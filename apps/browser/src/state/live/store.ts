@@ -1,3 +1,4 @@
+import { liveWithSpaces } from "../../lib/workspaceUpgrade";
 import { createLivePersistence, type LivePersistenceIntent, type LiveProjection } from "../../platform/livePersistence";
 import { create } from "zustand";
 import { noteLiveSave } from "../telemetry/workCounts";
@@ -141,11 +142,11 @@ export const FOLDER_DEFAULTS: Record<LiveFolderKind, { name: string; sources: Li
   documents: { name: "Documents", sources: ["notion"] },
 };
 
-export function createFolder(profileId: string, kind: LiveFolderKind, sources?: LiveSourceId[]): string {
+export function createFolder(spaceId: string, kind: LiveFolderKind, sources?: LiveSourceId[]): string {
   const id = persistence.newFolderId();
   const folder: LiveFolder = {
     id,
-    profileId,
+    spaceId,
     kind,
     name: FOLDER_DEFAULTS[kind].name,
     icon: null,
@@ -163,7 +164,7 @@ export function createFolder(profileId: string, kind: LiveFolderKind, sources?: 
   return id;
 }
 
-export function updateFolder(id: string, patch: Partial<Omit<LiveFolder, "id" | "profileId" | "kind">>) {
+export function updateFolder(id: string, patch: Partial<Omit<LiveFolder, "id" | "spaceId" | "kind">>) {
   setLive((s) => (s.folders[id] ? { folders: { ...s.folders, [id]: { ...s.folders[id]!, ...patch } } } : {}));
 }
 

@@ -45,9 +45,9 @@ export async function startLinuxShortcuts(host: ArdiaHost) {
   let pending = Promise.resolve();
   const update = () => {
     const state = useBrowser.getState();
-    bindings = linuxBindings(state.settings.shortcuts, state.profileOrder);
+    bindings = linuxBindings(state.settings.shortcuts, state.spaceOrder);
     if (host.bootstrap.utility) bindings = utilityBindings(bindings);
-    const encoded = JSON.stringify(linuxNativeBindings(bindings, state.profileOrder));
+    const encoded = JSON.stringify(linuxNativeBindings(bindings, state.spaceOrder));
     if (encoded === previous) return pending;
     previous = encoded;
     pending = pending.catch(reportHostError).then(async () => {

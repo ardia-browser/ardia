@@ -17,7 +17,7 @@ const sharingShapeChanged = (tab: Tab, was: Tab | undefined) =>
   !was ||
   tab.pin?.as !== was.pin?.as ||
   tab.pinKey !== was.pinKey ||
-  tab.profileId !== was.profileId ||
+  tab.spaceId !== was.spaceId ||
   tab.windowId !== was.windowId ||
   tab.page.kind !== was.page.kind ||
   !tab.url !== !was.url ||

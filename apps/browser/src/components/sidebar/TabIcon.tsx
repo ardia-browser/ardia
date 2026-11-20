@@ -19,7 +19,7 @@ export const TabIcon = memo(function TabIcon({
   size: givenSize,
   compact = false,
   color,
-  profileId: profile,
+  spaceId: space,
   direct,
   marks: givenMarks,
 }: {
@@ -30,7 +30,7 @@ export const TabIcon = memo(function TabIcon({
   size?: number;
   compact?: boolean;
   color?: string;
-  profileId?: string;
+  spaceId?: string;
   direct?: boolean;
   marks?: number;
 }) {
@@ -42,10 +42,10 @@ export const TabIcon = memo(function TabIcon({
   const engine = tabId && size >= 14 ? markedEngine(marks) : null;
   const opacity = sleeping || marks & FADED ? SLEEPING_OPACITY : 1;
   const props = { url, favicon, icon, size, color, direct };
-  if (!engine) return profile || !tabId ? <Icon {...props} opacity={opacity} profileId={profile} /> : <TabProfileIcon {...props} opacity={opacity} tabId={tabId} />;
+  if (!engine) return space || !tabId ? <Icon {...props} opacity={opacity} spaceId={space} /> : <TabSpaceIcon {...props} opacity={opacity} tabId={tabId} />;
   return (
     <View style={{ opacity }}>
-      {profile || !tabId ? <Icon {...props} profileId={profile} /> : <TabProfileIcon {...props} tabId={tabId} />}
+      {space || !tabId ? <Icon {...props} spaceId={space} /> : <TabSpaceIcon {...props} tabId={tabId} />}
       <EngineMark mark={engine} size={size} />
     </View>
   );
@@ -75,9 +75,9 @@ function EngineMark({ mark, size }: { mark: PageEngine; size: number }) {
   );
 }
 
-function TabProfileIcon({ tabId, ...props }: Omit<Parameters<typeof Icon>[0], "profileId"> & { tabId: string }) {
-  const profileId = useTab(tabId, (t) => t?.profileId);
-  return <Icon {...props} profileId={profileId} />;
+function TabSpaceIcon({ tabId, ...props }: Omit<Parameters<typeof Icon>[0], "spaceId"> & { tabId: string }) {
+  const spaceId = useTab(tabId, (t) => t?.spaceId);
+  return <Icon {...props} spaceId={spaceId} />;
 }
 
 const SLEEPING_OPACITY = 0.45;
@@ -90,7 +90,7 @@ function Icon({
   icon,
   size = 16,
   color,
-  profileId,
+  spaceId,
   direct,
   opacity = 1,
 }: {
@@ -99,7 +99,7 @@ function Icon({
   icon?: string | null;
   size?: number;
   color?: string;
-  profileId?: string;
+  spaceId?: string;
   direct?: boolean;
   opacity?: number;
 }) {
@@ -114,5 +114,5 @@ function Icon({
       </View>
     );
   }
-  return <Favicon url={url} favicon={favicon} size={size} profileId={profileId} direct={direct} opacity={opacity} />;
+  return <Favicon url={url} favicon={favicon} size={size} spaceId={spaceId} direct={direct} opacity={opacity} />;
 }

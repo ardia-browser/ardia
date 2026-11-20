@@ -62,8 +62,8 @@ export function DragGhost({ ghost }: { ghost: Ghost }) {
   );
   const fill = useMemo(() => m.paneShown.interpolate({ inputRange: [0, 1], outputRange: [surfaces.ghost, surfaces.activePanes.selected] }), [m, surfaces]);
   const lifted = useMemo(() => m.paneShown.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }), [m]);
-  const icon = drawn ? <TabIcon url={tab?.url ?? ""} favicon={tab?.favicon} icon={drawn.icon} profileId={tab?.profileId} /> : null;
-  const tileIcon = tileDrawn ? <TabIcon url={tab?.url ?? ""} favicon={tab?.favicon} icon={tileDrawn.icon} profileId={tab?.profileId} /> : null;
+  const icon = drawn ? <TabIcon url={tab?.url ?? ""} favicon={tab?.favicon} icon={drawn.icon} spaceId={tab?.spaceId} /> : null;
+  const tileIcon = tileDrawn ? <TabIcon url={tab?.url ?? ""} favicon={tab?.favicon} icon={tileDrawn.icon} spaceId={tab?.spaceId} /> : null;
   return (
     <Animated.View
       pointerEvents="none"

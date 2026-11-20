@@ -20,7 +20,7 @@ import { captureEscape, hapticTick } from "../../state/drag/dragNative";
 import { entryKey } from "../../state/sidebar/entryKey";
 import { endHeldTabPress } from "../../state/sidebar/heldTabPress";
 import { tabPlace } from "../../state/sidebar/actions";
-import { dropTabsInProfile, switchProfile } from "../../state/browser/actions";
+import { dropTabsInSpace, switchSpace } from "../../state/browser/actions";
 
 export class DragController extends DragTargeting {
   protected arriving: { key: string; from: number } | null = null;
@@ -206,7 +206,7 @@ export class DragController extends DragTargeting {
       if (now !== session || !session.home || session.shown === id) return;
       session.hopping = { id, by: "icon" };
       hapticTick();
-      switchProfile(session.home.windowId, id, true);
+      switchSpace(session.home.windowId, id, true);
     });
   }
 
@@ -222,7 +222,7 @@ export class DragController extends DragTargeting {
       session.edgeSpent = true;
       session.hopping = { id: next, by: "edge" };
       hapticTick();
-      switchProfile(session.home.windowId, next, true);
+      switchSpace(session.home.windowId, next, true);
     });
   }
 
@@ -266,10 +266,10 @@ export class DragController extends DragTargeting {
     const dropped = commit && !splitDrop && measured && sources.length > 0;
     let settled: (() => void) | null = null;
     if (dropped && drop.type === "none" && !toIcon) noteDragWithoutDrop();
-    if (home && toIcon) void dropTabsInProfile(dragged, toIcon, NO_DROP, home.profileId, true);
+    if (home && toIcon) void dropTabsInSpace(dragged, toIcon, NO_DROP, home.profileId, true);
     else if (home && crossed) {
-      if (dropped && drop.type === "tabs") void dropTabsInProfile(dragged, shown!, drop, home.profileId, false).then((placed) => placed && drop.sequence && arrangeLive(placedSequence(drop.sequence, placed)));
-      else if (!splitDrop && !interrupted) switchProfile(home.windowId, home.profileId, true);
+      if (dropped && drop.type === "tabs") void dropTabsInSpace(dragged, shown!, drop, home.profileId, false).then((placed) => placed && drop.sequence && arrangeLive(placedSequence(drop.sequence, placed)));
+      else if (!splitDrop && !interrupted) switchSpace(home.windowId, home.profileId, true);
     } else if (dropped && drop.type === "split") {
       const shift = this.splitShift(marks.split?.key);
       const made = dropTabOnRow(dragged[0]!, drop.targetId, drop.side);

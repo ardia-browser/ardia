@@ -43,7 +43,7 @@ globalThis.acTestNativeModules = {
 
 const shell = await import("../../test-native/index.ts");
 const { useBrowser } = await import("../browser/store.ts");
-const { setProfileTheme } = await import("../profiles/themeActions.ts");
+const { setProfileTheme } = await import("../spaces/themeActions.ts");
 const quit = await import("../app/quit.ts");
 const S = () => useBrowser.getState();
 const settle = async (rounds = 30) => {
@@ -70,13 +70,13 @@ test("known issue, expected for now: a theme picked while a pull reads is replac
   shell.docs.clear();
   S().hydrate({});
   useBrowser.setState({ bookmarksReady: { "": true } });
-  S().setProfileLook("default", { theme: THEME_A });
+  S().updateSpace("default", { theme: THEME_A });
   const engine = await import("./engine.ts?editDuringRead");
   engine.startSync();
   assert.ok("ok" in (await engine.turnOnSync("/sync")));
   await engine.syncNow();
   await engine.syncNow();
-  const key = `pth:${engine.useSync.getState().profiles.default.syncId}`;
+  const key = `pth:${engine.useSync.getState().spaces.default.syncId}`;
   assert.deepEqual(opsFor(key).at(-1)?.v, { t: THEME_A });
 
   remoteTheme(key, justAfter(opsFor(key).at(-1).h), THEME_B);
@@ -88,7 +88,7 @@ test("known issue, expected for now: a theme picked while a pull reads is replac
   setProfileTheme("default", THEME_C, engine.adoptProfileTheme);
   releaseRead();
   await cycle;
-  assert.deepEqual(S().profiles.default.theme, THEME_B, "documented in ~/ardia-scratch/slop-audit/sync-known-issues.md: the pick is overwritten until picks get durable stamps");
+  assert.deepEqual(S().spaces.default.theme, THEME_B, "documented in ~/ardia-scratch/slop-audit/sync-known-issues.md: the pick is overwritten until picks get durable stamps");
 });
 
 test("a profile's own theme that was never picked still gives way to a theme that arrives in a pull", async () => {
@@ -96,13 +96,13 @@ test("a profile's own theme that was never picked still gives way to a theme tha
   folder.clear();
   S().hydrate({});
   useBrowser.setState({ bookmarksReady: { "": true } });
-  S().setProfileLook("default", { theme: THEME_A });
+  S().updateSpace("default", { theme: THEME_A });
   const engine = await import("./engine.ts?fallback");
   engine.startSync();
   assert.ok("ok" in (await engine.turnOnSync("/sync")));
   await engine.syncNow();
   await engine.syncNow();
-  const key = `pth:${engine.useSync.getState().profiles.default.syncId}`;
+  const key = `pth:${engine.useSync.getState().spaces.default.syncId}`;
   remoteTheme(key, justAfter(opsFor(key).at(-1).h), THEME_B);
   quit.setQuitting(true);
   try {
@@ -110,9 +110,9 @@ test("a profile's own theme that was never picked still gives way to a theme tha
   } finally {
     quit.setQuitting(false);
   }
-  assert.deepEqual(S().profiles.default.theme, THEME_A, "the theme arrived but waits");
-  S().setProfileLook("default", { theme: THEME_C });
+  assert.deepEqual(S().spaces.default.theme, THEME_A, "the theme arrived but waits");
+  S().updateSpace("default", { theme: THEME_C });
   await engine.syncNow();
   await engine.syncNow();
-  assert.deepEqual(S().profiles.default.theme, THEME_B, "a look set without a pick doesn't publish over the arrived theme");
+  assert.deepEqual(S().spaces.default.theme, THEME_B, "a look set without a pick doesn't publish over the arrived theme");
 });

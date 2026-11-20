@@ -33,7 +33,7 @@ function setup(url = PAGE, kind) {
 
 const rowOf = (s) => (s.kind === "action" ? `action:${s.id}` : s.kind);
 function suggest(w, text) {
-  const h = mount((p) => useSuggestions({ text: p.text, active: true, windowId: w, profileId: S().windows[w].profileId, scope: null }), { props: { text } });
+  const h = mount((p) => useSuggestions({ text: p.text, active: true, windowId: w, spaceId: S().windows[w].spaceId, scope: null }), { props: { text } });
   const rows = h.value.items.map(rowOf);
   h.unmount();
   return rows;

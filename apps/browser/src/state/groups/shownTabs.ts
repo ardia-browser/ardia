@@ -58,7 +58,7 @@ export function settleShownTabs(s: BrowserState, prev: BrowserState): Pick<Brows
   const toggled = Object.values(s.groups).filter((g) => prev.groups[g.id] && prev.groups[g.id]!.collapsed !== g.collapsed);
   let groups = toggled.reduce((next, g) => withoutShownTabs(next, descendantIds(s.groups, g.id)), s.groups);
   for (const g of toggled) {
-    const active = activeTabId(s, g.windowId, g.profileId);
+    const active = activeTabId(s, g.windowId, g.spaceId);
     if (g.collapsed && active && g.tabIds.includes(active)) groups = withShownTab(groups, active);
   }
   for (const g of Object.values(groups)) {
@@ -67,7 +67,7 @@ export function settleShownTabs(s: BrowserState, prev: BrowserState): Pick<Brows
       groups = withoutShownTabs(groups, [g.id]);
       continue;
     }
-    const active = activeTabId(s, g.windowId, g.profileId);
+    const active = activeTabId(s, g.windowId, g.spaceId);
     const live = g.shownTabIds.filter(
       (id) => g.tabIds.includes(id) && !movedHidden(id, g.id) && !(id !== active && inPinnedContainer(s, id) && isAsleep(s.tabs[id])),
     );

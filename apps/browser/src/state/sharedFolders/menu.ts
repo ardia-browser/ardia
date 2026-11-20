@@ -19,7 +19,7 @@ export function sharedFolderMenuItems(s: Pick<BrowserState, "groups">, groupId: 
   const shared = sharedFolderOfGroup(s, groupId);
   if (!shared) return [{ id: "shareFolder", title: "Share Folder…", symbol: "person.crop.circle.badge.plus" }];
   const g = s.groups[groupId]!;
-  const sync = useSharedFolders.getState().sync[folderRef(g.profileId, pinKeyOf(g))];
+  const sync = useSharedFolders.getState().sync[folderRef(g.spaceId, pinKeyOf(g))];
   return [
     { id: "sharedStatus", title: syncStatusText(sync, shared.folder.path), enabled: false },
     { id: "shareFolder", title: "Share Folder…", symbol: "person.crop.circle.badge.plus" },

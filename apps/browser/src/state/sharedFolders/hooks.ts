@@ -7,7 +7,7 @@ export type SharedFolderMark = "shared" | "waiting" | "error";
 export function useSharedFolderMark(groupId: string): SharedFolderMark | null {
   const ref = useBrowser((s) => {
     const g = s.groups[groupId];
-    return g?.pinned && !g.parentId ? folderRef(g.profileId, pinKeyOf(g)) : null;
+    return g?.pinned && !g.parentId ? folderRef(g.spaceId, pinKeyOf(g)) : null;
   });
   return useSharedFolders((s) => {
     if (!ref) return null;

@@ -1,7 +1,7 @@
 import type { BrowserState } from "../browser/store";
 import { insertAll, nestGroups, orderSections, syncGroupOrder } from "./groups";
 import { markPinned } from "../pins/pinChoices";
-import { isIncognitoProfile, makeTab, newId } from "../browser/model";
+import { isIncognitoSpace, makeTab, newId } from "../browser/model";
 import { openPages, pageKey, pinnedPages } from "../tabs/pageKeys";
 import type { BookmarkFolder, Bookmarks, GroupColor, TabGroup } from "../browser/types";
 import { isWebPageUrl } from "../../lib/url";
@@ -40,13 +40,13 @@ export function bookmarkDraft(b: Bookmarks, folderId: string): GroupDraft | null
 
 export type DraftGroupOptions = { collapsed?: boolean; pinned?: boolean };
 
-export function withDraftGroups(s: BrowserState, windowId: string, profileId: string, drafts: GroupDraft[], options: DraftGroupOptions = {}): [BrowserState, DraftGroups] {
+export function withDraftGroups(s: BrowserState, windowId: string, spaceId: string, drafts: GroupDraft[], options: DraftGroupOptions = {}): [BrowserState, DraftGroups] {
   const collapsed = options.collapsed ?? false;
   const pinned = options.pinned ?? true;
   const carried = new Set<string>();
   const w = s.windows[windowId];
   if (!w || w.kind === "private") return [s, { made: [], carried, skipped: 0, splits: 0 }];
-  const seen = pinned ? pinnedPages(s, profileId) : openPages(s, profileId);
+  const seen = pinned ? pinnedPages(s, spaceId) : openPages(s, spaceId);
   const tabs = { ...s.tabs };
   let groups = { ...s.groups };
   const order: string[] = [];
@@ -63,7 +63,7 @@ export function withDraftGroups(s: BrowserState, windowId: string, profileId: st
     }
     seen.add(pageKey(c.url));
     taken++;
-    const t = { ...makeTab(windowId, profileId, c.url, { title: c.title, customTitle: c.customTitle ?? null }), page: pinned ? ASLEEP : IDLE };
+    const t = { ...makeTab(windowId, spaceId, c.url, { title: c.title, customTitle: c.customTitle ?? null }), page: pinned ? ASLEEP : IDLE };
     tabs[t.id] = t;
     order.push(t.id);
     if (c.id) carried.add(c.id);
@@ -98,7 +98,7 @@ export function withDraftGroups(s: BrowserState, windowId: string, profileId: st
       if (t) tabIds.push(t);
     }
     if (!tabIds.length) return tabIds;
-    groups[id] = { id, windowId, profileId, name: d.title, icon: d.icon ?? null, color: d.color ?? null, collapsed, pinned, tabIds, createdAt: now, ...(parentId ? { parentId } : {}) };
+    groups[id] = { id, windowId, spaceId, name: d.title, icon: d.icon ?? null, color: d.color ?? null, collapsed, pinned, tabIds, createdAt: now, ...(parentId ? { parentId } : {}) };
     all.push(id);
     if (!parentId) made.push(id);
     return tabIds;
@@ -115,8 +115,8 @@ export function withDraftGroups(s: BrowserState, windowId: string, profileId: st
   groups = nestGroups(groups);
   const window = { ...w, tabIds: orderSections(ids, tabs, groups) };
   let pinChoices = s.pinChoices;
-  if (pinned && !isIncognitoProfile(profileId)) {
-    pinChoices = markPinned(pinChoices, profileId, { groups: all, placed: order });
+  if (pinned && !isIncognitoSpace(spaceId)) {
+    pinChoices = markPinned(pinChoices, spaceId, { groups: all, placed: order });
   }
   const splits = { ...s.splits };
   for (const ids of panes) {

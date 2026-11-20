@@ -1,7 +1,7 @@
 import { showMenu, type MenuItem } from "../../platform/menus";
 import { tabLayoutOf, tabsShownIn } from "../browser/model";
-import { switchProfile } from "../browser/actions";
-import { requestCreateProfile } from "../profiles/createProfileRequest";
+import { switchSpace } from "../browser/actions";
+import { requestCreateSpace } from "../spaces/createSpaceRequest";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { menuShortcut } from "../commands/commandShortcuts";
 import { bookmarkAllTabs } from "../bookmarks/actions";
@@ -30,9 +30,9 @@ export function sidebarMenuItems(s: BrowserState, windowId: string): MenuItem[] 
     [
       { id: "newGroup", title: "New Group", symbol: "folder.badge.plus" },
       newLiveFolderMenuItem(),
-      ...(canAddSharedFolder(w?.profileId) ? [{ id: "addShared", title: "Add Shared Folder…", symbol: "person.2" }] : []),
+      ...(canAddSharedFolder(w?.spaceId) ? [{ id: "addShared", title: "Add Shared Folder…", symbol: "person.2" }] : []),
     ],
-    [{ id: "newProfile", title: "New Profile…", symbol: "plus" }],
+    [{ id: "newProfile", title: "New Space…", symbol: "plus" }],
     [bookmarksShown(s.settings) && { id: "bookmarkAll", title: "Bookmark All Tabs…", symbol: "bookmark", ...menuShortcut("bookmarkAllTabs", s) }],
     [
       ...pinnedFoldMenuItem(s, windowId),
@@ -54,7 +54,7 @@ export async function openSidebarMenu(windowId: string) {
   else if (choice === "newGroup") {
     const id = s.newTab(windowId);
     if (id) newGroupWithSelection(windowId, [id]);
-  } else if (choice === "newProfile") void requestCreateProfile(windowId).then((id) => id && switchProfile(windowId, id));
+  } else if (choice === "newProfile") void requestCreateSpace(windowId).then((id) => id && switchSpace(windowId, id));
   else if (choice === "addShared") void addSharedFolder(windowId);
   else if (choice === "bookmarkAll") bookmarkAllTabs(windowId);
   else if (choice === "tabLayout") s.toggleTabLayout(windowId);

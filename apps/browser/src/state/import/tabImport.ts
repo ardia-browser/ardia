@@ -20,7 +20,7 @@ export function importFavicons(profileId: string, favicons: ImportedFavicon[] | 
 export function windowFor(profileId: string): string {
   const s = useBrowser.getState();
   const regular = s.ui.focusOrder.find((id) => s.windows[id] && s.windows[id]!.kind !== "private") ?? s.windowOrder.find((id) => s.windows[id]!.kind !== "private");
-  return regular ?? s.createWindow({ profileId });
+  return regular ?? s.createWindow({ spaceId: profileId });
 }
 
 export type IncomingTab = Pick<ImportedTab, "url" | "title" | "pinned" | "customTitle" | "splitId"> & { row?: boolean };
@@ -84,7 +84,7 @@ export function importTabsWithSplits(
     const after = t.pinned ? undefined : unpinned.at(-1);
     const [made, id] = withNewTab(next, windowId, {
       url: t.url,
-      profileId,
+      spaceId: profileId,
       background: true,
       pinned: t.pinned,
       snapshot: { title: t.title, customTitle: t.customTitle ?? null, ...(t.pinned && t.row ? { pin: ROW_PIN } : {}) },

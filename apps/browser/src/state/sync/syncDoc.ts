@@ -1,5 +1,5 @@
 import type { HLC, ScopeState } from "../../platform/sync";
-import type { Profile } from "../browser/types";
+import type { Space } from "../browser/types";
 import { unchanged, type Migrations } from "../../lib/savedDocument";
 import type { DeviceKind, SendRecord } from "./records";
 import type { SendLedger } from "./sentTabsAdapter";
@@ -36,26 +36,37 @@ export const DATA_TYPES = TYPE_IDS.filter(offered).map((id) => ({ id, title: SPE
 export const typeSyncedFor = (types: Record<DataType, boolean>, type: DataType, ownsData: boolean) =>
   offered(type) && types[type] && (ownsData || !SPECS[type].profileData);
 
-export type ProfileLink = {
+export type SpaceLink = {
   syncId: string;
   enabled: boolean;
+  ownerSyncId?: string;
+  adopting?: true;
   retire?: boolean;
   themeAdopting?: true;
+  keepPairingColor?: true;
   tabsRetire?: true;
 };
 
+export type ProfileLink = { syncId: string; enabled: boolean; retire?: boolean; adopting?: true };
+
+export { profileScope, spaceScope } from "./records";
+
 export type SyncDoc = {
-  v: 1;
+  v: 3;
+  preview?: true;
+  initialized?: true;
+  profiles: Record<string, ProfileLink>;
   enabled: boolean;
   folder: string | null;
   deviceId: string | null;
   clock: string | null;
   types: Record<DataType, boolean>;
-  profiles: Record<string, ProfileLink>;
+  spaces: Record<string, SpaceLink>;
   scopes: Record<string, ScopeState>;
   lastSyncedAt: number | null;
   setupAt: number | null;
   joining: boolean;
+  joiningThemeChoices?: string[];
   seqs?: Record<string, number>;
   sends?: Record<string, SendLedger>;
   tabCloses?: Record<string, string[]>;
@@ -66,47 +77,50 @@ export type SyncDoc = {
 export type ProfileRemoval = { keys: Record<string, HLC>; returned?: boolean };
 
 export const DOC = "sync.json";
-export const DOC_VERSION = 1;
-export const DOC_MIGRATIONS: Migrations = { 0: unchanged };
+export const DOC_VERSION = 3;
+export const DOC_MIGRATIONS: Migrations = { 0: unchanged, 1: unchanged, 2: unchanged };
 export const STATE = "sync-state.nns";
 export const JOURNAL = "sync-journal.nns";
+export const journalPartName = (n: number) => `sync-journal-${n}.nns`;
 export const APP_SCOPE = "app";
 
 export const defaultTypes = (): Record<DataType, boolean> => Object.fromEntries(TYPE_IDS.map((id) => [id, true])) as Record<DataType, boolean>;
 
 export const emptyDoc = (): SyncDoc => ({
-  v: 1,
+  v: 3,
+  profiles: {},
   enabled: false,
   folder: null,
   deviceId: null,
   clock: null,
   types: defaultTypes(),
-  profiles: {},
+  spaces: {},
   scopes: {},
   lastSyncedAt: null,
   setupAt: null,
   joining: false,
 });
 
-export type SyncStatus = "off" | "starting" | "updating" | "updated" | "stalled" | "offline" | "locked" | "reset" | "unavailable";
+export type SyncStatus = "off" | "preview" | "starting" | "updating" | "updated" | "stalled" | "offline" | "locked" | "reset" | "unavailable";
 
 export type SyncedDevice = { id: string; name: string; kind: DeviceKind; receivesTabs: boolean; lastSeen: number | null; current: boolean; version?: string; os?: string };
 export type RemoteTabs = { deviceId: string; name: string; kind: DeviceKind; tabs: { url: string; title: string }[] };
 export type SendTarget = { id: string; name: string; kind: DeviceKind };
 export type ReceivedTab = { windowId: string; tabId: string; send: SendRecord; from: { name: string; kind: DeviceKind } };
-export type RemoteProfile = { syncId: string; name: string; color: Profile["color"]; icon: string | null; sharesWith?: { name: string; added: boolean }; waiting?: true; sharedByOthers?: true };
+export type RemoteSpace = { syncId: string; name: string; color: Space["color"]; icon: string | null; sharesWith?: { name: string; added: boolean }; waiting?: true; sharedByOthers?: true };
 
 export type SyncUi = {
+  profiles: Record<string, ProfileLink>;
   status: SyncStatus;
   enabled: boolean;
   joining: boolean;
   folder: string | null;
   types: Record<DataType, boolean>;
-  profiles: Record<string, ProfileLink>;
+  spaces: Record<string, SpaceLink>;
   lastSyncedAt: number | null;
   error: string | null;
   pending: number;
   devices: SyncedDevice[];
   remoteTabs: Record<string, RemoteTabs[]>;
-  remoteProfiles: RemoteProfile[];
+  remoteSpaces: RemoteSpace[];
 };

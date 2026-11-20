@@ -3,13 +3,13 @@ import { test } from "node:test";
 
 globalThis.__DEV__ = false;
 const { useBrowser } = await import("../browser/store.ts");
-const { engineProfile, windowTitle } = await import("../browser/model.ts");
+const { engineProfile, engineProfileForSpace, windowTitle } = await import("../browser/model.ts");
 const { createWindowSync } = await import("./windowSync.ts");
 const { takeLittleArdiaEscapeCloses } = await import("../telemetry/littleArdiaEscapes.ts");
 
 const S = () => useBrowser.getState();
 const PROFILES = { default: { id: "default", name: "Personal", color: "plum", icon: null, createdAt: 0 } };
-const reset = () => S().hydrate({ profiles: PROFILES, profileOrder: ["default"], windows: {}, tabs: {} });
+const reset = () => S().hydrate({ spaces: PROFILES, spaceOrder: ["default"], windows: {}, tabs: {} });
 
 function fakePort(nativeIds = []) {
   const calls = [];
@@ -21,7 +21,7 @@ function fakePort(nativeIds = []) {
     windowIds: async () => nativeIds,
     restoreFullScreen: (ids, focus) => calls.push(["restoreFullScreen", ids, focus]),
     onEvent: (l) => void (listener = l),
-    releaseProfile: (profile) => calls.push(["releaseProfile", profile]),
+    releaseProfile: (space) => calls.push(["releaseProfile", space]),
   };
   return { port, calls, emit: (e) => listener(e), of: (kind) => calls.filter((c) => c[0] === kind) };
 }
@@ -55,7 +55,7 @@ test("launch: every window opens once with its lights center, the focused one fi
   assert.equal(native.of("open").length, 2);
 });
 
-test("after launch: a new window opens animated, a closed one closes and its private profile is released", () => {
+test("after launch: a new window opens animated, a closed one closes and its private space is released", () => {
   reset();
   S().createWindow();
   const native = fakePort();
@@ -68,12 +68,12 @@ test("after launch: a new window opens animated, a closed one closes and its pri
   assert.equal(opened[1], priv);
   assert.equal(opened[2].animated, true);
   assert.equal(opened[2].incognito, true);
-  const profile = engineProfile(S(), S().windows[priv].profileId);
+  const space = engineProfile(S(), S().windows[priv].spaceId);
   prev = S();
   S().closeWindow(priv);
   sync.sync(S(), prev);
   assert.deepEqual(native.of("close"), [["close", priv]]);
-  assert.deepEqual(native.of("releaseProfile"), [["releaseProfile", profile]]);
+  assert.deepEqual(native.of("releaseProfile"), [["releaseProfile", space]]);
 });
 
 test("a private window's profile is released when sync first hears of the close from an update made inside another subscriber", () => {
@@ -267,4 +267,17 @@ test("restoring a maximized window clears its restored frame and the flag, and q
   assert.equal(S().windows[id].maximized, undefined);
   assert.equal(S().windows[id].restoredFrame, undefined);
   assert.deepEqual(S().windows[id].frame, [100, 80, 1100, 700]);
+test("closing a private window releases its frozen engine after its source Space changes Profile", () => {
+  reset();
+  const work = S().createProfile({ name: "Work" });
+  const privateWindow = S().createWindow({ kind: "private" });
+  const native = fakePort();
+  const sync = start(native);
+  sync.sync(S());
+  const expected = engineProfile(S(), S().windows[privateWindow].spaceId);
+  S().assignSpaceProfile("default", work);
+  const before = S();
+  S().closeWindow(privateWindow);
+  sync.sync(S(), before);
+  assert.deepEqual(native.of("releaseProfile"), [["releaseProfile", expected]]);
 });

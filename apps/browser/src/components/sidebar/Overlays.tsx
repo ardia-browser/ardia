@@ -5,7 +5,7 @@ import { startSidebarEffects } from "../../state/sidebar/effects";
 import { MeetingAlert } from "../live/MeetingAlert";
 import { HoverCard } from "./HoverCard";
 import { IconPicker } from "./IconPicker";
-import { ProfileIconPicker } from "../profiles/ProfileIconPicker";
+import { ProfileIconPicker } from "../spaces/ProfileIconPicker";
 import { SearchTabs } from "./SearchTabs";
 import { TabSwitcher } from "./TabSwitcher";
 import { useSidebarWidth } from "../../state/sidebar/hooks";

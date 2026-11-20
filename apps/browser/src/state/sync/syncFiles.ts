@@ -1,8 +1,9 @@
+import { syncWithSpaces } from "../../lib/workspaceUpgrade";
+import { useBrowser } from "../browser/store";
 import { readDocument, removeDocument, saveDocument, writeDocument } from "../../platform/documents";
 import { Clock, emptyScope, restoreJournal, SyncNative, trackTouchedKeys, writtenSeq, type LogFile, type ScopeState, type SyncRecord } from "../../platform/sync";
 import { parseSaved, unchanged, versionedJson, type Migrations, type SavedObject } from "../../lib/savedDocument";
-import { profileScope } from "./records";
-import { APP_SCOPE, DOC, DOC_MIGRATIONS, DOC_VERSION, JOURNAL, STATE, defaultTypes, emptyDoc, type SyncDoc } from "./syncDoc";
+import { APP_SCOPE, profileScope, spaceScope, DOC, DOC_MIGRATIONS, DOC_VERSION, JOURNAL, STATE, journalPartName as journalPart, defaultTypes, emptyDoc, type SyncDoc } from "./syncDoc";
 import { isFields, numberOr, stringOr } from "../../lib/decode";
 import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
@@ -47,9 +48,12 @@ const JOURNAL_BYTES_LIMIT = 1_000_000;
 const JOURNAL_PARTS_LIMIT = 400;
 const DOC_IDLE_MS = 5 * 60_000;
 
-const journalPart = (n: number) => `sync-journal-${n}.nns`;
-
-const openSealed = async (sealed: string | null | undefined) => (sealed ? ((await SyncNative?.openLocal(sealed)) ?? null) : null);
+const openSealed = async (sealed: string | null | undefined) => {
+  if (!sealed) return null;
+  const json = await SyncNative?.openLocal(sealed);
+  if (!json) throw new Error("Ardia could not open the saved sync state. The encrypted files were kept.");
+  return json;
+};
 
 function addBatches(into: Journal, part: Journal | undefined) {
   for (const [scope, files] of Object.entries(part ?? {})) {
@@ -106,7 +110,9 @@ export function syncFiles(current: () => SyncDoc) {
   function read(): SyncDoc | null {
     try {
       const json = readDocument(DOC);
-      const saved = parseSaved(json, DOC_VERSION, DOC_MIGRATIONS, "v") as SyncDoc | null;
+      const value = json ? JSON.parse(json) : null;
+      const migrated = isFields(value) && (value.v === undefined || value.v === 0 || value.v === 1 || value.v === 2) ? JSON.stringify(syncWithSpaces(value, { profiles: useBrowser.getState().profiles, spaces: useBrowser.getState().spaces })) : json;
+      const saved = parseSaved(migrated, DOC_VERSION, DOC_MIGRATIONS, "v") as SyncDoc | null;
       const loaded = saved ? { ...emptyDoc(), ...saved, types: { ...defaultTypes(), ...saved.types }, scopes: {} } : null;
       docFile.json = json ?? "";
       return loaded;
@@ -140,7 +146,7 @@ export function syncFiles(current: () => SyncDoc) {
       const { scopes, covers, clock: savedClock } = readCheckpoint(parseSaved(await openSealed(sealedState), CHECKPOINT_VERSION, CHECKPOINT_MIGRATIONS));
       const parts = await readJournal();
       const doc = current();
-      const live = new Set([APP_SCOPE, ...Object.values(doc.profiles).map((link) => profileScope(link.syncId))]);
+      const live = new Set([APP_SCOPE, ...Object.values(doc.spaces).map((link) => spaceScope(link.syncId)), ...Object.values(doc.profiles).map((link) => profileScope(link.syncId))]);
       const clock = new Clock(doc.deviceId ?? "", doc.clock);
       if (savedClock) clock.observe(savedClock);
       const batches: Journal = {};
@@ -243,7 +249,7 @@ export function syncFiles(current: () => SyncDoc) {
     if (!Object.keys(journal.batches).length) clearJournal();
   }
 
-  function saveDoc() {
+  function saveDoc(required = false) {
     const { scopes, ...meta } = current();
     const seqs = Object.fromEntries(Object.entries(scopes).map(([k, s]) => [k, writtenSeq(s)]));
     const json = versionedJson({ ...meta, seqs }, DOC_VERSION, "v");
@@ -251,8 +257,10 @@ export function syncFiles(current: () => SyncDoc) {
     const lasting = versionedJson({ ...meta, lastSyncedAt: null, seqs }, DOC_VERSION, "v");
     const now = Date.now();
     if (lasting === docFile.lasting && now - docFile.savedAt < DOC_IDLE_MS) return;
-    Object.assign(docFile, { json, lasting, savedAt: now });
+    const done = () => Object.assign(docFile, { json, lasting, savedAt: now });
+    if (required) return saveDocument(DOC, json).then(done);
     writeDocument(DOC, json);
+    done();
   }
 
   function stateDue() {
@@ -261,7 +269,7 @@ export function syncFiles(current: () => SyncDoc) {
     return countedParts() >= JOURNAL_PARTS_LIMIT || journal.bytes >= JOURNAL_BYTES_LIMIT || Date.now() - state.savedAt >= STATE_EVERY_MS;
   }
 
-  async function saveState() {
+  async function saveState(required = false) {
     const consent = consentToken();
     const doc = current();
     if (!doc.enabled) {
@@ -280,10 +288,12 @@ export function syncFiles(current: () => SyncDoc) {
     if (json !== state.json) {
       try {
         const sealed = await SyncNative?.sealLocal(`{"covers":${covers},"clock":${JSON.stringify(seen.last)},"scopes":${json},"version":${CHECKPOINT_VERSION}}`);
-        if (!sealed) return;
+        if (!sealed) { if (required) throw new Error("The sync upgrade could not be saved securely. Try again."); return; }
         await saveDocument(STATE, sealed);
       } catch (error) {
         warnFor(consent, "[sync] couldn't save the sync state", error);
+        state.wanted = true;
+        if (required) throw error;
         return;
       }
       Object.assign(state, { json, onDisk: true });
@@ -293,8 +303,9 @@ export function syncFiles(current: () => SyncDoc) {
   }
 
   function save() {
+    if (current().preview) return;
     saveDoc();
-    void serial(saveState);
+    void serial(() => saveState());
   }
 
   function startOver() {
@@ -306,11 +317,13 @@ export function syncFiles(current: () => SyncDoc) {
     });
   }
 
-  function checkpoint() {
-    saveDoc();
+  function checkpoint(required = false) {
+    if (current().preview) return Promise.resolve();
+    if (!required) saveDoc();
     return serial(async () => {
       if (state.loaded && current().enabled) state.wanted = true;
-      await saveState();
+      await saveState(required);
+      if (required) await saveDoc(true);
     });
   }
 

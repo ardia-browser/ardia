@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Button } from "../../ui";
 import { Favicon } from "../../favicon/Favicon";
 import { Group, ProfilePicker, Row, SectionHeader, useSettingsProfile } from "../Form";
-import { useProfiles } from "../../../state/browser/hooks";
+import { useSpaces } from "../../../state/browser/hooks";
 import { currentEngineProfile } from "../../../state/browser/current";
 import { hiddenElementTitle, profileHiddenElements, restoreHiddenElements, useHiddenElements, type HiddenElement } from "../../../state/site/hiddenElements";
 
@@ -12,7 +12,7 @@ export function HiddenElementsSection() {
   const [selected, setSelected] = useSettingsProfile();
   const profile = currentEngineProfile(selected);
   const changes = useHiddenElements((s) => s.changes);
-  const severalProfiles = useProfiles().length > 1;
+  const severalProfiles = useSpaces().length > 1;
   const [loaded, setLoaded] = useState<{ profile: string; elements: HiddenElement[] } | null>(null);
   useEffect(() => {
     let live = true;

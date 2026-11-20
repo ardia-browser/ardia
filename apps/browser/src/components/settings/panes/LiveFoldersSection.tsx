@@ -30,7 +30,7 @@ export function LiveFoldersSection() {
       {folders.length ? (
         <Box gap="xl">
           {folders.map((f) => (
-            <FolderGroup key={f.id} folder={f} profileName={profiles[f.profileId]?.name ?? "Profile"} />
+            <FolderGroup key={f.id} folder={f} profileName={profiles[f.spaceId]?.name ?? "Profile"} />
           ))}
         </Box>
       ) : (

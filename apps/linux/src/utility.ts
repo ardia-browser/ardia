@@ -19,7 +19,7 @@ function setNavigation(value: unknown) {
   const importSource = (value as { importSource?: unknown }).importSource;
   if (typeof importSource === "string") setPreferredImportSource(importSource);
   if (!PANES.some((pane) => pane.id === place.pane)) return;
-  goToSettingsPane(place.pane, typeof place.profileId === "string" ? place.profileId : null, typeof place.detail === "string" ? place.detail : null);
+  goToSettingsPane(place.pane, typeof place.spaceId === "string" ? place.spaceId : null, typeof place.detail === "string" ? place.detail : null);
 }
 
 export function startUtility(host: ArdiaHost) {

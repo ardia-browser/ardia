@@ -7,7 +7,7 @@ import { splitViewAvailable } from "../splits/splits";
 import { gateOpening, settleOpening } from "../tabs/openingGate";
 import { noteSplit } from "../telemetry/usage";
 import { noteBarLoad } from "../telemetry/barLoadFocus";
-import { originalProfile } from "../windows/small";
+import { originalSpace } from "../windows/small";
 
 export type Disposition = "current" | "newTab" | "newWindow" | "split";
 
@@ -29,15 +29,15 @@ export function openFromBar(url: string, tabId: string, disposition: Disposition
   }
   if (disposition === "split") {
     s.closePanel(tab.windowId);
-    const gated = gateOpening(url, { tabId: null, windowId: tab.windowId, profileId: tab.profileId, via: "newTab" }, null);
+    const gated = gateOpening(url, { tabId: null, windowId: tab.windowId, profileId: tab.spaceId, via: "newTab" }, null);
     settleOpening(gated, null, (verdict) => {
       if (!(verdict && "cancel" in verdict)) openBesideOrBehind(tabId, verdict?.url ?? url);
     });
     return;
   }
   s.closePanel(tab.windowId);
-  if (disposition === "newTab") return void s.newTab(tab.windowId, { url, profileId: tab.profileId, openerId: tab.url ? tabId : undefined });
-  openWindow(w?.kind === "private" ? { kind: "private", url, profileId: originalProfile(s, w) } : { profileId: tab.profileId, url });
+  if (disposition === "newTab") return void s.newTab(tab.windowId, { url, spaceId: tab.spaceId, openerId: tab.url ? tabId : undefined });
+  openWindow(w?.kind === "private" ? { kind: "private", url, spaceId: originalSpace(s, w) } : { spaceId: tab.spaceId, url });
 }
 
 export const barSplitsFrom = (tabId: string) => splitViewAvailable && !!useBrowser.getState().tabs[tabId]?.url;
@@ -47,7 +47,7 @@ function openBesideOrBehind(tabId: string, url: string) {
   const tab = s.tabs[tabId];
   if (!tab) return;
   const beside = openSplitPane(tab.windowId, { anchorTabId: tabId, url, side: "right" });
-  if (!beside) s.newTab(tab.windowId, { url, profileId: tab.profileId, background: true, gated: true });
+  if (!beside) s.newTab(tab.windowId, { url, spaceId: tab.spaceId, background: true, gated: true });
   noteSplit(beside ? "barSplitOpens" : "barSplitFullTabs");
 }
 

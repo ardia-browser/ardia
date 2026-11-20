@@ -1,12 +1,13 @@
+import { profileEngine as currentEngineProfile } from "../../../state/profiles/current";
 import { engineHost, type SearchEngine } from "@ardia/core";
 import { Box, Button, Checkbox, DialogActions, DialogTitle, PopUp, Sheet, space, Symbol, Text, TextField } from "../../ui";
 import { useState } from "react";
 import { View } from "react-native";
 import { useTheme } from "../../ui/theme";
 import { useSettings } from "../../../state/browser/hooks";
-import { currentEngineProfile, currentProfileOrder } from "../../../state/browser/current";
+import { currentSpaceOrder } from "../../../state/browser/current";
 import { addCustomEngine, removeCustomEngine, setSearchEngine, updateCustomEngine, updateSettings } from "../../../state/settings/actions";
-import { controllingSearchExtension, DEFAULT_PROFILE_ID, defaultSearchEngine, searchEngines } from "../../../state/settings/settings";
+import { controllingSearchExtension, DEFAULT_SPACE_ID, defaultSearchEngine, searchEngines } from "../../../state/settings/settings";
 import { extensionsProfileId, openExtensionDetails, setEnabled } from "../../../state/extensions/actions";
 import { SiteFavicon } from "../../favicon/Favicon";
 import { FormField, Group, Row, SectionHeader, SettingToggle } from "../Form";
@@ -16,7 +17,7 @@ import { setting } from "../settingsIndex";
 import { ProfileSubPage } from "./ProfileSubPage";
 
 function manageExtensionsOf(profile: string, extensionId: string) {
-  const profileId = extensionsProfileId(currentProfileOrder().find((id) => currentEngineProfile(id) === profile));
+  const profileId = extensionsProfileId(currentSpaceOrder().find((id) => currentEngineProfile(id) === profile));
   openExtensionDetails(profileId, extensionId);
 }
 
@@ -109,7 +110,7 @@ function EngineRow({ engine, selected, locked, editable }: { engine: SearchEngin
       ? `${engine.keyword} · ${engine.url}`
       : engine.keyword;
   return (
-    <Row icon={<SiteFavicon host={engineHost(engine)} profileId={DEFAULT_PROFILE_ID} />} title={engine.name} description={description}>
+    <Row icon={<SiteFavicon host={engineHost(engine)} profileId={DEFAULT_SPACE_ID} />} title={engine.name} description={description}>
       {editable && <Button variant="icon" icon="pencil" size="m" onPress={() => showSettingsSheet(<EngineSheet engine={engine} />)} tooltip="Edit" />}
       {selected ? (
         <Box row gap="xs" style={DEFAULT_MARK}>

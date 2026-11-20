@@ -1,58 +1,19 @@
-import { type SettingsEnv, type SettingSection } from "./types";
+import { type SettingSection } from "./types";
 import type { SettingsPane } from "../../../state/settings/settingsWindows";
-import { keyText } from "../../../state/commands/keyText";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
-
-const syncOn = (_: unknown, env: SettingsEnv) => !!env.syncOn;
 
 export const profileRows = {
   profiles: [
     {
       section: "Profiles",
       rows: {
-        profiles: {
-          title: "Profiles",
-          explained: true,
-          description: `Pick a profile in the bar to change its settings. Drag to reorder. ${keyText("⌃1")}–${keyText("⌃9")} switch between them.`,
-          keywords: ["create profile", "new profile", "delete profile", "reorder", "work", "personal"],
-        },
-      },
-    },
-    {
-      section: "For all profiles",
-      rows: {
-        defaultProfile: {
-          title: "Default profile",
-          description: "Used for new windows.",
-          keywords: ["new window"],
-        },
-        switcherShows: {
-          title: "Switcher in the sidebar shows",
-          description: "Dots, icons, or nothing.",
-          keywords: ["dots", "pager", "profile switcher", "page dots", "sidebar footer", "hide", "show profile dots", "spaces", "space icons", "profile dots", "switcher", "emoji", "symbol", "arc", "show profile icons instead of dots", "profile icons"],
-        },
-        shareTopApps: {
-          title: "Share Top Apps",
-          keywords: ["pinned tabs", "favorites", "essentials", "spaces", "shared"],
-        },
-        spacesFollowAppearance: {
-          title: "Profile colors follow the theme",
-          explained: true,
-          description: "Every profile follows this, whatever its theme says.",
-          keywords: ["space", "profile theme", "arc theme", "follow system", "profile themes follow this appearance"],
-        },
+        list: { title: "Profiles", description: "Browsing identities and their assigned spaces", keywords: ["profile", "create profile", "new profile", "delete profile", "work", "personal"] },
       },
     },
     {
       section: "This profile",
       rows: {
-        syncThisProfile: {
-          title: "Sync this profile",
-          keywords: ["sync profile", "sync"],
-          shown: syncOn,
-          needs: "Turn on Sync to use this",
-        },
         profileDownloadsFolder: {
           title: "Downloads folder",
           keywords: ["download location", "save to", "folder"],

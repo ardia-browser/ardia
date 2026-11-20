@@ -8,12 +8,12 @@ export type TileTheme = { theme: IconTheme; image?: string; emoji?: string };
 
 const emojiThemes = new Map<string, Promise<IconTheme | null>>();
 
-export function useTileTheme(url: string, favicon: string | null | undefined, ownIcon: string | null | undefined, profileId: string): TileTheme | null {
+export function useTileTheme(url: string, favicon: string | null | undefined, ownIcon: string | null | undefined, spaceId: string): TileTheme | null {
   const customIcon = drawnIcon(ownIcon);
   const emoji = customIcon && !iconSymbol(customIcon) ? customIcon : null;
   useAppearanceDark();
-  const resolved = useFavicon(customIcon ? "" : url, favicon, profileId);
-  const pageTheme = useFaviconTheme(customIcon ? "" : url, favicon, profileId);
+  const resolved = useFavicon(customIcon ? "" : url, favicon, spaceId);
+  const pageTheme = useFaviconTheme(customIcon ? "" : url, favicon, spaceId);
   const [emojiTheme, setEmojiTheme] = useState<{ emoji: string; theme: IconTheme | null } | null>(null);
   useEffect(() => {
     if (!emoji) return;

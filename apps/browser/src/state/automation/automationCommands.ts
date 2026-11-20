@@ -59,7 +59,7 @@ export const AUTOMATION: Readonly<Record<BrowserCommand, AutomationDecision>> = 
   togglePin: "run",
   togglePinnedRow: "run",
   duplicateTab: "run",
-  moveTabToProfile: "needsArgument",
+  moveTabToSpace: "needsArgument",
   moveTabToWindow: "needsArgument",
   bookmarkPage: "run",
   addBookmarkToFolder: "needsArgument",
@@ -71,10 +71,10 @@ export const AUTOMATION: Readonly<Record<BrowserCommand, AutomationDecision>> = 
   toggleReader: "run",
   downloads: "run",
   mergeAllWindows: "run",
-  switchProfile: "needsArgument",
-  nextProfile: "run",
-  previousProfile: "run",
-  newProfile: "run",
+  switchSpace: "needsArgument",
+  nextSpace: "run",
+  previousSpace: "run",
+  newSpace: "run",
   openSettings: "run",
   importBrowserData: "run",
   showHistory: "run",
@@ -117,7 +117,7 @@ export const AUTOMATION: Readonly<Record<BrowserCommand, AutomationDecision>> = 
   moveTabDown: "run",
   moveTabUp: "run",
   closeTabGroup: "run",
-  openProfileMenu: "run",
+  openSpaceMenu: "run",
 };
 
 type SpecView = { title?: string; scope?: string; variants?: Readonly<Record<string, unknown>>; toggles?: string; chooses?: string };

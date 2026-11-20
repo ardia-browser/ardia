@@ -1,71 +1,51 @@
-import { emptyScope, SyncNative, type Adapter, type ExtensionsAdapter } from "../../platform/sync";
+import { emptyScope, SyncNative, type Adapter } from "../../platform/sync";
 import { useBrowser } from "../browser/store";
-import { bookmarksAdapter, deviceAdapter, deviceTabsAdapter, inTodaysNames, passwordsAdapter, sharedDataAdapter } from "./adapters";
-import { historyAdapter } from "./historyAdapter";
-import { profileOpenTabsAdapter, profilesAdapter, profileThemesAdapter, profileTopAppsAdapter } from "./profileAdapters";
+import { deviceAdapter, deviceTabsAdapter, inTodaysNames, sharedDataAdapter } from "./adapters";
+import { profileKey, profilesAdapter } from "./identityAdapters";
+import { spacesAdapter, spaceThemesAdapter } from "./spaceAdapters";
 import { settingsAdapter } from "./settingsAdapter";
 import { pinnedAreaAdapters } from "./pinned";
-import { extensionsAdapterFor } from "./extensions";
-import { APP_SCOPE, typeSyncedFor, type DataType, type SyncDoc } from "./syncDoc";
-import { sentTabsAdapter } from "./sentTabsAdapter";
-import { deliverSentTabs, sendLedger } from "./sentTabs";
-import { PROFILE_OPEN_TABS, profileScope } from "./records";
+import { APP_SCOPE, spaceScope, type SyncDoc } from "./syncDoc";
 import { openTabsAdapters, type OpenTabCloses, type OpenTabsMode } from "./openTabs";
-import { PLATFORM_TERMS } from "../../lib/platformTerms";
-import { removedRecordKeys } from "./profileRemoval";
+import { PROFILE_OPEN_TABS } from "./records";
+import { deliverSentTabs, sendLedger } from "./sentTabs";
+import { sentTabsAdapter } from "./sentTabsAdapter";
 import { alsoDeleting, removedDeviceKeys } from "./deviceRemoval";
+import { removedRecordKeys } from "./profileRemoval";
+import { spaceOpenTabsAdapter, spaceTopAppsAdapter } from "./profileAdapters";
+import { PLATFORM_TERMS } from "../../lib/platformTerms";
+import { dataOwnerMatches, spaceOwnerMatches } from "./spaceLinks";
 
 export const deviceName = () => SyncNative?.deviceName() ?? `This ${PLATFORM_TERMS.computerTitle}`;
-
-const passwordAdapters = new Map<string, (forced: boolean) => Adapter>();
-const extensionAdapters = new Map<string, ExtensionsAdapter>();
-
-export function forgetScopeAdapters() {
-  passwordAdapters.clear();
-  extensionAdapters.clear();
-}
-
-export const typeSynced = (doc: SyncDoc, type: DataType, profileId: string) =>
-  typeSyncedFor(doc.types, type, !useBrowser.getState().profiles[profileId]?.dataId);
-
-export function extensionsOf(profileId: string): ExtensionsAdapter {
-  let adapter = extensionAdapters.get(profileId);
-  if (!adapter) extensionAdapters.set(profileId, (adapter = extensionsAdapterFor(profileId)));
-  return adapter;
-}
-
-const syncedProfileOrder = (links: SyncDoc["profiles"]) =>
-  useBrowser.getState().profileOrder.flatMap((id) => (links[id] ? [links[id].syncId] : []));
-
-const withSharedOwners = (doc: SyncDoc, links: () => SyncDoc["profiles"]) => (): SyncDoc["profiles"] => {
-  const shown = links();
-  const profiles = useBrowser.getState().profiles;
-  const owners = Object.keys(shown).flatMap((id) => {
-    const owner = profiles[id]?.dataId;
-    return owner && owner !== id && doc.profiles[owner] && !shown[owner] ? [[owner, doc.profiles[owner]] as const] : [];
-  });
-  return owners.length ? { ...shown, ...Object.fromEntries(owners) } : shown;
-};
-
 export function appAdapters(doc: SyncDoc, retiring: boolean): Adapter[] {
   const id = doc.deviceId!;
   if (retiring) return [deviceAdapter(id, deviceName, true)];
-  const enabledLinks = () => Object.fromEntries(Object.entries(doc.profiles).filter(([, l]) => l.enabled));
+  const app = doc.scopes[APP_SCOPE];
+  if (app) {
+    const adoptingSpaces = Object.values(doc.spaces).filter((link) => link.enabled && link.adopting).map((link) => `prof:${link.syncId}`);
+    const adoptingProfiles = Object.values(doc.profiles).filter((link) => link.enabled && link.adopting && app.records[profileKey(link.syncId)]?.v).map((link) => profileKey(link.syncId));
+    app.unapplied = [...new Set([...app.unapplied, ...adoptingSpaces, ...adoptingProfiles])];
+  }
+  const enabledLinks = () => Object.fromEntries(Object.entries(doc.spaces).filter(([, l]) => l.enabled));
+  const canPublish = (id: string) => !app?.records[`prof:${doc.spaces[id]!.syncId}`]?.v || spaceOwnerMatches(doc, id);
+  const visibleLinks = () => Object.fromEntries(Object.entries(enabledLinks()).filter(([id]) => canPublish(id)));
   const removed = () => removedRecordKeys(doc);
+  const spaceOrder = () => useBrowser.getState().spaceOrder.flatMap((key) => enabledLinks()[key]?.syncId ?? []);
   return [
     ...(doc.types.settings ? [inTodaysNames(settingsAdapter)] : []),
-    sharedDataAdapter(() => doc.profiles, removed),
-    profilesAdapter(withSharedOwners(doc, enabledLinks), removed),
-    profileThemesAdapter(enabledLinks, () => doc.scopes[APP_SCOPE]?.records, removed),
-    profileTopAppsAdapter(enabledLinks, removed),
-    profileOpenTabsAdapter(enabledLinks, removed),
-    alsoDeleting(deviceAdapter(id, deviceName, false, () => syncedProfileOrder(enabledLinks())), () => removedDeviceKeys(doc)),
+    sharedDataAdapter(visibleLinks, removed),
+    alsoDeleting(spacesAdapter(enabledLinks, canPublish), removed),
+    profilesAdapter(() => Object.fromEntries(Object.entries(doc.profiles).filter(([id, link]) => link.enabled && dataOwnerMatches(doc, id)))),
+    alsoDeleting(spaceThemesAdapter(enabledLinks, () => doc.scopes[APP_SCOPE]?.records), removed),
+    spaceTopAppsAdapter(enabledLinks, removed),
+    spaceOpenTabsAdapter(enabledLinks, removed),
+    alsoDeleting(deviceAdapter(id, deviceName, false, spaceOrder), () => removedDeviceKeys(doc)),
   ];
 }
 
-function openTabsMode(doc: SyncDoc, profileId: string): OpenTabsMode {
-  const link = doc.profiles[profileId]!;
-  if (useBrowser.getState().profiles[profileId]?.syncTabs) {
+function openTabsMode(doc: SyncDoc, spaceId: string): OpenTabsMode {
+  const link = doc.spaces[spaceId]!;
+  if (useBrowser.getState().spaces[spaceId]?.syncTabs) {
     delete link.tabsRetire;
     return doc.types.tabs ? "on" : "off";
   }
@@ -83,23 +63,16 @@ export function openTabCloses(doc: SyncDoc, scope: string): OpenTabCloses {
   };
 }
 
-export function profileAdapters(doc: SyncDoc, profileId: string, retiring: boolean, forcePasswords: boolean): Adapter[] {
+export function spaceAdapters(doc: SyncDoc, spaceId: string, retiring: boolean): Adapter[] {
   const id = doc.deviceId!;
-  if (retiring) return [deviceTabsAdapter(profileId, id, deviceName, true)];
-  const synced = (type: DataType) => typeSynced(doc, type, profileId);
-  let passwords = passwordAdapters.get(profileId);
-  if (!passwords) passwordAdapters.set(profileId, (passwords = passwordsAdapter(profileId)));
-  const scope = profileScope(doc.profiles[profileId]!.syncId);
-  const flag = () => doc.scopes[APP_SCOPE]?.records[`${PROFILE_OPEN_TABS}${doc.profiles[profileId]!.syncId}`]?.h;
-  const openTabs = openTabsAdapters(profileId, (doc.scopes[scope] ??= emptyScope()), openTabsMode(doc, profileId), openTabCloses(doc, scope), flag);
+  const link = doc.spaces[spaceId]!;
+  const scope = spaceScope(link.syncId);
+  const flag = () => doc.scopes[APP_SCOPE]?.records[`${PROFILE_OPEN_TABS}${link.syncId}`]?.h;
+  if (retiring) return [deviceTabsAdapter(spaceId, id, deviceName, true)];
   return [
-    ...(synced("pinned") ? pinnedAreaAdapters(profileId) : []),
-    ...openTabs,
-    ...(synced("bookmarks") ? [inTodaysNames(bookmarksAdapter(profileId))] : []),
-    ...(synced("history") ? [inTodaysNames(historyAdapter(profileId))] : []),
-    inTodaysNames(deviceTabsAdapter(profileId, id, deviceName, !synced("tabs"))),
-    sentTabsAdapter(id, () => sendLedger(doc, profileScope(doc.profiles[profileId]!.syncId)), (arrived) => deliverSentTabs(doc, profileId, arrived)),
-    ...(synced("passwords") ? [passwords(forcePasswords)] : []),
-    ...(synced("extensions") ? [extensionsOf(profileId)] : []),
+    ...(doc.types.pinned ? pinnedAreaAdapters(spaceId) : []),
+    ...openTabsAdapters(spaceId, (doc.scopes[scope] ??= emptyScope()), openTabsMode(doc, spaceId), openTabCloses(doc, scope), flag),
+    inTodaysNames(deviceTabsAdapter(spaceId, id, deviceName, !doc.types.tabs)),
+    sentTabsAdapter(id, () => sendLedger(doc, scope), (arrived) => deliverSentTabs(doc, spaceId, arrived)),
   ];
 }

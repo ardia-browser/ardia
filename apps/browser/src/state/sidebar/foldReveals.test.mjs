@@ -7,18 +7,16 @@ const { GROUP_MEMBERS_PAD_BOTTOM } = await import("../../lib/sidebarMetrics.ts")
 await import("../../test-native/index.ts");
 
 const S = () => useBrowser.getState();
-const profile = { id: "default", name: "Personal", color: "plum", icon: null, createdAt: 0 };
 const tab = (i) => ({
-  id: `t${i}`, windowId: "w", profileId: "default", url: `https://example.com/${i}`, title: `Tab ${i}`, favicon: null, pinned: false,
+  id: `t${i}`, windowId: "w", spaceId: "default", url: `https://example.com/${i}`, title: `Tab ${i}`, favicon: null, pinned: false,
   muted: false, zoom: 1, customTitle: null, customIcon: null, pinnedUrl: null, page: { kind: "idle" }, openerId: null, createdAt: i, lastActiveAt: i,
 });
-const group = (id, tabIds, extra = {}) => ({ id, windowId: "w", profileId: "default", name: id, icon: null, color: null, collapsed: true, pinned: false, tabIds, createdAt: 0, ...extra });
+const group = (id, tabIds, extra = {}) => ({ id, windowId: "w", spaceId: "default", name: id, icon: null, color: null, collapsed: true, pinned: false, tabIds, createdAt: 0, ...extra });
 
 function hydrate({ nested = null, pinned = false } = {}) {
   const tabs = Array.from({ length: 12 }, (_, i) => tab(i));
   S().hydrate({
-    profiles: { default: profile },
-    windows: { w: { id: "w", profileId: "default", kind: "main", tabIds: tabs.map((t) => t.id), activeTabIds: { default: "t0" }, sidebarOpen: true, frame: [0, 0, 1200, 800], createdAt: 0 } },
+    windows: { w: { id: "w", spaceId: "default", kind: "main", tabIds: tabs.map((t) => t.id), activeTabIds: { default: "t0" }, sidebarOpen: true, frame: [0, 0, 1200, 800], createdAt: 0 } },
     tabs: Object.fromEntries(tabs.map((t) => [t.id, t])),
     groups: {
       g: group("g", ["t2", "t3", "t4", "t5", "t6"], { pinned }),

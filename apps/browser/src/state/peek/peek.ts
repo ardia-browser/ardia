@@ -84,7 +84,7 @@ export function settlePeeks(s: BrowserState, prev: BrowserState): BrowserState |
       !source ||
       !s.windows[tab.windowId] ||
       source.windowId !== tab.windowId ||
-      source.profileId !== tab.profileId ||
+      source.spaceId !== tab.spaceId ||
       isAsleep(source) ||
       withoutFragment(source.url) !== peek.sourcePage;
     if (stale) next = withoutPeek(next, sourceId);
@@ -102,7 +102,7 @@ export const createPeekSlice: StateCreator<BrowserState, [], [], PeekSlice> = (s
     if (!source || !w || isSmall(s, w.id) || !peekable(url) || !w.tabIds.includes(sourceTabId)) return "";
     s = withoutPeek(s, sourceTabId);
     if (activeTabId(s, w.id) !== sourceTabId) s = apply(s, activated(s, sourceTabId));
-    const tab = { ...makeTab(w.id, source.profileId, url), openerId: sourceTabId, page: adoptId ? adoptedPage(adoptId) : loadedPage(navigationTo(url, true)) };
+    const tab = { ...makeTab(w.id, source.spaceId, url), openerId: sourceTabId, page: adoptId ? adoptedPage(adoptId) : loadedPage(navigationTo(url, true)) };
     const peek: Peek = { tabId: tab.id, sourceId: sourceTabId, sourcePage: withoutFragment(s.tabs[sourceTabId]!.url), from, ...(landing ? { landing } : {}) };
     set({
       ...s,

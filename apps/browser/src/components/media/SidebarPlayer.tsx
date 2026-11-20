@@ -86,7 +86,7 @@ export function useSidebarPlayerTab(windowId: string, profileId: string, current
   const acrossProfiles = useSettings((st) => st.playingNowAcrossProfiles);
   shown.current = useMedia((m) => sidebarPlayerTabFor(m, candidates, windowId, shown.current, acrossProfiles));
   const tabId = shown.current;
-  const fromOtherProfile = useTab(tabId, (tab) => !!tab && tab.profileId !== profileId);
+  const fromOtherProfile = useTab(tabId, (tab) => !!tab && tab.spaceId !== profileId);
   useEffect(() => {
     if (current && fromOtherProfile) noteSidebarPlayerFromOtherProfile();
   }, [current, fromOtherProfile, tabId]);
@@ -245,7 +245,7 @@ const PlayerRow = memo(function PlayerRow({ tabId, hovered, reveal }: { tabId: s
     >
       <Animated.View tooltip="Back to Tab" style={artScaleStyle}>
         <View style={{ width: ART, height: ART, borderRadius: radius.control, overflow: "hidden", backgroundColor: media.artPlaceholder, alignItems: "center", justifyContent: "center" }}>
-          {artwork ? <Image source={{ uri: artwork }} resizeMode="cover" style={{ width: ART, height: ART }} /> : <Favicon url={tab.url} favicon={tab.favicon} size={16} profileId={tab.profileId} />}
+          {artwork ? <Image source={{ uri: artwork }} resizeMode="cover" style={{ width: ART, height: ART }} /> : <Favicon url={tab.url} favicon={tab.favicon} size={16} spaceId={tab.spaceId} />}
         </View>
       </Animated.View>
       {isLive(session) ? (

@@ -37,9 +37,9 @@ const commandTitle = (id: string) => {
 };
 const legacyPathOf = (command: string) => LINUX_STANDARD_ITEMS[command]?.path ?? (/Settings|Profile/.test(command) ? "Ardia" : /Tab|Window|Group/.test(command) ? "Tabs" : /find|Find|Selection|copy/.test(command) ? "Edit" : /bookmark|Bookmark/.test(command) ? "Bookmarks" : /History|Browsing|downloads|back|forward/.test(command) ? "History" : "View");
 const PROFILES_MENU = ["Window", "Profiles"];
-const PROFILES_MENU_COMMANDS: ReadonlySet<string> = new Set(["switchProfile", "nextProfile", "previousProfile", "newProfile"]);
+const PROFILES_MENU_COMMANDS: ReadonlySet<string> = new Set(["switchSpace", "nextSpace", "previousSpace", "newSpace"]);
 const PER_PROFILE_PATHS: Readonly<Record<string, readonly string[]>> = {
-  switchProfile: PROFILES_MENU,
+  switchSpace: PROFILES_MENU,
   newLittleArdia: ["File", "New Little Ardia Window in Profile"],
 };
 export type ProfileNames = Readonly<Record<string, { name: string } | undefined>>;

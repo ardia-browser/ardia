@@ -29,7 +29,7 @@ import { developerBarShown, paneBar, type CardChrome } from "./paneChrome";
 import { DeveloperBar } from "../toolbar/DeveloperBar";
 import { useDeveloperMode } from "../../state/site/developerMode";
 import { PageOverlays } from "./PageOverlays";
-import { useProfileTheme } from "./ThemeScope";
+import { useSpaceTheme } from "./ThemeScope";
 import { useCardFrame } from "./cardFrame";
 import { newTabOpensOf } from "../../state/settings/settings";
 import { markNewTabPane } from "../../state/omnibox/newTabMarks";
@@ -82,7 +82,7 @@ export const TabPane = memo(function TabPane({
   const visible = !!rect;
   const live = visible || !!warm;
   const own = useTabValue(tabId, paneTab, shallowEqual);
-  const theme = useProfileTheme(own.profileId);
+  const theme = useSpaceTheme(own.spaceId);
   const toolbarHeight = useToolbarRow().height;
   const isNewTab = !own.url;
   const emptyCard = useSettings((st) => isNewTab && newTabOpensOf(st) === "commandBar");
@@ -186,4 +186,4 @@ export const TabPane = memo(function TabPane({
   );
 });
 
-const paneTab = (t: Tab | undefined) => ({ exists: !!t, url: t?.url ?? "", profileId: t?.profileId ?? "" });
+const paneTab = (t: Tab | undefined) => ({ exists: !!t, url: t?.url ?? "", spaceId: t?.spaceId ?? "" });

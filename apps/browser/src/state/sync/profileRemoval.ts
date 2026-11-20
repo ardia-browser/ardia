@@ -1,8 +1,8 @@
 import { visible, type HLC, type ScopeState } from "../../platform/sync";
 import { isFields, isStringList } from "../../lib/decode";
 import { PROFILE, PROFILE_OPEN_TABS, PROFILE_THEME, PROFILE_TOP_APPS, SHARE, recordId, shareRecord } from "./records";
-import { themeAngleKey } from "./profileAdapters";
-import { linkedProfileId, remoteProfileRecord } from "./profileLinks";
+import { themeAngleKey } from "./spaceAdapters";
+import { linkedSpaceId, remoteSpaceRecord } from "./spaceLinks";
 import { APP_SCOPE, type ProfileRemoval, type SyncDoc } from "./syncDoc";
 import { freezeDeviceRemovals, settleDeviceRemovals } from "./deviceRemoval";
 
@@ -28,7 +28,7 @@ function removalTargets(doc: SyncDoc): Record<string, ProfileRemoval> {
     : isFields(saved)
       ? Object.entries(saved).filter((entry): entry is [string, ProfileRemoval] => isRemoval(entry[1]))
       : [];
-  return Object.fromEntries(entries.filter(([syncId]) => !linkedProfileId(doc, syncId)));
+  return Object.fromEntries(entries.filter(([syncId]) => !linkedSpaceId(doc, syncId) && !localDataOwner(doc, syncId)));
 }
 
 export function freezeRemovals(doc: SyncDoc): boolean {
@@ -47,17 +47,19 @@ export const removedRecordKeys = (doc: SyncDoc): ReadonlySet<string> => {
 
 export const beingRemoved = (doc: SyncDoc, syncId: string) => syncId in removalTargets(doc);
 
+const localDataOwner = (doc: SyncDoc, syncId: string) => Object.values(doc.profiles).some((link) => link.enabled && !link.retire && link.syncId === syncId);
+
 export function sharesItsData(doc: SyncDoc, syncId: string): boolean {
   const app = doc.scopes[APP_SCOPE];
   if (!app) return false;
   return [...visible(app, SHARE)].some(([key, value]) => {
     const sharer = recordId(SHARE, key);
-    return sharer !== syncId && shareRecord(value)?.o === syncId && !!remoteProfileRecord(doc, sharer) && !beingRemoved(doc, sharer);
+    return sharer !== syncId && shareRecord(value)?.o === syncId && !!remoteSpaceRecord(doc, sharer) && !beingRemoved(doc, sharer);
   });
 }
 
 export function markRemoved(doc: SyncDoc, syncId: string): boolean {
-  if (!remoteProfileRecord(doc, syncId) || linkedProfileId(doc, syncId) || beingRemoved(doc, syncId) || sharesItsData(doc, syncId)) return false;
+  if (!remoteSpaceRecord(doc, syncId) || linkedSpaceId(doc, syncId) || localDataOwner(doc, syncId) || beingRemoved(doc, syncId) || sharesItsData(doc, syncId)) return false;
   doc.removing = { ...removalTargets(doc), [syncId]: { keys: liveKeys(doc.scopes[APP_SCOPE], syncId) } };
   removals++;
   return true;

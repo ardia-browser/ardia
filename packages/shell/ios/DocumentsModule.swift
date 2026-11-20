@@ -5,6 +5,7 @@ public class DocumentsModule: Module {
     Name("ArdiaDocuments")
 
     Function("readDocument") { (name: String) -> String? in DocumentStore.read(name) }
+    Function("writeDocumentImmediately") { (name: String, contents: String) in try DocumentStore.writeImmediately(name, contents) }
     Function("writeDocument") { (name: String, contents: String) in try DocumentStore.write(name, contents) }
     AsyncFunction("documentSaved") { (name: String, promise: Promise) in
       try DocumentStore.whenSaved(name) { error in

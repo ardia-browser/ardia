@@ -27,7 +27,7 @@ export const CleanUpUpsell = memo(function CleanUpUpsell({ windowId, shift }: { 
   const daily = useSettings((st) => st.cleanUpInactiveTabsAfterMinutes !== null);
   const wanted = useSettings((st) => st.suggestCleanUp);
   const tabIds = useWindow(windowId, (w) => w?.tabIds);
-  const profileId = useWindow(windowId, (w) => w?.profileId);
+  const spaceId = useWindow(windowId, (w) => w?.spaceId);
   const activeId = useShownTabId(windowId);
   const off = hidden || daily || !wanted;
   useEffect(() => {
@@ -35,7 +35,7 @@ export const CleanUpUpsell = memo(function CleanUpUpsell({ windowId, shift }: { 
     const check = () => setCount(cleanUpCandidateCount(windowId));
     check();
     return everySlowly({ every: 60_000, run: check });
-  }, [windowId, off, tabIds, profileId, activeId]);
+  }, [windowId, off, tabIds, spaceId, activeId]);
   const showing = !off && count >= UPSELL_MIN;
   useEffect(() => {
     if (showing) noteCleanUp("suggestionShown");

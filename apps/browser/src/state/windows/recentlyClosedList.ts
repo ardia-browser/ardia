@@ -1,6 +1,6 @@
 import type { BrowserState } from "../browser/store";
 import type { BrowserWindow, ClosedGroup, ClosedTab, ClosedWindow } from "../browser/types";
-import { isIncognitoProfile } from "../browser/model";
+import { isIncognitoSpace } from "../browser/model";
 
 export type RecentlyClosed = { tabs: ClosedTab[]; windows: ClosedWindow[]; groups: ClosedGroup[] };
 
@@ -8,11 +8,11 @@ export const RECENTLY_CLOSED_SHOWN = 10;
 
 export function recentlyClosedIn(s: BrowserState, w: BrowserWindow | undefined): RecentlyClosed {
   const everyProfile = !w || w.kind === "private";
-  const listed = (profileId: string | undefined) => everyProfile || (profileId && s.profiles[profileId] ? profileId : s.settings.defaultProfileId) === w.profileId;
+  const listed = (profileId: string | undefined) => everyProfile || (profileId && s.spaces[profileId] ? profileId : s.settings.defaultSpaceId) === w.spaceId;
   return {
-    tabs: s.closedTabs.filter((c) => !isIncognitoProfile(c.tab.profileId) && listed(c.tab.profileId)),
-    windows: s.closedWindows.filter((c) => listed(c.window.profileId)),
-    groups: s.closedGroups.filter((c) => everyProfile || c.tabs[0]?.profileId === w.profileId),
+    tabs: s.closedTabs.filter((c) => !isIncognitoSpace(c.tab.spaceId) && listed(c.tab.spaceId)),
+    windows: s.closedWindows.filter((c) => listed(c.window.spaceId)),
+    groups: s.closedGroups.filter((c) => everyProfile || c.tabs[0]?.spaceId === w.spaceId),
   };
 }
 

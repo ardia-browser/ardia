@@ -23,7 +23,7 @@ export function useBarItems({
   dropdown,
   opensTab,
   windowId,
-  profileId,
+  spaceId,
   tabId,
   currentUrl,
 }: {
@@ -37,7 +37,7 @@ export function useBarItems({
   dropdown: boolean;
   opensTab: boolean;
   windowId: string;
-  profileId: string;
+  spaceId: string;
   tabId: string;
   currentUrl: string;
 }) {
@@ -46,15 +46,15 @@ export function useBarItems({
     text: typed,
     active: edited || !!scope,
     windowId,
-    profileId,
+    spaceId,
     currentTabId: tabId,
     currentUrl: currentUrl || undefined,
     scope,
     preventInline: suppressCompletion,
   });
-  const start = useDropdownStart(dropdown && !edited && !scope, tabId, profileId);
+  const start = useDropdownStart(dropdown && !edited && !scope, tabId, spaceId);
   const idle = opensTab && !scope && !typed.trim();
-  const openTabs = useOpenTabsStart(idle, windowId, profileId);
+  const openTabs = useOpenTabsStart(idle, windowId, spaceId);
   const listed = { items: dropdown && !edited && !scope ? start : idle ? openTabs : suggested, completion: suggestedCompletion };
   const rows = useSteadyRows(listed, `${scope?.kind ?? ""}:${scope?.name ?? ""}:${typed}`, overRows, suggestionKey);
   const { items, completion } = rows.value;

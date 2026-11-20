@@ -2,7 +2,7 @@ import { Button, ListRow, NativeFormContext, space, Symbol, Text, VisualEffect, 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { useTheme } from "../ui/theme";
-import { useProfile } from "../../state/browser/hooks";
+import { useSpace } from "../../state/browser/hooks";
 import { usePluginTitle } from "../../state/plugins/hooks";
 import { trackSettingsSection } from "../../state/telemetry/track";
 import { preparePane, usePaneLoaded } from "../../state/settings/paneData";
@@ -18,14 +18,16 @@ import { AutomationsPane } from "./panes/Automations";
 import { GeneralPane } from "./panes/General";
 import { PluginsPane } from "./panes/Plugins";
 import { ProfilesPane } from "./panes/Profiles";
+import { SpaceDetailsPane, SpacesPane } from "./panes/Spaces";
+import { SyncSection } from "./panes/SyncSection";
 import { ShortcutsPane } from "./panes/Shortcuts";
 import { TabsPane } from "./panes/Tabs";
 import { useSettingsSheet } from "../../state/settings/sheet";
 import { SettingsConsentSheet } from "../plugins/SettingsConsentSheet";
 import { goToSettingsPane, SETTINGS_WINDOW_ID, settingsBack, settingsForward, useSettingsNav, type SettingsPane, type SettingsPlace } from "../../state/settings/settingsWindows";
 import { closeProfileIconPickerIn } from "../../state/profiles/iconPicker";
-import { ProfileIconPicker } from "../profiles/ProfileIconPicker";
-import { settingsProfileFor } from "../../state/extensions/store";
+import { ProfileIconPicker } from "../spaces/ProfileIconPicker";
+import { settingsSpaceFor } from "../../state/extensions/store";
 import { useSettingsColors } from "./useSettingsColors";
 import { paneTile, paneTints, settingsLayout } from "./tokens";
 import { pageToolbar } from "../pages/tokens";
@@ -44,20 +46,20 @@ const CONTROLS_ROOM = WINDOW_CONTROLS.edge + windowControlsWidth() + WINDOW_CONT
 const HOLD_CAP_MS = 250;
 const REVEAL_MARGIN = 16;
 
-const shownKey = (s: SettingsPlace) => `${s.pane}:${s.profileId ?? ""}:${s.detail ?? ""}`;
+const shownKey = (s: SettingsPlace) => `${s.pane}:${s.spaceId ?? ""}:${s.detail ?? ""}`;
 const pageKey = (s: SettingsPlace) => (s.pane === "profiles" && !s.detail ? "profiles::" : shownKey(s));
 
 function useShownPane(): SettingsPlace | null {
   const nav = useSettingsNav();
-  const target = { pane: nav.pane, profileId: nav.profileId, detail: nav.detail };
+  const target = { pane: nav.pane, spaceId: nav.spaceId, detail: nav.detail };
   const key = shownKey(target);
-  const loaded = usePaneLoaded(nav.pane, nav.profileId);
+  const loaded = usePaneLoaded(nav.pane, nav.spaceId);
   const [expired, setExpired] = useState<string | null>(null);
   const [last, setLast] = useState<SettingsPlace | null>(null);
   const ready = loaded || expired === key;
   useEffect(() => {
     if (ready) return setLast(target);
-    void preparePane(target.pane, target.profileId);
+    void preparePane(target.pane, target.spaceId);
     const timer = setTimeout(() => setExpired(key), HOLD_CAP_MS);
     return () => clearTimeout(timer);
   }, [key, ready]);
@@ -79,9 +81,9 @@ export function SettingsWindow() {
   const nav = useSettingsNav();
   const shown = useShownPane();
   usePrefetchAllPanes(!!shown);
-  const profileName = useProfile(shown?.profileId, (p) => p?.name);
+  const spaceName = useSpace(shown?.spaceId, (p) => p?.name);
   const pluginTitle = usePluginTitle(shown?.pane === "plugins" ? shown.detail : null);
-  const title = shown ? (shown.pane === "profiles" && profileName ? profileName : shown.pane === "plugins" && pluginTitle ? pluginTitle : paneTitle(shown.pane)) : "";
+  const title = shown ? (shown.pane === "spaces" && spaceName ? spaceName : shown.pane === "plugins" && pluginTitle ? pluginTitle : paneTitle(shown.pane)) : "";
   const sheet = useSettingsSheet((s) => s.sheet);
   useEffect(() => trackSettingsSection(nav.pane), [nav.pane]);
   useEffect(() => markCaptionRegions(SETTINGS_WINDOW_ID, [[TITLE_LEFT, 0, CONTROLS_ROOM, TOOLBAR]]), []);
@@ -135,7 +137,7 @@ export function SettingsWindow() {
         ) : (
           <ScrollView style={{ flex: 1 }} contentContainerStyle={SIDEBAR_LIST}>
             {PANES.map((p) => (
-              <SidebarItem key={p.id} title={p.title} icon={p.icon} tint={paneTints[p.tint]} selected={nav.pane === p.id} onPress={() => goToSettingsPane(p.id, settingsProfileFor(p.id, nav))} />
+              <SidebarItem key={p.id} title={p.title} icon={p.icon} tint={paneTints[p.tint]} selected={nav.pane === p.id} onPress={() => goToSettingsPane(p.id, p.id === "profiles" || p.id === "spaces" ? null : settingsSpaceFor(p.id, nav))} />
             ))}
           </ScrollView>
         )}
@@ -184,6 +186,8 @@ const PANE_COLUMN = { width: "100%", maxWidth: settingsLayout.paneMaxWidth, padd
 const PANE_VIEWS: Record<SettingsPane, (place: SettingsPlace) => ReactNode> = {
   general: (place) => <GeneralPane {...place} />,
   profiles: (place) => <ProfilesPane {...place} />,
+  spaces: ({ spaceId }) => spaceId ? <SpaceDetailsPane key={spaceId} spaceId={spaceId} /> : <SpacesPane />,
+  sync: () => <SyncSection />,
   tabs: (place) => <TabsPane {...place} />,
   appearance: (place) => <AppearancePane {...place} />,
   automations: (place) => <AutomationsPane {...place} />,

@@ -30,11 +30,11 @@ const TOP = [
   ["cookies", ["general.blockCookieBanners"]],
   ["import", ["general.importBrowser", "profiles.importPasswords"]],
   ["import from chrome", ["general.importBrowser"]],
-  ["profile", ["profiles.defaultProfile", "profiles.profiles"]],
+  ["profiles", ["profiles.list"]],
   ["sidebar", ["tabs.sidebarSide"]],
   ["right sidebar", ["tabs.sidebarSide"]],
   ["vertical tabs", ["tabs.layout"]],
-  ["pinned", ["profiles.shareTopApps", "tabs.balancedTopApps", "tabs.sleepingTabs"]],
+  ["pinned", ["sync.profiles", "tabs.balancedTopApps", "tabs.sleepingTabs"]],
   ["strikethrough", ["tabs.sleepingTabs"]],
   ["sleeping tabs", ["tabs.sleepingTabs"]],
   ["split", ["shortcuts.splitLinkModifier"]],
@@ -236,8 +236,8 @@ test("search still finds a row hidden until something else is on, when the row s
   const { unshownSettings } = await import("./settingsIndex.ts");
   const { DEFAULT_SETTINGS } = await import("../../state/settings/settings.ts");
   const unshown = new Set(unshownSettings(DEFAULT_SETTINGS, { top: false, syncOn: false }).split("\n"));
-  assert.ok(unshown.has("general.syncFolder"));
-  const entry = SETTINGS.find((s) => s.id === "general.syncFolder");
+  assert.ok(unshown.has("sync.folder"));
+  const entry = SETTINGS.find((s) => s.id === "sync.folder");
   assert.equal(entry.needs, "Turn on Sync to use this");
   for (const s of SETTINGS) if (s.needs) assert.ok(s.shown, `${s.id} says what it needs but has no rule`);
 });
@@ -291,7 +291,7 @@ test("a row its pane doesn't draw is left out of search, by the same rule the pa
   assert.ok(!across.has("tabs.buttons"), "the Hide Tabs button shows in both layouts");
   for (const id of ["tabs.sidebarSide", "appearance.sidebarTextSize", "appearance.addressBar"]) assert.ok(across.has(id), id);
   const sidebar = unshown({}, { top: false, glass: true, syncOn: true, calendarAccess: true });
-  for (const id of ["tabs.sidebarSide", "appearance.sidebarTextSize", "general.syncFolder", "automations.meetingAlert"]) assert.ok(!sidebar.has(id), id);
+  for (const id of ["tabs.sidebarSide", "appearance.sidebarTextSize", "sync.folder", "automations.meetingAlert"]) assert.ok(!sidebar.has(id), id);
   for (const id of ["appearance.interfaceStyle", "appearance.glassTint"]) assert.ok(unshown({}, { top: false }).has(id), id);
   assert.ok(unshown({ interfaceStyle: "classic" }, { top: false, glass: true }).has("appearance.glassTint"));
   assert.ok(unshown({ memorySaver: false }, { top: false }).has("advanced.keepActiveSites"));

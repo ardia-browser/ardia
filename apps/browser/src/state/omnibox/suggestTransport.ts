@@ -2,13 +2,13 @@ import type { FetchLike } from "@ardia/core";
 import { fetchSearchSuggestions, stopSearchSuggestions } from "../../platform/search";
 import { noteSearchSuggest } from "../telemetry/track";
 import { consentNow } from "../telemetry/client";
-import { engineProfile, isIncognitoProfile } from "../browser/model";
+import { engineProfile, isIncognitoSpace } from "../browser/model";
 import { useBrowser } from "../browser/store";
 
 const BLOCKED_STATUSES = new Set([403, 429]);
 let nextRequestId = 1;
 
-export const remoteSuggestionsAllowed = (profileId: string) => !isIncognitoProfile(profileId);
+export const remoteSuggestionsAllowed = (profileId: string) => !isIncognitoSpace(profileId);
 
 export const suggestProfileKey = (profileId: string) => engineProfile(useBrowser.getState(), profileId);
 

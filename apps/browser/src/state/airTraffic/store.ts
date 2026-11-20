@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { readDocument, writeDocument } from "../../platform/documents";
 import type { LinkSource } from "../../lib/linkSource";
-import { isIncognitoProfile } from "../browser/model";
+import { isIncognitoSpace } from "../browser/model";
 import { useBrowser } from "../browser/store";
 import {
   AIR_TRAFFIC_DOC,
@@ -55,7 +55,7 @@ export function currentAirTraffic(): AirTrafficConfig {
 
 export const targetUsableNow = (profileId: string, groupKey: string | null) => {
   const s = useBrowser.getState();
-  return !!s.profiles[profileId] && !isIncognitoProfile(profileId) && (!groupKey || hasRouteGroup(s, profileId, groupKey));
+  return !!s.spaces[profileId] && !isIncognitoSpace(profileId) && (!groupKey || hasRouteGroup(s, profileId, groupKey));
 };
 
 function saveConfig(change: (config: AirTrafficConfig) => AirTrafficConfig): boolean {

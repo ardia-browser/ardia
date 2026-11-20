@@ -154,7 +154,7 @@ const SwitcherCard = memo(function SwitcherCard({ tabId, index, focused, accent,
                 style={[StyleSheet.absoluteFill, { borderRadius: T.previewRadius }]}
               />
             ) : (
-              <TabIcon tabId={tab.id} url={url} favicon={tab.favicon} icon={tab.customIcon} profileId={tab.profileId} size={T.icon.preview} color={url ? T.onPage : T.onPanel} />
+              <TabIcon tabId={tab.id} url={url} favicon={tab.favicon} icon={tab.customIcon} spaceId={tab.spaceId} size={T.icon.preview} color={url ? T.onPage : T.onPanel} />
             )}
             <View
               pointerEvents="none"
@@ -170,7 +170,7 @@ const SwitcherCard = memo(function SwitcherCard({ tabId, index, focused, accent,
           </View>
           <View style={{ height: T.label, flexDirection: "row", alignItems: "center", gap: T.labelGap, paddingHorizontal: T.labelInset }}>
             {url || tab.customIcon ? (
-              <TabIcon tabId={tab.id} url={url} favicon={tab.favicon} icon={tab.customIcon} profileId={tab.profileId} size={T.icon.label} color={T.onPanel} />
+              <TabIcon tabId={tab.id} url={url} favicon={tab.favicon} icon={tab.customIcon} spaceId={tab.spaceId} size={T.icon.label} color={T.onPanel} />
             ) : (
               <Symbol name="globe" size={T.icon.globe} color={T.onPanel} style={{ width: T.icon.label, height: T.icon.label }} />
             )}

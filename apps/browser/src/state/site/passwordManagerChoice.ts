@@ -1,7 +1,6 @@
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import type { PasswordManagerSpec } from "../../lib/pluginPasswordManager";
 import type { Profile } from "../browser/types";
-import { engineProfile, incognitoOriginal, isIncognitoProfile } from "../browser/model";
 import { activeManifest, type PluginsStore } from "../plugins/store";
 
 export type PasswordManagerChoice = "ardia" | "none" | `plugin:${string}`;
@@ -27,17 +26,15 @@ export function managerPlugins(p: PluginsView): ManagerPlugin[] {
   });
 }
 
-export const regularProfileId = (profileId: string) => (isIncognitoProfile(profileId) ? incognitoOriginal(profileId) : profileId);
-
 type ChoiceState = { profiles: Record<string, Profile | undefined> };
 
-const dataOf = (profile: Pick<Profile, "id" | "dataId">) => profile.dataId ?? profile.id;
+const dataOf = (profile: Profile) => profile.engineId;
 
 export function profilesSharingData(s: ChoiceState, profileId: string): string[] {
-  const own = s.profiles[regularProfileId(profileId)];
+  const own = s.profiles[profileId];
   if (!own) return [];
   const data = dataOf(own);
-  const order = [data, ...Object.keys(s.profiles).sort()];
+  const order = Object.keys(s.profiles).sort();
   return [...new Set(order)].filter((id) => s.profiles[id] && dataOf(s.profiles[id]!) === data);
 }
 
@@ -73,7 +70,7 @@ export function neverChosenProfiles(s: ChoiceState): string[] {
     .filter((id) => storedPasswordManager(s, id) === undefined);
 }
 
-export type ProviderState = ChoiceState & Pick<Parameters<typeof engineProfile>[0], "profiles">;
+export type ProviderState = ChoiceState;
 
 export type FieldProviderEntry = { profile: string; fields: ManagerPlugin["spec"]["fields"]; codeSetup: boolean };
 
@@ -82,7 +79,7 @@ export function fieldProviderSet(s: ProviderState, plugins: readonly ManagerPlug
   for (const id of Object.keys(s.profiles).sort()) {
     const plugin = managerPluginOf(plugins, profilePasswordManager(s, plugins, id));
     if (!plugin || plugin.spec.fill !== "system") continue;
-    const profile = engineProfile(s, id);
+    const profile = s.profiles[id]!.engineId;
     if (!byEngine.has(profile)) byEngine.set(profile, { entry: { profile, fields: [...plugin.spec.fields], codeSetup: plugin.spec.verificationCodeSetup === "system" }, by: `${plugin.name}:${plugin.approval}` });
   }
   const sorted = [...byEngine.values()].sort((a, b) => (a.entry.profile < b.entry.profile ? -1 : a.entry.profile > b.entry.profile ? 1 : 0));

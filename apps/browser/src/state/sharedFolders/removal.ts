@@ -1,7 +1,7 @@
 import { confirm } from "../../platform/dialogs";
 import { sharedFoldersAvailable, sharedLocation } from "../../platform/sharedFolders";
 import { useBrowser, type BrowserState } from "../browser/store";
-import { isIncognitoProfile, pinKeyOf } from "../browser/model";
+import { isIncognitoSpace, pinKeyOf } from "../browser/model";
 import { groupLabel } from "../pins/tabGrouping";
 import { sharedFolderOf, type SharedFolder } from "./store";
 
@@ -11,16 +11,16 @@ export function sharedFolderOfGroup(s: Pick<BrowserState, "groups">, groupId: st
   const g = s.groups[groupId];
   if (!g?.pinned || g.parentId) return null;
   const key = pinKeyOf(g);
-  const folder = sharedFolderOf(g.profileId, key);
-  return folder ? { profileId: g.profileId, key, folder } : null;
+  const folder = sharedFolderOf(g.spaceId, key);
+  return folder ? { profileId: g.spaceId, key, folder } : null;
 }
 
 export const canShareGroup = (s: Pick<BrowserState, "groups">, groupId: string) => {
   const g = s.groups[groupId];
-  return sharedFoldersAvailable() && !!g?.pinned && !g.parentId && !isIncognitoProfile(g.profileId);
+  return sharedFoldersAvailable() && !!g?.pinned && !g.parentId && !isIncognitoSpace(g.spaceId);
 };
 
-export const canAddSharedFolder = (profileId: string | undefined) => sharedFoldersAvailable() && !!profileId && !isIncognitoProfile(profileId);
+export const canAddSharedFolder = (profileId: string | undefined) => sharedFoldersAvailable() && !!profileId && !isIncognitoSpace(profileId);
 
 export function folderLabel(path: string): string {
   const iCloudPath = sharedFoldersAvailable() ? sharedLocation().iCloudPath : null;

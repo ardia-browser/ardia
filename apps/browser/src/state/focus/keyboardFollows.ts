@@ -7,7 +7,7 @@ type Store = { getState(): Followed; subscribe(listener: (state: Followed, prev:
 
 const shownTabOf = (s: Followed, windowId: string) => {
   const w = s.windows[windowId];
-  return w ? w.activeTabIds[w.profileId] : undefined;
+  return w ? w.activeTabIds[w.spaceId] : undefined;
 };
 
 const peekShownIn = (s: Followed, windowId: string) => {

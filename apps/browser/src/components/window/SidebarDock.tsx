@@ -25,7 +25,7 @@ import {
   noteSidebarScreenEdge,
   noteSidebarSlide,
 } from "../../state/telemetry/dockCounts";
-import { ProfileSwipe } from "./ProfileSwipe";
+import { SpaceSwipe } from "./SpaceSwipe";
 import { ARC_HIDE_MS, DOCK_SLIDE, SHADOWS } from "./tokens";
 import {
   EDGE_ARMED,
@@ -297,9 +297,9 @@ function SidebarDock({
   const edgeSide = right ? "right" : "left";
   const sidebar = useMemo(
     () => (
-      <ProfileSwipe>
+      <SpaceSwipe>
         <Sidebar width={width} />
-      </ProfileSwipe>
+      </SpaceSwipe>
     ),
     [width],
   );

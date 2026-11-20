@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Animated, Pressable, TextInput, View, type GestureResponderEvent, type TextStyle } from "react-native";
 import { toggleMute } from "../../state/browser/actions";
 import { hex, layout, useTheme } from "../ui/theme";
-import { useIsActiveTab, usePageProfileId, useTab, useWindow, useWindowId } from "../../state/browser/hooks";
+import { useIsActiveTab, usePageSpaceId, useTab, useWindow, useWindowId } from "../../state/browser/hooks";
 import { returnToPinnedUrl } from "../../state/pins/actions";
 import { useSplitRowPanes, useTabBadged } from "../../state/sidebar/hooks";
 import { muteTitle } from "../../state/tabs/mute";
@@ -144,7 +144,7 @@ export const TabRow = memo(function TabRow({
                       </View>
                     ) : (
                       <View>
-                        <TabIcon tabId={tab.id} url={tab.url} favicon={tab.favicon} icon={tab.customIcon} profileId={tab.profileId} marks={flags & ICON_MARKS} compact={quiet} />
+                        <TabIcon tabId={tab.id} url={tab.url} favicon={tab.favicon} icon={tab.customIcon} spaceId={tab.spaceId} marks={flags & ICON_MARKS} compact={quiet} />
                         <TabBadges tabId={tab.id} />
                       </View>
                     )}
@@ -152,7 +152,7 @@ export const TabRow = memo(function TabRow({
                 </Pressable>
               ) : (
                 <>
-                  <TabIcon tabId={tab.id} url={tab.url} favicon={tab.favicon} icon={tab.customIcon} profileId={tab.profileId} marks={flags & ICON_MARKS} compact={quiet} />
+                  <TabIcon tabId={tab.id} url={tab.url} favicon={tab.favicon} icon={tab.customIcon} spaceId={tab.spaceId} marks={flags & ICON_MARKS} compact={quiet} />
                   <TabBadges tabId={tab.id} />
                 </>
               )}
@@ -291,8 +291,8 @@ export const SplitRowItem = memo(function SplitRowItem({
   const preview = useSplitPreview(splitSide, tabIds.length);
   const theme = useTheme();
   const tokens = useSidebarTokens();
-  const profileId = usePageProfileId();
-  const active = useWindow(windowId, (w) => tabIds.includes(w?.activeTabIds[profileId] ?? ""));
+  const spaceId = usePageSpaceId();
+  const active = useWindow(windowId, (w) => tabIds.includes(w?.activeTabIds[spaceId] ?? ""));
   const { hovered, hoverProps } = useRowHover(windowId, null);
   const [moved, movedRef] = useShift(motion?.shift ?? null, useCallback((v: View | null) => registerRow(windowId, entryKey("split", splitId), v), [windowId, splitId]));
   if (tabIds.length < 2) return null;

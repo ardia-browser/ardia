@@ -6,12 +6,12 @@ import { layout } from "../ui/theme";
 import { TintInk } from "../ui/TintInk";
 import { SidebarTextScope } from "./SidebarTextScope";
 import { ThemeScope } from "../window/ThemeScope";
-import { PageProfileContext, useSettings, useWindowId } from "../../state/browser/hooks";
+import { PageSpaceContext, useSettings, useWindowId } from "../../state/browser/hooks";
 import { newTab } from "../../state/tabs/actions";
 import { useSidebarCells } from "../../state/sidebar/hooks";
 import { useSidebarField, useSidebarPart } from "../../state/sidebar/chrome";
 import { SIDEBAR_PLAYER_HEIGHT, SidebarPlayer, usePlayerMotion, useSidebarPlayerTab } from "../media/SidebarPlayer";
-import { usePageStyle } from "../../state/windows/profilePager";
+import { usePageStyle } from "../../state/windows/spacePager";
 import { useSharedTilesStyle } from "../../state/sidebar/sharedTiles";
 import { DragPage, DragScope, useDragController, useDragging, usePinnedCount } from "./DragProvider";
 import { openSidebarMenu } from "../../state/sidebar/menus";
@@ -35,7 +35,7 @@ type PageGeometry = { scrollY: number; viewport: number; regions: SidebarGeometr
 const LIST_PAD = GLOW_ROOM + SCROLL_EDGE.inset;
 
 type PageProps = {
-  profileId: string;
+  spaceId: string;
   slot: number;
   paging: boolean;
   width: number;
@@ -49,7 +49,7 @@ type PageProps = {
   onScrollY: (y: number) => void;
 };
 
-export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, width, current, resting, dockAbove, height, rows, geometry, onScrollView, onScrollY }: PageProps) {
+export const SidebarPage = memo(function SidebarPage({ spaceId, slot, paging, width, current, resting, dockAbove, height, rows, geometry, onScrollView, onScrollY }: PageProps) {
   const windowId = useWindowId();
   const topGap = listTopGap(useSidebarField() === "top");
   const pinnedShown = useSidebarPart("pinned");
@@ -64,10 +64,10 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
     return () => cancelAnimationFrame(frame);
   }, [beside]);
   const offScreen = beside && !current;
-  const playerTab = useSidebarPlayerTab(windowId, profileId, current);
+  const playerTab = useSidebarPlayerTab(windowId, spaceId, current);
   const playerHeight = playerTab ? SIDEBAR_PLAYER_HEIGHT : 0;
   const playerMotion = usePlayerMotion();
-  const cells = useSidebarCells(windowId, profileId, offScreen);
+  const cells = useSidebarCells(windowId, spaceId, offScreen);
   const tiles = pinnedShown ? cells : NONE;
   const innerWidth = width - layout.sidebarInset * 2;
   const dragging = useDragging() && current;
@@ -172,7 +172,7 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
       pointerEvents={current ? "auto" : "none"}
       style={{ position: "absolute", top: 0, bottom: 0, left: 0, width, display: resting ? "none" : "flex", ...pageStyle }}
     >
-      <PageProfileContext.Provider value={profileId}>
+      <PageSpaceContext.Provider value={spaceId}>
         <ThemeScope page>
           <TintInk>
             <SidebarTextScope>
@@ -218,7 +218,7 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
                       >
                         <PageRows
                           windowId={windowId}
-                          profileId={profileId}
+                          spaceId={spaceId}
                           current={current}
                           rows={rows}
                           lazy={lazy}
@@ -263,7 +263,7 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
             </SidebarTextScope>
           </TintInk>
         </ThemeScope>
-      </PageProfileContext.Provider>
+      </PageSpaceContext.Provider>
     </Animated.View>
   );
 });

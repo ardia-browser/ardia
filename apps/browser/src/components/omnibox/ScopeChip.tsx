@@ -1,13 +1,13 @@
 import type { SearchScope } from "@ardia/core";
 import { View } from "react-native";
 import { Symbol, Text, useTheme } from "../ui";
-import { usePageProfileId } from "../../state/browser/hooks";
+import { usePageSpaceId } from "../../state/browser/hooks";
 import { SiteFavicon } from "../favicon/Favicon";
 import { BAR_TYPE, SCOPE_CHIP } from "./tokens";
 
 export function ScopeChip({ scope, large }: { scope: SearchScope; large: boolean }) {
   const theme = useTheme();
-  const profileId = usePageProfileId();
+  const profileId = usePageSpaceId();
   return (
     <View
       style={{

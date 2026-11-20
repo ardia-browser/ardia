@@ -4,7 +4,7 @@ import { resolveWindowId, tabLayoutOf } from "../browser/model";
 import { useOnboarding } from "../onboarding/onboarding";
 import { adoptSetupChoices } from "../onboarding/setupCodeChoices";
 import { PINNABLE_SITES, pinSites } from "../onboarding/sites";
-import { choosePresetColor } from "../profiles/themeActions";
+import { choosePresetColor } from "../spaces/themeActions";
 import type { Settings } from "../settings/settings";
 import { chooseTabLayout } from "../settings/actions";
 import { decodeSetupCode, describeSetupChoices, encodeSetupCode, SETUP_SETTING_KEYS, type SetupChoices } from "./setupCode";
@@ -17,8 +17,8 @@ export function onboardingSetupChoices(): SetupChoices {
   const id = resolveWindowId(s, windowId);
   const live: Partial<Settings> = { ...s.settings, tabLayout: tabLayoutOf(s, id) };
   const settings = Object.fromEntries(SETUP_SETTING_KEYS.map((k) => [k, k in baseline ? baseline[k] : live[k]]));
-  const profileId = id ? s.windows[id]?.profileId : undefined;
-  const color = baseline.color ?? (profileId ? s.profiles[profileId]?.color : undefined);
+  const spaceId = id ? s.windows[id]?.spaceId : undefined;
+  const color = baseline.color ?? (spaceId ? s.spaces[spaceId]?.color : undefined);
   return { preset, settings, color, pins: picked.pins ? (extras.pins ?? []) : undefined };
 }
 
@@ -35,8 +35,8 @@ function applyChoices(choices: SetupChoices, windowId: string | null) {
   if (Object.keys(rest).length) useBrowser.getState().updateSettings(rest);
   const s = useBrowser.getState();
   const id = resolveWindowId(s, windowId);
-  const profileId = id ? s.windows[id]?.profileId : undefined;
-  if (choices.color && profileId && s.profiles[profileId]) choosePresetColor(profileId, choices.color);
+  const spaceId = id ? s.windows[id]?.spaceId : undefined;
+  if (choices.color && spaceId && s.spaces[spaceId]) choosePresetColor(spaceId, choices.color);
   const pins = (choices.pins ?? []).filter((pin) => PINNABLE_SITES.some((site) => site.id === pin));
   if (id && pins.length) pinSites(id, pins);
 }

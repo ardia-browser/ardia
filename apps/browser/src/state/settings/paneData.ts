@@ -1,4 +1,4 @@
-import { useBrowser } from "../browser/store";
+import { currentProfileId, profileEngine } from "../profiles/current";
 import {
   engineInfo,
   listComponents,
@@ -26,7 +26,6 @@ import { menuShortcuts } from "../../platform/commands";
 import { setMenuBarShortcuts } from "../commands/commandShortcuts";
 import { UNAVAILABLE_COMMANDS } from "../commands/commandCatalog";
 import { currentSettings } from "../browser/current";
-import { engineProfile } from "../browser/model";
 import { currentSyncFolder, folderInfo } from "../sync/engine";
 import { extensionsProfileId, refreshExtensions } from "../extensions/actions";
 import { cached, load, loadAll, need, resource, store, useAllLoaded, type Needed } from "./resources";
@@ -77,30 +76,31 @@ export const widevine = resource("widevine", () =>
   ),
 );
 
-const defaultProfile = () => engineProfile(useBrowser.getState(), currentSettings().defaultProfileId);
-
 export function paneNeeds(pane: SettingsPane, profileId: string | null): Needed[] {
-  const profile = profileId ? engineProfile(useBrowser.getState(), profileId) : defaultProfile();
+  const profile = () => profileEngine(currentProfileId(profileId));
   switch (pane) {
     case "general":
-      return [need(loginItem), need(defaultBrowser), need(updater), need(downloadSettings, profile), need(contentBlocker), need(syncFolder, currentSyncFolder() ?? null), need(engineVersion), need(widevine)];
+      return [need(loginItem), need(defaultBrowser), need(updater), need(downloadSettings, profile()), need(contentBlocker), need(syncFolder, currentSyncFolder() ?? null), need(engineVersion), need(widevine)];
     case "profiles":
+      if (!profileId) return [];
       return [
-        need(downloadSettings, profile),
-        need(preloadPages, profile),
-        need(passwordAutofill, profile),
-        need(autofillToggleAsked, profile, "passwords"),
-        need(addresses, profile),
-        need(cards, profile),
-        need(autofillEnabled, profile),
-        need(autofillToggleAsked, profile, "addresses"),
-        need(autofillToggleAsked, profile, "cards"),
-        need(extensionList, engineProfile(useBrowser.getState(), extensionsProfileId(profileId))),
+        need(downloadSettings, profile()),
+        need(preloadPages, profile()),
+        need(passwordAutofill, profile()),
+        need(autofillToggleAsked, profile(), "passwords"),
+        need(addresses, profile()),
+        need(cards, profile()),
+        need(autofillEnabled, profile()),
+        need(autofillToggleAsked, profile(), "addresses"),
+        need(autofillToggleAsked, profile(), "cards"),
+        need(extensionList, profile()),
       ];
+    case "sync":
+      return [need(syncFolder, currentSyncFolder() ?? null)];
     case "appearance":
       return [need(appIconChoices)];
     case "automations":
-      return [need(appLinks, profile)];
+      return [need(appLinks, profileEngine(currentProfileId()))];
     case "shortcuts":
       return [need(shortcutItems)];
     default:

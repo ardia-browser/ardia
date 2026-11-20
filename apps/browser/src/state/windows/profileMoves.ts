@@ -1,6 +1,6 @@
 import type { BrowserState } from "../browser/store";
 import type { Tab } from "../browser/types";
-import { findLast, isIncognitoProfile, navigationTo, pinKeyOf } from "../browser/model";
+import { engineProfile, findLast, isIncognitoSpace, navigationTo, pinKeyOf } from "../browser/model";
 import { markPinned } from "../pins/pinChoices";
 import { hasLoadedPage, hasPage, IDLE, loadedPage, withWake } from "../tabs/pageSession";
 import { isTopApp, topAppsShared } from "../pins/topApps";
@@ -10,29 +10,29 @@ import { dropping, type Drop } from "../drag/drops";
 import { isRegularWindow } from "./small";
 import { adoptParkedPins } from "../pins/parkedPins";
 
-function sharedTopAppCopy(s: BrowserState, tab: Tab, profileId: string): string | undefined {
-  if (!isTopApp(tab) || !topAppsShared(s, tab.profileId, profileId)) return undefined;
-  return s.windows[tab.windowId]?.tabIds.find((id) => s.tabs[id]?.profileId === profileId && isTopApp(s.tabs[id]!) && pinKeyOf(s.tabs[id]!) === pinKeyOf(tab));
+function sharedTopAppCopy(s: BrowserState, tab: Tab, spaceId: string): string | undefined {
+  if (!isTopApp(tab) || !topAppsShared(s, tab.spaceId, spaceId)) return undefined;
+  return s.windows[tab.windowId]?.tabIds.find((id) => s.tabs[id]?.spaceId === spaceId && isTopApp(s.tabs[id]!) && pinKeyOf(s.tabs[id]!) === pinKeyOf(tab));
 }
 
-const parkedTopAppCopy = (s: BrowserState, tab: Tab, profileId: string) =>
-  isTopApp(tab) && topAppsShared(s, tab.profileId, profileId) && !!s.parkedPins[profileId]?.tabs.some((p) => !p.groupId && p.id === pinKeyOf(tab));
+const parkedTopAppCopy = (s: BrowserState, tab: Tab, spaceId: string) =>
+  isTopApp(tab) && topAppsShared(s, tab.spaceId, spaceId) && !!s.parkedPins[spaceId]?.tabs.some((p) => !p.groupId && p.id === pinKeyOf(tab));
 
-const unvisited = (s: BrowserState, windowId: string, profileId: string) => !s.windows[windowId]?.tabIds.some((id) => s.tabs[id]?.profileId === profileId);
+const unvisited = (s: BrowserState, windowId: string, spaceId: string) => !s.windows[windowId]?.tabIds.some((id) => s.tabs[id]?.spaceId === spaceId);
 
-function withParkedPinsShown(s: BrowserState, tabs: Tab[], profileId: string): BrowserState {
-  return [...new Set(tabs.map((t) => t.windowId))].reduce((acc, windowId) => (unvisited(acc, windowId, profileId) ? adoptParkedPins(acc, windowId, profileId) : acc), s);
+function withParkedPinsShown(s: BrowserState, tabs: Tab[], spaceId: string): BrowserState {
+  return [...new Set(tabs.map((t) => t.windowId))].reduce((acc, windowId) => (unvisited(acc, windowId, spaceId) ? adoptParkedPins(acc, windowId, spaceId) : acc), s);
 }
 
-export function intoProfile(s: BrowserState, tabId: string, profileId: string): BrowserState {
+export function intoSpace(s: BrowserState, tabId: string, spaceId: string): BrowserState {
   const tab = s.tabs[tabId];
   const w = tab && s.windows[tab.windowId];
-  if (!tab || !w || w.kind === "private" || !s.profiles[profileId] || tab.profileId === profileId) return s;
+  if (!tab || !w || w.kind === "private" || !s.spaces[spaceId] || tab.spaceId === spaceId) return s;
   const next = removeTabs(s, [tabId], false);
   const base = next.windows[w.id] ?? { ...w, tabIds: [], activeTabIds: {} };
   const loaded = hasLoadedPage(tab);
-  const moved: Tab = { ...tab, profileId, page: loaded ? loadedPage(navigationTo(tab.url)) : hasPage(tab) ? IDLE : withWake(tab.page, undefined), lastActiveAt: Date.now() };
-  const pinChoices = tab.pin ? markPinned(next.pinChoices, profileId, { tabs: [pinKeyOf(moved)], placed: [pinKeyOf(moved)] }) : next.pinChoices;
+  const moved: Tab = { ...tab, spaceId, page: engineProfile(s, tab.spaceId) === engineProfile(s, spaceId) ? tab.page : loaded ? loadedPage(navigationTo(tab.url)) : hasPage(tab) ? IDLE : withWake(tab.page, undefined), lastActiveAt: Date.now() };
+  const pinChoices = tab.pin ? markPinned(next.pinChoices, spaceId, { tabs: [pinKeyOf(moved)], placed: [pinKeyOf(moved)] }) : next.pinChoices;
   const tabs = { ...next.tabs, [tabId]: moved };
   const index = Math.min(w.tabIds.indexOf(tabId), base.tabIds.length);
   const tabIds = [...base.tabIds];
@@ -47,28 +47,28 @@ export function intoProfile(s: BrowserState, tabId: string, profileId: string): 
 }
 
 const movable = (s: BrowserState, ids: string[]) =>
-  ids.map((id) => s.tabs[id]).filter((t): t is Tab => !!t && !isIncognitoProfile(t.profileId) && isRegularWindow(s.windows[t.windowId]));
+  ids.map((id) => s.tabs[id]).filter((t): t is Tab => !!t && !isIncognitoSpace(t.spaceId) && isRegularWindow(s.windows[t.windowId]));
 
-const arriving = (s: BrowserState, t: Tab, profileId: string) => t.profileId !== profileId && !sharedTopAppCopy(s, t, profileId) && !parkedTopAppCopy(s, t, profileId);
+const arriving = (s: BrowserState, t: Tab, spaceId: string) => t.spaceId !== spaceId && !sharedTopAppCopy(s, t, spaceId) && !parkedTopAppCopy(s, t, spaceId);
 
-export const placedCopies = (s: BrowserState, tabIds: string[], profileId: string): Record<string, string> =>
-  Object.fromEntries(movable(s, tabIds).map((t) => [t.id, t.profileId === profileId ? t.id : (sharedTopAppCopy(s, t, profileId) ?? t.id)]));
+export const placedCopies = (s: BrowserState, tabIds: string[], spaceId: string): Record<string, string> =>
+  Object.fromEntries(movable(s, tabIds).map((t) => [t.id, t.spaceId === spaceId ? t.id : (sharedTopAppCopy(s, t, spaceId) ?? t.id)]));
 
-export const movesAcrossProfiles = (s: BrowserState, tabIds: string[], profileId: string) => movable(s, tabIds).some((t) => arriving(s, t, profileId));
+export const movesAcrossSpaces = (s: BrowserState, tabIds: string[], spaceId: string) => movable(s, tabIds).some((t) => arriving(s, t, spaceId));
 
-export type ProfileDrop = { state: BrowserState; placed: Record<string, string> };
+export type SpaceDrop = { state: BrowserState; placed: Record<string, string> };
 
-export function droppedInProfile(before: BrowserState, tabIds: string[], profileId: string, drop: Drop): ProfileDrop {
+export function droppedInSpace(before: BrowserState, tabIds: string[], spaceId: string, drop: Drop): SpaceDrop {
   const none = { state: before, placed: {} };
-  if (!before.profiles[profileId]) return none;
+  if (!before.spaces[spaceId]) return none;
   const dragged = movable(before, tabIds);
-  if (!dragged.length || (drop.type === "none" && dragged.every((t) => t.profileId === profileId))) return none;
-  const s = withParkedPinsShown(before, dragged, profileId);
+  if (!dragged.length || (drop.type === "none" && dragged.every((t) => t.spaceId === spaceId))) return none;
+  const s = withParkedPinsShown(before, dragged, spaceId);
   const tabs = movable(s, tabIds);
-  const copies = placedCopies(s, tabIds, profileId);
+  const copies = placedCopies(s, tabIds, spaceId);
   const placed = tabs.map((t) => copies[t.id] ?? t.id);
-  let next = tabs.reduce((acc, t) => (arriving(s, t, profileId) ? intoProfile(acc, t.id, profileId) : acc), s);
+  let next = tabs.reduce((acc, t) => (arriving(s, t, spaceId) ? intoSpace(acc, t.id, spaceId) : acc), s);
   next = dropping(next, placed, drop);
-  const last = findLast(placed, (id) => next.tabs[id]?.profileId === profileId);
+  const last = findLast(placed, (id) => next.tabs[id]?.spaceId === spaceId);
   return { state: last ? apply(next, activated(next, last)) : next, placed: copies };
 }

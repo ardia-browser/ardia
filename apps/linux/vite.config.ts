@@ -23,7 +23,7 @@ const replacements = new Map([
   [here("../browser/src/components/window/WindowOverlays.tsx"), here("./src/WindowOverlays.tsx")],
   [here("../browser/src/components/downloads/Downloads.tsx"), here("./src/DownloadsPopover.tsx")],
   [here("../browser/src/state/settings/settingsWindows.ts"), here("./src/settingsWindows.ts")],
-  [here("../browser/src/components/profiles/ProfileIndicator.tsx"), here("./src/ProfileIndicator.tsx")],
+  [here("../browser/src/components/spaces/SpaceIndicator.tsx"), here("./src/ProfileIndicator.tsx")],
   [here("../browser/src/components/sidebar/AddressBar.tsx"), here("./src/SidebarAddressBar.tsx")],
   [here("../browser/src/components/sidebar/TileFace.tsx"), here("./src/TileFace.tsx")],
   [here("../browser/src/components/site/SiteConnection.tsx"), here("./src/SiteConnection.tsx")],

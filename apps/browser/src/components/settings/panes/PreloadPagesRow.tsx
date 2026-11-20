@@ -1,4 +1,4 @@
-import { currentEngineProfile } from "../../../state/browser/current";
+import { profileEngine as currentEngineProfile } from "../../../state/profiles/current";
 import { preloadPages, setPreloadPagesFor } from "../../../state/settings/paneData";
 import { useResource } from "../../../state/settings/resources";
 import { Toggle } from "../../ui";

@@ -11,45 +11,45 @@ const regular = (s: BrowserState, id: string) => !inPinnedContainer(s, id);
 export function insertionIndex(s: BrowserState, w: BrowserWindow, tab: Tab, background: boolean): number {
   const opener = tab.openerId ? s.tabs[tab.openerId] : undefined;
   let index: number;
-  if (opener && opener.windowId === w.id && opener.profileId === tab.profileId && regular(s, opener.id)) {
+  if (opener && opener.windowId === w.id && opener.spaceId === tab.spaceId && regular(s, opener.id)) {
     const panes = splitTabIdsOf(splitOf(s, opener.id)) ?? [opener.id];
     const at = Math.max(...panes.map((id) => w.tabIds.indexOf(id))) + 1;
     index = background ? afterFamily(s, w, tab, at, opener.id) : at;
-  } else if (opener && opener.windowId === w.id && opener.profileId === tab.profileId) {
-    const gathered = pinnedChildGroup(s, opener.id, tab.profileId);
+  } else if (opener && opener.windowId === w.id && opener.spaceId === tab.spaceId) {
+    const gathered = pinnedChildGroup(s, opener.id, tab.spaceId);
     index = gathered
       ? Math.max(...gathered.tabIds.map((id) => w.tabIds.indexOf(id))) + 1
-      : afterFamily(s, w, tab, firstRegular(s, w, tab.profileId), opener.id);
+      : afterFamily(s, w, tab, firstRegular(s, w, tab.spaceId), opener.id);
   } else {
-    index = listStart(s, w, tab.profileId);
+    index = listStart(s, w, tab.spaceId);
     if (opener) index = afterFamily(s, w, tab, index, opener.id);
   }
   return outsideSplit(s, w, index);
 }
 
-export function firstRegular(s: BrowserState, w: BrowserWindow, profileId: string): number {
-  const first = w.tabIds.findIndex((id) => s.tabs[id]?.profileId === profileId && regular(s, id));
+export function firstRegular(s: BrowserState, w: BrowserWindow, spaceId: string): number {
+  const first = w.tabIds.findIndex((id) => s.tabs[id]?.spaceId === spaceId && regular(s, id));
   return first >= 0 ? first : w.tabIds.length;
 }
 
-export function newTabPlacement(s: BrowserState, w: BrowserWindow, profileId: string | undefined): { index: number; openerId?: string } {
-  const profile = w.kind !== "private" && profileId && s.profiles[profileId] ? profileId : w.profileId;
+export function newTabPlacement(s: BrowserState, w: BrowserWindow, spaceId: string | undefined): { index: number; openerId?: string } {
+  const profile = w.kind !== "private" && spaceId && s.spaces[spaceId] ? spaceId : w.spaceId;
   const beside = s.settings.newTabPosition === "nextToCurrent" ? belowCurrent(s, w, profile) : undefined;
   return beside ?? { index: listStart(s, w, profile) };
 }
 
-function belowCurrent(s: BrowserState, w: BrowserWindow, profileId: string): { openerId: string; index: number } | undefined {
-  const activeId = w.activeTabIds[profileId];
+function belowCurrent(s: BrowserState, w: BrowserWindow, spaceId: string): { openerId: string; index: number } | undefined {
+  const activeId = w.activeTabIds[spaceId];
   const active = activeId ? s.tabs[activeId] : undefined;
   if (!active || active.windowId !== w.id) return undefined;
-  if (!regular(s, active.id)) return { openerId: active.id, index: firstRegular(s, w, active.profileId) };
+  if (!regular(s, active.id)) return { openerId: active.id, index: firstRegular(s, w, active.spaceId) };
   const panes = splitTabIdsOf(splitOf(s, active.id)) ?? [active.id];
   return { openerId: active.id, index: outsideSplit(s, w, Math.max(...panes.map((id) => w.tabIds.indexOf(id))) + 1) };
 }
 
 export function joinedWithCurrent(s: BrowserState, ids: string[], openerId: string | undefined): BrowserState {
   const group = openerId && !inPinnedContainer(s, openerId) ? groupOf(s, openerId) : undefined;
-  const joining = group ? ids.filter((id) => !inPinnedContainer(s, id) && s.tabs[id]?.profileId === group.profileId) : [];
+  const joining = group ? ids.filter((id) => !inPinnedContainer(s, id) && s.tabs[id]?.spaceId === group.spaceId) : [];
   if (!group || !joining.length) return s;
   const members = new Set([...group.tabIds, ...joining]);
   const tabIds = s.windows[group.windowId]!.tabIds.filter((id) => members.has(id));
@@ -57,8 +57,8 @@ export function joinedWithCurrent(s: BrowserState, ids: string[], openerId: stri
   return { ...s, groups };
 }
 
-const listStart = (s: BrowserState, w: BrowserWindow, profileId: string) =>
-  s.settings.newTabPosition === "top" ? firstRegular(s, w, profileId) : w.tabIds.length;
+const listStart = (s: BrowserState, w: BrowserWindow, spaceId: string) =>
+  s.settings.newTabPosition === "top" ? firstRegular(s, w, spaceId) : w.tabIds.length;
 
 function afterFamily(s: BrowserState, w: BrowserWindow, tab: Tab, from: number, openerId: string): number {
   const family = new Set([openerId]);
@@ -66,7 +66,7 @@ function afterFamily(s: BrowserState, w: BrowserWindow, tab: Tab, from: number, 
   let index = from;
   for (let i = from; i < w.tabIds.length; i++) {
     const t = s.tabs[w.tabIds[i]!];
-    if (!t || t.profileId !== tab.profileId) continue;
+    if (!t || t.spaceId !== tab.spaceId) continue;
     if (!t.openerId || !family.has(t.openerId) || groupOf(s, t.id)?.id !== group) break;
     family.add(t.id);
     index = i + 1;

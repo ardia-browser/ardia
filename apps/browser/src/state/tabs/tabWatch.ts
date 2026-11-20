@@ -55,26 +55,26 @@ export function useTabValue<T>(tabId: string, select: (tab: Tab | undefined) => 
 
 const inert = Object.assign((_: () => void) => () => {}, { inert: true });
 
-const profileWatchers = new Set<() => void>();
-let watchingProfiles = false;
+const spaceWatchers = new Set<() => void>();
+let watchingSpaces = false;
 
-function watchProfiles(listener: () => void): () => void {
-  if (!watchingProfiles) {
-    watchingProfiles = true;
+function watchSpaces(listener: () => void): () => void {
+  if (!watchingSpaces) {
+    watchingSpaces = true;
     subscribeOf(useBrowser)((s, prev) => {
-      if (s.profiles !== prev.profiles) for (const l of [...profileWatchers]) l();
+      if (s.spaces !== prev.spaces) for (const l of [...spaceWatchers]) l();
     });
   }
-  profileWatchers.add(listener);
-  return () => profileWatchers.delete(listener);
+  spaceWatchers.add(listener);
+  return () => spaceWatchers.delete(listener);
 }
 
-export function useProfilesValue<T>(key: string, select: (profiles: BrowserState["profiles"]) => T): T {
-  const read = () => select(useBrowser.getState().profiles);
+export function useSpacesValue<T>(key: string, select: (spaces: BrowserState["spaces"]) => T): T {
+  const read = () => select(useBrowser.getState().spaces);
   const [value, setValue] = useState(read);
   useEffect(() => {
     setValue(read());
-    return watchProfiles(() => setValue(read()));
+    return watchSpaces(() => setValue(read()));
   }, [key]);
   return value;
 }
@@ -86,7 +86,7 @@ function watchLooks(listener: () => void): () => void {
   if (!watchingLooks) {
     watchingLooks = true;
     subscribeOf(useBrowser)((s, prev) => {
-      if (s.profiles !== prev.profiles || s.ui.appDark !== prev.ui.appDark || s.settings !== prev.settings) for (const l of [...lookWatchers]) l();
+      if (s.spaces !== prev.spaces || s.ui.appDark !== prev.ui.appDark || s.settings !== prev.settings) for (const l of [...lookWatchers]) l();
     });
     useBasePalette.subscribe((s, prev) => {
       if (s.palette !== prev.palette) for (const l of [...lookWatchers]) l();
@@ -96,24 +96,24 @@ function watchLooks(listener: () => void): () => void {
   return () => lookWatchers.delete(listener);
 }
 
-type LookInputs = { profile: BrowserState["profiles"][string] | undefined; appDark: boolean; settings: BrowserState["settings"]; palette: BasePalette | null };
+type LookInputs = { profile: BrowserState["spaces"][string] | undefined; appDark: boolean; settings: BrowserState["settings"]; palette: BasePalette | null };
 
 type Look<T> = (profile: LookInputs["profile"], appDark: boolean, settings: LookInputs["settings"], palette: BasePalette | null) => T;
 
-function lookSnapshot<T>(profileId: string, look: Look<T>): () => T {
+function lookSnapshot<T>(spaceId: string, look: Look<T>): () => T {
   let seen: (LookInputs & { value: T }) | null = null;
   return () => {
     const s = useBrowser.getState();
-    const profile = s.profiles[profileId];
+    const space = s.spaces[spaceId];
     const palette = currentBasePalette();
-    if (seen && seen.profile === profile && seen.appDark === s.ui.appDark && seen.settings === s.settings && seen.palette === palette) return seen.value;
-    seen = { profile, appDark: s.ui.appDark, settings: s.settings, palette, value: look(profile, s.ui.appDark, s.settings, palette) };
+    if (seen && seen.profile === space && seen.appDark === s.ui.appDark && seen.settings === s.settings && seen.palette === palette) return seen.value;
+    seen = { profile: space, appDark: s.ui.appDark, settings: s.settings, palette, value: look(space, s.ui.appDark, s.settings, palette) };
     return seen.value;
   };
 }
 
-export function useLookValue<T>(profileId: string, look: Look<T>): T {
-  const get = useMemo(() => lookSnapshot(profileId, look), [profileId]);
+export function useLookValue<T>(spaceId: string, look: Look<T>): T {
+  const get = useMemo(() => lookSnapshot(spaceId, look), [spaceId]);
   return useSyncExternalStore(watchLooks, get);
 }
 

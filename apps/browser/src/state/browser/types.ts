@@ -11,20 +11,42 @@ export type Frame = [number, number, number, number];
 export type Profile = {
   id: string;
   name: string;
+  icon: string | null;
+  engineId: string;
+  passwordManager?: string;
+  createdAt: number;
+};
+
+export type TopApp = {
+  key: string;
+  url: string;
+  title: string;
+  favicon: string | null;
+  customTitle: string | null;
+  customIcon: string | null;
+  tileFolder?: TileFolder;
+};
+
+export type Space = {
+  id: string;
+  name: string;
   color: ProfileColor;
   icon: string | null;
   createdAt: number;
-  dataId?: string;
+  profileId: string;
   theme?: ProfileTheme | null;
   pinnedCollapsed?: boolean;
   shareTopApps?: true;
+  legacyTopApps?: true;
+  syncProfileLocked?: true;
   syncTabs?: true;
-  passwordManager?: string;
 };
 
 type WindowBase = {
+  originalSpaceId?: string;
+  incognitoEngineId?: string;
   id: string;
-  profileId: string;
+  spaceId: string;
   tabIds: string[];
   activeTabIds: Record<string, string>;
   tabLayout?: "sidebar" | "top";
@@ -48,7 +70,7 @@ export type MainWindow = Extract<BrowserWindow, { kind: "main" }>;
 export type Tab = {
   id: string;
   windowId: string;
-  profileId: string;
+  spaceId: string;
   url: string;
   title: string;
   favicon: string | null;
@@ -101,7 +123,7 @@ export type ClosedGroupInfo = Pick<TabGroup, "id" | "name" | "icon" | "color"> &
 export type TabGroup = {
   id: string;
   windowId: string;
-  profileId: string;
+  spaceId: string;
   name: string;
   icon: string | null;
   color: GroupColor | null;
@@ -146,7 +168,7 @@ export type Bookmarks = {
 
 export type TabSnapshot = Pick<
   Tab,
-  "url" | "title" | "favicon" | "pin" | "muted" | "zoom" | "customTitle" | "customIcon" | "profileId"
+  "url" | "title" | "favicon" | "pin" | "muted" | "zoom" | "customTitle" | "customIcon" | "spaceId"
 > &
   Partial<Pick<Tab, "pinnedUrl" | "engine" | "lastActiveAt">>;
 
@@ -168,7 +190,7 @@ export type ClosedTab = {
 export type ClosedWindow = {
   kind: "window";
   id: string;
-  window: Pick<BrowserWindow, "profileId" | "frame" | "restoredFrame" | "maximized" | "tabLayout" | "autoHideTabs">;
+  window: Pick<BrowserWindow, "spaceId" | "frame" | "restoredFrame" | "maximized" | "tabLayout" | "autoHideTabs">;
   tabs: (TabSnapshot & { active: boolean; tabId?: string })[];
   groups: (Omit<TabGroup, "tabIds" | "windowId" | "shownTabIds"> & { tabIndexes: number[] })[];
   splits?: Pick<SplitView, "orientation" | "slots">[];

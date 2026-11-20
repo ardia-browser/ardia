@@ -2,7 +2,7 @@ import { GROUP_MEMBERS_PAD_BOTTOM, SIDEBAR_GROUP } from "../../lib/sidebarMetric
 import { LIGHTS_CENTER } from "../../state/windows/dockMotion";
 import { layout } from "../ui/theme";
 import { radius } from "../ui/tokens";
-import { profileSwitcher } from "../profiles/tokens";
+import { spaceSwitcher } from "../spaces/tokens";
 import type { ToolbarRow } from "../../lib/toolbarRow";
 import { SCROLL_EDGE } from "./ScrollEdge";
 
@@ -28,7 +28,7 @@ export const SIDEBAR_FIELD_BOTTOM = { above: 6, below: 8 } as const;
 export const bottomFieldBand = () => SIDEBAR_FIELD_BOTTOM.above + SIDEBAR_FIELD.height + SIDEBAR_FIELD_BOTTOM.below;
 const DOWNLOADS_BUTTON_SIZE = 34;
 const FOOTER_BAND_BOTTOM = 3;
-const FOOTER_DOWNLOADS_BOTTOM = FOOTER_BAND_BOTTOM + (profileSwitcher.height - FOOTER_BAND_BOTTOM - DOWNLOADS_BUTTON_SIZE) / 2;
+const FOOTER_DOWNLOADS_BOTTOM = FOOTER_BAND_BOTTOM + (spaceSwitcher.height - FOOTER_BAND_BOTTOM - DOWNLOADS_BUTTON_SIZE) / 2;
 export const SIDEBAR_FOOTER_DOWNLOADS = {
   bottom: FOOTER_DOWNLOADS_BOTTOM,
   left: FOOTER_DOWNLOADS_BOTTOM,

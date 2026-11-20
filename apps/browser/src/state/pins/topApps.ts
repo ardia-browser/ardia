@@ -1,231 +1,221 @@
+import { orderSections as pinnedFirst } from "../groups/groups";
 import type { BrowserState } from "../browser/store";
-import { isPinnedRow, makeTab, pinKeyOf, pinSection, snapshotTab, TILE_PIN } from "../browser/model";
-import type { ParkedPins, Tab } from "../browser/types";
-import { dataGroups, dataIdOf, sharingProfiles } from "../profiles/profiles";
-import { isRegularWindow } from "../windows/small";
-import { writingFromSync } from "./syncWrites";
-import { noteTopAppsSharing, sharingStartedBySync } from "../telemetry/topAppsSharing";
-import { conform, pinnedGroupsOf, pinsMayDiffer, profilesOf, sectionOf, tileSig, union, type Item, type Section } from "./pinMirror";
+import type { Tab, TopApp } from "../browser/types";
+import { makeTab, without } from "../browser/model";
+import { isRegularWindow as mirrored } from "../windows/small";
+import { ASLEEP, hasPage, holderOfPage, isAsleep, wakeOf, wokenPage, withNavigationAt } from "../tabs/pageSession";
+import { pinKeyOf } from "../browser/model";
 
-type Sharing = Pick<BrowserState, "profiles">;
-type Circles = Pick<BrowserState, "profiles" | "profileOrder">;
+const tile = (tab: Tab | undefined): tab is Tab => !!tab && tab.pin?.as === "tile";
+export const isTopApp = (tab: Pick<Tab, "pin">) => tab.pin?.as === "tile";
+const sharingProfile = (s: Pick<BrowserState, "spaces">, id: string) => s.spaces[id]?.shareTopApps && !s.spaces[id]?.legacyTopApps ? s.spaces[id]?.profileId : undefined;
+const profileOf = (s: BrowserState, tab: Tab) => sharingProfile(s, tab.spaceId);
 
-export const isTopApp = (t: Pick<Tab, "pin">) => pinSection(t) === "tile";
-
-const sharingDataOf = (s: Sharing, profileId: string) => {
-  const p = s.profiles[profileId];
-  return p?.shareTopApps ? dataIdOf(p) : undefined;
-};
-
-export function topAppsShared(s: Sharing, a: string, b: string): boolean {
-  if (a === b) return false;
-  const data = sharingDataOf(s, a);
-  return !!data && data === sharingDataOf(s, b);
-}
-
-export const sameTopApp = (s: Sharing, a: Pick<Tab, "pin" | "profileId">, b: Pick<Tab, "pin" | "profileId">) =>
-  isTopApp(a) && isTopApp(b) && topAppsShared(s, a.profileId, b.profileId);
-
-export function topAppCircles(s: Circles): string[][] {
-  return dataGroups(s)
-    .map((g) => g.profileIds.filter((id) => s.profiles[id]!.shareTopApps))
-    .filter((ids) => ids.length > 1);
-}
-
-export const topAppSiblings = (s: Circles, profileId: string): string[] =>
-  s.profiles[profileId]?.shareTopApps ? sharingProfiles(s, profileId).filter((id) => s.profiles[id]!.shareTopApps) : [];
-
-const circleKey = (ids: string[]) => [...ids].sort().join(",");
-
-let lastCircles: { profiles: unknown; profileOrder: unknown; key: string } | null = null;
-
-function circlesKey(s: Circles): string {
-  if (lastCircles && lastCircles.profiles === s.profiles && lastCircles.profileOrder === s.profileOrder) return lastCircles.key;
-  const key = topAppCircles(s)
-    .map(circleKey)
-    .sort()
-    .join("|");
-  lastCircles = { profiles: s.profiles, profileOrder: s.profileOrder, key };
-  return key;
-}
-
-export function sharingChanged(s: Circles, prev: Circles): boolean {
-  if (s.profiles === prev.profiles && s.profileOrder === prev.profileOrder) return false;
-  return circlesKey(s) !== circlesKey(prev);
-}
-
-const topAppItems = (x: Section) => x.items.filter((i) => !i.group && isTopApp(i.tab));
-const topAppSig = (x: Section) => topAppItems(x).map((i) => tileSig(i.tab)).join("\n");
-
-type ParkedPin = ParkedPins["tabs"][number];
-const isParkedTile = (p: ParkedPin) => !p.groupId && !isPinnedRow(p);
-
-function parkedSection(s: Pick<BrowserState, "parkedPins">, profileId: string): Section {
-  const tiles = (s.parkedPins[profileId]?.tabs ?? []).filter(isParkedTile);
-  const items = tiles.map(({ id, groupId: _, restoreFrom: __, ...snap }) => ({
-    tab: { ...makeTab("", profileId, snap.url, { ...snap, profileId, pin: snap.pin ?? TILE_PIN, pinnedUrl: snap.pinnedUrl || snap.url }), id },
-    group: null,
-  }));
-  return { items, groups: new Map(), own: [] };
-}
-
-function withParkedTiles(s: BrowserState, profileId: string, tiles: Item[]): BrowserState {
-  const park = s.parkedPins[profileId] ?? { tabs: [], groups: [] };
-  const old = new Map(park.tabs.filter(isParkedTile).map((p) => [p.id, p]));
-  const entries: ParkedPin[] = tiles.map(({ tab }) => {
-    const id = pinKeyOf(tab);
-    const was = old.get(id);
-    const kept = { pin: tab.pin, customTitle: tab.customTitle, customIcon: tab.customIcon, pinnedUrl: tab.pinnedUrl };
-    const home = tab.pinnedUrl || tab.url;
-    return was && (was.pinnedUrl || was.url) === home ? { ...was, ...kept } : { ...snapshotTab(tab), url: home, profileId, id, groupId: null };
-  });
-  const ids = new Set(entries.map((p) => p.id));
-  const rest = park.tabs.filter((p) => !isParkedTile(p) && !ids.has(p.id));
-  return { ...s, parkedPins: { ...s.parkedPins, [profileId]: { ...park, tabs: [...entries, ...rest] } } };
-}
-
-type Member = { window: string | null; profileId: string };
-
-const keyOf = (i: Item) => pinKeyOf(i.tab);
-
-const EDITABLE = ["pinnedUrl", "customTitle", "customIcon", "pin"] as const;
-const sameField = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
-
-function withChange(target: Item[], before: Item[], after: Item[], blocked: Set<string>): Item[] {
-  const beforeOf = new Map(before.map((i) => [keyOf(i), i]));
-  const afterKeys = new Set(after.map(keyOf));
-  const held = new Set(target.map(keyOf));
-  const reentering = new Set(after.map(keyOf).filter((k) => !beforeOf.has(k) && held.has(k) && !blocked.has(k)));
-  const out = target
-    .filter((i) => afterKeys.has(keyOf(i)) || !beforeOf.has(keyOf(i)))
-    .map((i) => {
-      const now = after.find((a) => keyOf(a) === keyOf(i));
-      if (!now || blocked.has(keyOf(i))) return i;
-      if (reentering.has(keyOf(i))) return { ...i, tab: { ...i.tab, pin: now.tab.pin } };
-      const was = beforeOf.get(keyOf(i));
-      if (!was) return i;
-      const edited = EDITABLE.filter((f) => !sameField(was.tab[f], now.tab[f]));
-      return edited.length ? { ...i, tab: { ...i.tab, ...Object.fromEntries(edited.map((f) => [f, now.tab[f]])) } } : i;
-    });
-  const shared = (keys: string[]) => keys.filter((k) => (beforeOf.has(k) && afterKeys.has(k)) || reentering.has(k));
-  const sourceOrder = shared(after.map(keyOf));
-  if (reentering.size || shared(before.map(keyOf)).join("\n") !== sourceOrder.join("\n")) {
-    const inOut = new Set(out.map(keyOf));
-    const order = sourceOrder.filter((k) => inOut.has(k));
-    const slots = out.map((i, n) => (order.includes(keyOf(i)) ? n : -1)).filter((n) => n >= 0);
-    const byKey = new Map(out.map((i) => [keyOf(i), i]));
-    slots.forEach((slot, n) => (out[slot] = byKey.get(order[n]!)!));
+export function topAppsShared(s: Pick<BrowserState, "spaces">, a: string, b: string): boolean {
+  if (s.spaces[a]?.legacyTopApps || s.spaces[b]?.legacyTopApps) {
+    const one = s.spaces[a], other = s.spaces[b];
+    return !!one?.legacyTopApps && !!other?.legacyTopApps && !!one.shareTopApps && !!other.shareTopApps && one.profileId === other.profileId;
   }
-  after.forEach((item, n) => {
-    const key = keyOf(item);
-    if (beforeOf.has(key) || blocked.has(key) || out.some((i) => keyOf(i) === key)) return;
-    let anchor = -1;
-    for (let m = n - 1; m >= 0 && anchor < 0; m--) anchor = out.findIndex((i) => keyOf(i) === keyOf(after[m]!));
-    out.splice(anchor + 1, 0, item);
-  });
-  return out;
+  const owner = sharingProfile(s, a);
+  return owner !== undefined && owner === sharingProfile(s, b);
 }
 
-const shownAnywhere = (s: BrowserState, p: string) => Object.values(s.windows).some((w) => isRegularWindow(w) && profilesOf(s, w).has(p));
+export const sameTopApp = (s: Pick<BrowserState, "spaces">, a: Pick<Tab, "pin" | "spaceId">, b: Pick<Tab, "pin" | "spaceId">) =>
+  isTopApp(a) && isTopApp(b) && topAppsShared(s, a.spaceId, b.spaceId);
+export const topAppCircles = (s: Pick<BrowserState, "spaces" | "spaceOrder">) => {
+  const profiles = new Map<string, string[]>();
+  for (const id of s.spaceOrder) {
+    const profile = sharingProfile(s, id);
+    if (profile !== undefined) profiles.set(profile, [...(profiles.get(profile) ?? []), id]);
+  }
+  return [...profiles.values()].filter((ids) => ids.length > 1);
+};
+export const sharingChanged = (s: Pick<BrowserState, "spaces">, prev: Pick<BrowserState, "spaces">) =>
+  s.spaces !== prev.spaces && [...new Set([...Object.keys(s.spaces), ...Object.keys(prev.spaces)])].some((id) => {
+    const a = s.spaces[id], b = prev.spaces[id];
+    return a?.legacyTopApps !== b?.legacyTopApps || (a?.shareTopApps ? a.profileId : undefined) !== (b?.shareTopApps ? b.profileId : undefined);
+  });
+const specOf = (tab: Tab): TopApp => ({
+  key: pinKeyOf(tab), url: tab.pinnedUrl || tab.url, title: tab.title, favicon: tab.favicon,
+  customTitle: tab.customTitle, customIcon: tab.customIcon, ...((tab.pin?.as === "tile" ? tab.pin.folder : undefined) ? { tileFolder: (tab.pin?.as === "tile" ? tab.pin.folder : undefined) } : {}),
+});
+const signature = (items: TopApp[]) => JSON.stringify(items.map(({ title: _t, favicon: _f, ...item }) => item));
 
-function keepEmptiedParks(s: BrowserState, prev: BrowserState, circles: string[][]): BrowserState | null {
-  if (s.parkedPins === prev.parkedPins) return null;
-  const emptied = circles.flat().filter((p) => prev.parkedPins[p] && !s.parkedPins[p] && !shownAnywhere(s, p));
-  if (!emptied.length) return null;
-  return { ...s, parkedPins: { ...s.parkedPins, ...Object.fromEntries(emptied.map((p) => [p, { tabs: [], groups: [] }])) } };
+function mergeJoiningTopApps(s: BrowserState, prev: BrowserState): BrowserState {
+  if (s.spaces === prev.spaces || s.topApps !== prev.topApps) return s;
+  let topApps = s.topApps;
+  let tabs = s.tabs;
+  for (const spaceId of s.spaceOrder) {
+    const profileId = sharingProfile(s, spaceId);
+    const before = prev.spaces[spaceId];
+    if (!profileId || !before || before.shareTopApps || before.profileId !== profileId) continue;
+    const items = [...(topApps[profileId] ?? [])];
+    for (const tab of Object.values(tabs)) {
+      if (tab.spaceId !== spaceId || !tile(tab) || !mirrored(s.windows[tab.windowId])) continue;
+      const item = specOf(tab);
+      const match = items.find(({ key, url }) => key === item.key || url === item.url);
+      if (!match) items.push(item);
+      else if (match.key !== item.key) {
+        if (tabs === s.tabs) tabs = { ...tabs };
+        tabs[tab.id] = { ...tab, pinKey: match.key };
+      }
+    }
+    if (items.length !== (topApps[profileId]?.length ?? 0)) topApps = { ...topApps, [profileId]: items };
+  }
+  return tabs === s.tabs && topApps === s.topApps ? s : { ...s, tabs, topApps };
 }
 
 export function mirrorTopApps(s: BrowserState, prev: BrowserState): BrowserState | null {
-  const key = circlesKey(s);
-  const recorded = key !== s.topAppsMerged ? { ...s, topAppsMerged: key } : s;
-  const onlyRecorded = recorded === s ? null : recorded;
-  if (!key) return onlyRecorded;
-  if (!onlyRecorded && s.parkedPins === prev.parkedPins && (writingFromSync() || !pinsMayDiffer(s, prev))) return null;
-  const circles = topAppCircles(s);
-  const merged = s.topAppsMerged.split("|").map((k) => new Set(k.split(",")));
-  const joining = new Set(circles.filter((c) => !merged.some((m) => c.every((id) => m.has(id)))).map(circleKey));
-  const kept = writingFromSync() ? keepEmptiedParks(recorded, prev, circles) : null;
-  if (!joining.size && (kept || writingFromSync())) return kept ?? onlyRecorded;
-  if (!joining.size && !pinsMayDiffer(s, prev) && s.parkedPins === prev.parkedPins) return onlyRecorded;
-  const order = [...new Set([...s.ui.focusOrder, ...s.windowOrder])].filter((id) => isRegularWindow(s.windows[id]));
-  const prevGroups = pinnedGroupsOf(prev);
-  const hadPlace = (p: string) => shownAnywhere(prev, p);
-  let next: BrowserState = kept ?? recorded;
-  const copiedProfiles = new Set<string>();
-  let copiedTiles = 0;
-  let removedTiles = 0;
-  const copiedCircles = new Set<string>();
-  const copied = (circle: string[], profileId: string, own: Item[], tiles: Item[]) => {
-    copiedCircles.add(circleKey(circle));
-    if (copiedProfiles.has(profileId)) return;
-    copiedProfiles.add(profileId);
-    const had = new Set(own.map((x) => pinKeyOf(x.tab)));
-    const has = new Set(tiles.map((x) => pinKeyOf(x.tab)));
-    copiedTiles += [...has].filter((key) => !had.has(key)).length;
-    removedTiles += [...had].filter((key) => !has.has(key)).length;
+  if (s.tabs === prev.tabs && s.windows === prev.windows && s.spaces === prev.spaces && s.topApps === prev.topApps && s.parkedPins === prev.parkedPins) return null;
+  const initial = s;
+  s = mergeJoiningTopApps(s, prev);
+  let topApps = s.topApps;
+  const edit = (profileId: string, items: TopApp[]) => {
+    if (signature(topApps[profileId] ?? []) === signature(items) && topApps[profileId]) return;
+    topApps = { ...topApps, [profileId]: items };
   };
-  for (const circle of circles) {
-    const turnedOn = joining.has(circleKey(circle));
-    if (!turnedOn && writingFromSync()) continue;
-    const members = circle.flatMap((p): Member[] => {
-      const windows = order.filter((w) => profilesOf(next, next.windows[w]!).has(p));
-      return windows.length ? windows.map((w) => ({ window: w, profileId: p })) : [{ window: null, profileId: p }];
-    });
-    if (members.length < 2) continue;
-    const nowGroups = pinnedGroupsOf(next);
-    const sectionNow = (m: Member) => (m.window ? sectionOf(next, next.windows[m.window]!, m.profileId, nowGroups) : parkedSection(next, m.profileId));
-    const sections = members.map(sectionNow);
-    const sigs = sections.map(topAppSig);
-    if (new Set(sigs).size === 1) continue;
-    const sectionBefore = ({ window: w, profileId: p }: Member): Section => {
-      const before = w ? prev.windows[w] : undefined;
-      return isRegularWindow(before) && profilesOf(prev, before).has(p) ? sectionOf(prev, before, p, prevGroups) : parkedSection(prev, p);
-    };
-    const wasParked = (p: string) => (!hadPlace(p) && prev.parkedPins[p] ? topAppSig(parkedSection(prev, p)) : null);
-    const was = ({ window: w, profileId: p }: Member) => {
-      if (!w) return hadPlace(p) || !prev.parkedPins[p] ? null : topAppSig(parkedSection(prev, p));
-      const before = prev.windows[w];
-      return isRegularWindow(before) && profilesOf(prev, before).has(p) ? topAppSig(sectionOf(prev, before, p, prevGroups)) : wasParked(p);
-    };
-    const source = turnedOn
-      ? -1
-      : members.findIndex((m, i) => {
-          const before = was(m);
-          return before !== null && before !== sigs[i];
+  if (s.topApps === prev.topApps || !Object.keys(s.topApps).length) {
+    for (const profile of Object.values(s.profiles)) {
+      const sourceWindow = s.ui.focusOrder.find((id) => {
+        const w = s.windows[id], was = prev.windows[id];
+        return w && was && mirrored(w) && sharingProfile(s, w.spaceId) === profile.id && (w.tabIds !== was.tabIds || w.tabIds.some((key) => { const tab = s.tabs[key], before = prev.tabs[key]; return tile(tab) && before !== tab && (!tile(before) || signature([specOf(tab)]) !== signature([specOf(before)])); }));
+      });
+      let items = topApps[profile.id];
+      if (!items) {
+        const seen = new Set<string>();
+        items = Object.values(s.tabs).filter((tab) => tile(tab) && profileOf(s, tab) === profile.id).flatMap((tab) => {
+          const key = pinKeyOf(tab);
+          if (seen.has(key)) return [];
+          seen.add(key);
+          return [specOf(tab)];
         });
-    const old = members.map((m, i) => (was(m) === null ? null : i)).filter((i): i is number => i !== null);
-    const receives = (i: number) => source >= 0 || turnedOn || (old.length > 0 && !old.includes(i));
-    const merged = source >= 0 ? [] : topAppItems(union((old.length ? old : members.map((_, i) => i)).map((i) => ({ ...sections[i]!, items: topAppItems(sections[i]!) }))));
-    const before = source >= 0 ? topAppItems(sectionBefore(members[source]!)) : [];
-    const after = source >= 0 ? topAppItems(sections[source]!) : [];
-    members.forEach(({ window: w, profileId: p }, i) => {
-      if (i === source || !receives(i)) return;
-      const blocked = new Set(sections[i]!.items.filter((x) => x.group || !isTopApp(x.tab)).map((x) => pinKeyOf(x.tab)));
-      if (!w) for (const e of next.parkedPins[p]?.tabs ?? []) if (!isParkedTile(e)) blocked.add(e.id);
-      const own = topAppItems(sections[i]!);
-      const tiles = source >= 0 ? withChange(own, before, after, blocked) : merged.filter((x) => !blocked.has(pinKeyOf(x.tab)));
-      if (tiles.map((x) => tileSig(x.tab)).join("\n") === sigs[i]) return;
-      if (!w) {
-        next = withParkedTiles(next, p, tiles);
-        copied(circle, p, own, tiles);
-        return;
+        edit(profile.id, items);
       }
-      if (!next.windows[w]) return;
-      const section = sectionOf(next, next.windows[w]!, p, pinnedGroupsOf(next));
-      next = conform(next, w, p, { ...section, items: [...section.items.filter((x) => x.group || !isTopApp(x.tab)), ...tiles] });
-      copied(circle, p, own, tiles);
-    });
+      for (const [spaceId, park] of Object.entries(prev.parkedPins)) {
+        if (park === s.parkedPins[spaceId] || sharingProfile(s, spaceId) !== profile.id || sharingProfile(prev, spaceId) !== profile.id) continue;
+        const next = s.parkedPins[spaceId]?.tabs ?? [];
+        const gone = park.tabs.filter((tab) => !tab.groupId && tab.pin?.as !== "row" && !next.some((other) => other.id === tab.id) && !Object.values(s.tabs).some((other) => tile(other) && profileOf(s, other) === profile.id && pinKeyOf(other) === tab.id));
+        if (gone.length) { items = items.filter((item) => !gone.some((tab) => tab.id === item.key)); edit(profile.id, items); }
+        for (const tab of next) {
+          const before = park.tabs.find((other) => other.id === tab.id);
+          if (tab.groupId || tab.pin?.as === "row" || !before || JSON.stringify((before.pin?.as === "tile" ? before.pin.folder : undefined)) === JSON.stringify((tab.pin?.as === "tile" ? tab.pin.folder : undefined))) continue;
+          items = items.map((item) => item.key === tab.id ? { ...item, tileFolder: (tab.pin?.as === "tile" ? tab.pin.folder : undefined) } : item);
+          edit(profile.id, items);
+        }
+      }
+      const removed = new Set(Object.values(prev.tabs).filter((tab) => tile(tab) && profileOf(prev, tab) === profile.id && sharingProfile(s, tab.spaceId) === profile.id && s.windows[tab.windowId] && (s.tabs[tab.id] ? !tile(s.tabs[tab.id]) || profileOf(s, s.tabs[tab.id]!) !== profile.id : !Object.values(s.tabs).some((other) => tile(other) && profileOf(s, other) === profile.id && pinKeyOf(other) === pinKeyOf(tab)))).map(pinKeyOf));
+      if (removed.size) { items = items.filter((item) => !removed.has(item.key)); edit(profile.id, items); }
+      for (const tab of Object.values(s.tabs)) {
+        if (!tile(tab) || profileOf(s, tab) !== profile.id || sourceWindow && tab.windowId !== sourceWindow || !mirrored(s.windows[tab.windowId])) continue;
+        const before = prev.tabs[tab.id];
+        if (before === tab || (prev.spaces[tab.spaceId] && prev.spaces[tab.spaceId]!.profileId !== profile.id)) continue;
+        const spec = specOf(tab);
+        if (before && tile(before) && signature([specOf(before)]) === signature([spec])) continue;
+        const at = items.findIndex((item) => item.key === spec.key);
+        if (at < 0) { items = [...items, spec]; edit(profile.id, items); }
+        else if (signature([items[at]!]) !== signature([spec])) { items = items.map((item, i) => i === at ? spec : item); edit(profile.id, items); }
+      }
+      const changedWindow = s.ui.focusOrder.map((id) => s.windows[id]).find((w) => w && mirrored(w) && prev.windows[w.id] && w.tabIds !== prev.windows[w.id]!.tabIds && sharingProfile(s, w.spaceId) === profile.id && prev.windows[w.id]!.spaceId === w.spaceId);
+      if (changedWindow) {
+        const order = [...new Set(changedWindow.tabIds.flatMap((id) => {
+          const tab = s.tabs[id];
+          return tile(tab) && tab.spaceId === changedWindow.spaceId ? [pinKeyOf(tab)] : [];
+        }))];
+        if (order.length === items.length && items.every((item) => order.includes(item.key))) edit(profile.id, order.map((key) => items!.find((item) => item.key === key)!));
+      }
+    }
   }
-  if (copiedProfiles.size) {
-    noteTopAppsSharing("top_apps_mirrored", {
-      circles: circles.length,
-      joining_circles: joining.size,
-      circles_changed: copiedCircles.size,
-      profiles_changed: copiedProfiles.size,
-      tiles: copiedTiles,
-      tiles_removed: removedTiles,
-      from_sync: writingFromSync() || sharingStartedBySync(),
-    });
+  let tabs = s.tabs;
+  let windows = s.windows;
+  let parkedTopApps = s.parkedTopApps;
+  for (const w of Object.values(s.windows)) {
+    if (!mirrored(w)) continue;
+    const sharing = s.spaceOrder.filter((id) => topAppsShared(s, id, w.spaceId));
+    const spaceIds = new Set([w.spaceId, ...sharing, ...w.tabIds.flatMap((id) => s.tabs[id]?.spaceId ? [s.tabs[id]!.spaceId] : [])]);
+    let ids = w.tabIds;
+    let activeTabIds = w.activeTabIds;
+    for (const spaceId of spaceIds) {
+      const profileId = sharingProfile(s, spaceId);
+      if (!profileId) continue;
+      const specs = topApps[profileId] ?? [];
+      const own = ids.flatMap((id) => tile(tabs[id]) && tabs[id]!.spaceId === spaceId ? [tabs[id]!] : []);
+      const keys = new Set(specs.map((item) => item.key));
+      for (const tab of own) {
+        if (keys.has(pinKeyOf(tab))) continue;
+        if (tabs === s.tabs) tabs = { ...tabs };
+        if (hasPage(tab) || wakeOf(tab)) tabs[tab.id] = { ...tab, pin: null, pinnedUrl: null, pinKey: undefined };
+        else { delete tabs[tab.id]; ids = ids.filter((id) => id !== tab.id); }
+      }
+      const tiles: string[] = [];
+      for (const spec of specs) {
+        let tab = own.filter((candidate) => pinKeyOf(candidate) === spec.key && tabs[candidate.id]).sort((a, b) => Number(hasPage(b)) - Number(hasPage(a)) || b.lastActiveAt - a.lastActiveAt)[0];
+        const parked = parkedTopApps[profileId]?.find((candidate) => pinKeyOf(candidate) === spec.key);
+        if (parked) {
+          if (tabs === s.tabs) tabs = { ...tabs };
+          if (tab && tab.id !== parked.id) {
+            const replaced = tab.id;
+            delete tabs[replaced];
+            ids = ids.map((id) => id === replaced ? parked.id : id);
+            activeTabIds = Object.fromEntries(Object.entries(activeTabIds).map(([id, value]) => [id, value === replaced ? parked.id : value]));
+          }
+          tab = { ...parked, windowId: w.id, spaceId, page: hasPage(parked) ? withNavigationAt(parked) : wokenPage(parked) };
+          tabs[tab.id] = tab;
+          parkedTopApps = { ...parkedTopApps, [profileId]: parkedTopApps[profileId]!.filter((candidate) => candidate.id !== parked.id) };
+        }
+        if (!tab) {
+          const sources = Object.values(tabs).filter((candidate) => tile(candidate) && profileOf(s, candidate) === profileId && pinKeyOf(candidate) === spec.key);
+          const source = sources.find(hasPage) ?? sources[0] ?? spec;
+          tab = { ...makeTab(w.id, spaceId, spec.url), pin: spec.tileFolder ? { as: "tile", folder: spec.tileFolder } : { as: "tile" }, pinnedUrl: spec.url, pinKey: spec.key, page: ASLEEP, title: source.title, favicon: source.favicon, customTitle: spec.customTitle, customIcon: spec.customIcon };
+          if (tabs === s.tabs) tabs = { ...tabs };
+          tabs[tab.id] = tab;
+        } else if (signature([specOf(tab)]) !== signature([spec])) {
+          if (tabs === s.tabs) tabs = { ...tabs };
+          tabs[tab.id] = { ...tab, ...(isAsleep(tab) ? { url: spec.url } : {}), pinnedUrl: spec.url, customTitle: spec.customTitle, customIcon: spec.customIcon, pin: spec.tileFolder ? { as: "tile", folder: spec.tileFolder } : { as: "tile" } };
+        }
+        tiles.push(tab.id);
+      }
+      for (const duplicate of own) {
+        if (tiles.includes(duplicate.id) || !tabs[duplicate.id] || !keys.has(pinKeyOf(duplicate))) continue;
+        if (tabs === s.tabs) tabs = { ...tabs };
+        if (hasPage(duplicate) || wakeOf(duplicate)) tabs[duplicate.id] = { ...duplicate, pin: null, pinnedUrl: null, pinKey: undefined };
+        else {
+          const target = tiles.find((id) => pinKeyOf(tabs[id]!) === pinKeyOf(duplicate));
+          delete tabs[duplicate.id];
+          ids = ids.filter((id) => id !== duplicate.id);
+          if (target) activeTabIds = Object.fromEntries(Object.entries(activeTabIds).map(([id, value]) => [id, value === duplicate.id ? target : value]));
+        }
+      }
+      const oldTiles = new Set(own.filter((tab) => tile(tabs[tab.id])).map((tab) => tab.id));
+      const first = ids.findIndex((id) => oldTiles.has(id) || s.tabs[id]?.spaceId === spaceId);
+      const rest = ids.filter((id) => !oldTiles.has(id));
+      const at = first < 0 ? rest.length : Math.min(first, rest.length);
+      const next = [...rest.slice(0, at), ...tiles, ...rest.slice(at)];
+      if (next.length !== ids.length || next.some((id, i) => id !== ids[i])) ids = next;
+    }
+    const sorted = ids.some((id) => tile(tabs[id])) || w.tabIds.some((id) => tile(prev.tabs[id])) ? pinnedFirst(ids, tabs, s.groups) : ids;
+    if (sorted.some((id, i) => id !== ids[i])) ids = sorted;
+    if (ids !== w.tabIds || activeTabIds !== w.activeTabIds) { if (windows === s.windows) windows = { ...windows }; windows[w.id] = { ...w, tabIds: ids, activeTabIds }; }
   }
-  return next === s ? null : next;
+  return s === initial && topApps === s.topApps && tabs === s.tabs && windows === s.windows && parkedTopApps === s.parkedTopApps ? null : { ...s, topApps, tabs, windows, parkedTopApps };
+}
+
+export function parkSpaceTopApps(s: BrowserState, spaceId: string): BrowserState {
+  const profileId = sharingProfile(s, spaceId);
+  if (!profileId) return s;
+  const owners = Object.values(s.tabs).filter((tab) => tab.spaceId === spaceId && tile(tab) && !holderOfPage(tab) && (hasPage(tab) || wakeOf(tab)));
+  if (!owners.length) return s;
+  const removed = new Set(owners.map((tab) => tab.id));
+  const parked = [...(s.parkedTopApps[profileId] ?? []).filter((tab) => !owners.some((owner) => pinKeyOf(owner) === pinKeyOf(tab))), ...owners];
+  return {
+    ...s, parkedTopApps: { ...s.parkedTopApps, [profileId]: parked },
+    tabs: without(s.tabs, [...removed]),
+    windows: Object.fromEntries(Object.entries(s.windows).map(([id, w]) => [id, w.tabIds.some((key) => removed.has(key)) ? { ...w, tabIds: w.tabIds.filter((key) => !removed.has(key)), activeTabIds: Object.fromEntries(Object.entries(w.activeTabIds).flatMap(([space, key]) => {
+      const next = removed.has(key) ? w.tabIds.find((candidate) => !removed.has(candidate) && s.tabs[candidate]?.spaceId === space && !tile(s.tabs[candidate])) : key;
+      return next ? [[space, next]] : [];
+    })) } : w])),
+  };
+}
+
+export function parkedTopAppOwners(s: Pick<BrowserState, "parkedTopApps">): Map<string, { profileId: string; tab: Tab }> {
+  return new Map(Object.entries(s.parkedTopApps).flatMap(([profileId, tabs]) => tabs.map((tab) => [tab.id, { profileId, tab }] as const)));
 }

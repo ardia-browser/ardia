@@ -1,6 +1,6 @@
 import { useContext } from "react";
 import { Animated, View } from "react-native";
-import { useIsActiveTab, usePageProfileId, useTab, useWindowId } from "../../state/browser/hooks";
+import { useIsActiveTab, usePageSpaceId, useTab, useWindowId } from "../../state/browser/hooks";
 import { useShownTabIdFor } from "../../state/tabs/topStrip";
 import { TabIcon } from "../sidebar/TabIcon";
 import { Divider, FadeLabel, Symbol } from "../ui";
@@ -29,8 +29,8 @@ export function SplitChip({ tabIds, width, paneWidths, geometry: givenGeometry, 
   const fromOf = () => givenFrom ?? strip?.current.slotOf(tabIds[0]!) ?? -1;
   const onTint = useTheme();
   const windowId = useWindowId();
-  const profileId = usePageProfileId();
-  const focusedId = useShownTabIdFor(windowId, profileId);
+  const spaceId = usePageSpaceId();
+  const focusedId = useShownTabIdFor(windowId, spaceId);
   const active = tabIds.includes(focusedId);
   const theme = active ? surfaceTheme(onTint) : onTint;
   const { band, palette } = useWebsiteBand(active ? focusedId : tabIds[0]!);
@@ -101,7 +101,7 @@ function SplitPart({ tabId, first, last, ink, width }: { tabId: string; first: b
           <Divider vertical length={SPLIT_DIVIDER_LENGTH} color={ink?.divider ?? theme.textTertiary} style={SPLIT_DIVIDER_GAP} />
         )}
         <View pointerEvents="none">
-          <TabIcon url={tab.url} favicon={tab.favicon} icon={tab.customIcon} compact profileId={tab.profileId} />
+          <TabIcon url={tab.url} favicon={tab.favicon} icon={tab.customIcon} compact spaceId={tab.spaceId} />
         </View>
         <FadeLabel text={tabTitle(tab)} fontSize={font.small.fontSize} color={ink ? (focused ? ink.text : ink.secondary) : focused ? theme.tabSelectedText : theme.textTab} strikethrough={struck} style={{ flex: 1, height: 16, marginLeft: CHIP_LABEL_GAP, opacity: struck ? SLEEPING_TITLE_OPACITY : 1 }} />
       </TabPressArea>

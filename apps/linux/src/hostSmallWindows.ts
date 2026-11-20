@@ -1,10 +1,10 @@
 import type { BrowserState, HydrateData } from "../../browser/src/state/browser/store";
-import type { BrowserWindow, Profile, Tab } from "../../browser/src/state/browser/types";
+import type { BrowserWindow, Profile, Space, Tab } from "../../browser/src/state/browser/types";
 import type { ArdiaHost } from "./host";
-import { activeTabId, isIncognitoProfile } from "../../browser/src/state/browser/model";
+import { activeTabId, isIncognitoSpace } from "../../browser/src/state/browser/model";
 import { adoptOf, navigationOf } from "../../browser/src/state/tabs/pageSession";
 
-export type SmallWindowSeed = { window: BrowserWindow; tabs: Record<string, Tab>; profile: Profile; at: number };
+export type SmallWindowSeed = { window: BrowserWindow; tabs: Record<string, Tab>; space: Space; profile: Profile; at: number };
 export type SeedStorage = Pick<Storage, "getItem" | "setItem" | "removeItem" | "key" | "length">;
 type Frame = [number, number, number, number];
 export type ScreenArea = { width: number; height: number; availLeft: number; availTop: number; availWidth: number; availHeight: number };
@@ -26,16 +26,17 @@ const seedStorage = (): SeedStorage | undefined => {
   }
 };
 
-export function smallWindowSeed(state: Pick<BrowserState, "windows" | "tabs" | "profiles">, id: string, now = Date.now()): SmallWindowSeed | undefined {
+export function smallWindowSeed(state: Pick<BrowserState, "windows" | "tabs" | "profiles" | "spaces">, id: string, now = Date.now()): SmallWindowSeed | undefined {
   const w = state.windows[id];
-  const profile = w && state.profiles[w.profileId];
-  if (w?.kind !== "small" || !profile || isIncognitoProfile(w.profileId)) return undefined;
+  const space = w && state.spaces[w.spaceId];
+  const profile = space && state.profiles[space.profileId];
+  if (w?.kind !== "small" || !space || !profile || isIncognitoSpace(w.spaceId)) return undefined;
   const tabs: Record<string, Tab> = {};
   for (const tabId of w.tabIds) {
     const tab = state.tabs[tabId];
-    if (tab && tab.windowId === id && !isIncognitoProfile(tab.profileId)) tabs[tabId] = tab;
+    if (tab && tab.windowId === id && !isIncognitoSpace(tab.spaceId)) tabs[tabId] = tab;
   }
-  return { window: { ...w, tabIds: w.tabIds.filter((tabId) => tabs[tabId]) }, tabs, profile, at: now };
+  return { window: { ...w, tabIds: w.tabIds.filter((tabId) => tabs[tabId]) }, tabs, space, profile, at: now };
 }
 
 function expiredSeeds(storage: SeedStorage, now: number): string[] {
@@ -51,7 +52,7 @@ function expiredSeeds(storage: SeedStorage, now: number): string[] {
 
 const shapedSeed = (value: unknown): SmallWindowSeed | undefined => {
   const seed = value as SmallWindowSeed | null;
-  return seed && typeof seed === "object" && typeof seed.at === "number" && seed.window && typeof seed.window === "object" && seed.tabs && typeof seed.tabs === "object" && seed.profile && typeof seed.profile === "object" ? seed : undefined;
+  return seed && typeof seed === "object" && typeof seed.at === "number" && seed.window && typeof seed.window === "object" && seed.tabs && typeof seed.tabs === "object" && seed.space && typeof seed.space === "object" && seed.profile && typeof seed.profile === "object" ? seed : undefined;
 };
 
 function parsedSeed(text: string | null): SmallWindowSeed | undefined {
@@ -65,7 +66,7 @@ function parsedSeed(text: string | null): SmallWindowSeed | undefined {
 
 const seedFor = (seed: SmallWindowSeed | undefined, windowId: string): SmallWindowSeed | undefined => {
   const w = seed?.window;
-  if (!seed || !w || w.id !== windowId || w.kind !== "small" || typeof w.profileId !== "string" || isIncognitoProfile(w.profileId) || seed.profile.id !== w.profileId || !Array.isArray(w.tabIds)) return undefined;
+  if (!seed || !w || w.id !== windowId || w.kind !== "small" || typeof w.spaceId !== "string" || isIncognitoSpace(w.spaceId) || seed.space.id !== w.spaceId || typeof seed.profile.id !== "string" || seed.profile.id !== seed.space.profileId || !Array.isArray(w.tabIds)) return undefined;
   return seed;
 };
 
@@ -115,21 +116,26 @@ export function takeSmallWindow(windowId: string, storage: SeedStorage | undefin
 
 export function withSmallWindow(host: ArdiaHost, session: HydrateData, storage?: SeedStorage, now = Date.now()): HydrateData | undefined {
   const { windowId, startup, pageProfile, privateWindow, windowKind, smallWindow } = host.bootstrap;
-  if (startup !== false || privateWindow || (pageProfile && isIncognitoProfile(pageProfile)) || session.windows?.[windowId]) return undefined;
+  if (startup !== false || privateWindow || (pageProfile && isIncognitoSpace(pageProfile)) || session.windows?.[windowId]) return undefined;
   if (windowKind !== undefined && windowKind !== SMALL_WINDOW_KIND) return undefined;
   const stored = storage ? takeSmallWindow(windowId, storage, now) : takeSmallWindow(windowId, undefined, now);
   const seed = (windowKind === SMALL_WINDOW_KIND ? seedFor(shapedSeed(smallWindow), windowId) : undefined) ?? stored;
   if (!seed) return undefined;
   const w = seed.window;
+  const space = session.spaces?.[w.spaceId] ?? seed.space;
+  const profiles = { ...session.profiles };
+  if (space.profileId === seed.profile.id) profiles[space.profileId] ??= seed.profile;
+  if (!profiles[space.profileId]) return undefined;
   const tabs = Object.fromEntries(Object.entries(seed.tabs)
-    .filter(([id, tab]) => tab?.id === id && tab.windowId === windowId && typeof tab.profileId === "string" && !isIncognitoProfile(tab.profileId) && !session.tabs?.[id]));
+    .filter(([id, tab]) => tab?.id === id && tab.windowId === windowId && typeof tab.spaceId === "string" && !isIncognitoSpace(tab.spaceId) && !session.tabs?.[id]));
   const tabIds = w.tabIds.filter((id) => tabs[id]);
   if (!tabIds.length) return undefined;
   const activeTabIds = Object.fromEntries(Object.entries(w.activeTabIds ?? {}).filter(([, id]) => tabs[id]));
   return {
     ...session,
-    profiles: { ...session.profiles, [w.profileId]: session.profiles?.[w.profileId] ?? seed.profile },
-    profileOrder: [...new Set([...(session.profileOrder ?? []), w.profileId])],
+    profiles,
+    spaces: { ...session.spaces, [w.spaceId]: space },
+    spaceOrder: [...new Set([...(session.spaceOrder ?? []), w.spaceId])],
     windows: { ...session.windows, [windowId]: { ...w, tabIds, activeTabIds } },
     windowOrder: [...new Set([...(session.windowOrder ?? []), windowId])],
     tabs: { ...session.tabs, ...tabs },

@@ -20,7 +20,7 @@ export function noteNotificationShown(tabId: string, n: { origin: string; title:
   sink("notification.shown", {
     windowId: t.windowId,
     tabId,
-    profile: t.profileId,
+    profile: t.spaceId,
     origin: n.origin,
     title: cut(n.title ?? "", NOTIFICATION_TITLE_LIMIT),
     body: cut(n.body ?? "", NOTIFICATION_BODY_LIMIT),

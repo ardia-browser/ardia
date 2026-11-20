@@ -8,6 +8,7 @@ import { appearanceRows } from "./rows/appearanceRows";
 import { automationRows } from "./rows/automationRows";
 import { generalRows } from "./rows/generalRows";
 import { pluginRows } from "./rows/pluginRows";
+import { workspaceRows } from "./rows/workspaceRows";
 import { profileRows } from "./rows/profileRows";
 import { shortcutRows } from "./rows/shortcutRows";
 import { tabRows } from "./rows/tabRows";
@@ -18,6 +19,8 @@ type PaneTint = Exclude<keyof typeof paneTints, "ink">;
 const PANE_LOOKS: Record<SettingsPane, { title: string; icon: string; tint: PaneTint }> = {
   general: { title: "General", icon: "gearshape.fill", tint: "gray" },
   profiles: { title: "Profiles", icon: "person.2.fill", tint: "blue" },
+  spaces: { title: "Spaces", icon: "square.stack", tint: "blue" },
+  sync: { title: "Sync", icon: "arrow.triangle.2.circlepath", tint: "indigo" },
   tabs: { title: "Tabs", icon: "square.on.square.fill", tint: "orange" },
   appearance: { title: "Appearance", icon: "circle.lefthalf.filled", tint: "indigo" },
   automations: { title: "Automations", icon: "wand.and.rays", tint: "purple" },
@@ -28,7 +31,7 @@ const PANE_LOOKS: Record<SettingsPane, { title: string; icon: string; tint: Pane
 
 export const PANES: { id: SettingsPane; title: string; icon: string; tint: PaneTint }[] = SETTINGS_PANES.map((id) => ({ id, ...PANE_LOOKS[id] }));
 
-const ROWS = { ...generalRows, ...profileRows, ...tabRows, ...appearanceRows, ...automationRows, ...pluginRows, ...shortcutRows, ...advancedRows };
+const ROWS = { ...generalRows, ...profileRows, ...tabRows, ...appearanceRows, ...automationRows, ...pluginRows, ...shortcutRows, ...advancedRows, ...workspaceRows };
 const SECTIONS = ROWS as unknown as Record<SettingsPane, SettingSection[]>;
 
 type RowKeysOf<P extends SettingsPane> = (typeof ROWS)[P][number] extends infer S ? (S extends { rows: infer R } ? keyof R & string : never) : never;

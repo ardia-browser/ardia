@@ -1,3 +1,4 @@
+import { profileEngine as currentEngineProfile } from "../../../state/profiles/current";
 import {
   cardNetworkName,
   deleteAddress,
@@ -15,7 +16,6 @@ import { Box, Button, DialogActions, DialogTitle, type Option, PopUp, Sheet, spa
 import { useState, type ReactNode } from "react";
 import { View } from "react-native";
 import { useTheme } from "../../ui/theme";
-import { currentEngineProfile } from "../../../state/browser/current";
 import { Group, Row, SectionHeader } from "../Form";
 import { NetworkBadge } from "../../site/Autofill";
 import { addresses as addressList, cards as cardList } from "../../../state/settings/paneData";

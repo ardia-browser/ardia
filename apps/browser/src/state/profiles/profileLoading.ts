@@ -3,7 +3,7 @@ import { useShallow } from "zustand/react/shallow";
 import { loadedProfiles, onProfileLoaded } from "../../platform/profiles";
 import { switchOn } from "../../platform/killSwitches";
 import { useBrowser, type BrowserState } from "../browser/store";
-import { engineProfile, incognitoOriginal, isIncognitoProfile } from "../browser/model";
+import { engineProfile, incognitoOriginal, isIncognitoSpace } from "../browser/model";
 import { engineProfiles } from "./engineProfiles";
 
 type ProfileLoading = { deferred: boolean; opened: Readonly<Record<string, true>>; unloaded: Readonly<Record<string, true>> };
@@ -20,11 +20,11 @@ export const useOpenedEngines = (engines: readonly string[]): string[] =>
 export const useProfileOpened = (profileId: string): boolean =>
   useProfileLoading((l) => profileOpened(engineProfile(useBrowser.getState(), profileId), l));
 
-export function shownEngineProfiles(s: Pick<BrowserState, "profiles" | "windows">): string[] {
+export function shownEngineProfiles(s: Pick<BrowserState, "profiles" | "spaces" | "windows">): string[] {
   const shown = new Set<string>();
   for (const w of Object.values(s.windows)) {
-    const id = isIncognitoProfile(w.profileId) ? incognitoOriginal(w.profileId) : w.profileId;
-    if (s.profiles[id]) shown.add(engineProfile(s, id));
+    const id = isIncognitoSpace(w.spaceId) ? incognitoOriginal(w.spaceId) : w.spaceId;
+    if (s.spaces[id]) shown.add(engineProfile(s, id));
   }
   return [...shown];
 }
@@ -82,7 +82,7 @@ export function startProfileLoading(): () => void {
     );
   }
   const shown = useBrowser.subscribe((next, prev) => {
-    if (next.windows === prev.windows && next.profiles === prev.profiles) return;
+    if (next.windows === prev.windows && next.profiles === prev.profiles && next.spaces === prev.spaces) return;
     for (const engine of shownEngineProfiles(next)) openProfile(engine);
   });
   return () => {

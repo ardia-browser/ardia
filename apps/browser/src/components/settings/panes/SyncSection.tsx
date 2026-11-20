@@ -1,21 +1,23 @@
 import { useEffect, useState } from "react";
 import { Linking, View } from "react-native";
 import { showMenu } from "../../../state/app/system";
-import { Button, Dot, lineHeight, space, Symbol, Text } from "../../ui";
+import { Button, Dot, lineHeight, space, Symbol, Text, Toggle } from "../../ui";
 import { perLook } from "../../ui/tokens";
 import { useTheme } from "../../ui/theme";
 import { copyRecoveryPhrase, revealSyncFolder, type FolderInfo } from "../../../state/sync/recoveryKit";
 import { syncFolder } from "../../../state/settings/paneData";
 import { useResource } from "../../../state/settings/resources";
-import { useProfiles } from "../../../state/browser/hooks";
-import { chooseSyncFolder, folderInfo, setOpenTabsSynced, setTypeSynced, syncNow, turnOnSync, useSync } from "../../../state/sync/engine";
+import { useSpaces } from "../../../state/browser/hooks";
+import { useProfiles } from "../../../state/profiles/hooks";
+import { chooseSyncFolder, folderInfo, setOpenTabsSynced, setProfileSynced, setSpaceSynced, setTypeSynced, syncNow, turnOnSync, useSync } from "../../../state/sync/engine";
 import { DATA_TYPES, type SyncStatus } from "../../../state/sync/syncDoc";
 import { deviceDetail } from "../../../state/sync/devices";
 import { Group, Row, SectionHeader } from "../Form";
-import { addAllRemoteProfiles, confirmRemoveDevice, folderLabel, lookingForProfiles, RemoteProfileRow, showConnectDevice, showPhraseEntry, showRecoveryKit, showStopSync } from "./SyncSheets";
+import { addAllRemoteSpaces, confirmRemoveDevice, folderLabel, lookingForSpaces, RemoteSpaceRow, showConnectDevice, showPhraseEntry, showRecoveryKit, showStopSync } from "./SyncSheets";
 import { ago } from "../../../lib/time";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 import { Checklist } from "./Checklist";
+import { SpaceBadge } from "../../spaces/SpaceIcons";
 
 function statusLine(status: SyncStatus, lastSyncedAt: number | null, pending: number): string {
   const since = lastSyncedAt ? ago(lastSyncedAt) : null;
@@ -52,11 +54,12 @@ export function SyncSection() {
       <>
         <SectionHeader title="Sync" />
         <Group>
-          <Row anchor="general.sync" description="Sync isn’t available in this build." />
+          <Row anchor="sync.sync" description="Sync isn’t available in this build." />
         </Group>
       </>
     );
   }
+  if (status === "preview") return <Group><Row anchor="sync.sync" description="This device has sync data from a Profiles and Spaces preview. Sync is paused here so both sets of files can be recovered." /></Group>;
   return enabled ? <SyncOn info={info} /> : <SyncOff info={info} />;
 }
 
@@ -107,7 +110,7 @@ function SyncOff({ info }: { info: FolderInfo | null }) {
       <Group>
         <Row
           icon={<SyncIcon on={false} />}
-          anchor="general.sync"
+          anchor="sync.sync"
           description={
             status === "reset" && error
               ? error
@@ -150,11 +153,11 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
   const pending = useSync((s) => s.pending);
   const error = useSync((s) => s.error);
   const types = useSync((s) => s.types);
-  const links = useSync((s) => s.profiles);
+  const links = useSync((s) => s.spaces);
   const devices = useSync((s) => s.devices);
-  const remoteProfiles = useSync((s) => s.remoteProfiles);
+  const remoteSpaces = useSync((s) => s.remoteSpaces);
   const joining = useSync((s) => s.joining);
-  const profiles = useProfiles();
+  const spaces = useSpaces();
   const [, tick] = useState(0);
   useEffect(() => {
     const t = setInterval(() => tick((n) => n + 1), 30_000);
@@ -179,7 +182,7 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
     else if (choice === "stop") showStopSync();
   };
 
-  const synced = profiles.filter((p) => links[p.id]?.enabled);
+  const synced = spaces.filter((space) => links[space.id]?.enabled);
   const allTabs = synced.filter((p) => p.syncTabs);
   const shownError = error && status !== "updated" ? error : null;
 
@@ -187,7 +190,7 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
     <>
       <SectionHeader title="Sync" />
       <Group>
-        <Row icon={<SyncIcon on={!locked} />} anchor="general.sync" description={statusLine(status, lastSyncedAt, pending)}>
+        <Row icon={<SyncIcon on={!locked} />} anchor="sync.sync" description={statusLine(status, lastSyncedAt, pending)}>
           {locked ? (
             <Button title="Enter Recovery Phrase…" kind="primary" onPress={() => showPhraseEntry(info)} />
           ) : (
@@ -195,9 +198,9 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
           )}
           <Button title="Advanced…" onPress={() => void advanced()} />
         </Row>
-        <Row anchor="general.syncFolder" description={info ? folderLabel(info) : " "} />
+        <Row anchor="sync.folder" description={info ? folderLabel(info) : " "} />
         <Checklist
-          anchor="general.whatSyncs"
+          anchor="sync.whatSyncs"
           description={null}
           items={[
             ...DATA_TYPES.map((t) => ({ key: t.id, label: t.title, value: types[t.id], onChange: (on: boolean) => setTypeSynced(t.id, on) })),
@@ -211,7 +214,7 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
             },
           ]}
         />
-        <Row anchor="general.syncDevices" description={devices.length ? undefined : `Just this ${PLATFORM_TERMS.computer} so far. Other devices show here once they sync.`} />
+        <Row anchor="sync.devices" description={devices.length ? undefined : `Just this ${PLATFORM_TERMS.computer} so far. Other devices show here once they sync.`} />
         {devices.map((d) => (
           <Row key={d.id} title={d.current ? `${d.name} (This ${PLATFORM_TERMS.computerTitle})` : d.name} description={d.current ? statusLine(status, lastSyncedAt, 0) : deviceDetail(d, ago)}>
             {d.current ? null : <Button title="Remove…" onPress={() => void confirmRemoveDevice(d)} />}
@@ -226,22 +229,56 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
           </Text>
         </View>
       ) : null}
-      {joining || remoteProfiles.length ? (
+      <SyncWorkspaces disabled={locked || joining} />
+      {joining || remoteSpaces.length ? (
         <>
           <SectionHeader
-            title="Profiles on your other devices"
-            description={joining ? lookingForProfiles(pending) : `Add them to this ${PLATFORM_TERMS.computer}. Choose which profiles sync on each profile's page.`}
-            action={remoteProfiles.filter((p) => !p.waiting).length > 1 ? <Button title="Add All" onPress={() => addAllRemoteProfiles(remoteProfiles)} /> : undefined}
+            title="Spaces on your other devices"
+            description={joining ? lookingForSpaces(pending) : `Add them to this ${PLATFORM_TERMS.computer}.`}
+            action={remoteSpaces.filter((p) => !p.waiting).length > 1 ? <Button title="Add All" onPress={() => addAllRemoteSpaces(remoteSpaces)} /> : undefined}
           />
-          {remoteProfiles.length ? (
+          {remoteSpaces.length ? (
             <Group>
-              {remoteProfiles.map((p) => (
-                <RemoteProfileRow key={p.syncId} profile={p} />
+              {remoteSpaces.map((p) => (
+                <RemoteSpaceRow key={p.syncId} profile={p} />
               ))}
             </Group>
           ) : null}
         </>
       ) : null}
+    </>
+  );
+}
+
+function SyncWorkspaces({ disabled }: { disabled: boolean }) {
+  const profiles = useProfiles();
+  const spaces = useSpaces();
+  const profileLinks = useSync((s) => s.profiles);
+  const spaceLinks = useSync((s) => s.spaces);
+  return (
+    <>
+      <SectionHeader anchor="sync.profiles" description="Choose which profiles sync browsing data." />
+      <Group>
+        {profiles.map((profile) => {
+          const link = profileLinks[profile.id];
+          return (
+            <Row key={profile.id} title={profile.name}>
+              <Toggle value={!!link?.enabled} disabled={disabled || !link} onChange={(on) => setProfileSynced(profile.id, on)} />
+            </Row>
+          );
+        })}
+      </Group>
+      <SectionHeader title="Spaces" description="Space names, themes, pinned rows, groups and open tabs." />
+      <Group>
+        {spaces.map((space) => {
+          const link = spaceLinks[space.id];
+          return (
+            <Row key={space.id} icon={<SpaceBadge profile={space} size={24} />} title={space.name}>
+              <Toggle value={!!link?.enabled} disabled={disabled} onChange={(on) => setSpaceSynced(space.id, on)} />
+            </Row>
+          );
+        })}
+      </Group>
     </>
   );
 }

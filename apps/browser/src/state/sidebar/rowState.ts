@@ -50,7 +50,7 @@ export function rowFlags(s: BrowserState, windowId: string, tabId: string): numb
   const tab = s.tabs[tabId];
   const live = shownLiveOf(s, tabId);
   let flags = iconMarks(s, tabId);
-  if (tab && activeTabId(s, tab.windowId, tab.profileId) === tabId) flags |= ACTIVE;
+  if (tab && activeTabId(s, tab.windowId, tab.spaceId) === tabId) flags |= ACTIVE;
   if (s.selection[windowId]?.includes(tabId)) flags |= SELECTED;
   if (live.playingAudio) flags |= PLAYING;
   if (live.isLoading) flags |= LOADING;

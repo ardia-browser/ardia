@@ -284,6 +284,30 @@ class DocumentStore {
     return true;
   }
 
+  static bool WriteImmediately(std::string_view name, std::string const &contents) noexcept {
+    auto url = Url(name);
+    if (!url) return false;
+    std::unique_lock<std::timed_mutex> writing(State().writing, std::chrono::seconds(10));
+    if (!writing.owns_lock()) return false;
+    std::vector<Done> waiters;
+    {
+      std::lock_guard<std::mutex> guard(State().mutex);
+      const auto key = url->filename().wstring();
+      if (State().closed || State().removing.contains(key)) return false;
+      std::error_code ignored;
+      std::filesystem::create_directories(url->parent_path(), ignored);
+      if (Files::ReplaceAtomically(*url, contents) != ERROR_SUCCESS) return false;
+      auto found = State().staged.find(key);
+      if (found != State().staged.end()) {
+        waiters = std::move(found->second.waiters);
+        State().staged.erase(found);
+      }
+    }
+    writing.unlock();
+    for (auto const &waiter : waiters) waiter(std::nullopt);
+    return true;
+  }
+
   static void WhenSaved(std::string_view name, Done done) noexcept {
     auto url = Url(name);
     if (!url) {
@@ -466,6 +490,9 @@ struct DocumentsModule {
 
   REACT_SYNC_METHOD(writeDocument)
   bool writeDocument(std::string name, std::string contents) noexcept { return DocumentStore::Write(name, std::move(contents)); }
+
+  REACT_SYNC_METHOD(writeDocumentImmediately)
+  bool writeDocumentImmediately(std::string name, std::string contents) noexcept { return DocumentStore::WriteImmediately(name, contents); }
 
   REACT_METHOD(saveDocument)
   void saveDocument(std::string name, std::string contents, winrt::Microsoft::ReactNative::ReactPromise<void> promise) noexcept {

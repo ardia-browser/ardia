@@ -41,7 +41,7 @@ export const QUESTIONS: Record<Exclude<OnboardingStep, "intro">, Question[]> = {
   ],
   look: [
     { id: "color", keys: [] },
-    { id: "switcher", keys: ["profileSwitcherIcons"], askedWithPreset: true },
+    { id: "switcher", keys: ["spaceSwitcherIcons"], askedWithPreset: true },
     { id: "appearance", keys: ["appearance"] },
     { id: "style", keys: ["interfaceStyle", "glassTintWithTheme", "glassTintAmount"], askedWithPreset: true },
     { id: "frame", keys: ["pageFrame", "borderlessMode"], askedWithPreset: true },

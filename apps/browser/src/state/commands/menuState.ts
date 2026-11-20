@@ -2,7 +2,7 @@ import type { MenuBookmark, MenuState } from "../../platform/commands";
 import { engineBookmarkRoots, folderChildren, isBookmarked, isWithin, ROOT_TITLES } from "../bookmarks/bookmarks";
 import type { BrowserState } from "../browser/store";
 import { changedIds } from "../browser/changes";
-import { activeTab, bookmarkProfileId, engineProfile, IDLE_LIVE, isPinnedRow, tabLabel, togglePinTitle, windowTitle, tabLayoutOf, tabsShownIn } from "../browser/model";
+import { activeTab, bookmarkSpaceId, engineProfileForSpace, IDLE_LIVE, isPinnedRow, tabLabel, togglePinTitle, windowTitle, tabLayoutOf, tabsShownIn } from "../browser/model";
 import { canSwitchEngine, tabEngine } from "../engines/engines";
 import { readerState as readerFor } from "../reader/reader";
 import { peekTabId } from "../peek/peek";
@@ -67,7 +67,7 @@ export function menuState(s: BrowserState, liveOfTab = (id: string) => shownLive
   const peek = windowId ? peekTabId(s, windowId) : undefined;
   const page = peek ? s.tabs[peek] : tab;
   const live = page ? liveOfTab(page.id) : IDLE_LIVE;
-  const bookmarkProfile = bookmarkProfileId(s, w);
+  const bookmarkProfile = bookmarkSpaceId(s, w);
   const regularWindows = s.windowOrder.filter((id) => s.windows[id]!.kind !== "private" && s.windows[id]!.kind !== "small");
 
   const disabled: string[] = [];
@@ -81,8 +81,8 @@ export function menuState(s: BrowserState, liveOfTab = (id: string) => shownLive
     if (!page || !canGoBack(page.id, live)) disabled.push("back");
     if (!page || !canGoForward(page.id, live)) disabled.push("forward");
     if (!live.isLoading) disabled.push("stop");
-    if (w.kind === "private") disabled.push("moveTabToProfile", "moveTabToWindow", "switchProfile", "nextProfile", "previousProfile");
-    else if (tab) disabled.push(`moveTabToProfile:${tab.profileId}`);
+    if (w.kind === "private") disabled.push("moveTabToSpace", "moveTabToWindow", "switchSpace", "nextSpace", "previousSpace");
+    else if (tab) disabled.push(`moveTabToSpace:${tab.spaceId}`);
     if (regularWindows.length < 2) disabled.push("mergeAllWindows");
   }
   const showBookmarks = bookmarksShown(s.settings);
@@ -132,9 +132,9 @@ export function menuState(s: BrowserState, liveOfTab = (id: string) => shownLive
     checked,
     disabled,
     titles,
-    profiles: s.profileOrder.map((id) => ({ id, title: s.profiles[id]!.name, current: w?.profileId === id })),
+    profiles: s.spaceOrder.map((id) => ({ id, title: s.spaces[id]!.name, current: w?.spaceId === id })),
     windows: w?.kind === "private" ? [] : regularWindows.filter((id) => id !== windowId).map((id) => ({ id, title: windowTitle(s, id) })),
-    ...bookmarkMenus(s.bookmarks, engineProfile(s, bookmarkProfile)),
+    ...bookmarkMenus(s.bookmarks, engineProfileForSpace(s, bookmarkProfile)),
     bookmarksShown: showBookmarks,
     recentlyClosed: closed,
     recentlyClosedGroups: sidebar.recentlyClosedGroups,
@@ -160,7 +160,7 @@ export function trackedMenuState(s: BrowserState): { state: MenuState; reads: Me
   return { state: menuState(tracked), reads };
 }
 
-export const HIDDEN_TAB_FIELDS_IN_MENU = ["id", "windowId", "profileId", "pin"] as const satisfies readonly (keyof Tab)[];
+export const HIDDEN_TAB_FIELDS_IN_MENU = ["id", "windowId", "spaceId", "pin"] as const satisfies readonly (keyof Tab)[];
 
 function shownOrSelected(s: BrowserState, tab: Tab): boolean {
   const w = s.windows[tab.windowId];

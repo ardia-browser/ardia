@@ -1,6 +1,6 @@
 import type { BrowserState } from "../browser/store";
 import type { GroupColor, Tab, TabGroup } from "../browser/types";
-import { activeTabId, inPinnedContainer, isIncognitoProfile, pinSection } from "../browser/model";
+import { activeTabId, inPinnedContainer, isIncognitoSpace, pinSection } from "../browser/model";
 import { groupPath, innermostGroupOf, rootOf } from "../groups/groups";
 import { NO_GROUP_ICON } from "../groups/groupIcons";
 import { NO_ROW_ICON } from "../pins/rowIcons";
@@ -59,7 +59,7 @@ export type WorkspaceWindow = { id: string; kind: AutomationWindowKind; focused:
 
 export type Workspace = { profiles: { id: string; name: string }[]; windows: WorkspaceWindow[] };
 
-type Snapshot = Pick<BrowserState, "windows" | "windowOrder" | "tabs" | "peeks" | "groups" | "profiles" | "profileOrder" | "splits" | "ui">;
+type Snapshot = Pick<BrowserState, "windows" | "windowOrder" | "tabs" | "peeks" | "groups" | "spaces" | "profiles" | "spaceOrder" | "splits" | "ui">;
 
 export const colorName = (color: GroupColor | null): string => color ?? "neutral";
 
@@ -80,7 +80,7 @@ export function tabNode(s: Snapshot, id: string, index = -1): TabNode {
     folder: folder ? { id: folder.id, name: folder.name } : null,
     group: innermostGroupOf(s.groups, id)?.id ?? null,
     split: splitOf(s, id)?.id ?? null,
-    active: activeTabId(s as BrowserState, t.windowId, t.profileId) === id,
+    active: activeTabId(s as BrowserState, t.windowId, t.spaceId) === id,
     muted: t.muted,
     asleep: isAsleep(t) || isLazy(t) || isSleeping(id),
     index,
@@ -103,11 +103,11 @@ export function groupFields(s: Snapshot, g: TabGroup): Omit<GroupNode, "items"> 
 
 export const isEligibleGroup = (s: Pick<BrowserState, "windows" | "groups">, id: string): boolean => {
   const g = ownEntry(s.groups, id);
-  return !!g && eligibleKind(s, g.windowId) === "normal" && !isIncognitoProfile(g.profileId);
+  return !!g && eligibleKind(s, g.windowId) === "normal" && !isIncognitoSpace(g.spaceId);
 };
 
 function spaceTabIds(s: Snapshot, windowId: string, profileId: string): string[] {
-  return (s.windows[windowId]?.tabIds ?? []).filter((id) => s.tabs[id]?.windowId === windowId && s.tabs[id]?.profileId === profileId && isEligibleTab(s, id));
+  return (s.windows[windowId]?.tabIds ?? []).filter((id) => s.tabs[id]?.windowId === windowId && s.tabs[id]?.spaceId === profileId && isEligibleTab(s, id));
 }
 
 function buildSpace(s: Snapshot, windowId: string, profileId: string, shown: boolean): Space {
@@ -129,7 +129,7 @@ function buildSpace(s: Snapshot, windowId: string, profileId: string, shown: boo
   };
   const space: Space = {
     profile: profileId,
-    profileName: s.profiles[profileId]?.name ?? "",
+    profileName: s.spaces[profileId]?.name ?? "",
     shown,
     activeTab: activeTabId(s as BrowserState, windowId, profileId) ?? null,
     topApps: [],
@@ -157,18 +157,18 @@ function buildSpace(s: Snapshot, windowId: string, profileId: string, shown: boo
 
 export function workspace(s: Snapshot, filter: { window?: string | null; profile?: string | null } = {}): Workspace {
   const focused = focusedWindowOf(s);
-  const profiles = s.profileOrder.filter((id) => s.profiles[id] && !isIncognitoProfile(id)).map((id) => ({ id, name: s.profiles[id]!.name }));
+  const profiles = s.spaceOrder.filter((id) => s.spaces[id] && !isIncognitoSpace(id)).map((id) => ({ id, name: s.spaces[id]!.name }));
   const windows = s.windowOrder.flatMap((id): WorkspaceWindow[] => {
     const kind = eligibleKind(s, id);
     const w = s.windows[id];
     if (!kind || !w || (filter.window && filter.window !== id)) return [];
-    const present = new Set([w.profileId, ...w.tabIds.map((t) => s.tabs[t]?.profileId).filter((p): p is string => !!p)]);
-    const order = [...s.profileOrder.filter((p) => present.has(p)), ...[...present].filter((p) => !s.profileOrder.includes(p))];
+    const present = new Set([w.spaceId, ...w.tabIds.map((t) => s.tabs[t]?.spaceId).filter((p): p is string => !!p)]);
+    const order = [...s.spaceOrder.filter((p) => present.has(p)), ...[...present].filter((p) => !s.spaceOrder.includes(p))];
     const spaces = order
-      .filter((p) => !isIncognitoProfile(p) && (!filter.profile || filter.profile === p))
-      .map((p) => buildSpace(s, id, p, p === w.profileId));
+      .filter((p) => !isIncognitoSpace(p) && (!filter.profile || filter.profile === p))
+      .map((p) => buildSpace(s, id, p, p === w.spaceId));
     if (filter.profile && !spaces.length) return [];
-    return [{ id, kind, focused: id === focused, profile: w.profileId, profileName: s.profiles[w.profileId]?.name ?? "", activeTab: activeTabId(s as BrowserState, id) ?? null, spaces }];
+    return [{ id, kind, focused: id === focused, profile: w.spaceId, profileName: s.spaces[w.spaceId]?.name ?? "", activeTab: activeTabId(s as BrowserState, id) ?? null, spaces }];
   });
   return { profiles, windows };
 }

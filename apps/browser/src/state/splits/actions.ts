@@ -34,7 +34,7 @@ export function focusSplitPane(windowId: string, delta: 1 | -1) {
 function openAsTab(windowId: string, { url, adoptId, anchorTabId, background }: OpenPaneOptions): string | null {
   const anchor = anchorTabId ? store().tabs[anchorTabId] : undefined;
   if (!store().windows[windowId]) return null;
-  return store().newTab(windowId, { url, adoptId, background, openerId: anchor?.id, profileId: anchor?.profileId, gated: true });
+  return store().newTab(windowId, { url, adoptId, background, openerId: anchor?.id, spaceId: anchor?.spaceId, gated: true });
 }
 
 export const openNewTabInSplit = (windowId: string) => openSplitPane(windowId);

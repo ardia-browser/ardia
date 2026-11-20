@@ -1,6 +1,6 @@
 import type { ArdiaHost } from "./host";
 import { reportHostError } from "./host.ts";
-import type { AdoptId, BrowserWindow, Profile } from "../../browser/src/state/browser/types";
+import type { AdoptId, BrowserWindow, Profile, Space } from "../../browser/src/state/browser/types";
 import { engineProfile } from "../../browser/src/state/browser/model";
 import type { NewTabOptions } from "../../browser/src/state/tabs/tabs";
 import { asAdoptId } from "../../browser/src/state/tabs/adoptIds";
@@ -10,8 +10,9 @@ export type UnclaimedTab = { adoptId: string; url: string; active: boolean; prof
 type TabStore = {
   getState(): {
     windows: Record<string, BrowserWindow | undefined>;
-    profiles: Record<string, Profile | undefined>;
-    profileOrder: string[];
+    profiles: Record<string, Profile>;
+    spaces: Record<string, Space>;
+    spaceOrder: string[];
     newTab(windowId: string, options?: NewTabOptions): string;
   };
 };
@@ -22,14 +23,13 @@ export function unclaimedAdoptId(offer: unknown): AdoptId | undefined {
   return typeof url === "string" && typeof adoptId === "string" && /^tab:\d+$/.test(adoptId) ? asAdoptId(adoptId) : undefined;
 }
 
-type ProfileState = { profiles: Record<string, Profile | undefined>; profileOrder: string[] };
+type ProfileState = { profiles: Record<string, Profile>; spaces: Record<string, Space>; spaceOrder: string[] };
 
 export function offeredProfile(s: ProfileState, w: BrowserWindow, engine: unknown): string | undefined {
-  if (typeof engine !== "string" || w.kind === "private") return w.profileId;
-  const known = s as Parameters<typeof engineProfile>[0];
-  if (engineProfile(known, w.profileId) === engine) return w.profileId;
-  const candidates = [...Object.keys(w.activeTabIds), ...s.profileOrder];
-  return candidates.find((id) => !!s.profiles[id] && engineProfile(known, id) === engine);
+  if (typeof engine !== "string" || w.kind === "private") return w.spaceId;
+  if (engineProfile(s, w.spaceId) === engine) return w.spaceId;
+  const candidates = [...Object.keys(w.activeTabIds), ...s.spaceOrder];
+  return candidates.find((id) => !!s.spaces[id] && engineProfile(s, id) === engine);
 }
 
 export function adoptUnclaimedTab(store: TabStore, windowId: string, offer: unknown) {
@@ -40,7 +40,7 @@ export function adoptUnclaimedTab(store: TabStore, windowId: string, offer: unkn
   const { url, active } = offer as UnclaimedTab;
   const profileId = offeredProfile(s, w, (offer as UnclaimedTab).profile);
   if (!profileId) return undefined;
-  return s.newTab(windowId, { url: url || undefined, adoptId, profileId, background: active !== true || w.kind === "small" || profileId !== w.profileId });
+  return s.newTab(windowId, { url: url || undefined, adoptId, spaceId: profileId, background: active !== true || w.kind === "small" || profileId !== w.spaceId });
 }
 
 export function watchUnclaimedTabs(host: ArdiaHost, store: TabStore, windowId = host.bootstrap.windowId) {

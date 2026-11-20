@@ -2,7 +2,7 @@ import { hostOf } from "@ardia/core";
 import type { Settings } from "../settings/settings";
 import type { Tab } from "../browser/types";
 import { useBrowser } from "../browser/store";
-import { isIncognitoProfile } from "../browser/model";
+import { isIncognitoSpace } from "../browser/model";
 
 export type UnreadSiteSettings = Pick<Settings, "showUnreadCounts" | "unreadHiddenSites">;
 
@@ -34,7 +34,7 @@ export const ALL_UNREAD_TITLE = "Show Unread Counts";
 
 export const showUnreadCounts = (shown: boolean) => useBrowser.getState().updateSettings({ showUnreadCounts: shown });
 
-export const canChooseSiteUnread = (tab: Pick<Tab, "url" | "profileId">) => !!tab.url && !!hostOf(tab.url) && !isIncognitoProfile(tab.profileId);
+export const canChooseSiteUnread = (tab: Pick<Tab, "url" | "spaceId">) => !!tab.url && !!hostOf(tab.url) && !isIncognitoSpace(tab.spaceId);
 
 export function setSiteUnreadShown(url: string, shown: boolean) {
   const host = hostOf(url);

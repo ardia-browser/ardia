@@ -35,9 +35,9 @@ Object.assign(globalThis, { ardiaDemo: { store: useBrowser, tabLive: { liveOf },
 function warmOtherProfiles() {
   const s = useBrowser.getState();
   for (const window of Object.values(s.windows))
-    for (const [profileId, tabId] of Object.entries(window.activeTabIds)) {
+    for (const [spaceId, tabId] of Object.entries(window.activeTabIds)) {
       const url = s.tabs[tabId]?.url;
-      if (profileId !== window.profileId && url && isFrameable(url)) warmFrame(url, pageTitle(url));
+      if (spaceId !== window.spaceId && url && isFrameable(url)) warmFrame(url, pageTitle(url));
     }
 }
 

@@ -20,7 +20,7 @@ export function BookmarkRow({
   id,
   top,
   windowId,
-  profileId,
+  spaceId,
   showPath,
   selected,
   highlighted,
@@ -36,7 +36,7 @@ export function BookmarkRow({
   id: string;
   top: number;
   windowId: string;
-  profileId: string;
+  spaceId: string;
   showPath: boolean;
   selected: boolean;
   highlighted: boolean;
@@ -88,7 +88,7 @@ export function BookmarkRow({
   const open = (mode: Parameters<typeof openUrl>[2]) => node.kind === "url" && openUrl(node.url, windowId, mode);
   const menu = () => {
     if (!selected) onSelect({});
-    return openBookmarkRowMenu(node, { windowId, profileId, showPath, selection: selected ? menuSelection() : [id], onOpenFolder, onDelete });
+    return openBookmarkRowMenu(node, { windowId, spaceId, showPath, selection: selected ? menuSelection() : [id], onOpenFolder, onDelete });
   };
 
   return (
@@ -106,7 +106,7 @@ export function BookmarkRow({
               style={[ROW_LOOK(), { backgroundColor: selected ? colors.rowSelected : highlighted ? colors.dropTarget : hovered ? theme.rowHover : undefined }]}
             >
               {node.kind === "url" ? (
-                <Favicon url={node.url} favicon={node.favicon} profileId={profileId} />
+                <Favicon url={node.url} favicon={node.favicon} spaceId={spaceId} />
               ) : (
                 <Symbol name="folder" size={bookmarkList.folderIcon} color={theme.icon} style={FOLDER_ICON} />
               )}

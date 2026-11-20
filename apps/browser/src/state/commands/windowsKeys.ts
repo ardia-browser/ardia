@@ -79,9 +79,9 @@ export const WINDOWS_KEYS: Readonly<Record<string, readonly (string | null)[]>> 
   "std:miniaturizeAll:": [null],
   downloads: ["Ctrl+J", null],
   taskManager: ["Shift+Esc"],
-  nextProfile: [null],
-  previousProfile: [null],
-  openProfileMenu: ["Ctrl+Shift+M"],
+  nextSpace: [null],
+  previousSpace: [null],
+  openSpaceMenu: ["Ctrl+Shift+M"],
   reportProblem: ["Ctrl+Alt+Shift+I"],
 };
 

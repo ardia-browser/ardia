@@ -102,7 +102,7 @@ export function forgetLive(ids: Iterable<string>) {
 export const forgetAllLive = () => forgetLive([...values.keys()]);
 
 const reloadedElsewhere = (tab: Tab, was: Tab) =>
-  (tab.windowId !== was.windowId || tab.profileId !== was.profileId) && navigationOf(tab)?.seq !== navigationOf(was)?.seq;
+  (tab.windowId !== was.windowId || tab.spaceId !== was.spaceId) && navigationOf(tab)?.seq !== navigationOf(was)?.seq;
 
 function forgetUnpublished(s: BrowserState) {
   const gone = [...writtenUnpublished].filter((id) => !s.tabs[id]);

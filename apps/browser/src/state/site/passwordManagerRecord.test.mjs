@@ -8,12 +8,12 @@ const { consentToken } = await import("../telemetry/consentPeriod.ts");
 const { choosePasswordManager, startPasswordManager } = await import("./passwordManager.ts");
 
 const S = () => useBrowser.getState();
-const PERSONAL = { id: "default", name: "Personal", color: "plum", icon: null, createdAt: 0 };
+const PERSONAL = { id: "default", name: "Personal", icon: null, engineId: "", createdAt: 0 };
 const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
 const passwords = () => stub.profileToggles.user.get("")?.passwords;
 
 test("offer to save goes off only after its record has landed, and comes back on only after the record is cleared", async () => {
-  S().hydrate({ profiles: { default: PERSONAL }, profileOrder: ["default"] });
+  S().hydrate({ profiles: { default: PERSONAL } });
   startPlugins();
   stub.pluginHost.folders = [];
   await lifecycle.rescanPlugins(consentToken());

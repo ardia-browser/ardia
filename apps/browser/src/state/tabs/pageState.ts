@@ -15,7 +15,7 @@ export type VerificationCodeOffer = { token: string; app: string; host: string; 
 import { create } from "zustand";
 import { useBrowser } from "../browser/store";
 import { recordWatch, useKeyed } from "../browser/keyedWatch";
-import { activeTabId } from "../browser/model";
+import { activeTabId , engineProfileIn } from "../browser/model";
 import { peekTabId } from "../peek/peek";
 import { splitOf, splitTabIdsOf } from "../splits/splits";
 
@@ -138,11 +138,15 @@ export function useFullscreenTab(windowId: string): string | undefined {
 }
 
 useBrowser.subscribe((s, prev) => {
-  if (s.tabs === prev.tabs) return;
-  for (const id of iconPages.keys()) if (!s.tabs[id]) iconPages.delete(id);
+  if (s.tabs === prev.tabs && s.spaces === prev.spaces && s.profiles === prev.profiles && s.windows === prev.windows) return;
+  const changed = new Set(Object.keys(s.tabs).filter((id) => {
+    const before = prev.tabs[id];
+    return before && prev.spaces[before.spaceId] && s.spaces[s.tabs[id]!.spaceId] && engineProfileIn(s, s.tabs[id]!.spaceId) !== engineProfileIn(prev, before.spaceId);
+  }));
+  for (const id of iconPages.keys()) if (!s.tabs[id] || changed.has(id)) iconPages.delete(id);
   const { pages, ready, popover } = usePages.getState();
   const stale = (ids: string[], tabOf: (id: string) => string) => {
-    for (let i = 0; i < ids.length; i++) if (!s.tabs[tabOf(ids[i]!)]) return true;
+    for (let i = 0; i < ids.length; i++) if (!s.tabs[tabOf(ids[i]!)] || changed.has(tabOf(ids[i]!))) return true;
     return false;
   };
   const pageIds = Object.keys(pages);
@@ -150,10 +154,10 @@ useBrowser.subscribe((s, prev) => {
   const popoverIds = Object.keys(popover);
   if (!stale(pageIds, (id) => id) && !stale(readyIds, (id) => id) && !stale(popoverIds, (id) => id)) return;
   const nextPages = { ...pages };
-  for (const id of pageIds) if (!s.tabs[id]) delete nextPages[id];
+  for (const id of pageIds) if (!s.tabs[id] || changed.has(id)) delete nextPages[id];
   const nextPopover = { ...popover };
-  for (const id of popoverIds) if (!s.tabs[id]) delete nextPopover[id];
+  for (const id of popoverIds) if (!s.tabs[id] || changed.has(id)) delete nextPopover[id];
   const nextReady = { ...ready };
-  for (const id of readyIds) if (!s.tabs[id]) delete nextReady[id];
+  for (const id of readyIds) if (!s.tabs[id] || changed.has(id)) delete nextReady[id];
   usePages.setState({ pages: nextPages, ready: nextReady, popover: nextPopover });
 });

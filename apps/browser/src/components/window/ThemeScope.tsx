@@ -1,8 +1,8 @@
 import { useMemo, type ReactNode } from "react";
 import { spaceLookSource } from "../../lib/profileLook";
 import { useGlassSettings, useScopedLook } from "../../state/app/theme";
-import { isIncognitoProfile } from "../../state/browser/model";
-import { useProfileLook } from "../../state/profiles/hooks";
+import { isIncognitoSpace } from "../../state/browser/model";
+import { useProfileLook } from "../../state/spaces/hooks";
 import { GlassLookContext, liquidGlass } from "../ui/Glass";
 import { ToolbarRowContext } from "../ui/toolbarRowContext";
 import { useToolbarRow } from "../toolbar/useToolbarRow";
@@ -23,6 +23,6 @@ export function ThemeScope({ page = false, children }: { page?: boolean; childre
   );
 }
 
-export function useProfileTheme(profileId: string): Theme {
-  return useProfileLook(profileId, (profile, appDark, settings, palette) => scopedTheme(isIncognitoProfile(profileId), profile, appDark, spaceLookSource(settings), palette));
+export function useSpaceTheme(spaceId: string): Theme {
+  return useProfileLook(spaceId, (space, appDark, settings, palette) => scopedTheme(isIncognitoSpace(spaceId), space, appDark, spaceLookSource(settings), palette));
 }

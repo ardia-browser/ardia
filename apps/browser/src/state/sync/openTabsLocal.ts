@@ -18,21 +18,21 @@ export function regularOpenTab(s: BrowserState, t: Tab | undefined, pinnedMember
 export const syncedOpenTab = (s: BrowserState, t: Tab | undefined, pinnedMembers: Members = pinnedGroupMembers(s.groups)): t is Tab =>
   regularOpenTab(s, t, pinnedMembers) && syncsAsOpenTab(t.url);
 
-export const holdsOpenTabs = (s: BrowserState, profileId: string) =>
-  Object.values(s.windows).some((w) => isRegularWindow(w) && (w.profileId === profileId || w.tabIds.some((id) => s.tabs[id]?.profileId === profileId)));
+export const holdsOpenTabs = (s: BrowserState, spaceId: string) =>
+  Object.values(s.windows).some((w) => isRegularWindow(w) && (w.spaceId === spaceId || w.tabIds.some((id) => s.tabs[id]?.spaceId === spaceId)));
 
 export type LocalOpenTabs = { synced: { key: string; tab: Tab }[]; byKey: Map<string, Tab[]>; held: Set<string>; pinned: Set<string> };
 
-export function localOpenTabs(s: BrowserState, profileId: string): LocalOpenTabs {
+export function localOpenTabs(s: BrowserState, spaceId: string): LocalOpenTabs {
   const members = pinnedGroupMembers(s.groups);
   const held = new Set<string>();
   const pinned = new Set<string>();
   for (const t of Object.values(s.tabs)) {
-    if (t.profileId !== profileId) continue;
+    if (t.spaceId !== spaceId) continue;
     held.add(pinKeyOf(t));
     if (t.pin || members.has(t.id)) pinned.add(pinKeyOf(t));
   }
-  for (const p of s.parkedPins[profileId]?.tabs ?? []) {
+  for (const p of s.parkedPins[spaceId]?.tabs ?? []) {
     held.add(p.id);
     pinned.add(p.id);
   }
@@ -41,7 +41,7 @@ export function localOpenTabs(s: BrowserState, profileId: string): LocalOpenTabs
   for (const w of regularWindows(s)) {
     for (const id of w.tabIds) {
       const t = s.tabs[id];
-      if (t?.profileId !== profileId || !syncedOpenTab(s, t, members) || pinned.has(pinKeyOf(t))) continue;
+      if (t?.spaceId !== spaceId || !syncedOpenTab(s, t, members) || pinned.has(pinKeyOf(t))) continue;
       const key = pinKeyOf(t);
       const copies = byKey.get(key);
       if (copies) copies.push(t);

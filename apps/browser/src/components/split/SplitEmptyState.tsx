@@ -90,7 +90,7 @@ export function SplitEmptyState({ tabId, focused }: { tabId: string; focused: bo
 function Suggestion({ tabId, selected, onHover, onPress }: { tabId: string; selected: boolean; onHover: () => void; onPress: () => void }) {
   const tab = useTab(tabId);
   if (!tab) return null;
-  return <Row icon={<Favicon url={tab.url} favicon={tab.favicon} profileId={tab.profileId} />} label={tabLabel(tab)} detail={tab.title} selected={selected} onHover={onHover} onPress={onPress} />;
+  return <Row icon={<Favicon url={tab.url} favicon={tab.favicon} spaceId={tab.spaceId} />} label={tabLabel(tab)} detail={tab.title} selected={selected} onHover={onHover} onPress={onPress} />;
 }
 
 function Row({

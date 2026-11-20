@@ -11,10 +11,10 @@ import { entryKey, parseEntry } from "./entryKey";
 
 type SidebarEntries = { tiles: string[]; cells: string[]; pinned: string[]; list: string[] };
 
-export const ENTRY_TAB_FIELDS = ["pin", "liveItem", "profileId", "url", "page"] as const satisfies readonly (keyof Tab)[];
+export const ENTRY_TAB_FIELDS = ["pin", "liveItem", "spaceId", "url", "page"] as const satisfies readonly (keyof Tab)[];
 
 const placesAlike = (a: Tab | undefined, b: Tab | undefined) =>
-  a === b || (!!a && !!b && a.pin === b.pin && a.liveItem === b.liveItem && a.profileId === b.profileId && !a.url === !b.url && hasPage(a) === hasPage(b));
+  a === b || (!!a && !!b && a.pin === b.pin && a.liveItem === b.liveItem && a.spaceId === b.spaceId && !a.url === !b.url && hasPage(a) === hasPage(b));
 
 export function sameEntryTabs(tabs: BrowserState["tabs"], was: BrowserState["tabs"]): boolean {
   if (tabs === was) return true;
@@ -47,12 +47,12 @@ export function sameEntriesInputs(s: BrowserState, was: EntriesInputs): boolean 
 
 const memo = new Map<string, Map<string, { inputs: EntriesInputs; result: SidebarEntries }>>();
 
-export function sidebarEntries(s: BrowserState, windowId: string, profileId?: string): SidebarEntries {
+export function sidebarEntries(s: BrowserState, windowId: string, spaceId?: string): SidebarEntries {
   let byProfile = memo.get(windowId);
-  const cached = byProfile?.get(profileId ?? "");
+  const cached = byProfile?.get(spaceId ?? "");
   if (cached && sameEntriesInputs(s, cached.inputs)) return cached.result;
   const inputs = entriesInputs(s);
-  let result = computeEntries(s, windowId, profileId);
+  let result = computeEntries(s, windowId, spaceId);
   if (cached) {
     const was = cached.result;
     const same = (a: string[], b: string[]) => a.length === b.length && a.every((id, i) => id === b[i]);
@@ -63,19 +63,19 @@ export function sidebarEntries(s: BrowserState, windowId: string, profileId?: st
     result = tiles === was.tiles && cells === was.cells && pinned === was.pinned && list === was.list ? was : { tiles, cells, pinned, list };
   }
   if (!byProfile) memo.set(windowId, (byProfile = new Map()));
-  byProfile.set(profileId ?? "", { inputs, result });
+  byProfile.set(spaceId ?? "", { inputs, result });
   if (memo.size > 8) for (const k of memo.keys()) if (!s.windows[k]) memo.delete(k);
   return result;
 }
 
-function computeEntries(s: BrowserState, windowId: string, profileId?: string): SidebarEntries {
+function computeEntries(s: BrowserState, windowId: string, spaceId?: string): SidebarEntries {
   const tiles: string[] = [];
   const pinned: string[] = [];
   const list: string[] = [];
   const rootGroups = groupIndex(s.groups);
   const splits = splitIndex(s.splits);
   const seen = new Set<string>();
-  for (const id of viewTabIds(s, windowId, profileId)) {
+  for (const id of viewTabIds(s, windowId, spaceId)) {
     const tab = s.tabs[id]!;
     if ((tab.liveItem && !tab.pin) || hiddenEmptyCard(s, tab)) continue;
     if (tab.pin) {
@@ -100,10 +100,10 @@ function computeEntries(s: BrowserState, windowId: string, profileId?: string): 
 export function numberedTabs(s: BrowserState, windowId: string): string[] {
   const { tiles, pinned, list } = sidebarEntries(s, windowId);
   const active = activeTabId(s, windowId);
-  const profileId = s.windows[windowId]?.profileId;
+  const spaceId = s.windows[windowId]?.spaceId;
   const latest = (ids: string[]) => ids.reduce<string | undefined>((a, b) => (!a || s.tabs[b]!.lastActiveAt > s.tabs[a]!.lastActiveAt ? b : a), undefined);
   const collapsedGroup = (groupId: string): string[] => {
-    const keptRows = profileId ? keptEntries(s, windowId, profileId, groupId) : [];
+    const keptRows = spaceId ? keptEntries(s, windowId, spaceId, groupId) : [];
     const kept = keptRows.flatMap(rowTab);
     const onScreen = new Set(keptRows.flatMap((entry) => entryTabIds(s, entry)));
     const members = s.groups[groupId]!.tabIds.filter((id) => s.tabs[id]);
@@ -151,25 +151,25 @@ function childGroups(groups: BrowserState["groups"], parentId: string): BrowserS
   return index.get(parentId) ?? NO_CHILDREN;
 }
 
-export function keptEntry(s: BrowserState, windowId: string, profileId: string, entries: string[]): string | null {
-  const active = activeTabId(s, windowId, profileId);
+export function keptEntry(s: BrowserState, windowId: string, spaceId: string, entries: string[]): string | null {
+  const active = activeTabId(s, windowId, spaceId);
   if (!active) return null;
   return entries.find((e) => holdsTab(s, e, active)) ?? null;
 }
 
-export function keptEntries(s: BrowserState, windowId: string, profileId: string, groupId: string): string[] {
+export function keptEntries(s: BrowserState, windowId: string, spaceId: string, groupId: string): string[] {
   const shown = s.groups[groupId]?.shownTabIds ?? [];
-  const active = activeTabId(s, windowId, profileId);
+  const active = activeTabId(s, windowId, spaceId);
   const held = active ? [active, ...shown] : shown;
   return groupEntries(s, groupId).filter((e) => held.some((id) => holdsTab(s, e, id)));
 }
 
-export function showsExtraTabs(s: BrowserState, windowId: string, profileId: string, groupId: string): boolean {
-  const active = activeTabId(s, windowId, profileId);
-  return keptEntries(s, windowId, profileId, groupId).some((entry) => {
+export function showsExtraTabs(s: BrowserState, windowId: string, spaceId: string, groupId: string): boolean {
+  const active = activeTabId(s, windowId, spaceId);
+  return keptEntries(s, windowId, spaceId, groupId).some((entry) => {
     if (!active || !holdsTab(s, entry, active)) return true;
     const { kind, id } = parseEntry(entry);
-    return kind === "group" && !!s.groups[id]?.collapsed && showsExtraTabs(s, windowId, profileId, id);
+    return kind === "group" && !!s.groups[id]?.collapsed && showsExtraTabs(s, windowId, spaceId, id);
   });
 }
 

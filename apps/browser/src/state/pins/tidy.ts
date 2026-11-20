@@ -33,10 +33,10 @@ export type Tidied = {
 
 const homeOf = (t: Pick<Tab, "url" | "pinnedUrl">) => t.pinnedUrl || t.url;
 
-function foldersOf(s: Pick<BrowserState, "groups">, order: string[], windowId: string, profileId: string, scope: TidyScope): TabGroup[] {
+function foldersOf(s: Pick<BrowserState, "groups">, order: string[], windowId: string, spaceId: string, scope: TidyScope): TabGroup[] {
   const at = new Map(order.map((id, i) => [id, i]));
   return Object.values(s.groups)
-    .filter((g) => g.pinned === (scope === "pins") && g.windowId === windowId && g.profileId === profileId && g.tabIds.length)
+    .filter((g) => g.pinned === (scope === "pins") && g.windowId === windowId && g.spaceId === spaceId && g.tabIds.length)
     .map((g) => ({ g, top: Math.min(...g.tabIds.map((id) => at.get(id) ?? Infinity)), depth: depthOf(s.groups, g.id) }))
     .sort((a, z) => a.top - z.top || a.depth - z.depth)
     .map(({ g }) => g);
@@ -59,11 +59,11 @@ const isUnpinnedTab = (t: Tab | undefined) => !!t && !t.pin && !t.liveItem;
 const isLoose = (s: Pick<BrowserState, "tabs" | "groups">, id: string, scope: TidyScope) =>
   scope === "pins" ? isPinnedRow(s.tabs[id]) : isUnpinnedTab(s.tabs[id]) && !innermostGroupOf(s.groups, id);
 
-export function tidyPlan(s: Pick<BrowserState, "tabs" | "groups" | "windows" | "splits">, windowId: string, profileId?: string, scope: TidyScope = "pins"): TidyPlan | null {
+export function tidyPlan(s: Pick<BrowserState, "tabs" | "groups" | "windows" | "splits">, windowId: string, spaceId?: string, scope: TidyScope = "pins"): TidyPlan | null {
   const w = s.windows[windowId];
   if (!isRegularWindow(w)) return null;
-  const profile = profileId ?? w.profileId;
-  const order = w.tabIds.filter((id) => s.tabs[id]?.profileId === profile);
+  const profile = spaceId ?? w.spaceId;
+  const order = w.tabIds.filter((id) => s.tabs[id]?.spaceId === profile);
   const rows = order.filter((id) => isLoose(s, id, scope));
   if (!rows.length) return null;
   const folders = foldersOf(s, order, w.id, profile, scope);
@@ -105,12 +105,12 @@ export function tidyPlan(s: Pick<BrowserState, "tabs" | "groups" | "windows" | "
 
 const plans = new Map<string, { tabs: object; groups: object; splits: object; window: object | undefined; can: boolean }>();
 
-export function canTidy(s: Pick<BrowserState, "tabs" | "groups" | "windows" | "splits">, windowId: string, profileId?: string, scope: TidyScope = "pins"): boolean {
-  const key = `${windowId}\n${profileId ?? ""}\n${scope}`;
+export function canTidy(s: Pick<BrowserState, "tabs" | "groups" | "windows" | "splits">, windowId: string, spaceId?: string, scope: TidyScope = "pins"): boolean {
+  const key = `${windowId}\n${spaceId ?? ""}\n${scope}`;
   const window = s.windows[windowId];
   const known = plans.get(key);
   if (known && known.tabs === s.tabs && known.groups === s.groups && known.splits === s.splits && known.window === window) return known.can;
-  const can = !!tidyPlan(s, windowId, profileId, scope);
+  const can = !!tidyPlan(s, windowId, spaceId, scope);
   plans.set(key, { tabs: s.tabs, groups: s.groups, splits: s.splits, window, can });
   if (plans.size > 64) plans.delete(plans.keys().next().value!);
   return can;
@@ -118,19 +118,19 @@ export function canTidy(s: Pick<BrowserState, "tabs" | "groups" | "windows" | "s
 
 export const TIDY_TABS_AFTER = 6;
 
-function unpinnedTabCount(s: BrowserState, tabIds: string[], profileId: string): number {
+function unpinnedTabCount(s: BrowserState, tabIds: string[], spaceId: string): number {
   const inPinnedGroup = new Set(Object.values(s.groups).flatMap((g) => (g.pinned ? g.tabIds : [])));
-  return tabIds.filter((id) => s.tabs[id]?.profileId === profileId && isUnpinnedTab(s.tabs[id]) && !inPinnedGroup.has(id) && !hiddenEmptyCard(s, s.tabs[id]!)).length;
+  return tabIds.filter((id) => s.tabs[id]?.spaceId === spaceId && isUnpinnedTab(s.tabs[id]) && !inPinnedGroup.has(id) && !hiddenEmptyCard(s, s.tabs[id]!)).length;
 }
 
-export function offersTidyTabs(s: BrowserState, windowId: string, profileId?: string): boolean {
+export function offersTidyTabs(s: BrowserState, windowId: string, spaceId?: string): boolean {
   const w = s.windows[windowId];
-  if (!w || unpinnedTabCount(s, w.tabIds, profileId ?? w.profileId) <= TIDY_TABS_AFTER) return false;
-  return canTidy(s, windowId, profileId, "tabs");
+  if (!w || unpinnedTabCount(s, w.tabIds, spaceId ?? w.spaceId) <= TIDY_TABS_AFTER) return false;
+  return canTidy(s, windowId, spaceId, "tabs");
 }
 
-export function tidying(s: BrowserState, windowId: string, profileId?: string, scope: TidyScope = "pins"): [BrowserState, Tidied | null] {
-  const plan = tidyPlan(s, windowId, profileId, scope);
+export function tidying(s: BrowserState, windowId: string, spaceId?: string, scope: TidyScope = "pins"): [BrowserState, Tidied | null] {
+  const plan = tidyPlan(s, windowId, spaceId, scope);
   const w = s.windows[windowId];
   if (!plan || !w) return [s, null];
   const homes: Record<string, string | null> = {};

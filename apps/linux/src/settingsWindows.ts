@@ -9,7 +9,7 @@ export function openSettings(pane?: SettingsPane, profileId?: string | null) {
   let settings: SettingsPlace | undefined;
   if (pane) {
     goToSettingsPane(pane, profileId ?? null);
-    settings = { pane, profileId: profileId ?? null, detail: null };
+    settings = { pane, spaceId: profileId ?? null, detail: null };
   }
   const options: OpenWindowOptions & { settings?: SettingsPlace } = { kind: "settings", title: "Settings", ...(settings ? { settings } : {}) };
   void flushLinuxSession().then(() => openWindow("settings", options)).catch(reportHostError);

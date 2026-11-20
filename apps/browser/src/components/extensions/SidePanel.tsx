@@ -7,7 +7,7 @@ import { useSettings, useWindowId } from "../../state/browser/hooks";
 import { currentSettings } from "../../state/browser/current";
 import { updateSettings } from "../../state/settings/actions";
 import { DEFAULT_SETTINGS } from "../../state/settings/settings";
-import { openFromPage, pageProfileId } from "../../state/tabs/openFromPage";
+import { openFromPage, pageSpaceId } from "../../state/tabs/openFromPage";
 import { space } from "../ui/tokens";
 import { EXTENSION_PAGE_BACKGROUND, SIDE_PANEL_HEADER_PAD_RIGHT } from "./tokens";
 import { closePanelCard, closeSidePanelOnTab, dropSidePanelCard, findExtension, panelKey, showExtensionMenu, shownReadyTab, takeSidePanelFocus, useExtensions, type SidePanel } from "../../state/extensions/actions";
@@ -94,7 +94,7 @@ export function ExtensionSidePanel() {
 }
 
 function PanelCard({ windowId, panel, current, onWindowClose, onHiddenCrash }: { windowId: string; panel: SidePanel; current: boolean; onWindowClose: () => void; onHiddenCrash: () => void }) {
-  const { extensionId, profile, pageProfile, url, opened } = panel;
+  const { extensionId, profile: engineContext, pageSpace, url, opened } = panel;
   const theme = useTheme();
   const cardRadius = useCardFrame().radius;
   const web = useRef<WebViewHandle>(null);
@@ -103,7 +103,7 @@ function PanelCard({ windowId, panel, current, onWindowClose, onHiddenCrash }: {
   useEffect(() => {
     if (current && loaded && takeSidePanelFocus(windowId, panel)) void web.current?.focus();
   }, [current, loaded, opened, lookingUp]);
-  const ext = useExtensions((e) => e.lists[profile]?.find((x) => x.id === extensionId));
+  const ext = useExtensions((e) => e.lists[engineContext]?.find((x) => x.id === extensionId));
   const title = ext?.actionTitle || ext?.name || "Extension";
   const icon = ext?.actionIcon || ext?.icon;
   return (
@@ -121,7 +121,7 @@ function PanelCard({ windowId, panel, current, onWindowClose, onHiddenCrash }: {
           glyph={GLYPH}
           tooltip="More"
           onPress={() => {
-            const found = findExtension(profile, extensionId);
+            const found = findExtension(engineContext, extensionId);
             if (found) void showExtensionMenu(windowId, found);
           }}
         />
@@ -133,7 +133,7 @@ function PanelCard({ windowId, panel, current, onWindowClose, onHiddenCrash }: {
           ref={web}
           style={StyleSheet.absoluteFill}
           url={url}
-          profile={pageProfile}
+          profile={pageSpace}
           standalone
           visible={current}
           warm={!current}
@@ -144,7 +144,7 @@ function PanelCard({ windowId, panel, current, onWindowClose, onHiddenCrash }: {
           }}
           onWindowClose={onWindowClose}
           onCrashed={current ? undefined : onHiddenCrash}
-          onOpenWindow={(request) => openFromPage(request, { windowId, profileId: pageProfileId(windowId, pageProfile) })}
+          onOpenWindow={(request) => openFromPage(request, { windowId, spaceId: pageSpaceId(windowId, pageSpace) })}
         />
       </View>
     </View>

@@ -4,7 +4,7 @@ import type { Tab } from "../browser/types";
 import { create } from "zustand";
 import { getHiddenElements, hideElements, restoreElements } from "../../platform/contentBlocker";
 import { useBrowser, type BrowserState } from "../browser/store";
-import { engineProfile, isIncognitoProfile } from "../browser/model";
+import { engineProfile, isIncognitoSpace } from "../browser/model";
 import { tabEngine } from "../engines/engines";
 import { webviews } from "../tabs/webviewHandles";
 import { togglePopover } from "../tabs/popoverDismiss";
@@ -60,7 +60,7 @@ export const useHiddenElements = create<{ session: Record<string, string[]>; cha
 
 const changed = () => useHiddenElements.setState((s) => ({ changes: s.changes + 1 }));
 
-const privateWindowOf = (profile: string) => (isIncognitoProfile(profile) ? profile.slice("incognito:".length, profile.indexOf("@")) : null);
+const privateWindowOf = (profile: string) => (isIncognitoSpace(profile) ? profile.slice("incognito:".length, profile.indexOf("@")) : null);
 
 export function startHiddenElements() {
   return useBrowser.subscribe((s, prev) => {
@@ -81,7 +81,7 @@ function pageOf(tabId: string) {
   const tab = s.tabs[tabId];
   const host = hidingHost(tab?.url);
   if (!tab || !host || tabEngine(s, tabId) === "webkit") return null;
-  return { tab, host, profile: engineProfile(s, tab.profileId), inPrivateWindow: isIncognitoProfile(tab.profileId) };
+  return { tab, host, profile: engineProfile(s, tab.spaceId), inPrivateWindow: isIncognitoSpace(tab.spaceId) };
 }
 
 export const canHideElements = (s: BrowserState, tabId: string) => !!hidingHost(s.tabs[tabId]?.url) && tabEngine(s, tabId) !== "webkit";
@@ -156,20 +156,20 @@ function unhideInOpenTabs(profile: string, elements: HiddenElement[]) {
   const s = store();
   for (const tab of Object.values(s.tabs)) {
     const host = hidingHost(tab.url);
-    if (!host || engineProfile(s, tab.profileId) !== profile) continue;
+    if (!host || engineProfile(s, tab.spaceId) !== profile) continue;
     const selectors = elements.filter((e) => coversHost(e.host, host)).map((e) => e.selector);
     if (selectors.length) void webviews.get(tab.id)?.evaluate(pickerCall("unhide", selectors));
   }
 }
 
-const savedProfileOf = (profile: string) => (isIncognitoProfile(profile) ? profile.slice(profile.indexOf("@") + 1) : profile);
+const savedProfileOf = (profile: string) => (isIncognitoSpace(profile) ? profile.slice(profile.indexOf("@") + 1) : profile);
 
 function reloadCoveredTabs(profile: string, restored: HiddenElement[]) {
   const s = store();
   const saved = savedProfileOf(profile);
   for (const [tabId, tab] of Object.entries(s.tabs)) {
     const host = hidingHost(tab.url);
-    const sameProfile = savedProfileOf(engineProfile(s, tab.profileId)) === saved;
+    const sameProfile = savedProfileOf(engineProfile(s, tab.spaceId)) === saved;
     if (host && sameProfile && !isSleeping(tabId) && restored.some((e) => coversHost(e.host, host))) void webviews.get(tabId)?.reload();
   }
 }
@@ -193,7 +193,7 @@ export async function restoreHiddenElements(profile: string, elements: HiddenEle
 
 const sessionHidingTab = (s: BrowserState, tabId: string) => {
   const tab = s.tabs[tabId];
-  return tab && isIncognitoProfile(tab.profileId) ? tab : null;
+  return tab && isIncognitoSpace(tab.spaceId) ? tab : null;
 };
 
 const sessionFilters = () => {
@@ -203,7 +203,7 @@ const sessionFilters = () => {
 
 function applySessionHiding(s: BrowserState, session: Record<string, string[]>, tab: Tab) {
   const host = hidingHost(tab.url);
-  const filters = session[engineProfile(s, tab.profileId)] ?? [];
+  const filters = session[engineProfile(s, tab.spaceId)] ?? [];
   const selectors = filters.map((f) => parseHidingFilter(f)).filter((e): e is HiddenElement => !!e && !!host && coversHost(e.host, host)).map((e) => e.selector);
   if (selectors.length) void webviews.get(tab.id)?.evaluate(pickerCall("apply", selectors));
 }

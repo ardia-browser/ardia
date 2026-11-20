@@ -27,7 +27,7 @@ export async function openOverflowMenu(windowId: string) {
   const muted = allMuted(windowId);
   const open = viewTabIds(s, windowId).map((id) => s.tabs[id]!);
   const clearable = clearableRecentlyClosed(s, windowId);
-  const listed = clearable ?? { tabs: s.closedTabs.filter((c) => c.tab.profileId === w.profileId), windows: [], groups: w.kind === "private" ? s.closedGroups : [] };
+  const listed = clearable ?? { tabs: s.closedTabs.filter((c) => c.tab.spaceId === w.spaceId), windows: [], groups: w.kind === "private" ? s.closedGroups : [] };
   const closed = [
     ...listed.tabs.map((c) => ({ value: { restore: c.id }, title: tabTitle(c.tab), symbol: "clock.arrow.circlepath", at: c.closedAt })),
     ...listed.windows.map((c) => ({ value: { restore: c.id }, title: closedWindowTitle(c), symbol: "macwindow", at: c.closedAt })),
@@ -42,7 +42,7 @@ export async function openOverflowMenu(windowId: string) {
     .reverse()
     .map((c) => ({ value: { restore: c.id }, title: `${c.group.name} (${plural(c.tabs.length, "Tab")})`, symbol: "trash" }));
   const daily = s.settings.cleanUpInactiveTabsAfterMinutes !== null;
-  const synced = syncedDevicesMenuItem(w.profileId);
+  const synced = syncedDevicesMenuItem(w.spaceId);
   const choice = await chooseFromMenu<OverflowChoice, string>([
     { id: "search", title: "Search Tabs…", symbol: "magnifyingglass", ...menuShortcut("searchTabs") },
     sep,
@@ -51,7 +51,7 @@ export async function openOverflowMenu(windowId: string) {
       title: "Open Tabs",
       symbol: "square.stack",
       enabled: open.length > 0,
-      children: open.map((t) => ({ value: { open: t.id }, title: tabTitle(t), checked: w.activeTabIds[w.profileId] === t.id })),
+      children: open.map((t) => ({ value: { open: t.id }, title: tabTitle(t), checked: w.activeTabIds[w.spaceId] === t.id })),
     },
     ...(synced ? [synced] : []),
     { id: "closed", title: "Recently Closed", symbol: "clock.arrow.circlepath", enabled: closed.length > 0, children: closed.length ? [...closed, ...(clearable ? [sep, { id: "clearClosed", title: "Clear Recently Closed" }] : [])] : [{ id: "none", title: "Empty", enabled: false }] },
@@ -82,7 +82,7 @@ export async function openOverflowMenu(windowId: string) {
     else if ("restore" in choice) s.restoreClosed(choice.restore, windowId);
     else s.restoreCleaned(choice.cleaned, windowId);
   } else if (choice === "search") setSidebarUi({ searchTabs: windowId });
-  else if (openSyncedTab(choice, windowId, w.profileId)) return;
+  else if (openSyncedTab(choice, windowId, w.spaceId)) return;
   else if (choice === "restoreAll") s.restoreCleaned(undefined, windowId);
   else if (choice === "clearClosed") s.clearRecentlyClosed(windowId);
   else if (choice === "clean") cleanUpWithUndo(windowId);

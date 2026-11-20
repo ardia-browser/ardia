@@ -346,6 +346,11 @@ const BODIES: readonly string[] = [
   "<path d=\"M248,152a8,8,0,0,1-8,8H224v16a8,8,0,0,1-16,0V160H192a8,8,0,0,1,0-16h16V128a8,8,0,0,1,16,0v16h16A8,8,0,0,1,248,152ZM56,72H72V88a8,8,0,0,0,16,0V72h16a8,8,0,0,0,0-16H88V40a8,8,0,0,0-16,0V56H56a8,8,0,0,0,0,16ZM184,192h-8v-8a8,8,0,0,0-16,0v8h-8a8,8,0,0,0,0,16h8v8a8,8,0,0,0,16,0v-8h8a8,8,0,0,0,0-16ZM219.31,80,80,219.31a16,16,0,0,1-22.62,0L36.68,198.63a16,16,0,0,1,0-22.63L176,36.69a16,16,0,0,1,22.63,0l20.68,20.68A16,16,0,0,1,219.31,80ZM208,68.69,187.31,48l-32,32L176,100.69Z\"/>",
   "<path d=\"M224,48H32A16,16,0,0,0,16,64V192a16,16,0,0,0,16,16H224a16,16,0,0,0,16-16V64A16,16,0,0,0,224,48ZM64,168H48a8,8,0,0,1,0-16H64a8,8,0,0,1,0,16Zm96,0H96a8,8,0,0,1,0-16h64a8,8,0,0,1,0,16Zm48,0H192a8,8,0,0,1,0-16h16a8,8,0,0,1,0,16Zm0-32H48a8,8,0,0,1,0-16H208a8,8,0,0,1,0,16Zm0-32H48a8,8,0,0,1,0-16H208a8,8,0,0,1,0,16Z\"/>",
   "<path d=\"M165.78,224H208a16,16,0,0,0,16-16V170.35A8,8,0,0,0,212.94,163a23.37,23.37,0,0,1-8.94,1.77c-13.23,0-24-11.1-24-24.73s10.77-24.73,24-24.73a23.37,23.37,0,0,1,8.94,1.77A8,8,0,0,0,224,109.65V72a16,16,0,0,0-16-16H171.78a35.36,35.36,0,0,0,.22-4,36,36,0,0,0-72,0,35.36,35.36,0,0,0,.22,4H64A16,16,0,0,0,48,72v32.22a35.36,35.36,0,0,0-4-.22,36,36,0,0,0,0,72,35.36,35.36,0,0,0,4-.22V208a16,16,0,0,0,16,16h42.22\"/>",
+  "<rect x=\"3.5\" y=\"7.97\" width=\"4.21\" height=\"19.59\" rx=\"1.59\"/><rect x=\"7.71\" y=\"7.97\" width=\"6.81\" height=\"19.59\" rx=\"1.59\"/><rect x=\"14.53\" y=\"4.44\" width=\"5.59\" height=\"23.11\" rx=\"1.59\"/><g transform=\"rotate(-8.94 26.7 27.56)\"><rect x=\"22.06\" y=\"6.47\" width=\"4.64\" height=\"21.09\" rx=\"1.59\"/></g><path d=\"M9.13 24.23L13.11 24.23\"/><path d=\"M9.13 11.3L13.11 11.3\"/>",
+  "<rect x=\"2.4\" y=\"5.68\" width=\"27.2\" height=\"20.65\" rx=\"1.93\"/>",
+  "<rect x=\"3.57\" y=\"5.73\" width=\"24.85\" height=\"20.55\" rx=\"3.16\"/><path d=\"M3.57 23.11L16.56 19.1L14.28 20.84L20.5 15.51L28.43 23.21V23.11A3.16 3.16 0 0 1 25.26 26.28H6.74A3.16 3.16 0 0 1 3.57 23.11Z\" fill=\"currentColor\" stroke-linejoin=\"round\"/><circle cx=\"12.14\" cy=\"12.66\" r=\"2.96\" fill=\"currentColor\" stroke=\"none\"/>",
+  "<path d=\"M2 10v3\" /><path d=\"M6 6v11\" /><path d=\"M10 3v18\" /><path d=\"M14 8v7\" /><path d=\"M18 5v13\" /><path d=\"M22 10v3\" />",
+  "<path d=\"M2 5a2 2 0 0 1 2 -2h16a2 2 0 0 1 2 2a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2z\" /><path d=\"M19 9c.513 0 .936 .463 .993 1.06l.007 .14v7.2c0 1.917 -1.249 3.484 -2.824 3.594l-.176 .006h-10c-1.598 0 -2.904 -1.499 -2.995 -3.388l-.005 -.212v-7.2c0 -.663 .448 -1.2 1 -1.2h14zm-5 2h-4l-.117 .007a1 1 0 0 0 0 1.986l.117 .007h4l.117 -.007a1 1 0 0 0 0 -1.986l-.117 -.007z\" />",
 ];
 
 const ENCODED: Record<string, readonly EncodedLayer[]> = {
@@ -392,6 +397,7 @@ const ENCODED: Record<string, readonly EncodedLayer[]> = {
   "book.closed.fill": [[40,24,1,1,0,[[1.1767,0.9275,0.0194,0.0199,0.012,0,1],[1.1823,0.9325,-0.0152,0.019,0.0135,0,1],[1.1898,0.9325,-0.0152,0.004,0.018,0,1],[1.2067,0.945,0.0016,0.004,0.0233,0,1],[1.2123,0.9525,0.0129,-0.0035,0.0345,0,1]]]],
   "bookmark": [[41,256,1,1,0,[[1.23,0.9325,0.0126,-0.0413,0,0,1],[1.23,0.9425,-0.0174,-0.0132,0.0068,0,1],[1.2581,0.9475,-0.0061,-0.0244,0.0173,0,1],[1.2469,0.94,0.0042,-0.0338,0.0338,0,1],[1.2562,0.945,0.0136,-0.0413,0.0578,0,1]]]],
   "bookmark.fill": [[42,256,1,1,0,[[1.1981,0.935,0.0136,-0.0413,0.012,0,1],[1.2263,0.935,-0.0174,-0.0075,0.0128,0,1],[1.2619,0.935,-0.0024,-0.0169,0.0158,0,1],[1.2863,0.94,0.0014,-0.0225,0.0165,0,1],[1.3163,0.945,0.0126,-0.0366,0.0218,0,1]]]],
+  "books.vertical": [[342,32,0,1,0,[[1.474,1.06,0.0666,-0.0206,0.0597,0,1],[1.504,1.08,0.0591,0.0075,0.0778,0,1],[1.5115,1.1,0.0816,0.0075,0.0883,0,1],[1.5171,1.1075,0.0581,0.0009,0.1033,0,1],[1.504,1.1275,0.0759,0,0.1175,0,1]]]],
   "brain": [[43,24,1,1,0,[[1.3641,1.065,-0.001,0.0041,0.0052,0,1],[1.4166,1.07,-0.0048,0.0228,0.0127,0,1],[1.4391,1.07,0.0055,0.0144,0.0165,0,1],[1.4316,1.07,0.0159,0.0434,0.0398,0,1],[1.4391,1.07,-0.0085,0.0341,0.0547,0,1]]]],
   "briefcase": [[44,256,1,1,0,[[1.3077,1.055,0.0194,0.0337,0,0,1],[1.3077,1.055,-0.0143,0.0337,0.0045,0,1],[1.3189,1.0575,-0.0002,0.0656,0.015,0,1],[1.3302,1.0525,0.0035,0.0506,0.0233,0,1],[1.3452,1.055,-0.0171,0.0412,0.0405,0,1]]]],
   "briefcase.fill": [[45,24,1,1,0,[[1.2574,1.0475,0.0157,0.0081,0.0098,0,1],[1.2743,1.0475,-0.0152,0.0006,0.0098,0,1],[1.3043,1.0525,-0.0002,0.0287,0.009,0,1],[1.3043,1.0425,0.0073,0.0203,0.0203,0,1],[1.3474,1.0525,-0.0171,0.0137,0.0135,0,1]]]],
@@ -557,6 +563,7 @@ const ENCODED: Record<string, readonly EncodedLayer[]> = {
   "person.fill": [[214,24,1,1,0,[[1.2331,0.9325,-0.0134,-0.0237,0.012,0,1],[1.2406,0.9375,-0.0096,-0.0246,0.0113,0,1],[1.2425,0.9375,-0.0096,-0.0246,0.012,0,1],[1.2519,0.9275,-0.0068,0.0054,0.012,0,1],[1.265,0.9375,-0.0077,0.0054,0.0113,0,1]]]],
   "phone": [[215,24,0,1,0,[[1.0325,0.995,-0.0307,0.0306,0.0672,0,1],[1.0475,0.995,-0.0157,0.0156,0.0822,0,1],[1.0738,0.995,-0.0457,0.0456,0.092,0,1],[1.0738,0.9925,-0.0382,0.0456,0.098,0,1],[1.0925,0.99,-0.0307,0.0381,0.1033,0,1]]]],
   "photo": [[216,24,1,1,0,[[1.2213,1.1425,0.0038,-0.0232,0.0998,0,1],[1.2625,1.125,0.0019,0.0068,0.087,0,1],[1.2625,1.125,0.0019,0.0068,0.087,0,1],[1.2625,1.125,0.0019,-0.0026,0.0878,0,1],[1.2625,1.13,0.0094,-0.0063,0.1028,0,1]]]],
+  "photo.on.rectangle": [[343,32,0,1,0,[[0.9825,1.075,-0.1362,-0.1559,0.0597,0,1],[0.9975,1.04,-0.1362,-0.1559,0.0778,0,1],[0.9863,1.04,-0.1297,-0.1391,0.1003,0,1],[1.0275,1.0025,-0.1212,-0.125,0.1078,0,1],[1.0312,0.99,-0.1175,-0.1344,0.1265,0,1]]],[344,32,0,1,0.07,[[1.11,1.0425,0.0975,0.1038,0.0695,0,1],[1.11,1.0375,0.1125,0.1,0.0815,0,1],[1.11,1.0425,0.1275,0.13,0.0965,0,1],[1.1063,1.03,0.135,0.1263,0.1033,0,1],[1.1025,1.0275,0.1463,0.115,0.1273,0,1]]]],
   "pianokeys": [[217,24,1,1,0,[[1.0836,1.1375,-0.0066,-0.0148,0.1073,0,1],[1.0836,1.14,0,0.0152,0.1065,0,1],[1.0836,1.14,0,0.0152,0.1065,0,1],[1.0836,1.14,0,0.0143,0.1065,0,1],[1.0836,1.14,0,0.0143,0.1065,0,1]]]],
   "pin": [[218,24,0,1,0,[[1.0939,0.965,0.0148,-0.0656,0.089,0,1],[1.1089,0.965,-0.0002,-0.0656,0.095,0,1],[1.1126,0.975,-0.0002,-0.0806,0.101,0,1],[1.1314,0.965,0.0035,-0.0806,0.1025,0,1],[1.1689,0.975,0.0138,-0.0506,0.113,0,1]]]],
   "pin.fill": [[219,24,1,1,0,[[1.328,1.055,0.0204,-0.015,0.0052,0,1],[1.3655,1.045,-0.0096,-0.0188,0.009,0,1],[1.388,1.045,0.0054,-0.0244,0.0082,0,1],[1.403,1.0475,0.0054,-0.0356,0.0217,0,1],[1.4311,1.045,0.0138,-0.0009,0.015,0,1]]]],
@@ -651,6 +658,7 @@ const ENCODED: Record<string, readonly EncodedLayer[]> = {
   "video.fill": [[325,256,1,1,0,[[1.3115,0.94,0.0018,-0.0143,0.0083,0,1],[1.3115,0.94,-0.0319,-0.0143,0.0113,0,1],[1.3115,0.94,-0.0319,-0.0143,0.012,0,1],[1.319,0.935,-0.0319,0.0176,0.0128,0,1],[1.3378,0.9325,-0.0244,0.0138,0.012,0,1]]]],
   "visionpro": [[326,24,1,0.3,0,[[1.5038,1.005,-0.015,-0.0148,0.0053,0,1],[1.5319,1.01,0,-0.0204,0.0023,0,1],[1.5769,1.005,-0.0169,-0.0373,0.0068,0,1],[1.6069,1.015,0,-0.0054,0.0075,0,1],[1.6613,1.01,-0.0169,-0.0204,0.0053,0,1]]],[327,24,0,1,0,[[1.5469,1,-0.0159,-0.012,0.0478,0,1],[1.56,1.005,0,-0.0213,0.0695,0,1],[1.5825,1.015,-0.0169,-0.0326,0.0808,0,1],[1.5994,1.0175,0,-0.0054,0.0995,0,1],[1.6331,1.02,-0.0169,-0.0185,0.1108,0,1]]]],
   "wand.and.stars": [[328,24,0,1,0,[[1.1949,1,0.0391,0.0675,0.0897,0,-1],[1.1481,1.0025,0.0316,0.0675,0.1085,0,-1],[1.1724,1.0025,0.0466,0.0675,0.1295,0,-1],[1.2099,1,0.0241,0.0675,0.1303,0,-1],[1.2437,1,0.0241,0.0525,0.1505,0,-1]]]],
+  "waveform": [[345,24,0,1,0,[[1.0973,0.87,0.0044,0.0415,0.0732,0,1],[1.1198,0.88,-0.0115,0.0265,0.0898,0,1],[1.1273,0.895,0.0016,0.0134,0.0995,0,1],[1.1498,0.89,0.011,0.0152,0.1063,0,1],[1.191,0.88,-0.0134,0.0452,0.1153,0,1]]]],
   "wrench.and.screwdriver": [[329,24,0,1,0,[[1.1579,1.0125,0.0051,0.0329,0.176,0,1],[1.1766,1.0125,-0.0192,0.0629,0.1843,0,1],[1.1804,1.0075,-0.0192,0.0592,0.1858,0,1],[1.1335,1.0125,-0.0052,0.0498,0.2248,0,1],[1.1466,1.0125,0.0098,0.0442,0.2285,0,1]]]],
   "xmark": [[330,256,1,1,0,[[1.2128,1,-0.0033,0.0023,0.0038,0,1],[1.2203,1,0.0099,-0.0061,0.0105,0,1],[1.2128,1,0.0164,-0.0145,0.0308,0,1],[1.1865,1,-0.0201,0.0173,0.0555,0,1],[1.179,1,-0.0145,0.0108,0.0713,0,1]]]],
   "xmark.circle": [[331,256,1,1,0,[[1.2182,1,-0.0113,0.0094,0.0015,0,1],[1.2182,1,-0.0019,0.0019,0.0098,0,1],[1.2107,1,0.0028,-0.0037,0.0233,0,1],[1.207,1,0.0075,-0.0094,0.0352,0,1],[1.2032,1,0.0169,-0.0131,0.0518,0,1]]]],
@@ -663,6 +671,7 @@ const ENCODED: Record<string, readonly EncodedLayer[]> = {
   "slider.horizontal.2.square": [[208,256,1,1,0,[[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1]]]],
   "play.tv": [[75,24,1,1,0,[[1.3069,0.9975,0.0197,-0.0059,0,0,1],[1.3069,1.0375,0.0009,-0.0246,0,0,1],[1.3106,1.0325,0.0047,-0.0077,0,0,1],[1.3163,1.035,0.0113,-0.0265,0,0,1],[1.3256,1.03,0.0216,-0.0415,0.012,0,1]]]],
   "puzzlepiece.fill": [[341,256,1,1,0,[[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1]]]],
+  "archivebox.fill": [[346,24,1,1,0,[[1.1553,1.0075,-0.0199,-0.0068,0.042,0,1],[1.1853,1.0175,-0.0115,-0.0077,0.0293,0,1],[1.2078,1.0275,-0.0077,-0.0115,0.0247,0,1],[1.2078,1.0225,-0.004,-0.0115,0.0308,0,1],[1.2078,1.0125,-0.0002,0.0223,0.0465,0,1]]]],
 };
 
 const WEIGHTS: readonly SymbolWeight[] = ["light","regular","medium","semibold","bold"];
@@ -738,6 +747,7 @@ const NUDGES: Record<string, string> = {
   "book.closed.fill": "g9cdf8h6bce8ibe7hac6g9j5j4ibhbgan9m9hacdg9ifcdf8jce8icd7hbdfkejeidhchbgbg9cdf8heace8acd8hbcffbbeadhdgcfceadag9bdf98face89cdfgbbffbae9e8dgcecdbca",
   "bookmark": "bbdffbh9bfdbhfabdegabeeacahificiiifiabdfgb9hbfdbgfbbefhjbefjcjiigici9hghbbdfgb9hbfdj8fbjde9iaeeibi8ifhch9hfhabde8j9gbedi8ebiee8ibeeich9h7hcgao7o",
   "bookmark.fill": "a9ddg9h7bde8gcb8ebh7bbe6b6hdfdccibfba9ddg99fadd8gca8dcgfbbefbegdedbc9ceba9ddg99fbdeg8cbgeb8fbbefce9dfdccabfbbade8i9fbddh8dbgec9gbcefcf9e7dcdal8k",
+  "books.vertical": "dchcd8ddfccfiadeeec9hde8c7dbcaddjcdbcc9cd8ddfbcf9aeefdd99ce8c7daa9ddcbdbedcchggebcgfdbieceh9edc9igcbjaddkdecfdcd9ggebcgfebbecea9fdc9agdbcafddcgc",
   "brain": "eabehabgeeb9gdehbcggdcbgdfgfiecefdideabe9ibgeebh8dehbcggdcbgdfgfaedefd9le8bc8fbdeabe89edb88cd7abda79a8cf7e9dggeccfedhbeecaidfhdciggbjae9hgcffeid",
   "briefcase": "9eebafdcfccfgcdghdegbdghi9iabadcfcfd9ce7abd9f7cb87dc97ebb7fb8babbbcaebfa9ce8bcdag8cc88dca8fcb88cacbcdddcfc8cbcggdcgaagfcdghdegbcggdcecgcicccebgc",
   "briefcase.fill": "9febbgdefcchgddiieeibffjhcidcddeeffg9ce8acdbf9bd89dd99edb9fd9dadbdcdddfe9de8acdbf9cc88dd99edb98d9dadbddded7dbcgfdcgaagfccghcegbcggdcebgbibcbebgb",
@@ -903,6 +913,7 @@ const NUDGES: Record<string, string> = {
   "person.fill": "fhaeebfh9gcdghbeejafdchhfiekdlbeaghhfhbeebfh9gdcghbefiafdjhggiejdlcebfhhfface8fe9dc9gebaeeabdfhbfceddecfa8h9ffbbe8ge9dd9gdbafeaaefhbgceddeceb7i8",
   "phone": "afeb9fbddb9gcc8gcd7hbd7i6iebebdccccdccg8cceag8cch8ccg8ccg8ccdcdcdcdcdcdcccg8cceag8ccg8ccg8cbg8cbcbcbcbcbcbcbcc88ccea88cc88cc88cc88cccccbcccccbcb",
   "photo": "ajegacdjghcegjegakehcngjakamcoeoeoglaheebjdhgfdc9heebiffckggahbjckelfnhoahfebiehgfdj9gedbhfedjhfbhbidjfkgmhn9hedbhdgfeci9fekagfcchgeaebgcheifigk",
+  "photo.on.rectangle": "b9f8cdabd8adf9cdde99edb99abe8facfcacbf7fcab8ddaa7ec9c99de9bd9db989ac7c9cbe8edab8eea97dc9d89c68bc9bb798bb8aaabe8dd9bgeda97dc9d8ac69bc9cbf9faa8aaa",
   "pianokeys": "9idfabcifgbdghce9jegalfh8j9kamcndoei9heeajdhfgcc8gde9iefbkfg9iajbkcmdnfo9heebidhffck8gddaheebjff9haibjdkemfn9gedbhdgfecj9fdkagfdbige9gahcidjfkgl",
   "pin": "chgdagcedb8gcbffaidegibd9dfjdibi9hfgdigdbhcfec9gckfgajde8ibealgkejcjai9hdh8cbgdeec9fcifebidd9iclak8jehdhbg9nde7abdcbeg9bcf7aaddg8cbf9d7c5bchaf8e",
   "pin.fill": "dggcbfddeb9fcagebhedhgccabhifhdgbfhecgfcafcddb8eciedahdc8gbc9ifidgbg9e7edg8cbfcdea9fcifdahdd9gbkaj8hegcgaf8mce89bccaef9bcd79addf8bbe9c7b69cgae8d",
@@ -997,6 +1008,7 @@ const NUDGES: Record<string, string> = {
   "video.fill": "acfgjeecgadfhcfhjegblghdjfchmifdheogbbfgcdebhaeficfhcehamficceegfhhcidkfb9fdcaf8h7ebj8gdd9h6ebj7c8e9gbicj5l6b97dcaf8heebb8gcc9heeab7c8e9gahcjdd6",
   "visionpro": "8ce8bdec9aefcca9fedaaggcbee89accfeagbchhedhccaafgcehceibfgddhfdhgiccgejgb99eea99c7abg8edc9a6fad798da8bccg5b7d9beaad9gfecc8adgafedbbff9bagbccgedf",
   "wand.and.stars": "aeeaaf3d5c9g5c8hcd8h4d7i7j0j6k5k5l4made9ae3c5a9e5a8ecb8f4b7g7g6g0h5h5h0icd8hcdeb8i4d8h4e8ice8i4e4f4f4f4f4g4gdd9hddfb9i5e9h5e9i5eaiee6f6f7f6f7f7g",
+  "waveform": "bfefjag9iefaheeadahed9hdldk9g8gckcjcbfefbbh9afdaaeeadahecahecec9g9fdjcjcbeeebaggaeeaadf9d99dd9accccggfgbbacaechbd7bdeah6e9idice8ibe7j6j9g8fbkaj9",
   "wrench.and.screwdriver": "abf6c9e68cd6aaf4b78ad5a8b5d3e17794b2abf6c8f69be6a974c79ae5a7c5e3f196a4c2ab76c9e68cd7aa75b88ad5a8b6d4e28795b3ab66b9d78cc79a65a87b4688a634c2687513",
   "xmark": "cb7gbdccda9fccf9aedb8gbd9e7gdabcae8gcb8gbdccea9fcc7haedb8gbd9e7g6ibc9e8gf9aeeag9i7dcg8cdf9i6ebh7g9fadbccj6i7f9bdeag9afdcg8cdf9beebh7g9faebdcbei7",
   "xmark.circle": "ccg8cceag8ccg8ccg8ccg8cccccccccccccccc8gccea8gcc8gcc8gcc8gcccccccccccccccc8gccea8gcc8gcc8gcc8gccccccccccccdccc8gccea8gcc8gcc8gcc8gcccccccccccccb",
@@ -1009,6 +1021,7 @@ const NUDGES: Record<string, string> = {
   "slider.horizontal.2.square": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
   "play.tv": "c9g9debbeabegacfdfabfebb9bcfafbb9bbccf8fdcdaegbb8edbebcf8bdfbec9a9cdadcdbf8fdbc9efbb8fdbfbbf8acebfcbacdfafbfcg9gdcciefbc8gdc6bbg8bdfbfdjbjdfaf5f",
   "puzzlepiece.fill": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "archivebox.fill": "ccgdc9agcegacfgcgcchgdchgaggchcegfggccgdchafcdgacegbgbcggdchghgfcgcdgegfccgcchafcdgicegagbcggcchghgecfccgdgec98aceacca8ecb8e8fcb87cb8b88c8cd8d9d",
 };
 
 export function symbolNudge(name: string, weight: SymbolWeight, pointSize: number): readonly [number, number] {

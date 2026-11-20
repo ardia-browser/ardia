@@ -6,6 +6,7 @@ import { cacheKey, pruneEngineFavicons } from "../../state/favicons/favicons";
 import { isIncognitoProfile } from "../../state/browser/model";
 import { useProfileName, useProfileOrder } from "../../state/profiles/hooks";
 import { clearHistory } from "../../state/history/actions";
+import { forgetThumbnails } from "../../state/app/thumbnails";
 import { noteBrowsingDataCleared } from "../../state/telemetry/historyRemovalCounts";
 import { consentToken } from "../../state/telemetry/client";
 import { Box, Button, Checkbox, Dialog, DialogActions, DialogTitle, Group, PopUp, Row, space, Text } from "../ui";
@@ -57,6 +58,7 @@ export function ClearDataDialog({ profileId, onClose }: { profileId: string; onC
         if (currentEngineProfile(profileId) === profile) clearHistory(profileId, since, startedAt);
         pruneEngineFavicons(icons);
       }
+      forgetThumbnails();
       cleared = true;
     } catch {
       noteBrowsingDataCleared(false, consent);

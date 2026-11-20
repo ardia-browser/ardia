@@ -1,5 +1,6 @@
 import type { HistoryEntry } from "../../state/browser/types";
-import { dayLabel, dayStart, queryWords, searchText } from "./PageLayout";
+import { dayLabel } from "./PageLayout";
+import { dayStart, queryWords, searchText } from "../../lib/textSearch";
 import { historyRow } from "./tokens";
 
 const ROW = historyRow.height;

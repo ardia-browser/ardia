@@ -32,6 +32,8 @@ type IconBase = {
   glyphBox?: number;
   radius?: number;
   weight?: SymbolProps["weight"];
+  bounce?: number;
+  replace?: boolean;
   tooltip?: string;
   palette?: IconPalette;
   color?: string;
@@ -118,7 +120,7 @@ function useIconMetrics(props: IconProps) {
 }
 
 function IconButtonView(props: IconProps) {
-  const { icon, disabled, active, glyphBox, weight = "regular", tooltip, palette, color, style, hit, image, asset, badge, children } = props;
+  const { icon, disabled, active, glyphBox, weight = "regular", bounce, replace, tooltip, palette, color, style, hit, image, asset, badge, children } = props;
   const theme = useTheme();
   const { hovered, hoverProps } = useHover();
   const tip = useTooltip(tooltip);
@@ -137,7 +139,7 @@ function IconButtonView(props: IconProps) {
       <Image source={{ uri: image }} style={{ width: IMAGE_SIZE, height: IMAGE_SIZE, opacity: disabled ? opacity.disabled : 1 }} />
     </View>
   ) : icon ? (
-    <Symbol name={icon} size={metrics.glyph} weight={weight} color={ink} style={{ width: glyphFrame, height: glyphFrame }} />
+    <Symbol name={icon} size={metrics.glyph} weight={weight} color={ink} bounce={bounce} replace={replace} style={{ width: glyphFrame, height: glyphFrame }} />
   ) : null);
   const hasGlyphPressMotion = !children && (!!icon || !!image || !!asset);
   const { scale: pressScale, onPressIn, onPressOut } = usePressScaleMotion(hasGlyphPressMotion);

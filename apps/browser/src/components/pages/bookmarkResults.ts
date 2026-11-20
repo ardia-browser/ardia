@@ -1,6 +1,6 @@
 import type { BookmarkRootIds } from "../../state/bookmarks/bookmarks";
 import type { BookmarkNode, Bookmarks } from "../../state/browser/types";
-import { queryWords, searchText } from "./PageLayout";
+import { queryWords, searchText } from "../../lib/textSearch";
 
 const NO_IDS: readonly string[] = [];
 const searchTexts = new WeakMap<BookmarkNode, string>();

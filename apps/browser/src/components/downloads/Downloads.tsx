@@ -49,6 +49,7 @@ import { useDownloadsPlacement } from "./useDownloadsPlacement";
 import { sameSize, useSettled, type Size } from "../ui/useSettled";
 import { DOWNLOADS_LIST as L, FILE_ICON_GLYPH_SHARE, MAGNET, useDownloadsColors } from "./tokens";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
+import { useLibraryAvailable } from "../../state/library/hooks";
 
 const rowFill = (theme: Theme, hovered: boolean, pressed: boolean) => (hovered || pressed ? menuRowFill(theme, pressed) : undefined);
 
@@ -88,7 +89,8 @@ function DownloadsPanel({ windowId, closing, onClosed }: { windowId: string; clo
   if (!closing) shownList.current = { ids: liveIds, clearable: liveClearable };
   const { ids, clearable } = shownList.current;
   const topStrip = useTabLayout() === "top";
-  const addressBar = useDownloadsInSidebarFooter();
+  const library = useLibraryAvailable(windowId);
+  const addressBar = useDownloadsInSidebarFooter() || library;
   const sidebarRight = useSidebarSide(windowId) === "right";
   const setOpen = (value: boolean) => setDownloadsOpen(windowId, value);
   const { root, placement: p, onLayout } = useDownloadsPlacement(windowId, closing, { topStrip, footer: addressBar, footerBottom: PROFILE_DOTS_HEIGHT + 2, sidebarRight });
@@ -226,6 +228,7 @@ function DownloadRow({ d, windowId }: { d: Download; windowId: string }) {
                 <View style={{ flex: 1 }}>
                   <Text
                     lines={1}
+                    ellipsizeMode="middle"
                     tone={exists ? "textPrimary" : "textSecondary"}
                     style={{ lineHeight: PANEL.titleLine, textDecorationLine: exists ? "none" : "line-through" }}
                   >
@@ -275,7 +278,8 @@ export function DownloadMagnet() {
   const sidebarWidth = useSidebarWidth(windowId);
   const topStrip = useTabLayout() === "top";
   const right = useSidebarSide(windowId) === "right";
-  const addressBar = useDownloadsInSidebarFooter();
+  const library = useLibraryAvailable(windowId);
+  const addressBar = useDownloadsInSidebarFooter() || library;
   const lightsY = useToolbarLightsCenter()[1];
   const [flight, setFlight] = useState<{ id: string; path: string } | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });

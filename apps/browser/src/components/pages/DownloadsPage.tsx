@@ -70,6 +70,7 @@ function DownloadCard({ d: listed, windowId }: { d: Download; windowId: string }
             <Pressable disabled={!done} onPress={() => void openDownload(d.path)}>
               <Text
                 lines={1}
+                ellipsizeMode="middle"
                 weight="medium"
                 tone={exists ? "textPrimary" : "textSecondary"}
                 style={{ ...pageType.fileName, textDecorationLine: exists ? "none" : "line-through" }}

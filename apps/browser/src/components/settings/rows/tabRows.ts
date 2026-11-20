@@ -22,6 +22,18 @@ export const tabRows = {
           keywords: ["right", "left", "side", "position", "flip", "mirror", "sidebar on the right", "right sidebar", "arc"],
           shown: inSidebar,
         },
+        sidebarLibrary: {
+          title: "Library in sidebar",
+          description: "Replaces Downloads in the sidebar footer.",
+          keywords: ["library", "media", "downloads", "history", "profiles", "spaces", "archived tabs", "dia"],
+          shown: inSidebar,
+        },
+        sidebarLibraryAllProfiles: {
+          title: "Show every profile in the Library",
+          description: "Media, Downloads and History list every profile's items, with a filter to show one.",
+          keywords: ["all profiles", "every profile", "spaces", "unified", "merged", "filter", "profile filter", "library", "downloads", "history", "media", "arc"],
+          shown: (settings, env) => !env.top && settings.sidebarLibrary,
+        },
         autoHideTabs: {
           title: "Auto-hide tabs",
           explained: true,

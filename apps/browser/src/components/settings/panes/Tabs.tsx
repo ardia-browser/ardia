@@ -110,6 +110,8 @@ function LayoutSection() {
           <Row anchor="tabs.sidebarSide">
             <Segmented options={SIDEBAR_SIDES} value={sidebarSide} onChange={chooseSidebarSide} />
           </Row>
+          <SettingToggle anchor="tabs.sidebarLibrary" />
+          <SettingToggle anchor="tabs.sidebarLibraryAllProfiles" />
           <SettingToggle anchor="tabs.hideToolbarWhileScrolling" />
           <ButtonsRow top={top} />
         </Group>

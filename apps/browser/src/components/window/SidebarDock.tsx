@@ -26,6 +26,9 @@ import {
   noteSidebarSlide,
 } from "../../state/telemetry/dockCounts";
 import { ProfileSwipe } from "./ProfileSwipe";
+import { useSidebarDock } from "./useSidebarDock";
+import { LibraryLayer } from "../library/LibraryLayer";
+import { useLibraryMorph, useLibraryMorphStyles } from "../library/useLibraryMorph";
 import { ARC_HIDE_MS, DOCK_SLIDE, SHADOWS } from "./tokens";
 import {
   EDGE_ARMED,
@@ -62,44 +65,15 @@ import { useSidebarLights, useTopStripLights } from "./useDockLights";
 import { useCardFrame } from "./cardFrame";
 import { forgetSidebarDock, noteSidebarDock } from "./sidebarDockCheck";
 
-function useSidebarDock(open: boolean, animate: boolean, arc: boolean): { dock: Animated.Value; away: boolean } {
-  const windowId = useWindowId();
-  const dock = useRef(new Animated.Value(open ? 1 : 0)).current;
-  const was = useRef(open);
-  const [away, setAway] = useState(!open);
-  useEffect(() => {
-    if (was.current === open) return;
-    was.current = open;
-    const move = dockMove({ open, animated: animate && !reduceMotion() && switchOn("sidebarSlide"), arc, peekOut: peekShown(windowId) });
-    if (move === "jump") {
-      dock.stopAnimation();
-      dock.setValue(open ? 1 : 0);
-      setDockMoving(windowId, false);
-      setAway(!open);
-      return;
-    }
-    if (open) setAway(false);
-    setDockMoving(windowId, true);
-    let pastTarget = false;
-    const watch = dock.addListener(({ value }) => {
-      if (value > 1 || value < 0) pastTarget = true;
-    });
-    (move === "arcHide"
-      ? Animated.timing(dock, { toValue: 0, duration: ARC_HIDE_MS, easing: curve.enter, useNativeDriver: false })
-      : Animated.timing(dock, { toValue: open ? 1 : 0, ...DOCK_SLIDE, useNativeDriver: false })
-    ).start(({ finished }) => {
-      dock.removeListener(watch);
-      if (!finished) return;
-      noteSidebarSlide(pastTarget);
-      setDockMoving(windowId, false);
-      if (!open) setAway(true);
-    });
-  }, [open]);
-  useEffect(() => () => setDockMoving(windowId, false), []);
-  return { dock, away };
-}
-
 type Inset = { top: number; right: number; bottom: number; left: number };
+
+const NO_SPACE = { width: 0 } as const;
+const NATIVE_SPACE = {} as const;
+
+function spacerStyle(library: ReturnType<typeof useLibraryMorph>, active: boolean) {
+  if (!active) return NO_SPACE;
+  return library.native ? NATIVE_SPACE : { width: library.growth };
+}
 
 export function DockedLayout({
   fullscreen,
@@ -127,12 +101,9 @@ export function DockedLayout({
   const { dock, away } = useSidebarDock(open, !fullscreen, arc);
   const frame = useCardFrame();
   const sideInset = right ? inset.right : inset.left;
+  const library = useLibraryMorph(windowId, width, right);
   const edge = useMemo(
-    () =>
-      dock.interpolate({
-        inputRange: [0, 1],
-        outputRange: [sideInset, dockedCardInset(width, frame.inset)],
-      }),
+    () => dock.interpolate({ inputRange: [0, 1], outputRange: [sideInset, dockedCardInset(width, frame.inset)] }),
     [dock, width, sideInset, frame.inset],
   );
   const hiddenTop = useCardTopInset(frame.inset);
@@ -158,7 +129,9 @@ export function DockedLayout({
         }
       >
         {!fullscreen && <WindowDragRegion style={StyleSheet.absoluteFill} />}
+        <Animated.View ref={right ? undefined : library.onSpacer} collapsable={false} pointerEvents="none" style={spacerStyle(library, !right)} />
         {children}
+        <Animated.View ref={right ? library.onSpacer : undefined} collapsable={false} pointerEvents="none" style={spacerStyle(library, right)} />
       </Animated.View>
       {topStrip &&
         stripShown && (
@@ -172,6 +145,7 @@ export function DockedLayout({
       {topStrip && topTabs && !stripShown && topStrip.peek}
       {!topTabs && (
         <SidebarDock
+          library={library}
           dock={dock}
           open={open}
           width={width}
@@ -188,6 +162,7 @@ export function DockedLayout({
 }
 
 function SidebarDock({
+  library,
   dock,
   open,
   width,
@@ -197,6 +172,7 @@ function SidebarDock({
   right,
   windowWidth,
 }: {
+  library: ReturnType<typeof useLibraryMorph>;
   dock: Animated.Value;
   open: boolean;
   width: number;
@@ -295,6 +271,8 @@ function SidebarDock({
   );
   useSidebarLights(windowId, dock, peek.slide, { width, peeking, fullscreen, lights, right, peekAt });
   const edgeSide = right ? "right" : "left";
+  const morph = useLibraryMorphStyles(windowId, outward);
+  const morphing = library.available && !peeking && !away;
   const sidebar = useMemo(
     () => (
       <ProfileSwipe>
@@ -385,10 +363,18 @@ function SidebarDock({
               )}
             </Animated.View>
           )}
-          <View style={[{ flex: 1, paddingTop: controlsRow }, peeking ? { borderRadius: peekAt.radius, overflow: "hidden" } : null]}>{sidebar}</View>
-          <ResizeHandle windowId={windowId} />
+          <Animated.View
+            pointerEvents={library.open ? "none" : "auto"}
+            importantForAccessibility={library.open ? "no-hide-descendants" : "auto"}
+            style={[{ flex: 1, paddingTop: controlsRow }, peeking ? { borderRadius: peekAt.radius, overflow: "hidden" } : null, morphing ? morph.sidebar : null]}
+          >
+            {sidebar}
+          </Animated.View>
+          {!library.open && <ResizeHandle windowId={windowId} />}
+          {morphing && <LibraryLayer windowId={windowId} sidebarWidth={width} width={library.native ? undefined : library.width} onClip={library.onClip} onContent={library.onContent} right={right} style={morph.library} />}
         </Animated.View>
       </Animated.View>
     </>
   );
 }
+

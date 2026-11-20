@@ -398,6 +398,29 @@ export const ORIGINALS = {
       return `<circle cx="${f(cx)}" cy="${f(cy)}" r="${f(p.r)}"/><path d="M${f(cx + p.r)} ${f(cy)}Q${f(cx + p.r)} ${f(cy + p.t + p.r * 0.6)} ${f(cx - p.r * 0.4)} ${f(cy + p.r + p.t)}L${f(cx - p.r * 0.4 - p.tw * 0.3)} ${f(cy + p.r + p.t - p.tw)}Q${f(cx + p.r * 0.2)} ${f(cy + p.t)} ${f(cx)} ${f(cy + p.r)}Z"/>`;
     }).join(""),
   },
+  "books.vertical": {
+    paint: "stroke",
+    params: { H: P(16.5, 0.4, 12, 22), T: P(20.5, 0.4, 14, 26), w1: P(4.2, 0.2, 2.5, 7), w2: P(6, 0.2, 3, 9), w3: P(5, 0.2, 3, 8), w4: P(4.6, 0.2, 3, 8), g: P(0.6, 0.2, -1, 3), tilt: P(13, 1, 0, 28), r: P(1.3, 0.1, 0.3, 2.6), lw: P(2.4, 0.15, 1, 4), lf: P(0.27, 0.02, 0.12, 0.45) },
+    make: (p) => {
+      const total = p.w1 + p.w2 + p.w3 + p.g + p.w4 + p.T * Math.sin((p.tilt * Math.PI) / 180) * 0.5;
+      const bottom = C + p.T / 2, x1 = C - total / 2, x2 = x1 + p.w1, x3 = x2 + p.w2, x4 = x3 + p.w3 + p.g + p.w4;
+      const book = (x, w, h) => rr(x + w / 2, bottom - h / 2, w, h, p.r);
+      const labelX = x2 + p.w2 / 2;
+      return book(x1, p.w1, p.H) + book(x2, p.w2, p.H) + book(x3, p.w3, p.T)
+        + `<g transform="rotate(${f(-p.tilt)} ${f(x4)} ${f(bottom)})">${book(x4 - p.w4, p.w4, p.H + 1.5)}</g>`
+        + line(labelX - p.lw / 2, bottom - p.H * p.lf, labelX + p.lw / 2, bottom - p.H * p.lf)
+        + line(labelX - p.lw / 2, bottom - p.H * (1 - p.lf), labelX + p.lw / 2, bottom - p.H * (1 - p.lf));
+    },
+  },
+  "photo.frame": {
+    paint: "stroke",
+    params: { ...FRAME, sr: P(2, 0.15, 1, 3.5), sx: P(-4.5, 0.3, -9, 2), sy: P(-2.8, 0.3, -7, 2), m1: P(-3, 0.3, -8, 2), m1h: P(5, 0.3, 2, 9), mv: P(1.5, 0.3, -3, 6), mvh: P(2.4, 0.3, 0, 6), m2: P(6, 0.3, 1, 10), m2h: P(7.5, 0.3, 3, 11), me: P(3.5, 0.3, 0, 8) },
+    make: (p) => {
+      const x0 = C - p.W / 2, x1 = C + p.W / 2, y1 = C + p.H / 2, r = Math.min(p.r, p.W / 2, p.H / 2);
+      const mountains = `<path d="M${f(x0)} ${f(y1 - r)}L${f(C + p.m1)} ${f(y1 - p.m1h)}L${f(C + p.mv)} ${f(y1 - p.mvh)}L${f(C + p.m2)} ${f(y1 - p.m2h)}L${f(x1)} ${f(y1 - p.me)}V${f(y1 - r)}A${f(r)} ${f(r)} 0 0 1 ${f(x1 - r)} ${f(y1)}H${f(x0 + r)}A${f(r)} ${f(r)} 0 0 1 ${f(x0)} ${f(y1 - r)}Z"${FILL} stroke-linejoin="round"/>`;
+      return rr(C, C, p.W, p.H, p.r) + mountains + dot(C + p.sx, C + p.sy, p.sr, ` stroke="none"`);
+    },
+  },
   wen: {
     paint: "stroke",
     params: { w: P(14, 0.4, 8, 20), h: P(16, 0.4, 10, 22), t: P(2.4, 0.2, 1, 4), bar: P(-3, 0.3, -7, 0), cross: P(7, 0.3, 3, 10) },

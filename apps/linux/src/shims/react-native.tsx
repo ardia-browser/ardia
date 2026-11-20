@@ -48,7 +48,7 @@ type MacTextInputProps = ComponentProps<typeof WebTextInput> & {
 
 const MODIFIERS = ["metaKey", "shiftKey", "altKey", "ctrlKey"] as const;
 const matches = (e: KeyboardEvent, wanted: KeyMatch) =>
-  e.key === wanted.key && MODIFIERS.every((m) => wanted[m] === undefined || !!e[m] === wanted[m]);
+  e.key === wanted.key && MODIFIERS.every((m) => !!e[m] === !!wanted[m]);
 
 function assignRef<T>(ref: ForwardedRef<T>, value: T | null) {
   if (typeof ref === "function") ref(value);

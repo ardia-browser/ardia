@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import { View, type GestureResponderEvent } from "react-native";
 import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
 import { toggleDownloadsOpen } from "../../state/windows/actions";
@@ -25,13 +25,9 @@ export async function locateDownloadsButton(windowId: string, origin: Rect): Pro
   return null;
 }
 
-const DOWNLOADS_HIT = perLook(() => ({ width: SIDEBAR_FOOTER_DOWNLOADS.size, height: SIDEBAR_FOOTER_DOWNLOADS.size, plateX: 0, plateY: 0, box: SIDEBAR_FOOTER_DOWNLOADS.size, radius: DOWNLOADS_BUTTON.radius }));
+export const DOWNLOADS_HIT = perLook(() => ({ width: SIDEBAR_FOOTER_DOWNLOADS.size, height: SIDEBAR_FOOTER_DOWNLOADS.size, plateX: 0, plateY: 0, box: SIDEBAR_FOOTER_DOWNLOADS.size, radius: DOWNLOADS_BUTTON.radius }));
 
-export function DownloadsButton({ windowId }: { windowId: string }) {
-  const open = useWindowUiOf(windowId, (ui) => !!ui?.downloadsOpen);
-  const hint = useShortcutHint("downloads");
-  const view = useRef<View>(null);
-  const pressedAt = useRef<number | undefined>(undefined);
+export function useDownloadsAnchor(windowId: string, view: RefObject<View | null>) {
   useEffect(() => {
     const node = view.current;
     if (!node) return;
@@ -42,7 +38,15 @@ export function DownloadsButton({ windowId }: { windowId: string }) {
       set.delete(node);
       if (!set.size && downloadsButtons.get(windowId) === set) downloadsButtons.delete(windowId);
     };
-  }, [windowId]);
+  }, [windowId, view]);
+}
+
+export function DownloadsButton({ windowId }: { windowId: string }) {
+  const open = useWindowUiOf(windowId, (ui) => !!ui?.downloadsOpen);
+  const hint = useShortcutHint("downloads");
+  const view = useRef<View>(null);
+  const pressedAt = useRef<number | undefined>(undefined);
+  useDownloadsAnchor(windowId, view);
   return (
     <View ref={view} collapsable={false} onStartShouldSetResponderCapture={(press) => {
       pressedAt.current = press.nativeEvent.timestamp;

@@ -9,6 +9,7 @@ import { useProfileLooks } from "../../state/profiles/hooks";
 import { useProfileNeighbours } from "../../state/windows/hooks";
 import { useWindowId } from "../../state/browser/hooks";
 import { pagerFor, useNativePagerPosition, usePagerNativeConfig, usePagerPages, usePagerSurface } from "../../state/windows/profilePager";
+import { useLibraryAvailable, useLibraryOpen } from "../../state/library/hooks";
 
 
 export function ProfileSwipe({ children }: { children: ReactNode }) {
@@ -20,14 +21,17 @@ export function ProfileSwipe({ children }: { children: ReactNode }) {
   );
 }
 
-export function ProfileSwipeArea({ surface, style, pageWidth }: { surface: "sidebar" | "strip"; style: StyleProp<ViewStyle>; pageWidth?: number }) {
+export function ProfileSwipeArea({ surface, style, pageWidth }: { surface: "sidebar" | "strip" | "library"; style: StyleProp<ViewStyle>; pageWidth?: number }) {
   const windowId = useWindowId();
   usePagerSurface(windowId);
   const [previous, next, multiple] = useProfileNeighbours(windowId);
   const area = useRef<SwipeAreaHandle>(null);
   const pager = pagerFor(windowId);
   const nativePager = usePagerNativeConfig(windowId, pageWidth);
-  const onPagerPosition = useMemo(() => Animated.event([{ nativeEvent: { position: pager.pos } }], { useNativeDriver: true }), [pager]);
+  const leading = useLibraryAvailable(windowId) && !!nativePager;
+  const library = useLibraryOpen(windowId) && leading;
+  const pages = multiple || leading;
+  const onPagerPosition = useMemo(() => Animated.event([{ nativeEvent: { position: pager.pos, leading: pager.lead } }], { useNativeDriver: true }), [pager]);
 
   const onSwipe = (event: SwipeEvent) => {
     if (__DEV__) {
@@ -51,10 +55,10 @@ export function ProfileSwipeArea({ surface, style, pageWidth }: { surface: "side
     <SwipeArea
       ref={area}
       style={style}
-      canSwipeBack={previous}
-      canSwipeForward={next}
-      tracksUnavailableDirections={multiple}
-      isPager={multiple}
+      canSwipeBack={!library && (previous || leading)}
+      canSwipeForward={next || library}
+      tracksUnavailableDirections={pages}
+      isPager={pages}
       onSwipe={onSwipe}
       nativePager={nativePager}
       onPagerPosition={nativePager && onPagerPosition}
@@ -93,3 +97,4 @@ const received: object[] = [];
 devRegister("acSwipe", "received", () => received.splice(0));
 devRegister("acSwipe", "sidebar", (windowId: string) => devAreas.get(`sidebar:${windowId}`)?.current ?? null);
 devRegister("acSwipe", "strip", (windowId: string) => devAreas.get(`strip:${windowId}`)?.current ?? null);
+devRegister("acSwipe", "library", (windowId: string) => devAreas.get(`library:${windowId}`)?.current ?? null);

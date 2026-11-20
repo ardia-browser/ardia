@@ -292,6 +292,9 @@ test("a row its pane doesn't draw is left out of search, by the same rule the pa
   for (const id of ["tabs.sidebarSide", "appearance.sidebarTextSize", "appearance.addressBar"]) assert.ok(across.has(id), id);
   const sidebar = unshown({}, { top: false, glass: true, syncOn: true, calendarAccess: true });
   for (const id of ["tabs.sidebarSide", "appearance.sidebarTextSize", "general.syncFolder", "automations.meetingAlert"]) assert.ok(!sidebar.has(id), id);
+  assert.ok(unshown({ sidebarLibrary: false }, { top: false }).has("tabs.sidebarLibraryAllProfiles"), "every profile in the Library shows only with the Library on");
+  assert.ok(!unshown({ sidebarLibrary: true }, { top: false }).has("tabs.sidebarLibraryAllProfiles"));
+  assert.ok(unshown({ sidebarLibrary: true }, { top: true }).has("tabs.sidebarLibraryAllProfiles"), "and only in the sidebar layout");
   for (const id of ["appearance.interfaceStyle", "appearance.glassTint"]) assert.ok(unshown({}, { top: false }).has(id), id);
   assert.ok(unshown({ interfaceStyle: "classic" }, { top: false, glass: true }).has("appearance.glassTint"));
   assert.ok(unshown({ memorySaver: false }, { top: false }).has("advanced.keepActiveSites"));

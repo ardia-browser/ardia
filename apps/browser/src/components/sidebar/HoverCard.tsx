@@ -33,6 +33,7 @@ import { TabIcon } from "./TabIcon";
 import { HoverPlayer, useShowsMiniPlayer } from "../media/HoverPlayer";
 import { useMedia, usePictureInPicture } from "../../state/media/media";
 import { noteTabHoverCardPress } from "../../state/telemetry/hoverCardCounts";
+import { LibraryItemCard } from "../library/LibraryItemCard";
 
 const WIDTH = 264;
 
@@ -63,6 +64,7 @@ export function HoverCard({ windowId, width, height }: { windowId: string; width
 
 function HoverContent({ hover, windowId, player, windowHeight }: { hover: Hover; windowId: string; player: boolean; windowHeight: number }) {
   const calendar = useIsCalendarTab(hover.kind === "tab" ? hover.id : null);
+  if (hover.kind === "media" || hover.kind === "download" || hover.kind === "visit") return <LibraryItemCard kind={hover.kind} id={hover.id} windowId={windowId} anchor={hover.anchor} windowHeight={windowHeight} />;
   if (hover.kind === "live") return <LiveItemCard id={hover.id} windowId={windowId} anchor={hover.anchor} />;
   if (hover.kind === "tab" && player) return <HoverPlayer tabId={hover.id} windowId={windowId} anchor={hover.anchor} />;
   if (hover.kind === "tab" && calendar) return <CalendarPreview tabId={hover.id} windowId={windowId} anchor={hover.anchor} />;

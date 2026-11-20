@@ -4,7 +4,7 @@ The demo draws its icons from the open icon sets below, rescaled and repositione
 
 ==============================================================================
 Lucide (lucide-static 1.56.0, ISC) https://lucide.dev
-Icons used: arrow-left-right, arrow-up-down, car-front, check, chevrons-up-down, circle-equal, circle-question-mark, clock-9, coffee, command, ellipsis, film, flag, flame, git-merge, hammer, hard-drive, key-round, leaf, lightbulb, message-square, messages-square, moon, navigation, newspaper, orbit, package, paintbrush, palette, pin, pin-off, plug, plus, shopping-cart, square-plus, sun, target, test-tubes, trophy, umbrella, undo-2, unfold-vertical, user, video
+Icons used: arrow-left-right, arrow-up-down, audio-lines, car-front, check, chevrons-up-down, circle-equal, circle-question-mark, clock-9, coffee, command, ellipsis, film, flag, flame, git-merge, hammer, hard-drive, key-round, leaf, lightbulb, message-square, messages-square, moon, navigation, newspaper, orbit, package, paintbrush, palette, pin, pin-off, plug, plus, shopping-cart, square-plus, sun, target, test-tubes, trophy, umbrella, undo-2, unfold-vertical, user, video
 ------------------------------------------------------------------------------
 ISC License
 

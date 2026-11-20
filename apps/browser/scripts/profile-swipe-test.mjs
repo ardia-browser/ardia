@@ -598,6 +598,42 @@ try {
     assert.ok(result.areas >= 1);
     return result;
   });
+  await test("the Library is one leading page before the first profile, one page per gesture", async () => {
+    const pagerState = () => ac('return globalThis.expo.modules.ArdiaSwipe.devPagerState("w1");');
+    const swipeAndSettle = async (sign) => {
+      await simulate(gesture(sign));
+      await sleep(650);
+      return pagerState();
+    };
+    await reset();
+    const noLeading = await swipeAndSettle(1);
+    assert.equal(noLeading.selected, 0, "with the setting off the first profile is the floor");
+    assert.equal(await profile(), "default");
+    await ac('ac.store.getState().updateSettings({ sidebarLibrary: true }); return true;');
+    await sleep(350);
+    try {
+      const library = await swipeAndSettle(1);
+      assert.equal(library.selected, -1, "one swipe back from the first profile lands on the Library");
+      assert.equal(library.profileId ?? null, null, "the Library page has no profile");
+      assert.ok(Math.abs(library.position + 1) < 0.003, `rests at -1 (${library.position})`);
+      assert.equal(await profile(), "default", "the window keeps its profile");
+      const banded = await swipeAndSettle(1);
+      assert.equal(banded.selected, -1, "past the Library the pager rubber-bands and stays");
+      assert.ok(Math.abs(banded.position + 1) < 0.003);
+      const back = await swipeAndSettle(-1);
+      assert.equal(back.selected, 0, "one swipe forward from the Library lands on the first profile, not past it");
+      assert.equal(await profile(), "default");
+      await swipeAndSettle(1);
+      await ac('ac.store.getState().updateSettings({ sidebarLibrary: false }); return true;');
+      await sleep(650);
+      const off = await pagerState();
+      assert.equal(off.selected, 0, "turning the setting off while on the Library returns to the profile");
+      assert.equal(await profile(), "default");
+      return { noLeading, library, banded, back, off };
+    } finally {
+      await ac('ac.store.getState().updateSettings({ sidebarLibrary: false }); return true;');
+    }
+  });
   stage = "the snapshot";
   evidence.snapshot = { path: join(data, "profile-swipe.png"),
     saved: await ac(`return ac.shell.devSnapshotWindow("w1", ${JSON.stringify(join(data, "profile-swipe.png"))});`) };

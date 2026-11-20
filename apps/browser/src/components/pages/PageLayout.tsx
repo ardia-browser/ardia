@@ -1,5 +1,7 @@
-import { appUrlOrigin, urlForDisplay } from "@ardia/core";
+import { appUrlOrigin } from "@ardia/core";
 import { displayHostOf } from "../../lib/url";
+import { dayStart, queryWords, searchText } from "../../lib/textSearch";
+
 import type { ReactNode, Ref } from "react";
 import { StyleSheet, View, type TextInput } from "react-native";
 import { Box, display, SearchField, space, Text, useTheme, WindowDragRegion } from "../ui";
@@ -57,11 +59,6 @@ const HEADER_ACTIONS = { width: pageHeader.sideWidth, justifyContent: "flex-end"
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-export const dayStart = (ms: number) => {
-  const d = new Date(ms);
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-};
-
 export function dayLabel(start: number, now = Date.now()): string {
   const d = new Date(start);
   const full = `${DAYS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
@@ -78,10 +75,6 @@ export function timeLabel(ms: number): string {
 }
 
 export const hostLabel = (url: string) => appUrlOrigin(url) || displayHostOf(url) || url;
-
-export const queryWords = (query: string) => query.toLowerCase().split(/\s+/).filter(Boolean);
-
-export const searchText = (...fields: string[]) => fields.map((f) => (/xn--/i.test(f) ? `${f} ${urlForDisplay(f)}` : f)).join(" ").toLowerCase();
 
 export function matchesQuery(query: string, ...fields: string[]): boolean {
   const words = queryWords(query);

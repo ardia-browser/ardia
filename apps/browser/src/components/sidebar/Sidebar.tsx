@@ -8,6 +8,8 @@ import { useHasDownloads, useNoTiles } from "../../state/sidebar/hooks";
 import { collapsedSidebarHeader, useAddressBarInSidebar, useDownloadsInSidebarFooter, usePageFrameInset, useSidebarCaptionRoom, useSidebarHeaderCollapsed, useToolbarLightsCenter } from "../../state/windows/layout";
 import { closeAnchoredWhenControlsRowChanges } from "../../state/sidebar/controlsRowChange";
 import { DownloadsButton } from "../downloads/DownloadsButton";
+import { LibraryFooter } from "../library/LibraryButton";
+import { useLibraryAvailable } from "../../state/library/hooks";
 import { PROFILE_INDICATOR_X, ProfileIndicator } from "../profiles/ProfileIndicator";
 import { usePagerPages } from "../../state/windows/profilePager";
 import { PROFILE_DOTS_HEIGHT, ProfileDots, useProfileDotsShown } from "../profiles/ProfileDots";
@@ -56,8 +58,10 @@ export function Sidebar({ width }: { width: number }) {
   const profileShown = useSidebarPart("profile");
   const dotsWanted = useProfileDotsShown();
   const dots = dotsWanted && profileShown;
-  const footerDownloads = useDownloadsInSidebarFooter() && hasDownloads;
-  const band = dots || footerDownloads ? PROFILE_DOTS_HEIGHT : 0;
+  const library = useLibraryAvailable(windowId);
+  const footerDownloads = useDownloadsInSidebarFooter() && hasDownloads && !library;
+  const headerDownloads = hasDownloads && !library && !footerDownloads;
+  const band = dots || footerDownloads || library ? PROFILE_DOTS_HEIGHT : 0;
   const fieldBand = field === "bottom" ? bottomFieldBand() : 0;
   const footer = band + fieldBand;
   const pinnedShown = useSidebarPart("pinned");
@@ -100,7 +104,7 @@ export function Sidebar({ width }: { width: number }) {
                 right: 0,
                 top: header - GLOW_ROOM,
                 bottom: footer,
-                overflow: paging ? "hidden" : "visible",
+                overflow: paging || library ? "hidden" : "visible",
               }}
               onLayout={(e) => setAvailable(e.nativeEvent.layout.height)}
             >
@@ -128,7 +132,7 @@ export function Sidebar({ width }: { width: number }) {
                 <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: footer }}>
                   <ContextMenuArea style={StyleSheet.absoluteFill} onContextMenu={() => void openSidebarMenu(windowId)} />
                   {field === "bottom" ? <SidebarAddressRow width={width} top={SIDEBAR_FIELD_BOTTOM.above} /> : null}
-                  {dots ? <View style={{ position: "absolute", left: 0, right: 0, bottom: 0 }}><ProfileDots windowId={windowId} width={width} besideDownloads={footerDownloads} /></View> : null}
+                  {dots ? <View style={{ position: "absolute", left: 0, right: 0, bottom: 0 }}><ProfileDots windowId={windowId} width={width} besideDownloads={footerDownloads || library} /></View> : null}
                   {footerDownloads ? (
                     <View style={{ position: "absolute", left: SIDEBAR_FOOTER_DOWNLOADS.left, bottom: SIDEBAR_FOOTER_DOWNLOADS.bottom }}>
                       <DownloadsButton windowId={windowId} />
@@ -136,6 +140,7 @@ export function Sidebar({ width }: { width: number }) {
                   ) : null}
                 </View>
               ) : null}
+              {library ? <LibraryFooter windowId={windowId} footer={footer} /> : null}
 
               <View style={{ height: header }}>
                 <ContextMenuArea style={StyleSheet.absoluteFill} onContextMenu={() => void openSidebarMenu(windowId)}>
@@ -148,9 +153,9 @@ export function Sidebar({ width }: { width: number }) {
                   </>
                 ) : collapsed ? null : (
                   <View pointerEvents="box-none" style={{ height: header, flexDirection: "row", alignItems: "flex-start", paddingLeft: PROFILE_INDICATOR_X, paddingRight: HEADER_RIGHT + captionRoom, paddingTop: lightsY - 17 }}>
-                    {profileShown ? <ProfileIndicator room={width - PROFILE_INDICATOR_X - HEADER_RIGHT - captionRoom - (hasDownloads && !footerDownloads ? SIDEBAR_FOOTER_DOWNLOADS.size + 2 : 0)} /> : null}
+                    {profileShown ? <ProfileIndicator room={width - PROFILE_INDICATOR_X - HEADER_RIGHT - captionRoom - (headerDownloads ? SIDEBAR_FOOTER_DOWNLOADS.size + 2 : 0)} /> : null}
                     <View pointerEvents="none" style={{ flex: 1 }} />
-                    {hasDownloads && !footerDownloads ? <DownloadsButton windowId={windowId} /> : null}
+                    {headerDownloads ? <DownloadsButton windowId={windowId} /> : null}
                   </View>
                 )}
               </View>

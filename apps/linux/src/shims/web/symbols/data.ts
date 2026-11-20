@@ -353,6 +353,9 @@ const BODIES: readonly string[] = [
   "<path d=\"M248,152a8,8,0,0,1-8,8H224v16a8,8,0,0,1-16,0V160H192a8,8,0,0,1,0-16h16V128a8,8,0,0,1,16,0v16h16A8,8,0,0,1,248,152ZM56,72H72V88a8,8,0,0,0,16,0V72h16a8,8,0,0,0,0-16H88V40a8,8,0,0,0-16,0V56H56a8,8,0,0,0,0,16ZM184,192h-8v-8a8,8,0,0,0-16,0v8h-8a8,8,0,0,0,0,16h8v8a8,8,0,0,0,16,0v-8h8a8,8,0,0,0,0-16ZM219.31,80,80,219.31a16,16,0,0,1-22.62,0L36.68,198.63a16,16,0,0,1,0-22.63L176,36.69a16,16,0,0,1,22.63,0l20.68,20.68A16,16,0,0,1,219.31,80ZM208,68.69,187.31,48l-32,32L176,100.69Z\"/>",
   "<path d=\"M224,48H32A16,16,0,0,0,16,64V192a16,16,0,0,0,16,16H224a16,16,0,0,0,16-16V64A16,16,0,0,0,224,48ZM64,168H48a8,8,0,0,1,0-16H64a8,8,0,0,1,0,16Zm96,0H96a8,8,0,0,1,0-16h64a8,8,0,0,1,0,16Zm48,0H192a8,8,0,0,1,0-16h16a8,8,0,0,1,0,16Zm0-32H48a8,8,0,0,1,0-16H208a8,8,0,0,1,0,16Zm0-32H48a8,8,0,0,1,0-16H208a8,8,0,0,1,0,16Z\"/>",
   "<path d=\"M165.78,224H208a16,16,0,0,0,16-16V170.35A8,8,0,0,0,212.94,163a23.37,23.37,0,0,1-8.94,1.77c-13.23,0-24-11.1-24-24.73s10.77-24.73,24-24.73a23.37,23.37,0,0,1,8.94,1.77A8,8,0,0,0,224,109.65V72a16,16,0,0,0-16-16H171.78a35.36,35.36,0,0,0,.22-4,36,36,0,0,0-72,0,35.36,35.36,0,0,0,.22,4H64A16,16,0,0,0,48,72v32.22a35.36,35.36,0,0,0-4-.22,36,36,0,0,0,0,72,35.36,35.36,0,0,0,4-.22V208a16,16,0,0,0,16,16h42.22\"/>",
+  "<path d=\"M2 5a2 2 0 0 1 2 -2h16a2 2 0 0 1 2 2a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2z\" /><path d=\"M19 9c.513 0 .936 .463 .993 1.06l.007 .14v7.2c0 1.917 -1.249 3.484 -2.824 3.594l-.176 .006h-10c-1.598 0 -2.904 -1.499 -2.995 -3.388l-.005 -.212v-7.2c0 -.663 .448 -1.2 1 -1.2h14zm-5 2h-4l-.117 .007a1 1 0 0 0 0 1.986l.117 .007h4l.117 -.007a1 1 0 0 0 0 -1.986l-.117 -.007z\" />",
+  "<rect x=\"2.4\" y=\"5.68\" width=\"27.2\" height=\"20.65\" rx=\"1.93\"/>",
+  "<rect x=\"3.57\" y=\"5.73\" width=\"24.85\" height=\"20.55\" rx=\"3.16\"/><path d=\"M3.57 23.11L16.56 19.1L14.28 20.84L20.5 15.51L28.43 23.21V23.11A3.16 3.16 0 0 1 25.26 26.28H6.74A3.16 3.16 0 0 1 3.57 23.11Z\" fill=\"currentColor\" stroke-linejoin=\"round\"/><circle cx=\"12.14\" cy=\"12.66\" r=\"2.96\" fill=\"currentColor\" stroke=\"none\"/>",
 ];
 
 const ENCODED: Record<string, readonly EncodedLayer[]> = {
@@ -675,6 +678,8 @@ const ENCODED: Record<string, readonly EncodedLayer[]> = {
   "slider.horizontal.2.square": [[328,256,1,1,0,[[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1]]]],
   "play.tv": [[72,24,1,1,0,[[1.3069,0.9975,0.0197,-0.0059,0,0,1],[1.3069,1.0375,0.0009,-0.0246,0,0,1],[1.3106,1.0325,0.0047,-0.0077,0,0,1],[1.3163,1.035,0.0113,-0.0265,0,0,1],[1.3256,1.03,0.0216,-0.0415,0.012,0,1]]]],
   "puzzlepiece.fill": [[348,256,1,1,0,[[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1]]]],
+  "archivebox.fill": [[349,24,1,1,0,[[1.1553,1.0075,-0.0199,-0.0068,0.042,0,1],[1.1853,1.0175,-0.0115,-0.0077,0.0293,0,1],[1.2078,1.0275,-0.0077,-0.0115,0.0247,0,1],[1.2078,1.0225,-0.004,-0.0115,0.0308,0,1],[1.2078,1.0125,-0.0002,0.0223,0.0465,0,1]]]],
+  "photo.on.rectangle": [[350,32,0,1,0,[[0.9825,1.075,-0.1362,-0.1559,0.0597,0,1],[0.9975,1.04,-0.1362,-0.1559,0.0778,0,1],[0.9863,1.04,-0.1297,-0.1391,0.1003,0,1],[1.0275,1.0025,-0.1212,-0.125,0.1078,0,1],[1.0312,0.99,-0.1175,-0.1344,0.1265,0,1]]],[351,32,0,1,0.07,[[1.11,1.0425,0.0975,0.1038,0.0695,0,1],[1.11,1.0375,0.1125,0.1,0.0815,0,1],[1.11,1.0425,0.1275,0.13,0.0965,0,1],[1.1063,1.03,0.135,0.1263,0.1033,0,1],[1.1025,1.0275,0.1463,0.115,0.1273,0,1]]]],
 };
 
 const WEIGHTS: readonly SymbolWeight[] = ["light","regular","medium","semibold","bold"];
@@ -1026,6 +1031,8 @@ const NUDGES: Record<string, string> = {
   "slider.horizontal.2.square": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
   "play.tv": "c9g9debbeabegacfdfabfebb9bcfafbb9bbccf8fdcdaegbb8edbebcf8bdfbec9a9cdadcdbf8fdbc9efbb8fdbfbbf8acebfcbacdfafbfcg9gdcciefbc8gdc6bbg8bdfbfdjbjdfaf5f",
   "puzzlepiece.fill": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "archivebox.fill": "ccgdc9agcegacfgcgcchgdchgaggchcegfggccgdchafcdgacegbgbcggdchghgfcgcdgegfccgcchafcdgicegagbcggcchghgecfccgdgec98aceacca8ecb8e8fcb87cb8b88c8cd8d9d",
+  "photo.on.rectangle": "b9f8cdabd8adf9cdde99edb99abe8facfcacbf7fcab8ddaa7ec9c99de9bd9db989ac7c9cbe8edab8eea97dc9d89c68bc9bb798bb8aaabe8dd9bgeda97dc9d8ac69bc9cbf9faa8aaa",
 };
 
 export function symbolNudge(name: string, weight: SymbolWeight, pointSize: number): readonly [number, number] {

@@ -84,6 +84,18 @@ export function useRowHover(windowId: string, rowTarget: Target | null) {
       },
     }),
   );
+  const enteredTarget = useRef(target);
+  useEffect(() => {
+    const was = enteredTarget.current;
+    enteredTarget.current = target;
+    const at = inside.current;
+    if ((was?.id === target?.id && was?.kind === target?.kind) || !at || !onCurrentPage() || latest.current.away) return;
+    rowLeft(latest.current.windowId, was, at, true);
+    const frame = requestAnimationFrame(() => {
+      if (inside.current === at) enterRow(at);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [target?.id, target?.kind]);
   const shownAway = useRef(away);
   useEffect(() => {
     if (shownAway.current === away) return;

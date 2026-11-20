@@ -8,6 +8,7 @@ import { useMedia, type TabShare } from "./media";
 
 export { getDisplayMediaSources, screenRecordingAllowed, type DisplayMediaAudio, type DisplayMediaSource } from "../../platform/media";
 export { noteScreenRecordingMissing } from "../telemetry/usage";
+export { useTabShared } from "./sharedTabs";
 
 export function useShareFor(tabId: string): [string, TabShare] | null {
   const shares = useMedia((m) => m.tabShares);
@@ -24,11 +25,6 @@ export function useShareFor(tabId: string): [string, TabShare] | null {
     if (owner && engineProfile(useBrowser.getState(), owner.profileId) === profile) return [capturer, share];
   }
   return null;
-}
-
-export function useTabShared(tabId: string): boolean {
-  const capturers = useMedia((m) => Object.keys(m.tabShares).filter((id) => m.tabShares[id]!.capturedTabId === tabId).join(","));
-  return usePages((p) => !!capturers && capturers.split(",").some((id) => !!p.pages[id]?.mediaAccess?.screen));
 }
 
 export function noteTabShare(capturerTabId: string, capturedTabId: string, origin: string) {

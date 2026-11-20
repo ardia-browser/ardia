@@ -13,7 +13,9 @@ public enum ChromiumFavicons {
     }
     let toolbar = (result.bookmarks?.children ?? []).filter { $0.role == "toolbar" }.flatMap(links)
     return result.favorites.map(\.url)
-      + result.spaces.flatMap { $0.pinned.flatMap(links) + $0.tabs.map(\.url) }
+      + result.spaces.flatMap {
+        $0.pinned.flatMap(links) + $0.tabs.map(\.url) + ($0.openGroups ?? []).flatMap(links) + ($0.favorites ?? []).map(\.url)
+      }
       + result.tabs.map(\.url)
       + toolbar
   }

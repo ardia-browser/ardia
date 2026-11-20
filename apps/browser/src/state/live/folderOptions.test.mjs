@@ -10,6 +10,8 @@ const { folderRows, liveTabOpen, liveTabPlace, stackMembers } = await import("./
 const { liveFolderMenuItems } = await import("../sidebar/liveMenus.ts");
 const { hideNewRepos, setShowNewRepos, showAllRepos } = await import("./repoFilter.ts");
 const { applyFetch, createFolder, finishCompleting, hideItems, live, markUnread, removeFolder, setRepoHidden, showAllIn, toggleStack, updateFolder, useLive } = await import("./store.ts");
+const { setConsentPeriod } = await import("../telemetry/consentPeriod.ts");
+setConsentPeriod(true, "folder-options-test");
 
 const pr = (id, number, headRef, baseRef) => ({
   id,

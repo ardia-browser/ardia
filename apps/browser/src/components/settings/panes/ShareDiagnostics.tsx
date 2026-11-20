@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ScrollView, View } from "react-native";
+import { View } from "react-native";
 import { setSharing, useTelemetry } from "../../../state/telemetry/client";
 import { IDENTITY_COPY, LOCAL_COPY, SHARING_COPY, WATCH_COPY, WHATS_SENT } from "../../../state/telemetry/copy";
 import { identityFor, resetAnonymousId, shortInstallId, stopWatch, useInstallId, useWatchReport, useWatchTurnedSharingOn, useWatchUntil, viewMyData } from "../../../state/telemetry/privacy";
@@ -14,23 +14,44 @@ const AVATAR_SIZE = 28;
 
 const longDate = (ms: number) => new Date(ms).toLocaleDateString(UI_LOCALE, { month: "long", day: "numeric", hour: "numeric", minute: "2-digit" });
 
-export function ShareDiagnosticsSection() {
+export function ShareDiagnosticsToggle() {
   const sharing = useTelemetry((s) => s.sharing);
-  const report = useWatchReport();
-  const until = useWatchUntil();
+  return (
+    <Row anchor="general.shareDiagnostics" description={SHARING_COPY.summary}>
+      <Toggle value={sharing} accessibilityLabel={SHARING_COPY.toggle} onChange={(on) => setSharing(on, "settings")} />
+    </Row>
+  );
+}
+
+export function ShareDiagnosticsSection() {
   return (
     <>
       <SectionHeader title="Crash reports and usage" description={SHARING_COPY.dailyCountShort} />
       <Group>
-        <Row anchor="privacy.shareDiagnostics" title={SHARING_COPY.toggle} description={SHARING_COPY.summary}>
-          <Toggle value={sharing} onChange={(on) => setSharing(on, "settings")} />
-        </Row>
+        <ShareDiagnosticsToggle />
+        <Row title={SHARING_COPY.whatsSent} onPress={() => showSettingsSheet(<WhatsSentSheet />)} />
+      </Group>
+    </>
+  );
+}
+
+export function CrashReportDetails() {
+  const report = useWatchReport();
+  const until = useWatchUntil();
+  return (
+    <View>
+      <SectionHeader title="Your anonymous ID" description={SHARING_COPY.dailyCountShort} />
+      <Group>
         {report && until !== null ? <WatchRow report={report} until={until} /> : null}
         <IdentityRow />
-        <Row anchor="privacy.whatsSent" title={SHARING_COPY.whatsSent} onPress={() => showSettingsSheet(<WhatsSentSheet />)} />
       </Group>
       <KeptOnThisMac />
-    </>
+      <SectionHeader title={SHARING_COPY.whatsSent} description={`Only while “${SHARING_COPY.toggle}” is on, except what’s under “Even with sharing off” and “${SHARING_COPY.keptOnThisMac}”.`} />
+      <WhatsSentGroups />
+      <Text size="caption" tone="textTertiary" style={DETAILS_FOOTNOTE()}>
+        {SHARING_COPY.footnote}
+      </Text>
+    </View>
   );
 }
 
@@ -46,15 +67,10 @@ function WatchRow({ report, until }: { report: string; until: number }) {
 
 function IdentityRow() {
   const installId = useInstallId();
-  if (!installId) return <Row anchor="privacy.anonymousId" title={IDENTITY_COPY.noId} description={IDENTITY_COPY.noIdDetail} />;
+  if (!installId) return <Row title={IDENTITY_COPY.noId} description={IDENTITY_COPY.noIdDetail} />;
   const { name, avatar } = identityFor(installId);
   return (
-    <Row
-      anchor="privacy.anonymousId"
-      icon={<AnonymousAvatar avatar={avatar} size={AVATAR_SIZE} />}
-      title={IDENTITY_COPY.appearAs(name)}
-      description={IDENTITY_COPY.idDetail(shortInstallId(installId))}
-    >
+    <Row icon={<AnonymousAvatar avatar={avatar} size={AVATAR_SIZE} />} title={IDENTITY_COPY.appearAs(name)} description={IDENTITY_COPY.idDetail(shortInstallId(installId))}>
       <Button title={IDENTITY_COPY.reset} onPress={() => showSettingsSheet(<ResetIdSheet />)} />
     </Row>
   );
@@ -73,7 +89,7 @@ function KeptOnThisMac() {
     <>
       <SectionHeader title={LOCAL_COPY.title} description={LOCAL_COPY.summary} />
       <Group>
-        <Row anchor="privacy.viewData" description={status ?? LOCAL_COPY.viewDataDetail}>
+        <Row title={LOCAL_COPY.viewData} description={status ?? LOCAL_COPY.viewDataDetail}>
           <Button title={LOCAL_COPY.viewData} disabled={busy} onPress={() => void save()} />
         </Row>
       </Group>
@@ -104,30 +120,38 @@ function ResetIdSheet() {
   );
 }
 
-export function WhatsSentSheet() {
+function WhatsSentGroups() {
   const groups = [...WHATS_SENT.slice(0, -1), { title: SHARING_COPY.keptOnThisMac, items: [...LOCAL_COPY.items] }, WHATS_SENT.at(-1)!];
+  return (
+    <>
+      {groups.map((group) => (
+        <View key={group.title} style={SENT_GROUP}>
+          <Text size="small" weight="medium" tone="textSecondary" style={SENT_TITLE}>
+            {group.title}
+          </Text>
+          <Group>
+            {group.items.map((item) => (
+              <Row
+                key={item}
+                title={
+                  <Text size="small" style={ITEM()}>
+                    {item}
+                  </Text>
+                }
+              />
+            ))}
+          </Group>
+        </View>
+      ))}
+    </>
+  );
+}
+
+export function WhatsSentSheet() {
   return (
     <Sheet size="l" onClose={closeSettingsSheet}>
       <DialogTitle subtitle={`Only while “${SHARING_COPY.toggle}” is on, except what’s under “Even with sharing off” and “${SHARING_COPY.keptOnThisMac}”.`}>{SHARING_COPY.whatsSent}</DialogTitle>
-      <ScrollView style={LIST}>
-        {groups.map((group) => (
-          <View key={group.title}>
-            <SectionHeader title={group.title} />
-            <Group>
-              {group.items.map((item) => (
-                <Row
-                  key={item}
-                  title={
-                    <Text size="small" style={ITEM()}>
-                      {item}
-                    </Text>
-                  }
-                />
-              ))}
-            </Group>
-          </View>
-        ))}
-      </ScrollView>
+      <WhatsSentGroups />
       <DialogActions
         note={
           <Text size="caption" tone="textTertiary" style={FOOTNOTE()}>
@@ -141,6 +165,8 @@ export function WhatsSentSheet() {
   );
 }
 
-const LIST = { maxHeight: 420, marginTop: space.xs } as const;
+const SENT_GROUP = { marginTop: space.l } as const;
+const SENT_TITLE = { marginBottom: space.s, paddingHorizontal: space.xxs } as const;
 const ITEM = perLook(() => ({ lineHeight: proseLineHeight.small }) as const);
 const FOOTNOTE = perLook(() => ({ lineHeight: lineHeight.caption }) as const);
+const DETAILS_FOOTNOTE = perLook(() => ({ marginTop: space.l, lineHeight: lineHeight.caption }) as const);

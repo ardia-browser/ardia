@@ -13,6 +13,7 @@ import { openSplitPane } from "../splits/actions";
 import { openSettings } from "../settings/settingsWindows";
 import { isOrganizeId, shownOrganizeContext, sideBySide, splitCandidates, type OrganizeContext, type OrganizeId } from "./organizeActions";
 import { renameProfile } from "../profiles/profileMenu";
+import { isPluginAction, runPluginAction } from "../plugins/commands";
 
 const store = () => useBrowser.getState();
 
@@ -61,6 +62,7 @@ const RUN_ORGANIZE: Record<OrganizeId, (c: OrganizeContext) => void | Promise<vo
 };
 
 export function runBarAction(id: string, windowId: string) {
+  if (isPluginAction(id)) return void runPluginAction(id, windowId);
   if (isOrganizeId(id)) {
     const c = shownOrganizeContext(id, windowId);
     if (c) void RUN_ORGANIZE[id](c);

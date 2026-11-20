@@ -1,4 +1,3 @@
-diff --git a/components/cdm/renderer/key_system_support_update.cc b/components/cdm/renderer/key_system_support_update.cc
 --- a/components/cdm/renderer/key_system_support_update.cc
 +++ b/components/cdm/renderer/key_system_support_update.cc
 @@ -33,7 +33,9 @@
@@ -45,10 +44,10 @@ diff --git a/components/cdm/renderer/key_system_support_update.cc b/components/c
  #endif  // BUILDFLAG(ENABLE_WIDEVINE)
  
  void AddExternalClearKey(const media::KeySystemCapability& /*capability*/,
-@@ -548,6 +570,13 @@
-     media::GetSupportedKeySystemsCB cb,
+@@ -549,6 +571,13 @@
      content::KeySystemCapabilities key_system_capabilities) {
    KeySystemInfos key_systems;
+   base::flat_set<std::string> pending_key_systems;
 +#if BUILDFLAG(ENABLE_WIDEVINE)
 +  if (g_ardia_widevine_without_cdm &&
 +      !key_system_capabilities.contains(kWidevineKeySystem)) {
@@ -57,5 +56,5 @@ diff --git a/components/cdm/renderer/key_system_support_update.cc b/components/c
 +  }
 +#endif  // BUILDFLAG(ENABLE_WIDEVINE)
    for (const auto& [key_system, capability] : key_system_capabilities) {
- #if BUILDFLAG(ENABLE_WIDEVINE)
-     if (key_system == kWidevineKeySystem) {
+     if (capability.IsPending()) {
+       pending_key_systems.insert(key_system);

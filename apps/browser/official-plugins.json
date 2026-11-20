@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "plugins": [
+    {
+      "name": "cli",
+      "title": "Command Line",
+      "blurb": "Drive Ardia from your terminal or an agent.",
+      "icon": "terminal.fill",
+      "version": "0.4.0",
+      "release": "https://github.com/ardia-browser/plugins/releases/download/cli-v0.4.0",
+      "artifacts": {
+        "macos-arm64": {
+          "file": "cli-plugin-0.4.0-macos-arm64.tar.gz",
+          "sha256": "5f6442242c0a7d42d9ec592c599a167faa3675dbbc18999ef2cf34fc2336339e"
+        },
+        "linux-x64": {
+          "file": "ardia-cli-0.4.0-linux-x64.tar.gz",
+          "sha256": "5bd2bf6cc2f6e34bbfbb78cf28e3ee0963db569697e951cf7d45cfcc35a7a9bf"
+        },
+        "installer": {
+          "file": "install.sh",
+          "sha256": "7e865385ba438f1623a14e7278b7d84e30b837855e0370e3c0d81727e60cb54d"
+        }
+      }
+    },
+    {
+      "name": "apple-passwords",
+      "title": "Apple Passwords",
+      "blurb": "Fill logins and verification codes from the Passwords app on every site.",
+      "icon": "key.fill",
+      "version": "1.0.0",
+      "release": "https://github.com/ardia-browser/plugins/releases/download/apple-passwords-v1.0.0",
+      "artifacts": {
+        "macos-arm64": {
+          "file": "apple-passwords-plugin-1.0.0-macos-arm64.tar.gz",
+          "sha256": "9bca4437519ec6df5b590ebca1a6d4eef0a3e8f9aa08d0c8508051f96a45feee"
+        }
+      }
+    }
+  ],
+  "comingSoon": [
+    {
+      "name": "ai",
+      "title": "AI",
+      "blurb": "Chat that can use your tabs, on your Claude plan.",
+      "icon": "sparkles",
+      "experiment": "officialPluginsAi"
+    }
+  ]
+}

@@ -3,7 +3,7 @@ import { after, test } from "node:test";
 
 globalThis.__DEV__ = false;
 const stub = await import("../../test-native/index.ts");
-globalThis.fetch = async () => ({ status: 200 });
+globalThis.fetch = async () => ({ status: 503 });
 
 const client = await import("./client.ts");
 const usage = await import("./usage.ts");
@@ -42,11 +42,11 @@ test("click skips in a Picture in Picture window are counted back and ahead, sen
   };
   const before = (await skipsSent()).length;
 
-  pipCounts.notePictureInPictureClickSkip(-10);
-  pipCounts.notePictureInPictureClickSkip(10);
-  pipCounts.notePictureInPictureClickSkip(10);
-  pipCounts.notePictureInPictureClickSkip(10);
-  pipCounts.notePictureInPictureClickSkip(0);
+  pipCounts.notePictureInPictureClickSkip({ seconds: -10, epoch: client.consentEpoch() });
+  pipCounts.notePictureInPictureClickSkip({ seconds: 10, epoch: client.consentEpoch() });
+  pipCounts.notePictureInPictureClickSkip({ seconds: 10, epoch: client.consentEpoch() });
+  pipCounts.notePictureInPictureClickSkip({ seconds: 10, epoch: client.consentEpoch() });
+  pipCounts.notePictureInPictureClickSkip({ seconds: 0, epoch: client.consentEpoch() });
   usage.sessionEnding();
   const sent = await skipsSent();
   assert.equal(sent.length, before + 1);

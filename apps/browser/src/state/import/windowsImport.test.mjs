@@ -21,7 +21,7 @@ test("Windows discovery finds each fixture browser under its Windows data folder
   assert.deepEqual(chromeDefault.available, ["bookmarks", "history", "tabs", "passwords", "cookies", "autofill"]);
   assert.equal(chromeDefault.path, `${LOCAL}\\Google\\Chrome\\User Data\\Default`);
   assert.ok(byId.opera.profiles.some((p) => p.id === "."));
-  assert.deepEqual(byId.arc.profiles.find((p) => p.id === "Default").available, ["history", "passwords", "spaces", "pinnedTabs", "tabs", "favorites"]);
+  assert.deepEqual(byId.arc.profiles.find((p) => p.id === "Default").available, ["history", "passwords", "autofill", "linkRules", "archive", "spaces", "pinnedTabs", "tabs", "favorites"]);
   for (const s of sources) assert.equal(s.needsKeychain, false);
   assert.ok(byId.firefox.profiles.some((p) => p.id === "Profiles/abcd1234.default-release" && p.available.includes("tabs")));
 });
@@ -44,6 +44,11 @@ test("A Firefox profile brings bookmarks, history and its session store", async 
   assert.equal(links(result.bookmarks), 4);
   assert.equal(result.historyCount, 4);
   assert.equal(result.tabs.length, 3);
+  assert.deepEqual(result.favicons.map((f) => [f.page, f.icon]), [
+    ["https://www.mozilla.example/", "https://www.mozilla.example/icon-32.png"],
+    ["https://developer.mozilla.example/docs", "https://developer.mozilla.example/favicon.ico"],
+  ]);
+  assert.ok(result.favicons.every((f) => Buffer.from(f.png, "base64").subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))));
 });
 
 test("History streams in chunks and honours a limit", async () => {

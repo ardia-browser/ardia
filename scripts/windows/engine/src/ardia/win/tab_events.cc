@@ -362,10 +362,10 @@ void TabEvents::DidToggleFullscreenModeForTab(bool entered_fullscreen,
 
 void TabEvents::WebContentsDestroyed() {
   audible_subscription_ = {};
-  if (popups_) {
+  if (LivePopups()) {
     popups_->manager()->RemoveObserver(this);
-    popups_ = nullptr;
   }
+  popups_ = nullptr;
   if (zoom_) {
     zoom_->RemoveObserver(this);
     zoom_ = nullptr;
@@ -418,6 +418,15 @@ void TabEvents::OnFindTabHelperDestroyed(find_in_page::FindTabHelper* helper) {
   find_helper_ = nullptr;
 }
 
+blocked_content::PopupBlockerTabHelper* TabEvents::LivePopups() {
+  if (popups_ && (!web_contents() ||
+                  popups_ != blocked_content::PopupBlockerTabHelper::FromWebContents(
+                                 web_contents()))) {
+    popups_ = nullptr;
+  }
+  return popups_;
+}
+
 void TabEvents::Observe() {
   content::WebContents* contents = web_contents();
   if (!contents) {
@@ -435,7 +444,7 @@ void TabEvents::Observe() {
       zoom_->AddObserver(this);
     }
   }
-  if (!popups_) {
+  if (!LivePopups()) {
     popups_ = blocked_content::PopupBlockerTabHelper::FromWebContents(contents);
     if (popups_) {
       popups_->manager()->AddObserver(this);
@@ -475,7 +484,7 @@ void TabEvents::CheckSecurity() {
 }
 
 void TabEvents::SendBlockedPopup(int32_t popup_id, base::DictValue popup) {
-  if (!popups_ || !popups_->GetBlockedPopupRequests().contains(popup_id)) {
+  if (!LivePopups() || !popups_->GetBlockedPopupRequests().contains(popup_id)) {
     return;
   }
   Send("popupBlocked", std::move(popup));

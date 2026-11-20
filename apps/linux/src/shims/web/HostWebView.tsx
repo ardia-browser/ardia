@@ -18,6 +18,12 @@ import { focusPageIfShellUnfocused, notePageFocusRequest, notingPageFocus } from
 import { withPopupDismissal } from "../../popupDismissal";
 import { registerSwitchView } from "../../tabSwitchAhead";
 
+const pageCoveredListeners = new Set<(tabId: string) => void>();
+export function onPageCovered(listener: (tabId: string) => void) {
+  pageCoveredListeners.add(listener);
+  return () => void pageCoveredListeners.delete(listener);
+}
+
 export const HostWebView = forwardRef<WebViewHandle, WebViewProps>(function HostWebView(props, ref) {
   return props.extensionHost && extensionViewsSupported(ardiaHost) ? <HostExtensionWebView ref={ref} {...props} /> : <HostTabWebView ref={ref} {...props} />;
 });
@@ -97,7 +103,11 @@ const HostTabWebView = forwardRef<WebViewHandle, WebViewProps>(function HostTabW
     const node = element.current;
     const regions = inputRegions();
     if (!node || !regions) return;
-    const stop = watchPageBelowShell(node, regions, () => latest.current.visible !== false, () => tab.current);
+    const covered = () => {
+      const tabId = latest.current.tabId;
+      if (tabId) for (const listener of pageCoveredListeners) listener(tabId);
+    };
+    const stop = watchPageBelowShell(node, regions, () => latest.current.visible !== false, () => tab.current, undefined, covered);
     const unregister = props.tabId ? registerSwitchView(props.tabId, { tab: () => tab.current, slot: node, regions }) : () => {};
     return () => {
       unregister();
@@ -108,11 +118,14 @@ const HostTabWebView = forwardRef<WebViewHandle, WebViewProps>(function HostTabW
   return <View style={[props.style, { backgroundColor: "transparent" }]}><div ref={element} data-ardia-native-tab={key.current} style={{ position: "absolute", inset: 0 }} /></View>;
 });
 
-export function watchPageBelowShell(node: HTMLElement, regions: InputRegionsRegistry, visible: () => boolean, page: () => { identity?: unknown; disposed?: boolean; viewport(viewport: TabViewport): Promise<void> } | null, radii?: () => CornerRadii) {
+export function watchPageBelowShell(node: HTMLElement, regions: InputRegionsRegistry, visible: () => boolean, page: () => { identity?: unknown; disposed?: boolean; viewport(viewport: TabViewport): Promise<void> } | null, radii?: () => CornerRadii, covered?: () => void) {
   let last = "";
+  let shown = false;
   let revision = 0;
-  const stop = watchTabViewport(node, visible, (viewport) => {
+  const stop = watchTabViewport(node, visible, (viewport, coveredByShell) => {
     if (!viewport.visible) regions.setPage(node, false, radii);
+    if (shown && coveredByShell) covered?.();
+    shown = viewport.visible;
     regions.refresh();
     const current = page();
     if (!current?.identity) return;

@@ -3,7 +3,7 @@ import { ancestorIds, innermostGroupOf } from "../groups/groups";
 import { activeTabId, pinSection, viewTabIds } from "../browser/model";
 import { selectedTabIds } from "../pins/organize";
 import { canMoveGroup, movingGroup, type GroupPlacement } from "../pins/tabGrouping";
-import { groupingOnto, placing, type TabPlacement } from "../pins/placing";
+import { placing, type TabPlacement } from "../pins/placing";
 import { splitOf } from "../splits/splits";
 import { addToTileFolder, tileFolderOf } from "../pins/tileFolders";
 import { entryKey } from "../sidebar/entryKey";
@@ -13,6 +13,8 @@ type Order = Pick<BrowserState, "tabs" | "windows">;
 
 export type Lane = { pinned: boolean; groupId: string | null };
 
+export type SplitDropSide = "left" | "right";
+
 export type DragSource = { kind: "tab" | "split" | "group" | "live"; groupId?: string; folderId?: string; external?: boolean };
 
 export type DropSpot =
@@ -21,14 +23,14 @@ export type DropSpot =
   | { zone: "pinnedRows"; beforeId: string | null }
   | { zone: "list"; beforeId: string | null }
   | { zone: "group"; groupId: string; beforeId: string | null }
-  | { zone: "onto"; targetId: string }
+  | { zone: "split"; targetId: string; side: SplitDropSide }
   | { zone: "folder"; ontoId: string; beforeId?: string | null };
 
 export type Drop =
   | { type: "tabs"; placement: TabPlacement }
   | { type: "group"; groupId: string; placement: GroupPlacement }
   | { type: "live" }
-  | { type: "onto"; targetId: string }
+  | { type: "split"; targetId: string; side: SplitDropSide }
   | { type: "folder"; ontoId: string; beforeId?: string | null }
   | { type: "none" };
 
@@ -82,8 +84,8 @@ function dropAt(source: DragSource, spot: DropSpot): Drop {
     case "group":
       if (tabs) return tabsAt({ pinned: false, groupId: spot.groupId, beforeId: spot.beforeId });
       return moveGroup({ pinned: false, parentId: spot.groupId, beforeId: spot.beforeId });
-    case "onto":
-      return source.kind === "tab" && !source.external ? { type: "onto", targetId: spot.targetId } : NO_DROP;
+    case "split":
+      return source.kind === "tab" && !source.external && !source.folderId ? { type: "split", targetId: spot.targetId, side: spot.side } : NO_DROP;
     case "folder":
       return source.kind === "tab" && !source.external ? { type: "folder", ontoId: spot.ontoId, beforeId: spot.beforeId } : NO_DROP;
   }
@@ -103,8 +105,6 @@ export function dropping(s: BrowserState, ids: string[], drop: Drop): BrowserSta
       const moved = movingGroup(s, drop.groupId, drop.placement);
       return Object.keys(moved).length ? { ...s, ...moved } : s;
     }
-    case "onto":
-      return groupingOnto(s, ids, drop.targetId)[0];
     case "folder":
       return addToTileFolder(s, ids, drop.ontoId, drop.beforeId);
     default:

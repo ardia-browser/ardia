@@ -1,5 +1,6 @@
 import { OutsidePressArea, showMenu, type MenuItem } from "@ardia/shell";
 import { withIconNames } from "../../lib/activeLook";
+import { POP_UP_CHROME } from "../../lib/platformChrome";
 import { modifiersOf, type ClickModifiers } from "../../lib/keys";
 import { Symbol } from "./Symbol";
 import { useEffect, useRef, type Ref } from "react";
@@ -8,6 +9,7 @@ import { buttonMotion, curve, duration, usePressScaleMotion } from "./motion";
 import { useTheme } from "./theme";
 import { capsule, monoFace, opacity, perLook, proseLineHeight, radius, space, font as typeScale } from "./tokens";
 import { useHover } from "./useHover";
+import { useNativeForm } from "./nativeForm";
 
 const SEARCH_KEYS = [{ key: "Escape" }];
 const SEARCH_KEYS_WITH_ENTER = [{ key: "Escape" }, { key: "Enter" }, { key: "Enter", shiftKey: true }];
@@ -194,8 +196,9 @@ export function PopUp<T extends string>({
   accessibilityLabel?: string;
 }) {
   const theme = useTheme();
+  const native = useNativeForm();
   const { hovered, hoverProps } = useHover();
-  const pressMotion = usePressScaleMotion(!disabled, buttonMotion.controlPressScale);
+  const pressMotion = usePressScaleMotion(!disabled && !native, buttonMotion.controlPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : null;
   const current = options.find((o) => o.value === value);
   const labelled = accessibilityLabel ? { accessibilityLabel, accessibilityValue: { text: current?.title ?? "" } } : {};
@@ -210,7 +213,15 @@ export function PopUp<T extends string>({
   return (
     <View {...hoverProps} style={{ opacity: disabled ? opacity.disabled : 1 }}>
       <Pressable disabled={disabled} onPress={open} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} accessibilityRole="button" {...labelled}>
-        {({ pressed }) => (
+        {({ pressed }) =>
+          native ? (
+            <View style={[PLAIN_POPUP, { backgroundColor: pressed ? theme.controlPressed : hovered ? theme.controlHover : undefined }]}>
+              <Text numberOfLines={1} ardiaCentersCapitals style={{ ...typeScale.body, color: theme.textPrimary, flexShrink: 1 }}>
+                {current?.title ?? ""}
+              </Text>
+              <Symbol name={POP_UP_CHROME.indicator === "chevronDown" ? "chevron.down" : "chevron.up.chevron.down"} size={9} weight="semibold" color={theme.textSecondary} style={PLAIN_POPUP_GLYPH} />
+            </View>
+          ) : (
           <Animated.View
             style={[
               {
@@ -229,20 +240,30 @@ export function PopUp<T extends string>({
               scaleStyle,
             ]}
           >
-            <Text numberOfLines={1} style={{ flex: 1, ...typeScale.body, color: theme.textPrimary }}>
+            <Text numberOfLines={1} ardiaCentersCapitals style={[POP_UP_TITLE, typeScale.body, { color: theme.textPrimary }]}>
               {current?.title ?? ""}
             </Text>
-            <View style={{ width: 16, height: 16, borderRadius: radius.control, backgroundColor: theme.formAccent, alignItems: "center", justifyContent: "center" }}>
-              <Symbol name="chevron.up.chevron.down" size={8} weight="bold" color={theme.onAccent} style={{ width: 16, height: 16 }} />
-            </View>
+            {POP_UP_CHROME.indicator === "chevronDown" ? (
+              <Symbol name="chevron.down" size={8} weight="bold" color={theme.textSecondary} style={POP_UP_INDICATOR} />
+            ) : (
+              <View style={{ ...POP_UP_INDICATOR, borderRadius: radius.control, backgroundColor: theme.formAccent, alignItems: "center", justifyContent: "center" }}>
+                <Symbol name="chevron.up.chevron.down" size={8} weight="bold" color={theme.onAccent} style={POP_UP_INDICATOR} />
+              </View>
+            )}
           </Animated.View>
-        )}
+          )
+        }
       </Pressable>
     </View>
   );
 }
 
+const POP_UP_INDICATOR = { width: 16, height: 16 } as const;
+const POP_UP_TITLE = POP_UP_CHROME.growsToItsTitle ? ({ flexGrow: 1, flexShrink: 1 } as const) : ({ flex: 1 } as const);
+
 const CLEAR_GLYPH = { width: 16, height: 16 } as const;
+const PLAIN_POPUP = { height: 22, maxWidth: 260, borderRadius: radius.control, paddingLeft: space.s, paddingRight: space.xxs, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: space.xs } as const;
+const PLAIN_POPUP_GLYPH = { width: 10, height: 14 } as const;
 
 const CHECK_RING = { s: { box: 14, glyph: 8 }, m: { box: 18, glyph: 10 } } as const;
 const CHECK_RING_BORDER = 1.5;

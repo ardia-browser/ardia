@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { launchArguments, launchEnvironment } from "../../apps/linux/scripts/acceptance/lib/ardia.mjs";
-import { ASSERTIONS, SCRIPT_NAME, SCRIPT_TITLE_PREFIX, USAGE, USER_SCRIPTS_CAPABILITIES, VERSION_PATTERN, appVersionVerdict, cliControlSupport, cliTarball, debLayoutProblems, packageFormat, formatTable, installerRanAgain, launchRefusal, packageStagedFiles, parseArgs, pipeLaunchArguments, splitPipeMessages, summarize, uboTuningProblems, userScriptSource } from "./smoke.mjs";
+import { ASSERTIONS, SCRIPT_NAME, SCRIPT_TITLE_PREFIX, USAGE, USER_SCRIPTS_CAPABILITIES, VERSION_PATTERN, appVersionVerdict, cliControlSupport, cliTarball, debLayoutProblems, packageFormat, formatTable, installerRanAgain, launchRefusal, packageStagedFiles, parseArgs, pipeLaunchArguments, splitPipeMessages, summarize, uboSeedProblems, uboTuningProblems, userScriptSource } from "./smoke.mjs";
 
 test("the package checks are named in the usage and keep the original eight first", () => {
   assert.deepEqual(ASSERTIONS.slice(0, 8), ["ldd", "shell-ui", "bootstrap", "native-tab", "sandbox", "content-blocker", "restart-restore", "staged-install"]);
@@ -94,6 +94,15 @@ test("the packaged uBlock Origin saves its engine soon after a launch and waits 
   assert.deepEqual(uboTuningProblems(tuned.replace("selfieDelayInSeconds: 3,", "selfieDelayInSeconds: 53,")), ["selfieDelayInSeconds is 53, not 3"]);
   assert.deepEqual(uboTuningProblems(tuned.replace("autoUpdateDelayAfterLaunch: 600,", "autoUpdateDelayAfterLaunch: 37,")), ["autoUpdateDelayAfterLaunch is 37, not 600"]);
   assert.deepEqual(uboTuningProblems(""), ["selfieDelayInSeconds is missing", "autoUpdateDelayAfterLaunch is missing"]);
+});
+
+test("the packaged uBlock Origin carries a seed that its start sequence loads", () => {
+  const start = "µb.isReadyPromise = (async function start() {\n    try {\n        await ardiaSeedFromPackage();\n";
+  const seed = JSON.stringify({ storage: { version: "1.76.0b25", selectedFilterLists: ["user-filters", "easylist"], "cache/selfie/staticMain": "a", "cache/selfie/staticNetFilteringEngine": "b" } });
+  assert.deepEqual(uboSeedProblems(seed, start), []);
+  assert.deepEqual(uboSeedProblems(null, start), ["no readable ardia-seed/storage.json"]);
+  assert.deepEqual(uboSeedProblems(seed, "µb.isReadyPromise = (async function start() {"), ["js/start.js doesn't load the seed"]);
+  assert.deepEqual(uboSeedProblems(JSON.stringify({ storage: { version: "1.76.0b25", selectedFilterLists: [] } }), start), ["the seed has no cache/selfie/staticMain", "the seed has no cache/selfie/staticNetFilteringEngine"]);
 });
 
 test("the gate takes a tarball, a .deb or an AppImage and refuses anything else", () => {

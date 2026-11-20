@@ -43,7 +43,7 @@ test("followers run every frame while an animation runs, a burst is reported whe
   let follows = 0;
   const bursts = [];
   const unfollow = followMotion(() => follows++);
-  const unlisten = onMotionBurst((burst) => bursts.push(burst));
+  const unlisten = onMotionBurst((burst) => bursts.push(burst), () => "");
   const animation = { __active: true };
   noteAnimation(animation);
   await turns(6);
@@ -58,6 +58,20 @@ test("followers run every frame while an animation runs, a burst is reported whe
   assert.equal(follows, after);
   unfollow();
   unlisten();
+});
+
+test("a burst carries the consent epoch each listener gave when it began, not the one when it ended", async () => {
+  let epoch = "period-1";
+  const bursts = [];
+  const unlisten = onMotionBurst((burst) => bursts.push(burst), () => epoch);
+  const animation = { __active: true };
+  noteAnimation(animation);
+  await turns(4);
+  epoch = "period-2";
+  forgetAnimation(animation);
+  await turns(2);
+  unlisten();
+  assert.deepEqual(bursts.map((b) => b.epoch), ["period-1"]);
 });
 
 test("a follower that throws leaves the clock able to start again", async () => {

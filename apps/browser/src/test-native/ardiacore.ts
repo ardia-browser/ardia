@@ -1,5 +1,6 @@
 import type {
   ActionState,
+  SiteSettings,
   BookmarkOp,
   CallArgs,
   CallName,
@@ -34,6 +35,7 @@ type ExtensionEngine = {
   install(path: string, profile: string): Promise<string>;
   reload(id: string, profile: string): Promise<void>;
   uninstall(id: string, profile: string): Promise<void>;
+  configure?(id: string, profile: string, options: Record<string, unknown>): Promise<void>; inspect?(path: string): Promise<CallResult<"extensions.inspectUnpacked">>;
 };
 const testGlobals = globalThis as {
   acTestTabStrip?: TabStripHost;
@@ -43,6 +45,7 @@ const testGlobals = globalThis as {
   acTestCliOwns?: (tabId: string) => { owned: boolean; shown: boolean };
   acTestCliMoveOffscreen?: (tabId: string) => { ok: boolean; reason?: string };
   acTestTasks?: () => EngineTask[];
+  acTestEngineInfo?: () => CallResult<"engine.info">;
   acTestUserScripts?: { engine: ExtensionEngine };
   acTestSuggest?: (args: { url: string; id: number; profile: string }) => CallResult<"search.suggest"> | undefined;
 };
@@ -92,7 +95,65 @@ const laterEvent = <E extends EventName>(name: E, data: EventData<E>) => queueMi
 export const emitDownload = (download: EngineEvents["downloads.changed"]) => emitEvent("downloads.changed", download);
 export const emitPermission = (request: EngineEvents["permissions.requested"]) => emitEvent("permissions.requested", request);
 
+export const passwordProviders = {
+  calls: [] as unknown[][],
+  generation: 0,
+  profiles: [] as { profile: string; fields: string[]; codeSetup: boolean }[],
+  panel: { shown: true } as CallResult<"passwords.showSystemPanel">,
+  handlerApp: "Passwords" as string | null,
+  lastPanelGeneration: undefined as number | undefined,
+  opened: [] as { tab: string; token: string; generation?: number }[],
+  openResult: true,
+  hold: null as Promise<void> | null,
+  holdNext: null as Promise<void> | null,
+  notAppliedNext: 0,
+  bareReplyNext: 0,
+  sessions: [] as unknown[],
+  rejectNext: 0,
+  handlerGate: null as Promise<void> | null,
+  hints: [] as { tab: string; label: string; side: string }[],
+  hintShown: true,
+};
+const providerFakes = {
+  setFieldProviders: async (args: { generation: number; session: string; profiles: { profile: string; fields: string[]; codeSetup: boolean }[] }) => {
+    const { generation, profiles } = args;
+    passwordProviders.calls.push(["setFieldProviders", generation, profiles.map((p) => p.profile)]);
+    passwordProviders.sessions.push(args.session);
+    if (passwordProviders.rejectNext > 0) {
+      passwordProviders.rejectNext -= 1;
+      throw new Error("native refused the provider set");
+    }
+    const once = passwordProviders.holdNext;
+    passwordProviders.holdNext = null;
+    await once;
+    await passwordProviders.hold;
+    if (passwordProviders.bareReplyNext > 0) {
+      passwordProviders.bareReplyNext -= 1;
+      return {} as { applied: boolean };
+    }
+    if (passwordProviders.notAppliedNext > 0) {
+      passwordProviders.notAppliedNext -= 1;
+      return { applied: false };
+    }
+    passwordProviders.generation = generation;
+    passwordProviders.profiles = profiles.map((p) => ({ ...p, fields: [...p.fields] }));
+    return { applied: true };
+  },
+  showSystemPanel: ({ tab, generation }: { tab: string; generation?: number }) => (passwordProviders.calls.push(["showSystemPanel", tab]), (passwordProviders.lastPanelGeneration = generation), { ...passwordProviders.panel }),
+  showPanelHint: ({ tab, label, side }: { tab: string; label: string; side: string }) => (passwordProviders.hints.push({ tab, label, side }), { shown: passwordProviders.hintShown }),
+  systemPanelAvailable: () => ({ chromium: true, webkit: true }),
+  otpauthHandler: async () => (passwordProviders.calls.push(["otpauthHandler"]), await passwordProviders.handlerGate, { app: passwordProviders.handlerApp }),
+  setUpVerificationCode: ({ tab, token, generation }: { tab: string; token: string; generation?: number }) => (passwordProviders.opened.push({ tab, token, generation }), { opened: passwordProviders.openResult }),
+};
 export const current = { device: null as string | null };
+
+export const siteSettingsDb = new Map<string, Record<string, string>>();
+export const siteZoomDb = new Map<string, number>();
+const SITE_SETTING_TYPES = ["popups", "camera", "microphone", "location", "notifications", "sound", "autoplay", "javascript", "images", "clipboard", "automaticDownloads", "cookies", "midi", "sensors", "windowManagement", "localFonts", "idleDetection", "storageAccess", "fileSystem", "keyboardLock", "pointerLock", "cameraPanTiltZoom"];
+const siteSettingsOf = (profile: string, origin: string) => {
+  const own = siteSettingsDb.get(`${profile}\n${origin}`) ?? {};
+  return Object.fromEntries(SITE_SETTING_TYPES.map((t) => [t, own[t] && own[t] !== "default" ? { value: own[t], isDefault: false } : { value: "ask", isDefault: true }]));
+};
 
 type Login = { origin: string; url: string; username: string; password: string; created: number };
 export const passwordStores = new Map<string | null, Map<string, Login>>();
@@ -129,7 +190,10 @@ function addVisit(profile: string, url: string, title: string, at: number) {
 }
 export const chromeVisit = (profile: string, url: string, title: string, at = Date.now()) => addVisit(profile, url, title, at);
 
+export const historyQueries: { profile: string; maxUrls: number; maxVisits: number }[] = [];
+
 function queryHistory(profile: string, { maxUrls = 5000, maxVisits = 50 }: { maxUrls?: number; maxVisits?: number }) {
+  historyQueries.push({ profile, maxUrls, maxVisits });
   const entries = [...chromeHistory(profile)]
     .map(([u, r]) => ({ u, t: r.title, n: r.visits.length, v: r.visits.slice(-maxVisits) }))
     .sort((a, b) => (b.v.at(-1) ?? 0) - (a.v.at(-1) ?? 0))
@@ -154,12 +218,31 @@ function addHistoryVisits(profile: string, { pages, toleranceMs = 1000 }: { page
   return { added };
 }
 
+export const ENGINE_REQUEST_LIMIT_BYTES = 8 * 1024 * 1024;
+export const historyImportRequestBytes: number[] = [];
+export const refusedHistoryImports = { next: 0 };
+export const heldHistoryImports: { reply: Promise<void> | null } = { reply: null };
+export const heldHistoryQueries: { reply: Promise<void> | null } = { reply: null };
+
 function importHistoryRows(profile: string, { rows }: { rows: { u: string; t: string; l: number }[] }) {
+  const bytes = new TextEncoder().encode(JSON.stringify({ rows })).length;
+  historyImportRequestBytes.push(bytes);
+  if (bytes > ENGINE_REQUEST_LIMIT_BYTES) throw Object.assign(new Error("Invalid or oversized engine request"), { code: "ERR_ENGINE" });
+  if (refusedHistoryImports.next > 0) {
+    refusedHistoryImports.next--;
+    throw Object.assign(new Error("no history"), { code: "ERR_ENGINE" });
+  }
   for (const r of rows) if (!chromeHistory(profile).has(r.u)) chromeHistory(profile).set(r.u, { title: r.t, visits: [r.l] });
-  return {};
+  return heldHistoryImports.reply ? heldHistoryImports.reply.then(() => ({})) : {};
 }
 
+export const historyDeletes = { failNext: false };
+
 function deleteHistoryUrls(profile: string, { urls }: { urls: string[] }) {
+  if (historyDeletes.failNext) {
+    historyDeletes.failNext = false;
+    throw new Error("the history database couldn't be written");
+  }
   for (const url of urls) chromeHistory(profile).delete(url);
   chromeHistoryEvent({ kind: "deleted", profile, all: false, urls });
   return {};
@@ -276,17 +359,23 @@ const cliStatus = (on: boolean | null): CliControlStatus =>
 const cliControl = (on: boolean | null) => testGlobals.acTestCliControl?.(on) ?? cliStatus(on);
 
 export const cancelledDownloads: string[] = [];
+export const downloadSettingsWrites: { profile: string; folder?: string; askWhereToSave?: boolean }[] = [];
+export const clearedSiteData: { profile: string; origin: string }[] = [];
 export const endedWebKitSessions: string[] = [];
 export const removedStagings: string[] = [];
 export const stagingRemovals = { ok: true };
 export const deletedProfileData: string[] = [];
 export const profileDataLeft = new Map<string, string[]>();
 export const revealedTabs: string[] = [];
+export const nativeTabSwitches: boolean[] = [];
+export const nativeTabPresses: { byStart: Map<number, number>; dropped: number[]; splits: string[][] } = { byStart: new Map(), dropped: [], splits: [] };
 export const discardedOffers: string[] = [];
 export const installedCrx: { path: string; profile: string }[] = [];
+export const chosenExtensionFolder: { next: string | null } = { next: null };
 export const crxInstallFailure: { next: string | null } = { next: null };
 export const linkRoute: { next: LinkRoute } = { next: {} };
 export const resolvedPermissions: { id: string; result: string; remember: boolean }[] = [];
+
 export const extensionAnswers = {
   actionStates: async (_tabId: string, _ids: string[], _profile?: string): Promise<Record<string, ActionState>> => ({}),
   sidePanelUrl: async (_tabId: string, _extensionId: string, _profile?: string): Promise<string | null> => null,
@@ -334,6 +423,11 @@ const fakeModules = {
     {
       components: () => [],
       tasks: () => testGlobals.acTestTasks?.() ?? [],
+      info: () => {
+        const info = testGlobals.acTestEngineInfo?.();
+        if (!info) throw Object.assign(new Error("engine.info has no test fake yet"), { code: "ERR_UNKNOWN_CALL" });
+        return info;
+      },
       beginTracing: () => false,
       endTracing: () => null,
       isTracing: () => false,
@@ -355,7 +449,7 @@ const fakeModules = {
     "tabs",
     {
       routeLinkTabs: () => linkRoute.next,
-      stripCommand: ({ id, command }) => (tabStripHost().command(command, id), null),
+      stripCommand: async ({ id, command }) => (await tabStripHost().command(command, id), null),
       strips: () => tabStripHost().snapshot(),
       lastTabPolicy: () => ({ closesWindow: true }),
     },
@@ -363,9 +457,13 @@ const fakeModules = {
       prepareTransfer: () => {},
       releaseTransfer: () => {},
       claimLaunchTab: () => {},
-      revealTab: (key: string) => void revealedTabs.push(key),
-      dropTabReveals: (key: string) => void revealedTabs.push(`drop over ${key}`),
-      revealOffered: (adoptId: string, key: string) => void revealedTabs.push(`${adoptId} over ${key}`),
+      revealTab: (key: string, press: number) => void revealedTabs.push(press ? `${key} by press ${press}` : key),
+      dropTabReveals: (key: string, press: number) => void revealedTabs.push(press ? `drop over ${key} by press ${press}` : `drop over ${key}`),
+      claimTabPress: (_key: string, startedAt: number) => nativeTabPresses.byStart.get(startedAt) ?? 0,
+      dropTabPress: (press: number) => void nativeTabPresses.dropped.push(press),
+      setTabsInSplits: (keys: string[]) => void nativeTabPresses.splits.push(keys),
+      setNativeTabSwitch: (enabled: boolean) => void nativeTabSwitches.push(enabled),
+      revealOffered: (adoptId: string, key: string, press: number) => void revealedTabs.push(press ? `${adoptId} over ${key} by press ${press}` : `${adoptId} over ${key}`),
       discardOffered: async (adoptId: string) => (discardedOffers.push(adoptId), true),
     },
   )),
@@ -376,7 +474,7 @@ const fakeModules = {
     resume: () => null,
     keep: () => null,
     settings: () => ({ folder: "", askWhereToSave: false, managed: false }),
-    setSettings: () => ({ folder: "", askWhereToSave: false, managed: false }),
+    setSettings: (args) => (downloadSettingsWrites.push(args), { folder: "", askWhereToSave: false, managed: false }),
   }),
   ArdiaPermissions: domain("permissions", {
     resolve: ({ id, result, remember }) => (resolvedPermissions.push({ id, result, remember }), null),
@@ -400,12 +498,15 @@ const fakeModules = {
     clearBrowsingData: () => null,
   }),
   ArdiaSites: domain("sites", {
-    setSetting: () => null,
-    origins: () => [],
-    reset: () => null,
-    clearData: () => ({ cookies: 0, storage: true }),
-    zoomLevels: () => ({}),
-    setZoom: () => null,
+    settings: ({ profile, origin }) => siteSettingsOf(profile, origin) as SiteSettings,
+    setSetting: ({ profile, origin, type, value }) => (siteSettingsDb.set(`${profile}\n${origin}`, { ...(siteSettingsDb.get(`${profile}\n${origin}`) ?? {}), [type]: value }), null),
+    origins: ({ profile }) => [...siteSettingsDb.keys()].filter((k) => k.startsWith(`${profile}\n`)).map((k) => k.slice(profile.length + 1)),
+    reset: ({ profile, origin }) => (siteSettingsDb.delete(`${profile}\n${origin}`), null),
+    clearData: ({ profile, origin }) => (clearedSiteData.push({ profile, origin }), { cookies: 0, storage: true }),
+    zoomLevels: ({ profile }) => Object.fromEntries([...siteZoomDb].filter(([k]) => k.startsWith(`${profile}\n`)).map(([k, v]) => [k.slice(profile.length + 1), v])),
+    setZoom: ({ profile, host, zoom }) => (siteZoomDb.set(`${profile}\n${host}`, zoom), null),
+    preloadPages: () => false,
+    setPreloadPages: () => null,
   }),
   ArdiaPasswords: domain(
     "passwords",
@@ -420,7 +521,12 @@ const fakeModules = {
       allowSaving: () => ({ ok: true }),
       export: () => ({ status: "cancelled" }),
       autofillEnabled: ({ profile }) => profileToggle(profile, "passwords"),
-      setAutofillEnabled: ({ profile, enabled }) => (setProfileToggle(profile, "passwords", enabled), null),
+      setAutofillEnabled: ({ profile, enabled }) => {
+        setProfileToggle(profile, "passwords", enabled);
+        passwordProviders.calls.push(["offerToSave", profile, enabled]);
+        return null;
+      },
+      ...providerFakes,
     },
     {
       save: async (_profile: string, origin: string, username: string, password: string) => {
@@ -471,8 +577,9 @@ const fakeModules = {
     setEnabled: async ({ id }) => (await extensionAnswers.change("setEnabled", id), { ok: true }),
     uninstall: async ({ profile, id }) => (await extensionAnswers.change("uninstall", id), await extensionEngine()?.uninstall(id, profile), { ok: true }),
     reload: async ({ profile, id }) => (await extensionAnswers.change("reload", id), await extensionEngine()?.reload(id, profile), { ok: true }),
-    configure: async ({ id }) => (await extensionAnswers.change("configure", id), { ok: true }),
-    chooseFolder: () => null,
+    configure: async ({ profile, id, options }) => (await extensionAnswers.change("configure", id), await extensionEngine()?.configure?.(id, profile, options), { ok: true }),
+    inspectUnpacked: ({ path }) => extensionEngine()?.inspect?.(path) ?? Promise.reject(Object.assign(new Error("Manifest file is missing or unreadable"), { code: "ERR_EXTENSION_INVALID" })),
+    chooseFolder: () => chosenExtensionFolder.next,
     installCrx: ({ profile, path }) => {
       const failure = crxInstallFailure.next;
       crxInstallFailure.next = null;
@@ -517,7 +624,10 @@ const fakeModules = {
     setAllowed: () => null,
   }),
   ArdiaHistory: domain("history", {
-    query: ({ profile, ...args }) => queryHistory(profile, args),
+    query: ({ profile, ...args }) => {
+      const read = queryHistory(profile, args);
+      return heldHistoryQueries.reply ? heldHistoryQueries.reply.then(() => read) : read;
+    },
     add: ({ profile, ...args }) => addHistoryVisits(profile, args),
     import: ({ profile, ...args }) => importHistoryRows(profile, args),
     deleteUrls: ({ profile, ...args }) => deleteHistoryUrls(profile, args),
@@ -540,7 +650,6 @@ const fakeModules = {
     setPeekOtherSiteTabs: () => null,
     setSelectionPopover: () => null,
     setBlockAutoplayEverywhere: () => null,
-    setFairPlayInChromium: () => null,
     setCommandScrollZoom: () => null,
     setLittleArdiaOpensNewTabLinks: () => null,
     setPopupsOpenAsTabs: () => null,
@@ -549,6 +658,7 @@ const fakeModules = {
     setVideoUpscalingTestConditions: () => null,
     videoUpscalingState: () => null,
     takeContentDrift: () => ({ layouts: 0, fits: 0, maxPoints: 0 }),
+    takeFirstPaintHolds: () => ({ held: 0, painted: 0, loaded: 0, pressed: 0, timedOut: 0, heldMs: 0 }),
   }),
   ArdiaWebKit: domain("webKit", {
     endPrivateSession: ({ session }) => (endedWebKitSessions.push(session), null),

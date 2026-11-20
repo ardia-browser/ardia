@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useExtensions } from "../../state/extensions/actions";
+import { useExtensions, utilitySheetHost } from "../../state/extensions/actions";
 import { useWindowId } from "../../state/browser/hooks";
 import { ActionPopup } from "./ActionPopup";
 import { InstallDialog, PinDialog } from "./InstallDialog";
@@ -20,6 +20,7 @@ export function ExtensionOverlays() {
 
 export function InstallDialogHost({ windowId, onClosed }: { windowId: string; onClosed: () => void }) {
   const install = useExtensions((e) => (e.install?.windowId === windowId ? e.install : null));
+  useEffect(() => utilitySheetHost(windowId), [windowId]);
   useEffect(() => {
     if (!install) onClosed();
   }, [!install]);

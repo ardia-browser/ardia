@@ -27,6 +27,7 @@ import { HistoryButton, ReloadButton } from "../toolbar/NavButtons";
 import { GLYPH } from "../toolbar/tokens";
 import { HEADER_TOOLS, headerToggleX, navButtonsFitting, type HeaderButton } from "../window/dockMotion";
 import { ARC_LIGHTS_CENTER } from "../../state/windows/dockMotion";
+import { PAGE_IDENTITY_TAG } from "../../state/tabs/tabReveal";
 
 const BUTTON = layout.toolbarButton;
 const { edge: EDGE } = HEADER_TOOLS;
@@ -99,6 +100,7 @@ function NavigationButtons({
             windowId={tab.windowId}
             direction={b === "back" ? -1 : 1}
             disabled={b === "back" ? !history.back : !history.forward}
+            closesTab={b === "back" && history.backCloses}
             palette={palette}
             onFocus={alreadyFocused}
           />
@@ -133,6 +135,8 @@ export function SidebarAddressRow({ width, top }: { width: number; top: number }
     <View
       ref={field}
       onLayout={anchor}
+      nativeID={PAGE_IDENTITY_TAG}
+      collapsable={false}
       style={{ position: "absolute", left: layout.sidebarInset, right: layout.sidebarInset, top, height: SIDEBAR_FIELD.height }}
     >
       <SidebarTextScope>

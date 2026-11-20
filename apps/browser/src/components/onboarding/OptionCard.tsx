@@ -20,6 +20,7 @@ export function OptionCard({
   onHover,
   preview,
   dense,
+  subtitleLines = 2,
 }: {
   title: string;
   subtitle?: string;
@@ -31,6 +32,7 @@ export function OptionCard({
   onHover?: (hovered: boolean) => void;
   preview?: ReactNode;
   dense?: boolean;
+  subtitleLines?: number;
 }) {
   const colors = useOnboardingColors();
   const { hovered, hoverProps } = useHover();
@@ -71,7 +73,7 @@ export function OptionCard({
                   {title}
                 </Text>
                 {subtitle ? (
-                  <Text size="small" lines={2} color={colors.rowSubtitle}>
+                  <Text size="small" lines={subtitleLines} color={colors.rowSubtitle}>
                     {subtitle}
                   </Text>
                 ) : null}

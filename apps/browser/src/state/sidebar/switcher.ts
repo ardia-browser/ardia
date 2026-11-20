@@ -10,6 +10,7 @@ import { rememberPicture } from "../tabs/tabPictures";
 import { noteTabSwitcherOpened } from "../telemetry/usage";
 import { closeTab } from "../browser/actions";
 import { noteTabSwitcherOpenedInWebKit, noteTabSwitcherRowClosed } from "../telemetry/tabSwitcherOpens";
+import { consentToken } from "../telemetry/client";
 import { isWindowClosing } from "../windows/closingWindows";
 import { setSidebarUi, sidebarUi } from "./sidebarUi";
 
@@ -133,9 +134,10 @@ export async function closeSwitcherRow() {
   if (!s) return;
   const id = s.ids[pointedRow(s) ?? s.index];
   if (!id) return;
+  const consent = consentToken();
   await closeTab(id);
   syncSwitcherTabs(s.windowId);
-  if (!sidebarUi().switcher?.ids.includes(id) || isWindowClosing(s.windowId)) noteTabSwitcherRowClosed();
+  if (!sidebarUi().switcher?.ids.includes(id) || isWindowClosing(s.windowId)) noteTabSwitcherRowClosed(consent);
 }
 
 export function commitSwitcher(index?: number) {

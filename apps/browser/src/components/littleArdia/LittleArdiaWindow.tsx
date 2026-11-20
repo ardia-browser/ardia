@@ -3,7 +3,6 @@ import { setTrafficLightsCenter } from "../../state/windows/nativeWindow";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 import { useTheme } from "../ui/theme";
-import { useProfileOrder } from "../../state/profiles/hooks";
 import { openPanel } from "../../state/windows/actions";
 import { useActiveTab, useSettings, useWindowFullScreen, useWindowId, useWindowProfile, useWindowUi } from "../../state/browser/hooks";
 import type { Tab } from "../../state/browser/types";
@@ -13,14 +12,16 @@ import { BrowserWindowControls } from "../window/BrowserWindowControls";
 import { DownloadsPopover } from "../downloads/Downloads";
 import { ExtensionOverlays } from "../extensions/ExtensionOverlays";
 import { ToolbarPopupAnchor } from "../extensions/ToolbarExtensions";
-import { setUrlAnchor, usePageFrameInset } from "../../state/windows/layout";
+import { setUrlAnchor, usePageFrameInset, windowCornerRadius } from "../../state/windows/layout";
 import { showUrlBarMenu } from "../../state/omnibox/paste";
 import { copyPageUrl } from "../../state/site/selection";
 import { ProfileBadge } from "../profiles/ProfileIcons";
+import { useProfileDotsShown } from "../profiles/ProfileDots";
 import { closeLittleArdia, openInMainWindow, openLittleArdiaProfileMenu } from "../../state/littleArdia/actions";
 import { isWindowClosing } from "../../state/windows/closeAnimated";
 import { notePinch, noteSwipeClose } from "../../state/telemetry/usage";
 import { SwipeCloseContext } from "../window/swipeClose";
+import { useCardFrame } from "../window/cardFrame";
 import { startLittleArdiaNewTabLinks } from "../../state/littleArdia/newTabLinks";
 import { PageLabel, SMALL_BAR_BUTTON, SmallBar } from "./SmallChrome";
 import { SMALL_LIGHTS_CENTER } from "../../state/windows/small";
@@ -37,26 +38,42 @@ const NAV_HIT = perLook(() => ({ width: SMALL_BAR_BUTTON, height: SMALL_BAR_BUTT
 const BACK_AT = perLook(() => ({ style: { position: "absolute" as const, top: BAR.buttonTop, left: BAR.navLeft }, hit: NAV_HIT() }));
 const FORWARD_AT = perLook(() => ({ style: { position: "absolute" as const, top: BAR.buttonTop, left: BAR.navLeft + BAR.navPitch }, hit: NAV_HIT() }));
 const alreadyFocused = () => {};
+const SPREAD_STARTS = 0.0001;
 
 export function LittleArdiaWindow() {
   const theme = useTheme();
   const windowId = useWindowId();
   const fullScreen = useWindowFullScreen(windowId);
-  const [width, setWidth] = useState(0);
+  const [size, setSize] = useState({ width: 0, height: 0 });
   const frame = usePageFrameInset();
-  const gestures = useSettings((s) => s.littleWindowGestures) && !fullScreen;
+  const cardRadius = useCardFrame().radius;
+  const gestures = !fullScreen;
   const pinch = useLittleArdiaPinch(windowId);
   const swipe = useLittleArdiaSwipeClose(windowId);
+  const windowRadius = windowCornerRadius();
+  const headroom = Math.min(BAR.height, windowRadius);
+  const corner = useMemo(
+    () => zoomedCorner(pinch.scale, { ...size, inset: frame, cardRadius, windowRadius }),
+    [pinch.scale, size.width, size.height, frame, cardRadius, windowRadius],
+  );
   useEffect(startLittleArdiaNewTabLinks, []);
   return (
-    <View style={{ flex: 1 }} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+    <View
+      style={{ flex: 1 }}
+      onLayout={(e) => {
+        const { width, height } = e.nativeEvent.layout;
+        setSize((prev) => (prev.width === width && prev.height === height ? prev : { width, height }));
+      }}
+    >
       <Animated.View style={{ ...StyleSheet.absoluteFillObject, opacity: swipe.opacity, transform: [{ translateX: swipe.x }] }}>
         <WindowBackdrop vibrancy {...theme.backdrop} colors={theme.windowTint} grainOpacity={theme.grain} style={StyleSheet.absoluteFill} />
         <PinchArea enabled={gestures} motion={pinch.motion} style={StyleSheet.absoluteFill}>
           <Animated.View style={{ flex: 1, transform: [{ scale: pinch.scale }] }}>
             <SwipeCloseContext.Provider value={gestures ? swipe.onSwipe : null}>
-              <View style={{ flex: 1, flexDirection: "row", paddingTop: BAR.height, paddingLeft: frame, paddingRight: frame, paddingBottom: frame }}>
-                <ContentCard />
+              <View style={{ flex: 1, flexDirection: "row", paddingTop: BAR.height - headroom, paddingLeft: frame, paddingRight: frame, paddingBottom: frame }}>
+                <Animated.View pointerEvents="box-none" style={{ flex: 1, flexDirection: "row", paddingTop: headroom, ...(corner ? { borderRadius: corner, overflow: "hidden" } : null) }}>
+                  <ContentCard />
+                </Animated.View>
               </View>
             </SwipeCloseContext.Provider>
             <View style={{ position: "absolute", left: 0, right: 0, top: 0 }}>
@@ -65,12 +82,19 @@ export function LittleArdiaWindow() {
           </Animated.View>
         </PinchArea>
       </Animated.View>
-      <CommandPanel windowWidth={width} />
+      <CommandPanel windowWidth={size.width} />
       <DownloadsPopover />
       <ExtensionOverlays />
       <BrowserWindowControls />
     </View>
   );
+}
+
+function zoomedCorner(scale: Animated.Value, { width, height, inset, cardRadius, windowRadius }: { width: number; height: number; inset: number; cardRadius: number; windowRadius: number }) {
+  if (inset <= 0 || width <= 0 || height <= 0) return null;
+  const spreading = 1 + SPREAD_STARTS;
+  const touchesEdge = Math.max(1 + (2 * inset) / Math.max(width, height), spreading + SPREAD_STARTS);
+  return Animated.divide(scale.interpolate({ inputRange: [1, spreading, touchesEdge], outputRange: [0, cardRadius, windowRadius], extrapolate: "clamp" }), scale);
 }
 
 function useLittleArdiaPinch(windowId: string) {
@@ -132,7 +156,7 @@ function LittleArdiaBar() {
   const windowId = useWindowId();
   const tab = useActiveTab();
   const panelOpen = useWindowUi().panel.open;
-  const severalProfiles = useProfileOrder((order) => order.length > 1);
+  const switcherShown = useProfileDotsShown();
   const [copied, setCopied] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
@@ -158,7 +182,7 @@ function LittleArdiaBar() {
         { icon: copied ? "checkmark" : "link", disabled: !tab?.url, tooltip: `Copy Link (${keyText("⇧⌘C")})`, onPress: copy },
         { icon: "arrow.up.left.and.arrow.down.right", tooltip: `Open in Ardia (${keyText("⌘O")})`, onPress: () => openInMainWindow(windowId) },
       ]}
-      trailing={severalProfiles ? <ProfileButton windowId={windowId} /> : undefined}
+      trailing={switcherShown ? <ProfileButton windowId={windowId} /> : undefined}
     >
       <WindowDragRegion style={StyleSheet.absoluteFill} />
       {tab ? <HistoryButtons tabId={tab.id} windowId={windowId} /> : null}
@@ -172,7 +196,7 @@ function HistoryButtons({ tabId, windowId }: { tabId: string; windowId: string }
   const history = useHistoryAvailability(tabId);
   return (
     <>
-      <HistoryButton place={BACK_AT()} tabId={tabId} windowId={windowId} direction={-1} disabled={!history.back} palette={palette} onFocus={alreadyFocused} />
+      <HistoryButton place={BACK_AT()} tabId={tabId} windowId={windowId} direction={-1} disabled={!history.back} palette={palette} onFocus={alreadyFocused} closesTab={history.backCloses} />
       <HistoryButton place={FORWARD_AT()} tabId={tabId} windowId={windowId} direction={1} disabled={!history.forward} palette={palette} onFocus={alreadyFocused} />
     </>
   );

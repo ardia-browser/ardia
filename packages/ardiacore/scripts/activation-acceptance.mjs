@@ -218,7 +218,7 @@ const openTab = async (url, title, windowId = mainWindow) => {
   const before = new Set(Object.keys(await evalApp(`return ac.store.getState().tabs`)));
   await evalApp(`ac.actions.openUrls([${JSON.stringify(url)}], ${JSON.stringify(windowId)}); return true`);
   return until(`a tab for ${url}`, () => evalApp(`const s = ac.store.getState();
-    return Object.values(s.tabs).find((t) => !${JSON.stringify([...before])}.includes(t.id) && t.title === ${JSON.stringify(title)} && !s.live[t.id]?.isLoading)?.id ?? null`), 20000);
+    return Object.values(s.tabs).find((t) => !${JSON.stringify([...before])}.includes(t.id) && t.title === ${JSON.stringify(title)} && !ac.tabLive.liveOf(t.id)?.isLoading)?.id ?? null`), 20000);
 };
 const show = async (tabId) => {
   await evalApp(`ac.actions.switchToTab(${JSON.stringify(tabId)}); return true`);
@@ -622,7 +622,7 @@ try {
     const numbersBefore = new Set((await nativeWindows()).map((w) => w.window));
     const behind = await evalApp(`return ac.actions.openWindow({ url: "${origin()}/behind?t=Behind", background: true })`);
     const first = await until("its tab loaded", () => evalApp(`const s = ac.store.getState(); const w = s.windows[${JSON.stringify(behind)}];
-      const t = w && s.tabs[w.activeTabIds[w.profileId]]; return t?.title === "Behind" && !s.live[t.id]?.isLoading ? t.id : null`), 20000);
+      const t = w && s.tabs[w.activeTabIds[w.profileId]]; return t?.title === "Behind" && !ac.tabLive.liveOf(t.id)?.isLoading ? t.id : null`), 20000);
     const second = await openTab(`${origin()}/behind2?t=Behind2`, "Behind2", behind);
     const behindNumber = await until("its native window", async () => (await nativeWindows()).find((w) => !numbersBefore.has(w.window))?.window ?? null);
     const steps = [];

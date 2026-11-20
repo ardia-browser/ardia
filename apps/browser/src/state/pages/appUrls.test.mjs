@@ -12,10 +12,10 @@ test("ardia://settings and ardia://newtab open what they name instead of loading
   const page = Object.keys(S().tabs)[0];
   const before = tabCount();
   assert.equal(S().newTab(w, { url: "ardia://settings/passwords" }), "");
-  assert.equal(useSettingsNav.getState().pane, "passwords");
+  assert.equal(useSettingsNav.getState().pane, "profiles");
   assert.equal(tabCount(), before, "no tab for a settings address");
   S().navigate(page, "ardia://settings/privacy");
-  assert.equal(useSettingsNav.getState().pane, "privacy");
+  assert.equal(useSettingsNav.getState().pane, "general");
   assert.equal(S().tabs[page].url, "https://a.example/", "the page stays where it was");
   assert.equal(S().newTab(w, { url: "ardia://newtab" }), "");
   assert.equal(tabCount(), before + 1, "a blank new tab");

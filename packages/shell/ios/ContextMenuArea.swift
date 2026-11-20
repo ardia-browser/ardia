@@ -4,7 +4,9 @@ import ExpoModulesCore
 
 final class ContextMenuArea: ExpoView {
   let onContextMenu = EventDispatcher()
+  let onMiddleClick = EventDispatcher()
   var captureDescendants = false
+  var middleClicks = false
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
@@ -20,6 +22,12 @@ final class ContextMenuArea: ExpoView {
 
   override func rightMouseDown(with event: NSEvent) {
     openMenu(for: event)
+  }
+
+  override func otherMouseUp(with event: NSEvent) {
+    guard middleClicks, event.buttonNumber == 2 else { return super.otherMouseUp(with: event) }
+    let flags = event.modifierFlags
+    onMiddleClick(["shiftKey": flags.contains(.shift), "altKey": flags.contains(.option), "metaKey": flags.contains(.command)])
   }
 
   override func mouseDown(with event: NSEvent) {
@@ -53,6 +61,7 @@ enum PressRelease {
     let landedOn: String
   }
 
+  private static let pressLock = NSLock()
   private static var presses: (earlier: Press?, latest: Press?) = (nil, nil)
 
   static let watchingPresses: Void = {
@@ -63,13 +72,25 @@ enum PressRelease {
         classes.append(String(describing: type(of: v)))
         view = v.superview
       }
-      presses = (presses.latest, Press(at: event.timestamp, place: event.locationInWindow, window: event.windowNumber, landedOn: classes.joined(separator: "<")))
+      let press = Press(at: event.timestamp, place: event.locationInWindow, window: event.windowNumber, landedOn: classes.joined(separator: "<"))
+      pressLock.lock()
+      presses = (presses.latest, press)
+      pressLock.unlock()
       return event
     }
   }()
 
+  static func forgetPresses() {
+    pressLock.lock()
+    presses = (nil, nil)
+    pressLock.unlock()
+  }
+
   static var pressRepeated: [String: Any]? {
-    guard let earlier = presses.earlier, let latest = presses.latest, earlier.window == latest.window,
+    pressLock.lock()
+    let recent = presses
+    pressLock.unlock()
+    guard let earlier = recent.earlier, let latest = recent.latest, earlier.window == latest.window,
           latest.at - earlier.at < repeatWithin, hypot(latest.place.x - earlier.place.x, latest.place.y - earlier.place.y) < repeatDistance
     else { return nil }
     return ["landedOn": earlier.landedOn, "ms": Int((latest.at - earlier.at) * 1000)]

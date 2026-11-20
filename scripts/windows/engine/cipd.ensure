@@ -1,7 +1,7 @@
 $ParanoidMode CheckPresence
 $OverrideInstallMode copy
 @Subdir src/buildtools/mac
-gn/gn/mac-${arch} git_revision:0035961837fbcfe875d855744b3eda4fd2eefb43
+gn/gn/mac-${arch} git_revision:938087829fcbcc8fd87835ee301dd522c7637685
 @Subdir src/third_party/cpython3/host
 infra/3pp/tools/cpython3/${platform} version:3@3.11.9.chromium.38
 @Subdir src/third_party/dawn/third_party/agility-sdk/src

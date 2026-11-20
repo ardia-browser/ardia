@@ -167,6 +167,67 @@ int main(int argc, char** argv) {
     assert(p.tools()->web_contents() == &p.frontend);
     return 0;
   }
+  if (mode == "tab-return" || mode == "tab-return-unmanaged") {
+    views::manages_layers = mode == "tab-return";
+    Pane p;
+    p.Dock();
+    p.host.Show(p.binding, true);
+    auto& chrome = p.host.browser_view_storage.containers[&p.page].devtools;
+    aura::Window& native = p.frontend.native;
+    const auto shown_in_pane = [&] { return p.tools()->holder()->Holds(&native) && native.IsVisible(); };
+    assert(shown_in_pane());
+    for (int round = 0; round < 3; ++round) {
+      p.host.Show(p.binding, false);
+      assert(!p.tools()->GetVisible() && !p.tools()->web_contents() && !native.parented);
+      p.host.Show(p.binding, true);
+      assert(shown_in_pane());
+      chrome.SetWebContents(&p.frontend);
+      chrome.SetVisible(true);
+      assert(chrome.holder()->Holds(&native) && !p.tools()->holder()->Holds(&native));
+      if (round == 1) {
+        p.host.LayoutPane(p.binding);
+      } else {
+        chrome.SetWebContents(nullptr);
+        chrome.SetVisible(false);
+        assert(!native.parented && !native.IsVisible());
+        p.host.OnDevToolsDockChanged(&p.page, &p.frontend);
+      }
+      DrainPosted();
+      assert(!chrome.web_contents() && !chrome.GetVisible());
+      assert(p.tools()->GetVisible() && p.tools()->web_contents() == &p.frontend);
+      assert(shown_in_pane());
+      assert(p.binding->viewport()->bounds() == gfx::Rect(100, 50, 500, 600));
+    }
+    p.host.Show(p.binding, false);
+    chrome.SetWebContents(&p.frontend);
+    p.host.Show(p.binding, true);
+    assert(!chrome.web_contents() && shown_in_pane());
+    DevToolsWindow::docked.clear();
+    p.host.LayoutPane(p.binding);
+    assert(!p.tools()->GetVisible() && !p.tools()->web_contents() && !native.parented);
+    assert(p.binding->viewport()->bounds() == gfx::Rect(100, 50, 800, 600));
+    return 0;
+  }
+  if (mode == "tab-return-focus") {
+    views::detach_advances_focus = true;
+    Pane p;
+    p.Dock();
+    p.host.Show(p.binding, true);
+    auto& chrome = p.host.browser_view_storage.containers[&p.page].devtools;
+    assert(views::focus_manager.focused == p.tools() && p.frontend.focuses == 1);
+    chrome.SetWebContents(&p.frontend);
+    chrome.SetWebContents(nullptr);
+    p.host.LayoutPane(p.binding);
+    assert(p.tools()->holder()->Holds(&p.frontend.native) && views::focused_detaches == 0);
+    assert(views::focus_manager.focused == p.tools() && p.frontend.focuses == 2);
+    p.binding->viewport()->RequestFocus();
+    chrome.SetWebContents(&p.frontend);
+    chrome.SetWebContents(nullptr);
+    p.host.LayoutPane(p.binding);
+    assert(p.tools()->holder()->Holds(&p.frontend.native));
+    assert(views::focus_manager.focused == p.binding->viewport() && p.frontend.focuses == 2);
+    return 0;
+  }
   assert(false);
 }
 '''
@@ -181,7 +242,7 @@ class PaneLayoutTests(unittest.TestCase):
         host = HOST.read_text()
         watch = method(host, 'class DevToolsFrontendWatch') + ';' if 'class DevToolsFrontendWatch' in host else 'struct DevToolsFrontendWatch {};'
         methods = '\n'.join(method(host, signature) for signature in [
-            'void ShellHostView::LayoutPane(', 'void ShellHostView::OnDevToolsDockChanged(',
+            'bool HoldsNativeView(', 'void ShellHostView::LayoutPane(', 'void ShellHostView::OnDevToolsDockChanged(',
             'void ShellHostView::HideDevToolsViewport(', 'void TabBinding::WebContentsDestroyed(',
             'void TabBinding::FocusFromHost(', 'void TabBinding::OnWebContentsFocused('])
         methods = methods.replace('content::RenderWidgetHost*', 'void*')
@@ -219,6 +280,15 @@ class PaneLayoutTests(unittest.TestCase):
 
     def test_undocking_releases_the_frontend_before_chrome_moves_it_into_its_window(self):
         self.run_case('undock')
+
+    def test_returning_to_a_tab_takes_its_frontend_back_from_chromes_container(self):
+        self.run_case('tab-return')
+
+    def test_returning_to_a_tab_takes_its_frontend_back_when_views_do_not_manage_layers(self):
+        self.run_case('tab-return-unmanaged')
+
+    def test_taking_the_frontend_back_keeps_keyboard_focus_where_it_was(self):
+        self.run_case('tab-return-focus')
 
 if __name__ == '__main__':
     unittest.main()

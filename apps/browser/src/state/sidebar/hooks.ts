@@ -132,3 +132,5 @@ export const useIsActiveIn = (windowId: string, profileId: string, tabId: string
 
 export const useTabAwayFromPin = (tabId: string | null) => useBrowser((s) => { const tab = tabId ? s.tabs[tabId] : undefined; return !!tab && awayFromPin(tab); });
 
+
+export const sidebarListLengthNow = (windowId: string, profileId: string) => sidebarEntries(useBrowser.getState(), windowId, profileId).list.length;

@@ -1,7 +1,7 @@
 # Building the engine for Windows
 
-The Windows engine is the same tree as the Mac's (`docs/engine-build.md`): **Chromium 157.0.8103.38**, **Helium**
-0.21.1 (helium-chromium) with **helium-windows** 0.21.1.1 in place of helium-macos, then our patch series. It is
+The Windows engine is the same tree as the Mac's (`docs/engine-build.md`): **Chromium 158.0.8127.36**, **Helium**
+0.22.1 (helium-chromium) with **helium-windows** 0.22.1.1 in place of helium-macos, then our patch series. It is
 cross-built on a **Linux host**, a Boat VM ([On a Linux host](#on-a-linux-host)): Linux is Chromium's supported host for
 Windows cross builds (`docs/win_cross.md` in the tree). The same scripts still run on a Mac, where the first engines were
 built, but **never build a Windows engine on the owner's Mac** (the owner's rule since 2026-11-15: a cross build pins
@@ -169,8 +169,8 @@ must not be published, and the repo is public.
 
 ## Helium for Windows
 
-helium-windows 0.21.1.1 (`d6806de`) is Helium's Windows packaging for 0.21.1. Its `helium-chromium` submodule is at
-`42da6c5`, one commit after the 0.21.1 tag we pin (`ecb36f0`); that commit only changes `devutils/set_quilt_vars`, so
+helium-windows 0.22.1.1 (`8a04093`) is Helium's Windows packaging for 0.22.1; its `helium-chromium` submodule is exactly
+the 0.22.1 tag we pin (`1bccd2b`). Under 0.21.1.1 (`d6806de`) the submodule sat one commit past the tag (`42da6c5`, only `devutils/set_quilt_vars`), so
 the patches are the same. `helium-pins.ini` pins both. Over helium-chromium's series it adds:
 
 - ungoogled-chromium's Windows patches: build fixes (`windows-fix-*`, `windows-disable-reorder-fix-linking`,
@@ -489,6 +489,18 @@ In the order they happened on 2026-11-10:
 10. **`chrome.dll` doesn't link: two undefined symbols** from `chrome/browser/ardia`, which only the Mac builds:
     `ardia::RegisterManagementPolicyProviders` and `NewArdiaVideoOverlayWindow`. Fixed by
     `chromium-win-ardia-layer-calls-mac-only.patch`. With it, `chrome` builds.
+
+## Moving to Chromium 158 (2026-11-18)
+
+From 157.0.8103.38 with Helium 0.21.1 straight to 158.0.8127.36 with Helium 0.22.1, on a fresh xlarge Boat VM: sync and
+toolchain 11 min (Visual Studio's channel now gives MSVC 14.52.37029, the hash stays `44da279f35`), step 3 2 min (372
+patches, 16 skips, guard clean), and the x64 `chrome` build about 1 h 35 min at `JOBS=18` with no compile error.
+Three Windows patches needed rebasing: `chromium-win-hosted-no-browser-shortcuts.patch` (`LoadAccelerators` now
+`CHECK`s its focus manager; fuzz would have put the hook in another function), `chromium-win-reauth-app-window.patch`
+(include context) and `chromium-win-autoplay-policy.patch` (158 added `can_use_device_bound_session_js_api` as the last
+`CommitNavigationParams` field; `ardia_autoplay_blocked` follows it). In `//ardia/win`, `WindowOpenDisposition` values
+are kCamelCase, and `TabEvents` asks for the live `PopupBlockerTabHelper` before each use: Chromium 158 made it a tab
+feature that is freed before `WebContentsDestroyed`, as the Mac's TabBridge found.
 
 ## Resuming
 

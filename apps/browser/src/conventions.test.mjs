@@ -24,10 +24,10 @@ const MAY_IMPORT = {
 const MAY_CALL_NATIVE = ["platform", "ui"];
 const HANDS_PLATFORM_TO_SCRIPTS = new Set(["components/dev/devHarness.ts"]);
 
-const RULES = ["layout", "imports", "native-calls", "tokens", "scale", "get-state", "set-state", "store-reads", "store-shape", "size", "env", "naming", "comments", "file-names"];
+const RULES = ["layout", "imports", "native-calls", "tokens", "scale", "get-state", "set-state", "store-reads", "store-shape", "native-loops", "size", "env", "naming", "comments", "file-names"];
 const SIZE_CAP = { js: 400, native: 600 };
 const SCOPES = ["apps/browser/src", "packages", "engine/ardiacore/src", "engine/chromium/src"];
-const GENERATED = new Set(["packages/core/src/bangList.ts", "packages/demo/src/shims/web/symbols/data.ts", "apps/browser/src/lib/emojiData.ts"]);
+const GENERATED = new Set(["packages/core/src/bangList.ts", "packages/demo/src/shims/web/symbols/data.ts", "apps/browser/src/lib/emojiData.ts", "packages/phone/ios/ArdiaKit/Sources/ArdiaShared/Scripts/ardia-core.js", "packages/phone/ios/ArdiaKit/Sources/ArdiaShared/Scripts/ardia-sync.js"]);
 const ONE_INJECTED_SCRIPT = new Set(["packages/ardiacore/ios/page_script.js"]);
 const FROZEN_SPECS = new Set(["packages/core/src/suggest.reference.ts"]);
 const LAUNCH_CONFIG = [/^packages\/ardiacore\/ios\/ArdiaLaunchConfig\.\w+$/, /^apps\/browser\/src\/platform\/launchConfig\.ts$/];
@@ -50,7 +50,7 @@ const SCOPE_FILE = /^(?:apps\/browser\/src\/|packages\/[^/]+\/(?:src|ios)\/|engi
 const TEST_FILE = /\.test\.[cm]?[jt]sx?$|(?:^|\/)(?:test-native|fixtures|tests|Tests)\/|(?:^|\/)test-(?:loader|hooks)\.mjs$/;
 
 const TOOL_DIRECTIVE =
-  /^(?:\/\/+|\/\*+)\s*(?:@ts-(?:expect-error|ignore|nocheck)|eslint-(?:disable|enable)|swiftlint:|swift-format-ignore|prettier-ignore|clang-format (?:on|off)|NOLINT|nogncheck|IWYU pragma|[#@]__PURE__|# sourceURL=|# sourceMappingURL=)/;
+  /^(?:\/\/+|\/\*+)\s*(?:@ts-(?:expect-error|ignore|nocheck)|eslint-(?:disable|enable)|swiftlint:|swift-format-ignore|swift-tools-version:|prettier-ignore|clang-format (?:on|off)|NOLINT|nogncheck|IWYU pragma|[#@]__PURE__|# sourceURL=|# sourceMappingURL=)/;
 const LICENSE_HEADER = /copyright|licen[cs]e|spdx/i;
 const REGEX_AFTER_WORDS = new Set(["return", "typeof", "case", "do", "else", "in", "of", "new", "delete", "void", "throw", "instanceof", "yield", "await"]);
 
@@ -306,6 +306,7 @@ const count = (text, pattern) => (text.match(pattern) || []).length;
 
 const COLOR_LITERAL = /#(?:[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3,4})(?![\w-])|\b(?:rgba?|hsla?)\s*\(/gi;
 const NAMED_CLEAR = /^\s*transparent\s*$/i;
+const JS_RESTARTED_LOOP = /\bAnimated\s*\.\s*loop\s*\(\s*Animated\s*\.\s*(?:sequence|parallel|stagger)\s*\(/g;
 const MOTION_LITERAL = /\bEasing\s*\.\s*\w|\bduration\s*:\s*-?\.?\d|\bAnimated\s*\.\s*delay\s*\(\s*\d/g;
 const SCALE_PROPERTY =
   /(?<![\w$.])(?:fontSize|letterSpacing|radius|[a-z]\w*Radius|padding(?:Horizontal|Vertical|Top|Bottom|Left|Right|Start|End)?|margin(?:Horizontal|Vertical|Top|Bottom|Left|Right|Start|End)?|gap|rowGap|columnGap|damping|stiffness|friction|tension|bounciness)\s*(?::|=\s*\{|=(?![=>]))/g;
@@ -399,6 +400,7 @@ function checkFile(path, src, add) {
   const isJs = /\.tsx?$/.test(path) && (inApp || /^packages\/[^/]+\/src\//.test(path)) && !FROZEN_SPECS.has(path);
   const isNative = /\.(?:swift|h|m|mm|cc|mojom|js)$/.test(path) && !ONE_INJECTED_SCRIPT.has(path);
   if ((isJs && lines > SIZE_CAP.js) || (isNative && lines > SIZE_CAP.native)) add("size", path, 1);
+  if (isJs) add("native-loops", path, count(code, JS_RESTARTED_LOOP));
 
   if (!LAUNCH_CONFIG.some((allowed) => allowed.test(path))) add("env", path, envReads(path, src, code));
 
@@ -564,6 +566,11 @@ if (process.argv.includes("--write-baseline")) {
     });
     return found;
   };
+  test("a Swift package manifest's tools version line is a compiler directive", () => {
+    assert.deepEqual(violationsOf("packages/phone/ios/PhoneSync/Package.swift", "// swift-tools-version:6.2\nimport PackageDescription\n"), {});
+    assert.deepEqual(violationsOf("packages/phone/ios/PhoneSync/Package.swift", "// swift-tools-version:6.2\n// a note\nimport PackageDescription\n"), { comments: 1 });
+  });
+
   test("a closing JSX tag doesn't hide a comment after it", () => {
     assert.deepEqual(violationsOf("apps/browser/src/components/hello/Hello.tsx", "<Text>Hello</Text>; // comment\n"), { comments: 1 });
   });
@@ -602,6 +609,14 @@ if (process.argv.includes("--write-baseline")) {
     assert.deepEqual(store("export const useA = create<{ a: number }>(() => ({ a: 1 }));"), { "store-shape": 1 });
     assert.deepEqual(store("export const useA = create<{ a: number }>()((set) => ({ a: 1 }));"), { "store-shape": 1 });
     assert.deepEqual(store("export const useA = create((set) => ({ a: 1 }));"), { "store-shape": 1 });
+  });
+  test("a loop around a sequence, parallel or stagger counts; a loop of one timing doesn't", () => {
+    const loop = (body) => violationsOf("apps/browser/src/components/hello/Pulse.tsx", `import { Animated } from "react-native";\n${body}\n`);
+    assert.deepEqual(loop("Animated.loop(Animated.sequence([a, b])).start();"), { "native-loops": 1 });
+    assert.deepEqual(loop("Animated.loop(\n  Animated.parallel([a, b]),\n).start();"), { "native-loops": 1 });
+    assert.deepEqual(loop("Animated.loop(Animated.stagger(9, [a, b]));"), { "native-loops": 1 });
+    assert.deepEqual(loop("Animated.loop(a).start();"), {});
+    assert.deepEqual(loop("Animated.sequence([a, b]).start();"), {});
   });
   test("an interpolation after # in a string isn't a colour", () => {
     assert.deepEqual(violationsOf("apps/browser/src/state/hello/ids.ts", "export const id = (repo: string, n: number) => `${repo}#${n}`;\n"), {});

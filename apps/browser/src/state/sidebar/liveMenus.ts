@@ -10,6 +10,7 @@ import { SOURCES } from "../live/sources";
 import { dismissNowBadge, live, markRead, markUnread, setRepoHidden, updateCalendarSettings, updateFolder } from "../live/store";
 import { folderRepos, setShowNewRepos, showAllRepos } from "../live/repoFilter";
 import { noteLiveFolderColorPick, noteLiveRepoMenuPick } from "../telemetry/liveHides";
+import { consentToken } from "../telemetry/client";
 import type { LiveItem, LiveSourceId } from "../live/types";
 import type { GroupColor } from "../browser/types";
 import { groupColorItems } from "./groupMenu";
@@ -163,6 +164,7 @@ export async function openLiveFolderMenu(windowId: string, folderId: string) {
   const folder = live().folders[folderId];
   if (!folder) return;
   let showedRepo = false;
+  const consent = consentToken();
   const choice = await showMenu(liveFolderMenuItems(windowId, folderId), (picked) => {
     showedRepo = runRepoChoice(folderId, picked) || showedRepo;
     noteLiveRepoMenuPick(picked, !!live().folders[folderId]?.showNewRepos);
@@ -180,7 +182,7 @@ export async function openLiveFolderMenu(windowId: string, folderId: string) {
     void refreshFolder(folderId);
   } else if (choice.startsWith("source:")) {
     const id = choice.slice(7) as LiveSourceId;
-    if (!live().accounts[id]) return openSettings("liveFolders");
+    if (!live().accounts[id]) return openSettings("automations");
     const sources = folder.sources.includes(id) ? folder.sources.filter((x) => x !== id) : [...folder.sources, id];
     updateFolder(folderId, { sources: sources.length ? sources : folder.sources });
     void refreshFolder(folderId);
@@ -190,13 +192,13 @@ export async function openLiveFolderMenu(windowId: string, folderId: string) {
   } else if (choice === "icon") void openIconPicker(windowId, { kind: "live", id: `livefolder|${folderId}` });
   else if (choice.startsWith(COLOR_CHOICE)) {
     const color = chosenColor(choice);
-    noteLiveFolderColorPick();
+    noteLiveFolderColorPick(consent);
     updateFolder(folderId, { color });
   }
   else if (choice === "read") markRead(folderId);
   else if (choice === "up") moveLiveFolder(windowId, folderId, -1);
   else if (choice === "down") moveLiveFolder(windowId, folderId, 1);
-  else if (choice === "settings") openSettings("liveFolders");
+  else if (choice === "settings") openSettings("automations");
   else if (choice === "delete") deleteLiveFolder(folderId);
 }
 
@@ -286,6 +288,6 @@ export function runCalendarMenu(choice: string): boolean {
   else if (choice.startsWith("cal:toggle:")) {
     const id = choice.slice(11);
     setCalendarHidden(id, !settings.hiddenCalendarIds.includes(id));
-  } else if (choice === "cal:settings") openSettings("calendar");
+  } else if (choice === "cal:settings") openSettings("automations");
   return true;
 }

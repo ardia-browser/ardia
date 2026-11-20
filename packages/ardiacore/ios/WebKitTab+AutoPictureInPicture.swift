@@ -31,7 +31,9 @@ extension WebKitTab {
     let seen = visible && ArdiaChromeWindowHost.userSees(window)
     let activeCapture = webView?.cameraCaptureState == .active || webView?.microphoneCaptureState == .active
     switch autoPictureInPictureRule.sight(seen, enabled: autoPictureInPicture, playing: !playingFrames.isEmpty || activeCapture) {
-    case .open: setPictureInPicture(true, automatic: true) { [weak self] answer in if answer == .nothingPlaying { self?.emit("autoPictureInPictureKept", ["reason": "nothingPlaying"]) } }
+    case .open:
+      let stamp = ArdiaConsentStamp.begin()
+      setPictureInPicture(true, automatic: true) { [weak self] answer in if answer == .nothingPlaying { self?.emit("autoPictureInPictureKept", stamp.onto(["reason": "nothingPlaying"])) } }
     case .close: setPictureInPicture(false) { _ in }
     case .none: break
     }

@@ -1,9 +1,11 @@
 import { readDocument, removeDocument, saveDocument, writeDocument } from "../../platform/documents";
-import { Clock, emptyScope, restoreJournal, SyncNative, writtenSeq, type LogFile, type ScopeState, type SyncRecord } from "../../platform/sync";
+import { Clock, emptyScope, restoreJournal, SyncNative, trackTouchedKeys, writtenSeq, type LogFile, type ScopeState, type SyncRecord } from "../../platform/sync";
 import { parseSaved, unchanged, versionedJson, type Migrations, type SavedObject } from "../../lib/savedDocument";
 import { profileScope } from "./records";
 import { APP_SCOPE, DOC, DOC_MIGRATIONS, DOC_VERSION, JOURNAL, STATE, defaultTypes, emptyDoc, type SyncDoc } from "./syncDoc";
 import { isFields, numberOr, stringOr } from "../../lib/decode";
+import { consentToken } from "../telemetry/client";
+import { warnFor } from "../telemetry/logs";
 
 type Journal = Record<string, LogFile[]>;
 type ScopeChange = { records: Record<string, SyncRecord | null>; base: Record<string, string | null>; rest: Partial<ScopeState> };
@@ -63,11 +65,10 @@ function restOf(state: ScopeState): Partial<ScopeState> {
   return rest;
 }
 
-function changedEntries<T>(before: Record<string, T>, after: Record<string, T>): Record<string, T | null> {
-  const changed: Record<string, T | null> = {};
-  for (const key in after) if (before[key] !== after[key]) changed[key] = after[key]!;
-  for (const key in before) if (!(key in after)) changed[key] = null;
-  return changed;
+function entriesOf<T>(keys: Set<string>, now: Record<string, T>): Record<string, T | null> {
+  const entries: Record<string, T | null> = {};
+  for (const key of keys) entries[key] = key in now ? now[key]! : null;
+  return entries;
 }
 
 function replayChanges(scopes: SyncDoc["scopes"], changes: Record<string, ScopeChange>, live: Set<string>) {
@@ -191,7 +192,7 @@ export function syncFiles(current: () => SyncDoc) {
       const list = (journal.batches[scope] ??= []);
       const fresh = batches.filter((file) => !list.some((f) => f.seq === file.seq));
       if (!fresh.length) return;
-      list.push(...fresh);
+      for (const file of fresh) list.push(file);
       try {
         await writePart({ journal: { [scope]: fresh } });
       } catch (error) {
@@ -203,13 +204,14 @@ export function syncFiles(current: () => SyncDoc) {
     });
 
   function watchScope(scope: string, scoped: ScopeState, clock: Clock) {
+    const consent = consentToken();
     state.clock = clock;
-    const records = { ...scoped.records };
-    const base = { ...scoped.base };
+    const { touched: keys, stop } = trackTouchedKeys(scoped);
     return () => {
+      stop();
       if (current().scopes[scope] !== scoped) return Promise.resolve();
-      const change: ScopeChange = { records: changedEntries(records, scoped.records), base: changedEntries(base, scoped.base), rest: restOf(scoped) };
-      const touched = Object.keys(change.records).length > 0 || Object.keys(change.base).length > 0;
+      const change: ScopeChange = { records: entriesOf(keys.records, scoped.records), base: entriesOf(keys.base, scoped.base), rest: restOf(scoped) };
+      const touched = keys.records.size > 0 || keys.base.size > 0;
       const rest = JSON.stringify(change.rest);
       if (!touched && rest === writtenRest.get(scope)) return Promise.resolve();
       const part = { device: current().deviceId, clock: clock.last, changes: { [scope]: change } };
@@ -218,7 +220,7 @@ export function syncFiles(current: () => SyncDoc) {
           await writePart(part);
           writtenRest.set(scope, rest);
         } catch (error) {
-          console.warn("[sync] couldn't journal this cycle's changes", error);
+          warnFor(consent, "[sync] couldn't journal this cycle's changes", error);
           state.wanted = true;
         }
       });
@@ -260,6 +262,7 @@ export function syncFiles(current: () => SyncDoc) {
   }
 
   async function saveState() {
+    const consent = consentToken();
     const doc = current();
     if (!doc.enabled) {
       if (state.onDisk || state.wanted) writeDocument(STATE, "");
@@ -280,7 +283,7 @@ export function syncFiles(current: () => SyncDoc) {
         if (!sealed) return;
         await saveDocument(STATE, sealed);
       } catch (error) {
-        console.warn("[sync] couldn't save the sync state", error);
+        warnFor(consent, "[sync] couldn't save the sync state", error);
         return;
       }
       Object.assign(state, { json, onDisk: true });

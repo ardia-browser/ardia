@@ -2,6 +2,7 @@ import { toAppUrl } from "@ardia/core";
 import { deliverPageEvent, type PageEvent } from "../../../packages/ardiacore/src/pageEvents";
 import type { NavigationState, WebViewProps } from "../../../packages/ardiacore/src/pageTypes";
 import type { PageResetReason } from "./hostPageLifecycle";
+import { consentEpoch } from "../../browser/src/state/telemetry/client";
 
 export type PageLeaseMetadata = {
   claim: string;
@@ -46,6 +47,13 @@ const leaseOf = (value: PageLeaseMetadata): PageLeaseMetadata =>
   ({ claim: value.claim, rendererGeneration: value.rendererGeneration, bindingGeneration: value.bindingGeneration, documentEpoch: value.documentEpoch });
 
 const SCROLL_STATES = new Set(["down", "up", "top"]);
+
+function stampedOnArrival<T extends PageDelivery | PageLifecycle>(payload: T): T {
+  if (payload.type !== "pageEvent") return payload;
+  const { event: shown } = payload as PageDelivery;
+  if (shown.name !== "pictureInPicture" || !record(shown.data) || !("fullScreenSpaces" in shown.data)) return payload;
+  return { ...payload, event: { ...shown, data: { ...shown.data, epoch: consentEpoch() } } };
+}
 
 function typedPageMessage(data: unknown): PageEvent | null {
   if (!record(data)) return null;
@@ -98,8 +106,9 @@ export class HostPageEvents {
     this.applyTheme = applyTheme;
   }
 
-  receive(module: string, id: string, payload: unknown): boolean {
-    if (!this.active || module !== "ArdiaWebView" || !delivery(payload) || payload.claim !== this.claim) return false;
+  receive(module: string, id: string, received: unknown): boolean {
+    if (!this.active || module !== "ArdiaWebView" || !delivery(received) || received.claim !== this.claim) return false;
+    const payload = stampedOnArrival(received);
     if (!this.installed) {
       if (this.early.length >= 128) { this.dispose(); return false; }
       this.early.push(structuredClone({ ...payload, channel: id }) as PageDelivery | PageLifecycle);

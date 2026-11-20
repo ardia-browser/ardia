@@ -607,3 +607,20 @@ test("Macs compacting and pruning at the same moment never empty the folder, wit
     assert.deepEqual(snapshot(c), snapshot(b));
   }
 });
+
+test("a cycle whose apply is held keeps 200,000 pulled keys for later, where a call with one argument per key would overflow", async () => {
+  const count = 200_000;
+  const ops = Array.from({ length: count }, (_, i) => ({ k: `h:${i}`, h: "000000000001000.0000.devB", v: i }));
+  const remote: LogFile = { v: 1, kind: "log", device: "devB", seq: 1, at: 1000, ops };
+  const transport: Transport = {
+    write: async () => "own",
+    read: async () => ({ files: [{ id: "remote", payload: JSON.stringify(remote) }], pending: [], damaged: [], present: ["remote"] }),
+    remove: async () => {},
+  };
+  const refusing: Adapter = { prefix: "h:", extract: () => null, apply: () => false };
+  const state = emptyScope();
+  const result = await syncScope({ scope: "s", state, transport, adapters: [refusing], clock: new Clock("devA"), device: "devA", now: () => 2000 });
+  assert.equal(result.changed, count);
+  assert.equal(state.unapplied.length, count);
+  assert.equal(state.unapplied[count - 1], `h:${count - 1}`);
+});

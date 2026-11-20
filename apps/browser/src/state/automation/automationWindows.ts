@@ -2,6 +2,7 @@ import type { BrowserState } from "../browser/store";
 import { activeTabId, isIncognitoProfile } from "../browser/model";
 import { isPeekTab } from "../peek/peek";
 import { INTERNAL_PAGES, internalPageOf } from "../pages/urls";
+import { pluginPageOf } from "../plugins/pageNames";
 import { groupOf } from "../pins/tabGrouping";
 import { focusedWindowOf } from "../windows/ui";
 
@@ -28,6 +29,7 @@ export function isEligibleTab(s: Pick<BrowserState, "windows" | "tabs" | "peeks"
 export function shownPage(t: { url: string; title: string; customTitle?: string | null }): { url: string; title: string } {
   const page = internalPageOf(t.url);
   if (page) return { url: t.url.replace(/[?#].*$/, ""), title: INTERNAL_PAGES[page].title };
+  if (pluginPageOf(t.url)) return { url: t.url.replace(/[?#].*$/, ""), title: t.customTitle || t.title };
   return { url: t.url, title: t.customTitle || t.title };
 }
 

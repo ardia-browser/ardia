@@ -49,6 +49,8 @@
 //                               prepare    prepare the app copies and exit (see --prepared)
 //     --env K=V               repeatable: extra environment for every instance (DYLD_INSERT_LIBRARIES is appended to
 //                             the marker library). Instances stay muted; don't pass ARDIA_INSTANCE allowAudio.
+//     --control-env K=V       repeatable: extra environment for the control's instances only, so one app can be measured
+//                             against itself with, say, ARDIA_SWITCHES=freezeWatchOff=on
 //     --profile-count <n>     profiles phase: profiles in the session (default 4, at least 2)
 //     --profile-visits <n>    profiles phase: how many of the other profiles to open before idling (default: all; 0
 //                             leaves them as a launch finds them, to measure what launch loads)
@@ -145,9 +147,11 @@ import { parseArgs } from "node:util";
 import { INJECTION_ENTITLEMENTS, prepareApp } from "../../../../scripts/lib/app-copy.mjs";
 import { appEnv, launchVariables, mergeLaunchEnv } from "../../../../scripts/lib/instance.mjs";
 import { buildSeed } from "./seed.mjs";
+import { waitForUboEngine } from "./ubo-cache.mjs";
 import { parseSettings, profileSeed } from "./profile-seed.mjs";
 import { writeSwitches } from "./js-bench.mjs";
 import { frameRows, frameTable, framesLibrary, framesRun } from "./frames-phase.mjs";
+import { sideLaunchEnv } from "./launch-env.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, "../..");
@@ -170,6 +174,7 @@ const { values: opt } = parseArgs({
     "control-label": { type: "string" },
     prepared: { type: "boolean" },
     env: { type: "string", multiple: true, default: [] },
+    "control-env": { type: "string", multiple: true, default: [] },
     seed: { type: "string" },
     "profile-count": { type: "string", default: "4" },
     "profile-visits": { type: "string" },
@@ -439,9 +444,9 @@ class Instance {
     const exe = join(realpathSync(this.app), "Contents/MacOS", execFileSync("defaults", ["read", join(this.app, "Contents/Info.plist"), "CFBundleExecutable"], { encoding: "utf8" }).trim());
     const main = `^${exe.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}( |$)`;
     if (spawnSync("pgrep", ["-f", main]).status === 0) throw new Error("a bench instance is still running");
-    const extra = [...opt.env, ...this.env].filter((e) => !e.startsWith("DYLD_INSERT_LIBRARIES="));
-    writeSwitches(this.dataDir, extra.find((e) => e.startsWith("ARDIA_SWITCHES="))?.slice(19));
-    const dyld = [markerLibrary(), ...(this.frames ? [framesLibrary(toolDir, here)] : []), ...opt.env.filter((e) => e.startsWith("DYLD_INSERT_LIBRARIES=")).map((e) => e.slice(22))].join(":");
+    const { extra, libraries, switches } = sideLaunchEnv(opt.env, opt["control-env"], this.side.role, this.env);
+    writeSwitches(this.dataDir, switches);
+    const dyld = [markerLibrary(), ...(this.frames ? [framesLibrary(toolDir, here)] : []), ...libraries].join(":");
     this.t0 = Date.now();
     const env = appEnv(this.app, mergeLaunchEnv({
       ARDIA_BACKGROUND: "1", ARDIA_DATA_DIR: this.dataDir, ARDIA_REMOTE_DEBUGGING_PORT: String(this.port),
@@ -582,6 +587,7 @@ async function makeTemplate(side) {
       for (const id of s.windowOrder) if (id !== w) ac.store.getState().closeWindow(id);
       ac.store.getState().activate(keep); return keep;`);
     await sleep(4000);
+    await waitForUboEngine({ port: +opt.port, dataDir: dir, log });
   } finally {
     await app.quit();
   }

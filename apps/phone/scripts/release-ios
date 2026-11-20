@@ -1,0 +1,215 @@
+#!/usr/bin/env bash
+# Build the Expo iPhone app for App Store Connect and send it to TestFlight.
+#
+#   apps/phone/scripts/release-ios <build number> [--version <release version>] [--commit REV] [--no-upload]
+#                                  [--development] [--unsigned] [--default-browser] [--out <dir>]
+#   apps/phone/scripts/release-ios -h | --help
+#
+# The Expo counterpart of main's scripts/release-ios.sh, which archives the SwiftUI app. Same app record, same
+# bundle ids and extensions, same version scheme: the release version is --version (a stable 0.2.47 or a
+# nightly 0.2.47-nightly.2), without it the Mac app's MARKETING_VERSION. Every target's
+# CFBundleShortVersionString is its Apple form and the app's ArdiaReleaseVersion key carries the release
+# version, so the Settings footer reads "Ardia 0.2.47 Nightly 2 (10)" from TestFlight. The build number must
+# be above the highest App Store Connect holds (apps/phone/scripts/asc.mjs next-build).
+#
+# The JavaScript is REV's (default HEAD), from a git export as build-sim-app does, compiled with Hermes with
+# the lab off, and handed to the archive's bundle phase through ARDIA_PREBUILT_BUNDLE with a stamp
+# (ArdiaBuildCommit, ArdiaBuildDirty no, ArdiaBuildSource, ArdiaBuildNative). The native tree must be clean:
+# commit first. The Pods must match Podfile.lock. React Native's prebuilt frameworks lose their debug map in
+# the Release strip phase; the archive keeps the dSYMs.
+#
+# Checks before anything leaves the machine: the bundle id, every target's version and build, the release
+# version, three extensions, the stamp, Hermes bytecode, the lab off, the stripped frameworks, the app's
+# dSYM matching its binary, the default browser flag and, when signed, the entitlements (the app group,
+# and the web-browser entitlement only with --default-browser).
+#
+# --unsigned archives without signing and stops after the checks: proof without the Apple account.
+# --no-upload signs the archive and stops: nothing reaches App Store Connect, whose app-store export opens an
+# upload record and takes the build number even when it only writes an .ipa. Otherwise it exports and uploads.
+# --development signs the archive and exports a development-signed .ipa instead, for the iPhones registered on
+# the team (asc.mjs register-device), to install over a cable with xcrun devicectl device install app; it never
+# uploads and opens no upload record.
+# Signing and upload take ASC_KEY (path to the .p8), ASC_KEY_ID and ASC_ISSUER, or the account Xcode is signed
+# in to. Output and logs go to dist/ios-expo/<release version>-<build>, or --out.
+set -euo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+root="$(cd "$here/../../.." && pwd -P)"
+phoneIos="$root/apps/phone/ios"
+
+die() { echo "error: $*" >&2; exit 1; }
+
+source "$root/scripts/lib/releases.sh"
+
+help() {
+  awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0"
+  exit 0
+}
+
+build="" release_version="" rev=HEAD upload=1 development=0 unsigned=0 default_browser=NO out=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h | --help) help ;;
+    --no-upload) upload=0; shift ;;
+    --development) development=1; upload=0; shift ;;
+    --unsigned) unsigned=1; upload=0; shift ;;
+    --default-browser) default_browser=YES; shift ;;
+    --out) [ $# -ge 2 ] || die "--out needs a directory"; out="$2"; shift 2 ;;
+    --version) [ $# -ge 2 ] || die "--version needs a release version"; release_version="$2"; shift 2 ;;
+    --commit) [ $# -ge 2 ] || die "--commit needs a revision"; rev="$2"; shift 2 ;;
+    -*) die "unknown option $1" ;;
+    *) [ -z "$build" ] || die "one build number, got $build and $1"; build="$1"; shift ;;
+  esac
+done
+[[ "$build" =~ ^[1-9][0-9]*$ ]] || die "the build number must be a positive integer (apps/phone/scripts/release-ios --help)"
+[ "$development" = 0 ] || [ "$unsigned" = 0 ] || die "--development signs the build: it can't go with --unsigned"
+
+if [ -z "$release_version" ]; then
+  release_version="$(mac_marketing_version)"
+  [ -n "$release_version" ] || die "no MARKETING_VERSION in the Mac app's project"
+  [ "$(wc -l <<<"$release_version" | tr -d ' ')" = 1 ] || die "the Mac app's project has more than one MARKETING_VERSION: $(tr '\n' ' ' <<<"$release_version")"
+fi
+channel="$(channel_of "$release_version")" || exit 1
+version="$(apple_version_of "$release_version")"
+
+nativePaths=(apps/phone/ios packages/phone/ios apps/phone/app.json apps/phone/package.json apps/phone/pnpm-lock.yaml packages/phone/expo-module.config.json patches)
+dirtyNative="$(cd "$root" && git status --porcelain=v1 --untracked-files=no -- "${nativePaths[@]}" | cut -c4- | tr '\n' ' ')"
+[ -z "$dirtyNative" ] || { (cd "$root" && git --no-pager diff --stat -- "${nativePaths[@]}" >&2); die "the native tree has uncommitted changes, commit them first: $dirtyNative"; }
+nativeCommit="$(git -C "$root" rev-parse HEAD)"
+cmp -s "$phoneIos/Podfile.lock" "$phoneIos/Pods/Manifest.lock" || die "the Pods don't match Podfile.lock: run scripts/agent/locked pod -- sh -c 'cd apps/phone/ios && LANG=en_US.UTF-8 pod install'"
+hermesc="$phoneIos/Pods/hermes-engine/destroot/bin/hermesc"
+[ -x "$hermesc" ] || die "no hermesc at $hermesc: run pod install for apps/phone/ios"
+
+out="${out:-$root/dist/ios-expo/$release_version-$build}"
+mkdir -p "$out"
+out="$(cd "$out" && pwd -P)"
+archive="$out/Ardia.xcarchive"
+prebuilt="$out/bundle"
+
+auth=()
+if [ "$unsigned" = 0 ] && [ -n "${ASC_KEY:-}" ]; then
+  [ -f "$ASC_KEY" ] || die "ASC_KEY is not a file: $ASC_KEY"
+  [ -n "${ASC_KEY_ID:-}" ] && [ -n "${ASC_ISSUER:-}" ] || die "ASC_KEY needs ASC_KEY_ID and ASC_ISSUER"
+  key="$(cd "$(dirname "$ASC_KEY")" && pwd -P)/$(basename "$ASC_KEY")"
+  auth=(-authenticationKeyPath "$key" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER")
+fi
+
+without_key_ids() {
+  [ ${#auth[@]} -gt 0 ] || return 0
+  ASC_KEY_ID="$ASC_KEY_ID" ASC_ISSUER="$ASC_ISSUER" perl -pi -e 's/\Q$ENV{ASC_KEY_ID}\E/<key id>/g; s/\Q$ENV{ASC_ISSUER}\E/<issuer>/g' "$1"
+}
+
+run_logged() {
+  local name="$1" log="$out/$1.log" status=0
+  shift
+  echo "==> $name (log: $log)"
+  "$@" >"$log" 2>&1 || status=$?
+  without_key_ids "$log"
+  if [ "$status" != 0 ]; then
+    grep -E "error:|Error Domain|errors? occurred|\*\* .* FAILED \*\*" "$log" | sort -u | tail -40 >&2 || true
+    tail -15 "$log" >&2
+    die "$name failed"
+  fi
+}
+
+exportDir=""
+cleanup() { [ -z "$exportDir" ] || node --no-warnings "$here/bundle-export.ts" remove "$exportDir" >/dev/null 2>&1 || true; }
+trap cleanup EXIT
+
+made="$(node --no-warnings "$here/bundle-export.ts" create --commit "$rev" --root "$root")"
+exportDir="$(printf '%s' "$made" | node -e 'console.log(JSON.parse(require("fs").readFileSync(0, "utf8")).dir)')"
+commit="$(printf '%s' "$made" | node -e 'console.log(JSON.parse(require("fs").readFileSync(0, "utf8")).commit)')"
+bundleSource="export of the commit"
+
+echo "Ardia for iPhone (Expo) $release_version ($channel, version $version, build $build), JS $commit, native $nativeCommit, default browser $default_browser$([ "$unsigned" = 1 ] && echo ', unsigned')"
+
+rm -rf "$archive" "$out/export" "$prebuilt" "$out/js"
+mkdir -p "$prebuilt" "$out/js"
+phone="$exportDir/apps/phone"
+entry="$(cd "$phone" && node -e "require('expo/scripts/resolveAppEntry')" "$phone" ios absolute | tail -n 1)"
+cli="$(cd "$phone" && node --print "require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })")"
+reactNative="$(cd "$phone" && node --print "require('path').dirname(require.resolve('react-native/package.json'))")"
+run_logged bundle env EXPO_PUBLIC_ARDIA_LAB=false sh -c "cd '$phone' && node '$cli' export:embed --entry-file '$entry' --platform ios --dev false --reset-cache --bundle-output '$out/js/main.jsbundle' --assets-dest '$prebuilt' --minify false --config-cmd \"'$(command -v node)' '$reactNative/cli.js' config\""
+run_logged hermes "$hermesc" -emit-binary -max-diagnostic-width=80 -O -out "$prebuilt/main.jsbundle" "$out/js/main.jsbundle"
+/usr/libexec/PlistBuddy -c "Add :ArdiaBuildCommit string $commit" -c "Add :ArdiaBuildDirty string no" -c "Add :ArdiaBuildSource string $bundleSource" -c "Add :ArdiaBuildNative string $nativeCommit, clean" "$prebuilt/stamp.plist" >/dev/null
+
+signing=(-allowProvisioningUpdates ${auth[@]+"${auth[@]}"})
+[ "$unsigned" = 0 ] || signing=(CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO)
+run_logged archive xcodebuild archive \
+  -workspace "$phoneIos/Ardia.xcworkspace" -scheme Ardia -configuration Release \
+  -destination "generic/platform=iOS" \
+  -archivePath "$archive" -derivedDataPath "$out/dd" \
+  "${signing[@]}" \
+  CURRENT_PROJECT_VERSION="$build" \
+  MARKETING_VERSION="$version" \
+  ARDIA_RELEASE_VERSION="$release_version" \
+  ARDIA_DEFAULT_BROWSER="$default_browser" \
+  ARDIA_TEST_BUILD=NO \
+  ARDIA_PREBUILT_BUNDLE="$prebuilt" \
+  ENABLE_SIGNATURE_AGGREGATION=NO \
+  COMPILER_INDEX_STORE_ENABLE=NO
+
+app="$archive/Products/Applications/Ardia.app"
+[ -d "$app" ] || die "the archive has no Ardia.app"
+plist_value() { /usr/libexec/PlistBuddy -c "Print :$2" "$1/Info.plist" 2>/dev/null; }
+[ "$(plist_value "$app" CFBundleIdentifier)" = com.ardia.browser.ios ] || die "the archive is $(plist_value "$app" CFBundleIdentifier)"
+for bundle in "$app" "$app"/PlugIns/*.appex; do
+  [ "$(plist_value "$bundle" CFBundleVersion)" = "$build" ] || die "$(basename "$bundle") is build $(plist_value "$bundle" CFBundleVersion), not $build"
+  [ "$(plist_value "$bundle" CFBundleShortVersionString)" = "$version" ] || die "$(basename "$bundle") is version $(plist_value "$bundle" CFBundleShortVersionString), not $version"
+done
+[ "$(plist_value "$app" ArdiaReleaseVersion)" = "$release_version" ] || die "the app's ArdiaReleaseVersion is $(plist_value "$app" ArdiaReleaseVersion), not $release_version"
+for extension in com.ardia.browser.ios.share com.ardia.browser.ios.widgets com.ardia.browser.ios.open; do
+  found=NO
+  for bundle in "$app"/PlugIns/*.appex; do [ "$(plist_value "$bundle" CFBundleIdentifier)" = "$extension" ] && found=YES; done
+  [ "$found" = YES ] || die "the archive has no $extension"
+done
+[ "$(find "$app/PlugIns" -maxdepth 1 -name '*.appex' | wc -l | tr -d ' ')" = 3 ] || die "the archive should hold three extensions"
+[ "$(plist_value "$app" ArdiaDefaultBrowser)" = "$default_browser" ] || die "the app offers the default browser steps: $(plist_value "$app" ArdiaDefaultBrowser), expected $default_browser"
+[ "$(plist_value "$app" ArdiaTestBuild)" = NO ] || die "the app is a test build: ArdiaTestBuild $(plist_value "$app" ArdiaTestBuild)"
+[ "$(plist_value "$app" ArdiaBuildCommit)" = "$commit" ] || die "the app's stamp says JS ${commit:-none}: $(plist_value "$app" ArdiaBuildCommit)"
+[ "$(plist_value "$app" ArdiaBuildDirty)" = no ] || die "the app's stamp says dirty"
+[ "$(head -c 4 "$app/main.jsbundle" | xxd -p)" = c61fbc03 ] || die "main.jsbundle is not Hermes bytecode"
+cmp -s "$app/main.jsbundle" "$prebuilt/main.jsbundle" || die "the archive's main.jsbundle is not the one compiled from $commit"
+if strings "$out/js/main.jsbundle" | grep -q 'EXPO_PUBLIC_ARDIA_LAB'; then die "the bundle still reads EXPO_PUBLIC_ARDIA_LAB at run time"; fi
+for framework in React hermesvm; do
+  binary="$app/Frameworks/$framework.framework/$framework"
+  [ -f "$binary" ] || die "the archive has no $framework.framework"
+  [ "$(nm -a "$binary" 2>/dev/null | grep -c ' - ')" = 0 ] || die "$framework still carries its debug map: the Release strip phase didn't run"
+done
+dsym="$archive/dSYMs/Ardia.app.dSYM"
+[ -d "$dsym" ] || die "the archive keeps no dSYM for Ardia.app"
+appUUID="$(dwarfdump --uuid "$app/Ardia" | awk '{print $2}' | sort)"
+dsymUUID="$(dwarfdump --uuid "$dsym" | awk '{print $2}' | sort)"
+[ -n "$appUUID" ] && [ "$appUUID" = "$dsymUUID" ] || die "Ardia.app.dSYM doesn't match the app binary ($dsymUUID against $appUUID)"
+if [ "$unsigned" = 0 ]; then
+  entitlements="$(codesign -d --entitlements - --xml "$app" 2>/dev/null)"
+  plutil -extract 'com\.apple\.security\.application-groups' xml1 -o - - <<<"$entitlements" | grep -q 'group.com.ardia.browser.ios' || die "the app's signature lacks the app group group.com.ardia.browser.ios"
+  signed=NO
+  if plutil -extract 'com\.apple\.developer\.web-browser' raw -o - - <<<"$entitlements" 2>/dev/null | grep -qx true; then signed=YES; fi
+  [ "$signed" = "$default_browser" ] || die "the app's signature carries the default browser entitlement: $signed, expected $default_browser"
+fi
+echo "checks passed: $(du -sk "$app" | awk '{printf "%.1f MB", $1 / 1024}') installed, JS $commit, release $release_version, build $build"
+
+options="$out/ExportOptions.plist"
+if [ "$development" = 1 ]; then
+  cp "$root/apps/phone/ios/Config/ExportOptions-TestFlight.plist" "$options"
+  /usr/libexec/PlistBuddy -c "Set :method debugging" -c "Set :destination export" -c "Delete :uploadSymbols" "$options"
+  run_logged export xcodebuild -exportArchive \
+    -archivePath "$archive" -exportOptionsPlist "$options" -exportPath "$out/export" \
+    -allowProvisioningUpdates ${auth[@]+"${auth[@]}"}
+  ipa="$(find "$out/export" -maxdepth 1 -name '*.ipa' | head -1)"
+  [ -n "$ipa" ] || die "the export wrote no .ipa"
+  echo "Development-signed for the team's registered devices, nothing sent to App Store Connect: $ipa"
+  exit 0
+fi
+
+if [ "$upload" = 0 ]; then
+  if [ "$unsigned" = 1 ]; then echo "Unsigned archive, nothing sent to App Store Connect: $archive"; else echo "Signed archive, nothing sent to App Store Connect: $archive"; fi
+  exit 0
+fi
+
+cp "$root/apps/phone/ios/Config/ExportOptions-TestFlight.plist" "$options"
+run_logged upload xcodebuild -exportArchive \
+  -archivePath "$archive" -exportOptionsPlist "$options" -exportPath "$out/export" \
+  -allowProvisioningUpdates ${auth[@]+"${auth[@]}"}
+echo "Uploaded Ardia for iPhone (Expo) $release_version ($build) to App Store Connect."

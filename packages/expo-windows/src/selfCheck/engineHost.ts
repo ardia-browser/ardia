@@ -7,6 +7,7 @@ import { requireNativeModule } from "../modules";
 import { expectEqual, expectTrue, type Check } from "./check";
 import { popupChecks } from "./enginePopups";
 import { comparable } from "./engineCalls";
+import { timedCall } from "./engineSleep";
 import { fieldFocusedIn } from "../appKeyboard";
 import { textFocusForCheck } from "../textFocus";
 
@@ -137,21 +138,21 @@ const withEngine: Check[] = [
     name: "engine: two pages of one window show at once, each in its own page window",
     async run() {
       const windowId = await firstWindow();
-      const made = await hostCall<{ tab?: unknown }>("tab.create", { key: SECOND_PAGE_KEY, url: PAGE_URL, profile: "" }, windowId);
+      const made = await timedCall<{ tab?: unknown }>("tab.create", { key: SECOND_PAGE_KEY, url: PAGE_URL, profile: "" }, windowId);
       expectTrue(typeof made.tab === "number" && made.tab > 0, `tab.create said ${JSON.stringify(made)}`);
-      await hostCall("tab.show", { key: PAGE_KEY, visible: true, unit: "px", x: 40, y: 60, width: 300, height: 240 }, windowId);
-      await hostCall("tab.show", { key: SECOND_PAGE_KEY, visible: true, unit: "px", x: 360, y: 60, width: 280, height: 220 }, windowId);
-      const both = (await hostCall<{ tabs: ListedTab[] }>("tabs.list")).tabs;
+      await timedCall("tab.show", { key: PAGE_KEY, visible: true, unit: "px", x: 40, y: 60, width: 300, height: 240 }, windowId);
+      await timedCall("tab.show", { key: SECOND_PAGE_KEY, visible: true, unit: "px", x: 360, y: 60, width: 280, height: 220 }, windowId);
+      const both = (await timedCall<{ tabs: ListedTab[] }>("tabs.list")).tabs;
       const first = both.find((tab) => tab.key === PAGE_KEY);
       const second = both.find((tab) => tab.key === SECOND_PAGE_KEY);
       expectEqual({ shown: first?.shown, width: first?.width, height: first?.height }, { shown: true, width: 300, height: 240 }, "the first page while the second shows");
       expectEqual({ shown: second?.shown, width: second?.width, height: second?.height }, { shown: true, width: 280, height: 220 }, "the second page");
-      await hostCall("tab.show", { key: SECOND_PAGE_KEY, visible: false }, windowId);
-      const after = (await hostCall<{ tabs: ListedTab[] }>("tabs.list")).tabs;
+      await timedCall("tab.show", { key: SECOND_PAGE_KEY, visible: false }, windowId);
+      const after = (await timedCall<{ tabs: ListedTab[] }>("tabs.list")).tabs;
       expectEqual(after.find((tab) => tab.key === PAGE_KEY)?.shown, true, "the first page after the second hid");
       expectEqual(after.find((tab) => tab.key === SECOND_PAGE_KEY)?.shown, false, "the second page after it hid");
-      await hostCall("tab.show", { key: PAGE_KEY, visible: false }, windowId);
-      await hostCall("tab.close", { key: SECOND_PAGE_KEY });
+      await timedCall("tab.show", { key: PAGE_KEY, visible: false }, windowId);
+      await timedCall("tab.close", { key: SECOND_PAGE_KEY });
     },
   },
   {

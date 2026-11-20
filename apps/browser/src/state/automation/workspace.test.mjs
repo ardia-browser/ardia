@@ -572,7 +572,7 @@ test("workspace with usage: each tab gets its process id, CPU and memory, and a 
     const plain = (await call("workspace", {})).result;
     const first = (tree) => tree.windows.at(-1).spaces[0].tabs;
     assert.equal("pid" in first(plain)[0], false);
-    assert.match((await call("workspace", { usage: "yes" })).error.message, /usage is true or false/);
+    assert.match((await call("workspace", { usage: "yes" })).error.message, /usage must be a boolean/);
     const id = ++nextId;
     const before = stub.controlSocket.replies.length;
     stub.emitControlRequest({ connection: 7, generation: stub.controlSocket.generation, line: JSON.stringify({ id, method: "workspace", params: { usage: true } }) });

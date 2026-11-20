@@ -20,11 +20,11 @@ export function tabViewport(rect: Bounds, viewport: { width: number; height: num
   return { rect: finite ? { x: rect.x, y: rect.y, width: Math.max(0, rect.width), height: Math.max(0, rect.height) } : { x: 0, y: 0, width: 0, height: 0 }, visible: visible && intersects };
 }
 
-function plainViewport(element: HTMLElement, rect: DOMRect, viewport: TabViewport, cover: OverlayCover): TabViewport {
-  if (!viewport.visible) return viewport;
+function plainViewport(element: HTMLElement, rect: DOMRect, viewport: TabViewport, cover: OverlayCover): { viewport: TabViewport; covered: boolean } {
+  if (!viewport.visible) return { viewport, covered: false };
   for (let parent: HTMLElement | null = element; parent; parent = parent.parentElement) {
     const style = getComputedStyle(parent);
-    if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return { ...viewport, visible: false };
+    if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return { viewport: { ...viewport, visible: false }, covered: false };
   }
   const insetX = Math.min(16, rect.width / 4);
   const insetY = Math.min(16, rect.height / 4);
@@ -34,26 +34,28 @@ function plainViewport(element: HTMLElement, rect: DOMRect, viewport: TabViewpor
   const bottom = Math.min(window.innerHeight, rect.bottom) - insetY;
   const dismiss = document.querySelector<HTMLElement>(EXTENSION_POPUP_DISMISS);
   const points = [[left, top], [right, top], [left, bottom], [right, bottom], [(left + right) / 2, (top + bottom) / 2]] as const;
-  const seen = points.map(([x, y]): "shown" | "page" | "covered" => {
+  const seen = points.map(([x, y]): "shown" | "page" | "covered" | "missed" => {
     if (cover.overlayAt(x, y)) return "shown";
     const hit = document.elementFromPoint(x, y);
-    if (!hit) return "covered";
+    if (!hit) return "missed";
     if (hit === element || element.contains(hit) || !!dismiss?.contains(hit)) return "shown";
     return hit.closest?.(STACKED_PAGE) ? "page" : "covered";
   });
-  return seen.includes("shown") && !seen.includes("covered") ? viewport : { ...viewport, visible: false };
+  const coveredInPage = points.some(([x, y], index) => seen[index] === "covered" && x >= rect.left && x < rect.right && y >= rect.top && y < rect.bottom);
+  return seen.includes("shown") && !seen.includes("covered") && !seen.includes("missed") ? { viewport, covered: false } : { viewport: { ...viewport, visible: false }, covered: coveredInPage };
 }
 
 export type OverlayCover = { overlayAt: (x: number, y: number) => boolean; overlayElements: () => readonly Element[] };
 
-export function watchTabViewport(element: HTMLElement, visible: () => boolean, report: (viewport: TabViewport) => void, cover: OverlayCover) {
+export function watchTabViewport(element: HTMLElement, visible: () => boolean, report: (viewport: TabViewport, covered: boolean) => void, cover: OverlayCover) {
   let frame = 0;
   let stopped = false;
   const measure = () => {
     if (stopped) return;
     const rect = element.getBoundingClientRect();
     const viewport = tabViewport(rect, { width: window.innerWidth, height: window.innerHeight }, visible() && !document.hidden && element.isConnected);
-    report(plainViewport(element, rect, viewport, cover));
+    const plain = plainViewport(element, rect, viewport, cover);
+    report(plain.viewport, plain.covered);
     if (animating()) measureNextFrame();
   };
   const animating = () => !!document.getAnimations?.().some((animation) => {

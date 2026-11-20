@@ -1,0 +1,29 @@
+#!/bin/bash
+# sign-release-apk <apk> <signed apk>
+# Signs an Android APK with the release key from three environment variables and never writes the password anywhere:
+# ANDROID_RELEASE_KEYSTORE_B64 (a PKCS12 keystore, base64), ANDROID_RELEASE_KEYSTORE_PASSWORD (store and key share it)
+# and ANDROID_RELEASE_KEY_ALIAS. The keystore is decoded into a private folder under TMPDIR that is removed on exit,
+# and apksigner reads the password from that one variable for the store and the key (env:, not file:, since apksigner
+# reads a second --key-pass from the same file's next line). v1 to v3 signing, no v4 file. Prints the signer's
+# certificate SHA-256. Uses ANDROID_HOME's newest build-tools.
+set -euo pipefail
+if [ $# -ne 2 ] || [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
+  sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'
+  [ $# -eq 1 ] && { [ "$1" = "--help" ] || [ "$1" = "-h" ]; } && exit 0
+  exit 64
+fi
+unsigned="$1"
+signed="$2"
+for needed in ANDROID_RELEASE_KEYSTORE_B64 ANDROID_RELEASE_KEYSTORE_PASSWORD ANDROID_RELEASE_KEY_ALIAS; do
+  [ -n "${!needed:-}" ] || { echo "sign-release-apk: $needed is empty" >&2; exit 1; }
+done
+[ -f "$unsigned" ] || { echo "sign-release-apk: no APK at $unsigned" >&2; exit 1; }
+sdk="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+tools="$(ls -d "$sdk"/build-tools/* | sort -V | tail -1)"
+keys="$(umask 077 && mktemp -d "${TMPDIR:-/tmp}/release-keys.XXXXXX")"
+trap 'rm -rf "$keys"' EXIT
+(umask 077 && printf '%s' "$ANDROID_RELEASE_KEYSTORE_B64" | base64 -d > "$keys/release.p12")
+"$tools/apksigner" sign --ks "$keys/release.p12" --ks-type PKCS12 --ks-key-alias "$ANDROID_RELEASE_KEY_ALIAS" \
+  --ks-pass env:ANDROID_RELEASE_KEYSTORE_PASSWORD --key-pass env:ANDROID_RELEASE_KEYSTORE_PASSWORD \
+  --v4-signing-enabled false --out "$signed" "$unsigned"
+"$tools/apksigner" verify --print-certs "$signed" | sed -n 's/.*certificate SHA-256 digest: //p' | head -1

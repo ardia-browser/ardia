@@ -1,7 +1,11 @@
 #ifndef ARDIA_WIN_MAIN_H_
 #define ARDIA_WIN_MAIN_H_
 
+#include <string>
+
 namespace ardia_win {
+
+void NoteForTest(const std::string& line);
 
 void BeforeChromeMain();
 

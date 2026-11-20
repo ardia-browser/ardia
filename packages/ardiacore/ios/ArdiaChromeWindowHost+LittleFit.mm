@@ -13,7 +13,7 @@ NSRect ToNSRect(ardia_little_fit::Rect rect) { return NSMakeRect(rect.x, rect.y,
 
 @implementation ArdiaChromeWindowHost (LittleFit)
 
-+ (NSValue *)littleFrameFittingLandingOf:(NSWindow *)window minimumSize:(NSSize)minimum {
++ (NSValue *)littleFrameFittingLandingOf:(NSWindow *)window minimumSize:(NSSize)minimum wantedSize:(NSValue *)wanted placedFrame:(NSValue *)placed {
   NSArray<NSScreen *> *screens = NSScreen.screens;
   if (window.windowNumber <= 0 || screens.count == 0) return nil;
   NSArray *list = CFBridgingRelease(CGWindowListCopyWindowInfo(kCGWindowListOptionIncludingWindow, (CGWindowID)window.windowNumber));
@@ -25,8 +25,14 @@ NSRect ToNSRect(ardia_little_fit::Rect rect) { return NSMakeRect(rect.x, rect.y,
   std::vector<ardia_little_fit::Display> displays;
   for (NSScreen *screen in screens) displays.push_back({FromNSRect(screen.frame), FromNSRect(screen.visibleFrame)});
   ardia_little_fit::Rect fitted;
-  if (!ardia_little_fit::FitLanding(landed, displays, {minimum.width, minimum.height}, &fitted)) return nil;
+  const ardia_little_fit::Placement placement = {{wanted.sizeValue.width, wanted.sizeValue.height}, FromNSRect(placed.rectValue)};
+  if (!ardia_little_fit::FitLanding(landed, displays, {minimum.width, minimum.height}, wanted && placed ? &placement : nullptr, &fitted))
+    return nil;
   return [NSValue valueWithRect:ToNSRect(fitted)];
+}
+
++ (NSRect)littleFrameForSize:(NSSize)size minimumSize:(NSSize)minimum visibleFrame:(NSRect)visible {
+  return ToNSRect(ardia_little_fit::Fit(FromNSRect(visible), {size.width, size.height}, {minimum.width, minimum.height}));
 }
 
 @end

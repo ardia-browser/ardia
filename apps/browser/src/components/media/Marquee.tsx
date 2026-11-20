@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, Text, View, type TextStyle } from "react-native";
-import { curve } from "../ui/motion";
+import { curve, nativeLoop } from "../ui/motion";
 import { fadeStepColor, mediaMotion } from "./tokens";
 
 const FADE = 12;
@@ -19,8 +19,16 @@ export function useMarqueeGroup(resetKey: string, iterations = -1): MarqueeGroup
     progress.setValue(0);
     if (max < 1 || iterations === 0) return;
     const duration = (max / mediaMotion.marqueeSpeed) * 1000;
-    const leg = (toValue: number) => Animated.timing(progress, { toValue, duration, easing: curve.linear, useNativeDriver: true });
-    const loop = Animated.loop(Animated.sequence([Animated.delay(mediaMotion.marqueePause), leg(1), Animated.delay(mediaMotion.marqueePause), leg(0)]), { iterations });
+    const loop = nativeLoop(
+      progress,
+      [
+        { to: 0, ms: mediaMotion.marqueePause },
+        { to: 1, ms: duration, easing: curve.linear },
+        { to: 1, ms: mediaMotion.marqueePause },
+        { to: 0, ms: duration, easing: curve.linear },
+      ],
+      iterations,
+    );
     loop.start();
     return () => loop.stop();
   }, [max, resetKey, iterations]);

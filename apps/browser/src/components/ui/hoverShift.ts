@@ -49,13 +49,26 @@ function label(f: Fiber): string {
   return `${names.reverse().join(" › ")} (${nameOf(f)})`;
 }
 
-function around(f: Fiber): Map<Host, Fiber> {
-  let parent = f.return;
-  while (parent && !isHost(parent)) parent = parent.return;
+function under(parent: Fiber | null): Map<Host, Fiber> {
   const out = new Map<Host, Fiber>();
   if (!parent) return out;
   for (const x of fibers(parent, (x) => isHost(x) && x.return?.type === HoverSlot)) if (isHost(x)) out.set(x.stateNode as Host, x);
   return out;
+}
+
+function around(f: Fiber): Map<Host, Fiber> {
+  let parent = f.return;
+  while (parent && !isHost(parent)) parent = parent.return;
+  return under(parent);
+}
+
+function aroundNow(f: Fiber): Map<Host, Fiber> {
+  let parent = f.return;
+  while (parent && !isHost(parent)) parent = parent.return;
+  const view = parent?.stateNode;
+  if (!view) return new Map();
+  for (const root of roots()) for (const x of fibers(root)) if (x.stateNode === view && isHost(x)) return under(x);
+  return new Map();
 }
 
 const measure = (h: Host) =>
@@ -86,6 +99,15 @@ function opensOnHover(host: Fiber): boolean {
     if (x.type === HoverSlot) return x.memoizedProps?.reserve === "hover";
   }
   return false;
+}
+
+export function slotAtRest(host: Fiber, now: Frame): Frame | null {
+  for (let x = host.return; x && !isHost(x); x = x.return) {
+    if (x.type !== HoverSlot) continue;
+    if (x.memoizedProps?.reserve !== "hover") return null;
+    return [x.memoizedProps.align === "start" ? now[0] : right(now), now[1], 0, now[3]];
+  }
+  return null;
 }
 
 type Measured = { host: Fiber; was: Frame | null; now: Frame | null };
@@ -160,7 +182,13 @@ export async function check({ scopes, settleFrames = 3 }: { scopes?: string[]; s
     props.onMouseEnter();
     await frames(settleFrames);
     const after = await Promise.all(views.map(([h]) => measure(h)));
-    const measured = views.map(([, host], i) => ({ host, was: before[i] ?? null, now: after[i] ?? null }));
+    const measured: Measured[] = views.map(([, host], i) => ({ host, was: before[i] ?? null, now: after[i] ?? null }));
+    for (const [view, host] of aroundNow(fiber)) {
+      if (views.some(([known]) => known === view)) continue;
+      const now = await measure(view);
+      const was = now && slotAtRest(host, now);
+      if (was) measured.push({ host, was, now });
+    }
     const openings = hoverSlotOpenings(measured);
     for (const { host, was, now } of measured) {
       if (was && now && moved(was, now) && !openings.has(host)) shifts.push({ scope, hovered: label(fiber), view: label(host), before: was, after: now });

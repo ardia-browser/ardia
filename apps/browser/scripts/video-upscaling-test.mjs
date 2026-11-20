@@ -9,7 +9,8 @@ in every state the gate decides, read from its trace events (ArdiaVSR.* in the "
   --keep        leave the instance up; --attach reuses it (seconds instead of a launch)
   --seconds N   how long each check watches (default 4)
 
-Needs ffmpeg (the clips are made once into DIR/media). Each check prints PASS/FAIL with what the GPU did: jobs (new
+The size checks (on-…, portrait-720) size their boxes in screen pixels from the instance's own devicePixelRatio, so
+they ask the same of a 1x and a 2x screen. Needs ffmpeg (the clips are made once into DIR/media). Each check prints PASS/FAIL with what the GPU did: jobs (new
 frames upscaled, with their median wall and GPU ms), cache hits (redraws that reused an output), setups and the gate.`;
 import { execFileSync } from "node:child_process";
 import { createReadStream, existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
@@ -24,10 +25,12 @@ const { values: flags, positionals } = parseArgs({
   options: { out: { type: "string" }, keep: { type: "boolean" }, attach: { type: "boolean" }, seconds: { type: "string" }, list: { type: "boolean" }, help: { type: "boolean", short: "h" } },
 });
 const CHECKS = {
-  "on-480": "854×480 H.264 in a 1280×720 box: VideoToolbox super resolution, then MetalFX to the box",
-  "on-360": "640×360 H.264 in a 1280×720 box",
-  "on-720": "1280×720 H.264 in a 1600×900 box: VideoToolbox ×1.5, then MetalFX",
-  "on-1080": "1920×1080 H.264 in a 1600×900 box on a 2x screen: MetalFX only",
+  "on-480": "854×480 H.264 drawn at 1708×960 screen pixels: VideoToolbox super resolution ×2",
+  "on-360": "640×360 H.264 drawn at 1280×720 screen pixels: ×2",
+  "on-720": "1280×720 H.264 drawn at 1920×1080 screen pixels: VideoToolbox ×1.5",
+  "portrait-720": "720×1280 H.264 drawn at 1080×1920 screen pixels: portrait 720p still counts as 720p, ×1.5",
+  "on-1080": "1080p source drawn at 2880×1620 screen pixels (×1.5): nothing, a source over 720p is never upscaled",
+  "on-768": "1366×768 source, just over 720p, drawn at 2049×1152 screen pixels (×1.5): nothing",
   "mse-720": "the 720p clip through Media Source Extensions",
   "vp9-480": "854×480 VP9 (WebM)",
   "hevc-720": "1280×720 HEVC, decoded into a frame with padding rows: VideoToolbox on a copy, the GPU process never crashes",
@@ -80,10 +83,10 @@ function makeClips() {
   if (!existsSync(master))
     ff("-f", "lavfi", "-i", "mandelbrot=s=1920x1080:r=30:maxiter=128:start_scale=2:end_scale=0.2", "-f", "lavfi", "-i", "testsrc2=s=640x360:r=30",
       "-filter_complex", "[0][1]overlay=x='100+200*sin(t/3)':y=80,format=yuv420p", "-t", "8", "-c:v", "libx264", "-preset", "veryfast", "-crf", "16", ...tags, master);
-  for (const size of ["640x360", "854x480", "1280x720", "1920x1080"]) {
+  for (const size of ["640x360", "854x480", "1280x720", "720x1280", "1366x768", "1920x1080"]) {
     const f = join(media, `clip_${size}.mp4`);
     if (!existsSync(f))
-      ff("-i", master, "-vf", `scale=${size}:flags=area,format=yuv420p`, "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", ...tags,
+      ff("-i", master, "-vf", `scale=${size}:flags=area,setsar=1,format=yuv420p`, "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", ...tags,
         "-bsf:v", "h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1", "-movflags", "+faststart", f);
   }
   const frag = join(media, "clip_1280x720_frag.mp4");
@@ -290,12 +293,29 @@ async function playing(name, query, expectFactor) {
     }
   });
 }
+async function overLimit(name, query) {
+  await check(name, async () => {
+    const v = await warm(query);
+    try {
+      const w = await watch();
+      if (w.jobs || w.hits || w.setups.length) throw new Error(`a source over 720p was processed: ${fmt(w)}`);
+      if (!(await gate(v)).allowed) throw new Error("the gate is closed");
+      return `gate open, ${fmt(w)}`;
+    } finally {
+      await closeTab(v.id);
+    }
+  });
+}
 
 await engine("webView.setVideoUpscaling", { enabled: true });
-await playing("on-480", "src=clip_854x480.mp4&w=1280&h=720", 2);
-await playing("on-360", "src=clip_640x360.mp4&w=1280&h=720", 2);
-await playing("on-720", "src=clip_1280x720.mp4&w=1600&h=900", 1.5);
-await playing("on-1080", "src=clip_1920x1080.mp4&w=1600&h=900", 0);
+const devicePixelRatio = await instance.page("about:blank", { timeout: 3000 }).then((p) => p.eval("devicePixelRatio")).catch(() => 2);
+const drawnAt = (clip, width, height) => `src=${clip}&w=${width / devicePixelRatio}&h=${height / devicePixelRatio}`;
+await playing("on-480", drawnAt("clip_854x480.mp4", 1708, 960), 2);
+await playing("on-360", drawnAt("clip_640x360.mp4", 1280, 720), 2);
+await playing("on-720", drawnAt("clip_1280x720.mp4", 1920, 1080), 1.5);
+await playing("portrait-720", drawnAt("clip_720x1280.mp4", 1080, 1920), 1.5);
+await overLimit("on-1080", drawnAt("clip_1920x1080.mp4", 2880, 1620));
+await overLimit("on-768", drawnAt("clip_1366x768.mp4", 2049, 1152));
 await playing("mse-720", "src=clip_1280x720_frag.mp4&mse=1&w=1600&h=900");
 await playing("vp9-480", "src=clip_854x480.webm&w=1280&h=720");
 await playing("hevc-720", "src=clip_1280x720_hevc.mp4&w=1920&h=1080", 1.5);
@@ -320,7 +340,7 @@ await check("paused", async () => {
 });
 
 await check("native", async () => {
-  const dpr = await instance.page("about:blank", { timeout: 3000 }).then((p) => p.eval("devicePixelRatio")).catch(() => 2);
+  const dpr = devicePixelRatio;
   const v = await warm(`src=clip_854x480.mp4&w=${854 / dpr}&h=${480 / dpr}`);
   try {
     const w = await watch();

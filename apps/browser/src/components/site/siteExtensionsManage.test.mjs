@@ -58,7 +58,7 @@ test("the Extensions header has a visible Manage button that closes the panel, t
   assert.deepEqual(events, ["close"]);
   assert.ok(windows.open.has(SETTINGS_WINDOW_ID));
   const nav = useSettingsNav.getState();
-  assert.equal(nav.pane, "extensions");
+  assert.equal(nav.pane, "profiles");
   assert.equal(nav.profileId, work);
   usage.sessionEnding();
   assert.deepEqual((await usageCounts()).map((e) => e.extensions_manage_opens_from_site_controls), [1]);

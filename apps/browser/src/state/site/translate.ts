@@ -3,14 +3,14 @@ import { translation } from "../../platform/text";
 import { create } from "zustand";
 import { webviews } from "../../platform/webviews";
 import { useBrowser } from "../browser/store";
-import { changedIds } from "../browser/changes";
+import { liveOf, onLiveChange } from "../tabs/tabLive";
 import { incognitoOriginal, isIncognitoProfile } from "../browser/model";
 import { hideKeyedToast, showToast } from "../app/toasts";
 import { translatorCall } from "./pageTranslator";
 import { stopDocumentWatch, watchDocument } from "./documentWatch";
 import { drainPassages, type PageBatch, type Passage, type Translated } from "./translateDrain";
 import { errorText } from "../../lib/errors";
-import { capture } from "../telemetry/client";
+import { capture, consentToken, type ConsentToken } from "../telemetry/client";
 
 export { translation } from "../../platform/text";
 
@@ -196,6 +196,7 @@ function toast(tabId: string, title: string, message?: string, progress = false)
 }
 
 export async function translatePage(tabId: string, target = defaultTarget()) {
+  const consent = consentToken();
   const tab = useBrowser.getState().tabs[tabId];
   if (!translation || !tab || !webviews.get(tabId)) return;
   await revertPage(tabId, { quiet: true });
@@ -229,14 +230,14 @@ export async function translatePage(tabId: string, target = defaultTarget()) {
     if (!done) {
       if (holds(tabId, mine)) toIdle(tabId);
       if (shown && stateOf(tabId).status === "idle") hideKeyedToast(tab.windowId, PROGRESS_TOAST);
-      return void reportFirstPass("stopped", started, progress);
+      return void reportFirstPass("stopped", started, progress, consent);
     }
-    reportFirstPass("done", started, progress);
+    reportFirstPass("done", started, progress, consent);
     if (holds(tabId, mine)) set(tabId, { status: "translated", source, target, token: mine });
     toast(tabId, `Translated to ${languageName(target)}`);
     void follow(tabId, mine);
   } catch (error) {
-    if (started) reportFirstPass("failed", started, progress);
+    if (started) reportFirstPass("failed", started, progress, consent);
     const replaced = token !== null && !holds(tabId, token);
     if (shown && (!replaced || stateOf(tabId).status === "idle")) hideKeyedToast(tab.windowId, PROGRESS_TOAST);
     if (replaced) return;
@@ -246,14 +247,14 @@ export async function translatePage(tabId: string, target = defaultTarget()) {
   }
 }
 
-function reportFirstPass(outcome: "done" | "stopped" | "failed", started: number, progress: Progress) {
+function reportFirstPass(outcome: "done" | "stopped" | "failed", started: number, progress: Progress, consent: ConsentToken | null) {
   capture("translate_finished", {
     outcome,
     first_pass_ms: Date.now() - started,
     first_text_ms: progress.firstAppliedAt === null ? null : progress.firstAppliedAt - started,
     passages: progress.applied,
     unlinked_passages: progress.unlinked,
-  });
+  }, consent);
 }
 
 export async function revertPage(tabId: string, { quiet = false } = {}) {
@@ -287,7 +288,7 @@ function watchTabDocument(tabId: string) {
     tabId,
     {
       holds: () => holds(tabId, token),
-      loading: () => !!useBrowser.getState().live[tabId]?.isLoading,
+      loading: () => liveOf(tabId).isLoading,
       sameDocument: () => webviews.get(tabId)?.evaluate<boolean>(translatorCall("holds", token)) ?? Promise.resolve(undefined),
       release: () => toIdle(tabId),
       wait: (ms) => new Promise((r) => setTimeout(r, ms)),
@@ -319,14 +320,13 @@ export function startTranslate() {
   if (!translation) return () => {};
   const model = translation;
   const stopCancelling = cancelEndedTranslations((token) => void model.cancel(token).catch(() => {}));
+  const stopLoadWatch = onLiveChange((id, live, prev) => {
+    if (live.isLoading === prev.isLoading || !useBrowser.getState().tabs[id]) return;
+    if (live.isLoading) return watchTabDocument(id);
+    stopDocumentWatch(id);
+    void detect(id).catch(() => {});
+  });
   const stopWatching = useBrowser.subscribe((s, prev) => {
-    for (const id of changedIds(s.live, prev.live)) {
-      if (s.live[id] && prev.live[id]?.isLoading && !s.live[id].isLoading) {
-        stopDocumentWatch(id);
-        void detect(id).catch(() => {});
-      }
-      if (s.live[id]?.isLoading && prev.live[id] && !prev.live[id].isLoading) watchTabDocument(id);
-    }
     if (s.tabs === prev.tabs) return;
     const gone = Object.keys(useTranslate.getState()).filter((id) => !s.tabs[id]);
     for (const id of gone) {
@@ -337,6 +337,7 @@ export function startTranslate() {
   });
   return () => {
     stopCancelling();
+    stopLoadWatch();
     stopWatching();
   };
 }

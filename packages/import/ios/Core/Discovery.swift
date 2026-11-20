@@ -108,6 +108,7 @@ public struct BrowserProfile: Codable, Equatable, Sendable {
   public var available: [ImportKind]
   public var spaces: [SpaceSummary]?
   public var tabsNeedKey = false
+  public var diaSidebar = false
 }
 
 public struct BrowserSource: Codable, Equatable, Sendable {
@@ -165,6 +166,13 @@ public struct BrowserDiscovery {
       for i in profiles.indices {
         profiles[i].available = profiles[i].available.filter { $0 != .tabs } + [.tabs, .pinnedTabs]
         profiles[i].tabsNeedKey = false
+      }
+    }
+    if def.id == BrowserDefinition.dia.id {
+      for i in profiles.indices where DiaSidebar.exists(profile: URL(fileURLWithPath: profiles[i].path, isDirectory: true)) {
+        profiles[i].diaSidebar = true
+        profiles[i].tabsNeedKey = true
+        profiles[i].available += DiaSidebar.kinds.filter { !profiles[i].available.contains($0) }
       }
     }
     let denied = def.family != .safari && profiles.isEmpty && dataDirectory(def).map { root in
@@ -301,8 +309,31 @@ public struct BrowserDiscovery {
     applicationSupport.appendingPathComponent("Arc/StorableSidebar.json")
   }
 
+  public func arcFile(_ name: String) -> URL {
+    applicationSupport.appendingPathComponent("Arc", isDirectory: true).appendingPathComponent(name)
+  }
+
+  public func arcPreferencesURL() -> URL {
+    applicationSupport.deletingLastPathComponent().appendingPathComponent("Preferences/\(ArcExtras.preferencesDomain).plist")
+  }
+
+  func arcExtraKinds(spaces: [String: String]) -> [ImportKind] {
+    var kinds: [ImportKind] = []
+    if let data = ArcExtras.boundedRead(arcFile(ArcExtras.routingFile), within: arcFile(""), limit: ArcExtras.routingBytes),
+       let routing = try? ArcExtras.routing(data, spaces: spaces), !routing.rules.isEmpty || routing.skipped > 0 || routing.changesFallback {
+      kinds.append(.linkRules)
+    }
+    if FileManager.default.fileExists(atPath: arcFile(ArcExtras.archiveFile).path) || ArcExtras.threshold(preferences: arcPreferencesURL()) != nil {
+      kinds.append(.archive)
+    }
+    return kinds
+  }
+
   func attachArcSpaces(_ profiles: inout [BrowserProfile]) {
-    guard let data = try? Data(contentsOf: arcSidebarURL()), let sidebar = try? ArcSidebar.parse(data) else { return }
+    let sidebar = ArcExtras.boundedRead(arcSidebarURL(), within: arcFile(""), limit: ArcExtras.sidebarBytes).flatMap { try? ArcSidebar.parse($0) }
+    let extras = arcExtraKinds(spaces: Dictionary((sidebar?.spaces ?? []).map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first }))
+    for i in profiles.indices { profiles[i].available += extras }
+    guard let sidebar else { return }
     for i in profiles.indices {
       let spaces = sidebar.spaces.filter { $0.profileId == profiles[i].id }
       profiles[i].spaces = spaces.map {

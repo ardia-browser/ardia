@@ -3,6 +3,7 @@ import type { LaunchClaim } from "./appServices";
 import { showToast } from "../../browser/src/state/app/toasts";
 import { useOnboarding } from "../../browser/src/state/onboarding/onboarding";
 import { noteUnsandboxedLaunch } from "../../browser/src/state/telemetry/updateCounts.ts";
+import { consentToken } from "../../browser/src/state/telemetry/client";
 
 export function sandboxNotice(decision: string | undefined): { title: string; message: string } | null {
   if (!decision) return null;
@@ -28,8 +29,9 @@ const onboarding: OnboardingWatch = {
 
 export async function noticeUnsandboxedLaunch(host: ArdiaHost, windowId: string, launch: Promise<LaunchClaim>, show = showToast, intro: OnboardingWatch = onboarding) {
   const notice = sandboxNotice(host.bootstrap.sandboxDecision);
+  const consent = consentToken();
   if (!notice || (await launch) !== "ran") return false;
-  noteUnsandboxedLaunch();
+  noteUnsandboxedLaunch(consent);
   if (intro.open()) await intro.closed();
   show(windowId, notice.title, notice.message, { icon: "exclamationmark.triangle", sticky: true, key: "linux-sandbox" });
   return true;

@@ -1,3 +1,4 @@
+import { consentToken } from "../telemetry/client";
 import { onExtensionActionPopup, onExtensionActionShortcut, onExtensionSidePanel, onExtensionsChanged, onExtensionTabsRequest } from "../../platform/extensions";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { shownPageId } from "../peek/peek";
@@ -21,6 +22,7 @@ import {
   refreshExtensions,
   refreshExtensionsAfterChange,
   wantedSidePanels,
+  watchSidePanelCards,
   syncSidePanel,
   useExtensions,
   windowExtensions,
@@ -29,14 +31,14 @@ import {
 export function startExtensionsBridge() {
   onExtensionTabsRequest(openRequestedTab);
   startExtensionSearchEngines();
-  onExtensionsChanged(({ profile }) => void refreshExtensions(profile));
-  onSyncedExtensionChange((profile) => void refreshExtensionsAfterChange(profile));
+  onExtensionsChanged(({ profile }) => void refreshExtensions(profile, null));
+  onSyncedExtensionChange((profile) => void refreshExtensionsAfterChange(profile, null));
 
   const loadProfiles = (s: BrowserState) => {
     for (const id of s.windowOrder) {
       const profile = extensionProfile(s, id);
       if (!isPrivate(s, id)) reportExtensionsLoaded(profile);
-      if (watchActionsOf(profile)) void refreshExtensions(profile);
+      if (watchActionsOf(profile)) void refreshExtensions(profile, consentToken());
     }
   };
   loadProfiles(useBrowser.getState());
@@ -71,6 +73,7 @@ function startActionPopups() {
 }
 
 function startSidePanels() {
+  watchSidePanelCards();
   onExtensionSidePanel(({ tabId, extensionId, open }) => {
     const windowId = tabId ? useBrowser.getState().tabs[tabId]?.windowId : undefined;
     if (!windowId) return;

@@ -4,7 +4,7 @@ import { inPinnedContainer, isIncognitoProfile, pinKeyOf } from "../browser/mode
 import { asleepFrom, frozenOn, hasPage, holderOfPage, needsPage, withNavigationAt, wokenPage } from "../tabs/pageSession";
 import { splitOf, splitTabIds } from "../splits/splits";
 import { sharedListTab } from "../tabs/tabShare";
-import type { BrowserWindow, Tab, TabGroup, TabLive } from "../browser/types";
+import type { BrowserWindow, Tab, TabGroup } from "../browser/types";
 import { isRegularWindow } from "../windows/small";
 import { isTopApp, sameTopApp, sharingChanged } from "./topApps";
 
@@ -117,11 +117,10 @@ export function swapPinPage(s: BrowserState, id: string): { state: BrowserState;
     const next = swapIds(ids, a, b);
     if (next !== ids) selection = { ...selection, [w]: next };
   }
-  const live = { ...s.live, [b]: { ...(s.live[a] ?? s.live[b]!) } };
-  return { state: { ...s, tabs, windows, groups, selection, live }, holderId: a };
+  return { state: { ...s, tabs, windows, groups, selection }, holderId: a };
 }
 
-export function frozenCopiesOf(s: BrowserState, holderId: string): Tab[] {
+export function frozenCopiesOf(s: Pick<BrowserState, "tabs">, holderId: string): Tab[] {
   return frozenIds(s).map((id) => s.tabs[id]!).filter((t) => holderOfPage(t) === holderId);
 }
 
@@ -161,9 +160,6 @@ export function withSharedFamily(s: BrowserState, ids: string[]): string[] {
   }
   return [...out];
 }
-
-const LIVE_KEYS = ["isLoading", "canGoBack", "canGoForward", "playingAudio", "themeColor"] as const;
-const sameLive = (x: TabLive | undefined, y: TabLive | undefined) => !!x && !!y && LIVE_KEYS.every((k) => x[k] === y[k]);
 
 const shownIn = (s: BrowserState, t: Tab) => s.windows[t.windowId]?.profileId === t.profileId && s.windows[t.windowId]?.activeTabIds[t.profileId] === t.id;
 
@@ -214,12 +210,11 @@ function oneOwnerPerPin(s: BrowserState, prev: BrowserState, rejoined: boolean):
 
 export function settleSharedPins(next: BrowserState, prev: BrowserState): BrowserState | null {
   const rejoined = sharingChanged(next, prev);
-  if (!rejoined && next.tabs === prev.tabs && next.live === prev.live && next.windows === prev.windows && next.groups === prev.groups && next.splits === prev.splits) return null;
+  if (!rejoined && next.tabs === prev.tabs && next.windows === prev.windows && next.groups === prev.groups && next.splits === prev.splits) return null;
   const s = oneOwnerPerPin(next, prev, rejoined);
   const frozen = rejoined ? frozenIds(s) : frozenAfter(s, prev);
   if (!frozen.length) return s === next ? null : s;
   let tabs = s.tabs;
-  let live = s.live;
   let windows = s.windows;
   const edit = (id: string, patch: Partial<Tab>) => {
     if (tabs === s.tabs) tabs = { ...s.tabs };
@@ -245,13 +240,9 @@ export function settleSharedPins(next: BrowserState, prev: BrowserState): Browse
     }
     const fields = shownFields(holder);
     if ((Object.keys(fields) as (keyof typeof fields)[]).some((k) => t[k] !== fields[k])) edit(id, fields);
-    if (!sameLive(live[id], live[holder.id]) && live[holder.id]) {
-      if (live === s.live) live = { ...s.live };
-      live[id] = { ...live[holder.id]! };
-    }
   }
-  if (tabs === s.tabs && live === s.live && windows === s.windows) return s === next ? null : s;
-  return { ...s, tabs, live, windows };
+  if (tabs === s.tabs && windows === s.windows) return s === next ? null : s;
+  return { ...s, tabs, windows };
 }
 
 export function handPagesOutOfProfile(s: BrowserState, profileId: string): BrowserState {

@@ -23,6 +23,7 @@ import {
   swipeProgress,
 } from "./swipeMotion";
 import { noteSwipeHistoryList } from "../../state/telemetry/swipeHistoryListCounts";
+import { consentToken } from "../../state/telemetry/client";
 
 const SIZE = CAPSULE_SIZE;
 const SIZE_CONFIRMED = CAPSULE_SIZE_CONFIRMED;
@@ -133,6 +134,7 @@ export function SwipeOverlay({ tabId }: { tabId: string }) {
 
   const presentList = async () => {
     const gesture = g.items;
+    const consent = consentToken();
     const items = (await gesture) ?? [];
     if (g.items !== gesture || !g.active || g.list || !g.confirmed || items.length < 2) return;
     const { height } = sizeRef.current;
@@ -146,7 +148,7 @@ export function SwipeOverlay({ tabId }: { tabId: string }) {
     layoutTo(LIST_WIDTH, list.length * ROW + LIST_PAD * 2, listTop(height, list.length, 0), radius.sheet);
     Animated.timing(v.list, { toValue: 1, ...SWIPE_MOTION.list, useNativeDriver: true }).start();
     setShown((s) => (s ? { ...s, list, selected: 0 } : s));
-    noteSwipeHistoryList("opened");
+    noteSwipeHistoryList("opened", consent);
   };
 
   const foldList = () => {

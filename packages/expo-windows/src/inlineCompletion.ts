@@ -10,5 +10,6 @@ export function windowsInlineCompletion(host: () => Pick<WindowsHostModule, "tex
       const composing = await host()?.textComposing().catch(() => true);
       return composing === false ? SHOWN : NOT_WRITTEN;
     },
+    async copyFieldAs() {},
   };
 }

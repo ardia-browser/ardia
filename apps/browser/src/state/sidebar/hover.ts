@@ -1,5 +1,6 @@
 import { hoverHeld } from "../app/transientUi";
 import { noteTabHoverCardShown } from "../telemetry/hoverCardCounts";
+import { consentToken } from "../telemetry/client";
 import { noteSidebarHoverHeld, noteSidebarScrolled } from "../telemetry/sidebarScrollCounts";
 import { sidebarSliding, useDockMotion } from "../windows/dockMotion";
 import { cardReach, pointInRect, type Point, type Rect } from "./hoverAim";
@@ -135,12 +136,13 @@ export function suppressHover(value: boolean) {
 }
 
 async function show(windowId: string, target: Target, mine: number) {
+  const consent = consentToken();
   const anchor = await measureRow(windowId, target.id);
   if (mine !== ticket || suppressed || !anchor || hoverHeld(windowId) || sliding(windowId)) return;
   if (card.pointerOn && sidebarUi().hover) return;
   card.exit = null;
   setSidebarUi({ hover: { windowId, ...target, anchor } });
-  if (target.kind === "tab" || target.kind === "folder") noteTabHoverCardShown();
+  if (target.kind === "tab" || target.kind === "folder") noteTabHoverCardShown(consent);
 }
 
 export function hoverEnter(windowId: string, target: Target) {

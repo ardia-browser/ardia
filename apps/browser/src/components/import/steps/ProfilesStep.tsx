@@ -16,10 +16,13 @@ import {
 import { continueImport } from "../../../state/import/runImport";
 import type { BrowserSource } from "../../../state/import/apply";
 
+const firstSpaceNote =
+  "The first space goes into your selected profile and the others become new profiles. If Personal is your only profile and you haven't changed it, it takes the first space's name, emoji and color instead.";
+
 const spacesNote = (name: string, zen: boolean) =>
   zen
-    ? `Customize which spaces to bring over to ${APP}. Each space becomes a profile, kept with the ${name} profile it comes from: its spaces share that profile's logins, cookies and history, and a space tied to a container gets a profile of its own with that container's Essentials.`
-    : `Customize which spaces to bring over to ${APP}. Each space becomes a profile, and the spaces of one ${name} profile share its logins, cookies, extensions and history, as in ${name}.`;
+    ? `Customize which spaces to bring over to ${APP}. ${firstSpaceNote} The spaces of one ${name} profile share its logins, cookies and history, and a space tied to a container gets a profile of its own with that container's Essentials.`
+    : `Customize which spaces to bring over to ${APP}. ${firstSpaceNote} The spaces of one ${name} profile share its logins, cookies, extensions and history, as in ${name}.`;
 
 function spaceSubtitle(source: BrowserSource, s: ReturnType<typeof spacesOf>[number]) {
   const withSpaces = source.profiles.filter((p) => p.spaces?.length);

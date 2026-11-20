@@ -142,16 +142,22 @@ test("the header's profile name makes room for the menu only when the header hol
   assert.equal(layout(40, true, false).shown, true);
 });
 
-test("the sidebar's header tools: the profile name comes before back and forward beside the window buttons, and with no name they take the whole width", async () => {
+test("the sidebar's header tools hold no profile name: back, forward and reload sit at the right edge as on the Mac, and the full-screen menu takes reload's slot", async () => {
   const { sidebarHeaderSplit } = await import("./profileIndicatorLayout.ts");
-  const split = (width, captionRoom, indicator, menuInHeader = false) => sidebarHeaderSplit({ width, captionRoom, controls: 141, indicator, toggleOnly: 45, menuInHeader });
-  assert.deepEqual(split(190, 0, 34, true), { tools: true, navigation: 114, indicatorRoom: 67 }, "with the hamburger in the header (full screen) it is as before");
-  assert.deepEqual(split(190, 0, 0), { tools: true, navigation: 190, indicatorRoom: 0 }, "a left sidebar with the address bar and one profile: toggle, back, forward and reload fit");
-  assert.deepEqual(split(190, 0, 70), { tools: true, navigation: 111, indicatorRoom: 70 });
-  assert.deepEqual(split(260, 171, 32), { tools: true, navigation: 48, indicatorRoom: 32 });
-  assert.deepEqual(split(320, 171, 75), { tools: true, navigation: 65, indicatorRoom: 75 });
-  assert.deepEqual(split(190, 171, 0), { tools: true, navigation: 45, indicatorRoom: 0 }, "the toggle still fits left of the window buttons at 190 px");
-  assert.deepEqual(split(160, 171, 32), { tools: false, navigation: 0, indicatorRoom: 0 }, "at the 160 px minimum the toggle would sit under the …, so the header tools give way");
+  const slot = { edge: 10, button: 30, pitch: 35 };
+  const split = (width, captionRoom, menuInHeader = false) => sidebarHeaderSplit({ width, captionRoom, controls: 141, toggleOnly: 45, menuInHeader, slot });
+  assert.deepEqual(split(277, 0), { tools: true, navigation: 277, menuLeft: 0 }, "a left sidebar with the address bar: the buttons end at the sidebar's edge");
+  assert.deepEqual(split(190, 0), { tools: true, navigation: 190, menuLeft: 0 });
+  assert.deepEqual(split(260, 171), { tools: true, navigation: 89, menuLeft: 0 }, "a right sidebar stops them short of the window buttons");
+  assert.deepEqual(split(190, 171), { tools: true, navigation: 19, menuLeft: 0 }, "the toggle still fits left of the window buttons at 190 px");
+  assert.deepEqual(split(160, 171), { tools: false, navigation: 0, menuLeft: 0 }, "at the 160 px minimum the toggle would sit under the …, so the header tools give way");
+  const fullScreen = split(277, 0, true);
+  assert.deepEqual(fullScreen, { tools: true, navigation: 242, menuLeft: 236 }, "in full screen the menu sits where reload would, one pitch right of it");
+  assert.equal(fullScreen.navigation - slot.edge - slot.button / 2 + slot.pitch, fullScreen.menuLeft + 16);
+  const narrowest = split(160, 0, true);
+  assert.deepEqual(narrowest, { tools: true, navigation: 125, menuLeft: 119 }, "at the 160 px minimum the menu still sits at the edge");
+  assert.ok(narrowest.navigation - slot.edge - slot.button / 2 + 16 <= narrowest.menuLeft, "and clears the last navigation button's plate");
+  assert.deepEqual(split(60, 0, true),{ tools: true, navigation: 45, menuLeft: 45 }, "a sidebar too narrow for the buttons keeps the menu clear of the toggle");
 });
 
 function clusterHarness() {

@@ -12,6 +12,9 @@ import { toggleNewTabBar } from "../omnibox/newTabBar";
 import { hintWhen, profileItems, sections, windowItems, withAlternate, type Destination } from "./menuParts";
 import { confirmRemovingShared } from "../sharedFolders/removal";
 import { runSharedFolderChoice, sharedFolderMenuItems } from "../sharedFolders/menu";
+import { canSleep, sleepTabsFromMenu } from "../tabs/manualSleep";
+import { groupTabIds } from "./groupPanelRows";
+import { shownLiveOf } from "../tabs/tabLive";
 
 type GroupChoice = Destination | { kind: "color"; color: GroupColor | null };
 
@@ -34,7 +37,7 @@ export function groupColorItems(current: GroupColor | null, siteColor: string | 
 export function groupMenuItems(s: BrowserState, windowId: string, groupId: string): GroupMenuItem[] {
   const g = s.groups[groupId];
   if (!g) return [];
-  const siteColor = g.tabIds.map((id) => s.live[id]?.themeColor).find(Boolean);
+  const siteColor = g.tabIds.map((id) => shownLiveOf(s, id).themeColor).find(Boolean);
   const shown = groupOf(s, activeTabId(s, windowId))?.id === groupId;
   const incognito = isIncognitoProfile(g.profileId);
   return sections<GroupMenuItem>(
@@ -58,6 +61,7 @@ export function groupMenuItems(s: BrowserState, windowId: string, groupId: strin
     [
       { id: "ungroup", title: "Ungroup", symbol: "folder.badge.minus" },
       bookmarksShown(s.settings) && { id: "bookmarkBar", title: "Move to Bookmarks Bar", symbol: "bookmark" },
+      { id: "sleep", title: "Sleep Tabs", symbol: "moon.zzz", enabled: groupTabIds(s.groups, groupId).some((id) => canSleep(s, id)) },
       { id: "close", title: "Close Group", symbol: "xmark", ...hintWhen(shown, "closeTabGroup", s) },
       { id: "delete", title: "Delete Group", symbol: "trash" },
     ],
@@ -104,6 +108,7 @@ function runGroupChoice(windowId: string, groupId: string, choice: string | Grou
   else if (choice === "copyMd") copyUrls(g.tabIds, true);
   else if (choice === "ungroup") s.ungroup(groupId);
   else if (choice === "bookmarkBar") s.moveGroupToBookmarksBar(groupId);
+  else if (choice === "sleep") void sleepTabsFromMenu(groupTabIds(s.groups, groupId).filter((id) => canSleep(s, id)), "group");
   else if (choice === "close") void closeGroup(groupId);
   else if (choice === "delete") s.deleteGroup(groupId);
 }

@@ -15,6 +15,7 @@
 #include "ardia/linux/ac_linux_import_keyring.h"
 #include "ardia/linux/ac_linux_import_readers.h"
 #include "ardia/linux/ac_linux_import_secrets.h"
+#include "ardia/linux/ac_linux_import_zen.h"
 #include "ardia/linux/ac_linux_profile_service.h"
 #include "ardia/linux/ac_linux_profiles.h"
 #include "base/callback_list.h"
@@ -832,6 +833,9 @@ class ImportService {
       const base::DictValue& given = values[4].GetDict();
       if (std::optional<int> limit = given.FindInt("historyLimit"); limit && *limit > 0) options.history_limit = limit;
       if (std::optional<double> since = given.FindDouble("historySince"); since && *since > 0) options.history_since = since;
+      if (!li::RequestedSpaceIds(given.Find("spaceIds"), &options.space_ids)) {
+        return Fail(std::move(done), "invalid", "Invalid import request");
+      }
     }
     options.now_ms = base::Time::Now().InMillisecondsFSinceUnixEpoch();
     if (std::optional<li::SecretBytes> secret = unlocked_.Copy(requester.owner, browser, NowMs())) {
@@ -876,7 +880,7 @@ class ImportService {
       if (outcome.withheld) {
         event.Set("type", "failed");
         event.Set("code", "ERR_SECRET_IN_REPLY");
-        event.Set("message", "The import result was withheld because it contained a password");
+        event.Set("message", "The import result was withheld because it contained an imported password, cookie or card number");
       } else {
         base::ListValue failed;
         base::ListValue warnings;

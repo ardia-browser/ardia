@@ -38,7 +38,8 @@ behave more like Dia is almost always welcome. A change that restyles it to tast
 
 Out of scope:
 
-- **AI features.** The owner decided against them. Dia's AI rows in `docs/dia-feature-parity.md` stay ⏸.
+- **AI features in the base browser.** AI ships only as a first-party plugin on the plugin host (#2462, #2463), off
+  until the user enables it. Dia's AI rows in `docs/dia-feature-parity.md` stay ⏸ until the plugin ships them.
 - **Accounts or sign-in of our own.** Sync goes through the user's iCloud Drive and nothing else.
 - **Telemetry that carries browsing data.** Crash reports are opt-in and never include sites or searches.
 

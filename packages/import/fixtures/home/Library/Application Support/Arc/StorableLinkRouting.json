@@ -1,0 +1,238 @@
+{
+  "rules": [
+    {
+      "id": "R-336f7a96",
+      "destination": {
+        "space": {
+          "_0": {
+            "mostRecent": {}
+          }
+        }
+      },
+      "sourceComponents": [
+        {
+          "id": "C-meet.google.com",
+          "componentType": {
+            "urlMatch": {
+              "_0": {
+                "contains": {}
+              },
+              "_1": "meet.google.com"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "R-b1013920",
+      "destination": {
+        "space": {
+          "_0": {
+            "space": {
+              "_0": "S-WORK"
+            }
+          }
+        }
+      },
+      "sourceComponents": [
+        {
+          "id": "C-jira.example/browse",
+          "componentType": {
+            "urlMatch": {
+              "_0": {
+                "contains": {}
+              },
+              "_1": "jira.example/browse"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "R-c44a4fa9",
+      "destination": {
+        "littleArc": {
+          "_0": {
+            "mostRecent": {}
+          }
+        }
+      },
+      "sourceComponents": [
+        {
+          "id": "C-https://www.docs.example/",
+          "componentType": {
+            "urlMatch": {
+              "_0": {
+                "contains": {}
+              },
+              "_1": "https://www.docs.example/"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "R-90347a2a",
+      "destination": {
+        "littleArc": {
+          "_0": {
+            "space": {
+              "_0": "S-PERSONAL"
+            }
+          }
+        }
+      },
+      "sourceComponents": [
+        {
+          "id": "C-calendar.example",
+          "componentType": {
+            "urlMatch": {
+              "_0": {
+                "matches": {}
+              },
+              "_1": "calendar.example"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "R-77835829",
+      "destination": {
+        "space": {
+          "_0": {
+            "space": {
+              "_0": "S-DELETED"
+            }
+          }
+        }
+      },
+      "sourceComponents": [
+        {
+          "id": "C-gone.example",
+          "componentType": {
+            "urlMatch": {
+              "_0": {
+                "contains": {}
+              },
+              "_1": "gone.example"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "R-23b58def",
+      "destination": {
+        "space": {
+          "_0": {
+            "mostRecent": {}
+          }
+        }
+      },
+      "sourceComponents": [
+        {
+          "id": "C-  ",
+          "componentType": {
+            "urlMatch": {
+              "_0": {
+                "contains": {}
+              },
+              "_1": "  "
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "R-unknown-op",
+      "destination": {
+        "space": {
+          "_0": {
+            "mostRecent": {}
+          }
+        }
+      },
+      "sourceComponents": [
+        {
+          "id": "C-op",
+          "componentType": {
+            "urlMatch": {
+              "_0": {
+                "startsWith": {}
+              },
+              "_1": "x.example"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "R-two-parts",
+      "destination": {
+        "space": {
+          "_0": {
+            "mostRecent": {}
+          }
+        }
+      },
+      "sourceComponents": [
+        {
+          "id": "C-a",
+          "componentType": {
+            "urlMatch": {
+              "_0": {
+                "contains": {}
+              },
+              "_1": "a.example"
+            }
+          }
+        },
+        {
+          "id": "C-b",
+          "componentType": {
+            "urlMatch": {
+              "_0": {
+                "contains": {}
+              },
+              "_1": "b.example"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "R-f7f0bc59",
+      "destination": {
+        "space": {
+          "_0": {
+            "profile": {
+              "_0": "P-1"
+            }
+          }
+        }
+      },
+      "sourceComponents": [
+        {
+          "id": "C-profile.example",
+          "componentType": {
+            "urlMatch": {
+              "_0": {
+                "contains": {}
+              },
+              "_1": "profile.example"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "defaultDestination": {
+    "space": {
+      "_0": {
+        "mostRecent": {}
+      }
+    }
+  },
+  "version": 1
+}

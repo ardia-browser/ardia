@@ -65,10 +65,11 @@
       "changeCaptureSource",
       "stopCapture"
     ],
-    "passwords": ["autofillEnabled", "setAutofillEnabled"],
+    "passwords": ["autofillEnabled", "setAutofillEnabled", "setFieldProviders", "showSystemPanel", "showPanelHint", "systemPanelAvailable", "otpauthHandler", "setUpVerificationCode"],
     "permissions": ["resolve", "devExternalLaunches"],
     "profiles": ["loaded", "unloadIdle"],
     "search": ["setEngineName"],
+    "sites": ["preloadPages", "setPreloadPages"],
     "tabs": [
       "routeLinkTabs",
       "stripCommand",
@@ -91,10 +92,10 @@
       "setCommandScrollZoom",
       "setLittleArdiaOpensNewTabLinks",
       "setAutoPictureInPicture",
-      "setFairPlayInChromium",
       "setVideoUpscaling",
       "setVideoUpscalingTestConditions",
       "takeContentDrift",
+      "takeFirstPaintHolds",
       "videoUpscalingState"
     ],
     "windows": ["list", "dev"]

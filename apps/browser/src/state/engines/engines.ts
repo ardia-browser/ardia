@@ -15,14 +15,26 @@ export const otherEngine = (engine: PageEngine): PageEngine => (engine === "webk
 
 type EngineState = Pick<BrowserState, "tabs" | "settings">;
 
-export function siteOf(url: string | undefined | null): string | null {
-  if (!url) return null;
+const SITE_CACHE_SIZE = 512;
+const sites = new Map<string, string | null>();
+
+function parseSite(url: string): string | null {
   try {
     const u = new URL(url);
     return u.protocol === "http:" || u.protocol === "https:" ? `${u.protocol}//${u.host}`.toLowerCase() : null;
   } catch {
     return null;
   }
+}
+
+export function siteOf(url: string | undefined | null): string | null {
+  if (!url) return null;
+  const known = sites.get(url);
+  if (known !== undefined) return known;
+  const site = parseSite(url);
+  if (sites.size >= SITE_CACHE_SIZE) sites.delete(sites.keys().next().value!);
+  sites.set(url, site);
+  return site;
 }
 
 export const canSwitchEngine = (url: string | undefined | null) => PLATFORM_FEATURES.webKit && !!url && isWebPageUrl(url);
@@ -47,6 +59,7 @@ export const PROTECTED_VIDEO_SITES: readonly string[] = [
   "hulu.com",
   "tv.apple.com",
   "music.apple.com",
+  "open.spotify.com",
   "peacocktv.com",
   "paramountplus.com",
   "crunchyroll.com",
@@ -55,22 +68,15 @@ export const PROTECTED_VIDEO_SITES: readonly string[] = [
   "v.qq.com",
 ];
 
-export const FAIRPLAY_IN_CHROMIUM_ORIGINS: readonly string[] = ["https://open.spotify.com", "https://www.netflix.com", "https://www.disneyplus.com"];
-
 export function protectedVideoSite(url: string | undefined | null): boolean {
   const site = siteOf(url);
   if (!site?.startsWith("https://")) return false;
-  const host = new URL(site).hostname;
+  const host = site.slice("https://".length).replace(/:\d+$/, "");
   return PROTECTED_VIDEO_SITES.some((domain) => host === domain || host.endsWith(`.${domain}`));
 }
 
-export const fairPlaySite = (url: string | undefined | null) => FAIRPLAY_IN_CHROMIUM_ORIGINS.includes(siteOf(url) ?? "");
-
-const fairPlayStaysInChromium = (s: Pick<BrowserState, "settings">, url: string | undefined | null) =>
-  s.settings.fairPlayInChromium === true && fairPlaySite(url);
-
 export const builtInEngine = (s: Pick<BrowserState, "settings">, url: string | undefined | null): PageEngine | undefined =>
-  PLATFORM_FEATURES.webKit && s.settings.protectedVideoInWebKit === true && (protectedVideoSite(url) || fairPlaySite(url)) && !fairPlayStaysInChromium(s, url) ? "webkit" : undefined;
+  PLATFORM_FEATURES.webKit && s.settings.protectedVideoInWebKit === true && protectedVideoSite(url) ? "webkit" : undefined;
 
 export const chosenEngine = (s: Pick<BrowserState, "settings">, url: string | undefined | null): PageEngine | undefined => ruleFor(s, url) ?? builtInEngine(s, url);
 

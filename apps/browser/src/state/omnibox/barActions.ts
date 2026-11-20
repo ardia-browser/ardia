@@ -3,14 +3,18 @@ import type { BrowserCommand } from "../../platform/commands";
 import { isBookmarked } from "../bookmarks/bookmarks";
 import { hidesBookmarkCommand } from "../bookmarks/visibility";
 import { useBrowser, type BrowserState } from "../browser/store";
-import { activeTab, bookmarkProfileId, isPinnedRow, pinnedSectionTitle } from "../browser/model";
+import { activeTab, bookmarkProfileId, isPinnedRow, pinnedSectionTitle, tabLayoutOf } from "../browser/model";
 import { canTidy } from "../pins/tidy";
-import { commandBarTitle, commandSymbol, UNAVAILABLE_COMMANDS } from "../commands/commandCatalog";
+import { commandBarTitle, commandSymbol, LITTLE_ARDIA_DISABLED_COMMANDS, UNAVAILABLE_COMMANDS } from "../commands/commandCatalog";
 import { menuBarRevision, shortcutHint } from "../commands/commandShortcuts";
 import type { Tab } from "../browser/types";
 import { organizeActions } from "./organizeActions";
 import { muteState, muteTitle, siteMuteTitle } from "../tabs/mute";
 import { isWebPageUrl } from "../../lib/url";
+import { pluginActionsRevision, pluginBarActions } from "../plugins/commands";
+import { currentPlugins } from "../plugins/store";
+import { eligibleKind } from "../automation/automationWindows";
+import { isSmallWindow } from "../windows/small";
 
 type Context = { s: BrowserState; windowId: string; tab: Tab | undefined };
 
@@ -18,12 +22,14 @@ type ActionDef = {
   command: BrowserCommand;
   arg?: string;
   title?: (c: Context) => string;
-  icon?: string;
+  icon?: string | ((c: Context) => string);
   keywords?: string[];
   needs?: "page" | "webPage" | "tab" | "profiles" | "pins";
 };
 
 const page = "page" as const;
+
+const layoutSwitchesTo = ({ s, windowId }: Context) => (tabLayoutOf(s, windowId) === "sidebar" ? "top" : "sidebar");
 
 const DEFS: ActionDef[] = [
   { command: "newTab", keywords: ["open tab"] },
@@ -85,6 +91,12 @@ const DEFS: ActionDef[] = [
   { command: "savePage", icon: "square.and.arrow.down", keywords: ["save as"], needs: page },
   { command: "cast", icon: "tv", keywords: ["cast tab"], needs: page },
   { command: "toggleFullUrl", title: ({ s }) => (s.settings.showFullUrl ? "Hide Full URL" : "Show Full URL") },
+  {
+    command: "toggleTabLayout",
+    title: (c) => (layoutSwitchesTo(c) === "top" ? "Show Tabs Across the Top" : "Show Tabs in Sidebar"),
+    icon: (c) => (layoutSwitchesTo(c) === "top" ? "rectangle.topthird.inset.filled" : c.s.settings.sidebarSide === "right" ? "sidebar.right" : "sidebar.left"),
+    keywords: ["tab layout", "top tabs", "tabs on top", "tabs across the top", "horizontal tabs", "horizontal row", "tab bar", "tab strip", "vertical tabs", "vertical sidebar", "sidebar tabs", "tabs in sidebar"],
+  },
   { command: "toggleSidebar", keywords: ["toggle sidebar", "hide sidebar", "show sidebar", "focus mode"] },
   { command: "toggleBookmarksBar", keywords: ["bookmarks bar"] },
   { command: "downloads", keywords: ["show downloads", "dl"] },
@@ -108,8 +120,11 @@ const DEFS: ActionDef[] = [
 
 const actionId = (d: Pick<ActionDef, "command" | "arg">) => (d.arg ? `${d.command}:${d.arg}` : d.command);
 
+const LITTLE_ARDIA_HIDDEN: ReadonlySet<string> = new Set(LITTLE_ARDIA_DISABLED_COMMANDS);
+
 export function barActions(s: BrowserState, windowId: string): CommandAction[] {
   const w = s.windows[windowId];
+  const small = isSmallWindow(w);
   const tab = activeTab(s, windowId);
   const c: Context = { s, windowId, tab };
   const out: CommandAction[] = [];
@@ -120,12 +135,13 @@ export function barActions(s: BrowserState, windowId: string): CommandAction[] {
     if (d.needs === "profiles" && w?.kind === "private") continue;
     if (d.needs === "pins" && !canTidy(s, windowId)) continue;
     if (hidesBookmarkCommand(s.settings, d.command) || UNAVAILABLE_COMMANDS.has(d.command)) continue;
+    if (small && LITTLE_ARDIA_HIDDEN.has(d.command)) continue;
     const id = actionId(d);
     const hint = shortcutHint(id, s);
     out.push({
       id,
       title: d.title?.(c) ?? commandBarTitle(d.command, d.arg),
-      icon: d.icon ?? commandSymbol(d.command, d.arg),
+      icon: (typeof d.icon === "function" ? d.icon(c) : d.icon) ?? commandSymbol(d.command, d.arg),
       ...(hint ? { hint } : {}),
       ...(d.keywords ? { keywords: d.keywords } : {}),
     });
@@ -139,6 +155,7 @@ export function barActions(s: BrowserState, windowId: string): CommandAction[] {
     });
   }
   out.push(...organizeActions(s, windowId));
+  if (eligibleKind(s, windowId)) out.push(...pluginBarActions(currentPlugins()));
   return out;
 }
 
@@ -148,7 +165,7 @@ export function currentBarActions(windowId: string): CommandAction[] {
   const s = useBrowser.getState();
   let byWindow = barActionsOf.get(s);
   if (!byWindow) barActionsOf.set(s, (byWindow = new Map()));
-  const key = `${windowId}|${menuBarRevision()}`;
+  const key = `${windowId}|${menuBarRevision()}|${pluginActionsRevision()}`;
   let actions = byWindow.get(key);
   if (!actions) byWindow.set(key, (actions = barActions(s, windowId)));
   return actions;

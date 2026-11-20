@@ -2,6 +2,8 @@ import type { ArdiaHost } from "./host";
 import { enqueueTab } from "./hostTabQueue.ts";
 import { queueTabPresentation } from "./hostTabPresentations.ts";
 import { hostProfile, hostSupports, invokeHost } from "./host.ts";
+import { consentToken } from "../../browser/src/state/telemetry/client";
+import { errorFor } from "../../browser/src/state/telemetry/logs";
 
 export type HostTabEvent = { type: string; [key: string]: unknown };
 export type HostTabIdentity = { browserId: number; chromeTabId: number; state?: unknown };
@@ -166,6 +168,7 @@ export class HostTab {
   detach() {
     if (this.releaseScheduled) return;
     this.releaseScheduled = true;
+    const consent = consentToken();
     void enqueueTab(this.host, this.key, async () => {
       const owners = claims.get(this.host);
       if (!this.identity || owners?.get(this.key) !== this) return;
@@ -173,7 +176,7 @@ export class HostTab {
       if (owners.get(this.key) === this) owners.delete(this.key);
     }).catch((error) => {
       this.releaseScheduled = false;
-      console.error("[ardia host] release failed", error);
+      errorFor(consent, "[ardia host] release failed", error);
     });
   }
 
@@ -191,9 +194,10 @@ export function showInPlaceOf(from: HostTab, to: HostTab): boolean {
   const shown: TabViewport = { rect: viewport.rect, visible: true };
   const hidden: TabViewport = { rect: viewport.rect, visible: false };
   const send = (method: string, args: Record<string, unknown>, undo: () => void) => {
+    const consent = consentToken();
     void new Promise((resolve) => resolve(to.host.invoke(method, args))).catch((error: unknown) => {
       undo();
-      console.error("[ardia host] early tab switch failed", error);
+      errorFor(consent, "[ardia host] early tab switch failed", error);
     });
   };
   to.lastViewport = JSON.stringify(shown);

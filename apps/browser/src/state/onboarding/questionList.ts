@@ -1,6 +1,6 @@
 import type { Settings } from "../settings/settings";
 
-export type OnboardingStep = "intro" | "source" | "layout" | "tabs" | "look" | "searchPrivacy" | "pins" | "home" | "outro";
+export type OnboardingStep = "intro" | "source" | "layout" | "tabs" | "look" | "searchPrivacy" | "pins" | "home" | "plugins" | "outro";
 
 export type QuestionId =
   | "source"
@@ -15,11 +15,11 @@ export type QuestionId =
   | "tabsMore"
   | "color" | "switcher" | "appearance" | "style" | "frame" | "siteColor" | "lookMore"
   | "engine"
-  | "typed"
   | "crash"
   | "pins"
   | "default"
   | "links"
+  | "plugins"
   | "outro";
 
 export type Question = { id: QuestionId; keys: readonly (keyof Settings)[]; askedWithPreset?: true };
@@ -50,7 +50,6 @@ export const QUESTIONS: Record<Exclude<OnboardingStep, "intro">, Question[]> = {
   ],
   searchPrivacy: [
     { id: "engine", keys: ["searchEngine"] },
-    { id: "typed", keys: ["commandBarPreference"] },
     { id: "crash", keys: [] },
   ],
   pins: [{ id: "pins", keys: [] }],
@@ -58,6 +57,7 @@ export const QUESTIONS: Record<Exclude<OnboardingStep, "intro">, Question[]> = {
     { id: "default", keys: [] },
     { id: "links", keys: ["openLinksInLittleArdia"] },
   ],
+  plugins: [{ id: "plugins", keys: [] }],
   outro: [{ id: "outro", keys: [] }],
 };
 

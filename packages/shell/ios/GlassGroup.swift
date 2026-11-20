@@ -86,9 +86,10 @@ private final class GlassGroupContent: NSView {
 enum GlassGroupMounts {
   static let groups = NSHashTable<GlassGroup>.weakObjects()
   private static var watcher: GlassGroupMountWatcher?
+  private static weak var observed: AnyObject?
 
   static func observe(_ manager: AnyObject?) {
-    guard watcher == nil, let manager,
+    guard let manager, manager !== observed,
           let coordinator = manager.value(forKey: "observerCoordinator") as AnyObject?
     else { return }
     let add = NSSelectorFromString("addObserver:")
@@ -96,6 +97,7 @@ enum GlassGroupMounts {
     let next = GlassGroupMountWatcher()
     _ = coordinator.perform(add, with: next)
     watcher = next
+    observed = manager
   }
 
   static func placeAll() {

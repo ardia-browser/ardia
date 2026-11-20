@@ -55,7 +55,6 @@ try {
     await scroll([{ phase: "commandUp" }]);
     return { held: held[0], zoomed };
   };
-  const setting = (on) => ac(`ac.store.getState().updateSettings({ commandScrollZoom: ${on} }); return true;`);
   const gesture = (trackpad) => [
     { phase: "mayBegin", dy: 0, trackpad },
     { phase: "began", dy: 12, trackpad },
@@ -86,23 +85,6 @@ try {
     const detail = `taken as a zoom ${JSON.stringify(zoomed)}, zoom ${after}`;
     if (!zoomed.some(Boolean) || !(after > 1)) throw new Error(detail);
     return detail;
-  });
-
-  await rep.check("with the setting off, ⌘ + wheel scrolls the page and never zooms", async () => {
-    await reset();
-    await setting(false);
-    try {
-      await sleep(300);
-      const { zoomed } = await withCommand(notches(3, -3));
-      const after = await zoom();
-      const scrollY = await page("scrollY");
-      const detail = `taken as a zoom ${JSON.stringify(zoomed)}, zoom ${after}, scrollY ${scrollY}`;
-      if (zoomed.some(Boolean) || after !== 1 || !(scrollY > 0)) throw new Error(detail);
-      return detail;
-    } finally {
-      await setting(true);
-      await sleep(300);
-    }
   });
 
   await rep.check("a page that handles ⌘ + wheel itself gets it, and the page doesn't zoom", async () => {

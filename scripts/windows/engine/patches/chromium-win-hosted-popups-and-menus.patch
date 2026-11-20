@@ -25,12 +25,12 @@
 +#if BUILDFLAG(IS_WIN)
 +  // Ardia: a tab or pop-up a page opens from a window the Windows engine host
 +  // hosts.
-+  if ((params->disposition == WindowOpenDisposition::NEW_POPUP ||
-+       params->disposition == WindowOpenDisposition::NEW_FOREGROUND_TAB) &&
++  if ((params->disposition == WindowOpenDisposition::kNewPopup ||
++       params->disposition == WindowOpenDisposition::kNewForegroundTab) &&
 +      g_ardia_win_open_as_offer &&
 +      g_ardia_win_open_as_offer(params->browser, params->disposition,
 +                                params->window_features)) {
-+    params->disposition = WindowOpenDisposition::NEW_BACKGROUND_TAB;
++    params->disposition = WindowOpenDisposition::kNewBackgroundTab;
 +    params->tabstrip_add_types |= AddTabTypes::ADD_INHERIT_OPENER;
 +    params->window_action = NavigateParams::WindowAction::kNoAction;
 +    base::WeakPtr<content::NavigationHandle> handle =

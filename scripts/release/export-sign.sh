@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-usage="usage: scripts/release/export-sign.sh <dist> <archive> <identity> <CLI tarball .sha256> [<provisioning profile>]"
+usage="usage: scripts/release/export-sign.sh <dist> <archive> <identity> [<provisioning profile>]"
 dist="${1:?$usage}"
 archive="${2:?$usage}"
 identity="${3:?$usage}"
-cli_sha="${4:?$usage}"
-provisioning_profile="${5:-}"
+provisioning_profile="${4:-}"
 . "$(dirname "$0")/lib.sh"
 app="$dist/export/Ardia.app"
 
@@ -30,7 +29,25 @@ else
 fi
 [ "$(lipo -archs "$app/Contents/MacOS/Ardia")" = arm64 ] || die "the app's executable is $(lipo -archs "$app/Contents/MacOS/Ardia"), not arm64"
 
-awk '{ print $1 }' "$cli_sha" >"$app/Contents/Resources/ardia-cli.sha256"
+echo "==> Built-in plugins"
+bundled="$app/Contents/Resources/Plugins"
+plist="$app/Contents/Info.plist"
+rm -rf "$bundled"
+mkdir -p "$bundled"
+/usr/libexec/PlistBuddy -c "Delete :ArdiaBuiltInPlugins" "$plist" 2>/dev/null || true
+/usr/libexec/PlistBuddy -c "Add :ArdiaBuiltInPlugins dict" "$plist"
+for folder in "$dist"/plugins/*/; do
+  name="$(basename "$folder")"
+  [ -f "$folder/plugin.json" ] || continue
+  ditto --norsrc --noextattr "$folder" "$bundled/$name"
+  find "$bundled/$name" -type f \( -name '*.so' -o -name '*.dylib' \) -print0 | while IFS= read -r -d '' lib; do
+    sign_as "$identity" --options runtime "$lib"
+  done
+  find "$bundled/$name" -type f -perm -u+x ! -name '*.so' ! -name '*.dylib' -print0 | while IFS= read -r -d '' exe; do
+    if file -b "$exe" | grep -q '^Mach-O'; then sign_as "$identity" --options runtime "$exe"; fi
+  done
+  /usr/libexec/PlistBuddy -c "Add :ArdiaBuiltInPlugins:$name string $("$root/scripts/release/plugin-digest.py" "$bundled/$name")" "$plist"
+done
 
 echo "==> Licenses"
 licenses="$app/Contents/Resources/Licenses"
@@ -56,9 +73,6 @@ sign_as "$identity" --options restrict,library,kill,runtime "$fwv/Helpers/app_mo
 [ -e "$fwv/Helpers/web_app_shortcut_copier" ] && sign_as "$identity" --options restrict,library,kill,runtime \
   --identifier com.ardia.browser.web_app_shortcut_copier "$fwv/Helpers/web_app_shortcut_copier"
 sign_as "$identity" "$fw"
-fairplay="$app/Contents/Helpers/ArdiaFairPlay.app"
-[ -d "$fairplay" ] || die "no ArdiaFairPlay.app in the export"
-sign_as "$identity" --options restrict,library,kill,runtime --entitlements "$ardiacore/fairplay/ArdiaFairPlay.entitlements" "$fairplay"
 [ -d "$app/Contents/Frameworks/hermes.framework" ] \
   && sign_as "$identity" --preserve-metadata=identifier,entitlements,flags,runtime "$app/Contents/Frameworks/hermes.framework"
 sign_as "$identity" --preserve-metadata=entitlements,requirements,flags,runtime "$app"

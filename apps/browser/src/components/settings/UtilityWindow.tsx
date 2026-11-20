@@ -3,17 +3,20 @@ import { View, type LayoutChangeEvent } from "react-native";
 import { ImportWindow } from "../import/ImportWindow";
 import { SettingsWindow } from "./SettingsWindow";
 import { SETTINGS_WINDOW_ID } from "../../state/settings/settingsWindows";
+import { consentToken } from "../../state/telemetry/client";
+import { warnFor } from "../../state/telemetry/logs";
 
 const EMPTY_CHECK_MS = 2000;
 
 function useReportEmptyContent(id: string) {
   const size = useRef<{ width: number; height: number } | null>(null);
   useEffect(() => {
+    const consent = consentToken();
     const timer = setTimeout(() => {
       const laidOut = size.current;
       if (laidOut && laidOut.width > 0 && laidOut.height > 0) return;
       const shown = laidOut ? `${Math.round(laidOut.width)}x${Math.round(laidOut.height)}` : "never laid out";
-      console.warn(`[window] ${id} content is empty ${EMPTY_CHECK_MS} ms after opening: ${shown}`);
+      warnFor(consent, `[window] ${id} content is empty ${EMPTY_CHECK_MS} ms after opening: ${shown}`);
     }, EMPTY_CHECK_MS);
     return () => clearTimeout(timer);
   }, [id]);

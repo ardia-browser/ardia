@@ -11,6 +11,9 @@ import { startTabPages } from "../../browser/src/state/tabs/tabPages";
 import { startTabLifecycle, useLifecycle } from "../../browser/src/state/tabs/tabLifecycle";
 import { useMedia } from "../../browser/src/state/media/media";
 import { useToolbarAutoHide } from "../../browser/src/state/windows/toolbarAutoHide";
+import { noteSidebarPeekPageHidden, noteToolbarPeekPageHidden } from "../../browser/src/state/telemetry/usage";
+import { peekShown } from "../../browser/src/state/windows/dockMotion";
+import { onPageCovered } from "./shims/web/HostWebView";
 import { copyLinkToSelection, jumpToSelection, replaceInField, usePageSelection } from "../../browser/src/state/site/selection";
 import { webviews } from "../../browser/src/platform/webviews";
 import { startMemoryTrim } from "../../browser/src/state/tabs/memoryTrim";
@@ -38,7 +41,7 @@ import { colorRoles } from "../../browser/src/components/ui/tokens";
 import { startHostConfig } from "./hostConfig";
 import { COMMANDS } from "../../browser/src/state/commands/commandCatalog";
 import { opensOnCommandBar } from "./hostSmallWindows";
-import { linuxSessionShape, startHostPersistence } from "./hostSession";
+import { hydrateLaunchSession, linuxSessionShape, startHostPersistence } from "./hostSession";
 import { startHostData } from "./hostData";
 import { startHostDownloads } from "./hostDownloads";
 import { startHostTabLifecycle } from "./hostTabLifecycle";
@@ -76,8 +79,9 @@ import { connectCalendar, refreshCalendar, setCalendarHidden, useCalendar } from
 import { useMeetingAlert } from "../../browser/src/state/live/alerts";
 import { linuxTelemetryHooks, reportRecoverableRender, reportUncaughtRender, startHostTelemetry } from "./hostTelemetry";
 import type { LeaderLocks } from "./telemetryLeader";
+import { liveOf } from "../../browser/src/state/tabs/tabLive";
 
-Object.assign(globalThis, { ardiaLinux: { store: useBrowser, pages: usePages, emitCommand, extensions: useExtensions, openExtension: openExtensionFromMenu, webviews, media: useMedia, lifecycle: { state: useLifecycle }, sync: linuxSyncHooks, live: linuxLiveHooks, toolbar: useToolbarAutoHide, windowMenu: linuxWindowMenu, selection: { state: usePageSelection, jump: jumpToSelection, copyQuoteLink: copyLinkToSelection, replaceInField }, calendar: { state: useCalendar, connect: connectCalendar, refresh: refreshCalendar, hide: setCalendarHidden, alert: useMeetingAlert }, inputRegions, telemetry: linuxTelemetryHooks } });
+Object.assign(globalThis, { ardiaLinux: { store: useBrowser, pages: usePages, emitCommand, extensions: useExtensions, openExtension: openExtensionFromMenu, webviews, media: useMedia, lifecycle: { state: useLifecycle }, sync: linuxSyncHooks, live: linuxLiveHooks, tabLive: { liveOf }, toolbar: useToolbarAutoHide, windowMenu: linuxWindowMenu, selection: { state: usePageSelection, jump: jumpToSelection, copyQuoteLink: copyLinkToSelection, replaceInField }, calendar: { state: useCalendar, connect: connectCalendar, refresh: refreshCalendar, hide: setCalendarHidden, alert: useMeetingAlert }, inputRegions, telemetry: linuxTelemetryHooks } });
 setHostPageHooks({ reset: resetHostPage, applyTheme: applyHostPageTheme, depart: (tabId) => ardiaHost && forgetDepartedPage(tabId, ardiaHost.bootstrap.windowId) });
 setWindowCloseDecider(decideLinuxWindowClose);
 
@@ -106,7 +110,7 @@ async function start() {
   const launch = ardiaHost.bootstrap.startup !== false;
   const restoreSession = launch ? configRestoreSession() : undefined;
   setStoreBatching(unstable_batchedUpdates);
-  useBrowser.getState().hydrate(initialLinuxSession(ardiaHost, saved?.settings && restoreSession !== undefined ? { ...saved, settings: { ...saved.settings, restoreSession } } : saved));
+  hydrateLaunchSession(saved, initialLinuxSession(ardiaHost, saved?.settings && restoreSession !== undefined ? { ...saved, settings: { ...saved.settings, restoreSession } } : saved));
   followWindowMaximized(ardiaHost, windowId);
   startConfigFiles(colorRoles, launch);
   startHostTelemetry({ host: ardiaHost, candidate: !utility, locks: navigator.locks as unknown as LeaderLocks });
@@ -129,6 +133,8 @@ async function start() {
     startHostData();
     startHostTabLifecycle(ardiaHost, useBrowser);
     startShellAbove(ardiaHost);
+    onPageCovered((tabId) => linuxTelemetryHooks.leading() && useToolbarAutoHide.getState().peek[tabId] && noteToolbarPeekPageHidden());
+    onPageCovered(() => peekShown(windowId) && noteSidebarPeekPageHidden());
     startPipPlayer(ardiaHost);
     watchTabSwitches(useBrowser);
     setPopupDismissal({ popup: () => useExtensions.getState().popup, windowOf: (tabId) => useBrowser.getState().tabs[tabId]?.windowId, close: () => useExtensions.setState({ popup: null }) });

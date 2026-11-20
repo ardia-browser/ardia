@@ -1,0 +1,123 @@
+require File.join(File.dirname(`node --print "require.resolve('expo/package.json')"`), "scripts/autolinking")
+require File.join(File.dirname(`node --print "require.resolve('react-native/package.json')"`), "scripts/react_native_pods")
+
+require 'json'
+require 'pathname'
+
+podfile_properties = JSON.parse(File.read(File.join(__dir__, 'Podfile.properties.json'))) rescue {}
+deployment_target = podfile_properties['ios.deploymentTarget']
+
+ENV['RCT_NEW_ARCH_ENABLED'] = '1'
+ENV['RCT_USE_RN_DEP'] ||= '1'
+ENV['RCT_USE_PREBUILT_RNCORE'] ||= '1'
+
+platform :ios, deployment_target
+
+prepare_react_native_project!
+
+ardia_kit = Pathname.new(File.join(__dir__, '..', '..', '..', 'packages', 'phone', 'ios', 'ArdiaKit')).cleanpath
+phone_sync = Pathname.new(File.join(__dir__, '..', '..', '..', 'packages', 'phone', 'ios', 'PhoneSync')).cleanpath
+ardia_talk = Pathname.new(File.join(__dir__, '..', '..', '..', 'packages', 'phone', 'ios', 'ArdiaTalk')).cleanpath
+
+publish_changed = '"${PODS_ROOT}/../publish-changed.sh"'
+
+publish_codegen_by_change = lambda do |installer|
+  installer.pods_project.targets.select { |t| t.name == 'ReactCodegen' }.each do |t|
+    t.shell_script_build_phases.select { |p| p.name.to_s.include?('Generate Specs') }.each do |phase|
+      script = phase.shell_script
+      next if script.include?('ac-codegen')
+      script = script.sub('export RCT_SCRIPT_OUTPUT_DIR="$RCT_SCRIPT_POD_INSTALLATION_ROOT"', <<~'SH'.chomp)
+        export RCT_SCRIPT_OUTPUT_DIR="$DERIVED_FILE_DIR/ac-codegen"
+        rm -rf "$RCT_SCRIPT_OUTPUT_DIR"
+        mkdir -p "$RCT_SCRIPT_OUTPUT_DIR/build/generated/autolinking"
+        cp "$RCT_SCRIPT_POD_INSTALLATION_ROOT/build/generated/autolinking/autolinking.json" "$RCT_SCRIPT_OUTPUT_DIR/build/generated/autolinking/" 2>/dev/null || true
+      SH
+      script = script.sub(%q(/bin/sh -c '"$WITH_ENVIRONMENT" "$SCRIPT_PHASES_SCRIPT"'), %q(/bin/sh -c '"$WITH_ENVIRONMENT" "$SCRIPT_PHASES_SCRIPT"' || exit 1))
+      script += "#{publish_changed} \"$RCT_SCRIPT_OUTPUT_DIR/build/generated/ios\" \"$RCT_SCRIPT_POD_INSTALLATION_ROOT/build/generated/ios\" --exclude '*.podspec'\n"
+      phase.shell_script = script
+    end
+  end
+end
+
+publish_expo_provider_by_change = lambda do |installer|
+  installer.aggregate_targets.each do |target|
+    path = File.join(target.support_files_dir, 'expo-configure-project.sh')
+    next unless File.exist?(path)
+    script = File.read(path)
+    next if script.include?('AC_PROVIDER_DIR')
+    provider = script[/--target "([^"]*ExpoModulesProvider\.swift)"/, 1]
+    next unless provider
+    script = script.sub(%(--target "#{provider}"), '--target "$AC_PROVIDER_DIR/ExpoModulesProvider.swift"')
+    script = script.sub("with_node \\\n", <<~SH + "with_node \\\n")
+      mkdir -p "${DERIVED_FILE_DIR:-${TMPDIR:-/tmp}}"
+      AC_PROVIDER_DIR=$(mktemp -d "${DERIVED_FILE_DIR:-${TMPDIR:-/tmp}}/expo-provider.XXXXXX")
+      trap 'rm -rf "$AC_PROVIDER_DIR"' EXIT
+    SH
+    File.write(path, script + %(\n"$PODS_ROOT/../publish-changed.sh" "$AC_PROVIDER_DIR" "#{File.dirname(provider)}"\n))
+  end
+end
+
+link_ardia_kit = lambda do |installer|
+  project = installer.pods_project
+  target = project.targets.find { |t| t.name == 'ArdiaPhoneNative' }
+  next unless target
+  { ardia_kit => %w[ArdiaBrowser ArdiaDesign], ardia_talk => %w[ArdiaTalk], phone_sync => %w[PhoneSync] }.each do |package, products|
+    path = package.relative_path_from(Pathname.new(project.project_dir)).to_s
+    reference = project.root_object.package_references.find do |existing|
+      existing.is_a?(Xcodeproj::Project::Object::XCLocalSwiftPackageReference) && existing.relative_path == path
+    end
+    unless reference
+      reference = project.new(Xcodeproj::Project::Object::XCLocalSwiftPackageReference)
+      reference.relative_path = path
+      project.root_object.package_references << reference
+    end
+    products.each do |product|
+      next if target.package_product_dependencies.any? { |d| d.product_name == product }
+      dependency = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
+      dependency.package = reference
+      dependency.product_name = product
+      target.package_product_dependencies << dependency
+    end
+  end
+end
+
+target 'Ardia' do
+  use_expo_modules!
+
+  config = use_native_modules!([
+    'node',
+    '--no-warnings',
+    '--eval',
+    'require(\'expo/bin/autolinking\')',
+    'expo-modules-autolinking',
+    'react-native-config',
+    '--json',
+    '--platform',
+    'ios'
+  ])
+
+  use_react_native!(
+    :path => config[:reactNativePath],
+    :hermes_enabled => true,
+    :app_path => "#{Pod::Config.instance.installation_root}/..",
+    :privacy_file_aggregation_enabled => true,
+  )
+
+  post_install do |installer|
+    react_native_post_install(installer, config[:reactNativePath], :mac_catalyst_enabled => false)
+
+    installer.pods_project.targets.each do |t|
+      t.build_configurations.each do |c|
+        c.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = deployment_target
+        c.build_settings['TARGETED_DEVICE_FAMILY'] = '1'
+      end
+    end
+
+    link_ardia_kit.call(installer)
+    publish_codegen_by_change.call(installer)
+  end
+end
+
+post_integrate do |installer|
+  publish_expo_provider_by_change.call(installer)
+end

@@ -1,3 +1,4 @@
+import { changedIds } from "../browser/changes";
 import { Clock, type HLC } from "../../platform/sync";
 import { pinKeyOf } from "../browser/model";
 import type { BrowserState } from "../browser/store";
@@ -76,8 +77,15 @@ function livePinTable<T>(table: Record<string, Record<string, T>>, s: Pick<Brows
   return changed ? out : table;
 }
 
+const pinTableTabsAlike = (tabs: BrowserState["tabs"], was: BrowserState["tabs"]) =>
+  changedIds(tabs, was).every((id) => {
+    const t = tabs[id];
+    const b = was[id];
+    return !!t && !!b && !!t.pin === !!b.pin && t.profileId === b.profileId && t.pinKey === b.pinKey;
+  });
+
 export function livePinTables(s: BrowserState, prev: BrowserState): Pick<BrowserState, "pinChoices" | "pinSync"> | null {
-  if (s.pinChoices === prev.pinChoices && s.pinSync === prev.pinSync && s.tabs === prev.tabs && s.groups === prev.groups && s.parkedPins === prev.parkedPins && s.profiles === prev.profiles) return null;
+  if (s.pinChoices === prev.pinChoices && s.pinSync === prev.pinSync && s.groups === prev.groups && s.parkedPins === prev.parkedPins && s.profiles === prev.profiles && pinTableTabsAlike(s.tabs, prev.tabs)) return null;
   const pinChoices = livePinTable(s.pinChoices, s);
   const pinSync = livePinTable(s.pinSync, s);
   return pinChoices !== s.pinChoices || pinSync !== s.pinSync ? { pinChoices, pinSync } : null;

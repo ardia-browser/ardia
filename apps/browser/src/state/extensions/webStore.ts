@@ -3,6 +3,7 @@ import { webviews } from "../../platform/webviews";
 import { webStoreExtensionId } from "@ardia/core";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { changedIds } from "../browser/changes";
+import { liveOf, onLiveChange } from "../tabs/tabLive";
 import { extensionProfile, findExtension, removeExtension, showInstallPrompt } from "./actions";
 import { focusedWindowOf } from "../windows/ui";
 import { noteExtensionInstallPrompt } from "../telemetry/usage";
@@ -66,17 +67,17 @@ export function startWebStoreIntegration() {
       if (tab.url === url) listen(tabId, url);
     });
   };
-  const sync = (s: BrowserState, prev?: BrowserState) => {
-    for (const [tabId, url] of listening) if (s.tabs[tabId]?.url !== url || s.live[tabId]?.isLoading) listening.delete(tabId);
-    const ids = prev ? new Set([...changedIds(s.tabs, prev.tabs), ...changedIds(s.live, prev.live)]) : Object.keys(s.tabs);
+  const sync = (s: BrowserState, ids: Iterable<string>) => {
+    for (const [tabId, url] of listening) if (s.tabs[tabId]?.url !== url || liveOf(tabId).isLoading) listening.delete(tabId);
     for (const id of ids) {
       const tab = s.tabs[id];
-      if (!tab || !isStorePage(tab.url) || s.live[id]?.isLoading || listening.get(id) === tab.url) continue;
+      if (!tab || !isStorePage(tab.url) || liveOf(id).isLoading || listening.get(id) === tab.url) continue;
       listen(id, tab.url);
     }
   };
   useBrowser.subscribe((s, prev) => {
-    if (s.tabs !== prev.tabs || s.live !== prev.live) sync(s, prev);
+    if (s.tabs !== prev.tabs) sync(s, changedIds(s.tabs, prev.tabs));
   });
-  sync(useBrowser.getState());
+  onLiveChange((id) => sync(useBrowser.getState(), [id]));
+  sync(useBrowser.getState(), Object.keys(useBrowser.getState().tabs));
 }

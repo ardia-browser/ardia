@@ -1,5 +1,12 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { after, test } from "node:test";
+globalThis.__DEV__ = false;
+await import("../../test-native/index.ts");
+globalThis.fetch = async () => ({ status: 503 });
+const client = await import("../telemetry/client.ts");
+client.loadChoice();
+client.setSharing(true, "settings");
+after(() => client.setSharing(false, "settings"));
 const { openDownload, isArchive } = await import("./openDownload.ts");
 const { takeDownloadsPanelCounts } = await import("../telemetry/downloadsPanelCounts.ts");
 
@@ -31,7 +38,7 @@ test("opening a downloaded zip shows it in Finder once, where Archive Utility un
   assert.deepEqual(mac.calls, [["open", "/d/Report.zip"], ["reveal", "/d/Report.zip"]], "one reveal, at the moment of the click; closing that Finder window is left alone");
   await new Promise((r) => setTimeout(r, 50));
   assert.equal(mac.calls.length, 2, "nothing is revealed after the click");
-  assert.deepEqual(takeDownloadsPanelCounts(), { downloads_panel_press_closes: 0, downloads_panel_held_opens: 0, download_archives_opened: 1 });
+  assert.deepEqual(takeDownloadsPanelCounts(), { downloads_panel_press_closes: 0, downloads_panel_held_opens: 0, download_archives_opened: 1, linux_downloads_panel_inside_presses: 0 });
 });
 
 test("other files only open, and a missing archive isn't revealed", async () => {

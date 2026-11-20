@@ -13,6 +13,7 @@ import { layoutHistory } from "./historyLayout";
 import { confirmRemoveSelected } from "../../state/history/historyMenus";
 import { allRows, movedCursor, NO_ROWS_SELECTED, shownRows, toggledCursor, toggledRow, withoutRows, type RowSelection } from "../../state/history/historySelection";
 import { noteHistoryRowsRemoved } from "../../state/telemetry/historyRemovalCounts";
+import { consentToken } from "../../state/telemetry/client";
 import { HistoryList } from "./HistoryList";
 import { hostLabel, PageHeader } from "./PageLayout";
 import { COMMAND_KEY, commandHeld } from "../../state/commands/keyNotation";
@@ -69,10 +70,11 @@ export function HistoryPage({ tabId, profileId, initialQuery }: { tabId: string;
 
   const deleteSelected = async (via: "key" | "button") => {
     if (!selected.size) return;
+    const consent = consentToken();
     const confirmed = await confirmRemoveSelected(windowId);
     if (!confirmed) return;
     removeHistory(profileId, [...selected]);
-    noteHistoryRowsRemoved(via, selected.size);
+    noteHistoryRowsRemoved(via, selected.size, consent);
     setSelection((prev) => ({ ...prev, selected: new Set() }));
   };
   const enterList = (step: 1 | -1) => {

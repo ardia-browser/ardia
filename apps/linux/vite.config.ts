@@ -28,8 +28,8 @@ const replacements = new Map([
   [here("../browser/src/components/sidebar/TileFace.tsx"), here("./src/TileFace.tsx")],
   [here("../browser/src/components/site/SiteConnection.tsx"), here("./src/SiteConnection.tsx")],
   [here("../browser/src/state/settings/paneData.ts"), here("./src/credentialPaneData.ts")],
-  [here("../browser/src/components/settings/panes/Passwords.tsx"), here("./src/LinuxPasswordsPane.tsx")],
-  [here("../browser/src/components/settings/panes/Autofill.tsx"), here("./src/LinuxAutofillPane.tsx")],
+  [here("../browser/src/components/settings/panes/ProfilePasswords.tsx"), here("./src/LinuxPasswordsPane.tsx")],
+  [here("../browser/src/components/settings/panes/ProfileAutofill.tsx"), here("./src/LinuxAutofillPane.tsx")],
   [here("../browser/src/state/import/apply.ts"), here("./src/importApply.ts")],
   [here("../browser/src/components/import/steps/UnlockStep.tsx"), here("./src/LinuxUnlockStep.tsx")],
   [here("../browser/src/state/sync/engine.ts"), here("./src/syncEngine.ts")],
@@ -42,18 +42,20 @@ const replacements = new Map([
 ]);
 const importedPasswordSave = {
   source: here("../browser/src/state/site/passwords.ts"),
-  importers: new Set([here("../browser/src/components/settings/panes/Passwords.tsx"), here("../browser/src/state/site/savedPasswords.ts")]),
+  importers: new Set([here("../browser/src/components/settings/panes/ProfilePasswords.tsx"), here("../browser/src/state/site/savedPasswords.ts")]),
   replacement: here("./src/importedPasswordSave.ts"),
 };
 const tabLifecycle = here("../browser/src/state/tabs/tabLifecycle.ts");
 const importerReplacements = new Map([
   [`${here("../browser/src/components/sidebar/Sidebar.tsx")}\0${here("../browser/src/components/window/SidebarDock.tsx")}`, here("./src/SidebarPeekMark.tsx")],
   [`${here("../browser/src/components/tabstrip/TopTabStrip.tsx")}\0${here("../browser/src/App.tsx")}`, here("./src/TopStripPeekRegion.tsx")],
+  [`${here("../browser/src/components/toolbar/AutoHideToolbar.tsx")}\0${here("../browser/src/components/window/TabPane.tsx")}`, here("./src/AutoHideToolbarRegion.tsx")],
+  [`${here("../browser/src/components/toolbar/AutoHideToolbar.tsx")}\0${here("../browser/src/components/toolbar/WindowToolbar.tsx")}`, here("./src/AutoHideToolbarRegion.tsx")],
   [`${here("../browser/src/components/peek/PeekOverlay.tsx")}\0${here("../browser/src/components/window/ContentCard.tsx")}`, here("./src/PeekOverlay.tsx")],
   [`${here("../browser/src/state/app/toasts.ts")}\0${tabLifecycle}`, here("./src/policyToasts.ts")],
   [`${here("../browser/src/platform/performance.ts")}\0${tabLifecycle}`, here("./src/policyPerformance.ts")],
   [`${here("../browser/src/state/site/webNotifications.ts")}\0${here("../browser/src/state/site/permissions.ts")}`, here("./src/notificationPermission.ts")],
-  [`${lazyComponentId(here("../browser/src/components/extensions/ExtensionOverlays.tsx"))}\0${here("../browser/src/components/settings/panes/Extensions.tsx")}`, here("./src/SettingsInstallDialog.tsx")],
+  [`${lazyComponentId(here("../browser/src/components/extensions/ExtensionOverlays.tsx"))}\0${here("../browser/src/components/settings/panes/ProfileExtensions.tsx")}`, here("./src/SettingsInstallDialog.tsx")],
   [`${here("../browser/src/platform/webviews.ts")}\0${here("../browser/src/state/drag/tabDrag.ts")}`, here("./src/dragWebviews.ts")],
   [`${here("../browser/src/platform/extensions.ts")}\0${here("../browser/src/state/extensions/actions.ts")}`, here("./src/extensionInstalls.ts")],
   [`${here("../browser/src/state/report/actions.ts")}\0${here("../browser/src/state/commands/appCommands.ts")}`, here("./src/reportProblem.ts")],

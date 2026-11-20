@@ -40,11 +40,13 @@ export const TabIcon = memo(function TabIcon({
   const sleeping = useIsSleeping(tabId ?? "");
   const marks = useIconMarks(tabId, givenMarks);
   const engine = tabId && size >= 14 ? markedEngine(marks) : null;
+  const opacity = sleeping || marks & FADED ? SLEEPING_OPACITY : 1;
   const props = { url, favicon, icon, size, color, direct };
+  if (!engine) return profile || !tabId ? <Icon {...props} opacity={opacity} profileId={profile} /> : <TabProfileIcon {...props} opacity={opacity} tabId={tabId} />;
   return (
-    <View style={{ opacity: sleeping || marks & FADED ? SLEEPING_OPACITY : 1 }}>
+    <View style={{ opacity }}>
       {profile || !tabId ? <Icon {...props} profileId={profile} /> : <TabProfileIcon {...props} tabId={tabId} />}
-      {engine ? <EngineMark mark={engine} size={size} /> : null}
+      <EngineMark mark={engine} size={size} />
     </View>
   );
 });
@@ -90,6 +92,7 @@ function Icon({
   color,
   profileId,
   direct,
+  opacity = 1,
 }: {
   url: string;
   favicon?: string | null;
@@ -98,17 +101,18 @@ function Icon({
   color?: string;
   profileId?: string;
   direct?: boolean;
+  opacity?: number;
 }) {
   const theme = useTheme();
   icon = drawnIcon(icon);
   const symbol = iconSymbol(icon);
-  if (symbol) return <Symbol name={symbol} size={size - 3} weight="medium" color={color ?? theme.icon} style={{ width: size, height: size }} />;
+  if (symbol) return <Symbol name={symbol} size={size - 3} weight="medium" color={color ?? theme.icon} style={{ width: size, height: size, opacity }} />;
   if (icon) {
     return (
-      <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
+      <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center", opacity }}>
         <Text style={{ fontSize: size - 3, lineHeight: size }}>{icon}</Text>
       </View>
     );
   }
-  return <Favicon url={url} favicon={favicon} size={size} profileId={profileId} direct={direct} />;
+  return <Favicon url={url} favicon={favicon} size={size} profileId={profileId} direct={direct} opacity={opacity} fallbackColor={color} />;
 }

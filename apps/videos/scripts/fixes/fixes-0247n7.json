@@ -1,0 +1,84 @@
+{
+  "id": "fixes-0247n7",
+  "dropEvents": ["mark", "row", "tile", "opened", "closed"],
+  "segments": [
+    {
+      "scene": "s7press",
+      "title": "Tabs and tiles hold still when pressed",
+      "body": "Two tabs, then two pinned tiles, pressed in the sidebar. nightly.6 squished each one and bounced it back. Now they stay put; the hover highlight still fades.",
+      "cam": [0, 0, 246, 420],
+      "lead": 0.5,
+      "tail": 10.0,
+      "ripple": true
+    },
+    {
+      "scene": "s7press",
+      "sync": "row",
+      "title": "A pressed tab, slowed down",
+      "body": "The first press again at a quarter of the speed. In nightly.6 the row shrinks under the pointer and springs back. Now it doesn't move.",
+      "cam": [0, 0, 246, 420],
+      "lead": 0.15,
+      "tail": 1.3,
+      "rate": 0.25,
+      "ripple": true
+    },
+    {
+      "scene": "s7press",
+      "sync": "tile",
+      "title": "A pressed tile, slowed down",
+      "body": "A pinned tile at a quarter of the speed. nightly.6 shrank the tile and its icon. Now the tile holds its size.",
+      "cam": [0, 0, 246, 420],
+      "lead": 0.15,
+      "tail": 1.3,
+      "rate": 0.25,
+      "ripple": true
+    },
+    {
+      "scene": "s7folder",
+      "title": "Folders open without a jolt",
+      "body": "Two folders opened and closed. In nightly.6 the folder icon slid sideways and sprang back on every click. Now it stays where it is.",
+      "cam": [0, 0, 246, 340],
+      "lead": 0.5,
+      "tail": 11.0,
+      "ripple": true
+    },
+    {
+      "scene": "s7folder",
+      "sync": "opened",
+      "title": "Opening a folder, slowed down",
+      "body": "The first click at a quarter of the speed. Watch the folder icon: it jumps right and back in nightly.6, and holds still now.",
+      "cam": [0, 0, 246, 340],
+      "lead": 0.15,
+      "tail": 1.4,
+      "rate": 0.25,
+      "ripple": true
+    },
+    {
+      "scene": "s7look",
+      "title": "Folders look like folders again",
+      "body": "A folder with no colour of its own and a live folder of pull requests. nightly.6 drew a plain outline and the GitHub icon. Now both get the tinted folder from nightly.5.",
+      "cam": [0, 0, 246, 380],
+      "lead": 0.3,
+      "tail": 4.0,
+      "cursor": false
+    },
+    {
+      "scene": "s7settings",
+      "title": "The ardia command is now a plugin",
+      "body": "Settings › Plugins, then Advanced. nightly.6 listed no plugins and kept an on/off switch for the ardia command. Now Command Line is under Plugins, and Advanced says whether it's installed, with a link to Plugins.",
+      "cam": [137, 44, 804, 628],
+      "lead": 0.3,
+      "tail": 10.2,
+      "cursor": false
+    },
+    {
+      "scene": "s7little",
+      "title": "Little Ardia follows the switcher setting",
+      "body": "Two profiles, with Switcher in the sidebar shows set to Nothing. nightly.6 still drew the profile button in Little Ardia's bar. Now it's hidden there too; ⌃1 to ⌃9 still switch.",
+      "cam": [0, 0, 900, 640],
+      "lead": 0.3,
+      "tail": 4.2,
+      "cursor": false
+    }
+  ]
+}

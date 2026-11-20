@@ -4,8 +4,8 @@ const MAX_HELD = 500;
 const MAX_ANSWERS = 100;
 
 export type Relayed =
-  | { kind: "capture"; event: string; props: Record<string, unknown>; options: Record<string, unknown> }
-  | { kind: "log"; level: "warn" | "error"; message: string; attributes: Record<string, string | number | boolean> };
+  | { kind: "capture"; event: string; props: Record<string, unknown>; options: Record<string, unknown>; consent: string | null }
+  | { kind: "log"; level: "warn" | "error"; message: string; attributes: Record<string, string | number | boolean>; consent: string | null };
 
 export type TelemetryOp = "reset" | "end" | "reopen" | "choice";
 
@@ -43,7 +43,7 @@ const isFields = (value: unknown): value is Record<string, unknown> => typeof va
 const OPS: readonly string[] = ["reset", "end", "reopen", "choice"];
 
 export function isRelayed(value: unknown): value is Relayed {
-  if (!isFields(value)) return false;
+  if (!isFields(value) || (value.consent !== null && typeof value.consent !== "string")) return false;
   if (value.kind === "capture") return typeof value.event === "string" && isFields(value.props) && isFields(value.options);
   if (value.kind === "log") return (value.level === "warn" || value.level === "error") && typeof value.message === "string" && isFields(value.attributes);
   return false;
@@ -73,6 +73,7 @@ export function startTelemetryLeadership(deps: TelemetryLeadershipDeps): Telemet
   const newId = deps.newId ?? (() => crypto.randomUUID());
   const channel = deps.channel;
   const post = (message: Wire) => channel?.postMessage(message);
+  const deliver = (message: Relayed) => deps.deliver(message);
   let role: "pending" | "follower" | "becoming" | "leader" = "pending";
   const held: Relayed[] = [];
   const unacked = new Map<string, Relayed>();
@@ -127,7 +128,7 @@ export function startTelemetryLeadership(deps: TelemetryLeadershipDeps): Telemet
     if (!isWire(data)) return;
     if (role === "leader") {
       if (data.kind === "relay") {
-        deps.deliver(data.message);
+        deliver(data.message);
         post({ kind: "ack", id: data.id });
       } else if (data.kind === "request") void answer(data.id, data.op, data.arg);
     } else if (role === "becoming") {
@@ -154,10 +155,10 @@ export function startTelemetryLeadership(deps: TelemetryLeadershipDeps): Telemet
     }
     role = "leader";
     deps.relay(null);
-    for (const message of [...unacked.values(), ...held.splice(0)]) deps.deliver(message);
+    for (const message of [...unacked.values(), ...held.splice(0)]) deliver(message);
     unacked.clear();
     for (const { id, message } of heard.splice(0)) {
-      deps.deliver(message);
+      deliver(message);
       post({ kind: "ack", id });
     }
     for (const { id, op, arg } of asked.splice(0)) void answer(id, op, arg);

@@ -1,0 +1,31 @@
+import { Platform } from "react-native";
+import Svg, { Path } from "react-native-svg";
+import { useDesign } from "./design";
+import { MaterialSymbol, materialSymbolFor } from "./MaterialSymbol";
+import { SYMBOLS, type SymbolName } from "./symbolPaths";
+
+export function Symbol({ name, size, color }: { name: SymbolName; size: number; color: string }) {
+  const material = useDesign() === "material";
+  const drawn = material && Platform.OS === "android" ? materialSymbolFor(name) : null;
+  if (drawn) return <MaterialSymbol name={drawn} size={size} color={color} />;
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      {SYMBOLS[name].map((layer, index) => (
+        <Path
+          key={index}
+          d={layer.d}
+          fill={"fill" in layer && layer.fill ? color : "none"}
+          fillRule={"evenOdd" in layer && layer.evenOdd ? "evenodd" : "nonzero"}
+          stroke={"stroke" in layer ? color : "none"}
+          strokeWidth={"stroke" in layer ? layer.stroke : 0}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          rotation={"rotate" in layer ? layer.rotate : 0}
+          scale={"scale" in layer ? layer.scale : 1}
+          translate={"shift" in layer ? [layer.shift ?? 0, layer.shift ?? 0] : undefined}
+          origin="12, 12"
+        />
+      ))}
+    </Svg>
+  );
+}

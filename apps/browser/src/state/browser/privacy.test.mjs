@@ -30,13 +30,13 @@ function privateWindowWith(...urls) {
 }
 
 
-test("incognito window: own profile, closing records nothing, history ignored", () => {
+test("incognito window: own profile, closing records nothing, history ignored", async () => {
   S().hydrate({});
   const w = S().createWindow({ kind: "private", url: "secret.com" });
   const tab = S().tabs[model.activeTabId(S(), w)];
   assert.equal(tab.profileId, `incognito:${w}@default`);
   stub.historyDbs.clear();
-  assert.equal(S().importHistory(tab.profileId, [{ url: "https://secret.com/", title: "S", visits: 1, lastVisit: Date.now() }]), 0);
+  assert.equal((await S().importHistory(tab.profileId, [{ url: "https://secret.com/", title: "S", visits: 1, lastVisit: Date.now() }])).added, 0);
   S().removeHistory(tab.profileId, ["https://secret.com/"]);
   assert.equal(S().history[model.engineProfile(S(), tab.profileId)], undefined);
   assert.equal(stub.historyDbs.size, 0, "nothing reaches Chrome's history, not even the default profile's");
@@ -312,10 +312,10 @@ test("queued profile data is deleted once, and stays queued in session.json unti
   again();
 });
 
-test("deleting a profile keeps the data others share", () => {
+test("deleting a profile keeps the data others share", async () => {
   S().hydrate({});
   const a = S().createProfile({ name: "A" });
-  S().importHistory(a, [{ url: "https://a.com/", title: "A", visits: 1, lastVisit: 2 }]);
+  await S().importHistory(a, [{ url: "https://a.com/", title: "A", visits: 1, lastVisit: 2 }]);
   const bookmark = S().addBookmark({ profileId: a, url: "https://b.com/", title: "B" });
   const b = S().createProfile({ name: "B", shareWith: a });
   S().deleteProfile(a);
@@ -323,7 +323,7 @@ test("deleting a profile keeps the data others share", () => {
   assert.equal(model.engineProfile(S(), b), a, "still on A's engine context");
   assert.ok(S().bookmarks.nodes[bookmark], "shared bookmarks stay");
   assert.deepEqual(historyOf(S(), b).map((h) => h.url), ["https://a.com/"]);
-  S().importHistory(b, [{ url: "https://c.com/", title: "C", visits: 1, lastVisit: 3 }]);
+  await S().importHistory(b, [{ url: "https://c.com/", title: "C", visits: 1, lastVisit: 3 }]);
   assert.equal(historyOf(S(), b).length, 2);
   S().deleteProfile(b);
   assert.equal(S().bookmarks.nodes[bookmark], undefined);

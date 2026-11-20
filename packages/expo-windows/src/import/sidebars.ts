@@ -1,17 +1,43 @@
-import type { SpaceSuggestion, SpaceSummary } from "@ardia/import";
+import type { ArcArchive, ArcRouting, SpaceSuggestion, SpaceSummary } from "@ardia/import";
 import { parseArcSidebar, type ArcSidebar } from "./arcSidebar";
-import { join, type ImportHost } from "./host";
+import { ARC_ARCHIVE_FILE, ARC_ROUTING_FILE, ARCHIVE_BYTES, changesFallback, parseArcArchive, parseArcRouting, ROUTING_BYTES } from "./arcExtras";
+import { exists, join, type ImportHost } from "./host";
 import { ImportFailure, linkCount, type ImportKind, type Profile, type Result } from "./model";
 import { loadZenSidebar, zenContainerNames, type ZenSidebar } from "./zenSidebar";
 
-export const ARC_SIDEBAR_FILE = "Packages\\TheBrowserCompany.Arc_ttt1ap7aakyb4\\LocalCache\\Local\\Arc\\StorableSidebar.json";
+const ARC_DIR = "Packages\\TheBrowserCompany.Arc_ttt1ap7aakyb4\\LocalCache\\Local\\Arc";
+export const ARC_SIDEBAR_FILE = `${ARC_DIR}\\StorableSidebar.json`;
 
 const LARGEST_SIDEBAR_BYTES = 64 << 20;
 
 export const arcSidebarPath = (host: ImportHost) => join(host.localAppData, ARC_SIDEBAR_FILE);
 
+export const arcFilePath = (host: ImportHost, ...name: string[]) => join(host.localAppData, ARC_DIR, ...name);
+
+export const arcSpaceNames = (sidebar: ArcSidebar | null | undefined) => new Map((sidebar?.spaces ?? []).map((s) => [s.id, s.name]));
+
+export async function readArcRouting(host: ImportHost, sidebar: ArcSidebar | null): Promise<ArcRouting> {
+  const raw = await host.readTextWithin(arcFilePath(host), arcFilePath(host, ARC_ROUTING_FILE), ROUTING_BYTES).catch(() => null);
+  if (raw === null) throw new ImportFailure("notFound", "No readable Arc Air Traffic Control rules");
+  return parseArcRouting(raw, arcSpaceNames(sidebar));
+}
+
+export async function readArcArchive(host: ImportHost, sidebar: ArcSidebar | null): Promise<ArcArchive> {
+  const raw = await host.readTextWithin(arcFilePath(host), arcFilePath(host, ARC_ARCHIVE_FILE), ARCHIVE_BYTES).catch(() => null);
+  if (raw === null && (await exists(host, arcFilePath(host), ARC_ARCHIVE_FILE))) throw new ImportFailure("unreadable", "Arc's archive couldn't be read");
+  return parseArcArchive(raw, null, arcSpaceNames(sidebar));
+}
+
+async function arcExtraKinds(host: ImportHost, sidebar: ArcSidebar | null): Promise<ImportKind[]> {
+  const kinds: ImportKind[] = [];
+  const routing = await readArcRouting(host, sidebar).catch(() => null);
+  if (routing && (routing.rules.length || routing.skipped || changesFallback(routing))) kinds.push("linkRules");
+  if (await exists(host, arcFilePath(host), ARC_ARCHIVE_FILE)) kinds.push("archive");
+  return kinds;
+}
+
 export async function loadArcSidebar(host: ImportHost): Promise<ArcSidebar> {
-  const raw = await host.readText(arcSidebarPath(host), LARGEST_SIDEBAR_BYTES).catch(() => null);
+  const raw = await host.readTextWithin(arcFilePath(host), arcSidebarPath(host), LARGEST_SIDEBAR_BYTES).catch(() => null);
   if (raw == null) throw new ImportFailure("notFound", "No Arc sidebar data");
   return parseArcSidebar(raw);
 }
@@ -38,10 +64,11 @@ export function spaceSummaries(spaces: SpaceSuggestion[], containers?: Map<numbe
 
 export async function attachArcSpaces(host: ImportHost, profiles: Profile[]): Promise<Profile[]> {
   const sidebar = await loadArcSidebar(host).catch(() => null);
-  if (!sidebar) return profiles;
+  const extras = await arcExtraKinds(host, sidebar);
+  if (!sidebar) return profiles.map((profile) => ({ ...profile, available: [...profile.available, ...extras] }));
   return profiles.map((profile) => {
     const spaces = sidebar.spaces.filter((s) => s.profileId === profile.id);
-    const kinds: ImportKind[] = [...profile.available];
+    const kinds: ImportKind[] = [...profile.available, ...extras];
     if (spaces.length) kinds.push("spaces", "pinnedTabs", "tabs");
     if (sidebar.favorites[profile.id]?.length) kinds.push("favorites");
     return { ...profile, spaces: spaceSummaries(spaces), available: kinds };
@@ -84,6 +111,10 @@ export class Sidebars {
 
   loadedZen() {
     return this.zen;
+  }
+
+  loadedArc() {
+    return this.arc;
   }
 
   async spaces(sidebar: "arc" | "zen" | undefined): Promise<SpaceSuggestion[] | undefined> {

@@ -10,7 +10,7 @@ export const pinHome = (t: Pick<Tab, "url" | "pinnedUrl">, housed: boolean): str
 export function settlePinHomes(s: HomeSource, prev: HomeSource): Pick<BrowserState, "tabs"> | null {
   if (s.tabs === prev.tabs && s.groups === prev.groups) return null;
   const members = pinnedGroupMembers(s.groups);
-  const ids = s.groups !== prev.groups || s.windows !== prev.windows ? Object.keys(s.tabs) : changedIds(s.tabs, prev.tabs);
+  const ids = s.groups !== prev.groups ? Object.keys(s.tabs) : changedIds(s.tabs, prev.tabs);
   let tabs: Record<string, Tab> | null = null;
   for (const id of ids) {
     const t = s.tabs[id];

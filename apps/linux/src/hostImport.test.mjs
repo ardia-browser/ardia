@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CHOOSER_DEADLINE_MS, IMPORT_IDLE_MS, UNLOCK_DEADLINE_MS, UNLOCK_LIFETIME_MS, createHostImport, pendingPasswords } from "./hostImport.ts";
+import { CHOOSER_DEADLINE_MS, IMPORT_IDLE_MS, MAX_SPACE_IDS, UNLOCK_DEADLINE_MS, UNLOCK_LIFETIME_MS, createHostImport, nativeSpaceIds, pendingPasswords } from "./hostImport.ts";
 import { applyPendingPasswords, applyResult, setImportPasswordSink } from "./importApply.ts";
 import { IMPORT_HANDLE_LIFETIME_MS, claimImportHandle, isImportHandle, issueImportHandles } from "./importHandles.ts";
 import { savePassword } from "./importedPasswordSave.ts";
@@ -95,7 +95,7 @@ test("importData starts a native job, maps only its own progress and resolves a 
   assert.equal(start.method, "ArdiaImport.startImport");
   const [jobId, ...rest] = start.args;
   assert.match(jobId, /^import-import-\d+$/);
-  assert.deepEqual(rest, ["chrome", "Default", ["bookmarks", "passwords"], { historyLimit: 10, historySince: undefined }]);
+  assert.deepEqual(rest, ["chrome", "Default", ["bookmarks", "passwords"], { historyLimit: 10, historySince: undefined, spaceIds: undefined }]);
   emit({ jobId: "someone-else", type: "progress", kind: "history", phase: "start", processed: 0 });
   emit({ jobId, type: "progress", kind: "bookmarks", phase: "start", processed: 0 }, "ArdiaShell");
   emit({ jobId, type: "progress", kind: "bookmarks", phase: "start", processed: 0 });
@@ -118,6 +118,41 @@ test("importData starts a native job, maps only its own progress and resolves a 
   assert.equal(result.warnings.length, 1);
   assert.deepEqual(pendingPasswords(result), { token: TOKEN, count: 3 });
   assert.equal(listeners.size, 0);
+});
+
+test("importData sends each Zen profile only its own chosen spaces, so the cap never drops another profile's", async () => {
+  const ids = (prefix) => Array.from({ length: 200 }, (_, i) => `{${prefix}-${i}}`);
+  const profile = (id, spaces) => ({ id, name: id, path: `/z/${id}`, isDefault: false, available: ["spaces"], spaces: spaces.map((space) => ({ id: space, name: space, pinnedCount: 0, tabCount: 0 })) });
+  const sources = [{ id: "zen", name: "Zen", family: "firefox", sidebar: "zen", requiresExport: false, needsKeychain: false, profiles: [profile("a.Work", ids("w")), profile("b.Home", ids("h"))] }];
+  const { api, calls } = fixture({ replies: { "ArdiaImport.listBrowsers": sources } });
+  await api.listBrowsers();
+  const chosen = [...ids("w"), ...ids("h")];
+  void api.importData("zen", "a.Work", ["spaces"], { spaceIds: chosen }).catch(() => {});
+  void api.importData("zen", "b.Home", ["spaces"], { spaceIds: chosen }).catch(() => {});
+  await settle();
+  const sent = calls.filter((c) => c.method === "ArdiaImport.startImport").map((c) => c.args[4].spaceIds);
+  assert.deepEqual(sent, [ids("w"), ids("h")]);
+});
+
+test("importData forwards the chosen Zen spaces as bounded space ids", async () => {
+  const { api, calls, emit } = fixture();
+  const running = api.importData("zen", "abcd.Work", ["spaces", "pinnedTabs", "tabs"], { spaceIds: ["{work}", "{work}", "", 7, "x".repeat(257), "{home}"] });
+  await settle();
+  const [start] = calls;
+  const [jobId, ...rest] = start.args;
+  assert.deepEqual(rest, ["zen", "abcd.Work", ["spaces", "pinnedTabs", "tabs"], { historyLimit: undefined, historySince: undefined, spaceIds: ["{work}", "{home}"] }]);
+  emit({ jobId, type: "done", result: { browserId: "zen", profileId: "abcd.Work", spaces: [{ id: "{work}", name: "Work", profileId: "abcd.Work", pinned: [], tabs: [] }], favorites: [], separateEssentials: false } });
+  const result = await running;
+  assert.equal(result.spaces.length, 1);
+  assert.equal(result.separateEssentials, false);
+});
+
+test("space ids are capped in count and length and dropped when not a list", () => {
+  assert.equal(nativeSpaceIds(undefined), undefined);
+  assert.equal(nativeSpaceIds("{work}"), undefined);
+  assert.deepEqual(nativeSpaceIds([]), []);
+  assert.equal(nativeSpaceIds(Array.from({ length: MAX_SPACE_IDS + 10 }, (_, i) => `{space-${i}}`)).length, MAX_SPACE_IDS);
+  assert.deepEqual(nativeSpaceIds(["é".repeat(128), "é".repeat(129)]), ["é".repeat(128)]);
 });
 
 test("importData streams history in chunks when asked", async () => {

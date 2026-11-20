@@ -10,6 +10,8 @@ import type {
 } from "../../platform/tabs";
 import type { ExternalAppRequest } from "../../platform/siteSettings";
 import type { PermissionRequest } from "../../platform/permissions";
+
+export type VerificationCodeOffer = { token: string; app: string; host: string; generation: number };
 import { create } from "zustand";
 import { useBrowser } from "../browser/store";
 import { recordWatch, useKeyed } from "../browser/keyedWatch";
@@ -33,6 +35,7 @@ export type PageState = {
   passwordPrompt: PasswordPrompt | null;
   autofillPrompt: AutofillPrompt | null;
   externalApp: ExternalAppRequest | null;
+  verificationCode: VerificationCodeOffer | null;
   mediaAccess: MediaAccess | null;
   wasNewTab: boolean;
   backToNewTab: boolean;
@@ -54,6 +57,7 @@ const IDLE_PAGE: PageState = {
   passwordPrompt: null,
   autofillPrompt: null,
   externalApp: null,
+  verificationCode: null,
   mediaAccess: null,
   wasNewTab: false,
   backToNewTab: false,
@@ -111,12 +115,19 @@ export function setPopover(tabId: string, popover: Store["popover"][string]) {
   usePages.setState((s) => ({ popover: { ...s.popover, [tabId]: popover } }));
 }
 
+const fullscreenScans = new WeakMap<Store["pages"], string>();
+
+function fullscreenIds(pages: Store["pages"]): string {
+  let ids = fullscreenScans.get(pages);
+  if (ids !== undefined) return ids;
+  ids = "";
+  for (const id in pages) if (pages[id]!.fullscreen) ids += `${id}\n`;
+  fullscreenScans.set(pages, ids);
+  return ids;
+}
+
 export function useFullscreenTab(windowId: string): string | undefined {
-  const fullscreen = usePages((s) => {
-    let ids = "";
-    for (const id in s.pages) if (s.pages[id]!.fullscreen) ids += `${id}\n`;
-    return ids;
-  });
+  const fullscreen = usePages((s) => fullscreenIds(s.pages));
   return useBrowser((s) => {
     if (!fullscreen) return undefined;
     const active = activeTabId(s, windowId);

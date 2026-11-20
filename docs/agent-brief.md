@@ -14,7 +14,7 @@ variables) is in `docs/conventions.md`, enforced by `apps/browser/src/convention
   inline styles.
 - Native code lives in Expo modules under `packages/*/ios` (Swift / Objective-C++):
   - `packages/ardiacore`: the web engine, **ArdiaCore**: Chrome's own framework (`Chromium Framework.framework`,
-    Chromium 157.0.8103.50 + Helium 0.21.2 + our patch series, `docs/engine-build.md`) with our layer linked
+    Chromium 158.0.8127.36 + Helium 0.22.1 + our patch series, `docs/engine-build.md`) with our layer linked
     in, and the Expo modules and JS API the app uses (`docs/ardiacore-spike.md`, `docs/ardiacore-parity.md`).
     - **Chromium runs the process.** `main.swift` calls `ArdiaHost.run`: `ChromeMain` starts with our
       `ACMainDelegate`, `NSApp` is Chrome's `BrowserCrApplication`, and the React Native host (`AppDelegate`) starts
@@ -51,7 +51,7 @@ variables) is in `docs/conventions.md`, enforced by `apps/browser/src/convention
   pnpm can add bogus `deleted file` entries (drop them and run `pnpm install` again under the same lock).
   Mark edits `[Ardia: … Ardia]`. Current patches: `react-native-macos` (a view's `transform` survives
   AppKit layout and applies from its centre; RCTTiming's display link, c7ebd600; a view in a scroll view observes its bounds once, not once per re-add; focus() on a text field being edited keeps its edit, caret and selection; a placeholder change on an empty field being edited isn't a blur; a placeholder colour change on a field being edited reaches its field editor, so it shows once the field is emptied, and its text keeps the field's own colour; a single-line field with pastedTypes pastes only those as plain text, line breaks folded as in Chrome's omnibox, a088913e; a container whose children change leaves the ones already in place alone instead of re-adding every one, 6d7277fd; a mouse touch matches its own down on the same button and is never recorded twice, so JS never gets a null touch, 8bd086c8; mounts go through one queue in layout order, and a live-resize layout, which React Native mounts on the main thread at once, first mounts every older one still queued, so a zoomed window never keeps an older layout and its views track the window during the animation, 2f4aa603; a network task's callback blocks are atomic and only one of
-  cancel, error and completion finishes it, so a cancel racing a completion never frees the block being called, #955; a React view whose parent and children are all React views leaves Auto Layout, which every macOS 26+ window engages and whose memory exploded with thousands of sidebar rows, #952; a view whose `overflow` changes redisplays its layer, so one that stops clipping at the same size stops masking its children; `measureInWindow` answers in the owning React root's points from its top left, and border images and decoded images use the view's own backing density, interface size included, and redraw when it changes; on a fractional pixel grid Yoga gives a node thinner than 3 device pixels one whole-pixel size wherever it sits, at least 1, so hairlines and 1 point rules neither vanish nor vary) and `expo-modules-core` (the JS
+  cancel, error and completion finishes it, so a cancel racing a completion never frees the block being called, #955; a React view whose parent and children are all React views leaves Auto Layout, which every macOS 26+ window engages and whose memory exploded with thousands of sidebar rows, #952; a view whose `overflow` changes redisplays its layer, so one that stops clipping at the same size stops masking its children; `measureInWindow` answers in the owning React root's points from its top left, and border images and decoded images use the view's own backing density, interface size included, and redraw when it changes; on a fractional pixel grid Yoga gives a node thinner than 3 device pixels one whole-pixel size wherever it sits, at least 1, so hairlines and 1 point rules neither vanish nor vary; a scroll tells hover once, from its RCTScrollView, not through an observer on every view in it; its first step is checked as any layout change is, so a lone wheel notch moves the highlight at once and leaves it alone on the same row, and while the scroll goes on a view in it is left on the step that takes it out from under the pointer and none is entered until it pauses, neither by the layout check nor by the enters AppKit sends for each view that scrolls under a real pointer; `removeClippedSubviews` hides the children further than 300 pt outside the scroll view's visible part instead of removing them, so AppKit skips them on each scroll step and measuring them still works, hides nothing while VoiceOver or Switch Control is on, never the child that holds the keyboard focus, and a hidden child that moves to another parent is shown there; a Pressable with no `onHoverIn` or `onHoverOut` asks for no mouse enter and leave, so its view gets no tracking area) and `expo-modules-core` (the JS
   runtime is prepared on the JS thread only, 364f5f7e).
 
 ## The engine
@@ -299,7 +299,7 @@ The only variables the app and engine read, through `ArdiaLaunchConfig` (`packag
 | | `updateFeed=<url>` | Sparkle's feed; a scratch instance checks for updates only with one |
 | | `allowAudio` · `allowOcclusion` | Background mode keeps sound · keeps Chrome's occlusion |
 | | `releaseNotes` | Opens the release notes as after an update (works on a Developer ID build: the release smoke) |
-| | `cliHome=<dir>` · `cliBinDir=<dir>` · `cliUrl=<url>` | Where the `ardia` command installs, links and downloads from (`docs/cli.md`); a test instance installs only with the first two |
+| | `cliHome=<dir>` · `cliBinDir=<dir>` · `cliUrl=<url>` | Where the `ardia` command installs, links and downloads from (`docs/cli.md`); a test instance installs only with the first two, and links plugins' programs only into `cliBinDir` (`docs/plugins.md` › programs) |
 | | `syncFolder=<dir>` | The sync folder (`packages/sync/scripts/e2e.mjs`) |
 | | `sharedFolders=<dir>` | Where Share Folder… creates shared folders and where Add Shared Folder… starts (`iCloud Drive › Ardia Shared` otherwise; a scratch data dir uses `<data dir>/Ardia Shared`), `docs/shared-folders.md` |
 | | `importSourceDir=<dir>` · `importSafariHome=<dir>` | Where import looks for other browsers and Safari's home, so a scratch instance never sees the owner's profiles |
@@ -308,7 +308,6 @@ The only variables the app and engine read, through `ArdiaLaunchConfig` (`packag
 | | `pip` · `pipZoom` | PiP windows to `/tmp/ac-pip-trace.log` · PiP zoom gestures, `[pip-zoom]` |
 | | `trafficLights` | Every traffic-light change to `<data dir>/traffic-lights.log` |
 | | `profileGate` | The browser process's parsed and gated command lines, at startup and after chrome://flags |
-| | `protectedVideo` | The Netflix and Disney+ FairPlay bridge (keys, the local HLS server, the player's state each second), `[protectedVideo]` in the system log; YouTube's FairPlay HLS bridge (`ArdiaHLSVideo`: key requests, CKCs, the player each second, PiP) as `[hlsVideo]` |
 | `ARDIA_TEST` | `keychain=file` (+ `keychainHiddenReads=<n>`, `keychainFail=decode\|denied\|interaction\|entitlement\|io`) | A file-backed keychain in the data dir instead of the login keychain |
 | | `safeStorageAnswer=start-over` | Answers the Safe Storage dialog with Start Over (background mode) |
 | | `reauth=granted` | Grants macOS re-auth requests in background mode (otherwise refused) |
@@ -320,13 +319,15 @@ The only variables the app and engine read, through `ArdiaLaunchConfig` (`packag
 | | `systemLocationPermission=ask\|denied\|granted` | The app's macOS location access (`ArdiaLocation`): `ask` is not determined and a request answers Allow. A background instance never asks macOS and reads as not determined without it |
 | | `appMenu` · `appDialog` | The app's own menus (`showMenu`) dump to `<data dir>/menu.json` and take their pick from `….pick` · `confirm` and `prompt` dump to `dialog.json` and take their answer from `….pick` |
 | | `pipSelfTest=close\|backToTab\|hover\|style` · `pipHover=close\|back` | PiP self-tests on the first PiP window (background mode), results in the data dir |
-| | `videoMirror` | The video controls mirror runs on any page's playing `<video>` and shows without protected playback; its timings go to `<data dir>/video-mirror.json` and a snapshot of the mirror to `video-mirror.png` |
-| | `protectedVideoOrigin=http://127.0.0.1:<port>` | The Netflix and Disney+ FairPlay bridge also serves that local origin's `/play/` pages, so a clear fMP4 test page drives it end to end (with the FairPlay in Chromium setting on) |
 | | `fakeFullScreenMs=<ms>` | Length of the acted-out full-screen transition |
 | | `shadersKeyWindow` | Metal views act as in the key window (the New Tab intro) |
 | | `peekStrict` | Peek's test hooks stop relaxing its click checks |
+| | `peekMesh=unavailable\|throws` · `peekReady=never` · `peekReduceMotion` · `peekSlow=<n>` | Peek's motion (`docs/peek-motion.md`): the Genie mesh reported missing or throwing on build, a page that never reports a drawn frame (the 150 ms timeout), Reduce Motion, and the Genie <n> times slower for captures |
 | | `importSecret=<s>` · `importDiaBundleId=<id>` · `importDiaWindows=<json>` | Import's Safe Storage secret · the app Dia's tabs come from (opened hidden and quit by the import) · fixture windows answering for it, with no Automation prompt |
-| | `cliInstallScript=<path>` | Another `ardia` installer script |
+| | `cliInstallScript=<path>` | Another `ardia` installer script (the Linux and Windows hosts' installer; macOS no longer runs one) |
+| | `applePasswordsPanel` | Background mode really opens macOS's Passwords panel for the key and Edit › AutoFill › Passwords… instead of logging it (`docs/testing.md`); the panel is another process's window and can show on screen |
+| | `systemPanelRace` | Runs AppKit's delayed autofill show-or-hide pass right after the Passwords command, to check the panel survives it (`docs/testing.md`) |
+| | `bundledPlugins=<dir>` | Built-in plugins come from this folder instead of `Ardia.app/Contents/Resources/Plugins` (`docs/plugins.md` › Built-in plugins) |
 | | `legacySource=<home>` · `legacyCrashAfter=<step>` | The Netnyahoo → Ardia migration from a scratch home |
 | | `bangsUrl` · `onboarding` · `whatsNew` · `telemetry` · `liveMock=<url>` · `calendarFixture` | Debug builds only: bang list, run onboarding, show What's New, send telemetry, live folders from a mock, the calendar fixture |
 | | `cdpTabsVisible` | A tab that a DevTools-port client (`ARDIA_REMOTE_DEBUGGING_PORT`) attaches to stays visible to its renderer until that session detaches, as on the `ardia` command's token path (`ac_cli_visible_tabs.cc`; `docs/cli.md` › Input) |

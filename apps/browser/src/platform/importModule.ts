@@ -1,6 +1,11 @@
 import type * as ImportApi from "@ardia/import";
 
 export type {
+  ArcArchive,
+  ArcArchivedTab,
+  ArcLinkDestination,
+  ArcLinkRule,
+  ArcRouting,
   BookmarkNode,
   BrowserProfile,
   BrowserSource,
@@ -8,7 +13,9 @@ export type {
   DiaTabsProfile,
   DiaTabsResult,
   ImportedExtension,
+  ImportedExtensionSkip,
   ImportedFavicon,
+  ImportedSearchEngine,
   ImportedTab,
   ImportKind,
   ImportResult,

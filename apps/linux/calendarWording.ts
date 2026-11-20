@@ -6,12 +6,12 @@ const REFUSED = "Evolution Data Server refused to share your calendars with Ardi
 
 export const CALENDAR_WORDING: readonly Wording[] = [
   {
-    file: "components/settings/panes/Calendar.tsx",
+    file: "components/settings/panes/CalendarSection.tsx",
     replacements: [
-      ["Events come from the Calendar app's accounts.", "Events come from Evolution Data Server: the accounts in GNOME Online Accounts and the calendars in GNOME Calendar or Evolution."],
+      ["Uses the Calendar app's accounts.", "Uses Evolution Data Server: the accounts in GNOME Online Accounts and the calendars in GNOME Calendar or Evolution."],
       [
         `"Ardia isn't allowed to read your calendars. Allow it in System Settings › Privacy & Security › Calendars."`,
-        `access === "restricted" ? ${JSON.stringify(UNAVAILABLE)} : ${JSON.stringify(REFUSED)}`,
+        `(access === "restricted" ? ${JSON.stringify(UNAVAILABLE)} : ${JSON.stringify(REFUSED)})`,
       ],
       [
         `{blocked ? (
@@ -32,7 +32,7 @@ export const CALENDAR_WORDING: readonly Wording[] = [
       ],
       [
         "Allow Ardia in System Settings › Privacy & Security › Calendars to see your meetings here.",
-        "Ardia can't read your calendars from Evolution Data Server. Settings › Calendar shows how to fix it.",
+        "Ardia can't read your calendars from Evolution Data Server. Settings › Automations › Calendar shows how to fix it.",
       ],
     ],
   },

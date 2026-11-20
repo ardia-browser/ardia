@@ -12,6 +12,7 @@ import { tileFolderOf } from "./tileFolders";
 import { syncGroupOrder, withParent } from "../groups/groups";
 import { cleanedTabsFor, closedEntries, closeQuietly, keptCleanedTabs, regroupRestored, restoreSnapshots, restoreTarget } from "./closedTabs";
 import { activated, apply, removeTabs } from "../tabs/tabs";
+import { shownLiveOf } from "../tabs/tabLive";
 
 export type ClearedTabs = {
   windowId: string;
@@ -30,9 +31,7 @@ export function noteRemotePinDeletion(profileId: string) {
   remotePinDeletions.set(profileId, (remotePinDeletions.get(profileId) ?? 0) + 1);
 }
 
-export function unpinnedTabIds(s: BrowserState, windowId: string): string[] {
-  return viewTabIds(s, windowId).filter((id) => !inPinnedContainer(s, id));
-}
+export const unpinnedTabIds = (s: BrowserState, windowId: string): string[] => viewTabIds(s, windowId).filter((id) => !inPinnedContainer(s, id));
 
 export function isClosedPin(s: BrowserState, id: string): boolean {
   const t = s.tabs[id];
@@ -43,7 +42,7 @@ export function isClosedPin(s: BrowserState, id: string): boolean {
 export function clearedTabIds(s: BrowserState, windowId: string): string[] {
   const ids = unpinnedTabIds(s, windowId);
   const active = activeTabId(s, windowId);
-  const kept = new Set(ids.filter((id) => id === active || s.live[id]?.playingAudio));
+  const kept = new Set(ids.filter((id) => id === active || shownLiveOf(s, id).playingAudio));
   for (const id of [...kept]) splitTabIdsOf(splitOf(s, id))?.forEach((pane) => kept.add(pane));
   return ids.filter((id) => !kept.has(id));
 }
@@ -132,7 +131,7 @@ function inactivity(s: BrowserState, windowId: string, profileId?: string) {
   const grouped = new Set(Object.values(s.groups).flatMap((g) => g.tabIds));
   const inSplit = new Set(Object.values(s.splits).flatMap((v) => splitTabIds(v)));
   const kept = protectedFamilies(s);
-  const keep = (t: Tab) => t.id === active || kept.has(familyKeyOf(t)) || inPinnedContainer(s, t.id) || s.live[t.id]?.playingAudio;
+  const keep = (t: Tab) => t.id === active || kept.has(familyKeyOf(t)) || inPinnedContainer(s, t.id) || shownLiveOf(s, t.id).playingAudio;
   const expires = (t: Tab) => !keep(t) && !grouped.has(t.id) && !inSplit.has(t.id);
   return { ...lastUseOf(s), active, inSplit, keep, expires };
 }

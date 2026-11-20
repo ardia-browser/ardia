@@ -1,6 +1,8 @@
 import { requireNativeViewManager } from "expo-modules-core";
 import type { ViewProps } from "react-native";
 import { nativeModule } from "./nativeModules";
+import type { MiddleClickEvent } from "./system";
+import type { PluginPageProps } from "./plugins";
 
 export type WindowProfileSwapped = { selection?: string; switchId?: number; profileLoaded?: boolean; activeMs?: number; swapMs?: number; heldTimedOut?: boolean };
 export type WindowProfileProps = ViewProps & {
@@ -66,17 +68,20 @@ export const FolderIcon = requireNativeViewManager<FolderIconProps>("ArdiaFolder
 
 export type ContextMenuAreaProps = ViewProps & {
   onContextMenu?: () => void;
+  onMiddleClick?: (e: MiddleClickEvent) => void;
   captureDescendants?: boolean;
 };
 
-export type NativeContextMenuAreaProps = Omit<ContextMenuAreaProps, "onContextMenu"> & {
+export type NativeContextMenuAreaProps = Omit<ContextMenuAreaProps, "onContextMenu" | "onMiddleClick"> & {
   onContextMenu?: (event: { nativeEvent: Record<string, never> }) => void;
+  middleClicks: boolean;
+  onMiddleClick?: (e: { nativeEvent: MiddleClickEvent }) => void;
 };
 
 const NativeContextMenuArea = requireNativeViewManager<NativeContextMenuAreaProps>("ArdiaContextMenuArea");
 
-export function ContextMenuArea(props: ContextMenuAreaProps) {
-  return <NativeContextMenuArea {...props} />;
+export function ContextMenuArea({ onMiddleClick, ...props }: ContextMenuAreaProps) {
+  return <NativeContextMenuArea middleClicks={!!onMiddleClick} onMiddleClick={onMiddleClick && ((e) => onMiddleClick(e.nativeEvent))} {...props} />;
 }
 
 export type SurfaceProps = ViewProps & {
@@ -202,3 +207,5 @@ export type DockSelectionProps = ViewProps & {
 };
 
 export const DockSelection = requireNativeViewManager<DockSelectionProps>("ArdiaDockSelection");
+
+export const PluginPageView = requireNativeViewManager<PluginPageProps>("ArdiaPlugins");

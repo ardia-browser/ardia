@@ -3,14 +3,16 @@ import { create } from "zustand";
 import { orWarn } from "../../lib/fallback";
 import { IMPORT_WINDOW_ID, takePreferredImportSource } from "../settings/settingsWindows";
 import { requestWindowClose } from "../windows/windowClose";
-import { defaultTarget, openInWebStore, type BrowserSource, type ImportCounts, type ImportedExtension, type ImportKind } from "./apply";
+import { defaultTarget, openInWebStore, type BrowserSource, type ImportCounts, type ImportedExtension, type ImportedSearchEngine, type ImportKind } from "./apply";
+import type { ExtensionListing } from "./extensionListing";
 import { importModule } from "./importApi";
 
 export type KindStatus = "pending" | "active" | "done" | "failed";
 export type ImportStatus = Partial<Record<ImportKind, KindStatus>>;
 export type ImportFailure = { kind: ImportKind; profiles: string[] };
-export type FoundExtensions = { profileId: string; list: ImportedExtension[]; opened: boolean };
-export type ImportResults = { counts: ImportCounts; failures: ImportFailure[]; notes: string[]; extensions: FoundExtensions };
+export type FoundExtensions = { profileId: string; list: ImportedExtension[]; opened: boolean; listing: ExtensionListing | null };
+export type EngineNotice = { name: string; offered: boolean; engine: ImportedSearchEngine };
+export type ImportResults = { counts: ImportCounts; failures: ImportFailure[]; notes: string[]; extensions: FoundExtensions; searchEngine?: EngineNotice };
 
 export type ImportStep =
   | { name: "loading" }
@@ -35,10 +37,12 @@ export type ImportFlow = {
   step: ImportStep;
 };
 
-export const IMPORT_KINDS: ImportKind[] = ["bookmarks", "history", "passwords", "cookies", "autofill", "tabs", "spaces", "pinnedTabs", "favorites"];
+export const IMPORT_KINDS: ImportKind[] = ["bookmarks", "history", "passwords", "cookies", "autofill", "tabs", "spaces", "pinnedTabs", "favorites", "linkRules", "archive"];
 export const ENCRYPTED_KINDS: ImportKind[] = ["passwords", "cookies", "autofill"];
 export const APP_TAB_KINDS: ImportKind[] = ["tabs", "pinnedTabs"];
-export const NO_EXTENSIONS: FoundExtensions = { profileId: "", list: [], opened: false };
+export const DIA_SIDEBAR_KINDS: ImportKind[] = ["tabs", "pinnedTabs", "favorites"];
+export const ARC_ONCE_KINDS: ImportKind[] = ["linkRules", "archive"];
+export const NO_EXTENSIONS: FoundExtensions = { profileId: "", list: [], opened: false, listing: null };
 
 const freshFlow = (target: string): ImportFlow => ({
   browsers: [],

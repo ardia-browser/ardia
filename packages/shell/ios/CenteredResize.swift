@@ -1,4 +1,5 @@
 import AppKit
+import ArdiaCore
 
 let installCenteredResize: Void = {
   let selector = #selector(NSWindowDelegate.windowWillResize(_:to:))
@@ -15,6 +16,7 @@ let installCenteredResize: Void = {
   method_setImplementation(method, imp_implementationWithBlock(block))
   NotificationCenter.default.addObserver(forName: NSWindow.willStartLiveResizeNotification, object: nil, queue: nil) { _ in
     CenteredResize.counted = false
+    CenteredResize.stamp = ArdiaConsentStamp.begin()
   }
 }()
 
@@ -26,11 +28,12 @@ enum CenteredResize {
   #endif
 
   static var counted = false
+  static var stamp: ArdiaConsentStamp?
 
   static func noteCentered() {
     guard !counted else { return }
     counted = true
-    ShellEvents.send(.app, ["type": "centeredResize"])
+    ShellEvents.send(.app, (stamp ?? ArdiaConsentStamp.begin()).onto(["type": "centeredResize"]))
   }
 
   static func appKitResizes(_ window: NSWindow) -> Bool {

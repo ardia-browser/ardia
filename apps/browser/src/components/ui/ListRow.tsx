@@ -3,6 +3,7 @@ import { markHoverProps } from "../../lib/hoverMarks";
 import { Pressable, View, type GestureResponderEvent } from "react-native";
 import { useTheme } from "./theme";
 import { radius, space } from "./tokens";
+import { HoverFill } from "./HoverFill";
 
 export type ListRowState = { hovered: boolean; pressed: boolean; selected: boolean };
 
@@ -51,9 +52,10 @@ export function ListRow({
               flexDirection: "row",
               alignItems: "center",
               gap: space.m,
-              backgroundColor: selected ? (selectedTone === "accent" ? theme.formAccent : theme.rowSelected) : hovered ? theme.rowHover : undefined,
+              backgroundColor: selected ? (selectedTone === "accent" ? theme.formAccent : theme.rowSelected) : undefined,
             }}
           >
+            <HoverFill shown={hovered && !selected} instant={selected} color={theme.rowHover} radius={radius.tile} />
             {typeof children === "function" ? children({ hovered, pressed, selected }) : children}
           </View>
         )}

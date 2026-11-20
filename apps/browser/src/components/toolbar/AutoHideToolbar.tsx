@@ -15,6 +15,7 @@ import { reduceMotion, space, Text } from "../ui";
 import { TOOLBAR_MOTION } from "./tokens";
 import { motionStep, tallPage, type MotionValue, type TallPage } from "./toolbarMotion";
 import { useToolbarRow } from "./useToolbarRow";
+import { PAGE_IDENTITY_TAG } from "../../state/tabs/tabReveal";
 
 const HIDE_MS = TOOLBAR_MOTION.hide;
 const HIDE_EASING = curve.enter;
@@ -209,6 +210,8 @@ export function AutoHideToolbar({
       {anim && (
         <Animated.View pointerEvents={collapsed ? "auto" : "none"} style={{ position: "absolute", left: 0, right: 0, top: 0, height: STRIP_HEIGHT, opacity: anim.label }}>
           <Pressable
+            nativeID={PAGE_IDENTITY_TAG}
+            collapsable={false}
             onPress={() => {
               clearTimeout(peekTimer.current);
               revealToolbar(tabId);

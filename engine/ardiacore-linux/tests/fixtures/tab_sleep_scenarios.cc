@@ -74,6 +74,19 @@ void SleepsAnEligibleTab() {
   assert(w.discarding.reasons[0] == policies::DiscardEligibilityPolicy::DiscardReason::PROACTIVE);
 }
 
+void AnAsleepTabIsAlreadyDone() {
+  World w;
+  assert(Codes(SleepLinuxTabIfHidden(&w.contents, 3600)).empty());
+  w.contents.discarded = true;
+  PerformanceManager::page = nullptr;
+  w.eligibility.result = policies::CanDiscardResult::kProtected;
+  w.eligibility.reasons = {policies::CannotDiscardReason::kVisible};
+  assert(Codes(SleepLinuxTabIfHidden(&w.contents, 3600)).empty());
+  assert(w.discarding.discarded.size() == 1);
+  PerformanceManager::available = false;
+  assert(Codes(SleepLinuxTabIfHidden(&w.contents, 3600)).empty());
+}
+
 void ReportsWhatKeptIt() {
   World w;
   w.eligibility.result = policies::CanDiscardResult::kProtected;
@@ -120,6 +133,7 @@ void UnavailableWithoutChrome() {
 int main() {
   ParsesHiddenTime();
   SleepsAnEligibleTab();
+  AnAsleepTabIsAlreadyDone();
   ReportsWhatKeptIt();
   UnavailableWithoutChrome();
   std::puts("tab sleep scenarios passed");

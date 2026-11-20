@@ -10,6 +10,9 @@ import { isWebPageUrl } from "../../lib/url";
 import { engineProfiles } from "../profiles/engineProfiles";
 import { onProfilesOpened, onProfilesUnloaded, openedEngineProfiles } from "../profiles/profileLoading";
 import { migrateLegacyFile } from "../app/legacyFiles";
+import { during } from "../app/jobActivity";
+import { consentToken } from "../telemetry/client";
+import { warnFor } from "../telemetry/logs";
 
 const LEGACY_FILE = "history.json";
 const LEGACY_TOLERANCE_MS = 60_000;
@@ -155,16 +158,23 @@ export function applyHistoryChanges(list: HistoryEntry[], changes: readonly List
   }
   if (!dirty) return list;
 
-  const slots: (HistoryEntry | null)[] = list.slice();
+  const replaced: Touched[] = [];
   const moved: Touched[] = [];
   for (const state of touched.values()) {
     if (state.moved && state.entry) moved.push(state);
-    if (state.index >= 0) slots[state.index] = state.moved ? null : (state.entry ?? null);
+    if (state.index >= 0) replaced.push(state);
   }
+  replaced.sort((a, b) => a.index - b.index);
   moved.sort((a, b) => b.entry!.lastVisit - a.entry!.lastVisit || b.seq - a.seq);
   const next: HistoryEntry[] = [];
   let m = 0;
-  for (const h of slots) {
+  let r = 0;
+  for (let i = 0; i < list.length && next.length < MAX_HISTORY; i++) {
+    let h: HistoryEntry | undefined = list[i]!;
+    if (r < replaced.length && replaced[r]!.index === i) {
+      const state = replaced[r++]!;
+      h = state.moved ? undefined : state.entry;
+    }
     if (!h) continue;
     while (m < moved.length && moved[m]!.entry!.lastVisit >= h.lastVisit) next.push(moved[m++]!.entry!);
     next.push(h);
@@ -187,6 +197,7 @@ function load(engine: string): Promise<void> {
   }
   const state: Load = { running: Promise.resolve(), again: false, queued: [] };
   loads.set(engine, state);
+  const consent = consentToken();
   state.running = (async () => {
     try {
       do {
@@ -204,7 +215,7 @@ function load(engine: string): Promise<void> {
       } while (state.again && inApp(engine));
     } catch (error) {
       const failure = ardiaError(error);
-      console.warn(`[history] couldn't read ${profileLabel(engine)}'s history: ${failure.code} ${failure.message}`, error);
+      warnFor(consent, `[history] couldn't read ${profileLabel(engine)}'s history: ${failure.code} ${failure.message}`, error);
     } finally {
       loads.delete(engine);
     }
@@ -224,7 +235,9 @@ function applyPending() {
   pending = [];
   const batches = new Map<string, ListChange[]>();
   const show = () => {
-    for (const [engine, batch] of batches) setView(engine, applyHistoryChanges(viewOf(engine), batch, gapNoter(engine)));
+    during("historyApply", () => {
+      for (const [engine, batch] of batches) setView(engine, applyHistoryChanges(viewOf(engine), batch, gapNoter(engine)));
+    });
     batches.clear();
   };
   for (const change of changes) {
@@ -329,5 +342,7 @@ export function startHistory() {
     legacyMoved = false;
   };
 }
+
+export const reloadEngineHistory = (engine: string) => (loaded.has(engine) || loads.has(engine) ? load(engine) : Promise.resolve());
 
 export const reloadHistory = () => Promise.all(openedEngineProfiles(store()).map(load));

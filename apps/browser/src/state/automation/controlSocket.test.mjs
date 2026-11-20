@@ -51,7 +51,13 @@ function fresh() {
 test("hello, unknown methods and malformed lines", async () => {
   fresh();
   await controlOn();
-  assert.deepEqual(call("hello").result, { app: "Ardia", version: "1.0", protocol: 3 });
+  assert.deepEqual(call("hello").result, { app: "Ardia", version: "1.0", protocol: 4, minClientProtocol: 4 });
+  assert.deepEqual(call("hello", { protocol: 4 }).result.protocol, 4, "a client that names the current protocol is welcome");
+  assert.equal(call("hello", { protocol: 9 }).result.protocol, 4, "a newer client gets the app's protocol and decides for itself");
+  const old = call("hello", { protocol: 3 });
+  assert.equal(old.error.code, "unsupported_protocol");
+  assert.match(old.error.message, /speaks control protocol 3, and Ardia 1\.0 needs 4 or later: update the command/);
+  assert.equal(call("hello", { protocol: "4" }).error.code, "bad_request");
   const unknown = call("dance");
   assert.equal(unknown.error.code, "unknown_method");
   const bad = call(null, null, { raw: "not json" });

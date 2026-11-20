@@ -1,5 +1,6 @@
 import { createSuggestFetcher as createSharedSuggestFetcher, type FetchLike, type SuggestFetcher } from "../../../packages/core/src/suggestFetcher.ts";
 import { ardiaHost } from "./host.ts";
+import { consentNow } from "../../browser/src/state/telemetry/choice";
 import { hostSuggestFetch, suggestionEndpoints } from "./hostSuggestions.ts";
 
 export type { FetchLike, SuggestFetcher };
@@ -12,10 +13,11 @@ export function createSuggestFetcher(options: Parameters<typeof createSharedSugg
   let extensionEndpoints: readonly string[] = [];
   const hostFetch = hostSuggestFetch(ardiaHost, () => extensionEndpoints);
   const fetch: FetchLike = async (url, init) => {
+    const consent = consentNow();
     const [{ useBrowser }, { noteSearchSuggest }] = await Promise.all([browserStore(), suggestTelemetry()]);
     extensionEndpoints = suggestionEndpoints(useBrowser.getState().settings.extensionSearchEngines);
     const reply = await hostFetch(url, init);
-    noteSearchSuggest(reply.ok ? "ok" : "failed");
+    noteSearchSuggest(reply.ok ? "ok" : "failed", consent);
     return reply;
   };
   return createSharedSuggestFetcher({ ...options, fetch });

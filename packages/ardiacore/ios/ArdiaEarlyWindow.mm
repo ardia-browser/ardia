@@ -277,7 +277,10 @@ ArdiaEarlyShown *ShownForWindow(NSWindow *window) {
   if (gLittleLayout) {
     NSArray<NSNumber *> *cardInsets = layout[@"card"];
     const double inset = cardInsets.firstObject.doubleValue;
-    gLittleLayout[@"radius"] = @(inset == 0 ? 0 : MAX(ArdiaChromeWindowHost.windowCornerRadius - inset, [ArdiaInterfaceScale windowLengthFromRoot:2]));
+    const CGFloat design = ArdiaChromeWindowHost.windowCornerRadius;
+    const CGFloat drawn = ArdiaChromeWindowHost.drawnWindowCornerRadius;
+    const CGFloat settled = MIN(1, inset / [ArdiaInterfaceScale windowLengthFromRoot:9]);
+    gLittleLayout[@"radius"] = @(inset == 0 ? 0 : MAX(drawn + (design - drawn) * settled - inset, [ArdiaInterfaceScale windowLengthFromRoot:2]));
   }
   controller.appWindowId = windowId;
   NSScreen *savedDisplay = [ArdiaDisplayIdentity screenWithIdentifier:display];

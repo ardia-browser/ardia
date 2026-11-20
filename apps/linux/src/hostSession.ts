@@ -1,5 +1,5 @@
 import { registerSessionCloseHooks } from "./sessionClose";
-import type { BrowserState, HydrateData } from "../../browser/src/state/browser/store";
+import { useBrowser, type BrowserState, type HydrateData } from "../../browser/src/state/browser/store";
 import type { BrowserWindow, MainWindow, Tab } from "../../browser/src/state/browser/types";
 import type { ArdiaHost } from "./host";
 import { reportHostError } from "./host.ts";
@@ -18,6 +18,7 @@ import { upgraded, type SavedObject } from "../../browser/src/lib/savedDocument"
 import { SESSION_MIGRATIONS, SESSION_VERSION } from "../../browser/src/state/session/persist";
 import { unclaimedAdoptId } from "./unclaimedTabs.ts";
 import { adoptedPage } from "../../browser/src/state/tabs/pageSession";
+import { noteSavedTopAppsMerged } from "../../browser/src/state/telemetry/topAppsSharing";
 
 type StoredWindow = Partial<BrowserWindow> & { incognito?: unknown; originalProfileId?: unknown; sidebarOpen?: unknown };
 
@@ -247,6 +248,11 @@ const publicProfile = (profile: string) => !profile.startsWith("incognito:");
 const savedPageKind = (tab: Tab): Tab["page"] => ({ kind: tab.page.kind === "asleep" || tab.page.kind === "frozen" ? "asleep" : "idle" });
 const publicTabs = (entry: { tabs: { profileId: string }[] }) => entry.tabs.every((tab) => publicProfile(tab.profileId));
 const publicTable = <T,>(table: Record<string, T>) => Object.fromEntries(Object.entries(table).filter(([id]) => publicProfile(id)));
+
+export function hydrateLaunchSession(saved: HydrateData | null | undefined, initial: HydrateData) {
+  noteSavedTopAppsMerged(saved?.topAppsMerged ?? "");
+  useBrowser.getState().hydrate(initial);
+}
 
 export function snapshotHostSession(s: BrowserState): HydrateData {
   const windows = Object.fromEntries(Object.values(s.windows).filter((w): w is MainWindow => w.kind === "main").map(({ chromeWindow: _, ...w }) => [w.id, w]));

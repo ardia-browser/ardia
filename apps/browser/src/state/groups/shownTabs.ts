@@ -1,4 +1,5 @@
 import { activeTabId, inPinnedContainer } from "../browser/model";
+import { changedIds } from "../browser/changes";
 import type { BrowserState } from "../browser/store";
 import type { TabGroup } from "../browser/types";
 import { isAsleep } from "../tabs/pageSession";
@@ -33,7 +34,23 @@ function shownThrough(groups: Record<string, TabGroup>, tabId: string, outerId: 
   return true;
 }
 
+const shownIds = new WeakMap<Record<string, TabGroup>, ReadonlySet<string>>();
+
+function shownIdsOf(groups: Record<string, TabGroup>): ReadonlySet<string> {
+  let ids = shownIds.get(groups);
+  if (!ids) {
+    const all = new Set<string>();
+    for (const g of Object.values(groups)) for (const id of g.shownTabIds ?? []) all.add(id);
+    shownIds.set(groups, (ids = all));
+  }
+  return ids;
+}
+
 export function settleShownTabs(s: BrowserState, prev: BrowserState): Pick<BrowserState, "groups"> | null {
+  if (s.groups === prev.groups) {
+    const shown = shownIdsOf(s.groups);
+    if (!shown.size || (s.windows === prev.windows && !changedIds(s.tabs, prev.tabs).some((id) => shown.has(id)))) return null;
+  }
   const movedHidden = (id: string, outerId: string) => {
     const was = innermostGroupOf(prev.groups, id);
     return !!was && was.id !== innermostGroupOf(s.groups, id)?.id && !shownThrough(s.groups, id, outerId);

@@ -42,7 +42,7 @@ test("Settings names the same kind of apps for a link from another app as the li
   assert.equal(MAC_TERMS.linkSourceExamples, "Discord, Slack or Mail");
   assert.equal(WINDOWS_TERMS.linkSourceExamples, "Outlook, Teams or Slack");
   for (const app of WINDOWS_TERMS.linkSourceExamples.split(/, | or /)) assert.ok(WINDOWS_TERMS.linkSourceApps.includes(app), `${app} is not in the links step's list`);
-  const pane = readFileSync(new URL("../settings/panes/General.tsx", import.meta.url), "utf8");
+  const pane = readFileSync(new URL("../settings/panes/Tabs.tsx", import.meta.url), "utf8");
   assert.equal(pane.split("A link from ${PLATFORM_TERMS.linkSourceExamples} opens").length, 3);
   assert.ok(!pane.includes("Discord, Slack or Mail"));
 });

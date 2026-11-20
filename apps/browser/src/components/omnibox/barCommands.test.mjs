@@ -65,7 +65,7 @@ const ENTRIES = [
   { id: "savePage", title: "Save Page As", keywords: ["save as"], page: true, ran: ({ calls }) => assert.deepEqual(calls.pageCommands, ["savePage"]) },
   { id: "cast", title: "Cast", keywords: ["cast tab"], page: true, ran: () => assert.ok(engineCalled("media", "showCastDialog")) },
   { id: "taskManager", title: "Task Manager", keywords: ["open task manager"], ran: () => assert.ok(engineCalled("engine", "openTaskManager")) },
-  { id: "manageExtensions", title: "Manage Extensions", keywords: [], ran: () => assert.equal(useSettingsNav.getState().pane, "extensions") },
+  { id: "manageExtensions", title: "Manage Extensions", keywords: [], ran: () => assert.equal(useSettingsNav.getState().pane, "profiles") },
   {
     id: "addExtension",
     title: "Add Extension",

@@ -1,6 +1,7 @@
 import { emptyScope, SyncNative, type Adapter, type ExtensionsAdapter } from "../../platform/sync";
 import { useBrowser } from "../browser/store";
-import { bookmarksAdapter, deviceAdapter, deviceTabsAdapter, historyAdapter, inTodaysNames, passwordsAdapter, sharedDataAdapter } from "./adapters";
+import { bookmarksAdapter, deviceAdapter, deviceTabsAdapter, inTodaysNames, passwordsAdapter, sharedDataAdapter } from "./adapters";
+import { historyAdapter } from "./historyAdapter";
 import { profileOpenTabsAdapter, profilesAdapter, profileThemesAdapter, profileTopAppsAdapter } from "./profileAdapters";
 import { settingsAdapter } from "./settingsAdapter";
 import { pinnedAreaAdapters } from "./pinned";

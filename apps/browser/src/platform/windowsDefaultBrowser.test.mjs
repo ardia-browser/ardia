@@ -3,6 +3,9 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { launchAddresses } from "../../../../packages/expo-windows/src/launchLinks/addresses.ts";
 const { checkDefaultBrowserAtLaunch, noteDefaultBrowserPrompt, takeDefaultBrowserCounts } = await import("../state/telemetry/defaultBrowserCounts.ts");
+await import("../test-native/index.ts");
+globalThis.fetch = async () => ({ status: 200 });
+const client = await import("../state/telemetry/client.ts");
 
 const read = (path) => readFileSync(new URL(`../../../../${path}`, import.meta.url), "utf8");
 const installer = read("scripts/windows/installer/Ardia.iss");
@@ -52,6 +55,8 @@ test("a link Windows hands over through the ProgID's command reaches the app as 
 });
 
 test("default browser counts: prompts opened and a launch as the default, once per launch", async () => {
+  client.loadChoice();
+  client.setSharing(true, "onboarding");
   takeDefaultBrowserCounts();
   noteDefaultBrowserPrompt();
   noteDefaultBrowserPrompt();
@@ -60,4 +65,5 @@ test("default browser counts: prompts opened and a launch as the default, once p
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.deepEqual(takeDefaultBrowserCounts(), { default_browser_prompts_opened: 2, launches_as_default_browser: 1 });
   assert.deepEqual(takeDefaultBrowserCounts(), { default_browser_prompts_opened: 0, launches_as_default_browser: 0 });
+  client.setSharing(false, "settings");
 });

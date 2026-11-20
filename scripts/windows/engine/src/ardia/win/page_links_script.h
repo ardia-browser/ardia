@@ -4,13 +4,14 @@
 namespace ardia_win {
 
 inline constexpr char kLinkScript[] = R"JS((() => {
-  if (globalThis.ardiaPeek) return;
-  const post = globalThis.ardiaPeekSend;
+  if (globalThis.ardiaPeek || !/^(https?|file):$/.test(location.protocol)) return;
   const send = (kind, data) => {
     try {
-      post(JSON.stringify({ kind, data }));
+      globalThis.ardiaPeekSend(JSON.stringify({ kind, data }));
     } catch (e) {}
   };
+  const stopping = new AbortController();
+  const listen = { capture: true, signal: stopping.signal };
   const guard = (fn) => (...args) => {
     try {
       return fn(...args);
@@ -115,7 +116,7 @@ inline constexpr char kLinkScript[] = R"JS((() => {
       if (!peekable(hit)) return;
       press = { link: hit.link, url: hit.url, x: e.clientX, y: e.clientY };
     }),
-    true,
+    listen,
   );
   addEventListener(
     "mouseup",
@@ -138,7 +139,7 @@ inline constexpr char kLinkScript[] = R"JS((() => {
       const scale = window.devicePixelRatio;
       send("peek", { url: hit.url, key, origin: location.origin, x: e.clientX * scale, y: e.clientY * scale, moved });
     }),
-    true,
+    listen,
   );
   addEventListener(
     "click",
@@ -149,7 +150,7 @@ inline constexpr char kLinkScript[] = R"JS((() => {
       e.preventDefault();
       e.stopImmediatePropagation();
     }),
-    true,
+    listen,
   );
   const peekSiteLink = (e, link) => {
     if (e.defaultPrevented) return;
@@ -184,7 +185,7 @@ inline constexpr char kLinkScript[] = R"JS((() => {
         if (forSite && replacesPage(link)) return peekSiteLink(e, link);
         noteNewTabLink(e, link);
       });
-      window.addEventListener("click", decide);
+      window.addEventListener("click", decide, { signal: stopping.signal });
       setTimeout(
         guard(() => {
           window.removeEventListener("click", decide);
@@ -196,7 +197,7 @@ inline constexpr char kLinkScript[] = R"JS((() => {
         0,
       );
     }),
-    true,
+    listen,
   );
   globalThis.ardiaPeek = {
     config: guard((config) => {
@@ -205,6 +206,7 @@ inline constexpr char kLinkScript[] = R"JS((() => {
       peekOtherSites = !!(config && config.otherSites === true);
     }),
     refused: guard(refused),
+    stop: () => stopping.abort(),
   };
 })();
 )JS";

@@ -172,16 +172,16 @@ test("with Keep Top Apps running on, ⌘W on a Top App switches away and leaves 
   S().updateSettings({ keepTopAppsRunning: false });
 });
 
-test("holding ⌘W with Top Apps kept running ends on a New Tab and never cycles through the tiles", async () => {
+test("holding ⌘W with Top Apps kept running reaches a New Tab without cycling through the tiles, then closes the window", async () => {
   const { w, ids: [a, b, r1] } = windowWith("a", "b", "r1", "r2");
   S().pinTabs([a, b], true);
   S().updateSettings({ keepTopAppsRunning: true });
   S().activate(a);
   S().updateTab(a, { lastActiveAt: Date.now() + 60_000 });
   const visited = [];
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 8 && shownTab(w).url !== ""; i++) {
     const t = shownTab(w);
-    visited.push(t.pin ? t.url : t.url || "new");
+    visited.push(t.url);
     await closeTab(t.id);
     assert.ok(S().windows[w], `the window stays (step ${i})`);
   }
@@ -191,6 +191,8 @@ test("holding ⌘W with Top Apps kept running ends on a New Tab and never cycles
   assert.equal(S().tabs[a].page.kind, "loaded");
   assert.equal(S().tabs[b].page.kind, "loaded");
   assert.ok(r1);
+  await closeTab(shownTab(w).id);
+  assert.equal(S().windows[w], undefined, "⌘W on that New Tab closes the window");
   S().updateSettings({ keepTopAppsRunning: false });
 });
 
@@ -306,20 +308,17 @@ const HELD_PRESSES = 25;
 
 async function holdCloseTab(w, kept) {
   const shown = [];
-  for (let i = 0; i < HELD_PRESSES; i++) {
-    await closeTab(activeTabId(S(), w));
-    assert.ok(S().windows[w], `the window stays (press ${i + 1})`);
-    shown.push(activeTabId(S(), w));
+  let lastShown;
+  for (let i = 0; i < HELD_PRESSES && S().windows[w]; i++) {
+    for (const id of kept) assert.equal(S().tabs[id].page.kind, "loaded", `every kept pane stays loaded (press ${i + 1})`);
+    lastShown = shownTab(w);
+    await closeTab(lastShown.id);
+    if (S().windows[w]) shown.push(activeTabId(S(), w));
   }
-  const back = shown.filter((id) => kept.includes(id));
-  assert.deepEqual(back, [], `no kept Top App or pane of its split comes forward while ⌘W is held`);
-  for (const id of shown.slice(-5)) {
-    assert.equal(S().tabs[id]?.url ?? "", "", "it stays on a New Tab");
-    assert.equal(S().tabs[id]?.pin ?? null, null);
-  }
-  assert.equal(shownTab(w).url, "");
-  assert.equal(shownTab(w).pin, null);
-  for (const id of kept) assert.equal(S().tabs[id].page.kind, "loaded", "every kept pane stays loaded");
+  assert.deepEqual(shown.filter((id) => kept.includes(id)), [], `no kept Top App or pane of its split comes forward while ⌘W is held`);
+  assert.equal(S().windows[w], undefined, "the held ⌘W ends by closing the window");
+  assert.equal(lastShown.url, "", "the last press was on a New Tab");
+  assert.equal(lastShown.pin, null);
 }
 
 function topAppSplitWithRow(w, app, row) {
@@ -364,7 +363,7 @@ const heldCloseShapes = {
 };
 
 for (const [shape, setUp] of Object.entries(heldCloseShapes)) {
-  test(`with Top Apps kept running, holding ⌘W on ${shape} ends on a New Tab and stays there`, async () => {
+  test(`with Top Apps kept running, holding ⌘W on ${shape} reaches a New Tab, then closes the window`, async () => {
     const { w, kept } = setUp();
     S().updateSettings({ keepTopAppsRunning: true });
     await holdCloseTab(w, kept);
@@ -397,4 +396,31 @@ test("off, ⌘W on a tile in a pinned split unloads both panes and keeps the spl
     assert.deepEqual(Object.values(S().splits).map((split) => [...splitTabIdsOf(split)].sort()), [[app, row].sort()], `the split stays (${pressed})`);
     assert.equal(activeTabId(S(), w), other, pressed);
   }
+});
+
+test("with Top Apps kept running, ⌘W on the New Tab left beside a running Top App closes the window without asking", async () => {
+  for (const close of [(id) => closeTab(id), (id) => S().closeTab(id)]) {
+    const { w, ids: [app, last] } = windowWith("app", "last");
+    S().pinTabs([app], true);
+    S().updateSettings({ keepTopAppsRunning: true });
+    S().activate(last);
+    await closeTab(last);
+    assert.ok(S().windows[w], "closing the last page keeps the window for the running Top App");
+    assert.equal(S().tabs[app].page.kind, "loaded");
+    await close(shownTab(w).id);
+    assert.equal(S().windows[w], undefined, "the test shell declines every confirmation, so only an unasked close gets through");
+    S().updateSettings({ keepTopAppsRunning: false });
+  }
+});
+
+test("with Top Apps kept running, ⌘W on a regular page beside a running Top App still keeps the window with a New Tab", async () => {
+  const { w, ids: [app, last] } = windowWith("app", "last");
+  S().pinTabs([app], true);
+  S().updateSettings({ keepTopAppsRunning: true });
+  S().activate(last);
+  await closeTab(last);
+  assert.ok(S().windows[w]);
+  assert.equal(shownTab(w).url, "");
+  assert.equal(S().tabs[app].page.kind, "loaded");
+  S().updateSettings({ keepTopAppsRunning: false });
 });

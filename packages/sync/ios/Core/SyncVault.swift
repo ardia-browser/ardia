@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 public final class SyncVault {
@@ -28,8 +29,12 @@ public final class SyncVault {
   @discardableResult
   public func write(scope: String, payload: Data) throws -> String {
     let id = SyncKeys.newFileId()
-    let scopeTag = keys.scopeTag(scope)
-    let sealed = try keys.seal(payload, scopeTag: scopeTag, fileId: id)
+    try write(scope: scope, payload: payload, fileId: id, nonce: AES.GCM.Nonce())
+    return id
+  }
+
+  func write(scope: String, payload: Data, fileId id: String, nonce: AES.GCM.Nonce) throws {
+    let sealed = try keys.seal(payload, scopeTag: keys.scopeTag(scope), fileId: id, nonce: nonce)
     let directory = scopeURL(scope)
     try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
     let destination = directory.appendingPathComponent("\(id).\(Self.fileExtension)")
@@ -40,7 +45,6 @@ public final class SyncVault {
     try coordinate(writing: destination, options: .forReplacing) { url in
       try self.fileManager.moveItem(at: temporary, to: url)
     }
-    return id
   }
 
   public struct RemoveFailed: Error {

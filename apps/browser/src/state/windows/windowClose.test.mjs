@@ -340,7 +340,7 @@ test("Settings and Import close through the same request as browser windows, fro
   const source = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
   assert.match(source("./windowClose.ts"), /if \(!w\) return closeWindowWithoutTabs\(windowId, onceAgreed\);/);
   assert.match(source("./controls.ts"), /export const closeFromWindowControls = \(windowId: string\) => requestWindowClose\(windowId\);/);
-  assert.match(source("../commands/commands.ts"), /if \(command === "closeTab"\) return requestWindowClose\(requested!\);/);
+  assert.match(source("../commands/commands.ts"), /if \(command === "closeTab"\) return requestWindowClose\(target\.windowId\);/);
   assert.match(source("../import/flow.ts"), /export const closeImport = \(\) => requestWindowClose\(IMPORT_WINDOW_ID\);/);
   assert.match(source("../../../windows/Ardia/WindowManager.h"), /if \(!found \|\| !m_context \|\| m_quitting\) return;\n\s+try \{\n\s+args\.Cancel\(true\);/);
   assert.match(source("../../platform/nativeApi.ts"), /windows\.addListener\?\.\("onWindowEvent", \(event\) => \{\n\s+if \(event\.type === "closeRequest"\) void windows\.closeWindow\(event\.id\);/);

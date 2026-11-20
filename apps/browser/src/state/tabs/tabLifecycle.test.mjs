@@ -32,6 +32,8 @@ const { keepActiveSiteOf, memorySaverRequest } = await import("./memorySaver.ts"
 const { reloadRecentTabs } = await import("./recentTabWarmup.ts");
 const { loadSession: loadSavedSession } = await import("../session/persist.ts");
 const { docs: savedDocs } = await import("../../test-native/index.ts");
+const { setConsentPeriod } = await import("../telemetry/consentPeriod.ts");
+setConsentPeriod(true, "tab-lifecycle-test");
 
 const S = () => useBrowser.getState();
 const memorySaverCalls = () => globalThis.engineCalls.filter(([name]) => name === "memorySaver").map(([, request]) => request);

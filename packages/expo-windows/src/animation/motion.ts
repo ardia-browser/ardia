@@ -7,6 +7,7 @@ type Follower = () => void;
 type Timers = { requestAnimationFrame(frame: Frame): number; cancelAnimationFrame(id: number): void };
 
 type BurstListener = (burst: MotionBurst) => void;
+type ConsentEpoch = () => string;
 
 export const FRAME_MS = 1000 / 60;
 const LONG_FRAME_MS = FRAME_MS * 2.5;
@@ -58,9 +59,9 @@ export function installFramePacing() {
 
 const running = new Set<Running>();
 const followers = new Set<Follower>();
-const burstListeners = new Set<BurstListener>();
+const burstListeners = new Map<BurstListener, ConsentEpoch>();
 let watching = false;
-let burst = { frames: 0, startedAt: 0, lastAt: 0, longest: 0, long: 0 };
+let burst = { frames: 0, startedAt: 0, lastAt: 0, longest: 0, long: 0, epochs: new Map<BurstListener, string>() };
 
 function each<Listener>(listeners: Set<Listener>, call: (listener: Listener) => void) {
   for (const listener of [...listeners]) {
@@ -85,9 +86,10 @@ function watch(time: number) {
   if (running.size) return void requestFrame(watch);
   watching = false;
   if (burst.frames < REPORT_AFTER_FRAMES) return;
-  const ended: MotionBurst = { frames: burst.frames, milliseconds: Math.round(time - burst.startedAt), longest: Math.round(burst.longest), long: burst.long };
+  const ended = { frames: burst.frames, milliseconds: Math.round(time - burst.startedAt), longest: Math.round(burst.longest), long: burst.long };
   console.log(`[ardia windows] motion ${ended.frames} frames in ${ended.milliseconds} ms, longest ${ended.longest} ms, ${ended.long} long`);
-  each(burstListeners, (listen) => listen(ended));
+  const { epochs } = burst;
+  each(new Set(burstListeners.keys()), (listen) => listen({ ...ended, epoch: epochs.get(listen) ?? "" }));
 }
 
 export function noteAnimation(animation: Running) {
@@ -95,7 +97,9 @@ export function noteAnimation(animation: Running) {
   if (watching) return;
   watching = true;
   const time = now();
-  burst = { frames: 0, startedAt: time, lastAt: time, longest: 0, long: 0 };
+  const epochs = new Map<BurstListener, string>();
+  for (const [listen, consentEpoch] of burstListeners) epochs.set(listen, consentEpoch());
+  burst = { frames: 0, startedAt: time, lastAt: time, longest: 0, long: 0, epochs };
   requestFrame(watch);
 }
 
@@ -108,8 +112,8 @@ export function followMotion(follow: Follower): () => void {
   return () => void followers.delete(follow);
 }
 
-export function onMotionBurst(listen: BurstListener): () => void {
-  burstListeners.add(listen);
+export function onMotionBurst(listen: BurstListener, consentEpoch: ConsentEpoch): () => void {
+  burstListeners.set(listen, consentEpoch);
   return () => void burstListeners.delete(listen);
 }
 

@@ -73,10 +73,14 @@ public final class Importer: @unchecked Sendable {
     func arcSidebar() throws -> ArcSidebar {
       if let arc { return arc }
       let url = discovery.arcSidebarURL()
-      guard FileManager.default.fileExists(atPath: url.path) else { throw ImportError.notFound("No Arc sidebar data") }
-      let parsed = try ArcSidebar.parse(Data(contentsOf: url))
+      guard let data = ArcExtras.boundedRead(url, within: discovery.arcFile(""), limit: ArcExtras.sidebarBytes) else { throw ImportError.notFound("No Arc sidebar data") }
+      let parsed = try ArcSidebar.parse(data)
       arc = parsed
       return parsed
+    }
+
+    func arcSpaceNames() -> [String: String] {
+      Dictionary(((try? arcSidebar())?.spaces ?? []).map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
     }
 
     var zen: ZenSidebar?
@@ -96,6 +100,36 @@ public final class Importer: @unchecked Sendable {
         return spaces.isEmpty ? nil : spaces
       case nil:
         return nil
+      }
+    }
+
+    var dia: DiaSidebar?
+    let readsDiaSidebar = def.id == BrowserDefinition.dia.id && DiaSidebar.exists(profile: dir)
+    func diaSidebar() throws -> DiaSidebar {
+      if let dia { return dia }
+      guard let key = key(browserId) else { throw ImportError.locked("Unlock \(def.name) to read its sidebar") }
+      let read = try DiaSidebar.load(profile: dir, folder: profileId, rootKey: key)
+      dia = read
+      return read
+    }
+
+    func takeDia(_ sidebar: DiaSidebar, for kind: ImportKind) -> Int {
+      result.diaSidebar = DiaSidebarRead(primarySpaceId: sidebar.primarySpaceId)
+      result.spaces = sidebar.spaces.map { space in
+        var s = space
+        if !kinds.contains(.pinnedTabs) { s.pinned = [] }
+        if !kinds.contains(.tabs) {
+          s.tabs = []
+          s.openGroups = []
+        }
+        if !kinds.contains(.favorites) { s.favorites = [] }
+        return s
+      }.filter { !($0.pinned.isEmpty && $0.tabs.isEmpty && ($0.openGroups ?? []).isEmpty && ($0.favorites ?? []).isEmpty) }
+      let links = { (nodes: [BookmarkNode]) in nodes.reduce(0) { $0 + $1.linkCount } }
+      switch kind {
+      case .tabs: return sidebar.spaces.reduce(0) { $0 + $1.tabs.count + links($1.openGroups ?? []) }
+      case .pinnedTabs: return sidebar.spaces.reduce(0) { $0 + links($1.pinned) }
+      default: return sidebar.spaces.reduce(0) { $0 + ($1.favorites ?? []).count }
       }
     }
 
@@ -127,6 +161,8 @@ public final class Importer: @unchecked Sendable {
       var succeeded = false
       do {
         switch (kind, def.family) {
+        case (_, .chromium) where readsDiaSidebar && DiaSidebar.kinds.contains(kind):
+          count = takeDia(try diaSidebar(), for: kind)
         case (.bookmarks, .chromium), (.bookmarks, .arc):
           result.bookmarks = try ChromiumBookmarks.load(profile: dir)
           count = result.bookmarks?.linkCount ?? 0
@@ -164,6 +200,23 @@ public final class Importer: @unchecked Sendable {
         case (.favorites, .arc):
           result.favorites = try arcSidebar().favorites[profileId] ?? []
           count = result.favorites.count
+        case (.linkRules, .arc):
+          guard let data = ArcExtras.boundedRead(discovery.arcFile(ArcExtras.routingFile), within: discovery.arcFile(""), limit: ArcExtras.routingBytes) else {
+            throw ImportError.notFound("No readable Arc Air Traffic Control rules")
+          }
+          let routing = try ArcExtras.routing(data, spaces: arcSpaceNames())
+          result.arcRouting = routing
+          count = routing.rules.count
+        case (.archive, .arc):
+          let archiveURL = discovery.arcFile(ArcExtras.archiveFile)
+          let archiveData = ArcExtras.boundedRead(archiveURL, within: discovery.arcFile(""), limit: ArcExtras.archiveBytes)
+          if archiveData == nil, (try? FileManager.default.attributesOfItem(atPath: archiveURL.path)) != nil {
+            throw ImportError.unreadable("Arc's archive couldn't be read")
+          }
+          let archive = try ArcExtras.archive(archiveData,
+                                              threshold: ArcExtras.threshold(preferences: discovery.arcPreferencesURL()), spaces: arcSpaceNames())
+          result.arcArchive = archive
+          count = archive.tabs.count
         case (.favorites, .firefox):
           guard def.sidebar == .zen else { throw ImportError.unsupported("\(def.name) has no \(kind.rawValue) to import") }
           result.favorites = try zenSidebar().essentials
@@ -234,10 +287,22 @@ public final class Importer: @unchecked Sendable {
     if def.family == .chromium || def.family == .arc {
       try cancellation.check()
       result.favicons = ChromiumFavicons.read(profiles: [dir], pages: ChromiumFavicons.pages(of: result))
+      result.searchEngine = ChromiumSearchEngine.read(profile: dir)
+    }
+    if def.family == .arc, let arc {
+      let cached = ArcExtras.cachedFavicons(folder: discovery.arcFile(ArcExtras.iconCacheFolder), root: discovery.arcFile(""), items: arc.iconItems,
+                                            pages: ChromiumFavicons.pages(of: result), known: result.favicons)
+      result.favicons = ArcExtras.preferring(cached, over: result.favicons)
+      result.arcCachedIcons = cached.count
     }
     if let zen {
       result.favicons = zen.favicons(for: ChromiumFavicons.pages(of: result))
       result.separateEssentials = zen.separateEssentials
+    }
+    if def.family == .firefox {
+      try cancellation.check()
+      result.favicons = try FirefoxFavicons.merged(profile: dir, pages: ChromiumFavicons.pages(of: result), known: result.favicons,
+                                                   snapshots: snapshots, cancellation: cancellation)
     }
     return result
   }

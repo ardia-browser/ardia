@@ -6,6 +6,7 @@ import { pageOperations, pageOperationsHeader } from "../scripts/page-operations
 import { CLOSE_DOCUMENT_PICTURE_IN_PICTURE, PICTURE_IN_PICTURE_STATE, UNSAVED_WORK, WEB_STORE_REQUEST, hostPageScript } from "./hostPageScripts.ts";
 import { useBrowser } from "../../browser/src/state/browser/store.ts";
 import { webviews } from "../../browser/src/platform/webviews.ts";
+import { updateLive } from "../../browser/src/state/tabs/actions.ts";
 import { copyLinkToSelection, copyPageUrl, jumpToSelection, replaceInField } from "../../browser/src/state/site/selection.ts";
 import { runCommand } from "../../browser/src/state/commands/commands.ts";
 import { closeReader, readerState, startReader, toggleReader } from "../../browser/src/state/reader/reader.ts";
@@ -106,7 +107,8 @@ test("the reader sends exactly the pinned reader operations and a canonical look
   } });
   const stop = startReader();
   try {
-    useBrowser.setState((s) => ({ live: { ...s.live, [tabId]: { ...s.live[tabId], isLoading: false } } }));
+    updateLive(tabId, { isLoading: true });
+    updateLive(tabId, { isLoading: false });
     await new Promise((resolve) => setTimeout(resolve, 400));
     assert.equal(readerState(tabId).available, true);
     await toggleReader(tabId);

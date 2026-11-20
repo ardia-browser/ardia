@@ -25,7 +25,6 @@ export {
   type ScrollState,
   type FocusRestoreOutcome,
   type ProtectedMediaRequest,
-  type FairPlayReport,
   type AppBadge,
 } from "@ardia/ardiacore";
 
@@ -34,9 +33,13 @@ const Tabs = nativeModule("ArdiaTabs");
 export const prepareTabTransfer = (tabId: string) => Tabs.prepareTransfer(tabId);
 export const releaseTabTransfer = (tabId: string) => Tabs.releaseTransfer(tabId);
 export const claimLaunchTab = (tabId: string, url: string, profile: string) => Tabs.claimLaunchTab(tabId, url, profile);
-export const revealTab = (tabId: string) => Tabs.revealTab(tabId);
-export const dropTabReveals = (tabId: string) => Tabs.dropTabReveals(tabId);
-export const revealOffered = (adoptId: string, overTabId: string) => Tabs.revealOffered(adoptId, overTabId);
+export const revealTab = (tabId: string, press: number) => Tabs.revealTab(tabId, press);
+export const dropTabReveals = (overTabId: string, press: number, toTabId: string) => Tabs.dropTabReveals(overTabId, press, toTabId);
+export const claimTabPress = (tabId: string, startedAt: number) => Tabs.claimTabPress(tabId, startedAt);
+export const dropTabPress = (press: number) => Tabs.dropTabPress(press);
+export const setTabsInSplits = (tabIds: string[]) => Tabs.setTabsInSplits(tabIds);
+export const setNativeTabSwitch = (enabled: boolean) => Tabs.setNativeTabSwitch(enabled);
+export const revealOffered = (adoptId: string, overTabId: string, press: number) => Tabs.revealOffered(adoptId, overTabId, press);
 export const discardOffered = (adoptId: string) => Tabs.discardOffered(adoptId);
 export const routeLinkTabs = (urls: string[]) => call("tabs.routeLinkTabs", { urls });
 

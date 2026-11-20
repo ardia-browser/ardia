@@ -56,7 +56,7 @@ test("a file from before settingsMeta with the old off turns on", () => {
 });
 
 test("a current file keeps an off as it is: the change runs once", () => {
-  assert.equal(load(doc(10, { ...DEFAULT_SETTINGS, [KEY]: false }, { chosen: [], inferred: [] })).on, false);
+  assert.equal(load(doc(11, { ...DEFAULT_SETTINGS, [KEY]: false }, { chosen: [], inferred: [] })).on, false);
 });
 
 test("an on stays on", () => {

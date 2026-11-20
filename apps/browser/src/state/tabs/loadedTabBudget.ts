@@ -10,10 +10,12 @@ import { withSharedFamily } from "../pins/pinShare";
 import type { Settings } from "../settings/settings";
 import { withPinnedPanes } from "../splits/splits";
 import { noteBudgetSweep, noteTabSleptOverBudget, noteTabSleptOverBudgetReopened } from "../telemetry/tabSleepCounts";
+import { consentToken } from "../telemetry/client";
 import { hasPage } from "./pageSession";
 import { usePages } from "./pageState";
 import { shownTabIds } from "./shownTabs";
 import { isSleeping } from "./sleepingTabs";
+import { liveOf } from "./tabLive";
 
 export type LoadedTabBudget = { tabs: number; hiddenMs: number };
 
@@ -40,11 +42,11 @@ export function loadedTabBudget(settings: Pick<Settings, "memorySaver" | "memory
   return { tabs: Math.max(mode.floor, Math.round((sys.physicalMemory / GIB) * mode.perGib)), hiddenMs: mode.hiddenMs };
 }
 
-function inUse(s: BrowserState, id: string): boolean {
+export function inUse(s: BrowserState, id: string): boolean {
   const media = useMedia.getState();
   const access = usePages.getState().pages[id]?.mediaAccess;
   return (
-    !!s.live[id]?.playingAudio ||
+    liveOf(id).playingAudio ||
     !!media.pipOpen[id] ||
     isPlaying(media.sessions[id]) ||
     !!(access && (access.camera || access.microphone || access.screen)) ||
@@ -79,7 +81,7 @@ export function tabsOverBudget(
         tabEngine(s, id) === "chromium" &&
         /^https?:\/\//i.test(s.tabs[id]!.url) &&
         !inUse(s, id) &&
-        !(s.live[id]?.isLoading && skippedLoading.push(id)),
+        !(liveOf(id).isLoading && skippedLoading.push(id)),
     )
     .reverse();
 }
@@ -102,6 +104,7 @@ export async function sleepTabsOverBudget(budget: LoadedTabBudget | null, now = 
   const asking = [...candidates.filter((id) => !keptAt.has(id)), ...candidates.filter((id) => keptAt.has(id))].slice(0, SLEEPS_PER_SWEEP);
   noteBudgetSweep(skippedLoading.length, candidates.slice(0, SLEEPS_PER_SWEEP).filter((id) => !asking.includes(id)).length);
   const slept: string[] = [];
+  const consent = consentToken();
   sweeping = true;
   try {
     for (const id of asking) {
@@ -111,7 +114,7 @@ export async function sleepTabsOverBudget(budget: LoadedTabBudget | null, now = 
         slept.push(id);
         sleptAt.set(id, now);
         keptAt.delete(id);
-        noteTabSleptOverBudget();
+        noteTabSleptOverBudget(consent);
       } else if (keptBy?.includes(RECENTLY_VISIBLE)) seenAt.set(id, now);
       else {
         askAgainAt.set(id, now + ASK_AGAIN_MS);

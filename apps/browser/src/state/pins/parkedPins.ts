@@ -1,6 +1,6 @@
 import type { BrowserState } from "../browser/store";
 import { ancestorIds, depthOf, orderSections, placeBlock, syncGroupOrder, withParent } from "../groups/groups";
-import { IDLE_LIVE, isIncognitoProfile, isPinnedRow, makeTab, newId, pinKeyOf, snapshotTab, TILE_PIN, without } from "../browser/model";
+import { isIncognitoProfile, isPinnedRow, makeTab, newId, pinKeyOf, snapshotTab, TILE_PIN, without } from "../browser/model";
 import { pendingRestore, restoreId } from "../tabs/adoptIds";
 import type { BrowserWindow, HistoryEntry, ParkedPins, Tab, TabGroup } from "../browser/types";
 import { samePage } from "../../lib/url";
@@ -90,7 +90,6 @@ export function adoptParkedPins(s: BrowserState, windowId: string, profileId: st
   const w = s.windows[windowId];
   if (!park || !w || w.kind === "private" || !s.profiles[profileId]) return s;
   const tabs = { ...s.tabs };
-  const live = { ...s.live };
   const homes = w.tabIds.map((id) => tabs[id]).filter((t): t is Tab => !!t?.pin && t.profileId === profileId).map(homeOf);
   const keyOf = new Map<string, string>();
   const tabOf = new Map<string, string>();
@@ -105,7 +104,6 @@ export function adoptParkedPins(s: BrowserState, windowId: string, profileId: st
       page: withWake(ASLEEP, restoreFrom && !tabs[id] ? restoreId(restoreFrom) : undefined),
     };
     tabs[tab.id] = tab;
-    live[tab.id] = IDLE_LIVE;
     added.push(tab.id);
     tabOf.set(id, tab.id);
     if (groupId) keyOf.set(tab.id, groupId);
@@ -146,5 +144,5 @@ export function adoptParkedPins(s: BrowserState, windowId: string, profileId: st
   const window = { ...w, tabIds: orderSections(order, tabs, groups) };
   groups = syncGroupOrder(groups, window);
   const closedWindows = s.closedWindows.filter((c) => c.tabs.length || c.window.profileId !== profileId);
-  return { ...s, tabs, live, groups, splits, windows: { ...s.windows, [windowId]: window }, parkedPins: without(s.parkedPins, [profileId]), closedWindows };
+  return { ...s, tabs, groups, splits, windows: { ...s.windows, [windowId]: window }, parkedPins: without(s.parkedPins, [profileId]), closedWindows };
 }

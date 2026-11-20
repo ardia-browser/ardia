@@ -23,6 +23,7 @@ import { NewTabRow } from "./NewTabRow";
 import { CleanUpUpsell } from "./CleanUpUpsell";
 import { sidebarTokens, TAB_ROW } from "./tokens";
 import { tailKey } from "./dragModel";
+import type { ListViewport } from "./listViewport";
 
 type PageRowsProps = {
   windowId: string;
@@ -38,12 +39,12 @@ type PageRowsProps = {
   controller: ReturnType<typeof useDragController>;
   geometry: RefObject<SidebarGeometry> | undefined;
   regions: SidebarGeometry["regions"];
-  onListHeight: (height: number) => void;
+  viewport: ListViewport | null;
 };
 
 const DOCKED_TILES_GAP = SCROLL_EDGE.gap + SCROLL_EDGE.line + SCROLL_EDGE.inset;
 
-export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, tiles, underDockedTiles, innerWidth, inlineNewTab, controller, geometry, regions, onListHeight }: PageRowsProps) {
+export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, tiles, underDockedTiles, innerWidth, inlineNewTab, controller, geometry, regions, viewport }: PageRowsProps) {
   const [captured] = useState(newCapture);
   const { list: all } = useCapturedSidebarEntries(windowId, profileId, captured);
   const [mountedRows, setMountedRows] = useState(() => firstPaintEntriesNow(windowId, profileId, all, lazy));
@@ -72,14 +73,12 @@ export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, 
   const pinnedGap = collapsed && !kept && !pinnedFold.moving ? 0 : layout.rowGap;
   const newTabButtonAtTop = useNewTabAtTop();
   const animated = current && !offScreen;
-  const motion = useListMotion(windowId, profileId, all, captured, animated);
+  const motion = useListMotion(windowId, profileId, all, captured, animated, viewport, newTabButtonAtTop && inlineNewTab ? rowPitch() : 0);
   const scope = useMemo(() => ({ slideBelow: motion.slideBelow }), [motion.slideBelow]);
   if (geometry) geometry.current.newTabAtTop = newTabButtonAtTop && inlineNewTab;
   return (
     <ListMotionContext.Provider value={scope}>
-      <View
-        onLayout={(e) => onListHeight(e.nativeEvent.layout.height + SCROLL_EDGE.inset - (inlineNewTab ? rowPitch() : 0))}
-      >
+      <View>
         {isIncognitoProfile(profileId) ? <IncognitoBadge /> : null}
         {tiles.length ? (
           <DragScope enabled={current}>
@@ -119,6 +118,7 @@ export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, 
             controller?.regions.set("list", v);
           }}
           onLayout={(e) => void (regions.list = e.nativeEvent.layout.y)}
+          removeClippedSubviews
           style={{ gap: layout.rowGap }}
         >
           {newTabButtonAtTop && inlineNewTab ? <NewTabRow windowId={windowId} /> : null}

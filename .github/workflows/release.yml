@@ -12,7 +12,7 @@ on:
         type: boolean
         default: true
       iphone:
-        description: Also build the iPhone app at this version; a real run sends it to TestFlight after the Mac release publishes
+        description: Also build the pinned iPhone TestFlight version. Enable only when the owner asks for TestFlight. A real run uploads to Internal after the Mac release publishes.
         type: boolean
         default: false
 
@@ -60,7 +60,7 @@ jobs:
             echo "### Ardia $VERSION ($channel)"
             echo "- commit \`$GITHUB_SHA\`, engine tree \`${tree:0:12}\`"
             if [ "$DRY_RUN" = true ]; then echo "- dry run: a release candidate, nothing published"; else echo "- publishes"; fi
-            if [ "$IPHONE" = true ]; then echo "- iPhone: $(apple_version_of "$VERSION"), $([ "$DRY_RUN" = true ] && echo "built and signed, not uploaded" || echo "sent to TestFlight after the Mac release")"; fi
+            if [ "$IPHONE" = true ]; then echo "- iPhone: TestFlight's pinned version, $([ "$DRY_RUN" = true ] && echo "built and signed, not uploaded" || echo "sent to TestFlight's Internal group after the Mac release")"; fi
           } >> "$GITHUB_STEP_SUMMARY"
 
   checks:
@@ -121,8 +121,6 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: uv
-        run: curl -LsSf https://astral.sh/uv/0.12.15/install.sh | sh
       - id: cas-key
         run: echo "prefix=xcode-cas-release-$(xcodebuild -version | awk '/Build version/ { print $3 }')-$(date -u +%Y-%m)-" >> "$GITHUB_OUTPUT"
       - id: cas
@@ -146,10 +144,6 @@ jobs:
         with:
           path: packages/ardiacore/vendor/ubol-webkit
           key: ubol-webkit-${{ hashFiles('packages/ardiacore/scripts/ubol.sh', 'packages/ardiacore/scripts/ubol-webkit.py') }}
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: ~/Library/Caches/ardia-cli-build
-          key: ardia-cli-${{ hashFiles('apps/cli/scripts/build.sh', 'apps/cli/requirements.lock') }}
       - name: Pods
         working-directory: apps/browser/macos
         run: pod install
@@ -163,11 +157,11 @@ jobs:
             echo "::notice::pod install only quoted MARKETING_VERSION: kept, not counted as changes"
             git update-index --assume-unchanged "$pbx"
           fi
-          dirty=$(git status --porcelain -- apps/browser apps/cli packages engine scripts/dmg | grep -v ' apps/browser/build' || true)
+          dirty=$(git status --porcelain -- apps/browser packages engine scripts/dmg | grep -v ' apps/browser/build' || true)
           [ -z "$dirty" ] || {
             echo "::error::installing changed tracked files, so release.sh would refuse the tree:"
             echo "$dirty"
-            git diff -- apps/browser apps/cli packages engine scripts/dmg | head -150
+            git diff -- apps/browser packages engine scripts/dmg | head -150
             exit 1
           }
       - name: Build
@@ -185,8 +179,7 @@ jobs:
         env:
           DIST: ${{ steps.paths.outputs.dist }}
         run: |
-          COPYFILE_DISABLE=1 tar --no-mac-metadata -cf "$RUNNER_TEMP/build.tar" -C "$DIST" Ardia.xcarchive provenance.txt \
-            "ardia-cli-$VERSION-macos-arm64.tar.gz" "ardia-cli-$VERSION-macos-arm64.tar.gz.sha256"
+          COPYFILE_DISABLE=1 tar --no-mac-metadata -cf "$RUNNER_TEMP/build.tar" -C "$DIST" Ardia.xcarchive provenance.txt plugins
       - if: always() && steps.cas.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -296,8 +289,6 @@ jobs:
             ${{ steps.paths.outputs.dist }}/appcast.xml
             ${{ steps.paths.outputs.dist }}/release-notes.md
             ${{ steps.paths.outputs.dist }}/provenance.txt
-            ${{ steps.paths.outputs.dist }}/ardia-cli-${{ inputs.version }}-macos-arm64.tar.gz
-            ${{ steps.paths.outputs.dist }}/ardia-cli-${{ inputs.version }}-macos-arm64.tar.gz.sha256
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
@@ -334,20 +325,26 @@ jobs:
           restore-keys: engine-linux-x64-v3-
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          path: ~/.cache/ardia-cli-build
-          key: ardia-cli-build-linux-x64-${{ hashFiles('apps/cli/scripts/build.sh', 'apps/cli/requirements.lock') }}
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
           path: packages/ardiacore/vendor/ubo
           key: ubo-linux-${{ hashFiles('packages/ardiacore/scripts/ubo.sh') }}
-      - name: uv
-        run: curl -LsSf https://astral.sh/uv/0.12.15/install.sh | sh
       - name: Build, package, smoke
         run: |
           if ! scripts/linux/release.sh "$VERSION" --engine exact --out "$RUNNER_TEMP/linux"; then
             echo "::error::no Linux build for $VERSION (above). A missing engine for ${TREE:0:12} means: build it on the Linux builder, publish it with scripts/linux/publish-engine.sh --upload and commit prebuilt-engines-linux.tsv"
             exit 1
           fi
+      - name: Debian package installs
+        id: deb-install
+        continue-on-error: true
+        run: scripts/linux/deb-install-test.sh "$RUNNER_TEMP/linux/Ardia-$VERSION-linux-x64.deb"
+      - name: Drop the .deb that failed its install test
+        if: steps.deb-install.outcome == 'failure'
+        run: |
+          set -euo pipefail
+          rm -f "$RUNNER_TEMP/linux/Ardia-$VERSION-linux-x64.deb" "$RUNNER_TEMP/linux/Ardia-$VERSION-linux-x64.deb.sha256"
+          echo "deb dropped: it failed scripts/linux/deb-install-test.sh in run $GITHUB_RUN_ID" >> "$RUNNER_TEMP/linux/provenance.txt"
+          echo "::warning::Ardia-$VERSION-linux-x64.deb failed its install test (above), so the release ships without it; the tarball, AppImage, Arch source package and CLI still ship"
+          echo "- Linux: the .deb failed its install test and is left out" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: linux
@@ -358,6 +355,8 @@ jobs:
             ${{ runner.temp }}/linux/Ardia-${{ inputs.version }}-linux-x64.deb.sha256
             ${{ runner.temp }}/linux/Ardia-${{ inputs.version }}-linux-x64.AppImage
             ${{ runner.temp }}/linux/Ardia-${{ inputs.version }}-linux-x64.AppImage.sha256
+            ${{ runner.temp }}/linux/ardia-bin-${{ inputs.version }}.src.tar.gz
+            ${{ runner.temp }}/linux/ardia-bin-${{ inputs.version }}.src.tar.gz.sha256
             ${{ runner.temp }}/linux/ardia-cli-${{ inputs.version }}-linux-x64.tar.gz
             ${{ runner.temp }}/linux/ardia-cli-${{ inputs.version }}-linux-x64.tar.gz.sha256
             ${{ runner.temp }}/linux/provenance.txt
@@ -479,12 +478,55 @@ jobs:
             echo "- Windows: build $BUILD is the update on windows-alpha" >> "$GITHUB_STEP_SUMMARY"
           fi
 
+  aur:
+    needs: [preflight, linux, publish]
+    continue-on-error: true
+    if: ${{ !cancelled() && needs.linux.result == 'success' && needs.publish.result == 'success' && !contains(inputs.version, '-') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: linux
+          path: ${{ runner.temp }}/linux
+      - name: ardia-bin
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          AUR_GIT_NAME: ${{ vars.AUR_GIT_NAME }}
+          AUR_GIT_EMAIL: ${{ vars.AUR_GIT_EMAIL }}
+        run: |
+          set -euo pipefail
+          sha=$(cut -d' ' -f1 "$RUNNER_TEMP/linux/Ardia-$VERSION-linux-x64.tar.xz.sha256")
+          args=("$VERSION" --sha256 "$sha")
+          if [ "$DRY_RUN" = true ]; then
+            args+=(--dry-run)
+          elif [ -z "$AUR_SSH_PRIVATE_KEY" ]; then
+            echo "::warning::no AUR_SSH_PRIVATE_KEY secret, so ardia-bin stays where it is: run scripts/linux/arch/publish-aur.sh $VERSION --sha256 $sha"
+            echo "- AUR: not updated (no AUR_SSH_PRIVATE_KEY secret)" >> "$GITHUB_STEP_SUMMARY"
+            args+=(--dry-run)
+          else
+            export AUR_SSH_KEY_FILE="$RUNNER_TEMP/aur-key"
+            install -m 600 /dev/null "$AUR_SSH_KEY_FILE"
+            printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > "$AUR_SSH_KEY_FILE"
+          fi
+          AUR_OUT="$RUNNER_TEMP/aur" scripts/linux/arch/publish-aur.sh "${args[@]}"
+      - if: always()
+        run: rm -f "$RUNNER_TEMP/aur-key"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: aur
+          path: ${{ runner.temp }}/aur
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
   iphone:
     needs: [preflight, publish]
     if: ${{ inputs.iphone }}
     uses: ./.github/workflows/ios-release.yml
     with:
       mode: ${{ inputs.dry_run && 'dry-run' || 'upload' }}
-      version: ${{ inputs.version }}
-      public_testers: true
     secrets: inherit

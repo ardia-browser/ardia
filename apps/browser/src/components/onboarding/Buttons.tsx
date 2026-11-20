@@ -16,6 +16,7 @@ function PressScale({ title, onPress, disabled, scale, tooltip, pressRef, childr
         ref={pressRef}
         disabled={disabled}
         onPress={onPress}
+        onAccessibilityTap={disabled ? undefined : onPress}
         onPressIn={pressMotion.onPressIn}
         onPressOut={pressMotion.onPressOut}
         accessibilityRole="button"

@@ -1,7 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { Animated, StyleSheet, View, type ViewStyle } from "react-native";
 import { Box, Button, curve, duration, Panel, radius, shadow, springs, Text, useHover } from "../ui";
+import { liftSpring } from "../ui/motion";
 import { NTP_CARD, useNtpColors } from "./tokens";
+import { PeekCoversCards } from "./peekClearance";
+import { notePageOverlay } from "../../state/telemetry/usage";
 
 const LEAVE_SCALE = 0.98;
 const CLOSE_PLACE = { position: "absolute", right: -8, top: -8 } as const;
@@ -17,6 +20,10 @@ export function useCardRetire() {
 }
 
 export function NtpCardSlot({ width, height, edge = "top", children }: { width: number; height?: number; edge?: "top" | "bottom"; children: ReactNode }) {
+  const peekCovers = useContext(PeekCoversCards);
+  useEffect(() => {
+    if (peekCovers) notePageOverlay("peekMovedCard");
+  }, [peekCovers]);
   return (
     <Box pad="m" style={{ position: "absolute", left: 0, [edge]: 0, width, height }} pointerEvents="box-none">
       {children}
@@ -59,7 +66,7 @@ export function NtpCard({
   }, []);
   useEffect(() => {
     if (!lift || leaving) return;
-    Animated.spring(scale, { toValue: pressed ? LEAVE_SCALE : hovered ? 1.02 : 1, ...springs.bouncy, useNativeDriver: true }).start();
+    Animated.spring(scale, { toValue: pressed ? LEAVE_SCALE : hovered ? 1.02 : 1, ...liftSpring(), useNativeDriver: true }).start();
   }, [hovered, pressed, !!leaving]);
   useEffect(() => {
     if (!leaving) return;

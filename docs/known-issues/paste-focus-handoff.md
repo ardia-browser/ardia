@@ -21,6 +21,8 @@ The fix is `FocusHandoff` in packages/shell/ios/FocusHandoff.swift.
 
 The page that had focus gets it back, but only while its tab is still the one shown. A dropped action never goes anywhere else.
 
+**A key window never stays without a responder.** When the gate ends and the window's first responder is still nil or the window itself, the next UI pass focuses the page that is shown (`ArdiaWebView.focusVisiblePage`), so ⌘A and the arrow keys don't chime and hover keeps reaching the page. The same holds for the other places that resign the page: the lingering New Tab pane (`takeFocusFromLingeringPane`, run once `applyPainting` has unhidden the page, so the page can take the focus) refocuses the page it hands over to, and `lendPageToSuccessor` asks the holder to take focus back. The hover probe covers what is left: a click on the page while the key window has no responder makes the page under the pointer first responder (`responderLost` heal).
+
 **Acks from the page:** edit keys a page passes back are tagged with their window and its key epoch, and stale ones are dropped with a beep. The epoch (`KeyEpochs`) moves only when another window took key, and it moves in step with `didBecomeKey` (the observer has no queue). The same window becoming key again after another app handed focus back (Raycast's clipboard, dictation tools, emoji pickers) keeps it, so a ⌘V sent right then is not dropped.
 
 ## Parked (behaves as before)
@@ -32,3 +34,20 @@ Codex reviews r1–r8 found these not to be safely fixable inside this scope:
 - **Plain keystrokes typed during the handoff.** A resigned page drops them.
 - **Edit actions while the destination is slower than 3 s** (a very busy JS thread). They're dropped with a beep, and the next press works.
 - **Selection timing.** RN applies a text input's selection in a later UI block than its focus. The claim hops through the UIManager queue first, but a selection queued after that hop can still land after the paste.
+
+## Diagnostics: the `paste_refused` event
+Every beep in `FocusHandoff` goes through `FocusHandoff.refuse(_:_:)` with a `Refusal` reason, and the address field's `pasteFrom:` (the react-native-macos patch) and `MenuTarget` report to `PasteRefusal` (packages/shell/ios/PasteRefusal.swift). It sends a `pasteRefused` app event, and `apps/browser/src/state/telemetry/pasteRefused.ts` turns it into one `paste_refused` telemetry event. Nothing about behaviour changed: the beep, the drop and the refusal are the same as before.
+
+**Properties**
+- `reason`: `deadline`, `cancelled`, `superseded`, `stale_epoch`, `queue_full`, `no_origin`, `late_acknowledgement`, `focus_lost`, `mouse_down`, `window_left`, `no_text` (the address field found no text on the pasteboard), `deferred` (a forwarded Paste the focus gate held back, including one it dropped at once) or `refused` (no responder took a forwarded Paste for a text field).
+- `type_ids`: the pasteboard's type names for `no_text`, at most 24. Only names on a fixed list in `pasteRefused.ts` are kept, each matched exactly: the standard text, rich text, HTML, URL, file, image and PDF types (`public.utf8-plain-text`, `public.html`, `public.file-url`, `public.png`, `com.adobe.pdf`, `com.apple.webarchive` and the like, Chromium's `org.chromium.web-custom-data` and `org.chromium.source-url`), the legacy names AppKit reports beside them (`NSStringPboardType`, `NeXT TIFF v4.0 pasteboard type`, `Apple HTML pasteboard type`, the `CorePasteboardFlavorType` codes for text, URLs, files and JPEG), and nine MIME types (`text/plain`, `text/html`, `text/uri-list`, `image/png`, `image/jpeg`, `image/gif`, `image/webp`, `application/pdf`, `application/rtf`). Dynamic `dyn.` types collapse to `dyn`, and any other name, even one that looks standard (`public.acme-secret-doc`, `text/x-customer-1234`, an app's own `com.apple.` name), is recorded as `other`, since an app's own type could carry a document or account id.
+- `type_count`: how many types the pasteboard offered, so a pasteboard whose types were all collapsed reads differently from an empty one.
+- `responder`: the first responder's class name for `deferred` and `refused`, on the first one of a session only. Later ones are still recorded, without it.
+- `gate_open`: whether the key window had a focus gate open.
+- `keyboard_layout`: the current keyboard layout's input source id, only when it is Apple's (`com.apple.keylayout.` or `com.apple.inputmethod.` and 1 to 60 letters, digits, dots or hyphens). Any other layout, such as a third-party input method's or one a user made (`org.unknown.keylayout.…`), whose id that vendor or user chose, is sent as `other`. The source is `TISCopyCurrentKeyboardLayoutInputSource`, which always answers a keyboard layout (while an input method is active, the layout it types with), so there is no separate layout-or-input-method flag.
+- `$os_version`: the macOS version, from the common context.
+- `dropped`: how many inputs were dropped, including ones rejected before they entered a gate.
+
+A gate drop is reported only when a Paste action (Paste, Paste and Match Style) or ⌘V is among the dropped inputs; Cut, Copy and Select All alone are not reported. Plain keystrokes still beep as before and are not reported.
+
+The telemetry never reads or sends what is on the clipboard: it takes the type names the pasteboard lists and nothing else. At most 50 events are reported per session. The "Usage" list in Settings › Privacy says the same.

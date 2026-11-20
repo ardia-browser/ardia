@@ -5,6 +5,9 @@ import { CONFIG_SETTING_KEYS } from "../settings/configAllowlist";
 import { SETTING_SPECS } from "../settings/settings";
 import { SHORTCUT_FORMAT, shortcutCatalog, shortcutDescription } from "./configShortcuts";
 import { launchActionIds, MAX_LAUNCH_ACTIONS } from "../automation/launchActions";
+import { PLUGIN_EVENTS } from "../automation/eventNames";
+import { PLUGIN_SCHEMA_FILE, pluginSchemaJson } from "../../lib/pluginSchema";
+import { PLUGIN_RULES } from "../plugins/appChecks";
 
 export const CONFIG_SCHEMA_FILE = "config.schema.json";
 export const THEME_SCHEMA_FILE = "theme.schema.json";
@@ -52,4 +55,5 @@ export function configSchema(): object {
 export const schemaFiles = (roles: RolePalettes): Record<string, string> => ({
   [CONFIG_SCHEMA_FILE]: schemaJson(configSchema()),
   [THEME_SCHEMA_FILE]: schemaJson(themeSchema(roles)),
+  [PLUGIN_SCHEMA_FILE]: pluginSchemaJson(PLUGIN_EVENTS, PLUGIN_RULES),
 });

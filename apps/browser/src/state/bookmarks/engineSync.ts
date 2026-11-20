@@ -10,6 +10,8 @@ import { engineProfiles } from "../profiles/engineProfiles";
 import { onProfilesOpened, onProfilesUnloaded, openedEngineProfiles, openProfile, profileOpened } from "../profiles/profileLoading";
 import { migrateLegacyFile } from "../app/legacyFiles";
 import { noteBookmarkSyncDiff } from "../telemetry/bookmarkMoves";
+import { consentToken } from "../telemetry/client";
+import { warnFor } from "../telemetry/logs";
 
 const LEGACY_FILE = "bookmarks.json";
 type LegacyFile = { bookmarks?: { nodes: Bookmarks["nodes"]; roots: Record<string, { bar: string; other: string }> } };
@@ -72,11 +74,12 @@ function adoptNow(engine: string, flat: Flat, ready: boolean) {
 }
 
 async function sendOps(engine: string, ops: BookmarkOp[]): Promise<boolean> {
+  const consent = consentToken();
   try {
     const result = await applyBookmarkOps(engine, ops);
     return !result.skipped && !result.invalid.length;
   } catch (error) {
-    console.warn("[bookmarks] couldn't save to Chrome", error);
+    warnFor(consent, "[bookmarks] couldn't save to Chrome", error);
     return false;
   }
 }
@@ -121,6 +124,7 @@ function work(engine: string) {
   const state = stateOf(engine);
   if (state.busy) return;
   state.busy = true;
+  const consent = consentToken();
   void (async () => {
     try {
       while ((state.needRead || state.needPush) && isCurrent(engine, state)) {
@@ -134,7 +138,7 @@ function work(engine: string) {
         }
       }
     } catch (error) {
-      console.warn(`[bookmarks] couldn't read ${engine || "the default profile"}'s bookmarks`, error);
+      warnFor(consent, `[bookmarks] couldn't read ${engine || "the default profile"}'s bookmarks`, error);
     } finally {
       state.busy = false;
     }

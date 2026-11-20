@@ -1,4 +1,4 @@
-import { isSharing, useTelemetry } from "./client";
+import { isSharing, onConsentPeriodChange } from "./client";
 
 const CORRECTION_WINDOW_MS = 2000;
 const SWITCH_MATCH_MS = 3000;
@@ -8,9 +8,7 @@ type SwitcherPress = { windowId: string; profileId: string; icons: boolean; corr
 
 let presses: SwitcherPress[] = [];
 
-useTelemetry.subscribe((s, prev) => {
-  if (prev.sharing && !s.sharing) presses = [];
-});
+onConsentPeriodChange(() => (presses = []));
 
 export function noteSwitcherPress(windowId: string, profileId: string, icons: boolean, now = Date.now()) {
   if (!isSharing()) return;

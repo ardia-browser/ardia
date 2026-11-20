@@ -1,11 +1,12 @@
 import { selfChecks } from "../../state/app/selfCheck";
 import { toggleSidebar } from "../../state/windows/actions";
+import { closeCheckPage, openCheckPage, windowIsEmpty } from "../../state/windows/dockCheckPage";
 import { animating, currentValue } from "../ui/motion";
 import type { usePeek } from "./usePeek";
 
 type SidebarDockLayer = { opacity: unknown; transform: { translateX: unknown }[] };
 
-type SidebarDockProbe = { peek: ReturnType<typeof usePeek>; open: boolean; moving: boolean; fullscreen: boolean; edgeOn: boolean; layer: SidebarDockLayer };
+type SidebarDockProbe = { peek: ReturnType<typeof usePeek>; open: boolean; moving: boolean; fullscreen: boolean; layer: SidebarDockLayer };
 
 type DockMoment = { label: string; ready(closingMs: number, slide: number): boolean };
 
@@ -97,10 +98,6 @@ async function checkSidebarPeek() {
     console.info("[ardia windows] self-check note: sidebar peek skipped, no window shows tabs in the sidebar");
     return;
   }
-  if (!probeFor(windowId).edgeOn) {
-    console.info("[ardia windows] self-check note: sidebar peek skipped, tabs don't reveal on hover");
-    return;
-  }
   if (probeFor(windowId).fullscreen) {
     console.info("[ardia windows] self-check note: sidebar peek skipped, the window is full screen");
     return;
@@ -108,11 +105,17 @@ async function checkSidebarPeek() {
   const wasOpen = probeFor(windowId).open;
   numericLayers = 0;
   const slides: number[] = [];
+  const pageTab = windowIsEmpty(windowId) ? openCheckPage(windowId) : null;
   try {
+    await until("a page to open in the window", () => !windowIsEmpty(windowId));
     await setDocked(windowId, true);
     for (const moment of DOCK_MOMENTS) slides.push(await dockMidClose(windowId, moment));
   } finally {
-    if (probes.has(windowId)) await setDocked(windowId, wasOpen);
+    try {
+      if (probes.has(windowId)) await setDocked(windowId, wasOpen);
+    } finally {
+      if (pageTab) closeCheckPage(pageTab);
+    }
   }
   const midClose = slides.filter((slide) => slide > 0 && slide < 1).length;
   console.info(`[ardia windows] self-check note: sidebar peek, ${slides.length} cycles, ${midClose} docked mid-close, slide at dock ${slides.map((slide) => slide.toFixed(2)).join(" ")}`);

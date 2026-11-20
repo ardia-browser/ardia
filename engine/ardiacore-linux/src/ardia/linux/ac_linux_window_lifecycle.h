@@ -96,6 +96,7 @@ inline constexpr int kSmallWindowMinWidth = 420;
 inline constexpr int kSmallWindowMinHeight = 300;
 inline constexpr int kSmallWindowWidth = 900;
 inline constexpr int kSmallWindowHeight = 640;
+inline constexpr double kSmallWindowLargestShare = 0.8;
 
 Requested RequestedSmallFrame(const std::vector<double>& size,
                               const Rect& work_area,

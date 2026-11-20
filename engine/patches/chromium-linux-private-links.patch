@@ -17,7 +17,7 @@
    }
  
 +#if BUILDFLAG(IS_LINUX)
-+  if (params->disposition == WindowOpenDisposition::OFF_THE_RECORD &&
++  if (params->disposition == WindowOpenDisposition::kOffTheRecord &&
 +      !params->contents_to_insert && params->source_contents &&
 +      !params->is_renderer_initiated && params->user_gesture &&
 +      g_ardia_linux_off_the_record_navigation &&

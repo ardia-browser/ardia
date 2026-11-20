@@ -5,6 +5,7 @@ bwfront
 fedyalight
 harshitruwali
 itsomsarraf
+kshitijk4poor
 luangjokaj
 maciekzygmunt
 mantrakp04
@@ -14,5 +15,7 @@ neved4
 nogi2027
 shivamhwp
 slukedev
+techsupportz
 torztomasz
 vlzuiev
+yishentu

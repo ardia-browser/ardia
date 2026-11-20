@@ -4,7 +4,7 @@ export type Wording = { file: string; replacements: [string, string][] };
 
 export const CREDENTIAL_WORDING: readonly Wording[] = [
   {
-    file: "components/settings/panes/Passwords.tsx",
+    file: "components/settings/panes/ProfilePasswords.tsx",
     replacements: [
       [
         `  const apps = \`1Password, Bitwarden, KeePassXC and Proton Pass extensions connect to their \${PLATFORM_TERMS.computer} apps.\`;
@@ -21,17 +21,17 @@ export const CREDENTIAL_WORDING: readonly Wording[] = [
     ],
   },
   {
-    file: "components/settings/panes/Autofill.tsx",
+    file: "components/settings/panes/ProfileAutofill.tsx",
     replacements: [
       ["Card numbers are kept in ${PLATFORM_TERMS.secretStore}.", "Card numbers are encrypted by Chromium with a key from your system keyring when one answers."],
       ["`Its number is removed from ${PLATFORM_TERMS.secretStore} too.`", `"Its saved number is deleted too."`],
     ],
   },
   {
-    file: "components/settings/rows/privacyRows.ts",
+    file: "components/settings/rows/profileRows.ts",
     replacements: [
-      [`keywords: ["password manager", "logins", "credentials", "keychain"]`, `keywords: ["password manager", "logins", "credentials", "keyring"]`],
-      ["`Filling in or showing a card number asks for ${PLATFORM_TERMS.deviceUnlock}.`", `"Showing a saved card number asks for your system password."`],
+      [`keywords: ["password manager", "logins", "credentials", "keychain", "offer to save and fill passwords"]`, `keywords: ["password manager", "logins", "credentials", "keyring", "offer to save and fill passwords"]`],
+      ["description: `Showing or filling a card asks for ${PLATFORM_TERMS.deviceUnlock}.`", `description: "Showing a saved card number asks for your system password."`],
     ],
   },
 ];

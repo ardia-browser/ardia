@@ -1,5 +1,5 @@
 import { memo, type ReactNode } from "react";
-import { View, type StyleProp, type ViewStyle } from "react-native";
+import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import { FadeLabel, perLook, radius, sidebarLineHeight, Surface, type SurfaceProps } from "../ui";
 import { hex, layout, useTheme } from "../ui/theme";
 import { useSelectedTabGlow } from "./rowLook";
@@ -31,20 +31,22 @@ export function SidebarRowSurface({
   const theme = useTheme();
   const glow = useSelectedTabGlow();
   return (
-    <Surface
-      fill={hex(fill)}
-      cornerRadius={cornerRadius}
-      borderWidth={border}
-      borderColor={stroke === undefined ? undefined : hex(stroke)}
-      borderColors={selected ? theme.tabSelectedBorder.map(hex) : undefined}
-      shadowColor={selected ? glow.shadowColor : undefined}
-      shadowOpacity={selected ? glow.shadowOpacity : 0}
-      shadowRadius={glow.shadowRadius}
-      shadowOffset={SELECTED_ROW_SHADOW_OFFSET}
-      style={{ height: layout.rowHeight, flexDirection: "row", alignItems: "center", paddingLeft: padLeft, paddingRight: padRight }}
-    >
+    <View style={{ height: layout.rowHeight, flexDirection: "row", alignItems: "center", paddingLeft: padLeft, paddingRight: padRight }}>
+      <Surface
+        pointerEvents="none"
+        fill={hex(fill)}
+        cornerRadius={cornerRadius}
+        borderWidth={border}
+        borderColor={stroke === undefined ? undefined : hex(stroke)}
+        borderColors={selected ? theme.tabSelectedBorder.map(hex) : undefined}
+        shadowColor={selected ? glow.shadowColor : undefined}
+        shadowOpacity={selected ? glow.shadowOpacity : 0}
+        shadowRadius={glow.shadowRadius}
+        shadowOffset={SELECTED_ROW_SHADOW_OFFSET}
+        style={StyleSheet.absoluteFill}
+      />
       {children}
-    </Surface>
+    </View>
   );
 }
 

@@ -5,7 +5,7 @@ import { switchOn } from "../../state/app/switches";
 import { useTheme } from "../ui/theme";
 import { curve, useGated } from "../ui/motion";
 import { Panel, reduceMotion, WindowBackdrop, WindowDragRegion } from "../ui";
-import { useSettings, useSidebarSide, useWindowFullScreen, useWindowId } from "../../state/browser/hooks";
+import { useSidebarSide, useWindowFullScreen, useWindowId } from "../../state/browser/hooks";
 import { useSidebarDockState } from "../../state/windows/hooks";
 import { useSidebarWidth } from "../../state/sidebar/hooks";
 import { useCardTopInset, useSidebarControlsRowIn, useToolbarLightsCenter } from "../../state/windows/layout";
@@ -58,6 +58,7 @@ import {
 } from "../../state/windows/dockMotion";
 import { useTabDrag } from "../../state/drag/tabDrag";
 import { usePeek } from "./usePeek";
+import { useEmptyWindowPeek } from "./useEmptyWindowPeek";
 import { useSidebarLights, useTopStripLights } from "./useDockLights";
 import { useCardFrame } from "./cardFrame";
 import { forgetSidebarDock, noteSidebarDock } from "./sidebarDockCheck";
@@ -210,9 +211,7 @@ function SidebarDock({
   const windowId = useWindowId();
   const controlsRow = useSidebarControlsRowIn(windowId);
   const moving = useDockMotion((m) => !!m.moving[windowId]);
-  const revealOnHover = useSettings((s) => s.revealTabsOnHover);
   const draggingTab = useTabDrag((d) => d.phase === "tab" && d.windowId === windowId);
-  const edgeOn = revealOnHover || draggingTab;
   const edgeOver = useRef(false);
   const arm = useRef(EDGE_ARMED);
   const windowFullScreen = useRef(false);
@@ -222,6 +221,7 @@ function SidebarDock({
   pageFullScreen.current = fullscreen;
   const opened = (bounce: boolean) => {
     noteSidebarPeek(bounce);
+    emptyWindow.opened();
     if (pageFullScreen.current) notePageFullScreenPeek();
     if (windowFullScreen.current) noteFullScreenPeek();
     fullScreenPeekAt.current = windowFullScreen.current ? Date.now() : null;
@@ -233,13 +233,15 @@ function SidebarDock({
     fullScreenPeekAt.current = null;
     dismissHoverIn(windowId);
   };
-  const peek = usePeek((!open || fullscreen) && !moving && edgeOn, arc, () => edgeOver.current || peekHeld(windowId), closed, opened);
+  const peek = usePeek((!open || fullscreen) && !moving, arc, () => edgeOver.current || emptyWindow.held() || peekHeld(windowId), closed, opened);
   const reveal = () => {
+    emptyWindow.byHand();
     if (arm.current.armed) latestPeek.current.show();
     else noteSidebarPeekRevealHeldBack();
   };
   const latestPeek = useRef(peek);
   latestPeek.current = peek;
+  const emptyWindow = useEmptyWindowPeek(windowId, !open && !moving && !fullscreen, latestPeek);
   useEffect(() => {
     if (open && !fullscreen) latestPeek.current.reset();
   }, [open, fullscreen]);
@@ -255,7 +257,7 @@ function SidebarDock({
   const holding = state === "peeking";
   const shown = shownAs(state);
   useLayoutEffect(() => () => dismissHoverIn(windowId), [windowId, shown]);
-  const watching = watchesEdge(state, moving) && (edgeOn || peeking);
+  const watching = watchesEdge(state, moving);
   const nativeHold = edgeWatchWidth(holding, draggingTab, holdWidth, fullscreen ? 0 : frame.inset);
   useEffect(() => {
     if (!watching) return;
@@ -326,7 +328,7 @@ function SidebarDock({
     () => ({ opacity: layerOpacity, transform: [{ translateX: restingPeek ? Animated.add(layerShift, -width * outward) : layerShift }] }),
     [layerOpacity, layerShift, restingPeek, width, outward],
   );
-  noteSidebarDock(windowId, { peek, open, moving, fullscreen, edgeOn, layer });
+  noteSidebarDock(windowId, { peek, open, moving, fullscreen, layer });
   useEffect(() => () => forgetSidebarDock(windowId), [windowId]);
   const panelOn = useRef(new Animated.Value(0)).current;
   useLayoutEffect(() => panelOn.setValue(peeking ? 1 : 0), [panelOn, peeking]);
@@ -337,20 +339,20 @@ function SidebarDock({
     <>
       {strip.current && (
         <View
-          pointerEvents={!open && !fullscreen && edgeOn && !edgeStripOverPage(frame.inset) ? "auto" : "none"}
-          onMouseEnter={edgeOn ? enterStrip : undefined}
-          onMouseLeave={edgeOn ? leaveStrip : undefined}
+          pointerEvents={!open && !fullscreen && !edgeStripOverPage(frame.inset) ? "auto" : "none"}
+          onMouseEnter={enterStrip}
+          onMouseLeave={leaveStrip}
           style={{
             position: "absolute",
             [edgeSide]: 0,
             top: 0,
             bottom: frame.inset,
-            width: !open && !fullscreen && edgeOn ? PEEK_EDGE_STRIP : 0,
+            width: !open && !fullscreen ? PEEK_EDGE_STRIP : 0,
           }}
         />
       )}
       <Animated.View
-        pointerEvents={moving || ((fullscreen || !open) && !holding) ? "none" : "auto"}
+        pointerEvents={moving || ((fullscreen || !open) && !holding) ? "none" : "box-none"}
         style={{
           position: "absolute",
           ...(away ? { left: -10_000 } : { [edgeSide]: peeking ? peekAt.left : 0 }),

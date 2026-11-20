@@ -1,26 +1,26 @@
 import { useContext } from "react";
 import { spaceLookSource, type LookSource } from "../../lib/profileLook";
-import { PageProfileContext, WindowContext } from "../browser/hooks";
+import { PageProfileContext, useSettings, WindowContext } from "../browser/hooks";
 import { useBrowser } from "../browser/store";
 import type { Profile } from "../browser/types";
 import { focusedWindowOf } from "../windows/ui";
 import { useBasePaletteValue } from "../config/hooks";
 import type { BasePalette } from "../../lib/themeFile";
 
-export function useScopedLook<T>(resolve: (incognito: boolean, profile: Profile | undefined, appDark: boolean, source: LookSource, palette: BasePalette | null, adaptTextToColor: boolean) => T): T {
+export function useScopedLook<T>(resolve: (incognito: boolean, profile: Profile | undefined, appDark: boolean, source: LookSource, palette: BasePalette | null) => T): T {
   const windowId = useContext(WindowContext);
   const page = useContext(PageProfileContext);
   const palette = useBasePaletteValue();
   return useBrowser((s) => {
     const w = s.windows[windowId ?? focusedWindowOf(s) ?? ""];
-    if (w?.kind === "private") return resolve(true, undefined, s.ui.appDark, "own", palette, s.settings.adaptTextToColor);
-    return resolve(false, s.profiles[page ?? w?.profileId ?? s.settings.defaultProfileId], s.ui.appDark, windowId ? spaceLookSource(s.settings) : "utility", palette, s.settings.adaptTextToColor);
+    if (w?.kind === "private") return resolve(true, undefined, s.ui.appDark, "own", palette);
+    return resolve(false, s.profiles[page ?? w?.profileId ?? s.settings.defaultProfileId], s.ui.appDark, windowId ? spaceLookSource(s.settings) : "utility", palette);
   });
 }
 
 export function useGlassSettings() {
-  const glass = useBrowser((s) => s.settings.interfaceStyle === "glass");
-  const tint = useBrowser((s) => (s.settings.glassTintWithTheme ? s.settings.glassTintAmount : 0));
+  const glass = useSettings((s) => s.interfaceStyle === "glass");
+  const tint = useSettings((s) => (s.glassTintWithTheme ? s.glassTintAmount : 0));
   return { glass, tint };
 }
 
@@ -29,5 +29,5 @@ export function useSelectedTabGlowSetting() {
 }
 
 export function useSelectedTopApp() {
-  return useBrowser((s) => (s.settings.elementOutlines ? s.settings.selectedTopApp : "fill"));
+  return useSettings((s) => (s.elementOutlines ? s.selectedTopApp : "fill"));
 }

@@ -103,7 +103,7 @@ function PinnedCell({ tabId, geometry, from }: { tabId: string; geometry: DragGe
           opacity: drag.crossed ? 0 : 1,
         }}
       >
-        <TabPressArea windowId={windowId} tab={tab}>
+        <TabPressArea windowId={windowId} tab={tab} squish="tile">
           {({ pressed }) => <PinnedFace tabId={tabId} active={active} hovered={hovered} pressed={pressed} frame="face" />}
         </TabPressArea>
       </View>

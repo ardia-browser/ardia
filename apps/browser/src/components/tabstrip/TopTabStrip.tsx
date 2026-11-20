@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Animated, StyleSheet, View, type ViewStyle } from "react-native";
 import { topStripPeekHeld, watchHolds } from "../../state/app/transientUi";
-import { useSettings, useWindowFullScreen, useWindowId, useWindowProfileId } from "../../state/browser/hooks";
+import { useWindowFullScreen, useWindowId, useWindowProfileId } from "../../state/browser/hooks";
 import { beginExternalDrag, endExternalDrag, moveExternalDrag } from "../../state/drag/tabDrag";
 import { lightsCenter, TOP_STRIP_LIGHTS_CENTER } from "../../state/windows/dockMotion";
 import { usePagerPages } from "../../state/windows/profilePager";
@@ -117,20 +117,18 @@ function StripDropHighlight({ left, right }: { left: number; right: number }) {
   return <WindowDropGlow place={place} />;
 }
 
-export function TopStripPeek({ windowWidth, enabled: hidden }: { windowWidth: number; enabled: boolean }) {
+export function TopStripPeek({ windowWidth, enabled }: { windowWidth: number; enabled: boolean }) {
   const theme = useTheme();
   const windowId = useWindowId();
-  const revealOnHover = useSettings((s) => s.revealTabsOnHover);
-  const enabled = hidden && revealOnHover;
   const { slide, live, show, hide, recheck, cancelPending } = usePeek(enabled, false, () => topStripPeekHeld(windowId), undefined, noteTabStripPeek);
   const latestRecheck = useRef(recheck);
   latestRecheck.current = recheck;
   useEffect(() => (live ? watchHolds("topStrip", () => latestRecheck.current()) : undefined), [live]);
   useEffect(() => {
-    if (!hidden) return;
+    if (!enabled) return;
     void setTrafficLightsCenter(windowId, lightsCenter(layout.sidebarWidth));
     return () => void setTrafficLightsCenter(windowId, null);
-  }, [hidden, windowId]);
+  }, [enabled, windowId]);
   const leaveStrip = (e: { nativeEvent: { clientY: number } }) => {
     if (live && e.nativeEvent.clientY < PEEK_HOVER_HEIGHT) hide();
     else cancelPending();

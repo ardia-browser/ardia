@@ -1,0 +1,2 @@
+#!/bin/bash
+for f in "$@"; do printf "%-18s frames %-5s janky %-16s p50 %-6s p90 %-6s p95 %-6s p99 %-6s gpu50 %-7s slowUI %-4s slowDraw %s\n" $(basename $f .txt) "$(grep -m1 'Total frames' $f|awk '{print $4}')" "$(grep -m1 '^Janky frames:' $f|sed 's/Janky frames: //;s/ //')" $(for p in 50 90 95 99; do grep -m1 "^${p}th percentile" $f|awk '{print $3}'; done) "$(grep -m1 '50th gpu' $f|awk '{print $4}')" "$(grep -m1 'Slow UI' $f|awk '{print $5}')" "$(grep -m1 'Slow issue' $f|awk '{print $6}')"; done

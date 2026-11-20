@@ -112,7 +112,7 @@ const sourceKind = (sourceId: string) => (sourceId.startsWith("screen:") ? "scre
 export function answerDisplayMedia(tabId: string, sourceId: string | null, audio = false) {
   const request = useMedia.getState().displayRequests[tabId];
   if (!request) return;
-  if (sourceId) noteSharePicked(sourceKind(sourceId));
+  if (sourceId) noteSharePicked(sourceKind(sourceId), request.controller === true);
   void webviews.get(tabId)?.resolveDisplayMedia(request.id, sourceId, audio);
   useMedia.setState((m) => {
     const displayRequests = { ...m.displayRequests };

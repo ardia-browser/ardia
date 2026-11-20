@@ -5,6 +5,8 @@ const FIELDS = {
   refused: "edit_key_acks_refused",
   afterHandbackAccepted: "edit_key_acks_after_handback_accepted",
   afterHandbackRefused: "edit_key_acks_after_handback_refused",
+  pasteMatchStyleKeys: "paste_match_style_keys",
+  pasteMatchStyleOptionKeys: "paste_match_style_option_keys",
 } as const;
 
 type Field = (typeof FIELDS)[keyof typeof FIELDS];

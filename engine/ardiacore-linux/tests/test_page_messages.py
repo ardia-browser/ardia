@@ -55,6 +55,12 @@ class PageMessageTests(unittest.TestCase):
     def test_link_modifier_options_match_macos(self):
         self.run_case('options')
 
+    def test_block_autoplay_everywhere_covers_local_files_as_well_as_web_pages(self):
+        self.run_case('options')
+        autoplay = (SOURCE / 'ardia/linux/ac_linux_autoplay.cc').read_text()
+        self.assertIn('if (!LinuxAutoplayCoversScheme(url.scheme())) return false;', autoplay)
+        self.assertNotIn('SchemeIsHTTPOrHTTPS', autoplay)
+
     def test_peek_and_split_require_a_matching_trusted_mouse_up(self):
         self.run_case('gestures')
 
@@ -112,7 +118,7 @@ class PageMessageTests(unittest.TestCase):
         forget = host[host.index('  void ForgetRendererPageOptions() {'):]
         self.assertIn('PushPeekSiteTabs(peek_site_tabs_.Clear());', forget[:forget.index('\n  }\n')])
         self.assertIn('if (link && page_ && owner_->OpensNewTabLinksInPlace())', host)
-        self.assertIn('ReportOpened(opened, url, target, disposition == WindowOpenDisposition::NEW_FOREGROUND_TAB);', host)
+        self.assertIn('ReportOpened(opened, url, target, disposition == WindowOpenDisposition::kNewForegroundTab);', host)
 
     def test_a_link_kept_in_place_closes_its_tab_once_chromium_has_put_it_in_a_strip(self):
         host = (SOURCE / 'ardia/linux/ac_linux_host.cc').read_text()

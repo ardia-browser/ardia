@@ -14,3 +14,14 @@ test("only the Mac reports memory pressure", () => {
   assert.equal(macFeatures.memoryPressure, true);
   assert.equal(windowsFeatures.memoryPressure, false);
 });
+
+test("a pop-up button looks like its platform's: the Mac's accent box with two chevrons, Windows's single chevron, and on Windows it is never narrower than its title", async () => {
+  const macChrome = await import("./platformChrome.ts");
+  const windowsChrome = await import("./platformChrome.windows.ts");
+  assert.deepEqual(macChrome.POP_UP_CHROME, { indicator: "accentUpDown", growsToItsTitle: false });
+  assert.deepEqual(windowsChrome.POP_UP_CHROME, { indicator: "chevronDown", growsToItsTitle: true });
+  assert.deepEqual((await import("./platformChrome.linux.ts")).POP_UP_CHROME, macChrome.POP_UP_CHROME);
+  const { vectorIcon } = await import("../../../../packages/expo-windows/src/symbol/layers.ts");
+  assert.ok(vectorIcon("chevron.down", 8, "bold"), "Windows can draw the chevron");
+  assert.ok(vectorIcon("chevron.down", 9, "semibold"), "Windows can draw the chevron of a Settings pop-up");
+});

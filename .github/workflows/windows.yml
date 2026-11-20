@@ -485,10 +485,10 @@ jobs:
       - name: Tour the pages
         if: ${{ !cancelled() && env.SLUG == 'x64' && env.PART == 'launch' && env.FULL == 'true' && steps.engine.outcome == 'success' }}
         continue-on-error: true
-        timeout-minutes: 8
+        timeout-minutes: 20
         shell: pwsh
         run: |
-          scripts/windows/tour.ps1 -App "${{ runner.temp }}/Ardia/Ardia.exe" -Out "${{ runner.temp }}/tour-engine" -Only pages
+          scripts/windows/tour.ps1 -App "${{ runner.temp }}/Ardia/Ardia.exe" -Out "${{ runner.temp }}/tour-engine" -Only pages,peek,peek-dark,peek-tabs,peek-layouts
           if (Test-Path "${{ runner.temp }}/tour-engine/tour.md") { Get-Content "${{ runner.temp }}/tour-engine/tour.md" >> $env:GITHUB_STEP_SUMMARY }
       - name: Tour the first run
         if: ${{ !cancelled() && env.SLUG == 'x64' && env.PART == 'launch' && env.FULL == 'true' && steps.engine.outcome == 'success' }}

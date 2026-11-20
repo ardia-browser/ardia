@@ -1,13 +1,13 @@
 import { engineHost } from "@ardia/core";
 import { StyleSheet, View } from "react-native";
-import { searchEngines, type Settings } from "../../state/settings/settings";
+import { searchEngines } from "../../state/settings/settings";
 import { useSettings } from "../../state/browser/hooks";
 import { isSharing, setSharing } from "../../state/telemetry/client";
 import { SHARING_COPY } from "../../state/telemetry/copy";
 import { Text } from "../ui";
 import { monoFace, radius, space, tracking } from "../ui/tokens";
 import { SiteLogo } from "./SiteLogo";
-import { ChoiceList, useMockFocus, type ChoiceOption } from "./ChoiceList";
+import { useMockFocus } from "./ChoiceList";
 import { Page } from "./LayoutSteps";
 import { MockPanel, useScreen } from "./Screen";
 import { setOnboardingDraft, setOnboardingExtras, useOnboarding } from "../../state/onboarding/onboarding";
@@ -20,11 +20,6 @@ import { onboardingType, receiptStamp } from "./tokens";
 const KEYS = keysOf("searchPrivacy");
 const ENGINES = ["google", "duckduckgo", "bing", "kagi", "ecosia", "brave", "startpage"];
 
-const TYPED_CHOICES: ChoiceOption<Settings["commandBarPreference"]>[] = [
-  { value: "website", preview: "typed-website", title: "Go to the website", subtitle: "“github” opens github.com" },
-  { value: "search", preview: "typed-search", title: "Search for it", subtitle: "“github” searches the web" },
-];
-
 export function SearchPrivacyStep() {
   const sub = useOnboarding((s) => s.sub);
   const id = useQuestions("searchPrivacy")[sub]?.id;
@@ -36,24 +31,6 @@ export function SearchPrivacyStep() {
   const all = useSettings((st) => searchEngines(st));
   const engines = all.filter((e) => ENGINES.includes(e.id) || e.id === values.searchEngine);
 
-  if (id === "typed")
-    return (
-      <Page
-        id={id}
-        title="Type a word. What happens?"
-        subtitle="When what you type could be a site."
-        patch={{ commandBarPreference: values.commandBarPreference }}
-        picked={[]}
-        preview={<MockPanel settings={mock} focus={focus.focus} />}
-      >
-        <ChoiceList
-          options={TYPED_CHOICES}
-          value={values.commandBarPreference}
-          onChange={(commandBarPreference) => setDraft({ commandBarPreference })}
-          mock={focus}
-        />
-      </Page>
-    );
   if (id === "crash")
     return (
       <Page

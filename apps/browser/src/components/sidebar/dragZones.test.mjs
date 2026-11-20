@@ -36,10 +36,10 @@ test("group: never into its own subtree; nests through another group's header; p
 test("nested group: dragged out of its parent and back into it", (t) =>
   sweep(t, "nested group sweep", mixedScene, (m) => entryKey("group", m.H), [...DOWN, ...UP.slice(0, 18)]));
 
-test("split row: one row of pitch, into groups, pinned rows and the list, never onto", (t) =>
+test("split row: one row of pitch, into groups, pinned rows and the list, never splitting a row", (t) =>
   sweep(t, "split sweep", mixedScene, (m) => entryKey("split", m.SP), [...UP, ...DOWN.slice(0, 16)]));
 
-test("pinned row: onto other rows, into the pinned group, the end of the pinned area and the list", (t) =>
+test("pinned row: splits other pinned rows, into the pinned group, the end of the pinned area and the list", (t) =>
   sweep(t, "pinned row sweep", mixedScene, (m) => entryKey("tab", m.id.p1), [...DOWN, ...UP]));
 
 test("group member: dragged out of a nested group, into the outer group and the list", (t) =>
@@ -51,8 +51,8 @@ test("collapsed nested group: a row on its header goes into it, its body is not 
 test("collapsed pinned group: a group nests through its header only", (t) =>
   sweep(t, "collapsed pinned header", () => mixedScene({ pinnedGroupCollapsed: true }), (m) => entryKey("group", m.G), [...UP, ...DOWN]));
 
-test("onto: only the middle half of a row, no x test", (t) =>
-  sweep(t, "onto bounds", mixedScene, (m) => entryKey("tab", m.id.c), [
+test("split: only the middle half of a row, the side by the row's halves", (t) =>
+  sweep(t, "split bounds", mixedScene, (m) => entryKey("tab", m.id.c), [
     { x: 60, y: 325 }, { x: 5, y: 325 }, { x: 239, y: 325 }, { x: 60, y: 316.6 }, { x: 60, y: 333.4 }, { x: 60, y: 333.5 }, { x: 60, y: 325 }, { x: 60, y: 316.5 },
   ]));
 
@@ -138,7 +138,7 @@ test("groups of the same shown height keep registration order, and the smaller o
   await sweep(t, "equal heights", equal, (m) => entryKey("tab", m.id.z), [...UP]);
 });
 
-test("onto: overlapping rows go to the first registered", async (t) => {
+test("split: overlapping rows go to the first registered", async (t) => {
   const scene = () => {
     const W = world("a", "b", "c");
     const { id } = W;
@@ -148,7 +148,7 @@ test("onto: overlapping rows go to the first registered", async (t) => {
     L.row(id.c).tail("list");
     return { ...W, L, regions: regionsOf(L, { list: [200, L.y] }) };
   };
-  await sweep(t, "onto overlap", scene, (m) => entryKey("tab", m.id.c), [{ x: 60, y: 218 }, { x: 60, y: 222 }, { x: 60, y: 226 }]);
+  await sweep(t, "split overlap", scene, (m) => entryKey("tab", m.id.c), [{ x: 60, y: 218 }, { x: 60, y: 222 }, { x: 60, y: 226 }]);
 });
 
 test("a selection drags as one: every selected row is a source, the pitch is the selection's", async (t) => {

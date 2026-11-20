@@ -125,10 +125,11 @@ const shortcuts = [
   ["⇧⌘Z", cmd("Z", 6, "shift"), { title: "Redo" }, "⇧⌘Z"],
   ["⌘X", cmd("x", 7), { title: "Cut" }, "⌘X", "clipboard"],
   ["⌘C", cmd("c", 8), { title: "Copy" }, "⌘C", "clipboard"],
-  ["⇧⌘C", cmd("C", 8, "shift"), { command: "copyUrl" }, "⇧⌘C"],
+  ["⇧⌘C", cmd("C", 8, "shift"), { command: "copyUrl" }, "⇧⌘C", "devtools-own"],
   ["⌥⇧⌘C", cmd("C", 8, "shift", "option"), { command: "copyUrlAsMarkdown" }, "⌥⇧⌘C"],
   ["⌘V", cmd("v", 9), { title: "Paste" }, "⌘V", "clipboard"],
   ["⇧⌘V", cmd("V", 9, "shift"), { title: "Paste and Match Style" }, "⇧⌘V", "clipboard"],
+  ["⌥⇧⌘V", cmd("V", 9, "shift", "option"), { title: "Paste and Match Style" }, "(macOS's)", "clipboard"],
   ["⌘A", cmd("a", 0), { title: "Select All" }, "⌘A"],
   ["⌘F", cmd("f", 3), { command: "findInPage" }, "⌘F"],
   ["⌥⌘F", cmd("f", 3, "option"), { command: "findAndReplace" }, "⌥⌘F"],
@@ -536,6 +537,36 @@ await ac(`ac.store.getState().updateSettings({ newTabOpens: "page" }); return 1;
 }
 {
   await resetToPageField("", [0, 0]);
+  const cleared = await devWindow("hoverProbe:responderNil:1");
+  await devWindow("hoverProbe:check:60,135,click");
+  await sleep(600);
+  const healed = await devWindow("hoverProbe:responderNil:0");
+  const episodes = JSON.parse(await devWindow("hoverProbe")).emitted;
+  const last = episodes[episodes.length - 1] ?? {};
+  check("a key window left with no first responder gets the page back on the next click",
+    cleared === "responder window, lost 1" && /^responder (?!nil|window)\w+, lost 0$/.test(healed) &&
+      last.reason === "responderLost" && last.healed === true && last.healWorked === true,
+    `cleared "${cleared}", healed "${healed}", episode ${JSON.stringify(last)}`);
+}
+{
+  await resetToPageField("", [0, 0]);
+  await devWindow("hoverProbe:watch:1");
+  const seen = Math.max(0, ...JSON.parse(await devWindow("hoverProbe")).emitted.map((e) => e.episode));
+  const cleared = await devWindow("hoverProbe:responderNil:1");
+  const click = await ac(`return ac.shell.devClick("w1", { in: "page", x: 60, y: 135, wait: 700 });`);
+  const after = await devWindow("hoverProbe:responderNil:0");
+  const state = JSON.parse(await devWindow("hoverProbe"));
+  await devWindow("hoverProbe:watch:0");
+  const fresh = state.emitted.filter((e) => e.episode > seen);
+  const pageOnClick = click.firstResponderOnClick === "RenderWidgetHostViewCocoa";
+  const healedOnce = fresh.length === 1 && fresh[0].reason === "responderLost" && fresh[0].trigger === "click" && fresh[0].healed === true && fresh[0].healWorked === true;
+  check("a real click on the page with no first responder leaves the page as first responder, through the click watch",
+    state.watching === true && cleared === "responder window, lost 1" && !click.error && /^responder (?!nil|window)\w+, lost 0$/.test(after) &&
+      (pageOnClick ? fresh.length === 0 : healedOnce),
+    `cleared "${cleared}", click ${JSON.stringify(click)}, after "${after}", episodes ${JSON.stringify(fresh)}`);
+}
+{
+  await resetToPageField("", [0, 0]);
   await clipboard.set("first");
   await cdp("?t3", "(window.slowShortcuts ??= addEventListener('keydown', (e) => { if (e.metaKey) { const t = performance.now(); while (performance.now() - t < 200); } }, true), true)");
   await postKeys([keyPress("f", 3), keyPress("v", 9), keyPress("q", 12, 300, [])]);
@@ -624,6 +655,14 @@ await post("v", 9);
 await sleep(600);
 const afterEscape = await pageField("f.value");
 check("Escape out of the command bar gives the page its focus back", responder.startsWith("RenderWidgetHostViewCocoa") && afterEscape === "after-escape", `first responder ${responder}, page field "${afterEscape}"`);
+for (const [name, modifiers] of [["⇧⌘V", ["command", "shift"]], ["⌥⇧⌘V", ["command", "shift", "option"]]]) {
+  await resetToPageField("", [0, 0]);
+  await clipboard.set(`plain-${modifiers.length}`);
+  await post("V", 9, modifiers);
+  await sleep(600);
+  const pastedPlain = await pageField("f.value");
+  check(`${name} pastes and matches style into a page field`, pastedPlain === `plain-${modifiers.length}`, `page field "${pastedPlain}"`);
+}
 await resetToPageField("", [0, 0]);
 
 for (const where of ["the find field", "the page"]) {
@@ -710,6 +749,29 @@ await sleep(1000);
   for (let i = 0; i < 30 && !(await reservedBy(cmd("t", 17))); i++) await sleep(100);
 }
 {
+  const optionC = K("c", 8, "option"), copyUrlKeys = cmd("C", 8, "shift");
+  await ac(`ac.store.getState().updateSettings({ shortcuts: { ...ac.store.getState().settings.shortcuts, copyUrl: ["c", "option"] } }); return 1;`);
+  let by = "", old = "x";
+  for (let i = 0; i < 30 && (by !== "ardia.command.copyUrl" || old); i++) {
+    await sleep(100);
+    [by, old] = [await reservedBy(optionC), await reservedBy(copyUrlKeys)];
+  }
+  check("Copy URL rebound to ⌥C: the Option-only keys are reserved and ⇧⌘C goes to the page", by === "ardia.command.copyUrl" && !old, `⌥C ${by || "page"}, ⇧⌘C ${old || "page"}`);
+  const url = await activeUrl();
+  await clipboard.set("before ⌥C");
+  await swallowKeys();
+  const r = await press(optionC, { focus: "page", asKey: true, send: true, wait: 600 });
+  const seen = await pageKeys(), copied = await clipboard.get();
+  const harness = r.error ? `harness: ${r.error}; ` : r.lostEvents ? "harness: a key event never came back from the app's event queue; " : r.keyWindow !== true ? "harness not key: NSApp.keyWindow wasn't the pressed window; " : "";
+  check(
+    "⌥C sent through AppKit to a page that cancels every keydown: Copy URL copies the page's address and the page gets no keydown",
+    !harness && (r.fired ?? []).some((f) => same(f, { command: "copyUrl" })) && copied === url && seen === 0,
+    `${harness}${describe(r)}, clipboard ${JSON.stringify(copied)} (page ${JSON.stringify(url)}), the page saw ${seen} keydown`,
+  );
+  await ac(`const { copyUrl, ...rest } = ac.store.getState().settings.shortcuts; ac.store.getState().updateSettings({ shortcuts: rest }); return 1;`);
+  for (let i = 0; i < 30 && !(await reservedBy(copyUrlKeys)); i++) await sleep(100);
+}
+{
   const fullScreenKey = cmd("f", 3, "control");
   const states = async () => Object.fromEntries(await Promise.all(
     [["⌘T", cmd("t", 17)], ["⌘W", cmd("w", 13)], ["⌘Q", cmd("q", 12)], ["⌃⌘F", fullScreenKey], ["🌐F", K("f", 3, "function")], ["⌃1", K("1", 18, "control")]]
@@ -747,10 +809,10 @@ await sleep(1000);
   let loaded = false;
   for (let i = 0; i < 80 && !loaded; i++) {
     await sleep(250);
-    loaded = await ac(`const s = ac.store.getState(), id = globalThis.wkTab; return s.tabs[id]?.title === "wk" && !s.live[id]?.isLoading && !!ac.webviews.get(id);`);
+    loaded = await ac(`const s = ac.store.getState(), id = globalThis.wkTab; return s.tabs[id]?.title === "wk" && !ac.tabLive.liveOf(id).isLoading && !!ac.webviews.get(id);`);
   }
   if (!loaded) {
-    const seenAs = await ac(`const s = ac.store.getState(), id = globalThis.wkTab; return JSON.stringify({ title: s.tabs[id]?.title, loading: s.live[id]?.isLoading, view: !!ac.webviews.get(id) });`);
+    const seenAs = await ac(`const s = ac.store.getState(), id = globalThis.wkTab; return JSON.stringify({ title: s.tabs[id]?.title, loading: ac.tabLive.liveOf(id).isLoading, view: !!ac.webviews.get(id) });`);
     check("the WebKit tab for the WebKit checks loads", false, `${wkUrl} never finished loading in 20 s: ${seenAs}`);
   } else {
     await sleep(500);

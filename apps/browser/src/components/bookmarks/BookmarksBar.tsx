@@ -67,7 +67,7 @@ function Bar({ windowId }: { windowId: string }) {
     const other = otherId ? b.nodes[otherId] : undefined;
     return other?.kind === "folder" && other.children.length > 0;
   });
-  const hideImport = useSettings((s) => s.hideBookmarksBarImport);
+  const importDismissed = useSettings((s) => s.bookmarksImportDismissed);
   const source = useBarDrag((s) => (s.windowId === windowId ? s.source : null));
   const spot = useBarDrag((s) => (s.windowId === windowId ? s.spot : null));
   const otherOpen = useFolderMenus((s) => s.windowId === windowId && !!otherId && s.panels.some((p) => p.level === 0 && !p.retained && p.key === otherId));
@@ -185,7 +185,7 @@ function Bar({ windowId }: { windowId: string }) {
         style={{ flex: 1, height: size.item, flexDirection: "row", alignItems: "center" }}
       >
         <View style={{ flex: 1, height: size.item, flexDirection: "row", alignItems: "center", overflow: "hidden" }}>
-          {children.length === 0 && !hideImport ? (
+          {children.length === 0 && !importDismissed ? (
             <ImportButton />
           ) : children.length === 0 ? (
             <Text size="small" tone="textTertiary" style={HINT}>

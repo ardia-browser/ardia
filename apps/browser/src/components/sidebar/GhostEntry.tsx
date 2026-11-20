@@ -1,7 +1,7 @@
 import { tabTitle } from "../../state/browser/model";
-import { Image, View } from "react-native";
+import { View } from "react-native";
 import { knownFaviconTheme, resolveFavicon } from "../../state/favicons/favicons";
-import { Divider, FadeLabel, radius, space, Symbol, Text, withAlpha } from "../ui";
+import { Divider, FadeLabel, radius, space, Symbol, Text, TintedImage, withAlpha } from "../ui";
 import { layout, useTheme } from "../ui/theme";
 import type { BrowserState } from "../../state/browser/store";
 import type { GroupColor } from "../../state/browser/types";
@@ -20,6 +20,7 @@ import { drawnIcon, hidesRowIcon } from "../../state/pins/rowIcons";
 import { groupBoxAtRest, groupSurface, SIDEBAR_TYPE, TAB_ROW, TABULAR_NUMS, useSidebarTokens } from "./tokens";
 import { SidebarRowLabel } from "./SidebarRow";
 import { entryKey, parseEntry } from "../../state/sidebar/entryKey";
+import { shownLiveOf } from "../../state/tabs/tabLive";
 
 type TabShot = { kind: "tab"; key: string; title: string; url: string; favicon?: string | null; icon?: string | null; textOnly: boolean; profileId: string; uri: string | null; template: boolean; sound: "muted" | "playing" | null; hovered: boolean };
 type SplitShot = { kind: "split"; key: string; panes: TabShot[] };
@@ -51,7 +52,7 @@ function tabShot(s: BrowserState, tabId: string, hovered: boolean): TabShot | nu
     icon: drawnIcon(tab.customIcon),
     textOnly: hidesRowIcon(tab),
     profileId: tab.profileId,
-    sound: isSilenced(s, tab) ? "muted" : s.live[tabId]?.playingAudio ? "playing" : null,
+    sound: isSilenced(s, tab) ? "muted" : shownLiveOf(s, tabId).playingAudio ? "playing" : null,
     hovered,
   };
 }
@@ -89,7 +90,7 @@ function ghostIcon(shot: TabShot, theme: ReturnType<typeof useTheme>) {
   const symbol = iconSymbol(shot.icon);
   if (symbol) return <Symbol name={symbol} size={13} weight="medium" color={theme.icon} style={{ width: 16, height: 16 }} />;
   if (shot.icon) return <TabIcon url={shot.url} icon={shot.icon} profileId={shot.profileId} />;
-  if (shot.uri) return <Image source={{ uri: shot.uri }} style={{ width: 16, height: 16, borderRadius: radius.hair, tintColor: shot.template && !theme.dark ? theme.textPrimary : undefined }} />;
+  if (shot.uri) return <TintedImage source={{ uri: shot.uri }} identity={shot.uri} tint={shot.template && !theme.dark ? theme.textPrimary : undefined} style={{ width: 16, height: 16, borderRadius: radius.hair }} />;
   return shot.url ? <FaviconFallback url={shot.url} /> : <NewTabIcon />;
 }
 

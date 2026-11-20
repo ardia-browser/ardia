@@ -6,7 +6,9 @@ import { ardiaHost, hostModuleMethod, hostSupports, reportHostError } from "../.
 import { shellOverPages, useInputRegion } from "../../shellAbove";
 import { GlassInside, GlassOptIn, useGlassSurface, useVisualEffectMark } from "../../shellGlass";
 import { watchPageFocus } from "../../pageFocus";
+import { menuShown } from "../../menus";
 import { WINDOW_DRAG_ROUTES, watchWindowDrag, type WindowDragHost } from "../../windowDrag";
+import type { MiddleClickEvent } from "./MouseArea";
 import { edgeGain, fallbackRadius, highlightMask, maskStyle, peakGain, SHADE_OUTSET, shadeMask, shapeMask, type RimCurve, type RimProfile, type ShadeProfile } from "./glassRim";
 
 type Style = ViewStyle & Record<string, unknown>;
@@ -252,13 +254,24 @@ export function GlassEffect({ cornerRadius = 0, tint, glassStyle = "regular", da
   );
 }
 
-export type ContextMenuAreaProps = ViewProps & { onContextMenu?: () => void; captureDescendants?: boolean };
+export type ContextMenuAreaProps = ViewProps & { onContextMenu?: () => void; onMiddleClick?: (e: MiddleClickEvent) => void; captureDescendants?: boolean };
 
-export function ContextMenuArea({ onContextMenu, captureDescendants: _capture, ...props }: ContextMenuAreaProps) {
-  const WebView = View as unknown as React.ComponentType<ViewProps & { onContextMenu?: (e: MouseEvent) => void }>;
+type WebMenuProps = ViewProps & { onContextMenu?: (e: MouseEvent) => void; onAuxClick?: (e: MouseEvent) => void; onMouseDown?: (e: MouseEvent) => void };
+
+export function ContextMenuArea({ onContextMenu, onMiddleClick, captureDescendants: _capture, ...props }: ContextMenuAreaProps) {
+  const WebView = View as unknown as React.ComponentType<WebMenuProps>;
   return (
     <WebView
       {...props}
+      onMouseDown={(e) => {
+        if (e.button === 1 && onMiddleClick) e.preventDefault();
+      }}
+      onAuxClick={(e) => {
+        if (e.button !== 1 || !onMiddleClick) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onMiddleClick({ shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey });
+      }}
       onContextMenu={(e) => {
         if (!onContextMenu) return;
         e.preventDefault();
@@ -279,6 +292,7 @@ export function OutsidePressArea({ onOutsidePress, ...props }: ViewProps & { onO
   useInputRegion(frame, "box", false);
   useEffect(() => {
     const down = (e: PointerEvent) => {
+      if (menuShown()) return;
       if (node.current && e.target instanceof Node && !node.current.contains(e.target)) latest.current?.({ nativeEvent: { timestamp: e.timeStamp } });
     };
     document.addEventListener("pointerdown", down, true);

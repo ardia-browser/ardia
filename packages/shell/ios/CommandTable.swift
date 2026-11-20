@@ -94,6 +94,7 @@ enum CommandTable {
     case reportProblem
     case keyboardShortcuts
     case copyDiagnostics
+    case copyLastFreeze
     case toolTour
     case videoTour
     case releaseNotes
@@ -214,6 +215,7 @@ enum CommandTable {
     "reportProblem": "Report a Problem…",
     "keyboardShortcuts": "Keyboard Shortcuts",
     "copyDiagnostics": "Copy Diagnostics",
+    "copyLastFreeze": "Copy Last Freeze",
     "toolTour": "Tool Tour",
     "videoTour": "Video Tour",
     "releaseNotes": "Release Notes",
@@ -323,7 +325,7 @@ enum CommandTable {
     "std:cut:": [("x", [.command])],
     "std:copy:": [("c", [.command])],
     "std:paste:": [("v", [.command])],
-    "std:pasteAndMatchStyle:": [("v", [.shift, .command])],
+    "std:pasteAndMatchStyle:": [("v", [.shift, .command]), ("v", [.option, .shift, .command])],
     "std:selectAll:": [("a", [.command])],
     "std:showGuessPanel:": [(":", [.command])],
     "std:checkSpelling:": [(";", [.command])],

@@ -73,6 +73,18 @@ inline unsigned HeldModifiers() noexcept {
   return modifiers;
 }
 
+inline bool PhysicallyDown(int virtualKey) noexcept {
+  return (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
+}
+
+inline unsigned PhysicallyHeldModifiers() noexcept {
+  unsigned modifiers = 0;
+  if (PhysicallyDown(VK_CONTROL)) modifiers |= ModifierControl;
+  if (PhysicallyDown(VK_MENU)) modifiers |= ModifierOption;
+  if (PhysicallyDown(VK_SHIFT)) modifiers |= ModifierShift;
+  return modifiers;
+}
+
 inline wchar_t FixedKeyOf(UINT virtualKey) noexcept {
   if (virtualKey >= 'A' && virtualKey <= 'Z') return static_cast<wchar_t>(virtualKey - 'A' + 'a');
   if (virtualKey >= '0' && virtualKey <= '9') return static_cast<wchar_t>(virtualKey);

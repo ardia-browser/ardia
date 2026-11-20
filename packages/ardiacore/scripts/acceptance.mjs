@@ -652,7 +652,7 @@ const eventsOf = async (tabId) => {
 };
 const state = () =>
   evalApp(`const s = ac.store.getState(); const w = s.windows[${JSON.stringify(mainWindow)}] ?? Object.values(s.windows).filter((w) => w.kind === "main").sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0))[0];
-    return { windowId: w?.id, profileId: w?.profileId, tabs: (w?.tabIds ?? []).map((id) => ({ id, url: s.tabs[id]?.url, title: s.tabs[id]?.title, favicon: s.tabs[id]?.favicon?.slice(0, 40), adoptId: s.tabs[id]?.page.adopt, profileId: s.tabs[id]?.profileId, loading: s.live[id]?.isLoading, back: s.live[id]?.canGoBack, fwd: s.live[id]?.canGoForward })), active: w ? w.activeTabIds[w.profileId] : null, windows: Object.keys(s.windows).length, profiles: s.profileOrder };`);
+    return { windowId: w?.id, profileId: w?.profileId, tabs: (w?.tabIds ?? []).map((id) => ({ id, url: s.tabs[id]?.url, title: s.tabs[id]?.title, favicon: s.tabs[id]?.favicon?.slice(0, 40), adoptId: s.tabs[id]?.page.adopt, profileId: s.tabs[id]?.profileId, loading: ac.tabLive.liveOf(id)?.isLoading, back: ac.tabLive.liveOf(id)?.canGoBack, fwd: ac.tabLive.liveOf(id)?.canGoForward })), active: w ? w.activeTabIds[w.profileId] : null, windows: Object.keys(s.windows).length, profiles: s.profileOrder };`);
 
 // MARK: Helpers
 
@@ -674,7 +674,7 @@ const shownAndMounted = async (id) => {
 const freshTab = async (url) => {
   const id = await evalApp(`return ac.store.getState().newTab(${JSON.stringify(mainWindow)}, { url: ${JSON.stringify(url)} })`);
   await shownAndMounted(id);
-  await until(`${url} loaded`, () => evalApp(`const s = ac.store.getState(); return s.tabs[${JSON.stringify(id)}]?.url && !s.live[${JSON.stringify(id)}]?.isLoading ? true : null`));
+  await until(`${url} loaded`, () => evalApp(`const s = ac.store.getState(); return s.tabs[${JSON.stringify(id)}]?.url && !ac.tabLive.liveOf(${JSON.stringify(id)})?.isLoading ? true : null`));
   return id;
 };
 const backToA = async () => {
@@ -683,7 +683,7 @@ const backToA = async () => {
   await evalApp(`ac.actions.switchToTab("${first.id}"); return true`);
 };
 const lastEvent = async (tabId, name, test = () => true) => (await eventsOf(tabId)).findLast((x) => x.name === name && test(x.payload ?? {})) ?? null;
-const live = (tabId) => evalApp(`return ac.store.getState().live["${tabId}"] ?? null`);
+const live = (tabId) => evalApp(`return ac.store.getState().tabs["${tabId}"] ? ac.tabLive.liveOf("${tabId}") : null`);
 const pipWindows = () => engine("tabs.devPictureInPicture").catch(() => null);
 const startVideo = async (tabId, audio) => {
   const t = await pageFor(tabId, "/video");
@@ -1367,7 +1367,7 @@ try {
 
   await check("theme-commit", async () => {
     const tab = await openTab(`${base}/red-header?commit`, "Red header");
-    const color = () => evalApp(`return ac.store.getState().live["${tab.id}"]?.themeColor ?? null`);
+    const color = () => evalApp(`return ac.tabLive.liveOf("${tab.id}")?.themeColor ?? null`);
     const settled = (title) => until(title, async () => (await state()).tabs.find((t) => t.id === tab.id && t.title === title && !t.loading));
     try {
       await until("the red header's colour", async () => (await color()) === "#C80000", 5000);
@@ -1695,14 +1695,14 @@ try {
     const shell = "globalThis.expo.modules.ArdiaDialogs";
     const s = (expr) => evalApp(`const s = ac.store.getState(); return ${expr}`);
     const toB = async (tabId, tag) => {
-      await until(`A?${tag} loaded`, async () => (await s(`s.tabs["${tabId}"]?.title === "Page A" && !s.live["${tabId}"]?.isLoading && !!ac.webviews.get("${tabId}")`)) || null, 15000);
+      await until(`A?${tag} loaded`, async () => (await s(`s.tabs["${tabId}"]?.title === "Page A" && !ac.tabLive.liveOf("${tabId}")?.isLoading && !!ac.webviews.get("${tabId}")`)) || null, 15000);
       await evalApp(`ac.store.getState().navigate("${tabId}", "${base}/b?${tag}", { userInitiated: true }); return true`);
-      await until(`B?${tag} with Back`, async () => (await s(`s.tabs["${tabId}"]?.title === "Page B" && s.live["${tabId}"]?.canGoBack && !s.live["${tabId}"]?.isLoading`)) || null, 15000);
+      await until(`B?${tag} with Back`, async () => (await s(`s.tabs["${tabId}"]?.title === "Page B" && ac.tabLive.liveOf("${tabId}")?.canGoBack && !ac.tabLive.liveOf("${tabId}")?.isLoading`)) || null, 15000);
     };
     const backReachesA = async (tabId, tag) => {
       await evalApp(`ac.actions.switchToTab("${tabId}"); return true`);
-      await until(`the reopened B?${tag}`, async () => (await s(`s.tabs["${tabId}"]?.title === "Page B" && !s.live["${tabId}"]?.isLoading && !!ac.webviews.get("${tabId}")`)) || null, 15000);
-      const canGoBack = await until(`Back on the reopened B?${tag}`, async () => (await s(`!!s.live["${tabId}"]?.canGoBack`)) || null, 5000).catch(() => false);
+      await until(`the reopened B?${tag}`, async () => (await s(`s.tabs["${tabId}"]?.title === "Page B" && !ac.tabLive.liveOf("${tabId}")?.isLoading && !!ac.webviews.get("${tabId}")`)) || null, 15000);
+      const canGoBack = await until(`Back on the reopened B?${tag}`, async () => (await s(`!!ac.tabLive.liveOf("${tabId}")?.canGoBack`)) || null, 5000).catch(() => false);
       if (!canGoBack) return { canGoBack };
       await evalApp(`return ac.webviews.get("${tabId}").goBack()`);
       const a = await until(`Back to A?${tag}`, async () => (await s(`s.tabs["${tabId}"]?.title === "Page A" && s.tabs["${tabId}"]?.url`)) || null, 10000).catch(() => null);
@@ -2275,6 +2275,15 @@ try {
     return { levels };
   });
 
+  await check("preload-pages", async () => {
+    await engine("sites.setPreloadPages", { profile: "", on: true });
+    const on = await engine("sites.preloadPages", { profile: "" });
+    await engine("sites.setPreloadPages", { profile: "", on: false });
+    const off = await engine("sites.preloadPages", { profile: "" });
+    if (on !== true || off !== false) throw new Error(`Preload pages didn't follow the setting: on read ${on}, off read ${off}`);
+    return { on, off };
+  });
+
   await check("extensions", async () => {
     const inspected = await engineOrError("extensions.inspectUnpacked", { path: extPath });
     const installed = await engineOrError("extensions.install", { profile: "", path: extPath });
@@ -2740,7 +2749,7 @@ try {
       : await evalApp(`return ac.store.getState().newTab(${JSON.stringify(mainWindow)}, { url: "${firstPage}" })`);
     try {
       await until("the first page", () => evalApp(`const s = ac.store.getState(); const t = s.tabs[${JSON.stringify(tab)}];
-        return t?.title === "Ad first" && !s.live[${JSON.stringify(tab)}]?.isLoading ? true : null`), 20000);
+        return t?.title === "Ad first" && !ac.tabLive.liveOf(${JSON.stringify(tab)})?.isLoading ? true : null`), 20000);
       await sleep(500);
       const first = adsServedFor(firstTag);
       if (first.length) throw new Error(`the first page's ads went out: ${JSON.stringify(first)}`);
@@ -2748,7 +2757,7 @@ try {
         tag = `${tag0}-${tag}`;
         await evalApp(`ac.store.getState().navigate(${JSON.stringify(tab)}, "${page}?${tag}", { userInitiated: true }); return true`);
         await until(`the page (${tag})`, () => evalApp(`const s = ac.store.getState(); const t = s.tabs[${JSON.stringify(tab)}];
-          return t?.url?.endsWith(${JSON.stringify(`?${tag}`)}) && !s.live[${JSON.stringify(tab)}]?.isLoading ? true : null`));
+          return t?.url?.endsWith(${JSON.stringify(`?${tag}`)}) && !ac.tabLive.liveOf(${JSON.stringify(tab)})?.isLoading ? true : null`));
         const t = await until("its target", () => pageTarget(`/adpage?${tag}`));
         const reached = async (url) => {
           const before = adServed.length;
@@ -2799,7 +2808,7 @@ try {
     const w = await evalApp(`return ac.actions.openWindow({ profileId: ${JSON.stringify(id)}, url: "http://adpage.test:${server.address().port}/adfirst?${tag}" })`);
     try {
       await until("the held page", () => evalApp(`const s = ac.store.getState(); const t = s.windows[${JSON.stringify(w)}]?.tabIds[0];
-        return t && s.tabs[t]?.title === "Ad first" && !s.live[t]?.isLoading ? true : null`), 20000);
+        return t && s.tabs[t]?.title === "Ad first" && !ac.tabLive.liveOf(t)?.isLoading ? true : null`), 20000);
       const loadedAfterMs = Date.now() - started;
       await sleep(500);
       const served = adsServedFor(tag);
@@ -2819,7 +2828,7 @@ try {
       const w = await evalApp(`return ac.actions.openWindow({ kind: "private", url: "${origin}/adfirst?${tag}" })`);
       try {
         await until(`the ${step} private page`, () => evalApp(`const s = ac.store.getState(); const id = s.windows[${JSON.stringify(w)}]?.tabIds[0];
-          return id && s.tabs[id]?.title === "Ad first" && !s.live[id]?.isLoading ? true : null`), 20000);
+          return id && s.tabs[id]?.title === "Ad first" && !ac.tabLive.liveOf(id)?.isLoading ? true : null`), 20000);
         await sleep(500);
         const served = adsServedFor(tag);
         if (served.length) throw new Error(`the ${step} private window's ads went out: ${JSON.stringify(served)}`);
@@ -5477,7 +5486,7 @@ try {
     const id = await reopenClosed("create-moved", `ac.store.getState().moveTabsToWindow([id], null)`);
     try {
       const windowId = await until("the tab in its new window", () => evalApp(`const s = ac.store.getState(); const w = s.tabs[${JSON.stringify(id)}]?.windowId; return w && w !== ${JSON.stringify(mainWindow)} && ac.webviews.get(${JSON.stringify(id)}) ? w : null`), 15000);
-      await until("its page", async () => evalApp(`const s = ac.store.getState(); return s.tabs[${JSON.stringify(id)}]?.title === "Page C" && !s.live[${JSON.stringify(id)}]?.isLoading || null`), 15000);
+      await until("its page", async () => evalApp(`const s = ac.store.getState(); return s.tabs[${JSON.stringify(id)}]?.title === "Page C" && !ac.tabLive.liveOf(${JSON.stringify(id)})?.isLoading || null`), 15000);
       await sleep(1500);
       const keys = (await chromeTabKeys()).filter((k) => k === id).length;
       if (keys !== 1) throw new Error(`the moved tab has ${keys} Chrome tabs`);
@@ -5512,7 +5521,7 @@ try {
   await check("page-reports-follow-the-tab", async () => withPopupExtension({}, async () => {
     await engine("sites.setSetting", { profile: "", engine: "chromium", origin: base, type: "notifications", value: "allow" });
     const blocked = (id) => evalApp(`return ac.pageState.getState().pages[${JSON.stringify(id)}]?.blocked ?? 0`);
-    const theme = (id) => evalApp(`return ac.store.getState().live[${JSON.stringify(id)}]?.themeColor ?? null`);
+    const theme = (id) => evalApp(`return ac.tabLive.liveOf(${JSON.stringify(id)})?.themeColor ?? null`);
     const ads = await freshTab(`${base}/ac-ads?reports`);
     const red = (await openTab(`${base}/red-header?reports`, "Red header")).id;
     let windowId = null;
@@ -5621,7 +5630,7 @@ try {
   const inPage = (id, code) => evalApp(`ac.webviews.get(${q(id)})?.executeJavaScript(${q(code)}); return true`);
   const chromiumBrowser = (id) => engine("tabs.devBrowserId", { tabId: id }).catch(() => null);
   const loadedAs = (id, title) =>
-    evalApp(`const s = ac.store.getState(); return s.tabs[${q(id)}]?.title === ${q(title)} && !s.live[${q(id)}]?.isLoading ? true : null`);
+    evalApp(`const s = ac.store.getState(); return s.tabs[${q(id)}]?.title === ${q(title)} && !ac.tabLive.liveOf(${q(id)})?.isLoading ? true : null`);
   const webkitTab = async (path, title, windowId = mainWindow) => {
     await useWebKit();
     const id = await evalApp(`return ac.store.getState().newTab(${q(windowId)}, { url: ${q(webkitBase + path)} })`);
@@ -5897,7 +5906,7 @@ try {
     const windowId = await evalApp(`return ac.actions.openWindow({ kind: "private", url: ${q(`${webkitBase}/c?wk-private`)} })`);
     try {
       const id = await until("the private WebKit tab", () => evalApp(`const s = ac.store.getState(); const id = s.windows[${q(windowId)}]?.tabIds[0];
-        return id && s.tabs[id]?.title === "Page C" && !s.live[id]?.isLoading ? id : null`), 15000);
+        return id && s.tabs[id]?.title === "Page C" && !ac.tabLive.liveOf(id)?.isLoading ? id : null`), 15000);
       if (await chromiumBrowser(id)) throw new Error("the private tab opened in Chromium");
       await evalApp(`globalThis.expo.modules.ArdiaTabs.prepareTransfer(${q(id)}); return true`);
       await engine("webKit.endPrivateSession", { session: "" });
@@ -6303,7 +6312,7 @@ try {
     const tag = `restored-${Date.now()}`;
     const url = `http://adpage.test:${server.address().port}/adfirst?${tag}`;
     const loaded = (id) => evalApp(`const s = ac.store.getState(); const t = s.tabs[${JSON.stringify(id)}];
-      return t?.title === "Ad first" && !s.live[${JSON.stringify(id)}]?.isLoading ? true : null`);
+      return t?.title === "Ad first" && !ac.tabLive.liveOf(${JSON.stringify(id)})?.isLoading ? true : null`);
     const id = await evalApp(`const s = ac.store.getState(); const id = s.newTab(${JSON.stringify(windowId)}, { url: ${JSON.stringify(url)} });
       ac.store.getState().activate(id); return id`);
     await until("the ad page", () => loaded(id), 15000);
@@ -6323,7 +6332,7 @@ try {
     const pagesBefore = adServed.filter((s) => s.startsWith("adpage.test") && s.endsWith(`?${again}`)).length;
     await evalApp(`ac.store.getState().navigate(${JSON.stringify(tab.id)}, ${JSON.stringify(`http://adpage.test:${server.address().port}/adfirst?${again}`)}, { userInitiated: true }); return true`);
     await until("the restored tab's next page", () => evalApp(`const s = ac.store.getState(); const t = s.tabs[${JSON.stringify(tab.id)}];
-      return t?.url?.endsWith(${JSON.stringify(`?${again}`)}) && t.title === "Ad first" && !s.live[${JSON.stringify(tab.id)}]?.isLoading ? true : null`), 20000);
+      return t?.url?.endsWith(${JSON.stringify(`?${again}`)}) && t.title === "Ad first" && !ac.tabLive.liveOf(${JSON.stringify(tab.id)})?.isLoading ? true : null`), 20000);
     await sleep(500);
     const documents = adServed.filter((s) => s.startsWith("adpage.test") && s.endsWith(`?${again}`)).length - pagesBefore;
     if (documents < 1) throw new Error("the next page's document never reached the server");
@@ -6358,9 +6367,9 @@ try {
     const entries = (id) => evalApp(`return ac.webviews.get(${JSON.stringify(id)})?.navigationEntries().then((e) => e.map((x) => { const u = new URL(x.url); return u.pathname + u.search; })) ?? null`);
     const onSamePage = async (tag) => {
       const id = await evalApp(`return ac.store.getState().newTab(${JSON.stringify(windowId)}, { url: "${base}/a?${tag}" })`);
-      await until(`A?${tag}`, async () => (await s(`s.tabs["${id}"]?.title === "Page A" && !s.live["${id}"]?.isLoading && !!ac.webviews.get("${id}")`)) || null, 15000);
+      await until(`A?${tag}`, async () => (await s(`s.tabs["${id}"]?.title === "Page A" && !ac.tabLive.liveOf("${id}")?.isLoading && !!ac.webviews.get("${id}")`)) || null, 15000);
       await evalApp(`ac.store.getState().navigate("${id}", "${base}/b?same", { userInitiated: true }); return true`);
-      await until(`B from A?${tag}`, async () => (await s(`s.tabs["${id}"]?.title === "Page B" && s.live["${id}"]?.canGoBack && !s.live["${id}"]?.isLoading`)) || null, 15000);
+      await until(`B from A?${tag}`, async () => (await s(`s.tabs["${id}"]?.title === "Page B" && ac.tabLive.liveOf("${id}")?.canGoBack && !ac.tabLive.liveOf("${id}")?.isLoading`)) || null, 15000);
       return id;
     };
     const a = await onSamePage("first-closed"), b = await onSamePage("second-closed");

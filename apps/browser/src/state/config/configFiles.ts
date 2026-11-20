@@ -15,6 +15,8 @@ import { CONFIG_FILE, launchRestoreSession, readConfig } from "./configSettings"
 import { schemaFiles } from "./configSchema";
 import { reloadHooks } from "../automation/hookRules";
 import { noteConfigProblemToastDismissed, noteConfigProblemToastShown } from "../telemetry/configProblemToasts";
+import { consentToken } from "../telemetry/client";
+import { warnFor } from "../telemetry/logs";
 
 const RECONCILE_DELAY_MS = 100;
 const PROBLEMS_TOAST = "config-problems";
@@ -189,7 +191,8 @@ function report(problems: string[]) {
 function watchNames() {
   if (theme.name === watching) return;
   watching = theme.name;
-  watchConfigFiles(["config.json", "hooks.json", ...(theme.name ? [themeFile(theme.name)] : [])]).then(changed, (error: unknown) => console.warn("[config] couldn't watch the config folder", error));
+  const consent = consentToken();
+  watchConfigFiles(["config.json", "hooks.json", ...(theme.name ? [themeFile(theme.name)] : [])]).then(changed, (error: unknown) => warnFor(consent, "[config] couldn't watch the config folder", error));
 }
 
 export function reconcileConfig(launch = true) {
@@ -213,7 +216,8 @@ export function reconcileConfig(launch = true) {
 function writeSchemas() {
   if (!defaults) return;
   schemas ??= schemaFiles(defaults);
-  writeConfigSchemas(schemas).catch((error: unknown) => console.warn("[config] couldn't write the schemas", error));
+  const consent = consentToken();
+  writeConfigSchemas(schemas).catch((error: unknown) => warnFor(consent, "[config] couldn't write the schemas", error));
 }
 
 function changed() {

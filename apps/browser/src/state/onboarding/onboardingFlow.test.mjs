@@ -21,6 +21,9 @@ import {
 } from "./onboarding.ts";
 import { adoptSetupChoices } from "./setupCodeChoices.ts";
 import { readSaved } from "./onboardingDocument.ts";
+import { usePlugins } from "../plugins/store.ts";
+
+usePlugins.setState({ scanned: true });
 
 const S = () => useBrowser.getState();
 const O = () => useOnboarding.getState();
@@ -68,7 +71,7 @@ test("skipping the source after picking a browser leaves its preset out, so ever
   skipStep();
   assert.equal(O().step, "layout");
   assert.equal(questionsFor("tabs").length, QUESTIONS.tabs.length);
-  assert.deepEqual(questionsFor("searchPrivacy").map((q) => q.id), ["engine", "typed", "crash"]);
+  assert.deepEqual(questionsFor("searchPrivacy").map((q) => q.id), ["engine", "crash"]);
   settle();
 });
 
@@ -79,7 +82,7 @@ test("after a setup code, every step asks its questions from the settings the co
   adoptSetupChoices({ settings: { searchEngine: "kagi" }, preset: "dia" }, ["From a setup code"]);
   assert.equal(readSaved().source, null, "a relaunch resumes without the unconfirmed browser's preset");
   assert.equal(questionsFor("layout").length > 0, true);
-  assert.deepEqual(questionsFor("searchPrivacy").map((q) => q.id), ["engine", "typed", "crash"]);
+  assert.deepEqual(questionsFor("searchPrivacy").map((q) => q.id), ["engine", "crash"]);
   S().updateSettings({ searchEngine: "kagi" });
   assert.equal(resolveDraft(["searchEngine"], O().draft, draftPreset(O()), S().settings, []).searchEngine, "kagi");
   settle();

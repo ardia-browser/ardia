@@ -32,6 +32,9 @@ typedef void (^ArdiaServiceReply)(id _Nullable value, NSString *_Nullable error)
 + (void)profileToggles:(NSString *)profile set:(nullable NSDictionary<NSString *, NSNumber *> *)values reply:(ArdiaServiceReply)reply
     NS_SWIFT_NAME(profileToggles(profile:set:reply:));
 
++ (void)preloadPages:(NSString *)profile reply:(ArdiaServiceReply)reply NS_SWIFT_NAME(preloadPages(profile:reply:));
++ (void)setPreloadPages:(BOOL)on profile:(NSString *)profile reply:(ArdiaServiceReply)reply NS_SWIFT_NAME(setPreloadPages(_:profile:reply:));
+
 + (void)addresses:(NSString *)profile reply:(ArdiaServiceReply)reply NS_SWIFT_NAME(addresses(profile:reply:));
 + (void)saveAddress:(NSDictionary<NSString *, id> *)address profile:(NSString *)profile reply:(ArdiaServiceReply)reply
     NS_SWIFT_NAME(saveAddress(_:profile:reply:));

@@ -48,14 +48,14 @@ export const TEST_KEYS = [
   "keychain", "keychainHiddenReads", "keychainFail", "safeStorageAnswer", "reauth", "bluetoothChooser",
   "externalProtocolNoLaunch", "externalProtocolApp", "mediaRouteProvider", "systemMediaPermission", "applyProfileGate", "contextMenu",
   "loginsDelay", "loginsReleaseAfter", "cdpTabsVisible", "nativeDragRefused",
-  "pipSelfTest", "pipHover", "fakeFullScreenMs", "shadersKeyWindow", "peekStrict", "importSecret", "importDiaBundleId", "importDiaWindows",
+  "pipSelfTest", "pipHover", "fakeFullScreenMs", "shadersKeyWindow", "peekStrict", "peekMesh", "peekReady", "peekReduceMotion", "peekSlow", "importSecret", "importDiaBundleId", "importDiaWindows",
   "cliInstallScript", "legacySource", "legacyCrashAfter", "bangsUrl", "onboarding", "whatsNew", "telemetry",
-  "liveMock", "calendarFixture", "appMenu", "appDialog", "loginsTimeout", "screenRecording", "systemLocationPermission",
-  "videoMirror", "protectedVideoOrigin",
+  "liveMock", "calendarFixture", "appMenu", "appDialog", "loginsTimeout", "screenRecording", "systemLocationPermission", "bundledPlugins",
+  "applePasswordsPanel", "systemPanelRace",
 ];
 export const COMMA_KEYS = [
   "chromiumSwitches", "downloadsDir", "updateFeed", "cliHome", "cliBinDir", "cliUrl", "syncFolder", "sharedFolders", "importSourceDir",
-  "importSafariHome", "importSecret", "cliInstallScript", "legacySource", "bangsUrl", "liveMock",
+  "importSafariHome", "importSecret", "cliInstallScript", "legacySource", "bangsUrl", "liveMock", "bundledPlugins",
 ];
 
 const knownKeys = { instance: INSTANCE_KEYS, test: TEST_KEYS };

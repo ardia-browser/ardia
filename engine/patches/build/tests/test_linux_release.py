@@ -158,21 +158,86 @@ class PackageVersionAndCliTests(unittest.TestCase):
 
 
 class ArchPackageTests(unittest.TestCase):
-    def pkgver(self, srcdir):
-        script = f'source {str(LINUX / "arch/PKGBUILD")!r}; srcdir={str(srcdir)!r}; pkgver'
-        result = subprocess.run(['bash', '-c', script], capture_output=True, text=True, timeout=30)
+    def source(self, pkgver):
+        result = subprocess.run(['bash', '-c', 'source "$1" && pkgver=$2 && source <(grep "^source=" "$1") && printf "%s" "${source[0]}"',
+                                 'bash', str(LINUX / 'arch/PKGBUILD'), pkgver], capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stderr)
-        return result.stdout.strip()
+        return result.stdout
 
-    def test_pkgver_comes_from_the_package_version(self):
+    def test_source_is_the_release_tarball_of_the_package_version(self):
+        release = 'https://github.com/ardia-browser/ardia/releases/download'
+        self.assertEqual(self.source('0.2.44nightly.3'), f'ardia-bin-0.2.44nightly.3.tar.xz::{release}/v{VERSION}/Ardia-{VERSION}-linux-x64.tar.xz')
+        self.assertEqual(self.source('0.2.45'), f'ardia-bin-0.2.45.tar.xz::{release}/v0.2.45/Ardia-0.2.45-linux-x64.tar.xz')
+
+
+@unittest.skipUnless(shutil.which('shasum'), 'shasum')
+class PublishLinuxAssetsTests(unittest.TestCase):
+    STABLE = '0.2.48'
+    NAMES = ('Ardia-{v}-linux-x64.tar.xz', 'Ardia-{v}-linux-x64.deb', 'Ardia-{v}-linux-x64.AppImage',
+             'ardia-bin-{v}.src.tar.gz', 'ardia-cli-{v}-linux-x64.tar.gz')
+
+    def linux_section(self):
+        script = (REPO / '.claude/skills/release/scripts/publish.sh').read_text()
+        return script[script.index('linux="$dist/linux"'):script.index('windows="$dist/windows"')]
+
+    def publish(self, dist):
+        script = 'die() { echo "error: $*" >&2; exit 1; }\nassets=()\n' + self.linux_section() + 'printf "asset %s\\n" "${assets[@]##*/}"\n'
+        return subprocess.run(['bash', '-c', script], capture_output=True, text=True, timeout=30,
+                              env={**os.environ, 'dist': str(dist), 'version': self.STABLE}, cwd=dist)
+
+    def assets(self, result):
+        return {line.split(' ', 1)[1] for line in result.stdout.splitlines() if line.startswith('asset ')}
+
+    def dist(self, scratch, provenance_extra=''):
+        dist = pathlib.Path(scratch)
+        linux = dist / 'linux'
+        linux.mkdir()
+        for template in self.NAMES:
+            name = template.format(v=self.STABLE)
+            (linux / name).write_bytes(name.encode())
+            (linux / f'{name}.sha256').write_text(f'{hashlib.sha256(name.encode()).hexdigest()}  {name}\n')
+        (linux / 'provenance.txt').write_text(f'engine key {"a" * 40} (exact), from /engine\n{provenance_extra}')
+        return dist, linux
+
+    def test_every_linux_asset_and_its_digest_join_the_release(self):
         with tempfile.TemporaryDirectory() as scratch:
-            srcdir = pathlib.Path(scratch)
-            self.assertEqual(self.pkgver(srcdir), '0.0.0')
-            (srcdir / 'ardia/lib/ardia').mkdir(parents=True)
-            (srcdir / 'ardia/lib/ardia/VERSION').write_text(VERSION + '\n')
-            self.assertEqual(self.pkgver(srcdir), '0.2.44_nightly.3')
-            (srcdir / 'ardia/lib/ardia/VERSION').write_text('0.2.45\n')
-            self.assertEqual(self.pkgver(srcdir), '0.2.45')
+            dist, _ = self.dist(scratch)
+            result = self.publish(dist)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            expected = {template.format(v=self.STABLE) + suffix for template in self.NAMES for suffix in ('', '.sha256')}
+            self.assertEqual(self.assets(result), expected)
+
+    def test_the_arch_source_package_is_required(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            dist, linux = self.dist(scratch)
+            (linux / f'ardia-bin-{self.STABLE}.src.tar.gz').unlink()
+            result = self.publish(dist)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(f'has no ardia-bin-{self.STABLE}.src.tar.gz', result.stderr)
+
+    def test_a_missing_deb_fails_unless_the_release_dropped_it(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            dist, linux = self.dist(scratch)
+            (linux / f'Ardia-{self.STABLE}-linux-x64.deb').unlink()
+            (linux / f'Ardia-{self.STABLE}-linux-x64.deb.sha256').unlink()
+            result = self.publish(dist)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(f'has no Ardia-{self.STABLE}-linux-x64.deb', result.stderr)
+            with (linux / 'provenance.txt').open('a') as provenance:
+                provenance.write('deb dropped: it failed scripts/linux/deb-install-test.sh in run 1\n')
+            result = self.publish(dist)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotIn(f'Ardia-{self.STABLE}-linux-x64.deb', self.assets(result))
+            self.assertIn(f'Ardia-{self.STABLE}-linux-x64.AppImage', self.assets(result))
+            self.assertIn('ships without the .deb', result.stdout)
+
+    def test_a_wrong_digest_fails(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            dist, linux = self.dist(scratch)
+            (linux / f'ardia-bin-{self.STABLE}.src.tar.gz').write_bytes(b'changed')
+            result = self.publish(dist)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("don't match their .sha256 files", result.stderr)
 
 
 class ReleaseScriptTests(unittest.TestCase):

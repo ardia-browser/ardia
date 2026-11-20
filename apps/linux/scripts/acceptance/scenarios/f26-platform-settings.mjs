@@ -39,7 +39,6 @@ export default {
     await t.check("no unsupported row is shown in General, Appearance or Advanced", async () => {
       texts.General = await paneText(settings, "General");
       texts.Appearance = await paneText(settings, "Appearance");
-      await settings.state("s.updateSettings({ showAdvancedSettings: true }); return true;");
       texts.Advanced = await paneText(settings, "Advanced");
       await t.evidence("settings-panes", texts);
       const shown = visibleUnsupported(texts);

@@ -5,22 +5,25 @@ import { Divider } from "./Divider";
 import { useTheme } from "./theme";
 import { lineHeight, radius, space, font as typeScale } from "./tokens";
 import { useHover } from "./useHover";
+import { HoverFill } from "./HoverFill";
+import { useNativeForm } from "./nativeForm";
 
 export function Row({ title, description, children, icon, onPress }: { title?: ReactNode; description?: ReactNode; children?: ReactNode; icon?: ReactNode; onPress?: () => void }) {
   const theme = useTheme();
   const { hovered, hoverProps } = useHover();
+  const native = useNativeForm();
   const body = (
     <View
       style={{
-        minHeight: 40,
+        minHeight: native ? NATIVE_ROW_HEIGHT : 40,
         paddingHorizontal: space.l,
-        paddingVertical: space.m,
+        paddingVertical: native ? space.s : space.m,
         flexDirection: "row",
         alignItems: "center",
         gap: space.l,
-        backgroundColor: onPress && hovered ? theme.rowHover : undefined,
       }}
     >
+      {onPress ? <HoverFill shown={hovered} color={theme.rowHover} radius={0} /> : null}
       {icon}
       <View style={{ flex: 1 }}>
         {typeof title === "string" ? <Text style={{ ...typeScale.body, color: theme.textPrimary }}>{title}</Text> : title}
@@ -43,6 +46,8 @@ export function Row({ title, description, children, icon, onPress }: { title?: R
     </View>
   );
 }
+
+const NATIVE_ROW_HEIGHT = 34;
 
 export function Group({ children }: { children: ReactNode }) {
   const theme = useTheme();

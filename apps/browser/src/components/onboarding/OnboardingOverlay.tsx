@@ -11,6 +11,7 @@ import { LookStep } from "./LookStep";
 import { SearchPrivacyStep } from "./PrivacyStep";
 import { SourceStep } from "./SourceStep";
 import { HomeStep } from "./HomeStep";
+import { OnboardingConsentSheet, PluginsStep } from "./PluginsStep";
 import { OutroStep } from "./OutroStep";
 import { PinnedTabsStep } from "./PinnedTabsStep";
 import { SetupCodeOutro } from "./SetupCodeOutro";
@@ -97,6 +98,7 @@ function Overlay({ session }: { session: number }) {
                   {step === "searchPrivacy" && <SearchPrivacyStep />}
                   {step === "pins" && <PinnedTabsStep />}
                   {step === "home" && <HomeStep />}
+                  {step === "plugins" && <PluginsStep />}
                   {step === "outro" && (isWebDemo ? <SetupCodeOutro /> : <OutroStep />)}
                 </View>
               </OnboardingCardContext.Provider>
@@ -106,6 +108,7 @@ function Overlay({ session }: { session: number }) {
         </View>
       )}
       {step === "intro" && <Intro onDone={() => goToStep("source")} />}
+      <OnboardingConsentSheet />
     </Animated.View>
   );
 }

@@ -6,18 +6,18 @@ import { useShownTabIdFor, useStripEntries, useStripTitleNeeds } from "../../sta
 import { setMeasuredWidth, useMeasuredWidths } from "../../state/windows/measuredWidths";
 import { dismissStripHoverIn, stripPageOffstage } from "../../state/tabs/stripHover";
 import { onTabPressEnd, tabPressHeld } from "../../state/sidebar/heldTabPress";
-import { noteTabStripCompact, noteTabStripHeldClose, noteTabStripOverflow, noteTabStripRevealAfterPress, noteTabStripRevealHeldForScroll, noteTabStripScrolled, noteTabStripTitledTabs } from "../../state/telemetry/tabStripCounts";
+import { noteTabStripCompact, noteTabStripReadable, noteTabStripHeldClose, noteTabStripOverflow, noteTabStripTabsInOverflow, noteTabStripRevealAfterPress, noteTabStripRevealHeldForScroll, noteTabStripScrolled, noteTabStripTitledTabs } from "../../state/telemetry/tabStripCounts";
 import { Offstage } from "../ui/useHover";
 import { usePageStyle } from "../../state/windows/profilePager";
 import { ThemeScope } from "../window/ThemeScope";
 import { TintInk } from "../ui/TintInk";
 import { DockContext, FloatingStrip } from "./context";
 import { IncomingGap, useIncomingTab } from "./IncomingTab";
-import { chipKey, folderKey, type Strip } from "./model";
+import { chipKey, folderKey, nameKey, type Strip } from "./model";
 import { NewTabButton } from "./NewTabButton";
 import { PinnedDock } from "./PinnedDock";
 import { SplitChip } from "./SplitChip";
-import { heldWideTab, layoutDock, layoutStrip, newTabPinned, revealOffset, tabsOf, type DragGeometry, type TabWidths } from "./stripGroups";
+import { heldWideTab, keyedWidths, namesStayTight, withRoomyNames, layoutDock, layoutStrip, newTabPinned, overflowIn, revealOffset, stripOverflow, withActiveShown, tabsOf, withOverflowCounts, withoutTabs, type DragGeometry, type StripOverflow, type TabWidths } from "./stripGroups";
 import { StripGroup } from "./StripGroup";
 import { DraggableChip } from "./TabChip";
 import { edgeMaskAt, edgeStrength } from "./edgeFade";
@@ -27,7 +27,7 @@ import { StripScrollContext, type StripScroll } from "./stripScroll";
 import { COMPACT_CHIP, EDGE_FADE, EDGE_FADE_FLOOR, EDGE_FADE_ONSET, FLARE, GAP, NEW_TAB_ROOM, STRIP_SCROLL_ID } from "./tokens";
 
 type Wide = { tabId: string; slot: number };
-type Hold = { widths: TabWidths; end: number; wide: Wide; lead: boolean; needsTitle: (tabId: string) => boolean };
+type Hold = { widths: TabWidths; end: number; wide: Wide; lead: boolean; needsTitle: (tabId: string) => boolean; overflow: StripOverflow };
 
 const USER_SCROLL_QUIET_MS = 200;
 const OWN_SCROLL_MS = 80;
@@ -39,39 +39,50 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
   const windowId = useWindowId();
   const flare = useContext(FloatingStrip) ? 0 : FLARE;
   const pageStyle = usePageStyle(windowId, slot, pageWidth + flare * 2);
-  const parsed = useStripEntries(windowId, profileId);
+  const entries = useStripEntries(windowId, profileId);
   const activeId = useShownTabIdFor(windowId, profileId);
   const liveNeeds = useStripTitleNeeds(windowId, profileId);
   const shownNeeds = useRef(liveNeeds);
-  const groupIds = parsed.flatMap((e) => (e.kind === "group" ? [e.id] : []));
+  const groupIds = entries.flatMap((e) => (e.kind === "group" ? [e.id] : []));
   const chipWidths = useMeasuredWidths(groupIds.map(chipKey));
-  const folderIds = parsed.flatMap((e) => (e.kind === "group" ? e.members.flatMap((m) => (m.kind === "folder" ? [m.id] : [])) : []));
+  const folderIds = entries.flatMap((e) => (e.kind === "group" ? e.members.flatMap((m) => (m.kind === "folder" ? [m.id] : [])) : []));
   const folderWidths = useMeasuredWidths(folderIds.map(folderKey));
-  const chipOf = (groupId: string) => chipWidths[groupIds.indexOf(groupId)];
-  const folderChip = (groupId: string) => folderWidths[folderIds.indexOf(groupId)];
-  const dockEntry = parsed.find((e) => e.kind === "dock");
+  const chipOf = keyedWidths(groupIds, chipWidths);
+  const nameOf = keyedWidths(groupIds, useMeasuredWidths(groupIds.map(nameKey)));
+  const folderChip = keyedWidths(folderIds, folderWidths);
+  const dockEntry = entries.find((e) => e.kind === "dock");
   const dock = useMemo(() => layoutDock(dockEntry), [dockEntry]);
   const pointerIn = useRef(false);
   const held = useRef<Hold | null>(null);
   const last = useRef<Omit<Hold, "lead" | "needsTitle"> & { count: number; pageWidth: number; lastSlot: string | undefined }>(null);
   const closedTo = useRef("");
   const [releases, release] = useReducer((n: number) => n + 1, 0);
-  const count = parsed.reduce((n, e) => n + (e.kind === "dock" ? 0 : e.kind === "group" ? e.members.flatMap(tabsOf).length : tabsOf(e).length), 0);
+  const count = entries.reduce((n, e) => n + (e.kind === "dock" ? 0 : e.kind === "group" ? e.members.flatMap(tabsOf).length : tabsOf(e).length), 0);
   const closedWhileIn = pointerIn.current && !!last.current && count < last.current.count;
   const heldClose = closedWhileIn && !!held.current;
   if (closedWhileIn && last.current) {
-    held.current ??= { widths: last.current.widths, end: last.current.end, wide: last.current.wide, lead: false, needsTitle: shownNeeds.current };
+    held.current ??= { widths: last.current.widths, end: last.current.end, wide: last.current.wide, lead: false, needsTitle: shownNeeds.current, overflow: last.current.overflow };
     const lastSlot = last.current.lastSlot;
-    if (lastSlot && !parsed.some((e) => e.kind !== "dock" && (e.kind === "group" ? e.members.some((m) => tabsOf(m).includes(lastSlot)) : tabsOf(e).includes(lastSlot)))) held.current.lead = true;
+    if (lastSlot && !entries.some((e) => e.kind !== "dock" && (e.kind === "group" ? e.members.some((m) => tabsOf(m).includes(lastSlot)) : tabsOf(e).includes(lastSlot)))) held.current.lead = true;
     closedTo.current = activeId;
   }
   const needsTitle = held.current?.needsTitle ?? liveNeeds;
   shownNeeds.current = needsTitle;
-  const holding = held.current ? heldWideTab(parsed, held.current.wide) : null;
+  const holding = held.current ? heldWideTab(entries, held.current.wide, held.current.overflow.hidden) : null;
   const wideId = holding?.tabId ?? activeId;
-  const { chip, selected, widths, tabWidth, top, targets, memberWidth, spanOf: spanInStrip, tabsEnd, tabsShrink } = layoutStrip(parsed, activeId, pageWidth, { groupChip: chipOf, folderChip, needsTitle }, dock, held.current?.widths, wideId);
+  const measures = { groupChip: chipOf, folderChip, needsTitle };
+  const heldFit = held.current ? withActiveShown(held.current.overflow, activeId) : null;
+  const activeReturned = !!held.current && heldFit !== held.current.overflow;
+  const fit = heldFit ?? stripOverflow(entries, activeId, pageWidth, measures, dock, wideId);
+  const overflow = fit.hidden;
+  const tightNames = useRef(false);
+  tightNames.current = held.current ? tightNames.current : namesStayTight(tightNames.current, fit, () => stripOverflow(entries, activeId, pageWidth, withRoomyNames(measures, nameOf), dock, wideId));
+  const parsed = withoutTabs(entries, overflow);
+  const groupOverflow = new Map(entries.flatMap((e) => (e.kind === "group" ? [[e.id, overflowIn(e, overflow)] as const] : [])));
+  const { chip, selected, widths, tabWidth, top, memberWidth, spanOf: spanInStrip, tabsEnd, tabsShrink } = layoutStrip(parsed, activeId, pageWidth, withOverflowCounts(measures, entries, overflow), dock, activeReturned ? undefined : held.current?.widths, wideId, fit.selectedMin, fit.titledMin, fit.compactMin);
+  if (held.current && activeReturned) held.current = { ...held.current, overflow: fit, widths };
   const animateWidths = !held.current && !!last.current && last.current.count === count && last.current.pageWidth === pageWidth;
-  last.current = { count, pageWidth, widths, end: stripEnd(top), lastSlot: top.slots.at(-1)?.tabIds[0], wide: { tabId: wideId, slot: Math.max(0, top.slots.findIndex((s) => s.tabIds.includes(wideId))) } };
+  last.current = { count, pageWidth, widths, overflow: fit, end: stripEnd(top), lastSlot: top.slots.at(-1)?.tabIds[0], wide: { tabId: wideId, slot: Math.max(0, top.slots.findIndex((s) => s.tabIds.includes(wideId))) } };
   const spare = held.current ? Math.max(0, held.current.end - stripEnd(top)) : 0;
   const leadSpare = !!held.current && (held.current.lead || !!holding?.atEnd);
   const pinned = newTabPinned(chip, tabsEnd + spare, pageWidth, tabsShrink);
@@ -85,7 +96,7 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
   const slotOf = (id: string) => top.slots.findIndex((slot) => slot.tabIds[0] === id);
   const grow = useRef(new Animated.Value(0)).current;
   const strip = useRef<Strip>(null!);
-  strip.current = { top, targets, chip, grow, dock, slotOf, animateWidths };
+  strip.current = { top, chip, grow, dock, slotOf, animateWidths };
   const incoming = useIncomingTab(windowId, current, top);
   const scroll = useRef<ScrollView>(null);
   const scrolled = useRef(0);
@@ -209,9 +220,16 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
   useEffect(() => {
     if (compact) noteTabStripCompact();
   }, [compact]);
+  const readable = current && fit.compactMin > COMPACT_CHIP;
+  useEffect(() => {
+    if (readable) noteTabStripReadable();
+  }, [readable]);
   useEffect(() => {
     if (current && pinned) noteTabStripOverflow(count);
   }, [current, pinned, count]);
+  useEffect(() => {
+    if (current && overflow.size) noteTabStripTabsInOverflow(overflow.size);
+  }, [current, overflow.size]);
   useEffect(() => {
     if (heldClose) noteTabStripHeldClose();
   }, [count]);
@@ -271,7 +289,7 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
                               key={e.id}
                               entry={e}
                               geometry={top}
-                              from={slotOf(e.members[0] ? tabsOf(e.members[0])[0]! : "")}
+                              from={slot}
                               chip={selected}
                               tabWidth={tabWidth}
                               activeId={activeId}
@@ -279,6 +297,8 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
                               onChipWidth={(width) => setMeasuredWidth(chipKey(e.id), width)}
                               memberWidth={memberWidth}
                               folderMeasured={(groupId) => folderChip(groupId) !== undefined}
+                              overflowCount={groupOverflow.get(e.id) ?? 0}
+                              tightName={tightNames.current}
                             />,
                           ];
                         if (e.kind === "split")

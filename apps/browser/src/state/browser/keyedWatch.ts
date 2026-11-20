@@ -58,8 +58,12 @@ export function useKeyed<T>(watch: KeyedWatch, key: string | null | undefined, r
 const browser = () => useBrowser;
 
 export const watchTabRecord = recordWatch(browser, (s: BrowserState) => s.tabs);
-export const watchLiveRecord = recordWatch(browser, (s: BrowserState) => s.live);
 export const watchWindowRecord = recordWatch(browser, (s: BrowserState) => s.windows);
 export const watchSettings = fieldWatch(browser, (s: BrowserState) => s.settings);
 export const watchAppDark = fieldWatch(browser, (s: BrowserState) => s.ui.appDark);
+export const watchWindowSettings = keyedWatch(browser, (s: BrowserState, prev: BrowserState, wake) => {
+  if (s.settings !== prev.settings) return true;
+  if (s.windows !== prev.windows) for (const id of changedIds(s.windows, prev.windows)) wake(id);
+});
+export const useWindowSettings = <T,>(windowId: string, read: (s: BrowserState) => T): T => useKeyed(watchWindowSettings, windowId, () => read(useBrowser.getState()));
 export const ALL = "";

@@ -152,12 +152,13 @@ test("seeds are checked before they are used", () => {
   assert.equal(secondRenderer(id, saved, undefined, now).windows[id].kind, "main", "without a seed the window is an ordinary one");
 });
 
-test("the Little Ardia frame is the Mac's: the saved size, at least 420 by 300, centred in the work area", () => {
+test("the Little Ardia frame is the Mac's: the saved size, at least 420 by 300 and at most 80 % of the work area, centred in it", () => {
   assert.deepEqual(smallWindowFrame([900, 640], SCREEN), [510, 220, 900, 640]);
   assert.deepEqual(smallWindowFrame(undefined, SCREEN), [510, 220, 900, 640]);
   assert.deepEqual(smallWindowFrame([100, 100], SCREEN), [750, 390, 420, 300]);
-  assert.deepEqual(smallWindowFrame([4000, 4000], SCREEN), [0, 0, 1920, 1080]);
-  assert.deepEqual(smallWindowFrame([900, 1060], SCREEN), [510, 10, 900, 1060], "a tall window stays centred on the screen");
+  assert.deepEqual(smallWindowFrame([4000, 4000], SCREEN), [192, 108, 1536, 864], "a size saved on a bigger screen fits 80 % of this one");
+  assert.deepEqual(smallWindowFrame([900, 1060], SCREEN), [510, 108, 900, 864], "a tall window is capped and stays centred on the screen");
+  assert.deepEqual(smallWindowFrame([900, 640], { ...SCREEN, availWidth: 500, availHeight: 360, height: 360 }), [40, 30, 420, 300], "the minimum wins over the cap");
   assert.equal(smallWindowFrame([900, 640], { ...SCREEN, availWidth: 0 }), undefined);
 });
 

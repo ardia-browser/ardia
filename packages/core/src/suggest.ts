@@ -83,6 +83,7 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
   const score = oneWord ? matchScoreWord : matchScore;
   const bound = Boolean(scope);
   let inline: Ranked | null = null;
+  const hiddenByRename = renamed.size > 0 ? renamed : null;
   for (const list of [pages, extra]) {
     const inPages = list === pages;
     for (let at = 0; at < list.length; at++) {
@@ -94,7 +95,7 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
         scores[found++] = m;
       }
       const key = c.text.key;
-      if (inPages && renamed.has(key)) continue;
+      if (inPages && hiddenByRename !== null && hiddenByRename.has(key)) continue;
       const derank = currentKey !== null && key === currentKey ? 80 : 0;
       const lastVisit = c.fresh ? now : c.lastVisit;
       let age = 10;

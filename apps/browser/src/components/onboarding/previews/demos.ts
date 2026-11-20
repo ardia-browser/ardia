@@ -1,7 +1,7 @@
 import type { PreviewId } from "../../../state/onboarding/previewIds";
 import type { Scene } from "./scene";
 import { block } from "./scenes/BlockingScenes";
-import { CmdlCentred, CmdlField, NewTabOpensBar, NewTabOpensPage, newTabAt, typed } from "./scenes/CommandBarScenes";
+import { CmdlCentred, CmdlField, NewTabOpensBar, NewTabOpensPage, newTabAt } from "./scenes/CommandBarScenes";
 import { quit, tidy, windows } from "./scenes/LifecycleScenes";
 import { links } from "./scenes/LinkScenes";
 import { appearance, siteColor } from "./scenes/LookScenes";
@@ -37,8 +37,6 @@ export const DEMOS: Record<PreviewId, { duration: number; Scene: Scene }> = {
   "sitecolor-off": { duration: sceneMs.siteColor, Scene: siteColor(false) },
   "switcher-dots": { duration: sceneMs.switcher, Scene: switcher(false) },
   "switcher-icons": { duration: sceneMs.switcher, Scene: switcher(true) },
-  "typed-website": { duration: sceneMs.typed, Scene: typed(false) },
-  "typed-search": { duration: sceneMs.typed, Scene: typed(true) },
   "block-on": { duration: sceneMs.block, Scene: block(true) },
   "block-off": { duration: sceneMs.block, Scene: block(false) },
   "links-little": { duration: sceneMs.links, Scene: links(true) },

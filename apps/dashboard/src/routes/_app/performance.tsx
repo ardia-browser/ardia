@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { PageHeader, Panel, Stat } from "@/components/blocks";
 import { DataTable } from "@/components/data-table";
+import { FreezesPanel } from "@/components/freezes-panel";
 import { TrendSheetProvider, TrendTarget, type TrendOption, type TrendSpec } from "@/components/perf-trend";
 import { QuantileRows } from "@/components/quantiles";
 import { ListSkeleton, Loaded, StatsSkeleton, TableSkeleton, useRange, useSection } from "@/components/section";
@@ -126,6 +127,7 @@ function PerformancePage() {
           )}
         </Loaded>
       </Panel>
+      <FreezesPanel />
       <Panel
         source="app"
         title="By version"

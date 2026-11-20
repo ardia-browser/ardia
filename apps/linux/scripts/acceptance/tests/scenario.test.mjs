@@ -226,7 +226,7 @@ describe("report", () => {
 
 describe("scenario catalogue", () => {
   it("holds the headless scenarios once each, with runnable checks and complete manual steps", () => {
-    assert.deepEqual(SCENARIOS.map((s) => s.id), ["F01", "F02", "F03", "F23", "F08", "F09", "F10", "F26", "F27", "F28"]);
+    assert.deepEqual(SCENARIOS.map((s) => s.id), ["F01", "F02", "F03", "F23", "F08", "F09", "F10", "F26", "F27", "F28", "F29", "F30"]);
     assert.equal(new Set(SCENARIOS.map((s) => s.issue)).size, SCENARIOS.length);
     for (const s of SCENARIOS) {
       assert.equal(typeof s.run, "function", s.id);

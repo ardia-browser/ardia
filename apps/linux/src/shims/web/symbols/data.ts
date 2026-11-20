@@ -76,7 +76,7 @@ const BODIES: readonly string[] = [
   "<path d=\"m7 15 5 5 5-5\" /><path d=\"m7 9 5-5 5 5\" />",
   "<circle cx=\"12\" cy=\"12\" r=\"10\" />",
   "<path d=\"M232,128A104,104,0,1,1,128,24,104.13,104.13,0,0,1,232,128Z\"/>",
-  "<path d=\"M17 3.34a10 10 0 1 1 -15 8.66l.005 -.324a10 10 0 0 1 14.995 -8.336m-9 1.732a8 8 0 0 0 4.001 14.928l-.001 -16a8 8 0 0 0 -4 1.072\" />",
+  "<path d=\"M21,3H3C1.89,3 1,3.89 1,5V17A2,2 0 0,0 3,19H8V21H16V19H21A2,2 0 0,0 23,17V5C23,3.89 22.1,3 21,3M21,17H3V5H21M16,11L9,15V7\" />",
   "<circle cx=\"12\" cy=\"12\" r=\"10\" /><path d=\"M12 6v6H8\" />",
   "<path d=\"M24.49 10.65A10.03 10.03 0 1 1 19.02 6.43L24.22 8.08\" fill=\"none\"/><path d=\"M23.17 6.07L24.22 8.08L23.17 10.08\" fill=\"none\" transform=\"rotate(17.52 24.22 8.08)\"/>",
   "<path d=\"M16 10.2V16L18.69 18.55\" fill=\"none\"/>",
@@ -332,7 +332,7 @@ const BODIES: readonly string[] = [
   "<path d=\"M216,48H56A16,16,0,0,0,40,64V184a8,8,0,0,1-16,0V88A8,8,0,0,0,8,88v96.11A24,24,0,0,0,32,208H208a24,24,0,0,0,24-24V64A16,16,0,0,0,216,48ZM176,152H96a8,8,0,0,1,0-16h80a8,8,0,0,1,0,16Zm0-32H96a8,8,0,0,1,0-16h80a8,8,0,0,1,0,16Z\"/>",
   "<path d=\"M14,19H18V5H14M6,19H10V5H6V19Z\" />",
   "<path d=\"M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,6A2,2 0 0,0 10,8A2,2 0 0,0 12,10A2,2 0 0,0 14,8A2,2 0 0,0 12,6M12,13C14.67,13 20,14.33 20,17V20H4V17C4,14.33 9.33,13 12,13M12,14.9C9.03,14.9 5.9,16.36 5.9,17V18.1H18.1V17C18.1,16.36 14.97,14.9 12,14.9Z\" />",
-  "<path d=\"M16 17V19H2V17S2 13 9 13 16 17 16 17M12.5 7.5A3.5 3.5 0 1 0 9 11A3.5 3.5 0 0 0 12.5 7.5M15.94 13A5.32 5.32 0 0 1 18 17V19H22V17S22 13.37 15.94 13M15 4A3.39 3.39 0 0 0 13.07 4.59A5 5 0 0 1 13.07 10.41A3.39 3.39 0 0 0 15 11A3.5 3.5 0 0 0 15 4Z\" />",
+  "<path d=\"M32,80a8,8,0,0,1,8-8H77.17a28,28,0,0,1,53.66,0H216a8,8,0,0,1,0,16H130.83a28,28,0,0,1-53.66,0H40A8,8,0,0,1,32,80Zm184,88H194.83a28,28,0,0,0-53.66,0H40a8,8,0,0,0,0,16H141.17a28,28,0,0,0,53.66,0H216a8,8,0,0,0,0-16Z\"/>",
   "<path d=\"M19,19H5V5H19M19,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5A2,2 0 0,0 19,3M13.96,12.29L11.21,15.83L9.25,13.47L6.5,17H17.5L13.96,12.29Z\" />",
   "<path d=\"M232.4,114.49,88.32,26.35a16,16,0,0,0-16.2-.3A15.86,15.86,0,0,0,64,39.87V216.13A15.94,15.94,0,0,0,80,232a16.07,16.07,0,0,0,8.36-2.35L232.4,141.51a15.81,15.81,0,0,0,0-27ZM80,215.94V40l143.83,88Z\"/>",
   "<path d=\"M19,19H5V5H19M19,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5C21,3.89 20.1,3 19,3M10,8V16L15,12L10,8Z\" />",
@@ -347,6 +347,13 @@ const BODIES: readonly string[] = [
   "<path d=\"M104,40H56A16,16,0,0,0,40,56v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V56A16,16,0,0,0,104,40Zm0,64H56V56h48v48Zm96-64H152a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V56A16,16,0,0,0,200,40Zm0,64H152V56h48v48Zm-96,32H56a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V152A16,16,0,0,0,104,136Zm0,64H56V152h48v48Zm96-64H152a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V152A16,16,0,0,0,200,136Zm0,64H152V152h48v48Z\"/>",
   "<rect x=\"3.13\" y=\"6.04\" width=\"25.75\" height=\"19.93\" rx=\"3.58\"/>",
   "<path d=\"M3.13 12.68V9.62A3.58 3.58 0 0 1 6.71 6.04H25.3A3.58 3.58 0 0 1 28.88 9.62V12.68Z\"/>",
+  "<path d=\"M216,130.16q.06-2.16,0-4.32l14.92-18.64a8,8,0,0,0,1.48-7.06,107.6,107.6,0,0,0-10.88-26.25,8,8,0,0,0-6-3.93l-23.72-2.64q-1.48-1.56-3-3L186,40.54a8,8,0,0,0-3.94-6,107.29,107.29,0,0,0-26.25-10.86,8,8,0,0,0-7.06,1.48L130.16,40Q128,40,125.84,40L107.2,25.11a8,8,0,0,0-7.06-1.48A107.6,107.6,0,0,0,73.89,34.51a8,8,0,0,0-3.93,6L67.32,64.27q-1.56,1.49-3,3L40.54,70a8,8,0,0,0-6,3.94,107.71,107.71,0,0,0-10.87,26.25,8,8,0,0,0,1.49,7.06L40,125.84Q40,128,40,130.16L25.11,148.8a8,8,0,0,0-1.48,7.06,107.6,107.6,0,0,0,10.88,26.25,8,8,0,0,0,6,3.93l23.72,2.64q1.49,1.56,3,3L70,215.46a8,8,0,0,0,3.94,6,107.71,107.71,0,0,0,26.25,10.87,8,8,0,0,0,7.06-1.49L125.84,216q2.16.06,4.32,0l18.64,14.92a8,8,0,0,0,7.06,1.48,107.21,107.21,0,0,0,26.25-10.88,8,8,0,0,0,3.93-6l2.64-23.72q1.56-1.48,3-3L215.46,186a8,8,0,0,0,6-3.94,107.71,107.71,0,0,0,10.87-26.25,8,8,0,0,0-1.49-7.06ZM128,168a40,40,0,1,1,40-40A40,40,0,0,1,128,168Z\"/>",
+  "<path d=\"M164.47,195.63a8,8,0,0,1-6.7,12.37H10.23a8,8,0,0,1-6.7-12.37,95.83,95.83,0,0,1,47.22-37.71,60,60,0,1,1,66.5,0A95.83,95.83,0,0,1,164.47,195.63Zm87.91-.15a95.87,95.87,0,0,0-47.13-37.56A60,60,0,0,0,144.7,54.59a4,4,0,0,0-1.33,6A75.83,75.83,0,0,1,147,150.53a4,4,0,0,0,1.07,5.53,112.32,112.32,0,0,1,29.85,30.83,23.92,23.92,0,0,1,3.65,16.47,4,4,0,0,0,3.95,4.64h60.3a8,8,0,0,0,7.73-5.93A8.22,8.22,0,0,0,252.38,195.48Z\"/>",
+  "<path d=\"M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24ZM40,128a88.1,88.1,0,0,1,88-88V216A88.1,88.1,0,0,1,40,128Z\"/>",
+  "<path d=\"M248,152a8,8,0,0,1-8,8H224v16a8,8,0,0,1-16,0V160H192a8,8,0,0,1,0-16h16V128a8,8,0,0,1,16,0v16h16A8,8,0,0,1,248,152ZM56,72H72V88a8,8,0,0,0,16,0V72h16a8,8,0,0,0,0-16H88V40a8,8,0,0,0-16,0V56H56a8,8,0,0,0,0,16ZM184,192h-8v-8a8,8,0,0,0-16,0v8h-8a8,8,0,0,0,0,16h8v8a8,8,0,0,0,16,0v-8h8a8,8,0,0,0,0-16ZM219.31,80,80,219.31a16,16,0,0,1-22.62,0L36.68,198.63a16,16,0,0,1,0-22.63L176,36.69a16,16,0,0,1,22.63,0l20.68,20.68A16,16,0,0,1,219.31,80ZM208,68.69,187.31,48l-32,32L176,100.69Z\"/>",
+  "<path d=\"M224,48H32A16,16,0,0,0,16,64V192a16,16,0,0,0,16,16H224a16,16,0,0,0,16-16V64A16,16,0,0,0,224,48ZM64,168H48a8,8,0,0,1,0-16H64a8,8,0,0,1,0,16Zm96,0H96a8,8,0,0,1,0-16h64a8,8,0,0,1,0,16Zm48,0H192a8,8,0,0,1,0-16h16a8,8,0,0,1,0,16Zm0-32H48a8,8,0,0,1,0-16H208a8,8,0,0,1,0,16Zm0-32H48a8,8,0,0,1,0-16H208a8,8,0,0,1,0,16Z\"/>",
+  "<path d=\"M165.78,224H208a16,16,0,0,0,16-16V170.35A8,8,0,0,0,212.94,163a23.37,23.37,0,0,1-8.94,1.77c-13.23,0-24-11.1-24-24.73s10.77-24.73,24-24.73a23.37,23.37,0,0,1,8.94,1.77A8,8,0,0,0,224,109.65V72a16,16,0,0,0-16-16H171.78a35.36,35.36,0,0,0,.22-4,36,36,0,0,0-72,0,35.36,35.36,0,0,0,.22,4H64A16,16,0,0,0,48,72v32.22a35.36,35.36,0,0,0-4-.22,36,36,0,0,0,0,72,35.36,35.36,0,0,0,4-.22V208a16,16,0,0,0,16,16h42.22\"/>",
+  "<rect x=\"6.14\" y=\"6.14\" width=\"19.73\" height=\"19.73\" rx=\"2.38\"/><path d=\"M11.5 16L20.5 16\"/>"
 ];
 
 const ENCODED: Record<string, readonly EncodedLayer[]> = {
@@ -426,7 +433,7 @@ const ENCODED: Record<string, readonly EncodedLayer[]> = {
   "chevron.up.chevron.down": [[69,24,0,1,0,[[1.3131,1.02,0.0164,0.0181,0.0687,0,1],[1.3056,1.0225,0.0174,0.0106,0.0898,0,1],[1.3281,1.02,-0.0051,-0.0082,0.1138,0,1],[1.3488,1.02,0.0061,0.0152,0.1303,0,1],[1.3731,1.0175,-0.0164,-0.0044,0.1535,0,1]]]],
   "circle": [[70,24,0,1,0,[[1.1002,1,0.0089,-0.0089,0.0635,0,1],[1.0965,1,0.0174,-0.0164,0.083,0,1],[1.0927,1,-0.0145,0.0155,0.0988,0,1],[1.089,1,-0.0098,0.0108,0.1115,0,1],[1.0852,1,-0.0033,0.0042,0.128,0,1]]]],
   "circle.fill": [[71,256,1,1,0,[[1.1931,1,0.0089,-0.0089,0.0105,0,1],[1.2231,1,0.0174,-0.0174,0.0015,0,1],[1.2381,1,-0.0145,0.0155,0.003,0,1],[1.2531,1,-0.0098,0.0098,0,0,1],[1.2531,1,-0.0033,0.0042,0.0143,0,1]]]],
-  "circle.lefthalf.filled": [[72,24,1,1,0,[[1.1781,1,0.008,-0.008,0,0,1],[1.1968,1,0.0174,-0.0174,0,0,1],[1.2118,1,-0.0155,0.0155,0,0,1],[1.2137,1,-0.007,0.0108,0.0083,0,1],[1.2118,1.005,0.0014,0.0033,0.0255,0,1]]]],
+  "circle.lefthalf.filled": [[345,256,1,1,0,[[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1]]]],
   "clock": [[73,24,0,1,0,[[1.1002,1,0.0099,-0.008,0.062,0,1],[1.0965,1,0.0174,-0.0164,0.083,0,1],[1.0927,1,-0.0145,0.0155,0.0995,0,1],[1.089,1,-0.0108,0.0108,0.1123,0,1],[1.0833,1,-0.0042,0.0042,0.128,0,1]]]],
   "clock.arrow.circlepath": [[74,32,0,1,0,[[1.4608,1,0.015,-0.0084,0.0635,0,-1],[1.4571,1,-0.0131,-0.0169,0.083,0,-1],[1.4496,1,-0.0084,0.015,0.0995,0,-1],[1.4458,1,-0.0047,0.0103,0.1115,0,-1],[1.4346,0.9975,0.0019,0.0037,0.1288,0,-1]]],[75,32,0,1,0,[[1.5017,0.92,0.0188,0.0472,0.0778,0,1],[1.5842,0.945,-0.0112,0.0434,0.0838,0,1],[1.5355,0.945,-0.0075,0.0697,0.0883,0,1],[1.5374,0.94,-0.0037,0.0659,0.0898,0,1],[1.5617,0.965,0,0.0622,0.0868,0,1]]]],
   "clock.fill": [[76,24,1,1,0,[[1.1368,1,0.0089,-0.008,0.0315,0,1],[1.1818,1,0.0183,-0.0164,0.0127,0,1],[1.2081,1,-0.0145,0.0155,0.0022,0,1],[1.2118,1,-0.0098,0.0108,0.0097,0,1],[1.2118,1,-0.0033,0.0042,0.0218,0,1]]]],
@@ -553,7 +560,7 @@ const ENCODED: Record<string, readonly EncodedLayer[]> = {
   "pencil": [[185,24,1,1,0,[[0.6781,1,0.0059,0.0134,0.0405,90,-1],[0.6781,1,0.0059,0.0134,0.0405,90,-1],[0.7381,1,0.0059,0.0134,0.0405,90,-1],[0.7044,1,0.0059,0.0134,0.0413,90,-1],[0.7381,1,0.0059,0.0134,0.0405,90,-1]]]],
   "person": [[327,24,1,1,0,[[1.3022,0.9525,-0.0019,0.0162,0,0,1],[1.3115,0.9525,0.0028,0.0096,0,0,1],[1.3115,0.9525,0.0038,0.0087,0,0,1],[1.3247,0.955,0.0084,0.0059,0.0008,0,1],[1.319,0.9625,0.0113,0.0021,0.006,0,1]]]],
   "person.2": [[186,24,1,1,0,[[1.4811,1.115,-0.0349,0.0112,0.057,0,1],[1.5093,1.1175,-0.0359,-0.0038,0.0555,0,1],[1.4793,1.1175,-0.0274,-0.0038,0.0638,0,1],[1.453,1.1075,-0.0218,-0.0113,0.081,0,1],[1.5093,1.1,-0.0134,0.0112,0.0705,0,1]]]],
-  "person.2.fill": [[328,24,1,1,0,[[1.4118,1.0925,-0.0101,0.014,0.0465,0,1],[1.393,1.11,-0.0476,-0.001,0.054,0,1],[1.393,1.1125,-0.0101,-0.001,0.0525,0,1],[1.4043,1.1125,-0.0026,-0.0085,0.0623,0,1],[1.4268,1.095,-0.0363,0.0149,0.0563,0,1]]]],
+  "person.2.fill": [[344,256,1,1,0,[[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1]]]],
   "person.badge.key": [[187,24,0,1,0,[[1.0925,1.035,-0.0409,-0.1106,0.0792,0,1],[1.0794,1.0175,-0.0775,-0.0881,0.086,0,1],[1.0756,1.005,-0.0738,-0.0956,0.092,0,1],[1.0625,0.9925,-0.0738,-0.1059,0.1003,0,1],[1.0494,0.9775,-0.0681,-0.1181,0.1048,0,1]]],[141,256,1,1,0.07,[[0.5525,0.855,0.3188,0.1384,0.0105,0,1],[0.5525,0.855,0.3,0.1572,0.0143,0,1],[0.5825,0.875,0.3,0.1497,0.003,0,1],[0.5863,0.895,0.3019,0.1422,0.0053,0,1],[0.5825,0.905,0.3112,0.1422,0.0293,0,1]]]],
   "person.crop.circle": [[188,32,0,1,0,[[1.3371,1,0.0094,-0.0094,0.0635,0,1],[1.3333,1,0.0169,-0.0169,0.083,0,1],[1.3296,1,-0.015,0.0159,0.0988,0,1],[1.3258,0.9975,-0.0103,0.0112,0.1115,0,1],[1.3221,0.9975,-0.0037,0.0056,0.128,0,1]]]],
   "person.crop.circle.badge.clock": [[189,32,0,1,0,[[1.3156,1,0.0769,-0.0347,0.0635,0,1],[1.3119,1,0.0956,-0.0506,0.083,0,1],[1.3081,0.9975,0.0619,-0.0169,0.0988,0,1],[1.3044,0.9975,0.0647,-0.0216,0.1115,0,1],[1.3044,0.995,0.0694,-0.0244,0.128,0,1]]],[190,256,1,1,0.07,[[0.52,1,-0.3544,0.2194,0.0623,0,1],[0.55,1,-0.3394,0.2044,0.0488,0,1],[0.55,1,-0.3722,0.2372,0.0555,0,1],[0.55,1,-0.3675,0.2325,0.0608,0,1],[0.55,1,-0.3609,0.2269,0.0675,0,1]]]],
@@ -662,6 +669,14 @@ const ENCODED: Record<string, readonly EncodedLayer[]> = {
   "xmark.circle": [[297,256,1,1,0,[[1.2175,0.9975,0.0099,-0.0024,0.0007,0,1],[1.2175,1,0.0174,-0.0174,0.0068,0,1],[1.2137,1,-0.0145,0.0164,0.0218,0,1],[1.21,1,-0.0108,0.0108,0.0353,0,1],[1.2043,1,-0.0033,0.0042,0.0525,0,1]]]],
   "xmark.circle.fill": [[298,24,1,1,0,[[1.1406,1,0.0089,-0.0089,0.0293,0,1],[1.1706,1,0.0174,-0.0174,0.0203,0,1],[1.1931,1,-0.0145,0.0145,0.015,0,1],[1.2006,1,-0.0108,0.0108,0.0188,0,1],[1.2306,1,-0.0033,0.0033,0.0053,0,1]]]],
   "xmark.square": [[299,32,0,1,0,[[1.3352,1,0.0188,0.0009,0.0627,0,1],[1.3333,1,-0.0131,-0.0075,0.0792,0,1],[1.3183,1,-0.0056,-0.015,0.0883,0,1],[1.3183,1,-0.0019,-0.0225,0.1033,0,1],[1.3127,1,0.0056,0.0131,0.125,0,1]]]],
+  "minus.square": [[349,32,0,1,0,[[1.3352,1,0.0188,0.0009,0.0627,0,1],[1.3333,1,-0.0131,-0.0075,0.0792,0,1],[1.3183,1,-0.0056,-0.015,0.0883,0,1],[1.3183,1,-0.0019,-0.0225,0.1033,0,1],[1.3127,1,0.0056,0.0131,0.125,0,1]]]],
+  "gearshape.fill": [[343,256,1,1,0,[[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1]]]],
+  "square.on.square.fill": [[87,256,1,1,0,[[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1]]]],
+  "wand.and.rays": [[346,256,1,1,0,[[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1]]]],
+  "keyboard.fill": [[347,256,1,1,0,[[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1]]]],
+  "slider.horizontal.2.square": [[328,256,1,1,0,[[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1]]]],
+  "play.tv": [[72,24,1,1,0,[[1.3069,0.9975,0.0197,-0.0059,0,0,1],[1.3069,1.0375,0.0009,-0.0246,0,0,1],[1.3106,1.0325,0.0047,-0.0077,0,0,1],[1.3163,1.035,0.0113,-0.0265,0,0,1],[1.3256,1.03,0.0216,-0.0415,0.012,0,1]]]],
+  "puzzlepiece.fill": [[348,256,1,1,0,[[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1]]]],
 };
 
 const WEIGHTS: readonly SymbolWeight[] = ["light","regular","medium","semibold","bold"];
@@ -770,7 +785,7 @@ const NUDGES: Record<string, string> = {
   "chevron.up.chevron.down": "89a9deacbaee8aae9eca678b9b6778cc5cada9d9gedbea9ecafedegabfebfbdfegccdcbdafdf8bd8ee9acefaea8eb9ed7dd9f8ccecbbdfgfbag8aedagebaaadeg9bdedchegcceccb",
   "circle": "f9f9aecbeaaeeaaeaeea9edbdb9f8gccccbc9f9feag9aeeaaeeaeaadf9bdbdf9g8ccccdb9f9eeag8aeeaaeeaeaaef9bdbdf9g8ccccdb9f9eeag8aeeaaeeaeaaef9bdbdf9g8ccccdb",
   "circle.fill": "f9f9aecceaaeeaaeaeeb9fdbdb9f8gccccbd9f9feag8aeeaaeeaeaadf9bdbdf9g8ccccdb9f9febg8aeeaaeeaeaaef9bdbdf9g8ccccdb9f9feag8aeeaaeeaeaadf9bdbdf9g8ccccdb",
-  "circle.lefthalf.filled": "g9g9cdecfacefabebefbbffbfbbgbgfcfcfd9f9feag8aeeaaeeafabef9bdbdg9g8ccdcdb9f9fdaf89edaaeeaeaade9adadf9f8bcbccb9f9fdaf89eda9edadaaee9adade9f9bcbcbc",
+  "circle.lefthalf.filled": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
   "clock": "f9e9aecceaaeeaae9edb9fdbdb8f8gbcbcbd9f9fdbg9afeaaeeaeaaeeaaebdf9f9cdcccc9f9febg9afeaaeeaeaaefabebef9g9cdcddc9f9febg9afebafebeabefabebefag9cdcddd",
   "clock.arrow.circlepath": "cagadfgdabffcbhfegbcfgccedghiiceefffcghgecg9bfgbdfibfbcfhbefgfhbjadefehecg9gebh9bfgbdfibfbcfhbefgeiakaeegeiecg9gfbh9cfhbefjbgbdfiaffhejadafeheje",
   "clock.fill": "f9f9adcbeaaeeaaeaeea9fdbdb9f8gccccbd9f9eeag8aeeaaeeaeabdf9bdbdg9g8cccbdb9f9feag8aeeaaeeafabdf9bdbdg9g8ccdcdb9fafeag8aeeaaeeafabef9bdbdg9g8ccdcdc",
@@ -897,7 +912,7 @@ const NUDGES: Record<string, string> = {
   "pencil": "de8fbccae8dd8ab7e89d99bea8cda7cda6d8ed9ecae98ffca9dd8ebab7ebcd7adbg96adbfcadd9f88e8abfec9cd9cd8aeb9889ae97788bbcf88eac99dd8aca7f7ba798cdbeeadbbc",
   "person": "febaefgd9bd78bb8fca8ec9989f9dacbbbacfebaef8d9bd78bc7fca8ec9988f9eadbbaabfebaef8d9bdf8bb8fca8ec9989e9dacbbbacfebaee8c9bdf8bb87ca8ed98896adacbbb9c",
   "person.2": "i9gadfkcfadfabggifgcdgjcjdehmihfofkfa9f9deccfaceiagehffbdfjbicdhdhgefeje9afadecceaceibgfhffccgacicdhkhfefeif9gffdcbaefcb9ffbhcefcbafhfcbcbffefif",
-  "person.2.fill": "jghdfhhfceiigemikfijoglkoeoeofkhoiojhfeccgfe9dfhdeiigedijfhjckndielfggkhggecbgee9dehcehifedjafgkblemhnkffgihjdhaeehccaaegamekbhffblfhgkgogkhnhoi",
+  "person.2.fill": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
   "person.badge.key": "agegabghafdj9fdjdj9fdj8fcfcjgj7nbnanagegaj8hafdj9fdjdj8fcj8fbnbj7j7nananbgfgak8iagdk9g5jdk9fdj8ocncj7k7obnao9f5f9j6h8fcj7e3ibi6m2i5m9l0h3o3l6l0k",
   "person.crop.circle": "f9f9aecceaaeeaaeaeea9fdbdb9f8gccccbd9f9feag9aeeaaeeae9adf9bdbdf8g8cccbdb9f9eeag8aeeaaeeae9bdf9bdbdf8g8cccbdb9f9eeag8aeeaaee9e9adf9bdbcf8g8cbcbdb",
   "person.crop.circle.badge.clock": "efcf9acgeeca9ee9ch9dehcdec9gcgfb9bcihcecc7fdibf6d9jdgce8kbh7l6g9j8fbial9hcfbd7fdibged9jdhce8cbi7l6g9k8fbiam8ibfbdffcaaged9jchce7cbi6ddg8k7fai9m8",
@@ -1006,6 +1021,14 @@ const NUDGES: Record<string, string> = {
   "xmark.circle": "f9f9aecceaaeeaaeaeeb9fdbdb9g8gccccbd9f9fdag8aeeaaeeaeaadf9bdbdf8g8cccbdb9f9fdbg8aeeaaeeaeabef9bdbdg9g8ccdcdb9f9fdbg8aeeaaeeaeaadf9bdbdf9g8ccccdb",
   "xmark.circle.fill": "f9f9aecceaaeeaaeaeea9fdbdb9f8gccccbd9f9feag8aeeaaeeaeaaef9bdbdf9g8ccccdb9f9feag8aeeaaeeaeabdf9bdbdg8g8ccccdb9f9feag8aeeaaeeaeaaef9bdbdf9g8ccccdb",
   "xmark.square": "acdch9ffhdc9ffcabcfgbcfgi9hedfccgefeaced9hfe9ecagecbccfgbcegah9edfccfdfeacdd8hge9dcihfcbbcfgbcehai9fdgcdgeefa9d99efc9ace8acebefab7ebab98d8cc7dfd",
+  "minus.square": "acdch9ffhdc9ffcabcfgbcfgi9hedfccgefeaced9hfe9ecagecbccfgbcegah9edfccfdfeacdd8hge9dcihfcbbcfgbcehai9fdgcdgeefa9d99efc9ace8acebefab7ebab98d8cc7dfd",
+  "gearshape.fill": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "square.on.square.fill": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "wand.and.rays": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "keyboard.fill": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "slider.horizontal.2.square": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "play.tv": "c9g9debbeabegacfdfabfebb9bcfafbb9bbccf8fdcdaegbb8edbebcf8bdfbec9a9cdadcdbf8fdbc9efbb8fdbfbbf8acebfcbacdfafbfcg9gdcciefbc8gdc6bbg8bdfbfdjbjdfaf5f",
+  "puzzlepiece.fill": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
 };
 
 export function symbolNudge(name: string, weight: SymbolWeight, pointSize: number): readonly [number, number] {

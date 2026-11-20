@@ -6,6 +6,7 @@ final class WebKitWebView: WKWebView {
   var onPressRefused: (() -> Void)?
   private var presses = WebKitPagePresses()
   var mediaFrames: [String: WKFrameInfo] = [:]
+  var scriptFrames: [String: WKFrameInfo] = [:]
   var playingFrames = Set<String>()
   let nowPlaying = ArdiaNowPlaying()
   var captureOrigins: [String: Set<String>] = [:]
@@ -77,6 +78,7 @@ final class WebKitWebView: WKWebView {
 
   override func keyDown(with event: NSEvent) {
     keyUpOfReservedKey = nil
+    if InputSourceKeys.consumeInWebKitTab(event) { return }
     super.keyDown(with: event)
   }
 

@@ -22,6 +22,12 @@ Ardia builds on and ships third-party software under its own licenses, including
 - Chromium Embedded Framework (BSD-3-Clause): a few of its patches to Chromium
 - uBlock Origin (GPL-3.0), bundled as a separate extension with the small patches in packages/ardiacore/scripts/ubo.sh
 - Sparkle (MIT)
+- Phosphor Icons (MIT, see third_party/phosphor-icons/LICENSE), https://phosphoricons.com: the Developer Mode bar's
+  icons in apps/browser/assets/developer-bar
 - The !bang list by Kagi Search and imput (MIT, see third_party/bangs/LICENSE), from Helium's
   services.helium.imput.net/bangs.json: a snapshot in packages/core/src/bangList.ts
 - React Native and React Native macOS (MIT)
+- Phonon 31M (Apache-2.0), copyright Gradium, https://huggingface.co/gradium/phonon-31m-en, with its voices from
+  https://huggingface.co/gradium/phonon-voices (Apache-2.0), run through Gradium's ptts package (MIT or Apache-2.0),
+  https://github.com/gradium-ai/xn-ptts: the iPhone's Talk to Me voice, downloaded from
+  https://github.com/ardia-browser/ardia-voices when Talk to Me is turned on

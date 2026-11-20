@@ -7,6 +7,7 @@ import { startLinuxTabPolicies, watchInputIdle } from "./hostPolicies.ts";
 import { useBrowser } from "../../browser/src/state/browser/store.ts";
 import { pageOf, patchPage } from "../../browser/src/state/tabs/pageState.ts";
 import { updateLive } from "../../browser/src/state/tabs/actions.ts";
+import { liveOf } from "../../browser/src/state/tabs/tabLive.ts";
 import { exitPictureInPicture, playerTabFor, setNowPlaying, setPictureInPictureState, useMedia } from "../../browser/src/state/media/media.ts";
 import { webviews } from "../../browser/src/platform/webviews.ts";
 import { noteDiscarded, noteReady, useLifecycle } from "../../browser/src/state/tabs/tabLifecycle.ts";
@@ -49,7 +50,7 @@ const mediaSnapshot = (playing, access, pip, extra = []) => [
 test("snapshot media state reaches the shared audio badge, player, capture and picture-in-picture state", () => {
   const h = setup();
   assert.ok(h.receiver.install({ lease, snapshot: { watermark: 1, events: mediaSnapshot(true, { camera: true, microphone: false, screen: false }, { kind: "video", active: true }) } }));
-  assert.equal(useBrowser.getState().live[h.tab]?.playingAudio, true);
+  assert.equal(liveOf(h.tab).playingAudio, true);
   assert.equal(useMedia.getState().sessions[h.tab]?.title, "Track");
   assert.deepEqual(useMedia.getState().sessions[h.tab]?.actions, ["play", "pause", "nexttrack"]);
   assert.deepEqual(pageOf(h.tab).mediaAccess, { camera: true, microphone: false, screen: false });
@@ -57,10 +58,28 @@ test("snapshot media state reaches the shared audio badge, player, capture and p
   h.send(message(2, "media", { playing: false, muted: true }));
   h.send(message(3, "nowPlaying", { state: null }));
   h.send(message(4, "pictureInPicture", { kind: "video", active: false }));
-  assert.equal(useBrowser.getState().live[h.tab]?.playingAudio, false);
+  assert.equal(liveOf(h.tab).playingAudio, false);
   assert.equal(useMedia.getState().sessions[h.tab], undefined);
   assert.equal(useMedia.getState().pipOpen[h.tab], undefined);
   assert.deepEqual(pageOf(h.tab).mediaAccess, { camera: true, microphone: false, screen: false });
+});
+
+test("a Picture in Picture window the engine reports as shown reaches the shared UI stamped with the consent epoch it arrived in", async () => {
+  const client = await import("../../browser/src/state/telemetry/client.ts");
+  client.loadChoice();
+  client.setSharing(true, "onboarding");
+  try {
+    const h = setup();
+    assert.ok(h.receiver.install({ lease, snapshot: { watermark: 1, events: [] } }));
+    h.send(message(2, "pictureInPicture", { kind: "video", active: true, fullScreenSpaces: false, leftTab: true }));
+    h.send(message(3, "pictureInPicture", { kind: "video", active: false }));
+    const states = h.calls.filter(([name]) => name === "pictureInPicture").map(([, state]) => state);
+    assert.equal(states[0].epoch, client.consentEpoch());
+    assert.ok(states[0].epoch);
+    assert.equal("epoch" in states[1], false);
+  } finally {
+    client.setSharing(false, "settings");
+  }
 });
 
 test("a playing video outside the media session offers the video controls but no player", () => {
@@ -157,4 +176,52 @@ test("input idle tracks shell input and the policies start once with one inputId
   assert.equal(read(), 3);
   assert.equal(providers[0]("ArdiaEngine", "trimMemory"), undefined);
   assert.equal(providers[0]("ArdiaShell", "inputIdleSeconds"), undefined);
+});
+
+test("a Picture in Picture window shown while sharing was off and buffered until the page installs keeps the off period's empty epoch, so no pip_shown is queued", async () => {
+  const client = await import("../../browser/src/state/telemetry/client.ts");
+  const docs = (await import("../../browser/src/test-native/index.ts")).docs;
+  const queuedShown = async () => {
+    await client.saveQueueNow();
+    return JSON.parse(docs.get("telemetry-queue.json") ?? '{"events":[]}').events.filter((e) => e.event === "pip_shown");
+  };
+  client.loadChoice();
+  client.setSharing(false, "settings");
+  try {
+    const h = setup();
+    h.send(message(2, "pictureInPicture", { kind: "video", active: true, fullScreenSpaces: false, leftTab: true }));
+    client.setSharing(true, "settings");
+    assert.ok(h.receiver.install({ lease, snapshot: { watermark: 1, events: [] } }));
+    assert.equal(h.calls.filter(([name]) => name === "pictureInPicture").length, 1);
+    assert.deepEqual(await queuedShown(), []);
+    const replayed = setup();
+    assert.ok(replayed.receiver.install({ lease, snapshot: { watermark: 1, events: mediaSnapshot(true, { camera: false, microphone: false, screen: false }, { kind: "video", active: true, fullScreenSpaces: false }) } }));
+    assert.deepEqual(await queuedShown(), []);
+  } finally {
+    client.setSharing(false, "settings");
+  }
+});
+
+test("a Picture in Picture window the engine reported while sharing was off, delivered after sharing is on, isn't sent", { todo: "known gap, consent-reach-baseline arrivalStamps: the Linux engine emits pictureInPicture with no epoch, so the host can only stamp it on arrival" }, async () => {
+  const client = await import("../../browser/src/state/telemetry/client.ts");
+  const docs = (await import("../../browser/src/test-native/index.ts")).docs;
+  const bodies = [];
+  const fetch = globalThis.fetch;
+  globalThis.fetch = async (_url, init) => (bodies.push(String(init?.body ?? "")), { status: 200 });
+  client.loadChoice();
+  client.setSharing(false, "settings");
+  try {
+    const h = setup();
+    assert.ok(h.receiver.install({ lease, snapshot: { watermark: 1, events: [] } }));
+    const emittedWhileOff = message(2, "pictureInPicture", { kind: "video", active: true, fullScreenSpaces: false, leftTab: true });
+    client.setSharing(true, "settings");
+    h.send(emittedWhileOff);
+    await client.flush();
+    await client.saveQueueNow();
+    const queued = JSON.parse(docs.get("telemetry-queue.json") ?? '{"events":[]}').events.filter((e) => e.event === "pip_shown");
+    assert.deepEqual({ queued, posted: bodies.filter((body) => body.includes("pip_shown")) }, { queued: [], posted: [] });
+  } finally {
+    globalThis.fetch = fetch;
+    client.setSharing(false, "settings");
+  }
 });

@@ -32,6 +32,7 @@ export type ClickResult = { hit?: string; root?: [number, number]; at?: number; 
 
 export type DevNative = {
   devCrash(kind?: "exception"): Promise<void>;
+  devBlockMain(ms: number): Promise<number>;
   devRenderIntroMusic(cues: IntroMusicCues, path: string): Promise<number | null>;
   devRunAppleScript(source: string): Promise<{ ok: boolean; result?: unknown; error?: string; number?: number }>;
   devSnapshotWindow(windowId: string, path: string, transparent?: boolean): Promise<boolean>;

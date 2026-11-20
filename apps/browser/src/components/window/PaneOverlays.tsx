@@ -5,6 +5,7 @@ import { webviews } from "../../state/tabs/webviewHandles";
 import { Button, Dialog, DialogActions, DialogTitle, space, Symbol, Text, usePresence } from "../ui";
 import { Hud } from "./Hud";
 import { patchPage, usePage } from "../../state/tabs/pageState";
+import { noteRendererResponsive } from "../../state/telemetry/freezes";
 import { STATUS_MOTION, windowColors } from "./tokens";
 
 export function StatusBubble({ tabId, maxWidth }: { tabId: string; maxWidth: number }) {
@@ -68,6 +69,7 @@ export function SadTab({ tabId }: { tabId: string }) {
         <Button variant="pill"
           title="Exit Page"
           onPress={() => {
+            noteRendererResponsive(tabId, true);
             patchPage(tabId, { unresponsive: false });
             void webviews.get(tabId)?.resolveUnresponsive(true);
           }}

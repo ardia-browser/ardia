@@ -3,7 +3,7 @@ import Foundation
 
 enum ConfigFolder {
   static let readLimit = 1 << 20
-  static let schemaNames: Set<String> = ["config.schema.json", "theme.schema.json"]
+  static let schemaNames: Set<String> = ["config.schema.json", "theme.schema.json", "plugin.schema.json"]
   private static let themeName = try! NSRegularExpression(pattern: "^themes/[a-z0-9][a-z0-9_-]*\\.json$")
 
   static var directory: String { LaunchConfig.shared.configDirectory }

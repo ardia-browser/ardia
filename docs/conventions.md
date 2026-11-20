@@ -78,6 +78,12 @@ lib/                    pure helpers: url, color, time, keys
   | `shadow.dialog` | 24 pt, (0, 10) | dialogs, sheets, the command panel, NTP cards (with their own opacity); `shadow.popover` (18, (0, 8)) is the lighter menu-material level |
 - No hex, `rgb()`/`rgba()`/`hsl()` literals, `Easing.` curves or numeric animation durations outside files named
   `tokens.ts` or `motion.ts`.
+- **Motion by frequency of use.** High-frequency controls (tab rows, tiles, folders, toolbar buttons, menus, the
+  command bar) get no bounce, squish or overshoot: state changes land on the press, and any curve is short and
+  critically damped. Springs with visible overshoot (`springs.bouncy`) are for rare, larger moves such as the
+  sidebar opening, onboarding and sheets (AGENTS.md, Building features). The one exception is opt-in and off by
+  default: `config.json`'s `pressMotion: "bounce"` (no Settings row, `docs/config.md`) brings back 0.2.47-nightly.6's
+  squish through `useSquish`, `usePressScaleMotion` and `liftSpring`, never through `springs.bouncy` at the call site.
 - **Screens are built from `components/ui/` pieces:** Box, Text, Button (icon, text, pill and close variants),
   Popover, Dialog, Row, Field, Switch, Radio, Menu, with token props (`pad="m" fill="panel" radius="l"`). Native views
   (Surface, Symbol, the web view, …) are wrapped there too. Feature code passes `style` only for layout (flex,
@@ -95,7 +101,9 @@ lib/                    pure helpers: url, color, time, keys
 | `useFormColors().accent` and friends | the theme role: `formAccent`, `groupFill`, `control`, `field`, `destructive`, `searchFlash`, … |
 | `Easing.out(Easing.quad)`, `Easing.bezier(…)` | `curve.enter`, `curve.exit`, `curve.move`, `curve.pulse`, … from `motion.ts` |
 | a numeric `duration:` | `duration.fast`, `duration.base`, `duration.slow`, `duration.long`; a loop's period is `period.spinner` / `period.pulse` |
-| `stiffness: (2π/response)²` written by hand | `springs.snappy` / `smooth` / `bouncy`, or `spring({ response, damping })` for a measured spring |
+| `stiffness: (2π/response)²` written by hand | `springs.snappy` / `smooth`, or `spring({ response, damping })` for a measured spring; `springs.bouncy` only for a rare, larger move (a badge appearing, the sidebar's edge springing back from a resize past its limit) |
+| a glyph or a small control that dips while pressed | `usePressScaleMotion(enabled, buttonMotion.…)` on its `onPressIn`/`onPressOut`: `springs.snappy` both ways, no bounce. Rows, folder headers and tiles don't scale at all, unless `pressMotion` is `"bounce"`: then `useSquish("row" \| "tile")` and `<Squish scale>` from `ui/Squish.tsx` (Motion by frequency of use; `ui/pressFeedback.test.mjs` keeps `springs.bouncy` out of the sidebar, the tab strip, the toolbar, the command bar, the New Tab page and the shared buttons, rows and menus) |
+| a hover or pressed highlight behind a row or a button plate | `<HoverFill shown color radius>`: lights in `hoverFade.show`, fades in `hoverFade.hide`; `instant` when the thing becomes selected. Over a fill it has at rest: `<HoverSwap rest color radius>`, with `underBorder` when the control draws a border |
 | a `View` with `padding`/`gap`/`backgroundColor`/`borderRadius` from tokens | `<Box pad="m" gap="s" fill="panel" radius="tile" row>` |
 | `<Text style={{ fontSize: 13, fontWeight: "600", color: theme.textSecondary }}>` | `<Text size="body" weight="semibold" tone="textSecondary">` |
 | a pressable square with an SF Symbol and a hover plate | `<Button variant="icon" icon="…">` (add `toolbar` for toolbar buttons: modifier clicks, long press, context menu, no window drag; `palette` for site-coloured toolbars) |
@@ -205,7 +213,7 @@ writeDocument(DOC, versionedJson(data, VERSION));
 - Covered: `session.json` (10), `downloads.json` (3), `launch-look.json` (2), `air-traffic.json` (2), `bookmarks-cache.json`, `telemetry.json`,
   `telemetry-queue.json`, `telemetry-daily.json`, `release-notes.json`, `onboarding.json`,
   `default-browser-offer.json`, `sync.json`, `sync-extensions.json`, `live.json`, `shared-folders.json`, `ardia-cli.json`,
-  `bangs-state.json`, `Scripts/status.json` and `link-sources.json` (all 1).
+  `bangs-state.json`, `Scripts/status.json`, `link-sources.json` and `freeze-sends.json` (all 1).
 - Native code reads through `ArdiaSavedDocument` (packages/ardiacore/ios), with the same rules: `session.json` and
   `onboarding.json` (any version up to the one JS writes; a test pins each) and `launch-layout.json` (5, written and
   read by native code only, so any other version reads as nothing).
@@ -217,6 +225,14 @@ writeDocument(DOC, versionedJson(data, VERSION));
   (`dev-eval-result.json`, `layout-watch.json`), test fixtures (`calendar-fixture.json`), and the legacy
   `bookmarks.json` / `history.json`, which are migration inputs read once. The sync payload (log and snapshot files,
   `v: 1`) and `switches-cache.json` have their own versions.
+
+## Workspaces
+
+- Two pnpm workspaces. The root one is the Mac app and its packages (`apps/browser`, `packages/*` but
+  `packages/phone`), on the Mac's Expo and react-native-macos. `apps/phone` is its own workspace with `packages/phone`,
+  on the phone's Expo and React Native, with its own lockfile (docs/phone.md › Layout). They share only `@ardia/core`,
+  plain TypeScript linked into the phone.
+- A package belongs to one workspace, never both. Install each from its own root under `scripts/agent/locked pod`.
 
 ## Files
 
@@ -322,6 +338,7 @@ still counts:
 | `set-state` | `.setState(` in `components/` |
 | `store-reads` | `useBrowser(` in `components/` (read through `state/<domain>/hooks.ts`) |
 | `store-shape` | a zustand store not created as `create<T>()(() => init)` (a `set`/`get` creator, or the uncurried form) |
+| `native-loops` | `Animated.loop(` around `Animated.sequence(`, `parallel(` or `stagger(`: React Native can't run those as a native loop, so JS restarts every leg and macOS starts a new display link each time. Use `nativeLoop(value, legs)` from `components/ui/motion.ts` |
 | `size` | a file over its line cap |
 | `env` | an environment read outside the launch config and the three exempt engine lines |
 | `naming` | a `Cef`, `AC*`/app-side `ArdiaCore*`, `Netnyahoo` or `NN*` name |

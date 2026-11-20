@@ -33,7 +33,6 @@ channel="$(channel_of "$version")"
 if [ "$rc" = 1 ]; then dist="$root/dist/$version-rc"; else dist="$root/dist/$version"; fi
 [ "$rc" = 1 ] && [ -n "${RC_DIST:-}" ] && dist="$(cd "$root" && mkdir -p "$RC_DIST" && cd "$RC_DIST" && pwd)"
 app="$dist/export/Ardia.app"
-cli_tarball="$dist/ardia-cli-$version-macos-arm64.tar.gz"
 build_input="${RELEASE_BUILD_INPUT:-}"
 archive="$dist/Ardia.xcarchive"
 [ "$phase" = sign ] && [ -n "$build_input" ] && archive="$build_input/Ardia.xcarchive"
@@ -102,9 +101,9 @@ else
   die "no release notes: write docs/release-notes/$version.md first"
 fi
 
-dirty="$(git -C "$root" status --porcelain -- apps/browser apps/cli packages engine scripts/dmg | grep -v ' apps/browser/build' || true)"
+dirty="$(git -C "$root" status --porcelain -- apps/browser packages engine scripts/dmg | grep -v ' apps/browser/build' || true)"
 if [ -n "$dirty" ]; then
-  [ "$rc" = 1 ] || { echo "$dirty" >&2; die "uncommitted changes under apps/browser, apps/cli, packages, engine or scripts/dmg (above)"; }
+  [ "$rc" = 1 ] || { echo "$dirty" >&2; die "uncommitted changes under apps/browser, packages, engine or scripts/dmg (above)"; }
   echo "warning: the candidate includes uncommitted changes:" >&2
   echo "$dirty" >&2
 fi
@@ -170,6 +169,7 @@ if [ "$phase" != sign ]; then
   {
     echo "version $version, build $release_build, $channel${version_settings:+ (${version_settings[*]})}"
     echo "commit $(git -C "$root" rev-parse HEAD)${dirty:+ + uncommitted changes}"
+    python3 -I "$stages/official-plugins.py" describe
     echo "framework $(plutil -extract SCMRevision raw "$framework_src/Versions/Current/Resources/Info.plist" 2>/dev/null)"
     echo "framework built $(stat -f '%Sm' "$framework_src/Versions/Current/Chromium Framework")"
   } > "$dist/provenance.txt"
@@ -177,26 +177,26 @@ if [ "$phase" != sign ]; then
   "$stages/archive.sh" "$dist" "$framework_src" "${RELEASE_BUILD_DIR:-$root/apps/browser/build-release}" "$archive_signing" \
     ${version_settings[@]+"${version_settings[@]}"} AC_UPDATE_CHANNEL="$channel" \
     ${extra_build_settings[@]+"${extra_build_settings[@]}"}
-  echo "==> ardia CLI"
-  "$root/apps/cli/scripts/build.sh" "$version" "$dist" >"$dist/cli-build.log" 2>&1 \
-    || { tail -20 "$dist/cli-build.log" >&2; die "building the ardia CLI failed ($dist/cli-build.log)"; }
+  echo "==> Official plugins (pinned in apps/browser/official-plugins.json)"
+  python3 -I "$stages/official-plugins.py" ${OFFICIAL_PLUGINS_FROM:+--from "$OFFICIAL_PLUGINS_FROM"} bundle "$dist/plugins" \
+    || die "the pinned official plugins couldn't be fetched and verified"
 fi
 if [ "$phase" = build ]; then
   echo
-  echo "Built $archive (signed ad hoc) and $(basename "$cli_tarball"); sign it with --phase sign."
+  echo "Built $archive (signed ad hoc) with the pinned official plugins; sign it with --phase sign."
   exit 0
 fi
 if [ "$phase" = sign ] && [ -n "$build_input" ]; then
   rm -rf "$dist"
   mkdir -p "$dist"
-  for file in provenance.txt "$(basename "$cli_tarball")" "$(basename "$cli_tarball").sha256"; do
-    [ -f "$build_input/$file" ] && [ ! -L "$build_input/$file" ] || die "no $file in $build_input"
-    cp "$build_input/$file" "$dist/$file"
-  done
+  [ -f "$build_input/provenance.txt" ] && [ ! -L "$build_input/provenance.txt" ] || die "no provenance.txt in $build_input"
+  cp "$build_input/provenance.txt" "$dist/provenance.txt"
+  [ -d "$build_input/plugins" ] || die "no plugins in $build_input"
+  ditto "$build_input/plugins" "$dist/plugins"
 fi
-[ -f "$cli_tarball.sha256" ] || die "no $cli_tarball.sha256 from --phase build"
+[ -f "$dist/plugins/cli/plugin.json" ] || die "no official plugins in $dist/plugins from --phase build"
 
-"$stages/export-sign.sh" "$dist" "$archive" "$identity" "$cli_tarball.sha256" ${provisioning_profile:+"$provisioning_profile"}
+"$stages/export-sign.sh" "$dist" "$archive" "$identity" ${provisioning_profile:+"$provisioning_profile"}
 "$stages/verify.sh" "$app" "$archive" "$version" "$release_build"
 [ "$phase" = sign ] || "$stages/launch-check.sh" "$app"
 if [ "$notarize" = 1 ]; then
@@ -225,4 +225,4 @@ echo
 [ "$channel" = nightly ] && [ "$rc" = 0 ] && echo "Nightly: publish it with .claude/skills/release/scripts/publish.sh $version (a prerelease; the feed and ardia.dev/nightly follow)."
 [ "$phase" = sign ] && echo "Not launched yet: remove the signing keys, then run the launch check (--phase check)."
 [ -n "$phased" ] && echo "Phased rollout: $phased s between steps (the appcast item has phasedRolloutInterval; the whole release takes $((phased * 7)) s)."
-du -sh "$app" "$dist/Ardia-$version.dmg" "$dist/Ardia-$version.zip" "$cli_tarball" "$dist/appcast.xml" "$dist/release-notes.md"
+du -sh "$app" "$dist/Ardia-$version.dmg" "$dist/Ardia-$version.zip" "$dist/appcast.xml" "$dist/release-notes.md"

@@ -1,11 +1,15 @@
 import type { ScrollView, View } from "react-native";
 import { layout } from "../ui/theme";
 import { currentSettings } from "../../state/browser/current";
-import { createDragMarks, dragMarksOf, markDrag } from "../../state/sidebar/dragMarks";
+import { createDragMarks, dragMarksOf, markDrag, type SplitHalfMark } from "../../state/sidebar/dragMarks";
 import { overPins, pinGrid, pinSlot, TILE_GAP } from "./pinZone";
 import { SCROLL_EDGE } from "./ScrollEdge";
-import { pinSlotPitch, apart, type Drop, type Frame, type Ghost, type Item, type Pointed, tailKey } from "./dragModel";
+import { apart, SPLIT_HOLD_MS, pinSlotPitch, type Drop, type Frame, type Ghost, type Item, type Pointed, tailKey } from "./dragModel";
 import { NO_DROP } from "../../state/drag/drops";
+import { splitViewAvailable } from "../../state/splits/splits";
+import type { DragHome } from "../../state/sidebar/current";
+import type { DragProfileHold } from "../../state/telemetry/tabPresses";
+import { EDGE_HOLD_MS, type Edge, HeldTimer, ProfileTargets } from "./dragProfiles";
 
 export type DragSession = {
   sources: Item[];
@@ -27,6 +31,15 @@ export type DragSession = {
   escapable: boolean;
   scrollTimer: ReturnType<typeof setInterval> | undefined;
   hold: { key: string | null; ready: string | null; timer: ReturnType<typeof setTimeout> | undefined };
+  splitHold: { key: string | null; ready: boolean; at: { x: number; y: number }; timer: ReturnType<typeof setTimeout> | undefined };
+  home: DragHome | null;
+  shown: string | null;
+  overProfile: string | null;
+  hopping: { id: string; by: DragProfileHold } | null;
+  edge: Edge | null;
+  edgeSpent: boolean;
+  closedInFrames: boolean;
+  measures: number;
 };
 
 export const newDragSession = (sources: Item[], pointer: { x: number; y: number }, scrollY: number): DragSession => ({
@@ -49,6 +62,15 @@ export const newDragSession = (sources: Item[], pointer: { x: number; y: number 
   escapable: false,
   scrollTimer: undefined,
   hold: { key: null, ready: null, timer: undefined },
+  splitHold: { key: null, ready: false, at: { x: 0, y: 0 }, timer: undefined },
+  home: null,
+  shown: null,
+  overProfile: null,
+  hopping: null,
+  edge: null,
+  edgeSpent: false,
+  closedInFrames: false,
+  measures: 0,
 });
 
 export class DragGeometry {
@@ -59,8 +81,13 @@ export class DragGeometry {
   scrollY = 0;
   tilesFixed = true;
   tilesRoom = Infinity;
+  splitView = splitViewAvailable;
+  splitHoldMs = SPLIT_HOLD_MS;
   setGhost: (ghost: Ghost | null) => void = () => {};
   marks = createDragMarks();
+  readonly profiles = new ProfileTargets(this.marks);
+  readonly edges = new HeldTimer<Edge>(EDGE_HOLD_MS, (edgeHold) => markDrag(this.marks, { edgeHold }));
+  profile: string | null = null;
   setSources = (sources: Set<string>) => markDrag(this.marks, { sources });
   setLanding = (landing: string | null) => markDrag(this.marks, { landing });
 
@@ -71,6 +98,11 @@ export class DragGeometry {
 
   protected get drag(): DragSession {
     return this.session!;
+  }
+
+  protected get crossed(): boolean {
+    const { home, shown } = this.drag;
+    return !!home && shown !== home.profileId;
   }
 
   protected still(i: Item): boolean {
@@ -120,24 +152,24 @@ export class DragGeometry {
     let dy = 0;
     let dh = 0;
     const gap = gapKey ? this.items.get(gapKey) : undefined;
-    if (gap?.frame && gap.section !== "tiles" && !apart(gap, i)) {
+    if (gap?.frame && !this.inGrid(gap) && !apart(gap, i)) {
       if (gap.frame.y <= top) dy += pitch;
       else if (gap.frame.y < bottom) dh += pitch;
     }
-    for (const s of sources) {
+    for (const s of this.crossed || this.drag.closedInFrames ? [] : sources) {
       if (s.kind === "tile" || !s.frame || s === i || apart(s, i)) continue;
-      const closed = s.frame.h + (s.parentGroup ? 0 : layout.rowGap);
+      const closed = s.frame.h + layout.rowGap;
       if (s.frame.y < top) dy -= closed;
       else if (s.frame.y < bottom) dh -= closed;
     }
     return { ...f, y: f.y + dy, h: f.h + dh };
   }
 
-  protected ontoTarget(live: Item[], y: number, section: "list" | "pinnedRows"): string | null {
+  protected splitTarget(live: Item[], x: number, y: number): SplitHalfMark | null {
     for (const i of live) {
-      if (i.kind !== "row" || i.parentGroup || i.section !== section) continue;
+      if ((i.kind !== "row" && i.kind !== "split") || i.section === "folder") continue;
       const f = this.shown(i);
-      if (y > f.y + f.h * 0.25 && y < f.y + f.h * 0.75) return i.key;
+      if (x >= f.x && x <= f.x + f.w && y > f.y + f.h * 0.25 && y < f.y + f.h * 0.75) return { key: i.key, side: x < f.x + f.w / 2 ? "left" : "right" };
     }
     return null;
   }

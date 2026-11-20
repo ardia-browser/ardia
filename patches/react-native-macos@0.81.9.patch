@@ -1579,6 +1579,304 @@ index 8f1094a71ed431fcecb6f760ffe8d6da643f04cb..67404c8656b69d9cf28d9eb5862e9914
  NS_INLINE void RCTUIViewSetContentModeRedraw(RCTPlatformView *view)
  {
    view.layerContentsRedrawPolicy = NSViewLayerContentsRedrawDuringViewResize;
+diff --git a/React/Base/macOS/RCTPlatformDisplayLink.m b/React/Base/macOS/RCTPlatformDisplayLink.m
+index 6ee09fde67a60082ac45764f6c66b7c4ca97e5b9..16aa54f49c24eeb4158b2f41393558bbd37a42d8 100644
+--- a/React/Base/macOS/RCTPlatformDisplayLink.m
++++ b/React/Base/macOS/RCTPlatformDisplayLink.m
+@@ -10,27 +10,57 @@
+ 
+ #import "RCTPlatformDisplayLink.h"
+ 
++#import <AppKit/AppKit.h>
++#import <QuartzCore/QuartzCore.h>
++
+ #import <React/RCTAssert.h>
+ #import <React/RCTDefines.h>
+ 
+-#import <CoreVideo/CVDisplayLink.h>
+-#import <CoreVideo/CVHostTime.h>
+-
+ #import <os/lock.h>
+ 
+-@interface RCTPlatformDisplayLink ()
++// [Ardia: the link is the screen's own CADisplayLink (macOS 14), rebuilt for the key window's screen whenever that
++// changes, asking for that screen's fastest rate, so animations run at 120 Hz on ProMotion and on whichever display
++// the window is on. It replaced a CVDisplayLink made for the active displays, which ticked at the main display's rate.
++@interface RCTPlatformDisplayLinkTicks : NSObject
++@property (nonatomic, weak) RCTPlatformDisplayLink *owner;
++@end
+ 
+-@property (nonatomic, strong) NSRunLoop *runLoop;
++@interface RCTPlatformDisplayLink ()
++- (void)tickWith:(CADisplayLink *)link;
++@end
+ 
++@implementation RCTPlatformDisplayLinkTicks
++- (void)tick:(CADisplayLink *)link
++{
++  [self.owner tickWith:link];
++}
+ @end
+ 
++static NSScreen *RCTPacingScreen(void)
++{
++  NSWindow *window = NSApp.keyWindow ?: NSApp.mainWindow;
++  return window.screen ?: NSScreen.mainScreen ?: NSScreen.screens.firstObject;
++}
++
++static CGDirectDisplayID RCTDisplayOfScreen(NSScreen *screen)
++{
++  return [screen.deviceDescription[@"NSScreenNumber"] unsignedIntValue];
++}
++// Ardia]
++
+ @implementation RCTPlatformDisplayLink
+ {
+-  CVDisplayLinkRef _displayLink;
++  CADisplayLink *_link;
++  RCTPlatformDisplayLinkTicks *_ticks;
++  CGDirectDisplayID _display;
+   SEL _selector;
+   __weak id _target;
+   NSRunLoop *_runLoop;
+   NSMutableArray<NSRunLoopMode> *_modes;
++  NSArray *_observers;
++  BOOL _paused;
++  CFTimeInterval _timestamp;
++  CFTimeInterval _duration;
+   os_unfair_lock _lock; // OS_UNFAIR_LOCK_INIT == 0
+ }
+ 
+@@ -39,116 +69,163 @@ + (RCTPlatformDisplayLink *)displayLinkWithTarget:(id)target selector:(SEL)sel
+   RCTPlatformDisplayLink *displayLink = [self.class new];
+   displayLink->_target = target;
+   displayLink->_selector = sel;
++  displayLink->_duration = 1.0 / 60.0;
+   return displayLink;
+ }
+ 
+-static CVReturn RCTPlatformDisplayLinkCallBack(__unused CVDisplayLinkRef displayLink, __unused const CVTimeStamp* now, __unused const CVTimeStamp* outputTime, __unused CVOptionFlags flagsIn, __unused CVOptionFlags* flagsOut, void* displayLinkContext)
++- (void)dealloc
+ {
+-  @autoreleasepool {
+-    RCTPlatformDisplayLink *rctDisplayLink = (__bridge RCTPlatformDisplayLink*)displayLinkContext;
++  [_link invalidate];
++  for (id observer in _observers) {
++    [NSNotificationCenter.defaultCenter removeObserver:observer];
++  }
++}
+ 
+-    // Lock and check for invalidation prior to calling out to the runloop
+-    os_unfair_lock_lock(&rctDisplayLink->_lock);
+-    if (rctDisplayLink->_runLoop != nil) {
+-      CFRunLoopRef cfRunLoop = [rctDisplayLink->_runLoop getCFRunLoop];
+-      CFRunLoopPerformBlock(cfRunLoop, (__bridge CFArrayRef)rctDisplayLink->_modes, ^{
+-        @autoreleasepool {
+-          [rctDisplayLink tick];
+-        }
+-      });
+-      CFRunLoopWakeUp(cfRunLoop);
+-    }
+-    os_unfair_lock_unlock(&rctDisplayLink->_lock);
++// [Ardia
++- (void)followScreen:(NSScreen *)screen
++{
++  RCTAssertMainQueue();
++  if (screen == nil) {
++    return;
++  }
++  CGDirectDisplayID display = RCTDisplayOfScreen(screen);
++  os_unfair_lock_lock(&_lock);
++  NSRunLoop *runLoop = _runLoop;
++  NSArray<NSRunLoopMode> *modes = [_modes copy];
++  BOOL current = _link != nil && _display == display;
++  BOOL paused = _paused;
++  os_unfair_lock_unlock(&_lock);
++  if (runLoop == nil || current) {
++    return;
++  }
++  _ticks = _ticks ?: [RCTPlatformDisplayLinkTicks new];
++  _ticks.owner = self;
++  CADisplayLink *link = [screen displayLinkWithTarget:_ticks selector:@selector(tick:)];
++  float fastest = (float)MAX(1, screen.maximumFramesPerSecond);
++  link.preferredFrameRateRange = CAFrameRateRangeMake(MIN(60.0f, fastest), fastest, fastest);
++  link.paused = paused;
++  for (NSRunLoopMode mode in modes) {
++    [link addToRunLoop:runLoop forMode:mode];
++  }
++  os_unfair_lock_lock(&_lock);
++  CADisplayLink *old = _runLoop != nil ? _link : link;
++  if (_runLoop != nil) {
++    _link = link;
++    _display = display;
++    _duration = 1.0 / fastest;
+   }
+-  return kCVReturnSuccess;
++  os_unfair_lock_unlock(&_lock);
++  [old invalidate];
+ }
+ 
+-- (void)dealloc
++- (void)startFollowingScreens
+ {
+-  if (_displayLink != NULL) {
+-    CVDisplayLinkStop(_displayLink);
+-    CVDisplayLinkRelease(_displayLink);
+-    _displayLink = NULL;
++  RCTAssertMainQueue();
++  if (_observers == nil) {
++    __weak RCTPlatformDisplayLink *weakSelf = self;
++    void (^follow)(NSNotification *) = ^(__unused NSNotification *note) {
++      [weakSelf followScreen:RCTPacingScreen()];
++    };
++    NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
++    NSOperationQueue *main = NSOperationQueue.mainQueue;
++    _observers = @[
++      [center addObserverForName:NSWindowDidBecomeKeyNotification object:nil queue:main usingBlock:follow],
++      [center addObserverForName:NSWindowDidChangeScreenNotification object:nil queue:main usingBlock:follow],
++      [center addObserverForName:NSApplicationDidChangeScreenParametersNotification object:nil queue:main usingBlock:follow],
++    ];
+   }
++  [self followScreen:RCTPacingScreen()];
+ }
+ 
++- (void)tickWith:(CADisplayLink *)link
++{
++  _timestamp = link.timestamp;
++  CFTimeInterval frame = link.targetTimestamp - link.timestamp;
++  if (frame > 0) {
++    _duration = frame;
++  }
++  [self tick];
++}
++// Ardia]
++
+ - (void)addToRunLoop:(NSRunLoop *)runloop forMode:(NSRunLoopMode)mode
+ {
+   os_unfair_lock_lock(&_lock);
+   _runLoop = runloop;
+-
+-  if (_displayLink != NULL) {
+-    [_modes addObject:mode];
+-    os_unfair_lock_unlock(&_lock);
+-    return;
++  CADisplayLink *link = _link;
++  BOOL first = _modes == nil;
++  if (first) {
++    _modes = [NSMutableArray new];
+   }
+-
+-  _modes = @[mode].mutableCopy;
++  [_modes addObject:mode];
+   os_unfair_lock_unlock(&_lock);
+-  CVReturn ret = CVDisplayLinkCreateWithActiveCGDisplays(&_displayLink);
+-  if (ret != kCVReturnSuccess) {
+-    ret = CVDisplayLinkCreateWithCGDisplay(CGMainDisplayID(), &_displayLink);
++  if (link != nil) {
++    [link addToRunLoop:runloop forMode:mode];
++    return;
++  }
++  if (!first) {
++    return;
++  }
++  if (NSThread.isMainThread) {
++    [self startFollowingScreens];
++    return;
+   }
+-  RCTAssert(ret == kCVReturnSuccess, @"Cannot create display link");
+-  CVDisplayLinkSetOutputCallback(_displayLink, &RCTPlatformDisplayLinkCallBack, (__bridge void *)(self));
+-  CVDisplayLinkStart(_displayLink);
++  __weak RCTPlatformDisplayLink *weakSelf = self;
++  dispatch_async(dispatch_get_main_queue(), ^{
++    [weakSelf startFollowingScreens];
++  });
+ }
+ 
+ - (void)removeFromRunLoop:(__unused NSRunLoop *)runloop forMode:(NSRunLoopMode)mode
+ {
++  os_unfair_lock_lock(&_lock);
+   [_modes removeObject:mode];
+-  if (_modes.count == 0) {
++  BOOL empty = _modes.count == 0;
++  CADisplayLink *link = _link;
++  os_unfair_lock_unlock(&_lock);
++  [link removeFromRunLoop:runloop forMode:mode];
++  if (empty) {
+     [self invalidate];
+   }
+ }
+ 
+ - (void)invalidate
+ {
+-  if (_runLoop != nil) {
+-    os_unfair_lock_lock(&_lock);
+-    _runLoop = nil;
+-    _modes = nil;
+-    os_unfair_lock_unlock(&_lock);
+-
+-    // CVDisplayLinkStop attempts to acquire a mutex possibly held during the callback's invocation.
+-    // Stop the display link outside of the lock to avoid deadlocking here.
+-    if (_displayLink != NULL) {
+-      CVDisplayLinkStop(_displayLink);
+-    }
+-  }
++  os_unfair_lock_lock(&_lock);
++  _runLoop = nil;
++  _modes = nil;
++  CADisplayLink *link = _link;
++  _link = nil;
++  _display = 0;
++  os_unfair_lock_unlock(&_lock);
++  [link invalidate];
+ }
+ 
+ - (void)setPaused:(BOOL)paused
+ {
+-  if (paused) {
+-    CVDisplayLinkStop(_displayLink);
+-  } else {
+-    CVDisplayLinkStart(_displayLink);
+-  }
++  os_unfair_lock_lock(&_lock);
++  _paused = paused;
++  CADisplayLink *link = _link;
++  os_unfair_lock_unlock(&_lock);
++  link.paused = paused;
+ }
+ 
+ - (BOOL)isPaused
+ {
+-  return !CVDisplayLinkIsRunning(_displayLink);
++  os_unfair_lock_lock(&_lock);
++  BOOL paused = _link != nil ? _link.paused : _paused;
++  os_unfair_lock_unlock(&_lock);
++  return paused;
+ }
+ 
+-- (NSTimeInterval)timestamp
++- (CFTimeInterval)timestamp
+ {
+-  CVTimeStamp now;
+-  now.version = 0;
+-  memset(&now, 0 , sizeof(now));
+-  CVDisplayLinkGetCurrentTime(_displayLink, &now);
+-  return (NSTimeInterval)now.hostTime / (NSTimeInterval)CVGetHostClockFrequency();
++  return _timestamp;
+ }
+ 
+-- (NSTimeInterval)duration
++- (CFTimeInterval)duration
+ {
+-  NSTimeInterval duration = 0;
+-  const CVTime time = CVDisplayLinkGetNominalOutputVideoRefreshPeriod(_displayLink);
+-  if (!(time.flags & kCVTimeIsIndefinite)) {
+-    duration = (NSTimeInterval)time.timeValue / (NSTimeInterval)time.timeScale;
+-  }
+-  return duration;
++  return _duration;
+ }
+ 
+ #pragma clang diagnostic push
 diff --git a/React/Base/macOS/RCTUIKit.m b/React/Base/macOS/RCTUIKit.m
 index a37a1c106a04752c1baeb6dd2170402ce5f34f71..4b0fa1207d50724979fdb0122a4a88eed20374cd 100644
 --- a/React/Base/macOS/RCTUIKit.m

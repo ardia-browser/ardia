@@ -53,6 +53,9 @@ NS_ASSUME_NONNULL_BEGIN
 + (BOOL)windowShouldClose:(NSWindow *)window;
 + (BOOL)windowFullScreenIsForPage:(NSWindow *)window;
 + (BOOL)userSeesWindow:(nullable NSWindow *)window NS_SWIFT_NAME(userSees(_:));
++ (BOOL)userSeesOnlyThroughWindowServer:(nullable NSWindow *)window NS_SWIFT_NAME(userSeesOnlyThroughWindowServer(_:));
++ (void)reconsiderSightOfWindow:(nullable NSWindow *)window NS_SWIFT_NAME(reconsiderSight(of:));
+@property(class, nonatomic, copy, nullable) BOOL (^playsForAutoPictureInPictureHandler)(NSWindow *window);
 
 @end
 

@@ -197,6 +197,10 @@ const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
   gLittleArdiaOpensNewTabLinks = enabled;
 }
 
++ (BOOL)littleArdiaOpensNewTabLinksInPlace {
+  return gLittleArdiaOpensNewTabLinks;
+}
+
 + (void)setPopupsOpenAsTabs:(BOOL)enabled {
   gPopupsOpenAsTabs = enabled;
 }

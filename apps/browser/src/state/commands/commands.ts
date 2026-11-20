@@ -36,6 +36,7 @@ import { addFolderToSidebar, restoreArcFolders } from "../bookmarks/bookmarkGrou
 import { withLivePage } from "../tabs/livePage";
 import { webviews } from "../../platform/webviews";
 import { togglePageEngine } from "../engines/actions";
+import { tabEngine } from "../engines/engines";
 import { runReaderCommand } from "../reader/reader";
 import { goBack, goForward } from "../tabs/navigation";
 import { awaitsFirstPage } from "../tabs/pendingAddress";
@@ -55,14 +56,7 @@ import { selectedTabIds } from "../pins/organize";
 import { noteSelectionClosedByKey } from "../telemetry/usage";
 import { noteUrlCopied } from "../telemetry/urlCopies";
 import { isSmall, mainWindowFor, newWindowProfile, originalProfile } from "../windows/small";
-import {
-  closeLittleArdia,
-  cycleLittleArdiaProfile,
-  moveLittleArdiaToProfile,
-  openInMainWindow,
-  openLittleArdia,
-  openLittleArdiaProfileMenu,
-} from "../littleArdia/actions";
+import { closeLittleArdia, cycleLittleArdiaProfile, moveLittleArdiaToProfile, openInMainWindow, openLittleArdia, openLittleArdiaProfileMenu } from "../littleArdia/actions";
 import { runPeekCommand } from "../peek/actions";
 import { peekTabId } from "../peek/peek";
 import { expectFocus, findFocus } from "../focus/focusClaims";
@@ -256,6 +250,7 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
       return void web?.showDevTools("console");
     case "viewSource":
       if (!page || !web || !isWebPageUrl(page.url)) return;
+      if (tabEngine(s, page.id) === "webkit") return void web.runPageCommand("viewSource");
       return void s.newTab(windowId, { url: `view-source:${page.url}`, openerId: page.id, profileId: page.profileId });
     case "back":
       return tabId ? goBack(tabId) : undefined;

@@ -4,6 +4,7 @@ import { webviews } from "../../platform/webviews";
 import { useBrowser } from "../browser/store";
 import { engineProfile } from "../browser/model";
 import { usePages } from "../tabs/pageState";
+import { tabEngine } from "../engines/engines";
 import { useMedia, type TabShare } from "./media";
 
 export { getDisplayMediaSources, screenRecordingAllowed, type DisplayMediaAudio, type DisplayMediaSource } from "../../platform/media";
@@ -79,7 +80,7 @@ export function dismissShareBar(capturer: string, tabId: string) {
 export function shareableTabs(tabId: string) {
   const s = useBrowser.getState();
   const tab = s.tabs[tabId];
-  if (!tab) return [];
+  if (!tab || tabEngine(s, tabId) === "webkit") return [];
   const profile = engineProfile(s, tab.profileId);
   const live = usePages.getState().ready;
   return Object.values(s.tabs)

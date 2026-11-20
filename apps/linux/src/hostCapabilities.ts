@@ -85,6 +85,7 @@ export const WEB_ENGINE_SETTINGS = [
   "advanced.offerWebKitForProtectedVideo",
   "advanced.engineSwitchKeepsPage",
   "advanced.engineSwitchAsksAboutUnsavedWork",
+  "advanced.webKitFraudWarnings",
   "advanced.enginesDiffer",
 ] as const;
 

@@ -10,6 +10,7 @@ import { hasMacModifiers, linuxShortcutText } from "./shortcutText";
 
 const here = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 const replacements = new Map([
+  [here("../browser/src/state/onboarding/redo.ts"), here("./src/redoSetup.ts")],
   ...inputAdapters,
   [here("../browser/src/platform/livePersistence.ts"), here("./src/livePersistence.ts")],
   [here("../browser/src/platform/fieldTiming.ts"), here("./src/fieldTiming.ts")],

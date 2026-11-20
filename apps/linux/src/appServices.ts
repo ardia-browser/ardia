@@ -8,7 +8,7 @@ import { readDocument, removeDocument, saveDocument } from "../../browser/src/pl
 import { afterFirstWindow } from "../../browser/src/lib/afterFirstWindow";
 import { diagnostics } from "../../browser/src/state/commands/appCommands";
 import { openReport } from "./reportProblem.ts";
-import { finishOnboarding, maybeStartOnboarding, onboardingCompletedAt, startOnboarding, useOnboarding } from "../../browser/src/state/onboarding/onboarding";
+import { finishOnboarding, maybeStartOnboarding, onboardingCompletedAt, redoOnboarding, startOnboarding, useOnboarding } from "../../browser/src/state/onboarding/onboarding";
 import { offerDefaultBrowserAgain } from "../../browser/src/state/onboarding/defaultBrowserOffer";
 import { openVideoTour, startToolTour, videoTourUrl } from "../../browser/src/state/onboarding/tour";
 import { trackAppVersion } from "../../browser/src/state/releaseNotes/releaseNotes";
@@ -18,7 +18,7 @@ import { useBrowser } from "../../browser/src/state/browser/store";
 import type { LinuxCapabilities } from "./hostCapabilities.ts";
 import { ardiaHost, hostSupports, invokeHost, type ArdiaHost } from "./host.ts";
 import { QUIT_COMMAND, createHostQuit, type QuitOutcome } from "./quit.ts";
-import { BROWSER_COMMAND_CHANNEL, BROWSER_WINDOW_COMMANDS, regularFocusOrder, routeToBrowserWindow, serveBrowserCommands, type RouteChannel } from "./browserCommandRoute.ts";
+import { BROWSER_COMMAND_CHANNEL, BROWSER_WINDOW_COMMANDS, regularFocusOrder, routeToBrowserWindow, serveBrowserCommands, type RouteChannel, type RoutedCommand } from "./browserCommandRoute.ts";
 
 export const APP_LAUNCH_LOCK = "ardia.linux.app-launch";
 export const APP_LAUNCH_MARK = "ardia.linux.app-launch";
@@ -170,7 +170,7 @@ function quitApp(windowId: string) {
   });
 }
 
-export function runAppCommand(windowId: string, command: CommandEvent["command"], capabilities: LinuxCapabilities, host: ArdiaHost | undefined = ardiaHost): boolean {
+export function runAppCommand(windowId: string, command: RoutedCommand, capabilities: LinuxCapabilities, host: ArdiaHost | undefined = ardiaHost): boolean {
   if ((command as string) === QUIT_COMMAND) {
     quitApp(windowId);
     return true;
@@ -185,6 +185,9 @@ export function runAppCommand(windowId: string, command: CommandEvent["command"]
       return true;
     case "copyDiagnostics":
       void diagnostics().then(copyText, report);
+      return true;
+    case "redoSetup":
+      redoOnboarding(windowId);
       return true;
     case "showOnboarding":
       startOnboarding(windowId);
@@ -216,7 +219,7 @@ export const LINUX_APP_COMMANDS: ReadonlySet<string> = new Set(["reportProblem",
 
 const routeChannel = () => typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(BROWSER_COMMAND_CHANNEL) as unknown as RouteChannel;
 
-export async function routeUtilityCommand(windowId: string, command: CommandEvent["command"], channel: RouteChannel | null) {
+export async function routeUtilityCommand(windowId: string, command: RoutedCommand, channel: RouteChannel | null) {
   const ran = channel ? await routeToBrowserWindow({ channel, command }) : null;
   if (!ran) showToast(windowId, "No browser window to show this in", "Open a browser window, then try again.");
   return ran;

@@ -7,7 +7,7 @@ import { useToasts } from "../../browser/src/state/app/toasts.ts";
 import { useReportSheet } from "../../browser/src/state/report/store.ts";
 import { APP_COMMAND_HANDLERS } from "../../browser/src/state/commands/appCommands.ts";
 import { LINUX_REPORT_TEMPLATE, openReport } from "./reportProblem.ts";
-import { APP_LAUNCH_LOCK, APP_LAUNCH_MARK, FRESH_PROFILE_DOCUMENT, LAUNCH_STEPS, LINUX_APP_COMMANDS, UTILITY_APP_COMMANDS, claimAppLaunch, hostLaunchRecord, onboardingAction, recordFreshProfile, runAppCommand, runLaunchServices, serveUtilityCommands, startAppCommands } from "./appServices.ts";
+import { APP_LAUNCH_LOCK, APP_LAUNCH_MARK, FRESH_PROFILE_DOCUMENT, LAUNCH_STEPS, LINUX_APP_COMMANDS, UTILITY_APP_COMMANDS, claimAppLaunch, hostLaunchRecord, onboardingAction, recordFreshProfile, routeUtilityCommand, runAppCommand, runLaunchServices, serveUtilityCommands, startAppCommands } from "./appServices.ts";
 
 const capabilities = { defaultBrowser: false, launchAtLogin: false, thinScrollBars: false, webkit: false, cliControl: false, cliInstall: false, externalLinks: false, performanceRecording: false, taskManager: false };
 
@@ -423,4 +423,32 @@ test("the quit command is handled here and says so when this build cannot quit",
   assert.equal(runAppCommand(first, "quit", capabilities), true);
   for (let i = 0; i < 20 && !toast(first); i++) await new Promise((resolve) => setTimeout(resolve, 5));
   assert.equal(toast(first)?.title, "Not available on Linux yet");
+});
+
+
+test("Redo Setup from Settings opens current-setting redo mode in the focused browser and preserves first-run completion", async () => {
+  const { first, second } = twoWindows();
+  useOnboarding.setState({ windowId: null });
+  useBrowser.setState((s) => ({ ui: { ...s.ui, focusOrder: [second, first] } }));
+  const completed = JSON.stringify({ completedAt: 123, startedAt: 100, version: 1 });
+  docs.set("onboarding.json", completed);
+  const name = `redo-route-${process.pid}`;
+  const channels = [new BroadcastChannel(name), new BroadcastChannel(name)];
+  const focused = [];
+  const served = serveUtilityCommands({ windowId: second, capabilities, privateWindow: false, channel: () => channels[0], focus: async (id) => focused.push(id) });
+  try {
+    assert.equal(await routeUtilityCommand("settings", "redoSetup", channels[1]), second);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const state = useOnboarding.getState();
+    assert.equal(state.windowId, second);
+    assert.equal(state.redo, true);
+    assert.equal(state.step, "source");
+    assert.equal(state.prefill, "current");
+    assert.equal(docs.get("onboarding.json"), completed);
+    assert.deepEqual(focused, [second]);
+  } finally {
+    served.remove();
+    channels.forEach((channel) => channel.close());
+    useOnboarding.setState({ windowId: null });
+  }
 });

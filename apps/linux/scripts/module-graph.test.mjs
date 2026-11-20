@@ -83,6 +83,10 @@ test("production graph uses current Linux adapters and one canonical shared stat
     assert.ok(graph.get(id).importedIds.includes(original));
   }
 
+  const general = graph.get(`${browser}components/settings/panes/General.tsx`);
+  assert.ok(general.importedIds.includes(`${linux}redoSetup.ts`));
+  assert.equal(graph.has(`${browser}state/onboarding/redo.ts`), false);
+
   const permissions = graph.get(`${browser}state/site/permissions.ts`);
   assert.ok(permissions.importedIds.includes(`${linux}notificationPermission.ts`), "accepting a notification prompt goes through the Linux permission adapter");
   assert.ok(!permissions.importedIds.includes(`${browser}state/site/webNotifications.ts`));

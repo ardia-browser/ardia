@@ -1,13 +1,13 @@
 import type { CommandEvent } from "@ardia/shell";
 
 export const BROWSER_COMMAND_CHANNEL = "ardia-browser-commands";
-export const BROWSER_WINDOW_COMMANDS: ReadonlySet<string> = new Set(["showOnboarding", "toolTour", "videoTour", "releaseNotes", "reportProblem"]);
+export const BROWSER_WINDOW_COMMANDS: ReadonlySet<string> = new Set(["redoSetup", "showOnboarding", "toolTour", "videoTour", "releaseNotes", "reportProblem"]);
 
-type Command = CommandEvent["command"];
+export type RoutedCommand = CommandEvent["command"] | "redoSetup";
 type RouteMessage =
   | { type: "find"; request: string }
   | { type: "here"; request: string; windowId: string; order: string[] }
-  | { type: "run"; request: string; windowId: string; command: Command }
+  | { type: "run"; request: string; windowId: string; command: RoutedCommand }
   | { type: "claim"; request: string; windowId: string }
   | { type: "go"; request: string; windowId: string };
 
@@ -32,13 +32,13 @@ export function serveBrowserCommands(options: {
   windowId: string;
   channel: RouteChannel;
   order: () => string[];
-  run: (windowId: string, command: Command) => void;
+  run: (windowId: string, command: RoutedCommand) => void;
   focus: (windowId: string) => Promise<unknown>;
   claimMs?: number;
 }) {
   const { windowId, channel, order, run, focus } = options;
   const claimMs = options.claimMs ?? 1500;
-  const claimed = new Map<string, { command: Command; timer: ReturnType<typeof setTimeout> }>();
+  const claimed = new Map<string, { command: RoutedCommand; timer: ReturnType<typeof setTimeout> }>();
   const listener = ({ data }: { data: RouteMessage }) => {
     if (data?.type === "find") channel.postMessage({ type: "here", request: data.request, windowId, order: order() });
     if (data?.type === "find" || data?.windowId !== windowId) return;
@@ -67,7 +67,7 @@ export function serveBrowserCommands(options: {
 
 export function routeToBrowserWindow(options: {
   channel: RouteChannel;
-  command: Command;
+  command: RoutedCommand;
   request?: string;
   gatherMs?: number;
   answerMs?: number;

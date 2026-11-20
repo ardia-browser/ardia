@@ -624,3 +624,43 @@ test("a cycle whose apply is held keeps 200,000 pulled keys for later, where a c
   assert.equal(state.unapplied.length, count);
   assert.equal(state.unapplied[count - 1], `h:${count - 1}`);
 });
+
+test("20,000 logs read behind a missing first one are tracked and then closed up without a scan per log", async () => {
+  const count = 20_000;
+  const log = (seq: number) => ({ id: `l${seq}`, payload: JSON.stringify({ v: 1, kind: "log", device: "devB", seq, at: 1000, ops: [] } satisfies LogFile) });
+  const logs = Array.from({ length: count }, (_, i) => log(i + 2));
+  let files = logs;
+  const transport: Transport = {
+    write: async () => "own",
+    read: async (_scope, known) => {
+      const seen = new Set(known);
+      return { files: files.filter((f) => !seen.has(f.id)), pending: [], damaged: [], present: files.map((f) => f.id) };
+    },
+    remove: async () => {},
+  };
+  const state = emptyScope();
+  const run = () => syncScope({ scope: "s", state, transport, adapters: [], clock: new Clock("devA"), device: "devA", now: () => 2000 });
+  const { includes, sort } = Array.prototype;
+  let scanned = 0;
+  Array.prototype.includes = function (this: unknown[], ...args: [unknown, number?]) {
+    scanned += this.length;
+    return includes.apply(this, args);
+  };
+  Array.prototype.sort = function <T>(this: T[], compare?: (a: T, b: T) => number) {
+    scanned += this.length;
+    return sort.call(this, compare) as T[];
+  };
+  try {
+    await run();
+    assert.equal(state.vv.devB ?? 0, 0);
+    assert.equal(state.extra.devB!.length, count);
+    files = [log(1), ...logs];
+    await run();
+  } finally {
+    Array.prototype.includes = includes;
+    Array.prototype.sort = sort;
+  }
+  assert.equal(state.vv.devB, count + 1);
+  assert.equal(state.extra.devB, undefined);
+  assert.ok(scanned < 20 * count, `${scanned} list entries scanned`);
+});

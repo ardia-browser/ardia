@@ -13,7 +13,7 @@ const store = () => useBrowser.getState();
 
 const HISTORY_WINDOW_MS = 90 * 86_400_000;
 
-const lastVisitOf = (v: HistoryValue) => Math.max(0, ...v.vt);
+const lastVisitOf = (v: HistoryValue) => v.vt.reduce((m, t) => Math.max(m, t), 0);
 const SAME_VISIT_MS = 1;
 const sameVisits = (a: number[], b: number[]) => a.length === b.length && a.every((t, i) => Math.abs(b[i]! - t) <= SAME_VISIT_MS);
 
@@ -123,7 +123,7 @@ export function historyAdapter(profileId: string): Adapter {
         const old = byUrl.get(url);
         if (v) {
           const have = old?.visitTimes ?? [];
-          const fresh = v.vt.filter((t) => t >= since && !have.some((h) => Math.abs(h - t) <= SAME_VISIT_MS));
+          const fresh = [...v.vt].sort((a, z) => a - z).slice(-MAX_VISIT_TIMES).filter((t) => t >= since && !have.some((h) => Math.abs(h - t) <= SAME_VISIT_MS));
           if (fresh.length) add.push({ url, title: v.t, visitTimes: fresh });
           const times = [...have, ...fresh].sort((a, z) => a - z).slice(-MAX_VISIT_TIMES);
           if (!times.length) continue;

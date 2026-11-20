@@ -4,6 +4,7 @@ const { useBrowser } = await import("../browser/store.ts");
 const adapters = await import("./historyAdapter.ts");
 const { historyExtractsOf } = await import("./historyExtracts.ts");
 const { isWebPageUrl } = await import("../../lib/url.ts");
+const stub = await import("../../test-native/index.ts");
 
 const DAY = 86_400_000;
 const WINDOW = 90 * DAY;
@@ -86,4 +87,17 @@ test("an old local row is ignored before its synced JSON is read: a malformed on
   const { ignore } = adapters.historyAdapter("default").extract(() => undefined, () => false, now, () => true, () => undefined, () => undefined, (key) => (key === `h:${url}` ? "{" : undefined));
   assert.equal(ignore(`h:${url}`), true);
   assert.equal(cached.size, before);
+});
+
+test("a synced history record with 200,000 visit times, from a damaged or foreign file, is read as expired or kept without overflowing, and applied as its newest 50", async () => {
+  const now = Date.now();
+  const recent = Array.from({ length: 200_000 }, (_, i) => now - DAY + i);
+  const old = recent.map((t) => t - 120 * DAY);
+  assert.equal(adapters.historyExpired("h:https://long.example/", { t: "Long", n: recent.length, vt: recent }, now), false);
+  assert.equal(adapters.historyExpired("h:https://long.example/", { t: "Long", n: old.length, vt: old }, now), true);
+  useBrowser.setState({ history: { "": { list: [], floor: -Infinity, ready: true } } });
+  const many = recent.slice(-1_000).reverse();
+  const view = new Map([["h:https://long.example/", { t: "Long", n: many.length, vt: many }]]);
+  await adapters.historyAdapter("default").apply(view, new Set(view.keys()), () => undefined, { known: () => true, now, horizon: 0, joined: true });
+  assert.deepEqual(stub.chromeHistory("").get("https://long.example/").visits, recent.slice(-50), "only the newest 50 times reach the engine");
 });

@@ -2239,3 +2239,47 @@ test("history: an unchanged page's visits are matched in one pass, not each agai
   assert.deepEqual(values.get(`h:${url}`), known);
   assert.ok(abs.mock.callCount() <= visitTimes.length, `${abs.mock.callCount()} comparisons`);
 });
+
+test("a 20,000-deep bookmark folder chain is read for sync in the same order as before, without overflowing", () => {
+  useBrowser.setState({ bookmarks: { nodes: {} } });
+  S().hydrate({});
+  useBrowser.setState((s) => ({ bookmarksReady: { ...s.bookmarksReady, [model.engineProfile(s, "default")]: true } }));
+  S().addBookmark({ profileId: "default", url: "https://first.example/", title: "First" });
+  const roots = bookmarkRoots(S(), "default");
+  const nodes = { ...S().bookmarks.nodes };
+  const depth = 20_000;
+  let parent = roots.other;
+  for (let i = 0; i < depth; i++) {
+    const id = `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`;
+    nodes[id] = { kind: "folder", id, parentId: parent, title: `D${i}`, children: [], addedAt: 1 };
+    nodes[parent] = { ...nodes[parent], children: [...nodes[parent].children, id] };
+    parent = id;
+  }
+  nodes[parent] = { ...nodes[parent], children: [...nodes[parent].children, "deep-url"] };
+  nodes["deep-url"] = { kind: "url", id: "deep-url", parentId: parent, title: "Deep", url: "https://deep.example/", addedAt: 2 };
+  useBrowser.setState({ bookmarks: { ...S().bookmarks, nodes } });
+  const { values } = adapters.bookmarksAdapter("default").extract(() => undefined, [], Date.now(), () => false);
+  const keys = [...values.keys()];
+  assert.equal(keys.length, depth + 2);
+  assert.equal(values.get(keys[0]).t, "First", "the bar is read before Other Bookmarks");
+  assert.deepEqual(keys.slice(1, 4).map((k) => values.get(k).t), ["D0", "D1", "D2"], "each folder is read before the next one below it");
+  assert.equal(values.get(keys.at(-1)).u, "https://deep.example/");
+  const applied = adapters.bookmarksAdapter("default").apply(values, new Set(values.keys()), () => undefined, { known: () => true, now: Date.now(), horizon: 0, joined: true });
+  assert.notEqual(applied, false);
+  assert.equal(Object.values(S().bookmarks.nodes).filter((n) => n.kind === "folder" && n.title.startsWith("D")).length, depth, "the same chain is applied back over itself");
+});
+
+test("a pinned group chain 4,000 deep from a damaged or foreign file is applied without overflowing", () => {
+  S().hydrate({});
+  S().createWindow({ url: "https://home.example/" });
+  const depth = 4_000;
+  const g = (i) => `deep${String(i).padStart(5, "0")}`;
+  const visible = new Map([[`pin:g:${g(0)}`, { n: "G0", i: null, c: "blue", pos: "1" }]]);
+  for (let i = 1; i < depth; i++) visible.set(`pinn:g:${g(i)}`, { n: `G${i}`, i: null, c: "blue", p: g(i - 1) });
+  visible.set("pin:t:leaf", { g: g(depth - 1), u: "https://leaf.example/", t: null, i: null, ti: "Leaf", pos: "1" });
+  const records = { known: () => true, now: Date.now(), horizon: 0, joined: true, held: () => false, landed: () => {} };
+  pinnedArea.pinnedAdapter("default").apply(visible, new Set(visible.keys()), () => undefined, records);
+  const leaf = Object.values(S().tabs).find((t) => t.pinnedUrl === "https://leaf.example/" || t.url === "https://leaf.example/");
+  assert.ok(leaf, "the leaf pin landed");
+  assert.equal(Object.values(S().groups).filter((x) => x.pinned && x.name.startsWith("G")).length, depth);
+});

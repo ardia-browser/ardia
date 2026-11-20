@@ -6,7 +6,7 @@ import { compact, syncScope, visible } from "../scope.ts";
 import { emptyScope, type Adapter, type SyncRecord, type Listing, type LogFile, type ScopeState, type Transport } from "../scopeState.ts";
 import { companionAcknowledge, companionAddBookmark, companionRemoveBookmark, companionRemovalsDone, companionSend, runCompanionCycle, type CycleInput } from "./cycle.ts";
 import { companionLoad, companionUnload, type CompanionState, type Host } from "./state.ts";
-import { buildView } from "./view.ts";
+import { buildView, type ViewBookmark } from "./view.ts";
 import type { LocalTab, LocalVisit } from "./adapters.ts";
 
 const DAY = 86_400_000;
@@ -1145,4 +1145,74 @@ test("two device records stamped alike give the order of the lower device id, wh
     for (const [key, value] of flipped ? [...devices].reverse() : devices) app.records[key] = value;
     assert.deepEqual(buildView({ app }, PHONE).profiles.map((p) => p.name), MAC2 < MAC ? ["School", "Personal", "Work"] : ["Work", "School", "Personal"]);
   }
+});
+
+test("a damaged history record with 200,000 visit times, and a folder with 200,000 bookmarks don't overflow the phone's stack", async () => {
+  const { folder, phone } = await joined();
+  const url = "https://long.example/";
+  const times = Array.from({ length: 200_000 }, (_, i) => START - 3 * DAY + i * 1000);
+  const writer = new Clock("foreign0000000000000000000", null, () => folder.now);
+  const ops = [
+    { k: `h:${url}`, h: writer.tick(), v: { t: "Long", n: times.length, vt: times } },
+    { k: "bm:wide", h: writer.tick(), v: { k: "f", p: "bar", t: "Wide", a: 8, pos: "3" } },
+    ...Array.from({ length: 200_000 }, (_, i) => ({ k: `bm:w${i}`, h: writer.tick(), v: { k: "u", p: "wide", t: `W${i}`, u: `https://w${i}.example/`, a: 9, pos: "1" } })),
+  ];
+  folder.add(s1, JSON.stringify({ v: 1, kind: "log", device: "foreign0000000000000000000", seq: 1, at: folder.now, ops } satisfies LogFile));
+  folder.now += 15_000;
+  const out = await phone.cycle({ visits: [{ u: url, t: "Long", vt: times, p: P1 }] });
+  const personal = out.view!.profiles.find((p) => p.syncId === P1)!;
+  assert.equal(personal.history.find((h) => h.url === url)!.lastVisit, times.at(-1));
+  assert.equal(personal.bookmarks.find((b) => b.title === "Wide")!.children!.length, 200_000);
+  companionRemoveBookmark({ profile: P1, key: "wide" });
+  folder.now += 1000;
+  await phone.cycle({ visits: null });
+  assert.equal(phone.state().bookmarks.length, 0);
+});
+
+test("pulling 20,000 history deletions lists each once and acknowledging them clears them, without scanning the whole list for each URL", async () => {
+  const { folder, mac, phone } = await joined();
+  const urls = Array.from({ length: 20_000 }, (_, i) => `https://gone${i}.example/`);
+  await phone.cycle({ visits: urls.map((u) => ({ u, t: "Gone", vt: [START - DAY], p: P1 })) });
+  await mac.sync([s1]);
+  folder.now += 60_000;
+  for (const u of urls) mac.history[s1]!.delete(u);
+  await mac.sync([s1]);
+  folder.now += 15_000;
+  const includes = Array.prototype.includes;
+  let scanned = 0;
+  Array.prototype.includes = function (this: unknown[], ...args: [unknown, number?]) {
+    scanned += this.length;
+    return includes.apply(this, args);
+  };
+  let out;
+  try {
+    out = await phone.cycle({ visits: null });
+    companionRemovalsDone({ items: out.historyRemoved });
+  } finally {
+    Array.prototype.includes = includes;
+  }
+  const mine = out.historyRemoved.find((r) => r.profile === P1)!;
+  assert.equal(mine.urls.length, urls.length);
+  assert.equal(new Set(mine.urls).size, urls.length);
+  assert.ok(scanned < 10 * urls.length, `${scanned} list entries scanned`);
+  folder.now += 15_000;
+  assert.deepEqual((await phone.cycle({ visits: null })).historyRemoved, []);
+});
+
+test("a 20,000-deep folder chain, and folders named like the roots, give the phone a bookmark tree it can serialize and decode", () => {
+  const app = emptyScope();
+  app.records[`prof:${P1}`] = { h: "a", v: { n: "Personal", c: "blue", i: null, d: true }, o: ["x", 1] };
+  const scope = emptyScope();
+  const depth = 20_000;
+  for (let i = 0; i < depth; i++) scope.records[`bm:d${String(i).padStart(5, "0")}`] = { h: "a", v: { k: "f", p: i ? `d${String(i - 1).padStart(5, "0")}` : "other", t: `D${i}`, a: 1, pos: "1" }, o: ["x", 1] };
+  scope.records["bm:other"] = { h: "a", v: { k: "f", p: "other", t: "Not a root", a: 1, pos: "2" }, o: ["x", 1] };
+  scope.records["bm:bar"] = { h: "a", v: { k: "f", p: "bar", t: "Not a root either", a: 1, pos: "2" }, o: ["x", 1] };
+  const started = performance.now();
+  const bookmarks = buildView({ app, [`p:${P1}`]: scope }, PHONE).profiles[0]!.bookmarks;
+  let levels = 0;
+  for (let at: ViewBookmark | undefined = bookmarks[0]; at; at = at.children?.[0]) levels++;
+  assert.equal(levels, 100);
+  assert.deepEqual(bookmarks.map((b) => b.title), ["D0"]);
+  assert.ok(JSON.stringify(bookmarks).length > 0);
+  assert.ok(performance.now() - started < 5_000, `${Math.round(performance.now() - started)} ms`);
 });

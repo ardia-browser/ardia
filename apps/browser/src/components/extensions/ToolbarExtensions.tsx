@@ -17,6 +17,7 @@ import { dropToolbarAnchor, setToolbarAnchor } from "../../state/extensions/tool
 import { onInterfaceScaleSettled } from "../../state/settings/interfaceScale";
 import {
   activateExtension,
+  activateMeasured,
   extensionOverflowItems,
   runExtensionListChoice,
   showExtensionMenu,
@@ -238,9 +239,9 @@ function ExtensionButton({ ext, index, pitch, reorder, windowId, tabId, ready, p
           tooltip={title}
           onPressIn={pressMotion.onPressIn}
           onPressOut={pressMotion.onPressOut}
-          onPress={async () => {
+          onPress={() => {
             onActivate?.();
-            return activateExtension(windowId, ext, await measure(), fetched?.[ext.id], tabId);
+            return activateMeasured(windowId, ext, measure, fetched?.[ext.id], tabId);
           }}
           badge={badge ? <Badge text={badge.slice(0, 4)} size="s" fit={badgeRoom} fill={fill} color={state?.badgeTextColor ?? contrastText(fill)} style={BADGE_PLACE} /> : null}
         >

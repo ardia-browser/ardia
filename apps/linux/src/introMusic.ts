@@ -1,12 +1,13 @@
 import type { ArdiaHost } from "./host";
 import { hostLaunchConfig } from "./hostLaunchConfig";
+import { consentToken, type ConsentToken } from "../../browser/src/state/telemetry/consentPeriod.ts";
 
 const MUTE_FADE_SECONDS = 0.25;
 const FRAME_MS = 1000 / 60;
 
 type Player = { volume: number; play(): Promise<void>; pause(): void; addEventListener(type: "ended", listener: () => void): void };
 type FrameTimer = { every(tick: () => void, ms: number): unknown; cancel(handle: unknown): void };
-type IntroMusicOptions = { host?: ArdiaHost; track?: () => Promise<string>; createPlayer?: (src: string) => Player; onPlayed?: (played: boolean) => void; frames?: FrameTimer };
+type IntroMusicOptions = { host?: ArdiaHost; track?: () => Promise<string>; createPlayer?: (src: string) => Player; onPlayed?: (played: boolean, startedIn: ConsentToken | null) => void; frames?: FrameTimer };
 
 const intervalFrames: FrameTimer = {
   every: (tick, ms) => setInterval(tick, ms),
@@ -54,12 +55,13 @@ export function linuxIntroMusic({ host, track = bundledTrack, createPlayer = (sr
   return {
     playIntroMusic: async (_cues: unknown, muted: unknown) => {
       if (introMusicSilenced(host)) return;
+      const startedIn = consentToken();
       const load = { muted: muted === true };
       loading = load;
       const src = await track().catch(() => null);
       if (loading !== load) return;
       loading = null;
-      if (!src) return onPlayed?.(false);
+      if (!src) return onPlayed?.(false, startedIn);
       frames.cancel(fading);
       playing?.pause();
       const audio = createPlayer(src);
@@ -69,10 +71,10 @@ export function linuxIntroMusic({ host, track = bundledTrack, createPlayer = (sr
       });
       playing = audio;
       await audio.play().then(
-        () => onPlayed?.(true),
+        () => onPlayed?.(true, startedIn),
         (error: unknown) => {
           if (playing === audio) playing = null;
-          onPlayed?.(false);
+          onPlayed?.(false, startedIn);
           console.info(`[ardia linux] the intro music didn't play: ${String(error)}`);
         },
       );

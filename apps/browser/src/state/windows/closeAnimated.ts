@@ -7,6 +7,8 @@ import { isWindowClosing, startClosingWindow, stopClosingWindow } from "./closin
 import { tabsHandedOver } from "../tabs/sharedWindowClose";
 import { isOpenRegularWindow } from "./small";
 import { noteWindowCloseTabsKept } from "../telemetry/usage";
+import type { ConsentToken } from "../telemetry/client";
+import { consentOrNow } from "../telemetry/countFor";
 
 export { isWindowClosing };
 
@@ -21,14 +23,15 @@ function familyCounts(s: BrowserState, tabIds: readonly string[]) {
   return counts;
 }
 
-type AnimatedCloseOptions = CloseWindowOptions & { replacedBy?: string | null; then?: () => void };
+type AnimatedCloseOptions = CloseWindowOptions & { replacedBy?: string | null; then?: () => void; consent?: ConsentToken | null };
 
-export function closeWindowAnimated(windowId: string, { replacedBy = null, then, ...options }: AnimatedCloseOptions = {}): Promise<boolean> {
+export function closeWindowAnimated(windowId: string, { replacedBy = null, then, consent: given, ...options }: AnimatedCloseOptions = {}): Promise<boolean> {
   const s = useBrowser.getState();
   const w = s.windows[windowId];
   if (isWindowClosing(windowId) || !w) return Promise.resolve(false);
   if (!replacedBy && !then && managesWindowClose(windowId, "window")) return Promise.resolve(true);
   const leaving = familyCounts(s, w.tabIds);
+  const consent = consentOrNow(given);
   let done: (closed: boolean) => void = () => undefined;
   const settled = new Promise<boolean>((resolve) => (done = resolve));
   const close = () => {
@@ -43,7 +46,7 @@ export function closeWindowAnimated(windowId: string, { replacedBy = null, then,
       return done(false);
     }
     const kept = tabsHandedOver(after, windowId, isOpenRegularWindow).length;
-    if (kept) noteWindowCloseTabsKept(kept);
+    if (kept) noteWindowCloseTabsKept(kept, consent);
     useBrowser.getState().closeWindow(windowId, options);
     then?.();
     done(true);

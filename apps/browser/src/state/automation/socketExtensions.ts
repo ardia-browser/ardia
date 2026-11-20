@@ -9,6 +9,7 @@ import type { JsonSchema } from "../../lib/jsonSchema";
 import { bool, id, obj, oneOf, PROFILE, text } from "./socketSchema";
 import { now, profileArg } from "./socketTargets";
 import { OpError } from "./workspaceTargets";
+import { consentToken } from "../telemetry/client";
 
 const SITE_ACCESS = ["allSites", "specificSites", "onClick"] as const;
 type SiteAccess = (typeof SITE_ACCESS)[number];
@@ -30,10 +31,11 @@ async function install(params: Record<string, unknown>, call: SocketCall) {
   const engine = engineProfile(now(), profileId);
   const extensionId = webStoreExtensionId(params.webStore as string);
   if (!extensionId) throw new OpError("bad_request", "webStore is a Chrome Web Store link or extension id.");
+  const consent = consentToken();
   const already = (await loaded(engine)).find((x) => x.id === extensionId);
   stillThere(call, profileId, engine);
   if (already) return { waiting: false, installed: true, extensions: [{ id: already.id, name: already.name, version: already.version }] };
-  openInExtensionProfile(`https://chromewebstore.google.com/detail/${extensionId}`, engine, { profileId });
+  openInExtensionProfile(`https://chromewebstore.google.com/detail/${extensionId}`, engine, { profileId }, consent);
   return { waiting: true, id: extensionId };
 }
 

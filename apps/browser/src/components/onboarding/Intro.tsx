@@ -22,7 +22,7 @@ import { INTRO_COPY, INTRO_LOOK, INTRO_MUTE } from "./introCopy";
 import { meadowIntroFor } from "./introPage";
 import { INTRO_TAB_KEYS, introHoldsKeyboard, nextIntroStop } from "./introKeys";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
-import { noteIntroEnded, noteIntroShown, noteIntroSkipped, type IntroScene } from "../../state/telemetry/introCounts";
+import { introSession, noteIntroShown, noteIntroSkipped, type IntroScene } from "../../state/telemetry/introCounts";
 
 const ICON = require("../../../assets/app-icon.png");
 const CUES = INTRO_CUES;
@@ -45,6 +45,7 @@ export function Intro({ onDone }: { onDone: () => void }) {
   const [tone, setTone] = useState(() => OPENING_TONE[dark ? "night" : "day"]);
   const [live, setLive] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const [session] = useState(introSession);
   const startedAt = useRef(Date.now() + introStartDelayMs()).current;
   const scene = useRef<{ shown: IntroScene | null; firstFrameMs: number | null }>({ shown: null, firstFrameMs: null });
   const pageOpen = useRef<(() => void) | null>(null);
@@ -69,7 +70,7 @@ export function Intro({ onDone }: { onDone: () => void }) {
   const finish = () => {
     if (done.current) return;
     done.current = true;
-    noteIntroEnded({ skipped: skipped.current, ...scene.current });
+    session.ended({ skipped: skipped.current, ...scene.current });
     void Promise.race([pageGone.current, new Promise((settle) => setTimeout(settle, PAGE_GONE_LIMIT_MS))]).then(onDone);
   };
 

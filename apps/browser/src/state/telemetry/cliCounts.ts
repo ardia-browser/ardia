@@ -44,7 +44,7 @@ export function noteSocketCall(family: SocketFamily, failed: boolean, consent?: 
 export const noteSocketLineShrunk = (consent: ConsentToken | null) => countFor(consentOrNow(consent), () => void counts.cli_socket_lines_shrunk++);
 export const noteSocketPasswordManagerRefused = (consent: ConsentToken | null) =>
   countFor(consentOrNow(consent), () => void counts.cli_socket_password_manager_refusals++);
-export const noteCliAutoEnabled = () => void counts.cli_auto_enables++;
+export const noteCliAutoEnabled = (consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void counts.cli_auto_enables++);
 
 let windowlessBaselineStale = false;
 onConsentPeriodChange(() => (windowlessBaselineStale = true));

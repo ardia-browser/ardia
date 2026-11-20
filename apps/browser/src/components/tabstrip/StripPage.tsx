@@ -7,6 +7,8 @@ import { setMeasuredWidth, useMeasuredWidths } from "../../state/windows/measure
 import { dismissStripHoverIn, stripPageOffstage } from "../../state/tabs/stripHover";
 import { onTabPressEnd, tabPressHeld } from "../../state/sidebar/heldTabPress";
 import { noteTabStripCompact, noteTabStripReadable, noteTabStripHeldClose, noteTabStripOverflow, noteTabStripTabsInOverflow, noteTabStripRevealAfterPress, noteTabStripRevealHeldForScroll, noteTabStripScrolled, noteTabStripTitledTabs } from "../../state/telemetry/tabStripCounts";
+import { consentToken } from "../../state/telemetry/client";
+import { userScrollClock } from "./userScrollClock";
 import { Offstage } from "../ui/useHover";
 import { usePageStyle } from "../../state/windows/profilePager";
 import { ThemeScope } from "../window/ThemeScope";
@@ -103,8 +105,8 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
   const viewport = useRef(pageWidth + flare * 2);
   const content = useRef(0);
   const ownScrollUntil = useRef(0);
-  const userScrollAt = useRef(-Infinity);
-  const userScrolling = () => performance.now() - userScrollAt.current < USER_SCROLL_QUIET_MS;
+  const [userScroll] = useState(() => userScrollClock(USER_SCROLL_QUIET_MS));
+  const userScrolling = userScroll.scrolling;
   const scrollStrip = (x: number, animated: boolean) => {
     scrolled.current = x;
     ownScrollUntil.current = performance.now() + (animated ? OWN_ANIMATED_SCROLL_MS : OWN_SCROLL_MS);
@@ -158,7 +160,7 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
     if (Math.abs(e.nativeEvent.contentOffset.x - scrolled.current) >= 1) {
       dismissStripHoverIn(windowId);
       if (now > ownScrollUntil.current) {
-        userScrollAt.current = now;
+        userScroll.scrolled(now);
         noteTabStripScrolled(now);
       }
     }
@@ -185,7 +187,7 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
   const latestReveal = useRef(() => {});
   latestReveal.current = () => {
     if (!current || !activeId || tabDragging()) return;
-    if (userScrolling()) noteTabStripRevealHeldForScroll();
+    if (userScrolling()) noteTabStripRevealHeldForScroll(userScroll.heldIn());
     else reveal(activeId, false);
   };
   useEffect(() => {
@@ -194,9 +196,10 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
     if (!current || !activeId || tabDragging()) return;
     let frame = 0;
     let quiet: ReturnType<typeof setTimeout> | undefined;
+    const consent = consentToken();
     const now = () => {
       if (!userScrolling()) return reveal(activeId, true);
-      noteTabStripRevealHeldForScroll();
+      noteTabStripRevealHeldForScroll(userScroll.heldIn(consent));
       quiet = setTimeout(now, USER_SCROLL_QUIET_MS);
     };
     const later = () => void (frame = requestAnimationFrame(now));

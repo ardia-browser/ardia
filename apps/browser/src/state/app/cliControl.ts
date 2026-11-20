@@ -219,20 +219,21 @@ function userTurnedControlOff() {
   return !settings.cliControl && settingsMeta.chosen.includes("cliControl") && !settingsMeta.inferred.includes("cliControl");
 }
 
-function finishAutoInstall() {
+function finishAutoInstall(consent?: ConsentToken | null) {
   save({ autoInstalledAt: Date.now() });
   const { settings, updateSettings } = useBrowser.getState();
   if (settings.cliControl || userTurnedControlOff()) return;
   updateSettings({ cliControl: true });
-  noteCliAutoEnabled();
+  noteCliAutoEnabled(consent);
 }
 
 async function installForTheFirstTime() {
   if (userTurnedControlOff() || !canInstallCliUnattended()) return;
+  const consent = consentToken();
   const tries = readSaved().autoInstallTries ?? 0;
   if (tries >= AUTO_INSTALL_TRIES || !save({ autoInstallTries: tries + 1 }) || readSaved().autoInstallTries !== tries + 1) return;
   const result = await installCliInBackground("auto");
-  if (result.ok) finishAutoInstall();
+  if (result.ok) finishAutoInstall(consent);
 }
 
 function installOrUpgrade() {

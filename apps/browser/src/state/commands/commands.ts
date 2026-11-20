@@ -56,6 +56,7 @@ import { groupOf } from "../pins/tabGrouping";
 import { selectedTabIds } from "../pins/organize";
 import { noteSelectionClosedByKey } from "../telemetry/usage";
 import { noteUrlCopied } from "../telemetry/urlCopies";
+import { consentToken } from "../telemetry/client";
 import { newWindowProfile, originalProfile } from "../windows/small";
 import { openLittleArdia } from "../littleArdia/actions";
 import { runPeekCommand } from "../peek/actions";
@@ -221,11 +222,13 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
       return page ? openFind(page.id, { replace: true }) : undefined;
     case "jumpToSelection":
       return page ? void jumpToSelection(page.id) : undefined;
-    case "useSelectionForFind":
+    case "useSelectionForFind": {
       if (!page || !web) return;
+      const consent = consentToken();
       return void web.evaluate<string>("post('result', JSON.stringify(String(getSelection() || '').trim().slice(0, 500)))").then((query) => {
-        if (query) openFind(page.id, { query });
+        if (query) openFind(page.id, { query }, consent);
       });
+    }
     case "findNext":
     case "findPrevious":
       return page ? findStep(page.id, command === "findPrevious") : undefined;

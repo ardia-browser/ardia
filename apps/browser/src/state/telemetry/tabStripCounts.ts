@@ -1,6 +1,7 @@
 import { takeTabLayoutCounts } from "./tabLayoutCounts";
 import { onConsentPeriodChange } from "./choice";
 import { consentedCount, consentedMax } from "./consentedCount";
+import type { ConsentToken } from "./choice";
 
 const groupToggles = consentedCount();
 const textOnlyRows = consentedCount();
@@ -66,8 +67,8 @@ export function noteTabStripCommandRefused() {
   commandsRefused.note();
 }
 
-export function noteTabStripRevealHeldForScroll() {
-  revealsHeldForScroll.note();
+export function noteTabStripRevealHeldForScroll(consent?: ConsentToken | null) {
+  revealsHeldForScroll.note(consent);
 }
 
 export function noteTabStripScrolled(at: number) {

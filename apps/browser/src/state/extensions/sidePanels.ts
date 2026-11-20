@@ -2,6 +2,7 @@ import { extensionSidePanelUrl } from "../../platform/extensions";
 import { useBrowser } from "../browser/store";
 import { shownPageId } from "../peek/peek";
 import { noteSidePanelKept } from "../telemetry/usage";
+import { consentToken, type ConsentToken } from "../telemetry/client";
 import { shownReadyTab, extensionPageUrl, extensionProfile, isPrivate, pageProfile, shownIn, tabProfile, useExtensions, type SidePanel, type SidePanelCard } from "./store";
 
 const wanted = new Map<string, string>();
@@ -166,6 +167,7 @@ export async function syncSidePanel(windowId: string): Promise<void> {
 }
 
 async function showSidePanel(windowId: string, extensionId: string): Promise<void> {
+  const consent = consentToken();
   const ticket = nextFetch(windowId);
   const readyTab = shownReadyTab(windowId);
   const shown = useExtensions.getState().sidePanels[windowId];
@@ -181,17 +183,17 @@ async function showSidePanel(windowId: string, extensionId: string): Promise<voi
         : null;
   if (fetches.get(windowId) !== ticket) return;
   if (!shownIn(windowId, extensionId)) return closeSidePanel(windowId);
-  placePanel(windowId, extensionId, readyTab, url);
+  placePanel(windowId, extensionId, readyTab, url, consent);
 }
 
-function placePanel(windowId: string, extensionId: string, readyTab: string | undefined, url: string | null) {
+function placePanel(windowId: string, extensionId: string, readyTab: string | undefined, url: string | null, consent?: ConsentToken | null) {
   if (!url && readyTab && shownTabs.get(windowId)?.delete(readyTab)) tabsOf(removedTabs, windowId).add(readyTab);
   if (!url) return readyTab ? hideSidePanel(windowId) : closeSidePanel(windowId);
   const s = useBrowser.getState();
   const panel = { extensionId, profile: extensionProfile(s, windowId), pageProfile: pageProfile(s, windowId), url, opened: openings.get(windowId) ?? 0, tabId: readyTab };
   if (readyTab) {
     const pageKept = sidePanelCards(windowId).some((card) => panelKey(card) === panelKey(panel) && card.owners.includes(readyTab));
-    if (pageKept && useExtensions.getState().sidePanels[windowId]?.tabId !== readyTab) noteSidePanelKept();
+    if (pageKept && useExtensions.getState().sidePanels[windowId]?.tabId !== readyTab) noteSidePanelKept(consent);
     tabsOf(shownTabs, windowId).add(readyTab);
     removedTabs.get(windowId)?.delete(readyTab);
   }
@@ -283,6 +285,7 @@ function dropOwner(windowId: string, card: SidePanelCard, tabId: string) {
 export async function recheckKeptSidePanels(windowId: string): Promise<void> {
   const generation = (rechecks.get(windowId) ?? 0) + 1;
   rechecks.set(windowId, generation);
+  const consent = consentToken();
   const extensionId = wanted.get(windowId);
   const asks = sidePanelCards(windowId)
     .filter((card) => card.extensionId === extensionId)
@@ -295,7 +298,7 @@ export async function recheckKeptSidePanels(windowId: string): Promise<void> {
       if (url === live.url) return;
       const entry = useExtensions.getState().sidePanels[windowId];
       const onScreen = !!entry && !entry.hidden && entry.tabId === tabId && panelKey(entry) === panelKey(live);
-      if (url) return onScreen ? placePanel(windowId, card.extensionId, tabId, url) : dropOwner(windowId, live, tabId);
+      if (url) return onScreen ? placePanel(windowId, card.extensionId, tabId, url, consent) : dropOwner(windowId, live, tabId);
       shownTabs.get(windowId)?.delete(tabId);
       tabsOf(removedTabs, windowId).add(tabId);
       if (onScreen) hideSidePanel(windowId);

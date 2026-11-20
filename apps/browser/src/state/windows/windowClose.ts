@@ -65,6 +65,7 @@ export function closeWindowAsked(windowId: string, guard: CloseGuard): Promise<G
 }
 
 export async function closeAfterAsking(windowId: string, { mayClose = () => true, ask = confirm }: CloseGuard = {}): Promise<GuardedClose> {
+  const consent = consentToken();
   const { decision, suppressWarning } = await decideWindowClose(windowId, ask, mayClose).catch((error: unknown) => {
     useBrowser.getState().dropStaleLastWindowMark();
     throw error;
@@ -75,7 +76,7 @@ export async function closeAfterAsking(windowId: string, { mayClose = () => true
     return "cancelled";
   }
   if (!mayClose()) return "stopped";
-  return (await closeWindowAnimated(windowId, { keepsLastWindow: true })) ? "closing" : mayClose() ? "cancelled" : "stopped";
+  return (await closeWindowAnimated(windowId, { keepsLastWindow: true, consent })) ? "closing" : mayClose() ? "cancelled" : "stopped";
 }
 
 export type CloseAsk = typeof confirm;

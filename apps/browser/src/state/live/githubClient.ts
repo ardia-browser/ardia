@@ -2,6 +2,7 @@ import { blockedError, blockedNodes, changeKey, DETAILS_PAGE, detailNodes, GITHU
 import { createGithubLimits, graphqlRateLimited, retryAtFromHeaders, type GithubLimits, type HeaderReader } from "./githubLimits";
 import { LiveError, type CompletionState, type LiveFolder, type LiveItem, type PullRequestSection } from "./types";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
+import { consentOrNow } from "../telemetry/countFor";
 import { noteLiveGithubBlocked, noteLiveGithubDetails, noteLiveGithubRequest } from "../telemetry/liveGithub";
 
 export const LIST_SHARED_MS = 30_000;
@@ -52,19 +53,19 @@ export function createGithubClient(send: GithubSend, clock: () => number = Date.
     return (current = { scope, list: null, details: new Map(), pending: new Map(), blocked: null });
   };
 
-  async function graphql<T extends Reply>(scope: string, interactive: boolean, query: string, variables: Record<string, unknown>): Promise<T> {
+  async function graphql<T extends Reply>(scope: string, interactive: boolean, query: string, variables: Record<string, unknown>, consent?: ConsentToken | null): Promise<T> {
     return limits.withSlot(async () => {
       if (limits.blockedUntil(scope, interactive) !== null) {
-        noteLiveGithubRequest("held");
+        noteLiveGithubRequest("held", consent);
         throw new LiveError("rateLimited", "Waiting for the GitHub rate limit to reset");
       }
       let headers: HeaderReader | null = null;
       const limited = () => {
-        noteLiveGithubRequest("rateLimited");
+        noteLiveGithubRequest("rateLimited", consent);
         limits.rateLimited(scope, retryAtFromHeaders(headers, clock()));
         return new LiveError("rateLimited", "Rate Limit Exceeded");
       };
-      noteLiveGithubRequest("sent");
+      noteLiveGithubRequest("sent", consent);
       let json: T;
       try {
         json = (await send(scope, { query, variables }, (h) => {
@@ -83,11 +84,11 @@ export function createGithubClient(send: GithubSend, clock: () => number = Date.
     });
   }
 
-  function list(a: Account, interactive: boolean): Promise<Listed> {
+  function list(a: Account, interactive: boolean, given?: ConsentToken | null): Promise<Listed> {
     const shared = a.list;
     if (shared && (!shared.done || (!interactive && clock() - shared.at < LIST_SHARED_MS))) return shared.promise;
-    const consent = consentToken();
-    const search = (query: string, q: string) => graphql<SearchResponse & Reply>(a.scope, interactive, query, { q });
+    const consent = consentOrNow(given);
+    const search = (query: string, q: string) => graphql<SearchResponse & Reply>(a.scope, interactive, query, { q }, consent);
     const searches = Promise.all([search(GITHUB_SEARCH_QUERY, GITHUB_SEARCHES.authored), search(GITHUB_SEARCH_QUERY, GITHUB_SEARCHES.review), search(GITHUB_DIRECT_QUERY, GITHUB_SEARCHES.direct)]);
     const entry = { at: clock(), done: false, promise: searches.then(([authored, review, direct]) => toListed({ authored, review, direct }, consent)) };
     a.list = entry;
@@ -105,8 +106,8 @@ export function createGithubClient(send: GithubSend, clock: () => number = Date.
     return entry.promise;
   }
 
-  function readPage(a: Account, interactive: boolean, listed: Listed, ids: string[]): Promise<void> {
-    const page = () => graphql<DetailsResponse & Reply>(a.scope, interactive, GITHUB_DETAILS_QUERY, { ids }).then((res) => detailNodes(ids, res));
+  function readPage(a: Account, interactive: boolean, listed: Listed, ids: string[], consent?: ConsentToken | null): Promise<void> {
+    const page = () => graphql<DetailsResponse & Reply>(a.scope, interactive, GITHUB_DETAILS_QUERY, { ids }, consent).then((res) => detailNodes(ids, res));
     const retried = page().catch((error: unknown) => (error instanceof LiveError && (error.kind === "other" || error.kind === "network") ? page() : Promise.reject(error)));
     const done = retried.then((nodes) => {
       const at = clock();
@@ -128,7 +129,7 @@ export function createGithubClient(send: GithubSend, clock: () => number = Date.
     return done;
   }
 
-  async function ensureDetails(a: Account, interactive: boolean, listed: Listed, ids: string[]) {
+  async function ensureDetails(a: Account, interactive: boolean, listed: Listed, ids: string[], consent?: ConsentToken | null) {
     const now = clock();
     const stale: string[] = [];
     const waits = new Set<Promise<void>>();
@@ -141,8 +142,8 @@ export function createGithubClient(send: GithubSend, clock: () => number = Date.
       if (pending) (waits.add(pending), joined++);
       else stale.push(id);
     }
-    for (let i = 0; i < stale.length; i += DETAILS_PAGE) waits.add(readPage(a, interactive, listed, stale.slice(i, i + DETAILS_PAGE)));
-    noteLiveGithubDetails(stale.length, ids.length - stale.length - joined);
+    for (let i = 0; i < stale.length; i += DETAILS_PAGE) waits.add(readPage(a, interactive, listed, stale.slice(i, i + DETAILS_PAGE), consent));
+    noteLiveGithubDetails(stale.length, ids.length - stale.length - joined, consent);
     await Promise.all(waits);
   }
 
@@ -167,17 +168,18 @@ export function createGithubClient(send: GithubSend, clock: () => number = Date.
     return stacked;
   }
 
-  async function fetchFolder(scope: string, folder: LiveFolder, interactive: boolean): Promise<LiveItem[]> {
+  async function fetchFolder(scope: string, folder: LiveFolder, interactive: boolean, given?: ConsentToken | null): Promise<LiveItem[]> {
     const a = account(scope);
-    const listed = await list(a, interactive);
-    await ensureDetails(a, interactive, listed, sectioned(listed, folder.filters).map((s) => s.id));
+    const consent = consentOrNow(given);
+    const listed = await list(a, interactive, consent);
+    await ensureDetails(a, interactive, listed, sectioned(listed, folder.filters).map((s) => s.id), consent);
     return itemsFor(a, listed, folder.filters);
   }
 
-  async function resolveGone(scope: string, items: LiveItem[], interactive: boolean): Promise<Record<string, CompletionState>> {
+  async function resolveGone(scope: string, items: LiveItem[], interactive: boolean, consent?: ConsentToken | null): Promise<Record<string, CompletionState>> {
     const byId = new Map(items.filter((it) => it.source === "github").map((it) => [it.id.slice("github:".length), it]));
     if (!byId.size) return {};
-    const json = await graphql<{ data?: { nodes: ({ id: string; state: string } | null)[] } } & Reply>(scope, interactive, GITHUB_STATE_QUERY, { ids: [...byId.keys()] });
+    const json = await graphql<{ data?: { nodes: ({ id: string; state: string } | null)[] } } & Reply>(scope, interactive, GITHUB_STATE_QUERY, { ids: [...byId.keys()] }, consent);
     const out: Record<string, CompletionState> = {};
     for (const n of json.data?.nodes ?? []) {
       const item = n && byId.get(n.id);
@@ -190,7 +192,7 @@ export function createGithubClient(send: GithubSend, clock: () => number = Date.
   }
 
   async function viewer(scope: string) {
-    const json = await graphql<{ data?: { viewer: { login: string; name: string | null; avatarUrl: string } } } & Reply>(scope, true, VIEWER_QUERY, {});
+    const json = await graphql<{ data?: { viewer: { login: string; name: string | null; avatarUrl: string } } } & Reply>(scope, true, VIEWER_QUERY, {}, consentToken());
     return json.data?.viewer ?? null;
   }
 

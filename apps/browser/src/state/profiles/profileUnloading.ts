@@ -5,7 +5,7 @@ import { engineProfile, isIncognitoProfile } from "../browser/model";
 import { hasPage, IDLE, needsPage, wakeOf, withWake, wokenPage } from "../tabs/pageSession";
 import { noteProfileUnloaded, noteUnloadedProfileReloaded, noteUnloadedProfileReopened } from "../telemetry/tabSleepCounts";
 import { engineProfiles } from "./engineProfiles";
-import { consentToken } from "../telemetry/client";
+import { consentToken, type ConsentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
 import { idleProfiles, profileUnloadDelay } from "./idleProfiles";
 import { markProfileUnloaded, onProfilesOpened, openProfile, profileOpened, shownEngineProfiles } from "./profileLoading";
@@ -19,7 +19,7 @@ type Unload = Awaited<ReturnType<typeof unloadIdleProfile>>;
 const store = () => useBrowser.getState();
 const readyToUnload = idleProfiles();
 const unloadedHere = new Set<string>();
-const reopenedAt = new Map<string, number>();
+const reopenedAt = new Map<string, { at: number; consent: ConsentToken | null }>();
 const unloadingNow = new Set<string>();
 const sleptByUnload = new Set<string>();
 let checking = false;
@@ -46,7 +46,7 @@ export function closedByUnload(tabId: string): boolean {
 
 const unloadable = (profile: string) => profile !== PERSONAL && !isIncognitoProfile(profile);
 
-export function applyUnload(profile: string, result: Unload) {
+export function applyUnload(profile: string, result: Unload, consent?: ConsentToken | null) {
   const s = store();
   const shown = shownEngineProfiles(s).includes(profile);
   for (const id of result.tabs) {
@@ -64,24 +64,24 @@ export function applyUnload(profile: string, result: Unload) {
   if (!profileOpened(profile)) return false;
   unloadedHere.add(profile);
   markProfileUnloaded(profile);
-  noteProfileUnloaded();
+  noteProfileUnloaded(consent);
   return true;
 }
 
 const SETTLE_MS = 5_000;
 
-async function unload(profile: string, settled = false): Promise<boolean> {
+async function unload(profile: string, settled = false, consent?: ConsentToken | null): Promise<boolean> {
   const s = store();
   if (!unloadable(profile) || profileUnloadDelay(s.settings) === null || shownEngineProfiles(s).includes(profile)) return false;
   unloadingNow.add(profile);
   try {
     const result = await unloadIdleProfile(profile);
-    if (result.heldBy !== "sleeping" || settled) return applyUnload(profile, result);
+    if (result.heldBy !== "sleeping" || settled) return applyUnload(profile, result, consent);
   } finally {
     unloadingNow.delete(profile);
   }
   await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
-  return unload(profile, true);
+  return unload(profile, true, consent);
 }
 
 export async function checkIdleProfiles(now = clock()) {
@@ -93,7 +93,7 @@ export async function checkIdleProfiles(now = clock()) {
   const consent = consentToken();
   try {
     const loaded = (await loadedProfiles()).filter((profile) => unloadable(profile) && profileOpened(profile));
-    for (const profile of readyToUnload(loaded, new Set(shownEngineProfiles(store())), now, delay)) await unload(profile);
+    for (const profile of readyToUnload(loaded, new Set(shownEngineProfiles(store())), now, delay)) await unload(profile, false, consent);
   } catch (error) {
     warnFor(consent, "[profiles] couldn't unload idle profiles", error);
   } finally {
@@ -109,15 +109,16 @@ function watchProfiles(): () => void {
   const opened = onProfilesOpened((engines) => {
     for (const engine of engines) {
       if (!unloadedHere.delete(engine)) continue;
-      noteUnloadedProfileReopened();
-      reopenedAt.set(engine, Date.now());
+      const consent = consentToken();
+      noteUnloadedProfileReopened(consent);
+      reopenedAt.set(engine, { at: Date.now(), consent });
     }
   });
   const loaded = onProfileLoaded((engine) => {
-    const at = reopenedAt.get(engine);
-    if (at === undefined) return;
+    const reopened = reopenedAt.get(engine);
+    if (reopened === undefined) return;
     reopenedAt.delete(engine);
-    noteUnloadedProfileReloaded(Date.now() - at);
+    noteUnloadedProfileReloaded(Date.now() - reopened.at, reopened.consent);
   });
   const timer = everySlowly({ every: CHECK_MS, run: () => void checkIdleProfiles() });
   return () => {

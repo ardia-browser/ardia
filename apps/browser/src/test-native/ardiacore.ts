@@ -72,6 +72,7 @@ export const engineCalls: { domain: string; verb: string; profile: string }[] = 
 export const loadedEngineProfiles = new Set<string>([""]);
 export const idleProfileUnloads = new Map<string, CallResult<"profiles.unloadIdle"> & { closing?: () => void }>();
 export const profilesLoadedCall = { known: true };
+export const screenRecordingCheck: { answer: boolean | Promise<boolean> } = { answer: true };
 
 function domain<D extends string, Sync extends object>(name: D, handlers: Handlers<D>, sync?: Sync): FakeDomain & Sync {
   const fake: FakeDomain = {
@@ -614,6 +615,7 @@ const fakeModules = {
     terminateCastRoute: () => null,
     changeCaptureSource: () => false,
     stopCapture: () => false,
+    screenRecordingAllowed: () => screenRecordingCheck.answer,
   }),
   ArdiaContentBlocker: domain("contentBlocker", {
     setEnabled: () => null,

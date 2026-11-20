@@ -7,6 +7,7 @@ import type { ProfileRecord } from "./profileAdapters";
 import { APP_SCOPE, type SyncDoc } from "./syncDoc";
 import { pairTheme } from "./syncThemes";
 import { noteTopAppsSharingFromSync, startedBySync } from "../telemetry/topAppsSharing";
+import type { ConsentToken } from "../telemetry/client";
 
 const remoteTopApps = (doc: SyncDoc, syncId: string) => topAppsRecord(doc.scopes[APP_SCOPE]?.records[`${PROFILE_TOP_APPS}${syncId}`]?.v);
 
@@ -58,7 +59,7 @@ export function readyToPair(doc: SyncDoc, app: ScopeState, now = Date.now()): bo
   return synced.length > 0 && !holdsBack(app, now, PAIRING_WAIT_MS);
 }
 
-export function linkProfiles(doc: SyncDoc, app: ScopeState) {
+export function linkProfiles(doc: SyncDoc, app: ScopeState, consent?: ConsentToken | null) {
   const s = useBrowser.getState();
   const remote = [...visible(app, PROFILE)].flatMap(([k, v]) => {
     const record = profileRecord(v);
@@ -77,7 +78,7 @@ export function linkProfiles(doc: SyncDoc, app: ScopeState) {
     const topApps = match ? remoteTopApps(doc, match) : null;
     if (topApps && topApps.on !== !!profile.shareTopApps) {
       startedBySync(() => s.updateProfile(id, { shareTopApps: topApps.on || undefined }));
-      noteTopAppsSharingFromSync(useBrowser.getState(), "link_profiles", topApps.on);
+      noteTopAppsSharingFromSync(useBrowser.getState(), "link_profiles", topApps.on, consent);
     }
     const openTabs = match ? remoteOpenTabs(doc, match) : null;
     if (openTabs && openTabs.on !== !!profile.syncTabs) s.updateProfile(id, { syncTabs: openTabs.on || undefined });

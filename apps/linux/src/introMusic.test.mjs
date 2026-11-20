@@ -111,3 +111,25 @@ test("muting or unmuting the intro while its track is still loading is the volum
   assert.equal(players.at(-1).volume, 1, "unmuted during the load starts audible");
   assert.equal(players.length, 2);
 });
+
+test("an intro track that fails after sharing turns on isn't counted when its playback started with sharing off", async () => {
+  const { noteIntroMusicPlayed } = await import("./hostSystem.ts");
+  const { setConsentPeriod } = await import("../../browser/src/state/telemetry/consentPeriod.ts");
+  const { takeIntroCounts } = await import("../../browser/src/state/telemetry/introCounts.ts");
+  let refuse = () => {};
+  const refusing = (src) => ({ ...createPlayer(src), play: () => new Promise((_, reject) => (refuse = reject)) });
+  const music = linuxIntroMusic({ host: hostWith({}), track, createPlayer: refusing, onPlayed: noteIntroMusicPlayed });
+  setConsentPeriod(false, null);
+  const playing = music.playIntroMusic({}, false);
+  await new Promise((resolve) => setImmediate(resolve));
+  setConsentPeriod(true, "intro-music-after");
+  takeIntroCounts();
+  refuse(new Error("NotAllowedError"));
+  await playing;
+  assert.equal(takeIntroCounts().intros_music_failed, 0);
+  const again = music.playIntroMusic({}, false);
+  await new Promise((resolve) => setImmediate(resolve));
+  refuse(new Error("NotAllowedError"));
+  await again;
+  assert.equal(takeIntroCounts().intros_music_failed, 1, "a failure from a playback started with sharing on still counts");
+});

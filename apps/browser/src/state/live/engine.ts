@@ -12,7 +12,7 @@ import { beginLiveRefresh, applyFetch, createFolder, finishCompleting, live, mar
 import { LiveError, type CompletionState, type LiveFolder, type LiveFolderKind, type LiveItem, type LiveSourceId, type PullRequestSection } from "./types";
 import { noteLiveCompletedTabsClosed } from "../telemetry/liveCompletedTabs";
 import { noteLiveSourceFetch } from "../telemetry/workCounts";
-import { consentToken } from "../telemetry/client";
+import { consentToken, type ConsentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
 import { isPlaying, useMedia } from "../media/media";
 import { usePages } from "../tabs/pageState";
@@ -33,12 +33,12 @@ const settingsOf = (folder: LiveFolder | undefined) => (folder ? JSON.stringify(
 const fetchedSources = new Map<string, Set<LiveSourceId>>();
 const sharedFetches = new Map<string, Promise<LiveItem[]>>();
 
-function fetchSource(source: LiveSourceId, folder: LiveFolder, interactive: boolean): Promise<LiveItem[]> {
+function fetchSource(source: LiveSourceId, folder: LiveFolder, interactive: boolean, consent?: ConsentToken | null): Promise<LiveItem[]> {
   const key = JSON.stringify([source, live().accounts[source]?.connectedAt ?? null, folder.filters]);
   const running = sharedFetches.get(key);
-  noteLiveSourceFetch(!!running);
+  noteLiveSourceFetch(!!running, consent);
   if (running) return running;
-  const task = SOURCES[source].fetch(folder, { interactive }).finally(() => sharedFetches.delete(key));
+  const task = SOURCES[source].fetch(folder, { interactive, consent }).finally(() => sharedFetches.delete(key));
   sharedFetches.set(key, task);
   return task;
 }
@@ -56,27 +56,28 @@ function queueFollowUp(folderId: string, allowed: () => boolean) {
   followUps.set(folderId, earlier && earlier !== allowed ? () => earlier() || allowed() : allowed);
 }
 
-export function refreshFolder(folderId: string, interactive = false): Promise<void> {
-  return refreshFolderWhile(folderId, interactive, always);
+export function refreshFolder(folderId: string, interactive = false, consent?: ConsentToken | null): Promise<void> {
+  return refreshFolderWhile(folderId, interactive, always, consent);
 }
 
-export function refreshFolderWhile(folderId: string, interactive: boolean, allowed: () => boolean): Promise<void> {
+export function refreshFolderWhile(folderId: string, interactive: boolean, allowed: () => boolean, given?: ConsentToken | null): Promise<void> {
+  const consent = given === undefined ? consentToken() : given;
   const running = inflight.get(folderId);
   if (running) {
-    if (passGuards.get(folderId) !== allowed) return running.catch(() => undefined).then(() => (allowed() ? refreshFolderWhile(folderId, interactive, allowed) : undefined));
+    if (passGuards.get(folderId) !== allowed) return running.catch(() => undefined).then(() => (allowed() ? refreshFolderWhile(folderId, interactive, allowed, consent) : undefined));
     if (fetchingWith.has(folderId) && settingsOf(live().folders[folderId]) !== fetchingWith.get(folderId)) queueFollowUp(folderId, allowed);
     return running;
   }
   passGuards.set(folderId, allowed);
-  const task = during("liveFolders", () => runUntilCurrent(folderId, interactive, allowed)).finally(() => [inflight, fetchingWith, followUps, passGuards].forEach((m) => m.delete(folderId)));
+  const task = during("liveFolders", () => runUntilCurrent(folderId, interactive, allowed, consent)).finally(() => [inflight, fetchingWith, followUps, passGuards].forEach((m) => m.delete(folderId)));
   inflight.set(folderId, task);
   return task;
 }
 
-async function runUntilCurrent(folderId: string, interactive: boolean, allowed: () => boolean) {
+async function runUntilCurrent(folderId: string, interactive: boolean, allowed: () => boolean, consent: ConsentToken | null) {
   for (let guard: (() => boolean) | undefined = allowed; guard && live().folders[folderId]; ) {
     passGuards.set(folderId, guard);
-    await run(folderId, interactive, guard);
+    await run(folderId, interactive, guard, consent);
     fetchingWith.delete(folderId);
     guard = followUps.get(folderId);
     followUps.delete(folderId);
@@ -108,7 +109,7 @@ function staleRun(folderId: string, folder: LiveFolder, allowed: () => boolean):
   return true;
 }
 
-async function run(folderId: string, interactive: boolean, allowed: () => boolean) {
+async function run(folderId: string, interactive: boolean, allowed: () => boolean, consent: ConsentToken | null) {
   if (!live().folders[folderId] || !allowed()) return;
   const claim = claimRefresh(folderId);
   let fence = claim ? await claim : undefined;
@@ -119,7 +120,7 @@ async function run(folderId: string, interactive: boolean, allowed: () => boolea
   fetchingWith.set(folderId, settingsOf(folder));
   const before = live();
   setStatus(folderId, { state: before.status[folderId]?.lastFetch ? "updating" : "initializing" });
-  const results = await Promise.allSettled(folder.sources.map((id) => fetchSource(id, folder, interactive)));
+  const results = await Promise.allSettled(folder.sources.map((id) => fetchSource(id, folder, interactive, consent)));
 
   const fetched: LiveItem[] = [];
   const failed: { source: LiveSourceId; error: unknown }[] = [];
@@ -145,7 +146,7 @@ async function run(folderId: string, interactive: boolean, allowed: () => boolea
   for (const source of new Set(missing.map((it) => it.source))) {
     const resolve = SOURCES[source].resolveGone;
     if (!resolve) continue;
-    Object.assign(gone, await resolve(missing.filter((it) => it.source === source), { interactive }).catch(() => ({})));
+    Object.assign(gone, await resolve(missing.filter((it) => it.source === source), { interactive, consent }).catch(() => ({})));
   }
 
   if (!live().folders[folderId] || staleRun(folderId, folder, allowed)) return;
@@ -177,7 +178,7 @@ async function run(folderId: string, interactive: boolean, allowed: () => boolea
   const succeeded = new Set(folder.sources.filter((id) => !failed.some((f) => f.source === id)));
   fetchedSources.set(folderId, succeeded);
   applyFetch(folderId, order(next), gone, Date.now(), quiet, fence, succeeded);
-  markCompletedTabs(folderId, gone, ids);
+  markCompletedTabs(folderId, gone, ids, consent);
   const warned = firstFailure ? null : folder.sources.map((source) => ({ source, error: SOURCES[source].warning?.() ?? null })).find((w) => w.error);
   const problem = firstFailure ?? warned;
   if (problem) setStatus(folderId, { state: "error", error: describe(problem.source, problem.error) });
@@ -297,7 +298,7 @@ export function syncLiveHomes() {
 
 const ended = (state: CompletionState | undefined) => state === "merged" || state === "closed";
 
-function markCompletedTabs(folderId: string, gone: Record<string, CompletionState>, listed: Set<string>) {
+function markCompletedTabs(folderId: string, gone: Record<string, CompletionState>, listed: Set<string>, consent: ConsentToken | null) {
   const s = useBrowser.getState();
   const hidden = new Set((live().hidden[folderId] ?? []).map((it) => it.id));
   for (const t of Object.values(s.tabs)) {
@@ -306,16 +307,15 @@ function markCompletedTabs(folderId: string, gone: Record<string, CompletionStat
     if (ended(gone[ref.itemId]) && !hidden.has(ref.itemId) && !ref.completed) s.updateTab(t.id, { liveItem: { ...ref, completed: true } });
     else if (ref.completed && listed.has(ref.itemId)) s.updateTab(t.id, { liveItem: { folderId, itemId: ref.itemId } });
   }
-  closeCompletedTabs();
+  closeCompletedTabs(consent);
 }
-
 
 const inUse = (s: BrowserState, id: string) => {
   const media = useMedia.getState();
   return liveOf(id).playingAudio || !!media.pipOpen[id] || isPlaying(media.sessions[id]) || capturing(usePages.getState().pages[id]?.mediaAccess) || !!media.tabShares[id] || Object.values(media.tabShares).some((share) => share.capturedTabId === id);
 };
 
-function closeCompletedTabs() {
+function closeCompletedTabs(consent?: ConsentToken | null) {
   const s = useBrowser.getState();
   const { folders, items } = live();
   const shown = shownTabIds(s);
@@ -324,7 +324,7 @@ function closeCompletedTabs() {
     .map((t) => t.id);
   if (!tabs.length) return;
   s.closeTabs(tabs);
-  noteLiveCompletedTabsClosed(tabs.length);
+  noteLiveCompletedTabsClosed(tabs.length, consent);
 }
 
 let started = false;
@@ -378,7 +378,7 @@ export function startLiveEngine() {
   onLiveChange((id, now, was) => {
     if (was.playingAudio && !now.playingAudio && useBrowser.getState().tabs[id]) closeCompletedTabs();
   });
-  whenCaptureEndsUnderHiddenCompleted(closeCompletedTabs);
+  whenCaptureEndsUnderHiddenCompleted(() => closeCompletedTabs());
   useMedia.subscribe((m, prev) => {
     if (m.pipOpen !== prev.pipOpen || m.sessions !== prev.sessions || m.tabShares !== prev.tabShares) closeCompletedTabs();
   });
@@ -391,7 +391,8 @@ export function startLiveEngine() {
       const folderId = s.tabs[before]?.liveItem?.folderId;
       if (!folderId || Date.now() - (lastNudge.get(folderId) ?? 0) < 20_000) continue;
       lastNudge.set(folderId, Date.now());
-      setTimeout(() => void refreshFolder(folderId), 3000);
+      const consent = consentToken();
+      setTimeout(() => void refreshFolder(folderId, false, consent), 3000);
     }
   });
 }

@@ -1,6 +1,7 @@
 import { webviews } from "../../platform/webviews";
 import { useBrowser } from "../browser/store";
 import { noteFind } from "../telemetry/findCounts";
+import type { ConsentToken } from "../telemetry/client";
 import { setFind } from "../windows/actions";
 
 export { noteFind };
@@ -11,8 +12,8 @@ export const submitRepeatsKey = (keyAt: number, now: number) => now - keyAt < SU
 
 const barOpen = (tabId: string) => !!useBrowser.getState().find[tabId]?.open;
 
-export function openFind(tabId: string, options: { replace?: boolean; query?: string } = {}) {
-  if (!barOpen(tabId)) noteFind("opened");
+export function openFind(tabId: string, options: { replace?: boolean; query?: string } = {}, consent?: ConsentToken | null) {
+  if (!barOpen(tabId)) noteFind("opened", consent);
   setFind(tabId, { open: true, ...options, focusRequest: Date.now() });
 }
 

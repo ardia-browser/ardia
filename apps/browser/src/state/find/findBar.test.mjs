@@ -3,6 +3,9 @@ import { test } from "node:test";
 import { closeFind, findStep, openFind, submitRepeatsKey } from "./actions.ts";
 import { noteFind, takeFindCounts } from "../telemetry/findCounts.ts";
 import { useBrowser } from "../browser/store.ts";
+import { setConsentPeriod } from "../telemetry/consentPeriod.ts";
+
+setConsentPeriod(true, "find-bar-test");
 
 test("a submit right after the Enter keydown it came from doesn't step again, a later one does", () => {
   assert.equal(submitRepeatsKey(1000, 1000), true);

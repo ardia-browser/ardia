@@ -18,6 +18,8 @@ const { startCast } = await import("../media/cast.ts");
 const { startHistory } = await import("../history/engineSync.ts");
 const { takeTabSleepCounts } = await import("../telemetry/tabSleepCounts.ts");
 const { pageAskedToClose } = await import("../tabs/pageEvents.ts");
+const { setConsentPeriod } = await import("../telemetry/consentPeriod.ts");
+setConsentPeriod(true, "profile-unloading-test");
 
 const S = () => useBrowser.getState();
 const MINUTE = 60_000;

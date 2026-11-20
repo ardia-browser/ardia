@@ -69,6 +69,7 @@ const setup = (send = sendThroughFetch) => {
 
 test("unchanged pull requests keep their details; a changed one is read again", async () => {
   const { clock, gh, client } = setup();
+  setConsentPeriod(true, "github-details-test");
   const first = await client.fetchFolder("t", folder, false);
   const ids = gh.detailIds();
   assert.equal(ids.length, new Set(first.map((it) => it.id)).size);
@@ -79,6 +80,7 @@ test("unchanged pull requests keep their details; a changed one is read again", 
   assert.deepEqual(gh.detailIds().slice(ids.length), [gh.list.data.authored.nodes[0].id]);
   assert.equal(second.find((it) => it.id === `github:${gh.list.data.authored.nodes[0].id}`).title, "Renamed");
   assert.equal(second.length, first.length);
+  setConsentPeriod(false, null);
   const counts = takeLiveGithubCounts();
   assert.equal(counts.live_github_details_fetched, ids.length + 1);
   assert.equal(counts.live_github_details_reused, ids.length - 1);
@@ -192,6 +194,7 @@ test("folders refreshing together share one list request", async () => {
 
 test("background refreshes stop at the last tenth of the quota; a manual refresh still goes", async () => {
   const { clock, gh, client } = setup();
+  setConsentPeriod(true, "github-quota-test");
   await client.fetchFolder("t", folder, false);
   gh.setQuota({ remaining: 499 });
   await client.fetchFolder("t", folder, true);
@@ -202,6 +205,7 @@ test("background refreshes stop at the last tenth of the quota; a manual refresh
   assert.ok(client.pausedUntil() > clock.now);
   await client.fetchFolder("t", folder, true);
   assert.ok(gh.calls.length > sent);
+  setConsentPeriod(false, null);
   assert.ok(takeLiveGithubCounts().live_github_requests_held >= 1);
 });
 

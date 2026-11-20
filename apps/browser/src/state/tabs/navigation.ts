@@ -7,6 +7,8 @@ import { useBrowser, type BrowserState } from "../browser/store";
 import { changedIds } from "../browser/changes";
 import { activeTabId, inPinnedContainer } from "../browser/model";
 import { noteBackCloseToOpener } from "../telemetry/usage";
+import { consentOrNow } from "../telemetry/countFor";
+import type { ConsentToken } from "../telemetry/client";
 import { useTab, useTabLive } from "../browser/hooks";
 import { useBrowserWhile } from "./tabWatch";
 import type { TabLive } from "../browser/types";
@@ -54,23 +56,24 @@ export function goBack(tabId: string, mayAct: () => boolean = () => true): void 
   void goBackAsking(tabId, mayAct);
 }
 
-export async function goBackAsking(tabId: string, mayAct: () => boolean = () => true, ask: typeof confirm = confirm): Promise<boolean> {
+export async function goBackAsking(tabId: string, mayAct: () => boolean = () => true, ask: typeof confirm = confirm, given?: ConsentToken | null): Promise<boolean> {
+  const consent = consentOrNow(given);
   if (livePageId(tabId) !== tabId) {
     let went: Promise<boolean> = Promise.resolve(false);
-    const acted = await withLivePage(tabId, (_, id) => (went = goBackAsking(id, mayAct, ask)), mayAct);
+    const acted = await withLivePage(tabId, (_, id) => (went = goBackAsking(id, mayAct, ask, consent)), mayAct);
     return acted ? went : false;
   }
   if (pageOf(tabId).newTabShown) return true;
   if (pageOf(tabId).engineBack && !liveOf(tabId).canGoBack) return goBackAcrossEngines(tabId, mayAct, ask);
-  goBackHere(tabId);
+  goBackHere(tabId, consent);
   return true;
 }
 
-function goBackHere(tabId: string) {
+function goBackHere(tabId: string, consent?: ConsentToken | null) {
   if (liveOf(tabId).canGoBack) return void webviews.get(tabId)?.goBack();
   if (pageOf(tabId).backToNewTab) return showNewTab(tabId);
   if (backClosesTab(store(), tabId)) {
-    noteBackCloseToOpener();
+    noteBackCloseToOpener(consent);
     if (isPeekTab(store(), tabId)) dismissPeek(store().tabs[tabId]!.windowId);
     else {
       const tab = store().tabs[tabId]!;

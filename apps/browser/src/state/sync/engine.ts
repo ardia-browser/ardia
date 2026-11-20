@@ -147,7 +147,7 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
       await appSettled();
     }
     settleRemovals(doc, app);
-    if (app.joined && readyToPair(doc, app) && !isQuitting()) linkProfiles(doc, app);
+    if (app.joined && readyToPair(doc, app) && !isQuitting()) linkProfiles(doc, app, consent);
     settleThemeAdoption(doc.profiles, app, true);
     let pending = app.pending;
     const s = useBrowser.getState();

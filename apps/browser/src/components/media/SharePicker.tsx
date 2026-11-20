@@ -4,7 +4,7 @@ import {
   type DisplayMediaSource,
   answerDisplayMedia,
   askForScreenRecording,
-  noteScreenRecordingMissing,
+  checkScreenRecording,
   screenRecordingAllowed,
   shareableTabs,
   shareTab,
@@ -52,11 +52,7 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
     setShareAudio(AUDIO_SHARED_BY_DEFAULT);
     setScreenAccess(null);
     let live = true;
-    void screenRecordingAllowed().then((allowed) => {
-      if (!live) return;
-      setScreenAccess(allowed);
-      if (!allowed) noteScreenRecordingMissing();
-    });
+    void checkScreenRecording(() => live, setScreenAccess);
     const t = setInterval(() => {
       void getDisplayMediaSources().then((next) => live && setSources(next));
       void screenRecordingAllowed().then((allowed) => live && setScreenAccess(allowed));

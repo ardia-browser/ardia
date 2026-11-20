@@ -1,4 +1,4 @@
-import { consentToken } from "../telemetry/client";
+import { consentToken, type ConsentToken } from "../telemetry/client";
 import { isFields } from "../../lib/decode";
 import { minimizedUrl, originOf as urlOrigin, urlParts } from "../../lib/urlParts";
 import { anyMatches, matchesUrl } from "../../lib/matchPattern";
@@ -34,10 +34,10 @@ function decidingHook<A>(event: DecideEvent, plan: Plan<A>): Deciding<A> | null 
   return null;
 }
 
-function askHook<A>(hook: HookSpec, event: DecideEvent, data: Record<string, unknown>, plan: Plan<A>, signal?: AbortSignal): Promise<A | null> | null {
+function askHook<A>(hook: HookSpec, event: DecideEvent, data: Record<string, unknown>, plan: Plan<A>, signal: AbortSignal | undefined, consent: ConsentToken | null): Promise<A | null> | null {
   if (servingConnection(hook) === null) return null;
   const sent = hook.fullUrls || typeof data.url !== "string" ? data : { ...data, url: minimizedUrl(data.url) };
-  return requestDecision(hook, event, sent, DECIDE_DEADLINE_MS[event], signal, consentToken()).then(
+  return requestDecision(hook, event, sent, DECIDE_DEADLINE_MS[event], signal, consent).then(
     (answer) => (answer === undefined || answer === null ? null : plan.answer(answer)),
     () => null,
   );
@@ -47,7 +47,7 @@ export function decide<A>(event: DecideEvent, data: Record<string, unknown>, pla
   const found = decidingHook(event, plan);
   if (!found) return null;
   if ("verdict" in found) return found.verdict;
-  return askHook(found.hook, event, data, plan, signal);
+  return askHook(found.hook, event, data, plan, signal, consentToken());
 }
 
 const urlApplies = (hook: HookSpec, url: string) => !hook.specs.length || anyMatches(hook.specs, url);
@@ -154,17 +154,18 @@ export function traceLink(url: string, source: LinkSource): LinkTrace {
   return settledLink();
 }
 
-function settle(trace: Exclude<LinkTrace, { by: "program" }>): LinkVerdict | null {
-  if (trace.by === "rule" || trace.by === "fallback") noteAirTrafficLink(trace.by);
+function settle(trace: Exclude<LinkTrace, { by: "program" }>, consent?: ConsentToken | null): LinkVerdict | null {
+  if (trace.by === "rule" || trace.by === "fallback") noteAirTrafficLink(trace.by, consent);
   return trace.by === "usual" ? null : trace.verdict;
 }
 
-export function decideLink(url: string, source: LinkSource, signal?: AbortSignal): LinkVerdict | null | Promise<LinkVerdict | null> {
+export function decideLink(url: string, source: LinkSource, signal?: AbortSignal, given?: ConsentToken | null): LinkVerdict | null | Promise<LinkVerdict | null> {
+  const consent = given === undefined ? consentToken() : given;
   const trace = traceLink(url, source);
-  if (trace.by !== "program") return settle(trace);
-  const asked = askHook(trace.hook, "link.opening", linkData(url, source), linkPlan(url, source), signal);
-  if (asked === null) return settle(trace.otherwise);
-  return asked.then((verdict) => verdict ?? settle(settledLink()));
+  if (trace.by !== "program") return settle(trace, consent);
+  const asked = askHook(trace.hook, "link.opening", linkData(url, source), linkPlan(url, source), signal, consent);
+  if (asked === null) return settle(trace.otherwise, consent);
+  return asked.then((verdict) => verdict ?? settle(settledLink(), consent));
 }
 
 export type PermissionVerdict = "deny" | "ask";

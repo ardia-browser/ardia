@@ -51,12 +51,12 @@ export function addFromWebStore(windowId: string, urlOrId: string, profile = ext
 
 export const openWebStoreFor = (profile: string, profileId?: string | null) => openInExtensionProfile(WEB_STORE_HOME, profile, { profileId });
 
-export function openInExtensionProfile(url: string, profile: string, { windowId, profileId }: { windowId?: string | null; profileId?: string | null } = {}) {
+export function openInExtensionProfile(url: string, profile: string, { windowId, profileId }: { windowId?: string | null; profileId?: string | null } = {}, consent?: ConsentToken | null) {
   const s = useBrowser.getState();
   const shows = (w: string | null | undefined): w is string =>
     !!w && !!s.windows[w] && (w === windowId || isOpenRegularWindow(s.windows[w])) && extensionProfile(s, w) === profile;
   const target = [windowId, ...s.ui.focusOrder, ...s.windowOrder].find(shows);
-  noteExtensionProfilePageOpen(target !== (windowId && s.windows[windowId] ? windowId : focusedWindowOf(s)));
+  noteExtensionProfilePageOpen(target !== (windowId && s.windows[windowId] ? windowId : focusedWindowOf(s)), consent);
   if (target) {
     s.newTab(target, { url });
     focus(target);
@@ -180,12 +180,13 @@ export async function activateExtension(
   anchor: Anchor,
   state?: ActionState | null,
   tabId = shownPageId(useBrowser.getState(), windowId),
+  consent?: ConsentToken | null,
 ) {
   const current = useExtensions.getState().popup;
   if (current?.windowId === windowId && current.extensionId === ext.id) return closeExtensionPopup();
   if (!ext.enabled) return void showExtensionMenu(windowId, ext);
   if (!shownIn(windowId, ext.id)) return;
-  if (isPrivate(useBrowser.getState(), windowId)) notePrivateWindowExtensionOpen();
+  if (isPrivate(useBrowser.getState(), windowId)) notePrivateWindowExtensionOpen(consent);
   const web = tabId ? webviews.get(tabId) : undefined;
   const result = web ? await web.executeExtensionAction(ext.id) : null;
   const readyTab = readyTabOf(tabId);
@@ -195,6 +196,11 @@ export async function activateExtension(
   if (result === "sidePanel") return void toggleSidePanel(windowId, ext.id);
   if (!url) return void (result === null && showExtensionMenu(windowId, ext));
   useExtensions.setState({ popup: { windowId, pageProfile: pageProfile(useBrowser.getState(), windowId), extensionId: ext.id, url, anchor } });
+}
+
+export function activateMeasured(windowId: string, ext: InstalledExtension, measure: () => Promise<Anchor>, state?: ActionState | null, tabId?: string) {
+  const consent = consentToken();
+  return measure().then((anchor) => activateExtension(windowId, ext, anchor, state, tabId, consent));
 }
 
 export const closeExtensionPopup = () => useExtensions.setState({ popup: null });

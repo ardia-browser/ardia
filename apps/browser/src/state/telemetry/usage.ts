@@ -147,16 +147,16 @@ export const noteOnboarding = (event: "stepCompleted" | "stepSkipped" | "redoOpe
 export const noteOnboardingStyle = (style: "glass" | "classic", tinted: boolean) => void (counts[style === "glass" ? "onboardingGlassPicks" : "onboardingClassicPicks"]++, style === "glass" && tinted && counts.onboardingTintedGlassPicks++);
 
 export const noteSplit = (count: "splitPaneCloses" | "splitViewCloses" | "splitDividerResets" | "barSplitOpens" | "barSplitFullTabs" | "splitSuggestionKeyPicks", consent?: ConsentToken | null) => bump(consent, { [count]: 1 });
-export const noteBackCloseToOpener = () => void counts.backClosesToOpener++;
+export const noteBackCloseToOpener = (consent?: ConsentToken | null) => bump(consent, { backClosesToOpener: 1 });
 
-export const noteWindowCloseTabsKept = (n: number) => void (counts.windowCloseTabsKept += n);
+export const noteWindowCloseTabsKept = (n: number, consent?: ConsentToken | null) => bump(consent, { windowCloseTabsKept: n });
 
 export const noteSelectionClosedByKey = (tabs: number) => void ((counts.selectionCloseKeys += 1), (counts.selectionCloseKeyTabs += tabs));
 
 export const noteSharePicked = (kind: "tab" | "window" | "screen", withController = false, consent?: ConsentToken | null) =>
   bump(consentOrNow(consent), { [kind === "tab" ? "sharesPickedTab" : kind === "window" ? "sharesPickedWindow" : "sharesPickedScreen"]: 1, sharesWithCaptureController: withController ? 1 : 0 });
 
-export const noteScreenRecordingMissing = () => counts.screenRecordingMissing++;
+export const noteScreenRecordingMissing = (consent?: ConsentToken | null) => bump(consent, { screenRecordingMissing: 1 });
 export const noteScreenRecordingAsked = () => counts.screenRecordingAsked++;
 
 export const noteWebKitPageKeptHidden = () => counts.webKitPagesKeptHidden++;
@@ -165,7 +165,7 @@ export const noteAutoPictureInPictureKept = (reason: "onScreen" | "appSwitch" | 
 
 export const noteExtensionInstallPrompt = () => counts.extensionInstallPrompts++;
 export const noteExtensionInstallPromptStale = (consent?: ConsentToken | null) => bump(consent, { extensionInstallPromptsStale: 1 });
-export const noteExtensionProfilePageOpen = (rerouted: boolean) => void (counts.extensionProfilePageOpens++, rerouted && counts.extensionProfilePageReroutes++), notePrivateWindowExtensionOpen = () => counts.privateWindowExtensionOpens++, noteSidePanelKept = () => counts.sidePanelsKeptOnSwitch++;
+export const noteExtensionProfilePageOpen = (rerouted: boolean, consent?: ConsentToken | null) => bump(consent, { extensionProfilePageOpens: 1, extensionProfilePageReroutes: rerouted ? 1 : 0 }), notePrivateWindowExtensionOpen = (consent?: ConsentToken | null) => bump(consent, { privateWindowExtensionOpens: 1 }), noteSidePanelKept = (consent?: ConsentToken | null) => bump(consent, { sidePanelsKeptOnSwitch: 1 });
 export const noteToolbarAnchor = (outcome: "moved" | "missed", consent?: ConsentToken | null) => bump(consent, { [outcome === "moved" ? "toolbarAnchorMoves" : "toolbarAnchorMisses"]: 1 });
 export const noteEmptyTabSidebarExtensionPress = () => counts.emptyTabSidebarExtensionPresses++;
 export const noteToolbarExtensionMove = (via: "drag" | "menu") => void (counts.toolbarExtensionMoves++, via === "menu" && counts.toolbarExtensionMenuMoves++);
@@ -202,10 +202,10 @@ export function noteReopenedPage(canGoBack: boolean) {
 export const noteToolbarPeekPageHidden = () => void counts.toolbarPeekPageHides++;
 export const noteSidebarPeekPageHidden = () => void counts.sidebarPeekPageHides++;
 export const noteSidebarEmptyWindowPeek = () => void counts.sidebarEmptyWindowPeeks++;
-export const notePinch = (on: "peek" | "littleArdia", outcome: "open" | "close") => void counts[on === "peek" ? (outcome === "open" ? "peekPinchOpens" : "peekPinchCloses") : outcome === "open" ? "littleArdiaPinchOpens" : "littleArdiaPinchCloses"]++;
+export const notePinch = (on: "peek" | "littleArdia", outcome: "open" | "close", consent?: ConsentToken | null) => bump(consent, { [on === "peek" ? (outcome === "open" ? "peekPinchOpens" : "peekPinchCloses") : outcome === "open" ? "littleArdiaPinchOpens" : "littleArdiaPinchCloses"]: 1 });
 
-export const noteSwipeClose = (closed: boolean) => void counts[closed ? "littleArdiaSwipeCloses" : "littleArdiaSwipeCloseCancels"]++;
-export const noteExternalLink = (opened: "tab" | "littleArdia", settingOn: boolean) => void counts[opened === "tab" ? (settingOn ? "externalLinksTabSettingOn" : "externalLinksTabSettingOff") : settingOn ? "externalLinksLittleSettingOn" : "externalLinksLittleSettingOff"]++;
+export const noteSwipeClose = (closed: boolean, consent?: ConsentToken | null) => bump(consent, { [closed ? "littleArdiaSwipeCloses" : "littleArdiaSwipeCloseCancels"]: 1 });
+export const noteExternalLink = (opened: "tab" | "littleArdia", settingOn: boolean, consent?: ConsentToken | null) => bump(consent, { [opened === "tab" ? (settingOn ? "externalLinksTabSettingOn" : "externalLinksTabSettingOff") : settingOn ? "externalLinksLittleSettingOn" : "externalLinksLittleSettingOff"]: 1 });
 
 export const noteGroupHeaderHide = () => counts.groupHeaderHides++;
 

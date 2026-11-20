@@ -1,5 +1,5 @@
-import { changeCaptureSource, requestScreenRecording, stopCapture, type DisplayMediaRequest } from "../../platform/media";
-import { noteScreenRecordingAsked, noteSharePicked } from "../telemetry/usage";
+import { changeCaptureSource, requestScreenRecording, screenRecordingAllowed, stopCapture, type DisplayMediaRequest } from "../../platform/media";
+import { noteScreenRecordingAsked, noteScreenRecordingMissing, noteSharePicked } from "../telemetry/usage";
 import { consentToken, type ConsentToken } from "../telemetry/client";
 import { webviews } from "../../platform/webviews";
 import { useBrowser } from "../browser/store";
@@ -9,7 +9,15 @@ import { useMedia, type TabShare } from "./media";
 import { useBrowserWhile, useStoreWhile } from "../tabs/tabWatch";
 
 export { getDisplayMediaSources, screenRecordingAllowed, type DisplayMediaAudio, type DisplayMediaSource } from "../../platform/media";
-export { noteScreenRecordingMissing } from "../telemetry/usage";
+
+export function checkScreenRecording(stillShown: () => boolean, show: (allowed: boolean) => void): Promise<void> {
+  const consent = consentToken();
+  return screenRecordingAllowed().then((allowed) => {
+    if (!stillShown()) return;
+    show(allowed);
+    if (!allowed) noteScreenRecordingMissing(consent);
+  });
+}
 
 export function useShareFor(tabId: string): [string, TabShare] | null {
   const shares = useMedia((m) => m.tabShares);

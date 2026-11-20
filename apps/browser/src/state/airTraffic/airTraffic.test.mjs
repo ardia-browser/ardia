@@ -17,6 +17,8 @@ const { useHookRules } = await import("../automation/hookRules.ts");
 const { startDecideHooks } = await import("../automation/decideHooks.ts");
 const { takeAirTrafficCounts, airTrafficSetting } = await import("../telemetry/airTrafficCounts.ts");
 const { cleanProperties } = await import("../telemetry/sanitize.ts");
+const { setConsentPeriod } = await import("../telemetry/consentPeriod.ts");
+setConsentPeriod(true, "air-traffic-test");
 
 const S = () => useBrowser.getState();
 const PERSONAL = { id: "default", name: "Personal", color: "plum", icon: null, createdAt: 0 };

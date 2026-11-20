@@ -12,15 +12,15 @@ const BEFORE_LOAD = "beforeLoad";
 type HeldConsent = ConsentToken | null | typeof BEFORE_LOAD;
 const held: [string, Counts, HeldConsent][] = [];
 const dropped = new Map<HeldConsent, number>();
-const heldConsent = (): HeldConsent => (choiceLoaded() ? consentToken() : BEFORE_LOAD);
+const heldConsent = (consent?: ConsentToken | null): HeldConsent => (!choiceLoaded() ? BEFORE_LOAD : consent === undefined ? consentToken() : consent);
 const releasedConsent = (consent: HeldConsent) => (consent === BEFORE_LOAD ? consentAtLaunch() : consent);
 let released = false;
 let savedMerged: string | null = null;
 
-export function noteTopAppsSharing(event: string, counts: Counts) {
-  if (released) capture(event, counts, consentNow());
-  else if (held.length < MAX_HELD) held.push([event, counts, heldConsent()]);
-  else dropped.set(heldConsent(), (dropped.get(heldConsent()) ?? 0) + 1);
+export function noteTopAppsSharing(event: string, counts: Counts, consent?: ConsentToken | null) {
+  if (released) capture(event, counts, consent === undefined ? consentNow() : consent);
+  else if (held.length < MAX_HELD) held.push([event, counts, heldConsent(consent)]);
+  else dropped.set(heldConsent(consent), (dropped.get(heldConsent(consent)) ?? 0) + 1);
 }
 
 export function releaseTopAppsSharing() {
@@ -64,6 +64,6 @@ export function topAppsSharingAtLaunch(s: Pick<BrowserState, "profiles" | "topAp
   };
 }
 
-export function noteTopAppsSharingFromSync(s: Pick<BrowserState, "profiles">, path: TopAppsSharingPath, on: boolean) {
-  noteTopAppsSharing("top_apps_sharing_synced", { path, on, ...topAppsSharingCounts(s) });
+export function noteTopAppsSharingFromSync(s: Pick<BrowserState, "profiles">, path: TopAppsSharingPath, on: boolean, consent?: ConsentToken | null) {
+  noteTopAppsSharing("top_apps_sharing_synced", { path, on, ...topAppsSharingCounts(s) }, consent);
 }

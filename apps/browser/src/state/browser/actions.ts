@@ -74,7 +74,7 @@ export async function closeTab(tabId: string, mayWrite?: () => boolean) {
   if (last && closesItsWindow) {
     if (closesBesideKeptTopApps(now, tabId)) noteTopAppWindowClosedFromNewTab(consent);
     noteTabClosedByUser(tabId);
-    return closeWindowAnimated(w.id);
+    return closeWindowAnimated(w.id, { consent });
   }
   if (splitOf(now, tabId) && closeKind(now, tabId) === "close") noteSplit("splitPaneCloses", consent);
   commit(() => store().closeTab(tabId));
@@ -192,7 +192,7 @@ export async function moveTabsToProfile(tabIds: string[], target: string | null,
   });
 }
 
-export async function dropTabsInProfile(tabIds: string[], target: string, drop: Drop, home: string, onIcon: boolean): Promise<Record<string, string> | null> {
+export async function dropTabsInProfile(tabIds: string[], target: string, drop: Drop, home: string, onIcon: boolean, drag?: object): Promise<Record<string, string> | null> {
   const move = tabsMove(tabIds);
   if (!move) return null;
   const consent = consentToken();
@@ -200,7 +200,7 @@ export async function dropTabsInProfile(tabIds: string[], target: string, drop: 
   const profileId = placesOnly ? target : await profileMoveTarget({ ...move, fromProfileId: home }, target);
   const placed = profileId ? store().dropTabsInProfile(tabIds, profileId, drop) : null;
   if (placed) {
-    if (stillValid(consent)) noteSidebarDrop(onIcon ? "profile_icon" : "other_profile");
+    if (stillValid(consent)) noteSidebarDrop(onIcon ? "profile_icon" : "other_profile", drag);
     return placed;
   }
   if (placesOnly && drop.type === "none") return null;

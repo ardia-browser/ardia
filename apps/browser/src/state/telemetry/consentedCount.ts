@@ -1,10 +1,10 @@
-import { isSharing, onConsentPeriodChange } from "./choice";
+import { isSharing, onConsentPeriodChange, stillValid, type ConsentToken } from "./choice";
 
 export function consentedCount() {
   let count = 0;
   onConsentPeriodChange(() => (count = 0));
   return {
-    note: () => void (isSharing() && count++),
+    note: (consent?: ConsentToken | null) => void ((consent === undefined ? isSharing() : stillValid(consent)) && count++),
     take: () => {
       const taken = count;
       count = 0;

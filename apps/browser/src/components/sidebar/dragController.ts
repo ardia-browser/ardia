@@ -268,9 +268,9 @@ export class DragController extends DragTargeting {
     const dropped = commit && !splitDrop && measured && sources.length > 0;
     let settled: (() => void) | null = null;
     if (dropped && drop.type === "none" && !toIcon) noteDragWithoutDrop(session);
-    if (home && toIcon) void dropTabsInProfile(dragged, toIcon, NO_DROP, home.profileId, true);
+    if (home && toIcon) void dropTabsInProfile(dragged, toIcon, NO_DROP, home.profileId, true, session);
     else if (home && crossed) {
-      if (dropped && drop.type === "tabs") void dropTabsInProfile(dragged, shown!, drop, home.profileId, false).then((placed) => placed && drop.sequence && arrangeLive(placedSequence(drop.sequence, placed)));
+      if (dropped && drop.type === "tabs") void dropTabsInProfile(dragged, shown!, drop, home.profileId, false, session).then((placed) => placed && drop.sequence && arrangeLive(placedSequence(drop.sequence, placed)));
       else if (!splitDrop && !interrupted) switchProfile(home.windowId, home.profileId, true);
     } else if (dropped && drop.type === "split") {
       const shift = this.splitShift(marks.split?.key);

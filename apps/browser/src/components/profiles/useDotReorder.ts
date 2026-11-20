@@ -3,6 +3,7 @@ import { Animated, PanResponder, type PanResponderInstance } from "react-native"
 import { hapticTick } from "../../state/app/system";
 import { reorderProfiles } from "../../state/profiles/actions";
 import { noteProfileDotReorder } from "../../state/telemetry/pagerCounts";
+import { consentToken, type ConsentToken } from "../../state/telemetry/client";
 import { curve, duration } from "../ui/motion";
 import { dotDrag, dotShifts, movedOrder } from "./dotReorder";
 
@@ -18,7 +19,7 @@ export function useDotReorder(ids: string[], widths: number[]): DotReorder {
   const [dragging, setDragging] = useState<string | null>(null);
   const live = useRef({ ids, widths });
   live.current = { ids, widths };
-  const drag = useRef({ id: "", to: -1, committed: false, downX: 0 });
+  const drag = useRef<{ id: string; to: number; committed: boolean; downX: number; consent?: ConsentToken | null }>({ id: "", to: -1, committed: false, downX: 0 });
 
   useLayoutEffect(() => {
     if (!drag.current.committed) return;
@@ -37,7 +38,7 @@ export function useDotReorder(ids: string[], widths: number[]): DotReorder {
       drag.current.downX = pageX;
     },
     start(id: string) {
-      drag.current = { id, to: live.current.ids.indexOf(id), committed: false, downX: drag.current.downX };
+      drag.current = { id, to: live.current.ids.indexOf(id), committed: false, downX: drag.current.downX, consent: consentToken() };
       setDragging(id);
     },
     moveTo(pageX: number) {
@@ -55,7 +56,7 @@ export function useDotReorder(ids: string[], widths: number[]): DotReorder {
       ids.forEach((other, j) => other !== id && settle(offsetOf(other), shifts[j]!).start());
     },
     end(commit: boolean) {
-      const { id, to } = drag.current;
+      const { id, to, consent } = drag.current;
       const { ids } = live.current;
       const from = ids.indexOf(id);
       setDragging(null);
@@ -65,7 +66,7 @@ export function useDotReorder(ids: string[], widths: number[]): DotReorder {
       }
       drag.current.committed = true;
       reorderProfiles(movedOrder(ids, from, to));
-      noteProfileDotReorder();
+      noteProfileDotReorder(consent);
     },
   }).current;
 

@@ -17,6 +17,7 @@ import type { AdoptId } from "../browser/types";
 import { linkGate, type LinkGateResult, type LinkRouteChoice, type LinkSourceInfo } from "./linkGate";
 import { externalLinkOpen, type ExternalLinkOpen } from "./externalLinkOpen";
 import { noteExternalLink } from "../telemetry/usage";
+import { consentToken, type ConsentToken } from "../telemetry/client";
 import { openInRouteGroup } from "../airTraffic/openAt";
 import { noteLittleArdiaAppHandoff, noteLittleArdiaEscapeClose, type EscapePressedIn } from "../telemetry/littleArdiaEscapes";
 import { askBeforeQuitting, quitWarningMayAsk } from "../windows/quitWarning";
@@ -37,10 +38,11 @@ export function openExternalUrls(given: string[], pointer?: [number, number], so
   if (!urls.length) return;
   const gate = linkGate();
   const app = returnTo ?? source?.bundleId ?? undefined;
-  if (!gate) return openUndecided(urls, pointer, false, app);
+  const consent = consentToken();
+  if (!gate) return openUndecided(urls, pointer, false, app, consent);
   const verdicts = urls.map((url): LinkGateResult | Promise<LinkGateResult> => {
     try {
-      return gate(url, source ?? null);
+      return gate(url, source ?? null, consent);
     } catch {
       return { url, route: null, decided: false };
     }
@@ -49,46 +51,46 @@ export function openExternalUrls(given: string[], pointer?: [number, number], so
     const plain: string[] = [];
     results.forEach((result, i) => {
       if (!result) return;
-      if (result.route) return openRoutedUrl(result.url, result.route, pointer, app);
-      if (result.url !== urls[i]) return openUrlsFromApps([result.url], { profileId: null, adoptIds: [undefined] }, pointer, true, app);
+      if (result.route) return openRoutedUrl(result.url, result.route, pointer, app, consent);
+      if (result.url !== urls[i]) return openUrlsFromApps([result.url], { profileId: null, adoptIds: [undefined] }, pointer, true, app, consent);
       plain.push(result.url);
     });
-    if (plain.length) openUndecided(plain, pointer, results.some((r) => r?.decided), app);
+    if (plain.length) openUndecided(plain, pointer, results.some((r) => r?.decided), app, consent);
   });
 }
 
-function openRoutedUrl(url: string, route: LinkRouteChoice, pointer?: [number, number], app?: string) {
+function openRoutedUrl(url: string, route: LinkRouteChoice, pointer?: [number, number], app?: string, consent?: ConsentToken | null) {
   const profileId = route.profileId ?? lastActiveProfile(store());
   if (route.windowId && store().windows[route.windowId]) {
-    noteExternalLink("tab", store().settings.openLinksInLittleArdia);
+    noteExternalLink("tab", store().settings.openLinksInLittleArdia, consent);
     store().newTab(route.windowId, { url, profileId, gated: true });
     return focus(route.windowId);
   }
   if (route.groupKey) {
-    noteExternalLink("tab", store().settings.openLinksInLittleArdia);
-    return openInRouteGroup(url, profileId, route.groupKey);
+    noteExternalLink("tab", store().settings.openLinksInLittleArdia, consent);
+    return openInRouteGroup(url, profileId, route.groupKey, consent);
   }
-  const open = decideExternal([url], route.open);
+  const open = decideExternal([url], route.open, consent);
   if (open === "littleArdia") return void openLittleArdia(url, profileId, undefined, pointer, app);
   if (open === "window") return focus(openWindow({ url, profileId }));
   openLinksInMainWindow([url], profileId, [undefined], true);
 }
 
-function decideExternal(urls: string[], ruled: ExternalLinkOpen | null = null): ExternalLinkOpen {
+function decideExternal(urls: string[], ruled: ExternalLinkOpen | null = null, consent?: ConsentToken | null): ExternalLinkOpen {
   const on = store().settings.openLinksInLittleArdia;
   const open = externalLinkOpen(on, urls, ruled);
-  noteExternalLink(open === "littleArdia" ? "littleArdia" : "tab", on);
+  noteExternalLink(open === "littleArdia" ? "littleArdia" : "tab", on, consent);
   return open;
 }
 
-function openUndecided(urls: string[], pointer?: [number, number], gated = false, app?: string) {
+function openUndecided(urls: string[], pointer?: [number, number], gated = false, app?: string, consent?: ConsentToken | null) {
   void routeLinkTabs(urls).then(
-    (route) => openRoutedUrls(urls, route, pointer, gated, app),
-    () => openUrlsFromApps(urls, routedLinks({}, urls.length), pointer, gated, app),
+    (route) => openRoutedUrls(urls, route, pointer, gated, app, consent),
+    () => openUrlsFromApps(urls, routedLinks({}, urls.length), pointer, gated, app, consent),
   );
 }
 
-function openRoutedUrls(urls: string[], route: LinkRoute, pointer?: [number, number], gated = false, app?: string) {
+function openRoutedUrls(urls: string[], route: LinkRoute, pointer?: [number, number], gated = false, app?: string, consent?: ConsentToken | null) {
   const dismissed = new Set(route.dismissed ?? []);
   const kept = urls.map((_, i) => i).filter((i) => !dismissed.has(i));
   if (!kept.length) return;
@@ -99,13 +101,14 @@ function openRoutedUrls(urls: string[], route: LinkRoute, pointer?: [number, num
     pointer,
     gated,
     app,
+    consent,
   );
 }
 
-function openUrlsFromApps(urls: string[], routed: RoutedLinks, pointer?: [number, number], gated = false, app?: string) {
+function openUrlsFromApps(urls: string[], routed: RoutedLinks, pointer?: [number, number], gated = false, app?: string, consent?: ConsentToken | null) {
   const [url] = urls;
   const profileId = routed.profileId ?? lastActiveProfile(store());
-  if (decideExternal(urls) === "littleArdia" && url) return void openLittleArdia(url, profileId, asAdoptId(routed.adoptIds[0]), pointer, app);
+  if (decideExternal(urls, null, consent) === "littleArdia" && url) return void openLittleArdia(url, profileId, asAdoptId(routed.adoptIds[0]), pointer, app);
   openLinksInMainWindow(urls, profileId, routed.adoptIds, gated);
 }
 
@@ -187,10 +190,11 @@ export async function openLittleArdiaProfileMenu(windowId: string) {
 
 export async function closeLittleArdia(windowId: string, { mayClose = () => true, ask }: CloseGuard = {}): Promise<GuardedClose> {
   if (!isSmall(store(), windowId)) return "cancelled";
+  const consent = consentToken();
   if (quitWarningMayAsk() && (await askBeforeQuitting(windowId, ask, mayClose)) === "cancelled") return "cancelled";
   if (!mayClose()) return "stopped";
   if (!isSmall(store(), windowId) || isWindowClosing(windowId)) return "cancelled";
-  return (await closeWindowAnimated(windowId)) ? "closing" : mayClose() ? "cancelled" : "stopped";
+  return (await closeWindowAnimated(windowId, { consent })) ? "closing" : mayClose() ? "cancelled" : "stopped";
 }
 
 export function closeLittleArdiaForAppLink(windowId: string | null) {

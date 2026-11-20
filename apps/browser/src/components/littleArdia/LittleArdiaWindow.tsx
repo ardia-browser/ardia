@@ -20,6 +20,7 @@ import { useProfileDotsShown } from "../profiles/ProfileDots";
 import { closeLittleArdia, openInMainWindow, openLittleArdiaProfileMenu } from "../../state/littleArdia/actions";
 import { isWindowClosing } from "../../state/windows/closeAnimated";
 import { notePinch, noteSwipeClose } from "../../state/telemetry/usage";
+import { consentToken, type ConsentToken } from "../../state/telemetry/client";
 import { SwipeCloseContext } from "../window/swipeClose";
 import { useCardFrame } from "../window/cardFrame";
 import { startLittleArdiaNewTabLinks } from "../../state/littleArdia/newTabLinks";
@@ -101,22 +102,26 @@ function zoomedCorner(scale: Animated.Value, { width, height, inset, cardRadius,
 function useLittleArdiaPinch(windowId: string) {
   const [scale] = useState(() => new Animated.Value(1));
   const leaving = useRef(false);
+  const begunIn = useRef<ConsentToken | null | undefined>(undefined);
   const settle = () => pinchSettle([{ value: scale, to: 1 }]);
   const motion: PinchMotion = {
     get reduce() {
       return reduceMotion() === true;
     },
     idle: () => leaving.current || isWindowClosing(windowId),
-    begin: () => scale.stopAnimation(),
+    begin: () => {
+      begunIn.current = consentToken();
+      scale.stopAnimation();
+    },
     follow: (magnification) => scale.setValue(pinchScale(magnification, LITTLE_ARDIA_PINCH.smallest, LITTLE_ARDIA_PINCH.largest)),
     settle,
     open: () => {
-      notePinch("littleArdia", "open");
+      notePinch("littleArdia", "open", begunIn.current);
       openInMainWindow(windowId);
       settle();
     },
     close: () => {
-      notePinch("littleArdia", "close");
+      notePinch("littleArdia", "close", begunIn.current);
       leaving.current = true;
       closeLittleArdia(windowId);
       if (isWindowClosing(windowId)) return;
@@ -130,9 +135,10 @@ function useLittleArdiaPinch(windowId: string) {
 function useLittleArdiaSwipeClose(windowId: string) {
   const [x] = useState(() => new Animated.Value(0));
   const opacity = useMemo(() => x.interpolate({ inputRange: [0, LITTLE_ARDIA_SWIPE_CLOSE.fadeOver], outputRange: [1, 0], extrapolate: "clamp" }), [x]);
+  const begunIn = useRef<ConsentToken | null | undefined>(undefined);
   const settle = () => pinchSettle([{ value: x, to: 0 }]);
-  const close = () => {
-    noteSwipeClose(true);
+  const close = (consent: ConsentToken | null | undefined) => {
+    noteSwipeClose(true, consent);
     if (reduceMotion() === true) return closeLittleArdia(windowId);
     Animated.timing(x, { toValue: LITTLE_ARDIA_SWIPE_CLOSE.fadeOver, duration: LITTLE_ARDIA_SWIPE_CLOSE.leaveMs, useNativeDriver: true }).start(() => {
       closeLittleArdia(windowId);
@@ -141,12 +147,12 @@ function useLittleArdiaSwipeClose(windowId: string) {
   };
   const onSwipe = (e: SwipeEvent) => {
     if (isWindowClosing(windowId)) return;
-    if (e.phase === "swipe") return close();
-    if (e.phase === "began") return x.stopAnimation();
+    if (e.phase === "swipe") return close(consentToken());
+    if (e.phase === "began") return void ((begunIn.current = consentToken()), x.stopAnimation());
     if (e.phase === "changed") return x.setValue(Math.max(0, e.distance));
-    if (e.phase === "ended" && (e.distance >= LITTLE_ARDIA_SWIPE_CLOSE.distance || (e.distance > 0 && e.velocity >= LITTLE_ARDIA_SWIPE_CLOSE.velocity))) return close();
+    if (e.phase === "ended" && (e.distance >= LITTLE_ARDIA_SWIPE_CLOSE.distance || (e.distance > 0 && e.velocity >= LITTLE_ARDIA_SWIPE_CLOSE.velocity))) return close(begunIn.current);
     if (e.phase === "ended" || e.phase === "cancelled") {
-      noteSwipeClose(false);
+      noteSwipeClose(false, begunIn.current);
       settle();
     }
   };

@@ -3,6 +3,7 @@ import { linuxCapabilities, unavailableError } from "./hostCapabilities.ts";
 import { openMailLink } from "./linkShare.ts";
 import { linuxIntroMusic } from "./introMusic.ts";
 import { noteIntroMusicFailed } from "../../browser/src/state/telemetry/introCounts.ts";
+import type { ConsentToken } from "../../browser/src/state/telemetry/consentPeriod.ts";
 import { UPDATE_METHODS, updatesAvailable } from "./hostUpdates.ts";
 import { linuxCrashReports, servesCrashDumps } from "./hostCrashReports.ts";
 
@@ -10,9 +11,10 @@ const UPDATER_METHODS: ReadonlySet<string> = new Set(UPDATE_METHODS);
 
 const INTRO_MUSIC = new Set(["playIntroMusic", "setIntroMusicMuted", "stopIntroMusic"]);
 const introMusicPlayers = new WeakMap<ArdiaHost, ReturnType<typeof linuxIntroMusic>>();
+export const noteIntroMusicPlayed = (played: boolean, startedIn: ConsentToken | null) => void (played || noteIntroMusicFailed(startedIn));
 const introMusicFor = (host: ArdiaHost) => {
   let player = introMusicPlayers.get(host);
-  if (!player) introMusicPlayers.set(host, (player = linuxIntroMusic({ host, onPlayed: (played) => void (played || noteIntroMusicFailed()) })));
+  if (!player) introMusicPlayers.set(host, (player = linuxIntroMusic({ host, onPlayed: noteIntroMusicPlayed })));
   return player;
 };
 

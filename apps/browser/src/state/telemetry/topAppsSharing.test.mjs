@@ -276,3 +276,19 @@ test("a local sharing change stays local, and marking a sync-started change does
   assert.equal(startedBySync(() => writingFromSync()), false, "writingFromSync, which picks the mirroring rules, isn't touched");
   assert.ok(S().profiles[work]);
 });
+
+test("a sync cycle started with sharing off doesn't record linking a profile's Top Apps sharing once sharing turns on", async () => {
+  S().hydrate({});
+  client.loadChoice();
+  client.setSharing(false, "settings");
+  const cycleStartedIn = client.consentToken();
+  client.setSharing(true, "settings");
+  const before = (await recorded("top_apps_sharing_synced")).length;
+  const doc = syncedDoc();
+  const app = appScopeOf(doc);
+  app.records["prof:remote-default"] = remoteRecord({ n: "Remote Personal", c: "blue", i: null, d: true });
+  app.records["pta:remote-default"] = remoteRecord({ on: true });
+  linkProfiles(doc, app, cycleStartedIn);
+  assert.equal(S().profiles.default.shareTopApps, true, "the profile still links and takes the synced setting");
+  assert.equal((await recorded("top_apps_sharing_synced")).length, before);
+});

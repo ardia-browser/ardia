@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { noteIntroEnded, noteIntroShown, noteIntroSkipped, takeIntroCounts } from "./introCounts.ts";
+import { setConsentPeriod } from "./consentPeriod.ts";
 
 test("the intro counts say which scene ran, how soon the meadow drew, and whether the intro was skipped or finished", () => {
   takeIntroCounts();
+  setConsentPeriod(true, "intro-counts-test");
   noteIntroShown(false);
   noteIntroEnded({ skipped: false, shown: "animated", firstFrameMs: 640 });
   noteIntroShown(true);
@@ -13,6 +15,7 @@ test("the intro counts say which scene ran, how soon the meadow drew, and whethe
   noteIntroEnded({ skipped: false, shown: "poster", firstFrameMs: null });
   noteIntroShown(false);
   noteIntroEnded({ skipped: false, shown: null, firstFrameMs: null });
+  setConsentPeriod(false, null);
   assert.deepEqual(takeIntroCounts(), {
     intros_shown: 4,
     intros_music_muted: 1,

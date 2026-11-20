@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { noteProfileDotReorder, notePagerSettle, takePagerCounts } from "./pagerCounts.ts";
+import { setConsentPeriod } from "./consentPeriod.ts";
 
 test("pager settles are counted, those that kept the profile apart, switcher reorders too, and taking them starts over", () => {
+  setConsentPeriod(false, null);
+  noteProfileDotReorder();
+  setConsentPeriod(true, "pager");
   notePagerSettle(true);
   notePagerSettle(false);
   notePagerSettle(false);

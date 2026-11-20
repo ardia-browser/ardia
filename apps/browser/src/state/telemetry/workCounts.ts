@@ -85,7 +85,7 @@ onConsentPeriodChange(() => {
 const count = (key: keyof ReturnType<typeof none>, consent?: ConsentToken | null) =>
   countFor(consentOrNow(consent), () => void (isSharing() && pending[key]++));
 
-export const noteLiveSourceFetch = (shared: boolean) => count(shared ? "liveSourceFetchesShared" : "liveSourceFetches");
+export const noteLiveSourceFetch = (shared: boolean, consent?: ConsentToken | null) => count(shared ? "liveSourceFetchesShared" : "liveSourceFetches", consent);
 export const noteLiveSave = (changed: boolean, kind: "write" | "intent" = "write") =>
   count(kind === "intent" ? changed ? "liveSaveIntentsQueued" : "liveSaveIntentsUnchanged" : changed ? "liveSavesWritten" : "liveSavesUnchanged");
 export const noteExtensionActionRefresh = () => count("extensionActionRefreshes");

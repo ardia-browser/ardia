@@ -9,6 +9,7 @@ import { startOmniboxApprovals } from "./omniboxApprovals";
 import { startOmniboxHooks } from "./omniboxHooks";
 import { startDownloadHooks } from "./downloadHooks";
 import { airTrafficHolds } from "../airTraffic/rules";
+import type { ConsentToken } from "../telemetry/client";
 import { currentAirTraffic, loadAirTraffic, noteLinkSource, useAirTraffic } from "../airTraffic/store";
 
 function linkResult(url: string, verdict: LinkVerdict | null): LinkGateResult {
@@ -17,13 +18,13 @@ function linkResult(url: string, verdict: LinkVerdict | null): LinkGateResult {
   return { url, route: verdict, decided: true };
 }
 
-function gateLink(url: string, source: LinkSourceInfo): LinkGateResult | Promise<LinkGateResult> {
+function gateLink(url: string, source: LinkSourceInfo, consent?: ConsentToken | null): LinkGateResult | Promise<LinkGateResult> {
   noteLinkSource(source);
   const opening = decideOpening(url, { tabId: null, windowId: null, profileId: null, via: "external" });
   const route = (verdict: Awaited<typeof opening>): LinkGateResult | Promise<LinkGateResult> => {
     if (verdict && "cancel" in verdict) return null;
     const target = verdict?.url ?? url;
-    const linked = decideLink(target, source);
+    const linked = decideLink(target, source, undefined, consent);
     return linked instanceof Promise ? linked.then((v) => linkResult(target, v)) : linkResult(target, linked);
   };
   return opening instanceof Promise ? opening.then(route) : route(opening);

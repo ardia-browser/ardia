@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
-import { mergeFirefoxFavicons, pngSize } from "../../../../../packages/expo-windows/src/import/firefoxFavicons.ts";
-import { zenFavicons } from "../../../../../packages/expo-windows/src/import/zenSidebar.ts";
+import { mergeFirefoxFavicons, pngSize } from "../../../../../packages/import/src/readers/firefoxFavicons.ts";
+import { zenFavicons } from "../../../../../packages/import/src/readers/zenSidebar.ts";
 
 const folders = [];
 after(() => folders.forEach((f) => rmSync(f, { recursive: true, force: true })));
@@ -42,6 +42,7 @@ function host() {
   });
   return {
     open,
+    separator: "\\",
     async openSnapshot(path) {
       try {
         const db = new DatabaseSync(path.replaceAll("\\", "/"), { readOnly: true });

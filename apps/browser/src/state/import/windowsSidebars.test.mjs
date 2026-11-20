@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { parseArcSidebar } from "../../../../../packages/expo-windows/src/import/arcSidebar.ts";
-import { importProfile, Unlocks } from "../../../../../packages/expo-windows/src/import/importer.ts";
-import { ARC_SIDEBAR_FILE } from "../../../../../packages/expo-windows/src/import/sidebars.ts";
-import { loadZenSidebar } from "../../../../../packages/expo-windows/src/import/zenSidebar.ts";
-import { fakeHost, fixtures, ROAMING } from "./fixtures/windowsHost.mjs";
+import { parseArcSidebar } from "../../../../../packages/import/src/readers/arcSidebar.ts";
+import { importProfile, Unlocks } from "../../../../../packages/import/src/readers/importer.ts";
+import { arcSidebarPath } from "../../../../../packages/import/src/readers/sidebars.ts";
+import { loadZenSidebar } from "../../../../../packages/import/src/readers/zenSidebar.ts";
+import { fakeHost, fixtures, LOCAL, ROAMING } from "./fixtures/windowsHost.mjs";
 
 const quiet = { progress() {}, cancelled: () => false };
 const links = (node) => (node.type === "url" ? 1 : (node.children ?? []).reduce((n, c) => n + links(c), 0));
@@ -17,7 +17,7 @@ const arcSidebar = () => parseArcSidebar(readFileSync(join(fixtures, "arc-sideba
 const space = (name) => arcSidebar().spaces.find((s) => s.name === name);
 
 test("Arc for Windows keeps its sidebar beside User Data in the package's LocalCache", () => {
-  assert.equal(ARC_SIDEBAR_FILE, "Packages\\TheBrowserCompany.Arc_ttt1ap7aakyb4\\LocalCache\\Local\\Arc\\StorableSidebar.json");
+  assert.equal(arcSidebarPath(fakeHost()), `${LOCAL}\\Packages\\TheBrowserCompany.Arc_ttt1ap7aakyb4\\LocalCache\\Local\\Arc\\StorableSidebar.json`);
 });
 
 test("Arc's pinned tabs and folders keep their place, and splits keep every pane", () => {

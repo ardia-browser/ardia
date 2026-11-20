@@ -1,6 +1,6 @@
-import { findBrowser, isChromiumBased, type Browser } from "./browsers";
+import { isChromiumBased, type Browser } from "./browsers";
 import { chromiumBookmarks, faviconPages, readFavicons, readHistory } from "./chromium";
-import { dataDirectory, profileDirectory } from "./discovery";
+import { findBrowser, profileDirectory } from "./discovery";
 import { firefoxBookmarks, loadFirefoxSession } from "./firefox";
 import { mergeFirefoxFavicons } from "./firefoxFavicons";
 import { entries, join, type ImportHost, type Secrets } from "./host";
@@ -16,7 +16,7 @@ export class Unlocks {
 
   async ensure(host: ImportHost, browser: Browser): Promise<boolean> {
     if (!isChromiumBased(browser) || this.unlocked.has(browser.id)) return true;
-    const answer = await host.unlock(browser.id, join(dataDirectory(host, browser), "Local State")).catch(() => ({ unlocked: false }));
+    const answer = await host.unlock(browser.id, join(host, browser.dataDirectory, "Local State")).catch(() => ({ unlocked: false }));
     if (answer.unlocked) this.unlocked.add(browser.id);
     return answer.unlocked;
   }
@@ -29,20 +29,25 @@ export class Unlocks {
 
 function secretWarnings(result: Result, kind: ImportKind, outcome: Secrets, noun: string, browser: Browser) {
   if (outcome.undecryptable > 0) result.warnings.push({ kind, code: "undecryptable", message: `${plural(outcome.undecryptable, noun)} couldn't be decrypted` });
-  if (outcome.appBound > 0)
+  if (outcome.appBound > 0 && kind === "cookies")
+    result.warnings.push({ kind, code: "undecryptable", message: `Skipped ${plural(outcome.appBound, noun)} locked by ${browser.name}'s app-bound encryption, which only ${browser.name} can read: sites that used ${outcome.appBound === 1 ? "it" : "them"} will ask you to sign in again` });
+  else if (outcome.appBound > 0)
     result.warnings.push({ kind, code: "undecryptable", message: `${plural(outcome.appBound, noun)} use ${browser.name}'s app-bound encryption, which only ${browser.name} can read` });
 }
 
+const appBoundCookiesToo = (appBound: number, browser: Browser) =>
+  appBound > 0 ? `, and ${appBound} more ${appBound === 1 ? "is" : "are"} locked by ${browser.name}'s app-bound encryption, which only ${browser.name} can read: sites that used ${appBound === 1 ? "it" : "them"} will ask you to sign in again` : "";
+
 async function cookieFile(host: ImportHost, dir: string): Promise<string> {
-  const network = join(dir, "Network");
-  if ((await entries(host, network)).some((e) => e.name === "Cookies")) return join(network, "Cookies");
-  if ((await entries(host, dir)).some((e) => e.name === "Cookies")) return join(dir, "Cookies");
+  const network = join(host, dir, "Network");
+  if ((await entries(host, network)).some((e) => e.name === "Cookies")) return join(host, network, "Cookies");
+  if ((await entries(host, dir)).some((e) => e.name === "Cookies")) return join(host, dir, "Cookies");
   throw new ImportFailure("notFound", "No cookies in this profile");
 }
 
 async function loginFiles(host: ImportHost, dir: string): Promise<string[]> {
   const names = new Set((await entries(host, dir)).map((e) => e.name));
-  const files = ["Login Data", "Login Data For Account"].filter((n) => names.has(n)).map((n) => join(dir, n));
+  const files = ["Login Data", "Login Data For Account"].filter((n) => names.has(n)).map((n) => join(host, dir, n));
   if (!files.length) throw new ImportFailure("notFound", "No saved passwords in this profile");
   return files;
 }
@@ -56,7 +61,7 @@ export async function importProfile(
   options: Options,
   observer: Observer,
 ): Promise<Result> {
-  const browser = findBrowser(browserId);
+  const browser = findBrowser(host, browserId);
   if (!browser) throw new ImportFailure("notFound", `Unknown browser ${browserId}`);
   const { dir, profile } = await profileDirectory(host, browser, profileId);
   const result: Result = {
@@ -86,10 +91,10 @@ export async function importProfile(
     let succeeded = false;
     try {
       if (kind === "bookmarks") {
-        result.bookmarks = chromium ? await chromiumBookmarks(host, dir) : await firefoxBookmarks(host, join(dir, "places.sqlite"));
+        result.bookmarks = chromium ? await chromiumBookmarks(host, dir) : await firefoxBookmarks(host, join(host, dir, "places.sqlite"));
         count = linkCount(result.bookmarks);
       } else if (kind === "history") {
-        const file = join(dir, chromium ? "History" : "places.sqlite");
+        const file = join(host, dir, chromium ? "History" : "places.sqlite");
         const read = await readHistory(host, file, chromium ? "chromium" : "firefox", options, observer, browser.name);
         result.history = read.entries;
         result.historyCount = read.count;
@@ -123,7 +128,7 @@ export async function importProfile(
         count = result.arcArchive.tabs.length;
       } else if (kind === "autofill" && chromium) {
         if (!(await entries(host, dir)).some((e) => e.name === "Web Data")) throw new ImportFailure("notFound", "No autofill data in this profile");
-        const file = join(dir, "Web Data");
+        const file = join(host, dir, "Web Data");
         await unlocks.ensure(host, browser);
         const outcome = await host.autofill(browser.id, file, result.vaultToken ?? "");
         if (outcome.failure) throw snapshotFailure(outcome.failure, file, browser.name);
@@ -132,17 +137,17 @@ export async function importProfile(
         if (outcome.token) result.vaultToken = outcome.token;
         count = outcome.addresses + outcome.cards;
         if (outcome.lockedCards > 0)
-          result.warnings.push({ kind, code: "locked", message: `${plural(outcome.lockedCards, "saved card")} need ${browser.name}'s key, which Windows couldn't unwrap` });
+          result.warnings.push({ kind, code: "locked", message: `${plural(outcome.lockedCards, "saved card")} need ${browser.name}'s key, which ${host.platform} couldn't unwrap` });
         secretWarnings(result, kind, outcome, "card", browser);
       } else if (kind === "passwords" && !chromium) {
         const outcome = await host.firefoxLogins(dir);
         if (outcome.error) throw new ImportFailure(outcome.error.code, outcome.error.message);
-        if (outcome.failure && !outcome.items.length) throw snapshotFailure(outcome.failure, join(dir, "key4.db"), browser.name);
+        if (outcome.failure && !outcome.items.length) throw snapshotFailure(outcome.failure, join(host, dir, "key4.db"), browser.name);
         result.credentials = outcome.items;
         count = outcome.items.length;
         secretWarnings(result, kind, outcome, "password", browser);
       } else if (kind === "cookies" && !chromium) {
-        const file = join(dir, "cookies.sqlite");
+        const file = join(host, dir, "cookies.sqlite");
         const outcome = await host.firefoxCookies(file);
         if (outcome.failure) throw snapshotFailure(outcome.failure, file, browser.name);
         result.cookieCount = outcome.count;
@@ -174,9 +179,9 @@ export async function importProfile(
         if (outcome.token) result.vaultToken = outcome.token;
         count = outcome.count;
         secretWarnings(result, kind, outcome, "cookie", browser);
-        if (!count && outcome.undecryptable > 0) throw new ImportFailure("locked", `The ${browser.name} key didn't decrypt any cookies`);
+        if (!count && outcome.undecryptable > 0) throw new ImportFailure("locked", `The ${browser.name} key didn't decrypt any cookies${appBoundCookiesToo(outcome.appBound, browser)}`);
       } else {
-        throw new ImportFailure("unsupported", `${browser.name} has no ${kind} to import on Windows`);
+        throw new ImportFailure("unsupported", `${browser.name} has no ${kind} to import on ${host.platform}`);
       }
       succeeded = true;
     } catch (error) {

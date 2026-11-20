@@ -1,6 +1,6 @@
 import { TurboModuleRegistry } from "react-native";
 import type { AppNative, DocumentsNative } from "@ardia/shell";
-import { join } from "../import/host";
+import { windowsJoin as join } from "../import/browsers";
 import { nativeImportHost } from "../import/nativeHost";
 import { requireNativeModule } from "../modules";
 import { expectEqual, expectTrue, type Check } from "./check";
@@ -33,7 +33,8 @@ export const checks: Check[] = [
     async run() {
       expectTrue(TurboModuleRegistry.get("ArdiaWindowsImport"), "ArdiaWindowsImport is not registered");
       const native = host();
-      expectTrue(/^[A-Za-z]:\\/.test(native.localAppData) && /^[A-Za-z]:\\/.test(native.roamingAppData), `folders are ${native.localAppData} and ${native.roamingAppData}`);
+      const folders = native.browsers.map((b) => b.dataDirectory);
+      expectTrue(folders.length > 0 && folders.every((f) => /^[A-Za-z]:\\/.test(f)), `folders are ${folders.slice(0, 5).join(", ")}`);
       const name = `${unique("list")}.json`;
       await written(name, "{}");
       const listed = await native.list(dataFolder());

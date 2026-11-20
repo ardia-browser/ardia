@@ -15,6 +15,13 @@ test("only the Mac reports memory pressure", () => {
   assert.equal(windowsFeatures.memoryPressure, false);
 });
 
+test("only Windows, where Chrome's app-bound cookies can't be read, stops promising an import keeps you signed in", async () => {
+  const linuxFeatures = (await import("./platformFeatures.linux.ts")).PLATFORM_FEATURES;
+  assert.equal(macFeatures.importedCookiesKeepSignIns, true);
+  assert.equal(linuxFeatures.importedCookiesKeepSignIns, true);
+  assert.equal(windowsFeatures.importedCookiesKeepSignIns, false);
+});
+
 test("a pop-up button looks like its platform's: the Mac's accent box with two chevrons, Windows's single chevron, and on Windows it is never narrower than its title", async () => {
   const macChrome = await import("./platformChrome.ts");
   const windowsChrome = await import("./platformChrome.windows.ts");

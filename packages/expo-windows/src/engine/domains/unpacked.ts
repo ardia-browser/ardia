@@ -1,4 +1,4 @@
-import { fromBase64 } from "../../import/bytes";
+import { fromBase64 } from "@ardia/import/src/readers/index.ts";
 import { callError, isFields, ok, type Desktop, type Fields, type Handlers } from "./calling";
 import { desktopOf } from "./exports";
 import { sha256 } from "./sha256";

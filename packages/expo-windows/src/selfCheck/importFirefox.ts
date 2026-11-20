@@ -1,4 +1,4 @@
-import { join } from "../import/host";
+import { windowsJoin as join } from "../import/browsers";
 import { expectEqual, expectTrue, type Check } from "./check";
 import { dataFolder, host } from "./importFiles";
 

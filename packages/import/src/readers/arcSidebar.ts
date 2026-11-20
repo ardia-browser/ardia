@@ -1,4 +1,4 @@
-import type { SpaceSuggestion } from "@ardia/import";
+import type { SpaceSuggestion } from "../index";
 import { folder, ImportFailure, link, type BookmarkNode, type BookmarkRole, type ImportedTab } from "./model";
 
 type Json = Record<string, unknown>;

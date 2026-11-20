@@ -1,4 +1,4 @@
-import type { SpaceSuggestion } from "@ardia/import";
+import type { SpaceSuggestion } from "../index";
 import { rgbHex } from "./arcSidebar";
 import { fromBase64, startsWith } from "./bytes";
 import { folder, ImportFailure, isWebUrl, link, type BookmarkNode, type Favicon, type ImportedTab } from "./model";

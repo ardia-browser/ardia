@@ -31,7 +31,7 @@ export function separateEssentials(prefs: string | null): boolean {
 
 export async function zenContainerNames(host: ImportHost, profile: string): Promise<Map<number, string>> {
   const names = new Map<number, string>();
-  const top = record(await readJson(host, join(profile, "containers.json"), 4 << 20));
+  const top = record(await readJson(host, join(host, profile, "containers.json"), 4 << 20));
   for (const identity of objects(top?.identities)) {
     if (identity.public === false) continue;
     const id = typeof identity.userContextId === "number" ? Math.trunc(identity.userContextId) : undefined;
@@ -43,20 +43,20 @@ export async function zenContainerNames(host: ImportHost, profile: string): Prom
 }
 
 async function sessionFiles(host: ImportHost, profile: string): Promise<string[]> {
-  const backups = join(profile, "zen-sessions-backup");
+  const backups = join(host, profile, "zen-sessions-backup");
   const here = new Set((await entries(host, profile)).filter((e) => !e.dir).map((e) => e.name));
   const saved = (await entries(host, backups)).filter((e) => !e.dir).map((e) => e.name);
   const dated = saved
     .filter((n) => n.startsWith("zen-sessions-") && n.endsWith(".jsonlz4"))
     .sort()
     .reverse();
-  const own = [...(here.has("zen-sessions.jsonlz4") ? [join(profile, "zen-sessions.jsonlz4")] : []), ...(saved.includes("clean.jsonlz4") ? [join(backups, "clean.jsonlz4")] : []), ...dated.map((n) => join(backups, n))];
+  const own = [...(here.has("zen-sessions.jsonlz4") ? [join(host, profile, "zen-sessions.jsonlz4")] : []), ...(saved.includes("clean.jsonlz4") ? [join(host, backups, "clean.jsonlz4")] : []), ...dated.map((n) => join(host, backups, n))];
   const firefox = await firefoxSessionFile(host, profile);
   return firefox ? [...own, firefox] : own;
 }
 
 async function placesWorkspaces(host: ImportHost, profile: string): Promise<Json[]> {
-  const places = join(profile, "places.sqlite");
+  const places = join(host, profile, "places.sqlite");
   try {
     const [table] = await readRows(host, places, [{ sql: "SELECT name FROM sqlite_master WHERE type='table' AND name='zen_workspaces'" }]);
     if (!rowsOf(table).length) return [];
@@ -98,7 +98,7 @@ async function readSession(host: ImportHost, file: string): Promise<unknown> {
 export async function loadZenSidebar(host: ImportHost, profile: string, profileId: string, cancelled: () => boolean = () => false): Promise<ZenSidebar> {
   const files = await sessionFiles(host, profile);
   if (!files.length) throw new ImportFailure("notFound", "No Zen session in this profile");
-  const separate = separateEssentials(await host.readText(join(profile, "prefs.js"), 8 << 20).catch(() => null));
+  const separate = separateEssentials(await host.readText(join(host, profile, "prefs.js"), 8 << 20).catch(() => null));
   let failure: unknown;
   let parsed = false;
   let stored: Json[] | undefined;

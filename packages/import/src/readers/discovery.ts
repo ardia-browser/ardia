@@ -1,4 +1,4 @@
-import { BROWSERS, type Browser } from "./browsers";
+import type { Browser } from "./browsers";
 import { firefoxProfiles, firefoxSessionFile } from "./firefox";
 import { entries, join, readJson, type ImportHost } from "./host";
 import { hexColor, ImportFailure, type ImportKind, type Profile, type Source } from "./model";
@@ -9,7 +9,11 @@ type Info = Record<string, unknown>;
 
 const PROFILE_MARKERS = ["Preferences", "Bookmarks", "History", "Login Data"];
 
-export const dataDirectory = (host: ImportHost, browser: Browser) => join(browser.root === "local" ? host.localAppData : host.roamingAppData, browser.path);
+const outsideFolder = (host: ImportHost, path: string) =>
+  host.separator === "\\" ? /^[a-zA-Z]:|^[\\/]/.test(path) || path.split(/[\\/]/).includes("..") : path.startsWith("/") || path.split("/").includes("..");
+
+const unsafeProfileFolder = (host: ImportHost, dir: string) =>
+  host.separator === "\\" ? dir.includes("..") || dir.includes(":") : outsideFolder(host, dir);
 
 const has = (names: Set<string>, ...wanted: string[]) => wanted.some((n) => names.has(n.toLowerCase()));
 
@@ -23,7 +27,7 @@ async function isProfile(host: ImportHost, folder: string) {
 
 async function chromiumKinds(host: ImportHost, folder: string, arc: boolean): Promise<ImportKind[]> {
   const names = await namesIn(host, folder);
-  const network = has(names, "Network") ? await namesIn(host, join(folder, "Network")) : new Set<string>();
+  const network = has(names, "Network") ? await namesIn(host, join(host, folder, "Network")) : new Set<string>();
   const kinds: ImportKind[] = [];
   if (has(names, "Bookmarks", "AccountBookmarks")) kinds.push("bookmarks");
   if (has(names, "History")) kinds.push("history");
@@ -38,8 +42,8 @@ const text = (value: unknown) => (typeof value === "string" && value ? value : u
 const record = (value: unknown): Info => (typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Info) : {});
 
 export async function chromiumProfiles(host: ImportHost, browser: Browser, only?: string): Promise<Profile[]> {
-  const root = dataDirectory(host, browser);
-  const state = record(record(await readJson(host, join(root, "Local State"))).profile);
+  const root = browser.dataDirectory;
+  const state = record(record(await readJson(host, join(host, root, "Local State"))).profile);
   const infoCache = record(state.info_cache);
   const order = Array.isArray(state.profiles_order) ? state.profiles_order.filter((d): d is string => typeof d === "string") : [];
   const lastUsed = text(state.last_used);
@@ -51,13 +55,13 @@ export async function chromiumProfiles(host: ImportHost, browser: Browser, only?
     if (e.name === "Default" || e.name.startsWith("Profile ")) add(e.name);
   }
   if (browser.rootIsProfile) {
-    for (const e of await entries(host, join(root, "_side_profiles"))) if (e.dir) add(`_side_profiles\\${e.name}`);
+    for (const e of await entries(host, join(host, root, "_side_profiles"))) if (e.dir) add(`_side_profiles${host.separator}${e.name}`);
   }
   const out: Profile[] = [];
   let fallback = 0;
   for (const dir of dirs) {
-    if (dir.includes("..") || dir.includes(":")) continue;
-    const path = dir === "." ? root : join(root, dir);
+    if (unsafeProfileFolder(host, dir)) continue;
+    const path = dir === "." ? root : join(host, root, dir);
     if (!(await isProfile(host, path))) continue;
     fallback += 1;
     if (only !== undefined && only !== dir) continue;
@@ -70,7 +74,7 @@ export async function chromiumProfiles(host: ImportHost, browser: Browser, only?
       name,
       path,
       ...(text(info.user_name) ? { email: text(info.user_name) } : {}),
-      ...(has(pictures, "Google Profile Picture.png") ? { avatarPath: join(path, "Google Profile Picture.png") } : {}),
+      ...(has(pictures, "Google Profile Picture.png") ? { avatarPath: join(host, path, "Google Profile Picture.png") } : {}),
       ...(skColor !== undefined && skColor >>> 0 !== 0xff000000 ? { color: hexColor(skColor) } : {}),
       isDefault: dir === (lastUsed ?? "Default") || (dir === "." && lastUsed === undefined),
       available: await chromiumKinds(host, path, browser.family === "arc"),
@@ -81,13 +85,13 @@ export async function chromiumProfiles(host: ImportHost, browser: Browser, only?
 }
 
 async function firefoxSource(host: ImportHost, browser: Browser): Promise<Profile[]> {
-  const root = dataDirectory(host, browser);
-  const ini = await host.readText(join(root, "profiles.ini"), 1 << 20).catch(() => null);
+  const root = browser.dataDirectory;
+  const ini = await host.readText(join(host, root, "profiles.ini"), 1 << 20).catch(() => null);
   if (ini == null) return [];
   const out: Profile[] = [];
   for (const p of firefoxProfiles(ini)) {
-    if (/^[a-zA-Z]:|^[\\/]/.test(p.path) || p.path.split(/[\\/]/).includes("..")) continue;
-    const dir = join(root, p.path);
+    if (outsideFolder(host, p.path)) continue;
+    const dir = join(host, root, p.path);
     const names = await namesIn(host, dir);
     if (!names.size) continue;
     const kinds: ImportKind[] = [];
@@ -109,7 +113,7 @@ export async function profilesOf(host: ImportHost, browser: Browser): Promise<Pr
 
 export async function listSources(host: ImportHost): Promise<Source[]> {
   const found = await Promise.all(
-    BROWSERS.map(async (browser): Promise<Source | null> => {
+    host.browsers.map(async (browser): Promise<Source | null> => {
       const profiles = await profilesOf(host, browser).catch(() => []);
       if (!profiles.length) return null;
       return {
@@ -127,6 +131,8 @@ export async function listSources(host: ImportHost): Promise<Source[]> {
   );
   return found.filter((s): s is Source => s !== null);
 }
+
+export const findBrowser = (host: ImportHost, id: string) => host.browsers.find((b) => b.id === id);
 
 export async function profileDirectory(host: ImportHost, browser: Browser, profileId: string): Promise<{ dir: string; profile: Profile }> {
   const profile = (await profilesOf(host, browser)).find((p) => p.id === profileId);

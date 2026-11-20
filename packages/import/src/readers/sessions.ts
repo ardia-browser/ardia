@@ -30,14 +30,14 @@ type Tab = { windowId: number; visualIndex: number; navigations: Navigation[]; c
 type Window = { selectedTab: number; type?: number };
 
 export async function sessionFiles(host: ImportHost, profile: string): Promise<string[]> {
-  const folder = join(profile, "Sessions");
+  const folder = join(host, profile, "Sessions");
   const stamped = (await entries(host, folder))
     .filter((e) => !e.dir && /^Session_\d+$/.test(e.name))
-    .map((e) => ({ stamp: Number(e.name.slice("Session_".length)), path: join(folder, e.name) }))
+    .map((e) => ({ stamp: Number(e.name.slice("Session_".length)), path: join(host, folder, e.name) }))
     .sort((a, b) => b.stamp - a.stamp);
   if (stamped.length) return stamped.map((s) => s.path);
   const names = new Set((await entries(host, profile)).filter((e) => !e.dir).map((e) => e.name));
-  return ["Current Session", "Last Session"].filter((n) => names.has(n)).map((n) => join(profile, n));
+  return ["Current Session", "Last Session"].filter((n) => names.has(n)).map((n) => join(host, profile, n));
 }
 
 export async function latestSessionFile(host: ImportHost, profile: string): Promise<string | undefined> {

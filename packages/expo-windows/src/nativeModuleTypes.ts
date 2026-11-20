@@ -3,7 +3,7 @@ import type { FolderInfo } from "@ardia/sync";
 import type { TurboModule } from "react-native";
 import type { PowerReading } from "./engine/domains/calling";
 import type { EventSubscription } from "./events";
-import type { ImportHost } from "./import/host";
+import type { ImportHost } from "@ardia/import/src/readers/index.ts";
 import type { LaunchArguments } from "./launchLinks/addresses";
 import type { SyncContract, VaultNative } from "./sync/vault";
 import type { DropAreaFrame } from "./views/fileDropAreas";

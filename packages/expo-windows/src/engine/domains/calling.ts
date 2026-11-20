@@ -1,5 +1,5 @@
 import type { DomainModule } from "@ardia/ardiacore";
-import type { ImportHost } from "../../import/host";
+import type { ImportHost } from "@ardia/import/src/readers/index.ts";
 import type { profileDataFolder, removeProfileFolder } from "../host";
 import type { ExternalApps } from "./externalApps";
 

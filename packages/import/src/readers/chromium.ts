@@ -53,11 +53,11 @@ export function parseChromiumBookmarks(json: unknown): BookmarkNode {
 export async function chromiumBookmarks(host: ImportHost, profile: string): Promise<BookmarkNode> {
   const names = new Set((await entries(host, profile)).map((e) => e.name));
   if (!names.has("Bookmarks") && !names.has("AccountBookmarks")) throw new ImportFailure("notFound", "No bookmarks in this profile");
-  const result = names.has("Bookmarks") ? parseChromiumBookmarks(await readJson(host, join(profile, "Bookmarks"))) : folder("Bookmarks", []);
+  const result = names.has("Bookmarks") ? parseChromiumBookmarks(await readJson(host, join(host, profile, "Bookmarks"))) : folder("Bookmarks", []);
   if (names.has("AccountBookmarks")) {
     let extra: BookmarkNode | undefined;
     try {
-      extra = parseChromiumBookmarks(await readJson(host, join(profile, "AccountBookmarks")));
+      extra = parseChromiumBookmarks(await readJson(host, join(host, profile, "AccountBookmarks")));
     } catch {
       extra = undefined;
     }
@@ -197,7 +197,7 @@ export async function readFavicons(host: ImportHost, profiles: string[], pages: 
           : { sql: "SELECT NULL AS icon, NULL AS png WHERE 0", limit: 1 },
       ];
     });
-    const answer = await host.query(join(profile, "Favicons"), queries).catch(() => null);
+    const answer = await host.query(join(host, profile, "Favicons"), queries).catch(() => null);
     if (!answer || !("results" in answer)) continue;
     for (const [i, page] of missing.entries()) {
       const icon = answer.results

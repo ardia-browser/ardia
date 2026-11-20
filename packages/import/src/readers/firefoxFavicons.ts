@@ -220,7 +220,7 @@ function firstChosen(sources: Source[], chosen: Map<string, Icon | null>): Icon 
 async function recentPages(host: ImportHost, profile: string, origins: Origin[], cancelled: () => boolean): Promise<Map<string, string[]>> {
   const recent = new Map<string, string[]>();
   if (!origins.length) return recent;
-  await withSnapshot(host, join(profile, "places.sqlite"), "Firefox", async (read) => {
+  await withSnapshot(host, join(host, profile, "places.sqlite"), "Firefox", async (read) => {
     const [tables] = await read([{ sql: "SELECT name FROM sqlite_master WHERE type='table' AND name='moz_places'" }]);
     if (!rowsOf(tables).length) return;
     const replies = await batched(
@@ -267,7 +267,7 @@ export async function mergeFirefoxFavicons(host: ImportHost, profile: string, pa
     wanted.push({ key, pages: [page], origin: urlParts(page)?.origin });
   }
   if (!wanted.length || total >= MAXIMUM_TOTAL_BYTES) return out;
-  const added = await withSnapshot(host, join(profile, "favicons.sqlite"), "Firefox", async (read) => {
+  const added = await withSnapshot(host, join(host, profile, "favicons.sqlite"), "Firefox", async (read) => {
     const [tables] = await read([{ sql: `SELECT name FROM sqlite_master WHERE type='table' AND name IN (${TABLES.map((t) => `'${t}'`).join(", ")})` }]);
     if (rowsOf(tables).length !== TABLES.length) return [];
     const rootKeys = new Set(wanted.flatMap((w) => (w.origin ? [w.origin.rootKey] : [])));

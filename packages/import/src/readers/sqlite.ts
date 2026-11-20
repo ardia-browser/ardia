@@ -1,7 +1,5 @@
-import { type Answer, type ImportHost, type Query, type Rows, type SnapshotFailure } from "./host";
+import { baseName as fileName, type Answer, type ImportHost, type Query, type Rows, type SnapshotFailure } from "./host";
 import { ImportFailure } from "./model";
-
-const fileName = (path: string) => path.slice(path.lastIndexOf("\\") + 1);
 
 export function snapshotFailure(failure: SnapshotFailure, path: string, browserName = "the browser"): ImportFailure {
   if (failure === "missing") return new ImportFailure("notFound", `${fileName(path)} not found`);

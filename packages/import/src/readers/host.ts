@@ -1,3 +1,4 @@
+import type { Browser } from "./browsers";
 import type { Credential, WrittenCounts } from "./model";
 
 export type Entry = { name: string; dir: boolean; size: number; modified: number };
@@ -11,9 +12,12 @@ export type AutofillRead = Secrets & { addresses: number; cards: number; lockedC
 export type FirefoxLoginRead = Secrets & { items: Credential[]; error?: { code: "locked" | "unsupported" | "unreadable" | "notFound"; message: string } };
 export type Answer = { results: Rows[] } | { failure: SnapshotFailure };
 
+export type Separator = "\\" | "/";
+
 export type ImportHost = {
-  localAppData: string;
-  roamingAppData: string;
+  platform: string;
+  separator: Separator;
+  browsers: Browser[];
   list(path: string): Promise<Entry[] | null | { denied: true }>;
   readText(path: string, largest: number): Promise<string | null>;
   readBase64(path: string, largest: number): Promise<string | null>;
@@ -34,22 +38,28 @@ export type ImportHost = {
   forget(): void;
 };
 
-export function pathFromFileUrl(picked: string): string {
-  if (!picked.startsWith("file:")) return picked;
-  const decoded = decodeURIComponent(picked);
-  const local = /^file:\/\/\/([A-Za-z]:.*)$/.exec(decoded);
-  if (local) return local[1]!.replace(/\//g, "\\");
-  const network = /^file:\/\/([^/].*)$/.exec(decoded);
-  if (network) return `\\\\${network[1]!.replace(/\//g, "\\")}`;
-  return decoded.replace(/^file:\/*/, "").replace(/\//g, "\\");
+const SEPARATORS: Record<Separator, { trailing: RegExp; edges: RegExp; other: RegExp | null }> = {
+  "\\": { trailing: /[\\/]+$/, edges: /^[\\/]+|[\\/]+$/g, other: /\//g },
+  "/": { trailing: /\/+$/, edges: /^\/+|\/+$/g, other: null },
+};
+
+export function joinPath(separator: Separator, ...parts: string[]): string {
+  const { trailing, edges, other } = SEPARATORS[separator];
+  const joined = parts
+    .filter((part) => part !== "" && part !== ".")
+    .map((part, i) => (i === 0 ? part.replace(trailing, "") : part.replace(edges, "")))
+    .join(separator);
+  return other ? joined.replace(other, separator) : joined;
 }
 
-export const join = (...parts: string[]) =>
-  parts
-    .filter((part) => part !== "" && part !== ".")
-    .map((part, i) => (i === 0 ? part.replace(/[\\/]+$/, "") : part.replace(/^[\\/]+|[\\/]+$/g, "")))
-    .join("\\")
-    .replace(/\//g, "\\");
+export const join = (host: Pick<ImportHost, "separator">, ...parts: string[]) => joinPath(host.separator, ...parts);
+
+export function parentPath(host: Pick<ImportHost, "separator">, path: string): string {
+  const at = path.lastIndexOf(host.separator);
+  return at <= 0 ? path.slice(0, at + 1) : path.slice(0, at);
+}
+
+export const baseName = (path: string) => path.slice(Math.max(path.lastIndexOf("\\"), path.lastIndexOf("/")) + 1);
 
 export async function entries(host: ImportHost, path: string): Promise<Entry[]> {
   const listed = await host.list(path).catch(() => null);

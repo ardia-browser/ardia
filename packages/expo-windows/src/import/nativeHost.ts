@@ -1,8 +1,11 @@
 import { TurboModuleRegistry } from "react-native";
 import type { WindowsImportModule } from "../nativeModuleTypes";
-import type { ImportHost } from "./host";
+import type { ImportHost } from "@ardia/import/src/readers/index.ts";
+import { windowsBrowsers } from "./browsers";
 
 export const NATIVE_IMPORT = "ArdiaWindowsImport";
+
+const text = (value: unknown) => (typeof value === "string" ? value : "");
 
 const parsed = async <Value>(promise: Promise<string>): Promise<Value> => JSON.parse(await promise) as Value;
 
@@ -11,8 +14,9 @@ export function nativeImportHost(): ImportHost | null {
   if (!native) return null;
   const constants = native.getConstants?.() ?? {};
   return {
-    localAppData: typeof constants.localAppData === "string" ? constants.localAppData : "",
-    roamingAppData: typeof constants.roamingAppData === "string" ? constants.roamingAppData : "",
+    platform: "Windows",
+    separator: "\\",
+    browsers: windowsBrowsers(text(constants.localAppData), text(constants.roamingAppData)),
     list: (path) => parsed(native.list(path)),
     readText: (path, largest) => native.readText(path, largest),
     readBase64: (path, largest) => native.readBase64(path, largest),

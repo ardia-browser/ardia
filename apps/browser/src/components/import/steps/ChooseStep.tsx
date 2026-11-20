@@ -1,7 +1,7 @@
 import { View } from "react-native";
 import { Button, Checkbox, space, Text } from "../../ui";
 import { SectionHeader } from "../../settings/Form";
-import { APP, diaTabsNote, KINDS, type ImportKind } from "../model";
+import { APP, diaTabsNote, IMPORT_SUBTITLE, KINDS, lockedCookiesNote, type ImportKind } from "../model";
 import { ErrorText, Note, Spacer, TargetPicker, Title } from "../Parts";
 import { BrowserRow } from "../Rows";
 import { importType } from "../tokens";
@@ -21,9 +21,10 @@ export function ChooseBody({ flow }: { flow: ImportFlow }) {
   const shown = !source
     ? []
     : KINDS.filter((k) => source.profiles.some((p) => p.available.includes(k.kind)) && (!HIDDEN_KINDS.includes(k.kind) || (diaTabs && k.kind === "pinnedTabs")));
+  const cookiesNote = source && shown.some((k) => k.kind === "cookies") ? lockedCookiesNote(source) : null;
   return (
     <>
-      <Title title="Import from Another Browser" subtitle="Import once and stay in your flow. Your tabs, passwords, bookmarks and history come with you, and you stay signed in." />
+      <Title title="Import from Another Browser" subtitle={IMPORT_SUBTITLE} />
       {browsers.length === 0 ? (
         <Note text={`No other browsers with data to import were found on this ${PLATFORM_TERMS.computer}.`} />
       ) : (
@@ -46,6 +47,11 @@ export function ChooseBody({ flow }: { flow: ImportFlow }) {
               />
             ))}
           </View>
+          {cookiesNote && (
+            <Text size="caption" tone="textSecondary" style={{ lineHeight: importType.smallLine, marginTop: space.ml }}>
+              {cookiesNote}
+            </Text>
+          )}
           {source && diaTabs && (
             <Text size="caption" tone="textSecondary" style={{ lineHeight: importType.smallLine, marginTop: space.ml }}>
               {diaTabsNote(source.profiles)}

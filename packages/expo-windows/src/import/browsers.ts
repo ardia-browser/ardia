@@ -1,18 +1,9 @@
-import type { Family } from "./model";
+import { joinPath, type Browser } from "@ardia/import/src/readers/index.ts";
 
-export type Root = "local" | "roaming";
+type Root = "local" | "roaming";
+type Listed = Omit<Browser, "dataDirectory"> & { root: Root; path: string };
 
-export type Browser = {
-  id: string;
-  name: string;
-  family: Family;
-  root: Root;
-  path: string;
-  rootIsProfile?: boolean;
-  sidebar?: "arc" | "zen";
-};
-
-const chromium = (id: string, name: string, path: string, root: Root = "local", rootIsProfile = false): Browser => ({
+const chromium = (id: string, name: string, path: string, root: Root = "local", rootIsProfile = false): Listed => ({
   id,
   name,
   family: "chromium",
@@ -23,7 +14,7 @@ const chromium = (id: string, name: string, path: string, root: Root = "local", 
 
 const ARC_PACKAGE = "Packages\\TheBrowserCompany.Arc_ttt1ap7aakyb4\\LocalCache\\Local\\Arc\\User Data";
 
-export const BROWSERS: Browser[] = [
+const LISTED: Listed[] = [
   chromium("chrome", "Google Chrome", "Google\\Chrome\\User Data"),
   chromium("edge", "Microsoft Edge", "Microsoft\\Edge\\User Data"),
   { id: "arc", name: "Arc", family: "arc", root: "local", path: ARC_PACKAGE, sidebar: "arc" },
@@ -44,6 +35,8 @@ export const BROWSERS: Browser[] = [
   chromium("braveNightly", "Brave Nightly", "BraveSoftware\\Brave-Browser-Nightly\\User Data"),
 ];
 
-export const findBrowser = (id: string) => BROWSERS.find((b) => b.id === id);
+export const windowsJoin = (...parts: string[]) => joinPath("\\", ...parts);
 
-export const isChromiumBased = (b: Browser) => b.family === "chromium" || b.family === "arc";
+export function windowsBrowsers(localAppData: string, roamingAppData: string): Browser[] {
+  return LISTED.map(({ root, path, ...browser }) => ({ ...browser, dataDirectory: windowsJoin(root === "local" ? localAppData : roamingAppData, path) }));
+}

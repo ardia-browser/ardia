@@ -1057,9 +1057,11 @@ cleared one by one through their `ac_*` calls, and each step that fails is named
 
 ## Import from another browser
 
-The Mac's `ArdiaImport` (Swift, `packages/import`) has a Windows version in TypeScript, `packages/expo-windows/src/import`,
-that answers the same methods with the same result shapes, so the wizard (`components/import`) and
-`state/import/apply.ts` are the Mac's. Only the OS calls and the secrets are native: `ArdiaWindowsImport` (`ImportModule.h`,
+The Mac's `ArdiaImport` (Swift, `packages/import`) has a TypeScript version that reads every browser's files once for
+every OS, `packages/import/src/readers`, and Windows is its first host: `packages/expo-windows/src/import` gives it the
+browsers' Windows folders (`browsers.ts`), the `\` separator and the native calls below (`nativeHost.ts`), and answers
+the same methods with the same result shapes, so the wizard (`components/import`) and `state/import/apply.ts` are the
+Mac's. Only the OS calls and the secrets are native: `ArdiaWindowsImport` (`ImportModule.h`,
 `ImportFiles.h`, `ImportSecrets.h`, `ImportNss.h`, `ImportFirefox.h`, `ImportFirefoxCookies.h`, `ImportAutofill.h`).
 
 - Native primitives: the two data folders (`localAppData`, `roamingAppData`, or `<importSourceDir>\Local` and `\Roaming`
@@ -1076,7 +1078,7 @@ that answers the same methods with the same result shapes, so the wizard (`compo
   calls (closed after 10 idle minutes otherwise), so history is read 5,000 rows a page instead of in one reply. A file the browser holds open with no
   sharing (Chrome does this to `Network\Cookies` and others while it runs) answers `inUse`, and that kind fails with
   "Quit <browser> and import again".
-- Discovery (`browsers.ts`, `discovery.ts`): Chrome, Edge, Arc, Firefox, Zen, Brave, Vivaldi, Opera, Opera GX, Chromium,
+- Discovery (`expo-windows/src/import/browsers.ts`, `readers/discovery.ts`): Chrome, Edge, Arc, Firefox, Zen, Brave, Vivaldi, Opera, Opera GX, Chromium,
   and the Beta, Dev and Canary (`SxS`) channels of Chrome and Edge and Brave's Beta and Nightly, each from its own folder
   under `%LOCALAPPDATA%` or `%APPDATA%` (Arc from its package's `LocalCache`). Chromium profiles come from `Local State`
   and the `Default` and `Profile *` folders; Firefox and Zen profiles from `profiles.ini` (relative paths only).
@@ -1120,7 +1122,9 @@ that answers the same methods with the same result shapes, so the wizard (`compo
   (`Sessions_Encrypted`), extensions found in the profile, Safari, Dia's tabs.
 - Tests: `apps/browser/src/state/import/windowsImport.test.mjs`, `windowsSidebars.test.mjs` and `windowsAutofill.test.mjs`
   run the TypeScript against `packages/import/fixtures` with a stand-in for the native module
-  (`state/import/fixtures/windowsHost.mjs`: Node's own `node:sqlite`, the same snapshot copy). The self-check's import area
+  (`state/import/fixtures/windowsHost.mjs`: Node's own `node:sqlite`, the same snapshot copy), and
+  `importReaders.test.mjs` reads every kind of every fixture profile through a POSIX host (`fixtures/posixHost.mjs`)
+  and checks it matches the Windows host. The self-check's import area
   exercises every native method in the app; `launch-smoke.ps1` copies the fixtures' Firefox, Zen and Chrome profiles
   into the self-check's data folder (`import-fixtures`), so the NSS, `logins.db`, cookie and `Web Data` readers decrypt
   real files there. Telemetry: `import_runs`, `import_kinds_done`, `import_kinds_failed` and

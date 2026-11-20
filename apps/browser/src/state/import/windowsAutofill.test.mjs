@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { importProfile, Unlocks } from "../../../../../packages/expo-windows/src/import/importer.ts";
+import { importProfile, Unlocks } from "../../../../../packages/import/src/readers/importer.ts";
 import { fakeHost } from "./fixtures/windowsHost.mjs";
 
 const quiet = { progress() {}, cancelled: () => false };

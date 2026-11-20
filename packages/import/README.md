@@ -2,11 +2,17 @@
 
 Imports another browser's data into Ardia. The native code lives in `ios/`; `ios/Core/` is plain Swift with no
 Expo dependency, so `Package.swift` builds and tests it on its own. `src/index.ts` is the typed JS wrapper and the UI
-is `apps/browser/src/components/import/`. Every test reads fixtures. Never point anything at a real profile. On Windows the
-same module is TypeScript in `packages/expo-windows/src/import` (`docs/windows.md`, Import from another browser), with
-the same result shapes: the sidebar readers are ported to TypeScript (`arcSidebar.ts`, `zenSession.ts`), and the
-secrets (Firefox NSS, cookie values, autofill) are read natively in `apps/browser/windows/Ardia/Import*.h`. Arc for Windows
-keeps `StorableSidebar.json` in its package's `LocalCache\Local\Arc`. A change to a reader here needs the same change there.
+is `apps/browser/src/components/import/`. Every test reads fixtures. Never point anything at a real profile.
+
+`src/readers/` is the same reading in TypeScript, written once for every OS, with the same result shapes. It touches
+no file and no secret itself: an OS gives it an `ImportHost` (`src/readers/host.ts`) with where each browser keeps its
+data (`browsers`), its path separator, folder listings, size-capped file reads, SQLite snapshot queries, and the calls
+that decrypt secrets and hand cookies and autofill to the engine. Windows is its first host
+(`packages/expo-windows/src/import`, `docs/windows.md`, Import from another browser), with the secrets read natively in
+`apps/browser/windows/Ardia/Import*.h`. The Mac still reads with the Swift below and Linux with the engine's C++
+(`engine/ardiacore-linux/src/ardia/linux/ac_linux_import_*`) until they move onto `src/readers/` (#2898). Until then a
+change to a reader here needs the same change there. Arc keeps `StorableSidebar.json` in the folder that holds its
+`User Data`; on Windows that is its package's `LocalCache\Local\Arc`.
 
 ## Which file reads what
 

@@ -1,18 +1,23 @@
-import type { ArcArchive, ArcRouting, SpaceSuggestion, SpaceSummary } from "@ardia/import";
+import type { ArcArchive, ArcRouting, SpaceSuggestion, SpaceSummary } from "../index";
 import { parseArcSidebar, type ArcSidebar } from "./arcSidebar";
 import { ARC_ARCHIVE_FILE, ARC_ROUTING_FILE, ARCHIVE_BYTES, changesFallback, parseArcArchive, parseArcRouting, ROUTING_BYTES } from "./arcExtras";
-import { exists, join, type ImportHost } from "./host";
+import { exists, join, parentPath, type ImportHost } from "./host";
 import { ImportFailure, linkCount, type ImportKind, type Profile, type Result } from "./model";
 import { loadZenSidebar, zenContainerNames, type ZenSidebar } from "./zenSidebar";
 
-const ARC_DIR = "Packages\\TheBrowserCompany.Arc_ttt1ap7aakyb4\\LocalCache\\Local\\Arc";
-export const ARC_SIDEBAR_FILE = `${ARC_DIR}\\StorableSidebar.json`;
+export const ARC_SIDEBAR_FILE = "StorableSidebar.json";
 
 const LARGEST_SIDEBAR_BYTES = 64 << 20;
 
-export const arcSidebarPath = (host: ImportHost) => join(host.localAppData, ARC_SIDEBAR_FILE);
+const arcDirectory = (host: ImportHost) => {
+  const arc = host.browsers.find((b) => b.sidebar === "arc");
+  if (!arc) throw new ImportFailure("notFound", "No Arc on this computer");
+  return parentPath(host, arc.dataDirectory);
+};
 
-export const arcFilePath = (host: ImportHost, ...name: string[]) => join(host.localAppData, ARC_DIR, ...name);
+export const arcFilePath = (host: ImportHost, ...name: string[]) => join(host, arcDirectory(host), ...name);
+
+export const arcSidebarPath = (host: ImportHost) => arcFilePath(host, ARC_SIDEBAR_FILE);
 
 export const arcSpaceNames = (sidebar: ArcSidebar | null | undefined) => new Map((sidebar?.spaces ?? []).map((s) => [s.id, s.name]));
 

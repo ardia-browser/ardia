@@ -80,15 +80,14 @@ export async function firefoxBookmarks(host: ImportHost, places: string): Promis
   return folder("Bookmarks", top);
 }
 
-const SESSION_CANDIDATES = ["sessionstore-backups\\recovery.jsonlz4", "sessionstore.jsonlz4", "sessionstore-backups\\previous.jsonlz4"];
+const SESSION_CANDIDATES = [["sessionstore-backups", "recovery.jsonlz4"], ["sessionstore.jsonlz4"], ["sessionstore-backups", "previous.jsonlz4"]];
 
 export async function firefoxSessionFile(host: ImportHost, profile: string): Promise<string | undefined> {
   let best: { path: string; modified: number } | undefined;
   for (const candidate of SESSION_CANDIDATES) {
-    const path = join(profile, candidate);
-    const slash = path.lastIndexOf("\\");
-    const name = path.slice(slash + 1);
-    const found = (await entries(host, path.slice(0, slash))).find((e) => !e.dir && e.name === name);
+    const path = join(host, profile, ...candidate);
+    const name = candidate[candidate.length - 1]!;
+    const found = (await entries(host, join(host, profile, ...candidate.slice(0, -1)))).find((e) => !e.dir && e.name === name);
     if (found && (!best || found.modified > best.modified)) best = { path, modified: found.modified };
   }
   return best?.path;

@@ -1,4 +1,4 @@
-import type { ArcArchive, ArcArchivedTab, ArcLinkDestination, ArcLinkRule, ArcRouting } from "@ardia/import";
+import type { ArcArchive, ArcArchivedTab, ArcLinkDestination, ArcLinkRule, ArcRouting } from "../index";
 import { ImportFailure, isWebUrl, type Favicon } from "./model";
 
 type Json = Record<string, unknown>;

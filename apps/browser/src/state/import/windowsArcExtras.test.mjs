@@ -3,10 +3,10 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { changesFallback, md5Hex, parseArcArchive, parseArcRouting } from "../../../../../packages/expo-windows/src/import/arcExtras.ts";
-import { importProfile, Unlocks } from "../../../../../packages/expo-windows/src/import/importer.ts";
-import { listSources } from "../../../../../packages/expo-windows/src/import/discovery.ts";
-import { arcFilePath } from "../../../../../packages/expo-windows/src/import/sidebars.ts";
+import { changesFallback, md5Hex, parseArcArchive, parseArcRouting } from "../../../../../packages/import/src/readers/arcExtras.ts";
+import { importProfile, Unlocks } from "../../../../../packages/import/src/readers/importer.ts";
+import { listSources } from "../../../../../packages/import/src/readers/discovery.ts";
+import { arcFilePath } from "../../../../../packages/import/src/readers/sidebars.ts";
 import { fakeHost, support } from "./fixtures/windowsHost.mjs";
 
 const quiet = { progress() {}, cancelled: () => false };

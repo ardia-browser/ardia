@@ -1,12 +1,21 @@
 import { TurboModuleRegistry, type TurboModule } from "react-native";
 import type { DialogsNative } from "@ardia/shell";
 import { emitNativeEvent } from "../events";
-import { findBrowser } from "./browsers";
-import { listSources } from "./discovery";
-import { bookmarksFromHtml, passwordsFromCsv } from "./fileFormats";
-import { pathFromFileUrl, type ImportHost } from "./host";
-import { importProfile, Unlocks } from "./importer";
-import { ImportFailure, type ImportKind, type Options, type Progress } from "./model";
+import {
+  baseName,
+  bookmarksFromHtml,
+  findBrowser,
+  importProfile,
+  ImportFailure,
+  listSources,
+  passwordsFromCsv,
+  Unlocks,
+  type ImportHost,
+  type ImportKind,
+  type Options,
+  type Progress,
+} from "@ardia/import/src/readers/index.ts";
+import { pathFromFileUrl } from "./fileUrl";
 import { nativeImportHost } from "./nativeHost";
 
 type NativeOptions = Omit<Options, "historyPage">;
@@ -34,7 +43,6 @@ export function windowsImport(hostOf: () => ImportHost | null = nativeImportHost
     if (text == null) throw failure("unreadable", "The file could not be read");
     return text;
   };
-  const fileName = (path: string) => path.slice(Math.max(path.lastIndexOf("\\"), path.lastIndexOf("/")) + 1);
   const notOnWindows = (what: string) => () => Promise.reject(failure("unsupported", `${what} isn't on Windows`));
 
   return {
@@ -64,9 +72,10 @@ export function windowsImport(hostOf: () => ImportHost | null = nativeImportHost
     },
 
     async unlockBrowser(browserId: string): Promise<null> {
-      const browser = findBrowser(browserId);
+      const native = needHost();
+      const browser = findBrowser(native, browserId);
       if (!browser) throw failure("notFound", `Unknown browser ${browserId}`);
-      await unlocks.ensure(needHost(), browser);
+      await unlocks.ensure(native, browser);
       return null;
     },
 
@@ -93,7 +102,7 @@ export function windowsImport(hostOf: () => ImportHost | null = nativeImportHost
     listExtensions: async () => "[]",
 
     async importBookmarksHTML(path: string): Promise<string> {
-      return JSON.stringify(await readFile(path).then((html) => bookmarksFromHtml(html, fileName(path)), rethrown));
+      return JSON.stringify(await readFile(path).then((html) => bookmarksFromHtml(html, baseName(path)), rethrown));
     },
 
     async importPasswordsCSV(path: string): Promise<string> {

@@ -3,6 +3,7 @@ import { fetchBangList, readDocument, saveDocument, writeDocument } from "../../
 import { useEffect, useSyncExternalStore } from "react";
 import { loadBundledBangs, refreshesBangs } from "./bangPlatform";
 import { parseSaved, unchanged, versionedJson, type Migrations } from "../../lib/savedDocument";
+import { useBrowser } from "../browser/store";
 
 const LIST_DOC = "bangs.txt";
 const STATE_DOC = "bangs-state.json";
@@ -76,7 +77,7 @@ const BANG_WORD = /^![^\s!]+$/;
 
 export function mayBeBang(text: string): boolean {
   const trimmed = text.trim();
-  if (!trimmed.includes("!") || trimmed.startsWith("?")) return false;
+  if (!useBrowser.getState().settings.bangs || !trimmed.includes("!") || trimmed.startsWith("?")) return false;
   const words = trimmed.split(/\s+/);
   return BANG_WORD.test(words[0]!) || BANG_WORD.test(words[words.length - 1]!);
 }

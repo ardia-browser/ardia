@@ -76,6 +76,7 @@ export const SETTING_SPECS = {
     engineRecords(["profile", "extensionId", "name", "keyword", "url"]),
   ),
   searchSuggestions: flag(true, SYNCED),
+  bangs: flag(true, SYNCED),
   commandBarHistory: flag(true, SYNCED),
   showSelectionSearch: flag(true, SYNCED),
   tabLayout: oneOf(["sidebar", "top"], "sidebar", SYNCED),

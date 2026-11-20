@@ -1,7 +1,7 @@
 import type { SettingKey } from "./settings";
 
 export const CONFIG_SETTING_KEYS: readonly SettingKey[] = [
-  "warnBeforeQuitting", "warnBeforeClosingWindow", "restoreSession", "separateDownloadFolders", "searchEngine", "searchSuggestions", "commandBarHistory", "showSelectionSearch", "blockNotificationRequests",
+  "warnBeforeQuitting", "warnBeforeClosingWindow", "restoreSession", "separateDownloadFolders", "searchEngine", "searchSuggestions", "bangs", "commandBarHistory", "showSelectionSearch", "blockNotificationRequests",
   "tabLayout", "autoHideTabs", "sidebarSide", "hideToolbarWhileScrolling", "newTabPosition", "newTabButtonPosition", "appLinksFirst", "newTabOpens",
   "warnBeforeClosingLastTab", "keepTopAppsRunning", "undoReopensClosedTab", "warnBeforeMovingTabsToProfile", "shareTabsAcrossWindows",
   "extendWebsiteColor", "cmdClickCreatesTabGroup", "optShiftClickOpensInGroup", "peekModifier", "peekLinksToOtherSites", "newTabLinksOpenIn", "popupsOpenAsTabs", "peekButtons",

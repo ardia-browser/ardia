@@ -1,6 +1,6 @@
 import { onWindowEvent, watchSidebarEdge } from "../../state/windows/nativeWindow";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Animated, StyleSheet, View } from "react-native";
+import { Animated, Platform, StyleSheet, View } from "react-native";
 import { switchOn } from "../../state/app/switches";
 import { useTheme } from "../ui/theme";
 import { curve, useGated } from "../ui/motion";
@@ -271,12 +271,14 @@ function SidebarDock({
       if (e.over) latestReveal.current.reveal();
       else latestPeek.current.hide();
     });
-    watchSidebarEdge(windowId, true, nativeHold, right, holding || draggingTab);
     return () => {
       sub.remove();
       watchSidebarEdge(windowId, false);
       edgeOver.current = false;
     };
+  }, [windowId, watching]);
+  useEffect(() => {
+    if (watching) watchSidebarEdge(windowId, true, nativeHold, right, holding || draggingTab);
   }, [windowId, watching, nativeHold, right, holding || draggingTab]);
   useEffect(() => {
     if (!open) arm.current = EDGE_DISARMED;
@@ -335,20 +337,16 @@ function SidebarDock({
   const bleed = peekBleed(peekAt.left);
   const [panelHeight, setPanelHeight] = useState(0);
 
+  const hasStrip = Platform.OS !== "macos";
+
   return (
     <>
-      {strip.current && (
+      {hasStrip && strip.current && (
         <View
-          pointerEvents={!open && !fullscreen && !edgeStripOverPage(frame.inset) ? "auto" : "none"}
+          pointerEvents={!open && !fullscreen && !peeking && !edgeStripOverPage(frame.inset) ? "auto" : "none"}
           onMouseEnter={enterStrip}
           onMouseLeave={leaveStrip}
-          style={{
-            position: "absolute",
-            [edgeSide]: 0,
-            top: 0,
-            bottom: frame.inset,
-            width: !open && !fullscreen ? PEEK_EDGE_STRIP : 0,
-          }}
+          style={{ position: "absolute", [edgeSide]: 0, top: 0, bottom: frame.inset, width: !open && !fullscreen ? PEEK_EDGE_STRIP : 0 }}
         />
       )}
       <Animated.View

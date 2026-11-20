@@ -171,10 +171,14 @@ try {
   await rep.check("pressing the other space's dot switches spaces and keeps the peek out", async () => {
     assert.equal(await run(`return peek();`), true);
     const out = await run(`const before = st().windows.w1.profileId; const other = st().profileOrder.find((p) => p !== before); const done = watchCalls();
-      return at(91, ${HEIGHT - 31}).then(() => ac.actions.switchProfile("w1", other, true)).then(() => settle(1200)).then(() => ({ switched: st().windows.w1.profileId === other, calls: done(), live: live() }));`);
-    assert.equal(out.switched, true);
-    assert.deepEqual(out.calls.filter((c) => c === "hide"), [], `no hide: ${out.calls}`);
-    assert.equal(out.live, true);
+      return at(91, ${HEIGHT - 31}).then(() => ac.actions.switchProfile("w1", other, true)).then(() => settle(1200)).then(() => ({ before, switched: st().windows.w1.profileId === other, calls: done(), live: live() }));`);
+    try {
+      assert.equal(out.switched, true);
+      assert.deepEqual(out.calls.filter((c) => c === "hide"), [], `no hide: ${out.calls}`);
+      assert.equal(out.live, true);
+    } finally {
+      await run(`ac.actions.switchProfile("w1", ${JSON.stringify(out.before)}, true); return away();`);
+    }
   });
 
   await rep.check("with the window against the screen's edge, crossing to the next display stops at the edge and peeks; a second push goes through", async () => {
@@ -236,6 +240,51 @@ try {
     } finally {
       await run(`st().updateSettings({ sidebarSide: "left" }); return settle(400);`);
     }
+  });
+
+  await rep.check("an open peek persists up to 250 pt outside the window on either side and closes past 250 pt (#767)", async () => {
+    const resized = (x, w) => `return globalThis.expo.modules.ArdiaDev.devSetWindowFrame("w1", [${x}, 100, ${w}, ${HEIGHT}]).then(() => settle(400));`;
+    await run(resized(300, 900));
+    try {
+      assert.equal(await run(`return peek();`), true);
+      const persist = await run(`const done = watchCalls();
+        return at(-40, 400).then(() => settle(300)).then(() => at(-120, 400)).then(() => settle(300)).then(() => at(-240, 400)).then(() => settle(300)).then(() => ({ calls: done(), live: live() }));`);
+      assert.deepEqual(persist.calls.filter((c) => c === "hide"), [], `no hide within 250 pt left of window: ${persist.calls}`);
+      assert.equal(persist.live, true, "persists at 240 pt left of window");
+      assert.equal(await run(`return at(-260, 400).then(() => settle(700)).then(live);`), false, "closes past 250 pt left of window");
+
+      await run(`st().updateSettings({ sidebarSide: "right" }); return settle(400);`);
+      assert.equal(await run(`return at(904, 400).then(() => settle(500)).then(() => at(820, 400)).then(() => settle(300)).then(live);`), true, "peeks on right side");
+      const persistRight = await run(`const done = watchCalls();
+        return at(900 + 120, 400).then(() => settle(300)).then(() => at(900 + 240, 400)).then(() => settle(300)).then(() => ({ calls: done(), live: live() }));`);
+      assert.deepEqual(persistRight.calls.filter((c) => c === "hide"), [], `no hide within 250 pt right of window: ${persistRight.calls}`);
+      assert.equal(persistRight.live, true, "persists at 240 pt right of window");
+      assert.equal(await run(`return at(900 + 260, 400).then(() => settle(700)).then(live);`), false, "closes past 250 pt right of window");
+    } finally {
+      await run(`st().updateSettings({ sidebarSide: "left" }); return settle(400);`);
+      await run(resized(300, WIDTH));
+    }
+  });
+
+  await rep.check("flicking past the edge reveals cleanly, sliding back inside never flickers, brisk crossing stays shut, and outside approach needs 50 pt", async () => {
+    await run(`return globalThis.expo.modules.ArdiaDev.devSetWindowFrame("w1", [300, 100, ${WIDTH}, ${HEIGHT}]).then(() => settle(400));`);
+    assert.equal(await run(`return at(300, 400).then(() => settle(120)).then(() => at(-150, 400)).then(() => settle(500)).then(live);`), true, "reveals when leaving window up to 250 pt");
+    const slideIn = await run(`const done = watchCalls();
+      return at(-5, 400).then(() => settle(60)).then(() => at(2, 400)).then(() => settle(60)).then(() => at(80, 400)).then(() => settle(300)).then(() => ({ calls: done(), live: live() }));`);
+    assert.deepEqual(slideIn.calls.filter((c) => c === "hide"), [], `no hide sliding across edge back onto sidebar: ${slideIn.calls}`);
+    assert.equal(slideIn.live, true);
+    assert.equal(await run(`return away();`), false);
+
+    const brisk = await run(`const done = watchCalls();
+      const sweep = (xs, ms) => xs.reduce((p, x) => p.then(() => at(x, 400)).then(() => settle(ms)), Promise.resolve());
+      return at(300, 400).then(() => settle(120)).then(() => sweep([2, -20, -260], 15)).then(() => settle(400)).then(() => ({ calls: done(), live: live() }));`);
+    assert.deepEqual(brisk.calls, [], `brisk crossing never flickers open: ${brisk.calls}`);
+    assert.equal(brisk.live, false);
+
+    assert.equal(await run(`return at(-280, 400).then(() => settle(120)).then(() => at(-80, 400)).then(() => settle(500)).then(live);`), false, "outside approach beyond 50 pt stays closed");
+    assert.equal(await run(`return at(-40, 400).then(() => settle(500)).then(() => at(-180, 400)).then(() => settle(400)).then(live);`), true, "entering 50 pt opens and expands outer hold to 250 pt");
+    assert.equal(await run(`return away();`), false);
+    await run(`return globalThis.expo.modules.ArdiaDev.devSetWindowFrame("w1", [80, 80, ${WIDTH}, ${HEIGHT}]).then(() => settle(400));`);
   });
 } finally {
   await run(`return globalThis.expo.modules.ArdiaDev.devSidebarEdgePointer("w1", 0, 0, false).then(() => ac.shell.devSetPointer("w1", null));`).catch(() => {});

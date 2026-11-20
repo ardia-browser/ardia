@@ -49,8 +49,8 @@ export function setSettingsQuery(query: string) {
   useSettingsSearch.setState({ query, selected: 0, keyboardMove: 0, ...(query.trim() ? {} : { previewing: false }) });
 }
 
-export function dropSettingsSearch() {
-  if (useSettingsSearch.getState().query.trim()) noteSettingsSearch("dropped");
+export function dropSettingsSearch(consent: ConsentToken | null) {
+  if (useSettingsSearch.getState().query.trim()) noteSettingsSearch("dropped", consent);
   useSettingsSearch.setState({ query: "", selected: 0, keyboardMove: 0, reveal: null, flash: null, previewSection: null, previewing: false });
 }
 

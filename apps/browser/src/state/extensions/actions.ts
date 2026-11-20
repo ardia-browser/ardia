@@ -229,6 +229,7 @@ export function extensionMenuItems(ext: Pick<InstalledExtension, "name" | "enabl
 }
 
 export async function showExtensionMenu(windowId: string, ext: InstalledExtension) {
+  const consent = consentToken();
   const profile = extensionProfile(useBrowser.getState(), windowId);
   const panel = useExtensions.getState().sidePanels[windowId];
   const choice = await showMenu(extensionMenuItems(ext, panel?.extensionId === ext.id && !panel.hidden));
@@ -238,7 +239,7 @@ export async function showExtensionMenu(windowId: string, ext: InstalledExtensio
   if (choice === "remove") void removeExtension(profile, ext, windowId);
   if (choice === "sidePanel") void toggleSidePanel(windowId, ext.id);
   if (choice === "manage") {
-    dropSettingsSearch();
+    dropSettingsSearch(consent);
     openExtensionDetails(extensionsProfileId(null, windowId), ext.id);
     openSettings();
   }

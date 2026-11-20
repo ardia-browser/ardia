@@ -1,6 +1,7 @@
 import { focusWindow, openWindow } from "../../platform/windows";
 import { create } from "zustand";
 import { useBrowser } from "../browser/store";
+import { consentToken, type ConsentToken } from "../telemetry/choice";
 
 export const SETTINGS_WINDOW_ID = "settings";
 export const IMPORT_WINDOW_ID = "import";
@@ -60,13 +61,14 @@ export const SETTINGS_DETAIL = {
 
 export const detailValue = (detail: string | null, kind: "site" | "extension") => (detail?.startsWith(`${kind}:`) ? detail.slice(kind.length + 1) : null);
 
-const targetedOpenListeners = new Set<() => void>();
+const targetedOpenListeners = new Set<(consent: ConsentToken | null) => void>();
 
-export const onTargetedSettingsOpen = (listener: () => void) => void targetedOpenListeners.add(listener);
+export const onTargetedSettingsOpen = (listener: (consent: ConsentToken | null) => void) => void targetedOpenListeners.add(listener);
 
 export function openSettings(pane?: SettingsPane, profileId?: string | null, detail?: string | null) {
   if (pane) {
-    targetedOpenListeners.forEach((listener) => listener());
+    const consent = consentToken();
+    targetedOpenListeners.forEach((listener) => listener(consent));
     goToSettingsPane(pane, profileId ?? null, detail ?? null);
   }
   void openWindow(SETTINGS_WINDOW_ID, { kind: "settings", title: "Settings" });

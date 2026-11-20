@@ -45,6 +45,9 @@ store but through `storeAction` wrappers in each domain's `actions.ts` (`newTab`
   across windows on, a closing window's profiles that no open window holds go to the open window used last, pins
   included (`handOverTabs`, then `handOverPins` adopts what the close parked; state/tabs/sharedWindowClose.ts).
   Sync publishes parked pins as the profile's pins and applies changes to them in place (state/sync/adapters `pinnedAdapter`).
+  A session save that would drop pinned tabs or pinned folders of a profile that still exists first appends that profile's
+  previous pins, in parked-pins shape, to `pins-backup.json` (newest 20; state/session/pinGuard.ts). Restoring one is
+  putting its `pins` back in `parkedPins[profileId]`; the next window showing the profile adopts them.
 - Pins are per profile in every window (state/pins/pinMirror.ts): each regular window showing a profile holds its own copy
   (a Tab, a TabGroup) of every pinned tile and pinned group, linked by `pinKey` (unset on the first copy, whose id is
   the key; `pinKeyOf`). A store listener (`mirrorPins`) carries a change of one window's pinned section to the others

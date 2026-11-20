@@ -14,7 +14,8 @@ import type { BrowserWindow, ClosedWindow, ParkedPins, SplitView, Tab } from "..
 import { downloadSession, withoutRepeats } from "../downloads/downloadsSlice";
 import { anyDownloadProgress, withLiveProgress } from "../downloads/progress";
 import { noteDownloadHistoryWrite } from "../telemetry/downloadWork";
-import { noteSessionWrite } from "../telemetry/sessionWrites";
+import { noteSessionPinBackup, noteSessionWrite } from "../telemetry/sessionWrites";
+import { droppedPins, parsePinBackups, pinCensus, pinSources, PINS_BACKUP_DOCUMENT, withPinBackups, type PinCensus, type PinState } from "./pinGuard";
 import { noteSavedTopAppsMerged } from "../telemetry/topAppsSharing";
 import { parseSaved, unchanged, type Migrations, type SavedObject } from "../../lib/savedDocument";
 import { sessionWithCleanUpMinutes } from "../settings/cleanUpAfter";
@@ -301,6 +302,27 @@ export function startPersistence(overrides: LaunchOverrides = {}) {
   useBrowser.getState().hydrate(loaded ?? {});
   restoreLaunchLook();
 
+  let pinsSaved: PinState = useBrowser.getState();
+  let pinSourcesSaved = pinSources(pinsSaved);
+  let censusSaved: PinCensus | null = null;
+  const keepDroppedPins = (s: BrowserState) => {
+    const sources = pinSources(s);
+    if (sources.every((v, i) => v === pinSourcesSaved[i])) return;
+    const census = pinCensus(s);
+    const dropped = droppedPins(censusSaved ?? pinCensus(pinsSaved), census, s.profiles);
+    if (dropped.size) {
+      try {
+        const backups = withPinBackups(parsePinBackups(read(PINS_BACKUP_DOCUMENT)), pinsSaved, dropped, Date.now());
+        if (write(PINS_BACKUP_DOCUMENT, JSON.stringify(backups))) noteSessionPinBackup([...dropped.values()].reduce((a, n) => a + n, 0));
+      } catch (error) {
+        console.warn("Couldn't keep the dropped pins", error);
+      }
+    }
+    pinsSaved = s;
+    pinSourcesSaved = sources;
+    censusSaved = census;
+  };
+
   const lastSources = new Map<string, unknown[]>();
   const lastJson = new Map<string, string>();
   const dirty = new Set<Doc>();
@@ -325,6 +347,7 @@ export function startPersistence(overrides: LaunchOverrides = {}) {
     for (const doc of DOCS.filter((d) => dirty.has(d))) {
       const json = doc.json(s);
       const saved = lastJson.get(doc.name) === json;
+      if (!saved && doc.name === SESSION_DOCUMENT) keepDroppedPins(s);
       if (saved || write(doc.name, json)) {
         if (!saved && doc.name === DOWNLOADS_DOCUMENT) noteDownloadHistoryWrite(json.length);
         if (!saved && doc.name === SESSION_DOCUMENT) noteSessionWrite(json.length, cosmeticOnly);

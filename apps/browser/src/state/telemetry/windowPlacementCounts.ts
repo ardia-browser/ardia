@@ -26,7 +26,7 @@ onAppEvent((e) => {
 });
 
 export const noteWindowReopenedMaximized = () => void (isSharing() && reopenedMaximized++);
-export const noteWindowClosePinsKept = (n: number) => void (isSharing() && (closePinsKept += n));
+export const noteWindowClosePinsKept = (n: number) => void (closePinsKept += n);
 
 export function takeWindowPlacementCounts() {
   const taken = { window_centered_resizes: centeredResizes, windows_reopened_maximized: reopenedMaximized, window_titles_read: titlesRead, window_drag_loops: dragLoops, window_close_pins_kept: closePinsKept };

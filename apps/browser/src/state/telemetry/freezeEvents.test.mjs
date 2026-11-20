@@ -145,11 +145,11 @@ test("a signature whose hash is all digits survives the property scrub, stays di
   const sent = (await sentFreezes()).map((p) => p.signature);
   assert.deepEqual(sent, signatures);
   assert.notEqual(sent[0], sent[1]);
-  const day = Date.UTC(2026, 10, 20);
-  assert.equal(sends.claimDailySend(signatures[0], day), true);
-  assert.equal(sends.claimDailySend(signatures[0], day + 60_000), false, "same signature, same day");
-  assert.equal(sends.claimDailySend(signatures[1], day + 120_000), true);
-  assert.deepEqual(sends.sendsOn(day).signatures, signatures, "the ledger keeps the prefixed form");
+  assert.deepEqual(sends.sendsOn().signatures, signatures, "the ledger keeps the prefixed form");
+  for (const signature of signatures) assert.equal(sends.claimDailySend(signature), false, "same signature, same day");
+  events.resetFreezeEventsForTests();
+  for (const offset of offsets) await reportFreeze(record({ samples: [{ state: 1, frames: frames(["Ardia", offset]) }] }));
+  assert.deepEqual((await sentFreezes()).map((p) => p.signature), signatures, "sent again the same day: refused by the ledger");
 });
 
 test("a signature names the build: the same offsets in images with other UUIDs hash apart, an identical record hashes the same", async () => {

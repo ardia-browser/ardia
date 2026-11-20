@@ -16,7 +16,7 @@ const description =
 const jsonLd = [aboutArdiaPage({ home, url, title, description }), breadcrumbs(home, ["Moving from Arc", url])];
 
 const carried = [
-  { from: "Spaces", to: "The first space you pick fills the profile you import into. Each other one becomes its own profile, with its name and colour. Every space keeps its theme." },
+  { from: "Spaces", to: "Your first selected space fills the current profile. Each additional space becomes its own profile, keeping its name, color and theme." },
   { from: "Pinned tabs", to: "Pinned rows in that profile, with the names you gave them." },
   { from: "Pinned folders", to: "Pinned groups. Folders inside folders stay nested." },
   { from: "Favorites", to: "Tiles at the top of the sidebar." },
@@ -33,8 +33,8 @@ const timeline = [
 ---
 
 <Base title={title} description={description} jsonLd={jsonLd}>
-  <Header home={`${base}/`} />
-  <main>
+  <Header home={`${base}/`} current="arc" />
+  <main id="main">
     <section class="intro" aria-labelledby="arc-title">
       <div class="wrap">
         <p class="label kicker">Moving from Arc</p>
@@ -47,7 +47,7 @@ const timeline = [
           <DownloadButton location="arc" />
           <a class="link" href={`${base}/try/`}>Try the sidebar first</a>
         </div>
-        <p class="label fine not-phone">{MIN_MACOS} or later · Apple Silicon · Notarized by Apple</p>
+        <p class="label fine bits not-phone"><span>{MIN_MACOS} or later</span><span>Apple Silicon</span><span>Notarized by Apple</span></p>
       </div>
     </section>
 
@@ -76,8 +76,8 @@ const timeline = [
             <p>Pinned tabs, groups and today’s tabs down the side, in Arc’s layout. Hide it when you want the whole screen.</p>
           </div>
           <div class="col">
-            <h3>Split view, Peek, Little Arc</h3>
-            <p>Up to three pages side by side. ⇧-click a link to peek at it. ⌥⌘N opens a Little Ardia window.</p>
+            <h3>Split view, Peek, Little Ardia</h3>
+            <p>Up to three pages side by side. ⇧-click a link to peek at it. ⌥⌘N opens a Little Ardia window, like Little Arc.</p>
           </div>
           <div class="col">
             <h3>The command bar</h3>
@@ -89,7 +89,7 @@ const timeline = [
           </div>
           <div class="col">
             <h3>Real Chromium</h3>
-            <p>Sites and Chrome extensions just work. uBlock Origin is built in.</p>
+            <p>Sites and Chrome extensions run like they do in Chrome. uBlock Origin is built in.</p>
           </div>
           <div class="col">
             <h3>Ships most weeks</h3>
@@ -103,9 +103,9 @@ const timeline = [
       <div class="wrap">
         <h2 class="poster" id="missing-title">What doesn’t</h2>
         <ul class="plain">
-          <li><strong>Boosts and Easels.</strong> There’s no Boosts editor and no Easels.</li>
+          <li><strong>Boosts and Easels.</strong> Neither is built in.</li>
           <li><strong>Arc Max.</strong> Ardia has no AI, on purpose.</li>
-          <li><strong>Windows and Intel Macs.</strong> Ardia needs Apple Silicon and {MIN_MACOS} or later.</li>
+          <li><strong>Intel Macs and stable Windows.</strong> Mac needs Apple Silicon and {MIN_MACOS}+; Windows is nightly-only.</li>
         </ul>
       </div>
     </section>
@@ -135,7 +135,7 @@ const timeline = [
             ))
           }
         </dl>
-        <p class="note">Import while Arc still works. After December 22 there’s no Arc left to ask.</p>
+        <p class="note">Import before December 22, while Arc still opens and unlocks your saved data.</p>
       </div>
     </section>
 
@@ -143,8 +143,8 @@ const timeline = [
       <div class="wrap">
         <h2 class="poster" id="dia-title">Why not Dia?</h2>
         <p class="note">
-          Arc points you to Dia, made by the same team. Dia is built around AI and runs on Windows too. Ardia dresses like Dia, keeps
-          Arc’s sidebar, and leaves the AI out. Both import from Arc, so try both.
+          The Browser Company points Arc users to Dia, which is built around AI. Ardia looks like Dia, keeps Arc’s sidebar, and
+          leaves built-in AI out. Both import from Arc, so try both.
         </p>
       </div>
     </section>
@@ -160,7 +160,6 @@ const timeline = [
   }
   .intro h1 {
     font-size: var(--t-mega);
-    line-height: 0.82;
     margin-left: -0.04em;
   }
   .lede {
@@ -219,11 +218,10 @@ const timeline = [
     padding-top: 24px;
   }
   .col h3 {
-    font-weight: 620;
-    font-stretch: 104%;
+    font-weight: 640;
     font-size: 1.25rem;
     line-height: 1.25;
-    letter-spacing: -0.018em;
+    letter-spacing: -0.022em;
   }
   .col p {
     margin-top: 10px;

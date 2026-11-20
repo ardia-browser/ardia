@@ -11,16 +11,17 @@ import SendToMac from "./SendToMac.astro";
 import { DISCORD, MIN_MACOS, VERSION } from "../data/release";
 const hillsMask = await getImage({ src: hills, width: 320, format: "webp" });
 const whatsNew = (await getEntry("releaseNotes", VERSION)) ? `${base}/release-notes/${VERSION}/` : `${base}/release-notes/`;
+const formats = import.meta.env.DEV ? [] : ["avif"];
 ---
 
-<section class="closing paint edge dark" aria-labelledby="closing-title" data-shot="closing">
+<section class="closing paint edge dark" data-paint="night" aria-labelledby="closing-title" data-shot="closing">
   <div class="wrap closing-grid">
     <div class="closing-copy">
       <p class="label kicker">Same engine as Chrome</p>
-      <h2 class="poster" id="closing-title" data-reveal>Better<br />view.</h2>
+      <h2 class="poster" id="closing-title" data-reveal>Better <br />view.</h2>
       <p class="lede" data-reveal style="--i: 1">
         Make Ardia your default. <span class="not-pc">It’s one drag into Applications.</span><span class="windows-only"
-          >No admin needed: it installs just for you.</span
+          >Installs per user, no admin prompt.</span
         ><span class="linux-only">One tarball, one install script.</span>
       </p>
       <SendToMac location="closing" />
@@ -35,9 +36,9 @@ const whatsNew = (await getEntry("releaseNotes", VERSION)) ? `${base}/release-no
       </div>
       <MacOnlyNote location="closing" />
       <PcNote location="closing" />
-      <p class="label fine not-phone not-pc">{MIN_MACOS} or later · Apple Silicon · Notarized by Apple</p>
+      <p class="label fine bits not-phone not-pc"><span>{MIN_MACOS} or later</span><span>Apple Silicon</span><span>Notarized by Apple</span></p>
       <p class="nightly not-phone not-pc" data-reveal style="--i: 3">
-        Nightly gets every fix the day it’s made, smudges and all. Back to stable any time in Settings › General.
+        Nightly ships daily fixes. Switch back to stable any time in Settings › General.
       </p>
       <p class="brew not-phone not-pc">Homebrew: <code>brew install ardia-browser/tap/ardia</code></p>
     </div>
@@ -47,7 +48,7 @@ const whatsNew = (await getEntry("releaseNotes", VERSION)) ? `${base}/release-no
           class="sun"
           src={sun}
           alt=""
-          formats={["avif"]}
+          formats={formats}
           fallbackFormat="webp"
           widths={[160, 260]}
           sizes="(max-width: 900px) 20vw, 160px"
@@ -60,7 +61,7 @@ const whatsNew = (await getEntry("releaseNotes", VERSION)) ? `${base}/release-no
           class="hills"
           src={hills}
           alt=""
-          formats={["avif"]}
+          formats={formats}
           fallbackFormat="webp"
           widths={[420, 640, hills.width]}
           sizes="(max-width: 900px) 72vw, 600px"
@@ -68,17 +69,12 @@ const whatsNew = (await getEntry("releaseNotes", VERSION)) ? `${base}/release-no
           decoding="async"
         />
       </div>
-      <p class="caption label">Sun’s setting. Tabs aren’t.</p>
     </div>
   </div>
 </section>
 
 <style>
   .closing {
-    --bg: var(--twilight);
-    --bg-top: #8a5f7f;
-    --wash: linear-gradient(180deg, #8a5f7f 0%, var(--twilight) 34%, var(--evening) 100%);
-    --dab: var(--sun);
     padding: var(--section) 0 clamp(72px, 9vw, 140px);
   }
   .closing-grid {
@@ -91,8 +87,9 @@ const whatsNew = (await getEntry("releaseNotes", VERSION)) ? `${base}/release-no
     grid-column: 1 / span 7;
   }
   h2 {
-    font-size: clamp(3.6rem, 1rem + 14vw, 15rem);
-    line-height: 0.82;
+    font-size: clamp(3.4rem, 1.2rem + 8vw, 8.6rem);
+    line-height: 0.95;
+    letter-spacing: -0.032em;
   }
   .lede {
     margin-top: 32px;
@@ -112,11 +109,11 @@ const whatsNew = (await getEntry("releaseNotes", VERSION)) ? `${base}/release-no
     align-items: center;
   }
   .closing :global(.send-link) {
-    color: var(--night-ink);
+    color: var(--ink);
   }
   .closing :global(.send-main) {
     --btn-bg: var(--sun);
-    --btn-fg: var(--ink);
+    --btn-fg: var(--day-ink);
     --btn-wipe: var(--sun-pale);
   }
   .fine {
@@ -136,7 +133,7 @@ const whatsNew = (await getEntry("releaseNotes", VERSION)) ? `${base}/release-no
   }
   .brew code {
     font-family: var(--mono);
-    color: var(--night-ink);
+    color: var(--ink);
     user-select: all;
   }
   .closing-stage {
@@ -178,13 +175,6 @@ const whatsNew = (await getEntry("releaseNotes", VERSION)) ? `${base}/release-no
     height: auto;
     filter: brightness(0.82) saturate(0.85);
   }
-  .caption {
-    position: absolute;
-    right: 0;
-    bottom: -34px;
-    margin: 0;
-    color: var(--ink-3);
-  }
   @supports (animation-timeline: view()) {
     @media (prefers-reduced-motion: no-preference) {
       .sunset {
@@ -217,7 +207,7 @@ const whatsNew = (await getEntry("releaseNotes", VERSION)) ? `${base}/release-no
   }
   @media (max-width: 900px) {
     h2 {
-      font-size: min(calc((100vw - 2 * var(--gutter)) / 2.5), 15rem);
+      font-size: clamp(3.2rem, 13vw, 5.5rem);
     }
     .closing-copy,
     .closing-stage {

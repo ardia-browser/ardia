@@ -33,13 +33,13 @@ const sections = [
   ["logo", "Logo"],
   ["screenshots", "Screenshots"],
   ["about", "About"],
-  ["colours", "Colours"],
+  ["colors", "Colors"],
   ["type", "Type"],
   ["rules", "Rules"],
 ];
 const rules = [
-  "Use the logos as they are. Don’t redraw the hills, recolour them, stretch, rotate, outline or add effects.",
-  "Give the mark room: at least the sun’s width of clear space all round.",
+  "Use the logos as they are. Don’t redraw the hills, recolor them, stretch, rotate, outline or add effects.",
+  "Give the mark room: at least the sun’s width of clear space all around.",
   "Black on light backgrounds, white on dark ones and photos.",
   "Write the name Ardia, with a capital A.",
   "Crop the screenshots as you like, but don’t edit what’s inside the window.",
@@ -47,14 +47,14 @@ const rules = [
 ];
 ---
 
-<Base title="Press kit · Ardia" description="Logos, screenshots, colours and the words for writing about Ardia, the sidebar browser for Mac.">
+<Base title="Press kit · Ardia" description="Logos, screenshots, colors and boilerplate copy for Ardia, the sidebar browser for Mac.">
   <Header home={`${base}/`} />
-  <main class="press">
+  <main id="main" class="press">
     <section class="wrap intro">
       <p class="label kicker">Press kit</p>
-      <h1 class="poster">Free real<br />estate.</h1>
+      <h1 class="poster">Take what <br />you need.</h1>
       <p class="lede">
-        Logos, screenshots, colours and the words for writing about Ardia. Take what you need. For an interview or anything that isn’t here,
+        Logos, screenshots, colors and boilerplate copy for writing about Ardia. For an interview or anything that isn’t here,
         say hi on <a class="link" href={DISCORD} rel="noopener" data-track="discord_clicked" data-track-location="press">Discord</a> or open an
         issue on <a class="link" href={`${REPO}/issues`} rel="noopener" data-track="github_clicked" data-track-link="issues" data-track-location="press">GitHub</a>.
       </p>
@@ -64,7 +64,7 @@ const rules = [
             <path d="M8 1v11.5M2.5 7.5 8 13l5.5-5.5M1.5 17h13" stroke="currentColor" stroke-width="2" stroke-linecap="square"></path>
           </svg>
           <span>Download everything</span>
-          <span class="btn-meta">ZIP · {zipSize}</span>
+          <span class="btn-meta">ZIP, {zipSize}</span>
         </a>
       </div>
       <nav class="toc" aria-label="On this page">
@@ -118,7 +118,7 @@ const rules = [
     <section class="wrap block" id="screenshots" aria-labelledby="screenshots-title">
       <header class="block-head">
         <h2 class="poster" id="screenshots-title">Screenshots</h2>
-        <p>Real window captures at 2×, on a transparent background. Click one for the PNG.</p>
+        <p>Real 2× window captures. Click any shot to download the JPG.</p>
       </header>
       <ul class="block-body shots">
         {
@@ -130,7 +130,7 @@ const rules = [
                 download
                 data-track="press_kit_downloaded"
                 data-track-file={shotFile(s.id)}
-                aria-label={`${s.title}, PNG`}
+                aria-label={`${s.title}, JPG`}
               >
                 <Picture
                   src={s.image}
@@ -146,7 +146,7 @@ const rules = [
               <div class="shot-text">
                 <h3>{s.title}</h3>
                 <span class="label dims">
-                  PNG · {s.image.width} × {s.image.height}
+                  JPG, {s.image.width} × {s.image.height}
                 </span>
               </div>
             </li>
@@ -198,9 +198,9 @@ const rules = [
       </div>
     </section>
 
-    <section class="wrap block" id="colours" aria-labelledby="colours-title">
+    <section class="wrap block" id="colors" aria-labelledby="colors-title">
       <header class="block-head">
-        <h2 class="poster" id="colours-title">Colours</h2>
+        <h2 class="poster" id="colors-title">Colors</h2>
         <p>The logo’s four, and the two the site is printed in. Click a value to copy it.</p>
       </header>
       <ul class="block-body swatches">
@@ -234,7 +234,7 @@ const rules = [
           FONTS.map((f, i) => (
             <li class="font">
               <p class:list={["specimen", i === 0 ? "poster" : "label"]} style={`font-family: ${f.family}`} aria-hidden="true">
-                {i === 0 ? "Sidebar first." : `Apple Silicon · macOS ${MIN_MACOS_MAJOR}+`}
+                {i === 0 ? "Sidebar first." : `Apple Silicon, macOS ${MIN_MACOS_MAJOR}+`}
               </p>
               <div class="font-text">
                 <h3>
@@ -350,12 +350,11 @@ const rules = [
   }
 
   h3 {
-    font-family: var(--poster);
-    font-weight: 760;
-    font-stretch: 90%;
+    font-family: var(--sans);
+    font-weight: 680;
     font-size: 1.15rem;
-    letter-spacing: -0.005em;
-    line-height: 1.2;
+    letter-spacing: -0.018em;
+    line-height: 1.22;
   }
 
   .chips {

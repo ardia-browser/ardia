@@ -5,8 +5,41 @@ type RawContender = (typeof raw.contenders)[number];
 type Side = "ardia" | "aside" | "opencode";
 
 export type Bar = { task: string; value: number; text: string; passes: number; runs: number; partial: boolean };
-export type Series = { side: Side; name: string; total: string; bars: (Bar | null)[] };
-export type Chart = { id: string; title: string; agent: string; ticks: { value: number; text: string; at: number }[]; max: number; series: Series[] };
+export type Series = { side: Side; name: string; sum: number; share: number; total: string; isBest: boolean; bars: (Bar | null)[] };
+export type TaskCell = {
+  side: Side;
+  name: string;
+  value: number | null;
+  text: string;
+  share: number;
+  passes: number;
+  runs: number;
+  partial: boolean;
+  isBest: boolean;
+};
+export type RowCallout = { figure: string; line: string; loss: boolean };
+export type TaskRow = {
+  task: string;
+  title: string;
+  cells: TaskCell[];
+  ardiaText: string;
+  ardiaBest: boolean;
+  partialNote: string | null;
+  callout: RowCallout | null;
+};
+export type ChartHeadline = { figure: string; line: string; secondary: string | null };
+export type Chart = {
+  id: string;
+  title: string;
+  agent: string;
+  agentName: string;
+  model: string;
+  headline: ChartHeadline;
+  ticks: { value: number; text: string; at: number }[];
+  max: number;
+  series: Series[];
+  rows: TaskRow[];
+};
 
 const SHORT: Record<string, string> = {
   calendar: "Calendar",
@@ -40,7 +73,7 @@ function niceStep(rough: number) {
 }
 
 function chartOf(model: string): Chart {
-  const series = SIDES.flatMap(({ side, name }) => {
+  const rawSeries = SIDES.flatMap(({ side, name }) => {
     const contender = contenderOf(side, model);
     if (!contender) return [];
     const bars = raw.tasks.map((t) => {
@@ -57,22 +90,85 @@ function chartOf(model: string): Chart {
       };
     });
     const sum = bars.reduce((n, b) => n + (b?.value ?? 0), 0);
-    return [{ side, name, total: millions(sum), bars }];
+    return [{ side, name, sum, total: millions(sum), bars }];
   });
-  const top = Math.max(...series.flatMap((s) => s.bars.map((b) => b?.value ?? 0)));
+  const maxSum = Math.max(...rawSeries.map((s) => s.sum), 1);
+  const minSum = Math.min(...rawSeries.map((s) => s.sum));
+  const series: Series[] = rawSeries.map((s) => ({
+    ...s,
+    share: s.sum / maxSum,
+    isBest: s.sum === minSum,
+  }));
+  const top = Math.max(...series.flatMap((s) => s.bars.map((b) => b?.value ?? 0)), 1);
   const step = niceStep(top / 4);
   const max = step * Math.ceil(top / step);
   const ticks = Array.from({ length: Math.round(max / step) + 1 }, (_, i) => {
     const value = step * i;
     return { value, text: tokenTick(value), at: (value / max) * 100 };
   });
+  const rows: TaskRow[] = raw.tasks.map((t, ti) => {
+    const task = SHORT[t.id] ?? t.title;
+    const vals = series.map((s) => s.bars[ti]?.value ?? null).filter((v): v is number => v !== null);
+    const minVal = vals.length ? Math.min(...vals) : -1;
+    const cells: TaskCell[] = series.map((s) => {
+      const b = s.bars[ti];
+      return {
+        side: s.side,
+        name: s.name,
+        value: b?.value ?? null,
+        text: b?.text ?? "N/A",
+        share: b ? b.value / top : 0,
+        passes: b?.passes ?? 0,
+        runs: b?.runs ?? 0,
+        partial: b?.partial ?? false,
+        isBest: b != null && b.value === minVal,
+      };
+    });
+    const ardiaCell = cells.find((c) => c.side === "ardia");
+    const opencodeCell = cells.find((c) => c.side === "opencode");
+    const partialCell = cells.find((c) => c.partial);
+    const callout: RowCallout | null = (() => {
+      if (!ardiaCell?.value || !opencodeCell?.value) return null;
+      if (ardiaCell.value <= opencodeCell.value) {
+        const r = opencodeCell.value / ardiaCell.value;
+        if (r >= 1.5) return { figure: `${r.toFixed(1)}×`, line: "fewer than OpenCode", loss: false };
+        const pct = Math.round(((opencodeCell.value - ardiaCell.value) / opencodeCell.value) * 100);
+        return { figure: `${pct}%`, line: "fewer than OpenCode", loss: false };
+      }
+      const pct = Math.round(((ardiaCell.value - opencodeCell.value) / opencodeCell.value) * 100);
+      return { figure: `${pct}%`, line: "more than OpenCode", loss: true };
+    })();
+    return {
+      task,
+      title: t.title,
+      cells,
+      ardiaText: ardiaCell?.text ?? "N/A",
+      ardiaBest: ardiaCell?.isBest ?? false,
+      partialNote: partialCell ? `${partialCell.name} ${partialCell.passes}/${partialCell.runs}` : null,
+      callout,
+    };
+  });
+  const ardia = series.find((s) => s.side === "ardia");
+  const aside = series.find((s) => s.side === "aside");
+  const opencode = series.find((s) => s.side === "opencode");
+  const ratio = ardia && opencode && ardia.sum > 0 ? opencode.sum / ardia.sum : 1;
+  const pctVsAside = ardia && aside && aside.sum > 0 ? Math.round(((aside.sum - ardia.sum) / aside.sum) * 100) : 0;
+  const agentName = agentOf(model);
   return {
     id: `${model.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-tokens`,
     title: "Tokens",
-    agent: `${agentOf(model)} · ${model}`,
+    agent: `${agentName}, ${model}`,
+    agentName,
+    model,
+    headline: {
+      figure: `${ratio.toFixed(1)}×`,
+      line: "fewer tokens than OpenCode",
+      secondary: pctVsAside > 0 ? `${pctVsAside}% fewer than Aside` : null,
+    },
     ticks,
     max,
     series,
+    rows,
   };
 }
 

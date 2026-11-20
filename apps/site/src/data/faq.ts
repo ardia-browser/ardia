@@ -1,7 +1,7 @@
 export type Question = { id?: string; question: string; answer: string; more?: { path: string; label: string } };
 
 export const FAQ: Question[] = [
-  { question: "What does it cost?", answer: "Nothing. It’s open source under GPL-3.0. No paid tier, no catch." },
+  { question: "What does it cost?", answer: "Nothing. It’s free and open source under GPL-3.0." },
   {
     id: "install",
     question: "Is it safe to open?",
@@ -10,18 +10,18 @@ export const FAQ: Question[] = [
   {
     question: "What does it collect?",
     answer:
-      "Once a day the app sends one anonymous “opened today” count with its version and macOS version and no persistent ID, so we know how many people use it. Update checks are counted by version and day, and whether it’s a new copy’s first. Each launch also reads one small file, the same for everyone, so we can switch off a speed-up that misbehaves. Nothing else, unless you tick the box. Then crash reports and counts, never your sites or searches.",
+      "Once a day, Ardia sends an anonymous ping with the app and macOS versions and no lasting ID. Update checks log the version, day and first-install flag. Launch also reads one shared config file so we can turn off a buggy optimization. Crash reports and feature counts stay off unless you opt in, and never include your sites or searches.",
   },
   {
     question: "And this website?",
-    answer: "It counts its own visitors on its own servers, replays included, typing masked, gone after 30 days. No third party does the counting.",
+    answer: "We self-host analytics and 30-day session replays with typed text masked. No third-party trackers.",
   },
   {
     question: "Coming from Arc?",
-    answer: "Same sidebar, same muscle memory. The importer brings your spaces, pinned tabs and their names along.",
+    answer: "Yes. The importer brings over your spaces, pinned tabs, folders and themes.",
     more: { path: "arc/", label: "See what comes over." },
   },
-  { question: "Is this Dia?", answer: "No. It dresses like Dia, or like Arc if you ask." },
+  { question: "Is this Dia?", answer: "No. It defaults to Dia’s look, with an Arc layout option in Settings." },
   { question: "Why “Ardia”?", answer: "Arc plus Dia." },
 ];
 

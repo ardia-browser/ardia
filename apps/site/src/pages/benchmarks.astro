@@ -20,8 +20,8 @@ const versus = ["Ardia", ...rivalNames].join(" vs ");
 const dataPath = "apps/site/src/data/bench.json";
 const dataPage = `${REPO}/blob/main/${dataPath}`;
 const dataFile = `${REPO.replace("https://github.com/", "https://raw.githubusercontent.com/")}/main/${dataPath}`;
-const description = `Ardia against ${rivals} on one Mac: launch, tabs, memory, idle CPU, Speedometer 3 and power.${
-  card ? ` ${card.total} tests, medians only, losses left in.` : ""
+const description = `Ardia vs ${rivals}: launch, tabs, memory, idle CPU, Speedometer 3 and power.${
+  card ? ` ${card.total} tests, medians only.` : ""
 }`;
 const organization = { "@type": "Organization", name: "Ardia", url: home };
 const jsonLd = [
@@ -53,24 +53,23 @@ const jsonLd = [
 
 <Base title={`Mac browser benchmarks · ${versus}`} description={description} jsonLd={jsonLd}>
   <Header home={`${base}/`} current="benchmarks" />
-  <main>
+  <main id="main">
     <ComputerUse page />
-    <Bench page />
+    <Bench page heading="h2" />
     {
       bench && (
-        <section class="method paint edge edge-b" aria-labelledby="method-title">
+        <section class="method paint edge edge-b" data-paint="sundown" aria-labelledby="method-title">
           <div class="wrap method-grid">
             <header class="method-head">
               <p class="label kicker">The method</p>
-              <h2 class="poster" id="method-title">No warm starts.</h2>
-              <p class="sub">Same Mac, same script, same pages for every browser. The rows Ardia loses stay on the board.</p>
+              <h2 class="poster" id="method-title">How we run it.</h2>
+              <p class="sub">One harness runs every browser on the same local pages, losses included.</p>
             </header>
             <dl class="facts">
               <div class="fact">
                 <dt>The Mac</dt>
                 <dd>
-                  {bench.dated ? `${bench.machine}. ${bench.dated}.` : `${bench.machine}, on ${bench.date}.`}{bench.elsewhere && ` ${bench.elsewhere}.`} It’s the owner’s working Mac in normal use, so the browsers take turns and share
-                  whatever else is going on.
+                  {bench.dated ? `${bench.machine}. ${bench.dated}.` : `${bench.machine}, on ${bench.date}.`}{bench.elsewhere && ` ${bench.elsewhere}.`} Run on a daily-driver Mac in normal use, with browsers taking turns under the same background load.
                 </dd>
               </div>
               <div class="fact">
@@ -119,13 +118,6 @@ const jsonLd = [
 
 <style>
   .method {
-    --bg: var(--dusk);
-    --bg-top: #e3a585;
-    --wash: linear-gradient(180deg, #e3a585 0%, var(--dusk) 50%, var(--dusk-late) 100%);
-    --ink-2: #3f3437;
-    --ink-3: #5a4a4e;
-    --dab: var(--sun);
-    --rule: rgb(22 25 26 / 0.2);
     padding: var(--section) 0;
   }
   .method-grid {
@@ -177,6 +169,9 @@ const jsonLd = [
     gap: 12px 28px;
   }
   .more .link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
     color: var(--ink);
     font-weight: 600;
   }

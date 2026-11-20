@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { goToSettingsPane, type SettingsPane, useSettingsNav } from "./settingsWindows";
+import { goToSettingsPane, onTargetedSettingsOpen, type SettingsPane, useSettingsNav } from "./settingsWindows";
 import { settingsProfileFor } from "../extensions/store";
 import { noteSettingsSearch, noteSettingsSearchReveal } from "../telemetry/usage";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
@@ -49,9 +49,12 @@ export function setSettingsQuery(query: string) {
   useSettingsSearch.setState({ query, selected: 0, keyboardMove: 0, ...(query.trim() ? {} : { previewing: false }) });
 }
 
-export function clearSettingsSearch() {
+export function dropSettingsSearch() {
+  if (useSettingsSearch.getState().query.trim()) noteSettingsSearch("dropped");
   useSettingsSearch.setState({ query: "", selected: 0, keyboardMove: 0, reveal: null, flash: null, previewSection: null, previewing: false });
 }
+
+onTargetedSettingsOpen(dropSettingsSearch);
 
 export function noteSettingsSearchEmpty() {
   if (emptyNoted) return;

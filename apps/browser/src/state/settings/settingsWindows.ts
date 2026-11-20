@@ -60,8 +60,15 @@ export const SETTINGS_DETAIL = {
 
 export const detailValue = (detail: string | null, kind: "site" | "extension") => (detail?.startsWith(`${kind}:`) ? detail.slice(kind.length + 1) : null);
 
+const targetedOpenListeners = new Set<() => void>();
+
+export const onTargetedSettingsOpen = (listener: () => void) => void targetedOpenListeners.add(listener);
+
 export function openSettings(pane?: SettingsPane, profileId?: string | null, detail?: string | null) {
-  if (pane) goToSettingsPane(pane, profileId ?? null, detail ?? null);
+  if (pane) {
+    targetedOpenListeners.forEach((listener) => listener());
+    goToSettingsPane(pane, profileId ?? null, detail ?? null);
+  }
   void openWindow(SETTINGS_WINDOW_ID, { kind: "settings", title: "Settings" });
 }
 

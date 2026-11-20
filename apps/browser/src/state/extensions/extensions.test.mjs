@@ -1130,3 +1130,21 @@ test("Manage Extension opens its details after a Settings search", async () => {
     setSettingsQuery("");
   }
 });
+
+test("Settings opened at a place from outside drops a search left from before, so its preview can't replace that place", async () => {
+  const { currentSettingsSearch, previewSetting, setSettingsQuery } = await import("../settings/searchState.ts");
+  const { openSiteSettings, useSettingsNav } = await import("../settings/settingsWindows.ts");
+  const target = { id: "appearance.theme", pane: "appearance", section: "theme" };
+  try {
+    setSettingsQuery("theme");
+    previewSetting(target);
+    assert.equal(useSettingsNav.getState().pane, "appearance");
+    openSiteSettings("https://example.com", "default");
+    previewSetting(target);
+    assert.equal(currentSettingsSearch().query, "");
+    assert.equal(useSettingsNav.getState().pane, "profiles");
+    assert.equal(useSettingsNav.getState().detail, "site:https://example.com");
+  } finally {
+    setSettingsQuery("");
+  }
+});

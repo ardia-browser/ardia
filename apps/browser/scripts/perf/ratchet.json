@@ -431,6 +431,7 @@
     "launch.writes.dev-console.log": 1,
     "launch.writes.dev-eval-result.json": 4,
     "launch.writes.release-notes.json": 1,
+    "nodeChurn.nativeNodesLeft": 0,
     "open.mounts.ArdiaActivitySpinner": 20,
     "open.mounts.ArdiaContextMenuArea": 20,
     "open.mounts.ArdiaFadeLabel": 20,

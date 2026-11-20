@@ -2,6 +2,7 @@ import type { MenuItem } from "../../platform/menus";
 import type { MenuShortcut } from "../../platform/commands";
 import { useMemo } from "react";
 import { create } from "zustand";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { useBrowser } from "../browser/store";
 import { ALL, useKeyed } from "../browser/keyedWatch";
 import { shortcutSources, UNAVAILABLE_COMMANDS } from "./commandCatalog";
@@ -12,11 +13,11 @@ export { cancelShortcutRecording, recordShortcut, type MenuShortcut } from "../.
 
 type MenuModifier = NonNullable<Extract<MenuItem, { id: string }>["modifiers"]>[number];
 type MenuKey = { key?: string; modifiers?: MenuModifier[] };
-type ShortcutState = { settings: { shortcuts: ShortcutOverrides }; profileOrder: readonly string[] };
+type ShortcutState = { settings: { shortcuts: ShortcutOverrides; mouseShortcuts?: ShortcutOverrides }; profileOrder: readonly string[] };
 type MenuBar = { listed: ReadonlySet<string>; fixed: readonly ShortcutSource[] };
 
 const useMenuBar = create<{ bar: MenuBar | undefined; revision: number }>()(() => ({ bar: undefined, revision: 0 }));
-let resolvedFor: { overrides: ShortcutOverrides; profiles: readonly string[]; menuBar: MenuBar | undefined; resolved: ResolvedShortcuts } | undefined;
+let resolvedFor: { overrides: ShortcutOverrides; mouse: ShortcutOverrides | undefined; profiles: readonly string[]; menuBar: MenuBar | undefined; resolved: ResolvedShortcuts } | undefined;
 
 export function setMenuBarShortcuts(offered: readonly MenuShortcut[]) {
   const items = offered.filter((item) => !UNAVAILABLE_COMMANDS.has(item.id));
@@ -32,11 +33,12 @@ export const useMenuBarRevision = () => useMenuBar((m) => m.revision);
 
 export function resolvedShortcuts({ settings, profileOrder }: ShortcutState): ResolvedShortcuts {
   const overrides = settings.shortcuts;
+  const mouse = PLATFORM_FEATURES.mouseShortcuts ? settings.mouseShortcuts : undefined;
   const bar = useMenuBar.getState().bar;
-  if (resolvedFor?.overrides !== overrides || resolvedFor.profiles !== profileOrder || resolvedFor.menuBar !== bar) {
-    const catalog = shortcutSources(profileOrder, Object.keys(overrides));
+  if (resolvedFor?.overrides !== overrides || resolvedFor.mouse !== mouse || resolvedFor.profiles !== profileOrder || resolvedFor.menuBar !== bar) {
+    const catalog = shortcutSources(profileOrder, [...Object.keys(overrides), ...Object.keys(mouse ?? {})]);
     const sources = bar ? [...catalog.filter((source) => bar.listed.has(source.id)), ...bar.fixed] : catalog;
-    resolvedFor = { overrides, profiles: profileOrder, menuBar: bar, resolved: resolveShortcuts(sources, overrides) };
+    resolvedFor = { overrides, mouse, profiles: profileOrder, menuBar: bar, resolved: resolveShortcuts(sources, overrides, undefined, mouse) };
   }
   return resolvedFor.resolved;
 }
@@ -85,6 +87,18 @@ export function menuBarBindings(s: ShortcutState): Record<string, string[][]> {
     bindings[`newWindow:${id}`] = alternate ? [stored(alternate)] : [];
   }
   menuBarBindingsOf.set(resolved, bindings);
+  return bindings;
+}
+
+const menuBarMouseBindingsOf = new WeakMap<ResolvedShortcuts, Record<string, string[]>>();
+
+export function menuBarMouseBindings(s: ShortcutState): Record<string, string[]> {
+  const resolved = resolvedShortcuts(s);
+  const cached = menuBarMouseBindingsOf.get(resolved);
+  if (cached) return cached;
+  const bindings: Record<string, string[]> = {};
+  for (const [id, button] of resolved.mouse) if (resolved.holdersOf(button)[0] === id) bindings[id] = stored(button);
+  menuBarMouseBindingsOf.set(resolved, bindings);
   return bindings;
 }
 

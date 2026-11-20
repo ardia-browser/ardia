@@ -5,7 +5,13 @@ const MUTE_FADE_SECONDS = 0.25;
 const FRAME_MS = 1000 / 60;
 
 type Player = { volume: number; play(): Promise<void>; pause(): void; addEventListener(type: "ended", listener: () => void): void };
-type IntroMusicOptions = { host?: ArdiaHost; track?: () => Promise<string>; createPlayer?: (src: string) => Player; onPlayed?: (played: boolean) => void };
+type FrameTimer = { every(tick: () => void, ms: number): unknown; cancel(handle: unknown): void };
+type IntroMusicOptions = { host?: ArdiaHost; track?: () => Promise<string>; createPlayer?: (src: string) => Player; onPlayed?: (played: boolean) => void; frames?: FrameTimer };
+
+const intervalFrames: FrameTimer = {
+  every: (tick, ms) => setInterval(tick, ms),
+  cancel: (handle) => clearInterval(handle as ReturnType<typeof setInterval> | undefined),
+};
 
 const bundledTrack = () => import("./introMusicTrack").then((module) => module.introMusicTrack);
 
@@ -16,15 +22,15 @@ export function introMusicSilenced(host?: ArdiaHost): boolean {
   return launch.background && !truthy(launch.instance.allowAudio);
 }
 
-export function linuxIntroMusic({ host, track = bundledTrack, createPlayer = (src) => new Audio(src), onPlayed }: IntroMusicOptions = {}) {
+export function linuxIntroMusic({ host, track = bundledTrack, createPlayer = (src) => new Audio(src), onPlayed, frames = intervalFrames }: IntroMusicOptions = {}) {
   let playing: Player | null = null;
   let loading: { muted: boolean } | null = null;
-  let fading: ReturnType<typeof setInterval> | undefined;
+  let fading: unknown;
 
   const fade = (target: number, seconds: number, stopAfter: boolean) => {
     const audio = playing;
     if (!audio) return;
-    clearInterval(fading);
+    frames.cancel(fading);
     const from = audio.volume;
     const steps = Math.max(1, Math.round(seconds * 60));
     let step = 0;
@@ -32,7 +38,7 @@ export function linuxIntroMusic({ host, track = bundledTrack, createPlayer = (sr
       step++;
       audio.volume = Math.min(1, Math.max(0, from + (target - from) * (step / steps)));
       if (step < steps) return;
-      clearInterval(fading);
+      frames.cancel(fading);
       if (!stopAfter) return;
       audio.pause();
       if (playing === audio) playing = null;
@@ -42,7 +48,7 @@ export function linuxIntroMusic({ host, track = bundledTrack, createPlayer = (sr
       tick();
       return;
     }
-    fading = setInterval(tick, FRAME_MS);
+    fading = frames.every(tick, FRAME_MS);
   };
 
   return {
@@ -54,7 +60,7 @@ export function linuxIntroMusic({ host, track = bundledTrack, createPlayer = (sr
       if (loading !== load) return;
       loading = null;
       if (!src) return onPlayed?.(false);
-      clearInterval(fading);
+      frames.cancel(fading);
       playing?.pause();
       const audio = createPlayer(src);
       audio.volume = load.muted ? 0 : 1;

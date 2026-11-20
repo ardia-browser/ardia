@@ -41,6 +41,7 @@ import { noteSiteControls } from "../../state/telemetry/usage";
 import { HistoryButton, ReloadButton } from "./NavButtons";
 import { FIELD_LOAD, TOOLBAR_MOTION } from "./tokens";
 import { useToolbarRow } from "./useToolbarRow";
+import { useStableHandler } from "./useStableHandler";
 import { PAGE_IDENTITY_TAG } from "../../state/tabs/tabReveal";
 import { DeveloperToolsButtons } from "./DeveloperToolsButtons";
 import { useDeveloperMode } from "../../state/site/developerMode";
@@ -102,9 +103,12 @@ export const Toolbar = memo(function Toolbar({
     dimmedFor.current = focused;
     Animated.timing(dim, { toValue: focused ? 1 : 0.5, duration: TOOLBAR_MOTION.dim, easing: curve.enter, useNativeDriver: true }).start();
   }, [focused]);
-  const focus = useCallback(() => {
+  const focus = useStableHandler(() => {
     if (!focused) activate(tabId);
-  }, [focused, tabId]);
+  });
+  const toggleTabs = useCallback(() => toggleSidebar(windowId), [windowId]);
+  const splitMenu = useCallback(() => showSplitMenu(tabId), [tabId]);
+  const closeThisPane = useCallback(() => closePane(tabId), [tabId]);
   const at = useMemo(() => {
     const top = row.center - row.button / 2;
     const place = (center: number | null) => ({ position: "absolute" as const, top, left: (center ?? 0) - row.button / 2 });
@@ -131,7 +135,7 @@ export const Toolbar = memo(function Toolbar({
             palette={palette}
             icon={tabsIcon}
             look="row"
-            onPress={() => toggleSidebar(windowId)}
+            onPress={toggleTabs}
             tooltip={withShortcut(tabsShown ? "Hide Tabs" : "Show Tabs", hints.toggleSidebar)}
           />
         )}
@@ -146,8 +150,8 @@ export const Toolbar = memo(function Toolbar({
         </View>
         {inSplit && (
           <View style={{ position: "absolute", top: at.top, right: trailing.splitRight + geometry.trailing, flexDirection: "row" }}>
-            <Button variant="icon" toolbar palette={palette} icon="rectangle.split.2x1" look="row" onPress={() => showSplitMenu(tab.id)} tooltip="Split View" />
-            <Button variant="icon" toolbar palette={palette} icon="xmark" look="row" weight="medium" onPress={() => closePane(tab.id)} tooltip="Close Pane" />
+            <Button variant="icon" toolbar palette={palette} icon="rectangle.split.2x1" look="row" onPress={splitMenu} tooltip="Split View" />
+            <Button variant="icon" toolbar palette={palette} icon="xmark" look="row" weight="medium" onPress={closeThisPane} tooltip="Close Pane" />
           </View>
         )}
       </Animated.View>
@@ -180,14 +184,14 @@ function useUrlField(tab: ToolbarTab, windowId: string, onFocus: () => void) {
   const { hovered: pointerOver, hoverProps } = useHover();
   const hovered = pointerOver || popover === "siteControls";
   const buttonsShown = fieldButtonsShown(useSettings((s) => s.addressBarButtons), hovered);
-  const openPanel = () => {
+  const openPanel = useStableHandler(() => {
     onFocus();
     openBarFromAddress(windowId, tab.url);
-  };
-  const toggleSiteControls = () => {
+  });
+  const toggleSiteControls = useStableHandler(() => {
     onFocus();
     togglePopover(tab.id, "siteControls");
-  };
+  });
   return { insecure, popover, hovered, buttonsShown, developerMode, hoverProps, openPanel, toggleSiteControls, host: pageHostLabel(tab.url), trail: urlTrail(tab.url, tab.title, { hovered, showFullUrl }) };
 }
 
@@ -201,6 +205,7 @@ export const ToolbarUrlField = memo(function ToolbarUrlField({ tab, palette, win
   const row = useToolbarRow();
   const field = useUrlField(tab, windowId, onFocus);
   const { insecure, hovered, buttonsShown, popover, toggleSiteControls } = field;
+  const openSplit = useStableHandler(() => openSplitPane(windowId, { anchorTabId: tab.id }));
   const glass = useGlass();
   const lockPress = usePressScaleMotion(!!insecure, buttonMotion.iconPressScale);
   const lockScaleStyle = lockPress.scale ? { transform: [{ scale: lockPress.scale }] } : undefined;
@@ -254,7 +259,7 @@ export const ToolbarUrlField = memo(function ToolbarUrlField({ tab, palette, win
                 palette={palette}
                 icon="rectangle.split.2x1"
                 look="field"
-                onPress={() => openSplitPane(windowId, { anchorTabId: tab.id })}
+                onPress={openSplit}
                 tooltip={withShortcut("Open Split View", splitHint)}
               />
             )}
@@ -273,10 +278,10 @@ export const SidebarUrlField = memo(function SidebarUrlField({ tab, palette, win
   const { insecure, hovered, popover, toggleSiteControls } = field;
   const extensionsHeld = useFieldExtensionsHeld(windowId);
   const shown = sidebarFieldButtons({ mode: useSettings((s) => s.addressBarButtons), hovered, insecure: !!insecure, extensionsHeld });
-  const openSiteControls = () => {
+  const openSiteControls = useStableHandler(() => {
     if (popover !== "siteControls") noteSiteControls("sidebarField");
     toggleSiteControls();
-  };
+  });
 
   return (
     <View {...field.hoverProps} style={{ flexDirection: "row", alignItems: "center", height, borderRadius: SIDEBAR_FIELD.radius }}>

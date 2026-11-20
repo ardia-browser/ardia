@@ -17,6 +17,13 @@ export type RouteChannel = {
   removeEventListener(type: "message", listener: (event: { data: RouteMessage }) => void): void;
 };
 
+export type RouteTimers = { after(run: () => void, ms: number): unknown; cancel(handle: unknown): void };
+
+const realTimers: RouteTimers = {
+  after: (run, ms) => setTimeout(run, ms),
+  cancel: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout> | undefined),
+};
+
 type FocusState = {
   ui: { focusOrder: readonly string[] };
   windowOrder: readonly string[];
@@ -35,21 +42,22 @@ export function serveBrowserCommands(options: {
   run: (windowId: string, command: Command) => void;
   focus: (windowId: string) => Promise<unknown>;
   claimMs?: number;
+  timers?: RouteTimers;
 }) {
-  const { windowId, channel, order, run, focus } = options;
+  const { windowId, channel, order, run, focus, timers = realTimers } = options;
   const claimMs = options.claimMs ?? 1500;
-  const claimed = new Map<string, { command: Command; timer: ReturnType<typeof setTimeout> }>();
+  const claimed = new Map<string, { command: Command; timer: unknown }>();
   const listener = ({ data }: { data: RouteMessage }) => {
     if (data?.type === "find") channel.postMessage({ type: "here", request: data.request, windowId, order: order() });
     if (data?.type === "find" || data?.windowId !== windowId) return;
     if (data.type === "run" && BROWSER_WINDOW_COMMANDS.has(data.command) && !claimed.has(data.request)) {
-      claimed.set(data.request, { command: data.command, timer: setTimeout(() => claimed.delete(data.request), claimMs) });
+      claimed.set(data.request, { command: data.command, timer: timers.after(() => claimed.delete(data.request), claimMs) });
       channel.postMessage({ type: "claim", request: data.request, windowId });
     }
     if (data.type === "go") {
       const pending = claimed.get(data.request);
       if (!pending) return;
-      clearTimeout(pending.timer);
+      timers.cancel(pending.timer);
       claimed.delete(data.request);
       void focus(windowId).catch(() => {});
       run(windowId, pending.command);
@@ -59,7 +67,7 @@ export function serveBrowserCommands(options: {
   return {
     remove: () => {
       channel.removeEventListener("message", listener);
-      for (const { timer } of claimed.values()) clearTimeout(timer);
+      for (const { timer } of claimed.values()) timers.cancel(timer);
       claimed.clear();
     },
   };
@@ -71,8 +79,9 @@ export function routeToBrowserWindow(options: {
   request?: string;
   gatherMs?: number;
   answerMs?: number;
+  timers?: RouteTimers;
 }): Promise<string | null> {
-  const { channel, command } = options;
+  const { channel, command, timers = realTimers } = options;
   const request = options.request ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const gatherMs = options.gatherMs ?? 150;
   const answerMs = options.answerMs ?? 1500;
@@ -80,10 +89,10 @@ export function routeToBrowserWindow(options: {
     const replies: { windowId: string; order: string[] }[] = [];
     let chosen: string | null = null;
     let settled = false;
-    let timer: ReturnType<typeof setTimeout>;
+    let timer: unknown;
     const finish = (windowId: string | null) => {
       settled = true;
-      clearTimeout(timer);
+      timers.cancel(timer);
       channel.removeEventListener("message", listener);
       resolve(windowId);
     };
@@ -96,12 +105,12 @@ export function routeToBrowserWindow(options: {
       }
     };
     channel.addEventListener("message", listener);
-    timer = setTimeout(() => {
+    timer = timers.after(() => {
       const serving = new Set(replies.map((reply) => reply.windowId));
       const order = replies.find((reply) => reply.order.length)?.order ?? [];
       chosen = order.find((id) => serving.has(id)) ?? null;
       if (!chosen) return finish(null);
-      timer = setTimeout(() => finish(null), answerMs);
+      timer = timers.after(() => finish(null), answerMs);
       channel.postMessage({ type: "run", request, windowId: chosen, command });
     }, gatherMs);
     channel.postMessage({ type: "find", request });

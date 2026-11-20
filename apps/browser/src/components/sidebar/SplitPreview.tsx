@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Animated, StyleSheet, View } from "react-native";
+import { Animated, StyleSheet, View, type ViewStyle } from "react-native";
 import { useTheme } from "../ui/theme";
 import { FadeLabel, radius, sidebarFont, sidebarLineHeight, space } from "../ui";
 import { previewSlots, SPLIT_MAX_PANES, SPLIT_PANE, splitPaneShape } from "./splitPaneGeometry";
@@ -48,8 +48,12 @@ export function useSplitPreview(side: SplitDropSide | null, panes: number): Spli
 }
 
 export function PreviewFade({ preview, children }: { preview: SplitPreviewMotion; children: ReactNode }) {
-  if (!preview.fades) return <View style={ROW_CONTENT}>{children}</View>;
-  return <Animated.View style={[ROW_CONTENT, { opacity: preview.values ? preview.values.hidden : 1 }]}>{children}</Animated.View>;
+  return previewFade(preview, children);
+}
+
+export function previewFade(preview: SplitPreviewMotion, children: ReactNode, frame: ViewStyle = ROW_CONTENT) {
+  if (!preview.fades) return <View style={frame}>{children}</View>;
+  return <Animated.View style={[frame, { opacity: preview.values ? preview.values.hidden : 1 }]}>{children}</Animated.View>;
 }
 
 const ROW_CONTENT = { flex: 1, alignSelf: "stretch", flexDirection: "row", alignItems: "center" } as const;

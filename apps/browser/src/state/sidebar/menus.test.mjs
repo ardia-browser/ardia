@@ -434,10 +434,14 @@ test("a Top App whose page runs in another window offers Unload here too while K
   S().updateSettings({ keepTopAppsRunning: false });
 });
 
-function sleepableViews(ids, kept = []) {
+function sleepableViews(ids, kept = [], refusals = {}, discarded = []) {
   const asked = [];
   webviews.clear();
-  for (const id of ids) webviews.set(id, { sleepIfHidden: async (seconds) => (asked.push([id, seconds]), kept.includes(id) ? [26] : []) });
+  for (const id of ids)
+    webviews.set(id, {
+      sleepIfHidden: async (seconds) => (asked.push([id, seconds]), refusals[id] ?? (kept.includes(id) ? [26] : [])),
+      discard: async () => (discarded.push(id), "discarded"),
+    });
   return asked;
 }
 
@@ -463,6 +467,36 @@ test("Sleep Tab is offered for a loaded tab only while nothing shows it, and ask
   lifecycle.noteReady(b);
   S().pinTabs([b], true, true);
   assert.equal(offers(b), true, "a pinned tab sleeps too");
+  webviews.clear();
+});
+
+test("Sleep Tab sleeps a pinned row, a Top App and a regular tab that Chrome keeps only for automatic sleep, and keeps one holding typed input", async () => {
+  const { w, ids } = windowWith("tile", "row", "plain", "typed", "front");
+  const [tile, row, plain, typed] = ids;
+  S().pinTabs([tile], true, false);
+  S().pinTabs([row], true, true);
+  const discarded = [];
+  sleepableViews(ids, [], { [tile]: [25, 13], [row]: [25], [plain]: [7, 23], [typed]: [25, 26] }, discarded);
+  takeTabSleepCounts();
+  for (const id of [tile, row, plain, typed]) {
+    assert.ok(tabMenuItems(S(), w, S().tabs[id]).some((i) => i.id === "sleep"), `Sleep Tab offered for ${id}`);
+    await whileMenuIsUp(() => openTabMenu(w, S().tabs[id]), () => {}, "sleep");
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.deepEqual(discarded.sort(), [tile, row, plain].sort(), "the typed-in tab stays awake");
+  const counts = takeTabSleepCounts();
+  assert.equal(counts.tabs_slept_from_menu, 4);
+  assert.equal(counts.menu_sleeps_past_automatic, 3);
+  assert.equal(counts.menu_sleeps_kept_awake, 1);
+  assert.equal(counts.menu_sleep_kept_reason, "typedInput");
+  const late = ids[4];
+  let shownMeanwhile;
+  webviews.set(late, { sleepIfHidden: async () => (S().activate(late), (shownMeanwhile = true), [25]), discard: async () => (discarded.push(late), "discarded") });
+  S().activate(plain);
+  await whileMenuIsUp(() => openTabMenu(w, S().tabs[late]), () => {}, "sleep");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(shownMeanwhile);
+  assert.ok(!discarded.includes(late), "a tab shown while Chrome answered is not discarded");
   webviews.clear();
 });
 

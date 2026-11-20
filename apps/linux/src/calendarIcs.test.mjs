@@ -88,12 +88,19 @@ test("exceptions, extra dates and events that straddle the range edge", () => {
   ]);
 });
 
-test("a long-running daily rule stays fast", () => {
+const visited = (start, rule, from, end) => {
+  let calls = 0;
+  expandRule(start, false, parseRule(rule), (w) => (calls++, wallMs(w) >= end), () => false, (w) => wallMs(w) >= from, { from });
+  return calls;
+};
+
+test("a long-running daily rule walks only the periods near the range", () => {
   const objects = events(parseIcs("BEGIN:VEVENT\r\nUID:daily\r\nDTSTART;TZID=Europe/Berlin:20000101T080000\r\nRRULE:FREQ=DAILY\r\nEND:VEVENT\r\n"));
-  const started = performance.now();
-  const found = occurrences(objects, Date.UTC(2026, 10, 2), Date.UTC(2026, 10, 3, 12), (tzid) => ianaZone(tzid));
+  const budget = { deadline: Infinity, truncated: [] };
+  const found = occurrences(objects, Date.UTC(2026, 10, 2), Date.UTC(2026, 10, 3, 12), (tzid) => ianaZone(tzid), budget);
   assert.deepEqual(found.map((o) => new Date(o.start).toISOString()), ["2026-11-02T07:00:00.000Z", "2026-11-03T07:00:00.000Z"]);
-  assert.ok(performance.now() - started < 2000);
+  assert.deepEqual(budget.truncated, []);
+  assert.ok(visited(wall(2000, 1, 1, 8), "FREQ=DAILY", Date.UTC(2026, 10, 2), Date.UTC(2026, 10, 3, 12)) < 100);
 });
 
 const RANGE_START = Date.UTC(2026, 10, 2);
@@ -102,8 +109,8 @@ const single = (lines) => events(parseIcs(["BEGIN:VEVENT", ...lines, "END:VEVENT
 const starts = (found) => found.map((o) => o.start);
 
 test("sub-daily rules from years ago jump to the range instead of walking every period", () => {
-  const started = performance.now();
-  const minutely = occurrences(single(["UID:m", "DTSTART:20200101T000000Z", "DURATION:PT5M", "RRULE:FREQ=MINUTELY;INTERVAL=7"]), RANGE_START, RANGE_END, () => null);
+  const budget = { deadline: Infinity, truncated: [] };
+  const minutely = occurrences(single(["UID:m", "DTSTART:20200101T000000Z", "DURATION:PT5M", "RRULE:FREQ=MINUTELY;INTERVAL=7"]), RANGE_START, RANGE_END, () => null, budget);
   const step = 7 * 60000;
   const origin = Date.UTC(2020, 0, 1);
   const first = origin + Math.ceil((RANGE_START - 5 * 60000 - origin) / step) * step;
@@ -113,7 +120,8 @@ test("sub-daily rules from years ago jump to the range instead of walking every 
   assert.ok(starts(minutely).every((start, i, all) => !i || start - all[i - 1] === step));
   const hourly = occurrences(single(["UID:h", "DTSTART:20000101T000000Z", "RRULE:FREQ=HOURLY;INTERVAL=5"]), RANGE_START, RANGE_END, () => null);
   assert.ok(hourly.length >= 7 && starts(hourly).every((start) => (start - Date.UTC(2000, 0, 1)) % (5 * 3600000) === 0));
-  assert.ok(performance.now() - started < 200, `${performance.now() - started} ms`);
+  assert.deepEqual(budget.truncated, []);
+  assert.ok(visited(wall(2000, 1, 1), "FREQ=HOURLY;INTERVAL=5", RANGE_START, RANGE_END) < 200);
 });
 
 test("a simple counted rule is counted arithmetically from DTSTART", () => {
@@ -129,10 +137,14 @@ test("a simple counted rule is counted arithmetically from DTSTART", () => {
 
 test("fifty old minutely series fit in one refresh", () => {
   const objects = Array.from({ length: 50 }, (_, i) => single([`UID:m${i}`, "DTSTART:20200101T000000Z", "RRULE:FREQ=MINUTELY;INTERVAL=7"])[0]);
-  const started = performance.now();
-  const found = occurrences(objects, RANGE_START, RANGE_END, () => null);
-  assert.ok(found.length > 50 * 300);
-  assert.ok(performance.now() - started < 1500, `${performance.now() - started} ms`);
+  const budget = { deadline: Infinity, truncated: [] };
+  const found = occurrences(objects, RANGE_START, RANGE_END, () => null, budget);
+  assert.deepEqual(budget.truncated, []);
+  const step = 7 * 60000;
+  const origin = Date.UTC(2020, 0, 1);
+  const first = origin + Math.ceil((RANGE_START - origin) / step) * step;
+  assert.equal(found.length, 50 * Math.ceil((RANGE_END - first) / step));
+  assert.equal(new Set(found.map((o) => property(o.event, "UID").value)).size, 50);
 });
 
 test("expansion that runs out of periods or time is reported, not silently dropped", () => {

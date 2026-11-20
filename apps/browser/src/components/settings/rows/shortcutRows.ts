@@ -10,7 +10,7 @@ export const shortcutRows = {
       rows: {
         menuCommands: {
           title: "Keyboard shortcuts",
-          keywords: ["shortcuts", "keyboard shortcuts", "hotkeys", "keybindings", "remap", "menu shortcuts", "customize keyboard shortcuts"],
+          keywords: ["shortcuts", "keyboard shortcuts", "hotkeys", "keybindings", "remap", "menu shortcuts", "customize keyboard shortcuts", "mouse button", "middle click", "mouse shortcut", "side button"],
         },
         extensionShortcuts: {
           title: "Extension commands",

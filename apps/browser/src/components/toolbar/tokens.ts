@@ -52,7 +52,6 @@ export const HISTORY_BUTTON_MOTION = {
   duration: duration.slow + 50,
   incomingDelay: 35,
   travel: 4,
-  pressTravel: 1.5,
 } as const;
 
 export const DEVELOPER_ROW = { ...TOOLBAR_ROWS.compact, height: 34, center: 17, button: 24, buttonRadius: 6, extensionButton: 24 };

@@ -2823,19 +2823,36 @@ try {
   await check("content-blocker-unload-cycles", async () => {
     const pageIdleMs = 36000;
     const profile = `blocker-unload-cycles-${Date.now() % 1000}`;
+    const unload = async () => {
+      let last = null;
+      try {
+        await until("the profile unloaded", async () => {
+          if (!(await engine("profiles.loaded")).profiles.includes(profile)) return true;
+          if (!last || last.status === "busy") last = await engine("profiles.unloadIdle", { profile });
+          if (last.status === "busy") await sleep(2000);
+          return null;
+        }, 60000);
+      } catch (error) {
+        throw new Error(`${error.message}; last unload: ${JSON.stringify(last)}`);
+      }
+      return last?.status ?? null;
+    };
     const cycles = [];
     for (let cycle = 0; cycle < 2; cycle++) {
       await engine("contentBlocker.hiddenElements", { profile });
       await sleep(pageIdleMs);
-      const unload = await engine("profiles.unloadIdle", { profile });
-      await until("the profile unloaded", async () => ((await engine("profiles.loaded")).profiles.includes(profile) ? null : true), 20000);
+      cycles.push(await unload());
       await engine("contentBlocker.setAllowed", { host: "unload-cycles.test", allowed: true });
       await engine("contentBlocker.setAllowed", { host: "unload-cycles.test", allowed: false });
-      cycles.push(unload.status);
     }
+    await engine("contentBlocker.hiddenElements", { profile });
+    await sleep(pageIdleMs);
+    cycles.push(await unload());
+    const afterUnload = await evalApp(`return ac.engine.call("contentBlocker.hiddenElements", ${JSON.stringify({ profile })}).then((r) => ({ ok: r }), (e) => ({ error: e.message }))`);
+    if (afterUnload.error) throw new Error(`the first blocker call after an unload failed: ${afterUnload.error}`);
     const state = await engine("contentBlocker.state");
     if (!state?.stats?.ready) throw new Error("the blocker isn't ready after the profile unloaded twice");
-    return { profile, cycles };
+    return { profile, cycles, afterUnload };
   });
 
   await check("content-blocker-private", async () => {

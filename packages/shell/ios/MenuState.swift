@@ -22,6 +22,7 @@ struct MenuState {
   var bookmarksShown = true
   var downloadsInProgress = 0
   var shortcuts: [String: [[String]]] = [:]
+  var mouseShortcuts: [String: [String]] = [:]
   var extensions: [MenuExtension] = []
   var fromApp = false
 
@@ -44,6 +45,7 @@ struct MenuState {
     bookmarksShown = update.bookmarksShown
     downloadsInProgress = update.downloadsInProgress
     shortcuts = update.shortcuts
+    mouseShortcuts = update.mouseShortcuts
     extensions = update.extensions
     fromApp = true
   }

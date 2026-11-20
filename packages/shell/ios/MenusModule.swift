@@ -33,6 +33,7 @@ public class MenusModule: Module {
       let shortcutWasGlobal = MenuState.current.littleArdiaShortcutFromAnyApp
       MenuState.current = MenuState(state)
       MainMenu.refresh()
+      MouseShortcuts.shared.update(MenuState.current.mouseShortcuts)
       if MenuState.current.littleArdiaShortcutFromAnyApp != shortcutWasGlobal { LittleArdiaHotKey.shared.shortcutsChanged() }
     }.runOnQueue(.main)
     AsyncFunction("setMenuBookmarks") { (bookmarks: MenuBookmarks) in
@@ -81,6 +82,9 @@ public class MenusModule: Module {
       self.lifetime.run { ShortcutRecorder.shared.record(promise, for: self) }
     }.runOnQueue(.main)
     AsyncFunction("cancelRecording") { ShortcutRecorder.shared.finish(nil) }.runOnQueue(.main)
+    AsyncFunction("mouseShortcutMonitor") { () -> [String: Any] in
+      ["installed": MouseShortcuts.shared.isInstalled, "installs": MouseShortcuts.shared.installs]
+    }.runOnQueue(.main)
   }
 
   private static func surfaceCall<T>(_ body: () throws -> T) throws -> T {

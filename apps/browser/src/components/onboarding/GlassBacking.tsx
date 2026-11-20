@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { Image, StyleSheet, type ImageSourcePropType } from "react-native";
 import { DockSelection, radius, useGlass, useTheme } from "../ui";
 import { bundledSiteIcon } from "../favicon/siteIcons";
-import { useFavicon } from "../../state/favicons/favicons";
+import { useFavicon } from "../../state/favicons/faviconHooks";
 import { useIconRing, warmIconRing } from "../../state/favicons/iconRing";
 import type { TileTheme } from "../../state/favicons/tileTheme";
 

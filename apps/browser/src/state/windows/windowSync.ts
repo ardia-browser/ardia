@@ -6,6 +6,7 @@ import { focusedWindowOf } from "./ui";
 import { adoptOf } from "../tabs/pageSession";
 import { noteLittleArdiaFitBelowSaved } from "../telemetry/littleArdiaEscapes";
 import { isSmallWindow } from "./small";
+import { signalFullScreenExit } from "./fullScreenExits";
 import type { Frame } from "../browser/types";
 
 const fitsBelowSaved = (frame: Frame, was: Frame | null | undefined, [width, height]: readonly [number, number]) =>
@@ -55,6 +56,7 @@ export function createWindowSync({ port, getState, isQuitting, lightsCenter, isU
       }
       if (e.type === "maximized" && !isQuitting()) s.setWindowMaximized(e.id, e.on);
       if (e.type === "fullScreen" && !isQuitting()) s.setWindowFullScreen(e.id, e.on, e.display);
+      if (e.type === "fullScreen" && !e.on) signalFullScreenExit(e.id);
       if (e.type === "close") {
         if (isQuitting()) return;
         open.delete(e.id);

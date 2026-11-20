@@ -5,4 +5,8 @@ export type CommandEvent = {
   arg: string | null;
   windowId: string | null;
   focusGeneration?: number | null;
+  mouseButton?: MouseShortcutButton | null;
+  epoch?: string;
 };
+
+export type MouseShortcutButton = "middle" | "button4" | "button5";

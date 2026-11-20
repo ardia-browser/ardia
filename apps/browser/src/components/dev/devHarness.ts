@@ -69,6 +69,9 @@ export function startDevHarness() {
     get bookmarks(): typeof import("../../state/bookmarks/bookmarks") {
       return require("../../state/bookmarks/bookmarks");
     },
+    get persistence(): typeof import("../../state/session/persist") {
+      return require("../../state/session/persist");
+    },
     get tabLive(): typeof import("../../state/tabs/tabLive") {
       return require("../../state/tabs/tabLive");
     },

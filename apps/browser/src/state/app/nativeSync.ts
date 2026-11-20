@@ -1,4 +1,6 @@
 import { lastTabClosesWindow, onWindowRequest } from "../../platform/tabs";
+import { noteMouseShortcutRun } from "../telemetry/mouseShortcutCounts";
+import { nativeConsent } from "../telemetry/nativeConsent";
 import { onDownload } from "../../platform/downloads";
 import { releaseProfile } from "../../platform/profiles";
 import { closeWindow, onWindowEvent, openWindow, restoreFullScreen, setTrafficLightsCenter, setWindowTitle, windowIds } from "../../platform/windows";
@@ -59,7 +61,10 @@ export function startNativeSync() {
   if (!store.getState().windowOrder.length) openLastWindowOrNew("launch");
 
   cancelAbandonedFocusMoves();
-  onCommand((e) => settlingCommandFocus(e, runCommand));
+  onCommand((e) => {
+    if (e.mouseButton) noteMouseShortcutRun(e.mouseButton, nativeConsent(e));
+    settlingCommandFocus(e, runCommand);
+  });
   startWindowCloseGuard();
   startExtensionsBridge();
   onOpenURLs((urls, pointer, source, returnTo) => openExternalUrls(urls, pointer, source, returnTo));

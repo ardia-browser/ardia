@@ -4,7 +4,7 @@ import { StyleSheet } from "react-native";
 import { CommandPanel } from "./components/omnibox/CommandPanel";
 import { windowOverlays } from "./components/window/WindowOverlays";
 import { ContentCard } from "./components/window/ContentCard";
-import { BrowserWindowControls } from "./components/window/BrowserWindowControls";
+import { browserWindowControls } from "./components/window/BrowserWindowControls";
 import { BookmarkDialog } from "./components/bookmarks/BookmarkDialog";
 import { EditBookmarkDialog } from "./components/bookmarks/EditBookmarkDialog";
 import { FolderMenus } from "./components/bookmarks/FolderMenus";
@@ -112,7 +112,7 @@ function BrowserWindow() {
       )}
       <OnboardingOverlay />
       {windowOverlays(<ReportSheetHost />)}
-      <BrowserWindowControls />
+      {browserWindowControls()}
     </CrxDropArea>
   );
 }

@@ -5,7 +5,7 @@ import { createServer, request as httpRequest } from "node:http";
 import { createServer as createNetServer } from "node:net";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { forBuild, launchVariables, mergeLaunchEnv } from "./launchEnv.mjs";
+import { forBuild, launchVariables, mergeLaunchEnv, scratchInstance } from "./launchEnv.mjs";
 
 export { launchVariables, mergeLaunchEnv };
 
@@ -371,7 +371,7 @@ export async function launch(app, opts = {}) {
   const env = appEnv(app, mergeLaunchEnv({
     ARDIA_BACKGROUND: "1", ARDIA_DATA_DIR: data, ARDIA_REMOTE_DEBUGGING_PORT: String(port),
     ...launchVariables({
-      instance: { ...(location ? { jsLocation: location } : {}), ...(switches ? { chromiumSwitches: switches } : {}), ...opts.instance },
+      instance: scratchInstance(data, { ...(location ? { jsLocation: location } : {}), ...(switches ? { chromiumSwitches: switches } : {}), ...opts.instance }),
       test: opts.test, trace: opts.trace, switchOverrides: opts.switchOverrides,
     }),
   }, opts.env));

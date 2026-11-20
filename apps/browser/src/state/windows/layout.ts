@@ -7,7 +7,8 @@ import { rootSizeOfFrame } from "../settings/interfaceScale";
 import { DEFAULT_SIDEBAR_WIDTH, pageFrameInsetOf } from "../../lib/windowLayout";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { useSettings, useWindowId } from "../browser/hooks";
-import { useWindowSettings, watchWindowRecord } from "../browser/keyedWatch";
+import { useWindowSettings } from "../browser/keyedWatch";
+import { onFullScreenExit } from "./fullScreenExits";
 import { useSettingValue } from "../tabs/tabWatch";
 import { BROWSER_WINDOW_BUTTONS, captionClearTop, captionRoom, WINDOW_CHROME, WINDOW_CONTROLS, windowControlsWidth, type WindowChrome } from "../../lib/windowChrome";
 import { toolbarRowOf } from "../../lib/toolbarRow";
@@ -22,15 +23,7 @@ export { onInterfaceScaleChange } from "../settings/interfaceScale";
 export const windowRootShape = (windowId: string): Promise<{ width: number; height: number; radius: number } | null> =>
   Promise.all([windowFrame(windowId), frameCornerRadius(windowId)]).then(([frame, radius]) => (frame ? { ...rootSizeOfFrame(frame), radius } : null));
 
-export function onFullScreenLeft(windowId: string, run: () => void): () => void {
-  const fullScreenNow = () => !!useBrowser.getState().windows[windowId]?.fullScreen;
-  let was = fullScreenNow();
-  return watchWindowRecord(windowId, () => {
-    const now = fullScreenNow();
-    if (was && !now) run();
-    was = now;
-  });
-}
+export const onFullScreenLeft = onFullScreenExit;
 
 export function useTabLayout(): "sidebar" | "top" {
   const windowId = useWindowId();

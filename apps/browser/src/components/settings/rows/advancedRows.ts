@@ -115,6 +115,14 @@ export const advancedRows = {
           shown: webKitInUse,
           needs: NEEDS_WEBKIT,
         },
+        webKitExtensions: {
+          title: "Run extensions in WebKit pages",
+          explained: true,
+          description: "Your Chromium extensions run in WebKit pages too, with the same site access.",
+          keywords: ["webkit extensions", "extensions", "add-ons", "content scripts", "ublock", "password manager"],
+          shown: (s, env) => webKitInUse(s) && env.webKitExtensions !== false,
+          needs: NEEDS_WEBKIT,
+        },
         enginesDiffer: {
           title: "How engines differ",
           explained: true,

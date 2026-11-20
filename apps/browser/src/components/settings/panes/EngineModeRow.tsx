@@ -3,6 +3,7 @@ import { defaultEngine, type EngineMode, ENGINE_NAMES } from "../../../state/eng
 import { setEngineMode } from "../../../state/engines/actions";
 import { useEngineMode } from "../../../state/engines/hooks";
 import { engineModeFooter } from "../../../state/engines/engineModeCopy";
+import { webKitRunsExtensions } from "../../../state/engines/webKitSupport";
 import { useSettings } from "../../../state/browser/hooks";
 import { SETTINGS_WINDOW_ID } from "../../../state/settings/settingsWindows";
 import { Button, Segmented, type SegmentOption } from "../../ui";
@@ -19,7 +20,7 @@ export function EngineModeRow({ anchor }: { anchor: "general.engineMode" }) {
   const { mode, switching } = useEngineMode();
   const opensIn = useSettings((settings) => defaultEngine({ settings }));
   const streamingInWebKit = useSettings((s) => s.protectedVideoInWebKit);
-  const description = engineModeFooter({ mode, switching, defaultEngine: opensIn, streamingInWebKit });
+  const description = engineModeFooter({ mode, switching, defaultEngine: opensIn, streamingInWebKit, webKitExtensions: webKitRunsExtensions() });
   return (
     <Row anchor={anchor} description={description}>
       <View pointerEvents={switching ? "none" : "auto"}>

@@ -119,7 +119,7 @@ extension WebKitTab: PageTab {
 
   func resolveAutofillPrompt(_ promptId: Int, action: String) { WebKitAutofill.shared.resolve(self, promptId: promptId, action: action) }
 
-  func executeExtensionAction(_ extensionId: String) -> String? { nil }
+  func executeExtensionAction(_ extensionId: String) -> String? { runExtensionAction(extensionId) }
 
   func resolveDisplayMedia(_ requestId: String, sourceId: String?, audio: Bool) { answerDisplayCapture(requestId, sourceId: sourceId) }
 

@@ -90,6 +90,7 @@ final class WebKitHub: NSObject, WKScriptMessageHandler {
     }
     config.userContentController = controller
     WebKitContentBlocker.shared.attach(controller)
+    WebKitExtensions.shared.attach(config, profile: profile)
     config.applicationNameForUserAgent = "Version/\(Self.safariVersion) Safari/605.1.15"
     config.mediaTypesRequiringUserActionForPlayback = []
     config.allowsAirPlayForMediaPlayback = true
@@ -165,7 +166,42 @@ final class WebKitHub: NSObject, WKScriptMessageHandler {
     if types.contains("cache") { kinds.formUnion([WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache, WKWebsiteDataTypeFetchCache]) }
     if types.contains("siteData") { stores.forgetSitePermissions(of: profile) }
     guard !kinds.isEmpty else { return completion() }
-    stores.dataStore(for: profile).removeData(ofTypes: kinds, modifiedSince: Date(timeIntervalSince1970: since / 1000), completionHandler: completion)
+    let store = stores.dataStore(for: profile)
+    let extensionIds = loadedExtensionIds()
+    store.fetchDataRecords(ofTypes: kinds) { records in
+      let held = records.filter { Self.belongsToExtension($0, ids: extensionIds) }
+      let web = records.filter { !Self.belongsToExtension($0, ids: extensionIds) }
+      guard since > 0 else { return store.removeData(ofTypes: kinds, for: web, completionHandler: completion) }
+      let wholesale = kinds.intersection(Self.workerTypes.union(held.flatMap(\.dataTypes)))
+      let ranged = kinds.subtracting(wholesale)
+      let removals = DispatchGroup()
+      if !ranged.isEmpty {
+        removals.enter()
+        store.removeData(ofTypes: ranged, modifiedSince: Date(timeIntervalSince1970: since / 1000)) { removals.leave() }
+      }
+      if !wholesale.isEmpty {
+        removals.enter()
+        store.removeData(ofTypes: wholesale, for: web) { removals.leave() }
+      }
+      removals.notify(queue: .main, execute: completion)
+    }
+  }
+
+  private static let workerTypes: Set<String> = [WKWebsiteDataTypeFetchCache, WKWebsiteDataTypeServiceWorkerRegistrations]
+
+  private func loadedExtensionIds() -> Set<String> {
+    guard #available(macOS 15.4, *) else { return [] }
+    let controllers = transfers.views.compactMap { $0.configuration.webExtensionController }
+    return Set(controllers.flatMap { $0.extensionContexts.map(\.uniqueIdentifier) })
+  }
+
+  private static func belongsToExtension(_ record: WKWebsiteDataRecord, ids: Set<String>) -> Bool {
+    if ids.contains(record.displayName) { return true }
+    let originsKey = "_originsStrings"
+    guard record.responds(to: NSSelectorFromString(originsKey)) else { return false }
+    let value = record.value(forKey: originsKey)
+    let origins = (value as? [String]) ?? (value as? Set<String>).map(Array.init) ?? []
+    return origins.contains { URL(string: $0)?.scheme?.lowercased() == "webkit-extension" }
   }
 
   static func covers(_ domain: String, host: String) -> Bool {
@@ -195,6 +231,7 @@ final class WebKitHub: NSObject, WKScriptMessageHandler {
     WebKitTabHistory.forget(profile: profile)
     certificates.forgetTransportSecurity(profile: profile)
     WebKitSiteData.shared.forget(profile: profile)
+    WebKitExtensions.shared.forgetProfile(profile)
     downloads.cancelAll(profile: profile)
     if let host = stores.takeResumeHost(of: profile) { Self.close(host) }
     let removeStore = {

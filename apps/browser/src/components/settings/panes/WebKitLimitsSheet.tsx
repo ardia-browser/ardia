@@ -6,6 +6,7 @@ import { noteWebKitLimits } from "../../../state/telemetry/usage";
 import { Button, DialogActions, DialogTitle, lineHeight, proseLineHeight, Sheet, space, Text } from "../../ui";
 import { aboutEngines } from "../tokens";
 import { useContentBlocker } from "./FilterListsSheet";
+import { webKitRunsExtensions } from "../../../state/engines/webKitSupport";
 
 export const ABOUT_ENGINES_TITLE = "About Engines";
 
@@ -15,6 +16,8 @@ type Limit = { label: string; detail: string };
 type LimitGroup = { title: string; limits: Limit[]; onlyWhileBlocking?: true };
 
 const PASSKEYS: Limit = { label: "Passkeys", detail: "No passkeys or security keys" };
+
+const NO_EXTENSIONS: LimitGroup = { title: "WebKit Extensions", limits: [{ label: "Extensions", detail: "Need macOS 15.4 or later" }] };
 
 const WEBKIT_LIMITS: LimitGroup[] = [
   {
@@ -29,7 +32,11 @@ const WEBKIT_LIMITS: LimitGroup[] = [
   },
   {
     title: "WebKit Extensions",
-    limits: [{ label: "Extensions", detail: "Not supported" }],
+    limits: [
+      { label: "chrome.debugger", detail: "Not supported" },
+      { label: "webRequest", detail: "Can watch but not block or change" },
+      { label: "Extension State", detail: "Storage, alarms, permissions kept apart" },
+    ],
   },
   {
     title: "WebKit Ad Blocking",
@@ -61,7 +68,7 @@ function WebKitLimitsSheet() {
       <DialogTitle>{ABOUT_ENGINES_TITLE}</DialogTitle>
       <ScrollView style={LIST} contentContainerStyle={SECTIONS}>
         <Text style={PROSE}>{AUTOMATIC}</Text>
-        {WEBKIT_LIMITS.filter((group) => !(group.onlyWhileBlocking && blockingOff)).map((group) => (
+        {WEBKIT_LIMITS.filter((group) => !(group.onlyWhileBlocking && blockingOff)).map((group) => (group.title === NO_EXTENSIONS.title && !webKitRunsExtensions() ? NO_EXTENSIONS : group)).map((group) => (
           <Section key={group.title} title={group.title} limits={passkeysWork ? group.limits.filter((limit) => limit !== PASSKEYS) : group.limits} />
         ))}
       </ScrollView>

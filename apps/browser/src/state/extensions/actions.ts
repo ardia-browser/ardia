@@ -31,8 +31,12 @@ import { closeSidePanelsOf, toggleSidePanel } from "./sidePanels";
 import { notePrivateWindowExtensionOpen, noteExtensionInstallPromptStale, noteExtensionProfilePageOpen, noteToolbarExtensionMove } from "../telemetry/usage";
 import { extensionPageUrl, extensionProfile, extensionsProfileId, isPrivate, pageProfile, shownIn, useExtensions, windowExtensions, readyTabOf, tabProfile, type Anchor } from "./store";
 import { errorText } from "../../lib/errors";
+import { showToast } from "../app/toasts";
+import { tabEngine } from "../engines/engines";
+import { openPageIn } from "../engines/actions";
+import { noteWebKitCount } from "../telemetry/engineSwitchCounts";
 import { noteUnpackedInstall } from "../telemetry/exportCounts";
-import { consentToken } from "../telemetry/client";
+import { consentToken, type ConsentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import { movedToolbarOrder, toolbarOrder, type ToolbarDrag } from "./toolbarOrder";
@@ -272,6 +276,7 @@ export async function activateExtension(
   state?: ActionState | null,
   tabId = shownPageId(useBrowser.getState(), windowId),
 ) {
+  const consent = consentToken();
   const current = useExtensions.getState().popup;
   if (current?.windowId === windowId && current.extensionId === ext.id) return closeExtensionPopup();
   if (!ext.enabled) return void showExtensionMenu(windowId, ext);
@@ -281,6 +286,7 @@ export async function activateExtension(
   const result = web ? await web.executeExtensionAction(ext.id) : null;
   const readyTab = readyTabOf(tabId);
   if (!state && result === "popup" && readyTab) state = (await extensionActionStates(readyTab, [ext.id], tabProfile(readyTab)))[ext.id];
+  if (result === null && tabId && tabEngine(useBrowser.getState(), tabId) === "webkit") return void extensionUnavailable(windowId, ext, tabId, consent);
   const url = state ? state.popup : ext.popup ? extensionPageUrl(ext.id, ext.popup) : "";
   if (result === "none") return;
   if (result === "sidePanel") return void toggleSidePanel(windowId, ext.id);
@@ -290,7 +296,21 @@ export async function activateExtension(
 
 export const closeExtensionPopup = () => useExtensions.setState({ popup: null });
 
+function extensionUnavailable(windowId: string, ext: InstalledExtension, tabId: string, consent: ConsentToken | null) {
+  noteWebKitCount("extensionUnavailable", consent);
+  showToast(windowId, `${ext.name} doesn’t work in WebKit`, undefined, {
+    icon: "puzzlepiece.extension",
+    key: `extension-unavailable:${ext.id}`,
+    action: { title: "Open in Chromium", run: () => void openPageIn(tabId, "chromium") },
+  });
+}
+
 let popupRequests = 0;
+
+export function showActionPopup(windowId: string, extensionId: string, anchor: Anchor, url: string, engine?: "webkit") {
+  const request = ++popupRequests;
+  useExtensions.setState({ popup: { windowId, pageProfile: pageProfile(useBrowser.getState(), windowId), extensionId, url, anchor, opened: request, engine } });
+}
 
 export async function openActionPopup(windowId: string, extensionId: string, anchor: Anchor, sourceTabId: string) {
   const request = ++popupRequests;

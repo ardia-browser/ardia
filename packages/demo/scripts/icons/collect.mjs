@@ -5,7 +5,7 @@ import { REPO } from "./paths.mjs";
 const ROOTS = ["apps/browser/src"];
 const LITERAL = /(["'`])([a-z0-9]+(?:\.[a-z0-9]+)*)\1/g;
 const SYMBOL_CONTEXT = /icon|symbol|glyph|chevron|name=/i;
-const ICON_KEYS = /^(icon|icons|symbol|name|glyph|chevron|fallback)$/i;
+const ICON_KEYS = /^(\w*icon|icons|symbol|name|glyph|chevron|fallback)$/i;
 const KEYED = /([A-Za-z_$][\w$]*)\??\s*[:=]\s*\{?\s*(?:(["'`])[^"'`]*\2\s*\|\s*)*$/;
 const COMPARED = /(===|!==|==|!=|case)\s*$/;
 const NOT_A_SYMBOL = /typeof |kind ===|step ===|type Step|e\.key|command ===|MOD_ORDER|case "|LiveError|Outcome|APP_SCOPE|field:|params:/;

@@ -45,6 +45,18 @@ export const NO_PASSKEY_ACCESS: PasskeyAccess = { entitled: false, status: "enti
 
 export const WEBKIT_SITE_SETTINGS: readonly SiteSettingType[] = ["camera", "microphone", "location", "notifications", "popups", "javascript", "images", "cookies", "autoplay", "clipboard"];
 
+export type WebKitExtension = {
+  id: string;
+  path: string | null;
+  version: string;
+  name: string;
+  sites: string[];
+  allSites: boolean;
+  incognito: boolean;
+};
+
+export type WebKitExtensionsSync = { available: boolean; loaded: string[]; failed: string[] };
+
 export type WebKitCount =
   | "autofillAddressFill"
   | "autofillCardFill"
@@ -66,6 +78,26 @@ export type WebKitCount =
   | "workerShownNotification"
   | "workerClick"
   | "translation"
+  | "extensionAction"
+  | "shimDownloads"
+  | "shimHistory"
+  | "shimBookmarks"
+  | "shimTabGroups"
+  | "shimSidePanel"
+  | "shimRuntime"
+  | "shimManagement"
+  | "shimIdle"
+  | "shimTopSites"
+  | "shimSearch"
+  | "shimSessions"
+  | "shimBrowsingData"
+  | "shimDns"
+  | "shimTts"
+  | "shimOffscreen"
+  | "shimStorage"
+  | "shimIdentity"
+  | "shimCommands"
+  | "extensionShortcut"
   | "siteSettingApplied"
   | "uploadFiltered"
   | "screenShareRequest"
@@ -75,7 +107,22 @@ export type WebKitCount =
   | "savePage"
   | "savePageFailure"
   | "quarantineFailure"
+  | "nativeHostLaunch"
+  | "nativeHostFailure"
+  | "privateExtensionLoaded"
+  | "extensionTabCreate"
+  | "extensionTabClose"
+  | "extensionTabActivate"
+  | "extensionTabPin"
+  | "extensionTabDuplicate"
+  | "extensionTabZoom"
+  | "extensionWindowCreate"
+  | "extensionWindowUpdate"
+  | "extensionWindowRemove"
+  | "extensionTabRequestFailed"
+  | "extensionPopup"
   | "contextMenu"
+  | "contextMenuExtension"
   | "linkPeek"
   | "linkSplit"
   | "littleArdiaLink"
@@ -113,3 +160,44 @@ export type WebKitCount =
   | "unresponsive"
   | "unresponsiveEnded"
   | "webAudioAudible";
+
+export type WebKitExtensionApi =
+  | "downloads"
+  | "history"
+  | "bookmarks"
+  | "tabGroups"
+  | "sidePanel"
+  | "runtime"
+  | "management"
+  | "idle"
+  | "topSites"
+  | "search"
+  | "sessions"
+  | "browsingData"
+  | "dns"
+  | "tts"
+  | "offscreen"
+  | "storage"
+  | "identity"
+  | "commands";
+
+export type WebKitExtensionCall = {
+  id: string;
+  profile: string;
+  base: string;
+  private: boolean;
+  extensionId: string;
+  api: WebKitExtensionApi;
+  method: string;
+  apiPermissions?: Record<string, string[]>;
+  args: unknown[];
+  tabKeys: (string | null)[];
+  windows: string[][];
+  answerBy?: number;
+};
+
+export type WebKitExtensionReply = { result: unknown } | { error: string };
+
+export type WebKitExtensionListeners = { profile: string; base: string; private: boolean; apis: WebKitExtensionApi[] };
+
+export type WebKitExtensionEvent = { api: WebKitExtensionApi; event: string; args: unknown[] };

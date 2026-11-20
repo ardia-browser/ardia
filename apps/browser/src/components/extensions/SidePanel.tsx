@@ -133,6 +133,7 @@ function PanelCard({ windowId, panel, current, onWindowClose, onHiddenCrash }: {
           ref={web}
           style={StyleSheet.absoluteFill}
           url={url}
+          engine={url.startsWith("webkit-extension:") ? "webkit" : undefined}
           profile={pageProfile}
           standalone
           visible={current}

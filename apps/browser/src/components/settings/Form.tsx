@@ -14,6 +14,7 @@ import { lineHeight, proseLineHeight, radius as radii, space, perLook } from "..
 import { findSetting, sectionEntries, setting, unshownSettings, type SettingEntry, type SettingId } from "./settingsIndex";
 import { Toggle } from "../ui/Switch";
 import { liquidGlass } from "../ui/Glass";
+import { webKitRunsExtensions } from "../../state/engines/webKitSupport";
 import { PopUp } from "../ui/Field";
 import { Text } from "../ui/Text";
 import { updateSettings } from "../../state/settings/actions";
@@ -30,7 +31,7 @@ export function useUnshownSettings(): ReadonlySet<string> {
   const syncOn = useSync((s) => s.enabled);
   const calendarAccess = useCalendar((s) => s.access === "fullAccess" || s.access === "fixture");
   const official = usePlugins((s) => officialNamesInSettings(officialPlugins(s)).join(" "));
-  const ids = useSettings((s) => unshownSettings(s, { top, glass: liquidGlass, syncOn, calendarAccess, officialPlugins: official ? official.split(" ") : [] }));
+  const ids = useSettings((s) => unshownSettings(s, { top, glass: liquidGlass, syncOn, calendarAccess, officialPlugins: official ? official.split(" ") : [], webKitExtensions: webKitRunsExtensions() }));
   return useMemo(() => new Set(ids ? ids.split("\n") : []), [ids]);
 }
 

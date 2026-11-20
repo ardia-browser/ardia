@@ -4,7 +4,7 @@ import type { CastDialog, CastRoute, DeviceChooser } from "../media";
 import type { AddedFilterList, ContentBlockerState, ContentBlockerStats } from "../contentBlocker";
 import type {
   ActionPopupRequest, ActionState, ChromeSearchEngine, ExtensionActionChange, ExtensionInstallPrompt, ExtensionPackage, ExtensionsChange, ExtensionsLoadHealth, ExtensionsSyncApplied, ExtensionsSyncApply,
-  ExtensionsSyncState, ExtensionSyncIntent, InstalledExtension, SidePanelRequest, TabsRequest,
+  ExtensionsSyncState, ExtensionSyncIntent, InstalledExtension, SidePanelRequest, TabsRequest, WebKitTabLayout, WebKitTabsReply,
 } from "../extensions";
 import type { HistoryChangedBatch, HistoryWireRow } from "../history";
 import type { FaviconImage } from "../favicons";
@@ -19,7 +19,7 @@ import type { FieldProviderProfile, PasswordExportStatus, SavedPassword, SystemP
 import type { ClearSiteDataResult, SiteSettings, SiteSettingType, SiteSettingValue } from "../siteSettings";
 import type { LinkRoute, TabStripCommand, TabStripTransaction, WindowRequest } from "../tabs";
 import type {
-  CookieRemoval, PageCookie, PageEngine, PasskeyAccess, SiteData, SiteDataWritten, StorageChange, StorageItems, WebKitCount,
+  CookieRemoval, PageCookie, PageEngine, PasskeyAccess, SiteData, SiteDataWritten, StorageChange, StorageItems, WebKitCount, WebKitExtension, WebKitExtensionCall, WebKitExtensionEvent, WebKitExtensionListeners, WebKitExtensionReply, WebKitExtensionsSync,
 } from "../webkit";
 import type { DisplayMediaSource, OpenWindowRequest, WebNotification } from "../pageTypes";
 
@@ -218,6 +218,11 @@ export type EngineCalls = {
   "webKit.writeSiteData": [Profile & { set: PageCookie[]; remove: CookieRemoval[]; storage: Record<string, StorageChange> }, SiteDataWritten | null];
   "webKit.setZoom": [Profile & { host: string; zoom: number }, null];
   "webKit.setFraudWarnings": [{ enabled: boolean }, null];
+  "webKit.syncExtensions": [Profile & { extensions: WebKitExtension[] }, WebKitExtensionsSync];
+  "webKit.extensionReply": [{ id: string; reply: WebKitExtensionReply }, null];
+  "webKit.extensionEvent": [Profile & { event: WebKitExtensionEvent }, null];
+  "webKit.extensionTabLayout": [{ layout: WebKitTabLayout }, null];
+  "webKit.extensionTabsDone": [{ request: string; reply: WebKitTabsReply }, null];
   "webKit.devStoreExists": [Profile, boolean];
   "webKit.devTouchStore": [Profile, boolean];
   "webKit.devHoldStore": [Profile, null];
@@ -244,6 +249,9 @@ export type EngineEvents = {
   "webKit.counted": { name: WebKitCount; epoch?: string };
   "webKit.siteDataWanted": { id: string; profile: string; origin: string; epoch?: string };
   "webKit.siteCookiesChanged": { profile: string; domains: string[]; epoch?: string };
+  "webKit.extensionCall": WebKitExtensionCall;
+  "webKit.extensionListeners": WebKitExtensionListeners;
+  "webKit.extensionsWanted": { profile: string };
   "webKit.notification": { profile: string; notification: WebNotification; epoch?: string };
   "webKit.notificationClose": { id: string };
   "webKit.openWindow": OpenWindowRequest & { profile: string };

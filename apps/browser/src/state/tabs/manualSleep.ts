@@ -22,7 +22,7 @@ export function canSleep(s: BrowserState, id: string): boolean {
   return !!t && hasLoadedPage(t) && webviews.has(id) && !isSleeping(id) && tabEngine(s, id) === "chromium" && !visibleWith(s, id);
 }
 
-export async function sleepTab(id: string, { keepProtected = false } = {}): Promise<string> {
+export async function sleepTab(id: string, { keepProtected = false, mayWrite }: { keepProtected?: boolean; mayWrite?: () => boolean } = {}): Promise<string> {
   const s = useBrowser.getState();
   if (!s.tabs[id]) return "gone";
   if (visibleWith(s, id)) return "shown";
@@ -34,6 +34,7 @@ export async function sleepTab(id: string, { keepProtected = false } = {}): Prom
     return keptBy.length ? "kept" : "asleep";
   }
   if (inPinnedContainer(s, id)) {
+    if (mayWrite && !mayWrite()) return "refused";
     s.closeTabs([id]);
     return "asleep";
   }

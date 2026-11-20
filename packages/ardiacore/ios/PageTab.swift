@@ -59,6 +59,7 @@ protocol PageTab: NSView {
 
   func resolvePasswordPrompt(_ action: String, username: String?, password: String?)
   func resolveAutofillPrompt(_ promptId: Int, action: String)
+  func answerAutofillPrompt(_ promptId: Int, action: String) -> Bool
   func executeExtensionAction(_ extensionId: String) -> String?
   func resolveDisplayMedia(_ requestId: String, sourceId: String?, audio: Bool)
   func notificationAction(_ notificationId: String, action: String)

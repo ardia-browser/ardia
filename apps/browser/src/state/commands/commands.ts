@@ -1,3 +1,4 @@
+import { foreignWriteHooks } from "../browser/foreignWriteHooks";
 import { copyText } from "../../platform/clipboard";
 import { openExternalURL } from "../../platform/app";
 import { pickFiles, prompt } from "../../platform/dialogs";
@@ -69,7 +70,7 @@ const newOrId = (arg: string) => (arg === "new" ? null : arg);
 
 export class NoCommandWindowError extends Error {}
 
-export function runCommand({ command, arg, windowId: given }: CommandEvent, { strictWindow = false, tabId: targetTab = null }: { strictWindow?: boolean; tabId?: string | null } = {}) {
+export function runCommand({ command, arg, windowId: given }: CommandEvent, { strictWindow = false, tabId: targetTab = null, mayWrite }: { strictWindow?: boolean; tabId?: string | null; mayWrite?: () => boolean } = {}) {
   if (isAppCommand(command)) return APP_COMMAND_HANDLERS[command](given);
   const s = useBrowser.getState();
   const target = commandTarget(s, command, given, targetTab);
@@ -152,7 +153,7 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
   const page = tab?.url ? tab : undefined;
   const web = tabId ? webviews.get(tabId) : undefined;
   const ui = s.windowUi[windowId];
-  if (page && (runHidingCommand(command, page.id) || runReaderCommand(command, page.id))) return;
+  if (page && (runHidingCommand(command, page.id) || runReaderCommand(command, page.id, mayWrite))) return;
   if (!targeted && runSidebarCommand(command, arg, windowId)) return;
 
   switch (command) {
@@ -172,11 +173,11 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
       return ui?.panel.open ? s.closePanel(windowId) : undefined;
     }
     case "closeTab":
-      if (targeted) return void closeTab(targeted);
+      if (targeted) return void closeTab(targeted, mayWrite);
       if (ui?.panel.newTab) {
         closeNewTabBar(windowId);
         if (NEW_TAB_BAR_POLICY.closeTabKeyOnlyDismissesBar || !tabId) return;
-        return void closeTab(tabId);
+        return void closeTab(tabId, mayWrite);
       }
       if (ui?.panel.open) return tabId ? closePanelToHeroBar(windowId, tabId, "closeKey") : s.closePanel(windowId);
       if ((s.selection[windowId]?.length ?? 0) > 1) {
@@ -188,7 +189,7 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
           return;
         }
       }
-      return tabId ? void closeTab(tabId) : undefined;
+      return tabId ? void closeTab(tabId, mayWrite) : undefined;
     case "print":
       return void web?.print();
     case "printWithSystemDialog":
@@ -282,14 +283,14 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
       return tab ? s.moveTabBy(tab.id, command === "moveTabDown" ? 1 : -1) : undefined;
     case "closeTabGroup": {
       const group = groupOf(s, tabId);
-      return group ? void closeGroup(group.id) : undefined;
+      return group ? void closeGroup(group.id, mayWrite) : undefined;
     }
     case "openProfileMenu":
       return s.windows[windowId]?.kind === "private" ? undefined : void openProfileMenu(windowId);
     case "duplicateTab":
       return tab ? void s.duplicateTab(tab.id) : undefined;
     case "moveTabToProfile":
-      return tab && arg ? void moveTabToProfile(tab.id, newOrId(arg)) : undefined;
+      return tab && arg ? void moveTabToProfile(tab.id, newOrId(arg), mayWrite) : undefined;
     case "moveTabToWindow":
       return tab && arg ? moveTabToWindow(tab.id, newOrId(arg)) : undefined;
     case "bookmarkPage":
@@ -302,7 +303,7 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
       return node?.kind === "url" && tab ? s.navigate(tab.id, node.url) : undefined;
     }
     case "togglePageEngine":
-      return void (tabId && togglePageEngine(tabId));
+      return void (tabId && togglePageEngine(tabId, mayWrite));
     case "toggleMute":
       return page ? (arg === "site" ? toggleSiteMute(page.id) : toggleMute(page.id)) : undefined;
     case "downloads":
@@ -323,11 +324,11 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
     case "mergeAllWindows":
       return s.mergeAllWindows(windowId);
     case "switchProfile":
-      return arg ? switchProfile(windowId, arg, true) : undefined;
+      return arg ? switchProfile(windowId, arg, true, mayWrite) : undefined;
     case "nextProfile":
-      return cycleProfile(windowId, 1);
+      return cycleProfile(windowId, 1, mayWrite);
     case "previousProfile":
-      return cycleProfile(windowId, -1);
+      return cycleProfile(windowId, -1, mayWrite);
     case "openExtension":
       return arg ? openExtensionFromMenu(windowId, arg, tabId) : undefined;
     case "addExtension":
@@ -337,7 +338,7 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
     case "autofill":
       return void requestAutofill(windowId, arg, tabId);
     case "newProfile":
-      return void requestCreateProfile(windowId).then((id) => id && switchProfile(windowId, id));
+      return void requestCreateProfile(windowId).then((id) => id && foreignWriteHooks.around(() => switchProfile(windowId, id)));
   }
 }
 
@@ -350,9 +351,9 @@ async function addBookmarkToFolder(windowId: string, tabId: string, folder: stri
   if (folder === "new") {
     const title = await prompt({ title: "New Folder", placeholder: "Folder name", confirmTitle: "Create", windowId });
     if (!title) return;
-    parentId = useBrowser.getState().addBookmarkFolder({ profileId, title });
+    foreignWriteHooks.around(() => void (parentId = useBrowser.getState().addBookmarkFolder({ profileId, title })));
   }
-  useBrowser.getState().addBookmark({ profileId, url: tab.url, title: tab.title, favicon: tab.favicon, parentId });
+  foreignWriteHooks.around(() => useBrowser.getState().addBookmark({ profileId, url: tab.url, title: tab.title, favicon: tab.favicon, parentId }));
 }
 
 async function openFiles(windowId: string | null) {
@@ -360,8 +361,10 @@ async function openFiles(windowId: string | null) {
   if (!urls.length) return;
   const s = useBrowser.getState();
   const target = resolveWindowId(s, windowId);
-  if (!target) return void openWindow({ url: urls[0] });
-  let last: string | undefined;
-  for (const url of urls) last = useBrowser.getState().newTab(target, { url });
-  if (last) useBrowser.getState().activate(last);
+  if (!target) return foreignWriteHooks.around(() => void openWindow({ url: urls[0] }));
+  foreignWriteHooks.around(() => {
+    let last: string | undefined;
+    for (const url of urls) last = useBrowser.getState().newTab(target, { url });
+    if (last) useBrowser.getState().activate(last);
+  });
 }

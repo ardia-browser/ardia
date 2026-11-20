@@ -57,7 +57,7 @@ export async function sleep(results: OpResult[], op: Op, stillOn: () => boolean 
   const done: string[] = [];
   for (const id of ids) {
     goingOn(stillOn, done);
-    outcomes[id] = await settled(sleepTab(id), id, "going to sleep", done, stillOn, owner);
+    outcomes[id] = await settled(sleepTab(id, { mayWrite: stillOn }), id, "going to sleep", done, stillOn, owner);
     if (CHANGED.has(outcomes[id]!)) done.push(id);
   }
   return { tabs: ids, outcomes };

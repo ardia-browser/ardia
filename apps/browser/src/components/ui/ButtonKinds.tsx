@@ -94,14 +94,22 @@ export function PillButtonView(props: PillProps) {
     );
   }
   const height = size ? pillHeight[size] : pillHeight.prompt;
+  const disabled = !!props.disabled;
   return (
-    <View {...hoverProps}>
-      <Pressable onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut}>
+    <View {...hoverProps} style={{ opacity: disabled ? opacity.disabled : 1 }}>
+      <Pressable
+        disabled={disabled}
+        onPress={onPress}
+        onPressIn={pressMotion.onPressIn}
+        onPressOut={pressMotion.onPressOut}
+        accessibilityRole="button"
+        accessibilityState={{ disabled }}
+      >
         {({ pressed }) => {
-          const look = pillLook(theme, "prompt", primary, pressed, hovered);
+          const look = pillLook(theme, "prompt", primary, !disabled && pressed, !disabled && hovered);
           return (
             <Animated.View style={[{ height, paddingHorizontal: space.l, alignItems: "center", justifyContent: "center" }, scaleStyle]}>
-              <HoverSwap shown={pressed || hovered} rest={pillLook(theme, "prompt", primary, false, false).fill} color={look.fill} radius={size ? capsule(height) : radii.tile} />
+              <HoverSwap shown={!disabled && (pressed || hovered)} rest={pillLook(theme, "prompt", primary, false, false).fill} color={look.fill} radius={size ? capsule(height) : radii.tile} />
               <Text numberOfLines={1} style={{ ...typeScale.body, fontWeight: weights.medium, color: look.text }}>
                 {title}
               </Text>

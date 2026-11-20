@@ -16,13 +16,15 @@ final class ManagedWindow {
   var contentShown = false
   var closingFromJS = false
   var summoned = false
+  let incognito: Bool
   private var contentObserver: NSObjectProtocol?
   private var contentSizer: NSObjectProtocol?
 
-  init(id: String, kind: WindowKind, window: NSWindow) {
+  init(id: String, kind: WindowKind, window: NSWindow, incognito: Bool = false) {
     self.id = id
     self.kind = kind
     self.window = window
+    self.incognito = incognito
   }
 
   deinit {

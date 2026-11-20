@@ -69,7 +69,7 @@ type TextProps = {
 
 export type PillSize = "m" | "l" | "xl";
 
-export type PillProps = { variant: "pill"; onPress: () => void; title: string; primary?: boolean; size?: PillSize } & ({ tone?: "prompt" } | { tone: "chip"; icon?: string; height?: number });
+export type PillProps = { variant: "pill"; onPress: () => void; title: string; primary?: boolean; size?: PillSize } & ({ tone?: "prompt"; disabled?: boolean } | { tone: "chip"; icon?: string; height?: number });
 
 export type StepperProps = { variant: "stepper"; icon: string; onPress: () => void; width?: number; height?: number; tooltip: string; disabled?: boolean };
 

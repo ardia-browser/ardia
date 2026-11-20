@@ -6,6 +6,7 @@ import type { TabPlacement } from "../pins/placing";
 import { splitOf, splitRowPanes } from "../splits/splits";
 import { groupColor, type IconValue, type Op } from "./workspaceOps";
 import { closeTabs, mute, rename, sleep, tabIcon, wake } from "./workspaceTabOps";
+import { refuseSharedFolderChange } from "./workspaceSharedGuard";
 import {
   afterChange,
   groupSection,
@@ -324,6 +325,7 @@ function removeGroup(results: OpResult[], op: Op): OpResult {
 }
 
 export function runOp(results: OpResult[], op: Op, stillOn: () => boolean = () => true, owner = 0): OpResult | Promise<OpResult> {
+  refuseSharedFolderChange(results, op);
   switch (op.op) {
     case "open":
       return open(results, op);

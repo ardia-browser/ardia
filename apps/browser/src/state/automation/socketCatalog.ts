@@ -17,6 +17,7 @@ export type MethodSpec = {
   params: JsonSchema;
   result: string;
   run?: (params: Record<string, unknown>, call: SocketCall) => unknown;
+  hidden?: boolean;
 };
 
 export type MethodEntry = { name: string; area: string; mutates: boolean; description: string; params: JsonSchema; result: string };
@@ -25,7 +26,7 @@ export type ConnectionAccess = "owner" | "plugin";
 
 export const PLUGIN_SESSION_METHODS: ReadonlySet<string> = new Set(["hello", "methods"]);
 
-export const SOCKET_FAMILIES = ["core", "workspace", "tabs", "windows", "profiles", "splits", "peek", "bookmarks", "history", "downloads", "settings", "sites", "extensions", "plugins", "media", "sync", "secrets"] as const;
+export const SOCKET_FAMILIES = ["core", "workspace", "tabs", "windows", "profiles", "splits", "peek", "bookmarks", "history", "downloads", "settings", "sites", "extensions", "plugins", "media", "sync", "secrets", "pins", "favicons", "shared_folders", "live", "presets", "air_traffic", "permissions", "menus"] as const;
 export type SocketFamily = (typeof SOCKET_FAMILIES)[number];
 
 const FAMILY_OF_AREA: Record<string, SocketFamily> = {
@@ -52,6 +53,14 @@ const FAMILY_OF_AREA: Record<string, SocketFamily> = {
   sync: "sync",
   passwords: "secrets",
   autofill: "secrets",
+  pins: "pins",
+  favicons: "favicons",
+  sharedFolders: "shared_folders",
+  live: "live",
+  presets: "presets",
+  airTraffic: "air_traffic",
+  permissions: "permissions",
+  menus: "menus",
 };
 
 export const areaOf = (name: string) => name.split(".")[0]!;
@@ -112,7 +121,7 @@ export function registerSocketMethods(specs: readonly MethodSpec[]) {
 }
 
 export const methodsCatalog = (): MethodEntry[] =>
-  [...CORE_METHODS, ...added].map(({ name, mutates, description, params, result }) => ({ name, area: areaOf(name), mutates, description, params, result }));
+  [...CORE_METHODS, ...added].filter((m) => !m.hidden).map(({ name, mutates, description, params, result }) => ({ name, area: areaOf(name), mutates, description, params, result }));
 
 export const methodSpec = (name: string): MethodSpec | undefined => byName.get(name);
 

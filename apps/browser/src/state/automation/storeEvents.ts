@@ -7,6 +7,7 @@ import { liveReachOf, onLiveChange, shownLiveOf } from "../tabs/tabLive";
 import { focusedWindowOf } from "../windows/ui";
 import { eligibleKind, isEligibleTab, shownPage } from "./automationWindows";
 import type { AutomationEventName } from "./eventNames";
+import { LIBRARY_EVENTS, startLibraryEvents } from "./libraryEvents";
 
 export type EventSend = (name: AutomationEventName, data: Record<string, unknown>) => void;
 
@@ -174,6 +175,7 @@ export function startStoreEvents(send: EventSend, needs: StoreFeedNeeds): () => 
   if (diffing.some((name) => needs.events.has(name))) stops.push(useBrowser.subscribe((s, prev) => diffMore(s, prev, send, needs.events)));
   if (needs.events.has("media.started") || needs.events.has("media.stopped")) stops.push(startMediaEvents(send, needs.events));
   if (needs.events.has("tab.crashed")) stops.push(startCrashes(send));
+  if (LIBRARY_EVENTS.some((name) => needs.events.has(name))) stops.push(startLibraryEvents(send, needs.events));
   if (needs.tabIdle.size && (needs.events.has("tab.idle") || needs.events.has("tab.resumed"))) stops.push(startTabIdle(send, needs.tabIdle));
   return () => stops.forEach((stop) => stop());
 }

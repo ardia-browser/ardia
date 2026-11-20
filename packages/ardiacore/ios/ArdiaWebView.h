@@ -61,6 +61,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)resolveUnresponsive:(BOOL)terminate NS_SWIFT_NAME(resolveUnresponsive(terminate:));
 - (NSString *)discard:(BOOL)unload NS_SWIFT_NAME(discard(unload:));
 - (NSArray<NSNumber *> *)sleepIfHiddenFor:(NSTimeInterval)seconds NS_SWIFT_NAME(sleepIfHidden(for:));
++ (nullable NSString *)appTabIdContainingView:(nullable NSView *)view NS_SWIFT_NAME(appTabId(containing:));
 @end
 
 @interface ArdiaWebView (Reveals)
@@ -260,6 +261,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)resolvePasswordPrompt:(NSString *)action username:(nullable NSString *)username password:(nullable NSString *)password
     NS_SWIFT_NAME(resolvePasswordPrompt(_:username:password:));
 - (void)resolveAutofillPrompt:(NSInteger)promptId action:(NSString *)action NS_SWIFT_NAME(resolveAutofillPrompt(_:action:));
+- (BOOL)answerAutofillPrompt:(NSInteger)promptId action:(NSString *)action NS_SWIFT_NAME(answerAutofillPrompt(_:action:));
 - (nullable NSString *)executeExtensionAction:(NSString *)extensionId NS_SWIFT_NAME(executeExtensionAction(_:));
 - (void)notificationAction:(NSString *)notificationId action:(NSString *)action NS_SWIFT_NAME(notificationAction(_:action:));
 @end

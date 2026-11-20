@@ -392,6 +392,24 @@ test("switching tabs in one profile keeps another profile's opener links in the 
   assert.deepEqual(personal, ["a", "c", "c2", "b"], "the next link from the same tab still lines up after the first");
 });
 
+test("tabs closed together come back to their places, from ⇧⌘T or Recently Closed in any order (#2492)", () => {
+  reset();
+  const [w, , b, c, , e] = setup("a", "b", "c", "d", "e");
+  S().closeTabs([b, c, e]);
+  assert.deepEqual(hosts(w), ["a", "d"]);
+  S().reopenClosed(w);
+  assert.deepEqual(hosts(w), ["a", "d", "e"]);
+  S().reopenClosed(w);
+  S().reopenClosed(w);
+  assert.deepEqual(hosts(w), ["a", "b", "c", "d", "e"]);
+  const [, b2, c2] = S().windows[w].tabIds;
+  S().closeTabs([b2, c2]);
+  const entry = (host) => S().closedTabs.find((x) => short(x.tab.url) === host).id;
+  S().restoreClosed(entry("b"), w);
+  S().restoreClosed(entry("c"), w);
+  assert.deepEqual(hosts(w), ["a", "b", "c", "d", "e"]);
+});
+
 test("abandoned New Tab cleanup never closes a window or the tab it shows", () => {
   reset();
   const w = S().createWindow();

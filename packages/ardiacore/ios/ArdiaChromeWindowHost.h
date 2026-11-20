@@ -52,6 +52,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(class, nonatomic, copy, nullable) NSString *(^focusHandoffSummaryHandler)(NSWindow *window);
 + (BOOL)windowShouldClose:(NSWindow *)window;
 + (BOOL)windowFullScreenIsForPage:(NSWindow *)window;
++ (BOOL)windowIsFullScreen:(NSWindow *)window NS_SWIFT_NAME(windowIsFullScreen(_:));
 + (BOOL)userSeesWindow:(nullable NSWindow *)window NS_SWIFT_NAME(userSees(_:));
 
 @end

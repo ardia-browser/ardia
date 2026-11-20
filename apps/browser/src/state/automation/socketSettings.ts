@@ -4,6 +4,7 @@ import { controllingSearchExtension, DEFAULT_SETTINGS, defaultSearchEngine, SETT
 import { chooseTabLayout } from "../settings/actions";
 import { tabLayoutOf } from "../browser/model";
 import type { MethodSpec } from "./socketCatalog";
+import { checkedByRules, hasSocketRule, searchProblem } from "./socketSettingRules";
 import { id, ids, obj, text } from "./socketSchema";
 import { expect, now } from "./socketTargets";
 import { OpError } from "./workspaceTargets";
@@ -13,11 +14,12 @@ const OWN_METHOD: Partial<Record<SettingKey, string>> = {
   customSearchEngines: "search.add, search.update and search.remove",
   cliControl: "nothing: the ardia command can't switch its own control",
   allowJavaScriptFromAppleEvents: "nothing: it would let any AppleScript run script in every page",
+  extensionSearchEngines: "nothing: it mirrors the search engines extensions add, so install, turn off or remove the extension (extensions.*)",
 };
 
 const whyNot = (key: string) => {
   if (!(SETTING_KEYS as readonly string[]).includes(key)) return `${key} isn't a setting`;
-  if (isConfigSettingKey(key)) return null;
+  if (isConfigSettingKey(key) || hasSocketRule(key)) return null;
   const own = OWN_METHOD[key as SettingKey];
   return own ? `${key} is set with ${own}` : `${key} can't be set from the ardia command yet`;
 };
@@ -54,10 +56,16 @@ function apply(values: Record<string, unknown>, label: string, replaced: Partial
   if (refused.length) throw new OpError("refused", `${refused.join("; ")}.`);
   if (Object.hasOwn(values, "searchEngine")) refuseWhileExtensionControlsSearch();
   const settings = now().settings;
-  const { values: checked, problems } = checkedSettings(label, values, settings);
+  const ruled = Object.fromEntries(Object.entries(values).filter(([key]) => hasSocketRule(key)));
+  const fromRules = checkedByRules(ruled, settings, values);
+  const { values: checked, problems } = checkedSettings(label, Object.fromEntries(Object.entries(values).filter(([key]) => !hasSocketRule(key))), { ...settings, ...fromRules.patch });
+  problems.push(...fromRules.problems.map((p) => `${label}: ${p}`));
+  const merged = { ...fromRules.patch, ...checked, ...replaced };
+  const problem = problems.length ? null : searchProblem(settings, { ...settings, ...merged } as Settings);
+  if (problem) problems.push(`${label}: ${problem}`);
   if (problems.length) throw new OpError("bad_request", problems.join("; "));
   const patch: Partial<Record<SettingKey, unknown>> = {};
-  for (const [key, value] of Object.entries({ ...checked, ...replaced }) as [SettingKey, unknown][]) if (!sameValue(value, settings[key])) patch[key] = value;
+  for (const [key, value] of Object.entries(merged) as [SettingKey, unknown][]) if (!sameValue(value, settings[key])) patch[key] = value;
   const layouts = windowLayouts();
   if (Object.keys(patch).length) now().updateSettings(patch as Partial<Settings>);
   const layout = (Object.hasOwn(checked, "tabLayout") ? checked.tabLayout : patch.tabLayout) as Settings["tabLayout"] | undefined;

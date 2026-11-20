@@ -10,7 +10,7 @@ import { refreshActionStates } from "./actionStates";
 import { focusedWindowOf } from "../windows/ui";
 import { onProfilesUnloaded } from "../profiles/profileLoading";
 import { noteExtensionActionTabChangeSkipped } from "../telemetry/workCounts";
-import { consentToken } from "../telemetry/client";
+import { consentToken, type ConsentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
 
 const ACTION_EVENT_COALESCE_MS = 150;
@@ -26,7 +26,7 @@ export function watchActionsOf(profile: string): boolean {
 }
 
 const dirtyActions = new Set<string>();
-const dirtyLists = new Set<string>();
+const dirtyLists = new Map<string, ConsentToken | null>();
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
 const windowsOf = (s: BrowserState, profile: string) => s.windowOrder.filter((windowId) => extensionProfile(s, windowId) === profile);
@@ -42,7 +42,7 @@ function showsAction(profile: string, extensionId: string) {
 function flushActionChanges() {
   flushTimer = null;
   if (AppState.currentState !== "active") return;
-  for (const profile of dirtyLists) if (loadedProfiles.has(profile)) void refreshExtensionsAfterChange(profile);
+  for (const [profile, consent] of dirtyLists) if (loadedProfiles.has(profile)) void refreshExtensionsAfterChange(profile, consent);
   dirtyLists.clear();
   if (dirtyActions.size) {
     const profiles = [...dirtyActions];
@@ -67,7 +67,7 @@ export function startActionStates() {
     for (const profile of profiles) loadedProfiles.delete(profile);
   });
   onExtensionActionChanged(({ profile, id, kind }) => {
-    if (kind === "registry") dirtyLists.add(profile);
+    if (kind === "registry") dirtyLists.set(profile, dirtyLists.has(profile) ? dirtyLists.get(profile)! : consentToken());
     else if (showsAction(profile, id)) dirtyActions.add(profile);
     else return;
     flushSoon();

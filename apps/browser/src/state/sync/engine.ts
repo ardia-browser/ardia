@@ -12,8 +12,8 @@ import { settleThemeAdoption, themeChosenHere } from "./syncThemes";
 import { editClock, startEditClock } from "./editClock";
 import { addLinkedProfile, appScopeOf, linkedProfileId, linkProfiles, readyToPair, remoteProfileRecord, sharedDataChain } from "./profileLinks";
 import { summarize } from "./syncSummary";
-import { takeCycleWork, timedCycle } from "./cycleWork";
-import { freezeRemovals, markDeviceRemoved, markRemoved, settleRemovals, takeReturnedDeviceRemovals, takeReturnedProfileRemovals, takeSyncedDeviceRemovals, takeSyncedProfileRemovals } from "./profileRemoval";
+import { noteSnapshot, timedCycle } from "./cycleWork";
+import { freezeRemovals, markDeviceRemoved, markRemoved, settleRemovals } from "./profileRemoval";
 import { profileScope } from "./records";
 import { queueSend, sendTargetsIn } from "./sentTabs";
 import { errorText } from "../../lib/errors";
@@ -25,6 +25,7 @@ import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
 
 export { onTabsReceived } from "./sentTabs";
+export { takeSnapshotWrites } from "./cycleWork";
 export { takeOpenTabSyncCounts } from "../telemetry/openTabSyncCounts";
 
 const CYCLE_MS = 15_000;
@@ -52,18 +53,7 @@ let cycle: Promise<void> | null = null;
 let again = false;
 let forcePasswordsNext = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
-let snapshotWrites = { count: 0, bytes: 0 };
 const { read, loadState, persistJournal, watchScope, save, startOver, checkpoint } = syncFiles(() => doc);
-
-function noteSnapshot({ snapshotBytes }: { snapshotBytes: number }) {
-  if (snapshotBytes) snapshotWrites = { count: snapshotWrites.count + 1, bytes: snapshotWrites.bytes + snapshotBytes };
-}
-
-export function takeSnapshotWrites() {
-  const taken = { ...snapshotWrites, ...takeCycleWork(), removedProfiles: takeSyncedProfileRemovals(), removedDevices: takeSyncedDeviceRemovals(), removalsReturned: takeReturnedProfileRemovals() + takeReturnedDeviceRemovals() };
-  snapshotWrites = { count: 0, bytes: 0 };
-  return taken;
-}
 
 function load() {
   const loaded = read();
@@ -97,8 +87,16 @@ function scheduleSync(delay = AFTER_EDIT_MS) {
   timer = setTimeout(() => void runCycle(), delay);
 }
 
-export async function syncNow() {
+let stopping = false;
+
+export const syncWritesOpen = () => doc.enabled && !stopping && !["starting", "locked", "off", "unavailable"].includes(useSync.getState().status);
+
+export async function syncNow(stillWanted: () => void = () => {}): Promise<boolean> {
+  while (cycle) await cycle.catch(() => {});
+  if (stopping || !doc.enabled || useSync.getState().status === "locked") return false;
+  stillWanted();
   await runCycle({ forcePasswords: true });
+  return true;
 }
 
 type CycleOptions = { retiring?: boolean; forcePasswords?: boolean };
@@ -284,7 +282,12 @@ export async function enterRecoveryPhrase(folder: string, text: string): Promise
 
 export async function stopSync({ deleteData = false } = {}) {
   const native = SyncNative;
-  if (!native || !doc.enabled) return;
+  if (!native || !doc.enabled || stopping) return;
+  stopping = true;
+  await retire(native, deleteData).finally(() => (stopping = false));
+}
+
+async function retire(native: NonNullable<typeof SyncNative>, deleteData: boolean) {
   clearTimeout(timer);
   const consent = consentToken();
   const reportFailure = (error: unknown) => warnFor(consent, "[sync] the last cycle before stopping failed", error);

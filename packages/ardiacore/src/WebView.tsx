@@ -10,8 +10,18 @@ import type { PageCookie } from "./webkit";
 
 type NativeHandle = Omit<
   WebViewHandle,
-  "evaluate" | "loadUrl" | "downloadFavicon" | "resolvePasswordPrompt" | "discard" | "sleepIfHidden" | "nativeTag" | "requestPictureInPicture" | "takeControlPress"
+  | "evaluate"
+  | "loadUrl"
+  | "downloadFavicon"
+  | "resolvePasswordPrompt"
+  | "answerAutofillPrompt"
+  | "discard"
+  | "sleepIfHidden"
+  | "nativeTag"
+  | "requestPictureInPicture"
+  | "takeControlPress"
 > & {
+  answerAutofillPrompt(id: number, answer: string): Promise<boolean>;
   requestPictureInPicture(clickAt: number, control: number): Promise<boolean>;
   takeControlPress(clickAt: number, control: number): Promise<boolean>;
   evaluate(code: string): Promise<string | null>;
@@ -93,6 +103,7 @@ export const WebView = forwardRef<WebViewHandle, WebViewProps>(function WebView(
       resolvePasswordPrompt: (answer, edits) =>
         call(undefined, (n) => n.resolvePasswordPrompt(answer, edits?.username ?? null, edits?.password ?? null)),
       resolveAutofillPrompt: (id, answer) => call(undefined, (n) => n.resolveAutofillPrompt(id, answer)),
+      answerAutofillPrompt: (id, answer) => call(false, (n) => n.answerAutofillPrompt(id, answer)),
       executeExtensionAction: (extensionId) => call(null, (n) => n.executeExtensionAction(extensionId)),
       resolveDisplayMedia: (id, sourceId, audio = false) => call(undefined, (n) => n.resolveDisplayMedia(id, sourceId, audio)),
       mediaCaptureSourceId: () => call(null, (n) => n.mediaCaptureSourceId()),

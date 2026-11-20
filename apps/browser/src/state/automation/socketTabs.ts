@@ -1,3 +1,4 @@
+import { refuseSyncedLinkChange } from "./workspaceSharedGuard";
 import type { BrowserState } from "../browser/store";
 import { activeTabId, isIncognitoProfile } from "../browser/model";
 import type { ClosedGroup, ClosedTab, ClosedWindow } from "../browser/types";
@@ -55,6 +56,7 @@ function navigate(params: Record<string, unknown>) {
   const t = tabOf(params.tab);
   const url = openableUrl(params.url as string);
   if (typeof url !== "string") throw new OpError("refused", url.error);
+  refuseSyncedLinkChange(t.id, "loading another page");
   now().navigate(t.id, url || "ardia://newtab", { userInitiated: true });
   return tabRow(now(), t.id);
 }
@@ -68,6 +70,7 @@ async function reload(params: Record<string, unknown>, call: SocketCall) {
 
 async function forward(params: Record<string, unknown>, call: SocketCall) {
   const t = tabOf(params.tab);
+  refuseSyncedLinkChange(t.id, "going forward");
   if (await goForwardAsking(t.id, call.serving)) return { ok: true };
   call.stillServing();
   throw new OpError("failed", `Tab ${t.id} didn't go forward: it has no page, or its shared page couldn't be brought to it.`);
@@ -75,6 +78,7 @@ async function forward(params: Record<string, unknown>, call: SocketCall) {
 
 async function back(params: Record<string, unknown>, call: SocketCall) {
   const t = tabOf(params.tab);
+  refuseSyncedLinkChange(t.id, "going back");
   if (await goBackAsking(t.id, call.serving, askWhereSeen(`Tab ${t.id} stayed on its page`, call))) return { ok: true };
   call.stillServing();
   throw new OpError("refused", `Tab ${t.id} stayed on its page: the page has changes that going back may lose and the user chose to stay, the page moved on meanwhile, or its shared page couldn't be brought to it.`);

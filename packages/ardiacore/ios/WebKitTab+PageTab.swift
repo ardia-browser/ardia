@@ -93,6 +93,8 @@ extension WebKitTab: PageTab {
 
   func resolveAutofillPrompt(_ promptId: Int, action: String) {}
 
+  func answerAutofillPrompt(_ promptId: Int, action: String) -> Bool { false }
+
   func executeExtensionAction(_ extensionId: String) -> String? { nil }
 
   func resolveDisplayMedia(_ requestId: String, sourceId: String?, audio: Bool) {}

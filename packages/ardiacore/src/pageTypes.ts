@@ -280,6 +280,7 @@ export type WebViewHandle = {
 
   resolvePasswordPrompt(answer: PasswordPromptAnswer, edits?: { username?: string; password?: string; offer?: string }): Promise<void>;
   resolveAutofillPrompt(id: number, answer: AutofillPromptAnswer): Promise<void>;
+  answerAutofillPrompt?(id: number, answer: AutofillPromptAnswer): Promise<boolean>;
   executeExtensionAction(extensionId: string): Promise<ExtensionActionResult | null>;
 
   resolveDisplayMedia(id: string, sourceId: string | null, audio?: boolean): Promise<void>;

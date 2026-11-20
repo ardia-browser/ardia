@@ -40,7 +40,7 @@ export function Sidebar({ width }: { width: number }) {
   const [available, setAvailable] = useState(0);
   const newTabAtTop = useNewTabAtTop();
   const newTabShown = useSidebarPart("newTab");
-  const dockAbove = newTabAtTop || !newTabShown || available <= 0 ? Infinity : available - rowPitch() - 12;
+  const canDock = !newTabAtTop && newTabShown;
   const scroll = useRef<ScrollView>(null);
   const scrollY = useRef(0);
   const geometry = useRef<SidebarGeometry>({ viewport: 0, regions: { pinnedGroups: 0, list: 0 }, newTabAtTop: false, tilesFixed: true });
@@ -113,7 +113,7 @@ export function Sidebar({ width }: { width: number }) {
                     width={width}
                     current={page.id === current}
                     resting={!!page.resting}
-                    dockAbove={dockAbove}
+                    canDock={canDock}
                     height={Math.max(0, available - (field === "top" ? GLOW_ROOM : 0))}
                     rows={page.id === current ? undefined : Math.ceil(available / rowPitch()) + 1}
                     geometry={page.id === current ? geometry : undefined}

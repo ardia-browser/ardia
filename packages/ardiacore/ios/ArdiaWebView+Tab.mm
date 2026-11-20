@@ -29,6 +29,10 @@ const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
 
 @implementation ArdiaWebView (Tab)
 
++ (NSString *)appTabIdContainingView:(NSView *)view {
+  return ardia_host::AppTabIdContaining(view);
+}
+
 - (ArdiaCoreAdoption)windowTakes:(ArdiaCoreTab *)tab {
   ArdiaCoreWindow *coreWindow = _standalone ? nil : self.controller.coreWindow;
   return coreWindow ? [coreWindow canAdoptTab:tab] : ArdiaCoreAdoptionAdopted;

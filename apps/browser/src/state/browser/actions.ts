@@ -1,3 +1,4 @@
+import { foreignWriteHooks } from "./foreignWriteHooks";
 import { listExtensions } from "../../platform/extensions";
 import { stepPager } from "../../platform/pager";
 import { confirm } from "../../platform/dialogs";
@@ -49,7 +50,10 @@ export function switchToTab(tabId: string) {
   if (tab.windowId !== focusedWindowOf(store())) focus(tab.windowId);
 }
 
-export async function closeTab(tabId: string) {
+export const writesFor = (mayWrite?: () => boolean) => (mayWrite ? (write: () => void) => write() : foreignWriteHooks.around);
+
+export async function closeTab(tabId: string, mayWrite?: () => boolean) {
+  const commit = writesFor(mayWrite);
   const consent = consentToken();
   const s = store();
   const tab = s.tabs[tabId];
@@ -59,7 +63,8 @@ export async function closeTab(tabId: string) {
   if (last && managesWindowClose(w.id, "lastTab")) return;
   if (last && (asksBeforeClosingLastTab(w.id) || quitWarningMayAsk())) {
     const { decision, suppressWarning } = await decideLastTabClose(w.id);
-    if (suppressWarning) store().updateSettings({ warnBeforeClosingLastTab: false });
+    if (mayWrite && !mayWrite()) return;
+    if (suppressWarning) commit(() => store().updateSettings({ warnBeforeClosingLastTab: false }));
     if (decision === "cancel") return;
     applyHeldReports();
   }
@@ -70,15 +75,16 @@ export async function closeTab(tabId: string) {
     return closeWindowAnimated(w.id);
   }
   if (splitOf(now, tabId) && closeKind(now, tabId) === "close") noteSplit("splitPaneCloses", consent);
-  store().closeTab(tabId);
+  commit(() => store().closeTab(tabId));
 }
 
-export async function closeGroup(groupId: string) {
+export async function closeGroup(groupId: string, mayWrite?: () => boolean) {
+  const commit = writesFor(mayWrite);
   const s = store();
   const group = s.groups[groupId];
   const w = group && s.windows[group.windowId];
   if (!group || !w) return;
-  if (!(await groupCloseAllowed(w.id, groupId))) return;
+  if (!(await groupCloseAllowed(w.id, groupId)) || (mayWrite && !mayWrite())) return;
   if (s.settings.warnBeforeClosingTabGroup && !rootOf(s.groups, groupId)?.pinned) {
     const tabs = plural(group.tabIds.length, "tab");
     const { confirmed, suppressed } = await confirm({
@@ -88,11 +94,12 @@ export async function closeGroup(groupId: string) {
       suppression: "Don’t ask me again",
       windowId: w.id,
     });
-    if (suppressed) store().updateSettings({ warnBeforeClosingTabGroup: false });
+    if (mayWrite && !mayWrite()) return;
+    if (suppressed) commit(() => store().updateSettings({ warnBeforeClosingTabGroup: false }));
     if (!confirmed) return;
     applyHeldReports();
   }
-  if (store().groups[groupId]) store().closeGroup(groupId);
+  if (store().groups[groupId]) commit(() => store().closeGroup(groupId));
 }
 
 export function toggleMute(tabId: string) {
@@ -154,7 +161,7 @@ async function profileMoveTarget(move: ProfileMove, target: string | null): Prom
     suppression: "Don't warn me again",
     windowId: move.windowId,
   });
-  if (suppressed) store().updateSettings({ warnBeforeMovingTabsToProfile: false });
+  if (suppressed) foreignWriteHooks.around(() => store().updateSettings({ warnBeforeMovingTabsToProfile: false }));
   return confirmed ? profileId : null;
 }
 
@@ -171,14 +178,16 @@ function tabsMove(tabIds: string[]): ProfileMove | null {
   };
 }
 
-export async function moveTabsToProfile(tabIds: string[], target: string | null) {
+export async function moveTabsToProfile(tabIds: string[], target: string | null, mayWrite?: () => boolean) {
   const move = tabsMove(tabIds);
   const profileId = move && (await profileMoveTarget(move, target));
-  if (!profileId) return;
-  for (const id of tabIds) {
-    const tab = store().tabs[id];
-    if (tab && !isIncognitoProfile(tab.profileId)) store().moveTabToProfile(id, profileId);
-  }
+  if (!profileId || (mayWrite && !mayWrite())) return;
+  writesFor(mayWrite)(() => {
+    for (const id of tabIds) {
+      const tab = store().tabs[id];
+      if (tab && !isIncognitoProfile(tab.profileId)) store().moveTabToProfile(id, profileId);
+    }
+  });
 }
 
 export async function dropTabsInProfile(tabIds: string[], target: string, drop: Drop, home: string, onIcon: boolean): Promise<Record<string, string> | null> {
@@ -198,7 +207,7 @@ export async function dropTabsInProfile(tabIds: string[], target: string, drop: 
   return null;
 }
 
-export const moveTabToProfile = (tabId: string, target: string | null) => moveTabsToProfile([tabId], target);
+export const moveTabToProfile = (tabId: string, target: string | null, mayWrite?: () => boolean) => moveTabsToProfile([tabId], target, mayWrite);
 
 export async function moveGroupToProfile(groupId: string, target: string | null) {
   const g = store().groups[groupId];
@@ -217,14 +226,15 @@ export function moveTabToWindow(tabId: string, target: string | null) {
   if (windowId) focus(windowId);
 }
 
-export function switchProfile(windowId: string, profileId: string, animated = false) {
-  if (animated) pageToProfile(windowId, profileId);
+export function switchProfile(windowId: string, profileId: string, animated = false, mayWrite?: () => boolean) {
+  if (animated) pageToProfile(windowId, profileId, mayWrite);
   else store().switchProfile(windowId, profileId);
 }
 
-export function cycleProfile(windowId: string, delta: 1 | -1) {
+export function cycleProfile(windowId: string, delta: 1 | -1, mayWrite?: () => boolean) {
   if (!cycleTarget(windowId, delta)) return;
-  void stepPager(windowId, delta, true, store().profileOrder).then((ok) => ok || cycleFromStore(windowId, delta));
+  const commit = writesFor(mayWrite);
+  void stepPager(windowId, delta, true, store().profileOrder).then((ok) => ok || (mayWrite && !mayWrite()) || commit(() => cycleFromStore(windowId, delta)));
 }
 
 function cycleFromStore(windowId: string, delta: 1 | -1) {
@@ -268,10 +278,10 @@ export async function openProfileMenu(windowId: string) {
   const choice = await chooseFromMenu(items);
   if (!choice) return;
   if (typeof choice !== "string") {
-    if (choice.open === "switch") switchProfile(windowId, choice.profileId, true);
-    else openWindow({ profileId: choice.profileId });
+    if (choice.open === "switch") foreignWriteHooks.around(() => switchProfile(windowId, choice.profileId, true));
+    else foreignWriteHooks.around(() => void openWindow({ profileId: choice.profileId }));
   } else if (choice === "new") {
     const id = await requestCreateProfile(windowId);
-    if (id) switchProfile(windowId, id);
+    if (id) foreignWriteHooks.around(() => switchProfile(windowId, id));
   } else if (choice === "edit") openSettings("profiles", current);
 }

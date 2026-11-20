@@ -457,6 +457,12 @@ NSDictionary<NSString *, DevHandler> *DevHandlers() {
     },
     @"fullScreen" : ^NSString *(NSWindow *w, NSString *) { return FullScreen(w, nil); },
     @"fakeFullScreen" : ^NSString *(NSWindow *w, NSString *a) { return FullScreen(w, a); },
+    @"fakeFullScreenSilentExit" : ^NSString *(NSWindow *w, NSString *) {
+      [NSNotificationCenter.defaultCenter postNotificationName:NSWindowWillExitFullScreenNotification object:w];
+      objc_setAssociatedObject(w, kActedFullScreenKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+      [ArdiaWindowController forNSWindow:w].coreWindow.actedFullScreen = NO;
+      return @(IsWindowFullScreen(w)).stringValue;
+    },
     @"snapshotFrame" : ^NSString *(NSWindow *w, NSString *path) { return SnapshotFrameView(w, path); },
     @"children" : ^NSString *(NSWindow *w, NSString *) {
       NSMutableArray *children = [NSMutableArray array];

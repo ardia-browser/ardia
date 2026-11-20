@@ -169,6 +169,7 @@ export const CURATED = {
   internaldrive: "L:hard-drive T:device-sd-card P:hard-drive M:harddisk I:database",
   key: "L:key T:key P:key I:key M:key-outline L:key-round",
   "key.fill": "PF:key-fill M:key TF:key L:key-round",
+  qrcode: "L:qr-code T:qrcode P:qr-code I:qr-code M:qrcode",
   keyboard: "L:keyboard T:keyboard P:keyboard I:keyboard M:keyboard-outline",
   laptopcomputer: "L:laptop T:device-laptop P:laptop M:laptop I:laptop",
   leaf: "L:leaf T:leaf P:leaf I:leaf M:leaf",

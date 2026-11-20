@@ -1,3 +1,5 @@
+import { boundFolders } from "../sharedFolders/store";
+import { SHARED_GROUPS_SIDEBAR_ONLY } from "./workspaceSharedGuard";
 import type { BrowserState } from "../browser/store";
 import { engineProfile, isIncognitoProfile } from "../browser/model";
 import { deleteProfile } from "../browser/actions";
@@ -87,7 +89,9 @@ function reorder(params: Record<string, unknown>) {
 async function remove(params: Record<string, unknown>, call: SocketCall) {
   const id = profileArg(params.profile);
   if (now().profileOrder.length <= 1) throw new OpError("refused", "That's the only profile.");
-  await deleteProfile(id, shownWindowId(), call.serving, askWhereSeen(`Profile ${id} wasn't deleted`, call));
+  if (boundFolders().some((b) => b.profileId === id)) throw new OpError("refused", `Profile ${id} has groups synced to shared folders; ${SHARED_GROUPS_SIDEBAR_ONLY}, so it can be deleted only from the sidebar.`);
+  const mayDelete = () => call.serving() && !boundFolders().some((b) => b.profileId === id);
+  await deleteProfile(id, shownWindowId(), mayDelete, askWhereSeen(`Profile ${id} wasn't deleted`, call));
   const deleted = !now().profiles[id];
   if (!deleted) call.stillServing();
   return { deleted };

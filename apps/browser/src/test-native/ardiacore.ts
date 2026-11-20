@@ -35,6 +35,7 @@ type ExtensionEngine = {
   install(path: string, profile: string): Promise<string>;
   reload(id: string, profile: string): Promise<void>;
   uninstall(id: string, profile: string): Promise<void>;
+  configure?(id: string, profile: string, options: Record<string, unknown>): Promise<void>; inspect?(path: string): Promise<CallResult<"extensions.inspectUnpacked">>;
 };
 const testGlobals = globalThis as {
   acTestTabStrip?: TabStripHost;
@@ -367,9 +368,11 @@ export const nativeTabSwitches: boolean[] = [];
 export const nativeTabPresses: { byStart: Map<number, number>; dropped: number[]; splits: string[][] } = { byStart: new Map(), dropped: [], splits: [] };
 export const discardedOffers: string[] = [];
 export const installedCrx: { path: string; profile: string }[] = [];
+export const chosenExtensionFolder: { next: string | null } = { next: null };
 export const crxInstallFailure: { next: string | null } = { next: null };
 export const linkRoute: { next: LinkRoute } = { next: {} };
 export const resolvedPermissions: { id: string; result: string; remember: boolean }[] = [];
+
 export const extensionAnswers = {
   actionStates: async (_tabId: string, _ids: string[], _profile?: string): Promise<Record<string, ActionState>> => ({}),
   sidePanelUrl: async (_tabId: string, _extensionId: string, _profile?: string): Promise<string | null> => null,
@@ -571,8 +574,9 @@ const fakeModules = {
     setEnabled: async ({ id }) => (await extensionAnswers.change("setEnabled", id), { ok: true }),
     uninstall: async ({ profile, id }) => (await extensionAnswers.change("uninstall", id), await extensionEngine()?.uninstall(id, profile), { ok: true }),
     reload: async ({ profile, id }) => (await extensionAnswers.change("reload", id), await extensionEngine()?.reload(id, profile), { ok: true }),
-    configure: async ({ id }) => (await extensionAnswers.change("configure", id), { ok: true }),
-    chooseFolder: () => null,
+    configure: async ({ profile, id, options }) => (await extensionAnswers.change("configure", id), await extensionEngine()?.configure?.(id, profile, options), { ok: true }),
+    inspectUnpacked: ({ path }) => extensionEngine()?.inspect?.(path) ?? Promise.reject(Object.assign(new Error("Manifest file is missing or unreadable"), { code: "ERR_EXTENSION_INVALID" })),
+    chooseFolder: () => chosenExtensionFolder.next,
     installCrx: ({ profile, path }) => {
       const failure = crxInstallFailure.next;
       crxInstallFailure.next = null;

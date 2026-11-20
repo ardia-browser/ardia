@@ -41,6 +41,8 @@ export type OpenWindowOptions = {
   maximized?: boolean;
 };
 
+export type WindowGeometry = { frame: Rect4; zoomed: boolean; fullScreen: boolean; pageFullScreen?: boolean; miniaturized: boolean; visible: boolean; display: string | null; refused?: "offscreen" | "invalid"; transition?: "busy" | "timeout" };
+
 export type DragPreviewShape = "hidden" | "pill" | "card";
 
 export type WindowsNative = {
@@ -62,6 +64,10 @@ export type WindowsNative = {
   dragPreviewEnd(windowId: string | null, frame: Rect4 | null): Promise<void>;
   raiseView(tag: number, levels: number, raised: boolean): Promise<void>;
   windowFrame(id: string): Promise<Rect4 | null>;
+  windowGeometry(id: string): Promise<WindowGeometry | null>;
+  setWindowFrame(id: string, frame: Rect4): Promise<WindowGeometry | null>;
+  setWindowZoomed(id: string, on: boolean): Promise<WindowGeometry | null>;
+  setWindowFullScreen(id: string, on: boolean): Promise<WindowGeometry | null>;
   frameCornerRadius(id: string): Promise<number>;
   setWindowTitle(id: string, title: string): Promise<void>;
   windowIds(): Promise<string[]>;

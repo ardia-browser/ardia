@@ -69,7 +69,9 @@ Settings › Advanced.
   and `ardia call <method> [params]` calls any method, so a method Ardia adds is usable from the shell without a new
   command release. Adding methods doesn't change the protocol: a command that calls one an older Ardia lacks gets
   `unknown_method`. Every area, what it reads and changes, and what stays out of reach (passwords, card numbers,
-  cookie values) is in `docs/control-socket.md`.
+  cookie values) is in `docs/control-socket.md`. Tile folders (`pins.*`), page icons (`favicons.get`), shared
+  and live folders (`sharedFolders.*`, `live.*`), setup codes (`presets.*`) and Air Traffic Control rules
+  (`airTraffic.*`) are there too.
 - **One line is at most 1 MiB.** Every line Ardia writes on the socket (a reply, an event, a decide request) is at most
   1 MiB (1,048,576 bytes, newline included), the limit every shipped command reads (`MAX_LINE` in `control.py` and
   `control.rs`); a longer line makes the command drop the connection. Old commands can't change, so Ardia keeps to it:

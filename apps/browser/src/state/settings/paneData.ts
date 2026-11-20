@@ -62,7 +62,7 @@ export const autofillEnabled = resource("autofillEnabled", (profile: string) =>
 );
 export const autofillToggleAsked = resource("autofillToggleAsked", (profile: string, toggle: AutofillToggle) => Promise.resolve(askedValue(profile, toggle)));
 export const downloadSettings = resource("downloadSettings", (profile: string) => getDownloadSettings(profile).catch(() => null));
-export const extensionList = resource("extensions", (profile: string) => refreshExtensions(profile));
+export const extensionList = resource("extensions", (profile: string) => refreshExtensions(profile, consentToken()));
 export const shortcutItems = resource("menuShortcuts", () =>
   menuShortcuts().then(
     (items) => (setMenuBarShortcuts(items), items.filter((item) => !UNAVAILABLE_COMMANDS.has(item.id))),

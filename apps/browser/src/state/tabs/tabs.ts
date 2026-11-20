@@ -1,7 +1,7 @@
 import type { BrowserState } from "../browser/store";
 import { leaveGroups } from "../groups/groups";
 import { withShownTab } from "../groups/shownTabs";
-import { byRecentUse, inPinnedContainer, makeTab, navigationTo, TILE_PIN, viewTabIds, without } from "../browser/model";
+import { byRecentUse, inPinnedContainer, makeTab, navigationTo, newId, TILE_PIN, viewTabIds, without } from "../browser/model";
 import { closeSuccessor, forgetOpeners, insertionIndex } from "./openers";
 import { onUrlChange, pruneSelection } from "../pins/organize";
 import { isClosedPin } from "../pins/tabCleanup";
@@ -139,10 +139,11 @@ export function removeTabs(s: BrowserState, ids: string[], record: boolean): Bro
   for (const w of Object.values(s.windows)) {
     if (!w.tabIds.some((id) => gone.has(id))) continue;
     if (record) {
+      const closeBatch = gone.size > 1 ? newId("batch") : undefined;
       w.tabIds.forEach((id, index) => {
         const t = s.tabs[id];
         if (!t || !gone.has(id) || (!t.url && !t.pin)) return;
-        closed.push({ ...closedTabEntry(s, t, { windowId: w.id, index }, now), ...(w.kind === "small" ? { small: true } : {}) });
+        closed.push({ ...closedTabEntry(s, t, { windowId: w.id, index }, now), ...(closeBatch ? { closeBatch } : {}), ...(w.kind === "small" ? { small: true } : {}) });
       });
     }
     const tabIds = w.tabIds.filter((id) => !gone.has(id));

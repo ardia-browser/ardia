@@ -2,6 +2,9 @@ import { createContext, useContext, useMemo } from "react";
 import { useDarkScheme } from "../../state/settings/appearance";
 import { backdropStops, presetLook, showsTheme, windowTintStops, type PresetSpec, type ProfileLook } from "../../lib/profileLook";
 import { colorRoles, PROFILE_COLORS, type ColorRoles, type ProfileColor } from "./tokens";
+import { useDesign } from "./design";
+import { rolesFromScheme } from "./materialRoles";
+import { useMaterialTheme } from "./materialTheme";
 
 export type StartBackdrop = { colors: string[]; diagonal: boolean };
 
@@ -26,9 +29,15 @@ export const useProfileLook = () => useContext(ProfileLookContext);
 export function useTheme(): Theme {
   const look = useProfileLook();
   const dark = useDarkScheme();
+  const material = useDesign() === "material";
+  const { scheme } = useMaterialTheme();
   return useMemo(() => {
+    if (material) {
+      const surface = scheme.surface;
+      return { ...rolesFromScheme(scheme, dark), backdrop: [surface, surface], surface, start: { colors: [surface, scheme.surfaceContainerLow], diagonal: false } };
+    }
     const backdrop = windowTintStops(look, dark);
     const start = { colors: backdropStops(look, dark, true), diagonal: showsTheme(look, dark, true) };
     return { ...rolesFor(dark), backdrop, surface: backdrop[0], start };
-  }, [look, dark]);
+  }, [look, dark, material, scheme]);
 }

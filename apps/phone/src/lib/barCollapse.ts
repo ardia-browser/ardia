@@ -1,8 +1,12 @@
+import type { Design } from "./design.ts";
+
 export type ScrollDirection = "up" | "down";
 
 export type BarCollapse = { tabId: string | null; page: string | null; direction: ScrollDirection; hidden: boolean };
 
 export const BAR_SHOWN: BarCollapse = { tabId: null, page: null, direction: "up", hidden: false };
+
+export const bottomBarCollapses = (design: Design, preference: boolean | null): boolean => preference ?? design === "material";
 
 export function followScroll(state: BarCollapse, tabId: string | null, page: string | null, direction: ScrollDirection, collapses: boolean): BarCollapse {
   if (!collapses || tabId !== state.tabId || page !== state.page) {

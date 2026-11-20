@@ -6,8 +6,11 @@ import type {
   DiagnosticsSample,
   HardwareInfo,
   LaunchConfig,
+  OpenSurface,
   OpenWindowOptions,
   ShellNativeModules,
+  SurfaceEvent,
+  SurfaceItem,
   SystemInfo,
   SystemSignal,
   UserScriptsFolder,
@@ -16,6 +19,8 @@ import type {
 import { nativeEvents, unfaked } from "./events";
 import { reportModule } from "./report";
 import { telemetryLocalModule } from "./telemetryLocal";
+import { windowGeometries, windowGeometryFakes } from "./windowGeometry";
+export { beginWindowControlTransition, finishStalledTransition, geometryWorld } from "./windowGeometry";
 
 type Modules = ShellNativeModules;
 
@@ -30,7 +35,9 @@ type UserScriptsHost = {
 const testGlobals = globalThis as { acTestUserScripts?: UserScriptsHost };
 
 export const docs = new Map<string, string>();
+export const stagedDocs = new Map<string, string>();
 export const heldSaves = { on: false, queue: [] as (() => void)[] };
+export const refusedSaves = { on: false };
 export const refusedWrites = { on: false, returnsFalse: false, landingFails: false };
 export const bangListServer: { reply: ((etag: string | null) => Promise<BangListReply>) | null } = { reply: null };
 export const appInfo: Partial<SystemInfo> = { appVersion: "1.0" };
@@ -61,6 +68,7 @@ export const windows = {
   closed: [] as string[],
   focused: null as string | null,
   emit: (event: WindowEvent) => shellEvents.emit("onWindowEvent", event),
+  geometry: windowGeometries,
 };
 export const emitAppEvent = (event: AppEvent) => shellEvents.emit("onAppEvent", event);
 export const emitCommand = (event: CommandEvent) => shellEvents.emit("onCommand", event);
@@ -122,6 +130,7 @@ const windowsModule: Modules["ArdiaAppWindows"] & { requestClose(id: string): Pr
   dragPreviewEnd: () => Promise.resolve(),
   raiseView: () => Promise.resolve(),
   windowFrame: () => Promise.resolve(null),
+  ...windowGeometryFakes((id) => windows.open.has(id), (event) => shellEvents.emit("onWindowEvent", event)),
   frameCornerRadius: () => Promise.resolve(0),
   replyToTerminate: () => Promise.resolve(),
 };
@@ -153,8 +162,40 @@ const focus: Modules["ArdiaFocus"] = {
   pressRepeated: () => Promise.resolve(pressRepeated.earlier),
 };
 
+export const surfaces = {
+  open: [] as OpenSurface[],
+  bar: [] as SurfaceItem[],
+  captures: false,
+  chosen: [] as { id: string; path: number[] }[],
+  performed: [] as { ref: string; windowId: string }[],
+  dismissed: [] as string[],
+  barHook: null as (() => void) | null,
+  emit: (event: SurfaceEvent) => shellEvents.emit("onSurface", event),
+};
+
+function surfaceOf(id: string) {
+  const found = surfaces.open.find((s) => s.id === id);
+  if (!found) throw Object.assign(new Error(`There's no open menu ${id}.`), { code: "no_window" });
+  return found;
+}
+
 const menus: Modules["ArdiaMenus"] = {
   addListener: shellEvents.addListener,
+  openSurfaces: () => Promise.resolve(surfaces.open),
+  capturePageMenus: (captures) => Promise.resolve(void (surfaces.captures = captures)),
+  dismissSurface: async (id) => {
+    surfaceOf(id);
+    surfaces.dismissed.push(id);
+    surfaces.open = surfaces.open.filter((s) => s.id !== id);
+  },
+  menuBar: async () => {
+    surfaces.barHook?.();
+    return surfaces.bar;
+  },
+  performMenuBarItem: async (ref, windowId) => {
+    surfaces.performed.push({ ref, windowId });
+    return "performed";
+  },
   showMenu: () => Promise.resolve(null),
   updateMenu: () => Promise.resolve(),
   setMenuState: () => Promise.resolve(),
@@ -166,26 +207,38 @@ const menus: Modules["ArdiaMenus"] = {
 
 const dialogs: Modules["ArdiaDialogs"] = {
   confirm: () => Promise.resolve({ confirmed: false, suppressed: false }),
+  dismissesShownOnly: true,
+  dismissShownOnly: () => Promise.resolve(),
   prompt: () => Promise.resolve(null),
   pickFiles: () => Promise.resolve([]),
   pickFolder: () => Promise.resolve(null),
 };
 
 const documents: Modules["ArdiaDocuments"] = {
-  readDocument: (name) => docs.get(name) ?? null,
+  readDocument: (name) => stagedDocs.get(name) ?? docs.get(name) ?? null,
   writeDocument: (name, contents) => {
     if (refusedWrites.on) throw new Error("write refused");
     if (refusedWrites.returnsFalse) return false as unknown as void;
     docs.set(name, contents);
+    stagedDocs.delete(name);
   },
   saveDocument: (name, contents) =>
-    new Promise((resolve) => {
-      const land = () => (docs.set(name, contents), resolve());
+    new Promise((resolve, reject) => {
+      stagedDocs.set(name, contents);
+      if (refusedSaves.on) return reject(new Error("save refused"));
+      const land = () => {
+        try {
+          docs.set(name, contents);
+        } finally {
+          if (stagedDocs.get(name) === contents) stagedDocs.delete(name);
+        }
+        resolve();
+      };
       if (heldSaves.on) heldSaves.queue.push(land);
       else land();
     }),
   documentSaved: () => (refusedWrites.on || refusedWrites.landingFails ? Promise.reject(new Error("save refused")) : Promise.resolve()),
-  removeDocument: (name) => void docs.delete(name),
+  removeDocument: (name) => void (docs.delete(name), stagedDocs.delete(name)),
 };
 
 const app: Modules["ArdiaApp"] = {

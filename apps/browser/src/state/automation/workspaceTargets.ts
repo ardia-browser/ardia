@@ -8,6 +8,7 @@ import type { ErrorCode } from "./automationMethods";
 import { eligibleKind, isEligibleTab, lastFocusedEligibleWindow, ownEntry } from "./automationWindows";
 import type { GroupName, Op } from "./workspaceOps";
 import { iconName, isEligibleGroup } from "./workspaceTree";
+import { isTabBusy } from "./tabCalls";
 
 export type Changed = { tabs?: string[]; groups?: string[] };
 
@@ -37,6 +38,8 @@ export function tabRefs(results: OpResult[], refs: string[]): string[] {
   });
   const s = store();
   for (const id of ids) if (!isEligibleTab(s, id)) throw new OpError("no_window", `There's no tab ${id} the ardia command can use.`);
+  const busy = ids.find(isTabBusy);
+  if (busy) throw new OpError("refused", `Tab ${busy} is busy: an earlier sleep or wake on it is still waiting for the engine, so Ardia won't act on it until that answers.`);
   return [...new Set(ids)];
 }
 

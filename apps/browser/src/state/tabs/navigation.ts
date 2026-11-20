@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { goBackAcrossEngines } from "../engines/actions";
+import { confirm } from "../../platform/dialogs";
 import { livePageId, withLivePage } from "./livePage";
 import { webviews } from "../../platform/webviews";
 import { useBrowser, type BrowserState } from "../browser/store";
@@ -46,11 +47,24 @@ export function useHistoryAvailability(tabId: string) {
   return { back: !shown && (back || backToNewTab || closes), forward: shown || forward, backCloses: !shown && !back && !backToNewTab && closes };
 }
 
-export function goBack(tabId: string): void {
-  if (livePageId(tabId) !== tabId) return void withLivePage(tabId, (_, id) => goBack(id));
-  if (pageOf(tabId).newTabShown) return;
+export function goBack(tabId: string, mayAct: () => boolean = () => true): void {
+  void goBackAsking(tabId, mayAct);
+}
+
+export async function goBackAsking(tabId: string, mayAct: () => boolean = () => true, ask: typeof confirm = confirm): Promise<boolean> {
+  if (livePageId(tabId) !== tabId) {
+    let went: Promise<boolean> = Promise.resolve(false);
+    const acted = await withLivePage(tabId, (_, id) => (went = goBackAsking(id, mayAct, ask)), mayAct);
+    return acted ? went : false;
+  }
+  if (pageOf(tabId).newTabShown) return true;
+  if (pageOf(tabId).engineBack && !liveOf(tabId).canGoBack) return goBackAcrossEngines(tabId, mayAct, ask);
+  goBackHere(tabId);
+  return true;
+}
+
+function goBackHere(tabId: string) {
   if (liveOf(tabId).canGoBack) return void webviews.get(tabId)?.goBack();
-  if (pageOf(tabId).engineBack) return void goBackAcrossEngines(tabId);
   if (pageOf(tabId).backToNewTab) return showNewTab(tabId);
   if (backClosesTab(store(), tabId)) {
     noteBackCloseToOpener();
@@ -65,10 +79,26 @@ export function goBack(tabId: string): void {
   }
 }
 
-export function goForward(tabId: string): void {
-  if (livePageId(tabId) !== tabId) return void withLivePage(tabId, (_, id) => goForward(id));
-  if (pageOf(tabId).newTabShown) return hideNewTab(tabId);
-  void webviews.get(tabId)?.goForward();
+export function goForward(tabId: string, mayAct: () => boolean = () => true): void {
+  void goForwardAsking(tabId, mayAct);
+}
+
+export async function goForwardAsking(tabId: string, mayAct: () => boolean = () => true): Promise<boolean> {
+  if (livePageId(tabId) === tabId) return goForwardHere(tabId);
+  let went = false;
+  const acted = await withLivePage(tabId, (_, id) => (went = goForwardHere(id)), mayAct);
+  return acted && went;
+}
+
+function goForwardHere(tabId: string): boolean {
+  if (pageOf(tabId).newTabShown) {
+    hideNewTab(tabId);
+    return true;
+  }
+  const page = webviews.get(tabId);
+  if (!page) return false;
+  void page.goForward();
+  return true;
 }
 
 function showNewTab(tabId: string, keep?: { url: string; title: string }) {
@@ -136,7 +166,7 @@ export async function historyItems(asked: string, direction: -1 | 1, max = 15): 
 }
 
 export async function goToHistoryItem(tabId: string, item: HistoryItem): Promise<void> {
-  if (livePageId(tabId) !== tabId) return withLivePage(tabId, (_, id) => void goToHistoryItem(id, item));
+  if (livePageId(tabId) !== tabId) return void (await withLivePage(tabId, (_, id) => void goToHistoryItem(id, item)));
   const page = pageOf(tabId);
   if (item.offset === "newTab") {
     const list = (await webviews.get(tabId)?.navigationEntries()) ?? [];

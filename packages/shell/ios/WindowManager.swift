@@ -48,6 +48,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     guard let window else { return nil }
     return managed.first { $0.value.window === window }?.key
   }
+  var anyIncognitoWindow: Bool { managed.values.contains { $0.incognito } }
   var keyWindowId: String? { id(of: NSApp.keyWindow) ?? id(of: NSApp.mainWindow) }
 
   func closeForeignKeyWindow() -> Bool {
@@ -103,7 +104,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     }
     if let chromeWindow = ChromeWindows.makeWindow(profile: options.profile, chromeWindow: small ? nil : options.chromeWindow, appWindow: small ? claim : id) {
       if options.incognito { chromeWindow.appearance = NSAppearance(named: .darkAqua) }
-      let entry = ManagedWindow(id: id, kind: kind, window: chromeWindow)
+      let entry = ManagedWindow(id: id, kind: kind, window: chromeWindow, incognito: options.incognito)
       let root = makeContentView(id)
       ArdiaChromeWindowHost.embedRootView(root, in: chromeWindow)
       if !chromeWindow.isVisible {
@@ -133,7 +134,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
       configureSmall(window)
       LittleArdiaHandoff.shared.opened(id, linkFrom: options.returnTo)
     }
-    show(ManagedWindow(id: id, kind: kind, window: window), frame: frame, title: title, focus: focus, small: small, smallSize: options.size, smallPointer: options.pointer, display: options.display)
+    show(ManagedWindow(id: id, kind: kind, window: window, incognito: options.incognito), frame: frame, title: title, focus: focus, small: small, smallSize: options.size, smallPointer: options.pointer, display: options.display)
   }
   private func show(
     _ entry: ManagedWindow, frame: CGRect?, title: String, focus: Bool, small: Bool, smallSize: CGSize?, smallPointer: NSPoint?,
@@ -510,6 +511,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
   @objc func fullScreenChanged(_ notification: Notification) {
     guard let window = notification.object as? NSWindow, let id = id(of: window), let entry = managed[id] else { return }
     let entered = notification.name == NSWindow.didEnterFullScreenNotification
+    guard FullScreenLifecycle.shared.acceptsEnd(of: window, entering: entered) else { return }
     entry.isFullScreen = entered
     sendFullScreen(window, id: id, on: entered)
     if entered { fullScreen.entered(id) }

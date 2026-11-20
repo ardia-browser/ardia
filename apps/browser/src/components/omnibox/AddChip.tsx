@@ -30,7 +30,7 @@ export const AddChip = memo(function AddChip({ onPress }: { onPress(): void }) {
         >
           {glass ? <GlassFill radius={ADD_CHIP.radius} state={hovered ? "lit" : "rest"} /> : null}
           <Symbol name="arrow.up.right" size={ADD_CHIP.glyph} weight="medium" color={theme.chipText} style={{ width: ADD_CHIP.glyphBox, height: ADD_CHIP.glyphBox }} />
-          <Text tone="chipText">Open a tab or file</Text>
+          <Text tone="chipText" ardiaCentersCapitals>Open a tab or file</Text>
         </Animated.View>
       </Pressable>
     </View>

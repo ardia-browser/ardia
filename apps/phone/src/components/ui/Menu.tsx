@@ -7,7 +7,7 @@ import { insetRect, MENU_MARGIN, menuAt, menuHeight, menuOnTrigger, menuShrink, 
 import { useReduceMotion } from "./contrast";
 import { focusForScreenReader } from "./coverFocus";
 import { LookFrost, SURFACES_FROST } from "./LookViews";
-import { materialEnter, materialExit, materialMenuMotion, menuMotion } from "./motion";
+import { menuMotion } from "./motion";
 import { measureAnchor, Portal, useOverlayFrame, usePortalLeaving, usePortalLeft } from "./Overlay";
 import { Symbol } from "./Symbol";
 import type { SymbolName } from "./symbolPaths";
@@ -74,9 +74,9 @@ export function Menu({ items, place, placer, onDismiss, dimmed = false, origin =
   const revealed = shown && (placer === undefined || content !== null);
   const side = useRef<boolean | undefined>(undefined);
   const spot = placer ? placer(content ?? menuHeight(rows, menuLook) + (page ? menuLook.row : 0), side.current) : { place: place ?? {}, origin, maxHeight: undefined, shrink: undefined };
-  const shrinkX = MATERIAL ? 1 : spot.shrink?.x ?? menuMotion.fromScale;
-  const shrinkY = MATERIAL ? 1 : spot.shrink?.y ?? menuMotion.fromScale;
-  const fromScale = MATERIAL ? materialMenuMotion.fromScale : menuMotion.fromScale;
+  const shrinkX = spot.shrink?.x ?? menuMotion.fromScale;
+  const shrinkY = spot.shrink?.y ?? menuMotion.fromScale;
+  const fromScale = menuMotion.fromScale;
   if (revealed && placer && side.current === undefined) side.current = spot.origin.includes("top");
   const firstRow = useRef<ViewInstance>(null);
   const chosen = useRef(false);
@@ -108,10 +108,6 @@ export function Menu({ items, place, placer, onDismiss, dimmed = false, origin =
   const dim = useSharedValue(reduceMotion ? 1 : 0);
   useEffect(() => {
     if (!revealed || leaving || reduceMotion) return;
-    if (MATERIAL) {
-      opened.value = withTiming(1, { duration: materialMenuMotion.openMs, easing: materialEnter });
-      return;
-    }
     opened.value = withSpring(1, menuMotion.open);
     dim.value = withTiming(1, { duration: menuMotion.heldOpen });
   }, [revealed]);
@@ -124,10 +120,6 @@ export function Menu({ items, place, placer, onDismiss, dimmed = false, origin =
       dim.value = withTiming(0, { duration: menuMotion.contentFade });
       return;
     }
-    if (MATERIAL) {
-      glass.value = withTiming(0, { duration: materialMenuMotion.closeMs, easing: materialExit }, (finished) => finished && runOnJS(left)());
-      return;
-    }
     closed.value = withTiming(1, { duration: closing, easing: Easing.linear });
     glass.value = dimmed ? withTiming(0, { duration: closing, easing: Easing.in(Easing.cubic) }, (finished) => finished && runOnJS(left)()) : withDelay(closing - menuMotion.glassFade, withTiming(0, { duration: menuMotion.glassFade }, (finished) => finished && runOnJS(left)()));
     shownContent.value = withTiming(0, { duration: dimmed ? closing : menuMotion.contentFade });
@@ -138,7 +130,7 @@ export function Menu({ items, place, placer, onDismiss, dimmed = false, origin =
     return { transform: [{ scaleX: open * (1 + (shrinkX - 1) * closed.value) }, { scaleY: open * (1 + (shrinkY - 1) * closed.value) }] };
   });
   const dimStyle = useAnimatedStyle(() => ({ opacity: dim.value }));
-  const fade = useAnimatedStyle(() => ({ opacity: MATERIAL ? glass.value * opened.value : glass.value }));
+  const fade = useAnimatedStyle(() => ({ opacity: glass.value }));
   const rowsFade = useAnimatedStyle(() => ({ opacity: shownContent.value }));
   const choose = (action: () => void) => {
     if (chosen.current) return;
@@ -299,7 +291,7 @@ function fixedPlacer(place: ViewStyle, host: Rect, insets: Insets, width: number
 
 const EXIT_SLACK_MS = 32;
 
-export const menuExitMs = (dimmed?: boolean) => (MATERIAL ? materialMenuMotion.closeMs : dimmed ? menuMotion.heldClose : menuMotion.close) + EXIT_SLACK_MS;
+export const menuExitMs = (dimmed?: boolean) => (dimmed ? menuMotion.heldClose : menuMotion.close) + EXIT_SLACK_MS;
 
 const widthOf = (place: ViewStyle) => (typeof place.width === "number" ? place.width : menuLook.width);
 

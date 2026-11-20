@@ -7,19 +7,18 @@ import { SYNCED_SETTINGS } from "../sync/settingsAdapter.ts";
 import { canChooseDeveloperMode, developerModeHost, developerModeOn, developerModeSitesWith, isLoopbackHost, setDeveloperMode } from "./developerMode.ts";
 import { noteDeveloperBarPress, takeDeveloperModeCounts } from "../telemetry/developerModeCounts.ts";
 
-test("local addresses turn Developer Mode on by themselves, and other sites start off", () => {
-  for (const url of ["http://localhost:5173/", "http://LOCALHOST:3000/app", "http://127.0.0.1:8080", "http://127.1:3000/", "http://127.0.1/", "http://app.localhost:3000/", "http://my_app.localhost/", "http://[::1]:4000/", "http://0.0.0.0:8000", "https://localhost/"]) {
-    assert.equal(developerModeOn({}, url), true, url);
-  }
-  for (const url of ["https://github.com/", "http://localhost.example.com/", "https://example.com/localhost", "", "about:blank", "file:///tmp/a.html", "ardia://settings", "http://user@github.com/", "http://127/"]) {
+test("Developer Mode starts off everywhere, local addresses included", () => {
+  for (const url of ["http://localhost:5173/", "http://LOCALHOST:3000/app", "http://127.0.0.1:8080", "http://app.localhost:3000/", "http://[::1]:4000/", "http://0.0.0.0:8000", "https://localhost/", "https://github.com/", "http://localhost.example.com/", "", "about:blank", "file:///tmp/a.html", "ardia://settings"]) {
     assert.equal(developerModeOn({}, url), false, url);
   }
+  assert.equal(developerModeOn(undefined, "http://localhost:5173/"), false);
 });
 
-test("a site's choice wins over the default, and is kept per host for every port", () => {
+test("a site turned on shows it, per host for every port, and nowhere else", () => {
+  assert.equal(developerModeOn({ localhost: true }, "http://localhost:5173/"), true);
+  assert.equal(developerModeOn({ localhost: true }, "http://localhost:3000/"), true);
+  assert.equal(developerModeOn({ localhost: true }, "http://127.0.0.1:3000/"), false);
   assert.equal(developerModeOn({ localhost: false }, "http://localhost:5173/"), false);
-  assert.equal(developerModeOn({ localhost: false }, "http://localhost:3000/"), false);
-  assert.equal(developerModeOn({ localhost: false }, "http://127.0.0.1:3000/"), true);
   assert.equal(developerModeOn({ "staging.example.com": true }, "https://staging.example.com/x"), true);
   assert.equal(developerModeHost("http://user:pw@Example.COM:81/a"), "example.com");
   assert.equal(developerModeHost("http://[::1]:3000/"), "[::1]");
@@ -28,9 +27,10 @@ test("a site's choice wins over the default, and is kept per host for every port
   assert.equal(developerModeOn({}, "http://constructor/"), false);
 });
 
-test("only choices that differ from the default are saved", () => {
-  assert.deepEqual(developerModeSitesWith({}, "localhost", false), { localhost: false });
-  assert.deepEqual(developerModeSitesWith({ localhost: false }, "localhost", true), {});
+test("only sites turned on are saved", () => {
+  assert.deepEqual(developerModeSitesWith({}, "localhost", true), { localhost: true });
+  assert.deepEqual(developerModeSitesWith({ localhost: true }, "localhost", false), {});
+  assert.deepEqual(developerModeSitesWith({ localhost: false }, "localhost", false), {});
   assert.deepEqual(developerModeSitesWith({}, "example.com", true), { "example.com": true });
   assert.deepEqual(developerModeSitesWith({ "example.com": true }, "example.com", false), {});
   assert.equal(developerModeOn(developerModeSitesWith({}, "__proto__", true), "http://__proto__/"), true);
@@ -44,13 +44,15 @@ test("the setting syncs, can be set from a config file, and drops malformed valu
   assert.deepEqual(parseSettings({ developerModeSites: { "example.com": true } }).developerModeSites, { "example.com": true });
 });
 
-test("turning it off and on from Site Controls updates the setting and counts the toggles", () => {
+test("turning it on and off from Site Controls updates the setting and counts the toggles", () => {
   takeDeveloperModeCounts();
   useBrowser.getState().hydrate({ settings: { developerModeSites: {} } });
   setDeveloperMode("http://localhost:5173/", false);
-  assert.deepEqual(useBrowser.getState().settings.developerModeSites, { localhost: false });
-  setDeveloperMode("http://localhost:5173/", false);
+  assert.deepEqual(useBrowser.getState().settings.developerModeSites, {});
+  setDeveloperMode("http://localhost:5173/", true);
+  assert.deepEqual(useBrowser.getState().settings.developerModeSites, { localhost: true });
   setDeveloperMode("http://localhost:3000/", true);
+  setDeveloperMode("http://localhost:3000/", false);
   assert.deepEqual(useBrowser.getState().settings.developerModeSites, {});
   setDeveloperMode("https://example.com/", true);
   noteDeveloperBarPress("console");

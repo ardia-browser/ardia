@@ -14,6 +14,7 @@ import { applySearchEngine } from "../search/store";
 import { showToast } from "../toasts/store";
 import { clearArchivedTabs, currentTabs, setAutoArchiveInterval } from "../tabs/store";
 import type { AutoArchiveInterval } from "../tabs/tabModels";
+import { countUsage } from "../telemetry/telemetry";
 import { closeSettings } from "./nav";
 import type { ColorChoice, NightShadeMode, Preferences, SwipeNavigationMode } from "./preferences";
 import { clearSince, exportableUrls, FALLBACK_ENGINES, FILTER_LIST_ADDRESS, pickerEngines, listsUpdateFailed, websiteDataKinds, type ClearChoice, type ClearRange } from "./settingsRules";
@@ -73,6 +74,13 @@ export const setAutoOpenKeyboard = (on: boolean) => setPreference("autoOpensKeyb
 export const setSwipeNavigation = (mode: SwipeNavigationMode) => setPreference("swipeNavigation", mode);
 export const setCollapsesBottomBar = (on: boolean) => setPreference("collapsesBottomBar", on);
 export const setColorChoice = (choice: ColorChoice) => setPreference("colorChoice", choice);
+export const setDynamicColors = (on: boolean) => setPreference("dynamicColors", on);
+
+export function setMaterialYou(on: boolean) {
+  if (currentPreferences().materialYou === on) return;
+  setPreference("materialYou", on);
+  countUsage(on ? "material_you_turned_on" : "material_you_turned_off");
+}
 export const setInterfaceStyle = (choice: InterfaceStyleChoice) => setPreference("interfaceStyle", choice);
 export const setSchemeChoice = (choice: SchemeChoice) => setPreference("schemeChoice", choice);
 export const setArchiveInterval = (interval: AutoArchiveInterval) => setAutoArchiveInterval(interval);

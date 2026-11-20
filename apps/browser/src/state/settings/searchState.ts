@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { goToSettingsPane, type SettingsPane, useSettingsNav } from "./settingsWindows";
 import { settingsProfileFor } from "../extensions/store";
 import { noteSettingsSearch, noteSettingsSearchReveal } from "../telemetry/usage";
+import { consentToken, type ConsentToken } from "../telemetry/choice";
 
 type SearchUi = {
   query: string;
@@ -13,9 +14,12 @@ type SearchUi = {
   revealedSections: string[];
   previewSection: string | null;
   previewing: boolean;
+  shortcutsQuery: string;
 };
 
 type Target = { id: string; pane: SettingsPane; section: string };
+
+const MENU_COMMANDS: Target = { id: "shortcuts.menuCommands", pane: "shortcuts", section: "Keyboard" };
 
 export const useSettingsSearch = create<SearchUi>()(() => ({
   query: "",
@@ -27,6 +31,7 @@ export const useSettingsSearch = create<SearchUi>()(() => ({
   revealedSections: [],
   previewSection: null,
   previewing: false,
+  shortcutsQuery: "",
 }));
 
 export const settingsSectionKey = (pane: SettingsPane, section: string) => `${pane}\u0000${section}`;
@@ -52,6 +57,15 @@ export function noteSettingsSearchEmpty() {
   if (emptyNoted) return;
   emptyNoted = true;
   noteSettingsSearch("empty");
+}
+
+export const keySearchConsent = (): ConsentToken | null => consentToken();
+
+export const noteSettingsKeySearch = (consent: ConsentToken | null) => noteSettingsSearch("keys", consent);
+
+export function noteShortcutsKeySearch(via: "typed" | "recorded", found: boolean, consent: ConsentToken | null) {
+  noteSettingsSearch(via === "typed" ? "shortcutsTyped" : "shortcutsRecorded", consent);
+  if (!found) noteSettingsSearch("shortcutsEmpty", consent);
 }
 
 export const focusSettingsSearch = () => useSettingsSearch.setState({ focusRequest: Date.now() });
@@ -90,3 +104,16 @@ function showWithoutHistory(pane: SettingsPane) {
 }
 
 export const flashSetting = (id: string) => useSettingsSearch.setState({ reveal: null, flash: { id, at: Date.now() } });
+
+export const setShortcutsQuery = (shortcutsQuery: string) => useSettingsSearch.setState({ shortcutsQuery });
+
+export function revealCommandKeys(keys: string, via: "keyboard" | "click", rank: number) {
+  noteSettingsSearch("keysOpened");
+  setShortcutsQuery(keys);
+  revealSetting(MENU_COMMANDS, via, rank);
+}
+
+export function previewCommandKeys(keys: string) {
+  setShortcutsQuery(keys);
+  previewSetting(MENU_COMMANDS);
+}

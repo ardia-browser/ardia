@@ -24,6 +24,10 @@ export function SearchTabsGlyphs({ dark }: { dark: boolean }) {
   );
 }
 
+export function SearchTabsGlyph({ dark }: { dark: boolean }) {
+  return <SystemGlyph systemName="magnifyingglass" pointSize={18} weight="medium" fitted name="magnifyingglass" size={deckChromeLayout.searchGlyph} color={rolesFor(dark).label} />;
+}
+
 export function PlusGlyph({ dark }: { dark: boolean }) {
   return <SystemGlyph systemName="plus" pointSize={18} weight="medium" name="plus" size={startLayout.plusGlyph} color={rolesFor(dark).label} />;
 }

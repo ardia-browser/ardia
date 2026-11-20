@@ -9,8 +9,8 @@ import { useSelectedProfile, useSyncStatus, useSyncView } from "../../state/sync
 import { useCanReopen, useIncognito } from "../../state/tabs/hooks";
 import { prepareArchive } from "../../state/tabs/store";
 import { countUsage } from "../../state/telemetry/telemetry";
-import { browseLayout, capsule, deckChromeInk, deckChromeLayout, deckChromeMotion, font, IncognitoSpecs, tabsInk, tabsLayout, useTheme, type MenuItem } from "../ui";
-import { MenuTrigger, spaceSystemImage } from "../ui/MenuTrigger";
+import { browseLayout, capsule, deckChromeInk, deckChromeLayout, deckChromeMotion, font, IncognitoSpecs, menuLook, tabsInk, tabsLayout, useTheme, type MenuItem } from "../ui";
+import { MenuTrigger, nativeMenus, spaceSystemImage } from "../ui/MenuTrigger";
 import { SpaceTitle, spaceMenuSymbol } from "../search/StartSpaces";
 import { FadingGlyphs, GlassCircleButton, type ChromeFade } from "./ChromeButtons";
 
@@ -23,7 +23,6 @@ type Props = {
   onCloseIncognito: () => void;
   onCloseAll: () => void;
   menusShown?: boolean;
-  showsMore?: boolean;
   onMenu?: (open: boolean) => void;
 } & ChromeFade;
 
@@ -31,28 +30,41 @@ export const deckHeaderBottom = () => deckChromeLayout.headerCenter + deckChrome
 
 export const deckArchiveBottom = () => deckChromeLayout.archiveCenter + deckChromeLayout.archiveHeight / 2;
 
-export function deckMoreMenuItems({ syncEnabled, canReopen, hasTabs, onCloseAll }: { syncEnabled: boolean; canReopen: boolean; hasTabs: boolean; onCloseAll: () => void }): MenuItem[] {
-  return [
-    { label: "Archive", onPress: openArchive },
-    ...(syncEnabled ? [{ label: "Spaces From Your Mac", onPress: openSpaces }] : []),
-    "divider",
-    { label: "New Incognito Tab", onPress: newIncognitoTab },
-    ...(canReopen ? [{ label: "Reopen Closed Tab", onPress: reopenLastClosed }] : []),
-    ...(hasTabs ? [{ label: "Close All Tabs", destructive: true, onPress: onCloseAll }] : []),
-    "divider",
-    { label: "Settings", onPress: () => openSettings() },
-  ];
+const menuGroupsRuled = () => nativeMenus() || menuLook.dividerLine > 0;
+
+function joinMenuGroups(groups: readonly MenuItem[][], ruled: boolean = menuGroupsRuled()): MenuItem[] {
+  return groups.filter((group) => group.length > 0).flatMap((group, index): MenuItem[] => (index > 0 && ruled ? ["divider", ...group] : group));
 }
 
-export function DeckHeader({ safeTop, safeSide, sideInset, privateCount, hasTabs, onCloseIncognito, onCloseAll, menusShown = true, showsMore = true, onMenu, glassShown, glassShownMs, glyphFade }: Props) {
-  const theme = useTheme();
+export function deckMoreMenuItems({ syncEnabled, canReopen, hasTabs, onCloseAll }: { syncEnabled: boolean; canReopen: boolean; hasTabs: boolean; onCloseAll: () => void }): MenuItem[] {
+  return joinMenuGroups([
+    [{ label: "Archive", onPress: openArchive }, ...(syncEnabled ? [{ label: "Spaces From Your Mac", onPress: openSpaces }] : [])],
+    [{ label: "New Incognito Tab", onPress: newIncognitoTab }, ...(canReopen ? [{ label: "Reopen Closed Tab", onPress: reopenLastClosed }] : []), ...(hasTabs ? [{ label: "Close All Tabs", destructive: true, onPress: onCloseAll }] : [])],
+    [{ label: "Settings", onPress: () => openSettings() }],
+  ]);
+}
+
+export function useDeckSpaces() {
   const status = useSyncStatus();
   const view = useSyncView();
   const shown = useSelectedProfile();
-  const canReopen = useCanReopen();
   const incognito = useIncognito();
   const spaces = status.isEnabled ? view.profiles : [];
   const current = shown ?? spaces[0] ?? null;
+  const choose = (id: string) => {
+    if (id === current?.syncId) return;
+    haptics.selection();
+    if (!incognito) countUsage("spaces_picked");
+    selectProfile(id);
+  };
+  const spaceItems: MenuItem[] = spaces.map((space) => ({ label: space.name, icon: spaceMenuSymbol(space) ?? undefined, systemImage: spaceSystemImage(space.name, space.icon), checked: space.syncId === current?.syncId, onPress: () => choose(space.syncId) }));
+  return { syncEnabled: status.isEnabled, spaces, current, spaceItems };
+}
+
+export function DeckHeader({ safeTop, safeSide, sideInset, privateCount, hasTabs, onCloseIncognito, onCloseAll, menusShown = true, onMenu, glassShown, glassShownMs, glyphFade }: Props) {
+  const theme = useTheme();
+  const canReopen = useCanReopen();
+  const { syncEnabled, spaces, current, spaceItems } = useDeckSpaces();
   const side = safeSide + sideInset;
   const below = safeTop + deckHeaderBottom() + deckChromeLayout.menuGap;
   const opened = () => onMenu?.(true);
@@ -62,14 +74,7 @@ export function DeckHeader({ safeTop, safeSide, sideInset, privateCount, hasTabs
     prepareArchive();
   };
   const menu = { trigger: "tap" as const, fixedOrder: true, haptic: menuOpenedHaptic, disabled: !menusShown, onOpen: opened, onClose: closed };
-  const choose = (id: string) => {
-    if (id === current?.syncId) return;
-    haptics.selection();
-    if (!incognito) countUsage("spaces_picked");
-    selectProfile(id);
-  };
-  const spaceItems: MenuItem[] = spaces.map((space) => ({ label: space.name, icon: spaceMenuSymbol(space) ?? undefined, systemImage: spaceSystemImage(space.name, space.icon), checked: space.syncId === current?.syncId, onPress: () => choose(space.syncId) }));
-  const moreItems = deckMoreMenuItems({ syncEnabled: status.isEnabled, canReopen, hasTabs, onCloseAll });
+  const moreItems = deckMoreMenuItems({ syncEnabled, canReopen, hasTabs, onCloseAll });
   const pillItems: MenuItem[] = [{ label: "Close Incognito Tabs", destructive: true, onPress: onCloseIncognito }];
   return (
     <View testID="deckHeader" pointerEvents="box-none" style={[styles.row, { top: safeTop + deckChromeLayout.headerCenter - browseLayout.hitTarget / 2, paddingHorizontal: side }]}>
@@ -96,17 +101,15 @@ export function DeckHeader({ safeTop, safeSide, sideInset, privateCount, hasTabs
       {privateCount > 0 ? (
         <Animated.View entering={pillIn} exiting={pillOut}>
           <FadingGlyphs testID="deckIncognitoPillFade" fade={glyphFade}>
-            <MenuTrigger items={pillItems} {...menu} place={{ top: below, right: showsMore ? side + deckChromeLayout.headerCircle + deckChromeLayout.headerGap : side, width: tabsLayout.menuWidth }}>
+            <MenuTrigger items={pillItems} {...menu} place={{ top: below, right: side + deckChromeLayout.headerCircle + deckChromeLayout.headerGap, width: tabsLayout.menuWidth }}>
               {({ onPress }) => <IncognitoPill count={privateCount} onPress={onPress ?? noop} />}
             </MenuTrigger>
           </FadingGlyphs>
         </Animated.View>
       ) : null}
-      {showsMore ? (
-        <MenuTrigger items={moreItems} {...menu} onOpen={Platform.OS === "ios" ? openedMore : opened} place={{ top: below, right: side, width: tabsLayout.menuWidth }}>
-          {({ onPress }) => <GlassCircleButton icon="ellipsis" label="More" testID="deckHeaderMore" diameter={deckChromeLayout.headerCircle} dark={theme.dark} glassShown={glassShown} glassShownMs={glassShownMs} glyphFade={glyphFade} onPress={onPress ?? noop} />}
-        </MenuTrigger>
-      ) : null}
+      <MenuTrigger items={moreItems} {...menu} onOpen={Platform.OS === "ios" ? openedMore : opened} place={{ top: below, right: side, width: tabsLayout.menuWidth }}>
+        {({ onPress }) => <GlassCircleButton icon="ellipsis" label="More" testID="deckHeaderMore" diameter={deckChromeLayout.headerCircle} dark={theme.dark} glassShown={glassShown} glassShownMs={glassShownMs} glyphFade={glyphFade} onPress={onPress ?? noop} />}
+      </MenuTrigger>
     </View>
   );
 }

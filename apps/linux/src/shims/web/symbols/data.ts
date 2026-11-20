@@ -353,6 +353,7 @@ const BODIES: readonly string[] = [
   "<path d=\"M248,152a8,8,0,0,1-8,8H224v16a8,8,0,0,1-16,0V160H192a8,8,0,0,1,0-16h16V128a8,8,0,0,1,16,0v16h16A8,8,0,0,1,248,152ZM56,72H72V88a8,8,0,0,0,16,0V72h16a8,8,0,0,0,0-16H88V40a8,8,0,0,0-16,0V56H56a8,8,0,0,0,0,16ZM184,192h-8v-8a8,8,0,0,0-16,0v8h-8a8,8,0,0,0,0,16h8v8a8,8,0,0,0,16,0v-8h8a8,8,0,0,0,0-16ZM219.31,80,80,219.31a16,16,0,0,1-22.62,0L36.68,198.63a16,16,0,0,1,0-22.63L176,36.69a16,16,0,0,1,22.63,0l20.68,20.68A16,16,0,0,1,219.31,80ZM208,68.69,187.31,48l-32,32L176,100.69Z\"/>",
   "<path d=\"M224,48H32A16,16,0,0,0,16,64V192a16,16,0,0,0,16,16H224a16,16,0,0,0,16-16V64A16,16,0,0,0,224,48ZM64,168H48a8,8,0,0,1,0-16H64a8,8,0,0,1,0,16Zm96,0H96a8,8,0,0,1,0-16h64a8,8,0,0,1,0,16Zm48,0H192a8,8,0,0,1,0-16h16a8,8,0,0,1,0,16Zm0-32H48a8,8,0,0,1,0-16H208a8,8,0,0,1,0,16Zm0-32H48a8,8,0,0,1,0-16H208a8,8,0,0,1,0,16Z\"/>",
   "<path d=\"M165.78,224H208a16,16,0,0,0,16-16V170.35A8,8,0,0,0,212.94,163a23.37,23.37,0,0,1-8.94,1.77c-13.23,0-24-11.1-24-24.73s10.77-24.73,24-24.73a23.37,23.37,0,0,1,8.94,1.77A8,8,0,0,0,224,109.65V72a16,16,0,0,0-16-16H171.78a35.36,35.36,0,0,0,.22-4,36,36,0,0,0-72,0,35.36,35.36,0,0,0,.22,4H64A16,16,0,0,0,48,72v32.22a35.36,35.36,0,0,0-4-.22,36,36,0,0,0,0,72,35.36,35.36,0,0,0,4-.22V208a16,16,0,0,0,16,16h42.22\"/>",
+  "<rect x=\"6.14\" y=\"6.14\" width=\"19.73\" height=\"19.73\" rx=\"2.38\"/><path d=\"M11.5 16L20.5 16\"/>"
 ];
 
 const ENCODED: Record<string, readonly EncodedLayer[]> = {
@@ -668,6 +669,7 @@ const ENCODED: Record<string, readonly EncodedLayer[]> = {
   "xmark.circle": [[297,256,1,1,0,[[1.2175,0.9975,0.0099,-0.0024,0.0007,0,1],[1.2175,1,0.0174,-0.0174,0.0068,0,1],[1.2137,1,-0.0145,0.0164,0.0218,0,1],[1.21,1,-0.0108,0.0108,0.0353,0,1],[1.2043,1,-0.0033,0.0042,0.0525,0,1]]]],
   "xmark.circle.fill": [[298,24,1,1,0,[[1.1406,1,0.0089,-0.0089,0.0293,0,1],[1.1706,1,0.0174,-0.0174,0.0203,0,1],[1.1931,1,-0.0145,0.0145,0.015,0,1],[1.2006,1,-0.0108,0.0108,0.0188,0,1],[1.2306,1,-0.0033,0.0033,0.0053,0,1]]]],
   "xmark.square": [[299,32,0,1,0,[[1.3352,1,0.0188,0.0009,0.0627,0,1],[1.3333,1,-0.0131,-0.0075,0.0792,0,1],[1.3183,1,-0.0056,-0.015,0.0883,0,1],[1.3183,1,-0.0019,-0.0225,0.1033,0,1],[1.3127,1,0.0056,0.0131,0.125,0,1]]]],
+  "minus.square": [[349,32,0,1,0,[[1.3352,1,0.0188,0.0009,0.0627,0,1],[1.3333,1,-0.0131,-0.0075,0.0792,0,1],[1.3183,1,-0.0056,-0.015,0.0883,0,1],[1.3183,1,-0.0019,-0.0225,0.1033,0,1],[1.3127,1,0.0056,0.0131,0.125,0,1]]]],
   "gearshape.fill": [[343,256,1,1,0,[[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1]]]],
   "square.on.square.fill": [[87,256,1,1,0,[[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1]]]],
   "wand.and.rays": [[346,256,1,1,0,[[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1]]]],
@@ -1019,6 +1021,7 @@ const NUDGES: Record<string, string> = {
   "xmark.circle": "f9f9aecceaaeeaaeaeeb9fdbdb9g8gccccbd9f9fdag8aeeaaeeaeaadf9bdbdf8g8cccbdb9f9fdbg8aeeaaeeaeabef9bdbdg9g8ccdcdb9f9fdbg8aeeaaeeaeaadf9bdbdf9g8ccccdb",
   "xmark.circle.fill": "f9f9aecceaaeeaaeaeea9fdbdb9f8gccccbd9f9feag8aeeaaeeaeaaef9bdbdf9g8ccccdb9f9feag8aeeaaeeaeabdf9bdbdg8g8ccccdb9f9feag8aeeaaeeaeaaef9bdbdf9g8ccccdb",
   "xmark.square": "acdch9ffhdc9ffcabcfgbcfgi9hedfccgefeaced9hfe9ecagecbccfgbcegah9edfccfdfeacdd8hge9dcihfcbbcfgbcehai9fdgcdgeefa9d99efc9ace8acebefab7ebab98d8cc7dfd",
+  "minus.square": "acdch9ffhdc9ffcabcfgbcfgi9hedfccgefeaced9hfe9ecagecbccfgbcegah9edfccfdfeacdd8hge9dcihfcbbcfgbcehai9fdgcdgeefa9d99efc9ace8acebefab7ebab98d8cc7dfd",
   "gearshape.fill": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
   "square.on.square.fill": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
   "wand.and.rays": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",

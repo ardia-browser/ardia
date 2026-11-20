@@ -55,7 +55,7 @@ export function currentAirTraffic(): AirTrafficConfig {
 
 export const targetUsableNow = (profileId: string, groupKey: string | null) => {
   const s = useBrowser.getState();
-  return !!s.profiles[profileId] && !isIncognitoProfile(profileId) && (!groupKey || hasRouteGroup(s, profileId, groupKey));
+  return Object.hasOwn(s.profiles, profileId) && !isIncognitoProfile(profileId) && (!groupKey || hasRouteGroup(s, profileId, groupKey));
 };
 
 function saveConfig(change: (config: AirTrafficConfig) => AirTrafficConfig): boolean {
@@ -99,6 +99,17 @@ export function moveAirTrafficRule(id: string, step: -1 | 1) {
     if (from < 0 || to < 0 || to >= c.rules.length) return c;
     const rules = [...c.rules];
     [rules[from], rules[to]] = [rules[to]!, rules[from]!];
+    return { ...c, rules };
+  });
+}
+
+export function placeAirTrafficRule(id: string, index: number): boolean {
+  return saveConfig((c) => {
+    const from = c.rules.findIndex((r) => r.id === id);
+    const to = Math.max(0, Math.min(c.rules.length - 1, index));
+    if (from < 0 || from === to) return c;
+    const rules = c.rules.filter((r) => r.id !== id);
+    rules.splice(to, 0, c.rules[from]!);
     return { ...c, rules };
   });
 }

@@ -17,6 +17,7 @@ import { ROW_GLYPH, TAB_ROW, useSidebarTokens } from "./tokens";
 import { SidebarRowLabel } from "./SidebarRow";
 import { useQuietRows } from "./rowLook";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
+import { Squish, useSquish } from "../ui/Squish";
 
 const clippedRow = perLook(() => ({ marginTop: -layout.rowGap, paddingTop: layout.rowGap, overflow: "hidden" as const }));
 const NEW_TAB_LABEL_X = 30;
@@ -34,7 +35,8 @@ export const NewTabRow = memo(function NewTabRow({ windowId, shift = null, clip 
   const quiet = useQuietRows();
   const { hovered, hoverProps } = useHover();
   const newTabHint = useShortcutHint("newTab");
-  const pressMotion = usePressScaleMotion(true, buttonMotion.iconPressScale);
+  const squish = useSquish("row");
+  const pressMotion = usePressScaleMotion(!squish.scale, buttonMotion.iconPressScale);
   const iconScale = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined;
   const [moved, movedRef] = useShift(shift);
   const [movedButtons, movedButtonsRef] = useShift(shift);
@@ -63,16 +65,21 @@ export const NewTabRow = memo(function NewTabRow({ windowId, shift = null, clip 
         <Pressable
           tooltip={`${withShortcut("New Tab", newTabHint)} — ⌥-click to open in Split View`}
           onPressIn={() => {
+            squish.onPressIn?.();
             pressMotion.onPressIn?.();
             noteRowPressIn(windowId);
           }}
-          onPressOut={pressMotion.onPressOut}
+          onPressOut={() => {
+            squish.onPressOut?.();
+            pressMotion.onPressOut?.();
+          }}
           onPress={(e) => {
             if (modifiersOf(e).altKey && splitViewAvailable) openNewTabInSplit(windowId);
             else toggleNewTabBar(windowId) || newTab(windowId, { newTabCommand: true });
           }}
         >
           {({ pressed }) => (
+            <Squish scale={squish.scale}>
             <View
               {...moved}
               ref={movedRef}
@@ -94,6 +101,7 @@ export const NewTabRow = memo(function NewTabRow({ windowId, shift = null, clip 
               </Animated.View>
               <SidebarRowLabel text="New Tab" color={quiet ? quietInk : tokens.newTabLabel} compact={quiet} />
             </View>
+            </Squish>
           )}
         </Pressable>
       </ContextMenuArea>

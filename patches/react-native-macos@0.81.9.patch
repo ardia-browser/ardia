@@ -333,10 +333,10 @@ index bbee6d1e1865359b350da78b745c6c0061a2dc5d..c645bfead1814173bef35608504aa5ec
  
  function convertPointerEventToMouseEvent(input: PointerEvent): MouseEvent {
 diff --git a/Libraries/Text/Text/RCTTextView.h b/Libraries/Text/Text/RCTTextView.h
-index 3de368b73b6bbad86f1b27dd0ba56abb516f89e8..58ec2e0f64379d83989e5915b3ee44041be53f48 100644
+index 3de368b73b6bbad86f1b27dd0ba56abb516f89e8..84d3218318dc1771ca52ed445f9cd0f82e931b27 100644
 --- a/Libraries/Text/Text/RCTTextView.h
 +++ b/Libraries/Text/Text/RCTTextView.h
-@@ -12,6 +12,10 @@
+@@ -12,11 +12,18 @@
  
  NS_ASSUME_NONNULL_BEGIN
  
@@ -347,11 +347,19 @@ index 3de368b73b6bbad86f1b27dd0ba56abb516f89e8..58ec2e0f64379d83989e5915b3ee4404
  @interface RCTTextView : RCTUIView // [macOS]
  
  - (instancetype)initWithEventDispatcher:(id<RCTEventDispatcherProtocol>)eventDispatcher; // [macOS]
+ 
+ @property (nonatomic, assign) BOOL selectable;
++#if TARGET_OS_OSX
++@property (nonatomic, assign) BOOL ardiaCentersCapitals;
++#endif
+ 
+ - (void)setTextStorage:(NSTextStorage *)textStorage
+           contentFrame:(CGRect)contentFrame
 diff --git a/Libraries/Text/Text/RCTTextView.mm b/Libraries/Text/Text/RCTTextView.mm
-index abff88e692bd8ec88f4e5b292234b23133962d46..9bb23098ddd7f5b2b4143a1d964188c973a90d55 100644
+index abff88e692bd8ec88f4e5b292234b23133962d46..3638b57b4d2567b1476ccd6828f118bf6d6cb257 100644
 --- a/Libraries/Text/Text/RCTTextView.mm
 +++ b/Libraries/Text/Text/RCTTextView.mm
-@@ -37,6 +37,97 @@ - (BOOL)canBecomeKeyView
+@@ -37,6 +37,108 @@ - (BOOL)canBecomeKeyView
  
  @end
  
@@ -444,12 +452,23 @@ index abff88e692bd8ec88f4e5b292234b23133962d46..9bb23098ddd7f5b2b4143a1d964188c9
 +                }];
 +  return found;
 +}
++
++static BOOL RCTTextShowsLowercase(NSString *string, NSArray<NSValue *> *shown)
++{
++  NSCharacterSet *lowercase = NSCharacterSet.lowercaseLetterCharacterSet;
++  for (NSValue *part in shown) {
++    if ([string rangeOfCharacterFromSet:lowercase options:0 range:part.rangeValue].location != NSNotFound) {
++      return YES;
++    }
++  }
++  return NO;
++}
 +// Ardia]
 +
  #endif // macOS]
  
  #if !TARGET_OS_OSX // [macOS]
-@@ -62,6 +153,9 @@ @implementation RCTTextView {
+@@ -62,6 +164,9 @@ @implementation RCTTextView {
    NSArray<RCTUIView *> *_Nullable _descendantViews; // [macOS]
    NSTextStorage *_Nullable _textStorage;
    CGRect _contentFrame;
@@ -459,17 +478,18 @@ index abff88e692bd8ec88f4e5b292234b23133962d46..9bb23098ddd7f5b2b4143a1d964188c9
  }
  
  // [macOS
-@@ -171,6 +265,9 @@ - (void)setTextStorage:(NSTextStorage *)textStorage
+@@ -171,6 +276,10 @@ - (void)setTextStorage:(NSTextStorage *)textStorage
  #if TARGET_OS_OSX // [macOS
    NSLayoutManager *layoutManager = textStorage.layoutManagers.firstObject;
    NSTextContainer *textContainer = layoutManager.textContainers.firstObject;
-+  _opticalFont = descendantViews.count > 0 || RCTTextHasAttachments(textStorage) // [Ardia: inline views and attachments are placed apart from the glyphs, so text that has them isn't lifted
++  NSArray<NSValue *> *shown = descendantViews.count > 0 || RCTTextHasAttachments(textStorage) // [Ardia: inline views and attachments are placed apart from the glyphs, and text with no lowercase has no x-height to centre, so neither is lifted
 +      ? nil
-+      : RCTTextDominantFont(textStorage, RCTTextShownCharacters(textStorage, layoutManager, textContainer)); // Ardia]
++      : RCTTextShownCharacters(textStorage, layoutManager, textContainer);
++  _opticalFont = shown != nil && RCTTextShowsLowercase(textStorage.string, shown) ? RCTTextDominantFont(textStorage, shown) : nil; // Ardia]
  
    [_textView replaceTextContainer:textContainer];
  
-@@ -187,7 +284,7 @@ - (void)setTextStorage:(NSTextStorage *)textStorage
+@@ -187,7 +296,7 @@ - (void)setTextStorage:(NSTextStorage *)textStorage
  
    _textView.minSize = contentFrame.size;
    _textView.maxSize = contentFrame.size;
@@ -478,15 +498,21 @@ index abff88e692bd8ec88f4e5b292234b23133962d46..9bb23098ddd7f5b2b4143a1d964188c9
    _textView.textStorage.attributedString = textStorage;
  #endif // macOS]
  
-@@ -205,6 +302,33 @@ - (void)setTextStorage:(NSTextStorage *)textStorage
+@@ -205,6 +314,39 @@ - (void)setTextStorage:(NSTextStorage *)textStorage
    [self setNeedsDisplay];
  }
  
 +#if TARGET_OS_OSX // [Ardia
 +- (CGRect)ardia_liftedContentFrame
 +{
-+  CGFloat lift = RCTTextOpticalLift(_opticalFont, ArdiaBackingDensity(self));
++  CGFloat lift = _ardiaCentersCapitals ? 0 : RCTTextOpticalLift(_opticalFont, ArdiaBackingDensity(self));
 +  return CGRectOffset(_contentFrame, 0, self.isFlipped ? -lift : lift);
++}
++
++- (void)setArdiaCentersCapitals:(BOOL)ardiaCentersCapitals
++{
++  _ardiaCentersCapitals = ardiaCentersCapitals;
++  [self ardia_applyOpticalLift];
 +}
 +
 +- (void)ardia_applyOpticalLift
@@ -512,7 +538,7 @@ index abff88e692bd8ec88f4e5b292234b23133962d46..9bb23098ddd7f5b2b4143a1d964188c9
  - (void)drawRect:(CGRect)rect
  {
    [super drawRect:rect];
-@@ -293,6 +417,11 @@ - (NSNumber *)reactTagAtPoint:(CGPoint)point
+@@ -293,6 +435,11 @@ - (NSNumber *)reactTagAtPoint:(CGPoint)point
    CGFloat fraction;
    NSLayoutManager *layoutManager = _textStorage.layoutManagers.firstObject;
    NSTextContainer *textContainer = layoutManager.textContainers.firstObject;
@@ -524,7 +550,7 @@ index abff88e692bd8ec88f4e5b292234b23133962d46..9bb23098ddd7f5b2b4143a1d964188c9
    NSUInteger characterIndex = [layoutManager characterIndexForPoint:point
                                                      inTextContainer:textContainer
                             fractionOfDistanceBetweenInsertionPoints:&fraction];
-@@ -310,6 +439,12 @@ - (NSNumber *)reactTagAtPoint:(CGPoint)point
+@@ -310,6 +457,12 @@ - (NSNumber *)reactTagAtPoint:(CGPoint)point
  - (void)didMoveToWindow
  {
    [super didMoveToWindow];
@@ -537,7 +563,7 @@ index abff88e692bd8ec88f4e5b292234b23133962d46..9bb23098ddd7f5b2b4143a1d964188c9
  
    if (!self.window) {
      self.layer.contents = nil;
-@@ -318,6 +453,9 @@ - (void)didMoveToWindow
+@@ -318,6 +471,9 @@ - (void)didMoveToWindow
        _highlightLayer = nil;
      }
    } else if (_textStorage) {
@@ -547,6 +573,20 @@ index abff88e692bd8ec88f4e5b292234b23133962d46..9bb23098ddd7f5b2b4143a1d964188c9
      [self setNeedsDisplay];
    }
  }
+diff --git a/Libraries/Text/Text/RCTTextViewManager.mm b/Libraries/Text/Text/RCTTextViewManager.mm
+index 769a3e556d96b2b9f6c2795303b675b749cdeb61..078288af5be55afc260a48d0860a902ed817a5b8 100644
+--- a/Libraries/Text/Text/RCTTextViewManager.mm
++++ b/Libraries/Text/Text/RCTTextViewManager.mm
+@@ -34,6 +34,9 @@ @implementation RCTTextViewManager {
+ RCT_EXPORT_SHADOW_PROPERTY(onTextLayout, RCTDirectEventBlock)
+ 
+ RCT_EXPORT_VIEW_PROPERTY(selectable, BOOL)
++#if TARGET_OS_OSX
++RCT_EXPORT_VIEW_PROPERTY(ardiaCentersCapitals, BOOL)
++#endif
+ 
+ - (void)setBridge:(RCTBridge *)bridge
+ {
 diff --git a/Libraries/Text/TextInput/RCTBackedTextInputDelegateAdapter.mm b/Libraries/Text/TextInput/RCTBackedTextInputDelegateAdapter.mm
 index 18bbe64f657a36596563b3eb6d135284e28c674a..a4046a33e13d35cac155e306f368e04ef8d1f51e 100644
 --- a/Libraries/Text/TextInput/RCTBackedTextInputDelegateAdapter.mm
@@ -1297,6 +1337,18 @@ index 6f332dc1701cada0aff0e9a2678fa7bdcea0ef85..462853ec8b76f004cd5b9e92291473bc
  @end
  
  #endif // TARGET_OS_OSX
+diff --git a/Libraries/Text/TextNativeComponent.js b/Libraries/Text/TextNativeComponent.js
+index 37027e5da92b30d4c8c8f72235890c4e6dfbf043..5b3fb284b52ee9e9150d53a4530eb40af2a5a9b6 100644
+--- a/Libraries/Text/TextNativeComponent.js
++++ b/Libraries/Text/TextNativeComponent.js
+@@ -48,6 +48,7 @@ const textViewConfig = {
+     android_hyphenationFrequency: true,
+     lineBreakStrategyIOS: true,
+     tooltip: true, // [macOS]
++    ardiaCentersCapitals: true,
+   },
+   directEventTypes: {
+     topTextLayout: {
 diff --git a/React/Base/RCTTouchHandler.m b/React/Base/RCTTouchHandler.m
 index b85ee3dd203f88bf2daaa47e912031ea200ff910..fdd49042170be0c7850fea3ea8550c32f52ee33b 100644
 --- a/React/Base/RCTTouchHandler.m

@@ -51,6 +51,7 @@ export const TEST_KEYS = [
   "pipSelfTest", "pipHover", "fakeFullScreenMs", "shadersKeyWindow", "peekStrict", "peekMesh", "peekReady", "peekReduceMotion", "peekSlow", "importSecret", "importDiaBundleId", "importDiaWindows",
   "cliInstallScript", "legacySource", "legacyCrashAfter", "bangsUrl", "onboarding", "whatsNew", "telemetry",
   "liveMock", "calendarFixture", "appMenu", "appDialog", "loginsTimeout", "screenRecording", "systemLocationPermission", "bundledPlugins",
+  "applePasswordsPanel", "systemPanelRace",
 ];
 export const COMMA_KEYS = [
   "chromiumSwitches", "downloadsDir", "updateFeed", "cliHome", "cliBinDir", "cliUrl", "syncFolder", "sharedFolders", "importSourceDir",

@@ -6,6 +6,7 @@ import Animated, { interpolateColor, useAnimatedStyle, useSharedValue, withTimin
 import { redesignedBarCenterFromBottom } from "../../lib/deckGeometry";
 import { sfSymbol } from "../../lib/sfSymbols";
 import { haptics } from "../../state/app/haptics";
+import { newTab } from "../../state/browse/store";
 import { copyLink, menuOpenedHaptic, shareUrl } from "../../state/browse/tabMenus";
 import { openSettings } from "../../state/settings/nav";
 import { openRemote, selectProfile } from "../../state/sync/actions";
@@ -14,6 +15,7 @@ import { remoteTitle } from "../../state/sync/spaces";
 import type { PinnedTile, SyncedProfile } from "../../state/sync/store";
 import { countUsage } from "../../state/telemetry/telemetry";
 import {
+  ArdiaLogo,
   browseLayout,
   capsule,
   ChromeSurface,
@@ -37,7 +39,7 @@ import {
 import { MenuTrigger, type MenuHandlers } from "../ui/MenuTrigger";
 import { syncOffered } from "../../state/sync/offer";
 
-export type StartGeometry = { width: number; height: number; safeSide: number; barCenterY: number; dotsOnBar?: boolean };
+export type StartGeometry = { width: number; height: number; safeSide: number; barCenterY: number };
 
 export const startBarCenterY = (height: number, safeBottom: number, os: string = Platform.OS) => height - redesignedBarCenterFromBottom(safeBottom, os);
 
@@ -58,8 +60,11 @@ export function StartSpaces({ geometry, dark, incognito }: { geometry: StartGeom
     spaces.findIndex((p) => p.syncId === current?.syncId),
   );
   const pagerIndex = useRef(index);
+  const pagerWidth = useRef(geometry.width);
   useEffect(() => {
-    if (pagerIndex.current === index) return;
+    const widthChanged = pagerWidth.current !== geometry.width;
+    pagerWidth.current = geometry.width;
+    if (pagerIndex.current === index && !widthChanged) return;
     pagerIndex.current = index;
     pager.current?.scrollToOffset({ offset: index * geometry.width, animated: false });
   }, [index, geometry.width]);
@@ -121,11 +126,13 @@ export function StartSpaces({ geometry, dark, incognito }: { geometry: StartGeom
               if (next) choose(next.syncId);
             }}
             dark={dark}
-            y={geometry.dotsOnBar ? geometry.barCenterY : geometry.barCenterY - startLayout.pageDotsAboveBar}
+            y={geometry.barCenterY - startLayout.pageDotsAboveBar}
           />
         </>
       ) : spaces.length === 1 ? (
         page(spaces[0]!)
+      ) : Platform.OS === "android" ? (
+        <StartLogo y={geometry.height * startLayout.switcherRatio} incognito={incognito} />
       ) : status.phase === "off" ? (
         syncOffered() ? <SyncInvitation y={geometry.height * startLayout.switcherRatio} dark={dark} incognito={incognito} /> : null
       ) : null}
@@ -300,6 +307,21 @@ function PageDot({ on, dark }: { on: boolean; dark: boolean }) {
   return <Animated.View testID="startPageDot" style={[styles.dot, style]} />;
 }
 
+function StartLogo({ y, incognito }: { y: number; incognito: boolean }) {
+  const height = browseLayout.logoHeight;
+  const search = () => {
+    if (!incognito) countUsage("start_logo_taps");
+    newTab();
+  };
+  return (
+    <View testID="startLogo" pointerEvents="box-none" style={[styles.switcherRow, { top: y - height / 2, height }]}>
+      <Pressable testID="startLogoButton" accessibilityRole="button" accessibilityLabel="Search" accessibilityHint="Opens Search." onPressIn={haptics.barPress} onPress={search} style={({ pressed }) => [styles.logoButton, pressed ? styles.logoPressed : null]}>
+        <ArdiaLogo width={browseLayout.logoWidth} />
+      </Pressable>
+    </View>
+  );
+}
+
 function SyncInvitation({ y, dark, incognito }: { y: number; dark: boolean; incognito: boolean }) {
   const roles = rolesFor(dark);
   return (
@@ -335,6 +357,8 @@ const styles = StyleSheet.create({
   tileRow: { flexDirection: "row", gap: startLayout.tileGap },
   tile: { height: startLayout.tileHeight, alignItems: "center", justifyContent: "center" },
   pressed: { transform: [{ scale: startLayout.tilePressScale }] },
+  logoButton: { width: browseLayout.logoWidth, height: browseLayout.logoHeight, alignItems: "center", justifyContent: "center" },
+  logoPressed: { opacity: startLayout.logoPressOpacity, transform: [{ scale: startLayout.tilePressScale }] },
   centered: { alignItems: "center", justifyContent: "center" },
   dots: { position: "absolute", left: 0, right: 0, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: startLayout.pageDotSpacing },
   dot: { width: startLayout.pageDot, height: startLayout.pageDot, borderRadius: capsule(startLayout.pageDot) },

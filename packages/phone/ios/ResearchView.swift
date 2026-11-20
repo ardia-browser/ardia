@@ -10,6 +10,7 @@ struct ResearchView: View {
   @State private var copiedAnswer = 0
   @State private var showsCopied = false
   private var host: BrowseForMeHost { .shared }
+  private var talk: TalkToMe { .shared }
 
   var body: some View {
     NavigationStack {
@@ -34,6 +35,15 @@ struct ResearchView: View {
         .frame(maxWidth: .infinity)
       }
       .scrollBounceBehavior(.basedOnSize)
+      .safeAreaInset(edge: .bottom) {
+        if talk.offersListening(session), talk.isListening(to: session) {
+          listenBar
+            .padding(.horizontal, Spacing.medium)
+            .padding(.bottom, Spacing.tight)
+            .frame(maxWidth: 680)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+      }
       .animation(reduceMotion ? nil : Motion.smooth, value: session.phase)
       .background(Color(.systemBackground))
       .navigationBarTitleDisplayMode(.inline)
@@ -51,7 +61,88 @@ struct ResearchView: View {
       try? await Task.sleep(for: .seconds(1.5))
       withAnimation(reduceMotion ? nil : Motion.smooth) { showsCopied = false }
     }
+    .overlay { simulatedScreenOff }
+    .onAppear { talk.watch(session) }
+    .onChange(of: session.answer) { talk.watch(session) }
+    .onChange(of: session.phase) { talk.watch(session) }
+    .onChange(of: talk.isReady) { talk.watch(session) }
+    .onChange(of: talk.isOn) { talk.watch(session) }
     .onDisappear { host.closed(session) }
+  }
+
+  private var listenBar: some View {
+    let listening = talk.listening
+    let playsAloud = listening.isPlaying && listening.output == .speaker
+    return HStack(spacing: Spacing.small) {
+      Image(systemName: listening.output == .earpiece ? "ear.fill" : "ear")
+        .font(.title3)
+        .symbolEffect(.variableColor.iterative, isActive: listening.isPlaying && listening.output == .earpiece && !reduceMotion)
+        .frame(width: 28)
+        .accessibilityHidden(true)
+      Text(listenText(listening))
+        .font(.subheadline.weight(.medium))
+        .lineLimit(2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+      Button {
+        talk.toggleSpeaker(session)
+      } label: {
+        Group {
+          if talk.isPreparing, listening.isPlaying {
+            ProgressView()
+          } else {
+            Image(systemName: playsAloud ? "pause.fill" : "speaker.wave.2.fill")
+              .font(.body.weight(.semibold))
+              .contentTransition(.symbolEffect(.replace))
+          }
+        }
+        .frame(width: 44, height: 44)
+        .contentShape(.circle)
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel(playsAloud ? Text("Pause") : Text("Play Out Loud"))
+    }
+    .padding(.leading, Spacing.page)
+    .padding(.trailing, Spacing.hairline)
+    .padding(.vertical, Spacing.hairline)
+    .background(alignment: .bottomLeading) {
+      GeometryReader { proxy in
+        Capsule()
+          .fill(.tint.opacity(0.18))
+          .frame(width: proxy.size.width * talk.spokenFraction)
+          .animation(reduceMotion ? nil : .linear(duration: 0.25), value: talk.spokenFraction)
+      }
+      .clipShape(.capsule)
+    }
+    .glassEffect(.regular, in: .capsule)
+    .accessibilityElement(children: .contain)
+  }
+
+  private func listenText(_ listening: EarListening) -> String {
+    switch listening.state {
+    case .waiting: String(localized: "Hold your iPhone to your ear to listen")
+    case .playing(.earpiece): String(localized: "Reading at your ear")
+    case .playing(.speaker): String(localized: "Reading out loud")
+    case .paused(.earpiece): String(localized: "Paused. Hold it to your ear to keep listening")
+    case .paused(.speaker): String(localized: "Paused")
+    case .finished: String(localized: "Hold it to your ear to hear it again")
+    }
+  }
+
+  @ViewBuilder
+  private var simulatedScreenOff: some View {
+    #if targetEnvironment(simulator)
+    if talk.isNear, talk.isListening(to: session) {
+      Color.black
+        .ignoresSafeArea()
+        .overlay(alignment: .bottom) {
+          Text(verbatim: "Proximity: near")
+            .font(.caption.monospaced())
+            .foregroundStyle(.white.opacity(0.5))
+            .padding(.bottom, Spacing.section)
+        }
+        .allowsHitTesting(false)
+    }
+    #endif
   }
 
   private var moreMenu: some View {

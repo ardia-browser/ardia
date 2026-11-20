@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
-import { StyleSheet, type StyleProp, type ViewStyle } from "react-native";
+import { Platform, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
 import Animated, { runOnJS, useAnimatedReaction, useAnimatedStyle, useDerivedValue } from "react-native-reanimated";
 import { DECK } from "../../lib/deckGeometry";
 import { pullBarGhosts, pullBarGlyphs, pullBarShift, pullClearsBar, pullPagePose, pullRise } from "../../lib/deckPull";
 import { deckPull, PULL_STAGE, pullFades, setDeckOwnsBar } from "../../state/browse/deckPull";
-import { tabsInk, useTheme } from "../ui";
+import { tabsInk, usesGlass, useTheme } from "../ui";
 
 const PULL_OFFSTAGE = 100_000;
 const SHADOW_FULL_AT = 0.3;
@@ -14,12 +14,14 @@ const PRIMED = 0.99;
 export function PagePull({ tabId, barTop, children }: { tabId: string; barTop: number; children: ReactNode }) {
   const theme = useTheme();
   const barHanded = deckPull.barCleared;
+  const barStays = barStaysOnPage();
   useAnimatedReaction(
     () => {
       const target = deckPull.target.value;
       const stage = deckPull.stage.value;
       if (stage === PULL_STAGE.idle || target === null || deckPull.id.value !== tabId) return -1;
       if (stage === PULL_STAGE.growing) return deckPull.pageLive.value ? -1 : FADE_RISE;
+      if (barStays) return -1;
       if (stage === PULL_STAGE.fading) return 0;
       return pullFades(stage) ? FADE_RISE : pullRise(target, deckPull.shrink.value);
     },
@@ -81,11 +83,13 @@ export function usePullBarShift(barTop: number, drop: number) {
 }
 
 export function PullGlyphs({ style, children }: GlyphsProps) {
+  const barStays = barStaysOnPage();
   const fade = useAnimatedStyle(() => {
     const target = deckPull.target.value;
     const stage = deckPull.stage.value;
     if (stage === PULL_STAGE.idle || !target) return { opacity: 1 };
     if (stage === PULL_STAGE.growing) return { opacity: deckPull.pageLive.value ? deckPull.barBack.value : 0 };
+    if (barStays && pullLanded(stage)) return { opacity: 0 };
     return { opacity: pullFades(stage) ? 1 - deckPull.fade.value : pullBarGlyphs(pullRise(target, deckPull.shrink.value)) };
   });
   return (
@@ -96,11 +100,13 @@ export function PullGlyphs({ style, children }: GlyphsProps) {
 }
 
 export function PullGhost({ style, children }: GlyphsProps) {
+  const barStays = barStaysOnPage();
   const fade = useAnimatedStyle(() => {
     const target = deckPull.target.value;
     const stage = deckPull.stage.value;
     if (stage === PULL_STAGE.idle || !target) return { opacity: 0 };
     if (pullFades(stage)) return { opacity: deckPull.fade.value };
+    if (barStays && pullLanded(stage)) return { opacity: 1 };
     if (stage === PULL_STAGE.growing) return { opacity: deckPull.pageLive.value ? 1 - deckPull.barBack.value : 1 };
     return { opacity: pullBarGhosts(pullRise(target, deckPull.shrink.value)) };
   });
@@ -109,6 +115,13 @@ export function PullGhost({ style, children }: GlyphsProps) {
       {children}
     </Animated.View>
   );
+}
+
+const barStaysOnPage = () => Platform.OS === "android" && !usesGlass();
+
+function pullLanded(stage: number): boolean {
+  "worklet";
+  return stage === PULL_STAGE.landed || stage === PULL_STAGE.handed;
 }
 
 const CARD_SCALE = DECK.cardWidthRatio;

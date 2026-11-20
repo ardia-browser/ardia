@@ -19,6 +19,7 @@ public final class SearchStageModule: Module {
         view.fieldCenter = value.map { CGFloat($0) } ?? BrowseLayout.stageFieldCenter(fieldHeight: BrowseLayout.searchFieldHeight)
       }
       Prop("commandTop") { (view: SearchStageView, value: Double?) in view.commandTop = value.map { CGFloat($0) } }
+      Prop("landsDirectly") { (view: SearchStageView, value: Bool?) in view.landsDirectly = value ?? false }
       Prop("morphUsesGlass") { (view: SearchStageView, value: Bool?) in view.look.usesGlass = value ?? true }
       Prop("morphPanelTint") { (view: SearchStageView, value: UIColor?) in view.look.panelTint = value ?? .clear }
       Prop("morphPanelDark") { (view: SearchStageView, value: Bool?) in view.look.panelStyle = value == true ? .dark : .unspecified }

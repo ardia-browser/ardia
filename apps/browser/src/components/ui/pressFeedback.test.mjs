@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
-const { buttonMotion, springSpec, hoverFade } = await import("./motion.ts");
+const { buttonMotion, springSpec, hoverFade, springs, liftSpring, bounceDip, bouncePressMotion, pressReleaseDelay } = await import("./motion.ts");
+const { pressMotionNow, setPressMotion } = await import("../../lib/pressMotion.ts");
+const { SETTING_SPECS } = await import("../../state/settings/settings.ts");
+const { reduceMotionKnown } = await import("./reduceMotion.ts");
+
+await reduceMotionKnown;
 
 function overshoot({ damping }) {
   return damping >= 1 ? 0 : Math.exp((-Math.PI * damping) / Math.sqrt(1 - damping * damping));
@@ -17,9 +22,12 @@ test("a pressed glyph dips a little and comes back without a bounce", () => {
   assert.match(source("./motion.ts"), /toValue: pressed \? pressedScale : 1, \.\.\.springs\.snappy/);
 });
 
-test("sidebar rows, folder headers and tiles hold still under a press", () => {
-  for (const file of ["TabPressArea.tsx", "GroupBlock.tsx", "LiveFolderBlock.tsx", "LiveItemRow.tsx", "FolderPanel.tsx", "FolderTile.tsx"])
-    assert.doesNotMatch(source(`../sidebar/${file}`), /usePressScaleMotion|PressScale/, file);
+test("sidebar rows, folder headers and tiles hold still under a press unless pressMotion is bounce", () => {
+  for (const file of ["TabPressArea.tsx", "GroupBlock.tsx", "LiveFolderBlock.tsx", "LiveItemRow.tsx", "FolderPanel.tsx", "FolderTile.tsx"]) {
+    const text = source(`../sidebar/${file}`);
+    assert.doesNotMatch(text, /usePressScaleMotion|PressScale/, file);
+    assert.match(text, /useSquish\(/, `${file} reaches a scale only through useSquish, which stays still unless pressMotion is bounce`);
+  }
 });
 
 const USED_ALL_DAY = ["sidebar", "tabstrip", "toolbar", "omnibox", "ntp"];
@@ -59,3 +67,37 @@ test("hover cards, toasts and reload only fade or change state, with no grow, sl
   assert.doesNotMatch(reloadButton, /Animated\.|pressScale|press=/, "a click on reload doesn't squish the glyph");
   assert.doesNotMatch(source("../toolbar/tokens.ts"), /pressScale/);
 });
+
+test("the nightly.6 press bounce is opt-in through config.json's pressMotion, and still by default", () => {
+  assert.equal(SETTING_SPECS.pressMotion.default, "still");
+  assert.equal(SETTING_SPECS.pressMotion.synced, false);
+  assert.equal(pressMotionNow(), "still");
+  assert.equal(liftSpring(), springs.snappy);
+  setPressMotion("bounce");
+  try {
+    assert.equal(liftSpring(), springs.bouncy);
+  } finally {
+    setPressMotion("still");
+  }
+  assert.equal(liftSpring(), springs.snappy);
+});
+
+test("pressMotion bounce restores nightly.6's dips, springs and shortest visible press", () => {
+  assert.equal(bounceDip(buttonMotion.iconPressScale), 0.9);
+  assert.equal(bounceDip(buttonMotion.controlPressScale), 0.97);
+  assert.equal(bounceDip(0.98), 0.98);
+  assert.deepEqual([bouncePressMotion.rowPressScale, bouncePressMotion.tilePressScale], [0.975, 0.94]);
+  assert.ok(overshoot(springSpec.press) < 0.01, "the dip lands without overshoot");
+  assert.ok(Math.abs(overshoot(springSpec.release) - 0.13) < 0.02, "the release springs back about 13% past rest");
+  assert.equal(pressReleaseDelay(30), 60);
+  assert.equal(pressReleaseDelay(200), 0);
+  const squish = source("./Squish.tsx");
+  assert.match(squish, /usePressMotion\(\) === "bounce" && !!kind/, "rows and tiles squish only in bounce mode");
+  assert.match(squish, /return style \? <Animated\.View style=\{style\}>\{children\}<\/Animated\.View> : children;/, "still mode adds no view around a row");
+});
+
+test("a row being renamed doesn't squish, so a pressMotion change can't remount its rename field", () => {
+  assert.match(source("../sidebar/TabRow.tsx"), /<TabPressArea windowId=\{windowId\} tab=\{tab\} squish=\{renaming \? undefined : "row"\}/);
+  assert.match(source("../sidebar/GroupBlock.tsx"), /useSquish\(renaming \? null : "row"\)/);
+});
+

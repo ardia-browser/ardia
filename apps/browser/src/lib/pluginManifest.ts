@@ -1,6 +1,7 @@
 import { isFields, type Fields } from "./decode";
 import { upgraded, type Migrations } from "./savedDocument";
 import { isPagePath, isWellFormed, RESERVED_PAGE_NAMES } from "./pluginNames";
+import { passwordManagerOf, type PasswordManagerSpec } from "./pluginPasswordManager";
 
 export { compareVersions } from "./versions";
 
@@ -72,7 +73,7 @@ export type PluginManifest = {
   commands: CommandSpec[];
   page: PageSpec | null;
   process: ProcessSpec | null;
-  programs: ProgramSpec[];
+  programs: ProgramSpec[]; passwordManager: PasswordManagerSpec | null;
   alwaysOn: boolean; official: boolean; autoInstall: boolean; icon: string | null;
   hooks: string[];
   tools: ToolSpec[];
@@ -308,7 +309,7 @@ function permissionsOf(c: Check, value: unknown): PluginPermission[] {
   return out;
 }
 
-const TOP_KEYS = ["$schema", "manifest", "name", "title", "description", "version", "requires", "permissions", "settings", "commands", "page", "process", "programs", "alwaysOn", "official", "autoInstall", "icon", "hooks", "tools"];
+const TOP_KEYS = ["$schema", "manifest", "name", "title", "description", "version", "requires", "permissions", "settings", "commands", "page", "process", "programs", "passwordManager", "alwaysOn", "official", "autoInstall", "icon", "hooks", "tools"];
 
 export function checkManifest(raw: Fields): { manifest: PluginManifest | null; problems: string[] } {
   const c: Check = { problems: [] };
@@ -327,7 +328,7 @@ export function checkManifest(raw: Fields): { manifest: PluginManifest | null; p
   const page = pageOf(c, raw.page);
   const process = processOf(c, raw.process);
   const [alwaysOn, official, autoInstall] = (["alwaysOn", "official", "autoInstall"] as const).map((k) => (raw[k] === undefined ? false : raw[k] === true || (c.problems.push(`${k} must be true`), false)));
-  const icon = matching(c, "icon", raw.icon, SYMBOL, "an SF Symbol name", false);
+  const icon = matching(c, "icon", raw.icon, SYMBOL, "an SF Symbol name", false), passwordManager = passwordManagerOf(c.problems, raw.passwordManager);
   const programs = list(c, "programs", raw.programs, LIMITS.programs).flatMap((p, i) => program(c, at("programs", i), p) ?? []);
   unique(c, "programs", programs.map((p) => p.name), "programs");
   const hooks = list(c, "hooks", raw.hooks, 64).flatMap((h, i) => (typeof h === "string" && h ? [h] : (c.problems.push(`${at("hooks", i)} must be an event name`), [])));
@@ -348,7 +349,7 @@ export function checkManifest(raw: Fields): { manifest: PluginManifest | null; p
   for (const [what, used] of needsProcess) if (used && !process) c.problems.push(`${what} needs a process`);
   if (c.problems.length || !name || !title) return { manifest: null, problems: c.problems };
   return {
-    manifest: { manifest: MANIFEST_VERSION, name, title, description, version, requires, permissions, settings, commands, page, process, programs, alwaysOn: !!alwaysOn, official: !!official, autoInstall: !!autoInstall, icon, hooks, tools },
+    manifest: { manifest: MANIFEST_VERSION, name, title, description, version, requires, permissions, settings, commands, page, process, programs, passwordManager, alwaysOn: !!alwaysOn, official: !!official, autoInstall: !!autoInstall, icon, hooks, tools },
     problems: [],
   };
 }
@@ -372,8 +373,8 @@ export function readManifest(text: string): ManifestRead {
   return { manifest, problems: problems.map((p) => `${MANIFEST_FILE}: ${p}`), newer: false };
 }
 
-export type Contribution = "settings" | "commands" | "page" | "process" | "programs" | "hooks" | "tools";
-export const CONTRIBUTIONS: readonly Contribution[] = ["settings", "commands", "page", "process", "programs", "hooks", "tools"];
+export type Contribution = "settings" | "commands" | "page" | "process" | "programs" | "hooks" | "tools" | "passwordManager";
+export const CONTRIBUTIONS: readonly Contribution[] = ["settings", "commands", "page", "process", "programs", "hooks", "tools", "passwordManager"];
 
 export function contributionsOf(m: PluginManifest): Contribution[] {
   const has: Record<Contribution, boolean> = {
@@ -383,7 +384,7 @@ export function contributionsOf(m: PluginManifest): Contribution[] {
     process: m.process !== null,
     programs: m.programs.length > 0,
     hooks: m.hooks.length > 0,
-    tools: m.tools.length > 0,
+    tools: m.tools.length > 0, passwordManager: m.passwordManager !== null,
   };
   return CONTRIBUTIONS.filter((c) => has[c]);
 }

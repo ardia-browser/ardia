@@ -20,11 +20,17 @@ class PagePinchWatcherTest {
     private var document = 3L
     private val pending = mutableListOf<() -> Unit>()
     private var fired = 0
+    private var on = true
+    private var measured = 0
 
     private val watcher = PagePinchWatcher(
         density = 2.625f,
+        isOn = { on },
         moment = { PagePinch.Moment("p1", document, scale, isVisible = true, isLoading = false, isDragging = false) },
-        measureRest = { done -> done(atRest, scale) },
+        measureRest = { done ->
+            measured++
+            done(atRest, scale)
+        },
         later = { _, run -> pending += run },
     ) { fired++ }
 
@@ -147,6 +153,30 @@ class PagePinchWatcherTest {
     fun aResetDropsAPendingOpen() {
         pinchIn()
         watcher.reset()
+        settle()
+        assertEquals(0, fired)
+    }
+
+    @Test
+    fun withSummariesOffAPinchNeverReadsThePageNorOpens() {
+        on = false
+        pinchIn()
+        send(MotionEvent.ACTION_UP, listOf(Finger(0, 390f, 1000f)))
+        settle()
+        assertEquals(0, measured)
+        assertEquals(0, fired)
+    }
+
+    @Test
+    fun turningSummariesOffBeforeAPinchSettlesDropsItEvenIfTheyComeBackOn() {
+        pinchIn()
+        on = false
+        watcher.reset()
+        on = true
+        settle()
+        assertEquals(0, fired)
+        pinchIn()
+        on = false
         settle()
         assertEquals(0, fired)
     }

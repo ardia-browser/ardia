@@ -7,6 +7,7 @@ import { rootSizeOfFrame } from "../settings/interfaceScale";
 import { DEFAULT_SIDEBAR_WIDTH, pageFrameInsetOf } from "../../lib/windowLayout";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { useWindowId } from "../browser/hooks";
+import { useWindowSettings } from "../browser/keyedWatch";
 import { useSettingValue } from "../tabs/tabWatch";
 import { BROWSER_WINDOW_BUTTONS, captionClearTop, captionRoom, WINDOW_CHROME, WINDOW_CONTROLS, windowControlsWidth, type WindowChrome } from "../../lib/windowChrome";
 import { toolbarRowOf } from "../../lib/toolbarRow";
@@ -37,7 +38,7 @@ export const minimalismIn = (s: BrowserState, windowId: string): boolean => s.se
 
 export const useMinimalism = (): boolean => {
   const windowId = useWindowId();
-  return useBrowser((s) => minimalismIn(s, windowId));
+  return useWindowSettings(windowId, (s) => minimalismIn(s, windowId));
 };
 
 export const sidebarAddressChosen = (settings: Pick<BrowserState["settings"], "addressBar" | "minimalismMode">): boolean =>
@@ -55,7 +56,7 @@ export function addressBarInSidebar(s: BrowserState, windowId: string): boolean 
 
 export function useAddressBarInSidebar(): boolean {
   const windowId = useWindowId();
-  return useBrowser((s) => addressBarInSidebar(s, windowId));
+  return useWindowSettings(windowId, (s) => addressBarInSidebar(s, windowId));
 }
 
 export function openingLightsCenter(s: BrowserState, windowId: string): LightsPlace | null {
@@ -77,7 +78,7 @@ export function openingLightsCenter(s: BrowserState, windowId: string): LightsPl
 
 export function usePageFrameInset(): number {
   const windowId = useWindowId();
-  return useBrowser((s) =>
+  return useWindowSettings(windowId, (s) =>
     pageFrameInsetOf(s.settings.pageFrame, {
       borderlessMode: s.settings.borderlessMode || minimalismIn(s, windowId),
       zeroInFullScreen: s.settings.pageFrameZeroInFullScreen,

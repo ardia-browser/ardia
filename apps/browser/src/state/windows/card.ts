@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useBrowser, type BrowserState } from "../browser/store";
+import { fieldWatch, useKeyed } from "../browser/keyedWatch";
 import { activeTabId, engineProfile } from "../browser/model";
 import type { AdoptKind, SplitView, Tab } from "../browser/types";
 import { tabEngine, type PageEngine } from "../engines/engines";
@@ -21,6 +22,10 @@ import { notePageOverlay } from "../telemetry/usage";
 import { liveOf } from "../tabs/tabLive";
 
 export const useSplitOf = (tabId: string | undefined) => useBrowser((s) => splitOf(s, tabId));
+
+const watchSplits = fieldWatch(() => useBrowser, (s: BrowserState) => s.splits);
+
+export const useInSplit = (tabId: string) => useKeyed(watchSplits, tabId, () => !!splitOf(useBrowser.getState(), tabId));
 
 export const useIsSmallWindow = (windowId: string) => useBrowser((s) => isSmallWindow(s.windows[windowId]));
 

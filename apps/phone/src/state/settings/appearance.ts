@@ -1,4 +1,4 @@
-import { useColorScheme } from "react-native";
+import { Appearance, useColorScheme } from "react-native";
 import { create } from "zustand";
 import { appearanceSummary, appliedDark, chromeStyle, macLookOf, preferredScheme, type ChromeStyle, type PreferredScheme } from "../../lib/appearance";
 import type { Design } from "../../lib/design";
@@ -16,6 +16,11 @@ export function usePreferredScheme(): PreferredScheme {
   const design = useAppearanceDesign((s) => s.design);
   const choice = usePreferences((p) => p.schemeChoice);
   return preferredScheme(design, choice, useMacLook());
+}
+
+export function currentDarkScheme(): boolean {
+  const { status, view } = syncData();
+  return appliedDark(preferredScheme(useAppearanceDesign.getState().design, currentPreferences().schemeChoice, macLookOf(status.isEnabled, view.look)), Appearance.getColorScheme() === "dark");
 }
 
 export function useDarkScheme(): boolean {

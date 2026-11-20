@@ -3,8 +3,10 @@ import { useTheme } from "../ui/theme";
 import { duration, spring } from "../ui/motion";
 import { font, ink, radius, shadow, sidebarFont, sidebarIconSize, sidebarPoints, space, withAlpha, type ShadowLevel } from "../ui/tokens";
 import type { GroupColor } from "../../state/browser/types";
+import type { Settings } from "../../state/settings/settings";
 import { GROUP_COLORS } from "../../state/groups/tokens";
-import { mix } from "../../lib/color";
+import { contrastRatio, mix, parseColor, toHex } from "../../lib/color";
+import { fromOklab, hexColor, oklab } from "../../lib/profileLook";
 
 const DARK = {
   groupFill: "rgba(255,255,255,0.1)",
@@ -74,7 +76,7 @@ const LIGHT: typeof DARK = {
   quietFaintText: 0.2,
 };
 
-type SidebarTokens = typeof DARK;
+export type SidebarTokens = typeof DARK;
 
 const HIGH_CONTRAST_DARK: SidebarTokens = { ...DARK, groupTitle: "#FFFFFF", newTabLabel: "#FFFFFFD1", newTabIcon: "#FFFFFFB3", badge: "#FFFFFF" };
 const HIGH_CONTRAST_LIGHT: SidebarTokens = { ...LIGHT, groupTitle: "#000000", newTabLabel: "#000000D1", newTabIcon: "#000000B3", badge: "#000000" };
@@ -120,7 +122,10 @@ export const TAB_SWITCHER = {
   get titleSize() {
     return font.small.fontSize;
   },
-  fill: { dark: "#1C1C1EF2", light: "#2A2A2CF2" },
+} as const;
+
+const TAB_SWITCHER_DARK = {
+  fill: "#1C1C1EF2",
   focusFill: "rgba(255,255,255,0.14)",
   restRing: "rgba(255,255,255,0.12)",
   pageFill: "#FFFFFF",
@@ -128,7 +133,20 @@ export const TAB_SWITCHER = {
   onPanel: "#FFFFFFB3",
   onPage: "#000000A6",
   title: "#FFFFFF",
-} as const;
+};
+
+const TAB_SWITCHER_LIGHT: typeof TAB_SWITCHER_DARK = {
+  fill: "#F2F2F7F2",
+  focusFill: "rgba(0,0,0,0.18)",
+  restRing: "rgba(0,0,0,0.1)",
+  pageFill: "#FFFFFF",
+  blankFill: "#D1D1D6",
+  onPanel: "#000000A6",
+  onPage: "#000000A6",
+  title: "#000000D9",
+};
+
+export const tabSwitcherColors = (dark: boolean) => (dark ? TAB_SWITCHER_DARK : TAB_SWITCHER_LIGHT);
 
 export const SELECTED_ROW_SHADOW_OFFSET: [number, number] = [0, 0.5];
 
@@ -210,13 +228,133 @@ export function groupTint(color: GroupColor | null | undefined): string | null {
 
 export const groupBoxAtRest = (color: GroupColor | null | undefined) => groupTint(color) !== null;
 
-const FOLDER_ACCENT = "#443AFF";
+type FolderStyle = Settings["folderStyle"];
 
-export function folderPalette(color: GroupColor | null | undefined, dark: boolean) {
-  const tint = groupTint(color) ?? FOLDER_ACCENT;
+const FOLDER_NEUTRAL = { dark: "#FFFFFF", light: "#6E6E73" } as const;
+
+export const FOLDER_OUTLINE_CONTRAST = 3.3;
+
+const FOLDER_INK = {
+  light: { outlineStart: 0.62, outlineEnd: 0.2, outlineChroma: 1, pastelChroma: 2, pastelChromaMax: 0.1, face: 0.94, faceChroma: 0.6, faceChromaMax: 0.05, insideTop: 0.3, insideBottom: 0.55 },
+  dark: { outlineStart: 0.8, outlineEnd: 0.98, outlineChroma: 0.75, pastelChroma: 0, pastelChromaMax: 0, face: 0.32, faceChroma: 0.5, faceChromaMax: 0.05, insideTop: 0.45, insideBottom: 0.2 },
+} as const;
+
+const OUTLINE_STEP = 0.01;
+
+type Lch = { l: number; c: number; h: number };
+
+function lch(color: string): Lch {
+  const [l, a, b] = oklab(hexColor(color));
+  return { l, c: Math.hypot(a, b), h: Math.atan2(b, a) };
+}
+
+const inGamut = (rgb: number[]) => rgb.every((v) => v >= -1e-4 && v <= 1 + 1e-4);
+
+function lchHex({ l, c, h }: Lch): string {
+  const at = (chroma: number) => fromOklab([l, chroma * Math.cos(h), chroma * Math.sin(h)]);
+  let [low, high] = [0, c];
+  if (inGamut(at(c))) low = c;
+  else
+    for (let i = 0; i < 16; i++) {
+      const mid = (low + high) / 2;
+      if (inGamut(at(mid))) low = mid;
+      else high = mid;
+    }
+  return toHex(at(low).map((v) => Math.min(1, Math.max(0, v)) * 255));
+}
+
+const worstContrast = (color: string, backdrops: readonly string[]) => Math.min(...backdrops.map((backdrop) => contrastRatio(color, backdrop)));
+
+type FolderInkSide = keyof typeof FOLDER_INK;
+
+type FolderOutline = { side: FolderInkSide; stroke: string; contrast: number };
+
+const outlineChroma = (tint: Lch, side: FolderInkSide) => {
+  const ink = FOLDER_INK[side];
+  return Math.max(tint.c * ink.outlineChroma, Math.min(tint.c * ink.pastelChroma, ink.pastelChromaMax));
+};
+
+const outlineStart = (tint: Lch, side: FolderInkSide) =>
+  side === "dark" ? Math.max(tint.l, FOLDER_INK.dark.outlineStart) : Math.min(tint.l, FOLDER_INK.light.outlineStart);
+
+function folderOutline(tintHex: string, side: FolderInkSide, backdrops: readonly string[]): FolderOutline {
+  const ink = FOLDER_INK[side];
+  const lightens = side === "dark";
+  const tint = lch(tintHex);
+  const c = outlineChroma(tint, side);
+  const start = outlineStart(tint, side);
+  let l = start;
+  let stroke = start === tint.l ? toHex(parseColor(tintHex).slice(0, 3)) : lchHex({ l, c, h: tint.h });
+  let contrast = backdrops.length ? worstContrast(stroke, backdrops) : Infinity;
+  while (contrast < FOLDER_OUTLINE_CONTRAST && (lightens ? l < ink.outlineEnd : l > ink.outlineEnd)) {
+    l += lightens ? OUTLINE_STEP : -OUTLINE_STEP;
+    stroke = lchHex({ l, c, h: tint.h });
+    contrast = worstContrast(stroke, backdrops);
+  }
+  return { side, stroke, contrast };
+}
+
+const FOLDER_FACE_SPLIT = (FOLDER_INK.light.outlineStart + FOLDER_INK.dark.outlineStart) / 2;
+
+const faceSideFor = (l: number): FolderInkSide => (l < FOLDER_FACE_SPLIT ? "light" : "dark");
+
+let greyLightness: { hex: string; l: number }[] | null = null;
+
+function greys() {
+  greyLightness ??= Array.from({ length: 256 }, (_, v) => {
+    const hex = toHex([v, v, v]);
+    return { hex, l: lch(hex).l };
+  });
+  return greyLightness;
+}
+
+function nearestLegibleOutline(tintHex: string, side: FolderInkSide, backdrops: readonly string[]): FolderOutline | null {
+  const tint = lch(tintHex);
+  const start = outlineStart(tint, side);
+  const c = outlineChroma(tint, side);
+  for (let k = 1; k * OUTLINE_STEP <= 1; k++) {
+    for (const l of [start - k * OUTLINE_STEP, start + k * OUTLINE_STEP]) {
+      if (l < 0 || l > 1) continue;
+      const stroke = lchHex({ l, c, h: tint.h });
+      const contrast = worstContrast(stroke, backdrops);
+      if (contrast >= FOLDER_OUTLINE_CONTRAST) return { side: faceSideFor(l), stroke, contrast };
+    }
+  }
+  const byDistance = [...greys()].sort((a, b) => Math.abs(a.l - start) - Math.abs(b.l - start));
+  for (const grey of byDistance) {
+    const contrast = worstContrast(grey.hex, backdrops);
+    if (contrast >= FOLDER_OUTLINE_CONTRAST) return { side: faceSideFor(grey.l), stroke: grey.hex, contrast };
+  }
+  return null;
+}
+
+function legibleFolderOutline(tintHex: string, dark: boolean, backdrops: readonly string[]): FolderOutline {
+  const side: FolderInkSide = dark ? "dark" : "light";
+  const preferred = folderOutline(tintHex, side, backdrops);
+  if (preferred.contrast >= FOLDER_OUTLINE_CONTRAST) return preferred;
+  const opposite = folderOutline(tintHex, dark ? "light" : "dark", backdrops);
+  if (opposite.contrast >= FOLDER_OUTLINE_CONTRAST) return opposite;
+  const nearest = nearestLegibleOutline(tintHex, side, backdrops);
+  if (nearest) return nearest;
+  return opposite.contrast > preferred.contrast ? opposite : preferred;
+}
+
+function neutralFolderPalette(dark: boolean) {
+  const tint = FOLDER_NEUTRAL[dark ? "dark" : "light"];
   return dark
     ? { stroke: mix("#FFFFFF", tint, 0.64), face: mix("#211E29", tint, 0.12), insideTop: mix("#211E29", tint, 0.4), insideBottom: mix("#15121E", tint, 0.24) }
     : { stroke: tint, face: mix("#FFFFFF", tint, 0.06), insideTop: mix("#FFFFFF", tint, 0.34), insideBottom: mix("#FFFFFF", tint, 0.64) };
+}
+
+export function folderPalette(color: GroupColor | null | undefined, dark: boolean, profileTint: string, style: FolderStyle = "profile", backdrops: readonly string[] = []) {
+  const groupHex = groupTint(color);
+  if (!groupHex && style === "neutral") return neutralFolderPalette(dark);
+  const tintHex = groupHex ?? profileTint;
+  const tint = lch(tintHex);
+  const { side, stroke } = legibleFolderOutline(tintHex, dark, backdrops);
+  const ink = FOLDER_INK[side];
+  const face = lchHex({ l: ink.face, c: Math.min(tint.c * ink.faceChroma, ink.faceChromaMax), h: tint.h });
+  return { stroke, face, insideTop: mix(face, stroke, ink.insideTop), insideBottom: mix(face, stroke, ink.insideBottom) };
 }
 
 export function groupSurface(color: GroupColor | null | undefined, tokens: SidebarTokens): { fill: string; stroke: string } {
@@ -243,4 +381,4 @@ export const SELECTED_ROW_PILL_MOTION = {
   exit: { duration: 60, easing: Easing.linear },
 } as const;
 export const SELECTED_ROW_REVEAL_SETTLE_MS = 400;
-export const REVEAL_GLIDE = { duration: 300, easing: Easing.inOut(Easing.quad), margin: space.s } as const;
+export const REVEAL_ROW_MARGIN = space.s;

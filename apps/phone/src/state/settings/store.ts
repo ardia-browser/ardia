@@ -1,11 +1,12 @@
+import { Platform } from "react-native";
 import { create } from "zustand";
 import { readPreferences, writePreference } from "../store/browserDatabase";
 import { browserDatabase } from "../store/database";
-import { DEFAULT_PREFERENCES, parsePreferences, PREFERENCE_KEYS, serializePreference, type Preferences } from "./preferences";
+import { defaultPreferences, parsePreferences, PREFERENCE_KEYS, serializePreference, type Preferences } from "./preferences";
 
-export const usePreferences = create<Preferences>()(() => DEFAULT_PREFERENCES);
+export const usePreferences = create<Preferences>()(() => defaultPreferences(Platform.OS));
 
-export const loadPreferences = () => usePreferences.setState(parsePreferences(readPreferences(browserDatabase())));
+export const loadPreferences = () => usePreferences.setState(parsePreferences(readPreferences(browserDatabase()), Platform.OS));
 
 export const currentPreferences = () => usePreferences.getState();
 

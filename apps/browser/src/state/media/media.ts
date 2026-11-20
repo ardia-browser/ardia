@@ -5,6 +5,7 @@ import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { webviews } from "../../platform/webviews";
 import { useBrowser } from "../browser/store";
+import { useKeyed, watchTabRecord } from "../browser/keyedWatch";
 import type { BrowserState } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import { peekTabId } from "../peek/peek";
@@ -350,4 +351,5 @@ export const useHiddenPlayerTabs = (windowId: string, profileId: string, session
 
 export const sidebarPlayerCandidates = (m: Pick<Store, "leftPaused">, hidden: string[]) => hidden.filter((id) => !m.leftPaused[id]);
 
-export const usePinnedWithMediaControls = (tabId: string | undefined) => useBrowser((s) => !!tabId && !!s.tabs[tabId]?.pin);
+export const usePinnedWithMediaControls = (tabId: string | undefined) =>
+  useKeyed(watchTabRecord, tabId, () => !!tabId && !!useBrowser.getState().tabs[tabId]?.pin);

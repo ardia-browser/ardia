@@ -3,6 +3,8 @@ import { CORE_EVENTS, type AutomationEventName } from "./eventNames";
 import { startLifecycleEvents, startUserIdleEvents } from "./lifecycleEvents";
 import { startStoreEvents, type EventSend } from "./storeEvents";
 import { setNotificationSink } from "./notificationEvents";
+import { startPromptEvents } from "./socketPrompts";
+import { startSurfaceEvents } from "./socketSurfaces";
 import type { Subscription } from "./automationMethods";
 
 export type FeedNeeds = { events: Set<AutomationEventName>; tabIdle: Set<number>; userIdle: Set<number> };
@@ -45,6 +47,9 @@ export function updateFeed(needs: FeedNeeds, send: EventSend) {
     setNotificationSink(send);
     return () => setNotificationSink(null);
   });
+  const prompts = ["permission.prompted", "password.prompted"].filter((name) => needs.events.has(name as AutomationEventName));
+  keep("prompts", prompts.length ? prompts.join(",") : null, () => startPromptEvents(send, needs.events));
+  keep("surfaces", needs.events.has("menu.opened") ? "on" : null, () => startSurfaceEvents(send));
   keep("userIdle", needs.userIdle.size ? `${sorted(needs.events)}|${sorted(needs.userIdle)}` : null, () => startUserIdleEvents(send, needs.events, needs.userIdle));
 }
 

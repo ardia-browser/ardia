@@ -7,6 +7,7 @@ import { failure, type ErrorCode, type MethodError } from "./automationMethods";
 import { eligibleKind, isEligibleTab, ownEntry } from "./automationWindows";
 import { parseOps, type Op } from "./workspaceOps";
 import { runOp } from "./workspaceApply";
+import { takeLateResults } from "./tabCalls";
 import { OpError, type Changed, type OpResult } from "./workspaceTargets";
 import { groupFields, isEligibleGroup, tabNode, workspace, type GroupNode, type TabNode } from "./workspaceTree";
 import { sampleTabUsage, workspaceWithUsage } from "./workspaceUsage";
@@ -37,6 +38,7 @@ export type ApplyResult = {
   applied: number;
   results: (OpResult & { op: string })[];
   error?: { index: number; code: ErrorCode; message: string; changed?: Changed };
+  late?: Record<string, string>;
   tabs: TabNode[];
   groups: (Omit<GroupNode, "items"> & { tabs: string[] })[];
   windows: { id: string; activeTab: string | null }[];
@@ -57,7 +59,7 @@ function settledState(ops: Op[], results: OpResult[]): Pick<ApplyResult, "tabs" 
 
 let chain: Promise<unknown> = Promise.resolve();
 
-async function runAll(ops: Op[], stillOn: () => boolean, consent: ConsentToken | null): Promise<ApplyResult> {
+async function runAll(ops: Op[], stillOn: () => boolean, consent: ConsentToken | null, connection: number): Promise<ApplyResult> {
   const results: OpResult[] = [];
   let error: ApplyResult["error"];
   for (const [index, op] of ops.entries()) {
@@ -66,7 +68,7 @@ async function runAll(ops: Op[], stillOn: () => boolean, consent: ConsentToken |
       break;
     }
     try {
-      results.push(await runOp(results, op));
+      results.push(await runOp(results, op, stillOn, connection));
     } catch (thrown) {
       const code = thrown instanceof OpError ? thrown.code : "failed";
       const changed = thrown instanceof OpError ? thrown.changed : undefined;
@@ -74,6 +76,7 @@ async function runAll(ops: Op[], stillOn: () => boolean, consent: ConsentToken |
       break;
     }
   }
+  const late = takeLateResults(connection);
   const applied = ops.slice(0, results.length);
   noteCliEdits(applied.filter((op) => !op.op.startsWith("group.")).length, applied.filter((op) => op.op.startsWith("group.")).length, error ? 1 : 0, consent);
   return {
@@ -81,11 +84,12 @@ async function runAll(ops: Op[], stillOn: () => boolean, consent: ConsentToken |
     applied: results.length,
     results: results.map((r, i) => ({ op: ops[i]!.op, ...r })),
     ...(error ? { error } : {}),
+    ...(late ? { late } : {}),
     ...settledState(ops, results),
   };
 }
 
-export function applyMethod(params: Record<string, unknown>, stillOn: () => boolean): Body | Promise<Body> {
+export function applyMethod(params: Record<string, unknown>, stillOn: () => boolean, connection = 0): Body | Promise<Body> {
   const unknown = Object.keys(params).filter((key) => key !== "ops");
   if (unknown.length) return failure("bad_request", `apply takes ops, not ${unknown.join(", ")}.`);
   const ops = parseOps(params.ops);
@@ -94,7 +98,7 @@ export function applyMethod(params: Record<string, unknown>, stillOn: () => bool
     return failure(ops.code, ops.message);
   }
   const consent = consentToken();
-  const run = chain.then(() => runAll(ops, stillOn, consent));
+  const run = chain.then(() => runAll(ops, stillOn, consent, connection));
   chain = run.catch(() => {});
   return run.then((result) => ({ result }));
 }

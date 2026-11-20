@@ -6,6 +6,7 @@ final class WebKitWebView: WKWebView {
   var onPressRefused: (() -> Void)?
   private var presses = WebKitPagePresses()
   var mediaFrames: [String: WKFrameInfo] = [:]
+  var scriptFrames: [String: WKFrameInfo] = [:]
   var playingFrames = Set<String>()
   let nowPlaying = ArdiaNowPlaying()
   var captureOrigins: [String: Set<String>] = [:]

@@ -102,6 +102,12 @@ export const profileRows = {
     {
       section: "Passwords and autofill",
       rows: {
+        passwordManager: {
+          title: "Password manager",
+          description: "Ardia's own, a password manager plugin, or none when an extension handles logins.",
+          keywords: ["password manager", "passwords app", "passkeys", "verification codes", "2fa", "one time code", "autofill passwords"],
+          shown: () => PLATFORM_FEATURES.systemPasswordManagers && PLATFORM_FEATURES.plugins,
+        },
         offerToSavePasswords: {
           title: "Save and fill passwords",
           description: "Offers to save logins and fills saved ones.",

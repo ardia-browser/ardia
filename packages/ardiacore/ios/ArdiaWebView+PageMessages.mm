@@ -7,6 +7,7 @@
 #import "ArdiaServices.h"
 
 #import <objc/runtime.h>
+#import <os/log.h>
 
 #include <climits>
 #include <cmath>
@@ -33,6 +34,7 @@ BOOL gDisplayMediaPicker = YES;
 static BOOL gSelectionPopover = YES;
 static BOOL gBlockAutoplayEverywhere = NO;
 static char kScriptFramesKey;
+static char kSameSiteFramesKey;
 
 static NSDictionary *DisplayMediaAudioOffer(NSDictionary *message) {
   if (!Flag(message, @"audio")) return nil;
@@ -57,7 +59,8 @@ static NSString *DisplayMediaAudioFor(NSDictionary *offer, NSString *sourceId) {
 namespace ardia_web_view {
 
 void AnswerHello(ArdiaCoreTab *tab, NSString *profile, NSString *frameId, BOOL main, NSString *verifiedOrigin) {
-  NSString *origin = (main ? VerifiedOrigin(verifiedOrigin) : nil) ?: OriginOf(tab.url);
+  NSString *sender = VerifiedOrigin(verifiedOrigin);
+  NSString *origin = (main ? sender : nil) ?: OriginOf(tab.url);
   __weak ArdiaCoreTab *weakTab = tab;
   void (^answer)(BOOL) = ^(BOOL blockAutoplay) {
     ArdiaCoreTab *to = weakTab;
@@ -67,6 +70,7 @@ void AnswerHello(ArdiaCoreTab *tab, NSString *profile, NSString *frameId, BOOL m
     if (gDisplayMediaPicker) config[@"displayMediaPicker"] = @YES;
     if (main && ArdiaFieldTimingEnabled()) config[@"fieldTiming"] = @YES;
     if (main) config[@"selectionPopover"] = @(gSelectionPopover);
+    if (main || (sender.length && [sender isEqualToString:OriginOf(to.url)])) config[@"fieldProvider"] = FieldProviderFor(profile) ?: @NO;
     config[@"peek"] = gPeekModifier;
     config[@"split"] = SplitLinkModifier();
     config[@"peekOtherSites"] = @([ArdiaTabRegistry viewForTab:to].peeksLinksToOtherSites);
@@ -125,8 +129,9 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
     PeekTrace(@{@"event" : @"hello", @"main" : @(main), @"frame" : frameId ?: @"", @"url" : Text(dict, @"url", 8192) ?: @""});
     if (main && !tab.discarded) [self resetPageMedia];
     if (main) _reports.exclusiveFrames = nil;
+    if (main) [ArdiaWebView resetFieldProviderPage:tab];
     if (main && ![(Text(dict, @"url", 8192) ?: @"about:") hasPrefix:@"about:"]) _requests.requestedURL = nil;
-    [self noteScriptFrame:frameId main:main];
+    [self noteScriptFrame:frameId main:main sameSite:[self sameSiteFrame:main origin:sender]];
     [self callFrame:frameId kind:@"peekConfig" json:PeekConfigJSON(self)];
     AnswerHello(tab, _profile, frameId, main, verifiedOrigin);
     if (main) _firstPaint.scripted = YES;
@@ -140,8 +145,10 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
   } else if ([kind isEqualToString:@"peek"] && dict) {
     [self peekLink:dict frame:frameId main:main];
   } else if ([kind isEqualToString:@"peekHello"]) {
-    [self noteScriptFrame:frameId main:main];
+    const BOOL sameSite = [self sameSiteFrame:main origin:sender];
+    [self noteScriptFrame:frameId main:main sameSite:sameSite];
     [self callFrame:frameId kind:@"peekConfig" json:PeekConfigJSON(self)];
+    [self callFrame:frameId kind:@"fieldProvider" json:sameSite ? FieldProviderJSON(_profile) : @"false"];
   } else if ([kind isEqualToString:@"peekGone"]) {
     [self forgetScriptFrame:frameId];
   } else if ([kind isEqualToString:@"exclusive"] && dict) {
@@ -185,6 +192,42 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
     NSString *state = Text(dict, @"state", 8);
     if ([@[ @"down", @"up", @"top" ] containsObject:state ?: @""])
       [self emit:@"scroll" payload:@{@"state" : state}];
+  } else if ([kind isEqualToString:@"fieldFocus"] && main && dict) {
+    double generation;
+    double sequence;
+    if (Finite(dict, @"generation", &generation) && Finite(dict, @"seq", &sequence))
+      [ArdiaWebView noteFieldFocus:Text(dict, @"field", 16) sequence:sequence generation:generation query:Text(dict, @"query", 64) owner:tab];
+  } else if ([kind isEqualToString:@"fieldProviderHint"] && dict) {
+    NSString *state = Text(dict, @"state", 16);
+    if ([@[ @"shown", @"dismissed" ] containsObject:state ?: @""] && [self sameSiteFrame:main origin:sender] && FieldProviderFor(_profile))
+      [self emit:@"fieldProviderHint" payload:@{@"state" : state}];
+  } else if ([kind isEqualToString:@"fieldProvider"] && dict) {
+    double generation;
+    NSString *field = Text(dict, @"field", 16);
+    if (!Finite(dict, @"generation", &generation) || !field || ![self sameSiteFrame:main origin:sender]) return;
+    __weak ArdiaWebView *weakSelf = self;
+    void (^report)(NSDictionary *) = ^(NSDictionary *result) {
+      NSString *reason = result[@"reason"];
+      if ([reason isEqualToString:@"noProvider"] || [reason isEqualToString:@"stale"]) return;
+      NSMutableDictionary *payload = [@{@"via" : @"badge", @"shown" : result[@"shown"] ?: @NO} mutableCopy];
+      if (reason) payload[@"reason"] = reason;
+      if (result[@"panel"]) payload[@"panel"] = result[@"panel"];
+      [weakSelf emit:@"fieldProviderOpened" payload:payload];
+    };
+    if (!_visible) {
+      os_log(OS_LOG_DEFAULT, "[ardiacore] system passwords panel refused reason=hidden via=badge");
+      report(@{@"shown" : @NO, @"reason" : @"hidden"});
+    }
+    else [ArdiaWebView requestSystemPanelIn:tab.view owner:tab profile:_profile field:field generation:generation completion:report];
+  } else if ([kind isEqualToString:@"verificationCode"] && main && dict) {
+    double generation;
+    if (!Finite(dict, @"generation", &generation)) return;
+    NSDictionary *offer = [ArdiaWebView offerVerificationCode:Field<NSString>(dict, @"url")
+                                                        owner:tab
+                                                        frame:frameId
+                                                      profile:_profile
+                                                   generation:generation];
+    if (offer) [self emit:@"verificationCodeFound" payload:@{@"token" : offer[@"token"], @"app" : offer[@"app"], @"main" : @YES}];
   } else if ([kind isEqualToString:@"drm"] && dict) {
     [self emit:@"protectedMedia" payload:@{@"keySystem" : Text(dict, @"keySystem", 64) ?: @"", @"main" : @(main)}];
   } else if ([kind isEqualToString:@"nowPlaying"]) {
@@ -269,18 +312,59 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
   }
 }
 
-- (void)noteScriptFrame:(NSString *)frameId main:(BOOL)main {
+static NSMutableSet<NSString *> *SameSiteFramesOf(ArdiaCoreTab *tab) {
+  if (!tab) return nil;
+  NSMutableSet *frames = objc_getAssociatedObject(tab, &kSameSiteFramesKey);
+  if (!frames) {
+    frames = [NSMutableSet set];
+    objc_setAssociatedObject(tab, &kSameSiteFramesKey, frames, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  }
+  return frames;
+}
+
+- (void)noteScriptFrame:(NSString *)frameId main:(BOOL)main sameSite:(BOOL)sameSite {
   InstallPeekMonitor();
   NSMutableOrderedSet<NSString *> *frames = ScriptFramesOf(_tab);
+  NSMutableSet<NSString *> *sameSiteFrames = SameSiteFramesOf(_tab);
   if (!frames || !frameId.length) return;
   [frames removeObject:frameId];
   [frames addObject:frameId];
-  while (frames.count > 512) [frames removeObjectAtIndex:0];
+  if (sameSite) [sameSiteFrames addObject:frameId];
+  else [sameSiteFrames removeObject:frameId];
+  while (frames.count > 512) {
+    [sameSiteFrames removeObject:frames.firstObject];
+    [frames removeObjectAtIndex:0];
+  }
 }
 
 - (void)forgetScriptFrame:(NSString *)frameId {
-  if (frameId.length) [ScriptFramesOf(_tab) removeObject:frameId];
-  [_reports.exclusiveFrames removeObject:frameId ?: @""];
+  if (!frameId.length) return;
+  if (_tab) [ArdiaWebView dropVerificationCodesOf:_tab frame:frameId];
+  [ScriptFramesOf(_tab) removeObject:frameId];
+  [SameSiteFramesOf(_tab) removeObject:frameId];
+  [_reports.exclusiveFrames removeObject:frameId];
+}
+
+- (void)pushFieldProvider {
+  if (!_tab) return;
+  NSString *state = FieldProviderJSON(_profile);
+  NSSet<NSString *> *sameSite = [SameSiteFramesOf(_tab) copy];
+  [self callFrame:@"" kind:@"fieldProvider" json:state];
+  for (NSString *frameId in [ScriptFramesOf(_tab) copy])
+    [self callFrame:frameId kind:@"fieldProvider" json:[sameSite containsObject:frameId] ? state : @"false"];
+}
+
+- (void)pushFieldProviderHint:(NSString *)json {
+  if (!_tab) return;
+  NSSet<NSString *> *sameSite = [SameSiteFramesOf(_tab) copy];
+  if (!sameSite.count) return [self callFrame:@"" kind:@"fieldProviderHint" json:json];
+  for (NSString *frameId in sameSite) [self callFrame:frameId kind:@"fieldProviderHint" json:json];
+}
+
+- (BOOL)sameSiteFrame:(BOOL)main origin:(NSString *)origin {
+  if (main) return YES;
+  NSString *top = OriginOf(_tab.url);
+  return origin.length && top.length && [origin isEqualToString:top];
 }
 
 - (void)pushSelectionPopover {

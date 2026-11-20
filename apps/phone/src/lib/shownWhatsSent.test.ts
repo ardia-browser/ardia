@@ -24,6 +24,8 @@ test("where sync is offered, What's Sent keeps its Mac lines, and only iPhone li
   const fields = shownWhatsSent("android", false).flatMap((section) => section.items.flatMap((item) => item.fields));
   assert.ok(fields.includes("interface_style"));
   assert.ok(fields.includes("pins_to_mac"));
+  assert.ok(fields.includes("start_logo_taps"));
+  assert.ok(!shownWhatsSent("ios", true).some((section) => section.items.some((item) => item.fields.includes("start_logo_taps"))));
 });
 
 test("where sync isn't offered, Clear Browsing Data, About and the licences drop the Mac and the sync folder", () => {

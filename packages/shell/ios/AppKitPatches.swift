@@ -32,6 +32,20 @@ let installViewSelectAll: Void = {
   class_addMethod(viewClass, selectAll, imp_implementationWithBlock(block), "v@:@")
 }()
 
+let installHoverAfterWindowMoves: Void = {
+  let markHoverDirty = NSSelectorFromString("ardia_markHoverDirty")
+  guard let viewClass = NSClassFromString("RCTView"), (viewClass as AnyObject).responds(to: markHoverDirty) else { return }
+  let names = [
+    NSWindow.didMoveNotification, NSWindow.didChangeScreenNotification, NSWindow.didChangeBackingPropertiesNotification,
+    NSApplication.didChangeScreenParametersNotification,
+  ]
+  for name in names {
+    NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { _ in
+      _ = (viewClass as AnyObject).perform(markHoverDirty)
+    }
+  }
+}()
+
 let installSubmenuAction: Void = {
   let submenuAction = NSSelectorFromString("submenuAction:")
   guard !NSMenu.instancesRespond(to: submenuAction) else { return }

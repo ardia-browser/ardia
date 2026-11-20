@@ -13,10 +13,12 @@ export type MenuPage = "main" | "siteSettings";
 type PageUi = {
   menuOpen: boolean;
   menuPage: MenuPage;
+  menuDocked: boolean;
   menuSite: MenuSite | null;
   menuTranslation: MenuTranslation | null;
   titleFeedback: string | null;
   findOpen: boolean;
+  findIsPrivate: boolean;
   findQuery: string;
   readerTabId: string | null;
   press: Press | null;
@@ -26,10 +28,12 @@ type PageUi = {
 export const usePageUi = create<PageUi>()(() => ({
   menuOpen: false,
   menuPage: "main",
+  menuDocked: false,
   menuSite: null,
   menuTranslation: null,
   titleFeedback: null,
   findOpen: false,
+  findIsPrivate: true,
   findQuery: "",
   readerTabId: null,
   press: null,

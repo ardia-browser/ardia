@@ -21,6 +21,7 @@ export const RECIPES = {
 
   app: one(O("square")),
   "xmark.square": one(O("square-x")),
+  "minus.square": one(O("square-minus")),
   "app.badge": one(O("square", at(1.333, -0.03, 0.03)), badge("orig:dot", 1.333, 0.4, -0.4)),
   "questionmark.app.dashed": { recipes: [[O("square-dashed"), L("tabler:question-mark", at(0.6, 0, 0))], [O("square-dashed"), L("phosphor:question", at(0.6, 0, 0))]] },
   macwindow: one(O("macwindow")),
@@ -33,6 +34,7 @@ export const RECIPES = {
   "rectangle.righthalf.filled": one(O("rectangle.half.filled", { flip: -1 })),
   "rectangle.righthalf.inset.filled": one(O("rectangle.righthalf.inset.filled")),
   "rectangle.bottomhalf.inset.filled": one(O("rectangle.bottomhalf.inset.filled")),
+  "rectangle.topthird.inset.filled": one(O("rectangle.topthird.inset.filled")),
   "rectangle.lefthalf.inset.filled.arrow.left": one(O("rectangle.inset.arrow", { flip: -1 })),
   "rectangle.righthalf.inset.filled.arrow.right": one(O("rectangle.inset.arrow")),
   "rectangle.split.2x1": one(O("split.2x1")),

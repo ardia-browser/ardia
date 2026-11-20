@@ -14,14 +14,7 @@ private final class LabelInk: CALayer {
 }
 
 final class FadeLabel: ExpoView {
-  private static let field: NSTextField = {
-    let field = NSTextField(labelWithString: "")
-    field.lineBreakMode = .byClipping
-    field.maximumNumberOfLines = 1
-    field.cell?.truncatesLastVisibleLine = false
-    field.isSelectable = false
-    return field
-  }()
+  private static let field = SingleLineInk.labelField()
   private static let weights: [String: NSFont.Weight] = [
     "ultraLight": .ultraLight, "thin": .thin, "light": .light, "regular": .regular, "medium": .medium,
     "semibold": .semibold, "bold": .bold, "heavy": .heavy, "black": .black,
@@ -32,11 +25,6 @@ final class FadeLabel: ExpoView {
     let size: Double
   }
   @MainActor private static var fonts: [FontKey: NSFont] = [:]
-
-  static func opticalLift(_ font: NSFont, scale: CGFloat) -> CGFloat {
-    guard scale > 0 else { return 0 }
-    return max(0, ((font.capHeight - font.xHeight) * 0.375 * scale).rounded()) / scale
-  }
 
   @MainActor private static func resolvedFont(family: String, weight: String, size: Double) -> NSFont {
     let key = FontKey(family: family, weight: weight, size: size)
@@ -62,7 +50,6 @@ final class FadeLabel: ExpoView {
   private let fade = CAGradientLayer()
   private var font = NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .regular)
   private var fitting = NSSize.zero
-  private var lift: CGFloat = 0
 
   var text = "" {
     didSet {
@@ -125,9 +112,7 @@ final class FadeLabel: ExpoView {
     let scale = backingDensity
     guard scale != ink.contentsScale else { return }
     ink.contentsScale = scale
-    lift = Self.opticalLift(font, scale: scale)
     ink.setNeedsDisplay()
-    relayout()
   }
 
   private func load(_ field: NSTextField) {
@@ -146,10 +131,9 @@ final class FadeLabel: ExpoView {
 
   private func update() {
     font = Self.resolvedFont(family: fontFamily, weight: weight, size: fontSize)
-    lift = Self.opticalLift(font, scale: ink.contentsScale)
     let field = Self.field
     load(field)
-    fitting = field.frame(forAlignmentRect: NSRect(origin: .zero, size: field.intrinsicContentSize)).size
+    fitting = SingleLineInk.fitting(field)
     ink.setNeedsDisplay()
     relayout()
   }
@@ -166,7 +150,7 @@ final class FadeLabel: ExpoView {
     CATransaction.begin()
     CATransaction.setDisableActions(true)
     if ink.superlayer !== layer { layer?.addSublayer(ink) }
-    ink.frame = CGRect(x: 0, y: inkTop(), width: max(bounds.width, fitting.width), height: fitting.height)
+    ink.frame = CGRect(x: 0, y: (bounds.height - fitting.height) / 2, width: max(bounds.width, fitting.width), height: fitting.height)
     if bounds.width > 0, fitting.width > bounds.width + 0.5 {
       fade.frame = CGRect(x: 0, y: 0, width: bounds.width, height: fitting.height)
       let start = max(0, 1 - fadeWidth / bounds.width)
@@ -176,11 +160,6 @@ final class FadeLabel: ExpoView {
       ink.mask = nil
     }
     CATransaction.commit()
-  }
-
-  private func inkTop() -> CGFloat {
-    let centered = (bounds.height - fitting.height) / 2
-    return isFlipped ? centered - lift : centered + lift
   }
 
   private func paint(_ ctx: CGContext) {
@@ -195,7 +174,7 @@ final class FadeLabel: ExpoView {
     NSGraphicsContext.saveGraphicsState()
     NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: true)
     effectiveAppearance.performAsCurrentDrawingAppearance {
-      field.cell?.draw(withFrame: NSRect(origin: .zero, size: size), in: field)
+      SingleLineInk.draw(field, size: size)
     }
     NSGraphicsContext.restoreGraphicsState()
   }

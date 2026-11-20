@@ -51,7 +51,10 @@ public class TabsModule: Module {
     },
     "lastTabPolicy": EngineCall.passing("ac_tabs_last_tab_policy"),
     "devBrowserId": { args, reply in reply.ok(try browserId(args)) },
-    "devEvents": { args, reply in reply.ok(ArdiaWebView.devEvents(browserId: try browserId(args))) },
+    "devEvents": { args, reply in
+      let webKit = WebKitHub.shared.transfers.liveTab(try args.text("tabId"))?.browserId
+      reply.ok(ArdiaWebView.devEvents(browserId: try webKit ?? browserId(args)))
+    },
     "devWindowNumber": { args, reply in reply.ok(ArdiaWebView.devWindowNumber(browserId: try browserId(args))) },
     "devFocusPage": { args, reply in reply.ok(ArdiaWebView.devFocusPage(browserId: try browserId(args))) },
     "devPictureInPicture": { _, reply in reply.ok(ArdiaWebView.devPictureInPicture()) },

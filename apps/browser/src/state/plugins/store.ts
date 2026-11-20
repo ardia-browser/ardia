@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { PluginManifest } from "../../lib/pluginManifest";
+import type { ConsentToken } from "../telemetry/choice";
 
 export type PluginListing = {
   name: string;
@@ -86,3 +87,38 @@ export function needsReview(s: Pick<PluginsStore, "listings" | "records">, name:
 }
 
 export const currentPlugins = () => usePlugins.getState();
+
+export type PluginsCommit = Pick<PluginsStore, "listings" | "records">;
+const committing = new Set<(next: PluginsCommit, before: PluginsCommit) => void>();
+
+export function beforePluginsCommit(listener: (next: PluginsCommit, before: PluginsCommit) => void): () => void {
+  committing.add(listener);
+  return () => void committing.delete(listener);
+}
+
+export function commitPlugins(patch: Partial<Pick<PluginsStore, "listings" | "order" | "records">>) {
+  const before = usePlugins.getState();
+  const next = { listings: patch.listings ?? before.listings, records: patch.records ?? before.records };
+  for (const listener of [...committing]) listener(next, before);
+  usePlugins.setState(patch);
+}
+
+const withdrawing = new Set<(next: PluginsCommit) => Promise<unknown> | void>();
+
+export function beforePluginsWithdraw(listener: (next: PluginsCommit) => Promise<unknown> | void): () => void {
+  withdrawing.add(listener);
+  return () => void withdrawing.delete(listener);
+}
+
+const abandoning = new Set<(name: string, consent: ConsentToken | null) => void>();
+
+export function onPluginWithdrawAbandoned(listener: (name: string, consent: ConsentToken | null) => void): () => void {
+  abandoning.add(listener);
+  return () => void abandoning.delete(listener);
+}
+
+export const abandonWithdrawal = (name: string, consent: ConsentToken | null) => {
+  for (const listener of [...abandoning]) listener(name, consent);
+};
+
+export const withdrawalsFor = (next: PluginsCommit): Promise<unknown>[] => [...withdrawing].flatMap((listener) => listener(next) ?? []);

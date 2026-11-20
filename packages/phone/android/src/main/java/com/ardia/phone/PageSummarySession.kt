@@ -100,12 +100,16 @@ internal class PageSummarySession(
     private suspend fun write(extracted: ReadableContent, using: PageSummaryProvider, reason: String?) {
         phase = Phase.Writing
         writesWithChatGPT = using == PageSummaryProvider.ChatGPT
-        val written = try {
+        val result = try {
             writing.write(extracted, using, { if (isCurrent()) text = it }, reason)
         } finally {
             writesWithChatGPT = false
         }
         if (!isCurrent()) return
+        val written = when (result) {
+            is PageSummaryWriting.Unwritten -> return fail(result.message)
+            is PageSummaryWriting.Written -> result
+        }
         if (written.text.isBlank()) return fail("Couldn’t summarize this page.")
         text = written.text
         writer = written.writer

@@ -40,6 +40,11 @@ export const ORIGINALS = {
     params: { ...SQUARE, x: P(4, 0.2, 2, 7) },
     make: (p) => rr(C, C, p.S, p.S, p.r) + line(C - p.x, C - p.x, C + p.x, C + p.x) + line(C + p.x, C - p.x, C - p.x, C + p.x),
   },
+  "square-minus": {
+    paint: "stroke",
+    params: { ...SQUARE, x: P(4.5, 0.2, 2, 7) },
+    make: (p) => rr(C, C, p.S, p.S, p.r) + line(C - p.x, C, C + p.x, C),
+  },
   macwindow: {
     paint: "stroke",
     params: { ...FRAME, dr: P(0.95, 0.1, 0.5, 1.6), dl: P(3.6, 0.2, 2, 6), dt: P(3.5, 0.2, 2, 6), dg: P(2.6, 0.15, 1.6, 4) },
@@ -87,6 +92,14 @@ export const ORIGINALS = {
     make: (p) => {
       const ih = p.H / 2 - p.i - p.g, iw = p.W - 2 * p.i;
       return rr(C, C, p.W, p.H, p.r) + rr(C, C + p.H / 2 - p.i - ih / 2, iw, ih, p.ir, SOLID);
+    },
+  },
+  "rectangle.topthird.inset.filled": {
+    paint: "stroke",
+    params: { ...FRAME, i: P(3, 0.2, 1.5, 5), ir: P(1.4, 0.2, 0.3, 4), g: P(0, 0.3, -4, 4) },
+    make: (p) => {
+      const ih = (p.H - 2 * p.i) / 3 - p.g, iw = p.W - 2 * p.i;
+      return rr(C, C, p.W, p.H, p.r) + rr(C, C - p.H / 2 + p.i + ih / 2, iw, ih, p.ir, SOLID);
     },
   },
   "rectangle.inset.arrow": {

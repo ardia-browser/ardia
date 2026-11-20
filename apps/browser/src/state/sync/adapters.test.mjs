@@ -2144,7 +2144,7 @@ test("bookmarks and history: a Mac on v0.2.43-nightly.4 and one on today's build
   today.with(() => useBrowser.setState({ bookmarks: { nodes: {} } }));
   const t = Date.now() - 3_600_000;
   const x = today.with(() => S().addBookmark({ profileId: "default", url: "https://x.example/", title: "X" }));
-  today.with(() => S().importHistory("default", [{ url: "https://h1.example/", title: "H1", visits: 1, lastVisit: t }]));
+  await today.with(() => S().importHistory("default", [{ url: "https://h1.example/", title: "H1", visits: 1, lastVisit: t }]));
   await syncAll([today, old]);
   assert.deepEqual(tree(old), { bar: { "Bookmarks Bar": ["X=https://x.example/"] }, other: { "Other Bookmarks": [] } });
   assert.deepEqual(nightlyFourHistory(old), ["https://h1.example/"]);
@@ -2192,7 +2192,7 @@ test("profiles that share data: records applied through the owner land once in t
   assert.equal(inBar("https://in.example/").length, 1, "one bookmark node");
   assert.equal(inBar("https://in.example/")[0].parentId, bookmarkRoots(S(), b).bar, "under the shared bar");
 
-  S().importHistory(b, [{ url: "https://out.example/", title: "Out", visits: 1, lastVisit: t + 1000 }]);
+  await S().importHistory(b, [{ url: "https://out.example/", title: "Out", visits: 1, lastVisit: t + 1000 }]);
   S().addBookmark({ profileId: b, url: "https://out.example/", title: "Out" });
   const history = adapters.historyAdapter(a).extract(() => undefined, () => false, Date.now(), () => false, () => undefined, () => undefined, () => undefined);
   const bookmarks = adapters.bookmarksAdapter(a).extract(() => undefined, [], Date.now(), () => false);

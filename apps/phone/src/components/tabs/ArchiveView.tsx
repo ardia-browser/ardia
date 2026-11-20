@@ -13,13 +13,15 @@ import { useArchiveDays, useArchiveLoaded } from "../../state/tabs/hooks";
 import { AUTO_ARCHIVE_INTERVALS, autoArchiveTitle, type AutoArchiveInterval, type BrowserTab } from "../../state/tabs/tabModels";
 import { clearArchivedTabs, loadArchive, searchArchive, setAutoArchiveInterval } from "../../state/tabs/store";
 import { MenuTrigger, confirmInSheet } from "../ui/MenuTrigger";
-import { ConfirmSheet, Favicon, FloatingMenu, font, LookBackdrop, radius, space, SwipeToDelete, Symbol, tabsLayout, tabsMotion, useSheetFrame, useTheme, type Confirmation, type MenuItem } from "../ui";
+import { MaterialEmptyIcon, MaterialIconAction, MaterialSearchField, MaterialTopBar } from "../ui/MaterialTopBar";
+import { ConfirmSheet, Favicon, FloatingMenu, font, LookBackdrop, radius, space, SwipeToDelete, Symbol, tabsLayout, tabsMotion, useDesign, useSheetFrame, useTheme, type Confirmation, type MenuItem } from "../ui";
 import type { Point } from "../../lib/menuPlace";
 
 const time = (at: number) => new Date(at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
 export function ArchiveView() {
   const theme = useTheme();
+  const material = useDesign() === "material";
   const insets = useSafeAreaInsets();
   const { width, fontScale } = useWindowDimensions();
   const frame = useSheetFrame();
@@ -88,6 +90,24 @@ export function ArchiveView() {
     <View style={StyleSheet.absoluteFill}>
       <LookBackdrop />
       <View style={[styles.column, { paddingTop: frame ? 0 : insets.top }]}>
+        {material ? (
+          <>
+            <MaterialTopBar
+              title="Archive"
+              nav="close"
+              onNav={closeArchive}
+              actions={
+                <MenuTrigger items={items} trigger="tap" frost={null} place={{ right: space.s, width: Math.min(tabsLayout.menuWidth, width - space.l) }}>
+                  {({ onPress }) => <MaterialIconAction icon="ellipsis" turned label="Options" onPress={onPress ?? (() => undefined)} />}
+                </MenuTrigger>
+              }
+            />
+            <View style={styles.materialSearch}>
+              <MaterialSearchField value={query} onChangeText={setQuery} placeholder="Search Archive" />
+            </View>
+          </>
+        ) : (
+          <>
         <View style={styles.top}>
           <Pressable accessibilityRole="button" onPress={closeArchive} style={styles.topButton}>
             <Text style={[font.body, styles.bold, { color: theme.formAccent }]}>Done</Text>
@@ -121,9 +141,11 @@ export function ArchiveView() {
             </Pressable>
           ) : null}
         </View>
+          </>
+        )}
         {loaded && !hasArchive ? (
           <View style={styles.empty} accessible accessibilityRole="header" accessibilityLabel="No Archived Tabs. Closed and inactive tabs show up here.">
-            <ArchiveTile side={EMPTY_TILE} />
+            {material ? <MaterialEmptyIcon icon="archivebox" /> : <ArchiveTile side={EMPTY_TILE} />}
             <Text style={[font.title2, styles.bold, styles.centered, { color: theme.label }]}>No Archived Tabs</Text>
             <Text style={[font.subheadline, styles.centered, { color: theme.secondaryLabel }]}>Closed and inactive tabs show up here.</Text>
           </View>
@@ -228,6 +250,7 @@ const ROW_FAVICON = 20;
 const ROW_FAVICON_SCALE_CAP = 2;
 
 const styles = StyleSheet.create({
+  materialSearch: { paddingHorizontal: 16, paddingBottom: 8 },
   column: { flex: 1 },
   top: { minHeight: tabsLayout.archiveTop, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: space.s },
   topButton: { minWidth: tabsLayout.archiveButton, minHeight: tabsLayout.archiveButton, justifyContent: "center", paddingHorizontal: space.s },

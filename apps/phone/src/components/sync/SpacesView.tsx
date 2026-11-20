@@ -1,3 +1,4 @@
+import { MaterialIconAction, MaterialTopBar } from "../ui/MaterialTopBar";
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { FlatList, Platform, Pressable, RefreshControl, StyleSheet, Text, useWindowDimensions, View, type NativeScrollEvent, type NativeSyntheticEvent, type ViewInstance } from "react-native";
 import Animated, { FadeIn, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
@@ -36,6 +37,7 @@ import {
   syncInk,
   tabsLayout,
   tabsMotion,
+  useDesign,
   useTheme,
   type MenuItem,
   type SymbolName,
@@ -56,6 +58,7 @@ type RowMenu = { items: MenuItem[]; at: Point | null; anchor?: RefObject<ViewIns
 
 export function SpacesView() {
   const theme = useTheme();
+  const material = useDesign() === "material";
   const insets = useSafeAreaInsets();
   const frame = useSheetFrame();
   const status = useSyncStatus();
@@ -108,13 +111,17 @@ export function SpacesView() {
     <View style={StyleSheet.absoluteFill}>
       <FadingBackdrop colors={tone} />
       <View style={[styles.column, { paddingTop: frame ? 0 : insets.top }]}>
-        <View style={styles.header}>
-          <View accessibilityRole="header" accessible accessibilityLabel={profile?.name ?? "Spaces"} style={styles.fill}>
-            <CrossfadeText testID="spacesTitle" text={profile?.name ?? "Spaces"} style={[font.title2, styles.bold, { color: theme.label }]} />
+        {material ? (
+          <MaterialTopBar title={profile?.name ?? "Spaces"} titleTestID="spacesTitle" nav="close" onNav={closeArchive} actions={<MaterialIconAction icon="archivebox" label="Archive" onPress={openArchive} />} />
+        ) : (
+          <View style={styles.header}>
+            <View accessibilityRole="header" accessible accessibilityLabel={profile?.name ?? "Spaces"} style={styles.fill}>
+              <CrossfadeText testID="spacesTitle" text={profile?.name ?? "Spaces"} style={[font.title2, styles.bold, { color: theme.label }]} />
+            </View>
+            <HeaderButton icon="archivebox" label="Archive" onPress={openArchive} />
+            <HeaderButton icon="xmark" label="Close" onPress={closeArchive} />
           </View>
-          <HeaderButton icon="archivebox" label="Archive" onPress={openArchive} />
-          <HeaderButton icon="xmark" label="Close" onPress={closeArchive} />
-        </View>
+        )}
         {banner ? (
           <View style={[styles.banner, { backgroundColor: theme.tertiaryFill }]}>
             <Symbol name={bannerIcon(banner.icon)} size={18} color={syncInk.banner} />

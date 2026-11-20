@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { View } from "react-native";
 import { copyText } from "../../../state/app/system";
-import { installOfficialPlugin, type OfficialPlugin } from "../../../state/plugins/actions";
+import { disablePlugin, installOfficialPlugin, type OfficialPlugin } from "../../../state/plugins/actions";
 import { useOfficialPlugins, usePluginConsent, usePluginOrder, usePluginPrograms } from "../../../state/plugins/hooks";
 import { installedLabel, isOffered, officialInSettings, officialTitle, officialView, wasCancelled, type OfficialAttempt } from "../../../state/plugins/officialView";
 import { goToSettingsPane } from "../../../state/settings/settingsWindows";
 import { consentToken, noteOfficialPlugin } from "../../../state/telemetry/officialPluginCounts";
 import { Group, Row, SectionHeader } from "../Form";
 import type { SettingId } from "../settingsIndex";
-import { ActivitySpinner, Button, IconTile, Text } from "../../ui";
+import { ActivitySpinner, Button, IconTile, Text, Toggle } from "../../ui";
 import { lineHeight, monoFace, space } from "../../ui/tokens";
 
 const ROW_ANCHORS: Record<string, SettingId> = { cli: "plugins.commandLine" };
@@ -77,9 +77,9 @@ function OfficialPluginRow({ plugin }: { plugin: OfficialPlugin }) {
       title={
         <View style={TITLE}>
           <Text>{officialTitle(plugin)}</Text>
-          {view.note === "installed" ? (
+          {view.note === "installed" || view.note === "on" ? (
             <Text size="caption" tone="textSecondary">
-              {installedLabel(plugin)}
+              {view.note === "on" ? "On" : installedLabel(plugin)}
             </Text>
           ) : null}
         </View>
@@ -88,7 +88,7 @@ function OfficialPluginRow({ plugin }: { plugin: OfficialPlugin }) {
       onPress={view.opens ? () => goToSettingsPane("plugins", null, plugin.name) : undefined}
       description={
         view.note === "comingSoon" ? undefined : (
-          <Text selectable={view.failed} lines={view.failed ? undefined : 1} size="caption" tone={view.failed ? "destructive" : "textSecondary"} style={LINE}>
+          <Text selectable={view.failed} lines={view.failed ? undefined : 2} size="caption" tone={view.failed ? "destructive" : "textSecondary"} style={LINE}>
             {view.failed && view.status ? view.status : plugin.blurb}
           </Text>
         )
@@ -101,7 +101,10 @@ function OfficialPluginRow({ plugin }: { plugin: OfficialPlugin }) {
         </Text>
       ) : null}
       {view.firstCommand ? <FirstCommand command={view.firstCommand} /> : null}
-      {view.action === "install" || (view.busy && !view.status) ? <Button title="Install…" disabled={view.busy} onPress={() => void install()} /> : null}
+      {view.action === "install" || view.action === "turnOn" || (view.busy && !view.status) ? (
+        <Button title={plugin.switchable ? "Turn On…" : "Install…"} disabled={view.busy} onPress={() => void install()} />
+      ) : null}
+      {view.toggle ? <Toggle value accessibilityLabel={`Turn off ${officialTitle(plugin)}`} onChange={(on) => void (!on && disablePlugin(plugin.name))} /> : null}
       {view.action === "again" ? <Button title="Try Again" onPress={() => void install()} /> : null}
     </Row>
   );

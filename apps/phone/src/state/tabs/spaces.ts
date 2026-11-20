@@ -8,7 +8,7 @@ export const UNSYNCED: TabSpaces = { current: null, defaultId: null, known: [] }
 export type SpaceProfile = { syncId: string; isDefault: boolean };
 
 export function tabSpacesFor(design: Design, syncEnabled: boolean, profiles: readonly SpaceProfile[], current: string | null): TabSpaces {
-  if (design !== "redesigned" || !syncEnabled || !profiles.length) return UNSYNCED;
+  if (design === "original" || !syncEnabled || !profiles.length) return UNSYNCED;
   const fallback = profiles.find((profile) => profile.isDefault) ?? profiles[0]!;
   return { current, defaultId: fallback.syncId, known: profiles.map((profile) => profile.syncId) };
 }

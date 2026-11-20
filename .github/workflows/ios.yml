@@ -90,7 +90,7 @@ jobs:
         run: >-
           xcodebuild -workspace apps/phone/ios/Ardia.xcworkspace -scheme Ardia -configuration Debug
           -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$SCRATCH/dd"
-          CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO -quiet build
+          ARCHS=arm64 CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO -quiet build
 
   packages:
     needs: gate

@@ -10,12 +10,13 @@ import { relinkPrograms } from "./programs";
 import { activeManifest, currentPlugins, isAlwaysOn, isInstalled, usePlugins, type PluginListing, type PluginsStore } from "./store";
 
 export type OfficialPluginState = "available" | "installed" | "comingSoon" | "unsupported";
-export type OfficialPlugin = { name: string; title: string; blurb: string; icon: string; version: string | null; state: OfficialPluginState };
-type Entry = Omit<OfficialPlugin, "state" | "version">;
+export type OfficialPlugin = { name: string; title: string; blurb: string; icon: string; version: string | null; switchable: boolean; state: OfficialPluginState };
+type Entry = Omit<OfficialPlugin, "state" | "version" | "switchable">;
 type ComingSoon = Entry & { experiment: "officialPluginsAi" };
 
 export const OFFICIAL_CATALOGUE: readonly Entry[] = [
   { name: "cli", title: "Command Line", blurb: "Drive Ardia from your terminal or an agent.", icon: "terminal.fill" },
+  { name: "apple-passwords", title: "Apple Passwords", blurb: "Fill logins and verification codes from the Passwords app on every site.", icon: "key.fill" },
 ];
 
 export const COMING_SOON: readonly ComingSoon[] = [
@@ -41,13 +42,13 @@ export function officialPlugins(
   const out: OfficialPlugin[] = entries.map((entry) => {
     const listing = officialListing(s, entry.name);
     const m = listing?.manifest;
-    const shown = { name: entry.name, title: m?.title ?? entry.title, blurb: m?.description || entry.blurb, icon: m?.icon ?? m?.page?.icon ?? (entry.icon || "puzzlepiece"), version: m?.version ?? null };
+    const shown = { name: entry.name, title: m?.title ?? entry.title, blurb: m?.description || entry.blurb, icon: m?.icon ?? m?.page?.icon ?? (entry.icon || "puzzlepiece"), version: m?.version ?? null, switchable: !!listing && !isAlwaysOn(listing) };
     if (!supported || !listing) return { ...shown, state: "unsupported" };
     return { ...shown, state: installedOf(s, listing) ? "installed" : "available" };
   });
   for (const soon of COMING_SOON) {
     if (!showComingSoon(soon.experiment) || out.some((o) => o.name === soon.name)) continue;
-    out.push({ name: soon.name, title: soon.title, blurb: soon.blurb, icon: soon.icon, version: null, state: supported ? "comingSoon" : "unsupported" });
+    out.push({ name: soon.name, title: soon.title, blurb: soon.blurb, icon: soon.icon, version: null, switchable: false, state: supported ? "comingSoon" : "unsupported" });
   }
   return out;
 }

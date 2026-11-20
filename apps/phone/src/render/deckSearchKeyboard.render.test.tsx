@@ -3,12 +3,13 @@ import { getAnimatedStyle } from "react-native-reanimated";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { DeckBottomBar } from "../components/tabs/DeckBottomBar";
 import { deckChromeLayout } from "../components/ui";
+import { redesignedBarCenterFromBottom } from "../lib/deckGeometry";
 import * as telemetry from "../state/telemetry/telemetry";
 import { renderSurface, unmount, withTabs } from "../../test/render/harness";
 
 const SAFE_BOTTOM = 24;
 const DECK_HEIGHT = 873;
-const BAR_CENTER = DECK_HEIGHT - SAFE_BOTTOM - 40;
+const BAR_CENTER = DECK_HEIGHT - redesignedBarCenterFromBottom(SAFE_BOTTOM, Platform.OS);
 const KEYBOARD = 300;
 
 let listeners: Map<string, ((event: KeyboardEvent) => void)[]>;
@@ -49,7 +50,7 @@ const rise = (root: ReturnType<typeof renderSurface>) => {
 };
 
 test("a focused Search Tabs field rises until the deck bar's bottom sits its gap above the keyboard's top, on both phones, Android's keyboard height leaving out the navigation bar", () => {
-  const root = renderSurface(<DeckBottomBar shown barCenterY={BAR_CENTER} deckHeight={DECK_HEIGHT} safeSide={0} incognito={false} onQuery={() => undefined} />);
+  const root = renderSurface(<DeckBottomBar shown barCenterY={BAR_CENTER} deckHeight={DECK_HEIGHT} width={402} layout={{ span: { left: 24, right: 24 }, strip: null }} incognito={false} onQuery={() => undefined} />);
   expect(rise(root)).toBe(0);
   const field = root.root.findAll((node) => node.props.testID === "deckSearchField" && typeof node.props.onFocus === "function")[0]!;
   act(() => field.props.onFocus());

@@ -146,21 +146,27 @@ test("on Android the page's obscured bottom is the bar's current height: the pil
   scrolled("up");
   const lift = follows ? 34 + 8 - 21.5 : 0;
   const root = page("redesigned", tab);
+  const transition = () => root.root.findAll((node) => node.props.pageId !== undefined && node.props.obscuredInsets !== undefined)[0]!.props.bottomInsetTransitionMs;
+  expect(transition()).toBe(follows ? 300 : 0);
   expect(bottom(root)).toBe(75 + lift);
   scrolled("down");
   expect(bottom(root)).toBe(follows ? 51.5 + lift : 75);
   scrolled("up");
   act(() => storeFullscreen(tab.id, true));
   expect(bottom(root)).toBe(follows ? 0 : 75);
+  expect(transition()).toBe(0);
   act(() => storeFullscreen(tab.id, false));
   act(() => usePageUi.setState({ findOpen: true }));
   expect(bottom(root)).toBe(follows ? 0 : 75);
+  expect(transition()).toBe(0);
   act(() => usePageUi.setState({ findOpen: false }));
   act(() => useSearch.setState({ open: true }));
   expect(bottom(root)).toBe(follows ? 0 : 75);
+  expect(transition()).toBe(0);
   act(() => useSearch.setState({ open: false }));
   expect(bottom(root)).toBe(75 + lift);
-  setPreference("collapsesBottomBar", false);
+  act(() => setPreference("collapsesBottomBar", false));
+  expect(transition()).toBe(0);
   unmount(root);
 });
 

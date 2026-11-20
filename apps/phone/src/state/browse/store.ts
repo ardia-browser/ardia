@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { history } from "../history/store";
 import { HISTORY_RETENTION_MS } from "../history/historySummary";
+import { useLibrary } from "../library/store";
 import {
   clearTone,
   livePageIds,
@@ -113,6 +114,7 @@ export function pageCovered() {
     ui.menuOpen ||
     ui.readerTabId !== null ||
     ui.press !== null ||
+    useLibrary.getState().open ||
     settingsNav().open ||
     useOnboarding.getState().showing ||
     useBrowse.getState().sheet !== null

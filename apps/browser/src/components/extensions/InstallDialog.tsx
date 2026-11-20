@@ -24,6 +24,7 @@ export function InstallDialog({ request }: { request: InstallRequest }) {
   const title = kind === "re-enable" ? `Turn “${name}” back on?` : kind === "permissions" ? `“${name}” needs new permissions` : `Add “${name}”?`;
   const action = kind === "re-enable" ? "Turn On" : kind === "permissions" ? "Allow" : "Add Extension";
   const busy = request.status === "installing";
+  const cancel = () => cancelInstall(request.key);
 
   let body;
   if (request.status === "error") {
@@ -65,18 +66,18 @@ export function InstallDialog({ request }: { request: InstallRequest }) {
     <Dialog
       width="s"
       animated
-      onDismiss={busy ? undefined : cancelInstall}
-      onSubmit={request.status === "error" ? cancelInstall : () => void confirmInstall()}
+      onDismiss={busy ? undefined : cancel}
+      onSubmit={request.status === "error" ? cancel : () => void confirmInstall(request.key)}
       restoreFocus={() => focusShownPage(request.windowId)}
     >
       {body}
       <DialogActions>
         {request.status === "error" ? (
-          <Button variant="pill" title="OK" primary onPress={cancelInstall} />
+          <Button variant="pill" title="OK" primary onPress={cancel} />
         ) : (
           <>
-            <Button variant="pill" title="Cancel" onPress={cancelInstall} />
-            <Button variant="pill" title={request.status === "installing" ? "Adding…" : action} primary onPress={() => void confirmInstall()} />
+            <Button variant="pill" title="Cancel" disabled={busy} onPress={cancel} />
+            <Button variant="pill" title={busy ? "Adding…" : action} primary disabled={busy} onPress={() => void confirmInstall(request.key)} />
           </>
         )}
       </DialogActions>

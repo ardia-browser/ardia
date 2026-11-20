@@ -34,6 +34,7 @@ final class PageSummarySession: Identifiable {
   let trigger: Trigger
   let page: UUID
   let navigation: Int
+  let revision: Int
   @ObservationIgnored weak var source: WKWebView?
   private(set) var title: String
   private(set) var phase: Phase = .reading
@@ -47,6 +48,7 @@ final class PageSummarySession: Identifiable {
     self.trigger = trigger
     page = tab.id
     navigation = tab.navigationGeneration
+    revision = PageSummarySwitch.shared.revision
     source = tab.webView
     title = tab.title
   }
@@ -57,7 +59,7 @@ final class PageSummarySession: Identifiable {
   }
 
   func isCurrent(for tab: WebTab?) -> Bool {
-    guard let tab, let source else { return false }
+    guard let tab, let source, PageSummarySwitch.shared.isCurrent(revision) else { return false }
     return tab.id == page && tab.navigationGeneration == navigation && tab.webView === source
   }
 
@@ -144,6 +146,10 @@ final class PageSummarySession: Identifiable {
       String(localized: "This iPhone can’t run Apple Intelligence, so here are the page’s key lines.")
     }
   }
+}
+
+extension PageSummarySwitch {
+  static let shared = PageSummarySwitch(defaults: .standard)
 }
 
 @MainActor

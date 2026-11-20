@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import { AppState, Linking, View } from "react-native";
+import { View } from "react-native";
 import { resolveInput } from "@ardia/core";
-import { getPasskeyAccess, NO_PASSKEY_ACCESS, requestPasskeyAccess, type PasskeyAccess, type PasskeyAccessStatus } from "../../../state/engines/passkeys";
 import { defaultEngine, ENGINE_NAMES, PROTECTED_VIDEO_SITES, RECOMMENDED_ENGINE, siteOf, type PageEngine } from "../../../state/engines/engines";
 import { setWebsiteEngine } from "../../../state/engines/actions";
 import { useSettings } from "../../../state/browser/hooks";
@@ -13,6 +12,7 @@ import { useTheme } from "../../ui/theme";
 import { Favicon } from "../../favicon/Favicon";
 import { FormField, Group, Row, SectionHeader } from "../Form";
 import { setting } from "../settingsIndex";
+import { PasskeyAccessRow } from "./PasskeyAccessRow";
 
 const ENGINE_OPTIONS: { value: PageEngine; title: string }[] = [
   { value: "chromium", title: ENGINE_NAMES.chromium },
@@ -137,13 +137,6 @@ function RuleSheet({ site, engine: initial }: { site?: string; engine?: PageEngi
 
 const PASSKEYS_WAITING = "WebKit pages can't use passkeys until Apple grants Ardia its browser passkey entitlement. Sign in with a passkey in Chromium meanwhile.";
 
-const PASSKEY_STATUS: Record<Exclude<PasskeyAccessStatus, "entitlementRequired">, string> = {
-  deviceNotConfigured: "Passkeys aren't set up on this Mac. Set up iCloud Keychain or another passkey app in System Settings, then reopen Ardia.",
-  notDetermined: "Allow Ardia to use the passkeys saved on this Mac, from the Passwords app and other passkey apps, in WebKit and Chromium pages.",
-  authorized: "Websites can use the passkeys saved on this Mac, in WebKit and Chromium pages.",
-  denied: "Off. Turn Ardia on in System Settings › Privacy & Security › Passkeys Access for Web Browsers.",
-};
-
 function EnginesDifferSheet() {
   return (
     <Sheet size="l" onClose={closeSettingsSheet}>
@@ -152,40 +145,13 @@ function EnginesDifferSheet() {
         <Group>
           <Row title="Separate sign-ins" description="Each engine keeps its own cookies and site data." />
           <Row title="Extensions and ad blocking are Chromium only" description="WebKit pages run without extensions or the ad blocker for now." />
-          <PasskeysRow />
+          <PasskeyAccessRow waiting={PASSKEYS_WAITING} />
         </Group>
       </View>
       <DialogActions>
         <Button title="Done" kind="primary" onPress={closeSettingsSheet} />
       </DialogActions>
     </Sheet>
-  );
-}
-
-function PasskeysRow() {
-  const [access, setAccess] = useState<PasskeyAccess | null>(null);
-  const [asking, setAsking] = useState(false);
-  useEffect(() => {
-    let live = true;
-    const refresh = () => void getPasskeyAccess().catch(() => NO_PASSKEY_ACCESS).then((next) => live && setAccess(next));
-    refresh();
-    const watch = AppState.addEventListener("change", (state) => state === "active" && refresh());
-    return () => {
-      live = false;
-      watch.remove();
-    };
-  }, []);
-  if (!access?.entitled) return <Row title="Passkeys" description={PASSKEYS_WAITING} />;
-  const ask = async () => {
-    setAsking(true);
-    setAccess(await requestPasskeyAccess().catch(() => NO_PASSKEY_ACCESS));
-    setAsking(false);
-  };
-  return (
-    <Row title="Passkeys" description={PASSKEY_STATUS[access.status as keyof typeof PASSKEY_STATUS]}>
-      {access.status === "notDetermined" && <Button title="Allow Passkeys…" disabled={asking} onPress={() => void ask()} />}
-      {access.status === "denied" && <Button title="Open System Settings" onPress={() => void Linking.openURL("x-apple.systempreferences:com.apple.preference.security")} />}
-    </Row>
   );
 }
 

@@ -1,5 +1,6 @@
 import { JSON_SCHEMA_DIALECT, schemaJson, type JsonSchema } from "./jsonSchema";
 import { RESERVED_PAGE_NAMES } from "./pluginNames";
+import { PASSWORD_FIELD_COUNT, PASSWORD_FIELDS, PASSWORD_FILLS } from "./pluginPasswordManager";
 import { KEY_PATTERN, LIMITS, MANIFEST_VERSION, NAME_PATTERN, PLUGIN_PERMISSIONS, SPLIT_SIDES, SYMBOL_PATTERN, VERSION_PATTERN } from "./pluginManifest";
 
 export const PLUGIN_SCHEMA_FILE = "plugin.schema.json";
@@ -90,6 +91,18 @@ export function pluginSchema(eventNames: readonly string[], rules: PluginRules):
           },
           ["name", "path"],
         ),
+      },
+      passwordManager: {
+        ...closed(
+          {
+            fill: { enum: [...PASSWORD_FILLS], description: "system: macOS's Passwords panel fills the field. tool is reserved and refused for now" },
+            fields: { type: "array", minItems: PASSWORD_FIELD_COUNT[0], maxItems: PASSWORD_FIELD_COUNT[1], uniqueItems: true, items: { enum: [...PASSWORD_FIELDS] } },
+            verificationCodeSetup: { enum: ["system"], description: "Offer to set up two-factor codes a page shows in the app macOS uses for otpauth links" },
+            passkeys: { enum: ["system"], description: "Show the host's passkey status on the plugin's Settings page" },
+          },
+          ["fill", "fields"],
+        ),
+        description: "Makes the plugin a password manager each profile can pick in Settings › Profiles › Passwords",
       },
       alwaysOn: { const: true, description: "Built-in plugins only: once installed, no switch turns it off" },
       official: { const: true, description: "Built-in plugins only: listed among Ardia's official plugins" },

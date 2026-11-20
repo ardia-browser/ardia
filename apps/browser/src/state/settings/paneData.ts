@@ -34,9 +34,12 @@ import type { SettingsPane } from "./settingsWindows";
 import { FOLLOW_EVERY_MS, FOLLOW_FOR_MS, switchOutcome, updaterBusy } from "./updateStatus";
 import { noteUpdateChannelSwitch } from "../telemetry/usage";
 import { consentToken } from "../telemetry/client";
+import { forgetPendingOfferToSave, passwordAutofill } from "../site/passwordManager";
 import { notePreloadPagesTurned } from "../telemetry/preloadPagesCounts";
 import { trackAutofillToggleKept } from "../telemetry/track";
 import { askedValue, rememberAsked } from "./autofillAsked";
+
+export { passwordAutofill };
 
 export const APP_ICON_SIZE = 56;
 
@@ -52,7 +55,6 @@ export const siteOrigins = resource("siteOrigins", (profile: string) => getSiteS
 export const appLinks = resource("appLinks", (profile: string) => getExternalAppAllowances(profile).catch(() => []));
 export const zoomLevels = resource("zoomLevels", (profile: string) => getZoomLevels(profile).catch((): Record<string, number> => ({})));
 export const preloadPages = resource("preloadPages", (profile: string) => getPreloadPages(profile).catch(() => false));
-export const passwordAutofill = resource("passwordAutofill", (profile: string) => getPasswordAutofill(profile).catch(() => true));
 export const addresses = resource("addresses", (profile: string) => listAddresses(profile).catch(orWarn<SavedAddress[]>([])));
 export const cards = resource("cards", (profile: string) => listCards(profile).catch(orWarn<SavedCard[]>([])));
 export const autofillEnabled = resource("autofillEnabled", (profile: string) =>
@@ -60,7 +62,7 @@ export const autofillEnabled = resource("autofillEnabled", (profile: string) =>
 );
 export const autofillToggleAsked = resource("autofillToggleAsked", (profile: string, toggle: AutofillToggle) => Promise.resolve(askedValue(profile, toggle)));
 export const downloadSettings = resource("downloadSettings", (profile: string) => getDownloadSettings(profile).catch(() => null));
-export const extensionList = resource("extensions", (profile: string) => refreshExtensions(profile));
+export const extensionList = resource("extensions", (profile: string) => refreshExtensions(profile, consentToken()));
 export const shortcutItems = resource("menuShortcuts", () =>
   menuShortcuts().then(
     (items) => (setMenuBarShortcuts(items), items.filter((item) => !UNAVAILABLE_COMMANDS.has(item.id))),
@@ -126,6 +128,7 @@ export async function setPreloadPagesFor(profile: string, on: boolean) {
 }
 
 export async function setPasswordAutofillFor(profile: string, on: boolean) {
+  if (!(await forgetPendingOfferToSave(profile, consentToken())) && !on) return;
   if (!(await written(setPasswordAutofill(on, profile)))) return;
   const now = await getPasswordAutofill(profile).catch(() => on);
   store(passwordAutofill, [profile], now);

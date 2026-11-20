@@ -240,7 +240,7 @@ test("a sleeping, closed, crashed, non-web, split or other profile's page is nev
   assert.match(first, /hasPrefix:@"https:"/);
   assert.match(first, /other->_tab\.profile == _tab\.profile/);
   assert.match(tabReveal, /PLATFORM_FEATURES\.nativeTabSwitch && !inSplit \? `\$\{selected \? "tab-selected" : "tab-switch"\}:\$\{tabId\}` : undefined/);
-  assert.match(pressArea, /const inSplit = !!useSplitOf\(tab\.id\);/);
+  assert.match(pressArea, /const inSplit = useInSplit\(tab\.id\);/);
   assert.match(tabReveal, /if \(PLATFORM_FEATURES\.nativeTabSwitch && s\.splits !== prev\.splits\) setTabsInSplits\(tabsInSplits\(s\)\);/);
   assert.match(body(tabFile, "- (void)tab:(ArdiaCoreTab *)tab rendererGone:(NSString *)status code:(int)code"), /\[self dropReveal\];/);
   assert.match(body(tabFile, "- (void)tabDidChangeDiscarded:(ArdiaCoreTab *)tab"), /if \(tab\.discarded\) \[self dropReveal\];/);

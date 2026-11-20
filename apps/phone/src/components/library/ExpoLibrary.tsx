@@ -44,6 +44,7 @@ import {
   deleteDownload,
   deleteHistoryEntry,
   followLibraryPath,
+  LIBRARY_CLEAR_DATA,
   LIBRARY_NAMES,
   LIBRARY_SEARCH_PROMPTS,
   LIBRARY_SECTIONS,
@@ -76,7 +77,6 @@ const ROW_FAVICON = 20;
 const ROW_FAVICON_SCALE_CAP = 2;
 const DEVICE_GLYPH = 13;
 const SWITCHER_SEGMENT = 40;
-const CLEAR_DATA = "clearData";
 const FOLDER = "folder:";
 
 const ROW_CHROME = [listRowBackground(PlatformColor("secondarySystemGroupedBackground")), listRowInsets({ top: 0, leading: PAGE, bottom: 0, trailing: PAGE }), alignmentGuide("listRowSeparatorLeading", ROW_FAVICON + SMALL)];
@@ -144,7 +144,7 @@ function LibraryNavigation() {
           <ToolbarItem placement="primaryAction">
             <Menu label="More" systemImage="ellipsis" modifiers={[accessibilityLabel("More")]}>
               {section === "downloads" ? <Button label="Delete All Downloads" role="destructive" onPress={() => setConfirmingDelete(true)} modifiers={[disabled(!hasFiles)]} /> : null}
-              <Button label="Clear Browsing Data" onPress={() => pushLibraryPage(CLEAR_DATA)} />
+              <Button label="Clear Browsing Data" onPress={() => pushLibraryPage(LIBRARY_CLEAR_DATA)} />
             </Menu>
           </ToolbarItem>
         </Toolbar.Content>
@@ -169,7 +169,7 @@ function LibrarySwitcher({ section }: { section: LibrarySection }) {
 }
 
 function LibraryDestination({ routeKey }: { routeKey: string }) {
-  if (routeKey === CLEAR_DATA) return <ExpoClearDataPage onCleared={popLibraryPage} />;
+  if (routeKey === LIBRARY_CLEAR_DATA) return <ExpoClearDataPage onCleared={popLibraryPage} />;
   if (routeKey.startsWith(FOLDER)) return <BookmarkFolderPage folderKey={routeKey.slice(FOLDER.length)} />;
   return null;
 }

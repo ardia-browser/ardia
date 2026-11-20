@@ -73,6 +73,8 @@ type PagesNative = {
   print?(pageId: string): Promise<boolean>;
   summarizePage?(pageId: string): Promise<boolean>;
   dismissPageSummaries?(): Promise<void>;
+  pageSummariesEnabled?(): Promise<boolean>;
+  setPageSummariesEnabled?(enabled: boolean): Promise<boolean>;
   pageSummaryProvider?(): Promise<string>;
   setPageSummaryProvider?(provider: PageSummaryProvider): Promise<string>;
   translation?(): Promise<PageTranslationState>;
@@ -167,6 +169,9 @@ export const pages = {
   summarize: (pageId: string): Promise<boolean> => native().summarizePage?.(pageId) ?? Promise.resolve(false),
   canSummarize: (): boolean => typeof native().summarizePage === "function",
   dismissSummaries: (): Promise<void> => native().dismissPageSummaries?.() ?? Promise.resolve(),
+  switchesSummaries: (): boolean => typeof native().setPageSummariesEnabled === "function",
+  summariesEnabled: async (): Promise<boolean> => (await native().pageSummariesEnabled?.()) === true,
+  setSummariesEnabled: async (enabled: boolean): Promise<boolean> => (await native().setPageSummariesEnabled?.(enabled)) === true,
   choosesSummaryProvider: (): boolean => typeof native().setPageSummaryProvider === "function",
   summaryProvider: async (): Promise<PageSummaryProvider> => ((await native().pageSummaryProvider?.()) === "chatgpt" ? "chatgpt" : "on_device"),
   setSummaryProvider: async (provider: PageSummaryProvider): Promise<PageSummaryProvider> => ((await native().setPageSummaryProvider?.(provider)) === "chatgpt" ? "chatgpt" : "on_device"),

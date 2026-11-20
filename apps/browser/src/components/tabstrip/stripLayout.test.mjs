@@ -12,12 +12,12 @@ const dockOf = (entries) => layoutDock(entries.find((e) => e.kind === "dock"));
 const PAGE_LEAVING_TABS_1000_AFTER_PLUS = 1000 + NEW_TAB_ROOM - ITEM_HEIGHT;
 const layout = (entries, activeId, m = measured(), page = PAGE_LEAVING_TABS_1000_AFTER_PLUS) => layoutStrip(entries, activeId, page, m, dockOf(entries));
 
-test("tabs share the page after the new-tab button, rounded to half points and kept between the compact and max chip", () => {
+test("the selected tab takes the max chip first and the others share the rest, rounded to half points and kept between the compact and max chip", () => {
   const six = ["a", "b", "c", "d", "e", "f"].map((id) => tab(id));
-  assert.deepEqual([layout(six, "a").chip, layout(six, "a").selected], [156.5, 156.5]);
+  assert.deepEqual([layout(six, "a").chip, layout(six, "a").selected], [153.5, MAX_CHIP]);
   assert.equal(layout(six.slice(0, 3), "a").chip, 173);
   const twelve = layout([...six, ...six.map((t) => tab(`${t.id}2`))], "a");
-  assert.deepEqual([twelve.chip, twelve.selected], [71.5, SELECTED_MIN_CHIP]);
+  assert.deepEqual([twelve.chip, twelve.selected], [67.5, SELECTED_MIN_CHIP]);
 });
 
 test("once an even share drops below the selected tab's minimum, the selected tab keeps it and the others shrink to the compact width", () => {
@@ -48,8 +48,8 @@ test("+ and the chevron take 58 pt: the 32 pt button, a 4 pt gap and the sidebar
   assert.equal(NEW_TAB_ROOM, 32 + 4 + 22);
   const six = ["a", "b", "c", "d", "e", "f"].map((id) => tab(id));
   const strip = layout(six, "a", measured(), 1000);
-  assert.equal(strip.chip, 152.5);
-  assert.equal(strip.tabsEnd, 6 * 152.5 + 5 * GAP);
+  assert.equal(strip.chip, 148);
+  assert.equal(strip.tabsEnd, 5 * 148 + MAX_CHIP + 5 * GAP);
   assert.ok(strip.tabsEnd + GAP + NEW_TAB_ROOM <= 1000);
 });
 
@@ -86,9 +86,9 @@ test("+ and the chevron pin once Top Apps, pinned tiles or collapsed groups alon
 test("the pinned dock takes its cells and its gap off the room and off every top slot's left", () => {
   const entries = [dock(["folder:f", "p1", "a"], { "folder:f": ["a", "b"] }), ...["x", "y", "z", "u", "v", "w"].map((id) => tab(id))];
   const strip = layout(entries, "x");
-  assert.equal(strip.chip, 138.5);
-  assert.deepEqual(strip.spanOf("x"), [110.5, 138.5]);
-  assert.deepEqual(strip.spanOf("y"), [110.5 + 138.5 + 4, 138.5]);
+  assert.equal(strip.chip, 131.5);
+  assert.deepEqual(strip.spanOf("x"), [110.5, MAX_CHIP]);
+  assert.deepEqual(strip.spanOf("y"), [110.5 + MAX_CHIP + 4, 131.5]);
   assert.equal(dockOf(entries).left, -110.5);
   assert.deepEqual(dockOf(entries).geometry.slots.map((s) => s.tabIds), [["a", "b"], ["p1"], ["a"]]);
 });
@@ -105,14 +105,14 @@ test("a selected pinned tab reveals its own dock cell, and a tab only in a tile 
 test("an open group lays out its chip, its members and a nested folder holding the selected tab after the folder chip", () => {
   const entries = [tab("t1"), group("G", [tab("a", "G"), folder("F", ["b", "c"], "G"), tab("d", "G")]), tab("t2")];
   const strip = layout(entries, "c", measured({ G: 60 }, { F: 50 }));
-  assert.equal(strip.chip, 156);
-  assert.equal(strip.memberWidth(entries[1].members[1]), 212.5);
-  assert.deepEqual(strip.top.lefts, [0, 163.5, 800.75]);
-  assert.deepEqual(strip.top.slots.map((s) => s.width), [156, 629.25, 156]);
+  assert.equal(strip.chip, 151.5);
+  assert.equal(strip.memberWidth(entries[1].members[1]), 50 + 6.5 + MAX_CHIP);
+  assert.deepEqual(strip.top.lefts, [0, 159, 804.25]);
+  assert.deepEqual(strip.top.slots.map((s) => s.width), [151.5, 637.25, 151.5]);
   assert.deepEqual(strip.top.slots[1].tabIds, ["a", "b", "c", "d"]);
-  assert.deepEqual(strip.spanOf("c"), [390, 212.5]);
-  assert.deepEqual(strip.spanOf("d"), [606.5, 156]);
-  assert.deepEqual(strip.spanOf("t2"), [800.75, 156]);
+  assert.deepEqual(strip.spanOf("c"), [381, 50 + 6.5 + MAX_CHIP]);
+  assert.deepEqual(strip.spanOf("d"), [614.5, 151.5]);
+  assert.deepEqual(strip.spanOf("t2"), [804.25, 151.5]);
 });
 
 test("a closed group shows only the member holding the selected tab, right after its chip, and reveals from its chip so the group stays readable", () => {

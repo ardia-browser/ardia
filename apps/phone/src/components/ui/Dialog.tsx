@@ -4,13 +4,19 @@ import Animated, { FadeIn } from "react-native-reanimated";
 import { tabsMotion } from "./motion";
 import { Portal } from "./Overlay";
 import { useTheme } from "./theme";
+import { useDesign } from "./design";
+import { MaterialDialog } from "./MaterialSurfaces";
 import { dialogLayout, font, space } from "./tokens";
 
 export type DialogButton = { title: string; onPress: () => void; destructive?: boolean };
 
 type Props = { title: string; message?: string | null; buttons: DialogButton[]; onDismiss: () => void; children?: ReactNode };
 
-export function Dialog({ title, message, buttons, onDismiss, children }: Props) {
+export function Dialog(props: Props) {
+  return useDesign() === "material" ? <MaterialDialog {...props} /> : <ClassicDialog {...props} />;
+}
+
+function ClassicDialog({ title, message, buttons, onDismiss, children }: Props) {
   const theme = useTheme();
   useEffect(() => {
     const back = BackHandler.addEventListener("hardwareBackPress", () => {

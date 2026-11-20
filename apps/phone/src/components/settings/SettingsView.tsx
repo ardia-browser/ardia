@@ -1,9 +1,11 @@
-import { useEffect, useRef } from "react";
-import { Platform, StyleSheet } from "react-native";
-import Animated, { SlideInLeft, SlideInRight, SlideOutRight } from "react-native-reanimated";
+import { useEffect, useRef, useState } from "react";
+import { Platform, StyleSheet, View, type ViewInstance } from "react-native";
+import Animated, { Easing, FadeIn, FadeOut } from "react-native-reanimated";
 import { refreshSettings } from "../../state/settings/actions";
 import { useSettingsNav, type SettingsRoute } from "../../state/settings/hooks";
-import { tabsMotion } from "../ui";
+import { LookBackdrop } from "../ui";
+import { materialEasing, materialMotion } from "../ui/materialTokens";
+import { useCoverFocus } from "../ui/coverFocus";
 import { FilterListDetailPage, FilterListsPage, MyFiltersPage, TrustedSitesPage } from "./BlockingPages";
 import { AboutPage, ClearDataPage, LicensesPage } from "./DataPages";
 import { AppearancePage } from "./AppearancePage";
@@ -16,14 +18,15 @@ import { setConnectPhrase } from "../../state/sync/connectDraft";
 import { SyncPage } from "../sync/SyncPage";
 import { DefaultBrowserPage } from "./DefaultBrowserPage";
 import { WhatsSentPage } from "./WhatsSentPage";
-import { popSettings, pushSettings } from "../../state/settings/nav";
+import { popSettings, pushSettings, settingsRouteKey } from "../../state/settings/nav";
 import { ExpoSettingsStack } from "./ExpoSettingsStack";
 import { BrowseForMePage } from "./BrowseForMePage";
 import { PageSummaryPage } from "./PageSummaryPage";
 
-const push = SlideInRight.springify().stiffness(tabsMotion.sheetIn.stiffness).damping(tabsMotion.sheetIn.damping);
-const reveal = SlideInLeft.springify().stiffness(tabsMotion.sheetIn.stiffness).damping(tabsMotion.sheetIn.damping);
-const leave = SlideOutRight.springify().stiffness(tabsMotion.sheetOut.stiffness).damping(tabsMotion.sheetOut.damping);
+const axisIn = Easing.bezier(...materialEasing[materialMotion.sharedAxisIn.easing]);
+const axisOut = Easing.bezier(...materialEasing[materialMotion.sharedAxisOut.easing]);
+const SCREEN_IN = FadeIn.duration(materialMotion.sharedAxisIn.durationMs).easing(axisIn);
+const SCREEN_OUT = FadeOut.duration(materialMotion.sharedAxisOut.durationMs).easing(axisOut);
 
 export function SettingsPageFor({ route }: { route: SettingsRoute }) {
   switch (route.page) {
@@ -86,25 +89,40 @@ export function SettingsView() {
   return <HandBuiltSettings />;
 }
 
+export function MaterialSettingsScreen() {
+  const screen = useRef<ViewInstance>(null);
+  useCoverFocus(screen);
+  return (
+    <Animated.View ref={screen} testID="materialSettingsScreen" entering={SCREEN_IN} exiting={SCREEN_OUT} style={StyleSheet.absoluteFill} accessibilityViewIsModal>
+      <HandBuiltSettings />
+    </Animated.View>
+  );
+}
+
+type ShownPage = { key: string; route: SettingsRoute };
+
+const shownPageOf = (open: boolean, stack: readonly SettingsRoute[]): ShownPage | null => {
+  const route = open ? stack[stack.length - 1] : undefined;
+  return route ? { key: `${stack.length}:${settingsRouteKey(route)}`, route } : null;
+};
+
 function HandBuiltSettings() {
   const open = useSettingsNav((s) => s.open);
   const stack = useSettingsNav((s) => s.stack);
-  const popping = useSettingsNav((s) => s.popping);
   useEffect(() => {
     if (open) void refreshSettings();
   }, [open]);
-  const shown = useRef<{ depth: number; route: SettingsRoute } | null>(null);
-  if (open && stack.length) shown.current = { depth: stack.length, route: stack[stack.length - 1]! };
-  const last = shown.current;
-  if (!last) return null;
+  const latest = shownPageOf(open, stack);
+  const [lastShown, setLastShown] = useState<ShownPage | null>(latest);
+  if (latest && latest.key !== lastShown?.key) setLastShown(latest);
+  const shown = latest ?? lastShown;
+  if (!shown) return null;
   return (
-    <Animated.View
-      key={`${last.depth}:${last.route.page}`}
-      entering={last.depth === 1 || !open ? undefined : popping ? reveal : push}
-      exiting={popping && open ? leave : undefined}
-      style={StyleSheet.absoluteFill}
-    >
-      <SettingsPageFor route={last.route} />
-    </Animated.View>
+    <View testID="settingsStack" style={StyleSheet.absoluteFill}>
+      <LookBackdrop />
+      <View key={shown.key} testID="settingsPage" style={StyleSheet.absoluteFill}>
+        <SettingsPageFor route={shown.route} />
+      </View>
+    </View>
   );
 }

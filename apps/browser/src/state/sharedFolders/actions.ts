@@ -1,6 +1,8 @@
 import { confirm, pickFolder } from "../../platform/dialogs";
 import { sharePage } from "../../platform/share";
-import { createSharedFolder, revealSharedFolder, sharedFoldersAvailable, sharedLocation } from "../../platform/sharedFolders";
+import { createSharedFolder, discardSharedFolder, identityOf, resolveSharedFolder, revealSharedFolder, sharedFoldersAvailable, sharedLocation } from "../../platform/sharedFolders";
+import { errorText } from "../../lib/errors";
+import { bindingAt, boundAt } from "./bindings";
 import { useBrowser, type BrowserState } from "../browser/store";
 import type { Tab } from "../browser/types";
 import { isIncognitoProfile, makeTab, newId, pinKeyOf } from "../browser/model";
@@ -13,7 +15,7 @@ import { isRegularWindow } from "../windows/small";
 import { measureRow } from "../sidebar/sidebarUi";
 import { EMPTY_FOLDER_URL } from "./applyFolder";
 import { syncFolderAfterNow, syncFolderNow } from "./engine";
-import { bindFolder, boundFolders, folderRef, sharedFolderOf, unbindFolder, useSharedFolders } from "./store";
+import { bindFolder, bindFolderIfUnbound, folderRef, sharedFolderOf, unbindFolder, useSharedFolders } from "./store";
 import { canShareGroup, sharedFolderOfGroup } from "./removal";
 import { showToast } from "../app/toasts";
 
@@ -59,10 +61,18 @@ export async function addSharedFolder(windowId: string) {
   const location = sharedLocation();
   const start = location.iCloudAvailable ? location.path : await chooseParent(windowId);
   if (!start) return;
-  const path = await pickFolder(start, "Add Folder");
-  if (!path) return;
+  const picked = await pickFolder(start, "Add Folder");
+  if (!picked) return;
+  const found = await resolveSharedFolder(picked).catch((error: unknown) => {
+    showToast(windowId, "Couldn’t add this folder", errorText(error), { icon: "exclamationmark.icloud" });
+    return null;
+  });
+  if (!found) return;
+  const { path } = found;
   const profileId = store().windows[windowId]?.profileId ?? w.profileId;
-  const known = boundFolders().find((b) => b.profileId === profileId && b.folder.path === path);
+  await bindingAt(profileId, found);
+  if (store().windows[windowId]?.profileId !== profileId) return;
+  const known = boundAt(profileId, found);
   if (known) {
     const g = Object.values(store().groups).find((x) => x.profileId === profileId && x.pinned && pinKeyOf(x) === known.key);
     showToast(windowId, `“${(g && groupLabel(store(), g)) || path.split("/").at(-1)}” is already in your sidebar`, undefined, { icon: "person.2" });
@@ -72,7 +82,7 @@ export async function addSharedFolder(windowId: string) {
   if (!groupId) return;
   useBrowser.setState(next);
   const key = pinKeyOf(store().groups[groupId]!);
-  bindFolder(profileId, key, path);
+  bindFolder(profileId, key, path, identityOf(found));
   await syncFolderNow(profileId, key);
 }
 
@@ -86,8 +96,8 @@ export async function shareFolder(windowId: string, groupId: string) {
     if (!folder) {
       const parent = await chooseParent(windowId);
       if (!parent) return;
-      const path = await createSharedFolder(parent, groupLabel(s, g) || "Shared Folder");
-      bindFolder(g.profileId, key, path);
+      const made = await createSharedFolder(parent, groupLabel(s, g) || "Shared Folder");
+      if (!bindFolderIfUnbound(g.profileId, key, made)) await discardSharedFolder(made).catch(() => false);
     }
     await syncFolderAfterNow(g.profileId, key);
     folder = sharedFolderOf(g.profileId, key);

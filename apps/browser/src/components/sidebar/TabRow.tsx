@@ -15,7 +15,7 @@ import { hidesRowIcon } from "../../state/pins/rowIcons";
 import { commitRename, endRename, startRename } from "../../state/sidebar/actions";
 import { useDragItem, useDropSplit } from "./DragProvider";
 import { SplitDropHalf } from "./DropMarks";
-import { SplitPreview, useSplitPreview } from "./SplitPreview";
+import { PreviewFade, SplitPreview, useSplitPreview } from "./SplitPreview";
 import { profileSurfaces } from "./profileSurfaces";
 import { SPLIT_PANE, splitPaneShape } from "./splitPaneGeometry";
 import { useShift, type EntryMotion } from "./EntryMotion";
@@ -114,7 +114,7 @@ export const TabRow = memo(function TabRow({
       style={moved.style as object}
       onDoubleClick={() => void startRename(windowId, { kind: "tab", id: tabId })}
     >
-      <TabPressArea windowId={windowId} tab={tab} hitSlop={rowGapSlop(0)} selected={selected}>
+      <TabPressArea windowId={windowId} tab={tab} squish={renaming ? undefined : "row"} hitSlop={rowGapSlop(0)} selected={selected}>
       {({ pressed }) => (
         <>
           <HoverFill shown={plain && (hovered || pressed)} instant={!plain} color={pressed ? pressedFill : hoverFill} radius={radius.chrome} />
@@ -123,10 +123,9 @@ export const TabRow = memo(function TabRow({
             selected={active && !quiet}
             border={border}
             stroke={selected && !active ? tokens.multiSelectedStroke : undefined}
-            padLeft={(textOnly ? TAB_ROW.contentLeft - TAB_ROW.titleGap : TAB_ROW.contentLeft) - border}
-            padRight={TAB_ROW.trailing - border}
+            padLeft={textOnly ? TAB_ROW.contentLeft - TAB_ROW.titleGap : TAB_ROW.contentLeft}
           >
-            <Animated.View style={[ROW_CONTENT, { opacity: preview.values ? preview.values.hidden : 1 }]}>
+            <PreviewFade preview={preview}>
             <View {...(tab.pinnedUrl ? backToPin.hoverProps : null)} style={textOnly ? NO_SLOT : undefined}>
               {resettable ? (
                 <Pressable
@@ -187,7 +186,7 @@ export const TabRow = memo(function TabRow({
                 </>
               ) : null}
             </HoverSlot>
-            </Animated.View>
+            </PreviewFade>
           </SidebarRowSurface>
         </>
       )}
@@ -198,7 +197,6 @@ export const TabRow = memo(function TabRow({
 });
 
 const AWAY_FRAME = { flex: 1, marginLeft: TAB_ROW.titleGap } as const;
-const ROW_CONTENT = { flex: 1, alignSelf: "stretch", flexDirection: "row", alignItems: "center" } as const;
 const singles = new Map<string, string[]>();
 const SINGLE = (tabId: string) => singles.get(tabId) ?? (singles.set(tabId, [tabId]), singles.get(tabId)!);
 const NO_SLOT = { display: "none" } as const;
@@ -304,16 +302,16 @@ export const SplitRowItem = memo(function SplitRowItem({
           fill={active ? theme.tabSelected : hovered ? theme.tabHover : ink.clear}
           selected={active}
           border={splitBorder}
-          padLeft={SPLIT_PANE.inset - splitBorder}
-          padRight={SPLIT_PANE.inset - splitBorder}
+          padLeft={SPLIT_PANE.inset}
+          padRight={SPLIT_PANE.inset}
         >
-          <Animated.View style={[ROW_CONTENT, { opacity: preview.values ? preview.values.hidden : 1 }]}>
+          <PreviewFade preview={preview}>
             {tabIds.map((id, i) => (
               <View key={id} style={i > 0 ? SPLIT_SLOT_AFTER : SPLIT_SLOT}>
                 <SplitPane tabId={id} windowId={windowId} rowActive={active} />
               </View>
             ))}
-          </Animated.View>
+          </PreviewFade>
         </SidebarRowSurface>
         {preview.values ? <SplitPreview panes={tabIds} values={preview.values} rowActive={active} /> : <SplitDropHalf side={splitSide} fill={tokens.splitDropFill} />}
       </View>

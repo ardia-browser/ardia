@@ -3,7 +3,7 @@ import { create } from "zustand";
 import { orWarn } from "../../lib/fallback";
 import { IMPORT_WINDOW_ID, takePreferredImportSource } from "../settings/settingsWindows";
 import { requestWindowClose } from "../windows/windowClose";
-import { defaultTarget, openInWebStore, type BrowserSource, type ImportCounts, type ImportedExtension, type ImportKind } from "./apply";
+import { defaultTarget, openInWebStore, type BrowserSource, type ImportCounts, type ImportedExtension, type ImportedSearchEngine, type ImportKind } from "./apply";
 import type { ExtensionListing } from "./extensionListing";
 import { importModule } from "./importApi";
 
@@ -11,7 +11,8 @@ export type KindStatus = "pending" | "active" | "done" | "failed";
 export type ImportStatus = Partial<Record<ImportKind, KindStatus>>;
 export type ImportFailure = { kind: ImportKind; profiles: string[] };
 export type FoundExtensions = { profileId: string; list: ImportedExtension[]; opened: boolean; listing: ExtensionListing | null };
-export type ImportResults = { counts: ImportCounts; failures: ImportFailure[]; notes: string[]; extensions: FoundExtensions };
+export type EngineNotice = { name: string; offered: boolean; engine: ImportedSearchEngine };
+export type ImportResults = { counts: ImportCounts; failures: ImportFailure[]; notes: string[]; extensions: FoundExtensions; searchEngine?: EngineNotice };
 
 export type ImportStep =
   | { name: "loading" }

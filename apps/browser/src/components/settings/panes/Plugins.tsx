@@ -12,7 +12,7 @@ import {
   pluginsFolderPath,
   relinkPrograms,
   canRelink,
-  removePlugin,
+  removePluginAfterConfirm,
   requestPluginConsent,
   restartPlugin,
   setPluginValue,
@@ -21,13 +21,14 @@ import {
 } from "../../../state/plugins/actions";
 import { usePluginActive, usePluginListing, usePluginNeedsReview, usePluginProcess, usePluginPrograms, usePluginRecord, usePluginValues } from "../../../state/plugins/hooks";
 import { goToSettingsPane, SETTINGS_WINDOW_ID, type SettingsPlace } from "../../../state/settings/settingsWindows";
-import { confirm } from "../../../state/app/system";
 import { Button, PopUp, Symbol, TextField, Toggle } from "../../ui";
 import { Group, Row, SectionHeader } from "../Form";
 import { useTheme } from "../../ui/theme";
 import { PaneSubPage } from "./PaneSubPage";
 import { releaseOrphanedConsent } from "../../../state/plugins/consentSurface";
 import { OfficialPluginsSection, usePluginsBelowOfficial } from "./OfficialPlugins";
+import { useNeverChosenCount } from "../../../state/site/passwordManager";
+import { PasswordManagerDetails } from "./PasswordManagerPlugin";
 
 export function PluginsPane({ detail }: SettingsPlace) {
   if (!PLATFORM_FEATURES.plugins) return <UnavailablePage />;
@@ -91,19 +92,19 @@ function originText(listing: PluginListing | undefined, active: boolean): string
   return listing?.replacesBundled ? "Replaces the built-in plugin" : null;
 }
 
-function statusOf(m: PluginManifest | null, problems: string[], active: boolean, review: boolean, p: ProcessState | undefined): string {
+function statusOf(m: PluginManifest | null, problems: string[], active: boolean, review: boolean, p: ProcessState | undefined, describe = true): string {
   if (!m) return problems.slice(0, 2).join("; ") || "This plugin can't load";
   if (review) return "Its plugin.json changed. Review it to turn it back on.";
   const running = active ? processText(p) : null;
-  return [m.description, running].filter(Boolean).join(" · ");
+  return [describe ? m.description : null, running].filter(Boolean).join(" · ");
 }
 
-function setOn(name: string, on: boolean) {
+function setOn(name: string, on: boolean): Promise<unknown> | void {
   if (on) {
     releaseOrphanedConsent();
     requestPluginConsent(name);
   }
-  else disablePlugin(name);
+  else return disablePlugin(name);
 }
 
 function PluginRow({ name }: { name: string }) {
@@ -124,7 +125,7 @@ function PluginRow({ name }: { name: string }) {
       {isAlwaysOn(listing) ? (
         active ? null : <Button title="Install…" onPress={() => void installOfficialPlugin(name, { showSheet: false })} />
       ) : (
-        <Toggle value={active} disabled={!m} accessibilityLabel={`Turn on ${m?.title ?? name}`} onChange={(on) => setOn(name, on || (record.enabled && review))} />
+        <Toggle value={active} disabled={!m} asksFirst={!active} accessibilityLabel={`Turn on ${m?.title ?? name}`} onChange={(on) => setOn(name, on || (record.enabled && review))} />
       )}
     </Row>
   );
@@ -148,10 +149,7 @@ function ValueRow({ name, row, value }: { name: string; row: RowSpec; value: str
 }
 
 async function confirmRemove(name: string, title: string) {
-  const ok = await confirm({ title: `Remove ${title}?`, message: `Its folder moves to the ${PLATFORM_TERMS.trash}, and its data and its panel's website data are deleted.`, confirmTitle: "Remove", destructive: true, windowId: SETTINGS_WINDOW_ID });
-  if (!ok) return;
-  const removed = await removePlugin(name);
-  if (removed.ok || removed.removed) goToSettingsPane("plugins");
+  if (await removePluginAfterConfirm(name, title, SETTINGS_WINDOW_ID)) goToSettingsPane("plugins");
 }
 
 function PluginPage({ name }: { name: string }) {
@@ -162,20 +160,20 @@ function PluginPage({ name }: { name: string }) {
   const process = usePluginProcess(name);
   const programs = usePluginPrograms(name);
   const values = usePluginValues(name);
+  const movesProfiles = useNeverChosenCount();
   const m = listing?.manifest ?? null;
   if (!listing) return <PaneSubPage intro="This plugin isn't installed any more.">{null}</PaneSubPage>;
   return (
     <PaneSubPage intro={m?.description || undefined}>
-      <SectionHeader title={m?.title ?? name} />
       <Group>
         <Row
           title={isAlwaysOn(listing) ? (active ? "Installed" : "Not installed") : active ? "On" : review ? "Changed since you turned it on" : "Off"}
-          description={[originText(listing, active), statusOf(m, listing.problems, active, review, process)].filter(Boolean).join(" · ")}
+          description={[originText(listing, active), statusOf(m, listing.problems, active, review, process, false)].filter(Boolean).join(" · ") || undefined}
         >
           {isAlwaysOn(listing) ? (
             active ? null : <Button title="Install…" onPress={() => void installOfficialPlugin(name, { showSheet: false })} />
           ) : (
-            <Toggle value={active} disabled={!m} accessibilityLabel={`Turn on ${m?.title ?? name}`} onChange={(on) => setOn(name, on)} />
+            <Toggle value={active} disabled={!m} asksFirst={!active} accessibilityLabel={`Turn on ${m?.title ?? name}`} onChange={(on) => setOn(name, on)} />
           )}
         </Row>
         {m?.process && active ? (
@@ -200,11 +198,12 @@ function PluginPage({ name }: { name: string }) {
           </Group>
         </>
       ) : null}
+      {m?.passwordManager && active ? <PasswordManagerDetails name={name} spec={m.passwordManager} /> : null}
       {m ? (
         <>
           <SectionHeader title="What it gets" />
           <Group>
-            {consentLines(m).map((line) => (
+            {consentLines(m, { bundled: !!listing.bundled && !active, movesProfiles }).map((line) => (
               <Row key={line.text} title={line.text} icon={<Symbol name={line.icon} size={13} color={theme.icon} style={ICON} />} />
             ))}
           </Group>

@@ -20,6 +20,7 @@ import { entryHeightNow, foldedGroupHeight, headGap } from "../../state/sidebar/
 import { dismissHover } from "../../state/sidebar/hover";
 import { useGroupHover, useRowHover } from "./hoverController";
 import { useHoverFade } from "./hoverMotion";
+import { Squish, useSquish } from "../ui/Squish";
 import { GhostSlot, ListMotionContext, useGroupMotion } from "./ListMotion";
 import { pressGroupClose, useGroupCloseControlWhile } from "../../state/sidebar/closeControl";
 import { openGroupMenu } from "../../state/sidebar/menus";
@@ -173,6 +174,7 @@ const GroupHeader = memo(function GroupHeader({ groupId, windowId, collapsed, op
   const closeControl = useGroupCloseControlWhile(groupId, hovered && !renaming);
   const profileId = usePageProfileId();
   const showsExtra = useShowsExtraTabs(windowId, profileId, groupId);
+  const squish = useSquish(renaming ? null : "row");
   const chevronTurn = useMemo(() => ({ ...CHEVRON_BOX, transform: [{ rotate: open.interpolate({ inputRange: [0, 1], outputRange: ["-90deg", "0deg"] }) }] }), [open]);
   if (!group) return null;
   const target = { kind: "group" as const, id: groupId };
@@ -186,6 +188,8 @@ const GroupHeader = memo(function GroupHeader({ groupId, windowId, collapsed, op
         }}
       >
         <Pressable
+          onPressIn={squish.onPressIn}
+          onPressOut={squish.onPressOut}
           onPress={() => {
             dismissHover();
             if (renaming) return;
@@ -195,6 +199,7 @@ const GroupHeader = memo(function GroupHeader({ groupId, windowId, collapsed, op
           }}
         >
           {() => (
+            <Squish scale={squish.scale}>
             <SidebarRowSurface fill={dropInto ? theme.tabPressed : ink.clear} cornerRadius={GROUP_INNER_RADIUS}>
               <FolderOrIcon icon={group.icon} open={!collapsed || dropInto} color={group.color} />
               {renaming ? (
@@ -226,6 +231,7 @@ const GroupHeader = memo(function GroupHeader({ groupId, windowId, collapsed, op
                 {countdown.label && !renaming ? <MeetingTimeLabel label={countdown.label} urgent={countdown.urgent} /> : null}
               </HoverSlot>
             </SidebarRowSurface>
+            </Squish>
           )}
         </Pressable>
       </ContextMenuArea>

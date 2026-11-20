@@ -8,7 +8,9 @@ import { copyText, openExternal, preferredLanguage, pressHaptic, shareLink, succ
 import { cancelSearch, closeArchive, deckPullCommitted, openTab, showDeck, takeSheetFromSettings, useBrowse } from "../browse/store";
 import { display } from "../search/omnibox";
 import { presentSearch, searchState } from "../search/store";
-import { setPreference } from "../settings/store";
+import { currentPreferences, setPreference } from "../settings/store";
+import { designFor } from "../../lib/design";
+import { Platform } from "react-native";
 import { listenToPages, openPageInBackground, pageHandle, pageIsFullscreen, pageRequest, settled, storeFind, storeFullscreen, storeRequest, usePages } from "../pages/store";
 import { closeTabById, currentTabs, openNewTab, useTabs } from "../tabs/store";
 import { isSyncableUrl } from "../tabs/tabModels";
@@ -16,6 +18,7 @@ import { findTab } from "../tabs/tabsState";
 import { blockersToast, searchQuery, translationUrl, type NightShadeMode } from "./pageMenu";
 import { backLayer, downloadedToast, downloadFailedToast, downloadingToast, pressPlan, stoppedPrivateDownloadsToast, type PressAction, type Request } from "./pagePrompts";
 import { onboardingBack } from "../onboarding/store";
+import { refreshSettings } from "../settings/actions";
 import { openSettings, openSettingsPage, popSettings, type SettingsRoute } from "../settings/nav";
 import { pinToMac, sendTab } from "../sync/actions";
 import type { SyncedDevice } from "../../platform/sync";
@@ -24,11 +27,13 @@ import { closeVoiceSearch, useVoice } from "../voice/store";
 import { addOnlineAgainListener } from "../../platform/network";
 import { countUsage } from "../telemetry/telemetry";
 import { pageSummaryOpenedCount, pageSummarySettledCounts } from "../../lib/telemetrySchema";
+import { pageSummariesEnabled, pageSummariesRevision, refreshPageSummariesEnabled } from "../pageSummary/enabled";
 import { dismissArchiveCard } from "../browse/archiveCard";
 import { copy } from "../../lib/platformCopy";
 import { launchValues } from "../../platform/launch";
 import { COPIED_LINK } from "../browse/tabMenus";
 import { syncData } from "../sync/store";
+import { libraryBack } from "../library/store";
 import { showToast, TOAST_LONG_DURATION_MS } from "../toasts/store";
 import { syncOffered } from "../../platform/system";
 
@@ -48,11 +53,14 @@ const hostOf = (url: string | null) => (url ? display(url).host || null : null);
 
 let afterMenuHidden: (() => void) | null = null;
 
-export async function openPageMenu() {
+export const openPageMenu = () => showPageMenu(false);
+
+async function showPageMenu(menuDocked: boolean) {
   const tab = selectedTab();
   if (!tab) return;
   afterMenuHidden = null;
-  usePageUi.setState({ menuOpen: true, menuPage: "main", titleFeedback: null, menuSite: null });
+  usePageUi.setState({ menuOpen: true, menuPage: "main", menuDocked, titleFeedback: null, menuSite: null });
+  if (menuDocked && !tab.isPrivate) countUsage("site_settings_sheet_opened");
   const url = usePages.getState().navigation[tab.id]?.url ?? tab.url;
   const host = hostOf(url);
   const [shade, blockers, capabilities, translation] = await Promise.all([
@@ -61,6 +69,7 @@ export async function openPageMenu() {
     settled(async () => pages.capabilities(), null),
     settled(() => pages.translation(), null),
   ]);
+  if (materialDesign() && selectedId() !== tab.id) return;
   usePageUi.setState({
     menuSite: { host, nightShade: shade?.mode ?? "disabled", blockersEnabled: blockers },
     menuTranslation: translation ? { languageName: translation.languageName, confirmed: translation.confirmed } : pageUi().menuTranslation,
@@ -105,12 +114,14 @@ export function canSummarizePages(): boolean {
 
 export function summarizeCurrentPage() {
   const tab = selectedTab();
-  if (!tab) return;
+  if (!tab || !pageSummariesEnabled()) return;
   const navigation = usePages.getState().navigation[tab.id];
   const url = navigation?.url ?? tab.url;
   if (!isSyncableUrl(url) || navigation?.isLoading) return;
+  const revision = pageSummariesRevision();
 
   afterMenuHidden = () => {
+    if (!pageSummariesEnabled() || pageSummariesRevision() !== revision) return;
     const current = selectedTab();
     const latest = usePages.getState().navigation[tab.id];
     if (current?.id !== tab.id || useBrowse.getState().surface !== "browsing" || latest?.isLoading || (latest?.url ?? current.url) !== url) return;
@@ -141,7 +152,14 @@ export function sendCurrentTab(device: SyncedDevice) {
   if (tab) void sendTab(tab, device);
 }
 
-export const openSiteSettings = () => usePageUi.setState({ menuPage: "siteSettings" });
+export function openSiteSettings() {
+  usePageUi.setState({ menuPage: "siteSettings" });
+  if (materialDesign()) void refreshSettings();
+}
+
+const materialDesign = () => designFor(Platform.OS, false, currentPreferences().materialYou) === "material";
+
+export const openDockedSiteSettings = () => showPageMenu(true);
 
 export const closeMenuSubpage = () => usePageUi.setState({ menuPage: "main" });
 
@@ -150,9 +168,9 @@ export function openSiteSettingsSheet() {
   openSettingsPage({ page: "siteSettings" });
 }
 
-export function openSiteSettingsRoute(route: SettingsRoute) {
+export function openSiteSettingsRoute(route: SettingsRoute, { direct = false } = {}) {
   closePageMenu();
-  openSettings(route);
+  openSettings(route, { direct });
 }
 
 const withPage = (run: (id: string) => Promise<unknown>) => {
@@ -188,11 +206,28 @@ export function retryWhenOnline(tabId: string): () => void {
 export const menuStop = () => void pageHandle(selectedId())?.stopLoading();
 
 export function editPageQuery() {
+  beginPageSearch("rises");
+}
+
+function beginPageSearch(arrival: "rises" | "dockedMenu") {
   const tab = selectedTab();
   if (!tab) return;
-  closePageMenu();
-  presentSearch("page", searchQuery(tab.url) ?? tab.url, null, { currentUrl: tab.url, currentTabId: tab.id });
+  if (arrival === "rises") closePageMenu();
+  presentSearch("page", searchQuery(tab.url) ?? tab.url, null, { currentUrl: tab.url, currentTabId: tab.id }, arrival);
+  if (arrival === "dockedMenu") closePageMenu();
 }
+
+function afterDockedMenu(run: () => void) {
+  const tabId = selectedId();
+  closePageMenu();
+  afterMenuHidden = () => {
+    if (tabId !== null && selectedId() === tabId && useBrowse.getState().surface === "browsing") run();
+  };
+}
+
+export const editDockedPageQuery = () => {
+  if (pageUi().menuOpen) beginPageSearch("dockedMenu");
+};
 
 export function copyCurrentLink() {
   const tab = selectedTab();
@@ -236,6 +271,7 @@ const usesSystemFind = () => {
 };
 
 export function showFind() {
+  const findIsPrivate = selectedTab()?.isPrivate ?? true;
   if (usesSystemFind()) {
     countUsage("find_opened_system");
     usePageUi.setState({ menuOpen: false });
@@ -244,11 +280,18 @@ export function showFind() {
   }
   countUsage("find_opened_bar");
   if (!copy().findWaitsForMenu) {
-    usePageUi.setState({ menuOpen: false, findOpen: true, findQuery: "" });
+    usePageUi.setState({ menuOpen: false, findOpen: true, findIsPrivate, findQuery: "" });
     return;
   }
   usePageUi.setState({ menuOpen: false });
-  setTimeout(() => usePageUi.setState({ findOpen: true, findQuery: "" }), FIND_AFTER_MENU_MS);
+  setTimeout(() => usePageUi.setState({ findOpen: true, findIsPrivate, findQuery: "" }), FIND_AFTER_MENU_MS);
+}
+
+export function showDockedFind() {
+  const tab = selectedTab();
+  if (!tab) return;
+  if (!tab.isPrivate) countUsage("find_opened_bar");
+  afterDockedMenu(() => usePageUi.setState({ findOpen: true, findIsPrivate: tab.isPrivate, findQuery: "" }));
 }
 
 export function typeFind(query: string) {
@@ -261,7 +304,8 @@ export const findPrevious = () => withPage((id) => pages.findPrevious(id));
 
 export function closeFind() {
   const id = selectedId();
-  usePageUi.setState({ findOpen: false, findQuery: "" });
+  if (pageUi().findOpen && !pageUi().findIsPrivate) countUsage("find_closed_bar");
+  usePageUi.setState({ findOpen: false, findIsPrivate: true, findQuery: "" });
   if (id) {
     storeFind(id, null);
     quietly(() => pages.endFind(id));
@@ -432,6 +476,7 @@ export function startPageUi() {
   if (started) return;
   started = true;
   listenToPages(pageEvent);
+  void refreshPageSummariesEnabled();
   try {
     downloads.addListener(downloadEvent);
   } catch {
@@ -448,6 +493,7 @@ export function handleSystemBack(): boolean {
     return true;
   }
   if (popSettings()) return true;
+  if (libraryBack()) return true;
   const { surface, sheet } = useBrowse.getState();
   const id = selectedId();
   const ui = pageUi();

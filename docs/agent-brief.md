@@ -325,6 +325,8 @@ The only variables the app and engine read, through `ArdiaLaunchConfig` (`packag
 | | `peekMesh=unavailable\|throws` · `peekReady=never` · `peekReduceMotion` · `peekSlow=<n>` | Peek's motion (`docs/peek-motion.md`): the Genie mesh reported missing or throwing on build, a page that never reports a drawn frame (the 150 ms timeout), Reduce Motion, and the Genie <n> times slower for captures |
 | | `importSecret=<s>` · `importDiaBundleId=<id>` · `importDiaWindows=<json>` | Import's Safe Storage secret · the app Dia's tabs come from (opened hidden and quit by the import) · fixture windows answering for it, with no Automation prompt |
 | | `cliInstallScript=<path>` | Another `ardia` installer script (the Linux and Windows hosts' installer; macOS no longer runs one) |
+| | `applePasswordsPanel` | Background mode really opens macOS's Passwords panel for the key and Edit › AutoFill › Passwords… instead of logging it (`docs/testing.md`); the panel is another process's window and can show on screen |
+| | `systemPanelRace` | Runs AppKit's delayed autofill show-or-hide pass right after the Passwords command, to check the panel survives it (`docs/testing.md`) |
 | | `bundledPlugins=<dir>` | Built-in plugins come from this folder instead of `Ardia.app/Contents/Resources/Plugins` (`docs/plugins.md` › Built-in plugins) |
 | | `legacySource=<home>` · `legacyCrashAfter=<step>` | The Netnyahoo → Ardia migration from a scratch home |
 | | `bangsUrl` · `onboarding` · `whatsNew` · `telemetry` · `liveMock=<url>` · `calendarFixture` | Debug builds only: bang list, run onboarding, show What's New, send telemetry, live folders from a mock, the calendar fixture |

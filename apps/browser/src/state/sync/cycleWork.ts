@@ -1,5 +1,6 @@
 import { consentToken, onConsentPeriodChange, stillValid } from "../telemetry/choice";
 import { beginActivity } from "../app/jobActivity";
+import { takeReturnedDeviceRemovals, takeReturnedProfileRemovals, takeSyncedDeviceRemovals, takeSyncedProfileRemovals } from "./profileRemoval";
 
 const NO_CYCLES = { cycles: 0, ms: 0, longestMs: 0 };
 let work = NO_CYCLES;
@@ -21,5 +22,17 @@ export function timedCycle(startedAt: number, cycle: Promise<void>): Promise<voi
 export function takeCycleWork() {
   const taken = work;
   work = NO_CYCLES;
+  return taken;
+}
+
+let snapshotWrites = { count: 0, bytes: 0 };
+
+export function noteSnapshot({ snapshotBytes }: { snapshotBytes: number }) {
+  if (snapshotBytes) snapshotWrites = { count: snapshotWrites.count + 1, bytes: snapshotWrites.bytes + snapshotBytes };
+}
+
+export function takeSnapshotWrites() {
+  const taken = { ...snapshotWrites, ...takeCycleWork(), removedProfiles: takeSyncedProfileRemovals(), removedDevices: takeSyncedDeviceRemovals(), removalsReturned: takeReturnedProfileRemovals() + takeReturnedDeviceRemovals() };
+  snapshotWrites = { count: 0, bytes: 0 };
   return taken;
 }

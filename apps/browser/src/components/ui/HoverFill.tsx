@@ -1,12 +1,12 @@
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { Animated, StyleSheet } from "react-native";
 import { useHoverFill } from "./motion";
 
-export function HoverFill({ shown, color, radius, instant = false }: { shown: boolean; color: string; radius: number; instant?: boolean }) {
+export const HoverFill = memo(function HoverFill({ shown, color, radius, instant = false }: { shown: boolean; color: string; radius: number; instant?: boolean }) {
   const opacity = useHoverFill(shown, instant);
   if (!opacity) return null;
   return <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: radius, backgroundColor: color, opacity }]} />;
-}
+});
 
 export function HoverSwap({ shown, rest, color, radius, instant = false, underBorder = 0 }: { shown: boolean; rest: string | undefined; color: string; radius: number; instant?: boolean; underBorder?: number }) {
   const opacity = useHoverFill(shown, instant, true);

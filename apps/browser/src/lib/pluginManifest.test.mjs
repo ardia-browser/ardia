@@ -12,7 +12,7 @@ test("the example plugin reads with every contribution", () => {
   const { manifest, problems: found } = readManifest(FIXTURE);
   assert.deepEqual(found, []);
   assert.equal(manifest.name, "example");
-  assert.deepEqual(contributionsOf(manifest), [...CONTRIBUTIONS]);
+  assert.deepEqual(contributionsOf(manifest), CONTRIBUTIONS.filter((c) => c !== "passwordManager"));
   assert.deepEqual(manifest.page.source, { file: "page/index.html" });
   assert.deepEqual(manifest.commands.find((c) => c.name === "beside").action, { open: "split", context: true, side: "right", sideSetting: "side", path: "" });
   assert.ok(problems({ ...base(), commands: [{ name: "h", title: "History", open: "tab", path: "/../up" }] }).some((p) => p.includes("path must be")));
@@ -182,4 +182,34 @@ test("programs: a name like a plugin's and a file in the plugin's folder", () =>
 
 test("control is a permission of its own and needs nothing else", () => {
   assert.deepEqual(readManifest(JSON.stringify({ ...base(), permissions: [...base().permissions, "control"] })).problems, []);
+});
+
+const PASSWORD_FIXTURE = readFileSync(new URL("../../../../tests/fixtures/plugins/password-manager/plugin.json", import.meta.url), "utf8");
+
+test("a password manager declares how it fills, which fields get the key, and what else it offers", () => {
+  const { manifest, problems: found } = readManifest(PASSWORD_FIXTURE);
+  assert.deepEqual(found, []);
+  assert.deepEqual(manifest.passwordManager, { fill: "system", fields: ["login", "oneTimeCode"], verificationCodeSetup: "system", passkeys: "system" });
+  assert.deepEqual(contributionsOf(manifest), ["passwordManager"]);
+  const minimal = readManifest(JSON.stringify({ ...JSON.parse(PASSWORD_FIXTURE), passwordManager: { fill: "system", fields: ["oneTimeCode"] } }));
+  assert.deepEqual(minimal.manifest.passwordManager, { fill: "system", fields: ["oneTimeCode"], verificationCodeSetup: null, passkeys: null });
+  assert.equal(readManifest(FIXTURE).manifest.passwordManager, null);
+});
+
+test("fill: tool is reserved and refused by name, and every other shape is reported with its path", () => {
+  const doc = (passwordManager) => ({ ...JSON.parse(PASSWORD_FIXTURE), passwordManager });
+  assert.deepEqual(problems(doc({ fill: "tool", fields: ["login"] })), ["plugin.json: passwordManager.fill: tool isn't available yet; use system"]);
+  assert.deepEqual(problems(doc({ fill: "system", fields: ["login", "login"] })), ["plugin.json: passwordManager.fields has login twice"]);
+  assert.ok(problems(doc({ fill: "system", fields: [] }))[0].includes("passwordManager.fields must be a list of 1 to 2"));
+  assert.ok(problems(doc({ fill: "system", fields: ["login"], extra: 1 }))[0].includes("passwordManager.extra isn't a key"));
+  assert.ok(problems(doc([{ fill: "system", fields: ["login"] }]))[0].includes("passwordManager must be an object"));
+  assert.ok(problems(doc({ fill: "system", fields: ["login"], passkeys: "own" })).includes("plugin.json: passwordManager.passkeys must be system"));
+});
+
+test("the schema holds passwordManager to the same shape the app reads", () => {
+  const schema = pluginSchema([], { untabbedEvents: [], approvedSettings: [] }).properties.passwordManager;
+  assert.equal(schema.additionalProperties, false);
+  assert.deepEqual(schema.required, ["fill", "fields"]);
+  assert.deepEqual(schema.properties.fill.enum, ["system"]);
+  assert.deepEqual(schema.properties.fields.items.enum, ["login", "oneTimeCode"]);
 });

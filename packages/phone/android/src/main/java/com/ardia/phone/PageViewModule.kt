@@ -193,6 +193,14 @@ class PageViewModule : Module() {
 
         AsyncFunction("dismissPageSummaries") { -> PhonePages.dismissSummaries() }.runOnQueue(Queues.MAIN)
 
+        AsyncFunction("pageSummariesEnabled") { -> PageSummaryChoice.isEnabled(context) }.runOnQueue(Queues.MAIN)
+
+        AsyncFunction("setPageSummariesEnabled") { enabled: Boolean ->
+            PageSummaryChoice.enable(context, enabled)
+            if (!enabled) PhonePages.dismissSummaries()
+            PageSummaryChoice.isEnabled(context)
+        }.runOnQueue(Queues.MAIN)
+
         AsyncFunction("pageSummaryProvider") { -> PageSummaryChoice.stored(context).raw }.runOnQueue(Queues.MAIN)
 
         AsyncFunction("setPageSummaryProvider") { provider: String ->
@@ -390,6 +398,8 @@ class PageViewModule : Module() {
                 view.toneInsets = insets?.takeIf { it.size == 2 }?.let { it[0] to it[1] } ?: (0.0 to 0.0)
             }
 
+            Prop("bottomInsetTransitionMs") { view: PageView, millis: Int? -> view.bottomInsetTransitionMs = (millis ?: 0).coerceIn(0, 300) }
+
             Prop("obscuredInsets") { view: PageView, insets: List<Double>? ->
                 view.obscuredInsets = insets?.takeIf { it.size == 2 }?.let { it[0].coerceAtLeast(0.0) to it[1].coerceAtLeast(0.0) } ?: (0.0 to 0.0)
             }
@@ -399,7 +409,10 @@ class PageViewModule : Module() {
                 view.obscuredColours = (pair?.get(0)?.toLong()?.toInt()) to (pair?.get(1)?.toLong()?.toInt())
             }
 
-            OnViewDidUpdateProps { view -> view.bind() }
+            OnViewDidUpdateProps { view ->
+                view.updateObscuredInsets()
+                view.bind()
+            }
 
             OnViewDestroys { view -> view.unbind() }
 

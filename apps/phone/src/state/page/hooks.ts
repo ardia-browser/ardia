@@ -14,6 +14,7 @@ export const useMenuOpen = () => usePageUi((s) => s.menuOpen);
 export const useTranslationConfirmed = () => usePageUi((s) => s.menuTranslation?.confirmed ?? false);
 
 export const useMenuPage = () => usePageUi((s) => s.menuPage);
+export const useMenuDocked = () => usePageUi((s) => s.menuDocked);
 export const useTitleFeedback = () => usePageUi((s) => s.titleFeedback);
 export const useFindOpen = () => usePageUi((s) => s.findOpen);
 export const useFindQuery = () => usePageUi((s) => s.findQuery);

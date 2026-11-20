@@ -352,7 +352,6 @@ export const materialDialogLook = {
   title: { fontSize: 24, lineHeight: 32 },
   message: { fontSize: 14, lineHeight: 20, letterSpacing: 0.25 },
   button: { fontSize: 14, lineHeight: 20, fontWeight: "500", letterSpacing: 0.1 },
-  enterScale: 0.92,
   shadow: "0px 4px 8px 3px rgba(0,0,0,0.15), 0px 1px 3px 0px rgba(0,0,0,0.3)",
 } as const;
 
@@ -464,6 +463,7 @@ export const startLayout = {
   pageDot: 7,
   pageDotSpacing: 21,
   invitationPadding: 20,
+  logoPressOpacity: 0.85,
 } as const;
 
 export const deckChromeLayout = {
@@ -509,7 +509,7 @@ export const startInk = {
   dark: { pageDot: "rgba(255,255,255,0.32)", badgeInk: "#FFFFFF" },
 } as const;
 
-export const chromeLayout = { edge: 0.5, shadowRadius: 10, shadowY: 2, barSideInset: 24 } as const;
+export const chromeLayout = { edge: 0.5, shadowRadius: 10, shadowY: 2, barSideInset: 24, barCastsShadow: Platform.OS === "ios" } as const;
 
 export const chromeInk = {
   light: { surface: "#FFFFFF", edge: "rgba(0,0,0,0.12)", shadow: "rgba(0,0,0,0.12)", foreground: "rgba(14,15,16,0.9)", secondary: "rgba(0,0,0,0.5)", notSecure: lightRoles.destructive },

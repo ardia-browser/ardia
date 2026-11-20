@@ -11,7 +11,8 @@ import { matchMyMac } from "../../state/sync/actions";
 import { useSyncEnabled } from "../../state/sync/hooks";
 import { setDeckGrid, useDeckGrid } from "../../state/browse/deckGrid";
 import { useIncognito } from "../../state/tabs/hooks";
-import { capsule, font, PROFILE_COLORS, settingsLayout, settingsMotion, settingsTint, space, Symbol, useProfileLook, useTheme, type ProfileColor } from "../ui";
+import { capsule, font, PROFILE_COLORS, settingsLayout, settingsMotion, settingsTint, space, Symbol, useDesign, useProfileLook, useTheme, type ProfileColor } from "../ui";
+import { MaterialSettingsLeading } from "./MaterialSettingsKit";
 import { Divider, Group, IconTile, NavRow, SettingsPage, ToggleRow } from "./SettingsKit";
 
 const COLORS = Object.keys(PROFILE_COLORS) as ProfileColor[];
@@ -88,18 +89,20 @@ export function MatchMyMac({ labelled = true }: { labelled?: boolean }) {
   );
 }
 
-export function ColorRow({ labelled = true }: { labelled?: boolean }) {
+export function ColorRow({ labelled = true, plainIcon = false }: { labelled?: boolean; plainIcon?: boolean }) {
   const theme = useTheme();
   const look = useProfileLook();
+  const choice = usePreferences((p) => p.colorChoice);
+  const selected = useDesign() === "material" ? choice ?? "plum" : look.preset;
   return (
     <View style={[styles.colorRow, labelled ? null : styles.colorRowPlain]}>
-      <View style={styles.colorLabel}>
-        {labelled ? <IconTile icon="paintpaletteFill" tint={look.swatch} /> : null}
+      <View style={[styles.colorLabel, plainIcon ? styles.plainColorLabel : null]}>
+        {labelled ? plainIcon ? <MaterialSettingsLeading icon="paintpaletteFill" /> : <IconTile icon="paintpaletteFill" tint={look.swatch} /> : null}
         <Text style={[font.body, { color: theme.label }]}>Color</Text>
       </View>
       <View style={styles.swatches} accessibilityRole="radiogroup">
         {COLORS.map((color) => (
-          <Swatch key={color} color={color} selected={color === look.preset} />
+          <Swatch key={color} color={color} selected={color === selected} />
         ))}
       </View>
     </View>
@@ -138,6 +141,7 @@ const styles = StyleSheet.create({
   dividerPastIcon: { marginLeft: settingsLayout.rowInset + settingsLayout.tile + settingsLayout.labelGap },
   colorRow: { paddingHorizontal: settingsLayout.rowInset, paddingVertical: space.m, gap: space.m },
   colorRowPlain: { gap: space.s },
+  plainColorLabel: { gap: 16 },
   colorLabel: { flexDirection: "row", alignItems: "center", gap: settingsLayout.labelGap },
   swatches: { flexDirection: "row" },
   swatchHit: { flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center" },

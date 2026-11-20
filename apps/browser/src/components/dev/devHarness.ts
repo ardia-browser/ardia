@@ -219,6 +219,9 @@ export function startDevHarness() {
     get plugins() {
       return devPluginSeams();
     },
+    get passwordManager(): typeof import("../../state/site/passwordManager") & typeof import("../../state/site/verificationCodes") {
+      return { ...require("../../state/site/passwordManager"), ...require("../../state/site/verificationCodes") };
+    },
     get airTraffic(): typeof import("../../state/airTraffic/store") & typeof import("../../state/airTraffic/preview") & typeof import("../../state/littleArdia/actions") {
       return { ...require("../../state/airTraffic/store"), ...require("../../state/airTraffic/preview"), ...require("../../state/littleArdia/actions") };
     },

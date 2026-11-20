@@ -211,6 +211,18 @@ public final class PageViewModule: Module {
       MainActor.assumeIsolated { PageView.dismissAllSummaries() }
     }.runOnQueue(.main)
 
+    AsyncFunction("pageSummariesEnabled") { () -> Bool in
+      MainActor.assumeIsolated { PageSummarySwitch.shared.isOn }
+    }.runOnQueue(.main)
+
+    AsyncFunction("setPageSummariesEnabled") { (enabled: Bool) -> Bool in
+      MainActor.assumeIsolated { () -> Bool in
+        PageSummarySwitch.shared.turn(enabled)
+        if !enabled { PageView.stopAllSummaries() }
+        return PageSummarySwitch.shared.isOn
+      }
+    }.runOnQueue(.main)
+
     AsyncFunction("snapshot") { (pageID: String, options: SnapshotOptionsRecord, promise: Promise) in
       Self.main(promise) { try await PhonePages.shared.snapshot(pageID, maxWidth: options.maxWidth, quality: options.quality) }
     }.runOnQueue(.main)

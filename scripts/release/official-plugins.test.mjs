@@ -37,6 +37,7 @@ function scratch({ pluginVersion = "0.3.0", link = false } = {}) {
   writeFileSync(join(artifacts, "install.sh"), readFileSync(join(root, "apps/cli/install.sh")));
   const pin = join(dir, "pin.json");
   const unpublished = structuredClone(realPin);
+  unpublished.plugins = unpublished.plugins.filter((plugin) => plugin.name === "cli");
   Object.assign(unpublished.plugins[0], {
     version: "0.3.0",
     release: "https://github.com/ardia-browser/plugins/releases/download/cli-v0.3.0",
@@ -51,7 +52,7 @@ function scratch({ pluginVersion = "0.3.0", link = false } = {}) {
 }
 
 test("the checked-in pin is well formed and apps/cli/install.sh is its installer", () => {
-  assert.match(run(["check"]), /1 pinned, 1 coming soon/);
+  assert.match(run(["check"]), new RegExp(`${realPin.plugins.length} pinned, ${realPin.comingSoon.length} coming soon`));
 });
 
 test("an artifact that isn't published yet is refused with what to do", () => {

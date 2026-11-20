@@ -69,7 +69,7 @@ function PluginCard({ plugin, picked, asking }: { plugin: OfficialPlugin; picked
   const view = officialView(plugin, programs, failure ? { state: "failed", reason: failure } : working ? { state: "installing" } : null);
   if (plugin.state === "available" && (phase === "offer" || asking))
     return <OptionCard control="check" icon={plugin.icon} title={officialTitle(plugin)} subtitle={plugin.blurb} subtitleLines={1} selected={picked} onPress={() => togglePluginPick(plugin)} />;
-  return <StatusCard plugin={plugin} status={view.note === "comingSoon" ? "" : (view.status ?? (view.note === "installed" ? "Installed" : null))} failed={view.failed} busy={view.busy} soon={view.note === "comingSoon"} done={view.note === "installed" && !view.failed && !view.busy} />;
+  return <StatusCard plugin={plugin} status={view.note === "comingSoon" ? "" : (view.status ?? (view.note === "installed" ? "Installed" : view.note === "on" ? "On" : null))} failed={view.failed} busy={view.busy} soon={view.note === "comingSoon"} done={(view.note === "installed" || view.note === "on") && !view.failed && !view.busy} />;
 }
 
 function StatusCard({ plugin, status, failed, busy, soon, done }: { plugin: OfficialPlugin; status: string | null; failed: boolean; busy: boolean; soon: boolean; done: boolean }) {

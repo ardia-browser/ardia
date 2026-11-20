@@ -1,0 +1,10 @@
+{
+  "$schema": "../../plugin.schema.json",
+  "manifest": 1,
+  "name": "password-manager",
+  "title": "Test Passwords",
+  "description": "Fill logins and verification codes from the system's password panel.",
+  "version": "1.0.0",
+  "requires": "0.0.0",
+  "passwordManager": { "fill": "system", "fields": ["login", "oneTimeCode"], "verificationCodeSetup": "system", "passkeys": "system" }
+}

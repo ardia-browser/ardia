@@ -97,10 +97,7 @@ struct BrowseForMePage: View {
         }
       }
 
-      Section {
-        Text("Read aloud coming soon")
-          .foregroundStyle(.secondary)
-      }
+      TalkToMeSections()
     }
     .navigationTitle("Browse for Me")
     .navigationBarTitleDisplayMode(.inline)

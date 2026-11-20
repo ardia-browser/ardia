@@ -170,7 +170,7 @@ const PinnedTile = memo(function PinnedTile({ tabId, width, sliding, x, y }: { t
         {...hoverProps}
         onDoubleClick={() => returnShownTabToPinnedUrl(windowId, tabId)}
       >
-        <TabPressArea windowId={windowId} tab={tab} selected={selected}>
+        <TabPressArea windowId={windowId} tab={tab} squish="tile" selected={selected}>
           {({ pressed }) => (
             <TileFace tabId={tabId} width={width} active={active} selected={selected} hovered={hovered} pressed={pressed} />
           )}

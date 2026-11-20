@@ -20,12 +20,16 @@ public struct ResearchSource: Identifiable, Equatable, Hashable, Sendable {
 
 public enum ResearchDigest {
   public static let minimumSourceCharacters = 300
-  public static let extractiveLineLimit = 6
+  public static let briefLineLimit = 3
+  public static let detailedLineLimit = 8
+  static let detailWords: Set<String> = ["detail", "detailed", "details", "explain", "elaborate", "steps", "step-by-step", "list", "guide", "tutorial", "compare", "comparison", "vs", "versus", "overview", "everything", "thorough", "in-depth", "longer", "full"]
 
   public static let instructions = """
     You answer a search query using only the numbered web pages you are given. \
-    Start with a one or two sentence direct answer. Then add up to three short sections, each a line starting with "## " \
-    followed by two to four lines starting with "- ". Keep every line short and plain, as if read aloud. \
+    Be brief by default: give the direct answer in a few short sentences, with no introduction and no closing summary. \
+    When the query asks for detail, steps, a list, a comparison or a longer answer, give a fuller one: \
+    short sections, each a line starting with "## " followed by lines starting with "- ". \
+    Keep every line short and plain, as if read aloud. \
     After each fact put the number of the page it came from in brackets, like [2]. \
     If the pages don't answer the query, say so in one sentence. Never invent facts or links.
     """
@@ -88,7 +92,18 @@ public enum ResearchDigest {
     return "Query: \(query)\n\nPages:\n\n" + pages.joined(separator: "\n\n") + "\n\nAnswer the query: \(query)"
   }
 
+  public static func asksForDetail(_ query: String) -> Bool {
+    let lowered = query.lowercased()
+    if lowered.contains("how to") || lowered.contains("step by step") { return true }
+    return lowered.split(whereSeparator: { !$0.isLetter && !$0.isNumber && $0 != "-" }).contains { detailWords.contains(String($0)) }
+  }
+
+  public static func extractiveLineLimit(for query: String) -> Int {
+    asksForDetail(query) ? detailedLineLimit : briefLineLimit
+  }
+
   public static func extractiveAnswer(query: String, sources: [ResearchSource]) -> String {
+    let limit = extractiveLineLimit(for: query)
     let terms = terms(query)
     var candidates: [(source: Int, rank: Int, text: String, score: Int)] = []
     for source in sources {
@@ -102,10 +117,10 @@ public enum ResearchDigest {
       let key = String(candidate.text.lowercased().prefix(60))
       guard seen.insert(key).inserted else { continue }
       lines.append("- \(candidate.text) [\(candidate.source)]")
-      if lines.count == extractiveLineLimit { break }
+      if lines.count == limit { break }
     }
     if lines.isEmpty {
-      for source in sources.prefix(extractiveLineLimit) {
+      for source in sources.prefix(limit) {
         guard let paragraph = source.paragraphs.first(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else { continue }
         let clipped = paragraph.count > 280 ? String(paragraph.prefix(277)).trimmingCharacters(in: .whitespaces) + "…" : paragraph
         lines.append("- \(clipped) [\(source.id)]")

@@ -1,3 +1,4 @@
+import { foreignWriteHooks } from "../browser/foreignWriteHooks";
 import { onDownload, type Download } from "../../platform/downloads";
 import { useBrowser } from "../browser/store";
 import { decideDownload } from "./decisions";
@@ -64,7 +65,7 @@ export async function settleFinishedDownload(d: Download): Promise<MoveResult | 
   if (!result.ok) warnFor(consent, `[automation] download ${d.filename} wasn't moved (${result.reason})${result.stagedPath ? `; it is at ${result.stagedPath}` : ""}`);
   if (!result.ok && result.strayPath) warnFor(consent, `[automation] a file that isn't this download was left at ${result.strayPath}`);
   const current = useBrowser.getState().downloads.find((x) => x.id === d.id);
-  if (landed && current) useBrowser.getState().upsertDownload({ ...current, path: landed, filename: landed.split("/").pop() || current.filename });
+  if (landed && current) foreignWriteHooks.around(() => useBrowser.getState().upsertDownload({ ...current, path: landed, filename: landed.split("/").pop() || current.filename }));
   return result;
 }
 

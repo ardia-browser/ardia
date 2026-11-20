@@ -310,9 +310,12 @@ typedef NS_ENUM(NSInteger, ArdiaTransfer) {
 @end
 
 @interface ArdiaWebView (PageMessagesInternal)
-- (void)noteScriptFrame:(NSString *)frameId main:(BOOL)main;
+- (void)noteScriptFrame:(NSString *)frameId main:(BOOL)main sameSite:(BOOL)sameSite;
 - (void)forgetScriptFrame:(NSString *)frameId;
 - (void)pushSelectionPopover;
+- (void)pushFieldProvider;
+- (void)pushFieldProviderHint:(NSString *)json;
+- (BOOL)sameSiteFrame:(BOOL)main origin:(NSString *)origin;
 - (void)callFrame:(NSString *)frameId kind:(NSString *)kind json:(NSString *)json;
 - (void)resetPageMedia;
 @end
@@ -371,6 +374,8 @@ NSHashTable<ArdiaWebView *> *LiveViews();
 bool SamePage(NSString *a, NSString *b);
 NSString *OriginOf(NSString *url);
 NSString *VerifiedOrigin(NSString *origin);
+NSDictionary *_Nullable FieldProviderFor(NSString *_Nullable profile);
+NSString *FieldProviderJSON(NSString *_Nullable profile);
 void NoteEvent(int browserId, NSString *name, NSDictionary *payload);
 void AcceptDrops(NSView *root, BOOL accept);
 NSView *PaneUnder(NSView *view, NSView *ancestor);

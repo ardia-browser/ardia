@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 import { useTheme } from "../ui/theme";
 import { FadeLabel, radius, sidebarFont, sidebarLineHeight, space } from "../ui";
@@ -12,7 +12,7 @@ import { ROW_GLYPH, SPLIT_PREVIEW } from "./tokens";
 import { profileSurfaces } from "./profileSurfaces";
 
 type PreviewValues = { shown: Animated.Value; hidden: Animated.AnimatedInterpolation<number>; toLeft: Animated.Value };
-export type SplitPreviewMotion = { side: SplitDropSide | null; values: PreviewValues | null };
+export type SplitPreviewMotion = { side: SplitDropSide | null; values: PreviewValues | null; fades: boolean };
 
 export function useSplitPreview(side: SplitDropSide | null, panes: number): SplitPreviewMotion {
   const previews = !!side && panes < SPLIT_MAX_PANES;
@@ -44,8 +44,15 @@ export function useSplitPreview(side: SplitDropSide | null, panes: number): Spli
     motion.start();
     return () => motion.stop();
   }, [drawn]);
-  return { side: drawn, values: drawn ? values.current : null };
+  return { side: drawn, values: drawn ? values.current : null, fades: !!values.current };
 }
+
+export function PreviewFade({ preview, children }: { preview: SplitPreviewMotion; children: ReactNode }) {
+  if (!preview.fades) return <View style={ROW_CONTENT}>{children}</View>;
+  return <Animated.View style={[ROW_CONTENT, { opacity: preview.values ? preview.values.hidden : 1 }]}>{children}</Animated.View>;
+}
+
+const ROW_CONTENT = { flex: 1, alignSelf: "stretch", flexDirection: "row", alignItems: "center" } as const;
 
 export function SplitPreview({ panes, values, rowActive }: { panes: string[]; values: PreviewValues; rowActive: boolean }) {
   const theme = useTheme();

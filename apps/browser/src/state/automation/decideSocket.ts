@@ -2,6 +2,9 @@ import { broadcastOnControlSocket } from "../../platform/automation";
 import { isFields } from "../../lib/decode";
 import { parseHooksDocument, type HookSpec } from "./hookFile";
 import { hookNamed } from "./hookRules";
+import { fitsOnLine } from "./socketWire";
+import { noteSocketLineShrunk } from "../telemetry/cliCounts";
+import type { ConsentToken } from "../telemetry/client";
 
 export const MAX_PENDING_DECISIONS = 64;
 export const MAX_PENDING_PER_CONNECTION = 16;
@@ -71,15 +74,20 @@ export const servingConnection = (hook: HookSpec): number | null => responderFor
 export const servedHooks = (): { connection: number; name: string; revision: string }[] =>
   [...responders.values()].flatMap((r) => [...r.served].map(([name, revision]) => ({ connection: r.connection, name, revision })));
 
-function send(connection: number, line: object) {
+const send = (connection: number, line: object) => sendLine(connection, JSON.stringify(line));
+
+function sendLine(connection: number, line: string) {
   try {
-    broadcastOnControlSocket([connection], JSON.stringify(line));
+    broadcastOnControlSocket([connection], line);
   } catch (error) {
     console.warn("[automation] couldn't send a decide request", error);
   }
 }
 
-export function requestDecision(hook: HookSpec, event: string, data: Record<string, unknown>, deadlineMs: number, signal?: AbortSignal): Promise<unknown> {
+export const decideLine = (id: string, event: string, hook: HookSpec, deadlineMs: number, data: Record<string, unknown>) =>
+  JSON.stringify({ decide: id, event, hook: hook.name, revision: hook.revision, deadline: deadlineMs, time: Date.now(), data });
+
+export function requestDecision(hook: HookSpec, event: string, data: Record<string, unknown>, deadlineMs: number, signal?: AbortSignal, consent: ConsentToken | null = null): Promise<unknown> {
   const responder = responderFor(hook);
   if (!responder || pending.size >= MAX_PENDING_DECISIONS || signal?.aborted) return Promise.resolve(undefined);
   const { connection, generation } = responder;
@@ -87,6 +95,11 @@ export function requestDecision(hook: HookSpec, event: string, data: Record<stri
   for (const p of pending.values()) if (p.connection === connection) mine += 1;
   if (mine >= MAX_PENDING_PER_CONNECTION) return Promise.resolve(undefined);
   const id = `d${++seq}`;
+  const line = decideLine(id, event, hook, deadlineMs, data);
+  if (!fitsOnLine(line)) {
+    noteSocketLineShrunk(consent);
+    return Promise.resolve(undefined);
+  }
   return new Promise((resolve) => {
     const finish = (value: unknown, notify: boolean) => {
       if (!pending.delete(id)) return;
@@ -99,7 +112,7 @@ export function requestDecision(hook: HookSpec, event: string, data: Record<stri
     const timer = setTimeout(() => finish(undefined, true), deadlineMs);
     signal?.addEventListener("abort", onAbort);
     pending.set(id, { id, connection, generation, hook: hook.name, revision: hook.revision, answer: (value) => finish(value, false), cancel: () => finish(undefined, true) });
-    send(connection, { decide: id, event, hook: hook.name, revision: hook.revision, deadline: deadlineMs, time: Date.now(), data });
+    sendLine(connection, line);
   });
 }
 

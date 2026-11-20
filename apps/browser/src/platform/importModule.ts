@@ -15,6 +15,7 @@ export type {
   ImportedExtension,
   ImportedExtensionSkip,
   ImportedFavicon,
+  ImportedSearchEngine,
   ImportedTab,
   ImportKind,
   ImportResult,

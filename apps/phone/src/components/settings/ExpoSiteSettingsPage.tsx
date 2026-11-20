@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { PlatformColor, View } from "react-native";
 import { Button, ConfirmationDialog, Form, HStack, LabeledContent, NavigationLink, Picker, RNHostView, Section, SwipeActions, Text, Toggle, VStack } from "@expo/ui/swift-ui";
 import { accessibilityElement, accessibilityHint, font, foregroundStyle, frame, navigationBarTitleDisplayMode, navigationTitle, pickerStyle, tag, tint } from "@expo/ui/swift-ui/modifiers";
+import { bottomBarCollapses } from "../../lib/barCollapse";
 import { permissionSummary, PERMISSION_NAMES, sortedPermissions } from "../../lib/sitePermissionNames";
 import { setBlockingCategory, setCollapsesBottomBar, setDefaultNightShade, setSwipeNavigation, useBlocking, useEngines } from "../../state/settings/actions";
 import { usePreferences } from "../../state/settings/hooks";
@@ -9,7 +10,7 @@ import { settingsRouteKey } from "../../state/settings/nav";
 import { formatNumber } from "../../state/settings/settingsRules";
 import { refreshSitePermissions, revokeSiteAccess, useSitePermissions } from "../../state/settings/sitePermissions";
 import type { SitePermissionGrant } from "../../platform/pages";
-import { contentMargins, Favicon, modifierList, settingsChrome, settingsLayout, settingsSwitchStyle } from "../ui";
+import { contentMargins, Favicon, modifierList, settingsChrome, settingsLayout, settingsSwitchStyle, useDesign } from "../ui";
 import { ExpoRowLabel } from "./ExpoRowLabel";
 import { NIGHT_SHADE, SWIPE_NAVIGATION } from "./SitePages";
 
@@ -17,10 +18,11 @@ const SECONDARY = { type: "hierarchical", style: "secondary" } as const;
 const FILL = Number.MAX_SAFE_INTEGER;
 
 export function ExpoSiteSettingsPage() {
+  const design = useDesign();
   const state = useBlocking((s) => s.state);
   const nightShade = useEngines((s) => s.nightShade);
   const swipe = usePreferences((p) => p.swipeNavigation);
-  const collapses = usePreferences((p) => p.collapsesBottomBar);
+  const collapses = bottomBarCollapses(design, usePreferences((p) => p.collapsesBottomBar));
   const enabledLists = state?.lists.filter((list) => list.isEnabled).length ?? 0;
   const trusted = state?.exemptHosts.length ?? 0;
   return (

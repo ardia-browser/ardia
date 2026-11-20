@@ -277,6 +277,7 @@
 #include "ui/views/view_observer.h"
 #include "ui/views/view_targeter.h"
 #include "ui/views/view_targeter_delegate.h"
+#include "ui/views/view_constants_aura.h"
 #include "ui/views/view_tracker.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_observer.h"
@@ -949,6 +950,14 @@ std::optional<std::string> ReadAsset(base::FilePath directory,
     contents.insert(head + 6, "<script src=\"/host-bootstrap.js\"></script>");
   }
   return contents;
+}
+
+bool HoldsNativeView(views::WebView* view, content::WebContents* contents) {
+  views::NativeViewHost* holder = view->holder();
+  gfx::NativeView native = contents->GetNativeView();
+  if (!native || holder->native_view() != native) return false;
+  if (holder->layer_managed_by_views()) return holder->layer() && native->layer()->parent() == holder->layer();
+  return native->GetProperty(views::kHostViewKey) == holder;
 }
 
 class DevToolsFrontendWatch : public content::WebContentsObserver {
@@ -5087,6 +5096,11 @@ void ShellHostView::LayoutPane(TabBinding* binding) {
   }
   tools->SetBoundsRect(tools_bounds + origin);
   tools->SetVisible(true);
+  views::FocusManager* focus = GetFocusManager();
+  const bool reattach = tools->web_contents() == devtools && !HoldsNativeView(tools, devtools);
+  const bool reattach_focused = reattach && focus && tools->Contains(focus->GetFocusedView());
+  if (reattach_focused) focus->ClearFocus();
+  if (reattach) tools->SetWebContents(nullptr);
   tools->SetWebContents(devtools);
   if (auto* native = devtools->GetNativeView(); native && !native->IsVisible()) native->Show();
   tools->holder()->SetNativeViewCornerRadii(gfx::RoundedCornersF(12.0f));
@@ -5094,7 +5108,7 @@ void ShellHostView::LayoutPane(TabBinding* binding) {
   const size_t tools_index = GetIndexOf(tools).value();
   if (strategy.hide_inspected_contents() ? tools_index < page_index : tools_index > page_index)
     ReorderChildView(tools, page_index);
-  if ((fresh && DevToolsWindow::AsDevToolsWindow(devtools)) || restore_focus) {
+  if ((fresh && DevToolsWindow::AsDevToolsWindow(devtools)) || restore_focus || reattach_focused) {
     tools->RequestFocus();
     devtools->Focus();
   }

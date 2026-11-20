@@ -131,6 +131,7 @@ export type ArcLinkRule = { id: string; match: "contains" | "equals"; text: stri
 export type ArcRouting = { rules: ArcLinkRule[]; skipped: number; fallback?: ArcLinkDestination };
 export type ArcArchivedTab = { url: string; title: string; customTitle?: string; archivedAt: number; spaceId?: string; spaceName?: string; auto: boolean };
 export type ArcArchive = { tabs: ArcArchivedTab[]; dropped?: number; cleanUpAfterMinutes?: number };
+export type ImportedSearchEngine = { name: string; keyword: string; url: string; prepopulateId?: number };
 
 export type ImportResult = {
   browserId: string;
@@ -149,6 +150,7 @@ export type ImportResult = {
   spaces: SpaceSuggestion[];
   favorites: ImportedTab[];
   favicons: ImportedFavicon[];
+  searchEngine?: ImportedSearchEngine;
   separateEssentials?: boolean;
   diaSidebar?: { primarySpaceId?: string };
   arcRouting?: ArcRouting;

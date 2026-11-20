@@ -9,6 +9,7 @@ import { loadSession } from "./sessions";
 import { arcFilePath, readArcArchive, readArcRouting, Sidebars, takeSpaces } from "./sidebars";
 import { ARC_ICON_CACHE, cachedArcFavicons, preferringCached } from "./arcExtras";
 import { snapshotFailure } from "./sqlite";
+import { readSearchEngine } from "./searchEngine";
 import { zenFavicons } from "./zenSidebar";
 
 export class Unlocks {
@@ -193,6 +194,8 @@ export async function importProfile(
   if (chromium) {
     checkCancelled(observer);
     result.favicons = await readFavicons(host, [dir], faviconPages(result)).catch(() => []);
+    const searchEngine = await readSearchEngine(host, dir).catch(() => undefined);
+    if (searchEngine) result.searchEngine = searchEngine;
   }
   const arc = sidebars.loadedArc();
   if (arc) {

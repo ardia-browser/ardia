@@ -19,6 +19,7 @@ export type Profile = {
   pinnedCollapsed?: boolean;
   shareTopApps?: true;
   syncTabs?: true;
+  passwordManager?: string;
 };
 
 type WindowBase = {
@@ -155,6 +156,7 @@ export type ClosedTab = {
   tab: TabSnapshot;
   tabId?: string;
   restoreFrom?: string;
+  closeBatch?: string;
   windowId: string;
   index: number;
   group: ClosedGroupInfo | null;

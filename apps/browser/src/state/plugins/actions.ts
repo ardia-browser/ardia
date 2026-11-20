@@ -1,11 +1,12 @@
 import { pluginsFolder, revealPluginLog, revealPluginsFolder } from "../../platform/plugins";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
-import { disablePlugin as turnOff } from "./lifecycle";
+import { turnOffPlugin } from "./lifecycle";
 import { consentNow } from "../telemetry/choice";
 
 export { dismissPluginConsent, enablePlugin, removePlugin, requestPluginConsent, setPluginValue } from "./lifecycle";
-export const disablePlugin = (name: string) => turnOff(name, consentNow());
+export const disablePlugin = (name: string) => turnOffPlugin(name, consentNow());
 export { restartProcess as restartPlugin } from "./process";
+export { removePluginAfterConfirm } from "./removeConfirmed";
 export { openPluginPage, pluginPagePath } from "./pages";
 export { consentLines, type ConsentLine } from "./consent";
 export { canRelink, relinkPrograms } from "./programs";

@@ -166,6 +166,8 @@ test("Settings takes the one sheet over the Archive or Spaces, which come back w
   assert.equal(frontSheet(false, "spaces"), "spaces");
   assert.equal(frontSheet(true, "spaces"), "settings");
   assert.equal(frontSheet(true, null), "settings");
+  assert.equal(frontSheet(false, "archive", true), "library");
+  assert.equal(frontSheet(true, null, true), "settings");
 });
 
 test("onboarding comes back on the step it was on when the activity was recreated, and on the welcome step for anything else", () => {

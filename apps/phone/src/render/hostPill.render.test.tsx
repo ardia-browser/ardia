@@ -1,4 +1,4 @@
-import { StyleSheet } from "react-native";
+import { Platform, StyleSheet } from "react-native";
 import { getAnimatedStyle } from "react-native-reanimated";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { BrowsingScreen } from "../components/browsing/BrowsingScreen";
@@ -12,7 +12,12 @@ import { setPreference } from "../state/settings/store";
 import { currentTabs } from "../state/tabs/store";
 import { renderSurface, unmount, withTabs } from "../../test/render/harness";
 
+const mockMotion = { reduced: false };
+
+jest.mock("../state/app/systemLook", () => ({ ...jest.requireActual("../state/app/systemLook"), useReduceMotion: () => mockMotion.reduced }));
+
 beforeEach(() => {
+  mockMotion.reduced = false;
   jest.useFakeTimers();
   withTabs(3);
   usePages.setState({ tones: {}, lastTones: {}, heldTones: {} });
@@ -27,6 +32,8 @@ afterEach(() => {
   jest.useRealTimers();
   setPreference("collapsesBottomBar", false);
 });
+
+const android = Platform.OS === "android";
 
 type Root = ReturnType<typeof renderSurface>;
 
@@ -54,11 +61,22 @@ const moved = (node: ReactTestInstance) => {
   return { opacity: style.opacity ?? 1, translateY: transform.translateY ?? 0, scale: transform.scale ?? 1 };
 };
 
+const expectPill = (root: Root, shown: boolean) => {
+  if (!android) {
+    if (shown) expect(host(root, "hostPill")).toBeDefined();
+    else expect(host(root, "hostPill")).toBeUndefined();
+    return;
+  }
+  expect(host(root, "hostPillFold")!.props.pointerEvents).toBe(shown ? "box-none" : "none");
+  expect(host(root, "hostPillFold")!.props.accessibilityElementsHidden).toBe(!shown);
+  expect(moved(host(root, "hostPillFold")!).opacity).toBe(shown ? 1 : 0);
+};
+
 const showToolbar = (root: Root) => root.root.findAll((node) => node.props.accessibilityLabel === "Show Toolbar" && typeof node.props.onPress === "function")[0];
 
 test("on iPhone's design, scrolling down with Collapse Bottom Bar on shrinks the bar into a 30 point pill with the page's host, centred on the bar's bottom", () => {
   const root = page("redesigned");
-  expect(host(root, "hostPill")).toBeUndefined();
+  expectPill(root, false);
   scrolled("down");
   settle();
   expect(host(root, "hostPillHost")!.props.children).toBe("site0.example");
@@ -76,14 +94,15 @@ test("on iPhone's design, scrolling down with Collapse Bottom Bar on shrinks the
   unmount(root);
 });
 
-test("the pill grows in from the bar's size while the bar shrinks toward it, on main's barCollapse spring; only its contents fade, so its glass is never under a fading parent", () => {
+test("both phones grow the pill out of the bar on iPhone's spring; Android also fades the pill's surface, which has no glass to fade", () => {
   const root = page("redesigned");
   scrolled("down");
   act(() => jest.advanceTimersByTime(16));
   const pill = moved(host(root, "hostPillFold")!);
   expect(pill.scale).toBeGreaterThan(1);
   expect(pill.scale).toBeLessThanOrEqual(1 / 0.62 + 1e-6);
-  expect(pill.opacity).toBe(1);
+  if (android) expect(pill.opacity).toBeLessThan(1);
+  else expect(pill.opacity).toBe(1);
   expect(moved(host(root, "hostPillContent")!).opacity).toBeLessThan(1);
   settle();
   expect(moved(host(root, "hostPillFold")!).scale).toBeCloseTo(1, 3);
@@ -101,10 +120,10 @@ test("the pill reads Show Toolbar with the host as its value, and a tap on it br
   settle();
   expect(moved(host(root, "floatingBarFold")!)).toEqual({ opacity: 1, translateY: 0, scale: 1 });
   expect(host(root, "floatingBarFold")!.props.pointerEvents).toBe("box-none");
-  expect(host(root, "hostPill")).toBeUndefined();
+  expectPill(root, false);
   scrolled("down");
   settle();
-  expect(host(root, "hostPill")).toBeUndefined();
+  expectPill(root, false);
   unmount(root);
 });
 
@@ -115,10 +134,10 @@ test("scrolling back up, opening another page or turning the preference off expa
     scrolled("up");
     scrolled("down");
     settle();
-    expect(host(root, "hostPill")).toBeDefined();
+    expectPill(root, true);
     expand();
     settle();
-    expect(host(root, "hostPill")).toBeUndefined();
+    expectPill(root, false);
     expect(moved(host(root, "floatingBarFold")!).opacity).toBe(1);
   }
   unmount(root);
@@ -129,7 +148,7 @@ test("with Collapse Bottom Bar off, scrolling down leaves the full bar in place"
   const root = page("redesigned");
   scrolled("down");
   settle();
-  expect(host(root, "hostPill")).toBeUndefined();
+  expectPill(root, false);
   expect(moved(host(root, "floatingBarFold")!).opacity).toBe(1);
   unmount(root);
 });
@@ -164,4 +183,40 @@ test("each phone runs its own design's collapse: the pill on iPhone, the slide o
   expect(root.root.findAll((node) => node.type === HostPill)).toHaveLength(appDesign === "redesigned" ? 1 : 0);
   expect(moved(host(root, "pageBar")!).opacity).toBe(appDesign === "redesigned" ? 1 : 0);
   unmount(root);
+});
+
+test("Android keeps the same pill mounted through rapid direction reversals and taps, with only the current control accessible", () => {
+  if (!android) return;
+  const root = page("redesigned");
+  const pill = host(root, "hostPill")!;
+  for (let turn = 0; turn < 5; turn++) {
+    scrolled("down");
+    act(() => jest.advanceTimersByTime(48));
+    scrolled("up");
+    act(() => jest.advanceTimersByTime(32));
+  }
+  settle();
+  expect(host(root, "hostPill")).toBe(pill);
+  expectPill(root, false);
+  expect(moved(host(root, "floatingBarFold")!)).toEqual({ opacity: 1, translateY: 0, scale: 1 });
+  scrolled("down");
+  settle();
+  expectPill(root, true);
+  act(() => showToolbar(root)!.props.onPress());
+  settle();
+  expectPill(root, false);
+  unmount(root);
+});
+
+test("Android Remove animations snaps the collapse and Find state without the bar spring", () => {
+  if (!android) return;
+  mockMotion.reduced = true;
+  const root = page("redesigned");
+  scrolled("down");
+  act(() => jest.advanceTimersByTime(16));
+  expectPill(root, true);
+  act(() => usePageUi.setState({ findOpen: true }));
+  expect(moved(host(root, "pageBar")!)).toMatchObject({ opacity: 0, translateY: 30 });
+  unmount(root);
+  mockMotion.reduced = false;
 });

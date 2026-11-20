@@ -6,9 +6,10 @@ import { modifiersOf, type ClickModifiers } from "../../lib/keys";
 import { useToolbarRowContext } from "./toolbarRowContext";
 import { useHover, useTooltip } from "./useHover";
 import { HoverFill } from "./HoverFill";
+import { TintedImage } from "./TintedImage";
 import { CloseButtonView, PillButtonView, PushButtonView, StepperButtonView } from "./ButtonKinds";
 import { useTheme } from "./theme";
-import { buttonMotion, usePressScaleMotion } from "./motion";
+import { buttonMotion, usePressMotion, usePressScaleMotion } from "./motion";
 import { capsule, iconButton, opacity, radius as radii, space, font as typeScale, weight as weights, type ColorRole, type IconButtonSize, type Space, type TypeSize, type Weight } from "./tokens";
 
 export type ButtonHit = { width: number; height: number; plateX: number; plateY: number; box?: number; radius?: number };
@@ -65,7 +66,7 @@ type TextProps = {
 
 export type PillSize = "m" | "l" | "xl";
 
-export type PillProps = { variant: "pill"; onPress: () => void; title: string; primary?: boolean; size?: PillSize } & ({ tone?: "prompt" } | { tone: "chip"; icon?: string; height?: number });
+export type PillProps = { variant: "pill"; onPress: () => void; title: string; primary?: boolean; size?: PillSize } & ({ tone?: "prompt"; disabled?: boolean } | { tone: "chip"; icon?: string; height?: number });
 
 export type StepperProps = { variant: "stepper"; icon: string; onPress: () => void; width?: number; height?: number; tooltip: string; disabled?: boolean };
 
@@ -130,7 +131,7 @@ function IconButtonView(props: IconProps) {
   const ink = color ?? (disabled ? (palette ? palette.iconDisabled : theme.iconDisabled) : palette ? palette.icon : theme.icon);
   const face = children ?? (asset ? (
     <View pointerEvents="none">
-      <Image source={asset} style={{ width: metrics.glyph, height: metrics.glyph, tintColor: ink }} />
+      <TintedImage source={asset} tint={ink} style={{ width: metrics.glyph, height: metrics.glyph }} />
     </View>
   ) : image ? (
     <View pointerEvents="none">
@@ -141,6 +142,7 @@ function IconButtonView(props: IconProps) {
   ) : null);
   const hasGlyphPressMotion = !children && (!!icon || !!image || !!asset);
   const { scale: pressScale, onPressIn, onPressOut } = usePressScaleMotion(hasGlyphPressMotion);
+  const plateScale = usePressMotion() === "bounce" ? pressScale : null;
   const handlePressIn = (event: GestureResponderEvent) => {
     onPressIn?.();
     props.onPressIn?.(event);
@@ -150,7 +152,7 @@ function IconButtonView(props: IconProps) {
     props.onPressOut?.(event);
   };
   const plateRadius = hit?.radius ?? (props.capsule ? capsule(plateBox) : metrics.radius);
-  const animatedFace = hasGlyphPressMotion && pressScale ? (
+  const animatedFace = hasGlyphPressMotion && pressScale && !plateScale ? (
     <Animated.View
       pointerEvents="none"
       style={{ width: glyphFrame, height: glyphFrame, alignItems: "center", justifyContent: "center", transform: [{ scale: pressScale }] }}
@@ -158,8 +160,9 @@ function IconButtonView(props: IconProps) {
       {face}
     </Animated.View>
   ) : face;
+  const Plate = plateScale ? Animated.View : View;
   const plate = (pressed: boolean) => (
-    <View
+    <Plate
       style={{
         position: hit ? "absolute" : "relative",
         left: hit?.plateX,
@@ -168,12 +171,13 @@ function IconButtonView(props: IconProps) {
         height: plateBox,
         alignItems: "center",
         justifyContent: "center",
+        transform: plateScale ? [{ scale: plateScale }] : undefined,
       }}
     >
       <HoverFill shown={!disabled && (pressed || !!active || hovered)} instant={!!active} color={pressed || active ? pressedFill : hover} radius={plateRadius} />
       {animatedFace}
       {badge}
-    </View>
+    </Plate>
   );
   if (!props.toolbar)
     return (

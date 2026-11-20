@@ -1,4 +1,20 @@
+import Foundation
+
 enum WebKitPageScript {
+  static let fieldProviderKit: String = {
+    let start = "  const fieldProviderKit = "
+    let end = "  const nativeMutationObserver = "
+    guard let path = Bundle(for: WebKitHub.self).path(forResource: "page_script", ofType: "js"),
+      let script = try? String(contentsOfFile: path, encoding: .utf8),
+      let from = script.range(of: start),
+      let to = script.range(of: end, range: from.upperBound..<script.endIndex)
+    else {
+      NSLog("[webkit] field provider kit not found in page_script.js")
+      return "  const fieldProviderKit = () => ({ configure() {}, focusQuery() {} });\n  const fieldProviderIntrinsics = () => ({});\n"
+    }
+    return String(script[from.lowerBound..<to.lowerBound])
+  }()
+
   static let source = #"""
 (() => {
   if (window.__ardia) return;
@@ -316,7 +332,54 @@ enum WebKitPageScript {
     addEventListener("resize", () => direction.resized(innerHeight, performance.now()));
   }
 
+  const guard = (fn) =>
+    function () {
+      try {
+        return Reflect.apply(fn, this, arguments);
+      } catch (e) {}
+    };
+  const later = (fn, ms) => {
+    let queued = false;
+    return () => {
+      if (queued) return;
+      queued = true;
+      setTimeout(() => {
+        queued = false;
+        guard(fn)();
+      }, ms);
+    };
+  };
+  const onReady = (fn) => (document.readyState === "loading" ? document.addEventListener("DOMContentLoaded", fn, { once: true }) : fn());
+\#(fieldProviderKit)
+  const fieldProviders = fieldProviderKit({
+    document,
+    send: post,
+    guard,
+    later,
+    onReady,
+    revealed: () => null,
+    addListener: EventTarget.prototype.addEventListener,
+    apply: Reflect.apply,
+    FrameMutationObserver: window.MutationObserver,
+    setTimeout,
+    addEventListener,
+    requestAnimationFrame,
+    isTop,
+    intrinsics: fieldProviderIntrinsics(window),
+  });
+  post("fieldProviderHello", null);
+  addEventListener("pageshow", (e) => e.isTrusted && e.persisted && post("fieldProviderHello", null));
+
   window.__ardia = {
+    fieldProvider(state) {
+      fieldProviders.configure(state);
+    },
+    fieldFocusQuery(query) {
+      fieldProviders.focusQuery(query);
+    },
+    fieldProviderHint(state) {
+      fieldProviders.hint(state);
+    },
     mute(on) {
       muted = !!on;
       for (const m of allMedia()) {

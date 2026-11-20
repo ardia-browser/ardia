@@ -32,6 +32,8 @@ import { goToSettingsPane, SETTINGS_DETAIL } from "../../../state/settings/setti
 import { ProfileSubPage } from "./ProfileSubPage";
 import { useGrowingRows } from "../../../state/settings/growingRows";
 import { notePasswordListShown } from "../../../state/telemetry/exportCounts";
+import { useManagerPlugins, useProfilePasswordManager } from "../../../state/site/passwordManager";
+import { offerToSaveHandedOver, PasswordManagerRow } from "./PasswordManagerRow";
 
 function passwordManagerAppsNote() {
   const apps = `1Password, Bitwarden, KeePassXC and Proton Pass extensions connect to their ${PLATFORM_TERMS.computer} apps.`;
@@ -48,13 +50,15 @@ export function PasswordsSection({ profileId }: { profileId: string }) {
   const [addressesAsked] = useResource(autofillToggleAsked, profile, "addresses");
   const [cardsAsked] = useResource(autofillToggleAsked, profile, "cards");
   const open = (detail: string) => goToSettingsPane("profiles", profileId, detail);
+  const handedOver = offerToSaveHandedOver(useProfilePasswordManager(profileId), useManagerPlugins());
 
   return (
     <>
       <SectionHeader title="Passwords and autofill" />
       <Group>
-        <Row anchor="profiles.offerToSavePasswords" description={keptByExtensionNote(autofill, passwordsAsked)}>
-          <Toggle value={autofill} onChange={(v) => setPasswordAutofillFor(profile, v)} />
+        <PasswordManagerRow profileId={profileId} />
+        <Row anchor="profiles.offerToSavePasswords" description={handedOver ?? keptByExtensionNote(autofill, passwordsAsked)}>
+          <Toggle value={!handedOver && autofill} disabled={!!handedOver} onChange={(v) => setPasswordAutofillFor(profile, v)} />
         </Row>
         <Row anchor="profiles.passwords" onPress={() => open(SETTINGS_DETAIL.passwords)} />
         <Row anchor="profiles.addresses" description={keptByExtensionNote(enabled?.addresses, addressesAsked)}>

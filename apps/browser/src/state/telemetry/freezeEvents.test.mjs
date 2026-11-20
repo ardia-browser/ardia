@@ -145,6 +145,7 @@ test("a signature whose hash is all digits survives the property scrub, stays di
   const sent = (await sentFreezes()).map((p) => p.signature);
   assert.deepEqual(sent, signatures);
   assert.notEqual(sent[0], sent[1]);
+  stub.docs.delete("freeze-sends.json");
   const day = Date.UTC(2026, 10, 20);
   assert.equal(sends.claimDailySend(signatures[0], day), true);
   assert.equal(sends.claimDailySend(signatures[0], day + 60_000), false, "same signature, same day");

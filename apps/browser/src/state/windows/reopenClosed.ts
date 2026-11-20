@@ -55,6 +55,9 @@ export function withoutRecentlyClosed(s: BrowserState, windowId: string | null |
   return gone.size ? { cleared: gone.size, next } : undefined;
 }
 
+const closedBefore = (closed: ClosedTab[], entry: ClosedTab) =>
+  entry.closeBatch ? closed.filter((c) => c.closeBatch === entry.closeBatch && c.index < entry.index).length : 0;
+
 function canRestoreTabInto(s: BrowserState, c: ClosedTab, windowId: string | undefined): boolean {
   const w = windowId ? s.windows[windowId] : undefined;
   if (isIncognitoProfile(c.tab.profileId)) return c.windowId === windowId;
@@ -111,7 +114,7 @@ export function restoreTab(s: BrowserState, entry: ClosedTab, requested?: string
     url: entry.tab.url || undefined,
     profileId,
     snapshot: entry.tab,
-    index: w.id === entry.windowId ? entry.index : undefined,
+    index: w.id === entry.windowId ? entry.index - closedBefore(closedTabs, entry) : undefined,
     adoptId: entry.tabId && entry.tab.url ? restoreId(entry.restoreFrom ?? entry.tabId) : undefined,
   });
   next = withTab;

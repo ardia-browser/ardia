@@ -5,6 +5,7 @@ import { removeTabs } from "../tabs/tabs";
 import { shownTabIds } from "../tabs/shownTabs";
 import { failure, type MethodError } from "./automationMethods";
 import { isEligibleTab } from "./automationWindows";
+import { STOPPED } from "./socketCatalog";
 
 type Body = { result: unknown } | { error: MethodError };
 
@@ -13,7 +14,7 @@ const CLOSE_AFTER_MS = 5000;
 let closing: ReturnType<typeof setTimeout> | null = null;
 let served = false;
 
-export async function offscreenMethod(params: Record<string, unknown>): Promise<Body> {
+export async function offscreenMethod(params: Record<string, unknown>, serving: () => boolean = () => true): Promise<Body> {
   const unknown = Object.keys(params).filter((key) => key !== "tab");
   if (unknown.length) return failure("bad_request", `offscreen takes tab, not ${unknown.join(", ")}.`);
   const tab = params.tab;
@@ -24,6 +25,7 @@ export async function offscreenMethod(params: Record<string, unknown>): Promise<
     if (!owner.owned) return failure("refused", "The ardia command didn't open that tab.");
     if (owner.shown) return failure("refused", "That tab has been shown in a window, so it can't go off-screen.");
     if (shownTabIds(useBrowser.getState()).has(tab)) return failure("refused", "That tab is shown in a window, so it can't go off-screen.");
+    if (!serving()) return failure("failed", STOPPED);
     const moved = await cliMoveOffscreen(tab);
     if (!moved.ok) return failure("refused", moved.reason ?? "Ardia couldn't take that tab off-screen.");
   } catch (error) {

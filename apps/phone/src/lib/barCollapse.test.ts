@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { BAR_SHOWN, barShown, followScroll, obscuredBottom, pageInsets } from "./barCollapse.ts";
+import { BAR_SHOWN, barShown, bottomBarCollapses, followScroll, obscuredBottom, pageInsets } from "./barCollapse.ts";
+
+test("bottom bar collapse defaults on for Android's Material design, off elsewhere, and keeps any explicit choice", () => {
+  assert.equal(bottomBarCollapses("material", null), true);
+  assert.equal(bottomBarCollapses("redesigned", null), false);
+  assert.equal(bottomBarCollapses("original", null), false);
+  assert.equal(bottomBarCollapses("material", false), false);
+  assert.equal(bottomBarCollapses("redesigned", true), true);
+  assert.equal(bottomBarCollapses("original", true), true);
+});
 
 test("the bar hides when the page scrolls down and comes back when it scrolls up", () => {
   const opened = followScroll(BAR_SHOWN, "a", "p", "up", true);

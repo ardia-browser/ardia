@@ -6,11 +6,12 @@ export const wasCancelled = (result: InstallResult) => !result.ok && result.canc
 
 export type OfficialAttempt = { state: "asking" } | { state: "installing" } | { state: "failed"; reason: string } | null;
 
-export type OfficialAction = "install" | "again" | null;
+export type OfficialAction = "install" | "turnOn" | "again" | null;
 
 export type OfficialView = {
   shown: boolean;
-  note: "installed" | "comingSoon" | null;
+  note: "installed" | "on" | "comingSoon" | null;
+  toggle: boolean;
   status: string | null;
   failed: boolean;
   busy: boolean;
@@ -23,7 +24,7 @@ const FIRST_COMMANDS: Record<string, string> = { cli: "ardia tabs" };
 
 export const installedLabel = (plugin: OfficialPlugin) => (plugin.version ? `Installed · ${plugin.version}` : "Installed");
 
-const HIDDEN: OfficialView = { shown: false, note: null, status: null, failed: false, busy: false, action: null, opens: false, firstCommand: null };
+const HIDDEN: OfficialView = { shown: false, note: null, toggle: false, status: null, failed: false, busy: false, action: null, opens: false, firstCommand: null };
 
 function installedView(plugin: OfficialPlugin, programs: ProgramsState | undefined, attempt: OfficialAttempt): OfficialView {
   const base = { ...HIDDEN, shown: true, note: "installed" as const, opens: true };
@@ -41,12 +42,13 @@ function installedView(plugin: OfficialPlugin, programs: ProgramsState | undefin
 export function officialView(plugin: OfficialPlugin, programs: ProgramsState | undefined, attempt: OfficialAttempt): OfficialView {
   if (plugin.state === "unsupported") return HIDDEN;
   if (plugin.state === "comingSoon") return { ...HIDDEN, shown: true, note: "comingSoon" };
+  if (plugin.state === "installed" && plugin.switchable) return { ...installedView(plugin, programs, attempt), note: "on", toggle: true };
   if (plugin.state === "installed") return installedView(plugin, programs, attempt);
   const base = { ...HIDDEN, shown: true, opens: true };
   if (attempt?.state === "asking") return { ...base, busy: true };
   if (attempt?.state === "installing") return { ...base, status: "Installing…", busy: true };
   if (attempt?.state === "failed") return { ...base, status: attempt.reason, failed: true, action: "again" };
-  return { ...base, action: "install" };
+  return { ...base, action: plugin.switchable ? "turnOn" : "install" };
 }
 
 export const officialTitle = (plugin: OfficialPlugin) => plugin.title || plugin.name;

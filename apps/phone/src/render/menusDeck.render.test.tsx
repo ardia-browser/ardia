@@ -1,4 +1,4 @@
-import { Platform } from "react-native";
+import { Platform, StyleSheet } from "react-native";
 import { getByGestureTestId } from "react-native-gesture-handler/jest-utils";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { renderSurface, someTabs, unmount } from "../../test/render/harness";
@@ -7,7 +7,7 @@ import { idOf, itemOf, mockNative, resetNativeMenus, titles, type NativeItem } f
 jest.mock("@ardia/phone-native", () => require("./nativeMenusMock").nativeMenusModule(jest.requireActual("@ardia/phone-native")));
 
 const { TabDeck } = require("../components/tabs/TabDeck") as typeof import("../components/tabs/TabDeck");
-const { DesignProvider } = require("../components/ui") as typeof import("../components/ui");
+const { DesignProvider, menuLook } = require("../components/ui") as typeof import("../components/ui");
 const { haptics } = require("../state/app/haptics") as typeof import("../state/app/haptics");
 const { useArchiveCard } = require("../state/browse/archiveCard") as typeof import("../state/browse/archiveCard");
 const browse = require("../state/browse/store") as typeof import("../state/browse/store");
@@ -255,6 +255,25 @@ const drawnTest = Platform.OS === "android" ? test : test.skip;
 const menuitems = (root: Root) => root.root.findAll((node) => node.props.accessibilityRole === "menuitem" && typeof node.type === "string").map((node) => node.props.accessibilityLabel);
 const pick = (root: Root, label: string) => act(() => root.root.findAll((node) => node.props.accessibilityRole === "menuitem" && node.props.accessibilityLabel === label && typeof node.props.onPress === "function")[0]!.props.onPress());
 const press = (root: Root, label: string) => act(() => root.root.findAll((node) => node.props.accessibilityLabel === label && typeof node.props.onPress === "function")[0]!.props.onPress());
+const menuRowHeight = (row: ReactTestInstance) => {
+  const style = typeof row.props.style === "function" ? row.props.style({ pressed: false }) : row.props.style;
+  return StyleSheet.flatten(style).minHeight;
+};
+function expectEvenRows(root: Root) {
+  const rows = root.root.findAll((node) => node.props.testID === "drawnMenuRows" && typeof node.type !== "string")[0]!;
+  expect(rows.findAll((node) => node.props.testID === "drawnMenuGap" && typeof node.type === "string")).toHaveLength(0);
+  const heights = rows.findAll((node) => node.props.accessibilityRole === "menuitem" && typeof node.props.onPress === "function" && typeof node.type !== "string").map(menuRowHeight);
+  expect(new Set(heights)).toEqual(new Set([menuLook.row]));
+}
+
+drawnTest("on Android the ··· menu's rows sit one after another at one row height, with no blank band between its groups, whichever optional rows it holds", () => {
+  jest.spyOn(tabHooks, "useCanReopen").mockReturnValue(false);
+  const root = deck();
+  press(root, "More");
+  expect(menuitems(root)).toEqual(["Archive", "New Incognito Tab", "Close All Tabs", "Settings"]);
+  expectEvenRows(root);
+  unmount(root);
+});
 
 drawnTest("on Android a deck card's long press opens main's CardMenu drawn at the finger, dimmed, where the system's menu would have been", () => {
   withSpaces([WORK]);
@@ -290,6 +309,7 @@ drawnTest("on Android the ··· menu is drawn with main's items, and Close All 
   const root = deck();
   press(root, "More");
   expect(menuitems(root)).toEqual(["Archive", "Spaces From Your Mac", "New Incognito Tab", "Reopen Closed Tab", "Close All Tabs", "Settings"]);
+  expectEvenRows(root);
   pick(root, "Close All Tabs");
   expect(mockNative.sheets).toHaveLength(0);
   expect(closeAll).not.toHaveBeenCalled();

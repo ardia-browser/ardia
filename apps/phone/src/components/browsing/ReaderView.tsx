@@ -17,7 +17,8 @@ import {
   type ReaderTheme,
 } from "../../state/page/pagePrompts";
 import { copy } from "../../lib/platformCopy";
-import { ChromeSurface, font, readerInk, readerLayout, space, Symbol, tabsMotion, type MenuItem } from "../ui";
+import { ChromeSurface, font, readerInk, readerLayout, space, Symbol, tabsMotion, useDesign, type MenuItem } from "../ui";
+import { MaterialIconAction, MaterialTopBar } from "../ui/MaterialTopBar";
 import { MenuTrigger } from "../ui/MenuTrigger";
 
 
@@ -28,6 +29,7 @@ type Load = { kind: "loading" } | { kind: "failed" } | { kind: "loaded"; content
 
 export function ReaderView({ tabId }: { tabId: string }) {
   const insets = useSafeAreaInsets();
+  const material = useDesign() === "material";
   const dark = useDarkScheme();
   const settings = useReaderSettings();
   const shown = readerTheme(settings.theme, dark);
@@ -64,6 +66,20 @@ export function ReaderView({ tabId }: { tabId: string }) {
   ];
   return (
     <Animated.View entering={rise} exiting={fall} style={[StyleSheet.absoluteFill, { backgroundColor: ink.background, paddingTop: insets.top }]}>
+      {material ? (
+        <MaterialTopBar
+          nav="close"
+          onNav={closeReader}
+          ink={ink.ink}
+          actions={
+            load.kind === "loaded" ? (
+              <MenuTrigger items={items} trigger="tap" fixedOrder frost={null} dark={shown === "dark"} place={{ top: insets.top + readerLayout.chromeBand, right: readerLayout.chromeSide }}>
+                {({ onPress }) => <MaterialIconAction icon="textformatSize" label="Text Appearance" ink={ink.ink} onPress={onPress ?? (() => undefined)} />}
+              </MenuTrigger>
+            ) : null
+          }
+        />
+      ) : (
       <View style={styles.top}>
         {load.kind === "loaded" ? (
           <MenuTrigger items={items} trigger="tap" fixedOrder frost={null} dark={shown === "dark"} place={{ top: insets.top + readerLayout.chromeBand, left: readerLayout.chromeSide }}>
@@ -85,6 +101,7 @@ export function ReaderView({ tabId }: { tabId: string }) {
           </ChromeSurface>
         </Pressable>
       </View>
+      )}
       {load.kind === "loading" ? (
         <View style={styles.center}>
           <ActivityIndicator accessibilityLabel="Loading article" color={ink.secondary} />

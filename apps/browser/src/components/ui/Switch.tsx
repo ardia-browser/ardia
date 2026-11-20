@@ -24,6 +24,7 @@ function Switch({
   look,
   animateExternalChanges = true,
   accessibilityLabel,
+  asksFirst = false,
 }: {
   value: boolean;
   onChange: (value: boolean) => void | Promise<unknown>;
@@ -31,6 +32,7 @@ function Switch({
   look: SwitchLook;
   animateExternalChanges?: boolean;
   accessibilityLabel?: string;
+  asksFirst?: boolean;
 }) {
   const progress = useRef(new Animated.Value(value ? 1 : 0)).current;
   const target = useRef(value);
@@ -65,7 +67,7 @@ function Switch({
       onPress={() => {
         const next = !target.current;
         pressedAt.current = Date.now();
-        slideTo(next);
+        if (!asksFirst) slideTo(next);
         const settled = onChange(next);
         if (settled instanceof Promise) void settled.finally(() => slideTo(shown.current));
       }}
@@ -103,12 +105,14 @@ export function Toggle({
   disabled,
   look = "form",
   accessibilityLabel,
+  asksFirst,
 }: {
   value: boolean;
   onChange: (value: boolean) => void | Promise<unknown>;
   disabled?: boolean;
   look?: "form" | "panel";
   accessibilityLabel?: string;
+  asksFirst?: boolean;
 }) {
   const theme = useTheme();
   const native = useNativeForm();
@@ -119,6 +123,7 @@ export function Toggle({
         onChange={onChange}
         disabled={disabled}
         accessibilityLabel={accessibilityLabel}
+        asksFirst={asksFirst}
         look={{ width: 30, height: 17, knob: 14, inset: 1.5, offColor: theme.toggleOff, onColor: theme.accent, duration: duration.base, easing: curve.enter }}
       />
     );
@@ -128,6 +133,7 @@ export function Toggle({
       onChange={onChange}
       disabled={disabled}
       accessibilityLabel={accessibilityLabel}
+      asksFirst={asksFirst}
       animateExternalChanges={false}
       look={{ ...(native ? NATIVE_FORM_SWITCH : FORM_SWITCH), offColor: theme.switchOff, onColor: theme.formAccent, knobBorder: theme.knobBorder, duration: duration.base, easing: curve.enter }}
     />

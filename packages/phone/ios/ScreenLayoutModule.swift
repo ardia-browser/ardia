@@ -40,11 +40,6 @@ final class ScreenLayoutProbeView: ExpoView {
       report()
     }
     addSubview(host.view)
-    if #available(iOS 27.1, *) {
-      registerForTraitChanges(UITraitCollection.systemTraitsAffectingVerticalBarEdge) { (view: ScreenLayoutProbeView, _: UITraitCollection) in
-        view.readVerticalBarEdge()
-      }
-    }
   }
 
   override func layoutSubviews() {
@@ -60,7 +55,7 @@ final class ScreenLayoutProbeView: ExpoView {
 
   override func didMoveToWindow() {
     super.didMoveToWindow()
-    readVerticalBarEdge()
+    report()
   }
 
   private func readGeometry() {
@@ -68,16 +63,6 @@ final class ScreenLayoutProbeView: ExpoView {
     let rightToLeft = effectiveUserInterfaceLayoutDirection == .rightToLeft
     space.size = CGSize(width: max(bounds.width - insets.left - insets.right, 0), height: max(bounds.height - insets.top - insets.bottom, 0))
     space.safeInsets = ScreenSpace.Insets(top: insets.top, leading: rightToLeft ? insets.right : insets.left, bottom: insets.bottom, trailing: rightToLeft ? insets.left : insets.right)
-    report()
-  }
-
-  private func readVerticalBarEdge() {
-    guard #available(iOS 27.1, *) else { return }
-    switch traitCollection.verticalBarEdge {
-    case .leading: space.verticalBarEdge = .leading
-    case .trailing: space.verticalBarEdge = .trailing
-    default: space.verticalBarEdge = nil
-    }
     report()
   }
 

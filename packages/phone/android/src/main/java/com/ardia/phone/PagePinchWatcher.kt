@@ -6,6 +6,7 @@ import kotlin.math.hypot
 
 internal class PagePinchWatcher(
     private val density: Float,
+    private val isOn: () -> Boolean,
     private val moment: () -> PagePinch.Moment?,
     private val measureRest: ((Boolean, Float) -> Unit) -> Unit,
     private val later: (Long, () -> Unit) -> Unit,
@@ -29,6 +30,7 @@ internal class PagePinchWatcher(
             }
             MotionEvent.ACTION_POINTER_DOWN -> {
                 if (abandoned || pinch != null || event.pointerCount != 2) return reset()
+                if (!isOn()) return abandon()
                 val index = event.actionIndex
                 second = event.getPointerId(index)
                 first = event.getPointerId(if (index == 0) 1 else 0)
@@ -78,9 +80,9 @@ internal class PagePinchWatcher(
         if (!finished.isDeliberate(PagePinch.Ending.Ended)) return
         val asked = generation
         later(PagePinch.SETTLE_MILLIS) {
-            if (asked != generation || moment() == null) return@later
+            if (asked != generation || !isOn() || moment() == null) return@later
             measureRest { atRest, _ ->
-                if (asked != generation) return@measureRest
+                if (asked != generation || !isOn()) return@measureRest
                 val now = moment() ?: return@measureRest
                 if (finished.fires(PagePinch.Ending.Ended, now, atRest)) onPinchedIn()
             }

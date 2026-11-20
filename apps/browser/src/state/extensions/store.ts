@@ -14,7 +14,10 @@ export type Anchor = { x: number; y: number; width: number; height: number };
 
 export const extensionPageUrl = (extensionId: string, path: string) => `chrome-extension://${extensionId}/${path.replace(/^\//, "")}`;
 
-export type InstallRequest = { windowId: string; profile: string; source: "webStore" | "unpacked" } & (
+let installKeys = 0;
+export const nextInstallKey = () => ++installKeys;
+
+export type InstallRequest = { key: number; windowId: string; profile: string; source: "webStore" | "unpacked" } & (
   | { status: "error"; error: string }
   | { status: "ready" | "installing"; pkg: ExtensionPackage }
   | { status: "prompt"; prompt: ExtensionInstallPrompt }

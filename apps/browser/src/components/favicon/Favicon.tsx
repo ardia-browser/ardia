@@ -1,9 +1,9 @@
 import { displayHost, hostOf } from "@ardia/core";
 import { memo, useState } from "react";
-import { Image, Text, View } from "react-native";
+import { Image, View } from "react-native";
 import { faviconFailed, useAppearanceDark, useFavicon, useFaviconTheme } from "../../state/favicons/favicons";
-import { radius, Symbol, useTheme, weight } from "../ui";
-import { typeFace } from "../ui/tokens";
+import { radius, Symbol, TintedImage, useTheme, weight } from "../ui";
+import { CapCenteredLetter } from "../glyph/CapCenteredLetter";
 import { bundledSiteIcon } from "./siteIcons";
 
 export const Favicon = memo(function Favicon({
@@ -13,6 +13,7 @@ export const Favicon = memo(function Favicon({
   profileId,
   direct,
   opacity = 1,
+  fallbackColor,
 }: {
   url: string;
   favicon?: string | null;
@@ -20,6 +21,7 @@ export const Favicon = memo(function Favicon({
   profileId?: string;
   direct?: boolean;
   opacity?: number;
+  fallbackColor?: string;
 }) {
   const theme = useTheme();
   useAppearanceDark();
@@ -29,16 +31,17 @@ export const Favicon = memo(function Favicon({
   const white = shape?.kind === "template" && !!shape.stroke;
   const [broken, setBroken] = useState<string | null>(null);
   if (!url && !resolved) return <NewTabIcon size={size} opacity={opacity} />;
-  if (!resolved || broken === resolved.uri) return <FaviconFallback url={url} size={size} opacity={opacity} />;
+  if (!resolved || broken === resolved.uri) return <FaviconFallback url={url} size={size} opacity={opacity} color={fallbackColor} />;
   return (
-    <Image
-      key={white ? `${resolved.uri} tinted` : resolved.uri}
+    <TintedImage
+      identity={resolved.uri}
+      tint={white ? theme.textPrimary : undefined}
       source={{ uri: resolved.uri }}
       onError={() => {
         setBroken(resolved.uri);
         if (resolved.profileId) faviconFailed(resolved.profileId, resolved.uri);
       }}
-      style={{ width: size, height: size, borderRadius: size > 18 ? radius.control : radius.hair, tintColor: white ? theme.textPrimary : undefined, opacity }}
+      style={{ width: size, height: size, borderRadius: size > 18 ? radius.control : radius.hair, opacity }}
     />
   );
 });
@@ -50,12 +53,13 @@ export const SiteFavicon = memo(function SiteFavicon({ host, profileId, size }: 
   return <Favicon url={url} favicon={`${url}/favicon.ico`} profileId={profileId} size={size} />;
 });
 
-export const FaviconFallback = memo(function FaviconFallback({ url, size = 16, opacity = 1 }: { url: string; size?: number; opacity?: number }) {
+export const FaviconFallback = memo(function FaviconFallback({ url, size = 16, opacity = 1, color }: { url: string; size?: number; opacity?: number; color?: string }) {
   const theme = useTheme();
+  const glyph = color ?? theme.textSecondary;
   const bundled = bundledSiteIcon(url, theme.dark);
   if (bundled !== undefined) return <Image source={bundled} style={{ width: size, height: size, borderRadius: size > 18 ? radius.control : radius.hair, opacity }} />;
   const initial = hostInitial(url);
-  if (!initial) return <Symbol name="globe" size={size - 2} color={theme.textSecondary} style={{ width: size, height: size, opacity }} />;
+  if (!initial) return <Symbol name="globe" size={size - 2} color={glyph} style={{ width: size, height: size, opacity }} />;
   const tile = Math.round((size * 14) / 16);
   return (
     <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center", opacity }}>
@@ -70,7 +74,9 @@ export const FaviconFallback = memo(function FaviconFallback({ url, size = 16, o
           justifyContent: "center",
         }}
       >
-        <Text style={{ ...typeFace(), fontSize: Math.round(tile * 0.64), lineHeight: tile, fontWeight: weight.semibold, color: theme.textSecondary }}>{initial}</Text>
+        <CapCenteredLetter box={tile} fontSize={Math.round(tile * 0.64)} fontWeight={weight.semibold} color={glyph}>
+          {initial}
+        </CapCenteredLetter>
       </View>
     </View>
   );
@@ -87,10 +93,10 @@ const NEW_TAB_MARK = require("../../../assets/new-tab-mark.png");
 export function NewTabIcon({ size = 16, opacity = 1 }: { size?: number; opacity?: number }) {
   const theme = useTheme();
   return (
-    <Image
-      key={theme.dark ? "dark" : "light"}
+    <TintedImage
       source={NEW_TAB_MARK}
-      style={{ width: size, height: size, tintColor: theme.mark, opacity: (theme.dark ? 0.28 : 0.3) * opacity }}
+      tint={theme.mark}
+      style={{ width: size, height: size, opacity: (theme.dark ? 0.28 : 0.3) * opacity }}
     />
   );
 }

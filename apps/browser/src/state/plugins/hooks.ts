@@ -7,6 +7,7 @@ import { valuesOf } from "./values";
 export const usePluginOrder = () => usePlugins((s) => s.order);
 export { useOfficialPlugins } from "./official";
 export const usePluginListing = (name: string) => usePlugins((s) => s.listings[name]);
+export const usePluginTitle = (name: string | null | undefined) => usePlugins((s) => (name && Object.hasOwn(s.listings, name) ? (s.listings[name]!.manifest?.title ?? name) : null));
 export const usePluginRecord = (name: string) => usePlugins((s) => recordOf(s, name));
 export const usePluginActive = (name: string) => usePlugins((s) => !!activeManifest(s, name));
 export const usePluginNeedsReview = (name: string) => usePlugins((s) => needsReview(s, name));

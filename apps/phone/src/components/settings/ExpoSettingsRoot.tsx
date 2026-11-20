@@ -20,6 +20,8 @@ import { ExpoRowLabel } from "./ExpoRowLabel";
 import { ExpoSettingsDone } from "./ExpoSettingsDone";
 import { syncOffered } from "../../state/sync/offer";
 import { browseForMeOffered, refreshChatGPTConnected, useChatGPTConnected } from "../../state/browseForMe/store";
+import { pageSummariesSwitchable, refreshPageSummariesEnabled, setPageSummariesEnabled, usePageSummariesEnabled } from "../../state/pageSummary/enabled";
+import { PAGE_SUMMARY_COPY } from "../../state/pageSummary/copy";
 
 const INTERVALS = (Object.keys(AUTO_ARCHIVE_INTERVALS) as AutoArchiveInterval[]).map((id) => ({ id, title: autoArchiveTitle(id) }));
 const APP_LINKS = [
@@ -51,8 +53,11 @@ export function ExpoSettingsRoot() {
   const engineName = syncEnabled && synced ? syncedEngineName(synced, engines) : (engines.find((engine) => engine.id === engineId)?.name ?? "");
   const appearance = useAppearanceSummary(colorName);
   const chatGPT = useChatGPTConnected();
+  const summaries = usePageSummariesEnabled();
+  const switchesSummaries = pageSummariesSwitchable();
   useEffect(() => {
     void refreshChatGPTConnected();
+    void refreshPageSummariesEnabled();
   }, []);
   return (
     <ExpoSettingsDone>
@@ -135,13 +140,20 @@ export function ExpoSettingsRoot() {
             <ExpoRowLabel title={PHONE_SHARING_COPY.whatsSent} systemImage="info" tint="neutral" />
           </NavigationLink>
         </Section>
-        {browseForMeOffered() ? (
-          <Section title="Experimental">
-            <NavigationLink value={link({ page: "browseForMe" })}>
-              <LabeledContent label={<ExpoRowLabel title="Browse for Me" systemImage="sparkle.magnifyingglass" tint="nightShade" />}>
-                <Text>{chatGPT ? "ChatGPT" : "On iPhone"}</Text>
-              </LabeledContent>
-            </NavigationLink>
+        {browseForMeOffered() || switchesSummaries ? (
+          <Section title="Experimental" footer={switchesSummaries ? <Text>{PAGE_SUMMARY_COPY.iPhoneFooter}</Text> : undefined}>
+            {browseForMeOffered() ? (
+              <NavigationLink value={link({ page: "browseForMe" })}>
+                <LabeledContent label={<ExpoRowLabel title="Browse for Me" systemImage="sparkle.magnifyingglass" tint="nightShade" />}>
+                  <Text>{chatGPT ? "ChatGPT" : "On iPhone"}</Text>
+                </LabeledContent>
+              </NavigationLink>
+            ) : null}
+            {switchesSummaries ? (
+              <Toggle isOn={summaries} onIsOnChange={(on) => void setPageSummariesEnabled(on)} modifiers={modifierList(settingsSwitchStyle())}>
+                <ExpoRowLabel title={PAGE_SUMMARY_COPY.title} systemImage="sparkles" tint="nightShade" />
+              </Toggle>
+            ) : null}
           </Section>
         ) : null}
         <Section title="About" footer={<Text modifiers={[frame({ maxWidth: Number.MAX_SAFE_INTEGER }), multilineTextAlignment("center")]}>{appVersion()}</Text>}>

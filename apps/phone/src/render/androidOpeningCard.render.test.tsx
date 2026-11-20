@@ -3,6 +3,9 @@ import * as reanimated from "react-native-reanimated";
 import { getAnimatedStyle } from "react-native-reanimated";
 import { act, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
 import { Surfaces } from "../App";
+import { usePreferences } from "../state/settings/store";
+import { BottomBar } from "../components/browsing/BottomBar";
+import { MaterialBottomBar } from "../components/ui/MaterialBottomBar";
 import { DECK, deckGeometry } from "../lib/deckGeometry";
 
 import { coverFrame } from "../components/tabs/DeckCard";
@@ -44,7 +47,7 @@ jest.mock("../components/tabs/DeckCard", () => {
 
 const onAndroid = Platform.OS === "android" ? test : test.skip;
 
-const LANDS_MS = 278;
+const LANDS_MS = 167;
 const EXPANDED_Z = 100_000;
 
 let counted: jest.SpyInstance;
@@ -311,6 +314,22 @@ test("while a deck card grows into the page, neither phone draws a second page b
     expect(ghost()).toBeUndefined();
   }
   unmount(root);
+});
+
+onAndroid("opening the Material tab switcher retains the permanent bar and never draws a ghost or classic BottomBar", () => {
+  usePreferences.setState({ materialYou: true });
+  jest.spyOn(launchFlags, "launchArguments").mockImplementation(() => NO_LAUNCH_ARGUMENTS);
+  useBrowse.setState({ surface: "browsing", sheet: null, deckEntrance: null, frozenOrder: null, opening: null, veiled: null, leaving: null });
+  const root = renderSurface(<Surfaces />, { flushTimers: false });
+  const ghost = () => root.root.findAll((node) => node.props.testID === "pageBarGhost" && typeof node.type !== "string")[0];
+  expect(ghost()).toBeUndefined();
+  act(() => void browseStore.showDeck());
+  advance(16);
+  expect(ghost()).toBeUndefined();
+  expect(root.root.findAll((node) => node.type === MaterialBottomBar)).toHaveLength(1);
+  expect(root.root.findAll((node) => node.type === BottomBar)).toHaveLength(0);
+  unmount(root);
+  usePreferences.setState({ materialYou: false });
 });
 
 onAndroid("after an open through the opening card, the deck reopens settled and opens another card the same way", () => {

@@ -54,10 +54,10 @@ export const offerPageSummaryPage = (offered: () => boolean) => {
 export const settingsRouteOffered = (route: SettingsRoute) =>
   route.page === "browseForMe" ? browseForMePageOffered() : route.page === "pageSummary" ? pageSummaryPageOffered() : !SYNC_PAGES.has(route.page) || syncPagesOffered();
 
-export function openSettings(route: SettingsRoute = { page: "root" }) {
+export function openSettings(route: SettingsRoute = { page: "root" }, { direct = false } = {}) {
   if (!settingsRouteOffered(route)) return;
   scrolls.clear();
-  const stack: SettingsRoute[] = route.page === "root" ? [route] : [{ page: "root" }, route];
+  const stack: SettingsRoute[] = direct || route.page === "root" ? [route] : [{ page: "root" }, route];
   useSettingsNav.setState({ open: true, stack, popping: false });
 }
 

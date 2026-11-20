@@ -250,9 +250,9 @@ export type PageSwipe = "anywhere" | "edges" | "off";
 
 export const pageSwipe = (mode: "anywhere" | "screenEdges" | "disabled"): PageSwipe => (mode === "screenEdges" ? "edges" : mode === "disabled" ? "off" : "anywhere");
 
-export type FrontSheet = "settings" | "archive" | "spaces";
+export type FrontSheet = "settings" | "library" | "archive" | "spaces";
 
-export const frontSheet = (settingsOpen: boolean, browseSheet: "archive" | "spaces" | null): FrontSheet | null => (settingsOpen ? "settings" : browseSheet);
+export const frontSheet = (settingsOpen: boolean, browseSheet: "archive" | "spaces" | null, libraryOpen = false): FrontSheet | null => (settingsOpen ? "settings" : libraryOpen ? "library" : browseSheet);
 
 export const listsUpdateFailed = (state: { isOffline: boolean; lists: readonly { isEnabled: boolean; state: string }[] }): boolean =>
   state.isOffline || state.lists.some((list) => list.isEnabled && list.state === "failed");

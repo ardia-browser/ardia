@@ -6,27 +6,15 @@ import { useBrowser } from "../browser/store";
 import { MAX_DRAFT_LINKS } from "../groups/draftGroups";
 import { createProfile } from "../profiles/actions";
 import { noteImportedSpaces } from "../telemetry/usage";
-import { noteDiaSidebar, noteDiaTabProfiles, noteFirefoxFavicons, noteImportRun } from "../telemetry/importRuns";
+import { noteDiaSidebar, noteDiaTabProfiles, noteFirefoxFavicons, noteImportRun, noteUntitledBookmarks } from "../telemetry/importRuns";
 import { consentToken, type ConsentToken } from "../telemetry/client";
-import {
-  adoptSpaceIdentity,
-  applyResult,
-  emptyCounts,
-  importFavorites,
-  importDiaProfile,
-  profileColorFor,
-  profileNamed,
-  type BrowserProfile,
-  type DiaTabsResult,
-  type ImportCounts,
-  type ImportedExtension,
-  type ImportKind,
-  type ImportResult,
-} from "./apply";
+import { adoptSpaceIdentity, applyResult, emptyCounts, importFavorites, importDiaProfile, profileColorFor, profileNamed, untitledLinks } from "./apply";
+import type { BrowserProfile, DiaTabsResult, ImportCounts, ImportedExtension, ImportKind, ImportedSearchEngine, ImportResult } from "./apply";
 import { diaProfilesFor, diaProfilesWithoutFolder } from "./diaTabs";
 import { importArcSpace, importDiaSpace } from "./sidebarTree";
 import { arcNotes, importArcArchive, importArcRouting, withArcGlyph } from "./arcExtras";
 import { noteArcImport } from "../telemetry/importRuns";
+import { adoptImportedEngine } from "./searchEngine";
 import { planSidebar } from "./sidebarPlan";
 import {
   APP_TAB_KINDS,
@@ -107,6 +95,7 @@ type AppTabs = { result: DiaTabsResult } | { note: string };
 const NOT_BROUGHT = "Dia's tabs couldn't be brought over:";
 const SIDEBAR_UNREAD = "Dia's sidebar file couldn't be read, so Ardia asked Dia for its open and pinned tabs: their folders, custom names and split views stay in Dia.";
 const FAVORITES_LOCKED = "Dia's Favorites weren't imported: they're in its sidebar file, which needs the keychain access you skipped.";
+const HELD_BACK = "what looked like a password, cookie or card number turned up where it shouldn't, so Ardia held it all back to keep it private. Importing again without passwords, cookies and cards should work.";
 
 function readAppTabs(): Promise<AppTabs> {
   return importModule()
@@ -212,11 +201,13 @@ async function runImportJob(wanted: ReadonlySet<ImportKind>, withoutKey: boolean
   const nextDestination = (name: string, color?: string, emoji?: string, shareWith?: string | null, shareTopApps?: boolean) =>
     destination(target, destinationIndex++, name, color, emoji, shareWith, shareTopApps);
   const found = new Map<string, ImportedExtension>();
+  const engines: { profile: BrowserProfile; engine?: ImportedSearchEngine }[] = [];
   const left: string[] = [];
   let extensionsProfile = "";
   let profileDest = "";
   const extensionGroups: ExtensionGroup[] = [];
   let secretsLeft = 0;
+  let withheld = 0;
   const app: { read: Promise<AppTabs> | null } = { read: null };
   const askApp = () => (app.read ??= readAppTabs());
   if (appUpFront) void askApp();
@@ -241,7 +232,11 @@ async function runImportJob(wanted: ReadonlySet<ImportKind>, withoutKey: boolean
         },
       });
     } catch (e) {
-      if (ardiaError(e).code === "cancelled") return;
+      const { code } = ardiaError(e);
+      if (code === "cancelled") return;
+      const heldBack = code === "ERR_SECRET_IN_REPLY";
+      if (heldBack) left.push(`Nothing ${selected.length > 1 ? `from ${profile.name} ` : ""}was imported: ${HELD_BACK}`);
+      withheld += heldBack ? 1 : 0;
       if (readsSidebarFile(profile) && fromApp.length) {
         result = nothingRead(source.id, profile.id, profileKinds);
       } else {
@@ -265,6 +260,7 @@ async function runImportJob(wanted: ReadonlySet<ImportKind>, withoutKey: boolean
     }
     const viaApp = asksApp(profile) || recoverable.length > 0;
     const diaOutcome = { file: readsSidebarFile(profile) && !sidebarMissed, unreadable: sidebarMissed, appleScript: viaApp, groups: 0, ownProfiles: 0 };
+    engines.push({ profile, engine: result.searchEngine });
     for (const k of result.failed) failed.set(k, [...(failed.get(k) ?? []), profile.name]);
     arc.routing ??= result.arcRouting;
     arc.archive ??= result.arcArchive;
@@ -301,7 +297,7 @@ async function runImportJob(wanted: ReadonlySet<ImportKind>, withoutKey: boolean
       const dest = members[plan.dataPartition]?.[0] ?? (await nextDestination(result.profile?.name ?? profile.name, result.profile?.color));
       members[plan.dataPartition] ??= [dest];
       arc.home ||= dest;
-      add(await applyResult(dest, { ...result, favorites: [] }, source.name, profileKinds, refused));
+      add(await applyResult(dest, { ...result, favorites: [] }, source.name, profileKinds, refused, consent));
       let essentials = 0;
       plan.favorites.forEach((tabs, partition) => {
         const group = members[partition] ?? [];
@@ -321,7 +317,7 @@ async function runImportJob(wanted: ReadonlySet<ImportKind>, withoutKey: boolean
       profileDest = dest;
     } else {
       const dest = await nextDestination(result.profile?.name ?? profile.name, result.profile?.color ?? profile.color);
-      add(await applyResult(dest, result, source.name, profileKinds, refused));
+      add(await applyResult(dest, result, source.name, profileKinds, refused, consent));
       if (readsSidebarFile(profile) && !sidebarMissed && result.spaces.length) {
         const r = await importDiaSpaces(dest, result, nextDestination, signal, consent);
         if (signal.aborted) return;
@@ -341,6 +337,7 @@ async function runImportJob(wanted: ReadonlySet<ImportKind>, withoutKey: boolean
       profileDest = dest;
     }
     if (diaSource && sidebarKinds.length) noteDiaSidebar(diaOutcome, consent);
+    noteUntitledBookmarks(untitledLinks(result.bookmarks), consent);
     if (source.family === "firefox") noteFirefoxFavicons(result.favicons.length, consent);
     if (source.family === "chromium" || source.family === "arc") {
       const list = await api.listExtensions(source.id, profile.id).catch(orWarn([]));
@@ -378,15 +375,17 @@ async function runImportJob(wanted: ReadonlySet<ImportKind>, withoutKey: boolean
   }
   updateStatus(signal, (st) => Object.fromEntries(Object.entries(st).map(([k, v]) => [k, failed.has(k as ImportKind) ? "failed" : v === "failed" ? v : "done"])));
   api.forgetUnlockedKeys();
-  noteImportRun({ done: order.filter((k) => !failed.has(k)).length, failed: failed.size, secretsLeft }, consent);
+  noteImportRun({ done: order.filter((k) => !failed.has(k)).length, failed: failed.size, secretsLeft, withheld }, consent);
   if (total.bookmarks > 0) useBrowser.getState().updateSettings({ bookmarksImportDismissed: true });
   const listing = await listFoundExtensions(extensionGroups, consent).catch(orWarn(null));
   if (signal.aborted) return;
+  const engine = adoptImportedEngine(source, engines, consent);
   finishImport(signal, {
     counts: total,
     failures: [...failed].map(([kind, names]) => ({ kind, profiles: selected.length > 1 ? names : [] })),
     notes: [...new Set(left)],
     extensions: { profileId: extensionsProfile, list: [...found.values()], opened: false, listing },
+    searchEngine: engine?.notice ?? undefined,
   });
 }
 

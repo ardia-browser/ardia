@@ -1,6 +1,7 @@
 import { onPluginExit, onPluginLine, replyToPlugin, sendToPlugin, type PluginLine } from "../../platform/plugins";
 import { systemInfo } from "../../platform/app";
 import { errorText } from "../../lib/errors";
+import { redactedEventData } from "../automation/eventRedaction";
 import { canonicalIpv6, formatUrl, minimizedUrl, urlParts } from "../../lib/urlParts";
 import type { PluginManifest } from "../../lib/pluginManifest";
 import { useBrowser } from "../browser/store";
@@ -181,7 +182,7 @@ export function handlePluginLine({ name, run, launch, line }: PluginLine) {
 
 function deliverTo(c: Connection, name: AutomationEventName, data: Record<string, unknown>, time: number) {
   const full = !!c.sub?.fullUrls;
-  const shown = !full && typeof data.url === "string" ? { ...data, url: minimizedUrl(data.url) } : data;
+  const shown = full ? data : redactedEventData(data);
   sendToPlugin(c.name, c.run, JSON.stringify({ event: name, time, data: shown }));
 }
 

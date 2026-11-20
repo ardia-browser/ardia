@@ -1,5 +1,5 @@
 import { useDefaultBrowser } from "../state/settings/defaultBrowser";
-import { Dimensions, Platform, StyleSheet } from "react-native";
+import { Dimensions, StyleSheet } from "react-native";
 import { act, type ReactTestRenderer } from "react-test-renderer";
 import "../platform/copy";
 import { pages } from "../platform/pages";
@@ -8,6 +8,7 @@ import { DesignProvider } from "../components/ui";
 import type { Design } from "../lib/design";
 import { openPageMenu } from "../state/page/actions";
 import { usePageUi } from "../state/page/store";
+import { setPageSummariesEnabled, usePageSummariesSwitch } from "../state/pageSummary/enabled";
 import { registerPageHandle, usePages } from "../state/pages/store";
 import { useSettingsNav } from "../state/settings/nav";
 import { useBrowse } from "../state/browse/store";
@@ -36,6 +37,7 @@ beforeEach(() => {
   jest.spyOn(pages, "canPrint").mockReturnValue(true);
   printed = jest.spyOn(pages, "print").mockResolvedValue(true);
   counted = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
+  usePageSummariesSwitch.setState({ enabled: true });
 });
 
 afterEach(() => {
@@ -97,18 +99,15 @@ test("the original menu is unchanged: icon rows and tiles, no glass capsules, Pr
   unmount(root);
 });
 
-const LIBRARY_ROWS = Platform.OS === "ios" ? ["History", "Bookmarks", "Downloads"] : [];
-
-test("the redesign has main's word rows in main's order, without icons, in main's groups, with the Library's rows on iPhone", async () => {
+test("the redesign has main's word rows in main's order, without icons, in main's groups, with the Library's rows on both phones", async () => {
   const root = await openMenu("redesigned");
-  expect(wordRows(root)).toEqual(["Find on Page", "Print", ...LIBRARY_ROWS, "Night Shade", "Page Zoom", "Desktop Site", "Translate", "Block Ads and Trackers", "Site Settings", "Open in Default Browser"]);
-  expect(hosts(root, (id) => id === "pageMenuGroup")).toHaveLength(LIBRARY_ROWS.length ? 4 : 3);
+  expect(wordRows(root)).toEqual(["Find on Page", "Print", "History", "Bookmarks", "Downloads", "Night Shade", "Page Zoom", "Desktop Site", "Translate", "Block Ads and Trackers", "Site Settings", "Open in Default Browser"]);
+  expect(hosts(root, (id) => id === "pageMenuGroup")).toHaveLength(4);
   for (const row of hosts(root, (id) => id.startsWith("pageMenuRow:") || id.startsWith("menuToggle:"))) expect(symbolsIn(row)).toHaveLength(0);
   unmount(root);
 });
 
-test("on iPhone the page menu's History, Bookmarks and Downloads close the menu and open that Library sheet, as main's do", async () => {
-  if (Platform.OS !== "ios") return;
+test("on both phones the page menu's History, Bookmarks and Downloads close the menu and open that Library sheet, as main's do", async () => {
   for (const section of ["history", "bookmarks", "downloads"] as const) {
     useLibrary.setState({ open: false, section: "history", path: [] });
     const root = await openMenu("redesigned");
@@ -119,6 +118,15 @@ test("on iPhone the page menu's History, Bookmarks and Downloads close the menu 
     expect(counted).toHaveBeenCalledWith("library_opened");
     unmount(root);
   }
+});
+
+test("opening the Library from an Incognito page isn't counted", async () => {
+  useTabs.setState({ incognito: true });
+  const root = await openMenu("redesigned");
+  await pressButton(root, "History");
+  expect(useLibrary.getState()).toMatchObject({ open: true, section: "history" });
+  expect(counted).not.toHaveBeenCalledWith("library_opened");
+  unmount(root);
 });
 
 test("the redesign puts Send under Find and above Print, as main's first group", async () => {
@@ -205,6 +213,49 @@ test("Summarize Page shows only where the phone summarizes, under Find on Page",
   const rows = wordRows(root);
   expect(rows[rows.indexOf("Find on Page") + 1]).toBe("Summarize Page");
   expect(host(root, "pageMenuRow:Summarize Page")!.props.accessibilityState).toMatchObject({ disabled: false });
+  unmount(root);
+});
+
+test("Summarize Page stays out of the menu until Pinch to Summarize is turned on in Settings", async () => {
+  jest.spyOn(pages, "canSummarize").mockReturnValue(true);
+  usePageSummariesSwitch.setState({ enabled: false });
+  const root = await openMenu("redesigned");
+  expect(wordRows(root)).not.toContain("Summarize Page");
+  act(() => usePageSummariesSwitch.setState({ enabled: true }));
+  expect(wordRows(root)).toContain("Summarize Page");
+  unmount(root);
+  usePageSummariesSwitch.setState({ enabled: false });
+  const original = await openMenu("original");
+  expect(textOf(original)).not.toContain("Summarize Page");
+  unmount(original);
+});
+
+test("turning Pinch to Summarize off while the menu closes cancels the summary request", async () => {
+  jest.spyOn(pages, "canSummarize").mockReturnValue(true);
+  const summarized = jest.spyOn(pages, "summarize").mockResolvedValue(true);
+  const root = await openMenu("redesigned");
+  await pressButton(root, "Summarize Page");
+  await act(async () => {
+    usePageSummariesSwitch.setState({ enabled: false });
+    jest.advanceTimersByTime(1000);
+  });
+  expect(summarized).not.toHaveBeenCalled();
+  unmount(root);
+});
+
+test("turning Pinch to Summarize back on does not revive a request queued before it was turned off", async () => {
+  jest.spyOn(pages, "canSummarize").mockReturnValue(true);
+  jest.spyOn(pages, "switchesSummaries").mockReturnValue(true);
+  jest.spyOn(pages, "setSummariesEnabled").mockImplementation(async (enabled) => enabled);
+  const summarized = jest.spyOn(pages, "summarize").mockResolvedValue(true);
+  const root = await openMenu("redesigned");
+  await pressButton(root, "Summarize Page");
+  await act(async () => {
+    await setPageSummariesEnabled(false);
+    await setPageSummariesEnabled(true);
+    jest.advanceTimersByTime(1000);
+  });
+  expect(summarized).not.toHaveBeenCalled();
   unmount(root);
 });
 

@@ -79,4 +79,5 @@ export const sidebarSliding = (windowId: string) => {
   return !!m.moving[windowId] || !!m.leaving[windowId];
 };
 export const usePeekSpan = (windowId: string): PeekSpan | undefined => useDockMotion((m) => m.peeks[windowId]);
+export const usePeekLeaving = (windowId: string): boolean => useDockMotion((m) => !!m.leaving[windowId]);
 export const devPeeks: Record<string, { show(): void; hide(): void }> = {};

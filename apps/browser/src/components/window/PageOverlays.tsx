@@ -11,7 +11,7 @@ import { NO_TOOLBAR, type ToolbarGeometry } from "./geometry";
 import { usePages } from "../../state/tabs/pageState";
 import { startPopoverEscape } from "../../state/tabs/popoverDismiss";
 import { SadTab, StatusBubble } from "./PaneOverlays";
-import { AutofillPrompt, BLOCKED_POPUPS_WIDTH, BlockedPopupsPrompt, EXTERNAL_APP_WIDTH, ExternalAppPrompt, PasswordPrompt, PERMISSION_PROMPT_WIDTH, PermissionPrompt } from "../site/Prompts";
+import { AutofillPrompt, BLOCKED_POPUPS_WIDTH, BlockedPopupsPrompt, EXTERNAL_APP_WIDTH, ExternalAppPrompt, PasswordPrompt, PERMISSION_PROMPT_WIDTH, PermissionPrompt, VerificationCodePrompt } from "../site/Prompts";
 import { SiteControls } from "../site/SiteControls";
 import { SITE_PANEL } from "../site/SiteControlsParts";
 import { ZOOM_POPOVER_WIDTH, ZoomPopover } from "../site/ZoomControls";
@@ -67,6 +67,7 @@ export function PageOverlays({
       {!newTabShown && <PermissionPrompt tabId={tabId} {...at("prompt", PERMISSION_PROMPT_WIDTH)} />}
       <PasswordPrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />
       <AutofillPrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />
+      <VerificationCodePrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />
       <NewTabNotice windowId={windowId} tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />
       {!newTabShown && <ExternalAppPrompt tabId={tabId} {...at("prompt", EXTERNAL_APP_WIDTH)} />}
       {!newTabShown && <EngineOfferPrompt tabId={tabId} {...at("prompt", ENGINE_OFFER_WIDTH)} />}

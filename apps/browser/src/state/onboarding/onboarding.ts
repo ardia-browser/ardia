@@ -149,7 +149,12 @@ export function chooseSource(source: BrowserSourceId | null) {
 
 export const sourcePatch = (): Partial<Settings> => {
   const { source, prefill } = useOnboarding.getState();
-  return prefill === "preset" ? presetPatch(source) : {};
+  if (prefill !== "preset") return {};
+  const { searchEngine, ...rest } = presetPatch(source);
+  if (searchEngine === undefined) return rest;
+  if (!useBrowser.getState().settingsMeta.inferred.includes("searchEngine")) return { ...rest, searchEngine };
+  noteOnboarding("presetKeptImport");
+  return rest;
 };
 
 export function setOnboardingDraft(patch: Partial<Settings>) {

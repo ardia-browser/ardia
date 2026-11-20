@@ -281,6 +281,47 @@
         ]
       }
     },
+    "passwordManager": {
+      "type": "object",
+      "properties": {
+        "fill": {
+          "enum": [
+            "system"
+          ],
+          "description": "system: macOS's Passwords panel fills the field. tool is reserved and refused for now"
+        },
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "login",
+              "oneTimeCode"
+            ]
+          }
+        },
+        "verificationCodeSetup": {
+          "enum": [
+            "system"
+          ],
+          "description": "Offer to set up two-factor codes a page shows in the app macOS uses for otpauth links"
+        },
+        "passkeys": {
+          "enum": [
+            "system"
+          ],
+          "description": "Show the host's passkey status on the plugin's Settings page"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "fill",
+        "fields"
+      ],
+      "description": "Makes the plugin a password manager each profile can pick in Settings › Profiles › Passwords"
+    },
     "alwaysOn": {
       "const": true,
       "description": "Built-in plugins only: once installed, no switch turns it off"
@@ -333,7 +374,11 @@
           "system.wake",
           "user.idle",
           "user.active",
-          "page.error"
+          "page.error",
+          "bookmarks.changed",
+          "history.removed",
+          "download.changed",
+          "profile.changed"
         ]
       }
     },

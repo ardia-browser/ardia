@@ -9,18 +9,18 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PageSummaryWritingTest {
-    private class Cloud(override var isConnected: Boolean, val fails: Exception? = null) : PageSummaryCloud {
+    private class Cloud(override var isConnected: Boolean, val fails: Exception? = null, val answers: String = "- From ChatGPT") : PageSummaryCloud {
         val prompts = mutableListOf<String>()
 
         override suspend fun stream(instructions: String, prompt: String, onText: (String) -> Unit): String {
             prompts += prompt
             fails?.let { throw it }
-            onText("- From ChatGPT")
+            onText(answers)
             return "GPT-6"
         }
     }
 
-    private class Local(val availability: OnDeviceWriter.Availability = OnDeviceWriter.Availability.Available, val fails: Boolean = false) : PageSummaryLocal {
+    private class Local(val availability: OnDeviceWriter.Availability = OnDeviceWriter.Availability.Available, val fails: Boolean = false, val writes: String = "- From Gemini Nano") : PageSummaryLocal {
         val prompts = mutableListOf<String>()
 
         override suspend fun availability(): OnDeviceWriter.Availability = availability
@@ -30,9 +30,15 @@ class PageSummaryWritingTest {
         override suspend fun stream(instructions: String, prompt: String, onText: (String) -> Unit) {
             prompts += prompt
             if (fails) throw IllegalStateException("Gemini Nano returned nothing")
-            onText("- From Gemini Nano")
+            onText(writes)
         }
     }
+
+    private fun written(result: PageSummaryWriting.Result): PageSummaryWriting.Written = result as PageSummaryWriting.Written
+
+    private fun unwritten(result: PageSummaryWriting.Result): String = (result as PageSummaryWriting.Unwritten).message
+
+    private fun quotesThePage(text: String): Boolean = (extracted.paragraphs + listOfNotNull(extracted.excerpt)).any { text.contains(it.take(30)) }
 
     private val extracted = ReadableContent(
         "https://example.com/story", "The quiet harbour", "Example News", null, "A town keeps its harbour quiet at night.", null, "en",
@@ -47,77 +53,123 @@ class PageSummaryWritingTest {
     fun theDefaultProviderNeverSendsThePageToChatGPTEvenWhenAnAccountIsConnected() = runTest {
         val cloud = Cloud(isConnected = true)
         val local = Local()
-        val written = PageSummaryWriting(cloud, local).write(extracted, PageSummaryProvider.of(null), {})
+        val result = written(PageSummaryWriting(cloud, local).write(extracted, PageSummaryProvider.of(null), {}))
         assertTrue(cloud.prompts.isEmpty())
-        assertEquals(PageSummaryWriting.Writer.OnDevice, written.writer)
-        assertEquals("- From Gemini Nano", written.text)
-        assertFalse(written.chatGPTFellBack)
+        assertEquals(PageSummaryWriting.Writer.OnDevice, result.writer)
+        assertEquals("- From Gemini Nano", result.text)
+        assertFalse(result.chatGPTFellBack)
         assertEquals(1, local.prompts.size)
     }
 
     @Test
-    fun anUnavailableModelGivesThePagesKeyLinesWithoutAskingChatGPT() = runTest {
+    fun anUnavailableModelSaysSoPlainlyWithoutThePagesLinesOrAskingChatGPT() = runTest {
         val cloud = Cloud(isConnected = true)
-        val written = PageSummaryWriting(cloud, Local(OnDeviceWriter.Availability.Unavailable)).write(extracted, PageSummaryProvider.OnDevice, {})
+        val shown = mutableListOf<String>()
+        val message = unwritten(PageSummaryWriting(cloud, Local(OnDeviceWriter.Availability.Unavailable)).write(extracted, PageSummaryProvider.OnDevice, { shown += it }))
         assertTrue(cloud.prompts.isEmpty())
-        assertEquals(PageSummaryWriting.Writer.Excerpts, written.writer)
-        assertTrue(written.text.startsWith("- A town keeps its harbour quiet at night."))
-        assertTrue(written.note.contains("can’t run Gemini Nano"))
+        assertEquals("Gemini Nano is unavailable on this phone.", message)
+        assertTrue(shown.isEmpty())
+        assertFalse(quotesThePage(message))
     }
 
     @Test
-    fun aLocalFailureNeverFailsOverToChatGPT() = runTest {
+    fun aDownloadingModelSaysToTryAgainWithoutThePagesLines() = runTest {
+        val message = unwritten(PageSummaryWriting(Cloud(isConnected = true), Local(OnDeviceWriter.Availability.Downloading)).write(extracted, PageSummaryProvider.OnDevice, {}))
+        assertEquals(PageSummaryWriting.NANO_DOWNLOADING, message)
+        assertFalse(quotesThePage(message))
+    }
+
+    @Test
+    fun aLocalFailureNeverFailsOverToChatGPTAndNeverQuotesThePage() = runTest {
         val cloud = Cloud(isConnected = true)
         val local = Local(fails = true)
-        val written = PageSummaryWriting(cloud, local).write(extracted, PageSummaryProvider.OnDevice, {})
+        val shown = mutableListOf<String>()
+        val message = unwritten(PageSummaryWriting(cloud, local).write(extracted, PageSummaryProvider.OnDevice, { shown += it }))
         assertTrue(cloud.prompts.isEmpty())
         assertEquals(2, local.prompts.size)
-        assertEquals(PageSummaryWriting.Writer.Excerpts, written.writer)
+        assertEquals(PageSummaryWriting.NANO_FAILED, message)
+        assertTrue(shown.all { it.isEmpty() })
+    }
+
+    @Test
+    fun aBlankLocalAnswerIsRetriedOnceThenFailsWithoutQuoting() = runTest {
+        val local = Local(writes = "  ")
+        val message = unwritten(PageSummaryWriting(Cloud(isConnected = false), local).write(extracted, PageSummaryProvider.OnDevice, {}))
+        assertEquals(2, local.prompts.size)
+        assertEquals(PageSummaryWriting.NANO_FAILED, message)
     }
 
     @Test
     fun choosingChatGPTSendsTheExtractedPageTextAndNothingToThePhonesModel() = runTest {
         val cloud = Cloud(isConnected = true)
         val local = Local()
-        val written = PageSummaryWriting(cloud, local).write(extracted, PageSummaryProvider.ChatGPT, {})
+        val result = written(PageSummaryWriting(cloud, local).write(extracted, PageSummaryProvider.ChatGPT, {}))
         assertEquals(1, cloud.prompts.size)
         assertTrue(cloud.prompts.single().startsWith("Page: The quiet harbour (Example News)\n\n"))
         assertTrue(cloud.prompts.single().contains("kept a strict quiet rule at night for forty years"))
         assertTrue(local.prompts.isEmpty())
-        assertEquals(PageSummaryWriting.Writer.ChatGPT("GPT-6"), written.writer)
-        assertEquals("chatgpt", written.writer.outcome)
-        assertEquals("- From ChatGPT", written.text)
+        assertEquals(PageSummaryWriting.Writer.ChatGPT("GPT-6"), result.writer)
+        assertEquals("chatgpt", result.writer.outcome)
+        assertEquals("- From ChatGPT", result.text)
     }
 
     @Test
     fun aChatGPTFailureIsWrittenOnThePhoneWithTheReasonAndCountsAsAFallback() = runTest {
         val shown = mutableListOf<String>()
-        val written = PageSummaryWriting(Cloud(isConnected = true, fails = ChatGPTFailure.UsageLimit), Local()).write(extracted, PageSummaryProvider.ChatGPT, { shown += it })
-        assertEquals(PageSummaryWriting.Writer.OnDevice, written.writer)
-        assertTrue(written.chatGPTFellBack)
-        assertTrue(written.note.startsWith(ChatGPTFailure.UsageLimit.message))
+        val result = written(PageSummaryWriting(Cloud(isConnected = true, fails = ChatGPTFailure.UsageLimit), Local()).write(extracted, PageSummaryProvider.ChatGPT, { shown += it }))
+        assertEquals(PageSummaryWriting.Writer.OnDevice, result.writer)
+        assertTrue(result.chatGPTFellBack)
+        assertTrue(result.note.startsWith(ChatGPTFailure.UsageLimit.message))
         assertEquals(listOf("", "- From Gemini Nano"), shown)
+    }
+
+    @Test
+    fun anEmptyChatGPTAnswerFallsBackToThePhone() = runTest {
+        val local = Local()
+        val result = written(PageSummaryWriting(Cloud(isConnected = true, answers = ""), local).write(extracted, PageSummaryProvider.ChatGPT, {}))
+        assertEquals(PageSummaryWriting.Writer.OnDevice, result.writer)
+        assertTrue(result.chatGPTFellBack)
+        assertEquals(1, local.prompts.size)
+    }
+
+    @Test
+    fun whenChatGPTFailsAndGeminiNanoIsUnavailableNeitherWritesAndBothReasonsAreGiven() = runTest {
+        val shown = mutableListOf<String>()
+        val message = unwritten(PageSummaryWriting(Cloud(isConnected = true, fails = ChatGPTFailure.UsageLimit), Local(OnDeviceWriter.Availability.Unavailable)).write(extracted, PageSummaryProvider.ChatGPT, { shown += it }))
+        assertEquals("${ChatGPTFailure.UsageLimit.message} Gemini Nano is unavailable on this phone.", message)
+        assertEquals(listOf(""), shown)
+        assertFalse(quotesThePage(message))
+    }
+
+    @Test
+    fun chatGPTChosenButNotConnectedWithNoLocalModelSaysHowToReconnect() = runTest {
+        val cloud = Cloud(isConnected = false)
+        val message = unwritten(PageSummaryWriting(cloud, Local(OnDeviceWriter.Availability.Unavailable)).write(extracted, PageSummaryProvider.ChatGPT, {}))
+        assertTrue(cloud.prompts.isEmpty())
+        assertEquals("${PageSummaryWriting.NOT_CONNECTED_UNWRITTEN} ${PageSummaryWriting.NANO_UNAVAILABLE}", message)
     }
 
     @Test
     fun chatGPTChosenButNotConnectedStaysOnThePhoneForThisRunAndSaysHowToReconnect() = runTest {
         val cloud = Cloud(isConnected = false)
-        val written = PageSummaryWriting(cloud, Local()).write(extracted, PageSummaryProvider.ChatGPT, {})
+        val result = written(PageSummaryWriting(cloud, Local()).write(extracted, PageSummaryProvider.ChatGPT, {}))
         assertTrue(cloud.prompts.isEmpty())
-        assertEquals(PageSummaryWriting.Writer.OnDevice, written.writer)
-        assertFalse(written.chatGPTFellBack)
-        assertTrue(written.note.startsWith(PageSummaryWriting.NOT_CONNECTED))
+        assertEquals(PageSummaryWriting.Writer.OnDevice, result.writer)
+        assertFalse(result.chatGPTFellBack)
+        assertTrue(result.note.startsWith(PageSummaryWriting.NOT_CONNECTED))
         cloud.isConnected = true
-        val reconnected = PageSummaryWriting(cloud, Local()).write(extracted, PageSummaryProvider.ChatGPT, {})
+        val reconnected = written(PageSummaryWriting(cloud, Local()).write(extracted, PageSummaryProvider.ChatGPT, {}))
         assertEquals(PageSummaryWriting.Writer.ChatGPT("GPT-6"), reconnected.writer)
     }
 
     @Test
     fun aDisconnectMidAnswerRewritesOnThePhoneWithoutAnotherCloudRequest() = runTest {
         val cloud = Cloud(isConnected = true)
-        val written = PageSummaryWriting(cloud, Local()).write(extracted, PageSummaryProvider.OnDevice, {}, reason = "ChatGPT was disconnected.")
+        val result = written(PageSummaryWriting(cloud, Local()).write(extracted, PageSummaryProvider.OnDevice, {}, reason = "ChatGPT was disconnected."))
         assertTrue(cloud.prompts.isEmpty())
-        assertTrue(written.note.startsWith("ChatGPT was disconnected."))
+        assertTrue(result.note.startsWith("ChatGPT was disconnected."))
+        val unavailable = unwritten(PageSummaryWriting(cloud, Local(OnDeviceWriter.Availability.Unavailable)).write(extracted, PageSummaryProvider.OnDevice, {}, reason = "ChatGPT was disconnected."))
+        assertEquals("ChatGPT was disconnected. Gemini Nano is unavailable on this phone.", unavailable)
     }
 
     @Test

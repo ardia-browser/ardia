@@ -1,4 +1,4 @@
-import { Platform, StyleSheet } from "react-native";
+import { FlatList, Platform, StyleSheet } from "react-native";
 import { getAnimatedStyle } from "react-native-reanimated";
 import { act } from "react-test-renderer";
 import { StartScreen } from "../components/search/StartScreen";
@@ -7,14 +7,17 @@ import { ArdiaLogo, DesignProvider, FloatingMenu } from "../components/ui";
 import { redesignedBarCenterFromBottom } from "../lib/deckGeometry";
 import type { Design } from "../lib/design";
 import { haptics } from "../state/app/haptics";
+import * as browseStore from "../state/browse/store";
 import { useBrowse } from "../state/browse/store";
 import * as settingsNav from "../state/settings/nav";
 import * as syncActions from "../state/sync/actions";
+import * as searchStore from "../state/search/store";
 import { dismissSearch, presentSearch } from "../state/search/store";
 import { OFF_STATUS, useSync, type PinnedTile, type SyncedProfile } from "../state/sync/store";
 import * as telemetry from "../state/telemetry/telemetry";
 import { useTabs } from "../state/tabs/store";
-import { renderSurface, unmount, withTabs } from "../../test/render/harness";
+import { renderSurface, unmount, updateSurface, withTabs } from "../../test/render/harness";
+import { StartSpaces } from "../components/search/StartSpaces";
 
 const mockMotion = { reduced: false };
 jest.mock("../state/app/systemLook", () => ({ ...jest.requireActual("../state/app/systemLook"), useReduceMotion: () => mockMotion.reduced }));
@@ -75,6 +78,9 @@ afterEach(() => {
 
 type Root = ReturnType<typeof renderSurface>;
 
+const onAndroid = Platform.OS === "android" ? test : test.skip;
+const onIOS = Platform.OS === "ios" ? test : test.skip;
+
 const start = (design: Design = "redesigned") =>
   renderSurface(
     <DesignProvider design={design}>
@@ -94,13 +100,13 @@ test("the original start page keeps its logo and its deck bar, and none of the r
   unmount(root);
 });
 
-test("the redesigned start page has no logo and no deck bar; its own bar holds Tabs, a 77 by 48 plus and Settings, centred 11 points above the safe bottom on iPhone and where the browsing bar sits on Android (8 above its 3-button bar), 24 in from the sides", () => {
+test("the redesigned start page has no deck bar, and no logo on iPhone; its own bar holds Tabs, a 77 by 48 plus and Settings, centred 11 points above the safe bottom on iPhone and where the browsing bar sits on Android (8 above its 3-button bar), 24 in from the sides", () => {
   const root = start();
-  expect(root.root.findAll((node) => node.type === ArdiaLogo)).toHaveLength(0);
+  expect(root.root.findAll((node) => node.type === ArdiaLogo)).toHaveLength(Platform.OS === "android" ? 1 : 0);
   expect(root.root.findAll((node) => node.type === DeckBar)).toHaveLength(0);
   const bar = style(root, "startBar");
   expect(bar.top + bar.height / 2).toBe(BAR_CENTER_Y);
-  expect(bar).toMatchObject({ height: 48, paddingHorizontal: 24 });
+  expect(bar).toMatchObject({ height: 48, paddingLeft: 24, paddingRight: 24 });
   expect(style(root, "startBarTabs")).toMatchObject({ width: 48, height: 48, borderRadius: 24 });
   expect(style(root, "startBarSettings")).toMatchObject({ width: 48, height: 48, borderRadius: 24 });
   expect(style(root, "startBarPlus")).toMatchObject({ width: 77, height: 48, borderRadius: 24 });
@@ -231,7 +237,7 @@ test("in a private tab adjusting the dots still switches space but is never coun
   unmount(root);
 });
 
-test("with no spaces and sync off, a Sync With Your Mac capsule sits where the switcher would, and opens sync setup", () => {
+onIOS("on iPhone with no spaces and sync off, a Sync With Your Mac capsule sits where the switcher would, and opens sync setup", () => {
   const openSettings = jest.spyOn(settingsNav, "openSettings").mockImplementation(() => undefined);
   const root = start();
   const invitation = style(root, "startSyncInvitation");
@@ -243,11 +249,68 @@ test("with no spaces and sync off, a Sync With Your Mac capsule sits where the s
   unmount(root);
 });
 
-test("with sync on but no spaces yet, the page shows neither the switcher nor the invitation", () => {
+test("with sync on but no spaces yet, the page shows neither the switcher nor the invitation, and on Android the logo", () => {
   withSpaces([]);
   const root = start();
   expect(host(root, "startSyncInvitation")).toBeUndefined();
   expect(host(root, "startSwitcher")).toBeUndefined();
+  expect(hosts(root, "startLogo")).toHaveLength(Platform.OS === "android" ? 1 : 0);
+  unmount(root);
+});
+
+onAndroid("on Android with no spaces the Ardia logo sits centred where the switcher would, in place of any sync invitation, and only its own frame takes touches", () => {
+  const root = start();
+  expect(host(root, "startSyncInvitation")).toBeUndefined();
+  expect(host(root, "startSwitcher")).toBeUndefined();
+  const row = style(root, "startLogo");
+  expect(row.top + row.height / 2).toBeCloseTo(SWITCHER_Y, 5);
+  expect(host(root, "startLogo")!.props.pointerEvents).toBe("box-none");
+  expect(style(root, "startLogoButton")).toMatchObject({ width: 132, height: 108 });
+  expect(root.root.findAll((node) => node.type === ArdiaLogo)).toHaveLength(1);
+  unmount(root);
+});
+
+onAndroid("on Android tapping the logo opens Search through New Tab with a bar tick on the press, counted, and it is announced as a Search button", () => {
+  const opened = jest.spyOn(browseStore, "newTab").mockImplementation(() => undefined);
+  const pressTick = jest.spyOn(haptics, "barPress").mockImplementation(() => undefined);
+  const root = start();
+  const button = host(root, "startLogoButton")!;
+  expect(button.props.accessibilityRole).toBe("button");
+  expect(button.props.accessibilityLabel).toBe("Search");
+  const logo = root.root.findAll((node) => node.props.testID === "startLogoButton" && typeof node.props.onPress === "function")[0]!;
+  act(() => logo.props.onPressIn());
+  expect(pressTick).toHaveBeenCalledTimes(1);
+  expect(opened).not.toHaveBeenCalled();
+  act(() => logo.props.onPress());
+  expect(opened).toHaveBeenCalledTimes(1);
+  expect(counted).toHaveBeenCalledWith("start_logo_taps");
+  unmount(root);
+});
+
+onAndroid("on Android the logo's press shows at once as a slight shrink and dim, with nothing else moving", () => {
+  const root = start();
+  const logo = root.root.findAll((node) => node.props.testID === "startLogoButton" && typeof node.props.style === "function")[0]!;
+  expect(StyleSheet.flatten(logo.props.style({ pressed: false }))).toEqual({ width: 132, height: 108, alignItems: "center", justifyContent: "center" });
+  expect(StyleSheet.flatten(logo.props.style({ pressed: true }))).toMatchObject({ opacity: 0.85, transform: [{ scale: 0.94 }] });
+  unmount(root);
+});
+
+onAndroid("on Android in a private tab the logo still opens Search, which stays private, and is never counted", () => {
+  act(() => useTabs.setState({ incognito: true }));
+  const shown = jest.spyOn(searchStore, "presentSearch");
+  const root = start();
+  const logo = root.root.findAll((node) => node.props.testID === "startLogoButton" && typeof node.props.onPress === "function")[0]!;
+  act(() => logo.props.onPress());
+  expect(shown).toHaveBeenCalledWith("start", "", true);
+  expect(counted).not.toHaveBeenCalled();
+  unmount(root);
+});
+
+onAndroid("on Android the logo gives way to synced spaces and their pins", () => {
+  withSpaces([profile("work", "Work", [tile(1)])]);
+  const root = start();
+  expect(host(root, "startLogo")).toBeUndefined();
+  expect(host(root, "startSwitcher")).toBeDefined();
   unmount(root);
 });
 
@@ -326,4 +389,16 @@ test("the original start page has no veil, and the native backdrop is asked for 
   expect(host(native, "themeVeil")).toBeUndefined();
   expect(native.root.findAll((node) => node.type === lookModule.ProfileBackdrop).map((node) => node.props.themed)).toEqual([true]);
   unmount(native);
+});
+
+test("when the page width changes with the same space selected, the pager moves to that space at the new width", () => {
+  withSpaces([profile("work", "Work"), profile("home", "Home")], "home");
+  const scrolled = jest.spyOn(FlatList.prototype, "scrollToOffset").mockImplementation(() => {});
+  const spaces = (width: number) => <StartSpaces geometry={{ width, height: 678, safeSide: 0, barCenterY: 620 }} dark={false} incognito={false} />;
+  const root = renderSurface(spaces(466));
+  scrolled.mockClear();
+  updateSurface(root, spaces(951));
+  expect(scrolled).toHaveBeenCalledWith({ offset: 951, animated: false });
+  scrolled.mockRestore();
+  unmount(root);
 });

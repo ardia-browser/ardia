@@ -27,6 +27,7 @@ import type { SavedObject } from "../../lib/savedDocument";
 import type { JsonSchema } from "../../lib/jsonSchema";
 import { PROVIDERS_SCHEMA } from "../omnibox/providerSchema";
 import { COMMAND_BAR_START_SCHEMA, isCommandBarStart, type CommandBarStart } from "../omnibox/commandBarStart";
+import { PRESS_MOTIONS } from "../../lib/pressMotion";
 import { noteAutoHideTabsChosen } from "../telemetry/autoHideTabsChoices";
 import { READER_FONTS, READER_SIZE_NAMES } from "../reader/tokens";
 import { noteMinimalismToggled } from "../telemetry/minimalismCounts";
@@ -161,6 +162,9 @@ export const SETTING_SPECS = {
   pageFrameZeroWhenTabsHidden: flag(false, SYNCED),
   commandBarPlacement: oneOf(["field", "centred", "centredOnClick"], "field", SYNCED),
   commandBarStart: shaped<CommandBarStart>({}, isCommandBarStart, COMMAND_BAR_START_SCHEMA),
+  pressMotion: oneOf(PRESS_MOTIONS, "still"),
+  folderStyle: oneOf(["profile", "neutral"], "profile"),
+  liveFolderIcon: oneOf(["folder", "service"], "folder"),
   spacesFollowAppearance: flag(true),
   defaultProfileId: text(DEFAULT_PROFILE_ID),
   showProfileDots: flag(true, SYNCED),
@@ -168,6 +172,7 @@ export const SETTING_SPECS = {
   shortcuts: shaped<Record<string, string[]>>({}, (v) => isRecordOf(v, isStringList), recordOf(STRING_LIST), SYNCED),
   openLinksInLittleArdia: flag(true),
   littleArdiaOpensNewTabLinks: flag(true, SYNCED),
+  littleArdiaShortcutFromAnyApp: flag(false),
   littleArdiaSize: shaped<[number, number]>([900, 640], (v) => Array.isArray(v) && v.length === 2 && v.every(isWidth), { type: "array", prefixItems: [WIDTH, WIDTH], minItems: 2, maxItems: 2 }),
   pageEngine: oneOf(["chromium", "webkit"], "chromium"),
   websiteEngines: shaped<Record<string, "chromium" | "webkit">>({}, (v) => isRecordOf(v, (e) => e === "chromium" || e === "webkit"), recordOf({ type: "string", enum: ["chromium", "webkit"] })),
@@ -271,14 +276,14 @@ function withPageFrameDependencies(settings: Settings, patch: Partial<Settings>)
   return patch;
 }
 
-export function choose(s: Pick<BrowserState, "settings" | "settingsMeta">, patch: Partial<Settings>): Pick<BrowserState, "settings" | "settingsMeta"> {
+export function choose(s: Pick<BrowserState, "settings" | "settingsMeta">, patch: Partial<Settings>, { inferring = false } = {}): Pick<BrowserState, "settings" | "settingsMeta"> {
   const { chosen, inferred } = s.settingsMeta;
   if (patch.autoHideTabs !== undefined && patch.autoHideTabs !== s.settings.autoHideTabs) noteAutoHideTabsChosen();
   if (patch.minimalismMode !== undefined && patch.minimalismMode !== s.settings.minimalismMode) noteMinimalismToggled(patch.minimalismMode);
   patch = withPageFrameDependencies(s.settings, patch);
   const next = { ...s.settings, ...patch };
   const added = Object.keys(patch).filter((k) => !chosen.includes(k));
-  const left = inferred.filter((k) => !(k in patch));
+  const left = inferring ? [...new Set([...inferred, ...Object.keys(patch)])] : inferred.filter((k) => !(k in patch));
   const settingsMeta = added.length || left.length !== inferred.length ? { chosen: added.length ? [...chosen, ...added] : chosen, inferred: left } : s.settingsMeta;
   return { settings: next, settingsMeta };
 }
@@ -336,7 +341,7 @@ function windowsFollowingAutoHideTabs(s: Pick<BrowserState, "settings" | "window
 export type SettingsSlice = {
   settings: Settings;
   settingsMeta: SettingsMeta;
-  updateSettings(patch: Partial<Settings>, options?: { fromSync?: boolean }): void;
+  updateSettings(patch: Partial<Settings>, options?: { fromSync?: boolean; inferred?: boolean }): void;
   setSearchEngine(id: string): void;
   addCustomEngine(input: EngineInput): { id: string } | { error: string };
   updateCustomEngine(id: string, input: EngineInput): string | null;
@@ -349,11 +354,11 @@ const newEngineId = () => `engine-${Date.now().toString(36)}-${(++engineCounter)
 export const createSettingsSlice: StateCreator<BrowserState, [], [], SettingsSlice> = (set, get) => ({
   settings: DEFAULT_SETTINGS,
   settingsMeta: NO_SETTINGS_META,
-  updateSettings(patch, { fromSync = false } = {}) {
+  updateSettings(patch, { fromSync = false, inferred = false } = {}) {
     set((s) => {
       const windows = windowsFollowingAutoHideTabs(s, patch);
       if (fromSync) return { settings: { ...s.settings, ...withPageFrameDependencies(s.settings, patch) }, ...windows };
-      return { ...choose(s, withLinkKeysApart(s.settings, patch)), ...windows };
+      return { ...choose(s, withLinkKeysApart(s.settings, patch), { inferring: inferred }), ...windows };
     });
   },
 

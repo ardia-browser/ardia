@@ -146,6 +146,7 @@ run_logged archive xcodebuild archive \
   ARDIA_DEFAULT_BROWSER="$default_browser" \
   ARDIA_TEST_BUILD=NO \
   ARDIA_PREBUILT_BUNDLE="$prebuilt" \
+  ENABLE_SIGNATURE_AGGREGATION=NO \
   COMPILER_INDEX_STORE_ENABLE=NO
 
 app="$archive/Products/Applications/Ardia.app"

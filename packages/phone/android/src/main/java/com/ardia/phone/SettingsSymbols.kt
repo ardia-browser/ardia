@@ -91,4 +91,6 @@ internal object SettingsSymbols {
     val names: Set<String> get() = vectors.keys
 
     fun vector(systemImage: String): ImageVector = (vectors[systemImage] ?: vectors.getValue("gearshape"))()
+
+    fun known(systemImage: String): ImageVector? = vectors[systemImage]?.invoke()
 }

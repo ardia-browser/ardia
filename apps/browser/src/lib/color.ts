@@ -50,6 +50,11 @@ export function luminance(color: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
+export function contrastRatio(a: string, b: string): number {
+  const [la, lb] = [luminance(a), luminance(b)];
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
 export function isLight(color: string): boolean {
   const l = luminance(color);
   return 1.05 / (l + 0.05) < (l + 0.05) / 0.05;

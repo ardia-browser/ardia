@@ -27,12 +27,12 @@ export { PasteButton, pasteButtonIsNative, type PasteButtonProps } from "./paste
 export { actionSheet, ContextMenuView, nativeMenusAvailable, type ActionSheetAction, type ActionSheetOptions, type ContextMenuHandle, type ContextMenuProps, type MenuAppearance, type MenuItem } from "./menus";
 export { SearchStage, SearchStagePanel, searchStageIsNative, type SearchStageExit, type SearchStageHandle, type SearchStageLift, type SearchStageMorphLook, type SearchStageProps } from "./searchStage";
 export { MotionView, motionReportsNearEnd, motionRunsInRenderServer, type MotionCurve, type MotionTarget, type MotionViewProps } from "./motion";
-export { forcedDuoCanvas, ScreenLayoutProbe, screenLayoutIsNative, type DuoCanvasMode, type ScreenLayoutEdge, type ScreenLayoutName, type ScreenLayoutReport, type ScreenSpaceReport } from "./screenLayout";
+export { forcedDuoCanvas, ScreenLayoutProbe, screenLayoutIsNative, type DuoCanvasMode, type ScreenLayoutName, type ScreenLayoutReport, type ScreenSpaceReport } from "./screenLayout";
 export * as settingsUI from "./settingsUI";
 export { sync } from "./sync";
 export { syncLab, type SyncRuntimeCheck } from "./syncLab";
 export { labLog, restorableState, system, systemLab, type SystemLink, type SystemLinkSource } from "./system";
-export { TRAY_BACK_TRAVEL, trayBack, type TrayBackHandlers } from "./back";
+export { predictiveBack, TRAY_BACK_TRAVEL, trayBack, type PredictiveBackHandlers, type TrayBackHandlers } from "./back";
 export { scanLab, scanner, ScanView, type ScanError, type ScanPermission, type ScanViewProps } from "./scan";
 export { clipboard, type ClipboardOffer } from "./clipboard";
 export {
@@ -134,3 +134,5 @@ export type {
   VisitKind,
   WebsiteDataKind,
 } from "./pageTypes";
+export { MATERIAL_ROLES, materialColors, type MaterialRole, type MaterialSchemeChange, type NativeMaterialScheme, type NativeMaterialSchemes } from "./material";
+export { MaterialSearchBar, materialSearchBarIsNative, type MaterialSearchAppearance, type MaterialSearchBarHandle, type MaterialSearchBarProps } from "./materialSearchBar";

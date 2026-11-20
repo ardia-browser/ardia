@@ -19,6 +19,11 @@ import { screenCornerRadius } from "../../state/app/displayCorner";
 import { useTheme } from "./theme";
 import { sheetInk, sheetLayout, tabsLayout } from "./tokens";
 import { MenuFrostProvider } from "./Menu";
+import { useDesign } from "./design";
+import { withAlpha } from "../../lib/color";
+import { MATERIAL_STATE } from "./materialRoles";
+import { useMaterialTheme } from "./materialTheme";
+import { materialDuration, materialMotion, materialMove, materialShape } from "./materialTokens";
 
 const SHEET_REDUCED_MS = reducedMotionMs(tabsMotion.sheetReduced);
 
@@ -43,12 +48,15 @@ export function FullSheet<T extends string>({ sheet, progress, onDismiss, childr
   const insets = useSafeAreaInsets();
   const window = useWindowDimensions();
   const reduceMotion = useReduceMotion();
-  const top = insets.top + iPhoneOr(sheetLayout.iPhoneTopGap, sheetLayout.topGap);
-  const bottomCorner = iPhoneOr(screenCornerRadius(tabsLayout.displayCornerRadius), 0);
+  const material = useDesign() === "material";
+  const { scheme } = useMaterialTheme();
+  const top = insets.top + (material ? 0 : iPhoneOr(sheetLayout.iPhoneTopGap, sheetLayout.topGap));
+  const bottomCorner = material ? 0 : iPhoneOr(screenCornerRadius(tabsLayout.displayCornerRadius), 0);
   const presence = useRef(initialPresence(sheet));
   const [, redraw] = useState(0);
-  const height = useSharedValue(Math.max(1, window.height - top));
-  const offset = useSharedValue(sheet ? 0 : height.value);
+  const initialHeight = Math.max(1, window.height - top);
+  const height = useSharedValue(initialHeight);
+  const offset = useSharedValue(sheet ? 0 : initialHeight);
   const dragFrom = useSharedValue(0);
   const scrollTop = useSharedValue(0);
   const touch = useSharedValue({ x: 0, y: 0, inList: false });
@@ -65,7 +73,8 @@ export function FullSheet<T extends string>({ sheet, progress, onDismiss, childr
     if (step.motion === "in") {
       if (step.fromHidden) offset.value = height.value;
       scrollTop.value = 0;
-      offset.value = reduceMotion ? withTiming(0, { duration: SHEET_REDUCED_MS, easing: tabsCurve.easeOut }) : withSpring(0, tabsMotion.sheetRise);
+      if (material) offset.value = materialMove(0, materialMotion.sheetEnter.easing, reduceMotion ? SHEET_REDUCED_MS : materialMotion.sheetEnter.durationMs);
+      else offset.value = reduceMotion ? withTiming(0, { duration: SHEET_REDUCED_MS, easing: tabsCurve.easeOut }) : withSpring(0, tabsMotion.sheetRise);
       return;
     }
     const generation = step.presence.generation;
@@ -75,9 +84,15 @@ export function FullSheet<T extends string>({ sheet, progress, onDismiss, childr
       presence.current = next;
       redraw((count) => count + 1);
     };
-    offset.value = reduceMotion
-      ? withTiming(height.value, { duration: SHEET_REDUCED_MS, easing: tabsCurve.easeInOut }, (finished) => runOnJS(settle)(finished === true))
-      : withSpring(height.value, tabsMotion.sheetDismiss, (finished) => runOnJS(settle)(finished === true));
+    const settled = (finished?: boolean) => {
+      "worklet";
+      runOnJS(settle)(finished === true);
+    };
+    if (material) offset.value = materialMove(height.value, materialMotion.sheetExit.easing, reduceMotion ? SHEET_REDUCED_MS : materialMotion.sheetExit.durationMs, settled);
+    else
+      offset.value = reduceMotion
+        ? withTiming(height.value, { duration: SHEET_REDUCED_MS, easing: tabsCurve.easeInOut }, settled)
+        : withSpring(height.value, tabsMotion.sheetDismiss, settled);
     const fallback = setTimeout(() => settle(true), HIDE_FALLBACK_MS);
     return () => clearTimeout(fallback);
   }, [sheet]);
@@ -117,9 +132,9 @@ export function FullSheet<T extends string>({ sheet, progress, onDismiss, childr
         })
         .onEnd((event) => {
           if (sheetDismisses(offset.value, height.value, event.velocityY)) runOnJS(onDismiss)();
-          else offset.value = withSpring(0, tabsMotion.sheetRise);
+          else offset.value = material ? materialMove(0, "standard", materialDuration.short4) : withSpring(0, tabsMotion.sheetRise);
         }),
-    [onDismiss, top],
+    [onDismiss, top, material],
   );
 
   const frame = useMemo<SheetFrame>(
@@ -145,14 +160,19 @@ export function FullSheet<T extends string>({ sheet, progress, onDismiss, childr
   if (!shown) return null;
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents={sheet ? "auto" : "none"} collapsable={false} importantForAccessibility={sheet ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={!sheet}>
-      <Animated.View style={[StyleSheet.absoluteFill, styles.scrim, scrim]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
+      <Animated.View style={[StyleSheet.absoluteFill, material ? { backgroundColor: withAlpha(scheme.scrim, MATERIAL_STATE.scrim) } : styles.scrim, scrim]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
       <GestureDetector gesture={drag}>
         <Animated.View
           accessibilityViewIsModal
           onLayout={(event) => {
             height.value = Math.max(1, event.nativeEvent.layout.height);
           }}
-          style={[styles.sheet, { top, left: insets.left, right: insets.right, borderBottomLeftRadius: bottomCorner, borderBottomRightRadius: bottomCorner }, slide]}
+          style={[
+            styles.sheet,
+            { top, left: insets.left, right: insets.right, borderBottomLeftRadius: bottomCorner, borderBottomRightRadius: bottomCorner },
+            material ? { borderTopLeftRadius: materialShape.extraLarge, borderTopRightRadius: materialShape.extraLarge, backgroundColor: scheme.surfaceContainerLow } : null,
+            slide,
+          ]}
         >
           <SheetFrameContext.Provider value={frame}>
             <MenuFrostProvider value={null}>{children(shown)}</MenuFrostProvider>
@@ -165,9 +185,10 @@ export function FullSheet<T extends string>({ sheet, progress, onDismiss, childr
 
 export function SheetBackground({ progress, children }: { progress: SharedValue<number>; children: ReactNode }) {
   const theme = useTheme();
+  const material = useDesign() === "material";
   const shrink = useAnimatedStyle(() => ({
-    transform: [{ scale: backgroundScale(progress.value) }],
-    borderRadius: progress.value > 0 ? sheetLayout.backgroundRadius : 0,
+    transform: [{ scale: material ? 1 : backgroundScale(progress.value) }],
+    borderRadius: !material && progress.value > 0 ? sheetLayout.backgroundRadius : 0,
   }));
   return (
     <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.surface }]}>

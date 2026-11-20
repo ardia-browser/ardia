@@ -4,9 +4,9 @@ const SYNC_ONLY_PHRASES = ["pages you pinned to your Mac, ", "tabs you sent to a
 
 const APPEARANCE_WITHOUT_SYNC = "With each launch, the Appearance you chose: Glass or Classic, and Light, Dark or System";
 
-const IPHONE_ONLY_FIELDS = ["perf_backdrop", "browse_for_me_opened", "page_summaries_pinched"];
+const IPHONE_ONLY_FIELDS = ["perf_backdrop", "browse_for_me_opened", "page_summaries_pinched", "talk_to_me_answers_read"];
 
-const ANDROID_ONLY_FIELDS = ["page_summaries_chatgpt"];
+const ANDROID_ONLY_FIELDS = ["page_summaries_chatgpt", "start_logo_taps"];
 
 const shownOn = (os: string, item: SentItem) => !(os === "ios" ? ANDROID_ONLY_FIELDS : IPHONE_ONLY_FIELDS).some((field) => item.fields.includes(field));
 

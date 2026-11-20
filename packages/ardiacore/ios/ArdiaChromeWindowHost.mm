@@ -317,6 +317,10 @@ NSView *ArdiaWindowRootView(NSWindow *window) {
   else [window close];
 }
 
++ (BOOL)windowIsFullScreen:(NSWindow *)window {
+  return IsWindowFullScreen(window);
+}
+
 + (BOOL)windowFullScreenIsForPage:(NSWindow *)window {
   return [objc_getAssociatedObject(window, kWindowFullScreenKey) enteredForPage];
 }

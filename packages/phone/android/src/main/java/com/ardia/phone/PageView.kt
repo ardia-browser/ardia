@@ -8,6 +8,7 @@ import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.webkit.WebView
 import android.widget.FrameLayout
 import com.ardia.browser.BrowserUrl
@@ -57,12 +58,30 @@ class PageView(context: Context, appContext: AppContext) : ExpoView(context, app
     var savedState: String? = null
     var toneInsets: Pair<Double, Double> = 0.0 to 0.0
     var obscuredInsets: Pair<Double, Double> = 0.0 to 0.0
-        set(value) {
-            if (field == value) return
-            field = value
-            layOutChildren()
-            invalidate()
+    var bottomInsetTransitionMs = 0
+    private var appliedObscuredInsets: Pair<Double, Double> = 0.0 to 0.0
+    private val insetSettlement = PageInsetSettlement()
+    private var insetPage: Page? = null
+    private var insetWeb: WebView? = null
+    private var observedWeb: WebView? = null
+    private var observedScrollX = 0
+    private var observedScrollY = 0
+    private val settleInsets = object : Runnable {
+        override fun run() {
+            if (!isAttachedToWindow || insetPage !== page || insetWeb !== PageDrawnWatch.webViewIn(host)) return
+            val remaining = insetSettlement.remaining(SystemClock.uptimeMillis(), bottomInsetTransitionMs.toLong())
+            if (remaining > 0) postDelayed(this, remaining) else applyObscuredInsets()
         }
+    }
+    private val pageScrolled = ViewTreeObserver.OnScrollChangedListener {
+        val web = PageDrawnWatch.webViewIn(host)
+        val x = web?.scrollX ?: 0
+        val y = web?.scrollY ?: 0
+        if (web === observedWeb && (x != observedScrollX || y != observedScrollY)) insetSettlement.scrolled(SystemClock.uptimeMillis())
+        observedWeb = web
+        observedScrollX = x
+        observedScrollY = y
+    }
     var obscuredColours: Pair<Int?, Int?> = null to null
         set(value) {
             if (field == value) return
@@ -79,6 +98,7 @@ class PageView(context: Context, appContext: AppContext) : ExpoView(context, app
 
     private val pinches = PagePinchWatcher(
         density = context.resources.displayMetrics.density,
+        isOn = { PageSummaryChoice.isEnabled(context) },
         moment = ::pinchMoment,
         measureRest = ::measureRest,
         later = { millis, run -> postDelayed({ run() }, millis) },
@@ -166,7 +186,7 @@ class PageView(context: Context, appContext: AppContext) : ExpoView(context, app
 
     internal fun bands(): PageBands.Frame {
         val density = resources.displayMetrics.density
-        return PageBands.frame(height, (obscuredInsets.first * density).roundToInt(), (obscuredInsets.second * density).roundToInt())
+        return PageBands.frame(height, (appliedObscuredInsets.first * density).roundToInt(), (appliedObscuredInsets.second * density).roundToInt())
     }
 
     internal fun bandColours(): Pair<Int?, Int?> = PageBands.colour(obscuredColours.first, surfaceColor) to PageBands.colour(obscuredColours.second, surfaceColor)
@@ -207,9 +227,15 @@ class PageView(context: Context, appContext: AppContext) : ExpoView(context, app
     }
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
-        if (event.actionMasked == MotionEvent.ACTION_DOWN) touchesSummary = isOnSummary(event.x, event.y)
+        val action = event.actionMasked
+        if (action == MotionEvent.ACTION_DOWN) touchesSummary = isOnSummary(event.x, event.y)
         if (!touchesSummary) pinches.observe(event)
-        return super.dispatchTouchEvent(event)
+        val handled = super.dispatchTouchEvent(event)
+        when (action) {
+            MotionEvent.ACTION_DOWN -> insetSettlement.touching = handled && !touchesSummary
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> insetSettlement.touching = false
+        }
+        return handled
     }
 
     override fun onInterceptTouchEvent(event: MotionEvent): Boolean {
@@ -243,6 +269,10 @@ class PageView(context: Context, appContext: AppContext) : ExpoView(context, app
     }
 
     fun unbind() {
+        cancelInsetSettlement()
+        observedWeb = null
+        insetSettlement.touching = false
+        appliedObscuredInsets = obscuredInsets
         dismissSummary(animated = false)
         cover.cancel()
         drawn.reset()
@@ -269,11 +299,16 @@ class PageView(context: Context, appContext: AppContext) : ExpoView(context, app
         super.onAttachedToWindow()
         page?.id?.let(PhonePages::activate)
         viewTreeObserver.addOnPreDrawListener(asksWhenShown)
+        viewTreeObserver.addOnScrollChangedListener(pageScrolled)
+        applyObscuredInsets()
     }
 
     override fun onDetachedFromWindow() {
         dismissSummary(animated = false)
         viewTreeObserver.removeOnPreDrawListener(asksWhenShown)
+        viewTreeObserver.removeOnScrollChangedListener(pageScrolled)
+        cancelInsetSettlement()
+        insetSettlement.touching = false
         cover.cancel()
         drawn.reset()
         super.onDetachedFromWindow()
@@ -281,6 +316,8 @@ class PageView(context: Context, appContext: AppContext) : ExpoView(context, app
 
     private fun show(view: View?) {
         if (view != null && view.parent === host && host.childCount == 1) return
+        applyObscuredInsets()
+        observedWeb = null
         documentChanged(document.replaced())
         val hadView = host.childCount > 0
         host.removeAllViews()
@@ -301,6 +338,7 @@ class PageView(context: Context, appContext: AppContext) : ExpoView(context, app
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
+        applyObscuredInsets()
         lab { "page view ${page?.id ?: pageId} size ${oldw}x$oldh -> ${w}x$h" }
     }
 
@@ -316,16 +354,54 @@ class PageView(context: Context, appContext: AppContext) : ExpoView(context, app
         }
     }
 
+    fun updateObscuredInsets() {
+        if (appliedObscuredInsets == obscuredInsets) {
+            cancelInsetSettlement()
+            return
+        }
+        val web = PageDrawnWatch.webViewIn(host)
+        val defers = bottomInsetTransitionMs > 0 && appliedObscuredInsets.first == obscuredInsets.first &&
+            appliedObscuredInsets.second > 0 && obscuredInsets.second > 0 && page?.id == pageId && web != null && isAttachedToWindow
+        if (!defers) {
+            applyObscuredInsets()
+            return
+        }
+        if (insetPage === page && insetWeb === web && insetSettlement.target == obscuredInsets.second) return
+        removeCallbacks(settleInsets)
+        insetPage = page
+        insetWeb = web
+        insetSettlement.changed(obscuredInsets.second, SystemClock.uptimeMillis())
+        postDelayed(settleInsets, bottomInsetTransitionMs.toLong())
+    }
+
+    private fun cancelInsetSettlement() {
+        removeCallbacks(settleInsets)
+        insetPage = null
+        insetWeb = null
+        insetSettlement.reset()
+    }
+
+    private fun applyObscuredInsets() {
+        cancelInsetSettlement()
+        if (appliedObscuredInsets == obscuredInsets) return
+        lab { "page view ${page?.id ?: pageId} bottom inset ${appliedObscuredInsets.second} -> ${obscuredInsets.second}" }
+        appliedObscuredInsets = obscuredInsets
+        layOutChildren()
+        invalidate()
+    }
+
     private fun layOutChildren() {
         if (width == 0 || height == 0) return
         placeHost(width, height)
     }
 
     private fun placeHost(width: Int, height: Int) {
-        val bands = PageBands.frame(height, (obscuredInsets.first * resources.displayMetrics.density).roundToInt(), (obscuredInsets.second * resources.displayMetrics.density).roundToInt())
+        val bands = PageBands.frame(height, (appliedObscuredInsets.first * resources.displayMetrics.density).roundToInt(), (appliedObscuredInsets.second * resources.displayMetrics.density).roundToInt())
         val pageHeight = height - bands.top - bands.bottom
-        host.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(pageHeight, MeasureSpec.EXACTLY))
-        host.layout(0, bands.top, width, bands.top + pageHeight)
+        if (host.isLayoutRequested || host.measuredWidth != width || host.measuredHeight != pageHeight || host.width != width || host.height != pageHeight || host.top != bands.top || host.bottom != bands.top + pageHeight) {
+            host.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(pageHeight, MeasureSpec.EXACTLY))
+            host.layout(0, bands.top, width, bands.top + pageHeight)
+        }
         gestures.layout(width, height, bands.top)
         layOutSummary(width, height, bands)
     }
@@ -333,7 +409,10 @@ class PageView(context: Context, appContext: AppContext) : ExpoView(context, app
     override fun requestLayout() {
         super.requestLayout()
         @Suppress("SENSELESS_COMPARISON")
-        if (layOutAgain != null) post(layOutAgain)
+        if (layOutAgain != null) {
+            removeCallbacks(layOutAgain)
+            post(layOutAgain)
+        }
     }
 
     private fun sendState(state: PageState) {
@@ -378,7 +457,7 @@ class PageView(context: Context, appContext: AppContext) : ExpoView(context, app
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec)
-        val bands = PageBands.frame(measuredHeight, (obscuredInsets.first * resources.displayMetrics.density).roundToInt(), (obscuredInsets.second * resources.displayMetrics.density).roundToInt())
+        val bands = PageBands.frame(measuredHeight, (appliedObscuredInsets.first * resources.displayMetrics.density).roundToInt(), (appliedObscuredInsets.second * resources.displayMetrics.density).roundToInt())
         host.measure(
             MeasureSpec.makeMeasureSpec(measuredWidth, MeasureSpec.EXACTLY),
             MeasureSpec.makeMeasureSpec(measuredHeight - bands.top - bands.bottom, MeasureSpec.EXACTLY),
@@ -418,6 +497,7 @@ class PageView(context: Context, appContext: AppContext) : ExpoView(context, app
     }
 
     internal fun summarize(trigger: PageSummarySession.Trigger): Boolean {
+        if (!PageSummaryChoice.isEnabled(context)) return false
         val opened = page ?: return false
         val moment = pinchMoment() ?: return false
         if (!moment.isVisible || moment.isLoading) return false
@@ -429,6 +509,7 @@ class PageView(context: Context, appContext: AppContext) : ExpoView(context, app
         val web = opened.view.value
         val account = BrowseForMeHost.get(context).account
         val provider = PageSummaryChoice.stored(context)
+        val revision = PageSummaryChoice.revision
         val made = PageSummarySession(
             trigger = trigger,
             pageId = opened.id,
@@ -438,7 +519,7 @@ class PageView(context: Context, appContext: AppContext) : ExpoView(context, app
             provider = provider,
             writing = PageSummaryWriting.live(account),
             read = { opened.readableContent() },
-            isCurrent = { page === opened && document.generation == generation && web != null && opened.view.value === web },
+            isCurrent = { PageSummaryChoice.revision == revision && page === opened && document.generation == generation && web != null && opened.view.value === web },
         )
         made.onSettled = { settled ->
             PhonePages.report(settled.pageId, "page.summarySettled", "trigger" to settled.trigger.raw, "outcome" to settled.outcome, "chatGPTFellBack" to settled.chatGPTFellBack, "isPrivate" to settled.isPrivate)

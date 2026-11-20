@@ -94,7 +94,7 @@ test("an installed plugin stays off until its consent is accepted, then starts i
 
 test("the consent sheet names every reach the plugin gets", () => {
   const lines = consentLines(P().listings.example.manifest).map((l) => l.text).join("\n");
-  for (const words of ["/usr/bin/python3 helper.py", "can't connect beyond", "title of your tabs", "tab.activated", "Runs Ardia commands", "commandBarStart", "ardia://example", "handed the tab you're on", "Say Hello", "Offers tools"]) assert.ok(lines.includes(words), words);
+  for (const words of ["/usr/bin/python3 helper.py", "can't connect to anything or accept connections", "title of your tabs", "tab.activated", "Runs Ardia commands", "commandBarStart", "ardia://example", "handed the tab you're on", "Say Hello", "Offers tools"]) assert.ok(lines.includes(words), words);
 });
 
 test("settings defaults apply on enable and go back on disable, unless changed since", async () => {

@@ -4,6 +4,11 @@ import { newId, pinKeyOf } from "../browser/model";
 import { descendantIds, nestGroups, withGroupsPlaced, withParent } from "../groups/groups";
 import { keyField } from "../pins/pinMirror";
 import { splitTabIds } from "../splits/splits";
+import { noteGroupMoveSplits } from "../telemetry/groupMoveSplits";
+
+let moveTransaction: (run: () => void) => void = (run) => run();
+export const setGroupMoveTransaction = (transaction: (run: () => void) => void) => void (moveTransaction = transaction);
+export const inOneUpdate = (run: () => void) => moveTransaction(run);
 
 export function groupTree(groups: Record<string, TabGroup>, groupId: string): TabGroup[] {
   const root = groups[groupId];
@@ -52,14 +57,18 @@ export function splitsWithin(s: Pick<BrowserState, "splits">, tabIds: string[]):
 }
 
 export function withSplitsBack(s: BrowserState, kept: SplitView[], windowId: string): BrowserState {
+  const carried = kept.filter((v) => s.splits[v.id] !== v);
   const taken = new Set(Object.values(s.splits).flatMap((v) => splitTabIds(v)));
   let splits = s.splits;
-  for (const v of kept) {
+  let restored = 0;
+  for (const v of carried) {
     const profileId = s.tabs[splitTabIds(v)[0]!]?.profileId;
     if (!splitTabIds(v).every((id) => s.tabs[id]?.windowId === windowId && s.tabs[id]?.profileId === profileId && !taken.has(id))) continue;
     const id = splits[v.id] ? newId("split") : v.id;
     splits = { ...splits, [id]: { ...v, id, windowId } };
     splitTabIds(v).forEach((t) => taken.add(t));
+    restored++;
   }
+  if (carried.length) noteGroupMoveSplits(carried.length, restored);
   return splits === s.splits ? s : { ...s, splits };
 }

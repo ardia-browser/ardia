@@ -31,7 +31,7 @@ import { newTabHome } from "../tabs/newTabHome";
 import { noteAutoHideTabsChosen, noteTornOffWindowKeptAutoHide } from "../telemetry/autoHideTabsChoices";
 import { lastClosedEntry, lastClosedTab, restoreTab, restoreWindow, withoutRecentlyClosed } from "./reopenClosed";
 import { noteRecentlyClosedCleared } from "../telemetry/recentlyClosedCounts";
-import { groupTree, regrouped, splitsWithin, withSplitsBack } from "./groupMoves";
+import { groupTree, inOneUpdate, regrouped, splitsWithin, withSplitsBack } from "./groupMoves";
 import { commonGroup, orderSections } from "../groups/groups";
 import { groupOf } from "../pins/tabGrouping";
 import { focusedWindowOf } from "./ui";
@@ -314,8 +314,11 @@ export const createWindowsSlice: StateCreator<BrowserState, [], [], WindowsSlice
     if (!g || g.pinned) return undefined;
     const tree = groupTree(get().groups, groupId);
     const kept = splitsWithin(get(), g.tabIds);
-    const target = get().moveTabsToWindow(g.tabIds, windowId, options);
-    if (target) set(withSplitsBack(regrouped(get(), tree, target, g.profileId, false), kept, target));
+    let target: string | undefined;
+    inOneUpdate(() => {
+      target = get().moveTabsToWindow(g.tabIds, windowId, options);
+      if (target) set(withSplitsBack(regrouped(get(), tree, target, g.profileId, false), kept, target));
+    });
     return target;
   },
 

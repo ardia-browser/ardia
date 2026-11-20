@@ -3,6 +3,7 @@ import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
 const { viewTabIds } = await import("../browser/model.ts");
 const { splitTabIdsOf } = await import("../splits/splits.ts");
+const { takeGroupMoveSplitCounts } = await import("../telemetry/groupMoveSplits.ts");
 
 const S = () => useBrowser.getState();
 const host = (id) => new URL(S().tabs[id].url).hostname.replace(".com", "");
@@ -119,6 +120,52 @@ for (const to of ["window", "profile"]) {
     assert.ok(Object.values(S().splits).every((v) => splitTabIdsOf(v).every((id) => S().tabs[id].windowId === v.windowId)));
   });
 }
+
+for (const shared of [false, true]) {
+  for (const toNewWindow of [false, true]) {
+    test(`Move to Window${toNewWindow ? " › New Window" : ""} tells the store's listeners once, with the group's split already back${shared ? ", tabs shared across windows" : ""}`, () => {
+      const { w, ids } = windowWith("a", "b", "c", "d");
+      const open = toNewWindow ? null : S().createWindow({ url: "https://x.com/" });
+      if (shared) S().updateSettings({ shareTabsAcrossWindows: true });
+      const g = S().groupTabs([ids[1], ids[2], ids[3]], { name: "Trip", pinned: false });
+      S().createSplit([ids[1], ids[2]]);
+      assert.deepEqual(splitIn(w).map((v) => v.tabs), [["b", "c"]]);
+      const heard = [];
+      const stop = useBrowser.subscribe((s) => heard.push(Object.values(s.splits).filter((v) => v.windowId !== w).map((v) => ({ tabs: splitTabIdsOf(v).map(host) }))));
+      const dest = S().moveGroupToWindow(g, open);
+      stop();
+      assert.ok(dest && dest !== w);
+      assert.equal(heard.length, 1, "one notification for the whole move");
+      assert.ok(heard[0].some((v) => v.tabs.join() === "b,c"), "the split was never heard taken apart");
+      assert.deepEqual(splitIn(dest).map((v) => v.tabs), [["b", "c"]]);
+    });
+  }
+}
+
+test("a group move counts the splits that came along, none for a group without one, and the count is taken once", () => {
+  const { ids } = windowWith("a", "b", "c", "d");
+  const plain = S().groupTabs([ids[0]], { name: "Plain", pinned: false });
+  const split = S().groupTabs([ids[1], ids[2], ids[3]], { name: "Trip", pinned: false });
+  S().createSplit([ids[1], ids[2]]);
+  takeGroupMoveSplitCounts();
+  const open = S().createWindow({ url: "https://x.com/" });
+  S().moveGroupToWindow(plain, open);
+  assert.deepEqual(takeGroupMoveSplitCounts(), { group_move_splits_kept: 0, group_move_splits_dropped: 0 });
+  S().moveGroupToWindow(split, open);
+  assert.deepEqual(splitIn(open).map((v) => v.tabs), [["b", "c"]]);
+  assert.deepEqual(takeGroupMoveSplitCounts(), { group_move_splits_kept: 1, group_move_splits_dropped: 0 });
+  assert.deepEqual(takeGroupMoveSplitCounts(), { group_move_splits_kept: 0, group_move_splits_dropped: 0 });
+});
+
+test("a move its destination refuses leaves the split where it was, and counts it neither kept nor dropped", () => {
+  const { w, ids } = windowWith("a", "b", "c", "d");
+  const g = S().groupTabs([ids[1], ids[2], ids[3]], { name: "Trip", pinned: false });
+  S().createSplit([ids[1], ids[2]]);
+  takeGroupMoveSplitCounts();
+  S().moveGroupToWindow(g, "no-such-window");
+  assert.deepEqual(splitIn(w).map((v) => v.tabs), [["b", "c"]], "the split is still in the window the group stayed in");
+  assert.deepEqual(takeGroupMoveSplitCounts(), { group_move_splits_kept: 0, group_move_splits_dropped: 0 });
+});
 
 test("Move to Window with shared tabs keeps the destination group's own members, a split with a local pane included", () => {
   const { w, ids } = windowWith("a", "b", "c");

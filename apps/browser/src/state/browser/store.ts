@@ -26,6 +26,7 @@ import type { BrowserWindow, Tab } from "./types";
 import { createUiSlice, type UiSlice } from "../windows/ui";
 import { createDownloadsSlice, type DownloadsSlice } from "../downloads/downloadsSlice";
 import { createWindowsSlice, type WindowsSlice } from "../windows/windows";
+import { setGroupMoveTransaction } from "../windows/groupMoves";
 import { orderSections } from "../groups/groups";
 
 export type BrowserState = ProfilesSlice &
@@ -102,6 +103,7 @@ export const storeTransaction = transactions.transaction;
 export const afterStoreTransactionIdempotent = transactions.afterTransactionIdempotent;
 export const inStoreTransaction = transactions.inTransaction;
 setHeldReportsTransaction(storeTransaction);
+setGroupMoveTransaction((run) => storeTransaction(run, { together: true }));
 
 export const useBrowser = create<BrowserState>()(actionsApart(transactions.middleware(batched((...a) => ({
   ...createProfilesSlice(...a),

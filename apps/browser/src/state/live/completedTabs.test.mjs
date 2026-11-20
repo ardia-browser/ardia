@@ -5,6 +5,7 @@ const { openLiveItem, refreshFolder, startLiveEngine } = await import("./engine.
 const { SOURCES } = await import("./sources.ts");
 const { setNowPlaying, useMedia } = await import("../media/media.ts");
 const { usePages } = await import("../tabs/pageState.ts");
+const { splitTabIdsOf } = await import("../splits/splits.ts");
 const { createFolder, finishCompleting, hideItems, live, removeFolder, updateFolder } = await import("./store.ts");
 
 const S = () => useBrowser.getState();
@@ -107,6 +108,23 @@ test("a merged pull request's tab showing as a pane of the split on screen stays
   assert.ok(inFolder(tab, id));
   S().activate(start);
   assert.equal(S().tabs[tab], undefined);
+});
+
+test("a merged pull request's tab that's a pane of a split stays open when its group moves to another window", async () => {
+  const { id, tab, merging } = await mergeWithTabOpen(false);
+  const beside = S().newTab(w, { url: "https://beside.example/" });
+  const group = S().groupTabs([tab, beside], { name: "Review", pinned: false });
+  S().createSplit([tab, beside]);
+  S().activate(beside);
+  finishCompleting(id, [merging.id]);
+  assert.ok(inFolder(tab, id));
+  const other = S().createWindow({ url: "https://other.example/" });
+  assert.equal(S().moveGroupToWindow(group, other), other);
+  assert.ok(S().tabs[tab], "the pane's tab isn't closed while the split is taken apart on the way");
+  assert.equal(S().tabs[tab].windowId, other);
+  assert.equal(S().windows[other].activeTabIds.default, beside);
+  const split = Object.values(S().splits).find((v) => v.windowId === other);
+  assert.deepEqual(split && splitTabIdsOf(split).sort(), [tab, beside].sort(), "both panes are in the split");
 });
 
 test("a merged pull request's tab closes when the split that showed it is separated", async () => {

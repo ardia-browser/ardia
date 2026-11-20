@@ -2,6 +2,7 @@ import type { StateCreator } from "zustand";
 
 export function transactional<T>(heardAlone?: (s: T, prev: T) => boolean, settle?: (s: T, prev: T) => T) {
   let depth = 0;
+  let together = 0;
   let heard: T | null = null;
   let hear = () => {};
   const afterEach = new Set<() => void>();
@@ -12,7 +13,8 @@ export function transactional<T>(heardAlone?: (s: T, prev: T) => boolean, settle
       type Listener = (s: T, prev: T) => void;
       const listeners = new Set<Listener>();
       let settling = false;
-      const publish = (prev: T) => {
+      let settledAt: T | null = null;
+      const settleNow = (prev: T) => {
         const current = api.getState();
         const settled = settle ? settle(current, prev) : current;
         if (settled !== current) {
@@ -23,13 +25,21 @@ export function transactional<T>(heardAlone?: (s: T, prev: T) => boolean, settle
             settling = false;
           }
         }
+        return api.getState();
+      };
+      const publish = (prev: T) => {
+        if (api.getState() !== settledAt) settleNow(prev);
+        settledAt = null;
         listeners.forEach((listener) => listener(api.getState(), prev));
       };
       hear = () => {
         const prev = heard;
         if (prev === null) return;
         heard = null;
-        if (api.getState() === prev) return;
+        if (api.getState() === prev) {
+          settledAt = null;
+          return;
+        }
         const held = depth;
         depth = 0;
         try {
@@ -42,7 +52,11 @@ export function transactional<T>(heardAlone?: (s: T, prev: T) => boolean, settle
         if (settling) return;
         if (!depth) return publish(prev);
         heard ??= prev;
-        if (heardAlone?.(s, prev)) hear();
+        if (together) settledAt = settleNow(settledAt ?? heard);
+        else {
+          settledAt = null;
+          if (heardAlone?.(s, prev)) hear();
+        }
       });
       api.subscribe = (listener) => {
         listeners.add(listener);
@@ -53,11 +67,14 @@ export function transactional<T>(heardAlone?: (s: T, prev: T) => boolean, settle
       return creator(set, get, api);
     };
 
-  const transaction = (run: () => void) => {
+  const transaction = (run: () => void, o: { together?: boolean } = {}) => {
+    const joint = Boolean(o.together);
     depth++;
+    if (joint) together++;
     try {
       run();
     } finally {
+      if (joint) together--;
       if (--depth === 0) {
         try {
           hear();

@@ -4,15 +4,14 @@ let characters = 0;
 let pinBackups = 0;
 let pinsBackedUp = 0;
 
-export function noteSessionWrite(length: number, cosmeticOnly: boolean) {
+export function noteSessionWrite(length: number, cosmeticOnly: boolean, pinsKept = 0) {
   writes++;
+  if (pinsKept) {
+    pinBackups++;
+    pinsBackedUp += pinsKept;
+  }
   if (cosmeticOnly) cosmeticWrites++;
   characters += length;
-}
-
-export function noteSessionPinBackup(pins: number) {
-  pinBackups++;
-  pinsBackedUp += pins;
 }
 
 export function takeSessionWrites() {

@@ -9,5 +9,6 @@ declare module "react-native" {
   }
   interface TextInputProps {
     pastedTypes?: PastedTypesType;
+    ardiaCentersCapitals?: boolean;
   }
 }

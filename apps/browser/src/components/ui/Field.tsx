@@ -81,6 +81,7 @@ export function SearchField({
         selectionColor={theme.selection}
         autoFocus={autoFocus}
         enableFocusRing={false}
+        ardiaCentersCapitals
         onBlur={onBlur}
         keyDownEvents={onArrow ? SEARCH_KEYS_WITH_ARROWS : onSubmit ? SEARCH_KEYS_WITH_ENTER : SEARCH_KEYS}
         onKeyDown={(e) => {
@@ -162,6 +163,7 @@ export function TextField({
           enableFocusRing={false}
           selectTextOnFocus={selectOnFocus}
           multiline={multiline}
+          ardiaCentersCapitals={!multiline}
           autoCorrect={mono ? false : undefined}
           spellCheck={mono ? false : undefined}
           onSubmitEditing={onSubmit}

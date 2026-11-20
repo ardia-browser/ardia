@@ -223,16 +223,16 @@ export const ToolbarUrlField = memo(function ToolbarUrlField({ tab, palette, win
       <ContextMenuArea style={{ flex: 1 }} onContextMenu={() => void showUrlBarMenu(tab)}>
         <Pressable onPress={field.openPanel} style={{ flex: 1, height: row.field, justifyContent: "center", paddingLeft: insecure ? LOCK.gap : urlTextLeft(false) }}>
           {field.developerMode ? (
-            <Text numberOfLines={1} ellipsizeMode="middle" color={palette.text} style={monoFace()}>
+            <Text numberOfLines={1} ellipsizeMode="middle" color={palette.text} ardiaCentersCapitals style={monoFace()}>
               {withoutUserInfo(tab.url)}
             </Text>
           ) : (
             <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Text numberOfLines={1} ellipsizeMode="head" weight="medium" color={palette.text} style={HOST_FULL}>
+              <Text numberOfLines={1} ellipsizeMode="head" weight="medium" color={palette.text} ardiaCentersCapitals style={HOST_FULL}>
                 {field.host}
               </Text>
               {field.trail ? (
-                <Text numberOfLines={1} color={palette.secondary} style={SHRINK}>
+                <Text numberOfLines={1} color={palette.secondary} ardiaCentersCapitals style={SHRINK}>
                   {field.trail}
                 </Text>
               ) : null}
@@ -290,7 +290,7 @@ export const SidebarUrlField = memo(function SidebarUrlField({ tab, palette, win
       <ContextMenuArea style={{ flex: 1 }} onContextMenu={() => void showUrlBarMenu(tab)}>
         <Pressable onPress={field.openPanel} style={{ flex: 1, height, justifyContent: "center", paddingLeft: shown.leading ? SIDEBAR_TEXT_GAP : SIDEBAR_TEXT_ALONE }}>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <Text numberOfLines={1} ellipsizeMode="head" weight="medium" color={palette.text} style={SHRINK}>
+            <Text numberOfLines={1} ellipsizeMode="head" weight="medium" color={palette.text} ardiaCentersCapitals style={SHRINK}>
               {field.host}
             </Text>
             <FadeLabel text={field.trail} fontSize={sidebarFont.body.fontSize} color={palette.secondary} fadeWidth={14} style={{ flex: 1, height: sidebarPoints(18), marginLeft: -space.xxs }} />

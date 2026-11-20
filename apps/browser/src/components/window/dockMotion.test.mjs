@@ -358,6 +358,9 @@ test("the native edge watch spans the hold while peeking, 8 pt during a tab drag
   assert.equal(dm.edgeWatchWidth(false, true, 269, 9), 8);
   assert.equal(dm.edgeWatchWidth(false, false, 269, 9), 0);
   assert.equal(dm.edgeWatchWidth(false, false, 269, 2), 3, "edge to edge the strip would cover the page, so the native watch takes it and clicks reach the page");
+  assert.equal(dm.edgeWatchWidth(false, false, 269, 9, false), 3, "where the strip never hears the pointer (Windows, #2912) the native watch covers the strip too, maximized included");
+  assert.equal(dm.edgeWatchWidth(true, false, 269, 9, false), 269);
+  assert.equal(dm.edgeWatchWidth(false, true, 269, 9, false), 8);
   assert.equal(dm.edgeStripOverPage(3), false);
   assert.equal(dm.edgeStripOverPage(2), true);
 });

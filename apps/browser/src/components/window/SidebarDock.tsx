@@ -2,6 +2,7 @@ import { onWindowEvent, watchSidebarEdge } from "../../state/windows/nativeWindo
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 import { switchOn } from "../../state/app/switches";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { useTheme } from "../ui/theme";
 import { curve, useGated } from "../ui/motion";
 import { Panel, reduceMotion, WindowBackdrop, WindowDragRegion } from "../ui";
@@ -254,7 +255,7 @@ function SidebarDock({
   const shown = shownAs(state);
   useLayoutEffect(() => () => dismissHoverIn(windowId), [windowId, shown]);
   const watching = watchesEdge(state, moving);
-  const nativeHold = edgeWatchWidth(holding, draggingTab, holdWidth, fullscreen ? 0 : frame.inset);
+  const nativeHold = edgeWatchWidth(holding, draggingTab, holdWidth, fullscreen ? 0 : frame.inset, PLATFORM_FEATURES.edgeStripTakesHover);
   useEffect(() => {
     if (!watching) return;
     const sub = onWindowEvent((e) => {

@@ -1,7 +1,7 @@
 import type { SearchScope } from "@ardia/core";
 import { memo, type ReactNode, type RefObject } from "react";
 import { StyleSheet, View } from "react-native";
-import { Button, capsule, concentric, ContextMenuArea, ink, radius, useHover, useTheme } from "../ui";
+import { Button, capsule, ContextMenuArea, ink, useHover, useTheme } from "../ui";
 import { GlassFill, useGlass } from "../ui/Glass";
 import { ScopeChip } from "./ScopeChip";
 import { BAR, GO_BUTTON } from "./tokens";
@@ -26,7 +26,6 @@ export function DropdownFrame({ rootRef, onContextMenu, leadingIcon, scope, fiel
       {pulse}
       <ContextMenuArea captureDescendants onContextMenu={onContextMenu}>
         <View style={{ flexDirection: "row", alignItems: "center", height: BAR.dropdown.height, paddingLeft: BAR.dropdown.left, paddingRight: BAR.dropdown.right, gap: BAR.dropdown.gap }}>
-          <FocusRing inset={BAR.focusRing.dropdownInset} outerRadius={radius.panel} />
           <View style={ICON_SLOT}>{leadingIcon}</View>
           {scope && <ScopeChip scope={scope} large={false} />}
           {field}
@@ -53,11 +52,6 @@ export function DropdownFrame({ rootRef, onContextMenu, leadingIcon, scope, fiel
 
 const DROPDOWN_FOOTER = { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", height: BAR.dropdown.footer, paddingRight: BAR.dropdown.right } as const;
 
-function FocusRing({ inset, outerRadius }: { inset: number; outerRadius: number }) {
-  const theme = useTheme();
-  return <View pointerEvents="none" style={{ position: "absolute", left: inset, right: inset, top: inset, bottom: inset, borderRadius: concentric(outerRadius, inset), borderWidth: BAR.focusRing.width, borderColor: theme.formAccentInk }} />;
-}
-
 export function PanelFrame({ rootRef, onContextMenu, leadingIcon, scope, field, list, rowsHover, pulse, hero, rowHeight, bottom }: FrameProps & { hero: boolean; rowHeight: number; bottom: ReactNode }) {
   return (
     <View ref={rootRef}>
@@ -73,7 +67,6 @@ export function PanelFrame({ rootRef, onContextMenu, leadingIcon, scope, field, 
             gap: hero ? BAR.panel.heroGap : BAR.panel.gap,
           }}
         >
-          {hero ? null : <FocusRing inset={BAR.focusRing.panelInset} outerRadius={radius.hero} />}
           <View style={ICON_SLOT}>{leadingIcon}</View>
           {scope && <ScopeChip scope={scope} large={hero} />}
           {field}

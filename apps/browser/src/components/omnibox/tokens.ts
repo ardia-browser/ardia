@@ -40,7 +40,6 @@ export const BAR = {
   dropdown: { height: 44, footer: 44, left: DROPDOWN_ICON_LEFT, right: 9, gap: DROPDOWN_TEXT_LEFT - FIELD_TEXT_INSET - DROPDOWN_ICON_LEFT - ICON_SLOT },
   siteControls: { glyph: 15 },
   bottom: { left: 14, heroLeft: 13, right: 13, heroRight: 15, height: 44, heroHeight: 43, heroBelow: space.m, mic: 14, emptyTuck: 9 },
-  focusRing: { width: 2, panelInset: 6, dropdownInset: 4 },
 } as const;
 
 export const ADD_CHIP = {

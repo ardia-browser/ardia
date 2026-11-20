@@ -200,6 +200,11 @@ export function startDevHarness() {
         ...require("../../platform/clipboard"),
       };
     },
+    showCodeSheet: (code: import("../../state/vaults/types").VaultStandaloneCode) => {
+      const { showSettingsSheet } = require("../../state/settings/sheet") as typeof import("../../state/settings/sheet");
+      const { CodeSheet } = require("../vaults/VerificationCodes") as typeof import("../vaults/VerificationCodes");
+      showSettingsSheet(createElement(CodeSheet, { code }));
+    },
     showWhatsSent: () => {
       const { showSettingsSheet } = require("../../state/settings/sheet") as typeof import("../../state/settings/sheet");
       const { WhatsSentSheet } = require("../settings/panes/ShareDiagnostics") as typeof import("../settings/panes/ShareDiagnostics");

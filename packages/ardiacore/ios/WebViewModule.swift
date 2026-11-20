@@ -23,6 +23,7 @@ public class WebViewModule: Module {
     "setSplitLinkModifier": setting { ArdiaWebView.setSplitLinkModifier(try $0.text("modifier")) },
     "setPeekOtherSiteTabs": setting { ArdiaWebView.setPeekOtherSiteTabs(try $0.strings("tabIds")) },
     "setSelectionPopover": setting { ArdiaWebView.setSelectionPopoverEnabled(try $0.bool("enabled")) },
+    "setVaultCodeSetup": setting { VaultTotpSetup.enable(try $0.bool("enabled")) },
     "setVaultContextMenu": setting { args in
       ArdiaWebView.setVaultContextMenu(autofill: try args.bool("autofill"), generators: try args.dicts("generate"),
                                        anyField: try args.optionalBool("generateAnyField") ?? false)

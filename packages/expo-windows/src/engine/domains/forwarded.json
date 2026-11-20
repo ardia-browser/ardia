@@ -96,6 +96,7 @@
       "setVideoUpscaling",
       "setVideoUpscalingTestConditions",
       "takeContentDrift",
+      "setVaultCodeSetup",
       "setVaultContextMenu",
       "takeFirstPaintHolds",
       "videoUpscalingState"

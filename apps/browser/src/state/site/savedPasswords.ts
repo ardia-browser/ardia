@@ -1,9 +1,11 @@
+import { consentToken } from "../telemetry/choice";
 import { create } from "zustand";
 import { onAppEvent } from "../../platform/app";
 import { importModule } from "../../platform/importModule";
 import { orWarn } from "../../lib/fallback";
 import { passwordImportTally } from "../telemetry/passwordSaves";
 import { getPassword, savePassword, unlockPasswords } from "./passwords";
+import { importArdiaCodes } from "../vaults/ardiaCodes";
 
 const UNLOCK_MS = 5 * 60_000;
 
@@ -69,6 +71,7 @@ export const originOfLogin = (url: string) => {
 export type PasswordImport = { saved: number; skipped: number } | "cancelled";
 
 export async function importPasswordsCsv(profile: string): Promise<PasswordImport> {
+  const consent = consentToken();
   const mod = importModule();
   const path = await mod.chooseImportFile("passwordsCSV");
   if (!path) return "cancelled";
@@ -80,5 +83,6 @@ export async function importPasswordsCsv(profile: string): Promise<PasswordImpor
     if (origin && c.password && (await tally.attempt(savePassword(profile, origin, c.username, c.password)))) saved++;
   }
   tally.done();
+  if (saved) await importArdiaCodes(profile, path, consent);
   return { saved, skipped: credentials.length - saved };
 }

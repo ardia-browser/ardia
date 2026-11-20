@@ -9,6 +9,7 @@ import { startArdiaSources } from "./ardiaSources";
 import { startVaultIndex } from "./store";
 import { startStandaloneCodes } from "./standaloneCodes";
 import { startVaultBackupWatch } from "./sync";
+import { startVaultCodeSetup } from "./totpSetup";
 import { startVaultWarming } from "./warm";
 import { vaultsSupported } from "./enabled";
 
@@ -22,6 +23,7 @@ export function startVaults() {
   startArdiaSources();
   startGeneratedPasswords();
   startVaultContextMenu();
+  startVaultCodeSetup();
   startCodeAutofill();
   startVaultBackupWatch();
   startVaultWarming();

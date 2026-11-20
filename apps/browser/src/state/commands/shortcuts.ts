@@ -1,15 +1,17 @@
 import type { ShortcutModifier } from "../../platform/commands";
 import { isModifier, ordered } from "./modifiers";
 
-import { storedModifiers } from "./keyNotation";
+import { formatShortcut as formatKeys, storedModifiers } from "./keyNotation";
+import { isMouseKey, withMouseButton } from "./mouseButtons";
 
-export { formatShortcut, parseShortcut } from "./keyNotation";
+export { parseShortcut } from "./keyNotation";
 
 export type Shortcut = { key: string; modifiers: ShortcutModifier[] };
 export type ShortcutSource = { id: string; keys: Shortcut[]; fixed?: boolean };
 export type ShortcutOverrides = Record<string, string[]>;
 export type ResolvedShortcuts = {
   bindings: ReadonlyMap<string, Shortcut[]>;
+  mouse: ReadonlyMap<string, Shortcut>;
   defaultsOf(id: string): Shortcut[];
   conflictsOf(id: string): string[];
   holdersOf(shortcut: Shortcut): string[];
@@ -40,6 +42,14 @@ function recordedAsLayoutCode(stored: readonly string[]): string[] {
   return [functionKey, ...stored.slice(1).filter((m) => m !== "function")];
 }
 
+export function formatShortcut(shortcut: Shortcut): string {
+  if (!isMouseKey(shortcut.key)) return formatKeys(shortcut);
+  const modifierText = shortcut.modifiers.length ? formatKeys({ key: "a", modifiers: shortcut.modifiers }).slice(0, -1) : "";
+  return withMouseButton(modifierText, shortcut.key);
+}
+
+export const isMouseShortcut = (shortcut: Shortcut) => isMouseKey(shortcut.key);
+
 export function storedShortcut(raw: readonly string[], read: ModifierReading = storedModifiers): Shortcut {
   const stored = recordedAsLayoutCode(raw);
   const key = stored[0] ?? "";
@@ -55,7 +65,7 @@ export function comboKey({ key, modifiers }: Shortcut): string {
 
 export const sameShortcut = (a: Shortcut, b: Shortcut) => comboKey(a) === comboKey(b);
 
-export function resolveShortcuts(sources: readonly ShortcutSource[], overrides: ShortcutOverrides, read: ModifierReading = storedModifiers): ResolvedShortcuts {
+export function resolveShortcuts(sources: readonly ShortcutSource[], overrides: ShortcutOverrides, read: ModifierReading = storedModifiers, mouseOverrides: ShortcutOverrides = {}): ResolvedShortcuts {
   const rebindable = new Set(sources.filter((s) => !s.fixed).map((s) => s.id));
   const taken = new Set<string>();
   for (const [id, stored] of Object.entries(overrides)) {
@@ -71,11 +81,22 @@ export function resolveShortcuts(sources: readonly ShortcutSource[], overrides: 
     bindings.set(source.id, keys);
     for (const combo of seen) holders.set(combo, [...(holders.get(combo) ?? []), source.id]);
   }
+  const mouse = new Map<string, Shortcut>();
+  for (const id of Object.keys(mouseOverrides)) {
+    const stored = mouseOverrides[id];
+    if (!rebindable.has(id) || !stored || !isMouseKey(stored[0] ?? "")) continue;
+    const recorded = storedShortcut(stored, read);
+    const button = { key: recorded.key, modifiers: recorded.modifiers.filter((m) => m !== "function") };
+    mouse.set(id, button);
+    holders.set(comboKey(button), [...(holders.get(comboKey(button)) ?? []), id]);
+  }
   const defaults = new Map(sources.map((source) => [source.id, source.keys]));
+  const heldBy = (id: string) => [...(bindings.get(id) ?? []), ...(mouse.has(id) ? [mouse.get(id)!] : [])];
   return {
     bindings,
+    mouse,
     defaultsOf: (id) => defaults.get(id) ?? [],
     holdersOf: (shortcut) => holders.get(comboKey(shortcut)) ?? [],
-    conflictsOf: (id) => [...new Set((bindings.get(id) ?? []).flatMap((k) => holders.get(comboKey(k)) ?? []))].filter((other) => other !== id),
+    conflictsOf: (id) => [...new Set(heldBy(id).flatMap((k) => holders.get(comboKey(k)) ?? []))].filter((other) => other !== id),
   };
 }

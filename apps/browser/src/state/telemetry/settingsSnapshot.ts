@@ -6,6 +6,7 @@ import type { BrowserWindow } from "../browser/types";
 import { shownSidebarWidth } from "../../lib/windowLayout";
 import { systemIncreaseContrast } from "../app/systemContrast";
 import { isNavigationOrFunctionKey, storedShortcut } from "../commands/shortcuts";
+import { isMouseKey } from "../commands/mouseButtons";
 import { currentInterfaceScale } from "../settings/interfaceScale";
 import { INTERFACE_SCALE, interfaceScalePercent, rootLength, windowLength } from "../../lib/interfaceScale";
 import { drawnWindowCornerRadius } from "../../platform/windows";
@@ -47,6 +48,7 @@ export function settingsSnapshot(settings: Settings): Record<string, string> {
     ...out,
     ...commandBarStartFlags(settings.commandBarStart),
     ...customShortcutCounts(settings.shortcuts),
+    custom_mouse_shortcuts: String(Object.values(settings.mouseShortcuts ?? {}).filter((stored) => isMouseKey(stored[0] ?? "")).length),
     setting_interfaceScale: String(interfaceScalePercent(currentInterfaceScale())),
     default_interfaceScale: String(interfaceScalePercent(INTERFACE_SCALE.default)),
     system_increase_contrast: encode(systemIncreaseContrast())!,

@@ -265,11 +265,12 @@ function SidebarDock({
       if (e.type !== "sidebarEdge" || e.id !== windowId) return;
       if (e.screenEdge) noteSidebarScreenEdge(e.screenEdge);
       const at = latestReveal.current;
-      if (e.over && !edgeEventReveals(at.state, e.point[0], at.right, at.windowWidth, at.band)) return;
+      if (e.over && e.screenEdge !== "returned" && !edgeEventReveals(at.state, e.point[0], at.right, at.windowWidth, at.band)) return;
       edgeOver.current = e.over;
       arm.current = edgeSeen(arm.current, "native", e.over);
+      if (e.screenEdge === "crossed") dismissHoverIn(windowId);
       if (e.over) latestReveal.current.reveal();
-      else latestPeek.current.hide();
+      else latestPeek.current.hide(e.screenEdge === "crossed");
     });
     watchSidebarEdge(windowId, true, nativeHold, right, holding || draggingTab);
     return () => {

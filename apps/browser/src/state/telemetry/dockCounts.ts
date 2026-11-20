@@ -9,9 +9,8 @@ const NONE = {
   sidebar_peek_reveals_held_back: 0,
   sidebar_peek_resizes: 0,
   sidebar_peek_closes_while_resizing: 0,
-  sidebar_screen_edge_stops: 0,
-  sidebar_screen_edge_pass_throughs: 0,
-  sidebar_screen_edge_flings: 0,
+  sidebar_screen_edge_crossings: 0,
+  sidebar_screen_edge_returns: 0,
   sidebar_full_screen_peeks: 0,
   sidebar_full_screen_peek_quick_closes: 0,
   sidebar_field_remeasures: 0,
@@ -34,9 +33,8 @@ export const noteSidebarPeekResize = () => void counts.sidebar_peek_resizes++;
 export const noteSidebarPeekClosedWhileResizing = () => void counts.sidebar_peek_closes_while_resizing++;
 
 const SCREEN_EDGE_COUNTS = {
-  stopped: "sidebar_screen_edge_stops",
-  passed: "sidebar_screen_edge_pass_throughs",
-  flung: "sidebar_screen_edge_flings",
+  crossed: "sidebar_screen_edge_crossings",
+  returned: "sidebar_screen_edge_returns",
 } as const satisfies Record<ScreenEdge, keyof typeof NONE>;
 
 export const noteSidebarScreenEdge = (edge: ScreenEdge) => void counts[SCREEN_EDGE_COUNTS[edge]]++;

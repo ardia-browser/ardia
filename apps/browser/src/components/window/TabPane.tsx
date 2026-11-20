@@ -3,8 +3,6 @@ import { Animated, View } from "react-native";
 import { usePrewarm } from "../../state/tabs/prewarm";
 import { activate } from "../../state/tabs/actions";
 import { shallowEqual, useBrowserWhile, useStoreWhile, useTabValue } from "../../state/tabs/tabWatch";
-import { useSettings, useTabsShown } from "../../state/browser/hooks";
-import { useSidebarField } from "../../state/sidebar/chrome";
 import { splitOf } from "../../state/splits/splits";
 import type { Tab } from "../../state/browser/types";
 import { BookmarksBar, bookmarksBarShown, type BookmarksBarMode } from "../bookmarks/BookmarksBar";
@@ -21,7 +19,6 @@ import { Toolbar, ToolbarBackdrop } from "../toolbar/Toolbar";
 import { AutoHideBackdrop, AutoHideToolbar, useToolbarMode, useToolbarMotion } from "../toolbar/AutoHideToolbar";
 import { publishPaneChrome } from "../toolbar/WindowToolbar";
 import { addressFieldShownIn, revealToolbar } from "../../state/windows/toolbarAutoHide";
-import { useToolbarRow } from "../toolbar/useToolbarRow";
 import { TabWebView } from "./TabWebView";
 import { withoutFragment } from "../../lib/url";
 import { developerBarShown, paneBar, type CardChrome } from "./paneChrome";
@@ -29,8 +26,6 @@ import { DeveloperBar } from "../toolbar/DeveloperBar";
 import { useDeveloperMode } from "../../state/site/developerMode";
 import { PageOverlays } from "./PageOverlays";
 import { useProfileTheme } from "./ThemeScope";
-import { useCardFrame } from "./cardFrame";
-import { newTabOpensOf } from "../../state/settings/settings";
 import { markNewTabPane } from "../../state/omnibox/newTabMarks";
 
 const LINGERING_PANE = "ardia.lingeringPane";
@@ -56,6 +51,10 @@ export const TabPane = memo(function TabPane({
   peekShown,
   lingering,
   seeThrough,
+  sidebarFieldOpen,
+  cardRadius,
+  toolbarHeight,
+  newTabCard,
 }: {
   tabId: string;
   windowId: string;
@@ -77,14 +76,17 @@ export const TabPane = memo(function TabPane({
   peekShown: boolean;
   lingering: boolean;
   seeThrough: boolean;
+  sidebarFieldOpen: boolean;
+  cardRadius: number;
+  toolbarHeight: number;
+  newTabCard: boolean;
 }) {
   const visible = !!rect;
   const live = visible || !!warm;
   const own = useTabValue(tabId, paneTab, shallowEqual);
   const theme = useProfileTheme(own.profileId);
-  const toolbarHeight = useToolbarRow().height;
   const isNewTab = !own.url;
-  const emptyCard = useSettings((st) => isNewTab && newTabOpensOf(st) === "commandBar");
+  const emptyCard = isNewTab && newTabCard;
   const newTabShown = useStoreWhile(usePages, live, (s) => !!s.pages[tabId]?.newTabShown);
   const inSomeSplit = useBrowserWhile(!!warm, (s) => !!warm && !!splitOf(s, tabId));
   const inSplit = visible ? inActiveSplit : inSomeSplit;
@@ -106,13 +108,10 @@ export const TabPane = memo(function TabPane({
   const hideBar = autoLayout && bar.bar !== null;
   const mode = useToolbarMode(tabId, windowId, hideBar);
   const addressFieldShown = bar.kind !== "none" && addressFieldShownIn(mode);
-  const sidebarField = useSidebarField();
-  const sidebarOpen = useTabsShown(windowId);
-  const sidebarFieldShown = !!sidebarField && sidebarOpen && !fullscreen && focused;
+  const sidebarFieldShown = sidebarFieldOpen && !fullscreen && focused;
   const developerBar = developerBarShown(chrome, { developerMode: useDeveloperMode(own.url), small, fullscreen });
   const bookmarksBar = bookmarksBarShown(barMode, own.exists ? own : undefined) && !fullscreen && !inSplit && !small;
   const barHeight = useBookmarksBarHeight();
-  const cardRadius = useCardFrame().radius;
   const doc = withoutFragment(own.url);
   const motion = useToolbarMotion({ enabled: autoLayout, mode, extra: bookmarksBar ? barHeight : 0, doc });
   useEffect(() => {

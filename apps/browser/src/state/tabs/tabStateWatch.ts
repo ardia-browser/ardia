@@ -1,5 +1,6 @@
 import { changedIds } from "../browser/changes";
-import { keyedWatch, useKeyed, type KeyedWatch } from "../browser/keyedWatch";
+import { keyedWatch, recordWatch, useKeyed, type KeyedWatch } from "../browser/keyedWatch";
+import { useLifecycle } from "./sleepingTabs";
 import { useBrowser, type BrowserState } from "../browser/store";
 import type { Tab } from "../browser/types";
 import { tabEngine } from "../engines/engines";
@@ -59,13 +60,16 @@ export function tabStateChanges(s: BrowserState, prev: BrowserState, wake: (id: 
 }
 
 const watchStoreTabState = keyedWatch<BrowserState>(() => useBrowser, tabStateChanges);
+const watchSleeping = recordWatch(() => useLifecycle, (l) => l.discarded);
 
 export const watchTabState: KeyedWatch = (tabId, listener) => {
   const offStore = watchStoreTabState(tabId, listener);
   const offLive = watchLive(tabId, listener);
+  const offSleeping = watchSleeping(tabId, listener);
   return () => {
     offStore();
     offLive();
+    offSleeping();
   };
 };
 

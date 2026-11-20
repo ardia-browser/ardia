@@ -6,8 +6,7 @@ import { useTheme } from "../ui/theme";
 import { useCardFrame } from "../window/cardFrame";
 import { usePeekSplitFull, useWindowPeeks } from "../../state/peek/hooks";
 import { usePeekDonors } from "../../state/peek/donors";
-import { useActiveTabId, useSettings, useTab } from "../../state/browser/hooks";
-import { useFullscreenTab } from "../../state/tabs/pageState";
+import { useSettings, useTab } from "../../state/browser/hooks";
 import type { Peek } from "../../state/peek/peek";
 import { PEEK_SCRIM } from "./tokens";
 import { PageLabel, SMALL_BAR_BUTTON, SMALL_INSET, SMALL_WINDOW_FRAME, SmallBar, smallWindowRadius, type SmallBarButton } from "../littleArdia/SmallChrome";
@@ -47,17 +46,19 @@ export function PeekOverlay({
   width,
   height,
   origin,
+  activeTabId,
+  fullscreenTabId,
   page,
 }: {
   windowId: string;
   width: number;
   height: number;
   origin: { x: number; y: number } | null;
+  activeTabId: string | undefined;
+  fullscreenTabId: string | undefined;
   page: (tabId: string, sourceId: string, width: number, shown: boolean, fullscreen: boolean) => ReactNode;
 }) {
   const peeks = useWindowPeeks(windowId);
-  const activeTabId = useActiveTabId();
-  const fullscreenTabId = useFullscreenTab(windowId);
   const donor = usePeekDonors((d) => d[windowId]);
   const known = useRef(new Map<string, Peek>());
   const listed = new Map<string, Peek>();

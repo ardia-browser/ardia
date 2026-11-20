@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
-import { COMMA_KEYS, INSTANCE_KEYS, TEST_KEYS, launchVariables, mergeLaunchEnv } from "./launchEnv.mjs";
+import { COMMA_KEYS, INSTANCE_KEYS, TEST_KEYS, launchVariables, mergeLaunchEnv, scratchInstance } from "./launchEnv.mjs";
 
 test("an extra ARDIA_INSTANCE adds to the defaults instead of replacing them", () => {
   const base = { ARDIA_BACKGROUND: "1", ...launchVariables({ instance: { updateFeed: "http://127.0.0.1:1/appcast.xml", allowOcclusion: true } }) };
@@ -46,4 +46,11 @@ test("the key tables match the ones ArdiaLaunchConfig.mm reads", () => {
   assert.deepEqual(new Set(INSTANCE_KEYS), new Set(keysOf("InstanceKeys")));
   assert.deepEqual(new Set(TEST_KEYS), new Set([...keysOf("EngineTestKeys"), ...keysOf("AppTestKeys")]));
   assert.deepEqual(new Set(COMMA_KEYS), new Set(keysOf("KeysWhoseValuesHoldCommas")));
+});
+
+test("a scratch instance downloads into its own data folder unless the launch names another, never the real ~/Downloads", () => {
+  assert.equal(scratchInstance("/tmp/x/data").downloadsDir, "/tmp/x/data/Downloads");
+  assert.deepEqual(scratchInstance("/tmp/x/data", { jsLocation: "localhost:1" }), { downloadsDir: "/tmp/x/data/Downloads", jsLocation: "localhost:1" });
+  assert.equal(scratchInstance("/tmp/x/data", { downloadsDir: "/tmp/elsewhere" }).downloadsDir, "/tmp/elsewhere");
+  assert.match(launchVariables({ instance: scratchInstance("/tmp/x/data") }).ARDIA_INSTANCE, /^downloadsDir=\/tmp\/x\/data\/Downloads$/);
 });

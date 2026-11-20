@@ -39,7 +39,7 @@ const PAGE = `<!doctype html><title>peek target</title><style>body{margin:0;font
 <input id=f><div id=hit></div><audio id=a muted src="/tone.wav"></audio>${rows}
 <script>window.__nonce=Math.random().toString(36).slice(2);window.__resizes=0;window.__sizes=[];addEventListener("resize",()=>{__resizes++;__sizes.push([innerWidth,innerHeight,performance.now()])});window.__vis=[];document.addEventListener("visibilitychange",()=>__vis.push([document.visibilityState,performance.now()]));window.__over=[];addEventListener("mouseover",e=>__over.push(e.target.id),true);window.__wheel=[];addEventListener("wheel",e=>__wheel.push([e.clientX,e.clientY,e.deltaY]),true);
 window.__clicks=[];addEventListener("mousedown",e=>__clicks.push({x:e.clientX,y:e.clientY,target:e.target.id}),true);window.__ups=[];addEventListener("mouseup",e=>__ups.push({x:e.clientX,y:e.clientY}),true);window.__domClicks=0;addEventListener("click",()=>__domClicks++,true);</script>`;
-const SOURCE = `<!doctype html><title>peek source</title><body style="margin:0;font:16px system-ui"><p style="margin:80px">source <a id=l href="/page.html">link</a></p>`;
+const SOURCE = `<!doctype html><title>peek source</title><body style="margin:0;font:16px system-ui"><p style="margin:80px">source <a id=l href="/page.html">link</a></p>${rows}<script>window.__wheel=[];addEventListener("wheel",e=>__wheel.push(e.deltaY),true);</script>`;
 const server = createServer((req, res) => {
   const path = (req.url ?? "/").split("?")[0];
   if (path === "/tone.wav") return res.writeHead(200, { "content-type": "audio/wav" }).end(tone);
@@ -393,15 +393,25 @@ try {
     await sleep(300);
     const clicks = await page.eval(`__clicks`);
     page.close();
-    const scrollAt = await run(`return globalThis.expo.modules.ArdiaPeekStage.devPostScroll("w1", ${shown.x}, ${shown.y + 100}, -120).then(() => settle(400));`);
+    const scrollAt = await run(`return globalThis.expo.modules.ArdiaPeekStage.devPostScroll("w1", ${shown.x}, ${shown.y + 100}, -120).then((r) => settle(400).then(() => r));`);
     const page2 = await app.page("page.html?n=in");
     const wheel = await page2.eval(`({ wheel: __wheel, y: scrollY })`);
+    const edge = { x: o.x + g.rest.x + 12 * k, y: o.y + g.rest.y + 600 * k };
+    await page2.eval(`__wheel.length = 0; 0`);
+    const edgeAt = await run(`return globalThis.expo.modules.ArdiaPeekStage.devPostScroll("w1", ${edge.x}, ${edge.y}, -120).then((r) => settle(400).then(() => r));`);
+    const edgeWheel = await page2.eval(`__wheel`);
+    const behind = await app.page("source.html").then((p) => p.eval(`({ wheels: __wheel.length, y: scrollY })`).finally(() => p.close()));
     await run(`return ac.engine.call("windows.list", {}).then((l) => l.find((w) => w.hasRoot)).then((w) => ac.engine.call("windows.dev", { window: w.window, action: "mouse:moved:${Math.round(shown.x)},${Math.round(shown.y)}" })).then(() => settle(300));`).catch((e) => (record.hoverError = String(e)));
     const over = await page2.eval(`__over.slice(-5)`);
     page2.close();
-    Object.assign(record, { warp, during, click, clicks, shown, k, scrollAt, wheel, over });
-    record.scrollNote = "a window-less synthetic wheel event can't be dispatched by AppKit; real wheel events are checked by hand";
+    Object.assign(record, { warp, during, click, clicks, shown, k, scrollAt, wheel, over, edge, edgeAt, edgeWheel, behind });
     assert.ok(over.includes("hit"), `hover reached the target: ${JSON.stringify(over)}`);
+    assert.ok(scrollAt.window > 0, `the test wheel event has a window: ${JSON.stringify(scrollAt)}`);
+    assert.ok(wheel.wheel.length > 0, "a wheel over the Peek reached its page");
+    assert.ok(wheel.y > 0, `the Peek's page scrolled: ${wheel.y}`);
+    assert.ok(edgeWheel.length > 0, "a wheel near the Peek page's left edge reached its page, not the page behind");
+    near(edgeWheel[0][0], 12, 2, "edge wheel page x");
+    assert.deepEqual(behind, { wheels: 0, y: 0 }, "the page behind the Peek got no wheel and didn't scroll");
     assert.equal(warp.offPeek, true, "a press off the page during the warp leaves the Peek open");
     if (warp.entrance === "genie" && warp.offPhase === "entering") {
       assert.equal(warp.onPhase, "open", "a press over the page during the warp ends the entrance");

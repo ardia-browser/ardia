@@ -150,7 +150,7 @@ import { INJECTION_ENTITLEMENTS, prepareApp } from "../../../../scripts/lib/app-
 import { appEnv, launchVariables, mergeLaunchEnv } from "../../../../scripts/lib/instance.mjs";
 import { buildSeed } from "./seed.mjs";
 import { waitForUboEngine } from "./ubo-cache.mjs";
-import { launchedTree, stopTree } from "./processes.mjs";
+import { launchedTree, listenerPid, orphansSince, processTable, signalIfSame, stopTree, survivors } from "./processes.mjs";
 import { componentsState, sidesProblems, templateProblems, templateSizes, waitForStartupComponents } from "./template-state.mjs";
 import { parseSettings, profileSeed } from "./profile-seed.mjs";
 import { writeSwitches } from "./js-bench.mjs";
@@ -443,6 +443,19 @@ class Instance {
     this.cdp = new Cdp(this.port);
     this.seq = 0;
     this.env = [];
+    this.tracked = new Map();
+  }
+  track() {
+    if (!this.pid) return;
+    for (const p of launchedTree(this.pid, realpathSync(this.app))) this.tracked.set(p.pid, p);
+  }
+  async confirmOwnBrowser(timeoutMs = 30_000) {
+    let owner = null;
+    for (const end = Date.now() + timeoutMs; !owner && Date.now() < end; ) (owner = listenerPid(this.port)) || (await sleep(100));
+    if (owner !== this.pid) throw new Error(`pid ${this.pid} isn't this instance's browser: port ${this.port} is held by ${owner ?? "nobody"}`);
+    this.confirmed = true;
+    this.track();
+    if (!this.tracked.has(this.pid)) throw new Error(`pid ${this.pid} isn't running ${realpathSync(this.app)}`);
   }
   async launch() {
     const exe = join(realpathSync(this.app), "Contents/MacOS", execFileSync("defaults", ["read", join(this.app, "Contents/Info.plist"), "CFBundleExecutable"], { encoding: "utf8" }).trim());
@@ -469,6 +482,7 @@ class Instance {
     this.windowAt = w.code === 0 ? +w.out : NaN;
     const boot = await this.waitFile("bench-boot.json", 60_000);
     this.jsStart = boot?.jsStart ?? NaN;
+    await this.confirmOwnBrowser();
     return this;
   }
   marks() {
@@ -534,13 +548,20 @@ class Instance {
   async quit() {
     this.cdp.close();
     live.delete(this);
-    if (!this.pid || !this.alive()) return;
+    if (!this.pid) return;
     const app = realpathSync(this.app);
-    const tree = launchedTree(this.pid, app);
-    acperf("quit", String(this.pid));
-    for (let i = 0; i < 100 && this.alive(); i++) await sleep(100);
-    if (this.alive()) process.kill(this.pid, "SIGKILL");
-    await stopTree(tree, app);
+    if (!this.confirmed && listenerPid(this.port) !== this.pid) {
+      log(`not stopping pid ${this.pid}: it never proved to be this instance's browser (port ${this.port})`);
+      this.pid = null;
+    } else this.track();
+    const browser = this.tracked.get(this.pid);
+    if (browser && survivors([browser], app).length) {
+      acperf("quit", String(this.pid));
+      for (let i = 0; i < 100 && survivors([browser], app).length; i++) await sleep(100);
+      signalIfSame(browser, "SIGKILL");
+    }
+    const orphans = orphansSince(app, this.t0, processTable()).filter((p) => !this.tracked.has(p.pid));
+    await stopTree([...this.tracked.values(), ...orphans], app);
   }
 }
 
@@ -598,13 +619,13 @@ async function makeTemplate(side) {
     await app.quit();
   }
   for (const f of ["bench-cmd.js", "bench-result.json", "bench-boot.json"]) rmSync(join(dir, f), { force: true });
-  side.templateRecord = { waitedSecs: { ubo: waited.ubo.secs, components: waited.components.secs }, sizes: templateSizes(dir), components: componentsState(dir).components };
+  side.templateRecord = { waitedSecs: { ubo: waited.ubo.secs, components: waited.components.secs }, uboSelfies: waited.ubo.selfies, sizes: templateSizes(dir), components: componentsState(dir).components };
   writeFileSync(join(side.dir, "template.json"), JSON.stringify(side.templateRecord, null, 2));
   side.results.meta.template = side.templateRecord;
   const problems = templateProblems(side.templateRecord);
   if (problems.length) throw new Error(`${side.label}'s template is off, so its runs would be skewed: ${problems.join("; ")} (${join(side.dir, "template.json")})`);
   const { uboStoreMB, uboBlobsMB } = side.templateRecord.sizes;
-  log(`${side.label}'s template: uBO store ${uboStoreMB.toFixed(1)} MB, blobs ${uboBlobsMB.toFixed(1)} MB; components ${Object.entries(side.templateRecord.components).map(([k, c]) => `${k} ${c.version ?? "checked"}`).join(", ")}`);
+  log(`${side.label}'s template: uBO store ${uboStoreMB.toFixed(1)} MB, blobs ${uboBlobsMB.toFixed(1)} MB; components ${Object.entries(side.templateRecord.components).map(([k, c]) => `${k} ${c.version}`).join(", ")}`);
 }
 
 function freshDir(side, name) {
@@ -702,6 +723,7 @@ async function openTabs(app, from, to, kind = "static") {
     await app.run(`ac.store.getState().newTab(${WINDOW}, { url: "${base()}/${kind}?id=t${i}" }); return true;`);
     await app.pageState(`id=t${i}`, 30_000, (s) => s.fcp);
   }
+  app.track();
 }
 
 async function tabIds(app) {

@@ -5,24 +5,29 @@ final class MenuTarget: NSObject, NSMenuItemValidation {
   static let shared = MenuTarget()
   var swallowsCommands = false
 
-  func dispatch(_ command: String, _ arg: String?, windowId: String?) {
+  func dispatch(_ command: String, _ arg: String?, windowId: String?, mouseButton: String? = nil) {
     guard !swallowsCommands else { return }
-    if command == "closeTab", WindowManager.shared.closeForeignKeyWindow() { return }
-    ShellEvents.send(.command, [
+    if mouseButton == nil, command == "closeTab", WindowManager.shared.closeForeignKeyWindow() { return }
+    let body: [String: Any] = [
       "command": command, "arg": arg as Any, "windowId": windowId as Any, "focusGeneration": FocusHandoff.shared.takeBegun() as Any,
-    ])
+    ]
+    ShellEvents.send(.command, mouseButton.map { ArdiaConsentStamp.begin().onto(body.merging(["mouseButton": $0]) { $1 }) } ?? body)
   }
 
   private static let focusMovingCommands: Set<String> = ["newTab", "focusCommandBar", "findInPage", "showHistory"]
 
   @objc(commandDispatch:) func performCommand(_ sender: NSMenuItem) {
     guard let item = sender as? CommandItem else { return }
+    perform(item, in: NSApp.keyWindow, windowId: WindowManager.shared.keyWindowId)
+  }
+
+  func perform(_ item: CommandItem, in window: NSWindow?, windowId: String?, mouseButton: String? = nil) {
     _ = FocusHandoff.shared.takeBegun()
-    if Self.focusMovingCommands.contains(item.command) || FocusHandoff.shared.gatesKeyWindow, let window = NSApp.keyWindow {
+    if Self.focusMovingCommands.contains(item.command) || FocusHandoff.shared.gatesKeyWindow, let window {
       FocusHandoff.shared.begin(in: window)
     }
-    dispatch(item.command, item.arg, windowId: item.windowless ? nil : WindowManager.shared.keyWindowId)
-    if item.command == "tabSwitcher" { SwitcherHold.opened(by: item) }
+    dispatch(item.command, item.arg, windowId: item.windowless ? nil : windowId, mouseButton: mouseButton)
+    if item.command == "tabSwitcher", mouseButton == nil { SwitcherHold.opened(by: item) }
   }
 
   @objc(cut:) func cutEdit(_ sender: Any?) {

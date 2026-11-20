@@ -24,5 +24,5 @@ export function ThemeScope({ page = false, children }: { page?: boolean; childre
 }
 
 export function useProfileTheme(profileId: string): Theme {
-  return useProfileLook(profileId, (profile, appDark, settings, palette) => scopedTheme(isIncognitoProfile(profileId), profile, appDark, spaceLookSource(settings), palette));
+  return useProfileLook(profileId, (profile, appDark, settings, palette) => scopedTheme(isIncognitoProfile(profileId), profile, appDark, spaceLookSource(settings), palette, settings.adaptTextToColor));
 }

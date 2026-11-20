@@ -1,4 +1,5 @@
 import { findFibers, nameOf, roots, walk, type Fiber } from "./perfFibers";
+import { countNativeNodes, nativeNodes } from "./perfNativeNodes";
 import { bump, fresh, now, type Counter } from "./perfStats";
 
 if (!(globalThis as { expo?: unknown }).expo) {
@@ -309,6 +310,7 @@ if (perfProbeEnabled) {
   wrapBridge();
   wrapModuleEvents();
   wrapWrites();
+  countNativeNodes();
   if (probeOptions?.includes("selectors")) wrapSelectors();
   (globalThis as { acPerf?: unknown }).acPerf = {
     revision: PERF_PROBE_REVISION,
@@ -333,5 +335,6 @@ if (perfProbeEnabled) {
     findFibers,
     nameOf,
     subscriptions: () => ({ ...subscriptions }),
+    nativeNodes,
   };
 }

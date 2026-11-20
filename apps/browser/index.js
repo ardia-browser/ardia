@@ -1,3 +1,4 @@
+import "./src/platform/animatedCleanup";
 import "./src/state/telemetry/jsStart";
 import "./src/state/app/perfProbe";
 import { LogBox } from "react-native";

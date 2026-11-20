@@ -68,6 +68,16 @@ void WhenDefaultSettled(void (^then)(void));
 
 namespace ardia_content_blocker {
 
+void ForgetIfGone(NSString *profile) {
+  if (![LoadedProfiles() containsObject:profile]) return;
+  ArdiaCoreProfile *now = ardia_host::LoadedProfile(profile);
+  if (now && now == [LoadedInto() objectForKey:profile] && !ardia_host::IsDeletedProfile(profile)) return;
+  [LoadedProfiles() removeObject:profile];
+  [LoadedInto() removeObjectForKey:profile];
+  [Pages()[profile] fail:@"profile gone"];
+  [Pages() removeObjectForKey:profile];
+}
+
 void LoadIntoProfile(NSString *profile, void (^then)(NSString *error)) {
   then = [then copy];
   StartPreparing();
@@ -128,14 +138,8 @@ NSString *const kFollow =
      "})";
 
 void ForgetGoneProfiles() {
-  for (NSString *profile in LoadedProfiles().array) {
-    ArdiaCoreProfile *now = ardia_host::LoadedProfile(profile);
-    if (now && now == [LoadedInto() objectForKey:profile] && !ardia_host::IsDeletedProfile(profile)) continue;
-    [LoadedProfiles() removeObject:profile];
-    [LoadedInto() removeObjectForKey:profile];
-    [Pages()[profile] fail:@"profile gone"];
-    [Pages() removeObjectForKey:profile];
-  }
+  NSArray<NSString *> *loaded = [LoadedProfiles().array copy];
+  for (NSString *profile in loaded) ForgetIfGone(profile);
 }
 
 void FollowDefault(NSArray<NSString *> *profiles, void (^done)(NSString *error)) {
@@ -155,7 +159,7 @@ void FollowDefault(NSArray<NSString *> *profiles, void (^done)(NSString *error))
         const bool gone = !ardia_host::LoadedProfile(profile) || ardia_host::IsDeletedProfile(profile);
         if (!gone) failed = failed ?: error;
         dispatch_group_leave(group);
-      });
+      }, false);
     }
     dispatch_group_notify(group, dispatch_get_main_queue(), ^{ done(failed); });
   });

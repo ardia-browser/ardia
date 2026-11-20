@@ -57,13 +57,13 @@ export function usePeek(
   const cancelPending = (pointerStillAtEdge = false) => {
     waitingForFocus.current &&= pointerStillAtEdge;
   };
-  const hide = () => {
+  const hide = (now = false) => {
     clearTimeout(hideTimer.current);
     if (!out.current) return cancelPending();
     hideTimer.current = setTimeout(() => {
       heldBack.current = held();
       if (!heldBack.current) slideOut();
-    }, PEEK_CLOSE_DELAY_MS);
+    }, now ? 0 : PEEK_CLOSE_DELAY_MS);
   };
   const recheck = () => {
     if (!heldBack.current || held()) return;

@@ -19,6 +19,13 @@ export function setShortcutOverride(id: string, combo: Shortcut | null) {
   useBrowser.getState().updateSettings({ shortcuts: next });
 }
 
+export function setMouseShortcut(id: string, button: Shortcut | null) {
+  const next = { ...useBrowser.getState().settings.mouseShortcuts };
+  if (button) next[id] = [button.key, ...button.modifiers];
+  else delete next[id];
+  useBrowser.getState().updateSettings({ mouseShortcuts: next });
+}
+
 export function chooseTabLayout(layout: "sidebar" | "top") {
   useBrowser.getState().updateSettings({ tabLayout: layout });
   for (const id of Object.keys(useBrowser.getState().windows)) {

@@ -252,6 +252,8 @@ export function noteRowsScrolled(windowId: string) {
   scrolledAt.set(windowId, now);
 }
 
+export const forgetRowsScrolled = (windowId: string) => void scrolledAt.delete(windowId);
+
 export function holdEnterWhileScrolling(windowId: string, row: object, enter: () => void): boolean {
   if (stillFor(windowId) >= SCROLL_SETTLE_MS) return false;
   let held = heldEnters.get(windowId);

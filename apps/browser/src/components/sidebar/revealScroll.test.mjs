@@ -74,3 +74,15 @@ test("a new selected tab and a switch to an existing tab both reveal the selecte
   assert.deepEqual(revealTargets(browserState(["a", "b", "c"], "c"), before, "w"), { switched: "c", opened: null });
   assert.deepEqual(revealTargets(browserState(["a", "b"], "b"), before, "w"), { switched: "b", opened: null });
 });
+
+test("with Reduce Motion on, the pill's click jumps to the row instead of scrolling smoothly", () => {
+  const ids = S().windows[w].tabIds;
+  const still = startRevealTabs(w, scroll, scrollY, geometry, () => true);
+  scrollY.current = 0;
+  scrolls.length = 0;
+  revealTab(w, ids[45]);
+  runFrames();
+  assert.equal(scrolls.length, 1, JSON.stringify(scrolls));
+  assert.equal(scrolls[0].animated, false);
+  still();
+});

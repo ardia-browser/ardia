@@ -1,6 +1,7 @@
 import type { BrowserState } from "../browser/store";
 import { inPinnedContainer, pinKeyOf } from "../browser/model";
 import { orderSections, syncGroupOrder } from "../groups/groups";
+import { adoptParkedPins } from "../pins/parkedPins";
 import { profilesOf } from "../pins/pinMirror";
 import { splitTabIds } from "../splits/splits";
 import { isRegularWindow } from "../windows/small";
@@ -8,6 +9,7 @@ import { withNavigationAt } from "./pageSession";
 import { sharedListTab, sharesTabs } from "./tabShare";
 import type { BrowserWindow, Tab } from "../browser/types";
 import { isPeekTab } from "../peek/peek";
+import { noteWindowClosePinsKept } from "../telemetry/windowPlacementCounts";
 
 type KeepsTabs = (w: BrowserWindow | undefined) => boolean;
 
@@ -71,4 +73,20 @@ export function handOverTabs(s: BrowserState, windowId: string, keepsTabs: Keeps
   const window = { ...heir, tabIds: orderSections([...heir.tabIds, ...ids], tabs, groups), activeTabIds };
   const left = { ...w, tabIds: w.tabIds.filter((id) => !moving.has(id)), activeTabIds: Object.fromEntries(Object.entries(w.activeTabIds).filter(([, id]) => !moving.has(id))) };
   return { ...s, tabs, groups: syncGroupOrder(groups, window), splits, windows: { ...s.windows, [heir.id]: window, [windowId]: left } };
+}
+
+export function handOverPins(s: BrowserState, before: BrowserState, windowId: string, keepsTabs: KeepsTabs = isRegularWindow): BrowserState {
+  const heirId = heirWindow(before, windowId, keepsTabs);
+  if (!heirId || !s.windows[heirId]) return s;
+  const profiles = new Set(tabsHandedOver(before, windowId, keepsTabs).map((id) => before.tabs[id]!.profileId));
+  let next = s;
+  let pins = 0;
+  for (const profileId of profiles) {
+    const park = next.parkedPins[profileId];
+    if (!park) continue;
+    next = adoptParkedPins(next, heirId, profileId);
+    pins += park.tabs.length;
+  }
+  if (pins) noteWindowClosePinsKept(pins);
+  return next;
 }

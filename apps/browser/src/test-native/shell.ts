@@ -203,6 +203,7 @@ const menus: Modules["ArdiaMenus"] = {
   menuShortcuts: () => Promise.resolve([]),
   recordShortcut: () => Promise.resolve(null),
   cancelRecording: () => Promise.resolve(),
+  mouseShortcutMonitor: () => Promise.resolve({ installed: false, installs: 0 }),
 };
 
 const dialogs: Modules["ArdiaDialogs"] = {

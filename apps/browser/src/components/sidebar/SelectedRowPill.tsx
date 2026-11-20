@@ -1,14 +1,18 @@
-import { useEffect, useRef, useState, useSyncExternalStore, type RefObject } from "react";
-import { Animated, Pressable, View, type LayoutChangeEvent, type ScrollView } from "react-native";
-import { useActiveTabId, useTab } from "../../state/browser/hooks";
-import { revealTab, selectedTabIn, watchRowsMoved } from "../../state/sidebar/reveal";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { Animated, Pressable, StyleSheet, View, type ScrollView } from "react-native";
+import { watchWindowRecord } from "../../state/browser/keyedWatch";
+import { revealTab, rowsStamp, sameRows, selectedTabIn, selectedTabSnapshot, type PillTab, type RowsStamp } from "../../state/sidebar/reveal";
 import { notePageOverlay } from "../../state/telemetry/usage";
-import { capsule, Panel, reduceMotion, Symbol } from "../ui";
+import { capsule, Panel, radius, reduceMotion, Symbol, Text, tintedImage } from "../ui";
 import { useTheme } from "../ui/theme";
 import { SHADOWS } from "../window/tokens";
 import { GLOW_ROOM, type SidebarGeometry } from "./pageLayout";
-import { locateTab, rowAway, type RowAway, type RowSpot } from "./selectedRow";
-import { TabIcon } from "./TabIcon";
+import { locateTab, rowAway, type RowSpot } from "./selectedRow";
+import { FaviconFallback, NewTabIcon } from "../favicon/Favicon";
+import { drawnIcon } from "../../state/pins/rowIcons";
+import { iconSymbol } from "../../lib/customIcon";
+import { FADED, markedEngine } from "../../state/sidebar/rowState";
+import { EngineMark, SLEEPING_OPACITY } from "./TabIcon";
 import { SELECTED_ROW_PILL, SELECTED_ROW_PILL_MOTION, SELECTED_ROW_REVEAL_SETTLE_MS, useSidebarTokens } from "./tokens";
 
 function settle(progress: Animated.Value, phase: keyof typeof SELECTED_ROW_PILL_MOTION, done?: () => void) {
@@ -23,33 +27,35 @@ function settle(progress: Animated.Value, phase: keyof typeof SELECTED_ROW_PILL_
   return () => run.stop();
 }
 
-export function useSelectedRowAway(windowId: string, geometry: RefObject<SidebarGeometry> | undefined, scroll: RefObject<ScrollView | null>, scrollY: () => number) {
+export type PillAway = { side: "above" | "below"; tab: PillTab } | null;
+type PillSink = (away: PillAway) => void;
+export type PillTracker = { judge: () => void; relocate: () => void; attach: (sink: PillSink) => () => void };
+
+const samePill = (a: PillAway, b: PillAway) =>
+  a === b || (!!a && !!b && a.side === b.side && a.tab.id === b.tab.id && a.tab.url === b.tab.url && a.tab.favicon === b.tab.favicon && a.tab.icon === b.tab.icon);
+
+export function useSelectedRowAway(
+  windowId: string,
+  geometry: RefObject<SidebarGeometry> | undefined,
+  scroll: RefObject<ScrollView | null>,
+  scrollY: () => number,
+): PillTracker {
   const live = useRef({ geometry, scrollY });
   live.current = { geometry, scrollY };
   const [tracker] = useState(() => {
-    let away: RowAway = null;
-    const listeners = new Set<() => void>();
-    const setAway = (next: RowAway) => {
-      if (next === away) return;
-      away = next;
-      for (const listener of listeners) listener();
-    };
-    const source: AwaySource = {
-      read: () => away,
-      subscribe: (listener) => {
-        listeners.add(listener);
-        return () => listeners.delete(listener);
-      },
-    };
+    let away: PillAway = null;
+    let sink: PillSink | null = null;
     let row: RowSpot | null = null;
+    let stamp: RowsStamp | null = null;
     let ticket = 0;
     let frame = 0;
     let selected: string | null | undefined;
     let quietUntil = 0;
     let quiet: ReturnType<typeof setTimeout> | undefined;
-    const judge = () => {
-      const page = live.current.geometry?.current;
-      setAway(page && Date.now() >= quietUntil ? rowAway(row, live.current.scrollY(), page.viewport, page.edgeLift) : null);
+    const show = (next: PillAway) => {
+      if (samePill(next, away)) return;
+      away = next;
+      sink?.(away);
     };
     const settleAfterSwitch = (tabId: string | null) => {
       if (selected !== undefined && tabId !== selected) {
@@ -60,28 +66,53 @@ export function useSelectedRowAway(windowId: string, geometry: RefObject<Sidebar
       selected = tabId;
     };
     const locate = () => {
-      frame = 0;
       const mine = ++ticket;
+      stamp = rowsStamp();
       const page = live.current.geometry?.current;
-      const tabId = selectedTabIn(windowId);
-      settleAfterSwitch(tabId ?? null);
+      const tabId = selectedTabIn(windowId) ?? null;
+      settleAfterSwitch(tabId);
       const found = page && tabId ? locateTab(windowId, tabId, page, scroll.current, () => live.current.scrollY()) : null;
       if (found && "then" in found) {
+        row = null;
         void found.then((spot) => {
           if (mine !== ticket) return;
           row = spot;
-          judge();
+          place();
         });
         return;
       }
       row = found;
-      judge();
     };
+    const place = () => {
+      const page = live.current.geometry?.current;
+      const side = page && Date.now() >= quietUntil ? rowAway(row, live.current.scrollY(), page.viewport, page.edgeLift) : null;
+      const tab = side ? selectedTabSnapshot(windowId) : null;
+      show(side && tab ? { side, tab } : null);
+    };
+    function judge() {
+      if (!sameRows(stamp, rowsStamp())) locate();
+      place();
+    }
     return {
-      source,
       judge,
       relocate: () => {
-        if (!frame) frame = requestAnimationFrame(locate);
+        stamp = null;
+        judge();
+      },
+      selectionMoved: () => {
+        stamp = null;
+        if (!away || frame) return;
+        frame = requestAnimationFrame(() => {
+          frame = 0;
+          judge();
+        });
+      },
+      attach: (next: PillSink) => {
+        sink = next;
+        next(away);
+        return () => {
+          if (sink === next) sink = null;
+        };
       },
       stop: () => {
         cancelAnimationFrame(frame);
@@ -91,58 +122,25 @@ export function useSelectedRowAway(windowId: string, geometry: RefObject<Sidebar
     };
   });
   useEffect(() => {
-    if (!geometry) return void tracker.judge();
+    if (!geometry) return;
     tracker.relocate();
-    const unsubscribe = watchRowsMoved(tracker.relocate);
+    const unwatch = watchWindowRecord(windowId, tracker.selectionMoved);
     return () => {
-      unsubscribe();
+      unwatch();
       tracker.stop();
     };
   }, [windowId, geometry]);
-  return { away: tracker.source, judge: tracker.judge, relocate: tracker.relocate };
+  return tracker;
 }
 
-export type AwaySource = { read: () => RowAway; subscribe: (listener: () => void) => () => void };
-
-type ListFrame = { top: number; height: number };
-export type ListFrameSource = { read: () => ListFrame | null; subscribe: (listener: () => void) => () => void; onLayout: (e: LayoutChangeEvent) => void };
-
-export function useListFrame(): ListFrameSource {
-  const [frame] = useState<ListFrameSource>(() => {
-    let value: ListFrame | null = null;
-    const listeners = new Set<() => void>();
-    return {
-      read: () => value,
-      subscribe: (listener) => {
-        listeners.add(listener);
-        return () => listeners.delete(listener);
-      },
-      onLayout: (e) => {
-        const { y, height } = e.nativeEvent.layout;
-        if (value && value.top === y && value.height === height) return;
-        value = { top: y, height };
-        for (const listener of listeners) listener();
-      },
-    };
-  });
-  return frame;
-}
-
-export function SelectedRowPillFrame({ frame: source, lift, ...pill }: { frame: ListFrameSource; lift: number } & Parameters<typeof SelectedRowPill>[0]) {
-  const frame = useSyncExternalStore(source.subscribe, source.read, source.read);
-  if (!frame) return null;
-  return (
-    <View pointerEvents="box-none" style={{ position: "absolute", left: 0, right: 0, top: frame.top + GLOW_ROOM - lift, height: Math.max(0, frame.height - GLOW_ROOM + lift), zIndex: 2 }}>
-      <SelectedRowPill {...pill} />
-    </View>
-  );
-}
-
-export function SelectedRowPill({ windowId, away: source, bottomShift }: { windowId: string; away: AwaySource; bottomShift?: Animated.AnimatedInterpolation<number> }) {
-  const away = useSyncExternalStore(source.subscribe, source.read, source.read);
-  const [shown, setShown] = useState<RowAway>(away);
+export function SelectedRowPill({ windowId, tracker, lift, bottomShift }: { windowId: string; tracker: PillTracker; lift: number; bottomShift?: Animated.AnimatedInterpolation<number> }) {
+  const [away, setAway] = useState<PillAway>(null);
+  const [shown, setShown] = useState<PillAway>(null);
   const [leaving, setLeaving] = useState(false);
   const progress = useRef(new Animated.Value(0)).current;
+  const onScreen = useRef(false);
+  onScreen.current = !!shown;
+  useEffect(() => tracker.attach(setAway), [tracker]);
   useEffect(() => {
     if (away) {
       notePageOverlay("selectedRowPillShown");
@@ -150,20 +148,24 @@ export function SelectedRowPill({ windowId, away: source, bottomShift }: { windo
       setLeaving(false);
       return settle(progress, "enter");
     }
+    if (!onScreen.current) return;
     setLeaving(true);
     return settle(progress, "exit", () => setShown(null));
   }, [away]);
+  const outward = shown?.side === "below" ? 1 : -1;
+  const motion = useMemo(() => (leaving ? leaveStyle(progress, outward) : enterStyle(progress, outward)), [leaving, outward]);
   if (!shown) return null;
-  const outward = shown === "below" ? 1 : -1;
   return (
-    <Animated.View
-      pointerEvents="box-none"
-      style={[PLACE, shown === "below" ? AT_BOTTOM : AT_TOP, shown === "below" && bottomShift ? { transform: [{ translateY: bottomShift }] } : null]}
-    >
-      <Animated.View pointerEvents={away ? "auto" : "none"} style={leaving ? leaveStyle(progress, outward) : enterStyle(progress, outward)}>
-        <PillFace windowId={windowId} direction={shown} />
+    <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { top: GLOW_ROOM - lift, zIndex: 2 }]}>
+      <Animated.View
+        pointerEvents="box-none"
+        style={[PLACE, shown.side === "below" ? AT_BOTTOM : AT_TOP, shown.side === "below" && bottomShift ? { transform: [{ translateY: bottomShift }] } : null]}
+      >
+        <Animated.View pointerEvents={away ? "auto" : "none"} style={motion}>
+          <PillFace windowId={windowId} side={shown.side} tab={shown.tab} />
+        </Animated.View>
       </Animated.View>
-    </Animated.View>
+    </View>
   );
 }
 
@@ -189,28 +191,53 @@ function leaveStyle(progress: Animated.Value, outward: number) {
   };
 }
 
-function PillFace({ windowId, direction }: { windowId: string; direction: "above" | "below" }) {
+function PillFace({ windowId, side, tab }: { windowId: string; side: "above" | "below"; tab: PillTab }) {
   const theme = useTheme();
   const tokens = useSidebarTokens();
-  const tabId = useActiveTabId();
-  const url = useTab(tabId ?? "", (t) => t?.url ?? "");
-  const favicon = useTab(tabId ?? "", (t) => t?.favicon ?? null);
-  const icon = useTab(tabId ?? "", (t) => t?.customIcon ?? null);
   const press = () => {
-    if (!tabId) return;
     notePageOverlay("selectedRowPillPressed");
-    revealTab(windowId, tabId);
+    revealTab(windowId, tab.id);
   };
   return (
-    <Pressable onPress={press} accessibilityRole="button" accessibilityLabel={direction === "below" ? "Scroll down to the selected tab" : "Scroll up to the selected tab"}>
+    <Pressable onPress={press} accessibilityRole="button" accessibilityLabel={side === "below" ? "Scroll down to the selected tab" : "Scroll up to the selected tab"}>
       <Panel fill={tokens.selectedRowPillFill} border={tokens.selectedRowPillStroke} radius={capsule(SELECTED_ROW_PILL.height)} shadow={SHADOWS.status}>
         <View style={FACE}>
-          <TabIcon tabId={tabId ?? undefined} url={url} favicon={favicon} icon={icon} size={SELECTED_ROW_PILL.icon} />
-          <Symbol name={direction === "below" ? "arrow.down" : "arrow.up"} size={SELECTED_ROW_PILL.arrow} weight="medium" color={theme.textSecondary} style={ARROW} />
+          <PillIcon tab={tab} size={SELECTED_ROW_PILL.icon} />
+          <Symbol name={side === "below" ? "arrow.down" : "arrow.up"} size={SELECTED_ROW_PILL.arrow} weight="medium" color={theme.textSecondary} style={ARROW} />
         </View>
       </Panel>
     </Pressable>
   );
+}
+
+function PillIcon({ tab, size }: { tab: PillTab; size: number }) {
+  const engine = markedEngine(tab.marks);
+  const glyph = <PillGlyph tab={tab} size={size} />;
+  return (
+    <View style={{ opacity: tab.marks & FADED ? SLEEPING_OPACITY : 1 }}>
+      {glyph}
+      {engine ? <EngineMark mark={engine} size={size} /> : null}
+    </View>
+  );
+}
+
+function PillGlyph({ tab, size }: { tab: PillTab; size: number }) {
+  const theme = useTheme();
+  const [broken, setBroken] = useState<string | null>(null);
+  const icon = drawnIcon(tab.icon);
+  const symbol = iconSymbol(icon);
+  if (symbol) return <Symbol name={symbol} size={size - 3} weight="medium" color={theme.icon} style={{ width: size, height: size }} />;
+  if (icon) return <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}><Text style={{ fontSize: size - 3, lineHeight: size }}>{icon}</Text></View>;
+  if (!tab.url && !tab.faviconUri) return <NewTabIcon size={size} />;
+  if (!tab.faviconUri || broken === tab.faviconUri) return <FaviconFallback url={tab.url} size={size} />;
+  const uri = tab.faviconUri;
+  return tintedImage({
+    source: { uri },
+    identity: uri,
+    tint: tab.template && !theme.dark ? theme.textPrimary : undefined,
+    onError: () => setBroken(uri),
+    style: { width: size, height: size, borderRadius: radius.hair },
+  });
 }
 
 const PLACE = { position: "absolute", left: 0, right: 0, alignItems: "center" } as const;

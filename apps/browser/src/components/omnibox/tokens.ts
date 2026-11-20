@@ -55,6 +55,7 @@ export const GO_BUTTON = {
   padX: space.xl,
   radius: capsule(32),
   hoverOpacity: 0.9,
+  pressedOpacity: 0.78,
   gap: space.s,
   glyph: 11,
   glyphBox: 14,

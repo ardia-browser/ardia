@@ -1,3 +1,4 @@
+import { useShallow } from "zustand/react/shallow";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, PanResponder, StyleSheet, View } from "react-native";
 import { useTheme } from "../ui/theme";
@@ -166,14 +167,17 @@ function DividerHandle({ split, divider, width, height }: { split: SplitView; di
 const HANDLE_THICKNESS = 4;
 const HANDLE_LENGTH = 36;
 
+const NOT_DRAGGING = { dragging: null, x: -1, y: -1, lifted: null, outside: false, target: null } as const;
+
 export function DropTargets({ panes, origin }: { panes: Record<string, Rect>; origin: { x: number; y: number } | null }) {
   const windowId = useWindowId();
-  const dragging = useTabDrag((s) => (s.phase === "tab" && s.windowId === windowId ? s.tabId : null));
-  const x = useTabDrag((s) => (s.phase === "tab" ? s.x : -1));
-  const y = useTabDrag((s) => (s.phase === "tab" ? s.y : -1));
-  const lifted = useTabDrag((s) => (s.phase === "tab" ? s.lifted : null));
-  const outside = useTabDrag((s) => s.phase === "tab" && s.outside);
-  const target = useTabDrag((s) => (s.phase === "tab" ? s.target : null));
+  const { dragging, x, y, lifted, outside, target } = useTabDrag(
+    useShallow((s) =>
+      s.phase === "tab"
+        ? { dragging: s.windowId === windowId ? s.tabId : null, x: s.x, y: s.y, lifted: s.lifted, outside: s.outside, target: s.target }
+        : NOT_DRAGGING,
+    ),
+  );
   const draggedProfile = useTab(dragging ?? undefined, (t) => t?.profileId);
   const windowProfile = useWindowProfileId();
   const foreign = !!dragging && draggedProfile !== windowProfile;

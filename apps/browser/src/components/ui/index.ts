@@ -28,7 +28,7 @@ export { SlidingThumb, useSlidingThumb } from "./SlidingThumb";
 export { Group, Row } from "./Row";
 export { NativeFormContext, useNativeForm } from "./nativeForm";
 export { Swatch } from "./Swatch";
-export { TintedImage, tintedImageKey } from "./TintedImage";
+export { tintedImage, tintedImageKey } from "./TintedImage";
 export { Toggle } from "./Switch";
 export { Text, TextScopeContext, type TextProps, type TextScope } from "./Text";
 export { hex, layout, PROFILE_COLORS, useTheme, type Theme } from "./theme";
@@ -43,6 +43,7 @@ export {
   ContextMenuArea,
   DIA_SPECTRUM,
   DockSelection,
+  drawnFadeLabel,
   FadeLabel,
   FileDropArea,
   FolderIcon,
@@ -59,6 +60,7 @@ export {
   ReportVideo,
   Surface,
   SwipeArea,
+  drawnSymbol,
   Symbol,
   ThemeSwatch,
   VisualEffect,

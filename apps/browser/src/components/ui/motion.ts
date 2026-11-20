@@ -17,6 +17,14 @@ export const curve = {
 
 export const currentValue = (value: Animated.Value): number => (value as unknown as { __getValue(): number }).__getValue();
 
+type NativeNode = { __nativeTag?: number; __detach(): void };
+
+export function releaseNativeValue(value: Animated.Value) {
+  value.removeAllListeners();
+  const node = value as unknown as NativeNode;
+  if (node.__nativeTag != null) node.__detach();
+}
+
 export const animating = (value: Animated.Value): boolean => (value as unknown as { _animation?: unknown })._animation != null;
 
 export const gateLevel = (on: boolean) => (on ? 1 : 0);

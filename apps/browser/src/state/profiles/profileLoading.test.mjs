@@ -17,7 +17,8 @@ const { startBookmarks, reloadBookmarks } = await import("../bookmarks/engineSyn
 const { bookmarkRoots } = await import("../bookmarks/bookmarks.ts");
 const { startHistory } = await import("../history/engineSync.ts");
 const { historyOf } = await import("../history/history.ts");
-const { startFavicons, useFavicon } = await import("../favicons/favicons.ts");
+const { startFavicons } = await import("../favicons/favicons.ts");
+const { useFavicon } = await import("../favicons/faviconHooks.ts");
 const { useProfileDataStats } = await import("./hooks.ts");
 const { passwordsAdapter } = await import("../sync/adapters.ts");
 

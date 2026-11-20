@@ -9,9 +9,7 @@ import { useSitePalette } from "../toolbar/useSitePalette";
 import { usePaneChrome } from "../toolbar/WindowToolbar";
 import { controlsShown, WindowControls } from "./WindowControls";
 
-export function BrowserWindowControls() {
-  return controlsShown ? <PlacedControls /> : null;
-}
+export const browserWindowControls = () => (controlsShown ? <PlacedControls /> : null);
 
 function PlacedControls() {
   const windowId = useWindowId();

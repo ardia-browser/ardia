@@ -155,7 +155,7 @@ node apps/browser/scripts/perf/ratchet.mjs baseline       # rebuild ratchet.json
 node apps/browser/scripts/perf/ratchet.mjs baseline --measure-only   # the runs only; then `init <the two reports> --adopt` merges them without raising a ceiling
 ```
 
-`run` takes about 85 s (6 s of it bundling the tree, 15 s the Node counts, the rest one launch and the nine scenarios of
+`run` takes about 85 s (6 s of it bundling the tree, 15 s the Node counts, the rest one launch and the ten scenarios of
 one hidden instance), and about 170 s when a count is over and the scenarios run a second time. It exits 1 and prints a
 table of the counts over their ceiling. A count over in the first run gets one more run, and only a count over in both fails: a real regression is in both, a pointer moving over the hidden window or the window
 deactivating mid-scenario is in one. A report of several runs is judged by its median run.
@@ -163,10 +163,13 @@ deactivating mid-scenario is in one. A report of several runs is judged by its m
 ### What is steady
 
 The scenarios run in a fixed order (`ratchet.mjs` header says why): `startup`, `launch` (all the launch's work, read
-once it has stopped), `idle`, `typing`, `switchTabs`, `scroll`, `hover`, `pageLoad`, `openClose`, with
+once it has stopped), `idle`, `typing`, `switchTabs`, `scroll`, `hover`, `pageLoad`, `openClose`, `nodeChurn`, with
 `--options '{"seconds":5}'`, followed by a second launch from a one-tab session (`js-bench.mjs --seed small`, counts
 prefixed `small.`). `launch.firstCommitMounts` (and `small.launch.firstCommitMounts`) is what the launch's first React
-commit mounted (`acPerf.firstCommitMounts`): the first frame waits for all of it. The census behind `ratchet.json` is 8 launches of 0.2.27's Release app with the tree's
+commit mounted (`acPerf.firstCommitMounts`): the first frame waits for all of it. `nodeChurn.nativeNodesLeft` is how many
+of React Native's native animated nodes outlive a churn (20 tabs visited, then 60 tabs opened and closed and 120
+switches): the probe counts `createAnimatedNode` against `dropAnimatedNode` (`acPerf.nativeNodes`), and anything above 0
+is a node left behind for every tab or switch, for the life of the app. The census behind `ratchet.json` is 8 launches of 0.2.27's Release app with the tree's
 bundle.
 
 Group totals per scenario over the 16 baseline runs (two batches of 8): a bare number repeated in every run is gated

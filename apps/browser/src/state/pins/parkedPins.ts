@@ -21,7 +21,7 @@ function atPin(t: Tab, history: HistoryEntry[]): Partial<Pick<Tab, "url" | "titl
 
 const homeOf = (t: { url: string; pinnedUrl?: string | null }) => t.pinnedUrl || t.url;
 
-export function parkWindowPins(parked: Record<string, ParkedPins>, w: BrowserWindow, s: PinSource): Record<string, ParkedPins> {
+export function parkWindowPins(parked: Record<string, ParkedPins>, w: BrowserWindow, s: PinSource, { keepSamePage = false } = {}): Record<string, ParkedPins> {
   if (w.kind === "private") return parked;
   const own = Object.values(s.groups).filter((g) => g.pinned && g.windowId === w.id);
   const ownIds = new Set(own.map((g) => g.id));
@@ -54,7 +54,7 @@ export function parkWindowPins(parked: Record<string, ParkedPins>, w: BrowserWin
       if (t.pin) {
         const back = atPin(t, historyOf(s, profileId));
         const tile = { ...snapshotTab(t), ...back, ...pending(t, !!back.url), id: pinKeyOf(t), groupId: null };
-        if (!splitPanes.has(t.id) && homes.some((h) => samePage(h, homeOf(tile)))) {
+        if (!keepSamePage && !splitPanes.has(t.id) && homes.some((h) => samePage(h, homeOf(tile)))) {
           paneIds.delete(t.id);
           continue;
         }

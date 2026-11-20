@@ -1,22 +1,23 @@
 import { useEffect, type RefObject } from "react";
 import type { ScrollView } from "react-native";
 import { watchRevealTargets } from "../../state/sidebar/reveal";
+import { reduceMotion } from "../ui/reduceMotion";
 import { GLOW_ROOM, type SidebarGeometry } from "./pageLayout";
 import { locateTab } from "./selectedRow";
 import { REVEAL_ROW_MARGIN } from "./tokens";
 
 export type RevealScroll = { y: number; animated: boolean };
 
-export function revealScrollFor(row: { y: number; height: number }, at: { top: number; viewport: number; edgeLift?: number }, viaPill: boolean): RevealScroll | null {
+export function revealScrollFor(row: { y: number; height: number }, at: { top: number; viewport: number; edgeLift?: number }, animated: boolean): RevealScroll | null {
   const { top, viewport, edgeLift = 0 } = at;
-  if (row.y - top < GLOW_ROOM) return { y: Math.max(0, row.y - GLOW_ROOM + edgeLift - REVEAL_ROW_MARGIN), animated: viaPill };
-  if (row.y + row.height - top > viewport - GLOW_ROOM) return { y: row.y + row.height - viewport + REVEAL_ROW_MARGIN, animated: viaPill };
+  if (row.y - top < GLOW_ROOM) return { y: Math.max(0, row.y - GLOW_ROOM + edgeLift - REVEAL_ROW_MARGIN), animated };
+  if (row.y + row.height - top > viewport - GLOW_ROOM) return { y: row.y + row.height - viewport + REVEAL_ROW_MARGIN, animated };
   return null;
 }
 
 type Scroller = Pick<ScrollView, "scrollTo">;
 
-export function startRevealTabs(windowId: string, scroll: RefObject<Scroller | null>, scrollY: RefObject<number>, geometry: RefObject<SidebarGeometry>) {
+export function startRevealTabs(windowId: string, scroll: RefObject<Scroller | null>, scrollY: RefObject<number>, geometry: RefObject<SidebarGeometry>, stillMotion: () => boolean | null = reduceMotion) {
     let switched: string | null = null;
     let opened: string | null = null;
     let viaPill = false;
@@ -24,7 +25,7 @@ export function startRevealTabs(windowId: string, scroll: RefObject<Scroller | n
     let reveals = 0;
     const show = (row: { y: number; height: number }, pill: boolean) => {
       const { viewport, edgeLift } = geometry.current;
-      const move = revealScrollFor(row, { top: scrollY.current ?? 0, viewport, edgeLift }, pill);
+      const move = revealScrollFor(row, { top: scrollY.current ?? 0, viewport, edgeLift }, pill && !stillMotion());
       if (move) scroll.current?.scrollTo(move);
     };
     const reveal = () => {

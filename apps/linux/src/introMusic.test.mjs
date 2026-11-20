@@ -12,16 +12,37 @@ const createPlayer = (src) => {
 };
 const track = async () => "/assets/IntroMusic-test.wav";
 
+const steppedFrames = () => {
+  const running = new Map();
+  let next = 0;
+  return {
+    every: (tick, ms) => (running.set(++next, { tick, ms }), next),
+    cancel: (handle) => void running.delete(handle),
+    step: () => [...running.values()].forEach(({ tick }) => tick()),
+    running: () => [...running.values()],
+  };
+};
+
 test("the intro music plays the bundled track, follows mute, and fades out on stop", async () => {
   players.length = 0;
-  const music = linuxIntroMusic({ host: hostWith({}), track, createPlayer });
+  const frames = steppedFrames();
+  const music = linuxIntroMusic({ host: hostWith({}), track, createPlayer, frames });
   await music.playIntroMusic({}, true);
   assert.equal(players.length, 1);
   assert.equal(players[0].src, "/assets/IntroMusic-test.wav");
   assert.equal(players[0].volume, 0, "a muted intro starts silent");
   await music.setIntroMusicMuted(false);
-  await new Promise((resolve) => setTimeout(resolve, 400));
-  assert.equal(players[0].volume, 1);
+  assert.equal(frames.running().length, 1, "unmuting fades in on one frame timer");
+  assert.ok(Math.abs(frames.running()[0].ms - 1000 / 60) < 0.01, "the fade steps once a frame");
+  const levels = [];
+  for (let frame = 0; frame < 15; frame++) {
+    frames.step();
+    levels.push(players[0].volume);
+  }
+  assert.ok(levels.every((v, i) => i === 0 || v > levels[i - 1]), `the volume rises every frame: ${levels}`);
+  assert.ok(levels[0] > 0 && levels[0] < 0.1, `the first frame is a small step: ${levels[0]}`);
+  assert.equal(players[0].volume, 1, "a quarter second of frames reaches full volume");
+  assert.equal(frames.running().length, 0, "the fade stops its timer once it lands");
   await music.stopIntroMusic(0);
   assert.equal(players[0].paused, true);
   assert.equal(players[0].volume, 0);

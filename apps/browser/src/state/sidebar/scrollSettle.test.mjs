@@ -70,3 +70,17 @@ test("a dropped held enter never fires", (t) => {
   t.mock.timers.tick(1000);
   assert.equal(entered, 0);
 });
+
+test("a sidebar that goes away forgets its window's last scroll, and an enter it was holding still lands", (t) => {
+  scrolling(t);
+  let entered = 0;
+  flick(t, 2);
+  hover.holdEnterWhileScrolling(W, {}, () => entered++);
+  hover.forgetRowsScrolled(W);
+  assert.equal(
+    hover.holdEnterWhileScrolling(W, {}, () => {}),
+    false,
+  );
+  t.mock.timers.tick(150);
+  assert.equal(entered, 1);
+});

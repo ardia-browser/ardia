@@ -1,7 +1,9 @@
 const P = globalThis.acPerf;
 if (!P) throw new Error("perf probe is off (no perf-probe file in the data folder)");
 const store = ac.store;
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms) => new Promise((resolve) => setTimeout(function benchSleep() {
+  resolve();
+}, ms));
 const S = () => store.getState();
 const windowId = () => S().ui.focusOrder?.[0] ?? S().ui.focusedWindowId;
 const isPinned = (tab) => !!(tab.pin ?? tab.pinned);
@@ -42,6 +44,49 @@ async function writesSettled(quietMs = 3000, timeoutMs = 30000) {
   return false;
 }
 
+const harnessTimer = (label) => label.includes("pollDevEval") || label.includes("benchSettleStep") || label.includes("benchSleep") || label === "setInterval:anonymous";
+const oneShots = (timers) => Object.fromEntries(Object.entries(timers ?? {}).filter(([label]) => /^(setTimeout|setImmediate):/.test(label) && !harnessTimer(label)));
+const sameCounts = (a, b) => Object.keys(a).length === Object.keys(b).length && Object.entries(a).every(([k, v]) => b[k] === v);
+const settleStep = (ms) => new Promise((resolve) => setTimeout(function benchSettleStep() {
+  resolve();
+}, ms));
+
+async function timersSettled(stepMs = 1000, timeoutMs = 15000) {
+  const end = Date.now() + timeoutMs;
+  let previous = null;
+  while (Date.now() < end) {
+    P.reset();
+    await settleStep(stepMs);
+    const fired = oneShots(P.read().timers);
+    if (!Object.keys(fired).length) return { settled: true, steady: {} };
+    if (previous && sameCounts(fired, previous)) return { settled: true, steady: fired };
+    previous = fired;
+  }
+  return { settled: false, last: previous };
+}
+
+async function settleWindow({ hold = false } = {}) {
+  const persistence = ac.persistence;
+  const flushed = !!persistence;
+  persistence?.flushPersistence();
+  const writes = await writesSettled();
+  const timers = await timersSettled();
+  const held = hold && !!persistence?.holdPersistence;
+  if (held) persistence.holdPersistence();
+  return { flushed, writes, timers, held };
+}
+
+function release(settled) {
+  if (settled.held) ac.persistence.resumePersistence();
+}
+
+function tabShown(id) {
+  const tab = S().tabs[id];
+  if (!tab?.url || !tab.title || tab.title === tab.url) return false;
+  const resolve = ac.favicons?.resolveFavicon;
+  return resolve ? !!resolve(tab.url, null, tab.profileId) : !!tab.favicon;
+}
+
 function hostOf(fiber) {
   for (let f = fiber.child; f; f = f.child) if (f.tag === 5) return f;
   return null;
@@ -57,10 +102,12 @@ const scenarios = {
 
   async idle({ seconds = 10 } = {}) {
     await quiet(1000);
-    await writesSettled();
+    const settled = await settleWindow({ hold: true });
     P.reset();
     await sleep(seconds * 1000);
-    return { stats: P.read() };
+    release(settled);
+    const stats = P.read();
+    return { stats, settled };
   },
 
   async typing({ query = "github.com/facebook/react/pull", gapMs = 60 } = {}) {
@@ -73,6 +120,7 @@ const scenarios = {
     if (!(await until(() => ac.omnibox.get(id), 10000))) throw new Error("omnibox driver missing");
     await sleep(500);
     const driver = ac.omnibox.get(id);
+    const settled = await settleWindow();
     P.reset();
     const keys = [];
     for (let i = 1; i <= query.length; i++) {
@@ -83,7 +131,7 @@ const scenarios = {
     const items = driver.state().items.length;
     S().closePanel(w);
     await sleep(200);
-    return { keys, items, stats };
+    return { keys, items, stats, settled };
   },
 
   async switchTabs({ count = 12 } = {}) {
@@ -100,7 +148,7 @@ const scenarios = {
       await sleep(250);
     }
     await quiet();
-    await writesSettled(1200, 10000);
+    const settled = await settleWindow();
     P.reset();
     const steps = [];
     for (const id of ids) {
@@ -120,12 +168,13 @@ const scenarios = {
     stats.writeMs = saved.writeMs;
     timed(() => S().activate(start));
     await quiet();
-    return { steps, stats };
+    return { steps, stats, settled };
   },
 
   async openClose({ count = 20, origin } = {}) {
     const w = windowId();
     await quiet();
+    const settled = await settleWindow();
     P.reset();
     const open = [];
     const ids = [];
@@ -136,6 +185,7 @@ const scenarios = {
       await sleep(150);
     }
     await quiet();
+    const lastShown = await until(() => tabShown(ids[ids.length - 1]), 10000);
     const openStats = P.read();
     P.reset();
     const close = [];
@@ -144,7 +194,8 @@ const scenarios = {
       await sleep(150);
     }
     await sleep(500);
-    return { open, close, openStats, closeStats: P.read() };
+    await until(() => !ids.some((id) => S().tabs[id]), 5000);
+    return { open, close, openStats, closeStats: P.read(), lastShown, settled };
   },
 
   async scroll({ distance = 2400, steps = 60 } = {}) {
@@ -162,6 +213,7 @@ const scenarios = {
     if (!scroller) throw new Error("no ScrollView");
     scroller.scrollTo({ y: 0, animated: false });
     await sleep(300);
+    const settled = await settleWindow();
     P.reset();
     for (let i = 1; i <= steps; i++) {
       scroller.scrollTo({ y: (distance * i) / steps, animated: false });
@@ -172,7 +224,7 @@ const scenarios = {
       await sleep(16);
     }
     await sleep(300);
-    return { stats: P.read() };
+    return { stats: P.read(), settled };
   },
 
   async pageLoad({ origin, runs = 3 } = {}) {
@@ -180,6 +232,7 @@ const scenarios = {
     for (let r = 0; r < runs; r++) {
       await quiet(600);
       const tab = activeId();
+      const settled = await settleWindow();
       P.reset();
       const t0 = Date.now();
       timed(() => S().navigate(tab, `${origin}/heavy?run=${r}-${Date.now()}`));
@@ -187,7 +240,7 @@ const scenarios = {
       await until(() => !ac.tabLive.liveOf(tab).isLoading, 15000, 10);
       const loadMs = Date.now() - t0;
       await sleep(1000);
-      results.push({ loadMs, stats: P.read() });
+      results.push({ loadMs, stats: P.read(), settled });
     }
     return { runs: results };
   },
@@ -198,6 +251,7 @@ const scenarios = {
     const hosts = fibers.map(hostOf).filter((h) => h && typeof h.memoizedProps?.onMouseEnter === "function");
     const list = hosts.slice(from, from + rows);
     if (list.length < 2) throw new Error(`only ${list.length} hoverable rows`);
+    const settled = await settleWindow();
     P.reset();
     const steps = [];
     let prev = null;
@@ -213,7 +267,7 @@ const scenarios = {
     }
     steps.push(timed(() => prev.memoizedProps.onMouseLeave?.({ nativeEvent: {} })));
     await sleep(800);
-    return { steps, stats: P.read() };
+    return { steps, stats: P.read(), settled };
   },
 
   async profileSwipe({ settleMs = 1500 } = {}) {

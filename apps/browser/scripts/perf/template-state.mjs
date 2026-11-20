@@ -40,7 +40,7 @@ export function componentsState(dataDir) {
   const checked = new Set(updaterChecked(dataDir));
   const components = Object.fromEntries(Object.entries(STARTUP_COMPONENTS).map(([id, folder]) =>
     [folder, { version: installedVersion(dataDir, folder), checked: checked.has(id) }]));
-  return { components, settled: Object.values(components).every((c) => c.version || c.checked) };
+  return { components, settled: Object.values(components).every((c) => c.version) };
 }
 
 export async function waitForStartupComponents({ dataDir, launchedAt, deadlineMs = 150_000, pollMs = 1000, log = () => {} }) {
@@ -50,9 +50,9 @@ export async function waitForStartupComponents({ dataDir, launchedAt, deadlineMs
     await sleep(pollMs);
     state = componentsState(dataDir);
   }
-  const shown = Object.entries(state.components).map(([k, c]) => `${k} ${c.version ?? (c.checked ? "checked" : "missing")}`).join(", ");
-  if (!state.settled) throw new Error(`the component updater hadn't finished its first check ${deadlineMs / 1000} s after launch (${shown}); every run would pay it inside its idle window`);
-  log(`component updater's first check is done ${((Date.now() - launchedAt) / 1000).toFixed(1)} s after launch: ${shown}`);
+  const shown = Object.entries(state.components).map(([k, c]) => `${k} ${c.version ?? (c.checked ? "answered, not installed" : "missing")}`).join(", ");
+  if (!state.settled) throw new Error(`the component updater hadn't installed every startup component ${deadlineMs / 1000} s after launch (${shown}); every run would pay for them inside its idle window`);
+  log(`startup components installed ${((Date.now() - launchedAt) / 1000).toFixed(1)} s after launch: ${shown}`);
   return { secs: (Date.now() - launchedAt) / 1000, ...state };
 }
 
@@ -71,7 +71,7 @@ export function templateProblems(record, limits = TEMPLATE_LIMITS) {
   if (outside(sizes.uboStoreMB, limits.uboStoreMB)) problems.push(`uBO's store is ${sizes.uboStoreMB.toFixed(1)} MB, outside ${limits.uboStoreMB.join("–")} MB`);
   if (outside(sizes.uboBlobsMB, limits.uboBlobsMB)) problems.push(`uBO's IndexedDB blobs are ${sizes.uboBlobsMB.toFixed(1)} MB, outside ${limits.uboBlobsMB.join("–")} MB`);
   if (sizes.uboLogMB > limits.uboLogMB) problems.push(`uBO's store has ${sizes.uboLogMB.toFixed(1)} MB still in its LevelDB log (a write wasn't flushed)`);
-  for (const [name, c] of Object.entries(components ?? {})) if (!c.version && !c.checked) problems.push(`component ${name} is neither installed nor checked`);
+  for (const [name, c] of Object.entries(components ?? {})) if (!c.version) problems.push(`component ${name} isn't installed`);
   return problems;
 }
 

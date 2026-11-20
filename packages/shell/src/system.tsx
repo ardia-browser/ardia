@@ -4,7 +4,7 @@ import type { View, ViewProps } from "react-native";
 import { nativeModule } from "./nativeModules";
 
 export type MenuShortcut = { id: string; title: string; path: string[] } & (
-  | { remappable: true }
+  | { remappable: true; mouseBindable?: boolean }
   | { remappable: false; key: string; modifiers: ShortcutModifier[] }
 );
 

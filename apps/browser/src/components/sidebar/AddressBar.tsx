@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Pressable, View, type ViewStyle } from "react-native";
-import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
+import { NAV_HINTS, useShortcutHints, withShortcut, type NavHints } from "../../state/commands/commandShortcuts";
 import { layout, useTheme } from "../ui/theme";
 import { useActiveTabId, useSettings, useSidebarSide, useTabLive, useWindowFullScreen, useWindowId } from "../../state/browser/hooks";
 import { toggleSidebar } from "../../state/windows/actions";
@@ -42,7 +42,7 @@ export function SidebarHeaderTools({ width }: { width: number }) {
   const toggle = useSidebarPart("sidebarButton") && toggleWanted;
   const navShown = useSidebarPart("navButtons");
   const right = useSidebarSide(windowId) === "right";
-  const sidebarHint = useShortcutHint("toggleSidebar");
+  const hints = useShortcutHints(HEADER_HINTS);
   const toggleX = headerToggleX(useWindowFullScreen(windowId));
   const usable = width - useSidebarCaptionRoom();
   const { buttons, step } = navButtonsFitting(usable, BUTTON, toggle, toggleX);
@@ -64,24 +64,27 @@ export function SidebarHeaderTools({ width }: { width: number }) {
           icon={right ? "sidebar.right" : "sidebar.left"}
           glyph={GLYPH}
           onPress={() => toggleSidebar(windowId)}
-          tooltip={withShortcut("Hide Tabs", sidebarHint)}
+          tooltip={withShortcut("Hide Tabs", hints.toggleSidebar)}
         />
       )}
-      {tab ? <NavigationButtons tab={tab} palette={palette} buttons={shown} slots={at.slice(toggle ? 1 : 0).map(place)} /> : null}
+      {tab ? <NavigationButtons tab={tab} palette={palette} hints={hints} buttons={shown} slots={at.slice(toggle ? 1 : 0).map(place)} /> : null}
     </>
   );
 }
 
 const alreadyFocused = () => {};
+const HEADER_HINTS = ["toggleSidebar", ...NAV_HINTS] as const;
 
 function NavigationButtons({
   tab,
   palette,
+  hints,
   buttons,
   slots,
 }: {
   tab: NonNullable<ReturnType<typeof useToolbarTab>>;
   palette: ToolbarPalette;
+  hints: NavHints;
   buttons: HeaderButton[];
   slots: { style: ViewStyle; hit: ButtonHit }[];
 }) {
@@ -91,7 +94,7 @@ function NavigationButtons({
     <>
       {buttons.map((b, i) =>
         b === "reload" ? (
-          <ReloadButton key={b} place={slots[i]} tab={tab} loading={loading} palette={palette} onFocus={alreadyFocused} />
+          <ReloadButton key={b} place={slots[i]} tab={tab} loading={loading} palette={palette} onFocus={alreadyFocused} reloadHint={hints.reload} />
         ) : (
           <HistoryButton
             key={b}
@@ -103,6 +106,7 @@ function NavigationButtons({
             closesTab={b === "back" && history.backCloses}
             palette={palette}
             onFocus={alreadyFocused}
+            historyHint={b === "back" ? hints.back : hints.forward}
           />
         ),
       )}
@@ -173,7 +177,7 @@ function FieldExtensions({ tabId, windowId, width, palette, onActivate }: { tabI
   const extensionsWidth = useToolbarExtensionsWidth(windowId, limit);
   if (!extensionsWidth) return null;
   return (
-    <View style={{ width: extensionsWidth - 6, height: 28 }}>
+    <View style={{ width: extensionsWidth, height: 28 }}>
       <ToolbarExtensions tabId={tabId} windowId={windowId} palette={palette} top={0} right={0} limit={limit} onActivate={onActivate} />
     </View>
   );

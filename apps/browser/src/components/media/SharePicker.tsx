@@ -11,11 +11,11 @@ import {
   type DisplayMediaSource,
 } from "../../state/media/screenShare";
 import { runningAppIcon } from "../../state/app/system";
-import { Badge, Symbol, Button, Checkbox, PANEL, PanelHeader, Popover, POPOVER_MARGIN, Segmented, Text, useHover } from "../ui";
+import { Badge, Symbol, Button, Checkbox, DialogActions, PANEL, PanelHeader, Popover, POPOVER_MARGIN, Segmented, Text, useHover } from "../ui";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Image, Pressable, ScrollView, View } from "react-native";
 import { useTheme } from "../ui/theme";
-import { concentric, ink, radius, space } from "../ui/tokens";
+import { hairline, opacity, radius, space } from "../ui/tokens";
 import { useMediaTokens } from "./tokens";
 import { Favicon } from "../favicon/Favicon";
 import { useMedia } from "../../state/media/media";
@@ -141,11 +141,8 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
     <Popover key={request.id} width={width} top={POPOVER_MARGIN} left={(paneWidth - width) / 2} onDismiss={cancel}>
       <View style={{ paddingBottom: PANEL.inset }}>
         <PanelHeader
-          large
           icon={
-            <View style={{ width: 32, height: 32, borderRadius: radius.tile, alignItems: "center", justifyContent: "center", backgroundColor: tokens.iconTile }}>
-              <Symbol name="rectangle.inset.filled.and.person.filled" size={15} color={theme.icon} style={{ width: 22, height: 22 }} />
-            </View>
+            <Symbol name="rectangle.inset.filled.and.person.filled" size={13} color={theme.icon} style={{ width: PANEL.iconSlot, height: PANEL.iconSlot }} />
           }
           title="Share your screen"
           subtitle={
@@ -215,7 +212,7 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
           ) : null}
           <View style={{ flex: 1 }} />
           <Button variant="pill" title="Cancel" onPress={cancel} />
-          <View pointerEvents={valid ? "auto" : "none"} style={{ opacity: valid ? 1 : 0.4 }}>
+          <View pointerEvents={valid ? "auto" : "none"} style={{ opacity: valid ? 1 : opacity.disabled }}>
             <Button variant="pill" title="Share" primary onPress={() => share()} />
           </View>
         </View>
@@ -224,8 +221,8 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
   );
 }
 
-const EMPTY = { padding: space.l, textAlign: "center" } as const;
-const NOTICE = { paddingHorizontal: PANEL.rowPadding, paddingVertical: space.m, gap: space.m, alignItems: "flex-start" } as const;
+const EMPTY = { paddingHorizontal: PANEL.inset, paddingTop: space.xs } as const;
+const NOTICE = { paddingHorizontal: PANEL.inset, paddingTop: space.xs, gap: space.xs, alignItems: "flex-start" } as const;
 
 function screenTitle(source: DisplayMediaSource) {
   if (source.name && !/^Screen \d+$/.test(source.name)) return source.name;
@@ -233,12 +230,18 @@ function screenTitle(source: DisplayMediaSource) {
 }
 
 function ScreenRecordingNeeded() {
+  const theme = useTheme();
+  const { hovered, hoverProps } = useHover();
   return (
     <View style={NOTICE}>
       <Text size="small" tone="textSecondary">
         To share a window or your entire screen, turn on Ardia in System Settings › Privacy & Security › Screen Recording, then quit and reopen Ardia.
       </Text>
-      <Button variant="pill" title="Open System Settings" onPress={() => void askForScreenRecording()} />
+      <View {...hoverProps}>
+        <Pressable onPress={() => void askForScreenRecording()}>
+          <Text size="small" weight="medium" tone="accent" style={{ textDecorationLine: hovered ? "underline" : "none" }}>Open System Settings</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -254,7 +257,7 @@ function SourceCard({ card, width, thumb, selected, onSelect, onShare }: { card:
   const { hovered, hoverProps } = useHover();
   const previewWidth = width - 2 * space.m;
   const previewHeight = previewWidth * ASPECT;
-  const picture = card.kind === "tab" ? useSyncExternalStore(onPicturesChanged, () => lastPicture(card.id.slice(TAB.length))) : null;
+  const picture = useSyncExternalStore(onPicturesChanged, () => (card.kind === "tab" ? lastPicture(card.id.slice(TAB.length)) : null));
   return (
     <View {...hoverProps} onDoubleClick={onShare}>
       <Pressable onPress={onSelect}>
@@ -262,9 +265,9 @@ function SourceCard({ card, width, thumb, selected, onSelect, onShare }: { card:
           style={{
             width,
             padding: space.m,
-            borderRadius: concentric(radius.tile, 2),
-            borderWidth: 2,
-            borderColor: selected ? theme.accent : ink.clear,
+            borderRadius: radius.tile,
+            borderWidth: selected ? hairline.panel : 0,
+            borderColor: tokens.pickerSelectedStroke,
             backgroundColor: selected ? tokens.pickerSelected : hovered ? theme.rowHover : undefined,
           }}
         >
@@ -273,8 +276,8 @@ function SourceCard({ card, width, thumb, selected, onSelect, onShare }: { card:
               width: previewWidth,
               height: previewHeight,
               borderRadius: radius.control,
-              borderWidth: 1,
-              borderColor: selected ? theme.accent : tokens.previewBorder,
+              borderWidth: hairline.panel,
+              borderColor: tokens.previewBorder,
               backgroundColor: tokens.previewFill,
               alignItems: "center",
               justifyContent: "center",

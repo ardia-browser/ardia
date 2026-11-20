@@ -37,6 +37,9 @@ public class WebViewModule: Module {
     "videoUpscalingState": { _, reply in reply.ok(ArdiaWebView.videoUpscalingState()) },
     "takeContentDrift": { _, reply in reply.ok(ArdiaWebView.takeContentDrift()) },
     "takeFirstPaintHolds": { _, reply in reply.ok(ArdiaWebView.takeFirstPaintHolds()) },
+    "saveCapture": { args, reply in
+      CaptureClipboard.save(try args.int("capture"), folder: try args.text("folder"), name: try args.text("name")) { reply.ok($0) }
+    },
   ])
 }
 

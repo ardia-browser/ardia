@@ -38,6 +38,7 @@ import { withLivePage } from "../tabs/livePage";
 import { webviews } from "../../platform/webviews";
 import { togglePageEngine } from "../engines/actions";
 import { runReaderCommand } from "../reader/reader";
+import { runCaptureCommand } from "../capture/actions";
 import { goBack, goForward } from "../tabs/navigation";
 import { awaitsFirstPage } from "../tabs/pendingAddress";
 import { focusSplitPane, openSplitPane } from "../splits/actions";
@@ -155,6 +156,7 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
   const web = tabId ? webviews.get(tabId) : undefined;
   const ui = s.windowUi[windowId];
   if (page && (runHidingCommand(command, page.id) || runReaderCommand(command, page.id, mayWrite))) return;
+  if (page && runCaptureCommand(command, page.id)) return;
   if (!targeted && runSidebarCommand(command, arg, windowId)) return;
 
   switch (command) {

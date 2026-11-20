@@ -23,6 +23,14 @@ export type FieldProviderPanelRefusal = "hidden" | "notFocused" | "unavailable" 
 export type FieldProviderOpened = { via: "badge" | "menu"; shown: boolean; reason?: FieldProviderPanelRefusal; panel?: "above" | "below" };
 export type FieldProviderHint = { state: "shown" | "dismissed" };
 export type VerificationCodeFound = { token: string; app: string; main: boolean };
+export type CaptureResult = {
+  outcome: "copied" | "cancelled" | "failed";
+  kind?: "area";
+  width: number;
+  height: number;
+  ms: number;
+  capture?: number;
+};
 
 export type MediaState = { playing: boolean; muted: boolean };
 
@@ -243,6 +251,7 @@ export type WebViewProps = ViewProps & {
   onFieldProviderOpened?: (opened: FieldProviderOpened) => void;
   onFieldProviderHint?: (hint: FieldProviderHint) => void;
   onVerificationCodeFound?: (found: VerificationCodeFound) => void;
+  onCapture?: (result: CaptureResult) => void;
 };
 
 export type WebViewHandle = {
@@ -268,6 +277,7 @@ export type WebViewHandle = {
   evaluate<T = unknown>(code: string): Promise<T | null>;
   navigationEntries(): Promise<NavigationEntry[]>;
   capturePicture(scale: number): Promise<{ data: string; frame: [number, number, number, number] } | null>;
+  toggleCapture(): Promise<boolean>;
   downloadFavicon(url: string): Promise<FaviconImage | null>;
   downloadImage(url: string, maxPixels: number): Promise<FaviconImage | null>;
 

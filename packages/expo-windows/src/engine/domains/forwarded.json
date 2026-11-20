@@ -96,7 +96,8 @@
       "setVideoUpscalingTestConditions",
       "takeContentDrift",
       "takeFirstPaintHolds",
-      "videoUpscalingState"
+      "videoUpscalingState",
+      "saveCapture"
     ],
     "windows": ["list", "dev"]
   },

@@ -12,7 +12,9 @@ hold), searches "default browser" from another pane, and checks that:
   - the reveal waits for the row and then scrolls it into view and highlights it, instead of giving up;
   - going to another pane before the row mounts cancels the reveal, so nothing jumps or flashes later;
   - pressing Back, or opening a detail page in the same pane, while the destination still loads (Settings keeps the
-    old pane up for 250 ms) cancels the reveal too, even when the row mounts on the old pane during that hold.`;
+    old pane up for 250 ms) cancels the reveal too, even when the row mounts on the old pane during that hold. Each of
+    these leaves only while the reveal is still pending and the row hasn't flashed, retrying up to 3 times, so a slow
+    run can't pass without exercising the cancellation.`;
 
 const { values: flags, positionals } = parseArgs({ allowPositionals: true, options: { delay: { type: "string" }, keep: { type: "boolean" }, help: { type: "boolean", short: "h" } } });
 if (flags.help || !positionals[0]) {
@@ -52,6 +54,8 @@ return wait(1200)
     return { seen, frame, nav: s.useSettingsSearch.getState().reveal };
   });`;
 
+const RACE_ATTEMPTS = 3;
+
 const RACE = (leave) => `
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const s = ac.settingsSearch;
@@ -72,18 +76,23 @@ return wait(900)
   .then(() => s.revealSetting({ id: ${JSON.stringify(TARGET)}, pane: "general", section: "Default browser" }, "click", 0))
   .then(() => wait(RESOLVES_AT - 900 - 150))
   .then(() => {
+    const before = s.useSettingsSearch.getState().reveal;
+    const flashedEarly = seen.some((e) => e.what === "flash:" + ${JSON.stringify(TARGET)});
+    if (!before || before.id !== ${JSON.stringify(TARGET)} || flashedEarly) {
+      stop();
+      return { armed: false, seen, pending: before };
+    }
     const cur = nav.getState();
     const here = { pane: cur.pane, profileId: cur.profileId, detail: cur.detail };
     ${leave === "back"
       ? `const prev = cur.back[cur.back.length - 1]; nav.setState({ ...prev, back: cur.back.slice(0, -1), forward: [here, ...cur.forward] });`
       : `nav.setState({ pane: "general", profileId: null, detail: "filterLists", back: [...cur.back, here], forward: [] });`}
     leftAt = at();
-  })
-  .then(() => wait(1500))
-  .then(() => {
-    stop();
-    const n = nav.getState();
-    return { seen, leftAt, nav: { pane: n.pane, detail: n.detail }, pending: s.useSettingsSearch.getState().reveal };
+    return wait(1500).then(() => {
+      stop();
+      const n = nav.getState();
+      return { armed: true, seen, leftAt, nav: { pane: n.pane, detail: n.detail }, pending: s.useSettingsSearch.getState().reveal };
+    });
   });`;
 
 async function inFreshInstance(name, body) {
@@ -117,7 +126,9 @@ await rep.check("leaving for another pane cancels a pending reveal", async () =>
 
 for (const [leave, label] of [["back", "pressing Back"], ["detail", "opening a detail page in the same pane"]]) {
   await rep.check(`${label} while the destination loads cancels the reveal`, async () => {
-    const out = await inFreshInstance(leave, RACE(leave));
+    let out;
+    for (let attempt = 1; attempt <= RACE_ATTEMPTS && !out?.armed; attempt++) out = await inFreshInstance(`${leave}-${attempt}`, RACE(leave));
+    if (!out.armed) throw new Error(`the reveal wasn't still pending when it was time to leave, in ${RACE_ATTEMPTS} tries, so cancellation was never exercised: ${out.seen.map((e) => `${e.what}@${e.at}`).join(" ")}`);
     const late = out.seen.filter((e) => e.at >= out.leftAt && e.what === `flash:${TARGET}`);
     if (late.length) throw new Error(`the old pane's row flashed ${late[0].at - out.leftAt} ms after leaving: ${out.seen.map((e) => `${e.what}@${e.at}`).join(" ")}`);
     if (out.pending) throw new Error(`a reveal is still pending: ${JSON.stringify(out.pending)}`);

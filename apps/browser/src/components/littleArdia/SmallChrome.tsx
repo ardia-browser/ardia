@@ -12,7 +12,7 @@ import { Favicon } from "../favicon/Favicon";
 import { FieldLoadFill } from "../toolbar/FieldLoadFill";
 import { insecureLevel } from "../toolbar/Toolbar";
 import { SMALL_BAR_HEIGHT } from "../../state/windows/small";
-import { smallBarHint, smallBarTooltip, type SmallBarButton } from "./barButton";
+import { barTipOwner, barTipsChanged, NO_BAR_TIPS, smallBarHint, smallBarTooltip, type BarTips, type SmallBarButton } from "./barButton";
 
 export type { SmallBarButton };
 
@@ -45,11 +45,11 @@ export function SmallBar({
   const buttonsWidth = count * SMALL_BAR_BUTTON + Math.max(0, count - 1) * SMALL_BAR_GAP;
   const mid = height / 2;
   const right = SMALL_INSET + trailingRoom;
-  const [tipFor, setTipFor] = useState<{ index: number; via: "hover" | "focus" } | null>(null);
-  const tipButton = tipFor ? buttons[tipFor.index] : undefined;
-  const tipRight = tipFor ? right + buttonsWidth - tipFor.index * (SMALL_BAR_BUTTON + SMALL_BAR_GAP) + SMALL_TOOLTIP_GAP : 0;
-  const tipChange = (index: number, via: "hover" | "focus") => (on: boolean) =>
-    setTipFor((now) => (on ? { index, via } : now?.index === index && now.via === via ? null : now));
+  const [tips, setTips] = useState<BarTips>(NO_BAR_TIPS);
+  const tipIndex = barTipOwner(tips);
+  const tipButton = tipIndex === null ? undefined : buttons[tipIndex];
+  const tipRight = tipIndex === null ? 0 : right + buttonsWidth - tipIndex * (SMALL_BAR_BUTTON + SMALL_BAR_GAP) + SMALL_TOOLTIP_GAP;
+  const tipChange = (index: number, via: "hover" | "focus") => (on: boolean) => setTips((now) => barTipsChanged(now, index, via, on));
   return (
     <ToolbarRowContext.Provider value={smallBarRow()}>
       <View style={{ height }}>

@@ -58,8 +58,9 @@ export function navButtonsFitting(width: number, button = 30, toggle = true, tog
 
 export const PEEK_EDGE_STRIP = 3;
 export const TAB_DRAG_EDGE_STRIP = 8;
-export const PEEK_HOLD_SLACK = 40;
+export const PEEK_HOLD_SLACK = 75;
 export const PEEK_CLOSE_DELAY_MS = 200;
+export const SIDEBAR_PEEK_CLOSE_DELAY_MS = 0;
 export const PEEK_BLEED = 16;
 
 export const peekBleed = (peekLeft: number) => (peekLeft > 0 ? 0 : PEEK_BLEED);

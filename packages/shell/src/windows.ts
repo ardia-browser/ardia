@@ -20,7 +20,7 @@ export type WindowEvent =
   | { type: "frame"; id: string; frame: [number, number, number, number]; restored?: [number, number, number, number]; fitted?: boolean }
   | { type: "fullScreen"; id: string; on: boolean; display?: string }
   | { type: "maximized"; id: string; on: boolean }
-  | { type: "sidebarEdge"; id: string; over: boolean; point: [number, number]; screenEdge?: "stopped" | "passed" | "flung" }
+  | { type: "sidebarEdge"; id: string; over: boolean; point: [number, number]; edge?: boolean; screenEdge?: "stopped" | "passed" | "flung" }
   | { type: "closeRequest"; id: string };
 
 export type OpenWindowOptions = {

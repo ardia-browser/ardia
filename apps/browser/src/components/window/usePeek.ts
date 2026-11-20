@@ -15,6 +15,7 @@ export function usePeek(
   held: () => boolean = () => false,
   onSlideOut: () => void = () => {},
   onOpen: (bounce: boolean) => void = () => {},
+  closeDelayMs = PEEK_CLOSE_DELAY_MS,
 ) {
   const slide = useRef(new Animated.Value(0)).current;
   const [live, setLive] = useState(false);
@@ -57,13 +58,15 @@ export function usePeek(
   const cancelPending = (pointerStillAtEdge = false) => {
     waitingForFocus.current &&= pointerStillAtEdge;
   };
+  const finishHide = () => {
+    heldBack.current = held();
+    if (!heldBack.current) slideOut();
+  };
   const hide = () => {
     clearTimeout(hideTimer.current);
     if (!out.current) return cancelPending();
-    hideTimer.current = setTimeout(() => {
-      heldBack.current = held();
-      if (!heldBack.current) slideOut();
-    }, PEEK_CLOSE_DELAY_MS);
+    if (closeDelayMs <= 0) finishHide();
+    else hideTimer.current = setTimeout(finishHide, closeDelayMs);
   };
   const recheck = () => {
     if (!heldBack.current || held()) return;

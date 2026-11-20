@@ -44,7 +44,8 @@ import { focusSplitPane, openSplitPane } from "../splits/actions";
 import { switchTabLayout } from "../settings/actions";
 import { isAppCommand, settingChange, variantArg } from "./commandCatalog";
 import { APP_COMMAND_HANDLERS } from "./appCommands";
-import { runSidebarCommand } from "../sidebar/commands";
+import { runSidebarCommand, showPinToast } from "../sidebar/commands";
+import { consentToken } from "../telemetry/client";
 import { numberedTabs } from "../sidebar/entries";
 import { openExtensionFromMenu } from "../extensions/bridge";
 import { toggleCastPicker } from "../media/cast";
@@ -275,9 +276,9 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
     case "togglePin": {
       if (!tab) return;
       const place = variantArg("togglePin", arg);
-      if (place === "row") return s.pinTabs([tab.id], true, !isPinnedRow(tab));
       if (place === "tile") return isPinnedRow(tab) ? s.pinTabs([tab.id], true, false) : undefined;
-      return s.togglePin(tab.id);
+      void (place === "row" ? s.pinTabs([tab.id], true, !isPinnedRow(tab)) : s.togglePin(tab.id));
+      return showPinToast(windowId, s, consentToken());
     }
     case "moveTabDown":
     case "moveTabUp":

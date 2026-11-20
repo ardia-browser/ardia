@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { closeSync, openSync } from "node:fs";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { basename, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { connectCdp, evaluate, fetchJson } from "./cdp.mjs";
 import { js, pause, until } from "./util.mjs";
@@ -54,7 +54,8 @@ export function launchEnvironment({ scratch, background = true, base = process.e
   return result;
 }
 
-export async function launchArdia({ executable, uiDir, scratch, background = true, ozone = "headless", extensions = false, extraArgs = [], env = {}, label = "ardia", startTimeout = 45000, coreDumps = true, spawnImpl = spawn }) {
+export async function launchArdia({ executable, uiDir, scratch, background = true, ozone = "headless", extensions = false, extraArgs = [], env = {}, label = "ardia", startTimeout = 45000, connectTimeout = 5000, coreDumps = true, spawnImpl = spawn, keepLogsIn = process.env.ARDIA_ACCEPTANCE_FAILED_LOGS }) {
+  const startDeadline = Date.now() + startTimeout;
   await rm(join(scratch, "DevToolsActivePort"), { force: true });
   await mkdir(join(scratch, "home"), { recursive: true });
   const logPath = join(scratch, `${label}-${Date.now()}.log`);
@@ -72,11 +73,25 @@ export async function launchArdia({ executable, uiDir, scratch, background = tru
     const active = await until(() => readFile(join(scratch, "DevToolsActivePort"), "utf8").then((text) => text.includes("\n") && text), { timeout: startTimeout, label: "DevToolsActivePort", abort: () => app.exitReason() });
     const [port, path] = active.trim().split("\n");
     app.port = Number(port);
-    app.browser = await connectCdp(`ws://127.0.0.1:${port}${path}`);
+    const url = `ws://127.0.0.1:${port}${path}`;
+    app.browser = await until(() => connectCdp(url, { timeout: connectTimeout }), { timeout: Math.max(startDeadline - Date.now(), connectTimeout), label: "the first DevTools connection", abort: () => app.exitReason() });
     return app;
   } catch (error) {
     await app.close();
-    throw new Error(`${error.message}; log: ${logPath}`);
+    const kept = await keepFailedLaunchLog(logPath, keepLogsIn);
+    throw new Error(`${error.message}; log: ${kept ?? logPath}`);
+  }
+}
+
+async function keepFailedLaunchLog(logPath, directory) {
+  if (!directory) return null;
+  try {
+    await mkdir(directory, { recursive: true });
+    const kept = join(directory, basename(logPath));
+    await copyFile(logPath, kept);
+    return kept;
+  } catch {
+    return null;
   }
 }
 

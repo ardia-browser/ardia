@@ -44,7 +44,7 @@ check linux-typecheck pnpm --filter @ardia/linux typecheck
 check linux-test-host pnpm --filter @ardia/linux test:host
 check linux-test-symbols pnpm --filter @ardia/linux test:symbols
 check linux-test-graph pnpm --filter @ardia/linux test:graph
-check linux-acceptance-self-test pnpm --filter @ardia/linux acceptance:self-test
+ARDIA_ACCEPTANCE_FAILED_LOGS="$logs/acceptance-browser-logs" check linux-acceptance-self-test pnpm --filter @ardia/linux acceptance:self-test
 check linux-build pnpm --filter @ardia/linux build
 check patches-build-tests python3 -m unittest discover -s engine/patches/build/tests
 check chromium-ardia-tests python3 -m unittest discover -s engine/chromium/src/chrome/browser/ardia/tests

@@ -1,9 +1,12 @@
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { usePlugins } from "../../../state/plugins/store";
 import { choicePlugin, type ManagerPlugin, type PasswordManagerChoice } from "../../../state/site/passwordManagerChoice";
-import { choosePasswordManager, useManagerPlugins, useProfilePasswordManager, useProfilesSharingChoice, useStoredPasswordManager } from "../../../state/site/passwordManager";
+import { choosePasswordManagerChecked, useManagerPlugins, useProfilePasswordManager, useProfilesSharingChoice, useStoredPasswordManager } from "../../../state/site/passwordManager";
 import { type Option, PopUp } from "../../ui";
 import { Row } from "../Form";
+import { vaultsSupported } from "../../../state/vaults/enabled";
+import { useArdiaSources, type ArdiaSources } from "../../../state/vaults/ardiaSources";
+import { useOwnerCheckNote } from "./PasswordManagers";
 
 type StoredPlugin = { title: string; installed: boolean } | null;
 
@@ -39,6 +42,13 @@ export function unavailableNote(stored: PasswordManagerChoice | undefined, effec
   return `${storedPlugin.title} is off, so this profile uses Ardia until you turn it back on in Plugins or pick another password manager.`;
 }
 
+const joinedNames = (names: readonly string[]) => (names.length < 2 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`);
+
+export function ardiaSourcesNote(effective: PasswordManagerChoice, sources: ArdiaSources): string | null {
+  if (!vaultsSupported || effective !== "ardia" || !sources.managers.length) return null;
+  return `Fills from ${joinedNames(sources.saved ? ["saved passwords", ...sources.managers] : sources.managers)}.`;
+}
+
 export function PasswordManagerRow({ profileId }: { profileId: string }) {
   return PLATFORM_FEATURES.systemPasswordManagers && PLATFORM_FEATURES.plugins ? <PasswordManagerChoiceRow profileId={profileId} /> : null;
 }
@@ -51,10 +61,13 @@ function PasswordManagerChoiceRow({ profileId }: { profileId: string }) {
   const storedPlugin = useStoredPlugin(stored);
   const unavailable = unavailableNote(stored, effective, storedPlugin);
   const popUp = managerPopUp(plugins, stored, effective, storedPlugin);
-  const description = [unavailable, sharedChoiceNote(sharing)].filter(Boolean).join(" ") || undefined;
+  const sources = useArdiaSources(profileId);
+  const { note, guard } = useOwnerCheckNote();
+  const description = note ?? ([ardiaSourcesNote(effective, sources), unavailable, sharedChoiceNote(sharing)].filter(Boolean).join(" ") || undefined);
+  const choose = (manager: PasswordManagerChoice) => void guard(() => choosePasswordManagerChecked(profileId, manager));
   return (
     <Row anchor="profiles.passwordManager" description={description}>
-      <PopUp value={popUp.value} options={popUp.options} onChange={(manager) => choosePasswordManager(profileId, manager)} minWidth={210} />
+      <PopUp value={popUp.value} options={popUp.options} onChange={choose} minWidth={210} />
     </Row>
   );
 }

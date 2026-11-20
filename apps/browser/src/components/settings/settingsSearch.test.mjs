@@ -106,6 +106,8 @@ const TOP = [
   ["minimalism", ["appearance.minimalismMode"]],
   ["autoplay", ["profiles.siteSettings"]],
   ["1password", ["profiles.passwords"]],
+  ["bitwarden", ["profiles.passwords"]],
+  ["proton pass", ["profiles.passwords"]],
   ["warn quitting", ["general.askBefore"]],
   ["trakers", ["general.blockTrackers"]],
   ["thme", ["appearance.theme"]],
@@ -273,7 +275,8 @@ test("every settings row with a fixed title is searchable", () => {
   const dir = new URL("./panes/", import.meta.url);
   const notSettings = /Sheet$|Connect$|Details|List$|Page$|^ThisProfileSection$/;
   const statusRows = new Set(["iCloud Drive is off on this Mac", "uBlock Origin isn't answering", "Delete profile", "Apply a setup code", "Passkeys"]);
-  for (const file of readdirSync(dir).filter((f) => f.endsWith(".tsx"))) {
+  const passwordsSubPage = new Set(["PasswordManagers.tsx", "VaultICloudRows.tsx", "VaultSuggestRow.tsx", "GeneratedPasswords.tsx"]);
+  for (const file of readdirSync(dir).filter((f) => f.endsWith(".tsx") && !passwordsSubPage.has(f))) {
     const source = readFileSync(new URL(file, dir), "utf8");
     for (const m of source.matchAll(/<Row\b([^>]*?)title="([^"]+)"/gs)) {
       const owner = [...source.slice(0, m.index).matchAll(/^(?:export )?function (\w+)/gm)].at(-1)?.[1] ?? "";

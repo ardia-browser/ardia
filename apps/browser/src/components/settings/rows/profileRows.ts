@@ -105,7 +105,7 @@ export const profileRows = {
         passwordManager: {
           title: "Password manager",
           description: "Ardia's own, a password manager plugin, or none when an extension handles logins.",
-          keywords: ["password manager", "passwords app", "passkeys", "verification codes", "2fa", "one time code", "autofill passwords"],
+          keywords: ["password manager", "passwords app", "passkeys", "verification codes", "2fa", "one time code", "autofill passwords", "fill menu", "turn off", "disable"],
           shown: () => PLATFORM_FEATURES.systemPasswordManagers && PLATFORM_FEATURES.plugins,
         },
         offerToSavePasswords: {
@@ -117,7 +117,7 @@ export const profileRows = {
         passwords: {
           title: "Passwords",
           description: "Saved passwords, import and export.",
-          keywords: ["csv", "logins", "import passwords", "backup", "export passwords", "saved passwords", "never saved", "1password", "bitwarden", "password manager"],
+          keywords: ["csv", "logins", "import passwords", "backup", "export passwords", "saved passwords", "never saved", "1password", "bitwarden", "proton pass", "vaultwarden", "password manager", "lock after", "icloud", "generated passwords", "totp", "authenticator"],
         },
         addresses: {
           title: "Save and fill addresses",
@@ -137,7 +137,7 @@ export const profileRows = {
         },
         savedCards: {
           title: "Saved cards",
-          keywords: ["edit card", "add card", "payment", "credit card", "debit card"],
+          keywords: ["edit card", "add card", "payment", "credit card", "debit card", "card number", "show card number", "checkout"],
         },
       },
     },

@@ -103,7 +103,7 @@ export function SectionHeader({ title, description, action, anchor }: { title?: 
   const detail = description === undefined ? entry?.description : description;
   if (useHiddenSection(entry?.pane ?? pane, entry?.section ?? title)) return null;
   return (
-    <Anchor id={anchor} keep shape="row" style={SECTION_HEADER}>
+    <Anchor id={anchor} keep shape="row" style={detail ? SECTION_HEADER : [SECTION_HEADER, CENTERED_HEADER]}>
       <View style={{ flex: 1 }}>
         <Text weight="semibold">{text}</Text>
         {detail ? (
@@ -162,6 +162,7 @@ export function ProfilePicker({ value, onChange }: { value: string; onChange: (p
 }
 
 const SECTION_HEADER = { flexDirection: "row", alignItems: "flex-end", marginTop: space.xxl, marginBottom: space.s, paddingHorizontal: space.s } as const;
+const CENTERED_HEADER = { alignItems: "center" } as const;
 const SECTION_DETAIL = perLook(() => ({ marginTop: space.xs, lineHeight: lineHeight.body }) as const);
 
 export function PaneIntro({ children }: { children: ReactNode }) {

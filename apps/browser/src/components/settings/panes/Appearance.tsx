@@ -146,6 +146,7 @@ function GlassTintRow({ anchor }: { anchor: SettingId }) {
   return (
     <Row anchor={anchor}>
       <FrameSlider
+        name={setting(anchor).title}
         position={shown}
         tooltip={`${percent} %`}
         label={percent === 0 ? "Off" : `${percent} %`}
@@ -221,6 +222,7 @@ function PageFrameSection() {
       <Group>
         <Row anchor="appearance.pageFrame">
           <FrameSlider
+            name={setting("appearance.pageFrame").title}
             position={shown / PAGE_FRAME.max}
             tooltip={`${shown} pt`}
             label={shown === 0 ? "None" : `${shown} pt`}

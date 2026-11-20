@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const repo = join(here, "../../../../..");
-const { SYMBOL_NAMES: linux } = await import(join(repo, "apps/linux/src/shims/web/symbols/data.ts"));
-const { SYMBOL_NAMES: webAndWindows } = await import(join(repo, "packages/demo/src/shims/web/symbols/data.ts"));
+const { SYMBOL_NAMES: linux } = await import(pathToFileURL(join(repo, "apps/linux/src/shims/web/symbols/data.ts")).href);
+const { SYMBOL_NAMES: webAndWindows } = await import(pathToFileURL(join(repo, "packages/demo/src/shims/web/symbols/data.ts")).href);
 
 const SYMBOLISH = /^[a-z][a-z0-9]*(?:\.[a-z0-9]+)*$/;
 const quoted = (text) => [...text.matchAll(/"([^"]+)"/g)].map((m) => m[1]).filter((s) => SYMBOLISH.test(s));

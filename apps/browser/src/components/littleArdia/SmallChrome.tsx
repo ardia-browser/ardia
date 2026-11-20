@@ -12,6 +12,9 @@ import { Favicon } from "../favicon/Favicon";
 import { FieldLoadFill } from "../toolbar/FieldLoadFill";
 import { insecureLevel } from "../toolbar/Toolbar";
 import { SMALL_BAR_HEIGHT } from "../../state/windows/small";
+import { smallBarHint, smallBarTooltip, type SmallBarButton } from "./barButton";
+
+export type { SmallBarButton };
 
 export const SMALL_INSET = CARD_INSET;
 export const OPEN_IN_BROWSER_SYMBOL = "macwindow";
@@ -19,9 +22,7 @@ export { SMALL_BAR_BUTTON, SMALL_BAR_GAP, SMALL_FIELD_GAP, SMALL_WINDOW_FRAME, s
 const HOST = { flexShrink: 0, maxWidth: "60%" } as const;
 const FLEX = { flex: 1 } as const;
 
-export type SmallBarButton = { icon: string; tooltip: string; shortcut?: string; onPress: () => void; disabled?: boolean };
 
-const tooltipText = (b: SmallBarButton) => (b.shortcut ? `${b.tooltip} (${b.shortcut})` : b.tooltip);
 
 export function SmallBar({
   fieldLeft,
@@ -60,7 +61,7 @@ export function SmallBar({
           ))}
           {trailing}
         </View>
-        <TooltipBeside text={tipButton ? tooltipText(tipButton) : ""} active={!!tipButton} right={tipRight} centerY={mid} />
+        <TooltipBeside text={tipButton ? smallBarTooltip(tipButton) : ""} active={!!tipButton} right={tipRight} centerY={mid} />
       </View>
     </ToolbarRowContext.Provider>
   );
@@ -79,7 +80,7 @@ function SmallBarIcon({ button, onHover, onFocus }: { button: SmallBarButton; on
         look="row"
         disabled={button.disabled}
         label={button.tooltip}
-        hint={button.shortcut ? `Shortcut: ${button.shortcut}` : undefined}
+        hint={smallBarHint(button)}
         onFocusChange={onFocus}
         onPress={button.onPress}
       />

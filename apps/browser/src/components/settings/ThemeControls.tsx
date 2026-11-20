@@ -167,6 +167,7 @@ export function LightnessBar({ theme, index, onChange }: { theme: ProfileTheme; 
   return (
     <View style={{ width: PAD }}>
       <Track
+        label={theme.stops.length > 1 ? `Colour ${index + 1} brightness` : "Brightness"}
         value={stopLightness(stop)}
         thumbColor={colorHex(stop.color)}
         tooltip="Brightness"
@@ -208,6 +209,7 @@ export function Slider({
   const ui = useTheme();
   const track = (
     <Track
+      label={label}
       value={value}
       onChange={onChange}
       bar={<ProgressTrack value={value} height={4} tone="formAccent" style={{ backgroundColor: ui.switchOff }} />}
@@ -236,10 +238,11 @@ export function Slider({
     </Box>
   );
 }
-export function AmountSlider({ value, onChange, tooltip }: { value: number; onChange: (value: number, settle: boolean) => void; tooltip?: string }) {
+export function AmountSlider({ label, value, onChange, tooltip }: { label: string; value: number; onChange: (value: number, settle: boolean) => void; tooltip?: string }) {
   const ui = useTheme();
   return (
     <Track
+      label={label}
       value={value}
       onChange={onChange}
       tooltip={tooltip}
@@ -252,12 +255,14 @@ const SLIDER_STEP = 0.05;
 const SLIDER_ACTIONS = [{ name: "increment" }, { name: "decrement" }];
 
 function Track({
+  label,
   value,
   onChange,
   bar,
   thumbColor,
   tooltip,
 }: {
+  label: string;
   value: number;
   onChange: (value: number, settle: boolean) => void;
   bar: ReactNode;
@@ -276,6 +281,7 @@ function Track({
       style={{ paddingHorizontal: THUMB / 2 }}
       accessible
       accessibilityRole="adjustable"
+      accessibilityLabel={label}
       accessibilityValue={{ min: 0, max: 100, now: Math.round(value * 100) }}
       accessibilityActions={SLIDER_ACTIONS}
       onAccessibilityAction={(e) => onChange(clamp01(value + (e.nativeEvent.actionName === "increment" ? SLIDER_STEP : -SLIDER_STEP)), true)}

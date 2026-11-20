@@ -126,5 +126,6 @@ for (const [leave, label] of [["back", "pressing Back"], ["detail", "opening a d
 }
 
 const passed = rep.summary();
-if (!flags.keep) rmSync(scratch, { recursive: true, force: true });
+if (passed && !flags.keep) rmSync(scratch, { recursive: true, force: true });
+else rep.say(`kept ${scratch}`);
 process.exit(passed ? 0 : 1);

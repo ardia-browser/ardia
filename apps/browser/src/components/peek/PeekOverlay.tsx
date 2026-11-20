@@ -11,6 +11,7 @@ import { useFullscreenTab } from "../../state/tabs/pageState";
 import type { Peek } from "../../state/peek/peek";
 import { PEEK_SCRIM } from "./tokens";
 import { OPEN_IN_BROWSER_SYMBOL, PageLabel, SMALL_BAR_BUTTON, SMALL_INSET, SMALL_WINDOW_FRAME, SmallBar, smallWindowRadius, type SmallBarButton } from "../littleArdia/SmallChrome";
+import { smallBarHint, smallBarTooltip } from "../littleArdia/barButton";
 import { dismissPeek, finishPeek, openPeekAsTab, openPeekInSplit, promotePeekNow, registerPeekMotion } from "../../state/peek/actions";
 import { keyText } from "../../state/commands/keyText";
 import { splitViewAvailable } from "../../state/splits/splits";
@@ -305,7 +306,7 @@ function PeekSideButtons({ windowId }: { windowId: string }) {
     .map((b) => (
       <View key={b.tooltip} style={{ width: SMALL_BAR_BUTTON, height: SMALL_BAR_BUTTON }}>
         <Panel radius={SMALL_BAR_BUTTON / 2} shadow={shadow.tooltip} style={StyleSheet.absoluteFill} />
-        <Button variant="icon" look="row" icon={b.icon} box={SMALL_BAR_BUTTON} capsule disabled={b.disabled} tooltip={b.tooltip} onPress={b.onPress} />
+        <Button variant="icon" look="row" icon={b.icon} box={SMALL_BAR_BUTTON} capsule disabled={b.disabled} tooltip={smallBarTooltip(b)} label={b.tooltip} hint={smallBarHint(b)} onPress={b.onPress} />
       </View>
     ));
 }

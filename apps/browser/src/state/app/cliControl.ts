@@ -25,7 +25,7 @@ import { errorText } from "../../lib/errors";
 import { focusedWindowOf } from "../windows/ui";
 import { noteCliAutoEnabled, noteCliInstall, noteCliPillShown, type CliInstallReason } from "../telemetry/cliCounts";
 import { noteDragsEnded } from "../telemetry/stuckDrags";
-import { consentToken } from "../telemetry/client";
+import { consentToken, type ConsentToken } from "../telemetry/client";
 import type { CliCaller } from "./cliCaller";
 import { noteCliConnections } from "../automation/offscreen";
 
@@ -257,8 +257,8 @@ export function startCliControl() {
   let latest = 0;
   let inFlight = 0;
   let newest = 0;
-  const apply = (server: CliControlStatus, mayReconcile: boolean) => {
-    noteDragsEnded(server.dragsEnded);
+  const apply = (server: CliControlStatus, mayReconcile: boolean, consent?: ConsentToken | null) => {
+    noteDragsEnded(server.dragsEnded, consent);
     const generation = server.state === "external" ? newest : server.generation;
     if (generation < newest) return;
     newest = generation;
@@ -274,10 +274,11 @@ export function startCliControl() {
     const first = applied === null;
     applied = on;
     const request = ++latest;
+    const consent = consentToken();
     inFlight++;
     const settle = (server: CliControlStatus) => {
       inFlight--;
-      if (request === latest) apply(server, true);
+      if (request === latest) apply(server, true, consent);
     };
     const call = first && !on ? cliControlStatus() : setCliControl(on);
     void call.then(settle, (e: unknown) =>

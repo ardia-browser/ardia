@@ -1,5 +1,5 @@
 import { chromeWindows, onWindowEvent } from "../../platform/windows";
-import { capture, consentToken, counted, type ConsentToken } from "./client";
+import { consentToken, counted, type ConsentToken } from "./client";
 
 const SETTLE_MS = 1500;
 const NONE = { focused_window_checks: 0, focused_window_pages_occluded: 0 };
@@ -10,14 +10,10 @@ async function checkFocusedWindowOcclusion(token: ConsentToken | null) {
   const key = (await chromeWindows().catch(() => [])).find((w) => w.key && w.visible);
   if (!key) return;
   const occluded = key.chromeOccluded === true && !!key.occlusionVisible;
-  counted(
-    token,
-    () => {
-      counts.focused_window_checks++;
-      if (occluded) counts.focused_window_pages_occluded++;
-    },
-    () => capture("usage_counts", { focused_window_checks: 1, focused_window_pages_occluded: occluded ? 1 : 0 }, null),
-  );
+  counted(token, () => {
+    counts.focused_window_checks++;
+    if (occluded) counts.focused_window_pages_occluded++;
+  });
 }
 
 onWindowEvent((e) => {

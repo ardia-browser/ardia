@@ -161,7 +161,7 @@ export const WHATS_SENT: { title: string; items: string[] }[] = [
       "Installing an extension, turning sync on or off, translating a page, and which Settings sections you open",
       "When a profile first opens in a session: how many of its extensions are on, how many are off by reason (you, new permissions, damaged, developer mode, unsupported, policy, installed by another app, reloading, other), and how many Chrome removed because their saved protection didn't verify. Whether it's your first profile or another one, never which profile or extension",
       "How many times a shortcut that moves the keyboard to a new field (New Tab, the address bar, Find) held what you typed until that field was ready and then handed it over, how long the field took to be ready (under 0.4 s, 0.4 to 1 s, over 1 s), how many times the wait ran out or was replaced by a newer shortcut, and how many typed keys or edit actions were dropped, summed up once an hour. Never what you typed",
-      "How many times you searched Settings, how many of those searches found nothing, and how many settings you opened from the results with Return or with a click, whether that was the first result, the second or third, or one further down, and how many of them were hidden until something else is turned on, how many searches were for a key combination in Settings and in Settings › Shortcuts, whether you typed it or pressed it with the keys button, how many of those found no command, and how many commands you opened from a key combination's results, summed up once an hour. Never what you searched for or which keys",
+      "How many times you searched Settings, how many of those searches found nothing, how many were cleared because Settings was opened at a particular place from elsewhere (Manage Extension, site settings and the like), and how many settings you opened from the results with Return or with a click, whether that was the first result, the second or third, or one further down, and how many of them were hidden until something else is turned on, how many searches were for a key combination in Settings and in Settings › Shortcuts, whether you typed it or pressed it with the keys button, how many of those found no command, and how many commands you opened from a key combination's results, summed up once an hour. Never what you searched for or which keys",
       "How many times Settings › Advanced opened Chrome's own settings page, summed up once an hour",
       "How many times the page got the keyboard back after you closed the address bar by clicking elsewhere, how many requests Windows made to return it after you dismissed a right-click menu in the sidebar, including requests the app or system refused, and, when you came back to a tab or split pane open in WebKit, how many times its page took the keyboard back, how many times it left it with a field that already had it, how many times the system refused it and how many times it gave up waiting for the page to be shown, summed up once an hour",
       "How many times the 英数 or かな key on a Japanese keyboard switched the input source in a page open in WebKit instead of reaching the page, summed up once an hour. Never what you typed or on which page",
@@ -218,7 +218,7 @@ export const WHATS_SENT: { title: string; items: string[] }[] = [
     title: "The local copy",
     items: [
       "Leaves this Mac only as the events above while sharing is on, or when you attach it to a problem report. Settings › Privacy › View My Data saves it to your Downloads folder",
-      "Every hour, how big the local copy is and how long writing it took, so we notice if it ever slows Ardia down",
+      "Every hour while sharing is on, how much Ardia wrote to the local copy that hour and how long writing it took, so we notice if it ever slows Ardia down",
     ],
   },
   {
@@ -256,7 +256,7 @@ export const LOCAL_COPY = {
   exportFailed: "Couldn't save your data",
   items: [
     "Each event and warning or error line listed in What's Sent, with whether it was sent, and the last 20 times Ardia froze for 0.4 seconds or more: which part froze, for how long, which of its own jobs was running and the program addresses where it was stuck, kept whether sharing is on or off (Help › Copy Last Freeze copies the latest)",
-    "With sharing off, they carry no install ID and stay here",
+    "With sharing off, they carry no install ID and stay here, except usage counts and speed, memory and local-copy measurements, which aren't kept at all",
     "Kept 7 days and 8 MB at most, oldest first out; checked when Ardia opens and every hour",
     "Never leaves this Mac unless sharing is on or you attach it to a problem report",
     "Resetting your anonymous ID deletes it",

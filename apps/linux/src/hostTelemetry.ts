@@ -3,6 +3,7 @@ import { installErrorReporting, resetAnonymousId, startTelemetry } from "../../b
 import { captureException } from "../../browser/src/state/telemetry/errors";
 import { capture, consentNow, devState, endSession, flush, loadChoice, queueLog, saveQueueNow } from "../../browser/src/state/telemetry/client";
 import { reloadChoice, savedChoice, useTelemetry, type ConsentToken } from "../../browser/src/state/telemetry/choice";
+import { setConsentPeriod } from "../../browser/src/state/telemetry/consentPeriod";
 import { DAILY_DOC } from "../../browser/src/state/telemetry/daily";
 import { requestLog } from "../../browser/src/state/telemetry/requestLog";
 import { setTelemetryRelay, type ChoiceChange } from "../../browser/src/state/telemetry/relay";
@@ -104,9 +105,12 @@ let offeredInstallId: string | null = null;
 
 const shownChoice = () => JSON.stringify(useTelemetry.getState());
 
+let turningOff: Promise<unknown> | null = null;
+
 async function refreshState() {
   await refreshDocument(STATE_DOC).catch(report);
   reloadChoice();
+  if (turningOff) setConsentPeriod(false, null);
   if (savedChoice().installId) offeredInstallId = null;
 }
 
@@ -134,9 +138,17 @@ export function startHostTelemetry(options: { host: ArdiaHost; candidate: boolea
         return installId;
       },
       change: (change) => {
+        const off = change.kind === "sharing" && !change.on;
+        if (off) setConsentPeriod(false, null);
         const shown = shownAfter(change);
         if (shown) useTelemetry.setState(shown);
-        return followerChoiceSaved(current.request("choice", RESET_TIMEOUT_MS, JSON.stringify(change)), refreshState, report);
+        const saved = followerChoiceSaved(current.request("choice", RESET_TIMEOUT_MS, JSON.stringify(change)), refreshState, report);
+        if (!off) return saved;
+        const clear = () => {
+          if (turningOff === pending) turningOff = null;
+        };
+        const pending: Promise<unknown> = (turningOff = saved.then(clear, clear));
+        return saved;
       },
       installId: () => {
         const known = savedChoice().installId;

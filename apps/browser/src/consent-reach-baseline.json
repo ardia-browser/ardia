@@ -3,7 +3,7 @@
     "apps/browser/src/components/find/FindBar.tsx": 1,
     "apps/browser/src/components/tabstrip/StripPage.tsx": 1,
     "apps/browser/src/state/airTraffic/openAt.ts": 1,
-    "apps/browser/src/state/app/cliControl.ts": 3,
+    "apps/browser/src/state/app/cliControl.ts": 2,
     "apps/browser/src/state/automation/decisions.ts": 1,
     "apps/browser/src/state/automation/hookRules.ts": 1,
     "apps/browser/src/state/bookmarks/bookmarklets.ts": 2,

@@ -15,6 +15,8 @@ async function sentCounts() {
 }
 
 test("browsing data outcomes join the existing history counts and reset after collection", () => {
+  client.loadChoice();
+  client.setSharing(true, "settings");
   takeHistoryRemovalCounts();
   noteHistoryRowsRemoved("key", 3);
   noteBrowsingDataCleared(true);

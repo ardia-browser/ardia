@@ -73,7 +73,12 @@ function takeLostReleases() {
   return fresh;
 }
 
+let period = {};
+const startedIn = new WeakMap<object, object>();
+const ofThisPeriod = (started?: object) => !started || (startedIn.get(started) ?? period) === period;
+
 function forgetPresses() {
+  period = {};
   tally = empty();
   pending = false;
   unansweredOut = null;
@@ -108,7 +113,8 @@ export function noteRowPress(shownTabEmpty: boolean): Promise<void> {
 
 onConsentPeriodChange(() => (emitTabPresses(null), forgetPresses()));
 
-export function notePressStarted(switchedOnPress = false, windowKey = true) {
+export function notePressStarted(switchedOnPress = false, windowKey = true, press?: PressOut) {
+  if (press) startedIn.set(press, period);
   if (pending) tally.unanswered++;
   pending = true;
   tally.presses++;
@@ -132,7 +138,9 @@ export function notePressEnded(end: TabPressEnd, tabId: string | null = null, dr
   shown = tabId ? { tabId, at: Date.now() } : null;
 }
 
-function countPressOut({ drift, windowKey }: PressOut, withoutPress: boolean) {
+function countPressOut(out: PressOut, withoutPress: boolean) {
+  if (!ofThisPeriod(out)) return;
+  const { drift, windowKey } = out;
   tally[`drift_${drift}` as const]++;
   if (!withoutPress) return;
   tally.press_out_no_press++;
@@ -175,15 +183,18 @@ export function notePagePress(tabId: string) {
 
 export const notePagePressRefused = () => void tally.page_refused++;
 
-export const noteDragWithoutDrop = () => void tally.drags_without_drop++;
+export const noteDragBegan = (drag: object) => void startedIn.set(drag, period);
+
+export const noteDragWithoutDrop = (drag?: object) => void (ofThisPeriod(drag) && tally.drags_without_drop++);
 
 export type SidebarDropKind = "gap" | "split_left" | "split_right" | "split_pinned" | "split_unpinned" | "tile" | "other_profile" | "profile_icon";
 
-export const noteSidebarDrop = (kind: SidebarDropKind) => void tally[`drops_${kind}`]++;
+export const noteSidebarDrop = (kind: SidebarDropKind, drag?: object) => void (ofThisPeriod(drag) && tally[`drops_${kind}`]++);
 
 export type DragProfileHold = "icon" | "edge";
 
-export function noteDragProfileSwitch(by: DragProfileHold | null) {
+export function noteDragProfileSwitch(by: DragProfileHold | null, drag?: object) {
+  if (!ofThisPeriod(drag)) return;
   tally.drag_profile_switches++;
   if (by === "icon") tally.drag_profile_holds++;
   else if (by === "edge") tally.drag_profile_edge_holds++;

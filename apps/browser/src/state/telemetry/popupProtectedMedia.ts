@@ -1,6 +1,5 @@
 import { onPopupProtectedMedia, type PopupProtectedMedia } from "../../platform/performance";
 import { counted, onConsentPeriodChange } from "./choice";
-import { capture } from "./client";
 import { nativeConsent } from "./nativeConsent";
 
 const REFUSED = ["widevine", "playready", "fairplay", "other"] as const;
@@ -22,7 +21,6 @@ export function notePopupProtectedMedia(media: PopupProtectedMedia | undefined) 
   counted(
     nativeConsent(media),
     () => (pending[key] = (pending[key] ?? 0) + 1),
-    () => capture("usage_counts", { [`${field(outcome)}_${listed}`]: 1 }, null),
   );
 }
 

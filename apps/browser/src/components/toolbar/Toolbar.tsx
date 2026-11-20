@@ -30,7 +30,7 @@ import { showUrlBarMenu } from "../../state/omnibox/paste";
 import { ToolbarExtensions, useToolbarExtensionsWidth } from "../extensions/ToolbarExtensions";
 import { GlassFill, useGlass } from "../ui/Glass";
 import { TranslateButton } from "../site/TranslateControls";
-import { ReaderButton } from "../site/ReaderControls";
+import { ReaderButton, useReaderButtonShown } from "../site/ReaderControls";
 import { ZoomIndicator } from "../site/ZoomControls";
 import { NAV_HINTS, useShortcutHint, useShortcutHints, withShortcut } from "../../state/commands/commandShortcuts";
 import { buttonMotion, curve, usePressScaleMotion } from "../ui/motion";
@@ -360,11 +360,12 @@ function FieldButtons({
 }) {
   const popups = usePage(tab.id, (p) => p.popups.length);
   const capture = usePage(tab.id, (p) => p.mediaAccess);
+  const reader = useReaderButtonShown(tab.id, quiet);
   return (
     <View style={{ flexDirection: "row", alignItems: "center", paddingRight: space.xs }}>
       {children}
       {capture && <CaptureIndicator camera={capture.camera} microphone={capture.microphone} screen={capture.screen} onPress={toggleSiteControls} />}
-      <ReaderButton tabId={tab.id} palette={palette} onFocus={onFocus} quiet={quiet} />
+      {reader && <ReaderButton tabId={tab.id} palette={palette} onFocus={onFocus} quiet={quiet} />}
       <TranslateButton tabId={tab.id} palette={palette} onFocus={onFocus} quiet={quiet} />
       <ZoomIndicator tabId={tab.id} zoom={tab.zoom} palette={palette} onFocus={onFocus} quiet={quiet} />
       {popups > 0 && (

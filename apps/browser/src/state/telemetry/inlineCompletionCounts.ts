@@ -1,6 +1,6 @@
 import { takeKeyHoldCounts } from "../../platform/keyHold";
 import type { ConsentToken } from "./choice";
-import { countFor } from "./countFor";
+import { consentOrNow, countFor } from "./countFor";
 
 let shown = 0;
 let sitesShown = 0;
@@ -16,7 +16,7 @@ export const noteDroppedLetterRestored = () => void (restored += 1);
 
 export const noteRowsHeldUnderPointer = () => void (held += 1);
 
-export const noteReplayGuardExpired = (consent?: ConsentToken | null) => countFor(consent, () => void (guardExpired += 1), { command_bar_replay_guards_expired: 1 });
+export const noteReplayGuardExpired = (consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void (guardExpired += 1));
 
 export function takeInlineCompletionCounts() {
   const hold = takeKeyHoldCounts();

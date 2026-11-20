@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { after, test } from "node:test";
 
 globalThis.__DEV__ = false;
 await import("../../test-native/index.ts");
+globalThis.fetch = async () => ({ status: 503 });
+const client = await import("./client.ts");
+client.loadChoice();
+client.setSharing(true, "settings");
+after(() => client.setSharing(false, "settings"));
 const { notePasswordPanel, takePasswordManagerCounts } = await import("./passwordManagerCounts.ts");
 
 const panelCounts = (counts) => Object.fromEntries(Object.entries(counts).filter(([field, n]) => field.startsWith("password_manager_panel_") && n));

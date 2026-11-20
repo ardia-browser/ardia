@@ -1,3 +1,5 @@
+import { onConsentPeriodChange } from "./choice";
+
 const NEW_SCROLL_GAP_MS = 250;
 const STALL_GAP_MS = 34;
 
@@ -7,6 +9,7 @@ let heldHovers = 0;
 let newTabDocks = 0;
 let newTabUndocks = 0;
 let lastScrollAt = -Infinity;
+onConsentPeriodChange(() => (lastScrollAt = -Infinity));
 
 export function noteSidebarScrolled(at: number) {
   const gap = at - lastScrollAt;

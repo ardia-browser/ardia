@@ -1,5 +1,5 @@
 import { webviews } from "../../platform/webviews";
-import { capture, consentToken, counted } from "./client";
+import { consentToken, counted } from "./client";
 
 const SETTLE_MS = 2000;
 const NONE = { bar_loads: 0, bar_loads_page_focused: 0, link_tab_loads: 0, link_tab_loads_page_focused: 0 };
@@ -19,7 +19,6 @@ function noteLoad(tabId: string, loads: Count, focusedLoads: Count) {
             counts[loads]++;
             if (focused === true) counts[focusedLoads]++;
           },
-          () => capture("usage_counts", { [loads]: 1, [focusedLoads]: focused === true ? 1 : 0 }, null),
         ),
       () => {},
     );

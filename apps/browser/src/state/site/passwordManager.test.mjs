@@ -2,6 +2,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 const stub = await import("../../test-native/index.ts");
+globalThis.fetch = async () => ({ status: 503 });
+const telemetryClient = await import("../telemetry/client.ts");
+telemetryClient.loadChoice();
+const sharingFor = (t) => {
+  telemetryClient.setSharing(true, "settings");
+  t.after(() => telemetryClient.setSharing(false, "settings"));
+};
 const { useBrowser } = await import("../browser/store.ts");
 const { startPlugins } = await import("../plugins/start.ts");
 const lifecycle = await import("../plugins/lifecycle.ts");
@@ -223,7 +230,8 @@ test("a choice counts only for the plugin approved under that name", async () =>
   lifecycle.disablePlugin("other-passwords", consentToken());
 });
 
-test("a panel seen beside the field gets Ardia's hint on the other side, named for the site, until the profile closes it three times", async () => {
+test("a panel seen beside the field gets Ardia's hint on the other side, named for the site, until the profile closes it three times", async (t) => {
+  sharingFor(t);
   const hints = await import("./panelHints.ts");
   const counts = await import("../telemetry/passwordManagerCounts.ts");
   hints.forgetPanelHintsForTests();

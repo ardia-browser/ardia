@@ -1,5 +1,5 @@
 import { animationBursts } from "../../platform/motion";
-import { capture, consentEpoch, counted } from "./client";
+import { consentEpoch, counted } from "./client";
 import { nativeConsent } from "./nativeConsent";
 
 let bursts = 0;
@@ -13,7 +13,6 @@ export function watchAnimationBursts() {
         bursts += 1;
         longFrames += burst.long;
       },
-      () => capture("usage_counts", { animation_bursts: 1, animation_long_frames: burst.long }, null),
     ),
     consentEpoch,
   );

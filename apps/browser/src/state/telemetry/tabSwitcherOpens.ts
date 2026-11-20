@@ -1,5 +1,5 @@
 import { isSharing, onConsentPeriodChange, type ConsentToken } from "./choice";
-import { countFor } from "./countFor";
+import { consentOrNow, countFor } from "./countFor";
 
 let inWebKit = 0;
 
@@ -16,7 +16,7 @@ export function takeTabSwitcherOpensInWebKit(): number {
 let rowCloses = 0;
 
 export function noteTabSwitcherRowClosed(consent?: ConsentToken | null) {
-  countFor(consent, () => void rowCloses++, { tab_switcher_row_closes: 1 });
+  countFor(consentOrNow(consent), () => void rowCloses++);
 }
 
 export function takeTabSwitcherRowCloses(): number {

@@ -1,7 +1,7 @@
 import type { FieldProviderOpened } from "../../platform/passwordProviders";
 import type { PasswordManagerKind } from "../site/passwordManagerChoice";
 import type { ConsentToken } from "./choice";
-import { countFor } from "./countFor";
+import { consentOrNow, countFor } from "./countFor";
 
 export type PanelOpener = "badge" | "menu";
 type PanelRefusal = NonNullable<FieldProviderOpened["reason"]>;
@@ -46,7 +46,7 @@ const CHOICE_FIELDS: Record<PasswordManagerKind, string> = {
 const FIELDS = [...Object.values(PANEL_FIELDS).flat(), ...Object.values(PANEL_REFUSALS), ...Object.values(HINT_FIELDS), ...Object.values(CODE_FIELDS), ...Object.values(CHOICE_FIELDS), RECORD_FAILED];
 
 let counts: Record<string, number> = {};
-const bump = (field: string, consent?: ConsentToken | null) => countFor(consent, () => void (counts[field] = (counts[field] ?? 0) + 1), { [field]: 1 });
+const bump = (field: string, consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void (counts[field] = (counts[field] ?? 0) + 1));
 
 export function notePasswordPanel(opener: PanelOpener, shown: boolean, reason?: PanelRefusal) {
   bump(PANEL_FIELDS[opener][shown ? 0 : 1]);

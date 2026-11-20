@@ -1,5 +1,5 @@
 import { onCursorRestored } from "../../platform/performance";
-import { capture, counted } from "./client";
+import { counted } from "./client";
 import { nativeConsent } from "./nativeConsent";
 
 const NONE = { page_pointer_restores: 0, page_pointer_hidden_restores: 0 };
@@ -13,7 +13,6 @@ onCursorRestored((restore) => {
       counts.page_pointer_restores++;
       if (hidden) counts.page_pointer_hidden_restores++;
     },
-    () => capture("usage_counts", { page_pointer_restores: 1, page_pointer_hidden_restores: hidden ? 1 : 0 }, null),
   );
 });
 

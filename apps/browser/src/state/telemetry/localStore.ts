@@ -107,8 +107,9 @@ export async function pruneLocalStore(now = Date.now(), take = true, carry = tru
 }
 
 export function resetLocalStoreMeters() {
+  flushLocal();
   meterGeneration++;
-  Object.assign(meter, { lines: 0, chars: 0, oversize: 0, flushes: 0, flushMs: [], bufferedMax: buffer.length, failures: 0 });
+  Object.assign(meter, { lines: 0, chars: 0, oversize: 0, flushes: 0, flushMs: [], bufferedMax: 0, failures: 0 });
   carried = { writeMs: [], droppedLines: 0 };
   void pruneLocalStore(Date.now(), false, false).catch(() => null);
 }

@@ -13,7 +13,7 @@ let runs: Record<string, number> = { ...NO_RUNS };
 export function noteMouseShortcutRun(button: string | null | undefined, consent: ConsentToken | null) {
   if (!button || !Object.hasOwn(FIELDS, button)) return;
   const field = FIELDS[button as MouseShortcutButton];
-  countFor(consent, () => void (runs[field] = (runs[field] ?? 0) + 1), { [field]: 1 });
+  countFor(consent, () => void (runs[field] = (runs[field] ?? 0) + 1));
 }
 
 export function takeMouseShortcutCounts() {

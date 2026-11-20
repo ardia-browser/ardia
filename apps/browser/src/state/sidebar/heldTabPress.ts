@@ -107,7 +107,7 @@ export function holdTabPress(windowId: string, tabId: string, press: GestureResp
   const switched = switchesOnPress(windowId, tabId, press);
   const held: TabPress = { windowId, tabId, startedAt, switched, nativePress, at: pointOf(press), windowKey: windowIsKey(windowId), answered: false, out: false, drift: "unknown" };
   heldPress = held;
-  notePressStarted(switched, held.windowKey);
+  notePressStarted(switched, held.windowKey, held);
   if (switched) {
     dismissHover();
     switchingByPress(nativePress, () => clickTab(windowId, tabId));

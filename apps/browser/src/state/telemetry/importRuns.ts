@@ -1,5 +1,5 @@
 import type { ConsentToken } from "./choice";
-import { countFor } from "./countFor";
+import { consentOrNow, countFor } from "./countFor";
 
 let runs = 0;
 let kindsDone = 0;
@@ -21,44 +21,44 @@ let historyImportCalls = 0;
 let historyImportCallsFailed = 0;
 
 export function noteImportRun(run: { done: number; failed: number; secretsLeft: number; withheld: number }, consent?: ConsentToken | null) {
-  countFor(consent, () => {
+  countFor(consentOrNow(consent), () => {
     runs += 1;
     kindsDone += run.done;
     kindsFailed += run.failed;
     secretsLeft += run.secretsLeft;
     secretStops += run.withheld;
-  }, { import_runs: 1, import_kinds_done: run.done, import_kinds_failed: run.failed, import_secrets_left: run.secretsLeft, import_withheld: run.withheld });
+  });
 }
 
 export function noteUntitledBookmarks(count: number, consent?: ConsentToken | null) {
-  countFor(consent, () => {
+  countFor(consentOrNow(consent), () => {
     untitledBookmarks += count;
-  }, { import_untitled_bookmarks: count });
+  });
 }
 
 export function noteDiaTabProfiles(profiles: { matched: number; withoutFolder: number }, consent?: ConsentToken | null) {
-  countFor(consent, () => {
+  countFor(consentOrNow(consent), () => {
     diaProfilesMatched += profiles.matched;
     diaProfilesWithoutFolder += profiles.withoutFolder;
-  }, { import_dia_profiles_matched: profiles.matched, import_dia_profiles_without_folder: profiles.withoutFolder });
+  });
 }
 
 export function noteDiaSidebar(profile: { file: boolean; unreadable: boolean; appleScript: boolean; groups: number; ownProfiles: number }, consent?: ConsentToken | null) {
   const fields = { import_dia_sidebar_files: +profile.file, import_dia_sidebar_unreadable: +profile.unreadable, import_dia_applescript_profiles: +profile.appleScript, import_dia_groups: profile.groups, import_dia_space_profiles: profile.ownProfiles };
-  countFor(consent, () => {
+  countFor(consentOrNow(consent), () => {
     diaSidebarFiles += fields.import_dia_sidebar_files;
     diaSidebarUnreadable += fields.import_dia_sidebar_unreadable;
     diaAppleScriptProfiles += fields.import_dia_applescript_profiles;
     diaGroups += profile.groups;
     diaSpaceProfiles += profile.ownProfiles;
-  }, fields);
+  });
 }
 
 export function noteFirefoxFavicons(icons: number, consent?: ConsentToken | null) {
-  countFor(consent, () => {
+  countFor(consentOrNow(consent), () => {
     firefoxProfiles += 1;
     firefoxFavicons += icons;
-  }, { import_firefox_profiles: 1, import_firefox_favicons: icons });
+  });
 }
 
 export function noteSearchEngineOfferTaken() {
@@ -67,10 +67,10 @@ export function noteSearchEngineOfferTaken() {
 
 export function noteHistoryImport(batches: number, failed: number, consent?: ConsentToken | null) {
   if (!batches) return;
-  countFor(consent, () => {
+  countFor(consentOrNow(consent), () => {
     historyImportCalls += batches;
     historyImportCallsFailed += failed;
-  }, { import_history_batches: batches, import_history_batches_failed: failed });
+  });
 }
 
 export function takeImportRuns() {
@@ -129,16 +129,7 @@ const extensionCounts = {
 type ExtensionSkipCounts = { installed: number; manifestV2: number; unpacked: number; policy: number; external: number; notWebStore: number };
 
 export function noteImportExtensionListing(listed: number, skipped: ExtensionSkipCounts, consent?: ConsentToken | null) {
-  const fields = {
-    import_extensions_listed: listed,
-    import_extensions_skipped_installed: skipped.installed,
-    import_extensions_skipped_mv2: skipped.manifestV2,
-    import_extensions_skipped_unpacked: skipped.unpacked,
-    import_extensions_skipped_policy: skipped.policy,
-    import_extensions_skipped_external: skipped.external,
-    import_extensions_skipped_not_web_store: skipped.notWebStore,
-  };
-  countFor(consent, () => countExtensionListing(listed, skipped), fields);
+  countFor(consentOrNow(consent), () => countExtensionListing(listed, skipped));
 }
 
 function countExtensionListing(listed: number, skipped: ExtensionSkipCounts) {
@@ -165,9 +156,9 @@ const arcCounts = { import_arc_rules: 0, import_arc_rules_skipped: 0, import_arc
 
 export function noteArcImport(run: { rules: number; rulesSkipped: number; archived: number; glyphIcons: number; cachedIcons: number }, consent?: ConsentToken | null) {
   const fields = { import_arc_rules: run.rules, import_arc_rules_skipped: run.rulesSkipped, import_arc_archived_tabs: run.archived, import_arc_glyph_icons: run.glyphIcons, import_arc_cached_icons: run.cachedIcons };
-  countFor(consent, () => {
+  countFor(consentOrNow(consent), () => {
     for (const key of Object.keys(fields) as (keyof typeof fields)[]) arcCounts[key] += fields[key];
-  }, fields);
+  });
 }
 
 export function takeArcImportCounts() {

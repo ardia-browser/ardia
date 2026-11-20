@@ -40,7 +40,7 @@ test("an automatic Picture in Picture held back because nothing played is sent o
   ]);
 });
 
-test("an automatic Picture in Picture hold that began in an earlier consent period, or carries no epoch, isn't counted and stays in the local copy", async () => {
+test("an automatic Picture in Picture hold that began in an earlier consent period, or carries no epoch, isn't counted and isn't kept in the local copy", async () => {
   client.setSharing(true, "onboarding");
   const earlier = client.consentEpoch();
   client.setSharing(false, "settings");
@@ -54,6 +54,6 @@ test("an automatic Picture in Picture hold that began in an earlier consent peri
   assert.deepEqual((await sentUsageCounts()).slice(before), [{ kept: 0, appSwitch: 1, nothingPlaying: 0 }]);
   const { flushLocal } = await import("./localStore.ts");
   await flushLocal();
-  const local = stub.telemetryLocal.records().filter((r) => r.event === "usage_counts" && r.sent === false && (r.properties.auto_pip_kept_visible || r.properties.auto_pip_stayed_on_app_switch));
-  assert.equal(local.length, 2);
+  const unsent = stub.telemetryLocal.records().filter((r) => r.event === "usage_counts" && r.sent === false);
+  assert.deepEqual(unsent, []);
 });

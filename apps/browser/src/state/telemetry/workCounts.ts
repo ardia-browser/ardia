@@ -1,6 +1,6 @@
 import type { Adapter } from "../../platform/sync";
 import { consentToken, isSharing, stillValid, onConsentPeriodChange, type ConsentToken } from "./choice";
-import { countFor, fieldName } from "./countFor";
+import { consentOrNow, countFor, fieldName } from "./countFor";
 import { takePopupProtectedMediaCounts } from "./popupProtectedMedia";
 
 export type SyncWorkKind = "bookmark" | "history";
@@ -34,7 +34,7 @@ function timed<T>(run: () => T, done: (result: Awaited<T>, ms: number) => void):
 }
 
 export const noteSyncHistoryTitlesKept = (kept: number, consent: ConsentToken | null) =>
-  countFor(consent, () => void (isSharing() && (syncPending.historyTitlesKept += kept)), { sync_history_titles_kept: kept });
+  countFor(consent, () => void (isSharing() && (syncPending.historyTitlesKept += kept)));
 
 export function withSyncWorkCounts(kind: SyncWorkKind, adapter: Adapter): Adapter {
   return {
@@ -83,7 +83,7 @@ onConsentPeriodChange(() => {
 });
 
 const count = (key: keyof ReturnType<typeof none>, consent?: ConsentToken | null) =>
-  countFor(consent, () => void (isSharing() && pending[key]++), { [fieldName(key)]: 1 });
+  countFor(consentOrNow(consent), () => void (isSharing() && pending[key]++));
 
 export const noteLiveSourceFetch = (shared: boolean) => count(shared ? "liveSourceFetchesShared" : "liveSourceFetches");
 export const noteLiveSave = (changed: boolean, kind: "write" | "intent" = "write") =>

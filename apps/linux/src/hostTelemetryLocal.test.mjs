@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { collectSince, createTelemetryLocal, downloadSaver, planPrune, startFlushRelay, telemetryLocalAvailable, utf8Bytes } from "./hostTelemetryLocal.ts";
+import { collectSince, createTelemetryLocal, withoutUnsentCounts, downloadSaver, planPrune, startFlushRelay, telemetryLocalAvailable, utf8Bytes } from "./hostTelemetryLocal.ts";
 import { resolveHostModule } from "./hostModules.ts";
 
 const DAY_MS = 86_400_000;
@@ -201,3 +201,33 @@ test("an export asks the window that owns telemetry to flush first", async () =>
   const alone = startFlushRelay({ channel: port(), leading: async () => false, flush: async () => {}, settled: async () => {}, timeoutMs: 20 });
   await alone.gather();
 });
+
+test("a report leaves out counts recorded while sharing was off, and View My Data still saves every line", async () => {
+  const reported = [];
+  const { saved, module } = local({ reportFile: async (text) => (reported.push(text), { path: "/p/d/local-events.jsonl.gz", bytes: text.length }) });
+  const entry = (at, fields) => `${JSON.stringify({ at, ...fields })}\n`;
+  module.append(day(NOW), entry(NOW, { kind: "event", sent: false, event: "usage_counts", uuid: "a", distinct_id: null, properties: { tabs_opened: 3 } }));
+  module.append(day(NOW), entry(NOW + 1, { kind: "event", sent: true, event: "usage_counts", uuid: "b", distinct_id: "id", properties: { tabs_opened: 1 } }));
+  module.append(day(NOW), entry(NOW + 2, { kind: "event", sent: false, event: "tab_presses", uuid: "c", distinct_id: null, properties: { presses: 4 } }));
+  module.append(day(NOW), entry(NOW + 3, { kind: "event", sent: false, event: "page_process_gone", uuid: "d", distinct_id: null, properties: { reason: "crashed" } }));
+  module.append(day(NOW), entry(NOW + 4, { kind: "log", sent: false, level: "error", message: "boom", attributes: {} }));
+  const exported = await module.exportForReport(NOW - DAY_MS);
+  assert.deepEqual(reported[0].trim().split("\n").map((text) => JSON.parse(text).uuid ?? JSON.parse(text).message), ["b", "d", "boom"]);
+  assert.equal(exported.lines, 3);
+  await module.exportToDownloads(NOW);
+  assert.equal(saved[0].text.trim().split("\n").length, 5);
+});
+
+test("a report's count filter reads each record, whatever its key order or spacing, and keeps look-alikes", () => {
+  const records = [
+    '{"event":"usage_counts","sent":false,"at":1,"kind":"event"}',
+    '{ "at": 2, "kind": "event", "sent": false, "event": "tab_presses" }',
+    '{"at":3,"kind":"event","sent":true,"event":"report_sheet_opened","properties":{"sent":false,"event":"usage_counts"}}',
+    '{"at":4,"kind":"event","sent":false,"event":"report_sheet_opened","properties":{"event":"usage_counts"}}',
+    "not json",
+  ];
+  const kept = withoutUnsentCounts({ text: records.map((r) => `${r}\n`).join(""), lines: records.length });
+  assert.deepEqual(kept.text.trim().split("\n"), records.slice(2));
+  assert.equal(kept.lines, 3);
+});
+

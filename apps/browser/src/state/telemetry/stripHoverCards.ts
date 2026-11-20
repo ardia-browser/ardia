@@ -1,11 +1,11 @@
 import type { ConsentToken } from "./choice";
-import { countFor } from "./countFor";
+import { consentOrNow, countFor } from "./countFor";
 
 let shown = 0;
 let otherProfile = 0;
 
 export function noteStripHoverCard(fromOtherProfile: boolean, consent?: ConsentToken | null) {
-  countFor(consent, () => void (shown++, fromOtherProfile && otherProfile++), { tab_strip_hover_cards: 1, tab_strip_hover_cards_other_profile: +fromOtherProfile });
+  countFor(consentOrNow(consent), () => void (shown++, fromOtherProfile && otherProfile++));
 }
 
 export function takeStripHoverCardCounts() {

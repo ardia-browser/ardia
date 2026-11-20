@@ -74,11 +74,17 @@ struct PluginSandbox {
   }
 
   static func certificateBlocks(in text: String) -> [String] {
+    var visited = 0
+    return certificateBlocks(in: text, visited: &visited)
+  }
+
+  static func certificateBlocks(in text: String, visited: inout Int) -> [String] {
     let begin = "-----BEGIN CERTIFICATE-----"
     let end = "-----END CERTIFICATE-----"
     var blocks: [String] = []
     var body: [Substring]?
     for raw in text.split(omittingEmptySubsequences: false, whereSeparator: { $0 == "\n" || $0 == "\r\n" }) {
+      visited += 1
       let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
       if line.hasPrefix("-----BEGIN ") {
         body = line == begin ? [] : nil

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { goToSettingsPane, type SettingsPane, useSettingsNav } from "./settingsWindows";
+import { goToSettingsPane, onTargetedSettingsOpen, type SettingsPane, useSettingsNav } from "./settingsWindows";
 import { settingsProfileFor } from "../extensions/store";
 import { noteSettingsSearch, noteSettingsSearchReveal } from "../telemetry/usage";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
@@ -49,6 +49,13 @@ export function setSettingsQuery(query: string) {
   useSettingsSearch.setState({ query, selected: 0, keyboardMove: 0, ...(query.trim() ? {} : { previewing: false }) });
 }
 
+export function dropSettingsSearch(consent: ConsentToken | null) {
+  if (useSettingsSearch.getState().query.trim()) noteSettingsSearch("dropped", consent);
+  useSettingsSearch.setState({ query: "", selected: 0, keyboardMove: 0, reveal: null, flash: null, previewSection: null, previewing: false });
+}
+
+onTargetedSettingsOpen(dropSettingsSearch);
+
 export function noteSettingsSearchEmpty() {
   if (emptyNoted) return;
   emptyNoted = true;
@@ -85,7 +92,8 @@ export function revealSetting({ id, pane, section }: Target, via: "keyboard" | "
 }
 
 export function previewSetting({ id, pane, section }: Target) {
-  const { previewing, reveal } = useSettingsSearch.getState();
+  const { query, previewing, reveal } = useSettingsSearch.getState();
+  if (!query.trim()) return;
   if (reveal?.id === id && previewing && useSettingsNav.getState().pane === pane) return;
   if (!previewing) goToSettingsPane(pane, settingsProfileFor(pane, useSettingsNav.getState()));
   else showWithoutHistory(pane);

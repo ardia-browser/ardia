@@ -295,3 +295,103 @@ test("relayed telemetry reaches the leader with the consent token its window too
   await turn();
   assert.deepEqual(delivered, [["old", "earlier-period"], ["off", null]]);
 });
+
+test("with sharing off, a follower's count reaches the leader once, is recorded nowhere, and isn't sent again", async () => {
+  const stub = await import("../../browser/src/test-native/index.ts");
+  const client = await import("../../browser/src/state/telemetry/client.ts");
+  const local = await import("../../browser/src/state/telemetry/localStore.ts");
+  const { telemetryLocal } = await import("../../browser/src/test-native/telemetryLocal.ts");
+  client.loadChoice();
+  client.setSharing(false, "settings");
+  local.flushLocal();
+  telemetryLocal.reset();
+  const locks = fakeLocks();
+  const bus = fakeBus();
+  const delivered = [];
+  const leaderChannel = bus();
+  startTelemetryLeadership({
+    candidate: true,
+    locks,
+    channel: leaderChannel,
+    relay: () => {},
+    deliver: (message) => (delivered.push(message.event), client.capture(message.event, message.props, message.consent, message.options)),
+    handle: async (op) => `${op}-done`,
+    lead: async () => {},
+    changed: () => {},
+    report: (error) => assert.fail(String(error)),
+    newId: () => `id-${++ids}`,
+  });
+  await turn();
+  const follower = window({ locks, channel: bus() });
+  await turn();
+  follower.capture("usage_counts");
+  for (let i = 0; i < 5; i++) await turn();
+  assert.deepEqual(delivered, ["usage_counts"]);
+  local.flushLocal();
+  assert.deepEqual(telemetryLocal.records().filter((r) => r.event === "usage_counts"), []);
+  await client.saveQueueNow();
+  assert.deepEqual(JSON.parse(stub.docs.get("telemetry-queue.json") ?? '{"events":[]}').events.filter((e) => e.event === "usage_counts"), []);
+  locks.leaderClosed();
+  for (let i = 0; i < 3; i++) await turn();
+  assert.deepEqual(follower.delivered.filter((m) => m.event === "usage_counts"), [], "the confirmed count isn't replayed by the window that takes over");
+});
+
+test("a count sent while sharing was on and buffered through a promotion that lands after sharing went off is recorded nowhere and sent once", async () => {
+  const stub = await import("../../browser/src/test-native/index.ts");
+  const client = await import("../../browser/src/state/telemetry/client.ts");
+  const local = await import("../../browser/src/state/telemetry/localStore.ts");
+  const { telemetryLocal } = await import("../../browser/src/test-native/telemetryLocal.ts");
+  client.loadChoice();
+  client.setSharing(true, "settings");
+  const token = client.consentNow();
+  const locks = fakeLocks();
+  const bus = fakeBus();
+  const first = window({ locks, channel: bus() });
+  await turn();
+  const delivered = [];
+  const nextChannel = bus();
+  const next = startTelemetryLeadership({
+    candidate: true,
+    locks,
+    channel: nextChannel,
+    relay: () => {},
+    deliver: (message) => (delivered.push(message.event), client.capture(message.event, message.props, message.consent, message.options)),
+    handle: async (op) => `${op}-done`,
+    lead: async () => {},
+    changed: () => {},
+    report: (error) => assert.fail(String(error)),
+    newId: () => `id-${++ids}`,
+  });
+  let forward = null;
+  startTelemetryLeadership({
+    candidate: true,
+    locks,
+    channel: bus(),
+    relay: (relay) => (forward = relay),
+    deliver: () => assert.fail("the follower never delivers"),
+    handle: async (op) => `${op}-done`,
+    lead: async () => {},
+    changed: () => {},
+    report: (error) => assert.fail(String(error)),
+    newId: () => `id-${++ids}`,
+  });
+  await turn();
+  bus.drop(first.channel);
+  assert.ok(forward, "the follower relays to a leader");
+  forward({ kind: "capture", event: "usage_counts", props: { tabs_opened: 2 }, options: {}, consent: token });
+  await turn();
+  client.setSharing(false, "settings");
+  local.flushLocal();
+  telemetryLocal.reset();
+  locks.leaderClosed();
+  for (let i = 0; i < 4; i++) await turn();
+  assert.equal(next.leading(), true);
+  assert.ok(delivered.length >= 1 && delivered.every((event) => event === "usage_counts"));
+  local.flushLocal();
+  assert.deepEqual(telemetryLocal.records().filter((r) => r.event === "usage_counts"), []);
+  await client.saveQueueNow();
+  assert.deepEqual(JSON.parse(stub.docs.get("telemetry-queue.json") ?? '{"events":[]}').events.filter((e) => e.event === "usage_counts"), []);
+  const count = delivered.length;
+  for (let i = 0; i < 3; i++) await turn();
+  assert.equal(delivered.length, count, "nothing is resent after the new leader confirmed it");
+});

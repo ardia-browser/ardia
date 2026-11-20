@@ -13,6 +13,7 @@ import { withDeadline } from "../../lib/deadline";
 import { isFields, isString } from "../../lib/decode";
 import { consentEpoch, consentNow, consentToken, counted, dismissAsk, onConsentPeriodChange, isSharing, loadChoice, NO_WATCH, resumeSession, save, savedChoice as saved, savedOff, sessionId, startNewSession, stillValid, useTelemetry, type ConsentToken } from "./choice";
 import { flushLocalNow, LOCAL_KEEP_DAYS, recordLocal } from "./localStore";
+import { COUNT_EVENTS } from "./countEvents";
 import { context, environment, eventsBody, logsBody, resource, setEngineVersion } from "./requestContext";
 
 export { environment, resource };
@@ -124,11 +125,15 @@ let droppedWhileOff = 0;
 export type { CaptureOptions };
 
 export function capture(event: string, props: Record<string, unknown>, consent: ConsentToken | null, options: CaptureOptions = {}) {
+  const sharing = stillValid(consent);
+  if (!sharing && COUNT_EVENTS.has(event)) {
+    droppedWhileOff++;
+    return;
+  }
   const relay = telemetryRelay();
   if (relay) return relay.capture(event, props, consent, options);
   try {
     const { installId } = saved();
-    const sharing = stillValid(consent);
     const at = Date.now();
     const record: QueuedEvent = {
       uuid: uuidv7(),

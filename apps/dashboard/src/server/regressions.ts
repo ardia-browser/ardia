@@ -40,7 +40,7 @@ export const REGRESSION_METRICS: MetricDef[] = [
   { key: "crash_free", source: "crash", label: "Crash-free sessions", group: "Stability", unit: "share", stat: "crash-free", hint: "1 − app crashes ÷ launches; crashes credited to the version that crashed" },
   { key: "exceptions", source: "exception", label: "JS exceptions per 1k sessions", group: "Stability", unit: "per1k", stat: "rate", hint: "$exception that isn't a crash report, per 1,000 launches" },
   { key: "gone", source: "gone", label: "Page processes gone per 1k sessions", group: "Stability", unit: "per1k", stat: "rate", hint: "page_process_gone per 1,000 launches" },
-  { key: "store_bytes", source: "store_bytes", label: "Local telemetry store size, p95", group: "Telemetry store", unit: "bytes", stat: "p95", hint: "telemetry_local_store bytes" },
+  { key: "store_bytes", source: "store_bytes", label: "Local telemetry written per hour, p95", group: "Telemetry store", unit: "bytes", stat: "p95", hint: "telemetry_local_store bytes_recorded" },
   { key: "store_write", source: "store_write", label: "Local store write p95", group: "Telemetry store", unit: "ms", stat: "p50", hint: "Median of each hourly report's write time p95" },
 ];
 
@@ -56,7 +56,7 @@ const SAMPLES = `
         event = 'perf_journeys', [('j2', toFloat64OrZero(properties['j2_typeable_p95'])), ('j3', toFloat64OrZero(properties['j3_total_p95'])), ('j4', toFloat64OrZero(properties['j4_fcp_p95']))],
         event = 'perf_launch', [('launch', if(properties['first_of_version'] IN ('true', 'false') AND ${USABLE} < 600000, ${USABLE}, 0))],
         event = 'perf_memory', [('memory', toFloat64OrZero(properties['total_mb'])), ('cpu', toFloat64OrZero(properties['browser_cpu_pct'])), ('wakeups', toFloat64OrZero(properties['browser_wakeups_per_s']))],
-        event = 'telemetry_local_store', [('store_bytes', toFloat64OrZero(properties['bytes'])), ('store_write', ${STORE_WRITE})],
+        event = 'telemetry_local_store', [('store_bytes', toFloat64OrZero(properties['bytes_recorded'])), ('store_write', ${STORE_WRITE})],
         event = 'app_launched', [('sessions', 1.)],
         event = '$exception' AND properties['source'] = 'native_crash', [('crash', 1.)],
         event = '$exception' AND properties['source'] NOT IN ('native_crash', 'helper_crash'), [('exception', 1.)],

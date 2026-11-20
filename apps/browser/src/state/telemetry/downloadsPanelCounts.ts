@@ -1,6 +1,6 @@
 import type { ConsentToken } from "./choice";
 import { consentedCount } from "./consentedCount";
-import { countFor } from "./countFor";
+import { consentOrNow, countFor } from "./countFor";
 
 let linuxInsidePresses: ReturnType<typeof consentedCount> | undefined;
 
@@ -18,7 +18,7 @@ const KEYS = {
   archiveOpen: "download_archives_opened",
 } as const;
 
-export const noteDownloadsPanel = (event: keyof typeof KEYS, consent?: ConsentToken | null) => countFor(consent, () => void counts[KEYS[event]]++, { [KEYS[event]]: 1 });
+export const noteDownloadsPanel = (event: keyof typeof KEYS, consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void counts[KEYS[event]]++);
 
 export function takeDownloadsPanelCounts() {
   const taken = counts;

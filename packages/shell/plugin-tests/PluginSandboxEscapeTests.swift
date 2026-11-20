@@ -837,9 +837,10 @@ final class PluginSandboxEscapeTests: XCTestCase {
     let trusted = b.pem.replacingOccurrences(of: "BEGIN CERTIFICATE", with: "BEGIN TRUSTED CERTIFICATE").replacingOccurrences(of: "END CERTIFICATE", with: "END TRUSTED CERTIFICATE")
     XCTAssertEqual(names(PluginSandbox.certificateBlocks(in: trusted + a.pem).joined()), ["Ardia PEM A"], "TRUSTED CERTIFICATE blocks are skipped")
     let unended = String(repeating: "-----BEGIN CERTIFICATE-----\nAAAA\n", count: 200_000)
-    let started = Date()
-    XCTAssertEqual(names(PluginSandbox.certificateBlocks(in: unended + b.pem).joined()), ["Ardia PEM B"])
-    XCTAssertLessThan(Date().timeIntervalSince(started), 3, "unmatched BEGIN lines are scanned once")
+    var visited = 0
+    let input = unended + b.pem
+    XCTAssertEqual(names(PluginSandbox.certificateBlocks(in: input, visited: &visited).joined()), ["Ardia PEM B"])
+    XCTAssertEqual(visited, input.split(omittingEmptySubsequences: false, whereSeparator: { $0 == "\n" || $0 == "\r\n" }).count, "unmatched BEGIN lines are scanned once")
     let malformed = ["-----END CERTIFICATE-----", "-----BEGIN CERTIFICATE-----", "-----END PRIVATE KEY-----", Self.body(a.pem), "-----END CERTIFICATE-----", "-----BEGIN CERTIFICATE-----", "@@@", "-----END CERTIFICATE-----", b.pem].joined(separator: "\n")
     XCTAssertEqual(names(PluginSandbox.certificateBlocks(in: malformed).joined()), ["Ardia PEM B"], "a stray END, a foreign END inside a block and a bad body each drop only their block")
   }

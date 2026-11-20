@@ -1,6 +1,6 @@
 import { onAppEvent } from "../../platform/app";
 import { isSharing } from "./choice";
-import { capture, counted } from "./client";
+import { counted } from "./client";
 import { nativeConsent } from "./nativeConsent";
 
 let centeredResizes = 0;
@@ -21,7 +21,6 @@ onAppEvent((e) => {
       else if (type === "windowTitleRead") titlesRead++;
       else dragLoops++;
     },
-    () => capture("usage_counts", { [FIELDS[type]]: 1 }, null),
   );
 });
 

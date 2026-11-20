@@ -21,6 +21,7 @@ import { shownPageId } from "../peek/peek";
 import { isOpenRegularWindow, mainWindowFor, originalProfile } from "../windows/small";
 import { focusedWindowOf } from "../windows/ui";
 import { goToSettingsPane, openSettings, replaceSettingsPlace, SETTINGS_DETAIL, useSettingsNav } from "../settings/settingsWindows";
+import { dropSettingsSearch } from "../settings/searchState";
 import { closeSidePanelsOf, toggleSidePanel } from "./sidePanels";
 import { notePrivateWindowExtensionOpen, noteExtensionProfilePageOpen, noteToolbarExtensionMove } from "../telemetry/usage";
 import { extensionPageUrl, extensionProfile, extensionsProfileId, isPrivate, nextInstallKey, pageProfile, shownIn, useExtensions, windowExtensions, readyTabOf, tabProfile, type Anchor } from "./store";
@@ -228,6 +229,7 @@ export function extensionMenuItems(ext: Pick<InstalledExtension, "name" | "enabl
 }
 
 export async function showExtensionMenu(windowId: string, ext: InstalledExtension) {
+  const consent = consentToken();
   const profile = extensionProfile(useBrowser.getState(), windowId);
   const panel = useExtensions.getState().sidePanels[windowId];
   const choice = await showMenu(extensionMenuItems(ext, panel?.extensionId === ext.id && !panel.hidden));
@@ -237,6 +239,7 @@ export async function showExtensionMenu(windowId: string, ext: InstalledExtensio
   if (choice === "remove") void removeExtension(profile, ext, windowId);
   if (choice === "sidePanel") void toggleSidePanel(windowId, ext.id);
   if (choice === "manage") {
+    dropSettingsSearch(consent);
     openExtensionDetails(extensionsProfileId(null, windowId), ext.id);
     openSettings();
   }

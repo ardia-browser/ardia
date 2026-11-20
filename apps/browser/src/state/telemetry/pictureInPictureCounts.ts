@@ -1,6 +1,6 @@
 import type { PictureInPictureDrag, PictureInPictureResize, PictureInPictureSkip } from "../../platform/media";
 import type { PageEngine } from "../engines/engines";
-import { capture, counted } from "./client";
+import { counted } from "./client";
 import { nativeConsent } from "./nativeConsent";
 
 let nothingPlaying = 0;
@@ -28,7 +28,6 @@ export function notePictureInPictureDragged(drag: PictureInPictureDrag) {
       if (offCursor) drags.offCursor++;
       if (slowMove) drags.slowMove++;
     },
-    () => capture("usage_counts", { pip_drags: 1, pip_drags_off_cursor: offCursor ? 1 : 0, pip_drags_slow_move: slowMove ? 1 : 0 }, null),
   );
 }
 
@@ -40,7 +39,6 @@ export function notePictureInPictureResized(resize: PictureInPictureResize) {
       resizes.started++;
       if (withoutCursor) resizes.withoutCursor++;
     },
-    () => capture("usage_counts", { pip_resizes: 1, pip_resizes_without_cursor: withoutCursor ? 1 : 0 }, null),
   );
 }
 
@@ -50,7 +48,6 @@ export function notePictureInPictureClickSkip(skip: PictureInPictureSkip) {
   counted(
     nativeConsent(skip),
     () => clickSkips[direction]++,
-    () => capture("usage_counts", { [`pip_click_skips_${direction}`]: 1 }, null),
   );
 }
 

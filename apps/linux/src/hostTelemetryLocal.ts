@@ -2,6 +2,7 @@ import type { TelemetryLocalExport, TelemetryLocalNative, TelemetryLocalStats } 
 import { ardiaHost, callHost, type ArdiaHost } from "./host.ts";
 import { unavailableError } from "./hostCapabilities.ts";
 import { hostReportExport } from "./hostReport.ts";
+import { COUNT_EVENTS } from "../../browser/src/state/telemetry/countEvents";
 
 const DAY_MS = 86_400_000;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -113,6 +114,21 @@ export function planPrune(chunks: Chunk[], now: number, keepMs: number, maxBytes
   return { put, remove, dropped, bytes: total, lines: days.reduce((sum, entry) => sum + entry.lines.length, 0), files: days.length };
 }
 
+
+function isUnsentCount(line: string): boolean {
+  try {
+    const record: unknown = JSON.parse(line);
+    return !!record && typeof record === "object" && (record as { sent?: unknown }).sent === false && COUNT_EVENTS.has(String((record as { event?: unknown }).event));
+  } catch {
+    return false;
+  }
+}
+
+export function withoutUnsentCounts(collected: { text: string; lines: number }): { text: string; lines: number } {
+  const kept = collected.text.split("\n").filter((line) => line && !isUnsentCount(line));
+  return { text: kept.map((line) => `${line}\n`).join(""), lines: kept.length };
+}
+
 export function collectSince(chunks: Chunk[], since: number): { text: string; lines: number } {
   const fromDay = utcDay(since);
   let text = "";
@@ -208,7 +224,7 @@ export function createTelemetryLocal(deps: TelemetryLocalDeps): TelemetryLocal {
       const write = deps.reportFile;
       if (!store || !write) return null;
       await deps.gather?.().catch(report);
-      const { text, lines } = await run(async () => collectSince(await store.all(), since));
+      const { text, lines } = await run(async () => withoutUnsentCounts(collectSince(await store.all(), since)));
       const file = await write(text);
       return file ? { ...file, lines } : null;
     },

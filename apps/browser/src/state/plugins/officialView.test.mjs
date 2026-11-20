@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 const stub = await import("../../test-native/index.ts");
+globalThis.fetch = async () => ({ status: 503 });
+const telemetryClient = await import("../telemetry/client.ts");
+telemetryClient.loadChoice();
+const sharingFor = (t) => {
+  telemetryClient.setSharing(true, "settings");
+  t.after(() => telemetryClient.setSharing(false, "settings"));
+};
 const { useBrowser } = await import("../browser/store.ts");
 const { startPlugins } = await import("./start.ts");
 const { usePlugins } = await import("./store.ts");
@@ -78,7 +85,8 @@ test("closing the consent is no error: the seam marks it cancelled, and nothing 
   assert.equal(officialPlugins(usePlugins.getState(), true, () => false)[0].state, "available");
 });
 
-test("official plugin counts are a fixed set of fields, sent with the hourly counts and listed in What's Sent", () => {
+test("official plugin counts are a fixed set of fields, sent with the hourly counts and listed in What's Sent", (t) => {
+  sharingFor(t);
   takeOfficialPluginCounts();
   noteOfficialPlugin("onboarding", "shown", "cli");
   noteOfficialPlugin("onboarding", "installed", "cli");

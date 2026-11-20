@@ -16,11 +16,12 @@ const DOCUMENT_LIMIT = 1100 * 1024;
 const THEME_LIMIT = 200;
 const COLOR_LENGTH_LIMIT = 64;
 const RESTORED_THEME_GRACE_MS = 1500;
+export const COMMIT_THEME_HOLD_MS = 32;
 
 type RestoredTheme = { tab: string; page: string; color: string };
 type LaunchLook = { themes: RestoredTheme[]; favicons: LaunchFavicons };
 
-const restored = new Map<string, { page: string; color: string }>();
+const holds = new Map<string, { page: string | null; color: string }>();
 const settling = new Map<string, ReturnType<typeof setTimeout>>();
 
 function savedTabs(s: BrowserState): Tab[] {
@@ -74,38 +75,60 @@ export function restoreLaunchLook() {
   for (const theme of look.themes.filter(isRestoredTheme)) {
     const tab = s.tabs[theme.tab];
     if (!tab || liveOf(theme.tab).themeColor || withoutFragment(tab.url) !== theme.page) continue;
-    restored.set(theme.tab, { page: theme.page, color: theme.color });
+    holds.set(theme.tab, { page: theme.page, color: theme.color });
     setLive(theme.tab, { themeColor: theme.color });
   }
 }
 
 const onBlank = (url: string) => !url || url === "about:blank";
 
-function releaseRestoredTheme(tabId: string) {
-  restored.delete(tabId);
+function releaseHeldTheme(tabId: string) {
+  holds.delete(tabId);
   clearTimeout(settling.get(tabId));
   settling.delete(tabId);
 }
 
-function settleRestoredTheme(tabId: string) {
+function settleHeldTheme(tabId: string, after: number) {
   if (settling.has(tabId)) return;
   settling.set(
     tabId,
     setTimeout(() => {
       settling.delete(tabId);
-      if (!restored.delete(tabId)) return;
+      if (!holds.delete(tabId) || !useBrowser.getState().tabs[tabId]) return;
       useBrowser.getState().updateLive(tabId, { themeColor: null });
-    }, RESTORED_THEME_GRACE_MS),
+    }, after),
   );
 }
 
-export function restoredThemeColor(tabId: string, url: string, reported: string | null | undefined, isLoading: boolean): string | null {
-  const held = restored.get(tabId);
-  if (!held) return reported ?? null;
-  if (reported || (!onBlank(url) && withoutFragment(url) !== held.page)) {
-    releaseRestoredTheme(tabId);
-    return reported ?? null;
+export function heldThemeColor(tabId: string, url: string, reported: string | null | undefined, isLoading: boolean): string | null {
+  const hold = holds.get(tabId);
+  if (hold && (reported || (hold.page !== null && !onBlank(url) && withoutFragment(url) !== hold.page))) releaseHeldTheme(tabId);
+  else if (hold) {
+    if (hold.page !== null && !isLoading && !onBlank(url)) settleHeldTheme(tabId, RESTORED_THEME_GRACE_MS);
+    return hold.color;
   }
-  if (!isLoading && !onBlank(url)) settleRestoredTheme(tabId);
-  return held.color;
+  if (reported) return reported;
+  const shown = liveOf(tabId).themeColor;
+  if (!shown) return null;
+  holds.set(tabId, { page: null, color: shown });
+  settleHeldTheme(tabId, COMMIT_THEME_HOLD_MS);
+  return shown;
+}
+
+
+export function endThemeHold(tabId: string) {
+  const hold = holds.get(tabId);
+  if (!hold || hold.page !== null) return;
+  releaseHeldTheme(tabId);
+  if (useBrowser.getState().tabs[tabId] && liveOf(tabId).themeColor === hold.color) useBrowser.getState().updateLive(tabId, { themeColor: null });
+}
+
+export function hostThemeColor(tabId: string, url: string, reported: string | null | undefined, isLoading: boolean): string | null {
+  if (holds.get(tabId)?.page) releaseHeldTheme(tabId);
+  return heldThemeColor(tabId, url, reported, isLoading);
+}
+
+export function holdThemeColor(tabId: string) {
+  const shown = hostThemeColor(tabId, "", null, true);
+  if (liveOf(tabId).themeColor !== shown) useBrowser.getState().updateLive(tabId, { themeColor: shown });
 }

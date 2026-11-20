@@ -61,6 +61,7 @@ struct ArdiaFirstPaint {
   BOOL coldTab{};
   BOOL scripted{};
   CFTimeInterval heldAt{};
+  NSString *heldEpoch{};
   float opacity{};
   NSUInteger generation{};
 };

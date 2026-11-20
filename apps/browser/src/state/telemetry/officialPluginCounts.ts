@@ -1,5 +1,5 @@
 import { consentToken, type ConsentToken } from "./consentPeriod";
-import { countFor } from "./countFor";
+import { consentOrNow, countFor } from "./countFor";
 
 export { consentToken };
 
@@ -20,7 +20,7 @@ let counts: Record<string, number> = {};
 export function noteOfficialPlugin(surface: OfficialSurface, event: OfficialEvent, name: string, consent?: ConsentToken | null) {
   if (surface === "settings" && event === "skipped") return;
   const field = officialPluginField(surface, event, name);
-  countFor(consent, () => void (counts[field] = (counts[field] ?? 0) + 1), { [field]: 1 });
+  countFor(consentOrNow(consent), () => void (counts[field] = (counts[field] ?? 0) + 1));
 }
 
 export function takeOfficialPluginCounts(): Record<string, number> {

@@ -1,6 +1,6 @@
 import { takeCleanUpCounts } from "./cleanUpCounts";
 import type { ConsentToken } from "./choice";
-import { countFor } from "./countFor";
+import { consentOrNow, countFor } from "./countFor";
 import type { KeptAwakeReason } from "../tabs/sleepRefusals";
 
 const none = () => ({ captureIndicatorsCleared: 0, mediaCardsCleared: 0, pinnedTabsSleptByMemorySaver: 0, tabsSleptOverBudget: 0, tabsSleptOverBudgetReopened: 0, tabsOverBudgetSkippedLoading: 0, tabsOverBudgetAsksPassedOn: 0, topAppsKeptRunning: 0, topAppWindowsClosedFromNewTab: 0, topAppsUnloadedFromMenu: 0, tabsSleptFromMenu: 0, groupsSleptFromMenu: 0, menuSleepsKeptAwake: 0, menuSleepsPastAutomatic: 0, menuSleepKeptReason: null as KeptAwakeReason | null });
@@ -20,7 +20,7 @@ export function noteTabSlept(pinned: boolean, reason: string | null) {
 }
 
 export function noteTabSleptOverBudget(consent?: ConsentToken | null) {
-  countFor(consent, () => void pending.tabsSleptOverBudget++, { tabs_slept_over_budget: 1 });
+  countFor(consentOrNow(consent), () => void pending.tabsSleptOverBudget++);
 }
 
 export function noteTabSleptOverBudgetReopened() {
@@ -55,7 +55,7 @@ export function noteTopAppsKeptRunning(count: number) {
 }
 
 export function noteTopAppWindowClosedFromNewTab(consent?: ConsentToken | null) {
-  countFor(consent, () => void pending.topAppWindowsClosedFromNewTab++, { top_app_windows_closed_from_new_tab: 1 });
+  countFor(consentOrNow(consent), () => void pending.topAppWindowsClosedFromNewTab++);
 }
 
 export function noteTopAppUnloadedFromMenu() {
@@ -67,16 +67,12 @@ export function noteTabsSleptFromMenu(from: "tab" | "group", results: { outcome:
   const pastAutomatic = results.filter((r) => r.pastAutomatic).length;
   const keptReason = [...results].reverse().find((r) => r.keptBy)?.keptBy;
   const key = from === "tab" ? "tabsSleptFromMenu" : "groupsSleptFromMenu";
-  countFor(
-    consent,
-    () => {
-      pending[key]++;
-      pending.menuSleepsKeptAwake += keptAwake;
-      pending.menuSleepsPastAutomatic += pastAutomatic;
-      if (keptReason) pending.menuSleepKeptReason = keptReason;
-    },
-    { [from === "tab" ? "tabs_slept_from_menu" : "groups_slept_from_menu"]: 1, menu_sleeps_kept_awake: keptAwake, menu_sleeps_past_automatic: pastAutomatic },
-  );
+  countFor(consentOrNow(consent), () => {
+    pending[key]++;
+    pending.menuSleepsKeptAwake += keptAwake;
+    pending.menuSleepsPastAutomatic += pastAutomatic;
+    if (keptReason) pending.menuSleepKeptReason = keptReason;
+  });
 }
 
 export function takeTabSleepCounts() {

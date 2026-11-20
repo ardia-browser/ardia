@@ -1,4 +1,5 @@
 import { takeTabLayoutCounts } from "./tabLayoutCounts";
+import { onConsentPeriodChange } from "./choice";
 import { consentedCount, consentedMax } from "./consentedCount";
 
 const groupToggles = consentedCount();
@@ -16,6 +17,7 @@ const revealsHeldForScroll = consentedCount();
 const scrollStalls = consentedCount();
 const commandsRefused = consentedCount();
 let lastScrollAt = -Infinity;
+onConsentPeriodChange(() => (lastScrollAt = -Infinity));
 
 const NEW_SCROLL_GAP_MS = 250;
 const STALL_GAP_MS = 34;

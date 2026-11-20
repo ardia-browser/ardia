@@ -21,7 +21,7 @@ function beWhileOff() {
   noteLinuxDownloadsPanelInsidePress();
   usage.noteImportedPins({ rows: 3, splits: 1 });
   stub.editKeyAcks.pending = { accepted: 4 };
-  for (let i = 0; i < 20; i++) track.sampleOmniboxLatency(12);
+  for (let i = 0; i < 20; i++) track.sampleOmniboxLatency(track.omniboxKeyHeard() - 12);
   track.noteSearchSuggest("ok");
   presses.notePressStarted();
   presses.notePressEnded("click");

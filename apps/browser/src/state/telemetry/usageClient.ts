@@ -1,4 +1,4 @@
 export * from "./client";
 export { capture, withHourlyExtras } from "./hourlyExtras";
 export { watchConsentBoundary } from "./consentBoundary";
-export { countFor, fieldsOf } from "./countFor";
+export { consentOrNow, countFor, fieldsOf } from "./countFor";

@@ -67,18 +67,17 @@ test("thread 3: a Picture in Picture window shown after a retry that began in an
   assert.deepEqual((await local("pip_shown")).filter((r) => !r.sent).map((r) => r.properties.kind), ["document", "video"]);
 });
 
-test("a pointer restore from an earlier consent period, or with no epoch, isn't counted for this one and stays in the local copy", async () => {
+test("a pointer restore from an earlier consent period, or with no epoch, isn't counted and isn't kept in the local copy", async () => {
   cursor.takePageCursorCounts();
   const stale = staleEpoch();
   stub.emitEvent("engine.cursorRestored", { hidden: true, epoch: stale });
   stub.emitEvent("engine.cursorRestored", { hidden: false });
   stub.emitEvent("engine.cursorRestored", { hidden: true, epoch: client.consentEpoch() });
   assert.deepEqual(cursor.takePageCursorCounts(), { page_pointer_restores: 1, page_pointer_hidden_restores: 1 });
-  const kept = await local("usage_counts", (p) => p.page_pointer_restores === 1);
-  assert.deepEqual(kept.map((r) => [r.properties.page_pointer_hidden_restores, r.sent]), [[1, false], [0, false]]);
+  assert.deepEqual(await local("usage_counts", (p) => p.page_pointer_restores), []);
 });
 
-test("window placement events from an earlier consent period, or with no epoch, aren't counted for this one and stay in the local copy", async () => {
+test("window placement events from an earlier consent period, or with no epoch, aren't counted and aren't kept in the local copy", async () => {
   placement.takeWindowPlacementCounts();
   const stale = staleEpoch();
   stub.emitAppEvent({ type: "centeredResize", epoch: stale });
@@ -86,11 +85,10 @@ test("window placement events from an earlier consent period, or with no epoch, 
   stub.emitAppEvent({ type: "windowTitleRead" });
   stub.emitAppEvent({ type: "windowDragLoop", epoch: client.consentEpoch() });
   assert.deepEqual(placement.takeWindowPlacementCounts(), { window_centered_resizes: 0, windows_reopened_maximized: 0, window_titles_read: 0, window_drag_loops: 1, window_close_pins_kept: 0 });
-  const kept = await local("usage_counts", (p) => p.window_centered_resizes === 1 || p.window_drag_loops === 1 || p.window_titles_read === 1);
-  assert.deepEqual(kept.map((r) => [Object.keys(r.properties).find((k) => k.startsWith("window")), r.sent]).filter(([k]) => k), [["window_centered_resizes", false], ["window_drag_loops", false], ["window_titles_read", false]]);
+  assert.deepEqual(await local("usage_counts", (p) => p.window_centered_resizes || p.window_drag_loops || p.window_titles_read), []);
 });
 
-test("an animation burst that began in an earlier consent period isn't counted for this one and stays in the local copy", async () => {
+test("an animation burst that began in an earlier consent period, or carries no epoch, isn't counted and isn't kept in the local copy", async () => {
   let listen = () => {};
   motion.animationBursts.onBurst = (listener) => ((listen = listener), () => {});
   bursts.watchAnimationBursts();
@@ -100,11 +98,10 @@ test("an animation burst that began in an earlier consent period isn't counted f
   listen({ frames: 30, milliseconds: 500, longest: 40, long: 5 });
   listen({ frames: 30, milliseconds: 500, longest: 40, long: 2, epoch: client.consentEpoch() });
   assert.deepEqual(bursts.takeAnimationBursts(), { animation_bursts: 1, animation_long_frames: 2 });
-  const kept = await local("usage_counts", (p) => p.animation_bursts === 1);
-  assert.deepEqual(kept.map((r) => [r.properties.animation_long_frames, r.sent]), [[3, false], [5, false]]);
+  assert.deepEqual(await local("usage_counts", (p) => p.animation_bursts), []);
 });
 
-test("Picture in Picture drags and click skips from an earlier consent period aren't counted for this one and stay in the local copy", async () => {
+test("Picture in Picture drags and click skips from an earlier consent period aren't counted and aren't kept in the local copy", async () => {
   pip.takePictureInPictureCounts();
   const stale = staleEpoch();
   pip.notePictureInPictureDragged({ offCursor: true, slowMove: false, epoch: stale });
@@ -114,13 +111,10 @@ test("Picture in Picture drags and click skips from an earlier consent period ar
   pip.notePictureInPictureClickSkip({ seconds: 10, epoch: client.consentEpoch() });
   const taken = pip.takePictureInPictureCounts();
   assert.deepEqual([taken.drags, taken.clickSkips], [{ moved: 1, offCursor: 1, slowMove: 1 }, { back: 0, ahead: 1 }]);
-  const drags = await local("usage_counts", (p) => p.pip_drags === 1);
-  assert.deepEqual(drags.map((r) => [r.properties.pip_drags_off_cursor, r.properties.pip_drags_slow_move, r.sent]), [[1, 0, false], [0, 1, false]]);
-  const skips = await local("usage_counts", (p) => p.pip_click_skips_back === 1);
-  assert.deepEqual(skips.map((r) => r.sent), [false]);
+  assert.deepEqual(await local("usage_counts", (p) => p.pip_drags || p.pip_click_skips_back || p.pip_click_skips_ahead), []);
 });
 
-test("Picture in Picture resizes count the ones begun inside the window without the resize cursor, and an earlier consent period's stay local", async () => {
+test("Picture in Picture resizes count the ones begun inside the window without the resize cursor, and an earlier consent period's aren't counted or kept in the local copy", async () => {
   pip.takePictureInPictureCounts();
   const stale = staleEpoch();
   pip.notePictureInPictureResized({ inside: true, cursorShown: false, epoch: stale });
@@ -128,11 +122,10 @@ test("Picture in Picture resizes count the ones begun inside the window without 
   pip.notePictureInPictureResized({ inside: false, cursorShown: false, epoch: client.consentEpoch() });
   pip.notePictureInPictureResized({ inside: true, cursorShown: false, epoch: client.consentEpoch() });
   assert.deepEqual(pip.takePictureInPictureCounts().resizes, { started: 3, withoutCursor: 1 });
-  const stalePrints = await local("usage_counts", (p) => p.pip_resizes === 1 && p.pip_resizes_without_cursor === 1);
-  assert.deepEqual(stalePrints.map((r) => r.sent), [false]);
+  assert.deepEqual(await local("usage_counts", (p) => p.pip_resizes), []);
 });
 
-test("popup protected media reported in an earlier consent period, or with no epoch, isn't counted for this one and stays in the local copy", async () => {
+test("popup protected media reported in an earlier consent period, or with no epoch, isn't counted and isn't kept in the local copy", async () => {
   popup.takePopupProtectedMediaCounts();
   const stale = staleEpoch();
   popup.notePopupProtectedMedia({ family: "widevine", listed: true, epoch: stale });
@@ -140,6 +133,5 @@ test("popup protected media reported in an earlier consent period, or with no ep
   popup.notePopupProtectedMedia({ family: "playready", listed: false, epoch: client.consentEpoch() });
   const taken = popup.takePopupProtectedMediaCounts();
   assert.deepEqual([taken.popup_protected_media_refused_widevine_listed, taken.popup_protected_media_stalled_unlisted, taken.popup_protected_media_refused_playready_unlisted], [0, 0, 1]);
-  const kept = await local("usage_counts", (p) => p.popup_protected_media_refused_widevine_listed === 1 || p.popup_protected_media_stalled_unlisted === 1);
-  assert.deepEqual(kept.map((r) => r.sent), [false, false]);
+  assert.deepEqual(await local("usage_counts", (p) => p.popup_protected_media_refused_widevine_listed || p.popup_protected_media_stalled_unlisted || p.popup_protected_media_refused_playready_unlisted), []);
 });

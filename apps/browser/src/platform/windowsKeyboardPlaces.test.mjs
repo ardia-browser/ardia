@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import test from "node:test";
 
 const ts = createRequire(import.meta.url)("typescript");
-const MARKER = "TabContentArea";
+const MARKER = "contentAreaOf";
 
 function elements(file) {
   const path = new URL(`../components/${file}`, import.meta.url);
@@ -18,8 +18,8 @@ function elements(file) {
       const props = Object.fromEntries(
         opening.attributes.properties.filter(ts.isJsxAttribute).map((attribute) => [attribute.name.getText(source), attribute.initializer?.getText(source) ?? "true"]),
       );
-      found.push({ name, markers, props });
-      if (name === MARKER) inner = [...markers, props.contentAreaOf];
+      if (MARKER in props) inner = [...markers, props[MARKER]];
+      found.push({ name, markers: inner, props });
     }
     ts.forEachChild(node, (child) => visit(child, inner));
   };
@@ -33,10 +33,11 @@ const placed = (file, name) => {
   return hits;
 };
 
-test("the views a page replaces sit in the tab's content area, marked with its tab", () => {
+test("the views a page replaces sit in the tab's content area, marked with its tab without a wrapper of their own", () => {
   for (const name of ["NewTabPage", "SplitEmptyState", "EmptyCard", "InternalPage"]) {
     for (const hit of placed("window/TabPane.tsx", name)) assert.deepEqual(hit.markers, ["{tabId}"], `<${name}> in TabPane.tsx`);
   }
+  assert.equal(elements("window/TabPane.tsx").filter((element) => element.name === "TabContentArea").length, 0, "no wrapper component per pane");
   assert.ok(placed("ntp/NewTabPage.tsx", "Omnibox").length > 0, "the New Tab page's search field");
   assert.ok(placed("split/SplitEmptyState.tsx", "SearchField").length > 0, "the empty split pane's search field");
 });
@@ -52,7 +53,7 @@ test("the toolbar, the find bar, the sidebar rename field and the command bar ar
     ["omnibox/CommandPanel.tsx", "Omnibox"],
   ]) {
     for (const hit of placed(file, field)) assert.deepEqual(hit.markers, [], `<${field}> in ${file}`);
-    assert.deepEqual(elements(file).filter((element) => element.name === MARKER), [], `${file} marks no content area`);
+    assert.deepEqual(elements(file).filter((element) => MARKER in element.props), [], `${file} marks no content area`);
   }
   const app = new URL("../App.tsx", import.meta.url);
   assert.ok(!readFileSync(app, "utf8").includes(MARKER), "App.tsx, where the command bar is placed, marks no content area");

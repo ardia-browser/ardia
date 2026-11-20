@@ -258,7 +258,7 @@ public final class WebTab: DiscardablePage, Identifiable {
     webView.allowsBackForwardNavigationGestures = engine.preferences.swipeNavigation == .screenEdges
     webView.allowsLinkPreview = true
     webView.isFindInteractionEnabled = true
-    webView.scrollView.contentInsetAdjustmentBehavior = .automatic
+    webView.scrollView.contentInsetAdjustmentBehavior = .always
     webView.isInspectable = engine.isInspectable
     engine.blocker.install(on: configuration.userContentController, counter: blockedResources)
     engine.installPageScripts(on: configuration.userContentController)

@@ -90,6 +90,7 @@ function frame({ barcodes = true, timers = null, isTop = true, toRGBA = () => nu
     querySelectorAll: (selector) => (selector === "img, canvas" ? document.images : selector === 'a[href^="otpauth" i]' ? document.links : []),
     querySelector: (selector) => (selector === "input" ? {} : null),
     documentElement: { appendChild: (host) => (host.isConnected = true) },
+    createElement: (tag) => ({ tag, textContent: "" }),
   };
   class BarcodeDetector {
     constructor(options) {
@@ -117,6 +118,14 @@ function frame({ barcodes = true, timers = null, isTop = true, toRGBA = () => nu
       this.observing = false;
     }
   }
+  const hints = [];
+  const makeHint = () => {
+    const host = { style: {}, isConnected: false, getBoundingClientRect: () => ({ width: 220, height: 28 }) };
+    const text = { parts: [], replaceChildren: (...parts) => (text.parts = parts) };
+    const close = { attrs: {}, handlers: {}, setAttribute: (k, v) => (close.attrs[k] = v), addEventListener: (t, fn) => (close.handlers[t] = fn) };
+    hints.push({ host, text, close });
+    return { host, text, close };
+  };
   const makeKey = () => {
     const host = { style: {}, isConnected: false };
     const button = { style: {}, attrs: {}, handlers: {}, setAttribute: (k, v) => (button.attrs[k] = v), addEventListener: (t, fn) => (button.handlers[t] = fn) };
@@ -140,6 +149,7 @@ function frame({ barcodes = true, timers = null, isTop = true, toRGBA = () => nu
     requestAnimationFrame: () => {},
     isTop,
     makeKey,
+    makeHint,
     keyRect: () => KEY_BOX,
     intrinsics: { ...INTRINSICS, Detector: barcodes ? BarcodeDetector : null, detect: BarcodeDetector.prototype.detect, toRGBA },
   });
@@ -159,8 +169,14 @@ function frame({ barcodes = true, timers = null, isTop = true, toRGBA = () => nu
   const click = (trusted, timeStamp, at = { clientX: KEY_BOX.left + 17, clientY: KEY_BOX.top + 12 }) =>
     key().button.handlers.click({ isTrusted: trusted, timeStamp, ...at, preventDefault() {}, stopPropagation() {} });
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const hint = () => hints[0];
+  const hintShown = () => hint()?.host.style.display === "block";
+  const hintText = () => (hint()?.text.parts ?? []).map((p) => (typeof p === "string" ? p : `<b>${p.textContent}</b>`)).join("");
   return {
     ...kit,
+    hintEl: hint,
+    hintShown,
+    hintText,
     Detector: BarcodeDetector,
     windowListeners,
     document,
@@ -757,4 +773,67 @@ test("when no colour can be read at all, the page's own scheme picks the ink, ne
   assert.equal(badgeInk(["unreadable(1)"], "unreadable(2)", true), "#ffffff");
   assert.equal(badgeInk(["unreadable(1)"], "unreadable(2)", () => true), "#ffffff");
   assert.equal(badgeInk(["unreadable(1)"], "unreadable(2)", false), "#1d1d1f");
+});
+
+test("the panel hint shows beside a shown key, names only the label it was given, and reports itself", () => {
+  const page = frame();
+  page.configure(LOGIN);
+  page.hint({ label: "github", side: "below" });
+  assert.equal(page.hintShown(), false, "no key, no hint");
+  const password = input({ type: "password" });
+  page.focus(password);
+  page.hint({ label: "github", side: "below" });
+  assert.equal(page.hintShown(), true);
+  assert.equal(page.hintText(), "Type <b>github</b> in Passwords to find this site");
+  assert.equal(page.hintEl().host.style.top, `${47 + 24 + 8}px`, "below the key");
+  assert.equal(page.hintEl().host.style.left, `${286 + 34 - 220}px`, "right edge lined up with the key's");
+  assert.deepEqual(page.sent.filter((m) => m.kind === "fieldProviderHint").map((m) => m.data), [{ state: "shown" }]);
+  page.hint({ label: "github", side: "above" });
+  assert.equal(page.hintEl().host.style.top, `${Math.max(4, 47 - 8 - 28)}px`, "above the key");
+});
+
+test("the hint refuses labels that aren't one domain label", () => {
+  const page = frame();
+  page.configure(LOGIN);
+  page.focus(input({ type: "password" }));
+  for (const label of ["", "github.com", "Git Hub", "<b>x</b>", "-x", "x-", "a".repeat(64), 42]) {
+    page.hint({ label, side: "below" });
+    assert.equal(page.hintShown(), false, `label ${label}`);
+  }
+  page.hint({ label: "xn--bcher-kva", side: "below" });
+  assert.equal(page.hintShown(), true);
+});
+
+test("the hint closes when focus moves to another field, the key hides, the provider goes or Ardia says so", () => {
+  const page = frame();
+  page.configure(LOGIN);
+  const password = input({ type: "password" });
+  page.focus(password);
+  page.hint({ label: "github", side: "below" });
+  page.focus(input({ type: "email" }));
+  assert.equal(page.hintShown(), false, "another field");
+  page.focus(password);
+  page.hint({ label: "github", side: "below" });
+  page.hint(false);
+  assert.equal(page.hintShown(), false, "the panel closed");
+  page.hint({ label: "github", side: "below" });
+  page.type(password, "hunter2");
+  assert.equal(page.hintShown(), false, "the field was filled");
+  page.type(password, "");
+  page.hint({ label: "github", side: "below" });
+  page.configure(false);
+  assert.equal(page.hintShown(), false, "the provider went away");
+});
+
+test("only a trusted click on the hint's close button dismisses it, and the dismissal is reported", () => {
+  const page = frame();
+  page.configure(LOGIN);
+  page.focus(input({ type: "password" }));
+  page.hint({ label: "github", side: "below" });
+  const click = (isTrusted) => page.hintEl().close.handlers.click({ isTrusted, preventDefault() {}, stopPropagation() {} });
+  click(false);
+  assert.equal(page.hintShown(), true);
+  click(true);
+  assert.equal(page.hintShown(), false);
+  assert.deepEqual(page.sent.filter((m) => m.kind === "fieldProviderHint").map((m) => m.data.state), ["shown", "dismissed"]);
 });

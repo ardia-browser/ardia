@@ -59,7 +59,7 @@ export function startMeetingGroups() {
   if (started) return;
   started = true;
 
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["tabs"], (s, prev) => {
     for (const id of changedIds(s.tabs, prev.tabs)) {
       const tab = s.tabs[id];
       if (!tab) continue;

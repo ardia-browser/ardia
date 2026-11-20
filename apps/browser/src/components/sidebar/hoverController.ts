@@ -42,10 +42,56 @@ export function useCardTarget<T extends Target>(target: T | null): T | null {
   return target.kind === "tab" || target.kind === "folder" ? null : target;
 }
 
-export function useRowHover(windowId: string, rowTarget: Target | null) {
-  const target = useCardTarget(rowTarget);
-  const [hovered, setHovered] = useState(false);
+export type RowHoverCell = {
+  hovered: boolean;
+  windowId: string;
+  readers: Set<() => void>;
+  set(hovered: boolean): void;
+  refresh(): void;
+};
+
+export function rowHoverCell(windowId: string): RowHoverCell {
+  const cell: RowHoverCell = {
+    hovered: false,
+    windowId,
+    readers: new Set(),
+    set(hovered) {
+      if (cell.hovered === hovered) return;
+      cell.hovered = hovered;
+      cell.refresh();
+    },
+    refresh() {
+      for (const reader of cell.readers) reader();
+    },
+  };
+  return cell;
+}
+
+export const cellHovered = (cell: RowHoverCell) => cell.hovered && !rowsCovered(cell.windowId);
+
+export function useCellHovered(cell: RowHoverCell): boolean {
   const [, refresh] = useReducer((n: number) => n + 1, 0);
+  const seen = useRef(cellHovered(cell));
+  seen.current = cellHovered(cell);
+  useEffect(() => {
+    cell.readers.add(refresh);
+    if (seen.current !== cellHovered(cell)) refresh();
+    return () => void cell.readers.delete(refresh);
+  }, [cell]);
+  return seen.current;
+}
+
+export function useRowHover(windowId: string, rowTarget: Target | null) {
+  const { cell, hoverProps } = useRowHoverCell(windowId, rowTarget);
+  return { hovered: useCellHovered(cell), hoverProps };
+}
+
+export function useRowHoverCell(windowId: string, rowTarget: Target | null) {
+  const target = useCardTarget(rowTarget);
+  const [cell] = useState(() => rowHoverCell(windowId));
+  cell.windowId = windowId;
+  const setHovered = cell.set;
+  const refresh = cell.refresh;
   const page = useContext(PageProfileContext);
   const away = useContext(FoldedAway);
   const latest = useRef({ windowId, target, page, away });
@@ -105,7 +151,7 @@ export function useRowHover(windowId: string, rowTarget: Target | null) {
     },
     [],
   );
-  return { hovered: hovered && !rowsCovered(windowId), hoverProps };
+  return { cell, hoverProps };
 }
 
 export function useGroupHover(windowId: string, groupId: string) {

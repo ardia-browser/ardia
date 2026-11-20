@@ -601,6 +601,13 @@
       return badgeInk(backgrounds, cs.color, pageIsDark);
     };
     const KEY_ASPECT = 1.4;
+    const HINT_GAP = 8;
+    const HINT_HEIGHT = 28;
+    const HINT_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+    const HINT_CSS =
+      ".chip{all:initial;box-sizing:border-box;display:flex;align-items:center;gap:6px;padding:5px 5px 5px 10px;border-radius:8px;background:#1f2328;color:#f0f6fc;border:1px solid rgba(255,255,255,.14);font:500 12.5px/18px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;white-space:nowrap;box-shadow:0 6px 18px rgba(0,0,0,.35);pointer-events:none}" +
+      "b{font-weight:650;background:rgba(255,255,255,.14);padding:0 6px;border-radius:5px}" +
+      "button{all:initial;pointer-events:auto;cursor:default;width:18px;height:18px;border-radius:5px;display:flex;align-items:center;justify-content:center;color:#9198a1;font:15px/1 -apple-system,system-ui,sans-serif}button:hover{background:rgba(255,255,255,.12);color:#f0f6fc}";
     const KEY_REPEAT_MS = 600;
     const QR_MIN = 64;
     const QR_MAX = 640;
@@ -615,6 +622,12 @@
     let keyField = null;
     let keyKind = null;
     let keyHost = null;
+    let hintHost = null;
+    let hintText = null;
+    let hintClose = null;
+    let hintField = null;
+    let hintSide = "below";
+    let hintLabel = "";
     let keyButton = null;
     let keyClickedAt = -Infinity;
     let reportedFocus;
@@ -645,9 +658,73 @@
       const border = parseFloat(rtl ? cs.borderLeftWidth : cs.borderRightWidth) || 0;
       return { left: rtl ? r.left + border + inset : r.right - border - inset - width, top: r.top + (r.height - size) / 2, size, width, color: fieldInk(field, cs) };
     };
+    const hideHint = () => {
+      if (hintHost) hintHost.style.display = "none";
+      hintField = null;
+    };
     const hideKey = () => {
       if (keyHost) keyHost.style.display = "none";
       keyField = keyKind = null;
+      hideHint();
+    };
+    const placeHint = () => {
+      if (!hintHost || !hintField || hintField !== keyField) return;
+      const { left, top, size, width } = (env.keyRect || trailingRect)(keyField);
+      const height = (hintHost.getBoundingClientRect && hintHost.getBoundingClientRect().height) || HINT_HEIGHT;
+      const hintWidth = (hintHost.getBoundingClientRect && hintHost.getBoundingClientRect().width) || 0;
+      hintHost.style.left = Math.max(4, left + width - hintWidth) + "px";
+      hintHost.style.top = (hintSide === "above" ? Math.max(4, top - HINT_GAP - height) : top + size + HINT_GAP) + "px";
+    };
+    const makeHint = () => {
+      if (env.makeHint) return env.makeHint();
+      const host = document.createElement("ardia-field-provider-hint");
+      host.style.cssText = "all:initial;position:fixed;z-index:2147483647;display:none;";
+      const root = host.attachShadow({ mode: "closed" });
+      const style = document.createElement("style");
+      style.textContent = HINT_CSS;
+      root.appendChild(style);
+      const chip = document.createElement("div");
+      chip.className = "chip";
+      const text = document.createElement("span");
+      const close = document.createElement("button");
+      close.type = "button";
+      close.tabIndex = -1;
+      close.textContent = "\u00d7";
+      chip.appendChild(text);
+      chip.appendChild(close);
+      root.appendChild(chip);
+      return { host, text, close };
+    };
+    const showHint = (state) => {
+      const label = state && typeof state.label === "string" ? state.label : "";
+      if (!config || !keyField || !keyHost || keyHost.style.display !== "block" || !HINT_LABEL.test(label)) return hideHint();
+      if (!hintHost || !hintHost.isConnected) {
+        ({ host: hintHost, text: hintText, close: hintClose } = makeHint());
+        hintClose.setAttribute("aria-label", "Close");
+        apply(addListener, hintClose, ["mousedown", (e) => e.preventDefault()]);
+        apply(addListener, hintClose, [
+          "click",
+          guard((e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!e.isTrusted || !hintField) return;
+            hideHint();
+            send("fieldProviderHint", { state: "dismissed" });
+          }),
+        ]);
+        document.documentElement.appendChild(hintHost);
+      }
+      const side = state.side === "above" ? "above" : "below";
+      if (hintField === keyField && hintHost.style.display === "block" && hintLabel === label && hintSide === side) return placeHint();
+      hintLabel = label;
+      const bold = document.createElement("b");
+      bold.textContent = label;
+      hintText.replaceChildren("Type ", bold, " in Passwords to find this site");
+      hintSide = side;
+      hintField = keyField;
+      hintHost.style.display = "block";
+      placeHint();
+      send("fieldProviderHint", { state: "shown" });
     };
     const placeKey = () => {
       if (!keyHost || !keyField) return;
@@ -707,7 +784,9 @@
       keyField = el;
       keyKind = kind;
       keyHost.style.display = "block";
+      if (hintField && hintField !== el) hideHint();
       placeKey();
+      placeHint();
     });
 
     const watchDocument = (doc) => {
@@ -847,8 +926,9 @@
       addEventListener("pageshow", (e) => e.isTrusted && e.persisted && forgetFound());
       addEventListener("focus", focusGained, true);
       addEventListener("blur", focusLost, true);
-      addEventListener("scroll", () => keyField && requestAnimationFrame(placeKey), { passive: true, capture: true });
-      addEventListener("resize", () => keyField && requestAnimationFrame(placeKey));
+      addEventListener("scroll", () => keyField && requestAnimationFrame(() => (placeKey(), placeHint())), { passive: true, capture: true });
+      addEventListener("resize", () => keyField && requestAnimationFrame(() => (placeKey(), placeHint())));
+      addEventListener("pagehide", hideHint);
     };
     const stopScanning = () => {
       if (observer) observer.disconnect();
@@ -888,7 +968,7 @@
       reportedFocus = undefined;
       reportFocus();
     };
-    return { configure, focusQuery, badgeInk, hasOwnToggle, loginFieldKind, verificationSetupURL, codeKey, rememberedCodes: () => found.size };
+    return { configure, focusQuery, hint: guard((state) => (state ? showHint(state) : hideHint())), badgeInk, hasOwnToggle, loginFieldKind, verificationSetupURL, codeKey, rememberedCodes: () => found.size };
   };
   const fieldProviderIntrinsics = (scope) => {
     const call = Reflect.apply;
@@ -950,6 +1030,7 @@
   });
   handlers.fieldProvider = fieldProviders.configure;
   handlers.fieldFocusQuery = (message) => fieldProviders.focusQuery(message && message.query);
+  handlers.fieldProviderHint = fieldProviders.hint;
   const typedByUser = new WeakSet();
   let revealedField = null;
   let eyeField = null;

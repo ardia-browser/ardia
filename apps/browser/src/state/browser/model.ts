@@ -125,6 +125,12 @@ export function closesWindow(s: BrowserState, id: string): boolean {
   return viewTabIds(s, w.id).every((t) => t === id || s.tabs[t]!.page.kind === "asleep");
 }
 
+export function showsEmptyWindow(s: BrowserState, windowId: string): boolean {
+  const active = activeTabId(s, windowId);
+  if (active && s.tabs[active]!.url) return false;
+  return viewTabIds(s, windowId).every((id) => id === active || !s.tabs[id]!.url || s.tabs[id]!.page.kind === "asleep");
+}
+
 export function activeTabId(s: BrowserState, windowId: string, profileId?: string): string | undefined {
   const w = s.windows[windowId];
   if (!w) return undefined;

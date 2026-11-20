@@ -3,8 +3,12 @@ import { Pressable, StyleSheet, Text, useWindowDimensions, View, type TextStyle 
 import { queryPrefixLength, type TrayRow } from "../../state/search/omnibox";
 import { countRender } from "../../state/app/interactionPerf";
 import type { Design } from "../../lib/design";
-import { browseLayout, Favicon, font, radius, screenReaderActions, space, Symbol, tabsMotion, useDesign, type ColorRoles, type SymbolName } from "../ui";
 import type { Point } from "../../lib/menuPlace";
+import { browseLayout, Favicon, font, MaterialIconButton, radius, screenReaderActions, space, Symbol, tabsMotion, useDesign, type ColorRoles, type SymbolName } from "../ui";
+import { useMaterialRipple } from "../ui/MaterialSurfaces";
+import { materialBottomBar, materialSize, materialType } from "../ui/materialTokens";
+
+const MATERIAL_ROW_ICON = 20;
 
 const ROW_LOOK: Record<Design, { glyph: number; favicon: number; switchGlyph: boolean; title3: TextStyle; body: TextStyle; subheadline: TextStyle }> = {
   original: { glyph: 19, favicon: 20, switchGlyph: true, title3: font.title3, body: font.body, subheadline: font.subheadline },
@@ -16,6 +20,7 @@ const ROW_LOOK: Record<Design, { glyph: number; favicon: number; switchGlyph: bo
     body: { fontSize: font.body.fontSize },
     subheadline: { fontSize: font.subheadline.fontSize },
   },
+  material: { glyph: MATERIAL_ROW_ICON, favicon: MATERIAL_ROW_ICON, switchGlyph: false, title3: materialType.bodyLarge, body: materialType.bodyLarge, subheadline: materialType.bodySmall },
 };
 
 const LEADING: Record<TrayRow["kind"], SymbolName> = { query: "magnifyingglass", page: "globe", calc: "equalCircleFill", paste: "docOnDoc", browseForMe: "sparkleMagnifyingglass" };
@@ -34,6 +39,11 @@ type Props = {
 
 export const SuggestionRow = memo(function SuggestionRow({ row, typed, roles, interactive = true, highlightsPress = true, menu = [], onActivate, onRefine, onMenu }: Props) {
   countRender("SuggestionRow");
+  const design = useDesign();
+  const material = design === "material";
+  const ripple = useMaterialRipple();
+  const twoLine = row.kind !== "query" || Boolean(row.detail);
+  const rowStyle = material ? [styles.materialRow, twoLine ? styles.materialRowTwoLine : null] : styles.row;
   const content = <RowContent row={row} typed={typed} roles={roles} interactive={interactive} onRefine={onRefine} />;
   const menuActions = menu.map((item, index) => ({ name: `${MENU_ACTION}${index}`, label: item.label, run: item.run }));
   if (!interactive) {
@@ -47,7 +57,7 @@ export const SuggestionRow = memo(function SuggestionRow({ row, typed, roles, in
         accessible
         accessibilityRole="button"
         {...screenReaderActions(actions)}
-        style={styles.row}
+        style={rowStyle}
       >
         {content}
       </View>
@@ -56,11 +66,12 @@ export const SuggestionRow = memo(function SuggestionRow({ row, typed, roles, in
   return (
     <Pressable
       accessibilityRole="button"
+      android_ripple={material ? ripple : undefined}
       onPress={() => onActivate(row)}
       onLongPress={(event) => onMenu(row, { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY })}
       delayLongPress={tabsMotion.longPress}
       {...screenReaderActions(menuActions)}
-      style={({ pressed }) => [styles.row, { backgroundColor: pressed && highlightsPress ? roles.rowHighlight : undefined }]}
+      style={({ pressed }) => [rowStyle, !material && pressed && highlightsPress ? { backgroundColor: roles.rowHighlight } : null]}
     >
       {content}
     </Pressable>
@@ -73,11 +84,12 @@ const LARGE_TEXT = 1.5;
 
 function RowContent({ row, typed, roles, interactive, onRefine }: { row: TrayRow; typed: string; roles: ColorRoles; interactive: boolean; onRefine: (row: TrayRow) => void }) {
   const design = useDesign();
+  const material = design === "material";
   const look = ROW_LOOK[design];
   const large = useWindowDimensions().fontScale > LARGE_TEXT;
   return (
     <>
-      <View style={styles.leading}>
+      <View testID={material ? "materialSearchIconSlot" : undefined} style={material ? styles.materialLeading : styles.leading}>
         {row.kind === "page" ? <Favicon iconUrl={row.favicon} pageUrl={row.url} size={look.favicon} /> : <Symbol name={row.kind === "paste" && row.offer === "link" ? "link" : LEADING[row.kind]} size={look.glyph} color={roles.rowIcon} />}
       </View>
       <View style={styles.label}>
@@ -105,15 +117,27 @@ function RowContent({ row, typed, roles, interactive, onRefine }: { row: TrayRow
           </>
         )}
       </View>
-      {row.kind === "query" && design === "original" ? (
+      {row.kind === "query" && (design === "original" || material) ? (
         interactive ? (
-          <Pressable accessibilityRole="button" accessibilityLabel={`Refine ${row.title}`} onPress={() => onRefine(row)} style={styles.refine}>
-            <View style={styles.refineGlyph}>
-              <Symbol name="arrowUpForward" size={15} color={roles.rowIcon} />
-            </View>
-          </Pressable>
+          material ? (
+            <MaterialIconButton
+              icon="arrowUpForward"
+              iconSize={15}
+              iconStyle={styles.refineGlyph}
+              label={`Refine ${row.title}`}
+              ink={roles.rowIcon}
+              size="compact"
+              onPress={() => onRefine(row)}
+            />
+          ) : (
+            <Pressable accessibilityRole="button" accessibilityLabel={`Refine ${row.title}`} onPress={() => onRefine(row)} style={styles.refine}>
+              <View style={styles.refineGlyph}>
+                <Symbol name="arrowUpForward" size={15} color={roles.rowIcon} />
+              </View>
+            </Pressable>
+          )
         ) : (
-          <View style={styles.refine}>
+          <View style={material ? styles.materialRefine : styles.refine}>
             <View style={styles.refineGlyph}>
               <Symbol name="arrowUpForward" size={15} color={roles.rowIcon} />
             </View>
@@ -144,10 +168,24 @@ const styles = StyleSheet.create({
     paddingRight: browseLayout.rowTrailing,
     borderRadius: radius.row,
   },
+  materialRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    minHeight: materialBottomBar.field,
+    paddingLeft: 14,
+    paddingRight: 4,
+    paddingVertical: 6,
+  },
+  materialRowTwoLine: {
+    minHeight: materialSize.listItemOneLine,
+  },
   leading: { width: browseLayout.suggestionIconSlot, height: browseLayout.suggestionIconSlot, alignItems: "center", justifyContent: "center" },
+  materialLeading: { width: MATERIAL_ROW_ICON, height: MATERIAL_ROW_ICON, alignItems: "center", justifyContent: "center" },
   label: { flex: 1, gap: space.hair },
   detail: { flexDirection: "row", alignItems: "center", gap: space.xs },
   detailText: { flexShrink: 1 },
   refine: { width: browseLayout.refineWidth, height: browseLayout.suggestionPitch, alignItems: "center", justifyContent: "center" },
+  materialRefine: { width: materialSize.iconButton, height: materialSize.iconButton, alignItems: "center", justifyContent: "center" },
   refineGlyph: { transform: [{ rotate: "-90deg" }] },
 });

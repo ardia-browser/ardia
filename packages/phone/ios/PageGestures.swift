@@ -176,10 +176,11 @@ final class PageGestures: NSObject, UIGestureRecognizerDelegate {
       } else {
         target = UIView()
       }
+      let pageFrame = CGRect(x: webView.center.x - webView.bounds.width * webView.layer.anchorPoint.x, y: webView.center.y - webView.bounds.height * webView.layer.anchorPoint.y, width: webView.bounds.width, height: webView.bounds.height)
       target.backgroundColor = webView.underPageBackgroundColor ?? .systemBackground
-      target.frame = container.bounds
+      target.frame = pageFrame
       target.isUserInteractionEnabled = false
-      let shade = UIView(frame: container.bounds)
+      let shade = UIView(frame: pageFrame)
       shade.backgroundColor = UIColor.black.withAlphaComponent(0.12)
       shade.isUserInteractionEnabled = false
       if direction == .back {

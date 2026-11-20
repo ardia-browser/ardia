@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
-import { StyleSheet } from "react-native";
+import { Platform, StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
-import { DEFAULT_PROFILE_COLOR, OverlayHost, PROFILE_PRESETS, ProfileLookContext } from "../../src/components/ui";
+import { DEFAULT_PROFILE_COLOR, DesignProvider, OverlayHost, PROFILE_PRESETS, ProfileLookContext } from "../../src/components/ui";
 import { useLook } from "../../src/state/sync/hooks";
+import { usePreferences } from "../../src/state/settings/store";
 import { useTabs } from "../../src/state/tabs/store";
 import { launchTabs } from "../../src/state/tabs/tabsState";
 import type { BrowserTab } from "../../src/state/tabs/tabModels";
@@ -98,4 +99,11 @@ export function landOpeningPage(root: ReactTestRenderer) {
   const picture = cover?.findAll((node) => typeof node.props.onLoad === "function" && node.props.source?.uri)[0];
   if (picture) act(() => picture.props.onLoad({ nativeEvent: { source: { width: 600, height: 1300 } } }));
   return true;
+}
+
+export const classicOnAndroid = (node: ReactNode) => (Platform.OS === "android" ? <DesignProvider design="original">{node}</DesignProvider> : node);
+
+export function withMaterialYou() {
+  beforeEach(() => usePreferences.setState({ materialYou: true }));
+  afterEach(() => usePreferences.setState({ materialYou: false }));
 }

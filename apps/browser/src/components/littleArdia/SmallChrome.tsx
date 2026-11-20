@@ -76,7 +76,7 @@ export function PageLabel({ tab, hovered = false, label }: { tab: Tab; hovered?:
         backgroundColor: hovered ? theme.toolbarHover : undefined,
       }}
     >
-      <FieldLoadFill key={tab.id} tabId={tab.id} color={theme.accent} height={FIELD_HEIGHT} radius={radius.tile} />
+      <FieldLoadFill tabId={tab.id} color={theme.accent} height={FIELD_HEIGHT} radius={radius.tile} />
       {insecure ? (
         <Symbol name="lock.open.trianglebadge.exclamationmark.fill" size={12} color={theme.textSecondary} style={{ width: 16, height: 16 }} />
       ) : tab.url ? (

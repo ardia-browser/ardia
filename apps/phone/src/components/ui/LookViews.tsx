@@ -23,6 +23,9 @@ import { useReduceTransparency } from "./contrast";
 import { useProfileLook, useTheme } from "./theme";
 import { chromeInk, chromeLayout, startInk, tabsInk } from "./tokens";
 import { useReduceMotion } from "./contrast";
+import { useDesign } from "./design";
+
+const useNativeLook = () => useDesign() !== "material" && lookIsNative();
 
 export const SURFACES_FROST = "surfaces";
 
@@ -71,20 +74,23 @@ function useBackdropStops({ themed = false, incognito = false, dark }: BackdropP
 
 export function LookBackdropBase(props: BackdropProps) {
   const { stops } = useBackdropStops(props);
-  if (!lookIsNative() || props.fadesOut) return null;
+  const nativeLook = useNativeLook();
+  if (!nativeLook || props.fadesOut) return null;
   return <BackdropBase color={stops[0]} />;
 }
 
 export function DeckLookBackdropBase() {
   const theme = useTheme();
-  if (!lookIsNative()) return null;
+  const nativeLook = useNativeLook();
+  if (!nativeLook) return null;
   return <BackdropBase color={theme.backdrop[0]} />;
 }
 
 export function LookBackdrop(props: BackdropProps) {
   const { themed = false, softened = false, fadesOut = false, incognito = false, baseOutside = false, veiled = false } = props;
   const { look, theme, shade, stops } = useBackdropStops(props);
-  if (!lookIsNative()) {
+  const nativeLook = useNativeLook();
+  if (!nativeLook) {
     if (incognito) return <Backdrop colors={tabsInk.incognitoBackdrop} />;
     if (themed && veiled && theme.start.diagonal && !shade)
       return (
@@ -120,7 +126,8 @@ export function DeckLookBackdrop({ baseOutside = false }: { baseOutside?: boolea
   const theme = useTheme();
   const reduceMotion = useReduceMotion();
   const reduceTransparency = useReduceTransparency();
-  if (!lookIsNative()) return <Backdrop colors={theme.backdrop} />;
+  const nativeLook = useNativeLook();
+  if (!nativeLook) return <Backdrop colors={theme.backdrop} />;
   return (
     <>
       {baseOutside ? null : <BackdropBase color={theme.backdrop[0]} />}
@@ -160,7 +167,8 @@ export function LookFrost({
   const look = useProfileLook();
   const theme = useTheme();
   const reduceTransparency = useReduceTransparency();
-  if (!lookIsNative())
+  const nativeLook = useNativeLook();
+  if (!nativeLook)
     return (
       <View
         style={[style, { backgroundColor: fill, borderRadius: cornerRadius }]}

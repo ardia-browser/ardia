@@ -251,7 +251,7 @@ export function settleSidePanelTabs(windowId: string) {
 }
 
 export function watchSidePanelCards(): () => void {
-  return useBrowser.subscribe((s, prev) => {
+  return useBrowser.subscribeTo(["tabs", "windows"], (s, prev) => {
     if (s.tabs === prev.tabs && s.windows === prev.windows) return;
     const { sidePanels, sidePanelCards: cards } = useExtensions.getState();
     for (const windowId of new Set([...Object.keys(cards), ...Object.keys(sidePanels)])) settleSidePanelTabs(windowId);

@@ -105,6 +105,7 @@ export type EngineCalls = {
   "passwords.setAutofillEnabled": [Profile & { enabled: boolean }, null];
   "passwords.setFieldProviders": [{ session: string; generation: number; profiles: FieldProviderProfile[] }, { applied: boolean }];
   "passwords.showSystemPanel": [{ tab: string; generation?: number }, SystemPanelResult];
+  "passwords.showPanelHint": [{ tab: string; label: string; side: "above" | "below" }, { shown: boolean }];
   "passwords.systemPanelAvailable": [{}, { chromium: boolean; webkit: boolean }];
   "passwords.otpauthHandler": [{}, { app: string | null }];
   "passwords.setUpVerificationCode": [{ tab: string; token: string; generation?: number }, VerificationCodeSetupResult];

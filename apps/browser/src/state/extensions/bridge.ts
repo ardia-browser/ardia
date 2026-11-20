@@ -1,3 +1,4 @@
+import { consentToken } from "../telemetry/client";
 import { onExtensionActionPopup, onExtensionActionShortcut, onExtensionSidePanel, onExtensionsChanged, onExtensionTabsRequest } from "../../platform/extensions";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { shownPageId } from "../peek/peek";
@@ -30,18 +31,18 @@ import {
 export function startExtensionsBridge() {
   onExtensionTabsRequest(openRequestedTab);
   startExtensionSearchEngines();
-  onExtensionsChanged(({ profile }) => void refreshExtensions(profile));
-  onSyncedExtensionChange((profile) => void refreshExtensionsAfterChange(profile));
+  onExtensionsChanged(({ profile }) => void refreshExtensions(profile, null));
+  onSyncedExtensionChange((profile) => void refreshExtensionsAfterChange(profile, null));
 
   const loadProfiles = (s: BrowserState) => {
     for (const id of s.windowOrder) {
       const profile = extensionProfile(s, id);
       if (!isPrivate(s, id)) reportExtensionsLoaded(profile);
-      if (watchActionsOf(profile)) void refreshExtensions(profile);
+      if (watchActionsOf(profile)) void refreshExtensions(profile, consentToken());
     }
   };
   loadProfiles(useBrowser.getState());
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["windows", "tabs"], (s, prev) => {
     if (s.windows !== prev.windows) loadProfiles(s);
     if (s.windows !== prev.windows || s.tabs !== prev.tabs) pruneToolbarAnchors(s);
   });
@@ -80,7 +81,7 @@ function startSidePanels() {
     else closeSidePanel(windowId, extensionId);
   });
   const active = (s: BrowserState) => s.windowOrder.map((id) => `${id}:${shownPageId(s, id) ?? ""}`).join(",");
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["windows", "tabs"], (s, prev) => {
     if (s.windows === prev.windows && s.tabs === prev.tabs) return;
     if (active(s) === active(prev)) return;
     for (const [windowId] of wantedSidePanels()) {

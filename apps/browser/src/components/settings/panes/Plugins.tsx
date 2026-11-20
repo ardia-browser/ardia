@@ -12,7 +12,7 @@ import {
   pluginsFolderPath,
   relinkPrograms,
   canRelink,
-  removePlugin,
+  removePluginAfterConfirm,
   requestPluginConsent,
   restartPlugin,
   setPluginValue,
@@ -21,7 +21,6 @@ import {
 } from "../../../state/plugins/actions";
 import { usePluginActive, usePluginListing, usePluginNeedsReview, usePluginProcess, usePluginPrograms, usePluginRecord, usePluginValues } from "../../../state/plugins/hooks";
 import { goToSettingsPane, SETTINGS_WINDOW_ID, type SettingsPlace } from "../../../state/settings/settingsWindows";
-import { confirm } from "../../../state/app/system";
 import { Button, PopUp, Symbol, TextField, Toggle } from "../../ui";
 import { Group, Row, SectionHeader } from "../Form";
 import { useTheme } from "../../ui/theme";
@@ -150,10 +149,7 @@ function ValueRow({ name, row, value }: { name: string; row: RowSpec; value: str
 }
 
 async function confirmRemove(name: string, title: string) {
-  const ok = await confirm({ title: `Remove ${title}?`, message: `Its folder moves to the ${PLATFORM_TERMS.trash}, and its data and its panel's website data are deleted.`, confirmTitle: "Remove", destructive: true, windowId: SETTINGS_WINDOW_ID });
-  if (!ok) return;
-  const removed = await removePlugin(name);
-  if (removed.ok || removed.removed) goToSettingsPane("plugins");
+  if (await removePluginAfterConfirm(name, title, SETTINGS_WINDOW_ID)) goToSettingsPane("plugins");
 }
 
 function PluginPage({ name }: { name: string }) {

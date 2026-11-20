@@ -8,7 +8,7 @@ import type { BrowserWindow, FindState, Profile, Tab, TabGroup, TabLive } from "
 import { CLOSED_FIND, DEFAULT_WINDOW_UI } from "../windows/ui";
 import { downloadsIn } from "../downloads/downloadsSlice";
 import { focusedWindowOf } from "../windows/ui";
-import { ALL, useKeyed, watchSettings, watchTabRecord, watchWindowRecord } from "./keyedWatch";
+import { ALL, useKeyed, useWindowSettings, watchAppDark, watchSettings, watchTabRecord, watchWindowRecord } from "./keyedWatch";
 import { useTabState } from "../tabs/tabStateWatch";
 import { shownLiveOf, watchLive } from "../tabs/tabLive";
 
@@ -35,7 +35,7 @@ export function usePageProfileId(): string {
 }
 
 export const useIsIncognito = () => useWindowField((w) => w.kind === "private", false);
-export const useTabsShown = (windowId: string) => useBrowser((s) => tabsShownIn(s, windowId));
+export const useTabsShown = (windowId: string) => useWindowSettings(windowId, (s) => tabsShownIn(s, windowId));
 export const useSidebarOpen = () => useTabsShown(useWindowId());
 export const useWindowProfileId = () => useWindowField((w) => w.profileId, "");
 
@@ -85,7 +85,7 @@ export const useGroup = <T>(groupId: string | null | undefined, select: (g: TabG
 
 const inert = () => () => {};
 
-function watchShownLive(tabId: string, listener: () => void): () => void {
+export function watchShownLive(tabId: string, listener: () => void): () => void {
   const offLive = watchLive(tabId, listener);
   const offTab = watchTabRecord(tabId, listener);
   return () => {
@@ -121,7 +121,7 @@ export function useIsBookmarked(url: string): boolean {
   return useBrowser((s) => isBookmarked(s, bookmarkProfileId(s, s.windows[id]), url));
 }
 
-export const useAppDark = (): boolean => useBrowser((s) => s.ui.appDark);
+export const useAppDark = (): boolean => useKeyed(watchAppDark, ALL, () => useBrowser.getState().ui.appDark);
 
 export const useTabLayout = (windowId?: string | null): "sidebar" | "top" => useBrowser((s) => tabLayoutOf(s, windowId));
 

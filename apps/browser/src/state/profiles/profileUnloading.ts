@@ -103,7 +103,7 @@ export async function checkIdleProfiles(now = clock()) {
 
 function watchProfiles(): () => void {
   readyToUnload.noteShown(new Set(shownEngineProfiles(store())), clock());
-  const shown = useBrowser.subscribe((s, prev) => {
+  const shown = useBrowser.subscribeTo(["windows", "profiles"], (s, prev) => {
     if (s.windows !== prev.windows || s.profiles !== prev.profiles) readyToUnload.noteShown(new Set(shownEngineProfiles(s)), clock());
   });
   const opened = onProfilesOpened((engines) => {
@@ -141,7 +141,7 @@ export function startProfileUnloading() {
     else (stop?.(), (stop = null));
   };
   follow(profileUnloadDelay(store().settings) !== null);
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["settings"], (s, prev) => {
     if (s.settings !== prev.settings) follow(profileUnloadDelay(s.settings) !== null);
   });
   if (__DEV__) (globalThis as { acProfileUnloading?: unknown }).acProfileUnloading = { check: checkIdleProfiles, unload };

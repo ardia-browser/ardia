@@ -149,13 +149,14 @@ class ProfilePager {
     });
   }
 
-  switchTo(profileId: string) {
+  switchTo(profileId: string, mayWrite?: () => boolean) {
     const s = useBrowser.getState();
     const index = s.profileOrder.indexOf(profileId);
     if (!s.profiles[profileId] || !this.current() || index < 0) return;
     if (!this.active) return s.switchProfile(this.windowId, profileId);
     void switchPager(this.windowId, index, s.profileOrder).then((ok) => {
-      if (!ok) useBrowser.getState().switchProfile(this.windowId, profileId);
+      if (ok || (mayWrite && !mayWrite())) return;
+      useBrowser.getState().switchProfile(this.windowId, profileId);
     });
   }
 
@@ -186,8 +187,8 @@ export function pagerFor(windowId: string): ProfilePager {
   return pager;
 }
 
-export function pageToProfile(windowId: string, profileId: string) {
-  pagerFor(windowId).switchTo(profileId);
+export function pageToProfile(windowId: string, profileId: string, mayWrite?: () => boolean) {
+  pagerFor(windowId).switchTo(profileId, mayWrite);
 }
 
 export function usePagerSurface(windowId: string) {

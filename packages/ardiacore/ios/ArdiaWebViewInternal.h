@@ -314,6 +314,7 @@ typedef NS_ENUM(NSInteger, ArdiaTransfer) {
 - (void)forgetScriptFrame:(NSString *)frameId;
 - (void)pushSelectionPopover;
 - (void)pushFieldProvider;
+- (void)pushFieldProviderHint:(NSString *)json;
 - (BOOL)sameSiteFrame:(BOOL)main origin:(NSString *)origin;
 - (void)callFrame:(NSString *)frameId kind:(NSString *)kind json:(NSString *)json;
 - (void)resetPageMedia;

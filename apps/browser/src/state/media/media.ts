@@ -5,6 +5,7 @@ import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { webviews } from "../../platform/webviews";
 import { useBrowser } from "../browser/store";
+import { useKeyed, watchTabRecord } from "../browser/keyedWatch";
 import type { BrowserState } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import { peekTabId } from "../peek/peek";
@@ -319,7 +320,7 @@ export function usePictureInPicture(tabId: string): [boolean, (press: GestureRes
   return [on, (press) => void togglePictureInPicture(tabId, controlPress(press))];
 }
 
-useBrowser.subscribe((s, prev) => {
+useBrowser.subscribeTo(["tabs"], (s, prev) => {
   if (s.tabs === prev.tabs) return;
   const m = useMedia.getState();
   const gone = [...new Set(PER_TAB.flatMap((k) => Object.keys(m[k])))].filter((id) => !s.tabs[id]);
@@ -350,4 +351,5 @@ export const useHiddenPlayerTabs = (windowId: string, profileId: string, session
 
 export const sidebarPlayerCandidates = (m: Pick<Store, "leftPaused">, hidden: string[]) => hidden.filter((id) => !m.leftPaused[id]);
 
-export const usePinnedWithMediaControls = (tabId: string | undefined) => useBrowser((s) => !!tabId && !!s.tabs[tabId]?.pin);
+export const usePinnedWithMediaControls = (tabId: string | undefined) =>
+  useKeyed(watchTabRecord, tabId, () => !!tabId && !!useBrowser.getState().tabs[tabId]?.pin);

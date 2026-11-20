@@ -158,6 +158,13 @@ export const tabRows = {
           keywords: ["target blank", "new tab", "links", "inside"],
           shown: () => PLATFORM_FEATURES.keepsNewTabLinksInLittleArdia,
         },
+        littleArdiaShortcutFromAnyApp: {
+          title: "Shortcut opens Little Ardia from other apps",
+          explained: true,
+          description: "New Little Ardia Window's shortcut opens Little Ardia while another app is in front. Off, that app keeps the shortcut.",
+          shown: () => PLATFORM_FEATURES.littleArdiaShortcutFromAnyApp,
+          keywords: ["global shortcut", "global hotkey", "hotkey", "shortcut", "any app", "other apps", "system wide", "option command n", "new little ardia window"],
+        },
         peekLinksToOtherSites: {
           title: "Links to other sites open in",
           explained: true,

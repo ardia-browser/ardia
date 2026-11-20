@@ -1,11 +1,15 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Keyboard, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, type LayoutChangeEvent } from "react-native";
-import Animated, { FadeIn, FadeOut, useAnimatedStyle, useSharedValue, withDelay, withSpring } from "react-native-reanimated";
+import Animated, { Easing, FadeIn, FadeInLeft, FadeInRight, FadeOut, FadeOutLeft, FadeOutRight, useAnimatedStyle, useSharedValue, withDelay, withSpring } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { advanceOnboarding, finishOnboarding, useOnboarding } from "../../state/onboarding/hooks";
 import { refreshSettings, setBlockingCategory, useBlocking } from "../../state/settings/actions";
 import { AppIcon, appIconLayout, LookBackdrop, moveTo, onboardingArt, font, primaryButtonHeight, radius, settingsTint, shadowRadius, space, spring, Symbol, tabsMotion, ToggleTrack, useTheme, type SymbolName, useReduceMotion } from "../ui";
 import type { Motion } from "../ui/motion";
+import { useDesign } from "../ui";
+import { useMaterialRipple } from "../ui/MaterialSurfaces";
+import { useMaterialTheme } from "../ui/materialTheme";
+import { materialEasing, materialMotion, materialShape, materialSize, materialType } from "../ui/materialTokens";
 import { CrossfadeText, Divider, ToggleRow } from "../settings/SettingsKit";
 import { SyncConnect } from "../sync/SyncConnect";
 import { DefaultBrowserSteps } from "../settings/DefaultBrowserPage";
@@ -50,6 +54,15 @@ const fade = (from: number, to: number, motion: Motion) => () => {
 const backdropIn = (reduced: boolean) => fade(0, 1, reduced ? onboardingMotion.backdropReduced : onboardingMotion.backdrop);
 const backdropOut = (reduced: boolean) => fade(1, 0, reduced ? onboardingMotion.backdropReduced : onboardingMotion.backdrop);
 
+const axisIn = Easing.bezier(...materialEasing[materialMotion.sharedAxisIn.easing]);
+const axisOut = Easing.bezier(...materialEasing[materialMotion.sharedAxisOut.easing]);
+const MATERIAL_STEP = {
+  inForward: FadeInRight.duration(materialMotion.sharedAxisIn.durationMs).easing(axisIn),
+  inBack: FadeInLeft.duration(materialMotion.sharedAxisIn.durationMs).easing(axisIn),
+  outForward: FadeOutLeft.duration(materialMotion.sharedAxisOut.durationMs).easing(axisOut),
+  outBack: FadeOutRight.duration(materialMotion.sharedAxisOut.durationMs).easing(axisOut),
+};
+
 const REDUCED_IN = FadeIn.duration(tabsMotion.fade);
 const REDUCED_OUT = FadeOut.duration(tabsMotion.fade);
 
@@ -77,6 +90,7 @@ export function OnboardingView() {
   const forward = useOnboarding((s) => s.forward);
   const reduceMotion = useReduceMotion();
   const { fontScale } = useWindowDimensions();
+  const material = useDesign() === "material";
   useEffect(() => {
     if (showing) void refreshSettings();
   }, [showing]);
@@ -92,8 +106,8 @@ export function OnboardingView() {
       <Animated.View
         key={step}
         testID="onboardingStep"
-        entering={stepIn(forward ? 1 : -1, reduceMotion)}
-        exiting={stepOut(forward ? 1 : -1, reduceMotion)}
+        entering={material && !reduceMotion ? (forward ? MATERIAL_STEP.inForward : MATERIAL_STEP.inBack) : stepIn(forward ? 1 : -1, reduceMotion)}
+        exiting={material && !reduceMotion ? (forward ? MATERIAL_STEP.outForward : MATERIAL_STEP.outBack) : stepOut(forward ? 1 : -1, reduceMotion)}
         style={[StyleSheet.absoluteFill, { zIndex: ONBOARDING_LAYERS.step, paddingTop: insets.top, paddingBottom: insets.bottom }]}
       >
         {fontScale > LARGE_TEXT ? (
@@ -159,6 +173,14 @@ function SyncStep() {
 
 function Secondary({ title, onPress }: { title: string; onPress: () => void }) {
   const theme = useTheme();
+  const { scheme } = useMaterialTheme();
+  const ripple = useMaterialRipple();
+  if (useDesign() === "material")
+    return (
+      <Pressable testID="materialOnboardingSecondary" accessibilityRole="button" android_ripple={ripple} onPress={onPress} style={styles.materialSecondary}>
+        <Text style={[materialType.labelLarge, { color: scheme.primary }]}>{title}</Text>
+      </Pressable>
+    );
   return (
     <Pressable accessibilityRole="button" onPress={onPress} style={styles.secondary}>
       <Text style={[font.body, styles.bold, { color: theme.label }]}>{title}</Text>
@@ -170,6 +192,14 @@ function Primary({ title, onPress }: { title: string; onPress: () => void }) {
   const theme = useTheme();
   const [height, setHeight] = useState(primaryButtonHeight);
   const measure = (event: LayoutChangeEvent) => setHeight(Math.max(event.nativeEvent.layout.height, primaryButtonHeight()));
+  const { scheme } = useMaterialTheme();
+  const ripple = useMaterialRipple();
+  if (useDesign() === "material")
+    return (
+      <Pressable testID="materialOnboardingPrimary" accessibilityRole="button" android_ripple={ripple} onPress={onPress} style={[styles.materialPrimary, { backgroundColor: scheme.primary }]}>
+        <Text style={[materialType.titleMedium, styles.centeredText, { color: scheme.onPrimary }]}>{title}</Text>
+      </Pressable>
+    );
   return (
     <Pressable
       accessibilityRole="button"
@@ -184,6 +214,7 @@ function Primary({ title, onPress }: { title: string; onPress: () => void }) {
 
 function Welcome() {
   const theme = useTheme();
+  const material = useDesign() === "material";
   const reduceMotion = useReduceMotion();
   const appear = useSharedValue(0);
   useEffect(() => {
@@ -208,10 +239,10 @@ function Welcome() {
         <AppIcon side={appIconLayout.welcome} scalesWithText={false} />
       </Animated.View>
       <Animated.View testID="welcomeWords" style={[styles.welcomeWords, words]}>
-        <Text accessibilityRole="header" style={[onboardingLayout.welcomeTitle, styles.heavy, { color: theme.label }]}>
+        <Text accessibilityRole="header" style={material ? [materialType.displaySmall, styles.centeredText, { color: theme.label }] : [onboardingLayout.welcomeTitle, styles.heavy, { color: theme.label }]}>
           Meet your new favorite browser
         </Text>
-        <Text style={[onboardingLayout.welcomeSubtitle, styles.centered, { color: theme.secondaryLabel }]}>Get what you want twice as fast.</Text>
+        <Text style={[material ? materialType.bodyLarge : onboardingLayout.welcomeSubtitle, styles.centered, { color: theme.secondaryLabel }]}>Get what you want twice as fast.</Text>
       </Animated.View>
       <View style={styles.fill} />
       <Animated.View testID="onboardingActions" style={[styles.actions, { paddingTop: onboardingLayout.welcomeActionsTop }, start]}>
@@ -223,16 +254,17 @@ function Welcome() {
 
 function Page({ title, subtitle, illustration, sitsLow, children }: { title: ReactNode; subtitle: string; illustration: ReactNode; sitsLow?: boolean; children: ReactNode }) {
   const theme = useTheme();
+  const material = useDesign() === "material";
   return (
     <View style={styles.fill}>
       <View testID="onboardingIllustration" style={[styles.illustration, { justifyContent: sitsLow ? "flex-end" : "center" }]}>
         {illustration}
       </View>
       <View testID="onboardingWords" style={styles.words}>
-        <Text accessibilityRole="header" style={[onboardingLayout.title, styles.heavy, { color: theme.label }]}>
+        <Text accessibilityRole="header" style={material ? [materialType.headlineMedium, styles.centeredText, { color: theme.label }] : [onboardingLayout.title, styles.heavy, { color: theme.label }]}>
           {title}
         </Text>
-        <CrossfadeText testID="onboardingSubtitle" text={subtitle} style={[font.body, styles.centered, { color: theme.secondaryLabel }]} />
+        <CrossfadeText testID="onboardingSubtitle" text={subtitle} style={[material ? materialType.bodyLarge : font.body, styles.centered, { color: theme.secondaryLabel }]} />
       </View>
       <View testID="onboardingActions" style={[styles.actions, { paddingTop: onboardingLayout.actionsTop }]}>
         {children}
@@ -243,7 +275,10 @@ function Page({ title, subtitle, illustration, sitsLow, children }: { title: Rea
 
 function OnboardingCard({ children }: { children: ReactNode }) {
   const theme = useTheme();
-  const style = onboardingLayout.rowIcons
+  const { scheme } = useMaterialTheme();
+  const style = useDesign() === "material"
+    ? [styles.materialCard, { backgroundColor: scheme.surfaceContainerHigh }]
+    : onboardingLayout.rowIcons
     ? [styles.card, { backgroundColor: theme.groupFill, shadowColor: theme.trayShadow }]
     : [styles.plainCard, { backgroundColor: withAlpha(theme.pageSurface, onboardingLayout.cardFill), boxShadow: onboardingLayout.cardShadow }];
   return (
@@ -385,6 +420,10 @@ const styles = StyleSheet.create({
   bold: { fontWeight: "600" },
   actions: { paddingHorizontal: onboardingLayout.actionsInset, paddingBottom: onboardingLayout.actionsBottom, gap: onboardingLayout.actionsGap },
   primary: { alignItems: "center", justifyContent: "center", paddingHorizontal: space.l, paddingVertical: space.m },
+  materialPrimary: { minHeight: 56, borderRadius: materialShape.full, overflow: "hidden", alignItems: "center", justifyContent: "center", paddingHorizontal: 24 },
+  materialSecondary: { minHeight: materialSize.touchTarget, borderRadius: materialShape.full, overflow: "hidden", alignItems: "center", justifyContent: "center", paddingHorizontal: 12 },
+  materialCard: { borderRadius: materialShape.medium, paddingVertical: 8, overflow: "hidden" },
+  centeredText: { textAlign: "center" },
   primaryLabel: { fontWeight: "600", textAlign: "center" },
   illustration: { flex: 1, paddingHorizontal: onboardingLayout.illustrationInset },
   card: { borderRadius: radius.card, paddingVertical: space.xs, elevation: 8, shadowOpacity: 0.4, shadowRadius: shadowRadius.card },

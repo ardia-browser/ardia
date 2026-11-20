@@ -23,6 +23,7 @@ export type BrowseForMeEvent =
   | { name: "openLink"; url: string }
   | { name: "closed" }
   | { name: "settled"; outcome: BrowseForMeOutcome; chatGPTFellBack: boolean }
+  | { name: "talkToMe"; count: string }
   | { name: "account"; connected: boolean; account?: ChatGPTAccountState };
 
 type BrowseForMeNative = {

@@ -3,16 +3,18 @@ import { act, type ReactTestInstance } from "react-test-renderer";
 import { BrowsingScreen } from "../components/browsing/BrowsingScreen";
 import { FloatingBar } from "../components/browsing/FloatingBar";
 import { SearchTray } from "../components/search/SearchTray";
+import { StartScreen } from "../components/search/StartScreen";
 import { TabDeck } from "../components/tabs/TabDeck";
 import { deckArchiveBottom, deckHeaderBottom } from "../components/tabs/DeckHeader";
 import { DesignProvider } from "../components/ui";
 import { deckGeometry } from "../lib/deckGeometry";
-import { forgetLandscapeCount, noteScreenLayoutName, noteWindowShape } from "../state/app/landscapeCount";
+import { forgetLandscapeCount, noteScreenLayout, noteWindowShape } from "../state/app/landscapeCount";
 import { useArchiveCard } from "../state/browse/archiveCard";
 import * as deckGrid from "../state/browse/deckGrid";
 import { writePreference } from "../state/store/browserDatabase";
 import { browserDatabase } from "../state/store/database";
 import { setRootSize } from "../state/app/rootSize";
+import { useScreenLayout, type ScreenHinge } from "../state/app/screenLayout";
 import * as browse from "../state/browse/store";
 import { presentSearch } from "../state/search/store";
 import { currentTabs } from "../state/tabs/store";
@@ -39,6 +41,7 @@ afterEach(() => {
   writePreference(browserDatabase(), deckGrid.DECK_GRID_KEY, null);
   act(() => deckGrid.forgetDeckGrid());
   Dimensions.set({ window: PORTRAIT, screen: PORTRAIT });
+  act(() => useScreenLayout.setState({ hinge: "none" }));
   jest.useRealTimers();
   jest.restoreAllMocks();
 });
@@ -62,7 +65,7 @@ test("an iPhone 17 Pro on its side gets main's landscape deck: a 520.3 by 240 ca
 test("in landscape the deck's header and its bottom bar pad by the wider side inset plus the bars' 24 on both sides, and on iPhone the grid by it plus 16", () => {
   act(() => browse.useBrowse.setState({ surface: "deck", sheet: null, deckEntrance: null, frozenOrder: null, opening: null, leaving: null }));
   const root = redesigned(<TabDeck />);
-  expect(flat(hosts(root, "deckBottomBar")[0]!).paddingHorizontal).toBe(59 + 24);
+  expect(flat(hosts(root, "deckBottomBar")[0]!)).toMatchObject({ paddingLeft: 59 + 24, paddingRight: 59 + 24 });
   const header = root.root.findAll((node) => typeof node.type === "string" && typeof node.props.testID === "string" && node.props.testID.startsWith("deckHeader"));
   expect(header.length).toBeGreaterThan(0);
   const sides = header.map(flat).flatMap((style) => [style.paddingHorizontal, style.left, style.right, style.paddingLeft, style.paddingRight]).filter((value) => typeof value === "number");
@@ -82,11 +85,94 @@ test("in landscape the page bar stays one centred row: the wider side inset on b
   const bar = root.root.findAll((node) => node.type === FloatingBar)[0]!;
   let controls: ReactTestInstance | null = bar.parent;
   while (controls && (typeof controls.type !== "string" || flat(controls).bottom === undefined)) controls = controls.parent;
-  expect(flat(controls!).paddingHorizontal).toBe(59);
+  expect(flat(controls!)).toMatchObject({ left: 59, right: 59 });
   const row = bar.findAll((node) => typeof node.type === "string" && flat(node).flexDirection === "row" && flat(node).paddingHorizontal === 24)[0]!;
   const { gap, height } = flat(row) as { gap: number; height: number };
   expect(LANDSCAPE.width - 2 * (59 + 24) - 2 * height - 2 * gap).toBe(574);
   unmount(root);
+});
+
+const DUO_POSES = [
+  { name: "closed", width: 466, height: 678, insets: { top: 0, bottom: 34, left: 0, right: 84 }, hinge: "closed", span: { left: 24, right: 96 }, stripX: 418, plusY: -55, tabsY: 0, deckPlusY: 0, ends: false },
+  { name: "open", width: 951, height: 669, insets: { top: 0, bottom: 34, left: 0, right: 84 }, hinge: "fullyOpen", span: { left: 527, right: 24 }, stripX: 903, plusY: -110, tabsY: -55, deckPlusY: -110, ends: true },
+] as const satisfies readonly { name: string; width: number; height: number; insets: typeof INSETS; hinge: ScreenHinge; span: { left: number; right: number }; stripX: number; plusY: number; tabsY: number; deckPlusY: number; ends: boolean }[];
+
+function onDuo(pose: (typeof DUO_POSES)[number]) {
+  Dimensions.set({ window: { ...PORTRAIT, width: pose.width, height: pose.height }, screen: { ...PORTRAIT, width: pose.width, height: pose.height } });
+  act(() => setRootSize(pose.width, pose.height));
+  jest.spyOn(safeArea, "useSafeAreaInsets").mockImplementation(() => pose.insets);
+  act(() => useScreenLayout.setState({ hinge: pose.hinge }));
+}
+
+const holds = (node: ReactTestInstance, id: string) => node.findAll((inner) => inner.props.testID === id).length > 0;
+
+for (const pose of DUO_POSES) {
+  test(`on the ${pose.name} Duo the page bar holds only the address capsule, ${pose.span.left} from the left to ${pose.span.right} from the right, with + at ${pose.plusY} and Tabs at ${pose.tabsY} from the bar's line in the strip, ${pose.stripX} across`, () => {
+    onDuo(pose);
+    act(() => browse.useBrowse.setState({ surface: "browsing", sheet: null, deckEntrance: null, frozenOrder: null, opening: null }));
+    const page = redesigned(<BrowsingScreen tab={currentTabs().open[0]!} />);
+    const bar = page.root.findAll((node) => node.type === FloatingBar)[0]!;
+    let controls: ReactTestInstance | null = bar.parent;
+    while (controls && (typeof controls.type !== "string" || flat(controls).bottom === undefined)) controls = controls.parent;
+    const { left } = flat(controls!) as { left: number };
+    expect(flat(controls!)).toMatchObject({ left: pose.span.left - 24, right: pose.span.right - 24 });
+    const row = hosts(page, "floatingBar")[0]!;
+    expect(flat(row).paddingHorizontal).toBe(24);
+    expect(holds(row, "floatingBarAddress")).toBe(true);
+    expect(holds(row, "floatingBarTabs")).toBe(false);
+    expect(holds(row, "floatingBarPlus")).toBe(false);
+    const strip = hosts(page, "floatingBarStrip")[0]!;
+    const { left: stripLeft, top: stripTop, width: stripWidth, gap } = flat(strip) as { left: number; top: number; width: number; gap: number };
+    expect(left + stripLeft + stripWidth / 2).toBe(pose.stripX);
+    expect(stripTop).toBe(pose.plusY);
+    expect(stripWidth + gap).toBe(55);
+    const order = strip.findAll((node) => node.props.testID === "floatingBarPlus" || node.props.testID === "floatingBarTabs").map((node) => node.props.testID as string);
+    expect([...new Set(order)]).toEqual(["floatingBarPlus", "floatingBarTabs"]);
+    if (pose.ends) expect(pose.width - (flat(controls!).right as number) - 24).toBe(pose.stripX + 24);
+    unmount(page);
+  });
+
+  test(`on the ${pose.name} Duo the deck's + and the start page's + and Tabs take the page's strip slots, so nothing jumps between screens`, () => {
+    onDuo(pose);
+    act(() => browse.useBrowse.setState({ surface: "deck", sheet: null, deckEntrance: null, frozenOrder: null, opening: null, leaving: null }));
+    const deck = redesigned(<TabDeck />);
+    const deckBar = hosts(deck, "deckBottomBar")[0]!;
+    expect(flat(deckBar)).toMatchObject({ paddingLeft: pose.span.left, paddingRight: pose.span.right });
+    expect(holds(deckBar, "deckBarIncognito")).toBe(!pose.ends);
+    expect(holds(deckBar, "deckBarPlus")).toBe(false);
+    const stripPlus = hosts(deck, "deckStripPlus")[0]!;
+    expect(flat(stripPlus)).toMatchObject({ top: pose.deckPlusY, left: pose.stripX - 24, width: 48 });
+    const stripIncognito = hosts(deck, "deckStripIncognito")[0];
+    if (pose.ends) expect(flat(stripIncognito!)).toMatchObject({ top: pose.tabsY, left: pose.stripX - 24, width: 48 });
+    else expect(stripIncognito).toBeUndefined();
+    if (pose.ends) expect(holds(stripIncognito!, "deckBarIncognito")).toBe(true);
+    const plus = deck.root.findAll((node) => node.props.testID === "deckBarPlus" && node.props.place)[0]!;
+    expect(plus.props.place).toMatchObject({ right: pose.width - pose.stripX + 32 });
+    unmount(deck);
+    act(() => browse.useBrowse.setState({ surface: "start", sheet: null, deckEntrance: null, frozenOrder: null, opening: null, leaving: null }));
+    const start = redesigned(<StartScreen />);
+    const startBar = hosts(start, "startBar")[0]!;
+    const { top } = flat(startBar) as { top: number };
+    expect(flat(startBar)).toMatchObject({ paddingLeft: pose.span.left, paddingRight: pose.span.right });
+    expect(holds(startBar, "startBarSettings")).toBe(true);
+    expect(holds(startBar, "startBarTabs")).toBe(false);
+    expect(holds(startBar, "startBarPlus")).toBe(false);
+    expect(flat(hosts(start, "startStripTabs")[0]!)).toMatchObject({ left: pose.stripX - 24, top: top + pose.tabsY, width: 48 });
+    expect(flat(hosts(start, "startStripPlus")[0]!)).toMatchObject({ left: pose.stripX - 24, top: top + pose.plusY, width: 48 });
+    expect(flat(startBar).justifyContent).toBe(pose.ends ? "flex-end" : "space-between");
+    expect(holds(hosts(start, "startStripPlus")[0]!, "startBarPlus")).toBe(true);
+    expect(holds(hosts(start, "startStripTabs")[0]!, "startBarTabs")).toBe(true);
+    unmount(start);
+  });
+}
+
+test("with no hinge the page bar keeps Tabs and + in its row", () => {
+  act(() => browse.useBrowse.setState({ surface: "browsing", sheet: null, deckEntrance: null, frozenOrder: null, opening: null }));
+  const page = redesigned(<BrowsingScreen tab={currentTabs().open[0]!} />);
+  const row = hosts(page, "floatingBar")[0]!;
+  expect(holds(row, "floatingBarTabs")).toBe(true);
+  expect(holds(row, "floatingBarPlus")).toBe(true);
+  unmount(page);
 });
 
 test("in landscape the search panel spans the safe width less 8 on each side, so it clears the island", () => {
@@ -125,14 +211,21 @@ test("in landscape the archive capsule shrinks the deck's cards to main's 407.6 
   act(() => useArchiveCard.setState({ showing: false }));
 });
 
-test("a Duo layout is counted once a launch, and the phone layout never counts", () => {
+test("a launch on a Duo in any pose, or in the wide or split layout, is counted once, and a plain iPhone never counts", () => {
   const counted = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
   forgetLandscapeCount();
-  noteScreenLayoutName("phone");
-  noteScreenLayoutName("column");
-  noteScreenLayoutName("wide");
-  noteScreenLayoutName("split");
+  noteScreenLayout("phone", "none");
+  expect(counted.mock.calls).toEqual([]);
+  noteScreenLayout("phone", "closed");
+  noteScreenLayout("phone", "fullyOpen");
+  noteScreenLayout("split", "partiallyOpen");
   expect(counted.mock.calls).toEqual([["duo_layout_shown"]]);
+  for (const [name, hinge] of [["phone", "fullyOpen"], ["wide", "none"], ["split", "partiallyOpen"]] as const) {
+    counted.mockClear();
+    forgetLandscapeCount();
+    noteScreenLayout(name, hinge);
+    expect(counted.mock.calls).toEqual([["duo_layout_shown"]]);
+  }
   forgetLandscapeCount();
 });
 
@@ -159,7 +252,8 @@ test("in landscape the original design's deck bar pads by the wider side inset, 
   const root = renderSurface(<DesignProvider design="original"><TabDeck /></DesignProvider>);
   const settings = root.root.findAll((node) => node.props.accessibilityLabel === "Settings" && typeof node.props.onPress === "function")[0]!;
   let bar: ReactTestInstance | null = settings.parent;
-  while (bar && (typeof bar.type !== "string" || flat(bar).paddingHorizontal === undefined)) bar = bar.parent;
-  expect(flat(bar!).paddingHorizontal).toBeGreaterThanOrEqual(59);
+  while (bar && (typeof bar.type !== "string" || flat(bar).paddingLeft === undefined)) bar = bar.parent;
+  expect(flat(bar!).paddingLeft).toBeGreaterThanOrEqual(59);
+  expect(flat(bar!).paddingRight).toBeGreaterThanOrEqual(59);
   unmount(root);
 });

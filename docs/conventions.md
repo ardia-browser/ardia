@@ -81,7 +81,9 @@ lib/                    pure helpers: url, color, time, keys
 - **Motion by frequency of use.** High-frequency controls (tab rows, tiles, folders, toolbar buttons, menus, the
   command bar) get no bounce, squish or overshoot: state changes land on the press, and any curve is short and
   critically damped. Springs with visible overshoot (`springs.bouncy`) are for rare, larger moves such as the
-  sidebar opening, onboarding and sheets (AGENTS.md, Building features).
+  sidebar opening, onboarding and sheets (AGENTS.md, Building features). The one exception is opt-in and off by
+  default: `config.json`'s `pressMotion: "bounce"` (no Settings row, `docs/config.md`) brings back 0.2.47-nightly.6's
+  squish through `useSquish`, `usePressScaleMotion` and `liftSpring`, never through `springs.bouncy` at the call site.
 - **Screens are built from `components/ui/` pieces:** Box, Text, Button (icon, text, pill and close variants),
   Popover, Dialog, Row, Field, Switch, Radio, Menu, with token props (`pad="m" fill="panel" radius="l"`). Native views
   (Surface, Symbol, the web view, …) are wrapped there too. Feature code passes `style` only for layout (flex,
@@ -100,7 +102,7 @@ lib/                    pure helpers: url, color, time, keys
 | `Easing.out(Easing.quad)`, `Easing.bezier(…)` | `curve.enter`, `curve.exit`, `curve.move`, `curve.pulse`, … from `motion.ts` |
 | a numeric `duration:` | `duration.fast`, `duration.base`, `duration.slow`, `duration.long`; a loop's period is `period.spinner` / `period.pulse` |
 | `stiffness: (2π/response)²` written by hand | `springs.snappy` / `smooth`, or `spring({ response, damping })` for a measured spring; `springs.bouncy` only for a rare, larger move (a badge appearing, the sidebar's edge springing back from a resize past its limit) |
-| a glyph or a small control that dips while pressed | `usePressScaleMotion(enabled, buttonMotion.…)` on its `onPressIn`/`onPressOut`: `springs.snappy` both ways, no bounce. Rows, folder headers and tiles don't scale at all (Motion by frequency of use; `ui/pressFeedback.test.mjs` keeps `springs.bouncy` out of the sidebar, the tab strip, the toolbar, the command bar, the New Tab page and the shared buttons, rows and menus) |
+| a glyph or a small control that dips while pressed | `usePressScaleMotion(enabled, buttonMotion.…)` on its `onPressIn`/`onPressOut`: `springs.snappy` both ways, no bounce. Rows, folder headers and tiles don't scale at all, unless `pressMotion` is `"bounce"`: then `useSquish("row" \| "tile")` and `<Squish scale>` from `ui/Squish.tsx` (Motion by frequency of use; `ui/pressFeedback.test.mjs` keeps `springs.bouncy` out of the sidebar, the tab strip, the toolbar, the command bar, the New Tab page and the shared buttons, rows and menus) |
 | a hover or pressed highlight behind a row or a button plate | `<HoverFill shown color radius>`: lights in `hoverFade.show`, fades in `hoverFade.hide`; `instant` when the thing becomes selected. Over a fill it has at rest: `<HoverSwap rest color radius>`, with `underBorder` when the control draws a border |
 | a `View` with `padding`/`gap`/`backgroundColor`/`borderRadius` from tokens | `<Box pad="m" gap="s" fill="panel" radius="tile" row>` |
 | `<Text style={{ fontSize: 13, fontWeight: "600", color: theme.textSecondary }}>` | `<Text size="body" weight="semibold" tone="textSecondary">` |

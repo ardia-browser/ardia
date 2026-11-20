@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { bottomBarCollapses } from "../../lib/barCollapse";
 import { permissionSummary, PERMISSION_NAMES, sortedPermissions } from "../../lib/sitePermissionNames";
 import type { SitePermissionGrant } from "../../platform/pages";
 import { refreshSitePermissions, revokeSiteAccess, useSitePermissions } from "../../state/settings/sitePermissions";
@@ -7,7 +8,7 @@ import { setBlockingCategory, setCollapsesBottomBar, setDefaultNightShade, setSw
 import { usePreferences } from "../../state/settings/hooks";
 import { popSettings, pushSettings, type SettingsRoute } from "../../state/settings/nav";
 import { formatNumber } from "../../state/settings/settingsRules";
-import { Dialog, Favicon, font, settingsLayout, settingsTint, Symbol, useTheme, type DialogButton } from "../ui";
+import { Dialog, Favicon, font, settingsLayout, settingsTint, Symbol, useDesign, useTheme, type DialogButton } from "../ui";
 import { Divider, Group, NavRow, PickerRow, SettingsPage, ToggleRow } from "./SettingsKit";
 import { useSyncEnabled, useSyncView } from "../../state/sync/hooks";
 import { syncedEngineName } from "../../state/sync/syncRules";
@@ -74,7 +75,7 @@ export function SiteSettingsPage() {
   );
 }
 
-function AllowedSites() {
+export function AllowedSites() {
   const theme = useTheme();
   const listed = useSitePermissions((s) => s.listed);
   const grants = useSitePermissions((s) => s.grants);
@@ -138,12 +139,13 @@ function AllowedSite({ grant, divider }: { grant: SitePermissionGrant; divider: 
 const SITE_FAVICON = 22;
 
 export function SiteSettingsGroups({ openRoute }: { openRoute: (route: SettingsRoute) => void }) {
+  const design = useDesign();
   const state = useBlocking((s) => s.state);
   const nightShade = useEngines((s) => s.nightShade);
   const enabledLists = state?.lists.filter((list) => list.isEnabled).length ?? 0;
   const trusted = state?.exemptHosts.length ?? 0;
   const swipe = usePreferences((p) => p.swipeNavigation);
-  const collapses = usePreferences((p) => p.collapsesBottomBar);
+  const collapses = bottomBarCollapses(design, usePreferences((p) => p.collapsesBottomBar));
   return (
     <>
       <Group>

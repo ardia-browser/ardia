@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { Pressable, StyleSheet } from "react-native";
 import Animated, { interpolateColor, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
+import { useDesign } from "./design";
+import { MaterialSwitchTrack } from "./MaterialSurfaces";
 import { springs } from "./motion";
 import { useTheme } from "./theme";
 import { capsule, ink, shadowRadius, toggleLayout } from "./tokens";
@@ -24,6 +26,11 @@ export function Toggle({ value, disabled, onChange, label }: { value: boolean; d
 }
 
 export function ToggleTrack({ value, disabled }: { value: boolean; disabled?: boolean }) {
+  if (useDesign() === "material") return <MaterialSwitchTrack value={value} disabled={disabled} />;
+  return <ClassicToggleTrack value={value} disabled={disabled} />;
+}
+
+function ClassicToggleTrack({ value, disabled }: { value: boolean; disabled?: boolean }) {
   const theme = useTheme();
   const position = useSharedValue(value ? 1 : 0);
   useEffect(() => {

@@ -316,7 +316,7 @@ final class StageMorph {
     stage.addSubview(view)
   }
 
-  func fly(to target: CGRect, style: UIUserInterfaceStyle, carrying face: StageFace?, timing: UITimingCurveProvider, duration: TimeInterval) {
+  func fly(to target: CGRect, style: UIUserInterfaceStyle, carrying face: StageFace?, timing: UITimingCurveProvider, duration: TimeInterval, direct: Bool = false) {
     guard !hasFlown else { return }
     hasFlown = true
     destination = target
@@ -325,6 +325,17 @@ final class StageMorph {
     if let face {
       UIView.performWithoutAnimation { view.carry(face.makeView()) }
       fades.append(Self.run(Motion.stageFaceArrival, after: Motion.stageFaceArrivalDelay) { [view] in view.faceSlot.alpha = 1 })
+    }
+    if direct {
+      let travel = UIViewPropertyAnimator(duration: duration, timingParameters: timing)
+      travel.addAnimations { [view] in
+        view.shape(to: target, radius: target.height / 2)
+        view.settle(style: style)
+      }
+      travel.startAnimation()
+      flight = travel
+      folding = []
+      return
     }
     let start = view.frame
     let radius = view.radius

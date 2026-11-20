@@ -51,6 +51,7 @@ final class SearchStageView: ExpoView {
   private var startWaiters: [() -> Void] = []
   var fieldCenter = BrowseLayout.stageFieldCenter(fieldHeight: BrowseLayout.searchFieldHeight)
   var commandTop: CGFloat?
+  var landsDirectly = false
   var look = StageMorphLook()
 
   private let keyboardSentinel = UIView()
@@ -422,11 +423,11 @@ final class SearchStageView: ExpoView {
     let target = convert(anchor.frame, from: nil)
     let carried = face.flatMap { $0.fits(anchor) ? $0 : nil }
     if abs(velocity) < Self.stillReleaseSpeed, let clock = StageKeyboardClock(layer: keyboardSentinel.layer) {
-      morph.fly(to: target, style: anchor.style, carrying: carried, timing: clock.timing, duration: clock.duration)
+      morph.fly(to: target, style: anchor.style, carrying: carried, timing: clock.timing, duration: clock.duration, direct: landsDirectly)
     } else {
       let distance = target.midY - morph.view.frame.midY
       let timing = Motion.smoothSpring.stageTimingParameters(initialVelocity: Motion.relativeVelocity(velocity, over: distance))
-      morph.fly(to: target, style: anchor.style, carrying: carried, timing: timing, duration: Motion.smoothSpring.settlingDuration)
+      morph.fly(to: target, style: anchor.style, carrying: carried, timing: timing, duration: Motion.smoothSpring.settlingDuration, direct: landsDirectly)
     }
     hidePanelUnderMorph()
   }

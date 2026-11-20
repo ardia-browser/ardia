@@ -38,7 +38,7 @@ export const GoButton = memo(function GoButton({ label, enabled, onPress }: { la
           }, scaleStyle]}
         >
           {glass ? <GlassFill radius={GO_BUTTON.radius} state={!enabled ? "rest" : hovered ? "pressed" : "lit"} /> : null}
-          <Text lines={1} weight="semibold" tone={tone} style={BAR_TYPE.goLabel}>
+          <Text lines={1} weight="semibold" tone={tone} ardiaCentersCapitals style={BAR_TYPE.goLabel}>
             {label}
           </Text>
           <Symbol

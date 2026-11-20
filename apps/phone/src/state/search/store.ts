@@ -17,7 +17,7 @@ export type SearchOrigin = "home" | "start" | "page";
 
 export type SearchEnding = "submitted" | "cancelled";
 
-export type TrayArrival = "rises" | "atRest";
+export type TrayArrival = "rises" | "atRest" | "dockedMenu";
 
 type SearchState = {
   open: boolean;

@@ -1,5 +1,4 @@
-import { Platform } from "react-native";
-import { Easing, makeMutable, ReduceMotion, runOnJS, runOnUI, withSpring, withTiming, type AnimationCallback, type WithSpringConfig } from "react-native-reanimated";
+import { makeMutable, ReduceMotion, runOnJS, runOnUI, withSpring, withTiming } from "react-native-reanimated";
 import { create } from "zustand";
 import { DECK_PULL, DECK_PULL_SPRING, pullLands, pullShrink, pullSpeed, type PullTarget } from "../../lib/deckPull";
 
@@ -30,14 +29,6 @@ export const deckPull = {
 };
 
 export type PullSettled = (id: string, landed: boolean, worstFrameMs: number) => void;
-
-const timedPull = Platform.OS === "android";
-const pullTiming = { duration: DECK_PULL.androidSettleMs, easing: Easing.bezier(0.2, 0, 0, 1) };
-
-function animatePullSettle(to: number, spring: WithSpringConfig, finished?: AnimationCallback) {
-  "worklet";
-  return timedPull ? withTiming(to, pullTiming, finished) : withSpring(to, spring, finished);
-}
 
 function watchPullFrames() {
   "worklet";
@@ -96,8 +87,8 @@ export function settleDeckPull(lands: boolean, velocityY: number, settled: PullS
   const velocity = pullSpeed(velocityY, target.pull);
   if (lands) {
     deckPull.stage.value = PULL_STAGE.landing;
-    deckPull.reveal.value = animatePullSettle(1, DECK_PULL_SPRING.reveal);
-    deckPull.shrink.value = animatePullSettle(1, { ...DECK_PULL_SPRING.land, velocity }, (finished) => {
+    deckPull.reveal.value = withSpring(1, DECK_PULL_SPRING.reveal);
+    deckPull.shrink.value = withSpring(1, { ...DECK_PULL_SPRING.land, velocity }, (finished) => {
       "worklet";
       if (deckPull.stage.value !== PULL_STAGE.landing || deckPull.id.value !== id) return;
       if (!finished) {
@@ -111,8 +102,8 @@ export function settleDeckPull(lands: boolean, velocityY: number, settled: PullS
     return;
   }
   deckPull.stage.value = PULL_STAGE.returning;
-  deckPull.reveal.value = animatePullSettle(0, DECK_PULL_SPRING.back);
-  deckPull.shrink.value = animatePullSettle(0, { ...DECK_PULL_SPRING.back, velocity }, (finished) => {
+  deckPull.reveal.value = withSpring(0, DECK_PULL_SPRING.back);
+  deckPull.shrink.value = withSpring(0, { ...DECK_PULL_SPRING.back, velocity }, (finished) => {
     "worklet";
     if (deckPull.stage.value !== PULL_STAGE.returning || deckPull.id.value !== id) return;
     const worst = finished ? deckPull.worstFrame.value : 0;

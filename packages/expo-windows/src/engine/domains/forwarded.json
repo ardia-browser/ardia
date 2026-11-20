@@ -65,7 +65,7 @@
       "changeCaptureSource",
       "stopCapture"
     ],
-    "passwords": ["autofillEnabled", "setAutofillEnabled", "setFieldProviders", "showSystemPanel", "systemPanelAvailable", "otpauthHandler", "setUpVerificationCode"],
+    "passwords": ["autofillEnabled", "setAutofillEnabled", "setFieldProviders", "showSystemPanel", "showPanelHint", "systemPanelAvailable", "otpauthHandler", "setUpVerificationCode"],
     "permissions": ["resolve", "devExternalLaunches"],
     "profiles": ["loaded", "unloadIdle"],
     "search": ["setEngineName"],

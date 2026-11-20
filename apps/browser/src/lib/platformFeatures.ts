@@ -27,6 +27,7 @@ export type PlatformFeatures = {
   freezeWatch: boolean;
   quitsWithLastWindow: boolean;
   keepsNewTabLinksInLittleArdia: boolean;
+  littleArdiaShortcutFromAnyApp: boolean;
   commandScrollZoom: boolean;
   passwordAutofillSwitch: boolean;
   blocksAutoplay: boolean;
@@ -39,6 +40,8 @@ export type PlatformFeatures = {
   interfaceSize: boolean;
   ardiaCommand: boolean;
   devToolsPanels: boolean;
+  readsSearchEngine: boolean;
+  windowGeometry: boolean;
   claimsFollowFocus: boolean;
   inlineWritesEcho: boolean;
   holdsColdPagesUntilPainted: boolean;
@@ -50,4 +53,4 @@ export type PlatformFeatures = {
   nativePeekMotion: boolean;
 };
 
-export const PLATFORM_FEATURES: PlatformFeatures = { dock: true, appIcon: true, menuBar: true, memoryPressure: true, escapeClosesDownloads: false, unpacksArchivesSilently: true, findsBrowsersBy: "appBundle", hiddenBrowserSources: [], splitView: true, setsDefaultBrowser: true, exportsBookmarksAndPasswords: true, sync: true, calendar: true, webKit: true, contentBlocker: true, trackpadGestures: true, videoUpscaling: true, thinScrollBars: true, haptics: true, launchLoad: true, freezeWatch: true, sharesFiles: true, syncsWithPhone: true, syncsPasswords: true, unloadsIdleProfiles: true, sleepsTabsOverBudget: true, quitsWithLastWindow: false, keepsNewTabLinksInLittleArdia: true, commandScrollZoom: true, passwordAutofillSwitch: true, blocksAutoplay: true, answersPermissionRequests: true, tabReachesUnderOverlays: false, newTabBarFirst: false, newTabWaitsForFirstFrame: true, textInputRevertsFirstChange: false, defaultCloudDrive: true, interfaceSize: true, ardiaCommand: true, claimsFollowFocus: false, inlineWritesEcho: true, holdsColdPagesUntilPainted: true, preloadPages: true, snapsTextBaselines: true, nativeTabSwitch: true, plugins: true, nativePeekMotion: true, devToolsPanels: true, systemPasswordManagers: true };
+export const PLATFORM_FEATURES: PlatformFeatures = { dock: true, appIcon: true, menuBar: true, memoryPressure: true, escapeClosesDownloads: false, unpacksArchivesSilently: true, findsBrowsersBy: "appBundle", hiddenBrowserSources: [], splitView: true, setsDefaultBrowser: true, exportsBookmarksAndPasswords: true, sync: true, calendar: true, webKit: true, contentBlocker: true, trackpadGestures: true, videoUpscaling: true, thinScrollBars: true, haptics: true, launchLoad: true, freezeWatch: true, sharesFiles: true, syncsWithPhone: true, syncsPasswords: true, unloadsIdleProfiles: true, sleepsTabsOverBudget: true, quitsWithLastWindow: false, keepsNewTabLinksInLittleArdia: true, littleArdiaShortcutFromAnyApp: true, commandScrollZoom: true, passwordAutofillSwitch: true, blocksAutoplay: true, answersPermissionRequests: true, tabReachesUnderOverlays: false, newTabBarFirst: false, newTabWaitsForFirstFrame: true, textInputRevertsFirstChange: false, defaultCloudDrive: true, interfaceSize: true, ardiaCommand: true, claimsFollowFocus: false, inlineWritesEcho: true, holdsColdPagesUntilPainted: true, preloadPages: true, snapsTextBaselines: true, nativeTabSwitch: true, plugins: true, nativePeekMotion: true, devToolsPanels: true, systemPasswordManagers: true, windowGeometry: true, readsSearchEngine: true };

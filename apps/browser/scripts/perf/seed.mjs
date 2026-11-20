@@ -18,7 +18,7 @@ const WORDS = [
 const words = (n) => Array.from({ length: n }, () => pick(WORDS)).join(" ");
 const title = (n) => words(n).replace(/^\w/, (c) => c.toUpperCase());
 
-export function buildSeed(origin, appVersion = "") {
+export function buildSeed(origin, appVersion = "", { tabsOrigin = origin, activeDelayMs = 0 } = {}) {
   const now = Date.now();
   const profiles = {
     default: { id: "default", name: "Personal", color: "plum", icon: null, createdAt: 0 },
@@ -32,7 +32,7 @@ export function buildSeed(origin, appVersion = "") {
       id: `t-${profileId}-${i}`,
       windowId,
       profileId,
-      url: `${origin}/p/${profileId}-${i}`,
+      url: `${tabsOrigin}/p/${profileId}-${i}`,
       title: title(3 + (i % 5)),
       favicon: null,
       pinned: false,
@@ -52,7 +52,7 @@ export function buildSeed(origin, appVersion = "") {
   const layoutProfile = (profileId, count, pinned, groupSizes) => {
     const ids = [];
     let i = 0;
-    for (; i < pinned; i++) ids.push(tab(profileId, i, { pinned: true, pinnedUrl: `${origin}/p/${profileId}-${i}` }).id);
+    for (; i < pinned; i++) ids.push(tab(profileId, i, { pinned: true, pinnedUrl: `${tabsOrigin}/p/${profileId}-${i}` }).id);
     for (const [g, size] of groupSizes.entries()) {
       const members = [];
       for (let k = 0; k < size; k++, i++) members.push(tab(profileId, i).id);
@@ -68,7 +68,12 @@ export function buildSeed(origin, appVersion = "") {
   const personal = layoutProfile("default", 158, 8, [5, 5]);
   const work = layoutProfile("work", 42, 4, [4]);
   const active = { default: personal[20], work: work[10] };
-  for (const [p, id] of Object.entries(active)) tabs.find((t) => t.id === id).lastActiveAt = now - 1000 * (p === "default" ? 1 : 2);
+  for (const [p, id] of Object.entries(active)) {
+    const t = tabs.find((x) => x.id === id);
+    t.lastActiveAt = now - 1000 * (p === "default" ? 1 : 2);
+    const url = t.url.replace(tabsOrigin, origin);
+    t.url = activeDelayMs ? `${url}?d=${activeDelayMs}` : url;
+  }
 
   const session = {
     version: 2,
@@ -145,9 +150,9 @@ export function buildSeed(origin, appVersion = "") {
   };
 }
 
-export function writeSeed(dir, origin, appVersion) {
+export function writeSeed(dir, origin, appVersion, options) {
   mkdirSync(dir, { recursive: true });
-  for (const [name, value] of Object.entries(buildSeed(origin, appVersion))) {
+  for (const [name, value] of Object.entries(buildSeed(origin, appVersion, options))) {
     writeFileSync(join(dir, name), typeof value === "string" ? value : JSON.stringify(value));
   }
 }

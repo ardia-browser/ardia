@@ -93,7 +93,9 @@
 //   CDP             Cdp: page targets and their window.__ac
 //   App instances   prepareBenchApp (scripts/lib/app-copy.mjs: copy, bundle, marker entitlements, re-sign), buildBundle, Instance (hidden `open -g -n`
 //                   launch, the bench-cmd.js → bench-result.json channel of bench-channel.js, marks(), quit)
-//   Phases          makeTemplate (the seeded data folder each run copies), launchRun, sessionRun, windowsRun, newWindow,
+//   Phases          makeTemplate (the seeded data folder each run copies: its instance stays up until uBO's cache is
+//                   written and flushed and the component updater's first check is done, then template.json records
+//                   both and a template whose sizes are off stops the run), launchRun, sessionRun, windowsRun, newWindow,
 //                   idleWindow, throttled, throttleRun, churnRun, sampleRun
 //   Report          summary() builds every row below; printTable
 //   Main            options, the candidate and control sides, interleaved()
@@ -147,6 +149,9 @@ import { parseArgs } from "node:util";
 import { INJECTION_ENTITLEMENTS, prepareApp } from "../../../../scripts/lib/app-copy.mjs";
 import { appEnv, launchVariables, mergeLaunchEnv } from "../../../../scripts/lib/instance.mjs";
 import { buildSeed } from "./seed.mjs";
+import { waitForUboEngine } from "./ubo-cache.mjs";
+import { launchedTree, stopTree } from "./processes.mjs";
+import { componentsState, sidesProblems, templateProblems, templateSizes, waitForStartupComponents } from "./template-state.mjs";
 import { parseSettings, profileSeed } from "./profile-seed.mjs";
 import { writeSwitches } from "./js-bench.mjs";
 import { frameRows, frameTable, framesLibrary, framesRun } from "./frames-phase.mjs";
@@ -530,12 +535,12 @@ class Instance {
     this.cdp.close();
     live.delete(this);
     if (!this.pid || !this.alive()) return;
+    const app = realpathSync(this.app);
+    const tree = launchedTree(this.pid, app);
     acperf("quit", String(this.pid));
     for (let i = 0; i < 100 && this.alive(); i++) await sleep(100);
     if (this.alive()) process.kill(this.pid, "SIGKILL");
-    const helpers = () => spawnSync("pgrep", ["-f", this.app], { encoding: "utf8" }).stdout.trim();
-    for (let i = 0; i < 100 && helpers(); i++) await sleep(100);
-    for (const p of helpers().split("\n").filter(Boolean)) process.kill(+p, "SIGKILL");
+    await stopTree(tree, app);
   }
 }
 
@@ -577,6 +582,7 @@ async function makeTemplate(side) {
   log(`seeding a session (${side.label})`);
   writeFileSync(join(dir, "onboarding.json"), JSON.stringify({ version: 1, completedAt: 1 }));
   const app = await new Instance(side, dir).launch();
+  const waited = {};
   try {
     await app.run(`const w = ${WINDOW}; ac.store.getState().newTab(w, { url: "${base()}/static?id=seed" }); return w;`);
     await app.pageState("id=seed", 30_000, (s) => s.fcp);
@@ -586,10 +592,19 @@ async function makeTemplate(side) {
       for (const id of s.windowOrder) if (id !== w) ac.store.getState().closeWindow(id);
       ac.store.getState().activate(keep); return keep;`);
     await sleep(4000);
+    waited.ubo = await waitForUboEngine({ port: +opt.port, dataDir: dir, log });
+    waited.components = await waitForStartupComponents({ dataDir: dir, launchedAt: app.t0, log });
   } finally {
     await app.quit();
   }
   for (const f of ["bench-cmd.js", "bench-result.json", "bench-boot.json"]) rmSync(join(dir, f), { force: true });
+  side.templateRecord = { waitedSecs: { ubo: waited.ubo.secs, components: waited.components.secs }, sizes: templateSizes(dir), components: componentsState(dir).components };
+  writeFileSync(join(side.dir, "template.json"), JSON.stringify(side.templateRecord, null, 2));
+  side.results.meta.template = side.templateRecord;
+  const problems = templateProblems(side.templateRecord);
+  if (problems.length) throw new Error(`${side.label}'s template is off, so its runs would be skewed: ${problems.join("; ")} (${join(side.dir, "template.json")})`);
+  const { uboStoreMB, uboBlobsMB } = side.templateRecord.sizes;
+  log(`${side.label}'s template: uBO store ${uboStoreMB.toFixed(1)} MB, blobs ${uboBlobsMB.toFixed(1)} MB; components ${Object.entries(side.templateRecord.components).map(([k, c]) => `${k} ${c.version ?? "checked"}`).join(", ")}`);
 }
 
 function freshDir(side, name) {
@@ -1339,6 +1354,8 @@ try {
     process.exit(0);
   }
   for (const side of sides) await makeTemplate(side);
+  const mismatch = sidesProblems(sides.map((s) => s.templateRecord).filter(Boolean));
+  if (mismatch.length) throw new Error(`the two sides' templates don't match: ${mismatch.join("; ")}`);
   if (only.has("profiles")) await interleaved(+opt.runs, profilesRun);
   if (only.has("launch")) await interleaved(+opt["launch-runs"], launchRun);
   const parts = new Set(SESSION_PARTS.filter((p) => only.has("session") || only.has(p)));

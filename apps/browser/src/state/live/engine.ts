@@ -8,7 +8,7 @@ import { shownTabIds } from "../tabs/shownTabs";
 import { repoKey } from "./rows";
 import { hideNewRepos } from "./repoFilter";
 import { SOURCES } from "./sources";
-import { beginLiveRefresh, applyFetch, createFolder, finishCompleting, live, markRead, removeFolder, setStatus, unhide, useLive } from "./store";
+import { beginLiveRefresh, applyFetch, createFolder, finishCompleting, live, markRead, removeFolder, setStatus, unhide, updateFolder, useLive } from "./store";
 import { LiveError, type CompletionState, type LiveFolder, type LiveFolderKind, type LiveItem, type LiveSourceId, type PullRequestSection } from "./types";
 import { noteLiveCompletedTabsClosed } from "../telemetry/liveCompletedTabs";
 import { noteLiveSourceFetch } from "../telemetry/workCounts";
@@ -17,7 +17,7 @@ import { warnFor } from "../telemetry/logs";
 import { isPlaying, useMedia } from "../media/media";
 import { usePages } from "../tabs/pageState";
 import { liveOf, onLiveChange } from "../tabs/tabLive";
-import type { MediaAccess } from "../../platform/tabs";
+import { capturing, whenCaptureEndsUnderHiddenCompleted } from "./captureEnds";
 import { during } from "../app/jobActivity";
 
 const INTERVAL_MS: Record<LiveFolderKind, number> = { pullRequests: 3 * 60_000, documents: 10 * 60_000 };
@@ -25,6 +25,11 @@ const STALE_ON_FOCUS_MS = 60_000;
 export const COMPLETION_MS = 2600;
 
 const inflight = new Map<string, Promise<void>>();
+const fetchingWith = new Map<string, string>();
+const followUps = new Map<string, () => boolean>();
+const passGuards = new Map<string, () => boolean>();
+const always = () => true;
+const settingsOf = (folder: LiveFolder | undefined) => (folder ? JSON.stringify([folder.sources, folder.filters], sortedKeys) : "");
 const fetchedSources = new Map<string, Set<LiveSourceId>>();
 const sharedFetches = new Map<string, Promise<LiveItem[]>>();
 
@@ -46,17 +51,41 @@ function order(items: LiveItem[]): LiveItem[] {
   );
 }
 
+function queueFollowUp(folderId: string, allowed: () => boolean) {
+  const earlier = followUps.get(folderId);
+  followUps.set(folderId, earlier && earlier !== allowed ? () => earlier() || allowed() : allowed);
+}
+
 export function refreshFolder(folderId: string, interactive = false): Promise<void> {
+  return refreshFolderWhile(folderId, interactive, always);
+}
+
+export function refreshFolderWhile(folderId: string, interactive: boolean, allowed: () => boolean): Promise<void> {
   const running = inflight.get(folderId);
-  if (running) return running;
-  const task = during("liveFolders", () => run(folderId, interactive)).finally(() => inflight.delete(folderId));
+  if (running) {
+    if (passGuards.get(folderId) !== allowed) return running.catch(() => undefined).then(() => (allowed() ? refreshFolderWhile(folderId, interactive, allowed) : undefined));
+    if (fetchingWith.has(folderId) && settingsOf(live().folders[folderId]) !== fetchingWith.get(folderId)) queueFollowUp(folderId, allowed);
+    return running;
+  }
+  passGuards.set(folderId, allowed);
+  const task = during("liveFolders", () => runUntilCurrent(folderId, interactive, allowed)).finally(() => [inflight, fetchingWith, followUps, passGuards].forEach((m) => m.delete(folderId)));
   inflight.set(folderId, task);
   return task;
 }
 
-export function manualRefresh(folderId: string): Promise<void> {
+async function runUntilCurrent(folderId: string, interactive: boolean, allowed: () => boolean) {
+  for (let guard: (() => boolean) | undefined = allowed; guard && live().folders[folderId]; ) {
+    passGuards.set(folderId, guard);
+    await run(folderId, interactive, guard);
+    fetchingWith.delete(folderId);
+    guard = followUps.get(folderId);
+    followUps.delete(folderId);
+  }
+}
+
+export function manualRefresh(folderId: string, allowed: () => boolean = always): Promise<void> {
   unhide(folderId);
-  return refreshFolder(folderId, true);
+  return refreshFolderWhile(folderId, true, allowed);
 }
 
 const sortedKeys = (_key: string, value: unknown) =>
@@ -72,13 +101,22 @@ function claimRefresh(folderId: string) {
   });
 }
 
-async function run(folderId: string, interactive: boolean) {
-  if (!live().folders[folderId]) return;
+function staleRun(folderId: string, folder: LiveFolder, allowed: () => boolean): boolean {
+  if (!allowed()) return (setStatus(folderId, { state: "idle" }), true);
+  if (settingsOf(live().folders[folderId]) === settingsOf(folder)) return false;
+  queueFollowUp(folderId, allowed);
+  return true;
+}
+
+async function run(folderId: string, interactive: boolean, allowed: () => boolean) {
+  if (!live().folders[folderId] || !allowed()) return;
   const claim = claimRefresh(folderId);
   let fence = claim ? await claim : undefined;
   if (fence === null) return;
   const folder = live().folders[folderId];
   if (!folder) return;
+  if (!allowed()) return setStatus(folderId, { state: "idle" });
+  fetchingWith.set(folderId, settingsOf(folder));
   const before = live();
   setStatus(folderId, { state: before.status[folderId]?.lastFetch ? "updating" : "initializing" });
   const results = await Promise.allSettled(folder.sources.map((id) => fetchSource(id, folder, interactive)));
@@ -90,7 +128,7 @@ async function run(folderId: string, interactive: boolean) {
     if (r.status === "fulfilled") fetched.push(...r.value);
     else failed.push({ source, error: r.reason });
   });
-  if (!live().folders[folderId]) return;
+  if (!live().folders[folderId] || staleRun(folderId, folder, allowed)) return;
   const fromFailedSource = (it: LiveItem) => failed.some((f) => f.source === it.source);
   const listedByFilters = (it: LiveItem) => (it.section === "review" || it.section === "team" ? folder.filters.reviewRequests : folder.filters.authored);
   const repoShown = (it: LiveItem) => {
@@ -110,10 +148,11 @@ async function run(folderId: string, interactive: boolean) {
     Object.assign(gone, await resolve(missing.filter((it) => it.source === source), { interactive }).catch(() => ({})));
   }
 
+  if (!live().folders[folderId] || staleRun(folderId, folder, allowed)) return;
   const folderBeforeHiding = live().folders[folderId];
   hideNewRepos(folderId, fetched);
   const folderAfterHiding = live().folders[folderId];
-  if (fence !== undefined && sameFolder(folderBeforeHiding, folder) && !sameFolder(folderAfterHiding, folderBeforeHiding)) {
+  if (fence !== undefined && allowed() && sameFolder(folderBeforeHiding, folder) && !sameFolder(folderAfterHiding, folderBeforeHiding)) {
     const reclaim = claimRefresh(folderId);
     fence = reclaim ? await reclaim : undefined;
     if (fence === null || !live().folders[folderId]) return;
@@ -122,6 +161,7 @@ async function run(folderId: string, interactive: boolean) {
       return;
     }
   }
+  if (staleRun(folderId, folder, allowed)) return;
   const current = live();
   const prev = current.items[folderId] ?? [];
   const animating = new Set(current.completing[folderId] ?? []);
@@ -195,14 +235,16 @@ export function newLiveFolder(windowId: string, kind: LiveFolderKind): string | 
   return newProfileLiveFolder(w.profileId, kind);
 }
 
-export function newProfileLiveFolder(profileId: string, kind: LiveFolderKind, sources?: LiveSourceId[]): string {
+export const connectedSourcesOf = (kind: LiveFolderKind): LiveSourceId[] => {
   const s = live();
-  const connected: LiveSourceId[] =
-    kind === "pullRequests"
-      ? (["github", "bitbucket"] as const).filter((id) => s.accounts[id])
-      : (["notion", "confluence", "gdrive"] as const).filter((id) => s.accounts[id]);
+  return kind === "pullRequests" ? (["github", "bitbucket"] as const).filter((id) => s.accounts[id]) : (["notion", "confluence", "gdrive"] as const).filter((id) => s.accounts[id]);
+};
+
+export function newProfileLiveFolder(profileId: string, kind: LiveFolderKind, sources?: LiveSourceId[], options: { name?: string; allowed?: () => boolean } = {}): string {
+  const connected = connectedSourcesOf(kind);
   const id = createFolder(profileId, kind, sources ?? (connected.length ? connected : undefined));
-  void refreshFolder(id, true);
+  if (options.name !== undefined) updateFolder(id, { name: options.name });
+  void refreshFolderWhile(id, true, options.allowed ?? always);
   return id;
 }
 
@@ -267,7 +309,6 @@ function markCompletedTabs(folderId: string, gone: Record<string, CompletionStat
   closeCompletedTabs();
 }
 
-const capturing = (access: MediaAccess | null | undefined) => !!access && (access.camera || access.microphone || access.screen);
 
 const inUse = (s: BrowserState, id: string) => {
   const media = useMedia.getState();
@@ -307,7 +348,7 @@ export function startLiveEngine() {
   });
   closeCompletedTabs();
 
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["groups", "profiles"], (s, prev) => {
     if (s.groups !== prev.groups) syncLiveHomes();
     if (s.profiles === prev.profiles) return;
     for (const f of Object.values(live().folders)) if (!s.profiles[f.profileId]) removeFolder(f.id);
@@ -331,20 +372,18 @@ export function startLiveEngine() {
     if (e.type === "focus") for (const id of live().folderOrder) if (due(id, STALE_ON_FOCUS_MS)) void refreshFolder(id);
   });
 
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["windows", "splits", "peeks"], (s, prev) => {
     if (s.windows !== prev.windows || s.splits !== prev.splits || s.peeks !== prev.peeks) closeCompletedTabs();
   });
   onLiveChange((id, now, was) => {
     if (was.playingAudio && !now.playingAudio && useBrowser.getState().tabs[id]) closeCompletedTabs();
   });
-  usePages.subscribe((p, prev) => {
-    if (p.pages !== prev.pages && Object.keys(prev.pages).some((id) => capturing(prev.pages[id]?.mediaAccess) && !capturing(p.pages[id]?.mediaAccess))) closeCompletedTabs();
-  });
+  whenCaptureEndsUnderHiddenCompleted(closeCompletedTabs);
   useMedia.subscribe((m, prev) => {
     if (m.pipOpen !== prev.pipOpen || m.sessions !== prev.sessions || m.tabShares !== prev.tabShares) closeCompletedTabs();
   });
 
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["windows"], (s, prev) => {
     if (s.windows === prev.windows) return;
     for (const windowId of s.windowOrder) {
       const before = activeTabId(prev, windowId);

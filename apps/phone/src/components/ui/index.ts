@@ -13,6 +13,7 @@ export { ConfirmDialog, Dialog, showActionSheet, type Confirmation, type DialogB
 export { FloatingMenu, Menu, menuExitMs, MenuFloorProvider, MenuFrostProvider, pointPlacer, type MenuPlacer, onDrawnMenuOpened, type MenuAction, type MenuItem, type MenuSubmenu } from "./Menu";
 export { ActionSheet, ConfirmSheet, type SheetAction } from "./ActionSheet";
 export { confirmInSheet, MenuTrigger, nativeMenus, onNativeMenuOpened, spaceSystemImage, type MenuHandlers } from "./MenuTrigger";
+export { MaterialIconButton, materialIconButtonColors, materialIconRipple, type MaterialIconButtonProps, type MaterialIconButtonSize, type MaterialIconButtonVariant } from "./MaterialIconButton";
 export { Shade } from "./Shade";
 export { measureAnchor, OverlayHost, Portal } from "./Overlay";
 export { Sheet, SheetScrollView, sheetMaxHeight, usePresence } from "./Sheet";
@@ -34,7 +35,7 @@ export { SwipeToDelete } from "./SwipeToDelete";
 export { useIncreasedContrast, useReduceMotion, useReduceTransparency } from "./contrast";
 export { FadingBackdrop } from "./FadingBackdrop";
 export { ChromeSurface, DeckLookBackdrop, DeckLookBackdropBase, LookBackdrop, LookBackdropBase, LookFrost, LookGlass, SURFACES_FROST, usesGlass } from "./LookViews";
-export { appDesign, DesignProvider, useDesign, usePageUnderBars } from "./design";
+export { appDesign, currentDesign, DesignProvider, designWith, followDesign, materialYouOffered, useDesign, usePageUnderBars } from "./design";
 export { FadeView, fadeIsNative, FrostSource, motionReportsNearEnd, pageObscuresInsets, pageReportsDrawn, PasteButton, pasteButtonIsNative, ScrollActions } from "@ardia/phone-native";
 export { MotionView, type MotionCurve, type MotionTarget } from "@ardia/phone-native";
 export { AppIconPreview, BrowseForMeSettings, CheckmarkLabel, chromeSurface, ColorSwatch, contentMargins, FilterTextEditor, FullScreenCover, GlassCircleButton, legibleInk, minListRowHeight, modifierList, navigationBarBackButtonHidden, PinnedTiles, pressableStyle, profileLook, settingsChrome, SettingsHeroContent, SettingsIconTile, settingsPage, SettingsRowLabel, SettingsShortcuts, settingsSwitchStyle, settingsUIAvailable, SetupStepRow, spaceBackdrop, spaceColor, spaceMenuSymbol, SpacePageDots, spaceSymbol, SpaceTitle, type ProfilePresetName, type SettingsTintName, type SetupProgress } from "./settingsPieces";

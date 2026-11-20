@@ -8,7 +8,7 @@ import { useFocusReturn } from "./focusReturn";
 import { screenReaderActions } from "./screenReaderActions";
 import type { Confirmation } from "./Dialog";
 import { countDrawnMenuOpened, MenuMaterial } from "./Menu";
-import { materialEnter, materialExit, materialMenuMotion, menuMotion } from "./motion";
+import { menuMotion } from "./motion";
 import { Portal, usePortalLeaving, usePortalLeft } from "./Overlay";
 import { actionSheetInk, actionSheetLook, ink, materialDialogInk, materialDialogLook } from "./tokens";
 import { useTheme } from "./theme";
@@ -28,7 +28,7 @@ export function ActionSheet({ onCancel, opener, ...props }: Props) {
     if (returnTo.target) returnFocus(returnTo.target);
   }, [onCancel, returnTo, returnFocus]);
   return (
-    <Portal exitMs={MATERIAL ? materialMenuMotion.dialogOutMs : menuMotion.sheetOut}>
+    <Portal exitMs={menuMotion.sheetOut}>
       {MATERIAL ? <MaterialDialogCard {...props} onCancel={cancelled} /> : <SheetCard {...props} onCancel={cancelled} />}
     </Portal>
   );
@@ -56,6 +56,14 @@ function useSheetBehaviour(onCancel: () => void, opensOn: () => ViewInstance | n
   return leaving;
 }
 
+function useSheetFade(leaving: boolean, reduceMotion: boolean, left: () => void) {
+  const shown = useSharedValue(1);
+  useEffect(() => {
+    if (leaving) shown.value = withTiming(0, { duration: reduceMotion ? menuMotion.contentFade : menuMotion.sheetOut }, (finished) => finished && runOnJS(left)());
+  }, [leaving]);
+  return useAnimatedStyle(() => ({ opacity: shown.value }));
+}
+
 const spokenHeading = (title?: string | null, message?: string | null) => (title && message ? `${title}${/[.?!]$/.test(title) ? "" : "."} ${message}` : title || message || "");
 
 function MaterialDialogCard({ title, message, actions, cancel = "Cancel", onCancel }: Props) {
@@ -71,22 +79,14 @@ function MaterialDialogCard({ title, message, actions, cancel = "Cancel", onCanc
   const heading = spokenHeading(title, message);
   const leaving = useSheetBehaviour(onCancel, () => (heading ? spoken : firstButton).current);
   const left = usePortalLeft();
-  const shown = useSharedValue(reduceMotion ? 1 : 0);
-  useEffect(() => {
-    if (!reduceMotion) shown.value = withTiming(1, { duration: materialMenuMotion.dialogInMs, easing: materialEnter });
-  }, []);
-  useEffect(() => {
-    if (leaving) shown.value = withTiming(0, { duration: reduceMotion ? menuMotion.contentFade : materialMenuMotion.dialogOutMs, easing: materialExit }, (finished) => finished && runOnJS(left)());
-  }, [leaving]);
-  const fade = useAnimatedStyle(() => ({ opacity: shown.value }));
-  const grow = useAnimatedStyle(() => ({ transform: [{ scale: materialDialogLook.enterScale + (1 - materialDialogLook.enterScale) * shown.value }] }));
+  const fade = useSheetFade(leaving, reduceMotion, left);
   const cancelAction = screenReaderActions([{ name: "cancel", label: cancel, run: onCancel }]);
   const buttons = [{ title: cancel, destructive: false, onPress: onCancel, dismisses: true }, ...actions.map((action) => ({ ...action, dismisses: false }))];
   return (
     <Animated.View style={[StyleSheet.absoluteFill, fade]} pointerEvents={leaving ? "none" : "auto"} collapsable={false} accessibilityElementsHidden={leaving} importantForAccessibility={leaving ? "no-hide-descendants" : "auto"}>
       <Pressable testID="drawnConfirmationOutside" accessible={false} importantForAccessibility="no" style={[StyleSheet.absoluteFill, { backgroundColor: paint.scrim }]} onPress={onCancel} />
       <View style={styles.centre} pointerEvents="box-none">
-        <Animated.View testID="drawnActionSheet" accessibilityViewIsModal style={[styles.dialog, { width, maxHeight, backgroundColor: paint.surface, boxShadow: materialDialogLook.shadow }, grow]}>
+        <Animated.View testID="drawnActionSheet" accessibilityViewIsModal style={[styles.dialog, { width, maxHeight, backgroundColor: paint.surface, boxShadow: materialDialogLook.shadow }]}>
           <ScrollView testID="drawnConfirmationScroll" keyboardShouldPersistTaps="handled" style={styles.scroll} contentContainerStyle={styles.dialogContent} bounces={false} overScrollMode="never">
             {heading ? (
               <View ref={spoken} testID="drawnConfirmationHeading" accessible accessibilityRole="header" accessibilityLabel={heading} {...cancelAction}>
@@ -139,11 +139,7 @@ function SheetCard({ title, message, actions, cancel = "Cancel", onCancel }: Pro
   const heading = spokenHeading(title, message);
   const leaving = useSheetBehaviour(onCancel, () => (heading ? spoken : firstAction).current);
   const left = usePortalLeft();
-  const shown = useSharedValue(1);
-  useEffect(() => {
-    if (leaving) shown.value = withTiming(0, { duration: reduceMotion ? menuMotion.contentFade : menuMotion.sheetOut }, (finished) => finished && runOnJS(left)());
-  }, [leaving]);
-  const fade = useAnimatedStyle(() => ({ opacity: shown.value }));
+  const fade = useSheetFade(leaving, reduceMotion, left);
   const cancelAction = announces ? screenReaderActions([{ name: "cancel", label: cancel, run: onCancel }]) : {};
   return (
     <Animated.View style={[StyleSheet.absoluteFill, fade]} pointerEvents={leaving ? "none" : "auto"} collapsable={false} accessibilityElementsHidden={leaving} importantForAccessibility={leaving ? "no-hide-descendants" : "auto"}>

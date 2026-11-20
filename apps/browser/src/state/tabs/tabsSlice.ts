@@ -122,7 +122,7 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
     if (!hasPage(tab) && holderOf(s, id)) return handOffPinPage(id, () => get().handOffPin(id));
     const shown = activeTabId(s, tab.windowId);
     let next = apply(s, activated(s, id));
-    if (shown && shown !== id && !switchKeepsOpeners(s, shown, id)) next = forgetOpeners(next, tab.windowId);
+    if (shown && shown !== id && !switchKeepsOpeners(s, shown, id)) next = forgetOpeners(next, tab.windowId, tab.profileId);
     set(next);
   },
 
@@ -135,7 +135,7 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
     const shown = activeTabId(s, tab.windowId);
     const target = swapped?.holderId ?? id;
     let next = apply(base, activated(base, target));
-    if (shown && shown !== id && !switchKeepsOpeners(base, shown, target)) next = forgetOpeners(next, tab.windowId);
+    if (shown && shown !== id && !switchKeepsOpeners(base, shown, target)) next = forgetOpeners(next, tab.windowId, tab.profileId);
     set(next);
   },
 
@@ -180,7 +180,7 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
       if (get().windowUi[tab.windowId]?.panel.open) get().closePanel(tab.windowId);
       return;
     }
-    const base = userInitiated && tab.url ? forgetOpeners(s, tab.windowId) : s;
+    const base = userInitiated && tab.url ? forgetOpeners(s, tab.windowId, tab.profileId) : s;
     const navigation = navigationTo(url, userInitiated);
     const engine = userInitiated ? typedNavigationEngine(s, tab, url) : undefined;
     const switching = !!engine && engine !== tabEngine(s, id);

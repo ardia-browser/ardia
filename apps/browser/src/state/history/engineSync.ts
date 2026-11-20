@@ -318,7 +318,7 @@ export function startHistory() {
   };
   if (moving) afterFirstWindow(migrate);
   else migrate();
-  const stop = useBrowser.subscribe((s, prev) => {
+  const stop = useBrowser.subscribeTo(["profiles"], (s, prev) => {
     if (s.profiles === prev.profiles) return;
     const inStore = engineProfiles(s);
     for (const engine of loaded) if (!inStore.includes(engine)) loaded.delete(engine);
@@ -342,5 +342,7 @@ export function startHistory() {
     legacyMoved = false;
   };
 }
+
+export const reloadEngineHistory = (engine: string) => (loaded.has(engine) || loads.has(engine) ? load(engine) : Promise.resolve());
 
 export const reloadHistory = () => Promise.all(openedEngineProfiles(store()).map(load));

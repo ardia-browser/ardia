@@ -68,6 +68,17 @@ export function usePopoverPresence(open: boolean) {
   return { shown: open || shown, closing: !open, onClosed: () => setShown(false) };
 }
 
+export type PanelPresence = { closing: boolean; onClosed: () => void };
+
+export function usePanelsPresence<K extends string>(open: string | null, kinds: readonly K[]): (kind: K) => PanelPresence | null {
+  const opened = kinds.find((kind) => kind === open);
+  const [shown, setShown] = useState<readonly K[]>(NONE_SHOWN);
+  if (opened && !shown.includes(opened)) setShown([...shown, opened]);
+  return (kind) => (kind === open || shown.includes(kind) ? { closing: kind !== open, onClosed: () => setShown((now) => (now.includes(kind) ? now.filter((k) => k !== kind) : now)) } : null);
+}
+
+const NONE_SHOWN: readonly never[] = [];
+
 export function usePopoverMotion(closing: boolean, onClosed?: () => void, ready = true) {
   const appear = useRef(new Animated.Value(0)).current;
   const closed = useRef(onClosed);

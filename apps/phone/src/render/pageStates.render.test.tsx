@@ -60,11 +60,11 @@ test("a loading page with no saved picture shows main's placeholder centred on t
   unmount(root);
 });
 
-test("the placeholder's contents wait main's delay, then fade in: 250 then 150 ms on iPhone, Compose's 300 then 220 ms on Android", () => {
+test("the placeholder's contents wait main's delay, then fade in: 250 then 150 ms on both phones", () => {
   const tab = currentTabs().open[0]!;
   const root = renderSurface(<BrowsingScreen tab={tab} />, { flushTimers: false });
   const opacity = () => style(node(root, "pageLoadingContent")!).opacity;
-  const [wait, fade] = onIPhone ? [250, 150] : [300, 220];
+  const [wait, fade] = [250, 150];
   expect(opacity()).toBe(0);
   act(() => jest.advanceTimersByTime(wait - 16));
   expect(opacity()).toBe(0);

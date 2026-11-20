@@ -1,7 +1,7 @@
 import { memo, useState, type ReactNode } from "react";
-import { Animated, Image, Pressable, View } from "react-native";
+import { Animated, Pressable, View } from "react-native";
 import { useTheme } from "../ui/theme";
-import { ContextMenuArea, Divider, sidebarLineHeight, space, Symbol, Text, useHover } from "../ui";
+import { ContextMenuArea, Divider, sidebarLineHeight, space, Symbol, Text, TintedImage, useHover } from "../ui";
 import { TAB_ROW } from "./tokens";
 import { HoverSlot } from "../ui/HoverSlot";
 import { closeAllTabs } from "../../state/sidebar/clearTabs";
@@ -61,7 +61,7 @@ export const ClearDivider = memo(function ClearDivider({ windowId, profileId, li
                     title="Tidy"
                     label="Tidy Tabs"
                     onPress={() => tidyTabs(windowId, "tabs", profileId)}
-                    icon={(color) => <Image source={BROOM} style={{ width: 11, height: 11, marginRight: space.xs, tintColor: color }} />}
+                    icon={(color) => <TintedImage source={BROOM} tint={color} style={{ width: 11, height: 11, marginRight: space.xs }} />}
                   />
                 ) : null}
                 {tidy && clear ? <Divider vertical thick length={9} style={ACTIONS_DIVIDER} /> : null}

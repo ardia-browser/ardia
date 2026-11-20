@@ -17,6 +17,7 @@ prepare_react_native_project!
 
 ardia_kit = Pathname.new(File.join(__dir__, '..', '..', '..', 'packages', 'phone', 'ios', 'ArdiaKit')).cleanpath
 phone_sync = Pathname.new(File.join(__dir__, '..', '..', '..', 'packages', 'phone', 'ios', 'PhoneSync')).cleanpath
+ardia_talk = Pathname.new(File.join(__dir__, '..', '..', '..', 'packages', 'phone', 'ios', 'ArdiaTalk')).cleanpath
 
 publish_changed = '"${PODS_ROOT}/../publish-changed.sh"'
 
@@ -60,7 +61,7 @@ link_ardia_kit = lambda do |installer|
   project = installer.pods_project
   target = project.targets.find { |t| t.name == 'ArdiaPhoneNative' }
   next unless target
-  { ardia_kit => %w[ArdiaBrowser ArdiaDesign], phone_sync => %w[PhoneSync] }.each do |package, products|
+  { ardia_kit => %w[ArdiaBrowser ArdiaDesign], ardia_talk => %w[ArdiaTalk], phone_sync => %w[PhoneSync] }.each do |package, products|
     path = package.relative_path_from(Pathname.new(project.project_dir)).to_s
     reference = project.root_object.package_references.find do |existing|
       existing.is_a?(Xcodeproj::Project::Object::XCLocalSwiftPackageReference) && existing.relative_path == path

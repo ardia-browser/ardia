@@ -169,6 +169,7 @@ export const CURATED = {
   internaldrive: "L:hard-drive T:device-sd-card P:hard-drive M:harddisk I:database",
   key: "L:key T:key P:key I:key M:key-outline L:key-round",
   "key.fill": "PF:key-fill M:key TF:key L:key-round",
+  qrcode: "L:qr-code T:qrcode P:qr-code I:qr-code M:qrcode",
   keyboard: "L:keyboard T:keyboard P:keyboard I:keyboard M:keyboard-outline",
   laptopcomputer: "L:laptop T:device-laptop P:laptop M:laptop I:laptop",
   leaf: "L:leaf T:leaf P:leaf I:leaf M:leaf",
@@ -252,6 +253,7 @@ export const CURATED = {
   "rectangle.lefthalf.inset.filled.arrow.left": "L:panel-left-close T:layout-sidebar-left-collapse P:sidebar-simple M:dock-left",
   "rectangle.on.rectangle": "L:copy T:copy P:copy I:copy M:content-copy",
   "rectangle.portrait.and.arrow.right": "L:log-out T:logout P:sign-out I:log-out M:logout",
+  "rectangle.topthird.inset.filled": "L:panel-top T:layout-navbar M:dock-top TF:layout-navbar",
   "rectangle.leftthird.inset.filled": "L:panel-left T:layout-sidebar P:sidebar-simple M:dock-left TF:layout-sidebar",
   "rectangle.righthalf.filled": "L:panel-right T:layout-sidebar-right P:sidebar-simple M:dock-right TF:layout-sidebar-right",
   "rectangle.righthalf.inset.filled": "L:panel-right T:layout-sidebar-right P:sidebar-simple M:dock-right TF:layout-sidebar-right",
@@ -313,6 +315,7 @@ export const CURATED = {
   "xmark.circle": "L:circle-x T:circle-x P:x-circle I:xmark-circle M:close-circle-outline",
   "xmark.circle.fill": "TF:circle-x PF:x-circle-fill M:close-circle IS:xmark-circle",
   "xmark.square": "L:square-x T:square-x P:x-square I:xmark-square M:close-box-outline",
+  "minus.square": "L:square-minus T:square-minus P:minus-square I:minus-square M:minus-box-outline",
 };
 
 const SETS = { L: "lucide", T: "tabler", TF: "tabler-filled", I: "iconoir", IS: "iconoir-solid", P: "phosphor", PF: "phosphor-fill", M: "mdi" };

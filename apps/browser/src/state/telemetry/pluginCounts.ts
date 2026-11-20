@@ -19,6 +19,8 @@ const NONE = {
   program_adoptions: 0,
   plugin_adoptions: 0,
   plugin_adoptions_waiting: 0,
+  plugin_removals: 0,
+  plugin_removals_cancelled: 0,
 };
 
 export type PluginCount = keyof typeof NONE;

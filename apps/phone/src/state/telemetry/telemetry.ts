@@ -1,3 +1,6 @@
+import { materialColorSource } from "../../lib/material/schemePick";
+import { useDynamicScheme } from "../app/dynamicScheme";
+import { useAppearanceDesign } from "../settings/appearance";
 import { AppState } from "react-native";
 import { lookBudget, systemLook } from "../../platform/look";
 import { create } from "zustand";
@@ -72,8 +75,9 @@ export async function reportLaunch(firstScreenAt: number) {
   reported = true;
   const boot = useBoot.getState();
   const look = lookBudget.mode(await systemLook());
-  const { interfaceStyle, schemeChoice } = currentPreferences();
-  gate.capture("app_launched", { legacy_import: legacyImportOutcome(boot.outcome), legacy_import_failures: boot.failures, look_mode: look, ...appearanceTelemetry(offeredInterfaceStyle(interfaceStyle, syncOffered()), offeredScheme(schemeChoice, syncOffered())) });
+  const { interfaceStyle, schemeChoice, colorChoice, dynamicColors } = currentPreferences();
+  const material_colors = materialColorSource(useAppearanceDesign.getState().design === "material", colorChoice, useDynamicScheme.getState().pair, dynamicColors);
+  gate.capture("app_launched", { legacy_import: legacyImportOutcome(boot.outcome), legacy_import_failures: boot.failures, look_mode: look, ...appearanceTelemetry(offeredInterfaceStyle(interfaceStyle, syncOffered()), offeredScheme(schemeChoice, syncOffered())), material_colors });
   const processStart = await processStartedAt();
   const timings = launchProps(processStart, JS_STARTED_AT, firstScreenAt);
   if (timings) gate.capture("perf_launch", timings);

@@ -32,10 +32,17 @@ export function pluginList() {
   });
 }
 
-export function pluginSocketMethod(method: string, params: Record<string, unknown>): Body | Promise<Body> | null {
+function callPluginTool(params: Record<string, unknown>): Body | Promise<Body> {
+  const { plugin, tool, input } = params;
+  if (typeof plugin !== "string" || typeof tool !== "string") return failure("bad_request", "plugins.call needs a plugin and a tool.");
+  return callTool(plugin, tool, input, { kind: "cli" }).then((o) => (o.ok ? { result: o.result } : failure(o.code, o.message)));
+}
+
+export function pluginSocketMethod(method: string, params: Record<string, unknown>, serving: () => boolean = () => true): Body | Promise<Body> | null {
   if (method === "plugins") return { result: pluginList() };
   if (method === "plugins.official") return { result: officialPlugins(currentPlugins()) };
   if (!method.startsWith("plugins.")) return null;
+  if (method === "plugins.call") return callPluginTool(params);
   const name = nameOf(params);
   const plugins = currentPlugins();
   const known = name !== null && Object.hasOwn(plugins.listings, name);
@@ -60,12 +67,7 @@ export function pluginSocketMethod(method: string, params: Record<string, unknow
     }
     case "plugins.remove":
       if (!known && !recorded) return failure("bad_request", `There's no plugin ${String(name)}.`);
-      return removePlugin(name).then((r) => (r.ok ? { result: { ok: true } } : failure("failed", r.reason ?? "Couldn't remove it.")));
-    case "plugins.call": {
-      const { plugin, tool, input } = params;
-      if (typeof plugin !== "string" || typeof tool !== "string") return failure("bad_request", "plugins.call needs a plugin and a tool.");
-      return callTool(plugin, tool, input, { kind: "cli" }).then((o) => (o.ok ? { result: o.result } : failure(o.code, o.message)));
-    }
+      return removePlugin(name, serving).then((r) => (r.ok ? { result: { ok: true } } : failure("failed", r.reason ?? "Couldn't remove it.")));
   }
   return failure("unknown_method", `There's no method ${method}.`);
 }

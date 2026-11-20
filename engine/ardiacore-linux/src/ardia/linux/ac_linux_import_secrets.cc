@@ -287,7 +287,7 @@ void UnlockedKeys::Clear() {
 
 namespace {
 
-constexpr size_t kExactCookieBytes = 6;
+constexpr size_t kExactCookieBytes = 16;
 
 struct LeakSet {
   std::set<std::string_view> values;
@@ -299,6 +299,10 @@ struct LeakSet {
     }
   }
 };
+
+bool IsWebAddress(std::string_view text) {
+  return text.starts_with("https://") || text.starts_with("http://");
+}
 
 bool StringLeaks(std::string_view text, const LeakSet& leaks) {
   if (leaks.values.contains(text)) return true;
@@ -320,7 +324,7 @@ bool ValueLeaks(const base::Value& value, const LeakSet& leaks, int depth) {
   }
   if (value.is_dict()) {
     for (const auto [key, item] : value.GetDict()) {
-      if (StringLeaks(key, leaks) || ValueLeaks(item, leaks, depth + 1)) return true;
+      if (ValueLeaks(item, leaks, depth + 1)) return true;
     }
   }
   return false;
@@ -332,7 +336,8 @@ bool ReplyLeaksImported(const base::Value& reply, const std::vector<ImportedCook
                         const std::vector<ImportedCard>& cards) {
   LeakSet leaks;
   for (const ImportedCookie& cookie : cookies) {
-    if (cookie.value.value().size() >= kExactCookieBytes) leaks.values.insert(cookie.value.value());
+    const std::string& value = cookie.value.value();
+    if (value.size() >= kExactCookieBytes && !IsWebAddress(value)) leaks.values.insert(value);
   }
   for (const ImportedCard& card : cards) {
     std::string digits;

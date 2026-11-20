@@ -132,7 +132,7 @@ export async function shareTab(tabId: string, sharedTabId: string, audio: boolea
 
 export function cancelDisplayMediaOnNavigation() {
   const page = (url: string) => url.replace(/#.*$/, "");
-  return useBrowser.subscribe((s, prev) => {
+  return useBrowser.subscribeTo(["tabs"], (s, prev) => {
     if (s.tabs === prev.tabs) return;
     for (const [tabId, request] of Object.entries(useMedia.getState().displayRequests) as [string, Pending][]) {
       const url = s.tabs[tabId]?.url;

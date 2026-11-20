@@ -4,7 +4,7 @@ import { canPickSyncFolderFirst, checkPhrase, connectSync, syncConnectSession } 
 import { IDLE_CONNECT, type ConnectState } from "../../state/sync/connectSession";
 import { haptics } from "../../state/app/haptics";
 import { chooseFolderTitle, setupStepLabel, connectMessage, MAC_HINT, phraseFooter } from "../../state/sync/syncRules";
-import { capsule, font, radius, settingsLayout, space, spacesLayout, Symbol, tabsMotion, useTheme, useReduceMotion } from "../ui";
+import { capsule, font, radius, settingsLayout, space, spacesLayout, Symbol, tabsMotion, useDesign, useTheme, useReduceMotion } from "../ui";
 import { BarButton, CrossfadeText, Group, SettingsPage } from "../settings/SettingsKit";
 import Animated, { FadeIn, FadeOut, SlideInRight, SlideOutRight } from "react-native-reanimated";
 import { CapsuleButton, PasteAction, SyncHero } from "./SyncPage";
@@ -16,6 +16,7 @@ import { canScanCodes } from "../../state/sync/scan";
 type FlowProps = { onClose: () => void; onConnected: () => void; closes?: boolean };
 
 export function SyncConnect({ onClose, onConnected, closes }: FlowProps) {
+  const material = useDesign() === "material";
   const [phrase, setPhrase] = useState("");
   const [entering, setEntering] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -112,7 +113,7 @@ export function SyncConnect({ onClose, onConnected, closes }: FlowProps) {
   return (
     <View style={StyleSheet.absoluteFill}>
       <View style={StyleSheet.absoluteFill} importantForAccessibility={entering ? "no-hide-descendants" : "auto"} accessibilityElementsHidden={entering}>
-        <SettingsPage title="Connect to Your Mac" onBack={closes || busy ? undefined : onClose} leading={closes ? <BarButton title="Close" onPress={onClose} enabled={!busy} /> : undefined}>
+        <SettingsPage title="Connect to Your Mac" onBack={closes || busy ? undefined : onClose} onClose={material && closes && !busy ? onClose : undefined} leading={closes && !material ? <BarButton title="Close" onPress={onClose} enabled={!busy} /> : undefined}>
           <SyncHero title="Connect to Your Mac" subtitle="Two steps, and your Mac’s tabs are here." />
           <Group header="Two Steps" footer={copy().phraseStays}>
             <Step number={1} title="Show the code on your Mac" detail={MAC_HINT} done={hasPhrase} current>

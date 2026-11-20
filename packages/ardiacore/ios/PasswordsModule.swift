@@ -57,6 +57,13 @@ public class PasswordsModule: Module {
         reply.ok(["shown": false, "reason": "noTab"])
       }
     },
+    "showPanelHint": { args, reply in
+      let tab = try args.text("tab")
+      let label = try args.text("label")
+      let side = try args.text("side")
+      if let live = WebKitHub.shared.transfers.liveTab(tab) { return reply.ok(["shown": live.showFieldProviderHint(label: label, side: side)]) }
+      reply.ok(["shown": ArdiaWebView.showFieldProviderHint(label, side: side, tab: tab)])
+    },
     "systemPanelAvailable": { _, reply in reply.ok(ArdiaWebView.systemPanelAvailability) },
     "otpauthHandler": { _, reply in reply.ok(["app": ArdiaWebView.otpauthHandlerName as Any? ?? NSNull()]) },
     "setUpVerificationCode": { args, reply in

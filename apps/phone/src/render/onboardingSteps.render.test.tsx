@@ -192,26 +192,21 @@ const expectTiming = (animation: Animation, from: number, durationMs: number, cu
 
 const shownStep = (root: Root) => root.root.findAll((node) => node.props.testID === "onboardingStep" && node.props.entering !== undefined)[0]!;
 
-test("the step motion is main's Motion.step on iPhone: the new step comes in 72 points from the right and the old leaves 72 to the left, both on 300 ms of (0.05, 0.7, 0.1, 1); Android keeps Compose's 60 dp on its spring", () => {
+test("the step motion is main's Motion.step on both phones: the new step comes in 72 points from the right and the old leaves 72 to the left, both on 300 ms of (0.05, 0.7, 0.1, 1)", () => {
   const root = showStep("blocking");
   const step = shownStep(root);
   const entering = (step.props.entering as () => Built)();
   const exiting = (step.props.exiting as () => Built)();
-  const shift = iPhone ? 72 : 60;
+  const shift = 72;
   expect(entering.initialValues).toEqual({ opacity: 0, transform: [{ translateX: shift }] });
   expect(exiting.initialValues).toEqual({ opacity: 1, transform: [{ translateX: 0 }] });
   expect(entering.animations.transform![0]!.translateX.toValue).toBe(0);
   expect(exiting.animations.transform![0]!.translateX.toValue).toBe(-shift);
-  if (iPhone) {
-    expect(onboardingCurves.step).toEqual([0.05, 0.7, 0.1, 1]);
-    expectTiming(entering.animations.opacity, 0, 300, onboardingCurves.step);
-    expectTiming(entering.animations.transform![0]!.translateX, 72, 300, onboardingCurves.step);
-    expectTiming(exiting.animations.opacity, 1, 300, onboardingCurves.step);
-    expectTiming(exiting.animations.transform![0]!.translateX, 0, 300, onboardingCurves.step);
-  } else {
-    expect(entering.animations.transform![0]!.translateX.type).not.toBe("timing");
-    expect(onboardingMotion.step).toEqual({ spring: expect.objectContaining({ mass: 1 }) });
-  }
+  expect(onboardingCurves.step).toEqual([0.05, 0.7, 0.1, 1]);
+  expectTiming(entering.animations.opacity, 0, 300, onboardingCurves.step);
+  expectTiming(entering.animations.transform![0]!.translateX, 72, 300, onboardingCurves.step);
+  expectTiming(exiting.animations.opacity, 1, 300, onboardingCurves.step);
+  expectTiming(exiting.animations.transform![0]!.translateX, 0, 300, onboardingCurves.step);
   unmount(root);
 });
 
@@ -222,7 +217,7 @@ test("a step going back comes in from the left and the old one leaves to the rig
   expect(exiting.animations.transform![0]!.translateX.toValue).toBe(onboardingMotion.stepTravel);
 });
 
-test("with Reduce Motion a step only fades, on main's Motion.fade (150 ms ease-out) on iPhone and Compose's 200 ms on Android", () => {
+test("with Reduce Motion a step only fades, on main's Motion.fade (150 ms ease-out) on both phones", () => {
   mockMotion.reduced = true;
   const root = showStep("blocking");
   const step = shownStep(root);
@@ -230,45 +225,38 @@ test("with Reduce Motion a step only fades, on main's Motion.fade (150 ms ease-o
   const exiting = (step.props.exiting as () => Built)();
   expect(entering.initialValues.transform).toEqual([{ translateX: 0 }]);
   expect(exiting.animations.transform![0]!.translateX.toValue).toBe(0);
-  if (iPhone) {
-    expectTiming(entering.animations.opacity, 0, 150, onboardingCurves.easeOut);
-    expectTiming(exiting.animations.opacity, 1, 150, onboardingCurves.easeOut);
-  } else {
-    expect(run(entering.animations.opacity, 0, 199).done).toBe(false);
-    expect(run(entering.animations.opacity, 0, 200).done).toBe(true);
-  }
+  expectTiming(entering.animations.opacity, 0, 150, onboardingCurves.easeOut);
+  expectTiming(exiting.animations.opacity, 1, 150, onboardingCurves.easeOut);
   unmount(root);
 });
 
-test("the backdrop cross-fades on the step's motion on iPhone, as main animates both in one transaction", () => {
+test("the backdrop cross-fades on the step's motion on both phones, as main animates both in one transaction", () => {
   useOnboarding.setState({ showing: true, step: "welcome", forward: true });
   const root = renderSurface(<OnboardingView />);
   const backdrop = root.root.findAll((node) => node.props.entering !== undefined && node.props.testID === undefined && node.props.exiting !== undefined)[0]!;
   const entering = (backdrop.props.entering as () => Built)();
   expect(entering.initialValues).toEqual({ opacity: 0 });
-  if (iPhone) expectTiming(entering.animations.opacity, 0, 300, onboardingCurves.step);
-  else expect(run(entering.animations.opacity, 0, 300).done).toBe(true);
+  expectTiming(entering.animations.opacity, 0, 300, onboardingCurves.step);
   unmount(root);
 });
 
-test("the welcome step rises on main's Motion.rise on iPhone: 360 ms of (0.2, 0, 0, 1) after 50 ms; Android keeps Compose's spring after 100 ms", () => {
+test("the welcome step rises on main's Motion.rise on both phones: 360 ms of (0.2, 0, 0, 1) after 50 ms", () => {
   const delay = jest.spyOn(Reanimated, "withDelay");
   const root = showStep("welcome");
   expect(delay).toHaveBeenCalledTimes(1);
   const [wait, rise] = delay.mock.calls[0]! as unknown as [number, Animation];
-  expect(wait).toBe(iPhone ? 50 : 100);
+  expect(wait).toBe(50);
   expect(rise.toValue).toBe(1);
-  if (iPhone) expectTiming(rise, 0, 360, onboardingCurves.rise);
-  else expect(rise.type).not.toBe("timing");
+  expectTiming(rise, 0, 360, onboardingCurves.rise);
   unmount(root);
 });
 
-test("with Reduce Motion the welcome step fades in at once without the tilt, scale or lift, on SwiftUI's 300 ms ease-out on iPhone", () => {
+test("with Reduce Motion the welcome step fades in at once without the tilt, scale or lift, on SwiftUI's 300 ms ease-out on both phones", () => {
   mockMotion.reduced = true;
   const delay = jest.spyOn(Reanimated, "withDelay");
   const root = showStep("welcome");
   expect(delay).not.toHaveBeenCalled();
-  if (iPhone) expect(onboardingMotion.riseReduced).toEqual({ timing: { duration: 300, easing: expect.anything() } });
+  expect(onboardingMotion.riseReduced).toEqual({ timing: { duration: 300, easing: expect.anything() } });
   expect(styleOf(root, "welcomeIcon").transform).toEqual([{ rotate: "-6deg" }, { scale: 1 }]);
   expect(styleOf(root, "welcomeWords").transform).toEqual([{ translateY: 0 }]);
   unmount(root);

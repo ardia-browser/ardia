@@ -10,7 +10,7 @@ import { display } from "../../state/search/omnibox";
 import type { BrowserTab } from "../../state/tabs/tabModels";
 import { shownTone } from "../../lib/pageTone";
 import { snapshotPageTop } from "../../lib/shownSnapshots";
-import { barHeight, FadeView, Favicon, font, iPhoneOr, motionReportsNearEnd, MotionView, screenReaderActions, space, Symbol, IncognitoSpecs, TabFace, tabsInk, tabsLayout, tabsMotion, useDesign, usePageUnderBars, useTheme, isDarkColor, type MenuItem, type MotionCurve } from "../ui";
+import { barHeight, FadeView, Favicon, font, iPhoneOr, motionReportsNearEnd, MotionView, screenReaderActions, space, Symbol, IncognitoSpecs, TabFace, tabsInk, tabsLayout, tabsMotion, useDesign, usePageUnderBars, useTheme, isDarkColor, type MenuItem, type MotionCurve, type SymbolName } from "../ui";
 import { MenuTrigger, nativeMenus, spaceSystemImage, type MenuHandlers } from "../ui/MenuTrigger";
 import { hideArchiveCard } from "../../state/browse/archiveCard";
 import { OPENING_COVER_ID } from "../../state/browse/store";
@@ -195,6 +195,55 @@ export function cardPose(g: DeckGeometry, role: DeckRole, relative: number, sp: 
   return { x, y, scale, corner, opacity, header: Math.min(1, settle) * Math.min(1, liftFade) * shown, visible: deckVisibleWidth(g, relative, isLast), lift, fade: 1 - shown };
 }
 
+export function useCardPlacement(id: string, g: DeckGeometry, motion: DeckMotion, restCorner: number = DECK.cardRadius) {
+  const { orderIds, covering } = motion;
+  const at = useDerivedValue(() => orderIds.value.indexOf(id), [id]);
+
+  const placed = useDerivedValue(() => {
+    const now = deckNow(motion);
+    const m = deckCardMotion(now, at.value, id);
+    const p = cardPose(g, m.role, m.relative, now.scaleProgress, now.positionProgress, m.lift, m.fade, m.isLast, now.riseProgress);
+    const top = p.y - (g.cardHeight * p.scale) / 2 - tabsLayout.headerGap - tabsLayout.headerHeight;
+    const growing = m.role === "expanded" || m.role === "launcher";
+    return {
+      pose: p,
+      top,
+      place: deckHeaderPlacement(p.x - (g.cardWidth * p.scale) / 2, p.visible),
+      z: m.z,
+      expanded: m.role === "expanded",
+      launcher: m.role === "launcher",
+      growing,
+      restLeft: deckLeading(g, m.relative),
+      rest: growing ? now.scaleProgress : 1,
+    };
+  }, [g, id]);
+  const cardStyle = useAnimatedStyle(() => {
+    const p = placed.value.pose;
+    const corner = p.corner + (restCorner - DECK.cardRadius) * placed.value.rest;
+    return {
+      zIndex: placed.value.z,
+      opacity: covering.value === id ? 0 : p.opacity,
+      borderRadius: placed.value.launcher ? restCorner : corner / Math.max(p.scale, 0.01),
+      transform: [{ translateX: p.x - g.cardWidth / 2 }, { translateY: p.y - g.cardHeight / 2 }, { scale: p.scale }],
+    };
+  }, [g, restCorner]);
+  const reachStyle = useAnimatedStyle(() => {
+    const p = placed.value.pose;
+    return {
+      zIndex: placed.value.z + 1,
+      transform: [
+        { translateX: p.x - (g.cardWidth * p.scale) / 2 },
+        { translateY: p.y - (g.cardHeight * p.scale) / 2 },
+        { scaleX: Math.max(1, p.visible * p.scale) / g.cardWidth },
+        { scaleY: p.scale },
+      ],
+    };
+  }, [g]);
+  return { placed, cardStyle, reachStyle };
+}
+
+export type DeckCardProps = Props;
+
 export const DeckCard = memo(function DeckCard({ tab, index, geometry: g, motion, onOpen, onClose, onCloseNow, onMenu }: Props) {
   const reach = useRef<ViewInstance>(null);
   countRender("DeckCard");
@@ -331,11 +380,27 @@ export const DeckCard = memo(function DeckCard({ tab, index, geometry: g, motion
 
 type SendTarget = ReturnType<typeof sendTargetsFor>[number];
 
-type CardMenuContext = { devices: SendTarget[]; pinned: boolean; syncEnabled: boolean; spaces: SyncedProfile[] };
+type CardMenuContext = { devices: SendTarget[]; pinned: boolean; syncEnabled: boolean; spaces: SyncedProfile[]; icons?: boolean };
 
 const deviceSystemImage = (device: Pick<SendTarget, "name" | "kind">) => (device.kind === "phone" ? "iphone" : /book/i.test(device.name) ? "laptopcomputer" : "desktopcomputer");
 
-export function cardMenuItems(tab: BrowserTab, { devices, pinned, syncEnabled, spaces }: CardMenuContext, close: () => void): MenuItem[] {
+const CARD_MENU_ICONS: Record<string, { icon: SymbolName; systemImage: string }> = {
+  "Copy Link": { icon: "link", systemImage: "link" },
+  Share: { icon: "squareAndArrowUp", systemImage: "square.and.arrow.up" },
+  "Pin to Mac": { icon: "star", systemImage: "star" },
+  "Pinned to Mac": { icon: "starFill", systemImage: "star.fill" },
+  "Move to Space": { icon: "squareStack", systemImage: "square.stack" },
+  "Close Tab": { icon: "xmark", systemImage: "xmark" },
+};
+
+const withMenuIcon = (item: MenuItem): MenuItem => (item === "divider" || "heading" in item || !CARD_MENU_ICONS[item.label] ? item : { ...item, ...CARD_MENU_ICONS[item.label] });
+
+export function cardMenuItems(tab: BrowserTab, context: CardMenuContext, close: () => void): MenuItem[] {
+  const items = plainCardMenuItems(tab, context, close);
+  return context.icons ? items.map(withMenuIcon) : items;
+}
+
+function plainCardMenuItems(tab: BrowserTab, { devices, pinned, syncEnabled, spaces }: CardMenuContext, close: () => void): MenuItem[] {
   const closing: MenuItem = { label: "Close Tab", destructive: true, onPress: close };
   if (!canShareTab(tab)) return [closing];
   const send = (device: SendTarget) => () => void sendTab(tab, device);
@@ -354,6 +419,7 @@ export function cardMenuItems(tab: BrowserTab, { devices, pinned, syncEnabled, s
 type CardMenuProps = { tab: BrowserTab; close: () => void; testID: string; haptic?: () => void; style?: StyleProp<ViewStyle>; children: (handlers: MenuHandlers) => ReactNode };
 
 export function CardMenu({ tab, close, testID, haptic, style, children }: CardMenuProps) {
+  const material = useDesign() === "material";
   const devices = useSendTargets(tab.id);
   const pinned = useIsPinned(tab.id);
   const syncEnabled = useSyncEnabled();
@@ -361,7 +427,7 @@ export function CardMenu({ tab, close, testID, haptic, style, children }: CardMe
   const profiles = useSyncView().profiles;
   const spaces = moveTargets(tabSpaces, profiles, tab);
   return (
-    <MenuTrigger testID={testID} items={cardMenuItems(tab, { devices, pinned, syncEnabled, spaces }, close)} trigger="longPress" haptic={haptic} privately={tab.isPrivate} onOpen={hideArchiveCard} style={style}>
+    <MenuTrigger testID={testID} items={cardMenuItems(tab, { devices, pinned, syncEnabled, spaces, icons: material }, close)} trigger="longPress" haptic={haptic} privately={tab.isPrivate} onOpen={hideArchiveCard} style={style}>
       {children}
     </MenuTrigger>
   );
@@ -395,7 +461,7 @@ const androidCardOpen = (): CardOpen => (isLabBuild && launchArguments().opening
 
 export const cardOpen: () => CardOpen = iPhoneOr(() => "openingCard", androidCardOpen);
 
-export const OPENING_CARD_RESPONSE = iPhoneOr(0.18, 0.3);
+export const OPENING_CARD_RESPONSE = 0.18;
 export const OPENING_CARD_MOTION: MotionCurve = { type: "spring", response: OPENING_CARD_RESPONSE, dampingFraction: 1 };
 
 type OpeningCardProps = { tab: BrowserTab; geometry: DeckGeometry; centerX: number; centerY: number; growsAtMount?: boolean; endsSquare?: boolean; onGrowing: () => void; onLanded?: () => void };

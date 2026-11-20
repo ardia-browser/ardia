@@ -58,7 +58,7 @@ function Segment<T extends string>({ option, selected, onPress, onLayout }: { op
         {option.image ? (
           <Symbol name={option.image} size={SEGMENT.glyph} color={ink} style={{ width: SEGMENT.glyphBox, height: SEGMENT.glyphBox }} />
         ) : (
-          <Text size="small" color={selected ? theme.onAccent : theme.textPrimary}>
+          <Text size="small" color={selected ? theme.onAccent : theme.textPrimary} ardiaCentersCapitals>
             {option.title}
           </Text>
         )}

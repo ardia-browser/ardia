@@ -25,6 +25,7 @@ export type SearchStageProps = ViewProps & {
   rowsRevealNativeId?: string | null;
   fieldCenter?: number;
   commandTop?: number | null;
+  landsDirectly?: boolean;
   morphLook?: SearchStageMorphLook;
   onLift?: (lift: SearchStageLift) => void;
   onReveal?: (reveal: { late: boolean }) => void;

@@ -28,7 +28,7 @@ export function startMemorySaver() {
   started = true;
   const push = () => void setMemorySaver(memorySaverRequest(useBrowser.getState().settings)).catch(() => {});
   push();
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["settings"], (s, prev) => {
     if (changed(s.settings, prev.settings)) push();
   });
 }

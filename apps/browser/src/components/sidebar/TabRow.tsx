@@ -8,19 +8,21 @@ import { useSplitRowPanes, useTabBadged } from "../../state/sidebar/hooks";
 import { muteTitle } from "../../state/tabs/mute";
 import { usePictureInPicture } from "../../state/media/media";
 import { HoverSlot } from "../ui/HoverSlot";
-import { ActivitySpinner, Button, FadeLabel, HoverFill, HoverSwap, ink, OutsidePressArea, radius, sidebarFont, sidebarLineHeight, space, Symbol, typeFace, useHover, withAlpha } from "../ui";
+import { ActivitySpinner, FadeLabel, HoverSwap, ink, OutsidePressArea, radius, sidebarFont, sidebarLineHeight, space, Symbol, typeFace, useHover, withAlpha } from "../ui";
 import { isPinnedRow, tabTitle } from "../../state/browser/model";
 import { awayFromPin, rowAwayTitle } from "../../state/pins/organize";
 import { hidesRowIcon } from "../../state/pins/rowIcons";
 import { commitRename, endRename, startRename } from "../../state/sidebar/actions";
 import { useDragItem, useDropSplit } from "./DragProvider";
 import { SplitDropHalf } from "./DropMarks";
-import { SplitPreview, useSplitPreview } from "./SplitPreview";
+import { PreviewFade, SplitPreview, useSplitPreview } from "./SplitPreview";
 import { profileSurfaces } from "./profileSurfaces";
 import { SPLIT_PANE, splitPaneShape } from "./splitPaneGeometry";
 import { useShift, type EntryMotion } from "./EntryMotion";
-import { useRowHover } from "./hoverController";
-import { pressPaneClose, pressTabClose, useTabCloseControlWhile } from "../../state/sidebar/closeControl";
+import { useRowHover, useRowHoverCell } from "./hoverController";
+import { RowCloseSlot, RowHoverFill } from "./RowHoverParts";
+import { RowCloseButton } from "./RowCloseButton";
+import { pressPaneClose, useTabCloseControlWhile } from "../../state/sidebar/closeControl";
 import { modifiersOf } from "../../lib/keys";
 import { ACTIVE, ICON_MARKS, LOADING, mutedBy, PLAYING, SELECTED, useRowState, useStruckTitle } from "../../state/sidebar/rowState";
 import { registerRow, useSidebarUi } from "../../state/sidebar/sidebarUi";
@@ -80,10 +82,9 @@ export const TabRow = memo(function TabRow({
   const loading = !!(flags & LOADING);
   const [pip, togglePip] = usePictureInPicture(tabId);
   const renaming = useSidebarUi((u) => u.renaming?.kind === "tab" && u.renaming.id === tabId);
-  const { hovered, hoverProps } = useRowHover(windowId, renaming ? null : { kind: "tab", id: tabId });
+  const { cell, hoverProps } = useRowHoverCell(windowId, renaming ? null : { kind: "tab", id: tabId });
   const [moved, movedRef] = useShift(shift, useCallback((v: View | null) => registerRow(windowId, tabId, v), [windowId, tabId]));
   const backToPin = useHover();
-  const closeControl = useTabCloseControlWhile(tabId, hovered && !renaming);
   const { backToPinHint, quiet } = useSidebarRowLook();
   const unread = useTabUnread(tabId);
   const badged = useTabBadged(tabId);
@@ -114,19 +115,18 @@ export const TabRow = memo(function TabRow({
       style={moved.style as object}
       onDoubleClick={() => void startRename(windowId, { kind: "tab", id: tabId })}
     >
-      <TabPressArea windowId={windowId} tab={tab} hitSlop={rowGapSlop(0)} selected={selected}>
+      <TabPressArea windowId={windowId} tab={tab} squish={renaming ? undefined : "row"} hitSlop={rowGapSlop(0)} selected={selected}>
       {({ pressed }) => (
         <>
-          <HoverFill shown={plain && (hovered || pressed)} instant={!plain} color={pressed ? pressedFill : hoverFill} radius={radius.chrome} />
+          <RowHoverFill cell={cell} plain={plain} pressed={pressed} color={pressed ? pressedFill : hoverFill} radius={radius.chrome} />
           <SidebarRowSurface
             fill={selected && !active && pressed ? pressedFill : fill}
             selected={active && !quiet}
             border={border}
             stroke={selected && !active ? tokens.multiSelectedStroke : undefined}
-            padLeft={(textOnly ? TAB_ROW.contentLeft - TAB_ROW.titleGap : TAB_ROW.contentLeft) - border}
-            padRight={TAB_ROW.trailing - border}
+            padLeft={textOnly ? TAB_ROW.contentLeft - TAB_ROW.titleGap : TAB_ROW.contentLeft}
           >
-            <Animated.View style={[ROW_CONTENT, { opacity: preview.values ? preview.values.hidden : 1 }]}>
+            <PreviewFade preview={preview}>
             <View {...(tab.pinnedUrl ? backToPin.hoverProps : null)} style={textOnly ? NO_SLOT : undefined}>
               {resettable ? (
                 <Pressable
@@ -175,19 +175,15 @@ export const TabRow = memo(function TabRow({
             ) : (
               <SidebarRowLabel text={title} color={titleColor} compact={quiet} struck={struck && !resetting} />
             )}
-            <HoverSlot
-              hovered={hovered && !renaming}
-              reserve="hover"
-              hover={closeControl && <Button variant="icon" icon={closeControl.icon} size="s" weight="semibold" onPress={() => pressTabClose(tab.id)} tooltip={closeControl.tooltip} />}
-            >
+            <RowCloseSlot cell={cell} tabId={tab.id} renaming={renaming}>
               {loading || showsUnread ? (
                 <>
                   {loading && <ActivitySpinner style={{ width: 12, height: 12, marginRight: space.xxs }} />}
                   {showsUnread && <UnreadCount unread={unread} ink={active ? theme.rowSelectedText : theme.textTab} onDrawn={setUnreadDrawn} />}
                 </>
               ) : null}
-            </HoverSlot>
-            </Animated.View>
+            </RowCloseSlot>
+            </PreviewFade>
           </SidebarRowSurface>
         </>
       )}
@@ -198,7 +194,6 @@ export const TabRow = memo(function TabRow({
 });
 
 const AWAY_FRAME = { flex: 1, marginLeft: TAB_ROW.titleGap } as const;
-const ROW_CONTENT = { flex: 1, alignSelf: "stretch", flexDirection: "row", alignItems: "center" } as const;
 const singles = new Map<string, string[]>();
 const SINGLE = (tabId: string) => singles.get(tabId) ?? (singles.set(tabId, [tabId]), singles.get(tabId)!);
 const NO_SLOT = { display: "none" } as const;
@@ -304,16 +299,16 @@ export const SplitRowItem = memo(function SplitRowItem({
           fill={active ? theme.tabSelected : hovered ? theme.tabHover : ink.clear}
           selected={active}
           border={splitBorder}
-          padLeft={SPLIT_PANE.inset - splitBorder}
-          padRight={SPLIT_PANE.inset - splitBorder}
+          padLeft={SPLIT_PANE.inset}
+          padRight={SPLIT_PANE.inset}
         >
-          <Animated.View style={[ROW_CONTENT, { opacity: preview.values ? preview.values.hidden : 1 }]}>
+          <PreviewFade preview={preview}>
             {tabIds.map((id, i) => (
               <View key={id} style={i > 0 ? SPLIT_SLOT_AFTER : SPLIT_SLOT}>
                 <SplitPane tabId={id} windowId={windowId} rowActive={active} />
               </View>
             ))}
-          </Animated.View>
+          </PreviewFade>
         </SidebarRowSurface>
         {preview.values ? <SplitPreview panes={tabIds} values={preview.values} rowActive={active} /> : <SplitDropHalf side={splitSide} fill={tokens.splitDropFill} />}
       </View>
@@ -367,7 +362,7 @@ function SplitPane({ tabId, windowId, rowActive }: { tabId: string; windowId: st
               reserve="hover"
               width={shape.closeBox}
               style={CLOSE_SLOT}
-              hover={closeControl && <Button variant="icon" icon={closeControl.icon} size="s" box={shape.closeBox} radius={shape.closeCorner} weight="semibold" onPress={(e: GestureResponderEvent) => pressPaneClose(tab.id, modifiersOf(e).altKey)} tooltip={closeControl.tooltip} />}
+              hover={closeControl && <RowCloseButton icon={closeControl.icon} box={shape.closeBox} radius={shape.closeCorner} onPress={(e: GestureResponderEvent) => pressPaneClose(tab.id, modifiersOf(e).altKey)} tooltip={closeControl.tooltip} />}
             />
           </View>
         )}

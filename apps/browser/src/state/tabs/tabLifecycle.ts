@@ -106,7 +106,7 @@ export function startTabLifecycle() {
 
   startMemorySaver();
   startLoadedTabBudget(currentSystem);
-  useBrowser.subscribe((s: BrowserState, prev: BrowserState) => {
+  useBrowser.subscribeTo(["settings"], (s: BrowserState, prev: BrowserState) => {
     if (s.settings.batterySaverWhen !== prev.settings.batterySaverWhen) {
       lowBatteryHeld = false;
       updateBatterySaver(false);

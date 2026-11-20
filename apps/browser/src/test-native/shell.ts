@@ -6,8 +6,11 @@ import type {
   DiagnosticsSample,
   HardwareInfo,
   LaunchConfig,
+  OpenSurface,
   OpenWindowOptions,
   ShellNativeModules,
+  SurfaceEvent,
+  SurfaceItem,
   SystemInfo,
   SystemSignal,
   UserScriptsFolder,
@@ -16,6 +19,8 @@ import type {
 import { nativeEvents, unfaked } from "./events";
 import { reportModule } from "./report";
 import { telemetryLocalModule } from "./telemetryLocal";
+import { windowGeometries, windowGeometryFakes } from "./windowGeometry";
+export { beginWindowControlTransition, finishStalledTransition, geometryWorld } from "./windowGeometry";
 
 type Modules = ShellNativeModules;
 
@@ -63,6 +68,7 @@ export const windows = {
   closed: [] as string[],
   focused: null as string | null,
   emit: (event: WindowEvent) => shellEvents.emit("onWindowEvent", event),
+  geometry: windowGeometries,
 };
 export const emitAppEvent = (event: AppEvent) => shellEvents.emit("onAppEvent", event);
 export const emitCommand = (event: CommandEvent) => shellEvents.emit("onCommand", event);
@@ -124,6 +130,7 @@ const windowsModule: Modules["ArdiaAppWindows"] & { requestClose(id: string): Pr
   dragPreviewEnd: () => Promise.resolve(),
   raiseView: () => Promise.resolve(),
   windowFrame: () => Promise.resolve(null),
+  ...windowGeometryFakes((id) => windows.open.has(id), (event) => shellEvents.emit("onWindowEvent", event)),
   frameCornerRadius: () => Promise.resolve(0),
   replyToTerminate: () => Promise.resolve(),
 };
@@ -155,8 +162,40 @@ const focus: Modules["ArdiaFocus"] = {
   pressRepeated: () => Promise.resolve(pressRepeated.earlier),
 };
 
+export const surfaces = {
+  open: [] as OpenSurface[],
+  bar: [] as SurfaceItem[],
+  captures: false,
+  chosen: [] as { id: string; path: number[] }[],
+  performed: [] as { ref: string; windowId: string }[],
+  dismissed: [] as string[],
+  barHook: null as (() => void) | null,
+  emit: (event: SurfaceEvent) => shellEvents.emit("onSurface", event),
+};
+
+function surfaceOf(id: string) {
+  const found = surfaces.open.find((s) => s.id === id);
+  if (!found) throw Object.assign(new Error(`There's no open menu ${id}.`), { code: "no_window" });
+  return found;
+}
+
 const menus: Modules["ArdiaMenus"] = {
   addListener: shellEvents.addListener,
+  openSurfaces: () => Promise.resolve(surfaces.open),
+  capturePageMenus: (captures) => Promise.resolve(void (surfaces.captures = captures)),
+  dismissSurface: async (id) => {
+    surfaceOf(id);
+    surfaces.dismissed.push(id);
+    surfaces.open = surfaces.open.filter((s) => s.id !== id);
+  },
+  menuBar: async () => {
+    surfaces.barHook?.();
+    return surfaces.bar;
+  },
+  performMenuBarItem: async (ref, windowId) => {
+    surfaces.performed.push({ ref, windowId });
+    return "performed";
+  },
   showMenu: () => Promise.resolve(null),
   updateMenu: () => Promise.resolve(),
   setMenuState: () => Promise.resolve(),
@@ -168,6 +207,8 @@ const menus: Modules["ArdiaMenus"] = {
 
 const dialogs: Modules["ArdiaDialogs"] = {
   confirm: () => Promise.resolve({ confirmed: false, suppressed: false }),
+  dismissesShownOnly: true,
+  dismissShownOnly: () => Promise.resolve(),
   prompt: () => Promise.resolve(null),
   pickFiles: () => Promise.resolve([]),
   pickFolder: () => Promise.resolve(null),

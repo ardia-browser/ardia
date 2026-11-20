@@ -183,6 +183,36 @@ NSURL *SharedImageFile(NSData *image, NSString *mimeType, NSString *source) {
   return file;
 }
 
+NSArray *CapturedItems(NSArray *items) {
+  NSMutableArray *out = [NSMutableArray array];
+  for (NSDictionary *item in items) {
+    if (![item isKindOfClass:NSDictionary.class]) continue;
+    NSMutableDictionary *row = [@{
+      @"id" : Field<NSNumber>(item, @"id") ?: @0,
+      @"title" : MenuTitle(Field<NSString>(item, @"label") ?: @""),
+      @"enabled" : @(Flag(item, @"enabled")),
+      @"hidden" : @(Field<NSNumber>(item, @"visible") ? !Flag(item, @"visible") : NO),
+      @"separator" : @(MenuItemType(item) == kMenuSeparator),
+      @"checked" : @(Flag(item, @"checked")),
+    } mutableCopy];
+    if (NSArray *submenu = Field<NSArray>(item, @"submenu")) row[@"submenu"] = CapturedItems(submenu);
+    [out addObject:row];
+  }
+  return out;
+}
+
+void CaptureForChoice(ArdiaWebView *view, ArdiaCoreTab *tab, NSDictionary *menu, NSArray *items) {
+  NSString *tabId = ardia_host::AppTabIdOf(tab);
+  if (!tabId.length || !view.window) return;
+  [NSNotificationCenter.defaultCenter postNotificationName:@"ArdiaPageMenuCaptured"
+                                                    object:@{
+                                                      @"tab" : tabId,
+                                                      @"window" : view.window,
+                                                      @"link" : Field<NSString>(menu, @"link") ?: @"",
+                                                      @"items" : CapturedItems(items),
+                                                    }];
+}
+
 NSDictionary *FindMenuItem(NSArray *items, NSString *label) {
   for (NSUInteger i = 0; i < items.count; i++) {
     NSDictionary *item = items[i];
@@ -270,6 +300,7 @@ NSDictionary *FindMenuItem(NSArray *items, NSString *label) {
   ArdiaLaunchConfig *config = ArdiaLaunchConfig.shared;
   if (![config testFlag:@"contextMenu"]) {
     if (ardia_host::Background()) {
+      CaptureForChoice(self, tab, menu, items);
       NSMutableArray<NSString *> *titles = [NSMutableArray array];
       for (NSDictionary *item in items)
         if (MenuItemType(item) != kMenuSeparator && Field<NSString>(item, @"label").length) [titles addObject:MenuTitle(item[@"label"])];

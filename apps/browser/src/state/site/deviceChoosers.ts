@@ -36,7 +36,7 @@ export function startDeviceChoosers() {
       return { byTab };
     });
   });
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["tabs"], (s, prev) => {
     if (s.tabs === prev.tabs) return;
     const { byTab } = useChoosers.getState();
     const gone = Object.keys(byTab).filter((id) => !s.tabs[id]);

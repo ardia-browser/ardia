@@ -1,3 +1,4 @@
+import os
 import WebKit
 
 extension WebKitTab {
@@ -9,14 +10,22 @@ extension WebKitTab {
     case "fieldFocus":
       guard main, let view = webView, let generation = dict?["generation"] as? Double, let sequence = dict?["seq"] as? Double else { return }
       ArdiaWebView.noteFieldFocus(dict?["field"] as? String, sequence: sequence, generation: generation, query: dict?["query"] as? String, owner: view)
+    case "fieldProviderHint":
+      guard let state = dict?["state"] as? String, ["shown", "dismissed"].contains(state), sameOriginAsTop(frameInfo),
+        ArdiaWebView.fieldProvider(profile: profile) != nil
+      else { return }
+      emit("fieldProviderHint", ["state": state])
     case "fieldProvider":
       guard let view = webView, let field = dict?["field"] as? String, let generation = dict?["generation"] as? Double,
         sameOriginAsTop(frameInfo)
       else { return }
-      let result = visible
-        ? ArdiaWebView.requestSystemPanel(in: view, owner: view, profile: profile, field: field, generation: generation)
-        : ["shown": false, "reason": "hidden"]
-      emitPanelResult(result, via: "badge")
+      guard visible else {
+        os_log("[ardiacore] system passwords panel refused reason=hidden via=badge")
+        return emitPanelResult(["shown": false, "reason": "hidden"], via: "badge")
+      }
+      ArdiaWebView.requestSystemPanel(in: view, owner: view, profile: profile, field: field, generation: generation) { [weak self] result in
+        self?.emitPanelResult(result, via: "badge")
+      }
     case "verificationCode":
       guard main, let view = webView, let generation = dict?["generation"] as? Double, let url = dict?["url"] as? String,
         view.scriptFrames[frame] != nil,
@@ -70,7 +79,26 @@ extension WebKitTab {
   private func emitPanelResult(_ result: [AnyHashable: Any], via: String) {
     let reason = result["reason"] as? String
     guard reason != "noProvider", reason != "stale" else { return }
-    emit("fieldProviderOpened", ["via": via, "shown": result["shown"] as? Bool ?? false])
+    var payload: [String: Any] = ["via": via, "shown": result["shown"] as? Bool ?? false]
+    if let reason { payload["reason"] = reason }
+    if let panel = result["panel"] as? String { payload["panel"] = panel }
+    emit("fieldProviderOpened", payload)
+  }
+
+  func showFieldProviderHint(label: String, side: String) -> Bool {
+    guard let view = webView, let json = ArdiaWebView.fieldProviderHintJSON(label, side: side) else { return false }
+    pushFieldProviderHint(json, in: view)
+    ArdiaWebView.whenSystemPanelCloses { [weak self] in
+      guard let self, let view = self.webView else { return }
+      self.pushFieldProviderHint("false", in: view)
+    }
+    return true
+  }
+
+  private func pushFieldProviderHint(_ json: String, in view: WebKitWebView) {
+    for info in view.scriptFrames.values where sameOriginAsTop(info) {
+      runInWorld("window.__ardia && window.__ardia.fieldProviderHint(\(json))", frame: info.isMainFrame ? nil : info)
+    }
   }
 
   func showSystemPanel(generation: Double, done: @escaping ([AnyHashable: Any]) -> Void) {

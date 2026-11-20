@@ -55,6 +55,25 @@ let recording: Promise<unknown> = Promise.resolve();
 type Intent = { on: boolean; consent: ConsentToken | null };
 const intents = new Map<string, Intent>();
 const owed = new Map<string, ConsentToken | null>();
+const pendingWatchers = new Set<(pending: boolean) => void>();
+let wasPending = false;
+
+function notePending() {
+  const pending = intents.size + owed.size > 0;
+  if (pending === wasPending) return;
+  wasPending = pending;
+  for (const watcher of pendingWatchers) watcher(pending);
+}
+
+export function watchPendingOfferToSave(watcher: (pending: boolean) => void): () => void {
+  pendingWatchers.add(watcher);
+  return () => pendingWatchers.delete(watcher);
+}
+
+const setIntent = (profile: string, intent: Intent) => (intents.set(profile, intent), notePending());
+const dropIntent = (profile: string) => (intents.delete(profile), notePending());
+const setOwed = (profile: string, consent: ConsentToken | null) => (owed.set(profile, consent), notePending());
+const dropOwed = (profile: string) => (owed.delete(profile), notePending());
 
 function recordHeldOff(profile: string, held: boolean): Promise<boolean> {
   const saved = recording.then(async () => {
@@ -78,7 +97,7 @@ function recordHeldOff(profile: string, held: boolean): Promise<boolean> {
       unsaved = null;
       lastSaved = contents;
     }
-    for (const p of carried) owed.delete(p);
+    for (const p of carried) dropOwed(p);
     if (!owed.size && !intents.size) settleRetry();
     return true;
   });
@@ -117,7 +136,7 @@ async function payOwed(profile: string, consent: ConsentToken | null): Promise<b
     retryLater();
     return false;
   }
-  owed.delete(profile);
+  dropOwed(profile);
   retryLater();
   return true;
 }
@@ -126,7 +145,7 @@ async function holdOff(profile: string, intent: Intent): Promise<boolean> {
   if (!(await getPasswordAutofill(profile))) return (await payOwed(profile, intent.consent), true);
   if (!stillWanted(profile, intent)) return true;
   if (!(await recordHeldOff(profile, true))) return (notePasswordManagerRecordFailed(intent.consent), false);
-  owed.delete(profile);
+  dropOwed(profile);
   if (!stillWanted(profile, intent)) return true;
   await setPasswordAutofill(false, profile);
   storeResource(passwordAutofill, [profile], false);
@@ -135,7 +154,7 @@ async function holdOff(profile: string, intent: Intent): Promise<boolean> {
 
 async function oweUnlessForgotten(profile: string, intent: Intent) {
   if (!intents.has(profile)) return;
-  owed.set(profile, intent.consent);
+  setOwed(profile, intent.consent);
   await payOwed(profile, intent.consent);
 }
 
@@ -145,7 +164,7 @@ async function giveBack(profile: string, intent: Intent): Promise<boolean> {
   await getPasswordAutofill(profile);
   if (!stillWanted(profile, intent)) return true;
   if (recorded && !(await recordHeldOff(profile, false))) return (notePasswordManagerRecordFailed(intent.consent), false);
-  owed.delete(profile);
+  dropOwed(profile);
   if (!stillWanted(profile, intent)) return (await oweUnlessForgotten(profile, intent), true);
   try {
     await setPasswordAutofill(true, profile);
@@ -162,15 +181,15 @@ async function drain(profile: string) {
     const intent = intents.get(profile);
     if (!readHeldOff().writable) {
       noteNewerRecord(intent ? intent.consent : (owed.get(profile) ?? null));
-      intents.delete(profile);
-      owed.delete(profile);
+      dropIntent(profile);
+      dropOwed(profile);
       return;
     }
     if (!intent) return void (await payOwed(profile, owed.get(profile) ?? null));
     const done = await (intent.on ? giveBack(profile, intent) : holdOff(profile, intent)).catch(() => false);
     if (!stillWanted(profile, intent)) continue;
     if (!done) return retryLater();
-    intents.delete(profile);
+    dropIntent(profile);
     if (!owed.size && !intents.size) settleRetry();
     return;
   }
@@ -185,15 +204,15 @@ export function writeOfferToSave(profile: string) {
 }
 
 function offerToSave(profile: string, on: boolean) {
-  intents.set(profile, { on, consent: consentToken() });
+  setIntent(profile, { on, consent: consentToken() });
   writeOfferToSave(profile);
 }
 
 export const followMode = (profile: string, mode: PasswordManagerChoice) => offerToSave(profile, mode === "ardia");
 
 export function forgetPendingOfferToSave(profile: string, consent: ConsentToken | null): Promise<boolean> {
-  intents.delete(profile);
-  owed.delete(profile);
+  dropIntent(profile);
+  dropOwed(profile);
   return recordHeldOff(profile, false).then((landed) => {
     if (landed || !readHeldOff().writable) return true;
     notePasswordManagerRecordFailed(consent);

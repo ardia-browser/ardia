@@ -13,8 +13,8 @@ export const loadingPlaceholderLayout = {
   themeInkFlip: 0.55,
   themeInk: { onLight: "rgba(0,0,0,0.85)", onDark: "rgba(255,255,255,0.92)" },
   themeHostInk: { onLight: `rgba(0,0,0,${0.85 * 0.65})`, onDark: `rgba(255,255,255,${0.92 * 0.65})` },
-  revealDelayMs: iPhoneOr(250, 300),
-  revealMs: iPhoneOr(150, 220),
+  revealDelayMs: 250,
+  revealMs: 150,
 } as const;
 
 export const failureButton = {

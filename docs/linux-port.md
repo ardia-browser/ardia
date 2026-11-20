@@ -1770,6 +1770,33 @@ A background instance rejects without fetching.
   opens through handles and refuses symlinks.
 - **Private downloads.** These always ask where to save, as Chrome's incognito does. They reach only their own window
   and are never kept.
+- **Downloads panel presses.** `DownloadsPopover.tsx` counts any press inside the panel's region as inside the panel.
+  The region and the panel's root are `box-none`, so only the panel itself takes hits there. Before #2155 the check
+  looked for the full-window backdrop that #1610 removed. It found the panel instead, so every press in the panel
+  counted as outside, closed it and lost the click.
+  - A press outside closes the panel, and no part of that press reaches what it landed on, however long it is held
+    and whichever button it is (a right-click's menu included). The swallow is its own listener, so it outlives the
+    dismissal that closing the panel removes. It follows that press until its click, ends when the next press
+    begins, and lets go 800 ms after the release if no click comes. Before, it went with the dismissal, and the
+    release and click of the closing press switched tabs or pressed Clear All.
+  - Escape still closes it.
+  - While a row's menu is open, presses and Escape belong to the menu (`menuShown()` in `menus.tsx`). Escape closes
+    only the menu, and choosing an item leaves the panel open. The menu renders under `document.body`, outside the
+    panel's region, so `OutsidePressArea` ignores presses while a menu is shown too. A press on the shell outside both
+    closes only the menu and goes on to what it landed on, as Linux menus do elsewhere; the panel closes on the next
+    one. That holds for every Linux popover built on `OutsidePressArea`. A click in the page closes both at once,
+    since the page taking focus closes every popover.
+  - Acceptance F08 presses the header, a finished row (open file), Show in Folder, a row's menu (Escape, then Open),
+    View all downloads, Pause, Resume, Cancel, Keep, Discard and Clear, with real CDP input in the packaged UI. Outside
+    the panel it presses a toolbar button (Go Back, Go Forward or Reload) with a left and then a right press, and the
+    click after the right-click has to land, so that button really acts once. A stand-in `xdg-open`
+    records what Open and Show in Folder ask for. Progress and paused-byte samples come from the engine's
+    `downloads.list`; live progress is stored separately from `s.downloads`.
+  - Known bug: Clear removes the rows, but the panel opens again, empty. The engine posts `downloads.changed` for
+    each removed item before `downloads.removed`, and `upsertDownload` takes it for a new download.
+  - With sharing on, `usage_counts.linux_downloads_panel_inside_presses` counts pointer presses classified as inside
+    and allowed through the Linux dismissal handler. Watch for that count to fall toward zero relative to panel
+    opens if the handler starts misclassifying those presses again.
 
 ## Upstream syncs
 

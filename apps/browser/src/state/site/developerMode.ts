@@ -24,12 +24,12 @@ export const isLoopbackHost = (host: string): boolean => LOOPBACK_HOST.test(host
 export function developerModeOn(sites: DeveloperModeSites | undefined, url: string): boolean {
   const host = developerModeHost(url);
   if (!host) return false;
-  return sites && Object.hasOwn(sites, host) ? sites[host]! : isLoopbackHost(host);
+  return sites && Object.hasOwn(sites, host) ? sites[host]! : false;
 }
 
 export function developerModeSitesWith(sites: DeveloperModeSites, host: string, on: boolean): DeveloperModeSites {
   const next: DeveloperModeSites = { ...sites, [host]: on };
-  if (on === isLoopbackHost(host)) delete next[host];
+  if (!on) delete next[host];
   return next;
 }
 
@@ -50,7 +50,9 @@ export function openBarFromDeveloperBar(windowId: string, tabId: string, url: st
   s.openPanel(windowId, url, undefined, addressFieldShown(s, windowId) ? clickBarPlacement(s, windowId) : "centredNoField");
 }
 
-export const useDeveloperMode = (url: string): boolean => useSettings((s) => developerModeOn(s.developerModeSites, url));
+export const DEVELOPER_BAR_IN_CORE = false;
+
+export const useDeveloperMode = (url: string): boolean => useSettings((s) => DEVELOPER_BAR_IN_CORE && developerModeOn(s.developerModeSites, url));
 
 const SPLIT_SIDES: { side: SplitSide; title: string; symbol: string }[] = [
   { side: "right", title: "Add Right Split", symbol: "rectangle.righthalf.inset.filled" },

@@ -9,12 +9,15 @@ import { useCanReopen, useHasTabs, useIncognito } from "../../state/tabs/hooks";
 import { ArdiaLogo, browseLayout, deckCenterFromBottom, FrostSource, iPhoneOr, LookBackdrop, LookBackdropBase, Menu, moveTo, tabsCurve, tabsLayout, trayMotion, type MenuItem, useDesign, useReduceMotion } from "../ui";
 import { openSettings } from "../../state/settings/hooks";
 import { DeckBar } from "../tabs/DeckBar";
+import { MaterialStart } from "./MaterialStart";
 import { StartPage } from "./StartPage";
 
 const BAR_RESERVE = 58;
 
 export function StartScreen() {
-  return useDesign() === "redesigned" ? <StartPage /> : <OriginalStart />;
+  const design = useDesign();
+  if (design === "material") return <MaterialStart />;
+  return design === "redesigned" ? <StartPage /> : <OriginalStart />;
 }
 
 function OriginalStart() {

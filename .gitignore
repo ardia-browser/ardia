@@ -54,4 +54,6 @@ scripts/.notary.env
 
 packages/phone/ios/ArdiaKit/.build/
 packages/phone/ios/ArdiaKit/.swiftpm/
+packages/phone/ios/ArdiaTalk/.build/
+packages/phone/ios/ArdiaTalk/.swiftpm/
 __pycache__/

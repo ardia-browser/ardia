@@ -701,8 +701,8 @@ is plain Chromium.
   `platform/keyboardFollow.windows.ts`; the Mac has no such call and subscribes to nothing). `pages.ts` sends it once
   the page shows, unless a text field of that window has the keyboard: React Native's focused field and the window it
   is in decide, and a field the user left by pressing a page of its window no longer counts. A field in the content
-  area of another tab (its New Tab page, an empty split pane, an internal page: the views `TabPane` wraps in
-  `TabContentArea`, whose `contentAreaOf` prop the field walk reads) doesn't count either, since the new page replaces
+  area of another tab (its New Tab page, an empty split pane, an internal page: `TabPane`'s `NewTabDropArea` and
+  `InternalPage`, whose `contentAreaOf` prop the field walk reads) doesn't count either, since the new page replaces
   it; the sidebar, the command bar, the find bar and the toolbar keep the keyboard. Only a page already showing
   in that window gets the ask at once. For any other page (none yet, sleeping, hidden, prewarmed, still opening, or
   still showing in the window a tab moved from) the ask is kept until that page shows in that window, however long it

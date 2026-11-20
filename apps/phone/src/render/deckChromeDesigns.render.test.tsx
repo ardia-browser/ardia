@@ -131,7 +131,7 @@ test("the header is centred 26 points under the safe top, 24 in from the sides l
   const header = style(root, "deckHeader");
   expect(header.top + header.height / 2).toBe(SAFE_TOP + 26);
   expect(header).toMatchObject({ paddingHorizontal: 24, gap: 8 });
-  expect(header.paddingHorizontal).toBe(style(root, "deckBottomBar").paddingHorizontal);
+  expect(style(root, "deckBottomBar")).toMatchObject({ paddingLeft: header.paddingHorizontal, paddingRight: header.paddingHorizontal });
   const more = root.root.findAll((node) => Array.isArray(node.props.items) && node.props.place && node.props.items.some((item: { label?: string }) => item?.label === "Settings"))[0]!;
   expect(more.props.place).toMatchObject({ right: 24 });
   expect(style(root, "deckHeaderMore")).toMatchObject({ width: 44, height: 44, borderRadius: 22 });
@@ -227,7 +227,7 @@ test("the bottom bar is the Incognito switch, the Search Tabs capsule and a 48-p
   const { height } = Dimensions.get("window");
   const root = deck();
   const bar = style(root, "deckBottomBar");
-  expect(bar).toMatchObject({ height: 48, gap: 8, paddingHorizontal: 24 });
+  expect(bar).toMatchObject({ height: 48, gap: 8, paddingLeft: 24, paddingRight: 24 });
   let place = host(root, "deckBottomBar")!.parent;
   while (place && StyleSheet.flatten(place.props.style)?.position !== "absolute") place = place.parent;
   const anchor = StyleSheet.flatten(place!.props.style);

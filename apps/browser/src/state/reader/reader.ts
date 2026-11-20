@@ -59,12 +59,12 @@ function pushLook(s: BrowserState) {
   for (const [tabId, state] of Object.entries(useReader.getState())) if (state?.active) void callPage(tabId, readerCall("setLook", look));
 }
 
-function settle(tabId: string, url: string, report: ReaderReport, available?: boolean, pushesBefore = lookPushes) {
+function settle(tabId: string, url: string, report: ReaderReport, available?: boolean, pushesBefore = lookPushes, mayWrite?: () => boolean) {
   const tab = useBrowser.getState().tabs[tabId];
   if (!tab || tab.url !== url) return;
   const before = readerState(tabId);
   set(tabId, { url, available: available ?? before.available, active: report.active });
-  if ((report.active || before.active) && pushesBefore === lookPushes) keepLook(report.look);
+  if ((report.active || before.active) && pushesBefore === lookPushes && (!mayWrite || mayWrite())) keepLook(report.look);
 }
 
 const counted = new Map<string, string>();
@@ -100,13 +100,13 @@ function later(tabId: string, url: string) {
   );
 }
 
-export function runReaderCommand(command: string, tabId: string): boolean {
+export function runReaderCommand(command: string, tabId: string, mayWrite?: () => boolean): boolean {
   if (command !== "toggleReader") return false;
-  void toggleReader(tabId);
+  void toggleReader(tabId, mayWrite);
   return true;
 }
 
-export async function toggleReader(tabId: string) {
+export async function toggleReader(tabId: string, mayWrite?: () => boolean) {
   const s = useBrowser.getState();
   const tab = s.tabs[tabId];
   if (!tab || !readable(tab.url)) return;
@@ -117,20 +117,20 @@ export async function toggleReader(tabId: string) {
   if (!report) return;
   if (report.noArticle) {
     noteReaderNoArticle(consent);
-    settle(tabId, url, report, false, pushes);
+    settle(tabId, url, report, false, pushes, mayWrite);
     showToast(tab.windowId, "No article found on this page", undefined, { icon: "doc.plaintext" });
     return;
   }
   if (report.active) noteReaderOpened(consent);
-  settle(tabId, url, report, true, pushes);
+  settle(tabId, url, report, true, pushes, mayWrite);
 }
 
-export async function closeReader(tabId: string) {
+export async function closeReader(tabId: string, mayWrite?: () => boolean) {
   const url = useBrowser.getState().tabs[tabId]?.url;
   if (!url || !readerState(tabId).active) return;
   const pushes = lookPushes;
   const report = await callPage(tabId, readerCall("hide"));
-  if (report) settle(tabId, url, report, undefined, pushes);
+  if (report) settle(tabId, url, report, undefined, pushes, mayWrite);
 }
 
 function shownTabIds(s: BrowserState): Set<string> {

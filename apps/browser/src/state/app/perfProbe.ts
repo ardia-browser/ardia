@@ -1,11 +1,6 @@
 import { findFibers, nameOf, roots, walk, type Fiber } from "./perfFibers";
 import { bump, fresh, now, type Counter } from "./perfStats";
 
-type Store = {
-  subscribe: (listener: (s: unknown, prev: unknown) => void) => () => void;
-  getState: () => unknown;
-};
-
 if (!(globalThis as { expo?: unknown }).expo) {
   try {
     const { TurboModuleRegistry } = require("react-native") as typeof import("react-native");
@@ -265,26 +260,36 @@ function wrapWrites() {
   } catch {}
 }
 
-export function probeStore(name: string, store: Store) {
+type Listener<S> = (s: S, prev: S) => void;
+type ProbedStore<S> = {
+  subscribe: (listener: Listener<S>) => () => void;
+  subscribeTo?: (keys: readonly (keyof S)[], listener: Listener<S>) => () => void;
+};
+
+function probedListener<S>(name: string, listener: Listener<S>, stack: string | undefined): Listener<S> {
+  const site = stack ? `${name} ${callers(stack, 3)}` : "";
+  return (s, prev) => {
+    const t = now();
+    try {
+      listener(s, prev);
+    } finally {
+      const ms = now() - t;
+      bump(stats.listenerCalls, name);
+      bump(stats.listenerMs, name, ms);
+      if (site) {
+        bump(stats.listenerSiteCalls, site);
+        bump(stats.listenerSiteMs, site, ms);
+      }
+    }
+  };
+}
+
+export function probeStore<S>(name: string, store: ProbedStore<S>) {
   if (!perfProbeEnabled) return;
   const subscribe = store.subscribe;
-  store.subscribe = Object.assign((listener: Parameters<Store["subscribe"]>[0]) => {
-    const site = listenersProbe ? `${name} ${callers(new Error().stack, 3)}` : "";
-    return subscribe((s, prev) => {
-      const t = now();
-      try {
-        listener(s, prev);
-      } finally {
-        const ms = now() - t;
-        bump(stats.listenerCalls, name);
-        bump(stats.listenerMs, name, ms);
-        if (site) {
-          bump(stats.listenerSiteCalls, site);
-          bump(stats.listenerSiteMs, site, ms);
-        }
-      }
-    });
-  }, { unprobed: subscribe });
+  store.subscribe = Object.assign((listener: Listener<S>) => subscribe(probedListener(name, listener, listenersProbe ? new Error().stack : undefined)), { unprobed: subscribe });
+  const subscribeTo = store.subscribeTo;
+  if (subscribeTo) store.subscribeTo = (keys, listener) => subscribeTo(keys, probedListener(name, listener, listenersProbe ? new Error().stack : undefined));
   subscribe((s, prev) => {
     bump(stats.storeUpdates, name);
     const a = s as Record<string, unknown>;

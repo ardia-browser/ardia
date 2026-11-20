@@ -374,7 +374,11 @@
           "system.wake",
           "user.idle",
           "user.active",
-          "page.error"
+          "page.error",
+          "bookmarks.changed",
+          "history.removed",
+          "download.changed",
+          "profile.changed"
         ]
       }
     },

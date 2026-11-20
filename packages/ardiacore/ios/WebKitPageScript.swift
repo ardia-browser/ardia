@@ -377,6 +377,9 @@ enum WebKitPageScript {
     fieldFocusQuery(query) {
       fieldProviders.focusQuery(query);
     },
+    fieldProviderHint(state) {
+      fieldProviders.hint(state);
+    },
     mute(on) {
       muted = !!on;
       for (const m of allMedia()) {

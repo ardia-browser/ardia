@@ -147,4 +147,3 @@ export async function showSplitMenu(tabId: string) {
 export const updateSplit = storeAction("updateSplit");
 export const replaceSplitPane = storeAction("replaceSplitPane");
 export const removeTabFromSplit = storeAction("removeTabFromSplit");
-export const toggleTabLayout = storeAction("toggleTabLayout");

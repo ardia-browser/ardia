@@ -23,6 +23,8 @@ import { useTheme } from "./theme";
 import { menuLayout } from "./tokens";
 import { useReduceMotion } from "./contrast";
 import { MenuFrostProvider } from "./Menu";
+import { useDesign } from "./design";
+import { MaterialSheet } from "./MaterialSurfaces";
 
 const SHEET_REDUCED_MS = reducedMotionMs(trayMotion.reduced);
 
@@ -97,13 +99,18 @@ export function usePresence(open: boolean): {
 type Props = {
   open: boolean;
   onDismiss: () => void;
+  onBack?: () => void;
   onHidden: () => void;
   fill?: string;
   onTapAway?: () => void;
   children: ReactNode;
 };
 
-export function Sheet({ open, onDismiss, onHidden, fill, onTapAway, children }: Props) {
+export function Sheet(props: Props) {
+  return useDesign() === "material" ? <MaterialSheet open={props.open} onDismiss={props.onDismiss} onTapAway={props.onTapAway} onBack={props.onBack} onHidden={props.onHidden}>{props.children}</MaterialSheet> : <ClassicSheet {...props} />;
+}
+
+function ClassicSheet({ open, onDismiss, onHidden, fill, onTapAway, children }: Props) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();

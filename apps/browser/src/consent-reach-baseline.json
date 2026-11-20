@@ -62,7 +62,7 @@
     "apps/browser/src/state/config/configFiles.ts": 2,
     "apps/browser/src/state/downloads/openDownload.ts": 1,
     "apps/browser/src/state/extensions/actionWatch.ts": 1,
-    "apps/browser/src/state/extensions/actions.ts": 3,
+    "apps/browser/src/state/extensions/actions.ts": 1,
     "apps/browser/src/state/extensions/loadHealth.ts": 1,
     "apps/browser/src/state/extensions/searchEngines.ts": 1,
     "apps/browser/src/state/extensions/toolbarAnchors.ts": 1,

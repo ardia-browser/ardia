@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Platform, Pressable, StyleSheet, Text, View, type ViewInstance } from "react-native";
+import { Pressable, StyleSheet, Text, View, type ViewInstance } from "react-native";
 import Animated, { Easing, FadeIn, FadeOut, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { copy } from "../../lib/platformCopy";
@@ -104,7 +104,7 @@ const WAVE_EASE_MS = 100;
 function WaveBar({ height }: { height: number }) {
   const shown = useSharedValue(height);
   useEffect(() => {
-    shown.value = Platform.OS === "ios" ? withTiming(height, { duration: WAVE_EASE_MS, easing: Easing.out(Easing.quad) }) : height;
+    shown.value = withTiming(height, { duration: WAVE_EASE_MS, easing: Easing.out(Easing.quad) });
   }, [height]);
   const style = useAnimatedStyle(() => ({ height: shown.value }));
   return <Animated.View style={[styles.bar, style]} />;

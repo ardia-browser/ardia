@@ -133,7 +133,8 @@ persistence.start((payload, invalidated = []) => {
     });
   } finally { applyingCanonical = false; }
 });
-export const beginLiveRefresh = (folderId: string) => persistence.beginRefresh(folderId);
+export const liveRefreshClaims = { begin: (folderId: string) => persistence.beginRefresh(folderId) };
+export const beginLiveRefresh = (folderId: string) => liveRefreshClaims.begin(folderId);
 export const flushLive = () => persistence.flush();
 
 export const FOLDER_DEFAULTS: Record<LiveFolderKind, { name: string; sources: LiveSourceId[] }> = {

@@ -63,7 +63,7 @@ test("offscreen: the shown tab, a tab the command didn't open, one that was show
     assert.match((await call("offscreen", { tab: hidden })).error.message, /couldn't take/);
     assert.ok(S().tabs[hidden]);
     assert.match((await call("offscreen", { tab: "tab-nope" })).error.message, /no such tab/);
-    assert.match((await call("offscreen", { tab: hidden, window: "w" })).error.message, /takes tab, not window/);
+    assert.match((await call("offscreen", { tab: hidden, window: "w" })).error.message, /takes no window \(it takes tab\)/);
   } finally {
     delete globalThis.acTestCliOwns;
     delete globalThis.acTestCliMoveOffscreen;

@@ -6,6 +6,7 @@ export const rowPitch = () => layout.rowHeight + layout.rowGap;
 export const DOCKED_ROW_PAD = 6;
 export const ROWS_PER_FRAME = 32;
 export const DOCK_SHARE = 0.4;
+export const DOCK_SLACK = 12;
 
 export type SidebarGeometry = { viewport: number; regions: Record<Section, number>; newTabAtTop: boolean; tilesFixed: boolean; edgeLift?: number; laidOut?: () => void };
 
@@ -16,11 +17,9 @@ export type PageLayoutInput = {
   gridHeight: (count: number) => number;
   dragging: boolean;
   fixedBeforeDrag: boolean;
-  listHeight: number;
-  dockAbove: number;
 };
 
-export type PageLayout = { dockFixed: boolean; capped: boolean; docked: boolean };
+export type PageLayout = { dockFixed: boolean; capped: boolean };
 
 export const tilesFitDock = ({ tiles, gridHeight, dockRoom }: Pick<PageLayoutInput, "tiles" | "gridHeight" | "dockRoom">) => !tiles || gridHeight(tiles) <= dockRoom;
 
@@ -29,6 +28,15 @@ export function pageLayout(i: PageLayoutInput): PageLayout {
   return {
     dockFixed,
     capped: dockFixed && i.dragging && i.gridHeight(i.previewed) > i.dockRoom,
-    docked: i.listHeight > i.dockAbove,
   };
+}
+
+export function clearlyOverflows(rowCount: number, height: number): boolean {
+  return height > 0 && rowCount * rowPitch() > height * 2;
+}
+
+export function dockedAfter(docked: boolean, filler: number, hiddenGrowth = 0): boolean {
+  if (hiddenGrowth && filler < 1) return docked;
+  const slack = filler + hiddenGrowth;
+  return docked ? slack < 1 : slack < DOCK_SLACK;
 }

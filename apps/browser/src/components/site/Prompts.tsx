@@ -1,5 +1,5 @@
 import { setSiteSetting } from "../../state/site/siteSettings";
-import { answerExternalApp } from "../../state/site/prompts";
+import { answerAutofillPrompt, answerExternalApp, answerPasswordPrompt } from "../../state/site/prompts";
 import { acceptVerificationCode, declineVerificationCode, verificationCodeCopy } from "../../state/site/verificationCodes";
 import {
   type AutofillPromptAnswer,
@@ -159,10 +159,8 @@ export function PasswordPrompt({ tabId, right, top }: { tabId: string; right: nu
   const update = prompt.state === "update";
   const username = chosen ?? prompt.username;
   const answer = guard((action: PasswordPromptAnswer) => {
-    const offer = prompt.offer === undefined ? {} : { offer: prompt.offer };
-    void webviews.get(tabId)?.resolvePasswordPrompt(action, action === "save" || action === "update" ? { username, ...offer } : prompt.offer === undefined ? undefined : offer);
+    answerPasswordPrompt(tabId, action, username, prompt);
     setChosen(null);
-    patchPage(tabId, { passwordPrompt: null });
   });
   const choices = update && prompt.usernames.length > 1 ? prompt.usernames : [];
   return (
@@ -207,10 +205,8 @@ export function AutofillPrompt({ tabId, right, top }: { tabId: string; right: nu
   const prompt = usePage(tabId, (p) => p.autofillPrompt);
   const guard = usePromptInputGuard(prompt?.id);
   if (!prompt) return null;
-  const answer = guard((action: AutofillPromptAnswer) => {
-    void webviews.get(tabId)?.resolveAutofillPrompt(prompt.id, action);
-    patchPage(tabId, { autofillPrompt: null });
-  });
+  const shownId = prompt.id;
+  const answer = guard((action: AutofillPromptAnswer) => void answerAutofillPrompt(tabId, action, shownId));
   const changes = prompt.changes ?? [];
   const values = (key: "to" | "from") => changes.filter((c) => c[key]).map((c) => c[key]);
   const section = (lines: string[], label?: string) => (

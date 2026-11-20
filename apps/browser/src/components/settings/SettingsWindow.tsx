@@ -145,7 +145,7 @@ export function SettingsWindow() {
         <PageToolbar size="window" drag>
           <Button variant="icon" toolbar icon="chevron.left" size="l" disabled={!nav.back.length} onPress={() => settingsBack()} tooltip="Back" />
           <Button variant="icon" toolbar icon="chevron.right" size="l" disabled={!nav.forward.length} onPress={() => settingsForward()} tooltip="Forward" />
-          <Text size="title" weight="semibold" style={WINDOW_TITLE}>
+          <Text size="title" weight="semibold" ardiaCentersCapitals style={WINDOW_TITLE}>
             {title}
           </Text>
         </PageToolbar>
@@ -202,7 +202,7 @@ function SidebarItem({ title, icon, tint, selected, onPress }: { title: string; 
       <View style={[PANE_TILE, { backgroundColor: tint }]}>
         <Symbol name={icon} size={paneTile.symbol} weight="semibold" color={paneTints.ink} style={PANE_TILE_SYMBOL} />
       </View>
-      <Text tone={selected ? "onAccent" : "textPrimary"}>{title}</Text>
+      <Text tone={selected ? "onAccent" : "textPrimary"} ardiaCentersCapitals>{title}</Text>
     </ListRow>
   );
 }

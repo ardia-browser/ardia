@@ -1,6 +1,6 @@
 import { cancelShortcutRecording, recordShortcut, type MenuShortcut, resolvedShortcuts, useMenuBarRevision } from "../../../state/commands/commandShortcuts";
 import { Box, Button, EmptyState, KeyCap, PopUp, SearchField, space, Symbol, Text, Toggle, useHover, type Option } from "../../ui";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
 import { useTheme } from "../../ui/theme";
 import { useSettings } from "../../../state/browser/hooks";
@@ -12,15 +12,19 @@ import { setting, type SettingId } from "../settingsIndex";
 import { matchesQuery } from "../../pages/PageLayout";
 import { shortcutItems } from "../../../state/settings/paneData";
 import { useResource } from "../../../state/settings/resources";
-import { formatShortcut, sameShortcut, type Shortcut } from "../../../state/commands/shortcuts";
+import { comboKey, formatShortcut, sameShortcut, type Shortcut } from "../../../state/commands/shortcuts";
 import { splitLinkModifierOf, type PeekModifier, type SplitLinkModifier } from "../../../state/settings/settings";
 import { keyText } from "../../../state/commands/keyText";
 import type { SettingsPlace } from "../../../state/settings/settingsWindows";
+import { keySearchConsent, noteShortcutsKeySearch, setShortcutsQuery, useSettingsSearch } from "../../../state/settings/searchState";
+import { bindsCombo, parseCombo } from "../../../state/commands/comboQuery";
 
 type Filter = "all" | "customized" | "conflicts";
 
 const NO_SHORTCUT: Shortcut = { key: "", modifiers: [] };
 const EXTENSION_ITEM = "openExtension:";
+const KEY_SEARCH_SETTLE_MS = 1000;
+const KEY_SEARCH_CANCEL_PRESS_MS = 600;
 
 const FILTERS: Option<Filter>[] = [
   { value: "all", title: "All Shortcuts" },
@@ -56,11 +60,18 @@ function KeyboardSection() {
   const menuBar = useMenuBarRevision();
   const [loaded] = useResource(shortcutItems);
   const items = loaded ?? null;
-  const [query, setQuery] = useState("");
+  const query = useSettingsSearch((s) => s.shortcutsQuery);
   const [filter, setFilter] = useState<Filter>("all");
   const [recording, setRecording] = useState<string | null>(null);
+  const [keySearching, setKeySearching] = useState(false);
+  const recordedQuery = useRef<string | null>(null);
+  const keySearchEndedAt = useRef(0);
+  const combo = useMemo(() => parseCombo(query), [query]);
 
-  useEffect(() => () => void cancelShortcutRecording(), []);
+  useEffect(() => () => {
+    void cancelShortcutRecording();
+    setShortcutsQuery("");
+  }, []);
 
   const resolved = useMemo(() => resolvedShortcuts({ settings: { shortcuts: overrides }, profileOrder }), [items, overrides, profileOrder, menuBar]);
   const byId = useMemo(() => new Map((items ?? []).map((item) => [item.id, item])), [items]);
@@ -76,8 +87,24 @@ function KeyboardSection() {
     setShortcutOverride(item.id, isDefault ? null : combo);
   };
 
+  const searchKeys = async () => {
+    if (Date.now() - keySearchEndedAt.current < KEY_SEARCH_CANCEL_PRESS_MS) return;
+    setRecording(null);
+    setKeySearching(true);
+    const pressed = await recordShortcut();
+    keySearchEndedAt.current = Date.now();
+    setKeySearching(false);
+    if (!pressed) return;
+    const keys = formatShortcut(pressed);
+    recordedQuery.current = keys;
+    setShortcutsQuery(keys);
+  };
+
+  const matches = (item: MenuShortcut) =>
+    combo ? (resolved.bindings.get(item.id) ?? []).some((binding) => bindsCombo(binding, combo)) : matchesQuery(query, item.title, item.path.join(" "), formatShortcut(effective(item)));
+
   const shown = (items ?? []).filter((item) => {
-    if (!matchesQuery(query, item.title, item.path.join(" "), formatShortcut(effective(item)))) return false;
+    if (!matches(item)) return false;
     if (filter === "customized") return !!overrides[item.id];
     if (filter === "conflicts") return conflictsOf(item).length > 0;
     return true;
@@ -86,6 +113,15 @@ function KeyboardSection() {
   const extensionItems = shown.filter((i) => i.id.startsWith(EXTENSION_ITEM));
   const menus = [...new Set(menuItems.map((i) => i.path[0] ?? ""))];
   const customizedCount = Object.keys(overrides).length;
+  const found = shown.length > 0;
+
+  useEffect(() => {
+    if (!combo || items === null) return;
+    const recorded = recordedQuery.current === query;
+    const consent = keySearchConsent();
+    const timer = setTimeout(() => noteShortcutsKeySearch(recorded ? "recorded" : "typed", found, consent), recorded ? 0 : KEY_SEARCH_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [combo && comboKey(combo), items === null]);
 
   const itemRow = (item: MenuShortcut) => {
     const others = conflictsOf(item);
@@ -125,15 +161,16 @@ function KeyboardSection() {
         </Group>
         <Anchor id="shortcuts.menuCommands" shape="row" style={TOOLBAR}>
           <View style={FILL}>
-            <SearchField value={query} onChangeText={setQuery} placeholder="Search menu commands" />
+            <SearchField value={keySearching ? "" : query} onChangeText={setShortcutsQuery} placeholder={keySearching ? "Type Shortcut" : "Search menu commands"} />
           </View>
+          <Button variant="icon" icon="keyboard" size="m" active={keySearching} tooltip="Search by Keys" onPress={() => (keySearching ? void cancelShortcutRecording() : void searchKeys())} />
           <PopUp value={filter} options={FILTERS} onChange={setFilter} minWidth={170} />
           <Button title="Reset All Shortcuts" disabled={!customizedCount} onPress={() => updateSettings({ shortcuts: {} })} />
         </Anchor>
       </Box>
-      {items !== null && menuItems.length === 0 && (
+      {items !== null && (combo ? !found : menuItems.length === 0) && (
         <View style={NO_MATCH}>
-          <EmptyState symbol="magnifyingglass" title="No matching commands" />
+          <EmptyState symbol={combo ? "keyboard" : "magnifyingglass"} title={combo ? `No command uses ${formatShortcut(combo)}` : "No matching commands"} />
         </View>
       )}
       {menus.map((menu) => (

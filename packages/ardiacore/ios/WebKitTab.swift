@@ -138,8 +138,8 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     updateHidden()
     observe(view)
     WebKitHub.shared.permissions.reconcileCapture(view, profile: profile)
-    updateSight()
     pushFieldProvider()
+    updateSight()
   }
 
   private func observe(_ view: WKWebView) {

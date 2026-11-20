@@ -13,11 +13,13 @@ export type Preferences = {
   appLinks: AppLinkPreference;
   searchSuggestions: boolean;
   searchEngineId: string;
-  collapsesBottomBar: boolean;
+  collapsesBottomBar: boolean | null;
   autoOpensKeyboard: boolean;
   hasFinishedOnboarding: boolean;
   archiveCardShown: boolean;
   colorChoice: ColorChoice | null;
+  dynamicColors: boolean | null;
+  materialYou: boolean;
   interfaceStyle: InterfaceStyleChoice;
   schemeChoice: SchemeChoice;
   readerStep: number;
@@ -32,11 +34,13 @@ export const DEFAULT_PREFERENCES: Preferences = {
   appLinks: "ardia",
   searchSuggestions: true,
   searchEngineId: "google",
-  collapsesBottomBar: false,
+  collapsesBottomBar: null,
   autoOpensKeyboard: true,
   hasFinishedOnboarding: false,
   archiveCardShown: false,
   colorChoice: null,
+  dynamicColors: null,
+  materialYou: false,
   interfaceStyle: "matchMac",
   schemeChoice: "matchMac",
   readerStep: 2,
@@ -56,6 +60,8 @@ export const PREFERENCE_KEYS: Record<keyof Preferences, string> = {
   hasFinishedOnboarding: "settings.finishedOnboarding",
   archiveCardShown: "tabs.archiveCardShown",
   colorChoice: "settings.color",
+  dynamicColors: "settings.dynamicColors",
+  materialYou: "settings.materialYou",
   interfaceStyle: "settings.interfaceStyle",
   schemeChoice: "settings.schemeChoice",
   readerStep: "reader.sizeStep",
@@ -82,6 +88,8 @@ const PARSERS: { [K in keyof Preferences]: (raw: string) => Preferences[K] | und
   hasFinishedOnboarding: flag,
   archiveCardShown: flag,
   colorChoice: oneOf<ColorChoice>(["plum", "blue", "purple", "pink", "red", "orange", "yellow", "green", "neutral"]),
+  dynamicColors: flag,
+  materialYou: flag,
   interfaceStyle: oneOf<InterfaceStyleChoice>(["matchMac", "glass", "classic"]),
   schemeChoice: oneOf<SchemeChoice>(["matchMac", "system", "light", "dark"]),
   readerStep: (raw) => (/^\d$/.test(raw) && Number(raw) <= 6 ? Number(raw) : undefined),

@@ -279,7 +279,7 @@ function show(s: BrowserState, key: string): BrowserState {
   const shown = w.activeTabIds[w.profileId];
   if (shown === key || (shown && splitTabIdsOf(splitOf(s, shown))?.includes(key))) return withoutPeek(s, shown);
   let next = apply(s, activated(s, key));
-  if (shown && !switchKeepsOpeners(s, shown, key)) next = forgetOpeners(next, w.id);
+  if (shown && !switchKeepsOpeners(s, shown, key)) next = forgetOpeners(next, w.id, tab.profileId);
   return next;
 }
 

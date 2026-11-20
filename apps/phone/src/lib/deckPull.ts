@@ -33,7 +33,6 @@ export const DECK_PULL = {
   growResponse: 0.18,
   backResponse: 0.28,
   backDamping: 1,
-  androidSettleMs: 300,
   glyphsGoneAt: 44,
   glyphsFadeFrom: 8,
   ghostsFrom: 36,

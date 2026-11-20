@@ -352,7 +352,6 @@ export const materialDialogLook = {
   title: { fontSize: 24, lineHeight: 32 },
   message: { fontSize: 14, lineHeight: 20, letterSpacing: 0.25 },
   button: { fontSize: 14, lineHeight: 20, fontWeight: "500", letterSpacing: 0.1 },
-  enterScale: 0.92,
   shadow: "0px 4px 8px 3px rgba(0,0,0,0.15), 0px 1px 3px 0px rgba(0,0,0,0.3)",
 } as const;
 

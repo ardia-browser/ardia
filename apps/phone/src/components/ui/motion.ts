@@ -8,9 +8,9 @@ export const iPhoneOr = <T,>(iPhone: T, android: T): T => (onIPhone ? iPhone : a
 
 export const curve = { easeOut: Easing.bezier(0, 0, 0.58, 1) } as const;
 
-export const duration = { resultsIn: iPhoneOr(100, 140), progressFill: iPhoneOr(150, 200), progressFade: iPhoneOr(200, 250), progressAdvance: iPhoneOr(300, 450), toneFade: 250, crossfade: 300 } as const;
+export const duration = { resultsIn: 100, progressFill: 150, progressFade: 200, progressAdvance: 300, toneFade: 250, crossfade: 300 } as const;
 
-export const delay = { progressReveal: iPhoneOr(100, 150) } as const;
+export const delay = { progressReveal: 100 } as const;
 
 export const spring = (response: number, dampingFraction: number) => {
   const stiffness = (2 * Math.PI / response) ** 2;
@@ -33,24 +33,28 @@ export function moveTo(target: number, motion: Motion, done?: AnimationCallback)
 const arrive = WorkletEasing.bezier(0.05, 0.7, 0.1, 1);
 const rise = WorkletEasing.bezier(0.2, 0, 0, 1);
 
+const cardOpening: Motion = { timing: { duration: 190, easing: arrive } };
+
+const trayRise: Motion = { timing: { duration: 360, easing: rise } };
+
 export const tabsMotion = {
-  openScale: iPhoneOr<Motion>({ timing: { duration: 190, easing: arrive } }, { spring: progressSpring(0.19, 1) }),
-  openPosition: iPhoneOr<Motion>({ timing: { duration: 190, easing: arrive } }, { spring: progressSpring(0.3, 1) }),
-  expand: iPhoneOr(progressSpring(0.18, 1), progressSpring(0.3, 1)),
-  release: iPhoneOr(spring(0.26, 1), spring(0.3, 0.9)),
-  settle: iPhoneOr(spring(0.28, 1), spring(0.4, 1)),
-  gapClose: iPhoneOr(spring(0.22, 1), spring(0.4, 0.8)),
-  pagerSettle: iPhoneOr(spring(0.26, 1), spring(0.38, 1)),
-  fade: iPhoneOr(150, 200),
+  openScale: cardOpening,
+  openPosition: cardOpening,
+  expand: progressSpring(0.18, 1),
+  release: spring(0.26, 1),
+  settle: spring(0.28, 1),
+  gapClose: spring(0.22, 1),
+  pagerSettle: spring(0.26, 1),
+  fade: 150,
   sideLeave: 90,
-  flyAway: iPhoneOr(160, 200),
+  flyAway: 160,
   cardFlyAway: 0.32,
-  barTone: iPhoneOr(200, 250),
+  barTone: 200,
   menu: 160,
   longPress: 400,
   sheetIn: spring(0.39, 1),
   sheetOut: spring(0.32, 1),
-  surfaceFade: iPhoneOr(150, 200),
+  surfaceFade: 150,
   barCollapse: spring(0.26, 1),
   sheetRise: spring(0.42, 0.9),
   sheetDismiss: spring(0.32, 1),
@@ -61,7 +65,7 @@ export const tabsMotion = {
 } as const;
 
 export const menuMotion = {
-  open: spring(0.3, 0.76),
+  open: spring(0.3, 1),
   fromScale: 0.18,
   contentFade: 67,
   glassFade: 33,
@@ -71,29 +75,23 @@ export const menuMotion = {
   sheetOut: 270,
 } as const;
 
-export const materialMenuMotion = { openMs: 250, fromScale: 0.8, closeMs: 150, dialogInMs: 250, dialogOutMs: 150 } as const;
-
-export const materialEnter = WorkletEasing.bezier(0.05, 0.7, 0.1, 1);
-
-export const materialExit = WorkletEasing.bezier(0.3, 0, 0.8, 0.15);
-
 export const trayMotion = {
-  settle: iPhoneOr(spring(0.26, 1), spring(0.34, 0.86)),
-  dismiss: iPhoneOr(spring(0.14, 1), spring(0.32, 1)),
-  press: iPhoneOr(spring(0.16, 1), spring(0.2, 0.7)),
-  dim: iPhoneOr(200, 300),
-  dimEasing: iPhoneOr(WorkletEasing.bezier(0, 0, 0.58, 1), WorkletEasing.bezier(0.42, 0, 0.58, 1)),
+  settle: spring(0.26, 1),
+  dismiss: spring(0.14, 1),
+  press: spring(0.16, 1),
+  dim: 200,
+  dimEasing: WorkletEasing.bezier(0, 0, 0.58, 1),
   reduced: 200,
-  resultsIn: iPhoneOr(100, 140),
-  modeToggle: iPhoneOr(spring(0.2, 1), spring(0.3, 0.85)),
-  rise: iPhoneOr<Motion>({ timing: { duration: 360, easing: rise } }, { spring: spring(0.39, 1) }),
+  resultsIn: 100,
+  modeToggle: spring(0.2, 1),
+  rise: trayRise,
 } as const;
 
 export const barReturnMotion = { leaveMs: 100, delayMs: 120, fadeMs: 150, scale: 0.8, shift: 12, back: spring(0.26, 1) } as const;
 
 export const stageMotion = { dimMs: 200, heldLiftGraceMs: 650, settle: spring(0.26, 1) } as const;
 
-export const trayLandingDelayMs = iPhoneOr(TRAY_LIFT.iPhoneLandingDelayMs, TRAY_LIFT.landingDelayMs);
+export const trayLandingDelayMs = TRAY_LIFT.landingDelayMs;
 
 export const startMotion = { rise: 360, reduced: 200, trayScale: 0.96, pageDot: 200 } as const;
 

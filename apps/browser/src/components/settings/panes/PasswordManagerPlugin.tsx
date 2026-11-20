@@ -5,7 +5,7 @@ import { Button } from "../../ui";
 import { Group, Row, SectionHeader } from "../Form";
 import { PasskeyAccessRow } from "./PasskeyAccessRow";
 
-const PASSKEYS_NEED_GRANT = "Ardia can't use passkeys saved on this Mac yet: Apple hasn't granted it the browser passkey entitlement. This plugin can't change that.";
+const PASSKEYS_NEED_GRANT = "Passkeys saved in Passwords don't work in Ardia yet. On sites that open in Chromium, you can sign in with a security key, or with a passkey on your phone by scanning the QR code.";
 
 export function PasswordManagerDetails({ name, spec }: { name: string; spec: PasswordManagerSpec }) {
   const using = useProfilesUsing(name);

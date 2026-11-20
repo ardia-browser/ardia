@@ -64,7 +64,7 @@ final class LittleArdiaHotKey {
   }
 
   private func update() {
-    let wanted = NSApp.isActive ? nil : Self.chord()
+    let wanted = NSApp.isActive || !MenuState.current.littleArdiaShortcutFromAnyApp ? nil : Self.chord()
     if wanted == (registered ?? heldBack) { return }
     unregister()
     guard let wanted else { return }

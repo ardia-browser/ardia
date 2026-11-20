@@ -1,0 +1,28 @@
+import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { test } from "node:test";
+import { engineSaved, storeBytes, uboStoreDir, UBO_ENGINE_KEYS, UBO_ID } from "./ubo-cache.mjs";
+
+test("the engine counts as saved only when all three selfie keys are stored", () => {
+  assert.equal(engineSaved([]), false);
+  assert.equal(engineSaved(["compiledMagic", "selfieMagic"]), false);
+  assert.equal(engineSaved(UBO_ENGINE_KEYS.slice(0, 2)), false);
+  assert.equal(engineSaved([...UBO_ENGINE_KEYS, "selfieMagic"]), true);
+});
+
+test("the store is uBO's own extension settings folder, and its size is the sum of its files", () => {
+  const data = mkdtempSync(join(tmpdir(), "ubo-cache-"));
+  try {
+    const dir = uboStoreDir(data);
+    assert.ok(dir.endsWith(join("Default", "Local Extension Settings", UBO_ID)));
+    assert.equal(storeBytes(dir), 0);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "000003.log"), "x".repeat(10));
+    writeFileSync(join(dir, "000004.ldb"), "y".repeat(5));
+    assert.equal(storeBytes(dir), 15);
+  } finally {
+    rmSync(data, { recursive: true, force: true });
+  }
+});

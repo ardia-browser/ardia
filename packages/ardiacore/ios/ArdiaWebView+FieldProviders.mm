@@ -3,6 +3,8 @@
 #import "ArdiaRuntime.h"
 
 #import <objc/message.h>
+#import <objc/runtime.h>
+#import <os/log.h>
 
 #include <cmath>
 
@@ -16,6 +18,16 @@ double gFieldProviderGeneration = -1;
 NSString *gFieldProviderSession = @"";
 const NSTimeInterval kFocusQuerySeconds = 0.2;
 NSString *const kInsertFromPasswordsAction = @"_handleInsertFromPasswordsCommand:";
+NSString *const kShowOrHideAutoFill = @"_showOrHideAutoFillForCurrentTextInputContextIfAppropriate";
+NSString *const kSystemPanelOwner = @"AutoFillPanelService";
+const CFTimeInterval kAutoFillHeuristicsHold = 1.5;
+const CFTimeInterval kSystemPanelFirstCheck = 0.6;
+const CFTimeInterval kSystemPanelLastCheck = 1.5;
+CFTimeInterval gHoldAutoFillHeuristicsUntil = 0;
+bool gAutoFillPassSkipped = false;
+IMP gShowOrHideAutoFill = nullptr;
+NSView *__weak gHeldPage = nil;
+enum class SystemPanelSight { Seen, Missing, Unknown };
 const CFTimeInterval kSystemPanelInterval = 0.6;
 const NSUInteger kVerificationCodesPerPage = 8;
 
@@ -99,27 +111,192 @@ static BOOL SystemPanelActionExists() {
   return NSClassFromString(@"NSAutoFillHeuristicController") && [NSApplication instancesRespondToSelector:NSSelectorFromString(kInsertFromPasswordsAction)];
 }
 
-static NSDictionary *OpenSystemPanel(NSView *page) {
+
+id AutoFillController() {
+  Class heuristic = NSClassFromString(@"NSAutoFillHeuristicController");
+  SEL shared = NSSelectorFromString(@"sharedInstance");
+  return [heuristic respondsToSelector:shared] ? ((id (*)(id, SEL))objc_msgSend)(heuristic, shared) : nil;
+}
+
+void RunSkippedAutoFillPass() {
+  if (!gAutoFillPassSkipped || !gShowOrHideAutoFill) return;
+  gAutoFillPassSkipped = false;
+  os_log(OS_LOG_DEFAULT, "[ardiacore] system passwords panel hold ended, replaying AppKit's autofill pass");
+  if (id controller = AutoFillController()) ((void (*)(id, SEL))gShowOrHideAutoFill)(controller, NSSelectorFromString(kShowOrHideAutoFill));
+}
+
+void EndAutoFillHold() {
+  gHoldAutoFillHeuristicsUntil = 0;
+  gHeldPage = nil;
+  RunSkippedAutoFillPass();
+}
+
+bool HoldStillCoversResponder() {
+  NSView *page = gHeldPage;
+  NSResponder *responder = page.window.firstResponder;
+  return page && [responder isKindOfClass:NSView.class] && [(NSView *)responder isDescendantOf:page];
+}
+
+bool AutoFillHeuristicsHeld() {
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    Class heuristic = NSClassFromString(@"NSAutoFillHeuristicController");
+    SEL sel = NSSelectorFromString(kShowOrHideAutoFill);
+    Method method = heuristic ? class_getInstanceMethod(heuristic, sel) : nullptr;
+    if (!method) return;
+    IMP original = method_getImplementation(method);
+    method_setImplementation(method, imp_implementationWithBlock(^(id controller) {
+      if (CACurrentMediaTime() < gHoldAutoFillHeuristicsUntil) {
+        if (HoldStillCoversResponder()) {
+          gAutoFillPassSkipped = true;
+          return;
+        }
+        gHoldAutoFillHeuristicsUntil = 0;
+        gHeldPage = nil;
+        gAutoFillPassSkipped = false;
+        os_log(OS_LOG_DEFAULT, "[ardiacore] system passwords panel hold ended early: the responder left the page");
+      }
+      ((void (*)(id, SEL))original)(controller, sel);
+    }));
+    gShowOrHideAutoFill = original;
+  });
+  return gShowOrHideAutoFill != nullptr;
+}
+
+void HoldAutoFillHeuristics(NSView *page) {
+  const CFTimeInterval until = CACurrentMediaTime() + kAutoFillHeuristicsHold;
+  gHoldAutoFillHeuristicsUntil = until;
+  gHeldPage = page;
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kAutoFillHeuristicsHold * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    if (gHoldAutoFillHeuristicsUntil != until) return;
+    EndAutoFillHold();
+  });
+}
+
+NSDictionary<NSNumber *, NSValue *> *PanelWindowFrames(bool *namesHidden) {
+  NSArray<NSDictionary *> *windows = CFBridgingRelease(CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, kCGNullWindowID));
+  const pid_t me = getpid();
+  NSMutableDictionary<NSNumber *, NSValue *> *frames = [NSMutableDictionary dictionary];
+  for (NSDictionary *window in windows) {
+    NSString *owner = window[(id)kCGWindowOwnerName];
+    if ([window[(id)kCGWindowOwnerPID] intValue] != me && !owner.length && namesHidden) *namesHidden = true;
+    if (![owner isEqualToString:kSystemPanelOwner]) continue;
+    CGRect bounds;
+    if (!CGRectMakeWithDictionaryRepresentation((__bridge CFDictionaryRef)window[(id)kCGWindowBounds], &bounds)) continue;
+    if (bounds.size.width >= 100 && bounds.size.height >= 100) frames[window[(id)kCGWindowNumber]] = [NSValue valueWithRect:NSRectFromCGRect(bounds)];
+  }
+  return frames;
+}
+
+NSIndexSet *PanelWindowNumbers(bool *namesHidden) {
+  NSMutableIndexSet *numbers = [NSMutableIndexSet indexSet];
+  for (NSNumber *number in PanelWindowFrames(namesHidden)) [numbers addIndex:number.unsignedIntegerValue];
+  return numbers;
+}
+
+SystemPanelSight SightOfSystemPanel(NSIndexSet *before, CGRect *frame) {
+  bool namesHidden = false;
+  NSDictionary<NSNumber *, NSValue *> *frames = PanelWindowFrames(&namesHidden);
+  for (NSNumber *number in frames) {
+    if ([before containsIndex:number.unsignedIntegerValue]) continue;
+    if (frame) *frame = NSRectToCGRect(frames[number].rectValue);
+    return SystemPanelSight::Seen;
+  }
+  return namesHidden ? SystemPanelSight::Unknown : SystemPanelSight::Missing;
+}
+
+NSString *SideOfSystemPanel(NSView *page, CGRect panel) {
+  id responder = page.window.firstResponder;
+  if (![responder conformsToProtocol:@protocol(NSTextInputClient)] || CGRectIsEmpty(panel)) return nil;
+  id<NSTextInputClient> client = responder;
+  const NSRect caret = [client firstRectForCharacterRange:[client selectedRange] actualRange:nullptr];
+  NSScreen *primary = NSScreen.screens.firstObject;
+  if (!primary || (NSIsEmptyRect(caret) && NSEqualPoints(caret.origin, NSZeroPoint))) return nil;
+  const CGFloat caretMiddle = NSHeight(primary.frame) - NSMidY(caret);
+  return CGRectGetMidY(panel) >= caretMiddle ? @"below" : @"above";
+}
+
+NSString *LoggedFieldKind(NSString *field) {
+  if (!field) return @"-";
+  return [@[ @"username", @"password", @"code" ] containsObject:field] ? field : @"other";
+}
+
+void ReportSystemPanelSight(NSIndexSet *before, NSView *page, void (^done)(NSDictionary *result)) {
+  __weak NSView *weakPage = page;
+  void (^answer)(SystemPanelSight, CGRect) = ^(SystemPanelSight sight, CGRect frame) {
+    NSString *side = sight == SystemPanelSight::Seen ? SideOfSystemPanel(weakPage, frame) : nil;
+    os_log(OS_LOG_DEFAULT, "[ardiacore] system passwords panel %{public}s%{public}s%{public}@",
+           sight == SystemPanelSight::Seen ? "seen" : sight == SystemPanelSight::Missing ? "missing" : "unchecked", side ? " panel=" : "", side ?: @"");
+    if (sight == SystemPanelSight::Missing) return done(@{@"shown" : @NO, @"reason" : @"noPanel"});
+    done(side ? @{@"shown" : @YES, @"panel" : side} : @{@"shown" : @YES});
+  };
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kSystemPanelFirstCheck * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    CGRect frame = CGRectZero;
+    const SystemPanelSight first = SightOfSystemPanel(before, &frame);
+    if (first != SystemPanelSight::Missing) return answer(first, frame);
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)((kSystemPanelLastCheck - kSystemPanelFirstCheck) * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+      CGRect later = CGRectZero;
+      const SystemPanelSight last = SightOfSystemPanel(before, &later);
+      answer(last, later);
+    });
+  });
+}
+
+NSUInteger gPanelHintWatch = 0;
+const CFTimeInterval kPanelHintPoll = 0.25;
+const CFTimeInterval kPanelHintLongest = 120;
+
+void WatchSystemPanelUntilClosed(NSUInteger watch, CFTimeInterval started, void (^closed)(void)) {
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kPanelHintPoll * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    if (watch != gPanelHintWatch) return;
+    bool namesHidden = false;
+    const bool open = PanelWindowFrames(&namesHidden).count > 0 || namesHidden;
+    if (open && CACurrentMediaTime() - started < kPanelHintLongest) return WatchSystemPanelUntilClosed(watch, started, closed);
+    closed();
+  });
+}
+
+NSString *PanelHintJSON(NSString *label, NSString *side) {
+  static NSRegularExpression *pattern = [NSRegularExpression regularExpressionWithPattern:@"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$" options:0 error:nil];
+  if (![label isKindOfClass:NSString.class] || ![pattern firstMatchInString:label options:0 range:NSMakeRange(0, label.length)]) return nil;
+  if (![@[ @"above", @"below" ] containsObject:side ?: @""]) return nil;
+  return JSONText(@{@"label" : label, @"side" : side});
+}
+
+void OpenSystemPanel(NSView *page, void (^done)(NSDictionary *result)) {
   static CFTimeInterval lastAt = -kSystemPanelInterval;
   NSWindow *window = page.window;
-  if (!SystemPanelActionExists()) return @{@"shown" : @NO, @"reason" : @"unavailable"};
-  if (!window.isKeyWindow) return @{@"shown" : @NO, @"reason" : @"notKey"};
-  if (!EditsWebText(window.firstResponder, page)) return @{@"shown" : @NO, @"reason" : @"notEditing"};
+  if (!SystemPanelActionExists()) return done(@{@"shown" : @NO, @"reason" : @"unavailable"});
+  if (!window.isKeyWindow) return done(@{@"shown" : @NO, @"reason" : @"notKey"});
+  if (!EditsWebText(window.firstResponder, page)) return done(@{@"shown" : @NO, @"reason" : @"notEditing"});
   const CFTimeInterval now = CACurrentMediaTime();
-  if (now - lastAt < kSystemPanelInterval) return @{@"shown" : @NO, @"reason" : @"throttled"};
+  if (now - lastAt < kSystemPanelInterval) return done(@{@"shown" : @NO, @"reason" : @"throttled"});
   lastAt = now;
   ArdiaLaunchConfig *config = ArdiaLaunchConfig.shared;
   if (config.background && ![config testFlag:@"applePasswordsPanel"]) {
-    NSLog(@"[ardiacore] system passwords panel (background mode, not shown) responder=%@", NSStringFromClass([window.firstResponder class]));
-    return @{@"shown" : @YES};
+    os_log(OS_LOG_DEFAULT, "[ardiacore] system passwords panel (background mode, not shown) responder=%{public}s",
+           class_getName([window.firstResponder class]));
+    return done(@{@"shown" : @YES});
   }
+  NSIndexSet *before = PanelWindowNumbers(nullptr);
+  const bool held = AutoFillHeuristicsHeld();
+  if (held) HoldAutoFillHeuristics(page);
   SEL action = NSSelectorFromString(kInsertFromPasswordsAction);
   NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:@"AutoFill" action:action keyEquivalent:@""];
   id target = [NSApp targetForAction:action to:nil from:item];
   const BOOL sent = target && [NSApp sendAction:action to:target from:item];
-  NSLog(@"[ardiacore] system passwords panel responder=%@ target=%@ sent=%d", NSStringFromClass([window.firstResponder class]),
-        NSStringFromClass([target class]), sent);
-  return sent ? @{@"shown" : @YES} : @{@"shown" : @NO, @"reason" : @"refused"};
+  os_log(OS_LOG_DEFAULT, "[ardiacore] system passwords panel responder=%{public}s target=%{public}s sent=%d held=%d", class_getName([window.firstResponder class]),
+         class_getName([target class]), sent, held);
+  if (!sent) {
+    if (held) EndAutoFillHold();
+    return done(@{@"shown" : @NO, @"reason" : @"refused"});
+  }
+  if ([config testFlag:@"systemPanelRace"]) {
+    id controller = AutoFillController();
+    SEL pass = NSSelectorFromString(kShowOrHideAutoFill);
+    if ([controller respondsToSelector:pass]) ((void (*)(id, SEL))objc_msgSend)(controller, pass);
+  }
+  ReportSystemPanelSight(before, page, done);
 }
 
 }
@@ -184,11 +361,12 @@ static NSDictionary *OpenSystemPanel(NSView *page) {
   [page removeObjectForKey:@"queryPending"];
   void (^completion)(NSDictionary *) = pending[@"completion"];
   if (CACurrentMediaTime() > [pending[@"deadline"] doubleValue]) return completion(@{@"shown" : @NO, @"reason" : @"notFocused"});
-  completion([ArdiaWebView requestSystemPanelIn:pending[@"view"]
-                                          owner:owner
-                                        profile:pending[@"profile"]
-                                          field:nil
-                                     generation:[pending[@"generation"] doubleValue]]);
+  [ArdiaWebView requestSystemPanelIn:pending[@"view"]
+                               owner:owner
+                             profile:pending[@"profile"]
+                               field:nil
+                          generation:[pending[@"generation"] doubleValue]
+                          completion:completion];
 }
 
 + (void)querySystemPanelIn:(NSView *)view
@@ -220,11 +398,17 @@ static NSDictionary *OpenSystemPanel(NSView *page) {
   __weak id weakOwner = owner;
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kFocusQuerySeconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
     NSMutableDictionary *waiting = weakOwner ? [FieldProviderPages() objectForKey:weakOwner] : nil;
-    if ([waiting[@"query"] isEqualToString:query]) {
+    const BOOL unanswered = [waiting[@"query"] isEqualToString:query];
+    if (unanswered) {
       [waiting removeObjectForKey:@"query"];
       [waiting removeObjectForKey:@"queryPending"];
     }
-    answerOnce(@{@"shown" : @NO, @"reason" : @"notFocused"});
+    if (!waiting) {
+      os_log(OS_LOG_DEFAULT, "[ardiacore] system passwords panel refused reason=tabGone via=menu field=-");
+      answerOnce(@{@"shown" : @NO, @"reason" : @"tabGone"});
+    } else if (unanswered) {
+      answerOnce(@{@"shown" : @NO, @"reason" : @"notFocused"});
+    }
   });
   ask(query);
 }
@@ -248,13 +432,25 @@ static NSDictionary *OpenSystemPanel(NSView *page) {
     if ([tokens[token][@"frame"] isEqualToString:frame]) [tokens removeObjectForKey:token];
 }
 
-+ (NSDictionary *)requestSystemPanelIn:(NSView *)page owner:(id)owner profile:(NSString *)profile field:(NSString *)field generation:(double)generation {
++ (void)requestSystemPanelIn:(NSView *)page
+                       owner:(id)owner
+                     profile:(NSString *)profile
+                       field:(NSString *)field
+                  generation:(double)generation
+                  completion:(void (^)(NSDictionary *result))completion {
+  void (^done)(NSDictionary *) = ^(NSDictionary *result) {
+    NSString *reason = result[@"reason"];
+    if (reason)
+      os_log(OS_LOG_DEFAULT, "[ardiacore] system passwords panel refused reason=%{public}@ via=%{public}s field=%{public}@", reason, field ? "badge" : "menu",
+             LoggedFieldKind(field));
+    completion(result);
+  };
   NSDictionary *provider = FieldProviderFor(profile);
-  if (!provider) return @{@"shown" : @NO, @"reason" : @"noProvider"};
-  if ((field || generation >= 0) && generation != gFieldProviderGeneration) return @{@"shown" : @NO, @"reason" : @"stale"};
+  if (!provider) return done(@{@"shown" : @NO, @"reason" : @"noProvider"});
+  if ((field || generation >= 0) && generation != gFieldProviderGeneration) return done(@{@"shown" : @NO, @"reason" : @"stale"});
   NSString *focus = FieldProviderPage(owner)[@"focus"];
-  if (!ProviderWants(provider, focus) || (field && ![field isEqualToString:focus])) return @{@"shown" : @NO, @"reason" : @"notFocused"};
-  return OpenSystemPanel(page);
+  if (!ProviderWants(provider, focus) || (field && ![field isEqualToString:focus])) return done(@{@"shown" : @NO, @"reason" : @"notFocused"});
+  OpenSystemPanel(page, done);
 }
 
 + (NSDictionary *)offerVerificationCode:(NSString *)text owner:(id)owner frame:(NSString *)frame profile:(NSString *)profile generation:(double)generation {
@@ -330,11 +526,35 @@ static NSDictionary *OpenSystemPanel(NSView *page) {
       }
       completion:^(NSDictionary *result) {
         NSString *reason = result[@"reason"];
-        if (![reason isEqualToString:@"noProvider"] && ![reason isEqualToString:@"stale"])
-          [weakView emit:@"fieldProviderOpened" payload:@{@"via" : @"menu", @"shown" : result[@"shown"]}];
+        if (![reason isEqualToString:@"noProvider"] && ![reason isEqualToString:@"stale"]) {
+          NSMutableDictionary *payload = [@{@"via" : @"menu", @"shown" : result[@"shown"] ?: @NO} mutableCopy];
+          if (reason) payload[@"reason"] = reason;
+          if (result[@"panel"]) payload[@"panel"] = result[@"panel"];
+          [weakView emit:@"fieldProviderOpened" payload:payload];
+        }
         completion(result);
       }];
   return YES;
+}
+
++ (BOOL)showFieldProviderHint:(NSString *)label side:(NSString *)side tab:(NSString *)tabId {
+  ArdiaCoreTab *tab = ardia_host::TabWithAppTabId(tabId);
+  ArdiaWebView *view = tab ? [ArdiaTabRegistry viewForTab:tab] : nil;
+  NSString *json = PanelHintJSON(label, side);
+  if (!view || !json) return NO;
+  [view pushFieldProviderHint:json];
+  __weak ArdiaWebView *weakView = view;
+  [ArdiaWebView whenSystemPanelCloses:^{ [weakView pushFieldProviderHint:@"false"]; }];
+  return YES;
+}
+
++ (nullable NSString *)fieldProviderHintJSON:(NSString *)label side:(NSString *)side {
+  return PanelHintJSON(label, side);
+}
+
++ (void)whenSystemPanelCloses:(void (^)(void))closed {
+  const NSUInteger watch = ++gPanelHintWatch;
+  WatchSystemPanelUntilClosed(watch, CACurrentMediaTime(), closed);
 }
 
 + (BOOL)setUpVerificationCode:(NSString *)token tab:(NSString *)tabId generation:(double)generation completion:(void (^)(NSDictionary *result))completion {

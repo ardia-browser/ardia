@@ -46,7 +46,7 @@ let watchingContexts = false;
 export function watchPageContexts() {
   if (watchingContexts) return;
   watchingContexts = true;
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["tabs"], (s, prev) => {
     if (s.tabs !== prev.tabs) dropStalePageContexts();
   });
   usePlugins.subscribe((s, prev) => {

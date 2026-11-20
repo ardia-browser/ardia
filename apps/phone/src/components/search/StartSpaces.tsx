@@ -39,7 +39,7 @@ import {
 import { MenuTrigger, type MenuHandlers } from "../ui/MenuTrigger";
 import { syncOffered } from "../../state/sync/offer";
 
-export type StartGeometry = { width: number; height: number; safeSide: number; barCenterY: number; dotsOnBar?: boolean };
+export type StartGeometry = { width: number; height: number; safeSide: number; barCenterY: number };
 
 export const startBarCenterY = (height: number, safeBottom: number, os: string = Platform.OS) => height - redesignedBarCenterFromBottom(safeBottom, os);
 
@@ -60,8 +60,11 @@ export function StartSpaces({ geometry, dark, incognito }: { geometry: StartGeom
     spaces.findIndex((p) => p.syncId === current?.syncId),
   );
   const pagerIndex = useRef(index);
+  const pagerWidth = useRef(geometry.width);
   useEffect(() => {
-    if (pagerIndex.current === index) return;
+    const widthChanged = pagerWidth.current !== geometry.width;
+    pagerWidth.current = geometry.width;
+    if (pagerIndex.current === index && !widthChanged) return;
     pagerIndex.current = index;
     pager.current?.scrollToOffset({ offset: index * geometry.width, animated: false });
   }, [index, geometry.width]);
@@ -123,7 +126,7 @@ export function StartSpaces({ geometry, dark, incognito }: { geometry: StartGeom
               if (next) choose(next.syncId);
             }}
             dark={dark}
-            y={geometry.dotsOnBar ? geometry.barCenterY : geometry.barCenterY - startLayout.pageDotsAboveBar}
+            y={geometry.barCenterY - startLayout.pageDotsAboveBar}
           />
         </>
       ) : spaces.length === 1 ? (

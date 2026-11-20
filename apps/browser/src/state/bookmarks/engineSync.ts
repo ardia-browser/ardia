@@ -293,7 +293,7 @@ export function startBookmarks() {
       state.needPush = false;
     }
   });
-  const stop = useBrowser.subscribe((s, prev) => {
+  const stop = useBrowser.subscribeTo(["profiles", "bookmarks"], (s, prev) => {
     if (s.profiles !== prev.profiles) {
       const inStore = engineProfiles(s);
       for (const engine of engines.keys()) if (!inStore.includes(engine)) engines.delete(engine);

@@ -65,7 +65,7 @@ Requirements: `openssl` and Node 22 or newer (for the built-in WebSocket client)
 | F02 | #12 | Isolated and shared-data profiles, private windows |
 | F03 | #13 | Site panel connection security for HTTPS, HTTP, mixed, bad-certificate and internal pages |
 | F23 | #33 | History jumps of two or more, zoom feedback, reset and per-site persistence |
-| F08 | #18 | Download events, controls, settings and restart |
+| F08 | #18 | Download events, controls, settings and restart; real presses inside and outside the downloads panel (#2155) |
 | F09 | #19 | Extension management, toolbar action, popup and side panel, with `fixtures/extension/` |
 | F10 | #20 | Online search suggestions through the native host, only when enabled, and never from a private window |
 | F26 | #36 | Unsupported platform settings are hidden and startup has no backend rejections |

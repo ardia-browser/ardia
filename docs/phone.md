@@ -1097,7 +1097,7 @@ The owner's reference is Safari's swipe up on its bottom bar (#2607; the measure
   values (`growDeckPull`, response 0.18 s as before), the other cards tuck in behind it, the header's glyphs fade out, and
   the live page is mounted only once the card has landed (mounting it mid-growth stalled the growth for over 100 ms)
   and takes the card's place when it is laid out and its cover has painted. The bar then cross-fades back to the
-  page's in 150 ms. In Grid a tile still opens with the older cut. The separate opening card is now only used in the column layouts.
+  page's in 150 ms. In Grid a tile still opens with the older cut. The separate opening card is now only used in the classic design.
 - **Grid.** With Grid chosen the waiting deck holds the grid, centred on the page's tab, and the target is that tile.
 - **Reduce Motion.** Nothing tracks the finger, nothing moves and nothing waits (#2647). What the swipe and the tap
   do depends on what the page's card can show at once:
@@ -1150,8 +1150,8 @@ The owner's reference is Safari's swipe up on its bottom bar (#2607; the measure
 - **Back.** Android's Back does nothing while a pull is landing, waiting for the deck or handing over
   (`deckPullCommitted`), so it can't take the page back a step as it shrinks into its card; during the tracking and
   the return it behaves as on a page at rest.
-- **Landscape** takes the pull too, aimed at the landscape card. **Duo and iPad** keep the old tree and the old
-  entrance: `pulls` is false in the column layouts.
+- **Landscape** takes the pull too, aimed at the landscape card. The closed and open Duo take it as any iPhone does
+  (#2840); `wide` and `split` never show the deck.
 
 In a lab build every pull prints `PAGELAB perf deck pull <ms>` for the time under the finger, then
 `PAGELAB perf deck pull landing 900ms` (or `deck pull return`). A tap prints only the landing line. On iPhone `labLog`
@@ -1407,8 +1407,8 @@ JavaScript is shared; it turns on wherever the native module is registered.
   goes through an OkHttp client with no cookies, no cache and no redirects. Closing the page, or disconnecting while
   ChatGPT is writing, cancels the request at once; a disconnect mid-answer rewrites it on the phone.
 - **In Settings.** Settings › Experimental lists Browse for Me. Its row reads "ChatGPT" when connected and "On
-  iPhone" (iPhone) or "On This Phone" (Android) otherwise. On iPhone the page is the native `BrowseForMePage` and shows
-  "Read aloud coming soon"; on Android it is `components/settings/BrowseForMePage.tsx` on the hand-built settings
+  iPhone" (iPhone) or "On This Phone" (Android) otherwise. On iPhone the page is the native `BrowseForMePage` and holds
+  Talk to Me (below); on Android it is `components/settings/BrowseForMePage.tsx` on the hand-built settings
   kit, fed by the module's `account()`, `connect()`, `disconnect()`, `chooseModel()`, `chooseEffort()`,
   `clearProblem()` and `openUsage()`, and the `account` event carries the whole account state.
 - **Testing.** On Android a lab build (`-PardiaLab=true`) takes `--es BrowseResearch <query>` to open the page at
@@ -1416,8 +1416,89 @@ JavaScript is shared; it turns on wherever the native module is registered.
   `-ArdiaResearchWriter excerpts` skips the model; `-ArdiaChatGPTIssuer <url>` and `-ArdiaChatGPTAPI <url>` point
   ChatGPT at a fake server.
   `-ArdiaVoiceHeard <text>` opens voice search as if it had just heard those words, for a capture of its buttons.
-  `-ArdiaSettingsPage browseForMe` opens the settings page.
+  `-ArdiaSettingsPage browseForMe` opens the settings page. Talk to Me's switches are below.
 - **Left for a person.** A real Plus or Pro sign-in.
+
+### Talk to Me
+
+Browse for Me's answers read aloud on iPhone (#2845), by Phonon 31M (Gradium, Apache-2.0, English only), on the
+phone. The owner chose Phonon over Apple's voices and Kokoro, and the model must not grow the app's download.
+
+- **Engine.** `ptts` 0.7.1 from `https://github.com/gradium-ai/xn-ptts.git` (module `PhononTTS`), pinned exactly in
+  the `packages/phone/ios/ArdiaTalk` package's `Package.swift` and `Package.resolved`, wrapped by its `ArdiaTalk`
+  target (`TalkSpeaker`), which the Podfile links into `ArdiaPhoneNative` beside ArdiaBrowser and ArdiaDesign. It is a
+  package of its own, not part of ArdiaKit, so the app project, which loads ArdiaKit for its extensions, never resolves
+  Phonon. `release-ios` archives with `ENABLE_SIGNATURE_AGGREGATION=NO`: otherwise both the
+  package and `ArdiaPhoneNative` collect `PhononCore.xcframework-ios.signature`, and xcodebuild fails copying the second
+  into the archive's Signatures folder. It has to be on the command line, since the package's own targets take no
+  project settings. Phonon's is the only xcframework signature the app has. A local Xcode archive needs the same setting. Its compiled core is a static arm64
+  library; it adds about 13 MB to the app binary uncompressed (13.3 MB against 0.05 MB for an empty iOS dylib,
+  stripped, Release), about 4 MB compressed. `TalkSpeaker` keeps one `Phonon` and its own `AVAudioEngine`: a player
+  node through `AVAudioUnitTimePitch`, whose `rate` is the speed (pitch kept). Voices are the `.safetensors` files in
+  the models' `voices/` folder, switched with `Phonon.setVoice(_:)` (about 0.6 s, applied from the next sentence).
+  Each answer block is one `tts.stream(_:)` call, consumed in order; `pause()` and `resume()` pause the player node,
+  cancelling the consuming task stops generation, `stop()` clears what was scheduled, and when the engine stops on a
+  route change it restarts at the block being heard.
+- **Distribution: our own download from GitHub, on demand.** The voice is one LZFSE Apple Archive,
+  `phonon-31m-en.aar` in the `phonon-31m-en-v0.7.1` release of `ardia-browser/ardia-voices` (132,936,282 bytes, SHA-256
+  `f72408f2…6579`). It unpacks to `TalkToMe/`: the three Core ML models compiled to `.mlmodelc`, `host.safetensors`,
+  `tokenizer.json`, a pruned `bundle.json` and six voices (Harper, Juniper, Miles and Preston, American; Maeve and
+  Hugh, British), 156 MB installed. The models are compiled on the Mac, so the phone never compiles or writes beside
+  them (`Phonon` compiles only a `.mlpackage` with no `.mlmodelc` beside it). The URL, size and SHA-256 are pinned
+  together in `VoiceDownload` in `packages/phone/ios/VoiceDownload.swift`. Turning Talk to Me on downloads it with a
+  foreground `URLSession` download task into `Application Support/TalkToMe-incoming-<uuid>/`, checks the byte count and
+  the SHA-256 (CryptoKit, streamed in 4 MB reads), unpacks it with AppleArchive into the same folder, writes
+  `voice.sha256` into the unpacked `TalkToMe/`, and moves it to `Application Support/TalkToMe` in one step (replacing
+  an older one), excluded from backup; the archive and the incoming folder are then deleted. A wrong size or hash
+  deletes the archive and fails. The voice counts as in only when that folder's `bundle.json` is there and its
+  `voice.sha256` matches the pinned one, so pinning a new voice treats the old folder as absent and deletes it.
+  Nothing downloads before the switch, and the app binary carries no part of the voice. No App ID, extension, App
+  Store Connect upload or TestFlight is involved: development, ad hoc and simulator builds download it the same way.
+  `apps/phone/ios/TalkToMe/build-voice` makes the archive: it fetches `phonon-31m-en-coreml.zip` from xn-ptts' v0.7.1
+  release, checks its SHA-256, every kept file against the zip's `bundle.json` and each voice against `voices.tsv`,
+  compiles with `coremlcompiler`, packs with `aa archive -d <stage> -subdir TalkToMe -o phonon-31m-en.aar -a lzfse`
+  (reproducible: the same stage gives the same bytes) and prints its size and SHA-256. The model files are never
+  committed.
+- **Settings › Browse for Me › Talk to Me.** The switch (off by default) starts the download and shows its progress
+  with Cancel, or the failure with Try Again ("Check your connection" for a network error, "Try again in a moment"
+  for anything else, a wrong hash included); a failure stays until Try Again or the switch. With the voice in: Speed (0.8× to 1.5×), the six voices (a tap chooses one and plays a short sample), the
+  download's size and Remove Voice Download (confirmed; it turns Talk to Me off). The footer says the bar at the end
+  of an answer plays it, or the phone held to the ear does, that Phonon speaks it on this iPhone and nothing leaves it,
+  and that it is English only for now. Settings are in `UserDefaults` (`ArdiaTalkToMeOn`, `ArdiaTalkToMeVoice`,
+  `ArdiaTalkToMeSpeed`). Phonon is the only voice: no system voice is ever used.
+- **Nothing reads on its own.** Reading starts only from the speaker button or from raising the phone to the ear.
+- **The listen bar and hold to your ear** (the SwiftUI app's design from #1724, now with Phonon). While the answer
+  page is open, Talk to Me is on and its voice is in, the proximity sensor is on (`ProximityFeed`). Once the answer is
+  done and English (`NLLanguageRecognizer`; an answer under 40 letters counts as English when every letter is Latin), a glass bar sits at the bottom of the
+  page: an ear, a line ("Hold your iPhone to your ear to listen", "Reading at your ear", "Reading out loud", "Paused.
+  Hold it to your ear to keep listening", "Paused", "Hold it to your ear to hear it again"), the speaker button
+  (Play Out Loud, then Pause) and a fill showing how far it has read. Raising the phone to the ear reads the answer
+  through the earpiece; lowering it pauses, raising it again resumes, and after the end it starts over. Holding it up
+  before the answer is done starts it when it is. The speaker button plays it out loud, and raising the phone moves
+  that to the earpiece. The rules are `EarListening` in ArdiaKit's `ArdiaBrowser/Research` (tested). The text has
+  `[n]` citations, markdown, link targets and list numbers removed (`SpokenAnswer`), one utterance per heading,
+  bullet or paragraph, so a reroute or an engine restart picks up at the block being heard. The earpiece is
+  `.playAndRecord` with `.spokenAudio` and no `.defaultToSpeaker` (the receiver), so iOS can ask for the microphone
+  the first time (the usage string says why); out loud is `.playback` with `.spokenAudio`, ducking other audio, so it
+  plays with the silent switch on. A call, Siri, unplugged headphones or the app leaving the foreground pause it; a
+  new search, opening a source, Search the Web or closing the page stop it and turn the sensor off. In the simulator
+  the page blacks out while "near", as a real screen turns off.
+- **Testing** (test builds only). `-ArdiaTalkToMeModels <folder>` loads the models from a folder instead of the download
+  (`build-voice --models-only --out <dir>` writes `<dir>/stage/TalkToMe`); the simulator can also download the real voice.
+  `-ArdiaTalkToMeRecord <path.wav>` also writes what was generated to a 24 kHz WAV, finished when the answer ends or
+  the page closes, with `<path.wav>.txt` listing each block (time, output, index, text). `-ArdiaProximity
+  "4:near,12:far"` plays proximity changes at those seconds after the page opens, and `xcrun simctl --set <set> spawn
+  <udid> notify_post com.ardia.browser.ios.proximity.near` (or `.far`) sends one by hand. `-ArdiaTalkToMeOn YES`
+  turns Talk to Me on for the run (the setting's own key, through the launch argument domain). The app logs
+  `TALKTOME first audio after … (earpiece|speaker|sample)`, `TALKTOME utterance: …`, `TALKTOME voice installed after …` and
+  `TALKTOME download failed: …`.
+- **Telemetry.** Five counts in `usage_counts`: `talk_to_me_answers_read` (an answer whose first audio played, once per
+  answer, never a sample: the total), `talk_to_me_ear_listens` (those started by raising the phone to the ear), `talk_to_me_voice_downloads` (the voice downloaded, checked and unpacked), `talk_to_me_download_failed`
+  (it failed, not cancelled: offline, a bad status, a wrong size or hash, or an archive that wouldn't unpack) and `talk_to_me_failed` (the models wouldn't load or speech failed). The native side sends
+  `{ name: "talkToMe", count }` on `onBrowseForMe`, and `noteBrowseForMe` counts it outside Incognito.
+- **Left for a person.** The download over a phone's cellular connection, the real proximity sensor and the
+  earpiece route, the microphone prompt, the sound with the silent switch on, ducking under music, a call
+  interrupting it, and the Neural Engine's speed.
 
 ## Pinch to Summarize
 
@@ -1510,11 +1591,11 @@ Events (service `ardia-phone`, `$lib` `ardia-phone-telemetry`, tags `app: phone`
 | Event | Fields | When |
 | --- | --- | --- |
 | `sharing_turned_on` | `source` (settings, onboarding) | turning sharing on |
-| `app_launched` | `legacy_import` (imported, started_fresh, none), `legacy_import_failures` (failed tries before the app opened), `look_mode` (full, no_blur, no_motion, neither: the look this launch shows, after the look's budget and the system's Reduce Motion and Reduce Transparency), `interface_style` (match_mac, glass, classic) and `color_scheme` (match_mac, system, light, dark): the redesign's Appearance choices | each launch with sharing on |
+| `app_launched` | `legacy_import` (imported, started_fresh, none), `legacy_import_failures` (failed tries before the app opened), `look_mode` (full, no_blur, no_motion, neither: the look this launch shows, after the look's budget and the system's Reduce Motion and Reduce Transparency), `interface_style` (match_mac, glass, classic) and `color_scheme` (match_mac, system, light, dark): the redesign's Appearance choices, and `material_colors` (wallpaper, profile, fallback, not_material): where Android's Material design took its colours, from the wallpaper, from a picked profile colour, or from Ardia's own palette on phones that give none; not_material on iPhone and in the original design | each launch with sharing on |
 | `perf_launch` | `launch_ms`, `js_ms` | each launch, once the module gives the process start (`ArdiaPhoneSystem.processStartedAt()`, epoch ms) |
 | `perf_backdrop` | `backdrop_ms` | each launch on iPhone, once the native launch backdrop has shown (`system.launchBackdropShownAt()`, epoch ms on the process start's clock) |
 | `perf_launch_tray` | `tray_ms` | each launch with Auto-Open Keyboard on, once the launch tray is up (process start on `ArdiaPhoneSystem.processStartedAt()`'s clock) |
-| `usage_counts` | `tabs_opened`, `searches`, `pins_to_mac`, `tabs_sent`, `page_processes_gone`, `links_given_up` (a link whose handling passed its 8 s deadline), `pages_reloaded_online` (a failed page reloaded when the phone came back online), `find_opened_system` and `find_opened_bar` (Find on Page opened in WebKit's own panel, or in the app's find bar), `spaces_swiped` (a swipe in Spaces or on the start page that changed the profile), `tray_hidden_rows_opened` (a tray row opened while it peeked or sat under the keyboard), `deck_pictures_late` (a deck opened from a page whose picture hadn't painted within 250 ms, so it shrank without waiting), `search_tabs_opened` (the deck's Search Tabs field focused, in the redesign), `spaces_picked` (a space picked from the deck's switcher menu, or by a VoiceOver adjustment of the start page's dots, that changed the profile, in the redesign), `tabs_moved_to_space` (a tab moved to another space with the deck card menu's Move to Space, in the redesign), `pages_printed` (a page printed from the page menu's Print, counted when the print sheet opened, in the redesign), `pages_translated` (a page sent to Google Translate from the page menu's Translate, never from an Incognito tab), `pinned_tabs_refound` (a pinned site's tile or row switched to the tab it had opened after that tab had left the pinned address, where it used to open a second copy), `site_permissions_revoked` (a site's camera, microphone or location access revoked from Site Settings, by swipe or by its dialog, on iPhone's Expo UI Settings), `tray_back_swiped` (a search tray closed with Android's predictive back swipe), `card_opens_waited` (a card opened from the deck whose growth landed before its page had laid out and its picture painted, so the page waited up to 250 ms to take over), `native_menus_opened` (a menu opened as the system's own: a deck card's long press, the deck's ···, the space switchers, the + menus, Reader's Text Appearance, the page menu's Send to Device, the tabs button's recent tabs, on iPhone), `drawn_menus_opened` (a menu or confirmation card the app draws itself opened: every menu and confirmation card on Android, and on iPhone the few that have no system counterpart, such as a page link's long press; neither menu count is taken on the deck's Incognito side, on an Incognito page or for an Incognito card), `library_opened` (History, Bookmarks or Downloads opened from the page menu), `deck_grid_shown` (Grid picked for the deck in Settings › Appearance › Tabs, on iPhone), `landscape_shown` (a launch in which the phone was turned to landscape at least once, counted once a launch), `duo_layout_shown` (a launch that used the column, wide or split layout at least once, counted once a launch, on iPhone), `list_sheets_late` (an Archive or History sheet whose rows were drawn more than 400 ms after it was asked for, on iPhone), `list_pages_added` (Archive or History adding its next 200 rows as you scroll, on iPhone), `search_reveals_late` (a search panel opened whose content had not laid out within 250 ms, so the stage revealed it on its deadline, on iPhone), `address_field_scrolled` (a long address in the search field scrolled sideways with a swipe, on iPhone), `deck_bar_swipes` (the deck opened by swiping up on the browsing bar, the second way in beside the tabs button), `tabs_swiped_closed` and `tabs_swiped_reopened` (a back swipe on a page with no history that closed its tab, and a forward swipe with no forward history that reopened the last closed tab), `page_menu_tapped_away` (the page menu closed by a tap on the page above it, on iPhone), `new_tab_search_opened` (search opened on a new tab in the iPhone's full-height search panel), `deck_incognito_switches` (a tap on the deck bar's Incognito switch that went from the normal tabs to the Incognito tabs, on iPhone), `deck_bar_swipes_returned` (a swipe up on the browsing bar let go before its commit point, so the page grew back), `deck_pulls_hitched` (a swipe up or a tabs tap during whose shrink into the deck two UI-thread frames were more than 50 ms apart), `browse_for_me_opened` (Browse for Me opened from the tray, voice search or a launch argument), `browse_answers_chatgpt`, `browse_answers_on_device`, `browse_answers_excerpts` and `browse_answers_failed` (a Browse for Me answer by who wrote it, or a page that found or read nothing), `browse_chatgpt_fallbacks` (a ChatGPT answer that failed, so Apple Intelligence, Gemini Nano or the excerpts wrote it instead), `page_summaries_pinched` and `page_summaries_from_menu` (a page summary opened by pinching in or from the page menu's Summarize Page), `page_summaries_chatgpt`, `page_summaries_on_device`, `page_summaries_excerpts` and `page_summaries_failed` (a page summary by who wrote it, or a page it couldn't read or summarize; ChatGPT on Android only), `page_summaries_chatgpt_fallbacks` (a ChatGPT summary that failed, so Gemini Nano wrote it instead, on Android), `paste_and_go_links`, `paste_and_go_texts` and `paste_and_go_unread` (a Paste and Go tap with a link, with text, or that read nothing because the paste prompt was refused or the clipboard emptied; never counted while browsing privately), `search_tile_taps`, `voice_tile_taps` and `incognito_tile_taps` (Ardia opened from its Quick Settings tiles, on Android, counted on the phone and sent with the next day's counts) | at most once a day, for the last UTC day the app was used before today, when anything was counted; private tabs are never counted |
+| `usage_counts` | `tabs_opened`, `searches`, `pins_to_mac`, `tabs_sent`, `page_processes_gone`, `links_given_up` (a link whose handling passed its 8 s deadline), `pages_reloaded_online` (a failed page reloaded when the phone came back online), `find_opened_system` and `find_opened_bar` (Find on Page opened in WebKit's own panel, or in the app's find bar), `spaces_swiped` (a swipe in Spaces or on the start page that changed the profile), `tray_hidden_rows_opened` (a tray row opened while it peeked or sat under the keyboard), `deck_pictures_late` (a deck opened from a page whose picture hadn't painted within 250 ms, so it shrank without waiting), `search_tabs_opened` (the deck's Search Tabs field focused, in the redesign), `spaces_picked` (a space picked from the deck's switcher menu, or by a VoiceOver adjustment of the start page's dots, that changed the profile, in the redesign), `tabs_moved_to_space` (a tab moved to another space with the deck card menu's Move to Space, in the redesign), `pages_printed` (a page printed from the page menu's Print, counted when the print sheet opened, in the redesign), `pages_translated` (a page sent to Google Translate from the page menu's Translate, never from an Incognito tab), `pinned_tabs_refound` (a pinned site's tile or row switched to the tab it had opened after that tab had left the pinned address, where it used to open a second copy), `site_permissions_revoked` (a site's camera, microphone or location access revoked from Site Settings, by swipe or by its dialog, on iPhone's Expo UI Settings), `tray_back_swiped` (a search tray closed with Android's predictive back swipe), `card_opens_waited` (a card opened from the deck whose growth landed before its page had laid out and its picture painted, so the page waited up to 250 ms to take over), `native_menus_opened` (a menu opened as the system's own: a deck card's long press, the deck's ···, the space switchers, the + menus, Reader's Text Appearance, the page menu's Send to Device, the tabs button's recent tabs, on iPhone), `drawn_menus_opened` (a menu or confirmation card the app draws itself opened: every menu and confirmation card on Android, and on iPhone the few that have no system counterpart, such as a page link's long press; neither menu count is taken on the deck's Incognito side, on an Incognito page or for an Incognito card), `library_opened` (History, Bookmarks or Downloads opened from the page menu), `deck_grid_shown` (Grid picked for the deck in Settings › Appearance › Tabs, on iPhone), `landscape_shown` (a launch in which the phone was turned to landscape at least once, counted once a launch), `duo_layout_shown` (a launch on a Duo in any pose, or that used the wide or split layout at least once, counted once a launch, on iPhone), `list_sheets_late` (an Archive or History sheet whose rows were drawn more than 400 ms after it was asked for, on iPhone), `list_pages_added` (Archive or History adding its next 200 rows as you scroll, on iPhone), `search_reveals_late` (a search panel opened whose content had not laid out within 250 ms, so the stage revealed it on its deadline, on iPhone), `address_field_scrolled` (a long address in the search field scrolled sideways with a swipe, on iPhone), `deck_bar_swipes` (the deck opened by swiping up on the browsing bar, the second way in beside the tabs button), `tabs_swiped_closed` and `tabs_swiped_reopened` (a back swipe on a page with no history that closed its tab, and a forward swipe with no forward history that reopened the last closed tab), `page_menu_tapped_away` (the page menu closed by a tap on the page above it, on iPhone), `new_tab_search_opened` (search opened on a new tab in the iPhone's full-height search panel), `deck_incognito_switches` (a tap on the deck bar's Incognito switch that went from the normal tabs to the Incognito tabs, on iPhone), `deck_bar_swipes_returned` (a swipe up on the browsing bar let go before its commit point, so the page grew back), `deck_pulls_hitched` (a swipe up or a tabs tap during whose shrink into the deck two UI-thread frames were more than 50 ms apart), `browse_for_me_opened` (Browse for Me opened from the tray, voice search or a launch argument), `browse_answers_chatgpt`, `browse_answers_on_device`, `browse_answers_excerpts` and `browse_answers_failed` (a Browse for Me answer by who wrote it, or a page that found or read nothing), `browse_chatgpt_fallbacks` (a ChatGPT answer that failed, so Apple Intelligence, Gemini Nano or the excerpts wrote it instead), `talk_to_me_answers_read`, `talk_to_me_ear_listens`, `talk_to_me_voice_downloads`, `talk_to_me_download_failed` and `talk_to_me_failed` (Talk to Me reading a Browse for Me answer aloud once per answer, and of those the ones started by raising the phone to the ear, its voice download finishing or failing, and its models or speech failing, on iPhone), `page_summaries_pinched` and `page_summaries_from_menu` (a page summary opened by pinching in or from the page menu's Summarize Page), `page_summaries_chatgpt`, `page_summaries_on_device`, `page_summaries_excerpts` and `page_summaries_failed` (a page summary by who wrote it, or a page it couldn't read or summarize; ChatGPT on Android only), `page_summaries_chatgpt_fallbacks` (a ChatGPT summary that failed, so Gemini Nano wrote it instead, on Android), `paste_and_go_links`, `paste_and_go_texts` and `paste_and_go_unread` (a Paste and Go tap with a link, with text, or that read nothing because the paste prompt was refused or the clipboard emptied; never counted while browsing privately), `search_tile_taps`, `voice_tile_taps` and `incognito_tile_taps` (Ardia opened from its Quick Settings tiles, on Android, counted on the phone and sent with the next day's counts), `start_logo_taps`, `find_closed_bar` (the app's find bar closed, once per find), `material_you_turned_on` and `material_you_turned_off` (Settings › General › Material You switched, on Android), and, with Material You on: `card_close_tapped` (a deck card closed with its ×), `material_back_swiped` (a back swipe out of a Material sheet, dialog or the library), `archive_bar_opened` (Archive opened from the bottom bar), `site_settings_sheet_opened` and `site_settings_sheet_expanded` (the address bar's page menu opened, and pulled to full screen), `search_sheet_expanded` (the search sheet pulled to full screen) | at most once a day, for the last UTC day the app was used before today, when anything was counted; private tabs are never counted |
 
 On the dashboard they are kept out of every Mac section by source and lib (`PHONE_APP_SOURCE` in `apps/dashboard/src/server/sql.ts`).
 
@@ -1546,7 +1627,7 @@ Every count and timing the phone can send, for the owner to read as one set and 
 | `deck_bar_swipes` | the owner's tabs pass (the swipe up on the bar, beside the tabs button) | Whether people use the swipe as well as the button; zero across testers after a release means the swipe stopped opening the deck |
 | `deck_bar_swipes_returned` | the swipe that follows the finger (#2607; on Android too since the deck parity of 2026-11-19) | How often a swipe up is let go early. Read it against `deck_bar_swipes`: a share above about a third after a release means the commit point sits too far, or the swipe is caught by people who only meant to touch the bar |
 | `deck_pulls_hitched` | the swipe that follows the finger (#2607; on Android too since the deck parity of 2026-11-19) | Whether the shrink into the deck drops frames in the field. Read it against `deck_bar_swipes` plus `deck_bar_swipes_returned`: it should stay near zero, and a share that grows after a release means something on the pull's path again blocks the UI thread. It sees only UI-thread gaps over 50 ms, not frames the GPU drops |
-| `duo_layout_shown` | the Duo layouts on iPhone | Whether anyone runs Ardia on a Duo; zero after a release reaching Duo owners means the layout probe stopped reporting |
+| `duo_layout_shown` | a launch on a Duo in any pose (the probe reports a hinge), or in `wide` or `split` | Whether anyone runs Ardia on a Duo or a full-screen iPad; zero after a release reaching Duo owners means the layout probe stopped reporting. Since #2840 it counts the closed and open Duo too, which now take `phone` |
 | `landscape_shown` | landscape on both phones | How often people turn the phone; zero across testers after a release that rotates means the orientation lock came back |
 | `card_opens_waited` | the card open's hand-over | Whether the page mounted at the start of a card's growth is ready when the card lands; a share of card opens that grows after a release means the open is again held at full size before the page takes over |
 | `deck_pictures_late` | the deck-entrance hold, and the pull's handover (#2651) | Whether the leaving page's picture paints before the deck shrinks, or by the 1 s deadline of the wait that follows a pulled page landing in its card (1.25 s for one picture, and up to about 2.5 s with a replacement, before #2664); a share of deck opens that grows after a release means a card may again open on a blank or placeholder face |
@@ -1560,12 +1641,16 @@ Every count and timing the phone can send, for the owner to read as one set and 
 | `deck_incognito_switches` | the deck bar's Incognito switch on iPhone (build 16 feedback) | Whether people switch the deck to Incognito from its bar; zero across testers after a release means the switch stopped showing or stopped switching. Taps back to the normal tabs are not counted, since they start in Incognito |
 | `browse_for_me_opened` | Browse for Me on Expo | Whether people use Browse for Me at all; zero across testers after a release means the tray row or the voice button stopped opening it |
 | `browse_answers_chatgpt`, `browse_answers_on_device`, `browse_answers_excerpts`, `browse_answers_failed` | Browse for Me on Expo | Who writes the answers: a share of `excerpts` that grows on phones with Apple Intelligence means the model path broke, and a growing `failed` share against `browse_for_me_opened` means search or page reading broke (DuckDuckGo's page changing is the likely cause) |
+| `talk_to_me_answers_read`, `talk_to_me_ear_listens`, `talk_to_me_voice_downloads`, `talk_to_me_download_failed`, `talk_to_me_failed` | Talk to Me on iPhone (#2845) | Whether people listen: answers read against `browse_for_me_opened`, and how many of them start at the ear (`ear_listens`) rather than from the speaker button; zero ear listens across testers means the proximity sensor stopped starting it. `download_failed` against `voice_downloads` shows whether the GitHub download works; a rising `failed` against answers read means the models stopped loading or speaking |
 | `page_summaries_pinched`, `page_summaries_from_menu` | Pinch to Summarize on iPhone and Android | It is off by default, so opens count only people who turned it on. A drop in pinch opens alongside steady menu opens can point to a gesture regression. A rise in pinch opens relative to `tabs_opened` can indicate accidental summaries |
 | `page_summaries_on_device`, `page_summaries_excerpts`, `page_summaries_failed` | Pinch to Summarize on iPhone | A rising excerpt share can point to problems with Apple Intelligence. A rising failure share can point to problems reading pages |
 | `page_summaries_chatgpt`, `page_summaries_chatgpt_fallbacks` | Pinch to Summarize on Android | Android has no excerpts, so `page_summaries_failed` against `page_summaries_on_device` is the share of phones without a ready Gemini Nano. How many summaries the opt-in ChatGPT choice writes; fallbacks rising against `page_summaries_chatgpt` mean the Responses call or the token refresh broke. On Android, pinch opens against menu opens show the passive pinch watcher working, and zero pinch opens after a release with steady menu opens mean it stopped |
 | `paste_and_go_links`, `paste_and_go_texts`, `paste_and_go_unread` | Paste and Go, now on iPhone too | iPhone taps should appear beside Android's. A high unread share on iPhone means people refuse the paste prompt, or the row shows when nothing can be pasted |
 | `search_tile_taps`, `voice_tile_taps`, `incognito_tile_taps` | Android's Quick Settings tiles | Voice and Incognito should appear once the release is out; a tile that stays at zero while Search counts can point to a broken tile |
 | `browse_chatgpt_fallbacks` | Browse for Me on Expo | How often a connected ChatGPT plan fails to answer; a jump after a release, or against `browse_answers_chatgpt`, means the Responses call or the token refresh broke |
+| `material_you_turned_on`, `material_you_turned_off` | the Material You switch in Android Settings (the owner, 2026-11-20) | How many testers try Material You and how many go back. Read `off` against `on`: a share near one means it is tried and dropped. `app_launched.material_colors` says how many launches run with it on |
+| `card_close_tapped` | the × on a card in Android's Material deck | Whether people close tabs with the card's own button rather than a flick; zero across Android testers after a release means the × stopped closing cards, or its tap zone opens the card instead |
+| `material_back_swiped` | a predictive back swipe on Android's Material sheets, dialogs, menus and library | Whether people swipe back out of Material surfaces; zero across Android testers after a release means the swipe stopped reaching them, or Back goes to the wrong surface |
 
 ## What is left before the Expo app replaces both native apps
 
@@ -1583,7 +1668,7 @@ iPhone follows the SwiftUI app on main since the merge of main (8203d0b3c, 2026-
 
 - On 2026-11-17 the owner rejected the redesigned Android build on the POCO F4: "hate it … the … dropdowns are weird everywhere" (#2496). The dropdowns were Android's own PopupMenu and AlertDialog behind `MenuTrigger` and `confirmInSheet`, which look nothing like the iPhone's menus.
 - On 2026-11-19 he decided Android takes the iPhone's design after all, with the menus drawn by the app instead of the system's. Android's native menus module is gone, so every menu, picker and confirmation on Android is the drawn menu (`components/ui/Menu.tsx`) or the drawn action sheet (`components/ui/ActionSheet.tsx`), made to look and move like the iPhone's UIKit menu and action sheet. Their numbers sit in `menuLook`, `menuInk`, `actionSheetLook` and `actionSheetInk` (`components/ui/tokens.ts`), `menuMotion` (`components/ui/motion.ts`) and `lib/menuPlace.ts`.
-- The measurements are the iPhone's on iOS 27 (`/tmp/ardia-menus/ios/SPEC.md`, 2026-11-19): a 250 pt panel with 30.5 pt corners, 42 pt rows, labels at 29 pt (43.7 with a checkmark column, 65 beside a leading icon), group dividers as 20.67 pt bands with a line inset 24 pt, a pill press highlight inset 10 pt, no lines between rows. A tap menu sits on its trigger's matching corner and covers it (opening upward with its bottom on the trigger's when there is no room below), grows out of that corner on a spring with about 2.5 % overshoot and shrinks back into it in 200 ms. A long-press menu dims the screen (black 20 % light, 48 % dark). A confirmation is iOS 27's centred card: title, message, one pill button and no Cancel row, shown at once and fading out in 270 ms with nothing dimmed. Deliberately different: a long-press menu opens at the finger (the owner's rule) where UIKit places it from the lifted view and lifts that view; and a tap outside a confirmation only cancels it, where iOS also lets the tap through to what is underneath. Back cancels it, and TalkBack reaches the outside area as Cancel.
+- The measurements are the iPhone's on iOS 27 (`/tmp/ardia-menus/ios/SPEC.md`, 2026-11-19): a 250 pt panel with 30.5 pt corners, 42 pt rows, labels at 29 pt (43.7 with a checkmark column, 65 beside a leading icon), group dividers as 20.67 pt bands with a line inset 24 pt, a pill press highlight inset 10 pt, no lines between rows. A tap menu sits on its trigger's matching corner and covers it (opening upward with its bottom on the trigger's when there is no room below), grows out of that corner on a 0.3 s spring and shrinks back into it in 200 ms. UIKit's spring overshoots about 2.5 %; since 2026-11-20 the drawn menu's spring is critically damped on both phones, because menus are used all day and the owner's motion rule allows no overshoot there. A long-press menu dims the screen (black 20 % light, 48 % dark). A confirmation is iOS 27's centred card: title, message, one pill button and no Cancel row, shown at once and fading out in 270 ms with nothing dimmed. Deliberately different: a long-press menu opens at the finger (the owner's rule) where UIKit places it from the lifted view and lifts that view; and a tap outside a confirmation only cancels it, where iOS also lets the tap through to what is underneath. Back cancels it, and TalkBack reaches the outside area as Cancel.
 - Android keeps its touch habits: a long press opens the menu at the finger with the screen dimmed behind it, a tap outside or Back closes it (Back on a submenu goes back to its menu), the menu never runs off the screen or under the system bars, TalkBack moves into the menu and back to its trigger on close, and the app behind it is hidden from TalkBack while it is open.
 - Material You for Android (#2537, draft #2557) is dropped. The redesign switch from #2477 is on main: `designFor("android")` answers redesigned, and the deck's grid is offered on both phones.
 - `drawn_menus_opened` counts each drawn menu and confirmation card opened, by platform, never while browsing privately.
@@ -1596,8 +1681,8 @@ iPhone follows the SwiftUI app on main since the merge of main (8203d0b3c, 2026-
 - Confirmations follow iPhone: where iPhone asks with SwiftUI's confirmation (Clear Browsing Data, Restore Default Filter Lists, Remove This List, Stop Syncing This Device) or UIKit's action sheet (Close All Tabs, Close Incognito Tabs, Delete All archived tabs), Android shows the drawn confirmation card; Translate with Google stays the drawn centred dialog with Cancel on both phones. A menu taller than the screen is cut to the safe area and scrolls, and it is measured while hidden, so it first shows where its rows fit and keeps to its side of the finger when a submenu's page is taller. A turn of the phone closes an open menu as UIKit's does (the keyboard does not). A chosen row runs at once, once, while the menu plays its close; TalkBack goes back to the control that opened the menu only when it closes without a choice. A page link's long press opens at the finger like every other long-press menu.
 - Later on 2026-11-19 the owner asked for Android's own character instead of iPhone's glass ("we don't really want it to look like Apple Glass … have a solid background"). Android keeps the drawn menus' structure (placement on the trigger or at the finger, Back, tap outside, TalkBack, submenus as pages) and draws them as Material 3; iPhone's drawn menus and action sheet are unchanged. The Android values sit beside iPhone's in `menuLook`, `menuInk` (picked by platform), `materialDialogLook`, `materialDialogInk` and `materialMenuMotion`:
   - a menu is a solid surface (#F3EDF0 light; dark #1E1B1D with a 0.5 dp white 12 % edge, since a shadow doesn't show on the dark deck) with 16 dp corners and level-2 elevation, no frost or dim; 48 dp rows with one-line 16 sp labels at 16 dp, or at 52 dp beside a 24 dp icon slot; icons show only when every row has one (the owner, 2026-11-19: a lone icon, as on a card's Send to MacBook Pro, misaligns the menu), and a submenu page keeps the slot for its Back chevron; icons in on-surface-variant, a full-width ripple, groups split by an 8 dp gap with no line (the owner, 2026-11-19: the horizontal rules between groups read as clutter; headings and the order of actions stay), the check at the trailing edge, and M3 error red (#BA1A1A, #FFB4AB) for destructive rows;
-  - it fades in and grows from 80 % over 250 ms (emphasized decelerate) from its trigger's corner, and fades out in 150 ms (emphasized accelerate) without shrinking;
-  - a confirmation is an M3 basic dialog: 24 dp from the screen edges up to 560 dp wide, 28 dp corners, 24 dp padding, a 24 sp title and 14 sp message, Cancel (on-surface-variant) and the action (Ardia's plum primary, or the error red when destructive) as right-aligned text buttons, over a 32 % black scrim; it fades and grows from 92 % in 250 ms and fades out in 150 ms. Cancel is neutral because the dark theme's primary and error are both pale pinks.
+  - it fades in and grows from 80 % over 250 ms (emphasized decelerate) from its trigger's corner, and fades out in 150 ms (emphasized accelerate) without shrinking. Replaced on 2026-11-20 by the iPhone's motion (below);
+  - a confirmation is an M3 basic dialog: 24 dp from the screen edges up to 560 dp wide, 28 dp corners, 24 dp padding, a 24 sp title and 14 sp message, Cancel (on-surface-variant) and the action (Ardia's plum primary, or the error red when destructive) as right-aligned text buttons, over a 32 % black scrim; it fades and grows from 92 % in 250 ms and fades out in 150 ms (replaced on 2026-11-20 by the iPhone's: shown at once, fading out in 270 ms). Cancel is neutral because the dark theme's primary and error are both pale pinks.
   - Android's dark mode uses one near-black, #1E1B1D, for the chrome (the bars, Search Tabs and the round buttons, `chromeInk.dark.surface`, #000000 before), the menus and the dialogs, so nothing reads as a blacker black than its neighbour (the owner, 2026-11-19). iPhone's chrome stays #000000 where it isn't native glass.
   - Material You colours (the wallpaper palette and a Dynamic Colors switch, #2692 and Sai Charan's #2693) are a separate PR; these neutral surfaces are the fallback they would tint.
 - The rest of iPhone's deck and page parity comes to Android in the same PR (the owner, 2026-11-19: everything left except Material You):
@@ -1605,6 +1690,81 @@ iPhone follows the SwiftUI app on main since the merge of main (8203d0b3c, 2026-
   - the Archive capsule comes back on every deck open until it is dismissed or an interval is picked, as on iPhone, where Compose marked it shown when it first offered it;
   - a swipe between tabs shows the space's own surface behind the pages (`PagerBackdrop`), where Android drew black. The dim over the leaving page stays black on both phones, and a history swipe inside a page already takes the profile's surface (`surfaceColor` on the page view);
   - a top pull on a page still refreshes it; nothing native changed.
+
+### Android moves like the iPhone (the owner, 2026-11-20)
+
+After the bottom bar's fold (4a844bcfb), the owner asked on the F4 for Android's animations to be the iPhone's
+everywhere. Every motion value that was picked by platform now takes the iPhone's on both phones, and
+`src/render/motionPerPlatform.render.test.tsx` pins them on both presets:
+
+- the deck (`tabsMotion`): a card grows on the 0.18 s spring (Compose's 0.3), a released card settles on 0.26 s
+  (0.3 at 0.9 damping), the deck scrolls to rest on 0.28 s (0.4), a gap closes on 0.22 s (0.4 at 0.8), the pager
+  settles on 0.26 s (0.38), and the deck opens on SwiftUI's 190 ms arrive curve for scale and position together
+  (Compose's 0.19 s and 0.3 s springs). Fades are 150 ms (200), a fly-away 160 ms (200), the bar's tone 200 ms (250),
+  surfaces 150 ms (200);
+- the search tray (`trayMotion`): it rises on SwiftUI's 360 ms rise curve (a 0.39 s spring), lands after 220 ms
+  without a keyboard report (450), settles on 0.26 s (0.34 at 0.86), is dismissed on 0.14 s (0.32), a row press is
+  0.16 s (0.2 at 0.7), the Incognito toggle 0.2 s (0.3 at 0.85), the dim 200 ms ease-out (300 ease-in-out) and the
+  results 100 ms (140);
+- the progress bar fills in 150 ms (200), fades in 200 ms (250), advances in 300 ms (450) and shows after 100 ms (150);
+  a loading page's placeholder waits 250 ms and fades in over 150 ms (300 and 220);
+- onboarding: a step slides 72 points on 300 ms of (0.05, 0.7, 0.1, 1) (60 dp on a 0.42 s spring at 0.9), the
+  welcome rises on 360 ms after 50 ms (a 0.7 s spring at 0.7 after 100 ms), and Reduce Motion fades in 150 ms (200);
+- drawn menus grow from their trigger's corner and shrink back into it as the iPhone's do (Material's 250 ms grow
+  from 80 % and 150 ms fade are gone), on a 0.3 s spring that is now critically damped on both phones; a
+  confirmation shows at once and fades out in 270 ms (Material's 250 ms grow from 92 % and 150 ms fade). The
+  Material look, colours and layout stay;
+- the swipe into the deck lands and returns on the iPhone's springs (a fixed 300 ms before);
+- the voice screen's waveform bars ease to each new height over 100 ms, as on iPhone (Android jumped);
+- natively (`PageGestures.kt`, `PageSettle`): a history swipe settles on a critically damped curve that lands in about
+  220 ms, as UIKit's 0.22 s spring does (an ease-in-out 220 ms timing before), and pull to refresh settles on a
+  critically damped 0.3 s spring (Compose's 0.3 s at 0.86, which overshot).
+
+Kept per platform on purpose: Remove animations snaps on Android (`reducedMotionMs`); Android opens a card in the
+column layout through the deck card in Reanimated (`cardOpen`), because iPhone's opening card is a Core Animation
+growth and the Android equivalent (`coveringCard`) is still behind the `ArdiaOpeningCard` lab flag, while both phones
+open through the pulled card in the redesign; and the host pill stays mounted with its glass shown at once on Android,
+which the bar's fold needs. No new telemetry: `deck_pulls_hitched` keeps watching the swipe into the deck, and
+`card_opens_waited` the card opens.
+
+### Material You, a switch in Android Settings (the owner, 2026-11-20)
+
+Settings › General › Material You turns the whole Android app to the Material You design and back. It is off by
+default, so Android keeps main's iPhone design with drawn menus. It takes effect at once, with no relaunch: `useDesign()`
+reads the `settings.materialYou` preference (`designFor(os, lab, materialYou)` in `lib/design.ts`), and
+`followDesign` in `components/ui/design.tsx` re-applies the Spaces and Appearance design and starts following the
+wallpaper palette when it turns on. iPhone never offers it. The design itself is our Material You branch of 17 to 18 Nov
+(#2537, #2557) with Sai Charan's work from #2798 on top: the persistent bottom bar, the seamless search sheet,
+Material Symbols, the pitch-black Incognito and the Settings layout.
+
+What the switch changes, and what it leaves alone:
+
+- Menus and confirmations stay main's drawn ones in both designs, already Android's Material 3 look since 2026-11-19.
+  The branch's native Material menus (`MenusModule`, `MaterialMenus.kt`) and their `native_menu_actions` count are not
+  carried over: the owner turned down the native dropdowns on 2026-11-17, and main removed the module.
+- Material Symbols replace Ardia's drawn symbols only while the switch is on (`Symbol` and `MaterialSymbol`); Ardia's
+  eyes, closed eyes and Browse for Me glyph stay its own. The Compose screens (Settings UI, the share sheet, summary cards)
+  keep main's `ArdiaSymbols`, and the app's window colours stay main's, so the launch backdrop is the same with the switch
+  on or off.
+- The deck keeps main's pull and standby pipeline with the switch on; the branch's deferred entrance picture and its
+  cross-fading card pictures are not carried over, since main's deck parity replaced that path.
+- Main's tests run on main's design; the Material tests turn the switch on with `withMaterialYou()` from the render
+  harness.
+- My Filters puts the keyboard away when it is left by its back arrow or unmounted, with Material You on only;
+  main's design is left as it is.
+- Spaces split the tabs with Material You on exactly as they do in main's design (`tabSpacesFor` answers for every
+  design but the original), so the Material deck's Space switcher shows that Space's tabs.
+
+With the switch on:
+
+- Settings › General › Dynamic Colors switches between the wallpaper palette and a custom color (2026-11-18). Turning it off shows the existing color picker; turning it on keeps the custom color saved. The choice is stored in `settings.dynamicColors`, applies immediately to the app, its menus and Incognito, and survives relaunches. Phones without a wallpaper palette use Ardia's fallback when enabled. Existing installs retain their current theme until the switch changes. Watch the existing `app_launched.material_colors` values for adoption; no new telemetry fields.
+- Incognito start, search sheet and tab switcher use pitch-black backgrounds with the selected palette’s dark controls in both light and dark appearance (2026-11-18). They no longer invert the current scheme, which made dark-mode Incognito white. The page address field, native search capsule and tab-switcher search field also use black backgrounds with light text and icons. Incognito activity stays uncounted.
+- The Material bottom bar is one 64 dp capsule, inset 16 dp from the sides and 8 dp above the navigation inset. The page extends behind it, with no full-width background band; touches outside the capsule reach the page. Scrolling down a page slides the capsule out below the bottom edge and scrolling up brings it back; Settings › Site Settings › Collapse Bottom Bar defaults on in Android’s Material design and keeps an explicit off choice. Tabs is on the left, search/address in the center, and add on the right. Hold Tabs for recent tabs, or hold the address for the page menu. In the tab switcher, the same capsule has Archive Tabs on the left, Search Tabs in the center and add on the right. Its 48 dp targets stay above the keyboard while filtering tabs. `Surfaces` mounts one `MaterialBottomBar` above the page and tab switcher. `isTabOverview` switches its controls without replacing the capsule. The page and deck controllers register their actions, page collapse, gestures and keyboard lift with the scoped `MaterialBarProvider`; neither screen nor its transition ghost mounts another bar. Search, fullscreen and overlays disable or hide this same instance. Watch `archive_bar_opened` (the Archive button, never while browsing privately) beside `search_tabs_opened` and `tabs_opened`, and `card_close_tapped` for the × on a deck card.
+- Android's More options and search results use the same Material sheet and docked URL capsule. The docked bar supplies the fill and corners in both modes, including while the URL is editable. Tapping the URL in More options keeps the sheet and bar mounted, switches the body to search suggestions, and moves the bar as the keyboard opens. The existing URL or search query is selected for editing. Direct search uses the same sheet and moves the capsule up from the bottom bar. The Compose field keeps inline completion, clear, voice and Incognito controls inside the capsule. The sheet stays raised when the keyboard closes or becomes shorter, giving results more space. Turning the device resets the retained keyboard height when the width changes. Swipe up to expand the results, down to return to compact height, and down again to dismiss. Results can scroll independently after expansion. Remove animations skips the transition. Watch `search_sheet_expanded` against `searches`, and `site_settings_sheet_expanded` against `site_settings_sheet_opened` for the address bar menu pulled to full screen; none counts Incognito.
+- Android Material Find dismissal uses the sheet's predictive Back handler and ends Find when the keyboard hides, restoring the bottom bar in the same transition. Material sheet rows and bar buttons use Gesture Handler Pressable because the synchronous Reanimated props path moves native views without updating Fabric hit testing. Watch `find_closed_bar` against `find_opened_bar` (counted in both designs, once per non-private find), and `material_back_swiped` for back swipes out of Material sheets, dialogs and the library.
+
+Watch `material_you_turned_on` and `material_you_turned_off` in `usage_counts` for how many testers try it and how many
+go back, and `app_launched.material_colors` (`not_material` while it is off) for how many keep it on.
 
 ### Android motion and menu follow-up
 
@@ -1615,8 +1775,9 @@ iPhone follows the SwiftUI app on main since the merge of main (8203d0b3c, 2026-
   start a search. Incognito taps are excluded.
 - The deck's ··· menu has one row height throughout on Android, including when sync and recently closed tabs add
   actions. iPhone keeps its native menu sections.
-- After an Android swipe into the deck, the landing or return takes 300 ms on the UI thread. The live page still
-  follows the finger and remains visible until its card can take over.
+- After an Android swipe into the deck, the landing or return runs on the UI thread on the iPhone's springs (0.34 s to land,
+  0.28 s back, no bounce; a fixed 300 ms timing until 2026-11-20). The live page still follows the finger and remains
+  visible until its card can take over.
 - Android Settings uses the same General, Search, Tabs, Privacy, Experimental and About groups as iPhone.
   The page menu opens History, Bookmarks and Downloads in Android's Library sheet using the same entries
   and file actions as iPhone. Android still uses its default-browser role and summary provider choices.
@@ -1649,8 +1810,8 @@ iPhone follows the SwiftUI app on main since the merge of main (8203d0b3c, 2026-
     VoiceOver reads the switch's name, state and hint. One tap opens the Incognito deck and the plus opens private
     tabs there. A second tap restores the regular deck and its scroll position. Closing the last Incognito card
     leaves the Incognito deck open. The Archive capsule and Open Archive stay on the regular side. Android's
-    standard deck and the Duo column keep regular and private tabs together. Watch `deck_incognito_switches` for use.
-  - The bottom bars sit 24 points in from the screen's sides, up from 12 (build 13, the owner: more side spacing, like Safari's bottom bar but a bit less). Safari's bar on the iPhone 17 Pro Max simulator (iOS 27.0) sits 34 points in on both sides, its back circle and tabs circle 48 points and 8 points from the address capsule, read from the accessibility frames and checked on the pixels; 24 is between our 12 and Safari's 34. One token, `chromeLayout.barSideInset`, sets the browsing bar (`FloatingBar`), the deck's bottom bar (`DeckBottomBar`, and its plus menu's anchor) and the start page's bar (`StartPage`), so the three line up when one turns into another. Since the follow-up to build 13 (the owner: the Space picker and ··· should sit as far in as the bottom row) it also sets the deck's header (`DeckHeader`: the Space picker, the Incognito pill, the ··· and their menus' anchors) and the Archive capsule under it, so the deck's top and bottom rows share one edge; the Duo column keeps the header 12 in (`deckChromeLayout.headerSide`), beside its 12-point field, and the grid keeps its 16. The safe-area side inset still adds to it in landscape. Watch `deck_bar_swipes` and `deck_bar_swipes_returned`: a narrower bar shouldn't change how often a swipe up on it lands.
+    standard deck keeps regular and private tabs together. Watch `deck_incognito_switches` for use.
+  - The bottom bars sit 24 points in from the screen's sides, up from 12 (build 13, the owner: more side spacing, like Safari's bottom bar but a bit less). Safari's bar on the iPhone 17 Pro Max simulator (iOS 27.0) sits 34 points in on both sides, its back circle and tabs circle 48 points and 8 points from the address capsule, read from the accessibility frames and checked on the pixels; 24 is between our 12 and Safari's 34. One token, `chromeLayout.barSideInset`, sets the browsing bar (`FloatingBar`), the deck's bottom bar (`DeckBottomBar`, and its plus menu's anchor) and the start page's bar (`StartPage`), so the three line up when one turns into another. Since the follow-up to build 13 (the owner: the Space picker and ··· should sit as far in as the bottom row) it also sets the deck's header (`DeckHeader`: the Space picker, the Incognito pill, the ··· and their menus' anchors) and the Archive capsule under it, so the deck's top and bottom rows share one edge, and the grid keeps its 16. The safe-area side inset still adds to it in landscape. Watch `deck_bar_swipes` and `deck_bar_swipes_returned`: a narrower bar shouldn't change how often a swipe up on it lands.
   - Closing a card has no dust cloud. The card flies off the top on main's `flyAway` spring (response 0.32, no bounce), starting at the flick's speed, and the cards after it close the gap in the same frames: the order drops the card at once and a leaving record (`DeckLeave` in `lib/deckGeometry.ts`, timed by one UI-thread clock) draws it until it is off the screen. Closing the last tab lets the card leave before the start screen comes. With Reduce Motion the card fades where it is.
 
 - Find on Page on iPhone is WebKit's own find panel (`UIFindInteraction`), as main's SwiftUI app has, decided from the side-by-side screenshots in `/tmp/ardia-phone-shots/find-on-page/`. The app's own find bar stays for Android, and on iPhone behind the launch switch `-ArdiaAppFind YES` for comparison. `find_opened_system` and `find_opened_bar` count which one opens.
@@ -1782,8 +1943,8 @@ Owner: **screens** (JS), **iPhone** (native), **decision** (needs the owner).
 | Settings | Connect pages | match | The connect flow worked end to end on 2026-11-16 | |
 | Toasts | Copy Link | match | Neither app shows a toast half a second after Copy Link in the page menu; both keep the menu open. Other kinds not seen | |
 | Extensions, widgets, intents | | partly | The Expo project compiles main's own sources for these. Seen on our build 2026-11-17 (`unseen/widgets/`): the gallery offers main's four widgets (Search small and medium, Your Mac's Tabs medium and large, with the demo Mac's tabs in the previews); the large one on the home screen shows "Sync With Your Mac" without a synced snapshot (demo mode writes none) and a tap opens the app on the Spaces sheet with the Mac's tabs. Main's tap does the same (`unseen/widgets/ref-p4/`). The share sheet, seen 2026-11-17 on the iPhone 17 at e3be236e1 beside main's from Safari with no Mac connected: the same sheet in both, the page's title and host, Open in Ardia and the line about turning on Sync With Your Mac, its top edge on the same pixel row (`ports/30-ref-share-1.png`, `32-ours-share-b.png`). Not seen: the widgets in dark, and the share sheet's Send to Your Mac row with a Mac connected (the demo writes no snapshot; the row and the exporter are main's own sources) | iPhone |
-| Duo | Open and half-open layouts | not seen | Simlock leases the iPhone Duo folded only: `fold open` needs a simulator in the default set and Simlock's are in a scoped one (2026-11-17). Later the same day Simlock's Duo did not boot at all (two tries: a boot timeout, then a closed connection), and a Duo simulator made in the default set is not offered by the Device panel, so the layouts are still seen only under `-ArdiaDuoCanvas` on the iPhone 18 Pro (the row below) | |
-| iPhone in landscape, Duo layouts | | partly | Decided 2026-11-16. Built to the specification below. `phone` in landscape (db4823c0f and this change): every bar pads by `max(left, right)`, the deck takes main's landscape card, and the archive capsule now swaps the deck to main's archive geometry (407.6×188 at 852×393; 273.2 wide in portrait on a 402×874 iPhone), springing from the old card as main animates it. Seen on the iPhone 18 Pro simulator turned on its side: browsing, the deck with and without the capsule. `column`, `wide` and `split` are built (components/column, components/duo) and switch from the native probe (44797e4ed); under `-ArdiaDuoCanvas` on the iPhone 18 Pro each draws, but the 669×951 canvas overflows that screen, so their sizes still need the iPhone Duo simulator. `column` seen beside main on the iPhone Duo simulator closed (466×678, trailing 84): the deck's and browsing's columns land on main's, and the deck now clips its cards at the content edge as main's does. Simlock's Duo can't fold or turn (its scoped simulator set has no hinge), so `wide` and `split` are checked by tests only (duoLayout.test.ts, duoWide.render.test.tsx, main's numbers), not yet seen at their real size: this Mac's default-set Duo holds someone's install of main and is left as it is, until the owner names a Duo that may be folded. The command bar keeps its greatest height as main's does (main's rows take `rowsBudget`). Not matched yet: the status bar in `wide` follows the backdrop rather than the page's top tone | screens |
+| Duo | Closed and open take `phone`; only a half-open horizontal fold takes `split` | partly | Since #2840 (2026-11-20) the closed and open Duo show the page full screen, as any iPhone, seen on the Duo simulator. Their bottom bars follow Safari's on the closed Duo, with our page still full screen (the owner, 2026-11-20): closed, `+` and Tabs stacked in the strip with the address capsule along the bottom 24 to 370, never squeezing; open, three fixed slots in the strip (`+`, Tabs, and the `···` the 400-wide capsule grows out of, 527 to 927), the capsule squeezing into that `···` on scroll by default; the deck's Search Tabs is a circle in that slot that grows into the field, keyboard-wide while typing; on either Duo the search panel ends 8 short of the strip so it clears the clock. Checked in `bottomBarSpan.test.ts` and `landscape.render.test.tsx`, not yet seen on the simulator. `split` is not seen yet: Simlock leases the iPhone Duo folded only: `fold open` needs a simulator in the default set and Simlock's are in a scoped one (2026-11-17). Later the same day Simlock's Duo did not boot at all (two tries: a boot timeout, then a closed connection), and a Duo simulator made in the default set is not offered by the Device panel, so the layouts are still seen only under `-ArdiaDuoCanvas` on the iPhone 18 Pro (the row below) | |
+| iPhone in landscape, Duo layouts | | partly | Decided 2026-11-16. Built to the specification below. `phone` in landscape (db4823c0f and this change): every bar pads by `max(left, right)`, the deck takes main's landscape card, and the archive capsule now swaps the deck to main's archive geometry (407.6×188 at 852×393; 273.2 wide in portrait on a 402×874 iPhone), springing from the old card as main animates it. Seen on the iPhone 18 Pro simulator turned on its side: browsing, the deck with and without the capsule. `wide` (a full-screen iPad) and `split` (a half-open Duo) are built (components/duo) and switch from the native probe (44797e4ed); under `-ArdiaDuoCanvas` on the iPhone 18 Pro each draws, but the 669×951 canvas overflows that screen, so their sizes still need the iPhone Duo simulator. The closed and open Duo take `phone` since #2840 (the owner, 2026-11-20); the `column` layout that the closed Duo had is gone. Simlock's Duo can't fold or turn (its scoped simulator set has no hinge), so `wide` and `split` are checked by tests only (duoLayout.test.ts, duoWide.render.test.tsx, main's numbers), not yet seen at their real size: this Mac's default-set Duo holds someone's install of main and is left as it is, until the owner names a Duo that may be folded. The command bar keeps its greatest height as main's does (main's rows take `rowsBudget`). Not matched yet: the status bar in `wide` follows the backdrop rather than the page's top tone | screens |
 
 **Motions from main's pass (d199b885c)**:
 
@@ -1840,7 +2001,7 @@ so the app takes part in Split View and Slide Over (`TARGETED_DEVICE_FAMILY = "1
 extensions, no `UIRequiresFullScreen`). In Expo that is `UISupportedInterfaceOrientations` and
 `UISupportedInterfaceOrientations~ipad` in `apps/phone/ios/Ardia/Info.plist` (by hand: `app.json`'s `"default"` would
 add upside down on iPhone; `supportsTablet` there only records the choice). An iPad window at least 600 pt both ways
-gets the open Duo's `wide` layout; a narrower one (a Split View third, Slide Over) gets `phone`, from the same probe
+gets the `wide` layout; a narrower one (a Split View third, Slide Over) gets `phone`, from the same probe
 as the Duo, never the device model. A new device joining sync on an iPad is named "iPad" (`SyncMeta.deviceName`).
 From @mantrakp04's #2263 on the SwiftUI app. In a window (Windowed Apps, Split View, Slide Over) iPadOS draws its
 window controls over the window's top-left corner; `WindowControlsClearance` (SceneDelegate.swift) adds the extra the
@@ -1850,25 +2011,21 @@ its top stays there when its top clearance changes, so a window growing from `ph
 the toolbar (`PageView.applyObscuredInsets`). Android rotates too, as
 the Compose app does: see "Android's half" below.
 
-**Choosing a layout** (main's `ScreenLayout.resolve`). It reads the safe-area size, the safe-area insets, the
-vertical bar edge trait, the hinge and the fold rectangle; never size classes, orientation or the model. The
-keyboard never changes it. Checked in this order:
+**Choosing a layout** (`ScreenLayout.resolve`). It reads the safe-area size, the hinge and the fold rectangle;
+never size classes, orientation or the model. The keyboard never changes it. Checked in this order:
 1. Hinge partly open and a horizontal fold (a division at least half the screen wide, wider than tall): `split`,
    with `fold.top = rect.minY + safeTop` and `fold.bottom = rect.maxY + safeTop`.
-2. Safe-area size at least 600 by 600: `wide`.
-3. One side inset at least 60 (the vertical bar edge, or else one side at least 60, the other 0 and the top 0):
-   `column` on that edge, inset rounded up to a multiple of 12.
+2. Any other hinge (closed or fully open): `phone`.
+3. Safe-area size at least 600 by 600: `wide`.
 4. Otherwise `phone`.
 
-A closed Duo (466×678, 84 trailing) is `column`; an open Duo (669×951, or 951×669 on its side) is `wide`; half open
-is `split`. An ordinary iPhone in landscape has equal side insets and stays `phone`. Checked 2026-11-16 on an
-iPhone 17 Pro simulator, iOS 27.0: main rotated both ways keeps the phone layout (bottom row bar), and the probe
-reports 750×382 with 62 on each side and no vertical bar edge. Still open for iOS 27.1, where the trait exists: if it
-reports an edge on a plain iPhone in landscape, a Pro (62 side insets) would get `column` with 72, and a non-Pro (59)
-would stay `phone`. No simulator pool offers a 27.1 iPhone other than the Duo. On the Duo (27.1, simlock), closed: the probe
-reports `column`, trailing 84, with `verticalBarEdge` trailing, so the trait follows the real bar there; a closed Duo
-doesn't turn, and simlock's scoped simulator set can't fold, so the deciding reading (an open Duo on its side) still
-needs a Duo in the default set.
+The Duo, closed and open, takes `phone` since #2840: the owner's decision on 2026-11-20, after a tester said the
+old full-screen view was better. Before it, the closed Duo took a `column` layout (the page stopped at the 84-point
+sensor strip, with round buttons in the strip) and the open Duo took `wide` (the page in a card under a toolbar).
+The `column` layout is gone, and `-ArdiaDuoCanvas column` with it. The probe on the Duo simulator (iOS 27.1) knows the hinge
+from its first report: closed 382×644 with trailing 84, open 867×635 with trailing 84. Only a half-open Duo with a
+horizontal fold keeps `split`; half open with a vertical crease takes `phone`, as the simulator reports it. A
+full-screen iPad (no hinge) keeps `wide`. An ordinary iPhone in landscape stays `phone`.
 
 A layout change is not animated: views swap at once. Pages are not reloaded (the web views are re-parented), the
 open search tray stays, and app state (tabs, surface, grid, sheets) survives. Going between `phone` and `wide`
@@ -1883,11 +2040,36 @@ resets the browsing view's own state: the bar comes back expanded and the sideba
   Horizontal padding = `max(left, right)` + 24 (`chromeLayout.barSideInset`; 12 before build 13's feedback) on
   **both** sides, so the bar stays centred; no maximum width (852 wide with 59 insets gives a 574 address capsule). 21.5 above the bottom edge, ignoring the safe area. Collapsed
   pill unchanged (30 high, at most 240 wide).
+- On a Duo (the probe reports a hinge) the bottom bars follow Safari on the closed Duo (`bottomBarLayout`, the owner,
+  2026-11-20), except that our page stays full screen where Safari's stops at the strip. The strip's buttons are 48
+  glass circles centred `min(48, inset − 24)` from its edge, 7 apart; a strip on the leading side mirrors it all, and
+  menus open beside the strip buttons. A strip needs a side inset of at least 48, the circle's width: under that (a pose
+  reporting no side inset) there is nowhere to put a circle clear of the capsule, so the bar is the plain centred one
+  of any iPhone. The hinge picks the sizing: a closed hinge is always the closed bar, even turned on its side, and a
+  fully or partly open one at 600 wide or more is the open bar.
+  - **Closed** (under 600 wide): Tabs on the bar's centre line, `+` 55 above it. The bar row keeps only the address
+    capsule with its `···`, from 24 to 12 short of the strip (24 to 370 on 466). The start bar keeps Settings in that
+    span; the deck bar keeps the Incognito switch and Search Tabs there, its `+` in the strip on the bar's line. It
+    never squeezes: with Collapse Bottom Bar on it folds into the host pill as any iPhone does, strip buttons
+    included, and with it off it never collapses.
+  - **Open** (600 wide or more), from the owner's sketch: three fixed slots, `+` 110 and Tabs 55 above the bar's line
+    and the bottom slot on it; `+` and Tabs never move. Expanded, the 400-wide capsule grows out of the bottom slot,
+    its right end and its `···` on that slot (527 to 927 on 951). Scrolling down, whatever Collapse Bottom Bar says,
+    moves only its left edge into the slot (on `barCollapse`, the host pill's spring) while the host fades, leaving
+    the `···` circle; it opens the page menu (never expands the bar), shows the red open lock on an insecure page,
+    is read as "Page Menu, <site>" and anchors the search tray. Scrolling up grows it back. The deck puts its `+` in
+    the top slot, the Incognito switch in the middle one (where the page's Tabs button turns into the Incognito
+    glyph as the deck pulls in) and Search Tabs as a 48 magnifier circle in the bottom slot that grows left into the 400-wide field when tapped (on the same spring, focused, counted in `search_tabs_opened`), runs from 24 to the slot while the keyboard is up, and shrinks back once the search closes empty; the page's capsule hands over to it on the same slot as the deck pulls in; the start page puts `+` and Tabs in the
+    top two and Settings in the bottom slot. On either Duo the search panel keeps 8 from the safe edges, so it ends
+    short of the strip and its clock. Closing search on the open Duo lands the panel on the capsule in one move
+    (`landsDirectly`): the phone's drop, fold and then narrow read as a second slide there, the panel being twice
+    the capsule's width and off to its left. Each open Duo collapse counts in `bottom_bar_collapses`. The deck's header, cards, grid, archive capsule and the search tray keep
+  the side insets.
 - Pager: the full screen width.
 - Search tray: the panel is the safe width less 8 each side, so it clears the island; radius 32.75; 8 above the
   keyboard; height `min(274 + 47.5·(fieldScale − 1), safeH + safeBottom − keyboard − 16)`, the keyboard term
   usually winning in landscape.
-- Deck: side padding `max(left, right)` for the header (+24), the Archive capsule (+24), the bottom bar (+24) and the grid (+16). In the Duo column the header keeps +12, beside the column's 12-point field.
+- Deck: side padding `max(left, right)` for the header (+24), the Archive capsule (+24), the bottom bar (+24) and the grid (+16).
   Cards take the screen's aspect: `cardW = min(W·306/440, band/(H/W))`, with `bandTop = chromeBottom + 41`,
   `bandBottom = H − max(safeBottom, 20) − 43`, band at least 120; `focusLeading = W·66/440`,
   `spacing = min(cardW, W·218/440)`, `barCenterY = H − max(safeBottom, 20) − 11`. Check at 852×393, safe top 0,
@@ -1897,20 +2079,7 @@ resets the browsing view's own state: the bar comes back expanded and the sideba
   the page dots at 393 high; match it, and note it as main's.
 - Page menu, share sheet, Settings, Archive and the other sheets: the system's, no landscape rules.
 
-**`column`** (closed Duo, or any one-sided inset of 60 or more).
-- `contentWidth = W − inset`. The button column's centre is `min(48, inset − 24)` from the column edge, its top 166,
-  buttons 48, spacing 7.
-- Page: padded by the inset on the column edge; behind it the system background, not the look's surface; obscured
-  insets 0 top and bottom. The column holds Tabs, the site button (48 circle: favicon 18, the reader glasses, or a
-  warning triangle), the menu button and Plus. It never collapses; it fades with the bar's motion.
-- Deck: `contentWidth` wide with side padding 0, away from the column; the backdrop runs full width. The header
-  drops its `···`; the column holds grid, Search Tabs, `···` (48) and Plus. The Search Tabs field floats over the
-  cards, `contentWidth − 24` wide, centred in the content, at y 245, fading over 0.25 s.
-- Start page: the spaces are `contentWidth` wide, away from the column; the dots sit at the bar's centre line, not
-  60 above it; the bar becomes a column of Tabs, Plus, Settings.
-- Search, the page menu, Settings and onboarding keep the phone layout.
-
-**`wide`** (open Duo, 600 both ways). The deck is never shown; the start page keeps the phone arrangement.
+**`wide`** (a full-screen iPad, 600 both ways, no hinge). The deck is never shown; the start page keeps the phone arrangement.
 - Card: x = 11 + left, y = `max(33, safeTop + 4)`, width `W − 22 − left − right`, bottom margin
   `max(9, safeBottom − 20)`; radius 16 continuous; shadow black 0.12, radius 10, y 2. The page inside has no bar; its
   content inset and obscured top are 63 (toolbar 45 + 9 above and below), bottom 0.
@@ -1931,7 +2100,7 @@ resets the browsing view's own state: the bar comes back expanded and the sideba
 - Search is a command bar instead of the tray: top = card top + 127 − safe top, side padding 27 + 8, height at most
   `min(484, keyboardTop − top − 24)`; top-anchored, fading in from 0.96 scale; no resting drop.
 
-**`split`** (half open). Card x 11, width `W − 22` (side insets unused), y the card top, height
+**`split`** (a half-open Duo with a horizontal fold). Card x 11, width `W − 22` (side insets unused), y the card top, height
 `max(fold.top − y − 11, 120)`; toolbar without the address. Below the fold, the sidebar as a panel `W` by
 `H − fold.bottom`, bottom padding the safe bottom, no background (the backdrop shows), no tiles, header from 16, no
 sidebar button. Search uses the phone tray.
@@ -1985,15 +2154,14 @@ the Compose app has no orientation lock.
 | `apps/phone/android/app/src/main/AndroidManifest.xml` | Drop `screenOrientation="portrait"` from `MainActivity` | Android |
 | `FullscreenHost` (`packages/phone/android`) | Ask for no orientation once the lock is gone; never end fullscreen on rotation | Android |
 | `PageView` (`packages/phone/ios`) | Done: `obscuresSafeTop` takes the obscured top from the view's own safe top, re-applied on every safe-area change, as main's `applyInsets`; `topClearance` (63 in `wide`) sets the scroll view's top content and indicator insets and adds to the obscured top | iPhone |
-| Simulation | Done: `<ScreenLayoutProbe onLayoutChange>` (mounted full screen) reports `layout`, `column {edge, inset}` (rounded to 12), `fold {top, bottom}` (screen points, safe top added), `canvas`, `forced` and the raw space, once per settled change; resolve is main's, tested in `ScreenLayoutTests`. In test builds `-ArdiaDuoCanvas wide\|split\|column` (main's `open` and `half` too) forces a layout: wide and split on a 669×951 canvas with the fold at 465.5 to 485.5, column trailing at 84; reports log as `ARDIA_SCREEN` | iPhone |
+| Simulation | Done: `<ScreenLayoutProbe onLayoutChange>` (mounted full screen) reports `layout`, `fold {top, bottom}` (screen points, safe top added), `canvas`, `forced` and the raw space (the hinge included), once per settled change; tested in `ScreenLayoutTests`. In test builds `-ArdiaDuoCanvas wide\|split` (main's `open` and `half` too) forces a layout on a 669×951 canvas with the fold at 465.5 to 485.5; reports log as `ARDIA_SCREEN` | iPhone |
 | `App.tsx` | Resolve the layout from window size, insets and the probe; swap in the Duo view | screens |
-| `FloatingBar`, `BottomBar`, `barGeometry` | Pad by `max(left, right)`; the column arrangement | screens |
+| `FloatingBar`, `BottomBar`, `barGeometry` | Pad by `max(left, right)` | screens |
 | `PageSurface`, `TabPager` | Insets and pager width on rotation; the `wide` clearance | screens |
-| `TabDeck`, `DeckHeader`, `DeckBottomBar`, `deckGeometry` | `safeSide = max(left, right)` (it passes 0 now); the landscape card formula; the column variant | screens |
+| `TabDeck`, `DeckHeader`, `DeckBottomBar`, `deckGeometry` | `safeSide = max(left, right)` (it passes 0 now); the landscape card formula | screens |
 | `SearchTray` | Side safe area; the `wide` command bar | screens |
-| `StartPage`, `StartSpaces` | The column and dots variants | screens |
 | `Sheet`, `FullSheet` | Check width and height in landscape (main uses system sheets) | screens |
-| New | Duo toolbar, sidebar, card, column stack | screens |
+| New | Duo toolbar, sidebar, card | screens |
 
 ### Tester checklist for the next build
 
@@ -2030,7 +2198,7 @@ simulator, the list under "The iPhone redesign".
 
 **3. Start page and the search tray**
 - [ ] With no tabs and sync on. Expect: the start page's leading button is Synced Tabs; the logo fades and grows from 0.92 and the bar fades as the tray comes and goes.
-- [ ] Open the tray. Expect: it comes up with the keyboard and sits on its top edge on every frame, with no gap or overlap (including over Android's navigation bar); with a hardware keyboard it lands after 450 ms; the dim fades in over 300 ms; with Reduce Motion it fades instead of moving. Close it: the keyboard goes and the tray follows it down.
+- [ ] Open the tray. Expect: it comes up with the keyboard and sits on its top edge on every frame, with no gap or overlap (including over Android's navigation bar); with a hardware keyboard it lands after 220 ms; the dim fades in over 200 ms; with Reduce Motion it fades instead of moving. Close it: the keyboard goes and the tray follows it down.
 - [ ] Drag the tray down from the field, the incognito caption or the empty area. Expect: the dim lightens; past 8 points the keyboard goes down while the tray holds still; a short slow drag springs back and the keyboard returns; a long drag or a flick closes it.
 - [ ] Touch a row, slide along the rows and lift. Expect: the touched row lights at once, each row ticks as you pass it, and the last one opens on release with a confirm tick; the arrow on a query row refines; a 400 ms hold opens the row's menu; past 1.5x text size the list scrolls instead.
 - [ ] Type "otter", then "!w otter", then "12*12". Expect: nine rows with an "otter" search kept second; "Search Wikipedia" for the bang; "= 144", which copies with a "Copied 144" toast on a tap and offers Copy on a long press. A Mac tab row shows a laptop and its host and opens as a synced tab.
@@ -2156,7 +2324,7 @@ Not audited at all: Compose's `SyncSetupContent` internals inside onboarding.
 
 - A page that isn't secure shows a red open lock in the bar, not the words "Not Secure" (the owner's decision,
   16 Nov 2026: "we can show open lock with red i guess see the arc for that").
-  - **Where:** the redesigned bar's address capsule, the collapsed host pill, and the Duo column and toolbar. The lock
+  - **Where:** the redesigned bar's address capsule, the collapsed host pill, and the Duo toolbar. The lock
     takes the site icon's slot at the site icon's size, so the address starts at the same x on a secure and an
     insecure page, and the stage's face snapshot and the landed pill carry it.
   - **Glyph:** SF `lock.open.fill` on iPhone; on Android a drawn glyph in Material's `lock_open` shape (filled body
@@ -2176,7 +2344,8 @@ Not audited at all: Compose's `SyncSetupContent` internals inside onboarding.
   a grey strip the bar's height across the page (POCO F4, 2026-11-20). Remove animations snaps to the endpoint. The page's
   direction update no longer waits for a second effect to choose the toolbar state. Tapping the pill expands it;
   the next upward then downward scroll can collapse it again. The deck keeps its own motion settings.
-  Watch the consent-gated `usage_counts.bottom_bar_collapses` count, never recorded in Incognito. This measures
+  Watch the consent-gated `usage_counts.bottom_bar_collapses` count, never recorded in Incognito; on iPhone it
+  counts only the open Duo's squeeze. This measures
   collapse use, not frame smoothness. Smoothness and viewport resize counts still need real-device captures.
 
 - The page under the bar (the owner's decision, 2026-11-16).
@@ -3687,6 +3856,17 @@ This was `docs/ios.md`'s, for main's SwiftUI app; since the clean-up the workflo
   Confirm installation of `com.ardia.browser.ios` on the iPhone.
 - **The app record.** "Ardia", bundle id `com.ardia.browser.ios`, team `U5L5T3NGVV`; the extensions are `.widgets`,
   `.share` and `.open`, sharing the app group `group.com.ardia.browser.ios`.
+- **Talk to Me's voice** is not part of a build or an upload. Only a new voice needs a step, on a Mac:
+
+  ```sh
+  apps/phone/ios/TalkToMe/build-voice --out /private/tmp/ardia-talk-to-me-pack
+  gh release create <tag> /private/tmp/ardia-talk-to-me-pack/phonon-31m-en.aar --repo ardia-browser/ardia-voices \
+    --title <tag> --notes "<model and release it was built from>"
+  ```
+
+  Use a new tag (never replace a published asset, since older apps pin its hash), then update `url`, `bytes` and
+  `sha256` in `VoiceDownload` (`packages/phone/ios/TalkToMe.swift`) with what `build-voice` printed. Phones that had
+  the old voice download the new one the next time Talk to Me is on.
 - **The workflow** (`.github/workflows/ios-release.yml`). What each mode touches in App Store Connect:
   - `mode=status` only reads: the app record, App IDs, devices, certificates, profiles, builds, build uploads and
     tester groups.
@@ -3838,3 +4018,4 @@ the edge) has never triggered it; check it with a finger on a device or with the
 
 The first build takes about 25 minutes on a busy Mac; a native-only change rebuilds in 3 to 5, since the codegen and
 Expo provider phases publish only files that changed.
+

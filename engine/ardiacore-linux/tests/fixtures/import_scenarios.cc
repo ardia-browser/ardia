@@ -300,6 +300,35 @@ void Units() {
   assert(DecryptChromiumPassword("v10short", &password) == Decrypted::kFailed);
   assert(DecryptChromiumPassword("legacy-plain", &password) == Decrypted::kOk && password == "legacy-plain");
   assert(DecryptChromiumPassword("", &password) == Decrypted::kFailed);
+  const auto cookie_leaks = [](std::string value) {
+    std::vector<ImportedCookie> cookies(1);
+    cookies[0].value = SecretBytes(std::move(value));
+    base::DictValue fields;
+    fields.Set("separateEssentials", std::string_view("on"));
+    fields.Set("url", std::string_view("https://tab-a.example/"));
+    fields.Set("plain", std::string_view("http://tab-b.example/"));
+    fields.Set("short", std::string_view("fifteen-bytes!!"));
+    fields.Set("long", std::string_view("sixteen-bytes!!!"));
+    const base::Value reply(std::move(fields));
+    return ReplyLeaksImported(reply, cookies, {});
+  };
+  assert(cookie_leaks("sixteen-bytes!!!"));
+  assert(!cookie_leaks("fifteen-bytes!!"));
+  assert(!cookie_leaks("separateEssentials"));
+  assert(!cookie_leaks("https://tab-a.example/"));
+  assert(!cookie_leaks("http://tab-b.example/"));
+  assert(!cookie_leaks("unrelated-token-0123456789"));
+  const auto card_leaks = [](bool as_key) {
+    std::vector<ImportedCard> cards(1);
+    cards[0].number = SecretBytes(std::string("4111 1111 1111 1111"));
+    base::DictValue fields;
+    if (as_key) fields.Set("4111111111111111", std::string_view("on"));
+    else fields.Set("note", std::string_view("4111111111111111"));
+    const base::Value reply(std::move(fields));
+    return ReplyLeaksImported(reply, {}, cards);
+  };
+  assert(card_leaks(false));
+  assert(!card_leaks(true));
   std::printf("units passed\n");
 }
 
@@ -396,9 +425,9 @@ int main(int argc, char** argv) {
     base::DictValue out;
     out.Set("cancelled", outcome.cancelled);
     out.Set("error", outcome.error_code);
+    out.Set("withheld", OutcomeLeaks(outcome));
     out.Set("result", std::move(outcome.result));
     out.Set("credentials", Rows(outcome.credentials));
-    out.Set("withheld", OutcomeLeaks(outcome));
     out.Set("cookies", CookieRows(outcome.cookies));
     out.Set("addresses", AddressRows(outcome.addresses));
     out.Set("cards", CardRows(outcome.cards));

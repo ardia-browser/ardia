@@ -209,3 +209,37 @@ test("browser: a load starting or ending is heard as it lands without a store wr
   assert.equal(updates, 1, "loads alone write nothing to the store");
   assert.deepEqual(loads, ["a:true", "a:false", "b:true", "a:true"], "each load starting or ending is heard");
 });
+
+test("subscribeTo hears only updates that change one of its keys, in order with plain listeners", () => {
+  const t = transactional();
+  const store = createStore(t.middleware((set) => ({ a: 0, b: 0, c: 0, bump: (k) => set((s) => ({ [k]: s[k] + 1 })) })));
+  const heard = [];
+  store.subscribe(() => heard.push("plain1"));
+  const offA = store.subscribeTo(["a"], (s, prev) => heard.push(`a${prev.a}${s.a}`));
+  store.subscribeTo(["b", "c"], (s, prev) => heard.push(`bc${prev.b}${s.b}${prev.c}${s.c}`));
+  store.subscribe(() => heard.push("plain2"));
+  store.getState().bump("a");
+  store.getState().bump("c");
+  t.transaction(() => {
+    store.getState().bump("a");
+    store.getState().bump("b");
+  });
+  offA();
+  store.getState().bump("a");
+  assert.deepEqual(heard, [
+    "plain1", "a01", "plain2",
+    "plain1", "bc0001", "plain2",
+    "plain1", "a12", "bc0111", "plain2",
+    "plain1", "plain2",
+  ]);
+});
+
+test("subscribeTo judges its keys against the state a listener before it left", () => {
+  const t = transactional();
+  const store = createStore(t.middleware((set) => ({ a: 0, b: 0, set })));
+  const heard = [];
+  store.subscribe((s) => s.a === 1 && s.b === 0 && store.getState().set({ b: 1 }));
+  store.subscribeTo(["b"], (s, prev) => heard.push(`${prev.b}${s.b}`));
+  store.getState().set({ a: 1 });
+  assert.deepEqual(heard, ["01", "01"]);
+});

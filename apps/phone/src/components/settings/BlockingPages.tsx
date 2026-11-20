@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, BackHandler, Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, BackHandler, Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View, type TextInputInstance } from "react-native";
 import Animated, { FadeIn, FadeOut, LinearTransition, useAnimatedKeyboard, useAnimatedStyle } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { PasteAction } from "../sync/SyncPage";
@@ -31,7 +31,7 @@ import {
   filterListAddress,
   FILTER_LIST_ADDRESS,
 } from "../../state/settings/settingsRules";
-import { ConfirmSheet, duration, font, ink, screenReaderActions, Sheet, usePresence, settingsLayout, settingsTint, space, Symbol, Toggle, useTheme, type Confirmation, useWarningInk } from "../ui";
+import { ConfirmSheet, duration, font, ink, screenReaderActions, Sheet, usePresence, settingsLayout, settingsTint, space, Symbol, Toggle, useDesign, useTheme, type Confirmation, useWarningInk } from "../ui";
 import { copy } from "../../lib/platformCopy";
 
 const FILTER_SYNTAX_URL = "https://github.com/gorhill/uBlock/wiki/Static-filter-syntax";
@@ -305,6 +305,16 @@ export function MyFiltersPage() {
   const keyboard = useAnimatedKeyboard({ isStatusBarTranslucentAndroid: true, isNavigationBarTranslucentAndroid: true });
   const lift = useAnimatedStyle(() => ({ height: Math.max(keyboard.height.value - insets.bottom, 0) }));
   const large = useWindowDimensions().fontScale >= settingsLayout.accessibilityFontScale;
+  const field = useRef<TextInputInstance>(null);
+  const material = useDesign() === "material";
+  useEffect(() => (material ? () => Keyboard.dismiss() : undefined), [material]);
+  const leave = () => {
+    if (material) {
+      field.current?.blur();
+      Keyboard.dismiss();
+    }
+    popSettings();
+  };
   const apply = async () => {
     if (!changed || applyingNow.current) return;
     applyingNow.current = true;
@@ -323,13 +333,14 @@ export function MyFiltersPage() {
   return (
     <SettingsPage
       title="My Filters"
-      onBack={changed ? undefined : popSettings}
+      onBack={changed ? undefined : leave}
       scroll={false}
       leading={changed ? <BarButton title="Revert" onPress={() => setDraft(null)} /> : null}
       trailing={applying ? <ActivityIndicator testID="applyingFilters" color={theme.secondaryLabel} style={styles.barSpinner} /> : <BarButton title="Apply" emphasized enabled={changed} onPress={() => void apply()} />}
     >
       <View style={[styles.editor, { backgroundColor: theme.groupFill }]}>
         <TextInput
+          ref={field}
           testID="myFiltersField"
           accessibilityLabel="My Filters"
           multiline

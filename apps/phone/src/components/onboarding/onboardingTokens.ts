@@ -1,5 +1,5 @@
 import { Easing } from "react-native-reanimated";
-import { capsule, font, iPhoneOr, settingsLayout, space, spring } from "../ui";
+import { capsule, font, iPhoneOr, settingsLayout, space } from "../ui";
 import type { Motion } from "../ui/motion";
 
 type Curve = readonly [number, number, number, number];
@@ -41,15 +41,13 @@ export const onboardingCurves = {
 
 const timing = (duration: number, curve: Curve): Motion => ({ timing: { duration, easing: Easing.bezier(...curve) } });
 
-const composeFade = (duration: number): Motion => ({ timing: { duration, easing: Easing.inOut(Easing.quad) } });
-
 export const onboardingMotion = {
-  stepTravel: iPhoneOr(72, 60),
-  riseDelayMs: iPhoneOr(50, 100),
-  step: iPhoneOr<Motion>(timing(300, onboardingCurves.step), { spring: spring(0.42, 0.9) }),
-  stepReduced: iPhoneOr(timing(150, onboardingCurves.easeOut), composeFade(200)),
-  backdrop: iPhoneOr(timing(300, onboardingCurves.step), composeFade(300)),
-  backdropReduced: iPhoneOr(timing(150, onboardingCurves.easeOut), composeFade(300)),
-  rise: iPhoneOr<Motion>(timing(360, onboardingCurves.rise), { spring: spring(0.7, 0.7) }),
-  riseReduced: iPhoneOr(timing(300, onboardingCurves.easeOut), composeFade(200)),
+  stepTravel: 72,
+  riseDelayMs: 50,
+  step: timing(300, onboardingCurves.step),
+  stepReduced: timing(150, onboardingCurves.easeOut),
+  backdrop: timing(300, onboardingCurves.step),
+  backdropReduced: timing(150, onboardingCurves.easeOut),
+  rise: timing(360, onboardingCurves.rise),
+  riseReduced: timing(300, onboardingCurves.easeOut),
 } as const;

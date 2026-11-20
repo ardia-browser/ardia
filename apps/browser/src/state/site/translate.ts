@@ -326,7 +326,7 @@ export function startTranslate() {
     stopDocumentWatch(id);
     void detect(id).catch(() => {});
   });
-  const stopWatching = useBrowser.subscribe((s, prev) => {
+  const stopWatching = useBrowser.subscribeTo(["tabs"], (s, prev) => {
     if (s.tabs === prev.tabs) return;
     const gone = Object.keys(useTranslate.getState()).filter((id) => !s.tabs[id]);
     for (const id of gone) {

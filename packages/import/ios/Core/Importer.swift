@@ -287,6 +287,7 @@ public final class Importer: @unchecked Sendable {
     if def.family == .chromium || def.family == .arc {
       try cancellation.check()
       result.favicons = ChromiumFavicons.read(profiles: [dir], pages: ChromiumFavicons.pages(of: result))
+      result.searchEngine = ChromiumSearchEngine.read(profile: dir)
     }
     if def.family == .arc, let arc {
       let cached = ArcExtras.cachedFavicons(folder: discovery.arcFile(ArcExtras.iconCacheFolder), root: discovery.arcFile(""), items: arc.iconItems,

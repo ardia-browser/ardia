@@ -64,6 +64,22 @@ Settings › Advanced.
   Ardia"), before it sends anything else. A side raises its minimum only when it needs the other's newer behaviour, so a
   newer command against an older Ardia, or the reverse, either works or says which one to update. `ardia --version`
   reports the command's own version.
+- **Methods.** `methods` lists every method the socket answers: `name`, `area`, `mutates`, `description`, `params` (a
+  JSON Schema subset the socket checks before it runs anything) and `result`. The command's `ardia methods` prints it
+  and `ardia call <method> [params]` calls any method, so a method Ardia adds is usable from the shell without a new
+  command release. Adding methods doesn't change the protocol: a command that calls one an older Ardia lacks gets
+  `unknown_method`. Every area, what it reads and changes, and what stays out of reach (passwords, card numbers,
+  cookie values) is in `docs/control-socket.md`. Tile folders (`pins.*`), page icons (`favicons.get`), shared
+  and live folders (`sharedFolders.*`, `live.*`), setup codes (`presets.*`) and Air Traffic Control rules
+  (`airTraffic.*`) are there too.
+- **One line is at most 1 MiB.** Every line Ardia writes on the socket (a reply, an event, a decide request) is at most
+  1 MiB (1,048,576 bytes, newline included), the limit every shipped command reads (`MAX_LINE` in `control.py` and
+  `control.rs`); a longer line makes the command drop the connection. Old commands can't change, so Ardia keeps to it:
+  pages stop early, a read whose reply wouldn't fit answers `failed` saying what to narrow, a write whose result wouldn't
+  fit answers a compact `{ok, oversized, …counts}` so it's never unclear whether the write happened, an event that
+  wouldn't fit goes out summarized with `truncated: true`, and a decide request that wouldn't fit isn't sent (Ardia uses
+  its default). A reader that falls behind loses its oldest events, never a reply or a decide message and never its connection
+  in the middle of a line; the next event it gets carries `dropped: <n>`. Details in `docs/control-socket.md` › The 1 MiB line.
 - **The plugin schema.** `docs/plugin.schema.json` is the manifest schema Ardia writes (`apps/browser/scripts/
   write-plugin-schema.mjs`; a test keeps it current). The command ships a copy for `ardia plugins check` offline, and the
   plugins repo's CI compares that copy with ardia main's.

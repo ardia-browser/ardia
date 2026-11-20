@@ -36,7 +36,8 @@ export type AppEvent =
       types?: string[];
       responder?: string;
       dropped?: number;
-    };
+    }
+  | { type: "barWordEdit"; kind: "delete" | "move"; splitAtDot: boolean; epoch: string };
 
 export type AppearanceMode = "auto" | "light" | "dark";
 

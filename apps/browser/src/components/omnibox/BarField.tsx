@@ -8,6 +8,8 @@ import { useClaimFollowsFocus, type FocusClaim } from "./claimFollowsFocus";
 import { useRevertRepair } from "./useRevertRepair";
 import { BAR, BAR_TYPE } from "./tokens";
 
+const BAR_FIELD_ID = "ardia.barField";
+
 type InputProps = ComponentProps<typeof TextInput>;
 
 export function BarField({
@@ -48,6 +50,7 @@ export function BarField({
   return (
     <TextInput
       ref={inputRef}
+      nativeID={BAR_FIELD_ID}
       {...events}
       onChangeText={repair.changed}
       onFocus={(e) => (barFieldMarks.field("focus", variant, tag()), claimOnFocus(), events.onFocus?.(e))}

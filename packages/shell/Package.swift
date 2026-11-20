@@ -10,6 +10,7 @@ let package = Package(
     .library(name: "ArdiaReportCore", targets: ["ArdiaReportCore"]),
     .library(name: "ArdiaNotificationCore", targets: ["ArdiaNotificationCore"]),
     .library(name: "ArdiaPluginCore", targets: ["ArdiaPluginCore"]),
+    .library(name: "ArdiaTextCore", targets: ["ArdiaTextCore"]),
   ],
   targets: [
     .target(name: "ArdiaUpdaterCore", path: "ios/UpdaterCore"),
@@ -22,5 +23,7 @@ let package = Package(
     .testTarget(name: "ArdiaNotificationCoreTests", dependencies: ["ArdiaNotificationCore"], path: "notification-tests"),
     .target(name: "ArdiaPluginCore", path: "ios/PluginCore"),
     .testTarget(name: "ArdiaPluginCoreTests", dependencies: ["ArdiaPluginCore"], path: "plugin-tests"),
+    .target(name: "ArdiaTextCore", path: "ios/TextCore"),
+    .testTarget(name: "ArdiaTextCoreTests", dependencies: ["ArdiaTextCore"], path: "text-tests"),
   ]
 )

@@ -20,6 +20,7 @@ public class ShellModule: Module {
       _ = installSubmenuAction
       _ = installHoverAfterWindowMoves
       _ = installInputSourceKeys
+      _ = BarWordBreaks.install
       _ = installScrollViewInsetFix
       _ = installStripWheel
       _ = installOutsidePressMonitor

@@ -21,6 +21,7 @@ import type {
 } from "@ardia/ardiacore";
 import type { EventSubscription } from "expo-modules-core";
 import { nativeEvents, unfaked } from "./events";
+import { generatedVaultHandlers } from "./vaultGenerated";
 import type { AutofillToggle } from "../platform/autofill";
 
 
@@ -145,6 +146,7 @@ export const current = { device: null as string | null };
 type Login = { origin: string; url: string; username: string; password: string; created: number };
 export const passwordStores = new Map<string | null, Map<string, Login>>();
 const logins = () => passwordStores.get(current.device)!;
+export const passwordsUnlock = { answer: true };
 export const readLogins = async () => [...logins().values()];
 
 type HistoryRow = { title: string; visits: number[] };
@@ -376,6 +378,45 @@ function withStrips<Fake extends FakeDomain>(fake: Fake): Fake {
   return fake;
 }
 
+type FakeVaultProvider = CallResult<"vaults.refresh">;
+type FakeVaultItem = CallResult<"vaults.items">[number];
+export const vaultFakes = {
+  providers: [] as FakeVaultProvider[],
+  dropdownClaims: [] as CallArgs<"vaults.claimChromeDropdowns">[],
+  dropdownShowing: [] as CallResult<"vaults.claimChromeDropdowns">["showing"],
+  dropdownLogins: [] as string[],
+  items: [] as FakeVaultItem[],
+  copied: [] as { provider: string; id: string; field: string }[],
+  exports: [] as string[],
+  nextExport: { saved: true, count: 0 } as CallResult<"vaults.export">,
+  syncs: 0,
+  syncedAt: null as number | null,
+  unlocks: [] as { provider: string; withPassword: boolean; handOn: { tab: string; origin: string } | null }[],
+  addedTotps: [] as CallArgs<"vaults.addTotp">[],
+  nextAddTotp: null as CallResult<"vaults.addTotp"> | null,
+  removedTotps: [] as CallArgs<"vaults.removeTotp">[],
+  nextRemoveTotp: null as CallResult<"vaults.removeTotp"> | null,
+  codeReads: [] as CallArgs<"vaults.readCode">[],
+  nextCodeRead: { error: "none" } as CallResult<"vaults.readCode">,
+  forgottenCodes: [] as string[],
+  loginChanges: [] as CallArgs<"vaults.ardiaLoginChanged">[],
+  itemsGate: null as Promise<void> | null,
+  providersGate: null as Promise<void> | null,
+  totpGate: null as Promise<void> | null,
+  totpCode: "123456",
+  signInGate: null as Promise<void> | null,
+  cancelledSignIns: [] as string[],
+  ardiaProfiles: [] as string[][],
+  warmed: [] as string[],
+};
+const vaultState = (provider: string) => vaultFakes.providers.find((p) => p.id === provider)!;
+function setVaultState(provider: string, state: FakeVaultProvider["state"]) {
+  vaultFakes.providers = vaultFakes.providers.map((p) => (p.id === provider ? { ...p, state } : p));
+  return vaultState(provider);
+}
+const vaultUnlocked = (provider: string) => vaultFakes.providers.some((p) => p.id === provider && p.state === "unlocked");
+const vaultSignInReply = (provider: string) => JSON.stringify({ ok: true, state: setVaultState(provider, "unlocked") });
+
 const loginKey = (args: { origin: string; username: string }) => `${args.origin}\n${args.username}`;
 
 const fakeModules = {
@@ -474,7 +515,7 @@ const fakeModules = {
       list: () => ({
         passwords: [...(passwordStores.get(current.device)?.values() ?? [])].map((l) => ({ origin: l.url, username: l.username, created: l.created, modified: l.created })),
       }),
-      unlock: () => ({ unlocked: true }),
+      unlock: () => ({ unlocked: passwordsUnlock.answer }),
       reveal: (args) => ({ password: passwordStores.get(current.device)?.get(loginKey(args))?.password ?? null }),
       remove: (args) => (logins().delete(loginKey(args)), { ok: true }),
       neverSaveOrigins: () => ({ origins: [] }),
@@ -605,6 +646,7 @@ const fakeModules = {
     setSplitLinkModifier: () => null,
     setPeekOtherSiteTabs: () => null,
     setSelectionPopover: () => null,
+    setVaultContextMenu: () => null,
     setBlockAutoplayEverywhere: () => null,
     setCommandScrollZoom: () => null,
     setLittleArdiaOpensNewTabLinks: () => null,
@@ -624,6 +666,92 @@ const fakeModules = {
     passkeyAccess: () => ({ entitled: false, status: "entitlementRequired" }),
     requestPasskeyAccess: () => ({ entitled: false, status: "entitlementRequired" }),
   }),
+  ArdiaVaults: domain(
+    "vaults",
+    {
+      ...generatedVaultHandlers,
+      providers: () => {
+        const listed = vaultFakes.providers;
+        return vaultFakes.providersGate ? vaultFakes.providersGate.then(() => listed) : listed;
+      },
+      claimChromeDropdowns: (args) => {
+        vaultFakes.dropdownClaims.push({ ...args });
+        const { dropdownShowing: showing, dropdownLogins: logins } = vaultFakes;
+        const covered = args.anyLogin || logins.every((login) => args.usernames.includes(login));
+        const hidden = showing.length > 0 && covered && showing.every((kind) => (args.kinds as string[]).includes(kind));
+        if (hidden) Object.assign(vaultFakes, { dropdownShowing: [], dropdownLogins: [] });
+        return { hidden, showing: hidden ? [] : showing, logins: hidden ? [] : logins };
+      },
+      refresh: ({ provider, ardiaProfiles }) => {
+        if (ardiaProfiles) vaultFakes.ardiaProfiles.push([...ardiaProfiles]);
+        return vaultState(provider);
+      },
+      items: ({ provider }) => {
+        const listed = () => vaultFakes.items.filter((i) => (!provider || i.provider === provider) && vaultUnlocked(i.provider));
+        return vaultFakes.itemsGate ? vaultFakes.itemsGate.then(listed) : listed();
+      },
+      lock: ({ provider }) => setVaultState(provider, "locked"),
+      signOut: ({ provider }) => setVaultState(provider, "signedOut"),
+      configure: ({ provider, server }) => {
+        vaultFakes.providers = vaultFakes.providers.map((p) => (p.id === provider ? { ...p, server: server ?? undefined } : p));
+        return vaultState(provider);
+      },
+      copy: ({ provider, id, field }) => (vaultFakes.copied.push({ provider, id, field }), { copied: true, clearsAfter: 90 }),
+      totp: () => {
+        const code = vaultFakes.totpCode;
+        const answer = () => ({ code, period: 30, expiresAt: Date.now() + 30_000 });
+        return vaultFakes.totpGate ? vaultFakes.totpGate.then(answer) : answer();
+      },
+      generate: () => ({ length: 20 }),
+      setOptions: () => ({}),
+      export: ({ provider }) => (vaultFakes.exports.push(provider), vaultFakes.nextExport),
+      sync: () => {
+        vaultFakes.syncs += 1;
+        vaultFakes.syncedAt = Date.now();
+        const synced = vaultFakes.providers.filter((p) => p.state === "unlocked").map((p) => p.id);
+        return { ok: true, synced, failed: [], syncedAt: vaultFakes.syncedAt, iCloud: true };
+      },
+      syncStatus: () => ({ ok: true, synced: [], failed: [], syncedAt: vaultFakes.syncedAt, iCloud: true }),
+      warm: ({ origin }) => (vaultFakes.warmed.push(origin), {}),
+      biometrics: () => ({ available: true }),
+      cancelSignIn: ({ provider }) => (vaultFakes.cancelledSignIns.push(provider), vaultState(provider)),
+      addTotp: (args) => {
+        vaultFakes.addedTotps.push({ ...args });
+        const next = vaultFakes.nextAddTotp;
+        vaultFakes.nextAddTotp = null;
+        if (next) return next;
+        vaultFakes.items = vaultFakes.items.map((i) => (i.provider === args.provider && i.id === args.id ? { ...i, hasTotp: true } : i));
+        const item = vaultFakes.items.find((i) => i.provider === args.provider && i.id === args.id);
+        return item ? { added: true, item } : { added: false, error: "notFound" };
+      },
+      removeTotp: (args) => {
+        vaultFakes.removedTotps.push({ ...args });
+        const next = vaultFakes.nextRemoveTotp;
+        vaultFakes.nextRemoveTotp = null;
+        if (next) return next;
+        vaultFakes.items = vaultFakes.items.map((i) => (i.provider === args.provider && i.id === args.id ? { ...i, hasTotp: false } : i));
+        return { removed: true };
+      },
+      readCode: (args) => (vaultFakes.codeReads.push({ ...args }), vaultFakes.nextCodeRead),
+      forgetCode: ({ token }) => (vaultFakes.forgottenCodes.push(token), {}),
+      copyCode: () => ({ copied: true, clearsAfter: 90 }),
+      ardiaLoginChanged: (args) => (vaultFakes.loginChanges.push({ ...args }), true),
+      importCodes: () => ({ imported: 1 }),
+      dropTouchGrant: () => ({}),
+      copyConcealed: () => ({ copied: true, clearsAfter: 90 }),
+    },
+    {
+      signIn: async (provider: string) => {
+        await vaultFakes.signInGate;
+        return vaultSignInReply(provider);
+      },
+      unlock: async (provider: string, password: string | null, handOnTab: string | null, handOnOrigin: string | null) => {
+        vaultFakes.unlocks.push({ provider, withPassword: password !== null, handOn: handOnTab && handOnOrigin ? { tab: handOnTab, origin: handOnOrigin } : null });
+        await vaultFakes.signInGate;
+        return vaultSignInReply(provider);
+      },
+    },
+  ),
   ArdiaSwipe: {
     haptic: () => {},
     switchPager: () => Promise.resolve(false),

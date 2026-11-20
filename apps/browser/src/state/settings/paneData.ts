@@ -21,6 +21,7 @@ import { getContentBlocker } from "../../platform/contentBlocker";
 import { getDownloadSettings, setDownloadSettings, type DownloadSettings } from "../../platform/downloads";
 import { getExternalAppAllowances, getPreloadPages, getSiteSettingsOrigins, getZoomLevels, setPreloadPages } from "../../platform/siteSettings";
 import { getPasswordAutofill, setPasswordAutofill } from "../../platform/passwords";
+import { noteArdiaOffered } from "../vaults/dropdownPolicy";
 import { orWarn } from "../../lib/fallback";
 import { menuShortcuts } from "../../platform/commands";
 import { setMenuBarShortcuts } from "../commands/commandShortcuts";
@@ -128,10 +129,12 @@ export async function setPreloadPagesFor(profile: string, on: boolean) {
 }
 
 export async function setPasswordAutofillFor(profile: string, on: boolean) {
-  if (!(await forgetPendingOfferToSave(profile, consentToken())) && !on) return;
+  const consent = consentToken();
+  if (!(await forgetPendingOfferToSave(profile, consent)) && !on) return;
   if (!(await written(setPasswordAutofill(on, profile)))) return;
   const now = await getPasswordAutofill(profile).catch(() => on);
   store(passwordAutofill, [profile], now);
+  noteArdiaOffered(profile, now, consent);
   noteAsked(profile, "passwords", on, now);
 }
 

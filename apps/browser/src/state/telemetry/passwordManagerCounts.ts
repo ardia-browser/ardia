@@ -35,7 +35,7 @@ export const noteVerificationCodeSetup = (step: VerificationCodeStep, consent?: 
 
 export const notePasswordManagerRecordFailed = (consent?: ConsentToken | null) => bump(RECORD_FAILED, consent);
 
-export const notePasswordManagerChosen = (kind: PasswordManagerKind) => bump(CHOICE_FIELDS[kind]);
+export const notePasswordManagerChosen = (kind: PasswordManagerKind, consent?: ConsentToken | null) => bump(CHOICE_FIELDS[kind], consent);
 
 export function takePasswordManagerCounts(): Record<string, number> {
   const taken = Object.fromEntries(FIELDS.map((field) => [field, counts[field] ?? 0]));

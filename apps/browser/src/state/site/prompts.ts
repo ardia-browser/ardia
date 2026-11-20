@@ -5,6 +5,7 @@ import type { ExternalAppRequest } from "../../platform/siteSettings";
 import { currentEngineProfile, currentTab } from "../browser/current";
 import { noteExternalApp } from "../telemetry/externalAppCounts";
 import { noteExternalAppRequest } from "../telemetry/track";
+import { vaultClaimsPasswordPrompt } from "../vaults/saveOffer";
 
 async function shouldPromptForPopups(profile: string, origin: string): Promise<boolean> {
   try {
@@ -23,7 +24,7 @@ export function popupBlocked(tabId: string, popup: BlockedPopup) {
 }
 
 export function showPasswordPrompt(tabId: string, prompt: PasswordPrompt) {
-  patchPage(tabId, { passwordPrompt: prompt.state === "saved" ? null : prompt });
+  patchPage(tabId, { passwordPrompt: prompt.state === "saved" || vaultClaimsPasswordPrompt(tabId, prompt) ? null : prompt });
 }
 
 export function showAutofillPrompt(tabId: string, prompt: AutofillPrompt | null, id: number) {

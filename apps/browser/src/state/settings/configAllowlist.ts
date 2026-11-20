@@ -13,11 +13,12 @@ export const CONFIG_SETTING_KEYS: readonly SettingKey[] = [
   "bookmarksImportDismissed", "appearance", "addressBar", "compactToolbar", "addressBarButtons", "borderlessMode", "tabCornerRadius", "minimalismMode", "pageFrame", "pageFrameZeroInFullScreen", "pageFrameZeroWhenTabsHidden", "commandBarPlacement", "spacesFollowAppearance",
   "showProfileDots", "profileSwitcherIcons", "compactCliPill", "shortcuts", "openLinksInLittleArdia", "littleArdiaOpensNewTabLinks", "littleArdiaSize",
   "omniboxProviders", "launchActions", "commandBarStart", "readerTextSize", "readerFont",
+  "vaultSuggestOnFocus", "vaultSuggestLogins", "vaultSuggestCodes", "vaultSuggestUsernames", "vaultSuggestNewPasswords", "vaultSuggestGenerated", "vaultMenuGlass", "vaultSaveOffer", "vaultAutoSave", "vaultContextGenerate", "vaultSaveTarget", "vaultPasskeySource",
 ];
 
 export const CONFIG_EXCLUDED_KEYS: readonly SettingKey[] = [
   "customSearchUrl", "newTabUrl", "customSearchEngines", "extensionSearchEngines", "allowJavaScriptFromAppleEvents", "cliControl", "defaultProfileId",
-  "pageEngine", "websiteEngines", "protectedVideoInWebKit",
+  "pageEngine", "websiteEngines", "protectedVideoInWebKit", "vaultAskBeforeFilling", "vaultIdleLockMinutes", "vaultICloudSync", "vaultLockOnQuit", "vaultLockOnScreenLock", "vaultPasskeyExtensions", "vaultTouchID", "vaultKeepGenerated",
 ];
 
 const ALLOWED: ReadonlySet<string> = new Set(CONFIG_SETTING_KEYS);

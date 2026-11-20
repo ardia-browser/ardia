@@ -75,15 +75,28 @@ export function neverChosenProfiles(s: ChoiceState): string[] {
 
 export type ProviderState = ChoiceState & Pick<Parameters<typeof engineProfile>[0], "profiles">;
 
-export type FieldProviderEntry = { profile: string; fields: ManagerPlugin["spec"]["fields"]; codeSetup: boolean };
+export type FieldProviderFill = "system" | "menu";
+export type FieldProviderEntry = { profile: string; fields: ManagerPlugin["spec"]["fields"]; codeSetup: boolean; fill: FieldProviderFill };
+export type ArdiaSource = (profileId: string, engineProfile: string) => boolean;
 
-export function fieldProviderSet(s: ProviderState, plugins: readonly ManagerPlugin[]): { providers: FieldProviderEntry[]; key: string } {
+const ARDIA_FIELDS: FieldProviderEntry["fields"] = ["login", "oneTimeCode"];
+
+function entryFor(s: ProviderState, plugins: readonly ManagerPlugin[], id: string, ardiaSource: ArdiaSource | undefined): { entry: FieldProviderEntry; by: string } | null {
+  const choice = profilePasswordManager(s, plugins, id);
+  const profile = engineProfile(s, id);
+  if (choice === "ardia") return ardiaSource?.(id, profile) ? { entry: { profile, fields: [...ARDIA_FIELDS], codeSetup: false, fill: "menu" }, by: "ardia" } : null;
+  const plugin = managerPluginOf(plugins, choice);
+  if (!plugin || plugin.spec.fill !== "system") return null;
+  return { entry: { profile, fields: [...plugin.spec.fields], codeSetup: plugin.spec.verificationCodeSetup === "system", fill: "system" }, by: `${plugin.name}:${plugin.approval}` };
+}
+
+export function fieldProviderSet(s: ProviderState, plugins: readonly ManagerPlugin[], ardiaSource?: ArdiaSource): { providers: FieldProviderEntry[]; key: string } {
   const byEngine = new Map<string, { entry: FieldProviderEntry; by: string }>();
   for (const id of Object.keys(s.profiles).sort()) {
-    const plugin = managerPluginOf(plugins, profilePasswordManager(s, plugins, id));
-    if (!plugin || plugin.spec.fill !== "system") continue;
     const profile = engineProfile(s, id);
-    if (!byEngine.has(profile)) byEngine.set(profile, { entry: { profile, fields: [...plugin.spec.fields], codeSetup: plugin.spec.verificationCodeSetup === "system" }, by: `${plugin.name}:${plugin.approval}` });
+    if (byEngine.has(profile)) continue;
+    const found = entryFor(s, plugins, id, ardiaSource);
+    if (found) byEngine.set(profile, found);
   }
   const sorted = [...byEngine.values()].sort((a, b) => (a.entry.profile < b.entry.profile ? -1 : a.entry.profile > b.entry.profile ? 1 : 0));
   return { providers: sorted.map((x) => x.entry), key: JSON.stringify(sorted) };

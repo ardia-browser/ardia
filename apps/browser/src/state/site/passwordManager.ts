@@ -1,13 +1,18 @@
+import { create } from "zustand";
 import { setFieldProviders, showSystemPanel, type FieldProviderOpened, type VerificationCodeFound } from "../../platform/passwordProviders";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { warnFor } from "../telemetry/consoleConsent";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { engineProfile } from "../browser/model";
+import { tabEngine } from "../engines/engines";
 import { usePages } from "../tabs/pageState";
 import { useShallow } from "zustand/react/shallow";
 import { beforePluginsCommit, beforePluginsWithdraw, onPluginWithdrawAbandoned, usePlugins, recordOf, activeManifest, type PluginsCommit } from "../plugins/store";
 import { notePasswordManagerChosen, notePasswordPanel } from "../telemetry/passwordManagerCounts";
+import { confirmLeavingArdia } from "../vaults/settingsGuard";
+import { setConsentPreflight, type ConsentOwner } from "../plugins/consentSurface";
+import { vaultsOnForProfile } from "../vaults/enabled";
 import {
   choiceKind,
   fieldProviderSet,
@@ -20,6 +25,8 @@ import {
   profilesSharingData,
   regularProfileId,
   storedPasswordManager,
+  type ArdiaSource,
+  type FieldProviderFill,
   type ManagerPlugin,
   type PasswordManagerChoice,
 } from "./passwordManagerChoice";
@@ -79,10 +86,40 @@ export function useNeverChosenCount(): number {
 
 export const neverChosenCount = () => neverChosenProfiles(browser()).length;
 
-export function choosePasswordManager(profileId: string, manager: PasswordManagerChoice) {
+export function choosePasswordManager(profileId: string, manager: PasswordManagerChoice, consent?: ConsentToken | null) {
   const s = browser();
-  notePasswordManagerChosen(choiceKind(manager));
+  notePasswordManagerChosen(choiceKind(manager), consent);
   for (const id of profilesSharingData(s, profileId)) s.updateProfile(id, { passwordManager: manager });
+}
+
+const leavesArdia = (profileId: string, manager: PasswordManagerChoice) =>
+  PLATFORM_FEATURES.systemPasswordManagers && manager !== "ardia" && currentPasswordManager(profileId) === "ardia";
+
+export async function choosePasswordManagerChecked(profileId: string, manager: PasswordManagerChoice): Promise<boolean> {
+  const consent = consentToken();
+  if (leavesArdia(profileId, manager) && !(await confirmLeavingArdia())) return false;
+  if (!browser().profiles[regularProfileId(profileId)]) return false;
+  choosePasswordManager(profileId, manager, consent);
+  return true;
+}
+
+export function recordArdiaChoice(profileId: string): boolean {
+  const s = browser();
+  if (!pluginsView().scanned || !s.profiles[regularProfileId(profileId)] || storedPasswordManager(s, profileId) !== undefined || !vaultsOnForProfile(profileId)) return false;
+  for (const id of profilesSharingData(s, profileId)) s.updateProfile(id, { passwordManager: "ardia" });
+  return true;
+}
+
+function keepNeverChosenOnArdia(name: string, owner: ConsentOwner): Promise<void> | null {
+  const listing = pluginsView().listings[name];
+  if (owner === "onboarding" || !listing?.bundled || !listing.manifest?.passwordManager) return null;
+  const staying = neverChosenProfiles(browser()).filter((id) => currentPasswordManager(id) === "ardia");
+  if (!staying.length) return null;
+  return confirmLeavingArdia().then((confirmed) => {
+    if (confirmed) return;
+    const s = browser();
+    for (const id of staying) if (s.profiles[id] && storedPasswordManager(s, id) === undefined) for (const member of profilesSharingData(s, id)) s.updateProfile(member, { passwordManager: "ardia" });
+  });
 }
 
 function adoptNeverChosen(name: string) {
@@ -150,8 +187,24 @@ function want(key: string) {
   return wanted;
 }
 
+let ardiaSource: ArdiaSource | undefined;
+let resync: (() => void) | null = null;
+
+export function connectArdiaSource(source: ArdiaSource) {
+  ardiaSource = source;
+  resync?.();
+}
+
+export const refreshFieldProviders = () => resync?.();
+
+type ProviderModes = { modes: Readonly<Record<string, FieldProviderFill>> };
+
+export const useFieldProviderModes = create<ProviderModes>()(() => ({ modes: {} }));
+
+const modesOf = (providers: readonly { profile: string; fill: FieldProviderFill }[]) => Object.fromEntries(providers.map((p) => [p.profile, p.fill]));
+
 function pushProviders(plugins: readonly ManagerPlugin[], consent: ConsentToken | null, again = false): Promise<void> {
-  const { providers, key } = fieldProviderSet(browser(), plugins);
+  const { providers, key } = fieldProviderSet(browser(), plugins, ardiaSource);
   if (!again && key === pushed && inFlight === null) return Promise.resolve();
   const target = want(key);
   if (!again && inFlight === key) return target.confirmed;
@@ -171,6 +224,7 @@ function pushProviders(plugins: readonly ManagerPlugin[], consent: ConsentToken 
     pushed = key;
     attempts = 0;
     clearTimeout(retry);
+    useFieldProviderModes.setState({ modes: modesOf(providers) });
     target.confirm();
   };
   void setFieldProviders(sent, providers).then(
@@ -273,6 +327,8 @@ export function startPasswordManager() {
     syncReady();
   };
 
+  resync = syncModes;
+  setConsentPreflight(keepNeverChosenOnArdia);
   begin();
   usePlugins.subscribe((s, prev) => {
     if (!ready) return begin();
@@ -299,6 +355,19 @@ export function fieldProviderOpened(event: FieldProviderOpened) {
 export async function openSystemPanel(tabId: string): Promise<boolean> {
   const result = await showSystemPanel(tabId, generation).catch(() => null);
   return !!result?.shown;
+}
+
+const fillOf = (modes: ProviderModes["modes"], s: BrowserState, tabId: string): FieldProviderFill | null => {
+  const tab = s.tabs[tabId];
+  const fill = tab ? (modes[engineProfile(s, regularProfileId(tab.profileId))] ?? null) : null;
+  return fill === "menu" && tabEngine(s, tabId) !== "chromium" ? null : fill;
+};
+
+export const fieldProviderFillOfTab = (tabId: string) => fillOf(useFieldProviderModes.getState().modes, browser(), tabId);
+
+export function useFieldProviderFillOfTab(tabId: string): FieldProviderFill | null {
+  const modes = useFieldProviderModes((m) => m.modes);
+  return useBrowser((s) => fillOf(modes, s, tabId));
 }
 
 export function passwordManagerSnapshot(): Record<string, string> | null {

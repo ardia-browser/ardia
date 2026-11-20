@@ -58,7 +58,23 @@ const owns = (owner: ConsentOwner, id: number) => {
 
 export const CONFIRM_REFUSED = "Can't install it right now.";
 
+type ConsentPreflight = (name: string, owner: ConsentOwner) => Promise<void> | null;
+let preflight: ConsentPreflight | null = null;
+
+export const setConsentPreflight = (check: ConsentPreflight | null) => void (preflight = check);
+
 export function confirmConsentAs(owner: ConsentOwner, id: number): boolean {
+  if (!owns(owner, id)) return false;
+  const waiting = preflight?.(currentPlugins().consent!.name, owner) ?? null;
+  if (!waiting) return confirmNow(owner, id);
+  void waiting.then(
+    () => owns(owner, id) && confirmNow(owner, id),
+    () => owns(owner, id) && confirmNow(owner, id),
+  );
+  return false;
+}
+
+function confirmNow(owner: ConsentOwner, id: number): boolean {
   if (!owns(owner, id)) return false;
   if (confirmConsentRequest(id)) return true;
   const still = currentPlugins().consent;

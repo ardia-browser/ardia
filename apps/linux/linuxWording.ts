@@ -49,6 +49,7 @@ export const LINUX_WORDING: readonly Wording[] = [
     file: "state/telemetry/copy.ts",
     replacements: [
       ...[PHRASES_ONLY_WITH.freezeWatch ?? []].flat().map((phrase): [string, string] => [phrase, ""]),
+      ["\"How many times password managers read a stored key from the keychain or from memory, skipped rewriting an unchanged one, and called the older login keychain, summed up once an hour. Never the keys or which manager\",\n", ""],
       ["how many tab changes this Mac sent,", "how many tab changes this computer sent,"],
       ["Sent to ardia.dev with a random ID made on this Mac, and kept", "Sent to ardia.dev with a random ID made on this computer, and kept"],
       [`keptOnThisMac: "Kept on this Mac"`, `keptOnThisMac: "Kept on this computer"`],

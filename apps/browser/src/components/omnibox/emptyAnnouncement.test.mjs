@@ -30,3 +30,15 @@ test("after real rows show, a new empty state is announced again", () => {
 test("another provider's empty state is announced", () => {
   assert.deepEqual(steps([["No results from Notes", false], ["No results from Wiki", false]]), ["No results from Notes", "No results from Wiki"]);
 });
+
+test("the live region gets the text when the empty state appears, keeps it while queries are pending and empties when rows come back", () => {
+  const empty = "No results from Notes";
+  const frames = [[null, false], [empty, false], [null, false], [empty, false], [null, true], [null, false]];
+  let announced = null;
+  const region = [];
+  for (const [shown, hasRows] of frames) {
+    announced = emptyAnnouncement(announced, shown, hasRows).announced;
+    region.push(announced ?? "");
+  }
+  assert.deepEqual(region, ["", empty, empty, empty, "", ""]);
+});

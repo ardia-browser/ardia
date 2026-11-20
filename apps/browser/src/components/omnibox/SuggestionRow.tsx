@@ -1,11 +1,12 @@
 import { displayHost, displayUrl, hostOf, type Suggestion } from "@ardia/core";
-import { memo, useEffect, useRef } from "react";
+import { memo, useEffect, useState } from "react";
 import { AccessibilityInfo, Image, Pressable, Text as NativeText, View } from "react-native";
-import { Button, Symbol, Text, useHover, useTheme, withAlpha, type Theme } from "../ui";
+import { Button, LiveRegion, Symbol, Text, useHover, useTheme, withAlpha, type Theme } from "../ui";
 import { Favicon, LocalFileIcon } from "../favicon/Favicon";
 import { filePathLabel, fullFilePath, isLocalFileUrl } from "../../lib/url";
 import { SELECTED_SUGGESTION_ALPHA, SUGGESTION } from "./tokens";
 import { emptyAnnouncement } from "./emptyAnnouncement";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 
 const ICON_BOX = { width: SUGGESTION.iconBox, height: SUGGESTION.iconBox } as const;
 const NO_SHRINK = { flexShrink: 0 } as const;
@@ -85,33 +86,41 @@ export const SuggestionList = memo(function SuggestionList({
   dropdown: boolean;
   actions: RowActions;
 }) {
-  const announced = useRef<string | null>(null);
+  const [announced, setAnnounced] = useState<string | null>(null);
   useEffect(() => {
-    const step = emptyAnnouncement(announced.current, items.length ? null : empty, items.length > 0);
-    announced.current = step.announced;
-    if (step.say) AccessibilityInfo.announceForAccessibility(step.say);
+    const step = emptyAnnouncement(announced, items.length ? null : empty, items.length > 0);
+    if (step.announced !== announced) setAnnounced(step.announced);
+    if (step.say && PLATFORM_FEATURES.announcesByCall) AccessibilityInfo.announceForAccessibility(step.say);
   }, [empty, items.length]);
   const frame = { paddingHorizontal: dropdown ? SUGGESTION.dropdownListX : SUGGESTION.listX, paddingBottom: dropdown ? SUGGESTION.dropdownListBelow : SUGGESTION.listBelow };
-  if (!items.length) return empty ? <View style={frame}><EmptyRow text={empty} /></View> : null;
   return (
-    <View style={frame}>
-      {items.map((s, i) => (
-        <SuggestionRow
-          key={i}
-          suggestion={s}
-          selected={i === selectedIndex}
-          scopeHint={i === 0 ? scopeHint : null}
-          actions={actions}
-        />
-      ))}
-    </View>
+    <>
+      <LiveRegion text={announced ?? ""} />
+      {items.length ? (
+        <View style={frame}>
+          {items.map((s, i) => (
+            <SuggestionRow
+              key={i}
+              suggestion={s}
+              selected={i === selectedIndex}
+              scopeHint={i === 0 ? scopeHint : null}
+              actions={actions}
+            />
+          ))}
+        </View>
+      ) : empty ? (
+        <View style={frame}>
+          <EmptyRow text={empty} />
+        </View>
+      ) : null}
+    </>
   );
 });
 
 function EmptyRow({ text }: { text: string }) {
   const theme = useTheme();
   return (
-    <View accessibilityRole="text" accessibilityLiveRegion="polite" style={EMPTY_ROW}>
+    <View accessibilityRole="text" style={EMPTY_ROW}>
       <Symbol name="magnifyingglass" size={SUGGESTION.icon} color={theme.textSecondary} style={ICON_BOX} />
       <Text lines={1} size="title" tone="textSecondary" style={{ flexShrink: 1 }}>{text}</Text>
     </View>

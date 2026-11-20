@@ -13,6 +13,7 @@ export { HoverSlot } from "./HoverSlot";
 export { IconTile } from "./IconTile";
 export { KeyCap } from "./KeyCap";
 export { ListRow, type ListRowState } from "./ListRow";
+export { LiveRegion } from "./LiveRegion";
 export { MenuRow, menuRowFill, MenuSeparator } from "./Menu";
 export { Panel, type PanelProps, type PanelShadow } from "./Panel";
 export { PinchArea, pinchSettle } from "./PinchArea";

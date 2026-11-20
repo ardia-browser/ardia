@@ -167,6 +167,8 @@ export function autoHidesTabsIn(s: Pick<BrowserState, "windows" | "settings">, w
   return (windowId ? s.windows[windowId]?.autoHideTabs : undefined) ?? s.settings.autoHideTabs;
 }
 
+export const autoHidesTabsInFocused = (s: BrowserState): boolean => autoHidesTabsIn(s, resolveWindowId(s));
+
 export function tabsShownIn(s: Pick<BrowserState, "windows" | "settings">, windowId?: string | null): boolean {
   return !autoHidesTabsIn(s, windowId) && !(windowId && s.windows[windowId]?.kind === "small");
 }

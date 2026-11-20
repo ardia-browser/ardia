@@ -15,7 +15,7 @@ import type {
 import type { ExternalAppAllowance, PermissionRequest, PermissionResult } from "../permissions";
 import type { BrowsingDataType } from "../profiles";
 import type { ChromeWindowState } from "../windows";
-import type { FieldProviderProfile, PasswordExportStatus, SavedPassword, SystemPanelResult, VerificationCodeSetupResult } from "../passwords";
+import type { FieldProviderProfile, PasswordExportStatus, SavedPassword, SystemPanelResult, SystemPanelVia, VerificationCodeSetupResult } from "../passwords";
 import type { ClearSiteDataResult, SiteSettings, SiteSettingType, SiteSettingValue } from "../siteSettings";
 import type { LinkRoute, TabStripCommand, TabStripTransaction, WindowRequest } from "../tabs";
 import type { PageCookie, PageEngine, PasskeyAccess } from "../webkit";
@@ -105,7 +105,7 @@ export type EngineCalls = {
   "passwords.autofillEnabled": [Profile, boolean];
   "passwords.setAutofillEnabled": [Profile & { enabled: boolean }, null];
   "passwords.setFieldProviders": [{ session: string; generation: number; profiles: FieldProviderProfile[] }, { applied: boolean }];
-  "passwords.showSystemPanel": [{ tab: string; generation?: number }, SystemPanelResult];
+  "passwords.showSystemPanel": [{ tab: string; generation?: number; via?: SystemPanelVia }, SystemPanelResult];
   "passwords.systemPanelAvailable": [{}, { chromium: boolean; webkit: boolean }];
   "passwords.otpauthHandler": [{}, { app: string | null }];
   "passwords.setUpVerificationCode": [{ tab: string; token: string; generation?: number }, VerificationCodeSetupResult];

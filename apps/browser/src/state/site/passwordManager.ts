@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { setFieldProviders, showSystemPanel, type FieldProviderOpened, type VerificationCodeFound } from "../../platform/passwordProviders";
+import { setFieldProviders, showSystemPanel, type FieldProviderOpened, type SystemPanelVia, type VerificationCodeFound } from "../../platform/passwordProviders";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { warnFor } from "../telemetry/consoleConsent";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
@@ -10,6 +10,7 @@ import { usePages } from "../tabs/pageState";
 import { useShallow } from "zustand/react/shallow";
 import { beforePluginsCommit, beforePluginsWithdraw, onPluginWithdrawAbandoned, usePlugins, recordOf, activeManifest, type PluginsCommit } from "../plugins/store";
 import { notePasswordManagerChosen, notePasswordPanel } from "../telemetry/passwordManagerCounts";
+import { toggleVaultMenuFromBadge } from "../vaults/menu";
 import { confirmLeavingArdia } from "../vaults/settingsGuard";
 import { setConsentPreflight, type ConsentOwner } from "../plugins/consentSurface";
 import { vaultsOnForProfile } from "../vaults/enabled";
@@ -352,8 +353,8 @@ export function fieldProviderOpened(event: FieldProviderOpened) {
   if (event?.via === "badge" || event?.via === "menu") notePasswordPanel(event.via, event.shown === true);
 }
 
-export async function openSystemPanel(tabId: string): Promise<boolean> {
-  const result = await showSystemPanel(tabId, generation).catch(() => null);
+export async function openSystemPanel(tabId: string, via: SystemPanelVia = "menu"): Promise<boolean> {
+  const result = await showSystemPanel(tabId, generation, via).catch(() => null);
   return !!result?.shown;
 }
 
@@ -368,6 +369,13 @@ export const fieldProviderFillOfTab = (tabId: string) => fillOf(useFieldProvider
 export function useFieldProviderFillOfTab(tabId: string): FieldProviderFill | null {
   const modes = useFieldProviderModes((m) => m.modes);
   return useBrowser((s) => fillOf(modes, s, tabId));
+}
+
+export function pressFieldProviderKey(tabId: string): "opened" | "closed" | null {
+  const fill = fieldProviderFillOfTab(tabId);
+  if (fill === "menu") return toggleVaultMenuFromBadge(tabId);
+  if (fill === "system") void openSystemPanel(tabId, "badge");
+  return null;
 }
 
 export function passwordManagerSnapshot(): Record<string, string> | null {

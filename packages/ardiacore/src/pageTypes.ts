@@ -3,7 +3,7 @@ import type { ExternalAppRequest } from "./permissions";
 import type { FaviconImage } from "./favicons";
 import type { PageCookie, PageEngine } from "./webkit";
 import type { VaultEditResult } from "./vaults";
-import type { VaultPasswordStyle, VaultFillRequest, VaultFillTarget, VaultContextField, VaultContextAction, VaultContextMenu, VaultCodeFound, VaultCodeAction, VaultCodeMenu, VaultFillResult, VaultSaveRequest, VaultPasswordDraft, VaultSaveResult, VaultUpdateRequest } from "./pageVaultTypes";
+import type { VaultField, VaultKeyPress, VaultSubmission, VaultLoginOutcome, VaultLoginPage, VaultPasswordStyle, VaultFillRequest, VaultFillTarget, VaultContextField, VaultContextAction, VaultContextMenu, VaultCodeFound, VaultCodeAction, VaultCodeMenu, VaultFillResult, VaultSaveRequest, VaultPasswordDraft, VaultSaveResult, VaultUpdateRequest } from "./pageVaultTypes";
 
 export type * from "./pageVaultTypes";
 
@@ -240,6 +240,11 @@ export type WebViewProps = ViewProps & {
   onAutofillPrompt?: (prompt: AutofillPrompt | null, id: number) => void;
   onExternalApp?: (request: ExternalAppRequest) => void;
   onPreferredSize?: (size: { width: number; height: number }) => void;
+  onVaultField?: (field: VaultField) => void;
+  onVaultKey?: (press: VaultKeyPress) => void;
+  onVaultSubmitted?: (submission: VaultSubmission) => void;
+  onVaultLoginOutcome?: (outcome: VaultLoginOutcome) => void;
+  onVaultLoginPage?: (page: VaultLoginPage) => void;
   onVaultContext?: (field: VaultContextField) => void;
   onVaultContextAction?: (action: VaultContextAction) => void;
   onVaultCode?: (code: VaultCodeFound) => void;

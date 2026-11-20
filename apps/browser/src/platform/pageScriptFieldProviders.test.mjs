@@ -10,6 +10,8 @@ const end = script.indexOf(END, start);
 assert.ok(start > 0 && end > start, "page_script.js has the field provider kit where WebKitPageScript.swift slices it");
 const fieldProviderKit = new Function(`${script.slice(start, end)}\nreturn fieldProviderKit;`)();
 
+const FIELD = { left: 40, top: 40, height: 32 };
+
 const LOGIN = { login: true, oneTimeCode: true, codeSetup: true, generation: 1 };
 
 function input(attrs = {}) {
@@ -26,8 +28,9 @@ function input(attrs = {}) {
     parentElement: attrs.ownToggle ? toggleScope() : null,
     width: attrs.width ?? 240,
     getAttribute: (name) => attrs[name] ?? null,
+    style: attrs.style ?? {},
     getBoundingClientRect() {
-      return { width: this.width, height: 32 };
+      return { left: FIELD.left, top: FIELD.top, width: this.width, height: FIELD.height, right: FIELD.left + this.width, bottom: FIELD.top + FIELD.height };
     },
   };
 }
@@ -67,13 +70,27 @@ function link(href) {
 
 const INTRINSICS = { charCodeAt: String.prototype.charCodeAt, promiseThen: Promise.prototype.then, imul: Math.imul };
 
-const KEY_BOX = { left: 286, top: 47, size: 24, width: 34, color: "black" };
+const GEOMETRY = {
+  rectOf: (el) => el.getBoundingClientRect(),
+  styleOf: (el) => el.style ?? {},
+  styleValue: (style, name) => (style && style[name]) || "",
+  parentOf: (el) => el.parentElement ?? null,
+  hitAt: (doc, x, y) => (doc && doc.hit ? doc.hit(x, y) : null),
+  contains: () => false,
+  closest: () => null,
+  labelControl: () => null,
+  ownerDocumentOf: () => null,
+  formOf: () => null,
+  queryAll: () => [],
+  viewport: null,
+  pinch: () => null,
+};
 
 function frame({ barcodes = true, timers = null, isTop = true, toRGBA = () => null } = {}) {
   const sent = [];
   const listeners = {};
   const windowListeners = {};
-  const keys = [];
+  const frames = [];
   const observers = [];
   const detected = [];
   let detectors = 0;
@@ -89,7 +106,7 @@ function frame({ barcodes = true, timers = null, isTop = true, toRGBA = () => nu
     },
     querySelectorAll: (selector) => (selector === "img, canvas" ? document.images : selector === 'a[href^="otpauth" i]' ? document.links : []),
     querySelector: (selector) => (selector === "input" ? {} : null),
-    documentElement: { appendChild: (host) => (host.isConnected = true) },
+    documentElement: { appendChild: () => assert.fail("the kit never adds anything to the page") },
   };
   class BarcodeDetector {
     constructor(options) {
@@ -117,12 +134,6 @@ function frame({ barcodes = true, timers = null, isTop = true, toRGBA = () => nu
       this.observing = false;
     }
   }
-  const makeKey = () => {
-    const host = { style: {}, isConnected: false };
-    const button = { style: {}, attrs: {}, handlers: {}, setAttribute: (k, v) => (button.attrs[k] = v), addEventListener: (t, fn) => (button.handlers[t] = fn) };
-    keys.push({ host, button });
-    return { host, button };
-  };
   const kit = fieldProviderKit({
     document,
     send: (kind, data) => sent.push({ kind, data }),
@@ -137,11 +148,9 @@ function frame({ barcodes = true, timers = null, isTop = true, toRGBA = () => nu
     FrameMutationObserver: MutationObserver,
     setTimeout: timers ? (fn, ms) => timers.push({ fn, ms }) : (fn) => fn(),
     addEventListener: (type, fn) => (windowListeners[type] ??= []).push(fn),
-    requestAnimationFrame: () => {},
+    requestAnimationFrame: (fn) => frames.push(fn),
     isTop,
-    makeKey,
-    keyRect: () => KEY_BOX,
-    intrinsics: { ...INTRINSICS, Detector: barcodes ? BarcodeDetector : null, detect: BarcodeDetector.prototype.detect, toRGBA },
+    intrinsics: { ...INTRINSICS, ...GEOMETRY, Detector: barcodes ? BarcodeDetector : null, detect: BarcodeDetector.prototype.detect, toRGBA },
   });
   const fire = (type, event) => {
     for (const fn of listeners[type] ?? []) fn(event);
@@ -154,10 +163,11 @@ function frame({ barcodes = true, timers = null, isTop = true, toRGBA = () => nu
     el.value = value;
     fire("input", { target: el, isTrusted: trusted });
   };
-  const key = () => keys[0];
-  const keyShown = () => key()?.host.style.display === "block";
-  const click = (trusted, timeStamp, at = { clientX: KEY_BOX.left + 17, clientY: KEY_BOX.top + 12 }) =>
-    key().button.handlers.click({ isTrusted: trusted, timeStamp, ...at, preventDefault() {}, stopPropagation() {} });
+  const badges = () => sent.filter((m) => m.kind === "vaultField").map((m) => m.data);
+  const badgeShown = () => badges().at(-1)?.focused === true;
+  const runFrames = () => {
+    for (const fn of frames.splice(0)) fn();
+  };
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
   return {
     ...kit,
@@ -171,12 +181,12 @@ function frame({ barcodes = true, timers = null, isTop = true, toRGBA = () => nu
     detected,
     focus,
     type,
-    key,
-    keyShown,
-    click,
+    badges,
+    badgeShown,
+    runFrames,
+    frames,
     settle,
     reveal: (el) => (revealedField = el),
-    clicks: () => sent.filter((m) => m.kind === "fieldProvider"),
     codes: () => sent.filter((m) => m.kind === "verificationCode"),
     focusReports: () => sent.filter((m) => m.kind === "fieldFocus"),
     get detectors() {
@@ -218,7 +228,7 @@ test("login fields are classified by type, autocomplete and the form around them
   assert.equal(loginFieldKind(number, null), null);
 });
 
-test("disabled, readonly, hidden and narrow fields get no key", () => {
+test("disabled, readonly, hidden and narrow fields are not login fields", () => {
   const { loginFieldKind } = frame();
   assert.equal(loginFieldKind(input({ type: "password", readOnly: true }), null), null);
   assert.equal(loginFieldKind(input({ type: "password", disabled: true }), null), null);
@@ -257,80 +267,134 @@ test("with no provider nothing listens, scans, reports or shows", async () => {
   assert.deepEqual(Object.keys(page.windowListeners), []);
   assert.equal(page.observers.length, 0);
   assert.equal(page.detectors, 0);
-  assert.equal(page.key(), undefined);
   assert.deepEqual(page.sent, []);
 });
 
-test("the key asks for the panel only on a trusted click inside it, once per 600 ms, with the generation", () => {
+test("a focused login field is reported with its on-screen geometry for the native badge, never drawn in the page", () => {
   const page = frame();
   page.configure(LOGIN);
-  page.focus(input({ type: "password" }));
-  assert.equal(page.keyShown(), true);
-  assert.equal(page.key().button.attrs["aria-label"], "Fill from Passwords");
-
-  page.click(false, 1000);
-  assert.deepEqual(page.clicks(), []);
-  page.click(true, 1000);
-  page.click(true, 1500);
-  page.click(true, 1700);
-  page.click(true, 2000, { clientX: 20, clientY: 20 });
-  assert.deepEqual(page.clicks(), [
-    { kind: "fieldProvider", data: { field: "password", generation: 1 } },
-    { kind: "fieldProvider", data: { field: "password", generation: 1 } },
+  const password = input({ type: "password", autocomplete: "current-password webauthn", style: { "padding-right": "6px", "border-right-width": "1px", "background-color": "rgb(13, 17, 23)", "border-top-color": "rgb(220, 38, 38)" } });
+  page.focus(password);
+  assert.deepEqual(page.badges(), [
+    {
+      kind: "password",
+      focused: true,
+      rect: { x: 40, y: 40, width: 240, height: 32 },
+      formHasPassword: true,
+      maxLength: 0,
+      email: false,
+      clicked: false,
+      auto: false,
+      rtl: false,
+      darkField: true,
+      brandColor: "#dc2626",
+      trailingTaken: false,
+      inset: { top: 0, bottom: 0, trailing: 7 },
+      webauthn: true,
+    },
   ]);
   page.focus(input({ autocomplete: "one-time-code" }));
-  page.click(true, 3000);
-  assert.deepEqual(page.clicks().at(-1), { kind: "fieldProvider", data: { field: "code", generation: 1 } });
+  assert.deepEqual(page.badges().slice(1).map((b) => [b.kind, b.focused]), [["password", false], ["otp", true]]);
+  assert.deepEqual(page.sent.filter((m) => m.kind === "fieldProvider"), [], "the page has no press to send");
 });
 
-test("a provider for codes only shows the key in code fields, and one for logins only in login fields", () => {
+test("a right-to-left field measures its inset from the left, and a control under the trailing edge takes the badge's place", () => {
+  const page = frame();
+  page.configure(LOGIN);
+  const rtl = input({ type: "password", style: { direction: "rtl", "padding-left": "9px" } });
+  page.focus(rtl);
+  assert.deepEqual([page.badges().at(-1).rtl, page.badges().at(-1).inset.trailing], [true, 9]);
+  const eye = {};
+  page.document.hit = (x, y) => (x === FIELD.left + 240 - 14 && y === FIELD.top + 16 ? eye : null);
+  page.focus(input({ type: "password" }));
+  assert.equal(page.badges().at(-1).trailingTaken, true);
+  page.document.hit = () => null;
+  page.focus(input({ type: "password", style: { "background-image": "url(icon.svg)", "padding-right": "28px" } }));
+  assert.equal(page.badges().at(-1).trailingTaken, true, "a site icon painted in a wide trailing padding counts too");
+  page.focus(input({ type: "password", style: { "padding-right": "28px" } }));
+  assert.equal(page.badges().at(-1).trailingTaken, false);
+});
+
+test("a provider for codes only reports code fields, and one for logins only login fields", () => {
   const page = frame();
   page.configure({ login: false, oneTimeCode: true, codeSetup: false, generation: 2 });
   page.focus(input({ type: "password" }));
-  assert.equal(page.keyShown(), false);
+  assert.equal(page.badgeShown(), false);
   page.focus(input({ autocomplete: "one-time-code" }));
-  assert.equal(page.keyShown(), true);
+  assert.equal(page.badgeShown(), true);
   page.configure({ login: true, oneTimeCode: false, codeSetup: false, generation: 3 });
-  assert.equal(page.keyShown(), false);
+  assert.equal(page.badgeShown(), false);
   page.focus(input({ type: "email" }));
-  assert.equal(page.keyShown(), true);
+  assert.equal(page.badgeShown(), true);
 });
 
-test("the key gives way once the user types, and comes back for filled-in values", () => {
+test("typing, scrolling and resizing re-measure the badge once per frame, and an unchanged field sends nothing", () => {
   const page = frame();
   page.configure(LOGIN);
-  const password = input({ type: "password", value: "prefilled" });
+  const password = input({ type: "password" });
   page.focus(password);
-  assert.equal(page.keyShown(), true);
-  page.type(password, "hunter2");
-  assert.equal(page.keyShown(), false);
-  page.type(password, "");
-  assert.equal(page.keyShown(), true);
-  const email = input({ type: "email" });
-  page.focus(email);
-  page.type(email, "me@example.com");
-  assert.equal(page.keyShown(), false);
-  page.type(email, "", true);
-  page.type(email, "filled@example.com", false);
-  assert.equal(page.keyShown(), true);
-  page.focus(input({ type: "password", ownToggle: true }));
-  assert.equal(page.keyShown(), false);
+  const reported = page.badges().length;
+  page.type(password, "a");
+  for (const fn of page.windowListeners.scroll ?? []) fn({});
+  for (const fn of page.windowListeners.resize ?? []) fn({});
+  assert.equal(page.frames.length, 1);
+  page.runFrames();
+  assert.equal(page.badges().length, reported, "nothing moved");
+  password.width = 300;
+  for (const fn of page.windowListeners.scroll ?? []) fn({});
+  page.runFrames();
+  assert.deepEqual(page.badges().at(-1).rect, { x: 40, y: 40, width: 300, height: 32 });
   page.focus(input({ name: "q" }));
-  assert.equal(page.keyShown(), false);
+  assert.equal(page.badgeShown(), false);
 });
 
-test("removing the provider hides the key live and stops it sending", () => {
+test("removing the provider hides the badge live and stops reporting", () => {
   const page = frame();
   page.configure(LOGIN);
   page.focus(input({ type: "password" }));
   assert.equal(page.observers[0].observing, true);
+  assert.equal(page.badgeShown(), true);
   page.configure(false);
-  assert.equal(page.keyShown(), false);
+  assert.equal(page.badgeShown(), false);
   assert.equal(page.observers[0].observing, false);
+  const count = page.badges().length;
   page.focus(input({ type: "password" }));
-  assert.equal(page.keyShown(), false);
-  page.click(true, 5000);
-  assert.deepEqual(page.clicks(), []);
+  assert.equal(page.badges().length, count);
+});
+
+test("in menu mode the kit reports neither focus nor badge, and tells the vault code when the mode turns on and off", () => {
+  const page = frame();
+  const modes = [];
+  page.onMenuMode((on) => modes.push([on, page.menuMode()]));
+  page.configure({ ...LOGIN, fill: "menu" });
+  page.focus(input({ type: "password" }));
+  assert.deepEqual(page.badges(), []);
+  assert.deepEqual(page.focusReports(), []);
+  page.focusQuery("q");
+  assert.deepEqual(page.focusReports(), []);
+  page.configure({ ...LOGIN, fill: "menu", generation: 2 });
+  page.configure(LOGIN);
+  assert.equal(page.badgeShown(), true, "the system badge takes over");
+  page.configure({ ...LOGIN, fill: "menu" });
+  assert.equal(page.badgeShown(), false);
+  page.configure(false);
+  assert.deepEqual(modes, [[true, true], [false, true], [true, true], [false, true]], "turning off is told while menu mode still holds");
+});
+
+test("a field inside a same-origin iframe is placed in top-frame coordinates", () => {
+  const page = frame();
+  page.configure(LOGIN);
+  const password = input({ type: "password" });
+  const inner = { activeElement: password, addEventListener() {} };
+  const iframe = {
+    localName: "iframe",
+    contentDocument: inner,
+    getAttribute: () => null,
+    style: { "border-left-width": "2px", "border-top-width": "3px", "padding-left": "1px" },
+    getBoundingClientRect: () => ({ left: 100, top: 200, width: 400, height: 300 }),
+  };
+  page.focus(iframe);
+  assert.deepEqual(page.badges().at(-1).rect, { x: 143, y: 243, width: 240, height: 32 });
 });
 
 test("the top frame reports which wanted field holds focus, only when it changes, with the generation", () => {
@@ -356,7 +420,7 @@ test("the top frame looks into a same-origin iframe for the focused field, never
   const innerListeners = {};
   const password = input({ type: "password" });
   const inner = { activeElement: password, addEventListener: (type, fn) => (innerListeners[type] ??= []).push(fn) };
-  page.focus({ localName: "iframe", contentDocument: inner, getAttribute: () => null });
+  page.focus({ localName: "iframe", contentDocument: inner, getAttribute: () => null, getBoundingClientRect: () => ({ left: 0, top: 0, width: 400, height: 300 }) });
   assert.equal(page.focusReports().at(-1).data.field, "password");
   assert.ok(innerListeners.focusin && innerListeners.focusout, "focus changes inside the frame are followed");
   inner.activeElement = null;
@@ -379,7 +443,7 @@ test("a subframe never reports focus", () => {
   page.configure(LOGIN);
   page.focus(input({ type: "password" }));
   assert.deepEqual(page.focusReports(), []);
-  assert.equal(page.keyShown(), true);
+  assert.deepEqual(page.badges(), [], "only the top frame can place the native badge");
 });
 
 test("otpauth links and QR codes are reported once per link and generation", async () => {
@@ -686,16 +750,16 @@ test("a focus query gets a fresh report tied to the query, even when nothing cha
   assert.deepEqual(sub.focusReports(), []);
 });
 
-test("the key's ink follows the field's own background, then its ancestors', then its text colour", () => {
-  const { badgeInk } = frame();
-  assert.equal(badgeInk(["rgb(13, 17, 23)"], "rgb(230, 237, 243)"), "#ffffff");
-  assert.equal(badgeInk(["rgb(255, 255, 255)"], "rgb(31, 35, 40)"), "#1d1d1f");
-  assert.equal(badgeInk(["rgba(0, 0, 0, 0)", "rgba(0, 0, 0, 0.1)", "rgb(13, 17, 23)"], "rgb(0, 0, 0)"), "#ffffff");
-  assert.equal(badgeInk(["rgba(0, 0, 0, 0)", "rgb(246, 248, 250)"], "rgb(255, 255, 255)"), "#1d1d1f");
-  assert.equal(badgeInk(["rgb(110, 118, 129)"], "rgb(255, 255, 255)"), "#ffffff");
-  assert.equal(badgeInk(["rgb(0 0 0 / 0)"], "rgb(230, 237, 243)"), "#ffffff");
-  assert.equal(badgeInk([], "rgb(31, 35, 40)"), "#1d1d1f");
-  assert.equal(badgeInk(["color(srgb 0.1 0.1 0.1)"], "oklch(0.9 0 0)"), "#1d1d1f");
+test("the field reads as dark from its own background, then its ancestors', then its text colour", () => {
+  const { darkBehind } = frame();
+  assert.equal(darkBehind(["rgb(13, 17, 23)"], "rgb(230, 237, 243)"), true);
+  assert.equal(darkBehind(["rgb(255, 255, 255)"], "rgb(31, 35, 40)"), false);
+  assert.equal(darkBehind(["rgba(0, 0, 0, 0)", "rgba(0, 0, 0, 0.1)", "rgb(13, 17, 23)"], "rgb(0, 0, 0)"), true);
+  assert.equal(darkBehind(["rgba(0, 0, 0, 0)", "rgb(246, 248, 250)"], "rgb(255, 255, 255)"), false);
+  assert.equal(darkBehind(["rgb(110, 118, 129)"], "rgb(255, 255, 255)"), true);
+  assert.equal(darkBehind(["rgb(0 0 0 / 0)"], "rgb(230, 237, 243)"), true);
+  assert.equal(darkBehind([], "rgb(31, 35, 40)"), false);
+  assert.equal(darkBehind(["color(srgb 0.1 0.1 0.1)"], "oklch(0.9 0 0)"), false);
 });
 
 test("the QR scan calls the detector captured at script start, never one the page swaps in later", async () => {
@@ -729,15 +793,15 @@ test("a page restored from the back/forward cache offers its code again", async 
   assert.equal(page.codes().length, 2, "the restored page offers its code again");
 });
 
-test("a dark field in any colour space gets light ink, read through the colour normaliser", () => {
+test("a dark field in any colour space reads as dark, through the colour normaliser", () => {
   const painted = { "oklch(0.2 0.02 260)": { r: 21, g: 24, b: 32, a: 1 }, "color(display-p3 0.95 0.95 0.95)": { r: 243, g: 243, b: 243, a: 1 } };
-  const { badgeInk } = frame({ toRGBA: (css) => painted[css] ?? null });
-  assert.equal(badgeInk(["oklch(0.2 0.02 260)"], "oklch(0.95 0 0)"), "#ffffff");
-  assert.equal(badgeInk(["color(display-p3 0.95 0.95 0.95)"], "rgb(255, 255, 255)"), "#1d1d1f");
-  assert.equal(badgeInk(["lab(10 0 0 / 0)", "oklch(0.2 0.02 260)"], "rgb(0, 0, 0)"), "#ffffff");
+  const { darkBehind } = frame({ toRGBA: (css) => painted[css] ?? null });
+  assert.equal(darkBehind(["oklch(0.2 0.02 260)"], "oklch(0.95 0 0)"), true);
+  assert.equal(darkBehind(["color(display-p3 0.95 0.95 0.95)"], "rgb(255, 255, 255)"), false);
+  assert.equal(darkBehind(["lab(10 0 0 / 0)", "oklch(0.2 0.02 260)"], "rgb(0, 0, 0)"), true);
 });
 
-test("oklab and oklch backgrounds, as Tailwind v4 and discord emit them, get ink from their measured luminance", () => {
+test("oklab and oklch backgrounds, as Tailwind v4 and discord emit them, read dark or light from their measured luminance", () => {
   const painted = {
     "oklab(0 0 0 / 0.121569)": { r: 0, g: 0, b: 0, a: 0.12 },
     "oklab(0.262392 0.002511 -0.008907)": { r: 44, g: 46, b: 51, a: 1 },
@@ -745,16 +809,16 @@ test("oklab and oklch backgrounds, as Tailwind v4 and discord emit them, get ink
     "oklch(0.97 0.01 250)": { r: 242, g: 246, b: 252, a: 1 },
     "oklch(0.25 0.03 260)": { r: 26, g: 31, b: 44, a: 1 },
   };
-  const { badgeInk } = frame({ toRGBA: (css) => painted[css] ?? null });
-  assert.equal(badgeInk(["rgba(0, 0, 0, 0)", "oklab(0 0 0 / 0.121569)", "oklab(0.262392 0.002511 -0.008907)"], "oklab(0.952699 0.00075 -0.002555)"), "#ffffff");
-  assert.equal(badgeInk(["oklch(0.97 0.01 250)"], "oklch(0.25 0.03 260)"), "#1d1d1f");
-  assert.equal(badgeInk(["oklch(0.25 0.03 260)"], "rgb(0, 0, 0)"), "#ffffff");
-  assert.equal(badgeInk(["rgba(0, 0, 0, 0)"], "oklab(0.952699 0.00075 -0.002555)"), "#ffffff", "a light text colour alone says dark");
+  const { darkBehind } = frame({ toRGBA: (css) => painted[css] ?? null });
+  assert.equal(darkBehind(["rgba(0, 0, 0, 0)", "oklab(0 0 0 / 0.121569)", "oklab(0.262392 0.002511 -0.008907)"], "oklab(0.952699 0.00075 -0.002555)"), true);
+  assert.equal(darkBehind(["oklch(0.97 0.01 250)"], "oklch(0.25 0.03 260)"), false);
+  assert.equal(darkBehind(["oklch(0.25 0.03 260)"], "rgb(0, 0, 0)"), true);
+  assert.equal(darkBehind(["rgba(0, 0, 0, 0)"], "oklab(0.952699 0.00075 -0.002555)"), true, "a light text colour alone says dark");
 });
 
-test("when no colour can be read at all, the page's own scheme picks the ink, never dark ink by default", () => {
-  const { badgeInk } = frame({ toRGBA: () => null });
-  assert.equal(badgeInk(["unreadable(1)"], "unreadable(2)", true), "#ffffff");
-  assert.equal(badgeInk(["unreadable(1)"], "unreadable(2)", () => true), "#ffffff");
-  assert.equal(badgeInk(["unreadable(1)"], "unreadable(2)", false), "#1d1d1f");
+test("when no colour can be read at all, the page's own scheme decides, never light by default", () => {
+  const { darkBehind } = frame({ toRGBA: () => null });
+  assert.equal(darkBehind(["unreadable(1)"], "unreadable(2)", true), true);
+  assert.equal(darkBehind(["unreadable(1)"], "unreadable(2)", () => true), true);
+  assert.equal(darkBehind(["unreadable(1)"], "unreadable(2)", false), false);
 });

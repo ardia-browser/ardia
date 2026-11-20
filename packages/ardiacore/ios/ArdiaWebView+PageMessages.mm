@@ -35,7 +35,6 @@ static BOOL gSelectionPopover = YES;
 static BOOL gBlockAutoplayEverywhere = NO;
 static char kScriptFramesKey;
 static char kSameSiteFramesKey;
-
 static NSDictionary *DisplayMediaAudioOffer(NSDictionary *message) {
   if (!Flag(message, @"audio")) return nil;
   NSDictionary *support = ArdiaCoreEngine.desktopCaptureAudio;
@@ -132,6 +131,7 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
     if (main) [ArdiaWebView resetFieldProviderPage:tab];
     if (main && ![(Text(dict, @"url", 8192) ?: @"about:") hasPrefix:@"about:"]) _requests.requestedURL = nil;
     [self noteScriptFrame:frameId main:main sameSite:[self sameSiteFrame:main origin:sender]];
+    [self noteVaultDocumentInFrame:frameId tab:tab main:main origin:verifiedOrigin];
     [self callFrame:frameId kind:@"peekConfig" json:PeekConfigJSON(self)];
     AnswerHello(tab, _profile, frameId, main, verifiedOrigin);
     if (main) _firstPaint.scripted = YES;
@@ -197,15 +197,6 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
     double sequence;
     if (Finite(dict, @"generation", &generation) && Finite(dict, @"seq", &sequence))
       [ArdiaWebView noteFieldFocus:Text(dict, @"field", 16) sequence:sequence generation:generation query:Text(dict, @"query", 64) owner:tab];
-  } else if ([kind isEqualToString:@"fieldProvider"] && dict) {
-    double generation;
-    NSString *field = Text(dict, @"field", 16);
-    if (!Finite(dict, @"generation", &generation) || !field || ![self sameSiteFrame:main origin:sender]) return;
-    NSDictionary *result = _visible ? [ArdiaWebView requestSystemPanelIn:tab.view owner:tab profile:_profile field:field generation:generation]
-                                    : @{@"shown" : @NO, @"reason" : @"hidden"};
-    NSString *reason = result[@"reason"];
-    if (![reason isEqualToString:@"noProvider"] && ![reason isEqualToString:@"stale"])
-      [self emit:@"fieldProviderOpened" payload:@{@"via" : @"badge", @"shown" : result[@"shown"]}];
   } else if ([kind isEqualToString:@"verificationCode"] && main && dict) {
     double generation;
     if (!Finite(dict, @"generation", &generation)) return;
@@ -296,6 +287,8 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
           @"sources" : ArdiaHost.displayMediaSources,
           @"controller" : @([dict[@"controller"] isEqual:@YES])
         }];
+  } else {
+    [self receiveVaultMessage:kind json:json dict:dict frame:frameId main:main origin:verifiedOrigin tab:tab];
   }
 }
 

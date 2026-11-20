@@ -9,14 +9,6 @@ extension WebKitTab {
     case "fieldFocus":
       guard main, let view = webView, let generation = dict?["generation"] as? Double, let sequence = dict?["seq"] as? Double else { return }
       ArdiaWebView.noteFieldFocus(dict?["field"] as? String, sequence: sequence, generation: generation, query: dict?["query"] as? String, owner: view)
-    case "fieldProvider":
-      guard let view = webView, let field = dict?["field"] as? String, let generation = dict?["generation"] as? Double,
-        sameOriginAsTop(frameInfo)
-      else { return }
-      let result = visible
-        ? ArdiaWebView.requestSystemPanel(in: view, owner: view, profile: profile, field: field, generation: generation)
-        : ["shown": false, "reason": "hidden"]
-      emitPanelResult(result, via: "badge")
     case "verificationCode":
       guard main, let view = webView, let generation = dict?["generation"] as? Double, let url = dict?["url"] as? String,
         view.scriptFrames[frame] != nil,
@@ -24,6 +16,11 @@ extension WebKitTab {
         let token = offer["token"] as? String, let app = offer["app"] as? String
       else { return }
       emit("verificationCodeFound", ["token": token, "app": app, "main": true])
+    case "vaultField":
+      guard let dict, fillsWithSystemPanel, sameOriginAsTop(frameInfo),
+        let field = VaultFieldGeometry(dict, main: main)
+      else { return }
+      emit("vaultField", field.payload(frame: frame, origin: Origins.of(frameInfo.securityOrigin), main: main))
     default: break
     }
   }
@@ -50,8 +47,14 @@ extension WebKitTab {
     return originScheme == scheme && origin.host.lowercased() == host && originPort == (top.port ?? defaultPort(scheme))
   }
 
+  private var fillsWithSystemPanel: Bool {
+    guard let provider = ArdiaWebView.fieldProvider(profile: profile) else { return false }
+    return provider["fill"] as? String != "menu"
+  }
+
   private var fieldProviderJSON: String {
-    guard let provider = ArdiaWebView.fieldProvider(profile: profile), let data = try? JSONSerialization.data(withJSONObject: provider),
+    guard fillsWithSystemPanel, let provider = ArdiaWebView.fieldProvider(profile: profile),
+      let data = try? JSONSerialization.data(withJSONObject: provider),
       let text = String(data: data, encoding: .utf8)
     else { return "false" }
     return text
@@ -73,13 +76,13 @@ extension WebKitTab {
     emit("fieldProviderOpened", ["via": via, "shown": result["shown"] as? Bool ?? false])
   }
 
-  func showSystemPanel(generation: Double, done: @escaping ([AnyHashable: Any]) -> Void) {
+  func showSystemPanel(generation: Double, via: String, done: @escaping ([AnyHashable: Any]) -> Void) {
     guard let view = webView else { return done(["shown": false, "reason": "noTab"]) }
     ArdiaWebView.querySystemPanel(in: view, owner: view, profile: profile, generation: generation, ask: { [weak self] query in
       let quoted = (try? JSONSerialization.data(withJSONObject: [query])).flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
       self?.runInWorld("window.__ardia && window.__ardia.fieldFocusQuery(\(quoted)[0])")
     }) { [weak self] result in
-      self?.emitPanelResult(result, via: "menu")
+      self?.emitPanelResult(result, via: via)
       done(result)
     }
   }

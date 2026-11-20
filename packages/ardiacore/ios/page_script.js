@@ -34,6 +34,14 @@
     }
     return out;
   };
+  const ownOnly = (value, depth) => {
+    if (value === null || typeof value !== "object") return value;
+    if (depth > 32) return null;
+    const out = isArray(value) ? [] : setPrototypeOf({}, null);
+    const names = keys(value);
+    for (let i = 0; i < names.length; i++) out[names[i]] = ownOnly(value[names[i]], depth + 1);
+    return out;
+  };
   const serialize = (data) => toJSON(plain(data, 0));
   const send = (kind, data) => post(kind, serialize(data));
   const onReady = (fn) =>
@@ -192,7 +200,7 @@
 
   const receive = (kind, json) => {
     const handler = handlers[kind];
-    if (handler) guard(handler)(fromJSON(json));
+    if (handler) guard(handler)(ownOnly(fromJSON(json), 0));
   };
   if (!web) {
     const configureDisplayMedia = (config) => (config.displayMediaPicker ? installDisplayMedia() : restoreDisplayMedia());
@@ -510,7 +518,10 @@
   const fieldProviderKit = (env) => {
     const { document, send, guard, later, onReady, revealed, addListener, apply, FrameMutationObserver, setTimeout, addEventListener, requestAnimationFrame, isTop } = env;
     const { charCodeAt, promiseThen, imul, Detector, detect, toRGBA } = env.intrinsics;
+    const { rectOf, styleOf, styleValue, parentOf, hitAt, contains, closest, labelControl, ownerDocumentOf, formOf, queryAll, viewport, pinch } = env.intrinsics;
     const USERNAME_TOKEN = /(^|\s)(username|email|webauthn)(\s|$)/i;
+    const EMAIL_TOKEN = /(^|\s)email(\s|$)/i;
+    const WEBAUTHN_TOKEN = /(^|\s)webauthn(\s|$)/i;
     const ONE_TIME_CODE = /(^|\s)one-time-code(\s|$)/i;
     const USERNAME_HINT = /user|e-?mail|login|account/i;
     const OTPAUTH_PREFIXES = ["otpauth://", "otpauth-migration://"];
@@ -550,18 +561,6 @@
     const verificationSetupURL = (raw) =>
       typeof raw === "string" && raw.length <= 2048 && (startsWithFolded(raw, OTPAUTH_PREFIXES[0]) || startsWithFolded(raw, OTPAUTH_PREFIXES[1])) ? raw : null;
 
-    const SVG_NS = "http://www.w3.org/2000/svg";
-    const KEY = [
-      ["path", { d: "M5 4.4a3.6 3.6 0 1 0 0 7.2a3.6 3.6 0 1 0 0-7.2ZM4.2 6.9a1.1 1.1 0 1 1 0 2.2a1.1 1.1 0 1 1 0-2.2Z", fill: "currentColor", stroke: "none", "fill-rule": "evenodd" }],
-      ["path", { d: "M8 7.1h5.6v1.8H8ZM10.6 8.9h1.5v1.9h-1.5ZM12.4 8.9h1.2v1.4h-1.2Z", fill: "currentColor", stroke: "none" }],
-      ["path", { d: "M16.6 7.1l1.9 1.9 1.9-1.9", "stroke-width": "1.4" }],
-    ];
-    const KEY_BOX = { viewBox: "0 0 22 16", width: "26", height: "19", fill: "none", stroke: "currentColor", "stroke-width": "1.35", "stroke-linecap": "round", "stroke-linejoin": "round" };
-    const KEY_CSS =
-      "button{all:initial;box-sizing:border-box;display:flex;align-items:center;justify-content:center;border-radius:6px;cursor:default;opacity:1;transition:background-color .12s;background:color-mix(in srgb,currentColor 14%,transparent)}" +
-      "button:hover{background:color-mix(in srgb,currentColor 22%,transparent)}button:active{background:color-mix(in srgb,currentColor 30%,transparent)}";
-    const ON_DARK = "#ffffff";
-    const ON_LIGHT = "#1d1d1f";
     const DARK_LUMINANCE = 0.179;
     const parseColor = (text) => {
       const m = typeof text === "string" ? /^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,/]\s*([\d.]+%?))?\s*\)$/.exec(text) : null;
@@ -574,34 +573,142 @@
       return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
     };
     const readColor = (css) => parseColor(css) || (toRGBA ? toRGBA(css) : null);
-    const badgeInk = (backgrounds, text, pageIsDark) => {
+    const darkBehind = (backgrounds, text, pageIsDark) => {
       for (const background of backgrounds) {
         const c = readColor(background);
-        if (c && c.a >= 0.5) return luminance(c) < DARK_LUMINANCE ? ON_DARK : ON_LIGHT;
+        if (c && c.a >= 0.5) return luminance(c) < DARK_LUMINANCE;
       }
       const ink = readColor(text);
-      if (ink && ink.a >= 0.5) return luminance(ink) > 0.5 ? ON_DARK : ON_LIGHT;
-      return (typeof pageIsDark === "function" ? pageIsDark() : pageIsDark) ? ON_DARK : ON_LIGHT;
+      if (ink && ink.a >= 0.5) return luminance(ink) > 0.5;
+      return !!(typeof pageIsDark === "function" ? pageIsDark() : pageIsDark);
     };
     const pageIsDark = () => {
       try {
-        const scheme = getComputedStyle(document.documentElement).colorScheme || "";
+        const scheme = styleValue(styleOf(document.documentElement), "color-scheme");
         const dark = /\bdark\b/.test(scheme), light = /\blight\b/.test(scheme);
         if (dark !== light) return dark;
-        const body = document.body ? readColor(getComputedStyle(document.body).color) : null;
+        const body = document.body ? readColor(styleValue(styleOf(document.body), "color")) : null;
         if (body && body.a >= 0.5) return luminance(body) > 0.5;
         return !!(typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches);
       } catch {
         return false;
       }
     };
-    const fieldInk = (field, cs) => {
-      const backgrounds = [cs.backgroundColor];
-      for (let n = field.parentElement, depth = 0; n && depth < 12; n = n.parentElement, depth++) backgrounds.push(getComputedStyle(n).backgroundColor);
-      return badgeInk(backgrounds, cs.color, pageIsDark);
+    const BADGE_PROBE = 14;
+    const BADGE_PADDING = 20;
+    const BRAND_CHROMA = 0.25;
+    const BRAND_ACTIONS = 40;
+    const COLOR_TOKEN = /(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\([^()]*\)/gi;
+    const FIELD_BRAND = ["outline-color", "border-top-color", "border-bottom-color", "border-left-color", "box-shadow", "caret-color", "accent-color"];
+    const RING_BRAND = ["outline-color", "border-top-color", "box-shadow"];
+    const ACTION_BRAND = ["background-color", "border-top-color"];
+    const px = (style, name) => parseFloat(styleValue(style, name)) || 0;
+    const hexByte = (n) => {
+      const v = Math.max(0, Math.min(255, Math.round(n)));
+      return (v < 16 ? "0" : "") + v.toString(16);
     };
-    const KEY_ASPECT = 1.4;
-    const KEY_REPEAT_MS = 600;
+    const brandIn = (text) => {
+      if (!text || text === "none") return null;
+      for (const token of text.match(COLOR_TOKEN) || []) {
+        const c = readColor(token);
+        if (!c || !(c.a >= 0.5) || (Math.max(c.r, c.g, c.b) - Math.min(c.r, c.g, c.b)) / 255 < BRAND_CHROMA) continue;
+        return "#" + hexByte(c.r) + hexByte(c.g) + hexByte(c.b);
+      }
+      return null;
+    };
+    const brandOfStyle = (style, names) => {
+      for (const name of names) {
+        const brand = brandIn(styleValue(style, name));
+        if (brand) return brand;
+      }
+      return null;
+    };
+    const brandOf = (el) => {
+      const own = brandOfStyle(styleOf(el), FIELD_BRAND);
+      if (own) return own;
+      for (let n = parentOf(el), depth = 0; n && depth < 3; n = parentOf(n), depth++) {
+        const ring = brandOfStyle(styleOf(n), RING_BRAND);
+        if (ring) return ring;
+      }
+      const doc = ownerDocumentOf(el);
+      const scope = formOf(el) || (doc && doc.documentElement);
+      if (!scope) return null;
+      const actions = queryAll(scope, "button, [type=submit], a[href]");
+      for (let i = 0; i < actions.length && i < BRAND_ACTIONS; i++) {
+        const style = styleOf(actions[i]);
+        const brand = brandOfStyle(style, ACTION_BRAND) || brandOfStyle(style, ["color"]);
+        if (brand) return brand;
+      }
+      return null;
+    };
+    const fieldIsDark = (el, style) => {
+      const backgrounds = [styleValue(style, "background-color")];
+      for (let n = parentOf(el), depth = 0; n && depth < 12; n = parentOf(n), depth++) backgrounds.push(styleValue(styleOf(n), "background-color"));
+      return darkBehind(backgrounds, styleValue(style, "color"), pageIsDark);
+    };
+    const trailingTaken = (el, r, rtl, style) => {
+      const x = rtl ? r.left + BADGE_PROBE : r.right - BADGE_PROBE;
+      const y = r.top + r.height / 2;
+      const hit = x >= 0 && y >= 0 ? hitAt(ownerDocumentOf(el) || document, x, y) : null;
+      if (hit && hit !== el && !contains(el, hit)) {
+        let ancestor = false;
+        for (let n = parentOf(el); n && !ancestor; n = parentOf(n)) ancestor = n === hit;
+        const label = ancestor ? null : closest(hit, "label");
+        const labelFor = !!label && labelControl(label) === el && !contains(label, el);
+        if (!ancestor && !labelFor) return true;
+      }
+      const image = styleValue(style, "background-image");
+      return !!image && image !== "none" && px(style, rtl ? "padding-left" : "padding-right") >= BADGE_PADDING;
+    };
+    let lookEl = null;
+    let look = null;
+    let brandEl = null;
+    let brand = null;
+    const lookOf = (el) => {
+      if (lookEl !== el) {
+        const style = styleOf(el);
+        const rtl = styleValue(style, "direction") === "rtl";
+        const side = rtl ? "left" : "right";
+        look = {
+          style,
+          rtl,
+          dark: fieldIsDark(el, style),
+          inset: {
+            top: px(style, "border-top-width") + px(style, "padding-top"),
+            bottom: px(style, "border-bottom-width") + px(style, "padding-bottom"),
+            trailing: px(style, "border-" + side + "-width") + px(style, "padding-" + side),
+          },
+        };
+        lookEl = el;
+      }
+      return look;
+    };
+    const onScreen = (x, y, width, height) => {
+      const p = pinch();
+      return p ? { x: (x - p.left) * p.scale, y: (y - p.top) * p.scale, width: width * p.scale, height: height * p.scale } : { x, y, width, height };
+    };
+    const fieldRect = (el) => {
+      const r = rectOf(el);
+      return onScreen(r.left, r.top, r.width, r.height);
+    };
+    const fieldLook = (el, dx = 0, dy = 0) => {
+      const r = rectOf(el);
+      const { style, rtl, dark, inset } = lookOf(el);
+      if (brandEl !== el || !brand) {
+        brandEl = el;
+        brand = brandOf(el);
+      }
+      const p = pinch();
+      const scale = p ? p.scale : 1;
+      return {
+        rect: onScreen(r.left + dx, r.top + dy, r.width, r.height),
+        rtl,
+        darkField: dark,
+        brandColor: brand,
+        trailingTaken: trailingTaken(el, r, rtl, style),
+        inset: { top: inset.top * scale, bottom: inset.bottom * scale, trailing: inset.trailing * scale },
+      };
+    };
     const QR_MIN = 64;
     const QR_MAX = 640;
     const QR_DETECTIONS = 12;
@@ -612,11 +719,12 @@
 
     let config = null;
     let listening = false;
-    let keyField = null;
-    let keyKind = null;
-    let keyHost = null;
-    let keyButton = null;
-    let keyClickedAt = -Infinity;
+    let menuListener = null;
+    let badgeEl = null;
+    let badgeKind = null;
+    let badgeRect = null;
+    let badgeTaken = false;
+    let badgeQueued = false;
     let reportedFocus;
     let focusSeq = 0;
     let observer = null;
@@ -625,90 +733,13 @@
     let qrChecked = new WeakMap();
     let qrCanvasScans = new WeakMap();
     let found = new Set();
-    const typed = new WeakSet();
     const watchedDocuments = new WeakSet();
 
     const findsCodes = () => !!config && config.codeSetup && isTop;
+    const menuMode = () => !!config && config.fill === "menu";
+    const systemMode = () => !!config && config.fill !== "menu";
     const wants = (kind) => !!config && (kind === "code" ? config.oneTimeCode : kind ? config.login : false);
-    const svgElement = (tag, attributes) => {
-      const el = document.createElementNS(SVG_NS, tag);
-      for (const name of Object.keys(attributes)) el.setAttribute(name, attributes[name]);
-      return el;
-    };
-    const trailingRect = (field) => {
-      const r = field.getBoundingClientRect();
-      const cs = getComputedStyle(field);
-      const size = Math.min(24, Math.max(18, r.height - 8));
-      const width = Math.round(size * KEY_ASPECT);
-      const rtl = cs.direction === "rtl";
-      const inset = Math.max(4, Math.min(10, parseFloat(rtl ? cs.paddingLeft : cs.paddingRight) || 4));
-      const border = parseFloat(rtl ? cs.borderLeftWidth : cs.borderRightWidth) || 0;
-      return { left: rtl ? r.left + border + inset : r.right - border - inset - width, top: r.top + (r.height - size) / 2, size, width, color: fieldInk(field, cs) };
-    };
-    const hideKey = () => {
-      if (keyHost) keyHost.style.display = "none";
-      keyField = keyKind = null;
-    };
-    const placeKey = () => {
-      if (!keyHost || !keyField) return;
-      const { left, top, size, width, color } = (env.keyRect || trailingRect)(keyField);
-      keyHost.style.left = left + "px";
-      keyHost.style.top = top + "px";
-      keyButton.style.width = width + "px";
-      keyButton.style.height = size + "px";
-      keyButton.style.color = color;
-    };
-    const makeKey = () => {
-      if (env.makeKey) return env.makeKey();
-      const host = document.createElement("ardia-field-provider");
-      host.style.cssText = "all:initial;position:fixed;z-index:2147483647;display:none;";
-      const root = host.attachShadow({ mode: "closed" });
-      const style = document.createElement("style");
-      style.textContent = KEY_CSS;
-      root.appendChild(style);
-      const button = document.createElement("button");
-      button.type = "button";
-      button.tabIndex = -1;
-      const svg = svgElement("svg", KEY_BOX);
-      for (const [tag, attributes] of KEY) svg.appendChild(svgElement(tag, attributes));
-      button.appendChild(svg);
-      root.appendChild(button);
-      return { host, button };
-    };
-    const ensureKey = () => {
-      if (keyHost && keyHost.isConnected) return;
-      ({ host: keyHost, button: keyButton } = makeKey());
-      keyButton.title = "Passwords";
-      keyButton.setAttribute("aria-label", "Fill from Passwords");
-      apply(addListener, keyButton, ["mousedown", (e) => e.preventDefault()]);
-      apply(addListener, keyButton, [
-        "click",
-        guard((e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          if (!e.isTrusted || !config || !keyKind || !keyField || !wants(keyKind)) return;
-          const box = (env.keyRect || trailingRect)(keyField);
-          if (!(e.clientX >= box.left - 2 && e.clientX <= box.left + box.width + 2 && e.clientY >= box.top - 2 && e.clientY <= box.top + box.size + 2)) return;
-          if (e.timeStamp - keyClickedAt < KEY_REPEAT_MS) return;
-          keyClickedAt = e.timeStamp;
-          send("fieldProvider", { field: keyKind, generation: config.generation });
-        }),
-      ]);
-      document.documentElement.appendChild(keyHost);
-    };
-    const updateKey = guard(() => {
-      if (!config) return hideKey();
-      const el = document.activeElement;
-      const kind = loginFieldKind(el, revealed());
-      if (!kind || !wants(kind)) return hideKey();
-      if (el.value && typed.has(el)) return hideKey();
-      if (kind === "password" && keyField !== el && hasOwnToggle(el)) return hideKey();
-      ensureKey();
-      keyField = el;
-      keyKind = kind;
-      keyHost.style.display = "block";
-      placeKey();
-    });
+    const sameRect = (a, b) => !!a && !!b && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
 
     const watchDocument = (doc) => {
       if (watchedDocuments.has(doc)) return;
@@ -716,7 +747,7 @@
       apply(addListener, doc, ["focusin", focusGained, true]);
       apply(addListener, doc, ["focusout", focusLost, true]);
     };
-    const deepActive = (doc, depth) => {
+    const deepActive = (doc, depth, frames) => {
       const el = doc.activeElement;
       if (!el || (el.localName !== "iframe" && el.localName !== "frame") || depth >= FRAME_DEPTH) return el;
       let inner = null;
@@ -725,32 +756,98 @@
       } catch {}
       if (!inner) return null;
       watchDocument(inner);
-      return deepActive(inner, depth + 1);
+      if (frames) frames.push(el);
+      return deepActive(inner, depth + 1, frames);
     };
+    const badgeReport = (el, kind, seen) => {
+      const auto = el.getAttribute("autocomplete") || "";
+      const maxLength = el.maxLength;
+      send("vaultField", {
+        kind: kind === "code" ? "otp" : kind,
+        focused: !!seen,
+        rect: seen ? seen.rect : null,
+        formHasPassword: kind === "password" || (kind === "username" && nearPassword(el, revealed())),
+        maxLength: typeof maxLength === "number" && maxLength > 0 ? maxLength : 0,
+        email: kind === "username" && (el.type === "email" || EMAIL_TOKEN.test(auto)),
+        clicked: false,
+        auto: false,
+        rtl: !!seen && seen.rtl,
+        darkField: seen ? seen.darkField : null,
+        brandColor: seen ? seen.brandColor : null,
+        trailingTaken: !!seen && seen.trailingTaken,
+        inset: seen ? seen.inset : null,
+        webauthn: WEBAUTHN_TOKEN.test(auto),
+      });
+    };
+    const hideBadge = () => {
+      const el = badgeEl;
+      const kind = badgeKind;
+      badgeEl = badgeKind = badgeRect = null;
+      badgeTaken = false;
+      if (el) badgeReport(el, kind, null);
+    };
+    const updateBadge = guard(() => {
+      if (!isTop || !systemMode()) return hideBadge();
+      const frames = [];
+      const el = deepActive(document, 0, frames);
+      const kind = loginFieldKind(el, revealed());
+      if (!kind || !wants(kind)) return hideBadge();
+      let dx = 0;
+      let dy = 0;
+      for (const frame of frames) {
+        const r = rectOf(frame);
+        const style = styleOf(frame);
+        dx += r.left + px(style, "border-left-width") + px(style, "padding-left");
+        dy += r.top + px(style, "border-top-width") + px(style, "padding-top");
+      }
+      const seen = fieldLook(el, dx, dy);
+      if (el === badgeEl && kind === badgeKind && seen.trailingTaken === badgeTaken && sameRect(seen.rect, badgeRect)) return;
+      if (badgeEl && badgeEl !== el) hideBadge();
+      badgeEl = el;
+      badgeKind = kind;
+      badgeRect = seen.rect;
+      badgeTaken = seen.trailingTaken;
+      badgeReport(el, kind, seen);
+    });
+    const placeBadge = () => {
+      badgeQueued = false;
+      updateBadge();
+    };
+    const queueBadge = () => {
+      if (!badgeEl || badgeQueued) return;
+      badgeQueued = true;
+      requestAnimationFrame(placeBadge);
+    };
+
     const sendFocus = (field, query) => {
       reportedFocus = field;
       focusSeq++;
       send("fieldFocus", query ? { field, seq: focusSeq, generation: config.generation, query } : { field, seq: focusSeq, generation: config.generation });
     };
     const reportFocus = guard(() => {
-      if (!isTop || !config) return;
-      const kind = loginFieldKind(deepActive(document, 0), revealed());
+      if (!isTop || !systemMode()) return;
+      const kind = loginFieldKind(deepActive(document, 0, null), revealed());
       const field = wants(kind) ? kind : null;
       if (field !== reportedFocus) sendFocus(field);
     });
-    const reportFocusSoon = () => setTimeout(reportFocus, 0);
+    const settleFocusSoon = () =>
+      setTimeout(() => {
+        reportFocus();
+        updateBadge();
+      }, 0);
     const focusQuery = guard((query) => {
-      if (!isTop || !config || typeof query !== "string" || !query || query.length > 64) return;
-      const kind = loginFieldKind(deepActive(document, 0), revealed());
+      if (!isTop || !systemMode() || typeof query !== "string" || !query || query.length > 64) return;
+      const kind = loginFieldKind(deepActive(document, 0, null), revealed());
       sendFocus(wants(kind) ? kind : null, query);
     });
     const focusGained = () => {
       reportFocus();
-      reportFocusSoon();
+      updateBadge();
+      settleFocusSoon();
     };
     const focusLost = guard(() => {
-      if (isTop && config && reportedFocus !== null) sendFocus(null);
-      reportFocusSoon();
+      if (isTop && systemMode() && reportedFocus !== null) sendFocus(null);
+      settleFocusSoon();
     });
     const codeKey = (url) => {
       let hash = 0x811c9dc5;
@@ -758,13 +855,7 @@
       return (hash >>> 0).toString(16) + ":" + url.length.toString(36);
     };
 
-    const noteInput = guard((e) => {
-      const el = e.target;
-      if (!el || el.localName !== "input") return;
-      if (!el.value) typed.delete(el);
-      else if (e.isTrusted) typed.add(el);
-      if (config) updateKey();
-    });
+    const noteInput = () => queueBadge();
     const qrCandidate = (el) => {
       if (el.localName === "img" && !el.complete) return "later";
       if (el.localName === "img" ? el.naturalWidth < QR_MIN : el.localName !== "canvas") return "never";
@@ -832,37 +923,46 @@
       if (listening) return;
       listening = true;
       watchDocument(document);
-      document.addEventListener("focusin", updateKey, true);
       document.addEventListener("focusin", () => findsCodes() && scanSoon(), true);
-      document.addEventListener(
-        "focusout",
-        guard((e) => {
-          setTimeout(() => document.activeElement !== e.target && updateKey(), 0);
-        }),
-        true,
-      );
       document.addEventListener("input", noteInput, true);
       document.addEventListener("load", (e) => findsCodes() && e.target && e.target.localName === "img" && scanSoon(), true);
       document.addEventListener("visibilitychange", () => findsCodes() && scanSoon());
       addEventListener("pageshow", (e) => e.isTrusted && e.persisted && forgetFound());
       addEventListener("focus", focusGained, true);
       addEventListener("blur", focusLost, true);
-      addEventListener("scroll", () => keyField && requestAnimationFrame(placeKey), { passive: true, capture: true });
-      addEventListener("resize", () => keyField && requestAnimationFrame(placeKey));
+      addEventListener("scroll", queueBadge, { passive: true, capture: true });
+      addEventListener("resize", queueBadge);
+      if (viewport) {
+        apply(addListener, viewport, ["scroll", queueBadge, { passive: true }]);
+        apply(addListener, viewport, ["resize", queueBadge]);
+      }
     };
     const stopScanning = () => {
       if (observer) observer.disconnect();
       observer = null;
     };
+    const tellMenu = (on) => {
+      if (menuListener) menuListener(on);
+    };
     const configure = (state) => {
       const next =
         state && typeof state === "object"
-          ? { login: state.login === true, oneTimeCode: state.oneTimeCode === true, codeSetup: state.codeSetup === true, generation: typeof state.generation === "number" ? state.generation : 0 }
+          ? {
+              login: state.login === true,
+              oneTimeCode: state.oneTimeCode === true,
+              codeSetup: state.codeSetup === true,
+              generation: typeof state.generation === "number" ? state.generation : 0,
+              fill: state.fill === "menu" ? "menu" : "system",
+            }
           : null;
       const previous = config;
-      config = next && (next.login || next.oneTimeCode || next.codeSetup) ? next : null;
+      const wasMenu = menuMode();
+      const accepted = next && (next.login || next.oneTimeCode || next.codeSetup) ? next : null;
+      const nowMenu = !!accepted && accepted.fill === "menu";
+      if (wasMenu && !nowMenu) tellMenu(false);
+      config = accepted;
       if (!config) {
-        hideKey();
+        hideBadge();
         stopScanning();
         found = new Set();
         reportedFocus = undefined;
@@ -884,16 +984,38 @@
         }
         onReady(scan);
       }
-      updateKey();
+      updateBadge();
       reportedFocus = undefined;
       reportFocus();
+      if (nowMenu && !wasMenu) tellMenu(true);
     };
-    return { configure, focusQuery, badgeInk, hasOwnToggle, loginFieldKind, verificationSetupURL, codeKey, rememberedCodes: () => found.size };
+    const onMenuMode = (listener) => {
+      menuListener = typeof listener === "function" ? listener : null;
+    };
+    return {
+      configure,
+      focusQuery,
+      menuMode,
+      onMenuMode,
+      fieldLook,
+      fieldRect,
+      darkBehind,
+      hasOwnToggle,
+      loginFieldKind,
+      verificationSetupURL,
+      codeKey,
+      rememberedCodes: () => found.size,
+    };
   };
   const fieldProviderIntrinsics = (scope) => {
     const call = Reflect.apply;
     const describe = Object.getOwnPropertyDescriptor;
     const accessor = (proto, name, kind) => (proto && describe(proto, name) ? describe(proto, name)[kind] : undefined);
+    const protoOf = (name) => (typeof scope[name] === "function" ? scope[name].prototype : null);
+    const getter = (proto, name) => {
+      const read = accessor(proto, name, "get");
+      return read ? (o) => call(read, o, []) : (o) => o[name];
+    };
     const Offscreen = scope.OffscreenCanvas;
     const pen = scope.OffscreenCanvasRenderingContext2D && scope.OffscreenCanvasRenderingContext2D.prototype;
     const getContext = Offscreen && Offscreen.prototype.getContext;
@@ -920,6 +1042,24 @@
     };
     const Detector = typeof scope.BarcodeDetector === "function" ? scope.BarcodeDetector : null;
     const detect = Detector && Detector.prototype ? Detector.prototype.detect : null;
+    const elementProto = protoOf("Element");
+    const nodeProto = protoOf("Node");
+    const getRect = elementProto && elementProto.getBoundingClientRect;
+    const computedStyle = scope.getComputedStyle;
+    const propertyValue = scope.CSSStyleDeclaration && scope.CSSStyleDeclaration.prototype.getPropertyValue;
+    const pointHit = protoOf("Document") && protoOf("Document").elementFromPoint;
+    const nodeContains = nodeProto && nodeProto.contains;
+    const elementClosest = elementProto && elementProto.closest;
+    const queryAllOf = elementProto && elementProto.querySelectorAll;
+    const parentNodeOf = getter(nodeProto, "parentNode");
+    const nodeTypeOf = getter(nodeProto, "nodeType");
+    const hostOf = getter(protoOf("ShadowRoot"), "host");
+    const inputForm = accessor(protoOf("HTMLInputElement"), "form", "get");
+    const viewport = scope.visualViewport || null;
+    const viewportProto = protoOf("VisualViewport");
+    const viewportScale = accessor(viewportProto, "scale", "get");
+    const viewportLeft = accessor(viewportProto, "offsetLeft", "get");
+    const viewportTop = accessor(viewportProto, "offsetTop", "get");
     return {
       charCodeAt: String.prototype.charCodeAt,
       promiseThen: Promise.prototype.then,
@@ -927,6 +1067,41 @@
       Detector: typeof detect === "function" ? Detector : null,
       detect,
       toRGBA,
+      rectOf: (el) => call(getRect, el, []),
+      styleOf: (el) => call(computedStyle, scope, [el]),
+      styleValue: (style, name) => (style ? "" + (call(propertyValue, style, [name]) || "") : ""),
+      parentOf: (node) => {
+        const parent = parentNodeOf(node);
+        if (!parent) return null;
+        const kind = nodeTypeOf(parent);
+        return kind === 1 ? parent : kind === 11 ? hostOf(parent) || null : null;
+      },
+      hitAt: (doc, x, y) => (pointHit ? call(pointHit, doc, [x, y]) : null),
+      contains: (outer, inner) => !!nodeContains && !!call(nodeContains, outer, [inner]),
+      closest: (el, selector) => {
+        try {
+          return elementClosest ? call(elementClosest, el, [selector]) : null;
+        } catch {
+          return null;
+        }
+      },
+      labelControl: getter(protoOf("HTMLLabelElement"), "control"),
+      ownerDocumentOf: getter(nodeProto, "ownerDocument"),
+      formOf: (el) => {
+        try {
+          return inputForm ? call(inputForm, el, []) : null;
+        } catch {
+          return null;
+        }
+      },
+      queryAll: (root, selector) => call(queryAllOf, root, [selector]),
+      viewport,
+      pinch: () => {
+        if (!viewport || !viewportScale) return null;
+        const scale = call(viewportScale, viewport, []);
+        if (!(scale > 0) || scale === 1) return null;
+        return { scale, left: (viewportLeft && call(viewportLeft, viewport, [])) || 0, top: (viewportTop && call(viewportTop, viewport, [])) || 0 };
+      },
     };
   };
   const nativeMutationObserver = window.MutationObserver;
@@ -1064,6 +1239,1362 @@
   addEventListener("scroll", () => eyeField && requestAnimationFrame(placeEye), { passive: true, capture: true });
   addEventListener("resize", () => eyeField && requestAnimationFrame(placeEye));
   addEventListener("pagehide", conceal);
+
+  try {
+    const vaultValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+    const vaultSetValue = vaultValue.set;
+    const vaultGetValue = vaultValue.get;
+    const vaultFormOf = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "form").get;
+    const vaultCheckedOf = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "checked").get;
+    const vaultMaxLengthOf = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "maxLength").get;
+    const vaultRequestSubmit = HTMLFormElement.prototype.requestSubmit;
+    const vaultClick = HTMLElement.prototype.click;
+    const vaultStyleProperty = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "style");
+    const vaultInlineStyleOf = vaultStyleProperty && vaultStyleProperty.get;
+    const vaultCSSValue = CSSStyleDeclaration.prototype.getPropertyValue;
+    const vaultCSSPriority = CSSStyleDeclaration.prototype.getPropertyPriority;
+    const vaultCSSSet = CSSStyleDeclaration.prototype.setProperty;
+    const vaultCSSRemove = CSSStyleDeclaration.prototype.removeProperty;
+    const VaultKeyboardEvent = KeyboardEvent;
+    const vaultGetterOf = (proto, name) => {
+      const property = proto ? Object.getOwnPropertyDescriptor(proto, name) : null;
+      const read = property && property.get;
+      return read ? (o) => apply(read, o, []) : (o) => o[name];
+    };
+    const vaultKeyOf = vaultGetterOf(VaultKeyboardEvent.prototype, "key");
+    const vaultAltOf = vaultGetterOf(VaultKeyboardEvent.prototype, "altKey");
+    const vaultCtrlOf = vaultGetterOf(VaultKeyboardEvent.prototype, "ctrlKey");
+    const vaultMetaOf = vaultGetterOf(VaultKeyboardEvent.prototype, "metaKey");
+    const vaultShiftOf = vaultGetterOf(VaultKeyboardEvent.prototype, "shiftKey");
+    const vaultDefine = Object.defineProperty;
+    const vaultTimer = window.setTimeout;
+    const vaultClearTimer = window.clearTimeout;
+    const vaultMedia = window.matchMedia;
+    const vaultTrim = String.prototype.trim;
+    const vaultDispatch = EventTarget.prototype.dispatchEvent;
+    const vaultListen = EventTarget.prototype.addEventListener;
+    const VaultEvent = Event;
+    const vaultPathOf = Event.prototype.composedPath;
+    const vaultPrevent = Event.prototype.preventDefault;
+    const vaultStopNow = Event.prototype.stopImmediatePropagation;
+    const vaultRectOf = Element.prototype.getBoundingClientRect;
+    const vaultAttrOf = Element.prototype.getAttribute;
+    const vaultClosest = Element.prototype.closest;
+    const vaultQuery = Element.prototype.querySelectorAll;
+    const vaultFragmentQuery = DocumentFragment.prototype.querySelectorAll;
+    const vaultFocusOn = HTMLElement.prototype.focus;
+    const vaultStyleOf = window.getComputedStyle;
+    const vaultNextFrame = window.requestAnimationFrame;
+    const vaultNow = Date.now;
+    const vaultLower = String.prototype.toLowerCase;
+    const vaultSplit = String.prototype.split;
+    const vaultReplace = String.prototype.replace;
+    const vaultOrigin = () => location.origin;
+    const vaultExec = RegExp.prototype.exec;
+    const vaultSetProto = Object.setPrototypeOf;
+    const vaultIsArray = Array.isArray;
+    const VaultText = String;
+    const vaultSliceText = String.prototype.slice;
+    const vaultCharCodeAt = String.prototype.charCodeAt;
+    const vaultFromCharCode = String.fromCharCode;
+    const vaultParseNumber = parseFloat;
+    const vaultParseWhole = parseInt;
+    const vaultMin = Math.min;
+    const vaultSortList = Array.prototype.sort;
+    const vaultHasInstance = Function.prototype[Symbol.hasInstance];
+    const VaultInputElement = HTMLInputElement;
+    const VaultInputEvent = typeof InputEvent === "function" ? InputEvent : Event;
+    const VaultWeakSet = WeakSet;
+    const vaultSetHas = WeakSet.prototype.has;
+    const vaultSetAdd = WeakSet.prototype.add;
+    const vaultSetDelete = WeakSet.prototype.delete;
+    const VaultWeakMap = WeakMap;
+    const vaultMapGet = WeakMap.prototype.get;
+    const vaultMapSet = WeakMap.prototype.set;
+    const vaultMapDelete = WeakMap.prototype.delete;
+    const vaultMarks = () => {
+      const marks = new VaultWeakSet();
+      return {
+        has: (item) => apply(vaultSetHas, marks, [item]),
+        add: (item) => void apply(vaultSetAdd, marks, [item]),
+        delete: (item) => void apply(vaultSetDelete, marks, [item]),
+      };
+    };
+    const vaultTable = () => {
+      const table = new VaultWeakMap();
+      return {
+        get: (key) => apply(vaultMapGet, table, [key]),
+        set: (key, value) => void apply(vaultMapSet, table, [key, value]),
+        delete: (key) => void apply(vaultMapDelete, table, [key]),
+      };
+    };
+    const vaultList = () => vaultSetProto([], null);
+    const vaultAdd = (list, item) => {
+      list[list.length] = item;
+      return list;
+    };
+    const vaultListOf = (items, count) => {
+      const out = vaultList();
+      const n = count === undefined ? (items ? items.length : 0) : count;
+      for (let i = 0; i < n; i++) {
+        const item = items[i];
+        if (item !== undefined && item !== null) out[out.length] = item;
+      }
+      return out;
+    };
+    const vaultFilter = (list, keep) => {
+      const out = vaultList();
+      for (let i = 0; i < list.length; i++) if (keep(list[i])) out[out.length] = list[i];
+      return out;
+    };
+    const vaultMap = (list, change) => {
+      const out = vaultList();
+      for (let i = 0; i < list.length; i++) out[out.length] = change(list[i]);
+      return out;
+    };
+    const vaultFind = (list, test) => {
+      for (let i = 0; i < list.length; i++) if (test(list[i])) return list[i];
+      return undefined;
+    };
+    const vaultSome = (list, test) => {
+      for (let i = 0; i < list.length; i++) if (test(list[i])) return true;
+      return false;
+    };
+    const vaultIndexOf = (list, item) => {
+      for (let i = 0; i < list.length; i++) if (list[i] === item) return i;
+      return -1;
+    };
+    const vaultIncludes = (list, item) => vaultIndexOf(list, item) >= 0;
+    const vaultAddOnce = (list, item) => {
+      if (!vaultIncludes(list, item)) list[list.length] = item;
+    };
+    const vaultFrom = (list, start) => {
+      const out = vaultList();
+      for (let i = start; i < list.length; i++) out[out.length] = list[i];
+      return out;
+    };
+    const vaultJoin = (list, separator) => {
+      let text = "";
+      for (let i = 0; i < list.length; i++) text += (i ? separator : "") + list[i];
+      return text;
+    };
+    const vaultSorted = (list, compare) => {
+      apply(vaultSortList, list, [compare]);
+      return list;
+    };
+    const vaultSlice = (text, start, end) => apply(vaultSliceText, text, end === undefined ? [start] : [start, end]);
+    const vaultIsSpace = (code) => code === 32 || (code >= 9 && code <= 13);
+
+    const vaultHas = (re, text) => apply(vaultExec, re, [text]) !== null;
+    const vaultWords = (text) => {
+      const source = VaultText(text || "");
+      let out = "";
+      let joiner = false;
+      for (let i = 0; i < source.length; i++) {
+        const code = apply(vaultCharCodeAt, source, [i]);
+        if (code === 95 || code === 45) {
+          joiner = true;
+          continue;
+        }
+        if (joiner) {
+          out += " ";
+          joiner = false;
+        }
+        const previous = i > 0 ? apply(vaultCharCodeAt, source, [i - 1]) : 0;
+        if (code >= 65 && code <= 90 && previous >= 97 && previous <= 122) out += " ";
+        out += apply(vaultFromCharCode, null, [code]);
+      }
+      if (joiner) out += " ";
+      return apply(vaultLower, out, []);
+    };
+    const vaultOtherToken =
+      /^(name|honorific-.+|given-name|additional-name|family-name|nickname|organization.*|street-address|address-.+|country.*|postal-code|cc-.+|transaction-.+|language|bday.*|sex|url|photo|tel.*|impp|email-confirm)$/;
+    const VAULT_USER =
+      /user|login|log.?on|sign.?in|account.?(name|id)|\baccount\b|identifier|e.?mail|\bmail\b|\buid\b|loginfmt|benutzer|usuario|utilisateur|identifiant|courriel|correo/;
+    const VAULT_EMAIL = /e.?mail|\bmail\b|courriel|correo/;
+    const VAULT_NOT_LOGIN =
+      /search|query|first.?name|last.?name|full.?name|given|family|surname|company|organi[sz]ation|address|street|city|zip|postal|country|coupon|promo|captcha|subject|message|comment|card|cvc|cvv|iban|routing|account.?(number|no\b)|newsletter|subscribe/;
+    const VAULT_OTP_STRONG = /one.?time|\botp\b|otp.?code|totp|\b2fa\b|two.?factor|\bmfa\b|authenticator|auth.?app|passcode|verification.?code|security.?code|auth.?code|login.?code|sms.?code/;
+    const VAULT_OTP_WEAK = /code|token|verif|\bpin\b|digits|challenge/;
+    const VAULT_OTP_NOT = /zip|postal|promo|coupon|discount|gift|referral|invite|country|area|voucher|product|tracking|post.?code|captcha|color|colour|qr/;
+    const VAULT_NEW_PASSWORD = /new|confirm|repeat|retype|re.?enter|again|create|sign.?up|regist|choose|second|password.?2\b|verify.?pass/;
+    const VAULT_CURRENT_PASSWORD = /current|\bold\b|old.?pass|existing/;
+    const VAULT_CONFIRM_PASSWORD = /confirm|repeat|retype|re.?enter|again|verify|second|password.?2\b/;
+    const VAULT_SIGNUP = /sign.?up|regist|create.?(an.?|your.?)?account|join|enrol|new.?account|get.?started/;
+    const VAULT_LOGIN = /log.?in|sign.?in|log.?on|auth|session|identifier|account/;
+    const VAULT_LOGIN_PAGE = /log.?in|sign.?in|log.?on|auth|identifier/;
+    const VAULT_TEXT_TYPES = ["text", "email", "tel", "url", "number", "password", ""];
+    const VAULT_EDITABLE_TYPES = [...VAULT_TEXT_TYPES, "search"];
+    const VAULT_LONGEST_VALUE = 4096;
+    const VAULT_LONGEST_USERNAME = 1024;
+    const vaultFillable = (value) => typeof value === "string" && value.length > 0 && value.length <= VAULT_LONGEST_VALUE;
+
+    const vaultTokens = (autocomplete) => {
+      const text = apply(vaultLower, VaultText(autocomplete || ""), []);
+      const tokens = vaultList();
+      let token = "";
+      for (let i = 0; i <= text.length; i++) {
+        const code = i < text.length ? apply(vaultCharCodeAt, text, [i]) : 32;
+        if (!vaultIsSpace(code)) {
+          token += apply(vaultFromCharCode, null, [code]);
+          continue;
+        }
+        if (token && token !== "webauthn") vaultAdd(tokens, token);
+        token = "";
+      }
+      return tokens.length ? tokens[tokens.length - 1] : "";
+    };
+
+    const vaultClassify = (d) => {
+      const type = d.type || "text";
+      if (!vaultIncludes(VAULT_TEXT_TYPES, type)) return null;
+      const hints = vaultWords(d.hints);
+      const formContext = vaultWords(d.formContext);
+      const context = formContext + " " + (d.pageContext || "");
+      const token = vaultTokens(d.autocomplete);
+      const loginContext = vaultHas(VAULT_LOGIN, formContext) || vaultHas(VAULT_LOGIN_PAGE, d.pageContext || "");
+      const signupContext = vaultHas(VAULT_SIGNUP, formContext);
+      if (token === "one-time-code") return "otp";
+      if (type === "password") {
+        if (token === "current-password") return "password";
+        if (token === "new-password") return "newPassword";
+        if (vaultHas(VAULT_OTP_STRONG, hints) && d.passwordCount < 2) return "otp";
+        if (vaultHas(VAULT_CURRENT_PASSWORD, hints)) return "password";
+        if (vaultHas(VAULT_NEW_PASSWORD, hints)) return "newPassword";
+        if (d.passwordCount >= 3) return d.passwordIndex === 0 ? "password" : "newPassword";
+        if (d.passwordCount === 2) return !d.otherPasswordCurrent && d.otherPasswordFresh && !signupContext ? "password" : "newPassword";
+        return signupContext && !vaultHas(/log.?in|sign.?in/, formContext) ? "newPassword" : "password";
+      }
+      if (token === "current-password" || token === "new-password") return null;
+      if (d.splitRun) return "otp";
+      if (token === "username") return "username";
+      if (token === "email") return d.passwordCount > 0 || loginContext || vaultHas(VAULT_USER, hints) ? "username" : null;
+      if (token && vaultHas(vaultOtherToken, token)) return null;
+      const numeric = d.inputMode === "numeric" || d.inputMode === "decimal" || type === "tel" || type === "number" || vaultHas(/\\d|\[0-9\]/, d.pattern || "");
+      const shortCode = d.maxLength >= 4 && d.maxLength <= 10;
+      if (!vaultHas(VAULT_OTP_NOT, hints)) {
+        if (vaultHas(VAULT_OTP_STRONG, hints)) return "otp";
+        if (vaultHas(VAULT_OTP_WEAK, hints) && (numeric || shortCode)) return "otp";
+        if (numeric && d.maxLength >= 6 && d.maxLength <= 8 && vaultHas(VAULT_OTP_WEAK, hints + " " + context)) return "otp";
+      }
+      if (type === "number") return null;
+      if (vaultHas(VAULT_NOT_LOGIN, hints) && !vaultHas(/user|login|sign.?in|identifier/, hints)) return null;
+      if (vaultHas(VAULT_USER, hints) && !vaultHas(VAULT_EMAIL, hints)) return type === "url" ? null : "username";
+      if (vaultHas(VAULT_EMAIL, hints) || type === "email") return d.passwordCount > 0 || loginContext ? "username" : null;
+      if (d.precedesPassword && type !== "url") return "username";
+      return null;
+    };
+
+    const vaultAttr = (el, name) => {
+      const value = apply(vaultAttrOf, el, [name]);
+      return typeof value === "string" ? value : "";
+    };
+    const vaultLowered = (text) => apply(vaultLower, VaultText(text || ""), []);
+    const vaultProtoOf = (name) => (typeof globalThis[name] === "function" ? globalThis[name].prototype : null);
+    const vaultInputType = vaultGetterOf(HTMLInputElement.prototype, "type");
+    const vaultInputDisabled = vaultGetterOf(HTMLInputElement.prototype, "disabled");
+    const vaultInputReadOnly = vaultGetterOf(HTMLInputElement.prototype, "readOnly");
+    const vaultParentNodeOf = vaultGetterOf(vaultProtoOf("Node"), "parentNode");
+    const vaultNodeTypeOf = vaultGetterOf(vaultProtoOf("Node"), "nodeType");
+    const vaultHostOf = vaultGetterOf(vaultProtoOf("ShadowRoot"), "host");
+    const vaultContains = (vaultProtoOf("Node") || {}).contains;
+    const vaultDocumentElement = vaultGetterOf(vaultProtoOf("Document"), "documentElement");
+    const vaultIsConnected = vaultGetterOf(vaultProtoOf("Node"), "isConnected");
+    const vaultTagOf = vaultGetterOf(Element.prototype, "tagName");
+    const vaultShadowRootOf = vaultGetterOf(Element.prototype, "shadowRoot");
+    const vaultLabelsOf = vaultGetterOf(HTMLInputElement.prototype, "labels");
+    const vaultLabelControlOf = vaultGetterOf(vaultProtoOf("HTMLLabelElement"), "control");
+    const vaultSelectionStartOf = vaultGetterOf(HTMLInputElement.prototype, "selectionStart");
+    const vaultSelectionEndOf = vaultGetterOf(HTMLInputElement.prototype, "selectionEnd");
+    const vaultScrollWidthOf = vaultGetterOf(Element.prototype, "scrollWidth");
+    const vaultScrollHeightOf = vaultGetterOf(Element.prototype, "scrollHeight");
+    const vaultCountOf = (() => {
+      const list = vaultProtoOf("NodeList");
+      const property = list ? Object.getOwnPropertyDescriptor(list, "length") : null;
+      const read = property && property.get;
+      return (items) => (!items ? 0 : read && typeof items === "object" && !vaultIsArray(items) ? apply(read, items, []) : items.length);
+    })();
+    const vaultTextContentOf = vaultGetterOf(vaultProtoOf("Node"), "textContent");
+    const vaultChildCountOf = vaultGetterOf(Element.prototype, "childElementCount");
+    const vaultMatchesSelector = Element.prototype.matches;
+    const vaultDisabled = (el) => {
+      try {
+        return !!apply(vaultMatchesSelector, el, [":disabled"]);
+      } catch (e) {
+        return apply(vaultAttrOf, el, ["disabled"]) !== null;
+      }
+    };
+    const VAULT_USERNAME_TYPES = ["text", "email", "tel", ""];
+    const vaultElementFromPoint = (vaultProtoOf("Document") || {}).elementFromPoint || document.elementFromPoint;
+    const vaultIsInput = (el) => !!el && typeof el === "object" && apply(vaultHasInstance, VaultInputElement, [el]);
+    const vaultTypeOf = (el) => vaultLowered((vaultIsInput(el) ? vaultInputType(el) : el.type) || "text");
+    const vaultValueOf = (el) => apply(vaultGetValue, el, []) || "";
+    const vaultParentOf = (node) => {
+      const parent = vaultParentNodeOf(node);
+      if (!parent) return null;
+      const kind = vaultNodeTypeOf(parent);
+      if (kind === 1) return parent;
+      return kind === 11 ? vaultHostOf(parent) || null : null;
+    };
+    const VAULT_SMALLEST = 8;
+    const VAULT_FAINTEST = 0.05;
+    const VAULT_ANCESTORS = 48;
+    const vaultStyleValue = (style, name) => (style ? VaultText(apply(vaultCSSValue, style, [name]) || "") : "");
+    const vaultFilterOpacity = (filter) => {
+      let value = 1;
+      const opacity = /opacity\(\s*([\d.]+)(%?)\s*\)/g;
+      for (let m = apply(vaultExec, opacity, [filter]); m; m = apply(vaultExec, opacity, [filter])) {
+        const amount = vaultParseNumber(m[1]) / (m[2] ? 100 : 1);
+        if (amount >= 0) value *= vaultMin(amount, 1);
+      }
+      return value;
+    };
+    const vaultOpacityOf = (style) => {
+      const value = vaultParseNumber(vaultStyleValue(style, "opacity"));
+      return (value >= 0 ? value : 1) * vaultFilterOpacity(vaultStyleValue(style, "filter"));
+    };
+    const vaultScrollOf = (name) => {
+      const property = Object.getOwnPropertyDescriptor(window, name);
+      const read = property && property.get;
+      return () => (read ? apply(read, window, []) : window[name]) || 0;
+    };
+    const vaultScrollX = vaultScrollOf("scrollX");
+    const vaultScrollY = vaultScrollOf("scrollY");
+    const vaultViewWidth = vaultScrollOf("innerWidth");
+    const vaultViewHeight = vaultScrollOf("innerHeight");
+    const vaultOffscreen = (r) => {
+      const left = r.left + vaultScrollX();
+      const top = r.top + vaultScrollY();
+      if (left + r.width <= 0 || top + r.height <= 0) return true;
+      const root = vaultDocumentElement(document);
+      const wide = root ? vaultScrollWidthOf(root) : 0;
+      const tall = root ? vaultScrollHeightOf(root) : 0;
+      return (wide > 0 && left >= wide) || (tall > 0 && top >= tall);
+    };
+    const vaultCovered = (el, r) => {
+      if (typeof vaultElementFromPoint !== "function") return false;
+      const x = r.left + r.width / 2;
+      const y = r.top + r.height / 2;
+      if (x < 0 || y < 0 || x >= vaultViewWidth() || y >= vaultViewHeight()) return false;
+      const hit = apply(vaultElementFromPoint, document, [x, y]);
+      if (!hit || hit === el) return false;
+      for (let node = vaultParentOf(el); node; node = vaultParentOf(node)) if (node === hit) return false;
+      if (vaultContains && apply(vaultContains, el, [hit])) return false;
+      const label = vaultNodeTypeOf(hit) === 1 ? apply(vaultClosest, hit, ["label"]) : null;
+      return !(label && vaultLabelControlOf(label) === el);
+    };
+    const VAULT_MASKS = ["clip-path", "mask-image", "-webkit-mask-image"];
+    const vaultMasked = (style) =>
+      vaultSome(VAULT_MASKS, (name) => {
+        const value = vaultStyleValue(style, name);
+        return !!value && value !== "none";
+      });
+    const vaultClipsTiny = (node, style) => {
+      const overflow = vaultStyleValue(style, "overflow");
+      if (!overflow || overflow === "visible") return false;
+      const box = apply(vaultRectOf, node, []);
+      return !!box && (box.width < VAULT_SMALLEST || box.height < VAULT_SMALLEST);
+    };
+    const vaultShowingOf = (node, depth) => {
+      if (!node || depth >= VAULT_ANCESTORS) return 1;
+      const known = vaultPass ? vaultPass.showing.get(node) : undefined;
+      if (known !== undefined) return known;
+      const style = apply(vaultStyleOf, window, [node]);
+      const showing = vaultClipsTiny(node, style) ? 0 : vaultOpacityOf(style) * vaultShowingOf(vaultParentOf(node), depth + 1);
+      if (vaultPass) vaultPass.showing.set(node, showing);
+      return showing;
+    };
+    const vaultConcealedByAncestor = (el) => vaultShowingOf(vaultParentOf(el), 0) < VAULT_FAINTEST;
+    const vaultHidden = (el) => {
+      const input = vaultIsInput(el);
+      if ((input ? vaultInputDisabled(el) || vaultInputReadOnly(el) : vaultDisabled(el)) || vaultTypeOf(el) === "hidden") return true;
+      const r = apply(vaultRectOf, el, []);
+      if (!r || r.width < VAULT_SMALLEST || r.height < VAULT_SMALLEST || vaultOffscreen(r)) return true;
+      const style = apply(vaultStyleOf, window, [el]);
+      const visibility = vaultStyleValue(style, "visibility");
+      if (visibility === "hidden" || visibility === "collapse" || vaultStyleValue(style, "display") === "none" || vaultOpacityOf(style) < VAULT_FAINTEST) return true;
+      if (input && vaultMasked(style)) return true;
+      if (apply(vaultClosest, el, ['[aria-hidden="true"], [inert], [role="search"]'])) return true;
+      return vaultConcealedByAncestor(el) || vaultCovered(el, r);
+    };
+    let vaultPass = null;
+    const vaultInOnePass = (fn) =>
+      function () {
+        if (vaultPass) return apply(fn, this, arguments);
+        vaultPass = { usable: vaultTable(), inputs: vaultTable(), showing: vaultTable() };
+        try {
+          return apply(fn, this, arguments);
+        } finally {
+          vaultPass = null;
+        }
+      };
+    const vaultGuard = (fn) => guard(vaultInOnePass(fn));
+    const vaultUsable = (el) => {
+      if (!vaultIsInput(el)) return false;
+      const known = vaultPass ? vaultPass.usable.get(el) : undefined;
+      if (known !== undefined) return known;
+      const usable = !vaultHidden(el);
+      if (vaultPass) vaultPass.usable.set(el, usable);
+      return usable;
+    };
+    const vaultNodes = (root, query, selector) => {
+      const found = apply(query, root, [selector]);
+      return vaultListOf(found, vaultCountOf(found));
+    };
+    const vaultInputsUncached = (scope) => {
+      if (vaultIsInput(scope)) return vaultAdd(vaultList(), scope);
+      const light = vaultNodes(scope, vaultQuery, "input");
+      if (light.length > 40) return light;
+      const found = vaultList();
+      const visit = (root, query, depth) => {
+        const all = vaultNodes(root, query, "*");
+        if (all.length > 2000) {
+          if (root === scope) for (let i = 0; i < light.length; i++) vaultAdd(found, light[i]);
+          return;
+        }
+        for (let i = 0; i < all.length; i++) {
+          const el = all[i];
+          if (vaultIsInput(el)) vaultAdd(found, el);
+          else if (depth < 4) {
+            const shadow = vaultShadowRootOf(el);
+            if (shadow) visit(shadow, vaultFragmentQuery, depth + 1);
+          }
+        }
+      };
+      visit(scope, vaultQuery, 0);
+      return found;
+    };
+    const vaultInputsIn = (scope) => {
+      const known = vaultPass ? vaultPass.inputs.get(scope) : undefined;
+      if (known) return vaultFrom(known, 0);
+      const found = vaultInputsUncached(scope);
+      if (vaultPass) vaultPass.inputs.set(scope, found);
+      return vaultFrom(found, 0);
+    };
+    const vaultUsableIn = (scope) => vaultFilter(vaultInputsIn(scope), vaultUsable);
+    const vaultIsPassword = (el) => vaultTypeOf(el) === "password" || el === revealedField;
+    const VAULT_CONTAINER_MOST_INPUTS = 256;
+    const vaultCrowded = (node) => vaultInputsIn(node).length > VAULT_CONTAINER_MOST_INPUTS;
+    const vaultContainerOf = (el) => {
+      const form = vaultIsInput(el) ? apply(vaultFormOf, el, []) : apply(vaultClosest, el, ["form"]);
+      if (form && !vaultCrowded(form)) return form;
+      let best = null;
+      for (let node = vaultParentOf(el), depth = 0; node && depth < 8 && !vaultCrowded(node); node = vaultParentOf(node), depth++) {
+        const inputs = vaultUsableIn(node);
+        if (inputs.length > 24) break;
+        if (vaultSome(inputs, vaultIsPassword)) return node;
+        if (!best && inputs.length > 1) best = node;
+      }
+      const parent = vaultParentOf(el);
+      return best || (parent && !vaultCrowded(parent) ? parent : el);
+    };
+    const vaultTextOf = (el, max) => {
+      const content = el ? vaultTextContentOf(el) : "";
+      const text = typeof content === "string" ? content : "";
+      return text.length > max ? vaultSlice(text, 0, max) : text;
+    };
+    const vaultHintsOf = (el) => {
+      const parts = [vaultAttr(el, "name"), vaultAttr(el, "id"), vaultAttr(el, "placeholder"), vaultAttr(el, "aria-label"), vaultAttr(el, "title"), vaultAttr(el, "data-testid")];
+      const labels = vaultIsInput(el) ? vaultLabelsOf(el) : null;
+      if (labels) for (let i = 0, n = vaultCountOf(labels); i < n && i < 3; i++) vaultAdd(parts, vaultTextOf(labels[i], 80));
+      return vaultJoin(parts, " ");
+    };
+    const vaultFormContextOf = (scope) => {
+      const parts = [vaultAttr(scope, "id"), vaultAttr(scope, "name"), vaultAttr(scope, "action"), vaultAttr(scope, "class"), vaultAttr(scope, "aria-label")];
+      const buttons = vaultNodes(scope, vaultQuery, 'button, input[type="submit"], [role="button"]');
+      for (let i = 0; i < buttons.length && i < 4; i++) {
+        vaultAdd(parts, vaultTextOf(buttons[i], 40));
+        vaultAdd(parts, vaultAttr(buttons[i], "value"));
+      }
+      return vaultJoin(parts, " ");
+    };
+    const vaultSplitRunOf = (el) => {
+      if (vaultAttr(el, "maxlength") !== "1") return null;
+      for (let node = vaultParentOf(el), depth = 0; node && depth < 3; node = vaultParentOf(node), depth++) {
+        const run = vaultFilter(vaultInputsIn(node), (i) => vaultAttr(i, "maxlength") === "1" && vaultTypeOf(i) !== "password" && vaultUsable(i));
+        if (run.length >= 4 && run.length <= 8 && vaultIncludes(run, el)) return run;
+        if (run.length > 8) return null;
+      }
+      return null;
+    };
+    const vaultDescribe = (el, scope, inputs) => {
+      const passwords = vaultFilter(inputs, vaultIsPassword);
+      const index = vaultIndexOf(passwords, el);
+      const others = vaultMap(vaultFilter(passwords, (p) => p !== el), (p) => vaultWords(vaultHintsOf(p)));
+      const firstPassword = passwords.length ? vaultIndexOf(inputs, passwords[0]) : -1;
+      let precedesPassword = false;
+      if (firstPassword > 0 && !vaultIsPassword(el)) {
+        for (let i = firstPassword - 1; i >= 0; i--) {
+          const candidate = inputs[i];
+          if (!vaultIncludes(VAULT_USERNAME_TYPES, vaultTypeOf(candidate))) continue;
+          precedesPassword = candidate === el;
+          break;
+        }
+      }
+      const maxLength = vaultParseWhole(vaultAttr(el, "maxlength"), 10);
+      return {
+        type: vaultTypeOf(el) === "text" && el === revealedField ? "password" : vaultTypeOf(el),
+        autocomplete: vaultAttr(el, "autocomplete"),
+        hints: vaultHintsOf(el),
+        inputMode: vaultLowered(vaultAttr(el, "inputmode")),
+        pattern: vaultAttr(el, "pattern"),
+        maxLength: maxLength > 0 ? maxLength : -1,
+        passwordCount: passwords.length,
+        passwordIndex: index,
+        otherPasswordCurrent: vaultSome(others, (h) => vaultHas(VAULT_CURRENT_PASSWORD, h)),
+        otherPasswordFresh: vaultSome(others, (h) => vaultHas(/new/, h) && !vaultHas(VAULT_CONFIRM_PASSWORD, h)),
+        precedesPassword,
+        splitRun: !!vaultSplitRunOf(el),
+        formContext: vaultFormContextOf(scope),
+        pageContext: vaultLowered(location.hostname + location.pathname),
+      };
+    };
+    const vaultFieldsIn = (scope) => {
+      const inputs = vaultUsableIn(scope);
+      const fields = vaultList();
+      for (let i = 0; i < inputs.length; i++) {
+        const el = inputs[i];
+        const kind = vaultClassify(vaultDescribe(el, scope, inputs));
+        if (kind) vaultAdd(fields, { el, kind });
+      }
+      return { inputs, fields, hasPassword: vaultSome(inputs, vaultIsPassword) };
+    };
+    const vaultKindOf = (el) => {
+      if (!vaultUsable(el)) return null;
+      const scope = vaultContainerOf(el);
+      const inputs = vaultUsableIn(scope);
+      vaultAddOnce(inputs, el);
+      const kind = vaultClassify(vaultDescribe(el, scope, inputs));
+      if (!kind) return null;
+      const maxLength = apply(vaultMaxLengthOf, el, []);
+      return {
+        kind,
+        formHasPassword: vaultSome(inputs, vaultIsPassword),
+        maxLength: typeof maxLength === "number" && maxLength > 0 ? maxLength : 0,
+        email: kind === "username" && (vaultTypeOf(el) === "email" || vaultTokens(vaultAttr(el, "autocomplete")) === "email" || vaultHas(VAULT_EMAIL, vaultWords(vaultHintsOf(el)))),
+      };
+    };
+
+    const vaultTyped = vaultMarks();
+    const vaultFilledByUs = vaultMarks();
+    let vaultLastField = null;
+    let vaultLastInfo = null;
+    let vaultFocused = null;
+    let vaultFocusedInfo = null;
+    let vaultMenuOpen = false;
+    let vaultMenuHighlighted = false;
+    let vaultClearedSent = false;
+    let vaultRectQueued = false;
+    let vaultStepUser = null;
+    let vaultLastSubmit = null;
+
+    const vaultTargetOf = (e) => {
+      const path = apply(vaultPathOf, e, []);
+      return path && path.length ? path[0] : e.target;
+    };
+    const vaultViewport = window.visualViewport || null;
+    const vaultRect = (el) => (isTop ? fieldProviders.fieldRect(el) : null);
+    let vaultSentRect = null;
+    let vaultFocusAuto = false;
+    const vaultSameRect = (a, b) => !!a && !!b && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+    const vaultReport = (el, info, focused, clicked) => {
+      if (!fieldProviders.menuMode()) return;
+      const look = focused && isTop ? fieldProviders.fieldLook(el) : null;
+      vaultSentRect = look ? look.rect : null;
+      send("vaultField", {
+        kind: info.kind,
+        focused,
+        rect: look ? look.rect : null,
+        formHasPassword: info.formHasPassword,
+        maxLength: info.maxLength,
+        email: info.email,
+        clicked: !!clicked,
+        auto: !!focused && vaultFocusAuto,
+        rtl: !!look && look.rtl,
+        darkField: look ? look.darkField : null,
+        brandColor: look ? look.brandColor : null,
+        trailingTaken: !!look && look.trailingTaken,
+        inset: look ? look.inset : null,
+        webauthn: vaultHas(/(^|\s)webauthn(\s|$)/i, vaultAttr(el, "autocomplete") || ""),
+      });
+    };
+    const vaultBlur = () => {
+      const el = vaultFocused;
+      const info = vaultFocusedInfo;
+      vaultFocused = vaultFocusedInfo = null;
+      vaultMenuOpen = vaultMenuHighlighted = false;
+      if (el && info) vaultReport(el, info, false);
+    };
+    const vaultStillFocused = (el) => !!el && vaultIsConnected(el) && !!apply(vaultClosest, el, [":focus"]);
+    const vaultFocus = (el, retried) => {
+      const info = vaultIsInput(el) ? vaultKindOf(el) : null;
+      if (!info) {
+        if (!retried && vaultIsInput(el) && vaultInputReadOnly(el))
+          apply(vaultNextFrame, window, [vaultGuard(() => vaultStillFocused(el) && !vaultFocused && vaultFocus(el, true))]);
+        return;
+      }
+      if (!vaultLoginPageSent) vaultLookForLogin();
+      vaultLastField = el;
+      vaultLastInfo = info;
+      vaultFocused = el;
+      vaultFocusedInfo = info;
+      vaultClearedSent = false;
+      const chosen = vaultChoseField(el);
+      vaultFocusAuto = !chosen;
+      vaultReport(el, info, true, chosen);
+    };
+    const vaultResend = () => {
+      vaultRectQueued = false;
+      if (vaultFocused && !vaultIsConnected(vaultFocused)) return vaultBlur();
+      if (vaultFocused && vaultFocusedInfo) vaultReport(vaultFocused, vaultFocusedInfo, true);
+    };
+    let vaultWatching = false;
+    const vaultWatch = () => {
+      if (!vaultMenuOpen || !vaultFocused) {
+        vaultWatching = false;
+        return;
+      }
+      if (!vaultIsConnected(vaultFocused)) {
+        vaultWatching = false;
+        return vaultBlur();
+      }
+      if (isTop && !vaultSameRect(vaultRect(vaultFocused), vaultSentRect)) vaultReport(vaultFocused, vaultFocusedInfo, true);
+      apply(vaultNextFrame, window, [vaultGuard(vaultWatch)]);
+    };
+    const vaultStartWatch = () => {
+      if (vaultWatching || !vaultMenuOpen) return;
+      vaultWatching = true;
+      apply(vaultNextFrame, window, [vaultGuard(vaultWatch)]);
+    };
+    const vaultQueueRect = () => {
+      if (!isTop || !vaultFocused || vaultRectQueued) return;
+      vaultRectQueued = true;
+      apply(vaultNextFrame, window, [vaultGuard(vaultResend)]);
+    };
+    fieldProviders.onMenuMode(
+      vaultGuard((on) => {
+        if (!vaultFocused || !vaultFocusedInfo) return;
+        if (!on) {
+          vaultMenuOpen = vaultMenuHighlighted = false;
+          return vaultReport(vaultFocused, vaultFocusedInfo, false);
+        }
+        if (vaultIsConnected(vaultFocused)) vaultReport(vaultFocused, vaultFocusedInfo, true);
+      }),
+    );
+
+    const VAULT_EMAIL_TEXT = /^[^\s@<>()[\]\\,;:"']{1,64}@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\.[a-z]{2,24}$/i;
+    const VAULT_PLACEHOLDER_EMAIL = /^(name|you|your.?name|your.?email|email|user|username|someone|john.?doe|jane.?doe)@/i;
+    const VAULT_NO_TEXT_TAGS = ["script", "style", "template", "noscript", "title", "textarea", "option", "select"];
+    const vaultTrimmed = (text) => apply(vaultTrim, VaultText(text || ""), []);
+    const vaultFilledValueOf = (el) => vaultTrimmed(vaultValueOf(el));
+    const vaultDocumentInputs = () => {
+      const root = document.documentElement;
+      return root ? vaultInputsIn(root) : [];
+    };
+    const vaultEmailTextIn = (root) => {
+      const all = apply(vaultQuery, root, ["*"]);
+      if (all.length > 3000) return "";
+      for (let i = 0; i < all.length; i++) {
+        const el = all[i];
+        if (vaultChildCountOf(el) > 1) continue;
+        if (vaultIncludes(VAULT_NO_TEXT_TAGS, vaultLowered(vaultTagOf(el)))) continue;
+        const text = vaultTrimmed(vaultTextOf(el, 121));
+        if (!text || text.length > 120 || !vaultHas(VAULT_EMAIL_TEXT, text) || vaultHas(VAULT_PLACEHOLDER_EMAIL, text)) continue;
+        if (apply(vaultClosest, el, ['a[href^="mailto:"], [aria-hidden="true"]'])) continue;
+        return text;
+      }
+      return "";
+    };
+    const vaultEmailNear = (scope) => {
+      let node = scope && vaultNodeTypeOf(scope) === 1 ? scope : null;
+      for (let depth = 0; node && depth <= 3; depth++, node = vaultParentOf(node)) {
+        const found = vaultEmailTextIn(node);
+        if (found) return found;
+      }
+      return "";
+    };
+    const VAULT_STEP_USERNAME_LIFETIME = 600000;
+    const VAULT_ACCOUNT_TOKENS = ["username", "email"];
+    const vaultUsernameFor = (scope, inputs, fields) => {
+      const found = (el, from) => ({ username: vaultFilledValueOf(el), from });
+      const inScope = vaultFind(fields, (f) => f.kind === "username" && vaultFilledValueOf(f.el));
+      if (inScope) return found(inScope.el, "form");
+      const scopeEmail = vaultFind(inputs, (el) => vaultTypeOf(el) === "email" && vaultFilledValueOf(el));
+      if (scopeEmail) return found(scopeEmail, "form");
+      const everywhere = vaultFilter(vaultDocumentInputs(), (el) => !vaultIsPassword(el));
+      const tokened = vaultFind(everywhere, (el) => vaultIncludes(VAULT_ACCOUNT_TOKENS, vaultTokens(vaultAttr(el, "autocomplete"))) && vaultFilledValueOf(el));
+      if (tokened) return found(tokened, "page");
+      const shownEmail = vaultFind(everywhere, (el) => vaultTypeOf(el) === "email" && vaultUsable(el) && vaultFilledValueOf(el));
+      if (shownEmail) return found(shownEmail, "page");
+      if (vaultStepUser && vaultNow() - vaultStepUser.at < VAULT_STEP_USERNAME_LIFETIME) return { username: vaultStepUser.username, from: "step" };
+      const near = vaultEmailNear(scope);
+      return { username: near, from: near ? "nearby" : "" };
+    };
+
+    const VAULT_GESTURE_WINDOW = 1000;
+    let vaultGesture = null;
+    const vaultNoteGesture = (control) => {
+      vaultGesture = control ? { control, at: vaultNow() } : null;
+    };
+    const vaultButtonFormOf = vaultGetterOf(vaultProtoOf("HTMLButtonElement"), "form");
+    const vaultOwnerFormOf = (control) => {
+      const tag = vaultTagOf(control);
+      if (tag === "INPUT") return apply(vaultFormOf, control, []);
+      if (tag === "BUTTON") return vaultButtonFormOf(control);
+      return null;
+    };
+    const vaultSubmittedByGesture = (form) => {
+      const gesture = vaultGesture;
+      if (!gesture || vaultNow() - gesture.at > VAULT_GESTURE_WINDOW) return false;
+      const control = gesture.control;
+      return vaultOwnerFormOf(control) === form || (!!vaultContains && !!apply(vaultContains, form, [control]));
+    };
+    const VAULT_FOCUS_WINDOW = 500;
+    let vaultTabAt = -Infinity;
+    let vaultPressed = null;
+    let vaultPressedAt = -Infinity;
+    const vaultPressedOn = (el) => {
+      if (!vaultPressed || vaultNow() - vaultPressedAt > VAULT_FOCUS_WINDOW) return false;
+      if (vaultPressed === el) return true;
+      const label = vaultNodeTypeOf(vaultPressed) === 1 ? apply(vaultClosest, vaultPressed, ["label"]) : null;
+      return !!label && vaultLabelControlOf(label) === el;
+    };
+    const vaultSendKey = (key) => fieldProviders.menuMode() && send("vaultKey", { key });
+    const vaultChoseField = (el) => vaultNow() - vaultTabAt <= VAULT_FOCUS_WINDOW || vaultPressedOn(el);
+    const vaultSubmitFrom = (scope, trusted) => {
+      if (!scope || !fieldProviders.menuMode()) return;
+      const { inputs, fields } = vaultFieldsIn(scope);
+      const secrets = vaultFilter(fields, (f) => (f.kind === "password" || f.kind === "newPassword") && vaultValueOf(f.el) && (vaultTyped.has(f.el) || vaultFilledByUs.has(f.el)));
+      if (!secrets.length) {
+        const user = vaultFind(fields, (f) => f.kind === "username" && vaultFilledValueOf(f.el));
+        if (user && !vaultSome(fields, (f) => f.kind === "password" || f.kind === "newPassword"))
+          vaultStepUser = { username: vaultSlice(vaultFilledValueOf(user.el), 0, VAULT_LONGEST_USERNAME), at: vaultNow() };
+        return;
+      }
+      const fresh = vaultFilter(secrets, (f) => f.kind === "newPassword");
+      if (fresh.length >= 2 && vaultValueOf(fresh[0].el) !== vaultValueOf(fresh[1].el)) return;
+      const chosen = fresh.length ? fresh[0] : secrets[0];
+      const password = vaultValueOf(chosen.el);
+      const who = vaultUsernameFor(scope, inputs, fields);
+      const username = vaultSlice(who.username, 0, VAULT_LONGEST_USERNAME);
+      const usernameFrom = username ? who.from : "";
+      const isTrusted = trusted === true;
+      const now = vaultNow();
+      const last = vaultLastSubmit;
+      if (last && last.username === username && last.length === password.length && now - last.at < 1000 && (last.trusted || !isTrusted)) return;
+      vaultLastSubmit = { username, length: password.length, at: now, trusted: isTrusted };
+      send("vaultSubmit", { username, password, newPassword: chosen.kind === "newPassword", usernameFrom, trusted: isTrusted });
+      vaultWatchLogin(chosen.el, username);
+    };
+    const VAULT_OUTCOME_STEP = 250;
+    const VAULT_OUTCOME_WAIT = 5000;
+    let vaultLogin = null;
+    const vaultLoginLeft = (login) => !vaultIsConnected(login.field) || !vaultUsable(login.field) || location.href !== login.href;
+    const vaultReportLogin = (login, ok) => {
+      if (vaultLogin !== login) return;
+      vaultLogin = null;
+      if (fieldProviders.menuMode()) send("vaultLoginOutcome", { ok });
+    };
+    const vaultCheckLogin = (login) => {
+      if (vaultLogin !== login) return;
+      if (vaultLoginLeft(login)) return vaultReportLogin(login, true);
+      if (vaultNow() - login.at >= VAULT_OUTCOME_WAIT) return vaultReportLogin(login, false);
+      vaultLater(() => vaultCheckLogin(login), VAULT_OUTCOME_STEP);
+    };
+    const vaultWatchLogin = (field, username) => {
+      const login = { field, username, href: location.href, at: vaultNow() };
+      vaultLogin = login;
+      vaultLater(() => vaultCheckLogin(login), VAULT_OUTCOME_STEP);
+    };
+    const vaultLeaveLogin = () => {
+      const login = vaultLogin;
+      if (!login) return;
+      vaultLogin = null;
+      if (fieldProviders.menuMode()) send("vaultLoginOutcome", { left: true, username: login.username });
+    };
+    const VAULT_LANDING_LOOK_AGAIN = 1500;
+    let vaultLoaded = document.readyState === "complete";
+    const vaultSameUsername = (a, b) => apply(vaultLower, vaultTrimmed(a), []) === apply(vaultLower, vaultTrimmed(b), []);
+    const vaultLoginShownAgain = (username) => {
+      const inputs = vaultFilter(vaultDocumentInputs(), (el) => vaultIsPassword(el) && vaultUsable(el));
+      for (let i = 0; i < inputs.length; i++) {
+        const { fields } = vaultFieldsIn(vaultContainerOf(inputs[i]));
+        if (!vaultSome(fields, (f) => f.el === inputs[i] && f.kind === "password")) continue;
+        const user = vaultFind(fields, (f) => f.kind === "username" && vaultFilledValueOf(f.el));
+        if (!user || !username || vaultSameUsername(vaultFilledValueOf(user.el), username)) return true;
+      }
+      return false;
+    };
+    const vaultCheckLanding = (username, last) => {
+      const failed = vaultLoginShownAgain(username);
+      if (!failed && !last) return vaultLater(() => vaultCheckLanding(username, true), VAULT_LANDING_LOOK_AGAIN);
+      if (fieldProviders.menuMode()) send("vaultLoginOutcome", { checked: true, ok: !failed });
+    };
+    handlers.vaultLoginCheck = vaultInOnePass((message) => {
+      const username = message && typeof message.username === "string" ? message.username : "";
+      if (vaultLoaded) return vaultLater(() => vaultCheckLanding(username, false), 0);
+      apply(vaultListen, window, ["load", vaultGuard(() => vaultLater(() => vaultCheckLanding(username, false), 0)), { once: true }]);
+    });
+    const VAULT_SUBMIT_TEXT = /log.?in|sign.?in|sign.?up|continue|next|submit|register|create|save|enter|\bgo\b|\bok\b|weiter|anmelden|connexion|iniciar|entrar|accedi/;
+    const VAULT_NOT_SUBMIT = /forgot|reset|google|apple|facebook|microsoft|github|twitter|passkey|\bsso\b|cancel|\bback\b|show|hide|reveal|another|different|help/;
+    const VAULT_SIGNUP_TEXT = /sign.?up|regist|create|join/;
+    const VAULT_CONTROLS = 'button, input[type="submit"], input[type="image"], [role="button"]';
+    const VAULT_SUBMIT_TYPES = ["submit", "image"];
+    const vaultButtonTextOf = (button) => vaultLowered(vaultTextOf(button, 60) + " " + vaultAttr(button, "value") + " " + vaultAttr(button, "aria-label"));
+    const vaultButtonType = vaultGetterOf(vaultProtoOf("HTMLButtonElement"), "type");
+    const vaultButtonTypeOf = (button) => {
+      const tag = vaultTagOf(button);
+      if (tag === "INPUT") return vaultTypeOf(button);
+      if (tag === "BUTTON") return vaultLowered(vaultButtonType(button) || vaultAttr(button, "type") || "submit");
+      return vaultLowered(vaultAttr(button, "type"));
+    };
+    const vaultSubmitButtonOf = (el) => {
+      const button = el && vaultNodeTypeOf(el) === 1 ? apply(vaultClosest, el, [VAULT_CONTROLS]) : null;
+      if (!button) return null;
+      const type = vaultButtonTypeOf(button);
+      if ((type === "submit" || type === "image") && apply(vaultClosest, button, ["form"])) return button;
+      return vaultHas(VAULT_SUBMIT_TEXT, vaultButtonTextOf(button)) ? button : null;
+    };
+    const vaultSubmitControlIn = (scope, lastFilled, login) => {
+      const ordered = vaultNodes(scope, vaultQuery, 'input, button, [role="button"]');
+      const lastAt = vaultIndexOf(ordered, lastFilled);
+      const controls = vaultFilter(vaultNodes(scope, vaultQuery, VAULT_CONTROLS), (b) => {
+        if (vaultDisabled(b) || vaultAttr(b, "aria-disabled") === "true" || vaultHidden(b)) return false;
+        const text = vaultButtonTextOf(b);
+        return !vaultHas(VAULT_NOT_SUBMIT, text) && !(login && vaultHas(VAULT_SIGNUP_TEXT, text));
+      });
+      const typed = (b) => vaultIncludes(VAULT_SUBMIT_TYPES, vaultButtonTypeOf(b)) && !!apply(vaultClosest, b, ["form"]);
+      const fits = (b) => typed(b) || vaultHas(VAULT_SUBMIT_TEXT, vaultButtonTextOf(b));
+      const positionOf = (b) => vaultIndexOf(ordered, b);
+      const after = vaultSorted(vaultFilter(controls, (b) => positionOf(b) > lastAt), (a, b) => positionOf(a) - positionOf(b));
+      const before = vaultSorted(vaultFilter(controls, (b) => positionOf(b) < lastAt && typed(b)), (a, b) => positionOf(b) - positionOf(a));
+      return vaultFind(after, typed) || vaultFind(after, fits) || before[0] || null;
+    };
+
+    const VAULT_TINT_LIGHT = "rgba(250, 220, 90, 0.35)";
+    const VAULT_TINT_DARK = "rgba(250, 220, 90, 0.22)";
+    const VAULT_TINT_HOLD = 600;
+    const VAULT_TINT_FADE = 900;
+    const VAULT_TRANSITION_PARTS = ["transition-property", "transition-duration", "transition-timing-function", "transition-delay"];
+    const VAULT_TINTED_PARTS = ["background-color", ...VAULT_TRANSITION_PARTS];
+    const vaultTints = vaultTable();
+    const vaultPrefers = (query) => {
+      try {
+        const list = vaultMedia ? apply(vaultMedia, window, [query]) : null;
+        return !!(list && list.matches);
+      } catch (e) {
+        return false;
+      }
+    };
+    const vaultDarkScheme = (el) => {
+      const style = apply(vaultStyleOf, window, [el]);
+      const scheme = vaultLowered(style && style.colorScheme);
+      if (!vaultHas(/dark/, scheme)) return false;
+      return !vaultHas(/light/, scheme) || vaultPrefers("(prefers-color-scheme: dark)");
+    };
+    const vaultInlineOf = (el) => (vaultInlineStyleOf ? apply(vaultInlineStyleOf, el, []) : el.style);
+    const vaultReadStyle = (style, name) => ({ value: apply(vaultCSSValue, style, [name]), priority: apply(vaultCSSPriority, style, [name]) });
+    const vaultWriteStyle = (style, name, saved) =>
+      saved.value ? apply(vaultCSSSet, style, [name, saved.value, saved.priority]) : apply(vaultCSSRemove, style, [name]);
+    const vaultSetOurStyle = (tint, name, value) => {
+      apply(vaultCSSSet, tint.style, [name, value, "important"]);
+      tint.ours[name] = apply(vaultCSSValue, tint.style, [name]);
+    };
+    const vaultRestoreStyle = (tint, name) => {
+      if (!(name in tint.ours)) return;
+      if (apply(vaultCSSValue, tint.style, [name]) === tint.ours[name]) vaultWriteStyle(tint.style, name, tint.saved[name]);
+      delete tint.ours[name];
+    };
+    const vaultUntint = (el) => {
+      const tint = vaultTints.get(el);
+      if (!tint) return;
+      vaultTints.delete(el);
+      for (let i = 0; i < tint.timers.length; i++) apply(vaultClearTimer, window, [tint.timers[i]]);
+      vaultRestoreStyle(tint, "background-color");
+      for (let i = 0; i < VAULT_TRANSITION_PARTS.length; i++) vaultRestoreStyle(tint, VAULT_TRANSITION_PARTS[i]);
+    };
+    const vaultLater = (fn, ms) => apply(vaultTimer, window, [vaultGuard(fn), ms]);
+    const vaultTint = (el) => {
+      vaultUntint(el);
+      const style = vaultInlineOf(el);
+      if (!style) return;
+      const saved = {};
+      for (let i = 0; i < VAULT_TINTED_PARTS.length; i++) saved[VAULT_TINTED_PARTS[i]] = vaultReadStyle(style, VAULT_TINTED_PARTS[i]);
+      const tint = { style, saved, ours: {}, timers: vaultList() };
+      vaultTints.set(el, tint);
+      const reduced = vaultPrefers("(prefers-reduced-motion: reduce)");
+      vaultSetOurStyle(tint, "transition-property", "none");
+      vaultSetOurStyle(tint, "background-color", vaultDarkScheme(el) ? VAULT_TINT_DARK : VAULT_TINT_LIGHT);
+      if (reduced) {
+        vaultAdd(tint.timers, vaultLater(() => vaultUntint(el), VAULT_TINT_FADE));
+        return;
+      }
+      vaultAdd(
+        tint.timers,
+        vaultLater(() => {
+          if (vaultTints.get(el) !== tint) return;
+          vaultSetOurStyle(tint, "transition-property", "background-color");
+          vaultSetOurStyle(tint, "transition-duration", VAULT_TINT_FADE + "ms");
+          vaultSetOurStyle(tint, "transition-timing-function", "ease-out");
+          vaultSetOurStyle(tint, "transition-delay", "0s");
+          vaultRestoreStyle(tint, "background-color");
+          vaultAdd(tint.timers, vaultLater(() => vaultTints.get(el) === tint && vaultUntint(el), VAULT_TINT_FADE + 50));
+        }, VAULT_TINT_HOLD),
+      );
+    };
+
+    const vaultOptions = { capture: true };
+    const VAULT_MENU_KEYS = ["ArrowDown", "ArrowUp", "Enter", "Escape", "Tab"];
+    apply(vaultListen, document, [
+      "focusin",
+      vaultGuard((e) => {
+        if (!e.isTrusted) return;
+        const el = vaultTargetOf(e);
+        if (el === vaultFocused) {
+          const info = vaultKindOf(el);
+          if (!info) return vaultBlur();
+          vaultFocusedInfo = vaultLastInfo = info;
+          return vaultReport(el, info, true);
+        }
+        if (vaultFocused) vaultBlur();
+        vaultFocus(el);
+      }),
+      vaultOptions,
+    ]);
+    apply(vaultListen, document, [
+      "focusout",
+      vaultGuard((e) => {
+        if (vaultFocused && vaultTargetOf(e) === vaultFocused) vaultBlur();
+      }),
+      vaultOptions,
+    ]);
+    apply(vaultListen, document, [
+      "mousedown",
+      vaultGuard((e) => {
+        if (!e.isTrusted) return;
+        const el = vaultTargetOf(e);
+        vaultPressed = el;
+        vaultPressedAt = vaultNow();
+        if (!vaultFocused && vaultIsInput(el) && vaultStillFocused(el)) vaultFocus(el);
+        if (vaultFocused && el === vaultFocused) {
+          vaultFocusAuto = false;
+          vaultReport(vaultFocused, vaultFocusedInfo, true, true);
+        }
+      }),
+      vaultOptions,
+    ]);
+    apply(vaultListen, document, [
+      "input",
+      vaultGuard((e) => {
+        const el = vaultTargetOf(e);
+        if (!vaultIsInput(el)) return;
+        const empty = !vaultValueOf(el);
+        const typedBefore = vaultTyped.has(el);
+        if (empty) {
+          vaultTyped.delete(el);
+          vaultFilledByUs.delete(el);
+        } else if (e.isTrusted) vaultTyped.add(el);
+        if (!e.isTrusted) return;
+        vaultUntint(el);
+        if (el !== vaultFocused) return;
+        if (vaultIsPassword(el) && empty === typedBefore) vaultQueueRect();
+        if (empty) {
+          if (!vaultClearedSent) vaultSendKey("Cleared");
+          vaultClearedSent = true;
+          return;
+        }
+        vaultClearedSent = false;
+        if (vaultMenuOpen) {
+          vaultMenuOpen = vaultMenuHighlighted = false;
+          vaultSendKey("Typed");
+        }
+      }),
+      vaultOptions,
+    ]);
+    apply(vaultListen, document, [
+      "submit",
+      vaultGuard((e) => {
+        const form = vaultTargetOf(e);
+        if (form && vaultNodeTypeOf(form) === 1) vaultSubmitFrom(form, vaultSubmittedByGesture(form));
+      }),
+      vaultOptions,
+    ]);
+    apply(vaultListen, document, [
+      "click",
+      vaultGuard((e) => {
+        if (!e.isTrusted) return;
+        const button = vaultSubmitButtonOf(vaultTargetOf(e));
+        vaultNoteGesture(button);
+        if (button) vaultSubmitFrom(vaultContainerOf(button), true);
+      }),
+      vaultOptions,
+    ]);
+    apply(vaultListen, window, [
+      "keydown",
+      vaultGuard((e) => {
+        if (!e.isTrusted) return;
+        const el = vaultTargetOf(e);
+        const key = vaultKeyOf(e);
+        const alt = vaultAltOf(e);
+        const ctrl = vaultCtrlOf(e);
+        const meta = vaultMetaOf(e);
+        if (key === "Enter") vaultNoteGesture(vaultIsInput(el) ? el : null);
+        if (key === "Tab" && !alt && !ctrl && !meta) vaultTabAt = vaultNow();
+        if (vaultMenuOpen && vaultFocused && el === vaultFocused && vaultIncludes(VAULT_MENU_KEYS, key)) {
+          const passesToPage = key === "Tab" || (key === "Enter" && !vaultMenuHighlighted);
+          if (!passesToPage) {
+            apply(vaultPrevent, e, []);
+            apply(vaultStopNow, e, []);
+          }
+          if (passesToPage || key === "Escape") vaultMenuOpen = vaultMenuHighlighted = false;
+          vaultSendKey(key);
+          if (key !== "Enter" || !passesToPage) return;
+        }
+        if (!vaultMenuOpen && vaultFocused && el === vaultFocused && key === "ArrowDown" && !alt && !ctrl && !meta && !vaultShiftOf(e)) {
+          vaultSendKey("ArrowDown");
+          return;
+        }
+        if (key === "Enter" && vaultIsInput(el)) vaultSubmitFrom(vaultContainerOf(el), true);
+      }),
+      vaultOptions,
+    ]);
+    apply(vaultListen, window, ["scroll", vaultQueueRect, { capture: true, passive: true }]);
+    apply(vaultListen, window, ["resize", vaultQueueRect]);
+    if (vaultViewport) {
+      apply(vaultListen, vaultViewport, ["resize", vaultQueueRect]);
+      apply(vaultListen, vaultViewport, ["scroll", vaultQueueRect, { passive: true }]);
+    }
+    apply(vaultListen, window, ["pagehide", vaultGuard(vaultBlur)]);
+    apply(vaultListen, window, ["pagehide", vaultGuard(vaultLeaveLogin)]);
+    apply(vaultListen, window, ["load", vaultGuard(() => (vaultLoaded = true)), { once: true }]);
+    apply(vaultListen, window, [
+      "pageshow",
+      vaultGuard((e) => {
+        if (!e.persisted) return;
+        const el = vaultFocused || vaultLastField;
+        vaultFocused = vaultFocusedInfo = null;
+        vaultMenuOpen = vaultMenuHighlighted = false;
+        if (vaultStillFocused(el)) vaultFocus(el);
+      }),
+    ]);
+
+    const VAULT_LOGIN_LOOK_AGAIN = 1500;
+    const VAULT_LOGIN_TOKENS = ["username", "current-password", "one-time-code"];
+    let vaultLoginPageSent = false;
+    const vaultLooksLikeLogin = (el) => (vaultIsPassword(el) || vaultIncludes(VAULT_LOGIN_TOKENS, vaultTokens(vaultAttr(el, "autocomplete")))) && vaultUsable(el);
+    const vaultLookForLogin = () => {
+      if (vaultLoginPageSent || !fieldProviders.menuMode() || !vaultSome(vaultDocumentInputs(), vaultLooksLikeLogin)) return;
+      vaultLoginPageSent = true;
+      send("vaultLoginPage", {});
+    };
+    const vaultLookSoon = () => {
+      vaultLater(vaultLookForLogin, 0);
+      vaultLater(vaultLookForLogin, VAULT_LOGIN_LOOK_AGAIN);
+    };
+    if (document.readyState === "complete") vaultLookSoon();
+    else apply(vaultListen, window, ["load", vaultGuard(vaultLookSoon), { once: true }]);
+
+    const vaultPut = (el, value) => {
+      apply(vaultSetValue, el, [value]);
+      vaultFilledByUs.add(el);
+      apply(vaultDispatch, el, [new VaultInputEvent("input", { bubbles: true, composed: true, inputType: "insertReplacementText", data: value })]);
+      apply(vaultDispatch, el, [new VaultEvent("change", { bubbles: true, composed: true })]);
+    };
+    const vaultSpread = (run, value, steps, touched) => {
+      for (let i = 0; i < value.length; i++) {
+        vaultAdd(steps, { el: run[i], value: value[i] });
+        vaultAddOnce(touched, run[i]);
+      }
+    };
+    const vaultFill = (message, anchor = vaultLastField, anchorInfo = vaultLastInfo) => {
+      if (!message || typeof message.origin !== "string" || message.origin !== vaultOrigin()) return null;
+      if (!anchor || !vaultIsConnected(anchor) || !vaultUsable(anchor)) return null;
+      const scope = vaultContainerOf(anchor);
+      const { inputs, fields } = vaultFieldsIn(scope);
+      if (!vaultIncludes(inputs, anchor)) return null;
+      const anchorField = vaultFind(fields, (f) => f.el === anchor);
+      const anchorKind = anchorField ? anchorField.kind : null;
+      const passwords = vaultFilter(inputs, vaultIsPassword);
+      const ofKind = (kind) => vaultMap(vaultFilter(fields, (f) => f.kind === kind), (f) => f.el);
+      const filled = vaultList();
+      const touched = vaultList();
+      const put = (el, value, name) => {
+        vaultPut(el, value);
+        vaultAddOnce(touched, el);
+        vaultAddOnce(filled, name);
+      };
+      if (vaultFillable(message.username)) {
+        const users = ofKind("username");
+        const target = anchorKind === "username" ? anchor : vaultFind(users, (el) => !passwords.length || vaultIndexOf(inputs, el) < vaultIndexOf(inputs, passwords[0])) || users[0];
+        if (target) put(target, message.username, "username");
+      }
+      if (vaultFillable(message.password)) {
+        const current = ofKind("password");
+        const target = anchorKind === "password" ? anchor : current[0] || (passwords.length === 1 ? passwords[0] : null);
+        if (target) put(target, message.password, "password");
+      }
+      if (vaultFillable(message.newPassword)) {
+        const fresh = ofKind("newPassword");
+        const fromAnchor = anchorKind === "password" && !vaultIncludes(fresh, anchor);
+        const after = vaultFilter(fresh, (el) => vaultIndexOf(inputs, el) > vaultIndexOf(inputs, anchor));
+        const targets = fromAnchor ? vaultFrom(after, 0) : fresh.length ? fresh : passwords.length === 1 ? passwords : vaultList();
+        if (fromAnchor) put(anchor, message.newPassword, "newPassword");
+        for (let i = 0; i < targets.length; i++) put(targets[i], message.newPassword, "newPassword");
+      }
+      const steps = vaultList();
+      if (vaultFillable(message.otp)) {
+        const codeAnchor = anchorKind === "otp" || (!anchorKind && !!anchorInfo && anchorInfo.kind === "otp");
+        const run = codeAnchor ? vaultSplitRunOf(anchor) : null;
+        if (run && message.otp.length <= run.length) {
+          vaultSpread(run, message.otp, steps, touched);
+          vaultAddOnce(filled, "otp");
+        } else {
+          const target = codeAnchor ? anchor : ofKind("otp")[0];
+          if (target) put(target, message.otp, "otp");
+        }
+      }
+      vaultSorted(touched, (a, b) => vaultIndexOf(inputs, a) - vaultIndexOf(inputs, b));
+      return { filled, touched, scope, anchor, inputs, steps, origin: message.origin };
+    };
+    const vaultFocusAfter = (fill) => {
+      const { touched, inputs, scope } = fill;
+      if (!touched.length) return;
+      const last = vaultIndexOf(inputs, touched[touched.length - 1]);
+      const next = vaultFind(vaultFrom(inputs, last + 1), (el) => vaultIncludes(VAULT_TEXT_TYPES, vaultTypeOf(el)) && !vaultValueOf(el));
+      const submit = next ? null : vaultFind(vaultNodes(scope, vaultQuery, 'button, input[type="submit"]'), (b) => vaultButtonTypeOf(b) === "submit" && !vaultHidden(b));
+      const focusTarget = next || submit;
+      if (focusTarget) apply(vaultFocusOn, focusTarget, []);
+    };
+    const vaultRunSteps = (fill, done) => {
+      const step = fill.steps[fill.step || 0];
+      fill.step = (fill.step || 0) + 1;
+      if (!step) return done();
+      if (vaultOrigin() !== fill.origin || !vaultIsConnected(step.el)) {
+        fill.steps = vaultList();
+        fill.filled = vaultList();
+        fill.touched = vaultList();
+        return done();
+      }
+      apply(vaultFocusOn, step.el, []);
+      vaultLater(() => {
+        vaultPut(step.el, step.value);
+        vaultRunSteps(fill, done);
+      }, 0);
+    };
+
+    const VAULT_SUBMIT_DELAY = 60;
+    const VAULT_REMEMBERED_FILLS = 32;
+    const vaultSubmittedFills = vaultList();
+    const vaultBlocksSubmit = (el, inputs) => {
+      if (vaultInputDisabled(el) || vaultTypeOf(el) === "hidden") return false;
+      if (apply(vaultAttrOf, el, ["required"]) === null && vaultAttr(el, "aria-required") !== "true") return false;
+      const type = vaultTypeOf(el);
+      if (type === "checkbox") return !apply(vaultCheckedOf, el, []);
+      if (type === "radio") {
+        const name = vaultAttr(el, "name");
+        return !vaultSome(inputs, (other) => vaultTypeOf(other) === "radio" && (other === el || (name && vaultAttr(other, "name") === name)) && apply(vaultCheckedOf, other, []));
+      }
+      return vaultIncludes(VAULT_EDITABLE_TYPES, type) && !vaultHidden(el) && !vaultValueOf(el);
+    };
+    const VAULT_ENTER_STEPS = ["keydown", "keypress", "keyup"];
+    const VAULT_KEY_CODES = ["keyCode", "which", "charCode"];
+    const vaultPressEnter = (el) => {
+      let proceed = true;
+      for (let i = 0; i < VAULT_ENTER_STEPS.length; i++) {
+        const type = VAULT_ENTER_STEPS[i];
+        if (type === "keypress" && !proceed) continue;
+        const code = type === "keypress" ? 13 : 0;
+        const init = { key: "Enter", code: "Enter", keyCode: 13, which: 13, charCode: code, bubbles: true, cancelable: true, composed: true };
+        const event = new VaultKeyboardEvent(type, init);
+        for (let j = 0; j < VAULT_KEY_CODES.length; j++) {
+          const name = VAULT_KEY_CODES[j];
+          if (event[name] === init[name]) continue;
+          try {
+            vaultDefine(event, name, { value: init[name], configurable: true });
+          } catch (e) {}
+        }
+        const result = apply(vaultDispatch, el, [event]);
+        if (type === "keydown") proceed = result !== false;
+      }
+    };
+    const vaultAutoSubmit = (fill) => {
+      const { scope, origin, touched } = fill;
+      if (vaultOrigin() !== origin || !vaultIsConnected(scope)) return;
+      const inputs = vaultInputsIn(scope);
+      const shown = vaultFilter(inputs, vaultUsable);
+      const kept = vaultFilter(touched, (el) => vaultIsConnected(el) && vaultValueOf(el));
+      if (!kept.length) return;
+      if (vaultSome(shown, (el) => vaultIsPassword(el) && !vaultValueOf(el))) return;
+      if (vaultSome(inputs, (el) => vaultBlocksSubmit(el, inputs))) return;
+      const anchor = vaultIsConnected(fill.anchor) ? fill.anchor : kept[kept.length - 1];
+      const lastFilled = kept[kept.length - 1];
+      const login = !vaultIncludes(fill.filled, "newPassword") && (vaultIncludes(fill.filled, "password") || vaultIncludes(fill.filled, "username"));
+      const button = vaultSubmitControlIn(scope, lastFilled, login);
+      const form = apply(vaultFormOf, anchor, []);
+      vaultSubmitFrom(scope, true);
+      if (button) return apply(vaultClick, button, []);
+      if (form) {
+        if (typeof vaultRequestSubmit === "function") return apply(vaultRequestSubmit, form, []);
+        return apply(vaultDispatch, form, [new VaultEvent("submit", { bubbles: true, cancelable: true })]);
+      }
+      vaultPressEnter(lastFilled);
+    };
+    const vaultQueueSubmit = (id, fill) => {
+      if (vaultIncludes(vaultSubmittedFills, id)) return;
+      vaultAdd(vaultSubmittedFills, id);
+      if (vaultSubmittedFills.length > VAULT_REMEMBERED_FILLS) {
+        for (let i = 1; i < vaultSubmittedFills.length; i++) vaultSubmittedFills[i - 1] = vaultSubmittedFills[i];
+        vaultSubmittedFills.length--;
+      }
+      vaultLater(() => vaultAutoSubmit(fill), VAULT_SUBMIT_DELAY);
+    };
+    const vaultFinishFill = (message, id, fill) => {
+      try {
+        if (fill) vaultFocusAfter(fill);
+      } catch (e) {}
+      send("vaultFilled", { id, filled: fill ? fill.filled : [] });
+      if (!fill || !fill.touched.length) return;
+      for (let i = 0; i < fill.touched.length; i++) vaultGuard(vaultTint)(fill.touched[i]);
+      if (message.submit === true && id) vaultQueueSubmit(id, fill);
+    };
+    handlers.vaultFill = vaultInOnePass((message) => {
+      let fill = null;
+      try {
+        fill = message && message.context === true ? vaultFillContext(message) : vaultFill(message);
+      } catch (e) {}
+      const id = message && typeof message.id === "string" ? message.id : "";
+      if (fill && fill.steps.length) return vaultRunSteps(fill, () => vaultFinishFill(message, id, fill));
+      vaultFinishFill(message, id, fill);
+    });
+    handlers.vaultMenu = vaultInOnePass((message) => {
+      const open = !!(message && message.open === true);
+      if (open && !vaultFocused && vaultStillFocused(vaultLastField)) vaultFocus(vaultLastField);
+      vaultMenuOpen = open && !!vaultFocused;
+      vaultMenuHighlighted = vaultMenuOpen && message.highlighted === true;
+      if (open && !vaultMenuOpen && vaultLastField && vaultLastInfo) vaultReport(vaultLastField, vaultLastInfo, false);
+      vaultStartWatch();
+    });
+
+    const VAULT_CONTEXT_VALUES = ["username", "password", "newPassword", "otp"];
+    let vaultContextField = null;
+    const vaultContextUsable = (el) => vaultUsable(el) && vaultIncludes(VAULT_EDITABLE_TYPES, vaultTypeOf(el));
+    const vaultContextGuess = (el, info) => {
+      if (info) return info.kind === "newPassword" ? "password" : info.kind;
+      if (vaultIsPassword(el)) return "password";
+      return vaultTokens(vaultAttr(el, "autocomplete")) === "one-time-code" ? "otp" : "username";
+    };
+    apply(vaultListen, window, [
+      "contextmenu",
+      vaultGuard((e) => {
+        if (!e.isTrusted) return;
+        const el = vaultTargetOf(e);
+        if (!vaultIsInput(el) || !vaultContextUsable(el)) {
+          vaultContextField = null;
+          return send("vaultContext", { field: false });
+        }
+        const info = vaultKindOf(el);
+        const maxLength = apply(vaultMaxLengthOf, el, []);
+        vaultContextField = el;
+        send("vaultContext", {
+          field: true,
+          kind: info ? info.kind : null,
+          guess: vaultContextGuess(el, info),
+          rect: vaultRect(el),
+          maxLength: typeof maxLength === "number" && maxLength > 0 ? maxLength : 0,
+        });
+      }),
+      vaultOptions,
+    ]);
+    const vaultFillContext = (message) => {
+      const el = vaultContextField;
+      if (!message || typeof message.origin !== "string" || message.origin !== vaultOrigin()) return null;
+      message.submit = false;
+      if (!el || !vaultIsConnected(el) || !vaultContextUsable(el)) return null;
+      const names = vaultFilter(VAULT_CONTEXT_VALUES, (name) => vaultFillable(message[name]));
+      if (!names.length) return null;
+      const name = names[0];
+      if (names.length > 1 || (name === "newPassword" && vaultIsPassword(el))) return vaultFill(message, el, vaultKindOf(el));
+      const value = message[name];
+      const fill = { filled: vaultAdd(vaultList(), name), touched: vaultList(), scope: el, anchor: el, inputs: vaultAdd(vaultList(), el), steps: vaultList(), origin: message.origin };
+      const run = name === "otp" ? vaultSplitRunOf(el) : null;
+      if (run && value.length <= run.length) {
+        fill.inputs = run;
+        vaultSpread(run, value, fill.steps, fill.touched);
+        return fill;
+      }
+      vaultPut(el, value);
+      vaultAdd(fill.touched, el);
+      return fill;
+    };
+
+    const vaultSelectionOf = window.getSelection;
+    const vaultUpper = String.prototype.toUpperCase;
+    const VAULT_CODE_KEY = /^[a-z2-7]{2,32}(?:[ -][a-z2-7]{2,32})*$/i;
+    const VAULT_CODE_LONGEST_TEXT = 2048;
+    const VAULT_CODE_PARENTS = 3;
+    const vaultCodeKeyOf = (text) => {
+      const trimmed = vaultTrimmed(text);
+      if (trimmed.length < 16 || trimmed.length > VAULT_CODE_LONGEST_TEXT) return "";
+      if (fieldProviders.verificationSetupURL(trimmed)) return trimmed;
+      if (trimmed.length > 160 || !vaultHas(VAULT_CODE_KEY, trimmed)) return "";
+      const groups = apply(vaultSplit, trimmed, [/[ -]/]);
+      let compact = "";
+      for (let i = 0; i < groups.length; i++) {
+        if (i < groups.length - 1 && groups[i].length !== groups[0].length) return "";
+        if (i === groups.length - 1 && groups.length > 1 && groups[i].length > groups[0].length) return "";
+        compact += groups[i];
+      }
+      if (compact.length < 16 || compact.length > 128) return "";
+      const shouted = compact === apply(vaultUpper, compact, []);
+      return shouted || vaultHas(/[2-7]/, compact) ? trimmed : "";
+    };
+    const vaultCodeSelection = (el) => {
+      if (vaultIsInput(el)) {
+        const value = vaultValueOf(el);
+        const from = vaultSelectionStartOf(el);
+        const to = vaultSelectionEndOf(el);
+        if (typeof from === "number" && typeof to === "number" && to > from) return vaultSlice(value, from, to);
+        return vaultInputReadOnly(el) ? value : "";
+      }
+      if (typeof vaultSelectionOf !== "function") return "";
+      const selection = apply(vaultSelectionOf, window, []);
+      return selection ? VaultText(selection) : "";
+    };
+    const vaultCodeImageOf = (el) => {
+      const svg = apply(vaultClosest, el, ["svg"]);
+      if (svg) return svg;
+      for (let n = el, depth = 0; n && depth <= VAULT_CODE_PARENTS; n = vaultParentOf(n), depth++) {
+        const tag = apply(vaultUpper, VaultText(vaultTagOf(n) || ""), []);
+        if (tag === "IMG" || tag === "CANVAS" || tag === "PICTURE" || tag === "OBJECT" || tag === "EMBED") return n;
+        const style = apply(vaultStyleOf, window, [n]);
+        const background = style && style.backgroundImage;
+        if (typeof background === "string" && vaultHas(/url\(/i, background)) return n;
+      }
+      return null;
+    };
+    const vaultCodeLinkOf = (el) => {
+      const link = apply(vaultClosest, el, ["a[href]"]);
+      const href = link ? vaultAttr(link, "href") : "";
+      return fieldProviders.verificationSetupURL(vaultTrimmed(href)) || "";
+    };
+    apply(vaultListen, window, [
+      "contextmenu",
+      vaultGuard((e) => {
+        if (!e.isTrusted) return;
+        let el = vaultTargetOf(e);
+        if (el && vaultNodeTypeOf(el) !== 1) el = vaultParentOf(el);
+        if (!el || vaultNodeTypeOf(el) !== 1) return send("vaultCodeTarget", {});
+        const text = vaultCodeKeyOf(vaultCodeSelection(el)) || vaultCodeKeyOf(vaultCodeLinkOf(el));
+        if (text) return send("vaultCodeTarget", { text, rect: vaultRect(el) });
+        const image = vaultIsInput(el) ? null : vaultCodeImageOf(el);
+        if (!image) return send("vaultCodeTarget", {});
+        const rect = vaultRect(image);
+        const viewport = rect ? { width: vaultViewWidth(), height: vaultViewHeight() } : null;
+        send("vaultCodeTarget", { image: true, rect, viewport });
+      }),
+      vaultOptions,
+    ]);
+  } catch (e) {}
 
   let pageNotification = null;
   const installNotifications = () => {

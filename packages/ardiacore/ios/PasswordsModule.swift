@@ -75,8 +75,9 @@ public class PasswordsModule: Module {
     "showSystemPanel": { args, reply in
       let tab = try args.text("tab")
       let generation = try args.optionalDouble("generation") ?? -1
-      if let live = WebKitHub.shared.transfers.liveTab(tab) { return live.showSystemPanel(generation: generation) { reply.ok($0) } }
-      if !ArdiaWebView.showSystemPanel(tab: tab, generation: generation, completion: { reply.ok($0) }) {
+      let via = try args.optionalText("via") == "badge" ? "badge" : "menu"
+      if let live = WebKitHub.shared.transfers.liveTab(tab) { return live.showSystemPanel(generation: generation, via: via) { reply.ok($0) } }
+      if !ArdiaWebView.showSystemPanel(tab: tab, generation: generation, via: via, completion: { reply.ok($0) }) {
         reply.ok(["shown": false, "reason": "noTab"])
       }
     },

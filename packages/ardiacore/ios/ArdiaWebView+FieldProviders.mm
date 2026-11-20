@@ -44,6 +44,8 @@ NSString *FieldProviderJSON(NSString *profile) {
   return provider ? JSONText(provider) : @"false";
 }
 
+BOOL FieldProviderFillsFromMenu(NSString *profile) { return [FieldProviderFor(profile)[@"fill"] isEqual:kFillMenu]; }
+
 }
 
 namespace {
@@ -328,7 +330,11 @@ static NSDictionary *OpenSystemPanel(NSView *page) {
                       }];
 }
 
-+ (BOOL)showSystemPanelForTab:(NSString *)tabId generation:(double)generation completion:(void (^)(NSDictionary *result))completion {
++ (BOOL)showSystemPanelForTab:(NSString *)tabId
+                   generation:(double)generation
+                          via:(NSString *)via
+                   completion:(void (^)(NSDictionary *result))completion {
+  NSString *route = [via isEqualToString:@"badge"] ? @"badge" : @"menu";
   ArdiaCoreTab *tab = ardia_host::TabWithAppTabId(tabId);
   ArdiaWebView *view = tab ? [ArdiaTabRegistry viewForTab:tab] : nil;
   if (!view || !tab.view) return NO;
@@ -343,7 +349,7 @@ static NSDictionary *OpenSystemPanel(NSView *page) {
       completion:^(NSDictionary *result) {
         NSString *reason = result[@"reason"];
         if (![reason isEqualToString:@"noProvider"] && ![reason isEqualToString:@"stale"])
-          [weakView emit:@"fieldProviderOpened" payload:@{@"via" : @"menu", @"shown" : result[@"shown"]}];
+          [weakView emit:@"fieldProviderOpened" payload:@{@"via" : route, @"shown" : result[@"shown"]}];
         completion(result);
       }];
   return YES;

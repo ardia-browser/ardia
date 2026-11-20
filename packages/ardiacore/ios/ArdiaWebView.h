@@ -197,7 +197,8 @@ NS_ASSUME_NONNULL_BEGIN
     NS_SWIFT_NAME(redeemVerificationCode(_:owner:profile:generation:frameAlive:completion:));
 + (BOOL)showSystemPanelForTab:(NSString *)tabId
                    generation:(double)generation
-                   completion:(void (^)(NSDictionary *result))completion NS_SWIFT_NAME(showSystemPanel(tab:generation:completion:));
+                          via:(NSString *)via
+                   completion:(void (^)(NSDictionary *result))completion NS_SWIFT_NAME(showSystemPanel(tab:generation:via:completion:));
 + (BOOL)setUpVerificationCode:(NSString *)token
                           tab:(NSString *)tabId
                    generation:(double)generation

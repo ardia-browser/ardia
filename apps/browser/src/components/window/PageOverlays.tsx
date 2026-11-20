@@ -25,6 +25,7 @@ import { HISTORY_MENU_WIDTH, HistoryPopover } from "./HistoryPopover";
 import { TabWebView } from "./TabWebView";
 import { fitLeft, pageSurfaceLeft, type PageAnchor, type PageSurface } from "./pageAnchors";
 import { useSidebarSide } from "../../state/browser/hooks";
+import { VaultFieldBadgeHost } from "../vaults/VaultFieldBadge";
 
 export function PageOverlays({
   tabId,
@@ -80,6 +81,7 @@ export function PageOverlays({
       <CastPicker tabId={tabId} paneWidth={width} />
       <NavigationOverlays tabId={tabId} windowId={windowId} anchor={anchor} paneWidth={width} historyMenu={popovers} />
       <SelectionPopover tabId={tabId} zoom={zoom} />
+      <VaultFieldBadgeHost tabId={tabId} zoom={zoom} />
     </>
   );
 }

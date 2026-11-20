@@ -8,6 +8,7 @@ export type FieldProviderFill = "system" | "menu";
 export type FieldProviderProfile = { profile: string; fields: FieldProviderField[]; codeSetup: boolean; fill?: FieldProviderFill };
 export type SystemPanelRefusal = "noTab" | "noProvider" | "stale" | "hidden" | "notFocused" | "unavailable" | "notKey" | "notEditing" | "throttled" | "refused";
 export type SystemPanelResult = { shown: boolean; reason?: SystemPanelRefusal };
+export type SystemPanelVia = "badge" | "menu";
 export type VerificationCodeRefusal = "noTab" | "unknownToken" | "stale" | "navigated" | "noProvider" | "frameGone" | "handlerChanged" | "failed";
 export type VerificationCodeSetupResult = { opened: boolean; reason?: VerificationCodeRefusal };
 

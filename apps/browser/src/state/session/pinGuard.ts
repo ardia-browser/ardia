@@ -3,6 +3,7 @@ import { isIncognitoProfile, pinKeyOf } from "../browser/model";
 import { parkWindowPins } from "../pins/parkedPins";
 import { isRegularWindow } from "../windows/small";
 import { isFields } from "../../lib/decode";
+import { readDocument, writeDocument } from "../../platform/documents";
 import type { ParkedPins } from "../browser/types";
 
 export const PINS_BACKUP_DOCUMENT = "pins-backup.json";
@@ -91,4 +92,43 @@ export function withPinBackup(existing: PinBackup[], previous: PinState, dropped
   const pins = pinsOf(previous, [...dropped.keys()]);
   const kept = Object.fromEntries([...dropped].filter(([p]) => pins[p]));
   return { version: PINS_BACKUP_VERSION, backups: [...existing, { at, dropped: kept, pins }].slice(-MAX_PIN_BACKUPS) };
+}
+
+function keepPinBackup(previous: PinState, dropped: Map<string, number>): boolean {
+  try {
+    writeDocument(PINS_BACKUP_DOCUMENT, JSON.stringify(withPinBackup(parsePinBackups(readDocument(PINS_BACKUP_DOCUMENT)), previous, dropped, Date.now())));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export type PinCheck = { kept: number; commit: () => void };
+const NOTHING: PinCheck = { kept: 0, commit: () => {} };
+
+export function pinGuard(initial: PinState): (s: PinState) => PinCheck {
+  let saved = initial;
+  let sourcesSaved = pinSources(saved);
+  let censusSaved: PinCensus | null = null;
+  let backedUp: PinState | null = null;
+  return (s) => {
+    const sources = pinSources(s);
+    if (sources.every((v, i) => v === sourcesSaved[i])) return NOTHING;
+    const census = pinCensus(s);
+    const dropped = droppedPins(censusSaved ?? pinCensus(saved), census, s.profiles);
+    let kept = 0;
+    if (dropped.size && backedUp !== saved) {
+      if (!keepPinBackup(saved, dropped)) return NOTHING;
+      backedUp = saved;
+      kept = [...dropped.values()].reduce((a, n) => a + n, 0);
+    }
+    return {
+      kept,
+      commit: () => {
+        saved = s;
+        sourcesSaved = sources;
+        censusSaved = census;
+      },
+    };
+  };
 }

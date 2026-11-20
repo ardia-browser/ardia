@@ -15,7 +15,7 @@ import { downloadSession, withoutRepeats } from "../downloads/downloadsSlice";
 import { anyDownloadProgress, withLiveProgress } from "../downloads/progress";
 import { noteDownloadHistoryWrite } from "../telemetry/downloadWork";
 import { noteSessionWrite } from "../telemetry/sessionWrites";
-import { droppedPins, parsePinBackups, pinCensus, pinSources, PINS_BACKUP_DOCUMENT, withPinBackup, type PinCensus, type PinState } from "./pinGuard";
+import { pinGuard } from "./pinGuard";
 import { noteSavedTopAppsMerged } from "../telemetry/topAppsSharing";
 import { parseSaved, unchanged, type Migrations, type SavedObject } from "../../lib/savedDocument";
 import { sessionWithCleanUpMinutes } from "../settings/cleanUpAfter";
@@ -198,15 +198,6 @@ function write(name: string, json: string): boolean {
   }
 }
 
-function keepPinBackup(previous: PinState, dropped: Map<string, number>): boolean {
-  try {
-    writeDocument(PINS_BACKUP_DOCUMENT, JSON.stringify(withPinBackup(parsePinBackups(readDocument(PINS_BACKUP_DOCUMENT)), previous, dropped, Date.now())));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 let droppedPrivateDownloads = false;
 
 function forgetStaging(id: string) {
@@ -311,31 +302,7 @@ export function startPersistence(overrides: LaunchOverrides = {}) {
   useBrowser.getState().hydrate(loaded ?? {});
   restoreLaunchLook();
 
-  let pinsSaved: PinState = useBrowser.getState();
-  let pinSourcesSaved = pinSources(pinsSaved);
-  let censusSaved: PinCensus | null = null;
-  let backedUp: PinState | null = null;
-  const keepDroppedPins = (s: BrowserState): { kept: number; commit: () => void } => {
-    const sources = pinSources(s);
-    if (sources.every((v, i) => v === pinSourcesSaved[i])) return { kept: 0, commit: () => {} };
-    const census = pinCensus(s);
-    const dropped = droppedPins(censusSaved ?? pinCensus(pinsSaved), census, s.profiles);
-    let kept = 0;
-    if (dropped.size && backedUp !== pinsSaved) {
-      if (!keepPinBackup(pinsSaved, dropped)) return { kept: 0, commit: () => {} };
-      backedUp = pinsSaved;
-      kept = [...dropped.values()].reduce((a, n) => a + n, 0);
-    }
-    return {
-      kept,
-      commit: () => {
-        pinsSaved = s;
-        pinSourcesSaved = sources;
-        censusSaved = census;
-      },
-    };
-  };
-
+  const keepDroppedPins = pinGuard(useBrowser.getState());
   const lastSources = new Map<string, unknown[]>();
   const lastJson = new Map<string, string>();
   const dirty = new Set<Doc>();

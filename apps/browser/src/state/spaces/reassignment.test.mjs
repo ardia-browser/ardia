@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { useBrowser } from "../browser/store.ts";
 import { engineProfileForSpace, privateSession, viewTabIds } from "../browser/model.ts";
-import { spacesAdapter } from "../sync/spaceAdapters.ts";
 import { chromeChanged, stripPlan } from "../tabs/liveTabs.ts";
 import { extensionsProfileId } from "../extensions/store.ts";
 
@@ -21,17 +20,16 @@ test("reassignment loads the committed URL and leaves unloaded tabs lazy", () =>
   assert.equal(S().tabs[lazy].page.kind, "asleep");
 });
 
-test("remote assignment waits for consent while content is live and cannot publish the old assignment", () => {
+test("a linked Space keeps its browsing Profile while content is live", () => {
   S().hydrate({});
   const profile = S().createProfile({ name: "Work" });
-  S().createWindow({ url: "https://site.test/form" });
-  const links = { default: { syncId: "space", enabled: true } };
-  const identities = { default: { syncId: "home", enabled: true }, [profile]: { syncId: "work", enabled: true } };
-  const adapter = spacesAdapter(() => links, () => identities);
-  adapter.apply(new Map([["prof:space", { n: "Home", c: "plum", i: null, p: "work" }]]), new Set(["prof:space"]), () => undefined, { known: () => false });
+  const window = S().createWindow({ url: "https://site.test/form" });
+  const tab = viewTabIds(S(), window)[0];
+  const page = S().tabs[tab].page;
+  S().updateSpace("default", { syncProfileLocked: true });
+  S().assignSpaceProfile("default", profile);
   assert.equal(S().spaces.default.profileId, "default");
-  assert.equal(links.default.pendingProfileId, profile);
-  assert.equal(adapter.extract(() => undefined, () => false, Date.now(), () => true).values.has("prof:space"), false);
+  assert.equal(S().tabs[tab].page, page);
 });
 
 test("native selection reveals an inactive Space even when its selected tab was remembered", () => {

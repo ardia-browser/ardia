@@ -7,7 +7,7 @@ import { addressBarInSidebar } from "../windows/layout";
 import { splitsOnRow } from "../splits/lanes";
 import { splitOf } from "../splits/splits";
 import { isRegularWindow } from "../windows/small";
-import { isIncognitoProfile } from "../browser/model";
+import { isIncognitoSpace } from "../browser/model";
 
 const store = () => useBrowser.getState();
 
@@ -25,19 +25,19 @@ export function dragHomeOf(tabIds: string[]): DragHome | null {
   const s = store();
   const first = s.tabs[tabIds[0] ?? ""];
   const w = first && s.windows[first.windowId];
-  if (!first || !isRegularWindow(w) || isIncognitoProfile(first.profileId) || s.profileOrder.length < 2) return null;
-  return tabIds.every((id) => s.tabs[id]?.profileId === first.profileId && s.tabs[id]?.windowId === w.id) ? { windowId: w.id, profileId: first.profileId } : null;
+  if (!first || !isRegularWindow(w) || isIncognitoSpace(first.spaceId) || s.spaceOrder.length < 2) return null;
+  return tabIds.every((id) => s.tabs[id]?.spaceId === first.spaceId && s.tabs[id]?.windowId === w.id) ? { windowId: w.id, profileId: first.spaceId } : null;
 }
 
 export function profileBeside(profileId: string, step: -1 | 1): string | null {
-  const order = store().profileOrder;
+  const order = store().spaceOrder;
   const at = order.indexOf(profileId);
   return at < 0 ? null : (order[at + step] ?? null);
 }
 
 export const splitIdOfNow = (tabId: string) => splitOf(store(), tabId)?.id ?? null;
 
-export const shownProfileOf = (windowId: string) => store().windows[windowId]?.profileId ?? null;
+export const shownProfileOf = (windowId: string) => store().windows[windowId]?.spaceId ?? null;
 
 export const splitsOnRowNow = (tabId: string, rowTabId: string) => splitsOnRow(store(), tabId, rowTabId);
 

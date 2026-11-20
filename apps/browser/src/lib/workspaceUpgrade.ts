@@ -47,6 +47,7 @@ export function sessionWithSpaces(doc: SavedObject, sync?: SavedObject): SavedOb
     const profileId = text(saved.dataId) || id;
     spaces[id] = { ...saved, id, profileId, ...(saved.shareTopApps === true || version < 10 && saved.shareTopApps === undefined && !oldMerged.has(id) ? { shareTopApps: true } : {}) };
     delete spaces[id]!.dataId;
+    delete spaces[id]!.passwordManager;
     if (preserveLegacyPins === true) spaces[id]!.legacyTopApps = true;
     if (sync?.enabled === true && object(object(sync.profiles)[id]).syncId) {
       spaces[id]!.legacyTopApps = true;
@@ -54,6 +55,8 @@ export function sessionWithSpaces(doc: SavedObject, sync?: SavedObject): SavedOb
     }
     const owner = object(legacy[profileId] ?? saved);
     profiles[profileId] ??= { id: profileId, name: text(owner.name, "Profile"), icon: owner.icon ?? null, engineId: profileId === "default" ? "" : profileId, createdAt: owner.createdAt ?? 0 };
+    const passwordManager = typeof owner.passwordManager === "string" ? owner.passwordManager : saved.passwordManager;
+    if (typeof passwordManager === "string") profiles[profileId]!.passwordManager ??= passwordManager;
   }
   const oldSettings = object(doc.settings);
   const settings: SavedObject = { ...oldSettings, defaultSpaceId: spaces[text(oldSettings.defaultProfileId)] ? oldSettings.defaultProfileId : order[0] };

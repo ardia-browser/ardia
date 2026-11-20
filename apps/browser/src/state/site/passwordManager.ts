@@ -3,7 +3,8 @@ import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { warnFor } from "../telemetry/consoleConsent";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
 import { useBrowser, type BrowserState } from "../browser/store";
-import { engineProfile } from "../browser/model";
+import { engineProfile, privateSession } from "../browser/model";
+import { sortedProfiles } from "../profiles/profiles";
 import { usePages } from "../tabs/pageState";
 import { useShallow } from "zustand/react/shallow";
 import { beforePluginsCommit, beforePluginsWithdraw, onPluginWithdrawAbandoned, usePlugins, recordOf, activeManifest, type PluginsCommit } from "../plugins/store";
@@ -18,7 +19,6 @@ import {
   pluginChoice,
   profilePasswordManager,
   profilesSharingData,
-  regularProfileId,
   storedPasswordManager,
   type ManagerPlugin,
   type PasswordManagerChoice,
@@ -40,6 +40,15 @@ export const currentPasswordManager = (profileId: string): PasswordManagerChoice
 export function currentManagerPlugin(profileId: string): ManagerPlugin | null {
   const plugins = currentManagerPlugins();
   return managerPluginOf(plugins, profilePasswordManager(browser(), plugins, profileId));
+}
+
+const browsingEngine = (s: BrowserState, spaceId: string) => privateSession(s, spaceId) ?? engineProfile(s, spaceId);
+
+export function currentManagerPluginForSpace(spaceId: string): ManagerPlugin | null {
+  const s = browser();
+  const engineId = browsingEngine(s, spaceId);
+  const profile = Object.values(s.profiles).find((entry) => entry.engineId === engineId);
+  return profile ? currentManagerPlugin(profile.id) : null;
 }
 
 const pluginsKey = (plugins: readonly ManagerPlugin[]) => JSON.stringify(plugins);
@@ -69,7 +78,7 @@ export function useProfilesSharingChoice(profileId: string): string[] {
 export function useProfilesUsing(name: string): string[] {
   const plugins = useManagerPlugins();
   return useBrowser(
-    useShallow((s) => s.profileOrder.filter((id) => s.profiles[id] && profilePasswordManager(s, plugins, id) === pluginChoice(name)).map((id) => s.profiles[id]!.name)),
+    useShallow((s) => sortedProfiles(s.profiles).filter(({ id }) => profilePasswordManager(s, plugins, id) === pluginChoice(name)).map(({ name: label }) => label)),
   );
 }
 
@@ -93,7 +102,7 @@ function adoptNeverChosen(name: string) {
 function engineModes(s: BrowserState, plugins: readonly ManagerPlugin[]): Map<string, PasswordManagerChoice> {
   const modes = new Map<string, PasswordManagerChoice>();
   for (const id of Object.keys(s.profiles).sort()) {
-    const profile = engineProfile(s, id);
+    const profile = s.profiles[id]!.engineId;
     if (!modes.has(profile)) modes.set(profile, profilePasswordManager(s, plugins, id));
   }
   return modes;
@@ -101,7 +110,7 @@ function engineModes(s: BrowserState, plugins: readonly ManagerPlugin[]): Map<st
 
 function shownEngineProfiles(s: BrowserState): Set<string> {
   const shown = new Set<string>();
-  for (const w of Object.values(s.windows)) if (w) shown.add(engineProfile(s, regularProfileId(w.profileId)));
+  for (const w of Object.values(s.windows)) if (w) shown.add(browsingEngine(s, w.spaceId));
   return shown;
 }
 
@@ -230,7 +239,7 @@ export function startPasswordManager() {
     const s = browser();
     for (const tabId of Object.keys(usePages.getState().ready)) {
       const tab = s.tabs[tabId];
-      if (tab) writeOfferToSave(engineProfile(s, regularProfileId(tab.profileId)));
+      if (tab) writeOfferToSave(browsingEngine(s, tab.spaceId));
     }
   };
 
@@ -287,7 +296,7 @@ export function startPasswordManager() {
 
 function codeSetupOn(tabId: string): boolean {
   const tab = browser().tabs[tabId];
-  return !!tab && currentManagerPlugin(tab.profileId)?.spec.verificationCodeSetup === "system";
+  return !!tab && currentManagerPluginForSpace(tab.spaceId)?.spec.verificationCodeSetup === "system";
 }
 
 export const verificationCodeFound = (tabId: string, found: VerificationCodeFound) => offerVerificationCode(tabId, found, codeSetupOn, generation);

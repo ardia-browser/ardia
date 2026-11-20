@@ -8,8 +8,6 @@ export const DEFAULT_PROFILE: Profile = { id: "default", name: "Personal", icon:
 
 export type ProfilesSlice = {
   profiles: Record<string, Profile>;
-  orphanedProfileData: string[];
-  profileDataDeleted(engineId: string): void;
   topApps: Record<string, TopApp[]>;
   parkedTopApps: Record<string, Tab[]>;
   createProfile(options: { name: string; icon?: string | null }): string;
@@ -24,10 +22,6 @@ export const createProfilesSlice: StateCreator<BrowserState, [], [], ProfilesSli
   profiles: { [DEFAULT_PROFILE.id]: DEFAULT_PROFILE },
   topApps: {},
   parkedTopApps: {},
-  orphanedProfileData: [],
-  profileDataDeleted(engineId) {
-    set((s) => ({ orphanedProfileData: s.orphanedProfileData.filter((id) => id !== engineId) }));
-  },
   createProfile({ name, icon = null }) {
     const id = newId("profile");
     set((s) => ({

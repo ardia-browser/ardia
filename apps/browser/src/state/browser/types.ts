@@ -13,6 +13,7 @@ export type Profile = {
   name: string;
   icon: string | null;
   engineId: string;
+  passwordManager?: string;
   createdAt: number;
 };
 
@@ -39,7 +40,6 @@ export type Space = {
   legacyTopApps?: true;
   syncProfileLocked?: true;
   syncTabs?: true;
-  passwordManager?: string;
 };
 
 type WindowBase = {

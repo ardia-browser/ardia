@@ -36,6 +36,17 @@ test("a deleted data owner keeps its directory, and equal names never merge inde
   assert.equal(Object.keys(result.profiles).length, 2);
 });
 
+test("password manager choices follow the browsing Profile across the upgrade", () => {
+  const source = legacy();
+  source.profiles.default.passwordManager = "none";
+  source.profiles.school.passwordManager = "ardia";
+  const result = sessionWithSpaces(source);
+  assert.equal(result.profiles.default.passwordManager, "none");
+  assert.equal(result.spaces.school.passwordManager, undefined);
+  delete source.profiles.default.passwordManager;
+  assert.equal(sessionWithSpaces(source).profiles.default.passwordManager, "ardia");
+});
+
 test("deduplicating mirrored Top Apps preserves other navigated pages as ordinary tabs", () => {
   const source = legacy();
   source.tabs = [

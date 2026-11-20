@@ -15,5 +15,5 @@ export function crossesLane(anchor: Pick<Tab, "pin">, t: Pick<Tab, "pin">): bool
 export function splitsOnRow(s: Pick<BrowserState, "tabs">, tabId: string, rowTabId: string): boolean {
   const tab = s.tabs[tabId];
   const row = s.tabs[rowTabId];
-  return !!tab && !!row && tab.id !== row.id && tab.windowId === row.windowId && tab.profileId === row.profileId && (splitLane(tab) === "tile") === (splitLane(row) === "tile");
+  return !!tab && !!row && tab.id !== row.id && tab.windowId === row.windowId && tab.spaceId === row.spaceId && (splitLane(tab) === "tile") === (splitLane(row) === "tile");
 }

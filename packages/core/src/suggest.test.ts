@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { BUILT_IN_ENGINES, engineById, parseRemoteSuggestions, parseSuggestions } from "./engines.ts";
-import { buildSuggestions, suggestionKey, type Suggestion } from "./suggest.ts";
+import { buildSuggestions, listsRoutesApart, suggestionKey, type Suggestion } from "./suggest.ts";
 import { createSuggestFetcher, type FetchLike } from "./suggestFetcher.ts";
 
 const now = Date.UTC(2026, 8, 24);
@@ -297,7 +297,7 @@ test("a typed address opens as typed: a saved #fragment of the same page never r
   for (const [typed, url] of [[portal, portal], ["example.awsapps.com/start", bare]] as const) assert.deepEqual(rows(buildSuggestions(typed, { tabs: [], history: hist }, { now }).items).slice(0, 3), [url, `search:${typed}`, saved], `${typed}: the saved page stays a separate choice`);
   assert.equal(rows(buildSuggestions(saved, { tabs: [], history: hist }, { now }).items).filter((r) => r === saved).length, 1, "the saved address as typed is not listed twice");
   const other = `${portal}#/other`;
-  assert.deepEqual(firstRow(other, { tabs: [], history: hist }), opens(other), "another typed fragment");
+  assert.deepEqual(firstRow(other, { tabs: [], history: hist }), { kind: "page", url: other, title: "", favicon: null }, "another typed route is its own page: it borrows nothing from the saved one");
   assert.deepEqual(firstRow(saved, { tabs: [], history: hist }), { ...opens(saved), visited: true }, "the saved address as typed stays a history row");
   const bookmarks = [{ url: saved, title: "AWS access portal", favicon: "aws.ico" }];
   assert.deepEqual(firstRow(portal, { tabs: [], history: hist, bookmarks }), opens(portal), "a changed address is not the bookmark");
@@ -324,7 +324,7 @@ test("a typed address saved under a fragment that is not its page's top row keep
   const first = (typed: string, bookmarks?: Parameters<typeof buildSuggestions>[1]["bookmarks"]) => buildSuggestions(typed, { tabs: [], history, bookmarks }, { now }).items[0];
   assert.deepEqual(first("https://a.com/#/b"), { kind: "page", url: "https://a.com/#/b", title: "Route B", favicon: "b.ico", visited: true });
   assert.deepEqual(first("https://a.com/#/b", [{ url: "https://a.com/#/b", title: "B", favicon: null }]), { kind: "page", url: "https://a.com/#/b", title: "Route B", favicon: "b.ico", visited: true, bookmarked: true });
-  assert.deepEqual(first("https://a.com/#/c", [{ url: "https://a.com/#/b", title: "B", favicon: null }]), { kind: "page", url: "https://a.com/#/c", title: "Route A", favicon: "a.ico" });
+  assert.deepEqual(first("https://a.com/#/c", [{ url: "https://a.com/#/b", title: "B", favicon: null }]), { kind: "page", url: "https://a.com/#/c", title: "", favicon: null }, "a route nothing saved has its own title and icon: not another route's");
   const withHome = [...history, { url: "https://a.com/", title: "Home", favicon: "home.ico", visits: 1, lastVisit: now - 300 }];
   assert.deepEqual(buildSuggestions("https://a.com/", { tabs: [], history: withHome }, { now }).items[0], { kind: "page", url: "https://a.com/", title: "Home", favicon: "home.ico", visited: true });
 });
@@ -369,6 +369,63 @@ test("a typed address and the same page saved under a trailing slash are two cho
   const [typedRow, , savedRow] = items;
   assert.equal(typedRow?.kind === "page" && typedRow.visited, undefined, "the typed row was never visited");
   assert.equal(savedRow?.kind === "page" && savedRow.visited, true, "the saved row keeps its history flag");
+});
+
+const roam = (route: string) => `https://roamresearch.com/#/app/${route}`;
+const roamHistory = [
+  { url: roam("graph3333"), title: "graph3333", favicon: "g3.ico", visits: 6, lastVisit: now - 1000 },
+  { url: roam("graph4444"), title: "graph4444", favicon: "g4.ico", visits: 2, lastVisit: now - 2000 },
+];
+const roamBookmarks = [{ url: roam("graph5555"), title: "graph5555", favicon: null }];
+const roamPins = [
+  { id: "t1", url: roam("graph1111"), title: "graph1111", favicon: "g1.ico" },
+  { id: "t2", url: roam("graph2222"), title: "graph2222", favicon: "g2.ico" },
+];
+
+test("each route of a hash-routed site is its own page: every pinned, saved and bookmarked one is listed", () => {
+  const source = { tabs: roamPins, history: roamHistory, bookmarks: roamBookmarks };
+  const listed = rows(buildSuggestions("roamresearch.com", source, { now }).items);
+  for (const graph of ["graph1111", "graph2222"]) assert.ok(listed.includes(`tab:${roam(graph)}`), `${graph}: its own Switch to Tab row, got ${listed.join(" | ")}`);
+  for (const graph of ["graph3333", "graph4444", "graph5555"]) assert.ok(listed.includes(roam(graph)), `${graph}: its own saved row, got ${listed.join(" | ")}`);
+  const typed = rows(buildSuggestions("roamresearch.com/#/app/graph2222", source, { now }).items);
+  assert.deepEqual(typed, [roam("graph2222"), "search:roamresearch.com/#/app/graph2222", `tab:${roam("graph2222")}`], "a typed route lists only its own tab");
+});
+
+test("a typed route of a hash-routed site opens as typed, whichever other routes are pinned or saved", () => {
+  const help = roam("help");
+  const source = { tabs: roamPins, history: roamHistory, bookmarks: roamBookmarks };
+  for (const typed of [help, "roamresearch.com/#/app/help"]) {
+    const { items } = buildSuggestions(typed, source, { now });
+    assert.deepEqual(items[0], { kind: "page", url: help, title: "", favicon: null }, `${typed}: a plain row for what was typed, no title, icon or tab borrowed from another route`);
+    assert.equal(items.filter((i) => i.kind === "page" && i.tabId !== undefined).length, 0, `${typed}: nothing to switch to, the pins are other pages`);
+  }
+  const editing = buildSuggestions(help, source, { now, currentTabId: "t1", currentUrl: roam("graph1111") });
+  assert.deepEqual(editing.items[0], { kind: "page", url: help, title: "", favicon: null }, "editing the current tab's address");
+  assert.deepEqual(rows(buildSuggestions("roamresearch.com", { ...source, tabs: roamPins.slice(1) }, { now, currentTabId: "t1", currentUrl: roam("graph1111") }).items).filter((r) => r.startsWith("tab:")), [`tab:${roam("graph2222")}`], "the other pin stays a choice");
+  const pinned = buildSuggestions(roam("graph1111"), source, { now }).items;
+  assert.deepEqual(rows(pinned).slice(0, 3), [roam("graph1111"), `search:${roam("graph1111")}`, `tab:${roam("graph1111")}`], "a typed route that is pinned still lists its Switch to Tab row");
+  assert.equal(pinned[0]?.kind === "page" && pinned[0].tabId, undefined, "and the typed row only opens it");
+});
+
+test("a #! route is a page of its own too, while an anchor is not: #grid and #top are one page", () => {
+  const hist = [
+    { url: "https://a.com/#!/x", title: "X", favicon: null, visits: 3, lastVisit: now - 1000 },
+    { url: "https://a.com/#!/y", title: "Y", favicon: null, visits: 2, lastVisit: now - 2000 },
+    { url: "https://b.com/#grid", title: "Grid", favicon: null, visits: 3, lastVisit: now - 1000 },
+    { url: "https://b.com/#top", title: "Top", favicon: null, visits: 2, lastVisit: now - 2000 },
+  ];
+  const saved = (typed: string) => rows(buildSuggestions(typed, { tabs: [], history: hist }, { now }).items).filter((r) => r.includes("#"));
+  assert.deepEqual(saved("a.com"), ["https://a.com/#!/x", "https://a.com/#!/y"]);
+  assert.deepEqual(saved("b.com"), ["https://b.com/#grid"], "an anchor never made the page a different one");
+});
+
+test("listsRoutesApart tells a list that shows several routes of one page from one that shows a single route", () => {
+  const source = { tabs: roamPins, history: roamHistory, bookmarks: roamBookmarks };
+  assert.equal(listsRoutesApart(buildSuggestions("roamresearch.com", source, { now }).items), true, "every route of the site is its own row");
+  assert.equal(listsRoutesApart(buildSuggestions("roamresearch.com", { tabs: roamPins.slice(0, 1), history: [], bookmarks: [] }, { now }).items), false, "one route is one row");
+  assert.equal(listsRoutesApart(buildSuggestions("roamresearch.com/#/app/graph2222", source, { now }).items), false, "a typed route lists only its own page");
+  const anchors = [{ url: "https://b.com/#grid", title: "Grid", favicon: null, visits: 3, lastVisit: now - 1000 }, { url: "https://b.com/#top", title: "Top", favicon: null, visits: 2, lastVisit: now - 2000 }];
+  assert.equal(listsRoutesApart(buildSuggestions("b.com", { tabs: [], history: anchors }, { now }).items), false, "an anchor is not a route");
 });
 
 test("frecency: frequent + recent beats old, and multi-word queries match words", () => {

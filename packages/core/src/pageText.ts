@@ -5,13 +5,24 @@ export function displayUrl(url: string): string {
   return urlForDisplay(url).replace(/\/$/, "");
 }
 
-export const pageKey = (url: string) => url.replace(/#.*$/, "").replace(/\/$/, "");
+export const documentKey = (url: string) => {
+  const at = url.indexOf("#");
+  return (at < 0 ? url : url.slice(0, at)).replace(/\/$/, "");
+};
+
+export const routeOf = (url: string) => {
+  const at = url.indexOf("#");
+  return at >= 0 && (url.startsWith("#/", at) || url.startsWith("#!/", at)) ? url.slice(at) : "";
+};
+
+export const pageKey = (url: string) => documentKey(url) + routeOf(url);
 
 export const withRootSlash = (url: string) => url.replace(/^(https?:\/\/[^/?#]*)(?=[?#]|$)/i, "$1/");
 
 export type PageText = {
   url: string;
   key: string;
+  document?: string;
   shown: string;
   shownLower: string;
   titleLower: string;
@@ -39,7 +50,10 @@ export function pageText(row: { url: string; title: string }): PageText {
     const shown = displayUrl(row.url);
     const shownLower = shown.toLowerCase();
     const titleLower = row.title.toLowerCase();
-    text = { url: row.url, key: pageKey(row.url), shown, shownLower, titleLower, titleWords: wordsOf(titleLower) };
+    const document = documentKey(row.url);
+    const route = routeOf(row.url);
+    text = { url: row.url, key: document + route, shown, shownLower, titleLower, titleWords: wordsOf(titleLower) };
+    if (route) text.document = document;
     pageTexts.set(row, text);
   }
   return text;

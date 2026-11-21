@@ -4,6 +4,7 @@ import { consentOrNow, countFor } from "./countFor";
 
 let shown = 0;
 let sitesShown = 0;
+let routesListed = 0;
 let restored = 0;
 let held = 0;
 let guardExpired = 0;
@@ -11,6 +12,8 @@ let guardExpired = 0;
 export const noteInlineCompletionShown = () => void (shown += 1);
 
 export const noteSiteSuggestionShown = () => void (sitesShown += 1);
+
+export const noteRoutesListed = (consent?: ConsentToken | null) => countFor(consent, () => void (routesListed += 1), { command_bar_routes_listed: 1 });
 
 export const noteDroppedLetterRestored = () => void (restored += 1);
 
@@ -21,9 +24,10 @@ export const noteReplayGuardExpired = (consent?: ConsentToken | null) => countFo
 export function takeInlineCompletionCounts() {
   const hold = takeKeyHoldCounts();
   const drops = Object.fromEntries(Object.entries(hold.drops).map(([reason, count]) => [`command_bar_key_hold_drops_${reason}`, count]));
-  const taken = { command_bar_inline_completions: shown, command_bar_site_suggestions: sitesShown, command_bar_letters_restored: restored, command_bar_rows_held: held, command_bar_key_holds: hold.holds, command_bar_keys_replayed: hold.replayed, command_bar_replay_guards_expired: guardExpired, ...drops };
+  const taken = { command_bar_inline_completions: shown, command_bar_site_suggestions: sitesShown, command_bar_routes_listed: routesListed, command_bar_letters_restored: restored, command_bar_rows_held: held, command_bar_key_holds: hold.holds, command_bar_keys_replayed: hold.replayed, command_bar_replay_guards_expired: guardExpired, ...drops };
   shown = 0;
   sitesShown = 0;
+  routesListed = 0;
   restored = 0;
   held = 0;
   guardExpired = 0;

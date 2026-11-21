@@ -2333,6 +2333,8 @@ function globalProviderRows(sections                            , shown         
 });
 __define("packages/core/src/pageText.ts", function (exports, __require) {
   __export(exports, "displayUrl", () => displayUrl);
+  __export(exports, "documentKey", () => documentKey);
+  __export(exports, "routeOf", () => routeOf);
   __export(exports, "pageKey", () => pageKey);
   __export(exports, "withRootSlash", () => withRootSlash);
   __export(exports, "pageTexts", () => pageTexts);
@@ -2351,13 +2353,24 @@ function displayUrl(url        )         {
   return urlForDisplay(url).replace(/\/$/, "");
 }
 
-const pageKey = (url        ) => url.replace(/#.*$/, "").replace(/\/$/, "");
+const documentKey = (url        ) => {
+  const at = url.indexOf("#");
+  return (at < 0 ? url : url.slice(0, at)).replace(/\/$/, "");
+};
+
+const routeOf = (url        ) => {
+  const at = url.indexOf("#");
+  return at >= 0 && (url.startsWith("#/", at) || url.startsWith("#!/", at)) ? url.slice(at) : "";
+};
+
+const pageKey = (url        ) => documentKey(url) + routeOf(url);
 
 const withRootSlash = (url        ) => url.replace(/^(https?:\/\/[^/?#]*)(?=[?#]|$)/i, "$1/");
 
                         
               
               
+                    
                 
                      
                      
@@ -2385,7 +2398,10 @@ function pageText(row                                )           {
     const shown = displayUrl(row.url);
     const shownLower = shown.toLowerCase();
     const titleLower = row.title.toLowerCase();
-    text = { url: row.url, key: pageKey(row.url), shown, shownLower, titleLower, titleWords: wordsOf(titleLower) };
+    const document = documentKey(row.url);
+    const route = routeOf(row.url);
+    text = { url: row.url, key: document + route, shown, shownLower, titleLower, titleWords: wordsOf(titleLower) };
+    if (route) text.document = document;
     pageTexts.set(row, text);
   }
   return text;
@@ -2719,6 +2735,7 @@ __define("packages/core/src/suggest.ts", function (exports, __require) {
   __export(exports, "buildSuggestions", () => buildSuggestions);
   __export(exports, "displayUrl", () => __require("packages/core/src/pageText.ts")["displayUrl"]);
   __export(exports, "prepareSuggestions", () => __require("packages/core/src/candidatePool.ts")["prepareSuggestions"]);
+  __export(exports, "listsRoutesApart", () => __require("packages/core/src/suggestionRows.ts")["listsRoutesApart"]);
   __export(exports, "suggestionKey", () => __require("packages/core/src/suggestionRows.ts")["suggestionKey"]);
 const { findBang } = __require("packages/core/src/bangs.ts");
 const { calculate } = __require("packages/core/src/calculator.ts");
@@ -2728,7 +2745,7 @@ const { BUILT_IN_ENGINES, searchUrl } = __require("packages/core/src/engines.ts"
 const { matchActions } = __require("packages/core/src/fuzzy.ts");
 const { fixupUrl, hostOf, searchUrlFor } = __require("packages/core/src/omnibox.ts");
 const { matchScore, matchScoreWord, narrowing, parseQuery, remember, TopList } = __require("packages/core/src/pageMatch.ts");
-const { hostLowerOfPage, hostOfPage, hostPart, originOfPage, pageKey, withRootSlash } = __require("packages/core/src/pageText.ts");
+const { documentKey, hostLowerOfPage, hostOfPage, hostPart, originOfPage, pageKey, routeOf, withRootSlash } = __require("packages/core/src/pageText.ts");
 const { globalProviderRows, providerUrl, safeProviderRows } = __require("packages/core/src/providerRows.ts");
 const { matchQuickCreate } = __require("packages/core/src/quickCreate.ts");
 const { scopedSearchUrl } = __require("packages/core/src/siteSearch.ts");
@@ -2777,7 +2794,11 @@ function buildSuggestions(raw        , source                  , options        
   };
   const known = (url        ) => {
     const key = pageKey(url);
-    const c = pool.byKey.get(key) ?? extra.find((x) => x.text.key === key);
+    let c = pool.byKey.get(key) ?? extra.find((x) => x.text.key === key);
+    if (!c && !routeOf(url)) {
+      const document = documentKey(url);
+      c = pool.byDocument.get(document) ?? extra.find((x) => x.text.document === document);
+    }
     if (!c) return undefined;
     const shown = { ...c, title: c.pageTitle ?? c.title };
     const opened = withRootSlash(url);
@@ -2981,14 +3002,15 @@ const { logVisits, pageText, pageTexts, tabPageText, withRootSlash } = __require
   
 
                                                                                      
-                                                        
+                                                                                         
 
-                                                                                                                           
+                                                                                                                                                               
                 
                      
                                  
                     
                                 
+                                     
                         
                          
                     
@@ -3002,8 +3024,13 @@ const SLICE_CHECK = 64;
 
 function baseFor(bookmarks                        )               {
   let base = bases.get(bookmarks);
-  if (!base) bases.set(bookmarks, (base = { list: [], byKey: new Map(), keys: new Set(), cursor: 0, done: false }));
+  if (!base) bases.set(bookmarks, (base = { list: [], byKey: new Map(), byDocument: new Map(), keys: new Set(), cursor: 0, done: false }));
   return base;
+}
+
+function addTo(byKey                        , byDocument                        , c           ) {
+  byKey.set(c.text.key, c);
+  if (c.text.document !== undefined && !byDocument.has(c.text.document)) byDocument.set(c.text.document, c);
 }
 
 function advance(b         , bookmarks                        , deadline        )          {
@@ -3018,7 +3045,7 @@ function advance(b         , bookmarks                        , deadline        
     if (!base.byKey.has(text.key)) {
       const c            = { url: row.url, title: row.title, favicon: row.favicon, visits: 0, lastVisit: 0, logVisits: 0, bookmarked: true, text };
       base.list.push(c);
-      base.byKey.set(text.key, c);
+      addTo(base.byKey, base.byDocument, c);
     }
     if (late()) return false;
   }
@@ -3034,7 +3061,7 @@ function advance(b         , bookmarks                        , deadline        
         historyCandidates.set(h, c);
       }
       b.list.push(c);
-      b.byKey.set(text.key, c);
+      addTo(b.byKey, b.byDocument, c);
     }
     if (late()) return false;
   }
@@ -3044,9 +3071,11 @@ function advance(b         , bookmarks                        , deadline        
     if (late()) return false;
   }
   const history = b.byKey;
+  const historyDocuments = b.byDocument;
   b.pool = {
     list: b.list,
     byKey: { get: (key) => history.get(key) ?? base.byKey.get(key), has: (key) => history.has(key) || base.byKey.has(key) },
+    byDocument: { get: (document) => historyDocuments.get(document) ?? base.byDocument.get(document) },
   };
   return true;
 }
@@ -3055,7 +3084,7 @@ function builderFor(history                       , bookmarks                   
   let byBookmarks = builders.get(history);
   if (!byBookmarks) builders.set(history, (byBookmarks = new WeakMap()));
   let b = byBookmarks.get(bookmarks);
-  if (!b) byBookmarks.set(bookmarks, (b = { base: baseFor(bookmarks), history, list: [], byKey: new Map(), historyCursor: 0, bookmarkCursor: 0, pool: null }));
+  if (!b) byBookmarks.set(bookmarks, (b = { base: baseFor(bookmarks), history, list: [], byKey: new Map(), byDocument: new Map(), historyCursor: 0, bookmarkCursor: 0, pool: null }));
   return b;
 }
 
@@ -3150,12 +3179,13 @@ function tabsOver(pool      , tabs                   , currentTabId         )   
 __define("packages/core/src/suggestionRows.ts", function (exports, __require) {
   __export(exports, "pageSuggestion", () => pageSuggestion);
   __export(exports, "suggestionKey", () => suggestionKey);
+  __export(exports, "listsRoutesApart", () => listsRoutesApart);
   __export(exports, "Output", () => Output);
   __export(exports, "createRow", () => createRow);
   __export(exports, "actionRow", () => actionRow);
   __export(exports, "dedupeSuggestions", () => dedupeSuggestions);
                                                     
-const { pageKey, withRootSlash } = __require("packages/core/src/pageText.ts");
+const { documentKey, pageKey, routeOf, withRootSlash } = __require("packages/core/src/pageText.ts");
                                                                  
 
                                                                                                        
@@ -3187,6 +3217,20 @@ function suggestionKey(s            )         {
     case "provider":
       return `provider:${s.providerId}:${pageKey(s.url)}`;
   }
+}
+
+function listsRoutesApart(items                       )          {
+  const routes = new Map                ();
+  for (const s of items) {
+    if (s.kind !== "page") continue;
+    const route = routeOf(s.url);
+    if (!route) continue;
+    const document = documentKey(s.url);
+    const seen = routes.get(document);
+    if (seen === undefined) routes.set(document, route);
+    else if (seen !== route) return true;
+  }
+  return false;
 }
 
 class Output {

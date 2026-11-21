@@ -22,7 +22,7 @@ type Rng = ReturnType<typeof rng>;
 
 const HOSTS = ["github.com", "www.github.com", "news.ycombinator.com", "notion.so", "x.com", "en.wikipedia.org", "react.dev", "example.org", "a.b.co.uk", "localhost:3000", "xn--nxasmq6b.com", "Docs.Google.com"];
 const WORDS = ["react", "native", "banana", "nano", "layout", "github", "news", "notion", "an", "na", "net", "netflix", "pull", "issues", "perf", "Hermes", "Éclair", "naïve", "c++", "foo-bar", "a1", "9lives", "ok", "re\u00a0act", "tab\tbed"];
-const TAILS = ["", "/", "?q=1", "#top", "/index.html", "?utm=a&b=c#x", "/react native", "/new tab/page"];
+const TAILS = ["", "/", "?q=1", "#top", "/index.html", "?utm=a&b=c#x", "/react native", "/new tab/page", "#/app/one", "#/app/two", "/#!/route"];
 
 function makeProfile(r: Rng, size: number) {
   const url = () => {

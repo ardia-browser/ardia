@@ -2,7 +2,7 @@ import { createContext, useContext, useMemo, useSyncExternalStore } from "react"
 import { useShallow } from "zustand/react/shallow";
 import { isBookmarked } from "../bookmarks/bookmarks";
 import { useBrowser, type BrowserState } from "./store";
-import { activeTabId, bookmarkProfileId, IDLE_LIVE, profileFor, sidebarSideOf, tabLayoutOf, tabsShownIn, type SidebarSide } from "./model";
+import { activeTabId, autoHidesTabsInFocused, bookmarkProfileId, IDLE_LIVE, profileFor, sidebarSideOf, tabLayoutOf, tabsShownIn, type SidebarSide } from "./model";
 import type { Settings } from "../settings/settings";
 import type { BrowserWindow, FindState, Profile, Tab, TabGroup, TabLive } from "./types";
 import { CLOSED_FIND, DEFAULT_WINDOW_UI } from "../windows/ui";
@@ -124,6 +124,8 @@ export function useIsBookmarked(url: string): boolean {
 export const useAppDark = (): boolean => useKeyed(watchAppDark, ALL, () => useBrowser.getState().ui.appDark);
 
 export const useTabLayout = (windowId?: string | null): "sidebar" | "top" => useWindowOrFocusedSettings(windowId, (s) => tabLayoutOf(s, windowId));
+
+export const useAutoHidesTabsInFocused = (): boolean => useWindowOrFocusedSettings(null, autoHidesTabsInFocused);
 
 export const useSidebarSide = (windowId?: string | null): SidebarSide => useWindowOrFocusedSettings(windowId, (s) => sidebarSideOf(s, windowId));
 

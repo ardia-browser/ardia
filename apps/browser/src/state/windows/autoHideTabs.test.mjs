@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
-const { tabsShownIn } = await import("../browser/model.ts");
+const { autoHidesTabsInFocused, tabsShownIn } = await import("../browser/model.ts");
 const { menuState } = await import("../commands/menuState.ts");
 const { sidebarMenuItems } = await import("../sidebar/sidebarMenu.ts");
 const { flushPersistence, loadSession, parseSession, startPersistence } = await import("../session/persist.ts");
@@ -51,13 +51,45 @@ test("changing the setting puts every window back in line with it", () => {
   const a = fresh();
   const b = S().createWindow();
   S().toggleSidebar(a);
-  S().updateSettings({ autoHideTabs: false });
-  assert.equal(shown(a), false, "a value that changes nothing leaves the windows alone");
+  S().updateSettings({ autoHideTabs: false }, { fromSync: true });
+  assert.equal(shown(a), false, "a synced value that changes nothing leaves the windows alone");
   S().updateSettings({ autoHideTabs: true });
   assert.deepEqual(everySurface([a, b]), allHidden([a, b]));
   S().toggleSidebar(b);
   S().updateSettings({ autoHideTabs: false }, { fromSync: true });
   assert.deepEqual(everySurface([a, b]), allShown([a, b]));
+});
+
+test("with the setting off, a window hidden with ⌘S shows Settings' switch on, and turning it off brings its tabs back (#2906)", () => {
+  const a = fresh();
+  const b = S().createWindow();
+  S().toggleSidebar(a);
+  S().setFocusedWindow(a);
+  assert.equal(S().settings.autoHideTabs, false);
+  assert.equal(autoHidesTabsInFocused(S()), true, "the switch reads the window in front, not only the setting");
+  S().setFocusedWindow(b);
+  assert.equal(autoHidesTabsInFocused(S()), false);
+  S().setFocusedWindow(a);
+  takeAutoHideTabsChoices();
+  S().updateSettings({ autoHideTabs: false });
+  assert.deepEqual(everySurface([a, b]), allShown([a, b]));
+  assert.equal("autoHideTabs" in S().windows[a], false);
+  assert.equal(autoHidesTabsInFocused(S()), false);
+  assert.equal(takeAutoHideTabsChoices(), 1, "putting a window back in line counts as a choice");
+  S().updateSettings({ autoHideTabs: false });
+  assert.equal(takeAutoHideTabsChoices(), 0, "a choice that changes nothing isn't counted");
+});
+
+test("a window closed with its tabs hidden by ⌘S comes back in line once the setting is chosen (#2906)", () => {
+  const a = fresh();
+  S().createWindow();
+  S().toggleSidebar(a);
+  S().closeWindow(a);
+  S().updateSettings({ autoHideTabs: true });
+  S().updateSettings({ autoHideTabs: false });
+  assert.equal(S().closedWindows.some((c) => "autoHideTabs" in c.window), false);
+  S().reopenClosedWindow();
+  assert.equal(shown(S().windowOrder.at(-1)), true);
 });
 
 test("Settings, sync and the config file change the same setting, so the windows can't disagree with it", () => {

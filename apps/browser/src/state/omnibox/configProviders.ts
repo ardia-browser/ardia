@@ -1,4 +1,5 @@
 import {
+  fillProviderTemplate,
   fixupUrl,
   hostOf,
   matchProviderRows,
@@ -43,11 +44,14 @@ function configProvider(c: ProviderConfig, partition: string, remote: boolean): 
     ...(c.keyword ? { keyword: c.keyword } : {}),
     ...(c.url ? { host: hostOf(c.url.split(QUERY_SLOT).join("q")), template: c.url.split(QUERY_SLOT).join("%s") } : {}),
     sendsInput: !!suggest,
-    async query(text, signal) {
-      const local: ProviderRow[] = c.global && !text.trim() ? [] : matchProviderRows(c.rows, text);
-      if (!suggest || !text.trim() || (c.global && looksLikeAddress(text.trim()))) return local;
-      const fetched = await fetchRemoteRows(suggest, text.trim(), partition, signal, c.url);
-      return [...local, ...fetched];
+    async query(text, signal, publish) {
+      const typed = text.trim();
+      const address = looksLikeAddress(typed);
+      const link = c.global && c.url && typed && !address ? fillProviderTemplate(c.url, typed) : null;
+      const local: ProviderRow[] = [...(link ? [{ title: typed, url: link }] : []), ...(c.global && !typed ? [] : matchProviderRows(c.rows, text))];
+      if (!suggest || !typed || (c.global && address)) return local;
+      publish(local);
+      return [...local, ...(await fetchRemoteRows(suggest, typed, partition, signal, c.url))];
     },
   };
 }
@@ -58,7 +62,6 @@ export function configProviders(entries: readonly ProviderEntry[], { partition, 
     const approved = !needsApproval(config) || isProviderApproved(key);
     if (config.global && !approved) continue;
     const remote = !!config.suggest && approved && !privateContext;
-    if (config.global && config.suggest && !remote && !config.rows.length) continue;
     out.push(configProvider(config, partition, remote));
   }
   return out;

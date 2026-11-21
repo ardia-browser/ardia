@@ -37,17 +37,18 @@ export function createProviderQueries(deadlineMs: number = PROVIDER_DEADLINE_MS)
       for (const provider of providers) {
         const { signal, done } = childOf(run.signal, deadlineMs);
         const deadline = new Promise<never>((_, reject) => signal.addEventListener("abort", () => reject(new Error("deadline")), { once: true }));
+        const publish = (rows: unknown) => {
+          if (!run.signal.aborted && !signal.aborted && Array.isArray(rows)) onSection({ id: provider.id, title: provider.title, rows });
+        };
         let answer: Promise<unknown>;
         try {
-          answer = Promise.resolve(provider.query(text, signal));
+          answer = Promise.resolve(provider.query(text, signal, publish));
         } catch {
           done();
           continue;
         }
         Promise.race([answer, deadline])
-          .then((rows) => {
-            if (!run.signal.aborted && !signal.aborted && Array.isArray(rows)) onSection({ id: provider.id, title: provider.title, rows });
-          })
+          .then(publish)
           .catch(() => {})
           .finally(done);
       }

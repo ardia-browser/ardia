@@ -1,4 +1,4 @@
-import { displayUrl, asksForBackspace, keywordBySpace, resolveInput, searchUrl, scopedSearchUrl, suggestionKey, type Suggestion } from "@ardia/core";
+import { displayUrl, asksForBackspace, fixupUrl, keywordBySpace, resolveInput, searchUrl, scopedSearchUrl, suggestionKey, type Suggestion } from "@ardia/core";
 import { Symbol, useTheme } from "../ui";
 import { copyText, pickFiles } from "../../state/app/system";
 import { chooseFromMenu } from "../../state/app/menuChoice";
@@ -143,13 +143,13 @@ export function Omnibox({
     return hero ? reset() : onDone?.();
   };
 
-  const go = (url: string, asked: Disposition = "current") => {
+  const go = (url: string, asked: Disposition = "current", typedUrl = false) => {
     bangEnter.cancel();
     if (!url) return;
     const disposition = asked === "split" && !barSplitsFrom(tabId) ? (opensTab ? "newTab" : "current") : asked;
     if (opensTab && disposition !== "newWindow" && disposition !== "split") return openFromNewTabBar(windowId, opensTab, url);
     if (disposition === "current") journeyNavigate(tabId);
-    openFromBar(url, tabId, disposition);
+    openFromBar(url, tabId, disposition, typedUrl);
     if (disposition !== "current") dismiss();
   };
 
@@ -168,7 +168,7 @@ export function Omnibox({
     if (!s) {
       if (scope) return void waitForProvider(disposition);
       const text = edited ? value : initialText || value;
-      return go(resolveInput(text, engine.url), disposition);
+      return go(resolveInput(text, engine.url), disposition, !!fixupUrl(text));
     }
     switch (s.kind) {
       case "page":
@@ -181,7 +181,7 @@ export function Omnibox({
           dismiss();
           return void runBookmarklet(s.url, windowId, tabId);
         }
-        return go(s.url, disposition);
+        return go(s.url, disposition, true);
       case "search":
       case "create":
       case "provider":

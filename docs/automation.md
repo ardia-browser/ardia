@@ -419,7 +419,8 @@ Hooks that answer before something happens, with a deadline after which Ardia do
 ## Air Traffic Control
 
 Settings › Air Traffic Control is the same `link.opening` route engine with rules the user makes in Settings, kept in
-the data dir (`air-traffic.json`, version 2: an ordered `rules` list and a `fallback`), not in the config folder.
+the data dir (`air-traffic.json`, version 2: an ordered `rules` list, a `fallback` and an `inAppLinks` switch), not in the
+config folder.
 
 - **Order.** For a link from another app (after `tab.opening` has had its say): the Settings rules from the top, the
   first enabled one that fits answering; then the hooks.json `link.opening` hooks as above; then the Everything Else
@@ -442,6 +443,20 @@ the data dir (`air-traffic.json`, version 2: an ordered `rules` list and a `fall
   in the rule's profile, and its row in Settings says the group isn't open. A copy of the group in a window that is closing
   doesn't count. The parser drops a `groupKey` without a profile or with another `open`, so the rule keeps working as a
   plain tab.
+- **Links opened inside Ardia.** The `inAppLinks` switch (off by default) applies the same rules to a link a page
+  opens into a new tab or window (⌘-click, middle-click, `target=_blank`, a pop-up), to a plain same-tab link click and
+  to a URL typed in the address bar: only rules whose app condition is Any app (`from: null`) are checked, hooks.json
+  hooks and Everything Else never apply, and a rule to the source tab's own profile, or from a private window, changes
+  nothing. The new-tab check runs in `openFromPage` after `tab.opening` has had its say, so a rewrite is routed at its
+  new URL and a cancel stops it first. The engine has already prepared a page for the link under the source profile; a
+  routed link discards it (`discardOffered`) and opens fresh, never adopting contents loaded under another profile.
+  A plain click (no modifier, primary button, an `<a href>` that would replace the page) is decided inside the page:
+  the app pushes each enabled Any-app rule's match, as a list of regular expressions, to the pages of each profile
+  (`webView.setInAppLinkPatterns`), the page script cancels the click and reports the URL, and the app decides again
+  with the real rules, so a pattern that slipped through a stale push never loses a link: an unmatched click navigates
+  exactly as it would have. Only same-document link clicks are intercepted; form submits, script navigations, modified
+  clicks and redirects are never touched. A typed URL is checked where the address bar commits it, after the same
+  `tab.opening` gate, and opens in the rule's profile instead of the current tab; a typed search is never routed.
 - **No approval.** The user makes these rules in Settings, so they count as approved. hooks.json route hooks still need
   approval in Advanced › Automation; the pane lists them read-only with their state.
 - **The hold.** An enabled rule or an Everything Else choice turns the incoming-link hold on, reported again on every
@@ -456,14 +471,17 @@ the data dir (`air-traffic.json`, version 2: an ordered `rules` list and a `fall
   so it can't drift: a `tab.opening` rule that cancels or rewrites the link comes first, then it names the rule, hook,
   Everything Else or usual routing that would take the link and where it would open, tab group included. A program
   hook can't be asked without sending the link, so it shows what happens if the program doesn't answer.
-- Code: `state/airTraffic/rules.ts` (the pure matching and the saved document), `store.ts`, `sourceApps.ts`,
-  `preview.ts`, `groups.ts` (a profile's groups by key, their names and where they are) and `openAt.ts` (opening a
-  link in a group); `state/littleArdia/actions.ts` opens links from other apps; the pane is
+- Code: `state/airTraffic/rules.ts` (the pure matching, the saved document and the page patterns), `store.ts`,
+  `sourceApps.ts`, `preview.ts`, `groups.ts` (a profile's groups by key, their names and where they are) and
+  `openAt.ts` (opening a link in a group), `inAppLinkSync.ts` (the push to the pages);
+  `state/littleArdia/actions.ts` opens links from other apps; the pane is
   `components/settings/panes/AirTraffic.tsx` with its sheet `AirTrafficSheet.tsx`.
-- Telemetry: `usage_counts.air_traffic_rule_links` and `air_traffic_fallback_links` (links from other apps) and
-  `air_traffic_group_links` (those that joined a tab group), and `settings_snapshot`'s `air_traffic_rules` (enabled
-  rules), `air_traffic_wildcard_rules` (enabled rules with a wildcard pattern), `air_traffic_group_rules` (enabled rules
-  that send into a group) and `air_traffic_fallback` (true or false).
+- Telemetry: `usage_counts.air_traffic_rule_links` and `air_traffic_fallback_links` (links from other apps),
+  `air_traffic_group_links` (those that joined a tab group), `air_traffic_in_app_links` (a link opened into a new
+  tab or window), `air_traffic_in_app_clicks` (a plain link click) and `air_traffic_in_app_typed` (an address typed
+  in the address bar), and `settings_snapshot`'s `air_traffic_rules` (enabled rules), `air_traffic_wildcard_rules`
+  (enabled rules with a wildcard pattern), `air_traffic_group_rules` (enabled rules that send into a group),
+  `air_traffic_fallback` (true or false) and `air_traffic_in_app` (the switch, true or false).
 
 ## Approvals
 

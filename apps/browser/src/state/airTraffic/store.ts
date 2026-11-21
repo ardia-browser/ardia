@@ -119,6 +119,10 @@ export function setAirTrafficFallback(given: AirTrafficTarget | null): boolean {
   return saveConfig((c) => (sameTarget(c.fallback, fallback) && c.fallbackChosen ? c : { ...c, fallback, fallbackChosen: true }));
 }
 
+export function setAirTrafficInAppLinks(on: boolean) {
+  saveConfig((c) => (c.inAppLinks === on ? c : { ...c, inAppLinks: on }));
+}
+
 export function noteLinkSource(source: LinkSource) {
   loadAirTraffic();
   const before = useAirTraffic.getState().recentApps;

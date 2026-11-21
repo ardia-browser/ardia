@@ -247,6 +247,7 @@ export type WebViewProps = ViewProps & {
   onFieldProviderOpened?: (opened: FieldProviderOpened) => void;
   onFieldProviderHint?: (hint: FieldProviderHint) => void;
   onVerificationCodeFound?: (found: VerificationCodeFound) => void;
+  onAirTrafficLink?: (link: { url: string }) => void;
 };
 
 export type WebViewHandle = {

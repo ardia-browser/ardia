@@ -31,6 +31,7 @@ export const PAGE_OPTION_CALLS = [
   "webView.setCommandScrollZoom",
   "webView.setDisplayMediaPicker",
   "webView.setPeekOtherSiteTabs",
+  "webView.setInAppLinkPatterns",
   "webView.setLittleArdiaOpensNewTabLinks",
   "webView.setPopupsOpenAsTabs",
   "webView.setBlockAutoplayEverywhere",

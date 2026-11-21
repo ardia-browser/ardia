@@ -74,6 +74,8 @@ void AnswerHello(ArdiaCoreTab *tab, NSString *profile, NSString *frameId, BOOL m
     config[@"peek"] = gPeekModifier;
     config[@"split"] = SplitLinkModifier();
     config[@"peekOtherSites"] = @([ArdiaTabRegistry viewForTab:to].peeksLinksToOtherSites);
+    NSDictionary *linkPatterns = [NSJSONSerialization JSONObjectWithData:[InAppLinkPatternsJSON(profile ?: @"") dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
+    if ([linkPatterns isKindOfClass:NSDictionary.class]) [config addEntriesFromDictionary:linkPatterns];
     if (PeekTracing()) config[@"peekTrace"] = @YES;
     if (TracingPictureInPicture()) config[@"pipTrace"] = @YES;
     [to callFrame:frameId kind:@"config" json:JSONText(config)];
@@ -163,6 +165,10 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
     [self emit:@"selection" payload:@{@"selection" : SelectionState(dict, RootPointsPerLocalPoint(self)) ?: NSNull.null}];
   } else if ([kind isEqualToString:@"newTabLink"] && dict) {
     [self noteNewTabLink:Text(dict, @"url", 8192)];
+  } else if ([kind isEqualToString:@"airTrafficLink"] && dict) {
+    NSString *url = Text(dict, @"url", 8192);
+    NSString *scheme = (url.length ? [NSURL URLWithString:url].scheme.lowercaseString : nil) ?: @"";
+    if ([@[ @"http", @"https" ] containsObject:scheme]) [self emit:@"airTrafficLink" payload:@{@"url" : url}];
   } else if ([kind isEqualToString:@"linkDrop"] && main) {
     NSString *url = Text(dict, @"url", 8192);
     NSString *scheme = (url.length ? [NSURL URLWithString:url].scheme.lowercaseString : nil) ?: @"";

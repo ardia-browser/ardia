@@ -109,6 +109,17 @@ NSString *SplitLinkModifier() {
   return [gSplitLinkModifier isEqualToString:@"alt"] && ![gPeekModifier isEqualToString:@"alt"] ? @"alt" : @"altShift";
 }
 
+static NSMutableDictionary<NSString *, NSArray<NSArray<NSString *> *> *> *InAppLinkPatterns() {
+  static NSMutableDictionary *byProfile = [NSMutableDictionary dictionary];
+  return byProfile;
+}
+
+NSString *InAppLinkPatternsJSON(NSString *profile) {
+  NSArray<NSArray<NSString *> *> *patterns = InAppLinkPatterns()[profile ?: @""];
+  if (!patterns.count) return @"{}";
+  return JSONText(@{@"patterns" : patterns});
+}
+
 NSDictionary *RecentClickPoint(ArdiaWebView *view) {
   NSWindow *window = view.window;
   if (!window || gPeekUpView != view || gPeekUpAt < 0 || CACurrentMediaTime() - gPeekUpAt > kPeekGestureLifetime) return nil;
@@ -204,6 +215,25 @@ static NSString *LinkKeyAction(NSString *key) {
 
 - (BOOL)peeksLinksToOtherSites {
   return _transferKey.length && [gPeekOtherSiteTabs containsObject:_transferKey];
+}
+
++ (void)setInAppLinkPatterns:(NSString *)profile patterns:(NSArray<NSArray<NSString *> *> *)patterns {
+  InstallPeekMonitor();
+  NSString *key = profile ?: @"";
+  NSArray *kept = [patterns isKindOfClass:NSArray.class] ? patterns : @[];
+  kept = [kept filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(NSArray *pair, NSDictionary *) {
+    return [pair isKindOfClass:NSArray.class] && pair.count == 2 && [pair[0] isKindOfClass:NSString.class] && [pair[1] isKindOfClass:NSString.class];
+  }]];
+  if (kept.count) InAppLinkPatterns()[key] = kept;
+  else [InAppLinkPatterns() removeObjectForKey:key];
+  for (ArdiaWebView *view in LiveViews().allObjects) [view pushInAppLinkPatterns];
+}
+
+- (void)pushInAppLinkPatterns {
+  if (!_tab) return;
+  NSString *json = InAppLinkPatternsJSON(_profile);
+  [self callFrame:@"" kind:@"airTrafficConfig" json:json];
+  for (NSString *frameId in [ScriptFramesOf(_tab) copy]) [self callFrame:frameId kind:@"airTrafficConfig" json:json];
 }
 
 + (void)setSplitLinkModifier:(NSString *)modifier {

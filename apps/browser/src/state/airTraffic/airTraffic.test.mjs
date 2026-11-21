@@ -26,15 +26,15 @@ const slackApp = { bundleId: "com.tinyspeck.slackmacgap", name: "Slack" };
 
 let next = 0;
 const rule = (over = {}) => ({ id: `t${++next}`, enabled: true, from: null, when: { kind: "any" }, profileId: null, open: "tab", ...over });
-const counted = (over) => ({ air_traffic_rule_links: 0, air_traffic_fallback_links: 0, air_traffic_group_links: 0, ...over });
+const counted = (over) => ({ air_traffic_rule_links: 0, air_traffic_fallback_links: 0, air_traffic_group_links: 0, air_traffic_in_app_links: 0, air_traffic_in_app_clicks: 0, air_traffic_in_app_typed: 0, ...over });
 
-function fresh({ rules: list = [], fallback = null, hooks = [] } = {}) {
+function fresh({ rules: list = [], fallback = null, hooks = [], inAppLinks = false } = {}) {
   S().hydrate({ profiles: { default: PERSONAL }, profileOrder: ["default"] });
   const work = S().createProfile({ name: "Work" });
   resetApprovalsForTests();
   stub.configFolder.files.set("hooks.json", JSON.stringify({ hooks }));
   reloadHooks();
-  store.resetAirTrafficForTests({ rules: list.map((r) => (typeof r === "function" ? r(work) : r)), fallback: typeof fallback === "function" ? fallback(work) : fallback });
+  store.resetAirTrafficForTests({ rules: list.map((r) => (typeof r === "function" ? r(work) : r)), fallback: typeof fallback === "function" ? fallback(work) : fallback, inAppLinks });
   takeAirTrafficCounts();
   return work;
 }
@@ -215,17 +215,18 @@ test("the saved rules read back, an unversioned file upgrades, and a newer or br
   const config = {
     rules: [rule({ from: slackApp, when: { kind: "site", host: "github.com" }, profileId: "p1", open: "window" }), rule({ enabled: false, when: { kind: "pattern", pattern: "https://*.example.com/*" } })],
     fallback: { profileId: null, open: "littleArdia" },
+    inAppLinks: true,
   };
   const json = rules.airTrafficJson(config);
   assert.equal(JSON.parse(json).version, rules.AIR_TRAFFIC_VERSION);
   assert.deepEqual(rules.parseAirTraffic(json), config);
-  const unversioned = JSON.stringify({ rules: config.rules, fallback: config.fallback });
+  const unversioned = JSON.stringify({ rules: config.rules, fallback: config.fallback, inAppLinks: config.inAppLinks });
   assert.deepEqual(rules.parseAirTraffic(unversioned), config);
   assert.deepEqual(rules.parseAirTraffic(JSON.stringify({ ...JSON.parse(json), version: 99 })), rules.NO_AIR_TRAFFIC);
   assert.deepEqual(rules.parseAirTraffic("{ nope"), rules.NO_AIR_TRAFFIC);
   assert.deepEqual(rules.parseAirTraffic(JSON.stringify({ ...JSON.parse(json), version: 1 })), config, "a version 1 file reads unchanged: its rules name no group");
   const mixed = { version: 1, rules: [config.rules[0], { ...config.rules[1], when: { kind: "site", host: "Not A Host" } }, { ...config.rules[0] }, { id: "x", enabled: true, from: null, when: { kind: "any" }, profileId: null, open: "split" }], fallback: { open: "tab" } };
-  assert.deepEqual(rules.parseAirTraffic(JSON.stringify(mixed)), { rules: [config.rules[0]], fallback: null });
+  assert.deepEqual(rules.parseAirTraffic(JSON.stringify(mixed)), { rules: [config.rules[0]], fallback: null, inAppLinks: false });
 });
 
 test("the store saves its rules to the data dir and reads them back after a restart", () => {
@@ -261,14 +262,18 @@ test("incoming links remember the last 20 distinct apps that sent them, and noth
   assert.ok(!picks.common.some((a) => a.name === "Slack" || a.name === "Mail"));
 });
 
-test("telemetry sends only how many rules are on, how many send links into a tab group, and whether a fallback is set", () => {
+test("telemetry sends only how many rules are on, how many send links into a tab group, whether a fallback is set and whether in-app routing is on", () => {
   const snap = airTrafficSetting({
     rules: [rule({ from: slackApp }), rule({ enabled: false, profileId: "p", groupKey: "g" }), rule(), rule({ profileId: "p", groupKey: "g" })],
     fallback: { profileId: "p", open: "tab" },
+    inAppLinks: true,
   });
-  assert.deepEqual(snap, { air_traffic_rules: "3", air_traffic_wildcard_rules: "0", air_traffic_fallback: "true", air_traffic_group_rules: "1" });
+  assert.deepEqual(snap, { air_traffic_rules: "3", air_traffic_wildcard_rules: "0", air_traffic_fallback: "true", air_traffic_group_rules: "1", air_traffic_in_app: "true" });
   assert.deepEqual(cleanProperties(snap), snap);
-  assert.deepEqual(airTrafficSetting(rules.NO_AIR_TRAFFIC), { air_traffic_rules: "0", air_traffic_wildcard_rules: "0", air_traffic_fallback: "false", air_traffic_group_rules: "0" });
+  assert.deepEqual(
+    airTrafficSetting(rules.NO_AIR_TRAFFIC),
+    { air_traffic_rules: "0", air_traffic_wildcard_rules: "0", air_traffic_fallback: "false", air_traffic_group_rules: "0", air_traffic_in_app: "false" },
+  );
 });
 
 test("a tab group needs a profile opened as a tab; the parser and the store both enforce it", () => {
@@ -401,4 +406,173 @@ test("a link from another app lands where its rule says, before any tab exists",
   assert.equal(tab?.profileId, work);
   assert.notEqual(S().windows[tab.windowId].kind, "small");
   assert.equal(store.useAirTraffic.getState().recentApps[0].name, "Slack");
+});
+
+test("links opened inside Ardia route by Any-app rules only when the switch is on", async () => {
+  const { openFromPage } = await import("../tabs/openFromPage.ts");
+  const work = fresh({ rules: [(w) => rule({ when: { kind: "site", host: "github.com" }, profileId: w, open: "tab" })], inAppLinks: false });
+  S().createWindow({ url: "https://a.example/" });
+  const page = S().windowOrder[0];
+  const ref = { windowId: page, profileId: "default", tabId: S().windows[page].tabIds[0] };
+  openFromPage({ url: "https://github.com/ardia", disposition: "foreground" }, ref);
+  assert.equal(S().tabs[S().windows[page].tabIds.at(-1)].profileId, "default");
+  store.setAirTrafficInAppLinks(true);
+  takeAirTrafficCounts();
+  openFromPage({ url: "https://github.com/ardia", disposition: "foreground", adoptId: "tab:9" }, ref);
+  const routed = Object.values(S().tabs).find((t) => t.url === "https://github.com/ardia" && t.profileId === work);
+  assert.ok(routed, "the link landed in the Work profile");
+  assert.deepEqual(takeAirTrafficCounts(), counted({ air_traffic_in_app_links: 1 }));
+});
+
+test("an app-specific rule never takes a link opened inside Ardia, and the source profile is left alone", async () => {
+  const { openFromPage } = await import("../tabs/openFromPage.ts");
+  fresh({ rules: [(w) => rule({ from: slackApp, when: { kind: "any" }, profileId: w, open: "tab" })], inAppLinks: true });
+  S().createWindow({ url: "https://a.example/" });
+  const w = S().windowOrder[0];
+  const ref = { windowId: w, profileId: "default", tabId: S().windows[w].tabIds[0] };
+  takeAirTrafficCounts();
+  openFromPage({ url: "https://slack.example/go", disposition: "foreground" }, ref);
+  assert.equal(S().tabs[S().windows[w].tabIds.at(-1)].profileId, "default");
+  assert.deepEqual(takeAirTrafficCounts(), counted());
+});
+
+test("a link from a private window never routes out of it", async () => {
+  const { openFromPage } = await import("../tabs/openFromPage.ts");
+  const work = fresh({ rules: [(w) => rule({ when: { kind: "any" }, profileId: w, open: "tab" })], inAppLinks: true });
+  const w = S().createWindow({ kind: "private", url: "https://secret.example/" });
+  const ref = { windowId: w, profileId: S().windows[w].profileId, tabId: S().windows[w].tabIds[0] };
+  takeAirTrafficCounts();
+  openFromPage({ url: "https://github.com/ardia", disposition: "foreground" }, ref);
+  const opened = Object.values(S().tabs).find((t) => t.url === "https://github.com/ardia");
+  assert.ok(opened);
+  assert.notEqual(opened.profileId, work);
+  assert.equal(S().windows[opened.windowId].kind, "private");
+});
+
+test("a rule to the same profile, a non-http link and the switch missing from the file leave the link where it was", async () => {
+  const { openFromPage } = await import("../tabs/openFromPage.ts");
+  const work = fresh({ rules: [rule({ profileId: "default" }), (w) => rule({ when: { kind: "site", host: "github.com" }, profileId: w })], inAppLinks: true });
+  S().createWindow({ url: "https://a.example/" });
+  const w = S().windowOrder[0];
+  const ref = { windowId: w, profileId: "default", tabId: S().windows[w].tabIds[0] };
+  takeAirTrafficCounts();
+  openFromPage({ url: "https://plain.example/x", disposition: "foreground" }, ref);
+  assert.equal(Object.values(S().tabs).find((t) => t.url === "https://plain.example/x")?.profileId, "default");
+  const before = S().windows[w].tabIds.length;
+  openFromPage({ url: "about:blank", disposition: "foreground" }, ref);
+  assert.equal(S().windows[w].tabIds.length, before + 1);
+  assert.deepEqual(takeAirTrafficCounts(), counted());
+  stub.docs.set(rules.AIR_TRAFFIC_DOC, JSON.stringify({ version: 1, rules: [{ id: "a", enabled: true, from: null, when: { kind: "any" }, profileId: work, open: "tab" }], fallback: null }));
+  store.useAirTraffic.setState({ loaded: false });
+  store.loadAirTraffic();
+  assert.equal(store.useAirTraffic.getState().config.inAppLinks, false);
+});
+
+test("a plain click routes to the rule's profile only when the switch is on and the rule fits", async () => {
+  const { routedInAppClick } = await import("../tabs/openFromPage.ts");
+  const work = fresh({ rules: [(w) => rule({ when: { kind: "site", host: "github.com" }, profileId: w, open: "tab" })], inAppLinks: false });
+  S().createWindow({ url: "https://a.example/" });
+  const w = S().windowOrder[0];
+  const ref = { windowId: w, profileId: "default", tabId: S().windows[w].tabIds[0] };
+  takeAirTrafficCounts();
+  assert.equal(routedInAppClick("https://github.com/ardia", ref), false);
+  store.setAirTrafficInAppLinks(true);
+  assert.equal(routedInAppClick("https://plain.example/x", ref), false);
+  assert.equal(routedInAppClick("https://github.com/ardia", ref), true);
+  const routed = Object.values(S().tabs).find((t) => t.url === "https://github.com/ardia" && t.profileId === work);
+  assert.ok(routed, "the click landed in the Work profile");
+  assert.equal(S().tabs[ref.tabId].url, "https://a.example/");
+  assert.deepEqual(takeAirTrafficCounts(), counted({ air_traffic_in_app_clicks: 1 }));
+});
+
+test("a plain click from a private window or to the same profile never routes", async () => {
+  const { routedInAppClick } = await import("../tabs/openFromPage.ts");
+  const work = fresh({ rules: [rule({ when: { kind: "site", host: "plain.example" }, profileId: "default" }), (w) => rule({ when: { kind: "any" }, profileId: w })], inAppLinks: true });
+  S().createWindow({ url: "https://a.example/" });
+  const w = S().windowOrder[0];
+  const ref = { windowId: w, profileId: "default", tabId: S().windows[w].tabIds[0] };
+  takeAirTrafficCounts();
+  assert.equal(routedInAppClick("https://plain.example/x", ref), false);
+  const privateId = S().createWindow({ kind: "private", url: "https://secret.example/" });
+  const privateRef = { windowId: privateId, profileId: S().windows[privateId].profileId, tabId: S().windows[privateId].tabIds[0] };
+  assert.equal(routedInAppClick("https://plain.example/x", privateRef), false);
+  assert.deepEqual(takeAirTrafficCounts(), counted());
+});
+
+test("a typed URL routes, a typed search never does", async () => {
+  const { routedInAppTyped } = await import("../tabs/openFromPage.ts");
+  const { openFromBar } = await import("../omnibox/openFromBar.ts");
+  const work = fresh({ rules: [(w) => rule({ when: { kind: "site", host: "github.com" }, profileId: w, open: "tab" })], inAppLinks: true });
+  S().createWindow({ url: "https://a.example/" });
+  const w = S().windowOrder[0];
+  const tabId = S().windows[w].tabIds[0];
+  takeAirTrafficCounts();
+  openFromBar("https://github.com/ardia", tabId, "current", true);
+  const routed = Object.values(S().tabs).find((t) => t.url === "https://github.com/ardia" && t.profileId === work);
+  assert.ok(routed, "the typed address landed in the Work profile");
+  assert.equal(S().tabs[tabId].url, "https://a.example/");
+  assert.equal(routedInAppTyped("https://www.google.com/search?q=github.com", { windowId: w, profileId: "default", tabId }), false);
+  assert.deepEqual(takeAirTrafficCounts(), counted({ air_traffic_in_app_typed: 1 }));
+});
+
+test("a page suggestion picked from the bar routes, whatever the disposition", async () => {
+  const { openFromBar } = await import("../omnibox/openFromBar.ts");
+  const { navigationOf } = await import("../tabs/pageSession.ts");
+  const work = fresh({ rules: [(w) => rule({ when: { kind: "site", host: "example.org" }, profileId: w, open: "tab" })], inAppLinks: true });
+  S().createWindow({ url: "https://a.example/" });
+  const w = S().windowOrder[0];
+  const tabId = S().windows[w].tabIds[0];
+  takeAirTrafficCounts();
+  openFromBar("https://example.org/d", tabId, "current", true);
+  assert.ok(Object.values(S().tabs).find((t) => t.url === "https://example.org/d" && t.profileId === work), "the picked page landed in the Work profile");
+  assert.equal(S().tabs[tabId].url, "https://a.example/");
+  openFromBar("https://example.com/e", tabId, "current", true);
+  assert.equal(navigationOf(S().tabs[tabId])?.url, "https://example.com/e", "a non-matching picked page navigates in place");
+  openFromBar("https://example.org/n", tabId, "newTab", true);
+  assert.ok(Object.values(S().tabs).find((t) => t.url === "https://example.org/n" && t.profileId === work), "the new-tab picked page landed in the Work profile");
+  openFromBar("https://example.com/f", tabId, "newTab", true);
+  assert.ok(Object.values(S().tabs).find((t) => t.url === "https://example.com/f" && t.profileId === "default"), "a non-matching new-tab picked page opens in the default profile");
+  assert.deepEqual(takeAirTrafficCounts(), counted({ air_traffic_in_app_typed: 2 }));
+});
+
+test("a typed URL with the switch off or without a fitting rule stays in the tab", async () => {
+  const { openFromBar } = await import("../omnibox/openFromBar.ts");
+  const { navigationOf } = await import("../tabs/pageSession.ts");
+  const work = fresh({ rules: [(w) => rule({ when: { kind: "site", host: "github.com" }, profileId: w, open: "tab" })], inAppLinks: false });
+  S().createWindow({ url: "https://a.example/" });
+  const w = S().windowOrder[0];
+  const tabId = S().windows[w].tabIds[0];
+  takeAirTrafficCounts();
+  openFromBar("https://github.com/ardia", tabId, "current", true);
+  assert.equal(navigationOf(S().tabs[tabId])?.url, "https://github.com/ardia");
+  store.setAirTrafficInAppLinks(true);
+  openFromBar("https://plain.example/x", tabId, "current", true);
+  assert.equal(navigationOf(S().tabs[tabId])?.url, "https://plain.example/x");
+  assert.deepEqual(takeAirTrafficCounts(), counted());
+});
+
+test("the page patterns match what the rules match, and only rules that would route are pushed", async () => {
+  const { inAppLinkPatterns, pageLinkPatterns } = await import("./rules.ts");
+  const work = fresh({
+    rules: [
+      (w) => rule({ when: { kind: "site", host: "github.com" }, profileId: w }),
+      rule({ when: { kind: "pattern", pattern: "https://*.example.com/docs/*" }, profileId: "default" }),
+      rule({ when: { kind: "pattern", pattern: "*git*" }, profileId: "default" }),
+      rule({ from: slackApp, when: { kind: "any" }, profileId: "default" }),
+      rule({ enabled: false, when: { kind: "any" }, profileId: "default" }),
+    ],
+    inAppLinks: true,
+  });
+  const hits = ["https://github.com/ardia", "https://gist.github.com/x", "http://github.com:8080/ardia"];
+  const misses = ["https://evilgithub.com/", "https://example.com/", "https://example.com/docs/a", "ftp://github.com/x"];
+  const patterns = inAppLinkPatterns(store.useAirTraffic.getState().config, "default", store.targetUsableNow, "default");
+  assert.ok(patterns.length > 0);
+  const match = (url) => patterns.some(([source, flags]) => new RegExp(source, flags).test(url));
+  for (const url of hits) assert.ok(match(url), url);
+  for (const url of misses) assert.ok(!match(url), url);
+  const wildcard = pageLinkPatterns({ kind: "pattern", pattern: "*.bücher.de" });
+  assert.ok(wildcard.some(([source, flags]) => new RegExp(source, flags).test("https://shop.xn--bcher-kva.de/x")));
+  assert.ok(!wildcard.some(([source, flags]) => new RegExp(source, flags).test("https://shop.bucher.de/x")));
+  assert.ok(pageLinkPatterns({ kind: "any" }).some(([source]) => new RegExp(source).test("https://a.example/")));
+  assert.ok(work);
 });

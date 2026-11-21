@@ -17,6 +17,7 @@ export const webViewCalls: Handlers = {
     await engine.host("autoplay.everywhere", { enabled: args.bool("enabled") });
     return ok();
   },
+  setInAppLinkPatterns: async () => ok(),
   setPopupsOpenAsTabs: async (args) => {
     setPopupsOpenAsTabs(args.bool("enabled"));
     return ok();

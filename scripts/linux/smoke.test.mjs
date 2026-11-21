@@ -4,7 +4,7 @@ import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { launchArguments, launchEnvironment } from "../../apps/linux/scripts/acceptance/lib/ardia.mjs";
-import { ASSERTIONS, SCRIPT_NAME, SCRIPT_TITLE_PREFIX, UNKNOWN_WINDOW_ERROR, USAGE, USER_SCRIPTS_CAPABILITIES, VERSION_PATTERN, WINDOW_STATE_CAPABILITIES, windowStateProblems, appVersionVerdict, cliControlSupport, cliTarball, debLayoutProblems, privateFolder, packageFormat, formatTable, installerRanAgain, launchRefusal, packageStagedFiles, parseArgs, pipeLaunchArguments, splitPipeMessages, summarize, uboSeedProblems, uboTuningProblems, userScriptSource } from "./smoke.mjs";
+import { ASSERTIONS, SCRIPT_NAME, SCRIPT_TITLE_PREFIX, UNKNOWN_WINDOW_ERROR, USAGE, USER_SCRIPTS_CAPABILITIES, VERSION_PATTERN, WINDOW_STATE_CAPABILITIES, windowStateProblems, windowStateSupport, appVersionVerdict, cliControlSupport, cliTarball, debLayoutProblems, privateFolder, packageFormat, formatTable, installerRanAgain, launchRefusal, packageStagedFiles, parseArgs, pipeLaunchArguments, splitPipeMessages, summarize, uboSeedProblems, uboTuningProblems, userScriptSource } from "./smoke.mjs";
 
 test("the package checks are named in the usage and keep the original eight first", () => {
   assert.deepEqual(ASSERTIONS.slice(0, 8), ["ldd", "shell-ui", "bootstrap", "native-tab", "sandbox", "content-blocker", "restart-restore", "staged-install"]);
@@ -156,6 +156,10 @@ test("profile folders stay private under a login umask that lets the group write
 
 test("window-state accepts the contract's shapes and the unknown-window error, and names each mismatch", () => {
   assert.deepEqual(WINDOW_STATE_CAPABILITIES, ["ArdiaShell.windowButtonLayout", "ArdiaShell.windowState"]);
+  assert.deepEqual(windowStateSupport(null), []);
+  assert.deepEqual(windowStateSupport(["engine.setCliControl"]), []);
+  assert.deepEqual(windowStateSupport(["ArdiaShell.windowState"]), ["ArdiaShell.windowState"]);
+  assert.deepEqual(windowStateSupport(["ArdiaShell.windowState", "x", "ArdiaShell.windowButtonLayout"]), WINDOW_STATE_CAPABILITIES);
   const good = { layout: { layout: ":minimize,maximize,close", desktop: "ubuntu:GNOME" }, state: { maximized: false, tiled: false, fullScreen: false }, unknown: UNKNOWN_WINDOW_ERROR };
   assert.deepEqual(windowStateProblems(good), []);
   assert.deepEqual(windowStateProblems({ ...good, layout: { layout: null, desktop: "" } }), []);

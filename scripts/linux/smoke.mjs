@@ -309,6 +309,11 @@ export function windowStateProblems(reply) {
   return problems;
 }
 
+export function windowStateSupport(capabilities) {
+  const list = Array.isArray(capabilities) ? capabilities : [];
+  return WINDOW_STATE_CAPABILITIES.filter((name) => list.includes(name));
+}
+
 export function cliControlSupport(capabilities) {
   const list = Array.isArray(capabilities) ? capabilities : [];
   return CLI_CONTROL_CAPABILITIES.filter((name) => list.includes(name));
@@ -820,8 +825,9 @@ class Smoke {
   }
 
   async windowState(shell) {
-    const missing = WINDOW_STATE_CAPABILITIES.filter((name) => !(this.capabilities ?? []).includes(name));
-    if (missing.length) throw outcome("old", `the host doesn't advertise ${missing.join(", ")}: the engine predates window state on Linux`, { capabilities: this.capabilities?.length ?? null });
+    const advertised = windowStateSupport(this.capabilities);
+    if (!advertised.length) throw outcome("old", `the host advertises neither ${WINDOW_STATE_CAPABILITIES.join(" nor ")}: the engine predates window state on Linux`, { capabilities: this.capabilities?.length ?? null });
+    if (advertised.length < WINDOW_STATE_CAPABILITIES.length) throw new Error(`the host advertises ${advertised.join(", ")} without ${WINDOW_STATE_CAPABILITIES.filter((name) => !advertised.includes(name)).join(", ")}: the engine ships the two together`);
     const reply = await shell.eval(`(async () => {
       const host = globalThis.__ardiaHost;
       const call = (method, args) => host.invoke(method, { args });

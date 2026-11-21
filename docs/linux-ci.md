@@ -168,8 +168,8 @@ It refuses any sandbox-disabling switch. Every check must run and pass:
 Checks 9 to 12 report `skip` and pass for a dev package without `VERSION` or `cli/`. Checks 9 to 13 can also report
 `old` when the engine's host predates the feature: `appVersion` is Chromium's own version, the bootstrap advertises
 none of `engine.setCliControl`, `ArdiaCli.install` and `ArdiaAutomation.start`, (for `cli-scripts`) not all four
-`ArdiaUserScripts` methods, or (for `window-state`) not both `ArdiaShell.windowButtonLayout` and
-`ArdiaShell.windowState`. `old` fails the gate unless
+`ArdiaUserScripts` methods, or (for `window-state`) neither `ArdiaShell.windowButtonLayout` nor
+`ArdiaShell.windowState`; an engine that advertises only one of the two fails `window-state`. `old` fails the gate unless
 `--allow-old-engine` is passed. CI and `release.sh` pass it only for an engine that isn't the commit's own.
 
 It takes about 8 s without the CLI, and writes `results.json`, the launch logs and `cli.log`.

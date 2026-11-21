@@ -1,4 +1,4 @@
-import { hslToRgb, rgbToHsl } from "./color.ts";
+import { hslToRgb, legibleInk, rgbToHsl, withAlpha } from "./color.ts";
 
 type Rgb = readonly [number, number, number];
 
@@ -130,6 +130,23 @@ export function spaceTone(source: LookSource | null, dark: boolean, increasedCon
 }
 
 export type NativeLookColors = { color: string; themeColors: string[]; darkThemeColors: string[] | null };
+
+const ACTION_LIFT = 0.12;
+const GLASS_TINT_SHARE = 0.15;
+const PRESET_ACTIONS: Readonly<Record<string, string>> = { plum: "#DD899B" };
+
+export type LookAccents = { accent: string; formAccent: string; glassTint: string };
+
+export function lookAction(look: ProfileLook): string {
+  const preset = look.preset ? PRESET_ACTIONS[look.preset] : undefined;
+  return preset ?? hex(lightened(parse(look.swatch) ?? [0.5, 0.5, 0.5], ACTION_LIFT));
+}
+
+export function lookAccents(look: ProfileLook, dark: boolean, increasedContrast = false): LookAccents | null {
+  if (look.isNeutral) return null;
+  const action = lookAction(look);
+  return { accent: action, formAccent: legibleInk(action, dark, increasedContrast), glassTint: withAlpha(look.tint, GLASS_TINT_SHARE) };
+}
 
 export function nativeLookColors(look: ProfileLook): NativeLookColors {
   return { color: look.preset ?? look.swatch, themeColors: [...look.theme], darkThemeColors: look.darkTheme ? [...look.darkTheme] : null };

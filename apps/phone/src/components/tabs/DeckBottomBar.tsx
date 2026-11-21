@@ -112,6 +112,7 @@ export function SearchTabsField({ search, testID = "deckSearchTabs", style, rest
               accessibilityLabel="Search Tabs"
               placeholder="Search Tabs"
               placeholderTextColor={iPhoneOr(roles.tertiaryLabel, roles.secondaryLabel)}
+              selectionColor={roles.formAccent}
               value={text}
               onChangeText={change}
               onFocus={focus}

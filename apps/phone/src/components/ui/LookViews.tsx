@@ -12,6 +12,7 @@ import {
 import type { ReactNode } from "react";
 import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import {
+  lookAccents,
   nativeLookColors,
   windowTintStops,
   type NativeLookColors,
@@ -44,6 +45,8 @@ const INCOGNITO_COLORS: NativeLookColors = {
   themeColors: [],
   darkThemeColors: null,
 };
+
+const lookGlassTint = (look: ProfileLook, dark: boolean) => lookAccents(look, dark)?.glassTint;
 
 const lookColors = (look: ProfileLook, incognito: boolean): NativeLookColors =>
   incognito ? INCOGNITO_COLORS : nativeLookColors(look);
@@ -225,7 +228,7 @@ export function ChromeSurface({
   const surface = useChromeStyle();
   if (glassIsNative()) {
     return (
-      <Glass testID={testID} source={SURFACES_FROST} shape={shape} cornerRadius={cornerRadius} interactive={interactive} tinted={tinted} surface={surface} barShadow={barShadow} shown={shown} shownMs={shownMs} {...lookColors(look, incognito)} dark={dark ?? (incognito || theme.dark)} style={[style, { borderRadius: cornerRadius }]}>
+      <Glass testID={testID} source={SURFACES_FROST} shape={shape} cornerRadius={cornerRadius} tint={incognito ? undefined : lookGlassTint(look, theme.dark)} interactive={interactive} tinted={tinted} surface={surface} barShadow={barShadow} shown={shown} shownMs={shownMs} {...lookColors(look, incognito)} dark={dark ?? (incognito || theme.dark)} style={[style, { borderRadius: cornerRadius }]}>
         {children}
       </Glass>
     );
@@ -262,6 +265,7 @@ export function LookGlass({
       testID="deckGlass"
       source={frost.source}
       shape={shape}
+      tint={frost.incognito ? undefined : lookGlassTint(look, frost.dark ?? theme.dark)}
       {...lookColors(look, frost.incognito ?? false)}
       dark={frost.incognito || (frost.dark ?? theme.dark)}
       style={frost.style}

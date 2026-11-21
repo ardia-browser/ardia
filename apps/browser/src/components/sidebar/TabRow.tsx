@@ -13,6 +13,7 @@ import { isPinnedRow, tabTitle } from "../../state/browser/model";
 import { awayFromPin, rowAwayTitle } from "../../state/pins/organize";
 import { hidesRowIcon } from "../../state/pins/rowIcons";
 import { commitRename, endRename, startRename } from "../../state/sidebar/actions";
+import { armClickRename, cancelClickRename, clickRename } from "../../state/sidebar/clickRename";
 import { useDragItem } from "./DragProvider";
 import { SplitDropHalf } from "./DropMarks";
 import { PreviewFade, previewFade, SplitPreview, useSplitPreview } from "./SplitPreview";
@@ -150,6 +151,11 @@ export const TabRow = memo(function TabRow({
   const title = resetting ? "Back to Pinned URL" : tab.customTitle ? tabTitle(tab) : titleWithoutUnread(tabTitle(tab), unread);
   const away = resettable && !resetting ? rowAwayTitle(tab) : null;
   const hoverFill = quiet ? tokens.quietHover : theme.tabHover;
+  const pressChange = (down: boolean) => {
+    setPressed(down);
+    if (down && !renaming) armClickRename(windowId, tabId);
+  };
+  const clickToRename = (e: GestureResponderEvent) => clickRename(windowId, tabId, e, !!press.current?.windowKey);
   const titleColor = quiet ? hex(withAlpha(theme.textTab, active ? tokens.quietActiveText : tokens.quietText)) : active ? theme.rowSelectedText : theme.textTab;
 
   return (
@@ -158,9 +164,12 @@ export const TabRow = memo(function TabRow({
       ref={movedRef}
       {...hoverProps}
       style={moved.style as object}
-      onDoubleClick={() => void startRename(windowId, { kind: "tab", id: tabId })}
+      onDoubleClick={() => {
+        cancelClickRename();
+        void startRename(windowId, { kind: "tab", id: tabId });
+      }}
     >
-      {tabPressView({ windowId, tab, hitSlop: rowGapSlop(0), selected, press, inSplit: !!(flags & IN_SPLIT), plainTooltip, onPressChange: setPressed, children: (
+      {tabPressView({ windowId, tab, hitSlop: rowGapSlop(0), selected, press, inSplit: !!(flags & IN_SPLIT), plainTooltip, onPressChange: pressChange, onClicked: clickToRename, children: (
         <>
           <RowHoverFill cell={cell} pressed={pressed} color={pressed ? pressedFill : hoverFill} radius={radius.chrome} />
           {surface}

@@ -1,5 +1,5 @@
 import { type ReactNode, useRef } from "react";
-import { Pressable, type Insets, type StyleProp, type ViewStyle } from "react-native";
+import { Pressable, type GestureResponderEvent, type Insets, type StyleProp, type ViewStyle } from "react-native";
 import { hostOf } from "@ardia/core";
 import { useSettings } from "../../state/browser/hooks";
 import { tabTitle } from "../../state/browser/model";
@@ -43,7 +43,8 @@ export function tabPressView({
   inSplit,
   plainTooltip,
   onPressChange,
-}: TabPressProps & { press: { current: TabPress | null }; inSplit: boolean; plainTooltip: boolean; onPressChange?: (pressed: boolean) => void }) {
+  onClicked,
+}: TabPressProps & { press: { current: TabPress | null }; inSplit: boolean; plainTooltip: boolean; onPressChange?: (pressed: boolean) => void; onClicked?: (e: GestureResponderEvent) => void }) {
   return (
     <ContextMenuArea
       onMiddleClick={() => middleClickTab(tab.id)}
@@ -58,7 +59,10 @@ export function tabPressView({
           onPressChange?.(true);
           press.current = holdTabPress(windowId, tab.id, e, press.current);
         }}
-        onPress={(e) => clickHeldTabPress(windowId, tab.id, e, press.current)}
+        onPress={(e) => {
+          clickHeldTabPress(windowId, tab.id, e, press.current);
+          onClicked?.(e);
+        }}
         onPressOut={(e) => {
           onPressChange?.(false);
           pressOutTabPress(press.current, e);

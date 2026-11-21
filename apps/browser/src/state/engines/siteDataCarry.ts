@@ -1,4 +1,4 @@
-import { exportWebKitCookies, readWebKitSiteData, type StorageChange } from "../../platform/webkit";
+import { exportWebKitCookies, readWebKitSiteData, type SiteStorage, type StorageChange } from "../../platform/webkit";
 import type { PageEngine } from "../../platform/tabs";
 import { getSiteSettings } from "../../platform/siteSettings";
 import { useBrowser, type BrowserState } from "../browser/store";
@@ -19,7 +19,7 @@ import {
   webOrigin,
 } from "./siteDataMerge";
 import { learnRegistrableDomains } from "./siteDataDomains";
-import { readChromium, writeChromium, writeWebKit } from "./siteDataChromium";
+import { readChromium, readChromiumStorageWithoutPage, writeChromium, writeChromiumStorageWithoutPage, writeWebKit } from "./siteDataChromium";
 import { capBases, noteOrigin, needsCarry, profileOf, siteEntry, sourceIsNewer, touch } from "./siteDataLedger";
 import { book, clearCount, clearsSettled, commitCount, committedSince, hostOf, inCommitLane, noteCommit, pushTimers, saveNow, saveSoon } from "./siteDataState";
 import { noteSiteDataCarry, noteSiteDataSkip, type SiteDataCarry } from "../telemetry/siteDataCounts";
@@ -149,10 +149,10 @@ async function commitCarry(profile: string, site: string, to: PageEngine, { entr
     }
     noteSiteDataSkip("cookieOnlyFallback", consent);
     const changed = [...cookieMap(webkit.cookies, now)].filter(([key, c]) => cookieBase[key] !== cookieFingerprint(c)).map(([key]) => key);
-    if (!changed.length || !stillCurrent()) return NOTHING;
     const urls = origins.map((o) => `${o}/`).concat(domains.map((d) => `https://${d}/`));
-    const cookies = await exportWebKitCookies(profile, urls, changed).catch(() => 0);
-    return { ...NOTHING, cookies };
+    const cookies = changed.length && stillCurrent() ? await exportWebKitCookies(profile, urls, changed).catch(() => 0) : 0;
+    const stored = stillCurrent() ? await storageWithoutChromiumPage(profile, site, entry, origins, webkit.storage, cleared, stillCurrent, consent) : 0;
+    return { ...NOTHING, cookies, storage: stored };
   }
   const source = from === "chromium" ? chromium.data : webkit;
   const dest = from === "chromium" ? webkit : chromium.data;
@@ -202,6 +202,54 @@ async function commitCarry(profile: string, site: string, to: PageEngine, { entr
   const carry = { cookies: written.cookies, removed: written.removed, storage: written.storage, conflicts };
   noteSiteDataCarry(to, carry, consent);
   return carry;
+}
+
+async function storageWithoutChromiumPage(
+  profile: string,
+  site: string,
+  entry: Commit["entry"],
+  origins: string[],
+  webkitStorage: SiteStorage,
+  cleared: number,
+  stillCurrent: () => boolean,
+  consent: ConsentToken | null,
+): Promise<number> {
+  const wanted = origins.filter((o) => webkitStorage[o]);
+  if (!wanted.length) return 0;
+  const chromiumStorage = await readChromiumStorageWithoutPage(profile, wanted);
+  if (!stillCurrent()) return 0;
+  const p = profileOf(book(), profile);
+  const wins = sourceIsNewer(entry, "chromium", openIn(profile, site, "webkit"), openIn(profile, site, "chromium"));
+  const drops = trustsDropsFrom("webkit", entry.at.webkit);
+  const storage: Record<string, StorageChange> = {};
+  const merges: { origin: string; before: Record<string, string>; merged: ReturnType<typeof mergeInto<string>> }[] = [];
+  let conflicts = 0;
+  let held = 0;
+  for (const o of wanted) {
+    const s = webkitStorage[o];
+    const d = chromiumStorage[o];
+    if (!s || !d) continue;
+    const before = p.storage[o] ?? {};
+    const merged = mergeInto(storageMap(s), storageMap(d), before, storageFingerprint, wins, drops);
+    conflicts += merged.conflicts;
+    held += merged.held;
+    merges.push({ origin: o, before, merged });
+    if (merged.put.length || merged.drop.length) storage[o] = { set: merged.put, remove: merged.drop.map(([k]) => k) };
+  }
+  if (!merges.length || !stillCurrent()) return 0;
+  if (held) noteSiteDataSkip("untrustedDrops", consent);
+  const writing = Object.keys(storage).length > 0;
+  const written = writing ? await writeChromiumStorageWithoutPage(profile, storage, stillCurrent) : { storage: 0, landed: new Set<string>() };
+  if (writing) noteCommit(profile, [], Object.keys(storage));
+  if (clearCount(profile) !== cleared) return 0;
+  const bases = profileOf(book(), profile);
+  for (const { origin: o, before, merged } of merges) bases.storage[o] = settledBase(before, merged.base, [...merged.put, ...merged.drop], !storage[o] || written.landed.has(o));
+  capBases(bases);
+  if (writing) {
+    saveNow(consent);
+    noteSiteDataCarry("chromium", { cookies: 0, removed: 0, storage: written.storage, conflicts }, consent);
+  } else saveSoon(consent);
+  return written.storage;
 }
 
 export async function carryForTab(tabId: string, url: string, to: PageEngine, stillWanted: () => boolean, consent: ConsentToken | null): Promise<number> {

@@ -70,6 +70,24 @@ export async function writeChromium(
   return { cookies: reply.cookiesWritten ?? 0, removed: reply.removed ?? 0, storage: stored, landed };
 }
 
+export async function readChromiumStorageWithoutPage(profile: string, origins: string[]): Promise<SiteStorage> {
+  const storage: SiteStorage = {};
+  await Promise.all(origins.map(async (o) => void (storage[o] = await chromiumStorage(profile, o, []))));
+  return storage;
+}
+
+export async function writeChromiumStorageWithoutPage(profile: string, storage: Record<string, StorageChange>, stillCurrent: () => boolean): Promise<{ storage: number; landed: Set<string> }> {
+  const landed = new Set<string>();
+  let stored = 0;
+  for (const [origin, change] of Object.entries(storage)) {
+    if (!stillCurrent()) break;
+    const count = (await writeChromiumStorage(profile, origin, change.set, change.remove).catch(() => null))?.written ?? 0;
+    if (count >= change.set.length + change.remove.length) landed.add(origin);
+    stored += count;
+  }
+  return { storage: stored, landed };
+}
+
 export async function writeWebKit(profile: string, cookies: PageCookie[], remove: CookieRemoval[], storage: Record<string, StorageChange>): Promise<Written | null> {
   const reply = await writeWebKitSiteData(profile, cookies, remove, storage).catch(() => null);
   if (!reply) return null;

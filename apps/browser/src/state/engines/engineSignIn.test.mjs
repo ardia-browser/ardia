@@ -251,6 +251,39 @@ async function withSites(handlers, body) {
   }
 }
 
+test("with no Chromium page open, WebKit's saved data reaches Chromium through the engine's storage calls, and an engine without them moves cookies only", async () => {
+  const { tabId } = setup();
+  S().updateTab(tabId, { engine: "webkit" });
+  webKit.cookies = [{ ...signedIn, value: "webkit" }];
+  webKit.storage[ORIGIN] = [["token", "fromWebKit"]];
+  const chromiumStore = { [ORIGIN]: [["kept", "1"]] };
+  const writes = [];
+  await withSites(
+    {
+      readStorage: ({ origin }) => ({ items: chromiumStore[origin] ?? [] }),
+      writeStorage: ({ origin, set, remove }) => {
+        writes.push({ origin, set, remove });
+        chromiumStore[origin] = [...(chromiumStore[origin] ?? []).filter(([k]) => !remove.includes(k) && !set.some(([n]) => n === k)), ...set];
+        return { written: set.length + remove.length };
+      },
+    },
+    () => carrySignIn(tabId, `${ORIGIN}/home`, "chromium", null),
+  );
+  assert.deepEqual(writes, [{ origin: ORIGIN, set: [["token", "fromWebKit"]], remove: [] }]);
+  assert.deepEqual(Object.fromEntries(chromiumStore[ORIGIN]), { kept: "1", token: "fromWebKit" });
+
+  webKit.storage[ORIGIN] = [["token", "newer"]];
+  const before = writes.length;
+  await withSites(
+    {
+      readStorage: () => Promise.reject(new Error("the engine has no ac_local_storage_read")),
+      writeStorage: () => (writes.push("unexpected"), { written: 0 }),
+    },
+    () => carrySignIn(tabId, `${ORIGIN}/home`, "chromium", null),
+  );
+  assert.equal(writes.length, before);
+});
+
 test("Clear Browsing Data that starts while a carry is writing waits for the write, then clears what it wrote", async () => {
   const { tabId } = setup();
   const page = chromiumPage({ cookies: [signedIn], storage: {} });

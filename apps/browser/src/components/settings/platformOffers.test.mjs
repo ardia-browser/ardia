@@ -85,7 +85,7 @@ test("the Mac keeps every row and the engine switch", () => {
   assert.equal(mac.switchesEngine, true);
   assert.deepEqual(mac.pageEngines, ["webkit", "webkit", "webkit", "webkit", "webkit"]);
   assert.equal(mac.closedWindows, "What you see the next time you open it. Closed windows stay in History › Recently Closed.");
-  assert.deepEqual(mac.syncTypes, ["bookmarks", "history", "tabs", "pinned", "passwords", "extensions", "settings"]);
+  assert.deepEqual(mac.syncTypes, ["bookmarks", "history", "tabs", "pinned", "passwords", "extensions", "boosts", "settings"]);
   assert.equal(mac.syncsPasswords, true);
 });
 

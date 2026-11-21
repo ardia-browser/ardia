@@ -85,6 +85,7 @@ export function webViewHandle(native: { readonly current: WebViewNativeHandle | 
     discard: (options) => call<DiscardOutcome>("refused", (n) => n.discard(options?.unload ?? false)),
     sleepIfHidden: (seconds) => call<DiscardRefusal[]>([NO_PAGE_TO_DISCARD], (n) => n.sleepIfHidden(seconds)),
     setFrozen: (frozen) => call(undefined, (n) => n.setFrozen(frozen)),
+    zap: (action, level) => call(undefined, (n) => n.zap(action, level ?? 0)),
   };
 }
 

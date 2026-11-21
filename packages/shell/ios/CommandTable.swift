@@ -88,6 +88,9 @@ enum CommandTable {
     case searchTabs
     case renameTab
     case changeTabIcon
+    case newBoost
+    case editBoost
+    case turnOffBoosts
     case returnToPinnedUrl
     case tabSwitcher
     case share
@@ -208,6 +211,9 @@ enum CommandTable {
     "searchTabs": "Search Tabs…",
     "renameTab": "Rename…",
     "changeTabIcon": "Change Icon…",
+    "newBoost": "New Boost",
+    "editBoost": "Edit Boost",
+    "turnOffBoosts": "Turn Off Boosts for This Site",
     "returnToPinnedUrl": "Back to Pinned URL",
     "tabSwitcher:forward": "Tab Switcher (forward)",
     "tabSwitcher:backward": "Tab Switcher (backward)",

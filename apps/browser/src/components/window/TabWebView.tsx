@@ -28,11 +28,12 @@ import { isIncognitoProfile, navigationTo } from "../../state/browser/model";
 import type { Tab } from "../../state/browser/types";
 import { zoomChangedByUser } from "../../state/site/zoomBubble";
 import { markTabReady, patchPage, pageOf } from "../../state/tabs/pageState";
+import { deliverZapPicked } from "../../state/boostUi/zap";
 import { popupBlocked, showAutofillPrompt, showExternalApp, showPasswordPrompt } from "../../state/site/prompts";
 import { fieldProviderHint, fieldProviderOpened, verificationCodeFound, type FieldProviderHint, type FieldProviderOpened, type VerificationCodeFound } from "../../state/site/passwordManager";
 import { verificationCodeDocument, verificationCodeTabGone } from "../../state/site/verificationCodes";
 import { hoverStatus } from "../../state/tabs/hoverStatus";
-import { leftPage, pageAskedToClose, pageEnded } from "../../state/tabs/pageEvents";
+import { leftPage, openBoostLink, pageAskedToClose, pageEnded } from "../../state/tabs/pageEvents";
 import { copyLinkToSelection, searchSelection, setPageSelection } from "../../state/site/selection";
 import { shareFromPage } from "../../state/site/share";
 import { useAutoPictureInPicture } from "../../state/media/pip";
@@ -84,6 +85,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine }
   const backdrop = useMemo(() => opaqueCard(theme), [theme.card, theme.windowTint[0], theme.windowTint[1]]);
 
   const lastPage = useRef<string | null>(null);
+  const lastUrl = useRef<string | null>(null);
   const restore = useRef<string | null>(null);
   const reopening = useRef(engine === "chromium" && isAdoptKind(adoptId, "restore"));
   const pending = useRef<string | null>(navigation?.url ?? (adoptId ? (tab()?.url ?? null) : null));
@@ -170,6 +172,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine }
       pageColor={pageColor}
       contentsBackgroundColor={backdrop}
       shownUrl={shownUrl}
+      onZapPicked={(pick) => deliverZapPicked(tabId, pick)}
       onReady={() => {
         if (peekOf === undefined) notePeekRecipient(tabId);
         markTabReady(tabId);
@@ -220,6 +223,8 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine }
         dropOutlivedFavicon(tabId, url, isLoading);
         if (engine === "webkit") noteWebKitPage(tabId, { url, title, isLoading, committedUrl: committedUrl ?? "" });
         if (lastPage.current !== null && withoutFragment(url) !== lastPage.current) leftPage(tabId, url, lastPage.current, engine, peekOf !== undefined);
+        if (lastUrl.current !== null && url !== lastUrl.current) openBoostLink(tabId, url);
+        lastUrl.current = url;
         lastPage.current = withoutFragment(url);
         patchPage(tabId, { themeColorSource: themeColorSource ?? null });
       }}

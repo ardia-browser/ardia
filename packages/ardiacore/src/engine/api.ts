@@ -94,6 +94,10 @@ export type EngineCalls = {
   "sites.preloadPages": [Profile, boolean];
   "sites.setPreloadPages": [Profile & { on: boolean }, null];
 
+  "boosts.setProfileBoosts": [Profile & { json: string }, null];
+  "boosts.previewBoost": [{ tabId: string; json: string }, null];
+  "boosts.clearBoostPreview": [{ tabId: string }, null];
+
   "passwords.list": [Profile, { passwords: SavedPassword[] }];
   "passwords.unlock": [Profile, { unlocked: boolean }];
   "passwords.reveal": [Profile & { origin: string; username: string }, { password: string | null }];

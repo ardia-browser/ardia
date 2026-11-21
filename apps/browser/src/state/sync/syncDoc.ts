@@ -19,6 +19,7 @@ const SYNC_TYPES = {
     description: "Extensions from the Chrome Web Store, whether they’re on, and whether they’re pinned.",
     profileData: true,
   },
+  boosts: { title: "Boosts", description: "Each synced profile’s Boosts: site colours, fonts, hidden elements, CSS and JS.", profileData: true },
   settings: { title: "Settings", description: "Search engine, appearance, tab and keyboard settings." },
 } as const satisfies Record<string, SyncTypeSpec>;
 
@@ -27,7 +28,7 @@ export type DataType = keyof typeof SYNC_TYPES;
 const SPECS: Readonly<Record<DataType, SyncTypeSpec>> = SYNC_TYPES;
 const TYPE_IDS = Object.keys(SYNC_TYPES) as DataType[];
 
-const offered = (id: DataType) => id !== "passwords" || PLATFORM_FEATURES.syncsPasswords;
+const offered = (id: DataType) => (id !== "passwords" || PLATFORM_FEATURES.syncsPasswords) && (id !== "boosts" || PLATFORM_FEATURES.boosts);
 
 export const SYNCED_KINDS = `bookmarks, history, open tabs, pinned tabs, groups, ${PLATFORM_FEATURES.syncsPasswords ? "passwords, " : ""}extensions and settings`;
 

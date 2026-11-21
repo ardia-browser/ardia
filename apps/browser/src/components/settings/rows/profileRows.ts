@@ -4,6 +4,7 @@ import { keyText } from "../../../state/commands/keyText";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 
+const boostsOffered = () => PLATFORM_FEATURES.boosts;
 const syncOn = (_: unknown, env: SettingsEnv) => !!env.syncOn;
 
 export const profileRows = {
@@ -154,6 +155,23 @@ export const profileRows = {
           title: "Get extensions",
           description: "Add to Ardia installs into this profile.",
           keywords: ["install extension", "chrome web store"],
+        },
+      },
+    },
+    {
+      section: "Boosts",
+      rows: {
+        boosts: {
+          shown: boostsOffered,
+          title: "Boosts",
+          description: "Colours, fonts, hidden elements, CSS and JavaScript that restyle a site. Create one from Site Controls or the tab menu. A Google font is downloaded once from Google when you pick it.",
+          keywords: ["boost", "restyle", "theme site", "zap", "custom css", "userscript", "google fonts"],
+        },
+        importBoost: {
+          shown: boostsOffered,
+          title: "Add a Boost",
+          description: "Paste a share code to add someone's Boost.",
+          keywords: ["share code", "paste", "install boost", "import boost"],
         },
       },
     },

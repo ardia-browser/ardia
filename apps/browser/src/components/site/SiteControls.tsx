@@ -34,6 +34,8 @@ import { ActionTile, gridColumns, MoreButton, SettingRow, SITE_PANEL, TileRow } 
 import { SectionLabel } from "../sidebar/SectionLabel";
 import { CertificateDetails, ConnectionChip, ConnectionRow } from "./SiteConnection";
 import { SiteExtensions } from "./SiteExtensions";
+import { SiteBoosts } from "./SiteBoosts";
+import { canBoostTab, newBoostForTab } from "../../state/boostUi/actions";
 import { TranslateRows } from "./TranslateControls";
 import { ReaderRow } from "./ReaderControls";
 import { ZoomStepper } from "./ZoomControls";
@@ -183,6 +185,17 @@ export function SiteControlsPanel({
         }}
       />
     ) : null,
+    canBoostTab(tabId) ? (
+      <ActionTile
+        key="boost"
+        icon="paintbrush"
+        label="New Boost"
+        onPress={() => {
+          close();
+          newBoostForTab(tab.windowId, tabId);
+        }}
+      />
+    ) : null,
     video ? (
       <ActionTile
         key="pip"
@@ -210,6 +223,8 @@ export function SiteControlsPanel({
         <TileRow>{tiles}</TileRow>
 
         <SiteExtensions windowId={tab.windowId} tabId={tab.id} columns={gridColumns(tiles.length)} onClose={close} />
+
+        {canBoostTab(tabId) ? <SiteBoosts windowId={tab.windowId} tabId={tabId} profileId={tab.profileId} host={host} onClose={close} /> : null}
 
         {origin ? (
           <>

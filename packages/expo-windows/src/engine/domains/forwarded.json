@@ -43,6 +43,7 @@
   },
   "missing": {
     "autofill": ["settings", "setSettings", "showSuggestions"],
+    "boosts": ["setProfileBoosts", "previewBoost", "clearBoostPreview"],
     "contentBlocker": ["state", "setEnabled", "setListEnabled", "isAllowed", "setAllowed", "hiddenElements", "hideElements", "restoreElements", "addList", "removeList", "devFailNextMessage", "devDelayNextLoad"],
     "engine": ["beginTracing", "endTracing", "isTracing", "cliTabTargets", "cliOwnsTab", "cliMoveOffscreen", "cliCloseOffscreenTabs"],
     "extensions": ["resolveInstallPrompt", "actionStates", "sidePanelUrl"],

@@ -117,6 +117,7 @@ enum PageViewDefinition {
       AsyncFunction("sleepIfHidden") { (view: V, seconds: Double) -> [Int] in view.page.sleepIfHidden(for: seconds).map(\.intValue) }
         .runOnQueue(.main)
       AsyncFunction("setFrozen") { (view: V, frozen: Bool) in view.page.frozen = frozen }.runOnQueue(.main)
+      AsyncFunction("zap") { (view: V, action: String, level: Int) in view.page.zap(action, level: level) }.runOnQueue(.main)
 
       OnViewDidUpdateProps { (view: V) in view.propsDidUpdate() }
     }

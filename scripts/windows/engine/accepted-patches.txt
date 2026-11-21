@@ -66,6 +66,7 @@ chromium-video-super-resolution.patch
 chromium-keep-old-frame-on-swap.patch
 chromium-keep-compositor-on-occlusion.patch
 chromium-windowless-page-screen-rects.patch
+chromium-page-color-matrix.patch
 chromium-freeze-spares-live-connections.patch
 chromium-memory-saver-pinned-tabs.patch
 chromium-temporary-tab-restore-hook.patch

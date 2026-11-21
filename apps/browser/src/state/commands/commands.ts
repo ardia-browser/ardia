@@ -45,6 +45,7 @@ import { switchTabLayout } from "../settings/actions";
 import { isAppCommand, settingChange, variantArg } from "./commandCatalog";
 import { APP_COMMAND_HANDLERS } from "./appCommands";
 import { runSidebarCommand } from "../sidebar/commands";
+import { runBoostCommand } from "../boostUi/commands";
 import { numberedTabs } from "../sidebar/entries";
 import { openExtensionFromMenu } from "../extensions/bridge";
 import { toggleCastPicker } from "../media/cast";
@@ -154,7 +155,7 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
   const page = tab?.url ? tab : undefined;
   const web = tabId ? webviews.get(tabId) : undefined;
   const ui = s.windowUi[windowId];
-  if (page && (runHidingCommand(command, page.id) || runReaderCommand(command, page.id, mayWrite))) return;
+  if (runBoostCommand(command, windowId, tabId) || (page && (runHidingCommand(command, page.id) || runReaderCommand(command, page.id, mayWrite)))) return;
   if (!targeted && runSidebarCommand(command, arg, windowId)) return;
 
   switch (command) {

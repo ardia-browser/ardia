@@ -5,7 +5,7 @@ import { engineProfile } from "../browser/model";
 import { historyExpired } from "./historyAdapter";
 import { settingsToReapply } from "./settingsAdapter";
 import { watchExtensionIntents } from "./extensions";
-import { appAdapters, extensionsOf, forgetScopeAdapters, profileAdapters, typeSynced } from "./scopeAdapters";
+import { appAdapters, extensionsOf, forgetScopeAdapters, profileAdapters, typeSynced, watchBoosts } from "./scopeAdapters";
 import { APP_SCOPE, defaultTypes, emptyDoc, type DataType, type SendTarget, type SyncDoc, type SyncUi } from "./syncDoc";
 import { syncFiles } from "./syncFiles";
 import { settleThemeAdoption, themeChosenHere } from "./syncThemes";
@@ -50,8 +50,7 @@ export const currentSyncFolder = () => useSync.getState().folder;
 
 let doc: SyncDoc = emptyDoc();
 let cycle: Promise<void> | null = null;
-let again = false;
-let forcePasswordsNext = false;
+let again = false, forcePasswordsNext = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
 const { read, loadState, persistJournal, watchScope, save, startOver, checkpoint } = syncFiles(() => doc);
 
@@ -386,6 +385,7 @@ export function startSync() {
     if (closed && !cycle) save();
     if (closed || (!cycle && (s.bookmarks !== prev.bookmarks || s.settings !== prev.settings || s.profiles !== prev.profiles || s.profileOrder !== prev.profileOrder || s.groups !== prev.groups))) scheduleSync();
   });
+  watchBoosts(() => doc.types.boosts && scheduleSync());
   if (__DEV__) {
     (globalThis as { acSync?: object }).acSync = {
       useSync, syncNow, turnOnSync, enterRecoveryPhrase, stopSync, setTypeSynced, setProfileSynced, setOpenTabsSynced, addRemoteProfile, removeRemoteProfile, removeSyncedDevice, setSyncFolder, folderInfo,

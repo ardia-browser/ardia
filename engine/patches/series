@@ -87,6 +87,7 @@ chromium chromium-video-super-resolution.patch mac
 chromium chromium-keep-old-frame-on-swap.patch mac
 chromium chromium-keep-compositor-on-occlusion.patch mac
 chromium chromium-windowless-page-screen-rects.patch mac
+chromium chromium-page-color-matrix.patch mac
 chromium chromium-freeze-spares-live-connections.patch
 chromium chromium-memory-saver-pinned-tabs.patch
 chromium chromium-temporary-tab-restore-hook.patch

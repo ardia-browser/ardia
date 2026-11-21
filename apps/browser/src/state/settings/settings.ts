@@ -33,7 +33,6 @@ import { READER_FONTS, READER_SIZE_NAMES } from "../reader/tokens";
 import { noteMinimalismToggled } from "../telemetry/minimalismCounts";
 
 export const DEFAULT_PROFILE_ID = "default";
-
 export type SettingSpec<T> = { default: T; valid: (value: unknown) => boolean; synced: boolean; schema: JsonSchema; values?: readonly T[] };
 
 const SYNCED = true;
@@ -148,6 +147,7 @@ export const SETTING_SPECS = {
   extensionSidePanelWidth: width(360),
   showFullUrl: flag(false, SYNCED),
   allowJavaScriptFromAppleEvents: flag(false),
+  boostJavaScriptWarned: flag(false),
   cliControl: flag(false),
   compactCliPill: flag(false, SYNCED),
   showBookmarks: flag(true, SYNCED),

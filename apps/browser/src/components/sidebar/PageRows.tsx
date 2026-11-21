@@ -20,6 +20,7 @@ import { entryHeightNow, firstPaintEntriesNow, usePendingEntriesHeight } from ".
 import { INCOGNITO_ICON } from "../ntp/IncognitoHeading";
 import { rowPitch, ROWS_PER_FRAME, type SidebarGeometry } from "./pageLayout";
 import { NewTabRow } from "./NewTabRow";
+import { PageProfileTitle } from "./PageProfileTitle";
 import { CleanUpUpsell } from "./CleanUpUpsell";
 import { PluginSidebarViews } from "../plugins/PluginSidebarViews";
 import { PLUGIN_CHROME, usePluginChrome } from "../../state/plugins/chrome";
@@ -82,7 +83,7 @@ export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, 
   return (
     <ListMotionContext.Provider value={scope}>
       <View>
-        {isIncognitoProfile(profileId) ? <IncognitoBadge /> : null}
+        {isIncognitoProfile(profileId) ? <IncognitoBadge /> : <PageProfileTitle profileId={profileId} />}
         {tiles.length ? (
           <DragScope enabled={current}>
             <PinnedGrid tabs={tiles} innerWidth={innerWidth} flush />

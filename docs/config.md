@@ -309,7 +309,8 @@ The parts `hide` takes, all in the sidebar: `pinned` (the top apps grid, with it
 into a hidden grid), `newTab` (the New Tab row, inline or docked), `addressField` (the sidebar address field, when the
 address bar is in the sidebar), `navButtons` and `sidebarButton` (back, forward, reload and the Hide Tabs button in the
 sidebar header, when the address bar is in the sidebar; the toolbar's own buttons stay), `downloads` (the sidebar's
-downloads button) and `profile` (the profile name in the sidebar header and the profile dots at the bottom).
+downloads button) and `profile` (the profile name in the sidebar header, or above the tabs when the address bar is in
+the sidebar, and the profile dots at the bottom).
 
 ### icons
 

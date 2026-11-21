@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { mkdtemp, rm, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { launchArguments, launchEnvironment } from "../../apps/linux/scripts/acceptance/lib/ardia.mjs";
-import { ASSERTIONS, SCRIPT_NAME, SCRIPT_TITLE_PREFIX, USAGE, USER_SCRIPTS_CAPABILITIES, VERSION_PATTERN, appVersionVerdict, cliControlSupport, cliTarball, debLayoutProblems, packageFormat, formatTable, installerRanAgain, launchRefusal, packageStagedFiles, parseArgs, pipeLaunchArguments, splitPipeMessages, summarize, uboSeedProblems, uboTuningProblems, userScriptSource } from "./smoke.mjs";
+import { ASSERTIONS, SCRIPT_NAME, SCRIPT_TITLE_PREFIX, USAGE, USER_SCRIPTS_CAPABILITIES, VERSION_PATTERN, appVersionVerdict, cliControlSupport, cliTarball, debLayoutProblems, privateFolder, packageFormat, formatTable, installerRanAgain, launchRefusal, packageStagedFiles, parseArgs, pipeLaunchArguments, splitPipeMessages, summarize, uboSeedProblems, uboTuningProblems, userScriptSource } from "./smoke.mjs";
 
 test("the package checks are named in the usage and keep the original eight first", () => {
   assert.deepEqual(ASSERTIONS.slice(0, 8), ["ldd", "shell-ui", "bootstrap", "native-tab", "sandbox", "content-blocker", "restart-restore", "staged-install"]);
@@ -134,4 +137,19 @@ test("a .deb is root-owned with a setuid root helper, the launcher link, the pol
   assert.ok(problems.some((p) => p.includes("chrome-sandbox is not setuid root")));
   assert.ok(problems.some((p) => p.includes("apparmor/ardia is missing")));
   assert.ok(problems.some((p) => p.includes("owned by user/user")));
+});
+
+test("profile folders stay private under a login umask that lets the group write, so the engine opens its control socket there", async () => {
+  const work = await mkdtemp(join(tmpdir(), "smoke-private-"));
+  const before = process.umask(0o002);
+  try {
+    const profile = join(work, "cli-control-profile");
+    await privateFolder(profile);
+    assert.equal((await stat(profile)).mode & 0o777, 0o700);
+    await privateFolder(profile);
+    assert.equal((await stat(profile)).mode & 0o777, 0o700);
+  } finally {
+    process.umask(before);
+    await rm(work, { recursive: true, force: true });
+  }
 });

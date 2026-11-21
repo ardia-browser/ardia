@@ -297,6 +297,17 @@ test("Clear Key and supported systems aren't reported, and the method keeps its 
   assert.equal(Object.hasOwn(navigator, "requestMediaKeySystemAccess"), false);
 });
 
+test("an activated refusal's delayed report names the refusal that stands when it fires", async () => {
+  const p = page(["com.widevine.alpha"], { keyless: ["com.widevine.alpha"] });
+  p.navigator.userActivation.isActive = true;
+  await p.refuse("com.microsoft.playready");
+  const access = await p.navigator.requestMediaKeySystemAccess("com.widevine.alpha", []);
+  await assert.rejects(access.createMediaKeys());
+  await settle();
+  p.advance(5000);
+  assert.deepEqual(p.sent, drm("com.widevine.alpha", "createMediaKeys"));
+});
+
 test("an access whose keys can't be created counts as a refusal, so stalled playback prompts", async () => {
   const p = page(["com.widevine.alpha"], { keyless: ["com.widevine.alpha"] });
   const access = await p.navigator.requestMediaKeySystemAccess("com.widevine.alpha", []);

@@ -91,6 +91,10 @@ extension WebKitTab {
     guard !safety.dialogs.suppressed, !LaunchConfig.shared.background else { return cancelled() }
     let offersSuppression = safety.dialogs.noteScriptDialog()
     presentDialog(cancel: cancelled) { [weak self] window, settle in
+      if self?.safety.dialogs.suppressed ?? true {
+        if settle() { cancelled() }
+        return nil
+      }
       if offersSuppression {
         alert.showsSuppressionButton = true
         alert.suppressionButton?.title = "Prevent this page from creating additional dialogs"

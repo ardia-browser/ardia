@@ -63,6 +63,20 @@ test("Back across engines without unsaved input reopens the page before in its e
   webviews.clear();
 });
 
+test("Back across engines cancelled while the page is held keeps where Back goes", async () => {
+  const { tabId } = movedTab("https://www.netflix.com/browse");
+  webviews.set(tabId, { evaluate: () => Promise.resolve(false) });
+  const back = pageOf(tabId).engineBack;
+  let asked = 0;
+  assert.equal(await goBackAcrossEngines(tabId, () => ++asked === 1), false);
+  assert.equal(asked, 2);
+  assert.equal(S().tabs[tabId].engine, "webkit");
+  assert.deepEqual(pageOf(tabId).engineBack, back);
+  assert.equal(await goBackAcrossEngines(tabId), true, "a later Back still goes");
+  assert.equal(S().tabs[tabId].engine, "chromium");
+  webviews.clear();
+});
+
 test("a streaming site moves to WebKit quietly: the old page is held until the new one paints, and Move Back stays in the tab's engine", async () => {
   S().hydrate({});
   S().updateSettings({ protectedVideoInWebKit: true });

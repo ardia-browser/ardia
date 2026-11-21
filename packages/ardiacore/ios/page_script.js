@@ -1762,7 +1762,7 @@
         for (const m of attempted) if (stalled(m)) judgeAttempt(m);
         if (activated)
           after(GRACE_MS, () => {
-            if (!anyProgressed()) needsProtectedPlayback(keySystem, stage);
+            if (!anyProgressed()) needsProtectedPlayback(refused || keySystem, refusedStage || stage);
           });
       };
       const wrapped = asNative(requestAccess, (target, self, args) => {

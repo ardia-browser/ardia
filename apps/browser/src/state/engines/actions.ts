@@ -116,12 +116,12 @@ export async function goBackAcrossEngines(tabId: string, mayAct: () => boolean =
   const leaving = await mayLeavePage(t, "Go back to the previous page?", `It opens in ${ENGINE_NAMES[back.engine]}, so changes you made on this page may not be saved.`, "Go Back", ask);
   const now = store().tabs[tabId];
   if (!leaving || !holds() || !now || pageUrl(now) !== from || pageOf(tabId).engineBack !== back || !mayAct()) return false;
-  patchPage(tabId, { engineBack: null });
   const held = await holdPageForSwap(tabId, tabEngine(store(), tabId), back.engine, back.url, false, holds);
-  if (!holds() || pageUrl(store().tabs[tabId]) !== from || !mayAct()) {
+  if (!holds() || pageUrl(store().tabs[tabId]) !== from || pageOf(tabId).engineBack !== back || !mayAct()) {
     dropSwap(tabId, held);
     return false;
   }
+  patchPage(tabId, { engineBack: null });
   store().updateTab(tabId, { engine: back.engine, page: loadedPage(navigationTo(back.url, true)) });
   return true;
 }
@@ -229,8 +229,9 @@ export const acceptEngineOffer = (tabId: string) => openPageIn(tabId, "webkit", 
 async function moveForProtectedVideo(tabId: string, site: string) {
   if (movingTabs.has(tabId)) return;
   movingTabs.add(tabId);
+  const holds = modeStillHolds();
   try {
-    if (!(await openPageIn(tabId, "webkit"))) {
+    if (!(await openPageIn(tabId, "webkit")) && holds()) {
       declinedSites.add(site);
       return;
     }

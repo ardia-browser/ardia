@@ -343,6 +343,15 @@ test("a tap and each card's accessibility frame land on the right card in Arc's 
   }
 });
 
+test("with 40 tabs on the redesigned pile a tap at the right edge lands on a mounted card, never one squeezed past the mount window", () => {
+  const g = deckGeometry(360, 740, 24, 48, 0, "android", "redesigned", 48);
+  assert.equal(g.stack, "pile");
+  assert.ok(g.rightReach > 0);
+  const reach = 9;
+  const card = deckCardAt(g, 40, 0, 359, g.cardCenterY, 0, reach);
+  assert.ok(card >= 0 && card <= reach, `card ${card}`);
+});
+
 test("in Arc's stack a card shrunk behind the focused one answers only inside its drawn bounds", () => {
   const g = deckGeometry(402, 874, 62, 34, 0, "ios", "redesigned", 48, 55, "arc");
   const scroll = 2;

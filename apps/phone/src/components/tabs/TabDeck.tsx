@@ -884,7 +884,7 @@ export const TabDeck = memo(function TabDeck() {
 
     .onStart((e) => {
       const down = touchDown.value;
-      const card = deckCardAt(g, count, scroll.value, down.x, down.y);
+      const card = deckCardAt(g, count, scroll.value, down.x, down.y, anchor, DECK_MOUNT_REACH);
       if (measuresInteractions) runOnJS(beginInteraction)("deck scroll", INTERACTION_WINDOW_MS.deckScroll);
       startScroll.value = scroll.value;
       scrollFrom.value = e.absoluteX;
@@ -971,7 +971,7 @@ export const TabDeck = memo(function TabDeck() {
     .hitSlop(barBand)
     .minDuration(tabsMotion.longPress)
     .onStart((e) => {
-      const card = deckCardAt(g, count, scroll.value, e.x, e.y);
+      const card = deckCardAt(g, count, scroll.value, e.x, e.y, anchor, DECK_MOUNT_REACH);
       if (card >= 0) runOnJS(showHeldCardMenu)(card, e.absoluteX, e.absoluteY);
     });
   const tapFrom = useSharedValue({ x: 0, y: 0 });
@@ -994,7 +994,7 @@ export const TabDeck = memo(function TabDeck() {
       const touch = e.changedTouches[0];
       if (touch && deckIsTap(touch.x - tapFrom.value.x, touch.y - tapFrom.value.y)) {
         const closing = material ? materialCloseAt(g, count, scroll.value, touch.x, touch.y) : -1;
-        const card = deckCardAt(g, count, scroll.value, touch.x, touch.y);
+        const card = deckCardAt(g, count, scroll.value, touch.x, touch.y, anchor, DECK_MOUNT_REACH);
         if (closing >= 0) runOnJS(closeFromX)(closing);
         else if (card >= 0) runOnJS(open)(card);
         else if (redesigned || (material && touch.y < bottomRowTop)) runOnJS(dismissKeyboard)();
@@ -1358,7 +1358,8 @@ const ENTRANCE_CAPTURE_CAP_MS = 180;
 const DECK_RENDER_REACH = 6;
 const DECK_GESTURE_REACH = 3;
 
-const deckCardMounted = (index: number, anchor: number) => Math.abs(index - anchor) <= DECK_RENDER_REACH + DECK_GESTURE_REACH;
+const DECK_MOUNT_REACH = DECK_RENDER_REACH + DECK_GESTURE_REACH;
+const deckCardMounted = (index: number, anchor: number) => Math.abs(index - anchor) <= DECK_MOUNT_REACH;
 const BACKDROP_LEAD = 1.4;
 const FLY_CLOCK_SPAN_MS = 600_000;
 const LEAVE_SLACK_MS = 34;

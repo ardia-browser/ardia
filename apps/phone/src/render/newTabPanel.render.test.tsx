@@ -125,6 +125,25 @@ onIPhone("a page that redirects while the panel is open keeps the page row on th
   unmount(root);
 });
 
+onIPhone("the page row keeps the address it opened with when typing hides it, the page redirects, and the field is cleared", () => {
+  editPage();
+  const root = tray();
+  const { open, selectedId } = useTabs.getState();
+  const before = open.find((tab) => tab.id === selectedId)!;
+  act(() => typeSearch("abc"));
+  act(() => jest.runOnlyPendingTimers());
+  expect(host(root, "trayCurrentPage")).toBeUndefined();
+  act(() => useTabs.setState({ open: open.map((tab) => (tab.id === selectedId ? { ...tab, url: "https://moved.example/b", title: "Moved Page" } : tab)) }));
+  act(() => typeSearch(""));
+  act(() => jest.runOnlyPendingTimers());
+  expect(host(root, "trayCurrentPage")).toBeDefined();
+  expect(root.root.findAll((node) => node.props.children === "Moved Page")).toHaveLength(0);
+  const copy = jest.spyOn(tabMenus, "copyLink").mockImplementation(() => undefined);
+  act(() => root.root.findAll((node) => node.props.testID === "trayCurrentPageCopy" && typeof node.props.onPress === "function")[0]!.props.onPress());
+  expect(copy).toHaveBeenCalledWith(before.url);
+  unmount(root);
+});
+
 onIPhone("the panel's field is a 44 point pill with the mic and Incognito's eyes inside it, and in Incognito it reads Incognito beside the eyes", () => {
   act(() => presentSearch("start", ""));
   const root = tray();

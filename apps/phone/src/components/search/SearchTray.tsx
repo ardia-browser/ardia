@@ -1043,7 +1043,8 @@ function TrayRows({ dismissDrag }: { dismissDrag: GestureType }) {
   const reportRows = useContext(TrayContentContext);
   const editsPage = useSearchEditsPage();
   const caption = incognito && !typed.trim();
-  const currentPage = arc && editsPage && !typed.trim() ? <CurrentPageRow /> : null;
+  const openedPage = useOpenedPage();
+  const currentPage = arc && editsPage && openedPage && !typed.trim() ? <CurrentPageRow page={openedPage} /> : null;
   const empty = !caption && !rows.length;
   useEffect(() => {
     if (caption) reportRows(INCOGNITO_CAPTION_ROWS * browseLayout.suggestionPitch * window.fontScale);
@@ -1140,16 +1141,22 @@ function TrayRows({ dismissDrag }: { dismissDrag: GestureType }) {
   );
 }
 
-function CurrentPageRow() {
-  const theme = useTrayTheme();
+type OpenedPage = { key: string; url: string; title: string; faviconUrl: string | null; initialText: string };
+
+function useOpenedPage(): OpenedPage | null {
   const incognito = useIncognito();
   const tab = useSelectedTab();
   const initialText = useSearchInitialText();
-  const opened = useRef<{ key: string; url: string; title: string; faviconUrl: string | null } | null>(null);
+  const opened = useRef<OpenedPage | null>(null);
   if (!tab || !initialText || tab.isPrivate !== incognito) return null;
   const key = `${tab.id}\n${initialText}`;
-  if (opened.current?.key !== key) opened.current = { key, url: tab.url, title: tab.title || initialText, faviconUrl: tab.faviconUrl };
-  const { url, title, faviconUrl } = opened.current;
+  if (opened.current?.key !== key) opened.current = { key, url: tab.url, title: tab.title || initialText, faviconUrl: tab.faviconUrl, initialText };
+  return opened.current;
+}
+
+function CurrentPageRow({ page }: { page: OpenedPage }) {
+  const theme = useTrayTheme();
+  const { url, title, faviconUrl, initialText } = page;
   return (
     <Pressable testID="trayCurrentPage" accessibilityRole="button" accessibilityLabel={`Edit ${title}`} accessibilityHint="Puts this page's address in the search field" onPress={() => setSearchText(initialText)} style={({ pressed }) => [styles.searchPanelRow, pressed ? { backgroundColor: theme.rowHighlight } : null]}>
       <View style={styles.searchPanelIcon}>

@@ -185,12 +185,13 @@ export function deckShouldClose(translation: number, velocity: number, cardHeigh
   return -translation > cardHeight / 3 && velocity < 250;
 }
 
-export function deckCardAt(g: DeckGeometry, count: number, scroll: number, x: number, y: number): number {
+export function deckCardAt(g: DeckGeometry, count: number, scroll: number, x: number, y: number, mountedAround: number = scroll, mountedReach: number = Infinity): number {
   "worklet";
   if (count <= 0) return -1;
   const half = g.cardHeight / 2;
   if (y < g.cardCenterY - half || y > g.cardCenterY + half) return -1;
   for (let index = count - 1; index >= 0; index--) {
+    if (Math.abs(index - mountedAround) > mountedReach) continue;
     const relative = index - scroll;
     const scale = deckPileScale(g, relative);
     const centerX = deckLeading(g, relative) + g.cardWidth / 2;

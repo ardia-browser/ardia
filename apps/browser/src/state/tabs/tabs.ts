@@ -241,7 +241,8 @@ export function unloadPinnedTabs(s: BrowserState, requested: string[], keepTopAp
       if (!gone.has(activeId)) continue;
       const shown = profileId === w.profileId;
       if (shown && leaving.has(activeId) && runningInFront(activeId)) noteTopAppsKeptRunning(1);
-      let replacement = lastRegularTab(s, w, activeId, closing) ?? lastLivePinnedTab(s, w, activeId, closing, keepTopApps);
+      const nextRow = withTopApp(activeId) ? undefined : (otherPane(s, activeId, closing) ?? lastLivePinnedTab(s, w, activeId, closing, true));
+      let replacement = nextRow ?? lastRegularTab(s, w, activeId, closing) ?? lastLivePinnedTab(s, w, activeId, closing, keepTopApps);
       if (!replacement) [next, replacement] = withNewTab(next, w.id, { profileId, background: !shown });
       if (shown) next = apply(next, activated(next, replacement));
       else {

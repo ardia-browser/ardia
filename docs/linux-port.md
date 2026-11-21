@@ -886,8 +886,9 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
     - `ArdiaShell.windowState` `[windowId]` → `{ maximized, tiled, fullScreen }`, the event adding `windowId` and going to
       that window's shell. Subscribe first, then call, as with the layout. `fullScreen` is the window's own full screen,
       the same signal as the `fullScreen` window event (`WindowFullScreen()`): a page's full screen (a video) is not it,
-      and while a page is full screen `windowState` keeps the last state settled before the window went full screen,
-      so `maximized` and `tiled` don't flip and no event fires. A window settles its state when its shell attaches, so
+      and while a page is full screen `windowState` keeps `maximized` and `tiled` from the last state settled before
+      the window went full screen, so they don't flip and no event fires; `fullScreen` still reads the window's own
+      full screen, so it is `false` then. A window settles its state when its shell attaches, so
       that holds for a window that was already maximized. One exception: when the configure that enters page full
       screen also changes the tiled edges and Chromium defers applying it, one `tiled` change can surface during page
       full screen; it corrects itself when full screen ends. `maximized` is the platform's current state, so a maximized

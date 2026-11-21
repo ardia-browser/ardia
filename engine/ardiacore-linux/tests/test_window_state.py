@@ -29,6 +29,14 @@ class WindowStateTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertEqual(result.stdout, 'ok\n')
 
+    def test_page_full_screen_keeps_maximized_and_tiled_and_full_screen_follows_the_window(self):
+        state_of = between((LINUX / 'ac_linux_window_state.h').read_text(), 'constexpr WindowState StateOf(', '\n}\n')
+        page = between(state_of, 'if (PageFullScreen(window)) {', '\n  }\n')
+        for field in ('.maximized = before_page_full_screen.maximized,', '.tiled = before_page_full_screen.tiled,',
+                      '.full_screen = window.window_full_screen,'):
+            self.assertIn(field, page)
+        self.assertNotIn('return before_page_full_screen;', state_of)
+
     def test_the_host_advertises_both_calls_under_their_contract_names(self):
         core = (LINUX / 'ac_linux_window_state.h').read_text()
         self.assertIn('kWindowButtonLayoutCall[] = "ArdiaShell.windowButtonLayout"', core)

@@ -42,7 +42,13 @@ constexpr bool PageFullScreen(const NativeWindow& window) {
 }
 
 constexpr WindowState StateOf(const NativeWindow& window, const WindowState& before_page_full_screen) {
-  if (PageFullScreen(window)) return before_page_full_screen;
+  if (PageFullScreen(window)) {
+    return WindowState{
+        .maximized = before_page_full_screen.maximized,
+        .tiled = before_page_full_screen.tiled,
+        .full_screen = window.window_full_screen,
+    };
+  }
   const TiledEdges& edges = window.edges;
   return WindowState{
       .maximized = window.maximized && !window.window_full_screen,

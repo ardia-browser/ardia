@@ -6,7 +6,7 @@ import { useProfile } from "../../state/browser/hooks";
 import { usePluginTitle } from "../../state/plugins/hooks";
 import { trackSettingsSection } from "../../state/telemetry/track";
 import { preparePane, usePaneLoaded } from "../../state/settings/paneData";
-import { clearSettingsReveal, flashSetting, useSettingsSearch } from "../../state/settings/searchState";
+import { clearSettingsReveal, flashSetting, settingsSearchHost, useSettingsSearch } from "../../state/settings/searchState";
 import { anchorView } from "./anchors";
 import { findSetting, resolveSettingId, PANES, paneTitle } from "./settingsIndex";
 import { SettingsPaneContext } from "./Form";
@@ -84,6 +84,7 @@ export function SettingsWindow() {
   const title = shown ? (shown.pane === "profiles" && profileName ? profileName : shown.pane === "plugins" && pluginTitle ? pluginTitle : paneTitle(shown.pane)) : "";
   const sheet = useSettingsSheet((s) => s.sheet);
   useEffect(() => trackSettingsSection(nav.pane), [nav.pane]);
+  useEffect(() => settingsSearchHost(), []);
   useEffect(() => markCaptionRegions(SETTINGS_WINDOW_ID, [[TITLE_LEFT, 0, CONTROLS_ROOM, TOOLBAR]]), []);
   useEffect(() => void setTrafficLightsCenter(SETTINGS_WINDOW_ID, [LIGHTS_CENTER[0], TOOLBAR / 2]), []);
   const scroller = useRef<ScrollView>(null);

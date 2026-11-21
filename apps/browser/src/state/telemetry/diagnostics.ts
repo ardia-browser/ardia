@@ -8,6 +8,7 @@ import { activeTab } from "../browser/model";
 import { useBrowser } from "../browser/store";
 import { capture, consentNow, consentToken, counted, isSharing, saveContext, stillValid, onConsentPeriodChange } from "./client";
 import { nativeConsent } from "./nativeConsent";
+import { hoverLostProperties, oneOf } from "./hoverLost";
 import { formatRecentPages, readRecentPages, type RecentPage, type SavedContext } from "./savedContext";
 import { noteDragsEnded } from "./stuckDrags";
 import { noteWindowlessPages } from "./cliCounts";
@@ -20,7 +21,6 @@ const FIRST_CONTEXT_MS = 3_000;
 const HARDWARE_WAIT_MS = 1_000;
 const MAX_PAGE_PROCESS_EVENTS = 30;
 const MAX_HOVER_LOST_EVENTS = 20;
-const MAX_HOVER_LOST_SECONDS = 24 * 60 * 60;
 const MAX_WINDOW_UNPAINTED_EVENTS = 20;
 const MAX_WINDOW_VIEWS = 1_000;
 const MINUTE_MS = 60_000;
@@ -281,47 +281,12 @@ export function trackPageProcessGone(info: { reason: string; code: number }, vis
   void memoryPressure().then((memory_pressure) => capture("page_process_gone", { ...props, memory_pressure }, consent));
 }
 
-const HOVER_REASONS = new Set(["halfActive", "staleMenu", "notKeyOrMain", "coveredByView", "responderLost", "coveredByWindow"]);
-const HOVER_RESPONDERS = new Set(["none", "window", "otherWindow", "page", "control"]);
-const HOVER_WINDOW_KINDS = new Set(["none", "hidden", "blockerPage", "internal", "ardiaPanel", "popup", "browser", "other"]);
-const HOVER_COVERS = new Set(["none", "reactNative", "chromium", "other"]);
-const HOVER_ENDINGS = new Set(["hover", "heal", "appInactive", "windowClosed"]);
-
-const oneOf = (allowed: Set<string>, value: unknown) => (typeof value === "string" && allowed.has(value) ? value : "unknown");
-
-export function hoverLostProperties(e: HoverLostEpisode) {
-  return {
-    reason: oneOf(HOVER_REASONS, e.reason),
-    trigger: e.trigger === "click" ? "click" : "move",
-    key_window: oneOf(HOVER_WINDOW_KINDS, e.keyWindow),
-    main_window: oneOf(HOVER_WINDOW_KINDS, e.mainWindow),
-    prevent_key: e.preventKey === true,
-    can_key: e.canKey === true,
-    window_main: e.windowMain === true,
-    half_active: e.halfActive === true,
-    app_active: e.appActive === true,
-    running_active: e.runningActive === true,
-    frontmost: e.frontmost === true,
-    menu_active: e.menuActive === true,
-    over_page: e.overPage === true,
-    cover: oneOf(HOVER_COVERS, e.cover),
-    cover_clear: e.coverClear === true,
-    responder: oneOf(HOVER_RESPONDERS, e.responder),
-    cover_window: oneOf(HOVER_WINDOW_KINDS, e.coverWindow ?? "none"),
-    healed: e.healed === true,
-    heal_worked: typeof e.healWorked === "boolean" ? e.healWorked : null,
-    ended_by: oneOf(HOVER_ENDINGS, e.endedBy),
-    lost_seconds: Number.isFinite(e.seconds) ? Math.min(Math.max(0, Math.round(e.seconds)), MAX_HOVER_LOST_SECONDS) : null,
-    session_min: sessionMinutes(),
-  };
-}
-
 export function trackHoverLost(e: HoverLostEpisode) {
   const consent = nativeConsent(e);
   if (hoverLostEvents >= MAX_HOVER_LOST_EVENTS) return;
   const valid = stillValid(consent);
   if (valid) hoverLostEvents++;
-  capture("page_hover_lost", { ...hoverLostProperties(e), episode: valid ? hoverLostEvents : null }, consent);
+  capture("page_hover_lost", { ...hoverLostProperties(e, sessionMinutes()), episode: valid ? hoverLostEvents : null }, consent);
 }
 
 const UNPAINTED_WINDOWS = new Set(["regular", "private"]);

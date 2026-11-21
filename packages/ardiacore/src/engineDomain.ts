@@ -84,6 +84,10 @@ export type HoverLostEpisode = {
   coverWindow?: string;
   healed: boolean;
   healWorked: boolean | null;
+  healRefused?: string;
+  healRefusedLast?: string;
+  healRefusedWindow?: string;
+  otherWindowClicks?: number;
   endedBy: "hover" | "heal" | "appInactive" | "windowClosed";
   seconds: number;
   episode: number;

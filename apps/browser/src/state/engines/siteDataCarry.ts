@@ -147,12 +147,15 @@ async function commitCarry(profile: string, site: string, to: PageEngine, { entr
       noteSiteDataSkip("chromiumUnreadable", consent);
       return NOTHING;
     }
-    noteSiteDataSkip("cookieOnlyFallback", consent);
     const changed = [...cookieMap(webkit.cookies, now)].filter(([key, c]) => cookieBase[key] !== cookieFingerprint(c)).map(([key]) => key);
     const urls = origins.map((o) => `${o}/`).concat(domains.map((d) => `https://${d}/`));
     const cookies = changed.length && stillCurrent() ? await exportWebKitCookies(profile, urls, changed).catch(() => 0) : 0;
-    const stored = stillCurrent() ? await storageWithoutChromiumPage(profile, site, entry, origins, webkit.storage, cleared, stillCurrent, consent) : 0;
-    return { ...NOTHING, cookies, storage: stored };
+    const stored = stillCurrent() ? await storageWithoutChromiumPage(profile, site, entry, origins, webkit.storage, cleared, stillCurrent, consent) : NO_ENGINE_STORAGE;
+    if (!stored.available) noteSiteDataSkip("cookieOnlyFallback", consent);
+    if (stored.failed) noteSiteDataSkip("failure", consent);
+    const carry = { ...NOTHING, cookies, storage: stored.written, conflicts: stored.conflicts };
+    if (cookies || stored.written) noteSiteDataCarry("chromium", carry, consent);
+    return carry;
   }
   const source = from === "chromium" ? chromium.data : webkit;
   const dest = from === "chromium" ? webkit : chromium.data;
@@ -204,6 +207,9 @@ async function commitCarry(profile: string, site: string, to: PageEngine, { entr
   return carry;
 }
 
+type EngineStorageCarry = { available: boolean; written: number; conflicts: number; failed: boolean };
+const NO_ENGINE_STORAGE: EngineStorageCarry = { available: false, written: 0, conflicts: 0, failed: false };
+
 async function storageWithoutChromiumPage(
   profile: string,
   site: string,
@@ -213,11 +219,12 @@ async function storageWithoutChromiumPage(
   cleared: number,
   stillCurrent: () => boolean,
   consent: ConsentToken | null,
-): Promise<number> {
+): Promise<EngineStorageCarry> {
   const wanted = origins.filter((o) => webkitStorage[o]);
-  if (!wanted.length) return 0;
+  if (!wanted.length) return { ...NO_ENGINE_STORAGE, available: true };
   const chromiumStorage = await readChromiumStorageWithoutPage(profile, wanted);
-  if (!stillCurrent()) return 0;
+  const available = wanted.some((o) => chromiumStorage[o]);
+  if (!available || !stillCurrent()) return { ...NO_ENGINE_STORAGE, available };
   const p = profileOf(book(), profile);
   const wins = sourceIsNewer(entry, "chromium", openIn(profile, site, "webkit"), openIn(profile, site, "chromium"));
   const drops = trustsDropsFrom("webkit", entry.at.webkit);
@@ -236,20 +243,19 @@ async function storageWithoutChromiumPage(
     merges.push({ origin: o, before, merged });
     if (merged.put.length || merged.drop.length) storage[o] = { set: merged.put, remove: merged.drop.map(([k]) => k) };
   }
-  if (!merges.length || !stillCurrent()) return 0;
+  if (!merges.length || !stillCurrent()) return { ...NO_ENGINE_STORAGE, available };
   if (held) noteSiteDataSkip("untrustedDrops", consent);
   const writing = Object.keys(storage).length > 0;
   const written = writing ? await writeChromiumStorageWithoutPage(profile, storage, stillCurrent) : { storage: 0, landed: new Set<string>() };
   if (writing) noteCommit(profile, [], Object.keys(storage));
-  if (clearCount(profile) !== cleared) return 0;
+  if (clearCount(profile) !== cleared) return { ...NO_ENGINE_STORAGE, available };
   const bases = profileOf(book(), profile);
   for (const { origin: o, before, merged } of merges) bases.storage[o] = settledBase(before, merged.base, [...merged.put, ...merged.drop], !storage[o] || written.landed.has(o));
   capBases(bases);
-  if (writing) {
-    saveNow(consent);
-    noteSiteDataCarry("chromium", { cookies: 0, removed: 0, storage: written.storage, conflicts }, consent);
-  } else saveSoon(consent);
-  return written.storage;
+  if (writing) saveNow(consent);
+  else saveSoon(consent);
+  const failed = Object.keys(storage).some((o) => !written.landed.has(o));
+  return { available, written: written.storage, conflicts, failed };
 }
 
 export async function carryForTab(tabId: string, url: string, to: PageEngine, stillWanted: () => boolean, consent: ConsentToken | null): Promise<number> {

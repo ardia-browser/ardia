@@ -30,6 +30,22 @@ async function chromiumStorage(profile: string, origin: string, pages: ChromiumP
   return (await readChromiumStorage(profile, origin).catch(() => null))?.items ?? null;
 }
 
+const ENGINE_STORAGE_BATCH = 4000;
+
+async function writeEngineStorage(profile: string, origin: string, change: StorageChange, stillCurrent: () => boolean): Promise<number> {
+  const steps: StorageChange[] = [];
+  for (let i = 0; i < change.set.length; i += ENGINE_STORAGE_BATCH) steps.push({ set: change.set.slice(i, i + ENGINE_STORAGE_BATCH), remove: [] });
+  for (let i = 0; i < change.remove.length; i += ENGINE_STORAGE_BATCH) steps.push({ set: [], remove: change.remove.slice(i, i + ENGINE_STORAGE_BATCH) });
+  let written = 0;
+  for (const step of steps) {
+    if (!stillCurrent()) break;
+    const count = (await writeChromiumStorage(profile, origin, step.set, step.remove).catch(() => null))?.written ?? 0;
+    written += count;
+    if (count < step.set.length + step.remove.length) break;
+  }
+  return written;
+}
+
 export type ChromiumRead = { data: SiteData; page: WebViewHandle; pages: ChromiumPage[] };
 
 export async function readChromium(profile: string, domains: string[], origins: string[]): Promise<ChromiumRead | null> {
@@ -63,7 +79,7 @@ export async function writeChromium(
     const wanted = change.set.length + change.remove.length;
     const onOrigin = read.pages.find((p) => p.origin === origin);
     let count = onOrigin ? ((await onOrigin.page.siteData({ op: "write", cookies: [], remove: [], storage: { [origin]: change } }).catch(() => null))?.storageWritten ?? 0) : 0;
-    if (count < wanted) count = Math.max(count, (await writeChromiumStorage(profile, origin, change.set, change.remove).catch(() => null))?.written ?? 0);
+    if (count < wanted) count = Math.max(count, await writeEngineStorage(profile, origin, change, stillCurrent));
     if (count >= wanted) landed.add(origin);
     stored += count;
   }
@@ -81,7 +97,7 @@ export async function writeChromiumStorageWithoutPage(profile: string, storage: 
   let stored = 0;
   for (const [origin, change] of Object.entries(storage)) {
     if (!stillCurrent()) break;
-    const count = (await writeChromiumStorage(profile, origin, change.set, change.remove).catch(() => null))?.written ?? 0;
+    const count = await writeEngineStorage(profile, origin, change, stillCurrent);
     if (count >= change.set.length + change.remove.length) landed.add(origin);
     stored += count;
   }

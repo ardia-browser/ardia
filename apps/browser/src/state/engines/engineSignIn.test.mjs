@@ -273,15 +273,43 @@ test("with no Chromium page open, WebKit's saved data reaches Chromium through t
   assert.deepEqual(Object.fromEntries(chromiumStore[ORIGIN]), { kept: "1", token: "fromWebKit" });
 
   webKit.storage[ORIGIN] = [["token", "newer"]];
+  webKit.cookies = [{ ...signedIn, value: "webkit-newer" }];
+  const exported = [];
+  const realExport = webKitCalls.exportCookies;
+  webKitCalls.exportCookies = ({ keys }) => (exported.push(...(keys ?? [])), (keys ?? []).length);
   const before = writes.length;
+  try {
+    await withSites(
+      {
+        readStorage: () => Promise.reject(new Error("the engine has no ac_local_storage_read")),
+        writeStorage: () => (writes.push("unexpected"), { written: 0 }),
+      },
+      () => carrySignIn(tabId, `${ORIGIN}/home`, "chromium", null),
+    );
+  } finally {
+    webKitCalls.exportCookies = realExport;
+  }
+  assert.equal(writes.length, before);
+  assert.ok(exported.length > 0, "the cookie still goes through the engine's cookie import");
+});
+
+test("a page-free storage carry larger than one engine write goes in batches the engine takes", async () => {
+  const { tabId } = setup();
+  S().updateTab(tabId, { engine: "webkit" });
+  webKit.storage[ORIGIN] = Array.from({ length: 4500 }, (_, i) => [`k${i}`, `v${i}`]);
+  const batches = [];
   await withSites(
     {
-      readStorage: () => Promise.reject(new Error("the engine has no ac_local_storage_read")),
-      writeStorage: () => (writes.push("unexpected"), { written: 0 }),
+      readStorage: () => ({ items: [] }),
+      writeStorage: ({ set, remove }) => {
+        if (set.length + remove.length > 4000) return Promise.reject(new Error("too many writes in one call"));
+        batches.push(set.length + remove.length);
+        return { written: set.length + remove.length };
+      },
     },
     () => carrySignIn(tabId, `${ORIGIN}/home`, "chromium", null),
   );
-  assert.equal(writes.length, before);
+  assert.deepEqual(batches, [4000, 500]);
 });
 
 test("Clear Browsing Data that starts while a carry is writing waits for the write, then clears what it wrote", async () => {

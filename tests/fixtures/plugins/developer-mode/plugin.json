@@ -1,0 +1,14 @@
+{
+  "manifest": 1,
+  "name": "developer-mode",
+  "title": "Developer Mode",
+  "description": "Arc's striped developer bar on the sites you're building.",
+  "version": "1.0.0",
+  "settings": { "rows": [{ "key": "localAddresses", "title": "Turn On for Local Addresses", "type": "toggle", "default": false }] },
+  "siteSwitches": [{ "key": "on", "title": "Developer Mode", "icon": "hammer" }],
+  "pageBar": {
+    "look": "stripes",
+    "when": { "siteSwitch": "on", "localAddresses": "localAddresses" },
+    "buttons": ["siteControls", "address", "copyLink", "|", "console", "network", "inspect", "|", "extensions", "split"]
+  }
+}

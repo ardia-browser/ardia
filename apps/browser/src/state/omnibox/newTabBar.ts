@@ -9,6 +9,7 @@ import { isSmall } from "../windows/small";
 import type { NewTabTarget } from "../browser/types";
 import { notePageOverlay } from "../telemetry/usage";
 import { noteBarLoad } from "../telemetry/barLoadFocus";
+import { noteTypedAddress } from "../plugins/typedAddresses";
 
 export { isEmptyCardTab };
 
@@ -57,6 +58,7 @@ export function openFromNewTabBar(windowId: string, target: NewTabTarget, url: s
   s.closePanel(windowId);
   const into = target.kind === "into" ? s.tabs[target.tabId] : undefined;
   if (into && into.windowId === windowId && isEmptyCardTab(s, into)) {
+    noteTypedAddress(into.id, url);
     store().navigate(into.id, url);
     return noteBarLoad(into.id);
   }
@@ -64,11 +66,14 @@ export function openFromNewTabBar(windowId: string, target: NewTabTarget, url: s
   if (group && group.windowId === windowId && group.profileId === s.windows[windowId]!.profileId) {
     const id = store().newTabInGroup(group.id);
     if (!id) return;
+    noteTypedAddress(id, url);
     store().navigate(id, url);
     store().activate(id);
     return noteBarLoad(id);
   }
-  noteBarLoad(store().newTab(windowId, { url, newTabCommand: true }));
+  const opened = store().newTab(windowId, { url, newTabCommand: true });
+  noteTypedAddress(opened, url);
+  noteBarLoad(opened);
 }
 
 const launchTabs = new Set<string>();

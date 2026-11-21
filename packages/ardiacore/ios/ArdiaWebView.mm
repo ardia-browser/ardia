@@ -337,14 +337,22 @@ void ArdiaWebViewsSetFieldTiming(BOOL on) {
   NoteEvent(browserId, name, payload);
 }
 
-static BOOL gReportsCommits = NO;
-
-+ (BOOL)reportsCommits {
-  return gReportsCommits;
+static NSMutableSet<NSString *> *CommitReaders() {
+  static NSMutableSet<NSString *> *readers = [NSMutableSet set];
+  return readers;
 }
 
-+ (void)setReportsCommits:(BOOL)reportsCommits {
-  gReportsCommits = reportsCommits;
++ (BOOL)reportsCommits {
+  return CommitReaders().count > 0;
+}
+
++ (void)setReportsCommits:(BOOL)on forReader:(NSString *)reader {
+  const BOOL before = self.reportsCommits;
+  if (on) [CommitReaders() addObject:reader];
+  else [CommitReaders() removeObject:reader];
+  if (!on || before == self.reportsCommits) return;
+  for (ArdiaWebView *view in LiveViews().allObjects)
+    if (view->_tab) [view emitNavigation];
 }
 
 + (int)browserIdOfTab:(NSString *)tabId {

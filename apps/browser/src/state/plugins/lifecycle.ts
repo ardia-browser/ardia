@@ -45,7 +45,7 @@ function saveRecords(records: Record<string, PluginRecord>, consent: ConsentToke
   return true;
 }
 
-function updateRecord(name: string, change: (r: PluginRecord) => PluginRecord | null, consent: ConsentToken | null): boolean {
+export function updateRecord(name: string, change: (r: PluginRecord) => PluginRecord | null, consent: ConsentToken | null): boolean {
   const records = { ...currentPlugins().records };
   const next = change(recordOf(currentPlugins(), name));
   if (next) records[name] = next;
@@ -177,7 +177,7 @@ export function enablePlugin(name: string, hash: string): boolean {
   const records = kept || !before.enabled ? currentPlugins().records : spliceApplied(currentPlugins().records, name);
   const plan = kept ? { patch: {}, applied: before.applied } : planEnable(manifest, records, name, before.applied);
   const builtIn = isAlwaysOn(listing) ? { installed: true, ...(before.controlGranted ? { controlGranted: true } : {}) } : {};
-  if (!saveRecords({ ...records, [name]: { enabled: true, approved: hash, values, applied: plan.applied, ...builtIn } }, consent)) return false;
+  if (!saveRecords({ ...records, [name]: { enabled: true, approved: hash, values, applied: plan.applied, ...builtIn, ...(before.sites ? { sites: before.sites } : {}) } }, consent)) return false;
   const asksControl = manifest.permissions.includes("control");
   applySettingsPatch(kept || !asksControl || useBrowser.getState().settings.cliControl ? plan.patch : { ...plan.patch, cliControl: true });
   usePlugins.setState({ consent: null });

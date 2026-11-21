@@ -1,6 +1,7 @@
 import { JSON_SCHEMA_DIALECT, schemaJson, type JsonSchema } from "./jsonSchema";
 import { RESERVED_PAGE_NAMES } from "./pluginNames";
 import { PASSWORD_FIELD_COUNT, PASSWORD_FIELDS, PASSWORD_FILLS } from "./pluginPasswordManager";
+import { BUTTON_DIVIDER, HOST_ACTION_NAMES, PAGE_BAR_LIMITS, PAGE_BAR_LOOKS } from "./pluginPageBar";
 import { KEY_PATTERN, LIMITS, MANIFEST_VERSION, NAME_PATTERN, PLUGIN_PERMISSIONS, SPLIT_SIDES, SYMBOL_PATTERN, VERSION_PATTERN } from "./pluginManifest";
 
 export const PLUGIN_SCHEMA_FILE = "plugin.schema.json";
@@ -103,6 +104,31 @@ export function pluginSchema(eventNames: readonly string[], rules: PluginRules):
           ["fill", "fields"],
         ),
         description: "Makes the plugin a password manager each profile can pick in Settings › Profiles › Passwords",
+      },
+      siteSwitches: {
+        type: "array",
+        maxItems: PAGE_BAR_LIMITS.siteSwitches,
+        description: "Switches Site Controls shows for each http(s) site, kept per origin on this device",
+        items: closed({ key, title: textOf(PAGE_BAR_LIMITS.switchTitle), icon: symbol }, ["key", "title"]),
+      },
+      pageBar: {
+        ...closed(
+          {
+            look: { enum: [...PAGE_BAR_LOOKS], description: "stripes: Arc's striped developer bar above the page, or in the toolbar's address field" },
+            when: {
+              ...closed(
+                {
+                  siteSwitch: { ...key, description: "One of this plugin's siteSwitches: the bar shows on sites where it is on" },
+                  localAddresses: { ...key, description: "A toggle row: while it is on, a local address typed in the address bar turns siteSwitch on for that site" },
+                },
+                ["siteSwitch"],
+              ),
+            },
+            buttons: { type: "array", minItems: 1, maxItems: PAGE_BAR_LIMITS.buttons, items: { enum: [...HOST_ACTION_NAMES, BUTTON_DIVIDER] }, description: `Host actions in order; ${BUTTON_DIVIDER} is a divider` },
+          },
+          ["look", "when", "buttons"],
+        ),
+        description: "A bar Ardia draws above the pages the plugin's site switch is on for, with buttons that run Ardia's own actions on that tab",
       },
       alwaysOn: { const: true, description: "Built-in plugins only: once installed, no switch turns it off" },
       official: { const: true, description: "Built-in plugins only: listed among Ardia's official plugins" },

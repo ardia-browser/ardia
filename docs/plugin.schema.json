@@ -322,6 +322,90 @@
       ],
       "description": "Makes the plugin a password manager each profile can pick in Settings › Profiles › Passwords"
     },
+    "siteSwitches": {
+      "type": "array",
+      "maxItems": 4,
+      "description": "Switches Site Controls shows for each http(s) site, kept per origin on this device",
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,40}$"
+          },
+          "title": {
+            "type": "string",
+            "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,40}$"
+          },
+          "icon": {
+            "type": "string",
+            "pattern": "^[a-z0-9.]{1,64}$",
+            "description": "An SF Symbol name"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "title"
+        ]
+      }
+    },
+    "pageBar": {
+      "type": "object",
+      "properties": {
+        "look": {
+          "enum": [
+            "stripes"
+          ],
+          "description": "stripes: Arc's striped developer bar above the page, or in the toolbar's address field"
+        },
+        "when": {
+          "type": "object",
+          "properties": {
+            "siteSwitch": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,40}$",
+              "description": "One of this plugin's siteSwitches: the bar shows on sites where it is on"
+            },
+            "localAddresses": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,40}$",
+              "description": "A toggle row: while it is on, a local address typed in the address bar turns siteSwitch on for that site"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "siteSwitch"
+          ]
+        },
+        "buttons": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": {
+            "enum": [
+              "siteControls",
+              "address",
+              "copyLink",
+              "console",
+              "network",
+              "inspect",
+              "extensions",
+              "split",
+              "|"
+            ]
+          },
+          "description": "Host actions in order; | is a divider"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "look",
+        "when",
+        "buttons"
+      ],
+      "description": "A bar Ardia draws above the pages the plugin's site switch is on for, with buttons that run Ardia's own actions on that tab"
+    },
     "alwaysOn": {
       "const": true,
       "description": "Built-in plugins only: once installed, no switch turns it off"

@@ -46,5 +46,7 @@ export const routeLinkTabs = (urls: string[]) => call("tabs.routeLinkTabs", { ur
 export const onTabStripTransaction = (listener: (tx: TabStripTransaction) => void) => on("tabs.strips", listener);
 export const onWindowRequest = (listener: (request: WindowRequest) => void) => on("tabs.windowRequest", listener);
 export const tabStrips = () => call("tabs.strips");
-export const reportPageCommits = (on: boolean) => call("tabs.reportCommits", { on });
+export type CommitReader = "automation" | "pageBars";
+
+export const reportPageCommits = (reader: CommitReader, on: boolean) => call("tabs.reportCommits", { reader, on });
 export const lastTabClosesWindow = () => call("tabs.lastTabPolicy").then((r) => r.closesWindow);

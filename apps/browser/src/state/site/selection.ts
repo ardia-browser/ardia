@@ -114,13 +114,14 @@ export function copySelectedTabUrls(s: BrowserState, windowId: string, markdown:
   return true;
 }
 
-export async function copyPageUrl(tabId: string) {
+export async function copyPageUrl(tabId: string, confirmedUrl?: string) {
   const tab = store().tabs[tabId];
-  if (!tab?.url) return;
-  const clean = cleanUrl(tab.url);
+  const url = confirmedUrl ?? tab?.url;
+  if (!tab || !url) return;
+  const clean = cleanUrl(url);
   copyText(clean);
   noteUrlCopied(awaitsFirstPage(tabId));
-  const title = clean !== tab.url ? "Copied a clean link without trackers" : "Copied Current URL";
+  const title = clean !== url ? "Copied a clean link without trackers" : "Copied Current URL";
   const web = webviews.get(tabId);
   const selected = /^https?:/.test(tab.url) && web ? await web.evaluate<boolean>(HAS_SELECTION) : false;
   if (selected !== true) return showToast(tab.windowId, title, undefined, { icon: "link" });

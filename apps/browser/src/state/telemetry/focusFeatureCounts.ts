@@ -12,7 +12,8 @@ import { takePageCursorCounts } from "./pageCursorCounts";
 import { takePictureInPictureCloseCounts } from "./pictureInPictureCloses";
 import { takeDeveloperModeCounts } from "./developerModeCounts";
 import { takePasswordManagerCounts } from "./passwordManagerCounts";
+import { takePageBarCounts } from "./pageBarCounts";
 
 export function takeFocusFeatureCounts() {
-  return { ...takeMinimalismCounts(), ...takeReaderCounts(), ...takeHiddenElementCounts(), ...takeChromeSettingsOpens(), ...takePreloadPagesCounts(), ...takeWindowOcclusionCounts(), ...takePageFocusReturns(), ...takeBarLoadFocusCounts(), ...takePageCursorCounts(), ...takeFocusHandoffCounts(), ...takeWebNotificationCounts(), ...takePictureInPictureCloseCounts(), ...takeDeveloperModeCounts(), ...takePasswordManagerCounts() };
+  return { ...takeMinimalismCounts(), ...takeReaderCounts(), ...takeHiddenElementCounts(), ...takeChromeSettingsOpens(), ...takePreloadPagesCounts(), ...takeWindowOcclusionCounts(), ...takePageFocusReturns(), ...takeBarLoadFocusCounts(), ...takePageCursorCounts(), ...takeFocusHandoffCounts(), ...takeWebNotificationCounts(), ...takePictureInPictureCloseCounts(), ...takeDeveloperModeCounts(), ...takePasswordManagerCounts(), ...takePageBarCounts() };
 }

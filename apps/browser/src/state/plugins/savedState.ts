@@ -1,8 +1,9 @@
 import { documentSaved, readDocument, writeDocument } from "../../platform/documents";
 import { isFields, type Fields } from "../../lib/decode";
 import { parseSaved, versionedJson } from "../../lib/savedDocument";
-import { NAME_PATTERN } from "../../lib/pluginManifest";
-import type { PluginRecord } from "./store";
+import { KEY_PATTERN, NAME_PATTERN } from "../../lib/pluginManifest";
+import type { PluginRecord, SiteSwitchValues } from "./store";
+import { switchOrigin } from "../../lib/pluginPageBar";
 import { warnFor } from "../telemetry/consoleConsent";
 import type { ConsentToken } from "../telemetry/choice";
 
@@ -24,6 +25,18 @@ function appliedOf(raw: unknown): PluginRecord["applied"] {
   return out;
 }
 
+const KEY = new RegExp(KEY_PATTERN);
+
+export function sitesOf(raw: unknown): SiteSwitchValues | null {
+  if (!isFields(raw)) return null;
+  const entries = Object.entries(raw).flatMap(([key, origins]): [string, Record<string, boolean>][] => {
+    if (!KEY.test(key) || !isFields(origins)) return [];
+    const kept = Object.entries(origins).filter((e): e is [string, boolean] => typeof e[1] === "boolean" && switchOrigin(e[0]) === e[0]);
+    return kept.length ? [[key, Object.fromEntries(kept)]] : [];
+  });
+  return entries.length ? Object.fromEntries(entries) : null;
+}
+
 export function parsePluginRecords(json: string | null): Record<string, PluginRecord> {
   const doc = parseSaved(json, VERSION);
   if (!doc || !isFields(doc.plugins)) return {};
@@ -32,6 +45,8 @@ export function parsePluginRecords(json: string | null): Record<string, PluginRe
     if (!NAME.test(name) || !isFields(raw)) continue;
     const approved = typeof raw.approved === "string" && HASH.test(raw.approved) ? raw.approved : null;
     out[name] = { enabled: raw.enabled === true && approved !== null, approved, values: valuesOf(raw.values), applied: appliedOf(raw.applied), ...(raw.controlGranted === true ? { controlGranted: true } : {}), ...(raw.installed === true ? { installed: true } : {}) };
+    const sites = sitesOf(raw.sites);
+    if (sites) out[name]!.sites = sites;
   }
   return out;
 }

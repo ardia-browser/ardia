@@ -443,6 +443,83 @@ native verbs in `PasswordsModule.swift` (`passwords.setFieldProviders`, `showSys
 `otpauthHandler`, `setUpVerificationCode`) and the page events `fieldProviderOpened {via, shown}` and
 `verificationCodeFound {token, main}`. A plugin adds none of these; its manifest switches them on.
 
+### siteSwitches
+
+Up to 4 switches Site Controls shows for each site, as a row titled `title` with `icon` (an SF Symbol name, default
+`puzzlepiece`). Mac only (`PLATFORM_FEATURES.plugins`).
+
+```json
+"siteSwitches": [{ "key": "on", "title": "Developer Mode", "icon": "hammer" }]
+```
+
+- A row appears in Site Controls for an http(s) page in a tab, never in a private window, a Peek or an internal page
+  (`ardia://…`). Pressing it turns the switch on or off for that page's origin.
+- Values are kept per **canonical origin**: scheme, host and port, lowercased, the host's trailing dot dropped, default
+  ports left out and IPv6 hosts in brackets, so `http://localhost:8318` and `http://localhost:5173` are separate
+  sites. Each value is an explicit on or off; a site you never touched has none (and reads as off).
+- They are stored in `plugins.json` beside the plugin's record (`sites: { <key>: { <origin>: true | false } }`), on this
+  device and for all its profiles, and never in `values`: the helper, the `plugin.values` event, the socket and the
+  `ardia` command never see them, and no plugin API reports a site's value or which sites match.
+- Turning the plugin off withdraws its rows (and its page bar) at once; the values stay for when it's back. Removing the
+  plugin deletes them with its record.
+
+### pageBar
+
+One per plugin: a bar Ardia draws for a page whose site switch is on, with buttons that run Ardia's own actions on that
+tab. The plugin declares it; Ardia draws all of it, and no plugin code runs in the browser's interface.
+
+```json
+"pageBar": {
+  "look": "stripes",
+  "when": { "siteSwitch": "on", "localAddresses": "localAddresses" },
+  "buttons": ["siteControls", "address", "copyLink", "|", "console", "network", "inspect", "|", "extensions", "split"]
+}
+```
+
+- `look` (required): `stripes`, Arc's striped developer bar. With the address in the sidebar (or no toolbar), it is a
+  strip above the page with the page's address in a monospaced face; with a toolbar, the toolbar's address field
+  takes that face and the DevTools buttons the bar declares.
+- `when.siteSwitch` (required) names one of the plugin's `siteSwitches`: the bar shows on sites where it is on.
+- `when.localAddresses` (optional) names one of the plugin's `toggle` rows. While that row is on, typing or picking a
+  local address in the address bar (`localhost`, `*.localhost`, `127.0.0.0/8`, `0.0.0.0`, `[::1]`) turns the switch on
+  for that origin. It is a one-use intent recorded at the address bar's commit, tied to that tab and that origin, spent
+  on the tab's next document and dropped if that document is anything else. Redirects, links, pages a site opens,
+  restored tabs, the `ardia` command, automation and links from other apps never turn anything on, and a site you turned
+  off stays off. So an OAuth callback on `127.0.0.1` that another site redirected you to gets no bar.
+- `buttons` (1 to 16): host actions from one table, each at most once, with `|` for a divider. `siteControls` opens
+  Site Controls, `address` makes the address editable (without it the address is a plain label), `copyLink` copies
+  the page address, `console`, `network` and `inspect` open DevTools there (Chromium pages only; `network` where the
+  platform has DevTools panels), `extensions` is the extensions menu, `split` the menu that adds a split on a side.
+  The schema and the consent lines come from the same table (`HOST_ACTIONS` in `lib/pluginPageBar.ts`).
+
+**When it shows.** One host function decides for every pane from the window's real layout
+(`pageBarFor` in `state/plugins/pageBar.ts`): the pane is the visible one (or one of a visible split), not a warm,
+lingering, covered, discarded, sleeping or frozen pane, not a Peek, not a tab of another profile or a private window,
+not in a small window, and neither the page nor the window is full screen. A Peek's source tab keeps its bar while it
+shows. The same result draws the strip, the toolbar's field, split panes' toolbars and the frozen page's offset, so a
+tab further down the sidebar never draws its bar over the one you're on.
+
+**Which document.** The decision uses the page's committed document as the web view reports it (`committedUrl`,
+`committedAt`), never the address while it loads: no bar while the shown and committed addresses differ, a new document
+shows its bar once it has stayed committed for 300 ms (a page that redirects away sooner never shows it), a change
+within the same document keeps the decision and only updates the address, and switching to a tab whose document has
+settled shows it at once. The address shown and every action's target are that confirmed document's.
+
+**Actions.** Only the buttons Ardia draws run them. Ardia resolves the target tab when you press, checks it again after
+a menu closes (the split menu), and returns nothing to the plugin.
+
+**Several plugins.** When more than one plugin's bar matches a page, the first by plugin name draws it.
+
+#### Host extension points for page bars
+
+All host code a plugin can't reach past: the manifest checks (`lib/pluginPageBar.ts`), the site switch store and the
+typed-address intent (`state/plugins/siteSwitches.ts`, `typedAddresses.ts`), the document tracker
+(`state/plugins/pageBarDocuments.ts`), the per-pane decision and its published result (`pageBar.ts`,
+`pageBarPanes.ts`), the actions (`hostActions.ts`), the bar's components (`components/plugins/PluginPageBar.tsx`,
+`PageBarButtons.tsx`, `SiteSwitchRows.tsx`) and the web view's commit reports. Commit reports are off unless a reader
+asks: automation's event feed and page bars each ask for them as their own reader (`tabs.reportCommits {reader, on}`),
+so one stopping never turns them off under the other, and pages already open report again when page bars first ask.
+
 ### permissions
 
 | Permission | What it allows |
@@ -454,7 +531,8 @@ native verbs in `PasswordsModule.swift` (`passwords.setFieldProviders`, `showSys
 | `control` | Install or Turn On turns on `cliControl`, the ardia command's control of Ardia; the sheet says "Lets any program you run drive your tabs and pages, with your logins" (for an always-on plugin, "… while it's installed. There's no off switch"). On macOS there's no switch afterwards: while an always-on plugin that asks for it is installed, each launch turns it back on, and the control pill's Stop holds only until the next launch. For an `autoInstall` built-in plugin, its first link turns it on once unless you'd turned it off. `config.json` can't set it. |
 
 Contributions grant their own reach and are shown too: running a program, adding a page, adding commands, changing
-named Ardia settings, offering tools, becoming a password manager.
+named Ardia settings, offering tools, becoming a password manager, adding site switches to Site Controls and drawing a
+page bar with the actions it names.
 
 ## Turning a plugin on
 
@@ -758,6 +836,9 @@ The control socket's protocol 4 adds `plugins`, `plugins.enable` (`{"waiting": t
 
 - `lib/pluginManifest.ts`: parsing, migration, checks and the schema; `lib/pluginManifest.test.mjs`.
 - `state/site/passwordManager*.ts`, `verificationCodes.ts`: the `passwordManager` contribution's host side.
+- `lib/pluginPageBar.ts` and `state/plugins/{siteSwitches,typedAddresses,pageBarDocuments,pageBar,pageBarPanes,hostActions,pageBarCommits}.ts`:
+  the `siteSwitches` and `pageBar` contributions' host side; `components/plugins/PluginPageBar.tsx`, `PageBarButtons.tsx`,
+  `SiteSwitchRows.tsx` draw them.
 - `state/plugins/`: the registry (`store.ts`), saved state (`savedState.ts`), turning on and off (`lifecycle.ts`),
   settings defaults (`defaults.ts`), the helper channel (`channel.ts`, `channelMethods.ts`), tools (`tools.ts`),
   command bar entries (`commands.ts`), page tabs (`pages.ts`, `pageNames.ts`), consent copy (`consent.ts`), socket methods
@@ -779,11 +860,16 @@ it), so a count that finishes after sharing changed stays in the local copy:
 `program_adoptions` (an old `ardia` install's home taken over), `plugin_adoptions` (an always-on plugin installed on update because an old install was there); the daily settings snapshot's
 `plugins_installed`, `plugins_enabled` and, among those on, how many use each contribution:
 `plugins_with_settings`, `plugins_with_commands`, `plugins_with_page`, `plugins_with_process`, `plugins_with_programs`,
-`plugins_with_hooks`, `plugins_with_tools`, `plugins_with_passwordManager`. Password managers: hourly
+`plugins_with_hooks`, `plugins_with_tools`, `plugins_with_passwordManager`, `plugins_with_siteSwitches`, `plugins_with_pageBar`. Password managers: hourly
 `password_manager_panel_opens_<badge|menu>`, `password_manager_panel_refused_<badge|menu>`, and each refusal's reason
 `password_manager_panel_refusal_<hidden|not_focused|unavailable|not_key|not_editing|throttled|refused|no_panel>` (`no_panel`:
 macOS took the request but no panel window was on screen 0.6 s later),
 `password_manager_panel_hints_<shown|dismissed>` (the "Type <site> in Passwords to find this site" hint),
 `verification_code_setups_<offered|accepted|failed>`, `password_manager_chose_<ardia|none|plugin>`,
-`password_manager_record_failed`, and the daily `password_manager_profiles_<ardia|none|plugin>`. Dashboard: watch `plugin_process_crashes` against
-`plugin_process_starts`, and `program_link_failures` against `program_links`.
+`password_manager_record_failed`, and the daily `password_manager_profiles_<ardia|none|plugin>`. Page bars: hourly
+`plugin_page_bar_shown_<official|other>` (once per tab per document), `plugin_page_bar_press_<action>`
+(`site_controls`, `address`, `copy_link`, `console`, `network`, `inspect`, `extensions`, `split`),
+`plugin_site_switch_<on|off>` (your presses in Site Controls), `plugin_site_switch_auto_on_typed` (a local address you
+typed turned a switch on) and `plugin_page_bar_superseded` (another plugin's bar matched the same page). Dashboard: watch `plugin_process_crashes` against
+`plugin_process_starts`, and `program_link_failures` against `program_links`. For page bars, watch `plugin_page_bar_shown_official` against
+`plugin_site_switch_off`: a bar shown where people then turn it off is a misfire.

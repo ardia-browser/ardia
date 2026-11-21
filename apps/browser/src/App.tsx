@@ -27,6 +27,7 @@ import { SidebarOverlays } from "./components/sidebar/Overlays";
 import { ReportSheetHost } from "./components/report/ReportSheet";
 import { profileAccent, profileTheme, useTheme } from "./components/ui/theme";
 import { ThemeScope } from "./components/window/ThemeScope";
+import { PageBarContext, usePageBarScopeValue } from "./components/plugins/PageBarScope";
 import { useBrowser } from "./state/browser/store";
 import { useWindowId, WindowContext } from "./state/browser/hooks";
 import { provideProfileLooks } from "./state/profiles/looks";
@@ -51,10 +52,13 @@ function BrowserWindowRoot({ windowId }: { windowId?: string }) {
   const id = useBrowser((s) => windowId ?? focusedWindowOf(s) ?? s.windowOrder[0] ?? null);
   const exists = useBrowser((s) => !!id && !!s.windows[id]);
   const small = useBrowser((s) => !!id && s.windows[id]?.kind === "small");
+  const pageBars = usePageBarScopeValue(exists ? id : null);
   if (!id || !exists) return null;
   return (
     <WindowContext.Provider value={id}>
-      <ThemeScope>{small ? <LittleArdiaWindow /> : <BrowserWindow />}</ThemeScope>
+      <PageBarContext.Provider value={pageBars}>
+        <ThemeScope>{small ? <LittleArdiaWindow /> : <BrowserWindow />}</ThemeScope>
+      </PageBarContext.Provider>
     </WindowContext.Provider>
   );
 }

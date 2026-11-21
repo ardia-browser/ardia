@@ -5,6 +5,7 @@ import { consentToken } from "../telemetry/choice";
 import { loadPluginRecords, rescanPlugins, watchPluginFolder } from "./lifecycle";
 import { pluginSocketMethod } from "./socketMethods";
 import { watchPageContexts } from "./pages";
+import { watchPageBarCommits } from "./pageBarCommits";
 
 let started = false;
 
@@ -18,5 +19,6 @@ export function startPlugins() {
   watchPageContexts();
   registerPluginSocketMethods();
   watchPluginFolder();
+  watchPageBarCommits();
   void rescanPlugins(consentToken());
 }

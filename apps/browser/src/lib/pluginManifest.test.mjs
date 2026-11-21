@@ -12,7 +12,7 @@ test("the example plugin reads with every contribution", () => {
   const { manifest, problems: found } = readManifest(FIXTURE);
   assert.deepEqual(found, []);
   assert.equal(manifest.name, "example");
-  assert.deepEqual(contributionsOf(manifest), CONTRIBUTIONS.filter((c) => c !== "passwordManager"));
+  assert.deepEqual(contributionsOf(manifest), CONTRIBUTIONS.filter((c) => !["passwordManager", "siteSwitches", "pageBar"].includes(c)));
   assert.deepEqual(manifest.page.source, { file: "page/index.html" });
   assert.deepEqual(manifest.commands.find((c) => c.name === "beside").action, { open: "split", context: true, side: "right", sideSetting: "side", path: "" });
   assert.ok(problems({ ...base(), commands: [{ name: "h", title: "History", open: "tab", path: "/../up" }] }).some((p) => p.includes("path must be")));

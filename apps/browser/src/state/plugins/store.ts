@@ -32,7 +32,10 @@ export type PluginRecord = {
   applied: Record<string, { value: unknown; previous: unknown; order: number; over: string | null }>;
   controlGranted?: boolean;
   installed?: boolean;
+  sites?: SiteSwitchValues;
 };
+
+export type SiteSwitchValues = Record<string, Record<string, boolean>>;
 
 export type PluginsStore = {
   loaded: boolean;

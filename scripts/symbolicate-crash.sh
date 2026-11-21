@@ -1,27 +1,30 @@
 #!/usr/bin/env bash
-# Names the frames of a native crash in Chromium Framework (or any other engine image): finds the engine release whose
-# symbols hold the image's UUID, downloads them and runs atos on the offsets.
+# Names the frames of a native crash in Chromium Framework, in Ardia itself or in any other image with published
+# symbols: finds the release whose symbols hold the image's UUID, downloads them and runs atos on the offsets.
 #
-#   scripts/symbolicate-crash.sh [--tag <engine-tag>] [--cache <dir>] <image uuid> <offset>...
+#   scripts/symbolicate-crash.sh [--tag <release-tag>] [--cache <dir>] <image uuid> <offset>...
 #   scripts/symbolicate-crash.sh -h | --help
 #
 # The UUID and the offsets are what the crash records for the image: "Chromium Framework + 0x2e2334" is the offset
-# 0x2e2334, and a leading + is accepted. scripts/publish-engine.sh uploads ArdiaCore-<tree:12>-uuids.txt (one
-# "<uuid> <arch> <DWARF file>" row per image) and ArdiaCore-<tree:12>-symbols.tar.xz (the build's dSYMs) to each
-# engine-<tree:12> prerelease; every release is searched newest first, or --tag names one. Each run downloads into its
-# own folder and moves only the image it checked into --cache (default dist/engine-symbols), so runs can share a
-# cache. Prints "<offset> <frame>" per offset and warns about any atos could not name.
+# 0x2e2334 of that image's UUID, "Ardia + 0x18828" is the offset 0x18828 of Ardia's, and a leading + is accepted.
+# scripts/publish-engine.sh uploads ArdiaCore-<tree:12>-uuids.txt (one "<uuid> <arch> <DWARF file>" row per image) and
+# ArdiaCore-<tree:12>-symbols.tar.xz (the build's dSYMs) to each engine-<tree:12> prerelease; every Mac release and
+# nightly v<version> carries Ardia-<version>-uuids.txt and Ardia-<version>-symbols.tar.xz, the app's own dSYM, packed
+# the same way. Every engine and app release is searched newest first, or --tag names one (engine-<tree:12> or
+# v<version>). Each run downloads into its own folder and moves only the image it checked into --cache (default
+# dist/engine-symbols), so runs can share a cache. Prints "<offset> <frame>" per offset and warns about any atos could
+# not name.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd -P)"
 . "$root/scripts/lib/releases.sh"
 die() { echo "error: $*" >&2; exit 1; }
-usage="usage: scripts/symbolicate-crash.sh [--tag <engine-tag>] [--cache <dir>] <image uuid> <offset>... (--help)"
+usage="usage: scripts/symbolicate-crash.sh [--tag <release-tag>] [--cache <dir>] <image uuid> <offset>... (--help)"
 tag="" cache="$root/dist/engine-symbols"
 while [ $# -gt 0 ]; do
   case "$1" in
     -h | --help) awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0"; exit 0 ;;
-    --tag) tag="${2:?--tag takes an engine release tag}"; shift ;;
+    --tag) tag="${2:?--tag takes a release tag (engine-<tree:12> or v<version>)}"; shift ;;
     --cache) cache="${2:?--cache takes a directory}"; shift ;;
     -*) die "unknown option $1 (--help)" ;;
     *) break ;;
@@ -52,7 +55,7 @@ trap 'rm -rf "$run"' EXIT
 
 lists_image() {
   local candidate="$1" name sidecar
-  name="$(engine_uuids_name "$candidate")"
+  name="$(release_uuids_name "$candidate")"
   sidecar="$cache/$candidate/$name"
   if [ ! -f "$sidecar" ]; then
     mkdir -p "$run/$candidate" "$cache/$candidate"
@@ -67,18 +70,18 @@ row=""
 if [ -n "$tag" ]; then
   status=0
   lists_image "$tag" || status=$?
-  [ "$status" != 2 ] || die "$tag has no $(engine_uuids_name "$tag"): its symbols weren't published"
+  [ "$status" != 2 ] || die "$tag has no $(release_uuids_name "$tag"): its symbols weren't published"
   [ "$status" = 0 ] || die "$tag's symbols don't list the image $uuid"
 else
-  page=1 engines=0
+  page=1 searched=0
   while [ -z "$row" ]; do
     releases="$(gh api "repos/$REPO/releases?per_page=100&page=$page" --jq '.[] | [.tag_name, ([.assets[].name] | join(" "))] | @tsv')" \
       || die "couldn't list $REPO's releases: is gh signed in?"
     [ -n "$releases" ] || break
     while IFS=$'\t' read -r candidate assets; do
-      [[ "$candidate" == engine-* ]] || continue
-      engines=$((engines + 1))
-      [[ " $assets " == *" $(engine_uuids_name "$candidate") "* ]] || continue
+      [[ "$candidate" == engine-* || "$candidate" == v* ]] || continue
+      searched=$((searched + 1))
+      [[ " $assets " == *" $(release_uuids_name "$candidate") "* ]] || continue
       if lists_image "$candidate"; then
         tag="$candidate"
         break
@@ -86,14 +89,14 @@ else
     done <<<"$releases"
     page=$((page + 1))
   done
-  [ "$engines" -gt 0 ] || die "$REPO has no engine-* releases"
+  [ "$searched" -gt 0 ] || die "$REPO has no engine-* or v* releases"
 fi
-[ -n "$row" ] || die "no engine release lists the image $uuid: its symbols weren't published (releases before the symbols were uploaded have none)"
+[ -n "$row" ] || die "no engine release lists the image $uuid, and no app release does: its symbols weren't published (releases before the symbols were uploaded have none)"
 
 IFS=$'\t' read -r _ arch rel <<<"$row"
 binary="$cache/$tag/symbols/$rel"
 if [ "$(image_uuid "$binary" "$arch" 2>/dev/null || true)" != "$uuid" ]; then
-  name="$(engine_symbols_name "$tag")"
+  name="$(release_symbols_name "$tag")"
   mkdir -p "$run/$tag/symbols"
   gh release download "$tag" -R "$REPO" -p "$name" -D "$run/$tag" || die "couldn't download $name from $tag"
   tar -xJf "$run/$tag/$name" -C "$run/$tag/symbols" "$rel" || die "couldn't unpack $rel from $name"

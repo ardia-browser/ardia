@@ -12,6 +12,10 @@ const packSymbols = join(scripts, "lib/pack-symbols.sh");
 const FRAMEWORK_UUID = "4c4c44f3-5555-3144-a138-48cce2a582ef";
 const NEWER_UUID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 const LIBRARY_UUID = "11111111-2222-3333-4444-555555555555";
+const APP_UUID = "7a7a7a7a-1111-2222-3333-444444444444";
+const OLD_APP_UUID = "5b5b5b5b-1111-2222-3333-444444444444";
+const SPARKLE_UUID = "6c6c6c6c-1111-2222-3333-444444444444";
+const APP_DWARF = "Ardia.app.dSYM/Contents/Resources/DWARF/Ardia";
 
 const stubs = {
   gh: `#!/usr/bin/env bash
@@ -83,6 +87,27 @@ const makeBuild = (name, images, dsymUuids = images) => {
 const run = (script, args, extra = {}) =>
   spawnSync(script, args, { encoding: "utf8", env: { ...env, ...extra } });
 
+const makeApp = (name, uuid, dsymUuid = uuid) => {
+  const out = join(work, `out-${name}`);
+  const app = join(out, "Ardia.app");
+  if (uuid) writeImage(app, "Contents/MacOS/Ardia", uuid);
+  writeImage(join(app, "Contents/Frameworks/Chromium Framework.framework/Versions/A"), "Chromium Framework", FRAMEWORK_UUID);
+  const dsyms = join(out, "dSYMs");
+  mkdirSync(dsyms, { recursive: true });
+  if (dsymUuid) writeImage(dsyms, APP_DWARF, dsymUuid);
+  writeImage(dsyms, "Sparkle.framework.dSYM/Contents/Resources/DWARF/Sparkle", SPARKLE_UUID);
+  return { app, dsyms };
+};
+
+const packedApps = {};
+
+const publishApp = (version, uuid) => {
+  const { app, dsyms } = makeApp(`app-${version}`, uuid);
+  const dir = join(assets, `v${version}`);
+  mkdirSync(dir, { recursive: true });
+  packedApps[version] = run(packSymbols, ["--app", app, dsyms, join(dir, `Ardia-${version}-symbols.tar.xz`), join(dir, `Ardia-${version}-uuids.txt`)]);
+};
+
 const publish = (tag, images) => {
   const { framework, dsyms } = makeBuild(tag, images);
   const short = tag.replace(/^engine-/, "");
@@ -127,10 +152,14 @@ before(() => {
   });
   const mismatched = publish("engine-dddddddddddd", { "Chromium Framework": "dddddddd-dddd-dddd-dddd-dddddddddddd" });
   cpSync(join(assets, "engine-aaaaaaaaaaaa/ArdiaCore-aaaaaaaaaaaa-symbols.tar.xz"), join(mismatched, "ArdiaCore-dddddddddddd-symbols.tar.xz"));
+  publishApp("0.2.47-nightly.5", APP_UUID);
+  publishApp("0.2.46", OLD_APP_UUID);
+  mkdirSync(join(assets, "v0.2.45"), { recursive: true });
+  writeFileSync(join(assets, "v0.2.45/Ardia-0.2.45.dmg"), "dmg");
   const pages = [
     ["engine-bbbbbbbbbbbb", "v0.2.43", "engine-cccccccccccc", ...apps(0, 97)],
     apps(100, 100),
-    [...apps(200, 99), "engine-aaaaaaaaaaaa"],
+    [...apps(200, 99), "engine-aaaaaaaaaaaa", "v0.2.47-nightly.5", "v0.2.46", "v0.2.45"],
   ];
   pages.forEach((tags, i) => writeFileSync(join(env.STUB_RELEASES, `page-${i + 1}.json`), JSON.stringify(tags.map(release))));
 });
@@ -251,6 +280,7 @@ test("an image no engine release lists is an error that says so", () => {
   const result = run(symbolicate, ["--cache", cache, "00000000-0000-0000-0000-000000000000", "0x1"]);
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /no engine release lists the image 00000000-0000-0000-0000-000000000000/);
+  assert.match(result.stderr, /and no app release does/);
 });
 
 test("symbols that don't hold the UUID their release lists are refused", () => {
@@ -281,7 +311,9 @@ test("--help prints the header", () => {
   const result = run(symbolicate, ["--help"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /^Names the frames of a native crash/);
-  assert.match(result.stdout, /scripts\/symbolicate-crash\.sh \[--tag <engine-tag>\]/);
+  assert.match(result.stdout, /scripts\/symbolicate-crash\.sh \[--tag <release-tag>\]/);
+  assert.match(result.stdout, /Ardia \+ 0x18828/);
+  assert.match(result.stdout, /Ardia-<version>-uuids\.txt/);
 });
 
 test("publish-engine.sh copies the dSYMs with the framework, packs them before stripping and uploads them", () => {
@@ -303,4 +335,95 @@ test("the release names the symbolicate script looks for are the ones publish-en
     encoding: "utf8",
   }).trimEnd().split("\n");
   assert.deepEqual(names, ["ArdiaCore-4f3a9c0d1e2b-symbols.tar.xz", "ArdiaCore-4f3a9c0d1e2b-uuids.txt"]);
+});
+
+test("pack-symbols --app names the app's own dSYM by UUID and packs only that dSYM", () => {
+  for (const [version, packed] of Object.entries(packedApps)) assert.equal(packed.status, 0, `${version}: ${packed.stderr}`);
+  const dir = join(assets, "v0.2.47-nightly.5");
+  assert.equal(readFileSync(join(dir, "Ardia-0.2.47-nightly.5-uuids.txt"), "utf8"), `${APP_UUID}\tarm64\t${APP_DWARF}\n`);
+  const members = execFileSync("tar", ["-tJf", join(dir, "Ardia-0.2.47-nightly.5-symbols.tar.xz")], { encoding: "utf8" }).trimEnd().split("\n");
+  assert.ok(members.includes(APP_DWARF), members.join("\n"));
+  assert.ok(members.every((m) => m.split("/")[0] === "Ardia.app.dSYM"), members.join("\n"));
+});
+
+test("pack-symbols --app refuses an app whose dSYM is missing or from another build, and an app without its executable", () => {
+  const stale = makeApp("stale-app", APP_UUID, OLD_APP_UUID);
+  const refused = run(packSymbols, ["--app", stale.app, stale.dsyms, join(work, "sa.tar.xz"), join(work, "sa.txt")]);
+  assert.notEqual(refused.status, 0);
+  assert.match(refused.stderr, new RegExp(`no dSYM in .* holds Ardia's UUID ${APP_UUID} \\(arm64\\)`));
+  assert.equal(existsSync(join(work, "sa.txt")), false);
+  assert.equal(existsSync(join(work, "sa.tar.xz")), false);
+
+  const missing = makeApp("missing-app", APP_UUID, "");
+  const none = run(packSymbols, ["--app", missing.app, missing.dsyms, join(work, "ma.tar.xz"), join(work, "ma.txt")]);
+  assert.notEqual(none.status, 0);
+  assert.match(none.stderr, /no dSYM in .* holds Ardia's UUID/);
+
+  const bare = makeApp("bare-app", "", APP_UUID);
+  const empty = run(packSymbols, ["--app", bare.app, bare.dsyms, join(work, "ba.tar.xz"), join(work, "ba.txt")]);
+  assert.notEqual(empty.status, 0);
+  assert.match(empty.stderr, /holds no Contents\/MacOS\/Ardia/);
+
+  const nowhere = run(packSymbols, ["--app", join(work, "nowhere.app"), stale.dsyms, join(work, "nw.tar.xz"), join(work, "nw.txt")]);
+  assert.notEqual(nowhere.status, 0);
+  assert.match(nowhere.stderr, /no app at/);
+});
+
+test("an Ardia image's UUID and offsets resolve through the app release that lists it, skipping releases without symbols", () => {
+  const result = run(symbolicate, ["--cache", cache, APP_UUID.toUpperCase(), "+0x75564", "0x16420", "0x18828"]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(
+    result.stdout,
+    "0x75564\tframe_0x75564 (in Chromium Framework) (stub.cc:1)\n0x16420\tframe_0x16420 (in Chromium Framework) (stub.cc:1)\n0x18828\tframe_0x18828 (in Chromium Framework) (stub.cc:1)\n",
+  );
+  assert.match(result.stderr, new RegExp(`${APP_DWARF.replaceAll(".", "\\.")} \\(${APP_UUID}, arm64\\) from v0\\.2\\.47-nightly\\.5`));
+  const log = readFileSync(env.STUB_LOG, "utf8");
+  assert.ok(log.includes(`atos -arch arm64 -o ${join(cache, "v0.2.47-nightly.5/symbols", APP_DWARF)} -l 0x0 0x75564 0x16420 0x18828\n`), log);
+  assert.deepEqual(downloads("Ardia-0.2.47-nightly.5-symbols.tar.xz").map((line) => line.split(" ")[3]), ["v0.2.47-nightly.5"]);
+
+  const older = run(symbolicate, ["--cache", cache, OLD_APP_UUID, "0x10"]);
+  assert.equal(older.status, 0, older.stderr);
+  assert.match(older.stderr, /from v0\.2\.46/);
+  assert.equal(downloads("Ardia-0.2.47-nightly.5-uuids.txt").length, 1);
+  assert.deepEqual(downloads("Ardia-0.2.45-uuids.txt"), []);
+});
+
+test("--tag goes straight to one app release", () => {
+  const cold = join(work, "cache-app-tag");
+  const logged = readFileSync(env.STUB_LOG, "utf8").length;
+  const result = run(symbolicate, ["--tag", "v0.2.47-nightly.5", "--cache", cold, APP_UUID, "0x18828"]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stderr, /from v0\.2\.47-nightly\.5/);
+  assert.doesNotMatch(readFileSync(env.STUB_LOG, "utf8").slice(logged), /gh api/);
+  assert.deepEqual(readdirSync(join(cold, "v0.2.47-nightly.5")).sort(), ["Ardia-0.2.47-nightly.5-uuids.txt", "symbols"]);
+
+  const wrong = run(symbolicate, ["--tag", "v0.2.47-nightly.5", "--cache", cold, OLD_APP_UUID, "0x1"]);
+  assert.notEqual(wrong.status, 0);
+  assert.match(wrong.stderr, /v0\.2\.47-nightly\.5's symbols don't list the image/);
+
+  const none = run(symbolicate, ["--tag", "v0.2.45", "--cache", cold, APP_UUID, "0x1"]);
+  assert.notEqual(none.status, 0);
+  assert.match(none.stderr, /v0\.2\.45 has no Ardia-0\.2\.45-uuids\.txt/);
+});
+
+test("the app's symbol names come from the version, with or without the tag's v", () => {
+  const names = execFileSync(
+    "bash",
+    ["-c", `. "${join(scripts, "lib/releases.sh")}"; app_symbols_name 0.2.47-nightly.5; app_uuids_name v0.2.47; release_symbols_name v0.2.47; release_uuids_name engine-4f3a9c0d1e2b`],
+    { encoding: "utf8" },
+  ).trimEnd().split("\n");
+  assert.deepEqual(names, ["Ardia-0.2.47-nightly.5-symbols.tar.xz", "Ardia-0.2.47-uuids.txt", "Ardia-0.2.47-symbols.tar.xz", "ArdiaCore-4f3a9c0d1e2b-uuids.txt"]);
+});
+
+test("release.sh packs the archive's dSYM from the exported app before packaging, and publish.sh uploads the pair", () => {
+  const release = readFileSync(join(scripts, "release.sh"), "utf8");
+  const verify = release.indexOf('"$stages/verify.sh" "$app" "$archive"');
+  const pack = release.indexOf('pack-symbols.sh" --app "$app" "$archive/dSYMs" "$dist/$(app_symbols_name "$version")" "$dist/$(app_uuids_name "$version")"');
+  const packaged = release.indexOf('"$stages/package.sh"');
+  assert.ok(verify > 0 && pack > verify && packaged > pack, "pack-symbols.sh --app runs after verify.sh and before package.sh");
+
+  const publishScript = readFileSync(join(scripts, "../.claude/skills/release/scripts/publish.sh"), "utf8");
+  assert.match(publishScript, /^app_symbols="\$dist\/\$\(app_symbols_name "\$version"\)"$/m);
+  assert.match(publishScript, /^app_uuids="\$dist\/\$\(app_uuids_name "\$version"\)"$/m);
+  assert.match(publishScript, /for file in "\$app_symbols" "\$app_uuids"; do\n\s+\[ -f "\$file" \] \|\| die [^\n]+\n\s+assets\+=\("\$file"\)/);
 });

@@ -26,6 +26,11 @@ GitHub Actions. Each has these assets:
 - `ArdiaCore-<engine tree:12>-symbols.tar.xz` and `ArdiaCore-<engine tree:12>-uuids.txt`, only on an `engine-<tree:12>`
   prerelease: the dSYMs of the engine's unstripped build and the UUID of each image they name, which
   `scripts/symbolicate-crash.sh` reads to name the frames of a crash in Chromium Framework. See "Engines" below.
+- `Ardia-<version>-symbols.tar.xz` and `Ardia-<version>-uuids.txt`, on every Mac release and nightly: the dSYM of the
+  app's own executable, `Ardia.app.dSYM` from the release's `Ardia.xcarchive`, and the UUID of the `Contents/MacOS/Ardia`
+  it names. `scripts/symbolicate-crash.sh` reads them to name the `Ardia + 0x…` frames of a crash. Unlike the build
+  artifact that holds the archive, which expires after 3 days, they stay on the release. See "Engines"
+  below.
 
 Each version's notes are a file in the repo, `docs/release-notes/<version>.md` (how to write one:
 `docs/release-notes/README.md`). The GitHub release, the update dialog and the website's
@@ -385,7 +390,19 @@ image. It copies them with the framework under the chromium lock and refuses a f
 UUID. The framework itself is already stripped, so strip-engine.sh's copies in `symbols/` name almost nothing. A crash's
 "Chromium Framework + 0x2e2334" is named with `scripts/symbolicate-crash.sh <Chromium Framework UUID> 0x2e2334 …`: it
 finds the engine release whose rows hold that UUID, downloads that dSYM into `dist/engine-symbols` and runs
-`atos -arch arm64 -l 0x0` on the offsets. Engines published before the symbols were uploaded have none: the next build
+`atos -arch arm64 -l 0x0` on the offsets.
+
+The app's own frames work the same way: a crash's "Ardia + 0x18828" is named with
+`scripts/symbolicate-crash.sh <Ardia image UUID> 0x18828 …`, the UUID being the one the crash's `crash_images` lists for
+Ardia. The script searches the app releases (`v<version>`, nightlies included) as well as the `engine-*` ones, newest
+first, and `--tag v<version>` goes straight to one. `release.sh` packs `Ardia.app.dSYM` from the archive's `dSYMs`
+through `scripts/lib/pack-symbols.sh --app` after `verify.sh`, and refuses an app whose executable's UUID no dSYM in the
+archive carries. `publish.sh` uploads the two files whenever `dist` holds them (refusing a half pair, and noting it when there are
+none). A local release always has them; the CI publish job has only what the sign job's `release` artifact (in
+`.github/workflows/release.yml`) lists, so that list has to name both. Releases from before the app's symbols were uploaded have none: the build artifact that
+held their archive has expired, so their `Ardia + 0x…` frames stay unnamed.
+
+Engines published before the symbols were uploaded have none: the next build
 overwrites `out/`'s dSYMs. To backfill one, rebuild its engine key; if the framework comes back with the published UUID,
 copy the framework and its dSYMs out of `out/` under the lock and upload the pair under the exact names
 `symbolicate-crash.sh` downloads (`key` is the release tag without `engine-`):

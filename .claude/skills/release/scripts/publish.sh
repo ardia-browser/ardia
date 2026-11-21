@@ -33,6 +33,17 @@ for file in "$dmg" "$zip" "$feed"; do
   [ -f "$file" ] || die "no $file (scripts/release.sh $version first)"
   assets+=("$file")
 done
+app_symbols="$dist/$(app_symbols_name "$version")"
+app_uuids="$dist/$(app_uuids_name "$version")"
+if [ -f "$app_symbols" ] || [ -f "$app_uuids" ]; then
+  for file in "$app_symbols" "$app_uuids"; do
+    [ -f "$file" ] || die "no $file (scripts/release.sh $version first)"
+    assets+=("$file")
+  done
+  echo "PASS  the app's symbols join the release"
+else
+  echo "note: no $(basename "$app_symbols") in $dist: the release ships without the app's symbols (scripts/release.sh makes them; in CI the Release workflow's release artifact has to list them)"
+fi
 linux="$dist/linux"
 if [ -d "$linux" ]; then
   linux_package="$linux/Ardia-$version-linux-x64.tar.xz"

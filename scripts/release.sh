@@ -198,6 +198,8 @@ fi
 
 "$stages/export-sign.sh" "$dist" "$archive" "$identity" ${provisioning_profile:+"$provisioning_profile"}
 "$stages/verify.sh" "$app" "$archive" "$version" "$release_build"
+echo "==> Pack app symbols"
+"$root/scripts/lib/pack-symbols.sh" --app "$app" "$archive/dSYMs" "$dist/$(app_symbols_name "$version")" "$dist/$(app_uuids_name "$version")"
 [ "$phase" = sign ] || "$stages/launch-check.sh" "$app"
 if [ "$notarize" = 1 ]; then
   echo "==> Notarize app"

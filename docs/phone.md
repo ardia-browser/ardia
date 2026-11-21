@@ -133,9 +133,9 @@ says what happened, and no tab or removed visit is lost or shows up twice.
    minute. Then revoke the grant (Settings › Apps › Ardia › clear the folder permission, or remove the folder in
    the provider): status turns `needsFolderAccess`, and Change folder recovers it.
 6. **WorkManager with the app process dead.** Make a change on the Mac, leave the app, run
-   `adb shell am kill com.ardia.browser.android`, then
-   `adb shell cmd jobscheduler run -f com.ardia.browser.android <job id>` (ids from
-   `adb shell dumpsys jobscheduler com.ardia.browser.android`). Open the app: the change is there before the
+   `adb shell am kill com.ardia.browser.android.dev`, then
+   `adb shell cmd jobscheduler run -f com.ardia.browser.android.dev <job id>` (ids from
+   `adb shell dumpsys jobscheduler com.ardia.browser.android.dev`). Open the app: the change is there before the
    first foreground cycle, and the inbox holds any tabs the Mac sent.
 7. **Stalled age.** Turn on airplane mode and wait three minutes: the status reads `Last synced N minutes ago`
    and N moves each minute.
@@ -215,13 +215,13 @@ Before any run, prove the phone has the build you were sent:
   (sync13 on the M3 once installed sync12 that way): `adb shell ls /sdcard/Download | grep -i ardia`, then
   `adb shell rm /sdcard/Download/<each old ardia apk>`.
 - After installing, hash what is installed and compare it with the `sha256:` line of the build's `.txt`:
-  `adb shell sha256sum $(adb shell pm path com.ardia.browser.android | sed -n 's/^package://p' | grep base.apk)`.
+  `adb shell sha256sum $(adb shell pm path com.ardia.browser.android.dev | sed -n 's/^package://p' | grep base.apk)`.
   An `adb install` of a single APK keeps it byte for byte as `base.apk`.
 - On the first launch logcat has `PAGELAB build <commit> dirty: no …`, and the commit must be the one sent
   with the APK. If the hash or the commit differs, stop and reinstall: nothing measured on the wrong build
   counts.
 
-`P=com.ardia.browser.android/.MainActivity`. Open the lab
+`P=com.ardia.browser.android.dev/com.ardia.browser.android.MainActivity`. Open the lab
 (`adb shell am start -n $P --ez com.ardia.phone.PAGE_LAB true`), tap System, and watch
 `adb logcat -s PAGELAB | grep "PAGELAB system"`. Each command should print one `PAGELAB system link`
 line with the kind and source shown. The lab also prints `PAGELAB system default browser` once when it opens
@@ -302,7 +302,7 @@ and again only when that status changes.
     airplane mode on and off: `network lost`, then `online again` once.
 23. **Accessibility dump:** in the app (not the lab), open the tray, the page menu, a long-press menu, Spaces
     and the Archive sheet in turn, and with each open run
-    `adb shell am broadcast -a com.ardia.phone.A11Y_DUMP -p com.ardia.browser.android` and
+    `adb shell am broadcast -a com.ardia.phone.A11Y_DUMP -p com.ardia.browser.android.dev` and
     `adb logcat -d -s PAGELAB | grep "PAGELAB a11y"`. The lines between `begin` and `end` are what TalkBack can
     reach; the surface behind a cover should not be among them.
 Look checks (24, 25, 32, 33, 38) start from the look on. The lab's Look on/Look off switch lasts across launches
@@ -333,11 +333,11 @@ off in the lab`.
     answered while Ardia is in front. From sync20d its receiver also stays registered in the background, but
     Android 14 and later, and MIUI's freezer, hold a broadcast to a cached app until it is back on screen. For the
     background itself use `adb shell dumpsys gfxinfo $P` and `dumpsys meminfo $P`.)
-    `adb shell am broadcast -a com.ardia.phone.MEMORY -p com.ardia.browser.android`
+    `adb shell am broadcast -a com.ardia.phone.MEMORY -p com.ardia.browser.android.dev`
     and `adb logcat -d -s PAGELAB | grep "PAGELAB memory"` (or System › Memory) at four points, after a
     force-stop and cold start each time you start over: with one tab; after opening nine tabs and visiting each;
     after closing eight of them; and after `adb shell am broadcast -a com.ardia.phone.TRIM -p
-    com.ardia.browser.android` (System › Trim, the same clear Android's low-memory signal does). Report the four
+    com.ardia.browser.android.dev` (System › Trim, the same clear Android's low-memory signal does). Report the four
     lines; the image cache's MB should fall when tabs close.
 28. **Scanner without a camera:** Scanner section with the camera allowed: Feed a phrase code gives
     `code: … 24 words, valid true`, Feed another code gives `rejected`; no recovery phrase in
@@ -402,7 +402,7 @@ off in the lab`.
     when the delete wins, the close says `no snapshot files left (…)` and the delete line carries the drops. For
     a tab that had a card, one of the two lines drops 1 or more; report any close of a carded tab where both say
     0. The image cache after closing eight is no larger than with nine open. Then run
-    `adb shell am send-trim-memory com.ardia.browser.android RUNNING_CRITICAL` (Android's own signal, which
+    `adb shell am send-trim-memory com.ardia.browser.android.dev RUNNING_CRITICAL` (Android's own signal, which
     also trims the system's GPU caches; the lab's Trim only clears the image cache) and tap Memory again. Report
     all the lines, graphics included.
     - Each Memory line now ends with `look on|off: N of M frost(s) blurring, about X MB of blur layers (largest …),
@@ -411,7 +411,7 @@ off in the lab`.
       between), so the look's share of graphics shows.
     - Android only releases GPU caches, the WebViews' tiles included, at "UI hidden" or deeper, not at
       `RUNNING_CRITICAL` with the app in front. So also press Home, run
-      `adb shell am send-trim-memory com.ardia.browser.android UI_HIDDEN`, come back and tap Memory.
+      `adb shell am send-trim-memory com.ardia.browser.android.dev UI_HIDDEN`, come back and tap Memory.
 38. **Frames with and without the look:** measure twice, look on and look off, doing the same thing each time.
     - In the lab's Look, set the toggle (Look on or Look off; it logs `PAGELAB look views off|on` and lasts across
       launches), then `adb shell am force-stop $P` and open the app normally.
@@ -477,7 +477,7 @@ off in the lab`.
     connected folder's grant, not the one left unused.
 41. **Launch arguments** (lab build): run the capture commands from "Launch arguments on Android" against the Expo
     app, for example
-    `adb shell am start -S -n $P/.MainActivity --ez ArdiaDemo true --es BrowseQuery otters`,
+    `adb shell am start -S -n $P/com.ardia.browser.android.MainActivity --ez ArdiaDemo true --es BrowseQuery otters`,
     `… --ez ArdiaDemo true --ez BrowseDeck true`, `… --ez ArdiaDemo true --es ArdiaOpenSheet settings` and
     `… --ez ArdiaOnboarding true`. Each does what it does in the Compose app, and with `ArdiaDemo` the sync view
     shows the demo Macs, not the real ones. Lab builds log `PAGELAB launch arguments {…}` once per launch
@@ -582,7 +582,7 @@ off in the lab`.
     - System settings win: with Remove animations on (Settings › Accessibility), the deck stands still whatever
       the budget says, and no sample is taken (nothing moves to measure).
 52. **An idle app draws nothing** (sync11's look-off deck drew 1825 frames in 30 s with nothing changing). With the
-    deck open and untouched, run `adb shell am broadcast -a com.ardia.phone.FRAMES -p com.ardia.browser.android
+    deck open and untouched, run `adb shell am broadcast -a com.ardia.phone.FRAMES -p com.ardia.browser.android.dev
     --ei seconds 5` and keep hands off for 5 s. Logcat (`-s PAGELAB`) has `PAGELAB idle frames: N frame(s) drawn in
     5.0 s, … draw pass(es), … layout pass(es), … with no view redrawn; look views redrawn: <view> xN, …; redrawn:
     <view> xN, … and K more`. The look views (backdrops, frosts, frost sources) are listed first and in full,
@@ -592,7 +592,7 @@ off in the lab`.
     chase.
 53. **The look lets go when the app is hidden.** Look on, nine tabs, tap Memory (step 37) and note the look part
     (`… frost(s) holding a blur layer, about X MB …`). Press Home, then
-    `adb shell am send-trim-memory com.ardia.browser.android HIDDEN` (this Android's name for UI_HIDDEN). Logcat
+    `adb shell am send-trim-memory com.ardia.browser.android.dev HIDDEN` (this Android's name for UI_HIDDEN). Logcat
     has `PAGELAB memory trim received: level 20 (UI_HIDDEN); …; look released for the hidden app: N frost
     layer(s) …`; every trim the app receives now logs one such line, whatever its level, so a missing line means
     the app never got it. Come back and tap Memory: graphics should be near the look-off figure until the deck is
@@ -745,6 +745,14 @@ Start the pass where R8 is most likely to have broken something, then run the wh
 7. Fullscreen video (media3).
 8. The lab: the deck-parts, frames and memory broadcasts and the Look section's buttons.
 
+## Ardia Dev on Android
+
+Every build without a release version (corex-build, build-apk without `--version`, lab builds) is a separate app, Ardia
+Dev, `com.ardia.browser.android.dev`, so it installs beside the published Ardia (`com.ardia.browser.android`) and
+neither replaces the other's data. Its activities keep their class names, so launch it with
+`com.ardia.browser.android.dev/com.ardia.browser.android.MainActivity`. `--compose-key` builds keep the release package,
+since they must install over the Compose app.
+
 ## Upgrade from the Compose app on Android
 
 Both apps are `com.ardia.browser.android`, so the Expo app installs over the Compose app and finds its files.
@@ -886,7 +894,7 @@ pass.
 Use the Compose APK and the Expo upgrade APK built for this run (same key), named here `$COMPOSE_APK` and
 `$EXPO_APK`. Watch `adb logcat -s ReactNativeJS:I ArdiaJS PAGELAB` throughout (the lab's own lines are all under
 `PAGELAB`), and `adb logcat -b crash` for crashes.
-`P=com.ardia.browser.android`. The lab is `adb shell am start -n $P/.MainActivity --ez com.ardia.phone.PAGE_LAB true`,
+`P=com.ardia.browser.android`. The lab is `adb shell am start -n $P/com.ardia.browser.android.MainActivity --ez com.ardia.phone.PAGE_LAB true`,
 then Upgrade; opening the lab never runs the import, and while the import waits its page area stays blank ("no
 state"). A launch intent reaches a process that is already running, so to get from the app to the lab (or back)
 force-stop first.
@@ -937,9 +945,9 @@ Pass A
    - The lab's page area stays blank with "no state": the page engine waits for the import. Force-stop.
 6. **A kill at each durable step.** A lab build can hold the import for 20 s at a step, through
    `--es ArdiaImportPause <step>`. Do these three in order, each from a stopped app:
-   - `adb shell am start -n $P/.MainActivity --es ArdiaImportPause afterReceipt`. When logcat says
+   - `adb shell am start -n $P/com.ardia.browser.android.MainActivity --es ArdiaImportPause afterReceipt`. When logcat says
      `PAGELAB upgrade paused at settingsStart`, send a link to the held app:
-     `adb shell am start -a android.intent.action.VIEW -d https://example.com/held-a -n $P/.MainActivity`. It does
+     `adb shell am start -a android.intent.action.VIEW -d https://example.com/held-a -n $P/com.ardia.browser.android.MainActivity`. It does
      not open; the import is still waiting. Then run `adb shell am force-stop $P`. The SQL receipt is written, and
      the native settings and the marker are not. The link was kept on disk, so it survives the kill: it must open
      in step 7, once. (Don't send the link from a stopped app: that launch runs the import with no pause.)
@@ -1003,7 +1011,7 @@ Pass B (after steps 1 to 3 again)
     - The "Couldn’t Bring Over Your Tabs" screen shows in place of the deck, and logcat has
       `ardia-legacy failed reason=unusable_io`.
     - Send a link while the screen is up:
-      `adb shell am start -a android.intent.action.VIEW -d https://example.com/held-b -n $P/.MainActivity`. It does
+      `adb shell am start -a android.intent.action.VIEW -d https://example.com/held-b -n $P/com.ardia.browser.android.MainActivity`. It does
       not open.
     - Tap Try Again: the same screen, now with Start Without Them and its note under it. Don't tap it.
     - Force-stop, open the lab, tap Make source usable, force-stop, then open the app normally. The import runs,
@@ -1645,6 +1653,7 @@ Every count and timing the phone can send, for the owner to read as one set and 
 | `page_summaries_pinched`, `page_summaries_from_menu` | Pinch to Summarize on iPhone and Android | It is off by default, so opens count only people who turned it on. A drop in pinch opens alongside steady menu opens can point to a gesture regression. A rise in pinch opens relative to `tabs_opened` can indicate accidental summaries |
 | `page_summaries_on_device`, `page_summaries_excerpts`, `page_summaries_failed` | Pinch to Summarize on iPhone | A rising excerpt share can point to problems with Apple Intelligence. A rising failure share can point to problems reading pages |
 | `page_summaries_chatgpt`, `page_summaries_chatgpt_fallbacks` | Pinch to Summarize on Android | Android has no excerpts, so `page_summaries_failed` against `page_summaries_on_device` is the share of phones without a ready Gemini Nano. How many summaries the opt-in ChatGPT choice writes; fallbacks rising against `page_summaries_chatgpt` mean the Responses call or the token refresh broke. On Android, pinch opens against menu opens show the passive pinch watcher working, and zero pinch opens after a release with steady menu opens mean it stopped |
+| `start_no_tabs_button_taps` | Start's Archive or Synced Tabs button, which takes the place of Tabs when no tabs are open (#3324) | Whether people use it instead of landing on an empty tab view; zero across testers after a release means the swap stopped or the button stopped opening the Archive or the spaces |
 | `paste_and_go_links`, `paste_and_go_texts`, `paste_and_go_unread` | Paste and Go, now on iPhone too | iPhone taps should appear beside Android's. A high unread share on iPhone means people refuse the paste prompt, or the row shows when nothing can be pasted |
 | `search_tile_taps`, `voice_tile_taps`, `incognito_tile_taps` | Android's Quick Settings tiles | Voice and Incognito should appear once the release is out; a tile that stays at zero while Search counts can point to a broken tile |
 | `browse_chatgpt_fallbacks` | Browse for Me on Expo | How often a connected ChatGPT plan fails to answer; a jump after a release, or against `browse_answers_chatgpt`, means the Responses call or the token refresh broke |
@@ -2798,7 +2807,7 @@ The iPhone's launch arguments are intent extras on Android, with the same names.
 (`LaunchExtras.allowedInThisBuild`); a store build ignores them.
 
 ```
-adb shell am start -S -n com.ardia.browser.android/.MainActivity --ez ArdiaDemo true --es BrowseQuery otters
+adb shell am start -S -n com.ardia.browser.android.dev/com.ardia.browser.android.MainActivity --ez ArdiaDemo true --es BrowseQuery otters
 ```
 
 `ArdiaDemo` runs on demo data (two Macs, two profiles) and never touches real data. The rest drive captures without

@@ -274,3 +274,31 @@ test("when the page width changes with the same space selected, the pager moves 
   scrolled.mockRestore();
   unmount(root);
 });
+
+test("with no tabs open the bar's Tabs button becomes Archive, or Synced Tabs when sync is on, so Start never leads to an empty tab view", () => {
+  withTabs(0);
+  const deck = jest.spyOn(browseStore, "showDeck").mockImplementation(async () => undefined);
+  const archive = jest.spyOn(browseStore, "openArchive").mockImplementation(() => undefined);
+  const spaces = jest.spyOn(browseStore, "openSpaces").mockImplementation(() => undefined);
+  const press = (root: Root, label: string) => act(() => root.root.findAll((node) => node.props.accessibilityLabel === label && typeof node.props.onPress === "function")[0]!.props.onPress());
+  const offline = start();
+  expect(host(offline, "startBarTabs")).toBeUndefined();
+  expect(style(offline, "startBarArchive")).toMatchObject({ width: 48, height: 48, borderRadius: 24 });
+  press(offline, "Archive");
+  expect(archive).toHaveBeenCalledTimes(1);
+  expect(counted).toHaveBeenCalledWith("start_no_tabs_button_taps");
+  unmount(offline);
+  withSpaces([profile("work", "Work")]);
+  const synced = start();
+  expect(host(synced, "startBarArchive")).toBeUndefined();
+  press(synced, "Synced Tabs");
+  expect(spaces).toHaveBeenCalledTimes(1);
+  unmount(synced);
+  act(() => withTabs(1));
+  const browsing = start();
+  expect(host(browsing, "startBarSynced")).toBeUndefined();
+  press(browsing, "Tabs");
+  expect(deck).toHaveBeenCalledTimes(1);
+  expect(archive).toHaveBeenCalledTimes(1);
+  unmount(browsing);
+});

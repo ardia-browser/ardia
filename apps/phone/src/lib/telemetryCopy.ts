@@ -78,6 +78,10 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         fields: ["search_tile_taps", "voice_tile_taps", "incognito_tile_taps"],
       },
       {
+        text: "In the same daily counts: how often you tapped Archive or Synced Tabs on the start page, the button that takes the place of Tabs when no tabs are open. Counts only, and never while browsing privately",
+        fields: ["start_no_tabs_button_taps"],
+      },
+      {
         text: "In the same daily counts, on Android: how often you tapped the Ardia logo on the start page to search. Counts only, and never while browsing privately",
         fields: ["start_logo_taps"],
       },

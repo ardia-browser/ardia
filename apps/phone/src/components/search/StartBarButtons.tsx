@@ -5,17 +5,16 @@ import { menuOpenedHaptic } from "../../state/browse/tabMenus";
 import { useCanReopen, useIncognito } from "../../state/tabs/hooks";
 import { capsule, PressScale, rolesFor, smoothCorners, startLayout, SystemGlyph, type SymbolName } from "../ui";
 import { MenuTrigger } from "../ui/MenuTrigger";
+import { SF_SYMBOL_NAMES } from "../ui/sfSymbolNames";
 import { plusMenu } from "../tabs/DeckBottomBar";
 import { startButtonFill } from "./startLook";
-
-const SYSTEM_NAMES: Partial<Record<SymbolName, string>> = { gearshape: "gearshape", squareOnSquare: "square.on.square" };
 
 export function StartCircleButton({ icon, label, testID, diameter = startLayout.barCircle, dark, incognito, onPress }: { icon: SymbolName; label: string; testID: string; diameter?: number; dark: boolean; incognito: boolean; onPress: () => void }) {
   const size = { width: diameter, height: diameter };
   return (
     <PressScale label={label} onPress={onPress} onPressIn={haptics.barPress} style={[styles.centered, size]}>
       <View testID={testID} style={[styles.centered, size, { borderRadius: capsule(diameter), backgroundColor: startButtonFill[dark || incognito ? "dark" : "light"] }]}>
-        <SystemGlyph testID={`${testID}Glyph`} systemName={SYSTEM_NAMES[icon] ?? "circle"} pointSize={16} weight="medium" name={icon} size={startLayout.circleGlyph} color={rolesFor(dark).label} />
+        <SystemGlyph testID={`${testID}Glyph`} systemName={SF_SYMBOL_NAMES[icon] ?? "circle"} pointSize={16} weight="medium" name={icon} size={startLayout.circleGlyph} color={rolesFor(dark).label} />
       </View>
     </PressScale>
   );

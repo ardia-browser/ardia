@@ -3,11 +3,13 @@ import { StyleSheet, useWindowDimensions, View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { measuredOr, useRootSize } from "../../state/app/rootSize";
-import { showDeck } from "../../state/browse/store";
+import { openArchive, openSpaces, showDeck } from "../../state/browse/store";
 import { useSearchOpen } from "../../state/search/hooks";
 import { openSettings } from "../../state/settings/hooks";
-import { useIncognito } from "../../state/tabs/hooks";
-import { chromeLayout, space, startLayout, startMotion, tabsCurve, tabsLayout, useReduceMotion, useTheme } from "../ui";
+import { useSyncEnabled } from "../../state/sync/hooks";
+import { countUsage } from "../../state/telemetry/telemetry";
+import { useHasTabs, useIncognito } from "../../state/tabs/hooks";
+import { chromeLayout, space, startLayout, startMotion, tabsCurve, tabsLayout, useReduceMotion, useTheme, type SymbolName } from "../ui";
 import { StartCircleButton, StartPlusButton } from "./StartBarButtons";
 import { StartMark, StartSpaces, startBarCenterY, type StartGeometry } from "./StartSpaces";
 import { useBottomBarLayout } from "../ui/useBottomBarLayout";
@@ -36,7 +38,8 @@ export function StartPage() {
   const { span: barSpan, strip } = useBottomBarLayout(width, chromeLayout.barSideInset);
   const plusMenuLeft = Math.min(Math.max(barSpanCenter(width, barSpan) - tabsLayout.menuWidth / 2, space.l), width - tabsLayout.menuWidth - space.l);
   const stripX = strip ? strip.centerX - DUO_BAR.button / 2 : 0;
-  const tabs = <StartCircleButton icon="squareOnSquare" label="Tabs" testID="startBarTabs" dark={dark} incognito={incognito} onPress={showDeck} />;
+  const leading = useStartLeading(incognito);
+  const tabs = <StartCircleButton icon={leading.icon} label={leading.label} testID={leading.testID} dark={dark} incognito={incognito} onPress={leading.onPress} />;
   const plus = (
     <StartPlusButton
       width={strip ? DUO_BAR.button : startLayout.barPlus.width}
@@ -71,6 +74,18 @@ export function StartPage() {
       ) : null}
     </View>
   );
+}
+
+function useStartLeading(incognito: boolean): { icon: SymbolName; label: string; testID: string; onPress: () => void } {
+  const hasTabs = useHasTabs();
+  const syncs = useSyncEnabled();
+  if (hasTabs) return { icon: "squareOnSquare", label: "Tabs", testID: "startBarTabs", onPress: showDeck };
+  const open = syncs ? openSpaces : openArchive;
+  const onPress = () => {
+    if (!incognito) countUsage("start_no_tabs_button_taps");
+    open();
+  };
+  return syncs ? { icon: "laptop", label: "Synced Tabs", testID: "startBarSynced", onPress } : { icon: "archivebox", label: "Archive", testID: "startBarArchive", onPress };
 }
 
 const styles = StyleSheet.create({

@@ -103,6 +103,7 @@ if [ -n "$release" ]; then
   versionCode="$(sed -n 's/^code=//p' <<<"$planned")"
   gradleArgs+=(-PardiaVersionName="$versionName" -PardiaVersionCode="$versionCode")
 fi
+[ "$composeKey" = "1" ] && gradleArgs+=(-PardiaReleasePackage=true)
 gradleArgs+=(-PreactNativeArchitectures="$abis")
 case ",$compress," in *,libs,*) gradleArgs+=(-Pexpo.useLegacyPackaging=true) ;; esac
 case ",$compress," in *,dex,*) gradleArgs+=(-PardiaCompressDex=true) ;; esac

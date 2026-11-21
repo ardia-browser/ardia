@@ -6,16 +6,16 @@
       "title": "Command Line",
       "blurb": "Drive Ardia from your terminal or an agent.",
       "icon": "terminal.fill",
-      "version": "0.4.0",
-      "release": "https://github.com/ardia-browser/plugins/releases/download/cli-v0.4.0",
+      "version": "0.5.0",
+      "release": "https://github.com/ardia-browser/plugins/releases/download/cli-v0.5.0",
       "artifacts": {
         "macos-arm64": {
-          "file": "cli-plugin-0.4.0-macos-arm64.tar.gz",
-          "sha256": "5f6442242c0a7d42d9ec592c599a167faa3675dbbc18999ef2cf34fc2336339e"
+          "file": "cli-plugin-0.5.0-macos-arm64.tar.gz",
+          "sha256": "36d0dc74e7071f3b350d704c9edfe0f90765a77b00e3994a7db77d9bed2d6c35"
         },
         "linux-x64": {
-          "file": "ardia-cli-0.4.0-linux-x64.tar.gz",
-          "sha256": "5bd2bf6cc2f6e34bbfbb78cf28e3ee0963db569697e951cf7d45cfcc35a7a9bf"
+          "file": "ardia-cli-0.5.0-linux-x64.tar.gz",
+          "sha256": "597a48150b11f414d65263bba857a2a0b9ea934e3881dabcd2f0f4ac13e20463"
         },
         "installer": {
           "file": "install.sh",
@@ -33,8 +33,8 @@
         "items": [
           "Each command's name (like history or browse snapshot), its exit and error codes, and the names of the options it was given, never their values",
           "How long it took, step by step (starting up, starting its helper, connecting to Ardia, finding the tab, the command itself, waiting for the page to settle), plus counts and sizes: browser calls, steps in a batch, how many coding agents the install gave the agent skill to or skipped, the length of a page snapshot and of the output, how many requests an action sent, how many reading tabs it had to open again, and whether the output was cut short, the input humanized, it gave up waiting for its helper, it set a viewport size, it reloaded a crashed page or Ardia refused it a tab. Times, counts and yes or no only",
-          "Its version, macOS version, chip and Python version, with this Mac's install ID",
-          "After a crash: the error's type (with its message only when it's one of Python's fixed ones, like “division by zero”), and the module, function and line number of each step in the stack trace",
+          "Its version, whether it's a release or test build, and this Mac's install ID",
+          "After a crash: the error's type, and its message only when it's one of a fixed list (like “division by zero”); never the stack trace",
           "Nothing from commands pointed at a test browser (--port, --ws), and nothing at all with DO_NOT_TRACK=1 or ARDIA_TELEMETRY=0 set"
         ]
       },

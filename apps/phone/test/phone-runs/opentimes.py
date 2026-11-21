@@ -21,7 +21,7 @@ REGIONS = ["page=60,300,960,1400", "full=0,90,1080,2170", "bar=0,2080,1080,190",
 MOVE = 2.0
 QUIET = 0.8
 QUIET_MS = 300
-PACKAGE = "com.ardia.browser.android"
+PACKAGE = "com.ardia.browser.android.dev"
 
 
 def zone():
@@ -138,7 +138,7 @@ def flick(folder, name):
 
 def launch(folder, name):
     rows, command, lines = load(folder, name)
-    starts = [wall_of(line) for line in lines if "ActivityTaskManager: START u0" in line and f"{PACKAGE}/.MainActivity" in line and "LAUNCHER" in line]
+    starts = [wall_of(line) for line in lines if "ActivityTaskManager: START u0" in line and f"{PACKAGE}/com.ardia.browser.android.MainActivity" in line and "LAUNCHER" in line]
     totals = [int(value) for value in re.findall(r"TotalTime: (\d+)", command)]
     results = []
     for n, moment in enumerate(starts):

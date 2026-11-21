@@ -91,7 +91,7 @@ export const LINUX_WORDING: readonly Wording[] = [
       ["whether it's the first launch since the Mac started", "whether it's the first launch since the computer started"],
       ["Also at launch: the Mac's load average", "Also at launch: the system's load average"],
       ["a link no app on this Mac opens", "a link no app on this computer opens"],
-      ["Its version, macOS version, chip and Python version, with this Mac's install ID", "Its version, operating system version, chip and Python version, with this computer's install ID"],
+      ["Its version, whether it's a release or test build, and this Mac's install ID", "Its version, whether it's a release or test build, and this computer's install ID"],
       ["Leaves this Mac only as the events above", "Leaves this computer only as the events above"],
       ["whether macOS and Ardia agree that Ardia is the app in front", "whether the system and Ardia agree that Ardia is the app in front"],
       ["window was still on a screen, either though macOS reported it covered", "window was still on a screen, either though the system reported it covered"],

@@ -256,7 +256,7 @@ enum CommandTable {
     "findPrevious": [("g", [.shift, .command])],
     "hideElement": [("h", [.shift, .command])],
     "showHiddenElements": [("u", [.shift, .command])],
-    "reload": [("r", [.command])],
+    "reload": [("r", [.command]), ("\u{F708}", [])],
     "forceReload": [("r", [.shift, .command])],
     "toggleTabLayout": [("s", [.shift, .command])],
     "toggleSidebar": [("s", [.command]), ("l", [.shift, .command]), ("f", [.shift, .command])],

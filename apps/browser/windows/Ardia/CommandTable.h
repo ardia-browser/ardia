@@ -102,7 +102,7 @@ inline constexpr CommandRow kCommandRows[] = {
     {"setAppearance:light", "Light", "View > Appearance", "", ""},
     {"setAppearance:dark", "Dark", "View > Appearance", "", ""},
     {"stop", "Stop", "View", "cmd+.", "ctrl+."},
-    {"reload", "Refresh", "View", "cmd+r", "ctrl+r|f5"},
+    {"reload", "Refresh", "View", "cmd+r|f5", "ctrl+r|f5"},
     {"forceReload", "Force Refresh the Page", "View", "shift+cmd+r", "ctrl+shift+r|ctrl+f5|shift+f5"},
     {"toggleReader", "Show Reader", "View", "option+cmd+r", "ctrl+alt+r|f9"},
     {"toggleMinimalism", "Minimalism Mode", "View", "ctrl+cmd+m", "ctrl+alt+m"},

@@ -146,6 +146,7 @@ test("the backup keeps two pins of the same page that parking would merge", asyn
 function onePin() {
   stub.docs.clear();
   stub.stagedDocs.clear();
+  stub.unreadableDocs.clear();
   const stop = startPersistence();
   const w = S().createWindow({ url: "https://a1.com" });
   const pin = S().newTab(w, { url: "https://pin.com", background: true });
@@ -466,6 +467,35 @@ test("a pins-backup.json that can't be read is kept, and the new backup goes bes
   assert.equal(beside.length, 1);
   assert.deepEqual(parsePinBackups(stub.docs.get(beside[0]))[0].pins[profileId].tabs.map((t) => t.url), ["https://pin.com"]);
   assert.ok(!sessionUrls().includes("https://pin.com"));
+});
+
+test("a pins-backup.json that exists but the store can't read is not replaced, and the new backup goes beside it (#3205)", async () => {
+  const { stop, pin, profileId } = onePin();
+  stub.unreadableDocs.add(PINS_BACKUP_DOCUMENT);
+  try {
+    dropPins([pin]);
+    await settle();
+  } finally {
+    stop();
+  }
+  assert.ok(!stub.docs.has(PINS_BACKUP_DOCUMENT), "the unreadable file was never written over");
+  assert.ok(stub.unreadableDocs.has(PINS_BACKUP_DOCUMENT), "it is still there, unread");
+  const beside = [...stub.docs.keys()].filter((name) => name.startsWith("pins-backup-") && name.endsWith(".json"));
+  assert.equal(beside.length, 1);
+  assert.deepEqual(parsePinBackups(stub.docs.get(beside[0]))[0].pins[profileId].tabs.map((t) => t.url), ["https://pin.com"]);
+  assert.ok(!sessionUrls().includes("https://pin.com"));
+});
+
+test("with no pins-backup.json at all, the first backup still takes the primary name (#3205)", async () => {
+  const { stop, pin } = onePin();
+  try {
+    dropPins([pin]);
+    await settle();
+  } finally {
+    stop();
+  }
+  assert.ok(stub.docs.has(PINS_BACKUP_DOCUMENT), "a missing file is written as the primary backup");
+  assert.equal([...stub.docs.keys()].filter((name) => name.startsWith("pins-backup-")).length, 0, "nothing goes beside it");
 });
 
 test("two backups beside an unreadable pins-backup.json never share a file name, even in the same millisecond", async () => {

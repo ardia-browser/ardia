@@ -3,7 +3,7 @@ import { isIncognitoProfile, pinKeyOf } from "../browser/model";
 import { parkWindowPins } from "../pins/parkedPins";
 import { isRegularWindow } from "../windows/small";
 import { isFields } from "../../lib/decode";
-import { readDocument, saveDocument } from "../../platform/documents";
+import { readDocument, documentExists, saveDocument } from "../../platform/documents";
 import type { ParkedPins } from "../browser/types";
 import { consentToken } from "../telemetry/client";
 import { noteSessionPinBackup, noteSessionPinBackupFailure } from "../telemetry/sessionWrites";
@@ -106,7 +106,7 @@ function savedBackups(): { base: PinBackup[]; document: string } {
   const beside = `pins-backup-${Date.now()}-${++besideCount}.json`;
   try {
     const json = readDocument(PINS_BACKUP_DOCUMENT);
-    if (!json) return { base: [], document: PINS_BACKUP_DOCUMENT };
+    if (!json) return { base: [], document: documentExists(PINS_BACKUP_DOCUMENT) ? beside : PINS_BACKUP_DOCUMENT };
     const raw: unknown = JSON.parse(json);
     return isFields(raw) && Array.isArray(raw.backups) ? { base: parsePinBackups(json), document: PINS_BACKUP_DOCUMENT } : { base: [], document: beside };
   } catch {

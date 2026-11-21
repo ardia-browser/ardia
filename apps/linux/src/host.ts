@@ -12,6 +12,7 @@ export type ArdiaHost = {
     utility?: { pane: string; profileId: string | null; detail: string | null; importSource?: string };
     session?: HydrateData | null;
     documents?: Record<string, string>;
+    unreadableDocuments?: string[];
     nativeModules?: Record<string, Record<string, unknown>>;
     capabilities?: string[];
     launchConfig?: LaunchConfig;

@@ -41,6 +41,14 @@ enum DocumentStore {
     return pending ?? (try? String(contentsOf: url, encoding: .utf8))
   }
 
+  static func exists(_ name: String) -> Bool {
+    guard let url = try? url(name) else { return false }
+    lock.lock()
+    let pending = staged[url.lastPathComponent] != nil
+    lock.unlock()
+    return pending || FileManager.default.fileExists(atPath: url.path)
+  }
+
   static func write(_ name: String, _ contents: String, done: Done? = nil) throws {
     _ = flushOnQuit
     let url = try url(name)

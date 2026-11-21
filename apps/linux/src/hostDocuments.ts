@@ -4,6 +4,7 @@ import { invokeHost } from "./host.ts";
 
 export function createHostDocuments(host: ArdiaHost) {
   const documents = new Map(Object.entries(host.bootstrap.documents ?? {}));
+  const unreadable = new Set(host.bootstrap.unreadableDocuments ?? []);
   const stored = new Map(documents);
   const latest = new Map<string, number>();
   const landing = new Map<string, Promise<void>>();
@@ -22,7 +23,10 @@ export function createHostDocuments(host: ArdiaHost) {
     const operation = ++operations;
     latest.set(name, operation);
     keep(documents, name, value);
-    const done = invoke(method, args).then(() => keep(stored, name, value), (error) => {
+    const done = invoke(method, args).then(() => {
+      keep(stored, name, value);
+      unreadable.delete(name);
+    }, (error) => {
       if (latest.get(name) === operation) keep(documents, name, stored.get(name));
       throw error;
     });
@@ -31,6 +35,7 @@ export function createHostDocuments(host: ArdiaHost) {
   };
   return {
     read: (name: string) => name === "live.canonical.json" ? null : name === "live.json" ? readCanonicalLiveDocument(host) : documents.get(name) ?? null,
+    exists: (name: string) => documents.has(name) || unreadable.has(name),
     write: (name: string, contents: string) => {
       if (name === "live.json" || name === "live.canonical.json") return Promise.reject(Object.assign(new Error("Canonical Live documents require typed operations"), { code: "ERR_DOCUMENT_RESERVED" }));
       return change(name, contents, "writeDocument", [name, contents]);

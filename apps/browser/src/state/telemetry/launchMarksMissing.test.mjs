@@ -13,6 +13,7 @@ Object.assign(stub.appInfo, {
   processStart,
   launchMarks: { engineStarted: processStart + 150 },
   launchedHidden: null,
+  launchSource: "someone@example.com",
   loadAverage1m: Number.NaN,
 });
 stub.docs.set("telemetry.json", JSON.stringify({ version: 1, sharing: true, installId: "install", decidedAt: 1, askDoneAt: 1, crashCursor: 0, lastVersion: "0.3.0", sessionOpen: false }));
@@ -24,7 +25,7 @@ const journeys = await import("./journeys.ts");
 const track = await import("./track.ts");
 after(() => client.setSharing(false, "settings"));
 
-test("perf_launch leaves out a mark, a load average or a hidden flag the app did not report instead of sending 0 or false", async () => {
+test("perf_launch leaves out a mark, a load average, a hidden flag or a launch source the app did not report instead of sending 0, false or free text", async () => {
   client.loadChoice();
   journeys.startJourneys(null);
   journeys.launchCommitted();
@@ -41,4 +42,6 @@ test("perf_launch leaves out a mark, a load average or a hidden flag the app did
   const { main_ms, startup_ms, chromium_ms, engine_ms, load_1m, launched_hidden } = launches[0].properties;
   assert.deepEqual([main_ms, startup_ms, chromium_ms, load_1m, launched_hidden], [null, null, null, null, null]);
   assert.equal(engine_ms, 150);
+  const { appkit_will_finish_ms, appkit_did_finish_ms, launch_source } = launches[0].properties;
+  assert.deepEqual([appkit_will_finish_ms, appkit_did_finish_ms, launch_source], [null, null, null]);
 });

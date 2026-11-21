@@ -9,6 +9,7 @@ import { peekTabId } from "../peek/peek";
 import { canHideElements } from "../site/hiddenElements";
 import { splitOf } from "../splits/splits";
 import { canGoBack, canGoForward } from "../tabs/navigation";
+import { liveReachOf, shownLiveOf } from "../tabs/tabLive";
 import type { Bookmarks, BookmarkNode, Tab } from "../browser/types";
 import { isInternalTab } from "../pages/urls";
 import { muteState, muteTitle } from "../tabs/mute";
@@ -19,6 +20,7 @@ import { menuBarBindings } from "./commandShortcuts";
 import { focusedWindowOf } from "../windows/ui";
 import { clearableRecentlyClosed, closedWindowTitle, newestClosed, recentlyClosedIn } from "../windows/recentlyClosedList";
 import { BOOKMARK_COMMANDS, bookmarksShown } from "../bookmarks/visibility";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 
 function menuBookmarks(b: Bookmarks, folderId: string, depth = 0): MenuBookmark[] {
   return folderChildren(b, folderId).map((n: BookmarkNode) =>
@@ -58,14 +60,14 @@ function bookmarkMenus(b: Bookmarks, engine: string): BookmarkMenus {
   return menus;
 }
 
-export function menuState(s: BrowserState): MenuState {
+export function menuState(s: BrowserState, liveOfTab = (id: string) => shownLiveOf(s, id)): MenuState {
   const focused = focusedWindowOf(s);
   const windowId = focused && s.windows[focused] ? focused : undefined;
   const w = windowId ? s.windows[windowId] : undefined;
   const tab = windowId ? activeTab(s, windowId) : undefined;
   const peek = windowId ? peekTabId(s, windowId) : undefined;
   const page = peek ? s.tabs[peek] : tab;
-  const live = page ? s.live[page.id] : undefined;
+  const live = page ? liveOfTab(page.id) : IDLE_LIVE;
   const bookmarkProfile = bookmarkProfileId(s, w);
   const regularWindows = s.windowOrder.filter((id) => s.windows[id]!.kind !== "private" && s.windows[id]!.kind !== "small");
 
@@ -77,9 +79,9 @@ export function menuState(s: BrowserState): MenuState {
   else {
     if (!page?.url) disabled.push(...PAGE_COMMANDS);
     else if (isInternalTab(page)) disabled.push(...PAGE_COMMANDS_OFF_INTERNAL_PAGES);
-    if (!page || !canGoBack(page.id, live ?? IDLE_LIVE)) disabled.push("back");
-    if (!page || !canGoForward(page.id, live ?? IDLE_LIVE)) disabled.push("forward");
-    if (!live?.isLoading) disabled.push("stop");
+    if (!page || !canGoBack(page.id, live)) disabled.push("back");
+    if (!page || !canGoForward(page.id, live)) disabled.push("forward");
+    if (!live.isLoading) disabled.push("stop");
     if (w.kind === "private") disabled.push("moveTabToProfile", "moveTabToWindow", "switchProfile", "nextProfile", "previousProfile");
     else if (tab) disabled.push(`moveTabToProfile:${tab.profileId}`);
     if (regularWindows.length < 2) disabled.push("mergeAllWindows");
@@ -140,6 +142,8 @@ export function menuState(s: BrowserState): MenuState {
     warnBeforeQuitting: s.settings.warnBeforeQuitting,
     warnBeforeClosingWindow: s.settings.warnBeforeClosingWindow,
     undoReopensClosedTab: s.settings.undoReopensClosedTab,
+    linksOpenInLittleArdia: s.settings.openLinksInLittleArdia,
+    littleArdiaShortcutFromAnyApp: PLATFORM_FEATURES.littleArdiaShortcutFromAnyApp && s.settings.littleArdiaShortcutFromAnyApp,
     downloadsInProgress: s.downloads.filter((d) => d.state === "downloading").length,
     shortcuts: menuBarBindings(s),
     extensions: extensionMenu(s, windowId) };
@@ -177,18 +181,16 @@ function tabsChangedForMenu(s: BrowserState, prev: BrowserState): boolean {
   return false;
 }
 
-function liveChangedForMenu(s: BrowserState, prev: BrowserState): boolean {
-  for (const id of changedIds(s.live, prev.live)) {
+export const liveReachesMenu = (s: BrowserState, tabId: string): boolean =>
+  liveReachOf(s, tabId).some((id) => {
     const tab = s.tabs[id];
-    if (tab && shownOrSelected(s, tab)) return true;
-  }
-  return false;
-}
+    return !!tab && shownOrSelected(s, tab);
+  });
 
 export function menuInputsChanged(reads: MenuReads, s: BrowserState, prev: BrowserState): boolean {
   for (const key of reads) {
     if (s[key] === prev[key]) continue;
-    if (key === "tabs" ? tabsChangedForMenu(s, prev) : key === "live" ? liveChangedForMenu(s, prev) : true) return true;
+    if (key !== "tabs" || tabsChangedForMenu(s, prev)) return true;
   }
   return false;
 }

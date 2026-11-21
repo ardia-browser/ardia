@@ -13,6 +13,7 @@ registerHooks({
 const listeners = new Set();
 let payload = { folders: {}, folderOrder: [], items: {}, known: {}, unread: {}, hidden: {}, completed: {}, expandedStacks: {}, accounts: {}, config: {}, calendar: { showPreview: true, showTimeToNext: true, hiddenCalendarIds: [] }, meetingGroups: {}, dismissedAlerts: [], version: 1 };
 let revision = 0, watermark = 0;
+let failCommit = false;
 const snapshot = () => ({ document: "live.json", scope: "native", epoch: "epoch", clientId: "native-client", revision, watermark, payload, incarnations: Object.fromEntries(Object.keys(payload.folders).map((id) => [id, `folder:${id}`])), generations: {} });
 globalThis.window = { __ardiaHost: {
   bootstrap: { windowId: "main", profileId: "default" },
@@ -22,6 +23,7 @@ globalThis.window = { __ardiaHost: {
     if (name === "documents.watch") return JSON.stringify(snapshot());
     if (name === "documents.flush") return JSON.stringify(snapshot());
     assert.equal(name, "documents.commit");
+    if (failCommit) throw new Error("Storage unavailable");
     payload = projectLiveIntent(payload, args.operations);
     revision++; watermark++;
     return JSON.stringify({ status: "committed", requestId: args.requestId, snapshot: snapshot() });
@@ -102,4 +104,27 @@ test("Linux binding keeps a folder's hidden repos and their pull requests throug
   removeFolder(id);
   await flushLinuxDocuments();
   assert.equal(id in payload.repoHidden, false);
+});
+
+
+test("Linux save telemetry describes queued intent on failure and does not recount retries", async () => {
+  const { createLivePersistence } = await import("./livePersistence.ts");
+  const activity = [];
+  const binding = createLivePersistence((changed, kind) => activity.push({ changed, kind }));
+  let current;
+  binding.start((state) => { current = state; });
+  await new Promise((resolve) => setImmediate(resolve));
+  const before = structuredClone(payload);
+  failCommit = true;
+  try {
+    binding.changed(current, { ...current, calendar: { ...current.calendar, showPreview: !current.calendar.showPreview } });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(payload, before);
+    assert.deepEqual(activity, [{ changed: true, kind: "intent" }]);
+  } finally { failCommit = false; }
+  await flushLinuxDocuments();
+  assert.notEqual(payload.calendar.showPreview, before.calendar.showPreview);
+  assert.equal(activity.length, 1);
+  binding.changed(current, current);
+  assert.deepEqual(activity.at(-1), { changed: false, kind: "intent" });
 });

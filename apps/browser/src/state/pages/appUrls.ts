@@ -4,10 +4,20 @@ import { SETTINGS_PANES, type SettingsPane } from "../settings/settingsWindows";
 const PANE_ALIASES: Record<string, SettingsPane> = {
   people: "profiles",
   manageprofile: "profiles",
-  syncsetup: "sync",
-  addresses: "autofill",
-  payments: "autofill",
-  searchengines: "search",
+  syncsetup: "general",
+  sync: "general",
+  privacy: "general",
+  addresses: "profiles",
+  payments: "profiles",
+  autofill: "profiles",
+  passwords: "profiles",
+  extensions: "profiles",
+  search: "profiles",
+  searchengines: "profiles",
+  airtraffic: "automations",
+  livefolders: "automations",
+  calendar: "automations",
+  engines: "advanced",
 };
 
 export type AppUrlAction = { kind: "newTab" } | { kind: "settings"; pane: SettingsPane | undefined };

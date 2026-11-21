@@ -18,9 +18,8 @@ extension MainMenu {
   }
 
   private static func shortcut(of item: NSMenuItem) -> (key: String, mods: NSEvent.ModifierFlags) {
-    let key = item.keyEquivalent
-    guard key.count == 1, key != key.lowercased() else { return (key, item.keyEquivalentModifierMask) }
-    return (key.lowercased(), item.keyEquivalentModifierMask.union(.shift))
+    let combo = KeyEquivalentMatch.normalized(key: item.keyEquivalent, mask: item.keyEquivalentModifierMask)
+    return (combo.key, item.keyEquivalentModifierMask.subtracting(KeyEquivalentMatch.held).union(combo.mods))
   }
 
   private static func switcherItems() -> [CommandItem] {
@@ -117,10 +116,12 @@ extension MainMenu {
     if bound != announcedShortcuts {
       announcedShortcuts = bound
       ArdiaHost.menuShortcutsChanged()
+      LittleArdiaHotKey.shared.shortcutsChanged()
     }
   }
 
   static func applyShortcuts(_ bindings: [String: [[String]]]) {
+    LittleArdiaHotKey.bindingHoldsFunction = LittleArdiaHotKey.holdsFunction(bindings)
     defer { announceShortcuts() }
     for (id, group) in shortcutGroups() {
       guard let bound = bindings[id] else {

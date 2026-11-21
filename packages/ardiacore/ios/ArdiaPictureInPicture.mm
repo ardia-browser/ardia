@@ -75,6 +75,7 @@ void InstallDragMonitor() {
                                                       gGrabTravel = 0;
                                                       gGrabSkip = ClickSkipSeconds(window, event.locationInWindow);
                                                       gGrabClicks = event.clickCount;
+                                                      ardia_host::NotePointer(event, @"pipDrag");
                                                       return nil;
                                                     }
                                                     ArdiaPiPController *dragged = gDragged;
@@ -84,7 +85,8 @@ void InstallDragMonitor() {
                                                       gDragged = nil;
                                                       [dragged dragEnded:event];
                                                       if (gGrabSkip && ardia_pip_seek::IsClick(gGrabTravel))
-                                                        [dragged skipBy:gGrabSkip at:gGrabLocal clickCount:gGrabClicks];
+                                                        [dragged skipDraggedBy:gGrabSkip at:gGrabLocal clickCount:gGrabClicks];
+                                                      ardia_host::NotePointer(event, @"pipDrag");
                                                     } else {
                                                       [dragged dragMoved:event];
                                                     }
@@ -101,7 +103,7 @@ void InstallZoomMonitor() {
                                                   }];
 }
 
-bool Attach(ArdiaWebView *view, NSString *host) {
+bool Attach(ArdiaWebView *view, NSString *host, ArdiaConsentStamp *stamp) {
   for (NSWindow *window in NSApp.windows) {
     ArdiaPiPController *controller = [ArdiaPiPController forWindow:window];
     if (!IsChromeVideoPictureInPicture(window) && !(controller && window.visible)) continue;
@@ -114,7 +116,7 @@ bool Attach(ArdiaWebView *view, NSString *host) {
     [controller roundCorners];
     JoinFullScreenSpaces(window);
     PreventActivation(window);
-    if (fresh) [view emit:@"pictureInPicture" payload:@{@"kind" : @"video", @"active" : @YES, @"fullScreenSpaces" : @(JoinsFullScreenSpaces(window)), @"leftApp" : @(view.leftAppInPictureInPicture), @"leftTab" : @(!view.seenByUser)}];
+    if (fresh) [view emit:@"pictureInPicture" payload:[stamp onto:@{@"kind" : @"video", @"active" : @YES, @"fullScreenSpaces" : @(JoinsFullScreenSpaces(window)), @"leftApp" : @(view.leftAppInPictureInPicture), @"leftTab" : @(!view.seenByUser)}]];
     if (ardia_host::Background()) {
       window.alphaValue = 0;
       window.ignoresMouseEvents = YES;
@@ -212,21 +214,37 @@ NSString *DevLayerTree(NSWindow *window) {
 
 namespace ardia_pip {
 
+static NSTimeInterval gBackToTabActivationUntil = 0;
+
+void MarkBackToTabActivation() {
+  if (!ardia_host::Background() && !NSApp.isActive) gBackToTabActivationUntil = NSProcessInfo.processInfo.systemUptime + 2;
+}
+
+BOOL ConsumeBackToTabActivation() {
+  const BOOL pending = NSProcessInfo.processInfo.systemUptime <= gBackToTabActivationUntil;
+  gBackToTabActivationUntil = 0;
+  return pending;
+}
+
 void WatchZoom() { InstallZoomMonitor(); }
+
+NSWindow *GrabbedWindow() { return gDragged.window; }
 
 void TabRequestedActivation(ArdiaWebView *view) {
   for (NSWindow *window in NSApp.windows)
-    if ([ArdiaPiPController forWindow:window].view == view && window.visible && !window.hasShadow)
-      return ActivateApp(@"Back to Tab (Chrome's button)");
+    if ([ArdiaPiPController forWindow:window].view == view && window.visible) {
+      MarkBackToTabActivation();
+      if (!window.hasShadow) return ActivateApp(@"Back to Tab (Chrome's button)");
+    }
 }
 
-void VideoEntered(ArdiaWebView *view, NSString *host) {
+void VideoEntered(ArdiaWebView *view, NSString *host, ArdiaConsentStamp *stamp) {
   __block int tries = 0;
   __block void (^look)(void);
   __weak ArdiaWebView *weakView = view;
   look = ^{
     ArdiaWebView *strongView = weakView;
-    if (!strongView || Attach(strongView, host) || ++tries >= 20) {
+    if (!strongView || Attach(strongView, host, stamp) || ++tries >= 20) {
       look = nil;
       return;
     }
@@ -235,7 +253,7 @@ void VideoEntered(ArdiaWebView *view, NSString *host) {
   look();
 }
 
-void DocumentEntered(ArdiaWebView *view) {
+void DocumentEntered(ArdiaWebView *view, ArdiaConsentStamp *stamp) {
   __block int tries = 0;
   __block void (^look)(void);
   __weak ArdiaWebView *weakView = view;
@@ -246,7 +264,7 @@ void DocumentEntered(ArdiaWebView *view) {
       if (window.visible && IsChromeDocumentPictureInPicture(window) && IsChromeFloatingWindow(window)) found = window;
     if (strongView && found) {
       JoinFullScreenSpaces(found);
-      [strongView emit:@"pictureInPicture" payload:@{@"kind" : @"document", @"active" : @YES, @"fullScreenSpaces" : @(JoinsFullScreenSpaces(found)), @"leftApp" : @(strongView.leftAppInPictureInPicture), @"leftTab" : @(!strongView.seenByUser)}];
+      [strongView emit:@"pictureInPicture" payload:[stamp onto:@{@"kind" : @"document", @"active" : @YES, @"fullScreenSpaces" : @(JoinsFullScreenSpaces(found)), @"leftApp" : @(strongView.leftAppInPictureInPicture), @"leftTab" : @(!strongView.seenByUser)}]];
     }
     if (!strongView || found || ++tries >= 20) {
       look = nil;
@@ -323,12 +341,34 @@ void DocumentEntered(ArdiaWebView *view) {
   else if ([action isEqual:@"framing"]) return DevFraming(controller);
   else if ([action isEqual:@"throw"]) return DevJSON([controller throwInfo]);
   else if ([action isEqual:@"skip"]) return DevJSON([controller skipInfo]);
+  else if ([action isEqual:@"resizeCursor"]) return DevJSON([controller.resizeCursor probe]);
+  else if ([action hasPrefix:@"resizeCursor:"]) controller.resizeCursor.enabled = [[action substringFromIndex:13] isEqual:@"on"];
+  else if ([action isEqual:@"interactive"]) {
+    if (!ArdiaLaunchConfig.shared.testInstance) return @"test instances only";
+    NSWindow *window = controller.window;
+    auto setAlpha = (void (*)(id, SEL, CGFloat))class_getMethodImplementation(window.class, @selector(setAlphaValue:));
+    setAlpha(window, @selector(setAlphaValue:), 1);
+    window.ignoresMouseEvents = NO;
+    return DevShowAlpha(window, 1);
+  }
   else if ([action hasPrefix:@"skip:"]) {
     const NSPoint centre = NSMakePoint(NSWidth(controller.window.frame) / 2, NSHeight(controller.window.frame) / 2);
     return [controller skipBy:[action substringFromIndex:5].doubleValue at:centre clickCount:0] ? @"started" : @"no page";
   }
   else return @"";
   return @"started";
+}
+
+@end
+
+@implementation ArdiaChromeWindowHost (PictureInPicture)
+
++ (BOOL)isVideoPictureInPictureWindow:(NSWindow *)window {
+  return [ArdiaPiPController forWindow:window] != nil;
+}
+
++ (BOOL)consumePictureInPictureActivation {
+  return ConsumeBackToTabActivation();
 }
 
 @end

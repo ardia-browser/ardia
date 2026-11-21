@@ -11,13 +11,14 @@ import { useHistoryAvailability } from "../../state/tabs/navigation";
 import { toolbarPalette, type ToolbarPalette } from "../ui/toolbarColors";
 import { Button, type ButtonHit, FadeLabel, radius, space, ToolbarRowContext, useHover } from "../ui";
 import { TOOLBAR_ROWS } from "../../lib/toolbarRow";
-import { setUrlAnchor, useSidebarCaptionRoom, watchSidebarControlsRow } from "../../state/windows/layout";
+import { setUrlAnchor, useSidebarCaptionRoom, watchSidebarFieldPlace } from "../../state/windows/layout";
 import { onInterfaceScaleSettled } from "../../state/settings/interfaceScale";
 import { useSidebarPart } from "../../state/sidebar/chrome";
 import { SIDEBAR_FIELD } from "./geometry";
 import { SIDEBAR_TYPE, TAB_ROW } from "./tokens";
 import { SidebarTextScope } from "./SidebarTextScope";
 import { noteEmptyTabSidebarExtensionPress } from "../../state/telemetry/usage";
+import { noteSidebarFieldRemeasure } from "../../state/telemetry/dockCounts";
 import { SidebarFieldFill } from "./SidebarField";
 import { SidebarUrlField, useToolbarTab } from "../toolbar/Toolbar";
 import { sidebarFieldButtons } from "../toolbar/fieldButtons";
@@ -26,6 +27,7 @@ import { HistoryButton, ReloadButton } from "../toolbar/NavButtons";
 import { GLYPH } from "../toolbar/tokens";
 import { HEADER_TOOLS, headerToggleX, navButtonsFitting, type HeaderButton } from "../window/dockMotion";
 import { ARC_LIGHTS_CENTER } from "../../state/windows/dockMotion";
+import { PAGE_IDENTITY_TAG } from "../../state/tabs/tabReveal";
 
 const BUTTON = layout.toolbarButton;
 const { edge: EDGE } = HEADER_TOOLS;
@@ -98,6 +100,7 @@ function NavigationButtons({
             windowId={tab.windowId}
             direction={b === "back" ? -1 : 1}
             disabled={b === "back" ? !history.back : !history.forward}
+            closesTab={b === "back" && history.backCloses}
             palette={palette}
             onFocus={alreadyFocused}
           />
@@ -118,13 +121,22 @@ export function SidebarAddressRow({ width, top }: { width: number; top: number }
     });
   const remeasure = useRef(anchor);
   remeasure.current = anchor;
-  useEffect(() => watchSidebarControlsRow(windowId, () => requestAnimationFrame(() => remeasure.current())), [windowId]);
+  useEffect(
+    () =>
+      watchSidebarFieldPlace(windowId, () => {
+        noteSidebarFieldRemeasure();
+        requestAnimationFrame(() => remeasure.current());
+      }),
+    [windowId],
+  );
   useEffect(() => onInterfaceScaleSettled(() => remeasure.current()), [windowId]);
 
   return (
     <View
       ref={field}
       onLayout={anchor}
+      nativeID={PAGE_IDENTITY_TAG}
+      collapsable={false}
       style={{ position: "absolute", left: layout.sidebarInset, right: layout.sidebarInset, top, height: SIDEBAR_FIELD.height }}
     >
       <SidebarTextScope>

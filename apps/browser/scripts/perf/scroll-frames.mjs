@@ -33,6 +33,14 @@
 // scripts (extensionMs, uBlock Origin's); from the page, rAF rate and gaps over 12.5 ms, and scroll events per second.
 // A 60 Hz display makes every row 60; the display row says which. --cpu-throttle <n> slows the page's renderer n times
 // (Emulation.setCPUThrottlingRate), so per-frame script costs show as they would on a slower Mac.
+// pdf/trackpad scrolls a generated multi-page PDF (served as application/pdf). A PDF can't host the page probe, so its
+// rows come from the trace alone: per gesture, one row for the PDF viewer's process (role viewer) and one for the process
+// hosting the PDF content frame (role content), each with the draw and main-frame rates and stale draws above plus the
+// frame counts (mains, draws); renderers that drew during the gesture and are neither are listed as role other in
+// results.json. A gesture's window runs until the PDF's processes stop drawing after its last event (the first 100 ms
+// with no draw, at most 1 s later; tailMs). Each frame's process is named by a performance.mark made through its own
+// DevTools target, the viewer must sit under the bench's page and the content frame under the viewer, the page is
+// reloaded before each gesture to start from the first page, and --cpu-throttle doesn't apply to it.
 // Writes <out>/results.json and prints a table of medians per case and arm. Run it on a quiet Mac, screen unlocked.
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -41,6 +49,8 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { devtools, launch, sleep } from "../../../../scripts/lib/instance.mjs";
+import { frameRates, rate } from "./frame-rates.mjs";
+import { pdfFrameTargets, pdfRates, pdfRep, servePdf } from "./scroll-frames-pdf.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const { values: opt } = parseArgs({
@@ -76,6 +86,7 @@ const CASES = [
   { id: "nonpassive/trackpad", page: "nonpassive", src: "trackpad" },
   { id: "track/hold", page: "track", src: "trackhold" },
   { id: "panes/trackpad", page: "panes", src: "trackpad" },
+  { id: "pdf/trackpad", page: "pdf", src: "trackpad", pdf: true },
 ];
 
 if (opt.help || (!opt.list && (!opt.out || !opt.arm.length))) {
@@ -214,7 +225,6 @@ async function keys(d) {
 const sorted = (xs) => [...xs].sort((a, b) => a - b);
 const median = (xs) => { const s = sorted(xs.filter((x) => x !== null && Number.isFinite(x))); return s.length ? s[s.length >> 1] : null; };
 const gaps = (ts) => ts.slice(1).map((t, i) => t - ts[i]).filter((g) => g < 100);
-const rate = (ts) => (ts.length > 1 ? +((1000 * (ts.length - 1)) / (ts.at(-1) - ts[0])).toFixed(1) : null);
 
 function analyse(events, rep, refreshMs) {
   const mark = events.find((e) => e.name === rep.mark);
@@ -224,16 +234,7 @@ function analyse(events, rep, refreshMs) {
   if (!rep.idle) for (let i = 1; i < rep.res.raf.length; i++) if (rep.res.raf[i][1] !== rep.res.raf[i - 1][1]) last = Math.max(last, rep.res.raf[i][0]);
   const t0 = (rep.now0 + offset) * 1000;
   const t1 = (last + offset) * 1000 + 30000;
-  const named = (name, phases = ["X", "B"]) => events.filter((e) => e.pid === mark.pid && e.name === name && e.ts >= t0 && e.ts <= t1 && phases.includes(e.ph)).map((e) => e.ts / 1000).sort((a, b) => a - b);
-  const draws = named("ProxyImpl::ScheduledActionDraw");
-  const mains = named("ProxyMain::BeginMainFrame");
-  const activations = named("ProxyImpl::DidActivateSyncTreeOnImplThread", ["X", "B", "I"]);
-  let stale = 0;
-  for (let i = 1, a = 0; i < draws.length; i++) {
-    let fresh = false;
-    for (; a < activations.length && activations[a] <= draws[i]; a++) if (activations[a] > draws[i - 1]) fresh = true;
-    if (!fresh) stale++;
-  }
+  const frames = frameRates(events, mark.pid, t0, t1, refreshMs);
   const mainTid = events.find((e) => e.ph === "M" && e.name === "thread_name" && e.pid === mark.pid && e.args?.name === "CrRendererMain")?.tid;
   const inGesture = (e) => e.pid === mark.pid && e.tid === mainTid && e.ph === "X" && e.ts >= t0 && e.ts <= (last + offset) * 1000;
   const scriptMs = (test) => {
@@ -252,10 +253,10 @@ function analyse(events, rep, refreshMs) {
   return {
     ms: Math.round(last - rep.now0),
     dy: rep.res.y1 - rep.res.y0,
-    drawHz: rate(draws),
-    drawsLate: gaps(draws).filter((g) => g > refreshMs * 1.5).length,
-    mainHz: rate(mains),
-    stalePct: draws.length > 1 ? Math.round((100 * stale) / (draws.length - 1)) : null,
+    drawHz: frames.drawHz,
+    drawsLate: frames.drawsLate,
+    mainHz: frames.mainHz,
+    stalePct: frames.stalePct,
     rafHz: rafGaps.length ? +(1000 / median(rafGaps)).toFixed(1) : null,
     rafOver12: rafGaps.length ? Math.round((100 * rafGaps.filter((g) => g > 12.5).length) / rafGaps.length) : null,
     scrollHz: rate(scrolls),
@@ -267,6 +268,7 @@ function analyse(events, rep, refreshMs) {
 
 const server = createServer((req, res) => {
   const name = new URL(req.url, "http://x").pathname.slice(1);
+  if (name === "pdf") return servePdf(res);
   if (!PAGES[name]) {
     res.writeHead(404);
     return res.end();
@@ -302,7 +304,10 @@ try {
         }
         for (const c of cases) {
           await d.send("Page.navigate", { url: `http://127.0.0.1:${pagePort}/${c.page}` });
-          for (const end = Date.now() + 15000; Date.now() < end; await sleep(150)) if (await d.eval("document.readyState === 'complete' && !!window.__probe").catch(() => false)) break;
+          const ready = c.pdf
+            ? async () => { const f = pdfFrameTargets(await inst.targets(), `http://127.0.0.1:${pagePort}/${c.page}`); return !!(f.viewer && f.content); }
+            : () => d.eval("document.readyState === 'complete' && !!window.__probe").catch(() => false);
+          for (const end = Date.now() + 15000; Date.now() < end; await sleep(150)) if (await ready()) break;
           if (+opt["cpu-throttle"] > 1) await d.send("Emulation.setCPUThrottlingRate", { rate: +opt["cpu-throttle"] });
           await sleep(1500);
           const geo = await d.eval("({ x: screenX, y: screenY, iw: innerWidth, ow: outerWidth, oh: outerHeight })");
@@ -313,6 +318,13 @@ try {
           await sleep(300);
           const done = [];
           for (let r = 0; r < reps; r++) {
+            if (c.pdf) {
+              const pageUrl = `http://127.0.0.1:${pagePort}/${c.page}`;
+              if (r > 0) await d.send("Page.navigate", { url: pageUrl }).then(() => sleep(1500));
+              const args = ["postscroll", String(inst.pid), String(w.id), String(at.x), String(at.y), String(w.b.X), String(w.b.Y), c.src, String(c.rate ?? 120)];
+              done.push(await pdfRep({ inst, pageUrl, r, postscroll: { acperf, args } }));
+              continue;
+            }
             await d.eval("__probe.reset()");
             await sleep(1500);
             const mark = `scroll-frames-${r}`;
@@ -333,11 +345,12 @@ try {
           const events = await traceStop(b);
           const saver = arm.battery ? await batterySaver(data) : null;
           if (saver && !saver.active) throw new Error(`Battery Saver turned off during ${c.id}: ${JSON.stringify(saver)}`);
-          for (const rep of done) {
-            const row = { round, arm: arm.label, case: c.id, ...analyse(events, rep, refreshMs) };
-            results.push(row);
-            console.error(JSON.stringify(row));
-          }
+          for (const rep of done)
+            for (const found of c.pdf ? pdfRates(events, rep, refreshMs) : [analyse(events, rep, refreshMs)]) {
+              const row = { round, arm: arm.label, case: c.id, ...found };
+              results.push(row);
+              console.error(JSON.stringify(row));
+            }
           writeFileSync(join(out, "results.json"), JSON.stringify({ display: screen, results }, null, 1));
         }
         b.close();
@@ -354,7 +367,9 @@ try {
 const cols = ["mainHz", "stalePct", "rafHz", "rafOver12", "scrollHz", "drawHz", "drawsLate", "mainBusyMs", "pageScriptMs", "extensionMs"];
 console.log(["case".padEnd(20), "arm".padEnd(12), "n", ...cols.map((c) => c.padStart(9))].join(" "));
 for (const c of cases)
-  for (const arm of arms) {
-    const rows = results.filter((r) => r.case === c.id && r.arm === arm.label && !r.error);
-    if (rows.length) console.log([c.id.padEnd(20), arm.label.padEnd(12), String(rows.length), ...cols.map((k) => String(median(rows.map((r) => r[k])) ?? "-").padStart(9))].join(" "));
-  }
+  for (const role of c.pdf ? ["viewer", "content"] : [undefined])
+    for (const arm of arms) {
+      const rows = results.filter((r) => r.case === c.id && r.arm === arm.label && r.role === role && !r.error);
+      if (rows.length) console.log([(role ? `${c.id}:${role}` : c.id).padEnd(20), arm.label.padEnd(12), String(rows.length), ...cols.map((k) => String(median(rows.map((r) => r[k])) ?? "-").padStart(9))].join(" "));
+    }
+for (const r of results.filter((r) => r.error && cases.some((c) => c.pdf && c.id === r.case))) console.log(`${r.case} ${r.arm} ${r.role ?? "frames"}: ${r.error}`);

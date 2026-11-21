@@ -20,7 +20,7 @@ const runsText = (passes: number, runs: number) => (passes === runs ? `all ${run
     <header class="cu-head">
       <div class="cu-title">
         <p class="label kicker">Bring your own agent</p>
-        <h2 class="poster cu-heading" id="cu-title" data-reveal>CLI.</h2>
+        <h2 class="poster cu-heading" id="cu-title">CLI.</h2>
         <p class="lede">
           Your own Claude Code or Codex drives your Ardia with <code>ardia browse</code>, logins and all, and your Mac’s other apps
           with <code>ardia computer</code>. Tokens spent on eight browser tasks, against Aside and OpenCode Browse.
@@ -42,7 +42,7 @@ const runsText = (passes: number, runs: number) => (passes === runs ? `all ${run
     <ul class="charts" role="list">
       {
         cu.charts.map((c) => (
-          <li class="card chart" data-reveal>
+          <li class="card chart">
             <h3 class="card-title">
               {c.title} <span class="agent">· {c.agent}</span>
             </h3>

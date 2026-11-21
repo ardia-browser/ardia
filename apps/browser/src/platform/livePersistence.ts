@@ -24,17 +24,20 @@ export type LivePersistenceBinding = {
   flush(): void;
 };
 
-export function createLivePersistence(): LivePersistenceBinding {
+export function createLivePersistence(onSave?: (changed: boolean, kind?: "write" | "intent") => void): LivePersistenceBinding {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let pending: LiveProjection | undefined;
   let counter = 0;
+  let lastSaved: string | undefined;
   const save = () => {
     clearTimeout(timer);
     timer = undefined;
     const projection = pending;
     pending = undefined;
     if (!projection) return;
-    try { writeDocument(DOC, versionedJson(projection, DOC_VERSION)); }
+    const json = versionedJson(projection, DOC_VERSION);
+    if (json === lastSaved) return void onSave?.(false);
+    try { writeDocument(DOC, json); lastSaved = json; onSave?.(true); }
     catch (error) { console.warn("Couldn't save live folders", error); }
   };
   return {

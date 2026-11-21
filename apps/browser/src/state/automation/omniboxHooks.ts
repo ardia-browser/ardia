@@ -1,3 +1,4 @@
+import { consentToken } from "../telemetry/client";
 import { isFields } from "../../lib/decode";
 import { formatUrl, webUrl } from "../../lib/urlParts";
 import { registerOmniboxProvider, type ProviderRow } from "../omnibox/providers";
@@ -36,7 +37,7 @@ function providerFor(hook: HookSpec) {
     title: omnibox.title,
     ...(omnibox.keyword ? { keyword: omnibox.keyword } : {}),
     query: async (text: string, signal: AbortSignal) => {
-      const answer = await requestDecision(hook, "omnibox.query", { text: text.slice(0, TEXT_LIMIT), keyword: omnibox.keyword }, DECIDE_DEADLINE_MS["omnibox.query"], signal);
+      const answer = await requestDecision(hook, "omnibox.query", { text: text.slice(0, TEXT_LIMIT), keyword: omnibox.keyword }, DECIDE_DEADLINE_MS["omnibox.query"], signal, consentToken());
       return signal.aborted ? [] : providerRows(answer);
     },
   };

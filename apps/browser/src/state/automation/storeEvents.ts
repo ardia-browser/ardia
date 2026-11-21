@@ -1,9 +1,13 @@
-import { useBrowser, type BrowserState } from "../browser/store";
+import { afterStoreTransactionIdempotent, inStoreTransaction, useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId, isIncognitoProfile } from "../browser/model";
 import { usePages } from "../tabs/pageState";
+import { changedIds } from "../browser/changes";
+import { holderOfPage } from "../tabs/pageSession";
+import { liveReachOf, onLiveChange, shownLiveOf } from "../tabs/tabLive";
 import { focusedWindowOf } from "../windows/ui";
 import { eligibleKind, isEligibleTab, shownPage } from "./automationWindows";
 import type { AutomationEventName } from "./eventNames";
+import { LIBRARY_EVENTS, startLibraryEvents } from "./libraryEvents";
 
 export type EventSend = (name: AutomationEventName, data: Record<string, unknown>) => void;
 
@@ -65,14 +69,42 @@ export function diffMore(s: BrowserState, prev: BrowserState, send: EventSend, w
       if (before.pin && !t.pin && wants.has("pin.removed")) send("pin.removed", tabData(s, id));
     }
   }
-  if (s.live !== prev.live && (wants.has("media.started") || wants.has("media.stopped"))) {
-    for (const id in s.live) {
-      const now = !!s.live[id]?.playingAudio;
-      if (now === !!prev.live[id]?.playingAudio || !isEligibleTab(s, id)) continue;
-      const name = now ? "media.started" : "media.stopped";
-      if (wants.has(name)) send(name, tabData(s, id));
+}
+
+function startMediaEvents(send: EventSend, wants: ReadonlySet<string>) {
+  const audibleIn = (s: BrowserState, tabId: string) => !!s.tabs[tabId] && shownLiveOf(s, tabId).playingAudio;
+  const audible = new Set(Object.keys(useBrowser.getState().tabs).filter((id) => audibleIn(useBrowser.getState(), id)));
+  const recheck = (s: BrowserState, ids: Iterable<string>) => {
+    for (const tabId of ids) {
+      const playing = audibleIn(s, tabId);
+      if (playing === audible.has(tabId)) continue;
+      if (playing) audible.add(tabId);
+      else audible.delete(tabId);
+      const name = playing ? "media.started" : "media.stopped";
+      if (s.tabs[tabId] && wants.has(name) && isEligibleTab(s, tabId)) send(name, tabData(s, tabId));
     }
-  }
+  };
+  const reached = new Set<string>();
+  const stopLive = onLiveChange((id, live, prev) => {
+    if (live.playingAudio === prev.playingAudio) return;
+    const s = useBrowser.getState();
+    const ids = liveReachOf(s, id);
+    if (inStoreTransaction()) for (const tabId of ids) reached.add(tabId);
+    recheck(s, ids);
+  });
+  const stopReconcile = afterStoreTransactionIdempotent(() => {
+    const ids = [...reached];
+    reached.clear();
+    recheck(useBrowser.getState(), ids);
+  });
+  const stopHolders = useBrowser.subscribe((s, prev) => {
+    if (s.tabs !== prev.tabs) recheck(s, changedIds(s.tabs, prev.tabs).filter((id) => !s.tabs[id] || holderOfPage(s.tabs[id]) !== holderOfPage(prev.tabs[id])));
+  });
+  return () => {
+    stopLive();
+    stopHolders();
+    stopReconcile();
+  };
 }
 
 function startCrashes(send: EventSend) {
@@ -139,9 +171,11 @@ export type StoreFeedNeeds = { events: ReadonlySet<string>; tabIdle: ReadonlySet
 
 export function startStoreEvents(send: EventSend, needs: StoreFeedNeeds): () => void {
   const stops: (() => void)[] = [];
-  const diffing = ["littleArdia.opened", "profile.switched", "peek.opened", "peek.closed", "split.created", "split.closed", "tab.moved", "pin.added", "pin.removed", "media.started", "media.stopped"];
+  const diffing = ["littleArdia.opened", "profile.switched", "peek.opened", "peek.closed", "split.created", "split.closed", "tab.moved", "pin.added", "pin.removed"];
   if (diffing.some((name) => needs.events.has(name))) stops.push(useBrowser.subscribe((s, prev) => diffMore(s, prev, send, needs.events)));
+  if (needs.events.has("media.started") || needs.events.has("media.stopped")) stops.push(startMediaEvents(send, needs.events));
   if (needs.events.has("tab.crashed")) stops.push(startCrashes(send));
+  if (LIBRARY_EVENTS.some((name) => needs.events.has(name))) stops.push(startLibraryEvents(send, needs.events));
   if (needs.tabIdle.size && (needs.events.has("tab.idle") || needs.events.has("tab.resumed"))) stops.push(startTabIdle(send, needs.tabIdle));
   return () => stops.forEach((stop) => stop());
 }

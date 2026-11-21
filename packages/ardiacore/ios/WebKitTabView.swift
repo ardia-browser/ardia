@@ -14,6 +14,7 @@ final class WebKitTabView: PageTabHost, WebKitTabDelegate {
   }
 
   func webKitTab(_ tab: WebKitTab, event name: String, payload: [String: Any]) {
+    ArdiaWebView.devNoteEvent(name, payload: payload, browser: tab.browserId)
     send(name, payload: payload)
   }
 }

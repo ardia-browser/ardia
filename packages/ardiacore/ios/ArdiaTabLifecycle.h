@@ -14,6 +14,8 @@ struct ArdiaTabLifecycle {
   BOOL moving{};
   BOOL offerClosed{};
   BOOL launchCloseSent{};
+  BOOL keepsPageOnDetach{};
+  BOOL waitingForSize{};
 
   bool closed() const { return phase == ArdiaTabPhase::Closing; }
 

@@ -1,7 +1,6 @@
 import { focusWindow, openWindow } from "../../platform/windows";
 import { create } from "zustand";
 import { useBrowser } from "../browser/store";
-import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 
 export const SETTINGS_WINDOW_ID = "settings";
 export const IMPORT_WINDOW_ID = "import";
@@ -9,32 +8,10 @@ export const IMPORT_WINDOW_ID = "import";
 export const isUtilityWindowId = (id: string | null | undefined) =>
   id === SETTINGS_WINDOW_ID || id === IMPORT_WINDOW_ID;
 
-export const SETTINGS_PANES = [
-  "general",
-  "profiles",
-  "airTraffic",
-  "sync",
-  "tabs",
-  "appearance",
-  "privacy",
-  "passwords",
-  "autofill",
-  "extensions",
-  "search",
-  "engines",
-  "shortcuts",
-  "liveFolders",
-  "calendar",
-  "advanced",
-] as const;
+export const SETTINGS_PANES = ["general", "profiles", "tabs", "appearance", "automations", "plugins", "shortcuts", "advanced"] as const;
 
 export type SettingsPane = (typeof SETTINGS_PANES)[number];
 
-const PANES_OFFERED: Partial<Record<SettingsPane, boolean>> = { sync: PLATFORM_FEATURES.sync, calendar: PLATFORM_FEATURES.calendar, engines: PLATFORM_FEATURES.webKit };
-
-export const paneOffered = (pane: SettingsPane) => PANES_OFFERED[pane] !== false;
-
-export const offeredPane = (pane: SettingsPane): SettingsPane => (paneOffered(pane) ? pane : "general");
 
 export type SettingsPlace = { pane: SettingsPane; profileId: string | null; detail: string | null };
 
@@ -44,8 +21,7 @@ const placeOf = ({ pane, profileId, detail }: SettingsPlace): SettingsPlace => (
 
 export const useSettingsNav = create<Nav>()(() => ({ pane: "general", profileId: null, detail: null, back: [], forward: [] }));
 
-export function goToSettingsPane(asked: SettingsPane, profileId: string | null = null, detail: string | null = null) {
-  const pane = offeredPane(asked);
+export function goToSettingsPane(pane: SettingsPane, profileId: string | null = null, detail: string | null = null) {
   const current = useSettingsNav.getState();
   if (current.pane === pane && current.profileId === profileId && current.detail === detail) return;
   useSettingsNav.setState({ pane, profileId, detail, back: [...current.back, placeOf(current)].slice(-30), forward: [] });
@@ -70,15 +46,26 @@ export function settingsForward() {
   if (next) useSettingsNav.setState({ ...next, forward: current.forward.slice(1), back: [...current.back, placeOf(current)] });
 }
 
-export function openSettings(pane?: SettingsPane, profileId?: string | null) {
-  if (pane) goToSettingsPane(pane, profileId ?? null);
+export const SETTINGS_DETAIL = {
+  filterLists: "filterLists",
+  crashDetails: "crashDetails",
+  sites: "sites",
+  passwords: "passwords",
+  addresses: "addresses",
+  cards: "cards",
+  otherEngines: "otherEngines",
+  site: (origin: string) => `site:${origin}`,
+  extension: (id: string) => `extension:${id}`,
+} as const;
+
+export const detailValue = (detail: string | null, kind: "site" | "extension") => (detail?.startsWith(`${kind}:`) ? detail.slice(kind.length + 1) : null);
+
+export function openSettings(pane?: SettingsPane, profileId?: string | null, detail?: string | null) {
+  if (pane) goToSettingsPane(pane, profileId ?? null, detail ?? null);
   void openWindow(SETTINGS_WINDOW_ID, { kind: "settings", title: "Settings" });
 }
 
-export function openSiteSettings(origin: string, profileId: string) {
-  goToSettingsPane("privacy", profileId, origin);
-  void openWindow(SETTINGS_WINDOW_ID, { kind: "settings", title: "Settings" });
-}
+export const openSiteSettings = (origin: string, profileId: string) => openSettings("profiles", profileId, SETTINGS_DETAIL.site(origin));
 
 export const useImportRequest = create<{ source: string | null }>()(() => ({ source: null }));
 

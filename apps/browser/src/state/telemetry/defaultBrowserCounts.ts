@@ -1,4 +1,5 @@
 import { isDefaultBrowser } from "../../platform/app";
+import { consentToken, counted } from "./choice";
 
 let promptsOpened = 0;
 let launchesAsDefault = 0;
@@ -9,8 +10,9 @@ export const noteDefaultBrowserPrompt = () => void promptsOpened++;
 export function checkDefaultBrowserAtLaunch(read: () => Promise<boolean> = isDefaultBrowser) {
   if (checkedAtLaunch) return;
   checkedAtLaunch = true;
+  const consent = consentToken();
   void read().then(
-    (isDefault) => void (isDefault && launchesAsDefault++),
+    (isDefault) => void (isDefault && counted(consent, () => launchesAsDefault++)),
     () => {},
   );
 }

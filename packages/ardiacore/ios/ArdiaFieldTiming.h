@@ -1,4 +1,4 @@
-#import <Foundation/Foundation.h>
+#import <AppKit/AppKit.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -8,6 +8,7 @@ extern "C" {
 
 BOOL ArdiaFieldTimingEnabled(void);
 double ArdiaFieldNow(void);
+double ArdiaFieldEventTime(NSEvent *event);
 void ArdiaFieldMark(NSString *_Nullable key, NSString *kind, double at);
 void ArdiaFieldMarkNow(NSString *_Nullable key, NSString *kind);
 void ArdiaFieldMarkAtCommit(NSString *_Nullable key, NSString *kind);

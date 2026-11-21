@@ -24,6 +24,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy, nullable) NSString *pageColor;
 @property (nonatomic, copy, nullable) NSString *shownURL;
 @property (nonatomic) BOOL visible;
+@property (nonatomic) BOOL selected;
 @property (nonatomic) BOOL warm;
 @property (nonatomic) BOOL neighbour;
 @property (nonatomic) BOOL autoPictureInPicture;
@@ -34,6 +35,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly, nullable) NSView *devtoolsView;
 
 + (NSArray<NSDictionary<NSString *, id> *> *)devEventsForBrowser:(int)browserId NS_SWIFT_NAME(devEvents(browserId:));
++ (void)devNoteEvent:(NSString *)name payload:(NSDictionary *)payload browser:(int)browserId NS_SWIFT_NAME(devNoteEvent(_:payload:browser:));
 + (NSInteger)devWindowNumberForBrowser:(int)browserId NS_SWIFT_NAME(devWindowNumber(browserId:));
 + (BOOL)devFocusPageOfBrowser:(int)browserId NS_SWIFT_NAME(devFocusPage(browserId:));
 + (nullable NSString *)devPagePhaseOf:(NSString *)transferKey NS_SWIFT_NAME(devPagePhase(of:));
@@ -59,19 +61,42 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)resolveUnresponsive:(BOOL)terminate NS_SWIFT_NAME(resolveUnresponsive(terminate:));
 - (NSString *)discard:(BOOL)unload NS_SWIFT_NAME(discard(unload:));
 - (NSArray<NSNumber *> *)sleepIfHiddenFor:(NSTimeInterval)seconds NS_SWIFT_NAME(sleepIfHidden(for:));
++ (nullable NSString *)appTabIdContainingView:(nullable NSView *)view NS_SWIFT_NAME(appTabId(containing:));
 @end
 
 @interface ArdiaWebView (Reveals)
-+ (void)revealTab:(NSString *)transferKey;
-+ (void)dropTabReveals:(NSString *)transferKey;
-+ (void)revealOffered:(NSString *)adoptId over:(NSString *)transferKey;
++ (void)revealTab:(NSString *)transferKey press:(NSUInteger)press;
++ (void)dropTabReveals:(NSString *)transferKey press:(NSUInteger)press to:(NSString *)incomingKey;
++ (void)dropTabPress:(NSUInteger)press;
++ (void)setNativeTabSwitch:(BOOL)enabled;
++ (NSUInteger)claimTabPress:(NSString *)transferKey stamp:(double)stamp;
++ (void)setTabsInSplits:(NSArray<NSString *> *)transferKeys;
++ (void)setJavaScriptThread:(void (^)(void (^block)(void)))run;
++ (void)endRevealsAheadOfSwitch;
++ (BOOL)revealForPress:(NSEvent *)event;
++ (void)dropNativeRevealsInWindow:(nullable NSWindow *)window;
++ (void)revealOffered:(NSString *)adoptId over:(NSString *)transferKey press:(NSUInteger)press;
 + (BOOL)discardOffered:(NSString *)adoptId;
 @end
 
 @interface ArdiaWebView (Focus)
 + (void)keepOutgoingFocusFrom:(NSResponder *)responder NS_SWIFT_NAME(keepOutgoingFocus(from:));
 + (void)endOutgoingFocusFrom:(NSResponder *)responder NS_SWIFT_NAME(endOutgoingFocus(from:));
++ (BOOL)focusVisiblePageIn:(NSWindow *)window NS_SWIFT_NAME(focusVisiblePage(in:));
 - (void)focusPage;
+- (BOOL)focusPageIfUnfocused;
+@end
+
+@interface ArdiaWebView (RevealGap)
++ (BOOL)revealGapIn:(nullable NSWindow *)window NS_SWIFT_NAME(revealGap(in:));
++ (BOOL)refusesInputAheadOfSwitch:(nullable id)target NS_SWIFT_NAME(refusesInputAheadOfSwitch(_:));
++ (void)setAppWideKeys:(nullable BOOL (^)(NSEvent *event))perform;
++ (void)installRevealGuards;
++ (NSUInteger)guardedAccessibilityCalls;
+@end
+
+@interface ArdiaWebView (PaintedFrame)
+@property (nonatomic, readonly) BOOL showsPaintedFrame;
 @end
 
 @interface ArdiaWebView (NeighbourPages)
@@ -104,9 +129,60 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)setDisplayMediaPicker:(BOOL)enabled;
 + (void)setSelectionPopoverEnabled:(BOOL)enabled NS_SWIFT_NAME(setSelectionPopoverEnabled(_:));
 + (void)setBlockAutoplayEverywhere:(BOOL)enabled NS_SWIFT_NAME(setBlockAutoplayEverywhere(_:));
-+ (void)setFairPlayInChromium:(BOOL)enabled NS_SWIFT_NAME(setFairPlayInChromium(_:));
 - (void)resolveDisplayMedia:(NSString *)requestId sourceId:(nullable NSString *)sourceId audio:(BOOL)audio
     NS_SWIFT_NAME(resolveDisplayMedia(_:sourceId:audio:));
+@end
+
+@interface ArdiaWebView (FieldProviders)
+@property(class, nonatomic, readonly) NSDictionary<NSString *, NSNumber *> *systemPanelAvailability;
+@property(class, nonatomic, readonly, nullable) NSString *otpauthHandlerName;
++ (BOOL)setFieldProviders:(NSArray<NSDictionary *> *)profiles
+               generation:(double)generation
+                  session:(NSString *)session NS_SWIFT_NAME(setFieldProviders(_:generation:session:));
++ (nullable NSDictionary *)fieldProviderForProfile:(NSString *)profile NS_SWIFT_NAME(fieldProvider(profile:));
++ (void)noteFieldFocus:(nullable NSString *)field
+              sequence:(double)sequence
+            generation:(double)generation
+                 query:(nullable NSString *)query
+                 owner:(id)owner NS_SWIFT_NAME(noteFieldFocus(_:sequence:generation:query:owner:));
++ (void)querySystemPanelIn:(NSView *)view
+                     owner:(id)owner
+                   profile:(NSString *)profile
+                generation:(double)generation
+                       ask:(void (^)(NSString *query))ask
+                completion:(void (^)(NSDictionary *result))completion
+    NS_SWIFT_NAME(querySystemPanel(in:owner:profile:generation:ask:completion:));
++ (void)resetFieldProviderPage:(id)owner NS_SWIFT_NAME(resetFieldProviderPage(_:));
++ (void)dropVerificationCodesOf:(id)owner frame:(nullable NSString *)frame NS_SWIFT_NAME(dropVerificationCodes(of:frame:));
++ (void)requestSystemPanelIn:(NSView *)page
+                       owner:(id)owner
+                     profile:(NSString *)profile
+                       field:(nullable NSString *)field
+                  generation:(double)generation
+                  completion:(void (^)(NSDictionary *result))completion
+    NS_SWIFT_NAME(requestSystemPanel(in:owner:profile:field:generation:completion:));
++ (nullable NSDictionary *)offerVerificationCode:(NSString *)url
+                                       owner:(id)owner
+                                       frame:(NSString *)frame
+                                     profile:(NSString *)profile
+                                  generation:(double)generation NS_SWIFT_NAME(offerVerificationCode(_:owner:frame:profile:generation:));
++ (void)redeemVerificationCode:(NSString *)token
+                         owner:(id)owner
+                       profile:(NSString *)profile
+                    generation:(double)generation
+                    frameAlive:(BOOL (^)(NSString *frame))frameAlive
+                    completion:(void (^)(NSDictionary *result))completion
+    NS_SWIFT_NAME(redeemVerificationCode(_:owner:profile:generation:frameAlive:completion:));
++ (BOOL)showSystemPanelForTab:(NSString *)tabId
+                   generation:(double)generation
+                   completion:(void (^)(NSDictionary *result))completion NS_SWIFT_NAME(showSystemPanel(tab:generation:completion:));
++ (BOOL)showFieldProviderHint:(NSString *)label side:(NSString *)side tab:(NSString *)tabId NS_SWIFT_NAME(showFieldProviderHint(_:side:tab:));
++ (nullable NSString *)fieldProviderHintJSON:(NSString *)label side:(NSString *)side NS_SWIFT_NAME(fieldProviderHintJSON(_:side:));
++ (void)whenSystemPanelCloses:(void (^)(void))closed NS_SWIFT_NAME(whenSystemPanelCloses(_:));
++ (BOOL)setUpVerificationCode:(NSString *)token
+                          tab:(NSString *)tabId
+                   generation:(double)generation
+                   completion:(void (^)(NSDictionary *result))completion NS_SWIFT_NAME(setUpVerificationCode(_:tab:generation:completion:));
 @end
 
 @interface ArdiaWebView (Peek)
@@ -134,6 +210,10 @@ NS_ASSUME_NONNULL_BEGIN
                                   control:(NSInteger)target
                                completion:(void (^)(BOOL ok))completion NS_SWIFT_NAME(requestPictureInPicture(clickAt:control:_:));
 - (void)exitPictureInPicture;
+@end
+
+@interface ArdiaWebView (FirstPaint)
++ (NSDictionary<NSString *, NSNumber *> *)takeFirstPaintHolds;
 @end
 
 @interface ArdiaWebView (PictureInPictureDev)
@@ -186,6 +266,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)resolvePasswordPrompt:(NSString *)action username:(nullable NSString *)username password:(nullable NSString *)password
     NS_SWIFT_NAME(resolvePasswordPrompt(_:username:password:));
 - (void)resolveAutofillPrompt:(NSInteger)promptId action:(NSString *)action NS_SWIFT_NAME(resolveAutofillPrompt(_:action:));
+- (BOOL)answerAutofillPrompt:(NSInteger)promptId action:(NSString *)action NS_SWIFT_NAME(answerAutofillPrompt(_:action:));
 - (nullable NSString *)executeExtensionAction:(NSString *)extensionId NS_SWIFT_NAME(executeExtensionAction(_:));
 - (void)notificationAction:(NSString *)notificationId action:(NSString *)action NS_SWIFT_NAME(notificationAction(_:action:));
 @end

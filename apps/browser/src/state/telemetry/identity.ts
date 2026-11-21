@@ -1,5 +1,5 @@
 import { anonymousIdentity, type AnonymousAvatar } from "@ardia/core";
-import { capture, replaceInstallId } from "./client";
+import { capture, consentToken, replaceInstallId, stillValid } from "./client";
 import { ensureInstallId } from "./installId";
 import { savedChoice, sessionId } from "./choice";
 import { uuidv4 } from "./ids";
@@ -31,9 +31,11 @@ export const shortInstallId = (id: string) => id.slice(0, 8);
 export async function resetAnonymousId(): Promise<string> {
   const relay = telemetryRelay();
   if (relay) return relay.resetId();
+  const began = consentToken();
   stopWatch();
   await clearLocalCopy();
+  const sharedThroughout = stillValid(began);
   const installId = replaceInstallId();
-  capture("anonymous_id_reset");
+  capture("anonymous_id_reset", {}, sharedThroughout ? consentToken() : null);
   return installId;
 }

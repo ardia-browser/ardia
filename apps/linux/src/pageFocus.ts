@@ -31,3 +31,11 @@ export const notingPageFocus = <P extends { onPageFocus?: () => void }>(props: P
     props.onPageFocus?.();
   },
 });
+
+const SHELL_TEXT_ENTRY = "input, textarea, [contenteditable=''], [contenteditable='true']";
+
+export async function focusPageIfShellUnfocused(focusPage: () => Promise<unknown>, shellFocus: Element | null = typeof document === "undefined" ? null : document.activeElement) {
+  if (shellFocus?.matches(SHELL_TEXT_ENTRY)) return false;
+  notePageFocusRequest();
+  return focusPage().then(() => true, () => false);
+}

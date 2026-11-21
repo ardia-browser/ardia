@@ -1,5 +1,6 @@
 #import <AppKit/AppKit.h>
 #import <AVFoundation/AVFoundation.h>
+#import <QuartzCore/QuartzCore.h>
 #import <dlfcn.h>
 
 typedef CGImageRef (*CreateImageFromArray)(CGRect, CFArrayRef, uint32_t);
@@ -14,6 +15,11 @@ static AVAssetWriter *gWriter;
 static AVAssetWriterInput *gInput;
 static AVAssetWriterInputPixelBufferAdaptor *gAdaptor;
 static CGRect gRect;
+static CGFloat gScale = 2;
+static BOOL gLayers;
+static CGRect gCrop;
+static NSRect gMainFrame;
+static BOOL gCropped;
 static double gStart;
 static double gEnd;
 static size_t gWidth;
@@ -66,6 +72,57 @@ static void Finish(void) {
   Status(writer.status == AVAssetWriterStatusCompleted ? @"finished" : [NSString stringWithFormat:@"error %@", writer.error]);
 }
 
+static void HideOutside(CALayer *layer, CALayer *root, CGRect area, NSMutableArray<CALayer *> *hidden, int depth) {
+  for (CALayer *child in [layer.sublayers copy]) {
+    if (child.hidden) continue;
+    CGRect placed = [child convertRect:child.bounds toLayer:root];
+    if (!CGRectIntersectsRect(placed, area)) {
+      child.hidden = YES;
+      [hidden addObject:child];
+    } else if (depth < 6 && !CGRectContainsRect(area, placed)) {
+      HideOutside(child, root, area, hidden, depth + 1);
+    }
+  }
+}
+
+static void DrawLayers(CGContextRef ctx) {
+  CGContextClipToRect(ctx, CGRectMake(0, 0, gWidth, gHeight));
+  dispatch_sync(dispatch_get_main_queue(), ^{
+    CGFloat screenHeight = NSScreen.screens.firstObject.frame.size.height;
+    for (NSWindow *window in [NSApp.orderedWindows reverseObjectEnumerator]) {
+      if (!window.isVisible || window.alphaValue <= 0) continue;
+      NSView *view = window.contentView;
+      CALayer *layer = view.layer;
+      if (!layer || layer.bounds.size.width <= 0 || layer.bounds.size.height <= 0) continue;
+      NSRect frame = window.frame;
+      CGFloat left = frame.origin.x - gRect.origin.x;
+      CGFloat top = (screenHeight - NSMaxY(frame)) - gRect.origin.y;
+      CGFloat bottom = gRect.size.height - top - frame.size.height;
+      if (left >= gRect.size.width || bottom >= gRect.size.height || left + frame.size.width <= 0 || bottom + frame.size.height <= 0) continue;
+      NSRect placed = [view convertRect:view.bounds toView:nil];
+      NSMutableArray<CALayer *> *hidden = [NSMutableArray array];
+      [CATransaction begin];
+      [CATransaction setDisableActions:YES];
+      if (gCropped && NSEqualRects(frame, gMainFrame)) {
+        NSRect area = NSMakeRect(gCrop.origin.x, frame.size.height - gCrop.origin.y - gCrop.size.height, gCrop.size.width, gCrop.size.height);
+        HideOutside(layer, layer, NSRectToCGRect([view convertRect:area fromView:nil]), hidden, 0);
+      }
+      CGContextSaveGState(ctx);
+      CGContextScaleCTM(ctx, gScale, gScale);
+      CGContextTranslateCTM(ctx, left + placed.origin.x, bottom + placed.origin.y);
+      CGContextScaleCTM(ctx, placed.size.width / layer.bounds.size.width, placed.size.height / layer.bounds.size.height);
+      if (view.isFlipped || layer.isGeometryFlipped) {
+        CGContextTranslateCTM(ctx, 0, layer.bounds.size.height);
+        CGContextScaleCTM(ctx, 1, -1);
+      }
+      [layer renderInContext:ctx];
+      CGContextRestoreGState(ctx);
+      for (CALayer *l in hidden) l.hidden = NO;
+      [CATransaction commit];
+    }
+  });
+}
+
 static void Grab(void) {
   if (!gWriter) return;
   double t = Now();
@@ -77,22 +134,25 @@ static void Grab(void) {
     gDropped++;
     return;
   }
-  NSArray *windows = OwnWindows();
-  if (windows.count == 0) return;
-  const void **ids = malloc(sizeof(void *) * windows.count);
-  for (NSUInteger i = 0; i < windows.count; i++) ids[i] = (const void *)(uintptr_t)[windows[i][(id)kCGWindowNumber] unsignedIntValue];
-  CFArrayRef list = CFArrayCreate(NULL, ids, (CFIndex)windows.count, NULL);
-  free(ids);
-  CGImageRef image = gCapture(gRect, list, 8);
-  CFRelease(list);
-  if (!image) {
-    gDropped++;
-    return;
+  CGImageRef image = NULL;
+  if (!gLayers) {
+    NSArray *windows = OwnWindows();
+    if (windows.count == 0) return;
+    const void **ids = malloc(sizeof(void *) * windows.count);
+    for (NSUInteger i = 0; i < windows.count; i++) ids[i] = (const void *)(uintptr_t)[windows[i][(id)kCGWindowNumber] unsignedIntValue];
+    CFArrayRef list = CFArrayCreate(NULL, ids, (CFIndex)windows.count, NULL);
+    free(ids);
+    image = gCapture(gRect, list, 8);
+    CFRelease(list);
+    if (!image) {
+      gDropped++;
+      return;
+    }
   }
   CVPixelBufferRef buffer = NULL;
   CVPixelBufferPoolCreatePixelBuffer(NULL, gAdaptor.pixelBufferPool, &buffer);
   if (!buffer) {
-    CGImageRelease(image);
+    if (image) CGImageRelease(image);
     gDropped++;
     return;
   }
@@ -101,11 +161,12 @@ static void Grab(void) {
   CGContextRef ctx = CGBitmapContextCreate(CVPixelBufferGetBaseAddress(buffer), gWidth, gHeight, 8, CVPixelBufferGetBytesPerRow(buffer), space, kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little);
   CGContextSetRGBFillColor(ctx, 0, 0, 0, 1);
   CGContextFillRect(ctx, CGRectMake(0, 0, gWidth, gHeight));
-  CGContextDrawImage(ctx, CGRectMake(0, 0, gWidth, gHeight), image);
+  if (image) CGContextDrawImage(ctx, CGRectMake(0, 0, gWidth, gHeight), image);
+  else DrawLayers(ctx);
   CGContextRelease(ctx);
   CGColorSpaceRelease(space);
   CVPixelBufferUnlockBaseAddress(buffer, 0);
-  CGImageRelease(image);
+  if (image) CGImageRelease(image);
   if (gFrames == 0) {
     gStart = t;
     [gWriter startSessionAtSourceTime:kCMTimeZero];
@@ -136,12 +197,26 @@ static void Start(NSString *out, int fps, double seconds) {
   }
   CGRectMakeWithDictionaryRepresentation((CFDictionaryRef)largest[(id)kCGWindowBounds], &gRect);
   gRect = CGRectIntegral(gRect);
+  const char *crop = getenv("FIXES_SELFREC_CROP");
+  if (crop) {
+    double cx = 0, cy = 0, cw = 0, ch = 0;
+    if (sscanf(crop, "%lf,%lf,%lf,%lf", &cx, &cy, &cw, &ch) == 4) {
+      gRect = CGRectMake(gRect.origin.x + cx, gRect.origin.y + cy, cw, ch);
+      gCrop = CGRectMake(cx, cy, cw, ch);
+      gCropped = YES;
+    }
+  }
   __block CGFloat scale = 2;
   dispatch_sync(dispatch_get_main_queue(), ^{
     for (NSWindow *w in NSApp.windows) {
-      if (w.windowNumber == [largest[(id)kCGWindowNumber] integerValue]) scale = w.backingScaleFactor;
+      if (w.windowNumber == [largest[(id)kCGWindowNumber] integerValue]) {
+        scale = w.backingScaleFactor;
+        gMainFrame = w.frame;
+      }
     }
   });
+  if (getenv("FIXES_SELFREC_SCALE")) scale = atof(getenv("FIXES_SELFREC_SCALE"));
+  gScale = scale;
   gWidth = ((size_t)(gRect.size.width * scale)) & ~1;
   gHeight = ((size_t)(gRect.size.height * scale)) & ~1;
   [[NSFileManager defaultManager] removeItemAtPath:out error:nil];
@@ -189,8 +264,9 @@ __attribute__((constructor)) static void SelfRecInit(void) {
   const char *dir = getenv("FIXES_SELFREC_DIR");
   if (!dir) return;
   if (![[NSBundle mainBundle].bundlePath.lastPathComponent isEqualToString:@"Ardia.app"]) return;
+  gLayers = getenv("FIXES_SELFREC_LAYERS") != NULL;
   gCapture = (CreateImageFromArray)dlsym(RTLD_DEFAULT, "CGWindowListCreateImageFromArray");
-  if (!gCapture) return;
+  if (!gCapture && !gLayers) return;
   gDir = [NSString stringWithUTF8String:dir];
   [[NSFileManager defaultManager] createDirectoryAtPath:gDir withIntermediateDirectories:YES attributes:nil error:nil];
   gQueue = dispatch_queue_create("selfrec", DISPATCH_QUEUE_SERIAL);

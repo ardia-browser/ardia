@@ -13,7 +13,7 @@ globalThis.acTestNativeModules = {
 const shell = await import("../../test-native/index.ts");
 const { syncFiles } = await import("./syncFiles.ts");
 const { emptyDoc } = await import("./syncDoc.ts");
-const { emptyScope, Clock } = await import("@ardia/sync");
+const { emptyScope, Clock, putBase, putRecord } = await import("@ardia/sync");
 
 const realNow = Date.now;
 const HOUR = 60 * 60_000;
@@ -250,8 +250,8 @@ test("what a scope's sync applied is journaled for this device, and a restart re
   for (const name of ["app", "p:s1", "p:gone"]) {
     const state = (doc.scopes[name] = emptyScope());
     const settled = files.watchScope(name, state, clock);
-    state.records["bm:r"] = { h: "000000009.0000.devB", v: { t: "Remote" }, o: ["devB", 1] };
-    state.base["bm:r"] = '{"t":"Remote"}';
+    putRecord(state, "bm:r", { h: "000000009.0000.devB", v: { t: "Remote" }, o: ["devB", 1] });
+    putBase(state, "bm:r", '{"t":"Remote"}');
     state.vv = { devB: 1 };
     await settled();
   }
@@ -284,7 +284,7 @@ test("a scope replaced while it synced isn't journaled", async () => {
   const { doc, files } = await opening();
   const state = (doc.scopes.app = emptyScope());
   const settled = files.watchScope("app", state, new Clock("devA"));
-  state.records["bm:r"] = record;
+  putRecord(state, "bm:r", record);
   doc.scopes.app = emptyScope();
   await settled();
   assert.equal(parts().length, 0);
@@ -299,7 +299,7 @@ test("a changes part that fails to save makes the next save write the full state
   };
   try {
     const settled = files.watchScope("app", state, new Clock("devA"));
-    state.records["bm:r"] = record;
+    putRecord(state, "bm:r", record);
     await settled();
   } finally {
     sealHook = null;
@@ -387,7 +387,7 @@ test("a part written while the state seals isn't removed with the parts the stat
   assert.ok(seal.waiting(), "the state is sealing");
   const state = doc.scopes.app;
   const settled = files.watchScope("app", state, new Clock("devA"));
-  state.records["bm:during"] = record;
+  putRecord(state, "bm:during", record);
   const writing = settled();
   await tick();
   seal.release();
@@ -445,7 +445,7 @@ test("a checkpoint queued behind a part still sealing covers that part, with the
   const clock = new Clock("devA");
   const seal = await sealHeld((text) => text.includes('"changes"'));
   const settled = files.watchScope("app", state, clock);
-  state.records["bm:r"] = record;
+  putRecord(state, "bm:r", record);
   const writing = settled();
   await tick();
   assert.ok(seal.waiting());

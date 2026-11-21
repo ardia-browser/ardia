@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
-const { activeTabId, IDLE_LIVE } = await import("../browser/model.ts");
+const { activeTabId } = await import("../browser/model.ts");
+const { liveOf: live } = await import("./tabLive.ts");
 const { canGoBack, goBack } = await import("./navigation.ts");
 const { openLinkInSplit } = await import("../splits/actions.ts");
 await import("../../test-native/index.ts");
 
 const S = () => useBrowser.getState();
-const live = (id) => S().live[id] ?? IDLE_LIVE;
 const shown = (w) => activeTabId(S(), w);
 
 function windowWith(host) {

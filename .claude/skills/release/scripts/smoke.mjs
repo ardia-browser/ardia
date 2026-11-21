@@ -316,7 +316,7 @@ if (newTabId) {
     if (t) newTabHistory = (await onPage(t, "Page.getNavigationHistory")).entries ?? null;
   }
 }
-const newTabBack = newTabId ? await instance.eval(`return !!ac.store.getState().live[${JSON.stringify(newTabId)}]?.canGoBack;`).catch(() => null) : null;
+const newTabBack = newTabId ? await instance.eval(`return !!ac.tabLive.liveOf(${JSON.stringify(newTabId)}).canGoBack;`).catch(() => null) : null;
 check("the first page opened from ⌘T has no Back (the prewarmed about:blank isn't in its history)",
   newTabHistory?.length === 1 && newTabBack === false,
   newTabId ? `${newTabHistory ? newTabHistory.map((e) => e.url.replace(/^.*\//, "")).join(" → ") : "page never loaded"}; canGoBack ${newTabBack}` : "⌘T made no tab");

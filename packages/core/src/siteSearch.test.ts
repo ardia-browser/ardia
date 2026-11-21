@@ -28,6 +28,15 @@ test("Tab enters site search for a typed site with no completion: 'x.com'", () =
   assert.deepEqual(action?.kind === "enter" && [action.scope.kind, action.scope.name, action.from], ["site", "X", "x.com"]);
 });
 
+test("Tab enters a Google site's search from its one-word name: maps, drive, gmail, translate", () => {
+  for (const [word, name] of [["maps", "Google Maps"], ["Maps", "Google Maps"], ["drive", "Google Drive"], ["gmail", "Gmail"], ["translate", "Google Translate"]]) {
+    const action = siteSearchKey("Tab", {}, bar(word!));
+    assert.deepEqual(action?.kind === "enter" && [action.scope.kind, action.scope.name, action.from], ["site", name, word], word);
+  }
+  assert.equal(bar("map").offered, null);
+  assert.equal(bar("maps near me").offered, null);
+});
+
 test("Tab accepts the completion when the row offers no site search", () => {
   const state = bar("exampl", "e.org");
   assert.equal(state.offered, null);

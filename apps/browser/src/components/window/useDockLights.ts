@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { Animated } from "react-native";
 import { setTrafficLightsCenter } from "../../state/windows/nativeWindow";
-import { dockMoving, sidebarLightsCenter, TOP_STRIP_LIGHTS_CENTER } from "../../state/windows/dockMotion";
+import { dockMoving, sidebarLightsCenter, stillOffWindow, TOP_STRIP_LIGHTS_CENTER } from "../../state/windows/dockMotion";
 import { currentValue } from "../ui/motion";
 
 export function useTopStripLights(windowId: string, dock: Animated.Value, on: boolean, travel: number, open: boolean) {
@@ -23,12 +23,12 @@ export type SidebarLights = { width: number; peeking: boolean; fullscreen: boole
 export function useSidebarLights(windowId: string, dock: Animated.Value, slide: Animated.Value, o: SidebarLights) {
   const values = useRef({ dock: 1, slide: 0 });
   const apply = useRef<() => void>(() => {});
-  const sent = useRef<string | undefined>(undefined);
+  const sent = useRef<ReturnType<typeof slidingCenter> | undefined>(undefined);
   apply.current = () => {
     const center = slidingCenter(o, values.current.dock, values.current.slide);
-    const key = center.join(",");
-    if (key === sent.current) return;
-    sent.current = key;
+    const last = sent.current;
+    if ((last && last.join(",") === center.join(",")) || stillOffWindow(last, center)) return;
+    sent.current = center;
     void setTrafficLightsCenter(windowId, center);
   };
   useEffect(() => {

@@ -335,6 +335,7 @@ NSString *WindowInfo(NSWindow *window, NSString *) {
   info[@"alpha"] = @(window.alphaValue);
   info[@"level"] = @(window.level);
   info[@"collectionBehavior"] = @(window.collectionBehavior);
+  info[@"accessibilityTitle"] = window.accessibilityTitle ?: @"";
   info[@"background"] = window.backgroundColor.description ?: @"";
   NSButton *close = [window standardWindowButton:NSWindowCloseButton];
   info[@"closeButton"] = close ? NSStringFromRect([close convertRect:close.bounds toView:nil]) : @"";
@@ -456,6 +457,12 @@ NSDictionary<NSString *, DevHandler> *DevHandlers() {
     },
     @"fullScreen" : ^NSString *(NSWindow *w, NSString *) { return FullScreen(w, nil); },
     @"fakeFullScreen" : ^NSString *(NSWindow *w, NSString *a) { return FullScreen(w, a); },
+    @"fakeFullScreenSilentExit" : ^NSString *(NSWindow *w, NSString *) {
+      [NSNotificationCenter.defaultCenter postNotificationName:NSWindowWillExitFullScreenNotification object:w];
+      objc_setAssociatedObject(w, kActedFullScreenKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+      [ArdiaWindowController forNSWindow:w].coreWindow.actedFullScreen = NO;
+      return @(IsWindowFullScreen(w)).stringValue;
+    },
     @"snapshotFrame" : ^NSString *(NSWindow *w, NSString *path) { return SnapshotFrameView(w, path); },
     @"children" : ^NSString *(NSWindow *w, NSString *) {
       NSMutableArray *children = [NSMutableArray array];
@@ -473,6 +480,7 @@ NSDictionary<NSString *, DevHandler> *DevHandlers() {
     @"pageMove" : ^NSString *(NSWindow *w, NSString *a) { return ardia_host::PageMoveAt(w, WindowPoint(w, a)); },
     @"focusState" : ^NSString *(NSWindow *, NSString *) { return ardia_host::FocusState(); },
     @"hoverProbe" : ^NSString *(NSWindow *w, NSString *a) { return ardia_host::HoverProbeDev(w, a); },
+    @"pageCursor" : ^NSString *(NSWindow *w, NSString *a) { return ardia_host::PageCursorDev(w, a); },
     @"drag" : ^NSString *(NSWindow *w, NSString *a) { return Drag(w, a); },
     @"type" : ^NSString *(NSWindow *w, NSString *a) { return TypeText(w, a); },
     @"reserved" : ^NSString *(NSWindow *w, NSString *a) { return Reserved(w, a); },

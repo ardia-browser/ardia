@@ -24,7 +24,8 @@ import {
   useTheme,
   type Theme,
 } from "../ui";
-import { fileIcon, openFile, revealFile } from "../../state/app/system";
+import { fileIcon, revealFile } from "../../state/app/system";
+import { openDownload } from "../../state/downloads/openDownload";
 import { downloadMenu } from "../../state/downloads/downloadMenu";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Image, Pressable, ScrollView, StyleSheet, View } from "react-native";
@@ -205,7 +206,7 @@ function DownloadRow({ d, windowId }: { d: Download; windowId: string }) {
     <View {...hoverProps}>
       <MouseArea path={done ? d.path : null}>
         <ContextMenuArea onContextMenu={() => void downloadMenu(d, windowId)}>
-          <Pressable onPress={() => done && void openFile(d.path)}>
+          <Pressable onPress={() => done && void openDownload(d.path)}>
             {({ pressed }) => (
               <View
                 style={{

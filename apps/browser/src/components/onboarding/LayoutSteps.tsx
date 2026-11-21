@@ -74,7 +74,7 @@ const ADDRESS_CHOICES: ChoiceOption<Settings["addressBar"]>[] = [
 ];
 const CMDL_CHOICES: ChoiceOption<Settings["commandBarPlacement"]>[] = [
   { value: "field", preview: "cmdl-field", title: "Under the address", subtitle: "Drops down from the field, as in Dia" },
-  { value: "centred", preview: "cmdl-centred", title: "In the centre", subtitle: "Floats over the page, as in Arc" },
+  { value: "centred", preview: "cmdl-centred", title: "In the center", subtitle: "Floats over the page, as in Arc" },
 ];
 
 function styleOf(values: Pick<Settings, (typeof LAYOUT_KEYS)[number]>, preset: Preset) {
@@ -115,7 +115,7 @@ export function LayoutStep() {
         subtitle="The command bar, for going anywhere."
         tag={tag}
         patch={{ commandBarPlacement: values.commandBarPlacement }}
-        picked={[values.commandBarPlacement !== "field" ? `${keyText("⌘L")} opens in the centre` : `${keyText("⌘L")} opens under the address`]}
+        picked={[values.commandBarPlacement !== "field" ? `${keyText("⌘L")} opens in the center` : `${keyText("⌘L")} opens under the address`]}
         preview={preview}
       >
         <ChoiceList

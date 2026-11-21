@@ -1,8 +1,10 @@
 import { extensionActionStates } from "../../platform/extensions";
 import { useBrowser } from "../browser/store";
 import { activeTabId } from "../browser/model";
-import { extensionProfile, readyTabOf, useExtensions, windowExtensions } from "./store";
+import { extensionProfile, readyTabOf, tabProfile, useExtensions, windowExtensions } from "./store";
 import { singleFlight } from "../../lib/singleFlight";
+import { noteExtensionActionRefresh, noteExtensionActionStateFailure, noteExtensionActionStateRequest } from "../telemetry/workCounts";
+import { consentToken } from "../telemetry/client";
 
 let pendingAll = false;
 const pendingProfiles = new Set<string>();
@@ -17,6 +19,7 @@ const refresh = singleFlight(async () => {
   const only = pendingAll ? null : new Set(pendingProfiles);
   pendingAll = false;
   pendingProfiles.clear();
+  noteExtensionActionRefresh();
   await pass(only);
 });
 
@@ -30,7 +33,9 @@ async function pass(only: Set<string> | null) {
         .map((x) => x.id);
       const tabId = readyTabOf(activeTabId(s, windowId));
       if (!ids.length || !tabId) return;
-      const states = await extensionActionStates(tabId, ids).catch(() => null);
+      const consent = consentToken();
+      noteExtensionActionStateRequest();
+      const states = await extensionActionStates(tabId, ids, tabProfile(tabId)).catch(() => (noteExtensionActionStateFailure(consent), null));
       const previous = useExtensions.getState().actions[tabId];
       if (!states || (previous && JSON.stringify(previous) === JSON.stringify(states))) return;
       useExtensions.setState((e) => ({ actions: { ...e.actions, [tabId]: states } }));

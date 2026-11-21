@@ -1,5 +1,6 @@
 import { fromBase64, mozLz4, utf8 } from "./bytes";
 import { firefoxSessionFile } from "./firefox";
+import { sessionIcons } from "./firefoxFavicons";
 import { entries, join, readJson, rowsOf, type ImportHost } from "./host";
 import { ImportFailure, type Favicon } from "./model";
 import { readRows } from "./sqlite";
@@ -8,7 +9,6 @@ import { objects, parseZenSession, record, text, type Json, type ZenSidebar } fr
 export type { ZenSidebar } from "./zenSession";
 
 const LARGEST_SESSION_BYTES = 64 << 20;
-const MAXIMUM_TOTAL_BYTES = 6 * 1024 * 1024;
 const DEFAULT_CONTAINER_NAMES: Record<string, string> = {
   "user-context-personal": "Personal",
   "user-context-work": "Work",
@@ -16,17 +16,8 @@ const DEFAULT_CONTAINER_NAMES: Record<string, string> = {
   "user-context-shopping": "Shopping",
 };
 
-const decodedBytes = (base64: string) => Math.floor((base64.length * 3) / 4) - (base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0);
-
 export function zenFavicons(sidebar: ZenSidebar, pages: string[]): Favicon[] {
-  const wanted = new Set(pages);
-  let total = 0;
-  return sidebar.favicons.filter((icon) => {
-    const size = decodedBytes(icon.png);
-    if (!wanted.has(icon.page) || total + size > MAXIMUM_TOTAL_BYTES) return false;
-    total += size;
-    return true;
-  });
+  return sessionIcons(sidebar.favicons, pages);
 }
 
 export function separateEssentials(prefs: string | null): boolean {

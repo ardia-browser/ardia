@@ -12,6 +12,11 @@ public enum OpenURLInbox {
   private static var pending: [Batch] = []
   private(set) static var testDeliveries: [[String: Any]] = []
 
+  public static func receiveFromOtherApp(_ urls: [URL]) {
+    WindowManager.shared.linkArrivedFromOtherApp(urls)
+    receive(urls)
+  }
+
   public static func receive(_ urls: [URL]) {
     let pointer = NSEvent.mouseLocation
     for batch in batches(urls.map(\.absoluteString), pointer) {

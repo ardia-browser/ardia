@@ -2,15 +2,15 @@ import { useEffect, useRef } from "react";
 import type { View } from "react-native";
 import { DownloadsPopover as BrowserDownloadsPopover } from "../../browser/src/components/downloads/Downloads";
 import { useWindowId } from "../../browser/src/state/browser/hooks";
+import { noteLinuxDownloadsPanelInsidePress } from "../../browser/src/state/telemetry/downloadsPanelCounts";
 import { setDownloadsOpen } from "../../browser/src/state/windows/actions";
 import { useWindowUiOf } from "../../browser/src/state/windows/hooks";
 import { startDownloadsDismissal } from "./downloadsDismissal";
+import { menuShown } from "./menus";
 import { PageOverlayRegion } from "./PageOverlayRegion";
 import { watchPageFocus } from "./pageFocus";
 
 export * from "../../browser/src/components/downloads/Downloads";
-
-const BACKDROP = ":scope > * > :first-child";
 
 export function DownloadsPopover() {
   const windowId = useWindowId();
@@ -20,13 +20,10 @@ export function DownloadsPopover() {
     if (!open) return;
     return startDownloadsDismissal({
       target: window,
-      inside: (node) => {
-        const root = region.current;
-        if (!root || !(node instanceof Node) || !root.contains(node)) return false;
-        const backdrop = root.querySelector(BACKDROP);
-        return !backdrop || !backdrop.contains(node);
-      },
+      inside: (node) => node instanceof Node && !!region.current?.contains(node),
+      onInsidePress: noteLinuxDownloadsPanelInsidePress,
       close: () => setDownloadsOpen(windowId, false),
+      menuShown,
       watchPageFocus,
       activeElement: () => document.activeElement,
     });

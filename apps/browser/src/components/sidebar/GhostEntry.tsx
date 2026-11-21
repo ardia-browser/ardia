@@ -20,6 +20,7 @@ import { drawnIcon, hidesRowIcon } from "../../state/pins/rowIcons";
 import { groupBoxAtRest, groupSurface, SIDEBAR_TYPE, TAB_ROW, TABULAR_NUMS, useSidebarTokens } from "./tokens";
 import { SidebarRowLabel } from "./SidebarRow";
 import { entryKey, parseEntry } from "../../state/sidebar/entryKey";
+import { shownLiveOf } from "../../state/tabs/tabLive";
 
 type TabShot = { kind: "tab"; key: string; title: string; url: string; favicon?: string | null; icon?: string | null; textOnly: boolean; profileId: string; uri: string | null; template: boolean; sound: "muted" | "playing" | null; hovered: boolean };
 type SplitShot = { kind: "split"; key: string; panes: TabShot[] };
@@ -51,7 +52,7 @@ function tabShot(s: BrowserState, tabId: string, hovered: boolean): TabShot | nu
     icon: drawnIcon(tab.customIcon),
     textOnly: hidesRowIcon(tab),
     profileId: tab.profileId,
-    sound: isSilenced(s, tab) ? "muted" : s.live[tabId]?.playingAudio ? "playing" : null,
+    sound: isSilenced(s, tab) ? "muted" : shownLiveOf(s, tabId).playingAudio ? "playing" : null,
     hovered,
   };
 }

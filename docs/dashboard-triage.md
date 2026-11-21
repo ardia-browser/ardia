@@ -112,6 +112,25 @@ Leads and the reply queue's **Leads on X** group offer **Newest** (default), **F
 
 `leads.py` already reads followers from the author's `public_metrics.followers_count` and views from the post's `public_metrics.impression_count`. `ch_sync.py` mirrors both as nullable counts (`author_followers`, `views`) in `sandbox.ardia_leads`. To fill missing old values from saved post JSON without fetching X or inventing counts, install `apps/dashboard/pipeline/backfill_lead_metrics.py` beside `leads.py`, run `python3 backfill_lead_metrics.py`, then `python3 ch_sync.py leads`. Existing known values are not overwritten; absent metrics stay null.
 
+## Phone app events
+
+The phone app (`apps/phone`) sends to the same pipeline with service `ardia-phone` and `$lib` `ardia-phone-telemetry`, and tags every event `app: phone` and `platform: android|ios`. Every Mac section filters on `APP_SOURCE` (Mac sources and libs), so phone events never count toward Mac numbers; query them with `PHONE_APP_SOURCE` from `apps/dashboard/src/server/sql.ts`. Their events and fields are listed in `docs/phone.md` › Telemetry. People pages read `APP_SOURCE` too, so a phone install doesn't appear there.
+
 ## Site downloads
 
 The Site page's **Where they clicked Download** panel splits `download_clicked` two ways: by platform first, then by the button's place on the page (`location`). The platform comes from the event's `platform` and `arch` properties, which the site sends from 0.2.47-nightly.3 on: `windows x64`, `windows arm64` or `linux x64`. Clicks without a `platform` count as Mac, because before Windows and Linux builds the site offered only the Mac download; older ranges therefore show Mac only. People is distinct visitors, Clicks is raw clicks. The Mac funnel stays on Funnels.
+
+## Freezes
+
+Performance › Freezes reads `app_freeze` over the last 7 days, grouped by `signature`: people (`uniqExact(distinct_id)`),
+freezes (`count()`), time frozen (`sum(freeze_ms)`), the most common thread and job, the latest version, and the top
+three frames from Ardia's own images (hover the place). Offsets symbolicate with the engine's uploaded symbols
+(`scripts/symbolicate-crash.sh`) and Hermes's with the release framework's local symbols.
+
+Android's Material You switch (Settings › General, off by default) is counted as `usage_counts.material_you_turned_on` and `material_you_turned_off`; `app_launched.material_colors` is `not_material` for launches with it off. The counts below are taken only with it on, except `find_closed_bar`.
+
+Android search reports full-screen sheet expansions as the consent-gated daily `usage_counts.search_sheet_expanded` count on `ardia-phone`. Incognito expansions do not count. Compare it with `searches` to track use of the expanded result list; neither count includes queries or page content.
+
+Compare `usage_counts.site_settings_sheet_expanded` with `site_settings_sheet_opened` to track use of the full-screen Android address bar menu. Both are consent-gated counts that exclude Incognito.
+
+Android Find on Page: compare phone `usage_counts.find_closed_bar` with `find_opened_bar`. The close counter counts each non-private session once, whether it ends through Close or Back. Counts require usage sharing.

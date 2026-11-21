@@ -3,9 +3,10 @@ import { test } from "node:test";
 import { canonical } from "../canon.ts";
 import { Clock } from "../hlc.ts";
 import { compact, syncScope, visible } from "../scope.ts";
-import { emptyScope, type Adapter, type Listing, type LogFile, type ScopeState, type Transport } from "../scopeState.ts";
+import { emptyScope, type Adapter, type SyncRecord, type Listing, type LogFile, type ScopeState, type Transport } from "../scopeState.ts";
 import { companionAcknowledge, companionAddBookmark, companionRemoveBookmark, companionRemovalsDone, companionSend, runCompanionCycle, type CycleInput } from "./cycle.ts";
-import { companionLoad, type CompanionState, type Host } from "./state.ts";
+import { companionLoad, companionUnload, type CompanionState, type Host } from "./state.ts";
+import { buildView } from "./view.ts";
 import type { LocalTab, LocalVisit } from "./adapters.ts";
 
 const DAY = 86_400_000;
@@ -941,4 +942,207 @@ test("a phone that starts over under a new id deletes its old device and tabs re
   for (const scope of [s1, s2, s3]) assert.equal(mac.store[scope]!.has(`tabs:${PHONE}`), false);
   assert.ok(mac.store.app!.has(`dev:${fresh.id}`));
   assert.ok(mac.store[s1]!.has("bm:f1"));
+});
+
+type CrashStep = { call: "persistJournal" | "write" | "remove" | "saveState"; nth: number; moment: "before" | "after" | "beforePruning" };
+
+class KilledPhone extends Phone {
+  crash: CrashStep | null = null;
+  counts: Record<string, number> = {};
+  killed = false;
+  override host(): Host {
+    const real = super.host();
+    const reach = (call: CrashStep["call"]) => {
+      if (this.killed) throw new Error("the process is gone");
+      const nth = (this.counts[call] = (this.counts[call] ?? 0) + 1);
+      return this.crash && this.crash.call === call && this.crash.nth === nth ? this.crash.moment : null;
+    };
+    const kill = (): never => {
+      this.killed = true;
+      throw new Error("killed");
+    };
+    return {
+      chainStatus: () => {
+        if (this.killed) throw new Error("the process is gone");
+        return real.chainStatus();
+      },
+      read: (scope, known) => {
+        if (this.killed) throw new Error("the process is gone");
+        return real.read(scope, known);
+      },
+      write: (scope, payload) => {
+        const moment = reach("write");
+        if (moment === "before") kill();
+        const id = real.write(scope, payload);
+        if (moment === "after") kill();
+        return id;
+      },
+      remove: (scope, ids) => {
+        const moment = reach("remove");
+        if (moment === "before") kill();
+        const out = real.remove(scope, ids);
+        if (moment === "after") kill();
+        return out;
+      },
+      persistJournal: (scope, batches) => {
+        const moment = reach("persistJournal");
+        if (moment === "before") kill();
+        const out = real.persistJournal(scope, batches);
+        if (moment === "after") kill();
+        return out;
+      },
+      saveState: (json, seqs) => {
+        const moment = reach("saveState");
+        if (moment === "before") kill();
+        if (moment === "beforePruning") {
+          this.stateJSON = json;
+          kill();
+        }
+        const out = real.saveState(json, seqs);
+        if (moment === "after") kill();
+        return out;
+      },
+    };
+  }
+  restart() {
+    companionUnload();
+    this.killed = false;
+    this.crash = null;
+    return this.launch();
+  }
+}
+
+async function crashScenario(step: CrashStep | null) {
+  const folder = new Folder();
+  const mac = new Mac(folder);
+  seedMac(mac);
+  await mac.sync();
+  folder.now += 1000;
+  const phone = new KilledPhone(folder).launch();
+  phone.tabs = [{ u: "https://before.example/", t: "Before", at: folder.now }];
+  phone.visits = [{ u: "https://before.example/", t: "Before", vt: [folder.now] }];
+  await phone.cycle();
+  folder.now += 15_000;
+  phone.tabs = [
+    { u: "https://during.example/", t: "During", at: folder.now },
+    { u: "https://work.example/", t: "Work", at: folder.now, p: P2 },
+  ];
+  phone.visits = [...phone.visits, { u: "https://during.example/", t: "During", vt: [folder.now] }, { u: "https://work.example/", t: "Work", vt: [folder.now], p: P2 }];
+  phone.counts = {};
+  phone.crash = step;
+  await phone.cycle().catch(() => null);
+  const reached = phone.killed;
+  phone.restart();
+  for (let i = 0; i < 3; i++) {
+    folder.now += 15_000;
+    await phone.cycle();
+  }
+  await mac.sync();
+  return { folder, mac, phone, reached };
+}
+
+function assertNothingLostOrReused(folder: Folder, mac: Mac, label: string) {
+  const tabs = (mac.scopes[s1]!.records[`tabs:${PHONE}`]!.v as { tabs: { u: string }[] }).tabs.map((t) => t.u);
+  assert.deepEqual(tabs, ["https://during.example/"], `${label}: the Mac sees the phone's latest tabs`);
+  assert.deepEqual((mac.scopes[s2]!.records[`tabs:${PHONE}`]!.v as { tabs: { u: string }[] }).tabs.map((t) => t.u), ["https://work.example/"], `${label}: and its Work tabs`);
+  for (const url of ["https://before.example/", "https://during.example/"]) assert.ok(mac.history[s1]!.has(url), `${label}: the Mac has the visit to ${url}`);
+  assert.ok(mac.history[s2]!.has("https://work.example/"), `${label}: the Mac has the Work visit`);
+  const seen = new Map<string, string>();
+  for (const [scope, entries] of folder.scopes) {
+    for (const entry of entries.values()) {
+      const file = JSON.parse(entry.payload) as LogFile;
+      if (file.kind !== "log" || file.device !== PHONE) continue;
+      const key = `${scope}#${file.seq}`;
+      const body = canonical(file);
+      const before = seen.get(key);
+      assert.ok(before === undefined || before === body, `${label}: ${scope} sequence ${file.seq} was written twice with different contents`);
+      seen.set(key, body);
+    }
+  }
+}
+
+test("a phone killed at any durable step of a cycle loses no write and reuses no sequence after it restarts", async () => {
+  const calm = await crashScenario(null);
+  assertNothingLostOrReused(calm.folder, calm.mac, "without a crash");
+  const steps: CrashStep[] = [];
+  for (const call of ["persistJournal", "write", "remove"] as const) {
+    for (let nth = 1; nth <= 6; nth++) for (const moment of ["before", "after"] as const) steps.push({ call, nth, moment });
+  }
+  for (let nth = 1; nth <= 3; nth++) for (const moment of ["before", "beforePruning", "after"] as const) steps.push({ call: "saveState", nth, moment });
+  const reached: string[] = [];
+  for (const step of steps) {
+    const run = await crashScenario(step);
+    if (run.reached) reached.push(`${step.moment} ${step.call} #${step.nth}`);
+    assertNothingLostOrReused(run.folder, run.mac, `killed ${step.moment} ${step.call} #${step.nth}`);
+  }
+  const required = [
+    "before persistJournal #1", "after persistJournal #1", "before write #1", "after write #1",
+    "before persistJournal #2", "after persistJournal #2", "before write #2", "after write #2",
+    "before saveState #1", "beforePruning saveState #1", "after saveState #1",
+  ];
+  assert.deepEqual(required.filter((step) => !reached.includes(step)), [], `crash points the cycle no longer reaches; reached ${reached.join(", ")}`);
+});
+
+test("spaces take the order of the Mac that last republished its device record, and browsing on another Mac never moves it", async () => {
+  const { folder, mac, phone } = await joined();
+  const names = async () => {
+    folder.now += 1000;
+    return (await phone.cycle()).view!.profiles.map((p) => p.name);
+  };
+  assert.deepEqual(await names(), ["Personal", "School", "Work"]);
+  mac.put("app", `dev:${MAC}`, { n: "MacBook Pro", k: "mac", f: ["send"], o: [P2, P3, P1] });
+  await mac.sync();
+  assert.deepEqual(await names(), ["Work", "School", "Personal"]);
+  folder.now += 60_000;
+  const mini = new Mac(folder, MAC2);
+  mini.put("app", `dev:${MAC2}`, { n: "Mac mini", k: "mac", f: ["send"], o: [42, P3, "notaprofile", P3, P1] });
+  await mini.sync(["app"]);
+  assert.deepEqual(await names(), ["School", "Personal", "Work"]);
+  for (let i = 0; i < 3; i++) {
+    folder.now += 60_000;
+    mac.put(s1, `bm:browsing${i}`, { k: "u", p: "other", t: `Page ${i}`, u: `https://page${i}.example/`, a: i, pos: `z${i}` });
+    mac.visit(s1, `https://visit${i}.example/`, "Visit", folder.now);
+    await mac.sync();
+    assert.deepEqual(await names(), ["School", "Personal", "Work"], "the other Mac's browsing leaves the order alone");
+  }
+  folder.now += 60_000;
+  mac.put("app", `dev:${MAC}`, { n: "MacBook Pro", k: "mac", f: ["send"], o: [P1, P2, P3] });
+  await mac.sync();
+  assert.deepEqual(await names(), ["Personal", "Work", "School"]);
+  folder.now += 60_000;
+  mini.clock = new Clock(MAC2, mini.clock.last, () => folder.now + 30 * DAY);
+  mini.put("app", `dev:${MAC2}`, { n: "Mac mini", k: "mac", f: ["send"], o: [P3, P2, P1] });
+  await mini.sync(["app"]);
+  assert.deepEqual(await names(), ["School", "Work", "Personal"]);
+  folder.now += 60_000;
+  await mac.sync(["app"]);
+  mac.put("app", `dev:${MAC}`, { n: "MacBook Pro", k: "mac", f: ["send"], o: [P2, P1, P3] });
+  await mac.sync(["app"]);
+  assert.deepEqual(await names(), ["Work", "Personal", "School"], "a reorder made after seeing a record from a Mac whose clock runs ahead still wins");
+  folder.now += 60_000;
+  await mini.sync(["app"]);
+  mini.put("app", `dev:${MAC2}`, { n: "Mac mini", k: "mac", f: ["send"], o: [] });
+  await mini.sync(["app"]);
+  assert.deepEqual(await names(), ["Work", "Personal", "School"], "a newer record with no order passes to the next");
+  mac.put("app", `dev:${MAC}`, { n: "MacBook Pro", k: "mac", f: ["send"], o: "Work" });
+  await mac.sync(["app"]);
+  assert.deepEqual(await names(), ["Personal", "School", "Work"]);
+  const written = new Set(folder.logs(PHONE).flatMap((f) => f.ops.map((op) => op.k)));
+  assert.deepEqual([...written].sort(), [`dev:${PHONE}`, `tabs:${PHONE}`]);
+});
+
+test("two device records stamped alike give the order of the lower device id, whatever order they are read in", () => {
+  const record = (v: unknown, h: string): SyncRecord => ({ h, v, o: ["x", 1] });
+  for (const flipped of [false, true]) {
+    const app = emptyScope();
+    app.records[`prof:${P1}`] = record({ n: "Personal", c: "blue", i: null, d: true }, "a");
+    app.records[`prof:${P2}`] = record({ n: "Work", c: "green", i: null }, "a");
+    app.records[`prof:${P3}`] = record({ n: "School", c: "pink", i: null }, "a");
+    const devices: [string, SyncRecord][] = [
+      [`dev:${MAC2}`, record({ n: "Mac mini", o: [P3, P1, P2] }, "same")],
+      [`dev:${MAC}`, record({ n: "MacBook Pro", o: [P2, P3, P1] }, "same")],
+    ];
+    for (const [key, value] of flipped ? [...devices].reverse() : devices) app.records[key] = value;
+    assert.deepEqual(buildView({ app }, PHONE).profiles.map((p) => p.name), MAC2 < MAC ? ["School", "Personal", "Work"] : ["Work", "School", "Personal"]);
+  }
 });

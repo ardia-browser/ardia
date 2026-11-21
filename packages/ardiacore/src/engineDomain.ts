@@ -9,6 +9,7 @@ export type EngineInfo = {
   popupWindows: number;
   chromeWindows: number;
   focus?: string;
+  pictureInPictureCloses?: string;
 };
 
 export type EngineComponent = {
@@ -59,8 +60,12 @@ export const inputIdleSeconds = () => nativeModule("ArdiaEngine").inputIdleSecon
 
 type CliServer = { connections: number; generation: number; file: string; reason?: string };
 
+export type PopupProtectedMedia = { family: "widevine" | "playready" | "fairplay" | "other" | "none"; listed: boolean; epoch: string };
+
+export type CursorRestore = { hidden: boolean; epoch: string };
+
 export type HoverLostEpisode = {
-  reason: "halfActive" | "staleMenu" | "notKeyOrMain" | "coveredByView" | "responderLost";
+  reason: "halfActive" | "staleMenu" | "notKeyOrMain" | "coveredByView" | "responderLost" | "coveredByWindow";
   trigger: "move" | "click";
   keyWindow: string;
   mainWindow: string;
@@ -75,12 +80,31 @@ export type HoverLostEpisode = {
   overPage: boolean;
   cover: "none" | "reactNative" | "chromium" | "other";
   coverClear: boolean;
+  responder?: "none" | "window" | "otherWindow" | "page" | "control";
+  coverWindow?: string;
   healed: boolean;
   healWorked: boolean | null;
   endedBy: "hover" | "heal" | "appInactive" | "windowClosed";
   seconds: number;
   episode: number;
+  epoch: string;
 };
+
+export type WindowUnpaintedRecord = {
+  window: "regular" | "private";
+  trigger: "seen" | "key";
+  seen: boolean;
+  occlusion: "visible" | "occluded";
+  overruled: boolean;
+  appActive: boolean;
+  windows: number;
+  views: number;
+  unpainted: number;
+  reasons: number;
+  epoch: string;
+};
+
+export type PressLoopLongReport = { loop: string; inner: string; open: boolean; buttonsHeld: boolean; epoch: string };
 
 export type CliTabTarget = { targetId: string | null; pageGeneration: number };
 

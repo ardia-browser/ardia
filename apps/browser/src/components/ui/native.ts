@@ -6,9 +6,11 @@ export {
   FileDropArea,
   FolderIcon,
   MagnifyArea,
+  PeekStage,
   MouseArea,
   OutsidePressArea,
   PageCoverGate,
+  PluginPageView,
   PopoverBubble,
   ReportVideo,
   Surface,
@@ -18,6 +20,9 @@ export {
   type DroppedItem,
   type DropUpdate,
   type MagnifyUpdate,
+  type PeekStageGeometry,
+  type PeekStageHandle,
+  type PeekStageState,
   type SurfaceProps,
 } from "@ardia/shell";
 

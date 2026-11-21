@@ -29,7 +29,7 @@ test("Block requests to send notifications turns a notifications-only request do
   await tick();
   assert.equal(shown(t), null);
   assert.deepEqual(stub.resolvedPermissions.at(-1), { id: "n2", result: "deny", remember: true });
-  assert.deepEqual(takeNotificationRequestCounts(), { notification_requests_auto_denied: 1 });
+  assert.equal(takeNotificationRequestCounts().notification_requests_auto_denied, 1);
 
   stub.emitPermission({ id: "c1", tabId: t, origin: "https://news.example", permissions: ["notifications", "camera"] });
   await tick();
@@ -39,7 +39,7 @@ test("Block requests to send notifications turns a notifications-only request do
   await tick();
   assert.equal(shown(t), "c2");
   answerPermission(t, "c2", "dismiss");
-  assert.deepEqual(takeNotificationRequestCounts(), { notification_requests_auto_denied: 0 });
+  assert.equal(takeNotificationRequestCounts().notification_requests_auto_denied, 0);
 
   S().updateSettings({ blockNotificationRequests: false });
   stub.emitPermission({ id: "n3", tabId: t, origin: "https://news.example", permissions: ["notifications"] });

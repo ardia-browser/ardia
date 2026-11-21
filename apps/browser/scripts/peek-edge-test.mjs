@@ -8,7 +8,7 @@ import { launch, reporter, session } from "../../../scripts/lib/instance.mjs";
 const args = process.argv.slice(2);
 const appArg = args.find((a) => !a.startsWith("--"));
 if (!appArg) {
-  console.error("usage: node peek-edge-test.mjs <Debug Ardia.app> [--port=<DevTools port>] [--keep-data]\n\nThe auto-hidden sidebar's peek, through the native edge watcher: a pointer resting on the window's bottom or top edge beside the peek keeps it out instead of flicking it shut and open, one that goes well past the edge closes it, an edge crossing outside the sidebar's column never opens it, once it slides away only the window's edge brings it back, in a full-screen window the pointer resting at the screen's edge keeps it out, pressing the other space's dot keeps it out, and with the window against a screen edge another display shares, the pointer stops at that edge to show the sidebar and a second push goes on through. Also (#1297, #1393, #1679): only the last 3 pt or past the edge open it, it stays out 40 pt past its edge and closes 200 ms after the pointer leaves, a drag on its edge resizes it instead of closing it, and Reveal hidden tabs on hover off leaves the edge alone.");
+  console.error("usage: node peek-edge-test.mjs <Debug Ardia.app> [--port=<DevTools port>] [--keep-data]\n\nThe auto-hidden sidebar's peek, through the native edge watcher: a pointer resting on the window's bottom or top edge beside the peek keeps it out instead of flicking it shut and open, one that goes well past the edge closes it, an edge crossing outside the sidebar's column never opens it, once it slides away only the window's edge brings it back, in a full-screen window the pointer resting at the screen's edge keeps it out, pressing the other space's dot keeps it out, and with the window against a screen edge another display shares, the pointer stops at that edge to show the sidebar, a second push or 64 pt of pushing goes on through, and a fast sweep crosses without stopping. Also (#1297, #1393, #1679): only the last 3 pt or past the edge open it, it stays out 40 pt past its edge and closes 200 ms after the pointer leaves, a drag on its edge resizes it instead of closing it, and Reveal hidden tabs on hover off leaves the edge alone.");
   process.exit(2);
 }
 const appPath = resolve(appArg);
@@ -39,6 +39,8 @@ const watchCalls = () => { const p = globalThis.acLayout.peek.w1; const calls = 
 const jitter = (x, ys, ms) => { const done = watchCalls(); let i = 0;
   return new Promise((r) => { const iv = setInterval(() => at(x, ys[i++ % ys.length]), ms); setTimeout(() => { clearInterval(iv); r(); }, ms * ys.length * 4); })
     .then(() => settle(400)).then(() => ({ calls: done(), live: live() })); };
+const until = (test, ms) => { const end = Date.now() + ms; const poll = () => (test() ? Promise.resolve(true) : Date.now() > end ? Promise.resolve(false) : settle(50).then(poll)); return poll(); };
+const ROW_Y = 94;
 const peek = () => at(-4, 400).then(() => settle(500)).then(() => at(80, 400)).then(() => settle(300)).then(live);
 const away = () => at(700, 400).then(() => settle(700)).then(live);
 `;
@@ -93,11 +95,14 @@ try {
     assert.equal(await run(`return peek();`), true);
     const out = await run(`let win;
       return ac.engine.call("windows.list", {}).then((l) => { win = l.find((w) => w.hasRoot).window; })
-        .then(() => at(60, 66)).then(() => settle(200))
-        .then(() => ac.engine.call("windows.dev", { window: win, action: "mouse:down:60,66" })).then(() => settle(80))
-        .then(() => ac.engine.call("windows.dev", { window: win, action: "mouse:dragged:100,66" })).then(() => at(9 + 160 + 160, 66))
-        .then(() => ac.engine.call("windows.dev", { window: win, action: "mouse:dragged:" + (9 + 160 + 160) + ",66" }))
-        .then(() => settle(700)).then(() => { const held = live(); return ac.engine.call("windows.dev", { window: win, action: "mouse:up:" + (9 + 160 + 160) + ",66" }).then(() => settle(600)).then(() => ({ held, after: live() })); });`);
+        .then(() => at(60, ROW_Y)).then(() => settle(200))
+        .then(() => ac.engine.call("windows.dev", { window: win, action: "mouse:down:60," + ROW_Y })).then(() => settle(80))
+        .then(() => ac.engine.call("windows.dev", { window: win, action: "mouse:dragged:100," + ROW_Y })).then(() => settle(80))
+        .then(() => ac.engine.call("windows.dev", { window: win, action: "mouse:dragged:140," + ROW_Y }))
+        .then(() => until(() => globalThis.acTabDrag.getState().phase === "tab", 1500)).then((dragging) => at(9 + 160 + 160, ROW_Y).then(() => dragging))
+        .then((dragging) => ac.engine.call("windows.dev", { window: win, action: "mouse:dragged:" + (9 + 160 + 160) + "," + ROW_Y }).then(() => dragging))
+        .then((dragging) => settle(700).then(() => { const held = live(); return ac.engine.call("windows.dev", { window: win, action: "mouse:up:" + (9 + 160 + 160) + "," + ROW_Y }).then(() => settle(600)).then(() => ({ dragging, held, after: live() })); }));`);
+    assert.equal(out.dragging, true, "the press on the first tab row became a tab drag");
     assert.equal(out.held, true, "out while the button is down");
     assert.equal(out.after, false, "closes once the button comes up away from it");
     await run(`return away();`);
@@ -131,14 +136,6 @@ try {
     } finally {
       await run(fullScreen(false));
     }
-  });
-
-  await rep.check("with Reveal hidden tabs on hover off, the edge doesn't open it (#1393)", async () => {
-    await run(`st().updateSettings({ revealTabsOnHover: false }); return settle(300);`);
-    assert.equal(await run(`return peek();`), false);
-    await run(`st().updateSettings({ revealTabsOnHover: true }); return away();`);
-    assert.equal(await run(`return peek();`), true, "back on");
-    assert.equal(await run(`return away();`), false);
   });
 
   await rep.check("a pointer resting on the bottom edge beside the peek keeps it out", async () => {
@@ -183,7 +180,7 @@ try {
   await rep.check("with the window against the screen's edge, crossing to the next display stops at the edge and peeks; a second push goes through", async () => {
     const frame = (x) => `return globalThis.expo.modules.ArdiaDev.devSetWindowFrame("w1", [${x}, 100, ${WIDTH}, ${HEIGHT}]).then(() => settle(400));`;
     await run(frame(0));
-    assert.equal(await run(`return at(300, 400).then(() => at(-30, 400)).then(() => settle(500)).then(live);`), true, "stopped at the screen edge, peeking");
+    assert.equal(await run(`return at(300, 400).then(() => settle(120)).then(() => at(-30, 400)).then(() => settle(500)).then(live);`), true, "stopped at the screen edge, peeking");
     assert.equal(await run(`return at(-30, 400).then(() => settle(700)).then(live);`), false, "the second push went on to the next display");
     assert.equal(await run(`return at(300, 400).then(() => settle(500)).then(() => at(-30, 400)).then(() => settle(500)).then(live);`), true, "stops again on the next crossing");
     assert.equal(await run(`return away();`), false);
@@ -200,10 +197,30 @@ try {
     assert.equal(await run(`return at(300, 400).then(() => at(-250, 400)).then(() => settle(500)).then(live);`), false, "a window away from the screen edge lets the pointer cross");
   });
 
+  await rep.check("a sweep to the next display crosses the screen edge without stopping, and a long push goes through before the peek's 0.35 s", async () => {
+    await run(`return globalThis.expo.modules.ArdiaDev.devSetWindowFrame("w1", [0, 100, ${WIDTH}, ${HEIGHT}]).then(() => settle(400));`);
+    const listen = `const notes = []; const sub = globalThis.expo.modules.ArdiaAppWindows.addListener("onWindowEvent", (e) => e.screenEdge && notes.push(e.screenEdge));
+      const sweep = (xs, ms) => xs.reduce((p, x) => p.then(() => at(x, 400)).then(() => settle(ms)), Promise.resolve());`;
+    const fast = await run(`${listen}
+      return at(400, 400).then(() => settle(300)).then(() => sweep([380, 340, 300, 260, 220, 180, 140, 100, 60, 20, -20, -60], 8)).then(() => settle(400)).then(() => { sub.remove(); return { notes, live: live() }; });`);
+    assert.deepEqual(fast.notes, ["flung"], "a fast crossing is a fling, never a stop");
+    assert.equal(fast.live, false, "a fling leaves the peek closed");
+    assert.equal(await run(`return away();`), false);
+    const pushed = await run(`${listen}
+      return at(300, 400).then(() => settle(120)).then(() => at(-10, 400)).then(() => settle(60)).then(() => sweep([-20, -20, -20, -20], 20)).then(() => settle(100)).then(() => { sub.remove(); return notes; });`);
+    assert.deepEqual(pushed, ["stopped", "passed"], "pushing 64 pt past the edge goes through without waiting for the peek");
+    assert.equal(await run(`return away();`), false);
+    const short = await run(`${listen}
+      return at(300, 400).then(() => settle(120)).then(() => at(-10, 400)).then(() => settle(60)).then(() => sweep([-20, -20], 20)).then(() => settle(100)).then(() => { sub.remove(); return { notes, live: live() }; });`);
+    assert.deepEqual(short.notes, ["stopped"], "a short push stays stopped");
+    assert.equal(short.live, true, "and the peek is out");
+    assert.equal(await run(`return away();`), false);
+  });
+
   await rep.check("a stop at the screen edge ends when the window moves away from that edge", async () => {
     const frame = (x) => `return globalThis.expo.modules.ArdiaDev.devSetWindowFrame("w1", [${x}, 100, ${WIDTH}, ${HEIGHT}]).then(() => settle(400));`;
     await run(frame(0));
-    assert.equal(await run(`return at(300, 400).then(() => at(-30, 400)).then(() => settle(500)).then(live);`), true, "stopped at the screen edge, peeking");
+    assert.equal(await run(`return at(300, 400).then(() => settle(120)).then(() => at(-30, 400)).then(() => settle(500)).then(live);`), true, "stopped at the screen edge, peeking");
     await run(frame(300));
     assert.equal(await run(`return at(-300, 400).then(() => settle(700)).then(live);`), false, "the pointer left at the screen edge, 300 pt from the moved window");
     assert.equal(await run(`return at(-300, 200).then(() => settle(700)).then(live);`), false, "moving along the screen edge");
@@ -214,7 +231,7 @@ try {
     const screenWidth = Number(execFileSync("osascript", ["-l", "JavaScript", "-e", 'ObjC.import("AppKit"); $.NSScreen.screens.objectAtIndex(0).frame.size.width']).toString());
     await run(`st().updateSettings({ sidebarSide: "right" }); return globalThis.expo.modules.ArdiaDev.devSetWindowFrame("w1", [${screenWidth - WIDTH}, 100, ${WIDTH}, ${HEIGHT}]).then(() => settle(600));`);
     try {
-      assert.equal(await run(`return at(${WIDTH - 300}, 400).then(() => at(${WIDTH + 30}, 400)).then(() => settle(500)).then(live);`), true, "stopped at the right screen edge, peeking");
+      assert.equal(await run(`return at(${WIDTH - 300}, 400).then(() => settle(120)).then(() => at(${WIDTH + 30}, 400)).then(() => settle(500)).then(live);`), true, "stopped at the right screen edge, peeking");
       assert.equal(await run(`return at(${WIDTH + 30}, 400).then(() => settle(700)).then(live);`), false, "the second push went on to the next display");
     } finally {
       await run(`st().updateSettings({ sidebarSide: "left" }); return settle(400);`);

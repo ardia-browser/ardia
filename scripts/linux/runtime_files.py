@@ -15,6 +15,7 @@ OPTIONAL = ('snapshot_blob.bin', 'libEGL.so', 'libGLESv2.so', 'libvk_swiftshader
 NEVER_STRIPPED = ('chrome_sandbox',)
 LOCALE_BUILD_FILES = ('*.info',)
 ARCHIVE_ROOT = 'ardiacore-linux-x64'
+SYMBOLS_ROOT = 'ardiacore-linux-x64-symbols'
 MANIFEST_FORMAT = 2
 TARGET_OS = 'linux'
 TARGET_CPU = 'x64'
@@ -22,6 +23,10 @@ TARGET_CPU = 'x64'
 
 def archive_name(key):
     return f'ArdiaCore-{key[:12]}-linux-{TARGET_CPU}.tar.xz'
+
+
+def symbols_name(key):
+    return f'ArdiaCore-{key[:12]}-linux-{TARGET_CPU}-symbols.tar.xz'
 
 
 def release_tag(key):

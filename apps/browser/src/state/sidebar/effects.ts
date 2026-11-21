@@ -9,6 +9,7 @@ import { isSilenced } from "../tabs/mute";
 import { dismissHover } from "./hover";
 import { sidebarUi } from "./sidebarUi";
 import { cancelSwitcher, closeSwitcherRow, commitSwitcher, moveSwitcher } from "./switcher";
+import { noteTabSwitcherReleasedInMenu } from "../telemetry/tabSwitcherOpens";
 
 let started = false;
 
@@ -35,6 +36,7 @@ export function startSidebarEffects() {
       dismissHover();
       useBrowser.getState().closeAbandonedNewTabs();
     }
+    if (e.type === "switcherReleased" && e.afterMenu && sidebarUi().switcher) noteTabSwitcherReleasedInMenu();
     if (e.type === "switcherReleased" || e.type === "resignActive") commitSwitcher();
     if (e.type === "switcherMouseUp" || (e.type === "switcherKey" && e.key === "escape")) cancelSwitcher();
     if (e.type === "switcherKey" && e.key === "close") void closeSwitcherRow();

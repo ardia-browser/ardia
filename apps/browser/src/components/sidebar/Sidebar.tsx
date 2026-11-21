@@ -13,6 +13,7 @@ import { usePagerPages } from "../../state/windows/profilePager";
 import { PROFILE_DOTS_HEIGHT, ProfileDots, useProfileDotsShown } from "../profiles/ProfileDots";
 import { SidebarAddressRow, SidebarHeaderTools } from "./AddressBar";
 import { DragGhost } from "./DragGhost";
+import { EdgeGlow } from "./EdgeGlow";
 import { DragProvider } from "./DragProvider";
 import type { DragController } from "./dragController";
 import type { Ghost } from "./dragModel";
@@ -39,7 +40,7 @@ export function Sidebar({ width }: { width: number }) {
   const [available, setAvailable] = useState(0);
   const newTabAtTop = useNewTabAtTop();
   const newTabShown = useSidebarPart("newTab");
-  const dockAbove = newTabAtTop || !newTabShown || available <= 0 ? Infinity : available - rowPitch() - 12;
+  const canDock = !newTabAtTop && newTabShown;
   const scroll = useRef<ScrollView>(null);
   const scrollY = useRef(0);
   const geometry = useRef<SidebarGeometry>({ viewport: 0, regions: { pinnedGroups: 0, list: 0 }, newTabAtTop: false, tilesFixed: true });
@@ -77,6 +78,7 @@ export function Sidebar({ width }: { width: number }) {
 
   useRevealTabs(windowId, scroll, scrollY, geometry);
   useLayoutEffect(() => dismissHoverIn(windowId), [windowId, current, paging]);
+  useLayoutEffect(() => void (current && drag.current?.profileShown(current)), [current]);
   useEffect(() => closeAnchoredWhenControlsRowChanges(windowId), [windowId]);
 
   return (
@@ -111,7 +113,7 @@ export function Sidebar({ width }: { width: number }) {
                     width={width}
                     current={page.id === current}
                     resting={!!page.resting}
-                    dockAbove={dockAbove}
+                    canDock={canDock}
                     height={Math.max(0, available - (field === "top" ? GLOW_ROOM : 0))}
                     rows={page.id === current ? undefined : Math.ceil(available / rowPitch()) + 1}
                     geometry={page.id === current ? geometry : undefined}
@@ -146,9 +148,9 @@ export function Sidebar({ width }: { width: number }) {
                   </>
                 ) : collapsed ? null : (
                   <View pointerEvents="box-none" style={{ height: header, flexDirection: "row", alignItems: "flex-start", paddingLeft: PROFILE_INDICATOR_X, paddingRight: HEADER_RIGHT + captionRoom, paddingTop: lightsY - 17 }}>
-                    {profileShown ? <ProfileIndicator room={width - PROFILE_INDICATOR_X - HEADER_RIGHT - captionRoom - (hasDownloads ? SIDEBAR_FOOTER_DOWNLOADS.size + 2 : 0)} /> : null}
+                    {profileShown ? <ProfileIndicator room={width - PROFILE_INDICATOR_X - HEADER_RIGHT - captionRoom - (hasDownloads && !footerDownloads ? SIDEBAR_FOOTER_DOWNLOADS.size + 2 : 0)} /> : null}
                     <View pointerEvents="none" style={{ flex: 1 }} />
-                    {hasDownloads ? <DownloadsButton windowId={windowId} /> : null}
+                    {hasDownloads && !footerDownloads ? <DownloadsButton windowId={windowId} /> : null}
                   </View>
                 )}
               </View>
@@ -161,9 +163,14 @@ export function Sidebar({ width }: { width: number }) {
                 <PinSlotZone top={header - sidebarHeaderOf(addressBar, lightsY, false)} />
               )
             ) : null}
+            {ghost ? <EdgeGlow /> : null}
             <SidebarTextScope>
               <FolderPanel windowId={windowId} />
-              {ghost ? <DragGhost ghost={ghost} /> : null}
+              {ghost ? (
+                <ClipView pointerEvents="none" style={GHOST_CLIP}>
+                  <DragGhost ghost={ghost} />
+                </ClipView>
+              ) : null}
             </SidebarTextScope>
           </SidebarDropArea>
           </SidebarRowLookContext.Provider>
@@ -172,3 +179,5 @@ export function Sidebar({ width }: { width: number }) {
     </DragProvider>
   );
 }
+
+const GHOST_CLIP = { ...StyleSheet.absoluteFillObject, overflow: "hidden" } as const;

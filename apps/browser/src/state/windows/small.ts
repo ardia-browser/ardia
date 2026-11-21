@@ -20,6 +20,9 @@ export const isOpenRegularWindow = (w: BrowserWindow | undefined): boolean => is
 export const isLastRegularWindow = (s: Pick<BrowserState, "windows">, id: string): boolean =>
   isRegularWindow(s.windows[id]) && !Object.values(s.windows).some((o) => o.id !== id && isOpenRegularWindow(o));
 
+export const isOnlyRegularWindow = (s: Pick<BrowserState, "windows">, id: string): boolean =>
+  isRegularWindow(s.windows[id]) && !Object.values(s.windows).some((o) => o.id !== id && isRegularWindow(o));
+
 export function mainWindowFor(s: BrowserState, profileId?: string): string | undefined {
   const order = [...new Set([...s.ui.focusOrder, ...s.windowOrder])].filter((id) => isOpenRegularWindow(s.windows[id]));
   return (profileId ? order.find((id) => s.windows[id]!.profileId === profileId) : undefined) ?? order[0];

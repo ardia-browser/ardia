@@ -5,6 +5,7 @@
 #include <utility>
 #include <vector>
 
+#include "ardia/linux/ac_linux_cast_core.h"
 #include "ardia/linux/ac_linux_launch_config.h"
 #include "base/base_paths.h"
 #include "base/command_line.h"
@@ -325,8 +326,11 @@ std::optional<std::string> TestValue(std::string_view) {
   return std::nullopt;
 }
 
-bool TestFlag(std::string_view) {
-  return false;
+bool TestFlag(std::string_view key) {
+  return key == linux_cast::kTestProviderFlag &&
+         linux_cast::TestSinkAllowed(!CommandLine().HasSwitch(switches::kProcessType),
+                                     CommandLine().HasSwitch(linux_cast::kTestSinkSwitch),
+                                     !CommandLine().GetSwitchValuePath(switches::kUserDataDir).empty());
 }
 
 bool Traced(std::string_view) {

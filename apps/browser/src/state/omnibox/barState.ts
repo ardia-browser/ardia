@@ -6,6 +6,7 @@ import { expectFocus, heroBarFocus } from "../focus/focusClaims";
 import { webviews } from "../../platform/webviews";
 import { clickBarPlacement } from "./barPlacement";
 import { notePageFocusReturnAfterBar } from "../telemetry/pageFocusReturns";
+import { consentToken } from "../telemetry/client";
 
 export type BarSnapshot = {
   typed: string;
@@ -55,13 +56,14 @@ export function openEmptySidebarField(windowId: string) {
 export type BarDismissal = "escape" | "closeKey";
 
 export function cancelPanel(windowId: string) {
+  const consent = consentToken();
   useBrowser.getState().closePanel(windowId);
   setTimeout(() => {
     const now = useBrowser.getState();
     const active = activeTabId(now, windowId);
     if (!active || !now.tabs[active]?.url || now.windowUi[windowId]?.panel.open || shownPeek(now, windowId)) return;
     void webviews.get(active)?.focusIfUnfocused().then((focused) => {
-      if (focused) notePageFocusReturnAfterBar();
+      if (focused) notePageFocusReturnAfterBar(consent);
     });
   }, 0);
 }

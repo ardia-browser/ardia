@@ -76,6 +76,61 @@ struct FocusModule {
   REACT_INIT(Initialize)
   void Initialize(winrt::Microsoft::ReactNative::ReactContext const &context) noexcept {
     m_context = context;
+    RunOnUI(context, [context]() noexcept {
+      Menus::FocusHold &hold = Menus::FocusHold::Shared();
+      hold.announce = nullptr;
+      hold.Reloaded();
+      hold.announce = [context](int tag, int count) noexcept {
+        using winrt::Microsoft::ReactNative::JSValueObject;
+        EmitEvent(context, L"ArdiaShell", L"onAppEvent", JSValueObject{{"type", "keyHoldReplay"}, {"tag", static_cast<int64_t>(tag)}, {"count", static_cast<int64_t>(count)}});
+        LaunchLog::Write(L"keys", L"hold replay into tag " + std::to_wstring(tag) + (count ? L" announced, " + std::to_wstring(count) + L" held" : std::wstring{L" over"}));
+      };
+    });
+  }
+
+  REACT_METHOD(claimFocus)
+  void claimFocus(int generation, int tag, DonePromise promise) noexcept {
+    RunOnUI(m_context, [generation, tag, promise]() noexcept {
+      Menus::FocusHold::Shared().Claim(generation, tag);
+      promise.Resolve();
+    });
+  }
+
+  REACT_METHOD(cancelFocusMove)
+  void cancelFocusMove(int generation, bool, DonePromise promise) noexcept {
+    RunOnUI(m_context, [generation, promise]() noexcept {
+      Menus::FocusHold::Shared().Cancel(generation);
+      promise.Resolve();
+    });
+  }
+
+  REACT_METHOD(fieldFocused)
+  void fieldFocused(int tag) noexcept {
+    RunOnUI(m_context, [tag]() noexcept { Menus::FocusHold::Shared().Focused(tag); });
+  }
+
+  REACT_METHOD(fieldAsked)
+  void fieldAsked(int tag) noexcept {
+    RunOnUI(m_context, [tag]() noexcept { Menus::FocusHold::Shared().Asked(tag); });
+  }
+
+  REACT_METHOD(fieldBlurred)
+  void fieldBlurred(int tag) noexcept {
+    RunOnUI(m_context, [tag]() noexcept { Menus::FocusHold::Shared().Blurred(tag); });
+  }
+
+  REACT_SYNC_METHOD(keyHoldCounts)
+  winrt::Microsoft::ReactNative::JSValue keyHoldCounts() noexcept {
+    using winrt::Microsoft::ReactNative::JSValue;
+    using winrt::Microsoft::ReactNative::JSValueObject;
+    Menus::FocusHold::Counts taken = Menus::FocusHold::Shared().Take();
+    JSValueObject drops;
+    for (auto const &[reason, count] : taken.drops) drops[reason] = JSValue{static_cast<int64_t>(count)};
+    JSValueObject counts;
+    counts["holds"] = JSValue{static_cast<int64_t>(taken.holds)};
+    counts["replayed"] = JSValue{static_cast<int64_t>(taken.replayed)};
+    counts["drops"] = JSValue{std::move(drops)};
+    return JSValue{std::move(counts)};
   }
 
   REACT_METHOD(setDragEscapeCapture)

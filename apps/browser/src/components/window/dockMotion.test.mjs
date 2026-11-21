@@ -11,16 +11,12 @@ const stub = await import("../../test-native/index.ts");
 
 const S = () => useBrowser.getState();
 
-const DIA = [
-  [0.0337, 0.303], [0.0629, 0.616], [0.0837, 0.805], [0.1212, 0.968], [0.1379, 1.011], [0.1629, 1.011], [0.1837, 1.003],
-  [0.0263, 0.246], [0.0596, 0.524], [0.0805, 0.8], [0.1055, 0.951], [0.1305, 1.008], [0.1555, 1.011], [0.1805, 1.003],
-  [0.0324, 0.316], [0.0657, 0.586], [0.0949, 0.846], [0.1032, 0.973], [0.1365, 1.011], [0.1532, 1.011], [0.1782, 1.005],
-];
-
-test("the slide follows Dia's measured rise and never passes its final width (#1630: Dia's 1 % overshoot laid pages out 3 pt too wide and back)", () => {
-  const rms = Math.sqrt(DIA.reduce((sum, [t, x]) => sum + (dm.slideAt(t) - Math.min(1, x)) ** 2, 0) / DIA.length);
-  assert.ok(rms < 0.025, `rms ${rms.toFixed(3)} against Dia's trace with its overshoot taken out`);
-  assert.ok(dm.slideAt(0.1) > 0.9, "90 % of the travel in 100 ms, as Dia");
+test("the slide is an ease-in-out over 200 ms that never passes its final width (#1630: an overshoot laid pages out too wide and back)", () => {
+  assert.equal(dm.DOCK_SLIDE.duration, 200);
+  assert.deepEqual([...dm.DOCK_SLIDE_CURVE], [0.42, 0, 0.58, 1]);
+  assert.ok(Math.abs(dm.slideAt(0.1) - 0.5) < 0.001, `half the travel at half the time: ${dm.slideAt(0.1)}`);
+  assert.ok(dm.slideAt(0.02) < 0.05, "starts gently");
+  assert.ok(dm.slideAt(0.18) > 0.95, "lands gently");
   let last = 0;
   for (let ms = 0; ms <= 400; ms++) {
     const x = dm.slideAt(ms / 1000);
@@ -118,6 +114,13 @@ test("the card radius follows the native window radius minus the frame, and the 
   assert.deepEqual(dm.toolbarLightsCenter(false, 0), [25, 21]);
   assert.deepEqual(dm.toolbarLightsCenter(false), [...dm.LIGHTS_CENTER]);
   assert.equal(dm.toolbarLightsCenter(false, 4), dm.toolbarLightsCenter(false, 4), "one array per frame, so effects keyed on it settle");
+});
+
+test("on a window drawn at 16 pt, a thin frame's corner nests in the window's and the default frame keeps its 10 pt", () => {
+  const peek = dm.peekRadius();
+  assert.ok(Math.abs(pageFrameOf(1, 19, peek, 16).radius - 46 / 3) < 1e-9, "1 pt in from a 16 pt corner: 15 pt concentric, plus a ninth of the 3 pt the default frame adds");
+  for (const inset of [9, 12]) assert.equal(pageFrameOf(inset, 19, peek, 16).radius, pageFrameOf(inset, 19, peek).radius);
+  assert.equal(pageFrameOf(0, 19, peek, 16).radius, 0);
 });
 
 test("the motion flag is per window, and ending it twice is harmless", () => {
@@ -276,9 +279,13 @@ test("Arc's layout keeps the address bar in a hidden sidebar (no toolbar on the 
   reloadSwitches();
 });
 
-test("the dock is fullscreen, docked, peeking, hiding or away, and only a still, undocked sidebar watches the left edge", () => {
+test("the dock is fullscreen, docked, peeking, hiding or away, and a still sidebar that isn't docked watches the left edge, also over a full-screen page (#1041)", () => {
   const st = (o) => dm.dockState({ open: false, fullscreen: false, moving: false, peekLive: false, ...o });
-  assert.equal(st({ fullscreen: true, open: true, peekLive: true }), "fullscreen");
+  assert.equal(st({ fullscreen: true, open: true }), "fullscreen");
+  assert.equal(st({ fullscreen: true }), "fullscreen");
+  assert.equal(st({ fullscreen: true, open: true, peekLive: true }), "peeking");
+  assert.equal(st({ fullscreen: true, peekLive: true, peekLeaving: true }), "leaving");
+  assert.equal(st({ open: true, peekLive: true }), "docked");
   assert.equal(st({ open: true, moving: true }), "docked");
   assert.equal(st({ peekLive: true }), "peeking");
   assert.equal(st({ peekLive: true, moving: true }), "peeking");
@@ -293,7 +300,8 @@ test("the dock is fullscreen, docked, peeking, hiding or away, and only a still,
   assert.equal(dm.watchesEdge("peeking", true), false);
   assert.equal(dm.watchesEdge("hiding", true), false);
   assert.equal(dm.watchesEdge("docked", false), false);
-  assert.equal(dm.watchesEdge("fullscreen", false), false);
+  assert.equal(dm.watchesEdge("fullscreen", false), true);
+  assert.equal(dm.watchesEdge("fullscreen", true), false);
 });
 
 test("while the peek slides away only the window's edge brings it back, not the column it is leaving (#1192)", () => {
@@ -366,4 +374,18 @@ test("the dock jumps when it can't animate or Arc docks from an open peek, Arc h
   assert.equal(mv({ arc: true, open: false, peekOut: true }), "arcHide");
   assert.equal(mv({ open: false }), "slide");
   assert.equal(mv({ peekOut: true }), "slide");
+});
+
+test("a peek's light moves that stay wholly off the window at one height aren't sent; the first visible one and the rest place are", () => {
+  const hidden = dm.sidebarLightsCenter(false, 240, 240, 0, [25, 24]);
+  const right = dm.sidebarLightsCenter(true, 240, 240, 0, [25, 24]);
+  assert.equal(dm.lightsOffWindow(hidden), true);
+  assert.equal(dm.lightsOffWindow(right), true);
+  assert.equal(dm.lightsOffWindow(dm.sidebarLightsCenter(true, 240, 0, 0, [25, 24])), false);
+  assert.equal(dm.stillOffWindow(undefined, [-168, 33]), false);
+  assert.equal(dm.stillOffWindow([-168, 33], [-120, 33]), true);
+  assert.equal(dm.stillOffWindow([-120, 33], [-40, 33]), false);
+  assert.equal(dm.stillOffWindow([-168, 33], [-165, 24]), false);
+  assert.equal(dm.stillOffWindow([-60, 33, "right"], [-30, 33, "right"]), true);
+  assert.equal(dm.stillOffWindow([-30, 33, "right"], [10, 33, "right"]), false);
 });

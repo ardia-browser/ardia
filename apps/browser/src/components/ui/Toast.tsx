@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Animated, View } from "react-native";
 import { Button } from "./Button";
-import { curve, duration, springs } from "./motion";
+import { curve, duration } from "./motion";
 import { Symbol } from "./native";
 import { Panel } from "./Panel";
 import { Text } from "./Text";
@@ -12,6 +12,7 @@ const DOCK = { position: "absolute", left: 0, right: 0, bottom: toastLayout.bott
 const BODY = { paddingHorizontal: space.xl, paddingVertical: space.ml, flexDirection: "row", alignItems: "center", gap: space.ml, maxWidth: toastLayout.maxWidth } as const;
 const ICON = { width: 20, height: 20 } as const;
 const TEXT = { flexShrink: 1 } as const;
+const TOAST_FADE = { in: { duration: duration.base, easing: curve.enter }, out: { duration: duration.slow, easing: curve.exit } } as const;
 
 export function Toast({
   title,
@@ -35,20 +36,13 @@ export function Toast({
   const closed = useRef(onClosed);
   closed.current = onClosed;
   useEffect(() => {
-    const run = closing
-      ? Animated.timing(appear, { toValue: 0, duration: duration.slow, easing: curve.exit, useNativeDriver: true })
-      : Animated.spring(appear, { toValue: 1, ...springs.bouncy, useNativeDriver: true });
+    const run = Animated.timing(appear, { toValue: closing ? 0 : 1, ...(closing ? TOAST_FADE.out : TOAST_FADE.in), useNativeDriver: true });
     run.start(({ finished }) => finished && closing && closed.current?.());
     return () => run.stop();
   }, [closing]);
   return (
     <View pointerEvents={action && !closing ? "box-none" : "none"} style={DOCK}>
-      <Animated.View
-        style={{
-          opacity: appear,
-          transform: [{ translateY: appear.interpolate({ inputRange: [0, 1], outputRange: [toastLayout.rise, 0] }) }, { scale: appear.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }],
-        }}
-      >
+      <Animated.View style={{ opacity: appear }}>
         <Panel fill={theme.toastFill} border={theme.popoverBorder} radius={radius.panel} shadow={shadow.card} material="hudWindow" style={BODY}>
           {icon ? <Symbol name={icon} size={15} color={theme.icon} style={ICON} /> : null}
           <View style={TEXT}>

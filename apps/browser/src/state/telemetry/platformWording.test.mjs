@@ -51,14 +51,40 @@ test("no Mac name, Mac-only phrase or key glyph is left in Windows's copy except
   const windows = live.map(windowsWords);
   for (const text of windows) {
     assert.doesNotMatch(text, /\b(?:this|the) Mac\b|\bmacOS version\b|\bfrom the Dock\b|\bin Finder\b|[⌃⌥⇧⌘]/u, text);
-    for (const phrase of Object.values(PHRASES_ONLY_WITH)) assert.ok(!text.includes(phrase));
+    for (const phrase of Object.values(PHRASES_ONLY_WITH).flat()) assert.ok(!text.includes(phrase));
   }
   assert.ok(windows.some((text) => text.includes("whether macOS and Ardia agree")));
   assert.ok(windows.some((text) => text.includes("Dock icon clicks")));
 });
 
 test("each phrase a feature removes is still in the copy, so a reworded sentence fails here instead of leaking", () => {
-  for (const phrase of Object.values(PHRASES_ONLY_WITH)) assert.ok(live.some((text) => text.includes(phrase)), phrase);
+  for (const phrase of Object.values(PHRASES_ONLY_WITH).flat()) assert.ok(live.some((text) => text.includes(phrase)), phrase);
+});
+
+const FREEZE_WORDING = [
+  "stopped responding for a quarter of a second",
+  "freeing its memory",
+  "freezes for 0.4 seconds or more",
+  "program addresses",
+  "“system” or “other”",
+  "the last 20 times Ardia froze",
+  "Copy Last Freeze",
+];
+
+test("Windows, which has no freeze watch, says nothing about freezes; the Mac says all of it", () => {
+  const mac = live.join("\n");
+  for (const said of FREEZE_WORDING) assert.ok(mac.includes(said), `the Mac says ${said}`);
+  const windows = live.map(windowsWords).join("\n");
+  for (const said of FREEZE_WORDING) assert.ok(!windows.includes(said), `Windows says ${said}`);
+  assert.ok(windows.includes("with the largest slip in points"), "Windows keeps the sentence around the freeze phrase");
+  assert.equal(windowsFeatures.freezeWatch, false);
+});
+
+test("a feature phrase is removed even when a shorter feature phrase sits inside it or it spans quotes", () => {
+  const words = platformWording(windowsTerms, windowsFeatures, windowsKeyText);
+  const phrase = [PHRASES_ONLY_WITH.freezeWatch].flat()[0];
+  assert.ok(phrase.includes("“system”") && phrase.includes(", the Mac's memory pressure"));
+  assert.equal(words(`Memory use${phrase}. Never which page`), "Memory use. Never which page");
 });
 
 test("the rules touch only whole words outside quotes", () => {
@@ -76,9 +102,14 @@ test("the rules touch only whole words outside quotes", () => {
 test("the branch's own sentences come last in Usage, after main's", () => {
   const usage = copy.WHATS_SENT.find((group) => group.title === "Usage");
   assert.ok(usage);
-  assert.ok(usage.items.at(-1).startsWith("On Windows, how many times a tab you switched to had no page yet"));
-  assert.ok(usage.items.at(-2).startsWith("On Windows, how many sync files waited"));
-  assert.ok(usage.items.at(-16).startsWith("How many times the first-launch intro was shown"));
+  assert.ok(usage.items.at(-1).startsWith("On Windows, how many times Ardia asked before quitting right after you confirmed closing a window's tabs"));
+  assert.ok(usage.items.at(-2).startsWith("On Windows, how many times Ardia held the keys you typed"));
+  assert.ok(usage.items.at(-3).startsWith("How many times suggestions that came in late waited"));
+  assert.ok(usage.items.at(-4).startsWith("How many times a window's interface was started a second time"));
+  assert.ok(usage.items.at(-5).startsWith("On Windows, how many times the command bar put back a letter"));
+  assert.ok(usage.items.at(-6).startsWith("On Windows, how many times a tab you switched to had no page yet"));
+  assert.ok(usage.items.at(-7).startsWith("On Windows, how many sync files waited"));
+  assert.ok(usage.items.at(-22).startsWith("How many times the first-launch intro was shown"));
 });
 
 test("WATCH_COPY, which the platform pass skips, has nothing the rules would change", () => {

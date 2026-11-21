@@ -77,6 +77,7 @@ static __weak NSWindow *gSwipeMomentum;
   _dragGrab = NSMakePoint(pointer.x - NSMinX(frame), pointer.y - NSMinY(frame));
   _dragHome = [self gestureHome];
   _dragBeganAt = event.timestamp;
+  _dragStamp = ArdiaConsentStamp.begin;
   _dragOffCursor = 0;
   _dragMaxOff = 0;
   _dragSlowestMove = 0;
@@ -138,7 +139,7 @@ static __weak NSWindow *gSwipeMomentum;
     @"trace" : _dragTrace ?: @[],
   };
   _dragTrace = nil;
-  [self.view emit:@"pictureInPictureDragged" payload:@{@"offCursor" : @(_dragOffCursor > 0), @"slowMove" : @(_dragSlowestMove > 8)}];
+  [self.view emit:@"pictureInPictureDragged" payload:[_dragStamp onto:@{@"offCursor" : @(_dragOffCursor > 0), @"slowMove" : @(_dragSlowestMove > 8)}]];
   [self dragReleasedAt:grabbed velocity:NSMakePoint(velocity.x, velocity.y)];
 }
 

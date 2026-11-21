@@ -28,6 +28,7 @@ import { sendTabFromMenu, sendTabMenuItem } from "../sync/menu";
 import { pageUnread } from "../tabs/unread";
 import { closeIntent, openPages } from "../tabs/tabs";
 import { noteTopAppUnloadedFromMenu } from "../telemetry/tabSleepCounts";
+import { canSleep, sleepTabsFromMenu } from "../tabs/manualSleep";
 import { ALL_UNREAD_TITLE, canChooseSiteUnread, isUnreadSiteHidden, showUnreadCounts, toggleSiteUnread, unreadSiteTitle } from "../tabs/unreadSites";
 
 const store = () => useBrowser.getState();
@@ -107,7 +108,11 @@ function organiseItems(s: BrowserState, windowId: string, tab: Tab, f: Facts): T
   const groups = f.section === "tile" ? [] : groupItems(s, windowId, f.group?.id);
   const grouping: TabMenuItem[] =
     f.section === "tile"
-      ? [tileFolderOf(tab) ? { id: "leaveFolder", title: "Remove from Folder", symbol: "folder.badge.minus" } : { id: "newFolder", title: "New Folder…", symbol: "folder.badge.plus" }]
+      ? tileFolderOf(tab)
+        ? [{ id: "leaveFolder", title: "Remove from Folder", symbol: "folder.badge.minus" }]
+        : s.settings.topAppFolders
+          ? [{ id: "newFolder", title: "New Folder…", symbol: "folder.badge.plus" }]
+          : []
       : [
           ...(f.memberPin
             ? []
@@ -160,8 +165,10 @@ function unloadTopApp(tabId: string) {
 }
 
 function closeItems(s: BrowserState, tab: Tab, f: Facts): MenuItem[] {
-  if (f.housed) return f.section === "tile" && s.settings.keepTopAppsRunning && openPages(s, tab.id).length > 0 ? [{ id: "unloadTopApp", title: "Unload", symbol: "moon.zzz" }] : [];
+  const sleep: MenuItem[] = canSleep(s, tab.id) ? [{ id: "sleep", title: "Sleep Tab", symbol: "moon.zzz" }] : [];
+  if (f.housed) return f.section === "tile" && s.settings.keepTopAppsRunning && openPages(s, tab.id).length > 0 ? [{ id: "unloadTopApp", title: "Unload", symbol: "moon.zzz" }] : sleep;
   return [
+    ...sleep,
     { id: "close", title: "Close", symbol: "xmark", ...hintWhen(f.active, "closeTab") },
     ...(f.split ? [{ id: "closeSplit", title: "Close Split View" }] : []),
     { id: "closeOthers", title: "Close Other Tabs", enabled: f.others.length > 0 },
@@ -272,6 +279,7 @@ function runTabChoice(windowId: string, tab: Tab, f: Facts, choice: string | Des
   else if (choice === "unload") void discardTabs([tab.id]);
   else if (choice === "close") void closeTab(tab.id);
   else if (choice === "unloadTopApp") unloadTopApp(tab.id);
+  else if (choice === "sleep") void sleepTabsFromMenu([tab.id], "tab");
   else if (choice === "closeSplit" && f.split) closeSplitView(f.split.id);
   else if (choice === "closeOthers") s.closeTabs(f.others);
   else if (choice === "closeAbove") s.closeTabs(f.above);

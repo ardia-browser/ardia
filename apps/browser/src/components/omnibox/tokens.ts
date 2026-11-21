@@ -1,4 +1,5 @@
 import { curve, duration } from "../ui/motion";
+import { PANEL_FIELD_LIFT } from "../../lib/platformChrome";
 import { capsule, concentric, font, perLook, radius, space } from "../ui/tokens";
 
 export const PANEL_TEXT_LEFT = 48;
@@ -20,7 +21,7 @@ export const BAR_TYPE = {
 export const BAR = {
   iconSlot: ICON_SLOT,
   leadingIcon: 15,
-  panelFieldLift: -3,
+  panelFieldLift: PANEL_FIELD_LIFT,
   panel: {
     height: 55,
     heroHeight: 60,

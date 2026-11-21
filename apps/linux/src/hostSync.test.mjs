@@ -59,6 +59,7 @@ function nativeLease(ttl = 200) {
 function renderer(name, { candidate, lease, engines, channelName }) {
   const mirror = store({ status: "starting", error: null, folder: null });
   const log = [];
+  const calls = [];
   const authority = startSyncAuthority({
     id: name, candidate, channel: new BroadcastChannel(channelName), mirror, timers: fast, report: () => {},
     claim: async () => lease.claim(name),
@@ -68,6 +69,7 @@ function renderer(name, { candidate, lease, engines, channelName }) {
       const real = store({ status: "off", error: null, folder: null, owner: name });
       const remote = Object.fromEntries(REMOTE_METHODS.map((method) => [method, async (...args) => {
         log.push(method);
+        calls.push({ method, args });
         if (!lease.holds(name)) throw new Error("ERR_SYNC_NOT_AUTHORITY");
         if (method === "turnOnSync") real.setState({ ...real.getState(), status: "starting", folder: args[0] }, true);
         return method === "turnOnSync" || method === "enterRecoveryPhrase" ? { ok: true } : null;
@@ -75,7 +77,7 @@ function renderer(name, { candidate, lease, engines, channelName }) {
       return { store: real, remote };
     },
   });
-  return { authority, mirror, log };
+  return { authority, mirror, log, calls };
 }
 
 function heldIo(docs = new Map(), { openFails = false } = {}) {
@@ -188,6 +190,7 @@ test("the sync module keeps device ids local and sends every other call as a typ
   assert.match(syncModuleMethod(host, "ArdiaSync", "newDeviceId")(), /^[a-z2-7]{26}$/);
   assert.equal(newSyncDeviceId((bytes) => bytes.fill(0)), "aaaaaaaaaaaaaaaaaaaaaaaaaa");
   assert.equal(syncModuleMethod(host, "ArdiaSync", "nope"), undefined);
+  assert.equal(resolveHostModule(host, "ArdiaSync", "takeFileCounts"), null, "the hourly sync file counts are a Windows placeholder count Linux has none of, so the optional method is absent instead of a host call that rejects");
   await resolveHostModule(host, "ArdiaSync", "folderInfo")(undefined);
   await resolveHostModule(host, "ArdiaSync", "enterPhrase")("aaaaaaaaaaaaaaaaaaaaaaaaaa", PHRASE, "/sync");
   assert.deepEqual(host.calls, [
@@ -205,13 +208,14 @@ test("opening a keyring that was locked at launch resumes sync once from the sto
   assert.equal(resumed, 1);
 });
 
-test("one renderer runs sync, the others mirror it and forward their actions, and it fails over when that window closes", async () => {
+test("one renderer runs sync, the others mirror it and forward their actions, and it fails over when that window closes", async (t) => {
   const channelName = `sync-${Math.random()}`;
   const lease = nativeLease();
   const engines = [];
   const a = renderer("a", { candidate: true, lease, engines, channelName });
   const b = renderer("b", { candidate: true, lease, engines, channelName });
   const settings = renderer("settings", { candidate: false, lease, engines, channelName });
+  t.after(() => { a.authority.stop(); b.authority.stop(); settings.authority.stop(); });
   await tick(80);
   assert.deepEqual(engines, ["a"]);
   assert.equal(settings.authority.role(), "client");
@@ -219,11 +223,25 @@ test("one renderer runs sync, the others mirror it and forward their actions, an
   assert.deepEqual(a.log, ["turnOnSync"]);
   await tick();
   assert.equal(settings.mirror.getState().folder, "/home/tux/Sync");
+  await settings.authority.call("setOpenTabsSynced", ["work", true]);
+  await settings.authority.call("setOpenTabsSynced", ["work", false]);
+  assert.deepEqual(a.calls.slice(1), [
+    { method: "setOpenTabsSynced", args: ["work", true] },
+    { method: "setOpenTabsSynced", args: ["work", false] },
+  ]);
   a.authority.stop();
   await tick(300);
   assert.deepEqual(engines, ["a", "b"]);
   assert.equal(await settings.authority.call("syncNow", []), null);
   assert.deepEqual(b.log, ["syncNow"]);
+  await settings.authority.call("setOpenTabsSynced", ["work", true]);
+  await settings.authority.call("setOpenTabsSynced", ["work", false]);
+  assert.deepEqual(b.calls, [
+    { method: "syncNow", args: [] },
+    { method: "setOpenTabsSynced", args: ["work", true] },
+    { method: "setOpenTabsSynced", args: ["work", false] },
+  ]);
+  assert.equal(a.calls.length, 3);
   b.authority.stop();
   await tick(60);
   await assert.rejects(settings.authority.call("syncNow", []), { message: NO_AUTHORITY_MESSAGE });
@@ -234,4 +252,46 @@ test("refreshing sync documents drops journal parts stranded after a gap", async
   const disk = new Set(["sync.json", "sync-state.nns", "sync-journal-1.nns", "sync-journal-2.nns", "sync-journal-4.nns", "sync-journal-7.nns"]);
   const result = await refreshSyncDocuments({ refresh: async (name) => disk.has(name), remove: async (name) => void disk.delete(name), maxParts: 12, batch: 5 });
   assert.deepEqual(result, { parts: 2, removed: ["sync-journal-4.nns", "sync-journal-7.nns"] });
+});
+
+test("a sync.now forwarded to the sync window reports that window's answer", async () => {
+  const { syncNowThrough } = await import("./syncForward.ts");
+  const idle = async () => {};
+  assert.equal(await syncNowThrough(idle, async () => false, () => {}), false, "a refused pass stays refused");
+  assert.equal(await syncNowThrough(idle, async () => true, () => {}), true);
+  assert.equal(await syncNowThrough(idle, async () => null, () => {}), true, "a sync window that answers nothing still counts as done");
+  let forwarded = false;
+  await assert.rejects(syncNowThrough(idle, async () => (forwarded = true), () => { throw new Error("control is off"); }));
+  assert.equal(forwarded, false, "nothing is forwarded once the caller's check fails");
+});
+
+test("a forwarded sync.now checks its caller after the sync window's cycle ends, and never starts one behind a busy cycle", async () => {
+  const { syncIdle, syncNowIfIdle, syncNowThrough } = await import("./syncForward.ts");
+  let cycle = null;
+  let started = 0;
+  const engineSyncNow = async (stillWanted) => {
+    while (cycle) await cycle;
+    stillWanted();
+    started += 1;
+    return true;
+  };
+  let finish;
+  cycle = new Promise((resolve) => (finish = resolve)).then(() => (cycle = null));
+  let wanted = true;
+  const forwarded = syncNowThrough(() => syncIdle(engineSyncNow), () => syncNowIfIdle(engineSyncNow), () => {
+    if (!wanted) throw new Error("control is off");
+  });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  wanted = false;
+  finish();
+  await assert.rejects(forwarded, /control is off/);
+  assert.equal(started, 0, "control turned off while the sync window was busy, so no cycle starts");
+
+  cycle = new Promise((resolve) => (finish = resolve)).then(() => (cycle = null));
+  const busy = syncNowIfIdle(engineSyncNow);
+  finish();
+  assert.equal(await busy, "busy", "a start that would have waited behind a cycle answers busy instead");
+  assert.equal(started, 0);
+  assert.equal(await syncNowIfIdle(engineSyncNow), true);
+  assert.equal(started, 1);
 });

@@ -538,7 +538,7 @@ std::optional<Failure> ParseFirefoxSession(std::string_view json, OpenTabs* out)
   return std::nullopt;
 }
 
-std::optional<Failure> ReadFirefoxTabs(const std::string& profile, OpenTabs* out) {
+std::string FirefoxSessionFile(const std::string& profile) {
   std::string chosen;
   double newest = -1;
   for (const char* name : {"sessionstore-backups/recovery.jsonlz4", "sessionstore.jsonlz4", "sessionstore-backups/previous.jsonlz4"}) {
@@ -550,6 +550,11 @@ std::optional<Failure> ReadFirefoxTabs(const std::string& profile, OpenTabs* out
       chosen = path;
     }
   }
+  return chosen;
+}
+
+std::optional<Failure> ReadFirefoxTabs(const std::string& profile, OpenTabs* out) {
+  const std::string chosen = FirefoxSessionFile(profile);
   if (chosen.empty()) return Failure{"empty", "No session store in this profile"};
   std::string compressed;
   const FileRead read = ReadFileLimited(chosen, kMaxSessionBytes, &compressed);

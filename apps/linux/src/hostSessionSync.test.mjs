@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { useBrowser } from "../../browser/src/state/browser/store.ts";
-import { createSessionWriter, initialHostSession, snapshotHostSession, startHostPersistence } from "./hostSession.ts";
+import { createSessionWriter, hydrateLaunchSession, initialHostSession, snapshotHostSession, startHostPersistence } from "./hostSession.ts";
 import { cloneSessionValue, mergeSession } from "./hostSessionMerge.ts";
 
 const tick = () => new Promise(setImmediate);
@@ -168,4 +168,35 @@ test("only the launch window takes over the last focused saved window", () => {
   assert.equal(launched.tabs[aKey].windowId, "main");
   const opened = initialHostSession(hostFor("window-12"), session);
   assert.deepEqual(Object.keys(opened.windows).sort(), ["window-12", "window-7", "window-9"]);
+});
+
+test("a launch reports the Top Apps merge marker the saved session had, before hydration settles it", async () => {
+  const { topAppsSharingAtLaunch } = await import("../../browser/src/state/telemetry/topAppsSharing.ts");
+  const S = () => useBrowser.getState();
+  S().hydrate(initialHostSession(hostFor("a"), null));
+  S().updateProfile("default", { shareTopApps: true });
+  S().createProfile({ name: "Work", shareWith: "default", shareTopApps: true });
+  assert.notEqual(S().topAppsMerged, "", "two sharing profiles record a merge marker");
+  const saved = { ...cloneSessionValue(snapshotHostSession(S())), topAppsMerged: "" };
+  S().hydrate({});
+  hydrateLaunchSession(saved, initialHostSession(hostFor("a", true), saved));
+  assert.notEqual(S().topAppsMerged, "", "hydration settled the marker");
+  const launch = topAppsSharingAtLaunch(S(), null);
+  assert.deepEqual({ merge_recorded: launch.merge_recorded, merge_recorded_this_launch: launch.merge_recorded_this_launch }, { merge_recorded: false, merge_recorded_this_launch: true });
+});
+
+test("a launch that clears a saved Top Apps merge marker reports it cleared, not merged", async () => {
+  const { topAppsSharingAtLaunch } = await import("../../browser/src/state/telemetry/topAppsSharing.ts");
+  const S = () => useBrowser.getState();
+  S().hydrate(initialHostSession(hostFor("a"), null));
+  S().createProfile({ name: "Work", shareWith: "default" });
+  const saved = { ...cloneSessionValue(snapshotHostSession(S())), topAppsMerged: "default,work" };
+  S().hydrate({});
+  hydrateLaunchSession(saved, initialHostSession(hostFor("a", true), saved));
+  assert.equal(S().topAppsMerged, "", "no profile opted in, so hydration cleared the marker");
+  const launch = topAppsSharingAtLaunch(S(), null);
+  assert.deepEqual(
+    { merge_recorded: launch.merge_recorded, merge_recorded_this_launch: launch.merge_recorded_this_launch, merge_marker_cleared: launch.merge_marker_cleared },
+    { merge_recorded: true, merge_recorded_this_launch: false, merge_marker_cleared: true },
+  );
 });

@@ -70,6 +70,12 @@ export function resize(sizes: number[], a: number, delta: number, total: number,
   return next.map((p) => p / free);
 }
 
+export function evenPair(sizes: number[], a: number): number[] {
+  if (a < 0 || a + 1 >= sizes.length) return sizes;
+  const half = (sizes[a]! + sizes[a + 1]!) / 2;
+  return sizes.map((size, i) => (i === a || i === a + 1 ? half : size));
+}
+
 export type ToolbarGeometry = {
   sidebarButton: number | null;
   back: number;

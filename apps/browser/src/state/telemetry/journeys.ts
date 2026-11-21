@@ -1,10 +1,12 @@
 import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId } from "../browser/model";
-import { capture, isSharing, useTelemetry } from "./client";
+import { capture, consentNow, isSharing, onConsentPeriodChange } from "./client";
 import { appInfo, percentile } from "./transport";
 import { jsStartedAt } from "./jsStart";
 import { fieldTiming } from "../../platform/fieldTiming";
 import { isAsleep } from "../tabs/pageSession";
+import { NATIVE_REVEAL_COUNTS, forgetDroppedPress, nativePressTime, type Mark } from "./nativeRevealMarks";
+import { switchingPress } from "../tabs/tabReveal";
 
 let on = false;
 
@@ -41,7 +43,7 @@ export function emitJourneys(final = false) {
   props.tabs = Object.keys(useBrowser.getState().tabs).length;
   samples.clear();
   counts.clear();
-  if (on && isSharing()) capture("perf_journeys", props);
+  if (on && isSharing()) capture("perf_journeys", props, consentNow());
 }
 
 function lastInput(now = Date.now()): number | null {
@@ -49,14 +51,16 @@ function lastInput(now = Date.now()): number | null {
   return at > 0 && at <= now + 5 && now - at <= 1000 ? at : null;
 }
 
-type Mark = [kind: string, at: number];
 const marks = new Map<string, Mark[]>();
 
 function pullMarks(now: number) {
   for (const [key, kind, at] of fieldTiming.drain()) {
+    const counted = NATIVE_REVEAL_COUNTS[kind];
+    if (counted) count(counted);
     let list = marks.get(key);
     if (!list) marks.set(key, (list = []));
     list.push([kind, at]);
+    forgetDroppedPress(marks, key, kind);
   }
   for (const [key, list] of marks) {
     const fresh = list.filter(([, at]) => now - at < 120_000);
@@ -79,6 +83,9 @@ type Pending = NewTab | Switch | Navigate | Launch;
 
 const MAX_PENDING = 50;
 let pending: Pending[] = [];
+const JOURNEY_ACTIONS = { j1: "launch", j2: "newTab", j3: "switchTab", j4: "navigate" } as const;
+export const journeyInFlight = (end: number): (typeof JOURNEY_ACTIONS)[Pending["journey"]] | "none" =>
+  JOURNEY_ACTIONS[pending.filter((p) => p.t0 <= end).at(-1)?.journey as Pending["journey"]] ?? "none";
 let timer: ReturnType<typeof setTimeout> | undefined;
 
 function begin(p: Pending) {
@@ -94,9 +101,9 @@ function tick() {
 }
 
 function settle(force: boolean) {
-  if (!pending.length) return;
   const now = Date.now();
   pullMarks(now);
+  if (!pending.length) return;
   pending = pending.filter((p) => !(settleOne(p, now) || (force && settleOne(p, Infinity))));
 }
 
@@ -179,6 +186,7 @@ export const bucket = (n: number, edges: [number, string][], last: string) => ed
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
+const LAUNCH_SOURCES = new Set<string>(["login_item", "documents", "user"]);
 export const ago = (ms: number) =>
   bucket(ms, [[MINUTE, "<1m"], [10 * MINUTE, "<10m"], [HOUR, "<1h"], [8 * HOUR, "<8h"], [DAY, "<1d"], [7 * DAY, "<7d"]], "7d+");
 
@@ -245,7 +253,7 @@ function sendLaunch(l: Launch, content: number | null, paints: number[]) {
     history += view.list.length;
     oldestVisit = Math.min(oldestVisit, view.list.at(-1)?.lastVisit ?? Infinity);
   }
-  const { bootTime, appBuild, updatePrewarm, launchMarks, launchedHidden, loadAverage1m } = appInfo();
+  const { bootTime, appBuild, updatePrewarm, launchMarks, launchedHidden, launchSource, loadAverage1m } = appInfo();
   const { lastLaunchAt, lastQuitAt, firstOfVersion } = previousLaunch;
   const prewarm = firstOfVersion && updatePrewarm?.build === appBuild ? updatePrewarm : null;
   const ms = (at: number | null | undefined) => (at == null || !(at - l.t0 >= 0 && at - l.t0 < 10 * MINUTE) ? null : Math.round(at - l.t0));
@@ -254,6 +262,8 @@ function sendLaunch(l: Launch, content: number | null, paints: number[]) {
     main_ms: ms(launchMarks?.mainStarted),
     startup_ms: ms(launchMarks?.startupPrepared),
     chromium_ms: ms(launchMarks?.chromiumEntered),
+    appkit_will_finish_ms: ms(launchMarks?.appKitWillFinish),
+    appkit_did_finish_ms: ms(launchMarks?.appKitDidFinish),
     engine_ms: ms(launchMarks?.engineStarted),
     early_window_ms: ms(launchMarks?.earlyWindowShown),
     rn_ms: ms(launchMarks?.reactNativeStarted),
@@ -275,8 +285,9 @@ function sendLaunch(l: Launch, content: number | null, paints: number[]) {
     since_quit: lastQuitAt && (!lastLaunchAt || lastQuitAt >= lastLaunchAt) ? ago(l.t0 - lastQuitAt) : lastLaunchAt ? "unclean" : "unknown",
     load_1m: typeof loadAverage1m === "number" && Number.isFinite(loadAverage1m) && loadAverage1m >= 0 ? Math.round(loadAverage1m * 100) / 100 : null,
     launched_hidden: typeof launchedHidden === "boolean" ? launchedHidden : null,
+    launch_source: typeof launchSource === "string" && LAUNCH_SOURCES.has(launchSource) ? launchSource : null,
     since_boot: bootTime ? bucket(l.t0 - bootTime, [[2 * MINUTE, "<2m"], [10 * MINUTE, "<10m"], [HOUR, "<1h"], [DAY, "<1d"]], "1d+") : "unknown",
-  });
+  }, consentNow());
 }
 
 function watchStore(s: BrowserState, prev: BrowserState) {
@@ -285,9 +296,10 @@ function watchStore(s: BrowserState, prev: BrowserState) {
     const now = activeTabId(s, id);
     const before = activeTabId(prev, id);
     if (!now || now === before || s.windows[id]!.profileId !== prev.windows[id]?.profileId) continue;
-    const t0 = lastInput();
-    if (t0 === null) continue;
     const heard = Date.now();
+    if (prev.tabs[now]) pullMarks(heard);
+    const t0 = (prev.tabs[now] ? nativePressTime(marks, switchingPress()) : null) ?? lastInput(heard);
+    if (t0 === null) continue;
     if (!prev.tabs[now]) {
       if (!s.tabs[now]!.url) begin({ journey: "j2", key: now, t0, heard });
     } else if (before && s.tabs[before]?.windowId === id) {
@@ -363,7 +375,10 @@ function setOn(next: boolean, initial = false) {
 export function startJourneys(previous: PreviousLaunch | null) {
   if (previous) previousLaunch = previous;
   setOn(isSharing(), true);
-  useTelemetry.subscribe((t) => setOn(t.sharing));
+  onConsentPeriodChange(() => {
+    setOn(false);
+    setOn(isSharing());
+  });
 }
 
 export function journeysEnding() {

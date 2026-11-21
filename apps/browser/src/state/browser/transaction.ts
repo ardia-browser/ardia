@@ -4,6 +4,7 @@ export function transactional<T>(heardAlone?: (s: T, prev: T) => boolean, settle
   let depth = 0;
   let heard: T | null = null;
   let hear = () => {};
+  const afterEach = new Set<() => void>();
 
   const middleware =
     (creator: StateCreator<T>): StateCreator<T> =>
@@ -57,8 +58,19 @@ export function transactional<T>(heardAlone?: (s: T, prev: T) => boolean, settle
     try {
       run();
     } finally {
-      if (--depth === 0) hear();
+      if (--depth === 0) {
+        try {
+          hear();
+        } finally {
+          afterEach.forEach((listener) => listener());
+        }
+      }
     }
   };
-  return { middleware, transaction };
+  const afterTransactionIdempotent = (listener: () => void) => {
+    afterEach.add(listener);
+    return () => void afterEach.delete(listener);
+  };
+  const inTransaction = () => depth > 0;
+  return { middleware, transaction, afterTransactionIdempotent, inTransaction };
 }

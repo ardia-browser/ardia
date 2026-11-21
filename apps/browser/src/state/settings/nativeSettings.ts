@@ -2,10 +2,11 @@ import { setAppearance, setThinScrollBars } from "../../platform/app";
 import { setAutoPictureInPicture, setVideoUpscaling } from "../../platform/media";
 import { setCommandScrollZoom } from "../../platform/siteSettings";
 import { setPopupsOpenAsTabs } from "../../platform/pageOptions";
-import { setBlockAutoplayEverywhere, setFairPlayInChromium } from "../../platform/pageOptions";
+import { setBlockAutoplayEverywhere } from "../../platform/pageOptions";
 import { useBrowser } from "../browser/store";
 import type { Settings } from "./settings";
 import { startInterfaceScale } from "./interfaceScaleSync";
+import { setPressMotion } from "../../lib/pressMotion";
 
 type Mirror = { key: keyof Settings; send: (settings: Settings) => unknown };
 
@@ -13,17 +14,17 @@ const mirror = <K extends keyof Settings>(key: K, send: (value: Settings[K]) => 
 
 const NATIVE_SETTINGS: Mirror[] = [
   mirror("appearance", setAppearance),
-  mirror("pageScrollBars", (bars) => setThinScrollBars(bars === "thin")),
   mirror("autoPictureInPicture", setAutoPictureInPicture),
   mirror("videoUpscaling", setVideoUpscaling),
-  mirror("commandScrollZoom", setCommandScrollZoom),
   mirror("popupsOpenAsTabs", setPopupsOpenAsTabs),
   mirror("blockAutoplayEverywhere", setBlockAutoplayEverywhere),
-  mirror("fairPlayInChromium", setFairPlayInChromium),
+  mirror("pressMotion", setPressMotion),
 ];
 
 export function startNativeSettings() {
   startInterfaceScale();
+  void setThinScrollBars(false);
+  void setCommandScrollZoom(true);
   const sent = new Map<keyof Settings, unknown>();
   const sync = (settings: Settings) => {
     for (const { key, send } of NATIVE_SETTINGS) {

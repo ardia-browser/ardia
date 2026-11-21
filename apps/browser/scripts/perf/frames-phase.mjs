@@ -126,7 +126,8 @@ export function windowStats(rec, a, b, refresh) {
 }
 
 function interactions(c) {
-  const { app, key, sleep, run, W, probe, base } = c;
+  const { app, key, sleep, run, W, probe, base, acperf } = c;
+  let pointer = null;
   const seedTab = `(() => { const s = ac.store.getState(); return Object.keys(s.tabs).find((id) => s.tabs[id].url.includes("id=seed")); })()`;
   const reset = () => run(`const s = ac.store.getState(); const w = ${W};
     if (s.windowUi[w]?.panel.open) s.closePanel(w);
@@ -166,6 +167,19 @@ function interactions(c) {
     { name: "profile swipe (previous profile)", window: 1200, verify: `return ${win}.profileId !== globalThis.__frameProfile;`, before: () => run(`globalThis.__frameProfile = ${win}.profileId; return 1;`), go: () => store(`ac.runCommand({ command: "previousProfile", arg: null, windowId: ${W} })`), after: () => sleep(600) },
     { name: "sidebar scroll (200 tabs, flick down and back)", window: 2300, before: reset,
       go: async () => { await run(`globalThis.acPerf?.reset(); return 1;`); const t = Date.now(); await probe("scroll", { distance: 4000, seconds: 1, back: true }, false); return t; } },
+    { name: "sidebar scroll, pointer on the rows (200 tabs, flick down and back)", window: 2300, before: async () => { await reset(); await probe("pointer", { over: "list" }); },
+      go: async () => { await run(`globalThis.acPerf?.reset(); return 1;`); const t = Date.now(); await probe("scroll", { distance: 4000, seconds: 1, back: true }, false); return t; },
+      after: () => probe("pointer", { over: "real" }) },
+    { name: "sidebar scroll, pointer on the rows (200 tabs, trackpad flick)", window: 2300,
+      before: async () => { await reset(); await probe("scroll", { distance: 1, seconds: 0.05 }); pointer = await probe("pointer", { over: "list" }); },
+      go: async () => {
+        await run(`globalThis.acPerf?.reset(); return 1;`);
+        const t = Date.now();
+        const flick = acperf("postscroll", String(app.pid), String(pointer.window), String(pointer.x), String(pointer.y), String(pointer.windowX), String(pointer.windowY), "trackpad");
+        if (flick.code !== 0) throw new Error(`acperf postscroll failed (${flick.code}) ${flick.out}`);
+        return t;
+      },
+      after: () => probe("pointer", { over: "real" }) },
     { name: "sidebar hover (20 rows, 60 ms apart)", window: 1500, before: reset, go: async () => { await run(`globalThis.acPerf?.reset(); return 1;`); const t = Date.now(); await probe("hover", { rows: 20, gapMs: 60 }, false); return t; } },
     { name: "new window", window: 1200, verify: `return ac.store.getState().windowOrder.length > globalThis.__frameWindows;`, before: async () => { await reset(); await run(`globalThis.__frameWindows = ac.store.getState().windowOrder.length; return 1;`); },
       go: () => store(`ac.actions.openWindow({ url: "${base()}/static?id=fw${k++}" })`),
@@ -244,7 +258,7 @@ export async function framesRun(c, side, i, { counts }) {
     log(`${side.tag}frames ${i}${counts ? " (counts)" : ""}: ${info.screen} ${info.maxFPS} Hz, JS thread ${info.js ? "observed" : "NOT found"}; ${out.settled ? "quiet" : "never quiet"} after ${Math.round(out.settleMs / 1000)} s`);
     const reps = counts ? Math.min(3, +opt["frames-n"]) : +opt["frames-n"];
     const only = opt["frames-only"] ? new RegExp(opt["frames-only"], "i") : null;
-    const list = interactions({ app, key, sleep, run, W: WINDOW, probe, base }).filter((it) => !only || only.test(it.name));
+    const list = interactions({ app, key, sleep, run, W: WINDOW, probe, base, acperf }).filter((it) => !only || only.test(it.name));
     for (const it of list) {
       const rows = [];
       const taken = [];

@@ -217,11 +217,14 @@ ordered transaction that names its cause. There are no echo windows, timers or "
     place, keeping a group both neighbours share). A split is one row: its panes move together and nothing lands
     between them;
   - a new active tab that stayed in the strip is shown (`activate`'s rules, opener bookkeeping included), unless
-    it's Chrome's pick of a successor (`activePickedOnClose`; from engines that don't say, any activation that comes
-    with the old active tab leaving): then the store's own rule (state/tabs/openers.ts) decides. An explicit activation
+    it's Chrome's pick of a successor (`activePickedOnClose`, counted only while the old active tab left the strip in
+    this change, so a flag still held from an earlier close never stops a switch; from engines that don't say, any
+    activation that comes with the old active tab leaving): then the store's own rule (state/tabs/openers.ts)
+    decides. An extension that activates another tab and then discards the shown one (Auto Tab Discard) is a switch
+    too: the old tab stays in the strip, so there is no successor to pick. An explicit activation
     in the same change as the close (an extension's remove then update) is a switch, and wins over the store's
-    successor command still on its way. A split's other pane and a tab of a profile the window isn't showing
-    aren't shown (the focused pane changes on user focus; profiles keep their own tab);
+    successor command still on its way. The personal fork follows activation within the current space.
+    A split's other pane becomes active when the user focuses it;
   - a tab Chrome made (`tab:` adoption) takes Chrome's pin, place and activation the first time the app sees it;
     a tab arriving in a strip of another app window (an extension moving it; the window is `appWindow`, else the
     one its other tabs are in) changes window as it is, page and live state included (`intoWindow`; its view takes

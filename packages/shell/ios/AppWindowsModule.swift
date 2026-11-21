@@ -28,6 +28,7 @@ public class AppWindowsModule: Module {
     }
 
     Function("windowCornerRadius") { () -> Double in Double(InterfaceScale.rootLength(fromWindow: ArdiaChromeWindowHost.windowCornerRadius)) }
+    Function("drawnWindowCornerRadius") { () -> Double in Double(InterfaceScale.rootLength(fromWindow: ArdiaChromeWindowHost.drawnWindowCornerRadius)) }
     AsyncFunction("frameCornerRadius") { (id: String) -> Double in
       guard let window = WindowManager.shared.window(id) else { return 0 }
       return Double(InterfaceScale.rootLength(fromWindow: ArdiaChromeWindowHost.frameCornerRadius(of: window)))
@@ -87,6 +88,12 @@ public class AppWindowsModule: Module {
     AsyncFunction("windowFrame") { (id: String) -> [Double]? in
       guard let f = WindowManager.shared.window(id)?.frame else { return nil }
       return [f.minX, f.minY, f.width, f.height]
+    }.runOnQueue(.main)
+    AsyncFunction("windowGeometry") { (id: String) -> [String: Any]? in WindowManager.shared.geometry(id: id) }.runOnQueue(.main)
+    AsyncFunction("setWindowFrame") { (id: String, frame: CGRect) -> [String: Any]? in WindowManager.shared.setFrame(id: id, frame: frame) }.runOnQueue(.main)
+    AsyncFunction("setWindowZoomed") { (id: String, on: Bool) -> [String: Any]? in WindowManager.shared.setZoomed(id: id, on: on) }.runOnQueue(.main)
+    AsyncFunction("setWindowFullScreen") { (id: String, on: Bool, promise: Promise) in
+      WindowManager.shared.setFullScreen(id: id, on: on) { promise.resolve($0) }
     }.runOnQueue(.main)
     AsyncFunction("dragPreviewEnd") { (windowId: String?, frame: CGRect?) in
       DragPreview.shared.end(windowId: windowId, fallback: frame)

@@ -13,7 +13,9 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
   var initialURL: String?
   var adoptId: String?
   var transferKey: String?
-  var visible = true { didSet { updateHidden(); updateSight() } }
+  var visible = true { didSet { updateHidden(); updateSight(); noteShownChanged() } }
+  var selected = true { didSet { noteShownChanged() } }
+  var wasShown = true
   var autoPictureInPicture = false
   var pageBackgroundColor: NSColor? { didSet { if let color = pageBackgroundColor { webView?.underPageBackgroundColor = color } } }
   let browserId = WebKitHub.shared.nextBrowserId()
@@ -136,6 +138,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     updateHidden()
     observe(view)
     WebKitHub.shared.permissions.reconcileCapture(view, profile: profile)
+    pushFieldProvider()
     updateSight()
   }
 
@@ -256,6 +259,12 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     window?.makeFirstResponder(view)
   }
 
+  func focusPageIfUnfocused() -> Bool {
+    guard let window, window.firstResponder == nil || window.firstResponder === window else { return false }
+    focusPage()
+    return true
+  }
+
   func setMuted(_ on: Bool) {
     muted = on
     let code = muteScript
@@ -265,7 +274,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
 
   private var muteScript: String { "window.__ardia && window.__ardia.mute(\(muted ? "true" : "false"))" }
 
-  private func runInWorld(_ code: String, frame: WKFrameInfo? = nil, completion: ((Any?) -> Void)? = nil) {
+  func runInWorld(_ code: String, frame: WKFrameInfo? = nil, completion: ((Any?) -> Void)? = nil) {
     guard let view = webView else {
       completion?(nil)
       return
@@ -437,7 +446,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     case "scroll":
       guard main, let state = dict?["state"] as? String, ["down", "up", "top"].contains(state) else { return }
       emit("scroll", ["state": state])
-    default: break
+    default: fieldProviderMessage(kind, data: dict, frame: frame, frameInfo: frameInfo)
     }
   }
 
@@ -491,6 +500,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
   }
 
   func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+    fieldProviderCommitted()
     if !showingError { errorURL = nil }
     committedAt = Date().timeIntervalSince1970 * 1000
     committedStatus = respondedStatus
@@ -558,6 +568,8 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
 
   func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
     mediaFrames.removeAll()
+    self.webView?.scriptFrames.removeAll()
+    if let view = self.webView { ArdiaWebView.resetFieldProviderPage(view) }
     resetNowPlaying()
     emit("crashed", ["status": 0, "reason": "crashed", "code": 0])
   }

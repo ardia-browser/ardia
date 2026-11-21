@@ -22,22 +22,36 @@ export function sameEntryTabs(tabs: BrowserState["tabs"], was: BrowserState["tab
   return true;
 }
 
-export type EntriesInputs = { tabs: BrowserState["tabs"]; rest: readonly unknown[] };
+export type EntriesInputs = Pick<BrowserState, "tabs" | "windows" | "groups" | "splits"> & Pick<BrowserState["settings"], "newTabOpens" | "minimalismMode">;
 
-export const entriesInputs = (s: BrowserState): EntriesInputs => ({ tabs: s.tabs, rest: [s.windows, s.groups, s.splits, s.settings.newTabOpens, s.settings.minimalismMode] });
+export const entriesInputs = (s: BrowserState): EntriesInputs => ({
+  tabs: s.tabs,
+  windows: s.windows,
+  groups: s.groups,
+  splits: s.splits,
+  newTabOpens: s.settings.newTabOpens,
+  minimalismMode: s.settings.minimalismMode,
+});
 
-export const sameEntriesInputs = (now: EntriesInputs, was: EntriesInputs) => now.rest.every((v, i) => v === was.rest[i]) && sameEntryTabs(now.tabs, was.tabs);
+export function sameEntriesInputs(s: BrowserState, was: EntriesInputs): boolean {
+  const same =
+    s.windows === was.windows &&
+    s.groups === was.groups &&
+    s.splits === was.splits &&
+    s.settings.newTabOpens === was.newTabOpens &&
+    s.settings.minimalismMode === was.minimalismMode &&
+    sameEntryTabs(s.tabs, was.tabs);
+  if (same) was.tabs = s.tabs;
+  return same;
+}
 
-const memo = new Map<string, { inputs: EntriesInputs; result: SidebarEntries }>();
+const memo = new Map<string, Map<string, { inputs: EntriesInputs; result: SidebarEntries }>>();
 
 export function sidebarEntries(s: BrowserState, windowId: string, profileId?: string): SidebarEntries {
+  let byProfile = memo.get(windowId);
+  const cached = byProfile?.get(profileId ?? "");
+  if (cached && sameEntriesInputs(s, cached.inputs)) return cached.result;
   const inputs = entriesInputs(s);
-  const key = profileId ? `${windowId}|${profileId}` : windowId;
-  const cached = memo.get(key);
-  if (cached && sameEntriesInputs(inputs, cached.inputs)) {
-    cached.inputs = inputs;
-    return cached.result;
-  }
   let result = computeEntries(s, windowId, profileId);
   if (cached) {
     const was = cached.result;
@@ -48,8 +62,9 @@ export function sidebarEntries(s: BrowserState, windowId: string, profileId?: st
     const list = same(result.list, was.list) ? was.list : result.list;
     result = tiles === was.tiles && cells === was.cells && pinned === was.pinned && list === was.list ? was : { tiles, cells, pinned, list };
   }
-  memo.set(key, { inputs, result });
-  if (memo.size > 8) for (const k of memo.keys()) if (!s.windows[k.split("|")[0]!]) memo.delete(k);
+  if (!byProfile) memo.set(windowId, (byProfile = new Map()));
+  byProfile.set(profileId ?? "", { inputs, result });
+  if (memo.size > 8) for (const k of memo.keys()) if (!s.windows[k]) memo.delete(k);
   return result;
 }
 
@@ -85,19 +100,38 @@ function computeEntries(s: BrowserState, windowId: string, profileId?: string): 
 export function numberedTabs(s: BrowserState, windowId: string): string[] {
   const { tiles, pinned, list } = sidebarEntries(s, windowId);
   const active = activeTabId(s, windowId);
+  const profileId = s.windows[windowId]?.profileId;
+  const latest = (ids: string[]) => ids.reduce<string | undefined>((a, b) => (!a || s.tabs[b]!.lastActiveAt > s.tabs[a]!.lastActiveAt ? b : a), undefined);
+  const collapsedGroup = (groupId: string): string[] => {
+    const keptRows = profileId ? keptEntries(s, windowId, profileId, groupId) : [];
+    const kept = keptRows.flatMap(rowTab);
+    const onScreen = new Set(keptRows.flatMap((entry) => entryTabIds(s, entry)));
+    const members = s.groups[groupId]!.tabIds.filter((id) => s.tabs[id]);
+    const header = latest(members.filter((id) => !onScreen.has(id))) ?? latest(members);
+    return header ? [header, ...kept] : kept;
+  };
   const rowTab = (entry: string): string[] => {
     const { kind, id } = parseEntry(entry);
-    if (kind === "group") return groupEntries(s, id).flatMap(rowTab);
+    if (kind === "group") return s.groups[id]?.collapsed ? collapsedGroup(id) : groupEntries(s, id).flatMap(rowTab);
     if (kind !== "split") return [id];
     const panes = splitRowPanes(s, s.splits[id]);
     if (active && panes.includes(active)) return [active];
-    const last = panes.reduce<string | undefined>((a, b) => (!a || s.tabs[b]!.lastActiveAt > s.tabs[a]!.lastActiveAt ? b : a), undefined);
+    const last = latest(panes);
     return last ? [last] : [];
   };
   return [...tiles, ...pinned.flatMap(rowTab), ...list.flatMap(rowTab)];
 }
 
-const groupMemo = new WeakMap<object, { tabs: BrowserState["tabs"]; splits: BrowserState["splits"]; groups: BrowserState["groups"]; result: string[] }>();
+const groupMemo = new WeakMap<object, { tabs: BrowserState["tabs"]; splits: BrowserState["splits"]; groupsId: number; result: string[] }>();
+
+const groupsIds = new WeakMap<object, number>();
+let lastGroupsId = 0;
+
+function groupsIdOf(groups: BrowserState["groups"]): number {
+  let id = groupsIds.get(groups);
+  if (id === undefined) groupsIds.set(groups, (id = ++lastGroupsId));
+  return id;
+}
 
 const childIndex = new WeakMap<object, Map<string, BrowserState["groups"][string][]>>();
 const NO_CHILDREN: BrowserState["groups"][string][] = [];
@@ -139,6 +173,13 @@ export function showsExtraTabs(s: BrowserState, windowId: string, profileId: str
   });
 }
 
+function entryTabIds(s: BrowserState, entry: string): string[] {
+  const { kind, id } = parseEntry(entry);
+  if (kind === "group") return s.groups[id]?.tabIds ?? [];
+  if (kind === "split") return splitTabIdsOf(s.splits[id]) ?? [];
+  return [id];
+}
+
 export function holdsTab(s: BrowserState, entry: string, tabId: string): boolean {
   const { kind, id } = parseEntry(entry);
   if (kind === "group") return !!s.groups[id]?.tabIds.includes(tabId);
@@ -150,7 +191,8 @@ export function groupEntries(s: BrowserState, groupId: string): string[] {
   const g = s.groups[groupId];
   if (!g) return [];
   const cached = groupMemo.get(g);
-  if (cached && cached.splits === s.splits && cached.groups === s.groups && sameEntryTabs(s.tabs, cached.tabs)) {
+  const groupsId = groupsIdOf(s.groups);
+  if (cached && cached.splits === s.splits && cached.groupsId === groupsId && sameEntryTabs(s.tabs, cached.tabs)) {
     cached.tabs = s.tabs;
     return cached.result;
   }
@@ -168,7 +210,7 @@ export function groupEntries(s: BrowserState, groupId: string): string[] {
     }
   }
   const result = stableList(cached?.result, out);
-  groupMemo.set(g, { tabs: s.tabs, splits: s.splits, groups: s.groups, result });
+  groupMemo.set(g, { tabs: s.tabs, splits: s.splits, groupsId, result });
   return result;
 }
 

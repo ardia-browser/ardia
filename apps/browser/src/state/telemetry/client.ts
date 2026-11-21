@@ -1,18 +1,21 @@
 import { engineInfo, updaterState } from "../../platform/app";
 import { readDocument, saveDocument, writeDocument } from "../../platform/documents";
 import { MAX_BODY_BYTES } from "./config";
-import { EVENTS_SCOPE, eventRecord, LOGS_SCOPE, logRecord, logsRequest, outcome, type OtlpLogRecord, type QueuedEvent } from "./otlp";
+import { logRecord, outcome, type OtlpLogRecord, type QueuedEvent } from "./otlp";
 import { cleanProperties } from "./sanitize";
 import type { SavedContext } from "./savedContext";
 import type { RequestLogEntry } from "./requestLog";
-import { appInfo, mayPost, post, telemetryHost } from "./transport";
+import { appInfo, mayPost, post } from "./transport";
 import { telemetryRelay, type AskPlacement, type CaptureOptions, type SharingSource } from "./relay";
 import { uuidv4, uuidv7 } from "./ids";
 import { parseSaved, versionedJson } from "../../lib/savedDocument";
 import { withDeadline } from "../../lib/deadline";
 import { isFields, isString } from "../../lib/decode";
-import { dismissAsk, isSharing, loadChoice, NO_WATCH, resumeSession, save, savedChoice as saved, sessionId, startNewSession, useTelemetry } from "./choice";
+import { consentEpoch, consentNow, consentToken, counted, dismissAsk, onConsentPeriodChange, isSharing, loadChoice, NO_WATCH, resumeSession, save, savedChoice as saved, savedOff, sessionId, startNewSession, stillValid, useTelemetry, type ConsentToken } from "./choice";
 import { flushLocalNow, LOCAL_KEEP_DAYS, recordLocal } from "./localStore";
+import { context, environment, eventsBody, logsBody, resource, setEngineVersion } from "./requestContext";
+
+export { environment, resource };
 
 const QUEUE_DOC = "telemetry-queue.json";
 const QUEUE_VERSION = 1;
@@ -24,50 +27,24 @@ const FLUSH_DELAY_MS = 30_000;
 const URGENT_FLUSH_DELAY_MS = 3_000;
 const MAX_BACKOFF_MS = 30 * 60_000;
 
-export { dismissAsk, isSharing, loadChoice, useTelemetry };
-
-let engineVersion: string | null = null;
-
-export const environment = (): "dev" | "test" | "production" =>
-  __DEV__ ? "dev" : appInfo().isolatedInstance ? "test" : "production";
-
-function context(): Record<string, unknown> {
-  const info = appInfo();
-  return {
-    $lib: "ardia-telemetry",
-    $lib_version: "1",
-    $app_name: "Ardia",
-    $app_version: info.appVersion,
-    $app_build: info.appBuild,
-    $os: telemetryHost().os,
-    $os_version: info.osVersion,
-    arch: info.arch,
-    engine_version: engineVersion,
-    $environment: environment(),
-    $process_person_profile: false,
-    $geoip_disable: true,
-    $session_id: sessionId(),
-    ...watchProperty(),
-  };
-}
-
-function watchProperty(): Record<string, string> {
-  const { watchReport, watchUntil } = saved();
-  return watchReport && watchUntil !== null && Date.now() < watchUntil ? { watch_report: watchReport } : {};
-}
+export { consentEpoch, consentNow, consentToken, counted, dismissAsk, onConsentPeriodChange, isSharing, loadChoice, stillValid, useTelemetry, type ConsentToken };
 
 type Queue = { events: QueuedEvent[]; logs: OtlpLogRecord[] };
 
 let queue: Queue = { events: [], logs: [] };
 let queueLoaded = false;
+let queueEpoch: string | null = null;
 let generation = 0;
 
 const isEvent = (v: unknown): v is QueuedEvent =>
   isFields(v) && isString(v.uuid) && isString(v.event) && isString(v.distinct_id) && isString(v.timestamp) && isFields(v.properties);
 const isLog = (v: unknown): v is OtlpLogRecord => isFields(v) && isString(v.timeUnixNano) && isFields(v.body) && Array.isArray(v.attributes);
 
+const queueDoc = () => versionedJson({ ...queue, epoch: saved().epoch }, QUEUE_VERSION);
+
 function storedQueue(): Queue {
   const doc = parseSaved(readDocument(QUEUE_DOC), QUEUE_VERSION);
+  if (doc?.epoch !== saved().epoch) return { events: [], logs: [] };
   return {
     events: Array.isArray(doc?.events) ? doc.events.filter(isEvent) : [],
     logs: Array.isArray(doc?.logs) ? doc.logs.filter(isLog) : [],
@@ -77,6 +54,8 @@ function storedQueue(): Queue {
 function loadQueue() {
   if (queueLoaded) return;
   queueLoaded = true;
+  queueEpoch = saved().epoch;
+  watchQueueEpoch();
   const stored = storedQueue();
   queue = { events: [...stored.events, ...queue.events], logs: [...stored.logs, ...queue.logs] };
 }
@@ -90,7 +69,7 @@ function persistQueue(now = false) {
   const write = () => {
     try {
       loadQueue();
-      const json = versionedJson(queue, QUEUE_VERSION);
+      const json = queueDoc();
       queueChars = json.length;
       writeDocument(QUEUE_DOC, json);
     } catch {}
@@ -108,7 +87,7 @@ export function saveQueueNow(timeoutMs = 1000): Promise<void> {
   persistTimer = undefined;
   try {
     loadQueue();
-    const landed = saveDocument(QUEUE_DOC, versionedJson(queue, QUEUE_VERSION)).catch(() => {});
+    const landed = saveDocument(QUEUE_DOC, queueDoc()).catch(() => {});
     return withDeadline(landed, timeoutMs, undefined);
   } catch {
     return Promise.resolve();
@@ -118,20 +97,38 @@ export function saveQueueNow(timeoutMs = 1000): Promise<void> {
 function clearQueue() {
   queue = { events: [], logs: [] };
   queueLoaded = true;
+  queueEpoch = saved().epoch;
+  watchQueueEpoch();
   clearTimeout(flushTimer);
   flushTimer = undefined;
   persistQueue(true);
+}
+
+function dropQueueOfEarlierPeriod() {
+  if (!queueLoaded || saved().epoch === queueEpoch) return;
+  generation++;
+  for (const abort of inflight) abort.abort();
+  inflight.clear();
+  clearQueue();
+}
+
+let watchingQueueEpoch = false;
+function watchQueueEpoch() {
+  if (watchingQueueEpoch) return;
+  watchingQueueEpoch = true;
+  onConsentPeriodChange(dropQueueOfEarlierPeriod);
 }
 
 let droppedWhileOff = 0;
 
 export type { CaptureOptions };
 
-export function capture(event: string, props: Record<string, unknown> = {}, options: CaptureOptions = {}) {
+export function capture(event: string, props: Record<string, unknown>, consent: ConsentToken | null, options: CaptureOptions = {}) {
   const relay = telemetryRelay();
-  if (relay) return relay.capture(event, props, options);
+  if (relay) return relay.capture(event, props, consent, options);
   try {
-    const { sharing, installId } = saved();
+    const { installId } = saved();
+    const sharing = stillValid(consent);
     const at = Date.now();
     const record: QueuedEvent = {
       uuid: uuidv7(),
@@ -153,11 +150,11 @@ export function capture(event: string, props: Record<string, unknown> = {}, opti
   } catch {}
 }
 
-export function queueLog(level: "warn" | "error", message: string, attributes: Record<string, string | number | boolean>) {
+export function queueLog(level: "warn" | "error", message: string, attributes: Record<string, string | number | boolean>, consent: ConsentToken | null) {
   const relay = telemetryRelay();
-  if (relay) return relay.log(level, message, attributes);
+  if (relay) return relay.log(level, message, attributes, consent);
   try {
-    const sharing = saved().sharing;
+    const sharing = stillValid(consent);
     const at = Date.now();
     const withSession = { ...attributes, $session_id: sessionId() };
     recordLocal("log", sharing, { level, message, attributes: withSession }, at);
@@ -196,28 +193,6 @@ async function send(kind: RequestLogEntry["kind"], body: string, count: number) 
     inflight.delete(abort);
   }
 }
-
-export function resource(): Record<string, unknown> {
-  const info = appInfo();
-  return {
-    "service.name": "ardia-app",
-    "service.version": info.appVersion,
-    "deployment.environment": environment() === "production" ? "production" : "development",
-    "os.type": telemetryHost().osType,
-    "os.version": info.osVersion,
-    "host.arch": info.arch,
-    "engine.version": engineVersion,
-  };
-}
-
-const eventsBody = (batch: QueuedEvent[]) =>
-  logsRequest(
-    resource(),
-    EVENTS_SCOPE,
-    batch.map((e) => eventRecord(e.properties.engine_version == null && engineVersion ? { ...e, properties: { ...e.properties, engine_version: engineVersion } } : e)),
-  );
-
-const logsBody = (batch: OtlpLogRecord[]) => logsRequest(resource(), LOGS_SCOPE, batch);
 
 type DrainResult = "done" | "failed" | "stale";
 
@@ -271,12 +246,15 @@ export async function flush() {
 
 export type { AskPlacement, SharingSource };
 
-export function setSharing(on: boolean, source: SharingSource, placement?: AskPlacement) {
+export function setSharing(on: boolean, source: SharingSource, placement?: AskPlacement): Promise<boolean> {
   const relay = telemetryRelay();
   if (relay) return relay.change({ kind: "sharing", on, source, ...(placement ? { placement } : {}) });
   const now = Date.now();
   const current = saved();
-  if (on === current.sharing) return save({ decidedAt: now, askDoneAt: current.askDoneAt ?? now });
+  if (on === current.sharing) {
+    save({ decidedAt: now, askDoneAt: current.askDoneAt ?? now });
+    return on ? Promise.resolve(true) : savedOff();
+  }
   generation++;
   failures = 0;
   retryAt = 0;
@@ -285,8 +263,8 @@ export function setSharing(on: boolean, source: SharingSource, placement?: AskPl
     inflight.clear();
     save({ sharing: false, installId: current.installId, context: null, decidedAt: now, askDoneAt: current.askDoneAt ?? now, ...NO_WATCH, watchEndedNotice: current.watchEndedNotice });
     clearQueue();
-    capture("sharing_turned_off", { source });
-    return;
+    capture("sharing_turned_off", { source }, consentNow());
+    return savedOff();
   }
   save({
     sharing: true,
@@ -299,7 +277,8 @@ export function setSharing(on: boolean, source: SharingSource, placement?: AskPl
     decidedAt: now,
     askDoneAt: current.askDoneAt ?? now,
   });
-  capture("sharing_turned_on", { source, ...placement });
+  capture("sharing_turned_on", { source, ...placement }, consentNow());
+  return Promise.resolve(true);
 }
 
 export function replaceInstallId(): string {
@@ -330,7 +309,7 @@ type ClientSession = {
 export function startClient(continuing = false): ClientSession {
   loadChoice();
   void engineInfo()
-    .then((e) => (engineVersion = `ArdiaCore / Chromium ${e.chromiumVersion}`))
+    .then((e) => setEngineVersion(`ArdiaCore / Chromium ${e.chromiumVersion}`))
     .catch(() => {});
   void updaterState()
     .then((u) => {

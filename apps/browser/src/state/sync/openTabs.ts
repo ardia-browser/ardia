@@ -1,4 +1,4 @@
-import { assignPositions, canonical, type Adapter, type Extraction, type HLC, type ScopeState } from "../../platform/sync";
+import { assignPositions, canonical, dropBase, putBase, recordsWith, type Adapter, type Extraction, type HLC, type ScopeState } from "../../platform/sync";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { pinKeyOf } from "../browser/model";
 import { fromSync } from "../pins/pinOrderChoices";
@@ -28,7 +28,12 @@ function extractOpenTabs(profileId: string, state: ScopeState, closes: OpenTabCl
   const { synced, pinned } = localOpenTabs(s, profileId);
   const closed = new Set(closes.keys());
   const seen = pagesSeenIn(state);
-  const baseTab = (key: string) => openTabValue(base(`${OPEN_TAB}${key}`));
+  const baseTabs = new Map<string, OpenTabValue | null>();
+  const baseTab = (key: string) => {
+    let tab = baseTabs.get(key);
+    if (tab === undefined) baseTabs.set(key, (tab = openTabValue(base(`${OPEN_TAB}${key}`))));
+    return tab;
+  };
   const positions = new Map<string, string>();
   for (const w of new Set(synced.map(({ tab }) => tab.windowId))) {
     const here = synced.filter(({ tab }) => tab.windowId === w);
@@ -60,8 +65,8 @@ function extractOpenTabs(profileId: string, state: ScopeState, closes: OpenTabCl
     }
   };
   for (const [k, v] of values) if (k.startsWith(OPEN_TAB)) reference((v as OpenTabValue).g);
-  for (const [k, record] of Object.entries(state.records)) {
-    if (!k.startsWith(OPEN_TAB) || record.v === null || values.has(k)) continue;
+  for (const [k, record] of recordsWith(state, OPEN_TAB)) {
+    if (record.v === null || values.has(k)) continue;
     const key = k.slice(OPEN_TAB.length);
     if (!closed.has(key) && !pinned.has(key)) reference(openTabValue(record.v)?.g ?? null);
   }
@@ -92,15 +97,15 @@ function closesOnly(closes: OpenTabCloses): Extraction | null {
 
 function forget(state: ScopeState) {
   pagesSeen.delete(state);
-  for (const k of Object.keys(state.base)) if (k.startsWith(OPEN_TABS)) delete state.base[k];
+  for (const k of Object.keys(state.base)) if (k.startsWith(OPEN_TABS)) dropBase(state, k);
   if (state.unapplied.some((k) => k.startsWith(OPEN_TABS))) state.unapplied = state.unapplied.filter((k) => !k.startsWith(OPEN_TABS));
 }
 
 function orphans(profileId: string, state: ScopeState, closed: Set<string>): { key: string; value: OpenTabValue }[] {
   const { held } = localOpenTabs(store(), profileId);
-  return Object.entries(state.records).flatMap(([k, record]) => {
+  return recordsWith(state, OPEN_TAB).flatMap(([k, record]) => {
     const key = k.slice(OPEN_TAB.length);
-    const value = k.startsWith(OPEN_TAB) ? openTabValue(record.v) : null;
+    const value = openTabValue(record.v);
     return value && !held.has(key) && !closed.has(key) ? [{ key, value }] : [];
   });
 }
@@ -152,7 +157,7 @@ function settleCloses(profileId: string, state: ScopeState, closes: OpenTabClose
     const k = `${OPEN_TAB}${key}`;
     const record = state.records[k];
     if (held.has(key)) done.push(key);
-    else if (record && record.v !== null) state.base[k] ??= canonical(record.v);
+    else if (record && record.v !== null && !(k in state.base)) putBase(state, k, canonical(record.v));
     else if (!(k in state.base)) done.push(key);
   }
   if (done.length) closes.settle(done);
@@ -160,7 +165,7 @@ function settleCloses(profileId: string, state: ScopeState, closes: OpenTabClose
 
 function retire(state: ScopeState): Adapter {
   pagesSeen.delete(state);
-  for (const [k, record] of Object.entries(state.records)) if (k.startsWith(OPEN_TABS) && record.v !== null) state.base[k] = canonical(record.v);
+  for (const [k, record] of recordsWith(state, OPEN_TABS)) if (record.v !== null) putBase(state, k, canonical(record.v));
   return { prefix: OPEN_TABS, extract: () => ({ values: new Map([[OPEN_TABS_ON, { on: false }]]) }), apply: () => true };
 }
 

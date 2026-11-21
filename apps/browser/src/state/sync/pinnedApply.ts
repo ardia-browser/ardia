@@ -1,7 +1,7 @@
 import type { ApplyRecords } from "../../platform/sync";
 import { useBrowser } from "../browser/store";
 import { depthOf, leaveGroups, orderSections, syncGroupOrder, withParent } from "../groups/groups";
-import { makeTab, newId, pinKeyOf, ROW_PIN, without } from "../browser/model";
+import { makeTab, newId, pinKeyOf, ROW_PIN } from "../browser/model";
 import { noteRemotePinDeletion } from "../pins/tabCleanup";
 import { type PinSyncEntry } from "../pins/pinChoices";
 import { adoptParkedPins, parkWindowPins } from "../pins/parkedPins";
@@ -281,16 +281,15 @@ export function applyPinned(profileId: string, visible: Map<string, unknown>, ch
     windows[w.id] = window;
     groups = syncGroupOrder(groups, window);
   }
-  let { live, parkedPins } = s;
+  let { parkedPins } = s;
   const parkWindow = windows[PARK];
   if (parkWindow) {
     parkedPins = parkWindowPins(parkedPins, parkWindow, { tabs, groups, history: s.history, profiles: s.profiles });
     for (const id of parkWindow.tabIds) delete tabs[id];
-    live = without(live, parkWindow.tabIds);
     groups = Object.fromEntries(Object.entries(groups).filter(([, g]) => g.windowId !== PARK));
     delete windows[PARK];
   }
   const { find, splits, selection, windowOrder, windowUi } = s;
   const pinSync = noted.size ? { ...s.pinSync, [profileId]: { ...s.pinSync[profileId], ...Object.fromEntries(noted) } } : s.pinSync;
-  fromSync(() => useBrowser.setState({ tabs, windows, groups, live, find, splits, selection, windowOrder, windowUi, parkedPins, pinSync }));
+  fromSync(() => useBrowser.setState({ tabs, windows, groups, find, splits, selection, windowOrder, windowUi, parkedPins, pinSync }));
 }

@@ -92,20 +92,22 @@ test("one drop vocabulary: each zone gives the same drop to the sidebar and the 
   assert.deepEqual(drops.resolveDrop(S(), { kind: "group", groupId: g }, { zone: "list", beforeId: b }), { type: "group", groupId: g, placement: { pinned: false, parentId: null, beforeId: b } });
   assert.deepEqual(drops.resolveDrop(S(), { kind: "live" }, { zone: "pinnedRows", beforeId: null }), { type: "live" });
   assert.equal(drops.resolveDrop(S(), { kind: "split" }, { zone: "tiles", beforeId: null }).type, "none", "a split never becomes a tile");
-  assert.equal(drops.resolveDrop(S(), { kind: "split" }, { zone: "onto", targetId: b }).type, "none");
+  assert.deepEqual(drops.resolveDrop(S(), tab, { zone: "split", targetId: b, side: "left" }), { type: "split", targetId: b, side: "left" });
+  assert.equal(drops.resolveDrop(S(), { kind: "split" }, { zone: "split", targetId: b, side: "right" }).type, "none", "a split row never splits another row");
+  assert.equal(drops.resolveDrop(S(), { kind: "tab", external: true }, { zone: "split", targetId: b, side: "right" }).type, "none", "a dropped file never splits");
+  assert.equal(drops.resolveDrop(S(), { kind: "tab", folderId: "f" }, { zone: "split", targetId: b, side: "right" }).type, "none", "a folder tile never splits");
   assert.equal(drops.resolveDrop(S(), { kind: "tab", external: true }, { zone: "folder", ontoId: b }).type, "none");
   assert.equal(drops.resolveDrop(S(), { kind: "live" }, { zone: "list", beforeId: null }).type, "none");
   assert.equal(drops.resolveDrop(S(), { kind: "group", groupId: g }, { zone: "group", groupId: g, beforeId: null }).type, "none", "a group can't nest in itself");
   assert.equal(drops.resolveDrop(S(), tab, null).type, "none");
 });
 
-test("dropping a tab onto another groups them, and an unchanged drop reports nothing moved", () => {
+test("a split drop never groups or moves tabs through the store's drop, and an unchanged drop reports nothing moved", () => {
   reset();
   const { w, ids: [a, b, c] } = windowWith("a", "b", "c");
-  assert.equal(S().dropTabs([c], drops.resolveDrop(S(), { kind: "tab" }, { zone: "onto", targetId: a })), true);
-  const group = Object.values(S().groups)[0];
-  assert.deepEqual(group.tabIds, [a, c]);
-  assert.deepEqual(S().windows[w].tabIds, [a, c, b]);
+  assert.equal(S().dropTabs([c], drops.resolveDrop(S(), { kind: "tab" }, { zone: "split", targetId: a, side: "right" })), false);
+  assert.deepEqual(Object.values(S().groups), []);
+  assert.deepEqual(S().windows[w].tabIds, [a, b, c]);
   assert.equal(S().dropTabs([c], drops.NO_DROP), false);
 });
 

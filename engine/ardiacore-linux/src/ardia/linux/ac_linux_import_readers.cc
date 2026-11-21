@@ -21,6 +21,7 @@
 #include "ardia/linux/ac_linux_import_secrets.h"
 #include "ardia/linux/ac_linux_import_sessions.h"
 #include "ardia/linux/ac_linux_import_storage.h"
+#include "ardia/linux/ac_linux_import_zen.h"
 #include "base/json/json_reader.h"
 #include "third_party/sqlite/sqlite3.h"
 
@@ -44,29 +45,32 @@ constexpr size_t kMaxFaviconTotalBytes = 6u * 1024 * 1024;
 constexpr int64_t kPreferredFaviconWidth = 32;
 
 constexpr BrowserDefinition kBrowsers[] = {
-    {"chrome", "Google Chrome", Family::kChromium, true, "google-chrome", false},
-    {"chromeBeta", "Google Chrome Beta", Family::kChromium, true, "google-chrome-beta", false},
-    {"chromeDev", "Google Chrome Dev", Family::kChromium, true, "google-chrome-unstable", false},
-    {"chromeFlatpak", "Google Chrome (Flatpak)", Family::kChromium, false, ".var/app/com.google.Chrome/config/google-chrome", false},
-    {"chromium", "Chromium", Family::kChromium, true, "chromium", false},
-    {"chromiumFlatpak", "Chromium (Flatpak)", Family::kChromium, false, ".var/app/org.chromium.Chromium/config/chromium", false},
-    {"chromiumSnap", "Chromium (Snap)", Family::kChromium, false, "snap/chromium/common/chromium", false},
-    {"brave", "Brave", Family::kChromium, true, "BraveSoftware/Brave-Browser", false},
-    {"braveBeta", "Brave Beta", Family::kChromium, true, "BraveSoftware/Brave-Browser-Beta", false},
-    {"braveNightly", "Brave Nightly", Family::kChromium, true, "BraveSoftware/Brave-Browser-Nightly", false},
-    {"braveFlatpak", "Brave (Flatpak)", Family::kChromium, false, ".var/app/com.brave.Browser/config/BraveSoftware/Brave-Browser", false},
-    {"edge", "Microsoft Edge", Family::kChromium, true, "microsoft-edge", false},
-    {"edgeBeta", "Microsoft Edge Beta", Family::kChromium, true, "microsoft-edge-beta", false},
-    {"edgeDev", "Microsoft Edge Dev", Family::kChromium, true, "microsoft-edge-dev", false},
-    {"vivaldi", "Vivaldi", Family::kChromium, true, "vivaldi", false},
-    {"vivaldiSnapshot", "Vivaldi Snapshot", Family::kChromium, true, "vivaldi-snapshot", false},
-    {"opera", "Opera", Family::kChromium, true, "opera", true},
-    {"helium", "Helium", Family::kChromium, true, "net.imput.helium", false},
-    {"firefox", "Firefox", Family::kFirefox, false, ".mozilla/firefox", false},
-    {"firefoxFlatpak", "Firefox (Flatpak)", Family::kFirefox, false, ".var/app/org.mozilla.firefox/.mozilla/firefox", false},
-    {"firefoxSnap", "Firefox (Snap)", Family::kFirefox, false, "snap/firefox/common/.mozilla/firefox", false},
-    {"librewolf", "LibreWolf", Family::kFirefox, false, ".librewolf", false},
-    {"zen", "Zen", Family::kFirefox, false, ".zen", false},
+    {"chrome", "Google Chrome", Family::kChromium, true, "google-chrome", false, false, nullptr, Sidebar::kNone},
+    {"chromeBeta", "Google Chrome Beta", Family::kChromium, true, "google-chrome-beta", false, false, nullptr, Sidebar::kNone},
+    {"chromeDev", "Google Chrome Dev", Family::kChromium, true, "google-chrome-unstable", false, false, nullptr, Sidebar::kNone},
+    {"chromeFlatpak", "Google Chrome (Flatpak)", Family::kChromium, false, ".var/app/com.google.Chrome/config/google-chrome", false, false, nullptr, Sidebar::kNone},
+    {"chromium", "Chromium", Family::kChromium, true, "chromium", false, false, nullptr, Sidebar::kNone},
+    {"chromiumFlatpak", "Chromium (Flatpak)", Family::kChromium, false, ".var/app/org.chromium.Chromium/config/chromium", false, false, nullptr, Sidebar::kNone},
+    {"chromiumSnap", "Chromium (Snap)", Family::kChromium, false, "snap/chromium/common/chromium", false, false, nullptr, Sidebar::kNone},
+    {"brave", "Brave", Family::kChromium, true, "BraveSoftware/Brave-Browser", false, false, nullptr, Sidebar::kNone},
+    {"braveBeta", "Brave Beta", Family::kChromium, true, "BraveSoftware/Brave-Browser-Beta", false, false, nullptr, Sidebar::kNone},
+    {"braveNightly", "Brave Nightly", Family::kChromium, true, "BraveSoftware/Brave-Browser-Nightly", false, false, nullptr, Sidebar::kNone},
+    {"braveFlatpak", "Brave (Flatpak)", Family::kChromium, false, ".var/app/com.brave.Browser/config/BraveSoftware/Brave-Browser", false, false, nullptr, Sidebar::kNone},
+    {"edge", "Microsoft Edge", Family::kChromium, true, "microsoft-edge", false, false, nullptr, Sidebar::kNone},
+    {"edgeBeta", "Microsoft Edge Beta", Family::kChromium, true, "microsoft-edge-beta", false, false, nullptr, Sidebar::kNone},
+    {"edgeDev", "Microsoft Edge Dev", Family::kChromium, true, "microsoft-edge-dev", false, false, nullptr, Sidebar::kNone},
+    {"vivaldi", "Vivaldi", Family::kChromium, true, "vivaldi", false, false, nullptr, Sidebar::kNone},
+    {"vivaldiSnapshot", "Vivaldi Snapshot", Family::kChromium, true, "vivaldi-snapshot", false, false, nullptr, Sidebar::kNone},
+    {"opera", "Opera", Family::kChromium, true, "opera", true, false, nullptr, Sidebar::kNone},
+    {"helium", "Helium", Family::kChromium, true, "net.imput.helium", false, false, nullptr, Sidebar::kNone},
+    {"firefox", "Firefox", Family::kFirefox, false, ".mozilla/firefox", false, true, "mozilla/firefox", Sidebar::kNone},
+    {"firefoxFlatpak", "Firefox (Flatpak)", Family::kFirefox, false, ".var/app/org.mozilla.firefox/.mozilla/firefox", false,
+     false, ".var/app/org.mozilla.firefox/config/mozilla/firefox", Sidebar::kNone},
+    {"firefoxSnap", "Firefox (Snap)", Family::kFirefox, false, "snap/firefox/common/.mozilla/firefox", false, false, nullptr, Sidebar::kNone},
+    {"librewolf", "LibreWolf", Family::kFirefox, false, ".librewolf", false, false, nullptr, Sidebar::kNone},
+    {"zen", "Zen", Family::kFirefox, false, ".zen", false, true, "zen", Sidebar::kZen},
+    {"zenFlatpak", "Zen (Flatpak)", Family::kFirefox, false, ".var/app/app.zen_browser.zen/.zen", false, false,
+     ".var/app/app.zen_browser.zen/config/zen", Sidebar::kZen},
 };
 
 constexpr const char* kKindOrder[] = {"bookmarks", "history", "tabs", "passwords", "cookies",
@@ -209,7 +213,20 @@ class QuietObserver : public ImportObserver {
   void Progress(std::string_view, std::string_view, int, std::optional<int>) override {}
 };
 
-std::vector<base::DictValue> FirefoxProfiles(const std::string& root, const std::string& temp_root) {
+void AddZenSpaces(const std::string& path, ScratchDirectory& scratch, const ImportObserver& observer,
+                  base::ListValue& kinds, base::DictValue& profile) {
+  ZenSidebar sidebar;
+  if (LoadZenSidebar(path, scratch, observer, &sidebar) || sidebar.spaces.empty()) return;
+  kinds.Append("spaces");
+  kinds.Append("pinnedTabs");
+  if (std::none_of(kinds.begin(), kinds.end(), [](const base::Value& kind) { return kind.is_string() && kind.GetString() == "tabs"; })) {
+    kinds.Append("tabs");
+  }
+  if (!sidebar.essentials.empty()) kinds.Append("favorites");
+  profile.Set("spaces", ZenSpaceSummaries(sidebar, ZenContainerNames(path)));
+}
+
+std::vector<base::DictValue> FirefoxProfiles(const std::string& root, const std::string& temp_root, bool reads_zen_sidebar) {
   std::vector<base::DictValue> profiles;
   ScratchDirectory scratch(temp_root);
   QuietObserver quiet;
@@ -239,6 +256,7 @@ std::vector<base::DictValue> FirefoxProfiles(const std::string& root, const std:
       profile.Set("needsPrimaryPassword", true);
     }
     if (autofill && FirefoxCardsNeedKeyring(path, scratch, quiet)) profile.Set("cardsNeedKeyring", true);
+    if (reads_zen_sidebar) AddZenSpaces(path, scratch, quiet, kinds, profile);
     profile.Set("id", entry.path);
     profile.Set("name", entry.name);
     profile.Set("path", path);
@@ -637,14 +655,29 @@ void CollectLinks(const base::DictValue& node, int depth, std::vector<std::strin
   }
 }
 
+void CollectTabUrls(const base::ListValue* tabs, std::vector<std::string>* out) {
+  if (!tabs) return;
+  for (const base::Value& tab : *tabs) {
+    if (!tab.is_dict()) continue;
+    if (const std::string* url = tab.GetDict().FindString("url")) out->push_back(*url);
+  }
+}
+
 std::vector<std::string> FaviconPages(const base::DictValue& result) {
   std::vector<std::string> pages;
-  if (const base::ListValue* tabs = result.FindList("tabs")) {
-    for (const base::Value& tab : *tabs) {
-      if (!tab.is_dict()) continue;
-      if (const std::string* url = tab.GetDict().FindString("url")) pages.push_back(*url);
+  CollectTabUrls(result.FindList("favorites"), &pages);
+  if (const base::ListValue* spaces = result.FindList("spaces")) {
+    for (const base::Value& space : *spaces) {
+      if (!space.is_dict()) continue;
+      if (const base::ListValue* pinned = space.GetDict().FindList("pinned")) {
+        for (const base::Value& node : *pinned) {
+          if (node.is_dict()) CollectLinks(node.GetDict(), 0, &pages);
+        }
+      }
+      CollectTabUrls(space.GetDict().FindList("tabs"), &pages);
     }
   }
+  CollectTabUrls(result.FindList("tabs"), &pages);
   const base::DictValue* bookmarks = result.FindDict("bookmarks");
   const base::ListValue* roots = bookmarks ? bookmarks->FindList("children") : nullptr;
   if (roots) {
@@ -781,6 +814,30 @@ base::ListValue ReadFavicons(const std::string& directory, bool chromium, Scratc
   return out;
 }
 
+base::ListValue WithStoredFavicons(base::ListValue known, const std::string& directory, ScratchDirectory& scratch,
+                                   ImportObserver& observer, const std::vector<std::string>& pages) {
+  std::set<std::string> covered;
+  size_t total = 0;
+  for (const base::Value& icon : known) {
+    if (!icon.is_dict()) continue;
+    if (const std::string* page = icon.GetDict().FindString("page")) covered.insert(WithoutFragment(*page));
+    if (const std::string* png = icon.GetDict().FindString("png")) total += png->size();
+  }
+  if (known.size() >= kMaxFaviconPages) return known;
+  std::vector<std::string> missing;
+  for (const std::string& page : pages) {
+    if (!covered.contains(WithoutFragment(page))) missing.push_back(page);
+  }
+  base::ListValue stored = ReadFavicons(directory, false, scratch, observer, missing);
+  for (base::Value& icon : stored) {
+    const std::string* png = icon.is_dict() ? icon.GetDict().FindString("png") : nullptr;
+    if (!png || known.size() >= kMaxFaviconPages || total + png->size() > kMaxFaviconTotalBytes) break;
+    total += png->size();
+    known.Append(std::move(icon));
+  }
+  return known;
+}
+
 }
 
 const BrowserDefinition* FindBrowser(std::string_view id) {
@@ -809,7 +866,12 @@ Environment MakeEnvironment(const char* home, const char* config_home, const cha
 
 std::string DataDirectory(const Environment& environment, const BrowserDefinition& browser) {
   const std::string& base = browser.under_config ? environment.config_home : environment.home;
-  return base.empty() ? std::string() : Join(base, browser.path);
+  if (base.empty()) return std::string();
+  const std::string legacy = Join(base, browser.path);
+  const std::string& xdg_base = browser.xdg_under_config ? environment.config_home : environment.home;
+  if (!browser.xdg_path || xdg_base.empty() || IsFile(Join(legacy, "profiles.ini"))) return legacy;
+  const std::string xdg = Join(xdg_base, browser.xdg_path);
+  return IsFile(Join(xdg, "profiles.ini")) ? xdg : legacy;
 }
 
 std::optional<std::string> ProfileDirectory(const Environment& environment, const BrowserDefinition& browser,
@@ -831,7 +893,7 @@ base::ListValue ListBrowsers(const Environment& environment, Keyring* keyring) {
     if (!own.empty() && RealPath(root) == own) continue;
     std::vector<base::DictValue> profiles = browser.family == Family::kChromium
         ? ChromiumProfiles(root, browser, std::nullopt)
-        : FirefoxProfiles(root, environment.temp_root);
+        : FirefoxProfiles(root, environment.temp_root, browser.sidebar == Sidebar::kZen);
     if (profiles.empty()) continue;
     base::ListValue list;
     for (base::DictValue& profile : profiles) list.Append(std::move(profile));
@@ -840,6 +902,7 @@ base::ListValue ListBrowsers(const Environment& environment, Keyring* keyring) {
     source.Set("name", browser.name);
     source.Set("family", browser.family == Family::kChromium ? "chromium" : "firefox");
     source.Set("requiresExport", false);
+    if (browser.sidebar == Sidebar::kZen) source.Set("sidebar", "zen");
     bool keychain = false;
     if (browser.family == Family::kChromium && keyring) {
       if (std::optional<SafeStorageItem> item = SafeStorageFor(browser.id)) {
@@ -971,6 +1034,20 @@ ImportOutcome ReadBrowserProfile(const Environment& environment, std::string_vie
   int history_count = 0;
   base::ListValue failed;
   base::ListValue warnings;
+  auto wants = [&kinds](std::string_view kind) { return std::find(kinds.begin(), kinds.end(), kind) != kinds.end(); };
+  const bool zen = browser->sidebar == Sidebar::kZen;
+  std::optional<ZenSidebar> zen_sidebar;
+  std::optional<Failure> zen_failure;
+  bool zen_read = false;
+  auto load_zen = [&]() -> const ZenSidebar* {
+    if (!zen_read) {
+      zen_read = true;
+      ZenSidebar sidebar;
+      zen_failure = LoadZenSidebar(*directory, scratch, observer, &sidebar);
+      if (!zen_failure) zen_sidebar = std::move(sidebar);
+    }
+    return zen_sidebar ? &*zen_sidebar : nullptr;
+  };
   auto warn = [&warnings](std::string_view kind, std::string_view code, std::string message) {
     base::DictValue warning;
     warning.Set("kind", kind);
@@ -1037,6 +1114,29 @@ ImportOutcome ReadBrowserProfile(const Environment& environment, std::string_vie
         }
         for (std::string& note : logins.notes) warn(name, "unreadable", std::move(note));
         outcome.credentials = std::move(logins.credentials);
+      }
+    } else if (zen && (name == "tabs" || name == "spaces" || name == "pinnedTabs") && load_zen() &&
+               !zen_sidebar->spaces.empty()) {
+      const std::vector<const ZenSpace*> spaces = SelectZenSpaces(*zen_sidebar, options.space_ids);
+      result.Set("spaces", ZenSpaceSuggestions(spaces, profile_id, wants("pinnedTabs"), wants("tabs")));
+      if (name == "tabs") {
+        base::ListValue tabs = ZenOpenTabs(spaces);
+        count = static_cast<int>(tabs.size());
+        result.Set("tabs", std::move(tabs));
+      } else if (name == "pinnedTabs") {
+        for (const ZenSpace* space : spaces) count += ZenLinkCount(space->pinned);
+      } else {
+        count = static_cast<int>(spaces.size());
+      }
+    } else if (zen && (name == "spaces" || name == "pinnedTabs")) {
+      failure = Failure{"empty", "No " + std::string(browser->name) + " spaces in this profile"};
+    } else if (zen && name == "favorites") {
+      if (const ZenSidebar* sidebar = load_zen()) {
+        base::ListValue favorites = ZenEssentials(*sidebar);
+        count = static_cast<int>(favorites.size());
+        result.Set("favorites", std::move(favorites));
+      } else {
+        failure = zen_failure;
       }
     } else if (name == "tabs") {
       OpenTabs tabs;
@@ -1140,8 +1240,8 @@ ImportOutcome ReadBrowserProfile(const Environment& environment, std::string_vie
   }
 
   base::ListValue favicons;
-  const bool wants_icons = std::find(kinds.begin(), kinds.end(), "bookmarks") != kinds.end() ||
-                           std::find(kinds.begin(), kinds.end(), "tabs") != kinds.end();
+  const bool wants_icons =
+      wants("bookmarks") || wants("tabs") || wants("spaces") || wants("pinnedTabs") || wants("favorites");
   if (wants_icons) {
     if (observer.Cancelled()) {
       outcome.cancelled = true;
@@ -1151,8 +1251,11 @@ ImportOutcome ReadBrowserProfile(const Environment& environment, std::string_vie
       outcome.cards.clear();
       return outcome;
     }
-    favicons = ReadFavicons(*directory, chromium, scratch, observer, FaviconPages(result));
+    const std::vector<std::string> pages = FaviconPages(result);
+    favicons = zen_sidebar ? WithStoredFavicons(ZenSessionFavicons(*zen_sidebar, pages), *directory, scratch, observer, pages)
+                           : ReadFavicons(*directory, chromium, scratch, observer, pages);
   }
+  if (zen_sidebar) result.Set("separateEssentials", zen_sidebar->separate_essentials);
   result.Set("history", std::move(history));
   result.Set("historyCount", history_count);
   if (!result.FindList("tabs")) result.Set("tabs", base::ListValue());
@@ -1161,8 +1264,8 @@ ImportOutcome ReadBrowserProfile(const Environment& environment, std::string_vie
   result.Set("cookieCount", static_cast<int>(outcome.cookies.size()));
   result.Set("addressCount", static_cast<int>(outcome.addresses.size()));
   result.Set("cardCount", static_cast<int>(outcome.cards.size()));
-  result.Set("spaces", base::ListValue());
-  result.Set("favorites", base::ListValue());
+  if (!result.FindList("spaces")) result.Set("spaces", base::ListValue());
+  if (!result.FindList("favorites")) result.Set("favorites", base::ListValue());
   result.Set("favicons", std::move(favicons));
   result.Set("failed", std::move(failed));
   result.Set("warnings", std::move(warnings));
@@ -1219,7 +1322,7 @@ FirefoxUnlock UnlockFirefox(const Environment& environment, std::string_view bro
     return unlock;
   }
   const std::string root = DataDirectory(environment, *browser);
-  std::vector<base::DictValue> profiles = IsDirectory(root) ? FirefoxProfiles(root, environment.temp_root) : std::vector<base::DictValue>();
+  std::vector<base::DictValue> profiles = IsDirectory(root) ? FirefoxProfiles(root, environment.temp_root, false) : std::vector<base::DictValue>();
   ScratchDirectory scratch(environment.temp_root);
   QuietObserver quiet;
   bool locked = false;

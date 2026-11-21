@@ -1,4 +1,4 @@
-import { capture, setSharing } from "./client";
+import { capture, consentNow, setSharing } from "./client";
 import { ensureInstallId } from "./installId";
 import { NO_WATCH, save, savedChoice } from "./choice";
 import { telemetryRelay } from "./relay";
@@ -41,7 +41,7 @@ export function startWatch(reportId: string, days = WATCH_DAYS, now = Date.now()
     watchEndedNotice: null,
   });
   lastMonotonic = monotonicNow();
-  capture("watch_started", { days: Math.round(span / DAY_MS), turned_sharing_on: !wasSharing });
+  capture("watch_started", { days: Math.round(span / DAY_MS), turned_sharing_on: !wasSharing }, consentNow());
   schedule(now);
 }
 
@@ -49,7 +49,7 @@ function endWatch(reason: "expired" | "clock" | "stopped") {
   const s = savedChoice();
   const report = s.watchReport;
   if (!report) return;
-  capture("watch_ended", { reason, turned_sharing_on: s.sharingUntil !== null });
+  capture("watch_ended", { reason, turned_sharing_on: s.sharingUntil !== null }, consentNow());
   if (s.sharingUntil !== null) {
     setSharing(false, "watch_ended");
     if (reason !== "stopped") save({ watchEndedNotice: report });

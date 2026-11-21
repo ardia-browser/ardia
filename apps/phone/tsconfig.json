@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": [],
+    "preserveSymlinks": true,
+    "customConditions": ["react-native"],
+    "moduleSuffixes": [".native", ""]
+  },
+  "include": ["src", "index.js"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.render.test.tsx"]
+}

@@ -7,7 +7,9 @@ Usage: package_win.py --src SRC --out OUT --config JSON --runtime-deps TXT --wor
 """
 import argparse
 import datetime
+import json
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -15,7 +17,7 @@ import zipfile
 
 RUN_TXT = """Ardia's engine for Windows ({cpu})
 
-Chromium {chromium} with Helium {helium} and Ardia's patches, cross-built on macOS on {date}.
+Chromium {chromium} with Helium {helium} and Ardia's patches, cross-built on {host} on {date}.
 Not an official build (no ThinLTO, no PGO). Nothing in it is signed: Windows SmartScreen and Smart App Control may
 warn or block it, and there is no Authenticode signature to check.{emulated}
 
@@ -49,6 +51,27 @@ def runtime_deps(path):
     return deps
 
 
+def with_built_case(config, out_dir):
+    with open(config) as f:
+        data = json.load(f)
+    renamed = []
+    for archive in data.get('archive_datas', []):
+        files = archive.get('files', [])
+        for i, name in enumerate(files):
+            if any(c in name for c in '*?[') or os.path.exists(os.path.join(out_dir, name)):
+                continue
+            folder = os.path.join(out_dir, os.path.dirname(name))
+            if not os.path.isdir(folder):
+                continue
+            built = [n for n in os.listdir(folder) if n.lower() == os.path.basename(name).lower()]
+            if built:
+                files[i] = os.path.join(os.path.dirname(name), built[0]).replace(os.sep, '/')
+                renamed.append(f'{name} -> {files[i]}')
+    with open(config, 'w') as f:
+        json.dump(data, f, indent=2)
+    return renamed
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     for flag in ('--src', '--out', '--config', '--runtime-deps', '--work', '--zip', '--cpu', '--chromium', '--helium'):
@@ -58,6 +81,8 @@ def main():
     stage = os.path.join(args.work, 'chrome-win.zip')
     if os.path.exists(stage):
         os.remove(stage)
+    for line in with_built_case(args.config, out_dir):
+        print(f'archive config: {line}')
     p = subprocess.run([sys.executable, os.path.join(args.src, 'chrome/tools/build/make_zip.py'), out_dir,
                         args.config, stage], capture_output=True, text=True)
     with open(os.path.join(args.work, 'make_zip.log'), 'w') as f:
@@ -101,6 +126,7 @@ def main():
     with zipfile.ZipFile(tmp, 'a', compression=zipfile.ZIP_DEFLATED) as z:
         z.writestr('chrome-win/RUN.txt', RUN_TXT.format(
             cpu=args.cpu, chromium=args.chromium, helium=args.helium, zip_name=zip_name, emulated=emulated,
+            host={'Darwin': 'macOS'}.get(platform.system(), platform.system()),
             date=datetime.date.today().isoformat()).replace('\n', '\r\n'))
     os.replace(tmp, final)
     with zipfile.ZipFile(final) as z:

@@ -107,5 +107,7 @@ test("telemetry counts custom shortcuts and those on arrow, page and F keys, nev
   const snapshot = settingsSnapshot({ shortcuts });
   assert.equal(snapshot.custom_shortcuts, "3");
   assert.equal(snapshot.custom_shortcuts_navigation_keys, "2");
+  assert.equal(snapshot.custom_shortcuts_option_only, "0");
+  assert.equal(settingsSnapshot({ shortcuts: { copyUrl: ["c", "option"], newTab: ["t", "option", "command"] } }).custom_shortcuts_option_only, "1");
   assert.ok(!JSON.stringify(snapshot).includes("nextTab"));
 });

@@ -103,6 +103,8 @@ void NoteEvent(int browserId, NSString *name, NSDictionary *payload) {
   NSMutableDictionary *brief = [NSMutableDictionary dictionary];
   for (NSString *key in payload) {
     id value = payload[key];
+    if ([value isKindOfClass:NSString.class] && [value rangeOfString:@"^otpauth(-migration)?:" options:NSRegularExpressionSearch | NSCaseInsensitiveSearch].location == 0)
+      value = [value substringToIndex:[value rangeOfString:@":"].location + 1];
     brief[key] = [value isKindOfClass:NSString.class] && [value length] > 200 ? [value substringToIndex:200] : value;
   }
   [list addObject:@{@"name" : name, @"payload" : brief, @"t" : @(round(CACurrentMediaTime() * 1000))}];
@@ -156,6 +158,7 @@ void AcceptDrops(NSView *root, BOOL accept) {
   if ((self = [super initWithFrame:frameRect])) {
     _profile = @"";
     _visible = YES;
+    _selected = YES;
     _tabIndex = -1;
     self.wantsLayer = YES;
     __weak ArdiaWebView *weakSelf = self;
@@ -170,6 +173,7 @@ void AcceptDrops(NSView *root, BOOL accept) {
 - (void)dealloc {
   if (_interfaceScaleObserver) [NSNotificationCenter.defaultCenter removeObserver:_interfaceScaleObserver];
   if (_sightObserver) [NSNotificationCenter.defaultCenter removeObserver:_sightObserver];
+  [self leaveScreenAhead];
   [self closeBrowser];
 }
 
@@ -187,6 +191,8 @@ void AcceptDrops(NSView *root, BOOL accept) {
 
 - (void)viewWillMoveToWindow:(NSWindow *)newWindow {
   if (!newWindow) [self lendPageToSuccessor];
+  if (self.window && newWindow != self.window && (_visible || _reveal.active)) [ArdiaWebView dropNativeRevealsInWindow:self.window];
+  if (newWindow != self.window) [self leaveScreenAhead];
   [super viewWillMoveToWindow:newWindow];
 }
 
@@ -209,6 +215,11 @@ void AcceptDrops(NSView *root, BOOL accept) {
   else [self ensureTab];
 }
 
+- (void)viewDidUnhide {
+  [super viewDidUnhide];
+  [self settleFirstShowFocus];
+}
+
 - (void)setExtensionHost:(NSString *)extensionHost {
   _extensionHost = [extensionHost copy];
   if (_extensionHost.length) _standalone = YES;
@@ -217,6 +228,12 @@ void AcceptDrops(NSView *root, BOOL accept) {
 - (void)setAdoptId:(NSString *)adoptId {
   _adoptId = [adoptId copy];
   if (self.window) [self ensureTab];
+}
+
+- (void)setSelected:(BOOL)selected {
+  if (_selected == selected) return;
+  _selected = selected;
+  if (selected && _visible && !_standalone) [self requestFocusRestore];
 }
 
 - (void)setNeighbour:(BOOL)neighbour {
@@ -251,8 +268,10 @@ void AcceptDrops(NSView *root, BOOL accept) {
   if (!visible) [self storePageFocus];
   _visible = visible;
   if (visible) [self exposePage];
+  if (visible) [self holdCreatedPageShown];
   if (visible) [self stopHolding];
   if (visible) [self settleRevealsInWindow];
+  if (visible) [self settleFirstShowFocus];
   if (!visible) [_tab exitExclusiveAccess];
   if (visible && !_frameHold.awaiting && self.alphaValue < 1 && _tab.view.superview == self && !_tab.view.hidden) {
     [CATransaction begin];
@@ -312,6 +331,10 @@ void ArdiaWebViewsSetFieldTiming(BOOL on) {
 
 + (NSArray<NSDictionary<NSString *, id> *> *)devEventsForBrowser:(int)browserId {
   return RecentEvents()[@(browserId)] ?: @[];
+}
+
++ (void)devNoteEvent:(NSString *)name payload:(NSDictionary *)payload browser:(int)browserId {
+  NoteEvent(browserId, name, payload);
 }
 
 static BOOL gReportsCommits = NO;

@@ -62,7 +62,19 @@ the start unless noted. All clocks are epoch ms on the same Mac: JS's `Date.now(
 Each `perf_journeys` step goes as `<step>_p50`, `_p75`, `_p95`, `_max` and `_n` (ms; at most 500 samples per step per
 summary). Counts: `j3_cold` (the page was hidden), `j3_warm` (it was still painting), `j3_load` (it had to load),
 `j3_other` (no page: New Tab), `j2_no_bar`, `j4_no_load` (not a page load: a ardia: page, a download),
-`j4_no_paint` (nothing painted within 30 s), `j4_replaced` (another navigation came first).
+`j4_no_paint` (nothing painted within 30 s), `j4_replaced` (another navigation came first), `j3_native` (a sidebar
+press showed the page from native code before JS switched), `j3_native_dropped` (of those, shown and then not
+selected: a drag, a press on the shown tab's row, a press JS never heard, the tab closed, crashed or put to sleep
+while shown, a split made around it, the app or the window left, another selection winning, the 5 s backstop; a page a
+later press replaced is not counted, its own switch still follows). Both count only pages whose pixels reached the
+screen: one cancelled while it waited for its first frame is neither. Watch `j3_native_dropped / j3_native` stay small
+and `j3_view`'s p95 fall. A switch native code showed first is timed from its own press (the `nativePress` mark, kept
+under that press's number, so no other switch to the same tab can use it and a press taken back takes it along), not
+from the last input, so a release that came before JS heard the press, or a stall longer than a second, still gives
+a `j3` sample. Until JS commits the switch the page shown is pixels only: keys and clicks at the page reach neither
+page, and the keyboard stays where it was.
+A page of this Space that is kept warm keeps both this and JS's own reveal off (`revealableOver`); another Space's
+warm page does only while it is awake (the 10 s after a Space switch or swipe).
 Context: `tabs`, how many tabs were open when the summary went out (an exact count, from the first nightly after 0.2.46-nightly.6), so J2 and J3 can
 be split by tab count: they must not grow with it (#1330). Before it, join `perf_memory`'s tab count by copy.
 `perf_journeys` goes hourly and at quit, like `perf_omnibox`; `perf_launch` once its steps are in (≤ 30 s after the first
@@ -84,6 +96,9 @@ can be told from a slow launch on a quiet one; null when the call failed, never 
 launch was hidden, started as a login item, false when it wasn't; null when AppKit hadn't finished launching when the
 value was read). Both, and `main_ms`, `startup_ms` and `chromium_ms`, come from the first nightly after
 0.2.46-nightly.7; an earlier build leaves them out, and a mark the app didn't reach is null, never 0.
+`launch_source` (`login_item`, `documents` when another app opened a link or file with Ardia, `user`; null before AppKit
+finished launching, nothing else ever sent), `appkit_will_finish_ms` and `appkit_did_finish_ms` (`NSApplicationWillFinishLaunching`
+and `NSApplicationDidFinishLaunching`, from process start) come from the first nightly after 0.2.47-nightly.4.
 
 ### A session's payload
 

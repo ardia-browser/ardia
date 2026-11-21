@@ -23,16 +23,30 @@ public class SharedFoldersModule: Module {
       ]
     }
 
-    AsyncFunction("read") { (path: String) -> [String: Any] in
-      SharedFolderDirectory(root: URL(fileURLWithPath: path, isDirectory: true)).read()
+    AsyncFunction("read") { (path: String, identity: [String: Int]?) -> [String: Any] in
+      SharedFolderDirectory(root: URL(fileURLWithPath: path, isDirectory: true), identity: identity).read()
     }.runOnQueue(Self.work)
 
-    AsyncFunction("apply") { (path: String, ops: String) throws -> [String: Any] in
-      try SharedFolderDirectory(root: URL(fileURLWithPath: path, isDirectory: true)).apply(json: ops)
+    AsyncFunction("apply") { (path: String, ops: String, identity: [String: Int]?) throws -> [String: Any] in
+      try SharedFolderDirectory(root: URL(fileURLWithPath: path, isDirectory: true), identity: identity).apply(json: ops)
     }.runOnQueue(Self.work)
 
-    AsyncFunction("create") { (parent: String, name: String) throws -> String in
-      try SharedFolderDirectory.create(in: URL(fileURLWithPath: parent, isDirectory: true), named: name).path
+    AsyncFunction("resolve") { (path: String, promise: Promise) in
+      do {
+        promise.resolve(try SharedFolderDirectory.resolve(path))
+      } catch let refused as SharedFolderDirectory.Refused {
+        promise.reject("ERR_SHARED_FOLDER_REFUSED", refused.message)
+      } catch {
+        promise.reject("ERR_SHARED_FOLDER", error.localizedDescription)
+      }
+    }.runOnQueue(Self.work)
+
+    AsyncFunction("discard") { (path: String, identity: [String: Int]) -> Bool in
+      SharedFolderDirectory.discard(path, identity: identity)
+    }.runOnQueue(Self.work)
+
+    AsyncFunction("create") { (parent: String, parentIdentity: [String: Int]?, name: String) throws -> [String: Any] in
+      try SharedFolderDirectory.create(inParent: parent, parentIdentity: parentIdentity, named: name)
     }.runOnQueue(Self.work)
 
     Function("watch") { [weak self] (paths: [String]) in self?.watcher?.watch(paths) }

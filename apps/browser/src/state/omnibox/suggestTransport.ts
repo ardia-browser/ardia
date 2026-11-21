@@ -1,6 +1,7 @@
 import type { FetchLike } from "@ardia/core";
 import { fetchSearchSuggestions, stopSearchSuggestions } from "../../platform/search";
 import { noteSearchSuggest } from "../telemetry/track";
+import { consentNow } from "../telemetry/client";
 import { engineProfile, isIncognitoProfile } from "../browser/model";
 import { useBrowser } from "../browser/store";
 
@@ -14,12 +15,13 @@ export const suggestProfileKey = (profileId: string) => engineProfile(useBrowser
 export function browserSuggestFetch(profile: string): FetchLike {
   return async (url, { signal }) => {
     const id = nextRequestId++;
+    const consent = consentNow();
     const stop = () => void stopSearchSuggestions(profile, id).catch(() => {});
     signal.addEventListener("abort", stop, { once: true });
     try {
       const reply = await fetchSearchSuggestions(profile, url, id);
       if (reply.stopped || signal.aborted) throw new Error("suggestion request stopped");
-      noteSearchSuggest(reply.status === 200 ? "ok" : BLOCKED_STATUSES.has(reply.status) ? "blocked" : "failed");
+      noteSearchSuggest(reply.status === 200 ? "ok" : BLOCKED_STATUSES.has(reply.status) ? "blocked" : "failed", consent);
       const body = reply.body ?? "";
       return { ok: reply.status === 200 && !!body, text: async () => body };
     } finally {

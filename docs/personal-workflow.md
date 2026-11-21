@@ -177,16 +177,13 @@ Snapshots and the original migration backup stay private and out of Git. Do not 
 
 Preserve README fork notice `2286d63b`, PR CI workflow `84beb05f`, and the personal-build feature record.
 Starting point after setup: fork `main` at `9d18a24e`.
-The installed update targets `v0.2.47-nightly.5`, commit `f6636c47bd20ac2c86d82f5b54898498594b0512`.
-Candidate and installed records match current sources; the paired CLI is `0.2.47-personal.1`.
-All custom features remain active. Upstream strikethrough partially overlaps title fading; Simon confirmed
-that the fork should retain fade-only alongside upstream strikethrough. Unreleased upstream Sleep Tab and cross-space extension recovery are documented in the ledger,
-not imported. No replacement or custom-code removal is approved.
-Workspace typechecks, package tests, personal lifecycle tests, and focused custom-feature tests pass.
-The browser suite's four initial failures were corrected and rechecked. The CLI suite passed except one
-personal-skill length assertion; shortening the text and rerunning its 52 tests passed.
-Hidden signed-candidate checks cover MRU selection, close/unload successors, switcher row closing,
-sleeping filtering, settings persistence, and no background startup warmup after 15 seconds.
-Simon confirmed all requested manual checks passed.
-Evidence: `apps/browser/build-personal-signed/update-0.2.47-nightly.5/`.
-Installation snapshot: `20261117-182424-c196d008`. The managed Ardia skill matches the activated CLI bundle.
+The installed update targets `v0.2.47-nightly.9`, commit `c37a870640a8ce5c569322535f9fbf82fcaecaa0`.
+The signed app uses Chromium `158.0.8127.36`, engine key `367b6b04ea642e1afcb73365abd2f895fba1c7be`.
+The paired CLI and managed skill remain at `0.2.47-personal.1`. The personal command stays separate from
+upstream's Command Line plugin. All eight custom features remain active.
+Typechecks, 145 focused browser checks, and hidden candidate checks passed. The candidate exercised native unloading,
+MRU selection, switcher closing and sleeping filtering, settings restoration, lazy startup, and the personal CLI socket.
+The Linux host suite still records its upstream Picture in Picture consent TODO. The native plugin responsibility test
+passed from scratch after macOS denied its disclaimed subprocess access to the checkout under Documents.
+Installation snapshot: `20261120-233540-0fe4a2e4`. Evidence: `apps/browser/build-personal-signed/update-0.2.47-nightly.9/`.
+Simon confirmed restored tabs, an existing login, Control-Tab previews, and Unload Tab with reload on selection.

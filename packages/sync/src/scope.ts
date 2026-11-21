@@ -1,6 +1,8 @@
 import { canonical } from "./canon.ts";
 import { hlcWall, type Clock, type HLC } from "./hlc.ts";
 import { holdsBack, noteFileHealth } from "./fileHealth.ts";
+import { baseKeysWith, dropBase, dropRecord, putBase, putRecord, visible, withBaseIndex } from "./scopeKeys.ts";
+export * from "./scopeKeys.ts";
 import type { Adapter, LogFile, Origin, ScopeOptions, ScopeState, SnapshotFile, SyncFile, SyncRecord, Transport } from "./scopeState.ts";
 
 const DEFAULTS: Required<Omit<ScopeOptions, "persist" | "holdApply">> = {
@@ -62,7 +64,7 @@ function mergeRecord(state: ScopeState, key: string, record: SyncRecord, clock: 
   clock.observe(record.h);
   const current = state.records[key];
   if (current && current.h >= record.h) return false;
-  state.records[key] = record;
+  putRecord(state, key, record);
   return true;
 }
 
@@ -82,9 +84,9 @@ export function ingestSnapshot(state: ScopeState, file: SnapshotFile, clock: Clo
     if (!(key in state.records) && isApplied(state, record.o)) continue;
     if (mergeRecord(state, key, record, clock)) changed.add(key);
   }
-  for (const [key, record] of Object.entries(state.records)) {
-    if (!(key in file.records) && covered(file.vv, record.o)) {
-      delete state.records[key];
+  for (const key in state.records) {
+    if (!(key in file.records) && covered(file.vv, state.records[key]!.o)) {
+      dropRecord(state, key);
       changed.add(key);
     }
   }
@@ -97,14 +99,6 @@ export function ingestSnapshot(state: ScopeState, file: SnapshotFile, clock: Clo
       else delete state.extra[device];
     }
   }
-}
-
-export function visible(state: ScopeState, prefix: string): Map<string, unknown> {
-  const out = new Map<string, unknown>();
-  for (const [key, record] of Object.entries(state.records)) {
-    if (record.v !== null && key.startsWith(prefix)) out.set(key, record.v);
-  }
-  return out;
 }
 
 const parseBase = (json: string | undefined) => (json === undefined ? undefined : (JSON.parse(json) as unknown));
@@ -131,17 +125,20 @@ async function changesOf(state: ScopeState, adapter: Adapter, now: number) {
   if (adapter.adoptRemoteOnJoin && !state.joined) return null;
   let pending: Set<string> | null = null;
   const queued = (key: string) => (pending ??= new Set([...state.outbox, ...(state.journal ?? []).flatMap((f) => f.ops)].map((op) => op.k))).has(key);
-  const extraction = await adapter.extract((key) => parseBase(state.base[key]), queued, now, (key) => key in state.records, (key) => state.records[key]?.v, (key) => state.records[key]?.h);
+  const extraction = await adapter.extract((key) => parseBase(state.base[key]), queued, now, (key) => key in state.records, (key) => state.records[key]?.v, (key) => state.records[key]?.h, (key) => state.base[key]);
   if (!extraction) return null;
   const changes: Change[] = [];
-  for (const [key, value] of extraction.values) {
+  const { values, json: knownJson, republish, ignore } = extraction;
+  values.forEach((value, key) => {
     if (value === null || value === undefined) throw new Error(`[sync] ${key}: a live value can't be null`);
-    const json = canonical(value);
-    if (state.base[key] === json && !extraction.republish?.(key)) continue;
+    const json = knownJson?.(key, value) ?? canonical(value);
+    if (state.base[key] === json && !republish?.(key)) return;
     changes.push({ key, value, json });
-  }
-  for (const key of Object.keys(state.base)) {
-    if (!key.startsWith(adapter.prefix) || extraction.values.has(key) || extraction.ignore?.(key)) continue;
+  });
+  const keys = baseKeysWith(state, adapter.prefix);
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i]!;
+    if (!(key in state.base) || values.has(key) || ignore?.(key)) continue;
     changes.push({ key, value: null, json: "null" });
   }
   return { changes, settle: extraction.published };
@@ -163,13 +160,13 @@ async function publishAdapter(state: ScopeState, adapter: Adapter, clock: Clock,
   if (!found) return published;
   for (const change of found.changes) {
     const { key, value, json } = change;
-    if (value === null) delete state.base[key];
-    else state.base[key] = json;
+    if (value === null) dropBase(state, key);
+    else putBase(state, key, json);
     const candidate = stamps?.get(key);
     const h = candidate?.json === json ? candidate.h : stampOf(state, adapter, clock, change);
     const known = state.records[key];
     if (known && known.h >= h) continue;
-    state.records[key] = { h, v: value, o: [device, state.seq + 1] };
+    putRecord(state, key, { h, v: value, o: [device, state.seq + 1] });
     state.outbox.push({ k: key, h, v: value });
     published.add(key);
   }
@@ -209,8 +206,8 @@ export function restoreJournal(state: ScopeState, batches: LogFile[], clock: Clo
     if (file.seq === saved + 1) state.outbox = [];
     for (const op of file.ops) {
       mergeRecord(state, op.k, { h: op.h, v: op.v, o: [file.device, file.seq] }, clock);
-      if (op.v === null) delete state.base[op.k];
-      else state.base[op.k] = canonical(op.v);
+      if (op.v === null) dropBase(state, op.k);
+      else putBase(state, op.k, canonical(op.v));
     }
     state.seq = file.seq;
     if (file.seq <= written) markApplied(state, file.device, file.seq);
@@ -255,8 +252,8 @@ async function applyAdapter(state: ScopeState, adapter: Adapter, keys: Set<strin
   const applyAs = (state.applyAs ??= {});
   applyAs[adapter.prefix] ??= state.joined ? "joined" : "joining";
   const settle = (key: string) => {
-    if (view.has(key)) state.base[key] = canonical(view.get(key));
-    else delete state.base[key];
+    if (view.has(key)) putBase(state, key, canonical(view.get(key)));
+    else dropBase(state, key);
   };
   const landed = new Set<string>();
   let ok: boolean | void = false;
@@ -335,7 +332,7 @@ export async function compact(state: ScopeState, transport: Transport, scope: st
   const tombstoneTTL = Object.keys(state.extra).length ? 2 * o.tombstoneTTL : o.tombstoneTTL;
   for (const [key, record] of Object.entries(state.records)) {
     const drop = record.v === null ? now - hlcWall(record.h) > tombstoneTTL : o.expired(key, record.v, now);
-    if (drop) delete state.records[key];
+    if (drop) dropRecord(state, key);
     else records[key] = record;
   }
   const vv = { ...state.vv };
@@ -360,6 +357,10 @@ export async function syncScope(args: {
   now?: () => number;
   options?: ScopeOptions;
 }): Promise<CycleResult> {
+  return withBaseIndex(args.state, () => syncScopeIndexed(args));
+}
+
+async function syncScopeIndexed(args: Parameters<typeof syncScope>[0]): Promise<CycleResult> {
   const { scope, state, transport, adapters, clock, device, options } = args;
   const now = args.now ?? Date.now;
   let published = 0;
@@ -382,7 +383,7 @@ export async function syncScope(args: {
     heldApply ||= applyHeld();
     const applied = !heldApply && (await applyAdapter(state, adapter, keys, now(), 2 * (options?.tombstoneTTL ?? DEFAULTS.tombstoneTTL), applyHeld));
     heldApply ||= applyHeld();
-    if (!applied) unapplied.push(...[...keys].filter((k) => k.startsWith(adapter.prefix)));
+    if (!applied) for (const key of keys) if (key.startsWith(adapter.prefix)) unapplied.push(key);
   }
   state.unapplied = [...unapplied, ...[...keys].filter((k) => !adapters.some((a) => k.startsWith(a.prefix)))];
   if (!heldApply && (!state.awaitRemote || Object.keys(state.seen).some((d) => d !== device))) {

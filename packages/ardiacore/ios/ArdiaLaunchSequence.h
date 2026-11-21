@@ -17,6 +17,8 @@ typedef NS_OPTIONS(NSUInteger, ArdiaLaunchMilestone) {
 @property(nonatomic) double mainStartedAt;
 @property(nonatomic) double startupPreparedAt;
 @property(nonatomic) double chromiumEnteredAt;
+@property(nonatomic) double appKitWillFinishAt;
+@property(nonatomic) double appKitDidFinishAt;
 @property(nonatomic) double engineStartedAt;
 @property(nonatomic) double reactNativeStartedAt;
 @property(nonatomic) double earlyWindowShownAt;

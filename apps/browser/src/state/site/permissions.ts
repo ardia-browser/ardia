@@ -95,6 +95,8 @@ export function answerPermission(tabId: string, requestId: string, result: Permi
   next(tabId);
 }
 
+export const queuedPermissions = (tabId: string) => queues.get(tabId)?.length ?? 0;
+
 export function dismissPermissions(tabId: string) {
   for (const [id, entry] of [...deciding]) {
     if (entry.tabId !== tabId) continue;

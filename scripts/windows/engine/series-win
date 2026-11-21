@@ -18,3 +18,5 @@ chromium chromium-win-strict-login-list.patch
 chromium chromium-win-keep-every-login.patch
 chromium chromium-win-discard-asks-the-host.patch
 chromium chromium-win-devtools-other-clients.patch
+chromium chromium-win-autoplay-policy.patch
+chromium chromium-win-hosted-theme-change.patch

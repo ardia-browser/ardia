@@ -1,5 +1,6 @@
 import { createElement, forwardRef, type ComponentType } from "react";
 import { View } from "react-native-web";
+import { PeekStage } from "./web/PeekStage";
 import { noteMissing } from "./missing";
 import { ardiaHost, hostSupports } from "../host";
 import { createNativeEvents } from "../hostEvents";
@@ -113,7 +114,7 @@ export function requireOptionalNativeModule<T = unknown>(name: string): T | null
   return moduleValues[host] ? (nativeModule(name) as T) : null;
 }
 
-const viewManagers = new Map<string, ComponentType<object>>();
+const viewManagers = new Map<string, ComponentType<object>>([["ArdiaPeekStage", PeekStage as ComponentType<object>]]);
 
 export function requireNativeViewManager<P = object>(name: string): ComponentType<P> {
   const cached = viewManagers.get(name);

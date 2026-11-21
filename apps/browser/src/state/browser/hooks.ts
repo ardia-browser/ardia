@@ -1,4 +1,4 @@
-import { createContext, useContext } from "react";
+import { createContext, useContext, useMemo, useSyncExternalStore } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { isBookmarked } from "../bookmarks/bookmarks";
 import { useBrowser, type BrowserState } from "./store";
@@ -8,8 +8,9 @@ import type { BrowserWindow, FindState, Profile, Tab, TabGroup, TabLive } from "
 import { CLOSED_FIND, DEFAULT_WINDOW_UI } from "../windows/ui";
 import { downloadsIn } from "../downloads/downloadsSlice";
 import { focusedWindowOf } from "../windows/ui";
-import { ALL, useKeyed, watchLiveRecord, watchSettings, watchTabRecord, watchWindowRecord } from "./keyedWatch";
+import { ALL, useKeyed, watchSettings, watchTabRecord, watchWindowRecord } from "./keyedWatch";
 import { useTabState } from "../tabs/tabStateWatch";
+import { shownLiveOf, watchLive } from "../tabs/tabLive";
 
 export const WindowContext = createContext<string | null>(null);
 
@@ -82,13 +83,26 @@ export const useProfile = <T>(profileId: string | null | undefined, select: (p: 
 export const useGroup = <T>(groupId: string | null | undefined, select: (g: TabGroup | undefined) => T): T =>
   useBrowser((s) => select(groupId ? s.groups[groupId] : undefined));
 
+const inert = () => () => {};
+
+function watchShownLive(tabId: string, listener: () => void): () => void {
+  const offLive = watchLive(tabId, listener);
+  const offTab = watchTabRecord(tabId, listener);
+  return () => {
+    offLive();
+    offTab();
+  };
+}
+
 export function useTabLive(tabId: string | undefined): TabLive;
 export function useTabLive<T>(tabId: string | undefined, select: (live: TabLive) => T): T;
 export function useTabLive<T>(tabId: string | undefined, select?: (live: TabLive) => T) {
-  return useKeyed(watchLiveRecord, tabId, () => {
-    const live = (tabId && useBrowser.getState().live[tabId]) || IDLE_LIVE;
+  const subscribe = useMemo(() => (tabId ? (listener: () => void) => watchShownLive(tabId, listener) : inert), [tabId]);
+  const read = () => {
+    const live = tabId ? shownLiveOf(useBrowser.getState(), tabId) : IDLE_LIVE;
     return select ? select(live) : live;
-  });
+  };
+  return useSyncExternalStore(subscribe, read, read);
 }
 
 export const useFind = (tabId: string | undefined): FindState => useBrowser((s) => (tabId && s.find[tabId]) || CLOSED_FIND);

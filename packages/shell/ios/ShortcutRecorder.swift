@@ -31,7 +31,7 @@ final class ShortcutRecorder {
       let key = navigationKey ? unmodified : (event.characters(byApplyingModifiers: []) ?? unmodified).lowercased()
       guard !key.isEmpty else { return nil }
       let functionKey = key.unicodeScalars.first.map { (0xF704...0xF726).contains($0.value) } ?? false
-      guard flags.contains(.command) || flags.contains(.control) || functionKey else {
+      guard flags.contains(.command) || flags.contains(.control) || flags.contains(.option) || functionKey else {
         NSSound.beep()
         return nil
       }

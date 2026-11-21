@@ -337,6 +337,20 @@ function searchOf(app: ScopeState): ViewSearch | null {
   return { engineId: typeof engine === "string" && engine ? engine : "google", customURL: optStr(customUrl), customEngines: engines };
 }
 
+function spaceOrder(app: ScopeState, me: string): string[] {
+  let newest: { stamp: string; id: string; order: string[] } | null = null;
+  for (const [k, v] of visible(app, "dev:")) {
+    const id = k.slice(4);
+    const stamp = app.records[k]?.h;
+    const listed = (v as DeviceValue | null)?.o;
+    if (id === me || typeof stamp !== "string" || !Array.isArray(listed)) continue;
+    const order = [...new Set(listed.filter((profile): profile is string => typeof profile === "string"))];
+    if (!order.length) continue;
+    if (!newest || stamp > newest.stamp || (stamp === newest.stamp && id < newest.id)) newest = { stamp, id, order };
+  }
+  return newest?.order ?? [];
+}
+
 export function buildView(scopes: Record<string, ScopeState>, me: string): View {
   const app = scopes.app;
   if (!app) return { devices: [], profiles: [], search: null, look: null };
@@ -377,6 +391,8 @@ export function buildView(scopes: Record<string, ScopeState>, me: string): View 
       history: historyList(data),
     };
   });
-  profileList.sort((a, z) => Number(z.isDefault) - Number(a.isDefault) || a.name.localeCompare(z.name) || (a.syncId < z.syncId ? -1 : 1));
+  const rank = new Map(spaceOrder(app, me).map((id, i) => [id, i]));
+  const placed = (p: ViewProfile) => rank.get(p.syncId) ?? rank.size;
+  profileList.sort((a, z) => placed(a) - placed(z) || Number(z.isDefault) - Number(a.isDefault) || a.name.localeCompare(z.name) || (a.syncId < z.syncId ? -1 : 1));
   return { devices: deviceList, profiles: profileList, search: searchOf(app), look: lookOf(app) };
 }

@@ -1,0 +1,192 @@
+#!/bin/bash
+# Builds a release APK whose JavaScript is one commit, and stamps it with that commit and the native tree's state.
+#
+#   apps/phone/scripts/build-apk <name> [--commit REV] [--compose-key] [--store] [--direct] [--no-r8] [--abi ABI[,ABI]]
+#                                [--compress libs|dex|libs,dex] [--bundle] [--version RELEASE]
+#
+# The bundle comes from an export of REV (default HEAD at start, see bundle-export.ts), so edits and commits in the
+# working tree during the build don't reach it; the export is deleted afterwards. Kotlin, resources and the native
+# module still build from the working tree, and the stamp says at which commit and whether that tree was clean or
+# written during the build. --direct bundles the working tree instead, behind the bundle guard. Writes
+# $ARDIA_APK_DIR/<name>.apk (default /tmp/ardia-phone) and <name>.txt beside it. --compose-key re-signs it with the
+# Compose app's key (~/.android/debug.keystore) for the upgrade test; --store builds without the lab switch.
+# The release is shrunk with R8, and its reports (mapping, usage, seeds, configuration, missing rules) and the JS
+# bundle's composed source map are kept
+# in <name>-r8/ beside the APK, and check-names.py must pass on it. --no-r8 builds the unshrunk control.
+# Only arm64-v8a is built unless --abi names others (--abi arm64-v8a,x86_64 for an x86_64 emulator).
+# --compress stores the native libraries, the dex or both compressed, for a smaller direct download; the JS
+# bundle stays uncompressed. --bundle builds <name>.aab for the Play Store instead, and checks its stamp and
+# names on the universal APK made from it, kept as <name>-universal.apk.
+# ARDIA_BUILD_ROOT builds another checkout with these scripts (corex-build's build-only clone); --compose-key is
+# Mac-only, since only the Mac holds the Compose app's key. --version gives a --store build its release version
+# (0.2.47 or 0.2.47-nightly.2): android-version.ts turns it into the versionName and versionCode.
+set -euo pipefail
+if [ $# -lt 1 ] || [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
+  sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'
+  [ $# -ge 1 ] && exit 0 || exit 64
+fi
+name="$1"
+shift
+composeKey=0
+lab=1
+direct=0
+r8=1
+rev=HEAD
+abis=arm64-v8a
+compress=""
+bundle=0
+release=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --compose-key) composeKey=1 ;;
+    --store) lab=0 ;;
+    --direct) direct=1 ;;
+    --r8) r8=1 ;;
+    --no-r8) r8=0 ;;
+    --abi) abis="$2"; shift ;;
+    --compress) compress="$2"; shift ;;
+    --bundle) bundle=1 ;;
+    --commit) rev="$2"; shift ;;
+    --version) release="$2"; shift ;;
+    *) echo "unknown option $1" >&2; exit 64 ;;
+  esac
+  shift
+done
+if [ "$composeKey" = "1" ] && [ "$(uname)" != "Darwin" ]; then
+  echo "--compose-key signs with the Compose app's key, which only the Mac holds: build the upgrade pair there" >&2
+  exit 64
+fi
+case ",$compress," in
+  ,,|,libs,|,dex,|,libs,dex,|,dex,libs,) ;;
+  *) echo "--compress takes libs, dex or libs,dex" >&2; exit 64 ;;
+esac
+if [ "$bundle" = "1" ] && { [ -n "$compress" ] || [ "$composeKey" = "1" ]; }; then
+  echo "--bundle leaves compression and signing to the Play Store: it takes no --compress or --compose-key" >&2
+  exit 64
+fi
+here="$(cd "$(dirname "$0")" && pwd)"
+root="${ARDIA_BUILD_ROOT:-$(cd "$here/../../.." && pwd)}"
+out="${ARDIA_APK_DIR:-/tmp/ardia-phone}"
+tools="$(ls -d "${ANDROID_HOME:-$HOME/Library/Android/sdk}"/build-tools/* | sort -V | tail -1)"
+free=$(df -Pk "$root" | awk 'NR==2 {print int($4 / 1048576)}')
+if [ "$free" -lt 10 ]; then
+  echo "only ${free} GB free on the data volume: not building" >&2
+  exit 1
+fi
+started=$(node -e 'console.log(Date.now())')
+gradleArgs=()
+exportDir=""
+removeExport() {
+  if [ -n "$exportDir" ]; then
+    node --no-warnings "$here/bundle-export.ts" remove "$exportDir" || echo "could not remove the bundle export $exportDir" >&2
+  fi
+}
+trap removeExport EXIT
+if [ "$direct" = "1" ]; then
+  [ "$rev" = "HEAD" ] || { echo "--direct bundles the working tree, so it takes no --commit" >&2; exit 64; }
+  node --no-warnings "$here/bundle-guard.ts" check --root "$root"
+  commit="$(git -C "$root" rev-parse HEAD)"
+  source="working tree"
+else
+  made="$(node --no-warnings "$here/bundle-export.ts" create --commit "$rev" --root "$root")"
+  exportDir="$(printf '%s' "$made" | node -e 'console.log(JSON.parse(require("fs").readFileSync(0, "utf8")).dir)')"
+  commit="$(printf '%s' "$made" | node -e 'console.log(JSON.parse(require("fs").readFileSync(0, "utf8")).commit)')"
+  gradleArgs=(-PardiaBundleExport="$exportDir")
+  source="export of the commit"
+fi
+echo "bundling $commit from the $source"
+gradleArgs+=(-Pandroid.enableMinifyInReleaseBuilds=$([ "$r8" = "1" ] && echo true || echo false))
+if [ -n "$release" ]; then
+  [ "$lab" = "0" ] || { echo "--version is for a --store build: a lab build carries no release version" >&2; exit 64; }
+  planned="$(node --no-warnings "$here/android-version.ts" "$release")"
+  versionName="$(sed -n 's/^name=//p' <<<"$planned")"
+  versionCode="$(sed -n 's/^code=//p' <<<"$planned")"
+  gradleArgs+=(-PardiaVersionName="$versionName" -PardiaVersionCode="$versionCode")
+fi
+gradleArgs+=(-PreactNativeArchitectures="$abis")
+case ",$compress," in *,libs,*) gradleArgs+=(-Pexpo.useLegacyPackaging=true) ;; esac
+case ",$compress," in *,dex,*) gradleArgs+=(-PardiaCompressDex=true) ;; esac
+outputs="$root/apps/phone/android/app/build/outputs"
+if [ "$bundle" = "1" ]; then
+  ARDIA_LAB=$lab "$here/gradle-locked" :app:bundleRelease :app:packageReleaseUniversalApk ${gradleArgs[@]+"${gradleArgs[@]}"} --max-workers=4 --console=plain -q
+else
+  ARDIA_LAB=$lab "$here/gradle-locked" :app:assembleRelease ${gradleArgs[@]+"${gradleArgs[@]}"} --max-workers=4 --console=plain -q
+fi
+nativeAfter="$(node --no-warnings "$here/bundle-guard.ts" native --since "$started" --root "$root")"
+mkdir -p "$out"
+built="$out/$name.building.apk"
+if [ "$bundle" = "1" ]; then
+  cp "$outputs/bundle/release/app-release.aab" "$out/$name.building.aab"
+  cp "$outputs/apk_from_bundle/release/app-release-universal.apk" "$built"
+else
+  cp "$outputs/apk/release/app-release.apk" "$built"
+fi
+if [ "$composeKey" = "1" ]; then
+  "$tools/apksigner" sign --v4-signing-enabled false --ks "$HOME/.android/debug.keystore" --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android "$built"
+fi
+resources="$("$tools/aapt2" dump resources "$built")"
+stamp() { printf '%s\n' "$resources" | grep -A1 "string/$1" | sed -n 's/.*"\(.*\)".*/\1/p' | head -1; }
+stamped="$(stamp ardia_build_commit)"
+dirty="$(stamp ardia_build_dirty)"
+stampedSource="$(stamp ardia_build_source)"
+nativeStamp="$(stamp ardia_build_native)"
+if [ "$stamped" != "$commit" ] || [ "$dirty" != "no" ] || [ "$stampedSource" != "$source" ]; then
+  mv "$built" "$out/$name.rejected.apk"
+  [ "$bundle" = "1" ] && mv "$out/$name.building.aab" "$out/$name.rejected.aab"
+  echo "the APK says ${stamped:-no commit}, dirty: ${dirty:-unknown}, from the ${stampedSource:-unknown}, but this build bundled $commit from the $source: kept as $name.rejected.apk, not shipped" >&2
+  exit 1
+fi
+if [ "$r8" = "1" ] && ! names="$(ARDIA_BUILD_ROOT="$root" python3 "$here/../test/r8/check-names.py" "$built" 2>&1)"; then
+  printf '%s\n' "$names" >&2
+  mv "$built" "$out/$name.rejected.apk"
+  [ "$bundle" = "1" ] && mv "$out/$name.building.aab" "$out/$name.rejected.aab"
+  echo "check-names.py found names R8 lost: kept as $name.rejected.apk, not shipped" >&2
+  exit 1
+fi
+if [ "$bundle" = "1" ]; then
+  apk="$out/$name-universal.apk"
+  mv "$out/$name.building.aab" "$out/$name.aab"
+else
+  apk="$out/$name.apk"
+fi
+mv "$built" "$apk"
+if [ "$r8" = "1" ]; then
+  mkdir -p "$out/$name-r8"
+  cp "$outputs/mapping/release/"*.txt "$out/$name-r8/" 2>/dev/null || true
+  cp "$root/apps/phone/android/app/build/generated/sourcemaps/react/release/index.android.bundle.map" "$out/$name-r8/" 2>/dev/null || true
+fi
+packaging="$(python3 -c '
+import sys, zipfile
+entries = zipfile.ZipFile(sys.argv[1]).infolist()
+def state(test):
+    chosen = [e for e in entries if test(e.filename)]
+    return "none" if not chosen else "compressed" if all(e.compress_type for e in chosen) else "stored" if not any(e.compress_type for e in chosen) else "mixed"
+print("native libraries " + state(lambda n: n.startswith("lib/")) + ", dex " + state(lambda n: n.endswith(".dex")) + ", JS bundle " + state(lambda n: n.endswith(".bundle")))
+' "$apk")"
+version="$("$tools/aapt2" dump badging "$apk" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p" | head -1)"
+signer="$("$tools/apksigner" verify --print-certs "$apk" | sed -n 's/.*SHA-256 digest: //p' | head -1)"
+sum="$(shasum -a 256 "$apk" | cut -d' ' -f1)"
+{
+  if [ "$bundle" = "1" ]; then
+    echo "aab: $name.aab ($(wc -c < "$out/$name.aab" | tr -d ' ') bytes, sha256 $(shasum -a 256 "$out/$name.aab" | cut -d' ' -f1))"
+    echo "checked on: $name-universal.apk, made from it"
+  else
+    echo "apk: $name.apk"
+  fi
+  echo "commit: $commit"
+  echo "dirty: $dirty"
+  echo "bundle: from the $source"
+  echo "native at configuration: $nativeStamp"
+  echo "native after the build: $nativeAfter"
+  echo "lab: $([ "$lab" = "1" ] && echo on || echo off)"
+  echo "r8: $([ "$r8" = "1" ] && echo on || echo off)"
+  echo "abis: $abis"
+  echo "packaging: $packaging"
+  [ "$r8" = "1" ] && echo "names: check-names.py passed"
+  echo "versionCode: $version"
+  echo "versionName: $("$tools/aapt2" dump badging "$apk" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p" | head -1)"
+  echo "signer sha256: $signer"
+  echo "sha256: $sum"
+  echo "size: $(wc -c < "$apk" | tr -d ' ')"
+} > "$out/$name.txt"
+cat "$out/$name.txt"

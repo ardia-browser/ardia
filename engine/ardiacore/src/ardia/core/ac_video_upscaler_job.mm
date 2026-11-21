@@ -54,6 +54,18 @@ bool SameRowStrides(IOSurfaceRef surface, IOSurfaceRef reference) {
   return true;
 }
 
+CVPixelBufferRef WrapForSuperResolution(IOSurfaceRef source) {
+  CVPixelBufferRef wrapped = nullptr;
+  CVPixelBufferCreateWithIOSurface(nullptr, source, nullptr, &wrapped);
+  if (wrapped && HasExtendedPixels(wrapped)) {
+    TRACE_EVENT_INSTANT0("gpu", "ArdiaVSR.SourceCopiedForExtendedPixels",
+                         TRACE_EVENT_SCOPE_THREAD);
+    CVPixelBufferRelease(wrapped);
+    return nullptr;
+  }
+  return wrapped;
+}
+
 base::apple::ScopedCFTypeRef<IOSurfaceRef> CreateOutputSurface(const gfx::Size& size) {
   const size_t bytes_per_row =
       IOSurfaceAlignProperty(kIOSurfaceBytesPerRow, size.width() * 4);
@@ -157,6 +169,12 @@ bool SubmitSuperResolution(ArdiaVideoUpscalerKit* kit,
 
 }
 
+bool HasExtendedPixels(CVPixelBufferRef buffer) {
+  size_t left = 0, right = 0, top = 0, bottom = 0;
+  CVPixelBufferGetExtendedPixels(buffer, &left, &right, &top, &bottom);
+  return left || right || top || bottom;
+}
+
 bool VideoToolboxQuarantined() {
   return g_video_toolbox_quarantined;
 }
@@ -240,18 +258,16 @@ void Upscaler::Start(const VideoUpscaleCandidate& candidate, const Plan& plan) {
   if (video_toolbox) {
     IOSurfaceRef padded = CVPixelBufferGetIOSurface(kit.paddedInput);
     CVPixelBufferRef vt_input = nullptr;
-    if (plan.vt_needs_pad || !SameRowStrides(source, padded)) {
+    if (!plan.vt_needs_pad && SameRowStrides(source, padded)) {
+      vt_input = WrapForSuperResolution(source);
+    }
+    if (!vt_input) {
       pad_buffer = [kit.queue commandBuffer];
       if (!pad_buffer) {
         return;
       }
       EncodePad(kit, pad_buffer, source, padded, plan.region);
       vt_input = CVPixelBufferRetain(kit.paddedInput);
-    } else {
-      CVPixelBufferCreateWithIOSurface(nullptr, source, nullptr, &vt_input);
-    }
-    if (!vt_input) {
-      return;
     }
     VTFrameProcessorFrame* in_frame =
         [[VTFrameProcessorFrame alloc] initWithBuffer:vt_input

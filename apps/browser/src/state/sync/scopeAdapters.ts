@@ -1,6 +1,7 @@
 import { emptyScope, SyncNative, type Adapter, type ExtensionsAdapter } from "../../platform/sync";
 import { useBrowser } from "../browser/store";
-import { bookmarksAdapter, deviceAdapter, deviceTabsAdapter, historyAdapter, inTodaysNames, passwordsAdapter, sharedDataAdapter } from "./adapters";
+import { bookmarksAdapter, deviceAdapter, deviceTabsAdapter, inTodaysNames, passwordsAdapter, sharedDataAdapter } from "./adapters";
+import { historyAdapter } from "./historyAdapter";
 import { profileOpenTabsAdapter, profilesAdapter, profileThemesAdapter, profileTopAppsAdapter } from "./profileAdapters";
 import { settingsAdapter } from "./settingsAdapter";
 import { pinnedAreaAdapters } from "./pinned";
@@ -11,6 +12,8 @@ import { deliverSentTabs, sendLedger } from "./sentTabs";
 import { PROFILE_OPEN_TABS, profileScope } from "./records";
 import { openTabsAdapters, type OpenTabCloses, type OpenTabsMode } from "./openTabs";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
+import { removedRecordKeys } from "./profileRemoval";
+import { alsoDeleting, removedDeviceKeys } from "./deviceRemoval";
 
 export const deviceName = () => SyncNative?.deviceName() ?? `This ${PLATFORM_TERMS.computerTitle}`;
 
@@ -31,18 +34,32 @@ export function extensionsOf(profileId: string): ExtensionsAdapter {
   return adapter;
 }
 
+const syncedProfileOrder = (links: SyncDoc["profiles"]) =>
+  useBrowser.getState().profileOrder.flatMap((id) => (links[id] ? [links[id].syncId] : []));
+
+const withSharedOwners = (doc: SyncDoc, links: () => SyncDoc["profiles"]) => (): SyncDoc["profiles"] => {
+  const shown = links();
+  const profiles = useBrowser.getState().profiles;
+  const owners = Object.keys(shown).flatMap((id) => {
+    const owner = profiles[id]?.dataId;
+    return owner && owner !== id && doc.profiles[owner] && !shown[owner] ? [[owner, doc.profiles[owner]] as const] : [];
+  });
+  return owners.length ? { ...shown, ...Object.fromEntries(owners) } : shown;
+};
+
 export function appAdapters(doc: SyncDoc, retiring: boolean): Adapter[] {
   const id = doc.deviceId!;
   if (retiring) return [deviceAdapter(id, deviceName, true)];
   const enabledLinks = () => Object.fromEntries(Object.entries(doc.profiles).filter(([, l]) => l.enabled));
+  const removed = () => removedRecordKeys(doc);
   return [
     ...(doc.types.settings ? [inTodaysNames(settingsAdapter)] : []),
-    sharedDataAdapter(() => doc.profiles),
-    profilesAdapter(enabledLinks),
-    profileThemesAdapter(enabledLinks, () => doc.scopes[APP_SCOPE]?.records),
-    profileTopAppsAdapter(enabledLinks),
-    profileOpenTabsAdapter(enabledLinks),
-    deviceAdapter(id, deviceName),
+    sharedDataAdapter(() => doc.profiles, removed),
+    profilesAdapter(withSharedOwners(doc, enabledLinks), removed),
+    profileThemesAdapter(enabledLinks, () => doc.scopes[APP_SCOPE]?.records, removed),
+    profileTopAppsAdapter(enabledLinks, removed),
+    profileOpenTabsAdapter(enabledLinks, removed),
+    alsoDeleting(deviceAdapter(id, deviceName, false, () => syncedProfileOrder(enabledLinks())), () => removedDeviceKeys(doc)),
   ];
 }
 

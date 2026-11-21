@@ -78,28 +78,25 @@ export function linuxCapabilities(host: ArdiaHost | undefined = ardiaHost): Linu
   };
 }
 
+export const WEB_ENGINE_SETTINGS = ["advanced.pageEngine", "advanced.websiteEngines"] as const;
+
 export function unavailableSettingIds(capabilities: LinuxCapabilities, settingIds: readonly string[]): Set<string> {
   const ids = new Set<string>(["general.autoUpdate"]);
   if (!capabilities.defaultBrowser) ids.add("general.defaultBrowser");
   if (!capabilities.launchAtLogin) ids.add("general.openAtLogin");
-  if (!capabilities.thinScrollBars) ids.add("appearance.pageScrollBars");
   if (!capabilities.videoUpscaling) ids.add("tabs.videoUpscaling");
-  if (!capabilities.cliControl) for (const id of ["advanced.cliControl", "advanced.cliInstall", "advanced.compactCliPill"]) ids.add(id);
-  if (!capabilities.cliInstall) ids.add("advanced.cliInstall");
-  if (!capabilities.commandScrollZoom) ids.add("privacy.commandScrollZoom");
-  if (!capabilities.littleArdiaNewTabLinks) ids.add("general.littleArdiaOpensNewTabLinks");
+  if (!capabilities.cliControl) for (const id of ["advanced.ardiaCommand", "advanced.compactCliPill"]) ids.add(id);
   if (!capabilities.peekOtherSites) ids.add("tabs.peekLinksToOtherSites");
   if (!capabilities.popupsOpenAsTabs) ids.add("tabs.popupsOpenAsTabs");
-  if (!capabilities.haptics) ids.add("tabs.tabReorderHaptics");
-  if (!capabilities.unloadIdleProfiles) ids.add("advanced.unloadProfilesAfter");
-  if (!capabilities.blockAutoplayEverywhere) ids.add("privacy.blockAutoplayEverywhere");
-  if (!capabilities.linksFromOtherApps) for (const id of ["general.openLinksInLittleArdia", "tabs.appLinksFirst"]) ids.add(id);
-  if (!capabilities.webkit) for (const id of settingIds) if (id.startsWith("engines.")) ids.add(id);
+  if (!capabilities.littleArdiaNewTabLinks) ids.add("tabs.littleArdiaOpensNewTabLinks");
+  if (!capabilities.linksFromOtherApps) for (const id of ["tabs.openLinksInLittleArdia", "tabs.appLinksFirst"]) ids.add(id);
+  if (!capabilities.webkit) for (const id of WEB_ENGINE_SETTINGS) if (settingIds.includes(id)) ids.add(id);
   return ids;
 }
 
 export const unavailableCommands = (capabilities: LinuxCapabilities): Set<string> =>
   new Set([
+    "copyLastFreeze",
     ...(capabilities.externalLinks ? [] : ["emailPageLocation"]),
     ...(capabilities.linksFromOtherApps ? [] : ["toggleOpenLinksInLittleArdia"]),
     ...(capabilities.webkit ? [] : ["togglePageEngine", "toggleJavaScriptFromAppleEvents"]),
@@ -107,6 +104,5 @@ export const unavailableCommands = (capabilities: LinuxCapabilities): Set<string
     ...(capabilities.hiddenElements ? [] : ["hideElement", "showHiddenElements"]),
   ]);
 
-export const unavailablePanes = (capabilities: LinuxCapabilities): Set<string> => new Set(capabilities.webkit ? [] : ["engines"]);
 
 export const unavailableError = (feature: string) => Object.assign(new Error(`${feature} is unavailable on Linux`), { code: "ERR_UNAVAILABLE" });

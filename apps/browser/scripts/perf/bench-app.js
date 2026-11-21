@@ -28,7 +28,7 @@ async function until(test, timeoutMs, step = 25) {
 }
 
 async function quiet(ms = 400) {
-  await until(() => !S().live[activeId()]?.isLoading, 8000);
+  await until(() => !ac.tabLive.liveOf(activeId()).isLoading, 8000);
   await sleep(ms);
 }
 
@@ -183,8 +183,8 @@ const scenarios = {
       P.reset();
       const t0 = Date.now();
       timed(() => S().navigate(tab, `${origin}/heavy?run=${r}-${Date.now()}`));
-      await until(() => S().live[tab]?.isLoading, 3000, 5);
-      await until(() => !S().live[tab]?.isLoading, 15000, 10);
+      await until(() => ac.tabLive.liveOf(tab).isLoading, 3000, 5);
+      await until(() => !ac.tabLive.liveOf(tab).isLoading, 15000, 10);
       const loadMs = Date.now() - t0;
       await sleep(1000);
       results.push({ loadMs, stats: P.read() });
@@ -233,7 +233,7 @@ const scenarios = {
     await quiet();
     const s = S();
     const w = windowId();
-    const bg = s.windows[w].tabIds.find((id) => id !== activeId() && s.live[id] && !isPinned(s.tabs[id]));
+    const bg = s.windows[w].tabIds.find((id) => id !== activeId() && s.tabs[id] && !isPinned(s.tabs[id]));
     P.reset();
     const steps = [];
     for (let i = 0; i < count; i++) {
@@ -354,7 +354,7 @@ function renderScenarios() {
       }
       timed(() => S().activate(start));
       await quiet(1000);
-      return tabsInView().filter((id) => S().live[id]).length;
+      return tabsInView().filter((id) => S().tabs[id]).length;
     },
     async tabSwitch({ count = 10, gapMs = 300 } = {}) {
       const s = S();
@@ -435,7 +435,7 @@ function renderScenarios() {
     async bgLoad({ origin } = {}) {
       await quiet(800);
       const s = S();
-      const id = tabsInView().find((t) => t !== activeId() && !isPinned(s.tabs[t]) && s.live[t]);
+      const id = tabsInView().find((t) => t !== activeId() && !isPinned(s.tabs[t]) && s.tabs[t]);
       if (!id) throw new Error("no loaded background tab");
       P.reset();
       S().navigate(id, `${origin}/heavy?run=bg-${Date.now()}`);
@@ -541,22 +541,6 @@ function censusScenarios() {
     await sleep(800);
     return ac.omnibox.get(id);
   }
-  function untilStore(test, timeoutMs) {
-    return new Promise((resolve) => {
-      if (test(S())) return resolve(true);
-      let timer;
-      const off = store.subscribe((st) => {
-        if (!test(st)) return;
-        off();
-        clearTimeout(timer);
-        resolve(true);
-      });
-      timer = setTimeout(() => {
-        off();
-        resolve(false);
-      }, timeoutMs);
-    });
-  }
   return {
     async cenStartup() {
       await until(() => P.marks.firstWindow, 20000);
@@ -624,7 +608,7 @@ function censusScenarios() {
         enter.per.push(summary(rd, ms));
         merge(enter.stats, rd);
         P.reset();
-        await untilStore((st) => !st.live[tab]?.isLoading, 15000);
+        await until(() => !ac.tabLive.liveOf(tab).isLoading, 15000, 10);
         await sleep(1500);
         rd = P.read();
         for (const k of SKIP) delete rd[k];
@@ -674,7 +658,7 @@ function censusScenarios() {
       for (let r = 0; r < repeats; r++) {
         await quiet(800);
         const s = S();
-        const id = tabsInView().find((t) => t !== activeId() && !isPinned(s.tabs[t]) && s.live[t]);
+        const id = tabsInView().find((t) => t !== activeId() && !isPinned(s.tabs[t]) && s.tabs[t]);
         if (!id) throw new Error("no loaded background tab");
         await action(() => S().navigate(id, `${origin}/heavy?run=cenbg-${r}-${Date.now()}`), 3500, out);
       }

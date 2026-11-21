@@ -1,3 +1,5 @@
+import type { ConsentToken } from "./choice";
+
 export type CaptureOptions = {
   raw?: Record<string, unknown>;
   urgent?: boolean;
@@ -17,14 +19,21 @@ export type ChoiceChange =
   | { kind: "installId"; id: string };
 
 export type TelemetryRelay = {
-  capture(event: string, props: Record<string, unknown>, options: CaptureOptions): void;
-  log(level: "warn" | "error", message: string, attributes: Record<string, string | number | boolean>): void;
+  capture(event: string, props: Record<string, unknown>, consent: ConsentToken | null, options: CaptureOptions): void;
+  log(level: "warn" | "error", message: string, attributes: Record<string, string | number | boolean>, consent: ConsentToken | null): void;
   resetId(): Promise<string>;
-  change(change: ChoiceChange): void;
+  change(change: ChoiceChange): Promise<boolean>;
   installId(): string;
 };
 
 let relay: TelemetryRelay | null = null;
 
 export const telemetryRelay = () => relay;
-export const setTelemetryRelay = (next: TelemetryRelay | null) => void (relay = next);
+const relayReady = new Set<() => void>();
+
+export const onTelemetryRelay = (listener: () => void) => void relayReady.add(listener);
+
+export function setTelemetryRelay(next: TelemetryRelay | null) {
+  relay = next;
+  if (next) for (const listener of relayReady) listener();
+}

@@ -13,7 +13,7 @@
     "typecheck": "turbo run typecheck",
     "shaders:check": "turbo run shaders:check",
     "test": "turbo run test && pnpm run test:root",
-    "test:root": "node --no-warnings --test extras/raycast-ardia/src/scripts.test.ts \"scripts/**/*.test.mjs\" \"apps/site/src/**/*.test.ts\"",
+    "test:root": "node --no-warnings --test extras/raycast-ardia/src/scripts.test.ts \"scripts/**/*.test.mjs\" \"apps/ios/scripts/*.test.mjs\" \"apps/site/src/**/*.test.ts\"",
     "test:portable": "pnpm run test:portable:packages && pnpm run test:portable:mac && pnpm run test:root",
     "test:portable:mac": "turbo run test:portable",
     "test:portable:packages": "turbo run test --filter=!@ardia/ardiacore --filter=!@ardia/import --filter=!@ardia/shell --filter=!@ardia/sync"

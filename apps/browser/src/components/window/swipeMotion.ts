@@ -18,6 +18,7 @@ export function capsuleOffset(progress: number, width: number) {
 }
 
 export const LIST_ROW = 38;
+export const LIST_FOLD_PROGRESS = 0.75;
 
 export function listSelection(dySinceShown: number, count: number) {
   const rows = dySinceShown / SWIPE_UNIT;

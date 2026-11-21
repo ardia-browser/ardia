@@ -1,9 +1,11 @@
 # Building the engine for Windows
 
-The Windows engine is the same tree as the Mac's (`docs/engine-build.md`): **Chromium 157.0.8103.38**, **Helium**
-0.21.1 (helium-chromium) with **helium-windows** 0.21.1.1 in place of helium-macos, then our patch series. It is
-cross-built on a Mac: Chromium supports Windows x64 builds from a Mac host (`docs/win_cross.md` in the tree; 32-bit
-builds don't work there). No Windows machine is needed, not even for the toolchain.
+The Windows engine is the same tree as the Mac's (`docs/engine-build.md`): **Chromium 158.0.8127.36**, **Helium**
+0.22.1 (helium-chromium) with **helium-windows** 0.22.1.1 in place of helium-macos, then our patch series. It is
+cross-built on a **Linux host**, a Boat VM ([On a Linux host](#on-a-linux-host)): Linux is Chromium's supported host for
+Windows cross builds (`docs/win_cross.md` in the tree). The same scripts still run on a Mac, where the first engines were
+built, but **never build a Windows engine on the owner's Mac** (the owner's rule since 2026-11-15: a cross build pins
+every core of the machine they work on). No Windows machine is needed, not even for the toolchain.
 
 The scripts are in `scripts/windows/engine/`, not next to the Mac ones: nothing for Windows may live under `engine/`,
 because `engine/engine-key.sh` hashes the whole `engine/` tree into the key the Mac app's prebuilt engine is fetched
@@ -27,7 +29,9 @@ ARM, where x64 runs emulated): `gn gen` passes and `chrome` was at 51,230 of 54,
 ## Steps
 
 Run them in the order 1, toolchain, 1 again (its hooks), 3, 4, 2, 5, 6. Run each with stdin closed (`< /dev/null`): gclient and CIPD can wait on a prompt otherwise. Each needs `--apply` and the chromium lock
-(`lockf -k $AC_LOCK_ROOT/ac-chromium.lockf <step> --apply`; on the owner's machine `scripts/agent/locked chromium`).
+(on Linux `flock $AC_LOCK_ROOT/ac-chromium.lockf <step> --apply`, on a Mac `lockf -k …`). Step 3 needs the pinned
+Helium checkouts in `$AC_CHROMIUM_BUILD/helium` and `$AC_CHROMIUM_BUILD/helium-windows` ([On a Linux host](#on-a-linux-host)).
+The times below are the first Mac build's; the Linux VM's are in its section.
 
 | Step | Script | What it does | Time (M5 Pro, 2026-11-10) |
 |---|---|---|---|
@@ -46,6 +50,75 @@ Python, esbuild and TypeScript (DevTools and WebUI), 7-Zip, Go for the Mac host 
 it), the D3D12 Agility SDK, WebView2 and WTL. The other ~40 a Windows checkout asks for are test data, the updater's
 and enterprise companion's prebuilt binaries, screen-ai, Apache, Go for other hosts, luci tools; on a slow link they
 took hours. When the Chromium version moves, take the new versions from a full `gclient sync`'s ensure file (or DEPS).
+
+## On a Linux host
+
+Windows engines are built on a Boat VM, which runs the idle-stop watchdog like every VM: `ardia-linux` (`bx_x7n4g59u`,
+xlarge: 16 vCPU, 32 GB, 294 GB, Ubuntu 24.04). x64 and arm64 each need their own tree (about 85 GB with one out dir), so
+to build both at once take a second xlarge VM for the other CPU, give it the watchdog, and delete it once the engine is
+published. The toolchain, the Helium checkouts and the trees stay on the VMs; nothing from Microsoft's packages leaves
+them except inside the built engine.
+
+Once per VM:
+
+```
+sudo apt-get install -y msitools librsvg2-bin python3-pil git curl unzip zip patch fuse3
+git clone https://github.com/ardia-browser/ardia.git ~/winengine/repo   # at the commit to build
+export AC_CHROMIUM_BUILD=~/chromium-build-win AC_LOCK_ROOT=~/winengine/lock WIN_CPU=x64   # or arm64
+E=~/winengine/repo/scripts/windows/engine
+for repo in helium-chromium:helium helium-windows:helium-windows; do
+  section=${repo%%:*} dir=$AC_CHROMIUM_BUILD/${repo##*:}
+  url=$(awk -F' *= *' -v s="[$section]" '/^\[/{c=$0} c==s && $1=="url"{print $2}' $E/helium-pins.ini)
+  commit=$(awk -F' *= *' -v s="[$section]" '/^\[/{c=$0} c==s && $1=="commit"{print $2}' $E/helium-pins.ini)
+  git init -q $dir; git -C $dir fetch -q --depth=1 $url $commit; git -C $dir checkout -q --detach FETCH_HEAD
+done
+```
+
+Then the steps in their order, each as `flock $AC_LOCK_ROOT/ac-chromium.lockf $E/<step> --apply < /dev/null`, and for
+step 5 `TARGETS=chrome JOBS=16 BINDINGS_JOBS=4`. `/dev/fuse` must exist: on Linux the `win_toolchain` hook mounts the
+unpacked toolchain through Chromium's `ciopfs` (case-insensitive), because the SDK's includes are written with the case
+Windows ignores.
+
+What differs from a Mac host, all in the scripts:
+
+| Where | On Linux |
+|---|---|
+| `01-sync.sh` | The standard checkout: `target_os = ['win']` without `target_os_only`, so gclient adds the host and the Linux sysroots and host tools come with it, and every CIPD package DEPS lists (no `cipd.ensure`: a datacenter link takes them in minutes). After the hooks, the 30 hard-linked files of the two Debian sysroots get their own copies: the tree guard (`pathguard.py`) refuses hard links in any tree but the real `~/chromium-build` |
+| `toolchain.sh` | Asks for msitools (`msiextract`) instead of running brew |
+| `package_toolchain.py` | Looks files up without regard to case: msvc-wine unpacks `VC/Redist` and friends in Microsoft's mixed case, which only matched `VC/redist` on a Mac's case-insensitive disk |
+| `env.sh` | `AC_TARGET_OS=mac`: since the Linux port, the shared `env.sh`, `gn_defines.sh` and `series.py` pick their target from the host, and Linux's would give Windows the Linux GN args (`enable_cdm_storage_id=false`, `enable_rlz=false`, `use_vaapi` …) and a Linux series base. `mac` is the flavor every Windows build has used; `gn_defines.sh` replaces its `target_os` and `target_cpu` |
+| `03-helium.py` | Passes `--platform mac` to the shared step (one platform repo, helium-windows as `--helium-macos`), which otherwise takes helium-linux and its skips on a Linux host. Icons are made with `rsvg-convert` and Pillow (Ubuntu's ImageMagick 6 has no `magick`) |
+| `02-gn-args.sh` | Reads link counts with GNU `stat` |
+| `05-build.sh`, `01-sync.sh` | Raise the open-file limit `ciopfs` runs with (it inherits 1024 otherwise, and 16 compiles ran out) |
+| `package_win.py` | Matches the archive config's names to the built files without regard to case |
+
+The Windows pins (`helium-pins.ini` here) are the Windows build's own: the Mac moved to Chromium .50 and Helium 0.21.2
+on 2026-11-12 while the Windows engine stays on 0.21.1, so `03-helium.py` no longer requires the two to match. Its guard
+stage still fails on a shared skip the Windows series lacks.
+
+The toolchain made on Linux is MSVC **14.52.37025** with SDK 10.0.28000 (hash `44da279f35`, 4.58 GB in 9,901 files):
+Visual Studio's channel no longer offers 14.51.36231, the Mac's. Chromium's clang-cl takes only its headers and
+libraries.
+
+Times on 2026-11-16 (xlarge VMs, `windows-engine-20261116-10` to `-13`): step 1 6 min (the whole checkout and every CIPD
+package), the toolchain 2 min (download and pack), step 1 again 2 to 6 min, step 3 2 min, steps 4 and 2 under a
+minute, step 5 at `JOBS=16` about 85 min for x64 (78,800 steps) and 2 h 40 min for arm64 on a VM of its own, step 6
+20 s. The first pass lost 57 x64 and 37 arm64 compiles to "Too many open files": `ciopfs` had inherited a limit of
+1024 open files, which `01-sync.sh` and `05-build.sh` now raise. Load stayed at 17 with 13 GB of 32 GB in use, so
+`JOBS=20` would fit. Disk: about 85 GB per VM with one out dir.
+
+**ARM64 from a Linux host is broken (2026-11-16).** The arm64 engines built on the Linux VM (`windows-engine-20261116-10`
+to `-13`) crash at start on CI's `windows-11-arm` runner, while the Mac-built `-4` runs: plain `chrome.exe --headless=new
+--dump-dom` of a `data:` page hangs and Crashpad writes two dumps, every one an access violation reading `<cage>+0x80808083`
+at `chrome.dll+0x2013db0`, with or without the sandbox, `--jitless` or the GPU. x64 from the same VM is fine. The likely
+cause is V8's snapshot: an x64 Linux host builds `mksnapshot` for arm64 under V8's simulator (`clang_x64_v8_arm64`,
+`snapshot_toolchain.gni`), where an arm64 Mac builds it natively; the two `snapshot_blob.bin` differ in 9,898 bytes.
+Until that is fixed, build the arm64 engine where `mksnapshot` runs natively on arm64, and run any new arm64 engine on
+the `windows-11-arm` runner before pinning it.
+
+`06-package.sh` on Linux: Chromium's archive config says `D3DCompiler_47.dll`, the build writes `d3dcompiler_47.dll`,
+and `make_zip.py`'s glob only ignores case on a Mac, so `package_win.py` rewrites each plain name to the built one
+first (252 files, as from a Mac).
 
 ## The toolchain
 
@@ -96,8 +169,8 @@ must not be published, and the repo is public.
 
 ## Helium for Windows
 
-helium-windows 0.21.1.1 (`d6806de`) is Helium's Windows packaging for 0.21.1. Its `helium-chromium` submodule is at
-`42da6c5`, one commit after the 0.21.1 tag we pin (`ecb36f0`); that commit only changes `devutils/set_quilt_vars`, so
+helium-windows 0.22.1.1 (`8a04093`) is Helium's Windows packaging for 0.22.1; its `helium-chromium` submodule is exactly
+the 0.22.1 tag we pin (`1bccd2b`). Under 0.21.1.1 (`d6806de`) the submodule sat one commit past the tag (`42da6c5`, only `devutils/set_quilt_vars`), so
 the patches are the same. `helium-pins.ini` pins both. Over helium-chromium's series it adds:
 
 - ungoogled-chromium's Windows patches: build fixes (`windows-fix-*`, `windows-disable-reorder-fix-linking`,
@@ -235,6 +308,7 @@ a Windows build needs.
 | `chromium-background-instance-no-default-handlers.patch` | applies | Mac only | Counterpart in `shell_integration_win.cc`: a background instance registers no protocol handlers |
 | `chromium-apple-passwords-host-skipped.patch` | applies | OS-neutral | None: `launch_context_posix.cc` isn't built on Windows |
 | `chromium-extension-tab-move-closing-window.patch` | applies | OS-neutral | Shared; nothing more |
+| `chromium-enterprise-context-info.patch` | applies | OS-neutral | Shared; `getContextInfo` answers with the device's context in a build without cloud content analysis, which Windows is too (`enterprise_cloud_content_analysis` defaults to false in its tree), so Endpoint Verification gets an answer there as well. Applies strictly to the Windows tree's copy of the file (checked 2026-11-16) |
 | `chromium-ardia-layer.patch` | applies | OS-neutral | It links `chrome/browser/ardia` into the Mac framework only; Windows needs the same link once the `ac_*` layer builds there |
 | `chromium-win-rtl-unittest-domsub.patch` | applies (Windows only, `series-win`) | OS-neutral | Puts back the `base_unittests` literals Helium's domain substitution breaks |
 | `chromium-win-load-local-state-delegate.patch` | applies (Windows only, `series-win`) | OS-neutral | `chrome_main_delegate.cc` calls `LoadLocalState` with no delegate, as stock Chrome |
@@ -243,7 +317,7 @@ a Windows build needs.
 | `chromium-win-app-message-pump.patch` | applies (Windows only, `series-win`) | Windows only | The UI message pump offers each message to the app first, so React Native's windows get their keys and accelerators |
 | `chromium-win-hosted-browser-windows.patch` | applies (Windows only, `series-win`) | Windows only | The hooks `//ardia/win` sets: every normal browser window is page only with a frameless frame view, and the app's main parts join the browser's |
 | `chromium-win-child-window-activation.patch` | applies (Windows only, `series-win`) | Windows only | Lets a browser window that is a child window take activation; unused since hosted windows are top-level, harmless |
-| `chromium-win-app-in-browser-process.patch` | applies (Windows only, `series-win`) | Windows only | `chrome.dll` links `//ardia/win` and calls it before Chrome's main: with `ArdiaApp.dll` beside the launcher the browser process runs the app |
+| `chromium-win-app-in-browser-process.patch` | applies (Windows only, `series-win`) | Windows only | `chrome.dll` links `//ardia/win` and calls it before Chrome's main and after it: with `ArdiaApp.dll` beside the launcher the browser process runs the app, and ends as soon as Chromium's shutdown returns, without running exit handlers (#1706) |
 | `chromium-win-install-names.patch` | applies (Windows only, `series-win`) | Windows only | The install is named Ardia (`%LOCALAPPDATA%\Ardia\User Data`), and `ARDIA_DATA_DIR` moves Chromium's data |
 | `chromium-win-hosted-page-fills-window.patch` | applies (Windows only, `series-win`) | Windows only | A hosted window has no rounded page frame or insets: the page fills it |
 | `chromium-win-hosted-no-browser-shortcuts.patch` | applies (Windows only, `series-win`) | Windows only | Chrome's own accelerators are off in hosted windows, so Ctrl+L and the rest reach the app |
@@ -415,6 +489,18 @@ In the order they happened on 2026-11-10:
 10. **`chrome.dll` doesn't link: two undefined symbols** from `chrome/browser/ardia`, which only the Mac builds:
     `ardia::RegisterManagementPolicyProviders` and `NewArdiaVideoOverlayWindow`. Fixed by
     `chromium-win-ardia-layer-calls-mac-only.patch`. With it, `chrome` builds.
+
+## Moving to Chromium 158 (2026-11-18)
+
+From 157.0.8103.38 with Helium 0.21.1 straight to 158.0.8127.36 with Helium 0.22.1, on a fresh xlarge Boat VM: sync and
+toolchain 11 min (Visual Studio's channel now gives MSVC 14.52.37029, the hash stays `44da279f35`), step 3 2 min (372
+patches, 16 skips, guard clean), and the x64 `chrome` build about 1 h 35 min at `JOBS=18` with no compile error.
+Three Windows patches needed rebasing: `chromium-win-hosted-no-browser-shortcuts.patch` (`LoadAccelerators` now
+`CHECK`s its focus manager; fuzz would have put the hook in another function), `chromium-win-reauth-app-window.patch`
+(include context) and `chromium-win-autoplay-policy.patch` (158 added `can_use_device_bound_session_js_api` as the last
+`CommitNavigationParams` field; `ardia_autoplay_blocked` follows it). In `//ardia/win`, `WindowOpenDisposition` values
+are kCamelCase, and `TabEvents` asks for the live `PopupBlockerTabHelper` before each use: Chromium 158 made it a tab
+feature that is freed before `WebContentsDestroyed`, as the Mac's TabBridge found.
 
 ## Resuming
 

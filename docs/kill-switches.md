@@ -6,7 +6,7 @@ backed out without another build. `apps/browser/src/platform/killSwitches.ts` is
 
 ## Rules
 
-- **At most 8 switches live** (`MAX_SWITCHES`). `killSwitches.test.mjs` fails above 8, and for any switch past its
+- **At most 9 switches live** (`MAX_SWITCHES`; 8 until 2026-11-16, raised by one for `peekGenie`, the first switch guarding a private macOS API rather than a speed change, pending the owner's OK). `killSwitches.test.mjs` fails above the cap, and for any switch past its
   `removeBy` date: delete the switch and its old path, or move the date and say why in the commit.
 - Every switch is **on by default**, has an `owner` (an area) and an `about` line, and falls back to the behaviour from
   before the change when off, with a unit test of both paths.

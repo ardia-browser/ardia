@@ -1,7 +1,9 @@
+import { Easing } from "react-native";
 import { useTheme } from "../ui/theme";
-import { duration } from "../ui/motion";
+import { duration, spring } from "../ui/motion";
 import { font, ink, radius, shadow, sidebarFont, sidebarIconSize, sidebarPoints, space, withAlpha, type ShadowLevel } from "../ui/tokens";
 import type { GroupColor } from "../../state/browser/types";
+import type { Settings } from "../../state/settings/settings";
 import { GROUP_COLORS } from "../../state/groups/tokens";
 import { mix } from "../../lib/color";
 
@@ -15,13 +17,17 @@ const DARK = {
   multiSelectedStroke: "rgba(255,255,255,0.14)",
   dragBorder: "rgba(255,255,255,0.33)",
   dragSilhouette: "#0F0F14",
+  dropMark: "rgba(255,255,255,0.93)",
+  edgeGlow: "rgba(255,255,255,0.105)",
+  folderDropFill: "rgba(255,255,255,0.08)",
+  splitDropFill: "rgba(255,255,255,0.42)",
   badge: "rgba(255,255,255,0.9)",
   newTabLabel: "#FFFFFF8C",
   newTabIcon: "#FFFFFF40",
-  folderDropFill: "rgba(255,255,255,0.08)",
-  folderMosaic: "rgba(255,255,255,0.1)",
   liveDotRing: "rgba(0,0,0,0.3)",
   engineMarkPlate: "#2C2C2E",
+  selectedRowPillFill: "#141617",
+  selectedRowPillStroke: "rgba(255,255,255,0.1)",
   incognitoBadge: "rgba(255,255,255,0.08)",
   tileGlow: "#FFFFFF",
   fieldButtonPlate: "rgba(255,255,255,0.08)",
@@ -45,13 +51,17 @@ const LIGHT: typeof DARK = {
   multiSelectedStroke: "rgba(0,0,0,0.08)",
   dragBorder: "rgba(0,0,0,0.28)",
   dragSilhouette: "#FFFFFF",
+  dropMark: "rgba(0,0,0,0.8)",
+  edgeGlow: "rgba(0,0,0,0.1)",
+  folderDropFill: "rgba(0,0,0,0.05)",
+  splitDropFill: "rgba(0,0,0,0.08)",
   badge: "rgba(0,0,0,0.75)",
   newTabLabel: "#00000080",
   newTabIcon: "#00000042",
-  folderDropFill: "rgba(0,0,0,0.05)",
-  folderMosaic: "rgba(0,0,0,0.06)",
   liveDotRing: "rgba(0,0,0,0.1)",
   engineMarkPlate: "#FFFFFF",
+  selectedRowPillFill: "#FFFFFF",
+  selectedRowPillStroke: "rgba(0,0,0,0.1)",
   incognitoBadge: "rgba(0,0,0,0.06)",
   tileGlow: "#000000",
   fieldButtonPlate: "rgba(255,255,255,0.75)",
@@ -65,7 +75,7 @@ const LIGHT: typeof DARK = {
   quietFaintText: 0.2,
 };
 
-type SidebarTokens = typeof DARK;
+export type SidebarTokens = typeof DARK;
 
 const HIGH_CONTRAST_DARK: SidebarTokens = { ...DARK, groupTitle: "#FFFFFF", newTabLabel: "#FFFFFFD1", newTabIcon: "#FFFFFFB3", badge: "#FFFFFF" };
 const HIGH_CONTRAST_LIGHT: SidebarTokens = { ...LIGHT, groupTitle: "#000000", newTabLabel: "#000000D1", newTabIcon: "#000000B3", badge: "#000000" };
@@ -88,6 +98,7 @@ export const SIDEBAR_SHADOW = {
 } satisfies Record<string, ShadowLevel>;
 
 export const FADED_TAB_OPACITY = 0.45;
+export const TAB_SWITCHER_SCROLL_ID = "ardia-tab-switcher";
 
 export const SELECTED_ROW_SHADOW_OFFSET: [number, number] = [0, 0.5];
 
@@ -95,10 +106,25 @@ export const TILE_GLOW = { opacity: { dark: 0.15, light: 0.12 }, radius: 1.5, of
 
 export const SIDEBAR_MOTION = { liveFold: duration.long, fold: duration.base, listSlide: 140, listFade: 100, hoverCardFade: 100 } as const;
 
-export const HOVER_CARD_IN_SPRING = { response: 0.25, damping: 0.75 } as const;
-export const HOVER_CARD_OUT_SPRING = { response: 0.2, damping: 0.6 } as const;
-
 export const SLEEPING_TITLE_OPACITY = 0.6;
+
+export const SPLIT_DROP = { gap: 14 } as const;
+
+export const SPLIT_PREVIEW = { response: 0.1, damping: 1 } as const;
+
+
+export const GHOST_TILE_MORPH = { response: 0.1, damping: 1 } as const;
+
+export const GHOST_ROW_POINTER = 0.37;
+export const GHOST_OVER_PROFILES = 0.3;
+export const GHOST_OPACITY = 0.96;
+export const EDGE_GLOW = {
+  width: 36,
+  inMs: 180,
+  outMs: 150,
+  fill: [[0, 0], [0.2, 1], [0.8, 1], [1, 0]],
+  fade: [[0, 1], [0.15, 0.75], [0.35, 0.42], [0.6, 0.15], [1, 0]],
+} as const;
 
 export const TAB_ROW = {
   contentLeft: 9,
@@ -154,10 +180,12 @@ export function groupTint(color: GroupColor | null | undefined): string | null {
 
 export const groupBoxAtRest = (color: GroupColor | null | undefined) => groupTint(color) !== null;
 
-const FOLDER_ACCENT = "#443AFF";
+type FolderStyle = Settings["folderStyle"];
 
-export function folderPalette(color: GroupColor | null | undefined, dark: boolean) {
-  const tint = groupTint(color) ?? FOLDER_ACCENT;
+const FOLDER_NEUTRAL = { dark: "#FFFFFF", light: "#6E6E73" } as const;
+
+export function folderPalette(color: GroupColor | null | undefined, dark: boolean, profileTint: string, style: FolderStyle = "profile") {
+  const tint = groupTint(color) ?? (style === "neutral" ? FOLDER_NEUTRAL[dark ? "dark" : "light"] : profileTint);
   return dark
     ? { stroke: mix("#FFFFFF", tint, 0.64), face: mix("#211E29", tint, 0.12), insideTop: mix("#211E29", tint, 0.4), insideBottom: mix("#15121E", tint, 0.24) }
     : { stroke: tint, face: mix("#FFFFFF", tint, 0.06), insideTop: mix("#FFFFFF", tint, 0.34), insideBottom: mix("#FFFFFF", tint, 0.64) };
@@ -185,3 +213,20 @@ export const TAB_SWITCHER = {
 } as const;
 export { SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH } from "../../lib/windowLayout";
 export const SIDEBAR_RESIZE_HANDLE = { top: 46, width: 8 } as const;
+export const SELECTED_ROW_PILL = {
+  height: 28,
+  gap: 6,
+  icon: 16,
+  padLeft: 10,
+  padRight: 9,
+  iconGap: 6,
+  arrow: 10,
+  enter: { scale: 0.3, rise: 18 },
+  exit: { scale: 0.8, drop: 4 },
+} as const;
+export const SELECTED_ROW_PILL_MOTION = {
+  enter: { duration: 140, easing: Easing.out(Easing.quad) },
+  exit: { duration: 60, easing: Easing.linear },
+} as const;
+export const SELECTED_ROW_REVEAL_SETTLE_MS = 400;
+export const REVEAL_GLIDE = { duration: 300, easing: Easing.inOut(Easing.quad), margin: space.s } as const;

@@ -34,8 +34,9 @@ function read(doc: string): string | null {
 
 function write(doc: string, json: string): boolean {
   try {
-    writeDocument(doc, json);
-    return true;
+    if ((writeDocument(doc, json) as unknown) !== false) return true;
+    console.warn(`[airTraffic] couldn't save ${doc}`);
+    return false;
   } catch (error) {
     console.warn(`[airTraffic] couldn't save ${doc}`, error);
     return false;
@@ -54,33 +55,37 @@ export function currentAirTraffic(): AirTrafficConfig {
 
 export const targetUsableNow = (profileId: string, groupKey: string | null) => {
   const s = useBrowser.getState();
-  return !!s.profiles[profileId] && !isIncognitoProfile(profileId) && (!groupKey || hasRouteGroup(s, profileId, groupKey));
+  return Object.hasOwn(s.profiles, profileId) && !isIncognitoProfile(profileId) && (!groupKey || hasRouteGroup(s, profileId, groupKey));
 };
 
-function saveConfig(change: (config: AirTrafficConfig) => AirTrafficConfig) {
+function saveConfig(change: (config: AirTrafficConfig) => AirTrafficConfig): boolean {
   const before = currentAirTraffic();
   const config = change(before);
-  if (config === before || !write(AIR_TRAFFIC_DOC, airTrafficJson(config))) return;
+  if (config === before || !write(AIR_TRAFFIC_DOC, airTrafficJson(config))) return false;
   useAirTraffic.setState({ config });
+  return true;
 }
 
 const newRuleId = () => `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
 
 export type RuleDraft = Omit<AirTrafficRule, "id">;
 
-export function addAirTrafficRule(draft: RuleDraft): string | null {
-  const id = newRuleId();
-  let added = false;
-  saveConfig((c) => {
-    if (c.rules.length >= MAX_AIR_TRAFFIC_RULES) return c;
-    added = true;
-    return { ...c, rules: [...c.rules, cleanRule({ ...draft, id })] };
-  });
-  return added ? id : null;
+export type RuleAdded = { id: string } | { refused: "full" | "exists" | "unsaved" };
+
+export function addAirTrafficRule(draft: RuleDraft, id = newRuleId()): string | null {
+  const added = tryAddAirTrafficRule(draft, id);
+  return "id" in added ? added.id : null;
 }
 
-export function updateAirTrafficRule(id: string, patch: Partial<RuleDraft>) {
-  saveConfig((c) => (c.rules.some((r) => r.id === id) ? { ...c, rules: c.rules.map((r) => (r.id === id ? cleanRule({ ...r, ...patch, id }) : r)) } : c));
+export function tryAddAirTrafficRule(draft: RuleDraft, id = newRuleId()): RuleAdded {
+  const rules = currentAirTraffic().rules;
+  if (rules.length >= MAX_AIR_TRAFFIC_RULES) return { refused: "full" };
+  if (rules.some((r) => r.id === id)) return { refused: "exists" };
+  return saveConfig((c) => ({ ...c, rules: [...c.rules, cleanRule({ ...draft, id })] })) ? { id } : { refused: "unsaved" };
+}
+
+export function updateAirTrafficRule(id: string, patch: Partial<RuleDraft>): boolean {
+  return saveConfig((c) => (c.rules.some((r) => r.id === id) ? { ...c, rules: c.rules.map((r) => (r.id === id ? cleanRule({ ...r, ...patch, id }) : r)) } : c));
 }
 
 export function removeAirTrafficRule(id: string) {
@@ -98,9 +103,20 @@ export function moveAirTrafficRule(id: string, step: -1 | 1) {
   });
 }
 
-export function setAirTrafficFallback(given: AirTrafficTarget | null) {
+export function placeAirTrafficRule(id: string, index: number): boolean {
+  return saveConfig((c) => {
+    const from = c.rules.findIndex((r) => r.id === id);
+    const to = Math.max(0, Math.min(c.rules.length - 1, index));
+    if (from < 0 || from === to) return c;
+    const rules = c.rules.filter((r) => r.id !== id);
+    rules.splice(to, 0, c.rules[from]!);
+    return { ...c, rules };
+  });
+}
+
+export function setAirTrafficFallback(given: AirTrafficTarget | null): boolean {
   const fallback = given && cleanTarget(given);
-  saveConfig((c) => (sameTarget(c.fallback, fallback) ? c : { ...c, fallback }));
+  return saveConfig((c) => (sameTarget(c.fallback, fallback) && c.fallbackChosen ? c : { ...c, fallback, fallbackChosen: true }));
 }
 
 export function noteLinkSource(source: LinkSource) {

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { noteTabLayoutSwitch } from "./tabLayoutCounts.ts";
 import {
   noteTabStripCompact,
   noteTabStripEdgeScroll,
@@ -23,9 +24,13 @@ const ZERO = {
   tab_strip_most_tabs: 0,
   tab_strip_held_closes: 0,
   tab_strip_most_titled_tabs: 0,
+  tab_strip_most_tabs_in_overflow: 0,
   tab_strip_scrolls: 0,
   tab_strip_scroll_stalls: 0,
   tab_strip_reveals_held_for_scroll: 0,
+  tab_strip_commands_refused: 0,
+  tab_layout_switches_to_top: 0,
+  tab_layout_switches_to_sidebar: 0,
 };
 
 test("group collapses and expands from the strip are counted, and taking them starts over", () => {
@@ -62,5 +67,13 @@ test("a scroll starts after a quarter second without one, and an update more tha
   for (const at of [1000, 1016, 1033, 1100, 1116, 2000, 2008]) noteTabStripScrolled(at);
   noteTabStripRevealHeldForScroll();
   assert.deepEqual(takeTabStripCounts(), { ...ZERO, tab_strip_scrolls: 2, tab_strip_scroll_stalls: 1, tab_strip_reveals_held_for_scroll: 1 });
+  assert.deepEqual(takeTabStripCounts(), ZERO);
+});
+
+test("tab layout switches go out with the strip's counts, and taking them starts over", () => {
+  noteTabLayoutSwitch("top");
+  noteTabLayoutSwitch("sidebar");
+  noteTabLayoutSwitch("sidebar");
+  assert.deepEqual(takeTabStripCounts(), { ...ZERO, tab_layout_switches_to_top: 1, tab_layout_switches_to_sidebar: 2 });
   assert.deepEqual(takeTabStripCounts(), ZERO);
 });

@@ -68,9 +68,9 @@ export type DockState = "fullscreen" | "docked" | "peeking" | "leaving" | "hidin
 export type DockInput = { open: boolean; fullscreen: boolean; moving: boolean; peekLive: boolean; peekLeaving?: boolean };
 
 export function dockState({ open, fullscreen, moving, peekLive, peekLeaving = false }: DockInput): DockState {
+  if (peekLive && (fullscreen || !open)) return peekLeaving ? "leaving" : "peeking";
   if (fullscreen) return "fullscreen";
   if (open) return "docked";
-  if (peekLive) return peekLeaving ? "leaving" : "peeking";
   return moving ? "hiding" : "away";
 }
 
@@ -78,7 +78,7 @@ export const peekOnScreen = (state: DockState) => state === "peeking" || state =
 
 export const shownAs = (state: DockState) => (peekOnScreen(state) ? "peek" : state === "hiding" ? "away" : state);
 
-export const watchesEdge = (state: DockState, moving: boolean) => (peekOnScreen(state) || state === "away") && !moving;
+export const watchesEdge = (state: DockState, moving: boolean) => (peekOnScreen(state) || state === "away" || state === "fullscreen") && !moving;
 
 export const atRevealEdge = (x: number, right: boolean, windowWidth: number, band: number = PEEK_EDGE_STRIP) => (right ? x >= windowWidth - band : x < band);
 

@@ -1,7 +1,7 @@
 import { memo, useState, type ReactNode } from "react";
 import { Animated, Image, Pressable, View } from "react-native";
 import { useTheme } from "../ui/theme";
-import { ContextMenuArea, Divider, space, Symbol, Text, useHover } from "../ui";
+import { ContextMenuArea, Divider, sidebarLineHeight, space, Symbol, Text, useHover } from "../ui";
 import { TAB_ROW } from "./tokens";
 import { HoverSlot } from "../ui/HoverSlot";
 import { closeAllTabs } from "../../state/sidebar/clearTabs";
@@ -11,8 +11,10 @@ import { PINNED_FOLD_TITLES, togglePinnedFold } from "../../state/sidebar/pinned
 
 const BROOM = require("../../../assets/tidy-broom.png");
 
-const DIA_DIVIDER_SIDE = 6.5;
-const CLEAR_DIVIDER_HEIGHT = 2 * DIA_DIVIDER_SIDE + 1;
+const LABEL_CLEARANCE = space.xs;
+function bandHeight() {
+  return sidebarLineHeight.tiny + 2 * LABEL_CLEARANCE;
+}
 const PADDING = TAB_ROW.contentLeft;
 const DASH_BOX_HEIGHT = 8;
 const ACTIONS_DIVIDER = { marginLeft: space.m } as const;
@@ -33,7 +35,7 @@ export const ClearDivider = memo(function ClearDivider({ windowId, profileId, li
         {...hoverProps}
         onLayout={(e) => setLineWidth(Math.max(0, e.nativeEvent.layout.width - 2 * PADDING))}
         style={{
-          height: CLEAR_DIVIDER_HEIGHT,
+          height: bandHeight(),
           marginTop: -lift,
           flexDirection: "row",
           alignItems: "center",
@@ -91,7 +93,7 @@ function FoldButton({ pinned, onPress }: { pinned: PinnedFold; onPress: () => vo
         {({ pressed }) => {
           const color = pressed ? theme.textSecondary : hovered ? theme.textPrimary : theme.textTertiary;
           return (
-            <View style={{ height: CLEAR_DIVIDER_HEIGHT, flexDirection: "row", alignItems: "center", paddingRight: space.m }}>
+            <View style={{ height: bandHeight(), flexDirection: "row", alignItems: "center", paddingRight: space.m }}>
               <Animated.View style={{ width: 10, height: 10, marginRight: space.xs, alignItems: "center", justifyContent: "center", transform: [{ rotate }] }}>
                 <Symbol name="chevron.down" size={8} weight="semibold" color={color} style={{ width: 10, height: 10 }} />
               </Animated.View>
@@ -115,7 +117,7 @@ function DividerButton({ title, label, onPress, icon }: { title: string; label: 
         {({ pressed }) => {
           const color = pressed ? theme.textSecondary : hovered ? theme.textPrimary : theme.textTertiary;
           return (
-            <View style={{ height: CLEAR_DIVIDER_HEIGHT, flexDirection: "row", alignItems: "center", paddingLeft: space.m }}>
+            <View style={{ height: bandHeight(), flexDirection: "row", alignItems: "center", paddingLeft: space.m }}>
               {icon(color)}
               <Text size="tiny" weight="medium" color={color}>
                 {title}

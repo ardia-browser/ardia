@@ -10,8 +10,9 @@ PATCHES = ROOT.parent / 'patches'
 PATCH = PATCHES / 'chromium-linux-frameless-utility-windows.patch'
 BROWSER_VIEW = 'chrome/browser/ui/views/frame/browser_view.cc'
 NATIVE_WIDGET = 'chrome/browser/ui/views/frame/browser_native_widget_aura_linux.cc'
+FRAME_LAYOUT = 'chrome/browser/ui/views/frame/browser_frame_view_layout_linux.cc'
 
-GLOBALS_157 = '''int (*g_ardia_linux_window_tab_count)(const BrowserWindowInterface*) = nullptr;
+GLOBALS_158 = '''int (*g_ardia_linux_window_tab_count)(const BrowserWindowInterface*) = nullptr;
 bool (*g_ardia_linux_shell_passes_point)(gfx::NativeView child,
                                          const gfx::Point& location) = nullptr;
 void (*g_ardia_linux_minimum_size)(const BrowserWindowInterface*,
@@ -21,7 +22,7 @@ namespace {
 
 bool ArdiaLinuxBackgroundInstance() {
 '''
-TITLE_157 = '''  return nullptr;
+TITLE_158 = '''  return nullptr;
 }
 
 bool BrowserView::ShouldShowWindowTitle() const {
@@ -30,18 +31,22 @@ bool BrowserView::ShouldShowWindowTitle() const {
 }
 
 bool BrowserView::ShouldShowWindowIcon() const {
+#if !BUILDFLAG(IS_CHROMEOS)
+  if (GetIsWebAppType() && !GetSupportsTabStrip()) {
+    return true;
 '''
-INCLUDES_157 = '''#include "chrome/browser/ui/views/frame/browser_view.h"
+INCLUDES_158 = '''#include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/browser_widget.h"
 #include "chrome/common/pref_names.h"
 #include "ui/ozone/public/ozone_platform.h"
+#include "ui/platform_window/platform_window.h"
 #include "ui/views/widget/widget.h"
 
 BrowserNativeWidgetAuraLinux::BrowserNativeWidgetAuraLinux(
     BrowserWidget* browser_widget,
     BrowserView* browser_view)
 '''
-CUSTOM_FRAME_157 = '''}
+CUSTOM_FRAME_158 = '''}
 
 bool BrowserNativeWidgetAuraLinux::UseCustomFrame() const {
   if (!browser_view()) {
@@ -54,6 +59,27 @@ bool BrowserNativeWidgetAuraLinux::UseCustomFrame() const {
            ->GetPlatformRuntimeProperties()
            .supports_server_side_window_decorations) {
     return true;
+'''
+LAYOUT_INCLUDES_158 = '''#include "chrome/browser/ui/views/frame/browser_frame_view_layout_linux.h"
+
+#include "base/i18n/rtl.h"
+#include "chrome/browser/ui/views/frame/browser_frame_view_linux.h"
+#include "chrome/browser/ui/views/frame/opaque_browser_frame_view_layout.h"
+#include "ui/gfx/geometry/insets.h"
+#include "ui/views/window/frame_view_utils_linux.h"
+'''
+LAYOUT_CONSTRUCTORS_158 = '''
+}  // namespace
+
+BrowserFrameViewLayoutLinux::BrowserFrameViewLayoutLinux() = default;
+BrowserFrameViewLayoutLinux::~BrowserFrameViewLayoutLinux() = default;
+
+'''
+LAYOUT_TOP_158 = '''}
+
+int BrowserFrameViewLayoutLinux::NonClientExtraTopThickness() const {
+  return delegate_->IsTabStripVisible() ? 0 : kExtraTopBorder;
+}
 '''
 
 
@@ -69,25 +95,34 @@ class FramelessUtilityWindowTests(unittest.TestCase):
         self.assertGreater(at, names.index('chromium-linux-window-minimum-size.patch'))
         self.assertEqual(names.count(PATCH.name), 1)
 
-    def test_the_patch_applies_to_the_chromium_157_frame_files(self):
+    def test_the_patch_applies_to_the_chromium_158_frame_files(self):
         if shutil.which('git') is None:
             self.skipTest('git is unavailable')
         with tempfile.TemporaryDirectory(prefix='ardia-frameless-') as directory:
             view = Path(directory) / BROWSER_VIEW
             widget = Path(directory) / NATIVE_WIDGET
+            layout = Path(directory) / FRAME_LAYOUT
             view.parent.mkdir(parents=True)
-            view.write_text('\n' * 431 + GLOBALS_157 + '\n' * 3580 + TITLE_157)
-            widget.write_text('\n' * 13 + INCLUDES_157 + '\n' * 57 + CUSTOM_FRAME_157)
+            view.write_text('\n' * 431 + GLOBALS_158 + '\n' * 3580 + TITLE_158)
+            widget.write_text('\n' * 15 + INCLUDES_158 + '\n' * 99 + CUSTOM_FRAME_158)
+            layout.write_text('\n' * 4 + LAYOUT_INCLUDES_158 + '\n' * 11 + LAYOUT_CONSTRUCTORS_158 + '\n' * 43 + LAYOUT_TOP_158)
             result = subprocess.run(['git', 'apply', '--whitespace=nowarn', str(PATCH)], cwd=directory,
                                     capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, 0, result.stderr)
             patched_view = view.read_text()
             patched_widget = widget.read_text()
+            patched_layout = layout.read_text()
         self.assertIn('bool (*g_ardia_linux_frameless_app)(const std::string& app_name) = nullptr;\n', patched_view)
         self.assertIn('  const BrowserInitState* init = BrowserInitState::From(browser);\n'
                       '  return init && g_ardia_linux_frameless_app(init->create_params().app_name);\n', patched_view)
         self.assertIn('bool BrowserView::ShouldShowWindowTitle() const {\n'
                       '  if (ArdiaLinuxFramelessApp(browser_.get())) {\n    return false;\n  }\n', patched_view)
+        self.assertIn('bool BrowserView::ShouldShowWindowIcon() const {\n'
+                      '  if (ArdiaLinuxFramelessApp(browser_.get())) {\n    return false;\n  }\n', patched_view)
+        self.assertIn('bool ArdiaLinuxFramelessApp(const BrowserWindowInterface* browser);\n', patched_layout)
+        self.assertIn('int BrowserFrameViewLayoutLinux::NonClientExtraTopThickness() const {\n'
+                      '  if (view_ && ArdiaLinuxFramelessApp(view_->GetBrowserView()->browser())) {\n    return 0;\n  }\n'
+                      '  return delegate_->IsTabStripVisible() ? 0 : kExtraTopBorder;\n', patched_layout)
         self.assertIn('bool ArdiaLinuxFramelessApp(const BrowserWindowInterface* browser);\n', patched_widget)
         self.assertIn('  if (!browser_view()) {\n    return false;\n  }\n\n'
                       '  if (ArdiaLinuxFramelessApp(browser_view()->browser())) {\n    return true;\n  }\n', patched_widget)
@@ -97,6 +132,17 @@ class FramelessUtilityWindowTests(unittest.TestCase):
         self.assertIn('g_ardia_linux_frameless_app = &IsUtilityAppName;', self.host)
         self.assertIn('return app_name == "ArdiaSettings" || app_name == "ArdiaImport";', self.host)
         self.assertIn('params.app_name = opening.kind == "settings" ? "ArdiaSettings" : "ArdiaImport";', self.host)
+
+    def test_a_utility_window_rounds_its_page_with_the_frame(self):
+        overlay = self.host[self.host.index('void ShellHostView::LayoutOverlay() {'):self.host.index('void ShellHostView::ShellPainted() {')]
+        self.assertIn('  RoundUtilityCorners();\n', overlay)
+        self.assertIn('if (!is_utility() || !browser_view_->browser_widget()) return;', overlay)
+        self.assertIn('frame ? frame->GetWindowRoundedCorners() : gfx::RoundedCornersF();', overlay)
+        self.assertIn('SetBackground(views::CreateRoundedRectBackground(kColorWebContentsBackground, corners));', overlay)
+        self.assertIn('shell_->holder()->SetNativeViewCornerRadii(corners);', overlay)
+        self.assertIn('if (curtain_) curtain_->layer()->SetRoundedCornerRadius(corners);', overlay)
+        theme = self.host[self.host.index('void ShellHostView::OnWidgetThemeChanged(views::Widget*) {'):]
+        self.assertIn('  if (browser_view_) RoundUtilityCorners();\n}', theme[:theme.index('\n}\n') + 3])
 
     def test_a_utility_window_opens_over_its_opener(self):
         opening = self.host[self.host.index('if (method == "ArdiaShell.openWindow") {'):self.host.index('if (method == "ArdiaShell.isDarkAppearance") {')]

@@ -1,5 +1,6 @@
 import { hoverHeld } from "../app/transientUi";
 import { noteTabHoverCardShown } from "../telemetry/hoverCardCounts";
+import { consentToken } from "../telemetry/client";
 import { noteSidebarHoverHeld, noteSidebarScrolled } from "../telemetry/sidebarScrollCounts";
 import { sidebarSliding, useDockMotion } from "../windows/dockMotion";
 import { cardReach, pointInRect, type Point, type Rect } from "./hoverAim";
@@ -112,6 +113,15 @@ export function setRowsCovered(windowId: string, on: boolean) {
 
 export const rowsCovered = (windowId: string) => covered.has(windowId);
 
+export type PanelDraw = { open: boolean; newTab: boolean; centred: boolean; hasActiveTab: boolean; sidebarAnchor: boolean };
+
+export const panelCoversRows = (p: PanelDraw) => p.open && p.hasActiveTab && !p.newTab && !p.centred && p.sidebarAnchor;
+
+export function holdRowsCovered(windowId: string, on: boolean) {
+  setRowsCovered(windowId, on);
+  return () => setRowsCovered(windowId, false);
+}
+
 export function watchCovered(windowId: string, refresh: () => void, on: boolean) {
   let rows = pointedRows.get(windowId);
   if (on) {
@@ -126,12 +136,13 @@ export function suppressHover(value: boolean) {
 }
 
 async function show(windowId: string, target: Target, mine: number) {
+  const consent = consentToken();
   const anchor = await measureRow(windowId, target.id);
   if (mine !== ticket || suppressed || !anchor || hoverHeld(windowId) || sliding(windowId)) return;
   if (card.pointerOn && sidebarUi().hover) return;
   card.exit = null;
   setSidebarUi({ hover: { windowId, ...target, anchor } });
-  if (target.kind === "tab" || target.kind === "folder") noteTabHoverCardShown();
+  if (target.kind === "tab" || target.kind === "folder") noteTabHoverCardShown(consent);
 }
 
 export function hoverEnter(windowId: string, target: Target) {

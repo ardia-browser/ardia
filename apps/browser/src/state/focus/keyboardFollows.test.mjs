@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-const { startKeyboardFollows } = await import("./keyboardFollows.ts");
+const { followHandedBack, startKeyboardFollows } = await import("./keyboardFollows.ts");
 
 const windowOf = (profileId, active) => ({ profileId, activeTabIds: { [profileId]: active } });
 
@@ -77,4 +77,16 @@ test("a shown tab that gets its first page asks again, as Enter in a New Tab pag
   store.set(windows, {}, { ntp: { id: "ntp", url: "https://typed.example/next" } });
   assert.deepEqual(followed, ["ntp"], "once, when the empty tab takes its address; not for other tab changes, nor a later navigation");
   stop();
+});
+
+test("a snap key handed back from the app window follows the window's Peek when one shows, else its shown tab", () => {
+  const followed = [];
+  const follow = (tabId, windowId) => followed.push(`${tabId} in ${windowId}`);
+  const tabs = { a: { id: "a", url: "https://a.example/", windowId: "w1" }, peek1: { id: "peek1", url: "https://one.example/", windowId: "w1" }, x: { id: "x", url: "https://x.example/", windowId: "w2" } };
+  const store = fakeStore({ w1: windowOf("p", "a"), w2: windowOf("p", "x") }, { a: { tabId: "peek1", sourceId: "a" } }, tabs);
+  followHandedBack("w1", follow, store);
+  followHandedBack("w2", follow, store);
+  followHandedBack("gone", follow, store);
+  followHandedBack("w1", null, store);
+  assert.deepEqual(followed, ["peek1 in w1", "x in w2"]);
 });

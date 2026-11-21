@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-const { keyBarPlacement, isCentred, commandKeyPlacement, addressFieldShown, clickBarPlacement, placementCard, placementFromCard } = await import("./barPlacement.ts");
+const { keyBarPlacement, isCentred, commandKeyPlacement, addressFieldShown, clickBarPlacement, placementCard, placementFromCard, centredBarLeft } = await import("./barPlacement.ts");
 const { openBarFromAddress, openEmptySidebarField } = await import("./barState.ts");
 const { commandBarPlacementLabel } = await import("../telemetry/track.ts");
 const { useBrowser } = await import("../browser/store.ts");
@@ -102,4 +102,13 @@ test("an unknown window has no field and ⌘L there goes to the centre", () => {
   const s = useBrowser.getState();
   assert.equal(addressFieldShown(s, "nope"), false);
   assert.equal(commandKeyPlacement(s, "nope"), "centredNoField");
+});
+
+test("the centred command bar centres on the window, as in Arc, and never leaves the page card", () => {
+  const card = { left: 190, width: 1161 };
+  assert.equal(centredBarLeft(card, 652, 1360), 354, "centred on the 1360 pt window, not on the card (444.5)");
+  assert.equal(centredBarLeft({ left: 0, width: 1360 }, 652, 1360), 354, "the same spot with the sidebar hidden, so it doesn't jump");
+  assert.equal(centredBarLeft({ left: 300, width: 500 }, 472, 800), 300, "a narrow card keeps the bar inside it");
+  assert.equal(centredBarLeft({ left: 0, width: 900 }, 600, 1200), 300, "a right sidebar: the bar stays inside the card");
+  assert.equal(centredBarLeft(card, 652, 0), 444.5, "no window width yet: the card's centre");
 });

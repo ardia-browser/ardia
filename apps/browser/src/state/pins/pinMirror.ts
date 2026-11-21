@@ -1,7 +1,7 @@
 import type { BrowserState } from "../browser/store";
 import { changedIds } from "../browser/changes";
 import { ancestorIds, depthOf, orderSections, placeBlock, syncGroupOrder, withParent } from "../groups/groups";
-import { IDLE_LIVE, isIncognitoProfile, isPinnedRow, makeTab, newId, pinKeyOf, pinSection, TILE_PIN, without } from "../browser/model";
+import { isIncognitoProfile, isPinnedRow, makeTab, newId, pinKeyOf, pinSection, TILE_PIN, without } from "../browser/model";
 import { ASLEEP, hasPage, holderOfPage } from "../tabs/pageSession";
 import { mapSlotIds, removeFromSplits, splitTabIds, stackAt } from "../splits/splits";
 import { sharedListTab, sharesTabs } from "../tabs/tabShare";
@@ -118,8 +118,15 @@ function pinnedSplitsChanged(s: BrowserState, prev: BrowserState): boolean {
   return [...Object.values(s.splits), ...Object.values(prev.splits)].some((v) => splitTabIds(v).some(pinnedPane));
 }
 
+const windowsAlike = (windows: BrowserState["windows"], was: BrowserState["windows"]) =>
+  changedIds(windows, was).every((id) => {
+    const w = windows[id];
+    const b = was[id];
+    return !!w && !!b && w.tabIds === b.tabIds && w.profileId === b.profileId && w.kind === b.kind;
+  });
+
 export function pinsMayDiffer(s: BrowserState, prev: BrowserState): boolean {
-  if (s.windows !== prev.windows || s.groups !== prev.groups || pinnedSplitsChanged(s, prev)) return true;
+  if (s.groups !== prev.groups || pinnedSplitsChanged(s, prev) || !windowsAlike(s.windows, prev.windows)) return true;
   if (s.tabs === prev.tabs) return false;
   let members: Set<string> | null = null;
   for (const id of changedIds(s.tabs, prev.tabs)) {
@@ -215,7 +222,6 @@ export function conform(s: BrowserState, windowId: string, profileId: string, sp
   const mine = cur.items.map((i) => i.tab);
   const used = new Set<string>();
   const tabs = { ...s.tabs };
-  const live = { ...s.live };
   let groups = { ...s.groups };
   const wantedKeys = new Set(spec.items.map((i) => pinKeyOf(i.tab)));
   const byKey = new Map<string, Tab[]>();
@@ -228,7 +234,6 @@ export function conform(s: BrowserState, windowId: string, profileId: string, sp
     if (!t) {
       const copy = copyOf(src, windowId, tile, profileId);
       tabs[copy.id] = copy;
-      live[copy.id] = IDLE_LIVE;
       used.add(copy.id);
       return copy.id;
     }
@@ -300,7 +305,7 @@ export function conform(s: BrowserState, windowId: string, profileId: string, sp
   }
   const window = { ...w, tabIds: orderSections(ids, tabs, groups) };
   groups = syncGroupOrder(groups, window);
-  const next: BrowserState = { ...s, tabs, live, groups, splits, windows: { ...s.windows, [windowId]: window } };
+  const next: BrowserState = { ...s, tabs, groups, splits, windows: { ...s.windows, [windowId]: window } };
   return gone.length ? removeTabs(next, gone, false) : next;
 }
 
@@ -345,7 +350,6 @@ export function settleMovedPins(before: BrowserState, after: BrowserState, moved
     .filter((t): t is Tab => !!t && (t.pin || memberOf.has(t.id) || sharedListTab(before, t)) && t.windowId !== targetId && after.tabs[t.id]?.windowId === targetId);
   if (!pins.length) return after;
   const tabs = { ...after.tabs };
-  const live = { ...after.live };
   const windows = { ...after.windows };
   const groups = { ...after.groups };
   for (const sourceId of new Set(pins.map((t) => t.windowId))) {
@@ -358,7 +362,6 @@ export function settleMovedPins(before: BrowserState, after: BrowserState, moved
       if (t.windowId !== sourceId) continue;
       const copy = copyOf(t, sourceId, !!t.pin);
       tabs[copy.id] = copy;
-      live[copy.id] = IDLE_LIVE;
       swap.set(t.id, copy.id);
       if (shown[t.profileId] === t.id && !t.pin && !memberOf.has(t.id)) activeTabIds = { ...activeTabIds, [t.profileId]: copy.id };
     }
@@ -387,6 +390,6 @@ export function settleMovedPins(before: BrowserState, after: BrowserState, moved
     } else gone.push(copy);
   }
   windows[targetId] = { ...target, tabIds: orderSections(tabIds, tabs, groups) };
-  const next: BrowserState = { ...after, tabs, live, windows, groups };
+  const next: BrowserState = { ...after, tabs, windows, groups };
   return gone.length ? removeTabs(next, gone, false) : next;
 }

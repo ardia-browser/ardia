@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { notePagerSettle, takePagerCounts } from "./pagerCounts.ts";
+import { noteProfileDotReorder, notePagerSettle, takePagerCounts } from "./pagerCounts.ts";
 
-test("pager settles are counted, those that kept the profile apart, and taking them starts over", () => {
+test("pager settles are counted, those that kept the profile apart, switcher reorders too, and taking them starts over", () => {
   notePagerSettle(true);
   notePagerSettle(false);
   notePagerSettle(false);
-  assert.deepEqual(takePagerCounts(), { profile_pager_settles: 3, profile_pager_settles_without_switch: 2 });
-  assert.deepEqual(takePagerCounts(), { profile_pager_settles: 0, profile_pager_settles_without_switch: 0 });
+  noteProfileDotReorder();
+  assert.deepEqual(takePagerCounts(), { profile_pager_settles: 3, profile_pager_settles_without_switch: 2, profile_dot_reorders: 1 });
+  assert.deepEqual(takePagerCounts(), { profile_pager_settles: 0, profile_pager_settles_without_switch: 0, profile_dot_reorders: 0 });
 });

@@ -22,7 +22,7 @@ const rep = reporter(join(scratch, "tab-drag-test.log"), { name: "tab-drag-test"
 const tab = (id, windowId, pinned = false) => ({ id, windowId, pinned, lastActiveAt: id === "t1" ? 2 : 1 });
 const fixture = () => session({
   profiles: [{ id: "default", name: "Personal", color: "plum" }],
-  settings: { tabLayout: "top", dragToGroupInTopStrip: true },
+  settings: { tabLayout: "top" },
   windows: [
     { id: "w1", tabIds: ["p1", "p2", "t1", "t2", "t3", "t4"], activeTabIds: { default: "t1" }, frame: [80, 80, 1280, 800], createdAt: 1 },
     { id: "w2", tabIds: ["l1"], activeTabIds: { default: "l1" }, frame: [200, 120, 1100, 700], createdAt: 2 },
@@ -295,22 +295,16 @@ try {
     assert.deepEqual(await run(`return [loose("w3"), st().groups.grp.tabIds];`), [["g2", "g1", "x1"], ["g2", "g1"]]);
   });
 
-  await check("a tab let go on another tab's middle only reorders with Drag a tab onto another to group them off, and groups the two with it on", async () => {
+  await check("a tab let go on another tab's middle only reorders", async () => {
     const groupsIn = () => run(`return Object.values(st().groups).filter((g) => g.windowId === "w7").map((g) => g.tabIds);`);
     const dropOnSecond = async () => {
       const items = await run(`return tabItems("w7");`);
       const at = (i) => Math.round((items[i][0] + items[i][1]) / 2);
       return drag("w7", [[at(0), 21], [at(0) + 20, 21], [at(1) - 10, 21], [at(1), 21], [at(1), 21]]);
     };
-    await run(`st().updateSettings({ dragToGroupInTopStrip: false }); return settle(400);`);
     assert.equal(await dropOnSecond(), 0, "window drags");
-    assert.deepEqual(await groupsIn(), [], "setting off: no group");
-    assert.deepEqual(await tabsOf("w7"), ["c2", "c1", "c3"], "setting off: a reorder");
-    await run(`st().updateSettings({ dragToGroupInTopStrip: true }); return settle(400);`);
-    assert.equal(await dropOnSecond(), 0, "window drags");
-    const groups = await groupsIn();
-    assert.equal(groups.length, 1, `setting on: one group ${JSON.stringify(groups)}`);
-    assert.deepEqual([...groups[0]].sort(), ["c1", "c2"]);
+    assert.deepEqual(await groupsIn(), [], "no group");
+    assert.deepEqual(await tabsOf("w7"), ["c2", "c1", "c3"], "a reorder");
   });
 
   await check("a tab dragged onto another window's tabs: the strip makes room at the pointer, and it lands there", async () => {
@@ -519,6 +513,44 @@ try {
     assert.ok(Math.abs(out.landed.x - out.row.x) < 0.5 && Math.abs(out.landed.y - out.row.y) < 0.5, JSON.stringify(out));
   });
 
+  const LIST_ROWS = `return Promise.all([...globalThis.sidebarDrag.items.values()].filter((i) => i.kind === "row" && !i.parentGroup && i.section === "list" && i.view).map((i) => new Promise((r) => i.view.measureInWindow((x, y, w, h) => r({ id: i.tabIds[0], key: i.key, x, y, w, h }))))).then((l) => l.filter((i) => i.w > 0).sort((a, b) => a.y - b.y));`;
+  const watchMarks = (path) => run(`const c = globalThis.sidebarDrag; const seen = [];
+    const iv = setInterval(() => { const m = c.marks.getState(); if (c.active) { const k = c.session?.gapKey ?? null; seen.push({ gapKey: k, gap: k && c.items.get(k) ? c.items.get(k).gap.__getValue() : 0, split: m.split, sources: [...m.sources] }); } }, 30);
+    return new Promise((r) => c.root.measureInWindow((x, y) => r({ x, y }))).then((root) => act("w1", "drag:${path}").then(() => settle(1600)).then(() => { clearInterval(iv); return { root, seen }; }));`);
+
+  await check("sidebar: while a row is dragged, the rows part to open a gap of its height where it would land, as in Dia", async () => {
+    const rows = await run(LIST_ROWS);
+    assert.ok(rows.length >= 4, JSON.stringify(rows));
+    const [a, , c] = rows;
+    const sx = Math.round(a.x + 40), sy = Math.round(a.y + a.h / 2);
+    const to = Math.round(c.y + c.h * 0.15);
+    const before = await order("w1");
+    const out = await watchMarks(`${sx},${sy};${sx},${sy + 10};${sx},${to};${sx},${to};${sx},${to}`);
+    const shown = out.seen.filter((s) => s.gapKey).at(-1);
+    assert.ok(shown, JSON.stringify(out.seen.slice(-3)));
+    assert.equal(shown.split, null, "the edge of a row is a slot, never a split");
+    assert.equal(shown.gapKey, c.key, JSON.stringify(shown));
+    assert.ok(Math.abs(shown.gap - (rows[1].y - rows[0].y)) < 1, `the gap is a row's pitch: ${JSON.stringify(shown)}`);
+    const after = await order("w1");
+    assert.equal(after.indexOf(a.id), after.indexOf(c.id) - 1, `${a.id} lands right before ${c.id}: ${before} -> ${after}`);
+  });
+
+  await check("sidebar: a row let go on another row's right half makes a split with it there; on its left half, before it", async () => {
+    for (const [fx, side] of [[0.78, "right"], [0.22, "left"]]) {
+      await run(`for (const v of Object.values(st().splits)) st().separateSplit(v.id); return settle(600);`);
+      const rows = await run(LIST_ROWS);
+      const [a, b] = rows;
+      const sx = Math.round(a.x + 40), sy = Math.round(a.y + a.h / 2);
+      const tx = Math.round(b.x + b.w * fx), ty = Math.round(b.y + b.h / 2);
+      const out = await watchMarks(`${sx},${sy};${sx},${sy + 10};${tx},${ty};${tx},${ty};${tx},${ty}`);
+      const marked = out.seen.filter((s) => s.split).at(-1);
+      assert.deepEqual(marked?.split, { key: b.key, side }, JSON.stringify(out.seen.slice(-3)));
+      const splits = await run(`return Object.values(st().splits).map((v) => v.slots.flatMap((x) => x.stack ?? [x.tabId]));`);
+      assert.deepEqual(splits, [side === "right" ? [b.id, a.id] : [a.id, b.id]], JSON.stringify(splits));
+    }
+    await run(`for (const v of Object.values(st().splits)) st().separateSplit(v.id); return settle(600);`);
+  });
+
   await check("sidebar auto-hidden: a row dragged within the peeking sidebar reorders instead of splitting, and Esc cancels a drag", async () => {
     const edge = (p) => run(`return ac.shell.devSidebarEdgePointer("w1", ${JSON.stringify(p)}).then(() => settle(500)).then(() => !!globalThis.acLayout.peek.w1?.live);`);
     await run(`for (const v of Object.values(st().splits)) st().separateSplit(v.id); if (!st().settings.autoHideTabs) st().toggleSidebar("w1"); return settle(900);`);
@@ -688,7 +720,7 @@ try {
     const FD = ac.shell.devFileDrag; const log = []; let during = null;
     const pts = ${JSON.stringify(points)};
     const before = new Set(Object.keys(st().tabs));
-    const step = (i) => i >= pts.length ? Promise.resolve() : (i === pts.length - 1 ? Promise.resolve(during = { gapKey: (c.session?.gapKey ?? null), pitch: (c.session?.pitch ?? 0), external: (c.session?.external ?? 0), pins: c.marks.getState().pins, dropInto: c.marks.getState().dropInto }) : Promise.resolve())
+    const step = (i) => i >= pts.length ? Promise.resolve() : (i === pts.length - 1 ? Promise.resolve(during = { gapKey: (c.session?.gapKey ?? null), pitch: (c.session?.pitch ?? 0), external: (c.session?.external ?? 0), pins: c.marks.getState().pins, dropInto: c.marks.getState().dropInto, split: c.marks.getState().split }) : Promise.resolve())
       .then(() => FD.drag("w1", i === pts.length - 1 ? "drop" : "move", pts[i][0], pts[i][1], i === 0 ? ${JSON.stringify(payload)} : undefined))
       .then((r) => { log.push(r); return settle(i === 0 ? 500 : 150); }).then(() => step(i + 1));
     return step(0).then(() => settle(900)).then(() => {
@@ -707,7 +739,7 @@ try {
     assert.match(out.log[0], /FileDropView 1$/, `the sidebar takes the drag: ${out.log}`);
     assert.match(out.log.at(-1), /FileDropView performed/, out.log.join(" | "));
     assert.equal(out.during?.gapKey, b.key, `gap before ${b.key}: ${JSON.stringify(out.during)}`);
-    assert.ok(out.during.pitch > 0, "the gap opens");
+    assert.ok(out.during.pitch > 0 && !out.during.split, `the gap opens, never a split: ${JSON.stringify(out.during)}`);
     assert.equal(out.after, 0, "the drag ended");
     assert.equal(out.added.length, 1, JSON.stringify(out.added));
     assert.equal(out.added[0].url, fileUrl(pdf));

@@ -177,9 +177,18 @@ inline std::optional<std::string> ReadBytes(std::filesystem::path const &path, u
   return bytes;
 }
 
+inline bool IsLinkPath(std::filesystem::path const &path) noexcept {
+  WIN32_FIND_DATAW found{};
+  HANDLE search = FindFirstFileExW(path.c_str(), FindExInfoBasic, &found, FindExSearchNameMatch, nullptr, 0);
+  if (search == INVALID_HANDLE_VALUE) return false;
+  FindClose(search);
+  return (found.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0 &&
+         (found.dwReserved0 == IO_REPARSE_TAG_SYMLINK || found.dwReserved0 == IO_REPARSE_TAG_MOUNT_POINT);
+}
+
 inline std::optional<std::string> ReadBytesWithin(std::filesystem::path const &folder, std::filesystem::path const &path, uint64_t largest) noexcept {
   try {
-    if (IsSecretStore(path)) return std::nullopt;
+    if (IsSecretStore(path) || IsLinkPath(path)) return std::nullopt;
     std::wstring root = RealFolder(folder);
     if (root.empty()) return std::nullopt;
     HANDLE file = Files::OpenForReading(path);

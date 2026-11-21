@@ -14,7 +14,10 @@ export type Anchor = { x: number; y: number; width: number; height: number };
 
 export const extensionPageUrl = (extensionId: string, path: string) => `chrome-extension://${extensionId}/${path.replace(/^\//, "")}`;
 
-export type InstallRequest = { windowId: string; profile: string; source: "webStore" | "unpacked" } & (
+let installKeys = 0;
+export const nextInstallKey = () => ++installKeys;
+
+export type InstallRequest = { key: number; windowId: string; profile: string; source: "webStore" | "unpacked" } & (
   | { status: "error"; error: string }
   | { status: "ready" | "installing"; pkg: ExtensionPackage }
   | { status: "prompt"; prompt: ExtensionInstallPrompt }
@@ -27,6 +30,7 @@ type ExtensionsStore = {
   install: InstallRequest | null;
   pinDialog: { windowId: string } | null;
   sidePanels: Record<string, SidePanel>;
+  sidePanelCards: Record<string, SidePanelCard[]>;
   sidePanelLookups: Record<string, number>;
   toolbarDrag: (ToolbarDrag & { windowId: string }) | null;
 };
@@ -37,9 +41,13 @@ export type SidePanel = {
   pageProfile: string;
   url: string;
   opened: number;
+  tabId?: string;
+  hidden?: boolean;
 };
 
-export const useExtensions = create<ExtensionsStore>()(() => ({ lists: {}, actions: {}, popup: null, install: null, pinDialog: null, sidePanels: {}, sidePanelLookups: {}, toolbarDrag: null }));
+export type SidePanelCard = SidePanel & { owners: string[] };
+
+export const useExtensions = create<ExtensionsStore>()(() => ({ lists: {}, actions: {}, popup: null, install: null, pinDialog: null, sidePanels: {}, sidePanelCards: {}, sidePanelLookups: {}, toolbarDrag: null }));
 
 const EMPTY: InstalledExtension[] = [];
 
@@ -63,7 +71,7 @@ export function extensionsProfileId(profileId?: string | null, windowId?: string
 }
 
 export const settingsProfileFor = (pane: SettingsPane, current: SettingsPlace): string | null =>
-  pane === "extensions" ? extensionsProfileId(current.pane === "extensions" ? current.profileId : null) : null;
+  pane === "profiles" ? extensionsProfileId(current.pane === "profiles" ? current.profileId : null) : null;
 
 export const isPrivate = (s: BrowserState, windowId: string) => s.windows[windowId]?.kind === "private";
 
@@ -96,6 +104,12 @@ export const shownIn = (windowId: string, extensionId: string) => windowExtensio
 export function useExtensionList(profile: string): InstalledExtension[] {
   return useExtensions((e) => e.lists[profile] ?? EMPTY);
 }
+
+export const tabProfile = (tabId: string) => {
+  const s = useBrowser.getState();
+  const tab = s.tabs[tabId];
+  return tab ? engineProfile(s, tab.profileId) : "";
+};
 
 export const readyTabOf = (tabId: string | undefined): string | undefined => (isTabReady(tabId) ? tabId : undefined);
 

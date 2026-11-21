@@ -1,8 +1,20 @@
-import { useState, type ReactNode } from "react";
-import { View, type StyleProp, type ViewStyle } from "react-native";
+import { useEffect, useState, type ReactNode } from "react";
+import { Animated, View, type StyleProp, type ViewStyle } from "react-native";
 import { iconButton } from "./tokens";
+import { hoverFade } from "./motion";
+import { reduceMotion } from "./reduceMotion";
 
 const HOVER_SLOT_WIDTH = iconButton.s.box;
+
+function Appear({ style, children }: { style: ViewStyle; children: ReactNode }) {
+  const [opacity] = useState(() => new Animated.Value(reduceMotion() === false ? 0 : 1));
+  useEffect(() => {
+    const fade = Animated.timing(opacity, { toValue: 1, ...hoverFade.appear, useNativeDriver: true });
+    fade.start();
+    return () => fade.stop();
+  }, [opacity]);
+  return <Animated.View style={[style, { opacity }]}>{children}</Animated.View>;
+}
 
 export function HoverSlot({
   hovered,
@@ -27,6 +39,8 @@ export function HoverSlot({
   const hasHover = hover != null && hover !== false;
   const showHover = hovered && hasHover;
   const edge = align === "start" ? { left: 0 } : { right: 0 };
+  const hasChildren = children != null && children !== false;
+  if (reserve === "hover" && !fitsContent && !showHover && !hasChildren && style === undefined) return null;
   return (
     <View
       style={[
@@ -34,7 +48,7 @@ export function HoverSlot({
         style,
       ]}
     >
-      {children != null && children !== false ? (
+      {hasChildren ? (
         <View pointerEvents={showHover ? "none" : "box-none"} style={{ flexDirection: "row", alignItems: "center", opacity: showHover ? 0 : 1 }}>
           {children}
         </View>
@@ -47,7 +61,7 @@ export function HoverSlot({
           {hover}
         </View>
       ) : showHover ? (
-        <View style={{ position: "absolute", top: 0, bottom: 0, ...edge, flexDirection: "row", alignItems: "center" }}>{hover}</View>
+        <Appear style={{ position: "absolute", top: 0, bottom: 0, ...edge, flexDirection: "row", alignItems: "center" }}>{hover}</Appear>
       ) : null}
     </View>
   );

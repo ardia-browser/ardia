@@ -2,6 +2,7 @@
 #import <QuartzCore/QuartzCore.h>
 #import <objc/message.h>
 #import <objc/runtime.h>
+#include <dlfcn.h>
 #include <stdatomic.h>
 #include <time.h>
 
@@ -244,16 +245,263 @@ static unsigned short ModKeyCode(NSEventModifierFlags f) {
       if (v.isHiddenOrHasHiddenAncestor || v.frame.size.width < 50) continue;
       NSRect r = [v convertRect:v.bounds toView:content];
       double top = content.isFlipped ? r.origin.y : content.bounds.size.height - NSMaxY(r);
-      [webs addObject:@{@"x": @(r.origin.x), @"y": @(top), @"w": @(r.size.width), @"h": @(r.size.height), @"z": @(v.layer.zPosition)}];
+      id key = [v valueForKey:@"transferKey"];
+      [webs addObject:@{@"x": @(r.origin.x), @"y": @(top), @"w": @(r.size.width), @"h": @(r.size.height), @"z": @(v.layer.zPosition),
+                        @"key": [key isKindOfClass:NSString.class] ? key : @""}];
     }
+    NSMutableArray *children = [NSMutableArray array];
+    for (NSWindow *child in w.childWindows)
+      [children addObject:[NSString stringWithFormat:@"%@ visible=%d %@", NSStringFromClass(child.class), child.visible, NSStringFromRect(child.frame)]];
     [list addObject:@{@"number": @(w.windowNumber), @"key": @(w.isKeyWindow), @"main": @(w.isMainWindow), @"w": @(content.bounds.size.width),
-                      @"h": @(content.bounds.size.height), @"webs": webs, @"title": w.title ?: @""}];
+                      @"h": @(content.bounds.size.height), @"webs": webs, @"title": w.title ?: @"", @"children": children,
+                      @"sheet": @(w.attachedSheet != nil), @"frame": NSStringFromRect(w.frame)}];
   }
   [self answer:cid with:@{@"ok": @YES, @"windows": list}];
 }
 
+static NSView *ChildToward(NSView *ancestor, NSView *view) {
+  for (NSView *v = view; v; v = v.superview)
+    if (v.superview == ancestor) return v;
+  return nil;
+}
+
+static BOOL InFrontOf(NSView *a, NSView *b) {
+  for (NSView *shared = a.superview; shared; shared = shared.superview) {
+    if (![b isDescendantOf:shared]) continue;
+    NSView *pa = ChildToward(shared, a), *pb = ChildToward(shared, b);
+    if (pa.layer.zPosition != pb.layer.zPosition) return pa.layer.zPosition > pb.layer.zPosition;
+    return [shared.subviews indexOfObject:pa] > [shared.subviews indexOfObject:pb];
+  }
+  return NO;
+}
+
+static NSString *FrontPageKey(NSWindow *w, NSPoint inContent) {
+  NSMutableArray<NSView *> *found = [NSMutableArray array];
+  CollectClass(w.contentView, @"ArdiaWebView", found);
+  NSView *front = nil;
+  for (NSView *v in found) {
+    if (v.isHiddenOrHasHiddenAncestor || v.alphaValue < 1 || !NSPointInRect([v convertPoint:inContent fromView:w.contentView], v.bounds)) continue;
+    BOOL paints = NO;
+    for (NSView *sub in v.subviews) paints = paints || !sub.hidden;
+    if (paints && (!front || InFrontOf(v, front))) front = v;
+  }
+  id key = front ? [front valueForKey:@"transferKey"] : nil;
+  return [key isKindOfClass:NSString.class] ? key : @"";
+}
+
++ (void)front:(NSDictionary *)cmd id:(NSString *)cid {
+  NSWindow *w = WindowNumbered([cmd[@"window"] integerValue]);
+  if (!w) return [self answer:cid with:@{@"ok": @NO, @"error": @"no window"}];
+  NSView *content = w.contentView;
+  double x = [cmd[@"x"] doubleValue], y = [cmd[@"y"] doubleValue];
+  NSPoint p = content.isFlipped ? NSMakePoint(x, y) : NSMakePoint(x, content.bounds.size.height - y);
+  double until = EpochMs() + [cmd[@"ms"] doubleValue];
+  __block NSString *last = nil;
+  CFRunLoopTimerRef timer = CFRunLoopTimerCreateWithHandler(kCFAllocatorDefault, CFAbsoluteTimeGetCurrent(), 0.002, 0, 0, ^(CFRunLoopTimerRef t) {
+    NSString *key = FrontPageKey(w, p);
+    if (![key isEqualToString:last]) Record([NSString stringWithFormat:@"{\"k\":\"f\",\"t\":%.3f,\"key\":\"%@\"}", EpochMs(), key]);
+    last = key;
+    if (EpochMs() > until) CFRunLoopTimerInvalidate(t);
+  });
+  CFRunLoopAddTimer(CFRunLoopGetMain(), timer, kCFRunLoopCommonModes);
+  CFRelease(timer);
+  [self answer:cid with:@{@"ok": @YES, @"now": @(EpochMs())}];
+}
+
+static NSString *PageKeyHolding(NSView *view) {
+  for (NSView *v = view; v; v = v.superview) {
+    if (![NSStringFromClass(v.class) isEqualToString:@"ArdiaWebView"]) continue;
+    id key = [v valueForKey:@"transferKey"];
+    return [key isKindOfClass:NSString.class] ? key : @"";
+  }
+  return @"";
+}
+
+static double ShownAlpha(NSView *view) {
+  double alpha = 1;
+  for (NSView *v = view; v; v = v.superview) {
+    if (v.hidden) return 0;
+    alpha *= v.alphaValue;
+  }
+  return alpha;
+}
+
+static void CollectAddresses(NSView *root, NSMutableArray<NSString *> *out) {
+  for (NSView *v in root.subviews) {
+    if (v.hidden || v.alphaValue < 0.01) continue;
+    if ([NSStringFromClass(v.class) isEqualToString:@"RCTTextView"]) {
+      NSString *text = nil;
+      @try {
+        id storage = [v valueForKey:@"textStorage"];
+        if ([storage isKindOfClass:NSAttributedString.class]) text = [storage string];
+      } @catch (NSException *e) {
+      }
+      if (([text containsString:@"localhost"] || [text containsString:@"127.0.0.1"] || [text hasPrefix:@"/p/"]) && ShownAlpha(v) > 0.01) [out addObject:text];
+      continue;
+    }
+    CollectAddresses(v, out);
+  }
+}
+
+static NSString *TopPage(NSWindow *w, NSPoint inContent) {
+  NSMutableArray<NSView *> *found = [NSMutableArray array];
+  CollectClass(w.contentView, @"ArdiaWebView", found);
+  NSView *top = nil;
+  for (NSView *v in found) {
+    if (v.isHiddenOrHasHiddenAncestor || !NSPointInRect([v convertPoint:inContent fromView:w.contentView], v.bounds)) continue;
+    BOOL paints = NO;
+    for (NSView *sub in v.subviews) paints = paints || !sub.hidden;
+    if (paints && (!top || InFrontOf(v, top))) top = v;
+  }
+  return top ? [NSString stringWithFormat:@"%@@%d", PageKeyHolding(top), (int)lround(top.alphaValue * 100)] : @"";
+}
+
++ (void)watch:(NSDictionary *)cmd id:(NSString *)cid {
+  NSWindow *w = WindowNumbered([cmd[@"window"] integerValue]);
+  if (!w) return [self answer:cid with:@{@"ok": @NO, @"error": @"no window"}];
+  NSView *content = w.contentView;
+  double x = [cmd[@"x"] doubleValue], y = [cmd[@"y"] doubleValue];
+  NSPoint p = content.isFlipped ? NSMakePoint(x, y) : NSMakePoint(x, content.bounds.size.height - y);
+  double until = EpochMs() + [cmd[@"ms"] doubleValue];
+  __block NSString *last = nil;
+  CFRunLoopTimerRef timer = CFRunLoopTimerCreateWithHandler(kCFAllocatorDefault, CFAbsoluteTimeGetCurrent(), 0.003, 0, 0, ^(CFRunLoopTimerRef t) {
+    NSResponder *responder = w.firstResponder;
+    NSString *focus = [responder isKindOfClass:NSView.class] ? PageKeyHolding((NSView *)responder) : @"";
+    NSString *resp = responder == w ? @"window" : responder ? [NSString stringWithFormat:@"%@:%p", NSStringFromClass(responder.class), responder] : @"nil";
+    NSView *hit = [content hitTest:[content.superview convertPoint:[content convertPoint:p toView:nil] fromView:nil]];
+    NSMutableArray<NSString *> *addresses = [NSMutableArray array];
+    CollectAddresses(content, addresses);
+    NSString *state = [NSString stringWithFormat:@"\"front\":\"%@\",\"top\":\"%@\",\"focus\":\"%@\",\"hit\":\"%@\",\"addr\":\"%@\",\"resp\":\"%@\"", FrontPageKey(w, p), TopPage(w, p), focus,
+                                                 PageKeyHolding(hit), [addresses componentsJoinedByString:@" | "], resp];
+    if (![state isEqualToString:last]) Record([NSString stringWithFormat:@"{\"k\":\"w\",\"t\":%.3f,%@}", EpochMs(), state]);
+    last = state;
+    if (EpochMs() > until) CFRunLoopTimerInvalidate(t);
+  });
+  CFRunLoopAddTimer(CFRunLoopGetMain(), timer, kCFRunLoopCommonModes);
+  CFRelease(timer);
+  [self answer:cid with:@{@"ok": @YES, @"now": @(EpochMs())}];
+}
+
++ (void)phantom:(NSDictionary *)cmd id:(NSString *)cid {
+  NSWindow *w = WindowNumbered([cmd[@"window"] integerValue]);
+  if (!w) return [self answer:cid with:@{@"ok": @NO, @"error": @"no window"}];
+  NSPoint p = WindowPoint(w, [cmd[@"x"] doubleValue], [cmd[@"y"] doubleValue]);
+  NSTimeInterval at = NSProcessInfo.processInfo.systemUptime;
+  NSEvent *down = [NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:p modifierFlags:0 timestamp:at windowNumber:w.windowNumber
+                                      context:nil eventNumber:0 clickCount:1 pressure:1];
+  double made = UptimeToEpoch(at);
+  BOOL revealed = ((BOOL (*)(id, SEL, id))objc_msgSend)(NSClassFromString(@"ArdiaWebView"), NSSelectorFromString(@"revealForPress:"), down);
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(40 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
+    NSTimeInterval upAt = NSProcessInfo.processInfo.systemUptime;
+    if ([cmd[@"up"] boolValue])
+      [self post:[NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:p modifierFlags:0 timestamp:upAt windowNumber:w.windowNumber context:nil
+                                 eventNumber:0 clickCount:1 pressure:0]];
+    [self answer:cid with:@{@"ok": @YES, @"down": @(made), @"revealed": @(revealed)}];
+  });
+}
+
++ (void)button:(NSDictionary *)cmd id:(NSString *)cid {
+  NSWindow *w = WindowNumbered([cmd[@"window"] integerValue]);
+  if (!w) return [self answer:cid with:@{@"ok": @NO, @"error": @"no window"}];
+  NSPoint p = WindowPoint(w, [cmd[@"x"] doubleValue], [cmd[@"y"] doubleValue]);
+  NSEventType downType = [cmd[@"button"] integerValue] == 1 ? NSEventTypeRightMouseDown : NSEventTypeOtherMouseDown;
+  NSEventType upType = [cmd[@"button"] integerValue] == 1 ? NSEventTypeRightMouseUp : NSEventTypeOtherMouseUp;
+  NSTimeInterval at = NSProcessInfo.processInfo.systemUptime;
+  [self post:[NSEvent mouseEventWithType:downType location:p modifierFlags:0 timestamp:at windowNumber:w.windowNumber context:nil eventNumber:0 clickCount:1 pressure:1]];
+  double made = UptimeToEpoch(at);
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(40 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
+    [self post:[NSEvent mouseEventWithType:upType location:p modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:w.windowNumber context:nil eventNumber:0 clickCount:1 pressure:0]];
+    [self answer:cid with:@{@"ok": @YES, @"down": @(made)}];
+  });
+}
+
++ (void)responder:(NSDictionary *)cmd id:(NSString *)cid {
+  NSWindow *w = WindowNumbered([cmd[@"window"] integerValue]);
+  if (!w) return [self answer:cid with:@{@"ok": @NO, @"error": @"no window"}];
+  static NSButton *button;
+  if ([cmd[@"kind"] isEqualToString:@"button"]) {
+    if (!button) {
+      button = [NSButton buttonWithTitle:@"probe" target:nil action:nil];
+      button.frame = NSMakeRect(2, 2, 40, 16);
+      button.refusesFirstResponder = NO;
+    }
+    if (button.window != w) [w.contentView addSubview:button];
+    BOOL made = [w makeFirstResponder:button];
+    return [self answer:cid with:@{@"ok": @(made), @"responder": [NSString stringWithFormat:@"%@:%p", NSStringFromClass(w.firstResponder.class), w.firstResponder]}];
+  }
+  BOOL made = [w makeFirstResponder:nil];
+  [self answer:cid with:@{@"ok": @(made), @"responder": w.firstResponder == w ? @"window" : NSStringFromClass(w.firstResponder.class)}];
+}
+
++ (void)notify:(NSDictionary *)cmd id:(NSString *)cid {
+  NSWindow *w = WindowNumbered([cmd[@"window"] integerValue]);
+  NSString *name = cmd[@"name"];
+  double at = EpochMs();
+  if ([cmd[@"on"] isEqualToString:@"workspace"]) [NSWorkspace.sharedWorkspace.notificationCenter postNotificationName:name object:NSWorkspace.sharedWorkspace];
+  else if ([cmd[@"on"] isEqualToString:@"app"]) [NSNotificationCenter.defaultCenter postNotificationName:name object:NSApp];
+  else [NSNotificationCenter.defaultCenter postNotificationName:name object:w];
+  [self answer:cid with:@{@"ok": @YES, @"at": @(at)}];
+}
+
++ (void)unhost:(NSDictionary *)cmd id:(NSString *)cid {
+  NSWindow *w = WindowNumbered([cmd[@"window"] integerValue]);
+  NSMutableArray<NSView *> *found = [NSMutableArray array];
+  CollectClass(w.contentView, @"ArdiaWebView", found);
+  double at = EpochMs();
+  for (NSView *v in found) {
+    id key = [v valueForKey:@"transferKey"];
+    if (![key isEqual:cmd[@"key"]]) continue;
+    NSView *parent = v.superview;
+    [v removeFromSuperview];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(600 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{ [parent addSubview:v]; });
+    return [self answer:cid with:@{@"ok": @YES, @"at": @(at)}];
+  }
+  [self answer:cid with:@{@"ok": @NO, @"error": @"no such view"}];
+}
+
+static NSView *FindView(NSView *root, BOOL (^match)(NSView *)) {
+  for (NSView *sub in root.subviews) {
+    if (match(sub)) return sub;
+    NSView *found = FindView(sub, match);
+    if (found) return found;
+  }
+  return nil;
+}
+
++ (void)find:(NSDictionary *)cmd id:(NSString *)cid {
+  NSWindow *w = WindowNumbered([cmd[@"window"] integerValue]);
+  NSView *content = w.contentView;
+  NSString *tab = cmd[@"tab"], *tip = cmd[@"tooltip"];
+  NSView *v = FindView(content, ^BOOL(NSView *view) {
+    if (view.isHiddenOrHasHiddenAncestor) return NO;
+    if (tip) return [view.toolTip hasPrefix:tip];
+    id tag = [view respondsToSelector:NSSelectorFromString(@"nativeID")] ? [view valueForKey:@"nativeID"] : nil;
+    return [tag isKindOfClass:NSString.class] && ([tag isEqualToString:[@"tab-switch:" stringByAppendingString:tab]] || [tag isEqualToString:[@"tab-selected:" stringByAppendingString:tab]]);
+  });
+  if (!v) return [self answer:cid with:@{@"ok": @YES, @"found": @NO}];
+  NSRect r = [v convertRect:v.bounds toView:content];
+  double top = content.isFlipped ? r.origin.y : content.bounds.size.height - NSMaxY(r);
+  [self answer:cid with:@{@"ok": @YES, @"found": @YES, @"x": @(r.origin.x), @"y": @(top), @"width": @(r.size.width), @"height": @(r.size.height), @"alpha": @(ShownAlpha(v))}];
+}
+
++ (void)reload:(NSString *)cid {
+  void (*trigger)(NSString *) = dlsym(RTLD_DEFAULT, "RCTTriggerReloadCommandListeners");
+  double at = EpochMs();
+  if (trigger) trigger(@"proof");
+  [self answer:cid with:@{@"ok": @(trigger != NULL), @"at": @(at)}];
+}
+
 + (void)handle:(NSDictionary *)cmd {
   NSString *cid = cmd[@"id"], *op = cmd[@"op"];
+  if ([op isEqualToString:@"button"]) return [self button:cmd id:cid];
+  if ([op isEqualToString:@"responder"]) return [self responder:cmd id:cid];
+  if ([op isEqualToString:@"notify"]) return [self notify:cmd id:cid];
+  if ([op isEqualToString:@"unhost"]) return [self unhost:cmd id:cid];
+  if ([op isEqualToString:@"reload"]) return [self reload:cid];
+  if ([op isEqualToString:@"find"]) return [self find:cmd id:cid];
+  if ([op isEqualToString:@"front"]) return [self front:cmd id:cid];
+  if ([op isEqualToString:@"watch"]) return [self watch:cmd id:cid];
+  if ([op isEqualToString:@"phantom"]) return [self phantom:cmd id:cid];
   if ([op isEqualToString:@"key"]) return [self key:cmd id:cid];
   if ([op isEqualToString:@"click"]) return [self click:cmd id:cid];
   if ([op isEqualToString:@"drag"]) return [self drag:cmd id:cid];

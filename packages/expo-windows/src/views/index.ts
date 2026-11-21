@@ -8,6 +8,7 @@ import { FolderIcon } from "./FolderIcon";
 import { ContextMenuArea, FileDrop, MagnifyArea, MouseArea, OutsidePressArea, WindowProfile } from "./inputAreas";
 import { GlassEffect, GlassGroup, PopoverBubble, VisualEffect } from "./materials";
 import { PageCoverGate } from "./PageCoverGate";
+import { PeekStage } from "./PeekStage";
 import type { ViewByName } from "./shared";
 import { Surface } from "./Surface";
 import { SwipeArea } from "../pager/SwipeArea";
@@ -19,6 +20,7 @@ export const viewsDrawnInJs = new Map<string, ViewByName>([
   ["ArdiaSurface", Surface],
   ["ArdiaClipView", ClipView],
   ["ArdiaPageCoverGate", PageCoverGate],
+  ["ArdiaPeekStage", PeekStage],
   ["ArdiaFadeLabel", FadeLabel],
   ["ArdiaEdgeFadeMask", EdgeFadeMask],
   ["ArdiaActivitySpinner", ActivitySpinner],

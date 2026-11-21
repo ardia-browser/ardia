@@ -11,6 +11,7 @@
 
 #include "ardia/core/ac_host_visibility.h"
 #include "ardia/core/ac_launch_switches.h"
+#include "ardia/win/autoplay.h"
 #include "ardia/win/context_menu.h"
 #include "ardia/win/frame_view.h"
 #include "ardia/win/hooks.h"
@@ -333,6 +334,7 @@ void Host::Start() {
   g_ardia_win_open_as_offer = &HostOpensAsOffer;
   g_ardia_win_offer_inserted = &HostNotesOfferInserted;
   InstallHostedPageMenus();
+  InstallAutoplayPolicy();
   browsers_observation_.Observe(GlobalBrowserCollection::GetInstance());
 }
 
@@ -340,6 +342,15 @@ void Host::Call(const std::string& verb,
                 base::DictValue args,
                 HWND window,
                 Reply reply) {
+  if (ardiacore::TestInstance()) {
+    NoteForTest("host call " + verb + " " + Text(args, "key"));
+    reply = base::BindOnce(
+        [](std::string verb, Reply reply, base::DictValue answer) {
+          NoteForTest("host answered " + verb);
+          std::move(reply).Run(std::move(answer));
+        },
+        verb, std::move(reply));
+  }
   if (verb == "tab.create") {
     CreateTab(std::move(args), window, std::move(reply));
     return;
@@ -386,6 +397,8 @@ void Host::Call(const std::string& verb,
   } else if (verb == "keyboard.forget") {
     keyboard_wanted_.erase(window);
     result = Ok();
+  } else if (verb == "autoplay.everywhere") {
+    result = SetBlockAutoplayEverywhere(args);
   } else if (verb == "peek.config") {
     PageLinks::Configure(args);
     result = PageLinks::Config();
@@ -394,6 +407,9 @@ void Host::Call(const std::string& verb,
     PageLinks* links = contents ? PageLinks::FromWebContents(contents) : nullptr;
     result = Ok();
     result.Set("scriptFrames", links ? links->ScriptFrames() : 0);
+    if (ardiacore::TestInstance()) {
+      result.Set("reports", links ? links->ReportsForTest() : base::ListValue());
+    }
   } else if (verb == "profile.release") {
     PrivateSessions::Get()->Release(Text(args, "profile"));
     result = Ok();
@@ -592,7 +608,7 @@ void Host::CreateTabInProfile(std::string key,
     base::AutoReset<bool> creating(&creating_tab_, true);
     NavigateParams params(browser, GURL(url.empty() ? "about:blank" : url),
                           ui::PAGE_TRANSITION_TYPED);
-    params.disposition = WindowOpenDisposition::NEW_BACKGROUND_TAB;
+    params.disposition = WindowOpenDisposition::kNewBackgroundTab;
     params.window_action = NavigateParams::WindowAction::kNoAction;
     base::WeakPtr<content::NavigationHandle> opening = Navigate(&params);
     if (opening) {
@@ -1444,7 +1460,7 @@ bool Host::OpenAsOffer(BrowserWindowInterface* browser,
   }
   opening_ = Opening();
   opening_.browser = opener;
-  opening_.popup = disposition == WindowOpenDisposition::NEW_POPUP;
+  opening_.popup = disposition == WindowOpenDisposition::kNewPopup;
   if (opening_.popup && features.has_x) {
     opening_.bounds.Set("x", features.bounds.x());
   }
@@ -1605,6 +1621,9 @@ void Host::OnTabStripModelChanged(TabStripModel* tab_strip_model,
     return;
   }
   if (change.type() == TabStripModelChange::kInserted) {
+    for (const auto& inserted : change.GetInsert()->contents) {
+      WatchAutoplay(inserted.contents);
+    }
     if (creating_tab_ || moving_tab_) {
       return;
     }

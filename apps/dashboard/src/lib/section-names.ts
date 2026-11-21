@@ -10,6 +10,7 @@ export const SECTION_NAMES = [
   "health",
   "health.cli",
   "performance",
+  "performance.freezes",
   "settings",
   "settings.tint",
   "site.traffic",

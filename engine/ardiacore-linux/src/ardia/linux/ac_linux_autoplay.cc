@@ -102,7 +102,7 @@ WEB_CONTENTS_USER_DATA_KEY_IMPL(LinuxAutoplayFollower);
 }
 
 bool LinuxAutoplayBlocked(const GURL& url, content::BrowserContext* context) {
-  if (!url.SchemeIsHTTPOrHTTPS()) return false;
+  if (!LinuxAutoplayCoversScheme(url.scheme())) return false;
   HostContentSettingsMap* settings = SettingsFor(context);
   if (!settings) return false;
   content_settings::SettingInfo info;

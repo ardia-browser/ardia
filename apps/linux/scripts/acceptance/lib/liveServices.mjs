@@ -122,9 +122,9 @@ export function createLiveServices() {
     if (query.includes("LiveFolderGone")) {
       return json(res, 200, { data: { nodes: variables.ids.map((id) => ({ id, state: state.githubGone[id] ?? "OPEN" })) } });
     }
-    if (query.includes("LiveFolder")) {
-      const ids = state.githubPulls.map((p) => ({ id: p.id }));
-      return json(res, 200, { data: { viewer, authored: { nodes: ids }, review: { nodes: [] }, direct: { nodes: [] } } });
+    if (query.includes("search(")) {
+      const authored = /(^|\s)author:@me(\s|$)/.test(variables.q ?? "");
+      return json(res, 200, { data: { search: { nodes: authored ? state.githubPulls.map((p) => ({ id: p.id })) : [] } } });
     }
     if (query.includes("viewer")) return json(res, 200, { data: { viewer } });
     return json(res, 200, { errors: [{ message: "Unknown fixture query" }] });

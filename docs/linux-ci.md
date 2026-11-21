@@ -17,6 +17,9 @@ Hosted CI never runs `gclient sync`, GN or a Chromium build.
 | [`scripts/linux/runtime_files.py`](../scripts/linux/runtime_files.py) | The one runtime allowlist used by publishing, fetching and packaging, and the safe archive unpacker |
 | [`scripts/linux/smoke.mjs`](../scripts/linux/smoke.mjs) | Strict smoke gate for a packaged tarball |
 | [`scripts/linux/release.sh`](../scripts/linux/release.sh) | Builds a versioned Linux release with the CLI, smoke-tests it and prints the upload command; the Release workflow's `linux` job runs it |
+| [`scripts/linux/linux_formats.py`](../scripts/linux/linux_formats.py) | Builds the `.deb` (its `Depends` read from the binaries) and the AppImage from package.py's staged tree |
+| [`scripts/linux/deb-install-test.sh`](../scripts/linux/deb-install-test.sh) | Installs and purges a `.deb` in Debian 13 and Ubuntu 24.04 containers |
+| [`scripts/linux/arch/`](../scripts/linux/arch) | The Arch package `ardia-bin`: PKGBUILD and `.SRCINFO`, `update-pkgbuild.sh` to point them at a release, `publish-aur.sh` to push them to the AUR |
 
 ## Engine archives
 
@@ -36,8 +39,16 @@ Hosted CI never runs `gclient sync`, GN or a Chromium build.
   points them elsewhere. The engines published earlier on the contributor fork aren't used.
 - **What it ships.** The allowlist ships only what Chromium loads at runtime. It leaves out `.so.TOC` files, the mock
   Vulkan driver, the Vulkan validation layer and `locales/*.pak.info`.
-- **Stripping.** The publisher strips a staging copy; `symbol_level=0` builds have no debug symbols to keep. `chrome`
-  shrinks from about 535 MB to about 300 MB, and the archive is about 110 MB.
+- **Stripping.** The publisher strips a staging copy. `chrome` shrinks from about 535 MB to about 300 MB, and the
+  archive is about 110 MB.
+- **Symbols.** Before stripping, the publisher keeps what each stripped file loses (`objcopy --only-keep-debug`) in
+  `ArdiaCore-<key12>-linux-x64-symbols.tar.xz`, with its own `.sha256`, uploaded to the same prerelease. It holds
+  `ardiacore-linux-x64-symbols/.build-id/<2>/<rest>.debug` per file, the layout gdb and debuginfod read, and a
+  `symbols.json` naming each file's build ID. A `symbol_level=0` build has no debug info, so this is the symbol
+  table: function names, no lines. Crash reports name `chrome` by its build ID (`crash_images`) and give each frame as
+  an offset; [`scripts/linux/symbolize.py`](../scripts/linux/symbolize.py) names them:
+  `scripts/linux/symbolize.py --symbols ArdiaCore-<key12>-linux-x64-symbols.tar.xz --build-id <id> <offset>...`
+  (crashing frame first; the others are return addresses). The fetcher never downloads the symbols.
 - **Source commit.** The publisher doesn't trust `repo.commit` alone. It computes the engine key of the source copy the
   way `engine/engine-key.sh` does (one tree per key path, then one hash) and records `source_commit` only when that
   commit's key matches.
@@ -53,7 +64,7 @@ scripts/linux/publish-engine.sh \
 git add packages/ardiacore/prebuilt-engines-linux.tsv
 ```
 
-Without `--upload` it only writes the archive and prints its table row.
+Without `--upload` it only writes the archive and the symbols archive and prints the table row.
 
 The fetcher checks an archive in this order:
 
@@ -91,12 +102,20 @@ package job red after almost every merge.
   1. reads the version from `MARKETING_VERSION` in the Xcode project, as `scripts/release.sh` does;
   2. fetches the engine (cached per engine key and table);
   3. builds `apps/linux/dist`;
-  4. installs uv and builds the CLI with `apps/cli/scripts/build.sh <version> <dist> --platform linux-x64`; its Python
-     and esbuild downloads are cached;
+  4. fetches the `ardia` command pinned in `apps/browser/official-plugins.json` (its linux-x64 tarball, from
+     ardia-browser/plugins' release, SHA-256 checked) and names it `ardia-cli-<version>-linux-x64.tar.gz` for the package
+     (`scripts/release/official-plugins.py linux-cli`); until the pin is published it packages without the CLI, with a
+     warning, and the smoke skips the `cli-*` assertions;
   5. prepares uBlock Origin with `scripts/linux/fetch-ubo.sh` (cached);
-  6. runs `scripts/linux/package.py --out <engine> --version <version> --cli <CLI tarball>`;
-  7. runs the smoke gate, with `--allow-old-engine` when the engine is a nearest one;
-  8. uploads the tarball, the CLI tarball, their SHA-256 files and `results.json` for seven days.
+  6. runs `scripts/linux/package.py --out <engine> --version <version> --cli <CLI tarball> --deb <path> --appimage
+     <path>`, which seeds the packaged uBlock Origin by running the staged `chrome` once (`scripts/linux/ubo-seed.mjs`);
+  7. runs the smoke gate on the tarball, the `.deb` and the AppImage, with `--allow-old-engine` when the engine is a
+     nearest one;
+  8. installs the `.deb` with `scripts/linux/deb-install-test.sh` in Debian 13 and Ubuntu 24.04 containers
+     (dependencies resolve, every library is found, `chrome-sandbox` is setuid root, the AppArmor profile only where
+     the 4.0 ABI is, `apt purge` leaves nothing), about a minute; a failure fails the job;
+  9. uploads the tarball, the `.deb`, the AppImage, their SHA-256 files and `results.json` for seven
+     days.
 
   Its apt list covers the libraries `chrome` links (`readelf -d`) plus GTK and libsecret, which it loads at runtime.
 
@@ -162,22 +181,50 @@ it:
 1. checks the version's channel, `MARKETING_VERSION`, the notes file and a clean tree;
 2. fetches the exact engine (`--engine nearest`, an engine dir or a Chromium out dir make test builds);
 3. builds `apps/linux/dist`, the CLI and uBlock Origin;
-4. packages `Ardia-<version>-linux-x64.tar.xz` with `--version` and `--cli`;
-5. writes the `.sha256` files and `provenance.txt` (version, channel, commit, engine key, Chromium version and both
+4. packages `Ardia-<version>-linux-x64.tar.xz` with `--version` and `--cli`, and the same tree as
+   `Ardia-<version>-linux-x64.deb` (which needs `dpkg-deb` and `readelf`) and `Ardia-<version>-linux-x64.AppImage`;
+5. writes `ardia-bin-<version>.src.tar.gz`, the PKGBUILD and `.SRCINFO` pinned to that tarball by
+   `scripts/linux/arch/update-pkgbuild.sh`;
+6. writes the `.sha256` files and `provenance.txt` (version, channel, commit, engine key, Chromium version and the
    digests);
-6. runs the smoke gate.
+7. runs the smoke gate on the tarball, the `.deb` and the AppImage.
 
 Everything goes to `dist/<version>/linux/`, or to `--out`. It never uploads. It prints the `gh release upload` command
-for the package, the CLI tarball and their `.sha256` files. `--allow-dirty` builds from a dirty tree for testing.
+for the tarball, the `.deb`, the AppImage, the Arch source package, the CLI tarball (the pinned command, renamed for
+this version) and their `.sha256` files, and for
+a stable the AUR update. `--allow-dirty` builds from a dirty tree for testing.
 The key's paths must still be clean for a fetched engine, so pass an engine dir then.
 
-The Release workflow (`release.yml`) runs it in its `linux` job, beside the Mac build, with `--engine exact`, and
-uploads the package, the CLI tarball, their `.sha256` files and `provenance.txt` as the `linux` artifact. `publish`
-puts that artifact in `dist/<version>/linux/`, and `publish.sh` attaches the four assets to the GitHub release it
+The Release workflow (`release.yml`) runs it in its `linux` job, beside the Mac build, with `--engine exact`, runs
+`deb-install-test.sh` on the `.deb`, and uploads the assets, their `.sha256` files and `provenance.txt` as the `linux`
+artifact. When the install test fails (after apt's and the image pulls' retries), the job deletes the `.deb` and its
+`.sha256`, adds a `deb dropped` line to `provenance.txt` and warns, and still succeeds: the tarball, AppImage, Arch
+source package and CLI ship without it. Only a `deb dropped` line lets `publish.sh` go on without the `.deb`.
+`publish` puts that artifact in `dist/<version>/linux/`, and `publish.sh` attaches the assets to the GitHub release it
 creates. It refuses a Linux folder whose provenance names an inexact engine or uncommitted changes. A dry run
 publishes nothing. When the `linux` job fails, usually because the release's engine key has no published Linux
 engine, the Mac release still ships: `publish` warns and the release has no Linux assets until someone builds them
 with `release.sh` and uploads them by hand.
+
+### The AUR
+
+Every release carries `ardia-bin-<version>.src.tar.gz`, so Arch users can `makepkg -si` from the release page without
+the AUR ([linux-port.md](linux-port.md#installing-on-linux)). The AUR itself follows stable releases only.
+
+After a stable release publishes, the `aur` job moves `ardia-bin` on the AUR to it: `scripts/linux/arch/publish-aur.sh
+<version> --sha256 <the tarball's digest>`, which checks the published tarball against that digest before it pushes,
+and uploads the PKGBUILD and `.SRCINFO` it wrote as the `aur` artifact. It runs only when the `linux` and `publish`
+jobs succeeded, and never for a nightly. It needs:
+
+- the `AUR_SSH_PRIVATE_KEY` secret, the private half of an SSH key added to the AUR account that maintains
+  `ardia-bin` (aur.archlinux.org › My Account › SSH Public Key). Without it the job warns, shows the commit and
+  pushes nothing; run `publish-aur.sh` by hand then;
+- optionally the `AUR_GIT_NAME` and `AUR_GIT_EMAIL` repository variables, the commit author on the AUR (default
+  `github-actions[bot]`).
+
+A dry run clones the AUR over HTTPS and shows the commit without pushing. The first real push creates the package.
+The job has `continue-on-error`, so an AUR outage leaves the release run green; rerun it or run `publish-aur.sh` by
+hand. The one-time setup is in [releasing.md](releasing.md#linux-package).
 
 ## Sandbox on Ubuntu
 
@@ -195,7 +242,7 @@ with `release.sh` and uploads them by hand.
 ## Triggers and gating
 
 - **When it runs.** On pull requests and pushes to `main` that touch what the Linux build reads: `apps/linux`,
-  `apps/browser`, `apps/cli`, `packages`, `engine`, `scripts/linux`, `scripts/lib`, `scripts/agent/locked`,
+  `apps/browser`, `plugins`, `packages`, `engine`, `scripts/linux`, `scripts/lib`, `scripts/agent/locked`,
   `infra/feedback/lib`, `patches`, the workspace manifests and lockfile, the Linux setup action and the workflow itself.
   Mac-only changes elsewhere skip it. It can still be started by hand, with `exact` to require this commit's engine.
 - **Gate.** Like `ios.yml` and `android.yml`, a `gate` job runs `vouch.gate` first, and both jobs need it. An unvouched

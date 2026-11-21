@@ -53,12 +53,12 @@ export default {
     await waitCommitted(state.shell, tabId, (u) => u === pages[0], { label: pages[0] });
     await t.check("four pages build back history", async () => {
       for (const page of pages.slice(1)) await navigateTab(state.shell, tabId, page, { committed: true });
-      return until(() => state.shell.state(`const l = s.live[${js(tabId)}]; return l?.canGoBack && !l.canGoForward ? l : false;`), { timeout: 8000, label: "back available" });
+      return until(() => state.shell.state(`const l = ardiaLinux.tabLive.liveOf(${js(tabId)}); return l?.canGoBack && !l.canGoForward ? l : false;`), { timeout: 8000, label: "back available" });
     }, { critical: true });
     await t.check("history menu jumps back two pages", async () => {
       await chooseHistoryEntry(state.shell, -1, "Acceptance page 2");
       await state.shell.waitTabUrl(tabId, (u) => u === pages[1], { label: "page 2 after a two-step jump" });
-      return until(() => state.shell.state(`const l = s.live[${js(tabId)}]; return l?.canGoBack && l.canGoForward ? l : false;`), { timeout: 8000, label: "back and forward both available" });
+      return until(() => state.shell.state(`const l = ardiaLinux.tabLive.liveOf(${js(tabId)}); return l?.canGoBack && l.canGoForward ? l : false;`), { timeout: 8000, label: "back and forward both available" });
     });
     await t.check("history menu jumps forward two pages", async () => {
       await chooseHistoryEntry(state.shell, 1, "Acceptance page 4");
@@ -82,7 +82,7 @@ export default {
       await state.shell.command("reopenClosedTab");
       return until(() => state.shell.state(`const before = new Set(${js(before)}); return Object.values(s.tabs).find((t) => t.windowId === windowId && t.url === ${js(page)} && !before.has(t.id))?.id ?? false;`), { timeout: 8000, label: `a newly reopened tab on ${page}` });
     };
-    const hasBackHistory = (id) => until(() => state.shell.state(`const l = s.live[${js(id)}]; return l?.canGoBack ? l : false;`), { timeout: 8000, label: `back history in ${id}` });
+    const hasBackHistory = (id) => until(() => state.shell.state(`const l = ardiaLinux.tabLive.liveOf(${js(id)}); return l?.canGoBack ? l : false;`), { timeout: 8000, label: `back history in ${id}` });
     let reopened;
     await t.check("a closed tab reopens on its page", async () => {
       const closing = await twoPageTab();

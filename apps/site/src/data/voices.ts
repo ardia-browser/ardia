@@ -21,7 +21,7 @@ export const VOICES: Voice[] = [
     handle: "@MKBHD",
     source: "youtube",
     sourceLabel: "Waveform",
-    href: "https://www.youtube.com/watch?v=Fbb5gX2CvoM&t=486s",
+    href: "https://www.youtube.com/watch?v=Fbb5gX2CvoM&t=376s",
     avatar: "mkbhd",
     featured: true,
   },

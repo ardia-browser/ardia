@@ -10,6 +10,7 @@ protocol PageTab: NSView {
   var temporarySource: String? { get set }
   var extensionHost: String? { get set }
   var visible: Bool { get set }
+  var selected: Bool { get set }
   var warm: Bool { get set }
   var neighbour: Bool { get set }
   var pageBackgroundColor: NSColor? { get set }
@@ -31,6 +32,7 @@ protocol PageTab: NSView {
   func reloadIgnoringCache()
   func stopLoading()
   func focusPage()
+  func focusPageIfUnfocused() -> Bool
   func setMuted(_ muted: Bool)
   func zoomStep(_ direction: Int)
   func find(_ text: String, forward: Bool, findNext: Bool)
@@ -57,6 +59,7 @@ protocol PageTab: NSView {
 
   func resolvePasswordPrompt(_ action: String, username: String?, password: String?)
   func resolveAutofillPrompt(_ promptId: Int, action: String)
+  func answerAutofillPrompt(_ promptId: Int, action: String) -> Bool
   func executeExtensionAction(_ extensionId: String) -> String?
   func resolveDisplayMedia(_ requestId: String, sourceId: String?, audio: Bool)
   func notificationAction(_ notificationId: String, action: String)

@@ -10,12 +10,17 @@ export const NO_AUTHORITY_MESSAGE = "Sync runs in an Ardia browser window, and n
 
 export const REMOTE_METHODS = [
   "syncNow",
+  "syncIdle",
+  "syncNowIfIdle",
   "turnOnSync",
   "enterRecoveryPhrase",
   "stopSync",
   "setTypeSynced",
   "setProfileSynced",
+  "setOpenTabsSynced",
   "addRemoteProfile",
+  "removeRemoteProfile",
+  "removeSyncedDevice",
   "adoptProfileTheme",
   "useFolder",
   "sendTargets",

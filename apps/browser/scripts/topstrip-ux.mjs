@@ -263,7 +263,7 @@ function familySession(family, port) {
     add("c120", 120);
     add("k120", 120, { tabLayout: "sidebar" });
   } else for (const n of spec.counts) add(`c${n}`, n);
-  const s = session({ windows, tabs, groups, settings: { tabLayout: "top", appearance: "dark", revealTabsOnHover: true } });
+  const s = session({ windows, tabs, groups, settings: { tabLayout: "top", appearance: "dark" } });
   for (const w of s.windows) w.tabLayout = windows.find((x) => x.id === w.id)?.tabLayout ?? "top";
   return s;
 }
@@ -333,17 +333,15 @@ const pins = tabIds.filter((t) => s0.tabs[t].pin);
 const pick = sc.sel === "start" ? loose[0] : sc.sel === "end" ? loose[loose.length - 1] : sc.sel === "mid" ? loose[Math.floor(loose.length / 2)] : sc.sel === "pin" ? pins[Math.floor(pins.length / 2)] : loose[sc.sel];
 if (s0.settings.appearance !== (sc.theme || "dark")) s0.updateSettings({ appearance: sc.theme || "dark" });
 let nativeFrame = null;
-const live = { ...st().live };
-for (const t of loose) live[t] = { ...(live[t] || {}), playingAudio: false, isLoading: false };
+for (const t of loose) ac.tabLive.setLive(t, { playingAudio: false, isLoading: false });
 const discarded = {};
 if (sc.adorn) {
   const at = loose.indexOf(pick);
-  live[loose[at - 1]] = { ...live[loose[at - 1]], playingAudio: true };
-  live[pick] = { ...live[pick], playingAudio: true };
-  live[loose[at + 2]] = { ...live[loose[at + 2]], isLoading: true };
+  ac.tabLive.setLive(loose[at - 1], { playingAudio: true });
+  ac.tabLive.setLive(pick, { playingAudio: true });
+  ac.tabLive.setLive(loose[at + 2], { isLoading: true });
   discarded[loose[at + 3]] = true;
 }
-ac.store.setState({ live });
 return Promise.resolve()
   .then(() => sc.adorn && !st().tabs[loose[loose.indexOf(pick) + 1]].muted ? ac.actions.toggleMute(loose[loose.indexOf(pick) + 1]) : null)
   .then(() => sc.split && !Object.values(st().splits).some((x) => x.windowId === id) ? st().openSplitPane(id, { tabId: loose[sc.split[1]], anchorTabId: loose[sc.split[0]], side: "right" }) : null)

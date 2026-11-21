@@ -1,11 +1,11 @@
 import { crashReports } from "../../platform/app";
-import { advanceCrashCursor, capture, crashCursor, loadChoice, saveQueueNow } from "./client";
-import { contextAt, contextProperties, sessionStart } from "./diagnostics";
+import { advanceCrashCursor, capture, consentNow, consentToken, crashCursor, loadChoice, saveQueueNow, type ConsentToken } from "./client";
+import { contextAt, contextProperties, recentWebuiPages, sessionStart } from "./diagnostics";
 import type { SavedContext } from "./savedContext";
-import { recordLog } from "./logs";
-import { errorCode, errorMessage, errorType, nativeCrashExceptions, nativeCrashTermination, parseStack, type ExceptionFrame } from "./sanitize";
+import { logConsent, recordLog } from "./logs";
+import { errorCode, errorFrames, errorMessage, errorType, jsFatalKind, nativeCrashExceptions, nativeCrashTermination, type ExceptionFrame } from "./sanitize";
 
-type Mechanism = "onerror" | "onunhandledrejection" | "react" | "console" | "native_crash" | "helper_crash";
+type Mechanism = "onerror" | "onunhandledrejection" | "react" | "react_recovered" | "console" | "native_crash" | "helper_crash";
 
 const MAX_PER_SESSION = 25;
 const reported = new WeakSet<object>();
@@ -26,23 +26,53 @@ function exceptionProperties(entries: ExceptionEntry[], mechanism: Mechanism, ha
   };
 }
 
-export function captureException(error: unknown, mechanism: Mechanism, { fatal = false, handled = false } = {}) {
+const MAX_CAUSES = 3;
+
+function entryOf(error: unknown): ExceptionEntry {
+  const type = errorType(error);
+  return { type, value: errorMessage(error) || type, frames: errorFrames(error) };
+}
+
+function causeOf(error: unknown): object | null {
+  try {
+    const cause = error && typeof error === "object" ? (error as { cause?: unknown }).cause : undefined;
+    return cause instanceof Error ? cause : null;
+  } catch {
+    return null;
+  }
+}
+
+function causeChain(error: unknown): ExceptionEntry[] {
+  const entries = [entryOf(error)];
+  const visited = new Set<unknown>([error]);
+  for (let cause = causeOf(error); cause && !visited.has(cause) && entries.length <= MAX_CAUSES; cause = causeOf(cause)) {
+    visited.add(cause);
+    try {
+      entries.push(entryOf(cause));
+    } catch {
+      break;
+    }
+  }
+  return entries;
+}
+
+export function captureException(error: unknown, mechanism: Mechanism, { fatal = false, handled = false, consent }: { fatal?: boolean; handled?: boolean; consent?: ConsentToken | null } = {}) {
   try {
     if (error && typeof error === "object") {
       if (reported.has(error)) return;
       reported.add(error);
     }
-    const type = errorType(error);
-    const value = errorMessage(error) || type;
-    const frames = parseStack(error && typeof error === "object" ? (error as { stack?: unknown }).stack : undefined);
+    const entries = causeChain(error);
+    const { type, value, frames } = entries[0]!;
     const code = errorCode(error);
-    const key = `${type}|${value}|${code ?? ""}|${frames.at(-1)?.function ?? ""}`;
+    const key = JSON.stringify([type, value, code ?? "", frames.at(-1)?.function ?? "", entries.slice(1).map((e) => [e.type, e.value])]);
     if (seen.has(key) || seen.size >= MAX_PER_SESSION) return;
     seen.add(key);
     capture(
       "$exception",
       { $exception_level: fatal ? "fatal" : "error", source: mechanism, error_code: code },
-      { urgent: true, persist: true, raw: exceptionProperties([{ type, value, frames }], mechanism, handled) },
+      consent === undefined ? consentNow() : consent,
+      { urgent: true, persist: true, raw: exceptionProperties(entries, mechanism, handled) },
     );
   } catch {}
 }
@@ -115,8 +145,8 @@ export function installErrorReporting() {
         try {
           const first = args[0];
           if (level === "error" && first instanceof Error) {
-            captureException(first, (first as { isComponentError?: boolean }).isComponentError ? "react" : "console");
-          } else recordLog(level, args);
+            captureException(first, (first as { isComponentError?: boolean }).isComponentError ? "react" : "console", { consent: logConsent() });
+          } else recordLog(level, args, logConsent());
         } catch {}
         busy = false;
       }
@@ -133,10 +163,13 @@ const whole = (value: number | undefined) => (typeof value === "number" && Numbe
 
 export async function reportNativeCrashes(contexts: (SavedContext | null)[] = []) {
   const since = crashCursor();
+  const consent = consentToken();
   const reports = await crashReports(since).catch(() => []);
+  const floor = Math.max(since, crashCursor());
   let latest = since;
   for (const report of reports) {
     latest = Math.max(latest, report.fileTime ?? report.time);
+    if (floor > since && (report.fileTime ?? report.time) <= floor) continue;
     const browser = report.process === "browser";
     const mechanism: Mechanism = browser ? "native_crash" : "helper_crash";
     const { name, signal, subtype, images, exceptions } = nativeCrashExceptions(report);
@@ -157,8 +190,11 @@ export async function reportNativeCrashes(contexts: (SavedContext | null)[] = []
         crashed_engine_version: browser ? null : optional(report.engineVersion, ENGINE_VERSION),
         crash_uptime_s: whole(report.uptimeSeconds),
         crash_vm_writable_mb: whole(report.vmWritableMB),
+        crash_js_fatal: browser ? jsFatalKind(report.jsFatalSource, report.jsFatal) : null,
         ...contextProperties(context, "ctx_", report.time),
+        ctx_webui_pages: recentWebuiPages(context, report.time),
       },
+      consent,
       {
         urgent: true,
         persist: true,

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 import { GlassFill, GlassLookContext, liquidGlass, type GlassState } from "../../ui/Glass";
-import { ThemeContext, useTheme } from "../../ui/theme";
+import { useTheme } from "../../ui/theme";
+import { ThemeOverride } from "../../ui/ThemeOverride";
 import { capsule, font, space } from "../../ui/tokens";
-import { curve } from "../../ui/motion";
+import { curve, nativeLoop } from "../../ui/motion";
 import { mix } from "../../../lib/color";
 import { useBasePaletteValue } from "../../../state/config/hooks";
 import { DEFAULT_SETTINGS, type Settings } from "../../../state/settings/settings";
@@ -45,8 +46,10 @@ export function styleChoiceOf(settings: Partial<Settings>, hovered: Settings["in
 function useSunTravel() {
   const travel = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    const leg = (toValue: number) => Animated.timing(travel, { toValue, duration: styleSceneMs.sunLeg, easing: curve.pulse, useNativeDriver: true, isInteraction: false });
-    const loop = Animated.loop(Animated.sequence([leg(1), leg(0)]));
+    const loop = nativeLoop(travel, [
+      { to: 1, ms: styleSceneMs.sunLeg, easing: curve.pulse },
+      { to: 0, ms: styleSceneMs.sunLeg, easing: curve.pulse },
+    ]);
     loop.start();
     return () => loop.stop();
   }, [travel]);
@@ -150,14 +153,14 @@ export function StyleStage({ look, choice }: { look: Look; choice: StyleChoice }
   const glass = liquidGlass && choice.glass;
   const glassLook = useMemo(() => ({ controls: glass, panes: glass, tint: choice.tint }), [glass, choice.tint]);
   return (
-    <ThemeContext.Provider value={look.t}>
+    <ThemeOverride theme={look.t}>
       <GlassLookContext.Provider value={glassLook}>
         <View style={{ width: STAGE.width, height: STAGE.height, overflow: "hidden" }}>
           <Scene dark={look.dark} />
           <Surfaces look={look} glass={glass} />
         </View>
       </GlassLookContext.Provider>
-    </ThemeContext.Provider>
+    </ThemeOverride>
   );
 }
 

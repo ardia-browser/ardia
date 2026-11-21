@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { create } from "zustand";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { usePageProfileId } from "../browser/hooks";
 import { activeTabId, tabLabel, viewTabIds } from "../browser/model";
@@ -28,7 +27,7 @@ export function tuckTarget(s: BrowserState, windowId: string, profileId: string,
 
 
 export type StripMember = { kind: "tab"; id: string; group: string | null } | { kind: "split" | "folder"; id: string; tabIds: string[]; group: string | null };
-export type StripGroupEntry = { kind: "group"; id: string; collapsed: boolean; members: StripMember[] };
+export type StripGroupEntry = { kind: "group"; id: string; collapsed: boolean; members: StripMember[]; memberTabIds?: string[] };
 export type StripDock = { kind: "dock"; ids: string[]; members: Map<string, string[]> };
 export type StripEntry = StripDock | StripGroupEntry | StripMember;
 
@@ -80,12 +79,9 @@ function foldersUnderRoots(groups: BrowserState["groups"]): Map<string, string> 
 
 export function stripEntries(s: BrowserState, windowId: string, profileId: string): StripEntry[] {
   const key = `${windowId}|${profileId}`;
-  const inputs = entriesInputs(s);
   const cached = stripMemo.get(key);
-  if (cached && sameEntriesInputs(inputs, cached.inputs)) {
-    cached.inputs = inputs;
-    return cached.entries;
-  }
+  if (cached && sameEntriesInputs(s, cached.inputs)) return cached.entries;
+  const inputs = entriesInputs(s);
   const groups = groupIndex(s.groups);
   const folders = foldersUnderRoots(s.groups);
   const splits = splitIndex(s.splits);
@@ -249,7 +245,3 @@ export async function openTileFolderStripMenu(windowId: string, folderId: string
   if (choice === "rename") void renameFolder(windowId, folderId);
   else if (typeof choice === "object" && choice && useBrowser.getState().tabs[choice.tabId]) clickTab(windowId, choice.tabId);
 }
-
-const useStripOnto = create<{ key: string | null }>()(() => ({ key: null }));
-export const useStripOntoIs = (key: string | null) => useStripOnto((s) => s.key === key);
-export const setStripOnto = (key: string | null) => useStripOnto.setState({ key });

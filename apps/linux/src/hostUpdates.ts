@@ -4,6 +4,7 @@ import { hostSupports, invokeHost } from "./host.ts";
 import { hostLaunchConfig } from "./hostLaunchConfig.ts";
 import { channelOf, compareVersions, isAppVersion, linuxReleases, newestRelease, type Release } from "./updateReleases.ts";
 import { noteUpdateCheck, noteUpdatePageOpened } from "../../browser/src/state/telemetry/updateCounts.ts";
+import { consentToken } from "../../browser/src/state/telemetry/consentPeriod";
 
 export const UPDATE_METHODS = ["updaterState", "checkForUpdates", "setAutomaticUpdateChecks", "setAutomaticUpdateDownloads", "setUpdateChannel"] as const;
 export const RELEASES_METHOD = "ArdiaUpdates.releases";
@@ -72,6 +73,7 @@ export function linuxUpdater(deps: UpdateDeps) {
   }
 
   async function check(asked: boolean): Promise<void> {
+    const consent = consentToken();
     const current = version();
     if (checking || !current) return;
     checking = true;
@@ -84,7 +86,7 @@ export function linuxUpdater(deps: UpdateDeps) {
       const release = await newest(wanted);
       await remember({ lastCheck: now() });
       const newer = !!release && compareVersions(release.version, current) > 0;
-      noteUpdateCheck(asked, newer ? "found" : "upToDate");
+      noteUpdateCheck(asked, newer ? "found" : "upToDate", consent);
       switchCheck = newer ? { phase: "found", channel: wanted, version: release!.version } : { phase: "upToDate", channel: wanted };
       if (!newer) {
         if (asked) await deps.tell("Ardia is up to date", `You have Ardia ${current}, the newest ${wanted === "nightly" ? "Nightly" : "Stable"} build for Linux.`);
@@ -92,7 +94,7 @@ export function linuxUpdater(deps: UpdateDeps) {
       }
       if (asked) {
         if (await deps.ask(release!, current)) {
-          noteUpdatePageOpened();
+          noteUpdatePageOpened(consent);
           deps.open(release!.url);
         }
         return;
@@ -101,7 +103,7 @@ export function linuxUpdater(deps: UpdateDeps) {
       await remember({ notified: release!.version });
       deps.offer(release!);
     } catch (error) {
-      noteUpdateCheck(asked, "failed");
+      noteUpdateCheck(asked, "failed", consent);
       switchCheck = { phase: "failed", channel: wanted };
       console.info(`[ardia linux] the update check failed: ${String(error)}`);
       if (asked) await deps.tell("Ardia couldn't check for updates", `Try again later, or see ${RELEASES_PAGE}.`);

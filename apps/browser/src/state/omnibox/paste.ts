@@ -61,12 +61,12 @@ export function fieldMenuItems({ paste, hasSelection, hasText }: { paste: PasteA
 
 export type FieldMenuPick = { kind: "go"; url: string } | { kind: "edit"; text: string; caret: number } | { kind: "selectAll" } | null;
 
-export async function showFieldMenu(value: string, selection: { current: { start: number; end: number } }): Promise<FieldMenuPick> {
+export async function showFieldMenu(value: string, selection: { current: { start: number; end: number } }, fullUrl: string | null = null): Promise<FieldMenuPick> {
   const paste = await clipboardPasteAction();
   const { start, end } = selection.current;
   const choice = await showMenu(fieldMenuItems({ paste, hasSelection: end > start, hasText: !!value }));
   if (choice === "pasteAndGo" && paste) return { kind: "go", url: pasteTarget(paste) };
-  if (choice === "copy" || choice === "cut") copyText(value.slice(start, end));
+  if (choice === "copy" || choice === "cut") copyText(fullUrl && start === 0 && end === value.length ? fullUrl : value.slice(start, end));
   if (choice === "cut" || choice === "paste") {
     const insert = choice === "paste" ? sanitizePaste(await readText()) : "";
     return { kind: "edit", text: value.slice(0, start) + insert + value.slice(end), caret: start + insert.length };

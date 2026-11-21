@@ -25,11 +25,14 @@ import { addressFieldShownIn, revealToolbar } from "../../state/windows/toolbarA
 import { useToolbarRow } from "../toolbar/useToolbarRow";
 import { TabWebView } from "./TabWebView";
 import { withoutFragment } from "../../lib/url";
-import { paneBar, type CardChrome } from "./paneChrome";
+import { developerBarShown, paneBar, type CardChrome } from "./paneChrome";
+import { DeveloperBar } from "../toolbar/DeveloperBar";
+import { useDeveloperMode } from "../../state/site/developerMode";
 import { PageOverlays } from "./PageOverlays";
 import { useProfileTheme } from "./ThemeScope";
 import { useCardFrame } from "./cardFrame";
 import { newTabOpensOf } from "../../state/settings/settings";
+import { markNewTabPane } from "../../state/omnibox/newTabMarks";
 
 const LINGERING_PANE = "ardia.lingeringPane";
 
@@ -90,6 +93,13 @@ export const TabPane = memo(function TabPane({
   useEffect(() => {
     if (visible && isNewTab && !mounted) patchPage(tabId, { wasNewTab: true });
   }, [visible, isNewTab, mounted]);
+  useLayoutEffect(() => {
+    markNewTabPane(tabId, "mounted");
+    return () => markNewTabPane(tabId, "gone");
+  }, []);
+  useLayoutEffect(() => {
+    if (isNewTab) markNewTabPane(tabId, `visible ${visible} small ${small} split ${inSplit} card ${emptyCard}`);
+  }, [visible, isNewTab, small, inSplit, emptyCard]);
   const prewarmed = usePrewarm(visible && isNewTab && !emptyCard && !mounted && !small && !inSplit);
   const toolbar = chrome.kind !== "none";
   const bar = paneBar(chrome, { visible, fullscreen, lingering });
@@ -100,6 +110,7 @@ export const TabPane = memo(function TabPane({
   const sidebarField = useSidebarField();
   const sidebarOpen = useTabsShown(windowId);
   const sidebarFieldShown = !!sidebarField && sidebarOpen && !fullscreen && focused;
+  const developerBar = developerBarShown(chrome, { developerMode: useDeveloperMode(own.url), small, fullscreen });
   const bookmarksBar = bookmarksBarShown(barMode, own.exists ? own : undefined) && !fullscreen && !inSplit && !small;
   const barHeight = useBookmarksBarHeight();
   const cardRadius = useCardFrame().radius;
@@ -125,19 +136,21 @@ export const TabPane = memo(function TabPane({
         borderRadius: fullscreen ? 0 : cardRadius,
         overflow: "hidden",
         opacity: covered ? 0 : 1,
+        zIndex: lingering ? -1 : undefined,
         backgroundColor: visible && !fullscreen && !seeThrough ? theme.card : undefined,
       }}
     >
       {bar.kind === "toolbar" && <Toolbar tabId={tabId} geometry={geometry} windowId={windowId} inSplit={inSplit} focused={focused || !inSplit} />}
       {bar.kind === "backdrop" && <ToolbarBackdrop tabId={tabId} />}
       {bar.kind === "spacer" && <View style={{ height: toolbarHeight }} />}
+      {developerBar && <DeveloperBar tabId={tabId} windowId={windowId} />}
       {!autoLayout && bookmarksBar && <BookmarksBar tabId={tabId} placeholder={!visible} />}
       <Animated.View style={autoLayout ? motion.groupStyle : { flex: 1 }}>
         {autoLayout && bookmarksBar && <BookmarksBar tabId={tabId} placeholder={!visible} />}
         <View style={{ flex: 1 }}>
           {visible && !fullscreen && <ShareBar tabId={tabId} />}
           <View style={{ flex: 1 }}>
-            {(mounted || prewarmed) && <TabWebView tabId={tabId} visible={visible && !newTabShown && !isNewTab} warm={!!warm && !newTabShown && !isNewTab} />}
+            {(mounted || prewarmed) && <TabWebView tabId={tabId} visible={visible && !newTabShown && !isNewTab} selected={focused} warm={!!warm && !newTabShown && !isNewTab} />}
             {visible && isNewTab && !small && (
               <TabContentArea contentAreaOf={tabId}>
                 <NewTabDropArea tabId={tabId} accepting={!covered && !lingering}>

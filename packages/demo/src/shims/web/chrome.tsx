@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { StyleSheet, View, type ViewProps, type ViewStyle } from "react-native";
 import { useBrowser } from "../../../../../apps/browser/src/state/browser/store";
+import type { MiddleClickEvent } from "./MouseArea";
 import { edgeGain, fallbackRadius, highlightMask, maskStyle, peakGain, SHADE_OUTSET, shadeMask, shapeMask, type RimCurve, type RimProfile, type ShadeProfile } from "./glassRim";
 
 type Style = ViewStyle & Record<string, unknown>;
@@ -233,13 +234,24 @@ export function GlassGroup({ strength: _strength, ...props }: ViewProps & { stre
   return <View {...props} />;
 }
 
-export type ContextMenuAreaProps = ViewProps & { onContextMenu?: () => void; captureDescendants?: boolean };
+export type ContextMenuAreaProps = ViewProps & { onContextMenu?: () => void; onMiddleClick?: (e: MiddleClickEvent) => void; captureDescendants?: boolean };
 
-export function ContextMenuArea({ onContextMenu, captureDescendants: _capture, ...props }: ContextMenuAreaProps) {
-  const WebView = View as unknown as React.ComponentType<ViewProps & { onContextMenu?: (e: MouseEvent) => void }>;
+type WebMenuProps = ViewProps & { onContextMenu?: (e: MouseEvent) => void; onAuxClick?: (e: MouseEvent) => void; onMouseDown?: (e: MouseEvent) => void };
+
+export function ContextMenuArea({ onContextMenu, onMiddleClick, captureDescendants: _capture, ...props }: ContextMenuAreaProps) {
+  const WebView = View as unknown as React.ComponentType<WebMenuProps>;
   return (
     <WebView
       {...props}
+      onMouseDown={(e) => {
+        if (e.button === 1 && onMiddleClick) e.preventDefault();
+      }}
+      onAuxClick={(e) => {
+        if (e.button !== 1 || !onMiddleClick) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onMiddleClick({ shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey });
+      }}
       onContextMenu={(e) => {
         if (!onContextMenu) return;
         e.preventDefault();

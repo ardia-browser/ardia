@@ -5,7 +5,7 @@ const { bookmarkRoots } = await import("../bookmarks/bookmarks.ts");
 const { historyOf } = await import("../history/history.ts");
 const model = await import("../browser/model.ts");
 const { Clock, emptyScope, syncScope } = await import("@ardia/sync");
-const adapters = await import("./adapters.ts");
+const adapters = { ...(await import("./adapters.ts")), ...(await import("./historyAdapter.ts")) };
 const { useEditClock } = await import("./editClock.ts");
 const { settingsAdapter, settingsToReapply } = await import("./settingsAdapter.ts");
 const pinnedArea = await import("./pinned.ts");
@@ -144,7 +144,7 @@ function assertTreeWhole(device) {
 }
 
 const OLD_SESSION = (() => {
-  const { cmdClickCreatesTabGroup: _c, tabReorderHaptics: _t, chosen: _x, ...rest } = S().settings;
+  const { cmdClickCreatesTabGroup: _c, optShiftClickOpensInGroup: _t, chosen: _x, ...rest } = S().settings;
   return { ...rest, cleanUpInactiveTabsAfterMinutes: null };
 })();
 const relaunch = (device, settings) =>
@@ -158,17 +158,17 @@ test("settings: what a Mac only has by default isn't sent; nulls from another Ma
   const folder = new Folder();
   const a = new Device("A", folder);
   const b = new Device("B", folder);
-  b.with(() => S().updateSettings({ cmdClickCreatesTabGroup: true, tabReorderHaptics: true, cleanUpInactiveTabsAfterMinutes: 720 }));
+  b.with(() => S().updateSettings({ cmdClickCreatesTabGroup: true, optShiftClickOpensInGroup: true, cleanUpInactiveTabsAfterMinutes: 720 }));
   relaunch(a, OLD_SESSION);
   assert.equal(a.with(() => S().settings.cmdClickCreatesTabGroup), true, "filled in at launch");
   const extraction = a.with(() => settingsAdapter.extract(() => undefined));
   assert.ok(!extraction.values.has("set:cmdClickCreatesTabGroup") && extraction.ignore("set:cmdClickCreatesTabGroup"), "a default filled in abstains");
   assert.ok(!extraction.values.has("set:cleanUpInactiveTabsAfterHours"), "an old session's Never, its default, never published: no say either");
-  const visible = new Map([["set:cmdClickCreatesTabGroup", { v: null }], ["set:tabReorderHaptics", {}], ["set:cleanUpInactiveTabsAfterHours", { v: null }]]);
-  b.with(() => settingsAdapter.apply(visible, ["set:cmdClickCreatesTabGroup", "set:tabReorderHaptics", "set:cleanUpInactiveTabsAfterHours"]));
+  const visible = new Map([["set:cmdClickCreatesTabGroup", { v: null }], ["set:optShiftClickOpensInGroup", {}], ["set:cleanUpInactiveTabsAfterHours", { v: null }]]);
+  b.with(() => settingsAdapter.apply(visible, ["set:cmdClickCreatesTabGroup", "set:optShiftClickOpensInGroup", "set:cleanUpInactiveTabsAfterHours"]));
   b.with(() => {
     assert.equal(S().settings.cmdClickCreatesTabGroup, true);
-    assert.equal(S().settings.tabReorderHaptics, true);
+    assert.equal(S().settings.optShiftClickOpensInGroup, true);
     assert.equal(S().settings.cleanUpInactiveTabsAfterMinutes, null, "Never is a value of its own");
   });
   b.with(() => settingsAdapter.apply(new Map([["set:cmdClickCreatesTabGroup", { v: false }]]), ["set:cmdClickCreatesTabGroup"]));
@@ -254,9 +254,9 @@ test("settings: a session a pre-chosen build saved whole (defaults filled in) do
   assert.equal(a.with(() => S().settings.cmdClickCreatesTabGroup), false);
   assert.equal(b.with(() => S().settings.cmdClickCreatesTabGroup), false);
   await new Promise((r) => setTimeout(r, 20));
-  relaunch(a, { ...whole, cmdClickCreatesTabGroup: false, tabReorderHaptics: false });
+  relaunch(a, { ...whole, cmdClickCreatesTabGroup: false, optShiftClickOpensInGroup: false });
   await syncAll([a, b]);
-  assert.equal(b.with(() => S().settings.tabReorderHaptics), false);
+  assert.equal(b.with(() => S().settings.optShiftClickOpensInGroup), false);
 });
 
 test("settings: a setting from a newer version survives an older Mac's syncs (no deletion)", async () => {
@@ -2079,11 +2079,11 @@ const settingsWithout = (names) => ({
 test("settings received while this Mac ran a version that didn't sync them take effect once it does, and its own choices stay", async () => {
   const folder = new Folder();
   const a = new Device("devA", folder);
-  const b = new Device("devB", folder, { settings: settingsWithout(["selectedTabGlow", "pageScrollBars"]) });
+  const b = new Device("devB", folder, { settings: settingsWithout(["selectedTabGlow", "sidebarTextContrast"]) });
   for (const d of [a, b]) d.with(() => S().createWindow({ url: `https://${d.id}.example/` }));
   await syncAll([a, b]);
-  b.with(() => S().updateSettings({ pageScrollBars: "system" }));
-  a.with(() => S().updateSettings({ selectedTabGlow: "off", pageScrollBars: "thin" }));
+  b.with(() => S().updateSettings({ sidebarTextContrast: "high" }));
+  a.with(() => S().updateSettings({ selectedTabGlow: "off", sidebarTextContrast: "standard" }));
   await syncAll([a, b]);
   assert.equal(b.with(() => S().settings.selectedTabGlow), "full", "the older version leaves it alone");
   assert.ok("set:selectedTabGlow" in b.scopes.app.base && !b.scopes.app.unapplied.includes("set:selectedTabGlow"), "and counts it as applied");
@@ -2093,8 +2093,8 @@ test("settings received while this Mac ran a version that didn't sync them take 
   await syncAll([b, a]);
   assert.equal(b.with(() => S().settings.selectedTabGlow), "off", "the synced value takes effect after the upgrade");
   assert.ok(!b.with(() => S().settingsMeta.chosen.includes("selectedTabGlow")), "as a synced value, not a choice made here");
-  assert.equal(b.with(() => S().settings.pageScrollBars), "system", "a value chosen here stays");
-  assert.equal(a.with(() => S().settings.pageScrollBars), "system", "and goes out as the newer edit");
+  assert.equal(b.with(() => S().settings.sidebarTextContrast), "high", "a value chosen here stays");
+  assert.equal(a.with(() => S().settings.sidebarTextContrast), "high", "and goes out as the newer edit");
   assert.equal((await b.sync()).published, 0, "settled");
 });
 
@@ -2144,7 +2144,7 @@ test("bookmarks and history: a Mac on v0.2.43-nightly.4 and one on today's build
   today.with(() => useBrowser.setState({ bookmarks: { nodes: {} } }));
   const t = Date.now() - 3_600_000;
   const x = today.with(() => S().addBookmark({ profileId: "default", url: "https://x.example/", title: "X" }));
-  today.with(() => S().importHistory("default", [{ url: "https://h1.example/", title: "H1", visits: 1, lastVisit: t }]));
+  await today.with(() => S().importHistory("default", [{ url: "https://h1.example/", title: "H1", visits: 1, lastVisit: t }]));
   await syncAll([today, old]);
   assert.deepEqual(tree(old), { bar: { "Bookmarks Bar": ["X=https://x.example/"] }, other: { "Other Bookmarks": [] } });
   assert.deepEqual(nightlyFourHistory(old), ["https://h1.example/"]);
@@ -2192,10 +2192,50 @@ test("profiles that share data: records applied through the owner land once in t
   assert.equal(inBar("https://in.example/").length, 1, "one bookmark node");
   assert.equal(inBar("https://in.example/")[0].parentId, bookmarkRoots(S(), b).bar, "under the shared bar");
 
-  S().importHistory(b, [{ url: "https://out.example/", title: "Out", visits: 1, lastVisit: t + 1000 }]);
+  await S().importHistory(b, [{ url: "https://out.example/", title: "Out", visits: 1, lastVisit: t + 1000 }]);
   S().addBookmark({ profileId: b, url: "https://out.example/", title: "Out" });
-  const history = adapters.historyAdapter(a).extract(() => undefined, [], Date.now(), () => false);
+  const history = adapters.historyAdapter(a).extract(() => undefined, () => false, Date.now(), () => false, () => undefined, () => undefined, () => undefined);
   const bookmarks = adapters.bookmarksAdapter(a).extract(() => undefined, [], Date.now(), () => false);
   assert.deepEqual([...history.values.keys()].sort(), ["h:https://in.example/", "h:https://out.example/"]);
   assert.deepEqual([...bookmarks.values.values()].map((v) => v.u).sort(), ["https://in.example/", "https://out.example/"]);
+});
+
+test("bookmarks: a folder of 5,000 remote bookmarks is applied in linear steps, in position order", () => {
+  useBrowser.setState({ bookmarks: { nodes: {} } });
+  S().hydrate({});
+  const a = S().createProfile({ name: "A" });
+  useBrowser.setState((s) => ({ bookmarksReady: { ...s.bookmarksReady, [a]: true } }));
+  const n = 5000;
+  const marks = new Map(Array.from({ length: n }, (_, i) => [`bm:k${i}`, { k: "u", p: "bar", t: "T", u: `https://x.example/${i}`, a: 1, pos: `a${String(n - i).padStart(5, "0")}` }]));
+  const arrayIterator = Object.getPrototypeOf([][Symbol.iterator]());
+  const next = arrayIterator.next;
+  let steps = 0;
+  arrayIterator.next = function () {
+    steps++;
+    return next.call(this);
+  };
+  try {
+    adapters.bookmarksAdapter(a).apply(marks, new Set(marks.keys()), () => undefined, { known: () => true, now: Date.now(), horizon: 0, joined: true });
+  } finally {
+    arrayIterator.next = next;
+  }
+  const bar = S().bookmarks.nodes[bookmarkRoots(S(), a).bar].children.map((id) => S().bookmarks.nodes[id].url);
+  assert.equal(bar.length, n);
+  assert.equal(bar[0], `https://x.example/${n - 1}`);
+  assert.equal(bar.at(-1), "https://x.example/0");
+  assert.ok(steps < 40 * n, `${steps} array steps for ${n} bookmarks`);
+});
+
+test("history: an unchanged page's visits are matched in one pass, not each against all", (t) => {
+  useBrowser.getState().hydrate({});
+  const start = Date.now() - 3_600_000;
+  const visitTimes = Array.from({ length: 50 }, (_, i) => start + i * 10);
+  const url = "https://same.example/";
+  useBrowser.setState({ history: { "": { list: [{ url, title: "Same", favicon: null, visits: 50, lastVisit: visitTimes.at(-1), visitTimes }], floor: -Infinity, ready: true } } });
+  const known = { t: "Same", n: 50, vt: [...visitTimes] };
+  const abs = t.mock.method(Math, "abs");
+  const baseOf = (key) => (key === `h:${url}` ? known : undefined);
+  const { values } = adapters.historyAdapter("default").extract(baseOf, () => false, Date.now(), () => true, () => undefined, () => undefined, (key) => (baseOf(key) ? JSON.stringify(baseOf(key)) : undefined));
+  assert.deepEqual(values.get(`h:${url}`), known);
+  assert.ok(abs.mock.callCount() <= visitTimes.length, `${abs.mock.callCount()} comparisons`);
 });

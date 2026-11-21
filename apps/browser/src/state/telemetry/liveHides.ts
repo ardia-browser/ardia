@@ -1,3 +1,7 @@
+import { takeLiveGithubCounts } from "./liveGithub";
+import type { ConsentToken } from "./choice";
+import { countFor } from "./countFor";
+
 let rowHides = 0;
 let stackHides = 0;
 let repoMenuPicks = 0;
@@ -20,8 +24,8 @@ export function noteLiveRepoMenuPick(choice: string, showNewRepos: boolean) {
 
 let folderColorPicks = 0;
 
-export function noteLiveFolderColorPick() {
-  folderColorPicks++;
+export function noteLiveFolderColorPick(consent?: ConsentToken | null) {
+  countFor(consent, () => void folderColorPicks++, { live_folder_color_picks: 1 });
 }
 
 export function takeLiveHideCounts() {
@@ -32,6 +36,7 @@ export function takeLiveHideCounts() {
     live_repo_menu_picks: repoMenuPicks,
     live_repo_hide_alls: repoHideAlls,
     live_new_repos_hidden_turned_on: newReposHiddenTurnedOn,
+    ...takeLiveGithubCounts(),
   };
   rowHides = 0;
   stackHides = 0;

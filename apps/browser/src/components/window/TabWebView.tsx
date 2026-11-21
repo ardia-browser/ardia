@@ -5,7 +5,8 @@ import type { PageEngine } from "../../state/engines/engines";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet } from "react-native";
 import { focus, switchToTab } from "../../state/browser/actions";
-import { notePictureInPictureBackToTab, notePictureInPictureClickSkip, notePictureInPictureDragged } from "../../state/telemetry/pictureInPictureCounts";
+import { notePictureInPictureBackToTab, notePictureInPictureClickSkip, notePictureInPictureDragged, notePictureInPictureResized } from "../../state/telemetry/pictureInPictureCounts";
+import { noteRendererResponsive, noteRendererUnresponsive } from "../../state/telemetry/freezes";
 import { noteFavicon } from "../../state/favicons/favicons";
 import { adoptIconPage, dropOutlivedFavicon, noteIconPage } from "../../state/favicons/iconPage";
 import { restoredThemeColor } from "../../state/windows/launchLook";
@@ -29,6 +30,8 @@ import type { Tab } from "../../state/browser/types";
 import { zoomChangedByUser } from "../../state/site/zoomBubble";
 import { markTabReady, patchPage, pageOf } from "../../state/tabs/pageState";
 import { popupBlocked, showAutofillPrompt, showExternalApp, showPasswordPrompt } from "../../state/site/prompts";
+import { fieldProviderHint, fieldProviderOpened, verificationCodeFound, type FieldProviderHint, type FieldProviderOpened, type VerificationCodeFound } from "../../state/site/passwordManager";
+import { hoverStatus, verificationCodeDocument, verificationCodeTabGone } from "../../state/site/verificationCodes";
 import { leftPage, pageAskedToClose, pageEnded } from "../../state/tabs/pageEvents";
 import { copyLinkToSelection, searchSelection, setPageSelection } from "../../state/site/selection";
 import { shareFromPage } from "../../state/site/share";
@@ -45,28 +48,36 @@ import { forgetUnreadIfGone, noteAppBadge, noteUnreadFavicon, noteUnreadLoading,
 import { trackPageProcessGone } from "../../state/telemetry/diagnostics";
 import { releaseTranslation, translateCrashContext } from "../../state/site/translate";
 import { notePagePress, notePagePressRefused } from "../../state/telemetry/tabPresses";
-import { noteAutoPictureInPictureKept, notePageOverlay, noteReopenedPage, noteWebKitPageKeptHidden } from "../../state/telemetry/usage";
+import { noteWebKitFocusRestore } from "../../state/telemetry/pageFocusReturns";
+import { noteAutoPictureInPictureKept, notePageOverlay, noteReopenedPage, noteSiteControls, noteWebKitPageKeptHidden } from "../../state/telemetry/usage";
 import { noteWebKitMediaFault } from "../../state/telemetry/webkitMediaFaults";
-import { noteFairPlay } from "../../state/telemetry/fairPlayCounts";
 import { isAdoptKind } from "../../state/tabs/adoptIds";
 import { firstPagePending, isBlankAddress, noteFirstPagePending, reportedAddress, reportedTitle } from "../../state/tabs/pendingAddress";
 import { STATUS_FLIP_BAND } from "./tokens";
 import { startHidingElement } from "../../state/site/hiddenElements";
+import { forgetPeekHandover, notePeekRecipient, peekDonorTaken } from "../../state/peek/donors";
+import { promotedFromPeek } from "../../state/peek/actions";
 
 const webViewTab = (t: Tab | undefined) => ({ navigation: navigationOf(t), adoptId: adoptOf(t), profileId: t?.profileId ?? "", shownUrl: t?.url ?? "" });
 
-type TabWebViewProps = { tabId: string; visible: boolean; warm: boolean; peekOf?: string };
+type TabWebViewProps = { tabId: string; visible: boolean; selected?: boolean; warm: boolean; peekOf?: string };
 
 export const TabWebView = memo(function TabWebView(props: TabWebViewProps) {
   const engine = useTabEngine(props.tabId);
   return <EngineWebView key={engine} engine={engine} {...props} />;
 });
 
-function EngineWebView({ tabId, visible, warm, peekOf, engine }: TabWebViewProps & { engine: PageEngine }) {
+function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine }: TabWebViewProps & { engine: PageEngine }) {
+  const asPeek = peekOf !== undefined;
+  const isDonor = () => asPeek && promotedFromPeek(tabId);
+  const handedToTab = () => isDonor() && peekDonorTaken(tabId);
   const { navigation, adoptId, profileId, shownUrl } = useTabValue(tabId, webViewTab, shallowEqual);
   const neighbour = useBrowserWhile(warm, (s) => warm && s.windows[s.tabs[tabId]?.windowId ?? ""]?.profileId !== profileId);
   const tab = () => currentTab(tabId);
-  const ref = useMemo(() => webviewRef(tabId), [tabId]);
+  const ref = useMemo(() => {
+    const register = webviewRef(tabId);
+    return (handle: Parameters<typeof register>[0]) => (handle && peekOf !== undefined && promotedFromPeek(tabId) ? undefined : register(handle));
+  }, [tabId]);
   const autoPictureInPicture = useAutoPictureInPicture(tabId, visible);
   const pageColor = useProfilesValue(profileId, (profiles) => (isIncognitoProfile(profileId) ? "incognito" : (profiles[profileId]?.color ?? "plum")));
   const theme = useProfileTheme(profileId);
@@ -83,7 +94,7 @@ function EngineWebView({ tabId, visible, warm, peekOf, engine }: TabWebViewProps
   const arrived = useRef(!!handoff && (handoff.seq === navigation?.seq || isBlankAddress(navigation?.url ?? "")));
   const loadsOnCreate = useRef(engine === "webkit" && !handoff ? navigation?.seq : undefined);
   useEffect(() => {
-    if (!navigation) return;
+    if (!navigation || isDonor()) return;
     noteIssued(tabId, navigation.seq);
     if (arrived.current) {
       arrived.current = false;
@@ -106,7 +117,9 @@ function EngineWebView({ tabId, visible, warm, peekOf, engine }: TabWebViewProps
   useEffect(() => {
     persistEngine(tabId, engine);
     return () => {
+      if (handedToTab()) return forgetPeekHandover(tabId);
       noteGone(tabId);
+      verificationCodeTabGone(tabId);
       noteFirstPagePending(tabId, false);
       forgetUnreadIfGone(tabId);
     };
@@ -118,6 +131,7 @@ function EngineWebView({ tabId, visible, warm, peekOf, engine }: TabWebViewProps
   const mountedProfile = useRef(profileId);
   useLayoutEffect(
     () => () => {
+      if (handedToTab()) return;
       const t = tab();
       const sameEngine = currentTabEngine(tabId) === engine;
       if (wantsPage(t) && sameEngine && currentEngineProfile(t.profileId) === currentEngineProfile(mountedProfile.current) && !isQuitting()) handOff(tabId, currentEngineProfile(t.profileId), engine);
@@ -148,6 +162,7 @@ function EngineWebView({ tabId, visible, warm, peekOf, engine }: TabWebViewProps
       temporary={peekOf !== undefined}
       temporarySource={peekOf}
       visible={visible}
+      selected={selected}
       warm={warm}
       neighbour={neighbour}
       autoPictureInPicture={autoPictureInPicture}
@@ -155,6 +170,7 @@ function EngineWebView({ tabId, visible, warm, peekOf, engine }: TabWebViewProps
       contentsBackgroundColor={backdrop}
       shownUrl={shownUrl}
       onReady={() => {
+        if (peekOf === undefined) notePeekRecipient(tabId);
         markTabReady(tabId);
         noteTabReady(tabId);
         noteReady(tabId);
@@ -162,6 +178,7 @@ function EngineWebView({ tabId, visible, warm, peekOf, engine }: TabWebViewProps
       }}
       onNavigationChange={({ url: reported, title: reportedPageTitle, canGoBack, canGoForward, isLoading, themeColor, themeColorSource, initialDocumentAccessed, committedInitial, committedUrl, committedAt, httpStatus }) => {
         noteCommit(tabId, committedUrl, committedAt, httpStatus);
+        verificationCodeDocument(tabId, committedAt);
         if (reopening.current && reported && !isBlankAddress(reported)) {
           reopening.current = false;
           noteReopenedPage(canGoBack);
@@ -234,6 +251,7 @@ function EngineWebView({ tabId, visible, warm, peekOf, engine }: TabWebViewProps
       onPictureInPicture={(state) => setPictureInPictureState(tabId, state)}
       onAutoPictureInPictureKept={noteAutoPictureInPictureKept}
       onPictureInPictureDragged={notePictureInPictureDragged}
+      onPictureInPictureResized={notePictureInPictureResized}
       onPictureInPictureSkip={notePictureInPictureClickSkip}
       onMediaFault={noteWebKitMediaFault}
       onDisplayMediaRequest={(request) => requestDisplayMedia(tabId, request)}
@@ -241,7 +259,7 @@ function EngineWebView({ tabId, visible, warm, peekOf, engine }: TabWebViewProps
       onStatus={(status, fromBottom) => {
         const statusAtTop = !!status && fromBottom !== null && fromBottom < STATUS_FLIP_BAND;
         if (statusAtTop) notePageOverlay("statusAtTop");
-        patchPage(tabId, status ? { status, statusAtTop } : { status });
+        patchPage(tabId, status ? { status: hoverStatus(status), statusAtTop } : { status });
       }}
       onCrashed={(crashed) => {
         if (!isQuitting()) {
@@ -252,8 +270,14 @@ function EngineWebView({ tabId, visible, warm, peekOf, engine }: TabWebViewProps
         }
         noteUnreadPageEnded(tabId);
       }}
-      onUnresponsive={() => patchPage(tabId, { unresponsive: true })}
-      onResponsive={() => patchPage(tabId, { unresponsive: false })}
+      onUnresponsive={() => {
+        noteRendererUnresponsive(tabId);
+        patchPage(tabId, { unresponsive: true });
+      }}
+      onResponsive={() => {
+        noteRendererResponsive(tabId, false);
+        patchPage(tabId, { unresponsive: false });
+      }}
       onFullscreen={(fullscreen) => patchPage(tabId, { fullscreen })}
       onMediaAccess={(mediaAccess) => patchPage(tabId, { mediaAccess: mediaAccess.camera || mediaAccess.microphone || mediaAccess.screen ? mediaAccess : null })}
       onSecurity={(security) => !prewarmOnly() && patchPage(tabId, { security })}
@@ -263,6 +287,7 @@ function EngineWebView({ tabId, visible, warm, peekOf, engine }: TabWebViewProps
       onAutofillPrompt={(prompt, id) => showAutofillPrompt(tabId, prompt, id)}
       onExternalApp={(externalApp) => showExternalApp(tabId, externalApp)}
       onPageFocus={() => activateFocusedPane(tabId)}
+      onFocusRestore={noteWebKitFocusRestore}
       onPagePress={(refused) => {
         if (refused) return notePagePressRefused();
         notePagePress(tabId);
@@ -281,7 +306,10 @@ function EngineWebView({ tabId, visible, warm, peekOf, engine }: TabWebViewProps
       onSelection={(selection) => setPageSelection(tabId, selection)}
       onScroll={(state) => noteScroll(tabId, state)}
       onProtectedMedia={(request) => offerWebKit(tabId, request)}
-      onFairPlay={noteFairPlay}
+      onAutoplayBlocked={(count) => noteSiteControls("autoplayPlaysBlocked", count)}
+      onFieldProviderOpened={(opened: FieldProviderOpened) => fieldProviderOpened(tabId, opened)}
+      onFieldProviderHint={(hint: FieldProviderHint) => fieldProviderHint(tabId, hint)}
+      onVerificationCodeFound={(found: VerificationCodeFound) => verificationCodeFound(tabId, found)}
       onNotificationClose={closeWebNotification}
       onDiscarded={(url, reason) => {
         releaseTranslation(tabId);

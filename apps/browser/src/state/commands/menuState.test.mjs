@@ -2,11 +2,23 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
 const model = await import("../browser/model.ts");
-const { menuInputsChanged, menuState, trackedMenuState, HIDDEN_TAB_FIELDS_IN_MENU } = await import("./menuState.ts");
+const { liveReachesMenu, menuInputsChanged, menuState, trackedMenuState, HIDDEN_TAB_FIELDS_IN_MENU } = await import("./menuState.ts");
 const { noRecordReads, trackedRecord } = await import("../browser/recordReads.ts");
+const { liveOf, onLiveChange, shownLiveOf } = await import("../tabs/tabLive.ts");
+const { focusedWindowOf } = await import("../windows/ui.ts");
 
 const S = () => useBrowser.getState();
 const menuJson = (s) => JSON.stringify(menuState(s));
+
+function inputsChangedBy(step, reads) {
+  const before = S();
+  const live = new Set();
+  const off = onLiveChange((id) => live.add(id));
+  step();
+  off();
+  const after = S();
+  return menuInputsChanged(reads, after, before) || [...live].some((id) => liveReachesMenu(after, id));
+}
 
 test("a store change the last menu build didn't read leaves the menu as it was, and one it read is caught", () => {
   S().hydrate({});
@@ -28,14 +40,11 @@ test("a store change the last menu build didn't read leaves the menu as it was, 
   let unread = 0;
   let read = 0;
   for (const step of steps) {
-    const before = S();
-    const { state, reads } = trackedMenuState(before);
-    step();
-    const after = S();
-    if (menuInputsChanged(reads, after, before)) read++;
+    const { state, reads } = trackedMenuState(S());
+    if (inputsChangedBy(step, reads)) read++;
     else {
       unread++;
-      assert.equal(menuJson(after), JSON.stringify(state), `${step} changed the menu without touching a field it read`);
+      assert.equal(menuJson(S()), JSON.stringify(state), `${step} changed the menu without touching a field it read`);
     }
   }
   assert.ok(unread >= 2, "some steps touch only fields the menu doesn't read");
@@ -46,17 +55,18 @@ test("the reads cover every top-level field the menu used, including through its
   S().hydrate({});
   S().createWindow({ url: "https://a.example/" });
   const { reads } = trackedMenuState(S());
-  for (const field of ["windows", "tabs", "live", "settings", "closedTabs", "closedWindows", "closedGroups", "bookmarks", "profiles", "profileOrder", "downloads", "ui"]) {
+  const liveRead = [];
+  menuState(S(), (id) => (liveRead.push(id), liveOf(id)));
+  assert.deepEqual(liveRead, [model.activeTabId(S(), focusedWindowOf(S()))]);
+  for (const field of ["windows", "tabs", "settings", "closedTabs", "closedWindows", "closedGroups", "bookmarks", "profiles", "profileOrder", "downloads", "ui"]) {
     assert.ok(reads.has(field), field);
   }
   assert.equal(reads.has("history"), false);
 });
 
 function menuChanges(step) {
-  const before = S();
-  const { state, reads } = trackedMenuState(before);
-  step();
-  const changed = menuInputsChanged(reads, S(), before);
+  const { state, reads } = trackedMenuState(S());
+  const changed = inputsChangedBy(step, reads);
   if (!changed) assert.equal(menuJson(S()), JSON.stringify(state), `${step} changed the menu without touching anything it read`);
   return changed;
 }
@@ -101,8 +111,8 @@ test("whatever changes in tabs and their live state, a menu that isn't rebuilt i
     (id) => S().updateTab(id, { customTitle: pick([null, "Mine"]) }),
     (id) => S().updateTab(id, { pin: pick([null, { as: "row" }, { as: "tile" }]) }),
     (id) => S().updateTab(id, { pinnedUrl: pick([null, "https://a.example/"]) }),
-    (id) => S().updateLive(id, { isLoading: !S().live[id]?.isLoading }),
-    (id) => S().updateLive(id, { canGoBack: !S().live[id]?.canGoBack, canGoForward: !!rand(2) }),
+    (id) => S().updateLive(id, { isLoading: !liveOf(id).isLoading }),
+    (id) => S().updateLive(id, { canGoBack: !liveOf(id).canGoBack, canGoForward: !!rand(2) }),
     (id) => S().activate(id),
     (id) => S().setSelection(S().tabs[id].windowId, [id, pick(S().windows[S().tabs[id].windowId].tabIds)]),
     (id) => S().setFocusedWindow(S().tabs[id].windowId),
@@ -131,8 +141,8 @@ test("of a tab that isn't shown or selected, the menu reads only the fields a ch
     S().setSelection(windows[0], selection);
     const s = S();
     const tabs = noRecordReads();
-    const live = noRecordReads();
-    menuState({ ...s, tabs: trackedRecord(s.tabs, tabs), live: trackedRecord(s.live, live) });
+    const liveRead = new Set();
+    menuState({ ...s, tabs: trackedRecord(s.tabs, tabs) }, (id) => (liveRead.add(id), shownLiveOf(s, id)));
     const shown = new Set([...Object.values(s.windows).flatMap((w) => Object.values(w.activeTabIds)), ...(s.selection[windows[0]] ?? [])]);
     assert.equal(tabs.enumerated, false, "the menu listed every tab: a hidden tab's change would have to rebuild it");
     for (const [id, fields] of tabs.entries) {
@@ -140,7 +150,7 @@ test("of a tab that isn't shown or selected, the menu reads only the fields a ch
       assert.notEqual(fields, null, `${id} was read whole`);
       for (const field of fields) assert.ok(HIDDEN_TAB_FIELDS_IN_MENU.includes(field), `the menu read a hidden tab's ${field}`);
     }
-    for (const id of live.entries.keys()) assert.ok(shown.has(id), `the menu read a hidden tab's live state (${id})`);
+    for (const id of liveRead) assert.ok(shown.has(id), `the menu read a hidden tab's live state (${id})`);
   }
 });
 
@@ -192,4 +202,13 @@ test("the shown Peek's page rebuilds the menu like a shown tab; a Peek hidden be
   assert.equal(menuChanges(() => S().updateLive(shownPeek, { canGoForward: true })), true, "Forward turns on in the Peek");
   assert.equal(menuChanges(() => S().updateTab(shownPeek, { muted: true })), true, "Mute Tab becomes Unmute Tab");
   assert.equal(menuChanges(() => S().updateTab(hiddenPeek, { muted: true })), false);
+});
+
+test("the menu state tells the shell whether links from other apps open in Little Ardia", () => {
+  S().hydrate({});
+  S().createWindow({ url: "https://a.example/" });
+  S().updateSettings({ openLinksInLittleArdia: true });
+  assert.equal(menuState(S()).linksOpenInLittleArdia, true);
+  S().updateSettings({ openLinksInLittleArdia: false });
+  assert.equal(menuState(S()).linksOpenInLittleArdia, false);
 });

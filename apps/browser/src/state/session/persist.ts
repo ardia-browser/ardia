@@ -1,6 +1,7 @@
 import { removeDownloadStaging, type Download } from "../../platform/downloads";
 import { documentSaved, readDocument, writeDocument } from "../../platform/documents";
 import { SESSION_DOCUMENT } from "./sessionDocument";
+import { cosmeticChange, doc, field, listed, type Doc } from "./documentJson";
 import { useBrowser, type BrowserState, type HydrateData } from "../browser/store";
 import { inPinnedContainer, isIncognitoProfile, snapshotTab, tabsShownIn } from "../browser/model";
 import { earlyLaunchTabOn, launchTab, linkProfile } from "../tabs/launchTab";
@@ -13,7 +14,9 @@ import type { BrowserWindow, ClosedWindow, ParkedPins, SplitView, Tab } from "..
 import { downloadSession, withoutRepeats } from "../downloads/downloadsSlice";
 import { anyDownloadProgress, withLiveProgress } from "../downloads/progress";
 import { noteDownloadHistoryWrite } from "../telemetry/downloadWork";
-import { parseSaved, versionedJson, unchanged, type Migrations, type SavedObject } from "../../lib/savedDocument";
+import { noteSessionWrite } from "../telemetry/sessionWrites";
+import { noteSavedTopAppsMerged } from "../telemetry/topAppsSharing";
+import { parseSaved, unchanged, type Migrations, type SavedObject } from "../../lib/savedDocument";
 import { sessionWithCleanUpMinutes } from "../settings/cleanUpAfter";
 import { parseSettingsMeta, sessionWithNewTabLinksInLittleArdia, sessionWithSettingsMeta, sessionWithUnreadCountsOffByDefault } from "../settings/settings";
 import { sessionWithOwnTabMutes } from "../tabs/mute";
@@ -21,8 +24,10 @@ import { isRegularWindow } from "../windows/small";
 import { sessionWithPinChoiceStamps } from "../pins/pinChoices";
 import { isFields, isString, isStringList } from "../../lib/decode";
 import { pageFromDisk, pinFromDisk, splitsChecked, savedPage, sessionWithSplitSlots, sessionWithTabPages, sessionWithTabPins, slotsFromDisk } from "./savedShapes";
+import { beginActivity } from "../app/jobActivity";
 
 const SAVE_DELAY_MS = 800;
+const COSMETIC_SAVE_DELAY_MS = 10_000;
 export const SESSION_VERSION = 11;
 export const SESSION_MIGRATIONS: Migrations = { 2: sessionWithCleanUpMinutes, 3: sessionWithOwnTabMutes, 4: sessionWithTabPages, 5: sessionWithTabPins, 6: sessionWithSplitSlots, 7: sessionWithSettingsMeta, 8: sessionWithPinChoiceStamps, 9: sessionWithNewTabLinksInLittleArdia, 10: sessionWithUnreadCountsOffByDefault };
 const downloadsWithStagingPathOnly = (doc: SavedObject): SavedObject => ({
@@ -38,21 +43,6 @@ const downloadsWithStagingPathOnly = (doc: SavedObject): SavedObject => ({
 const DOWNLOADS_DOCUMENT = "downloads.json";
 const DOWNLOADS_VERSION = 3;
 const DOWNLOADS_MIGRATIONS: Migrations = { 0: unchanged, 1: unchanged, 2: downloadsWithStagingPathOnly };
-
-type Key = keyof BrowserState;
-type Field<K extends Key, V> = { reads: readonly K[]; save: (s: Pick<BrowserState, K>) => V };
-const field = <K extends Key, V>(reads: readonly K[], save: (s: Pick<BrowserState, K>) => V): Field<K, V> => ({ reads, save });
-
-type Doc = { name: string; reads: readonly Key[]; json: (s: BrowserState) => string };
-
-function doc<F extends Record<string, Field<Key, unknown>>>(name: string, version: number, fields: F): Doc {
-  const entries = Object.entries(fields);
-  return {
-    name,
-    reads: [...new Set(entries.flatMap(([, f]) => f.reads))],
-    json: (s) => versionedJson(Object.fromEntries(entries.map(([key, f]) => [key, f.save(s)])), version),
-  };
-}
 
 const publicTab = (t: { profileId: string }) => !isIncognitoProfile(t.profileId);
 const publicProfiles = <T,>(byProfile: Record<string, T>) => Object.fromEntries(Object.entries(byProfile).filter(([profileId]) => publicTab({ profileId })));
@@ -85,17 +75,17 @@ const SESSION_FIELDS = {
   linkProfile: field(["windows", "profiles", "ui", "windowOrder", "settings"], (s) => (earlyLaunchTabOn() ? linkProfile(s) : null)),
   tabs: field(["windows", "tabs", "peeks"], (s) => {
     const kept = savedWindowIds(s);
-    return Object.values(s.tabs).filter((t) => kept.has(t.windowId) && !isPeekTab(s, t.id)).map(persistedTab);
+    return listed(Object.values(s.tabs).filter((t) => kept.has(t.windowId) && !isPeekTab(s, t.id)), persistedTab);
   }),
   groups: field(["windows", "groups"], (s) => {
     const kept = savedWindowIds(s);
-    return Object.values(s.groups).filter((g) => kept.has(g.windowId));
+    return listed(Object.values(s.groups).filter((g) => kept.has(g.windowId)));
   }),
   splits: field(["windows", "splits"], (s) => {
     const kept = savedWindowIds(s);
-    return Object.values(s.splits).filter((v) => kept.has(v.windowId));
+    return listed(Object.values(s.splits).filter((v) => kept.has(v.windowId)));
   }),
-  closedTabs: field(["closedTabs"], (s) => s.closedTabs.filter((c) => publicTab(c.tab))),
+  closedTabs: field(["closedTabs"], (s) => listed(s.closedTabs.filter((c) => publicTab(c.tab)))),
   closedWindows: field(["closedWindows", "settings"], (s) =>
     s.closedWindows.filter((c) => c.tabs.every(publicTab)).map((c) => ({ ...c, window: { ...c.window, sidebarOpen: !(c.window.autoHideTabs ?? s.settings.autoHideTabs) } })),
   ),
@@ -307,6 +297,7 @@ export function startPersistence(overrides: LaunchOverrides = {}) {
   const loaded = loadSession(overrides);
   restoredAtLaunch = !!loaded?.windowOrder?.length;
   realignedAtLaunch = loaded?.windowsAgainstAutoHideTabs ?? 0;
+  noteSavedTopAppsMerged(loaded?.topAppsMerged ?? "");
   useBrowser.getState().hydrate(loaded ?? {});
   restoreLaunchLook();
 
@@ -314,22 +305,36 @@ export function startPersistence(overrides: LaunchOverrides = {}) {
   const lastJson = new Map<string, string>();
   const dirty = new Set<Doc>();
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let due = 0;
+  let cosmeticOnly = true;
+
+  const schedule = (delay: number) => {
+    const at = Date.now() + delay;
+    if (timer !== undefined && due <= at) return;
+    clearTimeout(timer);
+    due = at;
+    timer = setTimeout(save, delay);
+  };
 
   const save = () => {
     clearTimeout(timer);
     timer = undefined;
     if (frozen) return;
     const s = useBrowser.getState();
+    const done = beginActivity("sessionSave");
     for (const doc of DOCS.filter((d) => dirty.has(d))) {
       const json = doc.json(s);
       const saved = lastJson.get(doc.name) === json;
       if (saved || write(doc.name, json)) {
         if (!saved && doc.name === DOWNLOADS_DOCUMENT) noteDownloadHistoryWrite(json.length);
+        if (!saved && doc.name === SESSION_DOCUMENT) noteSessionWrite(json.length, cosmeticOnly);
         lastJson.set(doc.name, json);
         dirty.delete(doc);
       }
     }
-    if (dirty.size) timer = setTimeout(save, SAVE_DELAY_MS);
+    done();
+    cosmeticOnly = true;
+    if (dirty.size) schedule(SAVE_DELAY_MS);
   };
   flush = save;
   stageDownloads = () => dirty.add(DOCS.find((d) => d.name === DOWNLOADS_DOCUMENT)!);
@@ -337,24 +342,30 @@ export function startPersistence(overrides: LaunchOverrides = {}) {
 
   const check = (s: BrowserState, initial = false) => {
     if (frozen) return;
+    let urgent = false;
     for (const doc of DOCS) {
       const sources = doc.reads.map((key) => s[key]);
       const prev = lastSources.get(doc.name);
       if (prev && sources.every((v, i) => v === prev[i])) continue;
       lastSources.set(doc.name, sources);
-      if (!initial) dirty.add(doc);
+      if (initial) continue;
+      dirty.add(doc);
+      if (!prev || !cosmeticChange(doc, prev, sources)) urgent = true;
     }
-    if (dirty.size && !timer) timer = setTimeout(save, SAVE_DELAY_MS);
+    if (urgent) cosmeticOnly = false;
+    if (dirty.size) schedule(urgent || !cosmeticOnly ? SAVE_DELAY_MS : COSMETIC_SAVE_DELAY_MS);
   };
   check(useBrowser.getState(), true);
   if (droppedPrivateDownloads) {
     droppedPrivateDownloads = false;
     dirty.add(DOCS.find((d) => d.name === DOWNLOADS_DOCUMENT)!);
-    timer ??= setTimeout(save, SAVE_DELAY_MS);
+    cosmeticOnly = false;
+    schedule(SAVE_DELAY_MS);
   }
   if (realignedAtLaunch) {
     dirty.add(DOCS.find((d) => d.name === SESSION_DOCUMENT)!);
-    timer ??= setTimeout(save, SAVE_DELAY_MS);
+    cosmeticOnly = false;
+    schedule(SAVE_DELAY_MS);
   }
   resume = () => {
     check(useBrowser.getState());

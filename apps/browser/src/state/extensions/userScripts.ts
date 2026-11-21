@@ -13,6 +13,8 @@ import { parseSaved, unchanged, versionedJson, type Migrations } from "../../lib
 import { errorText } from "../../lib/errors";
 import { singleFlight, type Flight } from "../../lib/singleFlight";
 import { onProfilesOpened, profileOpened } from "../profiles/profileLoading";
+import { consentToken } from "../telemetry/client";
+import { warnFor } from "../telemetry/logs";
 
 export type ScriptsOutcome = { ok: true } | { disabled: true } | { removed: true } | { error: string };
 type Status = { generation: number; profiles: Record<string, ScriptsOutcome> };
@@ -98,6 +100,7 @@ const STATUS_MIGRATIONS: Migrations = { 0: unchanged };
 async function seed() {
   if (seeded) return;
   seeded = true;
+  const consent = consentToken();
   try {
     lastStatus = await readUserScriptsStatus();
     const status = parseSaved(lastStatus, STATUS_VERSION, STATUS_MIGRATIONS) as Status | null;
@@ -109,7 +112,7 @@ async function seed() {
       applied.set(engine, { generation: status.generation, wanted: wantedBy(outcome), outcome });
     }
   } catch (error) {
-    console.warn("[scripts] couldn't read status.json", error);
+    warnFor(consent, "[scripts] couldn't read status.json", error);
   }
 }
 
@@ -154,10 +157,11 @@ async function reconcile(flight: Flight) {
 }
 
 const schedule = singleFlight(async (flight) => {
+  const consent = consentToken();
   try {
     await reconcile(flight);
   } catch (error) {
-    console.warn("[scripts] couldn't apply the ardia scripts", error);
+    warnFor(consent, "[scripts] couldn't apply the ardia scripts", error);
   }
 }, enabled);
 

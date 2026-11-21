@@ -24,8 +24,10 @@ the same rule a macOS test instance follows. The schemas go to `<data dir>/confi
   config.json          settings and the theme choice
   hooks.json           automation hooks (docs/automation.md)
   themes/<name>.json   colour overrides
+  plugins/<name>/      plugins (docs/plugins.md)
   config.schema.json   written by the app
   theme.schema.json    written by the app
+  plugin.schema.json   written by the app
 ```
 
 Ardia never creates the folder. `ardia config init` does, or the user does.
@@ -49,7 +51,7 @@ Ardia never creates the folder. `ardia config init` does, or the user does.
   left out, so a new setting never becomes file-writable by accident. Left out, because they grant control, send
   data somewhere or change which engine handles a site: `cliControl`, `allowJavaScriptFromAppleEvents`,
   `extensionSearchEngines`, `defaultProfileId`, `customSearchUrl`, `newTabUrl`, `customSearchEngines`, `pageEngine`,
-  `websiteEngines`, `protectedVideoInWebKit`, `fairPlayInChromium`. `searchEngine` must name an engine that already exists (built in, or
+  `websiteEngines`, `protectedVideoInWebKit`. `searchEngine` must name an engine that already exists (built in, or
   one the user added in Settings).
 - `interfaceScale` (0.8 to 1.5 in steps of 0.05, default 1; this Mac only, not synced) is Settings › Appearance ›
   Interface size: it scales the whole app's UI, not web pages, and applies live.
@@ -152,6 +154,31 @@ you type. It has no Settings row: plugins (github.com/mantrakp04/ardia-plugins) 
 - Code: `state/omnibox/commandBarStart.ts`, used by `useOpenTabsStart` (`components/omnibox/dropdownStart.ts`).
   Telemetry: `settings_snapshot` carries `setting_commandBarStart_hidePinned`, `_hideTopApps` and `_limit` with their
   defaults.
+
+### Press motion and folder style
+
+`settings.pressMotion`, `settings.folderStyle` and `settings.liveFolderIcon` bring back how 0.2.47-nightly.6 felt and looked. They have no
+Settings row: plugins (github.com/ardia-browser/plugins, `nightly6-feel`) and people write them here.
+
+```json
+"pressMotion": "bounce", "folderStyle": "neutral", "liveFolderIcon": "service"
+```
+
+- `pressMotion`: `"still"` (the default) or `"bounce"`. Bounce squishes what you press and springs it back about 13 %
+  past rest, as in 0.2.47-nightly.6 (#2469): sidebar tab rows, group and live folder headers, live items, the New
+  Tab row and folder panel rows to 0.975, pinned tiles, tile folders and top-strip pins to 0.94, an icon button's
+  whole plate to 0.9 and other pressable controls to 0.97, holding the dip at least 90 ms. A New Tab card's lift and
+  a finished live item's check mark settle on `springs.bouncy`. macOS Reduce Motion still turns it off.
+- `folderStyle`: `"profile"` (the default: a folder with no colour of its own takes the profile's colour) or
+  `"neutral"`, which draws it white in dark mode and #6E6E73 in light mode, as in 0.2.47-nightly.6 (#2250). A
+  coloured group keeps its colour either way.
+- `liveFolderIcon`: `"folder"` (the default) or `"service"`. Service shows a live folder's service icon (GitHub,
+  Notion, …) instead of the folder, as in 0.2.47-nightly.6 (#2250). An icon you picked for the folder wins either way.
+- None of them is synced: they belong to this Mac. A change applies at once.
+- Code: `lib/pressMotion.ts` (the value `components/ui` reads), `useSquish` and `Squish` (`components/ui/Squish.tsx`),
+  `usePressScaleMotion` and `liftSpring` (`components/ui/motion.ts`), `folderPalette` (`components/sidebar/tokens.ts`)
+  and `LiveFolderIcon`. Telemetry: `settings_snapshot` carries `setting_pressMotion`, `setting_folderStyle` and
+  `setting_liveFolderIcon` with their defaults; watch how many installs pick `bounce`, `neutral` and `service`.
 
 ### The file wins
 
@@ -297,7 +324,7 @@ and in Ardia's context menus. A name macOS doesn't have draws nothing.
 
 ## Schemas
 
-The app writes `config.schema.json` and `theme.schema.json` (JSON Schema 2020-12) to `<data dir>/config-schema/` at
+The app writes `config.schema.json`, `theme.schema.json` and `plugin.schema.json` (JSON Schema 2020-12) to `<data dir>/config-schema/` at
 every launch, and into the config folder whenever it exists, rewriting only when the content changed (temp file and
 rename, replacing a symlinked schema rather than writing through it). They are generated from the allowlisted
 `SETTING_SPECS` entries (each spec carries its schema; a test checks schema and validator agree on samples and

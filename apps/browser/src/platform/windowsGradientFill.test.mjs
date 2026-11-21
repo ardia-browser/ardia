@@ -81,7 +81,8 @@ test("a gradient-only Surface cuts no page window, and every gradient drawn sits
   const surface = source("../../../../packages/expo-windows/src/views/Surface.tsx");
   assert.match(surface, /const own = gradient \? \{ ref, onLayout \} : \{ ref: cover\.ref, onLayout: cover\.onLayout \};/);
   assert.deepEqual(using(/\bfillColors=|\bfadeStops=/), ["../components/ui/GradientFill.tsx"], "only GradientFill gives a Surface a gradient");
-  assert.deepEqual(using(/<GradientFill\b/), ["../components/toolbar/FieldLoadFill.tsx"], "only the field glow draws a GradientFill");
+  assert.deepEqual(using(/<GradientFill\b/), ["../components/sidebar/EdgeGlow.tsx", "../components/toolbar/FieldLoadFill.tsx"], "only the field glow and the sidebar's edge glow draw a GradientFill");
+  assert.deepEqual(using(/<EdgeGlow\b/), ["../components/sidebar/Sidebar.tsx"], "the edge glow sits in the sidebar, inside its plate");
   assert.deepEqual(using(/<FieldLoadFill\b/), ["../components/littleArdia/SmallChrome.tsx", "../components/toolbar/Toolbar.tsx"], "the glow sits in the toolbar, sidebar and Little Ardia fields");
 });
 

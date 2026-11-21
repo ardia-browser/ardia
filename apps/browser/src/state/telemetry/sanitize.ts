@@ -65,6 +65,57 @@ export function errorType(error: unknown): string {
   return typeof error === "undefined" ? "Undefined" : error === null ? "Null" : "NonError";
 }
 
+export const JS_FATAL_KINDS = [
+  "hermes_heap_limit",
+  "hermes_out_of_memory",
+  "hermes_stack_overflow",
+  "hermes_other",
+  "rn_js_type_error",
+  "rn_js_reference_error",
+  "rn_js_range_error",
+  "rn_js_syntax_error",
+  "rn_js_stack_overflow",
+  "rn_js_error",
+  "rn_host_function",
+  "rn_host_object",
+  "rn_objc_exception",
+  "rn_cpp_exception",
+  "rn_other",
+  "unknown",
+] as const;
+
+export type JsFatalKind = (typeof JS_FATAL_KINDS)[number];
+
+const RN_JS_ERRORS: Record<string, JsFatalKind> = {
+  TypeError: "rn_js_type_error",
+  ReferenceError: "rn_js_reference_error",
+  RangeError: "rn_js_range_error",
+  SyntaxError: "rn_js_syntax_error",
+};
+
+function hermesFatalKind(text: string): JsFatalKind {
+  if (/^OOM\b|out of memory/i.test(text)) return /max heap size/i.test(text) ? "hermes_heap_limit" : "hermes_out_of_memory";
+  if (/stack overflow|call stack/i.test(text)) return "hermes_stack_overflow";
+  return "hermes_other";
+}
+
+function reactNativeFatalKind(text: string): JsFatalKind {
+  const js = /^Unhandled JS Exception: (?:([A-Za-z]+Error)\b)?/.exec(text);
+  if (js) return /Maximum call stack size exceeded/.test(text) ? "rn_js_stack_overflow" : (RN_JS_ERRORS[js[1] ?? ""] ?? "rn_js_error");
+  if (text.startsWith("Exception in HostFunction")) return "rn_host_function";
+  if (text.startsWith("Exception in HostObject")) return "rn_host_object";
+  if (text.startsWith("non-std ObjC Exception")) return "rn_objc_exception";
+  if (text.startsWith("non-std C++ exception")) return "rn_cpp_exception";
+  return "rn_other";
+}
+
+export function jsFatalKind(source: unknown, text: unknown): JsFatalKind | null {
+  if (typeof text !== "string" || !text.trim()) return null;
+  if (source === "hermes") return hermesFatalKind(text.trim());
+  if (source === "reactNative") return reactNativeFatalKind(text.trim());
+  return "unknown";
+}
+
 const NATIVE_CALL = /^Calling the '([A-Za-z_$][\w$]{0,60})' function has failed$/;
 
 export function errorMessage(error: unknown): string {
@@ -110,10 +161,33 @@ const V8_FRAME = /^\s*at (?:(.*?) \((.*?)\)|(.*?))\s*$/;
 const JSC_FRAME = /^\s*(.*?)@(.*?)\s*$/;
 const LOCATION = /^(.*?)(?::(\d+))?(?::(\d+))?$/;
 
-export function parseStack(stack: unknown, limit = 50): ExceptionFrame[] {
+const HEADERLESS_FRAME = /^\s*at |^[^@\n]*@(?:\S+:\d+(?::\d+)?|\[native code\])\s*$/;
+
+function stackFrames(error: unknown, keep: (file: string) => boolean): ExceptionFrame[] {
+  if (!error || typeof error !== "object") return [];
+  const { stack, name, message } = error as { stack?: unknown; name?: unknown; message?: unknown };
+  if (typeof stack !== "string") return [];
+  const kind = name === undefined ? "Error" : String(name);
+  const text = typeof message === "string" ? message : "";
+  const headers = [kind && text ? `${kind}: ${text}` : "", text, kind].filter(Boolean);
+  const header = headers.find((h) => stack.startsWith(h) && (stack.length === h.length || stack[h.length] === "\n"));
+  if (header !== undefined) return parseStack(stack.slice(header.length), 50, keep);
+  return HEADERLESS_FRAME.test(stack.split("\n", 1)[0]!) ? parseStack(stack, 50, keep) : [];
+}
+
+const ARDIA_CODE = /^(?:native|(?:[^\s()?#:]*\/)?(?:InternalBytecode\.js|main\.jsbundle|index\.windows\.bundle|index\.bundle)|http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\/index\.bundle(?:\/\/&|\?)[^\s()\/]*|chrome:\/\/ardia\/[\w./-]+\.js)$/;
+const CODE_FUNCTION = /^(?:async |new )?[\w$.<>#:-]+(?: \[as [\w$]+\])?$/;
+
+export function errorFrames(error: unknown): ExceptionFrame[] {
+  return stackFrames(error, (file) => ARDIA_CODE.test(file)).map((frame) => (CODE_FUNCTION.test(frame.function) ? frame : { ...frame, function: "<anonymous>" }));
+}
+
+export function parseStack(stack: unknown, limit = 50, keep: (file: string) => boolean = () => true): ExceptionFrame[] {
   if (typeof stack !== "string") return [];
   const frames: ExceptionFrame[] = [];
-  for (const line of stack.split("\n")) {
+  const lines = stack.split("\n");
+  const v8Style = lines.some((line) => V8_FRAME.test(line));
+  for (const line of lines) {
     let fn: string | undefined;
     let location: string | undefined;
     const v8 = V8_FRAME.exec(line);
@@ -121,11 +195,12 @@ export function parseStack(stack: unknown, limit = 50): ExceptionFrame[] {
       if (v8[2] !== undefined) [fn, location] = [v8[1], v8[2]];
       else location = v8[3];
     } else {
-      const jsc = JSC_FRAME.exec(line);
+      const jsc = v8Style ? null : JSC_FRAME.exec(line);
       if (!jsc || !jsc[2]) continue;
       [fn, location] = [jsc[1], jsc[2]];
     }
     const loc = LOCATION.exec((location ?? "").replace(/^address at /, "")) ?? [];
+    if (!keep((loc[1] ?? "").trim())) continue;
     const filename = frameFile(loc[1]);
     frames.push({
       platform: "custom",
@@ -146,7 +221,7 @@ export function parseStack(stack: unknown, limit = 50): ExceptionFrame[] {
 export type NativeFrame = { image: string; symbol?: string; symbolOffset?: number; offset?: number };
 export type NativeImage = { name: string; uuid: string };
 
-const OUR_IMAGES = /^(Ardia|ArdiaCore|ArdiaShell|Chromium Framework|Expo|ExpoModulesCore|React|hermes|RCT|Sparkle)/;
+const OUR_IMAGES = /^(Ardia|ArdiaCore|ArdiaShell|Chromium Framework|Expo|ExpoModulesCore|React|hermes|RCT|Sparkle|chrome$|chrome_crashpad_handler$|lib(?:EGL|GLESv2|vk_swiftshader|vulkan|qt5_shim|qt6_shim)\.so)/;
 const STRIPPED_EXPORT = /^(?:ArdiaCoreMain|ChromeMain|ChromeWebAppShortcutCopierMain|ac_[a-z0-9_]+)$/;
 const NEAREST_EXPORT_DISTANCE = 0x4000;
 
@@ -183,14 +258,14 @@ export function nativeFrames(frames: NativeFrame[], limit = 64): ExceptionFrame[
   }).reverse();
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const IMAGE_ID = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{40})$/;
 
 export function nativeImages(images: unknown, limit = 24): NativeImage[] {
   if (!Array.isArray(images)) return [];
   return images.flatMap((i: Partial<NativeImage>) => {
     const uuid = typeof i?.uuid === "string" ? i.uuid.toLowerCase() : "";
     const name = nativeImageName(i?.name);
-    return UUID.test(uuid) && OUR_IMAGES.test(name) ? [{ name, uuid }] : [];
+    return IMAGE_ID.test(uuid) && OUR_IMAGES.test(name) ? [{ name, uuid }] : [];
   }).slice(0, limit);
 }
 
@@ -226,10 +301,17 @@ export const nativeCrashTermination = (namespace: string | undefined) => (namesp
 type PropertyValue = string | number | boolean | null;
 
 const WEBUI_PAGE_KEY = /(?:^|_)webui_page$/;
-export const WEBUI_PAGE_VALUE = /^[a-z0-9-]{1,32}(?:\/[a-z0-9-]{1,32})?$/;
+const WEBUI_PAGES_KEY = /(?:^|_)webui_pages$/;
+const WEBUI_PAGE_NAME = "[a-z0-9-]{1,32}(?:/[a-z0-9-]{1,32})?";
+export const WEBUI_PAGE_VALUE = new RegExp(`^${WEBUI_PAGE_NAME}$`);
+const WEBUI_PAGES_VALUE = new RegExp(`^${WEBUI_PAGE_NAME}:\\d{1,6}(?:,${WEBUI_PAGE_NAME}:\\d{1,6}){0,2}$`);
 
 function scrubWebuiPage(value: string): string {
   return WEBUI_PAGE_VALUE.test(value) ? value : scrubText(value, 64);
+}
+
+function scrubWebuiPages(value: string): string {
+  return WEBUI_PAGES_VALUE.test(value) ? value : scrubText(value, 64);
 }
 
 export function cleanProperties(props: Record<string, unknown>): Record<string, PropertyValue> {
@@ -239,7 +321,9 @@ export function cleanProperties(props: Record<string, unknown>): Record<string, 
     if (value === null || typeof value === "boolean") out[key] = value;
     else if (typeof value === "number") {
       if (Number.isFinite(value)) out[key] = value;
-    } else if (typeof value === "string") out[key] = WEBUI_PAGE_KEY.test(key) ? scrubWebuiPage(value) : scrubText(value, 64);
+    } else if (typeof value === "string") {
+      out[key] = WEBUI_PAGE_KEY.test(key) ? scrubWebuiPage(value) : WEBUI_PAGES_KEY.test(key) ? scrubWebuiPages(value) : scrubText(value, 64);
+    }
   }
   return out;
 }

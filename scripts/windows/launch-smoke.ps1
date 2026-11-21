@@ -2,7 +2,7 @@ param(
   [Parameter(Mandatory = $true)][string]$App,
   [Parameter(Mandatory = $true)][string]$Out,
   [int]$Seconds = 25,
-  [int]$SelfCheckSeconds = 120,
+  [int]$SelfCheckSeconds = 300,
   [switch]$NoInput,
   [ValidateSet("all", "launch", "gate")][string]$Part = "all"
 )
@@ -55,6 +55,8 @@ public static class ArdiaInput {
   [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr window);
   [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(Point point);
   [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr window, uint flags);
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
   [DllImport("user32.dll", EntryPoint = "PostMessageW")] public static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
   [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassName(IntPtr window, System.Text.StringBuilder name, int size);
   [DllImport("user32.dll", EntryPoint = "SendMessageTimeoutW")] public static extern IntPtr SendMessageTimeout(IntPtr window, uint message, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
@@ -114,6 +116,39 @@ function Send-Click([int]$X, [int]$Y) {
   Start-Sleep -Milliseconds 60
   [ArdiaInput]::mouse_event(4, 0, 0, 0, [UIntPtr]::Zero)
   Start-Sleep -Milliseconds 250
+}
+
+function Send-PeekClick([System.Diagnostics.Process]$Process, [int]$X, [int]$Y, [int[]]$Page) {
+  $Process.Refresh()
+  if ($Process.MainWindowHandle -eq [IntPtr]::Zero) { return "the app has no main window" }
+  $owner = 0
+  foreach ($attempt in 1..5) {
+    [ArdiaInput]::SetForegroundWindow($Process.MainWindowHandle) | Out-Null
+    Start-Sleep -Milliseconds 200
+    [ArdiaInput]::GetWindowThreadProcessId([ArdiaInput]::GetForegroundWindow(), [ref]$owner) | Out-Null
+    if ($owner -eq $Process.Id) { break }
+  }
+  if ($owner -ne $Process.Id) { return "the foreground window belongs to process $owner, not the app ($($Process.Id))" }
+  $point = New-Object ArdiaInput+Point
+  $point.X = $X
+  $point.Y = $Y
+  $hit = [ArdiaInput]::GetAncestor([ArdiaInput]::WindowFromPoint($point), 2)
+  $hitOwner = 0
+  [ArdiaInput]::GetWindowThreadProcessId($hit, [ref]$hitOwner) | Out-Null
+  $rect = Get-HandleRect $hit
+  $class = New-Object System.Text.StringBuilder 256
+  [ArdiaInput]::GetClassName($hit, $class, 256) | Out-Null
+  $where = if ($rect) { "$($rect.Left),$($rect.Top),$($rect.Right - $rect.Left),$($rect.Bottom - $rect.Top)" } else { "no rect" }
+  $isPage = $hit -ne [IntPtr]::Zero -and $hit -ne $Process.MainWindowHandle -and $hitOwner -eq $Process.Id -and $rect -and [Math]::Abs($rect.Left - $Page[0]) -le 1 -and [Math]::Abs($rect.Top - $Page[1]) -le 1 -and [Math]::Abs(($rect.Right - $rect.Left) - $Page[2]) -le 1 -and [Math]::Abs(($rect.Bottom - $rect.Top) - $Page[3]) -le 1
+  if (-not $isPage) { return "($X, $Y) hits $($class.ToString()) at $where in process $hitOwner, not the page window at $($Page -join ',')" }
+  [ArdiaInput]::keybd_event(0x10, 0, 0, [UIntPtr]::Zero)
+  try {
+    Start-Sleep -Milliseconds 60
+    Send-Click $X $Y
+  } finally {
+    [ArdiaInput]::keybd_event(0x10, 0, 2, [UIntPtr]::Zero)
+  }
+  return ""
 }
 
 function Send-Drag([int]$X, [int]$Y, [int]$ByX, [int]$ByY, [int]$Hold = 150) {
@@ -448,6 +483,22 @@ param([int]$Port, [string]$Log)
 $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $Port)
 $listener.Start()
 $held = [System.Collections.Generic.List[object]]::new()
+$rate = 8000
+$count = $rate * 2
+$wav = [byte[]]::new(44 + 2 * $count)
+[System.Text.Encoding]::ASCII.GetBytes("RIFF").CopyTo($wav, 0)
+[BitConverter]::GetBytes([int](36 + 2 * $count)).CopyTo($wav, 4)
+[System.Text.Encoding]::ASCII.GetBytes("WAVEfmt ").CopyTo($wav, 8)
+[BitConverter]::GetBytes([int]16).CopyTo($wav, 16)
+[BitConverter]::GetBytes([int16]1).CopyTo($wav, 20)
+[BitConverter]::GetBytes([int16]1).CopyTo($wav, 22)
+[BitConverter]::GetBytes([int]$rate).CopyTo($wav, 24)
+[BitConverter]::GetBytes([int](2 * $rate)).CopyTo($wav, 28)
+[BitConverter]::GetBytes([int16]2).CopyTo($wav, 32)
+[BitConverter]::GetBytes([int16]16).CopyTo($wav, 34)
+[System.Text.Encoding]::ASCII.GetBytes("data").CopyTo($wav, 36)
+[BitConverter]::GetBytes([int](2 * $count)).CopyTo($wav, 40)
+for ($i = 0; $i -lt $count; $i++) { [BitConverter]::GetBytes([int16]([Math]::Sin($i * 0.345) * 3000)).CopyTo($wav, 44 + 2 * $i) }
 while ($true) {
   $client = $listener.AcceptTcpClient()
   $keep = $false
@@ -474,6 +525,25 @@ while ($true) {
       $keep = $true
       continue
     }
+    if (($path -replace '\?.*$', '') -eq "/tone.wav") {
+      $head = [System.Text.Encoding]::ASCII.GetBytes("HTTP/1.1 200 OK`r`nContent-Type: audio/wav`r`nContent-Length: $($wav.Length)`r`nConnection: close`r`n`r`n")
+      $stream.Write($head, 0, $head.Length)
+      $stream.Write($wav, 0, $wav.Length)
+      $stream.Flush()
+      continue
+    }
+    if (($path -replace '\?.*$', '') -eq "/clobber") {
+      $first = [System.Text.Encoding]::UTF8.GetBytes("<!doctype html><meta charset=utf-8><title>clobber page</title><div id=ardiaAutoplayGuard></div>")
+      $rest = [System.Text.Encoding]::UTF8.GetBytes("<video id=m src='/tone.wav' autoplay muted loop></video><script>window.tries = ['attribute'];</script>")
+      $head = [System.Text.Encoding]::ASCII.GetBytes("HTTP/1.1 200 OK`r`nContent-Type: text/html; charset=utf-8`r`nContent-Length: $($first.Length + $rest.Length)`r`nConnection: close`r`n`r`n")
+      $stream.Write($head, 0, $head.Length)
+      $stream.Write($first, 0, $first.Length)
+      $stream.Flush()
+      Start-Sleep -Milliseconds 1000
+      $stream.Write($rest, 0, $rest.Length)
+      $stream.Flush()
+      continue
+    }
     if (($path -replace '\?.*$', '') -eq "/download.bin") {
       $file = [System.Text.Encoding]::ASCII.GetBytes("ardia blank check")
       $head = [System.Text.Encoding]::ASCII.GetBytes("HTTP/1.1 200 OK`r`nContent-Type: application/octet-stream`r`nContent-Disposition: attachment; filename=ardia-blank-check.bin`r`nContent-Length: $($file.Length)`r`nConnection: close`r`n`r`n")
@@ -482,11 +552,12 @@ while ($true) {
       $stream.Flush()
       continue
     }
-    $name = @{ "/a" = "a"; "/b" = "b"; "/hover" = "hover"; "/sleep" = "sleep"; "/links" = "links"; "/drag" = "drag"; "/event/hovered" = "event"; "/event/left" = "event"; "/event/pressed" = "event"; "/event/selected" = "event"; "/event/released" = "event"; "/event/dragstart" = "event"; "/event/fullscreen" = "event"; "/event/windowed" = "event"; "/event/local-state-start" = "event"; "/event/local-state-stop" = "event" }[$($path -replace '\?.*$', '')]
+    $name = @{ "/a" = "a"; "/b" = "b"; "/field" = "field"; "/opener" = "opener"; "/hover" = "hover"; "/sleep" = "sleep"; "/links" = "links"; "/drag" = "drag"; "/media" = "media"; "/framed" = "framed"; "/event/hovered" = "event"; "/event/left" = "event"; "/event/pressed" = "event"; "/event/selected" = "event"; "/event/released" = "event"; "/event/dragstart" = "event"; "/event/fullscreen" = "event"; "/event/windowed" = "event"; "/event/local-state-start" = "event"; "/event/local-state-stop" = "event" }[$($path -replace '\?.*$', '')]
     $status = if ($name -eq "event") { "204 No Content" } elseif ($name) { "200 OK" } else { "404 Not Found" }
-    $text = if ($name -eq "event") { "" } elseif ($name -eq "links") { "<!doctype html><meta charset=utf-8><title>links page</title><style>body{margin:0}a{position:absolute;left:10px;width:200px;height:40px;display:block;background:#ddd}</style><a id=peek style='top:10px' href='/a'>peek</a><a id=blank style='top:70px' target=_blank href='/b'>blank</a><a id=app style='top:130px' href='ardia-sleep-check-link:woke'>app</a>" } elseif ($name -eq "sleep") { "<!doctype html><meta charset=utf-8><title>sleep page</title><body style='margin:0;height:6000px'><input id=field></body>" } elseif ($name -eq "drag") { "<!doctype html><meta charset=utf-8><title>drag page</title><style>body{margin:0;font:18px sans-serif}#words{position:absolute;left:40px;top:120px;width:560px;margin:0}#link{position:absolute;left:40px;top:240px}#full{position:absolute;left:40px;top:320px;width:160px;height:40px}</style><p id=words>Plain words to select by dragging across them, plain words to select by dragging across them.</p><a id=link href='/a'>a link to drag</a><button id=full>full screen</button><script>const report = (name) => fetch('/event/' + name); addEventListener('mousedown', () => report('pressed')); addEventListener('mouseup', () => report(getSelection().toString().length > 0 ? 'selected' : 'released')); addEventListener('dragstart', () => report('dragstart')); document.getElementById('full').addEventListener('click', (event) => { event.stopPropagation(); document.documentElement.requestFullscreen(); }); addEventListener('fullscreenchange', () => report(document.fullscreenElement ? 'fullscreen' : 'windowed'));</script>" } elseif ($name -eq "hover") { "<!doctype html><meta charset=utf-8><title>ready</title><style>body{margin:0}#strip{height:160px;background:#ddd}</style><div id=strip>hover strip</div><script>const strip = document.getElementById('strip'); strip.addEventListener('mouseenter', () => { document.title = 'hovered'; fetch('/event/hovered'); }); strip.addEventListener('mouseleave', () => { document.title = 'left'; fetch('/event/left'); });</script>" } elseif ($name) { "<!doctype html><meta charset=utf-8><p>cached page $name</p><script>addEventListener('pageshow', (event) => { document.title = (event.persisted ? 'restored ' : 'loaded ') + '$name'; });</script>" } else { "" }
+    $text = if ($name -eq "event") { "" } elseif ($name -eq "links") { "<!doctype html><meta charset=utf-8><title>links page</title><style>body{margin:0}a{position:absolute;left:10px;width:200px;height:40px;display:block;background:#ddd}</style><a id=peek style='top:10px' href='/a'>peek</a><a id=blank style='top:70px' target=_blank href='/b'>blank</a><a id=app style='top:130px' href='ardia-sleep-check-link:woke'>app</a><script>window.downs = 0; window.restored = false; window.lastClick = null; addEventListener('pointerdown', (event) => { if (event.isTrusted) downs++; }, true); addEventListener('pageshow', (event) => { restored = event.persisted; }); addEventListener('mouseup', (event) => { lastClick = { up: true, clicked: false, prevented: false, shift: event.shiftKey, alt: event.altKey }; }, true); addEventListener('click', (event) => { if (lastClick) { lastClick.clicked = true; lastClick.prevented = event.defaultPrevented; } });</script>" } elseif ($name -eq "opener") { "<!doctype html><meta charset=utf-8><title>opener page</title><style>body{margin:0}#open{position:absolute;left:0;top:0;width:100%;height:100%;font:24px sans-serif}</style><button id=open>open a pop-up</button><script>document.getElementById('open').addEventListener('click', () => window.open('/field', 'snapcheck', 'popup,width=560,height=420'));</script>" } elseif ($name -eq "field") { "<!doctype html><meta charset=utf-8><title>field page</title><style>body{margin:0}#field{position:absolute;left:0;top:0;width:100%;height:100%;border:0;font:24px sans-serif}</style><input id=field><script>const field = document.getElementById('field'); field.addEventListener('input', () => fetch('/event/typed?' + encodeURIComponent(field.value)));</script>" } elseif ($name -eq "sleep") { "<!doctype html><meta charset=utf-8><title>sleep page</title><body style='margin:0;height:6000px'><input id=field></body>" } elseif ($name -eq "drag") { "<!doctype html><meta charset=utf-8><title>drag page</title><style>body{margin:0;font:18px sans-serif}#words{position:absolute;left:40px;top:120px;width:560px;margin:0}#link{position:absolute;left:40px;top:240px}#full{position:absolute;left:40px;top:320px;width:160px;height:40px}</style><p id=words>Plain words to select by dragging across them, plain words to select by dragging across them.</p><a id=link href='/a'>a link to drag</a><button id=full>full screen</button><script>const report = (name) => fetch('/event/' + name); addEventListener('mousedown', () => report('pressed')); addEventListener('mouseup', () => report(getSelection().toString().length > 0 ? 'selected' : 'released')); addEventListener('dragstart', () => report('dragstart')); document.getElementById('full').addEventListener('click', (event) => { event.stopPropagation(); document.documentElement.requestFullscreen(); }); addEventListener('fullscreenchange', () => report(document.fullscreenElement ? 'fullscreen' : 'windowed'));</script>" } elseif ($name -eq "media") { "<!doctype html><meta charset=utf-8><title>media page</title><style>body{margin:0}#m{width:160px;height:90px}#go{position:absolute;left:0;top:100px;width:200px;height:60px}#next{position:absolute;left:0;top:170px;width:200px;height:30px;display:block;background:#ddd}</style><video id=m src='/tone.wav' loop></video><button id=go>play</button><a id=next href='/media?second'>next</a><script>const m = document.getElementById('m'); if (location.search.includes('muted')) m.muted = true; window.tries = []; const attempt = () => m.play().then(() => 'played', (error) => error.name).then((result) => tries.push(result)); if (location.search.includes('auto')) attempt(); const burst = () => { for (let i = 0; i < 25; i++) new Audio().play().catch(() => {}); }; if (location.search.includes('burst')) burst(); if (location.search.includes('again')) addEventListener('pageshow', (event) => { if (event.persisted) burst(); }); if (location.search.includes('session')) navigator.mediaSession.setActionHandler('play', () => attempt()); if (location.search.includes('touchplay')) addEventListener('pointerdown', (event) => { if (event.pointerType === 'touch') attempt(); }); document.getElementById('go').addEventListener('click', attempt); addEventListener('message', (event) => { if (event.data === 'play-muted') { m.muted = true; attempt(); } if (event.data === 'play-again') attempt(); }); if (parent !== window) setInterval(() => parent.postMessage({ paused: m.paused, time: m.currentTime, tries, active: !!(navigator.userActivation && navigator.userActivation.hasBeenActive) }, '*'), 200);</script>" } elseif ($name -eq "framed") { "<!doctype html><meta charset=utf-8><title>framed page</title><style>body{margin:0}iframe{width:280px;height:200px;border:0}</style><body><script>window.frameState = null; window.restored = false; addEventListener('message', (event) => { frameState = event.data; }); window.showPlay = null; addEventListener('pageshow', (event) => { restored = event.persisted; const shows = Number(sessionStorage.getItem('ardia-shows') || 0) + 1; sessionStorage.setItem('ardia-shows', String(shows)); if (shows > 1 && location.search.includes('showplay')) Object.assign(document.createElement('video'), { muted: true, loop: true, src: '/tone.wav' }).play().then(() => 'played', (error) => error.name).then((result) => { showPlay = result; }); }); if (location.search.includes('burst')) for (let i = 0; i < 25; i++) new Audio().play().catch(() => {}); const frame = document.createElement('iframe'); frame.allow = 'autoplay'; frame.src = (location.search.includes('same') ? location.origin : 'http://localhost:$Port') + '/media' + (location.search.includes('burst') ? '?again' : location.search.includes('quiet') ? '' : '?auto-muted'); document.body.append(frame);</script>" } elseif ($name -eq "hover") { "<!doctype html><meta charset=utf-8><title>ready</title><style>body{margin:0}#strip{height:160px;background:#ddd}</style><div id=strip>hover strip</div><script>const strip = document.getElementById('strip'); strip.addEventListener('mouseenter', () => { document.title = 'hovered'; fetch('/event/hovered'); }); strip.addEventListener('mouseleave', () => { document.title = 'left'; fetch('/event/left'); });</script>" } elseif ($name) { "<!doctype html><meta charset=utf-8><p>cached page $name</p><script>addEventListener('pageshow', (event) => { document.title = (event.persisted ? 'restored ' : 'loaded ') + '$name'; });</script>" } else { "" }
     $body = [System.Text.Encoding]::UTF8.GetBytes($text)
-    $head = [System.Text.Encoding]::ASCII.GetBytes("HTTP/1.1 $status`r`nContent-Type: text/html; charset=utf-8`r`nContent-Length: $($body.Length)`r`nConnection: close`r`n`r`n")
+    $policy = if ($name -eq "links" -and $path -match '\?sandboxed') { "Content-Security-Policy: sandbox allow-scripts allow-popups`r`n" } else { "" }
+    $head = [System.Text.Encoding]::ASCII.GetBytes("HTTP/1.1 $status`r`nContent-Type: text/html; charset=utf-8`r`n$($policy)Content-Length: $($body.Length)`r`nConnection: close`r`n`r`n")
     $stream.Write($head, 0, $head.Length)
     $stream.Write($body, 0, $body.Length)
     $stream.Flush()
@@ -536,6 +607,95 @@ elseif (Select-String -Path $browserLog -Pattern "^(js-error|fatal|error) " -Qui
   $failures += "the launch with onboarding done has errors"
 }
 elseif (-not (Select-String -Path $browserLog -Pattern "\[ardia windows\] first window" -Quiet)) { $failures += "the browser window never rendered with onboarding done" }
+
+function Start-PlacementRun([string]$Name) {
+  $runLog = Join-Path $Out "placement-$Name.log"
+  Remove-Item -Force -ErrorAction SilentlyContinue $runLog
+  $run = Start-Process -FilePath $App -ArgumentList "--log-file=`"$runLog`"" -PassThru
+  $by = (Get-Date).AddSeconds(40)
+  while ((Get-Date) -lt $by -and -not $run.HasExited) {
+    $run.Refresh()
+    if ($run.MainWindowHandle -ne [IntPtr]::Zero -and (Test-Path $runLog) -and (Select-String -Path $runLog -Pattern "\[ardia windows\] first window" -Quiet)) { break }
+    Start-Sleep -Milliseconds 300
+  }
+  Start-Sleep -Seconds 3
+  $run.Refresh()
+  return [pscustomobject]@{ Process = $run; Log = $runLog; Handle = $run.MainWindowHandle }
+}
+
+function Stop-PlacementRun($Run, [string]$What) {
+  if ($Run.Process.HasExited) { return @("placement: the app had exited before $What") }
+  [ArdiaInput]::PostMessage($Run.Handle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
+  if ($Run.Process.WaitForExit(20000)) { return @() }
+  Stop-Process -Id $Run.Process.Id -Force -ErrorAction SilentlyContinue
+  $Run.Process.WaitForExit(10000) | Out-Null
+  return @("placement: closing the last window did not quit the app within 20 s ($What)")
+}
+
+function Test-RectNear($Rect, $Expected, [string]$What) {
+  if (-not $Rect) { return @("placement: no window to measure $What") }
+  $got = "$($Rect.Left),$($Rect.Top) $($Rect.Right - $Rect.Left)x$($Rect.Bottom - $Rect.Top)"
+  $want = "$($Expected.Left),$($Expected.Top) $($Expected.Right - $Expected.Left)x$($Expected.Bottom - $Expected.Top)"
+  $near = [Math]::Abs($Rect.Left - $Expected.Left) -le 4 -and [Math]::Abs($Rect.Top - $Expected.Top) -le 4 -and [Math]::Abs($Rect.Right - $Expected.Right) -le 4 -and [Math]::Abs($Rect.Bottom - $Expected.Bottom) -le 4
+  if ($near) { Write-Host "Placement: $What came back at $got."; return @() }
+  return @("placement: $What came back at $got, not $want")
+}
+
+function Test-WindowPlacementKept {
+  $env:ARDIA_DATA_DIR = New-DataDirectory "placement-data"
+  Set-Content -Path (Join-Path $env:ARDIA_DATA_DIR "onboarding.json") -Value '{"completedAt":1700000000000,"version":1}' -Encoding utf8NoBOM
+  $notes = @()
+  $first = Start-PlacementRun "first"
+  if ($first.Handle -eq [IntPtr]::Zero) { Stop-Process -Id $first.Process.Id -Force -ErrorAction SilentlyContinue; return @("placement: the first run showed no window") }
+  $work = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+  $placeWidth = [int]($work.Width * 0.7)
+  $placeHeight = [int]($work.Height * 0.7)
+  $placeX = $work.X + [int](($work.Width - $placeWidth) / 3)
+  $placeY = $work.Y + [int](($work.Height - $placeHeight) / 3)
+  Write-Host "Placement: the work area is $($work.Width)x$($work.Height); the window goes to $placeX,$placeY ${placeWidth}x$placeHeight."
+  [ArdiaInput]::SetWindowPos($first.Handle, [IntPtr]::Zero, $placeX, $placeY, $placeWidth, $placeHeight, 0x0014) | Out-Null
+  Start-Sleep -Milliseconds 800
+  $placed = Get-WindowRect $first.Process
+  [ArdiaInput]::ShowWindow($first.Handle, 3) | Out-Null
+  Start-Sleep -Milliseconds 1200
+  if (-not [ArdiaInput]::IsZoomed($first.Handle)) { $notes += "placement: the window did not maximize before the app quit" }
+  Save-Screenshot (Join-Path $Out "placement-before-quit.png")
+  $notes += @(Stop-PlacementRun $first "the maximized run")
+  $saved = Join-Path $env:ARDIA_DATA_DIR "window-placement.txt"
+  if (Test-Path $saved) { Write-Host "Placement: the app saved '$((Get-Content -Raw $saved).Trim())' as the last window placement." }
+  else { $notes += "placement: the app saved no window-placement.txt when it quit" }
+
+  $second = Start-PlacementRun "maximized"
+  Save-Screenshot (Join-Path $Out "placement-relaunched-maximized.png")
+  $how = Get-LastLogLine $second.Log "^window \d+ (placed |opened \S+ maximized)"
+  Write-Host "Placement: the relaunch logged '$how'."
+  if ($second.Handle -eq [IntPtr]::Zero) { $notes += "placement: the relaunch showed no window" }
+  elseif (-not [ArdiaInput]::IsZoomed($second.Handle)) { $notes += "placement: a window maximized when the app quit came back not maximized ($(Get-WindowRect $second.Process | ForEach-Object { "$($_.Left),$($_.Top) $($_.Right - $_.Left)x$($_.Bottom - $_.Top)" }))" }
+  else {
+    Write-Host "Placement: a window maximized when the app quit came back maximized."
+    [ArdiaInput]::ShowWindow($second.Handle, 9) | Out-Null
+    Start-Sleep -Milliseconds 1200
+    $notes += @(Test-RectNear (Get-WindowRect $second.Process) $placed "the maximized window, restored,")
+  }
+  $notes += @(Stop-PlacementRun $second "the restored run")
+
+  $third = Start-PlacementRun "restored"
+  Save-Screenshot (Join-Path $Out "placement-relaunched-restored.png")
+  if ($third.Handle -eq [IntPtr]::Zero) { $notes += "placement: the third run showed no window" }
+  elseif ([ArdiaInput]::IsZoomed($third.Handle)) { $notes += "placement: a window restored before the app quit came back maximized" }
+  else { $notes += @(Test-RectNear (Get-WindowRect $third.Process) $placed "a window left restored") }
+  $notes += @(Stop-PlacementRun $third "the last run")
+  foreach ($name in "first", "maximized", "restored") {
+    $runLog = Join-Path $Out "placement-$name.log"
+    if ((Test-Path $runLog) -and (Select-String -Path $runLog -Pattern "^(js-error|fatal|error) " -Quiet)) {
+      Select-String -Path $runLog -Pattern "^(js-error|fatal|error) " | ForEach-Object { Write-Host $_.Line }
+      $notes += "placement: the $name run logged errors"
+    }
+  }
+  return $notes
+}
+
+if (-not $NoInput) { Test-WindowPlacementKept | ForEach-Object { $failures += $_ } }
 
 function Get-PageEvents {
   if (-not (Test-Path -LiteralPath $httpPagesLog)) { return @() }
@@ -785,7 +945,7 @@ $edgeLog = Join-Path $Out "top-edge.log"
 $env:ARDIA_DATA_DIR = New-DataDirectory "top-edge-data"
 $env:ARDIA_CONFIG_DIR = $env:ARDIA_DATA_DIR
 Set-Content -Path (Join-Path $env:ARDIA_DATA_DIR "onboarding.json") -Value '{"completedAt":1700000000000,"version":1}' -Encoding utf8NoBOM
-Set-Content -Path (Join-Path $env:ARDIA_DATA_DIR "config.json") -Value '{"settings":{"minimalismMode":true,"sidebarSide":"right","openLinksInLittleArdia":false}}' -Encoding utf8NoBOM
+Set-Content -Path (Join-Path $env:ARDIA_DATA_DIR "config.json") -Value '{"settings":{"minimalismMode":true,"sidebarSide":"right","openLinksInLittleArdia":false,"developerModeSites":{"127.0.0.1":false}}}' -Encoding utf8NoBOM
 if ($withEngineForEdge -and -not $NoInput -and $httpPagesUp) {
   $edge = Start-Process -FilePath $App -ArgumentList "--log-file=`"$edgeLog`"", "http://127.0.0.1:$httpPagesPort/hover" -PassThru
   $env:ARDIA_CONFIG_DIR = ""
@@ -806,7 +966,7 @@ if ($withEngineForEdge -and -not $NoInput -and $httpPagesUp) {
 $env:ARDIA_CONFIG_DIR = ""
 
 if ($Part -ne "gate" -and $withEngineForEdge -and -not $NoInput -and $httpPagesUp) {
-  foreach ($layout in @(@{ Name = "sidebar-left"; Settings = '{"settings":{"openLinksInLittleArdia":false}}' }, @{ Name = "minimal-right"; Settings = '{"settings":{"minimalismMode":true,"sidebarSide":"right","openLinksInLittleArdia":false}}' })) {
+  foreach ($layout in @(@{ Name = "sidebar-left"; Settings = '{"settings":{"openLinksInLittleArdia":false}}' }, @{ Name = "minimal-right"; Settings = '{"settings":{"minimalismMode":true,"sidebarSide":"right","openLinksInLittleArdia":false,"developerModeSites":{"127.0.0.1":false}}}' })) {
     $dragLog = Join-Path $Out "page-drag-$($layout.Name).log"
     $env:ARDIA_DATA_DIR = New-DataDirectory "page-drag-$($layout.Name)-data"
     $env:ARDIA_CONFIG_DIR = $env:ARDIA_DATA_DIR
@@ -835,6 +995,370 @@ if ($Part -ne "gate" -and $withEngineForEdge -and -not $NoInput -and $httpPagesU
   }
 }
 $env:ARDIA_CONFIG_DIR = ""
+
+if ($Part -ne "gate" -and $withEngineForEdge -and -not $NoInput -and $httpPagesUp) {
+  if (-not ([System.Management.Automation.PSTypeName]"ArdiaSnapKeys").Type) {
+    Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+
+public static class ArdiaSnapKeys {
+  [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left, Top, Right, Bottom; }
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr window, uint command);
+  [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] public static extern IntPtr GetWindowLongPtr(IntPtr window, int index);
+  [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr window, int attribute, out Rect rect, int size);
+}
+"@
+  }
+
+  function Get-SnapDescription([IntPtr]$Window) {
+    if ($Window -eq [IntPtr]::Zero) { return "none" }
+    $class = New-Object System.Text.StringBuilder 256
+    [ArdiaInput]::GetClassName($Window, $class, 256) | Out-Null
+    $style = [ArdiaSnapKeys]::GetWindowLongPtr($Window, -16).ToInt64()
+    $extended = [ArdiaSnapKeys]::GetWindowLongPtr($Window, -20).ToInt64()
+    return "$($class.ToString()) (style 0x$($style.ToString('X8')), extended 0x$($extended.ToString('X8')))"
+  }
+
+  function Get-SnapBounds([IntPtr]$Window) {
+    $rect = New-Object ArdiaSnapKeys+Rect
+    if ([ArdiaSnapKeys]::DwmGetWindowAttribute($Window, 9, [ref]$rect, 16) -ne 0) { return $null }
+    return $rect
+  }
+
+  function Send-WindowsArrow([byte]$Arrow) {
+    [ArdiaInput]::keybd_event(0x5B, 0, 1, [UIntPtr]::Zero)
+    Start-Sleep -Milliseconds 80
+    [ArdiaInput]::keybd_event($Arrow, 0, 1, [UIntPtr]::Zero)
+    Start-Sleep -Milliseconds 60
+    [ArdiaInput]::keybd_event($Arrow, 0, 3, [UIntPtr]::Zero)
+    Start-Sleep -Milliseconds 80
+    [ArdiaInput]::keybd_event(0x5B, 0, 3, [UIntPtr]::Zero)
+    Start-Sleep -Milliseconds 1500
+  }
+
+  function Set-SnapHome([IntPtr]$Handle, $Work) {
+    [ArdiaInput]::ShowWindow($Handle, 9) | Out-Null
+    Start-Sleep -Milliseconds 600
+    [ArdiaInput]::SetWindowPos($Handle, [IntPtr]::Zero, $Work.X + 60, $Work.Y + 40, [Math]::Min(960, $Work.Width - 120), [Math]::Min(620, $Work.Height - 80), 0x0014) | Out-Null
+    Start-Sleep -Milliseconds 900
+  }
+
+  function Set-SnapFocus([System.Diagnostics.Process]$Process, [string]$Where) {
+    $handle = $Process.MainWindowHandle
+    [ArdiaInput]::SetForegroundWindow($handle) | Out-Null
+    Start-Sleep -Milliseconds 300
+    $client = Get-ClientArea $Process
+    if (-not $client) { return }
+    if ($Where -eq "page") { Send-Click ($client.X + [int]($client.Width * 0.7)) ($client.Y + [int]($client.Height * 0.65)) }
+    else { Send-Click ($client.X + [int](24 * $client.Scale)) ($client.Y + [int]($client.Height * 0.62)) }
+    Start-Sleep -Milliseconds 500
+  }
+
+  function Test-SnapFocusHeld([IntPtr]$Handle, [string]$Where) {
+    $foreground = [ArdiaSnapKeys]::GetForegroundWindow()
+    $class = New-Object System.Text.StringBuilder 256
+    [ArdiaInput]::GetClassName($foreground, $class, 256) | Out-Null
+    if ($Where -eq "page") { return $class.ToString().StartsWith("Chrome_") -and [ArdiaSnapKeys]::GetWindow($foreground, 4) -eq $Handle }
+    return $foreground -eq $Handle
+  }
+
+  function Get-KeyboardPlace([IntPtr]$Handle) {
+    $foreground = [ArdiaSnapKeys]::GetForegroundWindow()
+    if (Test-SnapFocusHeld $Handle "page") { return "the page" }
+    if ($foreground -eq $Handle) { return "the app window" }
+    return "another window, $(Get-SnapDescription $foreground)"
+  }
+
+  function Send-HeldWindowsKeys([byte[]]$Keys) {
+    [ArdiaInput]::keybd_event(0x5B, 0, 1, [UIntPtr]::Zero)
+    Start-Sleep -Milliseconds 300
+    foreach ($key in $Keys) {
+      $extended = if ($key -ge 0x25 -and $key -le 0x28) { 1 } else { 0 }
+      [ArdiaInput]::keybd_event($key, 0, $extended, [UIntPtr]::Zero)
+      Start-Sleep -Milliseconds 60
+      [ArdiaInput]::keybd_event($key, 0, $extended + 2, [UIntPtr]::Zero)
+      Start-Sleep -Milliseconds 300
+    }
+    [ArdiaInput]::keybd_event(0x5B, 0, 3, [UIntPtr]::Zero)
+    Start-Sleep -Milliseconds 1500
+  }
+
+  function Test-SnapKeys([System.Diagnostics.Process]$Process, [string]$Where, [string]$Label = $Where, [switch]$Held) {
+    $handle = $Process.MainWindowHandle
+    if ($handle -eq [IntPtr]::Zero) { return @("snap keys ($Label): the window never showed") }
+    $work = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+    $failures = @()
+    $steps = @(
+      @{ Name = "Win+Up"; Arrow = 0x26; Home = $true; Want = "maximized" },
+      @{ Name = "Win+Down"; Arrow = 0x28; Home = $false; Want = "restored" },
+      @{ Name = "Win+Down again"; Arrow = 0x28; Home = $false; Want = "minimized" },
+      @{ Name = "Win+Left"; Arrow = 0x25; Home = $true; Want = "left half" },
+      @{ Name = "Win+Right"; Arrow = 0x27; Home = $true; Want = "right half" }
+    )
+    $start = $null
+    foreach ($step in $steps) {
+      if ($step.Home) {
+        Set-SnapHome $handle $work
+        Set-SnapFocus $Process $Where
+      }
+      if (-not $start) { $start = Get-SnapBounds $handle }
+      $foreground = Get-SnapDescription ([ArdiaSnapKeys]::GetForegroundWindow())
+      if (-not (Test-SnapFocusHeld $handle $Where)) {
+        $how = if ($step.Home) { "after a click there" } else { "kept from the step before, without a new click" }
+        $failures += "snap keys ($Label): before $($step.Name) the keyboard was not in the $Where ($how); the foreground window was $foreground"
+        Write-Host "Snap keys ($Label): before $($step.Name) the foreground window was $foreground, not the $Where; the step is skipped."
+        continue
+      }
+      $before = Get-SnapBounds $handle
+      if ($Held) { Send-HeldWindowsKeys @([byte]$step.Arrow) } else { Send-WindowsArrow ([byte]$step.Arrow) }
+      $zoomed = [ArdiaInput]::IsZoomed($handle)
+      $iconic = [ArdiaInput]::IsIconic($handle)
+      $after = Get-SnapBounds $handle
+      Save-Screenshot (Join-Path $Out "snap-keys-$Where-$($step.Name -replace '[ +]', '-').png")
+      $place = if ($after) { "$($after.Left),$($after.Top),$($after.Right),$($after.Bottom)" } else { "unknown" }
+      $was = if ($before) { "$($before.Left),$($before.Top),$($before.Right),$($before.Bottom)" } else { "unknown" }
+      $half = [int]($work.Width / 2)
+      $near = { param($a, $b) [Math]::Abs($a - $b) -le 16 }
+      $got = switch ($step.Want) {
+        "maximized" { $zoomed }
+        "restored" { -not $zoomed -and -not $iconic -and $after -and $start -and (& $near $after.Left $start.Left) -and (& $near $after.Top $start.Top) -and (& $near $after.Right $start.Right) -and (& $near $after.Bottom $start.Bottom) }
+        "minimized" { $iconic }
+        "left half" { $after -and -not $iconic -and (& $near $after.Left $work.Left) -and (& $near $after.Right ($work.Left + $half)) -and (& $near $after.Top $work.Top) -and (& $near $after.Bottom $work.Bottom) }
+        "right half" { $after -and -not $iconic -and (& $near $after.Left ($work.Left + $half)) -and (& $near $after.Right $work.Right) -and (& $near $after.Top $work.Top) -and (& $near $after.Bottom $work.Bottom) }
+      }
+      Write-Host "Snap keys ($Label): $($step.Name) with the foreground window $foreground; the window was at $was and is at $place (maximized $zoomed, minimized $iconic; the work area is $($work.Left),$($work.Top),$($work.Right),$($work.Bottom)); wanted $($step.Want): $got."
+      if (-not $got) { $failures += "snap keys ($Label): $($step.Name) did not leave the window $($step.Want) (maximized $zoomed, minimized $iconic, at $place; the foreground window was $foreground)" }
+      if ($step.Arrow -eq 0x25 -or $step.Arrow -eq 0x27) {
+        [ArdiaInput]::keybd_event(0x1B, 0, 0, [UIntPtr]::Zero)
+        [ArdiaInput]::keybd_event(0x1B, 0, 2, [UIntPtr]::Zero)
+        Start-Sleep -Milliseconds 400
+      }
+      $place = Get-KeyboardPlace $handle
+      Write-Host "Snap keys ($Label): after $($step.Name) the keyboard is in $place."
+      if ($Held -and $Where -eq "page" -and $step.Want -ne "minimized" -and $place -ne "the page") { $failures += "snap keys ($Label): after $($step.Name) the keyboard was not back in the page (it is in $place)" }
+    }
+    Set-SnapHome $handle $work
+    return $failures
+  }
+
+  function Get-SnapChain([System.Diagnostics.Process]$Process, [string]$Where, [string]$Label) {
+    $handle = $Process.MainWindowHandle
+    $work = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+    Set-SnapHome $handle $work
+    Set-SnapFocus $Process $Where
+    $ready = Test-SnapFocusHeld $handle $Where
+    Send-HeldWindowsKeys @([byte]0x25, [byte]0x26)
+    $bounds = Get-SnapBounds $handle
+    $zoomed = [ArdiaInput]::IsZoomed($handle)
+    $iconic = [ArdiaInput]::IsIconic($handle)
+    Save-Screenshot (Join-Path $Out "snap-keys-$($Label -replace '[ ,+]', '-')-chain.png")
+    [ArdiaInput]::keybd_event(0x1B, 0, 0, [UIntPtr]::Zero)
+    [ArdiaInput]::keybd_event(0x1B, 0, 2, [UIntPtr]::Zero)
+    Start-Sleep -Milliseconds 600
+    $place = Get-KeyboardPlace $handle
+    $at = if ($bounds) { "$($bounds.Left),$($bounds.Top),$($bounds.Right),$($bounds.Bottom)" } else { "unknown" }
+    Write-Host "Snap keys ($Label): Win+Left then Up in one Windows key press, the keyboard in the $Where first ($ready): the window is at $at (maximized $zoomed, minimized $iconic); after Escape the keyboard is in $place."
+    Set-SnapHome $handle $work
+    return @{ Ready = $ready; Bounds = $bounds; Zoomed = $zoomed; Iconic = $iconic; Place = $place }
+  }
+
+  function Test-SnapChainLike($Chain, $Control, [string]$Label) {
+    if (-not $Control -or -not $Control.Bounds) { return @("snap keys ($Label): the sidebar's Win+Left then Up gave nothing to compare with") }
+    if (-not $Chain.Ready) { return @("snap keys ($Label): the keyboard was not in the page before Win+Left then Up") }
+    $near = { param($a, $b) [Math]::Abs($a - $b) -le 16 }
+    $same = $Chain.Bounds -and $Chain.Zoomed -eq $Control.Zoomed -and $Chain.Iconic -eq $Control.Iconic -and (& $near $Chain.Bounds.Left $Control.Bounds.Left) -and (& $near $Chain.Bounds.Top $Control.Bounds.Top) -and (& $near $Chain.Bounds.Right $Control.Bounds.Right) -and (& $near $Chain.Bounds.Bottom $Control.Bounds.Bottom)
+    if ($same) { return @() }
+    $got = if ($Chain.Bounds) { "$($Chain.Bounds.Left),$($Chain.Bounds.Top),$($Chain.Bounds.Right),$($Chain.Bounds.Bottom)" } else { "unknown" }
+    $want = "$($Control.Bounds.Left),$($Control.Bounds.Top),$($Control.Bounds.Right),$($Control.Bounds.Bottom)"
+    return @("snap keys ($Label): Win+Left then Up in one Windows key press left the window at $got, not where the sidebar's left it ($want)")
+  }
+
+  function Test-HeldFieldKeys([System.Diagnostics.Process]$Process, [string]$Label, [string[]]$Letters) {
+    $handle = $Process.MainWindowHandle
+    $work = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+    Set-SnapHome $handle $work
+    Set-SnapFocus $Process "page"
+    $failures = @()
+    $typed = ""
+    $presses = @(@{ Name = "Win+V"; Key = 0x56 }, @{ Name = "Win+."; Key = 0xBE }, @{ Name = "a Windows key tap"; Key = 0 })
+    for ($index = 0; $index -lt $presses.Count; $index++) {
+      $press = $presses[$index]
+      $before = Get-KeyboardPlace $handle
+      if ($press.Key) { Send-HeldWindowsKeys @([byte]$press.Key) }
+      else {
+        [ArdiaInput]::keybd_event(0x5B, 0, 1, [UIntPtr]::Zero)
+        Start-Sleep -Milliseconds 100
+        [ArdiaInput]::keybd_event(0x5B, 0, 3, [UIntPtr]::Zero)
+        Start-Sleep -Milliseconds 1500
+      }
+      $shown = Get-SnapDescription ([ArdiaSnapKeys]::GetForegroundWindow())
+      [ArdiaInput]::keybd_event(0x1B, 0, 0, [UIntPtr]::Zero)
+      [ArdiaInput]::keybd_event(0x1B, 0, 2, [UIntPtr]::Zero)
+      Start-Sleep -Milliseconds 1000
+      $place = Get-KeyboardPlace $handle
+      $typed += $Letters[$index]
+      Send-Text $Letters[$index]
+      Start-Sleep -Milliseconds 800
+      $reached = (Test-Path $httpPagesLog) -and @(Select-String -Path $httpPagesLog -SimpleMatch "/event/typed?$typed").Count -gt 0
+      Write-Host "Snap keys ($Label): $($press.Name) from the page's text box: before it the keyboard was in $before; with it pressed the foreground window was $shown; after Escape the keyboard is in $place; typing reached the text box: $reached."
+      if (-not $reached) { $failures += "snap keys ($Label): after $($press.Name) and Escape typing did not reach the page's text box (the keyboard is in $place)" }
+    }
+    Set-SnapHome $handle $work
+    return $failures
+  }
+
+  function Test-PopupSnapKeys([System.Diagnostics.Process]$Process) {
+    $handle = $Process.MainWindowHandle
+    Set-SnapHome $handle ([System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea)
+    Set-SnapFocus $Process "page"
+    Start-Sleep -Seconds 3
+    $popupPage = [ArdiaSnapKeys]::GetForegroundWindow()
+    $popup = [ArdiaSnapKeys]::GetWindow($popupPage, 4)
+    $class = New-Object System.Text.StringBuilder 256
+    [ArdiaInput]::GetClassName($popupPage, $class, 256) | Out-Null
+    if (-not $class.ToString().StartsWith("Chrome_") -or $popup -eq [IntPtr]::Zero -or $popup -eq $handle) {
+      Write-Host "Snap keys (pop-up page): no pop-up window's page came to the front (the foreground window is $(Get-SnapDescription $popupPage)), so the pop-up step is not checked."
+      return @()
+    }
+    $box = Get-SnapBounds $popupPage
+    if ($box) { Send-Click ([int](($box.Left + $box.Right) / 2)) ([int](($box.Top + $box.Bottom) / 2)) }
+    Start-Sleep -Milliseconds 500
+    $ready = [ArdiaSnapKeys]::GetForegroundWindow() -eq $popupPage
+    $before = Get-SnapBounds $popup
+    Send-HeldWindowsKeys @([byte]0x26)
+    $after = Get-SnapBounds $popup
+    $front = [ArdiaSnapKeys]::GetForegroundWindow()
+    Send-Text "w"
+    Start-Sleep -Milliseconds 800
+    $reached = (Test-Path $httpPagesLog) -and @(Select-String -Path $httpPagesLog -SimpleMatch "/event/typed?w").Count -gt 0
+    $was = if ($before) { "$($before.Left),$($before.Top),$($before.Right),$($before.Bottom)" } else { "unknown" }
+    $now = if ($after) { "$($after.Left),$($after.Top),$($after.Right),$($after.Bottom)" } else { "unknown" }
+    $kept = $front -eq $popupPage
+    Write-Host "Snap keys (pop-up page): the keyboard in the pop-up's page first ($ready); after Win+Up with the Windows key held the pop-up was at $was and is at $now, the foreground window is $(Get-SnapDescription $front) (the pop-up's page: $kept), typing reached its text box: $reached."
+    Send-Chord @([byte]0x11) ([byte]0x57)
+    if (-not $ready) { return @("snap keys (pop-up page): the keyboard was not in the pop-up's page after a click there") }
+    $failures = @()
+    if (-not $before -or -not $after) { $failures += "snap keys (pop-up page): the pop-up window's position could not be read before and after Win+Up (before $was, after $now)" }
+    elseif ($was -ne $now) { $failures += "snap keys (pop-up page): Win+Up moved the pop-up window from $was to $now" }
+    if (-not ($kept -and $reached)) { $failures += "snap keys (pop-up page): after Win+Up the pop-up's page lost the keyboard (the foreground window is $(Get-SnapDescription $front); typing reached it: $reached)" }
+    return $failures
+  }
+
+  Enable-WindowSnapping
+  $snapLog = Join-Path $Out "snap-keys.log"
+  $env:ARDIA_DATA_DIR = New-DataDirectory "snap-keys-data"
+  $env:ARDIA_CONFIG_DIR = $env:ARDIA_DATA_DIR
+  Set-Content -Path (Join-Path $env:ARDIA_DATA_DIR "onboarding.json") -Value '{"completedAt":1700000000000,"version":1}' -Encoding utf8NoBOM
+  Set-Content -Path (Join-Path $env:ARDIA_DATA_DIR "config.json") -Value '{"settings":{"openLinksInLittleArdia":false}}' -Encoding utf8NoBOM
+  $snapApp = Start-Process -FilePath $App -ArgumentList "--log-file=`"$snapLog`"", "http://127.0.0.1:$httpPagesPort/a" -PassThru
+  $env:ARDIA_CONFIG_DIR = ""
+  try {
+    Start-Sleep -Seconds 12
+    if ($snapApp.HasExited) { $failures += "snap keys: the app exited on its own (exit code $($snapApp.ExitCode))" }
+    else {
+      $snapApp.Refresh()
+      Test-SnapKeys $snapApp "sidebar" | ForEach-Object { $failures += $_ }
+      Test-SnapKeys $snapApp "page" | ForEach-Object { $failures += $_ }
+      if (Test-Path $snapLog) { Select-String -Path $snapLog -Pattern "snap keys" | ForEach-Object { Write-Host "Snap keys log: $($_.Line)" } }
+    }
+  } finally {
+    if (-not $snapApp.HasExited) {
+      Stop-Process -Id $snapApp.Id -Force
+      $snapApp.WaitForExit(10000) | Out-Null
+    }
+  }
+  $heldLog = Join-Path $Out "snap-keys-held.log"
+  $env:ARDIA_DATA_DIR = New-DataDirectory "snap-keys-held-data"
+  $env:ARDIA_CONFIG_DIR = $env:ARDIA_DATA_DIR
+  Set-Content -Path (Join-Path $env:ARDIA_DATA_DIR "onboarding.json") -Value '{"completedAt":1700000000000,"version":1}' -Encoding utf8NoBOM
+  Set-Content -Path (Join-Path $env:ARDIA_DATA_DIR "config.json") -Value '{"settings":{"openLinksInLittleArdia":false}}' -Encoding utf8NoBOM
+  $heldApp = Start-Process -FilePath $App -ArgumentList "--log-file=`"$heldLog`"", "http://127.0.0.1:$httpPagesPort/field" -PassThru
+  $env:ARDIA_CONFIG_DIR = ""
+  try {
+    Start-Sleep -Seconds 12
+    if ($heldApp.HasExited) { $failures += "snap keys (Windows key held): the app exited on its own (exit code $($heldApp.ExitCode))" }
+    else {
+      $heldApp.Refresh()
+      Test-SnapKeys $heldApp "sidebar" "sidebar, Windows key held" -Held | ForEach-Object { $failures += $_ }
+      $chainControl = Get-SnapChain $heldApp "sidebar" "sidebar, Windows key held"
+      Test-SnapKeys $heldApp "page" "page, Windows key held" -Held | ForEach-Object { $failures += $_ }
+      $chain = Get-SnapChain $heldApp "page" "page, Windows key held"
+      Test-SnapChainLike $chain $chainControl "page, Windows key held" | ForEach-Object { $failures += $_ }
+      if ($chain.Place -ne "the page") { $failures += "snap keys (page, Windows key held): after Win+Left then Up and Escape the keyboard was not back in the page (it is in $($chain.Place))" }
+      Test-HeldFieldKeys $heldApp "page, Windows key held" @("k", "j", "q") | ForEach-Object { $failures += $_ }
+      if (Test-Path $heldLog) { Select-String -Path $heldLog -Pattern "snap keys" | ForEach-Object { Write-Host "Snap keys log (Windows key held): $($_.Line)" } }
+    }
+  } finally {
+    if (-not $heldApp.HasExited) {
+      Stop-Process -Id $heldApp.Id -Force
+      $heldApp.WaitForExit(10000) | Out-Null
+    }
+  }
+  $popupLog = Join-Path $Out "snap-keys-popup.log"
+  $env:ARDIA_DATA_DIR = New-DataDirectory "snap-keys-popup-data"
+  $env:ARDIA_CONFIG_DIR = $env:ARDIA_DATA_DIR
+  Set-Content -Path (Join-Path $env:ARDIA_DATA_DIR "onboarding.json") -Value '{"completedAt":1700000000000,"version":1}' -Encoding utf8NoBOM
+  Set-Content -Path (Join-Path $env:ARDIA_DATA_DIR "config.json") -Value '{"settings":{"openLinksInLittleArdia":false}}' -Encoding utf8NoBOM
+  $popupApp = Start-Process -FilePath $App -ArgumentList "--log-file=`"$popupLog`"", "http://127.0.0.1:$httpPagesPort/opener" -PassThru
+  $env:ARDIA_CONFIG_DIR = ""
+  try {
+    Start-Sleep -Seconds 12
+    if ($popupApp.HasExited) { $failures += "snap keys (pop-up page): the app exited on its own (exit code $($popupApp.ExitCode))" }
+    else {
+      $popupApp.Refresh()
+      Test-PopupSnapKeys $popupApp | ForEach-Object { $failures += $_ }
+      if (Test-Path $popupLog) { Select-String -Path $popupLog -Pattern "snap keys" | ForEach-Object { Write-Host "Snap keys log (pop-up page): $($_.Line)" } }
+    }
+  } finally {
+    if (-not $popupApp.HasExited) {
+      Stop-Process -Id $popupApp.Id -Force
+      $popupApp.WaitForExit(10000) | Out-Null
+    }
+  }
+  $env:ARDIA_CONFIG_DIR = ""
+}
+
+if ($Part -ne "gate" -and $withEngineForEdge -and -not $NoInput -and $httpPagesUp) {
+  $peekLog = Join-Path $Out "self-check-linkPeeks.log"
+  $env:ARDIA_DATA_DIR = New-DataDirectory "link-peeks-data"
+  $env:ARDIA_TEST = "selfCheckStage=linkPeeks,httpPages=$httpPagesPort"
+  $peekRun = Start-Process -FilePath $App -ArgumentList "--self-check", "--log-file=`"$peekLog`"" -PassThru
+  $env:ARDIA_TEST = ""
+  $clicked = @{}
+  $peekBy = (Get-Date).AddSeconds(240)
+  try {
+    while (-not $peekRun.HasExited -and (Get-Date) -lt $peekBy) {
+      if (Test-Path $peekLog) {
+        foreach ($ready in @(Select-String -Path $peekLog -Pattern "peek stage ready (\w+) try (\d+) at (-?\d+),(-?\d+) page window (-?\d+),(-?\d+),(\d+),(\d+)")) {
+          $groups = $ready.Matches[0].Groups
+          $try = "$($groups[1].Value) try $($groups[2].Value)"
+          if ($clicked.ContainsKey($try)) { continue }
+          $clicked[$try] = $true
+          $miss = Send-PeekClick $peekRun ([int]$groups[3].Value) ([int]$groups[4].Value) @([int]$groups[5].Value, [int]$groups[6].Value, [int]$groups[7].Value, [int]$groups[8].Value)
+          if ($miss) { Write-Host "Link peeks: $($try): not clicked, $miss." }
+          else { Write-Host "Link peeks: $($try): a real Shift+click on the page window." }
+        }
+      }
+      Start-Sleep -Milliseconds 200
+    }
+    if (-not $peekRun.HasExited) { $failures += "link peeks (real input): the stage did not finish within 240 s" }
+    elseif (-not (Test-Path $peekLog)) { $failures += "link peeks (real input): the stage wrote no log" }
+    else {
+      Select-String -Path $peekLog -Pattern "self-check" | ForEach-Object { Write-Host $_.Line }
+      $peekDone = Select-String -Path $peekLog -Pattern "self-check done: (\d+) passed, (\d+) failed" | Select-Object -First 1
+      if (-not $peekDone) { $failures += "link peeks (real input): the stage never reported its result" }
+      elseif ([int]$peekDone.Matches[0].Groups[2].Value -gt 0 -or [int]$peekDone.Matches[0].Groups[1].Value -ne 3) { $failures += "link peeks (real input): $($peekDone.Line)" }
+    }
+  } finally {
+    [ArdiaInput]::keybd_event(0x10, 0, 2, [UIntPtr]::Zero)
+    if (-not $peekRun.HasExited) {
+      Stop-Process -Id $peekRun.Id -Force
+      $peekRun.WaitForExit(10000) | Out-Null
+    }
+  }
+}
 
 $env:ARDIA_DATA_DIR = New-DataDirectory "self-check-data"
 $importFixtures = Join-Path $env:ARDIA_DATA_DIR "import-fixtures"

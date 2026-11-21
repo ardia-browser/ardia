@@ -2,14 +2,14 @@ import { lastAwakeTab } from "./awakeMru";
 import type { BrowserState } from "../browser/store";
 import { leaveGroups } from "../groups/groups";
 import { withShownTab } from "../groups/shownTabs";
-import { IDLE_LIVE, inPinnedContainer, makeTab, navigationTo, TILE_PIN, viewTabIds, without } from "../browser/model";
+import { inPinnedContainer, makeTab, navigationTo, newId, TILE_PIN, viewTabIds, without } from "../browser/model";
 import { closeSuccessor, forgetOpeners, insertionIndex } from "./openers";
 import { onUrlChange, pruneSelection } from "../pins/organize";
 import { isClosedPin } from "../pins/tabCleanup";
 import { adoptedPage, ASLEEP, frozenOn, hasOwnOrSharedPage, hasPage, isAsleep, isLazy, loadedPage, needsPage, withWake, wokenPage } from "./pageSession";
 import { isPeekTab, peekSourceOf, withoutPeek } from "../peek/peek";
 import { resolveTyped } from "../settings/settings";
-import { leavesEmptyWindow } from "../omnibox/newTabBarPolicy";
+import { isEmptyCardTab, leavesEmptyWindow } from "../omnibox/newTabBarPolicy";
 import { holderOf, withSharedFamily } from "../pins/pinShare";
 import { removeFromSplits, splitOf, splitTabIdsOf, withPinnedPanes } from "../splits/splits";
 import { closedTabEntry, MAX_CLOSED_TABS } from "../pins/closedTabs";
@@ -62,7 +62,7 @@ export function closeIntent(s: BrowserState, tabId: string): CloseIntent {
 }
 
 const isTopApp = (t: Tab | undefined) => t?.pin?.as === "tile";
-const keptWithTopApp = (s: BrowserState, id: string) => inPinnedContainer(s, id) && withPinnedPanes(s, [id]).some((pane) => isTopApp(s.tabs[pane]));
+export const keptWithTopApp = (s: BrowserState, id: string) => inPinnedContainer(s, id) && withPinnedPanes(s, [id]).some((pane) => isTopApp(s.tabs[pane]));
 const runningKept = (s: BrowserState, id: string) => keptWithTopApp(s, id) && hasOwnOrSharedPage(s.tabs[id]!);
 
 function withoutTopApps(s: BrowserState, ids: string[]): string[] {
@@ -87,7 +87,7 @@ export function closingTabs(s: BrowserState, ids: string[], { lastClosesWindow =
     const shown = view.filter((id) => goneIds.has(id));
     const keptRunning = keepTopApps && view.some((id) => !goneIds.has(id) && runningKept(next, id));
     if (!shown.length || !view.every((id) => goneIds.has(id) || isAsleep(next.tabs[id]) || (keptRunning && keptWithTopApp(next, id)))) continue;
-    const keepsWindow = keptRunning || !lastClosesWindow || leavesEmptyWindow(shown.length > 1 ? removeTabs(next, shown.slice(1), false) : next, shown[0]!);
+    const keepsWindow = (keptRunning && !shown.every((id) => isEmptyCardTab(next, next.tabs[id]))) || !lastClosesWindow || leavesEmptyWindow(shown.length > 1 ? removeTabs(next, shown.slice(1), false) : next, shown[0]!);
     if (keepsWindow) next = withNewTab(next, w.id)[0];
     else closedWindows.add(w.id);
   }
@@ -140,10 +140,11 @@ export function removeTabs(s: BrowserState, ids: string[], record: boolean): Bro
   for (const w of Object.values(s.windows)) {
     if (!w.tabIds.some((id) => gone.has(id))) continue;
     if (record) {
+      const closeBatch = gone.size > 1 ? newId("batch") : undefined;
       w.tabIds.forEach((id, index) => {
         const t = s.tabs[id];
         if (!t || !gone.has(id) || (!t.url && !t.pin)) return;
-        closed.push({ ...closedTabEntry(s, t, { windowId: w.id, index }, now), ...(w.kind === "small" ? { small: true } : {}) });
+        closed.push({ ...closedTabEntry(s, t, { windowId: w.id, index }, now), ...(closeBatch ? { closeBatch } : {}), ...(w.kind === "small" ? { small: true } : {}) });
       });
     }
     const tabIds = w.tabIds.filter((id) => !gone.has(id));
@@ -171,7 +172,6 @@ export function removeTabs(s: BrowserState, ids: string[], record: boolean): Bro
     windows,
     windowOrder: removedWindows.length ? s.windowOrder.filter((id) => !removedWindows.includes(id)) : s.windowOrder,
     windowUi: removedWindows.length ? without(s.windowUi, removedWindows) : s.windowUi,
-    live: without(s.live, gone),
     find: without(s.find, gone),
     groups: leaveGroups(s.groups, gone),
     splits: removeFromSplits(s.splits, gone),
@@ -217,7 +217,6 @@ export function unloadPinnedTabs(s: BrowserState, requested: string[], keepTopAp
   const runningInFront = (id: string) => withPinnedPanes(s, [id]).some((pane) => isTopApp(s.tabs[pane]) && hasPage(s.tabs[pane]!));
   const now = Date.now();
   const tabs = { ...s.tabs };
-  const live = { ...s.live };
   const closed: ClosedTab[] = [];
   for (const id of unloading) {
     const t = s.tabs[id]!;
@@ -229,12 +228,10 @@ export function unloadPinnedTabs(s: BrowserState, requested: string[], keepTopAp
     const back = backToPin(s, t);
     const pending = !back.url && pendingRestore(t) ? restoreId(pendingRestore(t)!) : undefined;
     tabs[id] = { ...t, ...back, page: withWake(ASLEEP, pending) };
-    live[id] = IDLE_LIVE;
   }
   let next: BrowserState = {
     ...s,
     tabs,
-    live,
     find: without(s.find, unloaded),
     splits: removeFromSplits(s.splits, new Set([...gone].filter((id) => !splitTabIdsOf(splitOf(s, id))?.every((pane) => gone.has(pane))))),
     selection: pruneSelection(s.selection, gone),
@@ -265,10 +262,10 @@ function backToPin(s: BrowserState, t: Tab): Partial<Tab> {
 }
 
 export function withNewTab(s: BrowserState, windowId: string, o: NewTabOptions = {}): [BrowserState, string] {
-  if (o.openerId && !o.background) s = forgetOpeners(s, windowId);
   const w = s.windows[windowId];
   if (!w) return [s, ""];
   const profileId = w.kind === "private" ? w.profileId : o.profileId && s.profiles[o.profileId] ? o.profileId : w.profileId;
+  if (o.openerId && !o.background) s = forgetOpeners(s, windowId, profileId);
   const url = o.url ? resolveTyped(s.settings, o.url) : "";
   const tab = makeTab(windowId, profileId, url, { ...o.snapshot, pin: o.pinned === false ? null : (o.snapshot?.pin ?? (o.pinned ? TILE_PIN : null)) });
   if (tab.page.kind === "loaded" && !o.snapshot) tab.page = loadedPage(navigationTo(url, !o.replaced));
@@ -290,7 +287,6 @@ export function withNewTab(s: BrowserState, windowId: string, o: NewTabOptions =
   let next: BrowserState = {
     ...s,
     tabs,
-    live: { ...s.live, [tab.id]: IDLE_LIVE },
     windows: { ...s.windows, [windowId]: window },
   };
   if (!o.background) next = apply(next, activated(next, tab.id));

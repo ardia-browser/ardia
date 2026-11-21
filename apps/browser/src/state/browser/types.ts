@@ -19,6 +19,7 @@ export type Profile = {
   pinnedCollapsed?: boolean;
   shareTopApps?: true;
   syncTabs?: true;
+  passwordManager?: string;
 };
 
 type WindowBase = {
@@ -29,7 +30,10 @@ type WindowBase = {
   tabLayout?: "sidebar" | "top";
   autoHideTabs?: boolean;
   frame: Frame | null;
+  restoredFrame?: Frame;
+  maximized?: boolean;
   fullScreen?: number;
+  display?: string;
   createdAt: number;
 };
 
@@ -152,6 +156,7 @@ export type ClosedTab = {
   tab: TabSnapshot;
   tabId?: string;
   restoreFrom?: string;
+  closeBatch?: string;
   windowId: string;
   index: number;
   group: ClosedGroupInfo | null;
@@ -164,7 +169,7 @@ export type ClosedTab = {
 export type ClosedWindow = {
   kind: "window";
   id: string;
-  window: Pick<BrowserWindow, "profileId" | "frame" | "tabLayout" | "autoHideTabs">;
+  window: Pick<BrowserWindow, "profileId" | "frame" | "restoredFrame" | "maximized" | "tabLayout" | "autoHideTabs">;
   tabs: (TabSnapshot & { active: boolean; tabId?: string })[];
   groups: (Omit<TabGroup, "tabIds" | "windowId" | "shownTabIds"> & { tabIndexes: number[] })[];
   splits?: Pick<SplitView, "orientation" | "slots">[];

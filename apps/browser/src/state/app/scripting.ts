@@ -6,12 +6,13 @@ import { JAVASCRIPT_FROM_APPLE_EVENTS_REFUSED, runsJavaScript } from "../setting
 import { webviews } from "../../platform/webviews";
 import { errorText } from "../../lib/errors";
 import { changedIds } from "../browser/changes";
+import { onLiveChange, shownLiveOf } from "../tabs/tabLive";
 
 const STRUCTURE_DELAY_MS = 100;
 const TITLE_DELAY_MS = 1000;
 const SCRIPTS_RUNNING_MS = 30_000;
 
-type Scripted = Pick<BrowserState, "tabs" | "windows" | "windowOrder" | "live" | "profiles" | "profileOrder">;
+type Scripted = Pick<BrowserState, "tabs" | "windows" | "windowOrder" | "profiles" | "profileOrder">;
 
 export function scriptChange(s: Scripted, prev: Scripted): "structure" | "titles" | null {
   if (s.windows !== prev.windows || s.windowOrder !== prev.windowOrder || s.profiles !== prev.profiles || s.profileOrder !== prev.profileOrder) return "structure";
@@ -22,7 +23,6 @@ export function scriptChange(s: Scripted, prev: Scripted): "structure" | "titles
     if (!a || !b || a.url !== b.url || !a.pin !== !b.pin || a.customTitle !== b.customTitle || a.profileId !== b.profileId || a.windowId !== b.windowId) return "structure";
     if (a.title !== b.title) titles = true;
   }
-  for (const id of changedIds(s.live, prev.live)) if (!s.live[id]?.isLoading !== !prev.live[id]?.isLoading) return "structure";
   return titles ? "titles" : null;
 }
 
@@ -42,7 +42,7 @@ export function scriptState(s: BrowserState): ScriptState {
             id: tabId,
             title: t.customTitle || t.title,
             url: t.url,
-            loading: !!s.live[tabId]?.isLoading,
+            loading: shownLiveOf(s, tabId).isLoading,
             pinned: !!t.pin };
         }) };
     }),
@@ -87,6 +87,9 @@ export function startScripting() {
   useBrowser.subscribe((s, prev) => {
     const change = scriptChange(s, prev);
     if (change) pushWithin(change === "structure" || Date.now() - scriptedAt < SCRIPTS_RUNNING_MS ? STRUCTURE_DELAY_MS : TITLE_DELAY_MS);
+  });
+  onLiveChange((_, live, prev) => {
+    if (live.isLoading !== prev.isLoading) pushWithin(STRUCTURE_DELAY_MS);
   });
   void push();
 

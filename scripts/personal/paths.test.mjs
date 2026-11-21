@@ -54,10 +54,13 @@ test("personal CLI pins its profile despite inherited official endpoints", () =>
     mkdirSync(join(scratch, "scripts/personal"), { recursive: true });
     mkdirSync(join(scratch, "apps/browser/build-personal-cli/current/bin"), { recursive: true });
     copyFileSync(join(root, "scripts/personal/ardia-personal"), launcher);
-    writeFileSync(runtime, '#!/bin/sh\nexec python3 -m ardia_cli "$@"\n');
+    writeFileSync(runtime, '#!/bin/sh\nif [ "$1" = endpoint-env ]; then printf "%s%s%s%s" "${ARDIA_WS-}" "${ARDIA_PORT-}" "${ARDIA_CDP_URL-}" "${AGENT_BROWSER_CDP-}"; exit; fi\nexec python3 -m ardia_cli "$@"\n');
     chmodSync(runtime, 0o755);
-    const environment = { ...process.env, HOME: home, PYTHONPATH: join(root, "apps/cli"), ARDIA_DATA_DIR: "/official/profile", ARDIA_CDP_URL: "ws://127.0.0.1:1/devtools/browser/official", AGENT_BROWSER_CDP: "ws://127.0.0.1:1/devtools/browser/official" };
+    const environment = { ...process.env, HOME: home, PYTHONPATH: join(root, "apps/cli"), ARDIA_DATA_DIR: "/official/profile", ARDIA_WS: "ws://127.0.0.1:1/devtools/browser/official", ARDIA_PORT: "1", ARDIA_CDP_URL: "ws://127.0.0.1:1/devtools/browser/official", AGENT_BROWSER_CDP: "ws://127.0.0.1:1/devtools/browser/official" };
     const invoke = (args) => spawnSync("sh", [launcher, ...args], { env: environment, encoding: "utf8", timeout: 10000 });
+    const inherited = invoke(["endpoint-env"]);
+    assert.equal(inherited.status, 0, inherited.stderr);
+    assert.equal(inherited.stdout, "");
     const path = invoke(["config", "path"]);
     assert.equal(path.status, 0, path.stderr);
     assert.equal(path.stdout.trim(), join(home, "Library/Application Support/dev.simon.ardia.personal/config"));

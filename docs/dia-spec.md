@@ -208,7 +208,8 @@ the same as top"), so if a Dia capture ever differs, the owner's equal insets wi
   - Hover: `TabBackgroundHovered` white 16% (dark) or white 55% (light). An `xmark` close button
     appears on the right, with its own ~22pt hover square.
   - Pressed: white 31% (dark) or 70% (light). Dia has no pressed colour for the selected tab, and no row scales or
-    bounces when pressed (2026-10-28 recording); ours matches.
+    bounces when pressed (2026-10-28 recording); ours matches. A tab row is used all day, so the owner's rule
+    (AGENTS.md, "Motion follows how often a thing is used") holds this whatever Dia does later.
   - Selected (regular): dark fill ≈ black 40% (sample `#1B1618` on `#2A1E23`), white title.
   - Audio: a `speaker.wave.2` glyph after the favicon.
 - "+ New Tab" row: label in `secondaryLabelColor` (white 0.55 dark), the `plus` in `tertiaryLabelColor` (white 0.25
@@ -243,13 +244,16 @@ corner**, the corner nearest the row.
 - Show delay: the controller sleeps **0.5 s** or **0.1 s** before presenting (a flag in the hover source picks which;
   not identified) and **0** when another card is already up. A click or key down dismisses it (local event monitor).
   The leave delay comes from the hover source's dismissal behaviour; no value in the binary. Both need a recording.
-- Ours (`components/sidebar/hoverMotion.ts`): the same curve, spring and scale, anchored at the card's top-left. Unlike Dia,
+- Ardia originally used the same curve, spring and scale, anchored at the card's top-left. Unlike Dia,
   since 2026-11-14 (#1584, #1365) it opens only after the pointer rests 0.8 s on one row (Dia: 0.5 s, then 0 for every
   next row), never moves from row to row with the pointer, leaves at once when the pointer leaves away from it (up, out
   of the far edge, or onto another row) and 160 ms after a leave toward it, and never opens for rows a peeking sidebar
   brings under the pointer during its first 0.4 s; Settings › Tabs › Show tab hover menu turns it off. Measured on the native driver's own per-frame values
   (120 Hz, a hidden instance): opacity within 0.007 of Dia's curve over its 12 frames, scale within 0.001 of the spring
   (peak 1.0022 at 180 ms, settled by 340 ms); the fade out takes 12 frames.
+- Ours since 2026-11-19 (the owner's review of 0.2.47-nightly.6): the fade only, in and out on the 0.10 s curve above,
+  with no scale spring either way, for the sidebar card, the top-strip card, live items, the calendar and the mini
+  player (`sidebar/hoverMotion.ts`). The card sits at its final size and position from the first frame.
 
 ### Opening and closing tabs (owner's 2× recording, 120 fps, 2026-10-15)
 
@@ -326,12 +330,38 @@ Clear Tabs; Clear Today"); a toast confirms the clear and offers Undo. Measured 
 pitch, about 6.3 px/pt): the line is 1 pt at about white 0.08 and starts at the favicons' left edge; it ends 7.5 pt before
 the arrow; the arrow is 7 pt wide and 8 pt tall, 3 pt from the text; "Clear" is semibold with a cap height 0.75 of the
 tab titles' (10 pt beside our 13 pt titles) and ends where the titles do; the line's centre is 25 pt above the first
-row's centre. Ours: `components/sidebar/ClearDivider.tsx`, a 14 pt row with Dia's `divider` colour and secondary text.
+row's centre. Ours: `components/sidebar/ClearDivider.tsx`, a 21 pt row with Dia's `divider` colour and secondary text.
 Dia's divider under its Pinned section (owner's 2× capture, 2026-11-09): a 1 pt line 6.5 pt under the last pinned row and
-6.5 pt above what follows (a group's box or a row), 14 pt edge to edge; ours draws the same band with no extra margins.
+6.5 pt above what follows (a group's box or a row), 14 pt edge to edge. Dia shows no labels there; ours carries the
+Pinned fold and Tidy/Clear (10 pt tiny text on a 13 pt line), so its band is the label plus 4 pt each side, keeping a hovered row's
+background off the text: 21 pt at the default Sidebar Text size, 23 pt at Large and 25 pt at Larger.
 What it closes (issue #149): the unselected unpinned tabs (`clearOthers`), keeping the selected tab and, per Arc's 2022
 release notes, tabs playing media. Dia's Close All in the sidebar does the same with the selected tab (the issue's
 recording: of three unpinned tabs, the two unselected close and the selected one stays selected).
+
+#### Press and hover feedback (2026-11-18)
+
+- **Press.** Nothing used all day bounces (AGENTS.md, "Motion follows how often a thing is used"). A sidebar row, a folder or group header, a pinned tile and a top-strip pin hold still
+  and only change colour, as in Dia (see "Pressed" above). An icon button's glyph dips to 0.96 and a pill, push or
+  text button to 0.985 on `springs.snappy`, with no overshoot. The Arc-style squish (rows to 0.975, tiles to 0.94,
+  a bounce back of about 13 %) shipped in 0.2.47-nightly.6 and was removed at the owner's request: with the row
+  scaling about its centre, a folder's icon slid 4 pt sideways and sprang back on every click. It stays reachable,
+  off by default and with no Settings row, as `pressMotion: "bounce"` in `config.json` (`docs/config.md`).
+  A New Tab card's lift and a finished live item's check mark settle on `springs.snappy` too. Since 2026-11-19,
+  pressing Reload highlights the toolbar plate while the glyph stays the same size. `springs.bouncy` stays for rare, larger moves: an unread or
+  live badge appearing, import's check mark, and the sidebar's edge springing back from a resize past its limit.
+- **Toast.** Fades in place: in over `duration.base` on `curve.enter`, out over `duration.slow` on `curve.exit`
+  (`ui/Toast.tsx`). Its 10 pt rise, 0.96 scale and `springs.bouncy` arrival were removed on 2026-11-19 (the owner's
+  review of 0.2.47-nightly.6).
+- **Hover.** A highlight lights in 50 ms and fades out over 200 ms, so the pointer leaves a short trail down a list:
+  sidebar rows, top-strip tabs and pins, icon and text buttons, settings and list rows. The pressed colour replaces
+  the hover colour at once. A row that becomes selected drops the highlight with no fade (the selected fill is
+  already there). A control with a fill of its own at rest (a pinned tile, a pill, push, stepper or close button)
+  cross-fades from that fill to the hover fill on the same timing. The ✕ on a hovered row fades in over 100 ms.
+  Menu rows and glass tiles keep their instant highlight.
+- Reduce Motion: no scale, and the highlight switches with no fade.
+- Ours: `components/ui/motion.ts` (`buttonMotion`, `hoverFade`, `usePressScaleMotion`, `useHoverFill`),
+  `ui/HoverFill.tsx` (`HoverFill`, `HoverSwap`), `ui/HoverSlot.tsx`; `ui/pressFeedback.test.mjs`.
 
 ## New Tab page
 
@@ -584,7 +614,10 @@ Implemented in `apps/browser/src/state/windows/profilePager.ts` (+ `components/w
   page changes.
 - **Wheel mice** (`nonGesturalScrollState`, `0x1005983c4`, events with no phase): scroll deltas add up while they
   come less than ~0.049 s apart; once |Σ| > 1 pt the view pages one page that way (sign flipped by
-  `isDirectionInvertedFromDevice`), then ignores wheel events for 0.25 s.
+  `isDirectionInvertedFromDevice`), then ignores wheel events for 0.25 s. Ardia does not copy the flip: AppKit has
+  already applied the device's scroll-direction setting to `scrollingDeltaX`, so a scroll left (Δx > 0) shows the
+  previous page with Natural scrolling on or off, as the trackpad path does (the flip paged a wheel with it off
+  backwards, #325).
 - `TabSidebar.PagingContainerViewController` keeps `loadedPages` / `transitionPageIDs` and schedules page cleanup:
   pages beside the current one only exist during a transition. `TabStrip.TabStripSpacePagingController` pages the
   top tab strip too (with a content fade on settle, `settleUsesContentFade`, not decoded).
@@ -879,8 +912,8 @@ right split"; the numbers are from the pixels.
   one Chrome strip command, and the tab settles into its place on the same spring, the store moving it as it lands.
   The dragged item draws over its neighbours: React Native macOS's `zIndex` sets the layer's zPosition, which AppKit
   ignores between sibling views, so `raiseView` (packages/shell) puts its view and layer last among its siblings while
-  dragged. The sidebar's rows make room and close up on the same spring, and the dropped row's ghost settles into its
-  place before the row shows. With nothing pinned, the pin target is an overlay in room the sidebar already has (the
+  dragged. The sidebar's rows part the same way (Dia's drop gap, back on 2026-11-19 after a day of Arc's insertion line,
+  below), and the dropped row's ghost settles into its place before the row shows there. With nothing pinned, the pin target is an overlay in room the sidebar already has (the
   band above the first row, or over the address field) instead of a grid that pushed every row down ~45 pt as a drag
   began and back up as it ended.
 - **In the strip** (both layouts): an item takes its neighbour's place once its leading edge passes the neighbour's
@@ -892,6 +925,35 @@ right split"; the numbers are from the pixels.
   `performWindowDrag`. The region now ignores presses that came through a view with `mouseDownCanMoveWindow` off
   (the strip's tabs, pinned tiles, splits, group chips and buttons), and the strip's icons take no hits (an image view
   under a press in an inactive window lets AppKit move the window itself).
+
+#### Arc's sidebar drop marks (Arc, the owner's 120 fps 2x recording, 2026-11-19)
+
+The insertion line below was removed the same day at the owner's request ("just make space for the tab like Dia"):
+the sidebar opens Dia's gap again. From the owner's Dia recording (`rec/dia-gap.mov`, 60 Hz updates): the dragged row
+lifts out and its slot closes; a row it passes slides into place 77 % in 17 ms, 95 % in 50 ms, still by ~83 ms
+(critically damped, ω ≈ 90, the reorder spring); a dropped row settles in ~0.12 s (88 % at 90 ms, ω ≈ 45), but ours
+lands on the reorder spring too: the softer landing read as lag. The split
+halves, the ghost and Top Apps measurements below still hold, except that a half lights only once the pointer
+rests in a row's middle (0.25 s within 4 pt): passing rows only reorders. Dia's own slot changes as the dragged
+row's leading edge passes the neighbour's resting centre (`rec/dia-smooth.mov`: the neighbour slides 65 % in 28 ms,
+89 % in 61 ms, still by ~120 ms); ours changes as the pointer passes the neighbour's centre where it is drawn, which
+keeps a row's height of hysteresis, so a pointer moving one way never flips the slot back.
+
+Measured in pixels from 2x frames (3456 × 2234), divided by 2. Rows never move during a drag: the dragged row stays
+in its place at full strength while a translucent copy follows the pointer.
+- **Insertion line**: 2 pt (4 px, no antialiasing) near-white (238/255 over a 52/255 sidebar), at the midpoint between
+  the two rows the drop lands between. An open ring at its left end: 8 pt across, 2 pt stroke, a 4 pt hole, its left
+  edge 7 pt inside the row's left edge (the row 9 … 218.5 pt, the ring 16 … 24 pt, the favicon from 19 pt); the line
+  runs from the ring to 2 pt short of the row's right edge. It jumps between slots.
+- **Split halves**: over a row's middle a lighter rounded rect covers the half under the pointer: the row's height and
+  corner radius, 97.5 pt wide on a 209.5 pt row, its inner edge 7 pt past the row's middle (so 14 pt between the
+  halves). Ardia draws it in the row's pressed fill.
+- **Top Apps**: over the tiles the copy is a tile of the grid's tile size (the grid already reflowed for it) with the
+  icon centred, under the pointer.
+- **The ghost** is see-through, with no border: one white alpha fits it over every background it crosses (sidebar
+  59 → 88, a selected row 94 → 115, a lit half 141 → 157: white at 0.15), its text at full strength (234 against the
+  rows' 212), and a soft shadow that shows only on the page. As a tile it is white at 0.40 (26/28/60 → 117/117/138, a
+  tile 44 → 125). A lit split half alone is white at 0.42 (59 → 141).
 
 ### Menus (1.50.1, menu builder `0x10000f000`–`0x10001c8f4`)
 - View: Appearance ▸ (Automatic, Light, Dark; still there although the Appearance pane is gone), Refresh ⌘R, Force

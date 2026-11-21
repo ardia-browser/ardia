@@ -18,10 +18,13 @@ export const checks: Check[] = [
       let stop = () => {};
       const reported = new Promise<MotionBurst | null>((resolve) => {
         const timer = setTimeout(() => resolve(null), BURST_LIMIT_MS);
-        stop = motion().onBurst((burst) => {
-          clearTimeout(timer);
-          resolve(burst);
-        });
+        stop = motion().onBurst(
+          (burst) => {
+            clearTimeout(timer);
+            resolve(burst);
+          },
+          () => "",
+        );
       });
       const finished = await new Promise<boolean>((resolve) => {
         Animated.timing(value, { toValue: 1, duration: FADE_MS, easing: Easing.linear, useNativeDriver: true }).start((end) => resolve(end.finished));

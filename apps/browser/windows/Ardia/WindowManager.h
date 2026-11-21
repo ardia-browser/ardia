@@ -10,6 +10,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <commctrl.h>
@@ -23,11 +24,13 @@
 #include "AppIcon.h"
 #include "Events.h"
 #include "Host.h"
+#include "InstanceLoad.h"
 #include "ModalThread.h"
 #include "LaunchLog.h"
 #include "LaunchConfig.h"
 #include "Paths.h"
 #include "WindowFade.h"
+#include "WindowPlacement.h"
 
 #pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "shcore.lib")
@@ -42,6 +45,7 @@ struct OpenWindowRequest {
   std::optional<std::array<double, 2>> size;
   bool focus{true};
   bool animated{false};
+  bool maximized{false};
   std::string focusWhenFront;
   std::string focusWhenPage;
   std::string behind;
@@ -62,6 +66,7 @@ struct ManagedWindow {
   winrt::Microsoft::UI::Input::InputNonClientPointerSource nonClient{nullptr};
   bool captionBand{false};
   bool maximized{false};
+  std::optional<std::array<double, 4>> restoredFrame;
   std::wstring installedRegions;
   std::shared_ptr<WindowFade> fade;
   std::vector<std::function<void()>> exits;
@@ -218,9 +223,9 @@ struct WindowManager {
 
       Configure(entry, request);
       ApplyTheme(entry, m_dark);
-      Place(entry, request);
+      bool maximize = Place(entry, request);
       Watch(entry);
-      Mount(entry);
+      if (InstanceLoad::Shared().loaded) Mount(entry);
       ConnectNonClientInput(entry);
       ApplyInputRegions(entry);
 
@@ -232,10 +237,21 @@ struct WindowManager {
       auto appWindow = entry.appWindow;
       m_order.push_back(entry.id);
       auto placed = m_windows.emplace(entry.id, std::move(entry)).first;
+      if (!InstanceLoad::Shared().loaded) {
+        InstanceLoad::Shared().WhenLoaded(std::wstring(L"window ").append(Paths::Wide(placed->first)), [this, id = placed->first, window = placed->second.window]() {
+          if (ManagedWindow *found = Find(id); found && found->window == window) Mount(*found);
+        });
+      }
       if (fades) BeginEntrance(placed->second);
       bool quietPopup = !activate && placed->second.kind == "popup";
       if (quietPopup) ShowAboveOpener(hwnd, openedFrom);
-      appWindow.Show(activate);
+      if (maximize) ShowMaximized(placed->second, activate);
+      else appWindow.Show(activate);
+      if (placed->second.IsBrowser()) {
+        ReportMaximized(placed->second);
+        EmitFrame(placed->second);
+        RememberPlacement(placed->second);
+      }
       if (!activate && !request.behind.empty()) PlaceBehind(hwnd, request.behind);
       if (activate) SetForegroundWindow(hwnd);
       else if (quietPopup) {
@@ -495,7 +511,22 @@ struct WindowManager {
     });
   }
 
+  HWND TakePageLeftBySecondaryPress(HWND app, ULONGLONG withinMs) noexcept {
+    FollowSecondaryPress();
+    PageLeft left = m_pageLeftBySecondaryPress;
+    ClearPageLeftBySecondaryPress();
+    if (!app || left.app != app || !left.releasedAt || GetTickCount64() - left.releasedAt > withinMs) return nullptr;
+    return left.page;
+  }
+
  private:
+  struct PageLeft {
+    HWND app = nullptr;
+    HWND page = nullptr;
+    ULONGLONG pressedAt = 0;
+    ULONGLONG releasedAt = 0;
+  };
+
   static constexpr UINT_PTR kSubclassId = 0xA2D1A;
   static constexpr double kPopupMinWidth = 200;
   static constexpr double kPopupMinPageHeight = 150;
@@ -503,7 +534,12 @@ struct WindowManager {
   static constexpr double kPopupWidth = 500;
   static constexpr double kPopupPageHeight = 600;
   static constexpr int kEdgePollMs = 40;
+  static constexpr int kSecondaryPressPollMs = 15;
+  static constexpr ULONGLONG kSecondaryHoldLimitMs = 10000;
+  static constexpr ULONGLONG kPageLeftKeptAfterReleaseMs = 2000;
   static constexpr double kEdgeReach = 24.0;
+  static constexpr double kCascadeStep = 28.0;
+  static constexpr std::chrono::milliseconds kPlacementSaveDelay{400};
 
   struct EdgeWatch {
     double hold{0};
@@ -596,58 +632,186 @@ struct WindowManager {
     }
   }
 
-  void Place(ManagedWindow &entry, OpenWindowRequest const &request) noexcept {
+  bool Place(ManagedWindow &entry, OpenWindowRequest const &request) noexcept {
+    bool maximize = false;
     try {
-      double scale = Scale(entry.hwnd);
-      auto pixels = [scale](double points) noexcept { return static_cast<int32_t>(points * scale + 0.5); };
       if (request.frame && (*request.frame)[2] > 0 && (*request.frame)[3] > 0) {
-        auto const &frame = *request.frame;
-        double placed = PositionScale();
-        int32_t x = static_cast<int32_t>(std::lround(frame[0] * placed));
-        int32_t y = static_cast<int32_t>(std::lround(frame[1] * placed));
-        auto sized = [](double points, double by) noexcept { return static_cast<int32_t>(points * by + 0.5); };
-        double there = ScaleAt(x, y, scale);
-        there = ScaleAt(x + sized(frame[2], there) / 2, y + sized(frame[3], there) / 2, there);
-        entry.appWindow.MoveAndResize({x, y, sized(frame[2], there), sized(frame[3], there)});
-        double landed = Scale(entry.hwnd);
-        if (landed != there) entry.appWindow.MoveAndResize({x, y, sized(frame[2], landed), sized(frame[3], landed)});
-        KeepOnADisplay(entry);
-        return;
+        PlaceAt(entry, *request.frame);
+        maximize = request.maximized;
+      } else if (entry.kind != "browser" || !PlaceLikeLastBrowser(entry, maximize)) {
+        PlaceCentered(entry, request);
       }
-      double width = 1280;
-      double height = 800;
-      if (entry.kind == "settings") {
-        width = 820;
-        height = 640;
-      } else if (entry.kind == "import") {
-        width = 640;
-        height = 600;
-      } else if (entry.kind == "small") {
-        width = request.size ? (*request.size)[0] : 900;
-        height = request.size ? (*request.size)[1] : 640;
-      } else if (entry.IsPopup()) {
-        width = (std::max)(request.size ? (*request.size)[0] : kPopupWidth, kPopupMinWidth);
-        height = (std::max)(request.size ? (*request.size)[1] : kPopupPageHeight + kPopupChromeHeight, kPopupMinPageHeight + kPopupChromeHeight);
-      }
-      auto area = winrt::Microsoft::UI::Windowing::DisplayArea::GetFromWindowId(
-                      entry.appWindow.Id(), winrt::Microsoft::UI::Windowing::DisplayAreaFallback::Primary)
-                      .WorkArea();
-      int32_t pixelWidth = (std::min)(pixels(width), area.Width);
-      int32_t pixelHeight = (std::min)(pixels(height), area.Height);
-      int32_t x = area.X + (area.Width - pixelWidth) / 2;
-      int32_t y = area.Y + (area.Height - pixelHeight) / 2;
-      if (entry.kind == "browser") {
-        if (const ManagedWindow *active = Find(m_activeId); active && active->kind == "browser") {
-          auto position = active->appWindow.Position();
-          int32_t step = pixels(28);
-          x = (std::min)(position.X + step, area.X + area.Width - pixelWidth);
-          y = (std::min)(position.Y + step, area.Y + area.Height - pixelHeight);
-        }
-      }
-      entry.appWindow.MoveAndResize({x, y, pixelWidth, pixelHeight});
     } catch (...) {
       LaunchLog::Write(L"warning", L"window could not be placed");
     }
+    entry.restoredFrame = FrameOf(entry);
+    return maximize;
+  }
+
+  static void PlaceAt(ManagedWindow &entry, std::array<double, 4> const &frame) {
+    double scale = Scale(entry.hwnd);
+    double placed = PositionScale();
+    int32_t x = static_cast<int32_t>(std::lround(frame[0] * placed));
+    int32_t y = static_cast<int32_t>(std::lround(frame[1] * placed));
+    auto sized = [](double points, double by) noexcept { return static_cast<int32_t>(points * by + 0.5); };
+    double there = ScaleAt(x, y, scale);
+    there = ScaleAt(x + sized(frame[2], there) / 2, y + sized(frame[3], there) / 2, there);
+    entry.appWindow.MoveAndResize({x, y, sized(frame[2], there), sized(frame[3], there)});
+    double landed = Scale(entry.hwnd);
+    if (landed != there) entry.appWindow.MoveAndResize({x, y, sized(frame[2], landed), sized(frame[3], landed)});
+    KeepOnADisplay(entry);
+  }
+
+  bool PlaceLikeLastBrowser(ManagedWindow &entry, bool &maximize) {
+    if (const ManagedWindow *active = Find(m_activeId); active && active->kind == "browser") {
+      auto from = RestoredFrameOf(*active);
+      if (from[2] > 0 && from[3] > 0) {
+        double step = kCascadeStep * Scale(active->hwnd) / PositionScale();
+        PlaceAt(entry, {from[0] + step, from[1] + step, from[2], from[3]});
+        maximize = active->maximized;
+        LaunchLog::Write(L"window", std::wstring(L"placed ").append(Paths::Wide(entry.id)).append(L" like the window in front"));
+        return true;
+      }
+    }
+    if (auto saved = LastPlacement()) {
+      PlaceAt(entry, saved->frame);
+      maximize = saved->maximized;
+      LaunchLog::Write(L"window", std::wstring(L"placed ").append(Paths::Wide(entry.id)).append(L" where the last browser window was").append(saved->maximized ? L", maximized" : L""));
+      return true;
+    }
+    return false;
+  }
+
+  static void PlaceCentered(ManagedWindow &entry, OpenWindowRequest const &request) {
+    double scale = Scale(entry.hwnd);
+    auto pixels = [scale](double points) noexcept { return static_cast<int32_t>(points * scale + 0.5); };
+    double width = 1280;
+    double height = 800;
+    if (entry.kind == "settings") {
+      width = 820;
+      height = 640;
+    } else if (entry.kind == "import") {
+      width = 640;
+      height = 600;
+    } else if (entry.kind == "small") {
+      width = request.size ? (*request.size)[0] : 900;
+      height = request.size ? (*request.size)[1] : 640;
+    } else if (entry.IsPopup()) {
+      width = (std::max)(request.size ? (*request.size)[0] : kPopupWidth, kPopupMinWidth);
+      height = (std::max)(request.size ? (*request.size)[1] : kPopupPageHeight + kPopupChromeHeight, kPopupMinPageHeight + kPopupChromeHeight);
+    }
+    auto area = winrt::Microsoft::UI::Windowing::DisplayArea::GetFromWindowId(
+                    entry.appWindow.Id(), winrt::Microsoft::UI::Windowing::DisplayAreaFallback::Primary)
+                    .WorkArea();
+    int32_t pixelWidth = (std::min)(pixels(width), area.Width);
+    int32_t pixelHeight = (std::min)(pixels(height), area.Height);
+    int32_t x = area.X + (area.Width - pixelWidth) / 2;
+    int32_t y = area.Y + (area.Height - pixelHeight) / 2;
+    entry.appWindow.MoveAndResize({x, y, pixelWidth, pixelHeight});
+  }
+
+  void ShowMaximized(ManagedWindow &entry, bool activate) noexcept {
+    auto presenter = OverlappedOf(entry);
+    bool maximizable = false;
+    try {
+      maximizable = presenter && presenter.IsMaximizable();
+    } catch (...) {
+    }
+    if (!maximizable || Background()) {
+      entry.appWindow.Show(activate);
+      if (maximizable) LaunchLog::Write(L"window", std::wstring(L"kept ").append(Paths::Wide(entry.id)).append(L" restored: a background instance never maximizes a window, as that would take focus"));
+      return;
+    }
+    HWND front = activate ? nullptr : GetForegroundWindow();
+    ShowWindow(entry.hwnd, SW_SHOWMAXIMIZED);
+    if (front && front != entry.hwnd) {
+      SetForegroundWindow(front);
+      LaunchLog::Write(L"window", std::wstring(L"gave the foreground back after maximizing ").append(Paths::Wide(entry.id)));
+    }
+    LaunchLog::Write(L"window", std::wstring(L"opened ").append(Paths::Wide(entry.id)).append(L" maximized"));
+  }
+
+  static std::array<double, 4> RestoredFrameOf(ManagedWindow const &entry) noexcept {
+    return entry.restoredFrame.value_or(FrameOf(entry));
+  }
+
+  static bool IsRestored(ManagedWindow const &entry) noexcept {
+    auto presenter = OverlappedOf(entry);
+    try {
+      return presenter && presenter.State() == winrt::Microsoft::UI::Windowing::OverlappedPresenterState::Restored;
+    } catch (...) {
+      return false;
+    }
+  }
+
+  void EmitFrame(ManagedWindow &entry) noexcept {
+    auto frame = FrameOf(entry);
+    bool restored = IsRestored(entry);
+    if (restored && frame[2] > 0 && frame[3] > 0) entry.restoredFrame = frame;
+    else if (entry.maximized) FollowToMonitor(entry);
+    auto numbers = [](std::array<double, 4> const &values) {
+      winrt::Microsoft::ReactNative::JSValueArray list;
+      for (double value : values) list.push_back(value);
+      return list;
+    };
+    winrt::Microsoft::ReactNative::JSValueObject event;
+    event["type"] = "frame";
+    event["id"] = entry.id;
+    event["frame"] = numbers(frame);
+    if (!restored && entry.restoredFrame) event["restored"] = numbers(*entry.restoredFrame);
+    EmitWindow(std::move(event));
+  }
+
+  static void FollowToMonitor(ManagedWindow &entry) noexcept {
+    if (!entry.restoredFrame) return;
+    auto &frame = *entry.restoredFrame;
+    double placed = PositionScale();
+    POINT corner{static_cast<LONG>(std::lround(frame[0] * placed)), static_cast<LONG>(std::lround(frame[1] * placed))};
+    HMONITOR from = MonitorFromPoint(corner, MONITOR_DEFAULTTONEAREST);
+    HMONITOR to = MonitorFromWindow(entry.hwnd, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO fromInfo{};
+    MONITORINFO toInfo{};
+    fromInfo.cbSize = toInfo.cbSize = static_cast<DWORD>(sizeof(MONITORINFO));
+    if (!from || !to || from == to || !GetMonitorInfoW(from, &fromInfo) || !GetMonitorInfoW(to, &toInfo)) return;
+    double scale = ScaleOfMonitor(to, 1.0);
+    RECT const &work = toInfo.rcWork;
+    LONG workWidth = work.right - work.left;
+    LONG workHeight = work.bottom - work.top;
+    frame[2] = (std::min)(frame[2], workWidth / scale);
+    frame[3] = (std::min)(frame[3], workHeight / scale);
+    LONG width = static_cast<LONG>(std::lround(frame[2] * scale));
+    LONG height = static_cast<LONG>(std::lround(frame[3] * scale));
+    LONG x = work.left + (std::min)((std::max)(corner.x - fromInfo.rcWork.left, 0L), workWidth - width);
+    LONG y = work.top + (std::min)((std::max)(corner.y - fromInfo.rcWork.top, 0L), workHeight - height);
+    frame[0] = x / placed;
+    frame[1] = y / placed;
+    LaunchLog::Write(L"window", std::wstring(L"moved the restored bounds of maximized ").append(Paths::Wide(entry.id)).append(L" to its new display"));
+  }
+
+  std::optional<SavedPlacement> LastPlacement() noexcept {
+    if (!m_placementLoaded) {
+      m_lastPlacement = WindowPlacement::Load();
+      m_placementLoaded = true;
+    }
+    return m_lastPlacement;
+  }
+
+  void RememberPlacement(ManagedWindow const &entry) noexcept {
+    if (entry.kind != "browser" || !entry.restoredFrame) return;
+    auto const &frame = *entry.restoredFrame;
+    if (frame[2] <= 0 || frame[3] <= 0) return;
+    m_lastPlacement = SavedPlacement{frame, entry.maximized};
+    m_placementLoaded = true;
+    m_placementUnsaved = true;
+    After(kPlacementSaveDelay, [this, generation = ++m_placementGeneration]() noexcept {
+      if (generation == m_placementGeneration) SavePlacement();
+    });
+  }
+
+  void SavePlacement() noexcept {
+    if (!m_placementUnsaved || !m_lastPlacement) return;
+    m_placementUnsaved = false;
+    WindowPlacement::Save(*m_lastPlacement);
   }
 
   static void ApplyTheme(ManagedWindow &entry, bool dark) noexcept {
@@ -684,18 +848,11 @@ struct WindowManager {
           ManagedWindow *found = Find(id);
           if (!found) return;
           try {
-            if (args.DidPositionChange() || args.DidSizeChange()) {
-              auto frame = FrameOf(*found);
-              winrt::Microsoft::ReactNative::JSValueArray values;
-              for (double value : frame) values.push_back(value);
-              winrt::Microsoft::ReactNative::JSValueObject event;
-              event["type"] = "frame";
-              event["id"] = id;
-              event["frame"] = std::move(values);
-              EmitWindow(std::move(event));
-            }
+            bool moved = args.DidPositionChange() || args.DidSizeChange();
+            if (moved) EmitFrame(*found);
             if (args.DidSizeChange()) ApplyInputRegions(*found);
             if (args.DidSizeChange() || args.DidPresenterChange()) ReportMaximized(*found);
+            if (moved || args.DidPresenterChange()) RememberPlacement(*found);
             if (args.DidPresenterChange()) {
               bool fullScreen = found->appWindow.Presenter().Kind() == winrt::Microsoft::UI::Windowing::AppWindowPresenterKind::FullScreen;
               if (fullScreen != found->fullScreen) {
@@ -746,6 +903,7 @@ struct WindowManager {
   void Closed(std::string const &id) noexcept {
     auto found = m_windows.find(id);
     if (found == m_windows.end()) return;
+    if (m_pageLeftBySecondaryPress.app == found->second.hwnd) ClearPageLeftBySecondaryPress();
     RemoveWindowSubclass(found->second.hwnd, &WindowManager::WindowProc, kSubclassId);
     auto closedWindow = found->second.window;
     auto exits = std::move(found->second.exits);
@@ -799,15 +957,81 @@ struct WindowManager {
           Host::Current()->reactHost.InstanceSettings().Properties(), reinterpret_cast<uint64_t>(hwnd));
     } catch (...) {
     }
+    bool fromPage = OwnPageWindow(hwnd, previous);
+    ClearPageLeftBySecondaryPress();
+    if (fromPage && SecondaryButtonDown()) {
+      m_pageLeftBySecondaryPress = PageLeft{hwnd, previous, GetTickCount64(), 0};
+      if (!StartSecondaryPressWatch()) ClearPageLeftBySecondaryPress();
+    }
     winrt::Microsoft::ReactNative::JSValueObject event;
     event["type"] = "focus";
     event["id"] = entry->id;
-    if (OwnPageWindow(hwnd, previous)) event["fromPage"] = true;
+    if (fromPage) event["fromPage"] = true;
     EmitWindow(std::move(event));
+  }
+
+  bool StartSecondaryPressWatch() noexcept {
+    if (m_secondaryPressTimer) return true;
+    try {
+      auto timer = Host::Current()->queue.DispatcherQueue().CreateTimer();
+      timer.Interval(std::chrono::milliseconds(kSecondaryPressPollMs));
+      timer.IsRepeating(true);
+      m_secondaryPressTick = timer.Tick([this](auto const &, auto const &) noexcept { FollowSecondaryPress(); });
+      m_secondaryPressTimer = timer;
+      timer.Start();
+      return true;
+    } catch (...) {
+      m_secondaryPressTimer = nullptr;
+      return false;
+    }
+  }
+
+  void StopSecondaryPressWatch() noexcept {
+    if (!m_secondaryPressTimer) return;
+    auto timer = m_secondaryPressTimer;
+    m_secondaryPressTimer = nullptr;
+    try {
+      timer.Stop();
+      timer.Tick(m_secondaryPressTick);
+    } catch (...) {
+    }
+  }
+
+  void ClearPageLeftBySecondaryPress() noexcept {
+    StopSecondaryPressWatch();
+    m_pageLeftBySecondaryPress = {};
+  }
+
+  void FollowSecondaryPress() noexcept {
+    PageLeft &left = m_pageLeftBySecondaryPress;
+    if (!left.app) return StopSecondaryPressWatch();
+    ULONGLONG now = GetTickCount64();
+    bool secondary = SecondaryButtonDown();
+    if (ButtonOtherThanSecondaryDown() || (left.releasedAt && secondary)) return ClearPageLeftBySecondaryPress();
+    if (!left.releasedAt) {
+      if (!secondary) {
+        left.releasedAt = now;
+      } else if (now - left.pressedAt > kSecondaryHoldLimitMs) {
+        ClearPageLeftBySecondaryPress();
+      }
+      return;
+    }
+    if (now - left.releasedAt > kPageLeftKeptAfterReleaseMs) ClearPageLeftBySecondaryPress();
+  }
+
+  static bool ButtonOtherThanSecondaryDown() noexcept {
+    for (int key : {VK_MBUTTON, VK_XBUTTON1, VK_XBUTTON2}) {
+      if (GetAsyncKeyState(key) & 0x8000) return true;
+    }
+    return LeftButtonDown();
   }
 
   static bool LeftButtonDown() noexcept {
     return (GetAsyncKeyState(GetSystemMetrics(SM_SWAPBUTTON) ? VK_RBUTTON : VK_LBUTTON) & 0x8000) != 0;
+  }
+
+  static bool SecondaryButtonDown() noexcept {
+    return (GetAsyncKeyState(GetSystemMetrics(SM_SWAPBUTTON) ? VK_LBUTTON : VK_RBUTTON) & 0x8000) != 0;
   }
 
   static std::optional<int64_t> RootTagOf(ManagedWindow const &entry) noexcept {
@@ -859,10 +1083,14 @@ struct WindowManager {
 
   void ReportMaximized(ManagedWindow &entry) noexcept {
     auto presenter = OverlappedOf(entry);
+    if (!presenter) return;
     bool maximized = false;
     try {
-      maximized = presenter && presenter.State() == winrt::Microsoft::UI::Windowing::OverlappedPresenterState::Maximized;
+      auto state = presenter.State();
+      if (state == winrt::Microsoft::UI::Windowing::OverlappedPresenterState::Minimized) return;
+      maximized = state == winrt::Microsoft::UI::Windowing::OverlappedPresenterState::Maximized;
     } catch (...) {
+      return;
     }
     if (maximized == entry.maximized) return;
     entry.maximized = maximized;
@@ -1054,7 +1282,13 @@ struct WindowManager {
     if (message == WM_ACTIVATE && LOWORD(wParam) != WA_INACTIVE && DialogParts::BringModalForward(hwnd)) return 0;
     if (message == WM_ACTIVATE && LOWORD(wParam) != WA_INACTIVE) manager->Activated(hwnd, reinterpret_cast<HWND>(lParam));
     if (message == WM_SIZE && wParam != SIZE_MINIMIZED) manager->ArrangeToClient(hwnd, LOWORD(lParam), HIWORD(lParam));
-    if (message == WM_ACTIVATEAPP && wParam == FALSE) manager->EmitApp("resignActive");
+    if (message == WM_ACTIVATEAPP && wParam == FALSE) {
+      if (DialogParts::ActivatesMenuThread(static_cast<DWORD>(lParam))) DialogParts::ModalRegistry::Shared().withheldResign = true;
+      else {
+        DialogParts::ModalRegistry::Shared().withheldResign = false;
+        manager->EmitApp("resignActive");
+      }
+    }
     return DefSubclassProc(hwnd, message, wParam, lParam);
   }
 
@@ -1524,6 +1758,7 @@ struct WindowManager {
   void Finish() noexcept {
     if (m_finished) return;
     m_finished = true;
+    SavePlacement();
     LaunchLog::Write(L"launch", L"quitting");
     try {
       auto unloading = Host::Current()->reactHost.UnloadInstance();
@@ -1551,7 +1786,14 @@ struct WindowManager {
   winrt::event_token m_edgeTick{};
   std::vector<std::string> m_order;
   std::string m_activeId;
+  PageLeft m_pageLeftBySecondaryPress;
+  winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer m_secondaryPressTimer{nullptr};
+  winrt::event_token m_secondaryPressTick{};
   bool m_quitting{false};
+  std::optional<SavedPlacement> m_lastPlacement;
+  bool m_placementLoaded{false};
+  bool m_placementUnsaved{false};
+  int m_placementGeneration{0};
   bool m_dark{false};
   bool m_systemMove{false};
   bool m_tracking{false};

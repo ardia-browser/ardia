@@ -5,11 +5,11 @@ import { Button, MenuRow } from "../ui";
 import { useTheme } from "../ui/theme";
 import type { ToolbarPalette } from "../ui/toolbarColors";
 
-export const ReaderButton = memo(function ReaderButton({ tabId, palette, onFocus }: { tabId: string; palette: ToolbarPalette; onFocus: () => void }) {
+export const ReaderButton = memo(function ReaderButton({ tabId, palette, onFocus, quiet = false }: { tabId: string; palette: ToolbarPalette; onFocus: () => void; quiet?: boolean }) {
   const theme = useTheme();
   const state = useReaderState(tabId);
   const hint = useShortcutHint("toggleReader");
-  if (!state.available && !state.active) return null;
+  if (!state.active && (!state.available || quiet)) return null;
   return (
     <Button variant="icon" toolbar
       palette={palette}

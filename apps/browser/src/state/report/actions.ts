@@ -5,7 +5,7 @@ import { confirm } from "../../platform/dialogs";
 import { readDocument, removeDocument, writeDocument } from "../../platform/documents";
 import { fileExists } from "../../platform/files";
 import { openUrls } from "../browser/actions";
-import { capture, isSharing } from "../telemetry/client";
+import { capture, consentNow, consentToken, isSharing } from "../telemetry/client";
 import { reportIdentity, telemetryIdentity, type ReportIdentity } from "../telemetry/identity";
 import { localEventsSince } from "../telemetry/localStore";
 import { startWatch } from "../telemetry/watch";
@@ -77,7 +77,7 @@ export function openReport(windowId: string | null, source: "menu" | "check_in" 
   const restored = restoreDraftOnce();
   if (currentReport().sent) resetReport();
   patchReport({ windowId, source, pageAddress: pageAddressOf(windowId), systemLine: systemLine(), preview: false, attachedOpen: false });
-  capture("report_sheet_opened", { source, restored_draft: !!restored, restored_recording: !!restored?.recording });
+  capture("report_sheet_opened", { source, restored_draft: !!restored, restored_recording: !!restored?.recording }, consentNow());
   void refreshLocalEvents();
 }
 
@@ -191,12 +191,13 @@ export const mayStartSending = (s: ReportSheetState) =>
   !isBusy(s.upload) && s.recording.phase !== "recording" && s.recording.phase !== "saving" && s.trace.phase !== "tracing" && s.trace.phase !== "saving";
 
 export async function sendCurrentReport() {
+  const consent = consentToken();
   const s = currentReport();
   if (!mayStartSending(s)) return;
   const problems = draftProblems(s.draft);
   if (problems.length) {
     patchReport({ showProblems: true });
-    capture("report_send_blocked", { reason: problems[0], problems: problems.length, kind: s.draft.kind });
+    capture("report_send_blocked", { reason: problems[0], problems: problems.length, kind: s.draft.kind }, consentNow());
     return;
   }
   cancelled = false;
@@ -229,7 +230,7 @@ export async function sendCurrentReport() {
       attempts: result.attempts,
       resumed: !!failed,
       restarted,
-    });
+    }, consent);
     return;
   }
   if (result.phase !== "sent") return;
@@ -259,7 +260,7 @@ export async function sendCurrentReport() {
     retries: result.sent.retries,
     resumed: !!failed,
     restarted,
-  });
+  }, consent);
 }
 
 export function viewIssue() {

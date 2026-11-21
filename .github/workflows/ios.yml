@@ -3,14 +3,28 @@ name: iOS
 on:
   pull_request:
     paths:
-      - "apps/ios/**"
+      - "packages/phone/ios/**"
+      - "packages/phone/src/**"
+      - "apps/phone/ios/**"
+      - "apps/phone/src/**"
+      - "apps/phone/package.json"
+      - "apps/phone/pnpm-lock.yaml"
+      - "apps/phone/app.json"
+      - "apps/phone/scripts/bundle-shared.mjs"
       - "packages/sync/**"
       - "packages/core/**"
       - ".github/workflows/ios.yml"
   push:
     branches: [main]
     paths:
-      - "apps/ios/**"
+      - "packages/phone/ios/**"
+      - "packages/phone/src/**"
+      - "apps/phone/ios/**"
+      - "apps/phone/src/**"
+      - "apps/phone/package.json"
+      - "apps/phone/pnpm-lock.yaml"
+      - "apps/phone/app.json"
+      - "apps/phone/scripts/bundle-shared.mjs"
       - "packages/sync/**"
       - "packages/core/**"
       - ".github/workflows/ios.yml"
@@ -52,45 +66,31 @@ jobs:
     needs: gate
     if: needs.gate.outputs.run == 'true'
     runs-on: xcode-27
-    timeout-minutes: 45
+    timeout-minutes: 75
     env:
       SCRATCH: ${{ github.workspace }}/.ci
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
       - name: Toolchain
         run: |
           xcodebuild -version
           xcrun --sdk iphonesimulator --show-sdk-version
-      - id: cas-key
-        run: echo "prefix=xcode-cas-ios-$(xcodebuild -version | awk '/Build version/ { print $3 }')-" >> "$GITHUB_OUTPUT"
-      - id: cas
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: .ci/cas
-          key: ${{ steps.cas-key.outputs.prefix }}${{ github.sha }}
-          restore-keys: ${{ steps.cas-key.outputs.prefix }}
-      - name: Build the app for the simulator
-        env:
-          RESTORED: ${{ steps.cas.outputs.cache-matched-key }}
+      - name: The Expo app's dependencies and Pods
         run: |
-          build() {
-            xcodebuild -project apps/ios/Ardia.xcodeproj -scheme Ardia -configuration Debug \
-              -destination 'generic/platform=iOS Simulator' -derivedDataPath "$SCRATCH/dd" \
-              CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO \
-              COMPILATION_CACHE_ENABLE_CACHING=YES COMPILATION_CACHE_CAS_PATH="$SCRATCH/cas" -quiet build
-          }
-          if build; then exit 0; fi
-          [ -n "$RESTORED" ] || exit 1
-          echo "::warning::The build failed with the compile cache restored from $RESTORED. Building once more from nothing, in case the cache is the cause."
-          rm -rf "$SCRATCH/cas" "$SCRATCH/dd"
-          build
-      - name: Size of the compile cache
-        run: du -sh "$SCRATCH/cas"
-      - if: github.event_name == 'push' && steps.cas.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: .ci/cas
-          key: ${{ steps.cas-key.outputs.prefix }}${{ github.sha }}
+          set -euo pipefail
+          (cd apps/phone && pnpm install --frozen-lockfile)
+          (cd apps/phone/ios && LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 pod install)
+          git diff --exit-code -- apps/phone/ios/Podfile.lock || { echo "::error::pod install changed apps/phone/ios/Podfile.lock: commit the lockfile pod install writes"; exit 1; }
+          git diff --exit-code -- apps/phone/ios ':!apps/phone/ios/Pods' || { echo "::error::pod install rewrote the iPhone project (diff above): run pod install locally and commit what it writes"; exit 1; }
+      - name: Build the Expo app for the simulator, unsigned
+        run: >-
+          xcodebuild -workspace apps/phone/ios/Ardia.xcworkspace -scheme Ardia -configuration Debug
+          -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$SCRATCH/dd"
+          CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO -quiet build
 
   packages:
     needs: gate
@@ -112,13 +112,19 @@ jobs:
         with:
           path: |
             .ci/ardiakit
+            .ci/phonemotion
+            .ci/phonesync
             .ci/sync
           key: swiftpm-xcode-27.1-${{ github.sha }}
           restore-keys: swiftpm-xcode-27.1-
       - name: The JavaScriptCore bundles match their TypeScript
-        run: node apps/ios/scripts/bundle-shared.mjs --check
+        run: node apps/phone/scripts/bundle-shared.mjs --check
       - name: ArdiaKit tests
-        run: swift test --package-path apps/ios/Packages/ArdiaKit --scratch-path "$SCRATCH/ardiakit"
+        run: swift test --package-path packages/phone/ios/ArdiaKit --scratch-path "$SCRATCH/ardiakit"
+      - name: The phone's Swift tests
+        run: |
+          swift test --package-path packages/phone/ios/PhoneMotion --scratch-path "$SCRATCH/phonemotion"
+          swift test --package-path packages/phone/ios/PhoneSync --scratch-path "$SCRATCH/phonesync"
       - name: Sync core tests
         run: swift test --package-path packages/sync --scratch-path "$SCRATCH/sync"
       - if: github.event_name == 'push'
@@ -126,5 +132,7 @@ jobs:
         with:
           path: |
             .ci/ardiakit
+            .ci/phonemotion
+            .ci/phonesync
             .ci/sync
           key: swiftpm-xcode-27.1-${{ github.sha }}

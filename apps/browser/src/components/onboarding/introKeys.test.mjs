@@ -37,3 +37,18 @@ test("the links step names apps from the platform it runs on", () => {
   assert.ok(step.includes("From ${PLATFORM_TERMS.linkSourceApps} and the rest."));
   assert.ok(!step.includes("Mail, Slack, Notes"));
 });
+
+test("Settings names the same kind of apps for a link from another app as the links step does", () => {
+  assert.equal(MAC_TERMS.linkSourceExamples, "Discord, Slack or Mail");
+  assert.equal(WINDOWS_TERMS.linkSourceExamples, "Outlook, Teams or Slack");
+  for (const app of WINDOWS_TERMS.linkSourceExamples.split(/, | or /)) assert.ok(WINDOWS_TERMS.linkSourceApps.includes(app), `${app} is not in the links step's list`);
+  const pane = readFileSync(new URL("../settings/panes/Tabs.tsx", import.meta.url), "utf8");
+  assert.equal(pane.split("A link from ${PLATFORM_TERMS.linkSourceExamples} opens").length, 3);
+  assert.ok(!pane.includes("Discord, Slack or Mail"));
+});
+
+test("the command bar's placement is spelled as the rest of the UI spells it", () => {
+  for (const file of ["LayoutSteps.tsx", "../settings/panes/Appearance.tsx", "../settings/rows/appearanceRows.ts", "../../state/telemetry/copy.ts"]) {
+    assert.ok(!/\bcentre\b/.test(readFileSync(new URL(file, import.meta.url), "utf8")), `${file} says "centre"`);
+  }
+});

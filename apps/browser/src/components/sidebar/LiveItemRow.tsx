@@ -11,9 +11,10 @@ import { useIsActiveIn, useLiveItemTab, useLiveTabOpen, useTabAwayFromPin } from
 import type { CloseControl } from "../../state/sidebar/closeControl";
 import { noteLiveRowHide } from "../../state/telemetry/liveHides";
 import { HoverSlot } from "../ui/HoverSlot";
-import { Badge, Button, ContextMenuArea, Dot, hairline, ink, space, Symbol, Text, useHover } from "../ui";
-import { curve, springs } from "../ui/motion";
-import { layout, useTheme } from "../ui/theme";
+import { Badge, Button, ContextMenuArea, Dot, hairline, HoverFill, ink, radius, space, Symbol, Text, useHover, withAlpha } from "../ui";
+import { curve, liftSpring } from "../ui/motion";
+import { Squish, useSquish } from "../ui/Squish";
+import { hex, layout, useTheme } from "../ui/theme";
 import { useLiveColors, type LiveColors } from "../live/tokens";
 import { modifiersOf } from "../../lib/keys";
 import { dismissHover } from "../../state/sidebar/hover";
@@ -22,7 +23,7 @@ import { openLiveItemMenu } from "../../state/sidebar/liveMenus";
 import { registerRow } from "../../state/sidebar/sidebarUi";
 import { withShortcut } from "../../state/commands/commandShortcuts";
 import { TabIcon } from "./TabIcon";
-import { SIDEBAR_MOTION, sidebarTokens, TAB_ROW } from "./tokens";
+import { SIDEBAR_MOTION, sidebarTokens, TAB_ROW, useSidebarTokens } from "./tokens";
 import { useSidebarRowLook } from "./rowLook";
 import { SidebarRowLabel, SidebarRowSurface } from "./SidebarRow";
 
@@ -31,7 +32,8 @@ const liveRowKey = (folderId: string, itemId: string) => `live|${folderId}|${ite
 export function LiveItemRow({ folderId, item, windowId, inStack = false }: { folderId: string; item: LiveItem; windowId: string; inStack?: boolean }) {
   const indent = inStack ? STACK_INDENT : 0;
   const theme = useTheme();
-  const { closeTabHint: closeHint, backToPinHint } = useSidebarRowLook();
+  const tokens = useSidebarTokens();
+  const { closeTabHint: closeHint, backToPinHint, quiet } = useSidebarRowLook();
   const backToPin = useHover();
   const colors = useLiveColors();
   const key = liveRowKey(folderId, item.id);
@@ -52,10 +54,15 @@ export function LiveItemRow({ folderId, item, windowId, inStack = false }: { fol
       Animated.timing(fold, { toValue: 0, duration: SIDEBAR_MOTION.liveFold, easing: curve.enter, useNativeDriver: false }),
     ]).start();
   }, [completion]);
-  const fill = active ? theme.tabSelected : hovered ? theme.tabHover : ink.clear;
+  const fill = active ? (quiet ? tokens.quietWash : theme.tabSelected) : ink.clear;
+  const hoverFill = quiet ? tokens.quietHover : theme.tabHover;
+  const border = active && !quiet ? 0.5 : 0;
+  const pressedFill = quiet ? tokens.quietPressed : theme.tabPressed;
+  const titleColor = completion ? theme.textSecondary : quiet ? hex(withAlpha(theme.textTab, active ? tokens.quietActiveText : tokens.quietText)) : active ? theme.rowSelectedText : theme.textTab;
   const resettable = away && !completion;
   const resetting = resettable && backToPin.hovered;
   const control = liveRowControl(folderId, item, tabId, tabOpen, closeHint);
+  const squish = useSquish("row");
 
   return (
     <Animated.View style={completion ? { height: fold.interpolate({ inputRange: [0, 1], outputRange: [0, layout.rowHeight] }), opacity: fold, overflow: "hidden" } : null}>
@@ -67,14 +74,18 @@ export function LiveItemRow({ folderId, item, windowId, inStack = false }: { fol
           }}
         >
           <Pressable
+            onPressIn={squish.onPressIn}
+            onPressOut={squish.onPressOut}
             onPress={(e) => {
               dismissHover();
               openLiveItem(windowId, folderId, item, { background: modifiersOf(e).metaKey });
             }}
           >
             {({ pressed }) => (
-              <SidebarRowSurface fill={!active && pressed ? theme.tabPressed : fill} selected={active} border={active ? 1 : 0} padLeft={TAB_ROW.contentLeft + indent}>
-                {unread ? <Dot size={5} color={theme.accent} style={{ position: "absolute", left: UNREAD_DOT_LEFT + indent }} /> : null}
+              <Squish scale={squish.scale}>
+              <HoverFill shown={!active && (hovered || pressed)} instant={active} color={pressed ? pressedFill : hoverFill} radius={radius.chrome} />
+              <SidebarRowSurface fill={fill} selected={active && !quiet} border={border} padLeft={TAB_ROW.contentLeft + indent - border} padRight={TAB_ROW.trailing - border}>
+                {unread ? <Dot size={5} color={theme.accent} style={{ position: "absolute", left: UNREAD_DOT_LEFT + indent - border }} /> : null}
                 <View {...backToPin.hoverProps}>
                   {resettable ? (
                     <Pressable
@@ -96,7 +107,7 @@ export function LiveItemRow({ folderId, item, windowId, inStack = false }: { fol
                 <SidebarRowLabel
                   text={resetting ? "Back to Pinned URL" : item.title}
                   weight={unread ? "medium" : undefined}
-                  color={active ? theme.rowSelectedText : completion ? theme.textSecondary : theme.textTab}
+                  color={titleColor}
                 />
                 {inStack && item.pr?.stack ? <PositionChip position={item.pr.stack.position} /> : null}
                 <HoverSlot
@@ -107,6 +118,7 @@ export function LiveItemRow({ folderId, item, windowId, inStack = false }: { fol
                   <Trailing item={item} completion={completion} colors={colors} />
                 </HoverSlot>
               </SidebarRowSurface>
+              </Squish>
             )}
           </Pressable>
         </ContextMenuArea>
@@ -154,7 +166,7 @@ function ItemIcon({ item, completion, colors }: { item: LiveItem; completion: Co
   useEffect(() => {
     if (!completion) return;
     pop.setValue(0);
-    Animated.spring(pop, { toValue: 1, ...springs.bouncy, useNativeDriver: true }).start();
+    Animated.spring(pop, { toValue: 1, ...liftSpring(), useNativeDriver: true }).start();
   }, [completion]);
   if (completion) {
     const glyph = COMPLETION_GLYPH[completion];

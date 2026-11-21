@@ -17,5 +17,6 @@
 - Manual when affected: existing login survives restart; profiles/settings, Bitwarden, scripts, and CLI routing work.
 - Details only when needed: [setup, snapshots, and recovery](../personal-app.md).
 
-- Replacement: `v0.2.47-nightly.5` provides no personal-app isolation or local-signing equivalent.
-  Preserve personal commands in all new CLI skill examples; refresh managed copies after activation.
+- Replacement: `v0.2.47-nightly.9` moves the official CLI to a plugin with shared PATH links.
+  The personal bundle refuses plugin program links and offers its own control toggle in Advanced.
+  Retain the personal CLI source and skill until a separately isolated upgrade is ready.

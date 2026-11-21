@@ -1,6 +1,8 @@
 import { Children, createContext, isValidElement, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
-import { sectionRevealed, settingsSectionKey, useSettingsSearch } from "../../state/settings/searchState";
+import { useSettingsSearch } from "../../state/settings/searchState";
+import { useSync } from "../../state/sync/engine";
+import { useCalendar } from "../../state/live/calendar";
 import { registerAnchor } from "./anchors";
 import { useProfiles, useSettings, useTabLayout } from "../../state/browser/hooks";
 import { currentSettings } from "../../state/browser/current";
@@ -16,23 +18,25 @@ import { PopUp } from "../ui/Field";
 import { Text } from "../ui/Text";
 import { updateSettings } from "../../state/settings/actions";
 import type { Settings } from "../../state/settings/settings";
+import { officialPlugins } from "../../state/plugins/official";
+import { officialNamesInSettings } from "../../state/plugins/officialView";
+import { usePlugins } from "../../state/plugins/store";
 import { settingsMotion } from "./tokens";
 
 export const SettingsPaneContext = createContext<SettingsPane | null>(null);
 
 export function useUnshownSettings(): ReadonlySet<string> {
   const top = useTabLayout() === "top";
-  const ids = useSettings((s) => unshownSettings(s, { top, glass: liquidGlass }));
+  const syncOn = useSync((s) => s.enabled);
+  const calendarAccess = useCalendar((s) => s.access === "fullAccess" || s.access === "fixture");
+  const official = usePlugins((s) => officialNamesInSettings(officialPlugins(s)).join(" "));
+  const ids = useSettings((s) => unshownSettings(s, { top, glass: liquidGlass, syncOn, calendarAccess, officialPlugins: official ? official.split(" ") : [] }));
   return useMemo(() => new Set(ids ? ids.split("\n") : []), [ids]);
 }
 
 export function useHiddenSetting() {
-  const shown = useSettings((s) => s.showAdvancedSettings);
-  const revealedSections = useSettingsSearch((s) => s.revealedSections);
-  const previewSection = useSettingsSearch((s) => s.previewSection);
   const unshown = useUnshownSettings();
-  return (entry: SettingEntry | undefined) =>
-    !!entry && (unshown.has(entry.id) || (entry.advanced && !shown && !sectionRevealed({ revealedSections, previewSection }, settingsSectionKey(entry.pane, entry.section))));
+  return (entry: SettingEntry | undefined) => !!entry && unshown.has(entry.id);
 }
 
 function useHiddenSection(pane: SettingsPane | null | undefined, section: string | undefined) {
@@ -130,7 +134,7 @@ export function Row({
 }) {
   const entry = anchor ? setting(anchor) : undefined;
   const row = (
-    <PlainRow title={title ?? entry?.title} description={description === undefined ? entry?.description : description} icon={icon} onPress={onPress}>
+    <PlainRow title={title ?? entry?.title} description={description === undefined ? (entry?.explained ? entry.description : undefined) : description} icon={icon} onPress={onPress}>
       {children}
     </PlainRow>
   );
@@ -157,7 +161,7 @@ export function ProfilePicker({ value, onChange }: { value: string; onChange: (p
   return <PopUp value={value} options={profiles.map((p) => ({ value: p.id, title: p.name }))} onChange={onChange} />;
 }
 
-const SECTION_HEADER = { flexDirection: "row", alignItems: "flex-end", marginTop: space.xxxl, marginBottom: space.m, paddingHorizontal: space.xxs } as const;
+const SECTION_HEADER = { flexDirection: "row", alignItems: "flex-end", marginTop: space.xxl, marginBottom: space.s, paddingHorizontal: space.s } as const;
 const SECTION_DETAIL = perLook(() => ({ marginTop: space.xs, lineHeight: lineHeight.body }) as const);
 
 export function PaneIntro({ children }: { children: ReactNode }) {

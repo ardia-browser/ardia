@@ -3,6 +3,9 @@ import test from "node:test";
 import { CHECK_EVERY_MS, FIRST_CHECK_AFTER_MS, UPDATE_CHECK_LOCK, UPDATE_PREFERENCES, linuxSwitchesFetch, linuxUpdater, scheduleUpdateChecks } from "./hostUpdates.ts";
 import { compareVersions, linuxReleases, newestRelease } from "./updateReleases.ts";
 import { takeUpdateCounts } from "../../browser/src/state/telemetry/updateCounts.ts";
+import { setConsentPeriod } from "../../browser/src/state/telemetry/consentPeriod.ts";
+
+setConsentPeriod(true, "host-updates-test");
 
 const page = (tag) => `https://github.com/ardia-browser/ardia/releases/tag/${tag}`;
 const release = (tag, { prerelease = false, draft = false, assets = [`Ardia-${tag.replace(/^v/, "")}-linux-x64.tar.xz`] } = {}) =>

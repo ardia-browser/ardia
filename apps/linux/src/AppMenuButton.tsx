@@ -31,7 +31,7 @@ async function showAbout(windowId: string) {
 
 export async function openAppMenu(windowId: string, button: HTMLElement) {
   const state = useBrowser.getState();
-  const shortcuts = new Map(linuxMenuShortcuts(state.settings.shortcuts, state.profileOrder).map((shortcut) => [
+  const shortcuts = new Map(linuxMenuShortcuts(state.settings.shortcuts, state.profileOrder, state.profiles).map((shortcut) => [
     shortcut.id,
     "key" in shortcut ? { key: shortcut.key, modifiers: shortcut.modifiers } : { key: "", modifiers: [] },
   ]));

@@ -217,6 +217,10 @@ bool LinuxAutoplayDecision(bool site_blocks, bool site_is_default, bool block_ev
   return site_blocks || (block_everywhere && site_is_default);
 }
 
+bool LinuxAutoplayCoversScheme(std::string_view scheme) {
+  return scheme == "http" || scheme == "https" || scheme == "file";
+}
+
 bool LinuxPageOptions::SetPeek(std::string_view modifier) {
   std::string next = OneOf(modifier, {"alt", "shift"}) ? std::string(modifier) : "off";
   if (next == peek) return false;

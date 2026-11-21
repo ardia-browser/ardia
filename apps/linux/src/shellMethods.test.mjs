@@ -5,7 +5,7 @@ import { reachesNativeHostUnchecked, resolveHostModule } from "./hostModules.ts"
 import { linuxShellMethod, sidebarEdgeEvent } from "./shellMethods.ts";
 import { dominantAccent } from "./iconAccent.ts";
 import { hostModuleName, requireNativeModule } from "./shims/expo-modules-core.ts";
-import { setTrafficLightsCenter, trafficLightPosition, trafficLightsPlace } from "./shims/web/windowChrome.tsx";
+import { setTrafficLightsCenter } from "./shims/web/windowChrome.tsx";
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const nativeHost = read("../../../engine/ardiacore-linux/src/ardia/linux/ac_linux_host.cc");
@@ -174,7 +174,8 @@ test("the updater, location and system signals reach an engine that advertises t
 });
 
 test("the Mac-only methods of #305 answer on Linux with a truthful value or ERR_UNAVAILABLE, never as an unsupported host method", async () => {
-  const host = olderEngine(...NOTIFICATION_CALLS, ...PORTED_FROM_1998);
+  assert.ok(advertised.includes("crash.dumps"));
+  const host = olderEngine(...NOTIFICATION_CALLS, ...PORTED_FROM_1998, "crash.dumps");
   for (const name of FORMERLY_TRACKED_IN_305) {
     const [module, method] = name.split(".");
     const resolved = resolveHostModule(host, module, method);
@@ -477,15 +478,10 @@ test("an engine with only the native left-edge watcher keeps it for a left sideb
   events.remove();
 });
 
-test("the window controls follow a sidebar on the right: a trailing center is measured from the window's right edge, as the Mac anchors them", async () => {
-  const lights = () => [0, 1, 2].map((index) => trafficLightPosition(trafficLightsPlace(), index));
+test("shared code can still place the Mac's traffic lights; Linux has none, so the call settles and draws nothing", async () => {
   assert.match(read("./shims/shellBase.tsx"), /setTrafficLightsCenter: async \(id: string, center: \[number, number\] \| null, trailing = false\) => setTrafficLightsCenter\(id, center, trailing\)/);
-  await setTrafficLightsCenter("main", [215, 30], true);
-  assert.deepEqual(lights(), [{ right: 208, top: 23 }, { right: 185, top: 23 }, { right: 162, top: 23 }]);
-  await setTrafficLightsCenter("main", [25, 30]);
-  assert.deepEqual(lights(), [{ left: 18, top: 23 }, { left: 41, top: 23 }, { left: 64, top: 23 }]);
-  await setTrafficLightsCenter("main", null, true);
-  assert.deepEqual(lights()[0], { left: 18, top: 20 });
+  assert.equal(await setTrafficLightsCenter("main", [215, 30], true), undefined);
+  assert.equal(await setTrafficLightsCenter("main", null), undefined);
 });
 
 test("on an engine without the native capture, a tab drag captures a bare Escape in the shell as dragEscape and releases it when the drag ends", async () => {

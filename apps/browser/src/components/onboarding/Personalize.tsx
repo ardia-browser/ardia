@@ -1,8 +1,7 @@
 import { StyleSheet, View } from "react-native";
 import { useSettings, useTabLayout } from "../../state/browser/hooks";
-import { chooseSidebarSide } from "../../state/settings/actions";
+import { chooseSidebarSide, toggleTabLayout } from "../../state/settings/actions";
 import type { Settings } from "../../state/settings/settings";
-import { toggleTabLayout } from "../../state/splits/actions";
 import { MiniWindow } from "../settings/MiniWindow";
 import { Segmented, Text, type SegmentOption } from "../ui";
 import { OptionCard } from "./OptionCard";

@@ -2,6 +2,7 @@ import { useBrowser, type BrowserState } from "../browser/store";
 import { useSettings, useTab } from "../browser/hooks";
 import { useKeyed } from "../browser/keyedWatch";
 import { watchTabState } from "../tabs/tabStateWatch";
+import { shownLiveOf } from "../tabs/tabLive";
 import { activeTabId, pinSection } from "../browser/model";
 import type { Tab } from "../browser/types";
 import { engineMark, type PageEngine } from "../engines/engines";
@@ -57,12 +58,12 @@ export function useStruckTitle(tabId: string, marks?: number): boolean {
 
 export function rowFlags(s: BrowserState, windowId: string, tabId: string): number {
   const tab = s.tabs[tabId];
-  const live = s.live[tabId];
+  const live = shownLiveOf(s, tabId);
   let flags = iconMarks(s, tabId);
   if (tab && activeTabId(s, tab.windowId, tab.profileId) === tabId) flags |= ACTIVE;
   if (s.selection[windowId]?.includes(tabId)) flags |= SELECTED;
-  if (live?.playingAudio) flags |= PLAYING;
-  if (live?.isLoading) flags |= LOADING;
+  if (live.playingAudio) flags |= PLAYING;
+  if (live.isLoading) flags |= LOADING;
   const mute = tab ? muteState(s, tab) : null;
   if (mute) flags |= mute === "site" ? SITE_MUTED : TAB_MUTED;
   return flags;

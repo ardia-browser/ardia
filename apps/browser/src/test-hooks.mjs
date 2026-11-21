@@ -22,6 +22,7 @@ export function mount(render, { props, contexts = [] } = {}) {
   const dispatcher = {
     readContext: (ctx) => (provided.has(ctx) ? provided.get(ctx) : ctx._currentValue),
     useContext: (ctx) => (provided.has(ctx) ? provided.get(ctx) : ctx._currentValue),
+    use: (ctx) => dispatcher.readContext(ctx),
     useMemo(make, deps) {
       const s = slot(() => ({}));
       at++;

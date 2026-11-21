@@ -29,6 +29,7 @@ import struct
 import subprocess
 import tempfile
 import zipfile
+import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SUPPORT = os.path.join(HERE, "home", "Library", "Application Support")
@@ -276,6 +277,40 @@ def chromium_web_data(path):
 
 
 
+PREPOPULATED_GUID = "485bf7d3-0215-45af-87dc-5388680000{:02d}"
+GOOGLE = ("Google", "google.com", "{google:baseURL}search?q={searchTerms}&{google:RLZ}{google:originalQueryForSuggestion}"
+          "{google:assistedQueryStats}{google:searchFieldtrialParameter}{google:language}{google:prefetchSource}"
+          "{google:searchClient}{google:sourceId}{google:contextualSearchVersion}ie={inputEncoding}", 1,
+          PREPOPULATED_GUID.format(1))
+BING = ("Bing", "bing.com", "https://www.bing.com/search?q={searchTerms}&PC=U316&FORM=CHROMN", 3, PREPOPULATED_GUID.format(3))
+DUCKDUCKGO = ("DuckDuckGo", "duckduckgo.com", "https://duckduckgo.com/?q={searchTerms}", 92, PREPOPULATED_GUID.format(92))
+ARDIA_DOCS = ("Ardia Docs", "docs", "https://docs.ardia.example/find?q={searchTerms}&enc={inputEncoding}&{google:RLZ}", 0,
+              "00000000-0000-4000-8000-00000000e001")
+
+
+def chromium_keywords(path, engines):
+    db = sqlite3.connect(path) if os.path.exists(path) else new_db(path)
+    db.executescript("""
+        CREATE TABLE keywords (id INTEGER PRIMARY KEY, short_name VARCHAR NOT NULL, keyword VARCHAR NOT NULL,
+          favicon_url VARCHAR NOT NULL, url VARCHAR NOT NULL, safe_for_autoreplace INTEGER, originating_url VARCHAR,
+          date_created INTEGER DEFAULT 0, usage_count INTEGER DEFAULT 0, input_encodings VARCHAR, suggest_url VARCHAR,
+          prepopulate_id INTEGER DEFAULT 0, created_by_policy INTEGER DEFAULT 0, last_modified INTEGER DEFAULT 0,
+          sync_guid VARCHAR, alternate_urls VARCHAR, image_url VARCHAR, search_url_post_params VARCHAR,
+          suggest_url_post_params VARCHAR, image_url_post_params VARCHAR, new_tab_url VARCHAR,
+          last_visited INTEGER DEFAULT 0, created_from_play_api INTEGER DEFAULT 0, is_active INTEGER DEFAULT 0,
+          starter_pack_id INTEGER DEFAULT 0, enforced_by_policy INTEGER DEFAULT 0, featured_by_policy INTEGER DEFAULT 0);
+    """)
+    for name, keyword, url, prepopulate, guid in engines:
+        db.execute("INSERT INTO keywords(short_name, keyword, favicon_url, url, prepopulate_id, sync_guid, input_encodings) "
+                   "VALUES (?,?,?,?,?,?,?)", (name, keyword, "", url, prepopulate, guid, "UTF-8"))
+    db.commit()
+    db.close()
+
+
+def default_search(guid):
+    return {"default_search_provider": {"guid": guid}}
+
+
 def pad4(b):
     return b + b"\0" * ((4 - len(b) % 4) % 4)
 
@@ -364,6 +399,41 @@ PNG_1PX = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
 
 
+def chromium_extensions(profile_dir, pinned, entries):
+    path = os.path.join(profile_dir, "Preferences")
+    with open(path) as f:
+        prefs = json.load(f)
+    settings = {}
+    for ext_id, entry, manifest in entries:
+        settings[ext_id] = entry
+        if manifest and "path" in entry and not entry["path"].startswith("/"):
+            write_json(os.path.join(profile_dir, "Extensions", entry["path"], "manifest.json"), manifest)
+    prefs["extensions"] = {"pinned_extensions": pinned, "settings": settings}
+    write_json(path, prefs)
+
+
+def chrome_extensions(root):
+    clip, notes, focus, old, dev, sso, later = ("f" * 32, "g" * 32, "h" * 32, "i" * 32, "j" * 32, "k" * 32, "l" * 32)
+    clip_saver = (clip, {"from_webstore": True, "location": 1, "path": f"{clip}/3.2_0", "disable_reasons": []},
+                  {"name": "Clip Saver", "version": "3.2", "manifest_version": 3})
+    chromium_extensions(os.path.join(root, "Default"), [clip, notes], [
+        clip_saver,
+        (notes, {"from_webstore": True, "location": 1, "path": f"{notes}/1.5_0", "disable_reasons": [1]},
+         {"name": "Tab Notes", "version": "1.5", "manifest_version": 3}),
+        (old, {"from_webstore": True, "location": 1, "path": f"{old}/2.0_0"},
+         {"name": "Old Toolbar", "version": "2.0", "manifest_version": 2}),
+        (dev, {"from_webstore": False, "location": 4, "path": "/Users/someone/dev-helper", "manifest": {"name": "Dev Helper"}}, None),
+        (sso, {"from_webstore": True, "location": 9, "manifest": {"name": "Company SSO"}}, None),
+    ])
+    chromium_extensions(os.path.join(root, "Profile 1"), [focus, clip], [
+        clip_saver,
+        (focus, {"from_webstore": True, "location": 1, "path": f"{focus}/4.0_0", "disable_reasons": []},
+         {"name": "Focus Timer", "version": "4.0", "manifest_version": 3}),
+        (later, {"from_webstore": True, "location": 1, "path": f"{later}/2.0_0", "disable_reasons": []},
+         {"name": "Read Later", "version": "2.0", "manifest_version": 3}),
+    ])
+
+
 def build_chrome():
     root = os.path.join(SUPPORT, "Google", "Chrome")
     chromium_local_state(root, {
@@ -376,7 +446,7 @@ def build_chrome():
     write_json(os.path.join(root, "System Profile", "junk.json"), {})
 
     d = os.path.join(root, "Default")
-    write_json(os.path.join(d, "Preferences"), {"profile": {"name": "Personal"}})
+    write_json(os.path.join(d, "Preferences"), {"profile": {"name": "Personal"}, **default_search(ARDIA_DOCS[4])})
     write(os.path.join(d, "Google Profile Picture.png"), PNG_1PX)
     t = BASE_UNIX - 86400 * 100
     chromium_bookmarks(os.path.join(d, "Bookmarks"),
@@ -444,6 +514,7 @@ def build_chrome():
     ])
     chromium_cookies_old(os.path.join(MISC, "Cookies-v23"))
     chromium_web_data(os.path.join(d, "Web Data"))
+    chromium_keywords(os.path.join(d, "Web Data"), [GOOGLE, BING, DUCKDUCKGO, ARDIA_DOCS])
 
     cmds = session_commands()
     sessions = os.path.join(d, "Sessions")
@@ -458,6 +529,7 @@ def build_chrome():
                        bar=[bookmark("Work wiki", "https://wiki.work.example/", t, "00000000-0000-4000-8000-000000000301")],
                        other=[], synced=[])
     chromium_history(os.path.join(p1, "History"), [("https://work.example/", "Work", 3, 1, BASE_UNIX - 10, 0)])
+    chrome_extensions(root)
 
 
 def build_brave():
@@ -583,6 +655,188 @@ def build_dia():
     chromium_bookmarks(os.path.join(p2, "Bookmarks"),
                        bar=[bookmark("Work", "https://work.dia.example/", t, "00000000-0000-4000-8000-000000000705")],
                        other=[], synced=[])
+
+    build_dia_sidebar(d, "Default")
+
+
+DIA_LABEL_SALT = base64.b64decode("iOe1Ue/XtonbieE/5m1nAgewvWQlePHRcKnoU10EyOM=")
+DIA_PAGE = 4096
+DIA_RESERVED = 80
+DIA_WAL_SALT = bytes.fromhex("5a1e5a1e0d1a0d1a")
+DIA_FILE_SALT = hashlib.sha256(b"dia-fixture-salt").digest()[:16]
+DIA_SCHEMA = """
+CREATE TABLE "spaces" ("id" TEXT PRIMARY KEY NOT NULL, "title" TEXT NOT NULL, "creation_date" DATE NOT NULL, "last_updated_at" DATE NOT NULL, "theme" TEXT NOT NULL DEFAULT 'neutral', "theme_intensity" DOUBLE);
+CREATE TABLE "nodes" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, "kind" TEXT NOT NULL CHECK ("kind" IN ('tab', 'group', 'favorites', 'window', 'content_pane', 'pinned_container')), "entity_id" TEXT NOT NULL, "parent_id" INTEGER REFERENCES "nodes"("id") ON DELETE CASCADE, "order" INTEGER NOT NULL, "deleted_at" DATETIME, "space_id" TEXT NOT NULL DEFAULT '', UNIQUE ("parent_id", "order"));
+CREATE TABLE "tabs" ("id" TEXT PRIMARY KEY NOT NULL, "node_id" INTEGER NOT NULL UNIQUE REFERENCES "nodes"("id") ON DELETE CASCADE, "creation_date" DATE NOT NULL, "last_active_date" DATE, "split_view_widths" TEXT);
+CREATE TABLE "tab_groups" ("id" TEXT PRIMARY KEY NOT NULL, "node_id" INTEGER NOT NULL UNIQUE REFERENCES "nodes"("id") ON DELETE CASCADE, "creation_date" DATE NOT NULL, "title" TEXT, "theme" TEXT NOT NULL DEFAULT 'neutral', "icon" TEXT, "last_closed_at" DATETIME, "title_source" TEXT, "icon_source" TEXT, "behavior" TEXT, "open_new_tabs_in_group" BOOLEAN);
+CREATE TABLE "content_panes" ("id" TEXT PRIMARY KEY NOT NULL, "node_id" INTEGER NOT NULL UNIQUE REFERENCES "nodes"("id") ON DELETE CASCADE, "creation_date" DATE NOT NULL, "last_active_date" DATE, "tab_session_id" INTEGER, "custom_title" TEXT, "custom_icon" TEXT, "variant" TEXT);
+CREATE TABLE "web_contents" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, "content_pane_id" NOT NULL REFERENCES "content_panes"("id") ON DELETE CASCADE, "url" TEXT NOT NULL, "title" TEXT);
+CREATE TABLE "windows" ("id" TEXT PRIMARY KEY NOT NULL, "node_id" INTEGER NOT NULL UNIQUE REFERENCES "nodes"("id") ON DELETE CASCADE, "selected_tab_id" TEXT, "focused_space_id" TEXT);
+"""
+DIA_DATE = "2026-11-01 09:00:00.000"
+
+
+class DiaTree:
+    def __init__(self, db):
+        self.db = db
+        self.next = (db.execute("SELECT max(id) FROM nodes").fetchone()[0] or 0) + 1
+
+    def node(self, kind, parent, order, space, deleted=None):
+        nid = self.next
+        self.next += 1
+        entity = "%s-%04d" % (kind, nid)
+        self.db.execute('INSERT INTO nodes (id, kind, entity_id, parent_id, "order", deleted_at, space_id) VALUES (?,?,?,?,?,?,?)',
+                        (nid, kind, entity, parent, order, deleted, "" if kind == "content_pane" else space))
+        return nid, entity
+
+    def container(self, kind, order, space, deleted=None):
+        nid, entity = self.node(kind, None, order, space, deleted)
+        if kind == "window":
+            self.db.execute("INSERT INTO windows VALUES (?,?,NULL,NULL)", (entity, nid))
+        return nid
+
+    def tab(self, parent, order, space, *pages, deleted=None):
+        nid, entity = self.node("tab", parent, order, space, deleted)
+        self.db.execute("INSERT INTO tabs VALUES (?,?,?,NULL,NULL)", (entity, nid, DIA_DATE))
+        for i, (url, title, custom) in enumerate(pages):
+            pid, pane = self.node("content_pane", nid, i, space)
+            self.db.execute("INSERT INTO content_panes VALUES (?,?,?,NULL,NULL,?,NULL,?)",
+                            (pane, pid, DIA_DATE, custom, "web_content" if url else "new_tab_page"))
+            if url:
+                self.db.execute("INSERT INTO web_contents (content_pane_id, url, title) VALUES (?,?,?)", (pane, url, title))
+        return nid
+
+    def group(self, parent, order, space, title, emoji=None, theme="neutral"):
+        nid, entity = self.node("group", parent, order, space)
+        icon = json.dumps({"emoji": emoji}, ensure_ascii=False) if emoji else None
+        self.db.execute("INSERT INTO tab_groups VALUES (?,?,?,?,?,?,NULL,'userGenerated',NULL,NULL,NULL)",
+                        (entity, nid, DIA_DATE, title, theme, icon))
+        return nid
+
+
+def dia_sidebar_plain(path):
+    subprocess.run(["sqlite3", path, ".filectrl reserve_bytes %d" % DIA_RESERVED, DIA_SCHEMA], check=True, capture_output=True)
+    db = sqlite3.connect(path)
+    db.execute("INSERT INTO spaces VALUES ('space-home','Home','2026-10-01 08:00:00.000',?,'yellow',NULL)", (DIA_DATE,))
+    db.execute("INSERT INTO spaces VALUES ('space-side','Side','2026-10-02 08:00:00.000',?,'green',NULL)", (DIA_DATE,))
+    t = DiaTree(db)
+    fav = t.container("favorites", 0, "space-home")
+    t.tab(fav, 0, "space-home", ("https://mail.dia.example/", "Mail", None))
+    t.tab(fav, 1, "space-home", ("https://calendar.dia.example/", "Calendar", None))
+    pinned = t.container("pinned_container", 0, "space-home")
+    t.tab(pinned, 0, "space-home", ("https://docs.dia.example/", "Docs", "Team docs"))
+    reading = t.group(pinned, 1, "space-home", "Reading", "\U0001F4DA", "blue")
+    t.tab(reading, 0, "space-home", ("https://read.dia.example/one", "Read one", None))
+    deep = t.group(reading, 1, "space-home", "Deep")
+    t.tab(deep, 0, "space-home", ("https://read.dia.example/deep", "Deep read", None))
+    t.tab(pinned, 2, "space-home", ("https://left.dia.example/", "Left", None), ("https://right.dia.example/", "Right", None))
+    t.tab(pinned, 3, "space-home", ("https://gone.dia.example/", "Gone", None), deleted=DIA_DATE)
+    window = t.container("window", 0, "space-home")
+    t.tab(window, 0, "space-home", ("https://news.dia.example/story", "Story", None))
+    t.tab(window, 1, "space-home", ("https://code.dia.example/", "Code", None), ("https://preview.dia.example/", "Preview", None))
+    t.tab(window, 2, "space-home", (None, None, None))
+    research = t.group(window, 3, "space-home", "Research", "\U0001F52C", "purple")
+    t.tab(research, 0, "space-home", ("https://paper.dia.example/", "Paper", None))
+    sources = t.group(research, 1, "space-home", "Sources", None, "green")
+    t.tab(sources, 0, "space-home", ("https://source.dia.example/a", "Source A", "Primary source"))
+    closed = t.container("window", 1, "space-home", deleted=DIA_DATE)
+    t.tab(closed, 0, "space-home", ("https://closed.dia.example/", "Closed window", None))
+    side_fav = t.container("favorites", 1, "space-side")
+    t.tab(side_fav, 0, "space-side", ("https://chat.dia.example/", "Chat", None))
+    t.container("pinned_container", 1, "space-side")
+    side_window = t.container("window", 2, "space-side")
+    errands = t.group(side_window, 0, "space-side", "Errands", "\U0001F6D2")
+    t.tab(errands, 0, "space-side", ("https://shop.dia.example/list", "List", None))
+    db.commit()
+    db.close()
+
+
+def dia_sidebar_edit(path, edit):
+    db = sqlite3.connect(path)
+    t = DiaTree(db)
+    window = db.execute("SELECT id FROM nodes WHERE kind = 'window' AND space_id = 'space-home' AND deleted_at IS NULL").fetchone()[0]
+    order = db.execute('SELECT max("order") FROM nodes WHERE parent_id = ?', (window,)).fetchone()[0] + 1
+    edit(t, window, order)
+    db.commit()
+    db.close()
+
+
+def dia_committed_edit(t, window, order):
+    later = t.group(window, order, "space-home", "Later", "\u23F0", "orange")
+    t.tab(later, 0, "space-home", ("https://later.dia.example/", "Later", None))
+
+
+def dia_uncommitted_edit(t, window, order):
+    t.tab(window, order, "space-home", ("https://uncommitted.dia.example/", "Not committed", None))
+
+
+def dia_key(label):
+    salt = hmac.new(DIA_LABEL_SALT, label.encode(), hashlib.sha256).digest()
+    prk = hmac.new(salt, CHROMIUM_KEY, hashlib.sha256).digest()
+    return hmac.new(prk, label.encode() + b"\x01", hashlib.sha256).digest()
+
+
+def dia_encrypt_page(page, number, key):
+    if number == 1:
+        page = page[:18] + b"\x02\x02" + page[20:]
+    start = 16 if number == 1 else 0
+    end = DIA_PAGE - DIA_RESERVED
+    iv = hmac.new(b"dia-fixture-iv", struct.pack(">I", number) + page, hashlib.sha256).digest()[:16]
+    body = openssl("aes-256-cbc", key, iv, page[start:end], nopad=True)
+    tag = hmac.new(dia_hmac_key(key), body + iv + struct.pack("<I", number), hashlib.sha512).digest()
+    salt = DIA_FILE_SALT if number == 1 else b""
+    return salt + body + iv + tag
+
+
+def dia_hmac_key(key):
+    return hashlib.pbkdf2_hmac("sha512", key, bytes(b ^ 0x3A for b in DIA_FILE_SALT), 2, len(key))
+
+
+def dia_pages(path):
+    raw = open(path, "rb").read()
+    return [raw[i:i + DIA_PAGE] for i in range(0, len(raw), DIA_PAGE)]
+
+
+def dia_wal_sum(data, s0, s1):
+    for i in range(0, len(data), 8):
+        a, b = struct.unpack("<II", data[i:i + 8])
+        s0 = (s0 + a + s1) & 0xFFFFFFFF
+        s1 = (s1 + b + s0) & 0xFFFFFFFF
+    return s0, s1
+
+
+def dia_wal(steps, key):
+    header = struct.pack(">IIII", 0x377F0682, 3007000, DIA_PAGE, 0) + DIA_WAL_SALT
+    s0, s1 = dia_wal_sum(header, 0, 0)
+    out = header + struct.pack(">II", s0, s1)
+    for before, after, commit in steps:
+        changed = [n for n in range(1, len(after) + 1) if n > len(before) or before[n - 1] != after[n - 1]]
+        for i, n in enumerate(changed):
+            size = len(after) if commit and i == len(changed) - 1 else 0
+            data = dia_encrypt_page(after[n - 1], n, key)
+            head = struct.pack(">II", n, size)
+            s0, s1 = dia_wal_sum(head + data, s0, s1)
+            out += head + DIA_WAL_SALT + struct.pack(">II", s0, s1) + data
+    return out
+
+
+def build_dia_sidebar(profile_dir, folder_name):
+    key = dia_key("profile/%s/tabs" % folder_name)
+    tmp = tempfile.mkdtemp()
+    try:
+        base = os.path.join(tmp, "base.db")
+        dia_sidebar_plain(base)
+        committed = os.path.join(tmp, "committed.db")
+        shutil.copy(base, committed)
+        dia_sidebar_edit(committed, dia_committed_edit)
+        pending = os.path.join(tmp, "pending.db")
+        shutil.copy(committed, pending)
+        dia_sidebar_edit(pending, dia_uncommitted_edit)
+        a, b, c = dia_pages(base), dia_pages(committed), dia_pages(pending)
+        write(os.path.join(profile_dir, "tabs.db"), b"".join(dia_encrypt_page(p, i + 1, key) for i, p in enumerate(a)))
+        write(os.path.join(profile_dir, "tabs.db-wal"), dia_wal([(a, b, True), (b, c, False)], key))
+    finally:
+        shutil.rmtree(tmp)
 
 
 
@@ -731,7 +985,8 @@ def build_arc():
     root = os.path.join(arc, "User Data")
     chromium_local_state(root, {"Default": {"name": "Your Chromium"}, "Profile 1": {"name": "Work"}})
     d = os.path.join(root, "Default")
-    write_json(os.path.join(d, "Preferences"), {})
+    write_json(os.path.join(d, "Preferences"), default_search(DUCKDUCKGO[4]))
+    chromium_keywords(os.path.join(d, "Web Data"), [GOOGLE, BING, DUCKDUCKGO])
     chromium_history(os.path.join(d, "History"), [("https://arc-history.example/", "Arc history", 2, 0, BASE_UNIX - 30, 0)])
     chromium_logins(os.path.join(d, "Login Data"), [
         ("https://arc-login.example/", "https://arc-login.example/", "arc-user", v10(b"arc-pass"), 0, 1)])
@@ -791,7 +1046,7 @@ def build_arc():
         {"id": "S-WORK", "title": "Work",
          "profile": {"custom": {"_0": {"directoryBasename": "Profile 1", "machineID": "M-1"}}},
          "newContainerIDs": [{"pinned": {}}, "W-PIN", {"unpinned": {"_0": {"shared": {}}}}, "W-TODAY"],
-         "customInfo": {"iconType": {"icon": "briefcase"},
+         "customInfo": {"iconType": {"icon": "construction"},
                         "windowTheme": arc_theme("blue-teal")}},
         {"id": "S-UNTITLED",
          "profile": {"default": True},
@@ -816,6 +1071,85 @@ def build_arc():
         "version": 1,
     }
     write_json(os.path.join(arc, "StorableSidebar.json"), sidebar)
+    build_arc_extras(arc, ref)
+
+
+ARC_ICON_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGP8z8DAwMDAxMDAwMDAAAANHQEDasKb6QAAAABJRU5ErkJggg==")
+
+
+def arc_route(text, destination, matches=False):
+    style = {"matches": {}} if matches else {"contains": {}}
+    return {"id": "R-" + hashlib.md5(text.encode()).hexdigest()[:8], "destination": destination,
+            "sourceComponents": [{"id": "C-" + text, "componentType": {"urlMatch": {"_0": style, "_1": text}}}]}
+
+
+def build_arc_extras(arc, ref):
+    most_recent = {"space": {"_0": {"mostRecent": {}}}}
+    write_json(os.path.join(arc, "StorableLinkRouting.json"), {
+        "rules": [
+            arc_route("meet.google.com", most_recent),
+            arc_route("jira.example/browse", {"space": {"_0": {"space": {"_0": "S-WORK"}}}}),
+            arc_route("https://www.docs.example/", {"littleArc": {"_0": {"mostRecent": {}}}}),
+            arc_route("calendar.example", {"littleArc": {"_0": {"space": {"_0": "S-PERSONAL"}}}}, matches=True),
+            arc_route("gone.example", {"space": {"_0": {"space": {"_0": "S-DELETED"}}}}),
+            arc_route("  ", most_recent),
+            {"id": "R-unknown-op", "destination": most_recent,
+             "sourceComponents": [{"id": "C-op", "componentType": {"urlMatch": {"_0": {"startsWith": {}}, "_1": "x.example"}}}]},
+            {"id": "R-two-parts", "destination": most_recent,
+             "sourceComponents": [{"id": "C-a", "componentType": {"urlMatch": {"_0": {"contains": {}}, "_1": "a.example"}}},
+                                  {"id": "C-b", "componentType": {"urlMatch": {"_0": {"contains": {}}, "_1": "b.example"}}}]},
+            arc_route("profile.example", {"space": {"_0": {"profile": {"_0": "P-1"}}}}),
+        ],
+        "defaultDestination": most_recent,
+        "version": 1,
+    })
+
+    def archived(id_, url, title, seconds_ago, space, rename=None, reason="manual"):
+        return {"archivedAt": ref - seconds_ago, "reason": reason,
+                "source": {"space": {"_0": space}} if space else {"littleArc": {}},
+                "sidebarItem": {"id": id_, "parentID": None, "childrenIds": [], "title": rename, "isUnread": False,
+                                "createdAt": ref - seconds_ago - 600,
+                                "data": {"tab": {"savedURL": url, "savedTitle": title, "timeLastActiveAt": ref - seconds_ago}}}}
+
+    items = [
+        archived("A-1", "https://old-news.example/", "Old news", 7200, "S-PERSONAL", reason="auto"),
+        archived("A-2", "https://report.example/q3", "Q3 report", 3600, "S-WORK", rename="Report"),
+        archived("A-3", "https://little.example/", "From Little Arc", 1800, None),
+        archived("A-4", "https://ghost.example/", "Deleted space", 900, "S-DELETED"),
+        {"archivedAt": ref - 600, "reason": "manual", "source": {"space": {"_0": "S-PERSONAL"}},
+         "sidebarItem": {"id": "A-5", "title": "A folder", "data": {"list": {}}}},
+        archived("A-6", "file:///Users/someone/notes.txt", "Local file", 300, "S-PERSONAL"),
+    ]
+    flat = []
+    for item in items:
+        flat += [item["sidebarItem"]["id"], item]
+    write_json(os.path.join(arc, "StorableArchiveItems.json"), {"items": flat, "version": 1})
+
+    preferences = os.path.join(os.path.dirname(SUPPORT), "Preferences", "company.thebrowser.Browser.plist")
+    os.makedirs(os.path.dirname(preferences), exist_ok=True)
+    with open(preferences, "wb") as f:
+        plistlib.dump({"autoArchiveTimeThreshold": "sevenDays"}, f, fmt=plistlib.FMT_BINARY)
+
+    cache = os.path.join(arc, "SidebarItemsFaviconCache")
+    for item_id in ["T-1", "T-6", "T-10", "T-13"]:
+        write(os.path.join(cache, hashlib.md5(item_id.encode()).hexdigest()), ARC_ICON_PNG)
+    write(os.path.join(cache, hashlib.md5(b"T-8").hexdigest()), b"not a png")
+
+    db = new_db(os.path.join(arc, "User Data", "Default", "Favicons"))
+    db.executescript("""
+        CREATE TABLE favicons(id INTEGER PRIMARY KEY, url LONGVARCHAR NOT NULL, icon_type INTEGER DEFAULT 1);
+        CREATE TABLE favicon_bitmaps(id INTEGER PRIMARY KEY, icon_id INTEGER NOT NULL, last_updated INTEGER DEFAULT 0,
+            image_data BLOB, width INTEGER DEFAULT 0, height INTEGER DEFAULT 0, last_requested INTEGER DEFAULT 0);
+        CREATE TABLE icon_mapping(id INTEGER PRIMARY KEY, page_url LONGVARCHAR NOT NULL, icon_id INTEGER);
+    """)
+    for i, (page, icon) in enumerate([("https://calendar.example/", "https://calendar.example/icon.png"),
+                                      ("https://blog.example/post", "https://blog.example/favicon.ico")], start=1):
+        db.execute("INSERT INTO favicons(id, url, icon_type) VALUES (?, ?, 1)", (i, icon))
+        db.execute("INSERT INTO icon_mapping(page_url, icon_id) VALUES (?, ?)", (page, i))
+        db.execute("INSERT INTO favicon_bitmaps(icon_id, image_data, width, height) VALUES (?, ?, 16, 16)", (i, PNG_1PX))
+    db.commit()
+    db.close()
 
 
 
@@ -1041,6 +1375,45 @@ def places(path):
     shutil.rmtree(tmp)
 
 
+def solid_png(side, rgb):
+    def chunk(kind, body):
+        return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", zlib.crc32(kind + body) & 0xFFFFFFFF)
+    rows = b"".join(b"\0" + bytes(rgb) * side for _ in range(side))
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", side, side, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(rows, 9)) + chunk(b"IEND", b""))
+
+
+FAVICON_SVG = (b'<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="100000" height="100000" '
+               b'viewBox="0 0 16 16"><rect width="16" height="16" rx="3" fill="#2a7"/></svg>')
+
+
+def firefox_favicons(path, pages, roots):
+    db = new_db(path)
+    db.executescript("""
+        CREATE TABLE moz_icons (id INTEGER PRIMARY KEY, icon_url TEXT NOT NULL, fixed_icon_url_hash INTEGER NOT NULL,
+          width INTEGER NOT NULL DEFAULT 0, root INTEGER NOT NULL DEFAULT 0, color INTEGER, expire_ms INTEGER NOT NULL DEFAULT 0,
+          flags INTEGER NOT NULL DEFAULT 0, data BLOB);
+        CREATE TABLE moz_pages_w_icons (id INTEGER PRIMARY KEY, page_url TEXT NOT NULL, page_url_hash INTEGER NOT NULL);
+        CREATE TABLE moz_icons_to_pages (page_id INTEGER NOT NULL, icon_id INTEGER NOT NULL, expire_ms INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY (page_id, icon_id)) WITHOUT ROWID;
+        CREATE INDEX moz_icons_iconurlhashindex ON moz_icons (fixed_icon_url_hash);
+        CREATE INDEX moz_pages_w_icons_urlhashindex ON moz_pages_w_icons (page_url_hash);
+    """)
+
+    def icon(url, width, data, root=0):
+        return db.execute("INSERT INTO moz_icons (icon_url, fixed_icon_url_hash, width, root, data) VALUES (?,?,?,?,?)",
+                          (url, 0, width, root, data)).lastrowid
+
+    for page_id, (page, icons) in enumerate(pages, 1):
+        db.execute("INSERT INTO moz_pages_w_icons (id, page_url, page_url_hash) VALUES (?,?,?)", (page_id, page, 0))
+        for url, width, data in icons:
+            db.execute("INSERT INTO moz_icons_to_pages (page_id, icon_id) VALUES (?,?)", (page_id, icon(url, width, data)))
+    for url, width, data in roots:
+        icon(url, width, data, root=1)
+    db.commit()
+    db.close()
+
+
 def firefox_cookies(path):
     db = new_db(path)
     db.executescript("""
@@ -1098,6 +1471,16 @@ Locked=1
     d = os.path.join(root, "Profiles", "abcd1234.default-release")
     places(os.path.join(d, "places.sqlite"))
     firefox_cookies(os.path.join(d, "cookies.sqlite"))
+    firefox_favicons(os.path.join(d, "favicons.sqlite"), [
+        ("https://www.mozilla.example/", [("https://www.mozilla.example/icon-16.png", 16, solid_png(16, (200, 30, 30))),
+                                          ("https://www.mozilla.example/icon-32.png", 32, solid_png(32, (200, 30, 30))),
+                                          ("https://www.mozilla.example/icon-96.png", 96, solid_png(96, (200, 30, 30)))]),
+        ("https://a.example/", [("https://a.example/logo.svg", 65535, FAVICON_SVG)]),
+        ("https://second.example/other", [("https://second.example/other.png", 32, solid_png(32, (30, 30, 200)))]),
+    ], [
+        ("https://developer.mozilla.example/favicon.ico", 32, solid_png(32, (30, 160, 30))),
+        ("https://unrelated.example/favicon.ico", 32, solid_png(32, (1, 2, 3))),
+    ])
     session = {
         "version": ["sessionrestore", 1],
         "windows": [
@@ -1202,6 +1585,15 @@ Locked=1
     d = os.path.join(root, "Profiles", "zen12345.Default (release)")
     places(os.path.join(d, "places.sqlite"))
     firefox_cookies(os.path.join(d, "cookies.sqlite"))
+    firefox_favicons(os.path.join(d, "favicons.sqlite"), [
+        ("https://mail.example/", [("https://mail.example/mail.png", 32, solid_png(32, (220, 60, 40)))]),
+        ("https://chat.example/room", [("https://chat.example/stored.png", 32, solid_png(32, (9, 9, 9)))]),
+        ("https://news.example/", [("https://news.example/news.svg", 65535, FAVICON_SVG)]),
+        ("https://games.example/", [("https://games.example/big.png", 128, solid_png(128, (120, 40, 200)))]),
+        ("https://nested.example/", [("https://nested.example/broken.svg", 65535, b"<svg xmlns='http://www.w3.org/2000/svg'><<<")]),
+    ], [
+        ("https://www.docs.example/favicon.ico", 16, solid_png(16, (40, 90, 220))),
+    ])
     session = {
         "lastCollected": BASE_UNIX * 1000,
         "spaces": [

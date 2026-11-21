@@ -340,7 +340,7 @@ std::optional<int> ACMainDelegate::BasicStartupComplete() {
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
   MergeFeatures(command_line, switches::kDisableFeatures,
                 "Glic,GlicActor,GlicActorUi,ApiGlicPrivate,ContextualCueing,"
-                "GlicZeroStateSuggestions");
+                "GlicZeroStateSuggestions,SettingsGlowupJourneys");
   if (!command_line->HasSwitch(switches::kProcessType)) {
     g_ardia_background_instance = BackgroundInstance();
     DecideTestGateAtStartup();

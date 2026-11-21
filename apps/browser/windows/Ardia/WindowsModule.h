@@ -29,6 +29,7 @@ struct WindowsModule {
     if (auto title = options["title"].TryGetString()) request.title = *title;
     if (auto focus = options["focus"].TryGetBoolean()) request.focus = *focus;
     if (auto animated = options["animated"].TryGetBoolean()) request.animated = *animated;
+    if (auto maximized = options["maximized"].TryGetBoolean()) request.maximized = *maximized;
     if (auto front = options["focusWhenFront"].TryGetString()) request.focusWhenFront = *front;
     if (auto page = options["focusWhenPage"].TryGetString()) request.focusWhenPage = *page;
     if (auto behind = options["behind"].TryGetString()) request.behind = *behind;

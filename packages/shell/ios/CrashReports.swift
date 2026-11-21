@@ -24,6 +24,7 @@ enum CrashReports {
         let report = parse(url, owner: ours, time: modified) else { continue }
       reports.append(report)
     }
+    attachHermesFatal(&reports)
     let sorted = reports.sorted { ($0["fileTime"] as? Double ?? 0) < ($1["fileTime"] as? Double ?? 0) }
     let browser = sorted.filter { $0["process"] as? String == "browser" }.suffix(perProcessKind)
     let helperReports = sorted.filter { $0["process"] as? String != "browser" }.suffix(perProcessKind)
@@ -178,6 +179,10 @@ enum CrashReports {
       report["uptimeSeconds"] = Int(captured.timeIntervalSince(launched).rounded())
     }
     if let writable = writableMegabytes(body["vmSummary"] as? String) { report["vmWritableMB"] = writable }
+    if process == "browser", let reason = reactNativeFatal(body) {
+      report["jsFatal"] = reason
+      report["jsFatalSource"] = "reactNative"
+    }
     return report
   }
 
@@ -206,7 +211,7 @@ enum CrashReports {
       return valid.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)) == nil ? nil : name
     }
     if let details = body["exceptionReason"] as? [String: Any], let name = details["name"] as? String { return checked(name) }
-    let named = try! NSRegularExpression(pattern: "uncaught exception '([^']{1,64})'")
+    let named = try! NSRegularExpression(pattern: "uncaught exception '([A-Za-z0-9_]{1,64})[':]")
     for case let lines as [String] in (body["asi"] as? [String: Any] ?? [:]).values {
       for line in lines {
         if let match = named.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
@@ -216,6 +221,42 @@ enum CrashReports {
       }
     }
     return nil
+  }
+
+  private static let reactNativeFatal = "RCTFatalException: "
+
+  private static func attachHermesFatal(_ reports: inout [[String: Any]]) {
+    guard let pending = HermesFatal.pending() else { return }
+    let aborts = reports.indices.filter { reports[$0]["process"] as? String == "browser" && reports[$0]["signal"] as? String == "SIGABRT" }
+    let crashed = aborts.map { Date(timeIntervalSince1970: (reports[$0]["time"] as? Double ?? 0) / 1000) }
+    if let match = FatalMatch.crash(forFileWrittenAt: pending.written, among: crashed) {
+      if let reason = pending.reason {
+        reports[aborts[match]]["jsFatal"] = reason
+        reports[aborts[match]]["jsFatalSource"] = "hermes"
+      }
+      HermesFatal.settle()
+    } else if Date().timeIntervalSince(pending.written) > HermesFatal.unmatchedLifetime {
+      HermesFatal.settle()
+    }
+  }
+
+  private static func reactNativeFatal(_ body: [String: Any]) -> String? {
+    guard thrownExceptionName(body) == "RCTFatalException" else { return nil }
+    var full = (body["exceptionReason"] as? [String: Any])?["name"] as? String
+    if full == nil {
+      let named = try! NSRegularExpression(pattern: "uncaught exception '(RCTFatalException: .*?)'(?:, reason: |$)")
+      for case let lines as [String] in (body["asi"] as? [String: Any] ?? [:]).values {
+        for line in lines {
+          if let match = named.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)), let range = Range(match.range(at: 1), in: line) {
+            full = String(line[range])
+          }
+        }
+      }
+    }
+    guard let full, full.hasPrefix(reactNativeFatal) else { return nil }
+    let line = full.dropFirst(reactNativeFatal.count).split(whereSeparator: \.isNewline).first.map { String($0.prefix(200)) } ?? ""
+    let trimmed = line.trimmingCharacters(in: .whitespaces)
+    return trimmed.isEmpty ? nil : trimmed
   }
 
   #if DEBUG

@@ -149,7 +149,9 @@ test("a migrated session is saved at once against what was on disk, so the next 
   }
 });
 
-test("a session that only lacks the version stamp launches like a stamped one, and has the stamp after its next save", async () => {
+test("a session that only lacks the version stamp launches like a stamped one, and has the stamp after its next save", async (context) => {
+  const savedAt = 1700000000000;
+  context.mock.timers.enable({ apis: ["Date"], now: savedAt });
   const first = persistenceRig(olderSession({ showUnreadCounts: false }));
   await first.stop.flush();
   first.restore();
@@ -164,7 +166,9 @@ test("a session that only lacks the version stamp launches like a stamped one, a
     }
   };
   const { version: _, ...unstamped } = settled;
-  assert.equal(await launchWrites(unstamped), await launchWrites(settled));
+  assert.deepEqual([await launchWrites(unstamped), await launchWrites(settled)], [0, 0]);
+  context.mock.timers.tick(1);
+  assert.deepEqual([await launchWrites(unstamped), await launchWrites(settled)], [1, 1]);
   const rig = persistenceRig(unstamped);
   try {
     useBrowser.getState().updateSettings({ sidebarWidth: 300 });

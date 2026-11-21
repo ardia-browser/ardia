@@ -38,19 +38,19 @@ const initials = (name: string) =>
 const restCount = VOICES.filter((v) => !v.featured).length;
 ---
 
-<section class="voices paint edge" id="voices" aria-labelledby="voices-title" data-shot="voices">
+<section class="voices paint edge edge-b" id="voices" aria-labelledby="voices-title" data-shot="voices">
   <div class="wrap">
     <header class="voices-head">
       <p class="label kicker">From the feed</p>
-      <h2 class="poster" id="voices-title" data-reveal>They switched.</h2>
+      <h2 class="poster" id="voices-title">They switched.</h2>
     </header>
 
     <ul class="quotes" role="list" aria-label="Testimonials" data-rest={restCount % 3}>
       {
-        VOICES.map((v, i) => {
+        VOICES.map((v) => {
           const avatar = avatars[v.avatar];
           return (
-            <li class:list={["quote", { featured: v.featured }]} data-reveal style={`--i: ${i + 2}`}>
+            <li class:list={["quote", { featured: v.featured }]}>
               <a class="card" href={v.href} rel="noopener">
                 <blockquote>
                   <p>“{v.quote}”</p>
@@ -87,9 +87,10 @@ const restCount = VOICES.filter((v) => !v.featured).length;
 
 <style>
   .voices {
-    --bg: #9a6580;
-    --bg-top: var(--dusk-late);
-    --wash: linear-gradient(180deg, var(--dusk-late) 0%, #9a6580 55%, #8a5f7f 100%);
+    /* Follows the Game section in the day cycle (was FAQ's palette when FAQ came first). */
+    --bg: var(--dusk);
+    --bg-top: #d98f86;
+    --wash: linear-gradient(180deg, #d98f86 0%, var(--dusk) 40%, var(--dusk-late) 100%);
     --dab: var(--sun);
     --ink-2: #3f3437;
     --ink-3: #5a4a4e;
@@ -302,13 +303,6 @@ const restCount = VOICES.filter((v) => !v.featured).length;
     .quote.featured blockquote p {
       max-width: none;
       font-size: clamp(1.12rem, 0.9rem + 1.2vw, 1.45rem);
-    }
-    /* Cards off to the side never intersect the viewport on load; keep them visible. */
-    :global(.js) .quote[data-reveal],
-    :global(.js) .quote[data-reveal].in {
-      opacity: 1;
-      transform: none;
-      transition: none;
     }
   }
 

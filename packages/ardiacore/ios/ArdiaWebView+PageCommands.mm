@@ -1,8 +1,5 @@
 #import "ArdiaWebViewInternal.h"
 #import "ArdiaRuntime.h"
-#import "ArdiaFairPlay.h"
-#import "ArdiaProtectedVideo.h"
-#import "ArdiaHLSVideo.h"
 
 using namespace ardia_web_view;
 using namespace ardia_runtime;
@@ -10,10 +7,9 @@ using namespace ardia_runtime;
 @implementation ArdiaWebView (PageCommands)
 
 - (void)emitMedia {
-  const BOOL playing = _tab.audible || [ArdiaFairPlay playsInTab:_tab] || [ArdiaProtectedVideo playsInTab:_tab] || [ArdiaHLSVideo playsInTab:_tab];
+  const BOOL playing = _tab.audible;
   const BOOL muted = _tab ? _tab.muted : _muted;
   [self emit:@"media" payload:@{@"playing" : @(playing), @"muted" : @(muted)}];
-  [self systemNowPlayingChanged];
 }
 
 - (void)emitZoom {
@@ -38,9 +34,6 @@ using namespace ardia_runtime;
 
 - (void)tabDidChangeAudio:(ArdiaCoreTab *)tab {
   if (_muted && !tab.muted) tab.muted = YES;
-  [ArdiaFairPlay muteChangedInTab:tab];
-  [ArdiaProtectedVideo muteChangedInTab:tab];
-  [ArdiaHLSVideo muteChangedInTab:tab];
   [self emitMedia];
 }
 
@@ -51,9 +44,6 @@ using namespace ardia_runtime;
 - (void)setMuted:(BOOL)muted {
   _muted = muted;
   _tab.muted = muted;
-  [ArdiaFairPlay muteChangedInTab:_tab];
-  [ArdiaProtectedVideo muteChangedInTab:_tab];
-  [ArdiaHLSVideo muteChangedInTab:_tab];
 }
 
 - (void)setZoomFactor:(double)factor {
@@ -93,6 +83,7 @@ using namespace ardia_runtime;
                       : [panel isEqualToString:@"toggle"]  ? 40237
                                                            : 0;
   if (command && _tab) [self runChromeCommand:command];
+  else if ([panel isEqualToString:@"network"]) [_tab showDevToolsPanel:panel];
   else [_tab showDevTools];
 }
 

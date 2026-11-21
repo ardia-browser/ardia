@@ -23,6 +23,7 @@ final class SidebarEdgeWatcher {
   private var wasPressed = false
   private var lastPoint: NSPoint?
   private var stoppedAtScreenEdge: String?
+  private var crossing = ScreenEdgeCrossing()
   private var overSince: [String: TimeInterval] = [:]
   private var localMonitor: Any?
   private var globalMonitor: Any?
@@ -116,6 +117,7 @@ final class SidebarEdgeWatcher {
     if let id = stoppedAtScreenEdge, !tracking || !restsAtScreenEdge(point, id, live: live) { stoppedAtScreenEdge = nil }
     let from = lastPoint
     lastPoint = tracking ? point : nil
+    if tracking { crossing.track(point, at: ProcessInfo.processInfo.systemUptime) } else { crossing.forget() }
     guard let from, lastPoint != nil else { return (point, nil) }
     for (id, watch) in watched {
       guard let window = WindowManager.shared.window(id), let screen = window.screen,
@@ -124,12 +126,20 @@ final class SidebarEdgeWatcher {
         Self.sidebarSideAtScreenEdge(window, screen, right: watch.right),
         !live || Self.windowNumber(at: Self.insideEdge(window.frame, watch.right, y: point.y)) == window.windowNumber
       else { continue }
+      let edgeX = Self.screenEdgeX(screen.frame, watch.right)
+      let first = alreadyStopped != id
+      if first {
+        crossing.startPush()
+        if crossing.isFling(right: watch.right) { return (point, (id, "flung")) }
+      } else if crossing.push(by: watch.right ? point.x - edgeX : edgeX - point.x) {
+        stoppedAtScreenEdge = nil
+        return (point, (id, "passed"))
+      }
       if over.contains(id), let since = overSince[id], ProcessInfo.processInfo.systemUptime - since >= Self.pushThrough {
         stoppedAtScreenEdge = nil
         return (point, (id, "passed"))
       }
-      let edge = NSPoint(x: Self.screenEdgeX(screen.frame, watch.right), y: point.y)
-      let first = alreadyStopped != id
+      let edge = NSPoint(x: edgeX, y: point.y)
       stoppedAtScreenEdge = id
       lastPoint = edge
       if live {
@@ -337,6 +347,7 @@ final class SidebarEdgeWatcher {
     pressedInside = []
     unreported = []
     stoppedAtScreenEdge = nil
+    crossing.forget()
     overSince = [:]
     pointerOverride = nil
     backgroundPoint = nil

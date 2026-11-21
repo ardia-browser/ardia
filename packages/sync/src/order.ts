@@ -36,20 +36,19 @@ export function assignPositions(existing: (string | undefined)[]): string[] {
 
   const out = new Array<string>(existing.length);
   for (const i of keep) out[i] = existing[i]!;
+  const nextKept = new Array<string | null>(existing.length);
+  let next: string | null = null;
+  for (let i = existing.length - 1; i >= 0; i--) {
+    nextKept[i] = next;
+    if (keep.has(i)) next = out[i]!;
+  }
   let before = "";
   for (let i = 0; i < existing.length; i++) {
     if (keep.has(i)) {
       before = out[i]!;
       continue;
     }
-    let next: string | null = null;
-    for (let j = i + 1; j < existing.length; j++) {
-      if (keep.has(j)) {
-        next = out[j]!;
-        break;
-      }
-    }
-    out[i] = positionBetween(before, next);
+    out[i] = positionBetween(before, nextKept[i] ?? null);
     before = out[i]!;
   }
   return out;

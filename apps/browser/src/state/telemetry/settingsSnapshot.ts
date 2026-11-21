@@ -7,7 +7,8 @@ import { shownSidebarWidth } from "../../lib/windowLayout";
 import { systemIncreaseContrast } from "../app/systemContrast";
 import { isNavigationOrFunctionKey, storedShortcut } from "../commands/shortcuts";
 import { currentInterfaceScale } from "../settings/interfaceScale";
-import { INTERFACE_SCALE, interfaceScalePercent, rootLength } from "../../lib/interfaceScale";
+import { INTERFACE_SCALE, interfaceScalePercent, rootLength, windowLength } from "../../lib/interfaceScale";
+import { drawnWindowCornerRadius } from "../../platform/windows";
 
 export const SETTINGS_SNAPSHOT_EVENT = "settings_snapshot";
 
@@ -29,7 +30,8 @@ function measured(spec: SettingSpec<unknown>, value: unknown): string | null {
 
 function customShortcutCounts(overrides: Settings["shortcuts"]): Record<string, string> {
   const keys = Object.values(overrides).filter((stored) => stored[0]).map((stored) => storedShortcut(stored).key);
-  return { custom_shortcuts: String(keys.length), custom_shortcuts_navigation_keys: String(keys.filter(isNavigationOrFunctionKey).length) };
+  const optionOnly = Object.values(overrides).filter((stored) => stored[0]).map((stored) => storedShortcut(stored).modifiers).filter((mods) => mods.includes("option") && !mods.includes("command") && !mods.includes("control"));
+  return { custom_shortcuts: String(keys.length), custom_shortcuts_navigation_keys: String(keys.filter(isNavigationOrFunctionKey).length), custom_shortcuts_option_only: String(optionOnly.length) };
 }
 
 export function settingsSnapshot(settings: Settings): Record<string, string> {
@@ -48,6 +50,7 @@ export function settingsSnapshot(settings: Settings): Record<string, string> {
     setting_interfaceScale: String(interfaceScalePercent(currentInterfaceScale())),
     default_interfaceScale: String(interfaceScalePercent(INTERFACE_SCALE.default)),
     system_increase_contrast: encode(systemIncreaseContrast())!,
+    window_corner_radius: encode(windowLength(drawnWindowCornerRadius(), currentInterfaceScale())) ?? "unknown",
     unread_hidden_sites: String(Array.isArray(settings.unreadHiddenSites) ? settings.unreadHiddenSites.length : 0),
     custom_new_tab_url: customNewTabUrl({ newTabOpens: "page", minimalismMode: false, newTabUrl: typeof settings.newTabUrl === "string" ? settings.newTabUrl : "" }) ? "true" : "false",
   };

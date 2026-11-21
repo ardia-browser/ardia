@@ -18,7 +18,11 @@ class FakeChrome {
   snapshot() {
     return Promise.resolve({ rev: this.rev, cmd: null, strips: [...this.strips.keys()].map((id) => this.state(id)) });
   }
+  refusing = new Set();
+  refuseOnce = 0;
   command(command, id) {
+    if (this.refusing.has(command.strip)) throw new Error("The strip is not owned by this window");
+    if (this.refuseOnce > 0 && this.refuseOnce--) return new Promise((_, reject) => setTimeout(() => reject(new Error("The strip is not owned by this window")), 20));
     this.sent++;
     this.commands.push({ id, command });
   }
@@ -148,6 +152,14 @@ class FakeChrome {
     f.s.tabs.splice(at, 0, f.tab);
     this.emit(f.id, null);
   }
+  activateBehindStaleFlag(key) {
+    const f = this.find(key);
+    f.s.active = f.tab.browser;
+    f.s.pickedOnClose = true;
+    this.emit(f.id, null);
+    f.s.pickedOnClose = false;
+    this.emit(f.id, null);
+  }
   activate(key, cmd = null) {
     const f = this.find(key);
     f.s.active = f.tab.browser;
@@ -215,7 +227,7 @@ const chrome = new FakeChrome();
 globalThis.acTestTabStrip = chrome;
 const { useBrowser } = await import("../browser/store.ts");
 const model = await import("../browser/model.ts");
-const { startChromeTabs } = await import("./chromeTabs.ts");
+const { chromeTabsBookkeeping, startChromeTabs } = await import("./chromeTabs.ts");
 const { splitTabIdsOf } = await import("../splits/splits.ts");
 startChromeTabs();
 
@@ -335,6 +347,18 @@ test("the tab Chrome shows after a close doesn't override the app's successor ru
   assert.equal(chromeShown(win.strip), "a", "and Chrome shows it too");
 });
 
+test("an extension that shows another tab and then discards the shown one is obeyed, whatever the strip last said about a close", async () => {
+  const win = windowWith("a", "b", "c");
+  await settle(win);
+  const [a, b] = S().windows[win.w].tabIds;
+  assert.equal(shown(win.w), "a");
+  chrome.activateBehindStaleFlag(b);
+  await settle(win);
+  assert.equal(shown(win.w), "b", "the tab the extension showed");
+  assert.equal(chromeShown(win.strip), "b", "Chrome isn't put back on the tab being discarded");
+  assert.ok(S().tabs[a], "the discarded tab stays in the sidebar");
+});
+
 test("a command on its way wins over Chrome's earlier change; stale transactions are dropped", async () => {
   const win = windowWith("a", "b", "c");
   await settle(win);
@@ -350,6 +374,51 @@ test("a command on its way wins over Chrome's earlier change; stale transactions
   const before = S().windows[win.w];
   chrome.listener({ rev: chrome.rev - 1, cmd: null, strips: [{ ...chrome.state(win.strip), tabs: [] }] });
   assert.equal(S().windows[win.w], before);
+});
+
+test("a command Chrome refuses is counted while sharing is on, and doesn't hold back the next one for that strip", async () => {
+  const { takeTabStripCounts } = await import("../telemetry/tabStripCounts.ts");
+  const { setSharing } = await import("../telemetry/client.ts");
+  const fetched = globalThis.fetch;
+  globalThis.fetch = async () => ({ status: 200 });
+  takeTabStripCounts();
+  const win = windowWith("a", "b", "c", "d");
+  await settle(win);
+  const [, b, c, d] = S().windows[win.w].tabIds;
+  chrome.refusing.add(win.strip);
+  S().activate(c);
+  await settle(win);
+  assert.equal(chromeShown(win.strip), "a", "the refused switch never reached Chrome");
+  assert.equal(takeTabStripCounts().tab_strip_commands_refused, 0, "nothing is counted with sharing off");
+  setSharing(true, "settings");
+  try {
+    S().activate(d);
+    await settle(win);
+    assert.equal(takeTabStripCounts().tab_strip_commands_refused, 1);
+  } finally {
+    setSharing(false, "settings");
+    globalThis.fetch = fetched;
+  }
+  chrome.refusing.delete(win.strip);
+  S().activate(b);
+  await settle(win);
+  assert.equal(chromeShown(win.strip), "b", "the next switch reaches Chrome");
+  assert.equal(shown(win.w), "b");
+});
+
+test("a switch made while a refused command was on its way goes out once the refusal comes back", async () => {
+  const win = windowWith("a", "b", "c");
+  await settle(win);
+  const [, b, c] = S().windows[win.w].tabIds;
+  chrome.refuseOnce = 1;
+  S().activate(b);
+  await tick();
+  S().activate(c);
+  await settle(win);
+  await new Promise((r) => setTimeout(r, 40));
+  await settle(win);
+  assert.equal(chromeShown(win.strip), "c");
+  assert.equal(shown(win.w), "c");
 });
 
 test("an extension's tab groups reach the sidebar, and the sidebar's groups reach Chrome", async () => {
@@ -398,6 +467,45 @@ test("an extension's tab groups reach the sidebar, and the sidebar's groups reac
   await settle(win);
   assert.equal(chrome.strips.get(win.strip).groups.get(token).color, "grey");
   assert.equal(S().groups[mine].color, "magenta");
+});
+
+test("a binding to a group the sidebar removed is dropped, and a closed strip leaves no bookkeeping behind", async () => {
+  const win = windowWith("a", "b", "c");
+  await settle(win);
+  const id = (u) => S().windows[win.w].tabIds.find((t) => urlOf(t) === u);
+  chrome.group([id("b"), id("c")], "Reading");
+  await settle(win);
+  const made = Object.values(S().groups).find((g) => g.windowId === win.w);
+  assert.ok(made, "the store made the group");
+  const bound = chromeTabsBookkeeping().groups;
+  assert.ok(bound >= 1);
+  S().ungroup(made.id);
+  await settle(win);
+  assert.deepEqual(Object.keys(S().groups), []);
+  assert.equal(chromeTabsBookkeeping().groups, 0);
+  const other = anotherWindow("x", "y");
+  await settle(other);
+  const sent = chrome.sent;
+  const notShown = (w) => S().windows[w].tabIds.find((t) => t !== model.activeTabId(S(), w));
+  S().activate(notShown(win.w));
+  S().activate(notShown(other.w));
+  await settle(win);
+  await settle(other);
+  assert.ok(chrome.sent >= sent + 2, "each strip was sent a command, so each has a signature");
+  const close = async (strip) => {
+    chrome.outbox.push({ rev: ++chrome.rev, cmd: null, strips: [{ ...chrome.state(strip), closed: true }] });
+    chrome.strips.delete(strip);
+    chrome.deliver();
+    await tick();
+    return chromeTabsBookkeeping();
+  };
+  const open = chromeTabsBookkeeping();
+  assert.ok(open.changedAt >= 1);
+  const firstClosed = await close(win.strip);
+  assert.equal(firstClosed.changedAt, open.changedAt - 1);
+  assert.ok(firstClosed.tried < open.tried, "the closed strip's signatures are gone");
+  const bothClosed = await close(other.strip);
+  assert.ok(bothClosed.tried < firstClosed.tried, "the other strip's signatures were kept until its own close");
 });
 
 test("an extension that closes the shown tab and shows another in one go is obeyed", async () => {
@@ -648,4 +756,18 @@ test("Chrome selecting a Peek's source dismisses the Peek instead of bouncing ba
   assert.equal(S().tabs[peek], undefined);
   assert.equal(shown(win.w), "a");
   assert.equal(chromeShown(win.strip), "a");
+});
+
+test("an extension activation in another space leaves the window in its current space", async () => {
+  const win = windowWith("a");
+  const home = S().windows[win.w].profileId;
+  const work = S().createProfile({ name: "Work", shareWith: home });
+  const b = S().newTab(win.w, { url: "b.com", profileId: work, background: true });
+  await settle(win);
+  assert.equal(shown(win.w), "a");
+  assert.equal(chromeShown(win.strip), "a");
+  chrome.activate(b);
+  await settle(win);
+  assert.equal(S().windows[win.w].profileId, home);
+  assert.equal(shown(win.w), "a");
 });

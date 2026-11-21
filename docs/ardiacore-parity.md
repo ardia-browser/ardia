@@ -134,6 +134,7 @@ Moved to `docs/testing.md` › "ArdiaCore acceptance".
 | passwords, passwords-more | Chrome's password store: save, list, reveal, edit, delete, never-save list, unlock (test reauth), export through the save panel, the autofill pref |
 | autofill, autofill-cards | Addresses; cards saved with a published test number, listed, revealed, deleted; the address and card switches |
 | zoom-levels | `setZoom`/`getZoomLevels` on Chrome's host zoom map |
+| preload-pages | `setPreloadPages`/`getPreloadPages` write and read back Chrome's preload pages state |
 | extensions, extension-surfaces | Unpacked inspect, install, list, disable, uninstall, reload; action state and side panel URL for a tab; the extension's declarativeNetRequest blocks counted on the page (`onContentBlocked`) |
 | chrome-windows-create | `chrome.windows.create` from an extension → the tab lands in the app's window as a live tab (`tab:<id>`), also on a fresh instance showing only the New Tab page (through the extensions module's `onTabs` with an `adoptId`) |
 | extension-popup-window | An action's popup (`extensionHost="popup"`) sees the window it was clicked in as its current window and the page under it as its active tab; it's in no strip and makes no window; Esc in it closes it |
@@ -266,6 +267,7 @@ over, `-[ArdiaCoreTab setTemporarySource:]`) is the tab a closed window's entry 
 | `getContentBlocker`, `setContentBlockerEnabled`, `setFilterListEnabled`, `addFilterList`, `removeFilterList`, `isContentBlockerAllowed`, `setContentBlockerAllowed` | done | uBlock Origin as a component extension (`loadComponentExtension:`), driven through its runtime messages; `addFilterList`/`removeFilterList` import and drop custom lists by URL (`applyFilterListSelection` `toImport`/`toRemove`), and other profiles follow them |
 | `setSiteSetting`, `getSiteSettings`, `getSiteSettingsOrigins`, `resetSiteSettings`, `clearSiteData` | done | Chrome's content settings under CEF's type names; the page script's `blockAutoplay` comes from them as on CEF |
 | `setZoom`, `getZoomLevels` | done | |
+| `setPreloadPages`, `getPreloadPages` | done | Chrome's preload pages state per profile (`prefetch::SetPreloadPagesState`, standard or none); off by default. A prerendered page's posts on the page channel are held until activation (`ac_prerender_posts.h`), so Chrome doesn't cancel the prerender with `kMojoBinderPolicy` |
 | `listPasswords`, `unlockPasswords`, `getPassword`, `savePassword`, `updatePassword`, `deletePassword`, `getNeverSavePasswordOrigins`, `allowSavingPasswords`, `exportPasswords`, `getPasswordAutofill`, `setPasswordAutofill` | done | |
 | `getAutofillSettings`, `setAutofillSettings`, `listAddresses`, `saveAddress`, `listCards`, `saveCard`, `deleteAutofillEntry`, `revealCardNumber` | done | |
 | `resolveExternalApp` | partial | The prompt is proven; opening the app is not (it would launch one) |

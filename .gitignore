@@ -52,9 +52,6 @@ dist/
 scripts/.notary.env
 *.p8
 
-apps/ios/Ardia.xcodeproj/xcuserdata/
-apps/ios/Ardia.xcodeproj/project.xcworkspace/xcuserdata/
-apps/ios/Packages/ArdiaKit/.build/
-apps/ios/Packages/ArdiaKit/.swiftpm/
-apps/cli/ardia_cli/vendor/
+packages/phone/ios/ArdiaKit/.build/
+packages/phone/ios/ArdiaKit/.swiftpm/
 __pycache__/

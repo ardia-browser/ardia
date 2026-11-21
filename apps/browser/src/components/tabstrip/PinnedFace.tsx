@@ -4,7 +4,7 @@ import { useTileTheme } from "../../state/favicons/tileTheme";
 import { TabBadges } from "../media/TabBadges";
 import { TabIcon } from "../sidebar/TabIcon";
 import { TileUnread } from "../unread/UnreadBadge";
-import { DockSelection, Text, withAlpha } from "../ui";
+import { DockSelection, HoverFill, Text, withAlpha } from "../ui";
 import { GlassFill, useGlass } from "../ui/Glass";
 import { hex, useTheme } from "../ui/theme";
 import { useSelectedTopApp } from "../../state/app/theme";
@@ -52,16 +52,19 @@ export function PinnedFace({ tabId, active, hovered, pressed, frame = "cell" }: 
         <View style={face}>
           <GlassFill radius={pinnedFaceRadius()} state={pressed ? "pressed" : "lit"} />
         </View>
-      ) : (active || hovered || pressed) && (
+      ) : (
         <View
+          pointerEvents="none"
           style={{
             ...face,
             borderRadius: pinnedFaceRadius(),
             borderWidth: active && topApp === "outline" ? PINNED_RING_STROKE : 0,
             borderColor: theme.pinnedSelectedFill,
-            backgroundColor: pressed ? theme.tabPressed : active && topApp !== "outline" ? theme.pinnedSelectedFill : hovered ? theme.tabHover : undefined,
+            backgroundColor: active && topApp !== "outline" && !pressed ? theme.pinnedSelectedFill : undefined,
           }}
-        />
+        >
+          <HoverFill shown={pressed || (hovered && !(active && topApp !== "outline"))} instant={active} color={pressed ? theme.tabPressed : theme.tabHover} radius={pinnedFaceRadius()} />
+        </View>
       )}
       <View pointerEvents="none">
         {minimal ? (

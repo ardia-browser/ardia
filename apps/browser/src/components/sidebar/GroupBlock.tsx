@@ -1,7 +1,7 @@
-import { createContext, memo, useContext, useEffect, useState } from "react";
+import { createContext, memo, useContext, useEffect, useMemo, useState } from "react";
 import { Animated, Pressable, View } from "react-native";
 import { useTheme } from "../ui/theme";
-import { useGroup, usePageProfileId, useWindowId } from "../../state/browser/hooks";
+import { useGroup, usePageProfileId, useWindowId, useWindowProfileId } from "../../state/browser/hooks";
 import { updateGroup } from "../../state/groups/actions";
 import { noteGroupHeaderHide } from "../../state/telemetry/usage";
 import { useGroupLabel } from "../../state/groups/hooks";
@@ -19,7 +19,8 @@ import { GROUP_BORDER, GROUP_INNER_RADIUS, GROUP_INDENT, GROUP_INSET, GROUP_RADI
 import { entryHeightNow, foldedGroupHeight, headGap } from "../../state/sidebar/geometry";
 import { dismissHover } from "../../state/sidebar/hover";
 import { useGroupHover, useRowHover } from "./hoverController";
-import { HOVER_CARD_FADE_MS } from "./hoverMotion";
+import { useHoverFade } from "./hoverMotion";
+import { Squish, useSquish } from "../ui/Squish";
 import { GhostSlot, ListMotionContext, useGroupMotion } from "./ListMotion";
 import { pressGroupClose, useGroupCloseControlWhile } from "../../state/sidebar/closeControl";
 import { openGroupMenu } from "../../state/sidebar/menus";
@@ -28,17 +29,16 @@ import { FolderOrIcon } from "./AnimatedFolder";
 import { RenameField, SplitRowItem, TabRowItem } from "./TabRow";
 import { groupBoxAtRest, groupSurface, SIDEBAR_TYPE, TAB_ROW, TABULAR_NUMS, useSidebarTokens } from "./tokens";
 import { SidebarRowSurface } from "./SidebarRow";
-import { curve } from "../ui/motion";
 import { entryKey, parseEntry } from "../../state/sidebar/entryKey";
 import { LiveFolderBlock } from "./LiveFolderBlock";
 import { tailKey, type RowSection } from "./dragModel";
 import { SharedFolderMark } from "./SharedFolderMark";
 
-const BOX_FADE = curve.fade;
 const NO_GROUPS: ReadonlySet<string> = new Set();
 
 type ReportInnerHover = (groupId: string, hovered: boolean) => void;
 const InnerGroupHover = createContext<ReportInnerHover | null>(null);
+const NO_SLIDE_BELOW = { slideBelow: null };
 
 function useInnermostHover(groupId: string, hovered: boolean) {
   const reportToParent = useContext(InnerGroupHover);
@@ -58,16 +58,6 @@ function useInnermostHover(groupId: string, hovered: boolean) {
     return () => reportToParent(groupId, false);
   }, [reportToParent, hovered, groupId]);
   return { innermost: hovered && hoveredInside.size === 0, reportInside };
-}
-
-function useBoxOpacity(shown: boolean) {
-  const [opacity] = useState(() => new Animated.Value(shown ? 1 : 0));
-  useEffect(() => {
-    const fade = Animated.timing(opacity, { toValue: shown ? 1 : 0, duration: HOVER_CARD_FADE_MS, easing: BOX_FADE, useNativeDriver: true });
-    fade.start();
-    return () => fade.stop();
-  }, [shown]);
-  return opacity;
 }
 
 export const GroupBlock = memo(function GroupBlock({
@@ -98,12 +88,13 @@ export const GroupBlock = memo(function GroupBlock({
 
   const fold = useFold(collapsed);
   const scope = useContext(ListMotionContext);
-  const motion = useGroupMotion(windowId, profileId, groupId, entries, captured, section === "list" && !parentGroup ? scope : { enabled: scope.enabled, slideBelow: null }, scope.enabled && !collapsed);
+  const onShownPage = useWindowProfileId() === profileId;
+  const motion = useGroupMotion(windowId, profileId, groupId, entries, captured, section === "list" && !parentGroup ? scope : NO_SLIDE_BELOW, onShownPage && !collapsed);
   const [moved, movedRef] = useShift(own?.shift ?? null);
   const box = useGroupHover(windowId, groupId);
-  const dropInto = useDropInto() === groupId;
+  const dropInto = useDropInto(groupId);
   const nested = useInnermostHover(groupId, box.hovered);
-  const boxOpacity = useBoxOpacity(nested.innermost || dropInto || groupBoxAtRest(color));
+  const boxOpacity = useHoverFade(nested.innermost || dropInto || groupBoxAtRest(color));
 
   const { fill, stroke } = groupSurface(color, tokens);
 
@@ -169,19 +160,22 @@ export const SidebarEntry = memo(function SidebarEntry({
 });
 
 const MEASURE_LABEL = { opacity: 0, fontVariant: TABULAR_NUMS } as const;
+const CHEVRON_BOX = { width: 10, height: 10, alignItems: "center", justifyContent: "center" } as const;
 
-function GroupHeader({ groupId, windowId, collapsed, open }: { groupId: string; windowId: string; collapsed: boolean; open: Animated.Value }) {
+const GroupHeader = memo(function GroupHeader({ groupId, windowId, collapsed, open }: { groupId: string; windowId: string; collapsed: boolean; open: Animated.Value }) {
   const theme = useTheme();
   const tokens = useSidebarTokens();
   const group = useGroup(groupId, (g) => g);
   const label = useGroupLabel(groupId);
   const renaming = useSidebarUi((u) => u.renaming?.kind === "group" && u.renaming.id === groupId);
-  const dropInto = useDropInto() === groupId;
+  const dropInto = useDropInto(groupId);
   const { hovered, hoverProps } = useRowHover(windowId, collapsed && !renaming ? { kind: "group", id: groupId } : null);
   const countdown = useMeetingCountdown(groupId);
   const closeControl = useGroupCloseControlWhile(groupId, hovered && !renaming);
   const profileId = usePageProfileId();
   const showsExtra = useShowsExtraTabs(windowId, profileId, groupId);
+  const squish = useSquish(renaming ? null : "row");
+  const chevronTurn = useMemo(() => ({ ...CHEVRON_BOX, transform: [{ rotate: open.interpolate({ inputRange: [0, 1], outputRange: ["-90deg", "0deg"] }) }] }), [open]);
   if (!group) return null;
   const target = { kind: "group" as const, id: groupId };
 
@@ -194,6 +188,8 @@ function GroupHeader({ groupId, windowId, collapsed, open }: { groupId: string; 
         }}
       >
         <Pressable
+          onPressIn={squish.onPressIn}
+          onPressOut={squish.onPressOut}
           onPress={() => {
             dismissHover();
             if (renaming) return;
@@ -203,6 +199,7 @@ function GroupHeader({ groupId, windowId, collapsed, open }: { groupId: string; 
           }}
         >
           {() => (
+            <Squish scale={squish.scale}>
             <SidebarRowSurface fill={dropInto ? theme.tabPressed : ink.clear} cornerRadius={GROUP_INNER_RADIUS}>
               <FolderOrIcon icon={group.icon} open={!collapsed || dropInto} color={group.color} />
               {renaming ? (
@@ -222,15 +219,7 @@ function GroupHeader({ groupId, windowId, collapsed, open }: { groupId: string; 
                     <FadeLabel text={label} fontSize={SIDEBAR_TYPE.title} weight="medium" color={tokens.groupTitle} style={{ position: "absolute", left: 0, right: 0, top: 0, height: TAB_ROW.titleHeight }} />
                   </View>
                   <SharedFolderMark groupId={groupId} />
-                  <Animated.View
-                    style={{
-                      width: 10,
-                      height: 10,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      transform: [{ rotate: open.interpolate({ inputRange: [0, 1], outputRange: ["-90deg", "0deg"] }) }],
-                    }}
-                  >
+                  <Animated.View style={chevronTurn}>
                     <Symbol name="chevron.down" size={9} weight="semibold" color={withAlpha(tokens.groupTitle, 0.5)} style={{ width: 10, height: 10 }} />
                   </Animated.View>
                 </Animated.View>
@@ -242,9 +231,10 @@ function GroupHeader({ groupId, windowId, collapsed, open }: { groupId: string; 
                 {countdown.label && !renaming ? <MeetingTimeLabel label={countdown.label} urgent={countdown.urgent} /> : null}
               </HoverSlot>
             </SidebarRowSurface>
+            </Squish>
           )}
         </Pressable>
       </ContextMenuArea>
     </View>
   );
-}
+});

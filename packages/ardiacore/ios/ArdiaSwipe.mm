@@ -150,7 +150,7 @@ NSEvent *HandleWheel(NSEvent *event, NSWindow *window, NSPoint location) {
     Diag(@{@"diag" : @"wheel", @"reject" : target ? @"notPager" : @"noTarget", @"hit" : HitChain(hit)});
     return event;
   }
-  BOOL back = (dx > 0) == event.isDirectionInvertedFromDevice;
+  BOOL back = dx > 0;
   if (NativeContentScrolls(hit, target.superview, back ? 1 : -1)) {
     Diag(@{@"diag" : @"wheel", @"reject" : @"nativeContentScrolls", @"scrollers" : NativeScrollReport(hit, target.superview)});
     return event;

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { PAGE_OPTION_CALLS, resolveHostModule } from "./hostModules.ts";
-import { CLI_CONTROL_METHODS, CLI_INSTALL_METHODS, DICTATION_METHOD, LINKS_FROM_OTHER_APPS, USER_SCRIPTS_METHODS, linuxCapabilities, unavailablePanes, unavailableSettingIds } from "./hostCapabilities.ts";
+import { CLI_CONTROL_METHODS, CLI_INSTALL_METHODS, DICTATION_METHOD, LINKS_FROM_OTHER_APPS, USER_SCRIPTS_METHODS, linuxCapabilities, unavailableSettingIds } from "./hostCapabilities.ts";
 import { CAST_UNAVAILABLE_TITLE, linuxMediaCall } from "./hostCast.ts";
 import { USER_SCRIPTS_LOCK, leadUserScripts } from "./hostUserScripts.ts";
 import { useBrowser } from "../../browser/src/state/browser/store.ts";
@@ -60,22 +60,23 @@ test("the command bar's Dictate button follows the dictation capability: off whi
   assert.deepEqual(invoked, []);
 });
 
-test("unavailable choices map to exact settings ids and the Engines pane", () => {
-  const ids = ["general.defaultBrowser", "general.openAtLogin", "general.warnBeforeQuitting", "appearance.pageScrollBars", "engines.defaultEngine", "engines.protectedVideo", "search.otherEngines", "advanced.cliControl", "advanced.cliInstall", "advanced.compactCliPill", "advanced.unloadProfilesAfter", "privacy.blockAutoplayEverywhere", "advanced.showFullUrl", "tabs.videoUpscaling", "tabs.autoPictureInPicture"];
-  const unrouted = ["general.littleArdiaOpensNewTabLinks", "general.openLinksInLittleArdia", "privacy.commandScrollZoom", "tabs.appLinksFirst", "tabs.peekLinksToOtherSites", "tabs.popupsOpenAsTabs", "tabs.tabReorderHaptics"];
-  const routedRows = { commandScrollZoom: true, littleArdiaNewTabLinks: true, peekOtherSites: true, popupsOpenAsTabs: true, haptics: true, linksFromOtherApps: true };
+test("unavailable choices map to exact settings ids and the Web engine rows", () => {
+  const ids = ["general.defaultBrowser", "general.openAtLogin", "general.askBefore", "advanced.pageEngine", "advanced.websiteEngines", "profiles.otherEngines", "advanced.ardiaCommand", "advanced.compactCliPill", "advanced.showFullUrl", "tabs.videoUpscaling", "tabs.autoPictureInPicture"];
+  const unrouted = ["tabs.openLinksInLittleArdia", "tabs.appLinksFirst", "tabs.littleArdiaOpensNewTabLinks", "tabs.peekLinksToOtherSites", "tabs.popupsOpenAsTabs"];
+  const routedRows = { littleArdiaNewTabLinks: true, peekOtherSites: true, popupsOpenAsTabs: true, linksFromOtherApps: true };
+  const webEngine = ["advanced.pageEngine", "advanced.websiteEngines"];
   const none = linuxCapabilities(fakeHost().host);
-  assert.deepEqual([...unavailableSettingIds(none, ids)].sort(), [...unrouted, "advanced.cliControl", "advanced.cliInstall", "advanced.compactCliPill", "advanced.unloadProfilesAfter", "appearance.pageScrollBars", "engines.defaultEngine", "engines.protectedVideo", "general.autoUpdate", "general.defaultBrowser", "general.openAtLogin", "privacy.blockAutoplayEverywhere", "tabs.videoUpscaling"].sort());
-  for (const [capability, rows] of Object.entries({ commandScrollZoom: ["privacy.commandScrollZoom"], littleArdiaNewTabLinks: ["general.littleArdiaOpensNewTabLinks"], peekOtherSites: ["tabs.peekLinksToOtherSites"], popupsOpenAsTabs: ["tabs.popupsOpenAsTabs"], haptics: ["tabs.tabReorderHaptics"], linksFromOtherApps: ["general.openLinksInLittleArdia", "tabs.appLinksFirst"] })) {
+  assert.deepEqual([...unavailableSettingIds(none, ids)].sort(), [...unrouted, ...webEngine, "advanced.ardiaCommand", "advanced.compactCliPill", "general.autoUpdate", "general.defaultBrowser", "general.openAtLogin", "tabs.videoUpscaling"].sort());
+  for (const [capability, rows] of Object.entries({ littleArdiaNewTabLinks: ["tabs.littleArdiaOpensNewTabLinks"], peekOtherSites: ["tabs.peekLinksToOtherSites"], popupsOpenAsTabs: ["tabs.popupsOpenAsTabs"], linksFromOtherApps: ["tabs.openLinksInLittleArdia", "tabs.appLinksFirst"] })) {
     const shown = unavailableSettingIds({ ...none, [capability]: true }, ids);
     assert.deepEqual(unrouted.filter((id) => !shown.has(id)), rows, capability);
   }
-  assert.deepEqual([...unavailablePanes(none)], ["engines"]);
-  assert.deepEqual([...unavailableSettingIds({ ...none, defaultBrowser: true, launchAtLogin: true, thinScrollBars: true, cliControl: true, cliInstall: true, videoUpscaling: true, unloadIdleProfiles: true, blockAutoplayEverywhere: true, ...routedRows }, ids)].sort(), ["engines.defaultEngine", "engines.protectedVideo", "general.autoUpdate"]);
-  const cliRows = (capabilities) => [...unavailableSettingIds(capabilities, ids)].filter((id) => id.startsWith("advanced.cli")).sort();
-  assert.deepEqual(cliRows({ ...none, cliControl: true }), ["advanced.cliInstall"]);
-  assert.deepEqual(cliRows({ ...none, cliInstall: true }), ["advanced.cliControl", "advanced.cliInstall"]);
-  assert.deepEqual(cliRows({ ...none, cliControl: true, cliInstall: true }), []);
+  assert.deepEqual([...unavailableSettingIds({ ...none, webkit: true }, ids)].filter((id) => webEngine.includes(id)), []);
+  assert.deepEqual([...unavailableSettingIds(none, ["general.defaultBrowser"])].filter((id) => webEngine.includes(id)), []);
+  assert.deepEqual([...unavailableSettingIds({ ...none, defaultBrowser: true, launchAtLogin: true, cliControl: true, cliInstall: true, videoUpscaling: true, ...routedRows }, ids)].sort(), [...webEngine, "general.autoUpdate"]);
+  const cliRows = (capabilities) => [...unavailableSettingIds(capabilities, ids)].filter((id) => id === "advanced.ardiaCommand" || id === "advanced.compactCliPill").sort();
+  assert.deepEqual(cliRows({ ...none, cliControl: true }), []);
+  assert.deepEqual(cliRows({ ...none, cliInstall: true }), ["advanced.ardiaCommand", "advanced.compactCliPill"]);
 });
 
 test("the ardia command's rows follow the engine: every control and install method, or the rows stay hidden", () => {
@@ -277,7 +278,7 @@ test("the native bootstrap advertises every route list, and every shared perform
   const used = uses.map((use) => use.name);
   for (const call of ["engine.memorySaver", "engine.validateKeepActiveSite", "engine.tasks"]) assert.ok(used.includes(call), call);
   const gated = { "engine.beginTracing": "performanceRecording", "engine.endTracing": "performanceRecording", "engine.isTracing": "performanceRecording" };
-  const macOnlyEvents = new Set(["engine.hoverLost"]);
+  const macOnlyEvents = new Set(["engine.hoverLost", "engine.cursorRestored", "engine.pressLoopLong", "engine.windowUnpainted", "engine.popupProtectedMedia", "engine.devToolsKeyKept"]);
   for (const name of macOnlyEvents) assert.deepEqual(uses.filter((use) => use.name === name).map((use) => use.kind), ["on"], `${name} is only listened to`);
   const none = linuxCapabilities(fakeHost().host);
   for (const call of used) {
@@ -365,6 +366,23 @@ test("the media domain keeps reaching the host for everything but casting", asyn
   assert.equal(await call("selectDevice", "", JSON.stringify({ id: 1, index: 0 })), "null");
   assert.equal(await call("showCastDialog", "", JSON.stringify({ tabId: "missing" })), "false");
   assert.deepEqual(calls, ["media.selectDevice"]);
+});
+
+test("casting reaches an engine that advertises every cast call, and a partial set still shows the notice", async () => {
+  const verbs = ["showCastDialog", "startCasting", "stopCasting", "closeCastDialog", "watchCastRoutes", "terminateCastRoute"];
+  const everything = (method) => verbs.some((verb) => method === `media.${verb}`);
+  useToasts.setState({ toasts: {} });
+  for (const verb of verbs) assert.equal(linuxMediaCall(verb, JSON.stringify({ tabId: "t" }), everything), undefined, verb);
+  assert.deepEqual(useToasts.getState().toasts, {});
+  const missingRoutes = (method) => everything(method) && method !== "media.watchCastRoutes";
+  assert.equal(await linuxMediaCall("watchCastRoutes", "{}", missingRoutes), "null");
+  await assert.rejects(linuxMediaCall("startCasting", "{}", missingRoutes), (error) => error.code === "ERR_UNAVAILABLE");
+  const calls = [];
+  const host = { bootstrap: { capabilities: verbs.map((verb) => `media.${verb}`), nativeModules: {} }, call: async (name) => { calls.push(name); return "true"; }, invoke: async () => null, onEvent: () => {} };
+  const call = resolveHostModule(host, "ArdiaMedia", "call");
+  assert.equal(await call("showCastDialog", "", JSON.stringify({ tabId: "t" })), "true");
+  assert.equal(await call("watchCastRoutes", "", JSON.stringify({ profile: "" })), "true");
+  assert.deepEqual(calls, ["media.showCastDialog", "media.watchCastRoutes"]);
 });
 
 test("a page option the host has no backend for is settled here, and reaches a host that advertises it", async () => {

@@ -2,6 +2,8 @@ import type { ExtensionSearchEngine } from "@ardia/core";
 import { extensionSearchEngines } from "../../platform/extensions";
 import { useBrowser } from "../browser/store";
 import { useExtensions } from "./actions";
+import { consentToken } from "../telemetry/client";
+import { warnFor } from "../telemetry/logs";
 
 export function startExtensionSearchEngines() {
   const timers: Record<string, ReturnType<typeof setTimeout>> = {};
@@ -19,11 +21,12 @@ export function startExtensionSearchEngines() {
 }
 
 async function refreshExtensionSearchEngines(profile: string) {
+  const consent = consentToken();
   let engines: ExtensionSearchEngine[];
   try {
     engines = await extensionSearchEngines(profile);
   } catch (error) {
-    console.warn("[extensions] search engines failed", error);
+    warnFor(consent, "[extensions] search engines failed", error);
     return;
   }
   const s = useBrowser.getState();

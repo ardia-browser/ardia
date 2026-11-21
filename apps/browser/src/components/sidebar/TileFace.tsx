@@ -1,6 +1,6 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
 import { Animated, StyleSheet, View } from "react-native";
-import { DockSelection, radius, Surface, Text, withAlpha } from "../ui";
+import { DockSelection, HoverFill, HoverSwap, radius, Surface, Text, withAlpha } from "../ui";
 import { hex, layout, useTheme } from "../ui/theme";
 import { useTileTheme, type TileTheme } from "../../state/favicons/tileTheme";
 import { useTab } from "../../state/browser/hooks";
@@ -37,7 +37,6 @@ function LetterTile({ tabId, badge, width, active, selected, hovered, pressed }:
   const title = useTab(tabId, (t) => t?.customTitle ?? t?.title ?? "");
   const asleep = useIsSleeping(tabId);
   const height = layout.pinnedHeight;
-  const fill = active ? tokens.quietTileLive : pressed ? tokens.quietPressed : hovered || selected ? tokens.quietWash : tokens.quietTile;
   return (
     <View
       accessibilityLabel={title}
@@ -45,13 +44,13 @@ function LetterTile({ tabId, badge, width, active, selected, hovered, pressed }:
         width,
         height,
         borderRadius: radius.pinned,
-        backgroundColor: fill,
         borderWidth: selected && !active ? 1 : 0,
         borderColor: tokens.dragBorder,
         alignItems: "center",
         justifyContent: "center",
       }}
     >
+      <HoverSwap shown={!active && (pressed || hovered || selected)} instant={active || selected} rest={active ? tokens.quietTileLive : tokens.quietTile} color={pressed ? tokens.quietPressed : tokens.quietWash} radius={radius.pinned} underBorder={selected && !active ? 1 : 0} />
       <View>
         <Text size="small" weight="medium" style={{ fontSize: Math.round(Math.min(width, height) * LETTER_SCALE * 2) / 2, opacity: asleep && !active ? ASLEEP_LETTER : 1 }} color={hex(withAlpha(theme.textTab, active ? tokens.quietActiveText : tokens.quietText))}>
           {tileLetterOf(url, title)}
@@ -186,11 +185,11 @@ export function RestingTile({ width, selected, hovered, pressed, bare = false, c
           borderRadius: radius.pinned,
           borderWidth: selected ? 1 : 0,
           borderColor: tokens.dragBorder,
-          backgroundColor: pressed ? tokens.quietPressed : hovered || selected ? tokens.quietWash : tokens.quietTile,
           alignItems: "center",
           justifyContent: "center",
         }}
       >
+        <HoverSwap shown={pressed || hovered || selected} instant={selected} rest={tokens.quietTile} color={pressed ? tokens.quietPressed : tokens.quietWash} radius={radius.pinned} underBorder={selected ? 1 : 0} />
         {children}
       </View>
     );
@@ -209,11 +208,11 @@ export function RestingTile({ width, selected, hovered, pressed, bare = false, c
         borderRadius: radius.pinned,
         borderWidth: selected ? 1 : StyleSheet.hairlineWidth,
         borderColor: selected ? tokens.dragBorder : theme.pinnedRestingStroke,
-        backgroundColor: pressed ? theme.tabPressed : hovered || selected ? theme.tabHover : theme.pinnedResting,
         alignItems: "center",
         justifyContent: "center",
       }}
     >
+      <HoverSwap shown={pressed || hovered || selected} instant={selected} rest={theme.pinnedResting} color={pressed ? theme.tabPressed : theme.tabHover} radius={radius.pinned} underBorder={selected ? 1 : StyleSheet.hairlineWidth} />
       {children}
     </View>
   );
@@ -240,9 +239,12 @@ function GlassTile({ width, active, selected, hovered, pressed, tileTheme, topAp
             colorRing
             style={StyleSheet.absoluteFill}
           />
-        ) : selected ? (
-          <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: radius.pinned, borderWidth: 1, borderColor: tokens.dragBorder }]} />
-        ) : null}
+        ) : (
+          <>
+            <HoverFill shown={hovered || selected || pressed} instant={selected} color={pressed ? theme.tabPressed : theme.tabHover} radius={radius.pinned} />
+            {selected ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: radius.pinned, borderWidth: 1, borderColor: tokens.dragBorder }]} /> : null}
+          </>
+        )}
         {children}
       </GlassFill>
     </View>
@@ -270,7 +272,7 @@ export function FolderDropRing({ on }: { on: boolean }) {
         bottom: -RING_OUTSET,
         borderRadius: radius.pinned + RING_OUTSET,
         borderWidth: 2,
-        borderColor: theme.accent,
+        borderColor: sidebarTokens(theme).dropMark,
         backgroundColor: sidebarTokens(theme).folderDropFill,
         opacity: shown,
         transform: [{ scale: shown.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] }) }],

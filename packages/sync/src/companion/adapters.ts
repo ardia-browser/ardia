@@ -13,7 +13,7 @@ export const MAX_DEVICE_TABS = 30;
 export const MAX_VISIT_TIMES = 50;
 const SAME_VISIT_MS = 1;
 
-export type DeviceValue = { n: string; k?: string; f?: string[]; s?: string };
+export type DeviceValue = { n: string; k?: string; f?: string[]; s?: string; o?: string[] };
 
 export type LocalTab = { u: string; t: string; at: number; p?: string | null };
 export type LocalVisit = { u: string; t: string; vt: number[]; p?: string | null };

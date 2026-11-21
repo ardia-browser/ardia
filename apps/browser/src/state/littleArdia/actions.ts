@@ -1,3 +1,4 @@
+import { foreignWriteHooks } from "../browser/foreignWriteHooks";
 import { type LinkRoute, routeLinkTabs } from "../../platform/tabs";
 import { showMenu } from "../../platform/menus";
 import { focus, openWindow } from "../browser/actions";
@@ -19,6 +20,7 @@ import { noteExternalLink } from "../telemetry/usage";
 import { openInRouteGroup } from "../airTraffic/openAt";
 import { noteLittleArdiaAppHandoff, noteLittleArdiaEscapeClose, type EscapePressedIn } from "../telemetry/littleArdiaEscapes";
 import { askBeforeQuitting, quitWarningMayAsk } from "../windows/quitWarning";
+import type { CloseGuard, GuardedClose } from "../windows/windowClose";
 
 const store = () => useBrowser.getState();
 
@@ -180,21 +182,21 @@ export async function openLittleArdiaProfileMenu(windowId: string) {
       ...menuShortcut(`switchProfile:${id}`, s),
     })),
   );
-  if (choice) moveLittleArdiaToProfile(windowId, choice);
+  if (choice) foreignWriteHooks.around(() => moveLittleArdiaToProfile(windowId, choice));
 }
 
-export function closeLittleArdia(windowId: string) {
-  if (!isSmall(store(), windowId)) return;
-  if (!quitWarningMayAsk()) return closeWindowAnimated(windowId);
-  void askBeforeQuitting(windowId).then((answer) => {
-    if (answer !== "cancelled" && isSmall(store(), windowId) && !isWindowClosing(windowId)) closeWindowAnimated(windowId);
-  });
+export async function closeLittleArdia(windowId: string, { mayClose = () => true, ask }: CloseGuard = {}): Promise<GuardedClose> {
+  if (!isSmall(store(), windowId)) return "cancelled";
+  if (quitWarningMayAsk() && (await askBeforeQuitting(windowId, ask, mayClose)) === "cancelled") return "cancelled";
+  if (!mayClose()) return "stopped";
+  if (!isSmall(store(), windowId) || isWindowClosing(windowId)) return "cancelled";
+  return (await closeWindowAnimated(windowId)) ? "closing" : mayClose() ? "cancelled" : "stopped";
 }
 
 export function closeLittleArdiaForAppLink(windowId: string | null) {
   if (!windowId || !isSmall(store(), windowId) || isWindowClosing(windowId)) return;
   noteLittleArdiaAppHandoff("appLinkClose");
-  closeLittleArdia(windowId);
+  void closeLittleArdia(windowId);
 }
 
 export function closeLittleArdiaOnEscape(tabId: string, pressedIn: EscapePressedIn = "page") {
@@ -202,7 +204,7 @@ export function closeLittleArdiaOnEscape(tabId: string, pressedIn: EscapePressed
   const tab = s.tabs[tabId];
   if (!tab || !isSmall(s, tab.windowId) || isWindowClosing(tab.windowId) || s.find[tabId]?.open || s.windowUi[tab.windowId]?.panel.open) return;
   noteLittleArdiaEscapeClose(pressedIn);
-  closeLittleArdia(tab.windowId);
+  void closeLittleArdia(tab.windowId);
 }
 
 export function closeBlankLittleArdiaOnEscape(windowId: string): boolean {
@@ -212,6 +214,6 @@ export function closeBlankLittleArdiaOnEscape(windowId: string): boolean {
   const tab = tabId ? s.tabs[tabId] : undefined;
   if (tab && (tab.url || navigationOf(tab))) return false;
   noteLittleArdiaEscapeClose("blankBar");
-  closeLittleArdia(windowId);
+  void closeLittleArdia(windowId);
   return true;
 }

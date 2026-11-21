@@ -2,6 +2,18 @@ import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import { noteBrowsingDataCleared, noteHistoryRowsRemoved, takeHistoryRemovalCounts } from "./historyRemovalCounts.ts";
 
+globalThis.fetch = async () => ({ ok: true });
+const stub = await import("../../test-native/index.ts");
+const client = await import("./client.ts");
+const usage = await import("./usage.ts");
+after(() => client.setSharing(false, "settings"));
+
+async function sentCounts() {
+  await client.saveQueueNow();
+  const queue = stub.docs.get("telemetry-queue.json");
+  return queue ? JSON.parse(queue).events.filter((event) => event.event === "usage_counts").map((event) => event.properties) : [];
+}
+
 test("browsing data outcomes join the existing history counts and reset after collection", () => {
   takeHistoryRemovalCounts();
   noteHistoryRowsRemoved("key", 3);
@@ -20,18 +32,6 @@ test("browsing data outcomes join the existing history counts and reset after co
   });
   assert.ok(Object.values(takeHistoryRemovalCounts()).every((count) => count === 0));
 });
-
-globalThis.fetch = async () => ({ ok: true });
-const stub = await import("../../test-native/index.ts");
-const client = await import("./client.ts");
-const usage = await import("./usage.ts");
-after(() => client.setSharing(false, "settings"));
-
-async function sentCounts() {
-  await client.saveQueueNow();
-  const queue = stub.docs.get("telemetry-queue.json");
-  return queue ? JSON.parse(queue).events.filter((event) => event.event === "usage_counts").map((event) => event.properties) : [];
-}
 
 test("browsing data outcomes are queued in usage_counts only with sharing enabled", async () => {
   client.setSharing(false, "settings");

@@ -27,8 +27,12 @@ async function noticeCastUnavailable(args: string) {
 }
 
 const HOST_CAPTURE_VERBS = new Set(["changeCaptureSource", "stopCapture"]);
+const CAST_VERBS = ["showCastDialog", "startCasting", "stopCasting", "closeCastDialog", "watchCastRoutes", "terminateCastRoute"];
+
+export const castsTabs = (supports: (method: string) => boolean) => CAST_VERBS.every((verb) => supports(`media.${verb}`));
 
 export function linuxMediaCall(verb: string, args: string, supports: (method: string) => boolean = (method) => hostSupports(method)): Promise<string> | undefined {
+  if (CAST_VERBS.includes(verb) && castsTabs(supports)) return undefined;
   if (verb === "showCastDialog") return noticeCastUnavailable(args).then(() => "false", () => "false");
   if (verb === "watchCastRoutes") return Promise.resolve("null");
   if (HOST_CAPTURE_VERBS.has(verb) && supports(`media.${verb}`)) return undefined;

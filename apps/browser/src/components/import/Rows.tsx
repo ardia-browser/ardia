@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Image, Pressable, Text as NativeText, View } from "react-native";
 import { plural } from "../../state/browser/model";
+import { arcSpaceEmoji } from "../../state/import/arcExtras";
 import { capsule, Checkbox, Dot, ink, Radio, Row, space, Symbol, Text, useTheme } from "../ui";
 import { SelectableCard } from "../settings/SelectableCard";
 import type { BrowserSource, SpaceSummary } from "./model";
@@ -74,6 +75,7 @@ export function Monogram({ name, color }: { name: string; color?: string }) {
 
 export function SpaceIcon({ space: summary }: { space: SpaceSummary }) {
   const size = importLayout.avatar;
+  const emoji = arcSpaceEmoji(summary);
   return (
     <View
       style={{
@@ -85,8 +87,8 @@ export function SpaceIcon({ space: summary }: { space: SpaceSummary }) {
         justifyContent: "center",
       }}
     >
-      {summary.emoji ? (
-        <NativeText style={{ fontSize: importType.emoji }}>{summary.emoji}</NativeText>
+      {emoji ? (
+        <NativeText style={{ fontSize: importType.emoji }}>{emoji}</NativeText>
       ) : (
         <Symbol name="square.stack" size={12} color={ink.white} style={{ width: 16, height: 16 }} />
       )}

@@ -247,3 +247,42 @@ test("generic document writes keep the old cache on failure and reserved documen
   await assert.rejects(documents.write("live.json", "{}"), { code: "ERR_DOCUMENT_RESERVED" });
   assert.equal(documents.read("live.canonical.json"), null);
 });
+
+test("a change says whether it gave the document something to save, so telemetry can count skipped saves", async () => {
+  const native = authority();
+  const a = bind(native.connect("browser-a"));
+  await a.client.reconnect();
+  const before = a.state();
+  assert.equal(a.client.changed(before, { ...before }), false);
+  assert.equal(a.client.changed(before, { ...before, calendar: { ...before.calendar, showPreview: false } }), true);
+  await a.client.flush();
+  assert.equal(native.payload.calendar.showPreview, false);
+});
+
+test("a batch made while sharing was off and rejected on a retry after sharing is on isn't reported under the new period", async () => {
+  const stub = await import("../../browser/src/test-native/index.ts");
+  const telemetry = await import("../../browser/src/state/telemetry/client.ts");
+  globalThis.fetch = async () => ({ status: 503 });
+  telemetry.loadChoice();
+  telemetry.setSharing(false, "settings");
+  const native = authority(), a = bind(native.connect("a"));
+  await a.client.reconnect();
+  native.fail = true;
+  a.edit({ folders: folders("made-while-off"), folderOrder: ["made-while-off"] });
+  await assert.rejects(a.client.flush(), /Storage failure/);
+  telemetry.setSharing(true, "settings");
+  native.fail = false;
+  native.invalid = (op) => op.type === "create" && op.id === "made-while-off";
+  const report = console.error;
+  console.error = () => {};
+  (await import("../../browser/src/state/telemetry/errors.ts")).installErrorReporting();
+  try {
+    await a.client.flush();
+    await telemetry.saveQueueNow();
+    const queue = JSON.parse(stub.docs.get("telemetry-queue.json") ?? '{"events":[],"logs":[]}');
+    assert.deepEqual([...queue.events.filter((e) => e.event === "$exception"), ...(queue.logs ?? [])], []);
+  } finally {
+    console.error = report;
+    telemetry.setSharing(false, "settings");
+  }
+});

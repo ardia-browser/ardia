@@ -1,5 +1,6 @@
 import { visible, type ScopeState } from "../../platform/sync";
 import { DEVICE, RECEIVES_TABS, deviceRecord, recordId, type DeviceKind, type DeviceRecord } from "./records";
+import type { SyncedDevice } from "./syncDoc";
 
 export const PHONE_SEEN_MS = 30 * 86_400_000;
 
@@ -29,4 +30,9 @@ export const deviceLabel = (kind: DeviceKind, name: string) => (kind === "phone"
 export function deviceSymbol(kind: DeviceKind, name: string): string {
   if (kind === "phone") return "iphone";
   return /\b(iMac|Mac mini|Mac Studio|Mac Pro)\b/i.test(name) ? "desktopcomputer" : "laptopcomputer";
+}
+
+export function deviceDetail(device: Pick<SyncedDevice, "lastSeen" | "version" | "os">, ago: (at: number) => string): string {
+  const seen = device.lastSeen ? `last synced ${ago(device.lastSeen)}` : "hasn’t synced yet";
+  return [seen, device.version && `Ardia ${device.version}`, device.os].filter(Boolean).join(" · ");
 }

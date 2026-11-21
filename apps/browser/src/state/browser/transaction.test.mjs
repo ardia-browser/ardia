@@ -5,6 +5,8 @@ import { createStore } from "zustand/vanilla";
 globalThis.__DEV__ = false;
 const { transactional } = await import("./transaction.ts");
 const { storeTransaction, useBrowser } = await import("./store.ts");
+const { liveOf, onLiveChange } = await import("../tabs/tabLive.ts");
+const { IDLE_LIVE } = await import("./model.ts");
 
 const counter = (split) => {
   const t = transactional(split);
@@ -122,15 +124,15 @@ test("browser: a flush's page reports are heard together, after its address", ()
   off();
   assert.equal(updates, 2, "the new address as it lands, then the progress, icon and title together");
   assert.equal(S().tabs[id].title, "X!");
-  assert.equal(S().live[id].themeColor, "#123456");
+  assert.equal(liveOf(id).themeColor, "#123456");
 });
 
 test("browser: a load that starts and ends in one flush is heard starting and ending", () => {
   const id = tabSetup();
   S().updateLive(id, { isLoading: false });
   const ends = [];
-  const off = useBrowser.subscribe((s, prev) => {
-    if (prev.live[id]?.isLoading !== s.live[id]?.isLoading) ends.push(`${prev.live[id]?.isLoading}>${s.live[id]?.isLoading}`);
+  const off = onLiveChange((tabId, live, prev) => {
+    if (tabId === id && prev.isLoading !== live.isLoading) ends.push(`${prev.isLoading}>${live.isLoading}`);
   });
   storeTransaction(() => {
     S().updateTab(id, { url: "https://a.com/y", title: "" }, { isLoading: true });
@@ -158,7 +160,7 @@ test("browser: a listener that closes a tab as its address lands isn't undone by
   });
   off();
   assert.equal(S().tabs[auth], undefined);
-  assert.equal(S().live[auth], undefined);
+  assert.equal(liveOf(auth), IDLE_LIVE);
   assert.ok(!S().windows[w].tabIds.includes(auth));
 });
 
@@ -178,25 +180,32 @@ test("browser: an address that goes A → B → A in one flush is heard going to
   assert.deepEqual(urls, ["B", "A"]);
 });
 
-test("browser: a load starting or ending is heard as it lands, the reports after it together", () => {
+test("browser: a load starting or ending is heard as it lands without a store write, the reports after it together", () => {
   const id = tabSetup();
   const w = S().tabs[id].windowId;
   const other = S().newTab(w, { url: "https://b.com", background: true });
   S().updateLive(id, { isLoading: false });
   S().updateLive(other, { isLoading: false });
   let updates = 0;
+  const loads = [];
   const off = useBrowser.subscribe(() => updates++);
+  const offLive = onLiveChange((tabId, live, prev) => {
+    if (live.isLoading !== prev.isLoading) loads.push(`${tabId === id ? "a" : "b"}:${live.isLoading}`);
+  });
   storeTransaction(() => {
     S().updateLive(id, { isLoading: true, canGoBack: true });
+    assert.deepEqual(loads, ["a:true"], "the load starting is heard before the flush ends");
     S().updateLive(id, { canGoForward: true });
     S().updateTab(id, { title: "t" });
   });
-  assert.equal(updates, 2, "the load starting, then the rest");
+  assert.equal(updates, 1, "only the title reaches the store");
   storeTransaction(() => {
     S().updateLive(id, { isLoading: false });
     S().updateLive(other, { isLoading: true });
     S().updateLive(id, { isLoading: true });
   });
   off();
-  assert.equal(updates, 5, "each load starting or ending is heard");
+  offLive();
+  assert.equal(updates, 1, "loads alone write nothing to the store");
+  assert.deepEqual(loads, ["a:true", "a:false", "b:true", "a:true"], "each load starting or ending is heard");
 });

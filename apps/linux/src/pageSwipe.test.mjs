@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 const hostListeners = [];
+const wheelListeners = [];
 globalThis.HTMLElement = class {};
+globalThis.Element = globalThis.HTMLElement;
 globalThis.getComputedStyle = () => ({ display: "block", visibility: "visible", overflowX: "visible" });
 globalThis.window = {
-  addEventListener: () => {},
+  addEventListener: (type, listener) => type === "wheel" && wheelListeners.push(listener),
   __ardiaHost: { onEvent: (listener) => (hostListeners.push(listener), () => {}) },
 };
 
@@ -23,14 +25,14 @@ globalThis.document = { elementFromPoint: () => page };
 
 const { addSwipeTarget, onPageSwipe } = await import("./shims/web/motion/swipe.ts");
 
-function target(seen, { back = true } = {}) {
+function target(seen, { back = true, forward = false, pager = false } = {}) {
   return {
     node: () => node,
     canSwipeBack: () => back,
-    canSwipeForward: () => false,
+    canSwipeForward: () => forward,
     tracksUnavailableDirections: () => false,
     allowsVerticalMotion: () => false,
-    isPager: () => false,
+    isPager: () => pager,
     pager: () => null,
     onSwipe: (event) => seen.push(event),
   };
@@ -78,4 +80,40 @@ test("a cancelled page swipe reports cancelled", () => {
   onPageSwipe({ phase: "cancelled", dx: 0, dy: 0 }, 5.02);
   remove();
   assert.deepEqual(seen.map((event) => event.phase), ["began", "cancelled"]);
+});
+
+function wheel({ deltaX = 0, deltaY = 0, shiftKey = false }) {
+  const event = {
+    deltaX,
+    deltaY,
+    deltaMode: 0,
+    wheelDeltaX: -deltaX,
+    wheelDeltaY: -deltaY,
+    shiftKey,
+    ctrlKey: false,
+    clientX: 400,
+    clientY: 300,
+    timeStamp: 10_000,
+    target: page,
+    defaultPrevented: false,
+    preventDefault() {
+      this.defaultPrevented = true;
+    },
+  };
+  wheelListeners.forEach((listener) => listener(event));
+  return event;
+}
+
+test("a shift-held mouse wheel pages profiles like a sideways wheel, since Chromium only swaps its axes for native scrolling", () => {
+  const seen = [];
+  const remove = addSwipeTarget(target(seen, { back: true, forward: true, pager: true }));
+  assert.equal(wheelListeners.length, 1);
+  const down = wheel({ deltaY: 120, shiftKey: true });
+  const up = wheel({ deltaY: -120, shiftKey: true });
+  const plain = wheel({ deltaY: 120 });
+  remove();
+  assert.deepEqual(seen.map((event) => [event.phase, event.direction, event.distance]), [["wheel", "forward", 120], ["wheel", "back", 120]]);
+  assert.equal(down.defaultPrevented, true);
+  assert.equal(up.defaultPrevented, true);
+  assert.equal(plain.defaultPrevented, false);
 });

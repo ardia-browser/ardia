@@ -117,8 +117,15 @@ function windowOf(pid) {
   const all = JSON.parse(execFileSync("osascript", ["-l", "JavaScript", "-e",
     `ObjC.import("CoreGraphics"); JSON.stringify(ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo($.kCGWindowListOptionAll, 0)))
      .filter((w) => w.kCGWindowOwnerPID === ${pid} && w.kCGWindowIsOnscreen && w.kCGWindowBounds.Width >= 600).map((w) => ({ id: w.kCGWindowNumber, b: w.kCGWindowBounds })))`], { timeout: 20000 }).toString());
-  if (!all.length) throw new Error(`no on-screen window for pid ${pid}`);
-  return all.sort((a, b) => b.b.Width * b.b.Height - a.b.Width * a.b.Height)[0];
+  return all.sort((a, b) => b.b.Width * b.b.Height - a.b.Width * a.b.Height)[0] ?? null;
+}
+
+async function shownWindowOf(pid, ms = 30_000) {
+  for (const end = Date.now() + ms; Date.now() < end; await sleep(500)) {
+    const found = windowOf(pid);
+    if (found) return found;
+  }
+  throw new Error(`no on-screen window for pid ${pid}`);
 }
 
 function serve() {
@@ -209,7 +216,7 @@ async function prepare(inst, fx, pointer) {
     let chain = Promise.resolve();
     for (const id of warm) chain = chain.then(() => { st().activate(id); return wait(700); });
     return chain.then(() => { st().activate(${JSON.stringify(fx.first)}); return wait(1500); }).then(() => ({ layout: st().settings.tabLayout, tabs: st().windows[w].tabIds.length }));`, { timeout: 60000 });
-  await inst.eval(`${HELPERS} return Promise.resolve(ac.shell.devSetPointer(w, ${JSON.stringify(pointer)})).catch(() => false);`);
+  await inst.eval(`${HELPERS} return Promise.resolve().then(() => ac.shell.devSetPointer(w, ${JSON.stringify(pointer)})).catch(() => false);`);
 }
 
 async function readProbe(inst, reset) {
@@ -356,7 +363,7 @@ async function run() {
             files: { "perf-probe": "" }, env: { AC_BENCH_FRAMES: "1", DYLD_INSERT_LIBRARIES: lib },
           });
         try {
-          const win = windowOf(inst.pid);
+          const win = await shownWindowOf(inst.pid);
           const pointer = pointerOver ? { x: 130, y: Math.round(win.b.Height / 2) } : { x: Math.round(win.b.Width * 0.7), y: Math.round(win.b.Height / 2) };
           if (!reuse) {
             await sleep(3000);

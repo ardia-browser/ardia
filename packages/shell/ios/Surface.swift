@@ -58,18 +58,7 @@ final class Surface: ExpoView {
     guard let layer else { return }
     CATransaction.begin()
     CATransaction.setDisableActions(true)
-    if borderGradient.superlayer !== layer {
-      layer.insertSublayer(borderGradient, at: 0)
-      borderStroke.fillColor = nil
-      borderStroke.strokeColor = NSColor.black.cgColor
-      borderGradient.mask = borderStroke
-    }
-    if plate.superlayer !== layer {
-      layer.insertSublayer(plate, at: 0)
-      layer.insertSublayer(shadowLayer, below: plate)
-      shadowMask.fillRule = .evenOdd
-      shadowLayer.mask = shadowMask
-    }
+    if plate.superlayer !== layer { layer.insertSublayer(plate, at: 0) }
     layer.filters = grayscale ? [grayscaleFilter] : nil
     layer.masksToBounds = false
     plate.frame = bounds
@@ -81,6 +70,12 @@ final class Surface: ExpoView {
     applyGradientFill(flipped: layer.isGeometryFlipped || isFlipped)
 
     if surfaceBorderColors.count >= 2, surfaceBorderWidth > 0 {
+      if borderGradient.superlayer !== layer {
+        layer.insertSublayer(borderGradient, above: plate)
+        borderStroke.fillColor = nil
+        borderStroke.strokeColor = NSColor.black.cgColor
+        borderGradient.mask = borderStroke
+      }
       borderGradient.isHidden = false
       borderGradient.frame = bounds
       borderGradient.colors = surfaceBorderColors.map(\.cgColor)
@@ -94,13 +89,18 @@ final class Surface: ExpoView {
         roundedRect: bounds.insetBy(dx: inset, dy: inset),
         cornerWidth: max(surfaceRadius - inset, 0), cornerHeight: max(surfaceRadius - inset, 0), transform: nil)
       plate.borderWidth = 0
-    } else {
+    } else if borderGradient.superlayer != nil {
       borderGradient.isHidden = true
     }
 
-    let shape = CGPath(roundedRect: bounds, cornerWidth: surfaceRadius, cornerHeight: surfaceRadius, transform: nil)
-    shadowLayer.frame = bounds
     if let shadowColor = surfaceShadowColor, surfaceShadowOpacity > 0 {
+      if shadowLayer.superlayer !== layer {
+        layer.insertSublayer(shadowLayer, below: plate)
+        shadowMask.fillRule = .evenOdd
+        shadowLayer.mask = shadowMask
+      }
+      let shape = CGPath(roundedRect: bounds, cornerWidth: surfaceRadius, cornerHeight: surfaceRadius, transform: nil)
+      shadowLayer.frame = bounds
       shadowLayer.shadowColor = shadowColor.cgColor
       shadowLayer.shadowOpacity = Float(surfaceShadowOpacity)
       shadowLayer.shadowRadius = surfaceShadowRadius
@@ -113,7 +113,7 @@ final class Surface: ExpoView {
       shadowMask.frame = bounds
       shadowMask.path = mask
       shadowLayer.isHidden = false
-    } else {
+    } else if shadowLayer.superlayer != nil {
       shadowLayer.isHidden = true
     }
     CATransaction.commit()

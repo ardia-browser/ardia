@@ -1,3 +1,6 @@
+import { consentToken } from "../../browser/src/state/telemetry/client";
+import { warnFor } from "../../browser/src/state/telemetry/logs";
+
 type InputTarget = Pick<EventTarget, "addEventListener" | "removeEventListener">;
 type ModuleProvider = (name: string, method: string) => unknown;
 
@@ -81,12 +84,13 @@ export function startLinuxTabPolicies(deps: LinuxPolicyDeps): () => void {
   };
   const takeLock = () => {
     if (!deps.locks) return becomeOwner();
+    const consent = consentToken();
     deps.locks.request(TAB_POLICY_LOCK, () => {
       if (stopped) return Promise.resolve();
       becomeOwner();
       return new Promise<void>((resolve) => { release = resolve; });
     }).catch((error: unknown) => {
-      console.warn("[ardia linux] tab policy lock", error);
+      warnFor(consent, "[ardia linux] tab policy lock", error);
       becomeOwner();
     });
   };

@@ -5,5 +5,5 @@ export * from "../../browser/src/platform/commands";
 
 export const menuShortcuts = async () => {
   const state = useBrowser.getState();
-  return linuxMenuShortcuts(state.settings.shortcuts, state.profileOrder);
+  return linuxMenuShortcuts(state.settings.shortcuts, state.profileOrder, state.profiles);
 };

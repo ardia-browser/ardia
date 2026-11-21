@@ -27,6 +27,8 @@ const windowHostHeader = read("../ios/ArdiaChromeWindowHost.h");
 const windowHost = read("../ios/ArdiaChromeWindowHost.mm");
 const swiftc = process.env.SWIFTC || "swiftc";
 const pageScriptSwift = read("../ios/WebKitPageScript.swift");
+const chromiumPageScript = read("../ios/page_script.js");
+const fieldProviderKit = chromiumPageScript.slice(chromiumPageScript.indexOf("  const fieldProviderKit = "), chromiumPageScript.indexOf("  const nativeMutationObserver = "));
 
 function pageWithVideos(videos) {
   const noop = () => {};
@@ -40,10 +42,10 @@ function pageWithVideos(videos) {
     body: null,
     documentElement: {},
   };
-  const window = { document, addEventListener: noop, location: { protocol: "https:", origin: "https://example.test" }, navigator: {}, performance: { now: () => 0 }, setTimeout: noop };
+  const window = { document, addEventListener: noop, location: { protocol: "https:", origin: "https://example.test" }, navigator: {}, performance: { now: () => 0 }, setTimeout: noop, requestAnimationFrame: noop, EventTarget: class { addEventListener() {} } };
   window.window = window;
   window.top = window;
-  const source = pageScriptSwift.slice(pageScriptSwift.indexOf('#"""') + 4, pageScriptSwift.indexOf('"""#')).replace("\\#(WebKitMediaFaults.sitesJSON)", "[]");
+  const source = pageScriptSwift.slice(pageScriptSwift.indexOf('#"""') + 4, pageScriptSwift.indexOf('"""#')).replace("\\#(WebKitMediaFaults.sitesJSON)", "[]").replace("\\#(fieldProviderKit)", () => fieldProviderKit);
   runInNewContext(source, window);
   return window.__ardia;
 }
@@ -74,11 +76,11 @@ test("WebKit tabs follow the user's sight of their window the way Chromium views
   assert.match(sight, /let activeCapture = webView\?\.cameraCaptureState == \.active \|\| webView\?\.microphoneCaptureState == \.active/);
   assert.match(sight, /playing: !playingFrames\.isEmpty \|\| activeCapture/);
   assert.match(tab, /override func viewDidMoveToWindow\(\) \{\n    super\.viewDidMoveToWindow\(\)\n    if window != nil \{ followInterfaceScale\(\) \}\n    watchSight\(\)\n  \}/);
-  assert.match(tab, /var visible = true \{ didSet \{ updateHidden\(\); updateSight\(\) \} \}/);
+  assert.match(tab, /var visible = true \{ didSet \{ updateHidden\(\); updateSight\(\); noteShownChanged\(\) \} \}/);
 });
 
 test("leaving opens picture in picture and returning closes it through the page's own player call", () => {
-  assert.match(sight, /case \.open: setPictureInPicture\(true, automatic: true\) \{ \[weak self\] answer in if answer == \.nothingPlaying \{ self\?\.emit\("autoPictureInPictureKept", \["reason": "nothingPlaying"\]\) \} \}/);
+  assert.match(sight, /case \.open:\s*let stamp = ArdiaConsentStamp\.begin\(\)\s*setPictureInPicture\(true, automatic: true\) \{ \[weak self\] answer in if answer == \.nothingPlaying \{ self\?\.emit\("autoPictureInPictureKept", stamp\.onto\(\["reason": "nothingPlaying"\]\)\) \} \}/);
   assert.match(sight, /case \.close: setPictureInPicture\(false\) \{ _ in \}/);
   assert.match(sight, /autoPictureInPictureRule\.sight\(seen, enabled: autoPictureInPicture, playing: !playingFrames\.isEmpty \|\| activeCapture\)/);
 });

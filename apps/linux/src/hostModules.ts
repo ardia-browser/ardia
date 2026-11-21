@@ -34,7 +34,6 @@ export const PAGE_OPTION_CALLS = [
   "webView.setLittleArdiaOpensNewTabLinks",
   "webView.setPopupsOpenAsTabs",
   "webView.setBlockAutoplayEverywhere",
-  "webView.setFairPlayInChromium",
 ] as const;
 const pageOptionCalls: ReadonlySet<string> = new Set(PAGE_OPTION_CALLS);
 
@@ -76,7 +75,7 @@ export function resolveHostModule(host: ArdiaHost, name: string, method: string)
     };
   }
   if (name === "ArdiaMedia" && method === "call") {
-    return (verb: string, profile: string, args: string) => linuxMediaCall(verb, args) ?? callHost(`media.${verb}`, profile, args, host);
+    return (verb: string, profile: string, args: string) => linuxMediaCall(verb, args, (method) => hostSupports(method, host)) ?? callHost(`media.${verb}`, profile, args, host);
   }
   if (name === "ArdiaBookmarks" && method === "call" && !hostSupports(BOOKMARKS_EXPORT_CALL, host)) {
     const exportHtml = bookmarksExportCall(host);

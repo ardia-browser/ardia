@@ -1,0 +1,198 @@
+#!/bin/bash
+# corex-test <commit> [--patch FILE] [--device SERIAL | --device-build | --device-run SERIAL] [Gradle --tests filters…]
+# Runs the phone's Kotlin unit tests (:ardia-phone-native, :app and :ardia-design testDebugUnitTest) on corex, in the bots container, in
+# corex-build's build-only clone at a pushed commit, so no Gradle runs on the Mac. --patch FILE (or - for stdin)
+# applies a diff from the main checkout on top of the commit for this run only; the clone is reset when the run
+# ends, as every build resets it. Waits like corex-build for another busy Gradle run or memory, and holds the clone's lock
+# so a build and a test never share it. Gradle runs without a daemon and Kotlin in-process. Prints each test class's
+# count and every failure; exits 1 when one fails. --device SERIAL runs :ardia-phone-native's device tests
+# (src/androidTest) on that phone instead, on demand and never in CI: hold the phone's Simlock lease first, as any
+# phone run does. Gradle installs and removes their test app. --device-build only compiles them and leaves the test app
+# at ~/Developer/ardia-android-build/device-tests.apk. On a phone whose installer stops adb installs (MIUI), install
+# that file with agentos's install tool, then --device-run SERIAL runs the installed tests with am instrument (the
+# filters are class names) and prints the same counts; it builds nothing, and the commit names what was installed.
+# One device test needs UiAutomation, which agentos holds while it leases a phone, so on a leased phone --device-run
+# counts it failed ("UiAutomationService … already registered") while every other one passes: run it through agentos's
+# test tool, package com.ardia.browser.test, runner androidx.test.runner.AndroidJUnitRunner, with the argument
+# class=com.ardia.browser.PageSnapshotTest#aSnapshotRightAfterANightModeChangeShowsThePage.
+set -euo pipefail
+if [ $# -lt 1 ] || [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
+  sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'
+  [ $# -ge 1 ] && [ "$1" != "--help" ] && [ "$1" != "-h" ] && exit 64
+  exit 0
+fi
+wanted="$1"
+shift
+patch=""
+device=""
+filters=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --patch) patch="$2"; shift ;;
+    --device) device="$2"; shift ;;
+    --device-build) device="build" ;;
+    --device-run) device="run:$2"; shift ;;
+    *) filters+=(--tests "$1") ;;
+  esac
+  shift
+done
+base="$HOME/Developer/ardia-android-build"
+src="$base/src"
+testApp="$base/device-tests.apk"
+
+if [ "${device#run:}" != "$device" ]; then
+  serial="${device#run:}"
+  adb -s "$serial" get-state > /dev/null 2>&1 || { echo "no phone $serial on adb" >&2; exit 64; }
+  adb -s "$serial" shell pm path com.ardia.browser.test > /dev/null 2>&1 || { echo "the test app com.ardia.browser.test isn't on $serial: install $testApp first" >&2; exit 64; }
+  classes=""
+  for filter in ${filters[@]+"${filters[@]}"}; do
+    [ "$filter" = "--tests" ] || classes="${classes:+$classes,}$filter"
+  done
+  started=$(date +%s)
+  status=0
+  raw="$base/device-run.txt"
+  adb -s "$serial" shell am instrument -w -r ${classes:+-e class "$classes"} com.ardia.browser.test/androidx.test.runner.AndroidJUnitRunner > "$raw" 2>&1 || true
+  (python3 - "$raw" <<'INSTRUMENTED'
+import re, sys
+text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+classes, failures, current, total, failed, skipped = {}, [], {}, 0, 0, 0
+for line in text.splitlines():
+    status = re.match(r"INSTRUMENTATION_STATUS: (\w+)=(.*)", line)
+    if status:
+        current[status.group(1)] = status.group(2)
+        continue
+    code = re.match(r"INSTRUMENTATION_STATUS_CODE: (-?\d+)", line)
+    if not code or int(code.group(1)) == 1:
+        continue
+    result = int(code.group(1))
+    name = current.get("class", "?").replace("com.ardia.phone.", "").replace("com.ardia.browser.", "")
+    passed, ran = classes.get(name, (0, 0))
+    if result in (-3, -4):
+        skipped += 1
+    else:
+        total += 1
+        ran += 1
+        if result == 0:
+            passed += 1
+        else:
+            failed += 1
+            failures.append(f"  FAILED {name}.{current.get('test', '?')}: {current.get('stack', '').splitlines()[0][:400] if current.get('stack') else ''}")
+    classes[name] = (passed, ran)
+    current = {}
+for name in sorted(classes):
+    print(f"{name}: {classes[name][0]}/{classes[name][1]}")
+print("\n".join(failures)) if failures else None
+crash = re.search(r"INSTRUMENTATION_RESULT: shortMsg=(.*)", text)
+if crash:
+    print(f"the run stopped: {crash.group(1)}")
+print(f"{total - failed} of {total} passed{f', {skipped} skipped' if skipped else ''}")
+sys.exit(1 if failed or crash or total == 0 else 0)
+INSTRUMENTED
+  ) || status=$?
+  echo "tests took $(( $(date +%s) - started )) s"
+  exit "$status"
+fi
+branch="${ARDIA_BUILD_BRANCH:-t3/unify-expo-architecture}"
+gib=$((1024 * 1024 * 1024))
+
+[ "$(uname)" = "Linux" ] || { echo "corex-test runs on corex" >&2; exit 64; }
+limit="$(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo max)"
+if [ "$limit" = "max" ] || [ "$limit" -lt $((14 * gib)) ]; then
+  echo "this isn't the bots container (memory limit $limit)" >&2
+  exit 64
+fi
+[ -d "$src/.git" ] || { echo "no build clone yet: run corex-build once" >&2; exit 64; }
+if [ "$patch" = "-" ]; then
+  patchFile="$base/test.patch"
+  cat > "$patchFile"
+elif [ -n "$patch" ]; then
+  patchFile="$patch"
+else
+  patchFile=""
+fi
+
+exec 9> "$base/clone.lock"
+flock -w "${ARDIA_BUILD_WAIT:-1800}" 9 || { echo "the build clone stayed busy" >&2; exit 75; }
+cpuTicks() { local total=0 pid; for pid in "$@"; do [ -r "/proc/$pid/stat" ] && total=$(( total + $(awk '{ print $14 + $15 }' "/proc/$pid/stat" 2>/dev/null || echo 0) )); done; echo "$total"; }
+others() {
+  local pids before
+  pids="$(pgrep -f 'org.gradle.launcher.daemon|GradleWrapperMain|org.gradle.launcher.GradleMain|KotlinCompileDaemon' || true)"
+  [ -n "$pids" ] || return 0
+  before="$(cpuTicks $pids)"
+  sleep 5
+  [ $(( $(cpuTicks $pids) - before )) -gt 50 ] && echo "$pids"
+  return 0
+}
+spare() { echo $(( (limit - $(cat /sys/fs/cgroup/memory.current) + $(awk '$1 == "inactive_file" || $1 == "slab_reclaimable" { sum += $2 } END { printf "%.0f", sum }' /sys/fs/cgroup/memory.stat)) / gib )); }
+deadline=$(( $(date +%s) + ${ARDIA_BUILD_WAIT:-1800} ))
+while [ -n "$(others)" ] || [ "$(spare)" -lt 6 ]; do
+  [ "$(date +%s)" -lt "$deadline" ] || { echo "bots stayed busy; not testing" >&2; exit 75; }
+  sleep 30
+done
+
+reset() {
+  git -C "$src" reset --quiet --hard
+  git -C "$src" clean -ffdq
+}
+trap reset EXIT
+git -C "$src" fetch --quiet origin "$branch"
+commit="$(git -C "$src" rev-parse --verify --quiet "$wanted^{commit}" || true)"
+[ -n "$commit" ] || { echo "$wanted isn't on origin/$branch: push it first" >&2; exit 64; }
+git -C "$src" checkout --quiet --detach --force "$commit"
+reset
+if [ -n "$patchFile" ]; then
+  git -C "$src" apply --whitespace=nowarn "$patchFile"
+  echo "testing $commit with $(git -C "$src" diff --stat | tail -1)"
+else
+  echo "testing $commit"
+fi
+
+pinned="$(sed -n 's/.*"packageManager": "pnpm@\([^"]*\)".*/\1/p' "$src/apps/phone/package.json")"
+export PATH="$base/pnpm-$pinned/node_modules/.bin:$PATH"
+export TMPDIR="$base/tmp"
+export GRADLE_OPTS="${GRADLE_OPTS:-} -Djava.net.preferIPv4Stack=true"
+(cd "$src/apps/phone" && pnpm install --frozen-lockfile --reporter=silent)
+results=("$src/packages/phone/android/build/test-results/testDebugUnitTest" "$src/apps/phone/android/app/build/test-results/testDebugUnitTest" "$src/apps/phone/android/ardia-design/build/test-results/testDebugUnitTest")
+tasks=(:ardia-phone-native:testDebugUnitTest :app:testDebugUnitTest :ardia-design:testDebugUnitTest)
+deviceArgs=()
+case "$device" in
+  "") ;;
+  build) results=(); tasks=(:ardia-phone-native:assembleDebugAndroidTest) ;;
+  *)
+    adb -s "$device" get-state > /dev/null 2>&1 || { echo "no phone $device on adb" >&2; exit 64; }
+    export ANDROID_SERIAL="$device"
+    results=("$src/packages/phone/android/build/outputs/androidTest-results/connected")
+    tasks=(:ardia-phone-native:connectedDebugAndroidTest)
+    for filter in ${filters[@]+"${filters[@]}"}; do
+      [ "$filter" = "--tests" ] || deviceArgs+=("-Pandroid.testInstrumentationRunnerArguments.class=$filter")
+    done
+    filters=()
+    ;;
+esac
+rm -rf ${results[@]+"${results[@]}"}
+started=$(date +%s)
+status=0
+(cd "$src/apps/phone/android" && ARDIA_LAB=1 EXPO_PUBLIC_ARDIA_LAB=true flock -w 540 /tmp/ardia-android-gradle.lock ./gradlew -PardiaLab=true --no-daemon -Pkotlin.compiler.execution.strategy=in-process "${tasks[@]}" ${filters[@]+"${filters[@]}"} ${deviceArgs[@]+"${deviceArgs[@]}"} --max-workers=4 --console=plain -q > "$base/test.log" 2>&1) || status=$?
+python3 - ${results[@]+"${results[@]}"} <<'SUMMARY'
+import glob, re, sys
+total = failed = 0
+for path in sorted(p for folder in sys.argv[1:] for p in glob.glob(folder + "/**/TEST-*.xml", recursive=True)):
+    text = open(path, encoding="utf-8", errors="replace").read()
+    tests, failures, errors = map(int, re.search(r'tests="(\d+)".*?failures="(\d+)".*?errors="(\d+)"', text).groups())
+    total += tests
+    failed += failures + errors
+    name = path.rsplit("TEST-", 1)[1][:-4].replace("com.ardia.phone.", "")
+    print(f"{name}: {tests - failures - errors}/{tests}")
+    for case in re.finditer(r'<testcase name="([^"]+)"[^>]*>\s*<(?:failure|error) message="([^"]{0,400})', text):
+        print(f"  FAILED {case.group(1)}: {case.group(2)}")
+print(f"{total - failed} of {total} passed")
+SUMMARY
+echo "tests took $(( $(date +%s) - started )) s"
+if [ "$device" = "build" ] && [ "$status" = "0" ]; then
+  built="$(find "$src/packages/phone/android/build/outputs/apk/androidTest" -name "*.apk" | head -1)"
+  [ -n "$built" ] && cp "$built" "$testApp" && echo "test app: $testApp ($(sha256sum "$testApp" | cut -c1-12))"
+fi
+if [ "$status" != "0" ]; then
+  grep -E "^e: |What went wrong|error:" "$base/test.log" | head -20 >&2 || true
+  exit 1
+fi

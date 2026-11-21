@@ -4,6 +4,7 @@ import type { ArdiaHost } from "./host";
 import { hostModuleMethod, invokeHost } from "./host.ts";
 import { linuxCapabilities, unavailableError } from "./hostCapabilities.ts";
 import type { BangListReply } from "../../../packages/shell/src/documents";
+import { fillsScreen, isWindowFrame } from "./windowFrame.ts";
 
 type ShellMethod = (...args: never[]) => unknown;
 
@@ -80,25 +81,19 @@ export const fetchBangList: (etag: string | null) => Promise<BangListReply> = un
 
 export const LINUX_WINDOW_CORNER_RADIUS = 19;
 
-type WindowFrame = [number, number, number, number];
-
-const isWindowFrame = (value: unknown): value is WindowFrame => Array.isArray(value) && value.length === 4 && value.every(Number.isFinite);
-
-function fillsScreen([, , width, height]: WindowFrame) {
-  const screen = typeof window === "undefined" ? undefined : window.screen;
-  return !!screen && width >= screen.availWidth && height >= screen.availHeight;
-}
-
 const frameCornerRadius = (host?: ArdiaHost) => (id: string): Promise<number> =>
   invokeHost<unknown>("ArdiaShell.windowFrame", { args: [id] }, host).then(
     (frame) => isWindowFrame(frame) && fillsScreen(frame) ? 0 : LINUX_WINDOW_CORNER_RADIUS,
     () => 0,
   );
 
+const noGeometry = (): Promise<null> => Promise.resolve(null);
+
 const HOST_SHELL_METHODS: Record<string, (host?: ArdiaHost) => ShellMethod> = { frameCornerRadius };
 
 const LINUX_SHELL_METHODS: Record<string, ShellMethod> = {
   windowCornerRadius: () => LINUX_WINDOW_CORNER_RADIUS,
+  drawnWindowCornerRadius: () => LINUX_WINDOW_CORNER_RADIUS,
   updateMenu: resolved,
   watchSidebarEdge: (id: string, on: boolean, hold = 0, right = false) => {
     watchSidebarEdge(id, on, hold, right);
@@ -106,11 +101,15 @@ const LINUX_SHELL_METHODS: Record<string, ShellMethod> = {
   },
   setDragEscapeCapture,
   saveKeyResponder,
+  takeEditKeyAcks: () => ({}),
+  takeInputSourceKeys: () => 0,
   restoreKeyResponder,
   discardKeyResponder,
   cancelFocusMove: resolved,
   switcherPointerMoved: () => false,
   pressesWithoutRelease: () => 0,
+  takeFocusHandoffCounts: () => ({}),
+  setConsentEpoch: () => undefined,
   pressRepeated: () => Promise.resolve(null),
   animateWindowClose: resolved,
   raiseView,
@@ -124,8 +123,18 @@ const LINUX_SHELL_METHODS: Record<string, ShellMethod> = {
   startDictation: unavailable("Dictation"),
   dictationAvailable: () => linuxCapabilities().dictation,
   pickFiles: unavailable("Choosing files to open"),
+  openSurfaces: () => Promise.resolve([]),
+  capturePageMenus: resolved,
+  dismissSurface: unavailable("Captured page menus"),
+  menuBar: unavailable("The menu bar catalog"),
+  performMenuBarItem: unavailable("Running menu bar items"),
+  dismissShownOnly: unavailable("Taking away a question Ardia asked on the control socket's behalf"),
   replyToTerminate: resolved,
   readText: readClipboardText,
+  windowGeometry: noGeometry,
+  setWindowFrame: noGeometry,
+  setWindowZoomed: noGeometry,
+  setWindowFullScreen: noGeometry,
 };
 
 export function watchSidebarEdgeBesideNativeLeftEdge(host: ArdiaHost) {

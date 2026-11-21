@@ -15,6 +15,6 @@
 - Open: intermittent omission of the Chrome extensions-shortcuts page. Existing checks found it eligible;
   no Chrome-specific fix is established. Recheck after visiting other pages and unload/wake.
 
-- Replacement: `v0.2.47-nightly.5` still schedules recent-tab warmup three seconds after system-state load
+- Replacement: `v0.2.47-nightly.9` still schedules recent-tab warmup three seconds after system-state load
   and permits empty pages in MRU. Keep both adaptations. The loaded-tab budget sleeps background tabs;
   it does not replace lazy startup.

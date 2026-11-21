@@ -2,7 +2,7 @@
 
 - Status: active. Simon confirmed the manual checks passed.
 - Source: [fork PR #2](https://github.com/simon-ami/ardia/pull/2), `e44b9e8b`.
-- Setting: Tabs → Advanced → Unloaded tab appearance → Fade titles (`fadeUnloadedTabTitles`), default off.
+- Setting: Tabs → Unloaded tab appearance → Fade titles (`fadeUnloadedTabTitles`), default off.
 - Behavior: fade titles for sleeping/unloaded pages, including closed pins and restored tabs awaiting load.
   Apply to sidebar, folder panel, top strip, and split tabs, including pinned tabs showing their current page.
   Restore opacity on load/wake; loaded background
@@ -12,7 +12,7 @@
 - Manual: toggle fading for loaded, sleeping, and unloaded tabs; wake a tab; vary icon fading separately.
 - Related: [favicon grayscale](grayscale-unloaded-favicons.md).
 
-- Replacement: upstream `v0.2.47-nightly.5` (PR #1862) offers strikethrough plus 60% opacity.
+- Replacement: upstream `v0.2.47-nightly.9` groups icon fading and strikethrough in one menu. Strikethrough uses strikethrough plus 60% opacity.
   The fork fades to 45% without strikethrough, independently of icon fading. Upstream includes unloaded
   pages only when their icon is faded; the fork includes them regardless. Simon chose to keep fade-only.
   When both options apply, use 45% once.

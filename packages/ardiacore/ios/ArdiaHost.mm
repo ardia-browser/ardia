@@ -456,6 +456,18 @@ static NSDictionary<NSString *, id> *OffscreenRefusal(NSString *reason) {
   return gDataDirectory ?: @"";
 }
 
++ (void)beginPressLoop:(NSString *)name {
+  ardia_host::BeginPressLoop(name);
+}
+
++ (void)endPressLoop {
+  ardia_host::EndPressLoop();
+}
+
++ (void)notePointer:(NSEvent *)event swallowedBy:(NSString *)name {
+  ardia_host::NotePointer(event, name);
+}
+
 + (NSDictionary<NSString *, id> *)engineInfo {
   ArdiaCoreEngine *engine = ArdiaCoreEngine.sharedEngine;
   NSInteger chromeWindows = 0;
@@ -469,6 +481,7 @@ static NSDictionary<NSString *, id> *OffscreenRefusal(NSString *reason) {
     @"popupWindows" : @(ardia_host::PopupWindowCount()),
     @"chromeWindows" : @(chromeWindows),
     @"keepAlive" : engine.keepAliveState ?: @"",
+    @"pictureInPictureCloses" : engine.pictureInPictureCloses ?: @"",
     @"lastUsedProfile" : engine.defaultProfile.name ?: @"",
     @"focus" : ardia_host::FocusState(),
   };

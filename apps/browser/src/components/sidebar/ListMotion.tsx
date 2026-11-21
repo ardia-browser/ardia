@@ -5,7 +5,7 @@ import { layout, useTheme } from "../ui/theme";
 import type { BrowserState } from "../../state/browser/store";
 import { workspaceSnapshot } from "../../state/browser/current";
 import type { Capture, ListSnapshot } from "../../state/sidebar/listCapture";
-import { useAnimatedStyle, type ClipSource, type EntryMotion } from "./EntryMotion";
+import { setSliding, useAnimatedStyle, type ClipSource, type EntryMotion } from "./EntryMotion";
 import { groupEntries } from "../../state/sidebar/entries";
 import { entryHeight } from "../../state/sidebar/geometry";
 import { ghostEntry, snapshotEntry, type EntrySnapshot } from "./GhostEntry";
@@ -13,7 +13,10 @@ import { curve } from "../ui/motion";
 import { SIDEBAR_MOTION } from "./tokens";
 import { entryId, entryKey, parseEntry } from "../../state/sidebar/entryKey";
 import { splitTabIdsOf } from "../../state/splits/splits";
-import { noteSidebarMotionMerge } from "../../state/telemetry/usage";
+import { noteSidebarMotion } from "../../state/telemetry/usage";
+import { settleSlides, type Slide } from "./slideSettle";
+import { seenSliding, shiftedBand, type ListViewport } from "./listViewport";
+import { offsets, prefixHeight, sharedPrefix, type Height, type Offsets } from "./listOffsets";
 
 export const SLIDE_MS = SIDEBAR_MOTION.listSlide;
 export const FADE_MS = SIDEBAR_MOTION.listFade;
@@ -23,18 +26,16 @@ const TAIL = "~tail";
 const FRAME_SLACK_MS = 50;
 const devScale = () => (__DEV__ ? ((globalThis as { sidebarMotionScale?: number }).sidebarMotionScale ?? 1) : 1);
 
-type Slide = { value: Animated.Value; from: number; at: number; until: number; landed: boolean };
 type Ghost = { key: string; anchor: string | null; y: number; snapshot: EntrySnapshot; opacity: Animated.Value; until: number };
 type Snapshot = ListSnapshot;
 type Move = { key: string; from: number };
 type Plan = { moves: Move[]; ghosts: Ghost[]; clipped: string[]; below: number };
-type Offsets = { at: Map<string, number>; end: number };
-type Height = (s: BrowserState, entry: string) => number;
 type Planner = (before: Snapshot, after: Snapshot, slides: Map<string, Slide>, ghosts: Ghost[], t: number) => Plan | null;
+type InView = (key: string, from: number) => boolean;
 export type ListSlot = { entry: string } | { ghost: Ghost; top: number };
-export type ListMotionScope = { enabled: boolean; slideBelow: ((entry: string, delta: number) => void) | null };
+export type ListMotionScope = { slideBelow: ((entry: string, delta: number) => void) | null };
 
-export const ListMotionContext = createContext<ListMotionScope>({ enabled: false, slideBelow: null });
+export const ListMotionContext = createContext<ListMotionScope>({ slideBelow: null });
 let ghostIds = 0;
 
 const tabsOf = (s: BrowserState, entry: string): string[] => {
@@ -53,28 +54,6 @@ const openedIn = (before: BrowserState, after: BrowserState) => (entry: string) 
   const ids = tabsOf(after, entry);
   return ids.length > 0 && ids.every((id) => !before.tabs[id]);
 };
-
-function offsets(s: BrowserState, entries: string[], height: Height, start = 0, base = 0): Offsets {
-  const at = new Map<string, number>();
-  let y = base;
-  for (let i = start; i < entries.length; i++) {
-    at.set(entries[i]!, y);
-    y += height(s, entries[i]!) + layout.rowGap;
-  }
-  return { at, end: y };
-}
-
-function sharedPrefix(a: string[], b: string[]): number {
-  let i = 0;
-  while (i < a.length && i < b.length && a[i] === b[i]) i++;
-  return i;
-}
-
-function prefixHeight(s: BrowserState, entries: string[], count: number, height: Height): number {
-  let y = 0;
-  for (let i = 0; i < count; i++) y += height(s, entries[i]!) + layout.rowGap;
-  return y;
-}
 
 function shiftAt(slide: Slide | undefined, t: number): number {
   if (!slide) return 0;
@@ -171,9 +150,17 @@ type Core = {
   enabled: boolean;
   nativeTail: boolean;
   below?: ((delta: number) => void) | null;
+  inView?: (list: string[]) => InView | null;
 };
 
-function useMotion({ devKey, entries, from, planner, height, enabled, nativeTail, below }: Core) {
+function onlySeen(plan: Plan, seen: InView | null, slides: Map<string, Slide>): Plan | null {
+  const moves = seen ? plan.moves.filter((m) => m.key === TAIL || slides.get(m.key)?.landed === false || seen(m.key, m.from)) : plan.moves;
+  if (moves.length === plan.moves.length) return plan;
+  if (!moves.length && !plan.ghosts.length && !plan.below) return null;
+  return { ...plan, moves, clipped: moves.length ? plan.clipped : [] };
+}
+
+function useMotion({ devKey, entries, from, planner, height, enabled, nativeTail, below, inView }: Core) {
   const slides = useRef(new Map<string, Slide>()).current;
   const contexts = useRef(new Map<string, EntryMotion>()).current;
   const clipped = useRef(new Set<string>()).current;
@@ -206,26 +193,23 @@ function useMotion({ devKey, entries, from, planner, height, enabled, nativeTail
   const seen = useRef(entries);
   const latest = useRef(entries);
   latest.current = entries;
+  const seenNow = useRef(inView);
+  seenNow.current = inView;
   const queued = useRef<Plan | null>(null);
   const clipping = useRef<object | null>(null);
   const [, rerender] = useState(0);
   if (enabled) devRegister("sidebarMotion", devKey, { slides, ghosts, clipped });
 
   const now = Date.now();
-  for (const slide of slides.values()) {
-    if (slide.until && now >= slide.until) {
-      slide.until = 0;
-      if (!slide.landed) slide.value.setValue(0);
-    }
-  }
+  if (settleSlides(slides.values(), now)) noteSidebarMotion("overrun");
   if (ghosts.current.some((g) => g.until && now >= g.until)) ghosts.current = ghosts.current.filter((g) => !g.until || now < g.until);
 
   const prepare = (plan: Plan, at: number) => {
-    for (const m of plan.moves) if (!slides.has(m.key)) slides.set(m.key, { value: new Animated.Value(m.from), from: m.from, at, until: 0, landed: false });
+    for (const m of plan.moves) if (!slides.has(m.key)) slides.set(m.key, { value: new Animated.Value(m.from), from: m.from, at, until: 0, run: null, landed: false });
     ghosts.current = [...ghosts.current, ...plan.ghosts];
     const pending = queued.current;
     const next = pending ? mergePlans(pending, plan) : plan;
-    if (pending) noteSidebarMotionMerge();
+    if (pending) noteSidebarMotion("merge");
     clipped.clear();
     for (const key of next.clipped) clipped.add(key);
     queued.current = next;
@@ -251,7 +235,9 @@ function useMotion({ devKey, entries, from, planner, height, enabled, nativeTail
     if (i < 0) return;
     const t = Date.now();
     const keys = [...list.slice(i + 1), TAIL];
-    prepare({ moves: keys.map((key) => ({ key, from: shiftAt(slides.get(key), t) + delta })), ghosts: [], clipped: [list[i + 1] ?? TAIL], below: 0 }, t);
+    const plan = onlySeen({ moves: keys.map((key) => ({ key, from: shiftAt(slides.get(key), t) + delta })), ghosts: [], clipped: [list[i + 1] ?? TAIL], below: 0 }, seenNow.current?.(list) ?? null, slides);
+    if (!plan) return;
+    prepare(plan, t);
     rerender((n) => n + 1);
   }).current;
 
@@ -271,9 +257,15 @@ function useMotion({ devKey, entries, from, planner, height, enabled, nativeTail
       slide.at = at;
       slide.until = at + slideMs + FRAME_SLACK_MS;
       slide.landed = false;
-      const timing = Animated.timing(slide.value, { toValue: 0, duration: slideMs, easing: SLIDE_EASING, useNativeDriver: nativeTail || m.key !== TAIL });
+      const run = Animated.timing(slide.value, { toValue: 0, duration: slideMs, easing: SLIDE_EASING, useNativeDriver: nativeTail || m.key !== TAIL });
+      slide.run = run;
+      setSliding(slide.value, true);
       const clips = i === 0 && token;
-      timing.start(({ finished }) => {
+      run.start(({ finished }) => {
+        if (slide.run === run) {
+          slide.run = null;
+          setSliding(slide.value, false);
+        }
         if (!finished) return;
         slide.landed = true;
         if (!clips) return;
@@ -329,8 +321,14 @@ function useMotion({ devKey, entries, from, planner, height, enabled, nativeTail
   return { motion, slots, fading: ghosts.current.length > 0, slideBelow, tail: slides.get(TAIL)?.value ?? null, tailClip: source(TAIL) };
 }
 
-export function useListMotion(windowId: string, profileId: string, entries: string[], from: Capture, enabled: boolean) {
+export function useListMotion(windowId: string, profileId: string, entries: string[], from: Capture, enabled: boolean, viewport: ListViewport | null = null, above = 0) {
   const height: Height = (s, e) => entryHeight(s, windowId, profileId, e);
+  const inView = (s: BrowserState) => (list: string[]): InView | null => {
+    const band = shiftedBand(viewport?.band() ?? null, above);
+    if (!band) return null;
+    const at = offsets(s, list, height);
+    return (key, from) => !at.at.has(key) || seenSliding(at.at.get(key)!, height(s, key), from, band);
+  };
   const planner: Planner = (before, after, slides, ghosts, t) => {
     const changes = new Map<string, GroupChange>();
     if (before.state.groups !== after.state.groups) {
@@ -357,9 +355,10 @@ export function useListMotion(windowId: string, profileId: string, entries: stri
     const old = offsets(before.state, before.list, height, start, base);
     const next = offsets(after.state, after.list, now, start, base);
     const snapshot = (e: string) => snapshotEntry(before.state, windowId, profileId, e);
-    return buildPlan({ before, after, old, next, removed, added, slides, ghosts, t, tail: true, snapshot, clipAfter: grown, start });
+    const plan = buildPlan({ before, after, old, next, removed, added, slides, ghosts, t, tail: true, snapshot, clipAfter: grown, start });
+    return plan && onlySeen(plan, inView(after.state)(after.list), slides);
   };
-  return useMotion({ devKey: windowId, entries, from, planner, height: (e) => height(workspaceSnapshot(), e), enabled, nativeTail: true });
+  return useMotion({ devKey: windowId, entries, from, planner, height: (e) => height(workspaceSnapshot(), e), enabled, nativeTail: true, inView: (list) => inView(workspaceSnapshot())(list) });
 }
 
 export function useGroupMotion(windowId: string, profileId: string, groupId: string, entries: string[], from: Capture, scope: ListMotionScope, enabled: boolean) {

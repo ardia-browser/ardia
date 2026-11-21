@@ -4,9 +4,11 @@ import { callHost } from "./host";
 import type { LiveCompletionInvalidation, LivePersistenceIntent, LiveProjection } from "../../browser/src/platform/livePersistence";
 import { createLiveCompletionTickets } from "./liveCompletionTickets";
 import { captureLiveIntent, projectLiveIntent } from "./liveDocumentIntent";
+import { consentToken, type ConsentToken } from "../../browser/src/state/telemetry/client";
+import { errorFor } from "../../browser/src/state/telemetry/logs";
 import { documentError, type DocumentSnapshot, type DocumentOperation, type DocumentReply, type DocumentChange } from "./liveDocumentTypes";
 
-type Pending = { operations: DocumentOperation[]; requestId?: string; observedRevision?: number; epoch?: string; skipped?: boolean; completion?: ReturnType<ReturnType<typeof createLiveCompletionTickets>["capture"]> };
+type Pending = { operations: DocumentOperation[]; consent: ConsentToken | null; requestId?: string; observedRevision?: number; epoch?: string; skipped?: boolean; completion?: ReturnType<ReturnType<typeof createLiveCompletionTickets>["capture"]> };
 const initial = (): DocumentSnapshot => ({ document: "live.json", scope: "", clientId: "", epoch: "", revision: -1, watermark: 0, payload: {}, incarnations: {}, generations: {} });
 
 export function createLiveDocumentClient(host: ArdiaHost) {
@@ -142,7 +144,7 @@ export function createLiveDocumentClient(host: ArdiaHost) {
         try { reply = await invoke("commit", { document: "live.json", epoch: batch.epoch, requestId: batch.requestId, observedRevision: batch.observedRevision, operations: batch.operations }) as DocumentReply; }
         catch (error) {
           if (attemptConnection === connection && (error as { code?: unknown } | null)?.code === "ERR_DOCUMENT_REQUEST") {
-            console.error(documentError("ERR_DOCUMENT_REJECTED", `Dropped a Live change the saved document rejected: ${(error as Error).message}`));
+            errorFor(batch.consent, documentError("ERR_DOCUMENT_REJECTED", `Dropped a Live change the saved document rejected: ${(error as Error).message}`));
             retire(batch);
             continue;
           }
@@ -195,15 +197,17 @@ export function createLiveDocumentClient(host: ArdiaHost) {
       if (closeTokens.size) { publish(); return; }
       try {
         const operations = captureLiveIntent(before, after, canonical, intent);
-        if (operations.length) { pending.push({ operations, completion: completions.capture(intent, before, after, canonical) }); void drain().catch(() => {}); }
+        if (operations.length) { pending.push({ operations, consent: consentToken(), completion: completions.capture(intent, before, after, canonical) }); void drain().catch(() => {}); }
+        return operations.length > 0;
       } catch (error) { captureFailure = failure = error; throw error; }
     },
     beginRefresh: async (id: string) => {
       if (closeTokens.size) throw documentError("ERR_DOCUMENT_CLOSING", "Document producers are quiesced");
+      const consent = consentToken();
       await drain();
       const incarnation = canonical.incarnations[id];
       if (!incarnation) throw documentError("ERR_DOCUMENT_DELETED", "Folder no longer exists");
-      const claim: Pending = { operations: [{ type: "claim", id, incarnation }] };
+      const claim: Pending = { operations: [{ type: "claim", id, incarnation }], consent };
       pending.push(claim);
       await drain();
       if (claim.skipped) return null;

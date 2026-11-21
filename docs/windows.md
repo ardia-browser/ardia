@@ -655,6 +655,35 @@ is plain Chromium.
   has opened, so a profile that crashes Ardia at every start opens again on its own. Chromium's profile (bookmarks,
   history, passwords, cookies) isn't touched. #2097's recording (the app gone about 4 s after its window appears, at
   every launch after onboarding) is that shape; the launch log now kept in `Logs` says what ended it.
+- **Crash reports.** `ArdiaApp.crashReports(since)` lists the minidumps Chromium's crash handler (Crashpad) wrote after
+  `since` (milliseconds), so the telemetry owner's native-crash report (`reportNativeCrashes`, the same consent as the
+  Mac and Linux) can name what ended a run on the next launch. It used to answer an empty list, so a Windows crash left
+  no report (#2097). `CrashDumps.h` does the work and uses only the standard library, so a test compiles it on any
+  machine; `AppModule.h` picks the folders and builds the JS objects.
+  - Where: the profile's `Crashpad\reports` folder (`%LOCALAPPDATA%\Ardia\User Data` for an everyday instance, the
+    instance's data folder for a test instance, whose dumps then never reach the everyday profile). Files over 32 MB
+    and empty or damaged ones are skipped. The newest 16 are read, then the newest five from the browser process and
+    five from the others are kept, as on Linux. The walk runs on its own thread, so it never holds the UI thread.
+  - What is read: the minidump's header, exception stream, module list and process times (bounds-checked, nothing is
+    executed) and three of Crashpad's annotations, `ptype`, `ver` and `ardia-ver`; every other annotation, the stacks,
+    the memory and the thread contexts are never copied. A dump written without a crash (Crashpad's simulated-exception
+    code) or without an exception stream is skipped.
+  - What comes back (`CrashReport`): the process kind (`ptype`; none means the browser), `terminationNamespace`
+    `WIN32_EXCEPTION`, the exception as its Windows name (`EXCEPTION_ACCESS_VIOLATION`, `STATUS_STACK_BUFFER_OVERRUN`,
+    or `STATUS_XXXXXXXX` for a code with no name), for an access violation whether it read, wrote or executed, one
+    frame naming the faulting module's file name and the offset in it (`nvoglv64.dll` +`0x1234`, `???` when the
+    address is in no module), the seconds the process had run (the dump's time minus its start time), the engine
+    version for a helper process and the app's own version for the browser (each kept only when it has the shape of a
+    version), and the dump's time and its file's modification time. No folder or file path, URL, page title or user
+    name is returned, and the module name has its folder cut off.
+  - `ArdiaApp.devWriteCrashFixture(name, hex)` writes a dump into that folder for the self-check. It refuses unless the
+    instance is a test instance, and refuses any name that isn't a plain `.dmp` file name. It answers true or false,
+    never a path.
+  - Self-check (`appSystem.ts`, `sampleMinidump.ts`): the inert-calls check asks for reports newer than tomorrow and
+    expects none; two more write a GPU-process dump (access violation in `nvoglv64.dll`, uptime 3 s, an engine
+    version) and a browser dump (stack buffer overrun in `Ardia.exe`, an app version) and read each back through
+    `crashReports(0)`. `windowsCrashReports.test.mjs` compiles the same parser with the system C++ compiler and
+    checks the dumps the self-check builds, plus damaged, oversized, simulated and hostile ones.
 - A window closed while minimized keeps its restored place and size for the next launch (the frame event's restored
   bounds); it used to save the minimized frame and come back as a 480 x 360 window in the corner.
 - `scripts/windows/relaunch-check.ps1` (CI, after the installer check) installs the build and closes and reopens

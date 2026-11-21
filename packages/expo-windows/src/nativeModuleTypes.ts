@@ -59,7 +59,7 @@ export type DefaultBrowserState = { progId: string; command: string | null; regi
 
 export type SystemModule = SystemNative & { defaultBrowserState(): DefaultBrowserState };
 
-export type AppModule = AppNative & { windowsApiVersion?: number };
+export type AppModule = AppNative & { windowsApiVersion?: number; devWriteCrashFixture(name: string, hex: string): Promise<boolean> };
 
 export type IntroMusicModule = { play(muted: boolean): void; setMuted(muted: boolean): void; stop(fade: number): void; embeddedSeconds(): number };
 

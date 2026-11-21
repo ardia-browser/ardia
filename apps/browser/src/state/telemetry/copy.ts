@@ -277,6 +277,9 @@ export const LOCAL_COPY = {
 } as const;
 
 const ADDED_ITEMS = {
+  "Crashes and errors": [
+    "On Windows, after a crash of Ardia or one of its page, graphics or helper processes: the process that crashed, the exception's name (such as an access violation) and whether it was reading, writing or running, the file name of the module it happened in (never its folder) and the offset in it, how long the process had run and the version that crashed, read from the crash report Windows' crash handler wrote. Never the report itself, its stacks, memory or paths",
+  ],
   Usage: [
     "How many cut, copy, paste and select all keys a page handed back to Ardia were carried out or refused as stale, and of those, how the first one after another app handed the window back was answered, summed up once an hour. Never what you copied or pasted or on which page",
     "When an import lists the other browser's Chrome Web Store extensions: how many it listed, how many it left out and why (already in Ardia, Manifest V2, loaded unpacked, installed by policy or by another app, or not from the Chrome Web Store), and how many of their store pages you opened from the list, summed up once an hour. Never which extensions, browser or profiles",

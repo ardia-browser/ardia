@@ -113,16 +113,17 @@ Do not copy the official profile for this test. Simon confirmed this test passed
 
 ## Personal CLI
 
-The app build runs `prepare-cli.py --prepare-only`. It builds a separate runtime
-from this checkout in `apps/browser/build-personal-cli` and verifies its archive.
-Preparation does not switch `current`; the app installer activates the CLI recorded in the signed candidate.
-Unchanged sources and version reuse the archive. Version metadata comes from the app project rather than a
-fixed version in the script. Runtime content is checked before activation. Old runtimes remain available.
+The app build runs `prepare-cli.py --prepare-only`. It verifies the pinned macOS Command Line plugin
+archive and prepares an isolated CLI runtime in `apps/browser/build-personal-cli`. Preparation
+leaves `current` in place. The Personal signing step removes the legacy CLI installer from the app bundle. The app installer activates the runtime recorded in the signed candidate.
+The runtime uses the personal profile, Keychain service, and CLI state. Its managed helper uses
+personal installation paths. Old runtimes remain available for rollback.
+
 For a deliberately separate CLI update, `prepare-cli.py` activates its prepared runtime; `--install` also adds
 `~/.local/bin/ardia-personal`. It does not change `ardia` or the shell configuration.
 Keep this checkout at its current location while using that symlink.
 Simon's global `~/.codex/AGENTS.md` directs browser automation to use `ardia-personal` wherever the Ardia skill
-says `ardia`. The fork's skill and references also use `ardia-personal` for CLI invocations and tool permissions.
+says `ardia`. The prepared skill and references also use `ardia-personal` for CLI invocations and tool permissions.
 Keep skill name `ardia`, paths, environment variables, and literal app labels unchanged. Preserve these
 substitutions during upstream merges and installed skill refreshes; see [the workflow](personal-workflow.md#installed-agent-skills).
 Use the official command only on an explicit request.

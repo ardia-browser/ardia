@@ -90,6 +90,7 @@ def main():
             with tempfile.TemporaryDirectory(prefix=".sign-", dir=output) as temporary:
                 candidate = Path(temporary) / app.name
                 run(["cp", "-cR", source, candidate])
+                (candidate / "Contents/Resources/ardia-cli-install.sh").unlink(missing_ok=True)
                 info_path = candidate / "Contents/Info.plist"
                 with info_path.open("rb") as stream:
                     info = plistlib.load(stream)

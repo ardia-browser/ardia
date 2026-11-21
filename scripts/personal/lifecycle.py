@@ -58,7 +58,7 @@ def app_inputs(repo):
 
 
 def cli_inputs(repo):
-    return inputs_digest(repo, ["apps/cli/ardia_cli", "apps/cli/scripts/build.sh", "apps/cli/requirements.lock", "apps/cli/pyproject.toml", "scripts/personal/prepare-cli.py", "scripts/personal/lifecycle.py"], include_docs=True)
+    return inputs_digest(repo, ["apps/browser/official-plugins.json", "scripts/release/official-plugins.py", "scripts/personal/prepare-cli.py", "scripts/personal/ardia-personal", "scripts/personal/lifecycle.py"])
 
 
 def artifact(app):

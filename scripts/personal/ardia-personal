@@ -16,7 +16,7 @@ for argument in "$@"; do
       exit 64 ;;
   esac
 done
-unset ARDIA_WS ARDIA_PORT ARDIA_CDP_URL AGENT_BROWSER_CDP ARDIA_BROWSE_KEYCHAIN
+unset ARDIA_WS ARDIA_PORT ARDIA_CDP_URL AGENT_BROWSER_CDP ARDIA_BROWSE_KEYCHAIN ARDIA_CLI_HOME ARDIA_CLI_BIN_DIR
 export ARDIA_DATA_DIR="$HOME/Library/Application Support/dev.simon.ardia.personal"
 export ARDIA_BROWSE_KEYCHAIN_SERVICE=dev.simon.ardia.personal.browse.auth
 runtime="$repo/apps/browser/build-personal-cli/current/bin/ardia"

@@ -11,6 +11,7 @@
 #include "ImportModule.h"
 #include "IntroMusicModule.h"
 #include "KeychainModule.h"
+#include "MaterialGrainView.h"
 #include "MaterialViews.h"
 #include "MaterialsModule.h"
 #include "MenusModule.h"
@@ -30,6 +31,7 @@ namespace Ardia {
 inline void RegisterViews(winrt::Microsoft::ReactNative::IReactPackageBuilder const &packageBuilder) noexcept {
   RegisterVectorIconView(packageBuilder);
   RegisterMaterialViews(packageBuilder);
+  RegisterMaterialGrainView(packageBuilder);
 }
 
 }

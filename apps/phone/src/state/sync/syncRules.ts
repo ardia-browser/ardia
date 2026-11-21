@@ -1,7 +1,9 @@
 import type { ConnectResult, PhraseCheck, SyncedDevice, SyncedProfile, SyncedView, SyncPhase, SyncStatus } from "../../platform/sync.ts";
 import { copy } from "../../lib/platformCopy.ts";
 
-export const MAC_HINT = "On your Mac: Settings › Sync › Connect Another Device.";
+const MAC_SETUP_HINT = "In Ardia on your Mac, open Settings › General › Sync. Click Turn On if needed, then Connect Another Device…";
+export const MAC_HINT = `${MAC_SETUP_HINT} Click Show Code.`;
+export const MAC_WORDS_HINT = `${MAC_SETUP_HINT} Click Show Words to see your 24-word recovery phrase.`;
 export const YOUR_MAC = "Your Mac";
 export const JUST_NOW_MS = 60_000;
 
@@ -85,7 +87,7 @@ export type PhraseTone = "hint" | "problem" | "good";
 export function phraseFooter(check: PhraseCheck): { text: string; tone: PhraseTone } {
   if (check.problem) return { text: check.problem, tone: "problem" };
   if (check.isValid) return { text: "All 24 words check out.", tone: "good" };
-  return { text: MAC_HINT, tone: "hint" };
+  return { text: MAC_WORDS_HINT, tone: "hint" };
 }
 
 export const orderedDevices = (devices: readonly SyncedDevice[]): SyncedDevice[] =>

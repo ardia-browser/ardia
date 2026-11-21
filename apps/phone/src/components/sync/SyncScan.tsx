@@ -3,7 +3,7 @@ import { ActivityIndicator, BackHandler, Pressable, StyleSheet, Text, View } fro
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { cameraErrorAccess, makeScanJudge, openCameraSettings, prepareCamera, type CameraAccess } from "../../state/sync/scan";
 import { haptics } from "../../state/app/haptics";
-import { SCAN_REJECTED } from "../../state/sync/syncRules";
+import { MAC_HINT, MAC_WORDS_HINT, SCAN_REJECTED } from "../../state/sync/syncRules";
 import { copy } from "../../lib/platformCopy";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import Svg, { Path } from "react-native-svg";
@@ -63,7 +63,7 @@ export function SyncScan({ onScan, onEnterWords, onCancel, inline = false }: Pro
                 <Text accessibilityRole="header" style={[font.title3, styles.bold, styles.white]}>
                   Scan the Code on Your Mac
                 </Text>
-                <Text style={[font.subheadline, styles.soft]}>In Ardia on your Mac, open Settings › Sync › Connect Another Device.</Text>
+                <Text style={[font.subheadline, styles.soft]}>{MAC_HINT}</Text>
               </View>
               <FinderCorners />
               {rejected ? (
@@ -90,7 +90,7 @@ export function SyncScan({ onScan, onEnterWords, onCancel, inline = false }: Pro
           <Unavailable
             icon="qrcodeViewfinder"
             title={copy().cantScanTitle}
-            message="Type the 24 words of your recovery phrase instead. Your Mac shows them under Connect Another Device."
+            message={MAC_WORDS_HINT}
             onEnterWords={onEnterWords}
           />
         ) : null}

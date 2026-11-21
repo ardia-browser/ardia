@@ -161,11 +161,15 @@ It refuses any sandbox-disabling switch. Every check must run and pass:
     of a userscript that prefixes the fixture's title must report the profile `loaded`, `ardia scripts list` must show
     it as reported by Ardia, and the fixture opened with `ardia browse` must read retitled. After
     `ardia scripts uninstall` it must report `removed`, and the fixture must open with its own title.
+13. `window-state`: in the first instance, `ArdiaShell.windowButtonLayout` must answer `{ layout, desktop }` (a string
+    or `null`, and a string), `ArdiaShell.windowState` for the shell's own window three booleans (`maximized`, `tiled`,
+    `fullScreen`), and `windowState` for an unknown window the error `No such native window`.
 
-Checks 9 to 12 report `skip` and pass for a dev package without `VERSION` or `cli/`. Each can also report `old` when
-the engine's host predates the feature: `appVersion` is Chromium's own version, the bootstrap advertises none of
-`engine.setCliControl`, `ArdiaCli.install` and `ArdiaAutomation.start`, or (for `cli-scripts`) not all four
-`ArdiaUserScripts` methods. `old` fails the gate unless
+Checks 9 to 12 report `skip` and pass for a dev package without `VERSION` or `cli/`. Checks 9 to 13 can also report
+`old` when the engine's host predates the feature: `appVersion` is Chromium's own version, the bootstrap advertises
+none of `engine.setCliControl`, `ArdiaCli.install` and `ArdiaAutomation.start`, (for `cli-scripts`) not all four
+`ArdiaUserScripts` methods, or (for `window-state`) not both `ArdiaShell.windowButtonLayout` and
+`ArdiaShell.windowState`. `old` fails the gate unless
 `--allow-old-engine` is passed. CI and `release.sh` pass it only for an engine that isn't the commit's own.
 
 It takes about 8 s without the CLI, and writes `results.json`, the launch logs and `cli.log`.

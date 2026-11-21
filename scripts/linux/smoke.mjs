@@ -43,12 +43,15 @@ ARDIA_BACKGROUND=1, a throwaway profile and HOME, the sandbox on) without
                     loads a userscript that retitles the fixture page, ardia scripts list shows it as
                     reported, the fixture opens retitled, and after ardia scripts uninstall it opens
                     with its own title (skip: no lib/ardia/cli; old: no ArdiaUserScripts methods)
+  window-state      ArdiaShell.windowButtonLayout answers {layout: string|null, desktop: string},
+                    ArdiaShell.windowState for the shell's own window answers three booleans, and for
+                    an unknown window fails with "No such native window" (old: neither call advertised)
 
 It writes <results>/results.json ({ok, package, started, assertions[]}) and the
 launch logs to <results>, prints a table, and exits 0 only when every check ran
 and passed or was skipped. A check whose feature the engine's host predates
-(appVersion is Chromium's version; no engine.setCliControl, ArdiaCli.install or
-ArdiaAutomation.start capability) reports "old": a failure, unless
+(appVersion is Chromium's version; no engine.setCliControl, ArdiaCli.install,
+ArdiaAutomation.start or ArdiaShell.windowState capability) reports "old": a failure, unless
 --allow-old-engine accepts it, as CI and release.sh do for an engine that isn't
 the commit's own.
 
@@ -61,7 +64,7 @@ the commit's own.
 `;
 
 export const privateFolder = (path) => mkdir(path, { recursive: true, mode: 0o700 });
-export const ASSERTIONS = ["ldd", "shell-ui", "bootstrap", "native-tab", "sandbox", "content-blocker", "restart-restore", "staged-install", "app-version", "cli-install", "cli-control", "cli-scripts"];
+export const ASSERTIONS = ["ldd", "shell-ui", "bootstrap", "native-tab", "sandbox", "content-blocker", "restart-restore", "staged-install", "app-version", "cli-install", "cli-control", "cli-scripts", "window-state"];
 export const FORBIDDEN_SWITCHES = ["--no-sandbox", "--disable-seccomp-filter-sandbox", "--disable-namespace-sandbox", "--disable-setuid-sandbox", "--disable-gpu-sandbox", "--no-zygote-sandbox", "--single-process", "--in-process-gpu"];
 export const TREE_FORBIDDEN_SWITCHES = ["--no-sandbox", "--disable-seccomp-filter-sandbox", "--disable-namespace-sandbox", "--disable-setuid-sandbox"];
 export const STAGED_FILES = [
@@ -99,6 +102,8 @@ export function uboTuningProblems(background, tuning = UBO_TUNING) {
 export const VERSION_PATTERN = /^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$/;
 export const CLI_CONTROL_CAPABILITIES = ["engine.setCliControl", "ArdiaCli.install", "ArdiaAutomation.start"];
 export const USER_SCRIPTS_CAPABILITIES = ["ArdiaUserScripts.watch", "ArdiaUserScripts.read", "ArdiaUserScripts.readStatus", "ArdiaUserScripts.writeStatus"];
+export const WINDOW_STATE_CAPABILITIES = ["ArdiaShell.windowButtonLayout", "ArdiaShell.windowState"];
+export const UNKNOWN_WINDOW_ERROR = "No such native window";
 export const SCRIPT_NAME = "Ardia smoke script";
 export const SCRIPT_TITLE_PREFIX = "Scripted: ";
 
@@ -281,6 +286,27 @@ export function appVersionVerdict(version, appVersion) {
   if (appVersion === version) return { status: "pass", message: `appVersion is ${version}` };
   if (typeof appVersion === "string" && /^\d+\.\d+\.\d+\.\d+$/.test(appVersion)) return { status: "old", message: `the host reports Chromium's version ${appVersion} as appVersion, not lib/ardia/VERSION ${version}: the engine predates lib/ardia/VERSION` };
   return { status: "fail", message: `appVersion is ${JSON.stringify(appVersion)}, not lib/ardia/VERSION ${version}` };
+}
+
+export function windowStateProblems(reply) {
+  const problems = [];
+  const layout = reply?.layout;
+  if (!layout || typeof layout !== "object" || Array.isArray(layout)) problems.push(`windowButtonLayout answered ${JSON.stringify(layout)}, not an object`);
+  else {
+    const keys = Object.keys(layout).sort().join(",");
+    if (keys !== "desktop,layout") problems.push(`windowButtonLayout has keys ${keys}, not desktop,layout`);
+    if (layout.layout !== null && typeof layout.layout !== "string") problems.push(`windowButtonLayout.layout is ${JSON.stringify(layout.layout)}, not a string or null`);
+    if (typeof layout.desktop !== "string") problems.push(`windowButtonLayout.desktop is ${JSON.stringify(layout.desktop)}, not a string`);
+  }
+  const state = reply?.state;
+  if (!state || typeof state !== "object" || Array.isArray(state)) problems.push(`windowState answered ${JSON.stringify(state)}, not an object`);
+  else {
+    const keys = Object.keys(state).sort().join(",");
+    if (keys !== "fullScreen,maximized,tiled") problems.push(`windowState has keys ${keys}, not fullScreen,maximized,tiled`);
+    for (const key of ["maximized", "tiled", "fullScreen"]) if (typeof state[key] !== "boolean") problems.push(`windowState.${key} is ${JSON.stringify(state[key])}, not a boolean`);
+  }
+  if (reply?.unknown !== UNKNOWN_WINDOW_ERROR) problems.push(`windowState for an unknown window answered ${JSON.stringify(reply?.unknown)}, not the error ${JSON.stringify(UNKNOWN_WINDOW_ERROR)}`);
+  return problems;
 }
 
 export function cliControlSupport(capabilities) {
@@ -793,6 +819,22 @@ class Smoke {
     return { format: "appimage" };
   }
 
+  async windowState(shell) {
+    const missing = WINDOW_STATE_CAPABILITIES.filter((name) => !(this.capabilities ?? []).includes(name));
+    if (missing.length) throw outcome("old", `the host doesn't advertise ${missing.join(", ")}: the engine predates window state on Linux`, { capabilities: this.capabilities?.length ?? null });
+    const reply = await shell.eval(`(async () => {
+      const host = globalThis.__ardiaHost;
+      const call = (method, args) => host.invoke(method, { args });
+      const layout = await call("ArdiaShell.windowButtonLayout", []);
+      const state = await call("ArdiaShell.windowState", [host.bootstrap.windowId]);
+      const unknown = await call("ArdiaShell.windowState", [${js(nonce("no-such-window"))}]).then((value) => ({ answered: value }), (error) => String(error?.message ?? error));
+      return { windowId: host.bootstrap.windowId, layout, state, unknown };
+    })()`);
+    const problems = windowStateProblems(reply);
+    if (problems.length) throw Object.assign(new Error(problems.join("; ")), { detail: reply });
+    return reply;
+  }
+
   async appVersion(shell) {
     if (!this.version) throw outcome("skip", "a dev package: no lib/ardia/VERSION");
     if (!VERSION_PATTERN.test(this.version)) throw new Error(`lib/ardia/VERSION reads ${JSON.stringify(this.version)}, not a version`);
@@ -1031,11 +1073,12 @@ class Smoke {
       return this.shellUi(shell);
     }, { timeout: 120000 });
     if (!first) {
-      for (const name of [...ASSERTIONS.slice(2, 7), "app-version"]) this.skip(name, `Ardia did not start: ${launched.detail.error}`);
+      for (const name of [...ASSERTIONS.slice(2, 7), "app-version", "window-state"]) this.skip(name, `Ardia did not start: ${launched.detail.error}`);
     } else {
       await this.record("bootstrap", () => this.bootstrap(first.shell));
       this.capabilities = await first.shell.eval("globalThis.__ardiaHost?.bootstrap?.capabilities ?? []").catch(() => null);
       await this.record("app-version", () => this.appVersion(first.shell));
+      await this.record("window-state", () => this.windowState(first.shell));
       await this.record("content-blocker", () => this.contentBlocker(first.shell), { timeout: 90000 });
       const tab = await this.record("native-tab", () => this.nativeTab(first.app, first.shell), { timeout: 90000 });
       if (tab.ok) first.tabId = tab.detail.tabId;

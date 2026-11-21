@@ -927,7 +927,7 @@ back), pass B (step 11: the failure screen, then an import) and pass C (step 12:
    Passes B and C need only a few tabs, one archived tab, a trusted site and a My Filters line.
 3. **Write down the state.** Do this before anything else:
    - Screenshot the deck, the Archive, search results for an old visit, every settings page you changed, and the
-     Mac's device list (Settings › Sync on the Mac, with the phone's device id in its detail; with the helper, save
+     Mac's device list (Settings › General › Sync on the Mac, with the phone's device id in its detail; with the helper, save
      the output of `mac sync`, which has the phone's id and its tabs).
    - Run `adb shell am force-stop $P`.
    - Run `adb shell "run-as $P sh -c 'sha256sum databases/* shared_prefs/ardia.*.xml cache/TabSnapshots/*'"`
@@ -3975,7 +3975,7 @@ the iPhone reads its files.
   folder picker and keeps a security-scoped bookmark. Picking iCloud Drive itself works too: the app looks for Ardia
   Sync (or Netnyahoo Sync) inside it. Reads and writes go through `NSFileCoordinator`, which makes iCloud bring files
   down; dataless files are reported as pending, as on the Mac.
-- **Joining.** The Mac's Settings › Sync › Connect Another Device shows a QR code of the phrase. The iPhone scans it
+- **Joining.** The Mac's Settings › General › Sync › Connect Another Device shows a QR code of the phrase. The iPhone scans it
   (or takes the 24 words typed or pasted), checks the checksum, and checks that the folder holds that phrase's chain
   before saving anything. Its errors are the Mac's. A different phrase entered after a failure clears the old error
   and, with a folder already chosen, tries again at once (`SyncConnectFlow`); the same words retyped don't.

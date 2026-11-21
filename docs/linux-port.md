@@ -124,6 +124,12 @@ The acceptance suite is in [linux-acceptance.md](linux-acceptance.md) and CI in 
   frame rather than in a later task, so a React commit and the animated transform that offsets it are never seen
   apart. Each tab keeps at most one `tab.viewport` request in flight; later rectangles replace the queued one, so a
   busy browser thread can't build up a backlog of stale positions.
+- **Toolbar slide.** When the hide-while-scrolling toolbar collapses or comes back, the shared layout makes the page
+  group its new size at once and slides it with a transform (`ardia.toolbarSlide`). The host clamps a page to the
+  window, so following the slide changed the page's height on every frame while it hung past the window's bottom, and
+  resize-sensitive sites such as Discord re-laid out and jumped (#2392). A page inside the group reports its rect
+  without the slide and clipped to its pane, so it changes size once when the slide starts and the shell's toolbar
+  slides over it. The hourly `toolbar_slide_frames_held` counts the frames this held.
 - **Overlays.** The shell WebView sits above the page views and is transparent over them (`ShellHostView::Restack`,
   `ShellTransparency`), so menus, hover cards, popovers, the command panel and the sidebar peek draw straight over the
   live page, as on the Mac. Each overlay registers an input region (`useInputRegion`); the shell sends

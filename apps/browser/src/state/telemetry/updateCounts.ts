@@ -1,6 +1,6 @@
 import { consentToken, consentOrNow, countFor, type ConsentToken } from "./consentPeriod";
 
-let checks = { asked: 0, automatic: 0, failed: 0, found: 0, pageOpens: 0, switchRefreshes: 0, switchRefreshFailures: 0, unsandboxed: 0, passwordGranted: 0, passwordDenied: 0, passwordCancelled: 0 };
+let checks = { asked: 0, automatic: 0, failed: 0, found: 0, pageOpens: 0, switchRefreshes: 0, switchRefreshFailures: 0, unsandboxed: 0, passwordGranted: 0, passwordDenied: 0, passwordCancelled: 0, slideFramesHeld: 0 };
 
 export function noteUpdateCheck(asked: boolean, outcome: "found" | "upToDate" | "failed", consent?: ConsentToken | null) {
   const fields = { update_checks_asked: +asked, update_checks_automatic: +!asked, update_check_failures: +(outcome === "failed"), update_checks_found: +(outcome === "found") };
@@ -27,6 +27,8 @@ export function noteLoginPasswordCheck(result: unknown) {
   else if (result === "cancelled") checks.passwordCancelled += 1;
 }
 
+export const noteSlideFrameKept = (consent?: ConsentToken | null) => countFor(consent, () => void (checks.slideFramesHeld += 1), { toolbar_slide_frames_held: 1 });
+
 export function takeUpdateCounts() {
   const taken = {
     update_checks_asked: checks.asked,
@@ -40,7 +42,8 @@ export function takeUpdateCounts() {
     login_password_checks_granted: checks.passwordGranted,
     login_password_checks_denied: checks.passwordDenied,
     login_password_checks_cancelled: checks.passwordCancelled,
+    toolbar_slide_frames_held: checks.slideFramesHeld,
   };
-  checks = { asked: 0, automatic: 0, failed: 0, found: 0, pageOpens: 0, switchRefreshes: 0, switchRefreshFailures: 0, unsandboxed: 0, passwordGranted: 0, passwordDenied: 0, passwordCancelled: 0 };
+  checks = { asked: 0, automatic: 0, failed: 0, found: 0, pageOpens: 0, switchRefreshes: 0, switchRefreshFailures: 0, unsandboxed: 0, passwordGranted: 0, passwordDenied: 0, passwordCancelled: 0, slideFramesHeld: 0 };
   return taken;
 }

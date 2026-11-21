@@ -1,5 +1,7 @@
 import type { TabViewport } from "./hostTab";
 import { PAGE_STACK_ATTRIBUTE } from "./pageHoles.ts";
+import { noteSlideFrameKept } from "../../browser/src/state/telemetry/updateCounts.ts";
+import { consentToken, type ConsentToken } from "../../browser/src/state/telemetry/consentPeriod.ts";
 
 export type { TabViewport };
 
@@ -8,6 +10,8 @@ type Bounds = TabViewport["rect"];
 const EXTENSION_POPUP_DISMISS = '[data-testid="ardia-extension-popup-dismiss"]';
 export const STACKED_PAGE = `[${PAGE_STACK_ATTRIBUTE}] [data-ardia-native-tab]`;
 const MOTION_EVENTS = ["transitionrun", "transitionend", "transitioncancel", "animationstart", "animationend", "animationcancel"] as const;
+
+export const TOOLBAR_SLIDE = '[data-testid="ardia.toolbarSlide"]';
 
 const viewportWatchers = new Set<() => void>();
 export const refreshTabViewports = () => {
@@ -20,7 +24,29 @@ export function tabViewport(rect: Bounds, viewport: { width: number; height: num
   return { rect: finite ? { x: rect.x, y: rect.y, width: Math.max(0, rect.width), height: Math.max(0, rect.height) } : { x: 0, y: 0, width: 0, height: 0 }, visible: visible && intersects };
 }
 
-function plainViewport(element: HTMLElement, rect: DOMRect, viewport: TabViewport, cover: OverlayCover): { viewport: TabViewport; covered: boolean } {
+function slideOf(transform: string) {
+  const matrix = /^matrix(3d)?\((.*)\)$/.exec(transform);
+  if (!matrix) return { x: 0, y: 0 };
+  const values = (matrix[2] ?? "").split(",").map(Number);
+  const x = values[matrix[1] ? 12 : 4] ?? Number.NaN;
+  const y = values[matrix[1] ? 13 : 5] ?? Number.NaN;
+  return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : { x: 0, y: 0 };
+}
+
+export function heldInPane(element: HTMLElement, rect: DOMRectReadOnly, consent?: ConsentToken | null): DOMRectReadOnly {
+  const group = element.closest?.(TOOLBAR_SLIDE);
+  const pane = group?.parentElement?.getBoundingClientRect();
+  if (!group || !pane) return rect;
+  const slide = slideOf(getComputedStyle(group).transform);
+  const left = Math.max(rect.left - slide.x, pane.left);
+  const top = Math.max(rect.top - slide.y, pane.top);
+  const right = Math.max(Math.min(rect.right - slide.x, pane.right), left);
+  const bottom = Math.max(Math.min(rect.bottom - slide.y, pane.bottom), top);
+  if (rect.left < pane.left || rect.top < pane.top || rect.right > pane.right || rect.bottom > pane.bottom) noteSlideFrameKept(consent);
+  return { x: left, y: top, left, top, right, bottom, width: right - left, height: bottom - top, toJSON: () => ({}) };
+}
+
+function plainViewport(element: HTMLElement, rect: DOMRectReadOnly, viewport: TabViewport, cover: OverlayCover): { viewport: TabViewport; covered: boolean } {
   if (!viewport.visible) return { viewport, covered: false };
   for (let parent: HTMLElement | null = element; parent; parent = parent.parentElement) {
     const style = getComputedStyle(parent);
@@ -48,11 +74,12 @@ function plainViewport(element: HTMLElement, rect: DOMRect, viewport: TabViewpor
 export type OverlayCover = { overlayAt: (x: number, y: number) => boolean; overlayElements: () => readonly Element[] };
 
 export function watchTabViewport(element: HTMLElement, visible: () => boolean, report: (viewport: TabViewport, covered: boolean) => void, cover: OverlayCover) {
+  const consent = consentToken();
   let frame = 0;
   let stopped = false;
   const measure = () => {
     if (stopped) return;
-    const rect = element.getBoundingClientRect();
+    const rect = heldInPane(element, element.getBoundingClientRect(), consent);
     const viewport = tabViewport(rect, { width: window.innerWidth, height: window.innerHeight }, visible() && !document.hidden && element.isConnected);
     const plain = plainViewport(element, rect, viewport, cover);
     report(plain.viewport, plain.covered);

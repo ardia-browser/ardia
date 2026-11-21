@@ -193,6 +193,53 @@ test("a page rect off the window or not finite is reported hidden", () => {
   assert.equal(tabViewport({ x: 10, y: 10, width: 100, height: 100 }, size, false).visible, false);
 });
 
+test("while the auto-hide toolbar slides the page group, the page keeps one size from the first frame to the last", async () => {
+  const { TOOLBAR_SLIDE } = await import("./hostViewport.ts");
+  const { takeUpdateCounts } = await import("../../browser/src/state/telemetry/updateCounts.ts");
+  const { setConsentPeriod } = await import("../../browser/src/state/telemetry/consentPeriod.ts");
+  setConsentPeriod(true, "toolbar-slide-test");
+  takeUpdateCounts();
+  const window = { width: 1018, height: 800 };
+  const pane = box(9, 60, 1000, 731);
+  const room = 41 - 20;
+  const hostSize = ({ rect }) => {
+    const top = Math.min(Math.max(rect.y, 0), window.height);
+    const bottom = Math.min(Math.max(rect.y + rect.height, top), window.height);
+    return `${rect.width}x${bottom - top}`;
+  };
+  for (const glide of [
+    { name: "hide", layout: { top: pane.top + 20, bottom: pane.bottom }, slide: (t) => room * (1 - t) },
+    { name: "show", layout: { top: pane.top + 41, bottom: pane.bottom + room }, slide: (t) => -room * (1 - t) },
+  ]) {
+    let shift = glide.slide(0);
+    const group = { matches: (selector) => selector === TOOLBAR_SLIDE, parentElement: { getBoundingClientRect: () => pane } };
+    const page = {
+      isConnected: true,
+      parentElement: null,
+      closest: (selector) => (selector === TOOLBAR_SLIDE ? group : null),
+      getBoundingClientRect: () => box(pane.x, glide.layout.top + shift, pane.width, glide.layout.bottom - glide.layout.top),
+      contains: (node) => node === page,
+    };
+    const s = stage({ ...window, elementFromPoint: () => page });
+    globalThis.getComputedStyle = (node) => ({ display: "block", visibility: "visible", opacity: "1", transform: node === group ? `matrix(1, 0, 0, 1, 0, ${shift})` : "none" });
+    try {
+      const updates = [];
+      const stop = watchTabViewport(page, () => true, (update) => updates.push(update), cover());
+      for (let frame = 1; frame <= 10; frame++) {
+        shift = glide.slide(frame / 10);
+        s.mutate();
+      }
+      assert.deepEqual([...new Set(updates.map(hostSize))], [`${pane.width}x${Math.min(glide.layout.bottom, pane.bottom) - glide.layout.top}`], glide.name);
+      assert.ok(updates.every((update) => update.visible), glide.name);
+      assert.ok(takeUpdateCounts().toolbar_slide_frames_held > 0, `${glide.name}: the held frames are counted`);
+      stop();
+    } finally {
+      s.restore();
+    }
+  }
+  setConsentPeriod(false, null);
+});
+
 test("a page that stops drawing because shell UI covers it is reported once, and a page hidden any other way or sampled off the window is not", async () => {
   const { watchPageBelowShell } = await import("./shims/web/HostWebView.tsx");
   const page = { isConnected: true, parentElement: null, getBoundingClientRect: () => box(200, 50, 800, 600), contains: () => false };

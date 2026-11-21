@@ -2188,6 +2188,193 @@ function Open-Page($Session, $Stop, [string]$Address, [string]$TitlePattern) {
   return $loaded
 }
 
+if (-not ([System.Management.Automation.PSTypeName]"ArdiaHoleCapture").Type) {
+  Add-Type -TypeDefinition @"
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Threading;
+
+public static class ArdiaHoleCapture {
+  [StructLayout(LayoutKind.Sequential)] struct Rect { public int Left, Top, Right, Bottom; }
+  [StructLayout(LayoutKind.Sequential)] struct Point { public int X, Y; }
+  [StructLayout(LayoutKind.Sequential)] struct Header { public uint Size; public int Width, Height; public ushort Planes, BitCount; public uint Compression, SizeImage; public int XPels, YPels; public uint Used, Important; }
+  [DllImport("user32.dll")] static extern bool GetClientRect(IntPtr window, out Rect rect);
+  [DllImport("user32.dll")] static extern bool ClientToScreen(IntPtr window, ref Point point);
+  [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr window);
+  [DllImport("user32.dll")] static extern int ReleaseDC(IntPtr window, IntPtr dc);
+  [DllImport("user32.dll")] static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
+  [DllImport("gdi32.dll")] static extern IntPtr CreateCompatibleDC(IntPtr dc);
+  [DllImport("gdi32.dll")] static extern bool DeleteDC(IntPtr dc);
+  [DllImport("gdi32.dll")] static extern IntPtr CreateDIBSection(IntPtr dc, ref Header header, uint usage, out IntPtr bits, IntPtr section, uint offset);
+  [DllImport("gdi32.dll")] static extern IntPtr SelectObject(IntPtr dc, IntPtr item);
+  [DllImport("gdi32.dll")] static extern bool DeleteObject(IntPtr item);
+  [DllImport("gdi32.dll")] static extern bool BitBlt(IntPtr dc, int x, int y, int width, int height, IntPtr source, int sx, int sy, uint op);
+
+  public class Frame { public DateTime Utc; public int Left = -1, Top = -1, Right = -1, Bottom = -1; public byte[] Pixels; }
+  public class Capture { public DateTime KeyUtc; public int Width, Height; public List<Frame> Frames = new List<Frame>(); }
+
+  public static Capture Run(IntPtr window, byte[] modifiers, byte key, int milliseconds, int keepEveryMs) {
+    Rect client;
+    GetClientRect(window, out client);
+    Point origin = new Point();
+    ClientToScreen(window, ref origin);
+    Capture capture = new Capture();
+    capture.Width = client.Right - client.Left;
+    capture.Height = client.Bottom - client.Top;
+    int width = capture.Width, height = capture.Height;
+    IntPtr screen = GetDC(IntPtr.Zero);
+    IntPtr memory = CreateCompatibleDC(screen);
+    Header header = new Header();
+    header.Size = (uint)Marshal.SizeOf(typeof(Header));
+    header.Width = width;
+    header.Height = -height;
+    header.Planes = 1;
+    header.BitCount = 32;
+    IntPtr bits;
+    IntPtr section = CreateDIBSection(screen, ref header, 0, out bits, IntPtr.Zero, 0);
+    IntPtr previous = SelectObject(memory, section);
+    byte[] before = new byte[width * height * 4];
+    try {
+      BitBlt(memory, 0, 0, width, height, screen, origin.X, origin.Y, 0x40CC0020);
+      Marshal.Copy(bits, before, 0, before.Length);
+      foreach (byte modifier in modifiers) keybd_event(modifier, 0, 0, UIntPtr.Zero);
+      keybd_event(key, 0, 0, UIntPtr.Zero);
+      capture.KeyUtc = DateTime.UtcNow;
+      keybd_event(key, 0, 2, UIntPtr.Zero);
+      for (int i = modifiers.Length - 1; i >= 0; i--) keybd_event(modifiers[i], 0, 2, UIntPtr.Zero);
+      Stopwatch clock = Stopwatch.StartNew();
+      long nextKept = 0;
+      int saved = 0;
+      byte[] now = new byte[before.Length];
+      while (clock.ElapsedMilliseconds < milliseconds) {
+        if (!BitBlt(memory, 0, 0, width, height, screen, origin.X, origin.Y, 0x40CC0020)) { Thread.Sleep(1); continue; }
+        Frame frame = new Frame();
+        frame.Utc = DateTime.UtcNow;
+        Marshal.Copy(bits, now, 0, now.Length);
+        for (int y = 0; y < height; y += 2) {
+          for (int x = 0; x < width; x += 2) {
+            int at = (y * width + x) * 4;
+            if (Math.Abs(now[at] - before[at]) + Math.Abs(now[at + 1] - before[at + 1]) + Math.Abs(now[at + 2] - before[at + 2]) <= 24) continue;
+            if (frame.Left < 0 || x < frame.Left) frame.Left = x;
+            if (x > frame.Right) frame.Right = x;
+            if (frame.Top < 0) frame.Top = y;
+            frame.Bottom = y;
+          }
+        }
+        if (clock.ElapsedMilliseconds >= nextKept && saved < 24) {
+          nextKept += keepEveryMs;
+          saved++;
+          frame.Pixels = (byte[])now.Clone();
+        }
+        capture.Frames.Add(frame);
+      }
+    } finally {
+      SelectObject(memory, previous);
+      DeleteObject(section);
+      DeleteDC(memory);
+      ReleaseDC(IntPtr.Zero, screen);
+    }
+    return capture;
+  }
+}
+"@
+}
+
+function Save-HoleFrames($Capture, [string]$Folder, [string]$Prefix) {
+  Add-Type -AssemblyName System.Drawing
+  $index = 0
+  foreach ($frame in @($Capture.Frames | Where-Object { $_.Pixels })) {
+    $bitmap = [System.Drawing.Bitmap]::new($Capture.Width, $Capture.Height, [System.Drawing.Imaging.PixelFormat]::Format32bppRgb)
+    $locked = $bitmap.LockBits([System.Drawing.Rectangle]::new(0, 0, $Capture.Width, $Capture.Height), [System.Drawing.Imaging.ImageLockMode]::WriteOnly, $bitmap.PixelFormat)
+    [System.Runtime.InteropServices.Marshal]::Copy($frame.Pixels, 0, $locked.Scan0, $frame.Pixels.Length)
+    $bitmap.UnlockBits($locked)
+    $bitmap.Save((Join-Path $Folder ("{0}-{1:00}-{2:000}ms.png" -f $Prefix, $index, [int]($frame.Utc - $Capture.KeyUtc).TotalMilliseconds)), [System.Drawing.Imaging.ImageFormat]::Png)
+    $bitmap.Dispose()
+    $frame.Pixels = $null
+    $index++
+  }
+}
+
+function Format-HoleTimeline($Session, $Capture, [int]$Mark) {
+  $started = $Session.Process.StartTime.ToUniversalTime()
+  $keyAt = [int]($Capture.KeyUtc - $started).TotalMilliseconds
+  $frames = @($Capture.Frames | Where-Object { $_.Left -ge 0 })
+  $last = $frames | Select-Object -Last 1
+  $finalArea = if ($last) { [double](($last.Right - $last.Left) * ($last.Bottom - $last.Top)) } else { 0 }
+  $spans = @()
+  $previous = ""
+  foreach ($frame in $frames) {
+    $box = "$($frame.Left),$($frame.Top) $($frame.Right - $frame.Left)x$($frame.Bottom - $frame.Top)"
+    if ($box -ne $previous) { $spans += "+$([int]($frame.Utc - $Capture.KeyUtc).TotalMilliseconds) $box"; $previous = $box }
+  }
+  $settled = $null
+  for ($i = $frames.Count - 1; $i -ge 0; $i--) {
+    $area = [double](($frames[$i].Right - $frames[$i].Left) * ($frames[$i].Bottom - $frames[$i].Top))
+    if ($finalArea -le 0 -or $area -lt 0.98 * $finalArea) { break }
+    $settled = [int]($frames[$i].Utc - $Capture.KeyUtc).TotalMilliseconds
+  }
+  $first = if ($frames.Count) { [int]($frames[0].Utc - $Capture.KeyUtc).TotalMilliseconds } else { $null }
+  $lines = @(Get-LinesSince $Session $Mark "(\[ardia windows\] hole |^command )")
+  $marks = @($lines | ForEach-Object {
+      if ($_ -match "^\w+ (\d+) (?:\[ardia windows\] hole )?(.*)$") { "+$([int]$Matches[1] - $keyAt) $($Matches[2])" }
+    })
+  $frameMarks = @($marks | Where-Object { $_ -match " frame \d+" })
+  $measured = @($marks | Where-Object { $_ -match " cover \S+ measured " })
+  $dropped = @($measured | Where-Object { $_ -match "stale, dropped" })
+  $shown = @($marks | Where-Object { $_ -match " page \S+ measured in .* shown with " })
+  $slowest = ($measured | ForEach-Object { if ($_ -match " in (\d+) ms") { [int]$Matches[1] } } | Measure-Object -Maximum).Maximum
+  return [pscustomobject]@{
+    Summary = "cover answers $($measured.Count), $($dropped.Count) dropped as stale, slowest round trip $slowest ms; page reshapes $($shown.Count); first changed pixels at +$first ms, the drawn extent within 98% of its final size from +$settled ms (final $previous), $($Capture.Frames.Count) captures; animation frames $($frameMarks.Count) (first $(($frameMarks | Select-Object -First 1) -replace ' .*$', ''), last $(($frameMarks | Select-Object -Last 1) -replace ' .*$', ''))"
+    Extent = ($spans -join "; ")
+    Marks = (@($marks | Where-Object { $_ -notmatch " frame \d+" }) -join " | ")
+  }
+}
+
+function Invoke-HoleTour {
+  $env:ARDIA_TEST = "holeMarks=1"
+  try { $session = Start-Ardia "holes" -Onboarded } finally { $env:ARDIA_TEST = "" }
+  $opened = Invoke-Stop $session "holes-page" "Holes: open Example Domain" {
+    param($stop)
+    $stop.Did = "Launched with ARDIA_TEST holeMarks=1 and opened example.com."
+    $stop.Expected = "the window's title names example.com."
+    Set-Seen $stop (Open-Page $session $stop "example.com" "example\.com")
+  }
+  if ($opened.Seen -ne "yes") { Stop-Ardia $session; return }
+  foreach ($surface in @(@{ Slug = "find"; Name = "the find bar"; Keys = "Ctrl+F"; Modifiers = [byte[]]@(0x11); Key = 0x46 }, @{ Slug = "command"; Name = "the command bar"; Keys = "Ctrl+L"; Modifiers = [byte[]]@(0x11); Key = 0x4C }, @{ Slug = "share"; Name = "the share popover"; Keys = "Ctrl+Alt+S"; Modifiers = [byte[]]@(0x11, 0x12); Key = 0x53 })) {
+    for ($try = 1; $try -le 5; $try++) {
+      $underLoad = if ($try -gt 3) { ", under CPU and disk load" } else { "" }
+      if ($try -eq 4) { $hogs = Start-Hogs (Join-Path $Out "hole-hog") }
+      Invoke-Stop $session "holes-$($surface.Slug)-$try" "Holes: $($surface.Name) coming in over the page, try $try of 5$($underLoad) (report only, #2424)" {
+        param($stop)
+        $stop.Did = "With Example Domain showing, pressed $($surface.Keys) and captured the window as fast as it reads for 900 ms, comparing each capture with the one before the key; the app logged each animation frame, each cover measurement and each page reshape with its holes (ARDIA_TEST holeMarks)."
+        $stop.Expected = "report only: when the surface's drawn extent stops growing against when its animation ends and its hole reaches the page (#2424)."
+        Focus-Window $session $session.Main $stop | Out-Null
+        Start-Sleep -Milliseconds 1200
+        $mark = Get-LogCount $session
+        $folder = Split-Path -Parent $stop.Shot
+        $prefix = [IO.Path]::GetFileNameWithoutExtension($stop.Shot)
+        $capture = [ArdiaHoleCapture]::Run($session.Main, $surface.Modifiers, [byte]$surface.Key, 900, $(if ($try -eq 1) { 40 } else { 100000 }))
+        Save-HoleFrames $capture $folder $prefix
+        Start-Sleep -Milliseconds 400
+        $timeline = Format-HoleTimeline $session $capture $mark
+        $stop.Facts.Add($timeline.Summary)
+        $stop.Facts.Add("drawn extent over time (ms after the key, changed pixels against the capture before it): $($timeline.Extent)")
+        $stop.Facts.Add("app lines (ms after the key): $($timeline.Marks)")
+        $stop.Seen = "yes"
+        Send-Escape
+        Start-Sleep -Milliseconds 800
+      } | Out-Null
+      if ($try -eq 5) {
+        $hogs | Stop-Job -ErrorAction SilentlyContinue
+        $hogs | Remove-Job -Force -ErrorAction SilentlyContinue
+      }
+    }
+  }
+  Stop-Ardia $session
+}
+
 function Invoke-PagesTour {
   $session = Start-Ardia "pages" -Onboarded
   Invoke-Stop $session "page-loads" "A page loads in a tab" {
@@ -2785,6 +2972,7 @@ $tours = @(
 
 if (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $App) "chrome.dll")) {
   $tours += @{ Name = "pages"; Run = { Invoke-PagesTour } }
+  $tours += @{ Name = "holes"; Run = { Invoke-HoleTour } }
   $tours += @{ Name = "first-run"; Run = { Invoke-FirstRunTour }; Required = $true }
   $tours += @{ Name = "typing"; Run = { Invoke-TypingTour }; Required = $true }
   $tours += @{ Name = "peek"; Run = { Invoke-PeekTour "peek-light" @{ appearance = "light" } "light" } }

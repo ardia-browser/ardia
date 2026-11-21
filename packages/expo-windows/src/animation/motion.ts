@@ -1,4 +1,5 @@
 import type { MotionBurst, MotionNative } from "@ardia/shell";
+import { holeMark } from "../engine/holeMarks";
 import type { Running as Animation } from "./index";
 
 type Running = Pick<Animation, "__active">;
@@ -82,6 +83,7 @@ function watch(time: number) {
     burst.longest = Math.max(burst.longest, gap);
     if (gap > LONG_FRAME_MS) burst.long += 1;
   }
+  holeMark(() => `frame ${burst.frames}, ${running.size} running`);
   each(followers, (follow) => follow());
   if (running.size) return void requestFrame(watch);
   watching = false;

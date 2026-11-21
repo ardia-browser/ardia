@@ -1,6 +1,7 @@
 import { createContext, type Ref } from "react";
 import type { NativeMethods } from "react-native";
 import { setCover, type Box } from "./covers";
+import { boxText, holeMark } from "./holeMarks";
 
 export type Measurable = Pick<NativeMethods, "measureInWindow">;
 
@@ -59,9 +60,12 @@ export function coverMeasurer(windowId: string, id: string, radius: number, node
       if (!own || stopped) return;
       if (!covering) return setCover(windowId, id, null);
       const asked = ++latest;
+      const askedAt = performance.now();
       const clipNodes = clips.map((clip) => clip.node()).filter((clip): clip is Measurable => !!clip);
       const [box, ...clipBoxes] = await Promise.all([own, ...clipNodes].map(boxOf));
-      if (stopped || asked !== latest || node() !== own) return;
+      const stale = stopped || asked !== latest || node() !== own;
+      holeMark(() => `cover ${id} measured ${boxText(box!)} in ${Math.round(performance.now() - askedAt)} ms${stale ? " (stale, dropped)" : ""}`);
+      if (stale) return;
       const visible = clipBox(box!, clipBoxes);
       setCover(windowId, id, visible && { ...visible, radius });
     },

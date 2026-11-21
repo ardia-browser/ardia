@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 import { fallbackColumns, fallbackRows, flatColors, gradientFill } from "../../../../packages/expo-windows/src/views/gradientFill.ts";
 
-const source = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+const source = (path) => readFileSync(new URL(path, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 
 test("a Surface's fill colours become positioned stops, with the fade passed through", () => {
   const filled = gradientFill({ fillColors: ["#ff000000", "#ff000080", "#ff0000ff"], fillStops: [0, 0.4, 1], fade: [1, 0.5, 0], fadeStops: [0, 0.8, 1] });

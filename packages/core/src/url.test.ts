@@ -44,6 +44,19 @@ test("fixupUrl leaves searches alone: file names, emails, prose, unknown schemes
   assert.equal(fixupUrl("site.photography/about"), "https://site.photography/about");
 });
 
+test("fixupUrl opens an address with a space after its host, as Chrome does, and leaves prose with a slash alone", () => {
+  assert.equal(fixupUrl("en.wikipedia.org/wiki/Jim Beam"), "https://en.wikipedia.org/wiki/Jim%20Beam");
+  assert.equal(fixupUrl("github.com/search?q=a b"), "https://github.com/search?q=a%20b");
+  assert.equal(fixupUrl("localhost:3000/a b"), "http://localhost:3000/a%20b");
+  for (const text of ["AC/DC songs", "AC/DC greatest hits #1", "C# nullable ? operator", "km/h to mph", "24/7 pharmacy near me", "r/macapps best apps", "x.com cats", "example.com /a", "foo bar/baz", "sms:123?what time"]) {
+    assert.equal(fixupUrl(text), null, text);
+  }
+  assert.deepEqual(classifyPaste("en.wikipedia.org/wiki/Jim Beam"), { kind: "go", url: "https://en.wikipedia.org/wiki/Jim%20Beam" });
+  assert.deepEqual(classifyPaste("AC/DC songs"), { kind: "search", query: "AC/DC songs" });
+  assert.deepEqual(classifyPaste("example.com/a\nb"), { kind: "search", query: "example.com/a b" });
+  assert.deepEqual(classifyPaste("https://a b.com/x"), { kind: "search", query: "https://a b.com/x" });
+});
+
 test("fixupUrl reads the host up to the first / ? or #: one trailing dot, a 1-5 digit port, labels never start or end in a hyphen", () => {
   assert.equal(fixupUrl("example.com./x"), "https://example.com./x");
   assert.equal(fixupUrl("example.com../x"), null);

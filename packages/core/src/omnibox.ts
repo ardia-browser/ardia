@@ -76,7 +76,8 @@ export function fixupUrl(raw: string): string | null {
 }
 
 function fixup(raw: string): string | null {
-  const input = raw.trim();
+  let input = raw.trim();
+  if (input.includes(" ") && /^([^\s:/?#]+\.[^\s:/?#]+|localhost)(:\d+)?[/?#]/i.test(input)) input = input.replace(/ /g, "%20");
   if (!input || (/\s/.test(input) && !/^([a-z][a-z0-9+.-]*:\/\/|\/[^\s/])/i.test(input))) return null;
   if (/^(about|data|mailto|tel|sms|facetime|view-source):/i.test(input)) return input;
 
@@ -124,7 +125,7 @@ export type PasteAction = { kind: "go"; url: string } | { kind: "search"; query:
 export function classifyPaste(text: string): PasteAction | null {
   const trimmed = withoutJavaScriptScheme(text.trim()).trim();
   if (!trimmed) return null;
-  const url = /\s/.test(trimmed) ? null : fixupUrl(trimmed);
+  const url = /[^\S ]/.test(trimmed) || (trimmed.includes(" ") && /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) ? null : fixupUrl(trimmed);
   if (url && !/^(about|data):/i.test(url)) return { kind: "go", url: cleanUrl(url) };
   return { kind: "search", query: trimmed.replace(/\s+/g, " ").slice(0, 2000) };
 }

@@ -8,7 +8,7 @@ import { dismissStripHoverIn, stripPageOffstage } from "../../state/tabs/stripHo
 import { onTabPressEnd, tabPressHeld } from "../../state/sidebar/heldTabPress";
 import { noteTabStripChipsMeasured, noteTabStripCompact, noteTabStripReadable, noteTabStripHeldClose, noteTabStripOverflow, noteTabStripTabsInOverflow, noteTabStripRevealAfterPress, noteTabStripRevealHeldForScroll, noteTabStripScrolled, noteTabStripTitledTabs } from "../../state/telemetry/tabStripCounts";
 import { Offstage } from "../ui/useHover";
-import { usePageStyle } from "../../state/windows/profilePager";
+import { usePageInReach, usePageStyle } from "../../state/windows/profilePager";
 import { ThemeScope } from "../window/ThemeScope";
 import { TintInk } from "../ui/TintInk";
 import { DockContext, FloatingStrip } from "./context";
@@ -40,6 +40,7 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
   const windowId = useWindowId();
   const flare = useContext(FloatingStrip) ? 0 : FLARE;
   const pageStyle = usePageStyle(windowId, slot, pageWidth + flare * 2);
+  const inReach = usePageInReach(windowId, profileId, current);
   const entries = useStripEntries(windowId, profileId);
   const activeId = useShownTabIdFor(windowId, profileId);
   const liveNeeds = useStripTitleNeeds(windowId, profileId);
@@ -296,7 +297,7 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
                       style={{ flex: 1 }}
                       contentContainerStyle={{ alignItems: "flex-start", gap: GAP, paddingLeft: flare, paddingRight: pinned ? Math.max(flare, GAP) : flare }}
                     >
-                      {parsed.flatMap((e) => {
+                      {!inReach ? <View style={{ width: tabsEnd }} /> : parsed.flatMap((e) => {
                         if (e.kind === "dock") return <PinnedDock key="dock" tabIds={e.ids} />;
                         const slot = slotIndex;
                         const lead = slot === 0 && spare && leadSpare ? <View key="held-lead" style={{ width: spare, marginRight: -GAP }} /> : null;

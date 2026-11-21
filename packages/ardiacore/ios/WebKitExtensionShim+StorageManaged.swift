@@ -68,7 +68,7 @@ extension WebKitExtensionShimNamespace {
             const call = (method, ...args) =>
               original && typeof original[method] === "function" ? settle(original[method](...args)) : failure(`storage.${name}.${method} isn't available.`);
             const shared = Object.create(original || Object.prototype);
-            Object.assign(shared, {
+            Object.defineProperties(shared, Object.getOwnPropertyDescriptors({
               get: withCallback((keys) => viaEngine(name, "sharedGet", [keys === undefined ? null : keys], () => call("get", keys))),
               getKeys: withCallback(() => viaEngine(name, "sharedGetKeys", [], () => call("getKeys"))),
               set: withCallback((items) => viaEngine(name, "sharedSet", [items || {}], () => call("set", items))),
@@ -79,7 +79,7 @@ extension WebKitExtensionShimNamespace {
                 viaEngine(name, "sharedSetAccessLevel", [options && options.accessLevel], () => call("setAccessLevel", options)),
               ),
               onChanged: both(areaEvent(name), original && original.onChanged),
-            });
+            }));
             return shared;
           };
           for (const name of ["local", "sync", "session"]) override("storage", name, area(name));

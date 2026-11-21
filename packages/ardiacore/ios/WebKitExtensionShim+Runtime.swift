@@ -126,13 +126,13 @@ extension WebKitExtensionShimNamespace {
               hasListener: (listener) => ours.hasListener(listener),
               hasListeners: () => ours.hasListeners(),
             };
-            if (patch(runtime, name, merged)) return;
+            if (patch(runtime, name, merged, "runtime")) return;
             if (!native) return;
             const add = typeof native.addListener === "function" ? native.addListener.bind(native) : () => {};
             const remove = typeof native.removeListener === "function" ? native.removeListener.bind(native) : () => {};
-            patch(native, "addListener", (listener) => (ours.addListener(listener), add(answering(listener, replies))));
-            patch(native, "removeListener", (listener) => (ours.removeListener(listener), remove(adapted.get(listener) || listener)));
-            patch(native, "hasListener", (listener) => ours.hasListener(listener));
+            patch(native, "addListener", (listener) => (ours.addListener(listener), add(answering(listener, replies))), `runtime.${name}`);
+            patch(native, "removeListener", (listener) => (ours.removeListener(listener), remove(adapted.get(listener) || listener)), `runtime.${name}`);
+            patch(native, "hasListener", (listener) => ours.hasListener(listener), `runtime.${name}`);
           };
           merge("onMessageExternal", externalMessage, true);
           merge("onConnectExternal", externalConnect, false);
@@ -169,7 +169,7 @@ extension WebKitExtensionShimNamespace {
           });
 
           override("runtime", "openOptionsPage", withCallback(() => request("runtime", "openOptionsPage", [])));
-          patch(runtime, "setUninstallURL", withCallback(() => Promise.resolve()));
+          patch(runtime, "setUninstallURL", withCallback(() => Promise.resolve()), "runtime");
 
           const installed = runtime.onInstalled;
           if (installed && typeof installed.addListener === "function") {
@@ -188,9 +188,9 @@ extension WebKitExtensionShimNamespace {
               }
               return asUpdates.get(listener);
             };
-            patch(installed, "addListener", (listener) => add(asUpdate(listener)));
-            if (remove) patch(installed, "removeListener", (listener) => remove(asUpdates.get(listener) || listener));
-            if (has) patch(installed, "hasListener", (listener) => has(asUpdates.get(listener) || listener));
+            patch(installed, "addListener", (listener) => add(asUpdate(listener)), "runtime.onInstalled");
+            if (remove) patch(installed, "removeListener", (listener) => remove(asUpdates.get(listener) || listener), "runtime.onInstalled");
+            if (has) patch(installed, "hasListener", (listener) => has(asUpdates.get(listener) || listener), "runtime.onInstalled");
           }
         }
 
@@ -206,7 +206,7 @@ extension WebKitExtensionShimNamespace {
               callback();
             });
             return undefined;
-          });
+          }, "runtime");
         }
         const runtimeConnect = typeof runtime.connect === "function" ? runtime.connect.bind(runtime) : null;
         if (runtimeConnect && !CONTENT) {
@@ -221,7 +221,7 @@ extension WebKitExtensionShimNamespace {
               if (made) made.end();
             });
             return port;
-          });
+          }, "runtime");
         }
       }
     """#)

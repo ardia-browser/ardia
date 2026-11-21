@@ -306,18 +306,67 @@ enum WebKitExtensionShim {
           } catch (error) {}
         }
       };
-      const patch = (target, name, value) => {
+      const viewRoots = [...new Set([root.chrome, root.browser])].filter(Boolean);
+      const viewed = new Map();
+      const viewPaths = new Set();
+      const views = new WeakMap();
+      const boundMethods = new WeakMap();
+      const methodOf = (target, value) => {
+        let made = boundMethods.get(target);
+        if (!made) boundMethods.set(target, (made = new WeakMap()));
+        let bound = made.get(value);
+        if (!bound) made.set(value, (bound = value.bind(target)));
+        return bound;
+      };
+      const viewAt = (object, path) => {
+        let made = views.get(object);
+        if (!made) views.set(object, (made = new Map()));
+        if (made.has(path)) return made.get(path);
+        const view = new Proxy(object, {
+          get(target, name) {
+            const here = viewed.get(path);
+            if (here && here.has(name)) return here.get(name);
+            const value = Reflect.get(target, name);
+            const below = typeof name === "string" ? (path ? `${path}.${name}` : name) : null;
+            if (below !== null && value && (typeof value === "object" || typeof value === "function") && viewPaths.has(below)) return viewAt(value, below);
+            return typeof value === "function" ? methodOf(target, value) : value;
+          },
+          has(target, name) {
+            const here = viewed.get(path);
+            return !!(here && here.has(name)) || Reflect.has(target, name);
+          },
+        });
+        made.set(path, view);
+        return view;
+      };
+      const showViews = () => {
+        for (const native of viewRoots) {
+          const view = viewAt(native, "");
+          for (const name of ["chrome", "browser"]) {
+            if (root[name] !== native || root[name] === view) continue;
+            try {
+              Object.defineProperty(root, name, { value: view, configurable: true, enumerable: true, writable: true });
+            } catch (error) {}
+          }
+        }
+      };
+      const patch = (target, name, value, path) => {
         if (!target) return false;
         try {
           Object.defineProperty(target, name, { value, configurable: true, enumerable: true, writable: true });
         } catch (error) {
           try {
             target[name] = value;
-          } catch (inner) {
-            return false;
-          }
+          } catch (inner) {}
         }
-        return target[name] === value;
+        if (target[name] === value) return true;
+        if (typeof path !== "string" || !viewRoots.length) return false;
+        if (!viewed.has(path)) viewed.set(path, new Map());
+        viewed.get(path).set(name, value);
+        const parts = path ? path.split(".") : [];
+        for (let i = 1; i <= parts.length; i += 1) viewPaths.add(parts.slice(0, i).join("."));
+        showViews();
+        return true;
       };
       const kept = new Set();
       const override = (namespace, name, value) => {
@@ -325,7 +374,7 @@ enum WebKitExtensionShim {
           const original = target && target[namespace];
           if (!original) continue;
           kept.add(original);
-          patch(original, name, value);
+          patch(original, name, value, namespace);
           const shared = Object.getPrototypeOf(original);
           if (shared && shared !== Object.prototype && shared !== Function.prototype) patch(shared, name, value);
         }
@@ -382,9 +431,9 @@ enum WebKitExtensionShim {
           if (!wrapped.has(listener)) wrapped.set(listener, (port) => (relayed(port) ? undefined : listener(port)));
           return wrapped.get(listener);
         };
-        patch(onConnect, "addListener", (listener) => add(guard(listener)));
-        if (remove) patch(onConnect, "removeListener", (listener) => remove(wrapped.get(listener) || listener));
-        if (has) patch(onConnect, "hasListener", (listener) => has(wrapped.get(listener) || listener));
+        patch(onConnect, "addListener", (listener) => add(guard(listener)), "runtime.onConnect");
+        if (remove) patch(onConnect, "removeListener", (listener) => remove(wrapped.get(listener) || listener), "runtime.onConnect");
+        if (has) patch(onConnect, "hasListener", (listener) => has(wrapped.get(listener) || listener), "runtime.onConnect");
       }
 
       if (!CONTENT && CONTENT_FILE) {

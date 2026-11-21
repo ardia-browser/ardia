@@ -41,7 +41,7 @@ extension WebKitExtensionShimNamespace {
         };
         const originalCall = (method, args) => settle(original[method](...args));
         const shared = Object.create(original);
-        Object.assign(shared, {
+        Object.defineProperties(shared, Object.getOwnPropertyDescriptors({
           create: withCallback((...args) => {
             const named = typeof args[0] === "string" || args[0] === undefined || args[0] === null;
             const info = Object.assign({}, (named ? args[1] : args[0]) || {});
@@ -71,8 +71,8 @@ extension WebKitExtensionShimNamespace {
             hasListener: (listener) => alarmListeners.has(listener),
             hasListeners: () => alarmListeners.size > 0,
           },
-        });
-        for (const target of new Set([root.chrome, root.browser])) patch(target, "alarms", shared);
+        }));
+        for (const target of new Set([root.chrome, root.browser])) patch(target, "alarms", shared, "");
         if (BACKGROUND && typeof original.clearAll === "function") settle(original.clearAll()).catch(() => {});
       }
     """#)

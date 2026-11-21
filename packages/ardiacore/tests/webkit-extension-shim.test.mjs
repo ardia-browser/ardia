@@ -342,6 +342,43 @@ test("without the shared flag the areas stay WebKit's own", () => {
   assert.equal(browser.storage.local, local);
 });
 
+test("on WebKit, whose namespaces ignore redefining their own members, the shim's overrides reach the extension through views of chrome and browser", async () => {
+  const stubborn = (object) => new Proxy(object, { defineProperty: () => true, set: () => true });
+  const log = [];
+  const areas = webKitStorage(log);
+  const storage = stubborn({ local: stubborn(areas.local), sync: stubborn(areas.sync), session: stubborn(areas.session), onChanged: areas.onChanged });
+  const sent = [];
+  const runtime = stubborn({
+    id: "aaaabbbbccccddddeeeeffffgggghhhh",
+    sendMessage: async () => "local",
+    onMessage: listenerSet(),
+    sendNativeMessage: async (application, message) => (sent.push(message), { result: message.method === "sharedGet" ? { a: 1 } : null }),
+    connectNative: () => ({ posted: [], onMessage: listenerSet(), onDisconnect: listenerSet(), postMessage() {} }),
+    getManifest() {
+      if (this !== runtime) throw new TypeError("Illegal invocation");
+      return { version: "1.0" };
+    },
+  });
+  const native = stubborn({ runtime, storage });
+  const context = { browser: native, chrome: native, console, setTimeout, Promise, Object, Array, Set, Map, WeakMap, Error, JSON, String, Number, Date, Math, RegExp };
+  context.location = { href: `webkit-extension://${runtime.id}/page.html` };
+  context.globalThis = context;
+  vm.runInNewContext(shim(["runtime", "storage"], { permissions: ["storage"], shared: ["storage"] }), context);
+  const chrome = context.chrome;
+  assert.notEqual(chrome, native, "the global is a view of WebKit's namespace");
+  assert.equal(context.browser, chrome);
+  assert.equal(chrome.storage, chrome.storage);
+  assert.equal(chrome.storage.local, chrome.storage.local);
+  assert.deepEqual(plain(await chrome.storage.local.get(["a"])), { a: 1 });
+  await chrome.storage.sync.set({ b: 2 });
+  assert.deepEqual(sent.map((m) => [m.api, m.method]), [["storage", "sharedGet"], ["storage", "sharedSet"]]);
+  assert.deepEqual(log, [], "WebKit's own storage is never touched");
+  assert.equal(chrome.storage.local.QUOTA_BYTES, 10485760);
+  assert.equal(chrome.runtime.getManifest().version, "1.0", "WebKit's own methods still run on their own object");
+  assert.equal(chrome.runtime.getManifest, chrome.runtime.getManifest);
+  assert.equal(native.storage.local.get, areas.local.get, "WebKit's namespace itself is left as it was");
+});
+
 test("Chromium's storage changes reach the area's and the namespace's listeners, filtered by area", async () => {
   const { browser, ports } = world({ apis: ["runtime", "storage"], permissions: ["storage"], shared: ["storage"], background: "bg.js", extra: { storage: webKitStorage([]) } });
   const local = [];

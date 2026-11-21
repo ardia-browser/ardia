@@ -58,6 +58,16 @@ NS_ASSUME_NONNULL_BEGIN
 
 @end
 
+@interface ArdiaHost (HiddenPage)
+
++ (void)hiddenPageOpen:(NSString *)profile url:(NSString *)url completion:(void (^)(NSDictionary<NSString *, id> *))completion
+    NS_SWIFT_NAME(hiddenPageOpen(_:url:completion:));
++ (void)hiddenPageRun:(NSString *)pageId script:(NSString *)script timeout:(double)timeoutSeconds completion:(void (^)(NSDictionary<NSString *, id> *))completion
+    NS_SWIFT_NAME(hiddenPageRun(_:script:timeout:completion:));
++ (void)hiddenPageClose:(NSString *)pageId NS_SWIFT_NAME(hiddenPageClose(_:));
+
+@end
+
 @interface ArdiaHost (Launch)
 
 + (int)runWithArgc:(int)argc

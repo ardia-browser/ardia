@@ -1,11 +1,11 @@
-import { memo, useState, type ReactNode } from "react";
-import { Animated, Pressable, View } from "react-native";
+import { memo, useEffect, useState, type ReactNode } from "react";
+import { Animated, Image, Pressable, View } from "react-native";
 import { useTheme } from "../ui/theme";
 import { ContextMenuArea, Divider, drawnSymbol, sidebarLineHeight, space, Text, tintedImage, useHover } from "../ui";
 import { TAB_ROW } from "./tokens";
 import { HoverSlot } from "../ui/HoverSlot";
 import { closeAllTabs } from "../../state/sidebar/clearTabs";
-import { tidy as tidyTabs } from "../../state/sidebar/tidyUi";
+import { onTidyingChanged, tidy as tidyTabs, topicTidyInFlight } from "../../state/sidebar/tidyUi";
 import { openSidebarMenu } from "../../state/sidebar/menus";
 import { PINNED_FOLD_TITLES, togglePinnedFold } from "../../state/sidebar/pinnedFold";
 
@@ -28,6 +28,13 @@ export const ClearDivider = memo(function ClearDivider({ windowId, profileId, li
   const { hovered: shown, hoverProps } = useHover();
   const [lineWidth, setLineWidth] = useState(0);
   const foldShown = !!pinned && (shown || pinned.collapsed);
+  const [tidying, setTidying] = useState(() => topicTidyInFlight(windowId));
+  useEffect(() => {
+    const stop = onTidyingChanged(() => setTidying(topicTidyInFlight(windowId)));
+    return () => {
+      stop();
+    };
+  }, [windowId]);
   const actions = tidy || clear;
   return (
     <ContextMenuArea onContextMenu={() => void openSidebarMenu(windowId)}>
@@ -58,8 +65,9 @@ export const ClearDivider = memo(function ClearDivider({ windowId, profileId, li
               <>
                 {tidy ? (
                   <DividerButton
-                    title="Tidy"
+                    title={tidying ? "Tidying…" : "Tidy"}
                     label="Tidy Tabs"
+                    disabled={tidying}
                     onPress={() => tidyTabs(windowId, "tabs", profileId)}
                     icon={(color) => tintedImage({ source: BROOM, tint: color, style: { width: 11, height: 11, marginRight: space.xs } })}
                   />
@@ -108,12 +116,12 @@ function FoldButton({ pinned, onPress }: { pinned: PinnedFold; onPress: () => vo
   );
 }
 
-function DividerButton({ title, label, onPress, icon }: { title: string; label: string; onPress: () => void; icon: (color: string) => ReactNode }) {
+function DividerButton({ title, label, disabled, onPress, icon }: { title: string; label: string; disabled?: boolean; onPress: () => void; icon: (color: string) => ReactNode }) {
   const theme = useTheme();
   const { hovered, hoverProps } = useHover();
   return (
     <View {...hoverProps}>
-      <Pressable tooltip={label} accessibilityRole="button" accessibilityLabel={label} onAccessibilityTap={onPress} onPress={onPress}>
+      <Pressable tooltip={label} accessibilityRole="button" accessibilityLabel={label} disabled={disabled} onAccessibilityTap={onPress} onPress={onPress}>
         {({ pressed }) => {
           const color = pressed ? theme.textSecondary : hovered ? theme.textPrimary : theme.textTertiary;
           return (

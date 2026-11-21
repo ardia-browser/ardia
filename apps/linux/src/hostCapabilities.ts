@@ -24,6 +24,7 @@ export type LinuxCapabilities = {
   unloadIdleProfiles: boolean;
   hiddenElements: boolean;
   blockAutoplayEverywhere: boolean;
+  topicModel: boolean;
 };
 
 export const CLI_CONTROL_METHODS = [
@@ -75,6 +76,7 @@ export function linuxCapabilities(host: ArdiaHost | undefined = ardiaHost): Linu
     unloadIdleProfiles: has(UNLOAD_IDLE_PROFILES_CALL),
     hiddenElements: has(...HIDDEN_ELEMENTS_CALLS),
     blockAutoplayEverywhere: has(BLOCK_AUTOPLAY_EVERYWHERE_CALL),
+    topicModel: has("engine.hiddenPageOpen"),
   };
 }
 
@@ -90,6 +92,7 @@ export function unavailableSettingIds(capabilities: LinuxCapabilities, settingId
   if (!capabilities.popupsOpenAsTabs) ids.add("tabs.popupsOpenAsTabs");
   if (!capabilities.littleArdiaNewTabLinks) ids.add("tabs.littleArdiaOpensNewTabLinks");
   if (!capabilities.linksFromOtherApps) for (const id of ["tabs.openLinksInLittleArdia", "tabs.appLinksFirst"]) ids.add(id);
+  if (!capabilities.topicModel) ids.add("tabs.tidyTopicTabs");
   if (!capabilities.webkit) for (const id of WEB_ENGINE_SETTINGS) if (settingIds.includes(id)) ids.add(id);
   return ids;
 }

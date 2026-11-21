@@ -13,7 +13,7 @@ import { setSidebarUi } from "./sidebarUi";
 import { tidy } from "./tidyUi";
 import { switcherStep } from "./switcher";
 
-export function runSidebarCommand(command: BrowserCommand, arg: string | null, windowId: string): boolean {
+export function runSidebarCommand(command: BrowserCommand, arg: string | null, windowId: string, mayWrite?: () => boolean): boolean {
   const s = useBrowser.getState();
   const tabId = activeTabId(s, windowId);
   switch (command) {
@@ -34,7 +34,7 @@ export function runSidebarCommand(command: BrowserCommand, arg: string | null, w
       closeAllTabs(windowId);
       return true;
     case "tidyPins":
-      tidy(windowId, "pins");
+      tidy(windowId, "pins", undefined, mayWrite);
       return true;
     case "searchTabs":
       setSidebarUi({ searchTabs: windowId, hover: null });

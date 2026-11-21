@@ -126,6 +126,7 @@ export const SETTING_SPECS = {
   showSidebarButton: flag(true, SYNCED),
   showClearButton: flag(true, SYNCED),
   tidyTabs: flag(false, SYNCED),
+  tidyTopicTabs: flag(false, SYNCED),
   balancedTopApps: flag(false, SYNCED),
   selectedTabGlow: oneOf(["full", "soft", "off"], "full", SYNCED),
   interfaceScale: shaped<number>(INTERFACE_SCALE.default, validInterfaceScale, { type: "number", enum: INTERFACE_SCALE_STEPS }),

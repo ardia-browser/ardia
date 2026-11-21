@@ -14,19 +14,20 @@
     "bundle:windows": "react-native bundle --platform windows --dev false --entry-file index.js --bundle-output build-windows/index.windows.bundle --assets-dest build-windows"
   },
   "dependencies": {
+    "@ardia/ardiacore": "workspace:*",
     "@ardia/core": "workspace:*",
+    "@ardia/import": "workspace:*",
     "@ardia/shaders": "workspace:*",
     "@ardia/shell": "workspace:*",
-    "@ardia/ardiacore": "workspace:*",
-    "@ardia/import": "workspace:*",
     "@ardia/sync": "workspace:*",
+    "@mlc-ai/web-llm": "0.2.87",
     "expo": "~54.0.37",
     "expo-modules-core": "~3.0.29",
     "react": "19.1.4",
     "react-native": "0.81.6",
     "react-native-macos": "0.81.9",
-    "zustand": "^5.0.8",
-    "react-native-windows": "0.81.38"
+    "react-native-windows": "0.81.38",
+    "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

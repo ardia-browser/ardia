@@ -45,6 +45,9 @@ export type EngineCalls = {
   "engine.cliOwnsTab": [{ tabId: string }, { owned: boolean; shown: boolean }];
   "engine.cliMoveOffscreen": [{ tabId: string }, { ok: boolean; reason?: string }];
   "engine.cliCloseOffscreenTabs": [{}, Done];
+  "engine.hiddenPageOpen": [Profile & { url: string }, { ok: boolean; pageId?: string; reason?: string }];
+  "engine.hiddenPageRun": [{ pageId: string; script: string; timeoutMs?: number }, { ok: boolean; json?: unknown; reason?: string }];
+  "engine.hiddenPageClose": [{ pageId: string }, null];
 
   "tabs.routeLinkTabs": [{ urls: string[] }, LinkRoute];
   "tabs.stripCommand": [{ id: number; command: TabStripCommand }, null];

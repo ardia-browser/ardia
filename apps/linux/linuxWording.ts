@@ -46,6 +46,12 @@ export const LINUX_WORDING: readonly Wording[] = [
     replacements: [["label: PLATFORM_FEATURES.quitsWithLastWindow ? `Quitting when you close the last window` : `Quitting with ${keyText(\"⌘Q\")}`", `label: "Quitting with Ctrl+Shift+Q"`]],
   },
   {
+    file: "components/settings/rows/tabRows.ts",
+    replacements: [
+      ["using Google's Gemma model on this Mac. Downloads the model (560 MB) from Hugging Face once; tab titles never leave your Mac.", "using Google's Gemma model on this computer. Downloads the model (560 MB) from Hugging Face once; tab titles never leave this computer."],
+    ],
+  },
+  {
     file: "state/telemetry/copy.ts",
     replacements: [
       ...[PHRASES_ONLY_WITH.freezeWatch ?? []].flat().map((phrase): [string, string] => [phrase, ""]),

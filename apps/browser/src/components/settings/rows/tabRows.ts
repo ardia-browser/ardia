@@ -219,6 +219,12 @@ export const tabRows = {
           keywords: ["tidy", "broom", "organize tabs", "group by site", "clean up", "arc max"],
           shown: inSidebar,
         },
+        tidyTopicTabs: {
+          title: "Group by Topic",
+          description: "Tidy groups tabs by what they're about, using Google's Gemma model on this Mac. Downloads the model (560 MB) from Hugging Face once; tab titles never leave your Mac.",
+          keywords: ["tidy", "group by topic", "ai", "gemma", "organize tabs", "topic", "on-device"],
+          shown: (settings) => settings.tidyTabs && PLATFORM_FEATURES.topicModel,
+        },
       },
     },
   ],

@@ -56,7 +56,7 @@ function folderSites(s: Pick<BrowserState, "tabs" | "groups">, g: TabGroup): str
 
 const isUnpinnedTab = (t: Tab | undefined) => !!t && !t.pin && !t.liveItem;
 
-const isLoose = (s: Pick<BrowserState, "tabs" | "groups">, id: string, scope: TidyScope) =>
+export const isLoose = (s: Pick<BrowserState, "tabs" | "groups">, id: string, scope: TidyScope) =>
   scope === "pins" ? isPinnedRow(s.tabs[id]) : isUnpinnedTab(s.tabs[id]) && !innermostGroupOf(s.groups, id);
 
 export function tidyPlan(s: Pick<BrowserState, "tabs" | "groups" | "windows" | "splits">, windowId: string, profileId?: string, scope: TidyScope = "pins"): TidyPlan | null {
@@ -129,27 +129,27 @@ export function offersTidyTabs(s: BrowserState, windowId: string, profileId?: st
   return canTidy(s, windowId, profileId, "tabs");
 }
 
-export function tidying(s: BrowserState, windowId: string, profileId?: string, scope: TidyScope = "pins"): [BrowserState, Tidied | null] {
-  const plan = tidyPlan(s, windowId, profileId, scope);
+export function tidying(s: BrowserState, windowId: string, profileId?: string, scope: TidyScope = "pins", plan?: TidyPlan | null): [BrowserState, Tidied | null] {
+  const tidy = plan === undefined ? tidyPlan(s, windowId, profileId, scope) : plan;
   const w = s.windows[windowId];
-  if (!plan || !w) return [s, null];
+  if (!tidy || !w) return [s, null];
   const homes: Record<string, string | null> = {};
-  for (const id of withSplitRows(s, [...plan.files.map((f) => f.tabId), ...plan.newGroups.flatMap((g) => g.tabIds)])) homes[id] = s.tabs[id]!.pinnedUrl;
+  for (const id of withSplitRows(s, [...tidy.files.map((f) => f.tabId), ...tidy.newGroups.flatMap((g) => g.tabIds)])) homes[id] = s.tabs[id]!.pinnedUrl;
   let next = s;
   let closed: ClosedTab[] = [];
-  if (plan.closes.length) {
-    const ids = new Set(plan.closes.map((c) => c.tabId));
+  if (tidy.closes.length) {
+    const ids = new Set(tidy.closes.map((c) => c.tabId));
     const shown = activeTabId(s, windowId);
     next = removeTabs(next, [...ids], true);
     closed = next.closedTabs.filter((c) => !s.closedTabs.includes(c) && !!c.tabId && ids.has(c.tabId));
-    const keeper = shown && ids.has(shown) ? plan.closes.find((c) => c.tabId === shown)!.keeperId : undefined;
+    const keeper = shown && ids.has(shown) ? tidy.closes.find((c) => c.tabId === shown)!.keeperId : undefined;
     if (keeper && next.tabs[keeper]) next = apply(next, activated(next, keeper));
   }
-  for (const f of plan.files) next = placing(next, [f.tabId], { pinned: false, groupId: f.groupId });
-  for (const g of plan.newGroups) next = withRowsGrouped(next, g.tabIds, { pinned: scope === "pins", name: g.name })[0];
+  for (const f of tidy.files) next = placing(next, [f.tabId], { pinned: false, groupId: f.groupId });
+  for (const g of tidy.newGroups) next = withRowsGrouped(next, g.tabIds, { pinned: scope === "pins", name: g.name })[0];
   const moved = Object.keys(homes).length;
-  const groups = new Set(plan.files.map((f) => f.groupId)).size + plan.newGroups.length;
-  return [next, { scope, windowId, order: [...w.tabIds], homes, closed, moved, groups, duplicates: plan.closes.length }];
+  const groups = new Set(tidy.files.map((f) => f.groupId)).size + tidy.newGroups.length;
+  return [next, { scope, windowId, order: [...w.tabIds], homes, closed, moved, groups, duplicates: tidy.closes.length }];
 }
 
 export function untidying(s: BrowserState, tidied: Tidied): BrowserState {

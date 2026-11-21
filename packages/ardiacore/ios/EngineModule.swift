@@ -54,6 +54,17 @@ public class EngineModule: Module {
       ArdiaHost.cliCloseOffscreenTabs()
       reply.ok()
     },
+    "hiddenPageOpen": { args, reply in
+      ArdiaHost.hiddenPageOpen(args.profile, url: try args.text("url")) { reply.ok($0) }
+    },
+    "hiddenPageRun": { args, reply in
+      let timeout = try args.optionalDouble("timeoutMs") ?? 30000
+      ArdiaHost.hiddenPageRun(try args.text("pageId"), script: try args.text("script"), timeout: timeout / 1000) { reply.ok($0) }
+    },
+    "hiddenPageClose": { args, reply in
+      ArdiaHost.hiddenPageClose(try args.text("pageId"))
+      reply.ok()
+    },
     "setCliActiveTab": { args, reply in
       let active = try args.optionalText("tabId").map { ArdiaHost.chromeTabId(ofTab: $0) } ?? -1
       EngineCall.passing("ac_cli_control", profile: args.profile, args: ["active": active], reply: reply)

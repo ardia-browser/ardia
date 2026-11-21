@@ -155,7 +155,7 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
   const web = tabId ? webviews.get(tabId) : undefined;
   const ui = s.windowUi[windowId];
   if (page && (runHidingCommand(command, page.id) || runReaderCommand(command, page.id, mayWrite))) return;
-  if (!targeted && runSidebarCommand(command, arg, windowId)) return;
+  if (!targeted && runSidebarCommand(command, arg, windowId, mayWrite)) return;
 
   switch (command) {
     case "newTab":

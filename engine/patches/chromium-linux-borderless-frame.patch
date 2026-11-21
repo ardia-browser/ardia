@@ -1,0 +1,235 @@
+The Ardia Linux host draws the whole window itself: its sidebar and page card sit on the BrowserView, and it hides the
+caption buttons. Chromium's custom Linux frame still wrapped that view in a themed band with a resize and shadow border,
+a rounded clip and a window-coloured frame, so on a compositor that draws no title bar (Hyprland) every Ardia window had
+a thick border with its own corners outside the sidebar and the page card. The host names its windows through
+g_ardia_linux_borderless_frame; for those windows the frame view and its layout report no border, input or shadow
+insets and no corner radius, and paint no frame, so the client area is the whole window. A thin band along the edges
+still answers as a resize border so a window can be resized where the compositor draws none. Settings and Import
+(g_ardia_linux_frameless_app) count as hosted too. The hook is null outside the Linux host.
+Chrome maps its startup window before the host starts, so X11 sets _GTK_FRAME_EXTENTS from the frame insets it had
+then and rewrites it only on a window state change. When the host lays the frame out again (FrameTypeChanged), the
+browser's window tree host now asks X11 for the insets once more through X11Extension::RefreshDecorationInsets, so
+a window manager that honours the property sees none. Wayland has no X11 extension and is unchanged.
+--- a/chrome/browser/ui/views/frame/browser_frame_view_layout_linux.cc
++++ b/chrome/browser/ui/views/frame/browser_frame_view_layout_linux.cc
+@@ -12,6 +12,10 @@
+ #include "ui/gfx/geometry/insets.h"
+ #include "ui/views/window/frame_view_utils_linux.h"
+ 
++class BrowserView;
++
++bool ArdiaLinuxBorderlessFrame(const BrowserView* browser_view);
++
+ namespace {
+ 
+ // This is the same thickness as the resize border on ChromeOS.
+@@ -39,6 +43,9 @@
+ }
+ 
+ gfx::Insets BrowserFrameViewLayoutLinux::GetInputInsets() const {
++  if (ArdiaBorderless()) {
++    return gfx::Insets();
++  }
+   bool showing_shadow = delegate_->ShouldDrawRestoredFrameShadow() &&
+                         !delegate_->IsFrameCondensed();
+   return gfx::Insets(showing_shadow ? kResizeBorder : 0);
+@@ -50,6 +57,10 @@
+ }
+ 
+ gfx::Insets BrowserFrameViewLayoutLinux::RestoredFrameBorderInsets() const {
++  if (ArdiaBorderless()) {
++    return gfx::Insets();
++  }
++
+   // Unframed mode only has a minimal frame so it is resizable from the borders.
+   if (delegate_->GetUnframedModeEnabled()) {
+     return gfx::Insets(
+@@ -81,3 +92,7 @@
+   }
+   return delegate_->IsTabStripVisible() ? 0 : kExtraTopBorder;
+ }
++
++bool BrowserFrameViewLayoutLinux::ArdiaBorderless() const {
++  return view_ && ArdiaLinuxBorderlessFrame(view_->GetBrowserView());
++}
+--- a/chrome/browser/ui/views/frame/browser_frame_view_layout_linux.h
++++ b/chrome/browser/ui/views/frame/browser_frame_view_layout_linux.h
+@@ -36,6 +36,8 @@
+   gfx::Insets RestoredFrameEdgeInsets() const override;
+   int NonClientExtraTopThickness() const override;
+ 
++  bool ArdiaBorderless() const;
++
+  private:
+   raw_ptr<BrowserFrameViewLinux> view_ = nullptr;
+ };
+--- a/chrome/browser/ui/views/frame/browser_frame_view_layout_linux_native.cc
++++ b/chrome/browser/ui/views/frame/browser_frame_view_layout_linux_native.cc
+@@ -39,6 +39,10 @@
+ 
+ gfx::Insets BrowserFrameViewLayoutLinuxNative::RestoredFrameBorderInsets()
+     const {
++  if (ArdiaBorderless()) {
++    return gfx::Insets();
++  }
++
+   // Unframed mode only has a minimal frame to be able to resize it from the
+   // borders.
+   if (delegate_->GetUnframedModeEnabled()) {
+--- a/chrome/browser/ui/views/frame/browser_frame_view_linux.cc
++++ b/chrome/browser/ui/views/frame/browser_frame_view_linux.cc
+@@ -19,6 +19,8 @@
+ #include "ui/views/window/frame_view_utils_linux.h"
+ #include "ui/views/window/window_button_order_provider.h"
+ 
++bool ArdiaLinuxBorderlessFrame(const BrowserView* browser_view);
++
+ namespace {
+ 
+ // The resize border at the top of the caption area. Only used when frame
+@@ -70,6 +72,9 @@
+ 
+ void BrowserFrameViewLinux::PaintRestoredFrameBorder(
+     gfx::Canvas* canvas) const {
++  if (ArdiaLinuxBorderlessFrame(GetBrowserView())) {
++    return;
++  }
+ #if BUILDFLAG(IS_LINUX)
+   const bool tiled = browser_widget()->tiled();
+ #else
+@@ -90,6 +95,9 @@
+ }
+ 
+ bool BrowserFrameViewLinux::ShouldDrawRestoredFrameShadow() const {
++  if (ArdiaLinuxBorderlessFrame(GetBrowserView())) {
++    return false;
++  }
+   return static_cast<BrowserNativeWidgetAuraLinux*>(
+              browser_widget()->browser_native_widget())
+       ->ShouldDrawRestoredFrameShadow();
+@@ -114,6 +122,18 @@
+ }
+ 
+ int BrowserFrameViewLinux::NonClientHitTest(const gfx::Point& point) {
++  if (ArdiaLinuxBorderlessFrame(GetBrowserView()) && !IsFrameCondensed()) {
++    views::WidgetDelegate* delegate = browser_widget()->widget_delegate();
++    if (delegate && delegate->CanResize()) {
++      constexpr int kResizeAreaCornerSize = 16;
++      const int edge = GetHTComponentForFrame(
++          point, gfx::Insets(kResizeTopBorderThickness),
++          kResizeAreaCornerSize, kResizeAreaCornerSize, true);
++      if (edge != HTNOWHERE) {
++        return edge;
++      }
++    }
++  }
+   int frame_component = OpaqueBrowserFrameView::NonClientHitTest(point);
+   // Allow resizing at the top of the caption area. This is only done when
+   // shadows are not drawn, since the resize area is on the shadows otherwise.
+@@ -125,6 +145,9 @@
+ }
+ 
+ float BrowserFrameViewLinux::GetRestoredCornerRadiusDip() const {
++  if (ArdiaLinuxBorderlessFrame(GetBrowserView())) {
++    return 0;
++  }
+ #if BUILDFLAG(IS_LINUX)
+   const bool tiled = browser_widget()->tiled();
+ #else
+--- a/chrome/browser/ui/views/frame/browser_frame_view_linux_native.cc
++++ b/chrome/browser/ui/views/frame/browser_frame_view_linux_native.cc
+@@ -11,6 +11,8 @@
+ #include "ui/views/window/frame_background.h"
+ #include "ui/views/window/frame_view_utils_linux.h"
+ 
++bool ArdiaLinuxBorderlessFrame(const BrowserView* browser_view);
++
+ BrowserFrameViewLinuxNative::BrowserFrameViewLinuxNative(
+     BrowserWidget* widget,
+     BrowserView* browser_view,
+@@ -52,11 +54,17 @@
+ }
+ 
+ float BrowserFrameViewLinuxNative::GetRestoredCornerRadiusDip() const {
++  if (ArdiaLinuxBorderlessFrame(GetBrowserView())) {
++    return 0;
++  }
+   return layout_->GetFrameProvider()->GetTopCornerRadiusDip();
+ }
+ 
+ void BrowserFrameViewLinuxNative::PaintRestoredFrameBorder(
+     gfx::Canvas* canvas) const {
++  if (ArdiaLinuxBorderlessFrame(GetBrowserView())) {
++    return;
++  }
+   layout_->GetFrameProvider()->PaintWindowFrame(
+       canvas, GetLocalBounds(), GetTopAreaHeight(), ShouldPaintAsActive(),
+       GetInputInsets());
+--- a/chrome/browser/ui/views/frame/browser_view.cc
++++ b/chrome/browser/ui/views/frame/browser_view.cc
+@@ -447,6 +447,19 @@
+   return init && g_ardia_linux_frameless_app(init->create_params().app_name);
+ }
+ 
++bool (*g_ardia_linux_borderless_frame)(const BrowserWindowInterface*) = nullptr;
++
++bool ArdiaLinuxBorderlessFrame(const BrowserView* browser_view);
++
++bool ArdiaLinuxBorderlessFrame(const BrowserView* browser_view) {
++  if (!g_ardia_linux_borderless_frame || !browser_view) {
++    return false;
++  }
++  const BrowserWindowInterface* browser = browser_view->browser();
++  return browser && (ArdiaLinuxFramelessApp(browser) ||
++                     g_ardia_linux_borderless_frame(browser));
++}
++
+ namespace {
+ 
+ bool ArdiaLinuxBackgroundInstance() {
+--- a/chrome/browser/ui/views/frame/browser_desktop_window_tree_host_linux.cc
++++ b/chrome/browser/ui/views/frame/browser_desktop_window_tree_host_linux.cc
+@@ -118,6 +118,9 @@
+ void BrowserDesktopWindowTreeHostLinux::FrameTypeChanged() {
+   DesktopWindowTreeHostPlatform::FrameTypeChanged();
+   UpdateFrameHints();
++  if (auto* x11_extension = GetX11Extension()) {
++    x11_extension->RefreshDecorationInsets();
++  }
+ }
+ 
+ void BrowserDesktopWindowTreeHostLinux::TabDraggingKindChanged(
+--- a/ui/ozone/platform/x11/x11_window.cc
++++ b/ui/ozone/platform/x11/x11_window.cc
+@@ -1340,6 +1340,10 @@
+ 
+ bool X11Window::IsWmSyncActiveForTest() {
+   return bounds_wm_sync_.get();
++}
++
++void X11Window::RefreshDecorationInsets() {
++  UpdateDecorationInsets();
+ }
+ 
+ bool X11Window::HandleAsAtkEvent(const x11::Event& event) {
+--- a/ui/ozone/platform/x11/x11_window.h
++++ b/ui/ozone/platform/x11/x11_window.h
+@@ -155,6 +155,7 @@
+   bool CanResetOverrideRedirect() const override;
+   void SetX11ExtensionDelegate(X11ExtensionDelegate* delegate) override;
+   bool IsWmSyncActiveForTest() override;
++  void RefreshDecorationInsets() override;
+ 
+   // x11::EventObserver:
+   void OnEvent(const x11::Event& event) override;
+--- a/ui/platform_window/extensions/x11_extension.h
++++ b/ui/platform_window/extensions/x11_extension.h
+@@ -49,6 +49,8 @@
+   // Indicates whether a WmSync is pending. Should only be used for testing.
+   virtual bool IsWmSyncActiveForTest() = 0;
+ 
++  virtual void RefreshDecorationInsets() {}
++
+  protected:
+   virtual ~X11Extension();
+ 

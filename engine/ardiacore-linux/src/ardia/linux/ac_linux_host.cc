@@ -322,6 +322,7 @@ extern bool (*g_ardia_linux_is_companion)(const BrowserWindowInterface*);
 extern bool (*g_ardia_linux_automation_window)(const BrowserWindowInterface*);
 extern int (*g_ardia_linux_window_tab_count)(const BrowserWindowInterface*);
 extern bool (*g_ardia_linux_frameless_app)(const std::string& app_name);
+extern bool (*g_ardia_linux_borderless_frame)(const BrowserWindowInterface*);
 extern bool (*g_ardia_linux_shell_passes_point)(gfx::NativeView child, const gfx::Point& location);
 extern void (*g_ardia_linux_tiled_edges_changed)(views::Widget* widget);
 
@@ -1696,6 +1697,7 @@ class ShellHostView : public views::View,
   void LayoutOverlay();
   void RoundUtilityCorners();
   void HideCaptionButtons();
+  void RefreshEngineFrame();
   void ShellPainted();
   void LiftCurtain();
   void ReattachViewports();
@@ -2705,6 +2707,7 @@ void ShellHostView::Initialize() {
   }
   if (small_ && !is_utility()) GetWidget()->OnSizeConstraintsChanged();
   LayoutOverlay();
+  RefreshEngineFrame();
   StartLinuxContentBlocker(profile(), page_profile());
   if (!title_.empty()) {
     browser_->GetWindow()->GetNativeWindow()->SetTitle(base::UTF8ToUTF16(title_));
@@ -3399,6 +3402,16 @@ void ShellHostView::HideCaptionButtons() {
   for (int id : {VIEW_ID_MINIMIZE_BUTTON, VIEW_ID_MAXIMIZE_BUTTON, VIEW_ID_RESTORE_BUTTON, VIEW_ID_CLOSE_BUTTON}) {
     if (views::View* button = frame->GetViewByID(id)) button->GetViewAccessibility().SetIsIgnored(true);
   }
+}
+
+void ShellHostView::RefreshEngineFrame() {
+  if (!browser_view_ || !browser_view_->browser_widget()) return;
+  GetWidget()->FrameTypeChanged();
+  BrowserFrameView* frame = browser_view_->browser_widget()->GetFrameView();
+  if (!frame) return;
+  frame->InvalidateLayout();
+  frame->SchedulePaint();
+  HideCaptionButtons();
 }
 
 void ShellHostView::OnWidgetThemeChanged(views::Widget*) {
@@ -8414,6 +8427,9 @@ void StartLinuxHost() {
   };
   g_ardia_linux_is_companion = [](const BrowserWindowInterface* browser) { return IsCompanion(browser); };
   g_ardia_linux_frameless_app = &IsUtilityAppName;
+  g_ardia_linux_borderless_frame = [](const BrowserWindowInterface* browser) {
+    return browser && Hosts().contains(browser->GetSessionID().id());
+  };
   g_ardia_linux_automation_window = &ardiacore::IsLinuxAutomationWindow;
   g_ardia_linux_shell_passes_point = [](gfx::NativeView child, const gfx::Point& location) {
     return std::ranges::any_of(Hosts(), [&](const auto& entry) { return entry.second->PassesShellPoint(child, location); });

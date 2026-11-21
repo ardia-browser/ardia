@@ -265,6 +265,27 @@ cp "$here/../external.h" "$src/shared/external.h"
         (self.tree / 'value').write_text('drift\n')
         self.run_command('check', success=False)
 
+    def test_a_patch_added_after_others_that_edit_the_same_file_applies_to_a_tree_holding_them(self):
+        (self.tree / 'value').write_text('a\nb\nc\nd\ne\nf\ng\n')
+        for unused in ('mac.patch', 'linux.patch'):
+            (self.here / unused).unlink()
+        (self.here / 'first.patch').write_text('--- a/value\n+++ b/value\n@@ -1,3 +1,3 @@\n a\n-b\n+b1\n c\n')
+        (self.here / 'second.patch').write_text('--- a/value\n+++ b/value\n@@ -1,3 +1,3 @@\n a\n-b1\n+b2\n c\n')
+        (self.here / 'series').write_text('chromium first.patch linux\nchromium second.patch linux\n')
+        self.run_command('capture-base')
+        self.run_command('apply')
+        self.assertEqual((self.tree / 'value').read_text(), 'a\nb2\nc\nd\ne\nf\ng\n')
+        (self.here / 'third.patch').write_text('--- a/value\n+++ b/value\n@@ -5,3 +5,3 @@\n e\n-f\n+f3\n g\n')
+        (self.here / 'series').write_text('chromium first.patch linux\nchromium second.patch linux\nchromium third.patch linux\n')
+        result = self.run_command('apply')
+        self.assertIn('already applied first.patch', result.stdout)
+        self.assertIn('already applied second.patch', result.stdout)
+        self.assertIn('applied chromium third.patch', result.stdout)
+        self.assertEqual((self.tree / 'value').read_text(), 'a\nb2\nc\nd\ne\nf3\ng\n')
+        self.run_command('check')
+        again = self.run_command('apply')
+        self.assertIn('already applied third.patch', again.stdout)
+
     def test_mac_selection_and_separate_default_base(self):
         self.run_command('capture-base', platform='mac')
         self.run_command('apply', platform='mac')

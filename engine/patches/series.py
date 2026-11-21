@@ -226,27 +226,38 @@ def cmd_files(args):
             print(f"  {path}{'/' if is_dir else ''}")
 
 
+def reached_after(states, index, live):
+    if not os.path.isfile(live):
+        return False
+    content = pathlib.Path(live).read_bytes()
+    return any(at >= index and state == content for at, state in states)
+
+
 def cmd_apply(args):
     steps = read_series()
     final_applied = set()
     if TARGET_OS == "linux" and os.path.isfile(os.path.join(BASE, '.ardia-series-target')):
         with tempfile.TemporaryDirectory(prefix="ac-linux-applied-") as scratch:
-            errors = materialize(steps, scratch)
+            states = {}
+
+            def note_states(index, step, out):
+                if step.kind != "chromium":
+                    return
+                for path, is_dir in step.paths():
+                    if not is_dir and os.path.isfile(os.path.join(out, path)):
+                        states.setdefault(path, []).append((index, pathlib.Path(out, path).read_bytes()))
+
+            errors = materialize(steps, scratch, after_step=note_states)
             if errors:
                 sys.exit("\n".join(errors))
-            for step in steps:
+            for index, step in enumerate(steps):
                 if step.kind != "chromium":
                     continue
                 text = pathlib.Path(step.patch).read_text(encoding="utf-8", errors="surrogateescape")
                 if re.search(r"^(?:\+\+\+ /dev/null(?:\s|$)|(?:rename|copy) (?:from|to) )", text, re.M):
                     continue
-                paths = step.paths()
-                if paths and all(
-                    os.path.isfile(os.path.join(scratch, path)) and
-                    os.path.isfile(os.path.join(SRC, path)) and
-                    filecmp.cmp(os.path.join(scratch, path), os.path.join(SRC, path), shallow=False)
-                    for path, is_dir in paths if not is_dir
-                ):
+                paths = [path for path, is_dir in step.paths() if not is_dir]
+                if paths and all(reached_after(states.get(path, []), index, os.path.join(SRC, path)) for path in paths):
                     final_applied.add(step.name)
     for step in steps:
         if step.kind != "layer" and (step.name in final_applied or is_applied(step, SRC)):
@@ -275,7 +286,7 @@ def cmd_capture_base(args):
     print(f"captured {count} files into {BASE}")
 
 
-def materialize(steps, out, until=None, report=None):
+def materialize(steps, out, until=None, report=None, after_step=None):
     paths = touched(steps)
     for path, is_dir in paths:
         if is_dir:
@@ -285,13 +296,15 @@ def materialize(steps, out, until=None, report=None):
         elif base_from_git(path, out):
             print(f"note: {path} isn't in the base; using the checkout's git HEAD (capture-base it before hooking it)")
     errors = []
-    for step in steps:
+    for index, step in enumerate(steps):
         error = apply_step(step, out, strict=True)
         if error:
             errors.append(f"{step} (series:{step.line}) does not apply cleanly:\n    " + error.replace("\n", "\n    "))
             apply_step(step, out, strict=False)
         elif report:
             report(f"ok  {step}")
+        if after_step:
+            after_step(index, step, out)
         if until and step.name == until:
             break
     return errors

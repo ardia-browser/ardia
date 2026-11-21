@@ -59,6 +59,12 @@ class PageView(context: Context, appContext: AppContext) : ExpoView(context, app
     var toneInsets: Pair<Double, Double> = 0.0 to 0.0
     var obscuredInsets: Pair<Double, Double> = 0.0 to 0.0
     var bottomInsetTransitionMs = 0
+    var summaryBottomInset: Double = 0.0
+        set(value) {
+            if (field == value) return
+            field = value
+            if (summaryLayer?.visibility == View.VISIBLE) layOutChildren()
+        }
     private var appliedObscuredInsets: Pair<Double, Double> = 0.0 to 0.0
     private val insetSettlement = PageInsetSettlement()
     private var insetPage: Page? = null
@@ -572,12 +578,19 @@ class PageView(context: Context, appContext: AppContext) : ExpoView(context, app
         val layer = summaryLayer ?: return
         if (layer.visibility == View.GONE) return
         val density = resources.displayMetrics.density
-        val bottom = maxOf(bands.bottom, (toneInsets.second * density).roundToInt()) + (SUMMARY_MARGIN_DP * density).roundToInt()
-        val room = (height - bands.top - bottom).coerceAtLeast(0)
-        val tallest = minOf(room / density, maxOf((height - bands.top - bands.bottom) * SUMMARY_HEIGHT_SHARE / density, SUMMARY_MINIMUM_HEIGHT_DP))
-        if (summaryPresenter.maxHeightDp != tallest) summaryPresenter.maxHeightDp = tallest
-        layer.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(room, MeasureSpec.AT_MOST))
-        val top = height - bottom - layer.measuredHeight
+        val placement = PageBands.summaryPlacement(
+            height = height,
+            density = density,
+            bands = bands,
+            toneBottomPx = (toneInsets.second * density).roundToInt(),
+            summaryBottomPx = (summaryBottomInset * density).roundToInt(),
+            marginDp = SUMMARY_MARGIN_DP,
+            heightShare = SUMMARY_HEIGHT_SHARE,
+            minimumHeightDp = SUMMARY_MINIMUM_HEIGHT_DP,
+        )
+        if (summaryPresenter.maxHeightDp != placement.maxHeightDp) summaryPresenter.maxHeightDp = placement.maxHeightDp
+        layer.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(placement.roomPx, MeasureSpec.AT_MOST))
+        val top = height - placement.bottomPx - layer.measuredHeight
         layer.layout(0, top, width, top + layer.measuredHeight)
     }
 

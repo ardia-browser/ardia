@@ -131,6 +131,8 @@ export const BrowsingScreen = memo(function BrowsingScreen({ tab }: { tab: Brows
   const fullscreen = usePages((s) => s.fullscreen[tab.id] ?? false);
   const coveredBottom = design === "material" ? materialCoveredBottom(collapse.collapses, barSlotHeight, fullscreen || finding || searching) : obscuredBottom({ follows: Platform.OS === "android", bar: barSlotHeight, pill: barCenterFromBottom(insets.bottom, design) - floatingBarLayout.control / 2 + hostPillLayout.height, collapsed: collapse.collapsed, cleared: fullscreen || finding || searching });
   const obscured = underBar ? { top: insets.top, bottom: coveredBottom } : undefined;
+  const materialSummaryBottom = fullscreen || finding || searching ? insets.bottom : collapse.collapsed ? insets.bottom + materialBottomBar.inset + materialBarPill.height : barSlotHeight;
+  const summaryBottomInset = design === "material" ? materialSummaryBottom : undefined;
   const painted = useSharedValue(false);
   useEffect(() => {
     painted.value = true;
@@ -192,7 +194,7 @@ export const BrowsingScreen = memo(function BrowsingScreen({ tab }: { tab: Brows
         <Animated.View style={[StyleSheet.absoluteFill, styles.outgoing, { backgroundColor: theme.surface }, pager.outgoing]}>
           {underBar ? null : <Animated.View testID="pageStatusStrip" style={[{ height: insets.top }, statusStyle]} />}
           <View testID="pageArea" style={[styles.page, { marginBottom: layout.pageBottom }]}>
-            <PageSurface key={tab.id} tab={tab} toneBottom={layout.toneBottom} obscured={obscured} bottomInsetTransitionMs={Platform.OS === "android" && collapse.collapses && design === "redesigned" && !fullscreen && !finding && !searching ? hostPillLayout.foldSettleMs : 0} pinsSafeArea={pulls ? true : undefined} />
+            <PageSurface key={tab.id} tab={tab} toneBottom={layout.toneBottom} obscured={obscured} bottomInsetTransitionMs={Platform.OS === "android" && collapse.collapses && design === "redesigned" && !fullscreen && !finding && !searching ? hostPillLayout.foldSettleMs : 0} summaryBottomInset={summaryBottomInset} pinsSafeArea={pulls ? true : undefined} />
             <PageCover key={`${tab.id}:cover`} tab={tab} />
             <PageFailureView key={`${tab.id}:failure`} tabId={tab.id} />
           </View>

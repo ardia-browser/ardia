@@ -24,6 +24,25 @@ internal object PageBands {
     fun toneOffsets(tone: Pair<Int, Int>, bands: Frame): Pair<Int, Int> =
         (tone.first - bands.top).coerceAtLeast(0) to (tone.second - bands.bottom).coerceAtLeast(0)
 
+    data class SummaryPlacement(val bottomPx: Int, val roomPx: Int, val maxHeightDp: Float)
+
+    fun summaryPlacement(
+        height: Int,
+        density: Float,
+        bands: Frame,
+        toneBottomPx: Int,
+        summaryBottomPx: Int,
+        marginDp: Float,
+        heightShare: Float,
+        minimumHeightDp: Float,
+    ): SummaryPlacement {
+        val inset = maxOf(bands.bottom, toneBottomPx.coerceAtLeast(0), summaryBottomPx.coerceAtLeast(0))
+        val bottom = inset + (marginDp * density).roundToInt()
+        val room = (height - bands.top - bottom).coerceAtLeast(0)
+        val tallest = minOf(room / density, maxOf((height - bands.top - inset) * heightShare / density, minimumHeightDp))
+        return SummaryPlacement(bottom, room, tallest)
+    }
+
     fun colour(band: Int?, surface: Int?): Int? = band ?: surface
 
     data class Scaled(val width: Int, val height: Int, val pageTop: Int, val pageHeight: Int)

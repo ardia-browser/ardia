@@ -1,7 +1,7 @@
 import { startEventFeed, stopEventFeed } from "./automationEvents";
 import { CORE_EVENTS, type AutomationEventName } from "./eventNames";
 import { startLifecycleEvents, startUserIdleEvents } from "./lifecycleEvents";
-import { startStoreEvents, type EventSend } from "./storeEvents";
+import { startStoreEvents, startTabIdle, type EventSend, type TabIdleTracker } from "./storeEvents";
 import { setNotificationSink } from "./notificationEvents";
 import { startPromptEvents } from "./socketPrompts";
 import { startSurfaceEvents } from "./socketSurfaces";
@@ -12,13 +12,14 @@ export type FeedNeeds = { events: Set<AutomationEventName>; tabIdle: Set<number>
 type Family = { key: string; stop: () => void };
 
 const families = new Map<string, Family>();
+let tabIdle: TabIdleTracker | null = null;
 let coreOn = false;
 
 export function feedNeeds(subscriptions: Iterable<Subscription>): FeedNeeds {
   const needs: FeedNeeds = { events: new Set(), tabIdle: new Set(), userIdle: new Set() };
   for (const sub of subscriptions) {
     for (const name of sub.events) needs.events.add(name);
-    for (const t of sub.tabIdle) needs.tabIdle.add(t);
+    if (sub.events.has("tab.idle") || sub.events.has("tab.resumed")) for (const t of sub.tabIdle) needs.tabIdle.add(t);
     for (const t of sub.userIdle) needs.userIdle.add(t);
   }
   return needs;
@@ -40,8 +41,9 @@ export function updateFeed(needs: FeedNeeds, send: EventSend) {
   if (wantsCore && !coreOn) startEventFeed(send);
   if (!wantsCore && coreOn) stopEventFeed();
   coreOn = wantsCore;
-  const storeKey = `${sorted(needs.events)}|${sorted(needs.tabIdle)}`;
-  keep("store", needs.events.size ? storeKey : null, () => startStoreEvents(send, needs));
+  keep("store", needs.events.size ? sorted(needs.events) : null, () => startStoreEvents(send, needs));
+  if (needs.tabIdle.size) (tabIdle ??= startTabIdle(send)).watch(needs.tabIdle);
+  else stopTabIdle();
   keep("lifecycle", needs.events.size ? sorted(needs.events) : null, () => startLifecycleEvents(send, needs.events));
   keep("notification", needs.events.has("notification.shown") ? "on" : null, () => {
     setNotificationSink(send);
@@ -58,4 +60,17 @@ export function stopFeed() {
   coreOn = false;
   for (const family of families.values()) family.stop();
   families.clear();
+  stopTabIdle();
+}
+
+function stopTabIdle() {
+  tabIdle?.stop();
+  tabIdle = null;
+}
+
+const wantsIdleAt = (sub: Subscription | null | undefined, threshold: number) => !!sub?.events.has("tab.idle") && sub.tabIdle.has(threshold);
+
+export function idleToReplay(before: Subscription | null | undefined, after: Subscription | null | undefined): Record<string, unknown>[] {
+  if (!after) return [];
+  return [...after.tabIdle].filter((t) => wantsIdleAt(after, t) && !wantsIdleAt(before, t)).flatMap((t) => tabIdle?.idleNow(t) ?? []);
 }

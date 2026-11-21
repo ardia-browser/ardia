@@ -26,7 +26,7 @@ import { warnFor } from "../telemetry/logs";
 import { controlTabTargets } from "../../platform/control";
 import { TAB_IDLE_EVENTS, USER_IDLE_EVENTS, type AutomationEventName } from "./eventNames";
 import { clientProtocolProblem, commands, failure, hello, parseRequest, parseSubscription, planRun, type RequestId, type Subscription } from "./automationMethods";
-import { feedNeeds, stopFeed, updateFeed } from "./automationFeed";
+import { feedNeeds, idleToReplay, stopFeed, updateFeed } from "./automationFeed";
 import { answerDecision, dropResponder, serveHooks, stopResponders } from "./decideSocket";
 import { launchToReplay, recordLaunch, runLaunchActions } from "./lifecycleEvents";
 import { startDecideHooks } from "./decideHooks";
@@ -54,6 +54,7 @@ const openConnections = new Set<number>();
 const launchSent = new Set<number>();
 const unwrittenRuns = new Set<number>();
 const callers = new Map<number, ControlCaller>();
+const idleReplays = new Map<number, Record<string, unknown>[]>();
 let nextTicket = 0;
 
 const controlOn = () => programControlOn(useBrowser.getState());
@@ -153,12 +154,14 @@ export function handleControlRequest({ connection, generation: tagged, line }: C
     const line = replyLine(id, settled, method, consent);
     const failedResult = "result" in settled && typeof settled.result === "object" && settled.result !== null && (settled.result as { ok?: unknown }).ok === false;
     noteSocketCall(family, "error" in settled || failedResult || line.startsWith(`{"id":${JSON.stringify(id)},"error":`), consent);
+    const replay = takeIdleReplay(connection);
     try {
       replyOnControlSocket(connection, line, ticket);
     } catch (error) {
       runWritten([ticket]);
       throw error;
     }
+    for (const data of replay) deliver("tab.idle", data, Date.now(), connection);
   };
   if (body instanceof Promise) void body.then(reply, (error) => reply(failure("failed", errorText(error))));
   else reply(body);
@@ -198,9 +201,12 @@ function subscribe(connection: number, params: Record<string, unknown>): Body {
   if ("error" in sub) return sub;
   const served = serveHooks(connection, sub.hooks);
   if ("error" in served) return failure("bad_request", served.error);
+  const before = subscriptions.get(connection);
   if (sub.events.size) subscriptions.set(connection, sub);
   else subscriptions.delete(connection);
   refreshFeed();
+  const replay = idleToReplay(before, subscriptions.get(connection));
+  if (replay.length) idleReplays.set(connection, replay);
   replayLaunch(connection);
   return { result: { ok: true, served: served.served, ...(sub.hooks === undefined || sub.hooks === null ? {} : { revisions: served.revisions }) } };
 }
@@ -262,7 +268,14 @@ function answerAs(origin: Pick<SocketOrigin, "segment">, connection: number, met
   return failure("unknown_method", `There's no method ${method}.`);
 }
 
+function takeIdleReplay(connection: number) {
+  const replay = subscriptions.has(connection) ? (idleReplays.get(connection) ?? []) : [];
+  idleReplays.delete(connection);
+  return replay;
+}
+
 function handleClose({ connection }: { connection: number }) {
+  idleReplays.delete(connection);
   openConnections.delete(connection);
   dismissSocketAsks(connection);
   launchSent.delete(connection);

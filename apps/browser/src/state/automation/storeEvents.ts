@@ -129,28 +129,32 @@ function shownTabs(s: BrowserState): Set<string> {
   return shown;
 }
 
-function startTabIdle(send: EventSend, thresholds: ReadonlySet<number>) {
-  const fired = new Map<number, Set<string>>([...thresholds].map((t) => [t, new Set<string>()]));
+export type TabIdleTracker = { watch: (thresholds: ReadonlySet<number>) => void; idleNow: (threshold: number) => Record<string, unknown>[]; stop: () => void };
+
+export function startTabIdle(send: EventSend): TabIdleTracker {
+  const idle = new Map<number, Map<string, number>>();
   const touched = new Map<string, number>();
-  const scan = () => {
+  const idleData = (s: BrowserState, id: string, threshold: number) => ({ ...tabData(s, id), pinned: !!s.tabs[id]!.pin, idle: threshold });
+  const scan = (quietly?: number) => {
     const s = useBrowser.getState();
     const now = Date.now();
     const shown = shownTabs(s);
     for (const id of shown) touched.set(id, now);
-    for (const [threshold, idle] of fired) {
-      for (const id of idle) {
-        if (!s.tabs[id] || !isEligibleTab(s, id)) idle.delete(id);
+    for (const [threshold, tabs] of idle) {
+      if (quietly !== undefined && threshold !== quietly) continue;
+      for (const id of tabs.keys()) {
+        if (!s.tabs[id] || !isEligibleTab(s, id)) tabs.delete(id);
         else if (shown.has(id)) {
-          idle.delete(id);
-          send("tab.resumed", { ...tabData(s, id), pinned: !!s.tabs[id]!.pin, idle: threshold });
+          tabs.delete(id);
+          send("tab.resumed", idleData(s, id, threshold));
         }
       }
       for (const id in s.tabs) {
-        if (idle.has(id) || shown.has(id) || !isEligibleTab(s, id)) continue;
+        if (tabs.has(id) || shown.has(id) || !isEligibleTab(s, id)) continue;
         const last = Math.max(s.tabs[id]!.lastActiveAt, s.tabs[id]!.restoredAt ?? 0, touched.get(id) ?? 0);
         if (now - last >= threshold * 1000) {
-          idle.add(id);
-          send("tab.idle", { ...tabData(s, id), pinned: !!s.tabs[id]!.pin, idle: threshold, idleSince: last });
+          tabs.set(id, last);
+          if (quietly === undefined) send("tab.idle", { ...idleData(s, id, threshold), idleSince: last });
         }
       }
     }
@@ -160,22 +164,32 @@ function startTabIdle(send: EventSend, thresholds: ReadonlySet<number>) {
   const unsubscribe = useBrowser.subscribe((s, prev) => {
     if (s.ui !== prev.ui || s.windows !== prev.windows) scan();
   });
-  scan();
-  return () => {
-    clearInterval(timer);
-    unsubscribe();
+  return {
+    watch: (thresholds) => {
+      for (const threshold of idle.keys()) if (!thresholds.has(threshold)) idle.delete(threshold);
+      for (const threshold of thresholds) {
+        if (idle.has(threshold)) continue;
+        idle.set(threshold, new Map());
+        scan(threshold);
+      }
+    },
+    idleNow: (threshold) => {
+      const s = useBrowser.getState();
+      return [...(idle.get(threshold) ?? [])].filter(([id]) => s.tabs[id] && isEligibleTab(s, id)).map(([id, since]) => ({ ...idleData(s, id, threshold), idleSince: since }));
+    },
+    stop: () => {
+      clearInterval(timer);
+      unsubscribe();
+    },
   };
 }
 
-export type StoreFeedNeeds = { events: ReadonlySet<string>; tabIdle: ReadonlySet<number> };
-
-export function startStoreEvents(send: EventSend, needs: StoreFeedNeeds): () => void {
+export function startStoreEvents(send: EventSend, needs: { events: ReadonlySet<string> }): () => void {
   const stops: (() => void)[] = [];
   const diffing = ["littleArdia.opened", "profile.switched", "peek.opened", "peek.closed", "split.created", "split.closed", "tab.moved", "pin.added", "pin.removed"];
   if (diffing.some((name) => needs.events.has(name))) stops.push(useBrowser.subscribe((s, prev) => diffMore(s, prev, send, needs.events)));
   if (needs.events.has("media.started") || needs.events.has("media.stopped")) stops.push(startMediaEvents(send, needs.events));
   if (needs.events.has("tab.crashed")) stops.push(startCrashes(send));
   if (LIBRARY_EVENTS.some((name) => needs.events.has(name))) stops.push(startLibraryEvents(send, needs.events));
-  if (needs.tabIdle.size && (needs.events.has("tab.idle") || needs.events.has("tab.resumed"))) stops.push(startTabIdle(send, needs.tabIdle));
   return () => stops.forEach((stop) => stop());
 }

@@ -51,22 +51,62 @@ export function clipBox(box: Box, clips: readonly Box[]): Box | null {
 const boxOf = (node: Measurable) => new Promise<Box>((resolve) => node.measureInWindow((x, y, width, height) => resolve({ x, y, width, height })));
 
 export function coverMeasurer(windowId: string, id: string, radius: number, node: () => Measurable | null, clips: readonly CoverClip[], covering = true) {
-  let latest = 0;
   let stopped = false;
+  type Pass = { own: Measurable; clipNodes: Measurable[]; dirty: boolean; done: Promise<void>; cancel(): void };
+  let active: Pass | null = null;
+  let latest: Pass | null = null;
+  const clipNodesNow = () => clips.map((clip) => clip.node()).filter((clip): clip is Measurable => !!clip);
+  const same = (a: readonly Measurable[], b: readonly Measurable[]) => a.length === b.length && a.every((item, i) => item === b[i]);
+  const measure = (): Promise<void> => {
+    const own = node();
+    if (!own || stopped || !covering) {
+      active?.cancel();
+      latest = null;
+      if (!covering && own && !stopped) setCover(windowId, id, null);
+      return Promise.resolve();
+    }
+    const clipNodes = clipNodesNow();
+    if (active) {
+      if (active.own === own && same(active.clipNodes, clipNodes)) {
+        active.dirty = true;
+        return active.done;
+      }
+      active.cancel();
+    }
+    let finish!: () => void;
+    let released = false;
+    const done = new Promise<void>((resolve) => { finish = resolve; });
+    const pass: Pass = { own, clipNodes, dirty: false, done, cancel() {
+      if (released) return;
+      released = true;
+      clearTimeout(timeout);
+      if (active === pass) active = null;
+      finish();
+    } };
+    const complete = (boxes?: Box[]) => {
+      if (!stopped && latest === pass && node() === own && same(clipNodes, clipNodesNow()) && boxes) {
+        const visible = clipBox(boxes[0]!, boxes.slice(1));
+        setCover(windowId, id, visible && { ...visible, radius });
+      }
+      if (released) return;
+      released = true;
+      clearTimeout(timeout);
+      if (active === pass) active = null;
+      if (!stopped && pass.dirty) void measure().then(finish);
+      else finish();
+    };
+    const timeout = setTimeout(() => complete(), 100);
+    active = pass;
+    latest = pass;
+    void Promise.all([own, ...clipNodes].map(boxOf)).then(complete, () => complete());
+    return done;
+  };
   return {
-    async measure() {
-      const own = node();
-      if (!own || stopped) return;
-      if (!covering) return setCover(windowId, id, null);
-      const asked = ++latest;
-      const clipNodes = clips.map((clip) => clip.node()).filter((clip): clip is Measurable => !!clip);
-      const [box, ...clipBoxes] = await Promise.all([own, ...clipNodes].map(boxOf));
-      if (stopped || asked !== latest || node() !== own) return;
-      const visible = clipBox(box!, clipBoxes);
-      setCover(windowId, id, visible && { ...visible, radius });
-    },
+    measure,
     stop() {
       stopped = true;
+      active?.cancel();
+      latest = null;
     },
   };
 }

@@ -70,7 +70,6 @@ export function newSyncDeviceId(random: (bytes: Uint8Array) => Uint8Array = (byt
 }
 
 let deviceName: string | null = null;
-let chosenFolder: { path: string } | null = null;
 
 export const syncDeviceName = () => deviceName ?? FALLBACK_DEVICE_NAME;
 
@@ -80,15 +79,6 @@ export async function loadSyncDeviceName(host: ArdiaHost): Promise<string> {
     if (typeof name === "string" && name.trim()) deviceName = name.trim().slice(0, 128);
   } catch {}
   return syncDeviceName();
-}
-
-export async function withChosenSyncFolder<T>(path: string, run: () => Promise<T>): Promise<T> {
-  chosenFolder = { path };
-  try {
-    return await run();
-  } finally {
-    chosenFolder = null;
-  }
 }
 
 export function keyringMessage(status: SyncKeyStoreStatus | null, saving: boolean): string | null {
@@ -417,16 +407,6 @@ export function syncModuleMethod(host: ArdiaHost, name: string, method: string):
   if (name !== "ArdiaSync") return undefined;
   if (method === "newDeviceId") return () => newSyncDeviceId();
   if (method === "deviceName") return syncDeviceName;
-  if (method === "chooseFolder") {
-    return (current: string | null) => {
-      const preset = chosenFolder;
-      if (preset) {
-        chosenFolder = null;
-        return Promise.resolve(preset.path);
-      }
-      return invoke(host, method)(current ?? null);
-    };
-  }
   if (method === "readPasswords") {
     return async (profile: string) => {
       const store = heldLogins;

@@ -6,13 +6,15 @@ import { historyExpired } from "./historyAdapter";
 import { settingsToReapply } from "./settingsAdapter";
 import { watchExtensionIntents } from "./extensions";
 import { appAdapters, extensionsOf, forgetScopeAdapters, profileAdapters, typeSynced } from "./scopeAdapters";
-import { APP_SCOPE, defaultTypes, emptyDoc, type DataType, type SendTarget, type SyncDoc, type SyncUi } from "./syncDoc";
+import { APP_SCOPE, emptyDoc, emptyUi, type DataType, type SendTarget, type SyncDoc, type SyncUi } from "./syncDoc";
 import { syncFiles } from "./syncFiles";
 import { settleThemeAdoption, themeChosenHere } from "./syncThemes";
 import { editClock, startEditClock } from "./editClock";
 import { addLinkedProfile, appScopeOf, linkedProfileId, linkProfiles, readyToPair, remoteProfileRecord, sharedDataChain } from "./profileLinks";
 import { summarize } from "./syncSummary";
 import { noteSnapshot, timedCycle } from "./cycleWork";
+import { exposeDevSync } from "./devSync";
+import { folderScopes, moveChain, noteFolderMove, noteTurnOn, type FolderMoveResult, type TurnOnFolder } from "./folderMove";
 import { freezeRemovals, markDeviceRemoved, markRemoved, settleRemovals } from "./profileRemoval";
 import { profileScope } from "./records";
 import { queueSend, sendTargetsIn } from "./sentTabs";
@@ -21,7 +23,7 @@ import { isQuitting, saveBeforeQuit } from "../app/quit";
 import { onProfilesOpened, profileOpened } from "../profiles/profileLoading";
 import { markOpenTabsSynced, openTabsClosed, recordOpenTabCloses } from "./openTabCloses";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
-import { consentToken } from "../telemetry/client";
+import { consentToken, type ConsentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
 
 export { onTabsReceived } from "./sentTabs";
@@ -31,20 +33,7 @@ export { takeOpenTabSyncCounts } from "../telemetry/openTabSyncCounts";
 const CYCLE_MS = 15_000;
 const AFTER_EDIT_MS = 3_000;
 
-export const useSync = create<SyncUi>()(() => ({
-  status: SyncNative ? "off" : "unavailable",
-  enabled: false,
-  joining: false,
-  folder: null,
-  types: defaultTypes(),
-  profiles: {},
-  lastSyncedAt: null,
-  error: null,
-  pending: 0,
-  devices: [],
-  remoteTabs: {},
-  remoteProfiles: [],
-}));
+export const useSync = create<SyncUi>()(() => emptyUi(SyncNative ? "off" : "unavailable"));
 
 export const currentSyncFolder = () => useSync.getState().folder;
 
@@ -88,11 +77,12 @@ function scheduleSync(delay = AFTER_EDIT_MS) {
 }
 
 let stopping = false;
+let moveRun: Promise<FolderMoveResult> | null = null;
 
 export const syncWritesOpen = () => doc.enabled && !stopping && !["starting", "locked", "off", "unavailable"].includes(useSync.getState().status);
 
 export async function syncNow(stillWanted: () => void = () => {}): Promise<boolean> {
-  while (cycle) await cycle.catch(() => {});
+  while (moveRun || cycle) await (moveRun ?? cycle)!.catch(() => {});
   if (stopping || !doc.enabled || useSync.getState().status === "locked") return false;
   stillWanted();
   await runCycle({ forcePasswords: true });
@@ -102,7 +92,7 @@ export async function syncNow(stillWanted: () => void = () => {}): Promise<boole
 type CycleOptions = { retiring?: boolean; forcePasswords?: boolean };
 
 async function runCycle({ retiring = false, forcePasswords = false }: CycleOptions = {}) {
-  if (!SyncNative || !doc.enabled || !doc.folder || !doc.deviceId || useSync.getState().status === "locked") return;
+  if (!SyncNative || !doc.enabled || moveRun || !doc.folder || !doc.deviceId || useSync.getState().status === "locked") return;
   if (cycle) {
     again = true;
     forcePasswordsNext ||= forcePasswords;
@@ -223,21 +213,37 @@ async function resetFromElsewhere() {
   publishUi({ status: "reset", error: "This device is out of sync. Sync may have been reset from another device." });
 }
 
-export async function folderInfo(path?: string | null): Promise<FolderInfo | null> {
-  return (await SyncNative?.folderInfo(path ?? doc.folder ?? null)) ?? null;
-}
+export const folderInfo = async (path?: string | null): Promise<FolderInfo | null> => (await SyncNative?.folderInfo(path ?? doc.folder ?? null)) ?? null;
 
-function setSyncFolder(path: string) {
-  if (doc.enabled) return;
+function pointAt(path: string) {
   doc.folder = path;
   save();
   publishUi();
+}
+
+export function setSyncFolder(path: string) {
+  if (!doc.enabled) pointAt(path);
 }
 
 export async function chooseSyncFolder(): Promise<string | null> {
   const picked = (await SyncNative?.chooseFolder(doc.folder)) ?? null;
   if (picked) setSyncFolder(picked);
   return picked;
+}
+
+export function moveSyncFolder(to: string): Promise<FolderMoveResult> {
+  const native = SyncNative, from = doc.folder;
+  if (!native || !doc.enabled || !from || stopping || moveRun) return Promise.resolve({ error: "busy" });
+  if (useSync.getState().status === "locked") return Promise.resolve({ error: "locked" });
+  clearTimeout(timer);
+  return (moveRun = movingTo(native, from, to).finally(() => ((moveRun = null), scheduleSync(0))));
+}
+
+async function movingTo(native: NonNullable<typeof SyncNative>, from: string, to: string): Promise<FolderMoveResult> {
+  while (cycle) await cycle.catch(() => {});
+  const result = await moveChain(native, from, to, folderScopes(doc)).catch((error: unknown): FolderMoveResult => ({ error: "failed", message: errorText(error) }));
+  if ("ok" in result && result.ok !== "same") pointAt(to);
+  return noteFolderMove(result);
 }
 
 function begin(folder: string, deviceId: string, joining: boolean) {
@@ -247,7 +253,7 @@ function begin(folder: string, deviceId: string, joining: boolean) {
   scheduleSync(0);
 }
 
-export async function turnOnSync(folder: string): Promise<{ ok: true } | { error: string }> {
+export async function turnOnSync(folder: string, how?: TurnOnFolder): Promise<{ ok: true } | { error: string }> {
   const native = SyncNative;
   if (!native) return { error: "Sync isn’t available in this build." };
   const deviceId = native.newDeviceId();
@@ -259,6 +265,7 @@ export async function turnOnSync(folder: string): Promise<{ ok: true } | { error
     return { error: `Couldn’t use that folder: ${errorText(error)}` };
   }
   begin(folder, deviceId, false);
+  noteTurnOn(how);
   return { ok: true };
 }
 
@@ -281,15 +288,15 @@ export async function enterRecoveryPhrase(folder: string, text: string): Promise
 }
 
 export async function stopSync({ deleteData = false } = {}) {
-  const native = SyncNative;
+  const native = SyncNative, consent = consentToken();
+  while (moveRun) await moveRun.catch(() => {});
   if (!native || !doc.enabled || stopping) return;
   stopping = true;
-  await retire(native, deleteData).finally(() => (stopping = false));
+  await retire(native, deleteData, consent).finally(() => (stopping = false));
 }
 
-async function retire(native: NonNullable<typeof SyncNative>, deleteData: boolean) {
+async function retire(native: NonNullable<typeof SyncNative>, deleteData: boolean, consent: ConsentToken | null) {
   clearTimeout(timer);
-  const consent = consentToken();
   const reportFailure = (error: unknown) => warnFor(consent, "[sync] the last cycle before stopping failed", error);
   while (cycle) await cycle.catch(reportFailure);
   if (useSync.getState().status !== "locked") await runCycle({ retiring: true }).catch(reportFailure);
@@ -386,14 +393,6 @@ export function startSync() {
     if (closed && !cycle) save();
     if (closed || (!cycle && (s.bookmarks !== prev.bookmarks || s.settings !== prev.settings || s.profiles !== prev.profiles || s.profileOrder !== prev.profileOrder || s.groups !== prev.groups))) scheduleSync();
   });
-  if (__DEV__) {
-    (globalThis as { acSync?: object }).acSync = {
-      useSync, syncNow, turnOnSync, enterRecoveryPhrase, stopSync, setTypeSynced, setProfileSynced, setOpenTabsSynced, addRemoteProfile, removeRemoteProfile, removeSyncedDevice, setSyncFolder, folderInfo,
-      doc: () => doc,
-      native: SyncNative,
-      get menu(): typeof import("./menu") {
-        return require("./menu");
-      },
-    };
-  }
+  if (__DEV__)
+    exposeDevSync({ useSync, syncNow, turnOnSync, enterRecoveryPhrase, stopSync, setTypeSynced, setProfileSynced, setOpenTabsSynced, addRemoteProfile, removeRemoteProfile, removeSyncedDevice, setSyncFolder, moveSyncFolder, folderInfo, doc: () => doc, native: SyncNative });
 }

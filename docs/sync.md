@@ -481,6 +481,10 @@ Settings › Sync. Dia puts sync in Account › Sync, with the section icon
   **Other Options** (Dia's menu: "Set Up Without Another Device", "Enter Recovery Phrase").
   Below is the sync folder, with Choose…. If iCloud Drive is off it says so, links to iCloud
   settings, and offers another folder; test instances never default to iCloud Drive.
+  On Linux there's no cloud drive to default to: until a folder is chosen, the button is **Turn On…**, which asks
+  where the folder goes and makes an `Ardia Sync` folder inside the one picked. Two picks are used as they are: a
+  folder already named `Ardia Sync`, and a folder that already holds sync data, which goes to **Enter Recovery
+  Phrase…** instead of starting a second chain (`docs/linux-port.md` › Sync).
 - **Turn On Sync** makes a phrase and shows **Save Your Recovery Kit**, with Dia's copy:
   - "Your Recovery Kit contains all you need to recover your data should you lose access to
     this device."
@@ -508,6 +512,9 @@ Settings › Sync. Dia puts sync in Account › Sync, with the section icon
     server.
   - **Advanced…** has Save Recovery Kit…, Copy Recovery Code (Dia's ⌥ item, copied as
     `org.nspasteboard.ConcealedType`), Sync Now, Show Sync Folder in Finder and Stop Syncing….
+  - On Linux the Sync Folder row has **Move…** (and Advanced… has Move Sync Folder…): it copies this phrase's files to
+    the folder picked and syncs through it from then on, or just points at a folder that already holds them, and
+    never touches the old folder (`state/sync/folderMove.ts`, `docs/linux-port.md` › Sync).
   - Then Profiles (toggles, and Add to This Mac), All Open Tabs (a switch per synced profile: "Every open tab syncs, not
     just pinned ones. Closing a tab closes it on your other Macs too."), What Syncs (Bookmarks, History, Open Tabs,
     Pinned Tabs and Groups, Passwords, Extensions, Settings) and Devices (each with "last synced …").

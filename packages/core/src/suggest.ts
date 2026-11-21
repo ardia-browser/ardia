@@ -53,18 +53,19 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
     }
     return s;
   };
-  const known = (url: string) => {
+  const known = (url: string, prioritizeOpenTab = false) => {
     const key = pageKey(url);
     const c = pool.byKey.get(key) ?? extra.find((x) => x.text.key === key);
     if (!c) return undefined;
     const shown = { ...c, title: c.pageTitle ?? c.title };
+    const tabId = prioritizeOpenTab ? (c.tabId ?? tabIds.get(key)) : null;
     const opened = withRootSlash(url);
-    if (withRootSlash(c.url) === opened) return pageSuggestion(shown, null);
+    if (withRootSlash(c.url) === opened) return pageSuggestion(shown, tabId);
     const visit = savedVisit(source.history, opened);
     const bookmark = savedBookmark(source.bookmarks ?? NO_BOOKMARKS, opened);
     const lent = visit ?? bookmark ?? shown;
     const row: PageRow = { url: visit?.url ?? opened, title: lent.title, favicon: lent.favicon, visits: visit?.visits ?? 0, bookmarked: bookmark !== undefined };
-    return tag(pageSuggestion(row, null), "literal");
+    return tag(pageSuggestion(row, tabId), "literal");
   };
 
   const websiteFirst = preference === "website";
@@ -155,8 +156,8 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
   let first: Suggestion;
   if (creates.length && /^\S+\s+\S/.test(query)) first = createRow(creates[0]!);
   else if (actionMatches[0]?.exact) first = actionRow(actionMatches[0].action);
-  else if (target && completion) first = tag(known(target.url) ?? { kind: "page", url: target.url, title: "", favicon: target.favicon }, !websiteFirst && "search_first_inline");
-  else if (typedUrl) first = known(typedUrl) ?? { kind: "page", url: typedUrl, title: "", favicon: null };
+  else if (target && completion) first = tag(known(target.url, options.prioritizeOpenTabs) ?? { kind: "page", url: target.url, title: "", favicon: target.favicon }, !websiteFirst && "search_first_inline");
+  else if (typedUrl) first = known(typedUrl, options.prioritizeOpenTabs) ?? { kind: "page", url: typedUrl, title: "", favicon: null };
   else if (extensionMatches.exact) first = extensionMatches.rows[0]!;
   else if (websiteFirst && best && best.m >= 40 && (!noInline || typedIsPage(best.c.text, q))) first = tag(pageSuggestion(best.c, best.tabId), best.c.renamed && "renamed_tab");
   else first = search;

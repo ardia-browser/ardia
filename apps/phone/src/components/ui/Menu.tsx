@@ -3,11 +3,17 @@ import { BackHandler, Platform, Pressable, ScrollView, StyleSheet, Text, View, u
 import { lookIsNative } from "@ardia/phone-native";
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { withAlpha } from "../../lib/color";
 import { insetRect, MENU_MARGIN, menuAt, menuHeight, menuOnTrigger, menuShrink, type MenuAlign, type MenuLimits, type Point, type Rect } from "../../lib/menuPlace";
 import { useReduceMotion } from "./contrast";
 import { focusForScreenReader } from "./coverFocus";
+import { useDesign } from "./design";
 import { LookFrost, SURFACES_FROST } from "./LookViews";
-import { menuMotion } from "./motion";
+import { MATERIAL_STATE } from "./materialRoles";
+import { MATERIAL_MENU_GROUP_GAP, materialMenuFill, materialMenuGroups, materialMenuHeight, materialMenuWidth, useMaterialBack } from "./MaterialSurfaces";
+import { useMaterialTheme } from "./materialTheme";
+import { materialMotion, materialMove, materialShape, materialSize, materialType } from "./materialTokens";
+import { menuMotion, reducedMotionMs } from "./motion";
 import { measureAnchor, Portal, useOverlayFrame, usePortalLeaving, usePortalLeft } from "./Overlay";
 import { Symbol } from "./Symbol";
 import type { SymbolName } from "./symbolPaths";
@@ -58,7 +64,154 @@ const CHECK_SHIFT = CHECK_TRAILING ? 0 : menuLook.labelInsetChecked - menuLook.l
 
 type Props = { items: MenuItem[]; place?: ViewStyle; placer?: MenuPlacer; onDismiss: (chosen?: boolean) => void; dimmed?: boolean; origin?: string; frost?: string | null; shown?: boolean; privately?: boolean };
 
-export function Menu({ items, place, placer, onDismiss, dimmed = false, origin = "top", frost, shown = true, privately = false }: Props) {
+export function Menu(props: Props) {
+  return useDesign() === "material" ? <MaterialMenu {...props} /> : <ClassicMenu {...props} />;
+}
+
+function MaterialMenu({ items, place, placer, onDismiss, origin = "top", shown = true, privately = false }: Props) {
+  const { scheme, dark } = useMaterialTheme(privately);
+  const fill = materialMenuFill(scheme, dark);
+  const ripple = { color: withAlpha(scheme.onSurface, MATERIAL_STATE.pressed), borderless: false, foreground: true };
+  const reduceMotion = useReduceMotion();
+  const [pages, setPages] = useState<MenuSubmenu[]>([]);
+  const page = pages[pages.length - 1] ?? null;
+  const openPage = (submenu: MenuSubmenu) => setPages((now) => [...now, submenu]);
+  const backPage = () => setPages((now) => now.slice(0, -1));
+  const leaving = usePortalLeaving();
+  const left = usePortalLeft();
+  const rows = page ? page.children : items;
+  const width = materialMenuWidth(rows);
+  const [content, setContent] = useState<number | null>(null);
+  const revealed = shown && (placer === undefined || content !== null);
+  const side = useRef<boolean | undefined>(undefined);
+  const spot = placer ? placer(content ?? materialMenuHeight(rows, page !== null), side.current) : { place: place ?? {}, origin, maxHeight: undefined, shrink: undefined };
+  if (revealed && placer && side.current === undefined) side.current = spot.origin.includes("top");
+  const firstRow = useRef<ViewInstance>(null);
+  const chosen = useRef(false);
+  const window = useWindowDimensions();
+  const openedWidth = useRef(window.width);
+  useEffect(() => {
+    if (openedWidth.current !== window.width) onDismiss();
+  }, [window.width]);
+  useEffect(() => {
+    countDrawnMenuOpened(privately);
+  }, []);
+  useEffect(() => {
+    if (!revealed || leaving) return;
+    return focusForScreenReader(() => firstRow.current);
+  }, [revealed, page, leaving]);
+  useMaterialBack(!leaving, { onCommit: () => (page ? backPage() : onDismiss()) });
+  const opened = useSharedValue(reduceMotion ? 1 : 0);
+  useEffect(() => {
+    if (!revealed || leaving || reduceMotion) return;
+    opened.value = materialMove(1, materialMotion.menuEnter.easing, materialMotion.menuEnter.durationMs);
+  }, [revealed]);
+  useEffect(() => {
+    if (!leaving) return;
+    const exitMs = reduceMotion ? reducedMotionMs(materialMotion.menuExit.durationMs) : materialMotion.menuExit.durationMs;
+    if (exitMs === 0) {
+      opened.value = 0;
+      left();
+      return;
+    }
+    opened.value = materialMove(0, materialMotion.menuExit.easing, exitMs, (finished) => {
+      "worklet";
+      if (finished) runOnJS(left)();
+    });
+  }, [leaving]);
+  const enter = useAnimatedStyle(() => ({
+    opacity: leaving ? opened.value : Math.min(1, opened.value * 3),
+    transform: [{ scaleY: 0.8 + 0.2 * opened.value }],
+  }));
+  const choose = (action: () => void) => {
+    if (chosen.current) return;
+    chosen.current = true;
+    onDismiss(true);
+    action();
+  };
+  const firstEnabled = page ? -1 : rows.findIndex((item) => typeof item === "object" && !("heading" in item) && !item.disabled);
+  const groups = materialMenuGroups(rows);
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents={revealed && !leaving ? "auto" : "none"} collapsable={false} accessibilityElementsHidden={!revealed || leaving} importantForAccessibility={revealed && !leaving ? "auto" : "no-hide-descendants"}>
+      <Pressable testID="drawnMenuScrim" {...SCRIM_ACCESSIBILITY} style={[StyleSheet.absoluteFill, { backgroundColor: ink.clear }]} onPress={() => onDismiss()} />
+      <Animated.View
+        testID="materialMenu"
+        accessibilityRole="menu"
+        accessibilityViewIsModal
+        style={[materialStyles.menu, { transformOrigin: spot.origin }, spot.place, { width }, spot.maxHeight === undefined ? null : { maxHeight: spot.maxHeight }, revealed ? null : styles.unseen, enter]}
+      >
+        <ScrollView testID="drawnMenuRows" keyboardShouldPersistTaps="handled" style={styles.scroll} contentContainerStyle={materialStyles.groups} bounces={false} overScrollMode="never" onContentSizeChange={(_width, height) => setContent(height)}>
+          {groups.map((group, groupIndex) => (
+            <View key={groupIndex} testID="materialMenuGroup" style={[materialStyles.menuGroup, { backgroundColor: fill }]}>
+              {page && groupIndex === 0 ? (
+                <Pressable ref={firstRow} accessibilityRole="button" accessibilityLabel={`Back, ${page.label}`} android_ripple={ripple} onPress={backPage} style={materialStyles.menuItem}>
+                  <Symbol name="chevronLeft" size={materialSize.icon} color={scheme.onSurfaceVariant} />
+                  <Text numberOfLines={1} style={[materialType.titleSmall, materialStyles.menuLabel, { color: scheme.onSurface }]}>
+                    {page.label}
+                  </Text>
+                </Pressable>
+              ) : null}
+              {group.map(({ entry, index }) => {
+                if ("heading" in entry)
+                  return (
+                    <Text key={`h${index}`} accessibilityRole="header" style={[materialType.titleSmall, materialStyles.menuHeading, { color: scheme.onSurfaceVariant }]}>
+                      {entry.heading}
+                    </Text>
+                  );
+                if (isSubmenu(entry)) {
+                  const color = entry.disabled ? withAlpha(scheme.onSurface, MATERIAL_STATE.disabledContent) : scheme.onSurface;
+                  const iconColor = entry.disabled ? color : scheme.onSurfaceVariant;
+                  return (
+                    <Pressable
+                      key={`${index}:${entry.label}`}
+                      ref={index === firstEnabled ? firstRow : undefined}
+                      accessibilityRole="menuitem"
+                      accessibilityLabel={entry.label}
+                      accessibilityState={{ disabled: entry.disabled, expanded: false }}
+                      disabled={entry.disabled}
+                      android_ripple={ripple}
+                      onPress={() => openPage(entry)}
+                      style={materialStyles.menuItem}
+                    >
+                      {entry.icon ? <Symbol name={entry.icon} size={materialSize.icon} color={iconColor} /> : null}
+                      <Text numberOfLines={1} style={[materialType.labelLarge, materialStyles.menuLabel, { color }]}>
+                        {entry.label}
+                      </Text>
+                      <Symbol name="chevronRight" size={materialSize.icon} color={iconColor} />
+                    </Pressable>
+                  );
+                }
+                const color = entry.disabled ? withAlpha(scheme.onSurface, MATERIAL_STATE.disabledContent) : entry.destructive ? scheme.error : scheme.onSurface;
+                const iconColor = entry.disabled ? color : entry.destructive ? scheme.error : scheme.onSurfaceVariant;
+                return (
+                  <Pressable
+                    key={`${index}:${entry.label}`}
+                    ref={index === firstEnabled ? firstRow : undefined}
+                    accessibilityRole="menuitem"
+                    accessibilityLabel={entry.label}
+                    accessibilityState={{ checked: entry.checked, disabled: entry.disabled }}
+                    disabled={entry.disabled}
+                    android_ripple={ripple}
+                    onPress={() => choose(entry.onPress)}
+                    style={materialStyles.menuItem}
+                  >
+                    {entry.icon ? <Symbol name={entry.icon} size={materialSize.icon} color={iconColor} /> : null}
+                    <Text numberOfLines={1} style={[materialType.labelLarge, materialStyles.menuLabel, { color }]}>
+                      {entry.label}
+                    </Text>
+                    {entry.checked ? <Symbol name="checkmark" size={materialSize.icon} color={scheme.primary} /> : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+          ))}
+        </ScrollView>
+      </Animated.View>
+    </View>
+  );
+}
+
+function ClassicMenu({ items, place, placer, onDismiss, dimmed = false, origin = "top", frost, shown = true, privately = false }: Props) {
   const theme = useTheme();
   const paint = theme.dark ? menuInk.dark : menuInk.light;
   const reduceMotion = useReduceMotion();
@@ -271,9 +424,9 @@ export function pointPlacer(at: Point, screen: { width: number; height: number }
   };
 }
 
-function triggerPlacer(row: Rect, host: Rect, insets: Insets, width: number, align?: MenuAlign): MenuPlacer {
+function triggerPlacer(row: Rect, host: Rect, insets: Insets, width: number, align?: MenuAlign, clearAnchor = false): MenuPlacer {
   return (height, keepBelow) => {
-    const spot = menuOnTrigger(row, host, host.width > 0 ? insetRect(host, insets) : host, width, height, MENU_MARGIN, keepBelow, align);
+    const spot = menuOnTrigger(row, host, host.width > 0 ? insetRect(host, insets) : host, width, height, MENU_MARGIN, keepBelow, align, clearAnchor);
     return { place: { left: spot.left, top: spot.top, width }, origin: spot.origin, maxHeight: spot.height, shrink: menuShrink(row, width, spot.height) };
   };
 }
@@ -299,11 +452,12 @@ const widthOf = (place: ViewStyle) => (typeof place.width === "number" ? place.w
 type FloatingProps = Omit<Props, "shown" | "origin" | "placer" | "place"> & { place?: ViewStyle; anchor?: RefObject<ViewInstance | null>; at?: Point | null; align?: MenuAlign; floor?: number | null };
 
 export function FloatingMenu({ items, place = {}, onDismiss, anchor, at, align, floor, dimmed, frost, privately }: FloatingProps) {
+  const material = useDesign() === "material";
   const hostFrame = useOverlayFrame();
   const insets = useSafeAreaInsets();
   const screen = useWindowDimensions();
   const frostAround = useMenuFrost();
-  const width = widthOf(place);
+  const width = material ? materialMenuWidth(items) : widthOf(place);
   const [measured, setMeasured] = useState<{ host: Rect; row: Rect | null } | null>(null);
   useEffect(() => {
     if (at && !anchor) return;
@@ -317,13 +471,22 @@ export function FloatingMenu({ items, place = {}, onDismiss, anchor, at, align, 
   }, []);
   const heldWithoutPoint = dimmed && !at && measured?.row ? { x: measured.row.x, y: measured.row.y + measured.row.height } : null;
   const point = at ?? heldWithoutPoint;
-  const placer = point ? (anchor && !measured ? undefined : pointPlacer(point, screen, insets, width, { control: measured?.row, floor })) : measured ? (measured.row ? triggerPlacer(measured.row, measured.host, insets, width, align) : fixedPlacer(place, measured.host, insets, width)) : undefined;
+  const placer = point ? (anchor && !measured ? undefined : pointPlacer(point, screen, insets, width, { control: measured?.row, floor })) : measured ? (measured.row ? triggerPlacer(measured.row, measured.host, insets, width, align, material) : fixedPlacer(place, measured.host, insets, width)) : undefined;
   return (
     <Portal exitMs={menuExitMs(dimmed)}>
       <Menu items={items} place={{ ...place, width }} placer={placer} shown={placer !== undefined} dimmed={dimmed} privately={privately} frost={frost === undefined ? frostAround : frost} onDismiss={onDismiss} />
     </Portal>
   );
 }
+
+const materialStyles = StyleSheet.create({
+  menu: { position: "absolute", minWidth: 112, maxWidth: 280 },
+  groups: { gap: MATERIAL_MENU_GROUP_GAP },
+  menuGroup: { borderRadius: materialShape.large, paddingVertical: 4, elevation: 3, overflow: "hidden" },
+  menuItem: { flexDirection: "row", alignItems: "center", gap: 12, minHeight: materialSize.touchTarget, paddingHorizontal: 12 },
+  menuLabel: { flex: 1 },
+  menuHeading: { paddingHorizontal: 12, paddingVertical: 8 },
+});
 
 const styles = StyleSheet.create({
   panel: { position: "absolute", minWidth: menuLook.width, borderRadius: menuLook.radius, borderWidth: menuLook.rim, ...smoothCorners },

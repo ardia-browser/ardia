@@ -327,3 +327,47 @@ test("the deck's search row rises by the whole keyboard on Android, whose report
   expect(materialKeyboardLift(300, 48, "android")).toBe(300 + MATERIAL_DECK.keyboardGap - 8);
   expect(materialKeyboardLift(300, 34, "ios")).toBe(300 + MATERIAL_DECK.keyboardGap - 34 - 8);
 });
+
+onAndroid("the Material deck's More dropdown and Space dropdown open as Material 3 Expressive menus: grouped 16 dp containers on surfaceContainer (surfaceContainerHighest in dark), dynamic scheme colours, and a primary checkmark", () => {
+  const space = (syncId: string, name: string) => ({
+    syncId,
+    name,
+    color: null,
+    icon: null,
+    isDefault: syncId === "work",
+    theme: null,
+    deviceTabs: [],
+    pinned: { tiles: [], sections: [] },
+    bookmarks: [],
+    history: [],
+    sendTargets: null,
+  });
+  useSync.setState((state) => ({
+    ...state,
+    status: { ...OFF_STATUS, isEnabled: true, phase: "updated" },
+    view: {
+      ...state.view,
+      profiles: [space("work", "Work"), space("home", "Home")],
+      selectedProfileId: "work",
+    },
+  }));
+  const root = deck();
+  act(() => pressable(root, "materialDeckMore")!.props.onPress());
+  act(() => jest.advanceTimersByTime(16));
+  expect(host(root, "materialMenu")).toBeDefined();
+  const groups = hosts(root, "materialMenuGroup");
+  expect(groups).toHaveLength(3);
+  for (const group of groups) expect(flat(group)).toMatchObject({ backgroundColor: LIGHT.surfaceContainer, borderRadius: 16, elevation: 3 });
+  act(() => setDynamicScheme(WALLPAPER));
+  expect(flat(hosts(root, "materialMenuGroup")[0])).toMatchObject({ backgroundColor: WALLPAPER.light.surfaceContainer });
+  act(() => root.root.findAll((node) => node.props.testID === "drawnMenuScrim" && typeof node.props.onPress === "function")[0]!.props.onPress());
+  act(() => jest.advanceTimersByTime(500));
+
+  act(() => pressable(root, "materialDeckSpace")!.props.onPress());
+  act(() => jest.advanceTimersByTime(16));
+  expect(host(root, "materialMenu")).toBeDefined();
+  const spaceItems = root.root.findAll((node) => node.props.accessibilityRole === "menuitem" && typeof node.type === "string");
+  expect(spaceItems.map((node) => node.props.accessibilityLabel)).toEqual(["Work", "Home"]);
+  expect(spaceItems[0]!.props.accessibilityState).toMatchObject({ checked: true });
+  unmount(root);
+});

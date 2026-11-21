@@ -95,6 +95,7 @@ import { MaterialDeckBackdrop, MaterialDeckChrome, MaterialDeckEmpty } from "./M
 import { MATERIAL_DECK, materialBottomRowCenter, materialCloseAt, materialDeckGeometry } from "./MaterialDeckLayout";
 import { materialDuration, materialMove, materialSize } from "../ui/materialTokens";
 import { PageBarGhost } from "../browsing/PageBarGhost";
+import { materialMenuWidth } from "../ui/MaterialSurfaces";
 import { useMaterialBarHosted } from "../browsing/PersistentMaterialBar";
 import { screenCornerRadius } from "../../state/app/displayCorner";
 import { TabGrid, type GridFrame } from "./TabGrid";
@@ -1373,9 +1374,10 @@ const styles = StyleSheet.create({
 
 function CardMenuAt({ items, privately, at, control, floor, screen, onDismiss }: { items: MenuItem[]; privately: boolean; at: { x: number; y: number }; control?: Rect; floor: number; screen: { width: number; height: number }; onDismiss: (chosen?: boolean) => void }) {
   const insets = useSafeAreaInsets();
+  const width = useDesign() === "material" ? materialMenuWidth(items) : tabsLayout.menuWidth;
   return (
     <Portal exitMs={menuExitMs(true)}>
-      <Menu items={items} placer={pointPlacer(at, screen, insets, tabsLayout.menuWidth, { floor, control })} privately={privately} dimmed onDismiss={onDismiss} />
+      <Menu items={items} placer={pointPlacer(at, screen, insets, width, { floor, control })} privately={privately} dimmed onDismiss={onDismiss} />
     </Portal>
   );
 }

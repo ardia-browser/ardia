@@ -33,7 +33,7 @@ export type MenuAlign = { trailing: boolean; inset: number };
 
 export const MENU_FINGER_GAP = 16;
 
-export function menuOnTrigger(anchor: Rect, host: Rect, room: Rect, width: number, wanted: number, margin: number, keepBelow?: boolean, align?: MenuAlign): MenuSpot {
+export function menuOnTrigger(anchor: Rect, host: Rect, room: Rect, width: number, wanted: number, margin: number, keepBelow?: boolean, align?: MenuAlign, clearAnchor = false): MenuSpot {
   const anchorBottom = anchor.y + anchor.height;
   const roomTop = Math.min(room.y + margin, anchor.y);
   const roomBottom = Math.max(room.y + room.height - margin, anchorBottom);
@@ -43,8 +43,10 @@ export function menuOnTrigger(anchor: Rect, host: Rect, room: Rect, width: numbe
   const trailing = align ? align.trailing : anchor.x + anchor.width / 2 > room.x + room.width / 2;
   const inset = align ? align.inset : 0;
   const x = clamp(trailing ? anchor.x + anchor.width - inset - width : anchor.x + inset, roomLeft, roomRight - width);
-  const below = keepBelow ?? (anchor.y + height <= roomBottom || anchorBottom - height < roomTop);
-  const y = clamp(below ? anchor.y : anchorBottom - height, roomTop, roomBottom - height);
+  const belowTop = clearAnchor ? anchorBottom : anchor.y;
+  const aboveBottom = clearAnchor ? anchor.y : anchorBottom;
+  const below = keepBelow ?? (belowTop + height <= roomBottom || aboveBottom - height < roomTop);
+  const y = clamp(below ? belowTop : aboveBottom - height, roomTop, roomBottom - height);
   return { left: x - host.x, top: y - host.y, height, origin: `${trailing ? "right" : "left"} ${below ? "top" : "bottom"}` };
 }
 

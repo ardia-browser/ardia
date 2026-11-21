@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef } from "react";
 import { Pressable, View } from "react-native";
 import type { Tone, ToolbarUpdate } from "../../lib/pluginProtocol";
+import { toolbarBadgeText } from "../../lib/toolbarBadge";
 import { runPluginToolbarItem, type PluginToolbarEntry } from "../../state/plugins/actions";
 import { usePluginPopover, usePluginToolbarItems, usePluginWindowEligible } from "../../state/plugins/hooks";
 import { Badge, Button, Dot, Text, useTheme, useToolbarRowContext, type ColorRole } from "../ui";
@@ -85,8 +86,7 @@ function ToolbarItemButton({ windowId, item, palette }: { windowId: string; item
 function badgeOf(value: ToolbarUpdate["badge"], fill: string, ink: string) {
   if (value === undefined || value === null || value === false || value === "" || value === 0) return null;
   if (value === true) return <Dot size={TOOLBAR_ITEM.dot} color={fill} style={DOT_PLACE} />;
-  const text = typeof value === "number" && Math.abs(value) > 999 ? `${Math.sign(value) < 0 ? "-" : ""}999+` : String(value);
-  return <Badge text={text.slice(0, 4)} size="s" fill={fill} color={ink} style={BADGE_PLACE} />;
+  return <Badge text={toolbarBadgeText(value)} size="s" fill={fill} color={ink} style={BADGE_PLACE} />;
 }
 
 const ROW = { flexDirection: "row", alignItems: "center" } as const;

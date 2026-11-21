@@ -63,7 +63,7 @@ test("a row's Surface renders only when its own look changes, not when the row's
 test("a tab row reads nothing at mount that only a hover, a split or a press needs", () => {
   const row = src("./TabRow.tsx");
   const body = row.slice(row.indexOf("export const TabRow = memo"), row.indexOf("const AWAY_FRAME"));
-  assert.match(body, /tabPressView\(\{ windowId, tab, hitSlop: rowGapSlop\(0\), selected, press, inSplit: !!\(flags & IN_SPLIT\), plainTooltip, onPressChange: setPressed, children: \(/);
+  assert.match(body, /tabPressView\(\{ windowId, tab, hitSlop: rowGapSlop\(0\), selected, press, inSplit: !!\(flags & IN_SPLIT\), plainTooltip, onPressChange: pressChange, onClicked: clickToRename, children: \(/);
   assert.match(body, /const surface = useRowSurfaceLayer\(/);
   assert.doesNotMatch(body, /<SidebarRowSurface/);
   assert.doesNotMatch(body, /<TabPressArea|<PreviewFade|usePressScaleMotion/);

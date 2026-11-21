@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, linkSync, mkdirSync, rmSync, mkdtempSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+const MACHO = Buffer.concat([Buffer.from("cffaedfe0c000001", "hex"), Buffer.alloc(56)]);
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const tool = join(root, "scripts/release/official-plugins.py");
 const realPin = JSON.parse(readFileSync(join(root, "apps/browser/official-plugins.json"), "utf8"));
@@ -28,11 +29,11 @@ function tarball(dir, name, top, files, extra = () => {}) {
   execFileSync("tar", ["-czf", join(dir, name), "-C", work, top], { env: { ...process.env, COPYFILE_DISABLE: "1" } });
 }
 
-function scratch({ pluginVersion = "0.3.0", link = false } = {}) {
+function scratch({ pluginVersion = "0.3.0", link = false, programs = [{ name: "ardia", path: "bin/ardia" }], entitlements } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "ac-pin-"));
   const artifacts = join(dir, "artifacts");
   mkdirSync(artifacts);
-  tarball(artifacts, "cli-plugin-0.3.0-macos-arm64.tar.gz", "cli", { "plugin.json": JSON.stringify({ manifest: 1, name: "cli", version: pluginVersion, programs: [{ name: "ardia", path: "bin/ardia" }] }), "bin/ardia": "#!/bin/sh\necho ardia 0.3.0\n" }, link ? (top) => symlinkSync("/etc/passwd", join(top, "bin/evil")) : undefined);
+  tarball(artifacts, "cli-plugin-0.3.0-macos-arm64.tar.gz", "cli", { "plugin.json": JSON.stringify({ manifest: 1, name: "cli", version: pluginVersion, programs }), "bin/ardia": entitlements ? MACHO : "#!/bin/sh\necho ardia 0.3.0\n" }, link ? (top) => symlinkSync("/etc/passwd", join(top, "bin/evil")) : undefined);
   tarball(artifacts, "ardia-cli-0.3.0-linux-x64.tar.gz", "ardia-cli-0.3.0", { "bin/ardia": "#!/bin/sh\necho ardia 0.3.0\n", "python/README": "python" });
   writeFileSync(join(artifacts, "install.sh"), readFileSync(join(root, "apps/cli/install.sh")));
   const pin = join(dir, "pin.json");
@@ -46,6 +47,7 @@ function scratch({ pluginVersion = "0.3.0", link = false } = {}) {
       "linux-x64": { file: "ardia-cli-0.3.0-linux-x64.tar.gz", sha256: null },
       installer: { file: "install.sh", sha256: null },
     },
+    ...(entitlements && { entitlements }),
   });
   writeFileSync(pin, JSON.stringify(unpublished));
   return { dir, artifacts, pin };
@@ -137,4 +139,176 @@ test("the pin's own fields are checked: preselected, anchor aliases and a legacy
   assert.match(bad((p) => (p.reservedPrograms = ["ardia", "ardia"])), /reservedPrograms must be a list of distinct program names/);
   assert.match(bad((p) => (p.example = "")), /example must be a command/);
   assert.match(bad((p) => (p.reservedPrograms = [])), /legacyInstall.program ardia must be one of its reservedPrograms/);
+});
+
+const JIT = "com.apple.security.cs.allow-jit";
+const ARDIA_PROGRAM = [{ name: "ardia", path: "bin/ardia" }];
+
+function pinWith(entitlements) {
+  const dir = mkdtempSync(join(tmpdir(), "ac-pin-ents-"));
+  const pin = structuredClone(realPin);
+  pin.plugins[0].entitlements = entitlements;
+  writeFileSync(join(dir, "pin.json"), JSON.stringify(pin));
+  return join(dir, "pin.json");
+}
+
+function folderFor(plugin, manifest, files = { "bin/ardia": MACHO }) {
+  const folder = join(mkdtempSync(join(tmpdir(), "ac-pin-folder-")), plugin.name);
+  for (const [path, body] of Object.entries(files)) {
+    mkdirSync(join(folder, path, ".."), { recursive: true });
+    writeFileSync(join(folder, path), body);
+    chmodSync(join(folder, path), 0o755);
+  }
+  writeFileSync(join(folder, "plugin.json"), JSON.stringify({ manifest: 1, name: plugin.name, version: plugin.version, ...manifest }));
+  return folder;
+}
+
+test("a pinned plugin's declared program gets exactly the entitlements the pin lists", () => {
+  const { dir, artifacts, pin } = scratch({ programs: ARDIA_PROGRAM, entitlements: { "bin/ardia": [JIT] } });
+  run(["--pin", pin, "--from", artifacts, "pin", "cli", "0.3.0"]);
+  assert.deepEqual(JSON.parse(readFileSync(pin, "utf8")).plugins[0].entitlements, { "bin/ardia": [JIT] });
+  run(["--pin", pin, "--from", artifacts, "bundle", join(dir, "plugins")]);
+  assert.equal(run(["--pin", pin, "entitlements", "cli", join(dir, "plugins/cli")]), `bin/ardia\t${JIT}\n`);
+  assert.equal(run(["--pin", pin, "entitlements", "unpinned", join(dir, "plugins/cli")]), "");
+  assert.equal(run(["entitlements", "apple-passwords", join(dir, "plugins/cli")]), "");
+});
+
+test("the bundle is refused when the pin grants a path its plugin.json doesn't declare as a program", () => {
+  const { dir, artifacts, pin } = scratch({ programs: [{ name: "ardia", path: "bin/other" }], entitlements: { "bin/ardia": [JIT] } });
+  run(["--pin", pin, "--from", artifacts, "pin", "cli", "0.3.0"]);
+  assert.match(run(["--pin", pin, "--from", artifacts, "bundle", join(dir, "plugins")], { ok: false }), /lists no program at that path/);
+});
+
+test("any other entitlement, a malformed path or a non-list is refused by check", () => {
+  for (const [entitlements, message] of [
+    [{ "bin/ardia": ["com.apple.security.cs.disable-library-validation"] }, /must list some of com\.apple\.security\.cs\.allow-jit/],
+    [{ "bin/ardia": [JIT, JIT] }, /once each/],
+    [{ "bin/ardia": [] }, /must list some of/],
+    [{ "bin/ardia": JIT }, /must list some of/],
+    [{ "../ardia": [JIT] }, /must be a program path/],
+    [{ "/bin/ardia": [JIT] }, /must be a program path/],
+    [{ "bin/./ardia": [JIT] }, /must be a program path/],
+    [{ "bin//ardia": [JIT] }, /must be a program path/],
+    [{ "bin/ardia\n": [JIT] }, /must be a program path/],
+    [{ "lib/x.dylib": [JIT] }, /must be a program path/],
+    [{}, /must map program paths/],
+    [["bin/ardia"], /must map program paths/],
+  ]) {
+    assert.match(run(["--pin", pinWith(entitlements), "check"], { ok: false }), message, JSON.stringify(entitlements));
+  }
+});
+
+test("a granted program that's a link, a hard link, not executable or not declared is refused", () => {
+  const pin = pinWith({ "bin/ardia": [JIT] });
+  const cli = realPin.plugins[0];
+  assert.equal(run(["--pin", pin, "entitlements", "cli", folderFor(cli, { programs: ARDIA_PROGRAM })]), `bin/ardia\t${JIT}\n`);
+  assert.match(run(["--pin", pin, "entitlements", "cli", folderFor(cli, { programs: [{ name: "other", path: "bin/other" }] }, { "bin/other": MACHO })], { ok: false }), /lists no program at that path/);
+  assert.match(run(["--pin", pin, "entitlements", "cli", folderFor(cli, { programs: ARDIA_PROGRAM }, { "bin/ardia": "#!/bin/sh\n" })], { ok: false }), /isn't a Mach-O program/);
+  assert.match(run(["--pin", pin, "entitlements", "cli", folderFor({ ...cli, version: "9.9.9" }, { programs: ARDIA_PROGRAM })], { ok: false }), /isn't the pinned cli/);
+  const linked = folderFor(cli, { programs: ARDIA_PROGRAM }, { "real/ardia": MACHO });
+  mkdirSync(join(linked, "bin"));
+  symlinkSync("../real/ardia", join(linked, "bin/ardia"));
+  assert.match(run(["--pin", pin, "entitlements", "cli", linked], { ok: false }), /a link, another case, or missing/);
+  const linkedDir = folderFor(cli, { programs: ARDIA_PROGRAM }, { "real/ardia": MACHO });
+  symlinkSync("real", join(linkedDir, "bin"));
+  assert.match(run(["--pin", pin, "entitlements", "cli", linkedDir], { ok: false }), /a link, another case, or missing/);
+  const hard = folderFor(cli, { programs: ARDIA_PROGRAM });
+  linkSync(join(hard, "bin/ardia"), join(hard, "bin/twin"));
+  assert.match(run(["--pin", pin, "entitlements", "cli", hard], { ok: false }), /no other links/);
+  const plain = folderFor(cli, { programs: ARDIA_PROGRAM });
+  chmodSync(join(plain, "bin/ardia"), 0o644);
+  assert.match(run(["--pin", pin, "entitlements", "cli", plain], { ok: false }), /must be an executable/);
+  assert.match(run(["--pin", pin, "entitlements", "cli", join(plain, "missing")], { ok: false }), /has no plugin\.json/);
+  const otherCase = folderFor(cli, { programs: [{ name: "ardia", path: "bin/Ardia" }] });
+  assert.match(run(["--pin", pinWith({ "bin/Ardia": [JIT] }), "entitlements", "cli", otherCase], { ok: false }), /another case/);
+});
+
+test("a grant is refused whenever Ardia would refuse the plugin's programs", () => {
+  const pin = pinWith({ "bin/ardia": [JIT] });
+  const cli = realPin.plugins[0];
+  const ardia = { name: "ardia", path: "bin/ardia" };
+  for (const [programs, message] of [
+    [[{ path: "bin/ardia" }], /programs\[0\]\.name must be a plugin name/],
+    [[{ name: "Bad Name", path: "bin/ardia" }], /programs\[0\]\.name must be a plugin name/],
+    [[{ ...ardia, afterUpdate: 1 }], /programs\[0\]\.afterUpdate must be a list/],
+    [[{ ...ardia, afterUpdate: [[]] }], /programs\[0\]\.afterUpdate must be a list/],
+    [[{ ...ardia, afterUpdate: [["ok", ""]] }], /programs\[0\]\.afterUpdate must be a list/],
+    [[{ ...ardia, afterUpdate: [["a"], ["b"], ["c"], ["d"], ["e"]] }], /programs\[0\]\.afterUpdate must be a list/],
+    [[{ ...ardia, afterUpdate: [["x".repeat(1025)]] }], /programs\[0\]\.afterUpdate must be a list/],
+    [[ardia, { name: "ardia", path: "bin/other" }], /two programs named ardia/],
+    [[{ ...ardia, run: ["x"] }], /programs\[0\]\.run isn't a key/],
+    [[ardia, { name: "two", path: "a\\b" }], /programs\[1\]\.path must be a file/],
+    [[ardia, "bin/ardia"], /programs\[1\] must be an object/],
+    [[ardia, ...["b", "c", "d", "e"].map((n) => ({ name: n, path: `bin/${n}` }))], /programs must be a list of at most 4/],
+    [{ ardia }, /programs must be a list of at most 4/],
+  ]) {
+    assert.match(run(["--pin", pin, "entitlements", "cli", folderFor(cli, { programs })], { ok: false }), message, JSON.stringify(programs));
+  }
+  assert.equal(run(["--pin", pin, "entitlements", "cli", folderFor(cli, { programs: [{ ...ardia, afterUpdate: [["bin/ardia", "setup"]] }] })]), `bin/ardia\t${JIT}\n`);
+  const longUnicode = ["é".repeat(100)].concat(Array(5).fill("é".repeat(100))).join("/");
+  assert.equal(run(["--pin", pin, "entitlements", "cli", folderFor(cli, { programs: [ardia, { name: "other", path: longUnicode }] })]), `bin/ardia\t${JIT}\n`);
+  assert.match(run(["--pin", pin, "entitlements", "cli", folderFor(cli, { programs: [ardia, { name: "other", path: "é".repeat(1025) }] })], { ok: false }), /programs\[1\]\.path must be a file/);
+  for (const manifest of [true, "1", 3, -1, 1.5, null]) {
+    assert.match(run(["--pin", pin, "entitlements", "cli", folderFor(cli, { manifest, programs: [ardia] })], { ok: false }), /which Ardia refuses/, String(manifest));
+  }
+  for (const body of ['"manifest": 1.0', '"manifest": 1e0', '"manifest": 0']) {
+    const folder = folderFor(cli, { programs: [ardia] });
+    writeFileSync(join(folder, "plugin.json"), `{${body}, "name": "cli", "version": "${cli.version}", "programs": [{"name": "ardia", "path": "bin/ardia"}]}`);
+    assert.equal(run(["--pin", pin, "entitlements", "cli", folder]), `bin/ardia\t${JIT}\n`, body);
+  }
+  const v2 = (contributes, extra = {}) => folderFor(cli, { manifest: 2, contributes, ...extra });
+  assert.equal(run(["--pin", pin, "entitlements", "cli", v2({ programs: [{ ...ardia, claim: true, example: "ardia browse" }] })]), `bin/ardia\t${JIT}\n`);
+  for (const [folder, message] of [
+    [folderFor(cli, { manifest: 2, programs: [ardia] }), /programs isn't a key of a plugin/],
+    [v2({ programs: [ardia] }, { programs: [ardia] }), /programs isn't a key of a plugin/],
+    [v2([]), /contributes must be an object/],
+    [v2({ programs: [{ name: "other", path: "bin/other" }] }), /lists no program at that path/],
+    [v2({ programs: [{ ...ardia, claim: "yes" }] }), /claim must be true or false/],
+    [v2({ programs: [{ ...ardia, example: "" }] }), /example must be text/],
+    [v2({ programs: [{ ...ardia, example: "\ufeff " }] }), /example must be text/],
+    [v2({ programs: [{ ...ardia, example: "x".repeat(121) }] }), /example must be text/],
+    [v2({ programs: [{ ...ardia, example: "ardia \u202e" }] }), /example must be text/],
+    [folderFor(cli, { programs: [{ ...ardia, claim: true }] }), /claim needs manifest 2/],
+    [folderFor(cli, { programs: [{ ...ardia, example: "ardia" }] }), /example needs manifest 2/],
+    [folderFor(cli, { manifest: 1, main: "main.js", programs: [ardia] }), /programs isn't a key of a plugin/],
+  ]) {
+    assert.match(run(["--pin", pin, "entitlements", "cli", folder], { ok: false }), message, String(message));
+  }
+  assert.equal(run(["--pin", pin, "entitlements", "cli", folderFor(cli, { programs: [{ ...ardia, claim: false }] })]), `bin/ardia\t${JIT}\n`);
+  const unmanifested = folderFor(cli, { programs: [ardia] });
+  writeFileSync(join(unmanifested, "plugin.json"), JSON.stringify({ name: "cli", version: cli.version, programs: [ardia] }));
+  assert.equal(run(["--pin", pin, "entitlements", "cli", unmanifested]), `bin/ardia\t${JIT}\n`);
+});
+
+test("machos lists every Mach-O by its magic, whatever its name or mode, and nothing else", () => {
+  const folder = mkdtempSync(join(tmpdir(), "ac-pin-machos-"));
+  const fat = (order, count) => { const b = Buffer.alloc(64); b.write(order === "big" ? "cafebabe" : "bebafeca", 0, "hex"); order === "big" ? b.writeUInt32BE(count, 4) : b.writeUInt32LE(count, 4); return b; };
+  const files = {
+    "bin/thin64": [Buffer.from("cffaedfe", "hex"), 0o755],
+    "lib/data-0644-fat": [fat("big", 2), 0o644],
+    "lib/swapped-fat": [fat("little", 2), 0o600],
+    "lib/thin32": [Buffer.from("cefaedfe", "hex"), 0o644],
+    "lib/thin32-be": [Buffer.from("feedface", "hex"), 0o644],
+    "lib/thin64-be": [Buffer.from("feedfacf", "hex"), 0o644],
+    "lib/fat64": [Buffer.concat([Buffer.from("cafebabf00000002", "hex"), Buffer.alloc(8)]), 0o644],
+    "lib/empty-fat": [fat("big", 0), 0o644],
+    "bin/script": [Buffer.from("#!/bin/sh\n"), 0o755],
+    "short": [Buffer.from("cffa", "hex"), 0o644],
+  };
+  for (const [path, [body, mode]] of Object.entries(files)) {
+    mkdirSync(join(folder, path, ".."), { recursive: true });
+    writeFileSync(join(folder, path), body);
+    chmodSync(join(folder, path), mode);
+  }
+  symlinkSync("thin64", join(folder, "bin/link-to-macho"));
+  const listed = run(["machos", folder]).split("\0").filter(Boolean).map((p) => p.slice(folder.length + 1));
+  assert.deepEqual(listed, ["bin/thin64", "lib/data-0644-fat", "lib/fat64", "lib/swapped-fat", "lib/thin32", "lib/thin32-be", "lib/thin64-be"]);
+  writeFileSync(join(folder, "lib/fat31"), fat("big", 31));
+  assert.match(run(["machos", folder], { ok: false }), /claiming 31 architectures/);
+  rmSync(join(folder, "lib/fat31"));
+  writeFileSync(join(folder, "lib/Java.class"), Buffer.concat([Buffer.from("cafebabe00000037", "hex"), Buffer.alloc(8)]));
+  assert.match(run(["machos", folder], { ok: false }), /claiming 55 architectures \(or a Java class file\)/);
+  assert.match(run(["machos", join(folder, "missing")], { ok: false }), /isn't a folder/);
+  symlinkSync(folder, `${folder}-link`);
+  assert.match(run(["machos", `${folder}-link/`], { ok: false }), /isn't a folder/);
 });

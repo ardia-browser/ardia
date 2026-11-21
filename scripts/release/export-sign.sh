@@ -40,12 +40,22 @@ for folder in "$dist"/plugins/*/; do
   name="$(basename "$folder")"
   [ -f "$folder/plugin.json" ] || continue
   ditto --norsrc --noextattr "$folder" "$bundled/$name"
+  granted="$(python3 -I "$root/scripts/release/official-plugins.py" entitlements "$name" "$bundled/$name")" \
+    || die "the pin's entitlements for the $name plugin don't match its folder"
   find "$bundled/$name" -type f \( -name '*.so' -o -name '*.dylib' \) -print0 | while IFS= read -r -d '' lib; do
     sign_as "$identity" --options runtime "$lib"
   done
-  find "$bundled/$name" -type f -perm -u+x ! -name '*.so' ! -name '*.dylib' -print0 | while IFS= read -r -d '' exe; do
-    if file -b "$exe" | grep -q '^Mach-O'; then sign_as "$identity" --options runtime "$exe"; fi
-  done
+  trap 'rm -f "$dist/plugin-machos" "$dist/program.entitlements"' EXIT
+  python3 -I "$root/scripts/release/official-plugins.py" machos "$bundled/$name" > "$dist/plugin-machos" \
+    || die "couldn't list the $name plugin's Mach-O files"
+  while IFS= read -r -d '' exe; do
+    case "$exe" in *.so | *.dylib) continue ;; esac
+    keys="$(program="${exe#"$bundled/$name/"}" awk -F '\t' '$1 "" == ENVIRON["program"] "" { print $2 }' <<<"$granted")"
+    if [ -z "$keys" ]; then sign_as "$identity" --options runtime "$exe"; continue; fi
+    printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict>%s</dict></plist>\n' \
+      "$(printf '<key>%s</key><true/>' $keys)" > "$dist/program.entitlements"
+    sign_as "$identity" --options runtime --entitlements "$dist/program.entitlements" "$exe"
+  done < "$dist/plugin-machos"
   /usr/libexec/PlistBuddy -c "Add :ArdiaBuiltInPlugins:$name string $("$root/scripts/release/plugin-digest.py" "$bundled/$name")" "$plist"
 done
 registry="$(python3 -I "$root/scripts/release/official-plugins.py" registry "$bundled")" || die "the bundled plugins' program registry couldn't be made"

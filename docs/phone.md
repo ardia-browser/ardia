@@ -3975,8 +3975,7 @@ the iPhone reads its files.
   folder picker and keeps a security-scoped bookmark. Picking iCloud Drive itself works too: the app looks for Ardia
   Sync (or Netnyahoo Sync) inside it. Reads and writes go through `NSFileCoordinator`, which makes iCloud bring files
   down; dataless files are reported as pending, as on the Mac.
-- **Joining.** In Ardia on the Mac, open Settings › General › Sync and click Turn On if needed. Choose Connect Another
-  Device…, then Show Code for the QR code or Show Words for the 24-word recovery phrase. The iPhone scans the code
+- **Joining.** The Mac's Settings › General › Sync › Connect Another Device shows a QR code of the phrase. The iPhone scans it
   (or takes the 24 words typed or pasted), checks the checksum, and checks that the folder holds that phrase's chain
   before saving anything. Its errors are the Mac's. A different phrase entered after a failure clears the old error
   and, with a folder already chosen, tries again at once (`SyncConnectFlow`); the same words retyped don't.

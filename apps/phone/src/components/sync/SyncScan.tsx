@@ -3,7 +3,7 @@ import { ActivityIndicator, BackHandler, Pressable, StyleSheet, Text, View } fro
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { cameraErrorAccess, makeScanJudge, openCameraSettings, prepareCamera, type CameraAccess } from "../../state/sync/scan";
 import { haptics } from "../../state/app/haptics";
-import { MAC_HINT, MAC_WORDS_HINT, SCAN_REJECTED } from "../../state/sync/syncRules";
+import { MAC_HINT, SCAN_REJECTED } from "../../state/sync/syncRules";
 import { copy } from "../../lib/platformCopy";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import Svg, { Path } from "react-native-svg";
@@ -90,7 +90,7 @@ export function SyncScan({ onScan, onEnterWords, onCancel, inline = false }: Pro
           <Unavailable
             icon="qrcodeViewfinder"
             title={copy().cantScanTitle}
-            message={MAC_WORDS_HINT}
+            message="Type the 24 words of your recovery phrase instead. Your Mac shows them under Connect Another Device."
             onEnterWords={onEnterWords}
           />
         ) : null}

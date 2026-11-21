@@ -108,6 +108,14 @@ away, a drag DevTools input started that no session took, and a drag macOS refus
 instance with `--test nativeDragRefused`, so no macOS drag session, which would follow the owner's pointer, is ever begun;
 never drag from a page with the harness's real mouse events in an instance without that key.
 
+`node packages/ardiacore/scripts/fingerprint-check.mjs <app> [scratch dir]` checks what a page reads about the hardware
+(`chromium-helium-noise-common-hardware.patch`, `chromium-device-memory-cap.patch`): on two sites, in a page, an iframe
+a worker, a detached frame and an `about:blank` frame, `navigator.hardwareConcurrency` is the common value for this Mac's cores, `navigator.deviceMemory` and the
+Device-Memory client hint stop at 8, and WebGL's `UNMASKED_RENDERER_WEBGL` names the common chip of this Mac's GPU
+generation. It reads pages over DevTools only, so it runs on any build, a Release copy included; on 0.2.47 it fails 8 of
+its 10 checks on an 18-core M5 Pro. The chip it expects comes from the GPU's name (`system_profiler`), as the
+engine's does, so a virtual Mac's GPU is expected under its real name.
+
 ## Test instances
 
 Launch with `scripts/agent/ac launch <app> --data <dir> [--instance K=V] [--test K[=V]] [--trace AREA] [--switch S]…`

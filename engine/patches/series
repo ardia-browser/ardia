@@ -62,6 +62,8 @@ chromium chromium-helium-rlz-for-cdm-storage-id.patch
 chromium chromium-helium-ntp-third-party.patch
 chromium chromium-helium-context-menu-cast.patch
 chromium chromium-helium-devtools-inspect-shortcut.patch
+chromium chromium-helium-noise-common-hardware.patch
+chromium chromium-device-memory-cap.patch
 chromium chromium-neterror-game.patch
 chromium chromium-branding.patch
 # Load-bearing for every user's data: the Safe Storage item ("Ardia Safe Storage" / "Ardia") holds the key to

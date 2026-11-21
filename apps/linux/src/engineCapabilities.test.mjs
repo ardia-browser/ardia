@@ -19,6 +19,7 @@ const ENGINE = {
   system: listed("ac_linux_desktop_core.h", "kSystemCapabilities"),
   openUrls: listed("ac_linux_open_urls.h", "kOpenUrlCapabilities"),
   windowCommands: listed("ac_linux_window_commands.h", "kWindowCommandCapabilities"),
+  windowState: listed("ac_linux_window_state.h", "kWindowStateCapabilities"),
   notifications: listed("ac_linux_notifications_core.h", "kNotificationCapabilities"),
   hardware: listed("ac_linux_hardware.h", "kHardwareCapabilities"),
   linkTabs: listed("ac_linux_link_tabs.h", "kLinuxLinkTabRoutes"),
@@ -73,6 +74,7 @@ test("the engine advertises the names the shell gates on, spelled the same", () 
   assert.deepEqual(ENGINE.system, ["ArdiaSystem.isDefaultBrowser", "ArdiaSystem.setAsDefaultBrowser", "ArdiaSystem.launchAtLoginStatus", "ArdiaSystem.setLaunchAtLogin", "ArdiaApp.openExternalURL"]);
   assert.deepEqual(ENGINE.openUrls, ["ArdiaShell.onOpenURLs", "ArdiaShell.listenForOpenURLs"]);
   assert.deepEqual(ENGINE.windowCommands, ["ArdiaShell.toggleFullScreen", "tab.edit", "ArdiaShell.readText"]);
+  assert.deepEqual(ENGINE.windowState, ["ArdiaShell.windowButtonLayout", "ArdiaShell.windowState"]);
   assert.deepEqual(ENGINE.notifications, ["ArdiaApp.notificationPermission", "ArdiaApp.requestNotificationPermission", "ArdiaApp.postNotification", "ArdiaApp.removeNotifications"]);
   assert.deepEqual(ENGINE.hardware, ["ArdiaApp.hardwareInfo", "ArdiaSystem.setThinScrollBars", "ArdiaShell.setAppearance"]);
   assert.deepEqual(ENGINE.linkTabs, ["webView.setPeekOtherSiteTabs", "webView.setLittleArdiaOpensNewTabLinks"]);
@@ -162,6 +164,34 @@ test("the two event-only capabilities need no gate: the engine's events reach th
   deliverPageEvent({ onCommand: (event) => commands.push(event) }, { name: "command", data: { command: "escape", text: "" } });
   assert.equal(commands.length, 1);
   assert.equal(commands[0].command, "escape");
+});
+
+test("the window-button layout and window state reach the engine as calls and come back as ArdiaShell events", async () => {
+  for (const [method, args] of [["windowButtonLayout", []], ["windowState", ["main"]]]) {
+    const resolved = resolveHostModule(host, "ArdiaShell", method);
+    assert.ok(reachesNativeHostUnchecked(resolved), `ArdiaShell.${method} is not answered locally`);
+    await resolved(...args);
+    assert.deepEqual(invoked.at(-1), [`ArdiaShell.${method}`, { args }]);
+  }
+  const layouts = [];
+  const states = [];
+  const shell = shim.requireNativeModule("ArdiaShell");
+  const layoutSubscription = shell.addListener("windowButtonLayout", (event) => layouts.push(event));
+  const stateSubscription = shell.addListener("windowState", (event) => states.push(event));
+  const layout = { layout: "appmenu:close", desktop: "ubuntu:GNOME" };
+  const state = { windowId: "main", maximized: false, tiled: true, fullScreen: false };
+  for (const listener of hostListeners) {
+    listener("ArdiaShell", "windowButtonLayout", layout);
+    listener("ArdiaShell", "windowState", state);
+  }
+  layoutSubscription.remove();
+  stateSubscription.remove();
+  assert.deepEqual(layouts, [layout]);
+  assert.deepEqual(states, [state]);
+  const nativeHost = nativeSource("ac_linux_host.cc");
+  assert.match(nativeHost, /\.Set\("layout", layout && linux_window_state::ReportableButtonLayout\(\*layout\) \? base::Value\(\*layout\) : base::Value\(\)\)\s*\.Set\("desktop", CurrentDesktop\(\)\)/);
+  for (const key of ["maximized", "tiled", "fullScreen"]) assert.ok(nativeHost.includes(`.Set("${key}", state.`), `windowState carries ${key}`);
+  assert.ok(nativeHost.includes('base::Value(WindowStateValue(state).Set("windowId", window_id_))'), "the windowState event names its window");
 });
 
 test("an event only the Linux engine sends is declared apart from the Mac's, and the Linux engine does send it", () => {

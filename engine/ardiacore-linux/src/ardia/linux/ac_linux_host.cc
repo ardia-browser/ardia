@@ -99,6 +99,7 @@
 #include "ardia/linux/ac_linux_site_controls_service.h"
 #include "ardia/linux/ac_linux_window_caption.h"
 #include "ardia/linux/ac_linux_window_commands.h"
+#include "ardia/linux/ac_linux_window_state.h"
 #include "ardia/linux/ac_linux_window_lifecycle.h"
 #include "ardia/linux/ac_linux_favicons.h"
 #include "ardia/linux/ac_linux_page_status.h"
@@ -261,6 +262,8 @@
 #include "ui/gfx/geometry/rounded_corners_f.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/codec/png_codec.h"
+#include "ui/linux/linux_ui.h"
+#include "ui/linux/window_button_order_observer.h"
 #include "ui/events/base_event_utils.h"
 #include "ui/events/event_constants.h"
 #include "ui/events/event.h"
@@ -320,6 +323,7 @@ extern bool (*g_ardia_linux_automation_window)(const BrowserWindowInterface*);
 extern int (*g_ardia_linux_window_tab_count)(const BrowserWindowInterface*);
 extern bool (*g_ardia_linux_frameless_app)(const std::string& app_name);
 extern bool (*g_ardia_linux_shell_passes_point)(gfx::NativeView child, const gfx::Point& location);
+extern void (*g_ardia_linux_tiled_edges_changed)(views::Widget* widget);
 
 namespace ardia {
 namespace {
@@ -1428,6 +1432,8 @@ class ShellHostView : public views::View,
     ardiacore::FetchLinuxFavicon(profile, url, std::move(reply));
   }
   bool WindowFullScreen() const;
+  linux_window_state::WindowState NativeWindowState() const;
+  void ScheduleWindowStateReport();
   PrefService* WindowOutputPrefs() const;
   void RememberWindowOutput();
   void ForgetWindowOutput();
@@ -1685,6 +1691,7 @@ class ShellHostView : public views::View,
                                    const gfx::PresentationFeedback& feedback) override;
   void OnCompositingShuttingDown(ui::Compositor* compositor) override { presentation_observation_.Reset(); }
   void ReportWindowGeometry();
+  void ReportWindowState();
   void LayoutOverlay();
   void RoundUtilityCorners();
   void HideCaptionButtons();
@@ -1798,6 +1805,8 @@ class ShellHostView : public views::View,
   bool requested_ = false;
   linux_window::GeometryLedger geometry_{GlobalScreenCoordinates()};
   base::OneShotTimer frame_timer_;
+  std::optional<linux_window_state::WindowState> reported_window_state_;
+  bool window_state_report_pending_ = false;
   std::unique_ptr<linux_window::TypeaheadInput> typeahead_;
   std::optional<std::string> output_target_;
   bool output_forgotten_ = false;
@@ -3290,6 +3299,7 @@ base::DictValue ShellHostView::Bootstrap() const {
     for (const char* capability : ardia::linux_open_urls::kOpenUrlCapabilities) capabilities.Append(capability);
   }
   for (const char* capability : ardia::linux_commands::kWindowCommandCapabilities) capabilities.Append(capability);
+  for (const char* capability : ardia::linux_window_state::kWindowStateCapabilities) capabilities.Append(capability);
   for (const char* capability : ardiacore::linux_capture::kCaptureCapabilities) capabilities.Append(capability);
   for (const char* capability : ardiacore::linux_cast::kCastCapabilities) capabilities.Append(capability);
   for (const char* capability : ardiacore::linux_automation_window::kCapabilities) capabilities.Append(capability);
@@ -4501,6 +4511,7 @@ void ShellHostView::OnWidgetActivationChanged(views::Widget*, bool active) {
 }
 
 void ShellHostView::OnWidgetBoundsChanged(views::Widget*, const gfx::Rect&) {
+  ScheduleWindowStateReport();
   if (is_utility()) return;
   frame_timer_.Start(FROM_HERE, base::Milliseconds(250),
                      base::BindOnce(&ShellHostView::ReportWindowGeometry, base::Unretained(this)));
@@ -4553,6 +4564,7 @@ void ShellHostView::OnWidgetVisibilityChanged(views::Widget*, bool visible) {
 }
 
 void ShellHostView::OnWidgetShowStateChanged(views::Widget* widget) {
+  ScheduleWindowStateReport();
   ReportWindowGeometry();
   if (widget && WindowFullScreen() && !window_id_.empty()) {
     FullScreenRestorer().Entered(window_id_);
@@ -4569,6 +4581,72 @@ bool ShellHostView::WindowFullScreen() const {
       widget->IsFullscreen(), controller && controller->IsWindowFullscreenForTabOrPending(),
       controller && controller->IsFullscreenCausedByTab());
 }
+
+base::DictValue WindowStateValue(const linux_window_state::WindowState& state) {
+  return base::DictValue()
+      .Set("maximized", state.maximized)
+      .Set("tiled", state.tiled)
+      .Set("fullScreen", state.full_screen);
+}
+
+linux_window_state::WindowState ShellHostView::NativeWindowState() const {
+  const views::Widget* widget = GetWidget();
+  if (!widget) return {};
+  linux_window_state::TiledEdges edges;
+  if (browser_view_ && browser_view_->browser_widget()) {
+    const ui::WindowTiledEdges& tiled = browser_view_->browser_widget()->tiled_edges();
+    edges = {.left = tiled.left, .right = tiled.right, .top = tiled.top, .bottom = tiled.bottom};
+  }
+  return linux_window_state::StateOf(widget->IsMaximized(), widget->IsFullscreen(), edges, !GlobalScreenCoordinates());
+}
+
+void ShellHostView::ScheduleWindowStateReport() {
+  if (std::exchange(window_state_report_pending_, true)) return;
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(&ShellHostView::ReportWindowState, GetWeakPtr()));
+}
+
+void ShellHostView::ReportWindowState() {
+  window_state_report_pending_ = false;
+  if (window_id_.empty() || !GetWidget()) return;
+  const linux_window_state::WindowState state = NativeWindowState();
+  if (reported_window_state_ == state) return;
+  reported_window_state_ = state;
+  Event("ArdiaShell", linux_window_state::kWindowStateEvent,
+        base::Value(WindowStateValue(state).Set("windowId", window_id_)));
+}
+
+std::string CurrentDesktop() {
+  const std::optional<std::string> desktop = base::Environment::Create()->GetVar("XDG_CURRENT_DESKTOP");
+  return desktop && linux_window_state::ReportableButtonLayout(*desktop) ? *desktop : std::string();
+}
+
+base::Value WindowButtonLayoutValue() {
+  const ui::LinuxUi* linux_ui = ui::LinuxUi::instance();
+  const std::optional<std::string> layout = linux_ui ? linux_ui->GetWindowButtonLayout() : std::nullopt;
+  return base::Value(base::DictValue()
+      .Set("layout", layout && linux_window_state::ReportableButtonLayout(*layout) ? base::Value(*layout) : base::Value())
+      .Set("desktop", CurrentDesktop()));
+}
+
+class WindowButtonLayoutWatch : public ui::WindowButtonOrderObserver {
+ public:
+  WindowButtonLayoutWatch() : reported_(WindowButtonLayoutValue()) {
+    if (ui::LinuxUi* linux_ui = ui::LinuxUi::instance()) observation_.Observe(linux_ui);
+  }
+  void OnWindowButtonOrderingChange() override {
+    base::Value layout = WindowButtonLayoutValue();
+    if (layout == reported_) return;
+    reported_ = layout.Clone();
+    for (const auto& [id, host] : Hosts()) {
+      host->Event("ArdiaShell", linux_window_state::kWindowButtonLayoutEvent, layout.Clone());
+    }
+  }
+
+ private:
+  base::Value reported_;
+  base::ScopedObservation<ui::LinuxUi, ui::WindowButtonOrderObserver> observation_{this};
+};
 
 void ShellHostView::ReportWindowGeometry() {
   views::Widget* widget = GetWidget();
@@ -7242,6 +7320,9 @@ void ShellHostView::Invoke(
     }
     return std::move(done).Run(true, base::Value());
   }
+  if (method == linux_window_state::kWindowButtonLayoutCall) {
+    return std::move(done).Run(true, WindowButtonLayoutValue());
+  }
   if (method == "ArdiaShell.windowIds") {
     base::ListValue ids;
     for (const auto& [id, host] : Hosts()) {
@@ -7255,7 +7336,7 @@ void ShellHostView::Invoke(
     return std::move(done).Run(true, base::Value(handled));
   }
   if (method == "ArdiaShell.windowFrame" || method == "ArdiaShell.closeWindow" ||
-      method == "ArdiaShell.minimizeWindow" ||
+      method == "ArdiaShell.minimizeWindow" || method == linux_window_state::kWindowStateCall ||
       method == "ArdiaShell.toggleMaximizeWindow" ||
       method == ardia::linux_commands::kToggleFullScreenCall ||
       method == "ArdiaShell.focusWindow" || method == "ArdiaShell.utilityReady" ||
@@ -7285,6 +7366,9 @@ void ShellHostView::Invoke(
     }
     if (method == "ArdiaShell.windowFrame") {
       return std::move(done).Run(true, base::Value(SharedFrameValue(target->browser()->GetWindow()->GetBounds())));
+    }
+    if (method == linux_window_state::kWindowStateCall) {
+      return std::move(done).Run(true, base::Value(WindowStateValue(target->NativeWindowState())));
     }
     if (method == "ArdiaShell.setWindowTitle") {
       target->browser()->GetWindow()->GetNativeWindow()->SetTitle(
@@ -8208,6 +8292,12 @@ void StartLinuxHost() {
       if (auto* status = host->PageStatus(contents)) return status->TargetURL(url, host->PointerFromPageBottom(contents));
     }
     return false;
+  };
+  static base::NoDestructor<WindowButtonLayoutWatch> window_button_layout_watch;
+  g_ardia_linux_tiled_edges_changed = [](views::Widget* widget) {
+    for (const auto& [id, host] : Hosts()) {
+      if (host->GetWidget() == widget) host->ScheduleWindowStateReport();
+    }
   };
   g_ardia_linux_minimum_size = [](const BrowserWindowInterface* browser, gfx::Size* minimum) {
     if (!browser || !minimum) return;

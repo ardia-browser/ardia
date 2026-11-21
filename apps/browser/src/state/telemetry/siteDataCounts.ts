@@ -22,6 +22,7 @@ const none = () => ({
   site_data_untrusted_drops: 0,
   site_data_clear_wait_timeouts: 0,
   site_data_sites_unresolved: 0,
+  site_data_storage_over_quota: 0,
 });
 
 let tally = none();
@@ -65,6 +66,10 @@ const SKIP_FIELDS = {
   clearWaitTimeout: "site_data_clear_wait_timeouts",
   siteUnresolved: "site_data_sites_unresolved",
 } as const;
+
+export function noteSiteDataOverQuota(keys: number, consent: ConsentToken | null) {
+  if (keys > 0) counted(consent, () => void (tally.site_data_storage_over_quota += keys));
+}
 
 export function noteSiteDataSkip(reason: keyof typeof SKIP_FIELDS, consent: ConsentToken | null) {
   counted(consent, () => void tally[SKIP_FIELDS[reason]]++);

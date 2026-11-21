@@ -22,7 +22,7 @@ import { learnRegistrableDomains } from "./siteDataDomains";
 import { readChromium, readChromiumStorageWithoutPage, writeChromium, writeChromiumStorageWithoutPage, writeWebKit } from "./siteDataChromium";
 import { capBases, noteOrigin, needsCarry, profileOf, siteEntry, sourceIsNewer, touch } from "./siteDataLedger";
 import { book, clearCount, clearsSettled, commitCount, committedSince, hostOf, inCommitLane, noteCommit, pushTimers, saveNow, saveSoon } from "./siteDataState";
-import { noteSiteDataCarry, noteSiteDataSkip, type SiteDataCarry } from "../telemetry/siteDataCounts";
+import { noteSiteDataCarry, noteSiteDataOverQuota, noteSiteDataSkip, type SiteDataCarry } from "../telemetry/siteDataCounts";
 import type { ConsentToken } from "../telemetry/client";
 
 const WEBKIT_PURGE_WINDOW_MS = 7 * 24 * 60 * 60_000;
@@ -193,6 +193,7 @@ async function commitCarry(profile: string, site: string, to: PageEngine, { entr
   }
   if (writing) noteCommit(profile, domains, origins);
   if (clearCount(profile) !== cleared) return NOTHING;
+  noteSiteDataOverQuota(written.overQuota ?? 0, consent);
   const cookiesLanded = written.cookies >= putCookies.length && written.removed >= dropCookies.length;
   const bases = profileOf(book(), profile);
   for (const k of Object.keys(cookieBase)) delete bases.cookies[k];
@@ -246,8 +247,9 @@ async function storageWithoutChromiumPage(
   if (!merges.length || !stillCurrent()) return { ...NO_ENGINE_STORAGE, available };
   if (held) noteSiteDataSkip("untrustedDrops", consent);
   const writing = Object.keys(storage).length > 0;
-  const written = writing ? await writeChromiumStorageWithoutPage(profile, storage, stillCurrent) : { storage: 0, landed: new Set<string>() };
+  const written = writing ? await writeChromiumStorageWithoutPage(profile, storage, stillCurrent) : { storage: 0, landed: new Set<string>(), overQuota: 0 };
   if (writing) noteCommit(profile, [], Object.keys(storage));
+  noteSiteDataOverQuota(written.overQuota, consent);
   if (clearCount(profile) !== cleared) return { ...NO_ENGINE_STORAGE, available };
   const bases = profileOf(book(), profile);
   for (const { origin: o, before, merged } of merges) bases.storage[o] = settledBase(before, merged.base, [...merged.put, ...merged.drop], !storage[o] || written.landed.has(o));

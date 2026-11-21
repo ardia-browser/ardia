@@ -293,6 +293,40 @@ test("with no Chromium page open, WebKit's saved data reaches Chromium through t
   assert.ok(exported.length > 0, "the cookie still goes through the engine's cookie import");
 });
 
+test("a carry never sends Chromium a write past the origin's storage quota, so the value already there stays", async () => {
+  const { tabId } = setup();
+  S().updateTab(tabId, { engine: "webkit" });
+  const MiB = 1024 * 1024;
+  const kept = "k".repeat(6 * MiB);
+  webKit.storage[ORIGIN] = [["kept", kept], ["huge", "h".repeat(5 * MiB)], ["small", "s"]];
+  const chromiumStore = { [ORIGIN]: [["kept", kept]] };
+  const calls = [];
+  const profiles = [];
+  const sites = stub.ardiaCoreNativeModules.ArdiaSites;
+  await withSites(
+    {
+      readStorage: ({ origin }) => (calls.push({ op: "read" }), { items: chromiumStore[origin] ?? [] }),
+      writeStorage: ({ origin, set, remove }) => {
+        calls.push({ op: "write", keys: set.map(([k]) => k), remove });
+        const used = (chromiumStore[origin] ?? []).reduce((n, [k, v]) => n + 2 + k.length + v.length, 0);
+        if (set.some(([k, v]) => used + 2 + k.length + v.length > 10 * MiB)) return Promise.reject(new Error("refused for quota"));
+        chromiumStore[origin] = [...(chromiumStore[origin] ?? []).filter(([k]) => !remove.includes(k) && !set.some(([n]) => n === k)), ...set];
+        return { written: set.length + remove.length };
+      },
+    },
+    () => {
+      const handled = sites.call;
+      sites.call = (verb, profile, json) => (profiles.push(profile), handled(verb, profile, json));
+      return carrySignIn(tabId, `${ORIGIN}/home`, "chromium", null).finally(() => (sites.call = handled));
+    },
+  );
+  const writes = calls.filter((c) => c.op === "write");
+  assert.deepEqual(writes.map((w) => w.keys), [["small"]], "only what fits is sent");
+  assert.ok(profiles.length > 0 && profiles.every((p) => p === ""), "the default profile is the engine's empty name, never \"default\"");
+  assert.equal(Object.fromEntries(chromiumStore[ORIGIN]).kept, kept);
+  assert.equal(Object.fromEntries(chromiumStore[ORIGIN]).huge, undefined);
+});
+
 test("a page-free storage carry larger than one engine write goes in batches the engine takes", async () => {
   const { tabId } = setup();
   S().updateTab(tabId, { engine: "webkit" });

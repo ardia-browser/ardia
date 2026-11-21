@@ -144,6 +144,8 @@ BOOL WindowServerShows(NSWindow *window) {
   NSArray<NSDictionary *> *above = CFBridgingRelease(CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenAboveWindow | kCGWindowListOptionIncludingWindow, number));
   CGRect mine = CGRectNull;
   std::vector<ardia_window_sight::Rect> covers;
+  const pid_t minePid = getpid();
+  NSMutableDictionary<NSNumber *, NSNumber *> *regularPids = [NSMutableDictionary dictionary];
   for (NSDictionary *info in above) {
     CGRect bounds;
     if (!CGRectMakeWithDictionaryRepresentation((__bridge CFDictionaryRef)info[(id)kCGWindowBounds], &bounds)) continue;
@@ -152,7 +154,15 @@ BOOL WindowServerShows(NSWindow *window) {
       mine = bounds;
       continue;
     }
-    if (!ardia_window_sight::CountsAsCover([info[(id)kCGWindowLayer] intValue], [info[(id)kCGWindowAlpha] doubleValue])) continue;
+    const pid_t pid = [info[(id)kCGWindowOwnerPID] intValue];
+    const BOOL own = pid == minePid;
+    NSNumber *regular = regularPids[@(pid)];
+    if (!regular) {
+      NSRunningApplication *owner = [NSRunningApplication runningApplicationWithProcessIdentifier:pid];
+      regular = @(owner != nil && owner.activationPolicy == NSApplicationActivationPolicyRegular);
+      regularPids[@(pid)] = regular;
+    }
+    if (!ardia_window_sight::CountsAsCover([info[(id)kCGWindowLayer] intValue], [info[(id)kCGWindowAlpha] doubleValue], own || regular.boolValue)) continue;
     covers.push_back(SightRect(bounds));
   }
   if (CGRectIsNull(mine)) return NO;

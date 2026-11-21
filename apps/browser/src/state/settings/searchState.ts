@@ -49,12 +49,14 @@ export function setSettingsQuery(query: string) {
   useSettingsSearch.setState({ query, selected: 0, keyboardMove: 0, ...(query.trim() ? {} : { previewing: false }) });
 }
 
-export function dropSettingsSearch(consent: ConsentToken | null) {
-  if (useSettingsSearch.getState().query.trim()) noteSettingsSearch("dropped", consent);
+export function dropSettingsSearch(consent: ConsentToken | null, why: "dropped" | "closed" = "dropped") {
+  if (useSettingsSearch.getState().query.trim()) noteSettingsSearch(why, consent);
   useSettingsSearch.setState({ query: "", selected: 0, keyboardMove: 0, reveal: null, flash: null, previewSection: null, previewing: false });
 }
 
 onTargetedSettingsOpen(dropSettingsSearch);
+
+export const settingsSearchHost = () => () => dropSettingsSearch(consentToken(), "closed");
 
 export function noteSettingsSearchEmpty() {
   if (emptyNoted) return;

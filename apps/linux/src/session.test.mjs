@@ -681,10 +681,10 @@ test("the merged Top Apps circles survive a save and a canonical update from ano
 });
 
 test("which settings the user chose survives a save and a canonical update from another window", () => {
-  const state = { ...useBrowser.getState(), settingsMeta: { chosen: ["theme"], inferred: [] } };
+  const state = { ...useBrowser.getState(), settingsMeta: { chosen: ["appearance"], inferred: [] } };
   const local = snapshotHostSession(state);
-  assert.deepEqual(local.settingsMeta, { chosen: ["theme"], inferred: [] });
-  assert.deepEqual(sessionStatePatch(state, local, { ...local, settingsMeta: { chosen: ["theme", "tabLayout"], inferred: [] } }).settingsMeta, { chosen: ["theme", "tabLayout"], inferred: [] });
+  assert.deepEqual(local.settingsMeta, { chosen: ["appearance"], inferred: [] });
+  assert.deepEqual(sessionStatePatch(state, local, { ...local, settingsMeta: { chosen: ["appearance", "tabLayout"], inferred: [] } }).settingsMeta, { chosen: ["appearance", "tabLayout"], inferred: [] });
   assert.equal("settingsMeta" in sessionStatePatch(state, local, local), false);
 });
 

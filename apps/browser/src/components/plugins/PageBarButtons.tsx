@@ -2,14 +2,14 @@ import { View } from "react-native";
 import { Button, Divider } from "../ui";
 import type { ToolbarPalette } from "../ui/toolbarColors";
 import { DEVELOPER_ICONS } from "../toolbar/developerIcons";
-import { DEVELOPER_BAR } from "../toolbar/tokens";
+import { PAGE_BAR } from "../toolbar/tokens";
 import { OverflowButton } from "../extensions/ToolbarExtensions";
 import { HOST_ACTIONS, type HostAction, type PageBarButton } from "../../lib/pluginPageBar";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
 import { usePageEngine } from "../../state/engines/hooks";
 import { splitViewAvailable } from "../../state/splits/splits";
-import { DEVELOPER_BAR_ANCHOR } from "../../state/extensions/toolbarAnchors";
+import { PAGE_BAR_ANCHOR } from "../../state/extensions/toolbarAnchors";
 import { hostActionTarget, runHostAction } from "../../state/plugins/hostActions";
 
 export const PAGE_BAR_ROW = { flexDirection: "row", alignItems: "center" } as const;
@@ -43,7 +43,7 @@ function trimmed(buttons: PageBarButton[]): PageBarButton[] {
 export function PageBarButtons({ windowId, tabId, buttons, palette, look, active, onFocus }: Props) {
   const webkit = usePageEngine(tabId) === "webkit";
   const hints: Partial<Record<HostAction, string | undefined>> = { copyLink: useShortcutHint("copyUrl"), console: useShortcutHint("javaScriptConsole"), inspect: useShortcutHint("inspectElements") };
-  const glyph = look === "row" ? DEVELOPER_BAR.glyph : undefined;
+  const glyph = look === "row" ? PAGE_BAR.glyph : undefined;
   const shown = trimmed(buttons.filter((b) => b === "|" || usable(b, webkit)));
   const press = (action: HostAction) => () => {
     onFocus?.();
@@ -52,10 +52,10 @@ export function PageBarButtons({ windowId, tabId, buttons, palette, look, active
   return (
     <View style={PAGE_BAR_ROW}>
       {shown.map((b, i) => {
-        if (b === "|") return <Divider key={`divider-${i}`} vertical length={DEVELOPER_BAR.dividerLength} color={palette.divider} style={{ marginHorizontal: DEVELOPER_BAR.groupGap }} />;
+        if (b === "|") return <Divider key={`divider-${i}`} vertical length={PAGE_BAR.dividerLength} color={palette.divider} style={{ marginHorizontal: PAGE_BAR.groupGap }} />;
         if (b === "address") return null;
         if (b === "extensions")
-          return <OverflowButton key={b} windowId={windowId} tabId={tabId} hidden={[]} palette={palette} slot={DEVELOPER_BAR_ANCHOR} asset={DEVELOPER_ICONS.extensions} glyph={DEVELOPER_BAR.extensionsGlyph} mayActivate={() => hostActionTarget("extensions", windowId, tabId)} onActivate={() => runHostAction("extensions", windowId, tabId)} />;
+          return <OverflowButton key={b} windowId={windowId} tabId={tabId} hidden={[]} palette={palette} slot={PAGE_BAR_ANCHOR} asset={DEVELOPER_ICONS.extensions} glyph={PAGE_BAR.extensionsGlyph} mayActivate={() => hostActionTarget("extensions", windowId, tabId)} onActivate={() => runHostAction("extensions", windowId, tabId)} />;
         return (
           <Button
             key={b}

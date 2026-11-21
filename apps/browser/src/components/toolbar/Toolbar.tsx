@@ -43,8 +43,6 @@ import { FIELD_LOAD, TOOLBAR_MOTION } from "./tokens";
 import { useToolbarRow } from "./useToolbarRow";
 import { useStableHandler } from "./useStableHandler";
 import { PAGE_IDENTITY_TAG } from "../../state/tabs/tabReveal";
-import { DeveloperToolsButtons } from "./DeveloperToolsButtons";
-import { useDeveloperMode } from "../../state/site/developerMode";
 import { usePublishedPageBar } from "../../state/plugins/pageBarPanes";
 import { PageBarButtons } from "../plugins/PageBarButtons";
 import { HOST_ACTION_FIELD } from "../plugins/pageBarField";
@@ -181,7 +179,6 @@ export function ToolbarBackdrop({ tabId }: { tabId: string }) {
 
 function useUrlField(tab: ToolbarTab, windowId: string, onFocus: () => void) {
   const pageBar = usePublishedPageBar(tab.windowId, tab.id);
-  const developerMode = useDeveloperMode(tab.url) || !!pageBar;
   const showFullUrl = useSettings((s) => s.showFullUrl);
   const insecure = usePage(tab.id, insecureLevel);
   const popover = usePages((p) => p.popover[tab.id] ?? null);
@@ -196,7 +193,7 @@ function useUrlField(tab: ToolbarTab, windowId: string, onFocus: () => void) {
     onFocus();
     togglePopover(tab.id, "siteControls");
   });
-  return { insecure, popover, hovered, buttonsShown, developerMode, pageBar, hoverProps, openPanel, toggleSiteControls, host: pageHostLabel(tab.url), trail: urlTrail(tab.url, tab.title, { hovered, showFullUrl }) };
+  return { insecure, popover, hovered, buttonsShown, pageBar, hoverProps, openPanel, toggleSiteControls, host: pageHostLabel(tab.url), trail: urlTrail(tab.url, tab.title, { hovered, showFullUrl }) };
 }
 
 const loadFillColor = (palette: ToolbarPalette, accent: string) =>
@@ -230,9 +227,9 @@ export const ToolbarUrlField = memo(function ToolbarUrlField({ tab, palette, win
       )}
       <ContextMenuArea style={{ flex: 1 }} onContextMenu={() => void showUrlBarMenu(tab)}>
         <Pressable onPress={field.openPanel} style={{ flex: 1, height: row.field, justifyContent: "center", paddingLeft: insecure ? LOCK.gap : urlTextLeft(false) }}>
-          {field.developerMode ? (
+          {field.pageBar ? (
             <Text numberOfLines={1} ellipsizeMode="middle" color={palette.text} ardiaCentersCapitals style={monoFace()}>
-              {withoutUserInfo(field.pageBar?.url ?? tab.url)}
+              {withoutUserInfo(field.pageBar.url)}
             </Text>
           ) : (
             <View style={{ flexDirection: "row", alignItems: "center" }}>
@@ -264,7 +261,6 @@ export const ToolbarUrlField = memo(function ToolbarUrlField({ tab, palette, win
             <Button variant="icon" toolbar palette={palette} icon="slider.horizontal.3" look="field" onPress={toggleSiteControls} active={popover === "siteControls"} tooltip="Site Controls" />
           </>
         )}
-        {field.developerMode && !field.pageBar && <DeveloperToolsButtons tabId={tab.id} palette={palette} look="field" onFocus={onFocus} />}
         {field.pageBar && <PageBarButtons windowId={windowId} tabId={tab.id} buttons={field.pageBar.spec.buttons.filter((b) => HOST_ACTION_FIELD.includes(b))} palette={palette} look="field" onFocus={onFocus} />}
       </FieldButtons>
     </View>

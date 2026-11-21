@@ -21,9 +21,7 @@ import { publishPaneChrome } from "../toolbar/WindowToolbar";
 import { addressFieldShownIn, revealToolbar } from "../../state/windows/toolbarAutoHide";
 import { TabWebView } from "./TabWebView";
 import { withoutFragment } from "../../lib/url";
-import { developerBarShown, paneBar, type CardChrome } from "./paneChrome";
-import { DeveloperBar } from "../toolbar/DeveloperBar";
-import { useDeveloperMode } from "../../state/site/developerMode";
+import { paneBar, type CardChrome } from "./paneChrome";
 import { PluginPageBar } from "../plugins/PluginPageBar";
 import type { PageBarMatch } from "../../state/plugins/pageBar";
 import { PageOverlays } from "./PageOverlays";
@@ -113,7 +111,6 @@ export const TabPane = memo(function TabPane({
   const mode = useToolbarMode(tabId, windowId, hideBar);
   const addressFieldShown = bar.kind !== "none" && addressFieldShownIn(mode);
   const sidebarFieldShown = sidebarFieldOpen && !fullscreen && focused;
-  const developerBar = developerBarShown(chrome, { developerMode: useDeveloperMode(own.url), small, fullscreen });
   const bookmarksBar = bookmarksBarShown(barMode, own.exists ? own : undefined) && !fullscreen && !inSplit && !small;
   const barHeight = useBookmarksBarHeight();
   const doc = withoutFragment(own.url);
@@ -145,8 +142,7 @@ export const TabPane = memo(function TabPane({
       {bar.kind === "toolbar" && <Toolbar tabId={tabId} geometry={geometry} windowId={windowId} inSplit={inSplit} focused={focused || !inSplit} />}
       {bar.kind === "backdrop" && <ToolbarBackdrop tabId={tabId} />}
       {bar.kind === "spacer" && <View style={{ height: toolbarHeight }} />}
-      {developerBar && <DeveloperBar tabId={tabId} windowId={windowId} />}
-      {!developerBar && pageBar && <PluginPageBar tabId={tabId} windowId={windowId} match={pageBar} />}
+      {pageBar && <PluginPageBar tabId={tabId} windowId={windowId} match={pageBar} />}
       {!autoLayout && bookmarksBar && <BookmarksBar tabId={tabId} placeholder={!visible} />}
       <Animated.View style={autoLayout ? motion.groupStyle : { flex: 1 }}>
         {autoLayout && bookmarksBar && <BookmarksBar tabId={tabId} placeholder={!visible} />}

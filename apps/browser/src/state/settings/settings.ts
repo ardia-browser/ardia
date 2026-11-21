@@ -114,7 +114,6 @@ export const SETTING_SPECS = {
   closedTopAppTiles: flag(true, SYNCED), topAppFolders: flag(true, SYNCED),
   unreadHiddenSites: shaped<string[]>([], isStringList, STRING_LIST, SYNCED),
   neverTranslateSites: shaped<Record<string, string[]>>({}, (v) => isRecordOf(v, isStringList), recordOf(STRING_LIST)),
-  developerModeSites: shaped<Record<string, boolean>>({}, (v) => isRecordOf(v, (on) => typeof on === "boolean"), recordOf({ type: "boolean" }), SYNCED),
   autoPictureInPicture: flag(true, SYNCED),
   playingNowAcrossProfiles: flag(false, SYNCED),
   sidebarMediaControls: flag(true, SYNCED),
@@ -223,7 +222,8 @@ export function parseSettings(raw: unknown): Settings {
 
 export function parseSettingsMeta(raw: unknown): SettingsMeta {
   const meta = isFields(raw) ? raw : {};
-  return { chosen: isStringList(meta.chosen) ? meta.chosen : [], inferred: isStringList(meta.inferred) ? meta.inferred : [] };
+  const known = (keys: unknown) => (isStringList(keys) ? keys.filter((key) => Object.hasOwn(SETTING_SPECS, key)) : []);
+  return { chosen: known(meta.chosen), inferred: known(meta.inferred) };
 }
 
 export const validSettingValue = (key: SettingKey, value: unknown) => SETTING_SPECS[key].valid(value);

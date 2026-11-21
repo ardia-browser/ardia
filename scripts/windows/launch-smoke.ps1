@@ -945,7 +945,7 @@ $edgeLog = Join-Path $Out "top-edge.log"
 $env:ARDIA_DATA_DIR = New-DataDirectory "top-edge-data"
 $env:ARDIA_CONFIG_DIR = $env:ARDIA_DATA_DIR
 Set-Content -Path (Join-Path $env:ARDIA_DATA_DIR "onboarding.json") -Value '{"completedAt":1700000000000,"version":1}' -Encoding utf8NoBOM
-Set-Content -Path (Join-Path $env:ARDIA_DATA_DIR "config.json") -Value '{"settings":{"minimalismMode":true,"sidebarSide":"right","openLinksInLittleArdia":false,"developerModeSites":{"127.0.0.1":false}}}' -Encoding utf8NoBOM
+Set-Content -Path (Join-Path $env:ARDIA_DATA_DIR "config.json") -Value '{"settings":{"minimalismMode":true,"sidebarSide":"right","openLinksInLittleArdia":false}}' -Encoding utf8NoBOM
 if ($withEngineForEdge -and -not $NoInput -and $httpPagesUp) {
   $edge = Start-Process -FilePath $App -ArgumentList "--log-file=`"$edgeLog`"", "http://127.0.0.1:$httpPagesPort/hover" -PassThru
   $env:ARDIA_CONFIG_DIR = ""
@@ -966,7 +966,7 @@ if ($withEngineForEdge -and -not $NoInput -and $httpPagesUp) {
 $env:ARDIA_CONFIG_DIR = ""
 
 if ($Part -ne "gate" -and $withEngineForEdge -and -not $NoInput -and $httpPagesUp) {
-  foreach ($layout in @(@{ Name = "sidebar-left"; Settings = '{"settings":{"openLinksInLittleArdia":false}}' }, @{ Name = "minimal-right"; Settings = '{"settings":{"minimalismMode":true,"sidebarSide":"right","openLinksInLittleArdia":false,"developerModeSites":{"127.0.0.1":false}}}' })) {
+  foreach ($layout in @(@{ Name = "sidebar-left"; Settings = '{"settings":{"openLinksInLittleArdia":false}}' }, @{ Name = "minimal-right"; Settings = '{"settings":{"minimalismMode":true,"sidebarSide":"right","openLinksInLittleArdia":false}}' })) {
     $dragLog = Join-Path $Out "page-drag-$($layout.Name).log"
     $env:ARDIA_DATA_DIR = New-DataDirectory "page-drag-$($layout.Name)-data"
     $env:ARDIA_CONFIG_DIR = $env:ARDIA_DATA_DIR

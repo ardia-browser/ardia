@@ -7,7 +7,7 @@ import { consentToken } from "../telemetry/client";
 
 type AnchorEntry = { windowId: string; tabId: string; anchor: Anchor; measure: () => Promise<Anchor> };
 const toolbarAnchors = new Map<string, AnchorEntry>();
-export const DEVELOPER_BAR_ANCHOR = "developerBar";
+export const PAGE_BAR_ANCHOR = "pageBar";
 const anchorKey = (windowId: string, tabId: string, slot: string) => `${windowId}|${tabId}|${slot}`;
 
 const MEASURE_WAIT_MS = 100;
@@ -30,7 +30,7 @@ function anchorEntry(windowId: string, extensionId: string, tabId?: string): Anc
   const s = useBrowser.getState();
   for (const pane of new Set([tabId ?? shownPageId(s, windowId), activeTabId(s, windowId)])) {
     if (!pane) continue;
-    const entry = toolbarAnchors.get(anchorKey(windowId, pane, extensionId)) ?? toolbarAnchors.get(anchorKey(windowId, pane, "*")) ?? toolbarAnchors.get(anchorKey(windowId, pane, DEVELOPER_BAR_ANCHOR));
+    const entry = toolbarAnchors.get(anchorKey(windowId, pane, extensionId)) ?? toolbarAnchors.get(anchorKey(windowId, pane, "*")) ?? toolbarAnchors.get(anchorKey(windowId, pane, PAGE_BAR_ANCHOR));
     if (entry) return entry;
   }
   return null;

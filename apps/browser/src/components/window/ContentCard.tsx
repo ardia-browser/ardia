@@ -3,7 +3,7 @@ import { View } from "react-native";
 import { startChromeTabs } from "../../state/tabs/chromeTabs";
 import { useIsSmallWindow, useSplitOf } from "../../state/windows/card";
 import { usePeekOpenedFrom } from "../../state/peek/hooks";
-import { useActiveTabId, useSettings, useTab, useTabsShown, useWindowFullScreen, useWindowId } from "../../state/browser/hooks";
+import { useActiveTabId, useSettings, useTabsShown, useWindowFullScreen, useWindowId } from "../../state/browser/hooks";
 import { useThemeLook } from "../../state/config/hooks";
 import { sidebarFieldOf } from "../../state/sidebar/chrome";
 import { useCurrentInterfaceScale } from "../../state/settings/interfaceScale";
@@ -29,9 +29,7 @@ import "../dev/devExpose";
 import { PeekOverlay } from "../peek/PeekOverlay";
 import { dismissPeek, startPeeks } from "../../state/peek/actions";
 import { usePaneLayout } from "./usePaneLayout";
-import { cardChrome, developerBarShown } from "./paneChrome";
-import { DEVELOPER_BAR } from "../toolbar/tokens";
-import { useDeveloperMode } from "../../state/site/developerMode";
+import { cardChrome } from "./paneChrome";
 import { TabPane } from "./TabPane";
 import { usePageBars } from "../../state/plugins/pageBarPanes";
 import { PAGE_BAR_HEIGHT } from "../plugins/PluginPageBar";
@@ -84,7 +82,6 @@ export function ContentCard() {
     () => cardChrome({ addressInSidebar, small, minimal, split: !!split, fullscreen: !!fullscreenTab, hideWhileScrolling }),
     [addressInSidebar, small, minimal, !!split, !!fullscreenTab, hideWhileScrolling],
   );
-  const activeDeveloperMode = useDeveloperMode(useTab(activeId, (t) => t?.url ?? ""));
   const paneFacts = shown.map((key) => {
     const tabId = key.slice(0, key.indexOf("|"));
     const visible = !!panes[tabId] || (tabId === lingerId && !!lingerRect);
@@ -92,7 +89,6 @@ export function ContentCard() {
   });
   const pageBars = usePageBars(windowId, paneFacts, { small, fullscreen: windowFullScreen });
   const activePageBar = chrome.kind === "none" && activeId && pageBars[activeId] ? PAGE_BAR_HEIGHT : 0;
-  const activeDeveloperBar = developerBarShown(chrome, { developerMode: activeDeveloperMode, small, fullscreen: false }) ? DEVELOPER_BAR.height : activePageBar;
   const geometryFor = (rect: Rect | undefined): ToolbarGeometry => {
     if (chrome.kind === "none") return NO_TOOLBAR;
     const leading = !!rect && rect.x === 0 && rect.y === 0;
@@ -205,7 +201,7 @@ export function ContentCard() {
         <WindowToolbar windowId={windowId} tabId={activeId} geometry={geometryFor(panes[activeId])} autoHide={chrome.autoHide} />
       )}
       {size.width > 0 && !split && !fullscreenTab && (
-        <FrozenPage windowId={windowId} tabId={activeId} top={(chrome.kind !== "none" && !chrome.autoHide ? toolbarRow.height : activeDeveloperBar) + (barMode === "always" && !small && !hideWhileScrolling ? barHeight : 0)} />
+        <FrozenPage windowId={windowId} tabId={activeId} top={(chrome.kind !== "none" && !chrome.autoHide ? toolbarRow.height : activePageBar) + (barMode === "always" && !small && !hideWhileScrolling ? barHeight : 0)} />
       )}
       {split && !fullscreenTab && <SplitDividers split={split} dividers={dividers} width={size.width} height={size.height} />}
       {split && !fullscreenTab && activeRect && <SplitFocusRing rect={activeRect} origin={origin} windowShape={windowFullScreen ? null : windowShape} />}

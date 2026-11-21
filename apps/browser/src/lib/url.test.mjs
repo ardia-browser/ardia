@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-const { pageHostLabel, urlTrail } = await import("./url.ts");
+const { pageHostLabel, urlTrail, withoutUserInfo } = await import("./url.ts");
 
 const rest = { hovered: false, showFullUrl: false };
 const full = { hovered: false, showFullUrl: true };
@@ -37,4 +37,11 @@ test("a local file shows File and its decoded path on hover or with Show Full UR
   assert.equal(urlTrail("file:///Users/me/a%20b.html", "a b.html", rest), "");
   assert.equal(urlTrail("file:///Users/me/a%20b.html", "", hover), " /Users/me/a b.html");
   assert.equal(urlTrail("file:///Users/me/100%.html", "", full), " /Users/me/100%.html");
+});
+
+test("the address a page bar shows leaves out a username and password", async () => {
+  assert.equal(withoutUserInfo("http://admin:hunter2@localhost:3000/a?b=1#c"), "http://localhost:3000/a?b=1#c");
+  assert.equal(withoutUserInfo("https://user@example.com/"), "https://example.com/");
+  assert.equal(withoutUserInfo("http://localhost:3000/@me"), "http://localhost:3000/@me");
+  assert.equal(withoutUserInfo("http://localhost:5173/"), "http://localhost:5173/");
 });

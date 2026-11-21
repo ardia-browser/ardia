@@ -1,6 +1,11 @@
 import { switchOrigin, type HostAction } from "../../lib/pluginPageBar";
 import { useBrowser } from "../browser/store";
-import { openBarFromDeveloperBar, showSplitSidesMenu } from "../site/developerMode";
+import { showMenu } from "../app/system";
+import { activeTabId } from "../browser/model";
+import { addressFieldShown, clickBarPlacement } from "../omnibox/barPlacement";
+import { openSplitPane } from "../splits/actions";
+import { MAX_SPLIT_PANES, splitOf, splitTabIds, type SplitSide } from "../splits/splits";
+import { activate } from "../tabs/actions";
 import { copyPageUrl } from "../site/selection";
 import { togglePopover } from "../tabs/popoverDismiss";
 import { webviews } from "../tabs/webviewHandles";
@@ -10,6 +15,29 @@ import type { PageBarMatch } from "./pageBar";
 import { confirmedDocument, usePageDocuments } from "./pageBarDocuments";
 import { siteSwitchValue } from "./siteSwitches";
 import { activeManifest, currentPlugins } from "./store";
+
+function openBarFromPageBar(windowId: string, tabId: string, url: string) {
+  if (activeTabId(useBrowser.getState(), windowId) !== tabId) activate(tabId);
+  const s = useBrowser.getState();
+  s.openPanel(windowId, url, undefined, addressFieldShown(s, windowId) ? clickBarPlacement(s, windowId) : "centredNoField");
+}
+
+const SPLIT_SIDES: { side: SplitSide; title: string; symbol: string }[] = [
+  { side: "right", title: "Add Right Split", symbol: "rectangle.righthalf.inset.filled" },
+  { side: "left", title: "Add Left Split", symbol: "sidebar.left" },
+  { side: "top", title: "Add Top Split", symbol: "rectangle.split.1x2" },
+  { side: "bottom", title: "Add Bottom Split", symbol: "rectangle.bottomhalf.inset.filled" },
+];
+
+export async function showSplitSidesMenu(tabId: string, stillTarget: () => boolean = () => true) {
+  const split = splitOf(useBrowser.getState(), tabId);
+  const enabled = !split || splitTabIds(split).length < MAX_SPLIT_PANES;
+  const item = ({ side, title, symbol }: (typeof SPLIT_SIDES)[number]) => ({ id: side, title, symbol, enabled });
+  const choice = await showMenu([...SPLIT_SIDES.slice(0, 2).map(item), { separator: true as const }, ...SPLIT_SIDES.slice(2).map(item)]);
+  const picked = SPLIT_SIDES.find((s) => s.side === choice);
+  const tab = useBrowser.getState().tabs[tabId];
+  if (picked && tab && stillTarget()) openSplitPane(tab.windowId, { anchorTabId: tabId, side: picked.side });
+}
 
 function targetOf(windowId: string, tabId: string, action: HostAction, document?: { url: string; at: number }): PageBarMatch | null {
   const match = publishedPageBar(windowId, tabId);
@@ -32,7 +60,7 @@ export function runHostAction(action: HostAction, windowId: string, tabId: strin
     case "siteControls":
       return togglePopover(tabId, "siteControls");
     case "address":
-      return openBarFromDeveloperBar(windowId, tabId, match.url);
+      return openBarFromPageBar(windowId, tabId, match.url);
     case "copyLink":
       return void copyPageUrl(tabId, match.url);
     case "console":

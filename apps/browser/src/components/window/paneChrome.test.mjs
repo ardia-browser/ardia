@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-const { cardChrome, developerBarShown, paneBar } = await import("./paneChrome.ts");
+const { cardChrome, paneBar } = await import("./paneChrome.ts");
 
 const card = (o = {}) => cardChrome({ addressInSidebar: false, small: false, minimal: false, split: false, fullscreen: false, hideWhileScrolling: false, ...o });
 const shown = { visible: true, fullscreen: false, lingering: false };
@@ -48,14 +48,4 @@ test("hide while scrolling in a split: each pane hides its own bar", () => {
 test("a New Tab page lingering under the new tab keeps its band but doesn't take over the window's bar", () => {
   assert.deepEqual(paneBar(card(), lingering), { kind: "backdrop" });
   assert.deepEqual(paneBar(card({ hideWhileScrolling: true }), lingering), { kind: "autoHide", bar: "backdrop" });
-});
-
-test("the developer bar shows only where no toolbar already holds the address", () => {
-  const on = { developerMode: true, small: false, fullscreen: false };
-  assert.equal(developerBarShown({ kind: "none" }, on), true);
-  assert.equal(developerBarShown({ kind: "window", autoHide: false }, on), false);
-  assert.equal(developerBarShown({ kind: "pane", autoHide: true }, on), false);
-  assert.equal(developerBarShown({ kind: "none" }, { ...on, developerMode: false }), false);
-  assert.equal(developerBarShown({ kind: "none" }, { ...on, small: true }), false);
-  assert.equal(developerBarShown({ kind: "none" }, { ...on, fullscreen: true }), false);
 });

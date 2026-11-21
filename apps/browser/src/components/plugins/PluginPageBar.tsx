@@ -5,7 +5,7 @@ import { ToolbarRowContext } from "../ui/toolbarRowContext";
 import { useEasedColor } from "../ui/toolbarColors";
 import { useSitePalette } from "../toolbar/useSitePalette";
 import { useToolbarTab } from "../toolbar/Toolbar";
-import { DEVELOPER_BAR, DEVELOPER_ROW as ROW } from "../toolbar/tokens";
+import { PAGE_BAR, PAGE_BAR_ROW as ROW } from "../toolbar/tokens";
 import { isLight } from "../../lib/color";
 import { withoutUserInfo } from "../../lib/url";
 import type { HostAction } from "../../lib/pluginPageBar";
@@ -20,7 +20,7 @@ const STRIPES = {
   darkInk: require("../../../assets/dev-stripes-dark-ink.png"),
 };
 
-export const PAGE_BAR_HEIGHT = DEVELOPER_BAR.height;
+export const PAGE_BAR_HEIGHT = PAGE_BAR.height;
 
 export const PluginPageBar = memo(function PluginPageBar({ tabId, windowId, match }: { tabId: string; windowId: string; match: PageBarMatch }) {
   const tab = useToolbarTab(tabId);
@@ -35,21 +35,21 @@ export const PluginPageBar = memo(function PluginPageBar({ tabId, windowId, matc
   const trailing = at < 0 ? buttons : buttons.slice(at + 1);
   const active: HostAction | null = popover === "siteControls" ? "siteControls" : null;
   const label = (
-    <Text numberOfLines={1} ellipsizeMode="middle" color={palette.text} style={[monoFace(), { fontSize: DEVELOPER_BAR.urlSize }]}>
+    <Text numberOfLines={1} ellipsizeMode="middle" color={palette.text} style={[monoFace(), { fontSize: PAGE_BAR.urlSize }]}>
       {withoutUserInfo(match.url)}
     </Text>
   );
-  const labelStyle = { flex: 1, height: ROW.button, justifyContent: "center", paddingLeft: DEVELOPER_BAR.urlGap, paddingRight: DEVELOPER_BAR.groupGap } as const;
+  const labelStyle = { flex: 1, height: ROW.button, justifyContent: "center", paddingLeft: PAGE_BAR.urlGap, paddingRight: PAGE_BAR.groupGap } as const;
 
   return (
     <ToolbarRowContext.Provider value={ROW}>
       <View testID="ardia.pluginPageBar" accessibilityLabel={`${match.plugin} page bar`} style={{ height: PAGE_BAR_HEIGHT }}>
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: band }]} />
-        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: DEVELOPER_BAR.stripeOpacity[ink] }]}>
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: PAGE_BAR.stripeOpacity[ink] }]}>
           <Image source={STRIPES[ink]} resizeMode="repeat" style={{ flex: 1, width: undefined, height: undefined }} />
         </View>
         <WindowDragRegion style={StyleSheet.absoluteFill} />
-        <View pointerEvents="box-none" style={{ flex: 1, flexDirection: "row", alignItems: "center", paddingLeft: DEVELOPER_BAR.leadingEdge, paddingRight: DEVELOPER_BAR.trailingEdge }}>
+        <View pointerEvents="box-none" style={{ flex: 1, flexDirection: "row", alignItems: "center", paddingLeft: PAGE_BAR.leadingEdge, paddingRight: PAGE_BAR.trailingEdge }}>
           {leading.length ? <PageBarButtons windowId={windowId} tabId={tabId} buttons={leading} palette={palette} look="row" active={active} /> : null}
           <ContextMenuArea style={{ flex: 1 }} onContextMenu={() => void showUrlBarMenu(tab)}>
             {at < 0 ? (

@@ -54,10 +54,10 @@ export const HISTORY_BUTTON_MOTION = {
   travel: 4,
 } as const;
 
-export const DEVELOPER_ROW = { ...TOOLBAR_ROWS.compact, height: 34, center: 17, button: 24, buttonRadius: 6, extensionButton: 24 };
+export const PAGE_BAR_ROW = { ...TOOLBAR_ROWS.compact, height: 34, center: 17, button: 24, buttonRadius: 6, extensionButton: 24 };
 
-export const DEVELOPER_BAR = {
-  height: DEVELOPER_ROW.height,
+export const PAGE_BAR = {
+  height: PAGE_BAR_ROW.height,
   stripeOpacity: { lightInk: 0.025, darkInk: 0.035 },
   urlSize: 11,
   dividerLength: 14,

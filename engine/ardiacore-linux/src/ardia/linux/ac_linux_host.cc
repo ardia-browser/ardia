@@ -1432,6 +1432,7 @@ class ShellHostView : public views::View,
     ardiacore::FetchLinuxFavicon(profile, url, std::move(reply));
   }
   bool WindowFullScreen() const;
+  linux_window_state::NativeWindow NativeWindowFacts() const;
   linux_window_state::WindowState NativeWindowState() const;
   void ScheduleWindowStateReport();
   PrefService* WindowOutputPrefs() const;
@@ -1806,6 +1807,7 @@ class ShellHostView : public views::View,
   linux_window::GeometryLedger geometry_{GlobalScreenCoordinates()};
   base::OneShotTimer frame_timer_;
   std::optional<linux_window_state::WindowState> reported_window_state_;
+  linux_window_state::WindowState settled_window_state_;
   bool window_state_report_pending_ = false;
   std::unique_ptr<linux_window::TypeaheadInput> typeahead_;
   std::optional<std::string> output_target_;
@@ -4589,15 +4591,24 @@ base::DictValue WindowStateValue(const linux_window_state::WindowState& state) {
       .Set("fullScreen", state.full_screen);
 }
 
-linux_window_state::WindowState ShellHostView::NativeWindowState() const {
+linux_window_state::NativeWindow ShellHostView::NativeWindowFacts() const {
   const views::Widget* widget = GetWidget();
   if (!widget) return {};
-  linux_window_state::TiledEdges edges;
+  linux_window_state::NativeWindow native{
+      .maximized = widget->IsMaximized(),
+      .widget_full_screen = widget->IsFullscreen(),
+      .window_full_screen = WindowFullScreen(),
+      .compositor_reports_edges = !GlobalScreenCoordinates(),
+  };
   if (browser_view_ && browser_view_->browser_widget()) {
     const ui::WindowTiledEdges& tiled = browser_view_->browser_widget()->tiled_edges();
-    edges = {.left = tiled.left, .right = tiled.right, .top = tiled.top, .bottom = tiled.bottom};
+    native.edges = {.left = tiled.left, .right = tiled.right, .top = tiled.top, .bottom = tiled.bottom};
   }
-  return linux_window_state::StateOf(widget->IsMaximized(), widget->IsFullscreen(), edges, !GlobalScreenCoordinates());
+  return native;
+}
+
+linux_window_state::WindowState ShellHostView::NativeWindowState() const {
+  return linux_window_state::StateOf(NativeWindowFacts(), settled_window_state_);
 }
 
 void ShellHostView::ScheduleWindowStateReport() {
@@ -4609,7 +4620,9 @@ void ShellHostView::ScheduleWindowStateReport() {
 void ShellHostView::ReportWindowState() {
   window_state_report_pending_ = false;
   if (window_id_.empty() || !GetWidget()) return;
-  const linux_window_state::WindowState state = NativeWindowState();
+  const linux_window_state::NativeWindow native = NativeWindowFacts();
+  const linux_window_state::WindowState state = linux_window_state::StateOf(native, settled_window_state_);
+  if (!linux_window_state::PageFullScreen(native)) settled_window_state_ = state;
   if (reported_window_state_ == state) return;
   reported_window_state_ = state;
   Event("ArdiaShell", linux_window_state::kWindowStateEvent,
@@ -4618,14 +4631,14 @@ void ShellHostView::ReportWindowState() {
 
 std::string CurrentDesktop() {
   const std::optional<std::string> desktop = base::Environment::Create()->GetVar("XDG_CURRENT_DESKTOP");
-  return desktop && linux_window_state::ReportableButtonLayout(*desktop) ? *desktop : std::string();
+  return desktop && linux_window_state::ReportableToolkitString(*desktop) ? *desktop : std::string();
 }
 
 base::Value WindowButtonLayoutValue() {
   const ui::LinuxUi* linux_ui = ui::LinuxUi::instance();
   const std::optional<std::string> layout = linux_ui ? linux_ui->GetWindowButtonLayout() : std::nullopt;
   return base::Value(base::DictValue()
-      .Set("layout", layout && linux_window_state::ReportableButtonLayout(*layout) ? base::Value(*layout) : base::Value())
+      .Set("layout", layout && linux_window_state::ReportableToolkitString(*layout) ? base::Value(*layout) : base::Value())
       .Set("desktop", CurrentDesktop()));
 }
 

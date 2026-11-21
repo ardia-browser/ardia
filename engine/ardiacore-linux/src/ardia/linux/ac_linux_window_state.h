@@ -12,7 +12,7 @@ inline constexpr char kWindowButtonLayoutEvent[] = "windowButtonLayout";
 inline constexpr char kWindowStateEvent[] = "windowState";
 inline constexpr const char* kWindowStateCapabilities[] = {"ArdiaShell.windowButtonLayout",
                                                            "ArdiaShell.windowState"};
-inline constexpr size_t kButtonLayoutLimit = 256;
+inline constexpr size_t kToolkitStringLimit = 256;
 
 struct TiledEdges {
   bool left = false;
@@ -29,17 +29,31 @@ struct WindowState {
   friend constexpr bool operator==(const WindowState&, const WindowState&) = default;
 };
 
-constexpr WindowState StateOf(bool maximized, bool full_screen, TiledEdges edges, bool compositor_reports_edges) {
+struct NativeWindow {
+  bool maximized = false;
+  bool widget_full_screen = false;
+  bool window_full_screen = false;
+  TiledEdges edges;
+  bool compositor_reports_edges = false;
+};
+
+constexpr bool PageFullScreen(const NativeWindow& window) {
+  return window.widget_full_screen && !window.window_full_screen;
+}
+
+constexpr WindowState StateOf(const NativeWindow& window, const WindowState& before_page_full_screen) {
+  if (PageFullScreen(window)) return before_page_full_screen;
+  const TiledEdges& edges = window.edges;
   return WindowState{
-      .maximized = maximized && !full_screen,
-      .tiled = compositor_reports_edges && edges.left && edges.right && edges.top && edges.bottom,
-      .full_screen = full_screen,
+      .maximized = window.maximized && !window.window_full_screen,
+      .tiled = window.compositor_reports_edges && edges.left && edges.right && edges.top && edges.bottom,
+      .full_screen = window.window_full_screen,
   };
 }
 
-constexpr bool ReportableButtonLayout(std::string_view layout) {
-  if (layout.size() > kButtonLayoutLimit) return false;
-  for (const char c : layout) {
+constexpr bool ReportableToolkitString(std::string_view text) {
+  if (text.size() > kToolkitStringLimit) return false;
+  for (const char c : text) {
     if (static_cast<unsigned char>(c) < 0x20 || static_cast<unsigned char>(c) > 0x7e) return false;
   }
   return true;

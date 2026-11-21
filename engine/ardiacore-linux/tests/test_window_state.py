@@ -49,14 +49,20 @@ class WindowStateTests(unittest.TestCase):
             self.assertIn(f'.Set("{key}", state.{field})', value)
 
     def test_window_state_reads_the_compositors_edges_and_reports_each_change_once(self):
+        facts = between(HOST, 'linux_window_state::NativeWindow ShellHostView::NativeWindowFacts() const {', '\n}\n')
+        self.assertIn('browser_view_->browser_widget()->tiled_edges()', facts)
+        for fact in ('.maximized = widget->IsMaximized(),', '.widget_full_screen = widget->IsFullscreen(),',
+                     '.window_full_screen = WindowFullScreen(),', '.compositor_reports_edges = !GlobalScreenCoordinates(),'):
+            self.assertIn(fact, facts)
         native = between(HOST, 'linux_window_state::WindowState ShellHostView::NativeWindowState() const {', '\n}\n')
-        self.assertIn('browser_view_->browser_widget()->tiled_edges()', native)
-        self.assertIn('StateOf(widget->IsMaximized(), widget->IsFullscreen(), edges, !GlobalScreenCoordinates())', native)
+        self.assertIn('StateOf(NativeWindowFacts(), settled_window_state_)', native)
         schedule = between(HOST, 'void ShellHostView::ScheduleWindowStateReport() {', '\n}\n')
         self.assertIn('if (std::exchange(window_state_report_pending_, true)) return;', schedule)
         self.assertIn('GetWeakPtr()', schedule)
         report = between(HOST, 'void ShellHostView::ReportWindowState() {', '\n}\n')
         self.assertLess(report.index('if (reported_window_state_ == state) return;'), report.index('Event("ArdiaShell", linux_window_state::kWindowStateEvent'))
+        self.assertLess(report.index('if (!linux_window_state::PageFullScreen(native)) settled_window_state_ = state;'),
+                        report.index('if (reported_window_state_ == state) return;'))
         self.assertIn('.Set("windowId", window_id_)', report)
         for observer in ('void ShellHostView::OnWidgetBoundsChanged(views::Widget*, const gfx::Rect&) {\n  ScheduleWindowStateReport();',
                          'void ShellHostView::OnWidgetShowStateChanged(views::Widget* widget) {\n  ScheduleWindowStateReport();'):
@@ -67,7 +73,7 @@ class WindowStateTests(unittest.TestCase):
     def test_button_layout_is_gtks_raw_string_or_null_and_changes_reach_every_window_once(self):
         value = between(HOST, 'base::Value WindowButtonLayoutValue() {', '\n}\n')
         self.assertIn('linux_ui ? linux_ui->GetWindowButtonLayout() : std::nullopt', value)
-        self.assertIn('ReportableButtonLayout(*layout) ? base::Value(*layout) : base::Value()', value)
+        self.assertIn('ReportableToolkitString(*layout) ? base::Value(*layout) : base::Value()', value)
         self.assertIn('.Set("desktop", CurrentDesktop())', value)
         watch = between(HOST, 'class WindowButtonLayoutWatch : public ui::WindowButtonOrderObserver {', '\n};\n')
         self.assertIn('observation_.Observe(linux_ui)', watch)
@@ -85,6 +91,10 @@ class WindowStateTests(unittest.TestCase):
         self.assertIn('+  delegate_->SetWindowButtonLayout(gtk_layout);\n   delegate_->SetWindowButtonOrdering(', patch)
         self.assertIn('+  browser_widget_->set_tiled_edges(new_tiled_edges);', patch)
         self.assertIn('+void (*g_ardia_linux_tiled_edges_changed)(views::Widget* widget) = nullptr;', patch)
+        self.assertIn('+  if (window_states.tiled_edges != notified_tiled_edges_) {', patch)
+        self.assertIn('+    notified_tiled_edges_ = window_states.tiled_edges;\n     auto weak_this = AsWeakPtr();\n     delegate()->OnWindowTiledStateChanged(', patch)
+        self.assertIn('+  std::optional<std::string> QtUi::GetWindowButtonLayout() const {'.replace('+  ', '+'), patch)
+        self.assertIn('fallback_linux_ui_->GetWindowButtonLayout()', patch)
         self.assertIn('extern void (*g_ardia_linux_tiled_edges_changed)(views::Widget* widget);', HOST)
         self.assertIn('chromium chromium-linux-window-state.patch linux\n', (REPO / 'engine/patches/series').read_text())
 

@@ -189,7 +189,7 @@ test("the window-button layout and window state reach the engine as calls and co
   assert.deepEqual(layouts, [layout]);
   assert.deepEqual(states, [state]);
   const nativeHost = nativeSource("ac_linux_host.cc");
-  assert.match(nativeHost, /\.Set\("layout", layout && linux_window_state::ReportableButtonLayout\(\*layout\) \? base::Value\(\*layout\) : base::Value\(\)\)\s*\.Set\("desktop", CurrentDesktop\(\)\)/);
+  assert.match(nativeHost, /\.Set\("layout", layout && linux_window_state::ReportableToolkitString\(\*layout\) \? base::Value\(\*layout\) : base::Value\(\)\)\s*\.Set\("desktop", CurrentDesktop\(\)\)/);
   for (const key of ["maximized", "tiled", "fullScreen"]) assert.ok(nativeHost.includes(`.Set("${key}", state.`), `windowState carries ${key}`);
   assert.ok(nativeHost.includes('base::Value(WindowStateValue(state).Set("windowId", window_id_))'), "the windowState event names its window");
 });

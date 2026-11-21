@@ -1,6 +1,7 @@
 The Ardia Linux host reports the desktop's window-button layout and a window's tiled state to the shell. GTK keeps
-the raw gtk-decoration-layout string it parses, and a browser window keeps the tiled edges the compositor last
-reported and tells the host when they change.
+the raw gtk-decoration-layout string it parses (Qt forwards to its GTK fallback), a browser window keeps the tiled
+edges the compositor last reported and tells the host when they change, and Wayland notifies each change of edges
+against the edges it last notified, so a configure the window never applied can't hide the next change.
 --- a/chrome/browser/ui/views/frame/browser_desktop_window_tree_host_linux.cc
 +++ b/chrome/browser/ui/views/frame/browser_desktop_window_tree_host_linux.cc
 @@ -32,6 +32,8 @@
@@ -136,3 +137,51 @@ reported and tells the host when they change.
    // What action we should take when the user clicks on the non-client area.
    // |source| describes the type of click.
    virtual WindowFrameAction GetWindowFrameAction(
+--- a/ui/ozone/platform/wayland/host/wayland_toplevel_window.cc
++++ b/ui/ozone/platform/wayland/host/wayland_toplevel_window.cc
+@@ -621,9 +621,10 @@
+   // WindowTreeHostPlatform::OnStateUpdate instead like all other state changes.
+   // The only issue there is when doing that a regression was seen in kwin. See
+   // the bug description for additional details.
+-  if (window_states.tiled_edges != applied_state().tiled_edges) {
++  if (window_states.tiled_edges != notified_tiled_edges_) {
+     // This configure changes the decoration insets.  We should adjust the
+     // bounds appropriately.
++    notified_tiled_edges_ = window_states.tiled_edges;
+     auto weak_this = AsWeakPtr();
+     delegate()->OnWindowTiledStateChanged(window_states.tiled_edges);
+     if (!weak_this) {
+--- a/ui/ozone/platform/wayland/host/wayland_toplevel_window.h
++++ b/ui/ozone/platform/wayland/host/wayland_toplevel_window.h
+@@ -253,6 +253,7 @@
+   bool is_active_ = false;
+   bool is_xdg_active_ = false;
+   bool is_suspended_ = false;
++  WindowTiledEdges notified_tiled_edges_;
+ 
+   // Id of the chromium app passed through
+   // PlatformWindowInitProperties::wm_class_name. This is used by Wayland
+--- a/ui/qt/qt_ui.cc
++++ b/ui/qt/qt_ui.cc
+@@ -556,6 +556,11 @@
+   return shim_->GetAnimationDurationMs() > 0;
+ }
+ 
++std::optional<std::string> QtUi::GetWindowButtonLayout() const {
++  return fallback_linux_ui_ ? fallback_linux_ui_->GetWindowButtonLayout()
++                            : std::nullopt;
++}
++
+ void QtUi::AddWindowButtonOrderObserver(
+     ui::WindowButtonOrderObserver* observer) {
+   if (fallback_linux_ui_) {
+--- a/ui/qt/qt_ui.h
++++ b/ui/qt/qt_ui.h
+@@ -59,6 +59,7 @@
+                                                  int text_flags) override;
+   gfx::FontRenderParams GetDefaultFontRenderParams() override;
+   bool AnimationsEnabled() const override;
++  std::optional<std::string> GetWindowButtonLayout() const override;
+   void AddWindowButtonOrderObserver(
+       ui::WindowButtonOrderObserver* observer) override;
+   void RemoveWindowButtonOrderObserver(

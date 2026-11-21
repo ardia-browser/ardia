@@ -115,6 +115,7 @@ enum MainMenu {
       cmd(.cleanUpTabs),
       .separator(),
       cmd(.savePage),
+      cmd(.installApp),
       sub("Share", [cmd(.share), .separator()], menu: shareMenu),
       cmd(.emailPageLocation),
       cmd(.print),

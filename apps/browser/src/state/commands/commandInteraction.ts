@@ -108,6 +108,7 @@ export const COMMAND_INTERACTION: Readonly<Record<BrowserCommand, CommandInterac
   autofill: "interactive",
   openFile: "interactive",
   savePage: "interactive",
+  installApp: "interactive",
   emailPageLocation: "quiet",
   printWithSystemDialog: "interactive",
   stop: "quiet",

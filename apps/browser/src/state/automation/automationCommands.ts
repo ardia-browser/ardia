@@ -110,6 +110,7 @@ export const AUTOMATION: Readonly<Record<BrowserCommand, AutomationDecision>> = 
   autofill: "needsPerson",
   openFile: "needsPerson",
   savePage: "needsPerson",
+  installApp: "needsPerson",
   emailPageLocation: "needsPerson",
   printWithSystemDialog: "needsPerson",
   stop: "run",

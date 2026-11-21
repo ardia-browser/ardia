@@ -1,6 +1,5 @@
 import { foreignWriteHooks } from "../browser/foreignWriteHooks";
 import { copyText } from "../../platform/clipboard";
-import { openExternalURL } from "../../platform/app";
 import { pickFiles, prompt } from "../../platform/dialogs";
 import type { CommandEvent } from "../../platform/commands";
 import { markdownLink } from "@ardia/core";
@@ -22,7 +21,7 @@ import {
 } from "../browser/actions";
 import { bookmarkAllTabs, bookmarkTab } from "../bookmarks/actions";
 import { isBookmarklet, runBookmarklet } from "../bookmarks/bookmarklets";
-import { exportBookmarksFromWindow, toggleDownloadsPanel } from "./platformCommands";
+import { emailPageLocation, exportBookmarksFromWindow, toggleDownloadsPanel } from "./platformCommands";
 import { requestClearData } from "../profiles/clearDataRequest";
 import { showHistory } from "../history/showHistory";
 import { openInternalPage } from "../pages/urls";
@@ -60,6 +59,7 @@ import { newWindowProfile, originalProfile } from "../windows/small";
 import { openLittleArdia } from "../littleArdia/actions";
 import { runPeekCommand } from "../peek/actions";
 import { expectFocus, findFocus } from "../focus/focusClaims";
+import { installPageAsApp } from "../webApps/webApps";
 import { isWebPageUrl } from "../../lib/url";
 import { findStep, openFind } from "../find/actions";
 import { runHidingCommand } from "../site/hiddenElements";
@@ -197,13 +197,12 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
       return void web?.runPageCommand("systemPrint");
     case "savePage":
       return void web?.runPageCommand("savePage");
+    case "installApp":
+      return void installPageAsApp(page, windowId);
     case "caretBrowsing":
       return void web?.runPageCommand("caretBrowsing");
     case "emailPageLocation":
-      if (!page || !/^https?:/i.test(page.url)) return;
-      return void openExternalURL(
-        `mailto:?subject=${encodeURIComponent(page.customTitle || page.title || page.url)}&body=${encodeURIComponent(page.url)}`,
-      );
+      return void emailPageLocation(page);
     case "stop":
       return void web?.stopLoading();
     case "share":

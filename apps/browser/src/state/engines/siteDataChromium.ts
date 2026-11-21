@@ -31,6 +31,7 @@ async function chromiumStorage(profile: string, origin: string, pages: ChromiumP
 }
 
 const ENGINE_STORAGE_BATCH = 4000;
+const ENGINE_STORAGE_BATCH_BYTES = 7 * 1024 * 1024;
 const ENGINE_STORAGE_QUOTA = 10 * 1024 * 1024;
 
 const encodedSize = (text: string) => {
@@ -38,47 +39,73 @@ const encodedSize = (text: string) => {
   return 1 + text.length;
 };
 const itemSize = ([key, value]: [string, string]) => encodedSize(key) + encodedSize(value);
+const storedSize = ([key, value]: [string, string]) => 2 + 2 * (key.length + value.length);
+const argumentBytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).length;
 
 type EngineStorageWrite = { written: number; overQuota: number };
 
 export function fitStorageChange(stored: StorageItems, change: StorageChange, quota = ENGINE_STORAGE_QUOTA): { change: StorageChange; overQuota: number } {
-  const sizes = new Map(stored.map((item) => [item[0], itemSize(item)]));
+  const sizes = new Map<string, number>();
+  for (const item of stored) sizes.set(item[0], (sizes.get(item[0]) ?? 0) + storedSize(item));
   let used = [...sizes.values()].reduce((n, size) => n + size, 0);
-  for (const key of change.remove) {
-    used -= sizes.get(key) ?? 0;
-    sizes.delete(key);
-  }
+  const remove = change.remove.filter((key) => key !== "");
   const set: StorageItems = [];
   let overQuota = 0;
   for (const item of change.set) {
+    if (item[0] === "") continue;
     const size = itemSize(item);
     const old = sizes.get(item[0]) ?? 0;
-    if (size > old && used - old + size > quota) {
+    if (size > old && used + size > quota) {
       overQuota++;
       continue;
     }
-    used += size - old;
-    sizes.set(item[0], size);
+    used += size;
+    sizes.set(item[0], old + size);
     set.push(item);
   }
-  return { change: { set, remove: change.remove }, overQuota };
+  return { change: { set, remove }, overQuota };
+}
+
+function nextBatch(change: StorageChange): { batch: StorageChange; tooBig: number } {
+  if (change.remove.length) return { batch: { set: [], remove: change.remove.slice(0, ENGINE_STORAGE_BATCH) }, tooBig: 0 };
+  const set: StorageItems = [];
+  let bytes = 0;
+  let tooBig = 0;
+  for (const item of change.set) {
+    if (set.length >= ENGINE_STORAGE_BATCH) break;
+    const size = argumentBytes(item) + 1;
+    if (size > ENGINE_STORAGE_BATCH_BYTES) {
+      tooBig++;
+      continue;
+    }
+    if (bytes + size > ENGINE_STORAGE_BATCH_BYTES) break;
+    bytes += size;
+    set.push(item);
+  }
+  return { batch: { set, remove: [] }, tooBig };
 }
 
 async function writeEngineStorage(profile: string, origin: string, change: StorageChange, stillCurrent: () => boolean): Promise<EngineStorageWrite> {
-  const stored = (await readChromiumStorage(profile, origin).catch(() => null))?.items;
-  if (!stored || !stillCurrent()) return { written: 0, overQuota: 0 };
-  const fitted = fitStorageChange(stored, change);
-  const steps: StorageChange[] = [];
-  for (let i = 0; i < fitted.change.remove.length; i += ENGINE_STORAGE_BATCH) steps.push({ set: [], remove: fitted.change.remove.slice(i, i + ENGINE_STORAGE_BATCH) });
-  for (let i = 0; i < fitted.change.set.length; i += ENGINE_STORAGE_BATCH) steps.push({ set: fitted.change.set.slice(i, i + ENGINE_STORAGE_BATCH), remove: [] });
+  let left: StorageChange = { set: change.set, remove: change.remove };
   let written = 0;
-  for (const step of steps) {
-    if (!stillCurrent()) break;
-    const count = (await writeChromiumStorage(profile, origin, step.set, step.remove).catch(() => null))?.written ?? 0;
+  let overQuota = 0;
+  while ((left.set.length || left.remove.length) && stillCurrent()) {
+    const stored = (await readChromiumStorage(profile, origin).catch(() => null))?.items;
+    if (!stored || !stillCurrent()) break;
+    const fitted = fitStorageChange(stored, left);
+    const { batch, tooBig } = nextBatch(fitted.change);
+    if (!batch.set.length && !batch.remove.length) {
+      overQuota += fitted.overQuota + tooBig;
+      break;
+    }
+    const count = (await writeChromiumStorage(profile, origin, batch.set, batch.remove).catch(() => null))?.written ?? 0;
     written += count;
-    if (count < step.set.length + step.remove.length) break;
+    if (count < batch.set.length + batch.remove.length) break;
+    const sent = new Set(batch.set.map(([key]) => key));
+    const removed = new Set(batch.remove);
+    left = { set: left.set.filter(([key]) => !sent.has(key)), remove: left.remove.filter((key) => !removed.has(key)) };
   }
-  return { written, overQuota: fitted.overQuota };
+  return { written, overQuota };
 }
 
 export type ChromiumRead = { data: SiteData; page: WebViewHandle; pages: ChromiumPage[] };

@@ -199,7 +199,7 @@ async function commitCarry(profile: string, site: string, to: PageEngine, { entr
   for (const k of Object.keys(cookieBase)) delete bases.cookies[k];
   Object.assign(bases.cookies, settledBase(cookieBase, cookies.base, [...cookies.put, ...cookies.drop], cookiesLanded));
   for (const { origin: o, before, merged } of storageMerges) bases.storage[o] = settledBase(before, merged.base, [...merged.put, ...merged.drop], !storage[o] || written.landed.has(o));
-  entry.carried[to] = Date.now();
+  if (cookiesLanded && Object.keys(storage).every((o) => written.landed.has(o))) entry.carried[to] = Date.now();
   capBases(bases);
   if (writing) saveNow(consent);
   else saveSoon(consent);

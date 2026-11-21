@@ -296,21 +296,31 @@ test("with no Chromium page open, WebKit's saved data reaches Chromium through t
 test("a carry never sends Chromium a write past the origin's storage quota, so the value already there stays", async () => {
   const { tabId } = setup();
   S().updateTab(tabId, { engine: "webkit" });
-  const MiB = 1024 * 1024;
-  const kept = "k".repeat(6 * MiB);
-  webKit.storage[ORIGIN] = [["kept", kept], ["huge", "h".repeat(5 * MiB)], ["small", "s"]];
+  const kept = "k".repeat(1_900_000);
+  webKit.storage[ORIGIN] = [["kept", kept], ["huge", "h".repeat(6_900_000)], ["small", "s"]];
   const chromiumStore = { [ORIGIN]: [["kept", kept]] };
+  const QUOTA = 10 * 1024 * 1024 + 100 * 1024;
+  const latin1 = (text) => 1 + text.length;
+  const used = (items) => items.reduce((n, [k, v]) => n + latin1(k) + latin1(v), 0);
   const calls = [];
   const profiles = [];
   const sites = stub.ardiaCoreNativeModules.ArdiaSites;
   await withSites(
     {
-      readStorage: ({ origin }) => (calls.push({ op: "read" }), { items: chromiumStore[origin] ?? [] }),
+      readStorage: ({ origin }) => {
+        calls.push({ op: "read" });
+        const items = chromiumStore[origin] ?? [];
+        return { items: items.reduce((n, [k, v]) => n + k.length + v.length, 0) > 2_000_000 ? null : items };
+      },
       writeStorage: ({ origin, set, remove }) => {
         calls.push({ op: "write", keys: set.map(([k]) => k), remove });
-        const used = (chromiumStore[origin] ?? []).reduce((n, [k, v]) => n + 2 + k.length + v.length, 0);
-        if (set.some(([k, v]) => used + 2 + k.length + v.length > 10 * MiB)) return Promise.reject(new Error("refused for quota"));
-        chromiumStore[origin] = [...(chromiumStore[origin] ?? []).filter(([k]) => !remove.includes(k) && !set.some(([n]) => n === k)), ...set];
+        let items = (chromiumStore[origin] ?? []).filter(([k]) => !remove.includes(k));
+        for (const [k, v] of set) {
+          const next = [...items.filter(([n]) => n !== k), [k, v]];
+          if (used(next) > QUOTA) return Promise.reject(new Error("refused for quota"));
+          items = next;
+        }
+        chromiumStore[origin] = items;
         return { written: set.length + remove.length };
       },
     },
@@ -325,6 +335,37 @@ test("a carry never sends Chromium a write past the origin's storage quota, so t
   assert.ok(profiles.length > 0 && profiles.every((p) => p === ""), "the default profile is the engine's empty name, never \"default\"");
   assert.equal(Object.fromEntries(chromiumStore[ORIGIN]).kept, kept);
   assert.equal(Object.fromEntries(chromiumStore[ORIGIN]).huge, undefined);
+});
+
+test("the quota check counts what Chromium holds at its largest, skips an empty key, and sizes new entries as Blink stores them", async () => {
+  const { fitStorageChange } = await import("./siteDataChromium.ts");
+  const stored = [["a", "x".repeat(40)]];
+  assert.deepEqual(fitStorageChange(stored, { set: [["b", "y".repeat(10)]], remove: [] }, 100).change.set.map(([k]) => k), ["b"], "84 held at most + 13 fits in 100");
+  assert.equal(fitStorageChange(stored, { set: [["b", "y".repeat(20)]], remove: [] }, 100).overQuota, 1, "84 + 23 doesn't");
+  assert.equal(fitStorageChange(stored, { set: [["b", "é".repeat(8)]], remove: [] }, 100).overQuota, 0, "Latin-1 is a byte a character: 84 + 11");
+  assert.equal(fitStorageChange(stored, { set: [["b", "€".repeat(8)]], remove: [] }, 100).overQuota, 1, "UTF-16 is two: 84 + 19");
+  const empty = fitStorageChange([], { set: [["", "v"]], remove: [""] }, 100);
+  assert.deepEqual(empty.change, { set: [], remove: [] }, "an empty key stays pending");
+  assert.equal(fitStorageChange(stored, { set: [["a", "x".repeat(10)]], remove: [] }, 100).change.set.length, 1, "a smaller value always fits");
+});
+
+test("an entry too big for one engine call stays pending while the rest goes through", async () => {
+  const { tabId } = setup();
+  S().updateTab(tabId, { engine: "webkit" });
+  webKit.storage[ORIGIN] = [["nuls", "\u0000".repeat(1_300_000)], ["small", "s"]];
+  const sent = [];
+  await withSites(
+    {
+      readStorage: () => ({ items: [] }),
+      writeStorage: ({ set, remove }) => {
+        if (new TextEncoder().encode(JSON.stringify({ set, remove })).length > 8 * 1024 * 1024) return Promise.reject(new Error("the arguments are too big"));
+        sent.push(...set.map(([k]) => k));
+        return { written: set.length + remove.length };
+      },
+    },
+    () => carrySignIn(tabId, `${ORIGIN}/home`, "chromium", null),
+  );
+  assert.deepEqual(sent, ["small"]);
 });
 
 test("a page-free storage carry larger than one engine write goes in batches the engine takes", async () => {

@@ -24,6 +24,7 @@ export type LinuxCapabilities = {
   unloadIdleProfiles: boolean;
   hiddenElements: boolean;
   blockAutoplayEverywhere: boolean;
+  selfUpdate: boolean;
 };
 
 export const CLI_CONTROL_METHODS = [
@@ -39,6 +40,8 @@ export const CLI_CONTROL_METHODS = [
 export const CLI_INSTALL_METHODS = ["ArdiaCli.installedVersion", "ArdiaCli.install"] as const;
 
 export const USER_SCRIPTS_METHODS = ["ArdiaUserScripts.watch", "ArdiaUserScripts.read", "ArdiaUserScripts.readStatus", "ArdiaUserScripts.writeStatus"] as const;
+
+export const SELF_UPDATE_METHODS = ["ArdiaUpdates.installKind", "ArdiaUpdates.update", "ArdiaUpdates.status", "ArdiaUpdates.claimOutcome", "ArdiaUpdates.restart"] as const;
 
 export const LINKS_FROM_OTHER_APPS = "ArdiaShell.onOpenURLs";
 export const DICTATION_METHOD = "ArdiaShell.startDictation";
@@ -75,13 +78,15 @@ export function linuxCapabilities(host: ArdiaHost | undefined = ardiaHost): Linu
     unloadIdleProfiles: has(UNLOAD_IDLE_PROFILES_CALL),
     hiddenElements: has(...HIDDEN_ELEMENTS_CALLS),
     blockAutoplayEverywhere: has(BLOCK_AUTOPLAY_EVERYWHERE_CALL),
+    selfUpdate: has(...SELF_UPDATE_METHODS),
   };
 }
 
 export const WEB_ENGINE_SETTINGS = ["advanced.pageEngine", "advanced.websiteEngines"] as const;
 
 export function unavailableSettingIds(capabilities: LinuxCapabilities, settingIds: readonly string[]): Set<string> {
-  const ids = new Set<string>(["general.autoUpdate"]);
+  const ids = new Set<string>();
+  if (!capabilities.selfUpdate) ids.add("general.autoUpdate");
   if (!capabilities.defaultBrowser) ids.add("general.defaultBrowser");
   if (!capabilities.launchAtLogin) ids.add("general.openAtLogin");
   if (!capabilities.videoUpscaling) ids.add("tabs.videoUpscaling");

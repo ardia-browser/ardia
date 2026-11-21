@@ -549,6 +549,10 @@ a `.sha256` file beside it (`sha256sum -c <asset>.sha256` checks a download):
   to remove it delete `<prefix>/lib/ardia`, `<prefix>/bin/ardia`, the desktop entry, the icon,
   `/usr/share/polkit-1/actions/dev.ardia.linux.policy` and, on Ubuntu, `/etc/apparmor.d/ardia`.
 
+The `.deb`, a tarball installed with `install.sh` and the AppImage update themselves from each release's signed
+self-update manifest (`lib/ardia/ardia-update`, under Packaging and installing). `ardia-bin` updates with pacman like
+any AUR package.
+
 ## Packaging and installing
 
 ```bash
@@ -608,6 +612,8 @@ command ([linux-ci.md](linux-ci.md) › Linux releases).
   - `lib/ardia/ardia-ui`;
   - `lib/ardia/extensions/ublock`;
   - `lib/ardia/VERSION` (with `--version`), one line with the Ardia version (`0.2.44`, `0.2.44-nightly.3`);
+  - `lib/ardia/ardia-update` (mode 0755), the self-update helper, and `lib/ardia/linux-update.pem` (0644), the
+    Ed25519 public key it verifies release manifests with;
   - `lib/ardia/cli/` (with `--cli`): `ardia-cli-install.sh` (`apps/cli/install.sh`, the pinned installer from
     ardia-browser/plugins; `scripts/release/official-plugins.py check` holds it to the pin, mode 0755),
     `ardia-cli-<version>-linux-x64.tar.gz` and `ardia-cli.sha256` (the digest is its first token), the `ardia`
@@ -623,10 +629,20 @@ command ([linux-ci.md](linux-ci.md) › Linux releases).
   `--destdir <staging root>`.
   - Without `--destdir` it must run as root and refuses otherwise, so it never leaves a partial install. Installed
     files are owned by root.
-  - It copies `lib/ardia` whole, so `VERSION` and `cli/` come along.
+  - It copies `lib/ardia` whole, so `VERSION`, `cli/` and the update helper come along. It copies it to
+    `<prefix>/lib/ardia.new-<pid>` first, then swaps it in with one atomic `mv --exchange` where coreutils has it
+    (9.5 and later), or else two renames (the old tree to `ardia.old-<pid>`, the new one to `ardia`), and deletes the
+    old tree, so a running Ardia keeps the files it has open and a failed copy
+    leaves the old install whole. A failure between the renames puts the old tree back; leftovers of a run that died
+    are removed by the next one.
   - It always installs the polkit policy at `<destdir>/usr/share/polkit-1/actions` (mode 0644), whatever the prefix,
     because polkit reads actions only from there. Without the policy Ardia can't ask for the system password, so saved
-    passwords and card numbers stay hidden.
+    passwords and card numbers stay hidden. The update action's `org.freedesktop.policykit.exec.path` names
+    `/usr/lib/ardia/ardia-update`; for another prefix `install.sh` rewrites it to `<prefix>/lib/ardia/ardia-update`.
+    Because that action runs the helper as root without a password, `install.sh` keeps it only when every folder from
+    `/` down to `<prefix>/lib/ardia` is owned by root and writable by no one else and the helper is root's, mode 0755
+    (with `--destdir`, only for `--prefix /usr`); otherwise it installs the policy without it, says so, and that
+    install reports `unsupported noPolicy` and doesn't update itself.
 - **Debian package.** `package.py --deb <path> --version <version>` (`scripts/linux/linux_formats.py`) builds it from
   the staged tree with `dpkg-deb`, so it needs `dpkg-deb` and `readelf` (`apt install dpkg binutils`, Arch:
   `pacman -S dpkg binutils`):
@@ -639,8 +655,9 @@ command ([linux-ci.md](linux-ci.md) › Linux releases).
     Chromium loads them only on Qt desktops) maps to its Debian package with the 64-bit-time name first
     (`libasound2t64 | libasound2`), `libc6`'s minimum is the highest `GLIBC_` symbol version, and the list adds what
     Chromium loads at run time (GTK 3, libsecret, Liberation fonts, xdg-utils) and `curl`, which the bundled CLI
-    installer downloads with. A library with no package in `SONAME_PACKAGES` fails the build, so a new engine
-    dependency can't ship unnoticed. polkit and Vulkan are `Recommends`;
+    installer downloads with, and `openssl`, which the update helper verifies signatures with. A library with no
+    package in `SONAME_PACKAGES` fails the build, so a new engine dependency can't ship unnoticed. polkit, `pkexec`
+    and Vulkan are `Recommends`;
   - it `Provides: www-browser`; `postinst` makes `chrome-sandbox` setuid root, copies the AppArmor profile to
     `/etc/apparmor.d/ardia` and loads it where `/etc/apparmor.d/abi/4.0` exists, as `install.sh` does, and registers
     `/usr/bin/ardia` as the `x-www-browser` and `gnome-www-browser` alternative (priority 100), also on dpkg's
@@ -673,6 +690,49 @@ command ([linux-ci.md](linux-ci.md) › Linux releases).
   leaves `<prefix>/lib/ardia/chrome` unconfined and allows it user namespaces, which Ubuntu denies to unprivileged
   programs and Chromium's sandbox needs. A staged install writes no profile, and an older AppArmor never gets the
   file, which it couldn't parse.
+
+- **Self-update helper.** `lib/ardia/ardia-update` (`scripts/linux/ardia-update`, bash) installs a release the
+  browser downloaded. `ardia-update kind` prints one line: `appimage` (`$APPIMAGE` names a file whose folder the user
+  can write, and when `$APPDIR` is set the helper runs from it), `managed` (pacman or rpm owns `lib/ardia/chrome`, or
+  a dpkg package other than `ardia`), `deb` (dpkg's `ardia` owns it), `tarball`, or `unsupported <reason>`: `noVersion`,
+  `noKey`, `noOpenssl` (no OpenSSL 3 with `pkeyutl -rawin`), and for deb and tarball `noPkexec` (no setuid pkexec) and
+  `noPolicy` (the installed policy's update action doesn't name this helper, as for a tarball run in place).
+  `ardia-update install <dir>` runs as root through `pkexec` for a `.deb` or tarball and as the user for an AppImage.
+  It takes a lock (`/run/ardia-update.lock`, or the AppImage's folder), refuses a folder or file that isn't a regular,
+  singly linked file owned by the calling user (`PKEXEC_UID`), copies the manifest (at most 4096 bytes) and its `.sig`
+  (64 bytes) into a fresh 0700 folder, read by `dd iflag=nofollow,nonblock` running as the calling user (`setpriv`), so
+  root never opens a path the caller controls. That reader only gets a pipe that root's `head` empties into the copy,
+  never the copy or the lock itself, so a process of the caller that traces it can't change a file after it is
+  verified. It verifies them with
+  `openssl pkeyutl -verify -rawin` against `lib/ardia/linux-update.pem`, parses the manifest strictly (it must
+  re-serialize byte for byte, and each package name must be exactly `Ardia-<V>-linux-x64.<deb|tar.xz|AppImage>`),
+  requires `<V>` to be newer than `lib/ardia/VERSION` (a nightly sorts before its stable), then copies its package
+  (at most the manifest's size, the same way) and checks size and sha256. Everything from its start to the post-install version check shares
+  one 9-minute deadline, enforced with `timeout`, so the helper gives up before the browser's 10-minute deadline. Run
+  through pkexec, it re-runs itself under a `timeout` watchdog 30 s past that deadline too, since the browser can't signal a root process,
+  so a step outside that deadline (a `stat` that stalls) still ends. A `.deb` goes through `apt-get install --no-remove`, a
+  tarball through its own `install.sh --prefix <the helper's prefix>`, and an AppImage is staged as
+  `.ardia-update-XXXXXX` beside `$APPIMAGE` and renamed over it, unless `$APPIMAGE` changed after the browser that
+  called the helper started (another instance already replaced it, so this one's version check is stale). PATH is its own and the prefix comes from its own
+  location, never from the caller. The last line on stdout is `installed <V>` or `failed <reason>` (`usage`,
+  `missing`, `manifest`, `signature`, `notNewer`, `kind`, `checksum`, `install`, `busy`, `timeout`).
+- **polkit action `dev.ardia.linux.update`.** `allow_active` is `yes` with no password, `allow_any` and
+  `allow_inactive` are `no`, and `org.freedesktop.policykit.exec.path` limits it to the helper, which only installs
+  a release signed with Ardia's key that is newer than the installed one.
+- **Signed manifest.** Each release carries `Ardia-<V>-linux-update.txt` (`ardia-linux-update 1`, `version <V>`, then
+  `deb`, `tarball` and `appimage` lines with file name, sha256 and size, for the formats on the release) and
+  `Ardia-<V>-linux-update.txt.sig`, the raw Ed25519 signature.
+  `node scripts/linux/sign-update.mjs --key <pem> --dir <assets> --version <V>` writes both, and refuses a key whose
+  public half isn't `scripts/linux/linux-update.pem`; `--unsigned` writes only the manifest. `release.sh` writes the
+  unsigned manifest unless `--update-key` (or `LINUX_UPDATE_KEY_FILE`) gives it the key. The Release workflow's
+  `linux-sign` job signs the `linux` artifact with the `LINUX_UPDATE_ED_PRIVATE_KEY` secret (a PKCS#8 PEM from
+  `openssl genpkey -algorithm ed25519`) in a job of its own, so the build never sees it; if it fails, the release
+  ships without the manifest and warns. `node --test scripts/linux/sign-update.test.mjs` covers the script.
+- **Testing the helper.** `scripts/linux/update-helper-test.sh` builds two stand-in releases with package.py, signs
+  them with a throwaway key it swaps into each test install, and in `debian:13` and `ubuntu:24.04` containers checks
+  `kind` and its reasons, upgrades a `.deb`, a tarball (no `ardia.new`/`ardia.old` left, a process running from the old
+  tree survives) and an AppImage as a user, and every refusal; in `archlinux` it installs the PKGBUILD and checks
+  `kind` is `managed`.
 
 CI builds packages from a prebuilt engine instead of compiling Chromium; see [linux-ci.md](linux-ci.md).
 
@@ -727,13 +787,48 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
   GitHub's release list for ardia-browser/ardia (`ac_linux_updates.cc`: a cookieless GET of a fixed URL, at most
   4 MiB, no redirects, 20 s), and the shell (`hostUpdates.ts`, `updateReleases.ts`) keeps published releases that
   carry a Linux package and a github.com release page, newest per channel (a nightly build follows nightly).
-- **What it does.** Check Now and the app menu ask before opening the release page; an automatic check (30 s after
-  launch, then every 6 h, in one window, never in a hidden instance or a build without `lib/ardia/VERSION`) offers a
-  newer release once as a toast. Ardia doesn't install updates on Linux, so "Automatically update Ardia" is hidden.
+- **What it does.** An automatic check runs 30 s after launch, then every 6 h, in one window, never in a hidden
+  instance or a build without `lib/ardia/VERSION`. Where Ardia can update itself (below), a newer release is
+  downloaded and installed in the background, with "Automatically update Ardia" on (the default), or on Check Now, the
+  app menu's Check for Updates or the offer toast's Update when it's off. Then a sticky toast says the release is
+  ready, and Check Now and the app menu read Restart to Update. Where it can't (an engine without the methods, or
+  `unsupported`), Check Now asks before opening the release page and an automatic check offers it once as a toast, and
+  the toggle is hidden. An install pacman or rpm owns (`managed`, the AUR's `ardia-bin`) is told to update with its
+  package manager. A failed download or install falls back to the release page once and isn't retried automatically.
+- **Self-update.** `ac_linux_self_update.cc` serves `ArdiaUpdates.installKind`, `update(version)`, `status()`,
+  `claimOutcome(run)` and `restart`; the rules are in `ac_linux_self_update_policy.h`. The engine owns each run, so it
+  carries on whatever window started it or closes.
+  - `installKind` runs `<lib dir>/ardia-update kind` once per browser process (10 s) and answers its line,
+    `unsupported noHelper` without the helper, or `unsupported helperFailed` (not cached).
+  - `status()` answers `{phase, version, reason, kind, run}`, phase `idle`, `downloading`, `installing`, `ready` or
+    `failed`. `ready` lasts until the restart: no newer run starts after it.
+  - `update(version)` starts a run unless one is busy or an update is ready, and answers the status at once. The run
+    downloads `Ardia-<V>-linux-update.txt`, its `.sig` and the package the manifest names for this kind from the `v<V>`
+    release into `<user data dir>/Updates/<V>/` (cookieless, no cache, traffic annotation `ardia_linux_update_download`;
+    `Updates` must be a real directory, and only version folders in it are pruned). Redirects go only to https on
+    github.com, objects.githubusercontent.com and release-assets.githubusercontent.com. Caps: 4096 bytes for the
+    manifest, 64 for the signature, the manifest's size (at most 512 MiB) for the package, and the package size plus
+    64 MiB free. Then it runs `pkexec <helper> install <dir>` for a `.deb` or tarball, or the helper as the user with
+    `APPIMAGE` and `APPDIR` for an AppImage, with a clean environment and a 10 min deadline (the helper's own is 9).
+    Failure reasons: `version`, `kind`, `network`, `manifest`, `tooLarge`, `busy`, `disk`, the helper's, `polkit`,
+    `timeout`, `missing`. A successful install deletes the folder, and so does a `signature`, `checksum`, `manifest` or
+    `notNewer` failure, so the next try downloads afresh.
+  - `claimOutcome(run)` is true once for a finished run. Only that window counts it and says so: the window that
+    started the run claims it as it finishes, otherwise the browser window that runs scheduled checks claims it on its
+    second look (every 30 s). Settings claims a ready run only when the user restarts from it, so otherwise a browser window shows
+    the ready toast.
+  - `restart` restarts through Chromium's own restart; an AppImage relaunches `$APPIMAGE`.
+  - The helper verifies the release's signature as root before it installs anything (Packaging and installing ›
+    Self-update helper), so the browser is never trusted with what gets installed.
+  - Test feed: in an isolated instance (`--user-data-dir` or `ARDIA_DATA_DIR`), `ARDIA_UPDATE_FEED=http://127.0.0.1:<port>/`
+    serves the release list from `<feed>releases.json` and packages from `<feed>v<V>/<name>`.
 - **Kill switches.** `ArdiaShell.fetchKillSwitches` fetches `ardia.dev/switches.json` (at most 16 KiB) once per
   browser process for every window, and the shared refresh runs under the Mac's rule (automatic checks on).
 - **Telemetry.** `update_checks_asked`, `update_checks_automatic`, `update_check_failures`, `update_checks_found`,
-  `update_release_page_opens`, `kill_switch_refreshes`, `kill_switch_refresh_failures`.
+  `update_release_page_opens`, `kill_switch_refreshes`, `kill_switch_refresh_failures`, and for self-update
+  `update_downloads_started`, `update_downloads_finished`, `update_download_failures_<reason>`,
+  `update_installs_<deb|tarball|appimage>`, `update_install_failures_<reason>` and `update_restarts`. Watch installs
+  against found updates, and the `signature`, `polkit` and `network` failures.
 
 ### System signals and location
 
@@ -2012,7 +2107,8 @@ These were open at the time of the PR.
     `stopCasting`, `closeCastDialog`, `watchCastRoutes`, `terminateCastRoute`): Cast shows a toast;
   - translation (Bergamot isn't ported yet);
   - video upscaling;
-  - installing updates: Ardia checks for them and opens the release page (Updates and kill switches);
+  - installing updates with an engine older than `ArdiaUpdates.install`, or an install the helper can't update: Ardia
+    checks for them and opens the release page (Updates and kill switches);
   - crash reports with an engine that doesn't advertise `crash.dumps` (see Crash reports);
   - sending problem reports from the sheet with an engine older than `report.files` and `report.send` (see Problem
     reports), where `ArdiaTelemetryLocal.exportForReport` answers null;

@@ -90,7 +90,6 @@
     "apps/linux/src/hostExtensionView.ts": 1,
     "apps/linux/src/hostPolicies.ts": 1,
     "apps/linux/src/hostTab.ts": 2,
-    "apps/linux/src/hostUpdates.ts": 1,
     "apps/linux/src/sandboxNotice.ts": 1
   },
   "consentNow": {

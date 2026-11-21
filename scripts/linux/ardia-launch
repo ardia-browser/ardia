@@ -5,6 +5,12 @@ chrome="$here/chrome"
 helper="$here/chrome-sandbox"
 why=""
 allow=""
+if [[ -n "${APPDIR:-}" && "$here" != "$(readlink -f -- "$APPDIR" 2>/dev/null)/lib/ardia" ]]; then
+  unset APPIMAGE APPDIR
+fi
+if [[ -z "${APPDIR:-}" ]]; then
+  unset APPIMAGE
+fi
 
 number() {
   if [[ -r "$1" ]]; then tr -dc '0-9' < "$1"; else printf '%s' "$2"; fi

@@ -200,6 +200,10 @@ The Release workflow (`release.yml`) runs it in its `linux` job, beside the Mac 
 artifact. When the install test fails (after apt's and the image pulls' retries), the job deletes the `.deb` and its
 `.sha256`, adds a `deb dropped` line to `provenance.txt` and warns, and still succeeds: the tarball, AppImage, Arch
 source package and CLI ship without it. Only a `deb dropped` line lets `publish.sh` go on without the `.deb`.
+The `linux-sign` job, the only one that sees the `LINUX_UPDATE_ED_PRIVATE_KEY` secret, downloads that artifact and
+signs `Ardia-<version>-linux-update.txt` with `scripts/linux/sign-update.mjs`, which refuses a key that doesn't match
+`scripts/linux/linux-update.pem`; it uploads the manifest and its `.sig` as the `linux-update` artifact. When signing
+fails, `publish` warns and the release ships without them, so installed Linux apps fall back to the release page for it.
 `publish` puts that artifact in `dist/<version>/linux/`, and `publish.sh` attaches the assets to the GitHub release it
 creates. It refuses a Linux folder whose provenance names an inexact engine or uncommitted changes. A dry run
 publishes nothing. When the `linux` job fails, usually because the release's engine key has no published Linux

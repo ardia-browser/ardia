@@ -431,9 +431,18 @@ class PackagingTests(unittest.TestCase):
                                         capture_output=True, text=True, timeout=60)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 policy = destdir / 'usr/share/polkit-1/actions/dev.ardia.linux.policy'
-                self.assertEqual(policy.read_text(), (REPO / 'scripts/linux/dev.ardia.linux.policy').read_text())
+                source_policy = (REPO / 'scripts/linux/dev.ardia.linux.policy').read_text()
+                self.assertIn('>/usr/lib/ardia/ardia-update<', source_policy)
+                if prefix == '/usr':
+                    self.assertEqual(policy.read_text(), source_policy)
+                else:
+                    self.assertNotIn('dev.ardia.linux.update', policy.read_text())
+                    self.assertIn('<action id="dev.ardia.linux.reauthenticate">', policy.read_text())
                 self.assertEqual(policy.stat().st_mode & 0o777, 0o644)
                 installed = destdir / prefix.lstrip('/')
+                self.assertEqual(oct((installed / 'lib/ardia/ardia-update').stat().st_mode & 0o777), oct(0o755))
+                self.assertEqual(oct((installed / 'lib/ardia/linux-update.pem').stat().st_mode & 0o777), oct(0o644))
+                self.assertEqual([path.name for path in (installed / 'lib').iterdir()], ['ardia'])
                 self.assertTrue((installed / 'lib/ardia/chrome').is_file())
                 self.assertTrue(os.access(installed / 'lib/ardia/chrome', os.X_OK))
                 self.assertTrue((installed / 'lib/ardia/ardia-ui/index.html').is_file())
@@ -542,6 +551,8 @@ class PackagingTests(unittest.TestCase):
             (root / 'apparmor.d').mkdir()
             (root / 'apparmor.d/ardia').write_text(env['profile'].replace('CHROME', str((runtime / 'chrome').resolve())))
         variables = {'PATH': os.environ['PATH'], **env.get('vars', {})}
+        if 'APPIMAGE' in variables:
+            variables.setdefault('APPDIR', str(root.resolve()))
         return subprocess.run([str(runtime / 'ardia-launch'), '--marker', *extra], capture_output=True, text=True, timeout=30, env=variables)
 
     def test_the_launcher_keeps_the_sandbox_and_runs_without_it_only_when_asked(self):
@@ -555,6 +566,7 @@ class PackagingTests(unittest.TestCase):
             ('namespaces off', {'proc': {'sys/user/max_user_namespaces': '0'}}, (), 1, None),
             ('asked', {'proc': restricted}, ('--no-sandbox',), 0, None),
             ('AppImage, asked', {'proc': restricted, 'vars': {'APPIMAGE': '/tmp/Ardia.AppImage'}}, ('--no-sandbox',), 0, None),
+            ('APPIMAGE without APPDIR', {'proc': restricted, 'vars': {'APPIMAGE': '/tmp/Ardia.AppImage', 'APPDIR': ''}}, (), 1, None),
         ]
         for label, env, extra, code, expected in cases:
             with self.subTest(label), tempfile.TemporaryDirectory() as scratch:
@@ -566,6 +578,8 @@ class PackagingTests(unittest.TestCase):
                 if code == 1:
                     self.assertEqual(lines, [])
                     self.assertIn("can't start Chromium's sandbox", result.stderr)
+                if label == 'APPIMAGE without APPDIR':
+                    self.assertNotIn("Ardia won't run without the sandbox", result.stderr)
                 if label.startswith('AppImage') and code == 1:
                     self.assertIn("Ardia won't run without the sandbox", result.stderr)
                     self.assertIn("Install Ardia's .deb, which sets up the sandbox helper and its AppArmor profile", result.stderr)
@@ -626,7 +640,7 @@ class PackagingTests(unittest.TestCase):
                 self.assertIn(f'[ "$1" = {rollback} ]', postinst)
             fields = subprocess.run(['dpkg-deb', '-f', str(deb), 'Depends', 'Provides'], capture_output=True, text=True, check=True).stdout
             self.assertIn('Provides: www-browser', fields)
-            for package in ('libc6 (>= 2.17)', 'libgtk-3-0t64 | libgtk-3-0', 'libsecret-1-0', 'xdg-utils', 'curl'):
+            for package in ('libc6 (>= 2.17)', 'libgtk-3-0t64 | libgtk-3-0', 'libsecret-1-0', 'xdg-utils', 'curl', 'openssl'):
                 self.assertIn(package, fields)
             self.assertIn('Upstream-Name: Ardia', (unpacked / 'usr/share/doc/ardia/copyright').read_text())
             with gzip.open(unpacked / 'usr/share/doc/ardia/changelog.gz', 'rt') as changelog:

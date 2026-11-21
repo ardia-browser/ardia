@@ -554,6 +554,7 @@ export const TabDeck = memo(function TabDeck() {
       const kept = sideScrolls.current[side ? "incognito" : "normal"];
       showSide(ids, alive, kept === null ? initialDeckScroll(ids.length) : Math.min(Math.max(kept, 0), Math.max(ids.length - 1, 0)), sideLeaving.current);
       sideLeaving.current = false;
+      if (!side && !archiveOffered) offerArchiveCard(ids.length);
       return;
     }
     const next = mergeDeckOrder(order, ids);

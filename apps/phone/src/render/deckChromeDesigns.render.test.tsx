@@ -1,4 +1,6 @@
 import { Dimensions, Platform, StyleSheet } from "react-native";
+import { State } from "react-native-gesture-handler";
+import { fireGestureHandler, getByGestureTestId } from "react-native-gesture-handler/jest-utils";
 import { getAnimatedStyle } from "react-native-reanimated";
 import { act } from "react-test-renderer";
 import { DeckBar } from "../components/tabs/DeckBar";
@@ -320,6 +322,28 @@ test("with no Incognito tabs the switch shows an empty Incognito deck that says 
   act(() => jest.advanceTimersByTime(600));
   expect(hosts(root, "deckCard")).toHaveLength(9);
   expect(textOf(root)).not.toContain("No Incognito Tabs");
+  unmount(root);
+});
+
+test("the Archive capsule a touch on the deck put away comes back after a switch to Incognito and back, as it does when the tabs reopen", () => {
+  act(() => useArchiveCard.setState({ showing: true }));
+  const root = deck();
+  act(() =>
+    fireGestureHandler(getByGestureTestId("deckPan"), [
+      { state: State.BEGAN, x: 100, y: 400, absoluteX: 100, absoluteY: 400 },
+      { state: State.ACTIVE, x: 100, y: 400, absoluteX: 60, absoluteY: 400 },
+      { state: State.END, x: 100, y: 400, absoluteX: 60, absoluteY: 400 },
+    ]),
+  );
+  act(() => jest.advanceTimersByTime(16));
+  expect(host(root, "archiveCapsule")).toBeUndefined();
+  act(() => incognitoSwitch(root)!.props.onPress());
+  act(() => jest.advanceTimersByTime(600));
+  act(() => incognitoSwitch(root)!.props.onPress());
+  act(() => jest.advanceTimersByTime(600));
+  act(() => jest.advanceTimersByTime(200));
+  expect(useTabs.getState().incognito).toBe(false);
+  expect(host(root, "archiveCapsule")).toBeDefined();
   unmount(root);
 });
 

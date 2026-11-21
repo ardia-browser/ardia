@@ -142,6 +142,7 @@ export type EngineCalls = {
   "search.stopSuggest": [Profile & { id: number }, Done];
 
   "media.displayMediaSources": [{}, DisplayMediaSource[]];
+  "media.displayMediaThumbnails": [{ ids: string[]; width: number }, Record<string, string>];
   "media.screenRecordingAllowed": [{}, boolean];
   "media.requestScreenRecording": [{}, boolean];
   "media.selectDevice": [{ id: number; index: number }, null];

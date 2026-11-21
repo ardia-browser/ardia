@@ -21,6 +21,7 @@ export {
 } from "@ardia/ardiacore";
 
 export const getDisplayMediaSources = () => call("media.displayMediaSources");
+export const getDisplayMediaThumbnails = (ids: string[], width: number) => call("media.displayMediaThumbnails", { ids, width });
 export const screenRecordingAllowed = () => call("media.screenRecordingAllowed");
 export const requestScreenRecording = () => call("media.requestScreenRecording");
 export const setDisplayMediaPicker = (enabled: boolean) => call("webView.setDisplayMediaPicker", { enabled });

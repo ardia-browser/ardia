@@ -1212,11 +1212,9 @@ export const TabDeck = memo(function TabDeck() {
                     safeTop={g.safeTop}
                     safeSide={g.safeSide}
                     sideInset={chromeLayout.barSideInset}
-                    privateCount={privateCount}
                     hasTabs={allTabs.length > 0}
                     menusShown={shown && phase.kind === "settled"}
                     onMenu={setChromeMenu}
-                    onCloseIncognito={confirmLeaveIncognito}
                     onCloseAll={confirmCloseAll}
                     glassShown={glassShown}
                     glassShownMs={pulledIn.current ? 0 : CHROME_GLASS_MS}

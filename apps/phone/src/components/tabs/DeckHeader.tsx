@@ -1,5 +1,4 @@
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
-import Animated, { withSpring } from "react-native-reanimated";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { haptics } from "../../state/app/haptics";
 import { newIncognitoTab, openArchive, openSpaces, reopenLastClosed } from "../../state/browse/store";
 import { menuOpenedHaptic } from "../../state/browse/tabMenus";
@@ -8,7 +7,7 @@ import { selectProfile } from "../../state/sync/actions";
 import { useSelectedProfile, useSyncStatus, useSyncView } from "../../state/sync/hooks";
 import { useCanReopen, useIncognito } from "../../state/tabs/hooks";
 import { countUsage } from "../../state/telemetry/telemetry";
-import { browseLayout, capsule, ChromeSurface, deckChromeInk, deckChromeLayout, deckChromeMotion, font, IncognitoSpecs, menuLook, tabsInk, tabsLayout, useTheme, type MenuItem } from "../ui";
+import { browseLayout, ChromeSurface, deckChromeLayout, font, menuLook, tabsLayout, useTheme, type MenuItem } from "../ui";
 import { deckLook } from "./deckLook";
 import { MenuTrigger, nativeMenus, spaceSystemImage } from "../ui/MenuTrigger";
 import { SpaceTitle, spaceMenuSymbol } from "../search/StartSpaces";
@@ -18,9 +17,7 @@ type Props = {
   safeTop: number;
   safeSide: number;
   sideInset: number;
-  privateCount: number;
   hasTabs: boolean;
-  onCloseIncognito: () => void;
   onCloseAll: () => void;
   menusShown?: boolean;
   onMenu?: (open: boolean) => void;
@@ -59,7 +56,7 @@ export function useDeckSpaces() {
   return { syncEnabled: status.isEnabled, spaces, current, spaceItems };
 }
 
-export function DeckHeader({ safeTop, safeSide, sideInset, privateCount, hasTabs, onCloseIncognito, onCloseAll, menusShown = true, onMenu, glassShown, glassShownMs, glyphFade }: Props) {
+export function DeckHeader({ safeTop, safeSide, sideInset, hasTabs, onCloseAll, menusShown = true, onMenu, glassShown, glassShownMs, glyphFade }: Props) {
   const theme = useTheme();
   const canReopen = useCanReopen();
   const { syncEnabled, spaces, current, spaceItems } = useDeckSpaces();
@@ -69,7 +66,6 @@ export function DeckHeader({ safeTop, safeSide, sideInset, privateCount, hasTabs
   const closed = () => onMenu?.(false);
   const menu = { trigger: "tap" as const, fixedOrder: true, haptic: menuOpenedHaptic, disabled: !menusShown, onOpen: opened, onClose: closed };
   const moreItems = deckMoreMenuItems({ syncEnabled, canReopen, hasTabs, onCloseAll, archive: false });
-  const pillItems: MenuItem[] = [{ label: "Close Incognito Tabs", icon: "xmark", destructive: true, onPress: onCloseIncognito }];
   return (
     <View testID="deckHeader" pointerEvents="box-none" style={[styles.row, { top: safeTop + deckChromeLayout.headerCenter - browseLayout.hitTarget / 2, paddingHorizontal: side }]}>
       {current && spaces.length > 1 ? (
@@ -98,15 +94,6 @@ export function DeckHeader({ safeTop, safeSide, sideInset, privateCount, hasTabs
         </FadingGlyphs>
       )}
       <View style={styles.spacer} />
-      {privateCount > 0 && Platform.OS !== "android" ? (
-        <Animated.View entering={pillIn} exiting={pillOut}>
-          <FadingGlyphs testID="deckIncognitoPillFade" fade={glyphFade}>
-            <MenuTrigger items={pillItems} {...menu} place={{ top: below, right: side + deckChromeLayout.headerCircle + deckChromeLayout.headerGap, width: tabsLayout.menuWidth }}>
-              {({ onPress }) => <IncognitoPill count={privateCount} onPress={onPress ?? noop} />}
-            </MenuTrigger>
-          </FadingGlyphs>
-        </Animated.View>
-      ) : null}
       <MenuTrigger items={moreItems} {...menu} place={{ top: below, right: side, width: tabsLayout.menuWidth }}>
         {({ onPress }) => <GlassCircleButton icon="ellipsis" label="More" testID="deckHeaderMore" diameter={deckChromeLayout.headerCircle} dark={theme.dark} glassShown={glassShown} glassShownMs={glassShownMs} glyphFade={glyphFade} onPress={onPress ?? noop} />}
       </MenuTrigger>
@@ -116,47 +103,10 @@ export function DeckHeader({ safeTop, safeSide, sideInset, privateCount, hasTabs
 
 const noop = () => undefined;
 
-function IncognitoPill({ count, onPress }: { count: number; onPress: () => void }) {
-  return (
-    <Pressable
-      testID="deckIncognitoPill"
-      accessibilityRole="button"
-      accessibilityLabel={`Incognito, ${count} ${count === 1 ? "tab" : "tabs"}`}
-      accessibilityHint="Shows the option to close incognito tabs."
-      onPress={onPress}
-      style={styles.pillHit}
-    >
-      <View pointerEvents="none" style={[styles.pill, { backgroundColor: tabsInk.incognitoOnLight, borderRadius: capsule(deckChromeLayout.pillHeight) }]}>
-        <IncognitoSpecs size={deckChromeLayout.pillSpecs} color={deckChromeInk.pill} />
-        <Text style={[font.subheadline, styles.count]}>{count}</Text>
-      </View>
-    </Pressable>
-  );
-}
-
-const pillIn = () => {
-  "worklet";
-  return {
-    initialValues: { opacity: 0, transform: [{ scale: deckChromeMotion.pillScale }] },
-    animations: { opacity: withSpring(1, deckChromeMotion.pill), transform: [{ scale: withSpring(1, deckChromeMotion.pill) }] },
-  };
-};
-
-const pillOut = () => {
-  "worklet";
-  return {
-    initialValues: { opacity: 1, transform: [{ scale: 1 }] },
-    animations: { opacity: withSpring(0, deckChromeMotion.pill), transform: [{ scale: withSpring(deckChromeMotion.pillScale, deckChromeMotion.pill) }] },
-  };
-};
-
 const styles = StyleSheet.create({
   row: { position: "absolute", left: 0, right: 0, height: browseLayout.hitTarget, flexDirection: "row", alignItems: "center", gap: deckChromeLayout.headerGap },
   switcher: { flexShrink: 1 },
   switcherPress: { height: deckLook.switcherHeight, justifyContent: "center", paddingLeft: deckLook.switcherLead, paddingRight: deckLook.switcherTrail },
   spacer: { flex: 1 },
   fallback: { fontWeight: "600" },
-  pillHit: { minHeight: browseLayout.hitTarget, justifyContent: "center" },
-  pill: { flexDirection: "row", alignItems: "center", gap: deckChromeLayout.pillSpacing, height: deckChromeLayout.pillHeight, paddingHorizontal: deckChromeLayout.pillPadding },
-  count: { fontWeight: "600", fontVariant: ["tabular-nums"], color: deckChromeInk.pill },
 });

@@ -27,7 +27,7 @@ import { coverTray, followTrayBack, trayBackTravel, useTrayCovers } from "../../
 import { useIncognito, useSelectedTab } from "../../state/tabs/hooks";
 import { useTabs } from "../../state/tabs/store";
 import { countUsage, reportLaunchTray } from "../../state/telemetry/telemetry";
-import { browseLayout, capsule, DeckLookBackdrop, Favicon, shape, smoothCorners, FloatingMenu, font, ink, LookFrost, MotionView, moveTo, radius, screenReaderActions, type MotionCurve, type MotionTarget, rolesFor, trayLandingDelayMs, space, stageMotion, barReturnMotion, Symbol, SURFACES_FROST, tabsCurve, tabsInk, tabsLayout, tabsMotion, trayMotion, trayShadow, useTheme, FadeView, fadeIsNative, floatingPanelLayout, useDesign, useReduceTransparency, useReduceMotion, settingsUIAvailable, SystemGlyph } from "../ui";
+import { browseLayout, capsule, DeckLookBackdrop, Favicon, smoothCorners, FloatingMenu, font, ink, LookFrost, MotionView, moveTo, radius, screenReaderActions, type MotionCurve, type MotionTarget, rolesFor, trayLandingDelayMs, space, stageMotion, barReturnMotion, Symbol, SURFACES_FROST, tabsCurve, tabsInk, tabsLayout, trayMotion, trayShadow, useTheme, FadeView, fadeIsNative, floatingPanelLayout, useDesign, useReduceTransparency, useReduceMotion, SystemGlyph } from "../ui";
 import { SuggestionRow } from "./SuggestionRow";
 import { MaterialSearchTray } from "./MaterialSearchView";
 import { TrayInput, type TrayInputHandle } from "./TrayInput";
@@ -979,7 +979,6 @@ function VoiceButton() {
 }
 
 const INCOGNITO_GLYPH = 26;
-const INCOGNITO_PLATE = 34;
 
 function IncognitoToggle() {
   const theme = useTrayTheme();
@@ -994,8 +993,7 @@ function IncognitoToggle() {
       style={[styles.incognito, panelField ? styles.panelIncognito : null]}
     >
       <View testID="trayIncognitoGlyph" style={styles.incognitoGlyph}>
-        {on && Platform.OS !== "android" ? <Animated.View testID="trayIncognitoPlate" entering={modeToggleIn} exiting={modeToggleOut} style={styles.incognitoPlate} /> : null}
-        <IncognitoEyes incognito={on} size={INCOGNITO_GLYPH} color={on ? tabsInk.onDark : theme.foregroundTertiary} />
+        <IncognitoEyes incognito={on} size={INCOGNITO_GLYPH} color={theme.foregroundTertiary} />
       </View>
     </Pressable>
   );
@@ -1336,14 +1334,6 @@ const styles = StyleSheet.create({
   panelInput: { minHeight: browseLayout.searchFieldHeight - floatingPanelLayout.fieldEdge * 2 },
   panelIncognito: { paddingRight: space.xs + 2 },
   incognitoGlyph: { width: INCOGNITO_GLYPH, alignItems: "center", justifyContent: "center" },
-  incognitoPlate: {
-    position: "absolute",
-    width: INCOGNITO_PLATE,
-    height: INCOGNITO_PLATE,
-    borderRadius: capsule(INCOGNITO_PLATE),
-    borderCurve: "continuous",
-    backgroundColor: floatingPanelLayout.fieldDark.fill,
-  },
   field: {
     minHeight: browseLayout.searchFieldHeight,
     borderRadius: capsule(browseLayout.searchFieldHeight),

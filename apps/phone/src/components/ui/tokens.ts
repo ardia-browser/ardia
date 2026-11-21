@@ -618,7 +618,7 @@ export const spacesLayout = {
 export const tabsInk = {
   incognitoCard: "#1C1D22",
   incognitoCardRaised: "#2A2B31",
-  incognitoOnLight: Platform.OS === "android" ? "rgba(28,29,34,0.6)" : "#1C1D22",
+  incognitoOnLight: "rgba(28,29,34,0.6)",
   incognitoBackdrop: ["#1A1A1E", "#0E0E10"] as const,
   incognitoSheet: "#151517",
   cardShadow: "rgba(0,0,0,0.18)",

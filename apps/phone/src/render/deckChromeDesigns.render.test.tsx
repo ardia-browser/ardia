@@ -205,8 +205,7 @@ test("each ··· row does its action: the Spaces sheet, a private tab, reopenin
   unmount(root);
 });
 
-test("on Android the bottom switch stands in for the Incognito pill: no pill, and holding the switch closes the private tabs after asking", () => {
-  if (Platform.OS !== "android") return;
+test("the bottom switch stands in for an Incognito pill: no pill, and holding the switch closes the private tabs after asking", () => {
   withPrivateTabs(2);
   const leave = jest.spyOn(browse, "leaveIncognito").mockImplementation(() => undefined);
   const root = deck();
@@ -221,31 +220,9 @@ test("on Android the bottom switch stands in for the Incognito pill: no pill, an
   unmount(root);
 });
 
-test("on Android the switch has no long press while there are no private tabs", () => {
-  if (Platform.OS !== "android") return;
+test("the switch has no long press while there are no private tabs", () => {
   const root = deck();
   expect(incognitoSwitch(root)!.props.onLongPress).toBeUndefined();
-  unmount(root);
-});
-
-test("the Incognito pill shows only while there are private tabs, with their count, and its menu closes them after asking", () => {
-  if (Platform.OS === "android") return;
-  const none = deck();
-  expect(host(none, "deckIncognitoPill")).toBeUndefined();
-  unmount(none);
-  withPrivateTabs(2);
-  const leave = jest.spyOn(browse, "leaveIncognito").mockImplementation(() => undefined);
-  const root = deck();
-  const pill = host(root, "deckIncognitoPill")!;
-  expect(pill.props.accessibilityLabel).toBe("Incognito, 2 tabs");
-  expect(textOf({ root: pill } as Root)).toBe("2");
-  act(() => pressable(root, "Incognito, 2 tabs").props.onPress());
-  expect(menuLabels(root)).toEqual(["Close Incognito Tabs"]);
-  pickMenu(root, "Close Incognito Tabs");
-  const sheet = root.root.findAll((node) => node.type === ConfirmSheet)[0]!;
-  expect(sheet.props.confirmation.title).toBe("Close Incognito Tabs?");
-  act(() => pressable(root, "Close Incognito Tabs").props.onPress());
-  expect(leave).toHaveBeenCalledTimes(1);
   unmount(root);
 });
 
@@ -302,9 +279,8 @@ test("a tap on the switch shows only the Incognito tabs, fills the whole switch 
   expect(hosts(root, "deckCard")).toHaveLength(2);
   expect(incognitoSwitch(root)!.props.accessibilityState).toMatchObject({ checked: true });
   expect(incognitoSwitch(root)!.props.accessibilityHint).toBe("Shows your tabs.");
-  expect(root.root.findAll((node) => node.props.testID === "deckBarIncognito" && node.props.incognito === true).length > 0).toBe(Platform.OS !== "android");
-  if (Platform.OS === "android") expect(host(root, "deckBarIncognitoOn")).toBeUndefined();
-  else expect(StyleSheet.flatten(host(root, "deckBarIncognitoOn")!.props.style)).toMatchObject({ width: 48, height: 48, borderRadius: 24, backgroundColor: tabsInk.incognitoOnLight });
+  expect(root.root.findAll((node) => node.props.testID === "deckBarIncognito" && node.props.incognito === true)).toHaveLength(0);
+  expect(host(root, "deckBarIncognitoOn")).toBeUndefined();
   expect(host(root, "deckBarIncognitoGlyph")!.findAll((node) => node.type === IncognitoEyes && node.props.incognito === true)).toHaveLength(1);
   expect(pressable(root, "New Incognito Tab")).toBeDefined();
   expect(counted.mock.calls.filter(([name]) => name === "deck_incognito_switches")).toHaveLength(1);

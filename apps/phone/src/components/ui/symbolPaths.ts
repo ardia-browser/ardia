@@ -1,5 +1,4 @@
-import { Platform } from "react-native";
-import { incognitoEyesLidded, incognitoEyesPath } from "./IncognitoEyes";
+import { incognitoEyesLidded } from "./IncognitoEyes";
 
 export type SymbolLayer = { d: string; stroke?: number; fill?: boolean; evenOdd?: boolean; rotate?: number; scale?: number; shift?: number };
 
@@ -108,7 +107,7 @@ export const SYMBOLS = {
     },
   ],
   ellipsis: [{ d: circle(5.5, 12, 1.75) + circle(12, 12, 1.75) + circle(18.5, 12, 1.75), fill: true }],
-  eyes: Platform.OS === "android" ? [{ d: incognitoEyesLidded(), fill: true, evenOdd: true }] : [{ d: incognitoEyesPath(false), fill: true }],
+  eyes: [{ d: incognitoEyesLidded(), fill: true, evenOdd: true }],
   eyesClosed: [{ d: incognitoEyesClosed(), stroke: STROKE }],
   chevronDown: [{ d: polyline(5.5, 8.5, 12, 15, 18.5, 8.5), stroke: BOLD }],
   minus: [{ d: line(5, 12, 19, 12), stroke: BOLD }],

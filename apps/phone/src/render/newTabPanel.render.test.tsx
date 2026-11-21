@@ -158,6 +158,8 @@ onIPhone("the panel's field is a 44 point pill with the mic and Incognito's eyes
   expect(useTabs.getState().incognito).toBe(true);
   const incognitoCapsule = host(root, "trayFieldCapsule")!;
   expect(incognitoCapsule.findAll((node) => node.props.accessibilityLabel === "Deactivate Incognito")).not.toHaveLength(0);
+  expect(incognitoCapsule.findAll((node) => node.type === IncognitoEyes && node.props.incognito === true)).toHaveLength(1);
+  expect(host(root, "trayIncognitoPlate")).toBeUndefined();
   expect(root.root.findAll((node) => node.props.testID === "trayIncognitoLabel" && node.props.children === "Incognito").length).toBeGreaterThan(0);
   expect(root.root.findAll((node) => node.props.children === "You\u2019re browsing Incognito").length).toBeGreaterThan(0);
   expect(host(root, "searchPanelRowsScroll")).toBeUndefined();

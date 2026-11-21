@@ -18,7 +18,7 @@ const springs = {
   "panel settle (trayMotion.settle)": [trayMotion.settle, [0.26, 1]],
   "panel dismiss (trayMotion.dismiss)": [trayMotion.dismiss, [0.14, 1]],
   "row press (trayMotion.press)": [trayMotion.press, [0.16, 1]],
-  "incognito toggle (trayMotion.modeToggle)": [trayMotion.modeToggle, [0.2, 1]],
+  "incognito label (trayMotion.modeToggle)": [trayMotion.modeToggle, [0.2, 1]],
   "menu open (menuMotion.open)": [menuMotion.open, [0.3, 1]],
 } as const;
 

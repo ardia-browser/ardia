@@ -1,4 +1,3 @@
-import { Platform } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { isDarkColor } from "../../lib/color";
 
@@ -8,7 +7,6 @@ const OUTLINE = 1.4;
 const PUPIL = { r: 2.5, dx: -1.4, dy: 0.6 };
 const SHINE = { r: 0.6, dx: -0.8, dy: -0.9 };
 const EYE_CENTERS = [SIDE / 2 - EYE.gap / 2 - EYE.rx, SIDE / 2 + EYE.gap / 2 + EYE.rx];
-const WATCHING_ON_ANDROID = Platform.OS === "android";
 const SCLERA = "#FFFFFF";
 const PUPIL_INK = "#1C1D22";
 
@@ -36,13 +34,6 @@ export const incognitoShines = () => EYE_CENTERS.map((cx) => ellipse(cx + PUPIL.
 
 export function IncognitoEyes({ size, color, incognito = false, testID }: { size: number; color: string; incognito?: boolean; testID?: string }) {
   const box = { testID, width: size, height: size, viewBox: `0 0 ${SIDE} ${SIDE}` };
-  if (!WATCHING_ON_ANDROID) {
-    return (
-      <Svg {...box}>
-        <Path d={incognitoEyesPath(incognito)} fill={color} fillRule="evenodd" />
-      </Svg>
-    );
-  }
   if (incognito) {
     return (
       <Svg {...box}>

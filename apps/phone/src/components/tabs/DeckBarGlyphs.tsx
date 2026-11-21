@@ -1,16 +1,9 @@
-import { Platform, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { IncognitoEyes } from "../ui/IncognitoEyes";
-import { capsule, deckChromeLayout, font, ink, iPhoneOr, rolesFor, startLayout, Symbol, SystemGlyph, tabsInk, useTheme } from "../ui";
+import { deckChromeLayout, font, iPhoneOr, rolesFor, startLayout, SystemGlyph } from "../ui";
 
 export function IncognitoGlyph({ incognito, dark }: { incognito: boolean; dark: boolean }) {
-  const theme = useTheme();
-  if (!incognito || Platform.OS === "android") return <IncognitoEyes incognito={incognito} size={deckChromeLayout.incognitoEyes} color={rolesFor(dark).label} />;
-  return (
-    <View style={styles.switch}>
-      <View style={[styles.switchOn, { backgroundColor: theme.dark ? ink.white : tabsInk.incognitoOnLight }]} />
-      <IncognitoEyes incognito size={deckChromeLayout.incognitoEyes} color={theme.dark ? tabsInk.incognitoCard : ink.white} />
-    </View>
-  );
+  return <IncognitoEyes incognito={incognito} size={deckChromeLayout.incognitoEyes} color={rolesFor(dark).label} />;
 }
 
 export function SearchTabsGlyphs({ dark }: { dark: boolean }) {
@@ -34,8 +27,6 @@ export function PlusGlyph({ dark }: { dark: boolean }) {
 }
 
 const styles = StyleSheet.create({
-  switch: { width: deckChromeLayout.barCircle, height: deckChromeLayout.barCircle, alignItems: "center", justifyContent: "center" },
-  switchOn: { position: "absolute", width: deckChromeLayout.barCircle, height: deckChromeLayout.barCircle, borderRadius: capsule(deckChromeLayout.barCircle) },
   search: { flex: 1, alignSelf: "stretch", flexDirection: "row", alignItems: "center", gap: deckChromeLayout.searchSpacing, paddingLeft: deckChromeLayout.searchLead, paddingRight: deckChromeLayout.searchTrail },
   words: { flex: 1 },
 });

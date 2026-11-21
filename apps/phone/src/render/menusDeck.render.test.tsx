@@ -197,13 +197,13 @@ nativeTest("the deck header shows a space's name alone when it has no icon of it
   unmount(marked);
 });
 
-nativeTest("the Incognito pill's menu is Close Incognito Tabs, which asks with an action sheet first", async () => {
+nativeTest("holding the Incognito switch offers Close Incognito Tabs, which asks with an action sheet first", async () => {
   act(() => tabStore.useTabs.setState((state) => ({ ...state, privates: someTabs(2, true) })));
   const leave = jest.spyOn(browse, "leaveIncognito").mockImplementation(() => undefined);
   const root = deck();
-  const pill = menuAround(root, "Incognito, 2 tabs");
-  expect(pill.props.trigger).toBe("tap");
-  expect(items(pill)).toEqual([{ id: "0", title: "Close Incognito Tabs", systemImage: "xmark", destructive: true }]);
+  const pill = menuAround(root, "Incognito");
+  expect(pill.props.trigger).toBe("longPress");
+  expect(items(pill)).toEqual([{ id: "0", title: "Close Incognito Tabs", destructive: true }]);
   choose(pill, "Close Incognito Tabs");
   await act(async () => undefined);
   expect(mockNative.sheets[0]).toMatchObject({ title: "Close Incognito Tabs?", message: "Their pages, cookies and history are cleared." });

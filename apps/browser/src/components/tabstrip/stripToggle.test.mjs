@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-const { groupChipWidth, groupLayout, layoutStrip, MEMBERS_INSET, nameGrowth, revealedMembers, stripOverflow, toggleFrame, withOverflowCounts, withoutTabs } = await import("./stripGroups.ts");
+const { groupLayout, layoutStrip, MEMBERS_INSET, nameGrowth, stripOverflow, withOverflowCounts, withoutTabs } = await import("./stripGroups.ts");
+const { groupChipWidth, revealedMembers, toggleFrame } = await import("./stripToggle.ts");
 const { GAP, GROUP_TITLE_MAX, GROUP_TITLE_TIGHT, TITLE_MIN_CHIP } = await import("./tokens.ts");
 
 const own = (id, group = null) => ({ kind: "tab", id, group });

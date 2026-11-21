@@ -51,20 +51,21 @@ after(() => client.setSharing(false, "settings"));
 
 test("group collapses and expands from the strip are counted, and taking them starts over", () => {
   sharing(true);
-  noteTabStripGroupToggle(1000);
-  noteTabStripGroupToggle(2000);
+  noteTabStripGroupToggle("w1", 1000);
+  noteTabStripGroupToggle("w1", 2000);
   noteTextOnlyRow();
   assert.deepEqual(takeTabStripCounts(), { ...ZERO, tab_strip_group_toggles: 2, pinned_rows_made_text_only: 1 });
   assert.deepEqual(takeTabStripCounts(), ZERO);
 });
 
-test("a group's name or folders measured again while it opens or closes are counted; measured at any other time they aren't", () => {
-  noteTabStripChipsMeasured(5000);
-  noteTabStripGroupToggle(10_000);
+test("a group's name or folders measured again while it opens or closes are counted; measured at any other time or in another window they aren't", () => {
+  noteTabStripChipsMeasured("w1", 5000);
+  noteTabStripGroupToggle("w1", 10_000);
   takeTabStripCounts();
-  noteTabStripChipsMeasured(10_016);
-  noteTabStripChipsMeasured(10_200);
-  noteTabStripChipsMeasured(10_500);
+  noteTabStripChipsMeasured("w1", 10_016);
+  noteTabStripChipsMeasured("w2", 10_100);
+  noteTabStripChipsMeasured("w1", 10_200);
+  noteTabStripChipsMeasured("w1", 10_500);
   assert.deepEqual(takeTabStripCounts(), { ...ZERO, tab_strip_toggle_remeasures: 2 });
 });
 
@@ -108,8 +109,8 @@ test("tab layout switches go out with the strip's counts, and taking them starts
 
 let clock = 1e9;
 const EVERY_FIELD = [
-  ["tab_strip_group_toggles", () => noteTabStripGroupToggle((clock += 10_000)), 1],
-  ["tab_strip_toggle_remeasures", () => (noteTabStripGroupToggle((clock += 10_000)), noteTabStripChipsMeasured((clock += 50))), 1],
+  ["tab_strip_group_toggles", () => noteTabStripGroupToggle("w", (clock += 10_000)), 1],
+  ["tab_strip_toggle_remeasures", () => (noteTabStripGroupToggle("w", (clock += 10_000)), noteTabStripChipsMeasured("w", (clock += 50))), 1],
   ["pinned_rows_made_text_only", () => noteTextOnlyRow(), 1],
   ["tab_strip_compact_layouts", () => noteTabStripCompact(), 1],
   ["tab_strip_readable_layouts", () => noteTabStripReadable(), 1],

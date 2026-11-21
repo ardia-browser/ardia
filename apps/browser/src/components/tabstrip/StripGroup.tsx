@@ -12,13 +12,14 @@ import { useTheme } from "../ui/theme";
 import { font, ink, weight, withAlpha } from "../ui/tokens";
 import { FolderMeasures, GroupMember, StripGroupIcon } from "./GroupMember";
 import type { StripGroupEntry, StripMember } from "../../state/tabs/topStrip";
-import { hasVisibleMembers, overflowCountRoom, dragGeometry, dropIndex, GROUP_MARGIN_LEFT, GROUP_MARGIN_RIGHT, GROUP_NAME_INSET, groupLayout, holds, MEMBERS_INSET, memberClipEdge, memberInteractive, tabsOf, TOGGLE_MS, toggleEase, type DragGeometry } from "./stripGroups";
+import { hasVisibleMembers, overflowCountRoom, dragGeometry, dropIndex, GROUP_MARGIN_LEFT, GROUP_MARGIN_RIGHT, groupLayout, holds, MEMBERS_INSET, memberInteractive, tabsOf, type DragGeometry } from "./stripGroups";
 import { CHIP_HAIRLINE, GAP, GROUP_CHIP_PAD, GROUP_DIVIDER_LENGTH, GROUP_OVERFLOW_GAP, GROUP_TITLE_GAP, GROUP_TITLE_MAX, GROUP_TITLE_TIGHT, GROUP_TRAY_ALPHA, ITEM_HEIGHT, ITEM_TOP, MID, STRIP_COLORS, tabRadius, TOP_STRIP_HEIGHT } from "./tokens";
 import { noteTabStripGroupToggle } from "../../state/telemetry/tabStripCounts";
 import { useStripDrag } from "./useStripDrag";
 import { nameKey } from "./model";
 import { setMeasuredWidth } from "../../state/windows/measuredWidths";
 import { useChipHover, useChipHovered, type ChipHover } from "./reachableHover";
+import { GROUP_NAME_INSET, memberClipEdge, TOGGLE_MS, toggleEase } from "./stripToggle";
 import { reduceMotion } from "../ui/reduceMotion";
 
 export function StripGroup({
@@ -67,34 +68,38 @@ export function StripGroup({
   const size = useRef(new Animated.Value(width)).current;
   const state = `${expanded}:${shown >= 0 ? entry.members[shown]!.id : ""}`;
   const settled = useRef(state);
-  const [gliding, setGliding] = useState(false);
-  const moving = gliding || (settled.current !== state && !reduceMotion());
+  const [gliding, setGliding] = useState<"toggle" | "shift" | null>(null);
+  const pending = settled.current !== state && !reduceMotion();
+  const toggling = pending && !settled.current.startsWith(`${expanded}:`);
+  const moving = gliding !== null || pending;
+  const revealed = expanded || toggling || gliding === "toggle";
   const glides = useRef(0);
   const placed = useRef(new Map<string, { width: number; offset: number }>());
-  if (expanded && !moving) placed.current = new Map(entry.members.map((m, i) => [m.id, { width: widths[i]!, offset: offsets[i]! }]));
+  if (expanded) placed.current = new Map(entry.members.map((m, i) => [m.id, { width: widths[i]!, offset: offsets[i]! }]));
   const placeOf = (m: StripMember, i: number) => {
     const before = expanded ? undefined : placed.current.get(m.id);
     return { width: i !== shown && before ? before.width : widths[i]!, offset: before ? before.offset : offsets[i]! };
   };
   useLayoutEffect(() => {
     const glide = (value: Animated.Value, toValue: number) => Animated.timing(value, { toValue, duration: TOGGLE_MS, easing: toggleEase, useNativeDriver: false });
-    const both = () => {
+    const both = (kind: "toggle" | "shift") => {
       const id = ++glides.current;
       if (reduceMotion()) {
         open.stopAnimation();
         size.stopAnimation();
         open.setValue(expanded ? 1 : 0);
         size.setValue(width);
-        setGliding(false);
+        setGliding(null);
         return;
       }
-      setGliding(true);
-      Animated.parallel([glide(open, expanded ? 1 : 0), glide(size, width)]).start(() => id === glides.current && setGliding(false));
+      setGliding(kind);
+      Animated.parallel([glide(open, expanded ? 1 : 0), glide(size, width)]).start(() => id === glides.current && setGliding(null));
     };
     if (settled.current !== state) {
+      const kind = !settled.current.startsWith(`${expanded}:`) || gliding === "toggle" ? "toggle" : "shift";
       settled.current = state;
-      both();
-    } else if (moving) both();
+      both(kind);
+    } else if (moving) both(gliding ?? "shift");
     else size.setValue(width);
   }, [state, width]);
   const fade = useMemo(() => open.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolate: "clamp" }), []);
@@ -140,7 +145,7 @@ export function StripGroup({
           start={chipSize + MEMBERS_INSET}
           offset={placeOf(m, i).offset}
           clip={moving && i !== shown ? tail : null}
-          revealed={expanded || moving}
+          revealed={revealed}
           open={open}
           interactive={memberInteractive(i === shown, expanded, moving)}
           shown={i === shown}
@@ -171,7 +176,7 @@ export function StripGroup({
         <ContextMenuArea onContextMenu={() => void openGroupMenu(windowId, entry.id)}>
           <Pressable
             onPress={() => {
-              noteTabStripGroupToggle(performance.now());
+              noteTabStripGroupToggle(windowId, performance.now());
               updateGroup(entry.id, { collapsed: expanded });
             }}
             style={{ height: ITEM_HEIGHT, flexDirection: "row", alignItems: "center", paddingLeft: GROUP_CHIP_PAD.left, paddingRight: GROUP_CHIP_PAD.right }}

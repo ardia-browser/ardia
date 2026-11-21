@@ -24,7 +24,7 @@ import { FadeIn } from "./FadeIn";
 import { dropAt, type GroupOut, type StripDrag } from "./model";
 import { PinnedFace } from "./PinnedFace";
 import { SelectedTab } from "./SelectedTab";
-import { CELL_STEP, dragRange, leaveIndex, TOGGLE_MS, toggleEase, type DragGeometry } from "./stripGroups";
+import { CELL_STEP, dragRange, leaveIndex, type DragGeometry } from "./stripGroups";
 import { AUDIO_BADGE, CHIP_LABEL_GAP, CHIP_PAD, CLOSE_MIN_CHIP, FAVICON, GAP, ITEM_HEIGHT, ITEM_TOP, PINNED_CELL, tabRadius, TITLE_FADE_MAX, TITLE_FADE_MIN, TITLE_MIN_CHIP, TOP_STRIP_HEIGHT } from "./tokens";
 import { useStripDrag } from "./useStripDrag";
 import { StripScrollContext } from "./stripScroll";
@@ -40,6 +40,7 @@ import { UnreadCount } from "../unread/UnreadBadge";
 import { useTabUnread } from "../../state/tabs/unread";
 import { titleWithoutUnread } from "../../lib/unread";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
+import { TOGGLE_MS, toggleEase } from "./stripToggle";
 import { reduceMotion } from "../ui/reduceMotion";
 
 export const DraggableChip = memo(function DraggableChip({

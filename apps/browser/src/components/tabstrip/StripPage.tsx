@@ -17,7 +17,8 @@ import { chipKey, folderKey, nameKey, type Strip } from "./model";
 import { NewTabButton } from "./NewTabButton";
 import { PinnedDock } from "./PinnedDock";
 import { SplitChip } from "./SplitChip";
-import { groupChipWidth, heldWideTab, keyedWidths, namesStayTight, layoutDock, layoutStrip, newTabPinned, overflowIn, revealOffset, stripOverflow, withActiveShown, tabsOf, withOverflowCounts, withoutTabs, type DragGeometry, type StripOverflow, type TabWidths } from "./stripGroups";
+import { heldWideTab, keyedWidths, namesStayTight, layoutDock, layoutStrip, newTabPinned, overflowIn, revealOffset, stripOverflow, withActiveShown, tabsOf, withOverflowCounts, withoutTabs, type DragGeometry, type StripOverflow, type TabWidths } from "./stripGroups";
+import { groupChipWidth } from "./stripToggle";
 import { StripGroup } from "./StripGroup";
 import { DraggableChip } from "./TabChip";
 import { edgeMaskAt, edgeStrength } from "./edgeFade";
@@ -78,7 +79,6 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
   const heldFit = held.current ? withActiveShown(held.current.overflow, activeId) : null;
   const activeReturned = !!held.current && heldFit !== held.current.overflow;
   let fit = heldFit ?? stripOverflow(entries, activeId, pageWidth, measures, dock, wideId);
-  const overflow = fit.hidden;
   if (!held.current) {
     const tight = namesStayTight(tightNames.current, fit, () => stripOverflow(entries, activeId, pageWidth, measuresAt(false), dock, wideId));
     if (tight !== tightNames.current) {
@@ -88,6 +88,7 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
     }
   }
   const chipOf = measures.groupChip;
+  const overflow = fit.hidden;
   const parsed = withoutTabs(entries, overflow);
   const groupOverflow = new Map(entries.flatMap((e) => (e.kind === "group" ? [[e.id, overflowIn(e, overflow)] as const] : [])));
   const { chip, selected, widths, tabWidth, top, memberWidth, spanOf: spanInStrip, tabsEnd, tabsShrink } = layoutStrip(parsed, activeId, pageWidth, withOverflowCounts(measures, entries, overflow), dock, activeReturned ? undefined : held.current?.widths, wideId, fit.selectedMin, fit.titledMin, fit.compactMin);
@@ -232,7 +233,7 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
   useEffect(() => {
     if (measuredBefore.current === chipsMeasured) return;
     measuredBefore.current = chipsMeasured;
-    if (current) noteTabStripChipsMeasured(performance.now());
+    if (current) noteTabStripChipsMeasured(windowId, performance.now());
   }, [chipsMeasured]);
   const compact = current && chip <= COMPACT_CHIP && tabsShrink;
   useEffect(() => {

@@ -1,191 +1,201 @@
 ---
+import type { ImageMetadata } from "astro";
+import { Image } from "astro:assets";
 import { base } from "../data/site";
-import { bench, display, BENCH_METHOD, type Figure } from "../data/bench";
+import { bench, BENCH_METHOD } from "../data/bench";
 import { scorecardOf } from "../data/benchScorecard";
+import ardiaLogo from "../assets/app-icon.png";
+import diaLogo from "../assets/logos/dia.png";
+import heliumLogo from "../assets/logos/helium.png";
 
 interface Props {
   page?: boolean;
+  heading?: "h1" | "h2";
 }
-const { page = false } = Astro.props;
-const Title = page ? "h1" : "h2";
-const CardTitle = page ? "h2" : "h3";
+const { page = false, heading } = Astro.props;
+const Title = heading ?? (page ? "h1" : "h2");
+
+const logos: Record<string, ImageMetadata> = {
+  ardia: ardiaLogo,
+  dia: diaLogo,
+  helium: heliumLogo,
+};
 
 const card = bench ? scorecardOf(bench) : null;
-const countAttrs = (f: Figure) => ({
-  "data-bench-count": "",
-  "data-bench-value": String(f.value),
-  "data-bench-decimals": String(f.decimals),
-  "data-bench-from": String(f.from),
-});
-const unitText = (unit: string) => (unit === "%" ? "%" : ` ${unit}`);
-const tick = "M3 13.5c2.2 1.4 4.3 3.6 6.4 6.6C13 13 17.6 7.4 25 2.6";
+const sections = card ? (page ? card.sections : card.sections.filter((s) => s.tests.every((t) => !t.isMulti))) : [];
+const rivalNames = bench?.rivals ?? ["Dia", "Helium"];
+const rivals = rivalNames.length > 1 ? `${rivalNames.slice(0, -1).join(", ")} and ${rivalNames.at(-1)}` : rivalNames.join("");
+const lede = page
+  ? "Every test, every number, losses included. Lower is better, except Speedometer 3. The best number in each row is highlighted."
+  : "Launch, tabs, and Speedometer 3, medians only. Lower is better, except Speedometer 3. The best number in each row is highlighted.";
+const slugOf = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+const highlights = (() => {
+  if (page || !sections.length) return [];
+  const flat = sections.flatMap((s) => s.tests.flatMap((t) => t.lines));
+  const picks = [
+    { match: /window on screen/i, title: "Cold launch" },
+    { match: /new window/i, title: "New window" },
+    { match: /tab switch/i, title: "Tab switch" },
+  ];
+  return picks
+    .map(({ match, title }) => {
+      const row = flat.find((line) => match.test(line.label));
+      if (!row || !row.callout.figure) return null;
+      const ardia = row.cells.find((c) => c.isArdia);
+      const dia = row.cells.find((c) => c.name === "Dia");
+      return {
+        title,
+        figure: row.callout.figure,
+        detail: row.callout.line,
+        compare: ardia && dia && dia.number !== null ? `${ardia.display} vs ${dia.display}` : ardia?.display ?? "",
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null);
+})();
 ---
 
 {
   bench && card && (
-    <section class:list={["bb paint", { edge: !page, "bb-page": page }]} id="speed" aria-labelledby="bench-title" data-shot="bench" data-bench>
+    <section class:list={["bb paint", { edge: !page, "bb-page": page }]} data-paint="golden" id="speed" aria-labelledby="bench-title" data-shot="bench" data-bench>
       <div class="wrap">
         <header class="bb-head">
-          <div class="bb-title">
-            <p class="label kicker">Measured before every release</p>
-            <Title class="poster bb-heading" id="bench-title" data-reveal>
-              {page && <span class="visually-hidden">Ardia vs Dia vs Helium: </span>}Benchmarks.
-            </Title>
-            {bench.sample && <p class="label sample">Sample numbers. Not measured. Dev only.</p>}
-          </div>
-
+          <p class="label kicker">Measured against {rivals}</p>
+          <Title class="poster bb-heading" id="bench-title">
+            {page && <span class="visually-hidden">Ardia vs {rivalNames.join(" vs ")}: </span>}Benchmarks.
+          </Title>
+          <p class="lede">{lede}</p>
+          {bench.sample && <p class="label sample">Sample numbers. Not measured. Dev only.</p>}
         </header>
 
-        <ul class="cards" role="list">
-          {card.cards.map((c) => (
-            <li class:list={["card", c.outcome, { wide: c.wide, solo: c.solo }]} data-bench-land>
-              <div class="card-top">
-                <CardTitle class="card-title">{c.title}</CardTitle>
-                {c.wide ? (
-                  <p class:list={["label", "record", { mixed: c.record.won < c.record.of }]}>
-                    {c.stamp}
-                  </p>
-                ) : c.outcome === "win" ? (
-                  <svg class="tick" viewBox="0 0 28 24" width="24" height="21" role="img" aria-label="Ardia wins">
-                    <path d={tick} />
-                  </svg>
-                ) : (
-                  <p class="label stamp">{c.stamp}</p>
-                )}
-              </div>
+        {highlights.length > 0 && (
+          <ul class="stat-strip" role="list">
+            {highlights.map((item) => (
+              <li class="stat-tile">
+                <p class="stat-label">{item.title}</p>
+                <p class="stat-figure">{item.figure}</p>
+                <p class="stat-detail">{item.detail}</p>
+                {item.compare && <p class="stat-compare">{item.compare}</p>}
+              </li>
+            ))}
+          </ul>
+        )}
 
-              <div class="card-body">
-                <div class="call">
-                  {c.context && <p class="label context">{c.context}</p>}
-                  <p class="verdict poster">
-                    {c.verdict.figure ? (
-                      <span class="fig">
-                        <span {...countAttrs(c.verdict.figure)}>{display(c.verdict.figure)}</span>
-                        {c.verdict.figure.suffix}
-                      </span>
-                    ) : (
-                      <span class:list={["fig", { word: c.verdict.word }]}>{c.verdict.word ?? "Tie"}</span>
-                    )}
-                    {c.verdict.photoFinish && c.verdict.figure && <span class="label photo">Photo finish</span>}
-                  </p>
-                  <p class="line">{c.verdict.line}</p>
-                  {c.verdict.note && <p class="note">{c.verdict.note}</p>}
-                </div>
-
-                {c.wide ? (
-                  <table class="sheet">
-                    <caption class="visually-hidden">{c.caption}</caption>
-                    <thead>
-                      <tr>
-                        <th scope="col" class="label unit">
-                          {c.unit}
-                        </th>
-                        {card.roster.map((name, j) => (
-                          <th scope="col" class:list={["label", { us: j === 0 }]}>
-                            {name}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {c.cases.map((k) => (
-                        <tr>
-                          <th scope="row" title={k.fullLabel}>
-                            {k.label}
-                          </th>
-                          {k.lanes.map((l, j) =>
-                            l.bar ? (
-                              <td
-                                class:list={{ us: l.isArdia, best: l.bar.isBest }}
-                                style={`--w: ${l.bar.share.toFixed(4)}; --j: ${j}`}
-                              >
-                                <span class="num">{display(l.bar.value)}</span>
-                                {l.bar.isBest && <span class="visually-hidden"> (best)</span>}
-                                <span class="dash" aria-hidden="true" />
-                              </td>
-                            ) : (
-                              <td class="none">
-                                <span aria-hidden="true">–</span>
-                                <span class="visually-hidden">not measured</span>
-                              </td>
-                            ),
+        <div class="sheet-card">
+          <div class="table-wrap">
+            <table class="sheet">
+              <caption class="visually-hidden">Ardia vs {rivals}: browser benchmarks, medians only</caption>
+              <colgroup>
+                <col class="t" />
+                {card.roster.map(() => <col class="n" />)}
+                <col class="x" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th scope="col" class="test-col">Metric</th>
+                  {card.roster.map((name) => {
+                    const slug = slugOf(name);
+                    const logo = logos[slug];
+                    return (
+                      <th scope="col" class="who-col" data-browser={slug}>
+                        <span class="who-head">
+                          {logo ? (
+                            <Image class="brand-logo" src={logo} alt="" width={20} height={20} densities={[1, 2]} />
+                          ) : (
+                            <i class="dot" aria-hidden="true"></i>
                           )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                ) : (
+                          <span>{name}</span>
+                        </span>
+                      </th>
+                    );
+                  })}
+                  <th scope="col" class="x-col">Comparison</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sections.map((section) => (
                   <>
-                    <div class="lanes" aria-hidden="true">
-                      {c.cases[0].lanes.map((l, j) => (
-                        <div
-                          class:list={["lane", { us: l.isArdia, best: l.bar?.isBest, empty: !l.bar }]}
-                          style={`--w: ${(l.bar?.share ?? 0).toFixed(4)}; --j: ${j}`}
-                        >
-                          <span class="lane-name">{l.name}</span>
-                          <span class="lane-val label">
-                            {l.bar ? `${display(l.bar.value)}${unitText(l.bar.unit)}` : "not measured"}
-                          </span>
-                          <span class="lane-track">
-                            <span class="lane-bar" />
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                    <div class="visually-hidden">
-                      <table>
-                        <caption>{c.caption}</caption>
-                        <thead>
-                          <tr>
-                            <th scope="col">Browser</th>
-                            <th scope="col">Median</th>
+                    <tr class="g">
+                      <th colspan={card.roster.length + 2} class="label">{section.title}</th>
+                    </tr>
+                    {section.tests.map((group) => (
+                      <>
+                        {group.isMulti && (
+                          <tr class="r head">
+                            <th scope="row" colspan={card.roster.length + 1}>
+                              {group.title} <span class="unit">{group.unit}</span>
+                              {(group.headline.figure || group.headline.line) && (
+                                <span class="m-callout">
+                                  {group.headline.figure && <><b>{group.headline.figure}</b>{" "}</>}
+                                  {group.headline.line}
+                                </span>
+                              )}
+                            </th>
+                            <td class="x">
+                              {group.headline.figure && <><b>{group.headline.figure}</b>{" "}</>}
+                              {group.headline.line}
+                            </td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {c.cases[0].lanes.map((l) => (
-                            <tr>
-                              <th scope="row">{l.bar?.isBest ? `${l.name} (best)` : l.name}</th>
-                              <td>{l.bar ? `${display(l.bar.value)}${unitText(l.bar.unit)}` : "not measured"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                        )}
+                        {group.lines.map((line) => (
+                          <tr class:list={["r", { sub: group.isMulti }]}>
+                            <th scope="row" title={line.detail ?? undefined}>
+                              <span class="row-label">{line.label}</span>
+                              {line.detail && <span class="visually-hidden"> ({line.detail})</span>}
+                              {!group.isMulti && (line.callout.figure || line.callout.line) && (
+                                <span class="m-callout">
+                                  {line.callout.figure && <><b>{line.callout.figure}</b>{" "}</>}
+                                  {line.callout.line}
+                                </span>
+                              )}
+                            </th>
+                            {line.cells.map((cell) => (
+                              <td
+                                class:list={["n", { us: cell.isArdia, best: cell.isBest, none: cell.number === null }]}
+                                data-browser={slugOf(cell.name)}
+                                data-who={cell.name}
+                              >
+                                <span class="visually-hidden">{cell.spoken}</span>
+                                <span class="val" aria-hidden="true">{cell.display}</span>
+                              </td>
+                            ))}
+                            <td class="x">
+                              {!group.isMulti && (
+                                <>
+                                  {line.callout.figure && <><b>{line.callout.figure}</b>{" "}</>}
+                                  {line.callout.line}
+                                </>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </>
+                    ))}
                   </>
-                )}
-              </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
 
-              {c.wide && (
-                <div class="card-foot">
-                  <p class="label meta">{c.meta}</p>
-                  {c.footnotes.map((f) => (
-                    <p class="foot">{f}</p>
-                  ))}
-                </div>
-              )}
-            </li>
-          ))}
-          <li class="colophon" data-bench-land>
-            <p class="label colophon-title">The small print</p>
-            <p>
-              {bench.dated ? `${bench.machine}. ${bench.dated}.` : `${bench.machine}, ${bench.date}. ${bench.versions}.`}{bench.elsewhere && ` ${bench.elsewhere}.`}
-            </p>
-            <p>Every figure is a median, so one lucky run doesn’t count.</p>
-            <a
-              class="link label"
-              href={BENCH_METHOD}
-              rel="noopener"
-              data-track="github_clicked"
-              data-track-link="bench_method"
-              data-track-location="bench">How we measure</a
-            >
+        <div class="colophon">
+          <p class="label colophon-title">The small print</p>
+          <p>
+            {bench.dated ? `${bench.machine}. ${bench.dated}.` : `${bench.machine}, ${bench.date}. ${bench.versions}.`}
+            {bench.elsewhere && ` ${bench.elsewhere}.`}
+          </p>
+          <p>Every figure is a median, so one lucky run doesn’t count.</p>
+          <p class="links">
             {!page && (
               <a class="link label" href={`${base}/benchmarks/`}>
-                The benchmarks page
+                All {card.total} tests: memory, idle CPU, wakeups, and power
               </a>
             )}
-          </li>
-        </ul>
+            <a class="link label" href={BENCH_METHOD} rel="noopener" data-track="github_clicked" data-track-link="bench_method" data-track-location="bench">
+              How we measure
+            </a>
+          </p>
+        </div>
       </div>
     </section>
   )
@@ -193,540 +203,531 @@ const tick = "M3 13.5c2.2 1.4 4.3 3.6 6.4 6.6C13 13 17.6 7.4 25 2.6";
 
 <style>
   .bb {
-    --bg: var(--golden);
-    --wash: linear-gradient(180deg, #f0c983 0%, var(--golden) 40%, var(--golden-late) 100%);
-    --bg-top: #f0c983;
-    --dab: var(--forest);
-    --ink-2: #3a372f;
-    --muted: #8c6a4c;
-    --card: #faf2df;
-    --card-edge: rgb(22 19 15 / 0.82);
-    --radius: 7px 12px 8px 14px / 11px 7px 13px 8px;
-    padding: var(--section) 0 clamp(72px, 9vw, 140px);
+    --bar-ardia: oklch(0.38 0.09 162);
+    --bar-dia: oklch(0.38 0.11 262);
+    --bar-helium: oklch(0.38 0.11 325);
+    --bar-color: var(--rival);
+    padding: clamp(68px, 7.5vw, 128px) 0 clamp(68px, 8vw, 128px);
   }
-
+  .bb [data-browser="ardia"] {
+    --bar-color: var(--bar-ardia);
+  }
+  .bb [data-browser="dia"] {
+    --bar-color: var(--bar-dia);
+  }
+  .bb [data-browser="helium"] {
+    --bar-color: var(--bar-helium);
+  }
   .bb-page {
-    padding-top: clamp(40px, 5vw, 88px);
-  }
-  .bb-head {
-    display: grid;
-    grid-template-columns: repeat(12, minmax(0, 1fr));
-    column-gap: var(--gutter);
-    align-items: end;
-    margin-bottom: clamp(32px, 4.4vw, 64px);
-  }
-  .bb-title {
-    grid-column: 1 / span 7;
+    padding-top: clamp(56px, 7vw, 112px);
   }
   .bb-heading {
     font-size: var(--t-h2);
   }
+  .lede {
+    font-size: var(--t-lede);
+    line-height: 1.44;
+    max-width: 34em;
+    margin-top: 14px;
+    color: var(--ink);
+  }
   .sample {
     display: inline-block;
-    margin-top: 20px;
+    margin-top: 18px;
     padding: 4px 10px;
     color: var(--stamp);
     border: 1.5px solid currentColor;
-    border-radius: 3px;
+    border-radius: 6px;
     transform: rotate(-1.5deg);
   }
 
-  .cards {
+  .stat-strip {
     list-style: none;
-    margin: 0;
+    margin: clamp(24px, 3vw, 36px) 0 0;
     padding: 0;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    grid-auto-flow: row dense;
-    gap: clamp(10px, 1.3vw, 18px);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: clamp(12px, 1.8vw, 20px);
   }
-  .card {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    padding: clamp(14px, 1.4vw, 20px);
-    border: 1.5px solid var(--card-edge);
-    border-radius: var(--radius);
-    background-color: var(--card);
-    background-image: var(--impasto-soft);
-    background-size: 520px;
-    background-blend-mode: soft-light;
-    box-shadow: 0 16px 28px -22px rgb(90 50 20 / 0.55);
+  .stat-tile {
+    padding: clamp(16px, 1.8vw, 20px) clamp(18px, 2vw, 24px) clamp(18px, 2vw, 24px);
+    border-radius: 18px;
+    background: var(--paper);
+    border: 1px solid transparent;
+    box-shadow:
+      0 0 0 1px rgb(22 19 15 / 0.08),
+      0 1px 2px rgb(22 19 15 / 0.04),
+      0 14px 30px -20px rgb(74 44 12 / 0.2);
   }
-  .card.wide {
-    grid-column: span 2;
+  .stat-label {
+    font-size: 0.84rem;
+    font-weight: 560;
+    color: var(--ink-2);
+    letter-spacing: -0.01em;
   }
-  .card.loss,
-  .card.tie {
-    background: transparent;
-    box-shadow: none;
-  }
-
-  .card-top {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
-  }
-  .card-title {
-    font-family: var(--poster);
+  .stat-figure {
+    margin-top: 4px;
+    font-size: clamp(2rem, 1.4rem + 1.8vw, 3rem);
     font-weight: 740;
-    font-stretch: 85%;
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
-    font-size: 0.98rem;
-    line-height: 1.15;
-    text-wrap: balance;
-  }
-  .tick {
-    flex: none;
-    overflow: visible;
-    margin-top: -2px;
-  }
-  .tick path {
-    fill: none;
-    stroke: var(--forest);
-    stroke-width: 3.6;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-  .stamp {
-    flex: none;
-    max-width: 9em;
-    padding: 3px 7px;
-    border: 1.5px solid currentColor;
-    border-radius: 3px;
-    color: var(--stamp);
-    font-weight: 600;
-    line-height: 1.25;
-    text-align: center;
-    transform: rotate(3deg);
-  }
-  .record {
-    flex: none;
-    padding: 3px 8px;
-    border-radius: 3px;
-    background: var(--forest);
-    color: var(--paper);
-    font-weight: 560;
-    white-space: nowrap;
-  }
-  .record.mixed {
-    background: var(--ink);
-  }
-
-  .card-body {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-  }
-  .call {
-    margin-top: clamp(12px, 1.4vw, 20px);
-  }
-  .context {
-    color: var(--ink-2);
-    margin-bottom: 4px;
-  }
-  .verdict {
-    position: relative;
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    font-size: clamp(3.4rem, 1.4rem + 4.2vw, 6.2rem);
-    line-height: 0.82;
-    color: var(--forest-deep);
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-  .fig.word {
-    font-size: 0.62em;
+    letter-spacing: -0.036em;
     line-height: 1;
+    color: var(--figure);
+    font-variant-numeric: tabular-nums;
   }
-  .loss .verdict,
-  .tie .verdict {
+  .stat-detail {
+    margin-top: 6px;
+    font-size: 0.88rem;
+    font-weight: 520;
     color: var(--ink);
+    letter-spacing: -0.01em;
   }
-  .photo {
-    align-self: center;
-    padding: 3px 6px;
-    border: 1.5px solid currentColor;
-    border-radius: 3px;
-    font-size: 0.6rem;
-    font-weight: 600;
-    line-height: 1.2;
-    color: var(--stamp);
-    white-space: normal;
-    max-width: 6em;
-    text-align: center;
-    transform: rotate(-4deg);
-  }
-  .line {
-    margin-top: 10px;
-    font-size: 1.04rem;
-    font-weight: 560;
-    line-height: 1.2;
-  }
-  .note {
-    margin-top: 4px;
-    font-size: 0.86rem;
-    line-height: 1.3;
-    color: var(--ink-2);
+  .stat-compare {
+    margin-top: 2px;
+    font-size: 0.8rem;
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
   }
 
-  .lanes {
-    margin-top: auto;
-    padding-top: clamp(16px, 1.8vw, 24px);
-    display: grid;
-    row-gap: 8px;
+  .sheet-card {
+    margin-top: clamp(16px, 2vw, 24px);
+    padding: clamp(18px, 2.2vw, 26px) clamp(10px, 1.4vw, 18px) clamp(16px, 2vw, 24px);
+    border-radius: 18px;
+    background: var(--paper);
+    border: 1px solid transparent;
+    box-shadow:
+      0 0 0 1px rgb(22 19 15 / 0.08),
+      0 1px 2px rgb(22 19 15 / 0.04),
+      0 20px 44px -26px rgb(74 44 12 / 0.22);
   }
-  .lane {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: baseline;
-    column-gap: 8px;
-    row-gap: 3px;
+  .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
-  .lane-name {
-    font-family: var(--poster);
-    font-weight: 700;
-    font-stretch: 85%;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    font-size: 0.8rem;
-    line-height: 1.1;
-    color: var(--ink-2);
-  }
-  .lane.us .lane-name {
-    color: var(--forest-deep);
-    font-weight: 900;
-  }
-  .lane-val {
-    text-transform: none;
-    letter-spacing: 0.02em;
-    color: var(--ink-2);
+
+  table.sheet {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 0;
     font-variant-numeric: tabular-nums;
+  }
+  col.t {
+    width: 38%;
+  }
+  col.n {
+    width: 13%;
+  }
+  col.x {
+    width: 23%;
+  }
+  th,
+  td {
+    padding: 0;
+    text-align: end;
+    vertical-align: middle;
+    font-weight: inherit;
+  }
+  thead th {
+    padding-block: 0 14px;
+    border-bottom: 1px solid rgb(22 19 15 / 0.1);
+    font-size: 0.82rem;
+    font-weight: 640;
+    letter-spacing: -0.008em;
+    color: var(--ink-3);
     white-space: nowrap;
   }
-  .lane.best .lane-val {
+  thead th.test-col {
+    text-align: start;
+    padding-inline-start: 14px;
+  }
+  thead th.x-col {
+    text-align: start;
+    padding-inline: clamp(20px, 2.6vw, 40px) 14px;
+  }
+  thead th.who-col {
+    color: var(--bar-color);
+  }
+  .who-head {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 7px;
+  }
+  .brand-logo {
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+    object-fit: cover;
+    flex: none;
+  }
+  [data-browser="ardia"] .brand-logo {
+    outline: 1px solid rgb(22 19 15 / 0.12);
+    outline-offset: -1px;
+  }
+  .dot {
+    display: inline-block;
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background-color: var(--bar-color);
+  }
+  tbody th {
+    text-align: start;
+  }
+  tbody tr.g th {
+    padding-block: 26px 8px;
+    padding-inline-start: 14px;
+    color: var(--ink-3);
+    font-size: 0.7rem;
+  }
+  tbody tr.g:first-child th {
+    padding-block-start: 16px;
+  }
+  tr.r > * {
+    padding-block: 12px;
+    border-bottom: 1px solid rgb(22 19 15 / 0.06);
+    transition:
+      background-color 120ms ease,
+      border-color 120ms ease;
+  }
+  tr.r:last-child > * {
+    border-bottom: 0;
+  }
+  @media (hover: hover) {
+    tbody tr.r:not(.head):hover > * {
+      background: rgb(22 19 15 / 0.036);
+      border-bottom-color: transparent;
+    }
+    tbody tr.r:has(+ tr.r:not(.head):hover) > * {
+      border-bottom-color: transparent;
+    }
+    tbody tr.r:not(.head):hover > :first-child {
+      border-start-start-radius: 10px;
+      border-end-start-radius: 10px;
+    }
+    tbody tr.r:not(.head):hover > :last-child {
+      border-start-end-radius: 10px;
+      border-end-end-radius: 10px;
+    }
+  }
+  tr.r th {
+    font-size: 0.95rem;
+    font-weight: 540;
+    letter-spacing: -0.01em;
     color: var(--ink);
-    font-weight: 640;
+    padding-inline: 14px 16px;
   }
-  .lane.empty .lane-val {
-    color: var(--muted);
+  tr.r.sub th {
+    font-weight: 440;
+    color: var(--ink-2);
+    padding-inline-start: 30px;
   }
-  .lane-track {
-    grid-column: 1 / -1;
-    display: block;
-    height: 9px;
+  tr.r.head > * {
+    padding-block: 16px 4px;
+    border-bottom: 0;
   }
-  .lane-bar {
-    display: block;
-    width: max(4px, calc(100% * var(--w)));
-    height: 100%;
-    border-radius: 3px 6px 4px 7px / 5px 3px 6px 4px;
-    background-color: var(--muted);
-    background-image: var(--impasto);
-    background-size: 200px;
-    background-blend-mode: soft-light;
-    transform-origin: left center;
+  tr.r.head .unit {
+    font-weight: 440;
+    color: var(--ink-2);
   }
-  .lane.us .lane-bar {
-    background-color: var(--forest);
-  }
-  .lane.empty .lane-track {
-    border-top: 1.5px dashed rgb(22 19 15 / 0.28);
-    height: 0;
-    margin-top: 4px;
-  }
-  .lane.empty .lane-bar {
+  .m-callout {
     display: none;
   }
 
-  .card.wide .card-body {
-    flex: none;
-    display: grid;
-    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-    column-gap: clamp(16px, 2vw, 28px);
-    align-items: start;
-  }
-  .card.wide .verdict {
-    font-size: clamp(3.8rem, 1.4rem + 5vw, 7.4rem);
-  }
-  .sheet {
-    width: 100%;
-    margin-top: clamp(16px, 1.8vw, 24px);
-    border-collapse: collapse;
-    font-variant-numeric: tabular-nums;
-  }
-  .sheet th,
-  .sheet td {
-    padding: 6px 0 6px 8px;
-    text-align: right;
-    vertical-align: baseline;
-  }
-  .sheet th:first-child {
-    padding-left: 0;
-    text-align: left;
-  }
-  .sheet thead th {
-    padding-bottom: 6px;
-    border-bottom: 1.5px solid var(--ink);
-    color: var(--ink-2);
-    font-weight: 560;
-  }
-  .sheet thead th.us {
-    color: var(--forest-deep);
-    font-weight: 700;
-  }
-  .sheet thead .unit {
-    text-transform: none;
-  }
-  .sheet tbody tr + tr {
-    border-top: 1px solid var(--rule);
-  }
-  .sheet tbody th {
-    font-size: 0.86rem;
-    font-weight: 520;
-    line-height: 1.2;
-  }
-  .sheet td {
-    position: relative;
-    font-family: var(--mono);
-    font-stretch: 87.5%;
-    font-size: 0.78rem;
+  td.n {
+    font-family: var(--sans);
+    font-weight: 500;
+    font-size: 0.92rem;
+    letter-spacing: -0.01em;
     color: var(--ink-2);
     white-space: nowrap;
+    padding-inline-start: 10px;
   }
-  .sheet td.best .num {
-    color: var(--ink);
+  td.n .val {
+    display: inline-block;
+    padding: 4px 8px;
+    margin-inline-end: -8px;
+    border-radius: 7px;
+    text-box: trim-both cap alphabetic;
+  }
+  td.n.us {
+    color: var(--bar-color);
+    font-weight: 660;
+  }
+  td.n.best .val {
+    background: color-mix(in oklch, var(--bar-color) 11%, transparent);
+    color: var(--bar-color);
     font-weight: 700;
   }
-  .sheet td.best.us .num {
-    color: var(--forest-deep);
+  td.n.none {
+    color: var(--ink-3);
   }
-  .sheet td.none {
-    color: var(--muted);
-  }
-  .dash {
-    position: absolute;
-    right: 0;
-    bottom: 2px;
-    width: calc((100% - 8px) * var(--w));
-    height: 3px;
-    border-radius: 2px;
-    background: rgb(22 19 15 / 0.22);
-    transform-origin: right center;
-  }
-  .best .dash {
-    background: var(--ink);
-  }
-  .best.us .dash {
-    background: var(--forest);
-  }
-
-  .card-foot {
-    margin-top: auto;
-    padding-top: 14px;
-  }
-  .meta {
+  td.x {
+    text-align: start;
+    padding-inline: clamp(20px, 2.6vw, 40px) 14px;
     color: var(--ink-2);
-  }
-  .foot {
-    margin-top: 8px;
-    padding-left: 10px;
-    border-left: 2px solid var(--stamp);
-    font-size: 0.86rem;
+    font-size: 0.9rem;
     line-height: 1.3;
+  }
+  td.x b {
+    color: var(--ink);
+    font-weight: 700;
+    font-size: 0.98rem;
+    margin-inline-end: 0.16em;
   }
 
   .colophon {
-    display: flex;
-    flex-direction: column;
+    display: grid;
     gap: 8px;
-    padding: clamp(14px, 1.4vw, 20px) 2px;
-    border-top: 1.5px solid var(--ink);
-    font-size: 0.8rem;
-    line-height: 1.45;
+    max-width: 44em;
+    margin-top: clamp(28px, 3.6vw, 44px);
+    font-size: 0.84rem;
+    line-height: 1.5;
     color: var(--ink-2);
   }
   .colophon-title {
     color: var(--ink);
   }
-  .colophon .link {
-    margin-top: auto;
-    align-self: flex-start;
-    color: var(--ink);
-    font-weight: 600;
+  .links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 28px;
+    margin-top: 4px;
   }
-  .colophon .link + .link {
-    margin-top: 0;
+  .colophon .link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    color: var(--ink);
+    font-weight: 620;
   }
   .colophon .link::after {
     content: " →";
   }
 
-  @media (prefers-reduced-motion: no-preference) {
-    :global(.js) .bb [data-bench-land] {
-      transition:
-        opacity 320ms var(--ease-out) var(--d, 0ms),
-        transform 520ms cubic-bezier(0.2, 1.2, 0.3, 1) var(--d, 0ms);
-    }
-    :global(.js) .bb [data-bench-land]:not(.landed) {
-      opacity: 0;
-      transform: translateY(22px) rotate(-0.6deg);
-    }
-    :global(.js) .bb .lane-bar,
-    :global(.js) .bb .dash {
-      transition: transform 620ms var(--ease-out) calc(var(--d, 0ms) + 160ms + var(--j, 0) * 70ms);
-    }
-    :global(.js) .bb [data-bench-land]:not(.landed) :is(.lane-bar, .dash) {
-      transform: scaleX(0);
-    }
-  }
-
-  @media (max-width: 1100px) {
-    .cards {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-  }
   @media (max-width: 860px) {
-    .bb-title {
-      grid-column: 1 / -1;
-    }
-    .cards {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-    .card.wide .card-body {
-      display: flex;
-    }
-    .card.solo {
-      grid-column: 1 / -1;
-    }
-  }
-  @media (max-width: 600px) {
-    .bb {
-      --radius: 5px 9px 6px 10px / 8px 5px 9px 6px;
-    }
-    .cards {
+    .stat-strip {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 8px;
     }
-    .card {
-      padding: 12px;
+    .stat-tile {
+      padding: 14px 12px;
+      border-radius: 16px;
     }
-    .card-title {
-      font-size: 0.78rem;
+    .stat-label {
+      font-size: 0.74rem;
     }
-    .card-top {
-      gap: 6px;
+    .stat-figure {
+      font-size: clamp(1.55rem, 6.2vw, 2.1rem);
     }
-    .tick {
-      width: 18px;
-      height: 16px;
+    .stat-detail {
+      font-size: 0.74rem;
+      line-height: 1.25;
     }
-    .stamp {
-      font-size: 0.56rem;
-      padding: 2px 5px;
-      max-width: 7.5em;
-    }
-    .verdict {
-      font-size: clamp(2.7rem, 1.4rem + 6vw, 3.4rem);
-    }
-    .card.wide .call {
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr);
-      column-gap: 14px;
-      align-items: end;
-    }
-    .card.wide .context {
-      grid-column: 1 / -1;
-    }
-    .card.wide .verdict {
-      grid-row: span 2;
-      font-size: clamp(3.4rem, 2rem + 8vw, 4.6rem);
-    }
-    .card.wide .line {
-      margin-top: 0;
-    }
-    .photo {
-      font-size: 0.5rem;
-      padding: 2px 4px;
-    }
-    .line {
-      margin-top: 8px;
-      font-size: 0.88rem;
-    }
-    .note {
-      font-size: 0.76rem;
-    }
-    .lanes {
-      padding-top: 14px;
-      row-gap: 6px;
-    }
-    .lane-name {
+    .stat-compare {
       font-size: 0.7rem;
+      margin-top: 3px;
     }
-    .lane-val {
-      font-size: 0.62rem;
+
+    .sheet-card {
+      padding: 16px 8px;
+      border-radius: 18px;
     }
-    .lane-track {
-      height: 7px;
+    col.t {
+      width: 40%;
     }
-    .sheet tbody th {
-      font-size: 0.8rem;
+    col.n {
+      width: 20%;
     }
-    .sheet td {
+    col.x,
+    thead th.x-col,
+    td.x {
+      display: none;
+    }
+    thead th {
+      padding-block: 0 11px;
+      font-size: 0.78rem;
+      vertical-align: bottom;
+    }
+    thead th.test-col {
+      padding-inline-start: 10px;
+    }
+    thead th.who-col:nth-last-child(2) {
+      padding-inline-end: 10px;
+    }
+    tbody tr.g th {
+      padding-block: 22px 6px;
+      padding-inline-start: 10px;
+    }
+    tbody tr.g:first-child th {
+      padding-block-start: 14px;
+    }
+    tr.r > * {
+      padding-block: 11px;
+      vertical-align: middle;
+    }
+    tr.r > :nth-last-child(2) {
+      padding-inline-end: 10px;
+    }
+    @media (hover: hover) {
+      tbody tr.r:not(.head):hover > :nth-last-child(2) {
+        border-start-end-radius: 10px;
+        border-end-end-radius: 10px;
+      }
+    }
+    tr.r th {
+      font-size: 0.9rem;
+      line-height: 1.28;
+      padding-inline: 10px 8px;
+      text-wrap: pretty;
+    }
+    tr.r.sub th {
+      padding-inline-start: 22px;
+    }
+    .m-callout {
+      display: block;
+      margin-top: 3px;
+      font-size: 0.76rem;
+      font-weight: 460;
+      color: var(--ink-2);
+      line-height: 1.25;
+    }
+    .m-callout b {
+      color: var(--bar-ardia);
+      font-weight: 700;
+    }
+    td.n {
+      font-size: 0.88rem;
+      padding-inline-start: 6px;
+    }
+    td.n .val {
+      padding: 4px 7px;
+      margin-inline-end: -7px;
+      border-radius: 7px;
+    }
+  }
+  @media (max-width: 520px) {
+    .sheet-card {
+      padding: 16px 6px;
+    }
+    col.t {
+      width: 31%;
+    }
+    col.n {
+      width: 23%;
+    }
+    thead th {
+      padding-block: 0 10px;
       font-size: 0.72rem;
     }
-    .colophon {
-      grid-column: 1 / -1;
+    thead th.test-col {
+      padding-inline-start: 8px;
+    }
+    thead th.who-col:nth-last-child(2) {
+      padding-inline-end: 8px;
+    }
+    .dot {
+      width: 6px;
+      height: 6px;
+    }
+    .who-head {
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+    }
+    .brand-logo {
+      width: 20px;
+      height: 20px;
+      border-radius: 5px;
+    }
+    tbody tr.g th {
+      padding-block: 20px 6px;
+      padding-inline-start: 8px;
+    }
+    tbody tr.g:first-child th {
+      padding-block-start: 12px;
+    }
+    tr.r > * {
+      padding-block: 10px;
+    }
+    tr.r > :nth-last-child(2) {
+      padding-inline-end: 8px;
+    }
+    tr.r th {
+      font-size: 0.82rem;
+      padding-inline: 8px 6px;
+    }
+    tr.r.sub th {
+      padding-inline-start: 18px;
+    }
+    .m-callout {
+      font-size: 0.7rem;
+    }
+    td.n {
+      font-size: 0.76rem;
+      padding-inline-start: 4px;
+    }
+    td.n .val {
+      padding: 3px 5px;
+      margin-inline-end: -5px;
+      border-radius: 6px;
+    }
+  }
+  @media (max-width: 360px) {
+    .stat-strip {
+      gap: 6px;
+    }
+    .stat-tile {
+      padding: 12px 8px;
+    }
+    .stat-label {
+      font-size: 0.68rem;
+      white-space: nowrap;
+    }
+    .stat-figure {
+      font-size: 1.45rem;
+    }
+    .stat-detail,
+    .stat-compare {
+      font-size: 0.68rem;
+    }
+    .sheet-card {
+      padding: 14px 4px;
+    }
+    col.t {
+      width: 31%;
+    }
+    col.n {
+      width: 23%;
+    }
+    thead th {
+      font-size: 0.66rem;
+    }
+    thead th.test-col,
+    tbody tr.g th {
+      padding-inline-start: 6px;
+    }
+    thead th.who-col:nth-last-child(2),
+    tr.r > :nth-last-child(2) {
+      padding-inline-end: 6px;
+    }
+    tr.r th {
+      font-size: 0.72rem;
+      padding-inline: 6px 4px;
+    }
+    td.n {
+      font-size: 0.63rem;
+      padding-inline-start: 2px;
+    }
+    td.n .val {
+      padding: 2px 3px;
+      margin-inline-end: -3px;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    tr.r > * {
+      transition: none;
     }
   }
 </style>
-
-<script>
-  const root = document.querySelector<HTMLElement>("[data-bench]");
-  if (root) {
-    const targets = [...root.querySelectorAll<HTMLElement>("[data-bench-land]")];
-    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const format = (v: number, decimals: number) =>
-      v.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-    const ease = (t: number) => 1 - Math.pow(1 - t, 4);
-
-    const count = (el: HTMLElement, delay: number) => {
-      const to = Number(el.dataset.benchValue);
-      const from = Number(el.dataset.benchFrom);
-      const decimals = Number(el.dataset.benchDecimals);
-      el.textContent = format(from, decimals);
-      const start = performance.now() + delay;
-      const step = (now: number) => {
-        const t = Math.min(1, Math.max(0, (now - start) / 700));
-        el.textContent = format(t >= 1 ? to : from + (to - from) * ease(t), decimals);
-        if (t < 1) requestAnimationFrame(step);
-      };
-      requestAnimationFrame(step);
-    };
-
-    const land = (el: HTMLElement, delay: number) => {
-      el.style.setProperty("--d", `${delay}ms`);
-      el.classList.add("landed");
-      for (const n of el.querySelectorAll<HTMLElement>("[data-bench-count]")) count(n, delay + 120);
-    };
-
-    if (still || !("IntersectionObserver" in window)) {
-      for (const el of targets) el.classList.add("landed");
-    } else {
-      const io = new IntersectionObserver(
-        (entries) => {
-          const arriving = entries.filter((e) => e.isIntersecting).map((e) => e.target as HTMLElement);
-          arriving.forEach((el, i) => {
-            io.unobserve(el);
-            land(el, Math.min(i, 5) * 60);
-          });
-        },
-        { threshold: 0.15, rootMargin: "0px 0px -6% 0px" },
-      );
-      for (const el of targets) io.observe(el);
-    }
-  }
-</script>

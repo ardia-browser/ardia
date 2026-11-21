@@ -11,8 +11,8 @@
   },
   "dependencies": {
     "@fontsource-variable/martian-mono": "^5.3.0",
-    "@fontsource-variable/mona-sans": "^5.3.0",
     "@rrweb/record": "2.1.6",
+    "allo-font": "^1.0.3",
     "astro": "^7.3.4",
     "web-vitals": "6.2.2"
   },

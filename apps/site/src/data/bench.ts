@@ -58,6 +58,7 @@ export type Row = {
   sub: string | null;
   caption: string;
   meta: string;
+  lowerIsBetter: boolean;
   call: Call;
   bars: Bar[];
   lead: number;
@@ -140,11 +141,11 @@ function callFor(row: Measured, entries: MeasuredBrowser[], kind: Kind): Call {
   const others = entries.filter((b) => b !== ardia);
   const ranked = [...others].sort((x, y) => (row.lowerIsBetter ? x.median - y.median : y.median - x.median));
   const best = ranked[0];
-  const kicker = isBetter(best.median, ardia.median, row.lowerIsBetter) ? `${row.label} · ${best.name} wins this one` : row.label;
+  const kicker = isBetter(best.median, ardia.median, row.lowerIsBetter) ? `${row.label}, ${best.name} leads` : row.label;
   const unmeasuredDia = !others.some(isDia) && row.browsers.find(isDia);
   if (unmeasuredDia) {
     const second = sideNote(ardia, best, row, kind);
-    return { lost: false, kicker, figure: null, word: "No-show", line: `${unmeasuredDia.name} never got there`, second };
+    return { lost: false, kicker, figure: null, word: "N/A", line: `${unmeasuredDia.name} opens to its start screen`, second };
   }
   const rival = others.find(isDia) ?? best;
   const near = ranked.find((b) => b !== rival);
@@ -152,11 +153,11 @@ function callFor(row: Measured, entries: MeasuredBrowser[], kind: Kind): Call {
 
   if (isBetter(ardia.median, rival.median, row.lowerIsBetter)) {
     const lead = margin(ardia.median, rival.median, row, kind);
-    if (!lead) return { lost: false, kicker, figure: null, line: `Dead even with ${rival.name}.`, second };
+    if (!lead) return { lost: false, kicker, figure: null, line: `Even with ${rival.name}`, second };
     return { lost: false, kicker, figure: lead, line: `${kind.word} than ${rival.name}`, second };
   }
   const behind = margin(rival.median, ardia.median, row, kind);
-  if (!behind) return { lost: false, kicker, figure: null, line: `Dead even with ${rival.name}.`, second };
+  if (!behind) return { lost: false, kicker, figure: null, line: `Even with ${rival.name}`, second };
   return { lost: true, kicker, figure: behind, line: `${kind.word} for ${rival.name}`, second };
 }
 
@@ -168,7 +169,10 @@ function shapeRow(row: Measured): Omit<Row, "sub"> | null {
     row.lowerIsBetter ? x.median - y.median : y.median - x.median,
   );
   const best = sorted[0].median;
-  const top = Math.max(...entries.map((b) => b.median)) || 1;
+  const values = entries.map((b) => b.median);
+  const top = Math.max(...values) || 1;
+  const floor = row.lowerIsBetter ? 0 : Math.max(0, Math.floor(Math.min(...values) - 1));
+  const span = top - floor;
   const ns = entries.map((b) => b.n ?? 0).filter((n) => n > 0);
   const n = ns.length ? Math.min(...ns) : 0;
   const direction = row.lowerIsBetter ? "Lower is better" : "Higher is better";
@@ -184,7 +188,7 @@ function shapeRow(row: Measured): Omit<Row, "sub"> | null {
       name: b.name,
       isArdia: isArdia(b.name),
       isBest: v === best,
-      share: v / top,
+      share: span > 0 ? (v - floor) / span : 1,
       value: { value: v, decimals, from: 0, suffix: "" },
       unit: row.unit,
       range,
@@ -195,11 +199,21 @@ function shapeRow(row: Measured): Omit<Row, "sub"> | null {
     id: slug(row.id),
     label: row.label,
     caption: [row.label, `in ${row.unit}`, runs?.toLowerCase(), direction.toLowerCase()].filter(Boolean).join(", "),
-    meta: [runs, direction, row.older].filter(Boolean).join(" · "),
+    meta: [runs, direction, row.older].filter(Boolean).join(". "),
+    lowerIsBetter: row.lowerIsBetter,
     call: callFor(row, entries, kind),
     bars,
     lead: leadOverDia(row, entries),
   };
+}
+
+const settledOf = (id: string) => id.replace(/-steady$/, "");
+
+function naturalOrder(rows: Row[]): Row[] {
+  const first = new Map<string, number>();
+  rows.forEach((r, i) => first.has(settledOf(r.id)) || first.set(settledOf(r.id), i));
+  const rank = (r: Row) => first.get(settledOf(r.id))! * 2 + Number(r.id === settledOf(r.id));
+  return [...rows].sort((a, b) => rank(a) - rank(b));
 }
 
 function groupRows(rows: Measured[]): Group[] {
@@ -224,12 +238,12 @@ function groupRows(rows: Measured[]): Group[] {
   const byLead = (a: { lead: number }, b: { lead: number }) => b.lead - a.lead;
   return [...groups.values()]
     .map((g) => {
-      const rows = [...g.rows].sort(byLead);
+      const rows = naturalOrder(g.rows);
       return {
         id: slug(g.label),
         label: g.label,
         rows: rows.length === 1 ? [{ ...rows[0], sub: null }] : rows,
-        lead: rows[0].lead,
+        lead: Math.max(...rows.map((r) => r.lead)),
         power: g.power,
       };
     })

@@ -2,12 +2,13 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import "../styles/fonts.css";
-import monaLatin from "../assets/fonts/mona-sans-core.woff2?url";
+import alloLatin from "../assets/fonts/allo-core.woff2?url";
 import martianLatin from "../assets/fonts/martian-mono-core.woff2?url";
 import "../styles/global.css";
 import Device from "../components/Device.astro";
 import { colour } from "../data/press";
 import { base } from "../data/site";
+import { paintCss } from "../data/paint";
 
 interface Props {
   title: string;
@@ -21,7 +22,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
 const ogVersion = createHash("sha256").update(readFileSync(`${process.cwd()}/public/og.png`)).digest("hex").slice(0, 10);
 const og = new URL(`${base}/og.png?v=${ogVersion}`, Astro.site);
 const OG_ALT =
-  "Touch grass. The Ardia logo, two painted green hills under a yellow sun, standing in a painted morning meadow. Arc’s sidebar and Dia’s polish, on real Chromium, for the Mac.";
+  "Touch grass. Two painted green hills under a yellow sun in a morning meadow. Arc’s sidebar and Dia’s look on Chromium, for Mac.";
 ---
 
 <!doctype html>
@@ -54,8 +55,9 @@ const OG_ALT =
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image:alt" content={OG_ALT} />
     {jsonLd.map((data) => <script type="application/ld+json" set:html={JSON.stringify(data)} />)}
-    <link rel="preload" href={monaLatin} as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href={alloLatin} as="font" type="font/woff2" crossorigin />
     <link rel="preload" href={martianLatin} as="font" type="font/woff2" crossorigin />
+    <style is:inline set:html={paintCss()} />
     <slot name="head" />
     <script is:inline>document.documentElement.classList.add("js");</script>
     <Device />

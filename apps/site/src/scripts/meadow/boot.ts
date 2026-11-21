@@ -1,39 +1,62 @@
 import { startSunrise } from "./clock";
-
-function afterFirstPaint(callback: () => void) {
-  requestAnimationFrame(() => {
-    if ("requestIdleCallback" in window) requestIdleCallback(callback, { timeout: 500 });
-    else setTimeout(callback, 60);
-  });
-}
+import { createMeadow } from "./scene";
 
 function onceOnScreen(callback: () => void) {
-  requestAnimationFrame(() => requestAnimationFrame(callback));
+  requestAnimationFrame(callback);
+}
+
+function hydratePosterFallback(hero: HTMLElement) {
+  const picture = hero.querySelector<HTMLPictureElement>(".hero-poster[data-js-poster]");
+  const image = picture?.querySelector<HTMLImageElement>("img");
+  if (!picture || !image || !image.dataset.fallbackSrc) return;
+  const template = hero.querySelector<HTMLTemplateElement>("template[data-poster-sources]");
+  if (template) {
+    picture.prepend(template.content.cloneNode(true));
+    template.remove();
+  }
+  if (image.dataset.fallbackSizes) image.sizes = image.dataset.fallbackSizes;
+  if (image.dataset.fallbackSrcset) image.srcset = image.dataset.fallbackSrcset;
+  image.src = image.dataset.fallbackSrc;
+  delete image.dataset.fallbackSrc;
+  delete image.dataset.fallbackSrcset;
+  delete image.dataset.fallbackSizes;
 }
 
 function boot(hero: HTMLElement) {
   const canvas = hero.querySelector<HTMLCanvasElement>("[data-meadow-canvas]");
   const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (!canvas || !("WebGL2RenderingContext" in window)) return;
+  const fallback = () => {
+    if (hero.dataset.meadow === "ready") return;
+    hydratePosterFallback(hero);
+    hero.dataset.meadow = "failed";
+  };
+  if (!canvas || !("WebGL2RenderingContext" in window)) {
+    fallback();
+    return;
+  }
 
-  afterFirstPaint(() => {
-    import("./scene")
-      .then(({ createMeadow }) => {
-        createMeadow({
-          canvas,
-          hero,
-          hint: hero.querySelector<HTMLElement>("[data-sun-hint]"),
-          reducedMotion,
-          onFirstFrame() {
-            onceOnScreen(() => {
-              hero.dataset.meadow = "ready";
-              startSunrise(hero);
-            });
-          },
+  const safety = window.setTimeout(fallback, 1400);
+  try {
+    const meadow = createMeadow({
+      canvas,
+      hero,
+      reducedMotion,
+      onFirstFrame() {
+        clearTimeout(safety);
+        onceOnScreen(() => {
+          hero.dataset.meadow = "ready";
+          startSunrise(hero);
         });
-      })
-      .catch(() => {});
-  });
+      },
+    });
+    if (!meadow) {
+      clearTimeout(safety);
+      fallback();
+    }
+  } catch {
+    clearTimeout(safety);
+    fallback();
+  }
 }
 
 const hero = document.querySelector<HTMLElement>("[data-meadow]");

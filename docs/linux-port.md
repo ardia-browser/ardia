@@ -875,8 +875,19 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
     keeps the maximize glyph. Clicking still toggles correctly; the glyph needs the engine to report maximized state.
 - **Header drag and double-click.** Dragging the header moves the window (`DispatchHostWindowDragMovement`).
   Double-clicking it runs the desktop's titlebar action.
-- **Outer frame.** The host overlays Chromium's client view and doesn't replace its frame. Without the Wayland
-  decoration protocol, Chromium draws its custom frame.
+- **Outer frame.** The host overlays Chromium's client view. Without the Wayland decoration protocol (Hyprland),
+  Chromium uses its custom frame, which would wrap that view in a themed band with a shadow border and rounded corners of
+  its own. `chromium-linux-borderless-frame.patch` stops that for every window the host owns (main, Little Ardia,
+  Settings, Import): `g_ardia_linux_borderless_frame` answers true for them, and the frame view and its layout then
+  report no border, input or shadow insets and no corner radius, and paint no frame, so the client area is the whole
+  window. The host calls `RefreshEngineFrame` once the window is its own, because Chromium laid the frame out before
+  that. Edge resizing stays: in a window that can be resized, a thin band along the edges answers as a resize border
+  (`NonClientHitTest`); Import, which can't be resized, keeps its edges for its content. On X11 Chrome maps its startup window
+  before the host starts and sets `_GTK_FRAME_EXTENTS` from the frame insets it had then; the host's `FrameTypeChanged`
+  now has X11 rewrite the property (`X11Extension::RefreshDecorationInsets`), so it is gone once the window is the
+  host's. Whatever
+  corners, shadow or outline the compositor draws are its own. `windowCornerRadius` still answers a fixed 19 on Linux
+  (`apps/linux/src/shellMethods.ts`); it was not changed with the frame.
 - **Menu button.** Linux has no global menu bar, so a menu button stands in for the Mac one: usually the `…` beside the
   window buttons, and a hamburger in the header only while they're hidden (Window controls above). It lists Ardia,
   File, Edit, View, Tabs, Bookmarks, History, Extensions, Window and Help as submenus built from the same menu

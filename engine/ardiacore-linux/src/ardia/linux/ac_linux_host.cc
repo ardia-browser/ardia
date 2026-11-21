@@ -307,6 +307,8 @@ extern void (*g_ardia_linux_devtools_open_url)(Profile*, const GURL&);
 extern void (*g_ardia_linux_drag_ended)(BrowserWindowInterface*);
 extern void (*g_ardia_linux_unhandled_key)(content::WebContents*, const input::NativeWebKeyboardEvent&);
 extern void (*g_ardia_linux_minimum_size)(const BrowserWindowInterface*, gfx::Size* minimum);
+extern bool (*g_ardia_linux_pins_window_size)(const BrowserWindowInterface*);
+extern const char* (*g_ardia_linux_window_class)(const BrowserWindowInterface*);
 extern void (*g_ardia_devtools_dock_changed)(BrowserWindowInterface* browser,
                                              content::WebContents* inspected,
                                              content::WebContents* devtools);
@@ -412,6 +414,7 @@ struct RequestedWindow {
   std::string id;
   std::string kind;
   bool small = false;
+  bool pinned = false;
   std::string title;
   base::DictValue utility;
   base::WeakPtr<BrowserWindowInterface> browser;
@@ -486,6 +489,11 @@ base::Value SharedFrameValue(const gfx::Rect& bounds) {
 }
 
 constexpr char kWindowOutputs[] = "ArdiaLinuxWindowOutputs";
+
+const char*& OpeningWindowClass() {
+  static const char* window_class = nullptr;
+  return window_class;
+}
 
 void ShowNativeWindow(BrowserWindowInterface* browser, linux_window::Presentation presentation) {
   if (presentation == linux_window::Presentation::kInactive) return browser->GetWindow()->ShowInactive();
@@ -1134,6 +1142,13 @@ class ShellHostView : public views::View,
   int id() const { return id_; }
   const std::string& window_id() const { return window_id_; }
   bool is_utility() const { return !kind_.empty(); }
+  bool pins_size() const { return pinned_; }
+  void ReleasePinnedSize() {
+    if (!pinned_) return;
+    pinned_ = false;
+    pinned_size_timer_.Stop();
+    if (GetWidget()) GetWidget()->OnSizeConstraintsChanged();
+  }
   void set_small(bool small) {
     if (small_ == small) return;
     small_ = small;
@@ -1160,6 +1175,8 @@ class ShellHostView : public views::View,
     window_id_ = std::move(request.id);
     kind_ = std::move(request.kind);
     small_ = request.small;
+    pinned_ = request.pinned;
+    opened_pinned_ = request.pinned;
     title_ = std::move(request.title);
     utility_ = std::move(request.utility);
     page_profile_ = std::move(request.page_profile);
@@ -1516,6 +1533,8 @@ class ShellHostView : public views::View,
   ardiacore::LinuxPeekSiteTabs peek_site_tabs_;
   std::set<int> closing_offers_;
   bool small_ = false;
+  bool pinned_ = false;
+  bool opened_pinned_ = false;
   bool reports_commits_ = false;
   std::map<int, base::WeakPtr<content::WebContents>> offered_;
   std::map<std::string, uint64_t> pending_restores_;
@@ -1718,6 +1737,8 @@ class ShellHostView : public views::View,
   raw_ptr<views::View> curtain_ = nullptr;
   gfx::RoundedCornersF utility_corners_;
   base::OneShotTimer curtain_timer_;
+  base::OneShotTimer pinned_size_timer_;
+  base::TimeTicks pinned_at_;
   raw_ptr<HostMessageHandler> handler_ = nullptr;
   uint64_t renderer_generation_ = 0;
   std::optional<uint64_t> live_generation_;
@@ -2664,6 +2685,11 @@ void ShellHostView::Initialize() {
   } else {
     presented_ = true;
   }
+  if (pinned_) {
+    pinned_at_ = base::TimeTicks::Now();
+    pinned_size_timer_.Start(FROM_HERE, presented_ ? base::TimeDelta() : base::Milliseconds(linux_window::kPinnedSizeLimitMs),
+                             base::BindOnce(&ShellHostView::ReleasePinnedSize, base::Unretained(this)));
+  }
   SeedWindowActivation();
   RestoreFullScreenNow();
   ArmWindowClose();
@@ -3323,6 +3349,7 @@ base::DictValue ShellHostView::Bootstrap() const {
   bootstrap.Set("pageProfile", page_profile_);
   if (!private_window_.empty()) bootstrap.Set("privateWindow", private_window_.Clone());
   bootstrap.Set("windowKind", WindowKind());
+  if (opened_pinned_) bootstrap.Set("openedFloating", true);
   if (const base::CommandLine* command = base::CommandLine::ForCurrentProcess();
       command->HasSwitch(sandbox::policy::switches::kNoSandbox)) {
     const std::string decision = command->GetSwitchValueASCII("ardia-sandbox-decision");
@@ -4473,6 +4500,11 @@ void ShellHostView::OnDidPresentCompositorFrame(ui::Compositor*, uint32_t, const
   WindowFocus().Presented(id_, FocusClockMs());
   presentation_observation_.Reset();
   presented_ = true;
+  if (pinned_) {
+    const int64_t pinned_for = (base::TimeTicks::Now() - pinned_at_).InMilliseconds();
+    pinned_size_timer_.Start(FROM_HERE, base::Milliseconds(linux_window::PinnedSizeReleaseDelayMs(pinned_for)),
+                             base::BindOnce(&ShellHostView::ReleasePinnedSize, base::Unretained(this)));
+  }
   RestoreFullScreenNow();
 }
 
@@ -6488,6 +6520,7 @@ void OpenNativeWindow(WindowOpening opening, uint64_t generation, Profile* page,
     return fail(ProfileFailure(ardiacore::linux_profiles::ProfileError::kUnavailable));
   }
   BrowserWindowCreateParams params(page, true);
+  bool maximized = false;
   if (opening.requested) {
     const auto& b = opening.requested->bounds;
     params.initial_bounds = opening.requested->positioned ? gfx::Rect(b.x, b.y, b.width, b.height)
@@ -6510,6 +6543,7 @@ void OpenNativeWindow(WindowOpening opening, uint64_t generation, Profile* page,
     const base::DictValue* placement = chrome::GetWindowPlacementDictionaryReadOnly(
         params.app_name, app->GetPrefs());
     const bool saved = ValidUtilityPlacement(placement);
+    maximized = saved && placement->FindBool("maximized").value_or(false);
     if (opening.kind == "import" || !saved) {
       const bool settings = opening.kind == "settings";
       params.initial_bounds = gfx::Rect(settings ? kSettingsWindowWidth : kImportWindowWidth,
@@ -6523,12 +6557,18 @@ void OpenNativeWindow(WindowOpening opening, uint64_t generation, Profile* page,
       params.initial_bounds = gfx::Rect();
     }
   }
-  BrowserWindowInterface* created = CreateBrowserWindow(std::move(params));
+  const bool pinned = linux_window::OpensPinned(opening.kind, opening.small, maximized);
+  BrowserWindowInterface* created = nullptr;
+  {
+    base::AutoReset<const char*> window_class(&OpeningWindowClass(), linux_window::WindowClass(opening.kind, opening.small));
+    created = CreateBrowserWindow(std::move(params));
+  }
   if (!created) return fail(base::Value("Chrome could not create a window"));
   RequestedWindow request;
   request.id = id;
   request.kind = opening.kind;
   request.small = opening.small;
+  request.pinned = pinned;
   request.title = opening.title;
   if (opening.utility) request.utility = std::move(*opening.utility);
   request.browser = created->GetWeakPtr();
@@ -8208,6 +8248,14 @@ void StartLinuxHost() {
     if (!browser || !minimum) return;
     const auto found = Hosts().find(browser->GetSessionID().id());
     if (found != Hosts().end()) found->second->MinimumSize(minimum);
+  };
+  g_ardia_linux_window_class = [](const BrowserWindowInterface*) { return OpeningWindowClass(); };
+  g_ardia_linux_pins_window_size = [](const BrowserWindowInterface* browser) {
+    if (!browser) return false;
+    const int session = browser->GetSessionID().id();
+    if (const auto host = Hosts().find(session); host != Hosts().end()) return host->second->pins_size();
+    const auto requested = RequestedWindows().find(session);
+    return requested != RequestedWindows().end() && requested->second.browser.get() == browser && requested->second.pinned;
   };
   g_ardia_linux_unhandled_key = [](content::WebContents* contents, const input::NativeWebKeyboardEvent& event) {
     const int modifiers = event.GetModifiers();

@@ -186,6 +186,21 @@ Requested RequestedUtilityFrame(int width,
   return requested;
 }
 
+const char* WindowClass(std::string_view kind, bool small) {
+  if (kind == "settings") return kSettingsWindowClass;
+  if (kind == "import") return kImportWindowClass;
+  if (kind.empty() && small) return kLittleWindowClass;
+  return nullptr;
+}
+
+bool OpensPinned(std::string_view kind, bool small, bool maximized) {
+  return !maximized && WindowClass(kind, small) != nullptr;
+}
+
+int64_t PinnedSizeReleaseDelayMs(int64_t pinned_for_ms) {
+  return std::clamp<int64_t>(kPinnedSizeLimitMs - pinned_for_ms, 0, kPinnedSizeHoldMs);
+}
+
 std::optional<std::array<int, 4>> GeometryLedger::Frame(const Rect& bounds,
                                                         const Rect& primary,
                                                         bool fullscreen,

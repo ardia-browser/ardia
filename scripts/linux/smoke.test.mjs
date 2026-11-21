@@ -125,6 +125,9 @@ test("a .deb is root-owned with a setuid root helper, the launcher link, the pol
     line("-rw-r--r--", "./usr/share/polkit-1/actions/dev.ardia.linux.policy"),
     line("-rw-r--r--", "./usr/share/ardia/apparmor/ardia"),
     line("-rw-r--r--", "./usr/share/applications/ardia.desktop"),
+    line("-rw-r--r--", "./usr/share/applications/ardia-little.desktop"),
+    line("-rw-r--r--", "./usr/share/applications/ardia-settings.desktop"),
+    line("-rw-r--r--", "./usr/share/applications/ardia-import.desktop"),
   ];
   const fields = { Package: "ardia", Architecture: "amd64" };
   assert.deepEqual(debLayoutProblems(good.join("\n"), fields), []);

@@ -18,6 +18,7 @@ export type ArdiaHost = {
     pageProfile?: string;
     privateWindow?: { window: BrowserWindow; tabs: Record<string, Tab> };
     windowKind?: string;
+    openedFloating?: boolean;
     smallWindow?: unknown;
     typeaheadDeadline?: number;
     adoptTabs?: UnclaimedTab[];

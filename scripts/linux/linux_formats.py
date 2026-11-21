@@ -68,8 +68,31 @@ def deb_version(version):
     return version.replace('-', '~')
 
 
+MAIN_DESKTOP_ENTRY = ('[Desktop Entry]\nType=Application\nName=Ardia\nExec=ardia %U\nIcon=ardia\nTerminal=false\n'
+                      'Categories=Network;WebBrowser;\nMimeType=text/html;x-scheme-handler/http;x-scheme-handler/https;\n'
+                      'StartupWMClass=ardia\n')
+WINDOW_CLASSES = {'ardia-little': 'Little Ardia', 'ardia-settings': 'Ardia Settings', 'ardia-import': 'Ardia Import'}
+
+
+def window_desktop_entry(window_class, name):
+    return (f'[Desktop Entry]\nType=Application\nName={name}\nExec=ardia %U\nIcon=ardia\nTerminal=false\nNoDisplay=true\n'
+            f'StartupWMClass={window_class}\n')
+
+
+def desktop_entries():
+    return {'ardia.desktop': MAIN_DESKTOP_ENTRY,
+            **{f'{window_class}.desktop': window_desktop_entry(window_class, name) for window_class, name in WINDOW_CLASSES.items()}}
+
+
 def desktop_entry(source, command):
     return source.read_text().replace('Exec=ardia ', f'Exec={command} ')
+
+
+def point_desktop_entries(applications, command):
+    for name in desktop_entries():
+        entry = applications / name
+        if entry.is_file():
+            entry.write_text(desktop_entry(entry, command))
 
 
 def is_elf(path):
@@ -180,7 +203,7 @@ def build_deb(root, destination, version):
         (usr / 'bin').mkdir()
         (usr / 'bin/ardia').symlink_to('../lib/ardia/ardia-launch')
         shutil.copytree(root / 'share', usr / 'share', symlinks=True, ignore=shutil.ignore_patterns('apparmor.d'))
-        (usr / 'share/applications/ardia.desktop').write_text(desktop_entry(root / 'share/applications/ardia.desktop', '/usr/bin/ardia'))
+        point_desktop_entries(usr / 'share/applications', '/usr/bin/ardia')
         profile = usr / 'share/ardia/apparmor/ardia'
         profile.parent.mkdir(parents=True)
         shutil.copyfile(root / 'share/apparmor.d/ardia', profile)
@@ -257,6 +280,7 @@ def build_appimage(root, destination, tools=None):
         (app / 'lib/ardia/chrome-sandbox').unlink(missing_ok=True)
         (app / 'AppRun').symlink_to('lib/ardia/ardia-launch')
         (app / 'ardia.desktop').write_text(desktop_entry(root / 'share/applications/ardia.desktop', 'AppRun'))
+        point_desktop_entries(app / 'share/applications', 'AppRun')
         icon = root / 'share/icons/hicolor/256x256/apps/ardia.png'
         if icon.is_file():
             shutil.copyfile(icon, app / 'ardia.png')

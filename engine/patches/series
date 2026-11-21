@@ -131,6 +131,7 @@ chromium chromium-linux-unhandled-key.patch linux
 chromium chromium-linux-window-minimum-size.patch linux
 chromium chromium-linux-frameless-utility-windows.patch linux
 chromium chromium-linux-geolocation.patch linux
+chromium chromium-linux-floating-windows.patch linux
 
 layer engine/chromium
 layer engine/ardiacore mac

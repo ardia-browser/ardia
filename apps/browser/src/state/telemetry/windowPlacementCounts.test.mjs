@@ -87,3 +87,40 @@ test("window titles read and Option resizes from while sharing was off are never
   await client.saveQueueNow();
   assert.deepEqual([sent().at(-1).properties.window_titles_read, sent().at(-1).properties.window_centered_resizes], [1, 1]);
 });
+
+test("Little Ardia and utility windows opened floating are counted apart, sent with usage_counts, and not counted while sharing is off or with the consent of an earlier period", async () => {
+  client.loadChoice();
+  client.setSharing(true, "onboarding");
+  const sentFloating = async () => {
+    await client.saveQueueNow();
+    const saved = JSON.parse(stub.docs.get("telemetry-queue.json") ?? '{"events":[]}');
+    return saved.events.filter((e) => e.event === "usage_counts").map((e) => [e.properties.little_ardia_opened_floating, e.properties.utility_windows_opened_floating]);
+  };
+
+  const consent = (await import("./consentPeriod.ts")).consentToken;
+  placement.noteWindowOpenedFloating(true, consent());
+  placement.noteWindowOpenedFloating(true, consent());
+  placement.noteWindowOpenedFloating(false, consent());
+  usage.sessionEnding();
+  assert.deepEqual((await sentFloating()).at(-1), [2, 1]);
+
+  const before = consent();
+  client.setSharing(false, "settings");
+  placement.noteWindowOpenedFloating(true, consent());
+  client.setSharing(true, "settings");
+  placement.noteWindowOpenedFloating(true, before);
+  assert.deepEqual(placement.takeWindowPlacementCounts(), { window_centered_resizes: 0, windows_reopened_maximized: 0, window_titles_read: 0, window_drag_loops: 0, window_close_pins_kept: 0, little_ardia_opened_floating: 0, utility_windows_opened_floating: 0 });
+});
+
+test("floating windows counted in one consent period are dropped when the period changes, not reported in the next", async () => {
+  client.loadChoice();
+  client.setSharing(true, "onboarding");
+  const consent = (await import("./consentPeriod.ts")).consentToken;
+  placement.takeWindowPlacementCounts();
+  placement.noteWindowOpenedFloating(true, consent());
+  placement.noteWindowOpenedFloating(false, consent());
+  client.setSharing(false, "settings");
+  client.setSharing(true, "settings");
+  const taken = placement.takeWindowPlacementCounts();
+  assert.deepEqual([taken.little_ardia_opened_floating, taken.utility_windows_opened_floating], [0, 0]);
+});

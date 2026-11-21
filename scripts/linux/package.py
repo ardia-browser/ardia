@@ -159,9 +159,10 @@ def package(output, ui, destination, content_blocker=None, version=None, cli=Non
         launcher.parent.mkdir()
         launcher.write_text('#!/usr/bin/env sh\nardia_bin_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nexec "$ardia_bin_dir/../lib/ardia/ardia-launch" "$@"\n')
         launcher.chmod(0o755)
-        desktop = root / 'share/applications/ardia.desktop'
-        desktop.parent.mkdir(parents=True)
-        desktop.write_text('[Desktop Entry]\nType=Application\nName=Ardia\nExec=ardia %U\nIcon=ardia\nTerminal=false\nCategories=Network;WebBrowser;\nMimeType=text/html;x-scheme-handler/http;x-scheme-handler/https;\nStartupWMClass=ardia\n')
+        applications = root / 'share/applications'
+        applications.mkdir(parents=True)
+        for name, entry in linux_formats.desktop_entries().items():
+            (applications / name).write_text(entry)
         policy = root / 'share/polkit-1/actions/dev.ardia.linux.policy'
         policy.parent.mkdir(parents=True)
         shutil.copyfile(pathlib.Path(__file__).resolve().parent / 'dev.ardia.linux.policy', policy)

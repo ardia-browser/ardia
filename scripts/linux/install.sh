@@ -10,8 +10,8 @@ Installs an extracted Ardia Linux package.
   --prefix DIR   absolute install prefix (default /usr)
   --destdir DIR  staging root for distribution packages (default none)
 
-Ardia goes under PREFIX/lib/ardia with PREFIX/bin/ardia, its desktop entry
-and icon. Run as root without --destdir, it makes lib/ardia/chrome-sandbox
+Ardia goes under PREFIX/lib/ardia with PREFIX/bin/ardia, its desktop entries
+(the hidden ones name Little Ardia, Settings and Import windows) and icon. Run as root without --destdir, it makes lib/ardia/chrome-sandbox
 setuid root, Chromium's sandbox where user namespaces are unavailable. The polkit policy always goes to DESTDIR/usr/share/polkit-1/actions,
 the only directory polkit reads actions from, whatever the prefix.
 Without --destdir it must run as root, and installed files are owned by root.
@@ -72,8 +72,10 @@ trap 'rm -f "$launcher"' EXIT
 printf '#!/usr/bin/env sh\nexec "%s/lib/ardia/ardia-launch" "$@"\n' "$prefix" > "$launcher"
 install -m 0755 "$launcher" "$target/bin/ardia"
 
-sed "s|^Exec=ardia |Exec=$prefix/bin/ardia |" "$source_root/share/applications/ardia.desktop" > "$launcher"
-install -m 0644 "$launcher" "$target/share/applications/ardia.desktop"
+for entry in "$source_root"/share/applications/ardia*.desktop; do
+  sed "s|^Exec=ardia |Exec=$prefix/bin/ardia |" "$entry" > "$launcher"
+  install -m 0644 "$launcher" "$target/share/applications/${entry##*/}"
+done
 
 icon=share/icons/hicolor/256x256/apps/ardia.png
 if [[ -f "$source_root/$icon" ]]; then

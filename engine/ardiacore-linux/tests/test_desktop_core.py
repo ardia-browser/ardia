@@ -1,5 +1,7 @@
+import importlib.util
 import os
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import unittest
@@ -74,14 +76,23 @@ class DesktopCoreTests(unittest.TestCase):
         self.assertNotIn('getenv', (LINUX / 'ac_linux_desktop_core.cc').read_text())
 
     def test_the_packaged_desktop_entry_is_the_one_the_engine_looks_for(self):
-        package = (REPO / 'scripts/linux/package.py').read_text()
-        self.assertIn("'share/applications/ardia.desktop'", package)
+        desktop_id = re.search(r'kDesktopId\[\] = "([^"]+)"', (LINUX / 'ac_linux_desktop_core.h').read_text()).group(1)
+        spec = importlib.util.spec_from_file_location('linux_formats', REPO / 'scripts/linux/linux_formats.py')
+        formats = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(formats)
+        entries = formats.desktop_entries()
+        self.assertIn(desktop_id, entries)
+        main = entries[desktop_id]
         for needed in ('Type=Application', 'Exec=ardia %U', 'x-scheme-handler/http;', 'x-scheme-handler/https;'):
-            self.assertIn(needed, package)
+            self.assertIn(needed, main)
+        self.assertNotIn('NoDisplay=true', main)
+        package = (REPO / 'scripts/linux/package.py').read_text()
+        self.assertIn("root / 'share/applications'", package)
+        self.assertIn('linux_formats.desktop_entries().items()', package)
         install = (REPO / 'scripts/linux/install.sh').read_text()
+        self.assertIn('"$source_root"/share/applications/ardia*.desktop', install)
         self.assertIn('s|^Exec=ardia |Exec=$prefix/bin/ardia |', install)
-        self.assertIn('"$target/share/applications/ardia.desktop"', install)
-
+        self.assertIn('"$target/share/applications/${entry##*/}"', install)
 
 if __name__ == '__main__':
     unittest.main()

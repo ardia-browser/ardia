@@ -27,7 +27,7 @@ ARDIA_BACKGROUND=1, a throwaway profile and HOME, the sandbox on) without
   content-blocker   the packaged uBlock Origin and its Linux bridge are present and load, tuned to save its engine soon after launch,
                     and seeded with its saved engine so a new profile filters from its first page
   restart-restore   after a clean quit and relaunch on the same profile the fixture tab is restored
-  staged-install    install.sh --destdir stages the launcher, desktop entry, runtime and polkit policy,
+  staged-install    install.sh --destdir stages the launcher, desktop entries, runtime and polkit policy,
                     and lib/ardia/VERSION and lib/ardia/cli when the package has them; for a .deb its
                     control file, maintainer scripts, setuid chrome-sandbox, policy and AppArmor profile;
                     for an AppImage its type 2 header, AppRun and no setuid helper
@@ -63,9 +63,11 @@ the commit's own.
 export const ASSERTIONS = ["ldd", "shell-ui", "bootstrap", "native-tab", "sandbox", "content-blocker", "restart-restore", "staged-install", "app-version", "cli-install", "cli-control", "cli-scripts"];
 export const FORBIDDEN_SWITCHES = ["--no-sandbox", "--disable-seccomp-filter-sandbox", "--disable-namespace-sandbox", "--disable-setuid-sandbox", "--disable-gpu-sandbox", "--no-zygote-sandbox", "--single-process", "--in-process-gpu"];
 export const TREE_FORBIDDEN_SWITCHES = ["--no-sandbox", "--disable-seccomp-filter-sandbox", "--disable-namespace-sandbox", "--disable-setuid-sandbox"];
+export const WINDOW_DESKTOP_ENTRIES = ["ardia-little.desktop", "ardia-settings.desktop", "ardia-import.desktop"];
+export const DESKTOP_ENTRIES = ["ardia.desktop", ...WINDOW_DESKTOP_ENTRIES];
 export const STAGED_FILES = [
   { path: "usr/bin/ardia", mode: 0o755 },
-  { path: "usr/share/applications/ardia.desktop", mode: 0o644 },
+  ...DESKTOP_ENTRIES.map((name) => ({ path: `usr/share/applications/${name}`, mode: 0o644 })),
   { path: "usr/lib/ardia/chrome", mode: 0o755 },
   { path: "usr/lib/ardia/ardia-ui/index.html", mode: 0o644 },
   { path: "usr/share/polkit-1/actions/dev.ardia.linux.policy", mode: 0o644 },
@@ -136,7 +138,7 @@ export function debLayoutProblems(listing, fields) {
   expect("./usr/bin/ardia", (e) => e.target === "../lib/ardia/ardia-launch", "is not a link to ../lib/ardia/ardia-launch");
   expect("./usr/share/polkit-1/actions/dev.ardia.linux.policy", (e) => e.mode === "-rw-r--r--", "is not 0644");
   expect("./usr/share/ardia/apparmor/ardia", (e) => e.mode === "-rw-r--r--", "is not 0644");
-  expect("./usr/share/applications/ardia.desktop", (e) => e.mode === "-rw-r--r--", "is not 0644");
+  for (const name of DESKTOP_ENTRIES) expect(`./usr/share/applications/${name}`, (e) => e.mode === "-rw-r--r--", "is not 0644");
   if (entries.has("./usr/lib/ardia/chrome-sandbox")) expect("./usr/lib/ardia/chrome-sandbox", (e) => e.mode === "-rwsr-xr-x", "is not setuid root 4755");
   if (fields.Package !== "ardia") problems.push(`the package is called ${fields.Package}, not ardia`);
   if (fields.Architecture !== "amd64") problems.push(`the architecture is ${fields.Architecture}, not amd64`);
@@ -736,8 +738,10 @@ class Smoke {
     }
     const launcher = await readFile(join(stage, "usr/bin/ardia"), "utf8").catch(() => "");
     if (!launcher.includes('exec "/usr/lib/ardia/ardia-launch"')) problems.push(`the staged launcher does not exec /usr/lib/ardia/ardia-launch: ${JSON.stringify(launcher)}`);
-    const desktop = await readFile(join(stage, "usr/share/applications/ardia.desktop"), "utf8").catch(() => "");
-    if (!/^Exec=\/usr\/bin\/ardia /m.test(desktop)) problems.push("the staged desktop entry does not run /usr/bin/ardia");
+    for (const name of DESKTOP_ENTRIES) {
+      const desktop = await readFile(join(stage, "usr/share/applications", name), "utf8").catch(() => "");
+      if (!/^Exec=\/usr\/bin\/ardia /m.test(desktop)) problems.push(`the staged ${name} does not run /usr/bin/ardia`);
+    }
     const policy = await readFile(join(stage, "usr/share/polkit-1/actions/dev.ardia.linux.policy")).catch(() => null);
     const packaged = await readFile(join(this.root, "share/polkit-1/actions/dev.ardia.linux.policy")).catch(() => null);
     if (!policy || !packaged || !policy.equals(packaged)) problems.push("the staged polkit policy differs from the package's");
@@ -767,8 +771,10 @@ class Smoke {
     const policy = await readFile(join(this.root, "share/polkit-1/actions/dev.ardia.linux.policy")).catch(() => null);
     const source = await readFile(new URL("./dev.ardia.linux.policy", import.meta.url)).catch(() => null);
     if (!policy || !source || !policy.equals(source)) problems.push("the .deb's polkit policy differs from scripts/linux/dev.ardia.linux.policy");
-    const desktop = await readFile(join(this.root, "share/applications/ardia.desktop"), "utf8").catch(() => "");
-    if (!/^Exec=\/usr\/bin\/ardia /m.test(desktop)) problems.push("the .deb's desktop entry does not run /usr/bin/ardia");
+    for (const name of DESKTOP_ENTRIES) {
+      const desktop = await readFile(join(this.root, "share/applications", name), "utf8").catch(() => "");
+      if (!/^Exec=\/usr\/bin\/ardia /m.test(desktop)) problems.push(`the .deb's ${name} does not run /usr/bin/ardia`);
+    }
     if (problems.length) throw new Error(problems.join("; "));
     return { format: "deb", version: fields.Version, setuidHelper: listing.stdout.includes("./usr/lib/ardia/chrome-sandbox") };
   }
@@ -787,6 +793,10 @@ class Smoke {
     if (await fileInfo(join(this.runtime, "chrome-sandbox"))) problems.push("the AppImage carries chrome-sandbox, which can't be setuid there");
     const desktop = await readFile(join(this.root, "ardia.desktop"), "utf8").catch(() => "");
     if (!/^Exec=AppRun /m.test(desktop)) problems.push("the AppImage's desktop entry does not run AppRun");
+    for (const name of WINDOW_DESKTOP_ENTRIES) {
+      const hidden = await readFile(join(this.root, "share/applications", name), "utf8").catch(() => "");
+      if (!/^Exec=AppRun /m.test(hidden)) problems.push(`the AppImage's ${name} does not run AppRun`);
+    }
     if (!(await fileInfo(join(this.root, "ardia.png")))?.isFile) problems.push("the AppImage has no ardia.png");
     if (problems.length) throw new Error(problems.join("; "));
     return { format: "appimage" };

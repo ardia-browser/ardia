@@ -1,0 +1,99 @@
+The Ardia Linux host names the window class of the windows it opens for Little Ardia, Settings and Import
+(g_ardia_linux_window_class: the Wayland app id and the X11 WM_CLASS instance, ardia-little, ardia-settings and
+ardia-import), so a compositor rule and a desktop entry can tell them from a main window. It may also pin a window's
+size (g_ardia_linux_pins_window_size): its frame view's minimum and maximum size are then the window's own size, so
+the window maps with a fixed size, which niri, sway, Hyprland and i3 float by default, and the host releases the pin
+once the window has been presented. Both hooks are null outside the Linux host.
+--- a/chrome/browser/ui/views/frame/browser_native_widget_aura_linux.cc
++++ b/chrome/browser/ui/views/frame/browser_native_widget_aura_linux.cc
+@@ -19,6 +19,9 @@
+ 
+ bool ArdiaLinuxFramelessApp(const BrowserWindowInterface* browser);
+ 
++const char* (*g_ardia_linux_window_class)(const BrowserWindowInterface*) =
++    nullptr;
++
+ BrowserNativeWidgetAuraLinux::BrowserNativeWidgetAuraLinux(
+     BrowserWidget* browser_widget,
+     BrowserView* browser_view)
+@@ -76,6 +79,13 @@
+     params.wayland_app_id = params.wm_class_class;
+   }
+ 
++  if (const char* ardia_class = g_ardia_linux_window_class
++                                    ? g_ardia_linux_window_class(&browser)
++                                    : nullptr) {
++    params.wm_class_name = ardia_class;
++    params.wayland_app_id = ardia_class;
++  }
++
+   return params;
+ }
+ 
+--- a/chrome/browser/ui/views/frame/opaque_browser_frame_view.cc
++++ b/chrome/browser/ui/views/frame/opaque_browser_frame_view.cc
+@@ -5,6 +5,7 @@
+ #include "chrome/browser/ui/views/frame/opaque_browser_frame_view.h"
+ 
+ #include <algorithm>
++#include <optional>
+ #include <utility>
+ 
+ #include "base/trace_event/trace_event.h"
+@@ -68,6 +69,9 @@
+ 
+ using content::WebContents;
+ 
++bool (*g_ardia_linux_pins_window_size)(const BrowserWindowInterface*) =
++    nullptr;
++
+ namespace {
+ 
+ constexpr int kRoundedCaptionButtonSize = 16;
+@@ -125,6 +129,16 @@
+          button->GetMirroredBounds().Contains(point);
+ }
+ 
++std::optional<gfx::Size> ArdiaLinuxPinnedWindowSize(
++    const OpaqueBrowserFrameView* frame) {
++  if (!g_ardia_linux_pins_window_size || !frame->GetWidget() ||
++      !frame->GetBrowserView() ||
++      !g_ardia_linux_pins_window_size(frame->GetBrowserView()->browser())) {
++    return std::nullopt;
++  }
++  return frame->GetWidget()->GetWindowBoundsInScreen().size();
++}
++
+ }  // namespace
+ 
+ ///////////////////////////////////////////////////////////////////////////////
+@@ -326,9 +340,19 @@
+ }
+ 
+ gfx::Size OpaqueBrowserFrameView::GetMinimumSize() const {
++  if (const auto pinned = ArdiaLinuxPinnedWindowSize(this)) {
++    return *pinned;
++  }
+   return layout_->GetMinimumSize(this);
+ }
+ 
++gfx::Size OpaqueBrowserFrameView::GetMaximumSize() const {
++  if (const auto pinned = ArdiaLinuxPinnedWindowSize(this)) {
++    return *pinned;
++  }
++  return BrowserFrameView::GetMaximumSize();
++}
++
+ void OpaqueBrowserFrameView::PaintAsActiveChanged() {
+   UpdateCaptionButtonPlaceholderContainerBackground();
+   BrowserFrameView::PaintAsActiveChanged();
+--- a/chrome/browser/ui/views/frame/opaque_browser_frame_view.h
++++ b/chrome/browser/ui/views/frame/opaque_browser_frame_view.h
+@@ -66,6 +66,7 @@
+   void WindowControlsOverlayEnabledChanged() override;
+   void SetCaptionButtonsOpacity(float opacity) override;
+   gfx::Size GetMinimumSize() const override;
++  gfx::Size GetMaximumSize() const override;
+   void PaintAsActiveChanged() override;
+   void OnThemeChanged() override;
+ 

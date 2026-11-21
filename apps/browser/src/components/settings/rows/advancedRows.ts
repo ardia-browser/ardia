@@ -58,7 +58,7 @@ export const advancedRows = {
         websiteEngines: {
           title: "Engine per site",
           description: "Sites that always open in a chosen engine.",
-          keywords: ["opens in", "site engine", "rule", "webkit", "chromium", "website rules", "drm", "netflix", "disney", "hbo", "max", "prime video", "hulu", "spotify", "apple tv", "apple music", "fairplay", "widevine", "streaming", "tencent video", "v.qq.com", "audible", "audiobooks", "canal+", "canalplus", "mycanal", "open streaming sites in webkit"],
+          keywords: ["opens in", "site engine", "rule", "webkit", "chromium", "website rules", "drm", "netflix", "disney", "hbo", "max", "prime video", "hulu", "spotify", "apple tv", "apple music", "fairplay", "widevine", "streaming", "tencent video", "v.qq.com", "audible", "audiobooks", "canal+", "canalplus", "mycanal", "youtube tv", "tv.youtube.com", "open streaming sites in webkit"],
           shown: webKitOffered,
         },
       },

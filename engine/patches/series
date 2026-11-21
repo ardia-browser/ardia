@@ -77,6 +77,7 @@ chromium chromium-os-crypt-decrypt-erase.patch
 chromium chromium-window-docked-devtools.patch
 chromium chromium-window-hosted.patch
 chromium chromium-window-hosted-mac.patch mac
+chromium chromium-mac-secure-input-window-focus.patch mac
 chromium chromium-linux-document-close.patch linux
 chromium chromium-linux-devtools-authority.patch linux
 chromium chromium-extension-installed-bubble.patch

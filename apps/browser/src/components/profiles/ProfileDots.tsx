@@ -13,6 +13,7 @@ import { SIDEBAR_FOOTER_DOWNLOADS } from "../sidebar/geometry";
 import { switcherCellWidth, switcherIcons, SwitcherMark } from "./ProfileIcons";
 import { openProfileItemMenu } from "./profileMenu";
 import { profileSwitcherShown } from "../../state/profiles/switcherShown";
+import { switcherIconOf } from "../../state/profiles/switcherMark";
 import { profileSwitcher } from "./tokens";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
 import { useProfileHold, useProfileTarget } from "../sidebar/DragProvider";
@@ -33,9 +34,8 @@ export function useProfileDotsShown() {
 
 export function ProfileDots({ windowId, width, besideDownloads }: { windowId: string; width: number; besideDownloads: boolean }) {
   const ids = useProfileOrder(useShallow((o) => o));
-  const saved = useProfileRecords(useShallow((profiles) => ids.map((id) => profiles[id]?.icon ?? null)));
-  const shown = useSettings((s) => s.profileSwitcherIcons);
-  const icons = switcherIcons(saved, shown, width - 2 * (besideDownloads ? SIDE_ROOM_BESIDE_DOWNLOADS : SIDE_ROOM));
+  const saved = useProfileRecords(useShallow((profiles) => ids.map((id) => switcherIconOf(profiles[id]))));
+  const icons = switcherIcons(saved, width - 2 * (besideDownloads ? SIDE_ROOM_BESIDE_DOWNLOADS : SIDE_ROOM));
   const { pages, pager } = usePagerPages(windowId);
   const reorder = useDotReorder(ids, ids.map((_, i) => switcherCellWidth(icons[i] ?? null)));
   return (

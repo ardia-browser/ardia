@@ -54,7 +54,7 @@ export const STATUS_MOTION = {
 
 export const STATUS_FLIP_BAND = 48;
 
-export const CLI_PILL_MOTION = {
+export const CONTROL_PILL_MOTION = {
   show: { duration: duration.base, easing: curve.enter },
   hide: { duration: duration.base, easing: curve.exit },
 } as const;

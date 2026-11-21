@@ -112,3 +112,12 @@ test("a settings key that is present but not an object is an error and applies n
   assert.deepEqual(read(null), { patch: {}, theme: null, problems: ["config.json: settings must be an object"] });
   assert.deepEqual(readConfig(JSON.stringify({ theme: "nord" }), DEFAULT_SETTINGS), { patch: {}, theme: "nord", problems: [] });
 });
+
+test("theme takes a plugin's theme key, and a malformed one is a problem", () => {
+  assert.equal(read({}, { theme: "plugin:reader/dusk" }).theme, "plugin:reader/dusk");
+  for (const theme of ["plugin:Reader/dusk", "plugin:reader/", "plugin:reader/a/b"]) {
+    const { theme: got, problems } = read({}, { theme });
+    assert.equal(got, undefined, theme);
+    assert.equal(problems.length, 1, theme);
+  }
+});

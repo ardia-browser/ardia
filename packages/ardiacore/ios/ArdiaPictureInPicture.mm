@@ -31,8 +31,16 @@ double ClickSkipSeconds(NSWindow *window, NSPoint local) {
   return ardia_pip_seek::SkipSecondsAt(local.x, NSWidth(window.frame));
 }
 
+BOOL OnStashHandle(NSWindow *window, NSEvent *event) {
+  ArdiaPiPController *controller = [ArdiaPiPController forWindow:window];
+  ArdiaPiPHandle *handle = controller.overlay.handle;
+  if (!handle || handle.hidden || controller.stashedEdge == ArdiaPiPEdgeNone) return NO;
+  return NSPointInRect([handle convertPoint:event.locationInWindow fromView:nil], handle.bounds);
+}
+
 BOOL GrabsWindowBackground(NSWindow *window, NSEvent *event) {
   if (!window || ![ArdiaPiPController forWindow:window] || (event.modifierFlags & NSEventModifierFlagControl)) return NO;
+  if (OnStashHandle(window, event)) return YES;
   if (event.clickCount > 1 && !ClickSkipSeconds(window, event.locationInWindow)) return NO;
   if ([window respondsToSelector:@selector(_resizeDirectionForMouseLocation:)] &&
       [window _resizeDirectionForMouseLocation:event.locationInWindow] != -1)
@@ -52,6 +60,8 @@ double gGrabTravel;
 double gGrabSkip;
 
 NSInteger gGrabClicks;
+
+BOOL gGrabHandle;
 
 void NoteGrabTravel(NSEvent *event) {
   const NSPoint mouse = PointerOf(event);
@@ -75,6 +85,7 @@ void InstallDragMonitor() {
                                                       gGrabTravel = 0;
                                                       gGrabSkip = ClickSkipSeconds(window, event.locationInWindow);
                                                       gGrabClicks = event.clickCount;
+                                                      gGrabHandle = OnStashHandle(window, event);
                                                       ardia_host::NotePointer(event, @"pipDrag");
                                                       return nil;
                                                     }
@@ -86,6 +97,7 @@ void InstallDragMonitor() {
                                                       [dragged dragEnded:event];
                                                       if (gGrabSkip && ardia_pip_seek::IsClick(gGrabTravel))
                                                         [dragged skipDraggedBy:gGrabSkip at:gGrabLocal clickCount:gGrabClicks];
+                                                      if (gGrabHandle && ardia_pip_seek::IsClick(gGrabTravel)) [dragged unstashFromHandle];
                                                       ardia_host::NotePointer(event, @"pipDrag");
                                                     } else {
                                                       [dragged dragMoved:event];

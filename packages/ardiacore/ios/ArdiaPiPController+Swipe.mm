@@ -117,6 +117,12 @@ static __weak NSWindow *gSwipeMomentum;
   if (_dragging) [self followPointer:event];
 }
 
+- (void)unstashFromHandle {
+  if (_stashedEdge == ArdiaPiPEdgeNone) return;
+  [self unstash];
+  [self.view emit:@"pictureInPictureUnstashed" payload:[(_dragStamp ?: ArdiaConsentStamp.begin) onto:@{}]];
+}
+
 - (void)dragEnded:(NSEvent *)event {
   if (!_dragging) return;
   [self followPointer:event];

@@ -63,6 +63,17 @@ using namespace ardia_pip;
     return layer.cornerRadius == self.cornerRadius && layer.masksToBounds && !window.opaque && window.hasShadow &&
            self.overlay.layer.borderWidth == 1;
   };
+  auto clickHandle = [=] {
+    ArdiaPiPHandle *handle = self.overlay.handle;
+    const NSPoint point = [handle convertPoint:NSMakePoint(NSMidX(handle.bounds), NSMidY(handle.bounds)) toView:nil];
+    for (NSEventType type : {NSEventTypeLeftMouseDown, NSEventTypeLeftMouseUp})
+      [NSApp postEvent:[NSEvent mouseEventWithType:type location:point modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime
+                                      windowNumber:window.windowNumber context:nil eventNumber:0 clickCount:1
+                                          pressure:type == NSEventTypeLeftMouseDown]
+               atStart:NO];
+    return NSStringFromPoint(point);
+  };
+  __block NSString *rightClickAt = @"", *leftClickAt = @"";
   auto dragTo = [=](CGFloat x) {
     self->_sawDrag = YES;
     [window setFrameOrigin:NSMakePoint(x, NSMinY(window.frame))];
@@ -94,12 +105,12 @@ using namespace ardia_pip;
   });
   after(3.4, ^{
     record(@"Chrome's move re-stashes", self.stashedEdge == ArdiaPiPEdgeRight && fabs(NSMinX(window.frame) - (NSMaxX(visibleRight) - kPeek)) < 0.5, nil);
-    self.overlay.handle.onClick();
+    rightClickAt = clickHandle();
   });
   after(4.6, ^{
     record(@"handle click brings it back", self.stashedEdge == ArdiaPiPEdgeNone && self.overlay.handle.hidden &&
                                                 fabs(NSMaxX(window.frame) - (NSMaxX(visibleRight) - kReturnMargin)) < 0.5,
-           nil);
+           @{@"clickedAt" : rightClickAt});
     dragTo(NSMinX(visibleLeft) - NSWidth(window.frame) * 0.7);
   });
   after(5.8, ^{
@@ -108,9 +119,19 @@ using namespace ardia_pip;
                                                 NSMinX(self.overlay.handle.frame) == NSWidth(self.overlay.bounds) - kPeek,
            @{@"handle" : NSStringFromRect(self.overlay.handle.frame)});
     snapshot(@"stashed-left");
-    dragTo(NSMinX(visibleLeft) + 100);
+    leftClickAt = clickHandle();
   });
   after(7.0, ^{
+    record(@"left handle click brings it back", self.stashedEdge == ArdiaPiPEdgeNone && self.overlay.handle.hidden &&
+                                                     fabs(NSMinX(window.frame) - (NSMinX(visibleLeft) + kReturnMargin)) < 0.5,
+           @{@"clickedAt" : leftClickAt});
+    dragTo(NSMinX(visibleLeft) - NSWidth(window.frame) * 0.7);
+  });
+  after(8.2, ^{
+    record(@"drag past left edge stashes again", self.stashedEdge == ArdiaPiPEdgeLeft, nil);
+    dragTo(NSMinX(visibleLeft) + 100);
+  });
+  after(9.4, ^{
     record(@"drag out of the stash", self.stashedEdge == ArdiaPiPEdgeNone && fabs(NSMinX(window.frame) - (NSMinX(visibleLeft) + 100)) < 0.5, nil);
     NSArray *saved = [NSArray arrayWithContentsOfFile:[dir stringByAppendingPathComponent:@"Chromium/ArdiaPictureInPicture.plist"]];
     NSRect frame = window.frame;
@@ -128,15 +149,15 @@ using namespace ardia_pip;
            @{@"menu" : [[self menu].itemArray valueForKey:@"title"]});
     [window setFrame:NSInsetRect(start, 40, 22.5) display:YES];
   });
-  after(7.6, ^{
+  after(10.0, ^{
     record(@"still rounded after a resize", rounded(), nil);
     [window setFrame:start display:YES];
   });
-  after(8.2, ^{
+  after(10.6, ^{
     record(@"menu: Back to Tab", self.view != nil, nil);
     [self backToTab];
   });
-  after(9.7, ^{
+  after(12.1, ^{
     record(@"PiP closed after Back to Tab", !window.visible, nil);
     write();
   });

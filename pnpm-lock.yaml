@@ -261,6 +261,8 @@ importers:
         specifier: workspace:*
         version: link:../core
 
+  packages/plugin-sdk: {}
+
   packages/shaders:
     dependencies:
       '@ardia/core':

@@ -47,8 +47,11 @@ export type CalendarNative = {
   events(start: number, end: number, calendarIds: string[]): Promise<SystemCalendarEvent[]>;
 };
 
+export type KeychainReadResult = { status: "ok"; value: string } | { status: "missing" } | { status: "error"; reason: string };
+
 export type KeychainNative = {
   get(account: string): Promise<string | null>;
+  read(account: string): Promise<KeychainReadResult>;
   set(account: string, secret: string): Promise<boolean>;
   delete(account: string): Promise<boolean>;
 };

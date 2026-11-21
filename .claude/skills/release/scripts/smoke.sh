@@ -109,6 +109,9 @@ swiftc -O "$here/windows.swift" -o "$work/windows" 2>/dev/null
 swiftc -O "$here/quit.swift" -o "$work/quit" 2>/dev/null
 swiftc -O "$here/keys.swift" -o "$work/keys" 2>/dev/null
 swiftc -O "$here/gurl.swift" -o "$work/gurl" 2>/dev/null
+swiftc -O "$here/ax.swift" -o "$work/ax" 2>/dev/null
+passkeys=0
+codesign -d --entitlements - --xml "$app" 2>/dev/null | grep -q "com.apple.developer.web-browser.public-key-credential" && passkeys=1
 serve_dir "$here/pages"
 
 mkdir -p "$work/data"
@@ -144,7 +147,7 @@ sleep 8
 locked="$("$work/windows" --locked)"
 access="$("$work/windows" --access)"
 [ "$locked" = 1 ] && echo "note: the screen is locked; checks of window order and closing are skipped (they need an unlocked screen)"
-SMOKE_LOCKED="$locked" SMOKE_ACCESS="$access" SMOKE_DATA="$work/data" SMOKE_KEYS="$work/keys" SMOKE_GURL="$work/gurl" node "$here/smoke.mjs" "$version" "$work/windows" "$pages" || status=1
+SMOKE_LOCKED="$locked" SMOKE_ACCESS="$access" SMOKE_AX="$work/ax" SMOKE_PASSKEYS="$passkeys" SMOKE_DATA="$work/data" SMOKE_KEYS="$work/keys" SMOKE_GURL="$work/gurl" node "$here/smoke.mjs" "$version" "$work/windows" "$pages" || status=1
 
 children="$(ps -axo ppid=,pid=,comm= | awk -v p="$pid" '$1 == p { $1 = ""; $2 = ""; sub(/^ +/, ""); print }')"
 foreign="$(printf '%s\n' "$children" | grep -v "^$fw/Chromium Framework.framework/" | grep -v '^$' || true)"

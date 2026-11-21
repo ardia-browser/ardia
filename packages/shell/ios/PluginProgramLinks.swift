@@ -8,8 +8,6 @@ enum PluginProgramLinks {
   private static let afterUpdateDeadline: TimeInterval = 300
   private static let pathMarker = ".path-line"
   static let builtInDigestsKey = "ArdiaBuiltInPlugins"
-  private static let reservedProgram = "ardia"
-  private static let reservedOwner = "cli"
 
   private static let lock = NSLock()
   private static var generations: [String: Int] = [:]
@@ -51,11 +49,16 @@ enum PluginProgramLinks {
     }
   }
 
-  static func legacyInstalled(done: @escaping (Bool) -> Void) {
+  static func legacyInstalled(done: @escaping ([String]) -> Void) {
     queue.async {
-      guard let folders = PluginFolders.current(), case .success(let places) = folders.programPlaces() else { return done(false) }
-      done(PluginPrograms.legacyInstalled(places))
+      guard let folders = PluginFolders.current() else { return done([]) }
+      let registry = folders.programRegistry()
+      done(registry.failClosed ? [] : registry.legacy.filter(PluginPrograms.legacyInstalled).map(\.owner))
     }
+  }
+
+  static func registry(done: @escaping ([String: Any]) -> Void) {
+    queue.async { done((PluginFolders.current()?.programRegistry() ?? .empty).jsonValue) }
   }
 
   static func sweep(keeping active: [String], done: @escaping () -> Void) {
@@ -77,14 +80,15 @@ enum PluginProgramLinks {
       return PluginProgram(name: program, path: path)
     }
     let builtIn = folderId == PluginFolders.bundledId
-    if programs.contains(where: { $0.name == reservedProgram }) && !(builtIn && name == reservedOwner) {
-      return ["ok": false, "reason": "\(reservedProgram) belongs to Ardia's built-in \(reservedOwner) plugin"]
+    guard let folders = PluginFolders.current() else { return ["ok": false, "reason": "Ardia has no data folder"] }
+    let registry = folders.programRegistry()
+    if let refusal = programs.lazy.compactMap({ registry.refusal(program: $0.name, plugin: name, builtIn: builtIn) }).first {
+      return ["ok": false, "reason": refusal]
     }
     let afterUpdate = builtIn ? raw.compactMap { entry -> (String, [[String]])? in
       guard let program = entry["path"] as? String, let commands = entry["afterUpdate"] as? [[String]], !commands.isEmpty else { return nil }
       return (program, commands)
     } : []
-    guard let folders = PluginFolders.current() else { return ["ok": false, "reason": "Ardia has no data folder"] }
     let places: ProgramPlaces
     switch folders.programPlaces() {
     case .failure(let refusal): return ["ok": false, "reason": refusal.reason]
@@ -102,19 +106,19 @@ enum PluginProgramLinks {
       if signed == nil && !LaunchConfig.shared.isolated { return ["ok": false, "reason": "it isn't in the list of built-in plugins this Ardia was signed with"] }
       expected = signed
     }
-    let adopt = builtIn && spec["adopt"] as? Bool == true
+    let adoption = registry.adoption(for: name, programs: programs.map(\.name), builtIn: builtIn)
     let result = PluginPrograms.install(
       plugin: name, from: folder, approved: approved, version: spec["version"] as? String, programs: programs, places: places, expectedDigest: expected,
-      adopt: adopt)
+      adoption: adoption)
     switch result {
     case .failure(let refusal):
       return ["ok": false, "reason": refusal.reason]
     case .success(let linked):
       if !linked.linked.isEmpty { addToLoginPath(places) }
-      if !afterUpdate.isEmpty, PluginPrograms.needsAfterUpdate(plugin: name, version: linked.version, places: places) {
+      if !afterUpdate.isEmpty, PluginPrograms.shouldRunAfterUpdate(linked, plugin: name, places: places) {
         runAfterUpdate(name, version: linked.version, commands: afterUpdate, places: places, generation: generation)
       }
-      return ["ok": true, "linked": linked.linked, "refused": linked.refused, "binDir": places.binDir, "adopted": linked.adopted]
+      return ["ok": true, "linked": linked.linked, "refused": linked.refused, "binDir": places.binDir, "adopted": linked.adopted, "adoptBusy": linked.adoptBusy, "adoption": linked.adoption.rawValue]
     }
   }
 
@@ -216,7 +220,7 @@ enum PluginProgramLinks {
     try? FileManager.default.createDirectory(atPath: home, withIntermediateDirectories: true)
     environment["HOME"] = home
     if let data = LaunchConfig.shared.dataDirectory { environment["ARDIA_DATA_DIR"] = data }
-    if let legacy = places.legacy { environment["ARDIA_CLI_HOME"] = legacy }
+    if let legacy = LaunchConfig.shared.instance(PluginFolders.isolatedLegacyKey) { environment["ARDIA_CLI_HOME"] = legacy }
     return environment
   }
 

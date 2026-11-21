@@ -49,6 +49,9 @@ test("with no password manager plugin on, the password manager holds no pages-st
 test("a pending offer-to-save write watches pages while it waits, and lets go once it lands", async () => {
   const seen = [];
   const stop = offer.watchPendingOfferToSave((pending) => seen.push(pending));
+  pm.choosePasswordManager("default", "ardia");
+  await settle();
+  seen.length = 0;
   offer.followMode("default", "plugin:system-passwords");
   assert.equal(live, 1);
   await settle();

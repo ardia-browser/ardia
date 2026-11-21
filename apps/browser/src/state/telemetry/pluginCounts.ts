@@ -21,6 +21,23 @@ const NONE = {
   plugin_adoptions_waiting: 0,
   plugin_removals: 0,
   plugin_removals_cancelled: 0,
+  plugin_activations: 0,
+  plugin_activation_failures: 0,
+  plugin_surface_renders: 0,
+  plugin_panel_opens: 0,
+  plugin_toolbar_runs: 0,
+  plugin_menu_runs: 0,
+  plugin_action_shortcuts: 0,
+  plugin_omnibox_queries: 0,
+  plugin_ui_prompts: 0,
+  plugin_net_fetches: 0,
+  plugin_net_refusals: 0,
+  plugin_storage_writes: 0,
+  plugin_storage_cancels: 0,
+  plugin_secret_writes: 0,
+  plugin_page_reads: 0,
+  plugin_decide_calls: 0,
+  plugin_decide_timeouts: 0,
 };
 
 export type PluginCount = keyof typeof NONE;

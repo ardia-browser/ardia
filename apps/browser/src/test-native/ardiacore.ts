@@ -236,6 +236,7 @@ function importHistoryRows(profile: string, { rows }: { rows: { u: string; t: st
   return heldHistoryImports.reply ? heldHistoryImports.reply.then(() => ({})) : {};
 }
 
+export const bookmarkModel = { loading: new Set<string>(), treeFails: false, treeHangs: false };
 export const historyDeletes = { failNext: false };
 
 function deleteHistoryUrls(profile: string, { urls }: { urls: string[] }) {
@@ -634,8 +635,16 @@ const fakeModules = {
     watch: ({ profile }) => (historyWatches.push(profile), null),
   }),
   ArdiaBookmarks: domain("bookmarks", {
-    tree: ({ profile }) => ({ bar: treeOf(chromeBookmarks(profile), "bar"), other: treeOf(chromeBookmarks(profile), "other") }),
-    apply: ({ profile, ...args }) => applyBookmarkOps(profile, args),
+    tree: ({ profile }) => {
+      if (bookmarkModel.treeFails) throw new Error("no bookmarks");
+      if (bookmarkModel.treeHangs) return new Promise(() => {});
+      bookmarkModel.loading.delete(profile);
+      return { bar: treeOf(chromeBookmarks(profile), "bar"), other: treeOf(chromeBookmarks(profile), "other") };
+    },
+    apply: ({ profile, ...args }) => {
+      if (bookmarkModel.loading.has(profile)) throw new Error("bookmarks.apply ran inside Chrome's bookmark model load");
+      return applyBookmarkOps(profile, args);
+    },
     watch: () => null,
   }),
   ArdiaFavicons: domain("favicons", {

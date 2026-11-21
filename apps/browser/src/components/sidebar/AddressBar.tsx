@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pressable, View, type ViewStyle } from "react-native";
 import { NAV_HINTS, useShortcutHints, withShortcut, type NavHints } from "../../state/commands/commandShortcuts";
 import { layout, useTheme } from "../ui/theme";
@@ -7,6 +7,8 @@ import { toggleSidebar } from "../../state/windows/actions";
 import { openEmptySidebarField } from "../../state/omnibox/barState";
 import { isAddressBarInSidebar } from "../../state/sidebar/current";
 import { extensionsFitting, ToolbarExtensions, useToolbarExtensionsWidth } from "../extensions/ToolbarExtensions";
+import { PluginToolbarItems } from "../plugins/PluginToolbarItems";
+import { PLUGIN_CHROME, usePluginChrome } from "../../state/plugins/chrome";
 import { useHistoryAvailability } from "../../state/tabs/navigation";
 import { toolbarPalette, type ToolbarPalette } from "../ui/toolbarColors";
 import { Button, type ButtonHit, FadeLabel, radius, space, ToolbarRowContext, useHover } from "../ui";
@@ -173,12 +175,17 @@ function PageField({ tab, windowId, width }: { tab: NonNullable<ReturnType<typeo
 }
 
 function FieldExtensions({ tabId, windowId, width, palette, onActivate }: { tabId: string; windowId: string; width: number; palette: ToolbarPalette; onActivate?: () => void }) {
-  const limit = extensionsFitting(width - 10 - 3 - HOST_ROOM);
+  const pluginToolbar = usePluginChrome(PLUGIN_CHROME.toolbar);
+  const [reportedPluginsWidth, setPluginsWidth] = useState(0);
+  const pluginsWidth = pluginToolbar ? reportedPluginsWidth : 0;
+  const limit = extensionsFitting(width - 10 - 3 - HOST_ROOM - pluginsWidth);
   const extensionsWidth = useToolbarExtensionsWidth(windowId, limit);
-  if (!extensionsWidth) return null;
+  const total = extensionsWidth + pluginsWidth;
+  if (!total && !pluginToolbar) return null;
   return (
-    <View style={{ width: extensionsWidth, height: 28 }}>
+    <View style={{ width: total, height: total ? 28 : 0 }}>
       <ToolbarExtensions tabId={tabId} windowId={windowId} palette={palette} top={0} right={0} limit={limit} onActivate={onActivate} />
+      {pluginToolbar ? <PluginToolbarItems windowId={windowId} palette={palette} top={0} right={extensionsWidth} onWidth={setPluginsWidth} /> : null}
     </View>
   );
 }

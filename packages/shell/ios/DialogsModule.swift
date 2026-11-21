@@ -21,6 +21,11 @@ public class DialogsModule: Module {
         promise.resolve(["confirmed": false, "suppressed": false, "unshown": true])
         return
       }
+      let sheetWindow = DialogsModule.visibleWindow(options.windowId)
+      if options.sheetOnly && sheetWindow == nil {
+        promise.resolve(["confirmed": false, "suppressed": false, "unavailable": true])
+        return
+      }
       let alert = DialogsModule.alert(title: options.title, message: options.message)
       alert.addButton(withTitle: options.confirmTitle)
       alert.addButton(withTitle: options.cancelTitle)
@@ -39,6 +44,10 @@ public class DialogsModule: Module {
       if options.onlyIfShown, let window = DialogsModule.visibleWindow(options.windowId) {
         DialogsModule.shownOnly.append((window, alert, options.dismissKey))
         alert.beginSheetModal(for: window, completionHandler: answer)
+        return
+      }
+      if options.sheetOnly, let sheetWindow {
+        alert.beginSheetModal(for: sheetWindow, completionHandler: answer)
         return
       }
       DialogsModule.present(alert, windowId: options.windowId, completion: answer)

@@ -180,8 +180,8 @@ Launch with `scripts/agent/ac launch <app> --data <dir> [--instance K=V] [--test
 - **`allowOcclusion`**: macOS posts no occlusion change for a window a band below normal, so minimizing and
   deminiaturizing post one for it (the page goes hidden as in a user's minimized window).
 - **The `ardia` command** (`cliHome`, `cliBinDir`, `cliUrl` (`file://` works), test `cliInstallScript`, test
-  `bundledPlugins`): on macOS a test instance links the built-in `cli` plugin only into `cliBinDir` and adopts an old
-  install only from `cliHome`, so it never touches the real home; give it the plugin folder with
+  `bundledPlugins`): on macOS a test instance links built-in plugins' programs only into `cliBinDir`, takes its program
+  registry from the bundled manifests' `claim`s, and adopts an old install only from `cliHome`, so it never touches the real home; give it the plugin folder with
   `ARDIA_TEST bundledPlugins=<dir>` (`scripts/release/official-plugins.py bundle <dir>` for the pinned ones, or
 `plugins/cli/build.sh <dir>` in ardia-browser/plugins for a local one), since a Debug build bundles none. On Linux a
   test instance installs or upgrades only with the first two set. Its

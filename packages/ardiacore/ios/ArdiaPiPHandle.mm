@@ -8,7 +8,25 @@ using namespace ardia_pip;
 
 @implementation ArdiaPiPHandle {
   NSImageView *_chevron;
+  NSTrackingArea *_tracking;
 }
+
+- (BOOL)isFlipped { return YES; }
+
+- (void)updateTrackingAreas {
+  [super updateTrackingAreas];
+  if (_tracking) [self removeTrackingArea:_tracking];
+  _tracking = [[NSTrackingArea alloc]
+      initWithRect:NSZeroRect
+           options:NSTrackingMouseEnteredAndExited | NSTrackingActiveAlways | NSTrackingInVisibleRect | NSTrackingCursorUpdate
+             owner:self
+          userInfo:nil];
+  [self addTrackingArea:_tracking];
+}
+
+- (void)mouseEntered:(NSEvent *)event { self.hovered = YES; }
+- (void)mouseExited:(NSEvent *)event { self.hovered = NO; }
+- (void)cursorUpdate:(NSEvent *)event { [NSCursor.pointingHandCursor set]; }
 
 - (instancetype)initWithFrame:(NSRect)frame {
   if ((self = [super initWithFrame:frame])) {
@@ -31,7 +49,7 @@ using namespace ardia_pip;
 }
 
 - (void)setHovered:(BOOL)hovered {
-  [super setHovered:hovered];
+  _hovered = hovered;
   self.layer.backgroundColor = [NSColor colorWithWhite:0 alpha:hovered ? 0.7 : 0.5].CGColor;
 }
 

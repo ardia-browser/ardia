@@ -7,11 +7,11 @@ import { installedLabel, isOffered, officialInSettings, officialTitle, officialV
 import { goToSettingsPane } from "../../../state/settings/settingsWindows";
 import { consentToken, noteOfficialPlugin } from "../../../state/telemetry/officialPluginCounts";
 import { Group, Row, SectionHeader } from "../Form";
-import type { SettingId } from "../settingsIndex";
+import { findSetting, type SettingId } from "../settingsIndex";
+import { officialPluginAnchor } from "../rows/pluginRows";
 import { ActivitySpinner, Button, IconTile, Text, Toggle } from "../../ui";
 import { lineHeight, monoFace, space } from "../../ui/tokens";
 
-const ROW_ANCHORS: Record<string, SettingId> = { cli: "plugins.commandLine" };
 const COPIED_FOR_MS = 2000;
 
 export function usePluginsBelowOfficial(): string[] {
@@ -70,7 +70,7 @@ function OfficialPluginRow({ plugin }: { plugin: OfficialPlugin }) {
   useEffect(() => {
     if (offered) noteOfficialPlugin("settings", "shown", plugin.name);
   }, [plugin.name, offered]);
-  const anchor = ROW_ANCHORS[plugin.name];
+  const anchor = findSetting(officialPluginAnchor(plugin.name))?.id as SettingId | undefined;
   return (
     <Row
       anchor={anchor}

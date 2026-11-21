@@ -12,7 +12,8 @@ test("the example plugin reads with every contribution", () => {
   const { manifest, problems: found } = readManifest(FIXTURE);
   assert.deepEqual(found, []);
   assert.equal(manifest.name, "example");
-  assert.deepEqual(contributionsOf(manifest), CONTRIBUTIONS.filter((c) => c !== "passwordManager"));
+  assert.deepEqual(contributionsOf(manifest), ["settings", "commands", "page", "process", "programs", "hooks", "tools"]);
+  assert.ok(CONTRIBUTIONS.includes("main") && CONTRIBUTIONS.includes("omnibox"));
   assert.deepEqual(manifest.page.source, { file: "page/index.html" });
   assert.deepEqual(manifest.commands.find((c) => c.name === "beside").action, { open: "split", context: true, side: "right", sideSetting: "side", path: "" });
   assert.ok(problems({ ...base(), commands: [{ name: "h", title: "History", open: "tab", path: "/../up" }] }).some((p) => p.includes("path must be")));
@@ -122,13 +123,20 @@ test("versions compare by number, a prerelease before its release", () => {
 });
 
 test("the schema closes every block it describes", () => {
-  const schema = pluginSchema(["tab.opened"], { untabbedEvents: [], approvedSettings: [] });
-  assert.equal(schema.additionalProperties, false);
-  assert.equal(schema.properties.settings.additionalProperties, false);
-  assert.equal(schema.properties.settings.properties.rows.items.additionalProperties, false, "rows are checked, not left in an unused $defs");
-  assert.deepEqual(schema.properties.hooks.items.enum, ["tab.opened"]);
-  assert.equal(schema.properties.process.additionalProperties, false);
-  assert.equal(schema.properties.commands.items.additionalProperties, false);
+  const schema = pluginSchema(["tab.opened"], { untabbedEvents: [], approvedSettings: [], decideEvents: ["tab.opening"] });
+  for (const body of [schema.then, schema.then.properties.contributes]) assert.equal(body.additionalProperties, false);
+  const v2 = schema.then.properties.contributes.properties;
+  assert.equal(v2.settings.additionalProperties, false);
+  assert.equal(v2.settings.properties.rows.items.additionalProperties, false, "rows are checked, not left in an unused $defs");
+  assert.deepEqual(v2.hooks.items.enum, ["tab.opened", "tab.opening"]);
+  assert.equal(schema.then.properties.sidecar.additionalProperties, false);
+  assert.equal(v2.commands.items.additionalProperties, false);
+  for (const block of ["menus", "permissions"]) assert.equal((v2[block] ?? schema.then.properties[block]).additionalProperties, false, block);
+  for (const block of ["toolbar", "sidebarViews", "panels", "omnibox", "themes"]) assert.equal(v2[block].items.additionalProperties, false, block);
+  const v1 = schema.else;
+  assert.equal(v1.additionalProperties, false);
+  assert.equal(v1.properties.process.additionalProperties, false);
+  assert.deepEqual(v1.properties.hooks.items.enum, ["tab.opened"]);
 });
 
 test("docs/plugin.schema.json, which plugins check against, is what the app writes", async () => {
@@ -167,7 +175,7 @@ test("a path with a lone surrogate is a manifest problem, not a crash", () => {
 test("programs: a name like a plugin's and a file in the plugin's folder", () => {
   const ok = readManifest(JSON.stringify({ ...base(), programs: [{ name: "ardia", path: "bin/ardia" }] }));
   assert.deepEqual(ok.problems, []);
-  assert.deepEqual(ok.manifest.programs, [{ name: "ardia", path: "bin/ardia", afterUpdate: [] }]);
+  assert.deepEqual(ok.manifest.programs, [{ name: "ardia", path: "bin/ardia", afterUpdate: [], example: null, claim: false }]);
   assert.deepEqual(readManifest(JSON.stringify({ ...base(), programs: [{ name: "a", path: "a", afterUpdate: [["skills", "refresh"], ["x"]] }] })).manifest.programs[0].afterUpdate, [["skills", "refresh"], ["x"]]);
   for (const afterUpdate of [["x"], [[]], [Array(9).fill("x")], Array(5).fill(["x"]), [[""]]]) assert.ok(problems({ ...base(), programs: [{ name: "a", path: "a", afterUpdate }] }).some((p) => p.includes("programs[0].afterUpdate")), JSON.stringify(afterUpdate));
   assert.equal(readManifest(JSON.stringify({ ...base(), alwaysOn: true })).manifest.alwaysOn, true);
@@ -207,9 +215,280 @@ test("fill: tool is reserved and refused by name, and every other shape is repor
 });
 
 test("the schema holds passwordManager to the same shape the app reads", () => {
-  const schema = pluginSchema([], { untabbedEvents: [], approvedSettings: [] }).properties.passwordManager;
+  const schema = pluginSchema([], { untabbedEvents: [], approvedSettings: [] }).then.properties.contributes.properties.passwordManager;
   assert.equal(schema.additionalProperties, false);
   assert.deepEqual(schema.required, ["fill", "fields"]);
   assert.deepEqual(schema.properties.fill.enum, ["system"]);
   assert.deepEqual(schema.properties.fields.items.enum, ["login", "oneTimeCode"]);
+});
+
+const { parseWhen, evaluateWhen, whenHolds, globMatches } = await import("./pluginWhen.ts");
+const { matchesAllowedHost, hostPatternProblem, hostPatternCovers } = await import("./pluginNetwork.ts");
+const { missingPermissions, NO_PERMISSIONS } = await import("./pluginPermissions.ts");
+const { buildPluginThemeCss, cssRoleValue } = await import("./pluginThemeCss.ts");
+const { checkPluginNode, toolbarUpdateOf, quickPickItemsOf, NODE_LIMITS } = await import("./pluginNodes.ts");
+const { MANIFEST_MIGRATIONS } = await import("./pluginManifest.ts");
+
+const V2 = () => ({
+  manifest: 2,
+  name: "reader",
+  title: "Reader",
+  icon: "book",
+  main: "dist/index.js",
+  permissions: { tabs: "read", activePage: true, storage: true, secrets: true, network: ["api.example.com", "*.cdn.example.com"] },
+  contributes: {
+    commands: [
+      { name: "summarize", title: "Summarize Page", when: "urlScheme == 'https' && !isPinned" },
+      { name: "browse", title: "Browse Notes", view: "notes" },
+      { name: "panel", title: "Open Reader Panel", panel: "side" },
+    ],
+    menus: { tab: [{ command: "summarize" }], group: [{ command: "summarize", title: "Summarize Group", when: "urlHost ~= '*.example.com'" }] },
+    toolbar: [{ id: "go", title: "Reader", icon: "book", view: "quick" }],
+    sidebarViews: [{ id: "notes", title: "Notes", icon: "note.text" }],
+    panels: [
+      { id: "default", title: "Reader", mode: "tab", file: "page/index.html" },
+      { id: "side", title: "Reader Side", mode: "sidecar", view: "side" },
+    ],
+    omnibox: [{ id: "notes", title: "Notes", keyword: "n" }],
+    themes: [{ id: "dusk", title: "Dusk", file: "themes/dusk.json" }],
+    settings: { rows: [{ key: "limit", title: "Limit", type: "number", default: 5, min: 1, max: 10 }, { key: "token", title: "API token", type: "secret" }] },
+    hooks: ["tab.opening"],
+  },
+});
+const v2problems = (patch) => readManifest(JSON.stringify(patch(V2()) ?? V2())).problems;
+
+test("a v1 manifest migrates into v2's shape: process is the sidecar, page the default panel, permissions an object", () => {
+  const raw = MANIFEST_MIGRATIONS[1](JSON.parse(FIXTURE));
+  assert.deepEqual(raw.sidecar, { run: ["/usr/bin/python3", "helper.py"], memoryMB: 256 });
+  assert.deepEqual(raw.contributes.panels, [{ id: "default", mode: "tab", title: "Example", icon: "sparkles", file: "page/index.html" }]);
+  assert.deepEqual(raw.permissions, { tabs: "read", commands: true });
+  for (const gone of ["process", "page", "commands", "tools", "hooks", "settings", "programs"]) assert.equal(raw[gone], undefined, gone);
+  const { manifest } = readManifest(FIXTURE);
+  assert.equal(manifest.manifest, 2);
+  assert.equal(manifest.declaredManifest, 1);
+  assert.deepEqual(manifest.permissions, { tabs: "read", fullUrls: false, activePage: false, workspace: false, commands: true, storage: false, secrets: false, network: false, control: false });
+  assert.equal(manifest.sidecar, manifest.process);
+  assert.equal(manifest.commands, manifest.contributes.commands);
+  assert.equal(manifest.main, null);
+  assert.deepEqual(manifest.activationEvents.slice(0, 1), ["onStartupFinished"]);
+});
+
+test("the built-in plugins' v1 manifests still read: cli's control and programs, apple-passwords' password manager", () => {
+  const cli = readManifest(JSON.stringify({ manifest: 1, name: "cli", title: "Command Line", version: "0.3.0", alwaysOn: true, official: true, icon: "terminal.fill", permissions: ["control"], programs: [{ name: "ardia", path: "bin/ardia", afterUpdate: [["skills", "refresh"]] }] }));
+  assert.deepEqual(cli.problems, []);
+  assert.equal(cli.manifest.permissions.control, true);
+  assert.deepEqual(cli.manifest.programs, [{ name: "ardia", path: "bin/ardia", afterUpdate: [["skills", "refresh"]], example: null, claim: false }]);
+  assert.equal(cli.manifest.icon, "terminal.fill");
+  const pm = readManifest(PASSWORD_FIXTURE).manifest;
+  assert.equal(pm.contributes.passwordManager, pm.passwordManager);
+  const network = readManifest(JSON.stringify({ ...base(), permissions: ["tabs", "network"] })).manifest;
+  assert.equal(network.permissions.network, "*");
+});
+
+test("a v2 manifest reads every contribution, and leaves activation to what it contributes", () => {
+  const { manifest, problems: found } = readManifest(JSON.stringify(V2()));
+  assert.deepEqual(found, []);
+  assert.deepEqual(manifest.main, { entry: "dist/index.js", memoryMB: 256 });
+  assert.deepEqual(manifest.permissions.network, ["api.example.com", "*.cdn.example.com"]);
+  assert.deepEqual(manifest.commands[0].action, { handler: true });
+  assert.deepEqual(manifest.commands[1].action, { view: "notes" });
+  assert.equal(Object.hasOwn(manifest.commands[0], "shortcut"), false);
+  assert.deepEqual(manifest.page, { title: "Reader", icon: "puzzlepiece", source: { file: "page/index.html" } });
+  assert.deepEqual(manifest.settings.rows[1], { key: "token", title: "API token", type: "secret", default: "" });
+  assert.deepEqual(manifest.activationEvents.sort(), ["onCommand:browse", "onCommand:panel", "onCommand:summarize", "onMenu:group", "onMenu:tab", "onOmnibox:notes", "onPanel:side", "onStartupFinished", "onToolbar:go", "onView:notes"].sort());
+  assert.deepEqual(contributionsOf(manifest), ["settings", "commands", "page", "hooks", "main", "menus", "toolbar", "sidebarViews", "panels", "omnibox", "themes"]);
+  const lazy = readManifest(JSON.stringify({ ...V2(), contributes: { commands: [{ name: "x", title: "X" }] } })).manifest;
+  assert.deepEqual(lazy.activationEvents, ["onCommand:x"]);
+  const given = readManifest(JSON.stringify({ ...V2(), activationEvents: ["onUrl:*.github.com", "onEvent:tab.opened"] })).manifest;
+  assert.deepEqual(given.activationEvents, ["onUrl:*.github.com", "onEvent:tab.opened"]);
+});
+
+test("v2 refuses what main, a sidecar or a permission would have to back", () => {
+  const cases = [
+    [(d) => void delete d.main, ".view needs a main"],
+    [(d) => void delete d.main, "contributes.sidebarViews needs a main"],
+    [(d) => void delete d.main, "contributes.omnibox needs a main"],
+    [(d) => void delete d.main, "contributes.toolbar[0].view needs a main"],
+    [(d) => void delete d.main, "hooks needs a main or a sidecar"],
+    [(d) => void (d.contributes.menus.tab = [{ command: "nope" }]), "contributes.menus.tab[0].command: nope isn't one of this plugin's commands"],
+    [(d) => void (d.contributes.toolbar = [{ id: "a", title: "A", icon: "a", command: "nope" }]), "contributes.toolbar[0].command: nope isn't one of this plugin's commands"],
+    [(d) => void (d.contributes.toolbar = [{ id: "a", title: "A", icon: "a" }]), "contributes.toolbar[0] needs either command or view"],
+    [(d) => void (d.contributes.commands[0].when = "urlHost = 'x'"), "contributes.commands[0].when"],
+    [(d) => void (d.contributes.commands[0].when = "secretKey == 1"), "isn't one of urlHost"],
+    [(d) => void (d.contributes.commands[0].when = "hasSelection"), "names hasSelection, which isn't one of"],
+    [(d) => void (d.permissions.network = ["http://evil.com"]), "permissions.network[0] must be a bare host"],
+    [(d) => void (d.permissions.network = ["*.com"]), "permissions.network[0] must put * in front of a domain with at least two parts"],
+    [(d) => void (d.sidecar = { run: ["bin/x"] }), "a sidecar can only have \"*\" or false"],
+    [(d) => void (d.permissions.workspace = true), "workspace needs tabs: write and fullUrls"],
+    [(d) => void (d.permissions.secrets = false), "a secret row needs the secrets permission"],
+    [(d) => void (d.contributes.settings.rows[1].default = "x"), "can't go with a secret"],
+    [(d) => void (d.contributes.settings.rows[0].default = 50), "default must be a number between its min and max"],
+    [(d) => void (d.activationEvents = ["onSomething:x"]), "activationEvents[0] must be *"],
+    [(d) => void (d.activationEvents = ["onUrl:*"]), "activationEvents[0] has a bad onUrl argument"],
+    [(d) => void (d.contributes.panels[1].file = "a.html"), "takes a file or a view, not both"],
+    [(d) => void (d.contributes.omnibox = [{ id: "x", title: "X" }]), "needs a keyword or global: true"],
+    [(d) => void (d.contributes.themes[0].file = "themes/dusk.css"), "contributes.themes[0].file must be a .json file"],
+    [(d) => void (d.contributes.commands[2].panel = "nope"), "contributes.commands[2].panel: nope isn't one of this plugin's panels"],
+    [(d) => void (d.main = "../escape.js"), "main must be a JavaScript file inside the plugin's folder"],
+    [(d) => void (d.sidecar = { run: ["/usr/bin/python3"] }), "a plugin can declare main or sidecar, not both"],
+    [(d) => void (d.contributes.menus.page = [{ command: "summarize" }]), "contributes.menus.page isn't a key of contributes.menus"],
+    [(d) => void (d.contributes.menus.link = [{ command: "summarize" }]), "contributes.menus.link isn't a key"],
+    [(d) => void (d.contributes.menus.selection = [{ command: "summarize" }]), "contributes.menus.selection isn't a key"],
+    [(d) => void (d.contributes.panels[1].mode = "popover"), "contributes.panels[1].mode must be sidecar, tab, split"],
+    [(d) => void (d.contributes.commands[0].shortcut = "cmd+shift+s"), "contributes.commands[0].shortcut isn't a key"],
+    [(d) => void (d.contributes.omnibox = [{ id: "x", title: "X", keyword: "x", global: true }]), "contributes.omnibox[0] takes a keyword or global: true, not both"],
+    [(d) => void (d.main = "index.py"), "main must be a .js"],
+    [(d) => void (d.memoryMB = 9), "memoryMB must be a whole number from 64 to 4096"],
+    [(d) => void (d.permissions = ["tabs"]), "permissions must be an object"],
+    [(d) => void (d.commands = []), "commands isn't a key of a plugin"],
+  ];
+  for (const [patch, words] of cases) {
+    const found = v2problems((d) => (patch(d), d));
+    assert.ok(found.some((p) => p.includes(words)), `${words}\n${found.join("\n")}`);
+  }
+  const noMain = V2();
+  delete noMain.main;
+  noMain.activationEvents = ["*"];
+  assert.ok(readManifest(JSON.stringify(noMain)).problems.includes("plugin.json: activationEvents only go with a main"));
+});
+
+test("a v2 command with nothing to do needs a main, which handles it by default", () => {
+  const doc = { manifest: 2, name: "bare", contributes: { commands: [{ name: "x", title: "X" }] } };
+  assert.ok(readManifest(JSON.stringify(doc)).problems.some((p) => p.includes("needs either tool")));
+  assert.ok(readManifest(JSON.stringify({ ...doc, contributes: { commands: [{ name: "x", title: "X", handler: true }] } })).problems.some((p) => p.includes("handler needs a main")));
+  assert.deepEqual(readManifest(JSON.stringify({ ...doc, main: "index.js" })).problems, []);
+});
+
+test("any plugin may have an icon now, not only built-in ones", async () => {
+  const { appProblems } = await import("../state/plugins/appChecks.ts");
+  const { useBrowser } = await import("../state/browser/store.ts");
+  const m = readManifest(JSON.stringify({ ...V2(), contributes: {} })).manifest;
+  assert.deepEqual(appProblems(m, useBrowser.getState().settings, "99.0.0", "user"), []);
+  const decide = readManifest(JSON.stringify({ ...V2(), permissions: { secrets: true } })).manifest;
+  assert.ok(appProblems(decide, useBrowser.getState().settings, "99.0.0").some((p) => p.includes("contributes.hooks[0]: tab.opening needs the tabs permission")));
+});
+
+test("when clauses: keys, literals, &&, ||, !, ==, != and ~=, with no eval and no unknown keys", () => {
+  const ctx = { urlHost: "docs.github.com", urlScheme: "https", isPinned: false, tabCount: 3, isActive: true };
+  const holds = (text) => whenHolds(text, ctx);
+  assert.equal(holds("urlScheme == 'https' && !isPinned"), true);
+  assert.equal(holds("isPinned || isActive"), true);
+  assert.equal(holds("!(isActive && tabCount == 3)"), false);
+  assert.equal(holds("tabCount != 2"), true);
+  assert.equal(holds('urlHost ~= "*.github.com"'), true);
+  assert.equal(holds('urlHost ~= "github.com"'), false);
+  assert.equal(holds("isSplit"), false);
+  assert.equal(holds(""), true);
+  assert.equal(whenHolds("constructor", ctx), false);
+  for (const bad of ["urlHost =", "process.exit()", "a == 1", "(isPinned", "'unterminated", "isPinned &&", "x".repeat(201), "isPinned)"]) assert.equal(parseWhen(bad).ok, false, bad);
+  const deep = `${"!(".repeat(20)}isPinned${")".repeat(20)}`;
+  assert.equal(parseWhen(deep).ok, false, "nesting has a limit");
+  assert.equal(evaluateWhen(parseWhen("tabCount == '3'").expr, ctx), true);
+  assert.equal(globMatches("a*b*c", "aXXbYYc"), true);
+  assert.equal(globMatches("a*b", "a".repeat(100) + "c"), false);
+});
+
+test("network allowlists: exact hosts, *.domain (its subdomains, never the bare domain, as native fetch enforces) and *, nothing malformed", () => {
+  assert.equal(matchesAllowedHost("api.example.com", ["api.example.com"]), true);
+  assert.equal(matchesAllowedHost("API.Example.com.", ["api.example.com"]), true);
+  assert.equal(matchesAllowedHost("evil-api.example.com", ["api.example.com"]), false);
+  assert.equal(matchesAllowedHost("a.b.example.com", ["*.example.com"]), true);
+  assert.equal(matchesAllowedHost("example.com", ["*.example.com"]), false);
+  assert.equal(matchesAllowedHost("notexample.com", ["*.example.com"]), false);
+  assert.equal(matchesAllowedHost("example.com.evil.io", ["*.example.com"]), false);
+  assert.equal(matchesAllowedHost("anything.io", ["*"]), true);
+  assert.equal(matchesAllowedHost("x.io", ["http://x.io", "x.io:443", "*x.io"]), false);
+  assert.equal(matchesAllowedHost("", ["*"]), false);
+  for (const bad of ["http://a.com", "a.com/path", "a.com:80", "*.com", "a.*.com", "A.com", "-a.com", "1.2.3", "*.1.2.3.4", "user@a.com", 5]) assert.ok(hostPatternProblem(bad), String(bad));
+  for (const good of ["*", "a.com", "*.a.co.uk", "127.0.0.1", "xn--bcher-kva.example"]) assert.equal(hostPatternProblem(good), null, good);
+});
+
+test("a host pattern covers another only when it allows every host the other allows", () => {
+  const covered = [["api.example.com", "api.example.com"], ["*.example.com", "*.example.com"], ["*.example.com", "api.example.com"], ["*.example.com", "a.b.example.com"], ["*.example.com", "*.api.example.com"], ["*", "*.example.com"], ["*", "api.example.com"]];
+  const notCovered = [["api.example.com", "*.example.com"], ["api.example.com", "example.com"], ["example.com", "api.example.com"], ["*.example.com", "evil-example.com"], ["*.example.com", "*.notexample.com"], ["*.example.com", "example.com.evil.io"], ["*.api.example.com", "*.example.com"], ["*.api.example.com", "example.com"], ["*.example.com", "*"], ["*.example.com", "http://api.example.com"], ["*.example.com", "example.com"]];
+  for (const [broader, narrower] of covered) {
+    assert.equal(hostPatternCovers(broader, narrower), true, `${broader} covers ${narrower}`);
+    const reached = narrower === "*" ? [] : narrower.startsWith("*.") ? [`a.${narrower.slice(2)}`, `x.y.${narrower.slice(2)}`] : [narrower];
+    for (const h of reached) assert.equal(matchesAllowedHost(h, [narrower]) && matchesAllowedHost(h, [broader]), true, `${broader} reaches ${h}`);
+  }
+  for (const [broader, narrower] of notCovered) assert.equal(hostPatternCovers(broader, narrower), false, `${broader} doesn't cover ${narrower}`);
+  const net = (network) => ({ ...NO_PERMISSIONS, network });
+  assert.deepEqual(missingPermissions(net(["*.example.com"]), net(["api.example.com"])), []);
+  assert.deepEqual(missingPermissions(net(["*.example.com", "x.io"]), net(["*.api.example.com", "x.io"])), []);
+  assert.deepEqual(missingPermissions(net(["api.example.com"]), net(["*.example.com"])), ["network"]);
+  assert.deepEqual(missingPermissions(net(["*.example.com"]), net(["api.example.com", "evil-example.com"])), ["network"]);
+  assert.deepEqual(missingPermissions(net(["*.example.com"]), net("*")), ["network"]);
+  assert.deepEqual(missingPermissions(net(false), net(["api.example.com"])), ["network"]);
+});
+
+test("a plugin page's theme CSS comes only from the roles given, with nothing that can load or escape", () => {
+  const css = buildPluginThemeCss({ scheme: "dark", roles: { background: "rgb(20, 20, 20)", text: "rgba(255,255,255,0.9)", accentStrong: "hsl(210 80% 50%)", radius: 6, evil: "red; } body { background: url(https://x)", sneaky: "url(x)", "bad-name": "red" } });
+  assert.match(css, /color-scheme: dark;/);
+  assert.match(css, /--ardia-background: rgb\(20, 20, 20\);/);
+  assert.match(css, /--ardia-accent-strong: hsl\(210 80% 50%\);/);
+  assert.match(css, /--ardia-radius: 6;/);
+  assert.doesNotMatch(css, /evil|sneaky|bad-name|url\(/);
+  assert.match(css, /background: var\(--ardia-background, Canvas\)/);
+  assert.equal(cssRoleValue("var(--x)"), null);
+  assert.equal(buildPluginThemeCss({ scheme: "nope", roles: {} }).includes("color-scheme: light;"), true);
+});
+
+test("a rendered tree is held to its limits, and its text cleaned", () => {
+  const ok = checkPluginNode({ type: "List", props: { title: "Notes‮", onSelect: "h1", items: [1, "a", { b: true }] }, children: ["hi", 3, null, false, { type: "Text", key: 7, props: {}, children: [] }] });
+  assert.equal(ok.ok, true);
+  assert.equal(ok.tree.props.title, "Notes");
+  assert.deepEqual(ok.tree.children, ["hi", "3", { type: "Text", key: 7, props: {}, children: [] }]);
+  let deep = { type: "Box", props: {}, children: [] };
+  for (let i = 0; i < NODE_LIMITS.depth + 2; i++) deep = { type: "Box", props: {}, children: [deep] };
+  assert.match(checkPluginNode(deep).problem, /nests deeper/);
+  assert.match(checkPluginNode({ type: "Box", children: Array.from({ length: NODE_LIMITS.nodes + 1 }, () => ({ type: "Text" })) }).problem, /more than/);
+  assert.match(checkPluginNode({ type: "script" }).problem, /component name/);
+  assert.match(checkPluginNode({ type: "Box", props: { "on-click": 1 } }).problem, /prop named/);
+  assert.match(checkPluginNode({ type: "Text", children: ["x".repeat(NODE_LIMITS.textBytes + 1)] }).problem, /KB of text/);
+  assert.equal(checkPluginNode("text").ok, false);
+  assert.deepEqual(toolbarUpdateOf({ badge: 123456, label: "Hi", tone: "accent" }), { badge: 9999, label: "Hi", tone: "accent" });
+  assert.equal(toolbarUpdateOf({ icon: "../x" }), null);
+  assert.equal(toolbarUpdateOf({ tone: "loud" }), null);
+  assert.equal(quickPickItemsOf([{ id: "a", title: "A" }, { id: "a", title: "B" }]), null, "ids are unique");
+  assert.deepEqual(quickPickItemsOf([{ id: "a", title: "A", icon: "star", keywords: ["x"], picked: true, extra: 1 }]), [{ id: "a", title: "A", icon: "star", keywords: ["x"], picked: true }]);
+});
+
+test("when clauses refuse hasSelection, which Ardia never fills, rather than taking an always-false key", () => {
+  const read = parseWhen("hasSelection");
+  assert.equal(read.ok, false);
+  assert.match(read.problem, /names hasSelection, which isn't one of/);
+  assert.equal(whenHolds("!hasSelection", { isActive: true }), false, "not even negated: the clause doesn't parse");
+});
+
+test("manifest 2 adds keywords, a telemetry disclosure, and a program's example and claim; manifest 1 can't use them", () => {
+  const v2 = {
+    manifest: 2,
+    name: "cli",
+    title: "Command Line",
+    keywords: ["terminal", "cli", "terminal"],
+    telemetry: { title: "The ardia command", items: ["Each command's name"] },
+    contributes: { programs: [{ name: "ardia", path: "bin/ardia", example: "ardia tabs", claim: true }] },
+  };
+  const read = readManifest(JSON.stringify(v2));
+  assert.deepEqual(read.problems, []);
+  assert.deepEqual(read.manifest.keywords, ["terminal", "cli"]);
+  assert.deepEqual(read.manifest.telemetry, { title: "The ardia command", items: ["Each command's name"] });
+  assert.deepEqual(read.manifest.programs[0], { name: "ardia", path: "bin/ardia", afterUpdate: [], example: "ardia tabs", claim: true });
+  assert.deepEqual(readManifest(JSON.stringify({ manifest: 2, name: "x" })).manifest.keywords, []);
+  assert.equal(readManifest(JSON.stringify({ manifest: 2, name: "x" })).manifest.telemetry, null);
+  const bad = (doc) => readManifest(JSON.stringify({ manifest: 2, name: "x", ...doc })).problems;
+  assert.ok(bad({ keywords: Array.from({ length: 13 }, (_, i) => `k${i}`) }).some((p) => p.includes("keywords must be a list of at most 12")));
+  assert.ok(bad({ keywords: ["x".repeat(41)] }).some((p) => p.includes("keywords[0]")));
+  assert.ok(bad({ telemetry: { title: "T", items: [] } }).some((p) => p.includes("telemetry.items")));
+  assert.ok(bad({ telemetry: { title: "T", items: ["a"], extra: 1 } }).some((p) => p.includes("telemetry.extra")));
+  assert.ok(bad({ contributes: { programs: [{ name: "a", path: "a", claim: "yes" }] } }).some((p) => p.includes("claim must be true or false")));
+  const v1 = (doc) => readManifest(JSON.stringify({ manifest: 1, name: "x", title: "X", ...doc })).problems;
+  assert.ok(v1({ keywords: ["a"] }).some((p) => p.includes("keywords needs manifest 2")));
+  assert.ok(v1({ telemetry: { title: "T", items: ["a"] } }).some((p) => p.includes("telemetry needs manifest 2")));
+  assert.ok(v1({ programs: [{ name: "a", path: "a", example: "a" }] }).some((p) => p.includes("programs[0].example needs manifest 2")));
+  assert.ok(v1({ programs: [{ name: "a", path: "a", claim: true }] }).some((p) => p.includes("programs[0].claim needs manifest 2")));
+  const schema = pluginSchema([], { untabbedEvents: [], approvedSettings: [] });
+  assert.ok(schema.then.properties.keywords && schema.then.properties.telemetry);
+  assert.ok(schema.then.properties.contributes.properties.programs.items.properties.claim);
+  assert.equal(schema.else.properties.programs.items.properties.claim, undefined, "manifest 1's schema keeps its old programs");
 });

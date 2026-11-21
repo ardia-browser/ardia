@@ -22,6 +22,10 @@ FILE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 RELEASE = re.compile(r"^https://github\.com/[A-Za-z0-9-]+/[A-Za-z0-9._-]+/releases/download/[A-Za-z0-9._-]+$")
 ARTIFACTS = {"macos-arm64": "the plugin folder Ardia bundles on macOS", "linux-x64": "the command's tarball Linux installs", "installer": "install.sh"}
 LIMIT = 512 * 1024 * 1024
+KNOWN_LEGACY_ROOTS = {"Library/Application Support/Ardia/CLI"}
+COMPONENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+ANCHOR = re.compile(r"^[A-Za-z][A-Za-z0-9]{0,39}$")
+REGISTRY_VERSION = 1
 DESCRIPTION = """Fetches and verifies the official plugins pinned in apps/browser/official-plugins.json: every byte that reaches a
 release goes through fetch(), which refuses an artifact whose SHA-256 isn't the pinned one.
 
@@ -29,7 +33,13 @@ release goes through fetch(), which refuses an artifact whose SHA-256 isn't the 
   published <name> <artifact>   exits 0 when that artifact has a pinned SHA-256, 1 while it isn't published yet
   describe                      one provenance line per pinned plugin: name, version and the macOS folder's SHA-256
   fetch <name> <artifact> <out> one pinned artifact (macos-arm64, linux-x64 or installer), verified
-  bundle <out dir>              every plugin's macos-arm64 folder, verified and unpacked into <out dir>/<name>
+  bundle <out dir>              every plugin's macos-arm64 folder, verified and unpacked into <out dir>/<name>, and
+                                <out dir>/program-registry.json, the program names they claim
+  registry <bundled dir>        prints the program registry (claimed names, legacy installs) for the bundled plugins,
+                                the JSON export-sign.sh puts in Info.plist as ArdiaProgramRegistry; refuses one that
+                                would lose a reservedPrograms entry of the pin
+  verify-registry <bundled dir> <json>
+                                checks a recorded registry against the bundled plugins and the pin's reservations
   pin <name> <version>          writes the SHA-256s of <version>'s artifacts into the pin file
   linux-cli <app version> <out> the pinned linux-x64 ardia command, verified and renamed ardia-cli-<app version>, the
                                 name and top folder the Linux engine's installer expects (ac_linux_cli.cc)
@@ -57,6 +67,8 @@ def problems_of(pin):
     if not isinstance(pin, dict) or pin.get("version") != 1:
         return ["version must be 1"]
     names = set()
+    legacy_programs = set()
+    reserved_programs = set()
     for index, plugin in enumerate(pin.get("plugins", [])):
         where = f"plugins[{index}]"
         if not isinstance(plugin, dict):
@@ -71,6 +83,45 @@ def problems_of(pin):
                 problems.append(f"{where}.{key} must be text")
         if not isinstance(plugin.get("version"), str) or not VERSION.match(plugin["version"]):
             problems.append(f"{where}.version must be a version")
+        if "preselected" in plugin and plugin["preselected"] is not True:
+            problems.append(f"{where}.preselected must be true or left out")
+        aliases = plugin.get("anchorAliases", [])
+        if not isinstance(aliases, list) or not all(isinstance(a, str) and ANCHOR.match(a) for a in aliases):
+            problems.append(f"{where}.anchorAliases must be a list of Settings row names")
+        reserved = plugin.get("reservedPrograms", [])
+        if not isinstance(reserved, list) or not all(isinstance(r, str) and NAME.match(r) for r in reserved) or len(set(reserved)) != len(reserved):
+            problems.append(f"{where}.reservedPrograms must be a list of distinct program names")
+            reserved = []
+        for program in reserved:
+            if program in reserved_programs:
+                problems.append(f"{where}.reservedPrograms: {program} is reserved by another plugin too")
+            reserved_programs.add(program)
+        example = plugin.get("example")
+        if example is not None and not (isinstance(example, str) and 0 < len(example) <= 120 and example.isprintable()):
+            problems.append(f"{where}.example must be a command of 1 to 120 printable characters")
+        telemetry = plugin.get("telemetry")
+        if telemetry is not None and not (
+            isinstance(telemetry, dict) and set(telemetry) == {"title", "items"} and isinstance(telemetry["title"], str) and telemetry["title"]
+            and isinstance(telemetry["items"], list) and telemetry["items"] and all(isinstance(i, str) and i for i in telemetry["items"])
+        ):
+            problems.append(f"{where}.telemetry must be {{title, items}} with text")
+        legacy = plugin.get("legacyInstall")
+        if legacy is not None:
+            if not isinstance(legacy, dict) or set(legacy) != {"program", "root", "current"}:
+                problems.append(f"{where}.legacyInstall must have program, root and current")
+            else:
+                if not isinstance(legacy["program"], str) or not NAME.match(legacy["program"]):
+                    problems.append(f"{where}.legacyInstall.program must be a program name")
+                elif legacy["program"] not in reserved:
+                    problems.append(f"{where}.legacyInstall.program {legacy['program']} must be one of its reservedPrograms")
+                elif legacy["program"] in legacy_programs:
+                    problems.append(f"{where}.legacyInstall.program {legacy['program']} is another plugin's legacy install too")
+                else:
+                    legacy_programs.add(legacy["program"])
+                if legacy["root"] not in KNOWN_LEGACY_ROOTS:
+                    problems.append(f"{where}.legacyInstall.root must be one of {', '.join(sorted(KNOWN_LEGACY_ROOTS))}")
+                if not isinstance(legacy["current"], str) or not COMPONENT.match(legacy["current"]):
+                    problems.append(f"{where}.legacyInstall.current must be one file name")
         if not isinstance(plugin.get("release"), str) or not RELEASE.match(plugin["release"]):
             problems.append(f"{where}.release must be a GitHub release download URL")
         artifacts = plugin.get("artifacts")
@@ -190,6 +241,74 @@ def bundle(pin, out, origin=None):
         if manifest.get("name") != name or manifest.get("version") != plugin["version"]:
             fail(f"{name}'s plugin.json says {manifest.get('name')} {manifest.get('version')}, not the pinned {name} {plugin['version']}")
         print(f"{name} {plugin['version']}: verified and unpacked into {dest}")
+    (out / "program-registry.json").write_text(json.dumps(registry(pin, out), indent=2) + "\n", encoding="utf-8")
+
+
+def declared_programs(manifest):
+    contributes = manifest.get("contributes")
+    programs = contributes.get("programs", []) if isinstance(contributes, dict) and "programs" in contributes else manifest.get("programs", [])
+    return [p for p in programs if isinstance(p, dict) and isinstance(p.get("name"), str)] if isinstance(programs, list) else []
+
+
+def claimed_programs(manifest):
+    return [p["name"] for p in declared_programs(manifest) if p.get("claim") is True]
+
+
+def claim(claims, program, owner):
+    if not NAME.match(program):
+        fail(f"{owner} claims {program!r}, which isn't a program name")
+    if program in claims and claims[program] != owner:
+        fail(f"{program} is claimed by both {claims[program]} and {owner}")
+    claims[program] = owner
+
+
+def registry(pin, bundled):
+    bundled = Path(bundled)
+    claims = {}
+    owners = {}
+    for folder in sorted(bundled.iterdir()) if bundled.is_dir() else []:
+        manifest_path = folder / "plugin.json"
+        if not folder.is_dir() or folder.is_symlink() or not manifest_path.is_file():
+            continue
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            fail(f"{folder.name}'s folder has no readable plugin.json")
+        owners[folder.name] = manifest
+        for program in claimed_programs(manifest):
+            claim(claims, program, folder.name)
+    for plugin in pin["plugins"]:
+        for program in plugin.get("reservedPrograms", []):
+            manifest = owners.get(plugin["name"])
+            if manifest is None:
+                fail(f"the pin reserves {program} for {plugin['name']}, which isn't bundled, so the registry would lose the reservation")
+            if program not in [p["name"] for p in declared_programs(manifest)]:
+                fail(f"the pin reserves {program} for {plugin['name']}, whose bundled plugin.json declares no such program")
+            claim(claims, program, plugin["name"])
+    legacy = []
+    for plugin in pin["plugins"]:
+        entry = plugin.get("legacyInstall")
+        if not entry:
+            continue
+        if claims.get(entry["program"]) != plugin["name"]:
+            fail(f"{plugin['name']}'s legacyInstall names {entry['program']}, which the registry doesn't give {plugin['name']}")
+        legacy.append({"owner": plugin["name"], "program": entry["program"], "root": entry["root"], "current": entry["current"]})
+    return {"version": REGISTRY_VERSION, "claims": dict(sorted(claims.items())), "legacyInstalls": legacy}
+
+
+def verify_registry(pin, bundled, recorded):
+    expected = registry(pin, bundled)
+    try:
+        given = json.loads(recorded)
+    except ValueError:
+        fail("the recorded program registry isn't JSON")
+    for plugin in pin["plugins"]:
+        for program in plugin.get("reservedPrograms", []):
+            if (given.get("claims") or {}).get(program) != plugin["name"]:
+                fail(f"the recorded program registry lost the pin's reservation of {program} for {plugin['name']}")
+    if given != expected:
+        fail("the recorded program registry doesn't match the signed plugins' claims and the pin's reservations")
+    print("program registry: matches")
 
 
 def linux_cli(pin, app_version, out, origin=None):
@@ -258,6 +377,11 @@ def main():
     one.add_argument("out")
     every = commands.add_parser("bundle")
     every.add_argument("out")
+    registering = commands.add_parser("registry")
+    registering.add_argument("bundled")
+    verifying = commands.add_parser("verify-registry")
+    verifying.add_argument("bundled")
+    verifying.add_argument("recorded")
     linux = commands.add_parser("linux-cli")
     linux.add_argument("app_version")
     linux.add_argument("out")
@@ -282,6 +406,10 @@ def main():
     if args.command == "fetch":
         fetch(plugin_of(pin, args.name), args.artifact, args.out, args.origin)
         return print(f"{args.out}: verified")
+    if args.command == "verify-registry":
+        return verify_registry(pin, args.bundled, args.recorded)
+    if args.command == "registry":
+        return print(json.dumps(registry(pin, args.bundled), separators=(",", ":")))
     if args.command == "linux-cli":
         return linux_cli(pin, args.app_version, args.out, args.origin)
     bundle(pin, args.out, args.origin)

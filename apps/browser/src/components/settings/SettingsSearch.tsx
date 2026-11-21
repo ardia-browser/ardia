@@ -17,7 +17,9 @@ import {
   setSettingsQuery,
   useSettingsSearch,
 } from "../../state/settings/searchState";
-import { paneTitle, SETTINGS_INDEX, type SettingEntry } from "./settingsIndex";
+import { paneTitle, settingsIndexWith, type SettingEntry } from "./settingsIndex";
+import { officialKeywords } from "../../state/plugins/official";
+import { currentPlugins } from "../../state/plugins/store";
 import { useUnshownSettings } from "./Form";
 import { settingsInk } from "./tokens";
 import { PREVIEW_DELAY_MS, RESULT_GAP, RESULT_MIN_HEIGHT, RESULTS_BOTTOM, RESULTS_TOP, scrollToShow } from "./searchResultLayout";
@@ -87,11 +89,13 @@ export function SettingsSearchField() {
 
 const FIELD = { marginHorizontal: space.ml, marginBottom: space.ml } as const;
 
-let cached: { query: string; unshown: ReadonlySet<string>; results: SettingsHit[] } = { query: "", unshown: new Set(), results: [] };
+let cached: { query: string; unshown: ReadonlySet<string>; keywords: string; results: SettingsHit[] } = { query: "", unshown: new Set(), keywords: "", results: [] };
 
 export function settingsResults(query: string, unshown: ReadonlySet<string>): SettingsHit[] {
-  if (cached.query !== query || cached.unshown !== unshown) {
-    cached = { query, unshown, results: search(SETTINGS_INDEX.filter((p) => !unshown.has(p.entry.id) || p.entry.needs), query) };
+  const extra = officialKeywords(currentPlugins());
+  const keywords = JSON.stringify(extra);
+  if (cached.query !== query || cached.unshown !== unshown || cached.keywords !== keywords) {
+    cached = { query, unshown, keywords, results: search(settingsIndexWith(extra).filter((p) => !unshown.has(p.entry.id) || p.entry.needs), query) };
   }
   return cached.results;
 }

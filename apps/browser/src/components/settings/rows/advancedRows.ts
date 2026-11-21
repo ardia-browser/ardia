@@ -66,15 +66,27 @@ export const advancedRows = {
     {
       section: "Command line and automation",
       rows: {
+        programControl: {
+          title: "Let programs control Ardia",
+          explained: true,
+          description: "Programs you run, like the ardia command or an agent, can open, read and act in your pages, with your logins.",
+          keywords: ["control", "cli", "automation", "agent", "stop", "turn control back on", "devtools", "remote debugging", "control pill", "let the ardia command control ardia"],
+          shown: () => PLATFORM_FEATURES.plugins,
+        },
+        programs: {
+          title: "Programs on your PATH",
+          keywords: ["cli", "command line", "terminal", "shell", "path", "programs", "commands", "plugin programs", "try again", "relink"],
+          shown: () => PLATFORM_FEATURES.plugins,
+        },
         ardiaCommand: {
           title: "ardia command",
           keywords: ["cli", "command line", "terminal", "shell", "install", "the ardia command", "devtools", "automation", "remote debugging", "let the ardia command control ardia"],
-          shown: () => PLATFORM_FEATURES.ardiaCommand,
+          shown: () => PLATFORM_FEATURES.ardiaCommand && !PLATFORM_FEATURES.plugins,
         },
         compactCliPill: {
           title: "Show the control pill as an icon and Stop",
           explained: true,
-          description: "While a command drives Ardia, the pill shows just an icon and Stop.",
+          description: "While a program drives Ardia, the pill shows just an icon and Stop.",
           keywords: ["cli", "control pill", "is controlling", "agent", "claude code", "codex", "hide", "smaller", "compact", "minimize", "indicator", "stop"],
           shown: () => PLATFORM_FEATURES.ardiaCommand,
         },

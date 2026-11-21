@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { View } from "react-native";
-import type { PluginManifest, RowSpec } from "../../../lib/pluginManifest";
+import type { PluginManifest, RowSpec, RowValue } from "../../../lib/pluginManifest";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 import type { PluginListing, ProcessState, ProgramsState } from "../../../state/plugins/store";
@@ -16,6 +16,8 @@ import {
   requestPluginConsent,
   restartPlugin,
   setPluginValue,
+  setPluginSecretRow,
+  pluginSecretRowIsSet,
   showPluginLog,
   showPluginsFolder,
 } from "../../../state/plugins/actions";
@@ -27,6 +29,7 @@ import { useTheme } from "../../ui/theme";
 import { PaneSubPage } from "./PaneSubPage";
 import { releaseOrphanedConsent } from "../../../state/plugins/consentSurface";
 import { OfficialPluginsSection, usePluginsBelowOfficial } from "./OfficialPlugins";
+import { useControlTurnedOff } from "../../../state/app/programControlSetting";
 import { useNeverChosenCount } from "../../../state/site/passwordManager";
 import { PasswordManagerDetails } from "./PasswordManagerPlugin";
 
@@ -66,14 +69,14 @@ function PluginList() {
   );
 }
 
-function processText(p: ProcessState | undefined): string | null {
-  if (!p) return null;
+function processText(p: ProcessState | undefined, onDemand = false): string | null {
+  if (!p) return onDemand ? "Ready (on demand)" : null;
   if (p.state === "running") return "Running";
   if (p.state === "starting") return "Starting…";
   if (p.state === "waiting") return `Restarting after ${p.failures === 1 ? "a crash" : `${p.failures} crashes`}…`;
   if (p.state === "crashed") return `Its program crashed (${p.reason}) and was stopped`;
   if (p.state === "failed") return `Its program couldn't start: ${p.reason}`;
-  return "Its program finished";
+  return onDemand ? "Ready (on demand)" : "Its program finished";
 }
 
 function programsText(p: ProgramsState | undefined): string | null {
@@ -95,7 +98,7 @@ function originText(listing: PluginListing | undefined, active: boolean): string
 function statusOf(m: PluginManifest | null, problems: string[], active: boolean, review: boolean, p: ProcessState | undefined, describe = true): string {
   if (!m) return problems.slice(0, 2).join("; ") || "This plugin can't load";
   if (review) return "Its plugin.json changed. Review it to turn it back on.";
-  const running = active ? processText(p) : null;
+  const running = active ? processText(p, !!m.main) : null;
   return [describe ? m.description : null, running].filter(Boolean).join(" · ");
 }
 
@@ -119,7 +122,7 @@ function PluginRow({ name }: { name: string }) {
     <Row
       title={m ? `${m.title}${m.version ? ` ${m.version}` : ""}` : name}
       description={[originText(listing, active), statusOf(m, listing?.problems ?? [], active, review, process)].filter(Boolean).join(" · ")}
-      icon={<Symbol name={m?.page?.icon ?? "puzzlepiece"} size={14} color={theme.icon} style={ICON} />}
+      icon={<Symbol name={m?.icon ?? m?.page?.icon ?? "puzzlepiece"} size={14} color={theme.icon} style={ICON} />}
       onPress={() => goToSettingsPane("plugins", null, name)}
     >
       {isAlwaysOn(listing) ? (
@@ -131,9 +134,7 @@ function PluginRow({ name }: { name: string }) {
   );
 }
 
-function ValueRow({ name, row, value }: { name: string; row: RowSpec; value: string | boolean }) {
-  const [draft, setDraft] = useState(typeof value === "string" ? value : "");
-  useEffect(() => setDraft(typeof value === "string" ? value : ""), [value]);
+function ValueRow({ name, row, value }: { name: string; row: RowSpec; value: RowValue }) {
   if (row.type === "toggle") return <Row title={row.title} description={row.description}><Toggle value={value === true} accessibilityLabel={row.title} onChange={(on) => setPluginValue(name, row.key, on)} /></Row>;
   if (row.type === "choice")
     return (
@@ -141,9 +142,78 @@ function ValueRow({ name, row, value }: { name: string; row: RowSpec; value: str
         <PopUp value={String(value)} options={row.choices.map((c) => ({ value: c.value, title: c.title }))} accessibilityLabel={row.title} onChange={(v) => setPluginValue(name, row.key, v)} />
       </Row>
     );
+  if (row.type === "number") return <NumberRow name={name} row={row} value={typeof value === "number" ? value : row.default} />;
+  if (row.type === "secret") return <SecretRow name={name} row={row} />;
+  return <TextRow name={name} row={row} value={typeof value === "string" ? value : ""} />;
+}
+
+function TextRow({ name, row, value }: { name: string; row: Extract<RowSpec, { type: "text" }>; value: string }) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  const save = () => draft !== value && setPluginValue(name, row.key, draft);
   return (
     <Row title={row.title} description={row.description}>
-      <TextField value={draft} width={200} onChangeText={setDraft} onSubmit={() => setPluginValue(name, row.key, draft)} onBlur={() => setPluginValue(name, row.key, draft)} />
+      <TextField value={draft} width={200} onChangeText={setDraft} onSubmit={save} onBlur={save} />
+    </Row>
+  );
+}
+
+function numberProblem(row: Extract<RowSpec, { type: "number" }>, text: string): string | null {
+  const n = Number(text.trim());
+  if (!text.trim() || !Number.isFinite(n)) return "Enter a number.";
+  if (row.min !== undefined && n < row.min) return `At least ${row.min}.`;
+  if (row.max !== undefined && n > row.max) return `At most ${row.max}.`;
+  if (row.step !== undefined && row.step > 0) {
+    const steps = (n - (row.min ?? 0)) / row.step;
+    if (Math.abs(steps - Math.round(steps)) > 1e-9) return `In steps of ${row.step}.`;
+  }
+  return null;
+}
+
+function NumberRow({ name, row, value }: { name: string; row: Extract<RowSpec, { type: "number" }>; value: number }) {
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => setDraft(String(value)), [value]);
+  const problem = numberProblem(row, draft);
+  const save = () => {
+    if (problem) return setDraft(String(value));
+    const n = Number(draft.trim());
+    if (n !== value) setPluginValue(name, row.key, n);
+  };
+  const range = [row.min !== undefined ? `min ${row.min}` : null, row.max !== undefined ? `max ${row.max}` : null].filter(Boolean).join(", ");
+  return (
+    <Row title={row.title} description={[row.description, problem && draft !== String(value) ? problem : range || null].filter(Boolean).join(" · ") || undefined}>
+      <TextField value={draft} width={120} invalid={!!problem} onChangeText={setDraft} onSubmit={save} onBlur={save} onEscape={() => setDraft(String(value))} />
+    </Row>
+  );
+}
+
+function SecretRow({ name, row }: { name: string; row: Extract<RowSpec, { type: "secret" }> }) {
+  const [draft, setDraft] = useState("");
+  const [saved, setSaved] = useState<boolean | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void pluginSecretRowIsSet(name, row.key).then((set) => live && setSaved(set));
+    return () => {
+      live = false;
+    };
+  }, [name, row.key]);
+  const write = async (value: string | null) => {
+    setBusy(true);
+    const outcome = await setPluginSecretRow(name, row.key, value);
+    setBusy(false);
+    if (!outcome.ok) return setProblem(outcome.message);
+    setProblem(null);
+    setDraft("");
+    setSaved(value !== null && value !== "");
+  };
+  const status = problem ?? (saved === null ? null : saved ? `Saved in ${PLATFORM_TERMS.secretStore}` : "Not set");
+  return (
+    <Row title={row.title} description={[row.description, status].filter(Boolean).join(" · ") || undefined}>
+      <TextField value={draft} width={180} secure placeholder={saved ? "••••••••" : row.placeholder} onChangeText={setDraft} onSubmit={() => draft && void write(draft)} />
+      <Button title="Save" disabled={!draft || busy} onPress={() => void write(draft)} />
+      {saved ? <Button title="Clear" disabled={busy} onPress={() => void write(null)} /> : null}
     </Row>
   );
 }
@@ -153,6 +223,7 @@ async function confirmRemove(name: string, title: string) {
 }
 
 function PluginPage({ name }: { name: string }) {
+  const controlOff = useControlTurnedOff();
   const theme = useTheme();
   const listing = usePluginListing(name);
   const active = usePluginActive(name);
@@ -176,8 +247,8 @@ function PluginPage({ name }: { name: string }) {
             <Toggle value={active} disabled={!m} asksFirst={!active} accessibilityLabel={`Turn on ${m?.title ?? name}`} onChange={(on) => setOn(name, on)} />
           )}
         </Row>
-        {m?.process && active ? (
-          <Row title="Its program" description={m.process.run.join(" ")}>
+        {active && (m?.process || (m?.main && process)) ? (
+          <Row title={m?.process ? "Its program" : "Its code"} description={m?.process ? m.process.run.join(" ") : typeof m?.main === "string" ? m.main : m?.main?.entry}>
             <Button title="Show Log" onPress={() => showPluginLog(name)} />
             <Button title="Restart" onPress={() => restartPlugin(name)} />
           </Row>
@@ -203,7 +274,7 @@ function PluginPage({ name }: { name: string }) {
         <>
           <SectionHeader title="What it gets" />
           <Group>
-            {consentLines(m, { bundled: !!listing.bundled && !active, movesProfiles }).map((line) => (
+            {consentLines(m, { controlOff, bundled: !!listing.bundled && !active, movesProfiles }).map((line) => (
               <Row key={line.text} title={line.text} icon={<Symbol name={line.icon} size={13} color={theme.icon} style={ICON} />} />
             ))}
           </Group>

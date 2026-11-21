@@ -48,14 +48,43 @@ struct PluginFolders {
       guard let bin = LaunchConfig.shared.instance("cliBinDir") else {
         return .failure(FolderRefusal(reason: "a test instance puts programs on PATH only with ARDIA_INSTANCE cliBinDir set"))
       }
-      return .success(ProgramPlaces(store: (appData as NSString).appendingPathComponent("Programs"), binDir: bin, legacy: LaunchConfig.shared.instance("cliHome")))
+      return .success(ProgramPlaces(store: (appData as NSString).appendingPathComponent("Programs"), binDir: bin))
     }
     let support = (home as NSString).appendingPathComponent("Library/Application Support/Ardia")
-    return .success(
-      ProgramPlaces(
-        store: (support as NSString).appendingPathComponent("Programs"), binDir: (home as NSString).appendingPathComponent(".local/bin"),
-        legacy: (support as NSString).appendingPathComponent("CLI")))
+    return .success(ProgramPlaces(store: (support as NSString).appendingPathComponent("Programs"), binDir: (home as NSString).appendingPathComponent(".local/bin")))
   }
+
+  static let isolatedLegacyKey = "cliHome"
+
+  func bundledClaims() -> [String: [String]] {
+    guard let bundled, let names = try? FileManager.default.contentsOfDirectory(atPath: bundled) else { return [:] }
+    var claims: [String: [String]] = [:]
+    for name in names where Self.isName(name) {
+      let manifest = ((bundled as NSString).appendingPathComponent(name) as NSString).appendingPathComponent(Self.manifestName)
+      guard let data = FileManager.default.contents(atPath: manifest) else { continue }
+      let claimed = ProgramRegistry.claimedPrograms(manifest: data)
+      if !claimed.isEmpty { claims[name] = claimed }
+    }
+    return claims
+  }
+
+  static let registryFixtureName = "program-registry.json"
+
+  func programRegistryFixture() -> Any? {
+    guard LaunchConfig.shared.testInstance, let bundled else { return nil }
+    let path = (bundled as NSString).appendingPathComponent(Self.registryFixtureName)
+    return FileManager.default.contents(atPath: path).flatMap { try? JSONSerialization.jsonObject(with: $0) }
+  }
+
+  func programRegistry() -> ProgramRegistry {
+    let isolated = LaunchConfig.shared.isolated
+    let hasBundled = bundled.map { ((try? FileManager.default.contentsOfDirectory(atPath: $0)) ?? []).contains(where: Self.isName) } ?? false
+    return ProgramRegistry.resolve(
+      info: Bundle.main.infoDictionary?[ProgramRegistry.infoKey], fixture: programRegistryFixture(), bundled: bundledClaims(), hasBundled: hasBundled,
+      home: FileManager.default.homeDirectoryForCurrentUser.path, isolated: isolated, testInstance: LaunchConfig.shared.testInstance,
+      scratchLegacyBase: isolated ? LaunchConfig.shared.instance(Self.isolatedLegacyKey) : nil)
+  }
+
 
   static func isName(_ name: String) -> Bool {
     let whole = NSRange(name.startIndex..., in: name)

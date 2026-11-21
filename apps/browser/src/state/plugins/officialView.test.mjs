@@ -14,11 +14,11 @@ const { usePlugins } = await import("./store.ts");
 const lifecycle = await import("./lifecycle.ts");
 const { installOfficialPlugin, officialPlugins } = await import("./official.ts");
 const { installedLabel, isOffered, officialView, wasCancelled } = await import("./officialView.ts");
-const { noteOfficialPlugin, officialPluginField, takeOfficialPluginCounts, OFFICIAL_EVENTS, OFFICIAL_SURFACES } = await import("../telemetry/officialPluginCounts.ts");
+const { noteOfficialPlugin, officialPluginField, takeOfficialPluginCounts, OFFICIAL_COUNTED_NAMES, OFFICIAL_EVENTS, OFFICIAL_SURFACES } = await import("../telemetry/officialPluginCounts.ts");
 const { takeHourlyExtras } = await import("../telemetry/hourlyExtras.ts");
 const { WHATS_SENT } = await import("../telemetry/copy.ts");
 
-const plugin = (state, name = "cli") => ({ name, title: "Command Line", blurb: "The ardia command.", icon: "terminal.fill", version: "0.3.0", state });
+const plugin = (state, name = "cli", example = name === "cli" ? "ardia tabs" : null) => ({ name, title: "Command Line", blurb: "The ardia command.", icon: "terminal.fill", version: "0.3.0", example, state });
 const LINKED = { state: "linked", hash: "h", linked: ["ardia"], refused: {}, binDir: "/Users/me/.local/bin" };
 
 test("an unsupported plugin shows nothing, and a coming-soon one shows no button", () => {
@@ -38,7 +38,7 @@ test("an available plugin offers Install, waits while its sheet is open, and sho
   assert.deepEqual([failed.action, failed.failed, failed.status], ["again", true, "It can't load."]);
 });
 
-test("an installed plugin shows no sentence, only a first command to copy when it has one", () => {
+test("an installed plugin shows no sentence, only the first command its manifest gives to copy", () => {
   const view = officialView(plugin("installed"), LINKED, null);
   assert.deepEqual([view.note, view.action, view.failed, view.busy, view.status], ["installed", null, false, false, null]);
   assert.equal(view.firstCommand, "ardia tabs");
@@ -102,7 +102,7 @@ test("official plugin counts are a fixed set of fields, sent with the hourly cou
   assert.equal(sent.official_plugin_settings_shown_ai, 1);
   assert.equal(sent.official_plugin_onboarding_skipped_other, 1);
   assert.equal(sent.official_plugin_settings_skipped_cli, undefined);
-  const fields = new Set(OFFICIAL_SURFACES.flatMap((s) => OFFICIAL_EVENTS.flatMap((e) => ["cli", "ai", "other"].map((n) => officialPluginField(s, e, n)))));
+  const fields = new Set(OFFICIAL_SURFACES.flatMap((s) => OFFICIAL_EVENTS.flatMap((e) => [...OFFICIAL_COUNTED_NAMES, "other"].map((n) => officialPluginField(s, e, n)))));
   for (const key of Object.keys(sent).filter((k) => k.startsWith("official_plugin_"))) assert.ok(fields.has(key), key);
   assert.deepEqual(takeOfficialPluginCounts(), {});
   assert.ok(WHATS_SENT.some((group) => group.items.some((item) => item.includes("official plugin") && item.includes("onboarding") && item.includes("Settings"))));
@@ -134,11 +134,19 @@ test("the seam marks a built-in plugin switchable unless it's always on", async 
   const listed = (name, extra) => ({ name, status: "ok", text: manifest(name, extra), folderId: "bundled", bundled: true });
   useBrowser.getState().hydrate({});
   startPlugins();
-  stub.pluginHost.folders = [listed("switchy", { passwordManager: { fill: "system", fields: ["login"] } }), listed("stays", { alwaysOn: true })];
+  stub.pluginHost.folders = [listed("switchy", {}), listed("stays", { alwaysOn: true })];
   await lifecycle.rescanPlugins(null);
   const byName = Object.fromEntries(officialPlugins(usePlugins.getState(), true).map((p) => [p.name, p]));
   assert.equal(byName.switchy?.switchable, true);
   assert.equal(byName.stays?.switchable, false);
   stub.pluginHost.folders = [];
   await lifecycle.rescanPlugins(null);
+});
+
+test("every pinned or coming-soon plugin is counted by name, a dash becoming an underscore, and cli and ai keep their field names", () => {
+  assert.deepEqual([...OFFICIAL_COUNTED_NAMES].sort(), ["ai", "apple-passwords", "cli"]);
+  assert.equal(officialPluginField("settings", "installed", "apple-passwords"), "official_plugin_settings_installed_apple_passwords");
+  assert.equal(officialPluginField("settings", "shown", "cli"), "official_plugin_settings_shown_cli");
+  assert.equal(officialPluginField("onboarding", "installed", "ai"), "official_plugin_onboarding_installed_ai");
+  assert.equal(officialPluginField("settings", "shown", "not-pinned"), "official_plugin_settings_shown_other");
 });

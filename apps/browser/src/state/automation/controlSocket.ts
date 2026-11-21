@@ -16,14 +16,14 @@ import {
 import { systemInfo } from "../../platform/app";
 import { useBrowser } from "../browser/store";
 import { NoCommandWindowError, runCommand } from "../commands/commands";
-import { noteCliCaller, noteSocketRun, noteSocketServing } from "../app/cliControl";
-import { parseCliCaller, type CliCaller } from "../app/cliCaller";
+import { noteControlCaller, noteSocketRun, noteSocketServing } from "../app/programControl";
+import { parseControlCaller, type ControlCaller } from "../app/controlCaller";
 import { errorText } from "../../lib/errors";
 import { redactedEventData } from "./eventRedaction";
 import { automationWindows, type AutomationWindow } from "./automationWindows";
 import { consentToken, type ConsentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
-import { cliTabTargets } from "../../platform/cli";
+import { controlTabTargets } from "../../platform/control";
 import { TAB_IDLE_EVENTS, USER_IDLE_EVENTS, type AutomationEventName } from "./eventNames";
 import { clientProtocolProblem, commands, failure, hello, parseRequest, parseSubscription, planRun, type RequestId, type Subscription } from "./automationMethods";
 import { feedNeeds, stopFeed, updateFeed } from "./automationFeed";
@@ -41,6 +41,7 @@ import { dismissSocketAsks } from "./socketAsk";
 import { dropAllHistoryHandles, dropHistoryHandles } from "./historyHandles";
 import { dropLateResults, forgetTabCalls } from "./tabCalls";
 import { backgroundInstance } from "../app/appSettings";
+import { programControlOn } from "../app/programControlSetting";
 
 export const useControlSocket = create<{ status: ControlSocketStatus | null }>()(() => ({ status: null }));
 
@@ -52,10 +53,10 @@ const subscriptions = new Map<number, Subscription>();
 const openConnections = new Set<number>();
 const launchSent = new Set<number>();
 const unwrittenRuns = new Set<number>();
-const callers = new Map<number, CliCaller>();
+const callers = new Map<number, ControlCaller>();
 let nextTicket = 0;
 
-const controlOn = () => useBrowser.getState().settings.cliControl;
+const controlOn = () => programControlOn(useBrowser.getState());
 
 export const replyLine = (id: RequestId, body: Body, method?: string, consent: ConsentToken | null = null) => fittedReply(id, body, method ? methodSpec(method) : undefined, consent);
 
@@ -135,7 +136,7 @@ export function handleControlRequest({ connection, generation: tagged, line }: C
   openConnections.add(connection);
   const ticket = method === "run" ? ++nextTicket : 0;
   const caller = callers.get(connection);
-  if (ticket && caller) noteCliCaller(caller);
+  if (ticket && caller) noteControlCaller(caller);
   if (ticket) {
     unwrittenRuns.add(ticket);
     noteSocketRun(1);
@@ -165,7 +166,7 @@ export function handleControlRequest({ connection, generation: tagged, line }: C
 
 export async function windowsWithTargets(windows: AutomationWindow[]): Promise<AutomationWindow[]> {
   const ids = windows.flatMap((w) => w.tabs.map((t) => t.id));
-  const targets = ids.length ? await cliTabTargets(ids).catch(() => null) : {};
+  const targets = ids.length ? await controlTabTargets(ids).catch(() => null) : {};
   if (!targets) return windows;
   return windows.map((w) => ({
     ...w,
@@ -224,13 +225,13 @@ function answerAs(origin: Pick<SocketOrigin, "segment">, connection: number, met
     case "hello": {
       const tooOld = clientProtocolProblem(params, systemInfo().appVersion);
       if (tooOld) return { error: tooOld };
-      const caller = parseCliCaller(params.caller);
+      const caller = parseControlCaller(params.caller);
       if (caller) callers.set(connection, caller);
       return { result: hello(systemInfo().appVersion) };
     }
     case "caller": {
       const caller = callers.get(connection);
-      if (caller) noteCliCaller(caller);
+      if (caller) noteControlCaller(caller);
       return { result: { ok: !!caller } };
     }
     case "commands":

@@ -15,11 +15,12 @@ import { singleFlight, type Flight } from "../../lib/singleFlight";
 import { onProfilesOpened, profileOpened } from "../profiles/profileLoading";
 import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
+import { programControlOn } from "../app/programControlSetting";
 
 export type ScriptsOutcome = { ok: true } | { disabled: true } | { removed: true } | { error: string };
 type Status = { generation: number; profiles: Record<string, ScriptsOutcome> };
 
-const enabled = () => useBrowser.getState().settings.cliControl;
+const enabled = () => programControlOn(useBrowser.getState());
 
 export function scriptsTargets(s: Pick<BrowserState, "profileOrder" | "profiles">): Map<string, string[]> {
   const targets = new Map<string, string[]>();
@@ -162,7 +163,7 @@ export function startUserScripts() {
   let watching = false;
   let key = "";
   const sync = (s: BrowserState) => {
-    const on = s.settings.cliControl;
+    const on = programControlOn(s);
     const nextKey = on ? targetsKey(openedTargets(scriptsTargets(s))) : "";
     if (on === watching && nextKey === key) return;
     watching = on;
@@ -172,7 +173,7 @@ export function startUserScripts() {
   };
   sync(useBrowser.getState());
   useBrowser.subscribeTo(["settings", "profileOrder", "profiles"], (s, prev) => {
-    if (s.settings.cliControl !== prev.settings.cliControl || s.profileOrder !== prev.profileOrder || s.profiles !== prev.profiles) sync(s);
+    if (programControlOn(s) !== programControlOn(prev) || s.profileOrder !== prev.profileOrder || s.profiles !== prev.profiles) sync(s);
   });
   onProfilesOpened(() => sync(useBrowser.getState()));
 }

@@ -16,8 +16,9 @@ is what Ardia does for it: how it ships, how it's installed, and the contract th
 - **macOS.** The Release workflow's `build` job, which holds no secrets, fetches the pinned folder, checks its SHA-256 and
   unpacks it (`official-plugins.py bundle`: files and folders only, its `plugin.json` must be the pinned name and
   version). The `sign` job signs its Mach-Os inside out with the app's Developer ID and hardened runtime, writes each
-  plugin's payload digest into `Info.plist` (`ArdiaBuiltInPlugins`), then signs the app; `verify.sh` recomputes the
-  digests on the signed app and checks every Mach-O's signature and runtime flag. The plugins repo never needs the
+  plugin's payload digest into `Info.plist` (`ArdiaBuiltInPlugins`) and the program registry its manifests' `claim`s and
+  the pin's `legacyInstall` make (`ArdiaProgramRegistry`, `docs/plugins.md` › programs), then signs the app; `verify.sh`
+  recomputes both on the signed app and checks every Mach-O's signature and runtime flag. The plugins repo never needs the
   signing identity. The release no longer publishes an `ardia-cli-*.tar.gz` of its own.
 - **Linux** has no plugins yet, so the package carries the command for its installer: `official-plugins.py linux-cli
   <app version>` fetches the pinned linux-x64 tarball, checks it, and renames it `ardia-cli-<app version>-linux-x64.tar.gz`

@@ -25,7 +25,7 @@ import {
   type PasswordManagerChoice,
 } from "./passwordManagerChoice";
 import { closeVerificationCodePrompts, offerVerificationCode } from "./verificationCodes";
-import { followMode, forgetPendingOfferToSave, passwordAutofill, pendingOfferToSave, watchPendingOfferToSave, writeOfferToSave } from "./offerToSave";
+import { followMode, forgetPendingOfferToSave, offerToSaveHeldOffSomewhere, passwordAutofill, pendingOfferToSave, watchPendingOfferToSave, writeOfferToSave } from "./offerToSave";
 
 export { forgetPendingOfferToSave, passwordAutofill };
 export { profilesSharingData, type FieldProviderHint, type FieldProviderOpened, type ManagerPlugin, type PasswordManagerChoice, type VerificationCodeFound };
@@ -80,10 +80,23 @@ export function useNeverChosenCount(): number {
 
 export const neverChosenCount = () => neverChosenProfiles(browser()).length;
 
+let engage = () => {};
+
 export function choosePasswordManager(profileId: string, manager: PasswordManagerChoice) {
   const s = browser();
   notePasswordManagerChosen(choiceKind(manager));
+  engage();
   for (const id of profilesSharingData(s, profileId)) s.updateProfile(id, { passwordManager: manager });
+}
+
+const choseAwayFromArdia = (s: BrowserState) => Object.values(s.profiles).some((p) => !!p && p.passwordManager !== undefined && p.passwordManager !== "ardia");
+
+let heldOffAtStart: boolean | null = null;
+
+export function passwordManagerInUse(): boolean {
+  if (currentManagerPlugins().length > 0 || choseAwayFromArdia(browser())) return true;
+  heldOffAtStart ??= offerToSaveHeldOffSomewhere();
+  return heldOffAtStart;
 }
 
 function adoptNeverChosen(name: string) {
@@ -247,6 +260,7 @@ export function startPasswordManager() {
   };
 
   beforePluginsCommit((next, before) => {
+    if (!ready && commitPlugins(next).length) begin(true);
     if (!ready) return;
     const active = new Set(commitPlugins(next).map((p) => p.name));
     for (const name of [...withdrawing]) if (!active.has(name) || recordOf(next, name) !== recordOf(before, name)) withdrawing.delete(name);
@@ -266,19 +280,6 @@ export function startPasswordManager() {
     void pushProviders(providerPlugins(currentManagerPlugins()), consent);
   });
 
-  const begin = () => {
-    if (ready || !pluginsView().scanned) return;
-    ready = true;
-    syncProfiles();
-    syncWindows();
-    syncReady();
-  };
-
-  begin();
-  usePlugins.subscribe((s, prev) => {
-    if (!ready) return begin();
-    if (s.listings !== prev.listings || s.records !== prev.records || s.order !== prev.order) syncModes();
-  });
   let stopWatchingReady: (() => void) | null = null;
   const watchReady = (pending: boolean) => {
     if (pending && !stopWatchingReady) stopWatchingReady = usePages.subscribe((s, prev) => s.ready !== prev.ready && syncReady());
@@ -287,12 +288,27 @@ export function startPasswordManager() {
       stopWatchingReady = null;
     }
   };
-  watchPendingOfferToSave(watchReady);
-  watchReady(pendingOfferToSave() > 0);
-  useBrowser.subscribeTo(["profiles", "windows"], (s, prev) => {
-    if (s.profiles !== prev.profiles) syncProfiles();
-    if (s.windows !== prev.windows) syncWindows();
+  const begin = (inUse = false) => {
+    if (ready || !pluginsView().scanned || !(inUse || passwordManagerInUse())) return;
+    ready = true;
+    syncProfiles();
+    syncWindows();
+    syncReady();
+    watchPendingOfferToSave(watchReady);
+    watchReady(pendingOfferToSave() > 0);
+    useBrowser.subscribeTo(["profiles", "windows"], (s, prev) => {
+      if (s.profiles !== prev.profiles) syncProfiles();
+      if (s.windows !== prev.windows) syncWindows();
+    });
+  };
+  engage = () => begin(true);
+
+  usePlugins.subscribe((s, prev) => {
+    const changed = s.listings !== prev.listings || s.records !== prev.records || s.order !== prev.order;
+    if (!ready) return void ((changed || s.scanned !== prev.scanned) && begin());
+    if (changed) syncModes();
   });
+  begin();
 }
 
 function codeSetupOn(tabId: string): boolean {

@@ -35,7 +35,7 @@ export function pluginList() {
 function callPluginTool(params: Record<string, unknown>): Body | Promise<Body> {
   const { plugin, tool, input } = params;
   if (typeof plugin !== "string" || typeof tool !== "string") return failure("bad_request", "plugins.call needs a plugin and a tool.");
-  return callTool(plugin, tool, input, { kind: "cli" }).then((o) => (o.ok ? { result: o.result } : failure(o.code, o.message)));
+  return callTool(plugin, tool, input, { kind: "socket" }).then((o) => (o.ok ? { result: o.result } : failure(o.code, o.message)));
 }
 
 export function pluginSocketMethod(method: string, params: Record<string, unknown>, serving: () => boolean = () => true): Body | Promise<Body> | null {

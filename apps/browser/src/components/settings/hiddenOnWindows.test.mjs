@@ -18,7 +18,7 @@ test("Windows hides the settings whose only effect is an engine call it doesn't 
   rowShownBy("./rows/tabRows.ts", "littleArdiaOpensNewTabLinks", "keepsNewTabLinksInLittleArdia");
   assert.ok(missing.webView.includes("setLittleArdiaOpensNewTabLinks"), "Windows has no Little Ardia new-tab links call yet");
   rowShownBy("./rows/profileRows.ts", "offerToSavePasswords", "passwordAutofillSwitch");
-  rowShownBy("./rows/advancedRows.ts", "ardiaCommand", "ardiaCommand");
+  assert.match(source("./rows/advancedRows.ts"), /\n        ardiaCommand: \{\n(?:\s+(?:title|explained|description|keywords):.*\n)*\s+shown: \(\) => PLATFORM_FEATURES\.ardiaCommand && !PLATFORM_FEATURES\.plugins,/, "the installer row is for a build that installs the command itself");
   rowShownBy("./rows/advancedRows.ts", "compactCliPill", "ardiaCommand");
   rowShownBy("./rows/profileRows.ts", "preloadPages", "preloadPages");
   assert.ok(missing.sites.includes("preloadPages") && missing.sites.includes("setPreloadPages"), "Windows has no preload pages call yet");

@@ -27,10 +27,11 @@ export const profileRows = {
           description: "Used for new windows.",
           keywords: ["new window"],
         },
-        switcherShows: {
-          title: "Switcher in the sidebar shows",
-          description: "Dots, icons, or nothing.",
-          keywords: ["dots", "pager", "profile switcher", "page dots", "sidebar footer", "hide", "show profile dots", "spaces", "space icons", "profile dots", "switcher", "emoji", "symbol", "arc", "show profile icons instead of dots", "profile icons"],
+        showProfileDots: {
+          title: "Show the profile switcher in the sidebar",
+          explained: true,
+          description: "A dot for each profile, or its icon if you gave it one.",
+          keywords: ["dots", "pager", "profile switcher", "page dots", "sidebar footer", "hide", "show profile dots", "spaces", "space icons", "profile dots", "switcher", "emoji", "symbol", "arc", "show profile icons instead of dots", "profile icons", "switcher in the sidebar shows", "nothing"],
         },
         shareTopApps: {
           title: "Share Top Apps",

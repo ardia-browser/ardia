@@ -15,6 +15,9 @@ import { runSharedFolderChoice, sharedFolderMenuItems } from "../sharedFolders/m
 import { canSleep, sleepTabsFromMenu } from "../tabs/manualSleep";
 import { groupTabIds } from "./groupPanelRows";
 import { shownLiveOf } from "../tabs/tabLive";
+import { urlParts } from "../../lib/urlParts";
+import { isPluginMenuChoice, pluginMenuItems, runPluginMenuChoice, type PluginMenuContext } from "../plugins/menus";
+import { consentToken, type ConsentToken } from "../telemetry/choice";
 
 type GroupChoice = Destination | { kind: "color"; color: GroupColor | null };
 
@@ -32,6 +35,18 @@ export function groupColorItems(current: GroupColor | null, siteColor: string | 
     { separator: true },
     ...GROUP_COLOR_ORDER.map((c) => ({ value: color(c), title: GROUP_COLORS[c].name, swatch: GROUP_COLORS[c].hex, checked: current === c })),
   ];
+}
+
+function pluginGroupContext(s: BrowserState, windowId: string, groupId: string): PluginMenuContext {
+  const g = s.groups[groupId]!;
+  const ids = groupTabIds(s.groups, groupId);
+  const active = activeTabId(s, windowId);
+  const front = s.tabs[ids.find((id) => id === active) ?? ids[0] ?? ""];
+  const parts = front ? urlParts(front.url) : null;
+  return {
+    when: { urlHost: parts?.host ?? "", urlScheme: parts?.scheme ?? "", isPinned: !!g.pinned, isInGroup: true, isSplit: false, isActive: groupOf(s, active)?.id === groupId, tabCount: ids.length },
+    data: { groupId, title: g.name, windowId, tabCount: ids.length },
+  };
 }
 
 export function groupMenuItems(s: BrowserState, windowId: string, groupId: string): GroupMenuItem[] {
@@ -58,6 +73,7 @@ export function groupMenuItems(s: BrowserState, windowId: string, groupId: strin
     ],
     withAlternate({ id: "copy", title: "Copy All Links", symbol: "link" }, { id: "copyMd", title: "Copy All Links as Markdown", symbol: "link" }, null),
     sharedFolderMenuItems(s, groupId),
+    incognito ? [] : pluginMenuItems("group", pluginGroupContext(s, windowId, groupId)),
     [
       { id: "ungroup", title: "Ungroup", symbol: "folder.badge.minus" },
       bookmarksShown(s.settings) && { id: "bookmarkBar", title: "Move to Bookmarks Bar", symbol: "bookmark" },
@@ -69,11 +85,12 @@ export function groupMenuItems(s: BrowserState, windowId: string, groupId: strin
 }
 
 export async function openGroupMenu(windowId: string, groupId: string) {
+  const consent = consentToken();
   const choice = await chooseFromMenu(groupMenuItems(store(), windowId, groupId));
   if (!choice) return;
   const removes = typeof choice === "string" ? REMOVES_FOLDER.has(choice) : choice.kind === "profile";
   if (removes && !(await confirmRemovingShared(windowId, groupId))) return;
-  runGroupChoice(windowId, groupId, choice);
+  runGroupChoice(windowId, groupId, choice, consent);
 }
 
 const REMOVES_FOLDER = new Set(["pin", "ungroup", "delete", "bookmarkBar"]);
@@ -84,11 +101,15 @@ function sendGroup(groupId: string, to: GroupChoice) {
   else if (to.kind === "window") moveGroupToWindow(groupId, to.windowId);
 }
 
-function runGroupChoice(windowId: string, groupId: string, choice: string | GroupChoice) {
+function runGroupChoice(windowId: string, groupId: string, choice: string | GroupChoice, consent: ConsentToken | null) {
   const s = store();
   const g = s.groups[groupId];
   if (!g || g.windowId !== windowId) return;
   if (typeof choice !== "string") return sendGroup(groupId, choice);
+  if (isPluginMenuChoice(choice)) {
+    if (!isIncognitoProfile(g.profileId)) void runPluginMenuChoice(choice, windowId, pluginGroupContext(s, windowId, groupId), consent);
+    return;
+  }
   if (runSharedFolderChoice(windowId, groupId, choice)) return;
   const target = { kind: "group" as const, id: groupId };
   if (choice === "rename") void startRename(windowId, target);

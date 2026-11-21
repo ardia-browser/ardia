@@ -44,6 +44,10 @@ for folder in "$app"/Contents/Resources/Plugins/*/; do
     [ "$(sed -n 's/^TeamIdentifier=//p' <<<"$signed")" = "$team" ] || die "$exe isn't signed by the app's team ($team)"
   done
 done
+recorded_registry="$(plutil -extract ArdiaProgramRegistry json -o - "$app/Contents/Info.plist" 2>/dev/null || true)"
+[ -n "$recorded_registry" ] || die "Info.plist has no ArdiaProgramRegistry"
+python3 -I "$root/scripts/release/official-plugins.py" verify-registry "$app/Contents/Resources/Plugins" "$recorded_registry" \
+  || die "Info.plist's ArdiaProgramRegistry doesn't match the signed plugins and the pin's reserved programs"
 [ -f "$app/Contents/Resources/Plugins/cli/plugin.json" ] || die "the app has no built-in Command Line plugin"
 [ -f "$app/Contents/Resources/Extensions/ublock/manifest.json" ] || die "no uBlock Origin in the app"
 [ -f "$app/Contents/Resources/ContentRules/rulesets.json" ] || die "no WebKit content rules in the app"

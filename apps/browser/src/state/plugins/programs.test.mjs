@@ -19,15 +19,15 @@ const settle = async () => {
 
 const AFTER = [["skills", "install", "--auto"], ["skills", "refresh"]];
 const CLI = JSON.stringify({
-  manifest: 1,
+  manifest: 2,
   name: "cli",
   title: "Command Line",
   version: "0.3.0",
   alwaysOn: true,
   official: true,
   icon: "terminal.fill",
-  permissions: ["control"],
-  programs: [{ name: "ardia", path: "bin/ardia", afterUpdate: AFTER }],
+  permissions: { control: true },
+  contributes: { programs: [{ name: "ardia", path: "bin/ardia", afterUpdate: AFTER, example: "ardia tabs", claim: true }] },
 });
 const OTHER = JSON.stringify({ manifest: 1, name: "other", title: "Other", programs: [{ name: "other-tool", path: "bin/other" }] });
 const BUILT_IN = { status: "ok", folderId: "bundled", bundled: true };
@@ -72,8 +72,8 @@ test("a profile that never installed the command line has it offered and nothing
   assert.deepEqual(launch.sweeps, [[]], "at launch every command of a plugin that isn't installed comes off PATH");
   assert.equal(S().settings.cliControl, false);
   assert.deepEqual(officialPlugins(P(), true, hidden), [
-    { name: "cli", title: "Command Line", blurb: "Drive Ardia from your terminal or an agent.", icon: "terminal.fill", version: "0.3.0", switchable: false, state: "available" },
-    { name: "apple-passwords", title: "Apple Passwords", blurb: "Fill logins and verification codes from the Passwords app on every site.", icon: "key.fill", version: null, switchable: false, state: "unsupported" },
+    { name: "cli", title: "Command Line", blurb: "Drive Ardia from your terminal or an agent.", icon: "terminal.fill", version: "0.3.0", example: "ardia tabs", switchable: false, state: "available" },
+    { name: "apple-passwords", title: "Apple Passwords", blurb: "Fill logins and verification codes from the Passwords app on every site.", icon: "key.fill", version: null, example: null, switchable: false, state: "unsupported" },
   ]);
   assert.deepEqual(pluginSocketMethod("plugins.official", {}), { result: officialPlugins(P()) });
 });
@@ -84,7 +84,7 @@ test("the seam: unsupported where plugins aren't, coming soon only behind its fl
     ["unsupported", "unsupported"],
   );
   const shown = officialPlugins(P(), true, (flag) => flag === "officialPluginsAi");
-  assert.deepEqual(shown.at(-1), { name: "ai", title: "AI", blurb: shown.at(-1).blurb, icon: "sparkles", version: null, switchable: false, state: "comingSoon" });
+  assert.deepEqual(shown.at(-1), { name: "ai", title: "AI", blurb: shown.at(-1).blurb, icon: "sparkles", version: null, example: null, switchable: false, state: "comingSoon" });
   assert.equal(officialPlugins(P(), false, () => true).at(-1).state, "unsupported");
   assert.deepEqual(await installOfficialPlugin("other", { showSheet: false }), { ok: false, reason: "Not an official plugin." });
   assert.deepEqual(await installOfficialPlugin("ai", { showSheet: false }), { ok: false, reason: "Not an official plugin." });
@@ -194,7 +194,8 @@ test("one click: Install on the sheet installs it, links ardia adopting the old 
   assert.ok(activeManifest(P(), "cli"));
   assert.equal(host.links.length, 1);
   const [spec] = host.links;
-  assert.deepEqual({ name: spec.name, folderId: spec.folderId, version: spec.version, adopt: spec.adopt }, { name: "cli", folderId: "bundled", version: "0.3.0", adopt: true });
+  assert.deepEqual({ name: spec.name, folderId: spec.folderId, version: spec.version }, { name: "cli", folderId: "bundled", version: "0.3.0" });
+  assert.equal(Object.hasOwn(spec, "adopt"), false, "the native side decides adoption from the signed registry");
   assert.deepEqual(spec.programs, [{ name: "ardia", path: "bin/ardia", afterUpdate: AFTER }]);
   assert.deepEqual(P().programs.cli, { state: "linked", hash: spec.approved, linked: ["ardia"], refused: {}, binDir: "/home/.local/bin" });
   assert.equal(S().settings.cliControl, true, "control comes on at Install, as the sheet says");
@@ -229,21 +230,35 @@ test("a plugin you install can't be always on, can't run after-update actions an
   const always = JSON.stringify({ manifest: 1, name: "always", title: "Always", alwaysOn: true });
   const after = JSON.stringify({ manifest: 1, name: "after", title: "After", programs: [{ name: "after-tool", path: "bin/a", afterUpdate: [["x"]] }] });
   const impostor = JSON.stringify({ manifest: 1, name: "impostor", title: "Impostor", programs: [{ name: "ardia", path: "bin/ardia" }] });
+  const claimer = JSON.stringify({ manifest: 2, name: "claimer", contributes: { programs: [{ name: "claimed-tool", path: "bin/c", claim: true }] } });
   await scan([
     { name: "after", status: "ok", text: after, folderId: "5:6" },
     { name: "always", status: "ok", text: always, folderId: "3:4" },
+    { name: "claimer", status: "ok", text: claimer, folderId: "5:5" },
     { name: "cli", text: CLI, ...BUILT_IN },
     { name: "impostor", status: "ok", text: impostor, folderId: "7:8" },
   ]);
   assert.deepEqual(P().listings.always.problems, ["plugin.json: alwaysOn is only for plugins built into Ardia"]);
   assert.deepEqual(P().listings.after.problems, ["plugin.json: programs[0].afterUpdate is only for plugins built into Ardia"]);
   assert.deepEqual(P().listings.impostor.problems, ["plugin.json: programs[0].name: ardia belongs to Ardia's built-in cli plugin"]);
+  assert.deepEqual(P().listings.claimer.problems, ["plugin.json: contributes.programs[0].claim is only for plugins built into Ardia"]);
   assert.equal(lifecycle.requestPluginConsent("always"), false);
 });
 
-test("a folder you add named cli can't take ardia either, even with no built-in one", async () => {
-  await scan([{ name: "cli", status: "ok", text: JSON.stringify({ ...JSON.parse(CLI), alwaysOn: undefined, official: undefined, icon: undefined, programs: [{ name: "ardia", path: "bin/ardia" }] }), folderId: "9:9" }]);
-  assert.deepEqual(P().listings.cli.problems, ["plugin.json: programs[0].name: ardia belongs to Ardia's built-in cli plugin"]);
+test("a claimed name stays reserved while its owner is missing: a folder you add named cli can't take ardia either", async () => {
+  host.registry = { claims: { ardia: "cli" }, failClosed: false, legacyOwners: ["cli"] };
+  try {
+    await scan([{ name: "cli", status: "ok", text: JSON.stringify({ manifest: 2, name: "cli", contributes: { programs: [{ name: "ardia", path: "bin/ardia" }] } }), folderId: "9:9" }]);
+    assert.deepEqual(P().listings.cli.problems, ["plugin.json: contributes.programs[0].name: ardia belongs to Ardia's built-in cli plugin"]);
+    host.registry = { claims: { ardia: "cli" }, failClosed: true, legacyOwners: [] };
+    await scan([{ name: "cli", text: CLI, ...BUILT_IN }]);
+    assert.deepEqual(P().listings.cli.problems, ["plugin.json: contributes.programs[0].name: ardia is kept for Ardia's built-in plugins, and the list of which one owns it couldn't be read"], "a damaged registry fails closed, even for the owner");
+    host.registry = { claims: {}, failClosed: false, legacyOwners: [] };
+    await scan([{ name: "cli", text: CLI, ...BUILT_IN }]);
+    assert.deepEqual(P().listings.cli.problems, ["plugin.json: contributes.programs[0].claim: ardia isn't in the list of programs this Ardia reserves for its built-in plugins"]);
+  } finally {
+    host.registry = null;
+  }
   await scan([{ name: "cli", text: CLI, ...BUILT_IN }, { name: "other", status: "ok", text: OTHER, folderId: "1:2" }]);
 });
 
@@ -264,7 +279,6 @@ test("any other plugin's programs still follow consent: on links, off unlinks, a
   takePluginCounts();
   await turnOn("other");
   assert.equal(host.links.length, 1);
-  assert.equal(host.links[0].adopt, false);
   assert.deepEqual(host.links[0].programs, [{ name: "other-tool", path: "bin/other" }], "after-update actions never travel for a plugin you installed");
   assert.equal(P().programs.other.state, "linked");
   assert.ok(lifecycle.disablePlugin("other"));
@@ -328,15 +342,34 @@ test("what the command line gets, as Settings shows it", () => {
     "Adds ardia to your PATH. It runs as you, outside Ardia's sandbox",
     "After updates, runs ardia skills install --auto, ardia skills refresh",
     "Adds ~/.local/bin to your PATH in your shell's login file",
-    "Lets any program you run drive your tabs and pages, with your logins, while it's installed. There's no off switch",
+    "Lets any program you run drive your tabs and pages, with your logins, while control is on in Settings › Advanced. The plugin stays installed once you install it",
   ], "four honest lines: the program, what runs after updates, the PATH line and control");
   assert.ok(!texts.some((t) => t.includes("in the background")), "a program-only plugin runs nothing in the background");
 });
 
-test("the app's official catalogue is the pin file's, which the release fetches and verifies", async () => {
+test("the official catalogue, the onboarding picks and the anchor aliases come from the pin file", async () => {
   const { readFileSync } = await import("node:fs");
-  const { OFFICIAL_CATALOGUE, COMING_SOON } = await import("./official.ts");
+  const { OFFICIAL_CATALOGUE, COMING_SOON, PRESELECTED_PLUGINS, officialCatalogue } = await import("./official.ts");
   const pin = JSON.parse(readFileSync(new URL("../../../official-plugins.json", import.meta.url), "utf8"));
   assert.deepEqual(OFFICIAL_CATALOGUE, pin.plugins.map(({ name, title, blurb, icon }) => ({ name, title, blurb, icon })));
   assert.deepEqual(COMING_SOON, pin.comingSoon);
+  assert.deepEqual(PRESELECTED_PLUGINS, pin.plugins.filter((p) => p.preselected).map((p) => p.name));
+  const made = officialCatalogue({
+    plugins: [
+      { name: "one", title: "One", blurb: "First.", icon: "a", preselected: true, anchorAliases: ["oldOne"], version: "1.0.0" },
+      { name: "two", title: "Two", blurb: "Second.", icon: "b" },
+    ],
+    comingSoon: [{ name: "soon", title: "Soon", blurb: "Later.", icon: "c", experiment: "officialPluginsAi" }],
+  });
+  assert.deepEqual(made.plugins, [{ name: "one", title: "One", blurb: "First.", icon: "a" }, { name: "two", title: "Two", blurb: "Second.", icon: "b" }]);
+  assert.deepEqual(made.preselected, ["one"]);
+  assert.deepEqual(made.anchorAliases, { one: ["oldOne"], two: [] });
+  assert.deepEqual(made.comingSoon, [{ name: "soon", title: "Soon", blurb: "Later.", icon: "c", experiment: "officialPluginsAi" }]);
+});
+
+test("a v1 command line with no example of its own shows the pin's first command", async () => {
+  const V1 = JSON.stringify({ manifest: 1, name: "cli", title: "Command Line", version: "0.4.0", alwaysOn: true, official: true, icon: "terminal.fill", permissions: ["control"], programs: [{ name: "ardia", path: "bin/ardia" }] });
+  await scan([{ name: "cli", text: V1, ...BUILT_IN }]);
+  assert.equal(officialPlugins(P(), true, hidden)[0].example, "ardia tabs");
+  await scan([{ name: "cli", text: CLI, ...BUILT_IN }, { name: "other", status: "ok", text: OTHER, folderId: "1:2" }]);
 });

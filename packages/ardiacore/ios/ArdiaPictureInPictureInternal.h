@@ -23,12 +23,8 @@ constexpr CGFloat kRimAlpha = 0.17;
 
 typedef NS_ENUM(NSInteger, ArdiaPiPEdge) { ArdiaPiPEdgeNone = 0, ArdiaPiPEdgeLeft = -1, ArdiaPiPEdgeRight = 1 };
 
-@interface ArdiaPiPControl : NSView
-@property (nonatomic, copy) void (^onClick)(void);
+@interface ArdiaPiPHandle : NSView
 @property (nonatomic) BOOL hovered;
-@end
-
-@interface ArdiaPiPHandle : ArdiaPiPControl
 @property (nonatomic) ArdiaPiPEdge edge;
 @end
 
@@ -149,6 +145,7 @@ typedef NS_ENUM(NSInteger, ArdiaPiPEdge) { ArdiaPiPEdgeNone = 0, ArdiaPiPEdgeLef
 - (void)followPointer:(NSEvent *)event;
 - (void)dragMoved:(NSEvent *)event;
 - (void)dragEnded:(NSEvent *)event;
+- (void)unstashFromHandle;
 - (void)devSwipe:(NSArray<NSString *> *)args;
 - (void)devDrag:(NSArray<NSString *> *)args;
 @end

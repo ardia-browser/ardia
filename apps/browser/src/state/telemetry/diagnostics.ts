@@ -1,6 +1,6 @@
 import { diagnosticsSample, hardwareInfo, type HardwareInfo } from "../../platform/app";
 import { onHoverLost, onWindowUnpainted, systemState, type HoverLostEpisode, type WindowUnpaintedRecord } from "../../platform/performance";
-import { cliControlStatus } from "../../platform/cli";
+import { controlStatus } from "../../platform/control";
 import { call } from "../../platform/engine";
 import { withDeadline } from "../../lib/deadline";
 import { hermesHeapMegabytes } from "../../lib/hermesHeap";
@@ -84,7 +84,7 @@ export const noteAppMemory = (totalMb: number) => (appMemoryMb = totalMb);
 export async function recordContext(): Promise<SavedContext | null> {
   const consent = consentToken();
   if (!consent) return null;
-  void cliControlStatus().then((status) => counted(consent, () => {
+  void controlStatus().then((status) => counted(consent, () => {
     noteDragsEnded(status.dragsEnded);
     noteWindowlessPages(status.windowlessPages);
   }), () => {});

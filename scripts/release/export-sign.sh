@@ -48,6 +48,8 @@ for folder in "$dist"/plugins/*/; do
   done
   /usr/libexec/PlistBuddy -c "Add :ArdiaBuiltInPlugins:$name string $("$root/scripts/release/plugin-digest.py" "$bundled/$name")" "$plist"
 done
+registry="$(python3 -I "$root/scripts/release/official-plugins.py" registry "$bundled")" || die "the bundled plugins' program registry couldn't be made"
+plutil -replace ArdiaProgramRegistry -json "$registry" "$plist" || die "couldn't write ArdiaProgramRegistry into Info.plist"
 
 echo "==> Licenses"
 licenses="$app/Contents/Resources/Licenses"
@@ -73,6 +75,8 @@ sign_as "$identity" --options restrict,library,kill,runtime "$fwv/Helpers/app_mo
 [ -e "$fwv/Helpers/web_app_shortcut_copier" ] && sign_as "$identity" --options restrict,library,kill,runtime \
   --identifier com.ardia.browser.web_app_shortcut_copier "$fwv/Helpers/web_app_shortcut_copier"
 sign_as "$identity" "$fw"
+plugin_host="$app/Contents/Helpers/ArdiaPluginHost"
+[ -e "$plugin_host" ] && sign_as "$identity" --options runtime --identifier com.ardia.browser.plugin-host "$plugin_host"
 [ -d "$app/Contents/Frameworks/hermes.framework" ] \
   && sign_as "$identity" --preserve-metadata=identifier,entitlements,flags,runtime "$app/Contents/Frameworks/hermes.framework"
 sign_as "$identity" --preserve-metadata=entitlements,requirements,flags,runtime "$app"

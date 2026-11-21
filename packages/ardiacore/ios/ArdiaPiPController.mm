@@ -168,7 +168,6 @@ NSString *CornerName(int corner) {
     NSView *root = ArdiaWindowRootView(window);
     _overlay = [[ArdiaPiPOverlay alloc] initWithFrame:root.bounds];
     __weak ArdiaPiPController *weakSelf = self;
-    _overlay.handle.onClick = ^{ [weakSelf unstash]; };
     [root addSubview:_overlay];
     _resizeCursor = [[ArdiaPiPResizeCursor alloc] initWithWindow:window view:_overlay];
     objc_setAssociatedObject(window, kControllerKey, self, OBJC_ASSOCIATION_RETAIN_NONATOMIC);

@@ -37,7 +37,7 @@ export const STEPS: OnboardingStep[] = stepsForThisSurface(["intro", "source", "
 
 const answeredByPreset = (q: Question, preset: Preset) => !q.askedWithPreset && q.keys.length > 0 && q.keys.every((k) => k in PRESETS[preset]);
 
-const SIDEBAR_ONLY: readonly QuestionId[] = ["address", "switcher"];
+const SIDEBAR_ONLY: readonly QuestionId[] = ["address"];
 export const liquidGlass = isLiquidGlass();
 
 export function questionsFor(step: OnboardingStep): Question[] {

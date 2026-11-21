@@ -6,12 +6,19 @@ import { useBrowser } from "../browser/store";
 import { notePlugin } from "../telemetry/pluginCounts";
 import { consentNow, consentToken, type ConsentToken } from "../telemetry/choice";
 import { warnFor } from "../telemetry/consoleConsent";
-import { listingOf } from "./appChecks";
+import { listingOf, NO_CLAIMS, type ProgramClaims } from "./appChecks";
+import { loadProgramClaims } from "./programRegistry";
+import { programControlOn, userTurnedControlOff } from "../app/programControlSetting";
 import { applySettingsPatch, planDisable, planEnable, spliceApplied } from "./defaults";
 import { pluginRecordsSaved, writePluginRecords } from "./savedState";
 import { settleInstall } from "./installWaiters";
 import { abandonWithdrawal, activeManifest, commitPlugins, currentPlugins, withdrawalsFor, type PluginsCommit, isAlwaysOn, isInstalled, NO_RECORD, recordOf, usePlugins, type PluginListing, type PluginRecord } from "./store";
 import { stopProcess, superviseProcess, supervisedNames } from "./process";
+import { checkActivations, deactivatePlugin, shouldRun } from "./activation";
+import { clearPluginSurfaces } from "./surfaces";
+import { clearPluginSecrets, type SecretsCleared } from "./secrets";
+import { closePluginStorage, reopenPluginStorage } from "./storage";
+import { forgetPluginGestures } from "./gestures";
 import { dropCalls } from "./tools";
 import { sendValues } from "./channel";
 import { adoptLegacyInstalls, reconcilePrograms, removePrograms } from "./programs";
@@ -26,13 +33,13 @@ const READ_PROBLEMS: Record<Exclude<PluginFolderEntry["status"], "ok">, string> 
   unreadable: "plugin.json couldn't be read",
 };
 
-export function listingsOf(entries: PluginFolderEntry[]): PluginListing[] {
+export function listingsOf(entries: PluginFolderEntry[], registry: ProgramClaims = NO_CLAIMS): PluginListing[] {
   const settings = useBrowser.getState().settings;
   const version = systemInfo().appVersion;
   return entries
     .slice(0, MAX_PLUGINS)
     .map((e) => ({
-      ...listingOf(e.name, e.status === "ok" ? (e.text ?? "") : null, e.status === "ok" ? null : READ_PROBLEMS[e.status], settings, version, e.folderId ?? ""),
+      ...listingOf(e.name, e.status === "ok" ? (e.text ?? "") : null, e.status === "ok" ? null : READ_PROBLEMS[e.status], settings, version, e.folderId ?? "", registry),
       ...(e.bundled ? { bundled: true } : {}),
       ...(e.replacesBundled ? { replacesBundled: true } : {}),
       ...(e.ignoresUserFolder ? { ignoresUserFolder: true } : {}),
@@ -53,6 +60,14 @@ function updateRecord(name: string, change: (r: PluginRecord) => PluginRecord | 
   return saveRecords(records, consent);
 }
 
+let lastActive = new Set<string>();
+
+function withdrawn(active: Set<string>): string[] {
+  const gone = [...lastActive].filter((name) => !active.has(name));
+  lastActive = new Set(active);
+  return gone;
+}
+
 export function reconcilePlugins(consent: ConsentToken | null) {
   const s = currentPlugins();
   const active = new Set<string>();
@@ -60,10 +75,17 @@ export function reconcilePlugins(consent: ConsentToken | null) {
     const manifest = activeManifest(s, name);
     if (!manifest) continue;
     active.add(name);
-    if (manifest.process) superviseProcess(name, s.listings[name]!.hash!, manifest, s.listings[name]!.folderId, consent);
+    const listing = s.listings[name]!;
+    if (shouldRun(name, listing.hash!, manifest)) superviseProcess(name, listing.hash!, manifest, listing.folderId, consent);
     else stopProcess(name, consent);
   }
   for (const name of supervisedNames()) if (!active.has(name)) stopProcess(name, consent);
+  for (const name of withdrawn(active)) {
+    deactivatePlugin(name);
+    clearPluginSurfaces(name);
+    forgetPluginGestures(name);
+  }
+  checkActivations();
   reconcilePrograms(consent);
 }
 
@@ -114,7 +136,7 @@ export function rescanPlugins(consent: ConsentToken | null): Promise<void> {
         return null;
       });
       if (entries) {
-        const listings = listingsOf(entries);
+        const listings = listingsOf(entries, await loadProgramClaims());
         const withdrawing = withdrawBefore({ listings: listingsByName(listings), records: currentPlugins().records }, asked);
         if (withdrawing) await withdrawing;
         applyListings(listings, asked);
@@ -178,8 +200,8 @@ export function enablePlugin(name: string, hash: string): boolean {
   const plan = kept ? { patch: {}, applied: before.applied } : planEnable(manifest, records, name, before.applied);
   const builtIn = isAlwaysOn(listing) ? { installed: true, ...(before.controlGranted ? { controlGranted: true } : {}) } : {};
   if (!saveRecords({ ...records, [name]: { enabled: true, approved: hash, values, applied: plan.applied, ...builtIn } }, consent)) return false;
-  const asksControl = manifest.permissions.includes("control");
-  applySettingsPatch(kept || !asksControl || useBrowser.getState().settings.cliControl ? plan.patch : { ...plan.patch, cliControl: true });
+  const asksControl = manifest.permissions.control;
+  applySettingsPatch(kept || !asksControl || programControlOn(useBrowser.getState()) || userTurnedControlOff() ? plan.patch : { ...plan.patch, cliControl: true });
   usePlugins.setState({ consent: null });
   notePlugin("plugin_enables", consent);
   reconcilePlugins(consent);
@@ -213,6 +235,9 @@ export function turnOffPlugin(name: string, consent: ConsentToken | null): Promi
 
 const removing = new Set<string>();
 
+const secretsLeftReason = (name: string, secrets: SecretsCleared) =>
+  `Its files are removed, but ${secrets.remaining.length === 1 ? "1 secret is" : secrets.remaining.length ? `${secrets.remaining.length} secrets are` : "its secrets may be"} still in your Keychain, under ardia.plugin.${name}. Delete them in Keychain Access.`;
+
 export async function removePlugin(name: string, mayGoOn: () => boolean = () => true): Promise<{ ok: boolean; removed?: boolean; reason?: string }> {
   if (removing.has(name)) return { ok: false, reason: "It is already being removed." };
   if (currentPlugins().listings[name]?.bundled) return { ok: false, reason: isAlwaysOn(currentPlugins().listings[name]) ? "It's built into Ardia and always on." : "It's built into Ardia: turn it off instead." };
@@ -224,21 +249,25 @@ export async function removePlugin(name: string, mayGoOn: () => boolean = () => 
     if (!mayGoOn()) return { ok: false, reason: "Control was turned off after Ardia turned it off, so its files are still there." };
     await removePrograms(name, consent);
     if (!mayGoOn()) return { ok: false, reason: "Control was turned off after Ardia unlinked its programs, so its files are still there." };
+    await closePluginStorage(name);
     const removed = await removePluginFiles(name).catch((error: unknown) => ({ ok: false as const, reason: String(error) }));
     if (!removed.ok) return removed;
+    const secrets = await clearPluginSecrets(name).catch((error: unknown): SecretsCleared => (warnFor(consent, `[plugins] couldn't remove ${name}'s secrets`, error), { ok: false, remaining: [] }));
     const forgotten = updateRecord(name, () => null, consent) && (await pluginRecordsSaved(consent));
     if (!forgotten) toForget.add(name);
     await rescanPlugins(consent);
     if (!forgotten) return { ok: false, removed: true, reason: "Its files are removed, but plugins.json couldn't be updated; Ardia drops its record the next time it can save." };
+    if (!secrets.ok) return { ok: false, removed: true, reason: secretsLeftReason(name, secrets) };
     return { ok: true };
   } finally {
+    reopenPluginStorage(name);
     removing.delete(name);
   }
 }
 
-export function setPluginValue(name: string, key: string, value: string | boolean) {
+export function setPluginValue(name: string, key: string, value: string | boolean | number) {
   const row = currentPlugins().listings[name]?.manifest?.settings.rows.find((r) => r.key === key);
-  if (!row || rowValue(row, value) !== value) return;
+  if (!row || row.type === "secret" || rowValue(row, value) !== value) return;
   if (!updateRecord(name, (r) => ({ ...(r === NO_RECORD ? { ...NO_RECORD } : r), values: { ...r.values, [key]: value } }), consentNow())) return;
   if (activeManifest(currentPlugins(), name)) sendValues(name);
 }

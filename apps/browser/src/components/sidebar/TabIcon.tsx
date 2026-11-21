@@ -127,7 +127,7 @@ export function EngineMark({ mark, size }: { mark: PageEngine; size: number }) {
         backgroundColor: sidebarTokens(theme).engineMarkPlate,
       }}
     >
-      <Symbol name={ENGINE_SYMBOLS[mark]} size={box - 3} weight="semibold" color={theme.icon} style={{ width: box, height: box }} />
+      <Symbol name={ENGINE_SYMBOLS[mark]} size={box - 3} weight="semibold" color={theme.icon} centresInk style={{ width: box, height: box }} />
     </View>
   );
 }

@@ -6,6 +6,7 @@ import { handPagesOutOfProfile } from "../pins/pinShare";
 import { DEFAULT_PROFILE_ID } from "../settings/settings";
 import { activated, apply, removeTabs, withNewTab } from "../tabs/tabs";
 import type { Profile, ProfileColor } from "../browser/types";
+import { patchedProfile } from "./switcherMark";
 
 export type ProfilesSlice = {
   profiles: Record<string, Profile>;
@@ -13,7 +14,7 @@ export type ProfilesSlice = {
   orphanedProfileData: string[];
 
   createProfile(options: { name: string; color?: ProfileColor; icon?: string | null; shareWith?: string | null; shareTopApps?: boolean }): string;
-  updateProfile(id: string, patch: Partial<Pick<Profile, "name" | "icon" | "pinnedCollapsed" | "shareTopApps" | "syncTabs" | "passwordManager">>): void;
+  updateProfile(id: string, patch: Partial<Pick<Profile, "name" | "icon" | "switcherDot" | "pinnedCollapsed" | "shareTopApps" | "syncTabs" | "passwordManager">>): void;
   setProfileLook(id: string, look: Partial<Pick<Profile, "color" | "theme">>): void;
   deleteProfile(id: string): void;
   reorderProfiles(ids: string[]): void;
@@ -72,7 +73,7 @@ export const createProfilesSlice: StateCreator<BrowserState, [], [], ProfilesSli
     },
 
     updateProfile(id, patch) {
-      set((s) => (s.profiles[id] ? { profiles: { ...s.profiles, [id]: { ...s.profiles[id]!, ...patch } } } : {}));
+      set((s) => (s.profiles[id] ? { profiles: { ...s.profiles, [id]: patchedProfile(s.profiles[id]!, patch) } } : {}));
     },
 
     setProfileLook(id, look) {

@@ -13,6 +13,7 @@ export type Profile = {
   name: string;
   color: ProfileColor;
   icon: string | null;
+  switcherDot?: true;
   createdAt: number;
   dataId?: string;
   theme?: ProfileTheme | null;

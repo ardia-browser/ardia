@@ -34,10 +34,6 @@ const STYLE_CHOICES: ChoiceOption<Settings["interfaceStyle"]>[] = [
   { value: "glass", preview: "style-glass", title: "Liquid Glass", subtitle: "Buttons and panels catch the light, as in Tahoe" },
   { value: "classic", preview: "style-classic", title: "Classic", subtitle: "Flat and quiet, as in Dia" },
 ];
-const SWITCHER_CHOICES: ChoiceOption<boolean>[] = [
-  { value: false, preview: "switcher-dots", title: "Dots", subtitle: "A quiet row of dots, as in Dia" },
-  { value: true, preview: "switcher-icons", title: "Icons", subtitle: "Each profile's symbol or emoji, as in Arc" },
-];
 const BOOKMARKS_BAR: { value: Settings["bookmarksBar"]; title: string }[] = [
   { value: "always", title: "Always" },
   { value: "newTab", title: "New Tab" },
@@ -137,24 +133,6 @@ export function LookStep() {
       </Page>
     );
   }
-  if (id === "switcher")
-    return (
-      <Page
-        id={id}
-        title="Dots or icons?"
-        subtitle="How the switcher at the bottom of the sidebar shows your profiles."
-        patch={{ profileSwitcherIcons: values.profileSwitcherIcons }}
-        picked={values.profileSwitcherIcons ? ["Profile icons in the sidebar"] : []}
-        preview={<MockPanel settings={mock} focus={focus.focus} switcher />}
-      >
-        <ChoiceList
-          options={SWITCHER_CHOICES}
-          value={values.profileSwitcherIcons}
-          onChange={(profileSwitcherIcons) => change({ profileSwitcherIcons })}
-          mock={focus}
-        />
-      </Page>
-    );
   if (id === "siteColor")
     return (
       <Page

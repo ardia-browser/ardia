@@ -55,3 +55,25 @@ test("click skips in a Picture in Picture window are counted back and ahead, sen
   usage.sessionEnding();
   assert.equal((await skipsSent()).length, before + 1);
 });
+
+test("clicks on a tucked Picture in Picture window's arrow are counted, sent with the usage counts, then start again from zero, and a click from before sharing's last change isn't", async () => {
+  client.loadChoice();
+  client.setSharing(true, "onboarding");
+  const unstashesSent = async () => {
+    await client.saveQueueNow();
+    const saved = JSON.parse(stub.docs.get("telemetry-queue.json") ?? '{"events":[]}');
+    return saved.events.filter((e) => e.event === "usage_counts" && e.properties.pip_handle_unstashes).map((e) => e.properties.pip_handle_unstashes);
+  };
+  const before = (await unstashesSent()).length;
+
+  pipCounts.notePictureInPictureHandleUnstash({ epoch: client.consentEpoch() });
+  pipCounts.notePictureInPictureHandleUnstash({ epoch: client.consentEpoch() });
+  pipCounts.notePictureInPictureHandleUnstash({ epoch: "an epoch from before" });
+  usage.sessionEnding();
+  const sent = await unstashesSent();
+  assert.equal(sent.length, before + 1);
+  assert.equal(sent.at(-1), 2);
+
+  usage.sessionEnding();
+  assert.equal((await unstashesSent()).length, before + 1);
+});

@@ -59,7 +59,7 @@ test("before any password manager plugin is on, every profile keeps Ardia's mana
   pm.startPasswordManager();
   await settle();
   assert.equal(pm.currentPasswordManager("default"), "ardia");
-  assert.deepEqual(calls("setFieldProviders"), [[1, []]], "launch pushes the empty set once");
+  assert.deepEqual(calls("setFieldProviders"), [], "nothing is pushed while no password manager is in use");
   assert.deepEqual(calls("offerToSave"), []);
   native.calls.length = 0;
 });
@@ -79,7 +79,7 @@ test("an installed plugin moves no profile on Turn On; a profile picks it explic
   turnOn("other-passwords");
   await settle();
   assert.equal(pm.currentPasswordManager("default"), "ardia");
-  assert.deepEqual(calls("setFieldProviders"), [], "nothing to push yet");
+  assert.deepEqual(calls("setFieldProviders"), [[1, []]], "the first manager plugin starts it, with nobody to fill for yet");
   pm.choosePasswordManager(work, "plugin:other-passwords");
   await settle();
   assert.equal(S().profiles[shared].passwordManager, "plugin:other-passwords", "profiles sharing data share the choice");

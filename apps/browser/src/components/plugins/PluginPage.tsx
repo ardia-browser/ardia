@@ -1,10 +1,15 @@
+import { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
-import { Box, Button, PluginPageView, Text } from "../ui";
+import type { PanelSpec } from "../../lib/pluginManifest";
+import { Box, Button, Text } from "../ui";
 import { useTheme } from "../ui/theme";
-import { useTab } from "../../state/browser/hooks";
-import { usePluginActive, usePluginFolderId, usePluginNetwork, usePluginPageContext, usePluginApproval, usePluginPageRun, usePluginPageSpec, usePluginPageUrl, usePluginProcess } from "../../state/plugins/hooks";
+import { useTab, useWindowId } from "../../state/browser/hooks";
+import { usePluginActive, usePluginManifest, usePluginPageContext, usePluginPageSpec, usePluginPageUrl, usePluginProcess, usePluginWindowEligible } from "../../state/plugins/hooks";
 import { pluginPagePath } from "../../state/plugins/actions";
+import { panelOfPath, wakeForFilePage } from "../../state/plugins/pages";
 import { openSettings } from "../../state/settings/settingsWindows";
+import { PluginFileView } from "./PluginFileView";
+import { PluginSurface } from "./PluginSurface";
 
 function Notice({ title, detail, name }: { title: string; detail: string; name: string }) {
   return (
@@ -18,28 +23,52 @@ function Notice({ title, detail, name }: { title: string; detail: string; name: 
   );
 }
 
+const isPagePanel = (p: PanelSpec) => p.mode === "tab" || p.mode === "split";
+
+function viewPanelOf(panels: readonly PanelSpec[], path: string): PanelSpec | null {
+  const panelId = panelOfPath(path);
+  if (panelId) return panels.find((p) => p.id === panelId && isPagePanel(p) && !!p.view && !p.file) ?? null;
+  if (panels.some((p) => isPagePanel(p) && p.file)) return null;
+  return panels.find((p) => isPagePanel(p) && !!p.view) ?? null;
+}
+
 export function PluginPage({ tabId, name }: { tabId: string; name: string }) {
   const theme = useTheme();
+  const windowId = useWindowId();
+  const eligible = usePluginWindowEligible(windowId);
   const path = useTab(tabId, (t) => pluginPagePath(t?.url ?? ""));
   const spec = usePluginPageSpec(name);
+  const manifest = usePluginManifest(name);
   const active = usePluginActive(name);
   const context = usePluginPageContext(tabId, name);
   const url = usePluginPageUrl(name, path);
   const process = usePluginProcess(name);
-  const network = usePluginNetwork(name);
-  const folderId = usePluginFolderId(name);
-  const run = usePluginPageRun(name);
-  const approved = usePluginApproval(name);
-  if (!spec || !active) return <Notice name={name} title={`${spec?.title ?? name} is off`} detail="Turn the plugin on in Settings › Plugins to use its page." />;
+  const viewPanel = manifest ? viewPanelOf(manifest.contributes.panels, path) : null;
+  const title = spec?.title ?? viewPanel?.title ?? manifest?.title ?? name;
+  useEffect(() => {
+    if (eligible && active && url) wakeForFilePage(name, path);
+  }, [eligible, active, url, name, path]);
+  if (!eligible) return <Notice name={name} title="Plugins aren't available in private windows" detail="Open this plugin in a regular window." />;
+  if (!active || (!spec && !viewPanel)) return <Notice name={name} title={`${title} is off`} detail="Turn the plugin on in Settings › Plugins to use its page." />;
+  if (viewPanel?.view && !url) {
+    return (
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.card }]}>
+        <Box pad="m" style={FILL}>
+          <PluginSurface plugin={name} surfaceId={`${viewPanel.view}@${tabId}`} viewId={viewPanel.view} kind="panel" windowId={windowId} context={{ tabId, panelId: viewPanel.id }} />
+        </Box>
+      </View>
+    );
+  }
   if (!url) {
     const failed = process?.state === "crashed" || process?.state === "failed";
-    return <Notice name={name} title={failed ? `${spec.title} stopped` : `${spec.title} is starting…`} detail={failed ? "Its program isn't running. Restart it from Settings › Plugins." : "Its program is getting the page ready."} />;
+    return <Notice name={name} title={failed ? `${title} stopped` : `${title} is starting…`} detail={failed ? "Its program isn't running. Restart it from Settings › Plugins." : "Its program is getting the page ready."} />;
   }
   return (
     <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.card }]}>
-      <PluginPageView style={StyleSheet.absoluteFill} plugin={name} url={url} network={network} folderId={folderId} approved={approved} run={run} context={context} />
+      <PluginFileView plugin={name} url={url} context={context} />
     </View>
   );
 }
 
 const CENTER = { flex: 1, alignItems: "center", justifyContent: "center" } as const;
+const FILL = { flex: 1 } as const;

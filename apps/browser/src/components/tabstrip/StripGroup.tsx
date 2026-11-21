@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Animated, Pressable, Text, View } from "react-native";
 import { currentGroup } from "../../state/browser/current";
 import { useGroup, usePageProfileId, useWindowId } from "../../state/browser/hooks";
@@ -10,15 +10,17 @@ import { groupTint, useSidebarTokens } from "../sidebar/tokens";
 import { Button, ContextMenuArea, Divider, FadeLabel, useTooltip } from "../ui";
 import { useTheme } from "../ui/theme";
 import { font, ink, weight, withAlpha } from "../ui/tokens";
-import { GroupMember, StripGroupIcon } from "./GroupMember";
+import { FolderMeasures, GroupMember, StripGroupIcon } from "./GroupMember";
 import type { StripGroupEntry, StripMember } from "../../state/tabs/topStrip";
-import { hasVisibleMembers, overflowCountRoom, dragGeometry, dropIndex, GROUP_MARGIN_LEFT, GROUP_MARGIN_RIGHT, groupLayout, holds, MEMBERS_INSET, memberInteractive, TAIL_EXPANDED, tabsOf, type DragGeometry } from "./stripGroups";
-import { CHIP_HAIRLINE, GAP, GROUP_CHIP_PAD, GROUP_DIVIDER_LENGTH, GROUP_SPRING, GROUP_OVERFLOW_GAP, GROUP_TITLE_GAP, GROUP_TITLE_MAX, GROUP_TITLE_TIGHT, GROUP_TRAY_ALPHA, ITEM_HEIGHT, ITEM_TOP, MID, STRIP_COLORS, tabRadius, TOP_STRIP_HEIGHT } from "./tokens";
+import { hasVisibleMembers, overflowCountRoom, dragGeometry, dropIndex, GROUP_MARGIN_LEFT, GROUP_MARGIN_RIGHT, groupLayout, holds, MEMBERS_INSET, TAIL_COLLAPSED, memberInteractive, tabsOf, type DragGeometry } from "./stripGroups";
+import { CHIP_HAIRLINE, GAP, GROUP_CHIP_PAD, GROUP_DIVIDER_LENGTH, GROUP_OVERFLOW_GAP, GROUP_TITLE_GAP, GROUP_TITLE_MAX, GROUP_TITLE_TIGHT, GROUP_TRAY_ALPHA, ITEM_HEIGHT, ITEM_TOP, MID, STRIP_COLORS, tabRadius, TOP_STRIP_HEIGHT } from "./tokens";
 import { noteTabStripGroupToggle } from "../../state/telemetry/tabStripCounts";
 import { useStripDrag } from "./useStripDrag";
 import { nameKey } from "./model";
 import { setMeasuredWidth } from "../../state/windows/measuredWidths";
 import { useChipHover, useChipHovered, type ChipHover } from "./reachableHover";
+import { GROUP_NAME_INSET, memberClipEdge, TOGGLE_MS, toggleEase } from "./stripToggle";
+import { reduceMotion } from "../ui/reduceMotion";
 
 export function StripGroup({
   entry,
@@ -28,7 +30,7 @@ export function StripGroup({
   tabWidth,
   activeId,
   chipWidth,
-  onChipWidth,
+  onChipFrame,
   memberWidth,
   folderMeasured,
   overflowCount,
@@ -41,7 +43,7 @@ export function StripGroup({
   tabWidth: (tabId: string) => number;
   activeId: string;
   chipWidth: number | undefined;
-  onChipWidth: (width: number) => void;
+  onChipFrame: (width: number) => void;
   memberWidth: (m: StripMember) => number;
   folderMeasured: (groupId: string) => boolean;
   overflowCount: number;
@@ -60,31 +62,44 @@ export function StripGroup({
   const chipSize = chipWidth === undefined ? 0 : chipWidth + overflowCountRoom(overflowCount);
   const { offsets, width } = groupLayout(chipSize, widths, GAP, expanded, shown);
   const members = useMemo(() => dragGeometry(entry.members.map((m, i) => ({ tabIds: tabsOf(m), width: widths[i]! })), GAP), [entry.members, widths.join()]);
+  const folderIds = useMemo(() => entry.members.flatMap((m) => (m.kind === "folder" ? [m.id] : [])), [entry.members]);
   const tuckable = useHasTuckTarget(!expanded && shown >= 0, windowId, profileId, entry.id);
   const open = useRef(new Animated.Value(expanded ? 1 : 0)).current;
   const size = useRef(new Animated.Value(width)).current;
   const state = `${expanded}:${shown >= 0 ? entry.members[shown]!.id : ""}`;
   const settled = useRef(state);
-  const [moving, setMoving] = useState(false);
-  const springs = useRef(0);
+  const [gliding, setGliding] = useState<"toggle" | "shift" | null>(null);
+  const pending = settled.current !== state && !reduceMotion();
+  const toggling = pending && !settled.current.startsWith(`${expanded}:`);
+  const moving = gliding !== null || pending;
+  const revealed = expanded || toggling || gliding === "toggle";
+  const glides = useRef(0);
   const placed = useRef(new Map<string, { width: number; offset: number }>());
-  if (expanded && !moving) placed.current = new Map(entry.members.map((m, i) => [m.id, { width: widths[i]!, offset: offsets[i]! }]));
+  if (expanded) placed.current = new Map(entry.members.map((m, i) => [m.id, { width: widths[i]!, offset: offsets[i]! }]));
   const placeOf = (m: StripMember, i: number) => {
     const before = expanded ? undefined : placed.current.get(m.id);
     return { width: i !== shown && before ? before.width : widths[i]!, offset: before ? before.offset : offsets[i]! };
   };
-  useEffect(() => {
-    const spring = (value: Animated.Value, toValue: number) => Animated.spring(value, { toValue, ...GROUP_SPRING, useNativeDriver: false });
-    const run = (animation: Animated.CompositeAnimation) => {
-      const id = ++springs.current;
-      setMoving(true);
-      animation.start(() => id === springs.current && setMoving(false));
+  useLayoutEffect(() => {
+    const glide = (value: Animated.Value, toValue: number) => Animated.timing(value, { toValue, duration: TOGGLE_MS, easing: toggleEase, useNativeDriver: false });
+    const both = (kind: "toggle" | "shift") => {
+      const id = ++glides.current;
+      if (reduceMotion()) {
+        open.stopAnimation();
+        size.stopAnimation();
+        open.setValue(expanded ? 1 : 0);
+        size.setValue(width);
+        setGliding(null);
+        return;
+      }
+      setGliding(kind);
+      Animated.parallel([glide(open, expanded ? 1 : 0), glide(size, width)]).start(() => id === glides.current && setGliding(null));
     };
-    const both = () => run(Animated.parallel([spring(open, expanded ? 1 : 0), spring(size, width)]));
     if (settled.current !== state) {
+      const kind = !settled.current.startsWith(`${expanded}:`) || gliding === "toggle" ? "toggle" : "shift";
       settled.current = state;
-      both();
-    } else if (moving) both();
+      both(kind);
+    } else if (moving) both(gliding ?? "shift");
     else size.setValue(width);
   }, [state, width]);
   const fade = useMemo(() => open.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolate: "clamp" }), []);
@@ -107,7 +122,10 @@ export function StripGroup({
       return true;
     },
   });
-  const tail = useMemo(() => Animated.add(size, -(TAIL_EXPANDED - 2.25)), []);
+  const tail = useMemo(() => Animated.add(size, memberClipEdge(0)), []);
+  const shownOffset = shown >= 0 ? placeOf(entry.members[shown]!, shown).offset : 0;
+  const shownEdge = useMemo(() => Animated.add(size, shownOffset - TAIL_COLLAPSED), [shownOffset]);
+  const shifting = moving && !revealed;
   if (!group) return null;
   const tint = groupTint(group.color);
   const bare = group.color === "none";
@@ -121,6 +139,7 @@ export function StripGroup({
     >
       <GroupFill hover={hover} width={size} tint={tint} bare={bare} />
       {membersShown ? <Animated.View pointerEvents="none" style={{ position: "absolute", left: chipSize + 0.75, top: MID - 7.5, width: 0.5, height: 15, backgroundColor: divider, opacity: fade }} /> : null}
+      <FolderMeasures ids={folderIds} />
       {entry.members.map((m, i) => (
         <GroupMember
           key={m.id}
@@ -128,11 +147,12 @@ export function StripGroup({
           width={placeOf(m, i).width}
           start={chipSize + MEMBERS_INSET}
           offset={placeOf(m, i).offset}
-          clip={moving && i !== shown ? tail : null}
+          clip={i !== shown ? (moving ? tail : null) : shifting ? shownEdge : null}
+          revealed={revealed}
           open={open}
           interactive={memberInteractive(i === shown, expanded, moving)}
           shown={i === shown}
-          parked={!expanded && !moving && i !== shown}
+          parked={!expanded && i !== shown && (!moving || !placed.current.has(m.id))}
           geometry={members}
           from={expanded ? i : -1}
           chip={chip}
@@ -154,18 +174,19 @@ export function StripGroup({
         {...drag.panHandlers}
         mouseDownCanMoveWindow={false}
         tooltip={chipTip}
-        onLayout={(e) => onChipWidth(Math.ceil((e.nativeEvent.layout.width - overflowCountRoom(overflowCount)) * 2) / 2)}
         style={{ position: "absolute", left: 0, top: ITEM_TOP, height: ITEM_HEIGHT }}
       >
         <ContextMenuArea onContextMenu={() => void openGroupMenu(windowId, entry.id)}>
           <Pressable
             onPress={() => {
-              noteTabStripGroupToggle();
+              noteTabStripGroupToggle(windowId, performance.now());
               updateGroup(entry.id, { collapsed: expanded });
             }}
             style={{ height: ITEM_HEIGHT, flexDirection: "row", alignItems: "center", paddingLeft: GROUP_CHIP_PAD.left, paddingRight: GROUP_CHIP_PAD.right }}
           >
-            <StripGroupIcon icon={group.icon} color={group.color} open={expanded} />
+            <View onLayout={(e) => onChipFrame(Math.ceil((e.nativeEvent.layout.width + GROUP_CHIP_PAD.left + GROUP_CHIP_PAD.right) * 2) / 2)}>
+              <StripGroupIcon icon={group.icon} color={group.color} open={expanded} />
+            </View>
             <GroupName
               name={group.name || `${group.tabIds.length} ${group.tabIds.length === 1 ? "Tab" : "Tabs"}`}
               cap={tightName ? GROUP_TITLE_TIGHT : GROUP_TITLE_MAX}
@@ -195,7 +216,6 @@ function GroupName({ name, cap, color, onNatural }: { name: string; cap: number;
   );
 }
 
-const GROUP_NAME_INSET = 2;
 const NAME_MEASURE = { position: "absolute", left: 0, top: 0, width: 10000, flexDirection: "row", opacity: 0 } as const;
 
 function OverflowCount({ count }: { count: number }) {

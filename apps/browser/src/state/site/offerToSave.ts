@@ -197,6 +197,8 @@ async function drain(profile: string) {
 
 export const pendingOfferToSave = () => intents.size + owed.size;
 
+export const offerToSaveHeldOffSomewhere = () => pendingOfferToSave() > 0 || readHeldOff().profiles.size > 0;
+
 export function writeOfferToSave(profile: string) {
   if ((!intents.has(profile) && !owed.has(profile)) || draining.has(profile)) return;
   draining.add(profile);

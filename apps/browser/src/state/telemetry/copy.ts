@@ -76,11 +76,12 @@ export const WHATS_SENT: { title: string; items: string[] }[] = [
       "How many times you removed pages on the History page with the keyboard, its Delete button or a row's menu, and how many pages each way removed, summed up once an hour. Never which pages",
       "How many Clear Browsing Data requests completed or failed, summed up once an hour. Never which profile, data types, time range or error details",
       "How many times a page tried to open a link no app on this Mac opens, so Ardia asked nothing, and how many times it asked to open an app, summed up once an hour. Never which page, link or app",
-      "How many times you collapsed or expanded a tab group from the tab strip across the top, summed up once an hour",
+      "How many times you collapsed or expanded a tab group from the tab strip across the top, and how many times the strip had to measure a group's name or folders again while one was opening or closing, summed up once an hour",
       "With tabs across the top: how many times the strip shrank its tabs to icons only, the most tabs a strip held while it scrolled, how many tab drags scrolled the strip at its edge, how many tab clicks waited for the press to end before scrolling the tab into view, how many tabs closed one after another with the pointer still while the strip held its layout, the most tabs given room for a title because their icon is shared with another tab or missing, the most tabs moved into the open tabs menu because they had no room for a readable title, how many times you scrolled the strip, and how many times a scroll's updates came more than 34 ms apart (a stutter), summed up once an hour. Never which tabs or sites",
       "How many pop-up windows opened as tabs because Open pop-up windows as tabs is on, and how many ⇧-clicked links that would have opened a new window opened as a Peek instead, summed up once an hour. Never which page, pop-up or link",
       "How many times you chose No Icon for a pinned tab, so it shows its title alone, summed up once an hour. Never which tab",
       "How many times you switched a window between tabs in the sidebar and tabs across the top, from the View menu, its keyboard shortcut, the command bar, the tab menu or the ardia command, and in which direction, summed up once an hour. Not when you choose it in Settings",
+      "How many site icons pages announced were fetched for their tabs, and how many of those came back with no image, summed up once an hour. Never which site or icon",
       "How many tab hover cards the tab strip across the top showed, and how many of those were for a tab from a profile other than the window's, summed up once an hour. Never which tab",
       "How many times the profile pages came to rest after a swipe, a profile shortcut or a page dot, how many of those stayed on the same profile, and how many times you reordered profiles by dragging a dot or icon in the sidebar's profile switcher, summed up once an hour. Never which profile",
       "How many times the toolbar hid while you scrolled a page, how many of those came less than a second after it had shown again, how many times the hidden toolbar peeked out under the pointer, and on Linux how many times a page stopped drawing while the toolbar peeked over it, summed up once an hour. Never which page",
@@ -133,8 +134,8 @@ export const WHATS_SENT: { title: string; items: string[] }[] = [
       "How many links from other apps an Air Traffic Control rule routed, how many went by its Everything Else choice, and how many of them went into a tab group, summed up once an hour. Never which links, rules, apps, groups or profiles",
       "How many tab and group changes the ardia command made (counts only, never which tabs or groups), how many requests it sent Ardia in each area (tabs, windows, profiles, splits, Peek, bookmarks, history, downloads, settings, site settings, extensions, plugins, media, sync, saved logins, permission, password and autofill prompts, menus, tile folders, icons, shared folders, live folders, setup codes, Air Traffic Control) and how many of those Ardia refused or couldn't do, how many replies, events and hook requests were too big to send whole and went out shortened, how many requests for saved logins it refused because a password manager plugin keeps that profile's passwords (never which plugin), never what they asked for or got back, how many of its batches were refused or stopped, how many times its control pill appeared and how many of those were shrunk to an icon and Stop, and how many times Ardia installed or upgraded the ardia command (on its own the first time, after an update, or from Settings) and whether that worked, and whether it turned on control after installing it on its own",
       "When a paste is dropped or finds no text: the reason, how many keys or commands were dropped with it, how many types the clipboard offered and the names of the standard ones (any other type is sent only as \"other\"), the class of the focused field, your keyboard layout if it is one of Apple's (any other is sent only as \"other\") and whether a new tab was still taking focus. Never what is on the clipboard",
-      "How many times you turned plugins on and off, how many plugins you removed and how many times you cancelled removing one, how many times their helper programs started and how many of those crashed, how many plugin commands you ran, how many plugin tools were called and how many of those failed, how many times a plugin page opened and how many of those opened beside a tab in Split View, how many times a plugin's commands went on your PATH, how many times that failed or a name was taken, how many times an ardia command installed the old way was taken over or left for you to install because control was off, and how many times they came off it, summed up once an hour. Once a day, how many plugins are installed, how many are on, and how many of those add settings, commands, a page, a helper program, commands on your PATH, event hooks or tools. Never which plugins, their names, what their settings hold, or what goes into or comes out of a tool",
-      "How many times an official plugin (Command Line, AI, or any other, never its name) was shown to you, installed, skipped or failed to install, counted apart for onboarding and for Settings, summed up once an hour",
+      "How many times you turned plugins on and off, how many plugins you removed and how many times you cancelled removing one, how many times their helper programs started and how many of those crashed, how many times a plugin started because you used it and how many of those didn't get ready, how many plugin commands you ran, how many plugin tools were called and how many of those failed, how many times a plugin page opened and how many of those opened beside a tab in Split View, how many times a plugin drew its views, opened a panel or asked you to pick, type or confirm something, how many plugin toolbar buttons and menu items you used, how many plugin actions you ran with their keyboard shortcuts, how many times the command bar asked a plugin for suggestions, how many web requests plugins made and how many Ardia refused because the site wasn't one the plugin may reach, how many times a plugin saved data or a secret, how many of a plugin's requests to read or save its data Ardia dropped because you were removing it, how many times a plugin read the page you used it from, how many times a plugin was asked to allow or block something and how many of those didn't answer in time, how many times a plugin's commands went on your PATH, how many times that failed or a name was taken, how many times an ardia command installed the old way was taken over or left for you to install because control was off, and how many times they came off it, summed up once an hour. Once a day, how many plugins are installed, how many are on, and how many of those add settings, commands, a page, a helper program, commands on your PATH, event hooks, tools, a password manager, code that runs in Ardia, menu items, toolbar buttons, sidebar views, panels, command bar suggestions or themes. Never which plugins, their names, what their settings hold, what goes into or comes out of a tool, which sites they reach, what they save, or what a page holds",
+      "How many times each official plugin, by name (like Command Line or AI, never a plugin of your own), was shown to you, installed, skipped or failed to install, counted apart for onboarding and for Settings, summed up once an hour",
       "How many times Ardia ended a page drag that would otherwise have left the page ignoring clicks and typing: one the ardia command or a debugger started and left behind, or one macOS refused to start. Summed up once an hour, never which page",
       "How many tabs whose page wasn't in a window, like the ones the ardia command opens in the background, told their page the size and position of the window they belong to, and how many had no window on screen to take them from. Summed up once an hour, never which page or where the window is",
       "Opening split view, switching profiles and opening the command bar, with where it opened: at the address, in the center, in the center because the address was out of sight, or for a new tab",
@@ -148,6 +149,7 @@ export const WHATS_SENT: { title: string; items: string[] }[] = [
       "How many changes to a window's tabs Chromium refused to apply (as when the tab strip belonged to another window), summed up once an hour. Never which tabs",
       "How many times a page in a pop-up window (such as a site's web player) asked for copy-protected media and was refused, counted by the kind of protection it asked for (Widevine, PlayReady, FairPlay or another), how many times one waited for copy-protected media without any being refused, and for both whether the pop-up is on one of Ardia's built-in streaming sites, summed up once an hour. Never which site, address or title",
       "How many times a click on the left or right side of a Picture in Picture video skipped it back or ahead 10 seconds, each side separately, summed up once an hour",
+      "How many times a click on the arrow of a Picture in Picture window tucked at the edge of the screen brought it back, summed up once an hour",
       "How many times you dragged a Picture in Picture window, how many of those drags let the spot you grabbed slip from under the pointer, and how many had a window move that took longer than 8 ms, summed up once an hour. Never where it was",
       "How many times you resized a Picture in Picture window by its edge, and how many of those began inside the window while the pointer wasn't showing the resize arrows, summed up once an hour. Never its size or where it was",
       "How many times a Picture in Picture window (a video or a page) closed, split by whether it was automatic or one you opened, and by whether Ardia asked for the close or Chromium closed it by itself, summed up once an hour. Never which page",
@@ -201,16 +203,6 @@ export const WHATS_SENT: { title: string; items: string[] }[] = [
     ],
   },
   {
-    title: "The ardia command",
-    items: [
-      "Each command's name (like history or browse snapshot), its exit and error codes, and the names of the options it was given, never their values",
-      "How long it took, step by step (starting up, starting its helper, connecting to Ardia, finding the tab, the command itself, waiting for the page to settle), plus counts and sizes: browser calls, steps in a batch, how many coding agents the install gave the agent skill to or skipped, the length of a page snapshot and of the output, how many requests an action sent, how many reading tabs it had to open again, and whether the output was cut short, the input humanized, it gave up waiting for its helper, it set a viewport size, it reloaded a crashed page or Ardia refused it a tab. Times, counts and yes or no only",
-      "Its version, macOS version, chip and Python version, with this Mac's install ID",
-      "After a crash: the error's type (with its message only when it's one of Python's fixed ones, like “division by zero”), and the module, function and line number of each step in the stack trace",
-      "Nothing from commands pointed at a test browser (--port, --ws), and nothing at all with DO_NOT_TRACK=1 or ARDIA_TELEMETRY=0 set",
-    ],
-  },
-  {
     title: "Even with sharing off",
     items: [SHARING_COPY.dailyCount, SHARING_COPY.updateChecks, SHARING_COPY.switchFile],
   },
@@ -233,6 +225,26 @@ export const WHATS_SENT: { title: string; items: string[] }[] = [
     ],
   },
 ];
+
+export const SELF_INSTALLED_COMMAND_SENT: { title: string; items: string[] } = {
+    title: "The ardia command",
+    items: [
+      "Each command's name (like history or browse snapshot), its exit and error codes, and the names of the options it was given, never their values",
+      "How long it took, step by step (starting up, starting its helper, connecting to Ardia, finding the tab, the command itself, waiting for the page to settle), plus counts and sizes: browser calls, steps in a batch, how many coding agents the install gave the agent skill to or skipped, the length of a page snapshot and of the output, how many requests an action sent, how many reading tabs it had to open again, and whether the output was cut short, the input humanized, it gave up waiting for its helper, it set a viewport size, it reloaded a crashed page or Ardia refused it a tab. Times, counts and yes or no only",
+      "Its version, macOS version, chip and Python version, with this Mac's install ID",
+      "After a crash: the error's type (with its message only when it's one of Python's fixed ones, like “division by zero”), and the module, function and line number of each step in the stack trace",
+      "Nothing from commands pointed at a test browser (--port, --ws), and nothing at all with DO_NOT_TRACK=1 or ARDIA_TELEMETRY=0 set",
+    ],
+  };
+
+export const PLUGIN_SENT_COPY = {
+  addedTitle: "From plugins you added",
+  addedNote: "What each plugin says its own programs send. Ardia doesn't send it, and the switch above doesn't control it.",
+  attribution: (plugin: string, official: boolean) =>
+    official
+      ? `Described by the ${plugin} plugin, which ships with Ardia: what its own program sends, not Ardia`
+      : `Provided by the ${plugin} plugin, about what its own programs send. Ardia doesn't send this, and this switch doesn't control it`,
+};
 
 export const IDENTITY_COPY = {
   appearAs: (name: string) => `You appear to us as ${name}`,
@@ -288,13 +300,13 @@ const ADDED_ITEMS = {
     "On Windows, how many times a tab you switched to had no page yet, so Ardia held on to giving that page the keyboard, and how many of those it then gave and how many it let go (you moved on, clicked another page or typed in a field), summed up once an hour. Never which tab or page",
     "On Windows, how many times the command bar put back a letter its text field had dropped while you typed, summed up once an hour. Never what you typed",
     "How many times a window's interface was started a second time while the first was still up, summed up once an hour",
-    "How many times suggestions that came in late waited because the pointer was over the command bar's list or its Go button, summed up once an hour. Never what you typed",
+    "How many times suggestions that came in late waited because the pointer was over the command bar's list or its Go button, and how many times the command bar changed its width in the moment after it opened, summed up once an hour. Never what you typed",
     "On Windows, how many times Ardia held the keys you typed right after opening a new tab or the command bar until its field was ready, how many of those keys it then typed into the field, how many times the command bar's completion stayed off for a replay whose end never came, and how many holds it let go and why (a shortcut, a key that isn't a letter, a click, another window, the field going away or taking too long), summed up once an hour. Never which keys or what you typed",
     "On Windows, how many times Ardia asked before quitting right after you confirmed closing a window's tabs, because your other window had closed meanwhile, and how many of those you cancelled, summed up once an hour",
   ],
 };
 
-platformCopy({ SHARING_COPY, WHATS_SENT, IDENTITY_COPY, LOCAL_COPY }, ADDED_ITEMS);
+platformCopy({ SHARING_COPY, WHATS_SENT, IDENTITY_COPY, LOCAL_COPY, SELF_INSTALLED_COMMAND_SENT }, ADDED_ITEMS);
 
 export const WATCH_COPY = {
   rowTitle: "Sharing to confirm a fix",

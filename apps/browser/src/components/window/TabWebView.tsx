@@ -4,12 +4,12 @@ import type { PageEngine } from "../../state/engines/engines";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet } from "react-native";
 import { focus, switchToTab } from "../../state/browser/actions";
-import { notePictureInPictureBackToTab, notePictureInPictureClickSkip, notePictureInPictureDragged, notePictureInPictureResized } from "../../state/telemetry/pictureInPictureCounts";
+import { notePictureInPictureBackToTab, notePictureInPictureClickSkip, notePictureInPictureDragged, notePictureInPictureHandleUnstash, notePictureInPictureResized } from "../../state/telemetry/pictureInPictureCounts";
 import { noteRendererResponsive, noteRendererUnresponsive } from "../../state/telemetry/freezes";
 import { noteFavicon } from "../../state/favicons/favicons";
 import { adoptIconPage, dropOutlivedFavicon, noteIconPage } from "../../state/favicons/iconPage";
 import { endThemeHold, heldThemeColor } from "../../state/windows/launchLook";
-import { noteTabReady } from "../../state/app/cliControl";
+import { noteTabReady } from "../../state/app/programControl";
 import { isQuitting } from "../../state/app/quit";
 import { useProfileTheme } from "./ThemeScope";
 import { opaqueCard } from "../ui/opaqueCard";
@@ -30,7 +30,8 @@ import { zoomChangedByUser } from "../../state/site/zoomBubble";
 import { markTabReady, patchPage, pageOf } from "../../state/tabs/pageState";
 import { popupBlocked, showAutofillPrompt, showExternalApp, showPasswordPrompt } from "../../state/site/prompts";
 import { fieldProviderHint, fieldProviderOpened, verificationCodeFound, type FieldProviderHint, type FieldProviderOpened, type VerificationCodeFound } from "../../state/site/passwordManager";
-import { hoverStatus, verificationCodeDocument, verificationCodeTabGone } from "../../state/site/verificationCodes";
+import { verificationCodeDocument, verificationCodeTabGone } from "../../state/site/verificationCodes";
+import { hoverStatus } from "../../state/tabs/hoverStatus";
 import { leftPage, pageAskedToClose, pageEnded } from "../../state/tabs/pageEvents";
 import { copyLinkToSelection, searchSelection, setPageSelection } from "../../state/site/selection";
 import { shareFromPage } from "../../state/site/share";
@@ -253,6 +254,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine }
       onPictureInPictureDragged={notePictureInPictureDragged}
       onPictureInPictureResized={notePictureInPictureResized}
       onPictureInPictureSkip={notePictureInPictureClickSkip}
+      onPictureInPictureUnstashed={notePictureInPictureHandleUnstash}
       onMediaFault={noteWebKitMediaFault}
       onDisplayMediaRequest={(request) => requestDisplayMedia(tabId, request)}
       onOpenWindow={onOpenWindow}

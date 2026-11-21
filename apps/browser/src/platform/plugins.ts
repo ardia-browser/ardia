@@ -1,6 +1,35 @@
-import { nativeModule, type PluginExit, type PluginFolderEntry, type PluginLine, type PluginProgramsResult, type PluginProgramsSpec, type PluginRemoveResult, type PluginStartResult, type PluginStartSpec } from "@ardia/shell";
+import {
+  nativeModule,
+  type PluginExit,
+  type PluginFetchResult,
+  type PluginFetchSpec,
+  type PluginFileReadResult,
+  type PluginFolderEntry,
+  type PluginLine,
+  type PluginProgramsResult,
+  type PluginProgramsSpec,
+  type PluginProgramRegistry,
+  type PluginRemoveResult,
+  type PluginStartResult,
+  type PluginStartSpec,
+  type PluginStorageReadResult,
+} from "@ardia/shell";
 
-export type { PluginExit, PluginFolderEntry, PluginLine, PluginProgramsResult, PluginProgramsSpec, PluginRemoveResult, PluginStartResult, PluginStartSpec };
+export type {
+  PluginExit,
+  PluginFetchResult,
+  PluginFetchSpec,
+  PluginFileReadResult,
+  PluginFolderEntry,
+  PluginLine,
+  PluginProgramsResult,
+  PluginProgramsSpec,
+  PluginProgramRegistry,
+  PluginRemoveResult,
+  PluginStartResult,
+  PluginStartSpec,
+  PluginStorageReadResult,
+};
 
 let bound: ReturnType<typeof nativeModule<"ArdiaPlugins">> | null = null;
 const Plugins = () => (bound ??= nativeModule("ArdiaPlugins"));
@@ -17,8 +46,13 @@ export const linkPluginPrograms = (spec: PluginProgramsSpec) => Plugins().linkPr
 export const unlinkPluginPrograms = (name: string, programs: string[], remove: boolean) => Plugins().unlinkPrograms(name, programs, remove);
 export const sweepPluginPrograms = (active: string[]) => Plugins().sweepPrograms(active);
 export const legacyProgramsInstalled = () => Plugins().legacyProgramsInstalled();
+export const programRegistry = () => Plugins().programRegistry();
 export const revealPluginLog = (name: string) => Plugins().revealLog(name);
 export const revealPluginsFolder = () => Plugins().revealFolder();
 export const devSnapshotPluginPage = (name: string, path: string) => Plugins().devSnapshotPage(name, path);
+export const hostFetchPlugin = (spec: PluginFetchSpec) => Plugins().hostFetch(spec);
+export const readPluginStorage = (name: string) => Plugins().storageRead(name);
+export const writePluginStorage = (name: string, text: string) => Plugins().storageWrite(name, text);
+export const readPluginFile = (name: string, folderId: string, approved: string, path: string) => Plugins().readPluginFile(name, folderId, approved, path);
 export const onPluginLine = (listener: (e: PluginLine) => void) => Plugins().addListener("onLine", listener);
 export const onPluginExit = (listener: (e: PluginExit) => void) => Plugins().addListener("onExit", listener);

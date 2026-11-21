@@ -20,8 +20,6 @@ export type OfficialView = {
   firstCommand: string | null;
 };
 
-const FIRST_COMMANDS: Record<string, string> = { cli: "ardia tabs" };
-
 export const installedLabel = (plugin: OfficialPlugin) => (plugin.version ? `Installed · ${plugin.version}` : "Installed");
 
 const HIDDEN: OfficialView = { shown: false, note: null, toggle: false, status: null, failed: false, busy: false, action: null, opens: false, firstCommand: null };
@@ -33,7 +31,10 @@ function installedView(plugin: OfficialPlugin, programs: ProgramsState | undefin
   if (programs?.state === "linked") {
     const refused = Object.values(programs.refused);
     if (refused.length) return { ...base, status: `Not on your PATH: ${refused.join("; ")}`, failed: true, action: "again" };
-    if (programs.linked.length) return { ...base, firstCommand: FIRST_COMMANDS[plugin.name] ?? null };
+    if (programs.adoption === "retrying") return { ...base, status: "Waiting for the old install to finish updating…", busy: true };
+    if (programs.adoption === "busy") return { ...base, status: "The old install is busy updating. Try again in a moment.", failed: true, action: "again" };
+    if (programs.adoption === "failed") return { ...base, status: "The old install couldn't be switched over to it.", failed: true, action: "again" };
+    if (programs.linked.length) return { ...base, firstCommand: plugin.example };
   }
   if (attempt?.state === "failed") return { ...base, status: attempt.reason, failed: true, action: "again" };
   return base;

@@ -275,6 +275,11 @@ export function VerificationCodePrompt({ tabId, right, top }: { tabId: string; r
   );
 }
 
+export function VerificationCodeOffer(props: { tabId: string; right: number; top: number }) {
+  const offered = usePage(props.tabId, (p) => !!p.verificationCode);
+  return offered ? <VerificationCodePrompt {...props} /> : null;
+}
+
 export function ExternalAppPrompt({ tabId, left, top }: { tabId: string; left: number; top: number }) {
   const request = usePage(tabId, (p) => p.externalApp);
   const [always, setAlways] = useState(false);

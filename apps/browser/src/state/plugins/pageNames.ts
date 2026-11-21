@@ -20,5 +20,5 @@ export function pluginPageOf(url: string | null | undefined): string | null {
   if (!name) return null;
   loadPluginRecords();
   const s = usePlugins.getState();
-  return s.listings[name]?.manifest?.page || s.records[name] ? name : null;
+  return s.listings[name]?.manifest?.contributes.panels.some((p) => p.mode === "tab" || p.mode === "split") || s.records[name] ? name : null;
 }

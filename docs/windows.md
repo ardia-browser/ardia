@@ -558,6 +558,18 @@ is plain Chromium.
   rest of the Mac tab's methods, `tab_calls.cc`), `tab.discard`, `tabs.list`, `host.info`, `app.quit`. Events come as
   the topic `tab` with a key, a name and data (navigation, progress, favicon, find, zoom, security, media, pagePress,
   windowClose and more), and `tab.opened` for a tab Chromium made itself, with who opened it.
+- The page view (`engine/EngineWebView.tsx`) is the native view under the shared `WebView`, so its handle is typed as
+  `WebViewNativeHandle` from `@ardia/ardiacore`, the calls the shared `WebView` makes on the Mac's view: a method
+  added to that contract that Windows lacks fails `pnpm -C packages/expo-windows typecheck`. Each method goes to `tab.call`
+  (`engine/pageCalls.ts`), is answered in TypeScript (`capturePicture`, `downloadFavicon`, `focusIfUnfocused`), or is
+  in `NOT_ON_WINDOWS_YET`, which answers the Mac's empty answer and logs the method once. Those need the engine:
+  `downloadImage`, `requestPictureInPicture`, `takeControlPress`, `exitPictureInPicture`, `resolvePasswordPrompt`,
+  `resolveAutofillPrompt`, `answerAutofillPrompt`, `executeExtensionAction`, `resolveDisplayMedia` (Chromium's own
+  picker shows), `mediaCaptureSourceId` and `notificationAction`. A failed `tab.call` rejects with the engine's error,
+  as on the Mac, an `evaluate` result, navigation list or cookie list of the wrong type rejects with `ERR_BAD_REPLY`,
+  and a closed page answers the empty answer. A focus the page takes only once it shows logs `could not take focus`
+  when the engine refuses it. `nativeTag` is null: a page is its own window, with no React Native tag to hand keyboard
+  focus to.
 - `tab.close` closes as the Mac's `TabBridge::CloseAfterUnloadHandlers` does: a page with `beforeunload` or `unload`
   handlers gets `beforeunload` with its prompt cancelled (no "Leave site?" is ever shown for a tab the app closed), then
   its unload handlers whatever it answered, each step with 2 seconds, and then the host deletes the tab
@@ -950,7 +962,12 @@ session with track actions, and the mini player shows skip by 15 seconds where t
 
 Answered in TypeScript on Windows since this list was made: `engine.info` (from `host.info`), `favicons.fetch` (the
 icon Chromium stored for that address, from `ac_favicons_get`, asked again after 0.4 and 1.5 s while Chromium writes
-it), and `profiles.deleteData`.
+it), and `profiles.deleteData`. The page call `downloadFavicon` (a page's favicon event) asks the same `favicons.fetch`
+with the page's profile (`engine/pageFavicon.ts`), so a tab shows its site's icon as soon as Chromium stores it rather
+than a letter tile until the next lookup by page address. `usage_counts` carries `page_favicon_downloads` and
+`page_favicon_downloads_empty` (every platform): on Windows the empty share should fall from all of them to a few.
+A fetch that fails rejects instead of answering null; the shared caller logs `[favicons] page download failed` and
+counts it as empty.
 
 Answered on Windows since the engine took Windows paths (`windows-engine-20261112-2`), in `domains/exports.ts`,
 `unpacked.ts` and `systemState.ts`, with the dialogs, file reads and power reading passed in as the domain engine's
@@ -1356,7 +1373,9 @@ does run in a test instance. A scratch folder with the marker must get both powe
   (add the label, then push or re-run the run). A pull request can read its base branch's caches and no other pull
   request's, which is why the Windows branch builds on every push: without that, each pull request into it would
   compile once for itself. A full run always compiles, saves that app for pull requests to reuse, and adds the tours, the
-  installers and the install check. Only a full run has the `Ardia-Setup-<cpu>` artifacts that
+  installers and the install check. The tours run beside the launch checks in their own jobs, `x64-tour` (the app
+  alone, then the pages and the typing with the engine; artifacts `tour` and `tour-engine`) and `x64-tour-first-run`
+  (artifact `tour-engine-first-run`), so a full run takes about as long as its slowest job instead of their sum. Only a full run has the `Ardia-Setup-<cpu>` artifacts that
   `scripts/windows/publish-alpha.sh` publishes.
 - With the browser window open, the x64 run also drives the app with real input and fails when the default layout
   marks no caption region; a drag by the gap beside the window buttons is not Windows' own move or does not move the

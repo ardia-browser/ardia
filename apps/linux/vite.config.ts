@@ -61,7 +61,7 @@ const importerReplacements = new Map([
   [`${here("../browser/src/state/report/actions.ts")}\0${here("../browser/src/state/commands/appCommands.ts")}`, here("./src/reportProblem.ts")],
   [`${here("../browser/src/components/ui/Panel.tsx")}\0${here("../browser/src/components/ui/Popover.tsx")}`, here("./src/GlassPanel.tsx")],
   [`${here("../browser/src/components/ui/index.ts")}\0${here("../browser/src/components/window/SidebarDock.tsx")}`, here("./src/glassUi.tsx")],
-  [`${here("../browser/src/components/ui/index.ts")}\0${here("../browser/src/components/omnibox/CommandPanel.tsx")}`, here("./src/glassUi.tsx")],
+  [`${here("../browser/src/components/ui/index.ts")}\0${here("../browser/src/components/omnibox/PanelBox.tsx")}`, here("./src/glassUi.tsx")],
   [`${here("../browser/src/state/windows/controls.ts")}\0${here("../browser/src/components/window/WindowControls.tsx")}`, here("./src/captionControls.ts")],
   [`${here("../browser/src/state/app/appMenu.ts")}\0${here("../browser/src/components/window/BrowserWindowControls.tsx")}`, here("./src/clusterAppMenu.ts")],
   [`${here("../browser/src/state/windows/layout.ts")}\0${here("../browser/src/components/sidebar/Sidebar.tsx")}`, here("./src/sidebarHeaderLayout.ts")],

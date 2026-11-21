@@ -10,4 +10,5 @@ struct ConfirmOptions: Record {
   @Field var windowId: String?
   @Field var onlyIfShown: Bool = false
   @Field var dismissKey: String?
+  @Field var sheetOnly: Bool = false
 }

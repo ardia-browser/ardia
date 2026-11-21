@@ -45,6 +45,8 @@ export function resolvedShortcuts({ settings, profileOrder }: ShortcutState): Re
 
 export const shortcutOf = (id: string, s: ShortcutState = useBrowser.getState()): Shortcut | undefined => resolvedShortcuts(s).bindings.get(id)?.[0];
 
+export const commandsHolding = (shortcut: Shortcut, s: ShortcutState = useBrowser.getState()): string[] => resolvedShortcuts(s).holdersOf(shortcut);
+
 export function shortcutHint(id: string, s: ShortcutState = useBrowser.getState()): string | undefined {
   const shortcut = shortcutOf(id, s);
   return shortcut && formatShortcut(shortcut);
@@ -124,6 +126,13 @@ function watchShortcuts(_key: string, listener: () => void): () => void {
   }
   shortcutListeners.add(listener);
   return () => void shortcutListeners.delete(listener);
+}
+
+export function useShortcutAssignments(): readonly unknown[] {
+  const bar = useMenuBarRevision();
+  const shortcuts = useKeyed(watchShortcuts, ALL, () => useBrowser.getState().settings.shortcuts);
+  const profiles = useKeyed(watchShortcuts, ALL, () => useBrowser.getState().profileOrder);
+  return useMemo(() => [bar, shortcuts, profiles], [bar, shortcuts, profiles]);
 }
 
 const HINT_SEPARATOR = "\u0000";

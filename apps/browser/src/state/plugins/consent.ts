@@ -1,10 +1,9 @@
-import type { PluginManifest } from "../../lib/pluginManifest";
+import { MENU_SLOTS, type PluginManifest } from "../../lib/pluginManifest";
 import type { PasswordField } from "../../lib/pluginPasswordManager";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
+import { contributionLines } from "./consentContributions";
 
 export type ConsentLine = { icon: string; text: string };
-
-export type ConsentContext = { bundled?: boolean; movesProfiles?: number };
 
 const FIELD_WORDS: Record<PasswordField, string> = { login: "login", oneTimeCode: "verification code" };
 
@@ -23,22 +22,50 @@ function passwordManagerLines(m: PluginManifest, context: ConsentContext): Conse
   return lines;
 }
 
-export function consentLines(m: PluginManifest, context: ConsentContext = {}): ConsentLine[] {
+function runtimeLines(m: PluginManifest): ConsentLine[] {
   const lines: ConsentLine[] = [];
-  if (m.process) lines.push({ icon: "gearshape", text: `Runs a program in the background: ${m.process.run.join(" ")}` });
+  if (m.main) lines.push({ icon: "shippingbox", text: m.activationEvents.some((e) => e === "*" || e === "onStartupFinished" || e.startsWith("onEvent:")) ? "Runs its code in the background, in Ardia's plugin sandbox" : "Runs its code in Ardia's plugin sandbox only while you use it" });
+  if (m.sidecar) lines.push({ icon: "gearshape", text: `Runs a program in the background: ${m.sidecar.run.join(" ")}` });
   for (const p of m.programs) {
     lines.push({ icon: "terminal.fill", text: `Adds ${p.name} to your PATH. It runs as you, outside Ardia's sandbox` });
     if (p.afterUpdate.length) lines.push({ icon: "arrow.triangle.2.circlepath", text: `After updates, runs ${p.afterUpdate.map((a) => [p.name, ...a].join(" ")).join(", ")}` });
   }
   if (m.programs.length) lines.push({ icon: "doc.text", text: "Adds ~/.local/bin to your PATH in your shell's login file" });
-  const control = m.permissions.includes("control");
-  if (control) lines.push({ icon: "hand.raised", text: m.alwaysOn ? "Lets any program you run drive your tabs and pages, with your logins, while it's installed. There's no off switch" : "Lets any program you run drive your tabs and pages, with your logins" });
+  return lines;
+}
+
+function networkLines(m: PluginManifest): ConsentLine[] {
+  const network = m.permissions.network;
+  const who = m.sidecar ? "That program" : "It";
+  if (network === "*") return [{ icon: "network", text: m.sidecar ? `That program may connect to the internet and to servers on this ${PLATFORM_TERMS.computer}, and a server it starts may listen on your network address` : `It may connect to any site, and to servers on this ${PLATFORM_TERMS.computer}` }];
+  if (Array.isArray(network)) return [{ icon: "network", text: `Its code may connect only to ${network.join(", ")}, through Ardia. Its pages and views stay offline` }];
+  if (m.sidecar || m.main) return [{ icon: "antenna.radiowaves.left.and.right.slash", text: `${who} can't connect to anything or accept connections, not even from this ${PLATFORM_TERMS.computer}` }];
+  return [];
+}
+
+function permissionLines(m: PluginManifest): ConsentLine[] {
+  const p = m.permissions;
+  const lines: ConsentLine[] = [];
+  if (p.control) lines.push({ icon: "hand.raised", text: m.alwaysOn ? "Lets any program you run drive your tabs and pages, with your logins, while control is on in Settings › Advanced. The plugin stays installed once you install it" : "Lets any program you run drive your tabs and pages, with your logins" });
   else if (m.alwaysOn) lines.push({ icon: "lock", text: "Once installed, there's no off switch" });
-  if (m.permissions.includes("network")) lines.push({ icon: "network", text: `That program may connect to the internet and to servers on this ${PLATFORM_TERMS.computer}, and a server it starts may listen on your network address` });
-  else if (m.process) lines.push({ icon: "antenna.radiowaves.left.and.right.slash", text: `That program can't connect to anything or accept connections, not even from this ${PLATFORM_TERMS.computer}` });
-  if (m.permissions.includes("tabs")) lines.push({ icon: "square.on.square", text: m.permissions.includes("fullUrls") ? "Sees the full address and title of your tabs" : "Sees the address (without what follows ? or #) and title of your tabs" });
+  lines.push(...networkLines(m));
+  if (p.tabs) lines.push({ icon: "square.on.square", text: `${p.fullUrls ? "Sees the full address and title of your tabs" : "Sees the address (without what follows ? or #) and title of your tabs"}${p.tabs === "write" ? ", and can open, close and switch tabs" : ""}` });
+  if (p.workspace) lines.push({ icon: "square.grid.2x2", text: "Sees and rearranges every window, tab and group: it can move, close and group your tabs" });
+  if (p.activePage) lines.push({ icon: "text.magnifyingglass", text: "Reads the text of the tab you're on, for 30 seconds after you use it. Never in private windows" });
   if (m.hooks.length) lines.push({ icon: "bell", text: `Hears these events: ${m.hooks.join(", ")}` });
-  if (m.permissions.includes("commands")) lines.push({ icon: "command", text: "Runs Ardia commands, like opening and closing tabs" });
+  if (p.commands) lines.push({ icon: "command", text: "Runs Ardia commands, like opening and closing tabs" });
+  if (p.storage) lines.push({ icon: "internaldrive", text: "Keeps its own data on this " + PLATFORM_TERMS.computer });
+  if (p.secrets) lines.push({ icon: "key", text: "Keeps secrets, like sign-in tokens, in your Keychain" });
+  return lines;
+}
+
+export type ConsentContext = { controlOff?: boolean; bundled?: boolean; movesProfiles?: number };
+
+export const CONTROL_OFF_LINE = "Control is off, as you set it, and installing this leaves it off. To let programs drive Ardia, turn on “Let programs control Ardia” in Settings › Advanced";
+
+export function consentLines(m: PluginManifest, context: ConsentContext = {}): ConsentLine[] {
+  const lines: ConsentLine[] = [...runtimeLines(m), ...permissionLines(m)];
+  if (m.permissions.control && context.controlOff) lines.push({ icon: "hand.raised.slash", text: CONTROL_OFF_LINE });
   const defaults = Object.keys(m.settings.defaults);
   if (defaults.length) lines.push({ icon: "slider.horizontal.3", text: `Changes these settings while it's on: ${defaults.join(", ")}` });
   if (m.settings.rows.length) lines.push({ icon: "list.bullet", text: `Adds ${m.settings.rows.length === 1 ? "a setting" : `${m.settings.rows.length} settings`} to its page here` });
@@ -46,6 +73,7 @@ export function consentLines(m: PluginManifest, context: ConsentContext = {}): C
   if (m.commands.some((c) => "open" in c.action && c.action.context)) lines.push({ icon: "rectangle.split.2x1", text: "Its page can be handed the tab you're on when you open it beside that tab" });
   if (m.commands.length) lines.push({ icon: "command", text: `Adds to the command bar: ${m.commands.map((c) => c.title).join(", ")}` });
   if (m.tools.length) lines.push({ icon: "wrench.and.screwdriver", text: `Offers tools to the ardia command and other plugins: ${m.tools.map((t) => t.title).join(", ")}` });
+  lines.push(...contributionLines(m, MENU_SLOTS));
   lines.push(...passwordManagerLines(m, context));
   return lines;
 }

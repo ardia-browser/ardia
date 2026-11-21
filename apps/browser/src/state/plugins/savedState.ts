@@ -12,9 +12,9 @@ const NAME = new RegExp(NAME_PATTERN);
 
 const HASH = /^[0-9a-f]{64}$/;
 
-function valuesOf(raw: unknown): Record<string, string | boolean> {
+function valuesOf(raw: unknown): Record<string, string | boolean | number> {
   if (!isFields(raw)) return {};
-  return Object.fromEntries(Object.entries(raw).filter((e): e is [string, string | boolean] => typeof e[1] === "string" || typeof e[1] === "boolean"));
+  return Object.fromEntries(Object.entries(raw).filter((e): e is [string, string | boolean | number] => typeof e[1] === "string" || typeof e[1] === "boolean" || (typeof e[1] === "number" && Number.isFinite(e[1]))));
 }
 
 function appliedOf(raw: unknown): PluginRecord["applied"] {

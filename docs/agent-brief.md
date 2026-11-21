@@ -292,7 +292,7 @@ The only variables the app and engine read, through `ArdiaLaunchConfig` (`packag
 | --- | --- | --- |
 | `ARDIA_DATA_DIR` | path | Scratch data dir: Chrome's data in `<dir>/Chromium`, the app's documents, defaults, keychain items and Sparkle state (`packages/shell/ios/ArdiaIsolation.m`); Chrome gets `--use-mock-keychain`. A Debug build refuses to start without one |
 | `ARDIA_BACKGROUND` | `1` (anything but empty or `0`) | Hidden test instance (Rules › never steal focus; `docs/testing.md`) |
-| `ARDIA_REMOTE_DEBUGGING_PORT` | port | CDP on that port, only on the mock keychain |
+| `ARDIA_REMOTE_DEBUGGING_PORT` | port | CDP on that port, only on the mock keychain. CDP doesn't go through Settings › Advanced › Let programs control Ardia, so that switch can't be judged on an instance with a port: test it on one launched without |
 | `ARDIA_INSTANCE` | `jsLocation=host:port` | This launch's Metro (Debug builds) |
 | | `chromiumSwitches=--a --b=x,y` | Extra Chrome switches, space-separated, only on the mock keychain; background mode drops the auto-accept capture ones, and `--ardia-*` never passes |
 | | `downloadsDir=<dir>` | Chrome's default download folder for this launch, never written to the profile |

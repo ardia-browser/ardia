@@ -18,13 +18,13 @@ const settle = async () => {
   for (let i = 0; i < 8; i++) await tick();
 };
 
-const CLI = JSON.stringify({ manifest: 1, name: "cli", title: "Command Line", version: "0.3.0", alwaysOn: true, official: true, permissions: ["control"], programs: [{ name: "ardia", path: "bin/ardia" }] });
+const CLI = JSON.stringify({ manifest: 2, name: "cli", title: "Command Line", version: "0.3.0", alwaysOn: true, official: true, permissions: { control: true }, contributes: { programs: [{ name: "ardia", path: "bin/ardia", claim: true }] } });
 const BUILT_IN = { status: "ok", folderId: "bundled", bundled: true };
 
 setConsentPeriod(true, "test-epoch");
 S().hydrate({});
 S().updateSettings({ cliControl: false });
-host.legacyInstalled = true;
+host.legacyInstalled = ["cli"];
 host.links.length = 0;
 host.linkResult = { ok: true, linked: ["ardia"], refused: {}, binDir: "/home/.local/bin", adopted: true };
 host.folders = [{ name: "cli", text: CLI, ...BUILT_IN }];
@@ -41,12 +41,15 @@ test("an old install whose control was off isn't adopted: the plugin is offered,
   assert.equal(takePluginCounts().plugin_adoptions_waiting, 1);
 });
 
-test("Install on the sheet adopts it then, turning control on as the sheet says", async () => {
+test("Install on the sheet installs it but keeps the Off you chose, and the sheet says how to turn control on", async () => {
+  const { consentLines, CONTROL_OFF_LINE } = await import("./consent.ts");
+  assert.ok(consentLines(P().listings.cli.manifest, { controlOff: true }).some((line) => line.text === CONTROL_OFF_LINE));
+  assert.ok(!consentLines(P().listings.cli.manifest, { controlOff: false }).some((line) => line.text === CONTROL_OFF_LINE));
   const done = installOfficialPlugin("cli", { showSheet: false });
   assert.ok(lifecycle.enablePlugin("cli", P().consent.hash));
   assert.deepEqual(await done, { ok: true });
-  assert.equal(host.links.at(-1).adopt, true);
-  assert.equal(S().settings.cliControl, true);
+  assert.equal(host.links.at(-1).name, "cli");
+  assert.equal(S().settings.cliControl, false, "an explicit Off wins over installing a plugin that asks for control");
   host.linkResult = null;
-  host.legacyInstalled = false;
+  host.legacyInstalled = [];
 });

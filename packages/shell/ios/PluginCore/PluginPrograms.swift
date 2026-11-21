@@ -12,7 +12,6 @@ struct ProgramPlaces {
 
   let store: String
   let binDir: String
-  let legacy: String?
   var shadowable: [String] = ProgramPlaces.systemDirs
 
   func pluginStore(_ plugin: String) -> String { (store as NSString).appendingPathComponent(plugin) }
@@ -23,7 +22,10 @@ struct ProgramsLinked: Equatable {
   let fresh: Bool
   let linked: [String]
   let refused: [String: String]
-  let adopted: Bool
+  var adoption: LegacyAdoption = .none
+
+  var adopted: Bool { adoption == .adopted }
+  var adoptBusy: Bool { adoption == .busy }
 }
 
 enum PluginPrograms {
@@ -35,7 +37,6 @@ enum PluginPrograms {
   static let caches = "__pycache__"
   private static let reserved: Set<String> = [leasesName, afterUpdateMarker, afterUpdateClaim]
   private static let namePattern = try! NSRegularExpression(pattern: "^[a-z0-9][a-z0-9-]{0,39}$")
-  private static let legacyVersionPattern = try! NSRegularExpression(pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+(-[a-z]+\\.[0-9]+)?(\\.partial)?$")
   private static let versionCharacters = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-")
 
   static func isName(_ name: String) -> Bool {
@@ -51,7 +52,7 @@ enum PluginPrograms {
 
   static func install(
     plugin: String, from folder: OpenedFolder, approved: String, version: String?, programs: [PluginProgram], places: ProgramPlaces,
-    expectedDigest: String? = nil, adopt: Bool = false
+    expectedDigest: String? = nil, adoption: LegacyInstall? = nil
   ) -> Result<ProgramsLinked, FolderRefusal> {
     guard let lock = lock(plugin, places) else { return .failure(FolderRefusal(reason: "its program folder couldn't be locked")) }
     defer { close(lock) }
@@ -78,6 +79,11 @@ enum PluginPrograms {
         fresh = true
       }
     }
+    let legacy = adoption.map { lockLegacy($0, plugin: plugin, places: places) }
+    defer { legacy?.release() }
+    if legacy?.outcome == .busy {
+      return .success(ProgramsLinked(version: name, fresh: fresh, linked: [], refused: [:], adoption: .busy))
+    }
     let before = linkTarget((pluginStore as NSString).appendingPathComponent(currentName))
     guard swapLink(in: pluginStore, named: currentName, to: name) else {
       return .failure(FolderRefusal(reason: "its programs couldn't be switched to the new version"))
@@ -85,18 +91,21 @@ enum PluginPrograms {
     if let before, before != name { _ = swapLink(in: pluginStore, named: previousName, to: before) }
     var linked: [String] = []
     var refused: [String: String] = [:]
+    var outcome: LegacyAdoption = legacy?.outcome == .failed ? .failed : .none
     if let bin = binLock(places) {
       defer { close(bin) }
       for program in programs {
-        if let problem = link(program, plugin: plugin, places: places, adopt: adopt) { refused[program.name] = problem } else { linked.append(program.name) }
+        let isLegacy = adoption?.program == program.name
+        let adoptTarget = isLegacy && legacy?.held == true ? adoption.map(legacyLauncherPath) : nil
+        if let problem = link(program, plugin: plugin, places: places, adoptTarget: adoptTarget) { refused[program.name] = problem } else { linked.append(program.name) }
       }
       unlinkOthers(plugin: plugin, keeping: Set(programs.map(\.name)), places: places)
     } else {
       for program in programs { refused[program.name] = "\(places.binDir) couldn't be locked" }
     }
     sweepLocked(plugin: plugin, places: places, keepCurrent: true)
-    let adopted = adopt && !linked.isEmpty && adoptLegacy(plugin: plugin, places: places)
-    return .success(ProgramsLinked(version: name, fresh: fresh, linked: linked, refused: refused, adopted: adopted))
+    if let legacy, let entry = adoption, legacy.held, linked.contains(entry.program) { outcome = adoptLegacyLocked(legacy, plugin: plugin, places: places, entry: entry) }
+    return .success(ProgramsLinked(version: name, fresh: fresh, linked: linked, refused: refused, adoption: outcome))
   }
 
   static func withdraw(plugin: String, programs: [String], places: ProgramPlaces) {
@@ -139,6 +148,10 @@ enum PluginPrograms {
 
   static func isCurrent(plugin: String, version: String, places: ProgramPlaces) -> Bool {
     linkTarget((places.pluginStore(plugin) as NSString).appendingPathComponent(currentName)) == version
+  }
+
+  static func shouldRunAfterUpdate(_ linked: ProgramsLinked, plugin: String, places: ProgramPlaces) -> Bool {
+    !linked.adoptBusy && needsAfterUpdate(plugin: plugin, version: linked.version, places: places)
   }
 
   static func needsAfterUpdate(plugin: String, version: String, places: ProgramPlaces) -> Bool {
@@ -268,34 +281,6 @@ enum PluginPrograms {
     }
   }
 
-  static func legacyInstalled(_ places: ProgramPlaces) -> Bool {
-    guard let legacy = places.legacy, isRealFolder(legacy), linkTarget((legacy as NSString).appendingPathComponent(currentName)) != nil else { return false }
-    var info = stat()
-    let program = ((legacy as NSString).appendingPathComponent(currentName) as NSString).appendingPathComponent("bin/ardia")
-    return stat(program, &info) == 0 && (info.st_mode & S_IFMT) == S_IFREG
-  }
-
-  static func adoptLegacy(plugin: String, places: ProgramPlaces) -> Bool {
-    guard let legacy = places.legacy, isRealFolder(legacy) else { return false }
-    let held = open((legacy as NSString).appendingPathComponent(".lock"), O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0o644)
-    guard held >= 0 else { return false }
-    defer { close(held) }
-    guard flock(held, LOCK_EX | LOCK_NB) == 0 else { return false }
-    let current = (legacy as NSString).appendingPathComponent(currentName)
-    let managed = (places.pluginStore(plugin) as NSString).appendingPathComponent(currentName)
-    var adopted = false
-    if let target = linkTarget(current), target != managed {
-      adopted = swapLink(in: legacy, named: currentName, to: managed)
-    }
-    guard linkTarget(current) == managed, let entries = try? FileManager.default.contentsOfDirectory(atPath: legacy) else { return adopted }
-    for entry in entries where legacyVersionPattern.firstMatch(in: entry, range: NSRange(entry.startIndex..., in: entry)) != nil {
-      let path = (legacy as NSString).appendingPathComponent(entry)
-      guard isRealFolder(path), !isLeased(path) else { continue }
-      discard(path)
-    }
-    return adopted
-  }
-
   static func isLeased(_ versionFolder: String) -> Bool {
     let leases = (versionFolder as NSString).appendingPathComponent(leasesName)
     guard isRealFolder(leases), let names = try? FileManager.default.contentsOfDirectory(atPath: leases) else { return false }
@@ -314,7 +299,7 @@ enum PluginPrograms {
     return live
   }
 
-  static func link(_ program: PluginProgram, plugin: String, places: ProgramPlaces, adopt: Bool = false) -> String? {
+  static func link(_ program: PluginProgram, plugin: String, places: ProgramPlaces, adoptTarget: String? = nil) -> String? {
     guard isName(program.name) else { return "\(program.name) isn't a program name" }
     guard realFolder(places.binDir, creating: true) != nil else { return "\(places.binDir) isn't a folder you own" }
     if let hidden = places.shadowable.map({ ($0 as NSString).appendingPathComponent(program.name) }).first(where: { FileManager.default.isExecutableFile(atPath: $0) }) {
@@ -328,7 +313,7 @@ enum PluginPrograms {
         return "\(path) is someone else's; remove it to use this one"
       }
       if existing == target { return nil }
-      let ours = isInside(existing, places.pluginStore(plugin)) || (adopt && places.legacy.map { isInside(existing, $0) } == true)
+      let ours = isInside(existing, places.pluginStore(plugin)) || (adoptTarget != nil && existing == adoptTarget)
       if !ours {
         if isInside(existing, places.store), let other = owner(of: existing, store: places.store) {
           return "\(program.name) comes from the \(other) plugin; turn that one off to use this one"
@@ -525,7 +510,7 @@ enum PluginPrograms {
     return try? FileManager.default.destinationOfSymbolicLink(atPath: path)
   }
 
-  private static func swapLink(in folder: String, named name: String, to target: String) -> Bool {
+  static func swapLink(in folder: String, named name: String, to target: String) -> Bool {
     let path = (folder as NSString).appendingPathComponent(name)
     var info = stat()
     if lstat(path, &info) == 0 && (info.st_mode & S_IFMT) != S_IFLNK { return false }

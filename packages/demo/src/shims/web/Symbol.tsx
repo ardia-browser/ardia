@@ -9,6 +9,7 @@ export type SymbolProps = ViewProps & {
   size?: number;
   weight?: SymbolWeight;
   color?: string;
+  centresInk?: boolean;
 };
 
 const NATIVE_DEFAULT_POINT_SIZE = 14;

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
 const model = await import("../browser/model.ts");
-const { useCli, useCliIndicator } = await import("../app/cliControl.ts");
+const { useControlServer: useCli, useControlIndicator: useCliIndicator } = await import("../app/programControl.ts");
 const { startAutomation } = await import("./controlSocket.ts");
 const { noteCommit } = await import("./automationEvents.ts");
 const { automationWindows } = await import("./automationWindows.ts");

@@ -435,9 +435,9 @@ recording: of three unpinned tabs, the two unselected close and the selected one
     (13pt: `x.com` is 69px wide in both). The text starts 48pt in from the panel's edge; the search icon is centred
     30pt in.
   - Open: the panel grows out of the field's box. Its left edge per 60fps frame (px at 2x): 676 (the field) → 674, 624,
-    609, 601, 598, 595, 594, i.e. 63%, 82%, 92%, 95%, 99% of the way: an exponential ease-out of about 130ms (ours:
-    `Easing.out(Easing.exp)`, 130ms). Height grows with it. The content doesn't scale or move: the growing shape
-    uncovers it.
+    609, 601, 598, 595, 594, i.e. 63%, 82%, 92%, 95%, 99% of the way: an exponential ease-out of about 130ms (we
+    copied it with `Easing.out(Easing.exp)`, 130ms, until #3283). Height grows with it. The content doesn't scale or move: the growing shape
+    uncovers it. Ardia doesn't copy this: the command bar is used all day, and the owner's motion rule (AGENTS.md, "Motion follows how often a thing is used") beats matching Dia there, so its panel opens at full size on the first frame (issue #3283; the grow came in with 50a7eeb78 on 2026-10-09).
 
 ### Logo (orb), measured from a same-screen capture
 

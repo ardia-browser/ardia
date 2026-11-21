@@ -25,7 +25,7 @@ import { useOnboarding } from "../../browser/src/state/onboarding/onboarding";
 import { adoptParkedPins } from "../../browser/src/state/pins/parkedPins";
 import { decideLinuxWindowClose } from "./windowCloseDecider";
 import { afterFirstWindow, firstWindowCommitted } from "../../browser/src/lib/afterFirstWindow";
-import { startCliControl } from "../../browser/src/state/app/cliControl";
+import { startProgramControl } from "../../browser/src/state/app/programControl";
 import { startAutomation } from "../../browser/src/state/automation/controlSocket";
 import { startUserScripts } from "../../browser/src/state/extensions/userScripts";
 import { leadUserScripts } from "./hostUserScripts";
@@ -116,7 +116,7 @@ async function start() {
   startHostTelemetry({ host: ardiaHost, candidate: !utility, locks: navigator.locks as unknown as LeaderLocks });
   countLoginPasswordChecks(linuxTelemetryHooks.leading);
   const capabilities = linuxCapabilities(ardiaHost);
-  if (capabilities.cliControl) startCliControl();
+  if (capabilities.cliControl) startProgramControl();
   await startLinuxShortcuts(ardiaHost);
   if (utility) {
     const persistence = startHostPersistence(ardiaHost, useBrowser, stored ?? {}, createUtilitySessionSnapshot(useBrowser.getState(), saved ?? {}));

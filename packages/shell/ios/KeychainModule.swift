@@ -11,15 +11,21 @@ public class KeychainModule: Module {
 
     AsyncFunction("get") { (account: String) -> String? in
       if let store = IsolatedSecrets.shared { return store.get(account) }
-      var query = Self.query(account)
-      query[kSecReturnData as String] = true
-      query[kSecMatchLimit as String] = kSecMatchLimitOne
-      #if DEBUG
-      query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
-      #endif
       var item: CFTypeRef?
-      guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess, let data = item as? Data else { return nil }
+      guard SecItemCopyMatching(Self.readQuery(account) as CFDictionary, &item) == errSecSuccess, let data = item as? Data else { return nil }
       return String(data: data, encoding: .utf8)
+    }
+
+    AsyncFunction("read") { (account: String) -> [String: Any] in
+      if let store = IsolatedSecrets.shared { return store.read(account) }
+      var item: CFTypeRef?
+      let status = SecItemCopyMatching(Self.readQuery(account) as CFDictionary, &item)
+      if status == errSecItemNotFound { return ["status": "missing"] }
+      guard status == errSecSuccess else { return ["status": "error", "reason": "Keychain read failed (status \(status))"] }
+      guard let data = item as? Data, let text = String(data: data, encoding: .utf8) else {
+        return ["status": "error", "reason": "Keychain item isn't valid UTF-8"]
+      }
+      return ["status": "ok", "value": text]
     }
 
     AsyncFunction("set") { (account: String, secret: String) -> Bool in
@@ -51,6 +57,16 @@ public class KeychainModule: Module {
   private static func query(_ account: String) -> [String: Any] {
     [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account]
   }
+
+  private static func readQuery(_ account: String) -> [String: Any] {
+    var query = query(account)
+    query[kSecReturnData as String] = true
+    query[kSecMatchLimit as String] = kSecMatchLimitOne
+    #if DEBUG
+    query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
+    #endif
+    return query
+  }
 }
 
 private final class IsolatedSecrets {
@@ -73,6 +89,18 @@ private final class IsolatedSecrets {
     lock.lock()
     defer { lock.unlock() }
     return load()?[account]
+  }
+
+  func read(_ account: String) -> [String: Any] {
+    lock.lock()
+    defer { lock.unlock() }
+    guard FileManager.default.fileExists(atPath: url.path) else { return ["status": "missing"] }
+    guard let data = try? Data(contentsOf: url) else { return ["status": "error", "reason": "Connected Accounts file is unreadable"] }
+    guard let secrets = try? JSONDecoder().decode([String: String].self, from: data) else {
+      return ["status": "error", "reason": "Connected Accounts file isn't valid JSON"]
+    }
+    guard let value = secrets[account] else { return ["status": "missing"] }
+    return ["status": "ok", "value": value]
   }
 
   func set(_ account: String, _ secret: String?) -> Bool {

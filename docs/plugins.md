@@ -1,15 +1,93 @@
 # Plugins
 
-A plugin is a folder with a `plugin.json` that adds to Ardia without a restart: Ardia settings it sets and rows it adds
-to Settings, command bar entries, a page of its own that opens as a tab at `ardia://<name>`, a long-running helper
-program, browser events delivered to that program, tools the `ardia` command and other plugins can call, and commands
-it puts on your PATH. Issue #2462; programs and built-in plugins #2568.
+A plugin is a folder with a `plugin.json` that adds to Ardia without a restart. Plugin Architecture v2 (#3183) gives
+it the same reach Raycast extensions have, inside a browser: native views written in JSX (lists, details, forms,
+sidebar views, popovers), toolbar buttons, context-menu items, command bar entries and omnibox results, side panels,
+themes, settings rows (secrets included, kept in the Keychain), decide hooks that can rewrite or stop a navigation,
+tools the `ardia` command and other plugins can call, and commands it puts on your PATH. Issue #2462 began it;
+programs and built-in plugins are #2568.
 
 The rule behind the design: anything a first-party plugin needs becomes a public extension point here, never a private
-hook. AI features will ship as a plugin (#2463) through exactly these contributions.
+hook. AI features ship as a plugin (#2463) through exactly these contributions.
 
 Plugins run on macOS. Linux and Windows don't load them yet (`PLATFORM_FEATURES.plugins`): the Plugins pane says so,
 and the `ardia` command's plugin commands still install and list files there.
+
+## The shape of a v2 plugin
+
+```
+plugin.json          the manifest: what it adds, what it may touch, when it wakes
+dist/index.js        main: the plugin's code, run by ArdiaPluginHost (JavaScriptCore, out of Ardia's process)
+bin/helper           sidecar (optional): any program, for what JavaScript can't do
+themes/dusk.json     themes it offers
+page/index.html      a web page panel (optional), for a view JSX can't express
+```
+
+- **main** is a JavaScript file built against `@ardia/plugin-sdk`. Ardia runs it in `ArdiaPluginHost`, a small
+  helper app holding one JavaScriptCore context, started inside the same `sandbox-exec` profile as any helper and
+  always **offline**: it can't open a socket. Its only way out is Ardia's channel, and its `fetch` is Ardia's, limited
+  to the hosts in `permissions.network` (below).
+- **sidecar** is the v1 `process`: a long-running program of the plugin's own, with the same sandbox, supervision and
+  channel ([The sidecar](#the-sidecar)). A plugin may have main, a sidecar, or neither (settings only), never both:
+  a manifest that declares both is refused (`a plugin can declare main or sidecar, not both`).
+- **Views are native.** A plugin never draws pixels: its JSX renders through the SDK's reconciler into a tree of plain
+  nodes (`lib/pluginNodes.ts`), Ardia validates that tree and draws it with its own components, so a plugin's list
+  looks, scrolls, themes and answers keys like Ardia's own.
+
+## The SDK
+
+`@ardia/plugin-sdk` (`packages/plugin-sdk`) is what main imports. It ships its own JSX runtime
+(`@ardia/plugin-sdk/jsx-runtime`), a fiber reconciler and hooks, with no React dependency, so a bundle stays small.
+
+```tsx
+import { ardia, definePlugin, List, ActionPanel, Action, useState, useEffect } from "@ardia/plugin-sdk";
+
+function Releases() {
+  const [items, setItems] = useState<{ name: string; url: string }[] | null>(null);
+  useEffect(() => {
+    void ardia.net.fetch("https://api.github.com/repos/ardia-browser/plugins/releases").then((r) => setItems(r.json()));
+  }, []);
+  return (
+    <List isLoading={!items} searchBarPlaceholder="Filter releases">
+      {(items ?? []).map((r) => (
+        <List.Item key={r.url} title={r.name} actions={<ActionPanel><Action.OpenInBrowser url={r.url} /><Action.CopyToClipboard content={r.url} /></ActionPanel>} />
+      ))}
+    </List>
+  );
+}
+
+definePlugin({ views: { releases: Releases }, commands: { refresh: async () => ardia.ui.toast("Refreshed") } });
+```
+
+- **Components**: `List` (`List.Section`, `List.Item`), `Detail` (Markdown), `Markdown` (headings, lists, quotes, code fences, rules, bold, italic, inline code and http/https links), `Form` (`Form.TextField`,
+  `Form.PasswordField`, `Form.Toggle`, `Form.Select`), `SidebarView` (`SidebarView.Section`, `SidebarView.Item`),
+  `Popover`, `ActionPanel`, `Action` (`Action.OpenInBrowser`, `Action.CopyToClipboard`), `WebView` (one of the
+  plugin's own files), and the small pieces `Box`, `Text`, `Badge`, `Button`, `Divider`, `EmptyState`, `Progress`.
+- **Action shortcuts.** `shortcut` on an `Action`, `Action.OpenInBrowser` or `Action.CopyToClipboard` is `cmd` plus
+  any of `ctrl`, `opt` (`option`, `alt`) and `shift`, joined by `+`, then one key: `a`–`z`, `0`–`9`, one of `` - = [ ]
+  \ ; ' , . / ` ``, `space` or `f1`–`f12` (`"cmd+shift+e"`, `"cmd+k"`, or in glyphs `"⇧⌘E"`). `cmd` is Ctrl on Windows
+  and Linux. Ardia drops a shortcut it can't read and one that would shadow a key it needs: no `cmd` (a plain or
+  shifted key types into a field), `shift` with a digit or punctuation (a different character on each layout), any
+  `cmd` shortcut on `q`, `w`, `t`, `n`, `h` or `m`, editing and system keys (`cmd+a`, `cmd+c`, `cmd+v`, `cmd+x`,
+  `cmd+z`, `cmd+shift+z`, `cmd+shift+v`, `cmd+opt+shift+v`, `cmd+,`, `` cmd+` ``, `cmd+space`, `cmd+ctrl+space`,
+  `cmd+opt+space`, `cmd+ctrl+f`, `cmd+ctrl+q`), and, at the moment of the press, any shortcut one of Ardia's own
+  commands holds, which is most `cmd` letters (rebinding a command frees its key; Settings › Shortcuts lists them).
+  Escape, Return, Tab, the arrows and Delete aren't keys a shortcut can use. The shortcuts that work are the active
+  ones: in a `List`, the selected item's actions, then the list's own; in a `Detail` or `Form`, the actions it shows,
+  ahead of any nested inside it; the first action in a panel wins a key two of them declare. A press runs the action
+  exactly as a click does, and works while typing in the list's search field or a form field, and in a command view
+  wherever its focus is. Action menus show each shortcut beside its action, and action buttons show it as their
+  tooltip.
+- **Hooks**: `useState`, `useReducer`, `useEffect`, `useLayoutEffect`, `useMemo`, `useCallback`, `useRef`,
+  `useContext`, `useId`, and `useSurface` (which surface and window a view is in).
+- **`ardia`**: `tabs`, `workspace`, `activePage`, `commands`, `tools`, `storage`, `secrets`, `net.fetch`, `programs`, `ui`
+  (`toast`, `quickPick`, `inputBox`, `confirm`), `panels`, `toolbar` (title, badge, icon updates), `omnibox`, `decide` and `pages`.
+  Each call is a request on the channel and is held to the manifest's permissions on Ardia's side; the SDK never
+  decides what a plugin may do.
+- **Rendering.** The reconciler batches a commit into one `surface.render` with the whole tree; Ardia checks it
+  (node types, prop types, sizes, at most a few thousand nodes) and draws it. Events come back as
+  `surface.event {handlerId, args}`, so a handler is a plain function in the plugin. A surface whose view throws shows
+  the error in place, not a blank panel.
 
 ## Where they live
 
@@ -76,14 +154,18 @@ removed, unless they're always on (below). The command-line plugin, `cli`, is th
 builds on; `programs.test.mjs` and `adoption.test.mjs` pin it.
 
 - `useOfficialPlugins(): OfficialPlugin[]`, a hook, and `officialPlugins(store, supported?, showComingSoon?)`, its pure
-  form. `OfficialPlugin` is `{ name, title, blurb, icon, version, switchable, state }` (`switchable`: built in but not always on, so it has an off switch), `state` one of `"available"`, `"installed"`,
-  `"comingSoon"`, `"unsupported"`. The list is `OFFICIAL_CATALOGUE` (the plugins Ardia means to ship: `cli` and `apple-passwords` today) plus
+  form. `OfficialPlugin` is `{ name, title, blurb, icon, version, example, switchable, state }` (`switchable`: built in but not always on, so it has an off switch; `example`: the first `programs[].example` its manifest gives), `state` one of `"available"`, `"installed"`,
+  `"comingSoon"`, `"unsupported"`. The list is `OFFICIAL_CATALOGUE`, built from `apps/browser/official-plugins.json`
+  (`state/plugins/officialPin.ts`: each pinned plugin's `name`, `title`, `blurb` and `icon`), plus
   any other built-in plugin whose manifest says `official`; title, blurb and icon come from the bundled manifest when
   there is one. Only a built-in plugin can claim `official`, so a plugin you install never shows here. Where plugins
   aren't supported (Linux and Windows today, `PLATFORM_FEATURES.plugins`), or the app has no bundled copy, every entry
   is `"unsupported"`; Linux's own `ardia` installer (Settings › Advanced) is unchanged.
-- `COMING_SOON` entries (the AI plugin) show as `"comingSoon"` only while their experiment is on
-  (`officialPluginsAi`, off by default), and never install.
+- `COMING_SOON` entries (the pin's `comingSoon`, the AI plugin today) show as `"comingSoon"` only while their
+  experiment is on (`officialPluginsAi`, off by default), and never install.
+- The pin also says which plugins onboarding ticks (`"preselected": true`, `PRESELECTED_PLUGINS`) and which old Settings
+  anchors still lead to a plugin's row (`"anchorAliases": ["commandLine"]` resolves `plugins.commandLine` to
+  `plugins.cli`). `scripts/release/official-plugins.py check` validates every field.
 - `installOfficialPlugin(name, { showSheet? }): Promise<{ ok: boolean; reason?: string }>` opens the consent sheet (in
   Settings › Plugins on that plugin, unless `showSheet: false` and the caller shows `PluginConsentSheet` itself) and
   settles when it's decided, as `InstallResult = { ok: true } | { ok: false; reason: string; cancelled?: true }`:
@@ -105,11 +187,12 @@ state and the attempt in progress to what a row shows (`officialView.test.mjs`).
 - **Settings › Plugins › Official** (`components/settings/panes/OfficialPlugins.tsx`), above the other plugins, which no
   longer list an official one twice. Text is kept to a minimum: a heading, and per row the icon, the seam's title and
   its blurb on one line. **Install…** (**Turn On…** for a switchable plugin, matching its sheet) opens the consent sheet in place and the row turns to installed with no reload; a switchable plugin that's on reads "On" beside its title, with a switch that turns it off;
-  installed reads "Installed · <version>" beside the title, with a first command in mono and **Copy** (where the
+  installed reads "Installed · <version>" beside the title, with its manifest's first `programs[].example` in mono and **Copy** (where the
   command lives is on the plugin's own page, behind the chevron); a failure shows its reason with **Try Again**;
   coming soon is the title and "Coming soon"; unsupported shows nothing. The list below has one short line, and its
   empty state is "None yet" with **How to add one**, which shows the folder and the `ardia plugins install` hint.
-  Settings search finds it as "Command Line" and "Official plugins".
+  Every pinned or coming-soon plugin has its own generated row, `plugins.<name>`, which Settings search finds by its
+  title, its blurb and the bundled manifest's `keywords`; "Official plugins" finds the section.
 - **Onboarding** has a step between Make it home and the outro (`components/onboarding/PluginsStep.tsx`,
   `state/onboarding/pluginsStep.ts`). The command line starts ticked. **Install** shows the same consent lines inside
   onboarding (`consentLines`, with the same changed-while-open guard) and nothing is installed until **Install** there
@@ -117,57 +200,128 @@ state and the attempt in progress to what a row shows (`officialView.test.mjs`).
   Continue. When everything is already installed the step says so, and when nothing can be offered (Linux, Windows,
   the web demo, a build with no bundled copy) the step is left out.
 - **Counts** (`state/telemetry/officialPluginCounts.ts`, in the hourly `usage_counts`):
-  `official_plugin_<onboarding|settings>_<shown|installed|skipped|failed>_<cli|ai|other>`. `shown` counts a plugin that
+  `official_plugin_<onboarding|settings>_<shown|installed|skipped|failed>_<name>`, where `<name>` is any pinned or
+  coming-soon plugin's name with `-` as `_` (so `_cli` and `_ai` stay as they were) and `other` for anything else. `shown` counts a plugin that
   could still be chosen, `skipped` is onboarding only, and a closed consent counts as nothing. Watch
   `…_onboarding_installed_cli` against `…_onboarding_shown_cli` for the take-up, and `…_failed_cli` for a regression.
 - On the control socket, `plugins.official` returns the same list; `plugins.enable` on an official plugin opens its
   sheet and answers `{"waiting": true}`.
+
 
 ## The manifest
 
 ```json
 {
   "$schema": "../../plugin.schema.json",
-  "manifest": 1,
+  "manifest": 2,
   "name": "example",
   "title": "Example",
   "description": "One line on what it does.",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "requires": "0.2.50",
-  "permissions": ["tabs", "commands", "network"],
-  "settings": {
-    "defaults": { "commandBarStart": { "openTabs": { "limit": 5 } } },
-    "rows": [
-      { "key": "greeting", "title": "Greeting", "type": "text", "default": "Hello" },
-      { "key": "loud", "title": "Shout", "type": "toggle", "default": false },
-      { "key": "side", "title": "Open Beside On", "type": "choice", "default": "right", "choices": [{ "value": "left", "title": "Left" }, { "value": "right", "title": "Right" }] }
-    ]
-  },
-  "commands": [
-    { "name": "say-hello", "title": "Say Hello", "icon": "hand.wave", "keywords": ["greet"], "tool": "hello" },
-    { "name": "beside", "title": "Open Example Beside This Tab", "open": "split", "context": true, "sideSetting": "side" }
-  ],
-  "page": { "title": "Example", "icon": "sparkles", "file": "page/index.html" },
-  "process": { "run": ["/usr/bin/python3", "helper.py"], "memoryMB": 256 },
-  "programs": [{ "name": "example-tool", "path": "bin/example-tool" }],
-  "hooks": ["tab.activated", "tab.navigated"],
-  "tools": [{ "name": "hello", "title": "Say hello", "description": "Greets someone.", "timeout": 10 }]
+  "icon": "sparkles",
+  "main": "dist/index.js",
+  "memoryMB": 128,
+  "activationEvents": ["onUrl:github.com"],
+  "permissions": { "tabs": "read", "activePage": true, "storage": true, "secrets": true, "network": ["api.github.com"] },
+  "contributes": {
+    "commands": [
+      { "name": "releases", "title": "Show Releases", "icon": "shippingbox", "view": "releases" },
+      { "name": "refresh", "title": "Refresh Releases" },
+      { "name": "beside", "title": "Open Example Beside This Tab", "open": "split", "context": true, "sideSetting": "side" }
+    ],
+    "menus": { "tab": [{ "command": "refresh", "when": "urlHost ~= '*.github.com'" }] },
+    "toolbar": [{ "id": "status", "title": "Example", "icon": "sparkles", "view": "status" }],
+    "sidebarViews": [{ "id": "feed", "title": "Feed", "icon": "list.bullet" }],
+    "panels": [
+      { "id": "chat", "title": "Chat", "icon": "bubble.left", "mode": "sidecar", "view": "chat", "retainContext": true },
+      { "id": "default", "title": "Example", "icon": "sparkles", "mode": "tab", "file": "page/index.html" }
+    ],
+    "omnibox": [{ "id": "gh", "title": "GitHub", "keyword": "gh" }],
+    "themes": [{ "id": "dusk", "title": "Dusk", "file": "themes/dusk.json" }],
+    "hooks": ["tab.activated", "tab.opening"],
+    "settings": {
+      "defaults": { "commandBarStart": { "openTabs": { "limit": 5 } } },
+      "rows": [
+        { "key": "token", "title": "GitHub Token", "type": "secret", "placeholder": "ghp_…" },
+        { "key": "limit", "title": "Releases Shown", "type": "number", "default": 10, "min": 1, "max": 50, "step": 1 },
+        { "key": "side", "title": "Open Beside On", "type": "choice", "default": "right", "choices": [{ "value": "left", "title": "Left" }, { "value": "right", "title": "Right" }] }
+      ]
+    },
+    "tools": [{ "name": "hello", "title": "Say hello", "description": "Greets someone.", "timeout": 10 }],
+    "programs": [{ "name": "example-tool", "path": "bin/example-tool" }]
+  }
 }
 ```
 
-- `manifest` is the schema version. A file without it is version 0, the settings-only plugins of
-  github.com/ardia-browser/plugins (`name`, `title`, `description`, `requires`, `settings`, `reset`), and reads as
-  version 1 with its `settings` as `settings.defaults` (`reset` is the installer's and Ardia ignores it). A newer
-  version than Ardia knows is listed as "needs a newer Ardia" and never loads. The migration is
-  `lib/pluginManifest.ts`'s `MIGRATIONS`, like every saved document (`docs/conventions.md`).
-- `name`: 1 to 40 lowercase letters, digits and dashes, starting with a letter or digit. `title` up to 60 characters,
-  `description` up to 200, both with control and bidi characters refused. `version` and `requires` are
-  `MAJOR.MINOR.PATCH` with an optional `-suffix`; a plugin that requires a newer Ardia doesn't load.
-- Unknown keys anywhere are errors, so a typo never silently does nothing. Every problem is reported at once, with
-  its path: `plugin.json: commands[0].tool: hello isn't one of this plugin's tools`. A manifest with any problem
-  doesn't load; the Plugins pane shows the problems and `ardia plugins check` prints them.
-- The app writes `plugin.schema.json` beside `config.schema.json` (`docs/config.md` › Schemas), generated from the same
-  rules, for editors and the CLI. The app validates with its own code.
+- `manifest` is the schema version, now 2. A newer version than Ardia knows is listed as "needs a newer Ardia" and
+  never loads. Unknown keys anywhere are errors, so a typo never silently does nothing. Every problem is reported at
+  once, with its path (`plugin.json: contributes.commands[0].tool: hello isn't one of this plugin's tools`); a
+  manifest with any problem doesn't load, the Plugins pane shows the problems and `ardia plugins check` prints them.
+- `name`: 1 to 40 lowercase letters, digits and dashes, starting with a letter or digit, and the plugin's folder
+  name. `title` up to 60 characters, `description` up to 200, with control and bidi characters refused. `version` and
+  `requires` are `MAJOR.MINOR.PATCH` with an optional `-suffix`; a plugin that requires a newer Ardia doesn't load.
+  `icon` is an SF Symbol.
+- `main` is a `.js`, `.mjs` or `.cjs` file inside the plugin's folder; `memoryMB` (only with `main`) is the host's
+  watchdog threshold. `sidecar` is `{run, memoryMB}` as below. A command with no action of its own (`tool`, `open`,
+  `view`, `panel`) is handled by main, so it needs one.
+- `keywords` (v2): up to 12 words of up to 40 characters that find the plugin's row in Settings search.
+- `telemetry` (v2): `{ "title": "…", "items": ["…"] }` (1 to 16 items of up to 800 characters), what the plugin's own
+  programs collect. Settings › Privacy › What's Sent shows it under its title for every installed plugin that has one,
+  labelled as the plugin's own, under its own heading, "From plugins you added" ("What each plugin says its own programs
+  send. Ardia doesn't send it, and the switch above doesn't control it"). An official plugin whose pinned release has no block yet uses the pin's
+  `telemetry` (the command line's "The ardia command" today), labelled as described by a plugin that ships with Ardia;
+  that block also shows while an old standalone install of it is still in place, asked again each time What's Sent
+  opens. The pin's `example` is likewise the
+  first command shown until the plugin's manifest gives one. Ardia's own counters
+  about what a plugin does (the `cli_socket_*` and control-pill counts, for one) stay in Ardia's own copy.
+- The app writes `plugin.schema.json` beside `config.schema.json` (`docs/config.md` › Schemas), generated from the
+  same rules, for editors and the CLI. The app validates with its own code.
+
+### Migrations: 0 → 1 → 2
+
+Old manifests keep working with no edit, through `MANIFEST_MIGRATIONS` in `lib/pluginMigrations.ts`, like every saved
+document (`docs/conventions.md`):
+
+- **0 → 1.** A file with no `manifest` is version 0, the settings-only presets of github.com/ardia-browser/plugins
+  (`name`, `title`, `description`, `requires`, `settings`, `reset`): its `settings` becomes `settings.defaults`, and
+  `reset` (the old installer's) is dropped.
+- **1 → 2.** `commands`, `tools`, `hooks`, `settings`, `programs` and `passwordManager` move into `contributes`;
+  `page` becomes the panel `{"id": "default", "mode": "tab", …}`; `process` becomes `sidecar`; and the permission
+  list becomes the object (`"tabs"` → `"tabs": "read"`, `"network"` → `"network": "*"`, any other name → `true`).
+  A manifest that already has `contributes`, `main` or `sidecar` is taken as v2 whatever its number says.
+- Problems in a migrated manifest are reported in its own words (`v1Problem`): a v1 plugin hears about `page` and
+  `process`, not `contributes.panels[0]` and `sidecar`.
+- The approval is the hash of the file's text, so a migration never asks for a new approval. The bundled `cli` and
+  `apple-passwords` plugins ship v1 manifests today and load through this path unchanged; `keywords`, `telemetry`,
+  `programs[].example` and `programs[].claim` need manifest 2.
+
+### activationEvents
+
+When main starts. Without the key Ardia derives the list from the contributions (`derivedActivationEvents`):
+`onCommand:<name>` for each command, `onView:<id>` for each sidebar view, `onPanel:<id>` for each view panel,
+`onToolbar:<id>`, `onOmnibox:<id>`, `onMenu:<slot>` for each menu slot used, and `onStartupFinished` when the plugin
+has hooks (or only a sidecar). Given explicitly, each entry is `*` or `onStartupFinished` (at launch), one of those
+prefixes, `onEvent:<event>` or `onUrl:<host pattern>` (when a tab in a normal window goes to a matching host). A
+plugin that isn't needed yet costs nothing: no host process, no memory. The first use waits for it to start
+(`ensurePluginActivated`, a few hundred ms cold) and a failure says why (`PluginActivationError`).
+
+### permissions
+
+| Key | Values | What it allows |
+| --- | --- | --- |
+| `tabs` | `read`, `write`, `false` | `read`: list windows and tabs, subscribe to tab, window and page events, URLs without their query and fragment. `write`: also open, move and close tabs, and `apply` with only `open` (no `group` or `profile`), `tab.close` and `tab.activate`; its answer's URLs are cut the same way unless `fullUrls` |
+| `fullUrls` | `true` | Those URLs in full (needs `tabs`) |
+| `activePage` | `true` | Read the text and selection of the page you're on when you run one of its commands (`plugin_page_reads`). The read is refused once you switch tabs or the page navigates after that use |
+| `workspace` | `true` | See and arrange every tab, group and folder (needs `tabs: write` and `fullUrls`) |
+| `commands` | `true` | Run Ardia's commands, the same ones with the same refusals as the `ardia` command (`docs/automation.md` › Which commands) |
+| `storage` | `true` | A private key-value store in `PluginData/<name>/storage.json`, at most 2 MB in all and 256 KB a value (`plugin_storage_writes`). `storage.get` answers `{found: true, value}` or `{found: false}`. A file Ardia can't read or parse, an empty one included, fails every call; Ardia never overwrites it with an empty store |
+| `secrets` | `true` | Keychain items of its own (`ardia.plugin.<name>.<key>`, at most 64, 16 KB each; `plugin_secret_writes`). If the Keychain's list of them can't be read, Ardia keeps it, fails secret writes and deletes, and says removing the plugin left its secrets |
+| `network` | `false`, `"*"`, or 1 to 32 host patterns | main's `fetch` reaches only these hosts (`*.example.com` included); a sidecar gets the network as in v1. A web view the plugin shows (its page, a `file` panel) goes online only with `"*"`: WebKit's traffic can't be held to a list of hosts, so with a list it stays offline and the plugin reaches its hosts through `net.fetch` |
+| `control` | `true` | Turning it on turns on `cliControl`, unless you turned control off yourself: an Off you chose wins, and the consent sheet points to the switch, Settings › Advanced › Let programs control Ardia |
+
+The old list form (`["tabs", "network"]`) still reads, as above. Contributions grant their own reach and are shown on
+the consent sheet too: a toolbar button, a sidebar view, a context-menu item, a theme, a decide hook.
 
 ### settings
 
@@ -175,64 +329,123 @@ state and the attempt in progress to what a row shows (`officialView.test.mjs`).
   allowlist, `docs/config.md`), with the same checks, so a plugin can't turn on CLI control, add a search destination
   or change which engine shows a site. When you turn the plugin on, each default that `config.json` doesn't set is
   applied through `updateSettings` and the value it replaced is remembered; turning the plugin off puts that value back
-  unless you changed the setting since or `config.json` now sets it. When two plugins set the same setting, turning either off leaves the other's
-  value or, once both are off, the one from before either. `config.json` always wins. `omniboxProviders` and
-  `launchActions` have approvals of their own (`docs/automation.md` › Approvals), so a plugin can't set them.
+  unless you changed the setting since or `config.json` now sets it. When two plugins set the same setting, turning
+  either off leaves the other's value or, once both are off, the one from before either. `config.json` always wins.
+  `omniboxProviders` and `launchActions` have approvals of their own (`docs/automation.md` › Approvals), so a plugin
+  can't set them.
 - `rows` (at most 20) add rows to the plugin's page in Settings › Plugins: `toggle` (boolean), `text` (up to 200
-  characters, `default` a string) and `choice` (2 to 12 `choices`, `default` one of their values). `key` is 1 to 40
-  letters, digits, `-` and `_`. Values are kept in `plugins.json` and sent to the helper (below). They are the plugin's
-  own: nothing in Ardia reads them.
+  characters), `number` (with optional `min`, `max` and `step`; `default` between them), `choice` (2 to 12 `choices`,
+  `default` one of their values) and `secret`. `key` is 1 to 40 letters, digits, `-` and `_`; `description` is an
+  optional second line. Values are kept in `plugins.json` and sent to main and the sidecar; nothing in Ardia reads them.
+- A **`secret`** row is a password field whose value never touches `plugins.json`, logs or telemetry: it is a Keychain
+  item (`ardia.plugin.<name>.<key>`, `state/plugins/secrets.ts`), the row shows only whether it is set, and main reads
+  it with `ardia.secrets.get(key)` (needs `secrets`). Removing the plugin deletes its items.
 
 ### commands
 
-At most 20. Each adds a command bar entry titled `title` (up to 60 characters), found by its title, `keywords` (up to 8,
-each up to 40 characters) and the plugin's title, drawn with `icon` (an SF Symbol name, default `puzzlepiece`). A
-command does one of two things:
+At most 20. Each adds a command bar entry titled `title` (up to 60 characters), found by its title, `keywords` (up to
+8) and the plugin's title, drawn with `icon` (an SF Symbol, default `puzzlepiece`), with an optional `when` clause
+(below). Plugin commands have no keyboard shortcut of their own; a manifest with `shortcut` is refused. A command does
+one thing:
 
-- `"tool": "<name>"` calls one of the plugin's own tools with `input` (an object, default `{}`), so it needs a
-  `process`. A result with a `message` (up to 200 characters) shows as a toast.
-- `"open": "tab"` or `"open": "split"` opens the plugin's page: as a tab (the one already open in that window, else a
-  new one), or in Split View beside the current tab, on `side` (`left`, `right`, the default, `top` or `bottom`), or on
-  the side a `choice` row named by `sideSetting` holds (its values must be sides). `"context": true` hands the page the
-  current tab (its id, title and URL, without the query and fragment unless the plugin has `fullUrls`), and needs
-  `tabs`. `path` (`/history`, `/chats/new?mode=split`) opens the page there.
+- `"view": "<id>"` shows one of main's views in the command bar, as Raycast does.
+- `"panel": "<id>"` opens one of its panels.
+- `"tool": "<name>"` calls one of the plugin's tools with `input`. A result with a `message` shows as a toast.
+- `"open": "tab"` or `"open": "split"` opens the page panel, as in v1: `side`, `sideSetting`, `context` (needs `tabs`)
+  and `path` work as they did.
+- nothing of the above: main handles it (`definePlugin({ commands: { <name>: fn } })`).
 
-A plugin with a `page` also gets "Open `<page title>`" for free. Plugin commands aren't offered in private windows, and a page
-is never handed a private tab or a Peek: the same tabs hooks and the `ardia` command never see (`docs/automation.md`).
+Plugin commands aren't offered in private windows, and nothing a plugin gets ever names a private tab or a Peek: the
+same tabs hooks and the `ardia` command never see (`docs/automation.md`).
 
-### page
+**`when` clauses** (`lib/pluginWhen.ts`) decide where a command, menu item shows: `&&`, `||`, `!`, `==`, `!=` and
+`~=` (a glob) over `urlHost`, `urlScheme`, `isPinned`, `isInGroup`, `isSplit`, `isActive` and
+`tabCount`. In the command bar the clause is checked against the window's current tab, and a command whose clause
+doesn't hold isn't offered. A clause is checked again when the item runs, so a stale menu or command bar never runs a
+command where it doesn't belong.
 
-The plugin's page is a real tab at `ardia://<name>`, like `ardia://history`: it sits in the sidebar, takes a place in
-Split View and in tab groups, moves between windows and comes back with the session. `title` (up to 40 characters)
-names the tab and `icon` its command bar entry. Its content is static files from the plugin's folder:
+### menus
 
-- `"file": "page/index.html"`: the page, served as `ardia-plugin://<name>/page/index.html` with everything it loads
-  from beside it.
-  Only regular files inside the approved plugin folder are served, and only while that folder still holds the approved
-  `plugin.json`: for every file Ardia opens the folder, checks its identity and the manifest's hash, and opens the file
-  one path component at a time from that same opened folder; a link anywhere in its path is refused. An edited
-  manifest stops the page's files at once, before the folder watcher reacts. At most 10 MB each, with their type from the
-  extension; anything else is a 404.
+`contributes.menus.<slot>`, with slots `tab` (a tab's context menu) and `group` (a group's or folder's): each entry
+names one of the plugin's commands, with an optional `title`, `icon` and `when`. They show as a section above Close in
+that context menu (`state/plugins/menus.ts`); more than 2 from one plugin fold into a submenu named after it. Never in a
+private window's or an incognito group's menus. Running one from a tab hands the command `{from: "menu", slot: "tab",
+url, title, tabId, windowId}`, with the URL cut to the plugin's permissions; from a group, `{from: "menu", slot:
+"group", groupId, title, tabCount, windowId}`, with `when` checked against the group's shown tab (`plugin_menu_runs`).
 
-A page tab can have a path, `ardia://<name>/<path>?<query>` (`ardia://ai/history`, `ardia://ai/chats/42`): each path
-is its own tab, and opening one that's already open in the window goes to it. A file page gets the path and query as
-`ardiaPath`. When a command hands the page a tab, the page reads it as `window.ardia.context`, a JSON object
-`{"tabId", "url", "title"}` with its URL cut to the plugin's permissions, set before the page's own scripts run; a new
-one fires a `context` event on `window.ardia`. It is never in the page's URL or in any request. A page talks to its own
-helper through Ardia ([Pages and their helper](#pages-and-their-helper)); it never needs a port. The context belongs to that page tab, that plugin and that approval: it goes when the tab leaves the
-address it was opened at, and when the plugin is turned off, changes or is approved again. Navigation inside the page doesn't change the
-tab's address, title or back and forward yet (follow-up issue). While the plugin is off, changed or not running, the tab stays and says so, with a way to Settings; it is
-never sent to Chrome. A plugin with a page can't take the name of one of Ardia's or Chrome's own pages (`history`,
-`settings`, `flags`, `extensions`, … `lib/pluginNames.ts`).
+### toolbar
 
-### process
+`contributes.toolbar`: buttons beside the extensions in the toolbar (and in the sidebar's address field), each with an
+`id`, `title`, `icon`, optional `tooltip`, and either a `command` or a `view` that opens as a popover anchored to the
+button. main can update a button's title, icon and badge live (`ardia.toolbar.update`). The URL field gives them room,
+so nothing overlaps (`plugin_toolbar_runs`).
 
-`run` is the helper's argv: its first item is a file in the plugin's folder (`bin/helper`), an absolute path
+### sidebarViews
+
+`contributes.sidebarViews`: a native section in the sidebar under the tab list, drawn from main's `SidebarView`
+tree (`SidebarView.Section`, `SidebarView.Item`). Never in a private or incognito profile's sidebar.
+
+### panels
+
+`contributes.panels`, each with an `id`, `title`, `icon`, a `mode` and either a `view` (native) or a `file` (a web page
+from the plugin's folder):
+
+- `sidecar`: a panel beside the page on the window's right, like Arc's and Dia's sidebars. `retainContext: true` keeps
+  it mounted, state and scroll included, when it is hidden, so a chat survives switching away (`plugin_panel_opens`).
+  Closing a window drops its panels.
+- `tab` and `split`: the page tab at `ardia://<name>` ([The page](#the-page)); `side` goes with `split`.
+
+A popover is a toolbar button's `view`, not a panel mode. Panels, popovers, command views and the surfaces in them
+never open in a private window.
+
+### omnibox
+
+`contributes.omnibox`: result providers for the command bar. With a `keyword` (`gh`), typing it then a space hands the
+rest of the query to main; with `global: true` main is asked for every query, within the omnibox's deadline. A
+provider has one or the other, not both. Queries in private windows never reach a plugin (`plugin_omnibox_queries`).
+
+### themes
+
+`contributes.themes`: theme files in the format of `docs/config.md` › Themes, listed by `pluginThemes()` with the
+plugin's title, and picked in `config.json` as `"theme": "plugin:<plugin>/<id>"`. The file is read through the
+approved folder like a page's files, so a changed plugin stops its theme until it is approved again; turning the plugin
+off returns to Ardia's own colours, and the problem shows in the config toast.
+
+### hooks
+
+Events from Ardia's automation event table (`docs/automation.md` › Events) delivered to main (`ardia.on`) or the
+sidecar (`subscribe`). Every event is listed here, so it shows on the consent sheet. Events about windows, tabs, pages,
+media, Peek, pins, splits and profiles need `tabs`.
+
+**Decide hooks.** `tab.opening`, `link.opening` and `permission.requested` (with `tabs`) let a plugin answer before
+Ardia acts: `{cancel: true}` or `{url}` for an opening, `{drop: true}` or `{profile, open}` for a link from another
+app, `{permission: "deny"}` for a permission prompt. The rules:
+
+- Ardia's own `hooks.json` decide hooks and Air Traffic rules come first; a plugin is asked only when they leave the
+  decision open.
+- Never for a private window, an incognito profile or a Peek.
+- Only plugins already running are asked: a decide hook never starts one. Each has at most 250 ms (less when the
+  event's own deadline is shorter); one that doesn't answer in time counts as no answer
+  (`plugin_decide_timeouts`) and the navigation goes on.
+- When more than one plugin answers, the first in plugin order wins.
+- URLs are cut to the plugin's permissions, as everywhere.
+
+### tools
+
+At most 32. A tool is an action main or the sidecar performs on request: `name`, `title`, `description` (up to 200
+characters), `timeout` in seconds (1 to 300, default 30). Callers: the plugin's own commands, the `ardia` command
+(`ardia plugins call`), and other plugins (`tools.call`). Input and result are JSON, at most 1 MB.
+
+### sidecar
+
+```json
+"sidecar": { "run": ["/usr/bin/python3", "helper.py"], "memoryMB": 256 }
+```
+
+`run` is the sidecar's argv: its first item is a file in the plugin's folder (`bin/helper`), an absolute path
 (`/usr/bin/python3`), or a bare name found on `/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin`.
 At most 32 items, each up to 1,024 bytes, no NUL. `memoryMB` (64 to 4,096, default 1,024) is a watchdog
-threshold, not a hard cap: Ardia checks the helper's own footprint every 10 seconds and stops it when it is over,
-so a helper can go past it between checks, and the processes it starts aren't counted. See [The helper](#the-helper).
-
+threshold, not a hard cap. See [The sidecar](#the-sidecar).
 What the approval pins is the plugin's root folder, not the files in it. A program in the plugin's folder is checked
 through the approved, opened folder (one path component at a time, no links, an executable file) and started as
 `./bin/helper` with that opened folder as its working directory, so a folder swapped in for the approved one never
@@ -246,8 +459,29 @@ installed, like a hook's program in `hooks.json`.
 ### programs
 
 At most 4. Each is a command Ardia puts on your PATH while the plugin is on: `name` (like a plugin's name) is the
-command and `path` an executable file in the plugin's folder. Only the `cli` plugin may use the name `ardia`. Ardia never
-runs a plugin's program itself, with one exception for built-in plugins:
+command and `path` an executable file in the plugin's folder. Two more keys need manifest 2:
+
+- **`example`**: a command to try, up to 120 characters, shown with **Copy** on an official plugin's Settings row once
+  the program is on PATH (`ardia tabs` for the command line).
+- **`claim: true`** (built-in plugins only): reserves the name. Claims aren't read from whatever is listed: the release
+  writes a program registry, `{ "version": 1, "claims": { "<program>": "<owner>" }, "legacyInstalls": [...] }`, from
+  the pinned plugins' verified manifests plus the pin's own `reservedPrograms` (`scripts/release/official-plugins.py
+  registry`, which fails when two built-ins claim one name, when a reserved name isn't a program the bundled owner
+  declares, or when a reservation would be lost) into `Info.plist` as `ArdiaProgramRegistry`, beside the digests and
+  covered by the same signature; `verify.sh` runs `verify-registry`, which recomputes it and refuses a build whose
+  registry lost a pinned reservation. `reservedPrograms` keeps `ardia` the `cli` plugin's while its pinned release
+  still ships a manifest 1 with no `claim`. Listing (`state/plugins/appChecks.ts`, given the registry by native `programRegistry()`)
+  and the native linker (`ProgramRegistry` in `PluginCore/PluginProgramRegistry.swift`) both consult it: a claimed name
+  stays reserved while its owner is off, uninstalled or missing, any other plugin naming it doesn't load ("ardia
+  belongs to Ardia's built-in cli plugin"), and a built-in's `claim` that the registry doesn't list is a problem too.
+  A registry that is damaged, disagrees with a bundled manifest, or is missing from an app that bundles plugins fails
+  closed: no program is linked at all, and Settings › Advanced › Programs on your PATH says the list is missing or
+  damaged. JS does the same: a missing native method, an answer of the wrong shape or `failClosed` stops every link
+  request before it reaches native. Only a test instance (a scratch data dir and not signed for
+  distribution) may do without one: it reads the bundle's `program-registry.json` (what `official-plugins.py bundle`
+  writes beside the plugins), or else derives the claims from the bundled manifests (`bundledPlugins`).
+
+Ardia never runs a plugin's program itself, with one exception for built-in plugins:
 
 - **`afterUpdate`** (built-in plugins only; a plugin you install that declares it doesn't load): up to 4 argument lists,
   each 1 to 8 arguments, that Ardia runs the program with once per new version, in order, each with a 5 minute limit.
@@ -283,8 +517,7 @@ runs a plugin's program itself, with one exception for built-in plugins:
   comes first on PATH.
 - **Whose link.** A name that's free is linked without replacing anything, so two Ardias racing for it can't both
   win; all of this happens under one lock for the bin folder (`Programs/.bin.lock`). Ardia replaces only a link that
-  already points into that plugin's store, or, for the built-in `cli`
-  plugin only, into the old CLI home (`~/Library/Application Support/Ardia/CLI`, adopted below). A file, or a link to
+  already points into that plugin's store, or, for a registry legacy install's owner only, into that old home (below). A file, or a link to
   anywhere else, is left alone and the plugin's page says so ("~/.local/bin/ardia is someone else's; remove it to use
   this one"); a link into another plugin's store names that plugin. Two plugins that are on never share a command.
 - **Leases.** A program that wants its version kept while it runs writes `<its version folder>/.leases/<pid>` at start
@@ -298,10 +531,28 @@ runs a plugin's program itself, with one exception for built-in plugins:
   leased. At the first scan after launch, every link into the store whose plugin isn't on (or isn't there any more,
   however it went) comes off, and those plugins' stores are swept; a plugin that dropped a command loses that link
   the next time it links.
-- **Adopting the old install** (the built-in `cli` plugin): once `ardia` is linked, and while the old installer's lock
-  (`CLI/.lock`) is free, an old CLI home's `current` becomes a link to `Programs/cli/current`, so paths saved through it
-  keep working; only once it does are its old version folders deleted, each once no running `ardia` leases it; its
-  other files stay. `usage_counts.program_adoptions` counts it.
+- **Adopting an old install.** The program registry's `legacyInstalls` come from the pin's `legacyInstall` on a plugin
+  (`{ "program": "ardia", "root": "Library/Application Support/Ardia/CLI", "current": "current" }`); `root` must be one
+  of the known legacy app-data roots (`KNOWN_LEGACY_ROOTS` in `official-plugins.py`, `knownLegacyRoots` in Swift) and
+  `current` one file name. Native checks the exact old layout, walking from the home folder with no-follow checks on
+  every folder: `<root>/<current>` is a link to a version folder beside it, and that folder's `bin/<program>` is a
+  regular file. JS asks `legacyProgramsInstalled()` once per launch, which answers the owners found, and installs an
+  always-on owner that isn't installed yet (only while control is on; an Off you chose is never overridden). Once the
+  program is linked, and while the old installer's lock (`<root>/.lock`) is free, the old home's `current` becomes a
+  link to `Programs/<owner>/current`, so paths saved through it keep working; only once it does are its old version
+  folders deleted, each a real folder inside that home and once no running program leases it; its other files stay.
+  All of it goes through directory descriptors: the home is opened one folder at a time with `O_NOFOLLOW` (each owned
+  by you), the lock must be a regular file you own, and the lock is taken right after the new version is staged,
+  before anything changes, and held through the check of the old layout, Ardia's own `current`, the PATH link and the old
+  home's `current` alike. While the old installer holds it nothing is switched: Ardia's `current` stays where it was (so
+  PATH runs the same file, even through an old home already adopted), no link changes, native answers `busy`, and no
+  `afterUpdate` starts. The swap and the pruning are
+  `renameat`/`unlinkat` inside the opened folder. A link on PATH is taken over only when it points at the
+  exact old launcher, `<root>/<current>/bin/<program>`. Native answers `adoption`: `adopted`, `already` (it was
+  Ardia's), `failed` (the swap didn't take), `busy` (the old installer holds its lock) or `none`. A busy lock is tried
+  again, for an Install and an automatic adoption alike (6 times, 5 s apart), then shown with **Try Again**, as a
+  failed swap is. `plugin_adoptions` counts, and a waiting Install settles, only once native says `adopted` or
+  `already`; `usage_counts.program_adoptions` counts the old home switched over.
 - **Built-in plugins' files** are checked against the release: `scripts/release.sh` writes each built-in plugin's
   payload digest (`scripts/release/plugin-digest.py`: one line per file and folder, sorted, hashed) into the
   app's `Info.plist` as `ArdiaBuiltInPlugins`, which the app's signature covers. Ardia computes the same digest over its
@@ -310,13 +561,21 @@ runs a plugin's program itself, with one exception for built-in plugins:
   plugin with no digest; a test instance checks only the ones listed.
 - **Which Ardia writes there.** Only an Ardia on its real data folder links into `~/.local/bin` and the store. A test
   instance (`ARDIA_DATA_DIR`) links only into `ARDIA_INSTANCE cliBinDir=<dir>`, keeps its store in
-  `<data dir>/Programs`, adopts an old install only from `cliHome`, and runs `afterUpdate` with `HOME` at
-  `<data dir>/ProgramsHome`. Plugins belong to the data
+  `<data dir>/Programs`, adopts an old install only from `ARDIA_INSTANCE cliHome=<dir>` (the old home itself; the key keeps
+  its name for the test harnesses, and is passed to `afterUpdate` as `ARDIA_CLI_HOME`) and never from the real home, a
+  signed smoke instance included: it keeps the signed claims but adopts nothing without that scratch folder,
+  and runs `afterUpdate` with `HOME` at `<data dir>/ProgramsHome`. Plugins belong to the data
   folder, not to a profile, so one link serves every profile; two copies of Ardia.app on one data folder share
   `plugins.json`, their version folders never collide, and the last to link wins.
 - **Stale requests.** Each link and unlink takes the plugin's next generation when it's asked for, and does nothing when
   a newer one was asked for before it runs; its answer to JS is only whether it worked, which commands were linked or
-  refused and why, the bin folder, and whether an old install was adopted.
+  refused and why, the bin folder, whether an old install was adopted, and whether its lock was held (`adoptBusy`).
+- **A plugin's own status** (v2 host API): `programs.status` answers `{ state: "none" | "linking" | "linked" |
+  "failed", linked, failed: [{ name, reason }], binDir }` for the calling plugin's programs only, and `programs.relink`
+  links them again in place: the links stay on PATH while it runs and are replaced only where they changed, and an old
+  install's adoption is tried again (refused while a link is under way or when it has none). The SDK has them as
+  `ardia.programs.status()` and `ardia.programs.relink()`. Settings › Advanced › Programs on your PATH lists every plugin
+  that is on and owns programs, with the same status and **Try Again**.
 - **PATH line** (`PluginCore/PluginLoginPath.swift`). Each time a plugin's commands are linked into `~/.local/bin`,
   Ardia reads (never runs) the startup files your login shell reads and, when none has an uncommented line that puts
   `.local/bin` on PATH, appends one to that shell's login file:
@@ -338,21 +597,9 @@ runs a plugin's program itself, with one exception for built-in plugins:
   and the token server, while "Let the ardia command control Ardia" is on (`docs/automation.md`, `docs/cli.md`).
 
 Code: `PluginCore/PluginPrograms.swift` (the store, links and leases; `plugin-tests/PluginProgramsTests.swift`),
-`PluginProgramLinks.swift` (places, PATH, the signed digests), `state/plugins/programs.ts`.
+`PluginCore/PluginProgramRegistry.swift` (claims and legacy installs; `plugin-tests/PluginProgramRegistryTests.swift`),
+`PluginProgramLinks.swift` (places, PATH, the signed digests), `state/plugins/programs.ts`, `state/plugins/programRegistry.ts`.
 
-### hooks
-
-Events from Ardia's automation event table (`docs/automation.md` › Events) delivered to the helper while it subscribes
-to them. Every event the helper may subscribe to is listed here, so it shows on the consent sheet. Events about
-windows, tabs, pages, media, Peek, pins, splits and profiles need the `tabs` permission. `notification.shown` and the
-decide events (`tab.opening`, …) aren't available to plugins yet. Needs a `process`.
-
-### tools
-
-At most 32. A tool is an action the helper performs on request: `name` (like a command's), `title`, `description`
-(up to 200 characters), `timeout` in seconds (1 to 300, default 30). Callers: the plugin's own commands, the `ardia`
-command (`ardia plugins call`), and other plugins' helpers (`tools.call`). Input and result are JSON, at most 1 MB.
-Needs a `process`.
 
 ### passwordManager
 
@@ -382,7 +629,7 @@ declare one, and each group of profiles that shares browser data picks at most o
   set changes. A setup step that shows its QR code before any text field gets no offer for it. The URL, which holds the code's secret, stays in native code: the page script, JS and the prompt see
   an opaque token, single use, bound to the tab, frame, document, profile, provider generation and handler app.
 - `passkeys` (`system`): the plugin's Settings page shows whether Ardia may use the passkeys saved on this Mac, with
-  macOS's access request. It says plainly when the build lacks Apple's browser passkey entitlement (every build today).
+  macOS's access request. It's the same row as Settings › Engines › Passkeys, and says plainly when the build lacks Apple's browser passkey entitlement (a local build; release builds carry it).
 
 The plugin never sees a secret and never runs code in a page: the key, field detection and code detection are Ardia's
 own page script, switched on per profile from the manifest.
@@ -443,165 +690,6 @@ native verbs in `PasswordsModule.swift` (`passwords.setFieldProviders`, `showSys
 `otpauthHandler`, `setUpVerificationCode`) and the page events `fieldProviderOpened {via, shown}` and
 `verificationCodeFound {token, main}`. A plugin adds none of these; its manifest switches them on.
 
-### permissions
-
-| Permission | What it allows |
-| --- | --- |
-| `tabs` | The helper may call `windows` and subscribe to tab, window and page events. URLs come without their query and fragment |
-| `fullUrls` | Those URLs in full (needs `tabs`) |
-| `commands` | The helper may run Ardia's commands, the same ones and with the same refusals as the `ardia` command (`docs/automation.md` › Which commands) |
-| `network` | The helper may resolve names, connect to the internet and to servers on this Mac, and listen on any of this Mac's addresses. Without it, it can't connect, listen or accept connections at all, not even on this Mac |
-| `control` | Install or Turn On turns on `cliControl`, the ardia command's control of Ardia; the sheet says "Lets any program you run drive your tabs and pages, with your logins" (for an always-on plugin, "… while it's installed. There's no off switch"). On macOS there's no switch afterwards: while an always-on plugin that asks for it is installed, each launch turns it back on, and the control pill's Stop holds only until the next launch. For an `autoInstall` built-in plugin, its first link turns it on once unless you'd turned it off. `config.json` can't set it. |
-
-Contributions grant their own reach and are shown too: running a program, adding a page, adding commands, changing
-named Ardia settings, offering tools, becoming a password manager.
-
-## Turning a plugin on
-
-A plugin you install is off. Turning it on in Settings › Plugins shows what it gets, in words built from the
-manifest ("Runs a program in the background: /usr/bin/python3 helper.py", "Sees the address and title of your tabs",
-"Runs Ardia commands", "Connects to the internet", "Changes these settings: commandBarStart", "Adds a page you open as a tab", …). Turn On approves that exact manifest in that exact folder: Ardia keeps the SHA-256 of the manifest's text and the
-plugin folder's identity on disk (device and inode, after links) in `plugins.json`.
-
-- **A changed manifest needs a new approval.** If `plugin.json` changes while the plugin is on, the plugin stops (its
-  helper, page, commands, hooks and tools all go) and its row says it changed and asks you to review it. Settings
-  defaults stay applied until you turn it off.
-- Files beside the manifest (the helper's code, the page's files) aren't covered by the approval, like a hook's
-  program in `hooks.json`: whoever can write your config folder can already change what Ardia runs. The approval is
-  for the manifest's declarations, not for the code. A folder replaced on disk (`ardia plugins install --force` always
-  installs a new folder, then swaps it in) is a new folder, so the plugin needs a new approval even with the same
-  manifest and even when Ardia wasn't running; a running Ardia is also asked to turn it off first.
-- Ardia reads the manifest and the folder's identity through one opened folder, never two lookups by name. Each
-  helper start opens the folder again, checks that it is the approved one and that its `plugin.json` still hashes to
-  the approval, and starts the helper in that opened folder; the page's files are served from the approved folder
-  only. A folder swapped in between a scan and a start or a page load gets "changed since you approved it", not the
-  old approval.
-- `ardia plugins enable NAME` opens the same sheet in Ardia; it never turns a plugin on by itself.
-  Nothing else turns one on: the dev harness can reach the plugin store only in a Debug build, never in a Release
-  build that starts it for the perf probe.
-- Turning off: the helper stops, its page tabs say it's off, commands, rows, hooks and tools go, and settings defaults
-  go back.
-- Remove (Settings, or `ardia plugins remove`) turns it off (if that can't be saved, nothing is removed), waits for its
-  helper (and any run still stopping) to exit, then moves the folder to the Trash and deletes its
-  `PluginData` folder and its page's website data. While it is being removed, the plugin can't be turned on. An instance on a scratch `ARDIA_DATA_DIR` deletes the folder
-  instead, so tests never fill the Trash.
-
-`plugins.json` (version 1): `{ "plugins": { "<name>": { "enabled", "approved" (manifest hash), "values" (row values),
-"applied" ({ key: { value, previous, order, over } }) } } }`: `order` counts up as plugins are turned on, and
-`over` names the plugin whose value `previous` was (null when it was yours), so whichever leaves, the defaults unwind
-in the order they were applied and a value you set in between comes back. Turning a plugin on or off saves `plugins.json` first and changes
-settings only once it is saved, so a failed save changes nothing.
-
-## The helper
-
-- **Starts** when the plugin is turned on, at launch for plugins that are on (after the first window), and when you
-  press Restart. **Stops** when it is turned off, removed, its manifest changes, or Ardia quits: Ardia closes its
-  channel, sends SIGTERM to the helper's processes and SIGKILL 3 s later (at quit, after 1 s). The run being stopped
-  is retired the moment the stop is asked for, before its grace period: from then on Ardia takes no request from it,
-  and work it queued earlier (an `open`, say) finds it gone and does nothing. While Ardia is quitting it takes no
-  request from any helper; a cancelled quit takes them again. Starts, stops and removals of a plugin
-  go through one queue, each to its end (the helper spawned, the folder deleted) before the next begins, and each first
-  waits until every earlier run has exited, its grace period included, so two runs never overlap. Turning the plugin off
-  or removing it cancels starts still waiting in the queue; stopping one particular old run doesn't. The helper's processes
-  are found by responsibility: Ardia starts the helper as responsible for itself, so every process it starts, at
-  any depth and whatever session or group it moves to (`setsid`, Node's `detached`, a double fork), names the helper
-  as its responsible process while the helper runs. Ardia reads that set, with the helper's group and descendants and
-  each process's start time, every time the helper starts another process, every second, and before it closes the
-  helper's channel or signals it; every signal also reaches the descendants of every process seen before, even after
-  the helper is gone. The group is signalled only while `waitid` confirms the helper is Ardia's own child and not yet
-  reaped, so its id can't belong to anyone else. A helper may start other programs (the AI plugin runs the Claude
-  Code CLI).
-- **Supervised.** A helper that exits with a failure or a signal, or whose own process goes over `memoryMB` (a watchdog:
-  its physical footprint checked every 10 s, not a hard cap, and its child processes aren't counted), is restarted after
-  1, 2, 4, 8 then 16 s. After 5 failures within 10 minutes it stays stopped and its row says it crashed, with Restart.
-  A helper that exits with status 0 isn't restarted. Every start, restart timer, call and page message belongs to one
-  run of the helper; anything from an older run is ignored.
-- **Launched** with `posix_spawn` in its own process group, from the plugin's folder, through
-  `/usr/bin/sandbox-exec` with Ardia's fixed profile (`PluginSandbox.swift`), the paths passed as its parameters (`-D`),
-  never written into the profile's text. It inherits nothing from Ardia but stdin (`/dev/null`), stdout and stderr (its
-  log, `PluginData/<name>/plugin.log`, 0600, a regular file or the helper doesn't start, moved to `plugin.log.1` at start past 1 MB and emptied while it runs past
-  2 MB) and the channel on descriptor 3; both ends of the channel are close-on-exec from the moment they exist. Its
-  environment is only `PATH` (above), `HOME` (`PluginData/<name>/home`), `TMPDIR` (`PluginData/<name>/tmp`), `LANG`,
-  `ARDIA_PLUGIN_NAME`, `ARDIA_PLUGIN_FD=3` and `ARDIA_PLUGIN_PROTOCOL=1`. A helper with `network` also gets the proxy
-  settings Ardia itself was started with (`HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY`, `ALL_PROXY` in either case), except a
-  proxy whose address carries a user name or password, a query or a fragment (where a token could ride), which is dropped with one line in Ardia's log (an authenticated
-  proxy is a follow-up the person would choose per plugin), and certificate settings that follow each tool's own
-  meaning: `SSL_CERT_FILE` and `GIT_SSL_CAINFO` replace a tool's roots, so they point at
-  `PluginData/<name>/certificates.pem` (the system roots plus the extra ones, only when the system roots could be read;
-  otherwise they point at `/etc/ssl/cert.pem`); `NODE_EXTRA_CA_CERTS` adds to node's roots, so it points at
-  `PluginData/<name>/extra-certificates.pem` (every distinct extra root, even one the system bundle also has, since
-  node doesn't read the system bundle; only when there are any).
-  The extra roots come from the files Ardia's own `SSL_CERT_FILE` or `NODE_EXTRA_CA_CERTS` name. The format is PEM
-  with LF or CRLF line ends: only `-----BEGIN CERTIFICATE-----` blocks on lines of their own that each hold exactly one
-  X.509 certificate are kept (`TRUSTED CERTIFICATE` blocks, a key labelled `CERTIFICATE`, trailing bytes, a block
-  another marker interrupts or one that never ends is skipped), from regular files of at most 4 MB opened without
-  blocking (a FIFO is refused), scanned line by line once. They are read on a background queue; before each start of a
-  helper with `network`, each file's device, inode, size, and modification and status-change times are checked there, and a file that
-  changed, was replaced or was deleted is read again (a failed read is never kept, and a root whose file is gone
-  disappears, together with `extra-certificates.pem` when no extra roots are left). The start waits for that, up to
-  3 s, then goes on on Ardia's plugin queue; past that it gets the system roots (`/etc/ssl/cert.pem`) directly. Preparations for the same settings share one read and different settings read apart, so a file stuck on a stalled
-  disk holds up only the starts that need it, each until its own deadline, and a start still waiting when Ardia closes its plugins is cancelled, never launched. With no
-  extra roots configured it gets them directly as well, and staged bundles are removed. The bundles are written through the already-open data folder, to a private file
-  renamed into place. The Keychain's trust settings are out of the helper's reach, so a root kept only in the Keychain
-  isn't trusted; `/etc/ssl/cert.pem` is a static bundle that macOS updates with the system, not your Keychain, and it is the
-  default because it is the one system-wide root list every runtime can read. Never a token. A sandbox Ardia can't set up means the helper
-  doesn't start; it never runs unsandboxed.
-- **Data folder.** `PluginData/<name>` is opened once per start and must be a real folder Ardia's user owns, with
-  `home` and `tmp` real folders in it; the log is created inside that opened folder, never through a link. The
-  helper can write in it, so Ardia never follows anything the helper leaves there.
-- **Sandbox.** It may read and write its `PluginData` folder and read the plugin's folder, the program it runs and that
-  program's install folder (the folder above the `bin` it is in, so `/opt/homebrew/opt/node/bin/node` reads its own
-  libraries; `/bin/sh` or `~/bin/x` read only themselves, since that folder would be `/` or your home, and so does a
-  program on another disk or in another account's home, under `/Volumes` or `/Users`). Each folder between a protected
-  root and the plugin's folder, its program or its data gets metadata reads (`PATH_UP_<n>`, metadata on named
-  ancestors): stat and Finder info answer, listing and extended attributes don't. Your home
-  folder, Ardia's data folder and its config folder are unreadable and unwritable, wherever they are (a scratch data
-  folder outside your home included): your files, every browser profile, cookies, passwords and Ardia's own state. So
-  are `/Users` (every account's home, `/Users/Shared` included) and `/Volumes` (mounted disks and disk images). The
-  rest of the disk (system folders, `/tmp`, `/opt`) stays readable; a read allowlist is a follow-up. It
-  can't connect to a Unix socket in your home or Ardia's data folder, so Ardia's control socket is out of reach. It
-  can't write anywhere else on disk, nor create a Unix socket anywhere, nor connect to any but the system resolver's:
-  its channel to Ardia is the inherited descriptor 3. Without `network` it can't connect anywhere, this Mac's own
-  addresses included, and can't resolve names, listen or accept connections; with it, it reaches the internet and
-  servers on this Mac, and a server it starts may listen on any of this Mac's addresses (the sandbox can't hold a
-  listener to loopback: a listener under `(allow network-bind (local ip "localhost:*"))` still accepted a connection
-  made from this Mac to its network address; connections from other devices weren't tested). A plugin whose
-  folder (after links) would take in your home, Ardia's data or its settings, or whose program lives in Ardia's data or
-  config folder, isn't started. The profile's grants are paths, the only kind `sandbox-exec` has: they name the
-  approved folder's path at start. A folder put in its place afterwards can be read by the running helper instead
-  of its own, and nothing outside the plugins folder can.
-- **What else it refuses.** Launching apps or opening URLs (`lsopen`), Apple Events, creating launchd jobs, posting
-  distributed or Darwin notifications, writing any preferences or reading any but the global domain, opening IOKit
-  user clients, writing sysctls, POSIX shared memory beyond reading the preferences segments (`apple.cfprefs.*`) and the
-  notification center's (`apple.shm.notification_center`), and looking up any
-  system service off a short list: user and group lookups, logging, per-user temp folders, preference reads, and,
-  with `network` only, the resolver, network settings and TLS trust (trustd fetches
-  issuers over the network on a helper's behalf) (`PluginSandbox.machAllowed`, `machAllowedOnline`). Nothing it runs follows
-  live changes to your locale or other global preferences: notification posts and lookups are refused, and nothing
-  measured needed them. File events are refused too: fseventsd doesn't filter by the client's sandbox (a stream on `/`
-  from inside showed writes in the home folder, live and in history replay, and gave out the device's event UUID;
-  outside, streams on the home folder and relative to its device show them), so inside the UUID, the current and
-  per-device event ids and every stream are refused,
-  `fs.watch` fails and a runtime that needs it polls (the AI runtime's file watches do). It can't inspect or
-  signal processes outside its own sandbox. `PluginSandboxEscapeTests.swift` proves each refusal next to a control
-  outside the sandbox. Two controls are weaker: Apple Events only check that Finder runs (a real send would raise a
-  privacy prompt), and sysctl writes are checked through the sandbox's own decision (`sandbox_check`), since the
-  writable ones need root anyway.
-- **What the sandbox doesn't do.** It runs as you, so it is a containment layer around a program you chose to run, not
-  a defense against one built to escape. Known gaps: any same-user process's command line, and for a process without
-  the hardened runtime its environment too, is readable (`KERN_PROCARGS2` can't be sandboxed), so nothing secret ever
-  goes in a helper's arguments or environment, and Ardia's own launch never puts one there; files your config folder
-  links to outside your home are readable; with `network`, a local server it starts may listen on any address; it isn't limited in CPU. Out of Ardia's reach: a
-  process started within
-  the moment between a helper's fork and its own exit. Checking a process id's start time and signalling it are two
-  calls, so an id reused within microseconds in between could be hit. The responsibility calls
-  (`responsibility_spawnattrs_setdisclaim`, `responsibility_get_pid_responsible_for_pid`) aren't public API: Ardia looks
-  them up at runtime, and where they're missing it logs that and falls back to the group and descendants, which an
-  orphaned or double-forked process escapes. Unverified until a signed, notarised build is tried: that notarisation
-  accepts the lookup, and how macOS privacy prompts (TCC) attribute a helper that is responsible for itself; in a
-  development build, prompts name the helper's program rather than Ardia. If Ardia crashes, a helper that doesn't exit when its channel closes keeps
-  running until it is stopped by hand. So the permissions below are what Ardia hands a helper through its channel and
-  what the sandbox holds it to on disk and on the network; the gaps above are outside them.
 
 ### The channel
 
@@ -615,7 +703,7 @@ Requests from the helper (`{"id", "method", "params"}`):
 
 | Method | Needs | Result |
 | --- | --- | --- |
-| `hello` | | `{"app", "version", "protocol": 1, "plugin", "values"}`: `values` are the row values |
+| `hello` | | `{"app", "version", "protocol", "plugin", "values"}`: `values` are the row values. `protocol` is 1 for a sidecar or v1 helper and 2 for main's host, so a helper written for v1 keeps working |
 | `values` | | the row values |
 | `subscribe` `{"events", "idle"?}` | the events in `hooks` | `{"ok": true}`; then `{"event", "time", "data"}` lines as on the socket; `["*"]` means every event in `hooks` |
 | `windows` | `tabs` | as on the socket |
@@ -628,7 +716,9 @@ Requests from the helper (`{"id", "method", "params"}`):
 
 A method the manifest doesn't allow is `refused`. Page messages arrive as `{"pageMessage", "view"}`. Events from Ardia: `plugin.values` (`{"values"}`) when you change a
 row, plus the subscribed events. Calls to a tool arrive as `{"call": "c4", "tool": "hello", "input": {…},
-"caller": {"kind": "command" | "cli" | "plugin", "plugin"?}, "deadline": ms}`; the helper answers with `result`. A
+"caller": {"kind": "command" | "cli" | "plugin", "plugin"?}, "deadline": ms}`, where `"cli"` means a call through the
+control socket, whatever program sent it (inside Ardia it is the `socket` caller; the wire keeps `"cli"` for protocol 1
+helpers and protocol 2 runtimes alike); the helper answers with `result`. A
 call past its deadline, or one whose calling plugin's helper stops, is answered with an error for the caller and
 `{"call": "c4", "cancel": true}` is sent; a late `result` is `bad_request`. At most 16 calls wait per helper.
 
@@ -681,6 +771,7 @@ document.querySelector("form").addEventListener("submit", (event) => {
 and its helper answers each `{"pageMessage": {"ask"}, "view"}` line by streaming `page.post {"view", "message":
 {"token"}}` lines back, holding whatever connection it needs (to the model, to a local runtime) itself.
 
+
 ## The page
 
 The page tab's content is a WebKit view (`WKWebView`), not a Chrome page, so nothing in it touches a Chrome profile,
@@ -721,6 +812,17 @@ whichever profile the tab's window shows:
   (every request needs its own `id`, echoed in the reply). A
   plugin without `commands` can't open tabs.
 
+
+### Theme tokens on web pages
+
+Every `PluginPageView` (a page tab, a `WebView` node, a web panel) gets Ardia's current colours as CSS custom
+properties, in a `<style id="ardia-theme">` that a script in its own content world injects at document start and
+updates live whenever the theme, appearance or profile tint changes (`lib/pluginThemeCss.ts`,
+`components/plugins/pluginThemeCss.ts`). Each theme role becomes `--ardia-<role>` in kebab case (`--ardia-background`,
+`--ardia-text`, `--ardia-accent`, `--ardia-selection`, …), with `color-scheme` set; values pass a strict filter (no
+`url()`, `var()`, `image()` or `expression()`), so a theme file can't load anything into a page. A page styled with
+`var(--ardia-background, Canvas)` matches Ardia in light, dark and every theme with no message passing.
+
 ## The ardia command
 
 The `ardia` command is itself a plugin, the built-in `cli` (`docs/cli.md`). `ardia plugins` works on the plugin folder of the config folder it resolves (`--data-dir`, `$ARDIA_DATA_DIR`, else
@@ -754,36 +856,67 @@ is a list both the app's tests and the CLI's tests refuse.
 The control socket's protocol 4 adds `plugins`, `plugins.enable` (`{"waiting": true}` once the sheet is up),
 `plugins.disable`, `plugins.remove` and `plugins.call` (`{"plugin", "tool", "input"?}`).
 
+
 ## Code
 
-- `lib/pluginManifest.ts`: parsing, migration, checks and the schema; `lib/pluginManifest.test.mjs`.
-- `state/site/passwordManager*.ts`, `verificationCodes.ts`: the `passwordManager` contribution's host side.
+- `lib/pluginManifest.ts`: parsing and checks, with `pluginContributions.ts`, `pluginCommands.ts`, `pluginRows.ts`,
+  `pluginPermissions.ts`, `pluginActivation.ts`, `pluginRuntime.ts`, `pluginWhen.ts`, `pluginNodes.ts`,
+  `pluginNetwork.ts`, `pluginProtocol.ts`, `pluginThemeCss.ts`; migrations in `pluginMigrations.ts`, the schema in
+  `pluginSchema.ts`; `lib/pluginManifest.test.mjs`.
+- `packages/plugin-sdk`: the SDK, JSX runtime, reconciler and hooks; `sdk.test.mjs`.
 - `state/plugins/`: the registry (`store.ts`), saved state (`savedState.ts`), turning on and off (`lifecycle.ts`),
-  settings defaults (`defaults.ts`), the helper channel (`channel.ts`, `channelMethods.ts`), tools (`tools.ts`),
-  command bar entries (`commands.ts`), page tabs (`pages.ts`, `pageNames.ts`), consent copy (`consent.ts`), socket methods
-  (`socketMethods.ts`).
-- `platform/plugins.ts` binds `ArdiaPlugins` (`packages/shell/ios/PluginsModule.swift`, `PluginFolder.swift`,
-  `PluginProcess.swift`, `PluginCore/` (`PluginSandbox`, `PluginFiles`, `PluginProcessTree`, `PluginRuns`, `PluginLifecycle`,
-  `PluginPageMessages`, `PluginPageOutbox`, `PluginPageGate`, `PluginPageOffline`, `PluginPageData`; tested by `packages/shell/plugin-tests`, run by `swift test` in `packages/shell`, and `PluginPageData` in a fresh process by `scripts/pluginPageData.test.mjs`), `PluginPageView.swift`, `PluginSchemeHandler.swift`).
-- UI: `components/settings/panes/Plugins.tsx`, `components/plugins/PluginPage.tsx` (rendered by `components/pages/InternalPage.tsx`).
+  activation (`activation.ts`), settings defaults (`defaults.ts`), the channel (`channel.ts`, `channelApi.ts`,
+  `channelData.ts`, `channelUi.ts`), tools (`tools.ts`), commands (`commands.ts`), menus (`menus.ts`), toolbar
+  (`toolbar.ts`), surfaces and panels (`surfaces.ts`, `panels.ts`), omnibox (`omnibox.ts`), themes (`themes.ts`),
+  decide hooks (`decideHooks.ts`), storage and secrets (`storage.ts`, `secrets.ts`), page tabs (`pages.ts`,
+  `pageNames.ts`), consent copy (`consent*.ts`), socket methods (`socketMethods.ts`).
+- Where the browser calls in: `App.tsx` (side panel and overlays), `components/toolbar/Toolbar.tsx` and
+  `components/sidebar/AddressBar.tsx` (toolbar buttons), `components/sidebar/PageRows.tsx` (sidebar views),
+  `state/sidebar/tabMenu.ts` (the tab menu), `state/config/configFiles.ts` (plugin themes),
+  `state/automation/decideHooks.ts` (decide hooks after `hooks.json`).
+- `state/site/passwordManager*.ts`, `verificationCodes.ts`: the `passwordManager` contribution's host side.
+- `platform/plugins.ts` binds `ArdiaPlugins` (`packages/shell/ios/PluginsModule.swift`, `PluginProcess.swift`,
+  `PluginHost.swift`, `PluginHostFetch.swift`, `PluginPageView.swift`, `PluginSchemeHandler.swift`, `PluginCore/`
+  (`PluginSandbox`, `PluginFiles`, `PluginFetchPolicy`, `PluginStorage`, `PluginProcessTree`, `PluginRuns`,
+  `PluginLifecycle`, `PluginPage*`), tested by `packages/shell/plugin-tests` with `swift test`), and
+  `packages/shell/plugin-host` is the host.
+- UI: `components/settings/panes/Plugins.tsx`, `components/plugins/` (`PluginPage`, `PluginSidePanel`,
+  `PluginOverlays`, `PluginToolbarItems`, `PluginSidebarViews`, the native node renderer, the consent sheets).
 - The example plugin used by the tests: `tests/fixtures/plugins/example/`.
 
 ## Telemetry
 
-Counts only, never plugin names, titles, URLs, row values, tool input or output, each tied to the consent period the
-activity began in (a tool call's outcome to the call, a helper start to the turn-on, restart or exit that asked for
-it), so a count that finishes after sharing changed stays in the local copy:
-`usage_counts.plugin_enables`, `plugin_disables`, `plugin_process_starts`, `plugin_process_crashes`,
-`plugin_commands_run`, `plugin_tool_calls`, `plugin_tool_failures`, `plugin_page_opens`, `plugin_split_opens`,
-`program_links`, `program_link_failures` (a link refused, a name taken or the copy failed), `program_unlinks`,
-`program_adoptions` (an old `ardia` install's home taken over), `plugin_adoptions` (an always-on plugin installed on update because an old install was there); the daily settings snapshot's
-`plugins_installed`, `plugins_enabled` and, among those on, how many use each contribution:
-`plugins_with_settings`, `plugins_with_commands`, `plugins_with_page`, `plugins_with_process`, `plugins_with_programs`,
-`plugins_with_hooks`, `plugins_with_tools`, `plugins_with_passwordManager`. Password managers: hourly
-`password_manager_panel_opens_<badge|menu>`, `password_manager_panel_refused_<badge|menu>`, and each refusal's reason
-`password_manager_panel_refusal_<hidden|not_focused|unavailable|not_key|not_editing|throttled|refused|no_panel>` (`no_panel`:
-macOS took the request but no panel window was on screen 0.6 s later),
-`password_manager_panel_hints_<shown|dismissed>` (the "Type <site> in Passwords to find this site" hint),
-`verification_code_setups_<offered|accepted|failed>`, `password_manager_chose_<ardia|none|plugin>`,
-`password_manager_record_failed`, and the daily `password_manager_profiles_<ardia|none|plugin>`. Dashboard: watch `plugin_process_crashes` against
-`plugin_process_starts`, and `program_link_failures` against `program_links`.
+Counts only, never plugin names, titles, URLs, row values, secrets, tool input or output, fetched hosts or view
+contents, each tied to the consent period the activity began in, so a count that finishes after sharing changed stays
+in the local copy. Hourly `usage_counts`:
+
+- v1: `plugin_enables`, `plugin_disables`, `plugin_process_starts`, `plugin_process_crashes`, `plugin_commands_run`,
+  `plugin_tool_calls`, `plugin_tool_failures`, `plugin_page_opens`, `plugin_split_opens`, `program_links`,
+  `program_link_failures` (a link refused, a name taken or the copy failed), `program_unlinks`, `program_adoptions`
+  (an old `ardia` install's home taken over), `plugin_adoptions`, `plugin_adoptions_waiting`.
+- v2: `plugin_activations` (main started by an activation event), `plugin_activation_failures`,
+  `plugin_surface_renders` (a native view committed), `plugin_panel_opens`, `plugin_toolbar_runs`,
+  `plugin_menu_runs`, `plugin_action_shortcuts` (an action run by its declared shortcut), `plugin_omnibox_queries`,
+  `plugin_ui_prompts` (a quick pick, input box or confirm shown),
+  `plugin_net_fetches`, `plugin_net_refusals` (a fetch outside `permissions.network` or to a private address),
+  `plugin_storage_writes`, `plugin_storage_cancels` (a storage request dropped because the plugin was being removed),
+  `plugin_secret_writes`, `plugin_page_reads` (`activePage` reads), `plugin_decide_calls`,
+  `plugin_decide_timeouts`.
+
+The daily settings snapshot has `plugins_installed`, `plugins_enabled` and, among those on, how many use each part:
+`plugins_with_settings`, `plugins_with_commands`, `plugins_with_page`, `plugins_with_process`,
+`plugins_with_programs`, `plugins_with_hooks`, `plugins_with_tools`, `plugins_with_passwordManager`, and for v2
+`plugins_with_main`, `plugins_with_menus`, `plugins_with_toolbar`, `plugins_with_sidebarViews`,
+`plugins_with_panels`, `plugins_with_omnibox`, `plugins_with_themes`.
+
+Password managers: hourly `password_manager_panel_opens_<badge|menu>`, `password_manager_panel_refused_<badge|menu>`,
+and each refusal's reason
+`password_manager_panel_refusal_<hidden|not_focused|unavailable|not_key|not_editing|throttled|refused|no_panel>`
+(`no_panel`: macOS took the request but no panel window was on screen 0.6 s later),
+`password_manager_panel_hints_<shown|dismissed>`, `verification_code_setups_<offered|accepted|failed>`,
+`password_manager_chose_<ardia|none|plugin>`, `password_manager_record_failed`, and the daily
+`password_manager_profiles_<ardia|none|plugin>`.
+
+Dashboard: watch `plugin_process_crashes` against `plugin_process_starts`, `plugin_activation_failures` against
+`plugin_activations`, `plugin_decide_timeouts` against `plugin_decide_calls` (a plugin slowing navigation),
+`plugin_net_refusals` against `plugin_net_fetches`, and `program_link_failures` against `program_links`.

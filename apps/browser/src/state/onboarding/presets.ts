@@ -40,7 +40,6 @@ const CLASSIC_TABS: Partial<Settings> = {
   bookmarksBar: "newTab",
   searchEngine: "google",
   openLinksInLittleArdia: false,
-  profileSwitcherIcons: false,
   peekLinksToOtherSites: false,
   newTabLinksOpenIn: "tab",
 };
@@ -66,7 +65,6 @@ export const PRESETS: Record<Preset, Partial<Settings>> = {
     bookmarksBar: "never",
     searchEngine: "google",
     openLinksInLittleArdia: true,
-    profileSwitcherIcons: false,
     peekLinksToOtherSites: true,
     newTabLinksOpenIn: "peek",
   },
@@ -90,7 +88,6 @@ export const PRESETS: Record<Preset, Partial<Settings>> = {
     bookmarksBar: "never",
     searchEngine: "google",
     openLinksInLittleArdia: true,
-    profileSwitcherIcons: true,
     peekLinksToOtherSites: true,
     newTabLinksOpenIn: "peek",
   },
@@ -114,7 +111,6 @@ export const PRESETS: Record<Preset, Partial<Settings>> = {
     bookmarksBar: "never",
     searchEngine: "google",
     openLinksInLittleArdia: false,
-    profileSwitcherIcons: true,
     peekLinksToOtherSites: true,
     newTabLinksOpenIn: "peek",
   },
@@ -127,7 +123,7 @@ export const PRESETS: Record<Preset, Partial<Settings>> = {
   chromium: CLASSIC_TABS,
   vivaldi: CLASSIC_TABS,
   opera: CLASSIC_TABS,
-  fresh: { addressBar: "sidebar", commandBarPlacement: "centred", newTabPosition: "nextToCurrent", newTabButtonPosition: "bottom", profileSwitcherIcons: false },
+  fresh: { addressBar: "sidebar", commandBarPlacement: "centred", newTabPosition: "nextToCurrent", newTabButtonPosition: "bottom" },
 };
 
 export const setsUpLikeBrowser = (source: BrowserSourceId | null): source is Exclude<BrowserSourceId, "fresh"> => !!source && source !== "fresh";

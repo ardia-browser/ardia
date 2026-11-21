@@ -6,13 +6,9 @@ import { showToast } from "../app/toasts";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
 import { noteVerificationCodeSetup } from "../telemetry/passwordManagerCounts";
 
-const MAX_APP = 40;
-const SETUP_LINK = /^\s*(otpauth(?:-migration)?):/i;
+export { hoverStatus } from "../tabs/hoverStatus";
 
-export const hoverStatus = (text: string) => {
-  const setup = SETUP_LINK.exec(text);
-  return setup ? `${setup[1]!.toLowerCase()}:` : text;
-};
+const MAX_APP = 40;
 const clipped = (text: string, max: number) => (text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text);
 
 export function verificationCodeCopy(app: string, host: string): { title: string; message: string } {

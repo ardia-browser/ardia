@@ -1,5 +1,6 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, type ReactNode } from "react";
 import { Animated, findNodeHandle, Pressable, StyleSheet, View, type DimensionValue, type StyleProp, type ViewStyle } from "react-native";
+import { DialogFocusContext, nextDialogButton, type DialogButton } from "./dialogFocus";
 import { curve, duration } from "./motion";
 import { Panel } from "./Panel";
 import { Text } from "./Text";
@@ -45,7 +46,7 @@ export function Dialog({
       {children}
     </DialogKeys>
   ) : (
-    children
+    <DialogFocusContext.Provider value={null}>{children}</DialogFocusContext.Provider>
   );
   const padding = onSubmit ? undefined : space[pad];
   const surface = (
@@ -86,7 +87,21 @@ const targetTag = (event: object) => (event as { target?: number }).target;
 
 function DialogKeys({ onDismiss, onSubmit, pad, children }: { onDismiss?: () => void; onSubmit: () => void; pad: Space; children: ReactNode }) {
   const keys = useRef<View>(null);
+  const buttons = useRef<DialogButton[]>([]);
+  const register = useCallback((button: DialogButton) => {
+    buttons.current = [...buttons.current, button];
+    return () => {
+      buttons.current = buttons.current.filter((b) => b !== button);
+    };
+  }, []);
   useEffect(() => keys.current?.focus(), []);
+  const focusNextButton = (target: number | undefined, back: boolean) => {
+    const views = buttons.current.map((button) => button());
+    const next = nextDialogButton(views.map((view) => view && findNodeHandle(view)), target, findNodeHandle(keys.current), back);
+    if (next === null) return false;
+    views[next]?.focus();
+    return true;
+  };
   return (
     <View
       ref={keys}
@@ -95,11 +110,14 @@ function DialogKeys({ onDismiss, onSubmit, pad, children }: { onDismiss?: () => 
       keyDownEvents={DIALOG_KEYS}
       onKeyDown={(e) => {
         if (e.nativeEvent.key === "Escape") onDismiss?.();
+        else if (e.nativeEvent.key === "Tab") {
+          if (focusNextButton(targetTag(e.nativeEvent), !!e.nativeEvent.shiftKey)) e.preventDefault();
+        }
         else if (e.nativeEvent.key === "Enter" && targetTag(e.nativeEvent) === findNodeHandle(keys.current)) onSubmit();
       }}
       style={{ padding: space[pad] }}
     >
-      {children}
+      <DialogFocusContext.Provider value={register}>{children}</DialogFocusContext.Provider>
     </View>
   );
 }

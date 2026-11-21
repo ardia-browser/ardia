@@ -1,6 +1,6 @@
 import { ContextMenuArea } from "@ardia/shell";
 import { drawnSymbol, type SymbolProps } from "./Symbol";
-import { memo, useState, type ReactNode } from "react";
+import { memo, useRef, useState, type ReactNode } from "react";
 import { Animated, Image, Pressable, Text, View, type GestureResponderEvent, type ImageSourcePropType, type StyleProp, type ViewStyle } from "react-native";
 import { modifiersOf, type ClickModifiers } from "../../lib/keys";
 import { useToolbarRowContext } from "./toolbarRowContext";
@@ -8,6 +8,7 @@ import { useHover, useTooltip } from "./useHover";
 import { HoverFill } from "./HoverFill";
 import { tintedImage } from "./TintedImage";
 import { CloseButtonView, PillButtonView, PushButtonView, StepperButtonView } from "./ButtonKinds";
+import { useDialogButton } from "./dialogFocus";
 import { useTheme } from "./theme";
 import { buttonMotion, usePressMotion, usePressScaleMotion } from "./motion";
 import { capsule, iconButton, opacity, radius as radii, space, font as typeScale, weight as weights, type ColorRole, type IconButtonSize, type Space, type TypeSize, type Weight } from "./tokens";
@@ -226,10 +227,12 @@ function TextButtonView(props: TextProps) {
   const Label = scaleStyle ? Animated.Text : Text;
   const a11y = label ? ({ accessibilityRole: "button", accessibilityLabel: label } as const) : undefined;
   const textStyle = (color: string) => ({ ...typeScale[size], ...(weight === "regular" ? null : { fontWeight: weights[weight] }), color });
+  const pressable = useRef<View>(null);
+  useDialogButton(pressable, disabled);
   if (plate === "none")
     return (
       <View {...hoverProps}>
-        <Pressable onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} disabled={disabled} {...a11y}>
+        <Pressable ref={pressable} onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} disabled={disabled} {...a11y}>
           <Label style={[textStyle(hovered && hoverTone ? theme[hoverTone] : theme[tone]), { paddingVertical: padY ? space[padY] : undefined }, look === "link" && hovered ? UNDERLINE : null, scaleStyle]}>{title}</Label>
         </Pressable>
       </View>
@@ -237,7 +240,7 @@ function TextButtonView(props: TextProps) {
   const shows = (pressed: boolean) => !disabled && ((plate === "toolbar" && pressed) || hovered);
   return (
     <View {...hoverProps}>
-      <Pressable onPress={onPress} onPressIn={pressIn} onPressOut={pressMotion.onPressOut} disabled={disabled} {...a11y}>
+      <Pressable ref={pressable} onPress={onPress} onPressIn={pressIn} onPressOut={pressMotion.onPressOut} disabled={disabled} {...a11y}>
         {({ pressed }) => (
           <Plate style={[{ height, paddingHorizontal: space[pad], justifyContent: "center" }, scaleStyle]}>
             {lit ? <HoverFill shown={shows(pressed)} color={plate === "toolbar" && pressed ? theme.toolbarPressed : theme.toolbarHover} radius={radii.control} /> : null}

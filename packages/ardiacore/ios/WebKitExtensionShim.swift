@@ -322,18 +322,33 @@ enum WebKitExtensionShim {
         let made = views.get(object);
         if (!made) views.set(object, (made = new Map()));
         if (made.has(path)) return made.get(path);
-        const view = new Proxy(object, {
-          get(target, name) {
-            const here = viewed.get(path);
+        const overrides = () => viewed.get(path);
+        const view = new Proxy(Object.create(null), {
+          get(_, name) {
+            const here = overrides();
             if (here && here.has(name)) return here.get(name);
-            const value = Reflect.get(target, name);
+            const value = Reflect.get(object, name);
             const below = typeof name === "string" ? (path ? `${path}.${name}` : name) : null;
             if (below !== null && value && (typeof value === "object" || typeof value === "function") && viewPaths.has(below)) return viewAt(value, below);
-            return typeof value === "function" ? methodOf(target, value) : value;
+            return typeof value === "function" ? methodOf(object, value) : value;
           },
-          has(target, name) {
-            const here = viewed.get(path);
-            return !!(here && here.has(name)) || Reflect.has(target, name);
+          set: (_, name, value) => Reflect.set(object, name, value),
+          has(_, name) {
+            const here = overrides();
+            return !!(here && here.has(name)) || Reflect.has(object, name);
+          },
+          deleteProperty: (_, name) => Reflect.deleteProperty(object, name),
+          defineProperty: (_, name, descriptor) => Reflect.defineProperty(object, name, descriptor),
+          getPrototypeOf: () => Reflect.getPrototypeOf(object),
+          ownKeys() {
+            const here = overrides();
+            return [...new Set([...Reflect.ownKeys(object), ...(here ? here.keys() : [])])];
+          },
+          getOwnPropertyDescriptor(_, name) {
+            const here = overrides();
+            if (here && here.has(name)) return { value: here.get(name), writable: true, enumerable: true, configurable: true };
+            const found = Reflect.getOwnPropertyDescriptor(object, name);
+            return found ? { ...found, configurable: true } : undefined;
           },
         });
         made.set(path, view);
@@ -359,8 +374,8 @@ enum WebKitExtensionShim {
             target[name] = value;
           } catch (inner) {}
         }
-        if (target[name] === value) return true;
-        if (typeof path !== "string" || !viewRoots.length) return false;
+        const took = target[name] === value;
+        if (typeof path !== "string" || !viewRoots.length) return took;
         if (!viewed.has(path)) viewed.set(path, new Map());
         viewed.get(path).set(name, value);
         const parts = path ? path.split(".") : [];

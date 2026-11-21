@@ -379,6 +379,38 @@ test("on WebKit, whose namespaces ignore redefining their own members, the shim'
   assert.equal(native.storage.local.get, areas.local.get, "WebKit's namespace itself is left as it was");
 });
 
+test("a view serves overrides over WebKit members that can't be reconfigured, and keeps direct patches when WebKit hands out a fresh namespace", async () => {
+  const log = [];
+  const areas = webKitStorage(log);
+  const storage = {};
+  for (const name of ["local", "sync", "session"]) Object.defineProperty(storage, name, { value: areas[name], writable: false, configurable: false, enumerable: true });
+  Object.defineProperty(storage, "onChanged", { value: areas.onChanged, writable: false, configurable: false });
+  const sent = [];
+  const runtimeFields = () => ({
+    id: "aaaabbbbccccddddeeeeffffgggghhhh",
+    sendMessage: async () => "local",
+    onMessage: listenerSet(),
+    sendNativeMessage: async (application, message) => (sent.push(message), { result: message.method === "sharedGet" ? { a: 1 } : null }),
+    connectNative: () => ({ posted: [], onMessage: listenerSet(), onDisconnect: listenerSet(), postMessage() {} }),
+  });
+  let runtime = runtimeFields();
+  const native = {};
+  Object.defineProperty(native, "runtime", { get: () => runtime, configurable: false, enumerable: true });
+  Object.defineProperty(native, "storage", { value: storage, writable: false, configurable: false, enumerable: true });
+  const context = { browser: native, chrome: native, console, setTimeout, Promise, Object, Array, Set, Map, WeakMap, Error, JSON, String, Number, Date, Math, RegExp };
+  context.location = { href: `webkit-extension://${runtime.id}/page.html` };
+  context.globalThis = context;
+  vm.runInNewContext(shim(["runtime", "storage"], { permissions: ["storage"], shared: ["storage"] }), context);
+  const chrome = context.chrome;
+  assert.deepEqual(plain(await chrome.storage.local.get(["a"])), { a: 1 });
+  assert.deepEqual(log, []);
+  const patchedUninstall = chrome.runtime.setUninstallURL;
+  assert.equal(typeof patchedUninstall, "function");
+  runtime = runtimeFields();
+  assert.equal(chrome.runtime.setUninstallURL, patchedUninstall, "a fresh runtime object still gets the shim's member");
+  assert.ok(Object.keys(chrome.storage).includes("local"));
+});
+
 test("Chromium's storage changes reach the area's and the namespace's listeners, filtered by area", async () => {
   const { browser, ports } = world({ apis: ["runtime", "storage"], permissions: ["storage"], shared: ["storage"], background: "bg.js", extra: { storage: webKitStorage([]) } });
   const local = [];

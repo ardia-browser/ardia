@@ -9,7 +9,7 @@ struct WebKitExtensionStaging {
     let signature: String
   }
 
-  static let revision = 4
+  static let revision = 5
   static let shimmed = WebKitExtensionShim.names
   static let workerFile = "__ardia_webkit_worker.js"
   static let backgroundFlagFile = "__ardia_webkit_background.js"

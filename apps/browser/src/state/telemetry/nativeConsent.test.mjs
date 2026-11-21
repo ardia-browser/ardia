@@ -84,7 +84,7 @@ test("window placement events from an earlier consent period, or with no epoch, 
   stub.emitAppEvent({ type: "windowDragLoop", epoch: stale });
   stub.emitAppEvent({ type: "windowTitleRead" });
   stub.emitAppEvent({ type: "windowDragLoop", epoch: client.consentEpoch() });
-  assert.deepEqual(placement.takeWindowPlacementCounts(), { window_centered_resizes: 0, windows_reopened_maximized: 0, window_titles_read: 0, window_drag_loops: 1, window_close_pins_kept: 0 });
+  assert.deepEqual(placement.takeWindowPlacementCounts(), { window_centered_resizes: 0, windows_reopened_maximized: 0, window_titles_read: 0, window_drag_loops: 1, window_close_pins_kept: 0, window_close_pin_ids_renewed: 0 });
   assert.deepEqual(await local("usage_counts", (p) => p.window_centered_resizes || p.window_drag_loops || p.window_titles_read), []);
 });
 

@@ -16,14 +16,26 @@ const scrolls = consentedCount();
 const revealsHeldForScroll = consentedCount();
 const scrollStalls = consentedCount();
 const commandsRefused = consentedCount();
+const toggleRemeasures = consentedCount();
 let lastScrollAt = -Infinity;
-onConsentPeriodChange(() => (lastScrollAt = -Infinity));
+let lastToggleAt = -Infinity;
+onConsentPeriodChange(() => {
+  lastScrollAt = -Infinity;
+  lastToggleAt = -Infinity;
+});
+
+const TOGGLE_WINDOW_MS = 400;
 
 const NEW_SCROLL_GAP_MS = 250;
 const STALL_GAP_MS = 34;
 
-export function noteTabStripGroupToggle() {
+export function noteTabStripGroupToggle(at: number) {
   groupToggles.note();
+  lastToggleAt = at;
+}
+
+export function noteTabStripChipsMeasured(at: number) {
+  if (at - lastToggleAt < TOGGLE_WINDOW_MS) toggleRemeasures.note();
 }
 
 export function noteTextOnlyRow() {
@@ -80,6 +92,7 @@ export function noteTabStripScrolled(at: number) {
 export function takeTabStripCounts() {
   return {
     tab_strip_group_toggles: groupToggles.take(),
+    tab_strip_toggle_remeasures: toggleRemeasures.take(),
     pinned_rows_made_text_only: textOnlyRows.take(),
     tab_strip_compact_layouts: compactLayouts.take(),
     tab_strip_readable_layouts: readableLayouts.take(),

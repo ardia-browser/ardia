@@ -6,6 +6,7 @@ globalThis.fetch = async () => ({ status: 503 });
 const client = await import("./client.ts");
 import { noteTabLayoutSwitch } from "./tabLayoutCounts.ts";
 import {
+  noteTabStripChipsMeasured,
   noteTabStripCommandRefused,
   noteTabStripCompact,
   noteTabStripReadable,
@@ -24,6 +25,7 @@ import {
 
 const ZERO = {
   tab_strip_group_toggles: 0,
+  tab_strip_toggle_remeasures: 0,
   pinned_rows_made_text_only: 0,
   tab_strip_compact_layouts: 0,
   tab_strip_readable_layouts: 0,
@@ -49,11 +51,21 @@ after(() => client.setSharing(false, "settings"));
 
 test("group collapses and expands from the strip are counted, and taking them starts over", () => {
   sharing(true);
-  noteTabStripGroupToggle();
-  noteTabStripGroupToggle();
+  noteTabStripGroupToggle(1000);
+  noteTabStripGroupToggle(2000);
   noteTextOnlyRow();
   assert.deepEqual(takeTabStripCounts(), { ...ZERO, tab_strip_group_toggles: 2, pinned_rows_made_text_only: 1 });
   assert.deepEqual(takeTabStripCounts(), ZERO);
+});
+
+test("a group's name or folders measured again while it opens or closes are counted; measured at any other time they aren't", () => {
+  noteTabStripChipsMeasured(5000);
+  noteTabStripGroupToggle(10_000);
+  takeTabStripCounts();
+  noteTabStripChipsMeasured(10_016);
+  noteTabStripChipsMeasured(10_200);
+  noteTabStripChipsMeasured(10_500);
+  assert.deepEqual(takeTabStripCounts(), { ...ZERO, tab_strip_toggle_remeasures: 2 });
 });
 
 test("compact layouts, edge-scrolled drags and reveals held for a press are counted, and the most tabs is a maximum, not a sum", () => {
@@ -96,7 +108,8 @@ test("tab layout switches go out with the strip's counts, and taking them starts
 
 let clock = 1e9;
 const EVERY_FIELD = [
-  ["tab_strip_group_toggles", () => noteTabStripGroupToggle(), 1],
+  ["tab_strip_group_toggles", () => noteTabStripGroupToggle((clock += 10_000)), 1],
+  ["tab_strip_toggle_remeasures", () => (noteTabStripGroupToggle((clock += 10_000)), noteTabStripChipsMeasured((clock += 50))), 1],
   ["pinned_rows_made_text_only", () => noteTextOnlyRow(), 1],
   ["tab_strip_compact_layouts", () => noteTabStripCompact(), 1],
   ["tab_strip_readable_layouts", () => noteTabStripReadable(), 1],

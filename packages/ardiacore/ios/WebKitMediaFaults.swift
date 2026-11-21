@@ -17,6 +17,7 @@ enum WebKitMediaFaults {
     "hotstar.com",
     "jiohotstar.com",
     "v.qq.com",
+    "tv.youtube.com",
   ]
 
   static let reasons: Set<String> = [

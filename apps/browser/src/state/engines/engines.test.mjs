@@ -87,6 +87,22 @@ test("Spotify's player opens in WebKit with the streaming sites, and a rule stil
   assert.equal(engineForUrl(state([], { protectedVideoInWebKit: false }), spotify), "chromium");
 });
 
+test("YouTube TV opens in WebKit with the streaming sites, while the rest of YouTube stays in Chromium", () => {
+  const on = state([], { protectedVideoInWebKit: true });
+  assert.equal(protectedVideoSite("https://tv.youtube.com/watch/1"), true);
+  assert.equal(protectedVideoSite("https://tv.youtube.com/"), true);
+  assert.equal(protectedVideoSite("http://tv.youtube.com/"), false);
+  assert.equal(protectedVideoSite("https://www.youtube.com/"), false);
+  assert.equal(protectedVideoSite("https://youtube.com/"), false);
+  assert.equal(protectedVideoSite("https://music.youtube.com/"), false);
+  assert.equal(protectedVideoSite("https://nottv.youtube.com.example.com/"), false);
+  assert.equal(engineForUrl(on, "https://tv.youtube.com/"), "webkit");
+  assert.equal(recommendedEngineFor(on, "https://tv.youtube.com/library"), "webkit");
+  assert.equal(engineForUrl(on, "https://www.youtube.com/watch?v=1"), "chromium");
+  assert.equal(engineForUrl(state([], { protectedVideoInWebKit: false }), "https://tv.youtube.com/"), "chromium");
+  assert.equal(engineForUrl(state([], { protectedVideoInWebKit: true, websiteEngines: { "https://tv.youtube.com": "chromium" } }), "https://tv.youtube.com/"), "chromium");
+});
+
 test("a website rule wins over the streaming default", () => {
   const s = state([], { protectedVideoInWebKit: true, websiteEngines: { "https://www.netflix.com": "chromium" } });
   assert.equal(chosenEngine(s, "https://www.netflix.com/"), "chromium");

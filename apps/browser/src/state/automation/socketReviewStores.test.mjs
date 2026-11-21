@@ -16,14 +16,14 @@ async function withBookmarks() {
   return opened;
 }
 
-test("sites.clearData takes a site, clears the whole site, and refuses the old origin form", async () => {
+test("sites.clearData takes a site, clears the whole site in both engines, and refuses the old origin form", async () => {
   await freshWindow();
   stub.clearedSiteData.length = 0;
   assert.equal((await call("sites.clearData", { origin: "https://mail.example.com" })).error?.code, "bad_request");
   for (const bad of ["https://example.com", "example.com/path", "example.com:8443", "nodots"]) assert.equal((await call("sites.clearData", { site: bad })).error?.code, "bad_request", bad);
   const cleared = await ok("sites.clearData", { site: "Example.COM" });
   assert.equal(cleared.site, "example.com");
-  assert.deepEqual(stub.clearedSiteData.map((c) => c.origin), ["https://example.com"]);
+  assert.deepEqual(stub.clearedSiteData.map((c) => [c.origin, c.engine]).sort(), [["https://example.com", "chromium"], ["https://example.com", "webkit"]]);
 });
 
 test("windows.close asks first when the user set Ardia to, and keeps the last window to reopen", async () => {

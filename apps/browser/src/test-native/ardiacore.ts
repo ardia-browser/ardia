@@ -363,7 +363,7 @@ const cliControl = (on: boolean | null) => testGlobals.acTestCliControl?.(on) ??
 
 export const cancelledDownloads: string[] = [];
 export const downloadSettingsWrites: { profile: string; folder?: string; askWhereToSave?: boolean }[] = [];
-export const clearedSiteData: { profile: string; origin: string }[] = [];
+export const clearedSiteData: { profile: string; origin: string; engine?: string }[] = [];
 export const endedWebKitSessions: string[] = [];
 export const removedStagings: string[] = [];
 export const stagingRemovals = { ok: true };
@@ -505,7 +505,7 @@ const fakeModules = {
     setSetting: ({ profile, origin, type, value }) => (siteSettingsDb.set(`${profile}\n${origin}`, { ...(siteSettingsDb.get(`${profile}\n${origin}`) ?? {}), [type]: value }), null),
     origins: ({ profile }) => [...siteSettingsDb.keys()].filter((k) => k.startsWith(`${profile}\n`)).map((k) => k.slice(profile.length + 1)),
     reset: ({ profile, origin }) => (siteSettingsDb.delete(`${profile}\n${origin}`), null),
-    clearData: ({ profile, origin }) => (clearedSiteData.push({ profile, origin }), { cookies: 0, storage: true }),
+    clearData: ({ profile, origin, engine }) => (clearedSiteData.push({ profile, origin, engine }), { cookies: 0, storage: true }),
     zoomLevels: ({ profile }) => Object.fromEntries([...siteZoomDb].filter(([k]) => k.startsWith(`${profile}\n`)).map(([k, v]) => [k.slice(profile.length + 1), v])),
     setZoom: ({ profile, host, zoom }) => (siteZoomDb.set(`${profile}\n${host}`, zoom), null),
     preloadPages: () => false,

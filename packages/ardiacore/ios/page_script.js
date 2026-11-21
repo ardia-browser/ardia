@@ -1640,12 +1640,39 @@
     );
     const userActivationOf = window.Navigator && Object.getOwnPropertyDescriptor(Navigator.prototype, "userActivation");
     const activeOf = window.UserActivation && Object.getOwnPropertyDescriptor(UserActivation.prototype, "isActive");
+    const activated = () => {
+      const activation = apply(userActivationOf.get, navigator, []);
+      return !!activation && !!apply(activeOf.get, activation, []);
+    };
+    const tracksActivation = !!(userActivationOf && activeOf);
+    const clickDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "click");
+    if (tracksActivation && clickDescriptor && typeof clickDescriptor.value === "function") {
+      const watchScriptedLinkClick = guard((link) => {
+        if (linkUrl(link) === null || !activated()) return null;
+        let dispatched = null;
+        const seen = (e) => {
+          if (!dispatched) dispatched = e;
+        };
+        apply(listen, link, ["click", seen, true]);
+        return guard(() => {
+          apply(unlisten, link, ["click", seen, true]);
+          if (!dispatched || defaultPrevented(dispatched) || replacesPage(link)) return;
+          const url = linkUrl(link);
+          if (peekable({ link, url, path: [link] })) send("newTabLink", { url });
+        });
+      });
+      const click = asNative(clickDescriptor.value, (target, self, args) => {
+        const settle = watchScriptedLinkClick(self);
+        try {
+          return apply(target, self, args);
+        } finally {
+          if (settle) settle();
+        }
+      });
+      Object.defineProperty(HTMLElement.prototype, "click", { ...clickDescriptor, value: click });
+    }
     const openDescriptor = Object.getOwnPropertyDescriptor(window, "open");
-    if (userActivationOf && activeOf && openDescriptor && typeof openDescriptor.value === "function") {
-      const activated = () => {
-        const activation = apply(userActivationOf.get, navigator, []);
-        return !!activation && !!apply(activeOf.get, activation, []);
-      };
+    if (tracksActivation && openDescriptor && typeof openDescriptor.value === "function") {
       const openedByUser = (args) => {
         if (!args.length || args[0] === undefined || args[0] === null || !activated()) return;
         const raw = `${args[0]}`;

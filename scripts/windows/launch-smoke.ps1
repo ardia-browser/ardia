@@ -1554,6 +1554,11 @@ if ($Part -ne "gate" -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent
   } else { $failures += "the meadow self-check on WARP wrote no log" }
 }
 
+if ($Part -ne "gate" -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent (Resolve-Path -LiteralPath $App).Path) "chrome.dll"))) {
+  if ($NoInput) { Write-Host "backed check: not run on this runner, whose desktop Windows' first-run screen covers (#2280)" }
+  else { $failures += @(& (Join-Path $PSScriptRoot "backed-check.ps1") -App $App -Out $Out) }
+}
+
 $gateApp = (Resolve-Path -LiteralPath $App).Path
 $withEngine = Test-Path -LiteralPath (Join-Path (Split-Path -Parent $gateApp) "chrome.dll")
 $gatePort = 9338

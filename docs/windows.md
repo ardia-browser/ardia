@@ -437,6 +437,65 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
   `TextInputState.focusInput`/`blurInput` and tells `ArdiaFocus.setTextInputFocused`; a page is a Chromium window on the
   same thread, so the hook reads the focused window's class (`Chrome_*`). The launch log says `ctrl+z reopens the last
   closed tab`, `ctrl+z left to the focused text field`, `ctrl+z left to the focused dialog or page` or `ctrl+z left to the focused page`.
+- A child mounted after its parent's first mount draws under the parent's background (#2197), in React Native
+  Windows 0.81.38 and upstream `main`. `ComponentView::updateProps` puts a view's background sprite at index 0 of its
+  visual, and `ViewComponentView::MountChildComponentView` inserts children at their index plus the border and outline
+  visuals but not the background. React Native mounts children inside a view only when it forms a stacking context
+  (`zIndex` with a position, `opacity` below 1, a transform, `pointerEvents="none"` and so on), so only a view with a
+  background and a stacking context is hit: a later child lands under the background, or under its previous sibling.
+  - **Remedy, by default:** the Windows bundle keeps backgrounds off the views children mount into. Metro resolves
+    React Native Windows' own `View` (`Libraries/Components/View/View.windows.js`), whoever imports it (the app,
+    `Pressable`, `Animated.View`, our `views/`), to `packages/expo-windows/src/views/BackedView.tsx`
+    (`packages/expo-windows/metroResolution.js`); only `views/raw/rawView.ts` gets the original. A view whose style
+    has a background that draws (its alpha byte isn't 0) renders through the original with the background and the
+    border moved onto a first child (`views/backgroundFill.ts`): absolute at the border box, so it paints under the
+    border as the sprite did, with the view's own radii, border widths, colours, style and curve, and the lowest
+    `zIndex`, which Fabric mounts before every other child, a `position: "static"` one or one with a negative `zIndex`
+    included (it is `-2147483648`, Fabric's lowest, and ties keep it first). It ignores the pointer. The view keeps its border widths for layout, with clear colours, and its shadow,
+    which React Native Windows draws on its outer visual either way. With no sprite on the view, a child mounted later
+    lands at its index, above the fill.
+  - A backed view always forms a stacking context (`collapsable={false}`), so its children mount inside it and the
+    fill can't be flattened into an ancestor and sorted under the ancestor's other content. That keeps it a native
+    view that takes presses, as its background made it. What that changes for a painted view that formed no stacking
+    context before: its children now mount inside it instead of being flattened into its ancestor, a `zIndex`
+    descendant can't rise above the view's later siblings any more, and `pointerEvents="box-only"` on it now also
+    keeps presses off children that used to be flattened out. The shared UI's `zIndex` uses lift a row, chip or drop
+    line among its own siblings, and it has no `box-only` view. Each fill is one more native view, outside UI
+    Automation's control and content views and never a tab stop.
+  - A `setNativeProps` that changes the background or a border colour (an animated `backgroundColor`, as the split
+    zones' glow) goes to the fill only; one that changes a radius, the curve or the border style goes to both. Not
+    covered: a border width changed that way (the fill's offsets stay), and a background first given that way to a
+    view that had none, which reaches the view itself as before and leaves it a sprite for life, even if a style
+    background later backs it. The shared UI has neither, nor a
+    `position: "static"`, right-to-left or outlined view, which an absolute fill at the border box can't match
+    (`platform/windowsBackedView.test.mjs` fails on the last three). `ARDIA_TEST=rawBackgrounds=1` turns fills off in
+    a test instance, to compare. Mac, Linux and the web don't use this resolver and render as before.
+  - `@ardia/shell` exports `BackedView` for a component that wants to say so: React Native's `View` on the Mac,
+    Linux and the web (`packages/shell/src/backedView.ts`), and on Windows `ArdiaBackedView`, which is the same
+    backed `View` (`backedView.windows.ts`). Onboarding's `ChoiceCard` renders through it.
+  - Patching React Native Windows isn't the smaller fix: the app takes `Microsoft.ReactNative` prebuilt from NuGet
+    (`UseExperimentalNuget`), so a C++ fix means building React Native Windows from source for both CPUs.
+  - **Check:** `scripts/windows/backed-check.ps1`, in the x64 engine launch of the launch check, launches with
+    `ARDIA_TEST backedLab` (`packages/expo-windows/src/backedLab.tsx`) for three rounds and fails unless, in rounds
+    2 and 3, a child mounted with the round is drawn within 100 ms and still drawn at the round's end in a plain
+    `View` with a background and `zIndex`, one with only a background, and one with only a background and a child at
+    `zIndex: -1`, and unless a plain `View` turned white with `setNativeProps({ style: { backgroundColor } })` is
+    white within 100 ms. It fails when another window covers the lab during a round (checked at the marker, the middle and the last
+    tile) or fewer than 100 samples see ours, and saves `backed-check.png` 400 ms into round 2. The `background+zIndex` and `zIndex: -1` cases fail
+    if the resolver stops backing views; the `setNativeProps` case fails if paint stops reaching the fill. It logs how many rounds React Native Windows' own `View` with a background
+    and `zIndex` hides the child; when that reads 0 after an upgrade, the resolver and `BackedView` can go. ARM64
+    runners skip it and say so, since Windows' first-run screen covers their desktop (#2280).
+  - **Tour:** the `url-field` part (`Tour the address field` in `windows.yml`, required) launches twice with tabs on
+    top, once with `ARDIA_TEST rawBackgrounds=1` and once as shipped. It finds the address field from example.com,
+    opens a page the tour's own server answers after 3 s and lets it load, rests the pointer on the page, moves it onto
+    the field and presses F5, so the load glow mounts inside the hovered field after the pill. It saves the window at
+    rest, hovered, 600 ms into the reload and after it, and reads two rows just outside the address text (or just
+    inside the field's edges, if UI Automation names the whole field), 12 points in from each end, away from the
+    text, the lock and the rounded ends. The shipped launch fails unless both rows change when the field is hovered
+    and are still changed after the reload, when the glow has gone (the pill), and the bottom row, where the glow is
+    brightest, changes during the reload. The pill is 5 to 7% opaque, so a glow drawn under it, as React Native
+    Windows' own `View` drew it, looks nearly the same: the pictures show the two side by side, and the backed check
+    above proves the order.
 - Animations run in JavaScript on Windows (`packages/expo-windows/src/animation`). React Native for Windows' native
   animation driver adds what it animates to the view's own style instead of replacing it, turns a scale around the
   top-left corner, never reports where an animation ended, and drops scroll and gesture events, so anything but a

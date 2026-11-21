@@ -497,6 +497,13 @@ jobs:
         run: |
           scripts/windows/tour.ps1 -App "${{ runner.temp }}/Ardia/Ardia.exe" -Out "${{ runner.temp }}/tour-first-run" -Only first-run
           if (Test-Path "${{ runner.temp }}/tour-first-run/tour.md") { Get-Content "${{ runner.temp }}/tour-first-run/tour.md" >> $env:GITHUB_STEP_SUMMARY }
+      - name: Tour the address field
+        if: ${{ !cancelled() && env.SLUG == 'x64' && env.PART == 'launch' && env.FULL == 'true' && steps.engine.outcome == 'success' }}
+        timeout-minutes: 15
+        shell: pwsh
+        run: |
+          scripts/windows/tour.ps1 -App "${{ runner.temp }}/Ardia/Ardia.exe" -Out "${{ runner.temp }}/tour-url-field" -Only url-field
+          if (Test-Path "${{ runner.temp }}/tour-url-field/tour.md") { Get-Content "${{ runner.temp }}/tour-url-field/tour.md" >> $env:GITHUB_STEP_SUMMARY }
       - name: Tour the typing
         if: ${{ !cancelled() && env.PART == 'tour' && steps.engine.outcome == 'success' }}
         timeout-minutes: 18
@@ -524,6 +531,8 @@ jobs:
             !${{ runner.temp }}/tour-first-run/data
             ${{ runner.temp }}/tour-typing
             !${{ runner.temp }}/tour-typing/data
+            ${{ runner.temp }}/tour-url-field
+            !${{ runner.temp }}/tour-url-field/data
           if-no-files-found: ignore
           retention-days: 14
       - name: Remove the test marker

@@ -46,6 +46,10 @@ int main() {
   static_assert(state::StateOf(PageFullScreen(kNone), kMaximizedTiled) == kMaximizedTiled);
   static_assert(state::StateOf(PageFullScreen(kAll), kNothing) == kNothing);
   {
+    state::SettledWindowState fresh;
+    assert(fresh.Settle(PageFullScreen(kNone)) == kNothing);
+  }
+  {
     state::SettledWindowState attached;
     assert(attached.Peek(PageFullScreen(kNone)) == kNothing);
     assert(attached.Settle(Wayland(true, kAll)) == kMaximizedTiled);

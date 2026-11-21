@@ -50,8 +50,9 @@ ARDIA_BACKGROUND=1, a throwaway profile and HOME, the sandbox on) without
 It writes <results>/results.json ({ok, package, started, assertions[]}) and the
 launch logs to <results>, prints a table, and exits 0 only when every check ran
 and passed or was skipped. A check whose feature the engine's host predates
-(appVersion is Chromium's version; no engine.setCliControl, ArdiaCli.install,
-ArdiaAutomation.start or ArdiaShell.windowState capability) reports "old": a failure, unless
+(appVersion is Chromium's version; no engine.setCliControl, ArdiaCli.install or
+ArdiaAutomation.start capability; neither ArdiaShell.windowButtonLayout nor
+ArdiaShell.windowState) reports "old": a failure, unless
 --allow-old-engine accepts it, as CI and release.sh do for an engine that isn't
 the commit's own.
 
@@ -312,6 +313,14 @@ export function windowStateProblems(reply) {
 export function windowStateSupport(capabilities) {
   const list = Array.isArray(capabilities) ? capabilities : [];
   return WINDOW_STATE_CAPABILITIES.filter((name) => list.includes(name));
+}
+
+export function windowStateVerdict(capabilities) {
+  const advertised = windowStateSupport(capabilities);
+  if (!advertised.length) return { status: "old", message: `the host advertises neither ${WINDOW_STATE_CAPABILITIES.join(" nor ")}: the engine predates window state on Linux` };
+  const missing = WINDOW_STATE_CAPABILITIES.filter((name) => !advertised.includes(name));
+  if (missing.length) return { status: "fail", message: `the host advertises ${advertised.join(", ")} without ${missing.join(", ")}: the engine ships the two together` };
+  return { status: "pass", message: `the host advertises ${advertised.join(" and ")}` };
 }
 
 export function cliControlSupport(capabilities) {
@@ -825,9 +834,9 @@ class Smoke {
   }
 
   async windowState(shell) {
-    const advertised = windowStateSupport(this.capabilities);
-    if (!advertised.length) throw outcome("old", `the host advertises neither ${WINDOW_STATE_CAPABILITIES.join(" nor ")}: the engine predates window state on Linux`, { capabilities: this.capabilities?.length ?? null });
-    if (advertised.length < WINDOW_STATE_CAPABILITIES.length) throw new Error(`the host advertises ${advertised.join(", ")} without ${WINDOW_STATE_CAPABILITIES.filter((name) => !advertised.includes(name)).join(", ")}: the engine ships the two together`);
+    const verdict = windowStateVerdict(this.capabilities);
+    if (verdict.status === "old") throw outcome("old", verdict.message, { capabilities: this.capabilities?.length ?? null });
+    if (verdict.status === "fail") throw new Error(verdict.message);
     const reply = await shell.eval(`(async () => {
       const host = globalThis.__ardiaHost;
       const call = (method, args) => host.invoke(method, { args });

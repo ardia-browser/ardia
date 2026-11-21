@@ -5,7 +5,8 @@ import { answerRequest, dismissPress, pressAction } from "../../state/page/actio
 import { usePageRequest, usePress } from "../../state/page/hooks";
 import { confirmAnswer, pressHeading, pressMenuGroups, PRESS_TITLES, requestPlan, type PressAction, type Request } from "../../state/page/pagePrompts";
 import { presentSystemRequest } from "./systemRequest";
-import { ActionSheet, Dialog, dialogLayout, font, Menu, menuExitMs, menuLook, pointPlacer, Portal, radius, space, useTheme, type MenuItem, type SymbolName } from "../ui";
+import { ActionSheet, Dialog, dialogLayout, font, Menu, menuExitMs, menuLook, pointPlacer, Portal, radius, space, useDesign, useTheme, type MenuItem, type SymbolName } from "../ui";
+import { materialMenuWidth } from "../ui/MaterialSurfaces";
 import { currentTabs } from "../../state/tabs/store";
 import { findTab } from "../../state/tabs/tabsState";
 
@@ -77,13 +78,14 @@ const PRESS_ICONS: Record<PressAction, SymbolName> = {
 export function PressMenu({ width, height }: { width: number; height: number }) {
   const press = usePress();
   const insets = useSafeAreaInsets();
+  const material = useDesign() === "material";
   if (!press) return null;
   const items: MenuItem[] = [{ heading: pressHeading(press.target) }];
   for (const group of pressMenuGroups(press.target)) {
     items.push("divider");
     for (const action of group) items.push({ label: PRESS_TITLES[action], icon: PRESS_ICONS[action], onPress: () => pressAction(press, action) });
   }
-  const placer = pointPlacer({ x: press.x, y: press.y + insets.top }, { width, height }, insets, menuLook.width);
+  const placer = pointPlacer({ x: press.x, y: press.y + insets.top }, { width, height }, insets, material ? materialMenuWidth(items) : menuLook.width);
   return (
     <Portal exitMs={menuExitMs(true)}>
       <Menu items={items} placer={placer} dimmed frost={null} privately={pressedPrivately(press.tabId)} onDismiss={dismissPress} />

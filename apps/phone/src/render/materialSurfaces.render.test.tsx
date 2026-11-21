@@ -1,6 +1,6 @@
 import { Dimensions, Platform, StyleSheet, Text } from "react-native";
 import { act, type ReactTestInstance } from "react-test-renderer";
-import { DesignProvider, Dialog, Sheet, useTheme } from "../components/ui";
+import { ConfirmSheet, DesignProvider, Dialog, Sheet, useTheme } from "../components/ui";
 import { rolesFromScheme } from "../components/ui/materialRoles";
 import { materialMenuFill, materialSheetMs } from "../components/ui/MaterialSurfaces";
 import { SEEDED_SCHEMES } from "../lib/material/schemes";
@@ -125,6 +125,20 @@ onAndroid("a dialog in the material design is Material's: surfaceContainerHigh, 
   expect(flat(texts.find((node) => node.props.children === "Close All")).color).toBe(LIGHT.error);
   const button = root.root.findAll((node) => node.props.accessibilityRole === "button" && typeof node.props.onPress === "function")[0]!;
   expect(button.props.android_ripple).toMatchObject({ borderless: false });
+  unmount(root);
+});
+
+onAndroid("a ConfirmSheet in the material design follows Material 3 AlertDialog: dynamic surfaceContainerHigh, 28 dp corners, elevation, headlineSmall title, primary Cancel and error destructive action", () => {
+  const dismissed = jest.fn();
+  const root = material(<ConfirmSheet confirmation={{ title: "Close All Tabs?", message: "They stay in your Archive.", action: "Close All", run: () => undefined }} onClose={dismissed} />);
+  expect(flat(host(root, "drawnActionSheet"))).toMatchObject({ backgroundColor: LIGHT.surfaceContainerHigh, borderRadius: 28, elevation: 3 });
+  const texts = root.root.findAll((node) => node.type === Text);
+  expect(flat(texts.find((node) => node.props.children === "Close All Tabs?"))).toMatchObject({ fontSize: 24, color: LIGHT.onSurface });
+  expect(flat(texts.find((node) => node.props.children === "Cancel")).color).toBe(LIGHT.primary);
+  expect(flat(texts.find((node) => node.props.children === "Close All")).color).toBe(LIGHT.error);
+  act(() => setDynamicScheme(WALLPAPER));
+  expect(flat(host(root, "drawnActionSheet")).backgroundColor).toBe(WALLPAPER.light.surfaceContainerHigh);
+  expect(flat(root.root.findAll((node) => node.type === Text).find((node) => node.props.children === "Cancel")).color).toBe(WALLPAPER.light.primary);
   unmount(root);
 });
 

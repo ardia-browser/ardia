@@ -16,6 +16,8 @@ export type PageCookie = {
   partitionKeyOpaque?: boolean;
 };
 
+export type StorageItems = [string, string][];
+
 export type PasskeyAccessStatus = "entitlementRequired" | "deviceNotConfigured" | "notDetermined" | "authorized" | "denied";
 export type PasskeyAccess = { entitled: boolean; status: PasskeyAccessStatus };
 

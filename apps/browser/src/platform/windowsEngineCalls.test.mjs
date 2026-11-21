@@ -13,6 +13,13 @@ const windowsDomains = "packages/expo-windows/src/engine/domains/";
 const engineSources = "engine/chromium/src/chrome/browser/ardia/";
 const rows = JSON.parse(read(`${windowsDomains}forwarded.json`));
 const MAC_ONLY = new Set(["swipe", "webKit"]);
+const ENGINE_CALL = /^AC_(?:PROFILE|ARGS)_CALL\(\s*(ac_\w+)/gm;
+const windowsEngineCalls = new Set(
+  read("scripts/windows/engine/accepted-layer-sources.txt")
+    .split("\n")
+    .filter((name) => name.endsWith(".cc"))
+    .flatMap((name) => [...read(engineSources + name).matchAll(ENGINE_CALL)].map((match) => match[1])),
+);
 const sorted = (list) => [...list].sort();
 
 function macTables() {
@@ -66,7 +73,16 @@ test("the scan finds the Mac's call tables", () => {
 });
 
 test("every verb the Mac passes straight to the engine goes to the same engine call on Windows", () => {
-  const passing = Object.fromEntries(Object.entries(mac).filter(([, table]) => Object.keys(table.passing).length).map(([domain, table]) => [domain, table.passing]));
+  const passing = {};
+  for (const [domain, table] of Object.entries(mac)) {
+    for (const [verb, call] of Object.entries(table.passing)) {
+      if (rows.missing[domain]?.includes(verb)) {
+        assert.equal(windowsEngineCalls.has(call), false, `${domain}.${verb} is missing on Windows only while the Windows engine builds no ${call}`);
+        continue;
+      }
+      (passing[domain] ??= {})[verb] = call;
+    }
+  }
   const awaited = rows.awaitingEngine ?? {};
   const onWindows = Object.fromEntries(
     sorted([...new Set([...Object.keys(rows.forwarded), ...Object.keys(awaited)])]).map((domain) => [domain, { ...rows.forwarded[domain], ...awaited[domain] }]),
@@ -88,6 +104,13 @@ test("every verb of the Mac's tables is forwarded, reproduced or listed as missi
     assert.deepEqual(sorted(onWindows), sorted(table.verbs), `${domain} has the Mac's verbs`);
     assert.equal(new Set(onWindows).size, onWindows.length, `${domain} answers each verb one way`);
   }
+});
+
+test("a verb the Mac passes to an engine call Windows doesn't build is missing on Windows", () => {
+  assert.ok(windowsEngineCalls.size > 40, "the scan found the Windows engine's calls");
+  for (const [domain, table] of Object.entries(mac))
+    for (const [verb, call] of Object.entries(table.passing))
+      if (!windowsEngineCalls.has(call)) assert.ok(rows.missing[domain]?.includes(verb), `${domain}.${verb} (${call}) is listed as missing on Windows`);
 });
 
 test("Windows only names engine calls the Windows engine has", () => {

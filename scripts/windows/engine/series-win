@@ -1,4 +1,5 @@
 skip chromium-safe-storage-no-silent-reset.patch
+skip chromium-extension-state-mirror-hooks.patch
 chromium chromium-win-rtl-unittest-domsub.patch
 chromium chromium-win-load-local-state-delegate.patch
 chromium chromium-win-ardia-layer-calls-mac-only.patch

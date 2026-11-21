@@ -133,7 +133,7 @@ export const SETTING_SPECS = {
   sidebarTextContrast: oneOf(["auto", "standard", "high"], "auto", SYNCED),
   selectedTopApp: oneOf(["ring", "fill", "outline"], "ring", SYNCED),
   elementOutlines: flag(true, SYNCED),
-  interfaceStyle: oneOf(["glass", "classic"], "glass", SYNCED),
+  interfaceStyle: oneOf(["glass", "classic"], "glass", SYNCED), windowButtons: oneOf(["native", "trafficLights", "hidden"], "native"),
   glassTintWithTheme: flag(false, SYNCED),
   glassTintAmount: fraction(0.8, SYNCED),
   fadeUnloadedTabs: flag(false, SYNCED),

@@ -40,7 +40,11 @@ export const dockedCardInset = (sidebarWidth: number, inset: number) => sidebarW
 export const cardInsetAt = (dock: number, sidebarWidth: number, inset: number) => inset + (dockedCardInset(sidebarWidth, inset) - inset) * dock;
 
 const FULL_SCREEN_TOGGLE_X = 29;
-export const HEADER_TOOLS = { toggleX: WINDOW_CHROME.leadingWidth ? 70.75 + 27 : FULL_SCREEN_TOGGLE_X, fullScreenToggleX: FULL_SCREEN_TOGGLE_X, pitch: 35, edge: layout.sidebarInset + 1 } as const;
+export const HEADER_TOOLS = {
+  get toggleX() {
+    return WINDOW_CHROME.leadingWidth ? 70.75 + 27 : FULL_SCREEN_TOGGLE_X;
+  },
+  fullScreenToggleX: FULL_SCREEN_TOGGLE_X, pitch: 35, edge: layout.sidebarInset + 1 } as const;
 
 export type HeaderButton = "back" | "forward" | "reload";
 

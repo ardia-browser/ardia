@@ -267,5 +267,7 @@ export const layout = {
   toolbarButton: 30,
   toolbarIconCenters: [21, 56, 92, 127],
   breadcrumbX: 153,
-  trafficLightsWidth: WINDOW_CHROME.leadingWidth,
+  get trafficLightsWidth() {
+    return WINDOW_CHROME.leadingWidth;
+  },
 } as const;

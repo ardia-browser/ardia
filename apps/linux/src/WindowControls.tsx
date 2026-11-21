@@ -1,12 +1,12 @@
 import { memo } from "react";
-import { controlsShown, WindowControls as SharedWindowControls, type WindowControlsProps } from "../../browser/src/components/window/WindowControls";
+import { controlsShown, useControlsShown, WindowControls as SharedWindowControls, type WindowControlsProps } from "../../browser/src/components/window/WindowControls";
 import { useFullscreenTab } from "../../browser/src/state/tabs/pageState";
 import { reportHostError } from "./host";
 import { isLinuxUtility } from "./session";
 import { linuxWindowMenu } from "./linuxWindowMenu";
 import { linuxControlsBehaviour, pressKeepsFocusWhereItWas } from "./windowControlsRules";
 
-export { controlsShown, type WindowControlsProps };
+export { controlsShown, useControlsShown, type WindowControlsProps };
 
 export const WindowControls = memo(function WindowControls(props: WindowControlsProps) {
   const behaviour = linuxControlsBehaviour({ pageFullScreen: !!useFullscreenTab(props.windowId), hidden: !!props.hidden, utility: isLinuxUtility(props.windowId), windowMenu: !!linuxWindowMenu });

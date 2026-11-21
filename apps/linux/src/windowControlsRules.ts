@@ -2,6 +2,9 @@ export type LinuxControlsState = { pageFullScreen: boolean; hidden: boolean; uti
 
 export const windowButtonsRendered = ({ placed, pageFullScreen }: { placed: boolean; pageFullScreen: boolean }): boolean => placed && !pageFullScreen;
 
+export const trafficLightsShown = ({ style, pageFullScreen, windowFullScreen }: { style: string; pageFullScreen: boolean; windowFullScreen: boolean }): boolean =>
+  style === "trafficLights" && !pageFullScreen && !windowFullScreen;
+
 export const linuxControlsBehaviour = ({ pageFullScreen, hidden, utility, windowMenu }: LinuxControlsState) => ({
   rendered: windowButtonsRendered({ placed: true, pageFullScreen }),
   inert: hidden,

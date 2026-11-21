@@ -13,9 +13,61 @@ function state(settings = {}, window = {}, extra = {}) {
   };
 }
 
-test("Linux lays out its window with the Windows build's chrome", async () => {
+test("Linux lays out its window with the Windows build's chrome until Traffic lights is chosen", async () => {
   const linux = (await import("../../browser/src/lib/platformChrome.linux.ts")).WINDOW_CHROME;
-  assert.equal(linux, windowsChrome);
+  assert.deepEqual(linux, windowsChrome);
+});
+
+test("the traffic lights show only when chosen, and hide while the window or a page is full screen, as the Mac's do", async () => {
+  const { trafficLightsShown } = await import("./windowControlsRules.ts");
+  const shown = (style, pageFullScreen = false, windowFullScreen = false) => trafficLightsShown({ style, pageFullScreen, windowFullScreen });
+  assert.equal(shown("trafficLights"), true);
+  assert.equal(shown("native"), false);
+  assert.equal(shown("hidden"), false);
+  assert.equal(shown("trafficLights", true), false);
+  assert.equal(shown("trafficLights", false, true), false);
+});
+
+test("with the traffic lights every layout keeps the header's hamburger, never collapses the header and keeps Downloads in it", async () => {
+  const { menuBesideWindowButtons, linuxSidebarCaptionRoom, linuxSidebarHeaderCollapsed, linuxDownloadsInSidebarFooter, headerFitsDownloads, addressBarInSidebar } = await import("./sidebarHeaderLayout.ts");
+  const { TRAFFIC_LIGHTS_CHROME } = await import("../../browser/src/lib/platformChrome.linux.ts");
+  const layouts = [{}, { compactToolbar: true }, { sidebarSide: "right" }, { sidebarSide: "right", sidebarWidth: 160 }, { tabLayout: "top" }, { autoHideTabs: true }, { minimalismMode: true }];
+  for (const settings of layouts) {
+    for (const window of [{}, { fullScreen: true }, { kind: "small" }]) {
+      const s = state(settings, window);
+      const label = JSON.stringify([settings, window]);
+      assert.equal(menuBesideWindowButtons(s, "w", false, TRAFFIC_LIGHTS_CHROME), false, label);
+      assert.equal(linuxSidebarCaptionRoom(s, "w", false, TRAFFIC_LIGHTS_CHROME), 0, label);
+      assert.equal(linuxSidebarHeaderCollapsed(s, "w", false, TRAFFIC_LIGHTS_CHROME), false, label);
+      assert.equal(headerFitsDownloads(s, "w", false, TRAFFIC_LIGHTS_CHROME), true, label);
+    }
+    assert.equal(linuxDownloadsInSidebarFooter(state(settings), "w", false, TRAFFIC_LIGHTS_CHROME), !!addressBarInSidebar(state(settings), "w"), JSON.stringify(settings));
+  }
+});
+
+test("with the window buttons hidden every layout keeps the header's hamburger and keeps no room for buttons, so a tiling window manager's window still has its menu", async () => {
+  const { menuBesideWindowButtons, linuxSidebarCaptionRoom, linuxSidebarHeaderCollapsed, linuxDownloadsInSidebarFooter, headerFitsDownloads, addressBarInSidebar } = await import("./sidebarHeaderLayout.ts");
+  const { HIDDEN_BUTTONS_CHROME } = await import("../../browser/src/lib/platformChrome.linux.ts");
+  const layouts = [{}, { compactToolbar: true }, { sidebarSide: "right" }, { sidebarSide: "right", sidebarWidth: 160 }, { tabLayout: "top" }, { autoHideTabs: true }, { minimalismMode: true }, { addressBar: "sidebar" }];
+  for (const settings of layouts) {
+    for (const window of [{}, { fullScreen: true }, { kind: "small" }]) {
+      const s = state(settings, window);
+      const label = JSON.stringify([settings, window]);
+      assert.equal(menuBesideWindowButtons(s, "w", false, HIDDEN_BUTTONS_CHROME), false, label);
+      assert.equal(linuxSidebarCaptionRoom(s, "w", false, HIDDEN_BUTTONS_CHROME), 0, label);
+      assert.equal(linuxSidebarHeaderCollapsed(s, "w", false, HIDDEN_BUTTONS_CHROME), false, label);
+      assert.equal(headerFitsDownloads(s, "w", false, HIDDEN_BUTTONS_CHROME), true, label);
+    }
+    assert.equal(linuxDownloadsInSidebarFooter(state(settings), "w", false, HIDDEN_BUTTONS_CHROME), !!addressBarInSidebar(state(settings), "w"), JSON.stringify(settings));
+  }
+});
+
+test("the header's empty room beside the hamburger drags the window: the profile controls pass presses through except on their buttons", async () => {
+  const { readFileSync } = await import("node:fs");
+  const css = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+  const rule = (selector) => new RegExp(`(^|\\n)${selector.replace(/[.>]/g, (c) => `\\${c}`)} \\{([^}]*)\\}`).exec(css)?.[2] ?? "";
+  assert.match(rule(".ardia-profile-controls"), /pointer-events: none;/);
+  assert.match(rule(".ardia-profile-controls > .ardia-header-button"), /pointer-events: auto;/);
 });
 
 test("minimize and maximize reach the Linux host's window calls; caption regions are the shell's own drag regions", async () => {

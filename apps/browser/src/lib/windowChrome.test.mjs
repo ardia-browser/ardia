@@ -27,3 +27,46 @@ test("on Windows a card whose top row is shorter than the caption buttons starts
   assert.equal(captionClearTop(9, 0, 9, windows), 32);
   assert.equal(captionClearTop(9, 0, 190, windows), 9);
 });
+
+test("Linux starts with the Windows build's buttons at the trailing top and switches to the traffic lights at the leading top and back", async () => {
+  const linux = await import("./platformChrome.linux.ts");
+  assert.deepEqual(linux.WINDOW_BUTTON_STYLES, ["native", "trafficLights", "hidden"]);
+  assert.deepEqual(linux.WINDOW_CHROME, windows);
+  assert.notEqual(linux.WINDOW_CHROME, windows, "switching on Linux never changes the Windows build's chrome");
+  assert.equal(linux.applyWindowButtonStyle("native"), false);
+  assert.equal(linux.applyWindowButtonStyle("trafficLights"), true);
+  assert.deepEqual(linux.WINDOW_CHROME, WINDOW_CHROME, "the traffic lights reserve what the Mac's do");
+  assert.equal(captionRoom(0, 0, linux.WINDOW_CHROME), 0);
+  assert.equal(linux.applyWindowButtonStyle("trafficLights"), false);
+  assert.equal(linux.applyWindowButtonStyle("native"), true);
+  assert.deepEqual(linux.WINDOW_CHROME, windows);
+  assert.deepEqual(windows, { leadingWidth: 0, trailingWidth: 171, titleBarHeight: 32 });
+});
+
+test("Linux with the window buttons hidden draws no caption buttons and keeps no room for them at either top corner", async () => {
+  const linux = await import("./platformChrome.linux.ts");
+  const { windowControlsDrawn } = await import("./windowChrome.ts");
+  for (const from of ["native", "trafficLights"]) {
+    linux.applyWindowButtonStyle(from);
+    assert.equal(linux.applyWindowButtonStyle("hidden"), true, from);
+    assert.deepEqual(linux.WINDOW_CHROME, { leadingWidth: 0, trailingWidth: 0, titleBarHeight: 0 }, from);
+    assert.equal(windowControlsDrawn(linux.WINDOW_CHROME), false, from);
+    assert.equal(captionRoom(0, 0, linux.WINDOW_CHROME), 0, from);
+    assert.equal(captionClearTop(9, 0, 9, linux.WINDOW_CHROME), 9, from);
+    assert.equal(linux.applyWindowButtonStyle("hidden"), false, from);
+  }
+  assert.equal(linux.applyWindowButtonStyle("native"), true);
+  assert.deepEqual(linux.WINDOW_CHROME, windows);
+});
+
+test("the Mac and Windows offer no choice of window buttons", async () => {
+  const mac = await import("./platformChrome.ts");
+  const win = await import("./platformChrome.windows.ts");
+  for (const platform of [mac, win]) {
+    assert.deepEqual(platform.WINDOW_BUTTON_STYLES, []);
+    assert.equal(platform.applyWindowButtonStyle("trafficLights"), false);
+    assert.equal(platform.applyWindowButtonStyle("native"), false);
+  }
+  assert.deepEqual(mac.WINDOW_CHROME, { leadingWidth: 78, trailingWidth: 0, titleBarHeight: 0 });
+  assert.deepEqual(win.WINDOW_CHROME, { leadingWidth: 0, trailingWidth: 171, titleBarHeight: 32 });
+});

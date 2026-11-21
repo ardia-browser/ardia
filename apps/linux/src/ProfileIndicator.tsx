@@ -8,7 +8,7 @@ import { setMeasuredWidth, useMeasuredWidth } from "../../browser/src/state/wind
 import { useMenuBesideWindowButtons } from "./sidebarHeaderLayout";
 import { headerIndicatorLayout } from "./profileIndicatorLayout";
 
-export { PROFILE_INDICATOR_X } from "../../browser/src/components/profiles/ProfileIndicator";
+export { profileIndicatorX } from "../../browser/src/components/profiles/ProfileIndicator";
 
 function useIndicator(room: number) {
   const incognito = useIsIncognito();

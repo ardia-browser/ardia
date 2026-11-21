@@ -14,7 +14,7 @@ const PAD = 9;
 const HEIGHT = 34;
 const MIN_CUT_NAME = 52;
 const ICON_WIDTH = 32;
-export const PROFILE_INDICATOR_X = Math.max(WINDOW_CHROME.leadingWidth + 6, CARD_INSET);
+export const profileIndicatorX = () => Math.max(WINDOW_CHROME.leadingWidth + 6, CARD_INSET);
 
 function useIndicator(room: number) {
   const theme = useTheme();

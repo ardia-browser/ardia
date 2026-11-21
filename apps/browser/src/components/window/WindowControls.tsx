@@ -2,7 +2,8 @@ import { memo } from "react";
 import { Animated, Pressable, View } from "react-native";
 import { Symbol, useHover } from "../ui";
 import { useTheme } from "../ui/theme";
-import { WINDOW_CHROME, WINDOW_CONTROLS, windowControlsWidth } from "../../lib/windowChrome";
+import { WINDOW_CONTROLS, windowControlsDrawn, windowControlsWidth } from "../../lib/windowChrome";
+import { useWindowButtonStyle } from "../../state/windows/windowButtons";
 import { useWindowMaximized } from "../../state/windows/captionRegions";
 import { WINDOW_BUTTONS } from "./tokens";
 import { closeFromWindowControls, minimizeWindow, toggleWindowMaximized } from "../../state/windows/controls";
@@ -68,12 +69,18 @@ export type WindowControlsProps = {
   leading?: boolean;
 };
 
-export const controlsShown = WINDOW_CHROME.trailingWidth > 0;
+export const controlsShown = windowControlsDrawn();
+
+export const useControlsShown = (): boolean => {
+  useWindowButtonStyle();
+  return windowControlsDrawn();
+};
 
 export const WindowControls = memo(function WindowControls({ windowId, centerY, size, maximizable = true, minimizable = true, onMenu, ink, opacity = 1, hidden = false, leading = false }: WindowControlsProps) {
   const theme = useTheme();
   const maximized = useWindowMaximized(windowId);
-  if (!controlsShown) return null;
+  const shown = useControlsShown();
+  if (!shown) return null;
   const colors: Ink = { icon: ink?.icon ?? theme.icon, hover: ink?.hover ?? theme.toolbarHover, pressed: ink?.pressed ?? theme.toolbarPressed };
   const width = WINDOW_CONTROLS.button;
   const plateRadius = Math.min(B.plateRadius.most, Math.round(size / B.plateRadius.share));

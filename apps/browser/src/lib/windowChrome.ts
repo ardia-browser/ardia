@@ -1,6 +1,6 @@
-import { WINDOW_CHROME, type WindowChrome } from "./platformChrome";
+import { applyWindowButtonStyle, WINDOW_BUTTON_STYLES, WINDOW_CHROME, type WindowButtonStyle, type WindowChrome } from "./platformChrome";
 
-export { WINDOW_CHROME, type WindowChrome };
+export { applyWindowButtonStyle, WINDOW_BUTTON_STYLES, WINDOW_CHROME, type WindowButtonStyle, type WindowChrome };
 
 export function captionRoom(fromRight: number, fromTop = 0, chrome: WindowChrome = WINDOW_CHROME): number {
   if (fromTop >= chrome.titleBarHeight) return 0;
@@ -15,6 +15,10 @@ export function captionClearTop(top: number, rowHeight: number, fromRight: numbe
 export function trailingClearance(top: number, margin: number, controlsBottom: number, chrome: WindowChrome = WINDOW_CHROME): number {
   return top < controlsBottom ? Math.max(margin, chrome.trailingWidth) : margin;
 }
+
+export const windowButtonsChoosable = WINDOW_BUTTON_STYLES.length > 1;
+
+export const windowControlsDrawn = (chrome: WindowChrome = WINDOW_CHROME): boolean => chrome.trailingWidth > 0;
 
 export const WINDOW_CONTROLS = { edge: 12, gap: 3, button: 30, regular: 30, small: 28, band: 26, strip: 18 } as const;
 

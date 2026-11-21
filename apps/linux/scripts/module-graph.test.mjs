@@ -61,7 +61,7 @@ test("production graph uses current Linux adapters and one canonical shared stat
     ["components/window/PageOverlays.tsx", "PageOverlays.tsx", ["BesidePeekPopovers", "PageOverlays", "PeekPage"]],
     ["components/window/WindowOverlays.tsx", "WindowOverlays.tsx", ["windowOverlays"]],
     ["components/downloads/Downloads.tsx", "DownloadsPopover.tsx", ["DownloadMagnet", "DownloadsPopover"]],
-    ["components/profiles/ProfileIndicator.tsx", "ProfileIndicator.tsx", ["PROFILE_INDICATOR_X", "ProfileIndicator", "useProfileIndicatorWidth"]],
+    ["components/profiles/ProfileIndicator.tsx", "ProfileIndicator.tsx", ["profileIndicatorX", "ProfileIndicator", "useProfileIndicatorWidth"]],
     ["components/sidebar/AddressBar.tsx", "SidebarAddressBar.tsx", ["SidebarAddressRow", "SidebarHeaderTools"]],
     ["components/sidebar/TileFace.tsx", "TileFace.tsx", ["FolderDropRing", "RestingTile", "TileFace", "useSlotPosition"]],
     ["state/settings/settingsWindows.ts", "settingsWindows.ts", ["goToSettingsPane", "openImport", "openSettings", "useSettingsNav"]],
@@ -122,7 +122,8 @@ test("production graph uses current Linux adapters and one canonical shared stat
     const imported = graph.get(`${browser}${importer}`).importedIds;
     assert.ok(imported.includes(`${linux}sidebarHeaderLayout.ts`) && !imported.includes(`${browser}state/windows/layout.ts`), `${importer} keeps the header, and its menu, whenever the window buttons are hidden`);
   }
-  assert.ok(!graph.has(`${linux}TrafficLights.tsx`));
+  assert.ok(graph.get(`${linux}main.tsx`).importedIds.includes(`${linux}TrafficLights.tsx`), "Linux draws its own traffic lights when they are chosen");
+  assert.ok(graph.get(`${linux}TrafficLights.tsx`).importedIds.includes(`${linux}captionControls.ts`), "the traffic lights close, minimize and maximize through the same adapters as the native buttons");
 
   for (const twin of ["lib/platformFeatures", "lib/platformTerms", "lib/platformChrome"]) {
     assert.ok(graph.has(`${browser}${twin}.linux.ts`), `${twin} resolves to its .linux twin`);

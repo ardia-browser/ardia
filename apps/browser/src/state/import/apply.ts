@@ -50,7 +50,7 @@ export function importBookmarks(profileId: string, root: ImportedNode | undefine
   const roots = bookmarkRoots(useBrowser.getState(), profileId)!;
   const toolbar = root.children.filter((c) => c.role === "toolbar").flatMap((c) => c.children ?? []);
   const rest = root.children.filter((c) => c.role !== "toolbar");
-  const other = rest.flatMap((c) => (c.role === "other" || !c.role ? (c.type === "folder" ? (c.children ?? []) : [c]) : [c]));
+  const other = rest.flatMap((c) => (c.type === "folder" && (c.role === "other" || (!c.role && !c.title)) ? (c.children ?? []) : [c]));
   const title = `Imported from ${browserName}`;
   const place = (nodes: ImportedNode[], parentId: string) => {
     if (!nodes.length) return;

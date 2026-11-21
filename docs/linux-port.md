@@ -893,7 +893,16 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
   collapsed. A peek lays the toolbar over the page's top edge, and without the region `plainViewport`'s top samples
   hit it and the page stopped drawing until the toolbar collapsed (#2390). `usage_counts.toolbar_peeks` counts peeks
   and `toolbar_peek_page_hides` counts a page that stopped drawing while its toolbar peeked; it should stay near 0. Both
-  count in the telemetry leader window only, like `toolbar_scroll_hides`, so their ratio holds.
+  count in the telemetry leader window only, like `toolbar_scroll_hides`, so their ratio holds. When a peek folds
+  away, the region stays for the fold's duration (`TOOLBAR_MOTION.hide`): the toolbar is still drawn at its peek
+  position on the collapse's first frame, and dropping the region then hid the page for a frame (#3285). A collapse
+  that cuts an opening short keeps it for the fold too; only a collapse from a toolbar that has finished opening
+  (`TOOLBAR_MOTION.show`) drops it at once, so the fading buttons don't take clicks over the page. The window
+  buttons (`WindowControls.tsx`) are an input region while they take input: when the toolbar opens they appear at full
+  size before the page has moved down, and their bottom edge reached a top sample. `toolbar_motion_page_hides` counts a
+  page that stopped drawing within two motion lengths of the toolbar opening or folding, while no peek is set (a hide
+  while a peek is set, even one a menu or the address field holds open, counts in `toolbar_peek_page_hides` only); it
+  should stay near 0 against `toolbar_scroll_hides`.
 - **Sidebar peek.** The peeking sidebar is a page overlay region (`SidebarPeekMark.tsx`), reaching past the panel's
   edge over the half of the resize handle that sticks out. Its dock's outer box takes no hits itself (`box-none`): on a
   peek's first frame that box already sits over the page's edge while the panel is still off screen, and

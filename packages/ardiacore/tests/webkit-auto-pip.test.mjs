@@ -114,7 +114,7 @@ test("the rule travels with the page view, so a tab that takes the view over sti
     /var autoPictureInPictureRule: WebKitAutoPictureInPicture \{\n\s+get \{ webView\?\.autoPictureInPictureRule \?\? WebKitAutoPictureInPicture\(\) \}\n\s+set \{ webView\?\.autoPictureInPictureRule = newValue \}\n\s+\}/,
   );
   const attach = tab.slice(tab.indexOf("func attach(_ view: WebKitWebView) {"), tab.indexOf("private func observe("));
-  assert.match(attach, /webView = view\n[\s\S]*\n {4}updateSight\(\)\n {4}pushFieldProvider\(\)\n {2}\}/);
+  assert.match(attach, /webView = view\n[\s\S]*\n {4}pushFieldProvider\(\)\n {4}updateSight\(\)\n {2}\}/);
 });
 
 test("ArdiaCore's public window host gives Swift the same sight rule as Chromium views", () => {

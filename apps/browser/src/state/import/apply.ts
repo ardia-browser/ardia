@@ -44,13 +44,35 @@ const linkCount = (nodes: ImportedNode[], counts: (link: ImportedNode) => boolea
 
 export const untitledLinks = (root: ImportedNode | undefined): number => linkCount(root?.children ?? [], (link) => link.title === "");
 
+function bookmarkedPages(profileId: string): Set<string> {
+  const s = useBrowser.getState();
+  const roots = bookmarkRoots(s, profileId);
+  const pages = new Set<string>();
+  const walk = (id: string) => {
+    const node = s.bookmarks.nodes[id];
+    if (node?.kind === "url") pages.add(pageKey(node.url));
+    else if (node?.kind === "folder") node.children.forEach(walk);
+  };
+  if (roots) [roots.bar, roots.other].forEach(walk);
+  return pages;
+}
+
+const notBookmarked = (nodes: ImportedNode[], had: Set<string>): ImportedNode[] =>
+  nodes.flatMap((n) => {
+    if (n.type === "url") return had.has(pageKey(n.url ?? "")) ? [] : [n];
+    const children = notBookmarked(n.children ?? [], had);
+    return linkCount(children) ? [{ ...n, children }] : [];
+  });
+
 export function importBookmarks(profileId: string, root: ImportedNode | undefined, browserName: string): number {
   if (!root?.children?.length) return 0;
   if (!bookmarkRoots(useBrowser.getState(), profileId)) useBrowser.getState().addBookmarkTree(profileId, []);
   const roots = bookmarkRoots(useBrowser.getState(), profileId)!;
-  const toolbar = root.children.filter((c) => c.role === "toolbar").flatMap((c) => c.children ?? []);
+  const had = bookmarkedPages(profileId);
+  const fresh = (nodes: ImportedNode[]) => (had.size ? notBookmarked(nodes, had) : nodes);
+  const toolbar = fresh(root.children.filter((c) => c.role === "toolbar").flatMap((c) => c.children ?? []));
   const rest = root.children.filter((c) => c.role !== "toolbar");
-  const other = rest.flatMap((c) => (c.role === "other" || !c.role ? (c.type === "folder" ? (c.children ?? []) : [c]) : [c]));
+  const other = fresh(rest.flatMap((c) => (c.role === "other" || !c.role ? (c.type === "folder" ? (c.children ?? []) : [c]) : [c])));
   const title = `Imported from ${browserName}`;
   const place = (nodes: ImportedNode[], parentId: string) => {
     if (!nodes.length) return;

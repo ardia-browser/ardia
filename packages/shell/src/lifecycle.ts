@@ -27,6 +27,8 @@ export type AppEvent =
   | { type: "littleArdiaGlobalShortcut" }
   | { type: "littleArdiaGlobalShortcutBehind" }
   | { type: "windowDragLoop"; epoch: string }
+  | { type: "engineNotificationPresented"; handedToEngine: boolean; epoch: string }
+  | { type: "notificationSettings"; authorization: string; alertSetting: string; alertStyle: string; epoch: string }
   | {
       type: "pasteRefused";
       reason: string;

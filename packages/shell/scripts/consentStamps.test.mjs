@@ -4,7 +4,7 @@ import { test } from "node:test";
 
 const IOS = new URL("../ios/", import.meta.url);
 const read = (name) => readFileSync(new URL(name, IOS), "utf8");
-const COUNTED = ["centeredResize", "windowTitleRead", "windowDragLoop"];
+const COUNTED = ["centeredResize", "windowTitleRead", "windowDragLoop", "engineNotificationPresented", "notificationSettings"];
 
 test("every app event JS telemetry counts is sent through a consent stamp", () => {
   for (const name of readdirSync(IOS).filter((n) => n.endsWith(".swift"))) {
@@ -47,4 +47,27 @@ test("a refused edit key and a late acknowledgement report the consent epoch the
   assert.match(handoff, /refuse\(\.lateAcknowledgement, \[\.action\(action\)\], since: consentAtArrival\(of: event\)\)/);
   assert.match(handoff, /refuse\(\.staleEpoch, \[\.key\(event, up: nil\)\], since: consentAtArrival\(of: event\)\)/);
   assert.match(handoff, /private func consentAtArrival\(of event: NSEvent\) -> String \{\s*editKeyConsent\.object\(forKey: event\) as String\? \?\? ""\s*\}/);
+});
+
+test("a notification Chrome posted is counted with the stamp taken as it arrives, and the event holds nothing of the notification", () => {
+  const hub = read("NotificationHub.swift");
+  const present = hub.slice(hub.indexOf("willPresent notification"), hub.indexOf("didReceive response"));
+  assert.ok(present.indexOf("ArdiaConsentStamp.begin()") > 0 && present.indexOf("ArdiaConsentStamp.begin()") < present.indexOf("DispatchQueue.main.async"), "the stamp is taken before the hop to the main thread");
+  const sends = present.split("\n").filter((line) => line.includes("ShellEvents.send"));
+  assert.equal(sends.length, 1);
+  assert.match(sends[0], /stamp\.onto\(\["type": "engineNotificationPresented", "handedToEngine": handedToEngine\]\)/, "only whether Chrome's delegate was handed it is sent");
+  assert.doesNotMatch(sends[0], /title|body|identifier|notificationId|userInfo|origin/);
+});
+
+test("the notification settings are read once per launch, sent as enum names with a consent stamp, and a send that found no listener is tried again", () => {
+  const hub = read("NotificationHub.swift");
+  const report = hub.slice(hub.indexOf("func reportSettingsOnce()"), hub.indexOf("func post("));
+  assert.match(report, /guard !settingsReported else \{ return \}/);
+  assert.match(report, /let stamp = ArdiaConsentStamp\.begin\(\)\s*guard !stamp\.epoch\.isEmpty else \{ return \}/);
+  assert.match(report, /settingsReported = ShellEvents\.send\(\.app, stamp\.onto\(\["type": "notificationSettings", "authorization": authorization, "alertSetting": alert, "alertStyle": style\]\)\)/);
+  assert.match(report, /Self\.name\(of: settings\.authorizationStatus\)/);
+  assert.match(report, /Self\.name\(of: settings\.alertSetting\)/);
+  assert.match(report, /Self\.name\(of: settings\.alertStyle\)/);
+  assert.match(read("ShellEvents.swift"), /case \.app: NotificationHub\.shared\.reportSettingsOnce\(\)/);
+  assert.match(read("FocusModule.swift"), /DispatchQueue\.main\.async \{ NotificationHub\.shared\.reportSettingsOnce\(\) \}/);
 });

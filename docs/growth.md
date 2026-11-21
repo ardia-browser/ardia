@@ -246,6 +246,15 @@ owner's Mac ──▶ ardia.dev/_ch/ (read-only ClickHouse user)   ardia.dev/_re
     `web_notification_clicks` (clicks on Ardia's website notifications) and `worker_notification_responses` (clicks or
     dismissals of a service worker's notifications that the app handed to Chrome). These three count only while
     sharing is on, and a pending count is dropped whenever sharing is turned on or off.
+  - `usage_counts` also adds `engine_notifications_to_engine_delegate` and `engine_notifications_shown_by_hub`: how
+    many notifications Chrome posted itself (a site's service worker, an extension; `notificationId` in the user info)
+    `NotificationHub.willPresent` handed to Chrome's delegate, and how many it showed with its own banner instead.
+    Once per launch, in the first hour after the app events channel is up and sharing is on, it adds
+    `notification_authorization`, `notification_alert_setting` and `notification_alert_style`: macOS's own enum names
+    for the notification settings of the app (`UNAuthorizationStatus`, `UNNotificationSetting`, `UNAlertStyle`; any
+    other value reads `other`). Counts and enum names only: never a title, text, id or origin. Both counts use the
+    native consent stamp, so one from an earlier consent period is kept locally and not sent. Added to find why
+    Chrome's notifications (Checker Plus in #1235) show no banner on some Macs; the fix follows once the numbers are in.
   - `web_notification_failed` (a website notification macOS refused or the app couldn't post): `title_length`,
     `body_length` (never the text), `icon_requested`, `icon_sent`, `icon_status` (`none`, `attached`, `invalid_url`,
     `download_failed`, `empty`, `write_failed`, `attachment_rejected`, or `unknown` when the call threw; `none` also

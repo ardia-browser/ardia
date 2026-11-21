@@ -66,6 +66,8 @@ export const PROTECTED_VIDEO_SITES: readonly string[] = [
   "hotstar.com",
   "jiohotstar.com",
   "v.qq.com",
+  "canalplus.com",
+  "mycanal.fr",
 ];
 
 export function protectedVideoSite(url: string | undefined | null): boolean {

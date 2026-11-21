@@ -297,6 +297,30 @@ test("a subdomain of a streaming site is watched", async () => {
   assert.deepEqual(p.reported(), ["eme_widevine_granted"]);
 });
 
+test("Canal+ is watched: its refused key system, rejected play() and decode error are recorded, on both its hosts and their subdomains", async () => {
+  assert.ok(sites.includes("canalplus.com") && sites.includes("mycanal.fr"));
+  for (const hostname of ["canalplus.com", "www.canalplus.com", "mycanal.fr", "www.mycanal.fr"]) {
+    const p = page({ hostname });
+    p.run(`
+      navigator.answer = () => Promise.reject(new DOMException("no CDM", "NotSupportedError"));
+      navigator.requestMediaKeySystemAccess("com.widevine.alpha", [{}]).catch(() => {});
+      const video = new HTMLMediaElement();
+      video.answer = () => Promise.reject(new DOMException("", "NotAllowedError"));
+      video.play().catch(() => {});
+      video._error = new MediaError(3);
+      video.dispatchEvent(new Event("error"));
+    `);
+    await settle();
+    assert.deepEqual(p.reported(), ["media_error_decode", "eme_widevine_refused_not_supported", "play_rejected_not_allowed"], hostname);
+  }
+  for (const [protocol, hostname] of [["http:", "www.canalplus.com"], ["https:", "canalplus.com.example.com"], ["https:", "notmycanal.fr"], ["http:", "mycanal.fr"]]) {
+    const p = page({ protocol, hostname });
+    p.run("navigator.answer = () => Promise.reject(new DOMException('', 'NotSupportedError')); navigator.requestMediaKeySystemAccess('com.widevine.alpha', [{}]).catch(() => {});");
+    await settle();
+    assert.deepEqual(p.reported(), [], `${protocol}//${hostname}`);
+  }
+});
+
 test("the page script relays a reason that is a short string and nothing else the page's events carry", () => {
   const p = page();
   p.run(`

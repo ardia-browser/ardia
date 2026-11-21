@@ -22,7 +22,7 @@ const BEFORE = {"legacyTrue":{"chosen":["newTabPosition","newTabButtonPosition"]
 const doc = (version, settings) => ({ version, profiles: { default: PROFILE }, profileOrder: ["default"], settings, windows: [], windowOrder: [], tabs: [], groups: [], splits: [], closedTabs: [], closedWindows: [] });
 const loaded = () => {
   const { settings: st, settingsMeta } = S();
-  return { chosen: settingsMeta.chosen, inferred: settingsMeta.inferred, batterySaverWhen: st.batterySaverWhen, newTabButtonPosition: st.newTabButtonPosition, newTabPosition: st.newTabPosition, tabLayout: st.tabLayout, peekModifier: st.peekModifier, splitLinkModifier: st.splitLinkModifier, keys: Object.keys(st).length + 2 };
+  return { chosen: settingsMeta.chosen, inferred: settingsMeta.inferred.filter((k) => k !== "hideToolbarWhileScrolling:offByDefault"), batterySaverWhen: st.batterySaverWhen, newTabButtonPosition: st.newTabButtonPosition, newTabPosition: st.newTabPosition, tabLayout: st.tabLayout, peekModifier: st.peekModifier, splitLinkModifier: st.splitLinkModifier, keys: Object.keys(st).length + 2 };
 };
 
 for (const version of [3, 4, 7]) {
@@ -55,8 +55,8 @@ test("settings and their bookkeeping save apart, read back the same, and a chang
   const saved = JSON.parse(stub.docs.get("session.json"));
   assert.ok(saved.version >= 8);
   assert.equal("chosen" in saved.settings || "inferred" in saved.settings, false);
-  assert.deepEqual(saved.settingsMeta, { chosen: ["tabLayout", "appearance"], inferred: [] });
+  assert.deepEqual(saved.settingsMeta, { chosen: ["tabLayout", "appearance"], inferred: ["hideToolbarWhileScrolling:offByDefault"] });
   S().hydrate(loadSession());
-  assert.deepEqual(S().settingsMeta, { chosen: ["tabLayout", "appearance"], inferred: [] });
+  assert.deepEqual(S().settingsMeta, { chosen: ["tabLayout", "appearance"], inferred: ["hideToolbarWhileScrolling:offByDefault"] });
   assert.equal(S().settings.appearance, "light");
 });

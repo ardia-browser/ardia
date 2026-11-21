@@ -156,7 +156,7 @@ export const TabDeck = memo(function TabDeck() {
   const pulls = redesigned;
   const safeSide = Math.max(insets.left, insets.right);
   const incognito = useIncognito();
-  const sided = redesigned;
+  const sided = redesigned || material;
   const wantedSide = sided && incognito;
   const [side, setSide] = useState(wantedSide);
   const { tabs: allTabs, selectedId: heldSelected } = useHeldDeckOrder();
@@ -1074,10 +1074,10 @@ export const TabDeck = memo(function TabDeck() {
   const plusItems: MenuItem[] = incognito
     ? [
         { label: "New Tab", icon: "plus", onPress: newRegularTab },
-        { label: "New Incognito Tab", icon: "eyeglassesThin", onPress: newTab },
+        { label: "New Incognito Tab", icon: "eyes", onPress: newTab },
       ]
     : [
-        { label: "New Incognito Tab", icon: "eyeglassesThin", onPress: newIncognitoTab },
+        { label: "New Incognito Tab", icon: "eyes", onPress: newIncognitoTab },
         ...(canReopen ? [{ label: "Reopen Closed Tab", icon: "arrowUturnBackward" as const, onPress: reopenLastClosed }] : []),
       ];
   if (count)
@@ -1229,6 +1229,8 @@ export const TabDeck = memo(function TabDeck() {
                     width={width}
                     layout={deckBarLayout}
                     incognito={incognito}
+                    privateCount={privateCount}
+                    onCloseIncognito={confirmLeaveIncognito}
                     onQuery={setNeedle}
                     menusShown={shown && phase.kind === "settled"}
                     onMenu={setChromeMenu}

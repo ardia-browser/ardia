@@ -14,6 +14,7 @@ import { useBrowse } from "../state/browse/store";
 import { currentTabs, useTabs } from "../state/tabs/store";
 import { renderSurface, someTabs, unmount, withTabs } from "../../test/render/harness";
 import type { BrowserTab } from "../state/tabs/tabModels";
+import { privateMark } from "../components/ui/IncognitoSpecs";
 
 const safeArea = require("react-native-safe-area-context") as { useSafeAreaInsets: () => { top: number; bottom: number; left: number; right: number } };
 
@@ -194,7 +195,7 @@ test("the bar's glass and glyphs follow the page's sampled bottom colour, not th
   const symbols = light.root.findAll((node) => node.type === Symbol);
   expect(symbols.find((node) => node.props.name === "ellipsis")!.props.size).toBeCloseTo(23.3);
   expect(symbols.find((node) => node.props.name === "plus")!.props.size).toBeCloseTo(23.6);
-  expect(symbols.find((node) => node.props.name === "eyeglassesThin")!.props).toMatchObject({ size: 28, color: "rgba(0,0,0,0.5)" });
+  expect(symbols.find((node) => node.props.name === privateMark)!.props).toMatchObject({ size: 28, color: "rgba(0,0,0,0.5)" });
   unmount(light);
   act(() => storeTone(tab.id, { top: "#101418", bottom: "#101418" }));
   const dark = page("redesigned", tab);

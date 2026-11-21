@@ -100,6 +100,27 @@ export const paneTile = { size: 20, radius: 5, symbol: 11 } as const;
 
 export const settingsLayout = { emptyTop: 40, sidebarWidth: 214, paneMaxWidth: 600, paneBottom: 40 } as const;
 
+export const choicePreview = {
+  tabRows: [1, 0.85, 0.95, 0.7],
+  shortTabRows: [1, 0.8, 0.9],
+  switcherCards: [false, true, false],
+  resultLines: [0.9, 0.6],
+  pageLines: [0.9, 0.75, 0.85, 0.6, 0.8],
+  scale: 0.5,
+  gap: space.xs,
+  switcherCard: 24,
+  commandField: 10,
+  line: 4,
+  litBorder: 1.5,
+  litAlpha: "33",
+  pagePad: space.s,
+  belowToolbar: 22,
+  scrollMark: 10,
+  strip: 3,
+  stripTop: 3,
+  stripInset: 3,
+} as const;
+
 export const pictureChoice = { m: 84, l: 104, icon: 70, iconWidth: 72 } as const;
 
 export const selectableCard = { selectedBorder: 2, selectedAlpha: "26" } as const;

@@ -33,7 +33,7 @@ export function IncognitoChip({ count, top, onPress }: { count: number; top: num
         accessibilityLabel={`Incognito, ${count} ${count === 1 ? "tab" : "tabs"}`}
         accessibilityHint="Shows the option to close incognito tabs."
         onPress={onPress}
-        style={[styles.chip, { backgroundColor: tabsInk.incognitoCard, borderRadius: capsule(tabsLayout.chipHeight) }]}
+        style={[styles.chip, { backgroundColor: tabsInk.incognitoOnLight, borderRadius: capsule(tabsLayout.chipHeight) }]}
       >
         <IncognitoSpecs size={tabsLayout.specsChip} color={tabsInk.onDark} />
         <Text style={[font.subheadline, styles.bold, styles.chipText]}>Incognito</Text>

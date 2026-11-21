@@ -42,15 +42,15 @@ const SITES: Record<string, Over[]> = {
   "tabs/ArchiveIntervalCard.tsx": ["frostable"],
   "tabs/ArchiveView.tsx": ["sheet", "sheet", "sheet", "card"],
   "tabs/ContainedDeck.tsx": ["frostable"],
-  "tabs/DeckBottomBar.tsx": ["frostable", "frostable"],
+  "tabs/DeckBottomBar.tsx": ["frostable", "frostable", "frostable"],
   "tabs/DeckCard.tsx": ["frostable", "frostable", "frostable"],
   "tabs/DeckHeader.tsx": ["frostable", "frostable", "frostable"],
   "tabs/ExpoArchive.tsx": ["system", "system", "system"],
   "tabs/MaterialDeckCard.tsx": ["frostable"],
-  "tabs/MaterialDeckChrome.tsx": ["frostable", "frostable", "frostable"],
+  "tabs/MaterialDeckChrome.tsx": ["frostable", "frostable"],
   "tabs/TabDeck.tsx": ["frostable", "frostable", "frostable", "card", "frostable"],
   "tabs/TabGrid.tsx": ["frostable"],
-  "ui/MaterialBottomBar.tsx": ["page", "page"],
+  "ui/MaterialBottomBar.tsx": ["page", "page", "page"],
 };
 
 function sources(dir: string): string[] {

@@ -92,6 +92,7 @@ test("with auto-hide off, scrolling a page, switching tabs and closing a tab nev
 
 test("scrolling tucks the toolbar away only while its own setting is on, and never touches the tabs", () => {
   const w = fresh();
+  S().updateSettings({ hideToolbarWhileScrolling: true });
   const tabId = S().windows[w].tabIds[0];
   const tucked = () => !!useToolbarAutoHide.getState().scrolledDown[tabId];
   noteScroll(tabId, "down");

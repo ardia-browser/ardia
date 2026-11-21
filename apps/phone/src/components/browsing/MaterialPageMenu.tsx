@@ -175,7 +175,7 @@ function MenuHeader({ tabId, model }: { tabId: string; model: MenuModel }) {
         {address?.pageUrl && !address.isPrivate ? (
           <Favicon iconUrl={address.iconUrl} pageUrl={address.pageUrl} size={materialSize.icon} />
         ) : (
-          <Symbol name={address?.isPrivate ? "eyeglasses" : "magnifyingglass"} size={materialSize.icon} color={scheme.onSurfaceVariant} />
+          <Symbol name={address?.isPrivate ? "eyes" : "magnifyingglass"} size={materialSize.icon} color={scheme.onSurfaceVariant} />
         )}
         <Animated.Text key={shown} entering={TITLE_IN} exiting={TITLE_OUT} numberOfLines={1} style={[materialType.titleMedium, styles.flex, { color: feedback ? scheme.primary : scheme.onSurface }]}>
           {shown}

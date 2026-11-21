@@ -13,6 +13,7 @@ import { currentTabs, useTabs } from "../state/tabs/store";
 import type { BrowserTab } from "../state/tabs/tabModels";
 import { launchTabs } from "../state/tabs/tabsState";
 import { renderSurface, someTabs, unmount, withTabs } from "../../test/render/harness";
+import { privateMark } from "../components/ui/IncognitoSpecs";
 
 const onIPhone = Platform.OS === "ios";
 
@@ -206,7 +207,7 @@ test("the lock sits in the site icon's own slot at the site icon's size, so the 
 
 test("the bar's icon slot for the four tabs: a normal secure page shows its favicon, a normal insecure one the red lock alone, an Incognito secure one its eyeglasses, and an Incognito insecure one the eyeglasses then the lock; a screen reader hears Incognito, Not Secure, then the host", () => {
   const { spokenAddress } = require("../components/browsing/FloatingBar") as typeof import("../components/browsing/FloatingBar");
-  const glyphs = (root: Root) => root.root.findAll((found) => typeof found.type !== "string" && (found.props.name === "eyeglassesThin" || found.props.testID === "floatingBarNotSecure" || ("pageUrl" in found.props && typeof found.props.size === "number"))).map((found) => (found.props.name === "eyeglassesThin" ? "eyeglasses" : found.props.testID === "floatingBarNotSecure" ? "lock" : "favicon"));
+  const glyphs = (root: Root) => root.root.findAll((found) => typeof found.type !== "string" && (found.props.name === privateMark || found.props.testID === "floatingBarNotSecure" || ("pageUrl" in found.props && typeof found.props.size === "number"))).map((found) => (found.props.name === privateMark ? "eyeglasses" : found.props.testID === "floatingBarNotSecure" ? "lock" : "favicon"));
   const cases = [
     { url: "https://secure.example/", isPrivate: false, shows: ["favicon"], spoken: "secure.example" },
     { url: "http://plain.example/", isPrivate: false, shows: ["lock"], spoken: "Not Secure, plain.example" },

@@ -171,19 +171,24 @@ for (let i = 0, last = ""; i < 12; i++) {
 }
 const dialog = list.find(isPasskeyDialog);
 if (passkeys) {
-  let texts = null;
-  let unread = "";
-  try {
-    texts = JSON.parse(execFileSync(process.env.SMOKE_AX, [pid, "texts"], { encoding: "utf8", timeout: 20000, stdio: ["ignore", "pipe", "pipe"] })).flatMap((w) => w.texts);
-  } catch (error) {
-    unread = error.status === 3 ? "untrusted" : String(error.stderr || error.message).trim();
-  }
-  const offers = !!texts && ["Save in Passwords", "Save in Ardia Passkeys"].every((choice) => texts.includes(choice));
   const detail = dialog ? `${dialog.w}x${dialog.h} "${dialog.title}"` : "no passkey window";
   const name = "passkey dialog shows, offering iCloud Keychain (Passwords) next to Ardia's passkeys";
-  const why = offers ? "both choices offered" : texts ? `choices missing from ${JSON.stringify(texts.filter((t) => /save|passkey/i.test(t)))}` : `its choices couldn't be read: ${unread}`;
-  if (unread === "untrusted") needs(false, "this process isn't trusted for Accessibility: give the terminal Accessibility in System Settings › Privacy & Security")(name, false, `${detail}; choices unread`);
-  else checkTitles(name, !!dialog && offers, `${detail}; ${why}`);
+  checkTitles("passkey dialog shows", !!dialog, detail);
+  if (locked) {
+    checkUnlocked(name, false, `${detail}; Accessibility reads no window contents while the screen is locked, so the choices weren't read`);
+  } else {
+    let texts = null;
+    let unread = "";
+    try {
+      texts = JSON.parse(execFileSync(process.env.SMOKE_AX, [pid, "texts"], { encoding: "utf8", timeout: 20000, stdio: ["ignore", "pipe", "pipe"] })).flatMap((w) => w.texts);
+    } catch (error) {
+      unread = error.status === 3 ? "untrusted" : String(error.stderr || error.message).trim();
+    }
+    const offers = !!texts && ["Save in Passwords", "Save in Ardia Passkeys"].every((choice) => texts.includes(choice));
+    const why = offers ? "both choices offered" : texts ? `choices missing from ${JSON.stringify(texts.filter((t) => /save|passkey/i.test(t)))}` : `its choices couldn't be read: ${unread}`;
+    if (unread === "untrusted") needs(false, "this process isn't trusted for Accessibility: give the terminal Accessibility in System Settings › Privacy & Security")(name, false, `${detail}; choices unread`);
+    else checkTitles(name, !!dialog && offers, `${detail}; ${why}`);
+  }
 } else {
   checkTitles("passkey dialog shows (no browser passkey entitlement: Chrome's own dialog)", !!dialog && /passkey/i.test(dialog.title), dialog?.title || "no passkey window");
 }

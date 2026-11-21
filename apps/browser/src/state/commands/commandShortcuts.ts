@@ -5,9 +5,12 @@ import { create } from "zustand";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { useBrowser } from "../browser/store";
 import { ALL, useKeyed } from "../browser/keyedWatch";
-import { shortcutSources, UNAVAILABLE_COMMANDS } from "./commandCatalog";
+import { commandTitle, shortcutSources, UNAVAILABLE_COMMANDS } from "./commandCatalog";
+import type { BrowserCommand } from "../../platform/commands";
 import { ALTERNATE_MODIFIER } from "./keyNotation";
 import { formatShortcut, resolveShortcuts, type ResolvedShortcuts, type Shortcut, type ShortcutOverrides, type ShortcutSource } from "./shortcuts";
+import { noteSettingsPick } from "../telemetry/settingsPickerCounts";
+import { ctrlTabChoiceOf, ctrlTabCombos, ctrlTabCustomTarget, ctrlTabOverrides, type CtrlTabChoice, type CtrlTabPreset } from "./ctrlTabKeys";
 
 export { cancelShortcutRecording, recordShortcut, type MenuShortcut } from "../../platform/commands";
 
@@ -126,6 +129,29 @@ function watchShortcuts(_key: string, listener: () => void): () => void {
   }
   shortcutListeners.add(listener);
   return () => void shortcutListeners.delete(listener);
+}
+
+export const ctrlTabChoice = (s: ShortcutState = useBrowser.getState()): CtrlTabChoice => ctrlTabChoiceOf(resolvedShortcuts(s));
+
+export function chooseCtrlTab(preset: CtrlTabPreset) {
+  const s = useBrowser.getState();
+  const combos = ctrlTabCombos(resolvedShortcuts(s));
+  if (!combos) return;
+  s.updateSettings({ shortcuts: ctrlTabOverrides(s.settings.shortcuts, combos, preset, resolvedShortcuts(s).defaultsOf) });
+  noteSettingsPick("ctrlTab", preset);
+}
+
+export function ctrlTabCustomQuery(s: ShortcutState = useBrowser.getState()): string {
+  const target = ctrlTabCustomTarget(resolvedShortcuts(s));
+  if (!target) return "";
+  if ("combo" in target) return formatShortcut(target.combo);
+  const [command, arg] = target.command.split(":") as [BrowserCommand, string | undefined];
+  return commandTitle(command, arg) ?? "";
+}
+
+export function useCtrlTabChoice(): CtrlTabChoice {
+  useMenuBar(() => ctrlTabChoice());
+  return useKeyed(watchShortcuts, ALL, () => ctrlTabChoice());
 }
 
 export function useShortcutAssignments(): readonly unknown[] {

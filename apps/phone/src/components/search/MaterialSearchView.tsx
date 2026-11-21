@@ -206,7 +206,7 @@ export function MaterialSearchResults({ scrollY }: { scrollY: SharedValue<number
   if (incognito && !typed.trim())
     return (
       <View testID="materialSearchIncognitoNote" style={[styles.group, styles.note, materialSegmentCorners(0, 1), { backgroundColor: scheme.surfaceContainer }]}>
-        <Symbol name="eyeglasses" size={materialSize.icon} color={scheme.onSurfaceVariant} />
+        <Symbol name="eyes" size={materialSize.icon} color={scheme.onSurfaceVariant} />
         <Text style={[materialType.titleMedium, styles.noteText, { color: scheme.onSurfaceVariant }]}>You’re browsing Incognito</Text>
       </View>
     );

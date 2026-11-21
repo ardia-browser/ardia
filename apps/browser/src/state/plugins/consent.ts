@@ -24,7 +24,7 @@ function passwordManagerLines(m: PluginManifest, context: ConsentContext): Conse
 
 function runtimeLines(m: PluginManifest): ConsentLine[] {
   const lines: ConsentLine[] = [];
-  if (m.main) lines.push({ icon: "shippingbox", text: m.activationEvents.some((e) => e === "*" || e === "onStartupFinished" || e.startsWith("onEvent:")) ? "Runs its code in the background, in Ardia's plugin sandbox" : "Runs its code in Ardia's plugin sandbox only while you use it" });
+  if (m.main) lines.push({ icon: "shippingbox", text: m.activationEvents.some((e) => e === "*" || e === "onStartupFinished" || e.startsWith("onEvent:")) ? "Runs its code in the background, in Ardia's plugin sandbox" : "Runs its code in Ardia's plugin sandbox, starting the first time you use it and stopping when you quit Ardia or turn the plugin off" });
   if (m.sidecar) lines.push({ icon: "gearshape", text: `Runs a program in the background: ${m.sidecar.run.join(" ")}` });
   for (const p of m.programs) {
     lines.push({ icon: "terminal.fill", text: `Adds ${p.name} to your PATH. It runs as you, outside Ardia's sandbox` });

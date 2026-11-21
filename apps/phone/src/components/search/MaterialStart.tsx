@@ -59,7 +59,7 @@ export function MaterialStart() {
         {incognito ? (
           <StartIconButton icon="plus" label="New Tab" scheme={scheme} onPress={newRegularTab} />
         ) : (
-          <StartIconButton icon="eyeglasses" label="New Incognito Tab" scheme={scheme} onPress={newIncognitoTab} />
+          <StartIconButton icon="eyes" label="New Incognito Tab" scheme={scheme} onPress={newIncognitoTab} />
         )}
         {canReopen && !incognito ? <StartIconButton icon="arrowUturnBackward" label="Reopen Closed Tab" scheme={scheme} onPress={reopenLastClosed} /> : null}
         <StartIconButton icon="gearshape" label="Settings" scheme={scheme} onPress={() => openSettings()} />

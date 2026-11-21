@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, { withSpring } from "react-native-reanimated";
 import { haptics } from "../../state/app/haptics";
 import { newIncognitoTab, openArchive, openSpaces, reopenLastClosed } from "../../state/browse/store";
@@ -98,7 +98,7 @@ export function DeckHeader({ safeTop, safeSide, sideInset, privateCount, hasTabs
         </FadingGlyphs>
       )}
       <View style={styles.spacer} />
-      {privateCount > 0 ? (
+      {privateCount > 0 && Platform.OS !== "android" ? (
         <Animated.View entering={pillIn} exiting={pillOut}>
           <FadingGlyphs testID="deckIncognitoPillFade" fade={glyphFade}>
             <MenuTrigger items={pillItems} {...menu} place={{ top: below, right: side + deckChromeLayout.headerCircle + deckChromeLayout.headerGap, width: tabsLayout.menuWidth }}>
@@ -126,7 +126,7 @@ function IncognitoPill({ count, onPress }: { count: number; onPress: () => void 
       onPress={onPress}
       style={styles.pillHit}
     >
-      <View pointerEvents="none" style={[styles.pill, { backgroundColor: tabsInk.incognitoCard, borderRadius: capsule(deckChromeLayout.pillHeight) }]}>
+      <View pointerEvents="none" style={[styles.pill, { backgroundColor: tabsInk.incognitoOnLight, borderRadius: capsule(deckChromeLayout.pillHeight) }]}>
         <IncognitoSpecs size={deckChromeLayout.pillSpecs} color={deckChromeInk.pill} />
         <Text style={[font.subheadline, styles.count]}>{count}</Text>
       </View>

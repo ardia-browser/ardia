@@ -379,7 +379,7 @@ test("themes list per plugin and load through the approved folder", async () => 
 test("the consent sheet names every v2 reach", async () => {
   await enable(READER);
   const text = consentLines(P().listings.reader.manifest).map((l) => l.text).join("\n");
-  for (const words of ["only while you use it", "connect only to api.example.com", "Keychain", "text of the tab you're on", "Keeps its own data", "toolbar: Reader", "sidebar: Notes", "address bar: Notes (n)", "themes: Dusk", "menu you get on tabs and groups", "Summarize Page", "Its pages and views stay offline", "Chat (in a side panel)"]) assert.ok(text.includes(words), words);
+  for (const words of ["starting the first time you use it", "connect only to api.example.com", "Keychain", "text of the tab you're on", "Keeps its own data", "toolbar: Reader", "sidebar: Notes", "address bar: Notes (n)", "themes: Dusk", "menu you get on tabs and groups", "Summarize Page", "Its pages and views stay offline", "Chat (in a side panel)"]) assert.ok(text.includes(words), words);
   const guard = consentLines({ ...P().listings.reader.manifest, contributes: { ...P().listings.reader.manifest.contributes, hooks: ["tab.opening"] } }).map((l) => l.text).join("\n");
   assert.ok(guard.includes("Can stop or redirect tab.opening"));
 });

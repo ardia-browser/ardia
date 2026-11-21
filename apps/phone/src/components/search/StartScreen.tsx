@@ -47,10 +47,10 @@ function OriginalStart() {
   const items: MenuItem[] = incognito
     ? [
         { label: "New Tab", icon: "plus", onPress: newRegularTab },
-        { label: "New Incognito Tab", icon: "eyeglassesThin", onPress: newTab },
+        { label: "New Incognito Tab", icon: "eyes", onPress: newTab },
       ]
     : [
-        { label: "New Incognito Tab", icon: "eyeglassesThin", onPress: newIncognitoTab },
+        { label: "New Incognito Tab", icon: "eyes", onPress: newIncognitoTab },
         ...(canReopen ? [{ label: "Reopen Closed Tab", icon: "arrowUturnBackward" as const, onPress: reopenLastClosed }] : []),
       ];
   return (

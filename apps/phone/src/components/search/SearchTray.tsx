@@ -994,8 +994,8 @@ function IncognitoToggle() {
       style={[styles.incognito, panelField ? styles.panelIncognito : null]}
     >
       <View testID="trayIncognitoGlyph" style={styles.incognitoGlyph}>
-        {on ? <Animated.View testID="trayIncognitoPlate" entering={modeToggleIn} exiting={modeToggleOut} style={styles.incognitoPlate} /> : null}
-        <Symbol name="eyeglassesThin" size={INCOGNITO_GLYPH} color={on ? tabsInk.onDark : theme.foregroundTertiary} />
+        {on && Platform.OS !== "android" ? <Animated.View testID="trayIncognitoPlate" entering={modeToggleIn} exiting={modeToggleOut} style={styles.incognitoPlate} /> : null}
+        <IncognitoEyes incognito={on} size={INCOGNITO_GLYPH} color={on ? tabsInk.onDark : theme.foregroundTertiary} />
       </View>
     </Pressable>
   );

@@ -1,13 +1,13 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, Text, View } from "react-native";
 import { IncognitoEyes } from "../ui/IncognitoEyes";
 import { capsule, deckChromeLayout, font, ink, iPhoneOr, rolesFor, startLayout, Symbol, SystemGlyph, tabsInk, useTheme } from "../ui";
 
 export function IncognitoGlyph({ incognito, dark }: { incognito: boolean; dark: boolean }) {
   const theme = useTheme();
-  if (!incognito) return <IncognitoEyes size={deckChromeLayout.incognitoEyes} color={rolesFor(dark).label} />;
+  if (!incognito || Platform.OS === "android") return <IncognitoEyes incognito={incognito} size={deckChromeLayout.incognitoEyes} color={rolesFor(dark).label} />;
   return (
     <View style={styles.switch}>
-      <View style={[styles.switchOn, { backgroundColor: theme.dark ? ink.white : tabsInk.incognitoCard }]} />
+      <View style={[styles.switchOn, { backgroundColor: theme.dark ? ink.white : tabsInk.incognitoOnLight }]} />
       <IncognitoEyes incognito size={deckChromeLayout.incognitoEyes} color={theme.dark ? tabsInk.incognitoCard : ink.white} />
     </View>
   );

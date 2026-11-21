@@ -5,10 +5,9 @@ import Animated from "react-native-reanimated";
 import { withAlpha } from "../../lib/color";
 import type { MaterialScheme } from "../../lib/material/schemes";
 import { haptics } from "../../state/app/haptics";
-import { newTab, openArchive } from "../../state/browse/store";
+import { newTab, switchDeckIncognito } from "../../state/browse/store";
 import { menuOpenedHaptic } from "../../state/browse/tabMenus";
 import type { BrowserTab } from "../../state/tabs/tabModels";
-import { countUsage } from "../../state/telemetry/telemetry";
 import { barAddress, spokenAddress } from "../browsing/FloatingBar";
 import { NotSecureLock } from "../browsing/NotSecureLock";
 import { TabsMenuTrigger } from "../browsing/tabsMenu";
@@ -16,6 +15,7 @@ import { plusMenuItems } from "../tabs/ChromeButtons";
 import type { SearchTabs } from "../tabs/DeckBottomBar";
 import { MATERIAL_DECK } from "../tabs/MaterialDeckLayout";
 import { Favicon, screenReaderActions, Symbol, type SymbolName } from "./index";
+import { IncognitoEyes } from "./IncognitoEyes";
 import { MaterialIconButton } from "./MaterialIconButton";
 import { MenuTrigger } from "./MenuTrigger";
 import { useMaterialRipple } from "./MaterialSurfaces";
@@ -38,6 +38,8 @@ export type MaterialPageBarProps = {
 type OverviewProps = {
   search: SearchTabs;
   incognito: boolean;
+  privateCount?: number;
+  onCloseIncognito?: () => void;
   canReopen: boolean;
   menusShown: boolean;
   onMenu: (open: boolean) => void;
@@ -143,7 +145,7 @@ export function MaterialAddressContent({ address, scheme, testID }: { address: R
   return (
     <>
       {address.isPrivate ? (
-        <Symbol name="eyeglassesThin" size={materialSize.icon} color={scheme.onSurfaceVariant} />
+        <Symbol name="eyes" size={materialSize.icon} color={scheme.onSurfaceVariant} />
       ) : address.insecure ? (
         <NotSecureLock testID="materialBarNotSecure" size={FIELD_ICON} color={scheme.error} />
       ) : address.pageUrl ? (
@@ -158,16 +160,39 @@ export function MaterialAddressContent({ address, scheme, testID }: { address: R
   );
 }
 
-function OverviewControls({ scheme, search, incognito, canReopen, menusShown, onMenu }: OverviewProps & { scheme: MaterialScheme }) {
+function OverviewControls({ scheme, search, incognito, privateCount = 0, onCloseIncognito, canReopen, menusShown, onMenu }: OverviewProps & { scheme: MaterialScheme }) {
   const { input, text, change, focus, blur } = search;
   const fabLabel = incognito ? "New Incognito Tab" : "New Tab";
-  const showArchive = () => {
-    if (!incognito) countUsage("archive_bar_opened");
-    openArchive();
-  };
+  const closesIncognito = menusShown && privateCount > 0 && onCloseIncognito !== undefined;
+  const closeItems = onCloseIncognito ? [{ label: "Close Incognito Tabs", destructive: true, onPress: onCloseIncognito }] : [];
   return (
     <>
-      <MaterialBarIconButton testID="materialDeckArchive" icon="archivebox" label="Archive Tabs" scheme={scheme} onPress={showArchive} />
+      <MenuTrigger
+        items={closeItems}
+        trigger="longPress"
+        frost={null}
+        haptic={menuOpenedHaptic}
+        disabled={!closesIncognito}
+        onOpen={() => onMenu(true)}
+        onClose={() => onMenu(false)}
+        place={{ bottom: materialBottomBar.field + MATERIAL_DECK.keyboardGap, left: 0 }}
+        style={styles.fabSlot}
+      >
+        {({ onLongPress }) => (
+          <MaterialIconButton
+            testID="materialDeckIncognito"
+            label="Incognito"
+            value={{ text: incognito ? "On" : "Off" }}
+            hint={incognito ? "Shows your tabs." : "Shows your Incognito tabs."}
+            scheme={scheme}
+            onPressIn={haptics.barPress}
+            onPress={switchDeckIncognito}
+            onLongPress={closesIncognito && onLongPress ? () => onLongPress() : undefined}
+          >
+            <IncognitoEyes incognito={incognito} size={materialSize.icon} color={scheme.onSurfaceVariant} />
+          </MaterialIconButton>
+        )}
+      </MenuTrigger>
       <Pressable accessible={false} onPress={() => input.current?.focus()} style={[styles.fieldContainer, styles.fieldPressable, { backgroundColor: scheme.surfaceContainerHigh }]} testID="materialDeckSearch">
         <View pointerEvents="none">
           <Symbol name="magnifyingglass" size={materialSize.icon} color={scheme.onSurfaceVariant} />

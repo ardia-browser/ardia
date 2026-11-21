@@ -54,7 +54,7 @@ Settings. "Starting fresh" or skipping the Source screen keeps the full question
 | ⌘-click makes a group (`cmdClickCreatesTabGroup`) | off | on | off | off | off | off | off | off | on |
 | Appearance (`appearance`) | auto | auto | auto | auto | auto | auto | auto | auto | auto |
 | Site color in tab bar (`extendWebsiteColor`) | off | on | off | off | off | on | off | off | on |
-| Hide toolbar while scrolling (`hideToolbarWhileScrolling`) | on | on | off | off | off | off | off | off | on |
+| Hide toolbar while scrolling (`hideToolbarWhileScrolling`) | on | on | off | off | off | off | off | off | off |
 | Bookmarks bar (`bookmarksBar`) | never | never | never | New Tab | New Tab | never | New Tab | New Tab | never |
 | Search engine (`searchEngine`) | Google | Google | Google | Google | Google | Google | Brave Search | Bing | Google |
 | Links from other apps (`openLinksInLittleArdia`) | Little Ardia | Little Ardia | tab | tab | tab | tab | tab | tab | Little Ardia |

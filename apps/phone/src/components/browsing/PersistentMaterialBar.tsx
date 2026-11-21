@@ -228,7 +228,7 @@ export function MaterialBarPill({ tab, scheme, onExpand }: { tab: BrowserTab; sc
       style={[styles.pill, { backgroundColor: scheme.surfaceContainer }]}
     >
       {address.isPrivate ? (
-        <Symbol name="eyeglassesThin" size={materialBarPill.siteIcon} color={scheme.onSurfaceVariant} />
+        <Symbol name="eyes" size={materialBarPill.siteIcon} color={scheme.onSurfaceVariant} />
       ) : address.insecure ? (
         <NotSecureLock testID="materialBarPillNotSecure" size={materialBarPill.siteIcon} color={scheme.error} />
       ) : address.pageUrl ? (

@@ -51,6 +51,18 @@ const TOP = [
   ["keyboard shortcuts", ["shortcuts.menuCommands"]],
   ["hotkeys", ["shortcuts.menuCommands", "shortcuts.extensionShortcuts"]],
   ["⌘L", ["appearance.commandBarPlacement"]],
+  ["alt tab", ["appearance.ctrlTab"]],
+  ["ctrl tab", ["appearance.ctrlTab"]],
+  ["control tab", ["appearance.ctrlTab"]],
+  ["tab switcher", ["appearance.ctrlTab"]],
+  ["switch tabs", ["appearance.ctrlTab"]],
+  ["recent tabs", ["appearance.ctrlTab"]],
+  ["address bar", ["appearance.addressBar"]],
+  ["url bar", ["appearance.addressBar"]],
+  ["command bar", ["appearance.commandBarPlacement"]],
+  ["cmd l", ["appearance.commandBarPlacement"]],
+  ["hide toolbar", ["tabs.hideToolbarWhileScrolling"]],
+  ["auto hide toolbar", ["tabs.hideToolbarWhileScrolling"]],
   ["shrink", ["tabs.hideToolbarWhileScrolling"]],
   ["⌘z", ["shortcuts.undoReopensClosedTab"]],
   ["update", ["general.updateChannel", "general.autoUpdate"]],
@@ -117,6 +129,12 @@ test("real queries put the setting people mean first", () => {
   const misses = TOP.filter(([q, want]) => !want.includes(first(q))).map(([q, want]) => `${q}: got ${first(q)}, want ${want.join(" or ")}`);
   assert.deepEqual(misses, []);
   assert.ok(TOP.length >= 40);
+});
+
+test("arc finds the Ctrl+Tab picker and the toolbar's address bar and command bar pickers", () => {
+  const found = ids("arc");
+  assert.ok(found.includes("appearance.ctrlTab"));
+  assert.ok(found.some((id) => ["appearance.addressBar", "appearance.commandBarPlacement"].includes(id)));
 });
 
 test("whole-word hits rank above word prefixes, and a loose keyword no longer wins", () => {

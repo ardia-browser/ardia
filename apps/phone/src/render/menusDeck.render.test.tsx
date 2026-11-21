@@ -323,7 +323,7 @@ drawnTest("on Android Settings chosen from the drawn ··· menu opens Settings,
   unmount(root);
 });
 
-drawnTest("on Android the space switcher and the Incognito pill are drawn menus, and leaving Incognito asks in the drawn action sheet", () => {
+drawnTest("on Android the space switcher and holding the Incognito switch are drawn menus, and leaving Incognito asks in the drawn action sheet", () => {
   withSpaces([WORK, HOME]);
   act(() => tabStore.useTabs.setState((state) => ({ ...state, privates: someTabs(2, true) })));
   const select = jest.spyOn(syncActions, "selectProfile").mockImplementation(() => undefined);
@@ -333,7 +333,7 @@ drawnTest("on Android the space switcher and the Incognito pill are drawn menus,
   expect(menuitems(root)).toEqual(["Work", "Home"]);
   pick(root, "Home");
   expect(select).toHaveBeenCalledWith("home");
-  press(root, "Incognito, 2 tabs");
+  act(() => root.root.findAll((node) => node.props.accessibilityLabel === "Incognito" && node.props.accessibilityRole === "switch" && typeof node.props.onLongPress === "function")[0]!.props.onLongPress());
   pick(root, "Close Incognito Tabs");
   expect(leave).not.toHaveBeenCalled();
   act(() => root.root.findAll((node) => node.props.testID === "drawnConfirmationOutside" && typeof node.props.onPress === "function")[0]!.props.onPress());

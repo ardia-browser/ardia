@@ -8,6 +8,7 @@ import { fitsMaterialChrome, MATERIAL_DECK, materialCloseCenter, materialCloseHi
 import { getByGestureTestId } from "react-native-gesture-handler/jest-utils";
 import { deckGeometry, openingDeckScroll } from "../lib/deckGeometry";
 import { DesignProvider } from "../components/ui";
+import { IncognitoEyes } from "../components/ui/IncognitoEyes";
 import { MenuTrigger } from "../components/ui/MenuTrigger";
 import { materialKeyboardLift } from "../components/tabs/MaterialDeckChrome";
 import type { Design } from "../lib/design";
@@ -201,22 +202,26 @@ onAndroid("Search Tabs occupies the capsule center and still filters cards", () 
   unmount(root);
 });
 
-onAndroid("Incognito takes the dark scheme of the same colours: its chip, its cards, and in Incognito the deck's surface and FAB", () => {
+onAndroid("Incognito takes the dark scheme of the same colours: its switch's eyes, its cards, and in Incognito the deck's surface and FAB", () => {
   withPrivates(2);
   const root = deck();
-  const chip = pressable(root, "materialDeckIncognito")!;
-  expect(chip.props.accessibilityLabel).toBe("Incognito, 2 tabs");
-  expect(flat(chip)).toMatchObject({ height: 32, backgroundColor: DARK.surfaceContainerHighest });
-  expect((flat(chip).height as number) + chip.props.hitSlop.top + chip.props.hitSlop.bottom).toBe(48);
-  expect(chip.props.android_ripple).toBeDefined();
-  const fills = cards(root).map((card) => flat(card).backgroundColor);
-  expect(fills).toContain(DARK.surfaceContainerLow);
-  expect(fills).toContain(LIGHT.surfaceContainerLow);
-  expect(flat(host(root, "materialCardIncognitoIcon")).backgroundColor).toBe(DARK.surfaceContainerHighest);
+  const toggle = pressable(root, "materialDeckIncognito")!;
+  expect(toggle.props.accessibilityLabel).toBe("Incognito");
+  expect(toggle.props.accessibilityValue).toEqual({ text: "Off" });
+  expect(flat(toggle)).toMatchObject({ width: 48, height: 48 });
+  expect(toggle.props.android_ripple).toBeDefined();
+  expect(toggle.findAll((node) => node.type === IncognitoEyes && node.props.incognito === false)).toHaveLength(1);
+  expect(host(root, "materialDeckTopBar")!.findAll((node) => node.type === IncognitoEyes)).toHaveLength(0);
+  expect(cards(root).map((card) => flat(card).backgroundColor)).toEqual(Array(4).fill(LIGHT.surfaceContainerLow));
+  expect(host(root, "materialCardIncognitoIcon")).toBeUndefined();
   expect(flat(host(root, "materialDeckBackdrop")).backgroundColor).toBe(LIGHT.surface);
   unmount(root);
   withPrivates(2, true);
   const incognito = deck();
+  expect(cards(incognito).map((card) => flat(card).backgroundColor)).toEqual(Array(2).fill(DARK.surfaceContainerLow));
+  expect(flat(host(incognito, "materialCardIncognitoIcon")).backgroundColor).toBe(DARK.surfaceContainerHighest);
+  expect(pressable(incognito, "materialDeckIncognito")!.props.accessibilityValue).toEqual({ text: "On" });
+  expect(pressable(incognito, "materialDeckIncognito")!.findAll((node) => node.type === IncognitoEyes && node.props.incognito === true)).toHaveLength(1);
   expect(flat(host(incognito, "materialDeckBackdrop")).backgroundColor).toBe("#000000");
   expect(flat(host(incognito, "materialDeckTopBar")).backgroundColor).toBe("#000000");
   expect(flat(host(incognito, "materialDeckBottomRow")).backgroundColor).toBe("#000000");
@@ -228,7 +233,35 @@ onAndroid("Incognito takes the dark scheme of the same colours: its chip, its ca
   unmount(incognito);
 });
 
-onAndroid("a scheme change re-themes the open deck: cards, top app bar, search, FAB and the Incognito chip", () => {
+onAndroid("the bar's Incognito switch: a tap shows only the Incognito tabs, a second tap only the others, holding it closes them after asking, and with none it has no long press", () => {
+  withPrivates(2);
+  const root = deck();
+  expect(cards(root)).toHaveLength(4);
+  act(() => pressable(root, "materialDeckIncognito")!.props.onPress());
+  act(() => jest.advanceTimersByTime(1000));
+  expect(useTabs.getState().incognito).toBe(true);
+  expect(cards(root)).toHaveLength(2);
+  expect(telemetry.countUsage).toHaveBeenCalledWith("deck_incognito_switches");
+  act(() => pressable(root, "materialDeckIncognito")!.props.onPress());
+  act(() => jest.advanceTimersByTime(1000));
+  expect(useTabs.getState().incognito).toBe(false);
+  expect(cards(root)).toHaveLength(4);
+  unmount(root);
+  withPrivates(0);
+  const none = deck();
+  expect(pressable(none, "materialDeckIncognito")!.props.onLongPress).toBeUndefined();
+  unmount(none);
+  withPrivates(2);
+  const leave = jest.spyOn(browse, "leaveIncognito").mockImplementation(() => undefined);
+  const held = deck();
+  act(() => pressable(held, "materialDeckIncognito")!.props.onLongPress());
+  const labels = held.root.findAll((node) => node.props.accessibilityRole === "menuitem" && typeof node.type === "string").map((node) => node.props.accessibilityLabel);
+  expect(labels).toEqual(["Close Incognito Tabs"]);
+  unmount(held);
+  leave.mockRestore();
+});
+
+onAndroid("a scheme change re-themes the open deck: cards, top app bar, search, FAB and the Incognito switch's eyes", () => {
   withPrivates(1);
   const root = deck();
   act(() => setDynamicScheme(WALLPAPER));
@@ -236,7 +269,7 @@ onAndroid("a scheme change re-themes the open deck: cards, top app bar, search, 
   expect(flat(host(root, "materialDeckTopBar")).backgroundColor).toBe(WALLPAPER.light.surface);
   expect(flat(host(root, "materialDeckBottomRow")).backgroundColor).toBe(WALLPAPER.light.surfaceContainer);
   expect(flat(host(root, "materialDeckSearch")).backgroundColor).toBe(WALLPAPER.light.surfaceContainerHigh);
-  expect(flat(pressable(root, "materialDeckIncognito")).backgroundColor).toBe("#123456");
+  expect(pressable(root, "materialDeckIncognito")!.findAll((node) => node.type === IncognitoEyes)[0]!.props.color).toBe(WALLPAPER.light.onSurfaceVariant);
   unmount(root);
 });
 
@@ -282,13 +315,11 @@ test("the Material deck opens on the active card itself, so a last tab opens ful
   expect(deckOpeningScroll(0, 3, true)).toBe(0);
 });
 
-onAndroid("Archive Tabs opens the archive from the capsule's left, with Search Tabs centered and add on the right", () => {
+onAndroid("the Incognito switch sits on the capsule's left where the redesign has it, with Search Tabs centered and add on the right, and the Archive stays in the ··· menu", () => {
   const root = deck();
-  const order = root.root.findAll((found) => typeof found.type === "string" && ["materialDeckArchive", "materialDeckSearch", "materialDeckFab"].includes(found.props.testID)).map((found) => found.props.testID);
-  expect(order).toEqual(["materialDeckArchive", "materialDeckSearch", "materialDeckFab"]);
-  act(() => pressable(root, "materialDeckArchive")!.props.onPress());
-  expect(browse.useBrowse.getState().sheet).toBe("archive");
-  expect(telemetry.countUsage).toHaveBeenCalledWith("archive_bar_opened");
+  const order = root.root.findAll((found) => typeof found.type === "string" && ["materialDeckIncognito", "materialDeckSearch", "materialDeckFab"].includes(found.props.testID)).map((found) => found.props.testID);
+  expect(order).toEqual(["materialDeckIncognito", "materialDeckSearch", "materialDeckFab"]);
+  expect(host(root, "materialDeckArchive")).toBeUndefined();
   unmount(root);
 });
 

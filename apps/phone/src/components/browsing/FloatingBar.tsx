@@ -8,6 +8,7 @@ import { TabsMenuTrigger } from "./tabsMenu";
 import { display } from "../../state/search/omnibox";
 import type { BrowserTab } from "../../state/tabs/tabModels";
 import { capsule, chromeInk, chromeLayout, ChromeSurface, Favicon, floatingBarLayout, PressScale, Symbol, type ColorRoles } from "../ui";
+import { privateMark } from "../ui/IncognitoSpecs";
 import { TabStack } from "./BottomBar";
 import { barReturnedToPage } from "../../state/browse/deckPull";
 import { useDeckOwnsBar } from "../../state/browse/hooks";
@@ -114,7 +115,7 @@ export function FloatingBar({ tab, order, roles, dark, showsPlus, anchors = true
           onPress={onAddress}
           style={styles.addressHit}
         >
-          {address.isPrivate ? <Symbol name="eyeglassesThin" size={floatingBarLayout.privateSymbol} color={ink.secondary} /> : null}
+          {address.isPrivate ? <Symbol name={privateMark} size={floatingBarLayout.privateSymbol} color={ink.secondary} /> : null}
           {address.insecure ? (
             <NotSecureLock testID="floatingBarNotSecure" size={floatingBarLayout.siteIcon} color={ink.notSecure} />
           ) : address.isPrivate ? null : address.pageUrl ? (

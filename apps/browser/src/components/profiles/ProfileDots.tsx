@@ -39,7 +39,7 @@ export function ProfileDots({ windowId, width, besideDownloads }: { windowId: st
   const { pages, pager } = usePagerPages(windowId);
   const reorder = useDotReorder(ids, ids.map((_, i) => switcherCellWidth(icons[i] ?? null)));
   return (
-    <View style={{ height: PROFILE_DOTS_HEIGHT, alignItems: "center" }}>
+    <View style={{ height: PROFILE_DOTS_HEIGHT, alignItems: "center", paddingLeft: besideDownloads ? SIDE_ROOM_BESIDE_DOWNLOADS : 0 }}>
       <View style={{ marginTop: (PROFILE_DOTS_HEIGHT - 3 - BAND) / 2, height: BAND, flexDirection: "row" }}>
         {ids.map((id, i) => (
           <Dot

@@ -12,7 +12,7 @@ import { useTheme } from "../ui/theme";
 import { font, ink, weight, withAlpha } from "../ui/tokens";
 import { FolderMeasures, GroupMember, StripGroupIcon } from "./GroupMember";
 import type { StripGroupEntry, StripMember } from "../../state/tabs/topStrip";
-import { hasVisibleMembers, overflowCountRoom, dragGeometry, dropIndex, GROUP_MARGIN_LEFT, GROUP_MARGIN_RIGHT, groupLayout, holds, MEMBERS_INSET, memberInteractive, tabsOf, type DragGeometry } from "./stripGroups";
+import { hasVisibleMembers, overflowCountRoom, dragGeometry, dropIndex, GROUP_MARGIN_LEFT, GROUP_MARGIN_RIGHT, groupLayout, holds, MEMBERS_INSET, TAIL_COLLAPSED, memberInteractive, tabsOf, type DragGeometry } from "./stripGroups";
 import { CHIP_HAIRLINE, GAP, GROUP_CHIP_PAD, GROUP_DIVIDER_LENGTH, GROUP_OVERFLOW_GAP, GROUP_TITLE_GAP, GROUP_TITLE_MAX, GROUP_TITLE_TIGHT, GROUP_TRAY_ALPHA, ITEM_HEIGHT, ITEM_TOP, MID, STRIP_COLORS, tabRadius, TOP_STRIP_HEIGHT } from "./tokens";
 import { noteTabStripGroupToggle } from "../../state/telemetry/tabStripCounts";
 import { useStripDrag } from "./useStripDrag";
@@ -123,6 +123,9 @@ export function StripGroup({
     },
   });
   const tail = useMemo(() => Animated.add(size, memberClipEdge(0)), []);
+  const shownOffset = shown >= 0 ? placeOf(entry.members[shown]!, shown).offset : 0;
+  const shownEdge = useMemo(() => Animated.add(size, shownOffset - TAIL_COLLAPSED), [shownOffset]);
+  const shifting = moving && !revealed;
   if (!group) return null;
   const tint = groupTint(group.color);
   const bare = group.color === "none";
@@ -144,12 +147,12 @@ export function StripGroup({
           width={placeOf(m, i).width}
           start={chipSize + MEMBERS_INSET}
           offset={placeOf(m, i).offset}
-          clip={moving && i !== shown ? tail : null}
+          clip={i !== shown ? (moving ? tail : null) : shifting ? shownEdge : null}
           revealed={revealed}
           open={open}
           interactive={memberInteractive(i === shown, expanded, moving)}
           shown={i === shown}
-          parked={!expanded && !moving && i !== shown}
+          parked={!expanded && i !== shown && (!moving || !placed.current.has(m.id))}
           geometry={members}
           from={expanded ? i : -1}
           chip={chip}

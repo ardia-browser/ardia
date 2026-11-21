@@ -1,4 +1,4 @@
-import { deckLeading, lerp, type DeckGeometry } from "./deckGeometry.ts";
+import { deckLeading, deckPileScale, lerp, type DeckGeometry } from "./deckGeometry.ts";
 
 export type PullTarget = {
   id: string;
@@ -74,7 +74,8 @@ export function pullTarget(id: string, screenWidth: number, screenHeight: number
 }
 
 export function stackPullTarget(g: DeckGeometry, id: string, index: number, scroll: number, shift: number): PullTarget {
-  return pullTarget(id, g.width, g.height, { centerX: deckLeading(g, index - scroll) + g.cardWidth / 2, centerY: g.cardCenterY + shift, width: g.cardWidth, height: g.cardHeight }, g.cardCorner, g.screenCorner);
+  const scale = deckPileScale(g, index - scroll);
+  return pullTarget(id, g.width, g.height, { centerX: deckLeading(g, index - scroll) + g.cardWidth / 2, centerY: g.cardCenterY + shift, width: g.cardWidth * scale, height: g.cardHeight * scale }, g.cardCorner * scale, g.screenCorner);
 }
 
 export function pullShrink(travel: number, pull: number): number {

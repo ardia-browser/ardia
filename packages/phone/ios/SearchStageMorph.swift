@@ -310,6 +310,7 @@ final class StageMorph {
   let view: StageMorphView
   private(set) var hasFlown = false
   private let corners: StageCorners
+  private let startsFromEmergence: Bool
   private var destination: CGRect?
   private var flight: UIViewPropertyAnimator?
   private var folding: [UIViewPropertyAnimator] = []
@@ -333,6 +334,7 @@ final class StageMorph {
 
   init(card: CGRect, fieldCenter: CGFloat, corners: StageCorners, of tray: UIView, in stage: UIView, look: StageMorphLook, from start: Start?) {
     self.corners = corners
+    startsFromEmergence = start != nil
     let cardFrame = tray.convert(card, to: stage).offsetBy(dx: 0, dy: Self.unfinishedTravel(of: tray))
     let snapshot = tray.resizableSnapshotView(from: card, afterScreenUpdates: false, withCapInsets: .zero)
     view = StageMorphView(look: look, contents: snapshot, cardSize: card.size, fieldCenter: fieldCenter)
@@ -418,9 +420,17 @@ final class StageMorph {
     UIView.performWithoutAnimation { view.isHidden = false }
   }
 
-  func restart(from frame: CGRect) {
-    guard !hasFlown, !frame.isEmpty else { return }
+  func restart(fromCard card: CGRect, of tray: UIView, in stage: UIView) {
+    guard !hasFlown, !startsFromEmergence else { return }
+    let frame = Self.shownCard(card, of: tray, in: stage)
+    guard !frame.isEmpty else { return }
     UIView.performWithoutAnimation { view.shape(to: frame, radius: min(view.radius, frame.height / 2)) }
+  }
+
+  private static func shownCard(_ card: CGRect, of tray: UIView, in stage: UIView) -> CGRect {
+    let shown = (tray.layer.presentation() ?? tray.layer).convert(card, to: stage.layer.presentation() ?? stage.layer)
+    guard shown.maxY > stage.bounds.maxY else { return shown }
+    return CGRect(x: shown.minX, y: shown.minY, width: shown.width, height: max(stage.bounds.maxY - shown.minY, 0))
   }
 
   private func startFades() {

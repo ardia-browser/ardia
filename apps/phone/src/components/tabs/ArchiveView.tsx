@@ -224,7 +224,7 @@ function ArchiveRow({ tab, first, last, editing, faviconSize, onMenu }: { tab: B
   return (
     <View testID="archiveGroupRow" style={[styles.group, corners, { backgroundColor: theme.groupFill }]}>
       <SwipeToDelete onDelete={() => deleteArchivedTab(tab)} revealsOnly={Platform.OS === "ios"}>
-        <View style={styles.rowLine}>
+        <View style={[styles.rowLine, { backgroundColor: theme.groupFill }]}>
           {editing ? (
             <Pressable accessibilityRole="button" accessibilityLabel={`Delete ${tab.title || shown.host}`} onPress={() => deleteArchivedTab(tab)} hitSlop={archiveGroup.deleteSlop} style={styles.deleteHit}>
               <View style={[styles.deleteDot, { backgroundColor: theme.destructive }]}>

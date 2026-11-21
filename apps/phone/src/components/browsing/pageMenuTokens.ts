@@ -50,7 +50,7 @@ export const pageMenuCards = {
   rowInset: 14,
   iconGap: 12,
   stepperHeight: 32,
-  stepperButton: 38,
+  stepperButton: 44,
   stepperReset: 52,
 } as const;
 

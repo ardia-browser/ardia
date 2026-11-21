@@ -343,6 +343,22 @@ test("a tap and each card's accessibility frame land on the right card in Arc's 
   }
 });
 
+test("in Arc's stack a card shrunk behind the focused one answers only inside its drawn bounds", () => {
+  const g = deckGeometry(402, 874, 62, 34, 0, "ios", "redesigned", 48, 55, "arc");
+  const scroll = 2;
+  const scale = deckPileScale(g, 0 - scroll);
+  assert.ok(scale < 1);
+  const centerX = deckLeading(g, -scroll) + g.cardWidth / 2;
+  const halfWidth = (g.cardWidth * scale) / 2;
+  const halfHeight = (g.cardHeight * scale) / 2;
+  const left = centerX - halfWidth;
+  const x = left + 2;
+  assert.equal(deckCardAt(g, 3, scroll, x, g.cardCenterY), 0, "inside the drawn card");
+  assert.equal(deckCardAt(g, 3, scroll, x, g.cardCenterY - halfHeight - 1), -1, "just above the drawn top edge");
+  assert.equal(deckCardAt(g, 3, scroll, x, g.cardCenterY + halfHeight + 1), -1, "just below the drawn bottom edge");
+  assert.equal(deckCardAt(g, 3, scroll, left - 1, g.cardCenterY), -1, "just left of the drawn edge");
+});
+
 test("Arc's card titles sit 16 in from the card's left edge, the favicon alone on a peeking card and the title once 36 points of it fit", () => {
   assert.deepEqual(deckArcHeaderPlacement(80, 220), { available: 220 - DECK_ARC_HEADER.inset - DECK_ARC_HEADER.trailing, left: 96 });
   assert.deepEqual(deckArcHeaderPlacement(10, 12), { available: 0, left: 26 });

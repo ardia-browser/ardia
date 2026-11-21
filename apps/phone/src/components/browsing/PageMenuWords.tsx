@@ -360,7 +360,7 @@ function ZoomRow({ model, large }: { model: MenuModel; large: boolean }) {
   const theme = useTheme();
   const ink = usePageMenuInk();
   const zoomButton = (icon: SymbolName, label: string, can: boolean, onPress: () => void) => (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} disabled={!can} onPress={onPress} style={styles.zoomButton}>
+    <Pressable accessibilityRole="button" accessibilityLabel={label} disabled={!can} onPress={onPress} hitSlop={ZOOM_SLOP} style={styles.zoomButton}>
       <Symbol name={icon} size={16} color={can ? theme.label : theme.tertiaryLabel} />
     </Pressable>
   );
@@ -375,7 +375,7 @@ function ZoomRow({ model, large }: { model: MenuModel; large: boolean }) {
       {large ? <View style={styles.zoomHeading}>{heading}</View> : heading}
       <View style={[styles.zoom, large ? styles.zoomIndented : null, { backgroundColor: ink.stepper }]}>
         {zoomButton("minus", "Zoom Out", model.zoomOut, zoomOut)}
-        <Pressable accessibilityRole="button" accessibilityLabel="Reset Zoom" accessibilityValue={{ text: model.zoomPercent }} disabled={!model.isWebPage} onPress={resetZoom} style={styles.zoomReset}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Reset Zoom" accessibilityValue={{ text: model.zoomPercent }} disabled={!model.isWebPage} onPress={resetZoom} hitSlop={ZOOM_SLOP} style={styles.zoomReset}>
           <Text style={[font.subheadline, styles.digits, styles.semibold, { color: theme.label }]}>{model.zoomPercent}</Text>
         </Pressable>
         {zoomButton("plus", "Zoom In", model.zoomIn, zoomIn)}
@@ -385,6 +385,7 @@ function ZoomRow({ model, large }: { model: MenuModel; large: boolean }) {
 }
 
 const SEND_MENU_WIDTH = 250;
+const ZOOM_SLOP = { top: (pageMenuCards.rowHeight - pageMenuCards.stepperHeight) / 2, bottom: (pageMenuCards.rowHeight - pageMenuCards.stepperHeight) / 2 };
 const TITLE_IN = FadeIn.duration(pageMenuMotion.titleFade);
 const TITLE_OUT = FadeOut.duration(pageMenuMotion.titleFade);
 const LABEL_START = pageMenuCards.rowInset + pageMenuCards.iconSlot + pageMenuCards.iconGap;

@@ -423,7 +423,7 @@ final class SearchStageView: ExpoView {
       return
     }
     let target = convert(anchor.frame, from: nil)
-    if let panel { morph.restart(from: shownCard(of: panel)) }
+    if let panel { morph.restart(fromCard: card, of: panel, in: self) }
     let carried = face.flatMap { $0.fits(anchor) ? $0 : nil }
     if abs(velocity) < Self.stillReleaseSpeed, let clock = StageKeyboardClock(layer: keyboardSentinel.layer) {
       morph.fly(to: target, style: anchor.style, carrying: carried, timing: clock.timing, duration: clock.duration, direct: landsDirectly)
@@ -433,12 +433,6 @@ final class SearchStageView: ExpoView {
       morph.fly(to: target, style: anchor.style, carrying: carried, timing: timing, duration: Motion.smoothSpring.settlingDuration, direct: landsDirectly)
     }
     hidePanelUnderMorph()
-  }
-
-  private func shownCard(of panel: UIView) -> CGRect {
-    let shown = (panel.layer.presentation() ?? panel.layer).convert(card, to: layer.presentation() ?? layer)
-    guard shown.maxY > bounds.maxY else { return shown }
-    return CGRect(x: shown.minX, y: shown.minY, width: shown.width, height: max(bounds.maxY - shown.minY, 0))
   }
 
   private func cancelPendingFlight() {

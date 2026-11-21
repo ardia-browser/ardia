@@ -191,8 +191,12 @@ export function deckCardAt(g: DeckGeometry, count: number, scroll: number, x: nu
   const half = g.cardHeight / 2;
   if (y < g.cardCenterY - half || y > g.cardCenterY + half) return -1;
   for (let index = count - 1; index >= 0; index--) {
-    const leading = deckLeading(g, index - scroll);
-    if (x >= leading && x <= leading + g.cardWidth) return index;
+    const relative = index - scroll;
+    const scale = deckPileScale(g, relative);
+    const centerX = deckLeading(g, relative) + g.cardWidth / 2;
+    const halfWidth = (g.cardWidth * scale) / 2;
+    const halfHeight = (g.cardHeight * scale) / 2;
+    if (x >= centerX - halfWidth && x <= centerX + halfWidth && y >= g.cardCenterY - halfHeight && y <= g.cardCenterY + halfHeight) return index;
   }
   return -1;
 }

@@ -73,7 +73,7 @@ class RegistryTests(unittest.TestCase):
         linux = sources("linux")
         self.assertFalse(any(path.suffix == ".mm" for path in linux))
         self.assertNotIn(ROOT / "ac_reauth.cc", linux)
-        for shared in ("ac_cli_control.cc", "ac_cli_token_policy.cc", "ac_cli_token_policy_web_targets.cc"):
+        for shared in ("ac_cli_control.cc", "ac_cli_token_policy.cc", "ac_cli_token_policy_events.cc"):
             self.assertIn(ROOT / shared, linux)
             self.assertIn(ROOT / shared, sources("mac"))
         self.assertFalse((ROOT / "ac_cli_control_linux.cc").exists())

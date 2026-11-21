@@ -327,7 +327,9 @@ constexpr size_t kDocumentLimit = linux_policy::kDocumentLimit;
 constexpr size_t kAssetLimit = 32 * 1024 * 1024;
 constexpr char kSessionName[] = "linux-session.json";
 constexpr const char* kCliControlCalls[] = {"engine.cliControlStatus", "engine.setCliControl",
-                                            "engine.setCliActiveTab"};
+                                            "engine.setCliActiveTab", "engine.cliPluginCredential",
+                                            "engine.cliActDocument", "engine.cliActLease",
+                                            "engine.cliActRelease", "engine.cliTestPointer"};
 
 base::FilePath NativeMessagingManifest(const std::string& host_name) {
   std::unique_ptr<base::Environment> environment = base::Environment::Create();
@@ -2008,9 +2010,55 @@ class HostMessageHandler : public content::WebUIMessageHandler,
         request.Set("active", -1);
       }
     }
+    const char* engine_call = "ac_cli_control";
+    if (name == "engine.cliPluginCredential") {
+      engine_call = "ac_cli_plugin_credential";
+      if (const std::string* revoke = input.FindString("revoke")) {
+        request.Set("revoke", *revoke);
+      } else {
+        const std::string* tab = input.FindString("tabId");
+        TabBinding* binding = tab ? host_->BindingForKey(*tab) : nullptr;
+        content::WebContents* contents = binding ? binding->contents() : nullptr;
+        if (std::optional<bool> visible = input.FindBool("visible")) {
+          const std::string* credential = input.FindString("id");
+          if (!credential || !tab) return Fail(id, "ERR_BAD_ARGS", "engine.cliPluginCredential {visible} requires {id, tabId}");
+          request.Set("id", *credential);
+          request.Set("visible", *visible);
+          request.Set("tab", contents ? TabId(contents) : -1);
+        } else {
+          if (!contents) return Fail(id, "ERR_ENGINE", "engine.cliPluginCredential requires {tabId} or {revoke}");
+          request.Set("tab", TabId(contents));
+        }
+      }
+    } else if (name == "engine.cliActDocument" || name == "engine.cliActLease") {
+      const bool lease = name == "engine.cliActLease";
+      engine_call = lease ? "ac_cli_act_lease" : "ac_cli_act_document";
+      const std::string* tab = input.FindString("tabId");
+      const std::string* credential = input.FindString("credential");
+      const std::optional<int> document = input.FindInt("document");
+      TabBinding* binding = tab ? host_->BindingForKey(*tab) : nullptr;
+      content::WebContents* contents = binding ? binding->contents() : nullptr;
+      if (!contents || !credential || (lease && !document)) {
+        return Fail(id, "ERR_ENGINE", lease ? "engine.cliActLease requires {tabId, credential, document}"
+                                            : "engine.cliActDocument requires {tabId, credential}");
+      }
+      request.Set("tab", TabId(contents));
+      request.Set("credential", *credential);
+      if (lease) request.Set("document", *document);
+    } else if (name == "engine.cliTestPointer") {
+      engine_call = "ac_cli_test_pointer";
+      for (const char* key : {"park", "withholdAcks", "release"}) {
+        if (const std::optional<bool> on = input.FindBool(key)) request.Set(key, *on);
+      }
+    } else if (name == "engine.cliActRelease") {
+      engine_call = "ac_cli_act_release";
+      std::optional<int> lease = input.FindInt("lease");
+      if (!lease) return Fail(id, "ERR_ENGINE", "engine.cliActRelease requires {lease}");
+      request.Set("lease", *lease);
+    }
     const auto json = base::WriteJson(request);
     if (!json) return Fail(id, "ERR_BAD_REPLY", "CLI control arguments are not JSON");
-    ac_engine_call("ac_cli_control", "", json->c_str(), Replied, new EngineReply{name, weak_factory_.GetWeakPtr(), id});
+    ac_engine_call(engine_call, "", json->c_str(), Replied, new EngineReply{name, weak_factory_.GetWeakPtr(), id});
   }
   void ProfileFail(const std::string& id, ardiacore::linux_profiles::ProfileError error) {
     Fail(id, ardiacore::linux_profiles::ProfileErrorCode(error), ardiacore::linux_profiles::ProfileErrorMessage(error));

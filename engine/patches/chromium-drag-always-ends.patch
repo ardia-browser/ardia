@@ -886,8 +886,8 @@ diff --git a/content/browser/devtools/protocol/input_handler.cc b/content/browse
      callback->sendFailure(Response::InvalidParams(
          base::StringPrintf("Unexpected event type '%s'", event_type.c_str())));
 @@ -1688,12 +1926,27 @@
-     }
-   }
+     const blink::mojom::DragEventSourceInfo* event_info,
+     bool* intercepted) {
    // Only allow when Input.setInterceptDrags is disabled.
 +  RenderWidgetHostImpl* ardia_source = source_frame
 +      ? RenderWidgetHostImpl::From(source_frame->GetRenderWidgetHost())

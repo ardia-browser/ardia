@@ -2,15 +2,22 @@
 #define ARDIA_CORE_AC_CONTENT_HOOKS_H_
 
 #include <stddef.h>
+#include <stdint.h>
 
 #include <memory>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "base/functional/callback_forward.h"
+#include "base/memory/ref_counted.h"
 #include "extensions/common/extension_id.h"
 
 class GURL;
+
+namespace base {
+class FilePath;
+}
 
 namespace content {
 class BrowserContext;
@@ -28,6 +35,45 @@ bool ArdiaHasAccessedInitialMainDocument(WebContents* contents);
 bool ArdiaMainFrameHandlesEnterPictureInPicture(WebContents* contents);
 
 DevToolsAgentHost* ArdiaDevToolsAgentHostForId(const std::string& id);
+
+class ArdiaWheelTicket : public base::RefCounted<ArdiaWheelTicket> {
+ public:
+  virtual bool Forward() = 0;
+  virtual void Acked(bool phase_end) = 0;
+  virtual void WidgetGone() = 0;
+
+ protected:
+  friend class base::RefCounted<ArdiaWheelTicket>;
+  virtual ~ArdiaWheelTicket() = default;
+};
+
+struct ArdiaPointer {
+  enum class Kind { kClick, kMove, kWheel };
+  Kind kind = Kind::kClick;
+  double x = 0;
+  double y = 0;
+  std::string button = "left";
+  int click_count = 1;
+  int modifiers = 0;
+  double delta_x = 0;
+  double delta_y = 0;
+  uint64_t epoch = 0;
+  scoped_refptr<ArdiaWheelTicket> wheel_ticket;
+  int64_t grant = 0;
+  bool plugin = false;
+};
+
+uint64_t ArdiaPageEpoch(DevToolsAgentHost* host);
+
+size_t ArdiaParkedPointerCount();
+
+size_t ArdiaReleaseParkedPointers();
+
+void ArdiaDispatchPointer(DevToolsAgentHost* host,
+                          DevToolsAgentHostClient* root_client,
+                          const std::string& session_id,
+                          const ArdiaPointer& pointer,
+                          base::OnceCallback<void(std::string error)> done);
 }
 
 namespace gfx {
@@ -146,10 +192,18 @@ class ArdiaDevToolsTokenClient {
   virtual bool MayAttachToURL(const GURL& url, bool is_webui) = 0;
   virtual bool MayAttachToRenderFrameHost(
       content::RenderFrameHost* render_frame_host) = 0;
+  virtual bool MayReadLocalFiles() = 0;
+  virtual bool MayWriteLocalFiles() = 0;
+  virtual void SetCloser(
+      base::RepeatingCallback<void(bool drop_queued)> close) = 0;
+  virtual void SetChannel(
+      base::RepeatingCallback<void(std::string)> to_browser,
+      base::RepeatingCallback<void(std::string)> to_client) = 0;
 };
 
 extern std::unique_ptr<ArdiaDevToolsTokenClient> (*g_ardia_devtools_token_client)(
     const content::DevToolsSocketFactory* factory,
+    std::string_view token,
     content::DevToolsAgentHostClient* client,
     content::DevToolsAgentHost* host);
 
@@ -161,11 +215,46 @@ extern bool (*g_ardia_devtools_may_input)(
     content::DevToolsAgentHostClient* root_client,
     content::RenderFrameHost* frame);
 
+enum class ArdiaSessionInput : uint8_t { kAllowed, kRefused, kLeaseEnded };
+
+extern ArdiaSessionInput (*g_ardia_devtools_session_may_input)(
+    content::DevToolsAgentHostClient* root_client,
+    const std::string& session_id,
+    int64_t grant,
+    bool delivering);
+
+extern int64_t (*g_ardia_devtools_input_grant)(
+    content::DevToolsAgentHostClient* root_client,
+    const std::string& session_id);
+
+extern bool g_ardia_test_pointer_park;
+extern bool g_ardia_test_pointer_withhold_acks;
+extern int g_ardia_test_pointer_recoveries;
+
 extern void (*g_ardia_devtools_session_attached)(
     content::DevToolsAgentHostClient* root_client,
     content::DevToolsAgentHost* host,
     const void* session);
 
 extern void (*g_ardia_devtools_session_detached)(const void* session);
+
+extern bool (*g_ardia_file_picker_answer)(content::RenderFrameHost* frame,
+                                          int dialog_type,
+                                          std::vector<base::FilePath>* paths);
+
+extern void (*g_ardia_file_picker_grant_expected)(
+    content::RenderFrameHost* frame,
+    const base::FilePath& path,
+    bool write);
+
+extern void (*g_ardia_file_picker_reset)(content::RenderFrameHost* frame);
+
+extern bool (*g_ardia_file_picker_grant_claim)(content::RenderFrameHost* frame,
+                                               const base::FilePath& path,
+                                               bool is_directory,
+                                               bool write);
+
+extern bool (*g_ardia_devtools_renderer_untrusted)(
+    content::DevToolsAgentHostClient* root_client);
 
 #endif

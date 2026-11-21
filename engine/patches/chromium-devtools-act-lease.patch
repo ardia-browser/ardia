@@ -1,0 +1,363 @@
+diff --git a/content/browser/devtools/protocol/input_handler.cc b/content/browser/devtools/protocol/input_handler.cc
+--- a/content/browser/devtools/protocol/input_handler.cc
++++ b/content/browser/devtools/protocol/input_handler.cc
+@@ -60,6 +60,7 @@
+ #include "ui/gfx/range/range.h"
+ 
+ #include "ardia/core/ac_content_hooks.h"  // nogncheck
++#include "base/no_destructor.h"
+ #include "ardia/core/ac_plugin_refusals.h"  // nogncheck
+ #include "ardia/core/ac_pointer_outcome.h"  // nogncheck
+ #include "base/strings/strcat.h"
+@@ -74,10 +75,20 @@
+ #include "third_party/blink/public/mojom/drag/drag.mojom.h"
+ #include "ui/latency/latency_info.h"
+ 
+-bool (*g_ardia_devtools_session_may_input)(
++ArdiaSessionInput (*g_ardia_devtools_session_may_input)(
++    content::DevToolsAgentHostClient* root_client,
++    const std::string& session_id,
++    int64_t grant,
++    bool delivering) = nullptr;
++
++int64_t (*g_ardia_devtools_input_grant)(
+     content::DevToolsAgentHostClient* root_client,
+     const std::string& session_id) = nullptr;
+ 
++bool g_ardia_test_pointer_park = false;
++bool g_ardia_test_pointer_withhold_acks = false;
++int g_ardia_test_pointer_recoveries = 0;
++
+ bool (*g_ardia_devtools_may_input)(content::DevToolsAgentHostClient* root_client,
+                                    content::RenderFrameHost* frame) = nullptr;
+ 
+@@ -87,31 +98,64 @@ namespace content::protocol {
+ 
+ namespace {
+ 
+-bool ArdiaMayInject(DevToolsSession* session,
+-                    RenderFrameHostImpl* host,
+-                    RenderWidgetHostImpl* widget) {
++std::vector<base::OnceClosure>& ArdiaParkedPointers() {
++  static base::NoDestructor<std::vector<base::OnceClosure>> parked;
++  return *parked;
++}
++
++ArdiaSessionInput ArdiaGrantCheck(DevToolsSession* session,
++                                  int64_t grant,
++                                  bool delivering = false) {
++  if (!g_ardia_devtools_session_may_input) {
++    return ArdiaSessionInput::kAllowed;
++  }
++  if (!session) {
++    return ArdiaSessionInput::kRefused;
++  }
++  return g_ardia_devtools_session_may_input(
++      session->GetRootSession()->GetClient(), session->ArdiaSessionId(), grant,
++      delivering);
++}
++
++const char* ArdiaRefusalFor(ArdiaSessionInput verdict) {
++  return verdict == ArdiaSessionInput::kLeaseEnded
++             ? ardia::refusal::kActLeaseEnded
++             : ardia::refusal::kInputNotAllowed;
++}
++
++ArdiaSessionInput ArdiaInjectCheck(DevToolsSession* session,
++                                   RenderFrameHostImpl* host,
++                                   RenderWidgetHostImpl* widget,
++                                   int64_t grant = 0,
++                                   bool grant_from_dispatch = false) {
+   if (!g_ardia_devtools_may_input) {
+-    return true;
++    return ArdiaSessionInput::kAllowed;
+   }
+   if (!session || !widget) {
+-    return false;
++    return ArdiaSessionInput::kRefused;
+   }
+   DevToolsAgentHostClient* client = session->GetRootSession()->GetClient();
+   if (g_ardia_devtools_may_input(client, nullptr)) {
+-    return true;
++    return ArdiaSessionInput::kAllowed;
+   }
+   WebContents* contents = host ? WebContents::FromRenderFrameHost(host) : nullptr;
+   if (!contents) {
+-    return false;
++    return ArdiaSessionInput::kRefused;
+   }
+   auto* touch_emulator = static_cast<TouchEmulatorImpl*>(
+       static_cast<WebContentsImpl*>(contents)->GetTouchEmulator(false));
+   if (touch_emulator && touch_emulator->ArdiaEmulatingTouchFromMouse()) {
+-    return false;
++    return ArdiaSessionInput::kRefused;
+   }
+-  if (g_ardia_devtools_session_may_input &&
+-      !g_ardia_devtools_session_may_input(client, session->ArdiaSessionId())) {
+-    return false;
++  if (grant_from_dispatch) {
++    grant = g_ardia_devtools_input_grant
++                ? g_ardia_devtools_input_grant(client, session->ArdiaSessionId())
++                : 0;
++  }
++  const ArdiaSessionInput verdict =
++      ArdiaGrantCheck(session, grant, grant_from_dispatch);
++  if (verdict != ArdiaSessionInput::kAllowed) {
++    return verdict;
+   }
+   bool found = false;
+   bool allowed = true;
+@@ -121,7 +165,16 @@ bool ArdiaMayInject(DevToolsSession* session,
+       allowed = allowed && g_ardia_devtools_may_input(client, frame);
+     }
+   });
+-  return found && allowed;
++  return found && allowed ? ArdiaSessionInput::kAllowed
++                          : ArdiaSessionInput::kRefused;
++}
++
++bool ArdiaMayInject(DevToolsSession* session,
++                    RenderFrameHostImpl* host,
++                    RenderWidgetHostImpl* widget,
++                    int64_t grant = 0) {
++  return ArdiaInjectCheck(session, host, widget, grant) ==
++         ArdiaSessionInput::kAllowed;
+ }
+ 
+ 
+@@ -1607,8 +1660,10 @@ void InputHandler::DispatchKeyEvent(
+       widget_host = target_host;
+   }
+ 
+-  if (!ArdiaMayInject(session(), host_, widget_host)) {
+-    callback->sendFailure(Response::InvalidParams(ardia::refusal::kInputNotAllowed));
++  if (const ArdiaSessionInput verdict =
++          ArdiaInjectCheck(session(), host_, widget_host, 0, true);
++      verdict != ArdiaSessionInput::kAllowed) {
++    callback->sendFailure(Response::InvalidParams(ArdiaRefusalFor(verdict)));
+     return;
+   }
+ 
+@@ -1639,8 +1694,10 @@ void InputHandler::InsertText(const std::string& text,
+       widget_host = target_host;
+   }
+ 
+-  if (!ArdiaMayInject(session(), host_, widget_host)) {
+-    callback->sendFailure(Response::InvalidParams(ardia::refusal::kInputNotAllowed));
++  if (const ArdiaSessionInput verdict =
++          ArdiaInjectCheck(session(), host_, widget_host, 0, true);
++      verdict != ArdiaSessionInput::kAllowed) {
++    callback->sendFailure(Response::InvalidParams(ArdiaRefusalFor(verdict)));
+     return;
+   }
+ 
+@@ -2902,12 +2959,16 @@ class InputHandler::ArdiaPointerRun
+  public:
+   ArdiaPointerRun(int kind,
+                   uint64_t epoch,
++                  int64_t grant,
++                  bool plugin,
+                   base::WeakPtr<WebContents> contents,
+                   base::WeakPtr<InputHandler> handler,
+                   scoped_refptr<ArdiaWheelTicket> wheel_ticket,
+                   base::OnceCallback<void(std::string)> done)
+       : kind_(kind),
+         epoch_(epoch),
++        grant_(grant),
++        plugin_(plugin),
+         contents_(std::move(contents)),
+         handler_(std::move(handler)),
+         wheel_ticket_(std::move(wheel_ticket)),
+@@ -2925,6 +2986,9 @@ class InputHandler::ArdiaPointerRun
+     return !contents_ || ArdiaPageEpochOf(contents_.get()) != epoch_;
+   }
+ 
++  int64_t grant() const { return grant_; }
++  bool plugin() const { return plugin_; }
++
+   void Fail(std::string error) {
+     if (done_) {
+       std::move(done_).Run(std::move(error));
+@@ -2979,7 +3043,8 @@ class InputHandler::ArdiaPointerRun
+ 
+   bool MayRecover() {
+     return !EpochChanged() && handler_ && handler_->session() && widget_ &&
+-           ArdiaMayInject(handler_->session(), handler_->host_, widget_.get());
++           ArdiaMayInject(handler_->session(), handler_->host_, widget_.get(),
++                          grant_);
+   }
+ 
+   void Settle() {
+@@ -2993,6 +3058,7 @@ class InputHandler::ArdiaPointerRun
+     }
+     if (ardia::NeedsRecoveryRelease(events_, outcome) && recovery_release_ &&
+         MayRecover()) {
++      ++g_ardia_test_pointer_recoveries;
+       widget_->ForwardMouseEventWithLatencyInfo(*recovery_release_,
+                                                 ui::LatencyInfo());
+     }
+@@ -3011,6 +3077,8 @@ class InputHandler::ArdiaPointerRun
+ 
+   const int kind_;
+   const uint64_t epoch_;
++  const int64_t grant_;
++  const bool plugin_;
+   base::WeakPtr<WebContents> contents_;
+   base::WeakPtr<InputHandler> handler_;
+   scoped_refptr<ArdiaWheelTicket> wheel_ticket_;
+@@ -3037,6 +3105,8 @@ void InputHandler::ArdiaDispatchPointer(
+     double delta_x,
+     double delta_y,
+     uint64_t epoch,
++    int64_t ardia_grant,
++    bool ardia_plugin,
+     scoped_refptr<ArdiaWheelTicket> wheel_ticket,
+     base::OnceCallback<void(std::string)> done) {
+   const bool click = kind == static_cast<int>(ArdiaPointer::Kind::kClick);
+@@ -3060,6 +3130,13 @@ void InputHandler::ArdiaDispatchPointer(
+     std::move(done).Run(ardia::refusal::kPageChanged);
+     return;
+   }
++  if (ardia_plugin) {
++    const ArdiaSessionInput verdict = ArdiaGrantCheck(session(), ardia_grant);
++    if (verdict != ArdiaSessionInput::kAllowed) {
++      std::move(done).Run(ArdiaRefusalFor(verdict));
++      return;
++    }
++  }
+   if (ardia::RefusesHiddenTarget(wheel, widget_host->IsHidden())) {
+     std::move(done).Run(ardia::refusal::kPageHidden);
+     return;
+@@ -3118,8 +3195,8 @@ void InputHandler::ArdiaDispatchPointer(
+     return;
+   }
+   auto run = base::MakeRefCounted<ArdiaPointerRun>(
+-      kind, epoch, contents->GetWeakPtr(), weak_factory_.GetWeakPtr(),
+-      std::move(wheel_ticket), std::move(done));
++      kind, epoch, ardia_grant, ardia_plugin, contents->GetWeakPtr(),
++      weak_factory_.GetWeakPtr(), std::move(wheel_ticket), std::move(done));
+   auto find_widget = base::BindOnce(
+       [](base::WeakPtr<InputHandler> self,
+          base::WeakPtr<RenderWidgetHostImpl> widget, gfx::PointF position,
+@@ -3147,6 +3224,13 @@ void InputHandler::ArdiaInjectPointer(
+     scoped_refptr<ArdiaPointerRun> run,
+     base::WeakPtr<RenderWidgetHostViewBase> target,
+     std::optional<gfx::PointF> point) {
++  if (run->plugin() && g_ardia_test_pointer_park) {
++    ArdiaParkedPointers().push_back(base::BindOnce(
++        &InputHandler::ArdiaInjectPointer, weak_factory_.GetWeakPtr(),
++        std::move(events), std::move(run), std::move(target),
++        std::move(point)));
++    return;
++  }
+   if (!target || !point.has_value()) {
+     run->Fail(ardia::refusal::kNothingThere);
+     return;
+@@ -3157,8 +3241,10 @@ void InputHandler::ArdiaInjectPointer(
+   }
+   RenderWidgetHostImpl* widget_host =
+       RenderWidgetHostImpl::From(target->GetRenderWidgetHost());
+-  if (!ArdiaMayInject(session(), host_, widget_host)) {
+-    run->Fail(ardia::refusal::kInputNotAllowed);
++  if (const ArdiaSessionInput verdict =
++          ArdiaInjectCheck(session(), host_, widget_host, run->grant());
++      verdict != ArdiaSessionInput::kAllowed) {
++    run->Fail(ArdiaRefusalFor(verdict));
+     return;
+   }
+   const bool is_wheel = !events.empty() &&
+@@ -3202,7 +3288,9 @@ void InputHandler::ArdiaInjectPointer(
+     widget_host->Focus();
+   }
+   for (size_t index = 0; index < events.size(); ++index) {
+-    if (!widget || run->EpochChanged()) {
++    if (!widget || run->EpochChanged() ||
++        (run->plugin() && ArdiaGrantCheck(session(), run->grant(), true) !=
++                              ArdiaSessionInput::kAllowed)) {
+       run->Resolve(index, 0);
+       if (is_wheel) {
+         run->Resolve(index + 1, 0);
+@@ -3229,8 +3317,12 @@ void InputHandler::ArdiaInjectPointer(
+         run->Fail(ardia::refusal::kNotDelivered);
+         return;
+       }
+-      ArdiaWheelAcks::Watch(widget.get(), stamp, ended.TimeStamp(), index,
+-                            run->Resolver(), run->wheel_ticket());
++      ArdiaWheelAcks::Watch(
++          widget.get(), stamp, ended.TimeStamp(), index,
++          run->plugin() && g_ardia_test_pointer_withhold_acks
++              ? base::RepeatingCallback<void(size_t, int)>(base::DoNothing())
++              : run->Resolver(),
++          run->wheel_ticket());
+       widget->ForwardWheelEventWithLatencyInfo(wheel, latency);
+       if (widget) {
+         widget->ForwardWheelEventWithLatencyInfo(ended, ui::LatencyInfo());
+@@ -3242,8 +3334,10 @@ void InputHandler::ArdiaInjectPointer(
+       }
+       continue;
+     }
+-    widget->ArdiaExpectMouseAck(
+-        base::BindOnce(&ArdiaPointerRun::Resolve, run, index));
++    if (!run->plugin() || !g_ardia_test_pointer_withhold_acks) {
++      widget->ArdiaExpectMouseAck(
++          base::BindOnce(&ArdiaPointerRun::Resolve, run, index));
++    }
+     widget->ForwardMouseEventWithLatencyInfo(event, latency);
+     base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
+         FROM_HERE, base::BindOnce(&ArdiaPointerRun::Expire, run, index),
+@@ -3255,10 +3349,32 @@ uint64_t ArdiaPageEpochOfContents(WebContents* contents) {
+   return ArdiaPageEpochOf(contents);
+ }
+ 
++size_t ArdiaParkedPointersCount() {
++  return ArdiaParkedPointers().size();
++}
++
++size_t ArdiaReleaseParked() {
++  g_ardia_test_pointer_park = false;
++  std::vector<base::OnceClosure> parked = std::move(ArdiaParkedPointers());
++  ArdiaParkedPointers().clear();
++  for (base::OnceClosure& closure : parked) {
++    std::move(closure).Run();
++  }
++  return parked.size();
++}
++
+ }  // namespace content::protocol
+ 
+ namespace content {
+ 
++size_t ArdiaParkedPointerCount() {
++  return protocol::ArdiaParkedPointersCount();
++}
++
++size_t ArdiaReleaseParkedPointers() {
++  return protocol::ArdiaReleaseParked();
++}
++
+ uint64_t ArdiaPageEpoch(DevToolsAgentHost* host) {
+   return protocol::ArdiaPageEpochOfContents(host ? host->GetWebContents()
+                                                  : nullptr);
+@@ -3276,8 +3392,8 @@ void ArdiaDispatchPointer(DevToolsAgentHost* host,
+         handler->ArdiaDispatchPointer(
+             static_cast<int>(pointer.kind), pointer.x, pointer.y,
+             pointer.button, pointer.click_count, pointer.modifiers,
+-            pointer.delta_x, pointer.delta_y, pointer.epoch,
+-            pointer.wheel_ticket, std::move(done));
++            pointer.delta_x, pointer.delta_y, pointer.epoch, pointer.grant,
++            pointer.plugin, pointer.wheel_ticket, std::move(done));
+         return;
+       }
+     }
+diff --git a/content/browser/devtools/protocol/input_handler.h b/content/browser/devtools/protocol/input_handler.h
+--- a/content/browser/devtools/protocol/input_handler.h
++++ b/content/browser/devtools/protocol/input_handler.h
+@@ -68,6 +68,8 @@ class InputHandler : public DevToolsDomainHandler, public Input::Backend {
+                             double delta_x,
+                             double delta_y,
+                             uint64_t epoch,
++                            int64_t ardia_grant,
++                            bool ardia_plugin,
+                             scoped_refptr<ArdiaWheelTicket> wheel_ticket,
+                             base::OnceCallback<void(std::string)> done);
+   void ArdiaInjectPointer(

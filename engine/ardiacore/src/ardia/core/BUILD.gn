@@ -55,6 +55,8 @@ source_set("core") {
     "ac_cast_dialog.h",
     "ac_cast_dialog.mm",
     "ac_content_hooks.h",
+    "ac_plugin_refusals.h",
+    "ac_pointer_outcome.h",
     "ac_contents_background.h",
     "ac_contents_background.mm",
     "ac_context_menu.h",

@@ -31,7 +31,7 @@ NSArray<NSString *> *EngineTestKeys() {
   return @[
     @"keychain", @"keychainHiddenReads", @"keychainFail", @"safeStorageAnswer", @"reauth", @"bluetoothChooser",
     @"externalProtocolNoLaunch", @"externalProtocolApp", @"mediaRouteProvider", @"systemMediaPermission", @"applyProfileGate", @"contextMenu",
-    @"loginsDelay", @"loginsReleaseAfter", @"cdpTabsVisible", @"nativeDragRefused",
+    @"loginsDelay", @"loginsReleaseAfter", @"cdpTabsVisible", @"nativeDragRefused", @"privatePasteboard", @"pluginInputHold",
   ];
 }
 

@@ -131,18 +131,4 @@ bool IsCliOwnedTab(content::WebContents* contents) {
   return false;
 }
 
-std::string CliEmulationRefusal(const std::string& target_id) {
-  auto it = OwnedTabs().find(target_id);
-  content::WebContents* contents =
-      it == OwnedTabs().end() ? nullptr : it->second->web_contents();
-  if (!contents) {
-    return "on a tab the ardia command didn't open";
-  }
-  if (!ardiacore::InAutomationWindow(contents) ||
-      ardiacore::TabWasInShownSlot(contents)) {
-    return "on a tab that isn't off-screen";
-  }
-  return std::string();
-}
-
 }

@@ -1,0 +1,170 @@
+diff --git a/chrome/browser/file_system_access/chrome_file_system_access_permission_context.cc b/chrome/browser/file_system_access/chrome_file_system_access_permission_context.cc
+--- a/chrome/browser/file_system_access/chrome_file_system_access_permission_context.cc
++++ b/chrome/browser/file_system_access/chrome_file_system_access_permission_context.cc
+@@ -125,6 +125,11 @@
+ #include "extensions/browser/guest_view/web_view/web_view_guest.h"
+ #endif  // BUILDFLAG(ENABLE_EXTENSIONS_CORE) && BUILDFLAG(ENABLE_GUEST_VIEW)
+ 
++bool (*g_ardia_file_picker_grant_claim)(content::RenderFrameHost* frame,
++                                        const base::FilePath& path,
++                                        bool is_directory,
++                                        bool write) = nullptr;
++
+ namespace {
+ 
+ #if BUILDFLAG(IS_CHROMEOS)
+@@ -1229,6 +1234,18 @@ class ChromeFileSystemAccessPermissionContext::PermissionGrantImpl
+       return;
+     }
+ 
++    if (g_ardia_file_picker_grant_claim &&
++        g_ardia_file_picker_grant_claim(
++            rfh, path_info_.path, handle_type_ == HandleType::kDirectory,
++            type_ == GrantType::kWrite)) {
++      PermissionRequestOutcome outcome = PermissionRequestOutcome::kUserGranted;
++      RecordPermissionRequestOutcome(outcome);
++      SetStatus(PermissionStatus::GRANTED,
++                PersistedPermissionOptions::kDoNotUpdatePersistedPermission);
++      std::move(callback).Run(outcome);
++      return;
++    }
++
+ #if BUILDFLAG(ENABLE_EXTENSIONS_CORE) && BUILDFLAG(ENABLE_GUEST_VIEW)
+     // A permission request from a webview is normally delegated to its embedder
+     // without showing a prompt. However, filesystem permissions are known to be
+diff --git a/content/browser/file_system_access/file_system_access_manager_impl.cc b/content/browser/file_system_access/file_system_access_manager_impl.cc
+--- a/content/browser/file_system_access/file_system_access_manager_impl.cc
++++ b/content/browser/file_system_access/file_system_access_manager_impl.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "content/browser/file_system_access/file_system_access_manager_impl.h"
+ 
++#include "ardia/core/ac_content_hooks.h"  // nogncheck
++
+ #include <algorithm>
+ #include <iterator>
+ #include <memory>
+@@ -92,6 +94,11 @@
+ #include "third_party/blink/public/mojom/choosers/file_chooser.mojom.h"
+ #endif
+ 
++void (*g_ardia_file_picker_grant_expected)(content::RenderFrameHost* frame,
++                                           const base::FilePath& path,
++                                           bool write) = nullptr;
++void (*g_ardia_file_picker_reset)(content::RenderFrameHost* frame) = nullptr;
++
+ namespace content {
+ 
+ using blink::mojom::FileSystemAccessStatus;
+@@ -779,6 +786,9 @@ void FileSystemAccessManagerImpl::ChooseEntries(
+     return;
+   }
+   rfhs_with_active_file_pickers_.insert(global_rfh_id);
++  if (g_ardia_file_picker_reset) {
++    g_ardia_file_picker_reset(RenderFrameHost::FromID(global_rfh_id));
++  }
+   ChooseEntriesCallback wrapped_callback = std::move(callback).Then(
+       base::BindOnce(&FileSystemAccessManagerImpl::FilePickerDeactivated,
+                      weak_factory_.GetWeakPtr(), global_rfh_id));
+@@ -805,6 +815,9 @@ void FileSystemAccessManagerImpl::FilePickerDeactivated(
+     GlobalRenderFrameHostId global_rfh_id) {
+   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+   rfhs_with_active_file_pickers_.erase(global_rfh_id);
++  if (g_ardia_file_picker_reset) {
++    g_ardia_file_picker_reset(RenderFrameHost::FromID(global_rfh_id));
++  }
+ }
+ 
+ void FileSystemAccessManagerImpl::ResolveDefaultDirectory(
+@@ -1958,6 +1971,10 @@ void FileSystemAccessManagerImpl::DidVerifySensitiveDirectoryAccessForIndex(
+         std::vector<blink::mojom::FileSystemAccessEntryPtr>());
+     return;
+   } else if (result == SensitiveEntryResult::kTryAgain) {
++    if (g_ardia_file_picker_reset) {
++      g_ardia_file_picker_reset(
++          RenderFrameHost::FromID(binding_context.frame_id));
++    }
+     ShowFilePickerOnUIThread(
+         permission_context(), binding_context.storage_key.origin(),
+         binding_context.frame_id, options,
+@@ -1993,6 +2010,10 @@ void FileSystemAccessManagerImpl::DidVerifySensitiveDirectoryAccess(
+     return;
+   }
+   if (result == SensitiveEntryResult::kTryAgain) {
++    if (g_ardia_file_picker_reset) {
++      g_ardia_file_picker_reset(
++          RenderFrameHost::FromID(binding_context.frame_id));
++    }
+     ShowFilePickerOnUIThread(
+         permission_context(), binding_context.storage_key.origin(),
+         binding_context.frame_id, options,
+@@ -2062,6 +2083,11 @@ void FileSystemAccessManagerImpl::OnCheckPathsAgainstEnterprisePolicy(
+             entries.front(), binding_context.storage_key,
+             HandleType::kDirectory,
+             FileSystemAccessPermissionContext::AccessTrigger::kOpen);
++    if (g_ardia_file_picker_grant_expected) {
++      g_ardia_file_picker_grant_expected(
++          RenderFrameHost::FromID(binding_context.frame_id),
++          entries.front().path, request_directory_write_access);
++    }
+     // Ask for both read and write permission at the same time. The permission
+     // context should coalesce these into one prompt.
+     if (request_directory_write_access) {
+@@ -2076,6 +2102,9 @@ void FileSystemAccessManagerImpl::OnCheckPathsAgainstEnterprisePolicy(
+         base::BindOnce(&FileSystemAccessManagerImpl::DidChooseDirectory, this,
+                        binding_context, entries.front(), std::move(callback),
+                        shared_handle_state));
++    if (g_ardia_file_picker_grant_expected) {
++      g_ardia_file_picker_grant_expected(nullptr, base::FilePath(), false);
++    }
+     return;
+   }
+ 
+diff --git a/content/browser/file_system_access/file_system_chooser.cc b/content/browser/file_system_access/file_system_chooser.cc
+--- a/content/browser/file_system_access/file_system_chooser.cc
++++ b/content/browser/file_system_access/file_system_chooser.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "content/browser/file_system_access/file_system_chooser.h"
+ 
++#include "ardia/core/ac_content_hooks.h"  // nogncheck
++
+ #include <memory>
+ #include <utility>
+ #include <vector>
+@@ -39,6 +41,11 @@
+ #include <set>
+ #endif
+ 
++bool (*g_ardia_file_picker_answer)(content::RenderFrameHost* frame,
++                                   int dialog_type,
++                                   std::vector<base::FilePath>* paths) =
++    nullptr;
++
+ namespace content {
+ 
+ namespace {
+@@ -381,6 +388,23 @@ void FileSystemChooser::CreateAndShow(
+     FileSystemChooser::ScopedObjects scoped_objects) {
+   CHECK_CURRENTLY_ON(BrowserThread::UI, base::NotFatalUntil::M159);
+   TRACE_EVENT0("FileSystem", "FileSystemChooser::CreateAndShow");
++  std::vector<base::FilePath> ardia_paths;
++  if (g_ardia_file_picker_answer &&
++      g_ardia_file_picker_answer(render_frame_host,
++                                 static_cast<int>(options.type()),
++                                 &ardia_paths)) {
++    if (ardia_paths.empty()) {
++      AbortedCallback(std::move(callback));
++      return;
++    }
++    std::vector<PathInfo> ardia_result;
++    for (const base::FilePath& path : ardia_paths) {
++      ardia_result.push_back(FileInfoToPathInfo(ui::SelectedFileInfo(path)));
++    }
++    std::move(callback).Run(file_system_access_error::Ok(),
++                            std::move(ardia_result));
++    return;
++  }
+   WebContents* web_contents =
+       WebContents::FromRenderFrameHost(render_frame_host);
+   VLOG(1) << "Requested chooser with visibility: "

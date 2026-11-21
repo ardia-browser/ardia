@@ -54,6 +54,33 @@ public class EngineModule: Module {
       ArdiaHost.cliCloseOffscreenTabs()
       reply.ok()
     },
+    "cliPluginCredential": { args, reply in
+      if let revoke = try args.optionalText("revoke") {
+        EngineCall.passing("ac_cli_plugin_credential", profile: args.profile, args: ["revoke": revoke], reply: reply)
+        return
+      }
+      let tab = ArdiaHost.chromeTabId(ofTab: try args.text("tabId"))
+      if let visible = try args.optionalBool("visible") {
+        let id = try args.text("id")
+        EngineCall.passing("ac_cli_plugin_credential", profile: args.profile, args: ["id": id, "tab": tab, "visible": visible], reply: reply)
+        return
+      }
+      EngineCall.passing("ac_cli_plugin_credential", profile: args.profile, args: ["tab": tab], reply: reply)
+    },
+    "cliActDocument": { args, reply in
+      let tab = ArdiaHost.chromeTabId(ofTab: try args.text("tabId"))
+      EngineCall.passing("ac_cli_act_document", profile: args.profile, args: ["tab": tab, "credential": try args.text("credential")], reply: reply)
+    },
+    "cliActLease": { args, reply in
+      let tab = ArdiaHost.chromeTabId(ofTab: try args.text("tabId"))
+      EngineCall.passing("ac_cli_act_lease", profile: args.profile, args: ["tab": tab, "credential": try args.text("credential"), "document": try args.int("document")], reply: reply)
+    },
+    "cliTestPointer": { args, reply in
+      ArdiaEngineBridge.call("ac_cli_test_pointer", profile: args.profile, args: args.json) { reply.engine($0) }
+    },
+    "cliActRelease": { args, reply in
+      EngineCall.passing("ac_cli_act_release", profile: args.profile, args: ["lease": try args.int("lease")], reply: reply)
+    },
     "setCliActiveTab": { args, reply in
       let active = try args.optionalText("tabId").map { ArdiaHost.chromeTabId(ofTab: $0) } ?? -1
       EngineCall.passing("ac_cli_control", profile: args.profile, args: ["active": active], reply: reply)

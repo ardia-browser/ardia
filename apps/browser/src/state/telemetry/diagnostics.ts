@@ -10,7 +10,7 @@ import { capture, consentNow, consentToken, counted, isSharing, saveContext, sti
 import { nativeConsent } from "./nativeConsent";
 import { formatRecentPages, readRecentPages, type RecentPage, type SavedContext } from "./savedContext";
 import { noteDragsEnded } from "./stuckDrags";
-import { noteWindowlessPages } from "./cliCounts";
+import { noteCliEngineTotals } from "./cliCounts";
 import { mainProcessWork } from "./mainProcessWork";
 import { appInfo } from "./transport";
 import { readDocument } from "../../platform/documents";
@@ -86,7 +86,7 @@ export async function recordContext(): Promise<SavedContext | null> {
   if (!consent) return null;
   void controlStatus().then((status) => counted(consent, () => {
     noteDragsEnded(status.dragsEnded);
-    noteWindowlessPages(status.windowlessPages);
+    noteCliEngineTotals(status, consent);
   }), () => {});
   const epoch = contextEpoch;
   const [sample, pressure] = await Promise.all([diagnosticsSample().catch(() => ({ footprintMB: undefined, freeDiskGB: undefined })), memoryPressure()]);

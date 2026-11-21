@@ -1,0 +1,51 @@
+diff --git a/ui/base/clipboard/clipboard_mac.h b/ui/base/clipboard/clipboard_mac.h
+--- a/ui/base/clipboard/clipboard_mac.h
++++ b/ui/base/clipboard/clipboard_mac.h
+@@ -24,6 +24,9 @@ namespace ui {
+ // available at https://developer.apple.com/documentation/appkit/nspasteboard
+ // and
+ // https://developer.apple.com/library/archive/documentation/General/Conceptual/Devpedia-CocoaApp/Pasteboard.html.
++COMPONENT_EXPORT(UI_BASE_CLIPBOARD) void ArdiaUsePrivatePasteboard();
++COMPONENT_EXPORT(UI_BASE_CLIPBOARD) bool ArdiaPrivatePasteboardActive();
++
+ class COMPONENT_EXPORT(UI_BASE_CLIPBOARD) ClipboardMac
+     : public Clipboard,
+       public ClipboardChangeNotifier {
+diff --git a/ui/base/clipboard/clipboard_mac.mm b/ui/base/clipboard/clipboard_mac.mm
+--- a/ui/base/clipboard/clipboard_mac.mm
++++ b/ui/base/clipboard/clipboard_mac.mm
+@@ -61,13 +61,34 @@ - (BOOL)_setExpirationDate:(NSDate*)date;
+ 
+ namespace {
+ 
++bool g_ardia_private_pasteboard = false;
++
+ NSPasteboard* GetPasteboard() {
++  if (g_ardia_private_pasteboard) {
++    static NSPasteboard* private_pasteboard =
++        [NSPasteboard pasteboardWithUniqueName];
++    return private_pasteboard;
++  }
+   // The pasteboard can always be nil, since there is a finite amount of storage
+   // that must be shared between all pasteboards.
+   NSPasteboard* pasteboard = NSPasteboard.generalPasteboard;
+   return pasteboard;
+ }
+ 
++}
++
++void ArdiaUsePrivatePasteboard() {
++  g_ardia_private_pasteboard = true;
++}
++
++bool ArdiaPrivatePasteboardActive() {
++  NSPasteboard* pasteboard = GetPasteboard();
++  return g_ardia_private_pasteboard && pasteboard &&
++         pasteboard != NSPasteboard.generalPasteboard;
++}
++
++namespace {
++
+ NSImage* GetNSImage(NSPasteboard* pasteboard) {
+   // If the pasteboard's image data is not to its liking, the guts of NSImage
+   // may throw, and that exception will leak. Prevent a crash in that case;

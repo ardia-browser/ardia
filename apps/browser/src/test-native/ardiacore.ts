@@ -6,6 +6,7 @@ import type {
   CallName,
   CallResult,
   ChromeWindowState,
+  CliActLeaseTotals,
   CliControlStatus,
   CliTabTarget,
   EngineBookmark,
@@ -44,6 +45,8 @@ const testGlobals = globalThis as {
   acTestCliTargets?: (tabId: string) => CliTabTarget | undefined;
   acTestCliOwns?: (tabId: string) => { owned: boolean; shown: boolean };
   acTestCliMoveOffscreen?: (tabId: string) => { ok: boolean; reason?: string };
+  acTestActLeases?: { document?(tabId: string, credential: string): { document: number }; grant(tabId: string, credential: string, document: number): { lease: number } | Promise<{ lease: number }>; release(lease: number): { released: boolean } | Promise<{ released: boolean }>; totals?: () => CliActLeaseTotals };
+  acTestRevokePluginCredential?: (id: string) => { revoked: boolean };
   acTestTasks?: () => EngineTask[];
   acTestEngineInfo?: () => CallResult<"engine.info">;
   acTestUserScripts?: { engine: ExtensionEngine };
@@ -436,12 +439,29 @@ const fakeModules = {
       batterySaver: ({ mode }) => ({ state: 0, active: mode === "on" }),
       trimMemory: () => ({ ok: true }),
       openTaskManager: () => ({ ok: true }),
-      cliControlStatus: () => cliControl(null),
+      cliControlStatus: () => {
+        const status = cliControl(null);
+        const totals = testGlobals.acTestActLeases?.totals?.();
+        return totals ? { ...cliStatus(null), actLeases: totals } : status;
+      },
       setCliControl: ({ on }) => cliControl(on),
       setCliActiveTab: ({ tabId }) => testGlobals.acTestCliActive?.(tabId) ?? cliStatus(null),
       cliOwnsTab: ({ tabId }) => testGlobals.acTestCliOwns?.(tabId) ?? { owned: false, shown: false },
       cliMoveOffscreen: ({ tabId }) => testGlobals.acTestCliMoveOffscreen?.(tabId) ?? { ok: false },
       cliCloseOffscreenTabs: () => null,
+      cliActDocument: ({ tabId, credential }) => {
+        if (!testGlobals.acTestActLeases?.document) throw Object.assign(new Error("engine.cliActDocument isn't in this engine"), { code: "ERR_UNKNOWN_CALL" });
+        return testGlobals.acTestActLeases.document(tabId, credential);
+      },
+      cliActLease: ({ tabId, credential, document }) => {
+        if (!testGlobals.acTestActLeases) throw Object.assign(new Error("engine.cliActLease isn't in this engine"), { code: "ERR_UNKNOWN_CALL" });
+        return testGlobals.acTestActLeases.grant(tabId, credential, document);
+      },
+      cliActRelease: ({ lease }) => {
+        if (!testGlobals.acTestActLeases) throw Object.assign(new Error("engine.cliActRelease isn't in this engine"), { code: "ERR_UNKNOWN_CALL" });
+        return testGlobals.acTestActLeases.release(lease);
+      },
+      cliPluginCredential: (args) => ("revoke" in args ? (testGlobals.acTestRevokePluginCredential?.(args.revoke) ?? { revoked: false }) : "visible" in args ? { visible: args.visible } : { id: "plugin-test", credential: "p.test", window: 1, endpoint: "" }),
       cliTabTargets: ({ tabIds }) => Object.fromEntries(tabIds.map((id) => [id, testGlobals.acTestCliTargets?.(id) ?? { targetId: null, pageGeneration: 0 }])),
     },
     { inputIdleSeconds: () => 3600 },

@@ -14,6 +14,11 @@ enum WebKitPageScript {
   let muted = false;
   const mutedByUs = new WeakSet();
   const mediaEvents = ["play", "playing", "pause", "ended", "volumechange", "emptied", "loadedmetadata", "seeked", "ratechange"];
+  const drmEvents = ["encrypted", "waitingforkey", "error"];
+  const drmSeen = new Set();
+  let drmKeySystem = "";
+  const mediaFaultSites = \#(WebKitMediaFaults.sitesJSON);
+  const streaming = location.protocol === "https:" && mediaFaultSites.some((site) => location.hostname === site || location.hostname.endsWith("." + site));
   const detached = new Set();
   const listened = new WeakSet();
   const heard = new WeakSet();
@@ -98,6 +103,7 @@ enum WebKitPageScript {
     if (listened.has(m)) return;
     listened.add(m);
     for (const type of mediaEvents) m.addEventListener(type, onMedia);
+    if (streaming) for (const type of drmEvents) m.addEventListener(type, onDrm);
   };
   const track = (m) => {
     listen(m);
@@ -125,6 +131,35 @@ enum WebKitPageScript {
     schedule();
   };
   for (const type of mediaEvents) document.addEventListener(type, onMedia, true);
+  const reportDrm = (stage, keySystem, code) => {
+    const system = typeof keySystem === "string" && keySystem.length <= 64 ? keySystem : "";
+    const key = stage + "|" + system + "|" + code;
+    if (drmSeen.has(key) || drmSeen.size >= 16) return;
+    drmSeen.add(key);
+    post("drm", { stage, keySystem: system, code });
+  };
+  const onDrm = (e) => {
+    const m = e.target;
+    if (!(m instanceof HTMLMediaElement)) return;
+    if (e.type === "error") reportDrm("error", drmKeySystem, m.error ? m.error.code : 0);
+    else reportDrm(e.type, drmKeySystem, 0);
+  };
+  if (streaming) {
+    for (const type of drmEvents) document.addEventListener(type, onDrm, true);
+    document.addEventListener(
+      "ardia:drm",
+      (e) => {
+        let data = null;
+        try {
+          data = typeof e.detail === "string" ? JSON.parse(e.detail) : null;
+        } catch (error) {}
+        if (!data || typeof data !== "object" || typeof data.keySystem !== "string") return;
+        drmKeySystem = data.keySystem.length <= 64 ? data.keySystem : "";
+        reportDrm(data.ok === true ? "access" : "accessDenied", drmKeySystem, Number.isInteger(data.code) ? data.code : 0);
+      },
+      true,
+    );
+  }
   document.addEventListener(
     "ardia:media-element",
     (e) => {
@@ -135,8 +170,7 @@ enum WebKitPageScript {
     },
     true,
   );
-  const mediaFaultSites = \#(WebKitMediaFaults.sitesJSON);
-  if (location.protocol === "https:" && mediaFaultSites.some((site) => location.hostname === site || location.hostname.endsWith("." + site))) {
+  if (streaming) {
     let faultsRelayed = 0;
     document.addEventListener(
       "ardia:media-fault",
@@ -445,6 +479,15 @@ enum WebKitPageScript {
   };
 
 \#(WebKitMediaFaults.pageScript)
+
+  const test = RegExp.prototype.test;
+  const protectedKeySystem = /^com\.(widevine\.alpha|microsoft\.playready|apple\.fps)/;
+  const domCodeOf = getter(DOMException.prototype, "code");
+  const reportAccess = (name, ok, error) => {
+    if (typeof name !== "string" || !apply(test, protectedKeySystem, [name])) return;
+    const code = !ok && error instanceof DOMException ? read(domCodeOf, error) : 0;
+    apply(dispatch, doc, [new Custom("ardia:drm", { detail: stringify({ keySystem: name, ok, code }) })]);
+  };
 
   const session = navigator.mediaSession;
   const proto = session && Object.getPrototypeOf(session);

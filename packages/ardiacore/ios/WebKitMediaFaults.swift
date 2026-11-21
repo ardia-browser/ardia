@@ -128,8 +128,14 @@ enum WebKitMediaFaults {
       const system = keySystem(name);
       return observe(
         result,
-        () => fault("eme_" + system + "_granted"),
-        (error) => fault("eme_" + system + "_refused_" + refusal(error)),
+        () => {
+          fault("eme_" + system + "_granted");
+          reportAccess(name, true);
+        },
+        (error) => {
+          fault("eme_" + system + "_refused_" + refusal(error));
+          reportAccess(name, false, error);
+        },
       );
     };
   }

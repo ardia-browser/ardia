@@ -171,6 +171,14 @@ export type PageSelection = { text: string; rect: { x: number; y: number; width:
 export type ScrollState = "down" | "up" | "top";
 export type FocusRestoreOutcome = "focused" | "kept" | "refused" | "gaveUp" | "unknown";
 export type ProtectedMediaRequest = { keySystem: string; main: boolean };
+export type DrmDiagnostic = {
+  host: string;
+  keySystem: string;
+  stage: string;
+  code: number;
+  main: boolean;
+  blockedHosts: string[];
+};
 
 export type WebViewProps = ViewProps & {
   engine?: PageEngine;
@@ -229,6 +237,7 @@ export type WebViewProps = ViewProps & {
   onSelection?: (selection: PageSelection | null) => void;
   onScroll?: (state: ScrollState) => void;
   onProtectedMedia?: (request: ProtectedMediaRequest) => void;
+  onDrmDiagnostic?: (diagnostic: DrmDiagnostic) => void;
   onAutoplayBlocked?: (count: number) => void;
   onReady?: () => void;
   onDiscarded?: (url: string, reason: DiscardReason | null) => void;

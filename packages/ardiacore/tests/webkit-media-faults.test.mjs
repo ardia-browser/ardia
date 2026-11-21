@@ -73,7 +73,7 @@ class HTMLMediaElement extends Node {
   play() { return this.answer(); }
   answer() { return undefined; }
 }
-class DOMException { constructor(message, name) { this._name = name; } get name() { return this._name; } }
+class DOMException { constructor(message, name) { this._name = name; } get name() { return this._name; } get code() { return this._code ?? 0; } }
 class Navigator {
   requestMediaKeySystemAccess(name, configurations) { return this.answer(name, configurations); }
   answer() { return undefined; }
@@ -125,7 +125,8 @@ function page({ protocol = "https:", hostname = sites[0] } = {}) {
   run(bridge);
   const json = (code) => JSON.parse(runInContext(`JSON.stringify(${code})`, window));
   const faults = () => posted.filter((m) => m.kind === "mediaFault");
-  return { run, json, faults, reported: () => faults().map((m) => m.data.reason) };
+  const drm = () => posted.filter((m) => m.kind === "drm").map((m) => m.data);
+  return { run, json, faults, drm, reported: () => faults().map((m) => m.data.reason) };
 }
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -301,4 +302,101 @@ test("a page off the streaming sites gets no media fault listener or wrapper", (
     p.run(`document.dispatchEvent(new CustomEvent("ardia:media-fault", { detail: "media_error_decode" }));`);
     assert.deepEqual(p.reported(), [], `${protocol}//${hostname}`);
   }
+});
+
+test("a refused protected key system request is passed on as a drm diagnostic with its host-free key system and error code, and the page still gets the refusal", async () => {
+  const p = page();
+  p.run(`
+    const refusal = new DOMException("no CDM", "NotSupportedError");
+    refusal._code = 9;
+    globalThis.refusal = refusal;
+    globalThis.thrown = [];
+    navigator.answer = () => Promise.reject(refusal);
+    for (let i = 0; i < 2; i++) navigator.requestMediaKeySystemAccess("com.widevine.alpha", [{}]).catch((error) => thrown.push(error));
+  `);
+  await settle();
+  assert.equal(p.run("thrown.length === 2 && thrown.every((error) => error === refusal)"), true);
+  assert.deepEqual(p.drm(), [{ stage: "accessDenied", keySystem: "com.widevine.alpha", code: 9 }]);
+  assert.deepEqual(p.reported(), ["eme_widevine_refused_not_supported", "eme_widevine_refused_not_supported"]);
+});
+
+test("a granted protected key system request is passed on as a drm diagnostic and the page gets its own result", async () => {
+  const p = page();
+  p.run(`
+    globalThis.access = { keySystem: "com.microsoft.playready" };
+    navigator.answer = () => Promise.resolve(access);
+    navigator.requestMediaKeySystemAccess("com.microsoft.playready", [{}]).then((value) => { globalThis.got = value; });
+  `);
+  await settle();
+  assert.equal(p.run("got === access"), true);
+  assert.deepEqual(p.drm(), [{ stage: "access", keySystem: "com.microsoft.playready", code: 0 }]);
+});
+
+test("a key system that isn't Widevine, PlayReady or FairPlay, and a request that doesn't return a promise, send no drm diagnostic", async () => {
+  const p = page();
+  p.run(`
+    navigator.answer = () => Promise.reject(new DOMException("no", "NotSupportedError"));
+    navigator.requestMediaKeySystemAccess("org.w3.clearkey", [{}]).catch(() => {});
+    navigator.requestMediaKeySystemAccess(42, [{}]).catch(() => {});
+  `);
+  await settle();
+  assert.deepEqual(p.drm(), []);
+  assert.equal(p.run("navigator.answer = () => 7; navigator.requestMediaKeySystemAccess('com.widevine.alpha', [{}])"), 7);
+  assert.deepEqual(p.drm(), []);
+});
+
+test("encrypted, waitingforkey and media error codes are passed on once each from media elements only, with the key system the page asked for", async () => {
+  const p = page();
+  p.run(`
+    navigator.answer = () => Promise.resolve({});
+    navigator.requestMediaKeySystemAccess("com.apple.fps.1_0", [{}]);
+  `);
+  await settle();
+  p.run(`
+    const video = new HTMLMediaElement();
+    video.dispatchEvent(new Event("encrypted"));
+    video.dispatchEvent(new Event("waitingforkey"));
+    video.dispatchEvent(new Event("waitingforkey"));
+    video._error = new MediaError(4);
+    video.dispatchEvent(new Event("error"));
+    video._error = null;
+    video.dispatchEvent(new Event("error"));
+    new Node().dispatchEvent(new Event("encrypted"));
+    new Node().dispatchEvent(new Event("error"));
+  `);
+  assert.deepEqual(p.drm(), [
+    { stage: "access", keySystem: "com.apple.fps.1_0", code: 0 },
+    { stage: "encrypted", keySystem: "com.apple.fps.1_0", code: 0 },
+    { stage: "waitingforkey", keySystem: "com.apple.fps.1_0", code: 0 },
+    { stage: "error", keySystem: "com.apple.fps.1_0", code: 4 },
+    { stage: "error", keySystem: "com.apple.fps.1_0", code: 0 },
+  ]);
+});
+
+test("at most 16 distinct drm diagnostics leave a frame", () => {
+  const p = page();
+  p.run(`
+    for (let code = 1; code <= 40; code++) {
+      const video = new HTMLMediaElement();
+      video._error = new MediaError(code);
+      video.dispatchEvent(new Event("error"));
+    }
+  `);
+  assert.equal(p.drm().length, 16);
+});
+
+test("a page off the streaming sites sends no drm diagnostic for a key system request or a media element", async () => {
+  const p = page({ hostname: "example.com" });
+  p.run(`
+    const refusal = new DOMException("no CDM", "NotSupportedError");
+    refusal._code = 9;
+    navigator.answer = () => Promise.reject(refusal);
+    navigator.requestMediaKeySystemAccess("com.widevine.alpha", [{}]).catch(() => {});
+    const video = new HTMLMediaElement();
+    video.dispatchEvent(new Event("encrypted"));
+    video._error = new MediaError(4);
+    video.dispatchEvent(new Event("error"));
+  `);
+  await settle();
+  assert.deepEqual(p.drm(), []);
 });

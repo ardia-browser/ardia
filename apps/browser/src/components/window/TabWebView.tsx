@@ -47,6 +47,7 @@ import { trackPageProcessGone } from "../../state/telemetry/diagnostics";
 import { releaseTranslation, translateCrashContext } from "../../state/site/translate";
 import { notePagePress, notePagePressRefused } from "../../state/telemetry/tabPresses";
 import { noteWebKitFocusRestore } from "../../state/telemetry/pageFocusReturns";
+import { trackDrmDiagnostic } from "../../state/telemetry/protectedMedia";
 import { noteAutoPictureInPictureKept, notePageOverlay, noteReopenedPage, noteSiteControls, noteWebKitPageKeptHidden } from "../../state/telemetry/usage";
 import { noteWebKitMediaFault } from "../../state/telemetry/webkitMediaFaults";
 import { isAdoptKind } from "../../state/tabs/adoptIds";
@@ -304,6 +305,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine }
       onSelection={(selection) => setPageSelection(tabId, selection)}
       onScroll={(state) => noteScroll(tabId, state)}
       onProtectedMedia={(request) => offerWebKit(tabId, request)}
+      onDrmDiagnostic={trackDrmDiagnostic}
       onAutoplayBlocked={(count) => noteSiteControls("autoplayPlaysBlocked", count)}
       onNotificationClose={closeWebNotification}
       onDiscarded={(url, reason) => {

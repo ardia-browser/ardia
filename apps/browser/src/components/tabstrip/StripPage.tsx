@@ -6,7 +6,7 @@ import { useShownTabIdFor, useStripEntries, useStripTitleNeeds } from "../../sta
 import { setMeasuredWidth, useMeasuredWidths } from "../../state/windows/measuredWidths";
 import { dismissStripHoverIn, stripPageOffstage } from "../../state/tabs/stripHover";
 import { onTabPressEnd, tabPressHeld } from "../../state/sidebar/heldTabPress";
-import { noteTabStripChipsMeasured, noteTabStripCompact, noteTabStripReadable, noteTabStripHeldClose, noteTabStripOverflow, noteTabStripTabsInOverflow, noteTabStripRevealAfterPress, noteTabStripRevealHeldForScroll, noteTabStripScrolled, noteTabStripTitledTabs } from "../../state/telemetry/tabStripCounts";
+import { noteTabStripChipsMeasured, noteTabStripCompact, noteTabStripToggleHidSelected, noteTabStripReadable, noteTabStripHeldClose, noteTabStripOverflow, noteTabStripTabsInOverflow, noteTabStripRevealAfterPress, noteTabStripRevealHeldForScroll, noteTabStripScrolled, noteTabStripTitledTabs } from "../../state/telemetry/tabStripCounts";
 import { Offstage } from "../ui/useHover";
 import { usePageStyle } from "../../state/windows/profilePager";
 import { ThemeScope } from "../window/ThemeScope";
@@ -18,8 +18,10 @@ import { NewTabButton } from "./NewTabButton";
 import { PinnedDock } from "./PinnedDock";
 import { SplitChip } from "./SplitChip";
 import { heldWideTab, keyedWidths, namesStayTight, layoutDock, layoutStrip, newTabPinned, overflowIn, revealOffset, stripOverflow, withActiveShown, tabsOf, withOverflowCounts, withoutTabs, type DragGeometry, type StripOverflow, type TabWidths } from "./stripGroups";
-import { groupChipWidth } from "./stripToggle";
+import { groupChipWidth, spanInView, TOGGLE_MS } from "./stripToggle";
+import { reduceMotion } from "../ui/reduceMotion";
 import { StripGroup } from "./StripGroup";
+import { PassingSlot } from "./PassingSlot";
 import { DraggableChip } from "./TabChip";
 import { edgeMaskAt, edgeStrength } from "./edgeFade";
 import { EdgeFadeMask } from "../ui/EdgeFadeMask";
@@ -31,6 +33,8 @@ type Wide = { tabId: string; slot: number };
 type Hold = { widths: TabWidths; end: number; wide: Wide; lead: boolean; needsTitle: (tabId: string) => boolean; overflow: StripOverflow };
 
 const USER_SCROLL_QUIET_MS = 200;
+const SETTLE_CHECK_MS = 150;
+const PASSING_SETTLE_MS = 50;
 const OWN_SCROLL_MS = 80;
 const OWN_ANIMATED_SCROLL_MS = 600;
 
@@ -188,6 +192,43 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
   };
   const latestSpan = useRef(spanOf);
   latestSpan.current = spanOf;
+  const groupsShape = entries.map((e) => (e.kind === "group" ? `${e.id}:${e.collapsed}` : "")).join("|");
+  const shapeShown = useRef(groupsShape);
+  const rows = parsed.filter((e) => e.kind !== "dock");
+  const rowWidths = new Map(rows.map((e, i) => [e.id, top.slots[i]!.width + (top.slots[i]!.marginLeft ?? 0) + (top.slots[i]!.marginRight ?? 0)]));
+  const widthsBefore = useRef(rowWidths);
+  const shapeDrawn = useRef(groupsShape);
+  const passing = useRef<{ entering: ReadonlySet<string>; leaving: ReadonlyMap<string, number> } | null>(null);
+  if (shapeDrawn.current !== groupsShape) {
+    shapeDrawn.current = groupsShape;
+    const was = widthsBefore.current;
+    passing.current = current && !reduceMotion() ? { entering: new Set([...rowWidths.keys()].filter((id) => !was.has(id))), leaving: new Map([...was].filter(([id]) => !rowWidths.has(id) && overflow.has(id))) } : null;
+  }
+  widthsBefore.current = rowWidths;
+  const leaving = passing.current?.leaving;
+  const drawnEntries = leaving?.size ? withoutTabs(entries, new Set([...overflow].filter((id) => !leaving.has(id)))) : parsed;
+  const passIn = (id: string, row: React.ReactElement) => (
+    <PassingSlot key={id} passing={passing.current?.entering.has(id) ? { from: 0, to: rowWidths.get(id) ?? 0 } : null}>
+      {row}
+    </PassingSlot>
+  );
+  useEffect(() => {
+    if (shapeShown.current === groupsShape) return;
+    shapeShown.current = groupsShape;
+    const passed = setTimeout(() => {
+      passing.current = null;
+      release();
+    }, TOGGLE_MS + PASSING_SETTLE_MS);
+    if (!current || !activeId) return () => clearTimeout(passed);
+    const settled = setTimeout(() => {
+      const span = latestSpan.current(activeId);
+      if (span && !spanInView(span, scrolled.current, viewport.current)) noteTabStripToggleHidSelected();
+    }, TOGGLE_MS + SETTLE_CHECK_MS);
+    return () => {
+      clearTimeout(passed);
+      clearTimeout(settled);
+    };
+  }, [groupsShape]);
   const revealed = useRef(activeId);
   const reveal = (tabId: string, animated: boolean) => {
     const span = latestSpan.current(tabId);
@@ -296,15 +337,26 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
                       style={{ flex: 1 }}
                       contentContainerStyle={{ alignItems: "flex-start", gap: GAP, paddingLeft: flare, paddingRight: pinned ? Math.max(flare, GAP) : flare }}
                     >
-                      {parsed.flatMap((e) => {
+                      {drawnEntries.flatMap((e) => {
                         if (e.kind === "dock") return <PinnedDock key="dock" tabIds={e.ids} />;
+                        const gone = leaving?.get(e.id);
+                        if (gone !== undefined)
+                          return (
+                            <PassingSlot key={e.id} passing={{ from: gone, to: 0 }}>
+                              {e.kind === "group" ? (
+                                <StripGroup key={e.id} entry={e} geometry={top} from={-1} chip={selected} tabWidth={tabWidth} activeId={activeId} chipWidth={chipOf(e.id)} onChipFrame={() => {}} memberWidth={memberWidth} folderMeasured={() => true} overflowCount={0} tightName={tightNames.current} />
+                              ) : e.kind === "tab" ? (
+                                <DraggableChip key={e.id} tabId={e.id} width={gone} group={null} />
+                              ) : null}
+                            </PassingSlot>
+                          );
                         const slot = slotIndex;
                         const lead = slot === 0 && spare && leadSpare ? <View key="held-lead" style={{ width: spare, marginRight: -GAP }} /> : null;
                         const before = gap(slotIndex++);
                         if (e.kind === "group")
                           return [
                             before,
-                            <StripGroup
+                            passIn(e.id, <StripGroup
                               key={e.id}
                               entry={e}
                               geometry={top}
@@ -318,11 +370,11 @@ export const StripPage = memo(function StripPage({ profileId, slot, pageWidth, c
                               folderMeasured={(groupId) => folderChip(groupId) !== undefined}
                               overflowCount={groupOverflow.get(e.id) ?? 0}
                               tightName={tightNames.current}
-                            />,
+                            />),
                           ];
                         if (e.kind === "split")
                           return [before, <SplitChip key={e.id} tabIds={e.tabIds} width={top.slots[slot]!.width} paneWidths={e.tabIds.map(tabWidth)} group={null} />];
-                        return [lead, before, <DraggableChip key={e.id} tabId={e.id} width={top.slots[slot]!.width} group={null} />];
+                        return [lead, before, passIn(e.id, <DraggableChip key={e.id} tabId={e.id} width={top.slots[slot]!.width} group={null} />)];
                       })}
                       {gap(top.slots.length)}
                       {pinned ? null : newTab}

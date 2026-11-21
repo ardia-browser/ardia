@@ -415,6 +415,16 @@ test("without the public suffix list a carry stays on the exact host, and with i
   });
 });
 
+test("hosts go to the engine's registrable-domain lookup in lowercase, whatever case they arrive in", async () => {
+  const { learnRegistrableDomains, resetRegistrableLookupsForTest } = await import("./siteDataDomains.ts");
+  resetRegistrableLookupsForTest();
+  const asked = [];
+  await withSites({ registrableDomains: ({ hosts }) => (asked.push(...hosts), { domains: hosts.map((h) => h.split(".").slice(-2).join(".")) }) }, () =>
+    learnRegistrableDomains(["WWW.Example.CO.UK", ".Mixed.Example.com.", "plain.test"]),
+  );
+  assert.deepEqual(asked, ["www.example.co.uk", "mixed.example.com", "plain.test"]);
+});
+
 test("Clear Site Data clears both engines, and signing in again afterwards reaches the other engine", async () => {
   const { tabId } = setup();
   const page = chromiumPage({ cookies: [signedIn], storage: {} });

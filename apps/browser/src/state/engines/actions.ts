@@ -357,7 +357,7 @@ const visitedTabs = new Set<string>();
 let unwatch: (() => void) | null = null;
 
 function watchClosedTabs() {
-  unwatch ??= useBrowser.subscribe((s, prev) => {
+  unwatch ??= useBrowser.subscribeTo(["tabs"], (s, prev) => {
     if (s.tabs === prev.tabs) return;
     for (const id of visitedTabs) {
       if (s.tabs[id]) continue;

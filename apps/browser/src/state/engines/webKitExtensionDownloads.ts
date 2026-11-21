@@ -114,7 +114,7 @@ function waitForDownload(url: string, before: ReadonlySet<string>): Promise<numb
       stop();
       reject(new DownloadApiError("The download didn't start."));
     }, DOWNLOAD_START_MS);
-    const stop = useBrowser.subscribe((s) => {
+    const stop = useBrowser.subscribeTo(["downloads"], (s) => {
       const found = pick(s);
       if (!found) return;
       clearTimeout(timer);

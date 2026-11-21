@@ -51,7 +51,7 @@ let watchingSetting = false;
 function watchSetting() {
   if (watchingSetting) return;
   watchingSetting = true;
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["settings"], (s, prev) => {
     if (s.settings.webKitExtensions === prev.settings.webKitExtensions) return;
     for (const profile of syncedProfiles) void syncExtensionsToWebKit(profile);
   });

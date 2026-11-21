@@ -219,7 +219,7 @@ function push() {
 export function startWebKitTabs() {
   if (started) return;
   started = true;
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["windows", "windowOrder", "ui", "tabs"], (s, prev) => {
     if (reshaped(s, prev)) push();
   });
   useExtensions.subscribe((e, prev) => {

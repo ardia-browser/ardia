@@ -195,7 +195,7 @@ export function ContentCard() {
         <WindowToolbar windowId={windowId} tabId={activeId} geometry={geometryFor(panes[activeId])} autoHide={chrome.autoHide} />
       )}
       {size.width > 0 && !split && !fullscreenTab && (
-        <FrozenPage windowId={windowId} tabId={activeId} top={(chrome.kind !== "none" && !chrome.autoHide ? toolbarRow.height : activeDeveloperBar) + (barMode === "always" && !small && !hideWhileScrolling ? barHeight : 0)} />
+        <FrozenPage windowId={windowId} tabId={activeId} radius={frame.radius} top={(chrome.kind !== "none" && !chrome.autoHide ? toolbarRow.height : activeDeveloperBar) + (barMode === "always" && !small && !hideWhileScrolling ? barHeight : 0)} />
       )}
       {split && !fullscreenTab && <SplitDividers split={split} dividers={dividers} width={size.width} height={size.height} />}
       {split && !fullscreenTab && activeRect && <SplitFocusRing rect={activeRect} origin={origin} windowShape={windowFullScreen ? null : windowShape} />}

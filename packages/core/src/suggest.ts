@@ -4,7 +4,7 @@ import { NO_BOOKMARKS, poolFor, savedBookmark, savedVisit, tabsOver, type Candid
 import { extensionSuggestions } from "./extensionRows.ts";
 import { BUILT_IN_ENGINES, searchUrl } from "./engines.ts";
 import { matchActions } from "./fuzzy.ts";
-import { fixupUrl, hostOf, searchUrlFor } from "./omnibox.ts";
+import { fixupUrl, hostOf, intranetLinkHost, intranetUrl, searchUrlFor } from "./omnibox.ts";
 import { matchScore, matchScoreWord, narrowing, parseQuery, remember, TopList, type Ranked } from "./pageMatch.ts";
 import { hostLowerOfPage, hostOfPage, hostPart, originOfPage, pageKey, type PageText, withRootSlash } from "./pageText.ts";
 import { globalProviderRows, providerUrl, safeProviderRows, type ProviderSection, type ProviderSuggestion } from "./providerRows.ts";
@@ -141,7 +141,8 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
   }
 
   const search: Suggestion = { kind: "search", query, url: searchUrl(engine, query), engine: engine.name };
-  const typedUrl = fixupUrl(query);
+  const typedUrl = fixupUrl(query) ?? intranetUrl(query, (host) => hasHost(pool.list, host) || source.tabs.some((t) => !!t.url && hostOf(t.url) === host));
+  const intranetLink = typedUrl !== null && intranetLinkHost(query) !== null;
   const calc = calculate(query);
   const creates = matchQuickCreate(raw.trimStart());
   const actionRows = query.length >= 4 ? 4 : 2;
@@ -156,7 +157,7 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
   if (creates.length && /^\S+\s+\S/.test(query)) first = createRow(creates[0]!);
   else if (actionMatches[0]?.exact) first = actionRow(actionMatches[0].action);
   else if (target && completion) first = tag(known(target.url) ?? { kind: "page", url: target.url, title: "", favicon: target.favicon }, !websiteFirst && "search_first_inline");
-  else if (typedUrl) first = known(typedUrl) ?? { kind: "page", url: typedUrl, title: "", favicon: null };
+  else if (typedUrl) first = tag(known(typedUrl) ?? { kind: "page", url: typedUrl, title: "", favicon: null }, intranetLink && "intranet_link");
   else if (extensionMatches.exact) first = extensionMatches.rows[0]!;
   else if (websiteFirst && best && best.m >= 40 && (!noInline || typedIsPage(best.c.text, q))) first = tag(pageSuggestion(best.c, best.tabId), best.c.renamed && "renamed_tab");
   else first = search;
@@ -189,6 +190,8 @@ function providerScopeSuggestions(query: string, scope: SearchScope, sections: r
   if (section) for (const row of safeProviderRows({ id, title: scope.name }, section.rows, limit)) if (!seen.has(row.url) && items.length < limit) items.push(row);
   return { items, completion: "" };
 }
+
+const hasHost = (list: readonly Candidate[], host: string) => list.some((c) => hostOfPage(c.text) === host);
 
 function viaOf(items: readonly Suggestion[], via: Record<string, SuggestionVia>): Record<string, SuggestionVia> | undefined {
   let shown: Record<string, SuggestionVia> | undefined;

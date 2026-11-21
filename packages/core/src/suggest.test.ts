@@ -548,6 +548,25 @@ test("a typed address that is bookmarked as typed opens as typed with that bookm
 });
 
 
+test("Return on go/<link> or a visited intranet host with a path opens it; an unknown one searches", () => {
+  const go = buildSuggestions("go/server", { tabs: [], history: [] }, { now });
+  assert.deepEqual(rows(go.items).slice(0, 2), ["http://go/server", "search:go/server"]);
+  assert.equal(go.via?.[suggestionKey(go.items[0]!)], "intranet_link");
+  assert.equal(rows(buildSuggestions("go/server", { tabs: [], history: [] }, { now, preference: "search" }).items)[0], "http://go/server");
+  const wiki = [{ url: "http://wiki/Home", title: "Wiki", favicon: null, visits: 3, lastVisit: now - 1000 }];
+  const visited = buildSuggestions("wiki/Setup", { tabs: [], history: wiki }, { now });
+  assert.equal(rows(visited.items)[0], "http://wiki/Setup");
+  assert.equal(visited.via?.[suggestionKey(visited.items[0]!)], "intranet_link");
+  const tab = { id: "t1", url: "http://wiki/Home", title: "Wiki", customTitle: null, favicon: null };
+  assert.equal(rows(buildSuggestions("wiki/Setup", { tabs: [tab], history: [] }, { now }).items)[0], "http://wiki/Setup");
+  const current = buildSuggestions("wiki/Setup", { tabs: [tab], history: [] }, { now, currentTabId: "t1" });
+  assert.equal(rows(current.items)[0], "http://wiki/Setup");
+  assert.ok(!current.items.some((item) => item.kind === "page" && item.tabId === "t1"));
+  assert.equal(rows(buildSuggestions("wiki/Setup", { tabs: [], history: [] }, { now }).items)[0], "search:wiki/Setup");
+  assert.equal(rows(buildSuggestions("and/or", { tabs: [], history: wiki }, { now }).items)[0], "search:and/or");
+  assert.equal(buildSuggestions("github.com", { tabs: [], history: [] }, { now }).via, undefined);
+});
+
 test("each new path tags its row, so the bar can report which path a pick came from", () => {
   const viaOf = (r: ReturnType<typeof buildSuggestions>) => Object.fromEntries(Object.entries(r.via ?? {}).map(([key, v]) => [key.split(":")[0] + ":" + v, true]));
   const saved = [{ url: "https://excalidraw.com/", title: "Excalidraw", favicon: null, visits: 4, lastVisit: now - 1000 }];

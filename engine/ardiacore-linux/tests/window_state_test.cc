@@ -45,6 +45,16 @@ int main() {
   static_assert(state::PageFullScreen(PageFullScreen(kNone)));
   static_assert(state::StateOf(PageFullScreen(kNone), kMaximizedTiled) == kMaximizedTiled);
   static_assert(state::StateOf(PageFullScreen(kAll), kNothing) == kNothing);
+  {
+    state::SettledWindowState attached;
+    assert(attached.Peek(PageFullScreen(kNone)) == kNothing);
+    assert(attached.Settle(Wayland(true, kAll)) == kMaximizedTiled);
+    assert(attached.Peek(PageFullScreen(kNone)) == kMaximizedTiled);
+    assert(attached.Settle(PageFullScreen(kNone)) == kMaximizedTiled);
+    assert(attached.Settle(WindowFullScreen(kNone)) == state::WindowState{.full_screen = true});
+    assert(attached.Settle(Wayland(false, kNone)) == kNothing);
+    assert(attached.Peek(PageFullScreen(kAll)) == kNothing);
+  }
   for (const bool reported : {false, true}) {
     for (const bool left : {false, true}) {
       for (const bool right : {false, true}) {

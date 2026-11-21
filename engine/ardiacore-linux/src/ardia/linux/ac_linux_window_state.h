@@ -51,6 +51,18 @@ constexpr WindowState StateOf(const NativeWindow& window, const WindowState& bef
   };
 }
 
+class SettledWindowState {
+ public:
+  constexpr WindowState Settle(const NativeWindow& window) {
+    settled_ = StateOf(window, settled_);
+    return settled_;
+  }
+  constexpr WindowState Peek(const NativeWindow& window) const { return StateOf(window, settled_); }
+
+ private:
+  WindowState settled_;
+};
+
 constexpr bool ReportableToolkitString(std::string_view text) {
   if (text.size() > kToolkitStringLimit) return false;
   for (const char c : text) {

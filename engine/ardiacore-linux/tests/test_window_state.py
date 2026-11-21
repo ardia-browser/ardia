@@ -55,14 +55,19 @@ class WindowStateTests(unittest.TestCase):
                      '.window_full_screen = WindowFullScreen(),', '.compositor_reports_edges = !GlobalScreenCoordinates(),'):
             self.assertIn(fact, facts)
         native = between(HOST, 'linux_window_state::WindowState ShellHostView::NativeWindowState() const {', '\n}\n')
-        self.assertIn('StateOf(NativeWindowFacts(), settled_window_state_)', native)
+        self.assertIn('return settled_window_state_.Peek(NativeWindowFacts());', native)
+        initialize = between(HOST, 'void ShellHostView::Initialize() {', '\n}\n')
+        self.assertTrue(initialize.rstrip().endswith('settled_window_state_.Settle(NativeWindowFacts());'),
+                        'a host attaching to an already maximized window settles its state before any change arrives')
+        self.assertNotIn('return', initialize)
         schedule = between(HOST, 'void ShellHostView::ScheduleWindowStateReport() {', '\n}\n')
         self.assertIn('if (std::exchange(window_state_report_pending_, true)) return;', schedule)
         self.assertIn('GetWeakPtr()', schedule)
         report = between(HOST, 'void ShellHostView::ReportWindowState() {', '\n}\n')
-        self.assertLess(report.index('if (reported_window_state_ == state) return;'), report.index('Event("ArdiaShell", linux_window_state::kWindowStateEvent'))
-        self.assertLess(report.index('if (!linux_window_state::PageFullScreen(native)) settled_window_state_ = state;'),
-                        report.index('if (reported_window_state_ == state) return;'))
+        self.assertLess(report.index('const linux_window_state::WindowState state = settled_window_state_.Settle(NativeWindowFacts());'),
+                        report.index('if (window_id_.empty() || reported_window_state_ == state) return;'))
+        self.assertLess(report.index('if (window_id_.empty() || reported_window_state_ == state) return;'),
+                        report.index('Event("ArdiaShell", linux_window_state::kWindowStateEvent'))
         self.assertIn('.Set("windowId", window_id_)', report)
         for observer in ('void ShellHostView::OnWidgetBoundsChanged(views::Widget*, const gfx::Rect&) {\n  ScheduleWindowStateReport();',
                          'void ShellHostView::OnWidgetShowStateChanged(views::Widget* widget) {\n  ScheduleWindowStateReport();'):

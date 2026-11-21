@@ -1807,7 +1807,7 @@ class ShellHostView : public views::View,
   linux_window::GeometryLedger geometry_{GlobalScreenCoordinates()};
   base::OneShotTimer frame_timer_;
   std::optional<linux_window_state::WindowState> reported_window_state_;
-  linux_window_state::WindowState settled_window_state_;
+  linux_window_state::SettledWindowState settled_window_state_;
   bool window_state_report_pending_ = false;
   std::unique_ptr<linux_window::TypeaheadInput> typeahead_;
   std::optional<std::string> output_target_;
@@ -2726,6 +2726,7 @@ void ShellHostView::Initialize() {
                        base::BindOnce(&ShellHostView::LiftCurtain, base::Unretained(this)));
   ApplyShellInput();
   ardiacore::WatchLinuxShellInput(shell());
+  settled_window_state_.Settle(NativeWindowFacts());
 }
 
 void ShellHostView::StartStartupTab() {
@@ -4608,7 +4609,7 @@ linux_window_state::NativeWindow ShellHostView::NativeWindowFacts() const {
 }
 
 linux_window_state::WindowState ShellHostView::NativeWindowState() const {
-  return linux_window_state::StateOf(NativeWindowFacts(), settled_window_state_);
+  return settled_window_state_.Peek(NativeWindowFacts());
 }
 
 void ShellHostView::ScheduleWindowStateReport() {
@@ -4619,11 +4620,9 @@ void ShellHostView::ScheduleWindowStateReport() {
 
 void ShellHostView::ReportWindowState() {
   window_state_report_pending_ = false;
-  if (window_id_.empty() || !GetWidget()) return;
-  const linux_window_state::NativeWindow native = NativeWindowFacts();
-  const linux_window_state::WindowState state = linux_window_state::StateOf(native, settled_window_state_);
-  if (!linux_window_state::PageFullScreen(native)) settled_window_state_ = state;
-  if (reported_window_state_ == state) return;
+  if (!GetWidget()) return;
+  const linux_window_state::WindowState state = settled_window_state_.Settle(NativeWindowFacts());
+  if (window_id_.empty() || reported_window_state_ == state) return;
   reported_window_state_ = state;
   Event("ArdiaShell", linux_window_state::kWindowStateEvent,
         base::Value(WindowStateValue(state).Set("windowId", window_id_)));

@@ -433,3 +433,20 @@ AC_PROFILE_CALL(ac_site_data_clear, ardia::OffTheRecord::kAllow) {
           },
           call.TakeReply(), call.profile()->GetWeakPtr(), domain));
 }
+
+AC_ARGS_CALL(ac_registrable_domains) {
+  constexpr size_t kMaxHosts = 256;
+  const base::ListValue* hosts = call.args().FindList("hosts");
+  if (!hosts || hosts->size() > kMaxHosts) {
+    return call.TakeReply().Error("hosts must be a list of at most 256 names");
+  }
+  base::ListValue domains;
+  for (const base::Value& host : *hosts) {
+    const std::string name = host.is_string() ? host.GetString() : std::string();
+    const GURL site = ardia::SiteOf("https://" + name + "/");
+    domains.Append(site.is_valid() && site.host() == name
+                       ? ardia::RegistrableDomainOf(site)
+                       : name);
+  }
+  call.TakeReply().Send(base::DictValue().Set("domains", std::move(domains)));
+}

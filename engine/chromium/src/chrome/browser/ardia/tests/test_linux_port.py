@@ -61,6 +61,22 @@ class RegistryTests(unittest.TestCase):
         self.assertIn(ROOT / "ac_engine_dispatch.cc", sources("linux"))
         self.assertNotIn(ROOT / "ac_engine_dispatch.cc", sources("mac"))
 
+    def test_registry_keeps_every_declared_service(self):
+        declared = set()
+        for path in service_sources("linux"):
+            declared.update(re.findall(r"^AC_(?:ENGINE|PROFILE|ARGS)_CALL\(\s*(\w+)", path.read_text(), re.M))
+        self.assertEqual(set(DISPATCH.service_names(service_sources("linux"))), declared)
+
+    def test_registry_reads_mixed_case_and_multiline_services(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = pathlib.Path(folder) / "calls.cc"
+            path.write_text(
+                "AC_PROFILE_CALL(ac_demo_getAll, ardia::OffTheRecord::kAllow) {\n}\n"
+                "AC_PROFILE_CALL(ac_demo_save,\n                ardia::Sensitive{ardia::kMax}) {\n}\n"
+                "AC_ARGS_CALL(ac_demo_plain) {\n}\n"
+            )
+            self.assertEqual(DISPATCH.service_names([path]), ["ac_demo_getAll", "ac_demo_plain", "ac_demo_save"])
+
     def test_registry_is_deterministic_and_rejects_duplicates(self):
         paths = service_sources("linux")
         self.assertEqual(DISPATCH.service_names(paths), DISPATCH.service_names(paths[::-1]))

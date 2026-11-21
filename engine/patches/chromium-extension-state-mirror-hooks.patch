@@ -1,0 +1,146 @@
+ArdiaCore hears every change to an extension's storage, every firing of its alarms and every change to its
+declarativeNetRequest rules, so the WebKit copy of the extension (macOS 15.4+, a replica of Chromium's) sees the same
+state. StorageFrontend::OnSettingsChanged calls g_ardia_extension_storage_changed with the context, the id, the area
+("local", "sync", "managed", "session") and the changes, before it looks for listeners, so a change reaches the app even
+when Chromium's copy has none. AlarmManager::OnAlarm calls g_ardia_extension_alarm_fired with the context, the id and
+the alarm before it hands the alarm to its delegate, so the WebKit copy's onAlarm fires for the same alarm Chromium's
+does. RulesMonitorService wraps the callback of UpdateDynamicRules, UpdateSessionRules, UpdateEnabledStaticRulesets and
+UpdateStaticRules: once one succeeds it calls g_ardia_dnr_rules_changed with the context, the id and what changed
+("dynamic", "session", "rulesets"). //chrome/browser/ardia (ac_extension_storage.cc, ac_extension_alarms.cc,
+ac_extension_dnr.cc) sets the hooks the first time the app asks for them and passes on only changes for extensions the
+app watches. Unset, Chrome behaves as stock.
+
+--- a/extensions/browser/api/alarms/alarm_manager.cc
++++ b/extensions/browser/api/alarms/alarm_manager.cc
+@@ -31,6 +31,10 @@
+ #include "extensions/common/event_args.h"
+ #include "extensions/common/extension_id.h"
+ 
++void (*g_ardia_extension_alarm_fired)(content::BrowserContext* context,
++                                      const std::string& extension_id,
++                                      const base::Value& alarm) = nullptr;
++
+ namespace extensions {
+ 
+ namespace alarms = api::alarms;
+@@ -324,6 +328,10 @@
+ void AlarmManager::OnAlarm(AlarmIterator it) {
+   CHECK(it.first != alarms_.end());
+   Alarm& alarm = *it.second;
++  if (g_ardia_extension_alarm_fired) {
++    g_ardia_extension_alarm_fired(browser_context_, it.first->first,
++                                  base::Value(alarm.js_alarm->ToValue()));
++  }
+   delegate_->OnAlarm(it.first->first, alarm);
+ 
+   // Update our scheduled time for the next alarm.
+--- a/extensions/browser/api/storage/storage_frontend.cc
++++ b/extensions/browser/api/storage/storage_frontend.cc
+@@ -39,6 +39,12 @@
+ using content::BrowserContext;
+ using content::BrowserThread;
+ using value_store::ValueStore;
++
++void (*g_ardia_extension_storage_changed)(content::BrowserContext* context,
++                                          const std::string& extension_id,
++                                          const char* area,
++                                          const base::Value& changes) =
++    nullptr;
+ 
+ namespace extensions {
+ 
+@@ -650,6 +656,12 @@
+   TRACE_EVENT1("browser", "StorageFrontend::OnSettingsChanged", "extension_id",
+                extension_id);
+ 
++  if (g_ardia_extension_storage_changed) {
++    g_ardia_extension_storage_changed(browser_context_, extension_id,
++                                      StorageAreaToString(storage_area),
++                                      changes);
++  }
++
+   // Alias extension_id for investigation of shutdown hangs. crbug.com/1154997
+   // Extension IDs are exactly 32 characters in length.
+   constexpr size_t kExtensionsIdLength = 32;
+--- a/extensions/browser/api/declarative_net_request/rules_monitor_service.cc
++++ b/extensions/browser/api/declarative_net_request/rules_monitor_service.cc
+@@ -57,6 +57,10 @@
+ #include "extensions/common/permissions/api_permission.h"
+ #include "tools/json_schema_compiler/util.h"
+ 
++void (*g_ardia_dnr_rules_changed)(content::BrowserContext* context,
++                                  const std::string& extension_id,
++                                  const std::string& kind) = nullptr;
++
+ namespace extensions {
+ namespace declarative_net_request {
+ 
+@@ -168,6 +172,28 @@
+ }
+ 
+ LoadRulesetThrottleCallback* g_test_throttle_override_ = nullptr;
++
++RulesMonitorService::ApiCallback ArdiaNotifyingRulesChanged(
++    content::BrowserContext* context,
++    const ExtensionId& extension_id,
++    const char* kind,
++    RulesMonitorService::ApiCallback callback) {
++  if (!g_ardia_dnr_rules_changed) {
++    return callback;
++  }
++  return base::BindOnce(
++      [](content::BrowserContext* context, const ExtensionId& extension_id,
++         const std::string& kind, RulesMonitorService::ApiCallback callback,
++         std::optional<std::string> error) {
++        const bool changed = !error.has_value();
++        std::move(callback).Run(std::move(error));
++        if (changed && g_ardia_dnr_rules_changed) {
++          g_ardia_dnr_rules_changed(context, extension_id, kind);
++        }
++      },
++      base::Unretained(context), extension_id, std::string(kind),
++      std::move(callback));
++}
+ 
+ }  // namespace
+ 
+@@ -411,7 +437,8 @@
+                          weak_factory_.GetWeakPtr(), extension.id(),
+                          std::move(rule_ids_to_remove),
+                          std::move(rules_to_add)),
+-          std::move(callback));
++          ArdiaNotifyingRulesChanged(context_, extension.id(), "dynamic",
++                                     std::move(callback)));
+ }
+ 
+ void RulesMonitorService::UpdateEnabledStaticRulesets(
+@@ -426,7 +453,8 @@
+       base::BindOnce(&RulesMonitorService::UpdateEnabledStaticRulesetsInternal,
+                      weak_factory_.GetWeakPtr(), extension.id(),
+                      std::move(ids_to_disable), std::move(ids_to_enable)),
+-      std::move(callback));
++      ArdiaNotifyingRulesChanged(context_, extension.id(), "rulesets",
++                                 std::move(callback)));
+ }
+ 
+ void RulesMonitorService::UpdateStaticRules(const Extension& extension,
+@@ -440,7 +468,8 @@
+       base::BindOnce(&RulesMonitorService::UpdateStaticRulesInternal,
+                      weak_factory_.GetWeakPtr(), extension.id(),
+                      std::move(ruleset_id), std::move(rule_ids_to_update)),
+-      std::move(callback));
++      ArdiaNotifyingRulesChanged(context_, extension.id(), "rulesets",
++                                 std::move(callback)));
+ }
+ 
+ void RulesMonitorService::GetDisabledRuleIds(
+@@ -489,7 +518,8 @@
+                          weak_factory_.GetWeakPtr(), extension.id(),
+                          std::move(rule_ids_to_remove),
+                          std::move(rules_to_add)),
+-          std::move(callback));
++          ArdiaNotifyingRulesChanged(context_, extension.id(), "session",
++                                     std::move(callback)));
+ }
+ 
+ RuleCounts RulesMonitorService::GetRuleCounts(const ExtensionId& extension_id,

@@ -239,6 +239,39 @@ try {
   }
 
   if (ok) {
+    await r.check("a press or a two-finger move on the window while another app is active asks for Ardia to become active with only that window in front", async () => {
+      const asked = async () => (await engine("tabs.devEvents", { tabId })).filter((e) => e.name === "pictureInPictureActivated");
+      const appActive = async (on) => {
+        const native = (await engine("windows.list"))[0]?.window;
+        const answer = await engine("windows.dev", { window: native, action: `fakeAppActive:${on ? 1 : 0}` });
+        if (answer !== (on ? "1" : "0")) throw new Error(`fakeAppActive: ${JSON.stringify(answer)}`);
+      };
+      await appActive(true);
+      const whileActive = (await asked()).length;
+      const s0 = await state();
+      await pip(`mouse:down:${Math.round(s0.width / 2)},${Math.round(s0.height / 2)}`);
+      await pip(`mouse:up:${Math.round(s0.width / 2)},${Math.round(s0.height / 2)}`);
+      await sleep(400);
+      if ((await asked()).length !== whileActive) throw new Error("a press asked for activation while Ardia was already active");
+      await appActive(false);
+      try {
+      const before = (await asked()).length;
+      const s = await state();
+      const [x, y] = [Math.round(s.width / 2), Math.round(s.height / 2)];
+      await pip(`mouse:down:${x},${y}`);
+      await pip(`mouse:up:${x},${y}`);
+      const pressed = await until("the press's event", async () => ((await asked()).length > before ? asked() : null), 3000);
+      await pip("swipe:30,0,6");
+      const moved = await until("the move's event", async () => ((await asked()).length > before + 1 ? asked() : null), 3000);
+      const flags = (e) => `${e.payload?.move ?? e.move}`;
+      if (flags(pressed.at(-1)) !== "false") throw new Error(`the press reported move ${flags(pressed.at(-1))}`);
+      if (flags(moved.at(-1)) !== "true") throw new Error(`the move reported move ${flags(moved.at(-1))}`);
+      return `${(await asked()).length - before} events`;
+      } finally {
+        await appActive(true).catch(() => null);
+        await sleep(900);
+      }
+    });
     await r.check("closing Picture in Picture in the middle of a pinch takes the stand-in away", async () => {
       await pip("pinch:1.5,240,120");
       await sleep(400);
@@ -251,6 +284,31 @@ try {
       const left = execFileSync("sh", ["-c", `/usr/bin/swift -e 'import CoreGraphics; let l = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as! [[String: Any]]; print(l.contains { ($0[kCGWindowNumber as String] as? Int) == ${Number(standIn)} && (($0[kCGWindowIsOnscreen as String] as? Bool) ?? false) })' 2>/dev/null || echo unknown`]).toString().trim();
       if (left !== "false") throw new Error(`the stand-in window ${standIn} is still on screen (${left})`);
       return { standIn, pipWindows: panels?.length ?? 0 };
+    });
+    await r.check("a press that asked for activation is still reported when the window closes before the report", async () => {
+      const page = await instance.page(url, { timeout: 5000 });
+      const entered = await page.eval("document.getElementById('v').requestPictureInPicture().then(() => 'ok', (e) => String(e))", { userGesture: true });
+      if (entered !== "ok") throw new Error(`no PiP: ${entered}`);
+      await until("the styled PiP window", shown, 8000);
+      const asked = async () => (await engine("tabs.devEvents", { tabId })).filter((e) => e.name === "pictureInPictureActivated").length;
+      const native = (await engine("windows.list"))[0]?.window;
+      await engine("windows.dev", { window: native, action: "fakeAppActive:0" });
+      try {
+        const before = await asked();
+        const s = await state();
+        await pip(`mouse:down:${Math.round(s.width / 2)},${Math.round(s.height / 2)}`);
+        await pip(`mouse:up:${Math.round(s.width / 2)},${Math.round(s.height / 2)}`);
+        await page.eval("document.exitPictureInPicture().then(() => 'ok', (e) => String(e))");
+        await until("the window to close", async () => !(await shown()), 1200);
+        if ((await asked()) !== before) throw new Error("inconclusive: the report came before the window had closed");
+        await until("the report after the close", async () => (await asked()) > before, 4000);
+        await sleep(400);
+        const reported = (await asked()) - before;
+        if (reported !== 1) throw new Error(`${reported} reports for one press`);
+        return "the window closed first, then 1 report";
+      } finally {
+        await engine("windows.dev", { window: native, action: "fakeAppActive:1" }).catch(() => null);
+      }
     });
   }
 

@@ -102,3 +102,53 @@ test("pinches on a Picture in Picture window and resizes that ended before Chrom
   usage.sessionEnding();
   assert.equal((await sentCounts()).length, before + 1);
 });
+
+test("activations asked for by a press or a move on a Picture in Picture window, and the ones that didn't take, are counted, then start again from zero", async () => {
+  client.loadChoice();
+  client.setSharing(true, "onboarding");
+  const sentCounts = async () => {
+    await client.saveQueueNow();
+    const saved = JSON.parse(stub.docs.get("telemetry-queue.json") ?? '{"events":[]}');
+    return saved.events
+      .filter((e) => e.event === "usage_counts" && e.properties.pip_activations)
+      .map((e) => [e.properties.pip_activations, e.properties.pip_activation_failures]);
+  };
+  const before = (await sentCounts()).length;
+
+  pipCounts.notePictureInPictureActivated({ move: false, activated: true, epoch: client.consentEpoch() });
+  pipCounts.notePictureInPictureActivated({ move: true, activated: true, epoch: client.consentEpoch() });
+  pipCounts.notePictureInPictureActivated({ move: false, activated: false, epoch: client.consentEpoch() });
+  pipCounts.notePictureInPictureActivated({ move: true, activated: true, epoch: "an epoch from before" });
+  usage.sessionEnding();
+  const sent = await sentCounts();
+  assert.equal(sent.length, before + 1);
+  assert.deepEqual(sent.at(-1), [3, 1]);
+
+  usage.sessionEnding();
+  assert.equal((await sentCounts()).length, before + 1);
+});
+
+test("activations Ardia handed back after it was left over a Picture in Picture window, and repeats, are counted, then start again from zero", async () => {
+  client.loadChoice();
+  client.setSharing(true, "onboarding");
+  const sentCounts = async () => {
+    await client.saveQueueNow();
+    const saved = JSON.parse(stub.docs.get("telemetry-queue.json") ?? '{"events":[]}');
+    return saved.events
+      .filter((e) => e.event === "usage_counts" && e.properties.pip_activation_hand_backs)
+      .map((e) => [e.properties.pip_activation_hand_backs, e.properties.pip_activation_hand_back_repeats]);
+  };
+  const before = (await sentCounts()).length;
+
+  pipCounts.notePictureInPictureHandBack({ again: false, epoch: client.consentEpoch() });
+  pipCounts.notePictureInPictureHandBack({ again: true, epoch: client.consentEpoch() });
+  pipCounts.notePictureInPictureHandBack({ again: false, epoch: client.consentEpoch() });
+  pipCounts.notePictureInPictureHandBack({ again: false, epoch: "an epoch from before" });
+  usage.sessionEnding();
+  const sent = await sentCounts();
+  assert.equal(sent.length, before + 1);
+  assert.deepEqual(sent.at(-1), [3, 1]);
+
+  usage.sessionEnding();
+  assert.equal((await sentCounts()).length, before + 1);
+});

@@ -1,9 +1,11 @@
 #import "ArdiaPictureInPictureInternal.h"
+#import "ArdiaWindowController.h"
 #import "ArdiaLaunchConfig.h"
 #import "ArdiaChromeWindowHost.h"
 #import "ArdiaPiPThrowMath.h"
 #import "ArdiaPiPSeekMath.h"
 
+#import <ApplicationServices/ApplicationServices.h>
 #import <dlfcn.h>
 #import <objc/runtime.h>
 #import <QuartzCore/QuartzCore.h>
@@ -76,11 +78,15 @@ void InstallDragMonitor() {
                                                     if ([ArdiaPiPZoom continueEdgeResize:event]) return nil;
                                                     if (event.type == NSEventTypeLeftMouseDown) {
                                                       NSWindow *window = event.window;
-                                                      if ([ArdiaPiPZoom beginEdgeResize:window event:event]) return nil;
+                                                      if ([ArdiaPiPZoom beginEdgeResize:window event:event]) {
+                                                        ActivateWithOnlyPictureInPicture([ArdiaPiPController forWindow:window], NO);
+                                                        return nil;
+                                                      }
                                                       ArdiaPiPController *grabbed =
                                                           GrabsWindowBackground(window, event) ? [ArdiaPiPController forWindow:window] : nil;
                                                       gDragged = grabbed;
                                                       if (!grabbed) return event;
+                                                      ActivateWithOnlyPictureInPicture(grabbed, NO);
                                                       [grabbed dragBegan:event];
                                                       gGrabMouse = PointerOf(event);
                                                       gGrabLocal = NSMakePoint(gGrabMouse.x - NSMinX(window.frame), gGrabMouse.y - NSMinY(window.frame));
@@ -238,6 +244,63 @@ BOOL ConsumeBackToTabActivation() {
   const BOOL pending = NSProcessInfo.processInfo.systemUptime <= gBackToTabActivationUntil;
   gBackToTabActivationUntil = 0;
   return pending;
+}
+
+static BOOL gActiveOnlyForPictureInPicture;
+
+static void EndActiveOnlyForPictureInPicture() {
+  if (!gActiveOnlyForPictureInPicture) return;
+  gActiveOnlyForPictureInPicture = NO;
+  for (NSWindow *window in NSApp.windows) [ArdiaWindowController reconsiderSightOf:window];
+}
+
+static void WatchActiveOnlyForPictureInPicture() {
+  static BOOL watching;
+  if (watching) return;
+  watching = YES;
+  NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
+  [center addObserverForName:NSApplicationDidResignActiveNotification object:nil queue:nil usingBlock:^(NSNotification *) {
+    EndActiveOnlyForPictureInPicture();
+  }];
+  [center addObserverForName:NSWindowDidBecomeKeyNotification object:nil queue:nil usingBlock:^(NSNotification *note) {
+    if (![ArdiaPiPController forWindow:note.object]) EndActiveOnlyForPictureInPicture();
+  }];
+}
+
+BOOL ActiveOnlyForPictureInPicture() { return gActiveOnlyForPictureInPicture; }
+
+void ActivateWithOnlyPictureInPicture(ArdiaPiPController *controller, BOOL move) {
+  NSWindow *window = controller.window;
+  if (!window || NSApp.active) return;
+  gActivations++;
+  ArdiaConsentStamp *activationStamp = ArdiaConsentStamp.begin;
+  __weak ArdiaWebView *source = controller.view;
+  __block BOOL becameActive = NO;
+  __block id watch = [NSNotificationCenter.defaultCenter addObserverForName:NSApplicationDidBecomeActiveNotification object:nil queue:nil usingBlock:^(NSNotification *) {
+    becameActive = YES;
+  }];
+  const double reportAfter = ardia_host::Background() ? 1.5 : 0.5;
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(reportAfter * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    [NSNotificationCenter.defaultCenter removeObserver:watch];
+    watch = nil;
+    if (!NSApp.active) EndActiveOnlyForPictureInPicture();
+    [source emit:@"pictureInPictureActivated" payload:[activationStamp onto:@{@"move" : @(move), @"activated" : @(becameActive || NSApp.active)}]];
+  });
+  if (ardia_host::Background()) return ardia_host::LogActivation(@"activate with only Picture in Picture in front (skipped in a test instance)");
+  WatchActiveOnlyForPictureInPicture();
+  gActiveOnlyForPictureInPicture = YES;
+  MarkBackToTabActivation();
+  typedef CGError (*BringsOneWindowForward)(ProcessSerialNumber *, uint32_t, uint32_t);
+  static const auto bringForward = (BringsOneWindowForward)dlsym(RTLD_DEFAULT, "_SLPSSetFrontProcessWithOptions");
+  static const uint32_t kUserGenerated = 0x200;
+  ProcessSerialNumber process;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+  const BOOL known = GetCurrentProcess(&process) == noErr;
+  if (!bringForward || !known || bringForward(&process, (uint32_t)window.windowNumber, kUserGenerated) != kCGErrorSuccess)
+    [NSApp activateIgnoringOtherApps:YES];
+#pragma clang diagnostic pop
+  [window makeKeyWindow];
 }
 
 BOOL ActivateApp(NSString *why) {
@@ -405,6 +468,10 @@ void DocumentEntered(ArdiaWebView *view, ArdiaConsentStamp *stamp) {
 
 + (BOOL)consumePictureInPictureActivation {
   return ConsumeBackToTabActivation();
+}
+
++ (BOOL)activeOnlyForPictureInPicture {
+  return ActiveOnlyForPictureInPicture();
 }
 
 + (BOOL)activateForPictureInPictureReturn {

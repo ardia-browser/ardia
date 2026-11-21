@@ -50,6 +50,7 @@ static __weak NSWindow *gSwipeMomentum;
     ArdiaPiPController *controller = [self swipeTargetFor:event];
     if (!controller) return NO;
     gSwipeWindow = controller.window;
+    ActivateWithOnlyPictureInPicture(controller, YES);
     [controller swipeBegan:event];
     return YES;
   }

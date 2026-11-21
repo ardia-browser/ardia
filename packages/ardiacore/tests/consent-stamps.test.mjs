@@ -93,8 +93,21 @@ test("a Picture in Picture window is stamped when the page enters it, and the re
   assert.match(pip, /bool Attach\(ArdiaWebView \*view, NSString \*host, ArdiaConsentStamp \*stamp\)/);
   assert.match(pip, /Attach\(strongView, host, stamp\)/);
   assert.match(pip, /void DocumentEntered\(ArdiaWebView \*view, ArdiaConsentStamp \*stamp\)/);
-  assert.doesNotMatch(pip, /ArdiaConsentStamp\.begin/);
+  const entries = pip.slice(pip.indexOf("bool Attach(ArdiaWebView *view"), pip.indexOf("namespace ardia_pip {")) + pip.slice(pip.indexOf("void VideoEntered("));
+  assert.ok(entries.includes("void DocumentEntered("), "the slices cover every entry function");
+  assert.doesNotMatch(entries, /ArdiaConsentStamp\.begin/, "an entry never takes a fresh stamp: it uses the one it was handed");
   assert.match(read("../ios/ArdiaPictureInPicture.h"), /void VideoEntered\(ArdiaWebView \*view, NSString \*host, ArdiaConsentStamp \*stamp\);/);
+});
+
+test("an activation asked for by a press or a move on Picture in Picture is stamped when asked, and its later report sends that stamp to the source view", () => {
+  const pip = read("../ios/ArdiaPictureInPicture.mm");
+  const activation = pip.slice(pip.indexOf("void ActivateWithOnlyPictureInPicture("), pip.indexOf("void WatchZoom()"));
+  assert.equal(pip.match(/ArdiaConsentStamp\.begin/g).length, 1, "the activation's stamp is the only fresh one in the file");
+  assert.match(activation, /ArdiaConsentStamp \*activationStamp = ArdiaConsentStamp\.begin;/);
+  assert.ok(activation.indexOf("activationStamp = ArdiaConsentStamp.begin") < activation.indexOf("dispatch_after("), "the stamp is taken at the press, before the report waits");
+  assert.match(activation, /__weak ArdiaWebView \*source = controller\.view;/, "the report holds the source view itself, so closing the window (which drops its controller) doesn't lose it");
+  assert.match(activation, /\[source emit:@"pictureInPictureActivated" payload:\[activationStamp onto:/);
+  assert.doesNotMatch(activation.slice(activation.indexOf("dispatch_after(")), /controller\./, "nothing in the report reads the controller");
 });
 
 test("a Picture in Picture drag is stamped when it begins and its report sends that stamp", () => {

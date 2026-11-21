@@ -61,6 +61,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (BOOL)isVideoPictureInPictureWindow:(NSWindow *)window;
 + (BOOL)consumePictureInPictureActivation;
++ (BOOL)activeOnlyForPictureInPicture;
 + (BOOL)activateForPictureInPictureReturn;
 
 @end

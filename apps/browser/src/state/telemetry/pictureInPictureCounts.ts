@@ -1,4 +1,4 @@
-import type { PictureInPictureDrag, PictureInPictureResize, PictureInPictureSkip, PictureInPictureStandIn, PictureInPictureUnstash } from "../../platform/media";
+import type { PictureInPictureActivation, PictureInPictureDrag, PictureInPictureResize, PictureInPictureSkip, PictureInPictureStandIn, PictureInPictureUnstash } from "../../platform/media";
 import type { PageEngine } from "../engines/engines";
 import { counted } from "./client";
 import { nativeConsent } from "./nativeConsent";
@@ -14,6 +14,10 @@ let resizes = noResizes();
 let handleUnstashes = 0;
 const noStandIns = () => ({ pinches: 0, timeouts: 0 });
 let standIns = noStandIns();
+const noActivations = () => ({ asked: 0, failed: 0 });
+let activations = noActivations();
+const noHandBacks = () => ({ given: 0, repeats: 0 });
+let handBacks = noHandBacks();
 
 export function noteAutoPictureInPictureNothingPlaying() {
   nothingPlaying++;
@@ -74,9 +78,33 @@ export function notePictureInPictureStandIn(standIn: PictureInPictureStandIn) {
   );
 }
 
+export function notePictureInPictureActivated(activation: PictureInPictureActivation) {
+  const { activated } = activation;
+  counted(
+    nativeConsent(activation),
+    () => {
+      activations.asked++;
+      if (!activated) activations.failed++;
+    },
+  );
+}
+
+export function notePictureInPictureHandBack(handBack: { again: boolean; epoch: string }) {
+  const { again } = handBack;
+  counted(
+    nativeConsent(handBack),
+    () => {
+      handBacks.given++;
+      if (again) handBacks.repeats++;
+    },
+  );
+}
+
 export function takePictureInPictureCounts() {
-  const taken = { nothingPlaying, backToTab: { ...backToTab }, backToTabFromOtherApp, drags, resizes, clickSkips: { ...clickSkips }, handleUnstashes, standIns };
+  const taken = { nothingPlaying, backToTab: { ...backToTab }, backToTabFromOtherApp, drags, resizes, clickSkips: { ...clickSkips }, handleUnstashes, standIns, activations, handBacks };
   standIns = noStandIns();
+  activations = noActivations();
+  handBacks = noHandBacks();
   nothingPlaying = 0;
   handleUnstashes = 0;
   drags = noDrags();

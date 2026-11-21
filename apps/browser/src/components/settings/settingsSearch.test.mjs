@@ -268,7 +268,7 @@ test("every indexed setting is anchored in its pane, and every anchor is indexed
   const panes = new Set(SETTINGS.map((s) => s.pane));
   const anchors = new Set([
     ...[...sources.matchAll(/["`]([a-zA-Z]+)\.([a-zA-Z]+)["`]/g)].filter((m) => panes.has(m[1])).map((m) => `${m[1]}.${m[2]}`),
-    ...(sources.includes("anchor={`automations.${id}`}") ? ["github", "bitbucket", "notion", "confluence", "gdrive"].map((id) => `automations.${id}`) : []),
+    ...(sources.includes("anchor={`automations.${id}`}") ? ["bitbucket", "notion", "confluence", "gdrive"].map((id) => `automations.${id}`) : []),
   ]);
   if (sources.includes("officialPluginAnchor(plugin.name)")) for (const s of SETTINGS) if (s.pane === "plugins" && s.section === "Official" && s.id !== "plugins.official") anchors.add(s.id);
   const indexed = new Set(SETTINGS.map((s) => s.id));

@@ -1,6 +1,6 @@
 import { View } from "react-native";
 import { useShallow } from "zustand/react/shallow";
-import { deleteLiveFolder, manualRefresh, statusText } from "../../../state/live/engine";
+import { deleteLiveFolder, manualRefresh, openGithubSignIn, statusText } from "../../../state/live/engine";
 import { isMocked } from "../../../state/live/net";
 import { disconnect, SOURCES } from "../../../state/live/sources";
 import { updateFolder, useLive } from "../../../state/live/store";
@@ -12,7 +12,7 @@ import { Favicon } from "../../favicon/Favicon";
 import { Group, Row, SectionHeader } from "../Form";
 import { ConnectAccountSheet } from "./ConnectAccountSheet";
 
-const ACCOUNTS: LiveSourceId[] = ["github", "bitbucket", "notion", "confluence", "gdrive"];
+const ACCOUNTS: Exclude<LiveSourceId, "github">[] = ["bitbucket", "notion", "confluence", "gdrive"];
 
 const PR_OPTIONS = {
   groupStacks: { title: "Group stacked pull requests", description: "Pull requests based on each other's branches sit together under one row." },
@@ -55,10 +55,17 @@ export function LiveFoldersSection() {
 }
 
 function FolderGroup({ folder, profileName }: { folder: LiveFolder; profileName: string }) {
+  const github = folder.sources.includes("github");
+  const githubLogin = useLive((s) => (github ? s.githubLogins[folder.profileId] : undefined));
+  const statusTextValue = statusText(folder.id);
+  const description = github
+    ? `${profileName} · ${githubLogin === undefined ? folder.sources.map((s) => SOURCES[s].name).join(", ") : githubLogin === null ? "Not signed in to GitHub" : `Signed in as ${githubLogin}`} · ${statusTextValue}`
+    : `${profileName} · ${folder.sources.map((s) => SOURCES[s].name).join(", ")} · ${statusTextValue}`;
   return (
     <Group>
-      <Row title={folder.name} description={`${profileName} · ${folder.sources.map((s) => SOURCES[s].name).join(", ")} · ${statusText(folder.id)}`}>
+      <Row title={folder.name} description={description}>
         <Box row gap="s">
+          {github && githubLogin === null ? <Button title="Sign In…" onPress={() => openGithubSignIn(folder.profileId)} /> : null}
           <Button title="Refresh" onPress={() => void manualRefresh(folder.id)} />
           <Button title="Delete" kind="destructive" onPress={() => deleteLiveFolder(folder.id)} />
         </Box>
@@ -84,10 +91,10 @@ function FolderOption({ option, value, onChange }: { option: keyof typeof PR_OPT
 
 function connectedAs(id: LiveSourceId, account: LiveAccount): string {
   if (!account.name || account.name === account.login) return account.login;
-  return id === "github" || id === "gdrive" ? `${account.name} (${account.login})` : account.name;
+  return id === "gdrive" ? `${account.name} (${account.login})` : account.name;
 }
 
-function AccountRow({ id }: { id: LiveSourceId }) {
+function AccountRow({ id }: { id: Exclude<LiveSourceId, "github"> }) {
   const account = useLive((s) => s.accounts[id]);
   const source = SOURCES[id];
   return (

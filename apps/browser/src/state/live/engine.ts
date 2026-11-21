@@ -1,4 +1,4 @@
-import { onWindowEvent } from "../../platform/windows";
+import { onWindowEvent, focusWindow } from "../../platform/windows";
 import { everySlowly } from "../../platform/slowTimers";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId, inPinnedContainer, viewTabIds } from "../browser/model";
@@ -14,6 +14,7 @@ import { noteLiveCompletedTabsClosed } from "../telemetry/liveCompletedTabs";
 import { noteLiveSourceFetch } from "../telemetry/workCounts";
 import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
+import { noteLiveGithubSignInOpen } from "../telemetry/liveGithubSession";
 import { isPlaying, useMedia } from "../media/media";
 import { usePages } from "../tabs/pageState";
 import { liveOf, onLiveChange } from "../tabs/tabLive";
@@ -211,7 +212,7 @@ export function errorText(kind: LiveError["kind"], source: LiveSourceId, now = D
     case "notConfigured":
       return `Connect ${name} in Settings`;
     case "signedOut":
-      return `Sign back in to ${name}`;
+      return source === "github" ? "Sign in to github.com in this profile" : `Sign back in to ${name}`;
     case "sso":
       return `${name} needs Single Sign-On for this organization`;
     case "tokenBlocked":
@@ -246,6 +247,16 @@ export function newProfileLiveFolder(profileId: string, kind: LiveFolderKind, so
   if (options.name !== undefined) updateFolder(id, { name: options.name });
   void refreshFolderWhile(id, true, options.allowed ?? always);
   return id;
+}
+
+export function openGithubSignIn(profileId: string) {
+  const s = useBrowser.getState();
+  const windowId = [...s.ui.focusOrder, ...s.windowOrder].find((id) => s.windows[id]?.kind !== "private" && s.windows[id]!.profileId === profileId);
+  if (!windowId) return false;
+  noteLiveGithubSignInOpen(consentToken());
+  s.newTab(windowId, { url: "https://github.com/login", profileId });
+  void focusWindow(windowId);
+  return true;
 }
 
 export function openLiveItem(windowId: string, folderId: string, item: LiveItem, options: { background?: boolean } = {}) {

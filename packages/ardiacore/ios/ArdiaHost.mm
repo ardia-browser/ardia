@@ -343,6 +343,68 @@ static NSDictionary<NSString *, id> *OffscreenRefusal(NSString *reason) {
       for (ArdiaCoreTab *tab in [[window tabsForProfile:profile] copy]) [tab close];
 }
 
+static NSMutableSet<NSString *> *SessionPageProfiles() {
+  static NSMutableSet *profiles = [NSMutableSet set];
+  return profiles;
+}
+
++ (void)sessionPageLoadSettled:(ArdiaCoreTab *)tab
+                             tries:(NSInteger)tries
+                            script:(NSString *)script
+                         completion:(void (^)(NSDictionary<NSString *, id> *))completion {
+  if (tab.closed || tries <= 0) {
+    [tab close];
+    return completion(OffscreenRefusal(@"The page never finished loading."));
+  }
+  if (tab.loading || tab.committedInitial) {
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 200 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+      [self sessionPageLoadSettled:tab tries:tries - 1 script:script completion:completion];
+    });
+    return;
+  }
+  NSString *wrapped = [NSString
+      stringWithFormat:@"const r=(function(){%@\n})(); post('result', typeof r==='string'?r:JSON.stringify(r));", script];
+  __block BOOL answered = NO;
+  [tab evaluate:wrapped
+      completion:^(NSString *json) {
+        if (answered) return;
+        answered = YES;
+        [tab close];
+        if (!json.length) return completion(OffscreenRefusal(@"The page had no answer."));
+        NSData *data = [json dataUsingEncoding:NSUTF8StringEncoding];
+        id parsed = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
+        if (![parsed isKindOfClass:NSDictionary.class]) return completion(OffscreenRefusal(@"The page's answer wasn't readable."));
+        completion(@{@"ok" : @YES, @"json" : parsed});
+      }];
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 120 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+    if (answered) return;
+    answered = YES;
+    [tab close];
+    completion(OffscreenRefusal(@"The page had no answer."));
+  });
+}
+
++ (void)sessionPage:(NSString *)profileName
+                   url:(NSString *)url
+                script:(NSString *)script
+            completion:(void (^)(NSDictionary<NSString *, id> *))completion {
+  ardia_host::WithProfile(profileName, ^(ArdiaCoreProfile *profile) {
+    if (!profile) return completion(OffscreenRefusal(@"That profile isn't loaded."));
+    NSString *name = ardia_host::ProfileName(profile);
+    if ([SessionPageProfiles() containsObject:name]) return completion(OffscreenRefusal(@"Another session page is still loading."));
+    ArdiaCoreWindow *window = OffscreenWindowFor(profile);
+    if (!window) return completion(OffscreenRefusal(@"Ardia couldn't make an off-screen window."));
+    ArdiaCoreTab *tab = [window openTab:url profile:profile foreground:NO];
+    if (!tab) return completion(OffscreenRefusal(@"Ardia couldn't open the page."));
+    [SessionPageProfiles() addObject:name];
+    void (^finish)(NSDictionary *) = ^(NSDictionary *answer) {
+      [SessionPageProfiles() removeObject:name];
+      completion(answer);
+    };
+    [self sessionPageLoadSettled:tab tries:100 script:script completion:finish];
+  });
+}
+
 + (void)cliTabTargets:(NSArray<NSString *> *)tabIds completion:(void (^)(NSDictionary<NSString *, id> *targets))completion {
   static NSMutableDictionary<NSString *, NSString *> *lastTarget;
   static NSMutableDictionary<NSString *, NSNumber *> *generations;

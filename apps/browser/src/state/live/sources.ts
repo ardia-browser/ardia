@@ -1,7 +1,10 @@
 import { CONFLUENCE_CQL, DRIVE_QUERY, mapBitbucket, mapConfluence, mapDrive, mapNotion, NOTION_SEARCH_BODY, type BitbucketPR, type BitbucketStatuses, type ConfluenceSearch, type DriveFiles, type NotionSearch, type NotionUsers } from "./documents";
+import { fetchPullsPage, mapPullsPage } from "./githubSession";
 import { createGithubClient } from "./githubClient";
 import { basic, deleteSecret, endpoints, form, getSecret, request, setSecret } from "./net";
-import { live, setAccount, updateConfig } from "./store";
+import { noteLiveGithubSession, noteLiveGithubSessionSignedOut } from "../telemetry/liveGithubSession";
+import { consentToken } from "../telemetry/client";
+import { live, setAccount, setGithubLogin, updateConfig } from "./store";
 import { LiveError, type CompletionState, type LiveAccount, type LiveFolder, type LiveItem, type LiveSourceId } from "./types";
 import { symbolIcon } from "../../lib/customIcon";
 
@@ -33,16 +36,43 @@ const github: LiveSource = {
   name: "GitHub",
   kind: "pullRequests",
   site: "https://github.com",
-  async fetch(folder, options) {
-    return githubClient.fetchFolder(await secret("github"), folder, !!options?.interactive);
+  async fetch(folder) {
+    void clearSavedGithubToken();
+    return githubSessionFetch(folder);
   },
-  async resolveGone(items, options) {
-    if (!items.some((it) => it.source === "github")) return {};
-    return githubClient.resolveGone(await secret("github"), items, !!options?.interactive);
+  async resolveGone() {
+    return {};
   },
   pausedUntil: () => githubClient.pausedUntil(),
   warning: () => githubClient.warning(),
 };
+
+let checkedGithubToken = false;
+async function clearSavedGithubToken() {
+  if (checkedGithubToken) return;
+  checkedGithubToken = true;
+  if (!(await getSecret("github"))) return;
+  await deleteSecret("github");
+  setAccount("github", null);
+}
+
+async function githubSessionFetch(folder: LiveFolder): Promise<LiveItem[]> {
+  const consent = consentToken();
+  try {
+    const page = await fetchPullsPage(folder.profileId);
+    if (page.signedOut) {
+      setGithubLogin(folder.profileId, null);
+      throw new LiveError("signedOut", "Sign in to github.com in this profile");
+    }
+    setGithubLogin(folder.profileId, page.login ?? null);
+    const items = mapPullsPage(page, folder.filters);
+    noteLiveGithubSession(consent, items.length);
+    return items;
+  } catch (error) {
+    if (error instanceof LiveError && error.kind === "signedOut") noteLiveGithubSessionSignedOut(consent);
+    throw error;
+  }
+}
 
 const BITBUCKET_STATE_BATCH = 10;
 

@@ -45,6 +45,7 @@ export type EngineCalls = {
   "engine.cliOwnsTab": [{ tabId: string }, { owned: boolean; shown: boolean }];
   "engine.cliMoveOffscreen": [{ tabId: string }, { ok: boolean; reason?: string }];
   "engine.cliCloseOffscreenTabs": [{}, Done];
+  "engine.sessionPage": [Profile & { url: string; script: string }, { ok: boolean; json?: unknown; reason?: string }];
 
   "tabs.routeLinkTabs": [{ urls: string[] }, LinkRoute];
   "tabs.stripCommand": [{ id: number; command: TabStripCommand }, null];

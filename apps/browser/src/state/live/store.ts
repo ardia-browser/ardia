@@ -6,7 +6,6 @@ import type { CompletedItem, CompletionState, FolderStatus, LiveAccount, LiveFol
 import { DEFAULT_COUNTDOWN_LEAD, keepDismissedNow, type DismissedNow } from "./meetings";
 
 export type LiveConfig = {
-  githubClientId: string;
   bitbucketUser: string;
   confluenceSite: string;
   confluenceEmail: string;
@@ -52,9 +51,10 @@ type LiveState = {
   meetingGroups: Record<string, MeetingGroup>;
   dismissedAlerts: string[];
   dismissedNow: DismissedNow;
+  githubLogins: Record<string, string | null>;
 };
 
-export const DEFAULT_CONFIG: LiveConfig = { githubClientId: "", bitbucketUser: "", confluenceSite: "", confluenceEmail: "", googleClientId: "" };
+export const DEFAULT_CONFIG: LiveConfig = { bitbucketUser: "", confluenceSite: "", confluenceEmail: "", googleClientId: "" };
 
 export const DEFAULT_CALENDAR: CalendarSettings = {
   alertLead: "1",
@@ -93,7 +93,7 @@ export const useLive = create<LiveState>()(() => ({
   calendar: { ...DEFAULT_CALENDAR, ...saved.calendar },
   meetingGroups: saved.meetingGroups ?? {},
   dismissedAlerts: saved.dismissedAlerts ?? [],
-  dismissedNow: keepDismissedNow(saved.dismissedNow, Date.now()),
+  dismissedNow: keepDismissedNow(saved.dismissedNow, Date.now()), githubLogins: {},
 }));
 
 export const live = () => useLive.getState();
@@ -381,6 +381,8 @@ export function setAccount(source: LiveSourceId, account: LiveAccount | null) {
 
 export const updateConfig = (patch: Partial<LiveConfig>) => setLive((s) => ({ config: { ...s.config, ...patch } }));
 export const updateCalendarSettings = (patch: Partial<CalendarSettings>) => setLive((s) => ({ calendar: { ...s.calendar, ...patch } }));
+
+export const setGithubLogin = (profileId: string, login: string | null) => setLive((s) => (s.githubLogins[profileId] === login ? {} : { githubLogins: { ...s.githubLogins, [profileId]: login } }));
 
 export function dismissAlert(occurrence: string) {
   setLive((s) => (s.dismissedAlerts.includes(occurrence) ? {} : { dismissedAlerts: [...s.dismissedAlerts, occurrence].slice(-200) }));

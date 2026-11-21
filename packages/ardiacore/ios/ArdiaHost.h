@@ -46,6 +46,8 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)cliMoveOffscreen:(NSString *)tabId completion:(void (^)(NSDictionary<NSString *, id> *moved))completion
     NS_SWIFT_NAME(cliMoveOffscreen(_:completion:));
 + (void)cliCloseOffscreenTabs;
++ (void)sessionPage:(NSString *)profile url:(NSString *)url script:(NSString *)script completion:(void (^)(NSDictionary<NSString *, id> *))completion
+    NS_SWIFT_NAME(sessionPage(_:url:script:completion:));
 + (BOOL)isPrivateProfile:(NSString *)profile NS_SWIFT_NAME(isPrivateProfile(_:));
 @property(class, nullable, copy) void (^quitCancelledHandler)(void);
 + (void)menuShortcutsChanged;

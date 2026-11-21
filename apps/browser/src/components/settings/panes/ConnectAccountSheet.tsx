@@ -1,20 +1,18 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { View } from "react-native";
-import { copyText } from "../../../state/app/system";
 import { focusWindow } from "../../../state/windows/nativeWindow";
 import { connectGoogleDrive } from "../../../state/live/googleAuth";
-import { connectBitbucket, connectConfluence, connectGithub, connectNotion, SOURCES, startGithubDeviceFlow, type DeviceFlow } from "../../../state/live/sources";
-import { live, updateConfig } from "../../../state/live/store";
+import { connectBitbucket, connectConfluence, connectNotion, SOURCES } from "../../../state/live/sources";
+import { live } from "../../../state/live/store";
 import type { LiveSourceId } from "../../../state/live/types";
-import { openUrlFromSettings, settingsBrowserWindow } from "../../../state/settings/settingsWindows";
+import { settingsBrowserWindow } from "../../../state/settings/settingsWindows";
 import { closeSettingsSheet } from "../../../state/settings/sheet";
-import { Button, DialogActions, DialogTitle, Divider, proseLineHeight, Sheet, space, Text, TextField } from "../../ui";
+import { Button, DialogActions, DialogTitle, proseLineHeight, Sheet, space, Text, TextField } from "../../ui";
 import { perLook } from "../../ui/tokens";
 import { Favicon } from "../../favicon/Favicon";
 import { FormField } from "../Form";
-import { settingsType } from "../tokens";
 
-export function ConnectAccountSheet({ id }: { id: LiveSourceId }) {
+export function ConnectAccountSheet({ id }: { id: Exclude<LiveSourceId, "github"> }) {
   const source = SOURCES[id];
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,9 +30,6 @@ export function ConnectAccountSheet({ id }: { id: LiveSourceId }) {
   };
   let body: ReactNode;
   switch (id) {
-    case "github":
-      body = <GithubConnect busy={busy} run={run} />;
-      break;
     case "bitbucket":
       body = <BitbucketConnect busy={busy} run={run} />;
       break;
@@ -66,68 +61,12 @@ type ConnectProps = { busy: boolean; run(task: () => Promise<void>): Promise<voi
 const NOTE_TOP = { marginTop: space.ml } as const;
 const BODY_TOP = { marginTop: space.l } as const;
 const HELP = perLook(() => ({ lineHeight: proseLineHeight.small }) as const);
-const CODE = perLook(() => ({ ...settingsType.code, textAlign: "center", marginTop: space.xl }) as const);
-const SPLIT = { marginVertical: space.xl } as const;
 
 function Help({ children }: { children: ReactNode }) {
   return (
     <Text size="small" tone="textSecondary" style={HELP()}>
       {children}
     </Text>
-  );
-}
-
-function GithubConnect({ busy, run }: ConnectProps) {
-  const [token, setToken] = useState("");
-  const [clientId, setClientId] = useState(live().config.githubClientId);
-  const [flow, setFlow] = useState<DeviceFlow | null>(null);
-  useEffect(() => () => flow?.cancel(), [flow]);
-
-  const signIn = () =>
-    run(async () => {
-      updateConfig({ githubClientId: clientId.trim() });
-      const f = await startGithubDeviceFlow(clientId.trim());
-      setFlow(f);
-      copyText(f.userCode);
-      openUrlFromSettings(f.verificationUri);
-      await f.done;
-    });
-
-  if (flow) {
-    return (
-      <View>
-        <Help>Enter this code on GitHub (it's on your clipboard), then approve Ardia. This sheet closes when you're signed in.</Help>
-        <Text selectable weight="semibold" style={CODE()}>
-          {flow.userCode}
-        </Text>
-        <DialogActions>
-          <Button title="Cancel" onPress={() => (flow.cancel(), setFlow(null))} />
-          <Button title="Open GitHub" kind="primary" onPress={() => openUrlFromSettings(flow.verificationUri)} />
-        </DialogActions>
-      </View>
-    );
-  }
-  return (
-    <View>
-      <Help>
-        Paste a personal access token (classic: "repo" and "read:org" scopes; fine-grained: read access to pull requests, checks and metadata).
-      </Help>
-      <FormField label="Personal access token">
-        <TextField value={token} onChangeText={setToken} placeholder="ghp_…" secure onSubmit={() => token && void run(() => connectGithub(token))} />
-      </FormField>
-      <DialogActions>
-        <Button title="Cancel" onPress={closeSettingsSheet} />
-        <Button title={busy ? "Checking…" : "Connect"} kind="primary" disabled={!token.trim() || busy} onPress={() => void run(() => connectGithub(token))} />
-      </DialogActions>
-      <Divider thick style={SPLIT} />
-      <Help>Or sign in with your own GitHub OAuth app (Settings › Developer settings › OAuth Apps, with Device Flow enabled).</Help>
-      <FormField label="OAuth app client ID">
-        <TextField value={clientId} onChangeText={setClientId} placeholder="Iv1.…" />
-      </FormField>
-      <DialogActions>
-        <Button title="Sign In with GitHub…" disabled={!clientId.trim() || busy} onPress={() => void signIn()} />
-      </DialogActions>
-    </View>
   );
 }
 

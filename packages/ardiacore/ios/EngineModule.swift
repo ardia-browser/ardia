@@ -54,6 +54,9 @@ public class EngineModule: Module {
       ArdiaHost.cliCloseOffscreenTabs()
       reply.ok()
     },
+    "sessionPage": { args, reply in
+      ArdiaHost.sessionPage(args.profile, url: try args.text("url"), script: try args.text("script")) { reply.ok($0) }
+    },
     "setCliActiveTab": { args, reply in
       let active = try args.optionalText("tabId").map { ArdiaHost.chromeTabId(ofTab: $0) } ?? -1
       EngineCall.passing("ac_cli_control", profile: args.profile, args: ["active": active], reply: reply)

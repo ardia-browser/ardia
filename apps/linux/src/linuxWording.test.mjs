@@ -50,7 +50,7 @@ const EXPECTED = [
   ["components/onboarding/SourceStep.tsx", ["Found on this computer"], []],
   ["state/import/runImport.ts", ["system keyring"], []],
   ["state/extensions/actions.ts", ["`The extension's folder stays on your computer.`"], ["stays on your ${PLATFORM_TERMS.computer}"]],
-  ["state/live/engine.ts", ["case \"keyringLocked\":\n      return `Unlock your keyring to refresh ${name}`;", "case \"keyringUnavailable\":\n      return `Start your keyring to refresh ${name}`;", "case \"signedOut\":\n      return `Sign back in to ${name}`;"], []],
+  ["state/live/engine.ts", ["case \"keyringLocked\":\n      return `Unlock your keyring to refresh ${name}`;", "case \"keyringUnavailable\":\n      return `Start your keyring to refresh ${name}`;", "case \"signedOut\":\n      return source === \"github\" ? \"Sign in to github.com in this profile\" : `Sign back in to ${name}`;"], []],
   ["components/settings/panes/General.tsx", ["label: \"Quitting with Ctrl+Shift+Q\""], ["Quitting with ${keyText(\"⌘Q\")}"]],
   ["components/settings/rows/shortcutRows.ts", ["title: `Ctrl-clicking links creates tab groups`"], []],
   ["components/settings/rows/profileRows.ts", ["description: \"Showing a saved card number asks for your system password.\"", "\"keyring\""], ["\"keychain\""]],

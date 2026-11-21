@@ -55,6 +55,8 @@ int main(int argc, char** argv) {
     assert(p.host.restacks == 1);
     assert(p.binding->viewport()->bounds() == gfx::Rect(100, 50, 500, 600));
     assert(p.tools()->bounds() == gfx::Rect(100, 50, 800, 600));
+    assert(std::ranges::count(p.host.clipped, p.binding->viewport()) == 1);
+    assert(std::ranges::count(p.host.clipped, p.tools()) == 1);
     assert(*p.host.GetIndexOf(p.tools()) < *p.host.GetIndexOf(p.binding->viewport()));
     DevToolsWindow::strategies[&p.page].hide = true;
     p.host.LayoutPane(p.binding);

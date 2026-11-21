@@ -911,19 +911,34 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
     keeps the maximize glyph. Clicking still toggles correctly; the glyph waits for the shell to read `windowState`.
 - **Header drag and double-click.** Dragging the header moves the window (`DispatchHostWindowDragMovement`).
   Double-clicking it runs the desktop's titlebar action.
-- **Outer frame.** The host overlays Chromium's client view. Without the Wayland decoration protocol (Hyprland),
-  Chromium uses its custom frame, which would wrap that view in a themed band with a shadow border and rounded corners of
-  its own. `chromium-linux-borderless-frame.patch` stops that for every window the host owns (main, Little Ardia,
-  Settings, Import): `g_ardia_linux_borderless_frame` answers true for them, and the frame view and its layout then
-  report no border, input or shadow insets and no corner radius, and paint no frame, so the client area is the whole
-  window. The host calls `RefreshEngineFrame` once the window is its own, because Chromium laid the frame out before
-  that. Edge resizing stays: in a window that can be resized, a thin band along the edges answers as a resize border
-  (`NonClientHitTest`); Import, which can't be resized, keeps its edges for its content. On X11 Chrome maps its startup window
-  before the host starts and sets `_GTK_FRAME_EXTENTS` from the frame insets it had then; the host's `FrameTypeChanged`
-  now has X11 rewrite the property (`X11Extension::RefreshDecorationInsets`), so it is gone once the window is the
-  host's. Whatever
-  corners, shadow or outline the compositor draws are its own. `windowCornerRadius` still answers a fixed 19 on Linux
-  (`apps/linux/src/shellMethods.ts`); it was not changed with the frame.
+- **Outer frame.** The host overlays Chromium's client view, and what happens to Chromium's frame around it depends on
+  who decorates the window. The rule is `CompositorDecorates` (`ac_linux_window_corners.h`): the compositor answered
+  xdg-decoration with server-side, or `XDG_CURRENT_DESKTOP` names a tiling desktop (the same list the shell's
+  `tilingDesktop.ts` uses: hyprland, sway, niri, i3, river, dwl, bspwm, awesome, qtile, xmonad, dwm, herbstluftwm,
+  regolith). Chromium asks for client-side decorations; measured on the test desktops, Hyprland 0.56 answers
+  server-side anyway, and Mutter (GNOME) has no xdg-decoration at all. KWin is expected to honour the client-side
+  request (not measured here), so KDE keeps Chromium's frame. `chromium-linux-borderless-frame.patch` has `XdgToplevel` record the answer
+  (`g_ardia_linux_compositor_decoration_mode`) and tell the host when it arrives, since the first window can map before
+  the host starts.
+  - Where the app decorates (GNOME, KDE, other floating desktops): Chromium's frame stays, with the shadow, outline
+    and corner shape its theme gives it (GTK's own decoration when the GTK frame is in use, which renders a sample to
+    measure the radius). The host clips its UI to that shape, like `overflow: clip` with the frame's `border-radius`:
+    `RoundWindowCorners` takes `GetWindowRoundedCorners()` from the frame view, which is square when the window is
+    maximized, tiled or full screen, and applies it to the shell's native view, the curtain and, for Settings and
+    Import, the background. Each page and DevTools view gets the window's corner where its own corner sits on a window
+    corner, and the 12 px card radius elsewhere (`ClipToWindow`), so a page that fills the window (page full screen,
+    no page frame) never shows rounded corners the window doesn't have. The corners follow every layout, theme change,
+    window-state change and frame refresh.
+  - Where the compositor decorates (Hyprland, sway, …): `g_ardia_linux_borderless_frame` answers true for every window
+    the host owns (main, Little Ardia, Settings, Import), and the frame view and its layout report no border, input or
+    shadow insets and no corner radius and paint no frame, so the client area is the whole window and the compositor
+    rounds, clips and shadows it. The host calls `RefreshEngineFrame` once a window is its own and again when the
+    decision changes. Edge resizing stays: in a window that can be resized, a thin band along the edges answers as a
+    resize border (`NonClientHitTest`); Import, which can't be resized, keeps its edges for its content. On X11 Chrome
+    maps its startup window before the host starts and sets `_GTK_FRAME_EXTENTS` from the frame insets it had then;
+    the host's `FrameTypeChanged` has X11 rewrite the property (`X11Extension::RefreshDecorationInsets`).
+  - Known limits: if sway or niri honour the client-side request (not measured here), a floating window there gets
+    no frame from either side. `windowCornerRadius` still answers a fixed 19 on Linux (`apps/linux/src/shellMethods.ts`).
 - **Menu button.** Linux has no global menu bar, so a menu button stands in for the Mac one: usually the `…` beside the
   window buttons, and a hamburger in the header only while they're hidden (Window controls above). It lists Ardia,
   File, Edit, View, Tabs, Bookmarks, History, Extensions, Window and Help as submenus built from the same menu

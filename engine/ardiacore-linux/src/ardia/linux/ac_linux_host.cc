@@ -99,6 +99,7 @@
 #include "ardia/linux/ac_linux_site_controls_service.h"
 #include "ardia/linux/ac_linux_window_caption.h"
 #include "ardia/linux/ac_linux_window_commands.h"
+#include "ardia/linux/ac_linux_window_corners.h"
 #include "ardia/linux/ac_linux_window_state.h"
 #include "ardia/linux/ac_linux_window_lifecycle.h"
 #include "ardia/linux/ac_linux_favicons.h"
@@ -323,6 +324,8 @@ extern bool (*g_ardia_linux_automation_window)(const BrowserWindowInterface*);
 extern int (*g_ardia_linux_window_tab_count)(const BrowserWindowInterface*);
 extern bool (*g_ardia_linux_frameless_app)(const std::string& app_name);
 extern bool (*g_ardia_linux_borderless_frame)(const BrowserWindowInterface*);
+extern int g_ardia_linux_compositor_decoration_mode;
+extern void (*g_ardia_linux_compositor_decoration_changed)();
 extern bool (*g_ardia_linux_shell_passes_point)(gfx::NativeView child, const gfx::Point& location);
 extern void (*g_ardia_linux_tiled_edges_changed)(views::Widget* widget);
 
@@ -1436,6 +1439,7 @@ class ShellHostView : public views::View,
   linux_window_state::NativeWindow NativeWindowFacts() const;
   linux_window_state::WindowState NativeWindowState() const;
   void ScheduleWindowStateReport();
+  void RefreshEngineFrame();
   PrefService* WindowOutputPrefs() const;
   void RememberWindowOutput();
   void ForgetWindowOutput();
@@ -1695,9 +1699,9 @@ class ShellHostView : public views::View,
   void ReportWindowGeometry();
   void ReportWindowState();
   void LayoutOverlay();
-  void RoundUtilityCorners();
+  void RoundWindowCorners();
+  void ClipViewport(views::WebView* view);
   void HideCaptionButtons();
-  void RefreshEngineFrame();
   void ShellPainted();
   void LiftCurtain();
   void ReattachViewports();
@@ -1727,7 +1731,7 @@ class ShellHostView : public views::View,
   std::vector<gfx::Rect> shell_pass_;
   std::unique_ptr<ShellTransparency> shell_transparency_;
   raw_ptr<views::View> curtain_ = nullptr;
-  gfx::RoundedCornersF utility_corners_;
+  std::optional<linux_window_corners::Corners> window_corners_;
   base::OneShotTimer curtain_timer_;
   raw_ptr<HostMessageHandler> handler_ = nullptr;
   uint64_t renderer_generation_ = 0;
@@ -3362,22 +3366,45 @@ void ShellHostView::LayoutOverlay() {
   shell_->SetBoundsRect(GetLocalBounds());
   if (glass_) glass_->SetBoundsRect(GetLocalBounds());
   if (curtain_) curtain_->SetBoundsRect(GetLocalBounds());
-  RoundUtilityCorners();
+  RoundWindowCorners();
   browser_view_->GetActiveContentsWebView()->SetVisible(false);
   if (extension_surfaces_) extension_surfaces_->Relayout();
   Restack();
   HideCaptionButtons();
 }
 
-void ShellHostView::RoundUtilityCorners() {
-  if (!is_utility() || !browser_view_->browser_widget()) return;
+gfx::RoundedCornersF RoundedCorners(const linux_window_corners::Corners& corners) {
+  return gfx::RoundedCornersF(corners.upper_left, corners.upper_right, corners.lower_right, corners.lower_left);
+}
+
+void ShellHostView::RoundWindowCorners() {
+  if (!browser_view_ || !browser_view_->browser_widget()) return;
   BrowserFrameView* frame = browser_view_->browser_widget()->GetFrameView();
-  const gfx::RoundedCornersF corners = frame ? frame->GetWindowRoundedCorners() : gfx::RoundedCornersF();
-  if (corners == utility_corners_) return;
-  utility_corners_ = corners;
-  SetBackground(views::CreateRoundedRectBackground(kColorWebContentsBackground, corners));
-  shell_->holder()->SetNativeViewCornerRadii(corners);
-  if (curtain_) curtain_->layer()->SetRoundedCornerRadius(corners);
+  const gfx::RoundedCornersF frame_corners = frame ? frame->GetWindowRoundedCorners() : gfx::RoundedCornersF();
+  const linux_window_corners::Corners corners{
+      .upper_left = frame_corners.upper_left(),
+      .upper_right = frame_corners.upper_right(),
+      .lower_right = frame_corners.lower_right(),
+      .lower_left = frame_corners.lower_left(),
+  };
+  if (window_corners_ == corners) return;
+  window_corners_ = corners;
+  const gfx::RoundedCornersF rounded = RoundedCorners(corners);
+  if (is_utility()) SetBackground(views::CreateRoundedRectBackground(kColorWebContentsBackground, rounded));
+  shell_->holder()->SetNativeViewCornerRadii(rounded);
+  if (curtain_) curtain_->layer()->SetRoundedCornerRadius(rounded);
+  for (const auto& [id, binding] : bindings_) {
+    ClipViewport(binding->viewport());
+    ClipViewport(binding->devtools_viewport());
+  }
+}
+
+void ShellHostView::ClipViewport(views::WebView* view) {
+  if (!view || view->parent() != this) return;
+  const gfx::Rect bounds = view->bounds();
+  view->holder()->SetNativeViewCornerRadii(RoundedCorners(linux_window_corners::ClipToWindow(
+      {.x = bounds.x(), .y = bounds.y(), .width = bounds.width(), .height = bounds.height()}, width(), height(),
+      window_corners_.value_or(linux_window_corners::Corners()), linux_window_corners::kPageCardRadius)));
 }
 
 void ShellHostView::ShellPainted() {
@@ -3412,11 +3439,12 @@ void ShellHostView::RefreshEngineFrame() {
   frame->InvalidateLayout();
   frame->SchedulePaint();
   HideCaptionButtons();
+  RoundWindowCorners();
 }
 
 void ShellHostView::OnWidgetThemeChanged(views::Widget*) {
   HideCaptionButtons();
-  if (browser_view_) RoundUtilityCorners();
+  if (browser_view_) RoundWindowCorners();
 }
 
 void ShellHostView::OnViewIsDeleting(views::View*) {
@@ -4634,6 +4662,7 @@ void ShellHostView::ScheduleWindowStateReport() {
 void ShellHostView::ReportWindowState() {
   window_state_report_pending_ = false;
   if (!GetWidget()) return;
+  RoundWindowCorners();
   const linux_window_state::WindowState state = settled_window_state_.Settle(NativeWindowFacts());
   if (window_id_.empty() || reported_window_state_ == state) return;
   reported_window_state_ = state;
@@ -4644,6 +4673,12 @@ void ShellHostView::ReportWindowState() {
 std::string CurrentDesktop() {
   const std::optional<std::string> desktop = base::Environment::Create()->GetVar("XDG_CURRENT_DESKTOP");
   return desktop && linux_window_state::ReportableToolkitString(*desktop) ? *desktop : std::string();
+}
+
+bool CompositorDecorates() {
+  static const base::NoDestructor<std::string> desktop(CurrentDesktop());
+  return linux_window_corners::CompositorDecorates(
+      linux_window_corners::DecorationAnswerOf(g_ardia_linux_compositor_decoration_mode), *desktop);
 }
 
 base::Value WindowButtonLayoutValue() {
@@ -5171,7 +5206,7 @@ void ShellHostView::LayoutPane(TabBinding* binding) {
   if (visible) {
     owner_view->GetActiveContentsWebView()->SetWebContents(nullptr);
     page->SetWebContents(contents);
-    page->holder()->SetNativeViewCornerRadii(gfx::RoundedCornersF(12.0f));
+    ClipViewport(page);
     ardiacore::NoteTabInShownSlot(contents);
   } else {
     page->SetWebContents(nullptr);
@@ -5208,7 +5243,7 @@ void ShellHostView::LayoutPane(TabBinding* binding) {
   if (reattach) tools->SetWebContents(nullptr);
   tools->SetWebContents(devtools);
   if (auto* native = devtools->GetNativeView(); native && !native->IsVisible()) native->Show();
-  tools->holder()->SetNativeViewCornerRadii(gfx::RoundedCornersF(12.0f));
+  ClipViewport(tools);
   const size_t page_index = GetIndexOf(page).value();
   const size_t tools_index = GetIndexOf(tools).value();
   if (strategy.hide_inspected_contents() ? tools_index < page_index : tools_index > page_index)
@@ -8428,7 +8463,14 @@ void StartLinuxHost() {
   g_ardia_linux_is_companion = [](const BrowserWindowInterface* browser) { return IsCompanion(browser); };
   g_ardia_linux_frameless_app = &IsUtilityAppName;
   g_ardia_linux_borderless_frame = [](const BrowserWindowInterface* browser) {
-    return browser && Hosts().contains(browser->GetSessionID().id());
+    return browser && Hosts().contains(browser->GetSessionID().id()) && CompositorDecorates();
+  };
+  g_ardia_linux_compositor_decoration_changed = [] {
+    static std::optional<bool> followed;
+    const bool decorates = CompositorDecorates();
+    if (followed == decorates) return;
+    followed = decorates;
+    for (const auto& [id, host] : Hosts()) host->RefreshEngineFrame();
   };
   g_ardia_linux_automation_window = &ardiacore::IsLinuxAutomationWindow;
   g_ardia_linux_shell_passes_point = [](gfx::NativeView child, const gfx::Point& location) {

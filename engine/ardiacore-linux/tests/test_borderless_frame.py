@@ -1,3 +1,4 @@
+import re
 import shutil
 import subprocess
 import tempfile
@@ -10,199 +11,28 @@ PATCHES = ROOT.parent / 'patches'
 PATCH = PATCHES / 'chromium-linux-borderless-frame.patch'
 FRAMELESS = PATCHES / 'chromium-linux-frameless-utility-windows.patch'
 FRAME = 'chrome/browser/ui/views/frame/'
-BROWSER_VIEW = FRAME + 'browser_view.cc'
 
-GLOBALS_157 = '''int (*g_ardia_linux_window_tab_count)(const BrowserWindowInterface*) = nullptr;
-bool (*g_ardia_linux_shell_passes_point)(gfx::NativeView child,
-                                         const gfx::Point& location) = nullptr;
-void (*g_ardia_linux_minimum_size)(const BrowserWindowInterface*,
-                                   gfx::Size* minimum) = nullptr;
-
-namespace {
-
-bool ArdiaLinuxBackgroundInstance() {
-'''
-TITLE_157 = '''  return nullptr;
-}
-
-bool BrowserView::ShouldShowWindowTitle() const {
-  return WindowFeatureController::From(browser_)->SupportsWindowFeature(
-      WindowFeatureController::WindowFeature::kFeatureTitleBar);
-}
-
-bool BrowserView::ShouldShowWindowIcon() const {
-'''
-
-LAYOUT_CC = [
-    (10, r'''#include "ui/gfx/geometry/insets.h"
-#include "ui/views/window/frame_view_utils_linux.h"
-
-namespace {
-
-// This is the same thickness as the resize border on ChromeOS.
-'''),
-    (35, r'''}
-
-gfx::Insets BrowserFrameViewLayoutLinux::GetInputInsets() const {
-  bool showing_shadow = delegate_->ShouldDrawRestoredFrameShadow() &&
-                        !delegate_->IsFrameCondensed();
-  return gfx::Insets(showing_shadow ? kResizeBorder : 0);
-'''),
-    (46, r'''}
-
-gfx::Insets BrowserFrameViewLayoutLinux::RestoredFrameBorderInsets() const {
-  // Unframed mode only has a minimal frame so it is resizable from the borders.
-  if (delegate_->GetUnframedModeEnabled()) {
-    return gfx::Insets(
-'''),
-    (74, r'''int BrowserFrameViewLayoutLinux::NonClientExtraTopThickness() const {
-  return delegate_->IsTabStripVisible() ? 0 : kExtraTopBorder;
-}
-'''),
-]
-
-LAYOUT_H = [
-    (36, r'''  gfx::Insets RestoredFrameEdgeInsets() const override;
-  int NonClientExtraTopThickness() const override;
-
- private:
-  raw_ptr<BrowserFrameViewLinux> view_ = nullptr;
-};
-'''),
-]
-
-LAYOUT_NATIVE_CC = [
-    (39, r'''
-gfx::Insets BrowserFrameViewLayoutLinuxNative::RestoredFrameBorderInsets()
-    const {
-  // Unframed mode only has a minimal frame to be able to resize it from the
-  // borders.
-  if (delegate_->GetUnframedModeEnabled()) {
-'''),
-]
-
-VIEW_CC = [
-    (19, r'''#include "ui/views/window/frame_view_utils_linux.h"
-#include "ui/views/window/window_button_order_provider.h"
-
-namespace {
-
-// The resize border at the top of the caption area. Only used when frame
-'''),
-    (70, r'''
-void BrowserFrameViewLinux::PaintRestoredFrameBorder(
-    gfx::Canvas* canvas) const {
-#if BUILDFLAG(IS_LINUX)
-  const bool tiled = browser_widget()->tiled();
-#else
-'''),
-    (90, r'''}
-
-bool BrowserFrameViewLinux::ShouldDrawRestoredFrameShadow() const {
-  return static_cast<BrowserNativeWidgetAuraLinux*>(
-             browser_widget()->browser_native_widget())
-      ->ShouldDrawRestoredFrameShadow();
-'''),
-    (114, r'''}
-
-int BrowserFrameViewLinux::NonClientHitTest(const gfx::Point& point) {
-  int frame_component = OpaqueBrowserFrameView::NonClientHitTest(point);
-  // Allow resizing at the top of the caption area. This is only done when
-  // shadows are not drawn, since the resize area is on the shadows otherwise.
-'''),
-    (125, r'''}
-
-float BrowserFrameViewLinux::GetRestoredCornerRadiusDip() const {
-#if BUILDFLAG(IS_LINUX)
-  const bool tiled = browser_widget()->tiled();
-#else
-'''),
-]
-
-VIEW_NATIVE_CC = [
-    (11, r'''#include "ui/views/window/frame_background.h"
-#include "ui/views/window/frame_view_utils_linux.h"
-
-BrowserFrameViewLinuxNative::BrowserFrameViewLinuxNative(
-    BrowserWidget* widget,
-    BrowserView* browser_view,
-'''),
-    (52, r'''}
-
-float BrowserFrameViewLinuxNative::GetRestoredCornerRadiusDip() const {
-  return layout_->GetFrameProvider()->GetTopCornerRadiusDip();
-}
-
-void BrowserFrameViewLinuxNative::PaintRestoredFrameBorder(
-    gfx::Canvas* canvas) const {
-  layout_->GetFrameProvider()->PaintWindowFrame(
-      canvas, GetLocalBounds(), GetTopAreaHeight(), ShouldPaintAsActive(),
-      GetInputInsets());
-'''),
-]
-
-HOST_LINUX_CC = [
-    (118, r'''void BrowserDesktopWindowTreeHostLinux::FrameTypeChanged() {
-  DesktopWindowTreeHostPlatform::FrameTypeChanged();
-  UpdateFrameHints();
-}
-
-void BrowserDesktopWindowTreeHostLinux::TabDraggingKindChanged(
-'''),
-]
-
-X11_WINDOW_CC = [
-    (1340, r'''
-bool X11Window::IsWmSyncActiveForTest() {
-  return bounds_wm_sync_.get();
-}
-
-bool X11Window::HandleAsAtkEvent(const x11::Event& event) {
-'''),
-]
-
-X11_WINDOW_H = [
-    (155, r'''  bool CanResetOverrideRedirect() const override;
-  void SetX11ExtensionDelegate(X11ExtensionDelegate* delegate) override;
-  bool IsWmSyncActiveForTest() override;
-
-  // x11::EventObserver:
-  void OnEvent(const x11::Event& event) override;
-'''),
-]
-
-X11_EXTENSION_H = [
-    (49, r'''  // Indicates whether a WmSync is pending. Should only be used for testing.
-  virtual bool IsWmSyncActiveForTest() = 0;
-
- protected:
-  virtual ~X11Extension();
-
-'''),
-]
-
-X11_FILES = {
-    'chrome/browser/ui/views/frame/browser_desktop_window_tree_host_linux.cc': HOST_LINUX_CC,
-    'ui/ozone/platform/x11/x11_window.cc': X11_WINDOW_CC,
-    'ui/ozone/platform/x11/x11_window.h': X11_WINDOW_H,
-    'ui/platform_window/extensions/x11_extension.h': X11_EXTENSION_H,
-}
-
-FRAME_FILES = {
-    'browser_frame_view_layout_linux.cc': LAYOUT_CC,
-    'browser_frame_view_layout_linux.h': LAYOUT_H,
-    'browser_frame_view_layout_linux_native.cc': LAYOUT_NATIVE_CC,
-    'browser_frame_view_linux.cc': VIEW_CC,
-    'browser_frame_view_linux_native.cc': VIEW_NATIVE_CC,
-}
+HUNK = re.compile(r'^@@ -(\d+)(?:,\d+)? \+\d+(?:,\d+)? @@')
 
 
-def at_real_lines(fragments):
-    lines = []
-    for start, text in fragments:
-        lines.extend([''] * (start - 1 - len(lines)))
-        lines.extend(text.splitlines())
-    return '\n'.join(lines) + '\n'
+def preimages(patch_text):
+    files = {}
+    lines = None
+    position = 0
+    for line in patch_text.splitlines():
+        if line.startswith('--- a/'):
+            lines = files.setdefault(line[len('--- a/'):], {})
+            continue
+        if lines is None or line.startswith('+++ '):
+            continue
+        hunk = HUNK.match(line)
+        if hunk:
+            position = int(hunk.group(1))
+        elif line.startswith((' ', '-')) or line == '':
+            lines[position] = line[1:]
+            position += 1
+    return {path: '\n'.join(lines.get(number, '') for number in range(1, max(lines) + 1)) + '\n'
+            for path, lines in files.items()}
 
 
 class BorderlessFrameTests(unittest.TestCase):
@@ -218,24 +48,14 @@ class BorderlessFrameTests(unittest.TestCase):
         self.assertTrue(PATCH.exists(), f'{PATCH.name} is missing')
         with tempfile.TemporaryDirectory(prefix='ardia-borderless-') as directory:
             root = Path(directory)
-            view = root / BROWSER_VIEW
-            view.parent.mkdir(parents=True)
-            view.write_text('\n' * 431 + GLOBALS_157 + '\n' * 3580 + TITLE_157)
-            for name, fragments in FRAME_FILES.items():
-                (root / FRAME / name).write_text(at_real_lines(fragments))
-            for path, fragments in X11_FILES.items():
+            before = preimages(PATCH.read_text())
+            for path, text in before.items():
                 (root / path).parent.mkdir(parents=True, exist_ok=True)
-                (root / path).write_text(at_real_lines(fragments))
-            for patch, only in ((FRAMELESS, BROWSER_VIEW), (PATCH, None)):
-                command = ['git', 'apply', '--whitespace=nowarn']
-                if only:
-                    command.append(f'--include={only}')
-                result = subprocess.run(command + [str(patch)], cwd=directory, capture_output=True, text=True,
-                                        timeout=30)
-                self.assertEqual(result.returncode, 0, f'{patch.name}: {result.stderr}')
-            files = {name: (root / FRAME / name).read_text() for name in [*FRAME_FILES, 'browser_view.cc']}
-            files.update({path: (root / path).read_text() for path in X11_FILES})
-            return files
+                (root / path).write_text(text)
+            result = subprocess.run(['git', 'apply', '--whitespace=nowarn', str(PATCH)], cwd=directory,
+                                    capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, f'{PATCH.name}: {result.stderr}')
+            return {path.removeprefix(FRAME): (root / path).read_text() for path in before}
 
     def test_the_patch_is_linux_only_and_after_the_frameless_patch(self):
         steps = [line.split() for line in (PATCHES / 'series').read_text().splitlines() if line.startswith('chromium ')]
@@ -246,16 +66,25 @@ class BorderlessFrameTests(unittest.TestCase):
         self.assertGreater(at, names.index(FRAMELESS.name))
         self.assertEqual(names.count(PATCH.name), 1)
 
-    def test_the_hook_names_the_hosted_windows(self):
+    def test_the_hook_alone_names_the_borderless_windows(self):
         view = self.patched()['browser_view.cc']
         self.contains('bool (*g_ardia_linux_borderless_frame)(const BrowserWindowInterface*) = nullptr;\n', view)
         self.contains('bool ArdiaLinuxBorderlessFrame(const BrowserView* browser_view) {\n'
                       '  if (!g_ardia_linux_borderless_frame || !browser_view) {\n    return false;\n  }\n'
                       '  const BrowserWindowInterface* browser = browser_view->browser();\n'
-                      '  return browser && (ArdiaLinuxFramelessApp(browser) ||\n'
-                      '                     g_ardia_linux_borderless_frame(browser));\n}\n', view)
-        self.assertLess(view.index('bool ArdiaLinuxFramelessApp(const BrowserWindowInterface* browser) {'),
-                        view.index('bool ArdiaLinuxBorderlessFrame(const BrowserView* browser_view) {'))
+                      '  return browser && g_ardia_linux_borderless_frame(browser);\n}\n', view)
+        self.assertNotIn('ArdiaLinuxFramelessApp(browser) ||', PATCH.read_text())
+
+    def test_wayland_records_the_compositors_decoration_answer_and_tells_the_host(self):
+        toplevel = self.patched()['ui/ozone/platform/wayland/host/xdg_toplevel.cc']
+        self.contains('int g_ardia_linux_compositor_decoration_mode = 0;\n'
+                      'void (*g_ardia_linux_compositor_decoration_changed)() = nullptr;\n\nnamespace ui {\n', toplevel)
+        self.contains('  self->decoration_mode_ = ToDecorationMode(mode);\n'
+                      '  g_ardia_linux_compositor_decoration_mode = static_cast<int>(mode);\n'
+                      '  if (g_ardia_linux_compositor_decoration_changed) {\n'
+                      '    g_ardia_linux_compositor_decoration_changed();\n  }\n}\n', toplevel)
+        self.contains('extern int g_ardia_linux_compositor_decoration_mode;', self.host)
+        self.contains('extern void (*g_ardia_linux_compositor_decoration_changed)();', self.host)
 
     def test_the_frame_layout_gives_the_client_the_whole_window(self):
         files = self.patched()
@@ -318,16 +147,23 @@ class BorderlessFrameTests(unittest.TestCase):
                       '  DesktopWindowTreeHostPlatform::FrameTypeChanged();\n  UpdateFrameHints();\n'
                       '  if (auto* x11_extension = GetX11Extension()) {\n'
                       '    x11_extension->RefreshDecorationInsets();\n  }\n}\n',
-                      files['chrome/browser/ui/views/frame/browser_desktop_window_tree_host_linux.cc'])
+                      files['browser_desktop_window_tree_host_linux.cc'])
         refresh = self.host[self.host.index('void ShellHostView::RefreshEngineFrame() {'):]
         self.contains('GetWidget()->FrameTypeChanged();', refresh[:refresh.index('\n}\n')])
 
-    def test_the_host_names_every_window_it_owns(self):
+    def test_the_host_drops_the_frame_only_where_the_compositor_decorates(self):
         self.contains('extern bool (*g_ardia_linux_borderless_frame)(const BrowserWindowInterface*);', self.host)
         self.contains('g_ardia_linux_borderless_frame = [](const BrowserWindowInterface* browser) {\n'
-                      '    return browser && Hosts().contains(browser->GetSessionID().id());\n  };', self.host)
-        self.assertLess(self.host.index('g_ardia_linux_frameless_app = &IsUtilityAppName;'),
-                        self.host.index('g_ardia_linux_borderless_frame = '))
+                      '    return browser && Hosts().contains(browser->GetSessionID().id()) && CompositorDecorates();\n  };',
+                      self.host)
+        decides = self.host[self.host.index('bool CompositorDecorates() {'):]
+        decides = decides[:decides.index('\n}\n')]
+        self.contains('static const base::NoDestructor<std::string> desktop(CurrentDesktop());', decides)
+        self.contains('DecorationAnswerOf(g_ardia_linux_compositor_decoration_mode), *desktop', decides)
+        changed = self.host[self.host.index('g_ardia_linux_compositor_decoration_changed = [] {'):]
+        changed = changed[:changed.index('\n  };\n')]
+        self.assertLess(changed.index('if (followed == decorates) return;'),
+                        changed.index('for (const auto& [id, host] : Hosts()) host->RefreshEngineFrame();'))
 
     def test_the_host_lays_the_frame_out_again_once_the_window_is_its_own(self):
         initialize = self.host[self.host.index('void ShellHostView::Initialize() {'):]

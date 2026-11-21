@@ -1,15 +1,16 @@
 The Ardia Linux host draws the whole window itself: its sidebar and page card sit on the BrowserView, and it hides the
-caption buttons. Chromium's custom Linux frame still wrapped that view in a themed band with a resize and shadow border,
-a rounded clip and a window-coloured frame, so on a compositor that draws no title bar (Hyprland) every Ardia window had
-a thick border with its own corners outside the sidebar and the page card. The host names its windows through
-g_ardia_linux_borderless_frame; for those windows the frame view and its layout report no border, input or shadow
-insets and no corner radius, and paint no frame, so the client area is the whole window. A thin band along the edges
-still answers as a resize border so a window can be resized where the compositor draws none. Settings and Import
-(g_ardia_linux_frameless_app) count as hosted too. The hook is null outside the Linux host.
+caption buttons. Where the compositor decorates windows itself (it answers xdg-decoration with server-side, as Hyprland
+does, or the desktop is a tiling one), Chromium's custom Linux frame only adds a themed band with its own shadow and
+rounded corners inside the compositor's. The host names those windows through g_ardia_linux_borderless_frame; for them
+the frame view and its layout report no border, input or shadow insets and no corner radius, and paint no frame, so
+the client area is the whole window. A thin band along the edges still answers as a resize border so a window can be
+resized where the compositor draws none. The hook is null outside the Linux host. XdgToplevel records the
+compositor's last xdg-decoration answer in g_ardia_linux_compositor_decoration_mode and tells the host through
+g_ardia_linux_compositor_decoration_changed.
 Chrome maps its startup window before the host starts, so X11 sets _GTK_FRAME_EXTENTS from the frame insets it had
 then and rewrites it only on a window state change. When the host lays the frame out again (FrameTypeChanged), the
 browser's window tree host now asks X11 for the insets once more through X11Extension::RefreshDecorationInsets, so
-a window manager that honours the property sees none. Wayland has no X11 extension and is unchanged.
+a window manager that honours the property sees none.
 --- a/chrome/browser/ui/views/frame/browser_frame_view_layout_linux.cc
 +++ b/chrome/browser/ui/views/frame/browser_frame_view_layout_linux.cc
 @@ -12,6 +12,10 @@
@@ -167,7 +168,7 @@ a window manager that honours the property sees none. Wayland has no X11 extensi
        GetInputInsets());
 --- a/chrome/browser/ui/views/frame/browser_view.cc
 +++ b/chrome/browser/ui/views/frame/browser_view.cc
-@@ -447,6 +447,19 @@
+@@ -447,6 +447,18 @@
    return init && g_ardia_linux_frameless_app(init->create_params().app_name);
  }
  
@@ -180,8 +181,7 @@ a window manager that honours the property sees none. Wayland has no X11 extensi
 +    return false;
 +  }
 +  const BrowserWindowInterface* browser = browser_view->browser();
-+  return browser && (ArdiaLinuxFramelessApp(browser) ||
-+                     g_ardia_linux_borderless_frame(browser));
++  return browser && g_ardia_linux_borderless_frame(browser);
 +}
 +
  namespace {
@@ -233,3 +233,26 @@ a window manager that honours the property sees none. Wayland has no X11 extensi
   protected:
    virtual ~X11Extension();
  
+--- a/ui/ozone/platform/wayland/host/xdg_toplevel.cc
++++ b/ui/ozone/platform/wayland/host/xdg_toplevel.cc
+@@ -34,6 +34,9 @@
+ #include "ui/ozone/platform/wayland/host/wayland_window.h"
+ #include "ui/ozone/platform/wayland/host/xdg_surface.h"
+ 
++int g_ardia_linux_compositor_decoration_mode = 0;
++void (*g_ardia_linux_compositor_decoration_changed)() = nullptr;
++
+ namespace ui {
+ 
+ namespace {
+@@ -296,6 +299,10 @@
+   auto* self = static_cast<XdgToplevel*>(data);
+   DCHECK(self);
+   self->decoration_mode_ = ToDecorationMode(mode);
++  g_ardia_linux_compositor_decoration_mode = static_cast<int>(mode);
++  if (g_ardia_linux_compositor_decoration_changed) {
++    g_ardia_linux_compositor_decoration_changed();
++  }
+ }
+ 
+ void XdgToplevel::SetTopLevelDecorationMode(DecorationMode requested_mode) {

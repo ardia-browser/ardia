@@ -367,6 +367,7 @@ class ShellHostView : public views::View {
   void OnDevToolsDockChanged(content::WebContents* inspected, content::WebContents* devtools);
   void HideDevToolsViewport(TabBinding* binding);
   void Restack() { restacks++; }
+  void ClipViewport(views::WebView* view) { clipped.push_back(view); }
   TabBinding* Binding(int id) {
     for (auto& binding : bindings) {
       if (TabId(binding->contents()) == id) return binding.get();
@@ -431,6 +432,7 @@ class ShellHostView : public views::View {
   int* handler_ = &handler_storage;
   uint64_t renderer_generation_ = 1;
   int restacks = 0;
+  std::vector<views::WebView*> clipped;
   base::WeakPtrFactory<ShellHostView> weak{this};
 };
 

@@ -135,14 +135,13 @@ class FramelessUtilityWindowTests(unittest.TestCase):
 
     def test_a_utility_window_rounds_its_page_with_the_frame(self):
         overlay = self.host[self.host.index('void ShellHostView::LayoutOverlay() {'):self.host.index('void ShellHostView::ShellPainted() {')]
-        self.assertIn('  RoundUtilityCorners();\n', overlay)
-        self.assertIn('if (!is_utility() || !browser_view_->browser_widget()) return;', overlay)
+        self.assertIn('  RoundWindowCorners();\n', overlay)
         self.assertIn('frame ? frame->GetWindowRoundedCorners() : gfx::RoundedCornersF();', overlay)
-        self.assertIn('SetBackground(views::CreateRoundedRectBackground(kColorWebContentsBackground, corners));', overlay)
-        self.assertIn('shell_->holder()->SetNativeViewCornerRadii(corners);', overlay)
-        self.assertIn('if (curtain_) curtain_->layer()->SetRoundedCornerRadius(corners);', overlay)
+        self.assertIn('if (is_utility()) SetBackground(views::CreateRoundedRectBackground(kColorWebContentsBackground, rounded));', overlay)
+        self.assertIn('shell_->holder()->SetNativeViewCornerRadii(rounded);', overlay)
+        self.assertIn('if (curtain_) curtain_->layer()->SetRoundedCornerRadius(rounded);', overlay)
         theme = self.host[self.host.index('void ShellHostView::OnWidgetThemeChanged(views::Widget*) {'):]
-        self.assertIn('  if (browser_view_) RoundUtilityCorners();\n}', theme[:theme.index('\n}\n') + 3])
+        self.assertIn('  if (browser_view_) RoundWindowCorners();\n}', theme[:theme.index('\n}\n') + 3])
 
     def test_a_utility_window_opens_over_its_opener(self):
         opening = self.host[self.host.index('if (method == "ArdiaShell.openWindow") {'):self.host.index('if (method == "ArdiaShell.isDarkAppearance") {')]

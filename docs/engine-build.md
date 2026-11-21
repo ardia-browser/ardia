@@ -279,6 +279,13 @@ Everything else Chrome writes (component updater, caches, extension installs) go
 `MacAppCodeSignClone` is disabled (`ArdiaHost+Launch.mm`). `scripts/release.sh` launches the exported app once and verifies
 the signature again, so a new writer fails the release.
 
+`AperitifHelpers` (on by default since Chromium 157) is disabled too (`ArdiaHost+Launch.mm`), so helpers run as
+`Chromium Helper`, `Chromium Helper (Renderer)` and so on. Under it the network service ran as `Chromium Helper (Aperitif)`,
+which macOS cuts to the 16-character process name `Chromium Helper ` (a trailing space), so `netstat` prints
+`Chromium Helper :<pid>`. Desktop apps that identify the browser behind a localhost connection by parsing that column
+couldn't read the pid and refused the connection (#2033). Google Chrome's helpers cut to `Google Chrome He` and aren't
+affected.
+
 ## ArdiaCore's layer: `//ardia/core`
 
 ArdiaCore (`docs/ardiacore-spike.md`) is our own layer over Chrome. `engine/ardiacore/apply.sh` copies `engine/ardiacore/src` to

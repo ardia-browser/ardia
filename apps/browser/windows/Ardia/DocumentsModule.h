@@ -250,6 +250,19 @@ class DocumentStore {
     return contents;
   }
 
+  static bool Exists(std::string_view name) noexcept {
+    auto url = Url(name);
+    if (!url) return false;
+    std::wstring key = url->filename().wstring();
+    {
+      std::lock_guard<std::mutex> guard(State().mutex);
+      if (State().staged.find(key) != State().staged.end()) return true;
+      if (State().removing.contains(key)) return false;
+    }
+    std::error_code ignored;
+    return std::filesystem::exists(*url, ignored);
+  }
+
   static bool Write(std::string_view name, std::string contents, Done done = nullptr) noexcept {
     auto url = Url(name);
     if (!url) {
@@ -463,6 +476,9 @@ REACT_MODULE(DocumentsModule, L"ArdiaDocuments")
 struct DocumentsModule {
   REACT_SYNC_METHOD(readDocument)
   std::optional<std::string> readDocument(std::string name) noexcept { return DocumentStore::Read(name); }
+
+  REACT_SYNC_METHOD(documentExists)
+  bool documentExists(std::string name) noexcept { return DocumentStore::Exists(name); }
 
   REACT_SYNC_METHOD(writeDocument)
   bool writeDocument(std::string name, std::string contents) noexcept { return DocumentStore::Write(name, std::move(contents)); }

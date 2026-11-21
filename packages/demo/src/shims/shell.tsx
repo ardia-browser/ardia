@@ -69,6 +69,7 @@ let appearance: "auto" | "light" | "dark" = "auto";
 
 provideNativeModule("ArdiaDocuments", {
   readDocument: (name: string) => documents.get(name) ?? null,
+  documentExists: (name: string) => documents.has(name),
   writeDocument: (name: string, contents: string) => void documents.set(name, contents),
   saveDocument: async (name: string, contents: string) => void documents.set(name, contents),
   removeDocument: (name: string) => void documents.delete(name),

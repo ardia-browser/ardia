@@ -37,6 +37,7 @@ const testGlobals = globalThis as { acTestUserScripts?: UserScriptsHost };
 
 export const docs = new Map<string, string>();
 export const stagedDocs = new Map<string, string>();
+export const unreadableDocs = new Set<string>();
 export const heldSaves = { on: false, queue: [] as (() => void)[] };
 export const refusedSaves = { on: false };
 export const refusedWrites = { on: false, returnsFalse: false, landingFails: false };
@@ -217,12 +218,14 @@ const dialogs: Modules["ArdiaDialogs"] = {
 };
 
 const documents: Modules["ArdiaDocuments"] = {
-  readDocument: (name) => stagedDocs.get(name) ?? docs.get(name) ?? null,
+  readDocument: (name) => (unreadableDocs.has(name) ? null : stagedDocs.get(name) ?? docs.get(name) ?? null),
+  documentExists: (name) => stagedDocs.has(name) || docs.has(name) || unreadableDocs.has(name),
   writeDocument: (name, contents) => {
     if (refusedWrites.on) throw new Error("write refused");
     if (refusedWrites.returnsFalse) return false as unknown as void;
     docs.set(name, contents);
     stagedDocs.delete(name);
+    unreadableDocs.delete(name);
   },
   saveDocument: (name, contents) =>
     new Promise((resolve, reject) => {
@@ -234,13 +237,14 @@ const documents: Modules["ArdiaDocuments"] = {
         } finally {
           if (stagedDocs.get(name) === contents) stagedDocs.delete(name);
         }
+        unreadableDocs.delete(name);
         resolve();
       };
       if (heldSaves.on) heldSaves.queue.push(land);
       else land();
     }),
   documentSaved: () => (refusedWrites.on || refusedWrites.landingFails ? Promise.reject(new Error("save refused")) : Promise.resolve()),
-  removeDocument: (name) => void (docs.delete(name), stagedDocs.delete(name)),
+  removeDocument: (name) => void (docs.delete(name), stagedDocs.delete(name), unreadableDocs.delete(name)),
 };
 
 const app: Modules["ArdiaApp"] = {

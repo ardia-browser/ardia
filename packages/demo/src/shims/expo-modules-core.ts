@@ -16,7 +16,7 @@ const moduleValues: Record<string, Record<string, unknown>> = {
   ArdiaTranslate: { available: false, userLanguages: () => ["en"], languageName: (id: string) => id },
   ArdiaGlassEffect: { isLiquidGlass: () => true },
   ArdiaShell: { copyText: () => {} },
-  ArdiaDocuments: { readDocument: () => null, writeDocument: () => {}, removeDocument: () => {} },
+  ArdiaDocuments: { readDocument: () => null, documentExists: () => false, writeDocument: () => {}, removeDocument: () => {} },
   ArdiaSystem: { fileExists: () => false, hapticTick: () => {} },
   ArdiaMenus: { menuShortcuts: async () => [] },
 };

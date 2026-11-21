@@ -29,6 +29,21 @@ export function roundedRect({ x, y, width, height }: Rect, radius: number | Radi
   return `M${n(x + tl)} ${n(y)}H${n(right - tr)}${arc(tr, right, y + tr)}V${n(bottom - br)}${arc(br, right - br, bottom)}H${n(x + bl)}${arc(bl, x, bottom - bl)}V${n(y + tl)}${arc(tl, x + tl, y)}Z`;
 }
 
+export type WindowSize = { width: number; height: number };
+
+export function windowCornerRadii(rect: Rect, window: WindowSize, radius = PAGE_CORNER_RADIUS): CornerRadii {
+  const left = rect.x <= 0.5;
+  const top = rect.y <= 0.5;
+  const right = rect.x + rect.width >= window.width - 0.5;
+  const bottom = rect.y + rect.height >= window.height - 0.5;
+  return {
+    upperLeft: top && left ? 0 : radius,
+    upperRight: top && right ? 0 : radius,
+    lowerRight: bottom && right ? 0 : radius,
+    lowerLeft: bottom && left ? 0 : radius,
+  };
+}
+
 export function holeClipPath(box: { width: number; height: number }, holes: readonly Hole[], radius = PAGE_CORNER_RADIUS, pieces: readonly HolePiece[] = []) {
   if (!holes.length && !pieces.length) return "";
   const outer = `M0 0H${n(box.width)}V${n(box.height)}H0Z`;
@@ -134,7 +149,13 @@ const clipFor = (element: HTMLElement, pages: readonly Hole[], pieces: readonly 
   return holeClipPath({ width: element.offsetWidth, height: element.offsetHeight }, localHoles(rect, scale, separate.holes), PAGE_CORNER_RADIUS, localPieces(rect, scale, [...separate.pieces, ...pieces]));
 };
 
-const holesOf = (pages: readonly PageArea[]): Hole[] => pages.map(({ rect, radii }) => (radii ? { ...rect, radii } : rect));
+export const holesOf = (pages: readonly PageArea[], window: WindowSize): Hole[] =>
+  pages.map(({ rect, radii }) => ({ ...rect, radii: radii ?? windowCornerRadii(rect, window) }));
+
+const shellViewport = (root: HTMLElement): WindowSize => ({
+  width: root.ownerDocument.documentElement.clientWidth,
+  height: root.ownerDocument.documentElement.clientHeight,
+});
 
 const stackDom: StackDom<Element> = {
   stackOf: (element) => element.closest(`[${PAGE_STACK_ATTRIBUTE}]`),
@@ -160,7 +181,7 @@ export function createPageHoles(root: HTMLElement) {
     if (element.style.getPropertyValue(name) !== value) element.style.setProperty(name, value);
   };
 
-  const holesUnder = (element: HTMLElement) => holesOf(pagesAbove(element, pages, stackDom));
+  const holesUnder = (element: HTMLElement) => holesOf(pagesAbove(element, pages, stackDom), shellViewport(root));
 
   const paintLayer = (layer: HTMLElement) => {
     const clip = clipFor(layer, holesUnder(layer), pieces());

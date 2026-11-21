@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createInputRegions, REVEAL_DEADLINE_MS, subtract } from "./inputRegions.ts";
-import { holeClipPath, localHoles, pagesAbove, paintersBeneath, separateHoles } from "./pageHoles.ts";
+import { holeClipPath, holesOf, localHoles, pagesAbove, paintersBeneath, PAGE_CORNER_RADIUS, separateHoles, windowCornerRadii } from "./pageHoles.ts";
 
 function node(rect, { children = [], pointer = true } = {}) {
   const element = { rect, children, pointer, isConnected: true, parent: null };
@@ -394,4 +394,22 @@ test("a page inside another page's hole adds no hole of its own, so the even-odd
   const split = separateHoles([pane, peek]);
   assert.deepEqual(split.holes, [pane]);
   assert.deepEqual(split.pieces, [{ rect: { x: 790, y: 96, width: 564, height: 737 }, radii: [0, 12, 12, 0] }]);
+});
+
+test("a page hole is square where it meets a window corner and keeps the card radius elsewhere", () => {
+  const window = { width: 1920, height: 1080 };
+  const square = { upperLeft: 0, upperRight: 0, lowerRight: 0, lowerLeft: 0 };
+  const card = { upperLeft: PAGE_CORNER_RADIUS, upperRight: PAGE_CORNER_RADIUS, lowerRight: PAGE_CORNER_RADIUS, lowerLeft: PAGE_CORNER_RADIUS };
+  assert.deepEqual(windowCornerRadii({ x: 0, y: 0, width: 1920, height: 1080 }, window), square);
+  assert.deepEqual(windowCornerRadii({ x: 0.3, y: -2, width: 1920.4, height: 1082 }, window), square);
+  assert.deepEqual(windowCornerRadii({ x: 8, y: 8, width: 1904, height: 1064 }, window), card);
+  assert.deepEqual(windowCornerRadii({ x: 240, y: 0, width: 1680, height: 1080 }, window), { ...card, upperRight: 0, lowerRight: 0 });
+  assert.deepEqual(windowCornerRadii({ x: 240, y: 40, width: 1680, height: 1040 }, window), { ...card, lowerRight: 0 });
+  const slot = {};
+  const own = { upperLeft: 4, upperRight: 4, lowerRight: 4, lowerLeft: 4 };
+  assert.deepEqual(holesOf([{ slot, rect: { x: 0, y: 0, width: 1920, height: 1080 } }, { slot, rect: { x: 0, y: 0, width: 1920, height: 1080 }, radii: own }], window),
+    [{ x: 0, y: 0, width: 1920, height: 1080, radii: square }, { x: 0, y: 0, width: 1920, height: 1080, radii: own }]);
+  const fullScreen = holeClipPath(window, holesOf([{ slot, rect: { x: 0, y: 0, width: 1920, height: 1080 } }], window));
+  assert.equal(fullScreen, 'path(evenodd, "M0 0H1920V1080H0Z M0 0H1920V1080H0V0Z")');
+  assert.doesNotMatch(fullScreen, /A/);
 });

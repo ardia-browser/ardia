@@ -928,7 +928,10 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
     Import, the background. Each page and DevTools view gets the window's corner where its own corner sits on a window
     corner, and the 12 px card radius elsewhere (`ClipToWindow`), so a page that fills the window (page full screen,
     no page frame) never shows rounded corners the window doesn't have. The corners follow every layout, theme change,
-    window-state change and frame refresh.
+    window-state change and frame refresh. The shell follows the same rule for the holes it cuts over pages
+    (`pageHoles.ts`, `windowCornerRadii`): a hole corner on a window corner is square, since the window's own clip
+    rounds it, and every other corner keeps the card radius, so the shell paints no rounded cover over a page that
+    fills the window (page full screen, on every desktop).
   - Where the compositor decorates (Hyprland, sway, …): `g_ardia_linux_borderless_frame` answers true for every window
     the host owns (main, Little Ardia, Settings, Import), and the frame view and its layout report no border, input or
     shadow insets and no corner radius and paint no frame, so the client area is the whole window and the compositor

@@ -9,6 +9,7 @@
 #include "GradientFailures.h"
 #include "Host.h"
 #include "MaterialEffects.h"
+#include "MaterialGrain.h"
 #include "MaterialSupport.h"
 #include "WindowManager.h"
 
@@ -26,6 +27,8 @@ struct MaterialCapabilities {
   bool inWindowBlur{false};
   REACT_FIELD(gradient)
   bool gradient{false};
+  REACT_FIELD(grain)
+  bool grain{false};
   REACT_FIELD(background)
   bool background{false};
 };
@@ -38,6 +41,46 @@ struct MaterialPath {
   std::string reason;
   REACT_FIELD(step)
   std::string step;
+};
+
+REACT_STRUCT(GrainProbe)
+struct GrainProbe {
+  REACT_FIELD(path)
+  std::string path;
+  REACT_FIELD(reason)
+  std::string reason;
+  REACT_FIELD(pixels)
+  double pixels{0};
+  REACT_FIELD(tileAlphaSum)
+  double tileAlphaSum{0};
+  REACT_FIELD(drawnAlphaSum)
+  double drawnAlphaSum{0};
+};
+
+REACT_STRUCT(GrainPathAnswer)
+struct GrainPathAnswer {
+  REACT_FIELD(path)
+  std::string path;
+  REACT_FIELD(reason)
+  std::string reason;
+  REACT_FIELD(step)
+  std::string step;
+  REACT_FIELD(brushed)
+  bool brushed{false};
+};
+
+REACT_STRUCT(GrainRecoveryProbe)
+struct GrainRecoveryProbe {
+  REACT_FIELD(path)
+  std::string path;
+  REACT_FIELD(reason)
+  std::string reason;
+  REACT_FIELD(sameSurface)
+  bool sameSurface{false};
+  REACT_FIELD(before)
+  double before{0};
+  REACT_FIELD(after)
+  double after{0};
 };
 
 REACT_MODULE(MaterialsModule, L"ArdiaMaterials")
@@ -57,6 +100,7 @@ struct MaterialsModule {
     answer.systemBackdropSupported = Materials::SystemBackdropSupported();
     answer.inWindowBlur = Materials::BlurAvailable();
     answer.gradient = Materials::GradientAvailable();
+    answer.grain = Grain::Available();
     answer.background = Materials::Background();
     return answer;
   }
@@ -135,6 +179,79 @@ struct MaterialsModule {
         }
       } catch (winrt::hresult_error const &error) {
         answer.reason = Paths::Utf8(Materials::Described(error));
+      } catch (...) {
+        answer.reason = "error";
+      }
+      promise.Resolve(answer);
+    });
+  }
+
+  REACT_SYNC_METHOD(grainPath)
+  GrainPathAnswer grainPath(std::string request) noexcept {
+    GrainPathAnswer answer;
+    const Grain::LastPath last = Grain::Last(request);
+    answer.path = last.path;
+    answer.reason = last.reason;
+    answer.step = last.texture;
+    answer.brushed = last.brushed;
+    return answer;
+  }
+
+  REACT_METHOD(probeGrain)
+  void probeGrain(std::string texture, winrt::Microsoft::ReactNative::ReactPromise<GrainProbe> promise) noexcept {
+    RunOnUI(m_context, [texture = Grain::Known(texture), promise]() noexcept {
+      GrainProbe answer;
+      answer.path = "none";
+      try {
+        auto *host = Host::Current();
+        if (!host || !host->compositor) {
+          answer.reason = "no compositor";
+        } else {
+          Grain::Tile const &tile = Grain::TileFor(texture);
+          answer.pixels = tile.side;
+          answer.tileAlphaSum = static_cast<double>(tile.alphaSum);
+          const Grain::ReadBack drawn = Grain::DrawnAlphaSum(host->compositor, texture, tile.side);
+          answer.drawnAlphaSum = static_cast<double>(drawn.alphaSum);
+          answer.reason = Paths::Utf8(drawn.outcome.reason);
+          if (drawn.outcome.drawn) answer.path = "tiled";
+        }
+      } catch (...) {
+        answer.reason = "error";
+      }
+      promise.Resolve(answer);
+    });
+  }
+
+  REACT_METHOD(failGrainForCheck)
+  void failGrainForCheck(winrt::Microsoft::ReactNative::ReactPromise<bool> promise) noexcept {
+    RunOnUI(m_context, [promise]() noexcept {
+      Grain::FailForCheck();
+      promise.Resolve(Grain::Failed().load());
+    });
+  }
+
+  REACT_METHOD(keptGrainTiles)
+  void keptGrainTiles(winrt::Microsoft::ReactNative::ReactPromise<std::vector<std::string>> promise) noexcept {
+    RunOnUI(m_context, [promise]() noexcept { promise.Resolve(Grain::KeptTiles()); });
+  }
+
+  REACT_METHOD(probeGrainRecovery)
+  void probeGrainRecovery(std::string texture, winrt::Microsoft::ReactNative::ReactPromise<GrainRecoveryProbe> promise) noexcept {
+    RunOnUI(m_context, [texture = Grain::Known(texture), promise]() noexcept {
+      GrainRecoveryProbe answer;
+      answer.path = "none";
+      try {
+        auto *host = Host::Current();
+        if (!host || !host->compositor) {
+          answer.reason = "no compositor";
+        } else {
+          const Grain::Redrawn redrawn = Grain::RedrawnOnReplacedDevice(host->compositor, texture, Grain::TileFor(texture).side);
+          answer.sameSurface = redrawn.sameSurface;
+          answer.before = static_cast<double>(redrawn.before);
+          answer.after = static_cast<double>(redrawn.after);
+          answer.reason = Paths::Utf8(redrawn.outcome.reason);
+          if (redrawn.outcome.drawn) answer.path = "redrawn";
+        }
       } catch (...) {
         answer.reason = "error";
       }

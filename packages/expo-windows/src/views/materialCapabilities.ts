@@ -6,10 +6,17 @@ export type MaterialCapabilities = {
   systemBackdropSupported: boolean;
   inWindowBlur: boolean;
   gradient: boolean;
+  grain: boolean;
   background: boolean;
 };
 
 export type MaterialPath = { path: string; reason: string; step?: string };
+
+export type GrainPath = MaterialPath & { brushed: boolean };
+
+export type GrainProbe = MaterialPath & { pixels: number; tileAlphaSum: number; drawnAlphaSum: number };
+
+export type GrainRecoveryProbe = MaterialPath & { sameSurface: boolean; before: number; after: number };
 
 export type MaterialsNative = {
   capabilities(): MaterialCapabilities;
@@ -17,6 +24,11 @@ export type MaterialsNative = {
   clearWindowMaterial(windowId: string): Promise<boolean>;
   probeBlur(): Promise<MaterialPath>;
   probeGradient(): Promise<MaterialPath>;
+  grainPath(request: string): GrainPath;
+  probeGrain(texture: string): Promise<GrainProbe>;
+  probeGrainRecovery(texture: string): Promise<GrainRecoveryProbe>;
+  failGrainForCheck(): Promise<boolean>;
+  keptGrainTiles(): Promise<string[]>;
 };
 
 let capabilities: MaterialCapabilities | null | undefined;
@@ -39,6 +51,8 @@ export const nativeWindowMaterial = () => materialCapabilities() !== null;
 export const nativeBlur = () => materialCapabilities()?.inWindowBlur === true;
 
 export const nativeGradient = () => materialCapabilities()?.gradient === true;
+
+export const nativeGrain = () => materialCapabilities()?.grain === true;
 
 export function gradientDrawsNow(): boolean {
   if (!nativeGradient()) return false;

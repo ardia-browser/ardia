@@ -4,7 +4,7 @@ import { noteFirstWindow } from "../missing";
 
 export type ViewByName = ComponentType<never>;
 
-export const finite = (value: unknown, fallback: number): number => (typeof value === "number" && Number.isFinite(value) ? value : fallback);
+export { finite } from "./numbers";
 
 export const colorOrUndefined = (value: unknown): string | undefined => (typeof value === "string" && value.length > 0 ? value : undefined);
 

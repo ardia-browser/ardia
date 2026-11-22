@@ -480,11 +480,30 @@ what differs; the Mac's list is `docs/dia-feature-parity.md`. Rows marked "hidde
 - Icons are the web demo's set (`packages/demo/src/shims/web/symbols`), resolved in TypeScript and drawn natively as
   Direct2D geometry in Composition shapes.
 - Materials are native views (`MaterialViews.h`, the `ArdiaMaterials` module in `MaterialsModule.h`), each with the old
-  flat drawing as its fallback. A window backdrop that covers its whole window asks the system for Mica Alt behind the
-  window on Windows 11 22H2 (build 22621) and later and draws the Mac's tint over it. Visual effects, glass and popover
+  flat drawing as its fallback. A window backdrop that covers its whole window asks the system for Acrylic behind the
+  window on Windows 11 22H2 (build 22621) and later: like the Mac's vibrancy it blurs the windows behind, where Mica
+  only tints with the wallpaper. Over it goes a lighter base tint than the Mac's (black at 15 % in dark, white at 30 %
+  in light, `TINT_OVER_SYSTEM_MATERIAL` in `views/backdrop.tsx`), because Acrylic already carries its own tint and
+  luminosity; the profile's colour bands stay as on the Mac. The flat fallback keeps the Mac's numbers, and a theme's
+  own base alpha still wins over both. Visual effects, glass and popover
   bubbles blur what is under them inside the window with a Composition backdrop brush (Gaussian blur, saturation and a
-  tint). Window and theme gradients are Composition linear gradients at their real angle. Windows 10, a background
-  instance and any failure keep the flat colours; the launch log says once which path each one took.
+  tint). Window and theme gradients are Composition linear gradients at their real angle. The theme's grain (`grain`,
+  `sand`, `denim`, `tweed`) is the Mac's `GrainLayer` tile, the same xorshift recipe and darkening byte for byte,
+  drawn once per texture and scale with Direct2D into a Composition drawing surface (64 DIPs a tile, as on the Mac, but
+  never fewer than its 128 pixels, so a 100 % display keeps one tile pixel per screen pixel as a Retina Mac does and
+  denim's one-pixel twill isn't averaged into a flat wash) and repeated by a
+  border effect (`MaterialGrain.h`, the `ArdiaMaterialGrain` view in `MaterialGrainView.h`); it sits over the theme
+  layers of the window backdrop and the swatch, at the grain amount. The plain backdrop (the release-notes postcard)
+  takes the Mac shader's hash grain, `grainOpacity` darkening per `grainScale` pixel cell, as a 256-cell tile. The Mac
+  dims the window grain to a quarter in an inactive window; Windows keeps it full. Windows 10, a background
+  instance and any failure keep the flat colours, and a grain that fails to draw is left out; the launch log says once
+  which path each one took. The tiles live on one Direct3D device shared by every grain view. When that device is lost
+  (a driver update, a GPU reset), its removal event, or the next paint that finds it gone, hands the same Composition
+  graphics device a new one (`SetRenderingDevice`) and redraws every tile, so the surfaces and the brushes mounted
+  views hold stay valid and refill without a repaint (`Replace` in `MaterialGrain.h`). A grain failure (a tile that
+  can't be drawn, a replacement that fails) turns grain off for the process and clears the brush of every mounted grain
+  view, which listen for it. Each tile size is kept while a view uses it and dropped when the last one goes, and the
+  hash cell is clamped to 0.25 to 4 px, so its tile is at most 1024 px. The tile recipes are in `MaterialGrainTiles.h`.
 - Switching profiles slides the sidebar's pages and crossfades the tint as on the Mac. The Mac's native pager
   (`Pager.swift`) has a TypeScript version in `packages/expo-windows/src/pager`: the `ArdiaSwipe` view and module with
   the same events (`onPagerPosition` every frame, `onPagerState` on select and settle), sequence numbers and spring

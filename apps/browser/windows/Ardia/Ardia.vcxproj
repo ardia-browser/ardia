@@ -122,6 +122,9 @@
     <ClInclude Include="MenuStore.h" />
     <ClInclude Include="MenusModule.h" />
     <ClInclude Include="MaterialEffects.h" />
+    <ClInclude Include="MaterialGrain.h" />
+    <ClInclude Include="MaterialGrainTiles.h" />
+    <ClInclude Include="MaterialGrainView.h" />
     <ClInclude Include="MaterialSupport.h" />
     <ClInclude Include="MaterialViews.h" />
     <ClInclude Include="MaterialViewParts.h" />

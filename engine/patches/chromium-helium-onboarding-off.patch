@@ -39,15 +39,15 @@ font, which isn't shipped.
      "//components/input",
 --- a/chrome/browser/ui/startup/startup_browser_creator_impl.cc
 +++ b/chrome/browser/ui/startup/startup_browser_creator_impl.cc
-@@ -64,7 +64,6 @@
+@@ -63,7 +63,6 @@
  #include "chrome/common/pref_names.h"
  #include "chrome/common/webui_url_constants.h"
  #include "components/custom_handlers/protocol_handler_registry.h"
 -#include "components/helium_services/pref_names.h"
  #include "components/prefs/pref_service.h"
- #include "components/sessions/core/serialized_navigation_entry.h"
- #include "components/sessions/core/serialized_user_agent_override.h"
-@@ -663,15 +662,6 @@
+ #include "components/signin/public/base/signin_switches.h"
+ #include "components/tab_groups/tab_group_id.h"
+@@ -645,15 +644,6 @@
        provider.GetCommandLineTabs(*command_line_, cur_dir_, profile_);
    LaunchResult launch_result =
        tabs.empty() ? LaunchResult::kNormally : LaunchResult::kWithGivenUrls;

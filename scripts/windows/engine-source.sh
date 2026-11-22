@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-usage="usage: scripts/windows/engine-source.sh <commit> <version> <build> <out.tar.xz>  (packs the source of the Windows engine that <commit> pins, for Ardia <version> build <build>)"
+usage="usage: scripts/windows/engine-source.sh <commit> <version> <build> <out.tar.xz>  (packs the source of the prebuilt Windows engine <commit> ships, from the commit its prebuilt.json names as its source, for Ardia <version> build <build>)"
 case "${1:-}" in -h | --help) echo "$usage"; exit 0 ;; esac
 commit_rev="${1:?$usage}"
 version="${2:?$usage}"
@@ -13,7 +13,18 @@ die() { echo "error: $*" >&2; exit 1; }
 case "$out" in *.tar.xz) ;; *) die "$out doesn't end in .tar.xz" ;; esac
 [ ! -e "$out" ] || die "$out already exists"
 commit="$(git -C "$root" rev-parse --verify "$commit_rev^{commit}")" || die "no commit $commit_rev in this checkout"
-pins="$(git -C "$root" show "$commit:scripts/windows/engine/helium-pins.ini")" || die "$commit has no scripts/windows/engine/helium-pins.ini"
+prebuilt="$(git -C "$root" show "$commit:scripts/windows/engine/prebuilt.json")" || die "$commit has no scripts/windows/engine/prebuilt.json"
+engine_source_rev="$(python3 -c 'import json, sys; print(json.load(sys.stdin).get("source", ""))' <<<"$prebuilt")"
+if [ -z "$engine_source_rev" ]; then
+  engine_source_rev="$commit"
+fi
+[[ "$engine_source_rev" =~ ^[0-9a-f]{40}$ ]] || die "scripts/windows/engine/prebuilt.json at $commit names no full source commit for its engine"
+if ! git -C "$root" cat-file -e "$engine_source_rev^{commit}" 2>/dev/null; then
+  git -C "$root" fetch --quiet --no-tags --depth=1 origin "$engine_source_rev" \
+    || die "couldn't fetch $engine_source_rev (the prebuilt engine's source) from origin"
+fi
+engine_source="$(git -C "$root" rev-parse --verify "$engine_source_rev^{commit}")" || die "no commit $engine_source_rev (the prebuilt engine's source) in this checkout"
+pins="$(git -C "$root" show "$engine_source:scripts/windows/engine/helium-pins.ini")" || die "$engine_source has no scripts/windows/engine/helium-pins.ini"
 pin() { awk -v section="[$1]" -v key="$2" '$0 == section { inside = 1; next } /^\[/ { inside = 0 } inside && $1 == key { print $3; exit }' <<<"$pins"; }
 chromium="$(pin chromium version)"
 helium="$(pin helium-chromium tag)"
@@ -36,9 +47,13 @@ fetch helium-windows "$helium_windows"
 cat >"$src/README.txt" <<EOF
 The source of Ardia for Windows, build $build ($version), besides Ardia's own repository.
 
-Ardia, with the engine's patches and build scripts:
+Ardia's engine, its patches and build scripts, at the commit this build's engine was built from:
+  https://github.com/$repo/tree/$engine_source
+  How to build the engine: docs/engine-build-windows.md there.
+
+Ardia's app, at this build's commit:
   https://github.com/$repo/tree/$commit
-  How to build the engine: docs/engine-build-windows.md there. How to build the app: docs/windows.md.
+  How to build the app: docs/windows.md there.
 
 Chromium $chromium (BSD-3-Clause and others):
   https://chromium.googlesource.com/chromium/src/+/refs/tags/$chromium

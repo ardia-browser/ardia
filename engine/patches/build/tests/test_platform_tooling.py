@@ -286,6 +286,18 @@ cp "$here/../external.h" "$src/shared/external.h"
         again = self.run_command('apply')
         self.assertIn('already applied third.patch', again.stdout)
 
+    def test_a_file_a_patch_edits_and_a_later_layer_replaces_reapplies(self):
+        (self.here / 'mac.patch').unlink()
+        (self.here / 'linux.patch').write_text('--- a/shared/external.h\n+++ b/shared/external.h\n@@ -1 +1 @@\n-original header\n+patched header\n')
+        (self.here / 'series').write_text('chromium linux.patch linux\nlayer engine/linux linux\n')
+        self.run_command('capture-base')
+        self.run_command('apply')
+        self.assertEqual((self.tree / 'shared/external.h').read_text(), 'replacement header\n')
+        again = self.run_command('apply')
+        self.assertIn('already applied linux.patch', again.stdout)
+        self.assertEqual((self.tree / 'shared/external.h').read_text(), 'replacement header\n')
+        self.run_command('check')
+
     def test_mac_selection_and_separate_default_base(self):
         self.run_command('capture-base', platform='mac')
         self.run_command('apply', platform='mac')

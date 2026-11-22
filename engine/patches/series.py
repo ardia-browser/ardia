@@ -250,6 +250,9 @@ def cmd_apply(args):
             errors = materialize(steps, scratch, after_step=note_states)
             if errors:
                 sys.exit("\n".join(errors))
+            for path, is_dir in touched(steps):
+                if not is_dir and os.path.isfile(os.path.join(scratch, path)):
+                    states.setdefault(path, []).append((len(steps), pathlib.Path(scratch, path).read_bytes()))
             for index, step in enumerate(steps):
                 if step.kind != "chromium":
                     continue

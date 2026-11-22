@@ -20,7 +20,7 @@ export function PageBarGhost({ tab, positionProgress, cardsOpacity }: { tab: Bro
   const order = useDeckOrder();
   const tone = shownTone(usePageTone(tab.id), tab.themeColorHex);
   const redesigned = design === "redesigned";
-  const dark = redesigned && !tone?.bottom ? theme.dark : isDarkColor(tone?.bottom ?? theme.surface);
+  const dark = redesigned && !tone?.bottom ? theme.dark : isDarkColor(tone?.bottom ?? theme.canvas);
   const control = redesigned ? floatingBarLayout.control : browseLayout.hitTarget;
   const style = useAnimatedStyle(() => ({ opacity: pageBarGhostOpacity(positionProgress.value) * (cardsOpacity ? cardsOpacity.value : 1) }));
   if (design === "material") {

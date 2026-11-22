@@ -44,7 +44,7 @@ it off until the next launch. An `ardia` installed the old way (`~/Library/Appli
 adopted on update with no click when control was on: the plugin counts as installed, the link moves to the new copy,
 and `CLI/current` points into the store, so paths saved through it keep working. When control was off, it isn't
 adopted (`ADOPT_WITH_CONTROL_OFF` in `state/plugins/programs.ts` is false): the old `ardia` stays on PATH, untouched,
-control stays off, and Command Line shows as available. The old command then reports Ardia unreachable with its own
+control stays off, and Command Line shows as available, its row in Settings › Plugins saying "An older ardia is installed. Install Command Line to update it." The old command then reports Ardia unreachable with its own
 old wording until the user installs Command Line, which adopts it and turns control on as the sheet says
 (`usage_counts.plugin_adoptions_waiting` counts these). There's no uninstall from
 Settings; removing the link brings it back at the next launch.

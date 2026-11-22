@@ -1,3 +1,4 @@
+import { actionWords, listWords } from "../../lib/sharedWords";
 import { useEffect, useRef } from "react";
 import { Platform, Pressable, StyleSheet, Text, View, type ViewInstance } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
@@ -6,7 +7,7 @@ import type { MaterialScheme } from "../../lib/material/schemes";
 import { menuOpenedHaptic } from "../../state/browse/tabMenus";
 import { useCanReopen } from "../../state/tabs/hooks";
 import { noteDeckBarTop, watchDeckBar } from "../../state/toasts/store";
-import { Symbol, type MenuItem } from "../ui";
+import { Symbol } from "../ui";
 import { MATERIAL_STATE } from "../ui/materialRoles";
 import { materialBottomBar, materialDuration, materialMove, materialShape, materialSize, materialType } from "../ui/materialTokens";
 import { MenuTrigger } from "../ui/MenuTrigger";
@@ -96,7 +97,7 @@ export function MaterialDeckTopBar({ safeTop, safeSide, incognito, privateCount,
         )}
       </View>
       <MenuTrigger items={moreItems} {...menu} place={{ top: below, right: side }}>
-        {({ onPress }) => <MaterialIconButton testID="materialDeckMore" icon="ellipsis" label="More" scheme={scheme} turned onPress={onPress ?? noop} />}
+        {({ onPress }) => <MaterialIconButton testID="materialDeckMore" icon="ellipsis" label={actionWords.more} scheme={scheme} turned onPress={onPress ?? noop} />}
       </MenuTrigger>
     </Animated.View>
   );
@@ -156,7 +157,7 @@ export function MaterialDeckEmpty({ centerY, showsArchive, onArchive, searching 
   const scheme = useDeckScheme(incognito);
   return (
     <View testID="materialDeckEmpty" pointerEvents="box-none" style={[styles.empty, { top: centerY - materialSize.listItemTwoLine }]}>
-      <Text style={[materialType.titleLarge, styles.centered, { color: scheme.onSurface }]}>{searching ? "No Matching Tabs" : "No Open Tabs"}</Text>
+      <Text style={[materialType.titleLarge, styles.centered, { color: scheme.onSurface }]}>{searching ? listWords.noResults : "No Open Tabs"}</Text>
       {searching ? null : <Text style={[materialType.bodyMedium, styles.centered, { color: scheme.onSurfaceVariant }]}>Tabs you open appear here. Inactive tabs move to the Archive.</Text>}
       {showsArchive && !searching ? (
         <Pressable accessibilityRole="button" android_ripple={ripple(scheme, scheme.primary)} onPress={onArchive} style={styles.textButton}>

@@ -1,4 +1,4 @@
-import { StyleSheet } from "react-native";
+import { Platform, StyleSheet } from "react-native";
 import { act } from "react-test-renderer";
 import { OnboardingView, SYNC_SUBTITLE } from "../components/onboarding/OnboardingView";
 import { SyncScanIllustration } from "../components/onboarding/SyncScanIllustration";
@@ -6,6 +6,10 @@ import { Symbol } from "../components/ui";
 import { SKETCH_QR_ROWS, sketchQrPath } from "../lib/sketchQr";
 import { useOnboarding } from "../state/onboarding/store";
 import { useSync } from "../state/sync/store";
+import { closeSettings, settingsNav } from "../state/settings/nav";
+
+const onIos = Platform.OS === "ios" ? test : test.skip;
+const onAndroid = Platform.OS === "android" ? test : test.skip;
 import { status } from "../../test/syncFixture";
 import { pressButton, renderSurface, textOf, unmount, withTabs } from "../../test/render/harness";
 
@@ -17,6 +21,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  act(() => closeSettings());
   act(() => jest.runOnlyPendingTimers());
   useOnboarding.setState({ showing: false, step: "welcome", forward: true });
   jest.useRealTimers();
@@ -76,7 +81,17 @@ test("once connected, the subtitle crossfades to say the Mac's tabs are here and
   unmount(root);
 });
 
-test("Connect to Your Mac slides the connect screen up from the bottom of the window, as Compose does, instead of popping it in", async () => {
+onIos("on iPhone Connect to Your Mac opens the very Settings connect page, as the stack's root with Cancel, and closing it lands back on this onboarding step", async () => {
+  const root = renderSurface(<OnboardingView />);
+  await pressButton(root, "Connect to Your Mac");
+  expect(root.root.findAll((node) => node.props.testID === "onboardingConnect")).toHaveLength(0);
+  expect(settingsNav()).toMatchObject({ open: true, stack: [{ page: "syncConnect" }] });
+  act(() => closeSettings());
+  expect(useOnboarding.getState()).toMatchObject({ showing: true, step: "sync" });
+  unmount(root);
+});
+
+onAndroid("Connect to Your Mac slides the connect screen up from the bottom of the window, as Compose does, instead of popping it in, with Cancel to leave it", async () => {
   const root = renderSurface(<OnboardingView />);
   expect(root.root.findAll((node) => node.props.testID === "onboardingConnect")).toHaveLength(0);
   await pressButton(root, "Connect to Your Mac");
@@ -85,5 +100,8 @@ test("Connect to Your Mac slides the connect screen up from the bottom of the wi
   expect(entering.initialValues.opacity).toBe(0);
   expect(entering.initialValues.transform[0]!.translateY).toBeGreaterThan(0);
   expect(typeof sheet.props.exiting).toBe("function");
+  expect(sheet.findAll((node) => typeof node.type === "string" && node.props.accessibilityViewIsModal === true)).not.toHaveLength(0);
+  expect(textOf({ root: sheet } as never)).toContain("Cancel");
+  expect(textOf({ root: sheet } as never)).not.toContain("Close");
   unmount(root);
 });

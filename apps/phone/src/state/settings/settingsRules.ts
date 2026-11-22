@@ -1,5 +1,6 @@
 export type ClearRange = "lastHour" | "today" | "todayAndYesterday" | "allTime";
 import { copy, type DefaultBrowserSteps } from "../../lib/platformCopy.ts";
+import { destinationWords } from "../../lib/sharedWords.ts";
 
 export const CLEAR_RANGES: { id: ClearRange; title: string; phrase: string }[] = [
   { id: "lastHour", title: "Last Hour", phrase: "from the last hour" },
@@ -43,7 +44,7 @@ export function joinList(items: readonly string[]): string {
 
 export function clearNames(choice: ClearChoice): string[] {
   const names: string[] = [];
-  if (choice.history) names.push("History");
+  if (choice.history) names.push(destinationWords.history);
   if (choice.cache) names.push("Cache");
   if (choice.cookies) names.push("Cookies");
   if (choice.archive) names.push("Archived Tabs");

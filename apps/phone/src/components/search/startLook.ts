@@ -23,7 +23,7 @@ export const startIncognitoStops = ["#232327", "#141416", "#202024"] as const;
 
 export const startButtonFill = { light: "rgba(255,255,255,0.32)", dark: "rgba(255,255,255,0.12)" } as const;
 
-export const startLogo = { width: 150, iconSide: 128, dragFollow: 0.72, dragTilt: 10, dragLift: 1.05, pressScale: 0.9, slop: 6, settle: { response: 0.55, damping: 0.5 }, press: { response: 0.18, damping: 1 }, reducedSettleMs: 200 } as const;
+export const startLogo = { width: 150, iconSide: 128, dragFollow: 0.72, dragTilt: 10, dragLift: 1.05, slop: 6, settle: { response: 0.55, damping: 0.5 }, press: { response: 0.18, damping: 1 }, reducedSettleMs: 200 } as const;
 
 const hueOf = (hex: string) => {
   const [r, g, b] = parseColor(hex);

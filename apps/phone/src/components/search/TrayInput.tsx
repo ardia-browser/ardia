@@ -7,6 +7,7 @@ import { useSearchCompletedFor, useSearchCompletion } from "../../state/search/h
 import { useTabs } from "../../state/tabs/store";
 import { countUsage } from "../../state/telemetry/telemetry";
 import { font } from "../ui";
+import { searchPanel } from "./searchPanelTokens";
 
 export type TrayInputHandle = { focus(): void; blur(): void; clearsInPlace(): boolean };
 
@@ -116,6 +117,7 @@ const PlainInput = forwardRef<TrayInputHandle, Props>(function PlainInput({ star
       placeholderTextColor={placeholderColor}
       selectionColor={accent}
       keyboardAppearance={keyboardAppearance}
+      maxFontSizeMultiplier={searchPanel.maxTextScale}
       submitBehavior="submit"
       disableFullscreenUI
     />

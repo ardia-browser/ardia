@@ -1,7 +1,7 @@
 import type { ConsentToken } from "./choice";
 import { consentOrNow, countFor } from "./countFor";
 
-const NONE = { hidden: 0, hiddenPrivate: 0, restored: 0, cancels: 0, contextMenuStarts: 0, failures: 0, escapedSelectors: 0, refused: 0, unconfirmed: 0 };
+const NONE = { hidden: 0, hiddenPrivate: 0, restored: 0, cancels: 0, contextMenuStarts: 0, failures: 0, escapedSelectors: 0, refused: 0, unconfirmed: 0, unsavable: 0 };
 let counts = { ...NONE };
 
 export function noteElementHidden(inPrivateWindow: boolean, consent?: ConsentToken | null) {
@@ -17,6 +17,7 @@ export const notePickedSelectorEscaped = (consent?: ConsentToken | null) => coun
 
 export const noteElementPickRefused = (consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void counts.refused++);
 export const noteElementPickUnconfirmed = (consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void counts.unconfirmed++);
+export const noteElementPickUnsavable = (consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void counts.unsavable++);
 
 export function takeHiddenElementCounts() {
   const taken = {
@@ -29,6 +30,7 @@ export function takeHiddenElementCounts() {
     hidden_element_selectors_escaped: counts.escapedSelectors,
     element_picks_refused: counts.refused,
     element_picks_unconfirmed: counts.unconfirmed,
+    element_picks_unsavable: counts.unsavable,
   };
   counts = { ...NONE };
   return taken;

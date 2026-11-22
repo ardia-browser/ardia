@@ -139,12 +139,16 @@ public class MenusModule: Module {
       entry.state = item.checked ? .on : .off
       if let symbol = item.symbol {
         entry.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+        #if compiler(>=6.4)
         if #available(macOS 27.0, *) { entry.preferredImageVisibility = .visible }
+        #endif
       } else if let hex = item.swatch, let light = RGBA(hex: hex)?.srgb {
         let dark = item.swatchDark.flatMap { RGBA(hex: $0)?.srgb } ?? light
         entry.image = light.alphaComponent == 0
           ? emptySwatch() : swatch(NSColor(name: nil) { $0.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light })
+        #if compiler(>=6.4)
         if #available(macOS 27.0, *) { entry.preferredImageVisibility = .visible }
+        #endif
       }
       menu.addItem(entry)
     }

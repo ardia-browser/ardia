@@ -1,9 +1,9 @@
 import { onWindowEvent, watchSidebarEdge } from "../../state/windows/nativeWindow";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useInsertionEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 import { switchOn } from "../../state/app/switches";
 import { useTheme } from "../ui/theme";
-import { curve, useGated } from "../ui/motion";
+import { curve, keepAttached, useGated } from "../ui/motion";
 import { Panel, reduceMotion, WindowBackdrop, WindowDragRegion } from "../ui";
 import { useSidebarSide, useWindowFullScreen, useWindowId } from "../../state/browser/hooks";
 import { useSidebarDockState } from "../../state/windows/hooks";
@@ -68,6 +68,7 @@ function useSidebarDock(open: boolean, animate: boolean, arc: boolean): { dock: 
   const dock = useRef(new Animated.Value(open ? 1 : 0)).current;
   const was = useRef(open);
   const [away, setAway] = useState(!open);
+  useInsertionEffect(() => keepAttached(dock), [dock]);
   useEffect(() => {
     if (was.current === open) return;
     was.current = open;
@@ -296,7 +297,7 @@ function SidebarDock({
     () => peek.slide.interpolate({ inputRange: [0, 1], outputRange: [-12 * outward, width * outward] }),
     [peek.slide, width, outward],
   );
-  useSidebarLights(windowId, dock, peek.slide, { width, peeking, fullscreen, lights, right, peekAt });
+  useSidebarLights(windowId, dock, peek.slide, { width, moving, peeking, fullscreen, lights, right, peekAt }, peek.sampleSlide);
   const edgeSide = right ? "right" : "left";
   const sidebar = useMemo(
     () => (

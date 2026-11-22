@@ -114,9 +114,10 @@ fi
 if [ "$phase" = sign ]; then
   [ -n "$provisioning_profile" ] || die "--phase sign exports the ad hoc archive --phase build made: set RELEASE_PROVISIONING_PROFILE"
 elif [ -n "$framework_engine" ]; then
-  [ -n "${ARDIACORE_FRAMEWORK:-}" ] || die "ARDIACORE_FRAMEWORK_ENGINE names the engine key (engine/engine-key.sh) a prebuilt ARDIACORE_FRAMEWORK was built from; set both or neither"
-  [ "$framework_engine" = "$("$root/engine/engine-key.sh")" ] \
-    || die "ARDIACORE_FRAMEWORK_ENGINE is $framework_engine but HEAD's engine key is $("$root/engine/engine-key.sh"): that framework wasn't built from this commit's engine"
+  [ -n "${ARDIACORE_FRAMEWORK:-}" ] || die "ARDIACORE_FRAMEWORK_ENGINE names the engine key (engine/engine-key.sh --platform macos) a prebuilt ARDIACORE_FRAMEWORK was built from; set both or neither"
+  head_engine="$("$root/engine/engine-key.sh" --platform macos)"
+  [ "$framework_engine" = "$head_engine" ] \
+    || die "ARDIACORE_FRAMEWORK_ENGINE is $framework_engine but HEAD's macOS engine key is $head_engine: that framework wasn't built from this commit's engine"
 fi
 if [ "$phase" = all ] && [ -z "${ARDIACORE_FRAMEWORK:-}" ]; then
   "$root/scripts/lib/engine-fresh.sh" "$framework_src" "$chromium_src" || exit 1
@@ -124,13 +125,13 @@ fi
 
 engine_source=""
 if [ "$phase" != build ]; then
-  engine_tree="$("$root/engine/engine-key.sh")"
-  engine_release="$(awk -v t="$engine_tree" '$1 == t { print $2; exit }' "$ardiacore/prebuilt-engines.tsv")"
+  engine_tree="$("$root/engine/engine-key.sh" --platform macos)"
+  read -r engine_release engine_built <<<"$(awk -v t="$engine_tree" '$1 == t { print $2, ($4 == "" ? $1 : $4); exit }' "$ardiacore/prebuilt-engines.tsv")"
   [ "$rc" = 1 ] || [ -n "$engine_release" ] \
     || die "packages/ardiacore/prebuilt-engines.tsv lists no published engine for this engine key (${engine_tree:0:12}): publish it with scripts/publish-engine.sh, commit the table line, then release"
   case "$engine_release" in engine-*) engine_tag="$engine_release" ;; *) engine_tag="v$engine_release" ;; esac
   [ -n "$engine_release" ] \
-    && engine_source="$REPO_URL/releases/download/$engine_tag/ArdiaCore-${engine_tree:0:12}-source.tar.xz"
+    && engine_source="$REPO_URL/releases/download/$engine_tag/ArdiaCore-${engine_built:0:12}-source.tar.xz"
 
   identity_name="Developer ID Application"
   identity="$(security find-identity -v -p codesigning | awk -v n="$identity_name" 'index($0, n) { print $2; exit }')"
@@ -192,6 +193,8 @@ fi
 
 "$stages/export-sign.sh" "$dist" "$archive" "$identity" ${provisioning_profile:+"$provisioning_profile"}
 "$stages/verify.sh" "$app" "$archive" "$version" "$release_build"
+echo "==> Pack app symbols"
+"$root/scripts/lib/pack-symbols.sh" --app "$app" "$archive/dSYMs" "$dist/$(app_symbols_name "$version")" "$dist/$(app_uuids_name "$version")"
 [ "$phase" = sign ] || "$stages/launch-check.sh" "$app"
 if [ "$notarize" = 1 ]; then
   echo "==> Notarize app"

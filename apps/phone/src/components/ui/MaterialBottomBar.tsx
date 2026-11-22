@@ -1,5 +1,5 @@
-import type { ComponentProps, ReactNode } from "react";
-import { StyleSheet, Text, TextInput, View } from "react-native";
+import { useRef, type ComponentProps, type ReactNode } from "react";
+import { StyleSheet, Text, TextInput, View, type ViewInstance } from "react-native";
 import { Pressable } from "react-native-gesture-handler";
 import Animated from "react-native-reanimated";
 import { withAlpha } from "../../lib/color";
@@ -10,6 +10,7 @@ import { menuOpenedHaptic } from "../../state/browse/tabMenus";
 import type { BrowserTab } from "../../state/tabs/tabModels";
 import { barAddress, spokenAddress } from "../browsing/FloatingBar";
 import { NotSecureLock } from "../browsing/NotSecureLock";
+import { openPageMenuFrom } from "../browsing/pageMenuOpener";
 import { TabsMenuTrigger } from "../browsing/tabsMenu";
 import { plusMenuItems } from "../tabs/ChromeButtons";
 import type { SearchTabs } from "../tabs/DeckBottomBar";
@@ -20,6 +21,7 @@ import { MaterialIconButton } from "./MaterialIconButton";
 import { MenuTrigger } from "./MenuTrigger";
 import { useMaterialRipple } from "./MaterialSurfaces";
 import { materialBottomBar, materialShape, materialSize, materialType } from "./materialTokens";
+import { actionWords, incognitoWords } from "../../lib/sharedWords";
 
 export type MaterialPageBarProps = {
   tab: BrowserTab;
@@ -83,6 +85,9 @@ function PageControls({ scheme, tab, order, showsPlus, addressDocked, onTabs, on
   const field = useMaterialRipple();
   const address = barAddress(tab);
   const count = order.length;
+  const addressField = useRef<ViewInstance>(null);
+  const menuButton = useRef<ViewInstance>(null);
+  const openMenuFromField = () => openPageMenuFrom(() => addressField.current, onMore);
   return (
     <>
       <TabsMenuTrigger order={order} onTabsMenu={onTabsMenu} style={styles.iconSlot}>
@@ -115,10 +120,11 @@ function PageControls({ scheme, tab, order, showsPlus, addressDocked, onTabs, on
           accessibilityLabel="Address"
           accessibilityValue={{ text: spokenAddress(address) }}
           accessibilityHint="Opens search with this page’s address. Touch and hold for the page menu."
-          {...screenReaderActions([{ name: "activate", run: onAddress }, { name: "pageMenu", label: "Page Menu", run: onMore }])}
+          ref={addressField}
+          {...screenReaderActions([{ name: "activate", run: onAddress }, { name: "pageMenu", label: "Page Menu", run: openMenuFromField }])}
           android_ripple={field}
           onPress={onAddress}
-          onLongPress={onMore}
+          onLongPress={openMenuFromField}
           style={[styles.fieldContainer, styles.fieldPressable, { backgroundColor: scheme.surfaceContainerHigh }, addressDocked ? styles.docked : null]}
         >
           <MaterialAddressContent address={address} scheme={scheme} testID="materialBarHost" />
@@ -126,16 +132,17 @@ function PageControls({ scheme, tab, order, showsPlus, addressDocked, onTabs, on
             testID="materialBarSiteSettings"
             icon="ellipsis"
             iconSize={FIELD_ICON}
+            buttonRef={menuButton}
             label="Page Menu"
             scheme={scheme}
             size="compact"
             turned
-            onPress={onSiteSettings}
+            onPress={() => openPageMenuFrom(() => menuButton.current, onSiteSettings)}
           />
         </Pressable>
       </View>
       {showsPlus ? (
-        <MaterialIconButton testID="materialBarPlus" icon="plus" label="New Search" scheme={scheme} onPress={onPlus} />
+        <MaterialIconButton testID="materialBarPlus" icon="plus" label={tab.isPrivate ? actionWords.newIncognitoTab : actionWords.newTab} scheme={scheme} onPress={onPlus} />
       ) : null}
     </>
   );
@@ -162,9 +169,9 @@ export function MaterialAddressContent({ address, scheme, testID }: { address: R
 
 function OverviewControls({ scheme, search, incognito, privateCount = 0, onCloseIncognito, canReopen, menusShown, onMenu }: OverviewProps & { scheme: MaterialScheme }) {
   const { input, text, change, focus, blur } = search;
-  const fabLabel = incognito ? "New Incognito Tab" : "New Tab";
+  const fabLabel = incognito ? actionWords.newIncognitoTab : actionWords.newTab;
   const closesIncognito = menusShown && privateCount > 0 && onCloseIncognito !== undefined;
-  const closeItems = onCloseIncognito ? [{ label: "Close Incognito Tabs", destructive: true, onPress: onCloseIncognito }] : [];
+  const closeItems = onCloseIncognito ? [{ label: incognitoWords.closeIncognitoTabs, destructive: true, onPress: onCloseIncognito }] : [];
   return (
     <>
       <MenuTrigger
@@ -215,7 +222,7 @@ function OverviewControls({ scheme, search, incognito, privateCount = 0, onClose
           returnKeyType="search"
           style={[materialType.bodyLarge, styles.field, { color: scheme.onSurface }]}
         />
-        {text ? <MaterialBarIconButton testID="materialDeckSearchClear" icon="xmark" label="Clear Search" scheme={scheme} onPress={() => change("")} /> : null}
+        {text ? <MaterialBarIconButton testID="materialDeckSearchClear" icon="xmark" label={actionWords.clearText} scheme={scheme} onPress={() => change("")} /> : null}
       </Pressable>
       <MenuTrigger
         items={plusMenuItems(incognito, canReopen)}
@@ -252,7 +259,7 @@ function StartControls({ scheme, incognito, onSearch }: MaterialStartBarProps & 
       <Pressable
         testID="materialStartSearch"
         accessibilityRole="button"
-        accessibilityLabel={incognito ? "New Incognito Tab" : "New Tab"}
+        accessibilityLabel={incognito ? actionWords.newIncognitoTab : actionWords.newTab}
         accessibilityHint="Opens search."
         android_ripple={field}
         onPress={onSearch}

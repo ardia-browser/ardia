@@ -34,7 +34,7 @@ export function NewTabNotice({ windowId, tabId, right, top }: { windowId: string
                 <Hud shape="capsule" height={NEW_TAB_NOTICE.height}>
                   <View style={[ROW, { backgroundColor: hover ? windowColors(theme.dark).noticeHover : undefined }]}>
                     <Symbol name="plus.square.on.square" size={12} weight="semibold" color={theme.icon} style={ICON} />
-                    <Text size="small" weight="semibold" numberOfLines={1}>
+                    <Text size="small" weight="semibold" numberOfLines={1} ardiaCentersCapitals>
                       New tab opened
                     </Text>
                     <Symbol name="arrow.right" size={10} weight="semibold" color={hover ? theme.textPrimary : theme.textSecondary} style={ICON} />

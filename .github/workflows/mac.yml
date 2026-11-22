@@ -1,0 +1,203 @@
+name: Mac
+
+on:
+  pull_request:
+    paths: &native
+      - "apps/browser/macos/**"
+      - "apps/browser/package.json"
+      - "apps/browser/react-native.config.js"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+      - "packages/ardiacore/ios/**"
+      - "packages/ardiacore/scripts/**"
+      - "packages/ardiacore/extensions/**"
+      - "packages/ardiacore/prebuilt-engines.tsv"
+      - "packages/shell/ios/**"
+      - "packages/shell/docktile/**"
+      - "packages/shell/plugin-host/**"
+      - "packages/shaders/ios/**"
+      - "packages/import/ios/**"
+      - "packages/sync/ios/**"
+      - "packages/sync/Sources/**"
+      - "packages/sync/Package.swift"
+      - "packages/*/expo-module.config.json"
+      - "engine/ardiacore/src/ardia/core/public/**"
+      - "engine/engine-key.sh"
+      - "engine/engine-key.py"
+      - "scripts/lib/paths.sh"
+      - "patches/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/mac.yml"
+  push:
+    branches: [main]
+    paths: *native
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mac-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  HOMEBREW_NO_AUTO_UPDATE: 1
+  ARDIACORE_PREBUILT_REPO: ${{ vars.ARDIACORE_PREBUILT_REPO || 'ardia-browser/ardia' }}
+
+jobs:
+  gate:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run: ${{ steps.vouch.outputs.run }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          sparse-checkout: .github
+      - id: vouch
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+        with:
+          retries: 3
+          script: |
+            const vouch = require(`${process.env.GITHUB_WORKSPACE}/.github/vouch/vouch.cjs`);
+            await vouch.gate({ github, context, core });
+
+  app:
+    name: compile (Debug)
+    needs: gate
+    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
+    runs-on: xcode-27
+    timeout-minutes: 75
+    env:
+      SCRATCH: ${{ github.workspace }}/.ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          filter: blob:none
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          xcrun --sdk macosx --show-sdk-version
+      - id: engine-key
+        run: echo "key=$(engine/engine-key.sh --platform macos)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: apps/browser/build-ardiacore/prebuilt
+          key: engine-${{ steps.engine-key.outputs.key }}
+          restore-keys: engine-
+      - name: Engine
+        id: engine
+        env:
+          ENGINE_KEY: ${{ steps.engine-key.outputs.key }}
+        run: |
+          set -euo pipefail
+          if ! framework=$(packages/ardiacore/scripts/fetch-engine.sh --nearest); then
+            echo "::error::no Mac engine for engine key ${ENGINE_KEY:0:12} or the 200 engine commits before it: publish one with scripts/publish-engine.sh and commit prebuilt-engines.tsv"
+            exit 1
+          fi
+          echo "ARDIACORE_FRAMEWORK=$framework" >> "$GITHUB_ENV"
+          short=$(basename "$(dirname "$framework")")
+          public=engine/ardiacore/src/ardia/core/public
+          strict=true
+          if [ "$short" = "${ENGINE_KEY:0:12}" ]; then
+            echo "### Mac engine $short (exact)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            read -r -a key_paths <<<"$(engine/engine-key.sh --platform macos --paths | xargs)"
+            base=""
+            while read -r commit; do
+              candidate=$(engine/engine-key.sh --platform macos "$commit" 2>/dev/null || true)
+              if [ "${candidate:0:12}" = "$short" ]; then base=$commit; break; fi
+            done < <(git rev-list HEAD -- "${key_paths[@]}")
+            if [ -z "$base" ] || [ -n "$(git diff --no-renames --name-only "$base" HEAD -- "$public")" ]; then
+              strict=false
+              echo "::warning::compiling against engine $short, older than this commit's ${ENGINE_KEY:0:12}, and $public changed since: this run fails after the build"
+            else
+              echo "::notice::compiled against engine $short, older than this commit's ${ENGINE_KEY:0:12}; $public is unchanged since, so the build is strict"
+            fi
+            echo "### Mac engine $short (older than this commit's ${ENGINE_KEY:0:12}; strict: $strict)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "strict=$strict" >> "$GITHUB_OUTPUT"
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - id: cas-key
+        run: echo "prefix=xcode-cas-mac-$(xcodebuild -version | awk '/Build version/ { print $3 }')-$(date -u +%Y-%m)-" >> "$GITHUB_OUTPUT"
+      - id: cas
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: .ci/cas
+          key: ${{ steps.cas-key.outputs.prefix }}${{ github.sha }}
+          restore-keys: ${{ steps.cas-key.outputs.prefix }}
+      - id: pods-key
+        run: echo "key=pods-${{ hashFiles('apps/browser/macos/Podfile', 'apps/browser/macos/Podfile.lock', 'pnpm-lock.yaml', 'patches/**') }}" >> "$GITHUB_OUTPUT"
+      - id: pods
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            apps/browser/macos/Pods
+            ~/Library/Caches/CocoaPods
+          key: ${{ steps.pods-key.outputs.key }}
+          restore-keys: pods-
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: packages/ardiacore/vendor/ubo
+          key: ubo-${{ hashFiles('packages/ardiacore/scripts/ubo.sh') }}
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: packages/ardiacore/vendor/ubol-webkit
+          key: ubol-webkit-${{ hashFiles('packages/ardiacore/scripts/ubol.sh', 'packages/ardiacore/scripts/ubol-webkit.py') }}
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: packages/ardiacore/vendor/hsts-preload
+          key: hsts-preload-${{ hashFiles('packages/ardiacore/scripts/hsts-preload.sh', 'packages/ardiacore/scripts/hsts-preload.py') }}
+      - name: Pods
+        id: install
+        working-directory: apps/browser/macos
+        run: |
+          set -euo pipefail
+          pod install
+          git diff --exit-code -- Podfile.lock || { echo "::error::pod install changed apps/browser/macos/Podfile.lock: commit the lockfile pod install writes"; exit 1; }
+      - name: Compile the Mac app, unsigned
+        id: build
+        env:
+          SKIP_BUNDLING: "1"
+        run: >-
+          xcodebuild -workspace apps/browser/macos/Ardia.xcworkspace -scheme Ardia-macOS -configuration Debug
+          -destination 'generic/platform=macOS' -derivedDataPath "$SCRATCH/dd"
+          -xcconfig apps/browser/macos/AdHoc.xcconfig
+          ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO
+          COMPILATION_CACHE_ENABLE_CACHING=YES COMPILATION_CACHE_CAS_PATH="$SCRATCH/cas" -quiet build
+      - name: The build has the app, the engine and the helpers
+        run: |
+          set -euo pipefail
+          app="$SCRATCH/dd/Build/Products/Debug/Ardia.app"
+          for part in "Contents/MacOS/Ardia" "Contents/Frameworks/Chromium Framework.framework" "Contents/Helpers/ArdiaPluginHost" "Contents/PlugIns/ArdiaDockTile.plugin"; do
+            [ -e "$app/$part" ] || { echo "::error::the build has no $part"; exit 1; }
+          done
+      - name: The engine's public headers match a published engine
+        if: ${{ !cancelled() && steps.engine.outcome == 'success' && steps.engine.outputs.strict == 'false' }}
+        run: |
+          echo "::error::engine/ardiacore/src/ardia/core/public changed since the nearest published Mac engine, so this build can't prove the app matches the engine it would ship with: build the engine (docs/engine-build.md), publish it with scripts/publish-engine.sh and commit its prebuilt-engines.tsv row, then re-run"
+          exit 1
+      - if: ${{ !cancelled() && github.event_name == 'push' && steps.cas.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: .ci/cas
+          key: ${{ steps.cas-key.outputs.prefix }}${{ github.sha }}
+      - if: ${{ !cancelled() && github.event_name == 'push' && steps.install.outcome == 'success' && steps.pods.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            apps/browser/macos/Pods
+            ~/Library/Caches/CocoaPods
+          key: ${{ steps.pods-key.outputs.key }}

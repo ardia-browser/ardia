@@ -32,6 +32,7 @@ public final class SearchStageModule: Module {
       Prop("morphPanelTint") { (view: SearchStageView, value: UIColor?) in view.look.panelTint = value ?? .clear }
       Prop("morphPanelDark") { (view: SearchStageView, value: Bool?) in view.look.panelStyle = value == true ? .dark : .unspecified }
       Prop("morphClassicPanel") { (view: SearchStageView, value: UIColor?) in view.look.classicPanel = value ?? .secondarySystemBackground }
+      Prop("morphClassicChrome") { (view: SearchStageView, value: ClassicChrome?) in view.look.classicChrome = value ?? ClassicChrome() }
       OnViewDidUpdateProps { (view: SearchStageView) in
         MainActor.assumeIsolated { view.propsDidUpdate() }
       }

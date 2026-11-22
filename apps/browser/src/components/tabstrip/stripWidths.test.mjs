@@ -377,3 +377,40 @@ test("across strips of favicon and letter-icon tabs, nothing moves into the menu
     }
   }
 });
+
+test("closing the last tab while the pointer stays widens the new last tab into the freed room, so its × is under the pointer and the left edge stays put", () => {
+  const before = layoutStrip(["a", "b", "c", "d"].map(tab), "d", 1000, measured(), null);
+  const end = before.spanOf("d")[0] + before.spanOf("d")[1];
+  const closed = ["a", "b", "c"].map(tab);
+  const plain = layoutStrip(closed, "c", 1000, measured(), null, before.widths);
+  const freed = end - (plain.spanOf("c")[0] + plain.spanOf("c")[1]);
+  assert.equal(freed, before.tabWidth("d") + GAP);
+  const held = layoutStrip(closed, "c", 1000, measured(), null, before.widths, "c", undefined, undefined, undefined, { tabId: "c", by: freed });
+  assert.deepEqual(held.spanOf("a"), before.spanOf("a"));
+  assert.deepEqual(held.spanOf("b"), before.spanOf("b"));
+  assert.equal(held.spanOf("c")[0] + held.spanOf("c")[1], end);
+  assert.equal(held.tabsEnd, before.tabsEnd);
+});
+
+test("closing a middle tab and then the last one at the same spot widens the new last tab only to the closed tab's edge, so its × stays under the pointer", () => {
+  const before = layoutStrip(["a", "b", "c", "d"].map(tab), "d", 1000, measured(), null);
+  const edge = (l, id) => l.spanOf(id)[0] + l.spanOf(id)[1];
+  const pointer = edge(before, "c");
+  const closedC = layoutStrip(["a", "b", "d"].map(tab), "d", 1000, measured(), null, before.widths);
+  assert.equal(edge(closedC, "d"), pointer);
+  const closed = ["a", "b"].map(tab);
+  const plain = layoutStrip(closed, "b", 1000, measured(), null, before.widths);
+  const held = layoutStrip(closed, "b", 1000, measured(), null, before.widths, "b", undefined, undefined, undefined, { tabId: "b", by: edge(closedC, "d") - edge(plain, "b") });
+  assert.equal(edge(held, "b"), pointer);
+  assert.deepEqual(held.spanOf("a"), before.spanOf("a"));
+  const closedB = layoutStrip(["a"].map(tab), "a", 1000, measured(), null, before.widths, "a", undefined, undefined, undefined, { tabId: "a", by: edge(held, "b") - edge(layoutStrip(["a"].map(tab), "a", 1000, measured(), null, before.widths), "a") });
+  assert.equal(edge(closedB, "a"), pointer);
+});
+
+test("after the last tab closes and widens its neighbour, closing a middle tab lets the next tab slide into its place at the held width", () => {
+  const before = layoutStrip(["a", "b", "c", "d"].map(tab), "d", 1000, measured(), null);
+  const edge = (l, id) => l.spanOf(id)[0] + l.spanOf(id)[1];
+  const afterB = layoutStrip(["a", "c"].map(tab), "c", 1000, measured(), null, before.widths);
+  assert.equal(edge(afterB, "c"), edge(before, "b"));
+  assert.deepEqual(afterB.spanOf("a"), before.spanOf("a"));
+});

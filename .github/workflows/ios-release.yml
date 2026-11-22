@@ -239,12 +239,27 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: 24
+          cache: pnpm
+          cache-dependency-path: apps/phone/pnpm-lock.yaml
       - name: Toolchain
         run: xcodebuild -version
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
+      - id: cas-key
+        run: echo "prefix=xcode-cas-phone-release-$(xcodebuild -version | awk '/Build version/ { print $3 }')-$(date -u +%Y-%m)-" >> "$GITHUB_OUTPUT"
+      - id: cas
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: .ci/cas
+          key: ${{ steps.cas-key.outputs.prefix }}${{ github.sha }}
+          restore-keys: ${{ steps.cas-key.outputs.prefix }}
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: apps/phone/ios/Pods
+          key: phone-pods-${{ hashFiles('apps/phone/ios/Podfile.lock', 'apps/phone/pnpm-lock.yaml') }}
+          restore-keys: phone-pods-
       - name: The Expo app's dependencies and Pods
         run: |
           set -euo pipefail
@@ -309,7 +324,13 @@ jobs:
           [ -z "$RELEASE_VERSION" ] || args+=(--version "$RELEASE_VERSION")
           if [ "$MODE" = device ]; then args+=(--development); elif [ "$MODE" != upload ]; then args+=(--no-upload); fi
           [ "$DEFAULT_BROWSER" = true ] || args+=(--no-default-browser)
+          export RELEASE_COMPILATION_CACHE_CAS_PATH="$GITHUB_WORKSPACE/.ci/cas"
           apps/phone/scripts/release-ios "${args[@]}" | tee -a "$GITHUB_STEP_SUMMARY"
+      - if: ${{ !cancelled() && steps.cas.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: .ci/cas
+          key: ${{ steps.cas-key.outputs.prefix }}${{ github.sha }}
       - if: inputs.mode == 'upload'
         name: Wait for App Store Connect to process the build
         env:

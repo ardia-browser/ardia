@@ -1,12 +1,16 @@
 import type { WindowEvent } from "../../platform/windows";
+import type { ConsentToken } from "./choice";
+import { countFor } from "./consentPeriod";
 
 type ScreenEdge = NonNullable<Extract<WindowEvent, { type: "sidebarEdge" }>["screenEdge"]>;
 
 const NONE = {
   sidebar_slides: 0,
   sidebar_slides_past_target: 0,
+  sidebar_lights_left_behind: 0,
   sidebar_page_full_screen_peeks: 0,
   sidebar_peek_reveals_held_back: 0,
+  sidebar_peeks_past_target: 0,
   sidebar_peek_resizes: 0,
   sidebar_peek_closes_while_resizing: 0,
   sidebar_screen_edge_crossings: 0,
@@ -25,6 +29,10 @@ export function noteSidebarSlide(pastTarget: boolean) {
   counts.sidebar_slides++;
   if (pastTarget) counts.sidebar_slides_past_target++;
 }
+
+export const noteSidebarLightsLeftBehind = () => void counts.sidebar_lights_left_behind++;
+
+export const noteSidebarPeekPastTarget = (consent: ConsentToken | null) => countFor(consent, () => void counts.sidebar_peeks_past_target++);
 
 export const noteSidebarPeekRevealHeldBack = () => void counts.sidebar_peek_reveals_held_back++;
 

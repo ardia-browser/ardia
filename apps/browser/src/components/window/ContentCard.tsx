@@ -33,6 +33,8 @@ import { cardChrome, developerBarShown } from "./paneChrome";
 import { DEVELOPER_BAR } from "../toolbar/tokens";
 import { useDeveloperMode } from "../../state/site/developerMode";
 import { TabPane } from "./TabPane";
+import { PageBarPublisher, usePageBarScope } from "../plugins/PageBarScope";
+import { PAGE_BAR_HEIGHT } from "../plugins/PluginPageBar";
 import { BesidePeekPopovers, PeekPage } from "./PageOverlays";
 import { besidePeekSpan } from "./pageAnchors";
 import { splitTabIdsOf } from "../../state/splits/splits";
@@ -83,7 +85,16 @@ export function ContentCard() {
     [addressInSidebar, small, minimal, !!split, !!fullscreenTab, hideWhileScrolling],
   );
   const activeDeveloperMode = useDeveloperMode(useTab(activeId, (t) => t?.url ?? ""));
-  const activeDeveloperBar = developerBarShown(chrome, { developerMode: activeDeveloperMode, small, fullscreen: false }) ? DEVELOPER_BAR.height : 0;
+  const { wanted: pageBarsWanted, bars: pageBars } = usePageBarScope();
+  const paneFacts = pageBarsWanted
+    ? shown.map((key) => {
+        const tabId = key.slice(0, key.indexOf("|"));
+        const visible = !!panes[tabId] || (tabId === lingerId && !!lingerRect);
+        return { tabId, visible, lingering: tabId === lingerId, warm: !visible && !!warmPanes[tabId], covered: !!fullscreenTab && tabId !== fullscreenTab, mounted: mountedIds.has(tabId), documentFullscreen: tabId === fullscreenTab };
+      })
+    : null;
+  const activePageBar = chrome.kind === "none" && activeId && pageBars[activeId] ? PAGE_BAR_HEIGHT : 0;
+  const activeDeveloperBar = developerBarShown(chrome, { developerMode: activeDeveloperMode, small, fullscreen: false }) ? DEVELOPER_BAR.height : activePageBar;
   const geometryFor = (rect: Rect | undefined): ToolbarGeometry => {
     if (chrome.kind === "none") return NO_TOOLBAR;
     const leading = !!rect && rect.x === 0 && rect.y === 0;
@@ -157,6 +168,7 @@ export function ContentCard() {
         }
       }}
     >
+      {paneFacts && <PageBarPublisher windowId={windowId} panes={paneFacts} small={small} fullscreen={windowFullScreen} />}
       {size.width > 0 &&
         shown.map((key) => {
           const tabId = key.slice(0, key.indexOf("|"));
@@ -184,6 +196,7 @@ export function ContentCard() {
               peekShown={!!peekId}
               lingering={tabId === lingerId}
               seeThrough={!!lingerId && tabId === activeId}
+              pageBar={chrome.kind === "none" ? (pageBars[tabId] ?? null) : null}
               sidebarFieldOpen={sidebarFieldOpen}
               cardRadius={frame.radius}
               toolbarHeight={toolbarRow.height}

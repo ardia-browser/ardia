@@ -2,11 +2,13 @@ import { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withDelay, withTiming } from "react-native-reanimated";
 import { delay, duration, tabsCurve } from "./motion";
+import { useTheme } from "./theme";
 import { browseLayout } from "./tokens";
 
 export type LoadWatch = (show: (progress: number, isLoading: boolean) => void) => () => void;
 
-export function LoadingLine({ watch, color }: { watch: LoadWatch; color: string }) {
+export function LoadingLine({ watch }: { watch: LoadWatch }) {
+  const color = useTheme().spaceAccentInk;
   const fraction = useSharedValue(0);
   const alpha = useSharedValue(0);
 
@@ -38,7 +40,7 @@ export function LoadingLine({ watch, color }: { watch: LoadWatch; color: string 
   const lineStyle = useAnimatedStyle(() => ({ opacity: alpha.value, transform: [{ scaleX: fraction.value }] }));
 
   return (
-    <View testID="loadingLine" style={styles.track} pointerEvents="none">
+    <View testID="loadingLine" style={styles.track} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       <Animated.View style={[styles.line, { backgroundColor: color }, lineStyle]} />
     </View>
   );

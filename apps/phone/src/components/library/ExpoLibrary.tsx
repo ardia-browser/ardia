@@ -1,18 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { PlatformColor, StyleSheet, useWindowDimensions, View } from "react-native";
-import { BottomSheet, Button, ConfirmationDialog, ContentUnavailableView, ContextMenu, HStack, Host, Image, Label, List, Menu, NavigationDestination, NavigationLink, NavigationStack, Picker, RNHostView, ShareLink, Spacer, SwipeActions, Text, Toolbar, ToolbarItem, VStack, useNativeState } from "@expo/ui/swift-ui";
+import { PlatformColor, StyleSheet } from "react-native";
+import { BottomSheet, Button, ConfirmationDialog, ContentUnavailableView, ContextMenu, HStack, Host, Image, List, Menu, NavigationDestination, NavigationLink, NavigationStack, Picker, Spacer, SwipeActions, Text, Toolbar, ToolbarItem, useNativeState } from "@expo/ui/swift-ui";
 import {
   accessibilityAddTraits,
   accessibilityElement,
-  accessibilityHint,
   accessibilityLabel,
   alignmentGuide,
-  buttonStyle,
   disabled,
   font,
   foregroundStyle,
   frame,
-  lineLimit,
   listRowBackground,
   listRowInsets,
   listRowSeparator,
@@ -28,7 +25,6 @@ import {
   searchable,
   tag,
   tint,
-  truncationMode,
 } from "@expo/ui/swift-ui/modifiers";
 import type { BookmarkItem } from "../../platform/sync";
 import { haptics } from "../../state/app/haptics";
@@ -65,22 +61,18 @@ import { useSync } from "../../state/sync/store";
 import { useSelectedProfile, useSyncEnabled } from "../../state/sync/hooks";
 import { useTabs } from "../../state/tabs/store";
 import { ExpoClearDataPage } from "../settings/ExpoClearDataPage";
-import { contentMargins, Favicon, modifierList, settingsChrome } from "../ui";
+import { actionWords } from "../../lib/sharedWords";
+import { DoneToolbarItem } from "../settings/ExpoSettingsDone";
+import { contentMargins, iconRoles, modifierList, settingsChrome, sfName } from "../ui";
+import { LinkMenuItems, ListLoading, ListNoResults, ListRow, ListRowSubtitle, listSheetWords, opensPage } from "./listSheet";
+import { libraryLayout as L, listRowLayout } from "./listSheetTokens";
 
 const SECONDARY = { type: "hierarchical", style: "secondary" } as const;
 const FILL = Number.MAX_SAFE_INTEGER;
-const PAGE = 16;
-const SMALL = 12;
-const TIGHT = 8;
-const ROW_PADDING = 16;
-const ROW_FAVICON = 20;
-const ROW_FAVICON_SCALE_CAP = 2;
-const DEVICE_GLYPH = 13;
-const SWITCHER_SEGMENT = 40;
 const FOLDER = "folder:";
 
-const ROW_CHROME = [listRowBackground(PlatformColor("secondarySystemGroupedBackground")), listRowInsets({ top: 0, leading: PAGE, bottom: 0, trailing: PAGE }), alignmentGuide("listRowSeparatorLeading", ROW_FAVICON + SMALL)];
-const HEADER_ROW = [listRowBackground("transparent"), listRowSeparator("hidden"), listRowInsets({ top: 0, leading: PAGE, bottom: 0, trailing: PAGE }), accessibilityAddTraits(["isHeader"])];
+const ROW_CHROME = [listRowBackground(PlatformColor("secondarySystemGroupedBackground")), listRowInsets({ top: 0, leading: L.page, bottom: 0, trailing: L.page }), alignmentGuide("listRowSeparatorLeading", listRowLayout.icon + listRowLayout.gap)];
+const HEADER_ROW = [listRowBackground("transparent"), listRowSeparator("hidden"), listRowInsets({ top: 0, leading: L.page, bottom: 0, trailing: L.page }), accessibilityAddTraits(["isHeader"])];
 
 const shareable = (url: string) => /^https?:\/\//i.test(url);
 
@@ -123,7 +115,7 @@ function LibraryNavigation() {
           <ConfirmationDialog.Actions>
             <Button
               role="destructive"
-              label="Delete All"
+              label={listSheetWords.deleteAll}
               onPress={() => {
                 haptics.warning();
                 deleteAllDownloads();
@@ -135,18 +127,16 @@ function LibraryNavigation() {
           </ConfirmationDialog.Message>
         </ConfirmationDialog>
         <Toolbar.Content>
-          <ToolbarItem placement="cancellationAction">
-            <Button label="Done" onPress={closeLibrary} />
-          </ToolbarItem>
           <ToolbarItem placement="principal">
             <LibrarySwitcher section={section} />
           </ToolbarItem>
           <ToolbarItem placement="primaryAction">
-            <Menu label="More" systemImage="ellipsis" modifiers={[accessibilityLabel("More")]}>
-              {section === "downloads" ? <Button label="Delete All Downloads" role="destructive" onPress={() => setConfirmingDelete(true)} modifiers={[disabled(!hasFiles)]} /> : null}
+            <Menu label={actionWords.more} systemImage={sfName(iconRoles.more)} modifiers={[accessibilityLabel(actionWords.more)]}>
+              {section === "downloads" ? <Button label={listSheetWords.deleteAllEntry} systemImage="trash" role="destructive" onPress={() => setConfirmingDelete(true)} modifiers={[disabled(!hasFiles)]} /> : null}
               <Button label="Clear Browsing Data" onPress={() => pushLibraryPage(LIBRARY_CLEAR_DATA)} />
             </Menu>
           </ToolbarItem>
+          <DoneToolbarItem onDone={closeLibrary} />
         </Toolbar.Content>
       </Toolbar>
       {path.map((key) => (
@@ -160,7 +150,7 @@ function LibraryNavigation() {
 
 function LibrarySwitcher({ section }: { section: LibrarySection }) {
   return (
-    <Picker selection={section} onSelectionChange={(next: LibrarySection) => showLibrarySection(next)} modifiers={[pickerStyle("segmented"), frame({ width: SWITCHER_SEGMENT * LIBRARY_SECTIONS.length + TIGHT * 2 })]}>
+    <Picker selection={section} onSelectionChange={(next: LibrarySection) => showLibrarySection(next)} modifiers={[pickerStyle("segmented"), frame({ width: L.switcherSegment * LIBRARY_SECTIONS.length + L.tight * 2 })]}>
       {LIBRARY_SECTIONS.map((item) => (
         <Image key={item} systemName={LIBRARY_SYMBOLS[item] as never} modifiers={[tag(item), accessibilityLabel(LIBRARY_NAMES[item])]} />
       ))}
@@ -176,14 +166,9 @@ function LibraryDestination({ routeKey }: { routeKey: string }) {
 
 type PageModifiers = ReturnType<typeof modifierList>;
 
-const listModifiers = (page: PageModifiers, extra: PageModifiers = []) => modifierList(...page, listStyle("plain"), contentMargins({ edges: "top", length: TIGHT }), scrollContentBackground("hidden"), scrollDismissesKeyboard("immediately"), ...extra);
+const listModifiers = (page: PageModifiers, extra: PageModifiers = []) => modifierList(...page, listStyle("plain"), contentMargins({ edges: "top", length: L.tight }), scrollContentBackground("hidden"), scrollDismissesKeyboard("immediately"), ...extra);
 
-const noResults = (query: string, page: PageModifiers) => <ContentUnavailableView title={`No Results for “${query.trim()}”`} systemImage="magnifyingglass" description="Check the spelling or try a new search." modifiers={page} />;
-
-function useRowIcon() {
-  const { fontScale } = useWindowDimensions();
-  return ROW_FAVICON * Math.min(fontScale, ROW_FAVICON_SCALE_CAP);
-}
+const noResults = (query: string, page: PageModifiers) => <ListNoResults query={query} modifiers={page} />;
 
 function HistoryContent({ query, page }: { query: string; page: PageModifiers }) {
   const open = useLibrary((s) => s.open);
@@ -215,22 +200,21 @@ function HistoryContent({ query, page }: { query: string; page: PageModifiers })
     });
     return () => cancelAnimationFrame(frame);
   }, [loaded]);
-  const iconSize = useRowIcon();
   const now = Date.now();
-  if (!loaded) return <List modifiers={page}>{null}</List>;
+  if (!loaded) return <ListLoading modifiers={page} />;
   if (!entries.length) return <ContentUnavailableView title="No History" systemImage="clock" description="Pages you visit here and on your Mac show up here." modifiers={page} />;
   if (!shown.length) return noResults(query, page);
   return (
     <List modifiers={listModifiers(page)}>
       {days.slice(0, listed).map((day, index) => (
-        <HistoryDaySection key={day.day} title={historyDayTitle(day.day, now)} entries={day.entries} iconSize={iconSize} eager={eager[index] ?? false} onLast={index === listed - 1 && listed < days.length ? more : undefined} />
+        <HistoryDaySection key={day.day} title={historyDayTitle(day.day, now)} entries={day.entries} eager={eager[index] ?? false} onLast={index === listed - 1 && listed < days.length ? more : undefined} />
       ))}
     </List>
   );
 }
 
-function HistoryDaySection({ title, entries, iconSize, eager, onLast }: { title: string; entries: HistoryEntry[]; iconSize: number; eager: boolean; onLast?: () => void }) {
-  const row = useCallback(({ item }: { item: HistoryEntry }) => <HistoryRow entry={item} iconSize={iconSize} />, [iconSize]);
+function HistoryDaySection({ title, entries, eager, onLast }: { title: string; entries: HistoryEntry[]; eager: boolean; onLast?: () => void }) {
+  const row = useCallback(({ item }: { item: HistoryEntry }) => <HistoryRow entry={item} />, []);
   const [seen, setSeen] = useState(false);
   const near = eager || seen;
   const wake = useCallback(() => setSeen(true), []);
@@ -248,58 +232,34 @@ function HistoryDaySection({ title, entries, iconSize, eager, onLast }: { title:
 }
 
 function LibrarySectionHeader({ title, onAppear: appeared }: { title: string; onAppear?: () => void }) {
-  return <Text modifiers={[font({ textStyle: "headline" }), foregroundStyle(SECONDARY), frame({ maxWidth: FILL, alignment: "leading" }), padding({ top: 24, bottom: TIGHT }), ...HEADER_ROW, ...(appeared ? [onAppear(appeared)] : [])]}>{title}</Text>;
+  return <Text modifiers={[font({ textStyle: "headline" }), foregroundStyle(SECONDARY), frame({ maxWidth: FILL, alignment: "leading" }), padding({ top: L.headerTop, bottom: L.tight }), ...HEADER_ROW, ...(appeared ? [onAppear(appeared)] : [])]}>{title}</Text>;
 }
 
-function HistoryRow({ entry, iconSize }: { entry: HistoryEntry; iconSize: number }) {
+function HistoryRow({ entry }: { entry: HistoryEntry }) {
   const host = historyHost(entry.url);
   const time = clockTime(entry.visitedAt);
   const thisDevice = entry.source === "thisDevice";
   const subtitle = (
-    <HStack spacing={4} modifiers={[accessibilityElement("ignore")]}>
-      <Image systemName={thisDevice ? "iphone" : "laptopcomputer"} size={DEVICE_GLYPH} color={PlatformColor("secondaryLabel")} />
-      <Text modifiers={[font({ textStyle: "footnote" }), foregroundStyle(SECONDARY), lineLimit(1)]}>{`${host} · ${time}`}</Text>
+    <HStack spacing={L.deviceGap} modifiers={[accessibilityElement("ignore")]}>
+      <Image systemName={thisDevice ? "iphone" : "laptopcomputer"} size={L.deviceGlyph} color={PlatformColor("secondaryLabel")} />
+      <ListRowSubtitle text={`${host} · ${time}`} />
     </HStack>
   );
   return (
     <ContextMenu modifiers={ROW_CHROME}>
       <ContextMenu.Trigger>
-        <LibraryRow title={entry.title} url={entry.url} iconSize={iconSize} subtitle={subtitle} label={`${entry.title || entry.url}, ${host}, ${time}, ${thisDevice ? "This iPhone" : "Another device"}`} />
+        <LibraryRow title={entry.title} url={entry.url} subtitle={subtitle} label={`${entry.title || entry.url}, ${host}, ${time}, ${thisDevice ? "This iPhone" : "Another device"}`} />
       </ContextMenu.Trigger>
       <ContextMenu.Items>
-        {shareable(entry.url) ? (
-          <ShareLink item={entry.url}>
-            <Label title="Share" systemImage="square.and.arrow.up" />
-          </ShareLink>
-        ) : null}
-        {shareable(entry.url) ? <Button label="Copy Link" systemImage="doc.on.doc" onPress={() => copyLink(entry.url)} /> : null}
+        {shareable(entry.url) ? <LinkMenuItems url={entry.url} onCopy={() => copyLink(entry.url)} /> : null}
         <Button label="Delete" systemImage="trash" role="destructive" onPress={() => deleteHistoryEntry(entry)} />
       </ContextMenu.Items>
     </ContextMenu>
   );
 }
 
-function LibraryRow({ title, url, iconSize, subtitle, label }: { title: string; url: string; iconSize: number; subtitle: ReactNode; label?: string }) {
-  const open = () => {
-    haptics.selection();
-    openFromLibrary(url, title);
-  };
-  return (
-    <Button onPress={open} modifiers={[buttonStyle("plain"), accessibilityHint("Opens the page.")]}>
-      <HStack alignment="top" spacing={SMALL} modifiers={[padding({ vertical: ROW_PADDING }), frame({ maxWidth: FILL, alignment: "leading" }), accessibilityElement("combine"), ...(label ? [accessibilityLabel(label)] : [])]}>
-        <RNHostView matchContents>
-          <View style={{ width: iconSize, height: iconSize, marginTop: 2 }}>
-            <Favicon iconUrl={null} pageUrl={url} size={iconSize} />
-          </View>
-        </RNHostView>
-        <VStack alignment="leading" spacing={2}>
-          <Text modifiers={[lineLimit(1)]}>{title || url}</Text>
-          {subtitle}
-        </VStack>
-        <Spacer />
-      </HStack>
-    </Button>
-  );
+function LibraryRow({ title, url, subtitle, label }: { title: string; url: string; subtitle: ReactNode; label?: string }) {
+  return <ListRow title={title || url} subtitle={subtitle} label={label} leading={{ favicon: { url } }} hint="Opens the page." rowModifiers={[padding({ vertical: L.rowPadding })]} onPress={opensPage(() => openFromLibrary(url, title))} />;
 }
 
 function useBookmarks(): BookmarkItem[] {
@@ -311,7 +271,6 @@ function useBookmarks(): BookmarkItem[] {
 function BookmarksContent({ query, page }: { query: string; page: PageModifiers }) {
   const enabled = useSyncEnabled();
   const bookmarks = useBookmarks();
-  const iconSize = useRowIcon();
   const trimmed = query.trim();
   const matches = useMemo(() => (trimmed ? bookmarkMatches(bookmarks, trimmed) : null), [bookmarks, trimmed]);
   const sections = useMemo(() => bookmarkSections(bookmarks), [bookmarks]);
@@ -320,30 +279,30 @@ function BookmarksContent({ query, page }: { query: string; page: PageModifiers 
   return (
     <List modifiers={listModifiers(page)}>
       {matches
-        ? matches.map((item) => <BookmarkRow key={item.key} item={item} iconSize={iconSize} />)
+        ? matches.map((item) => <BookmarkRow key={item.key} item={item} />)
         : sections.map((section) => (
-            <BookmarkGroup key={section.id} title={section.title} items={section.items} iconSize={iconSize} />
+            <BookmarkGroup key={section.id} title={section.title} items={section.items} />
           ))}
     </List>
   );
 }
 
-function BookmarkGroup({ title, items, iconSize }: { title: string | null; items: readonly BookmarkItem[]; iconSize: number }) {
+function BookmarkGroup({ title, items }: { title: string | null; items: readonly BookmarkItem[] }) {
   return (
     <>
       {title ? <LibrarySectionHeader title={title} /> : null}
       {items.map((item) => (
-        <BookmarkRow key={item.key} item={item} iconSize={iconSize} />
+        <BookmarkRow key={item.key} item={item} />
       ))}
     </>
   );
 }
 
-function BookmarkRow({ item, iconSize }: { item: BookmarkItem; iconSize: number }) {
+function BookmarkRow({ item }: { item: BookmarkItem }) {
   if (!item.url) {
     return (
       <NavigationLink value={`${FOLDER}${item.key}`} modifiers={ROW_CHROME}>
-        <HStack spacing={SMALL} modifiers={[padding({ vertical: SMALL })]}>
+        <HStack spacing={listRowLayout.gap} modifiers={[padding({ vertical: L.folderPadding })]}>
           <Text>{item.title || "Untitled Folder"}</Text>
           <Spacer />
           <Text modifiers={[foregroundStyle(SECONDARY)]}>{(item.children ?? []).length.toLocaleString()}</Text>
@@ -355,16 +314,9 @@ function BookmarkRow({ item, iconSize }: { item: BookmarkItem; iconSize: number 
   return (
     <ContextMenu modifiers={ROW_CHROME}>
       <ContextMenu.Trigger>
-        <LibraryRow title={item.title} url={url} iconSize={iconSize} subtitle={<Text modifiers={[font({ textStyle: "footnote" }), foregroundStyle(SECONDARY), lineLimit(1)]}>{historyHost(url)}</Text>} />
+        <LibraryRow title={item.title} url={url} subtitle={historyHost(url)} />
       </ContextMenu.Trigger>
-      <ContextMenu.Items>
-        {shareable(url) ? (
-          <ShareLink item={url}>
-            <Label title="Share" systemImage="square.and.arrow.up" />
-          </ShareLink>
-        ) : null}
-        {shareable(url) ? <Button label="Copy Link" systemImage="doc.on.doc" onPress={() => copyLink(url)} /> : null}
-      </ContextMenu.Items>
+      <ContextMenu.Items>{shareable(url) ? <LinkMenuItems url={url} onCopy={() => copyLink(url)} /> : null}</ContextMenu.Items>
     </ContextMenu>
   );
 }
@@ -380,14 +332,13 @@ function findFolder(items: readonly BookmarkItem[], key: string): BookmarkItem |
 
 function BookmarkFolderPage({ folderKey }: { folderKey: string }) {
   const bookmarks = useBookmarks();
-  const iconSize = useRowIcon();
   const folder = findFolder(bookmarks, folderKey);
   const page = modifierList(navigationTitle(folder?.title ?? ""), navigationBarTitleDisplayMode("inline"), settingsChrome());
   const children = folder?.children ?? [];
   if (!children.length) return <ContentUnavailableView title="Empty Folder" systemImage="folder" modifiers={page} />;
   return (
     <List modifiers={listModifiers(page)}>
-      <BookmarkGroup title={null} items={children} iconSize={iconSize} />
+      <BookmarkGroup title={null} items={children} />
     </List>
   );
 }
@@ -399,7 +350,8 @@ function DownloadsContent({ page }: { page: PageModifiers }) {
   useEffect(() => {
     if (open) void loadDownloads();
   }, [open]);
-  if (loaded && !files.length) return <ContentUnavailableView title="No Downloads" systemImage="arrow.down.circle" description="Files you download show up here." modifiers={page} />;
+  if (!loaded) return <ListLoading modifiers={page} />;
+  if (!files.length) return <ContentUnavailableView title="No Downloads" systemImage="arrow.down.circle" description="Files you download show up here." modifiers={page} />;
   return (
     <List modifiers={listModifiers(page, [refreshable(loadDownloads)])}>
       {files.map((file) => (
@@ -410,31 +362,22 @@ function DownloadsContent({ page }: { page: PageModifiers }) {
 }
 
 function DownloadRow({ file }: { file: DownloadedFile }) {
-  const { fontScale } = useWindowDimensions();
-  const side = ROW_FAVICON * Math.min(fontScale, ROW_FAVICON_SCALE_CAP);
+  const share = () => shareDownload(file);
+  const remove = () => deleteDownload(file);
   return (
     <SwipeActions modifiers={ROW_CHROME}>
       <ContextMenu>
-      <ContextMenu.Trigger>
-        <Button onPress={() => previewDownload(file)} modifiers={[buttonStyle("plain"), accessibilityHint("Shows the file.")]}>
-          <HStack alignment="top" spacing={SMALL} modifiers={[padding({ vertical: SMALL }), frame({ maxWidth: FILL, alignment: "leading" }), accessibilityElement("combine")]}>
-            <Image systemName={FILE_SYMBOLS[file.kind] as never} size={side * 0.8} color={PlatformColor("secondaryLabel")} modifiers={[frame({ width: side, height: side }), padding({ top: 2 }), accessibilityElement("ignore")]} />
-            <VStack alignment="leading" spacing={2}>
-              <Text modifiers={[lineLimit(1), truncationMode("middle")]}>{file.name}</Text>
-              <Text modifiers={[font({ textStyle: "subheadline" }), foregroundStyle(SECONDARY), lineLimit(1)]}>{downloadSubtitle(file.size, file.modified)}</Text>
-            </VStack>
-            <Spacer />
-          </HStack>
-        </Button>
-      </ContextMenu.Trigger>
-      <ContextMenu.Items>
-        <Button label="Share" systemImage="square.and.arrow.up" onPress={() => shareDownload(file)} />
-        <Button label="Delete" systemImage="trash" role="destructive" onPress={() => deleteDownload(file)} />
-      </ContextMenu.Items>
+        <ContextMenu.Trigger>
+          <ListRow title={file.name} titleTruncation="middle" subtitle={downloadSubtitle(file.size, file.modified)} leading={{ symbol: FILE_SYMBOLS[file.kind] }} hint="Shows the file." rowModifiers={[padding({ vertical: L.rowPadding })]} onPress={() => previewDownload(file)} />
+        </ContextMenu.Trigger>
+        <ContextMenu.Items>
+          <Button label={actionWords.share} systemImage={sfName(iconRoles.share)} onPress={share} />
+          <Button label="Delete" systemImage="trash" role="destructive" onPress={remove} />
+        </ContextMenu.Items>
       </ContextMenu>
       <SwipeActions.Actions edge="trailing">
-        <Button label="Delete" role="destructive" onPress={() => deleteDownload(file)} />
-        <Button label="Share" onPress={() => shareDownload(file)} modifiers={[tint(PlatformColor("systemBlue"))]} />
+        <Button label="Delete" role="destructive" onPress={remove} />
+        <Button label={actionWords.share} onPress={share} modifiers={[tint(PlatformColor("systemBlue"))]} />
       </SwipeActions.Actions>
     </SwipeActions>
   );

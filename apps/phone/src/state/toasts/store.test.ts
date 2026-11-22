@@ -5,10 +5,10 @@ import { dismissToast, holdToast, showToast, TOAST_RELEASE_MS, useToasts } from 
 test("the same message shown again keeps the toast and only extends its time, as Compose's ToastCenter does", () => {
   mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    showToast("Copied URL", "link", 2400);
+    showToast("Copied Link", "link", 2400);
     const first = useToasts.getState().toast!.id;
     mock.timers.tick(2000);
-    showToast("Copied URL", "link", 2400);
+    showToast("Copied Link", "link", 2400);
     assert.equal(useToasts.getState().toast!.id, first, "no new toast, so no new entrance");
     mock.timers.tick(2000);
     assert.equal(useToasts.getState().toast?.id, first);

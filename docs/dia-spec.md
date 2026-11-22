@@ -305,18 +305,23 @@ screen capture (frames 8–33 ms apart, most 17), so timings are ±1 frame. Edge
   tabs. It slides in from past the window's edge with no fade, on a spring: response 0.18 s, damping 0.8 (three peeks,
   rms 2.2 % of the travel; the best unconstrained fit, 0.185/0.77, overshoots 2.3 % where every trace peaks at 1.5 %):
   93 % in 66 ms, a 1.5 % (3.5 pt) overshoot at ~0.12 s, at rest by ~0.22 s. It leaves the same way, ease-in-out over
-  ~150 ms (two, rms 3.7 %). The whole card overshoots, fill and contents together; inset 5 pt, that never shows a gap at
-  the window's edge (owner's recording 2026-11-08).
+  ~150 ms (two, rms 3.7 %). The whole card overshoots, fill and contents together (owner's recording 2026-11-08).
+- Ours slides in on an ease-out cubic over 150 ms, as the peek does with Dia's layout, and leaves on Arc's ease-in-out
+  over 150 ms. The owner removed Arc's overshoot (#3631, 2026-11-22): in a 120 fps recording the panel's right edge ran
+  10 px (5 pt at 2x) past its final width and pulled back, and the peek is used all day, so the high-frequency motion
+  rule keeps it plain. The ease-out never passes 1 and lands on it at 150 ms with no tail: 0.30 at 17 ms, 0.53 at
+  33 ms, 0.70 at 50 ms, 0.83 at 67 ms, 0.91 at 83 ms, 0.96 at 100 ms, 0.99 at 117 ms, 0.999 at 133 ms, 1 at 150 ms.
+  It keeps Arc's pace up to Arc's overshoot (rms under 4 % against the traces clipped at 1). The traffic lights in the
+  panel ride the same value, so they land with it.
 - Ours with the page frame at 0 (the peek flush with the window's left, top and bottom): the fill runs 16 pt on past the
-  window's edge, clipped by it, so the overshoot shifts the contents 3.5 pt and the panel stays joined to the window's edge
-  (before: the panel moved off the edge by 5 pt, a strip of page between). Fill and contents are one layer, so they
+  window's edge, clipped by it, so the panel stays joined to the window's edge. Fill and contents are one layer, so they
   can't land a frame apart.
 - Docking from the peek (its sidebar button): instant. The panel becomes the docked sidebar and the page is laid out
   narrower in one frame (a 2 pt settle over three frames after).
 - Hiding the docked sidebar (its button): the sidebar and the card's left edge slide out together, the page laid out at
   every step, much quicker than Dia: ease-out cubic, 100 ms (two hides, rms 1.3 %; Dia's spring misses it by 10 %).
 - Showing from hidden without the peek (⌘S) isn't in the recording: ours uses Dia's spring.
-- Ours (`dockMotion.ts`: `ARC_PEEK_SPRING`, `ARC_PEEK_OUT_MS`, `ARC_HIDE_MS`; `dockMotion.test.mjs` holds the traced
+- Ours (`tokens.ts`: `PEEK_IN_MS`, `ARC_PEEK_OUT_MS`, `ARC_HIDE_MS`; `dockMotion.test.mjs` holds the traced
   points), behind `sidebarSlide`.
 
 #### Arc note: Clear above the unpinned tabs (Arc's bundle and a user's screenshot, 2026-10-16)

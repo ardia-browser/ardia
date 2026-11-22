@@ -1,17 +1,18 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
-import { ActivityIndicator, BackHandler, Platform, StyleSheet, Text, TextInput, View } from "react-native";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { ActivityIndicator, BackHandler, Platform, StyleSheet, Text, TextInput, View, type ViewInstance } from "react-native";
 import { canPickSyncFolderFirst, checkPhrase, connectSync, syncConnectSession } from "../../state/sync/actions";
 import { IDLE_CONNECT, type ConnectState } from "../../state/sync/connectSession";
 import { haptics } from "../../state/app/haptics";
 import { chooseFolderTitle, setupStepLabel, connectMessage, MAC_HINT, phraseFooter } from "../../state/sync/syncRules";
-import { capsule, font, radius, settingsLayout, space, spacesLayout, Symbol, tabsMotion, useDesign, useTheme, useReduceMotion } from "../ui";
+import { ActionButton, capsule, font, radius, settingsLayout, space, spacesLayout, Symbol, tabsMotion, useDesign, useTheme, useReduceMotion } from "../ui";
 import { BarButton, CrossfadeText, Group, SettingsPage } from "../settings/SettingsKit";
 import Animated, { FadeIn, FadeOut, SlideInRight, SlideOutRight } from "react-native-reanimated";
-import { CapsuleButton, PasteAction, SyncHero } from "./SyncPage";
+import { PasteAction, SyncHero } from "./SyncPage";
 import { SyncScan } from "./SyncScan";
 import { copy } from "../../lib/platformCopy";
 import type { ConnectResult } from "../../platform/sync";
 import { canScanCodes } from "../../state/sync/scan";
+import { connectionWords, dismissWords, syncWords } from "../../lib/sharedWords";
 
 type FlowProps = { onClose: () => void; onConnected: () => void; closes?: boolean };
 
@@ -21,6 +22,7 @@ export function SyncConnect({ onClose, onConnected, closes }: FlowProps) {
   const [entering, setEntering] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scans] = useState(canScanCodes);
+  const scanCodeButton = useRef<ViewInstance>(null);
   const [connecting, setConnecting] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<ConnectResult["result"] | null>(null);
@@ -89,6 +91,7 @@ export function SyncConnect({ onClose, onConnected, closes }: FlowProps) {
           setEntering(true);
         }}
         onCancel={() => setScanning(false)}
+        returnFocusTo={() => scanCodeButton.current}
       />
     );
   }
@@ -113,18 +116,18 @@ export function SyncConnect({ onClose, onConnected, closes }: FlowProps) {
   return (
     <View style={StyleSheet.absoluteFill}>
       <View style={StyleSheet.absoluteFill} importantForAccessibility={entering ? "no-hide-descendants" : "auto"} accessibilityElementsHidden={entering}>
-        <SettingsPage title="Connect to Your Mac" onBack={closes || busy ? undefined : onClose} onClose={material && closes && !busy ? onClose : undefined} leading={closes && !material ? <BarButton title="Close" onPress={onClose} enabled={!busy} /> : undefined}>
-          <SyncHero title="Connect to Your Mac" subtitle="Two steps, and your Mac’s tabs are here." />
+        <SettingsPage title={syncWords.connect} onBack={closes || busy ? undefined : onClose} onClose={material && closes && !busy ? onClose : undefined} leading={closes && !material ? <BarButton title={dismissWords.cancel} onPress={onClose} enabled={!busy} /> : undefined}>
+          <SyncHero title={syncWords.connect} subtitle="Two steps, and your Mac’s tabs are here." />
           <Group header="Two Steps" footer={copy().phraseStays}>
             <Step number={1} title="Show the code on your Mac" detail={MAC_HINT} done={hasPhrase} current>
               {hasPhrase ? (
                 <Animated.View key="added" entering={STEP_IN} exiting={STEP_OUT}>
-                  <PhraseAdded onChange={() => setEntering(true)} />
+                  <PhraseAdded locked={busy} onChange={() => setEntering(true)} />
                 </Animated.View>
               ) : (
                 <Animated.View key="ways" entering={STEP_IN} exiting={STEP_OUT} style={styles.ways}>
-                  {scans ? <CapsuleButton title="Scan Code" icon="qrcodeViewfinder" prominent onPress={() => setScanning(true)} /> : null}
-                  <CapsuleButton title="Enter Words" icon="textCursor" prominent={!scans} onPress={() => setEntering(true)} />
+                  {scans ? <ActionButton title={syncWords.scanCode} icon="qrcodeViewfinder" variant="filled" tone="accent" size="compact" stretch disabled={busy} buttonRef={scanCodeButton} onPress={() => setScanning(true)} /> : null}
+                  <ActionButton title={syncWords.enterRecoveryPhrase} icon="textCursor" variant="filled" tone={scans ? "neutral" : "accent"} size="compact" stretch disabled={busy} onPress={() => setEntering(true)} />
                 </Animated.View>
               )}
             </Step>
@@ -141,7 +144,7 @@ export function SyncConnect({ onClose, onConnected, closes }: FlowProps) {
                       <Connecting />
                     </Animated.View>
                   ) : (
-                    <CapsuleButton title={picked.folder ? "Choose Another Folder…" : "Choose Folder…"} onPress={() => void session.pickFolder(phrase).then(finished)} />
+                    <ActionButton title={picked.folder ? "Choose Another Folder…" : "Choose Folder…"} variant="filled" tone="neutral" size="compact" stretch onPress={() => void session.pickFolder(phrase).then(finished)} />
                   )}
                   {picked.failure && connectMessage(picked.failure) ? <Problem text={connectMessage(picked.failure)!} /> : null}
                 </>
@@ -152,7 +155,7 @@ export function SyncConnect({ onClose, onConnected, closes }: FlowProps) {
                       <Connecting />
                     </Animated.View>
                   ) : (
-                    <CapsuleButton title={chooseFolderTitle(lastResult)} enabled={hasPhrase} onPress={() => void connect()} />
+                    <ActionButton title={chooseFolderTitle(lastResult)} variant="filled" tone="neutral" size="compact" stretch disabled={!hasPhrase} onPress={() => void connect()} />
                   )}
                   {failure ? <Problem text={failure} /> : null}
                 </>
@@ -183,13 +186,13 @@ function Step({ number, title, detail, done, current, children }: { number: numb
   );
 }
 
-function PhraseAdded({ onChange }: { onChange: () => void }) {
+function PhraseAdded({ locked, onChange }: { locked: boolean; onChange: () => void }) {
   const theme = useTheme();
   return (
     <View style={styles.added}>
       <Symbol name="checkmarkCircle" size={18} color={theme.switchOn} />
       <Text style={[font.subheadline, styles.medium, styles.fill, { color: theme.switchOn }]}>Recovery phrase added</Text>
-      <BarButton title="Change" onPress={onChange} />
+      <BarButton title="Change" onPress={onChange} enabled={!locked} />
     </View>
   );
 }
@@ -217,7 +220,7 @@ function Connecting() {
   return (
     <View style={styles.added}>
       <ActivityIndicator size="small" color={theme.secondaryLabel} />
-      <Text style={[font.subheadline, { color: theme.secondaryLabel }]}>Connecting…</Text>
+      <Text style={[font.subheadline, { color: theme.secondaryLabel }]}>{connectionWords.connecting}</Text>
     </View>
   );
 }
@@ -244,7 +247,7 @@ function PhraseEntry({ initial, onUse, onBack }: { initial: string; onUse: (phra
     if (check.isValid) onUse(draft);
   };
   return (
-    <SettingsPage title="Enter Words" onBack={onBack} dismissesKeyboard={Platform.OS === "ios"} trailing={<BarButton title="Use Phrase" emphasized enabled={check.isValid} onPress={use} />}>
+    <SettingsPage title={syncWords.enterRecoveryPhrase} onBack={onBack} dismissesKeyboard={Platform.OS === "ios"} trailing={<BarButton title="Use Phrase" emphasized enabled={check.isValid} onPress={use} />}>
       <View style={styles.phrase}>
         <View style={styles.phraseHeader}>
           <Text style={[font.footnote, styles.fill, { color: theme.secondaryLabel }]}>Recovery Phrase</Text>
@@ -289,7 +292,7 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   digits: { fontVariant: ["tabular-nums"] },
   step: { flexDirection: "row", gap: space.m, paddingHorizontal: settingsLayout.rowInset, paddingVertical: space.m },
-  badge: { width: spacesLayout.stepBadge, height: spacesLayout.stepBadge, borderRadius: capsule(spacesLayout.stepBadge), borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
+  badge: { width: spacesLayout.stepBadge, height: spacesLayout.stepBadge, borderRadius: capsule(spacesLayout.stepBadge), borderWidth: spacesLayout.stepBadgeEdge, alignItems: "center", justifyContent: "center" },
   stepBody: { flex: 1, gap: space.xs },
   stepActions: { gap: space.s, paddingTop: space.xs },
   added: { flexDirection: "row", alignItems: "center", gap: space.s },

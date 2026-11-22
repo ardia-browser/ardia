@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useScreenLayout, type ScreenFold } from "../../state/app/screenLayout";
 import { useSystemBars } from "../../state/app/systemBars";
-import { useSurface, watchPageLoad } from "../../state/browse/hooks";
+import { useSurface } from "../../state/browse/hooks";
 import { consumeDeckEntrance, deckEntered, leaveDeck, pageLaidOut, useBrowse } from "../../state/browse/store";
 import { closePageMenu } from "../../state/page/actions";
 import { useFindOpen, useMenuOpen, useReaderTabId } from "../../state/page/hooks";
@@ -12,14 +12,15 @@ import { useSearchOpen } from "../../state/search/hooks";
 import { useIncognito, useSelectedTab } from "../../state/tabs/hooks";
 import { currentTabs } from "../../state/tabs/store";
 import type { BrowserTab } from "../../state/tabs/tabModels";
-import { LoadingLine, LookBackdrop, tabsCurve, usePresence, useReduceMotion, useTheme, type LoadWatch } from "../ui";
+import { LookBackdrop, shadowCss, smoothCorners, tabsCurve, usePresence, useReduceMotion, useTheme } from "../ui";
 import { FindBar } from "../browsing/FindBar";
 import { PageCover } from "../browsing/PageCover";
+import { PageProgressLine } from "../browsing/PageProgressLine";
 import { PageFailureView } from "../browsing/PageFailureView";
 import { PageSurface } from "../browsing/PageSurface";
 import { PageMenu } from "../browsing/PageMenu";
 import { PageRequestHost, PressMenu } from "../browsing/PageRequests";
-import { ReaderView } from "../browsing/ReaderView";
+import { ReaderView, useLeavingReader } from "../browsing/ReaderView";
 import { DuoSidebar } from "./DuoSidebar";
 import { DuoToolbar } from "./DuoToolbar";
 import { DUO, sidebarFrame, splitCardFrame, splitPanelFrame, toolbarFrame, wideCardFrame, type DuoFrame } from "./duoLayout";
@@ -138,16 +139,14 @@ const noop = () => undefined;
 function PageCard({ card, tab, front }: { card: DuoFrame; tab: BrowserTab | null; front: boolean }) {
   const theme = useTheme();
   return (
-    <View testID="duoCard" style={[styles.place, styles.card, frameStyle(card)]} importantForAccessibility={front ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={!front}>
-      <View style={[styles.cardClip, { backgroundColor: tab ? theme.surface : undefined }]} onLayout={tab ? () => pageLaidOut(tab.id) : undefined}>
+    <View testID="duoCard" style={[styles.place, styles.card, { boxShadow: shadowCss("control", theme.dark) }, frameStyle(card)]} importantForAccessibility={front ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={!front}>
+      <View style={[styles.cardClip, { backgroundColor: tab ? theme.canvas : undefined }]} onLayout={tab ? () => pageLaidOut(tab.id) : undefined}>
         {tab ? (
           <>
             <PageSurface key={tab.id} tab={tab} toneBottom={0} obscured={NO_INSETS} topClearance={DUO.toolbarClearance} testID="duoPage" />
             <PageCover key={`${tab.id}:cover`} tab={tab} />
             <PageFailureView key={`${tab.id}:failure`} tabId={tab.id} />
-            <View style={styles.loading} pointerEvents="none">
-              <DuoLoadingLine tabId={tab.id} color={theme.spaceAccentInk} />
-            </View>
+            <PageProgressLine tabId={tab.id} top={0} />
           </>
         ) : null}
       </View>
@@ -157,15 +156,11 @@ function PageCard({ card, tab, front }: { card: DuoFrame; tab: BrowserTab | null
 
 const NO_INSETS = { top: 0, bottom: 0 } as const;
 
-function DuoLoadingLine({ tabId, color }: { tabId: string; color: string }) {
-  const watch = useMemo<LoadWatch>(() => (show) => watchPageLoad(tabId, show), [tabId]);
-  return <LoadingLine watch={watch} color={color} />;
-}
-
 function PageOverlays({ tab, width, height }: { tab: BrowserTab; width: number; height: number }) {
   const menuOpen = useMenuOpen();
   const finding = useFindOpen();
   const readerId = useReaderTabId();
+  const reader = useLeavingReader(readerId === tab.id ? tab.id : null);
   const menu = usePresence(menuOpen);
   useEffect(() => closePageMenu, [tab.id]);
   return (
@@ -173,7 +168,7 @@ function PageOverlays({ tab, width, height }: { tab: BrowserTab; width: number; 
       {finding ? <FindBar tabId={tab.id} /> : null}
       <PressMenu width={width} height={height} />
       {menu.mounted ? <PageMenu tabId={tab.id} open={menuOpen} onHidden={menu.hidden} /> : null}
-      {readerId === tab.id ? <ReaderView tabId={tab.id} /> : null}
+      {reader.shown ? <ReaderView tabId={reader.shown} closing={reader.closing} /> : null}
       <PageRequestHost tabId={tab.id} />
     </>
   );
@@ -183,7 +178,6 @@ const frameStyle = (frame: DuoFrame) => ({ left: frame.x, top: frame.y, width: f
 
 const styles = StyleSheet.create({
   place: { position: "absolute" },
-  card: { borderRadius: DUO.cardRadius, borderCurve: "continuous", boxShadow: duoInk.cardShadow },
-  cardClip: { flex: 1, borderRadius: DUO.cardRadius, borderCurve: "continuous", overflow: "hidden" },
-  loading: { position: "absolute", top: 0, left: 0, right: 0 },
+  card: { borderRadius: DUO.cardRadius, ...smoothCorners },
+  cardClip: { flex: 1, borderRadius: DUO.cardRadius, ...smoothCorners, overflow: "hidden" },
 });

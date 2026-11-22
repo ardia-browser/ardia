@@ -8,7 +8,7 @@ import { BAR_SHOWN, barShown, bottomBarCollapses, followScroll, obscuredBottom, 
 import type { Design } from "../../lib/design";
 import { neighbours, PAGER } from "../../lib/pagerPhysics";
 import { useSystemBars } from "../../state/app/systemBars";
-import { useFrozenOrder, useNavigation, usePageTone, watchPageLoad } from "../../state/browse/hooks";
+import { useFrozenOrder, useNavigation, usePageTone } from "../../state/browse/hooks";
 import { armDeckPull, beginDeckPull, deckPull, disarmDeckPull, releaseDeckPull, trackDeckPull, type PullSettled } from "../../state/browse/deckPull";
 import { refreshHiddenDeck } from "../../state/browse/deckHold";
 import { closePageMenu, editPageQuery, openDockedSiteSettings, openPageMenu } from "../../state/page/actions";
@@ -29,8 +29,6 @@ import {
   browseLayout,
   chromeLayout,
   isDarkColor,
-  LoadingLine,
-  type LoadWatch,
   Menu,
   Shade,
   rolesFor,
@@ -55,12 +53,11 @@ import { MaterialBarPill, useMaterialBarFold, useMaterialBarRegistration, useMat
 import { useMaterialTheme } from "../ui/materialTheme";
 import { HostPill, useBarFold } from "./HostPill";
 import { hostPillLayout } from "./hostPillTokens";
-import { BarBase } from "./BarBase";
 import { FindBar } from "./FindBar";
 import { MaterialFindBar } from "./MaterialFindBar";
 import { PageMenu } from "./PageMenu";
 import { PageRequestHost, PressMenu } from "./PageRequests";
-import { ReaderView } from "./ReaderView";
+import { ReaderView, useLeavingReader } from "./ReaderView";
 import { PageFailureView } from "./PageFailureView";
 import { PageCover } from "./PageCover";
 import { PageSurface } from "./PageSurface";
@@ -69,7 +66,7 @@ import { redesignedBarCenterFromBottom } from "../../lib/deckGeometry";
 import { useDemoMotion } from "./DemoMotion";
 import { PagerBackdrop, PagerNeighbour, useTabPager } from "./TabPager";
 import { TabSwipeHint } from "./tabSwipeHint";
-import { launchArguments } from "../../state/app/launchFlags";
+import { PageProgressLine } from "./PageProgressLine";
 import { labTrace } from "../../platform/lab";
 import { shownTone } from "../../lib/pageTone";
 import { besideStrip, bottomBarLayout, DUO_BAR, duoSqueeze } from "../../lib/bottomBarSpan";
@@ -93,6 +90,7 @@ export const BrowsingScreen = memo(function BrowsingScreen({ tab }: { tab: Brows
   const menuDocked = useMenuDocked();
   const finding = useFindOpen();
   const readerId = useReaderTabId();
+  const reader = useLeavingReader(readerId === tab.id ? tab.id : null);
   const pressing = usePressOpen();
   const tone = usePageTone(tab.id);
   const order = useDeckOrder();
@@ -124,7 +122,7 @@ export const BrowsingScreen = memo(function BrowsingScreen({ tab }: { tab: Brows
   const failed = useNavigation(tab.id, (n) => n?.failure != null);
   const pageTone = failed ? null : shownTone(tone, tab.themeColorHex);
   const underBar = usePageUnderBars();
-  const blankPage = underBar ? theme.pageSurface : theme.surface;
+  const blankPage = underBar ? theme.pageSurface : theme.canvas;
   const top = pageTone?.top ?? blankPage;
   const bottom = pageTone?.bottom ?? blankPage;
   const barDark = (design === "redesigned" || design === "material") && !pageTone?.bottom ? theme.dark : isDarkColor(bottom);
@@ -195,11 +193,11 @@ export const BrowsingScreen = memo(function BrowsingScreen({ tab }: { tab: Brows
   } : null);
 
   return (
-    <View style={[StyleSheet.absoluteFill, pulls ? null : { backgroundColor: theme.surface }]} onLayout={() => pageLaidOut(tab.id)}>
+    <View style={[StyleSheet.absoluteFill, pulls ? null : { backgroundColor: theme.canvas }]} onLayout={() => pageLaidOut(tab.id)}>
       <Shade shaded={menuOpen || dockedSearch || readerId === tab.id || pressing || tabsMenu}>
         <PageStack pulledTab={pulls ? tab.id : null} barTop={barTop}>
         <PagerBackdrop />
-        <Animated.View style={[StyleSheet.absoluteFill, styles.outgoing, { backgroundColor: theme.surface }, pager.outgoing]}>
+        <Animated.View style={[StyleSheet.absoluteFill, styles.outgoing, { backgroundColor: theme.canvas }, pager.outgoing]}>
           {underBar ? null : <Animated.View testID="pageStatusStrip" style={[{ height: insets.top }, statusStyle]} />}
           <View testID="pageArea" style={[styles.page, { marginBottom: layout.pageBottom }]}>
             <PageSurface key={tab.id} tab={tab} toneBottom={layout.toneBottom} obscured={obscured} summaryBottomInset={summaryBottomInset} pinsSafeArea={pulls ? true : undefined} />
@@ -212,9 +210,7 @@ export const BrowsingScreen = memo(function BrowsingScreen({ tab }: { tab: Brows
         {pagerCards(left, right, arrived ? tab : null).map(({ card, side }) => (
           <PagerNeighbour key={card.id} pager={pager} tab={card} side={side} width={width} statusHeight={insets.top} statusOver={underBar} hasLeft={left !== null} hasRight={right !== null} coverId={ARRIVAL_COVER_ID} />
         ))}
-        <View style={[styles.loading, { top: insets.top }]} pointerEvents="none">
-          <PageLoadingLine tabId={tab.id} color={theme.accent} />
-        </View>
+        <PageProgressLine tabId={tab.id} top={insets.top} />
         </PageStack>
         {materialBarHosted && design === "material" ? null : (
         <GestureDetector gesture={barGesture}>
@@ -225,7 +221,6 @@ export const BrowsingScreen = memo(function BrowsingScreen({ tab }: { tab: Brows
             accessibilityElementsHidden={barBlocked}
             style={[styles.bar, { height: barHeight(insets.bottom, design) }, underBar ? null : barStyle, finding && design === "material" ? styles.replacedBar : collapse.style]}
           >
-            {design === "redesigned" && underBar && Platform.OS === "ios" ? <BarBase color={bottom} controlTop={barCenterFromBottom(insets.bottom, design) + floatingBarLayout.control / 2} control={floatingBarLayout.control} fold={collapse.fold.progress} foldDrop={floatingBarLayout.control - hostPillLayout.height} /> : null}
             {design === "redesigned" ? (
               <Animated.View style={[styles.controls, { bottom: barCenterFromBottom(insets.bottom, design) - floatingBarLayout.control / 2, ...controlsSpan }, pulls ? barShift : null]} pointerEvents="box-none">
                 <Animated.View
@@ -280,7 +275,7 @@ export const BrowsingScreen = memo(function BrowsingScreen({ tab }: { tab: Brows
               <>
                 <View style={[StyleSheet.absoluteFill, { backgroundColor: barDark ? tabsInk.barShadeOnDark : tabsInk.barShadeOnLight }]} />
                 <View style={[styles.controls, { bottom: barCenterFromBottom(insets.bottom, design) - browseLayout.hitTarget / 2, ...controlsSpan }]}>
-                  <BottomBar order={order} roles={rolesFor(barDark)} showsPlus={!searching} onTabs={showDeck} onTabsMenu={openTabsMenu} onStep={stepTab} onPlus={newTab} onMore={openPageMenu} />
+                  <BottomBar order={order} roles={rolesFor(barDark)} showsPlus={!searching} incognito={tab.isPrivate} onTabs={showDeck} onTabsMenu={openTabsMenu} onStep={stepTab} onPlus={newTab} onMore={openPageMenu} />
                 </View>
               </>
             )}
@@ -301,7 +296,7 @@ export const BrowsingScreen = memo(function BrowsingScreen({ tab }: { tab: Brows
       ) : null}
       <PressMenu width={width} height={height} />
       {materialBarHosted && siteSettingsSheet ? null : pageMenu}
-      {readerId === tab.id ? <ReaderView tabId={tab.id} /> : null}
+      {reader.shown ? <ReaderView tabId={reader.shown} closing={reader.closing} /> : null}
       <PageRequestHost tabId={tab.id} />
       {Platform.OS === "android" ? <TabSwipeHint pager={pager} toward={right ? 1 : left ? -1 : 0} tabId={tab.id} calm={!searching && !menuOpen && !finding && !tabsMenu && !fullscreen && readerId !== tab.id && !collapse.hidden && !pressing} /> : null}
     </View>
@@ -423,20 +418,10 @@ export function barSwipeUp(enabled: boolean, pagerActive: { value: number }, ope
     });
 }
 
-function PageLoadingLine({ tabId, color }: { tabId: string; color: string }) {
-  const watch = useMemo<LoadWatch>(() => {
-    const loadFreeze = launchArguments().loadFreeze;
-    if (loadFreeze !== null) return (show) => (show(loadFreeze, true), () => undefined);
-    return (show) => watchPageLoad(tabId, show);
-  }, [tabId]);
-  return <LoadingLine watch={watch} color={color} />;
-}
-
 
 const styles = StyleSheet.create({
   outgoing: { overflow: "hidden" },
   page: { flex: 1 },
-  loading: { position: "absolute", left: 0, right: 0 },
   statusOver: { position: "absolute", left: 0, right: 0, top: 0 },
   bar: { position: "absolute", left: 0, right: 0, bottom: 0 },
   replacedBar: { opacity: 0 },

@@ -33,7 +33,7 @@ test("the Sync With Mac row and page say what each phase needs, as SyncStatusWor
   assert.deepEqual(syncHeroSubtitle(off), { text: "Your Mac’s tabs here, and this phone’s on your Mac.", isWarning: false });
   assert.deepEqual(syncRowSubtitle(status()), { text: "Updated just now", isWarning: false });
   assert.deepEqual(syncRowSubtitle(status({ phase: "needsFolderAccess", attention: "folder" })), { text: "Choose Your Sync Folder Again", isWarning: true });
-  assert.deepEqual(syncRowSubtitle(status({ phase: "locked", attention: "phrase" })), { text: "Enter Your Recovery Phrase", isWarning: true });
+  assert.deepEqual(syncRowSubtitle(status({ phase: "locked", attention: "phrase" })), { text: "Enter Recovery Phrase", isWarning: true });
   assert.deepEqual(syncRowSubtitle(status({ phase: "reset", attention: "reset" })), { text: "Out of Sync", isWarning: true });
   const stalled = status({ phase: "stalled", attention: "stalled", statusText: "Not syncing · Last synced 2 hours ago" });
   assert.deepEqual(syncRowSubtitle(stalled), { text: "Not syncing · Last synced 2 hours ago", isWarning: true });

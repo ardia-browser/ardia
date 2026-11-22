@@ -6,6 +6,7 @@ import { redesignedBarCenterFromBottom } from "../../lib/deckGeometry";
 import { linearGradientCss } from "../../lib/gradient";
 import { lookForApp, type ProfileLook } from "../../lib/profileLook";
 import { sfSymbol } from "../../lib/sfSymbols";
+import { actionWords } from "../../lib/sharedWords";
 import { haptics } from "../../state/app/haptics";
 import { newTab } from "../../state/browse/store";
 import { usePreferences } from "../../state/settings/hooks";
@@ -156,9 +157,9 @@ export function StartMark({ incognito }: { incognito: boolean }) {
     [reduceMotion],
   );
   const moved = useAnimatedStyle(() => {
-    const scale = reduceMotion ? 1 : 1 + (startLogo.dragLift - 1) * lifted.value - (1 - startLogo.pressScale) * pressed.value;
+    const scale = reduceMotion ? 1 : 1 + (startLogo.dragLift - 1) * lifted.value;
     const tilt = reduceMotion ? 0 : (x.value / DRAG_REACH) * startLogo.dragTilt;
-    return { opacity: reduceMotion ? 1 - (1 - startLayout.logoPressOpacity) * pressed.value : 1, transform: [{ translateX: x.value }, { translateY: y.value }, { rotate: `${tilt}deg` }, { scale }] };
+    return { opacity: 1 - (1 - startLayout.logoPressOpacity) * pressed.value, transform: [{ translateX: x.value }, { translateY: y.value }, { rotate: `${tilt}deg` }, { scale }] };
   }, [reduceMotion]);
   const search = () => {
     if (Platform.OS === "android" && !incognito) countUsage("start_logo_taps");
@@ -170,14 +171,13 @@ export function StartMark({ incognito }: { incognito: boolean }) {
         <Pressable
           testID="startLogoButton"
           accessibilityRole="button"
-          accessibilityLabel="Search"
-          accessibilityHint="Opens Search."
+          accessibilityLabel={incognito ? actionWords.newIncognitoTab : actionWords.newTab}
           onPressIn={() => {
             haptics.barPress();
-            pressed.value = reduceMotion ? withTiming(1, { duration: startLogo.reducedSettleMs / 2 }) : withSpring(1, press);
+            pressed.value = 1;
           }}
           onPressOut={() => {
-            pressed.value = reduceMotion ? withTiming(0, { duration: startLogo.reducedSettleMs }) : withSpring(0, settle);
+            pressed.value = 0;
           }}
           onPress={search}
           style={styles.logoButton}

@@ -17,12 +17,19 @@ export const curve = {
 
 export const currentValue = (value: Animated.Value): number => (value as unknown as { __getValue(): number }).__getValue();
 
+type AttachableNode = { __attach(): void; __detach(): void };
 type NativeNode = { __nativeTag?: number; __detach(): void };
 
 export function releaseNativeValue(value: Animated.Value) {
   value.removeAllListeners();
   const node = value as unknown as NativeNode;
   if (node.__nativeTag != null) node.__detach();
+}
+
+export function keepAttached(value: Animated.Value): () => void {
+  const anchor = value.interpolate({ inputRange: [0, 1], outputRange: [0, 1] }) as unknown as AttachableNode;
+  anchor.__attach();
+  return () => anchor.__detach();
 }
 
 export const animating = (value: Animated.Value): boolean => (value as unknown as { _animation?: unknown })._animation != null;

@@ -14,6 +14,7 @@ import { useMaterialTheme } from "../ui/materialTheme";
 import { materialBottomBar, materialDuration, materialMotion, materialMove, materialSize, materialType } from "../ui/materialTokens";
 import { reducedMotionMs } from "../ui/motion";
 import type { MaterialScheme } from "../../lib/material/schemes";
+import { actionWords, destinationWords } from "../../lib/sharedWords";
 
 export const materialStartMs = (reduceMotion: boolean, searching: boolean) =>
   reduceMotion ? reducedMotionMs(materialDuration.short3) : searching ? materialMotion.fadeThroughOut.durationMs : materialMotion.fadeThroughIn.durationMs;
@@ -41,8 +42,8 @@ export function MaterialStart() {
   const leading: { icon: SymbolName; label: string; onPress: () => void } = hasTabs
     ? { icon: "squareOnSquare", label: "Tabs", onPress: showDeck }
     : syncs
-      ? { icon: "laptop", label: "Synced Tabs", onPress: openSpaces }
-      : { icon: "archivebox", label: "Archive", onPress: openArchive };
+      ? { icon: "laptop", label: destinationWords.spaces, onPress: openSpaces }
+      : { icon: "archivebox", label: destinationWords.archive, onPress: openArchive };
   return (
     <View testID="materialStart" style={StyleSheet.absoluteFill}>
       {incognito ? <View testID="materialStartBackdrop" style={[StyleSheet.absoluteFill, { backgroundColor: scheme.surface }]} /> : <Backdrop colors={theme.start.colors} />}
@@ -57,12 +58,12 @@ export function MaterialStart() {
         <StartIconButton icon={leading.icon} label={leading.label} scheme={scheme} onPress={leading.onPress} />
         <View style={styles.fill} />
         {incognito ? (
-          <StartIconButton icon="plus" label="New Tab" scheme={scheme} onPress={newRegularTab} />
+          <StartIconButton icon="plus" label={actionWords.newTab} scheme={scheme} onPress={newRegularTab} />
         ) : (
-          <StartIconButton icon="eyes" label="New Incognito Tab" scheme={scheme} onPress={newIncognitoTab} />
+          <StartIconButton icon="eyes" label={actionWords.newIncognitoTab} scheme={scheme} onPress={newIncognitoTab} />
         )}
         {canReopen && !incognito ? <StartIconButton icon="arrowUturnBackward" label="Reopen Closed Tab" scheme={scheme} onPress={reopenLastClosed} /> : null}
-        <StartIconButton icon="gearshape" label="Settings" scheme={scheme} onPress={() => openSettings()} />
+        <StartIconButton icon="gearshape" label={destinationWords.settings} scheme={scheme} onPress={() => openSettings()} />
       </Animated.View>
       <Animated.View
         testID="materialStartCenter"

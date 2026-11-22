@@ -1,3 +1,5 @@
+import { FLOATING_BAR_PLACE } from "./deckGeometry.ts";
+
 export type BarSpan = { left: number; right: number };
 
 export type ScreenHinge = "none" | "closed" | "partiallyOpen" | "fullyOpen";
@@ -6,7 +8,7 @@ export type DuoStrip = { side: "left" | "right"; centerX: number; plus: number; 
 
 export type BottomBarLayout = { span: BarSpan; strip: DuoStrip | null };
 
-export const DUO_BAR = { openFrom: 600, openWidth: 400, stripGap: 12, button: 48, axis: 48, buttonGap: 7, menuGap: 8 } as const;
+export const DUO_BAR = { openFrom: 600, openWidth: 400, stripGap: 12, button: FLOATING_BAR_PLACE.control, axis: 48, buttonGap: 7, menuGap: 8 } as const;
 
 export const DUO_PLUS_ABOVE = DUO_BAR.button + DUO_BAR.buttonGap;
 

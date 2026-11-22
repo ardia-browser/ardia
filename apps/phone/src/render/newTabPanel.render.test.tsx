@@ -7,7 +7,7 @@ import { Symbol } from "../components/ui";
 import { IncognitoEyes } from "../components/ui/IncognitoEyes";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { searchPanelShown, SearchTray } from "../components/search/SearchTray";
-import { searchPanel } from "../components/search/searchPanelTokens";
+import { searchPanel, searchPanelRadius } from "../components/search/searchPanelTokens";
 import * as tabMenus from "../state/browse/tabMenus";
 import { DesignProvider } from "../components/ui";
 import * as browse from "../state/browse/store";
@@ -73,7 +73,8 @@ const lift = (to: number) => act(() => (mockSeen.props!.onLift as (lift: { lift:
 const editPage = () => act(() => presentSearch("page", "site0.example", null, { currentUrl: "https://site0.example/", currentTabId: currentTabs().open[0]!.id }));
 
 const rowsMeasure = (root: Root, height: number) => act(() => root.root.findAll((node) => node.props.testID === "searchPanelRowsScroll" && typeof node.props.onContentSizeChange === "function")[0]!.props.onContentSizeChange(0, height));
-const PANEL_HEIGHT = searchPanel.fieldTop + searchPanel.fieldHeight + searchPanel.rowsTop + searchPanel.rowsShown * searchPanel.rowPitch + searchPanel.bottom;
+const PANEL_RADIUS = searchPanelRadius(searchPanel.fieldHeight);
+const PANEL_HEIGHT = searchPanel.fieldInset + searchPanel.fieldHeight + searchPanel.rowsTop + searchPanel.rowsShown * searchPanel.rowPitch + searchPanel.bottom;
 
 onIPhone("the search panel has one fixed height, the field and four rows as in Arc, whatever the rows measure, from a new tab and when editing a page", () => {
   act(() => presentSearch("start", ""));
@@ -91,7 +92,7 @@ onIPhone("the search panel has one fixed height, the field and four rows as in A
   const edit = tray();
   lift(300);
   expect(flat(host(edit, "traySurface")).height).toBe(PANEL_HEIGHT + 300);
-  expect(PANEL_HEIGHT).toBe(276);
+  expect(PANEL_HEIGHT).toBe(280.5);
   unmount(edit);
 });
 
@@ -148,16 +149,16 @@ onIPhone("the panel's field is a 44 point pill with the mic and Incognito's eyes
   act(() => presentSearch("start", ""));
   const root = tray();
   const capsule = host(root, "trayFieldCapsule")!;
-  expect(flat(capsule)).toMatchObject({ minHeight: searchPanel.fieldHeight, borderRadius: searchPanel.fieldHeight / 2 });
+  expect(flat(capsule)).toMatchObject({ height: searchPanel.fieldHeight, borderRadius: searchPanel.fieldHeight / 2 });
   expect(flat(host(root, "completingField")).fontSize).toBeUndefined();
-  expect(capsule.findAll((node) => node.props.accessibilityLabel === "Activate Incognito")).not.toHaveLength(0);
+  expect(capsule.findAll((node) => node.props.accessibilityLabel === "Incognito" && node.props.accessibilityRole === "switch" && node.props.accessibilityState?.checked === false)).not.toHaveLength(0);
   expect(capsule.findAll((node) => node.type === IncognitoEyes)).toHaveLength(1);
   expect(capsule.findAll((node) => node.type === Symbol && node.props.name === "eyes")).toHaveLength(0);
   expect(host(root, "trayIncognitoLabel")).toBeUndefined();
   act(() => root.root.findAll((node) => node.props.testID === "trayIncognito" && typeof node.props.onPress === "function")[0]!.props.onPress());
   expect(useTabs.getState().incognito).toBe(true);
   const incognitoCapsule = host(root, "trayFieldCapsule")!;
-  expect(incognitoCapsule.findAll((node) => node.props.accessibilityLabel === "Deactivate Incognito")).not.toHaveLength(0);
+  expect(incognitoCapsule.findAll((node) => node.props.accessibilityLabel === "Incognito" && node.props.accessibilityRole === "switch" && node.props.accessibilityState?.checked === true)).not.toHaveLength(0);
   expect(incognitoCapsule.findAll((node) => node.type === IncognitoEyes && node.props.incognito === true)).toHaveLength(1);
   expect(host(root, "trayIncognitoPlate")).toBeUndefined();
   expect(root.root.findAll((node) => node.props.testID === "trayIncognitoLabel" && node.props.children === "Incognito").length).toBeGreaterThan(0);
@@ -172,9 +173,9 @@ onIPhone("the panel runs edge to edge and on under the keyboard to the screen's 
   lift(300);
   expect(flat(host(root, "trayPanel")).bottom).toBe(-300);
   expect(flat(host(root, "trayRowsReveal")).paddingBottom).toBe(300);
-  expect(flat(host(root, "traySurface"))).toMatchObject({ borderTopLeftRadius: searchPanel.radius, borderTopRightRadius: searchPanel.radius });
+  expect(flat(host(root, "traySurface"))).toMatchObject({ borderTopLeftRadius: PANEL_RADIUS, borderTopRightRadius: PANEL_RADIUS });
   expect(flat(host(root, "traySurface")).borderBottomLeftRadius).toBeUndefined();
-  expect(mockSeen.props).toMatchObject({ cardInset: 0, cardGap: 0, fieldInset: searchPanel.fieldSide, fieldTop: searchPanel.fieldTop, morphCorners: { panel: searchPanel.radius } });
+  expect(mockSeen.props).toMatchObject({ cardInset: 0, cardGap: 0, fieldInset: searchPanel.fieldInset, fieldTop: searchPanel.fieldInset, morphCorners: { panel: PANEL_RADIUS } });
   unmount(root);
   act(() => dismissSearch());
   editPage();
@@ -220,7 +221,7 @@ onAndroid("Android's search draws the same panel, edge to edge with its field on
   act(() => presentSearch("start", ""));
   const root = tray();
   expect(host(root, "searchPanelFieldRow")).toBeDefined();
-  expect(flat(host(root, "trayPanel"))).toMatchObject({ borderTopLeftRadius: searchPanel.radius });
+  expect(flat(host(root, "trayPanel"))).toMatchObject({ borderTopLeftRadius: PANEL_RADIUS });
   expect(host(root, "traySurface")).toBeUndefined();
   unmount(root);
 });

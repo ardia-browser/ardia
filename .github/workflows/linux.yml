@@ -2,15 +2,54 @@ name: Linux
 
 on:
   pull_request:
-    paths:
+    paths: &linux
       - "apps/linux/**"
-      - "apps/browser/**"
-      - "scripts/release/official-plugins.py"
-      - "packages/**"
-      - "engine/**"
+      - "apps/browser/src/**"
+      - "apps/browser/assets/**"
+      - "apps/browser/package.json"
+      - "apps/browser/tsconfig.json"
+      - "apps/browser/official-plugins.json"
+      - "apps/browser/official-plugins.d.json.ts"
+      - "apps/browser/macos/Ardia.xcodeproj/project.pbxproj"
+      - "apps/browser/windows/Ardia/IntroMusic.wav"
+      - "apps/site/src/scripts/meadow/**"
+      - "apps/cli/install.sh"
+      - "packages/core/src/**"
+      - "packages/ardiacore/src/**"
+      - "packages/import/src/**"
+      - "packages/shaders/src/**"
+      - "packages/shell/src/**"
+      - "packages/sync/src/**"
+      - "packages/*/package.json"
+      - "packages/*/tsconfig.json"
+      - "packages/ardiacore/scripts/**"
+      - "packages/ardiacore/ios/ArdiaLittleFitMath.h"
+      - "packages/ardiacore/ios/ArdiaWindowController.mm"
+      - "packages/ardiacore/ios/page_script.js"
+      - "packages/shell/ios/BangListFetch.swift"
+      - "packages/shell/ios/CrashReports.swift"
+      - "packages/shell/ios/ReportFiles.swift"
+      - "packages/shell/ios/ReportUploader.swift"
+      - "packages/shell/ios/ShellModule.swift"
+      - "packages/shell/ios/SystemModule.swift"
+      - "packages/shell/ios/WindowManager.swift"
+      - "packages/sync/ios/Core/Wordlist.swift"
+      - "packages/sync/tests/fixtures/**"
+      - "packages/ardiacore/prebuilt-engines-linux.tsv"
+      - "packages/ardiacore/tests/ubo-scriptlets.test.mjs"
+      - "packages/shaders/ios/Meadow/**"
+      - "packages/shaders/windows/**"
+      - "engine/ardiacore-linux/**"
+      - "engine/ardiacore/src/**"
+      - "engine/chromium/**"
+      - "engine/patches/**"
+      - "engine/engine-key.*"
       - "scripts/linux/**"
       - "scripts/lib/**"
       - "scripts/agent/locked"
+      - "scripts/release/official-plugins.py"
+      - ".claude/skills/release/scripts/publish.sh"
+      - "docs/linux-port.md"
       - "infra/feedback/lib/**"
       - "patches/**"
       - "package.json"
@@ -23,25 +62,7 @@ on:
       - ".github/actions/linux-setup/**"
   push:
     branches: [main]
-    paths:
-      - "apps/linux/**"
-      - "apps/browser/**"
-      - "scripts/release/official-plugins.py"
-      - "packages/**"
-      - "engine/**"
-      - "scripts/linux/**"
-      - "scripts/lib/**"
-      - "scripts/agent/locked"
-      - "infra/feedback/lib/**"
-      - "patches/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "turbo.json"
-      - "tsconfig.base.json"
-      - ".nvmrc"
-      - ".github/workflows/linux.yml"
-      - ".github/actions/linux-setup/**"
+    paths: *linux
   workflow_dispatch:
     inputs:
       engine:
@@ -51,8 +72,8 @@ on:
         default: nearest
 
 concurrency:
-  group: linux-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: linux-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 permissions:
   contents: read
@@ -63,6 +84,7 @@ env:
 
 jobs:
   gate:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -87,7 +109,7 @@ jobs:
   checks:
     name: checks (${{ matrix.name }})
     needs: gate
-    if: needs.gate.outputs.run == 'true'
+    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -95,9 +117,7 @@ jobs:
       matrix:
         include:
           - { name: "UI", part: ui, shard: 1/1, slug: ui }
-          - { name: "engine fixtures, 1 of 3", part: engine, shard: 1/3, slug: engine-1 }
-          - { name: "engine fixtures, 2 of 3", part: engine, shard: 2/3, slug: engine-2 }
-          - { name: "engine fixtures, 3 of 3", part: engine, shard: 3/3, slug: engine-3 }
+          - { name: "engine fixtures", part: engine, shard: 1/1, slug: engine }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -116,7 +136,7 @@ jobs:
 
   package:
     needs: gate
-    if: needs.gate.outputs.run == 'true'
+    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -127,7 +147,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
       - id: engine-key
-        run: echo "key=$(engine/engine-key.sh)" >> "$GITHUB_OUTPUT"
+        run: echo "key=$(engine/engine-key.sh --platform linux)" >> "$GITHUB_OUTPUT"
       - name: Which packages
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
@@ -181,7 +201,7 @@ jobs:
             exit 1
           fi
           selected=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["engine_key"])' "$engine/manifest.json")
-          if [ "$selected" = "$ENGINE_KEY" ]; then
+          if python3 -I scripts/linux/runtime_files.py serves --engine "$engine" --key "$ENGINE_KEY"; then
             label="${GITHUB_SHA:0:12}"
             echo "ENGINE_EXACT=1" >> "$GITHUB_ENV"
             echo "### Linux engine ${ENGINE_KEY:0:12} (exact)" >> "$GITHUB_STEP_SUMMARY"
@@ -218,6 +238,8 @@ jobs:
           for built in "${formats[@]}"; do
             (cd "$RUNNER_TEMP/dist" && sha256sum "$PACKAGE_NAME.$built" > "$PACKAGE_NAME.$built.sha256")
           done
+      - name: Content blocker patches
+        run: node --test packages/ardiacore/tests/ubo-scriptlets.test.mjs
       - name: Smoke
         run: |
           set -euo pipefail

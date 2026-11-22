@@ -150,6 +150,23 @@ test("on the closed Duo with Collapse Bottom Bar on, scrolling down folds the ba
   expect(pageMenu(root).props.accessibilityLabel).toBe("Page Menu");
   unmount(root);
 });
+test("squeezed on the open Duo, the ··· circle that speaks the address also carries the page's busy state while it loads; unsqueezed it leaves that to the address", () => {
+  onDuo(OPEN);
+  const tab = currentTabs().open[0]!;
+  const loading = (isLoading: boolean) => act(() => storeNavigation(tab.id, { url: tab.url, title: "Site", isLive: true, isLoading, progress: isLoading ? 0.4 : 1, failure: null, canGoBack: false, canGoForward: false, scrollDirection: "down" } as unknown as PageState));
+  const root = page(tab);
+  expect(pageMenu(root).props.accessibilityState).toEqual({ disabled: false });
+  scrolled(tab, "down");
+  settle();
+  expect(pageMenu(root).props.accessibilityLabel).toMatch(/^Page Menu, \S/);
+  expect(pageMenu(root).props.accessibilityState).toEqual({ disabled: false, busy: false });
+  loading(true);
+  expect(pageMenu(root).props.accessibilityState).toEqual({ disabled: false, busy: true });
+  loading(false);
+  expect(pageMenu(root).props.accessibilityState).toEqual({ disabled: false, busy: false });
+  unmount(root);
+});
+
 test("collapsed on the open Duo, the ··· circle opens the page menu and leaves the bar collapsed, and its label carries the site", async () => {
   onDuo(OPEN);
   const tab = { ...currentTabs().open[0]!, url: "https://www.swift.org/" };

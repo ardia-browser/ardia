@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { PSL_TLDS } from "./tlds.ts";
 import { domainToASCII } from "node:url";
-import { cleanUrl } from "./cleanUrl.ts";
+import { cleanUrl, cleanUrlReport } from "./cleanUrl.ts";
 import { displayHost, hostSpoofReason, punycodeEncode } from "./idn.ts";
 import { breadcrumb, classifyPaste, fixupUrl, resolveInput, sameAddress, spacedAddressGuess, urlForDisplay } from "./omnibox.ts";
 import { displayUrl } from "./suggest.ts";
@@ -187,6 +187,16 @@ test("cleanUrl keeps the rest of the URL exactly as it was", () => {
   assert.equal(cleanUrl("https://example.com/?b=2&a=1"), "https://example.com/?b=2&a=1");
   assert.equal(cleanUrl("https://example.com/path"), "https://example.com/path");
   assert.equal(cleanUrl("https://user:pw@example.com:8443/p?utm_term=x&k"), "https://user:pw@example.com:8443/p?k");
+});
+
+test("cleanUrlReport gives cleanUrl's result and says whether a tracking parameter was really removed", () => {
+  assert.deepEqual(cleanUrlReport("https://shop.example/item?id=42&gclid=Cj0KCQ&color=red"), { url: "https://shop.example/item?id=42&color=red", removedTracker: true });
+  assert.deepEqual(cleanUrlReport("https://example.com/?q=abc&"), { url: "https://example.com/?q=abc", removedTracker: false });
+  assert.deepEqual(cleanUrlReport("https://example.com/?&&"), { url: "https://example.com/", removedTracker: false });
+  assert.deepEqual(cleanUrlReport("https://example.com/?q=abc&&fbclid=1"), { url: "https://example.com/?q=abc", removedTracker: true });
+  assert.deepEqual(cleanUrlReport("https://example.com/path"), { url: "https://example.com/path", removedTracker: false });
+  assert.deepEqual(cleanUrlReport("ardia://history/?utm_source=x"), { url: "ardia://history/?utm_source=x", removedTracker: false });
+  for (const url of ["https://example.com/?q=abc&", "https://x.example/?_hsenc=p2A&_hsmi=1&msclkid=9", "https://user:pw@example.com:8443/p?utm_term=x&k", "not a url?utm_source=x"]) assert.equal(cleanUrlReport(url).url, cleanUrl(url));
 });
 
 test("displayed URLs say ardia://, never chrome://", () => {

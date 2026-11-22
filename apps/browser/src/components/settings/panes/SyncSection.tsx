@@ -8,13 +8,15 @@ import { copyRecoveryPhrase, revealSyncFolder, type FolderInfo } from "../../../
 import { syncFolder } from "../../../state/settings/paneData";
 import { useResource } from "../../../state/settings/resources";
 import { useProfiles } from "../../../state/browser/hooks";
-import { chooseSyncFolder, folderInfo, setOpenTabsSynced, setTypeSynced, syncNow, turnOnSync, useSync } from "../../../state/sync/engine";
+import { chooseSyncFolder, folderInfo, moveSyncFolder, setOpenTabsSynced, setSyncFolder, setTypeSynced, syncNow, turnOnSync, useSync } from "../../../state/sync/engine";
+import { folderMoveMessage, pickSyncFolder, type TurnOnFolder } from "../../../state/sync/folderMove";
 import { DATA_TYPES, type SyncStatus } from "../../../state/sync/syncDoc";
 import { deviceDetail } from "../../../state/sync/devices";
 import { Group, Row, SectionHeader } from "../Form";
 import { addAllRemoteProfiles, confirmRemoveDevice, folderLabel, lookingForProfiles, RemoteProfileRow, showConnectDevice, showPhraseEntry, showRecoveryKit, showStopSync } from "./SyncSheets";
 import { ago } from "../../../lib/time";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
+import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { Checklist } from "./Checklist";
 
 function statusLine(status: SyncStatus, lastSyncedAt: number | null, pending: number): string {
@@ -75,19 +77,35 @@ function SyncOff({ info }: { info: FolderInfo | null }) {
   const error = useSync((s) => s.error);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
-  const noICloud = !!info && info.path === info.defaultPath && !info.iCloudAvailable;
+  const chosen = useSync((s) => s.folder);
+  const asksWhere = !PLATFORM_FEATURES.defaultCloudDrive && !chosen && !info?.hasSyncData;
+  const noICloud = !asksWhere && !!info && info.path === info.defaultPath && !info.iCloudAvailable;
   const hasData = !!info?.hasSyncData;
 
-  const turnOn = async () => {
-    if (!info) return;
+  const turnOn = async (path = info?.path, how: TurnOnFolder | undefined = PLATFORM_FEATURES.defaultCloudDrive ? undefined : "kept") => {
+    if (!path) return;
     setBusy(true);
     setFailure(null);
-    const result = await turnOnSync(info.path);
+    const result = await turnOnSync(path, how);
     setBusy(false);
     if ("error" in result) setFailure(result.error);
     else showRecoveryKit();
   };
-  const enterPhrase = () => showPhraseEntry(info, () => void chooseSyncFolder().then(() => folderInfo().then((i) => showPhraseEntry(i))));
+  const pickThenEnter = async () => {
+    const picked = await chooseSyncFolder();
+    if (picked) showPhraseEntry(await folderInfo(picked), () => void pickThenEnter());
+  };
+  const turnOnAsking = async () => {
+    setFailure(null);
+    const picked = await pickSyncFolder(null);
+    if (!picked) return;
+    const picks = await folderInfo(picked);
+    if (!picks?.hasSyncData) return turnOn(picked, "picked");
+    await setSyncFolder(picked);
+    showPhraseEntry(picks, () => void pickThenEnter());
+  };
+  const enterPhrase = () =>
+    asksWhere ? void pickThenEnter() : showPhraseEntry(info, () => void chooseSyncFolder().then(() => folderInfo().then((i) => showPhraseEntry(i))));
   const otherOptions = async () => {
     const choice = await showMenu([
       { id: "folder", title: "Choose Sync Folder…" },
@@ -113,14 +131,21 @@ function SyncOff({ info }: { info: FolderInfo | null }) {
               ? error
               : hasData
                 ? "This folder has synced data already. To sync with your other devices, enter the recovery phrase from one of them."
-                : `Off. Your ${PLATFORM_TERMS.syncedComputer}s meet in a folder you choose, end-to-end encrypted. ${where}`
+                : asksWhere
+                  ? `Off. Your ${PLATFORM_TERMS.syncedComputer}s meet in a folder you choose, end-to-end encrypted. Turn On asks where: pick one that ${PLATFORM_TERMS.cloudDrive} keeps in sync, or one on a shared drive, and Ardia keeps its files in an “Ardia Sync” folder there.`
+                  : `Off. Your ${PLATFORM_TERMS.syncedComputer}s meet in a folder you choose, end-to-end encrypted. ${where}`
           }
         >
           <Button title="More" onPress={() => void otherOptions()} />
           {hasData ? (
             <Button title="Enter Recovery Phrase…" kind="primary" onPress={enterPhrase} />
           ) : (
-            <Button title={busy ? "Turning On…" : "Turn On"} kind="primary" disabled={busy || noICloud || !info} onPress={() => void turnOn()} />
+            <Button
+              title={busy ? "Turning On…" : asksWhere ? "Turn On…" : "Turn On"}
+              kind="primary"
+              disabled={busy || noICloud || !info}
+              onPress={() => void (asksWhere ? turnOnAsking() : turnOn())}
+            />
           )}
         </Row>
         {noICloud ? (
@@ -156,12 +181,22 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
   const joining = useSync((s) => s.joining);
   const profiles = useProfiles();
   const [, tick] = useState(0);
+  const [moved, setMoved] = useState<{ text: string; failed: boolean } | null>(null);
   useEffect(() => {
     const t = setInterval(() => tick((n) => n + 1), 30_000);
     return () => clearInterval(t);
   }, []);
 
   const locked = status === "locked";
+  const move = async () => {
+    if (!info) return;
+    setMoved(null);
+    const target = await pickSyncFolder(info.path);
+    if (!target) return;
+    const result = await moveSyncFolder(target);
+    const label = folderLabel({ path: target, inICloud: false });
+    setMoved({ text: folderMoveMessage(result, label, folderLabel(info)), failed: "error" in result });
+  };
   const advanced = async () => {
     const choice = await showMenu([
       { id: "kit", title: "Save Recovery Kit…", symbol: "arrow.down.doc", enabled: !locked },
@@ -169,6 +204,7 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
       { separator: true },
       { id: "now", title: "Sync Now", symbol: "arrow.triangle.2.circlepath" },
       { id: "reveal", title: `Show Sync Folder in ${PLATFORM_TERMS.fileManager}`, symbol: "folder", enabled: !!info?.exists },
+      ...(PLATFORM_FEATURES.movesSyncFolder ? [{ id: "move", title: "Move Sync Folder…", symbol: "arrow.right.circle", enabled: !locked && !!info }] : []),
       { separator: true },
       { id: "stop", title: "Stop Syncing…", symbol: "xmark.circle" },
     ]);
@@ -176,6 +212,7 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
     else if (choice === "copy") await copyRecoveryPhrase();
     else if (choice === "now") await syncNow();
     else if (choice === "reveal" && info) await revealSyncFolder(info.path);
+    else if (choice === "move") await move();
     else if (choice === "stop") showStopSync();
   };
 
@@ -195,7 +232,9 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
           )}
           <Button title="Advanced…" onPress={() => void advanced()} />
         </Row>
-        <Row anchor="general.syncFolder" description={info ? folderLabel(info) : " "} />
+        <Row anchor="general.syncFolder" description={info ? folderLabel(info) : " "}>
+          {PLATFORM_FEATURES.movesSyncFolder ? <Button title="Move…" disabled={locked || !info} onPress={() => void move()} /> : null}
+        </Row>
         <Checklist
           anchor="general.whatSyncs"
           description={null}
@@ -218,6 +257,11 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
           </Row>
         ))}
       </Group>
+      {moved ? (
+        <Text size="caption" tone={moved.failed ? "destructive" : "textSecondary"} style={FAILURE}>
+          {moved.text}
+        </Text>
+      ) : null}
       {shownError ? (
         <View style={ERROR_ROW}>
           <Symbol name="exclamationmark.circle.fill" size={11} color={theme.destructive} style={ERROR_ICON} />

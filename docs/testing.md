@@ -66,6 +66,40 @@ holds the rest.
 | Native perf | `node apps/browser/scripts/perf/native-bench.mjs --app <Release app> --out <dir>` | Launch, idle, memory, tab and window latency; the release perf gate (`docs/perf/README.md`) |
 | JS perf | `node apps/browser/scripts/perf/js-bench.mjs run --app <Release app> --bundle <main.jsbundle> --label <name>` | What each interaction costs the JS thread (`docs/perf/README.md`) |
 
+## CI
+
+- `checks.yml` starts only on the paths one of its jobs reads, and a `which checks run` job (`dorny/paths-filter`)
+  picks the jobs from the change: `typecheck, tests and Mac bundle` (typecheck, the portable tests, the store
+  simulator and the Mac bundle, Metro then Hermes) for the workspace code; the browser's tests in three shares
+  (`--test-shard=I/3`) for what those tests read, which reaches past `apps/browser` into every package, the engine
+  sources, `apps/linux/src`, `scripts/{lib,security,windows}`, `tests/` and two docs; and `repository, vouch and
+  stale tests` (`test:root`, no install) for `scripts/`, `engine/`, `.github/`, `.claude/`, the site and the release
+  notes. A
+  docs-only, phone-app, dashboard or videos change starts none of them. When the filter can't tell (an API error, a
+  force push it can't diff, a pull request of 3,000 files or more) or the `which checks run` job fails, every job
+  runs. `scripts/ci/workflow-paths.test.mjs` keeps the trigger paths and the filters in step, follows the meadow
+  check's site imports, and fails when a Linux fixture or a root test names a file its job doesn't start on. Each share restores the TSX it transpiled last time (`ardia-test-tsx-I-of-3-…`); only pushes to
+  `main` save it, so pull requests add no caches. A newer push cancels the run before it, on `main` too.
+- `linux.yml` starts on what the Linux build and its fixture suites read (`apps/linux`, the shared UI and the desktop
+  packages' sources, the engine sources, its scripts, and the few Mac files the parity fixtures compare against,
+  which `workflow-paths.test.mjs` finds in the suites and checks), not on the rest of the Mac, iPhone, Android or
+  Windows native code; `windows.yml`
+  leaves out `packages/phone`; `windows-engine-inputs.yml` starts on the engine inputs `check_inputs.py` reads;
+  `deploy.yml` starts on `main` only for paths one of its services deploys from.
+- `mac.yml` compiles the Mac app (Debug, unsigned, `xcode-27`) on pull requests and pushes that touch its native code:
+  `apps/browser/macos`, the packages' `ios` folders, the Dock tile and plugin host, the engine's public headers, the
+  workspace manifests, the patches and the lockfile. It builds against this commit's engine, or the nearest published
+  one before it, and any compiler error fails it. When `engine/ardiacore/src/ardia/core/public` changed since that
+  engine it also fails after the build, asking for the engine to be published first.
+- The heavy workflows (`ios.yml`, `android.yml`, `linux.yml`, `windows.yml`, `mac.yml`) run their vouch `gate` job
+  only for pull requests from forks. Pushes, manual runs and branches of this repository skip it and start the build
+  at once. A newer push or pull request run cancels the one before it; manual and release runs each have their own
+  group and are never cancelled. `windows.yml` reads the `full-ci` label in its `identity` job, live, so adding the
+  label and re-running all jobs gives the full run.
+- Caches that would fill the 10 GB limit are saved on pushes to `main` only and pruned to the newest per branch by
+  `caches.yml`: Gradle (`gradle-phone-`, which `--main-only` also deletes from every other branch), Xcode compilation
+  caches (`xcode-cas-`), Pods (`pods-`, shared by `mac.yml` and the Release workflow, and `phone-pods-`).
+
 ## ArdiaCore acceptance
 
 The acceptance run's checks and what each proves are listed in `docs/ardiacore-parity.md` › "Acceptance (hidden instance)".
@@ -272,6 +306,7 @@ lose or leak data, or when the bug is invisible by eye and has shipped before.
 | `apps/browser/src/state/sync/adapters.test.mjs`, `engine.test.mjs` | Bookmark delete-vs-add and move cycles, parked pinned tabs, passwords (newest wins); a crash right after a batch lands; nothing published before its journal is on disk | Sync data loss (0.2.11) |
 | `apps/browser/src/state/sync/pairs.test.mjs` | Two in-memory Macs, every ordered pair of pinned-tab edits (pin, unpin, re-pin, row/tile, moves into groups, new groups, group unpin/re-pin/delete/restyle, rename, loaded pages, a member's page, a trip away and back, and a page copied to a new mirror before its window closes, profile moves) and lifecycle steps (park and reopen, a mirror window, a relaunch through the saved session, a snapshot collecting tombstones 46 days on) in six schedules (one after the other, concurrent, concurrent with a third Mac running the shipped 0.2.38 pinned adapter and scope from `fixtures`, either Mac's log delayed, a third Mac joining from the folder after B's delayed log, A's first log 44 days late while B compacts and a third Mac joins from that snapshot, without the ops that compact again), 7,402 runs in about 8 s: all Macs converge on the same pins, names, icons and group styles, every record names a group that exists, nothing pinned or kept regular is lost, the Mac that unpins a group keeps it, windows, splits and groups stay whole and ordered, each edit's outcome holds (renames, restyles, the page a Mac navigated to is sent, the later explicit choice), and nothing is sent once settled. Fourteen more cases: a member waiting for a group that never comes stands alone after 90 days on an idle Mac; seven page changes (a member navigated behind another window, copied to a new mirror whose window then closes, copied to a third window, a new group's mirror navigated before its first sync, navigated and unpinned then re-pinned elsewhere, a tile navigated then moved into a group, a mirror copy navigated in front), each with and without an edit from the other Mac, sent exactly as the shipped 0.2.38 adapter sends them, checked side by side; a Mac keeps the regular group it unpinned when the other restyles the pinned one; and, as documented in `docs/sync.md`, two Macs showing a pin at different pages, the page-change-versus-unpin conflict and three compaction residuals. The settle checks let a pin two Macs show at different pages keep sending; anything else must go quiet | Concurrent pinned-tab sync (0.2.40) |
 | `apps/browser/src/state/telemetry/sanitize.test.mjs` | URLs, hosts, paths, user names, quoted text, emails, dev hosts and NSException reasons never leave the Mac | Privacy: telemetry must never carry what the user browsed |
+| `apps/browser/src/boundaries.test.mjs`, `hostileInputs.test.mjs`, `state/site/hidingRuleSink.test.mjs`, `packages/ardiacore/tests/page-script-synthetic-input.test.mjs` | Every place page, sync, other-app, plugin or socket data enters the browser is in the boundary table with its guard; one shared list of hostile inputs through each guard, checked at the sink; picked hiding rules compile under the pinned uBlock Origin to one plain cosmetic rule; the page script ignores made-up input (`docs/security-testing.md`) | 0.2.48: a picked selector with a line break became an extra filter line |
 | `packages/core/src/url.test.ts` | Typed text → URL (`resolveInput`, `fixupUrl`); IDN homograph spoofing stays punycode; tracking parameters stripped without touching the rest; `ardia://` shown, never `chrome://` | URL parsing and security |
 | `packages/core/src/suggest.test.ts` | Inline completion never fills a long sign-in URL; free text never autocompletes; open tabs switchable; frecency ranking; a newer fetch aborts the older one | Omnibox ranking |
 | `packages/sync` | The 9 convergence cases above, and the crypto's 5 (`docs/sync.md` › Tests) | Sync correctness and encryption |

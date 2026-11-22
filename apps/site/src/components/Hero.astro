@@ -3,77 +3,87 @@ import DownloadButton from "./DownloadButton.astro";
 import MacOnlyNote from "./MacOnlyNote.astro";
 import PcNote from "./PcNote.astro";
 import SendToMac from "./SendToMac.astro";
-import { REPO } from "../data/release";
-import { STARS } from "../data/github";
 import { HERO_POSTER_CSS, HERO_POSTER_FALLBACK, HERO_POSTERS } from "../data/heroPoster";
 
-const posterTones = HERO_POSTERS.map(({ media, tones, sky, headerHalo }) => ({ media, tones, sky, headerHalo }));
+const BLANK_POSTER = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+const reducedPosters = HERO_POSTERS.filter((poster) => poster.media.includes("prefers-reduced-motion: reduce"));
+const dawnPosters = HERO_POSTERS.filter((poster) => !poster.fallback && !poster.media.includes("prefers-reduced-motion: reduce"));
 ---
 
 <section class="hero" id="top" data-shot="hero" data-meadow>
   <div class="scene" aria-hidden="true" data-ac-no-capture>
     <style is:inline set:html={HERO_POSTER_CSS}></style>
-    <picture class="hero-poster">
+    <picture class="hero-poster" data-js-poster>
       {
-        HERO_POSTERS.filter((poster) => !poster.fallback).map((poster) => (
+        reducedPosters.map((poster) => (
           <source media={poster.media} srcset={poster.srcset} sizes={poster.sizes} type="image/webp" />
         ))
       }
       <img
-        src={HERO_POSTER_FALLBACK.src}
-        srcset={HERO_POSTER_FALLBACK.srcset}
-        sizes={HERO_POSTER_FALLBACK.sizes}
+        src={BLANK_POSTER}
+        data-fallback-src={HERO_POSTER_FALLBACK.src}
+        data-fallback-srcset={HERO_POSTER_FALLBACK.srcset}
+        data-fallback-sizes={HERO_POSTER_FALLBACK.sizes}
         width={HERO_POSTER_FALLBACK.width}
         height={HERO_POSTER_FALLBACK.height}
         alt=""
-        fetchpriority="high"
-        onload="this.dataset.loaded = ''"
+        onload="if (this.currentSrc && !this.currentSrc.startsWith('data:')) this.dataset.loaded = ''"
       />
     </picture>
+    <template data-poster-sources>
+      {
+        dawnPosters.map((poster) => (
+          <source media={poster.media} srcset={poster.srcset} sizes={poster.sizes} type="image/webp" />
+        ))
+      }
+    </template>
+    <noscript>
+      <picture class="hero-poster">
+        {
+          HERO_POSTERS.filter((poster) => !poster.fallback).map((poster) => (
+            <source media={poster.media} srcset={poster.srcset} sizes={poster.sizes} type="image/webp" />
+          ))
+        }
+        <img
+          src={HERO_POSTER_FALLBACK.src}
+          srcset={HERO_POSTER_FALLBACK.srcset}
+          sizes={HERO_POSTER_FALLBACK.sizes}
+          width={HERO_POSTER_FALLBACK.width}
+          height={HERO_POSTER_FALLBACK.height}
+          alt=""
+        />
+      </picture>
+    </noscript>
     <canvas class="meadow-canvas" data-meadow-canvas></canvas>
   </div>
-  <span class="label sun-hint" data-sun-hint aria-hidden="true">Drag the sun</span>
 
   <div class="wrap hero-grid">
     <div class="hero-text">
-      <p class="yc-yet" data-meadow-keep-out="title" data-reveal>
-        <span class="yc-mark" aria-hidden="true">
-          <svg viewBox="0 0 16 16" width="16" height="16">
-            <path fill="#fff" d="M3.1 2h3.15L8 7.15 9.75 2h3.15L9.05 9.35V14H6.95V9.35L3.1 2z" />
-          </svg>
-        </span>
-        <span class="yc-text">not backed by yc yet</span>
-      </p>
-      <h1 class="poster hero-title">
-        <span class="visually-hidden">Ardia, the sidebar browser for Mac: </span>
-        <span class="line"><span data-meadow-keep-out="title">Touch</span></span>{" "}
-        <span class="line"><span data-meadow-keep-out="title">grass.</span></span>
-      </h1>
-      <p class="lede" data-reveal data-meadow-keep-out="copy" style="--i: 2">
-        Arc’s sidebar and Dia’s polish on real Chromium. Free and open source. Ads and trackers stay out.
-      </p>
-      <p class="label welcome not-phone" data-welcome data-meadow-keep-out="copy" hidden>Sent from your phone. Here it is.</p>
-      <div data-reveal style="--i: 3">
-        <SendToMac location="hero" main />
+      <div class="hero-head">
+        <h1 class="poster hero-title">
+          <span class="visually-hidden">Ardia, the sidebar browser for Mac: </span>
+          <span class="line"><span data-meadow-keep-out="title">Touch</span></span>{" "}
+          <span class="line"><span data-meadow-keep-out="title">grass.</span></span>
+        </h1>
+        <p class="lede slip" data-meadow-keep-out="copy">
+          Arc’s sidebar and Dia’s look on real Chromium. Free, open source, with uBlock Origin built in.
+        </p>
+        <p class="label welcome slip not-phone" data-welcome data-meadow-keep-out="copy" hidden>Sent from your phone. Here it is.</p>
       </div>
-      <div class="cta-row" data-reveal data-meadow-keep-out="row" style="--i: 3">
-        <DownloadButton location="hero" class="not-phone not-pc" />
-        <DownloadButton location="hero" class="not-phone not-pc" nightly label="Nightly" meta="Wet paint" />
-        <DownloadButton location="hero" platform="windows-x64" />
-        <DownloadButton location="hero" platform="windows-arm64" />
-        <DownloadButton location="hero" platform="linux" />
-        <a
-          class="link source"
-          href={REPO}
-          rel="noopener"
-          data-track="github_clicked"
-          data-track-link="read_the_source"
-          data-track-location="hero"
-          >Read the source{STARS && <span class="stars" aria-label={`${STARS} stars on GitHub`}>★ {STARS}</span>}</a
-        >
+      <div class="hero-foot">
+        <div class="hero-send">
+          <SendToMac location="hero" main />
+        </div>
+        <div class="cta-row" data-meadow-keep-out="row">
+          <DownloadButton location="hero" class="not-phone not-pc" />
+          <DownloadButton location="hero" class="not-phone not-pc" nightly label="Nightly" meta="Wet paint" />
+          <DownloadButton location="hero" platform="windows-x64" />
+          <DownloadButton location="hero" platform="windows-arm64" />
+          <DownloadButton location="hero" platform="linux" />
+        </div>
+        <MacOnlyNote location="hero" />
+        <PcNote location="hero" />
       </div>
-      <MacOnlyNote location="hero" />
-      <PcNote location="hero" />
     </div>
   </div>
 </section>
@@ -95,7 +105,10 @@ const posterTones = HERO_POSTERS.map(({ media, tones, sky, headerHalo }) => ({ m
     inset: 0;
     z-index: -1;
     pointer-events: none;
-    background: var(--paper);
+    background-color: var(--paper);
+    background-image: var(--grain);
+    background-size: 256px;
+    background-blend-mode: soft-light;
   }
   .scene::after {
     content: "";
@@ -103,6 +116,7 @@ const posterTones = HERO_POSTERS.map(({ media, tones, sky, headerHalo }) => ({ m
     left: 0;
     right: 0;
     bottom: 0;
+    z-index: 2;
     height: var(--edge);
     background-color: var(--paper);
     background-image: var(--grain);
@@ -128,6 +142,9 @@ const posterTones = HERO_POSTERS.map(({ media, tones, sky, headerHalo }) => ({ m
     display: block;
     object-fit: cover;
   }
+  :global(html:not(.js)) .hero-poster[data-js-poster] {
+    display: none;
+  }
   :global(.js) .hero-poster img {
     opacity: 0;
     transition: opacity 240ms var(--ease-out);
@@ -135,9 +152,18 @@ const posterTones = HERO_POSTERS.map(({ media, tones, sky, headerHalo }) => ({ m
   :global(.js) .hero-poster img[data-loaded] {
     opacity: 1;
   }
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.js) .hero:not([data-meadow="failed"]) .hero-poster {
+      opacity: 0;
+      pointer-events: none;
+    }
+    :global(.js) .hero[data-meadow="failed"] .hero-poster {
+      opacity: 1;
+      transition: opacity 420ms var(--ease-out);
+    }
+  }
   .meadow-canvas {
     opacity: 0;
-    transition: opacity var(--handoff) cubic-bezier(0.37, 0, 0.63, 1);
   }
   .hero[data-meadow="ready"] .meadow-canvas {
     opacity: 1;
@@ -147,36 +173,62 @@ const posterTones = HERO_POSTERS.map(({ media, tones, sky, headerHalo }) => ({ m
     transition: visibility 0s var(--handoff);
   }
 
-  .hero :global([data-tone]) {
-    --halo-rgb: 243 236 223;
-    transition:
-      color 600ms var(--ease-out),
-      text-shadow 600ms var(--ease-out);
-    text-shadow:
-      0 0 1px rgb(var(--halo-rgb) / var(--halo, 0)),
-      0 0 1px rgb(var(--halo-rgb) / var(--halo, 0)),
-      0 0 2px rgb(var(--halo-rgb) / var(--halo, 0)),
-      0 0 3px rgb(var(--halo-rgb) / calc(var(--halo, 0) * 0.7));
+  .hero-title {
+    transition: color var(--tone-fade) var(--ease-in-out);
   }
-  .hero :global([data-tone="dark"]) {
-    --halo-rgb: 18 16 26;
+  .hero-title[data-tone="dark"] {
     color: var(--night-ink);
   }
-  .hero :global([data-tone] .btn) {
-    text-shadow: none;
-    transition:
-      color 200ms var(--ease-out),
-      transform 160ms var(--ease-out),
-      box-shadow 600ms var(--ease-out);
+  .slip,
+  .hero :global(:is(.note, .pc-note, .send-more)) {
+    --slip-x: min(14px, calc(var(--gutter) - 6px));
+    position: relative;
+    isolation: isolate;
+    width: fit-content;
+    max-width: calc(100% + var(--slip-x));
+    margin-inline-start: calc(-1 * var(--slip-x));
+    padding: 11px var(--slip-x) 12px;
+    background: none;
+    border-radius: 0;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    color: var(--day-ink);
   }
-  .hero :global([data-tone="dark"] .btn) {
-    box-shadow: 0 0 0 1px rgb(239 232 220 / 0.55);
+  .slip::before,
+  .slip::after,
+  .hero :global(:is(.note, .pc-note, .send-more))::before,
+  .hero :global(:is(.note, .pc-note, .send-more))::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    z-index: -1;
+    background-color: var(--paper);
+    background-image: var(--impasto-soft);
+    background-size: 640px;
+    background-blend-mode: soft-light;
+    -webkit-mask:
+      var(--edge-a) 0 0 / 760px 9px repeat-x,
+      linear-gradient(#000 0 0) 0 8px / 100% 100% no-repeat;
+    mask:
+      var(--edge-a) 0 0 / 760px 9px repeat-x,
+      linear-gradient(#000 0 0) 0 8px / 100% 100% no-repeat;
   }
-  .hero :global([data-tone="dark"] .send-link) {
-    color: var(--night-ink);
+  .slip::before,
+  .hero :global(:is(.note, .pc-note, .send-more))::before {
+    top: 0;
+    bottom: calc(50% - 1px);
   }
-  .hero[data-sky="dark"] .sun-hint {
-    color: var(--night-ink);
+  .slip::after,
+  .hero :global(:is(.note, .pc-note, .send-more))::after {
+    top: 50%;
+    bottom: 0;
+    scale: 1 -1;
+    -webkit-mask-position: 37% 0, 0 8px;
+    mask-position: 37% 0, 0 8px;
+  }
+  .hero :global(.btn:not(.nightly-btn)) {
+    box-shadow: 0 0 0 1px rgb(239 232 220 / 0.5);
   }
   .hero[data-cursor="brush"] {
     cursor:
@@ -189,35 +241,7 @@ const posterTones = HERO_POSTERS.map(({ media, tones, sky, headerHalo }) => ({ m
   }
   .hero[data-cursor="grabbing"] {
     cursor: grabbing;
-    user-select: none;
-    -webkit-user-select: none;
   }
-  .sun-hint {
-    position: absolute;
-    top: 0;
-    left: 0;
-    z-index: 1;
-    pointer-events: none;
-    color: inherit;
-    opacity: 0;
-    white-space: nowrap;
-    transition: opacity 500ms var(--ease-out);
-  }
-  .sun-hint[data-side="right"]::before {
-    content: "← ";
-  }
-  .sun-hint[data-side="left"]::after {
-    content: " →";
-  }
-  .sun-hint:global(.is-shown) {
-    opacity: 0.72;
-  }
-  @media (max-width: 820px), (pointer: coarse) {
-    .sun-hint {
-      display: none;
-    }
-  }
-
   .hero-grid {
     position: relative;
     display: grid;
@@ -229,57 +253,11 @@ const posterTones = HERO_POSTERS.map(({ media, tones, sky, headerHalo }) => ({ m
     grid-column: 1 / span 7;
     grid-row: 1;
   }
-  .yc-yet {
-    /* Equal cream inset on top, bottom, and left; square radius is concentric with the capsule. */
-    --yc-inset: 3px;
-    --yc-mark: 20px;
-    --yc-gap: 8px;
-    --yc-border: 1px;
-    display: inline-flex;
-    align-items: center;
-    gap: var(--yc-gap);
-    width: max-content;
-    max-width: 100%;
-    margin: 0 0 clamp(16px, 2.4vh, 22px);
-    padding: var(--yc-inset) 10px var(--yc-inset) var(--yc-inset);
-    border: var(--yc-border) solid rgb(22 19 15 / 0.2);
-    border-radius: 999px;
-    background: var(--paper);
-    box-shadow: 0 8px 18px -16px rgb(22 19 15 / 0.45);
-    color: var(--ink);
-    white-space: nowrap;
-    line-height: 0;
-  }
-  .yc-mark {
-    display: grid;
-    place-items: center;
-    flex: none;
-    width: var(--yc-mark);
-    height: var(--yc-mark);
-    /* Capsule padding-box radius is (mark + 2*inset)/2; minus inset = mark/2. */
-    border-radius: calc(var(--yc-mark) / 2);
-    background: #fb651e;
-  }
-  .yc-mark svg {
-    display: block;
-    width: 13px;
-    height: 13px;
-    /* Visible ink of this Y sits slightly right and low; nudge to center it. */
-    transform: translate(-0.5px, -0.65px);
-  }
-  .yc-text {
-    font-family: var(--mono);
-    font-size: var(--t-label);
-    font-stretch: 87.5%;
-    font-weight: 520;
-    letter-spacing: 0.04em;
-    line-height: 1.3;
-    text-transform: none;
-  }
   .hero-title {
-    font-size: clamp(3.2rem, min(15vw, 25vh), 14.5rem);
-    line-height: 0.85;
-    margin-left: -0.045em;
+    font-size: clamp(3.4rem, min(10.2vw, 17vh), 8.5rem);
+    line-height: 0.95;
+    letter-spacing: -0.032em;
+    margin-left: -0.035em;
     white-space: nowrap;
   }
   .line {
@@ -291,24 +269,55 @@ const posterTones = HERO_POSTERS.map(({ media, tones, sky, headerHalo }) => ({ m
     display: block;
   }
   @media (prefers-reduced-motion: no-preference) {
-    :global(.js) .line > span {
-      animation: rise 1000ms var(--ease-out) -180ms both;
+    :global(.js) .hero:not([data-meadow="ready"]):not([data-meadow="failed"]) :is(.line > span, .lede, .hero-send, .cta-row) {
+      opacity: 0;
     }
-    :global(.js) .line + .line > span {
-      animation-delay: -110ms;
+    :global(.js) .hero:not([data-meadow="ready"]):not([data-meadow="failed"]) :global(:is(.note, .pc-note)) {
+      opacity: 0;
+    }
+    :global(.js) .hero:is([data-meadow="ready"], [data-meadow="failed"]) .line > span {
+      animation: hero-title-in 380ms var(--ease-out) 160ms both;
+    }
+    :global(.js) .hero:is([data-meadow="ready"], [data-meadow="failed"]) .line + .line > span {
+      animation-delay: 280ms;
+    }
+    :global(.js) .hero:is([data-meadow="ready"], [data-meadow="failed"]) .lede {
+      animation: hero-paint-in 360ms var(--ease-out) 400ms both;
+    }
+    :global(.js) .hero:is([data-meadow="ready"], [data-meadow="failed"]) :is(.hero-send, .cta-row) {
+      animation: hero-paint-in 340ms var(--ease-out) 510ms both;
+    }
+    :global(.js) .hero:is([data-meadow="ready"], [data-meadow="failed"]) :global(:is(.note, .pc-note)) {
+      animation: hero-paint-in 320ms var(--ease-out) 600ms both;
     }
   }
-  @keyframes rise {
+  @keyframes hero-title-in {
     from {
-      transform: translateY(100%);
+      opacity: 0;
+      transform: translate3d(0, 12px, 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+  @keyframes hero-paint-in {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 8px, 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
     }
   }
 
   .lede {
     font-size: var(--t-lede);
-    line-height: 1.36;
-    max-width: 24em;
-    margin-top: clamp(18px, 2.8vh, 30px);
+    line-height: 1.42;
+    letter-spacing: -0.012em;
+    max-width: calc(24em + 2 * var(--slip-x));
+    margin-top: clamp(14px, 2.4vh, 26px);
   }
   .cta-row {
     display: flex;
@@ -318,39 +327,20 @@ const posterTones = HERO_POSTERS.map(({ media, tones, sky, headerHalo }) => ({ m
     margin-top: clamp(22px, 3.4vh, 34px);
   }
   .hero :global(.nightly-btn) {
-    --btn-bg: color-mix(in srgb, var(--paper) 80%, transparent);
-    -webkit-backdrop-filter: blur(8px);
-    backdrop-filter: blur(8px);
-  }
-  .hero :global([data-tone="dark"] .nightly-btn) {
-    --btn-bg: color-mix(in srgb, var(--ink) 55%, transparent);
+    --btn-bg: var(--paper);
+    --btn-fg: var(--day-ink);
+    --btn-wipe: var(--paper-deep);
+    background-image: var(--impasto-soft);
+    background-size: 640px;
+    background-blend-mode: soft-light;
+    box-shadow: inset 0 0 0 1.5px var(--day-ink);
   }
   .hero :global(.pc-note) {
-    width: fit-content;
     margin-top: 16px;
-    padding: 10px 14px 8px;
-    border-radius: 4px;
-    background: color-mix(in srgb, var(--paper) 82%, transparent);
-    -webkit-backdrop-filter: blur(8px);
-    backdrop-filter: blur(8px);
     color: var(--ink-2);
   }
-  .source {
-    font-size: var(--t-small);
-    min-height: 44px;
-    display: inline-flex;
-    align-items: center;
-  }
-  .stars {
-    margin-left: 10px;
-    font-family: var(--mono);
-    font-size: 0.78em;
-    color: inherit;
-    text-decoration: none;
-    display: inline-block;
-  }
   .welcome {
-    margin-top: 18px;
+    margin-top: 12px;
     color: var(--accent);
   }
   .welcome[hidden] {
@@ -359,38 +349,86 @@ const posterTones = HERO_POSTERS.map(({ media, tones, sky, headerHalo }) => ({ m
 
   @media (max-width: 820px) {
     .hero {
-      --scene-strip: clamp(300px, 40svh, 380px);
-      padding-top: calc(61px + 22px);
-      padding-bottom: var(--scene-strip);
+      display: flex;
+      flex-direction: column;
+      min-height: 100svh;
+      padding-top: calc(61px + 20px);
+      padding-bottom: calc(var(--edge) + 22px);
     }
     .hero-grid {
+      flex: 1;
       display: flex;
       flex-direction: column;
       align-items: stretch;
+      width: 100%;
     }
-    .yc-yet {
-      margin-bottom: 14px;
+    .hero-text {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 28px;
     }
     .hero-title {
-      font-size: min(calc((100vw - 2 * var(--gutter)) / 2.55), 11rem);
-      line-height: 0.84;
+      font-size: clamp(3.4rem, 15.5vw, 4.7rem);
+      line-height: 0.94;
     }
     .lede {
+      font-size: 0.98rem;
+      line-height: 1.42;
       margin-top: 14px;
-      max-width: 22em;
+      margin-inline-start: 0;
+      padding: 10px 14px;
+      width: 100%;
+      max-width: 100%;
+      border-radius: 14px;
+      background: rgb(247 244 238 / 0.76);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgb(22 19 15 / 0.06);
+    }
+    .lede.slip::before,
+    .lede.slip::after {
+      display: none;
+    }
+    .hero-foot {
+      width: 100%;
     }
     .cta-row {
-      margin-top: 24px;
-      gap: 4px 24px;
-    }
-    :global(:root[data-device="phone"]) .cta-row {
       margin-top: 0;
+      gap: 8px 16px;
     }
     .hero-text :global(.send) {
-      margin-top: 18px;
+      margin-top: 0;
+    }
+    .hero-text :global(.send-compact) {
+      padding: 10px 10px 4px;
+      border-radius: 22px;
+      background: rgb(245 241 233 / 0.92);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgb(22 19 15 / 0.08);
+      box-shadow: 0 18px 36px -14px rgb(22 19 15 / 0.34);
+    }
+    .hero-text :global(.send-compact .btn) {
+      border-radius: 12px;
+      box-shadow: none;
+    }
+    .hero-text :global(.send-compact .nightly-btn) {
+      background: rgb(255 253 249 / 0.85);
+      box-shadow: inset 0 0 0 1px rgb(22 19 15 / 0.16);
     }
     .hero-text :global(.send-more) {
-      margin-top: 0;
+      width: 100%;
+      max-width: 100%;
+      margin-inline-start: 0;
+      margin-top: 4px;
+      padding: 0 8px;
+      justify-content: center;
+    }
+    .hero-text :global(.send-more::before),
+    .hero-text :global(.send-more::after) {
+      display: none;
     }
   }
   @media (max-width: 480px) {
@@ -401,29 +439,29 @@ const posterTones = HERO_POSTERS.map(({ media, tones, sky, headerHalo }) => ({ m
   }
 </style>
 
-<script is:inline define:vars={{ posterTones }}>
+<script is:inline>
   (() => {
     const hero = document.querySelector("[data-meadow]");
-    const image = hero?.querySelector(".hero-poster img");
-    if (image?.complete && image.naturalWidth) image.dataset.loaded = "";
-    const preset = posterTones.find((poster) => matchMedia(poster.media).matches);
-    if (!preset || !hero) return;
-    const groups = {
-      title: [hero.querySelector(".hero-title")],
-      lede: [hero.querySelector(".lede"), hero.querySelector(".welcome")],
-      cta: [hero.querySelector(".cta-row")],
-      send: [hero.querySelector("[data-send-panel]")?.parentElement],
-      note: [...hero.querySelectorAll(".note")],
-    };
-    for (const [group, [tone, halo]] of Object.entries(preset.tones)) {
-      for (const element of groups[group] ?? []) {
-        if (!element) continue;
-        element.dataset.tone = tone;
-        element.style.setProperty("--halo", halo);
+    const image = hero?.querySelector(".hero-poster[data-js-poster] img");
+    if (image?.complete && image.naturalWidth && image.currentSrc && !image.currentSrc.startsWith("data:")) image.dataset.loaded = "";
+    if (!hero) return;
+    const showPoster = () => {
+      if (hero.dataset.meadow === "ready") return;
+      const template = hero.querySelector("template[data-poster-sources]");
+      if (image?.dataset.fallbackSrc) {
+        if (template) image.parentElement.prepend(template.content.cloneNode(true));
+        if (image.dataset.fallbackSizes) image.sizes = image.dataset.fallbackSizes;
+        if (image.dataset.fallbackSrcset) image.srcset = image.dataset.fallbackSrcset;
+        image.src = image.dataset.fallbackSrc;
+        delete image.dataset.fallbackSrc;
+        delete image.dataset.fallbackSrcset;
+        delete image.dataset.fallbackSizes;
       }
-    }
-    if (preset.sky === "dark") hero.dataset.sky = "dark";
-    document.querySelector("[data-bar]")?.style.setProperty("--halo", preset.headerHalo);
+      template?.remove();
+      hero.dataset.meadow = "failed";
+    };
+    hero.addEventListener("meadow:failed", showPoster);
+    setTimeout(() => hero.dataset.meadow || showPoster(), 4000);
   })();
 </script>
 

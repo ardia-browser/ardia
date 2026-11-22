@@ -8,7 +8,7 @@ import { haptics } from "../../state/app/haptics";
 import { usePageTone } from "../../state/browse/hooks";
 import { display } from "../../state/search/omnibox";
 import type { BrowserTab } from "../../state/tabs/tabModels";
-import { TabFace, tabsCurve, tabsLayout, tabsMotion, trayMotion, useTheme, useReduceMotion } from "../ui";
+import { TabFace, tabsCurve, tabsLayout, tabsMotion, trayMotion, useTheme, useReduceMotion, smoothCorners } from "../ui";
 
 export type TabPager = {
   offset: SharedValue<number>;
@@ -159,8 +159,8 @@ export function PagerNeighbour({ pager, tab, side, width, statusHeight, statusOv
   return (
     <>
       <Animated.View testID="pagerEdgeShadow" pointerEvents="none" style={[styles.edge, { top: cornerRadius * 0.6, bottom: cornerRadius * 0.6 }, edge, shadowStyle]} />
-      <Animated.View testID={arrived ? "pagerArrival" : undefined} nativeID={arrived ? coverId : undefined} collapsable={false} style={[StyleSheet.absoluteFill, styles.card, { backgroundColor: theme.surface }, style]} pointerEvents="none">
-        {statusOver ? null : <View style={{ height: statusHeight, backgroundColor: tone?.top ?? theme.surface }} />}
+      <Animated.View testID={arrived ? "pagerArrival" : undefined} nativeID={arrived ? coverId : undefined} collapsable={false} style={[StyleSheet.absoluteFill, styles.card, { backgroundColor: theme.canvas }, style]} pointerEvents="none">
+        {statusOver ? null : <View style={{ height: statusHeight, backgroundColor: tone?.top ?? theme.canvas }} />}
         <View style={styles.body}>
           <TabFace tab={tab} title={tab.title || shown.host} host={shown.host} tone={tone?.top ?? null} roles={theme} />
         </View>
@@ -176,9 +176,9 @@ const EDGE_SHADOW_TRAILING = `linear-gradient(to left, ${EDGE_SHADOW_STOPS.join(
 
 export function PagerBackdrop() {
   const theme = useTheme();
-  return <View testID="pagerBackdrop" style={[StyleSheet.absoluteFill, { backgroundColor: theme.surface }]} />;
+  return <View testID="pagerBackdrop" style={[StyleSheet.absoluteFill, { backgroundColor: theme.canvas }]} />;
 }
 
 const cornerRadius = screenCornerRadius(tabsLayout.displayCornerRadius);
 
-const styles = StyleSheet.create({ card: { overflow: "hidden", borderRadius: cornerRadius }, edge: { position: "absolute", width: tabsLayout.pagerEdgeShadow }, body: { flex: 1 }, statusOver: { position: "absolute", left: 0, right: 0, top: 0 } });
+const styles = StyleSheet.create({ card: { overflow: "hidden", borderRadius: cornerRadius, ...smoothCorners }, edge: { position: "absolute", width: tabsLayout.pagerEdgeShadow }, body: { flex: 1 }, statusOver: { position: "absolute", left: 0, right: 0, top: 0 } });

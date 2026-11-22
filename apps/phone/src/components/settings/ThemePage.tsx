@@ -7,8 +7,9 @@ import { editedLook, keptReadable, TEXTURE_NAMES, THEME_MODES } from "../../lib/
 import { dropThemeDraft, editCustomTheme, startingCustomTheme } from "../../state/settings/customTheme";
 import { popSettings } from "../../state/settings/nav";
 import { useCustomTheme } from "../../state/settings/themeDraft";
-import { capsule, CustomLookBackdrop, font, settingsLayout, space, Symbol, themeEditorLayout as L, useProfileLook, useTheme } from "../ui";
+import { capsule, CustomLookBackdrop, font, settingsLayout, slotAround, space, Symbol, themeEditorLayout as L, useProfileLook, useTheme } from "../ui";
 import { Group, PickerRow, SettingsHostedContext, SettingsPage } from "./SettingsKit";
+import { themeStepperLayout } from "./settingsTokens";
 import { ColorPad, DirectionDial, LightnessBar, ThemeSlider, type BlockedScroll } from "./ThemeControls";
 
 function useLiveTheme(stored: ProfileTheme) {
@@ -137,10 +138,14 @@ function Stepper({ icon, label, enabled, onPress }: { icon: "minus" | "plus"; la
       accessibilityState={{ disabled: !enabled }}
       disabled={!enabled}
       onPress={onPress}
-      hitSlop={space.xs}
-      style={({ pressed }) => [styles.stepper, { backgroundColor: pressed ? ui.rowHighlight : ui.separator }]}
+      testID="themeStepper"
+      style={styles.stepperSlot}
     >
-      <Symbol name={icon} size={14} color={enabled ? ui.formAccent : ui.tertiaryLabel} />
+      {({ pressed }) => (
+        <View style={[styles.stepper, { backgroundColor: pressed ? ui.rowHighlight : ui.separator }]}>
+          <Symbol name={icon} size={themeStepperLayout.glyph} color={enabled ? ui.formAccent : ui.tertiaryLabel} />
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -151,6 +156,7 @@ const styles = StyleSheet.create({
   preview: { height: L.preview },
   colors: { paddingHorizontal: settingsLayout.rowInset, paddingVertical: space.l, gap: space.l },
   count: { flexDirection: "row", alignItems: "center", gap: space.s },
+  stepperSlot: slotAround(L.stepper),
   stepper: { width: L.stepper, height: L.stepper, borderRadius: capsule(L.stepper), alignItems: "center", justifyContent: "center" },
   row: { flexDirection: "row", alignItems: "center", gap: space.m, minHeight: settingsLayout.rowMinHeight, paddingHorizontal: settingsLayout.rowInset, paddingVertical: space.s },
   degrees: { fontVariant: ["tabular-nums"] },

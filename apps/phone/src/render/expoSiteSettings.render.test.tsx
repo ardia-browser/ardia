@@ -73,7 +73,7 @@ onIos("Site Settings from the page menu is the Settings sheet's first page, with
   expect(stack.props.path).toEqual([]);
   expect(titlesIn(stack)).toContain("Block Ads");
   expect(titlesIn(stack)).not.toContain("Search Engine");
-  const done = within(stack, (props) => typeof (props.onButtonPress ?? props.onPress) === "function").find((node) => node.findAll((inner) => inner.props.text === "Done").length > 0)!;
+  const done = within(stack, (props) => typeof (props.onButtonPress ?? props.onPress) === "function").find((node) => node.props.label === "Done" || node.findAll((inner) => inner.props.text === "Done").length > 0)!;
   await press(done);
   expect(settingsNav().open).toBe(false);
   unmount(root);

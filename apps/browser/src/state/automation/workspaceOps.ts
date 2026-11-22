@@ -152,7 +152,7 @@ export function parseOps(value: unknown, urlRule: UrlRule = openableUrl): Op[] |
     if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return fail("an operation is a JSON object.");
     const fields = raw as Record<string, unknown>;
     const name = fields.op;
-    if (typeof name !== "string" || !(name in SPECS)) return fail(`op is one of: ${OP_NAMES.join(", ")}.`);
+    if (typeof name !== "string" || !Object.hasOwn(SPECS, name)) return fail(`op is one of: ${OP_NAMES.join(", ")}.`);
     const spec = SPECS[name as OpName] as { required: string[]; fields: Record<string, Kind> };
     const op: Op = { op: name as OpName };
     for (const [key, given] of Object.entries(fields)) {

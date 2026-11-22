@@ -21,11 +21,17 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
   `target: {providerInstanceId: "codex", model: "gpt-6.2-sol", options: {reasoningEffort: "high", serviceTier: "priority"}}`,
   `role: "review"`, `mode: "async"`, and a new `clientRequestId` per round. Tell it to review only and edit
   nothing, and give it the full brief each round (it doesn't share your context). It reads more than it runs:
-  reproduce each finding before fixing it.
-- **No git worktrees, ever.** Everyone works in this checkout.
-- **Commit straight to `main`.** Stage only your own hunks (`git add -p` or explicit paths), never
-  someone else's work in progress. Never stage with `git apply --unidiff-zero`: it drops hunks into the wrong
-  place (it once committed an `ACClient.mm` that didn't compile). Check `git diff --cached` reads as you meant.
+  reproduce each finding before fixing it. Cap review loops at 5 rounds per PR (stop earlier once approved
+  or only nits remain; if blockers stay open after round 5, stop and escalate to the owner).
+- **Worktrees are fine.** Use a git worktree or a scratch clone for isolated feature, PR and full-send work, so
+  you can switch branches, reset and stash without touching anyone else. `scripts/agent/guard-git` only blocks
+  `checkout`, `switch`, `restore`, `stash`, `reset --hard` and `clean` in the shared root checkout (the primary
+  checkout of the repo the guard itself lives in), where other sessions keep uncommitted work: there, undo your own hunks by editing and stage as below. `~/chromium-build` stays
+  one shared build tree for every worktree; build in it only under `scripts/agent/locked chromium`.
+- **Commit straight to `main`** from the shared checkout, or push a branch from your worktree. Stage only your
+  own hunks (`git add -p` or explicit paths), never someone else's work in progress. Never stage with
+  `git apply --unidiff-zero`: it drops hunks into the wrong place (it once committed an `ACClient.mm` that didn't
+  compile). Check `git diff --cached` reads as you meant.
   The index and the working tree are shared with every other session, so commit the index, never with paths:
   `git commit -m … -- <paths>` takes the whole working-tree file, other agents' hunks included. Check
   `git diff --cached --stat` lists only your files, then run a bare `git commit -m …`. For a file that also holds
@@ -47,11 +53,23 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
   `/recheck` on a PR runs it again. Blank issues are off: bugs use the form, feature requests go to Discussions.
 - **Vouch gates outside PRs.** Every PR carries `vouch:trusted`, `vouch:unvouched` or `vouch:denounced`; a denounced
   author's PRs and issues are closed, and denouncing is by hand, for spam and abuse only. An unvouched PR stays
-  open, but its iOS, Android and Windows builds and CodeRabbit's automatic review wait until a maintainer comments `vouch` (also
+  open, but its iOS, Android, Linux, Windows and Mac builds and CodeRabbit's automatic review wait until a maintainer comments `vouch` (also
   `vouch @user`, `denounce @user <reason>`, `unvouch @user`) or adds the `run-ci` label; re-running all jobs of the
   skipped run starts the build alone. Vouching lets that person send features, so start one outsider's build with
   `run-ci`. Agents manage the list and `run-ci` only when the owner asks. A new heavy PR workflow needs the `gate`
   job from `ios.yml` and an entry in `GATED_WORKFLOWS` in `.github/vouch/vouch.cjs`.
+- **Quiet outside PRs close.** `.github/workflows/stale.yml` (`.github/stale/stale.cjs`) runs daily: an outside PR
+  labelled `incomplete`, `needs-rebase` or `vouch:unvouched`, with no push, comment or review by a person for 7 days,
+  gets a two-line note and `stale`; 7 more quiet days close it. A push or comment clears `stale`, and the author's
+  comment reopens a PR it closed. Team and collaborator PRs, `vouch:trusted`, `ready`, `pinned` and `keep-open` are
+  never touched; add `keep-open` to hold one. A run acts on at most 40 PRs (`max_prs` on dispatch) and stops
+  cleanly at a rate limit; dispatch it with `dry_run` to see what it would do.
+- **Merging.** The owner's own PRs (`mantrakp04`) may merge on local verification without waiting for GitHub CI,
+  when the owner says so or in a full send; run CI's checks for what changed locally first, then watch the merged
+  run and fix forward if it fails. Every other PR waits for its CI to pass.
+- **Pick the free Mac.** Before CPU-heavy work (Xcode or Chromium builds, full test runs, video renders), check the
+  MacBook and the linked Mac mini for free CPU, RAM and disk and for the shorter queue of builds and runs, and use
+  that one. Stay on it until it's short of resources while the other has room or a shorter queue; then move.
 - **Progress reports.** Keep them short and plain: what shipped, what's left, what needs the owner.
 - **Clean up.** Quit your test instances, stop the servers and background jobs you started, and never
   kill processes you didn't start.
@@ -89,10 +107,15 @@ One browser UI (`apps/browser/src` and `packages/*/src`) runs on three platforms
 engine. A change to the shared UI reaches all three, so check the other two before calling it done: Linux's
 `pnpm -C apps/linux typecheck`, `test:graph` and `test:host`, and the Windows workflow, which runs on any pull
 request touching shared code. Copy that names Mac things (⌘, "macOS", the menu bar) needs its Linux and Windows
-wording. When the machine you're on isn't the platform you're changing, use a Boat VM (`boat` CLI, signed in):
-`boat new --type xlarge --no-auto-stop`, an idle-stop watchdog that stops it after 20 idle minutes, `boat desktop`
-or an X11 display for real input and screen recordings. A Boat VM's desktop is yours: the hidden-instance and focus
-rules are for the owner's Mac.
+wording. When the machine you're on isn't the platform you're changing, use a Boat VM (`boat` CLI, signed in) sized
+to the job: `--type small` (2 vCPU / 4 GB, half rate) for quick Linux scripts and unit tests, `--type default`
+(4 vCPU / 8 GB, 1× rate) for Linux UI checks, `boat desktop`, X11 real-input runs and screen recordings, `--type large`
+(8 vCPU / 16 GB, 2× rate) for heavier test suites, and `--type xlarge` (16 vCPU / 32 GB, $0.20/hr, 5.56× `default`)
+**only** for Chromium engine builds or Windows 11 QEMU. Leave Boat's built-in auto-stop on (never pass
+`--no-auto-stop`), set `--ttl` (`7200` for normal tasks, `21600` for engine builds), pass `--no-snapshots` on
+throwaway VMs so stopping erases them cleanly, and stop or delete VMs as soon as you finish — keep named
+`boat snapshot`s only for reusable Chromium builders and keep them stopped between builds. A Boat VM's desktop is
+yours: the hidden-instance and focus rules are for the owner's Mac.
 - **macOS** is the main app: `apps/browser` (React Native macOS) on `engine/ardiacore` and the Mac engine. The rest
   of this file is written for it.
 - **Linux** (`docs/linux-port.md`): Chromium's own `chrome` is the app and serves the UI from `chrome://ardia/`;
@@ -100,8 +123,9 @@ rules are for the owner's Mac.
   `engine/ardiacore-linux` plus `engine/patches/chromium-linux-*.patch` are its native layer. The engine is built from
   source on a Boat builder VM (`scripts/linux/build.sh --apply`, incremental like the Mac's), published with
   `scripts/linux/publish-engine.sh --upload`, and pinned by a row in `packages/ardiacore/prebuilt-engines-linux.tsv`.
-  The engine key (`engine/engine-key.sh`) covers all of `engine/`, so any change there needs a new Mac engine and a
-  new Linux engine. CI: `.github/workflows/linux.yml` (`docs/linux-ci.md`); acceptance: `docs/linux-acceptance.md`.
+  Each platform has its own engine key (`engine/engine-key.sh --platform macos|linux`): a change only Linux builds
+  (`engine/ardiacore-linux`, a `linux` line of `engine/patches/series` and its patch) needs a new Linux engine and
+  keeps the Mac's, and the reverse; a shared change needs both. CI: `.github/workflows/linux.yml` (`docs/linux-ci.md`); acceptance: `docs/linux-acceptance.md`.
 - **Windows** (`docs/windows.md`): `apps/browser/windows` (React Native Windows) and `packages/expo-windows` host
   Chromium's `chrome.dll`, renamed Ardia, with each tab's page in its own window under the app's. The engine is
   cross-built on a Mac in `~/chromium-build-win` (`docs/engine-build-windows.md`; never `~/chromium-build`), its
@@ -132,7 +156,7 @@ rules are for the owner's Mac.
   frame difference, and measure positions and timings from the pixels. A position or size in the owner's
   recording may be their saved preference rather than Dia's default.
 - **Bonzai handles maintenance.** Bonzai (hibonzai.com, the `bonzai` MCP server) watches production errors
-  (our ClickHouse), performance, dependency and security updates, and failing deploys for `mantrakp04/ardia`.
+  (our ClickHouse), performance, dependency and security updates, and failing deploys for `ardia-browser/ardia`.
   Leave those to it and focus on features: don't hunt telemetry for errors yourself. Call its `get_status`
   when the owner asks about errors or health, and take on what it lists under `for_you`. Report anything else
   you notice with its `report_problem` tool. Auto-fix is on, so Bonzai opens fix PRs by itself; YOLO stays
@@ -145,7 +169,7 @@ rules are for the owner's Mac.
   the PR's branch (no new branch), reproduce the failure on this Mac, build and exercise the fix in a hidden
   instance, fix what's wrong on top of Bonzai's commits, then babysit and merge. The full send is the owner's
   OK to merge that PR; `merge_fix` still needs its own OK. This file's rules beat the skill's where they
-  differ: no worktrees, hidden instances only, verify in proportion. A Bonzai PR with no linked issue gets
+  differ: hidden instances only, verify in proportion. A Bonzai PR with no linked issue gets
   one opened and linked first. The merged fix ships in the next nightly.
 - **Local crashes still get fixed without asking.** When `crash.log` shows up in the repo root or a crash report
   appears, find the cause and fix it. Check the binary UUID against the current build first (older builds are
@@ -157,6 +181,11 @@ rules are for the owner's Mac.
   flags, never URLs, page content, titles or free text. List new events and fields in the "What's Sent" copy, and
   say in the commit and the parity row what to watch on the dashboard. Skip it only when nothing measurable exists,
   and say so.
+- **Test the boundary.** Code that takes data from a page, a frame, another device, another app, a plugin or the
+  socket gets a row in `apps/browser/src/boundaries.json` and runs the shared hostile inputs through its guard, checked
+  at the sink (`docs/security-testing.md`). The boundary test fails until the row is there, but only for the forms
+  that doc lists per file type (parsed for TypeScript and `page_script.js`, by pattern for Objective-C++ and Swift);
+  anything else isn't guaranteed, so add its row by hand.
 - **Verify before you call it done.** Typecheck, build, and exercise the feature in a hidden instance
   (dev harness, CDP, window snapshots).
   - The screen is often locked, and then WindowServer captures fail. Use the in-process snapshots
@@ -198,8 +227,9 @@ rules are for the owner's Mac.
   - point the site at it (`.claude/skills/release/scripts/site-version.mjs <version>`);
   - deploy the site with `pnpm -C apps/site run deploy`.
 
-  The owner has authorized releases to go all the way through. After an update, the app opens the
-  release notes on ardia.dev.
+  Never cut or publish a nightly or stable release unless the owner explicitly asks for a release in that
+  request. Scheduled and background jobs open a PR with the `full-stop` skill and stop for the owner. Once asked,
+  a release goes all the way through the flow above. After an update, the app opens the release notes on ardia.dev.
 - **iPhone builds.** Upload to TestFlight only when the owner asks, at the version pinned in iOS Release. Let App Store
   Connect pick the build number. "Get a build on my phone" means installing a development-signed build on the owner's
   iPhone over USB or through Xcode's paired wireless connection. Use a local Xcode build or an iOS Release `device`

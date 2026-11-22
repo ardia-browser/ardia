@@ -127,6 +127,27 @@ test("cancelling the sheet installs nothing and says so; while a sheet is up, a 
   assert.equal(officialPlugins(P(), true, hidden)[0].state, "available");
 });
 
+test("an install whose plugins.json can't be written tells the caller instead of waiting forever", async () => {
+  reset();
+  const done = installOfficialPlugin("cli", { showSheet: false });
+  stub.refusedWrites.on = true;
+  try {
+    assert.equal(lifecycle.enablePlugin("cli", P().listings.cli.hash), false);
+  } finally {
+    stub.refusedWrites.on = false;
+  }
+  assert.deepEqual(await done, { ok: false, reason: "plugins.json couldn't be saved. Try again." });
+  assert.equal(P().consent, null, "a settled install leaves no sheet behind");
+  assert.equal(P().unsaved, "cli");
+  const again = installOfficialPlugin("cli", { showSheet: false });
+  assert.equal(P().consent?.name, "cli", "asking again is accepted");
+  assert.equal(P().unsaved, null);
+  lifecycle.dismissPluginConsent();
+  assert.deepEqual(await again, { ok: false, reason: "Cancelled.", cancelled: true });
+  await settle();
+  assert.deepEqual(host.links, []);
+});
+
 test("a link that fails is reported to the caller; asking again links it and says ok", async () => {
   const TOOL = JSON.stringify({ manifest: 1, name: "tool", title: "Tool", alwaysOn: true, official: true, programs: [{ name: "tool-x", path: "bin/x" }] });
   await scan([{ name: "cli", text: CLI, ...BUILT_IN }, { name: "other", status: "ok", text: OTHER, folderId: "1:2" }, { name: "tool", text: TOOL, ...BUILT_IN }]);
@@ -378,7 +399,7 @@ test("the official catalogue, the onboarding picks and the anchor aliases come f
   assert.deepEqual(PRESELECTED_PLUGINS, pin.plugins.filter((p) => p.preselected).map((p) => p.name));
   const made = officialCatalogue({
     plugins: [
-      { name: "one", title: "One", blurb: "First.", icon: "a", preselected: true, anchorAliases: ["oldOne"], version: "1.0.0" },
+      { name: "one", title: "One", blurb: "First.", icon: "a", preselected: true, anchorAliases: ["oldOne"], version: "1.0.0", legacyInstall: { program: "one-cmd", root: "Library/Application Support/Ardia/CLI", current: "current" } },
       { name: "two", title: "Two", blurb: "Second.", icon: "b" },
     ],
     comingSoon: [{ name: "soon", title: "Soon", blurb: "Later.", icon: "c", experiment: "officialPluginsAi" }],
@@ -386,6 +407,9 @@ test("the official catalogue, the onboarding picks and the anchor aliases come f
   assert.deepEqual(made.plugins, [{ name: "one", title: "One", blurb: "First.", icon: "a" }, { name: "two", title: "Two", blurb: "Second.", icon: "b" }]);
   assert.deepEqual(made.preselected, ["one"]);
   assert.deepEqual(made.anchorAliases, { one: ["oldOne"], two: [] });
+  assert.deepEqual(made.legacyPrograms, { one: "one-cmd" });
+  const { OFFICIAL_LEGACY_PROGRAMS } = await import("./officialPin.ts");
+  assert.deepEqual(OFFICIAL_LEGACY_PROGRAMS, Object.fromEntries(pin.plugins.filter((p) => p.legacyInstall).map((p) => [p.name, p.legacyInstall.program])));
   assert.deepEqual(made.comingSoon, [{ name: "soon", title: "Soon", blurb: "Later.", icon: "c", experiment: "officialPluginsAi" }]);
 });
 

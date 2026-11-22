@@ -80,7 +80,7 @@ onIos("a switch on the root writes its preference, and Done closes Settings", ()
   const before = usePreferences.getState().searchSuggestions;
   act(() => toggleFor(root, "Search Suggestions").props.onIsOnChange({ nativeEvent: { isOn: !before } }));
   expect(usePreferences.getState().searchSuggestions).toBe(!before);
-  const done = hosts(root, (props) => typeof props.onButtonPress === "function" || typeof props.onPress === "function").find((node) => node.findAll((inner) => inner.props.text === "Done" || inner.props.children === "Done").length > 0);
+  const done = hosts(root, (props) => typeof props.onButtonPress === "function" || typeof props.onPress === "function").find((node) => node.props.label === "Done" || node.findAll((inner) => inner.props.text === "Done" || inner.props.children === "Done").length > 0);
   expect(done).toBeDefined();
   act(() => (done!.props.onButtonPress ?? done!.props.onPress)({ nativeEvent: {} }));
   expect(settingsNav().open).toBe(false);

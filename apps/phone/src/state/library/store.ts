@@ -12,6 +12,7 @@ import { belongsToSpace } from "../tabs/spaces";
 import { openNewTab, useTabs } from "../tabs/store";
 import { countUsage } from "../telemetry/telemetry";
 import { forgettingHidden, hidingEntry, historyEntries, keepingHidden, type HiddenHistory, type HistoryEntry, type HistoryVisitInput } from "./historyTimeline";
+import { destinationWords } from "../../lib/sharedWords";
 
 export type DownloadedFile = Awaited<ReturnType<typeof downloads.files>>[number];
 
@@ -19,7 +20,7 @@ export type LibrarySection = "history" | "bookmarks" | "downloads";
 
 export const LIBRARY_SECTIONS: readonly LibrarySection[] = ["history", "bookmarks", "downloads"];
 
-export const LIBRARY_NAMES: Record<LibrarySection, string> = { history: "History", bookmarks: "Bookmarks", downloads: "Downloads" };
+export const LIBRARY_NAMES: Record<LibrarySection, string> = { history: destinationWords.history, bookmarks: destinationWords.bookmarks, downloads: destinationWords.downloads };
 
 export const LIBRARY_SYMBOLS: Record<LibrarySection, string> = { history: "clock", bookmarks: "book", downloads: "arrow.down.circle" };
 

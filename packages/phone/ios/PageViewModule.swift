@@ -183,6 +183,10 @@ public final class PageViewModule: Module {
       MainActor.assumeIsolated { PhonePages.shared.print(pageID) }
     }.runOnQueue(.main)
 
+    AsyncFunction("sharePage") { (pageID: String, address: String, title: String, promise: Promise) in
+      PageViewModule.main(promise) { await PhonePages.shared.share(pageID, address: address, title: title) }
+    }.runOnQueue(.main)
+
     AsyncFunction("translation") { () -> [String: Any?] in
       MainActor.assumeIsolated { PhonePages.shared.translation() }
     }.runOnQueue(.main)

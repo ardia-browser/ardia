@@ -861,7 +861,7 @@ is plain Chromium.
   CPU's zip with its SHA-256, `fetch-engine.ps1` downloads and checks it, and the Windows workflow assembles the app
   with it, launches it with the self-check (which then loads a page through the engine) and runs the tour's pages
   part. The release is a draft, so only the repository's own runs can fetch it; a fork's pull request skips those
-  steps. A new engine build is a new release and a new `prebuilt.json`.
+  steps. A new engine build is a new release and a new `prebuilt.json`, whose `source` is the commit it was built from.
 - A tab opened with no address shows a committed `about:blank` until its first load, which replaces that entry, so
   the first real page reports `canGoBack: false` and Back never leads to a blank page (the Mac's "ahead blank" rule).
   `downloadNavigation`'s `committedUrl` is the tab's last committed page, empty while it has only that opening page.
@@ -1233,8 +1233,10 @@ Mac, for every nightly and stable:
    `release-files.ps1` names each tested installer `Ardia-<version>-windows-<cpu>-setup.exe` with its `.sha256`, and
    the job leaves them with `Ardia.build.json` in the artifacts `windows-release-x64` and `windows-release-arm64`. Its
    `source` job packs the engine's source, `Ardia-<version>-windows-source.tar.xz` with a `.sha256`, in
-   `windows-release-source`: `scripts/windows/engine-source.sh`, from the Helium tags `helium-pins.ini` pins at that
-   commit, with a README naming Chromium's source and this repository's tree.
+   `windows-release-source`: `scripts/windows/engine-source.sh`, from the Helium tags `helium-pins.ini` pins at the
+   commit `prebuilt.json` names as its engine's `source`, so the archive matches the engine the installers carry even
+   when the pins have moved on ahead of a new prebuilt. Its README names Chromium's source, this repository's tree at
+   that engine commit, and the tree at the release's commit for the app.
 2. `publish` attaches both installers, the engine's source and their `.sha256` files to `v<version>` (`publish.sh`
    checks the hashes and that the build is this version, and refuses installers without their source), so every
    release keeps the source beside its Windows binaries for as long as it stays up. A dry run checks the same and
@@ -1357,9 +1359,10 @@ does run in a test instance. A scratch folder with the marker must get both powe
   which launches it three times and uploads each launch's log: a first launch (onboarding) and a launch with
   onboarding done (the browser window), each with a screenshot when the runner allows a capture, then a hidden
   self-check launch.
-- A pull request gets the fast run. The `gate` job waits for a vouch, like the iPhone build. Then three things start
-  together. A Linux job (`javascript`) bundles the app's JavaScript with Metro, once for both CPUs. Each CPU's build
-  job (`app`, `arm64-app`, both on x64 runners) looks in the Actions cache for an app built from the same native code
+- A pull request gets the fast run. For a pull request from a fork the `gate` job waits for a vouch, like the iPhone
+  build; a branch of this repository skips it. Then a Linux job (`javascript`) bundles the app's JavaScript with
+  Metro, once for both CPUs, while `identity` reads the version and, live, the `full-ci` label. After `identity`, each
+  CPU's build job (`app`, `arm64-app`, both on x64 runners) looks in the Actions cache for an app built from the same native code
   (`windows-app-<cpu>-<hash>`; the hash covers `apps/browser/windows`, each package's `package.json` and `windows`
   folder, the lockfile, the patches and the workflow) and compiles only when none is there, then saves it.
 - Each CPU then has two jobs side by side on its own kind of runner: `x64` and `arm64` run the launch check's

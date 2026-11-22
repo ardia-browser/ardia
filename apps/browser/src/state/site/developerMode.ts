@@ -61,12 +61,12 @@ const SPLIT_SIDES: { side: SplitSide; title: string; symbol: string }[] = [
   { side: "bottom", title: "Add Bottom Split", symbol: "rectangle.bottomhalf.inset.filled" },
 ];
 
-export async function showSplitSidesMenu(tabId: string) {
+export async function showSplitSidesMenu(tabId: string, stillTarget: () => boolean = () => true) {
   const split = splitOf(useBrowser.getState(), tabId);
   const enabled = !split || splitTabIds(split).length < MAX_SPLIT_PANES;
   const item = ({ side, title, symbol }: (typeof SPLIT_SIDES)[number]) => ({ id: side, title, symbol, enabled });
   const choice = await showMenu([...SPLIT_SIDES.slice(0, 2).map(item), { separator: true as const }, ...SPLIT_SIDES.slice(2).map(item)]);
   const picked = SPLIT_SIDES.find((s) => s.side === choice);
   const tab = useBrowser.getState().tabs[tabId];
-  if (picked && tab) openSplitPane(tab.windowId, { anchorTabId: tabId, side: picked.side });
+  if (picked && tab && stillTarget()) openSplitPane(tab.windowId, { anchorTabId: tabId, side: picked.side });
 }

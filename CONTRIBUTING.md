@@ -48,7 +48,7 @@ do, pick from there, and update its row in the same PR.
 
 ## Getting it running
 
-You need an Apple Silicon Mac on macOS 14 or later, Xcode, CocoaPods, Node and pnpm 11.
+You need an Apple Silicon Mac on macOS 14 or later, Xcode, CocoaPods, Node and pnpm 12.
 
 ```sh
 pnpm install
@@ -243,6 +243,10 @@ issue.
   ones is merged or closed.
 - **Keep it mergeable.** `main` moves fast and the owner commits straight to it. A PR that conflicts gets
   `needs-rebase`; rebase and it comes off.
+- **Quiet PRs close.** An `incomplete`, `needs-rebase` or `vouch:unvouched` PR from outside the team with no push,
+  comment or review for 7 days gets a note saying what's missing and the `stale` label; after 7 more quiet days it
+  closes. Any push or comment takes the label off, and commenting on a PR it closed reopens it. `ready`, `pinned`
+  and `keep-open` PRs are never touched.
 - **Getting vouched.** Maintainers vouch for contributors with [vouch](https://github.com/mitchellh/vouch). The list
   is `.github/VOUCHED.td`; collaborators and bots always count as vouched. Being vouched means we take features from
   you, so it follows a few good bug fixes, not a first pull request. A maintainer comments `vouch` on your issue or
@@ -250,7 +254,8 @@ issue.
   then your PR carries `vouch:unvouched`, and the iOS and Android builds and CodeRabbit wait for a maintainer to
   start them with the `run-ci` label; you don't need to push again.
 - **Denouncing is for spam and abuse.** A maintainer does it by hand. No automation denounces anyone, and breaking a
-  rule on this page never does. It is the only thing that closes pull requests and issues automatically.
+  rule on this page never does. Apart from quiet PRs closing, it is the only thing that closes pull requests and
+  issues automatically.
 - Commit messages carry the why, since the code doesn't have comments. Look at `git log` for the style: a short
   subject saying what changed for the user, then a plain paragraph.
 - Sometimes the owner lands your work in a different shape, or pulls part of a PR into their own commit. When that

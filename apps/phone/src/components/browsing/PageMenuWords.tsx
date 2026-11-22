@@ -1,7 +1,8 @@
-import { Children, type ReactNode } from "react";
+import { Children, useState, type ReactNode } from "react";
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { copy } from "../../lib/platformCopy";
+import { actionWords, blockingWords, destinationWords } from "../../lib/sharedWords";
 import {
   canPrintPages,
   canSummarizePages,
@@ -23,23 +24,25 @@ import {
   setDesktopSite,
   setNightShadeOn,
   shareCurrentPage,
+  shareOffersPrint,
   showFind,
   showReader,
   zoomIn,
   zoomOut,
 } from "../../state/page/actions";
-import type { MenuModel } from "../../state/page/pageMenu";
+import { actionColumns } from "../../state/page/menuActionColumns";
+import { menuSwitchHint, type MenuModel, type MenuSwitch } from "../../state/page/pageMenu";
 import { useMenuTitle, useTitleFeedback } from "../../state/page/hooks";
 import { openLibrary, type LibrarySection } from "../../state/library/store";
 import { useIsPinned, useSendTargets } from "../../state/sync/hooks";
 import { useTab } from "../../state/tabs/hooks";
-import { font, pageMenuLayout, pageMenuMotion, PressScale, SheetScrollView, smoothCorners, space, Symbol, Toggle, useTheme, type MenuItem, type SymbolName } from "../ui";
+import { font, iconRoles, pageMenuLayout, pageMenuMotion, PressInPlace, SheetScrollView, smoothCorners, space, Symbol, ToggleRow as SharedToggleRow, usePressStyle, useTheme, type MenuItem, type PressKind, type SymbolName } from "../ui";
 import { MenuTrigger } from "../ui/MenuTrigger";
 import { syncOffered } from "../../state/sync/offer";
 import { usePageSummariesEnabled } from "../../state/pageSummary/enabled";
-import { pageMenuCardInk, pageMenuCards } from "./pageMenuTokens";
+import { pageMenuCards, pageMenuInkFrom } from "./pageMenuTokens";
 
-export const usePageMenuInk = () => pageMenuCardInk[useTheme().dark ? "dark" : "light"];
+export const usePageMenuInk = () => pageMenuInkFrom(useTheme());
 
 function openFromMenu(section: LibrarySection) {
   closePageMenu();
@@ -48,38 +51,65 @@ function openFromMenu(section: LibrarySection) {
 
 const useAccessibilityText = () => useWindowDimensions().fontScale >= copy().menuLargeTextScale;
 
-export function PageMenuWords({ tabId, model, onTranslate }: { tabId: string; model: MenuModel; onTranslate: () => void }) {
+type Action = { icon: SymbolName; label: string; enabled: boolean; onPress: () => void };
+
+function inRows<T>(items: T[], perRow: number): T[][] {
+  const rows: T[][] = [];
+  for (let at = 0; at < items.length; at += perRow) rows.push(items.slice(at, at + perRow));
+  return rows;
+}
+
+function useActionColumns(labels: readonly string[]) {
+  const { width, fontScale } = useWindowDimensions();
+  const [measured, setMeasured] = useState<number | null>(null);
+  const available = measured ?? width - pageMenuCards.padding * 2;
+  const columns = actionColumns(labels, available, pageMenuCards.tileGap, { fontSize: font.caption.fontSize, fontScale, advance: pageMenuCards.captionAdvance, maxLines: pageMenuCards.captionLines });
+  return { columns, measure: (next: number) => setMeasured((now) => (now === next ? now : next)) };
+}
+
+export function PageMenuWords({ tabId, model, onTranslate, onContentHeight }: { tabId: string; model: MenuModel; onTranslate: () => void; onContentHeight?: (height: number) => void }) {
   const large = useAccessibilityText();
   const devices = useSendTargets(tabId);
   const offersSummary = usePageSummariesEnabled() && canSummarizePages();
+  const actions: Action[] = [
+    { icon: "docPlaintext", label: "Reader", enabled: model.tiles, onPress: showReader },
+    { icon: "textMagnifyingglass", label: "Find on Page", enabled: model.find, onPress: showFind },
+    { icon: iconRoles.copyLink, label: actionWords.copyLink, enabled: model.tiles, onPress: copyCurrentLink },
+    { icon: iconRoles.share, label: actionWords.share, enabled: model.tiles, onPress: shareCurrentPage },
+  ];
+  const { columns, measure } = useActionColumns(actions.map((action) => action.label));
+  const square = columns === actions.length;
   return (
-    <SheetScrollView testID="pageMenuWords" style={styles.scroll} contentContainerStyle={[styles.column, large ? styles.largeBottom : null]} bounces={false}>
+    <SheetScrollView testID="pageMenuWords" style={styles.scroll} contentContainerStyle={[styles.column, large ? styles.largeBottom : null]} bounces={false} onContentSizeChange={onContentHeight ? (_, height) => onContentHeight(height) : undefined}>
       <NavigationBar tabId={tabId} model={model} large={large} />
-      <View style={styles.actions}>
-        <ActionTile icon="docPlaintext" label="Reader" enabled={model.tiles} large={large} onPress={showReader} />
-        <ActionTile icon="textMagnifyingglass" label="Find on Page" enabled={model.find} large={large} onPress={showFind} />
-        <ActionTile icon="link" label="Copy Link" enabled={model.tiles} large={large} onPress={copyCurrentLink} />
-        <ActionTile icon="squareAndArrowUp" label="Share" enabled={model.tiles} large={large} onPress={shareCurrentPage} />
+      <View testID="pageMenuActions" style={styles.actionRows} onLayout={(event) => measure(event.nativeEvent.layout.width)}>
+        {inRows(actions, columns).map((row, index) => (
+          <View key={index} testID="pageMenuActionRow" style={styles.actions}>
+            {row.map((action) => (
+              <ActionTile key={action.label} {...action} square={square} large={large} />
+            ))}
+          </View>
+        ))}
       </View>
       <Group>
         {offersSummary ? <Row icon="sparkles" title="Summarize Page" enabled={model.summarize} onPress={summarizeCurrentPage} /> : null}
         {model.isWebPage && devices.length ? <SendRow devices={devices} /> : null}
         {model.pageRows ? (
-          <ToggleRow icon={model.blockersEnabled ? "handRaised" : "handRaisedSlash"} title="Block Ads and Trackers" value={model.blockersEnabled} enabled={model.isWebPage} detail={model.blockedCount} onChange={setBlockersOn} />
+          <ToggleRow which="blockers" icon={model.blockersEnabled ? "handRaised" : "handRaisedSlash"} title={blockingWords.blockAdsAndTrackers} value={model.blockersEnabled} enabled={model.isWebPage} detail={model.blockedCount} onChange={setBlockersOn} />
         ) : null}
       </Group>
       <Group>
-        {model.pageRows ? <ToggleRow icon={model.nightShadeOn ? "moonFill" : "moon"} title="Night Shade" value={model.nightShadeOn} enabled={model.isWebPage} onChange={setNightShadeOn} /> : null}
+        {model.pageRows ? <ToggleRow which="nightShade" icon={model.nightShadeOn ? "moonFill" : "moon"} title="Night Shade" value={model.nightShadeOn} enabled={model.isWebPage} onChange={setNightShadeOn} /> : null}
         {model.pageRows ? <ZoomRow model={model} large={large} /> : null}
-        {model.pageRows ? <ToggleRow icon="desktop" title="Desktop Site" value={model.desktopSite} enabled={model.isWebPage} onChange={setDesktopSite} /> : null}
+        {model.pageRows ? <ToggleRow which="desktopSite" icon="desktop" title="Desktop Site" value={model.desktopSite} enabled={model.isWebPage} onChange={setDesktopSite} /> : null}
         {model.pageRows ? <Row icon="translate" title={model.translateTitle} enabled={model.translate} onPress={onTranslate} /> : null}
-        {canPrintPages() ? <Row icon="printer" title="Print" enabled={model.print} onPress={printCurrentPage} /> : null}
+        {canPrintPages() && !shareOffersPrint() ? <Row icon="printer" title="Print" enabled={model.print} onPress={printCurrentPage} /> : null}
         <Row icon="gearshape" title="Site Settings" enabled onPress={openSiteSettingsSheet} />
       </Group>
       <Group>
-        <Row icon="clockArrow" title="History" enabled onPress={() => openFromMenu("history")} />
-        <Row icon="star" title="Bookmarks" enabled onPress={() => openFromMenu("bookmarks")} />
-        <Row icon="arrowDownCircle" title="Downloads" enabled onPress={() => openFromMenu("downloads")} />
+        <Row icon="clockArrow" title={destinationWords.history} enabled onPress={() => openFromMenu("history")} />
+        <Row icon="star" title={destinationWords.bookmarks} enabled onPress={() => openFromMenu("bookmarks")} />
+        <Row icon="arrowDownCircle" title={destinationWords.downloads} enabled onPress={() => openFromMenu("downloads")} />
       </Group>
       {model.pageRows && model.offersDefaultBrowser ? (
         <Group>
@@ -96,27 +126,28 @@ function NavigationBar({ tabId, model, large }: { tabId: string; model: MenuMode
   const title = useMenuTitle(tabId);
   const feedback = useTitleFeedback();
   const shown = feedback ?? title;
+  const titleStyle = usePressStyle("text", { style: large ? styles.titleBelow : styles.title });
   const titleButton = (
-    <Pressable testID="pageMenuTitle" accessibilityRole="button" accessibilityLabel={shown} accessibilityHint="Edits the search" onPress={editPageQuery} style={large ? styles.titleBelow : styles.title}>
+    <Pressable testID="pageMenuTitle" accessibilityRole="button" accessibilityLabel={shown} accessibilityHint="Edits the search" onPress={editPageQuery} style={titleStyle}>
       <Animated.Text
         key={shown}
         entering={TITLE_IN}
         exiting={TITLE_OUT}
         style={[font.body, styles.titleText, large && !feedback ? styles.leading : styles.centered, feedback ? styles.feedback : null, { color: feedback ? theme.spaceAccentInk : theme.label }]}
-        numberOfLines={large ? 3 : 1}
+        numberOfLines={large ? 3 : feedback ? pageMenuCards.feedbackLines : 1}
       >
         {shown}
       </Animated.Text>
     </Pressable>
   );
   return (
-    <View testID="pageMenuCapsule" style={[styles.navigation, large ? styles.navigationTall : styles.navigationPill, { backgroundColor: ink.cell }]}>
+    <View testID="pageMenuCapsule" style={[styles.navigation, { backgroundColor: ink.cell }]}>
       <View testID="pageMenuCapsuleRow" style={styles.navigationRow}>
         <BarButton icon="chevronLeft" label="Back" enabled={model.back} onPress={menuBack} />
         <BarButton icon="chevronRight" label="Forward" enabled={model.forward} onPress={menuForward} />
         {large ? <View style={styles.fill} /> : titleButton}
         {syncOffered() ? <PinButton tabId={tabId} enabled={model.isWebPage} /> : null}
-        {model.reload === "stop" ? <BarButton icon="xmark" label="Stop" enabled onPress={menuStop} /> : <BarButton icon="arrowClockwise" label="Reload" enabled={model.reloadEnabled} onPress={menuReload} />}
+        {model.reload === "stop" ? <BarButton icon={iconRoles.stopLoading} label={actionWords.stopLoading} enabled onPress={menuStop} /> : <BarButton icon={iconRoles.reload} label={actionWords.reload} enabled={model.reloadEnabled} onPress={menuReload} />}
       </View>
       {large ? <View style={[styles.navigationDivider, { backgroundColor: ink.separator }]} /> : null}
       {large ? titleButton : null}
@@ -133,27 +164,31 @@ function PinButton({ tabId, enabled }: { tabId: string; enabled: boolean }) {
 function BarButton({ icon, label, enabled, onPress }: { icon: SymbolName; label: string; enabled: boolean; onPress: () => void }) {
   const theme = useTheme();
   return (
-    <PressScale label={label} disabled={!enabled} onPress={onPress} pressedScale={pageMenuLayout.pressedScale} pressSpring={pageMenuMotion.press} style={styles.barButton}>
-      <Symbol name={icon} size={19} color={enabled ? theme.label : theme.tertiaryLabel} />
-    </PressScale>
+    <PressInPlace label={label} disabled={!enabled} onPress={onPress} style={styles.barButton}>
+      <Symbol name={icon} size={pageMenuCards.barGlyph} color={enabled ? theme.label : theme.tertiaryLabel} />
+    </PressInPlace>
   );
 }
 
-function ActionTile({ icon, label, enabled, large, onPress }: { icon: SymbolName; label: string; enabled: boolean; large: boolean; onPress: () => void }) {
+function ActionTile({ icon, label, enabled, square, large, onPress }: Action & { square: boolean; large: boolean }) {
   const theme = useTheme();
   const ink = usePageMenuInk();
   return (
     <View testID={`pageMenuAction:${label}`} style={styles.action}>
-      <PressScale label={label} disabled={!enabled} onPress={onPress} grow pressedScale={pageMenuLayout.pressedScale} pressSpring={pageMenuMotion.press} style={styles.actionPress}>
-        <View style={[styles.tile, { backgroundColor: ink.cell }]}>
+      <PressInPlace label={label} disabled={!enabled} onPress={onPress} grow style={styles.actionPress}>
+        <View style={[styles.tile, square ? styles.tileSquare : styles.tileLarge, { backgroundColor: ink.cell }]}>
           <Symbol name={icon} size={pageMenuCards.tileGlyph} color={enabled ? theme.label : theme.tertiaryLabel} />
         </View>
-        {large ? null : (
-          <Text importantForAccessibility="no" accessibilityElementsHidden style={[font.caption, styles.medium, styles.centered, { color: enabled ? theme.secondaryLabel : theme.tertiaryLabel }]} numberOfLines={1}>
-            {label}
-          </Text>
-        )}
-      </PressScale>
+        <Text
+          testID={`pageMenuActionCaption:${label}`}
+          importantForAccessibility="no"
+          accessibilityElementsHidden
+          style={[font.caption, styles.medium, styles.centered, { color: enabled ? theme.secondaryLabel : theme.tertiaryLabel }]}
+          numberOfLines={large ? undefined : pageMenuCards.captionLines}
+        >
+          {label}
+        </Text>
+      </PressInPlace>
     </View>
   );
 }
@@ -185,16 +220,9 @@ function RowIcon({ name, enabled }: { name: SymbolName; enabled: boolean }) {
 
 function Row({ icon, title, enabled, onPress }: { icon: SymbolName; title: string; enabled: boolean; onPress: () => void }) {
   const theme = useTheme();
-  const ink = usePageMenuInk();
+  const rowStyle = usePressStyle("row", { style: styles.row });
   return (
-    <Pressable
-      testID={`pageMenuRow:${title}`}
-      accessibilityRole="button"
-      accessibilityState={{ disabled: !enabled }}
-      disabled={!enabled}
-      onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed ? { backgroundColor: ink.rowPressed } : null]}
-    >
+    <Pressable testID={`pageMenuRow:${title}`} accessibilityRole="button" accessibilityState={{ disabled: !enabled }} disabled={!enabled} onPress={onPress} style={rowStyle}>
       <RowIcon name={icon} enabled={enabled} />
       <Text style={[font.body, styles.rowTitle, { color: enabled ? theme.label : theme.tertiaryLabel }]}>{title}</Text>
     </Pressable>
@@ -203,62 +231,63 @@ function Row({ icon, title, enabled, onPress }: { icon: SymbolName; title: strin
 
 export function SendRow({ devices }: { devices: ReturnType<typeof useSendTargets> }) {
   const theme = useTheme();
-  const ink = usePageMenuInk();
+  const rowStyle = usePressStyle("row", { style: styles.row });
   if (devices.length === 1) return <Row icon="paperplane" title={`Send to ${devices[0]!.name}`} enabled onPress={() => sendCurrentTab(devices[0]!)} />;
   const items: MenuItem[] = devices.map((device) => ({ label: device.name, icon: device.kind === "mac" ? "laptop" : "iphone", systemImage: device.kind === "mac" ? "laptopcomputer" : "iphone", onPress: () => sendCurrentTab(device) }));
   return (
-    <MenuTrigger items={items} trigger="tap" place={{ left: space.xxl, width: SEND_MENU_WIDTH }}>
+    <MenuTrigger items={items} trigger="tap" place={{ left: space.xxl, width: pageMenuCards.sendMenuWidth }}>
       {({ onPress }) => (
-        <Pressable testID="pageMenuRow:Send to Device" accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.row, pressed ? { backgroundColor: ink.rowPressed } : null]}>
+        <Pressable testID="pageMenuRow:Send to Device" accessibilityRole="button" onPress={onPress} style={rowStyle}>
           <RowIcon name="paperplane" enabled />
           <Text style={[font.body, styles.rowTitle, { color: theme.label }]}>Send to Device</Text>
-          <Symbol name="chevronUpChevronDown" size={14} color={theme.tertiaryLabel} />
+          <Symbol name="chevronUpChevronDown" size={pageMenuCards.sendChevron} color={theme.tertiaryLabel} />
         </Pressable>
       )}
     </MenuTrigger>
   );
 }
 
-function ToggleRow({ icon, title, value, enabled, detail, onChange }: { icon: SymbolName; title: string; value: boolean; enabled: boolean; detail?: string | null; onChange: (value: boolean) => void }) {
+type ToggleRowProps = { which: MenuSwitch; icon: SymbolName; title: string; value: boolean; enabled: boolean; detail?: string | null; onChange: (value: boolean) => void };
+
+function ToggleRow({ which, icon, title, value, enabled, detail, onChange }: ToggleRowProps) {
   const theme = useTheme();
-  const flip = () => {
-    if (enabled) onChange(!value);
-  };
-  const label = detail ? `${title}, Blocked ${detail}` : title;
-  const content = (
-    <>
-      <RowIcon name={icon} enabled={enabled} />
-      <Text style={[font.body, styles.rowTitle, { color: enabled ? theme.label : theme.tertiaryLabel }]}>{title}</Text>
-      {detail ? <Text style={[font.subheadline, styles.digits, { color: theme.secondaryLabel }]}>{detail}</Text> : null}
-      <View importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-        <Toggle label={title} value={value} disabled={!enabled} onChange={onChange} />
+  return (
+    <SharedToggleRow
+      testID={`menuToggle:${title}`}
+      press={copy().menuRowTogglesSwitch ? "row" : "knob"}
+      label={detail ? `${title}, Blocked ${detail}` : title}
+      hint={menuSwitchHint(which)}
+      value={value}
+      disabled={!enabled}
+      onChange={onChange}
+      style={styles.toggleRow}
+    >
+      <View style={styles.toggleWords}>
+        <RowIcon name={icon} enabled={enabled} />
+        <Text style={[font.body, styles.rowTitle, { color: enabled ? theme.label : theme.tertiaryLabel }]}>{title}</Text>
+        {detail ? <Text style={[font.subheadline, styles.digits, { color: theme.secondaryLabel }]}>{detail}</Text> : null}
       </View>
-    </>
+    </SharedToggleRow>
   );
-  const switchRole = { accessible: true, accessibilityRole: "switch" as const, accessibilityLabel: label, accessibilityState: { checked: value, disabled: !enabled } };
-  return copy().menuRowTogglesSwitch ? (
-    <Pressable testID={`menuToggle:${title}`} {...switchRole} disabled={!enabled} onPress={flip} style={styles.row}>
-      {content}
+}
+
+function ZoomSegment({ kind, label, value, enabled, onPress, style, children }: { kind: PressKind; label: string; value?: string; enabled: boolean; onPress: () => void; style: object; children: ReactNode }) {
+  const pressStyle = usePressStyle(kind, { style });
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityValue={value ? { text: value } : undefined} accessibilityState={{ disabled: !enabled }} disabled={!enabled} onPress={onPress} style={pressStyle}>
+      {children}
     </Pressable>
-  ) : (
-    <View testID={`menuToggle:${title}`} {...switchRole} onAccessibilityTap={flip} style={styles.row}>
-      {content}
-    </View>
   );
 }
 
 function ZoomRow({ model, large }: { model: MenuModel; large: boolean }) {
   const theme = useTheme();
   const ink = usePageMenuInk();
-  const zoomButton = (icon: SymbolName, label: string, can: boolean, onPress: () => void) => (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} disabled={!can} onPress={onPress} style={styles.zoomButton}>
-      <Symbol name={icon} size={16} color={can ? theme.label : theme.tertiaryLabel} />
-    </Pressable>
-  );
+  const enabledInk = (on: boolean) => (on ? theme.label : theme.tertiaryLabel);
   const heading = (
     <>
       <RowIcon name="textformatSize" enabled={model.isWebPage} />
-      <Text style={[font.body, styles.rowTitle, { color: model.isWebPage ? theme.label : theme.tertiaryLabel }]}>Page Zoom</Text>
+      <Text style={[font.body, styles.rowTitle, { color: enabledInk(model.isWebPage) }]}>Page Zoom</Text>
     </>
   );
   return (
@@ -266,17 +295,22 @@ function ZoomRow({ model, large }: { model: MenuModel; large: boolean }) {
       {large ? <View style={styles.zoomHeading}>{heading}</View> : heading}
       <View style={[styles.zoom, large ? styles.zoomIndented : null]}>
         <View pointerEvents="none" style={[styles.zoomFill, { backgroundColor: ink.stepper }]} />
-        {zoomButton("minus", "Zoom Out", model.zoomOut, zoomOut)}
-        <Pressable accessibilityRole="button" accessibilityLabel="Reset Zoom" accessibilityValue={{ text: model.zoomPercent }} disabled={!model.isWebPage} onPress={resetZoom} style={styles.zoomReset}>
-          <Text style={[font.subheadline, styles.digits, styles.semibold, { color: theme.label }]}>{model.zoomPercent}</Text>
-        </Pressable>
-        {zoomButton("plus", "Zoom In", model.zoomIn, zoomIn)}
+        <ZoomSegment kind="icon" label="Zoom Out" enabled={model.zoomOut} onPress={zoomOut} style={styles.zoomButton}>
+          <Symbol name="minus" size={pageMenuCards.stepperGlyph} color={enabledInk(model.zoomOut)} />
+        </ZoomSegment>
+        <ZoomSegment kind="text" label="Reset Zoom" value={model.zoomPercent} enabled={model.isWebPage} onPress={resetZoom} style={styles.zoomReset}>
+          <Text testID="menuZoomPercent" style={[font.subheadline, styles.digits, styles.semibold, { color: enabledInk(model.isWebPage) }]}>
+            {model.zoomPercent}
+          </Text>
+        </ZoomSegment>
+        <ZoomSegment kind="icon" label="Zoom In" enabled={model.zoomIn} onPress={zoomIn} style={styles.zoomButton}>
+          <Symbol name="plus" size={pageMenuCards.stepperGlyph} color={enabledInk(model.zoomIn)} />
+        </ZoomSegment>
       </View>
     </View>
   );
 }
 
-const SEND_MENU_WIDTH = 250;
 const TITLE_IN = FadeIn.duration(pageMenuMotion.titleFade);
 const TITLE_OUT = FadeOut.duration(pageMenuMotion.titleFade);
 const LABEL_START = pageMenuCards.rowInset + pageMenuCards.iconSlot + pageMenuCards.iconGap;
@@ -285,12 +319,10 @@ const styles = StyleSheet.create({
   scroll: { flexGrow: 0, flexShrink: 1 },
   column: { padding: pageMenuCards.padding, gap: pageMenuCards.sectionGap },
   largeBottom: { paddingBottom: pageMenuCards.padding + pageMenuLayout.accessibilityBottom },
-  navigation: { paddingHorizontal: space.xs, overflow: "hidden", ...smoothCorners },
-  navigationPill: { borderRadius: pageMenuCards.barHeight / 2 },
-  navigationTall: { borderRadius: pageMenuCards.groupRadius },
+  navigation: { paddingHorizontal: space.xs, overflow: "hidden", borderRadius: pageMenuCards.navigationRadius, ...smoothCorners },
   navigationRow: { flexDirection: "row", alignItems: "center", minHeight: pageMenuCards.barHeight },
   barButton: { minWidth: pageMenuCards.barButton, minHeight: pageMenuCards.barHeight, alignItems: "center", justifyContent: "center" },
-  navigationDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: pageMenuCards.rowInset },
+  navigationDivider: { height: pageMenuCards.divider, marginHorizontal: pageMenuCards.rowInset },
   title: { flex: 1, paddingHorizontal: space.xs, justifyContent: "center", minHeight: pageMenuCards.barHeight },
   titleBelow: { paddingHorizontal: space.s, paddingVertical: space.m },
   titleText: { fontWeight: "600" },
@@ -298,14 +330,19 @@ const styles = StyleSheet.create({
   centered: { textAlign: "center" },
   leading: { textAlign: "left" },
   feedback: { fontWeight: "600" },
+  actionRows: { gap: pageMenuCards.tileGap },
   actions: { flexDirection: "row", gap: pageMenuCards.tileGap },
   action: { flex: 1 },
   actionPress: { gap: pageMenuCards.tileLabelGap, alignItems: "stretch" },
-  tile: { aspectRatio: 1, borderRadius: pageMenuCards.tileRadius, ...smoothCorners, alignItems: "center", justifyContent: "center" },
+  tile: { borderRadius: pageMenuCards.tileRadius, ...smoothCorners, alignItems: "center", justifyContent: "center" },
+  tileSquare: { aspectRatio: 1 },
+  tileLarge: { minHeight: pageMenuCards.largeTextTileHeight },
   medium: { fontWeight: "500" },
   group: { borderRadius: pageMenuCards.groupRadius, ...smoothCorners, overflow: "hidden" },
-  divider: { height: StyleSheet.hairlineWidth, marginLeft: LABEL_START },
+  divider: { height: pageMenuCards.divider, marginLeft: LABEL_START },
   row: { flexDirection: "row", alignItems: "center", minHeight: pageMenuCards.rowHeight, paddingHorizontal: pageMenuCards.rowInset, gap: pageMenuCards.iconGap },
+  toggleRow: { minHeight: pageMenuCards.rowHeight, paddingHorizontal: pageMenuCards.rowInset, paddingVertical: space.none, gap: pageMenuCards.iconGap },
+  toggleWords: { flexDirection: "row", alignItems: "center", gap: pageMenuCards.iconGap },
   icon: { width: pageMenuCards.iconSlot, alignItems: "center" },
   rowTitle: { flex: 1, paddingVertical: space.s },
   digits: { fontVariant: ["tabular-nums"] },

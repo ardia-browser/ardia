@@ -1,4 +1,5 @@
 import ArdiaBrowser
+import ArdiaDesign
 import Foundation
 import FoundationModels
 import Observation
@@ -211,6 +212,7 @@ struct PageSummaryOverlay: View {
     }
     .coordinateSpace(.named(PageSummaryLayer.coordinateSpace))
     .ignoresSafeArea()
+    .environment(\.usesGlass, NativeChromeLook.shared.usesGlass)
   }
 }
 
@@ -229,7 +231,7 @@ struct PageSummaryCard: View {
     }
     .padding(16)
     .frame(maxWidth: 560, maxHeight: maxHeight, alignment: .topLeading)
-    .glassEffect(.regular, in: .rect(cornerRadius: 24))
+    .chromeSurface(in: .rect(cornerRadius: 24), interactive: false)
     .accessibilityElement(children: .contain)
     .accessibilityLabel(Text("Summary"))
     .accessibilityAction(.escape) { onClose() }

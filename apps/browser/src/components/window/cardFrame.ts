@@ -1,7 +1,6 @@
 import { pageFrameOf, type PageFrame } from "../../lib/windowLayout";
-import { usePageFrameInset, windowCornerRadius } from "../../state/windows/layout";
+import { drawnWindowCornerRadius, usePageFrameInset, windowCornerRadius } from "../../state/windows/layout";
 import { perLook } from "../ui/tokens";
-import { peekRadius } from "./tokens";
 import { sidebarCardGap } from "./dockMotion";
 import { currentInterfaceScale, useCurrentInterfaceScale } from "../../state/settings/interfaceScale";
 
@@ -13,7 +12,7 @@ export function cardFrameOf(inset: number, scale = currentInterfaceScale()): Car
   const frames = framesOfLook();
   const key = `${inset}@${scale}`;
   let frame = frames.get(key);
-  if (!frame) frames.set(key, (frame = { ...pageFrameOf(inset, windowCornerRadius(), peekRadius()), dockGap: sidebarCardGap(inset) }));
+  if (!frame) frames.set(key, (frame = { ...pageFrameOf(inset, windowCornerRadius(), drawnWindowCornerRadius()), dockGap: sidebarCardGap(inset) }));
   return frame;
 }
 

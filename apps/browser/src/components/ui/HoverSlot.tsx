@@ -4,51 +4,58 @@ import { iconButton } from "./tokens";
 
 const HOVER_SLOT_WIDTH = iconButton.s.box;
 
-export function HoverSlot({
-  hovered,
-  hover,
-  width = HOVER_SLOT_WIDTH,
-  reserve = "always",
-  align = "end",
-  children,
-  style,
-}: {
+type SlotProps = {
   hovered: boolean;
   hover: ReactNode;
-  width?: number | "content";
   reserve?: "always" | "hover";
   align?: "start" | "end";
   children?: ReactNode;
   style?: StyleProp<ViewStyle>;
-}) {
+};
+
+export function HoverSlot({ width = HOVER_SLOT_WIDTH, ...props }: SlotProps & { width?: number | "content" }) {
+  return width === "content" ? <ContentHoverSlot {...props} /> : hoverSlotView({ ...props, width });
+}
+
+export function hoverSlotView({ hovered, hover, width = HOVER_SLOT_WIDTH, reserve = "always", align = "end", children, style }: SlotProps & { width?: number }) {
+  const showHover = hovered && hover != null && hover !== false;
+  const hasChildren = children != null && children !== false;
+  if (reserve === "hover" && !showHover && !hasChildren && style === undefined) return null;
+  return (
+    <View style={[slotFrame(reserve === "always" || showHover ? width : 0, align), style]}>
+      {hasChildren ? slotRest(showHover, children) : null}
+      {showHover ? <View style={[HOVER_LAYER, align === "start" ? AT_START : AT_END]}>{hover}</View> : null}
+    </View>
+  );
+}
+
+function ContentHoverSlot({ hovered, hover, reserve = "always", align = "end", children, style }: SlotProps) {
   const [contentWidth, setContentWidth] = useState(0);
-  const fitsContent = width === "content";
-  const room = fitsContent ? contentWidth : width;
   const hasHover = hover != null && hover !== false;
   const showHover = hovered && hasHover;
-  const edge = align === "start" ? { left: 0 } : { right: 0 };
+  const hasChildren = children != null && children !== false;
   return (
-    <View
-      style={[
-        { minWidth: reserve === "always" || showHover ? room : 0, alignSelf: "stretch", flexDirection: "row", alignItems: "center", justifyContent: align === "start" ? "flex-start" : "flex-end" },
-        style,
-      ]}
-    >
-      {children != null && children !== false ? (
-        <View pointerEvents={showHover ? "none" : "box-none"} style={{ flexDirection: "row", alignItems: "center", opacity: showHover ? 0 : 1 }}>
-          {children}
-        </View>
-      ) : null}
-      {fitsContent && hasHover ? (
-        <View
-          onLayout={(e) => setContentWidth(e.nativeEvent.layout.width)}
-          style={{ position: "absolute", top: 0, bottom: 0, ...edge, flexDirection: "row", alignItems: "center", opacity: showHover ? 1 : 0 }}
-        >
+    <View style={[slotFrame(reserve === "always" || showHover ? contentWidth : 0, align), style]}>
+      {hasChildren ? slotRest(showHover, children) : null}
+      {hasHover ? (
+        <View onLayout={(e) => setContentWidth(e.nativeEvent.layout.width)} style={[HOVER_LAYER, align === "start" ? AT_START : AT_END, { opacity: showHover ? 1 : 0 }]}>
           {hover}
         </View>
-      ) : showHover ? (
-        <View style={{ position: "absolute", top: 0, bottom: 0, ...edge, flexDirection: "row", alignItems: "center" }}>{hover}</View>
       ) : null}
     </View>
   );
 }
+
+function slotRest(showHover: boolean, children: ReactNode) {
+  return (
+    <View pointerEvents={showHover ? "none" : "box-none"} style={{ flexDirection: "row", alignItems: "center", opacity: showHover ? 0 : 1 }}>
+      {children}
+    </View>
+  );
+}
+
+const slotFrame = (minWidth: number, align: "start" | "end") =>
+  ({ minWidth, alignSelf: "stretch", flexDirection: "row", alignItems: "center", justifyContent: align === "start" ? "flex-start" : "flex-end" }) as const;
+const HOVER_LAYER = { position: "absolute", top: 0, bottom: 0, flexDirection: "row", alignItems: "center" } as const;
+const AT_START = { left: 0 } as const;
+const AT_END = { right: 0 } as const;

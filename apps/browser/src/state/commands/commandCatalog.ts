@@ -141,6 +141,7 @@ export const COMMANDS = {
   reportProblem: { title: "Report a Problem…", keys: ["⌥⇧⌘I"], ...appWide },
   keyboardShortcuts: { title: "Keyboard Shortcuts", symbol: "keyboard" },
   copyDiagnostics: { title: "Copy Diagnostics", ...appWide },
+  copyLastFreeze: { title: "Copy Last Freeze", ...appWide },
   toolTour: { title: "Tool Tour", ...appWide },
   videoTour: { title: "Video Tour", ...appWide },
   releaseNotes: { title: "Release Notes", ...appWide },
@@ -183,7 +184,7 @@ export const STANDARD_ITEMS: Readonly<Record<string, { keys?: Keys }>> = {
   "std:cut:": { keys: ["⌘X"] },
   "std:copy:": { keys: ["⌘C"] },
   "std:paste:": { keys: ["⌘V"] },
-  "std:pasteAndMatchStyle:": { keys: ["⇧⌘V"] },
+  "std:pasteAndMatchStyle:": { keys: ["⇧⌘V", "⌥⇧⌘V"] },
   "std:delete:": {},
   "std:selectAll:": { keys: ["⌘A"] },
   "std:showGuessPanel:": { keys: ["⌘:"] },
@@ -257,6 +258,8 @@ const variantOf = (command: BrowserCommand, arg: string | undefined): Variant =>
   const spec = SPECS[command];
   return (arg && spec.variants?.[arg]) || spec;
 };
+
+export const commandTitle = (command: BrowserCommand, arg?: string): string | undefined => variantOf(command, arg).title;
 
 export function commandBarTitle(command: BrowserCommand, arg?: string): string {
   const { barTitle, title = "" } = variantOf(command, arg);

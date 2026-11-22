@@ -15,8 +15,10 @@ export const otherEngine = (engine: PageEngine): PageEngine => (engine === "webk
 
 type EngineState = Pick<BrowserState, "tabs" | "settings">;
 
-export function siteOf(url: string | undefined | null): string | null {
-  if (!url) return null;
+const SITE_CACHE_SIZE = 512;
+const sites = new Map<string, string | null>();
+
+function parseSite(url: string): string | null {
   try {
     const u = new URL(url);
     return u.protocol === "http:" || u.protocol === "https:" ? `${u.protocol}//${u.host}`.toLowerCase() : null;
@@ -25,17 +27,43 @@ export function siteOf(url: string | undefined | null): string | null {
   }
 }
 
-export const canSwitchEngine = (url: string | undefined | null) => PLATFORM_FEATURES.webKit && !!url && isWebPageUrl(url);
+export function siteOf(url: string | undefined | null): string | null {
+  if (!url) return null;
+  const known = sites.get(url);
+  if (known !== undefined) return known;
+  const site = parseSite(url);
+  if (sites.size >= SITE_CACHE_SIZE) sites.delete(sites.keys().next().value!);
+  sites.set(url, site);
+  return site;
+}
+
 export const offersEngineChoice = () => PLATFORM_FEATURES.webKit;
 export const chromiumOnly = (url: string | undefined | null) => !!url && /^(ardia|chrome|chrome-extension|chrome-untrusted|devtools|view-source):/i.test(url);
+export const webStorePage = (url: string | undefined | null) => !!url && /^https:\/\/(chromewebstore\.google\.com|chrome\.google\.com\/webstore)([/?#]|$)/i.test(url);
+export const needsChromium = (url: string | undefined | null) => chromiumOnly(url) || webStorePage(url);
+export const canSwitchEngine = (url: string | undefined | null) => PLATFORM_FEATURES.webKit && !!url && isWebPageUrl(url) && !webStorePage(url);
 
 const offered = <Engine extends PageEngine | undefined>(engine: Engine): Engine | "chromium" => (engine === "webkit" && !PLATFORM_FEATURES.webKit ? "chromium" : engine);
 
-export const defaultEngine = (s: Pick<BrowserState, "settings">): PageEngine => offered(s.settings.pageEngine === "webkit" ? "webkit" : "chromium");
+export type EngineMode = BrowserState["settings"]["engineMode"];
+
+export const engineMode = (s: Pick<BrowserState, "settings">): EngineMode => (s.settings.engineMode === "chromium" || s.settings.engineMode === "webkit" ? s.settings.engineMode : "automatic");
+export const singleEngine = (s: Pick<BrowserState, "settings">): PageEngine | null => {
+  const mode = engineMode(s);
+  return mode === "automatic" ? null : offered(mode);
+};
+const modeEngine = (s: Pick<BrowserState, "settings">, url: string | undefined | null): PageEngine | undefined => {
+  const only = singleEngine(s);
+  return only ? (needsChromium(url) ? "chromium" : only) : undefined;
+};
+
+export const switchableEngine = (s: Pick<BrowserState, "settings">, url: string | undefined | null) => !singleEngine(s) && canSwitchEngine(url);
+
+export const defaultEngine = (s: Pick<BrowserState, "settings">): PageEngine => singleEngine(s) ?? offered(s.settings.pageEngine === "webkit" ? "webkit" : "chromium");
 
 export function ruleFor(s: Pick<BrowserState, "settings">, url: string | undefined | null): PageEngine | undefined {
   const site = siteOf(url);
-  return offered(site ? s.settings.websiteEngines?.[site] : undefined);
+  return site && !singleEngine(s) ? offered(s.settings.websiteEngines?.[site]) : undefined;
 }
 
 export const PROTECTED_VIDEO_SITES: readonly string[] = [
@@ -47,34 +75,45 @@ export const PROTECTED_VIDEO_SITES: readonly string[] = [
   "hulu.com",
   "tv.apple.com",
   "music.apple.com",
+  "open.spotify.com",
   "peacocktv.com",
   "paramountplus.com",
   "crunchyroll.com",
   "hotstar.com",
   "jiohotstar.com",
   "v.qq.com",
+  "audible.com",
+  "audible.co.uk",
+  "audible.ca",
+  "audible.com.au",
+  "audible.de",
+  "audible.fr",
+  "audible.it",
+  "audible.es",
+  "audible.co.jp",
+  "audible.in",
+  "audible.com.br",
+  "canalplus.com",
+  "mycanal.fr",
+  "tv.youtube.com",
+  "osnplus.com",
+  "anghami.com",
 ];
-
-export const FAIRPLAY_IN_CHROMIUM_ORIGINS: readonly string[] = ["https://open.spotify.com", "https://www.netflix.com", "https://www.disneyplus.com"];
 
 export function protectedVideoSite(url: string | undefined | null): boolean {
   const site = siteOf(url);
   if (!site?.startsWith("https://")) return false;
-  const host = new URL(site).hostname;
+  const host = site.slice("https://".length).replace(/:\d+$/, "");
   return PROTECTED_VIDEO_SITES.some((domain) => host === domain || host.endsWith(`.${domain}`));
 }
 
-export const fairPlaySite = (url: string | undefined | null) => FAIRPLAY_IN_CHROMIUM_ORIGINS.includes(siteOf(url) ?? "");
-
-const fairPlayStaysInChromium = (s: Pick<BrowserState, "settings">, url: string | undefined | null) =>
-  s.settings.fairPlayInChromium === true && fairPlaySite(url);
-
 export const builtInEngine = (s: Pick<BrowserState, "settings">, url: string | undefined | null): PageEngine | undefined =>
-  PLATFORM_FEATURES.webKit && s.settings.protectedVideoInWebKit === true && (protectedVideoSite(url) || fairPlaySite(url)) && !fairPlayStaysInChromium(s, url) ? "webkit" : undefined;
+  PLATFORM_FEATURES.webKit && !singleEngine(s) && s.settings.protectedVideoInWebKit === true && protectedVideoSite(url) ? "webkit" : undefined;
 
-export const chosenEngine = (s: Pick<BrowserState, "settings">, url: string | undefined | null): PageEngine | undefined => ruleFor(s, url) ?? builtInEngine(s, url);
+export const chosenEngine = (s: Pick<BrowserState, "settings">, url: string | undefined | null): PageEngine | undefined =>
+  modeEngine(s, url) ?? (webStorePage(url) ? "chromium" : undefined) ?? ruleFor(s, url) ?? builtInEngine(s, url);
 
-export const recommendedEngineFor = (s: Pick<BrowserState, "settings">, url: string | undefined | null): PageEngine => builtInEngine(s, url) ?? defaultEngine(s);
+export const recommendedEngineFor = (s: Pick<BrowserState, "settings">, url: string | undefined | null): PageEngine => modeEngine(s, url) ?? builtInEngine(s, url) ?? defaultEngine(s);
 
 export const engineForUrl = (s: Pick<BrowserState, "settings">, url: string | undefined | null): PageEngine => chosenEngine(s, url) ?? defaultEngine(s);
 
@@ -87,8 +126,19 @@ const fromAdoption = (s: EngineState, t: Tab, depth: number): PageEngine | undef
   return source && depth < 8 ? engineOf(s, source, depth + 1) : undefined;
 };
 
+export const drivenByChrome = (s: EngineState, t: Tab, depth = 0): boolean => {
+  if (t.chromeOpened) return true;
+  const id = adoptKind(adoptOf(t));
+  if (id?.kind === "tab") return true;
+  const opener = id?.kind === "ardiacore" && t.openerId ? s.tabs[t.openerId] : undefined;
+  return !!opener && depth < 8 && drivenByChrome(s, opener, depth + 1);
+};
+
 function engineOf(s: EngineState, t: Tab, depth: number): PageEngine {
-  if (chromiumOnly(navigationOf(t)?.url ?? t.url)) return "chromium";
+  if (needsChromium(navigationOf(t)?.url ?? t.url)) return "chromium";
+  const only = singleEngine(s);
+  if (only === "webkit" && drivenByChrome(s, t, depth)) return "chromium";
+  if (only) return only;
   if (t.engine) return offered(t.engine);
   const adopted = fromAdoption(s, t, depth);
   if (adopted) return offered(adopted);
@@ -97,13 +147,38 @@ function engineOf(s: EngineState, t: Tab, depth: number): PageEngine {
   return engineForUrl(s, navigationOf(t)?.url ?? t.url);
 }
 
+function livePopupOpener(s: EngineState, t: Tab): Tab | undefined {
+  const kind = adoptKind(adoptOf(t))?.kind;
+  if (kind !== "webkit" && kind !== "ardiacore") return undefined;
+  const opener = t.openerId ? s.tabs[t.openerId] : undefined;
+  return opener && (opener.url || navigationOf(opener)) ? opener : undefined;
+}
+
+function ownEngineOf(s: EngineState, t: Tab, depth = 0): PageEngine {
+  const url = navigationOf(t)?.url ?? t.url;
+  if (needsChromium(url) || drivenByChrome(s, t)) return "chromium";
+  const opener = depth < 8 ? livePopupOpener(s, t) : undefined;
+  return opener ? ownEngineOf(s, opener, depth + 1) : engineForUrl(s, url);
+}
+
 export function tabEngine(s: EngineState, tabId: string): PageEngine {
   const t = s.tabs[tabId];
   return t ? engineOf(s, t, 0) : defaultEngine(s);
 }
 
+export function engineUnderMode(s: EngineState, t: Tab): PageEngine {
+  return singleEngine(s) ? engineOf(s, t, 0) : ownEngineOf(s, t);
+}
+
+export function modeEngineFor(s: EngineState, t: Tab, url: string): PageEngine | undefined {
+  const only = singleEngine(s);
+  if (!only) return undefined;
+  if (needsChromium(url)) return "chromium";
+  return only === "webkit" && drivenByChrome(s, t, 0) ? "chromium" : only;
+}
+
 export function typedNavigationEngine(s: EngineState, tab: Tab, url: string): PageEngine {
-  if (chromiumOnly(url)) return "chromium";
+  if (needsChromium(url)) return "chromium";
   const chosen = chosenEngine(s, url);
   if (chosen) return chosen;
   return tab.url || navigationOf(tab) ? tabEngine(s, tab.id) : defaultEngine(s);
@@ -111,7 +186,7 @@ export function typedNavigationEngine(s: EngineState, tab: Tab, url: string): Pa
 
 export function engineMark(s: EngineState, tabId: string): PageEngine | null {
   const t = s.tabs[tabId];
-  if (!t || !canSwitchEngine(t.url || navigationOf(t)?.url)) return null;
+  if (!t || !switchableEngine(s, t.url || navigationOf(t)?.url)) return null;
   const engine = tabEngine(s, tabId);
   return engine === defaultEngine(s) ? null : engine;
 }

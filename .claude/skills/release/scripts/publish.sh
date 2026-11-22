@@ -27,30 +27,48 @@ channel="$(channel_of "$version")"
 dmg="$dist/Ardia-$version.dmg"
 zip="$dist/Ardia-$version.zip"
 feed="$dist/appcast.xml"
-cli="$dist/ardia-cli-$version-macos-arm64.tar.gz"
 
 assets=()
-for file in "$dmg" "$zip" "$feed" "$cli" "$cli.sha256"; do
+for file in "$dmg" "$zip" "$feed"; do
   [ -f "$file" ] || die "no $file (scripts/release.sh $version first)"
   assets+=("$file")
 done
+"$root/scripts/release/check-packages.sh" "$dist" "$version" || die "the update zip or the DMG isn't laid out as installs expect (scripts/release/check-packages.sh)"
 linux="$dist/linux"
 if [ -d "$linux" ]; then
   linux_package="$linux/Ardia-$version-linux-x64.tar.xz"
   linux_cli="$linux/ardia-cli-$version-linux-x64.tar.gz"
   linux_deb="$linux/Ardia-$version-linux-x64.deb"
   linux_appimage="$linux/Ardia-$version-linux-x64.AppImage"
-  for file in "$linux_package" "$linux_package.sha256" "$linux_deb" "$linux_deb.sha256" "$linux_appimage" "$linux_appimage.sha256" "$linux_cli" "$linux_cli.sha256"; do
-    [ -f "$file" ] || die "$linux has no $(basename "$file") (scripts/linux/release.sh $version first, or remove $linux to publish without Linux)"
-    assets+=("$file")
-  done
+  linux_arch="$linux/ardia-bin-$version.src.tar.gz"
   provenance="$linux/provenance.txt"
   [ -f "$provenance" ] || die "$linux has no provenance.txt"
   grep -q '^engine key [0-9a-f]\{40\} (exact)' "$provenance" && ! grep -q 'uncommitted changes' "$provenance" \
     || die "$linux is a Linux test build (an inexact engine or uncommitted changes, $provenance), not a release"
-  (cd "$linux" && shasum -a 256 -c --quiet "${linux_package##*/}.sha256" "${linux_deb##*/}.sha256" "${linux_appimage##*/}.sha256" "${linux_cli##*/}.sha256") \
+  linux_files=("$linux_package" "$linux_appimage" "$linux_arch" "$linux_cli")
+  if grep -q '^deb dropped' "$provenance"; then
+    echo "note: $(grep -m1 '^deb dropped' "$provenance"): the release ships without the .deb"
+  else
+    linux_files+=("$linux_deb")
+  fi
+  linux_sums=()
+  for file in "${linux_files[@]}"; do
+    for asset in "$file" "$file.sha256"; do
+      [ -f "$asset" ] || die "$linux has no $(basename "$asset") (scripts/linux/release.sh $version first, or remove $linux to publish without Linux)"
+      assets+=("$asset")
+    done
+    linux_sums+=("${file##*/}.sha256")
+  done
+  (cd "$linux" && shasum -a 256 -c --quiet "${linux_sums[@]}") \
     || die "the Linux assets in $linux don't match their .sha256 files"
-  echo "PASS  the Linux tarball, .deb, AppImage and CLI join the release"
+  echo "PASS  the Linux assets join the release: ${linux_files[*]##*/}"
+  linux_update="$linux/Ardia-$version-linux-update.txt"
+  if [ -f "$linux_update" ] && [ -f "$linux_update.sig" ]; then
+    assets+=("$linux_update" "$linux_update.sig")
+    echo "PASS  the signed Linux self-update manifest joins the release"
+  else
+    echo "note: no signed $(basename "$linux_update") in $linux: installed Linux apps won't update themselves to $version"
+  fi
 else
   echo "note: no $linux: the release ships without the Linux tarball"
 fi

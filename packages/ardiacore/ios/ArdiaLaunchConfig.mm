@@ -19,7 +19,7 @@ NSString *const kSwitchesCacheDocument = @"switches-cache.json";
 NSArray<NSString *> *InstanceKeys() {
   return @[
     @"jsLocation", @"chromiumSwitches", @"downloadsDir", @"updateFeed", @"allowAudio", @"allowOcclusion", @"releaseNotes",
-    @"cliHome", @"cliBinDir", @"cliUrl", @"syncFolder", @"sharedFolders", @"importSourceDir", @"importSafariHome",
+    @"cliHome", @"cliBinDir", @"cliUrl", @"syncFolder", @"sharedFolders", @"importSourceDir", @"importSafariHome", @"officialPluginsFrom",
   ];
 }
 
@@ -37,22 +37,22 @@ NSArray<NSString *> *EngineTestKeys() {
 
 NSArray<NSString *> *AppTestKeys() {
   return @[
-    @"pipSelfTest", @"pipHover", @"fakeFullScreenMs", @"shadersKeyWindow", @"peekStrict", @"importSecret", @"importDiaBundleId", @"importDiaWindows",
+    @"pipSelfTest", @"pipHover", @"fakeFullScreenMs", @"shadersKeyWindow", @"peekStrict", @"peekMesh", @"peekReady", @"peekReduceMotion", @"peekSlow", @"importSecret", @"importDiaBundleId", @"importDiaWindows",
     @"cliInstallScript", @"legacySource", @"legacyCrashAfter", @"bangsUrl", @"onboarding", @"whatsNew", @"telemetry",
-    @"liveMock", @"calendarFixture", @"appMenu", @"appDialog", @"loginsTimeout", @"screenRecording", @"systemLocationPermission",
-    @"videoMirror", @"protectedVideoOrigin",
+    @"liveMock", @"calendarFixture", @"appMenu", @"appDialog", @"loginsTimeout", @"screenRecording", @"systemLocationPermission", @"officialPin",
+    @"applePasswordsPanel", @"systemPanelRace",
   ];
 }
 
 NSArray<NSString *> *KeysWhoseValuesHoldCommas() {
   return @[
     @"chromiumSwitches", @"downloadsDir", @"updateFeed", @"cliHome", @"cliBinDir", @"cliUrl", @"syncFolder", @"sharedFolders", @"importSourceDir",
-    @"importSafariHome", @"importSecret", @"cliInstallScript", @"legacySource", @"bangsUrl", @"liveMock",
+    @"importSafariHome", @"importSecret", @"cliInstallScript", @"legacySource", @"bangsUrl", @"liveMock", @"officialPin", @"officialPluginsFrom",
   ];
 }
 
 NSArray<NSString *> *TraceAreas() {
-  return @[ @"visibility", @"pip", @"pipZoom", @"trafficLights", @"profileGate", @"protectedVideo", @"videoMirror" ];
+  return @[ @"visibility", @"pip", @"pipZoom", @"trafficLights", @"profileGate" ];
 }
 
 void Note(NSString *line) {

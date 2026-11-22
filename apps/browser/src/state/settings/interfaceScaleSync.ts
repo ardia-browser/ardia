@@ -2,6 +2,8 @@ import { nativeInterfaceScale, setNativeInterfaceScale } from "../../platform/ap
 import { INTERFACE_SCALE, sameInterfaceScale } from "../../lib/interfaceScale";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { appliedInterfaceScale, currentInterfaceScale } from "./interfaceScale";
+import { consentToken } from "../telemetry/client";
+import { warnFor } from "../telemetry/logs";
 
 export const storedScaleWins = (s: Pick<BrowserState, "settings" | "settingsMeta">): boolean =>
   s.settingsMeta.chosen.includes("interfaceScale") || s.settings.interfaceScale !== INTERFACE_SCALE.default;
@@ -13,13 +15,14 @@ let refused: number | null = null;
 function push(scale: number) {
   asked = scale;
   refused = null;
+  const consent = consentToken();
   setNativeInterfaceScale(scale).then(
     (now) => {
       if (asked === scale) appliedInterfaceScale(now);
     },
     (error: unknown) => {
       if (asked === scale) refused = scale;
-      console.warn("[interfaceScale] couldn't apply the interface size", error);
+      warnFor(consent, "[interfaceScale] couldn't apply the interface size", error);
     },
   );
 }

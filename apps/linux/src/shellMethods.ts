@@ -87,10 +87,13 @@ const frameCornerRadius = (host?: ArdiaHost) => (id: string): Promise<number> =>
     () => 0,
   );
 
+const noGeometry = (): Promise<null> => Promise.resolve(null);
+
 const HOST_SHELL_METHODS: Record<string, (host?: ArdiaHost) => ShellMethod> = { frameCornerRadius };
 
 const LINUX_SHELL_METHODS: Record<string, ShellMethod> = {
   windowCornerRadius: () => LINUX_WINDOW_CORNER_RADIUS,
+  drawnWindowCornerRadius: () => LINUX_WINDOW_CORNER_RADIUS,
   updateMenu: resolved,
   watchSidebarEdge: (id: string, on: boolean, hold = 0, right = false) => {
     watchSidebarEdge(id, on, hold, right);
@@ -99,12 +102,14 @@ const LINUX_SHELL_METHODS: Record<string, ShellMethod> = {
   setDragEscapeCapture,
   saveKeyResponder,
   takeEditKeyAcks: () => ({}),
+  takeInputSourceKeys: () => 0,
   restoreKeyResponder,
   discardKeyResponder,
   cancelFocusMove: resolved,
   switcherPointerMoved: () => false,
   pressesWithoutRelease: () => 0,
   takeFocusHandoffCounts: () => ({}),
+  setConsentEpoch: () => undefined,
   pressRepeated: () => Promise.resolve(null),
   animateWindowClose: resolved,
   raiseView,
@@ -118,8 +123,18 @@ const LINUX_SHELL_METHODS: Record<string, ShellMethod> = {
   startDictation: unavailable("Dictation"),
   dictationAvailable: () => linuxCapabilities().dictation,
   pickFiles: unavailable("Choosing files to open"),
+  openSurfaces: () => Promise.resolve([]),
+  capturePageMenus: resolved,
+  dismissSurface: unavailable("Captured page menus"),
+  menuBar: unavailable("The menu bar catalog"),
+  performMenuBarItem: unavailable("Running menu bar items"),
+  dismissShownOnly: unavailable("Taking away a question Ardia asked on the control socket's behalf"),
   replyToTerminate: resolved,
   readText: readClipboardText,
+  windowGeometry: noGeometry,
+  setWindowFrame: noGeometry,
+  setWindowZoomed: noGeometry,
+  setWindowFullScreen: noGeometry,
 };
 
 export function watchSidebarEdgeBesideNativeLeftEdge(host: ArdiaHost) {

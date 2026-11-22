@@ -74,6 +74,19 @@ if (is_mac) {
   ]
 }
 
+if (!is_win) {
+  ardia_sources += [
+    "ac_extension_alarms.cc",
+    "ac_extension_dnr.cc",
+    "ac_extension_grants.cc",
+    "ac_extension_mirror.cc",
+    "ac_extension_mirror_internal.h",
+    "ac_extension_storage.cc",
+    "ac_local_storage.cc",
+    "ac_passwords_page.cc",
+  ]
+}
+
 if (is_linux) {
   ardia_sources += [
     "ac_engine_dispatch.cc",
@@ -174,6 +187,17 @@ source_set("ardia") {
     "//ui/views",
     "//url",
   ]
+
+  if (!is_win) {
+    deps += [
+      "//components/password_manager/core/browser/password_store:password_store_interface",
+      "//components/services/storage/public/mojom",
+      "//extensions/browser/api/alarms",
+      "//extensions/browser/api/permissions",
+      "//extensions/browser/api/storage",
+      "//extensions/common/api",
+    ]
+  }
 
   if (is_mac) {
     frameworks = [ "QuartzCore.framework" ]

@@ -36,7 +36,7 @@ export function handOff(tabId: string, profile: string, engine: PageEngine) {
 
 export function startTabPages() {
   claimLaunch();
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["tabs"], (s, prev) => {
     if (s.tabs === prev.tabs) return;
     for (const id of changedIds(s.tabs, prev.tabs)) {
       const tab = s.tabs[id];

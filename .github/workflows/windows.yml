@@ -420,12 +420,12 @@ jobs:
         shell: pwsh
         run: scripts/windows/dependency-check.ps1 -App "${{ runner.temp }}/Ardia"
       - name: Launch it
-        if: ${{ !cancelled() && (env.FULL == 'true' || steps.engine.outcome != 'success' || env.COMPILED == 'true') }}
+        if: ${{ !cancelled() && !startsWith(env.PART, 'tour') && (env.FULL == 'true' || steps.engine.outcome != 'success' || env.COMPILED == 'true') }}
         timeout-minutes: 12
         shell: pwsh
         run: scripts/windows/launch-smoke.ps1 -App "$env:APP/Ardia.exe" -Out "${{ runner.temp }}/launch" -Part $env:PART -NoInput:($env:NO_INPUT -eq 'true')
       - name: Tour
-        if: ${{ !cancelled() && env.SLUG == 'x64' && env.PART == 'launch' && env.FULL == 'true' }}
+        if: ${{ !cancelled() && env.PART == 'tour' }}
         continue-on-error: true
         timeout-minutes: 12
         shell: pwsh
@@ -478,12 +478,12 @@ jobs:
           compression-level: 0
           retention-days: 14
       - name: Launch it with the engine
-        if: ${{ !cancelled() && steps.engine.outcome == 'success' }}
+        if: ${{ !cancelled() && !startsWith(env.PART, 'tour') && steps.engine.outcome == 'success' }}
         timeout-minutes: 12
         shell: pwsh
         run: scripts/windows/launch-smoke.ps1 -App "${{ runner.temp }}/Ardia/Ardia.exe" -Out "${{ runner.temp }}/launch-engine" -Part $env:PART -NoInput:($env:NO_INPUT -eq 'true')
       - name: Tour the pages
-        if: ${{ !cancelled() && env.SLUG == 'x64' && env.PART == 'launch' && env.FULL == 'true' && steps.engine.outcome == 'success' }}
+        if: ${{ !cancelled() && env.PART == 'tour' && steps.engine.outcome == 'success' }}
         continue-on-error: true
         timeout-minutes: 20
         shell: pwsh
@@ -491,14 +491,14 @@ jobs:
           scripts/windows/tour.ps1 -App "${{ runner.temp }}/Ardia/Ardia.exe" -Out "${{ runner.temp }}/tour-engine" -Only pages,peek,peek-dark,peek-tabs,peek-layouts
           if (Test-Path "${{ runner.temp }}/tour-engine/tour.md") { Get-Content "${{ runner.temp }}/tour-engine/tour.md" >> $env:GITHUB_STEP_SUMMARY }
       - name: Tour the first run
-        if: ${{ !cancelled() && env.SLUG == 'x64' && env.PART == 'launch' && env.FULL == 'true' && steps.engine.outcome == 'success' }}
+        if: ${{ !cancelled() && env.PART == 'tour-first-run' && steps.engine.outcome == 'success' }}
         timeout-minutes: 40
         shell: pwsh
         run: |
           scripts/windows/tour.ps1 -App "${{ runner.temp }}/Ardia/Ardia.exe" -Out "${{ runner.temp }}/tour-first-run" -Only first-run
           if (Test-Path "${{ runner.temp }}/tour-first-run/tour.md") { Get-Content "${{ runner.temp }}/tour-first-run/tour.md" >> $env:GITHUB_STEP_SUMMARY }
       - name: Tour the typing
-        if: ${{ !cancelled() && env.SLUG == 'x64' && env.PART == 'launch' && env.FULL == 'true' && steps.engine.outcome == 'success' }}
+        if: ${{ !cancelled() && env.PART == 'tour' && steps.engine.outcome == 'success' }}
         timeout-minutes: 18
         shell: pwsh
         run: |
@@ -513,10 +513,10 @@ jobs:
             !${{ runner.temp }}/launch-engine/*-data
           if-no-files-found: ignore
           retention-days: 14
-      - if: ${{ !cancelled() && env.SLUG == 'x64' && env.PART == 'launch' }}
+      - if: ${{ !cancelled() && startsWith(env.PART, 'tour') }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: tour-engine
+          name: ${{ env.PART == 'tour' && 'tour-engine' || 'tour-engine-first-run' }}
           path: |
             ${{ runner.temp }}/tour-engine
             !${{ runner.temp }}/tour-engine/data
@@ -537,7 +537,7 @@ jobs:
           path: ${{ runner.temp }}/Ardia
           if-no-files-found: ignore
           retention-days: 14
-      - if: ${{ !cancelled() && env.SLUG == 'x64' && env.PART == 'launch' }}
+      - if: ${{ !cancelled() && env.PART == 'tour' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: tour
@@ -551,6 +551,48 @@ jobs:
           path: ${{ runner.temp }}/launch
           if-no-files-found: ignore
           retention-days: 14
+
+  x64-tour:
+    needs: [gate, identity, javascript, app]
+    if: needs.gate.outputs.run == 'true' && needs.gate.outputs.full == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      SLUG: x64
+      PART: tour
+      SUFFIX: -tour
+      NO_INPUT: "false"
+      APP: apps/browser/windows/x64/Release
+      HERMES: .ci/windows-hermes/hermes.exe
+      FULL: ${{ needs.gate.outputs.full }}
+      COMPILED: ${{ needs.app.outputs.compiled }}
+      KEY: ${{ needs.app.outputs.key }}
+      VERSION: ${{ needs.identity.outputs.version }}
+      BUILD: ${{ needs.identity.outputs.build }}
+    steps: *launch_steps
+
+  x64-tour-first-run:
+    needs: [gate, identity, javascript, app]
+    if: needs.gate.outputs.run == 'true' && needs.gate.outputs.full == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      SLUG: x64
+      PART: tour-first-run
+      SUFFIX: -tour-first-run
+      NO_INPUT: "false"
+      APP: apps/browser/windows/x64/Release
+      HERMES: .ci/windows-hermes/hermes.exe
+      FULL: ${{ needs.gate.outputs.full }}
+      COMPILED: ${{ needs.app.outputs.compiled }}
+      KEY: ${{ needs.app.outputs.key }}
+      VERSION: ${{ needs.identity.outputs.version }}
+      BUILD: ${{ needs.identity.outputs.build }}
+    steps: *launch_steps
 
   x64-gate:
     needs: [gate, identity, javascript, app]

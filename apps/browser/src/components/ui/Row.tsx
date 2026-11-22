@@ -5,6 +5,7 @@ import { Divider } from "./Divider";
 import { useTheme } from "./theme";
 import { lineHeight, radius, space, font as typeScale } from "./tokens";
 import { useHover } from "./useHover";
+import { HoverFill } from "./HoverFill";
 import { useNativeForm } from "./nativeForm";
 
 export function Row({ title, description, children, icon, onPress }: { title?: ReactNode; description?: ReactNode; children?: ReactNode; icon?: ReactNode; onPress?: () => void }) {
@@ -20,9 +21,9 @@ export function Row({ title, description, children, icon, onPress }: { title?: R
         flexDirection: "row",
         alignItems: "center",
         gap: space.l,
-        backgroundColor: onPress && hovered ? theme.rowHover : undefined,
       }}
     >
+      {onPress ? <HoverFill shown={hovered} color={theme.rowHover} radius={0} /> : null}
       {icon}
       <View style={{ flex: 1 }}>
         {typeof title === "string" ? <Text style={{ ...typeScale.body, color: theme.textPrimary }}>{title}</Text> : title}

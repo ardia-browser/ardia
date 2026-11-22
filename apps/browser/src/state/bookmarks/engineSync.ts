@@ -10,10 +10,14 @@ import { engineProfiles } from "../profiles/engineProfiles";
 import { onProfilesOpened, onProfilesUnloaded, openedEngineProfiles, openProfile, profileOpened } from "../profiles/profileLoading";
 import { migrateLegacyFile } from "../app/legacyFiles";
 import { noteBookmarkSyncDiff } from "../telemetry/bookmarkMoves";
+import { consentToken } from "../telemetry/client";
+import { warnFor } from "../telemetry/logs";
+import { withDeadline } from "../../lib/deadline";
 
 const LEGACY_FILE = "bookmarks.json";
 type LegacyFile = { bookmarks?: { nodes: Bookmarks["nodes"]; roots: Record<string, { bar: string; other: string }> } };
 const LEGACY_KEPT_MS = 10_000;
+const LEGACY_MODEL_WAIT_MS = 30_000;
 const CACHE_FILE = "bookmarks-cache.json";
 const CACHE_SAVE_MS = 2000;
 const store = () => useBrowser.getState();
@@ -72,11 +76,12 @@ function adoptNow(engine: string, flat: Flat, ready: boolean) {
 }
 
 async function sendOps(engine: string, ops: BookmarkOp[]): Promise<boolean> {
+  const consent = consentToken();
   try {
     const result = await applyBookmarkOps(engine, ops);
     return !result.skipped && !result.invalid.length;
   } catch (error) {
-    console.warn("[bookmarks] couldn't save to Chrome", error);
+    warnFor(consent, "[bookmarks] couldn't save to Chrome", error);
     return false;
   }
 }
@@ -121,6 +126,7 @@ function work(engine: string) {
   const state = stateOf(engine);
   if (state.busy) return;
   state.busy = true;
+  const consent = consentToken();
   void (async () => {
     try {
       while ((state.needRead || state.needPush) && isCurrent(engine, state)) {
@@ -134,7 +140,7 @@ function work(engine: string) {
         }
       }
     } catch (error) {
-      console.warn(`[bookmarks] couldn't read ${engine || "the default profile"}'s bookmarks`, error);
+      warnFor(consent, `[bookmarks] couldn't read ${engine || "the default profile"}'s bookmarks`, error);
     } finally {
       state.busy = false;
     }
@@ -227,9 +233,10 @@ function saveCache() {
   }
 }
 
-export const migrateBookmarksFile = ({ keepMs = LEGACY_KEPT_MS } = {}) => migrateLegacyFile(LEGACY_FILE, "bookmarks", moveBookmarks, keepMs);
+export const migrateBookmarksFile = ({ keepMs = LEGACY_KEPT_MS, modelWaitMs = LEGACY_MODEL_WAIT_MS } = {}) =>
+  migrateLegacyFile(LEGACY_FILE, "bookmarks", (file: LegacyFile) => moveBookmarks(file, modelWaitMs), keepMs);
 
-async function moveBookmarks(file: LegacyFile) {
+async function moveBookmarks(file: LegacyFile, modelWaitMs: number) {
   const b = file.bookmarks ?? { nodes: {}, roots: {} };
   const s = store();
   const done = new Set<string>();
@@ -257,6 +264,8 @@ async function moveBookmarks(file: LegacyFile) {
     walk(roots.bar, "bar");
     walk(roots.other, "other");
     if (!ops.length) continue;
+    const loaded = await withDeadline(bookmarkTree(engine).then(() => true), modelWaitMs, false);
+    if (!loaded) throw new Error(`Chrome's bookmarks for ${engine || "the default profile"} didn't load within ${modelWaitMs / 1000} s`);
     const result = await applyBookmarkOps(engine, ops);
     if (result.skipped) throw new Error(`${result.skipped} of ${ops.length} bookmarks couldn't be added`);
   }
@@ -289,7 +298,7 @@ export function startBookmarks() {
       state.needPush = false;
     }
   });
-  const stop = useBrowser.subscribe((s, prev) => {
+  const stop = useBrowser.subscribeTo(["profiles", "bookmarks"], (s, prev) => {
     if (s.profiles !== prev.profiles) {
       const inStore = engineProfiles(s);
       for (const engine of engines.keys()) if (!inStore.includes(engine)) engines.delete(engine);

@@ -1,10 +1,13 @@
 import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
+import { join } from "node:path";
 
 const list = (entries) =>
   Object.entries(entries)
     .filter(([, value]) => value !== undefined && value !== null && value !== false)
     .map(([key, value]) => (value === true ? key : `${key}=${value}`))
     .join(",");
+
+export const scratchInstance = (data, instance = {}) => ({ downloadsDir: join(data, "Downloads"), ...instance });
 
 export function launchVariables({ instance = {}, test = {}, trace = [], switchOverrides = {} } = {}) {
   const env = {};
@@ -42,20 +45,20 @@ const OLD_TRACE = { visibility: "ARDIA_TRACE_VISIBILITY", pip: "ARDIA_TRACE_PIP"
 
 export const INSTANCE_KEYS = [
   "jsLocation", "chromiumSwitches", "downloadsDir", "updateFeed", "allowAudio", "allowOcclusion", "releaseNotes",
-  "cliHome", "cliBinDir", "cliUrl", "syncFolder", "sharedFolders", "importSourceDir", "importSafariHome",
+  "cliHome", "cliBinDir", "cliUrl", "syncFolder", "sharedFolders", "importSourceDir", "importSafariHome", "officialPluginsFrom",
 ];
 export const TEST_KEYS = [
   "keychain", "keychainHiddenReads", "keychainFail", "safeStorageAnswer", "reauth", "bluetoothChooser",
   "externalProtocolNoLaunch", "externalProtocolApp", "mediaRouteProvider", "systemMediaPermission", "applyProfileGate", "contextMenu",
   "loginsDelay", "loginsReleaseAfter", "cdpTabsVisible", "nativeDragRefused",
-  "pipSelfTest", "pipHover", "fakeFullScreenMs", "shadersKeyWindow", "peekStrict", "importSecret", "importDiaBundleId", "importDiaWindows",
+  "pipSelfTest", "pipHover", "fakeFullScreenMs", "shadersKeyWindow", "peekStrict", "peekMesh", "peekReady", "peekReduceMotion", "peekSlow", "importSecret", "importDiaBundleId", "importDiaWindows",
   "cliInstallScript", "legacySource", "legacyCrashAfter", "bangsUrl", "onboarding", "whatsNew", "telemetry",
-  "liveMock", "calendarFixture", "appMenu", "appDialog", "loginsTimeout", "screenRecording", "systemLocationPermission",
-  "videoMirror", "protectedVideoOrigin",
+  "liveMock", "calendarFixture", "appMenu", "appDialog", "loginsTimeout", "screenRecording", "systemLocationPermission", "officialPin",
+  "applePasswordsPanel", "systemPanelRace",
 ];
 export const COMMA_KEYS = [
   "chromiumSwitches", "downloadsDir", "updateFeed", "cliHome", "cliBinDir", "cliUrl", "syncFolder", "sharedFolders", "importSourceDir",
-  "importSafariHome", "importSecret", "cliInstallScript", "legacySource", "bangsUrl", "liveMock",
+  "importSafariHome", "importSecret", "cliInstallScript", "legacySource", "bangsUrl", "liveMock", "officialPin", "officialPluginsFrom",
 ];
 
 const knownKeys = { instance: INSTANCE_KEYS, test: TEST_KEYS };

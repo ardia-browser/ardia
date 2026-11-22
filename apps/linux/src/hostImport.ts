@@ -18,11 +18,21 @@ export const UNLOCK_DEADLINE_MS = 150_000;
 export const UNLOCK_LIFETIME_MS = 10 * 60_000;
 const HISTORY_CHUNK = 500;
 const TOKEN = /^[0-9a-f]{32}$/;
+export const MAX_SPACE_IDS = 256;
+export const MAX_SPACE_ID_LENGTH = 256;
 
 type Clock = { schedule(run: () => void, ms: number): unknown; cancel(handle: unknown): void; now?(): number };
 const realClock: Clock = { schedule: (run, ms) => setTimeout(run, ms), cancel: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>), now: () => Date.now() };
 
 const count = (value: unknown) => (typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : 0);
+
+export function nativeSpaceIds(ids: unknown, profileSpaces?: ReadonlySet<string>): string[] | undefined {
+  if (!Array.isArray(ids)) return undefined;
+  const bytes = new TextEncoder();
+  const valid = ids.filter((id): id is string =>
+    typeof id === "string" && id.length > 0 && bytes.encode(id).length <= MAX_SPACE_ID_LENGTH && (!profileSpaces || profileSpaces.has(id)));
+  return [...new Set(valid)].slice(0, MAX_SPACE_IDS);
+}
 
 export function pendingPasswords(result: unknown): PendingPasswords | null {
   const passwords = (result as { passwords?: unknown } | null)?.passwords as { token?: unknown; count?: unknown } | undefined;
@@ -76,6 +86,8 @@ export type HostImport = Pick<
 
 export function createHostImport(host: ArdiaHost, ImportError: ImportErrorClass, clock: Clock = realClock): HostImport {
   const families = new Map<string, string>();
+  const profileSpaces = new Map<string, Set<string>>();
+  const spacesKey = (browserId: string, profileId: string) => `${browserId}\n${profileId}`;
   const keychains = new Set<string>();
   const unlocked = new Map<string, number>();
   const now = () => clock.now?.() ?? Date.now();
@@ -186,7 +198,7 @@ export function createHostImport(host: ArdiaHost, ImportError: ImportErrorClass,
         },
       );
       options.signal?.addEventListener("abort", abort);
-      const native = { historyLimit: options.historyLimit, historySince: options.historySince };
+      const native = { historyLimit: options.historyLimit, historySince: options.historySince, spaceIds: nativeSpaceIds(options.spaceIds, profileSpaces.get(spacesKey(browserId, profileId))) };
       invoke("startImport", [jobId, browserId, profileId, kinds, native]).catch((error) => finish(() => reject(error)));
     });
   };
@@ -259,8 +271,14 @@ export function createHostImport(host: ArdiaHost, ImportError: ImportErrorClass,
         !!source && typeof source.id === "string" && typeof source.name === "string" && Array.isArray(source.profiles) && (source.family === "chromium" || source.family === "firefox"));
       families.clear();
       keychains.clear();
+      profileSpaces.clear();
       for (const source of sources) {
         families.set(source.id, source.family);
+        for (const profile of source.profiles) {
+          if (typeof profile?.id === "string" && Array.isArray(profile.spaces)) {
+            profileSpaces.set(spacesKey(source.id, profile.id), new Set(profile.spaces.map((space) => space?.id).filter((id): id is string => typeof id === "string")));
+          }
+        }
         if (source.family === "chromium" && source.needsKeychain === true) keychains.add(source.id);
       }
       return sources;

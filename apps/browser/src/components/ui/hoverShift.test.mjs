@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-const { hoverSlotOpenings } = await import("./hoverShift.ts");
+const { hoverSlotOpenings, slotAtRest } = await import("./hoverShift.ts");
 const { HoverSlot } = await import("./HoverSlot.tsx");
 
 const host = (parent) => ({ type: "RCTView", stateNode: { measureInWindow() {} }, return: parent, memoizedProps: {} });
@@ -15,6 +15,23 @@ test("a close slot opening at the end and the title narrowing by as much isn't m
   const title = host(row);
   const close = slot(row);
   assert.deepEqual(allowed([{ host: title, was: [10, 0, 160, 18], now: [10, 0, 138, 18] }, { host: close, was: [170, 0, 0, 18], now: [148, 0, 22, 18] }]), [true, true]);
+});
+
+test("a slot that mounts on hover opens from no width at its edge (a tab row's close slot)", () => {
+  const row = host(null);
+  const title = host(row);
+  const close = slot(row);
+  const now = [148, 0, 22, 18];
+  const was = slotAtRest(close, now);
+  assert.deepEqual(was, [170, 0, 0, 18]);
+  assert.deepEqual(allowed([{ host: title, was: [10, 0, 160, 18], now: [10, 0, 138, 18] }, { host: close, was, now }]), [true, true]);
+  const fold = host({ type: HoverSlot, return: row, memoizedProps: { reserve: "hover", align: "start" } });
+  assert.deepEqual(slotAtRest(fold, [9, 0, 55, 16]), [9, 0, 0, 16]);
+  assert.equal(slotAtRest(slot(row, "always"), now), null);
+  assert.equal(slotAtRest(title, now), null);
+  const wrapped = host({ type: "View", return: { type: HoverSlot, return: row, memoizedProps: { reserve: "hover" } }, memoizedProps: {} });
+  assert.deepEqual(slotAtRest(wrapped, now), was);
+  assert.equal(slotAtRest(host(wrapped), now), null);
 });
 
 test("a slot opening at the start pushes its neighbour's left edge by as much (the Pinned fold)", () => {

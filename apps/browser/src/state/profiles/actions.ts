@@ -1,16 +1,12 @@
 import { storeAction } from "../browser/store";
-import { currentProfile, currentSettings } from "../browser/current";
-import { updateSettings } from "../settings/actions";
+import { currentProfile } from "../browser/current";
 
 export const updateProfile = storeAction("updateProfile");
 export const setDefaultProfile = storeAction("setDefaultProfile");
 export const reorderProfiles = storeAction("reorderProfiles");
 export const createProfile = storeAction("createProfile");
 
-export function setSwitcherIcon(profileId: string, icon: string | null) {
-  updateProfile(profileId, { icon });
-  if (icon && !currentSettings().profileSwitcherIcons) updateSettings({ profileSwitcherIcons: true });
-}
+export const chooseIcon = (profileId: string, icon: string | null) => updateProfile(profileId, { icon, switcherDot: undefined });
 
 export const setShareTopApps = (profileId: string, share: boolean) => updateProfile(profileId, { shareTopApps: share ? true : undefined });
 

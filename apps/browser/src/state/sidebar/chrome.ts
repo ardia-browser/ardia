@@ -6,8 +6,10 @@ import { useAddressBarInSidebar } from "../windows/layout";
 export const useSidebarPart = (part: ChromePart): boolean => !useThemeLook().hidden.has(part);
 
 export function useSidebarField(): Place | null {
-  const look = useThemeLook();
-  const inSidebar = useAddressBarInSidebar();
+  return sidebarFieldOf(useThemeLook(), useAddressBarInSidebar());
+}
+
+export function sidebarFieldOf(look: ReturnType<typeof useThemeLook>, inSidebar: boolean): Place | null {
   return inSidebar && !look.hidden.has("addressField") ? look.addressField : null;
 }
 

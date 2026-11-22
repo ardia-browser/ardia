@@ -43,7 +43,7 @@ export function startSelectionTools() {
     if (!enabled) usePageSelection.setState({}, true);
   };
   sync();
-  return useBrowser.subscribe((s, prev) => s.settings !== prev.settings && sync());
+  return useBrowser.subscribeTo(["settings"], (s, prev) => s.settings !== prev.settings && sync());
 }
 
 export type ClickModifiers = { metaKey?: boolean; shiftKey?: boolean; altKey?: boolean; middle?: boolean };

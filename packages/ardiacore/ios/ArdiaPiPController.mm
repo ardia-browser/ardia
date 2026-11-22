@@ -110,12 +110,6 @@ BOOL PreventsActivation(NSWindow *window) {
 
 NSInteger gActivations = 0;
 
-void ActivateApp(NSString *why) {
-  gActivations++;
-  if (ardia_host::Background()) return ardia_host::LogActivation([@"activate (skipped in a test instance): " stringByAppendingString:why]);
-  [NSApp activate];
-}
-
 BOOL ThrowEnabled() {
   id value = [NSUserDefaults.standardUserDefaults objectForKey:kThrowDefault];
   return value ? [value boolValue] : YES;
@@ -167,8 +161,8 @@ NSString *CornerName(int corner) {
     NSView *root = ArdiaWindowRootView(window);
     _overlay = [[ArdiaPiPOverlay alloc] initWithFrame:root.bounds];
     __weak ArdiaPiPController *weakSelf = self;
-    _overlay.handle.onClick = ^{ [weakSelf unstash]; };
     [root addSubview:_overlay];
+    _resizeCursor = [[ArdiaPiPResizeCursor alloc] initWithWindow:window view:_overlay];
     objc_setAssociatedObject(window, kControllerKey, self, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
@@ -193,7 +187,7 @@ NSString *CornerName(int corner) {
     [_observers addObject:[center addObserverForName:NSWindowWillStartLiveResizeNotification
                                               object:window
                                                queue:nil
-                                          usingBlock:^(NSNotification *) { [weakSelf stopMotion]; }]];
+                                          usingBlock:^(NSNotification *) { [weakSelf stopMotion]; [weakSelf resizeStarted]; }]];
     [_observers addObject:[center addObserverForName:NSWindowWillCloseNotification
                                               object:window
                                                queue:nil
@@ -207,8 +201,10 @@ NSString *CornerName(int corner) {
   [ArdiaPiPController abandonSwipeOn:_window];
   for (id observer in _observers) [NSNotificationCenter.defaultCenter removeObserver:observer];
   [_observers removeAllObjects];
+  [self endMomentumWait];
   [NSObject cancelPreviousPerformRequestsWithTarget:self];
   [_slide invalidate];
+  [_resizeCursor detach];
   [_overlay removeFromSuperview];
   objc_setAssociatedObject(_window, kControllerKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
@@ -290,8 +286,8 @@ NSString *CornerName(int corner) {
 - (void)backToTab {
   ArdiaWebView *view = self.view;
   if (!view) return;
-  ActivateApp(@"Back to Tab (menu)");
-  [view emit:@"activateRequest" payload:@{@"reason" : @"pictureInPicture"}];
+  const BOOL fromOtherApp = ActivateApp(@"Back to Tab (menu)");
+  [view emit:@"activateRequest" payload:@{@"reason" : @"pictureInPicture", @"fromOtherApp" : @(fromOtherApp)}];
   [view exitPictureInPicture];
 }
 
@@ -323,11 +319,14 @@ NSString *CornerName(int corner) {
 }
 
 - (ArdiaPiPEdge)edgeBeyond {
-  NSRect frame = _window.frame;
+  return [self edgeBeyondFor:_window.frame];
+}
+
+- (ArdiaPiPEdge)edgeBeyondFor:(NSRect)frame {
   NSRect visible = [self homeScreen].visibleFrame;
-  CGFloat half = NSWidth(frame) / 2;
-  if (NSMaxX(frame) - NSMaxX(visible) > half && !ScreenAt(NSMaxX(visible) + 1, NSMidY(frame))) return ArdiaPiPEdgeRight;
-  if (NSMinX(visible) - NSMinX(frame) > half && !ScreenAt(NSMinX(visible) - 1, NSMidY(frame))) return ArdiaPiPEdgeLeft;
+  const CGFloat width = NSWidth(frame);
+  if (ardia_pip_throw::PastEdgeEnoughToTuck(NSMaxX(frame) - NSMaxX(visible), width) && !ScreenAt(NSMaxX(visible) + 1, NSMidY(frame))) return ArdiaPiPEdgeRight;
+  if (ardia_pip_throw::PastEdgeEnoughToTuck(NSMinX(visible) - NSMinX(frame), width) && !ScreenAt(NSMinX(visible) - 1, NSMidY(frame))) return ArdiaPiPEdgeLeft;
   return ArdiaPiPEdgeNone;
 }
 
@@ -373,13 +372,18 @@ NSString *CornerName(int corner) {
 }
 
 - (void)unstash {
-  ArdiaPiPEdge edge = _stashedEdge;
-  if (edge == ArdiaPiPEdgeNone) return;
+  if (_stashedEdge != ArdiaPiPEdgeNone) [self leaveTuckAt:_stashedEdge on:[self homeScreen].visibleFrame velocity:NSZeroPoint];
+}
+
+- (NSRect)leaveTuckAt:(ArdiaPiPEdge)edge on:(NSRect)visible velocity:(NSPoint)velocity {
   NSRect frame = _window.frame;
-  NSRect visible = [self homeScreen].visibleFrame;
   frame.origin.x = edge == ArdiaPiPEdgeRight ? NSMaxX(visible) - NSWidth(frame) - kReturnMargin : NSMinX(visible) + kReturnMargin;
   [self setStashedEdge:ArdiaPiPEdgeNone];
-  [self animateTo:frame];
+  [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(settle) object:nil];
+  _sawDrag = NO;
+  if (!ThrowEnabled() || NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion) [self animateTo:frame];
+  else [self throwTo:frame velocity:velocity corner:ardia_pip_throw::kNoCorner];
+  return frame;
 }
 
 - (void)setStashedEdge:(ArdiaPiPEdge)edge {
@@ -424,6 +428,7 @@ NSString *CornerName(int corner) {
 }
 
 - (void)stopMotion {
+  [self endMomentumWait];
   [_slide invalidate];
   _slide = nil;
   _animating = NO;
@@ -491,24 +496,46 @@ NSString *CornerName(int corner) {
 
 - (void)dragReleasedAt:(NSPoint)pointer velocity:(NSPoint)velocity {
   const BOOL reduceMotion = NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion;
-  const BOOL flings = ThrowEnabled() && !reduceMotion && ardia_pip_throw::DragFlings({velocity.x, velocity.y}) &&
-                      [self edgeBeyond] == ArdiaPiPEdgeNone;
-  const BOOL thrown = flings && [self throwFrom:pointer velocity:velocity];
+  const BOOL pastEdge = [self edgeBeyond] != ArdiaPiPEdgeNone;
+  const BOOL flings = ThrowEnabled() && !reduceMotion && ardia_pip_throw::DragFlings({velocity.x, velocity.y}) && !pastEdge;
+  const ArdiaPiPEdge flickedPast = flings ? [self edgeFlickedPast:velocity] : ArdiaPiPEdgeNone;
+  NSString *outcome = @"placed";
+  if (!NSIsEmptyRect([self leaveTuckIfPulledOut:velocity])) {
+    outcome = @"pullOut";
+  } else if (pastEdge) {
+    outcome = @"tuck";
+  } else if (flickedPast != ArdiaPiPEdgeNone) {
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(settle) object:nil];
+    _sawDrag = NO;
+    [self stashAt:flickedPast];
+    outcome = @"flickTuck";
+  } else if (flings && [self throwFrom:pointer velocity:velocity]) {
+    outcome = @"corner";
+  } else if ([self settleIntoCornerPulledInto:velocity]) {
+    outcome = @"cornerPull";
+  }
+  const BOOL thrown = [outcome isEqual:@"corner"] || [outcome isEqual:@"cornerPull"];
+  const BOOL cameOut = [outcome isEqual:@"pullOut"] || [outcome isEqual:@"flickTuck"];
+  [self reportRelease:outcome stamp:_dragStamp];
   _lastRelease = @{
+    @"outcome" : outcome,
     @"pointer" : NSStringFromPoint(pointer),
     @"velocity" : NSStringFromPoint(velocity),
     @"flings" : @(flings),
     @"thrown" : @(thrown),
     @"frame" : NSStringFromRect(_window.frame),
   };
-  if (!thrown) [self rescueIfLost];
+  if (!thrown && !cameOut) [self rescueIfLost];
 }
 
 - (void)swipeBegan:(NSEvent *)event {
   [self stopMotion];
   [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(settle) object:nil];
   _swiping = YES;
-  _swipeStart = _window.frame;
+  _swipeStamp = ArdiaConsentStamp.begin;
+  _pulledFrom = _stashedEdge;
+  _swipeStart = _pullStart = _window.frame;
+  _pulledFromScreen = [self gestureHome];
   _swipeHome = [self gestureHome];
   const NSPoint pointer = PointerOf(event);
   _swipeGrab = NSMakePoint(MIN(MAX(pointer.x - NSMinX(_swipeStart), 0), NSWidth(_swipeStart)),
@@ -540,52 +567,6 @@ NSString *CornerName(int corner) {
   _swipeLastDelta = NSMakePoint(delta.x, delta.y);
   _swipeLastAt = NSProcessInfo.processInfo.systemUptime;
   [self moveBy:delta];
-}
-
-- (void)swipeEnded:(NSEvent *)event cancelled:(BOOL)cancelled {
-  [self moveBy:ardia_pip_throw::FingerDelta(event.scrollingDeltaX, event.scrollingDeltaY, event.isDirectionInvertedFromDevice)];
-  _swiping = NO;
-  const NSPoint last = _swipeLastDelta;
-  const BOOL fresh = NSProcessInfo.processInfo.systemUptime - _swipeLastAt <= ardia_pip_throw::kVelocityWindow;
-  const BOOL flings = !cancelled && fresh && !NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion &&
-                      ardia_pip_throw::SwipeFlings({last.x, last.y});
-  const NSRect frame = _window.frame;
-  const NSPoint grab = NSMakePoint(NSMinX(frame) + _swipeGrab.x, NSMinY(frame) + _swipeGrab.y);
-  const ArdiaPiPEdge edge = [self edgeBeyond];
-  BOOL thrown = NO;
-  NSRect destination = frame;
-  if (edge != ArdiaPiPEdgeNone) {
-    destination = [self frameStashedAt:edge];
-    [self stashAt:edge];
-  } else {
-    if (_stashedEdge != ArdiaPiPEdgeNone) [self setStashedEdge:ArdiaPiPEdgeNone];
-    const auto velocity = ardia_pip_throw::SwipeVelocity({last.x, last.y});
-    thrown = flings && [self throwFrom:grab velocity:NSMakePoint(velocity.x, velocity.y)];
-    if (thrown) destination = NSRectFromString(_lastThrow[@"target"]);
-  }
-  const NSPoint landing = NSMakePoint(NSMinX(destination) + _swipeGrab.x, NSMinY(destination) + _swipeGrab.y);
-  const BOOL unmoved = NSEqualPoints(NSEvent.mouseLocation, _swipePointer);
-  const BOOL warp = edge == ArdiaPiPEdgeNone && unmoved && (!thrown || CACurrentMediaTime() - _swipeBeganAt >= 0.15);
-  if (!ardia_host::Background()) {
-    if (warp) {
-      CGWarpMouseCursorPosition(CGPointMake(landing.x, NSMaxY(NSScreen.screens.firstObject.frame) - landing.y));
-      [NSCursor setHiddenUntilMouseMoves:YES];
-    } else {
-      [NSCursor setHiddenUntilMouseMoves:NO];
-    }
-  }
-  _lastSwipe = @{
-    @"start" : NSStringFromRect(_swipeStart),
-    @"released" : NSStringFromRect(frame),
-    @"lastDelta" : NSStringFromPoint(last),
-    @"fresh" : @(fresh),
-    @"cancelled" : @(cancelled),
-    @"flings" : @(flings),
-    @"thrown" : @(thrown),
-    @"stashed" : @(edge),
-    @"warp" : warp ? NSStringFromPoint(landing) : @"",
-  };
-  [self rescueIfLost];
 }
 
 - (NSDictionary *)throwInfo {

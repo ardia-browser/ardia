@@ -37,9 +37,13 @@ public struct SyncKeys {
   }
 
   public func seal(_ payload: Data, scopeTag: String, fileId: String) throws -> Data {
+    try seal(payload, scopeTag: scopeTag, fileId: fileId, nonce: AES.GCM.Nonce())
+  }
+
+  func seal(_ payload: Data, scopeTag: String, fileId: String, nonce: AES.GCM.Nonce) throws -> Data {
     var plain = withUnsafeBytes(of: UInt32(payload.count).bigEndian) { Data($0) } + payload
     plain.append(Data(count: (Self.padding - plain.count % Self.padding) % Self.padding))
-    let box = try AES.GCM.seal(plain, using: fileKey, authenticating: Self.associatedData(chain: chainTag, scope: scopeTag, file: fileId))
+    let box = try AES.GCM.seal(plain, using: fileKey, nonce: nonce, authenticating: Self.associatedData(chain: chainTag, scope: scopeTag, file: fileId))
     return Self.magic + box.nonce + box.ciphertext + box.tag
   }
 

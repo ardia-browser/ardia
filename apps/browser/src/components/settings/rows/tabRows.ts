@@ -31,7 +31,7 @@ export const tabRows = {
         hideToolbarWhileScrolling: {
           title: "Hide toolbar while scrolling",
           description: "Scrolling down shrinks the toolbar to a thin strip.",
-          keywords: ["auto hide toolbar", "address bar hides", "collapse", "compact", "scroll", "shrink", "shrinking", "address bar shrinks", "toolbar shrinks", "page shifts", "page jumps"],
+          keywords: ["hide toolbar", "auto hide toolbar", "toolbar hides", "address bar hides", "collapse", "compact", "scroll", "shrink", "shrinking", "address bar shrinks", "toolbar shrinks", "page shifts", "page jumps"],
         },
         buttons: {
           title: "Buttons",
@@ -80,6 +80,18 @@ export const tabRows = {
           description: "Hold one Top App over another to make a folder.",
           keywords: ["folder", "folders", "top apps", "pinned tiles", "favorites", "group", "tile folder", "stack"],
         },
+        tabReorderHaptics: {
+          title: "Haptic feedback when reordering tabs",
+          description: "The trackpad ticks as a dragged tab moves to a new place or over another window.",
+          keywords: ["haptic", "haptics", "trackpad", "force touch", "tick", "vibration", "feedback", "drag", "reorder", "move tabs"],
+          shown: () => PLATFORM_FEATURES.haptics,
+        },
+        swipeBetweenTabs: {
+          title: "Swipe between tabs",
+          description: "Swipe left or right with two fingers on the address bar to go to the tab above or below.",
+          keywords: ["swipe", "gesture", "trackpad", "two fingers", "next tab", "previous tab", "toolbar", "address bar", "scroll"],
+          shown: () => PLATFORM_FEATURES.trackpadGestures,
+        },
         showTabHoverMenu: {
           title: "Show tab hover menu",
           description: "Rest on a tab to see its address and quick actions.",
@@ -94,6 +106,12 @@ export const tabRows = {
           title: "Automatic Picture in Picture",
           description: "Videos and calls pop out when you switch tabs or leave the window.",
           keywords: ["pip", "video", "floating", "mini player"],
+        },
+        playingNowAcrossProfiles: {
+          title: "Keep Playing now across profiles",
+          explained: true,
+          description: "Media playing in one profile stays in the sidebar of every profile, like Arc's spaces.",
+          keywords: ["playing now", "now playing", "media card", "media controls", "sidebar player", "music", "spotify", "youtube", "spaces", "swipe", "follow", "persist", "every space", "all spaces", "arc"],
         },
         videoUpscaling: {
           title: "Video upscaling",
@@ -145,6 +163,20 @@ export const tabRows = {
           title: "Open links from other apps in Little Ardia",
           keywords: ["little ardia", "little arc", "arc", "little window", "small window", "mini window", "external links", "links from other apps", "open links", "discord", "slack", "mail", "messages"],
         },
+        littleArdiaOpensNewTabLinks: {
+          title: "Keep new-tab links inside a Little Ardia window",
+          explained: true,
+          description: `A link in Little Ardia that would open a new tab loads right there. ${keyText("⌘")}-click still opens it behind.`,
+          keywords: ["target blank", "new tab", "links", "inside"],
+          shown: () => PLATFORM_FEATURES.keepsNewTabLinksInLittleArdia,
+        },
+        littleArdiaShortcutFromAnyApp: {
+          title: "Shortcut opens Little Ardia from other apps",
+          explained: true,
+          description: "New Little Ardia Window's shortcut opens Little Ardia while another app is in front. Off, that app keeps the shortcut.",
+          shown: () => PLATFORM_FEATURES.littleArdiaShortcutFromAnyApp,
+          keywords: ["global shortcut", "global hotkey", "hotkey", "shortcut", "any app", "other apps", "system wide", "option command n", "new little ardia window"],
+        },
         peekLinksToOtherSites: {
           title: "Links to other sites open in",
           explained: true,
@@ -162,6 +194,12 @@ export const tabRows = {
           explained: true,
           description: "Pop-up windows from pages open as tabs instead.",
           keywords: ["popup", "pop-up", "pop up", "window.open", "new window", "outlook", "sign in", "oauth", "as tab", "links", "open pop-up windows as tabs"],
+        },
+        peekButtons: {
+          title: "Show Peek buttons",
+          explained: true,
+          description: "Close, Open as Tab and Split View sit in the Peek's title bar, or float beside it on the left or right.",
+          keywords: ["peek", "buttons", "close", "expand", "split view", "left", "right", "side", "position", "arc", "zen", "glance"],
         },
       },
     },

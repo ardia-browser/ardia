@@ -1,12 +1,12 @@
 import type { MenuItem } from "../../platform/menus";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId, isPinnedRow, tabLayoutOf } from "../browser/model";
+import { changedIds } from "../browser/changes";
 import { live } from "../live/store";
 import { updateProfile } from "../profiles/actions";
 import { keptEntry } from "./entries";
 import { pinnedSequence } from "./pinnedOrder";
 import { entryKey } from "./entryKey";
-import { notePinnedFoldToggled } from "../telemetry/pinnedFoldCounts";
 
 export const PINNED_FOLD_TITLES = { collapse: "Collapse Pinned Tabs", expand: "Expand Pinned Tabs" } as const;
 
@@ -18,13 +18,7 @@ export function setPinnedCollapsed(profileId: string, collapsed: boolean) {
   updateProfile(profileId, { pinnedCollapsed: collapsed });
 }
 
-export function togglePinnedFold(profileId: string) {
-  const s = useBrowser.getState();
-  if (!s.profiles[profileId]) return;
-  const collapsed = !pinnedCollapsed(s, profileId);
-  setPinnedCollapsed(profileId, collapsed);
-  notePinnedFoldToggled(collapsed);
-}
+export const togglePinnedFold = (profileId: string) => setPinnedCollapsed(profileId, !pinnedCollapsed(useBrowser.getState(), profileId));
 
 export function pinnedKept(s: BrowserState, windowId: string, profileId: string, entries: string[]): string | null {
   const kept = keptEntry(s, windowId, profileId, entries);
@@ -44,7 +38,14 @@ function pinnedSectionTabs(s: Pick<BrowserState, "tabs" | "groups">, profileId: 
   return ids;
 }
 
+const pinnedRowIn = (t: BrowserState["tabs"][string] | undefined, profileId: string) => !!t && t.profileId === profileId && isPinnedRow(t);
+
+const inPinnedGroupOf = (s: Pick<BrowserState, "groups">, id: string, profileId: string) =>
+  Object.values(s.groups).some((g) => g.pinned && g.profileId === profileId && g.tabIds.includes(id));
+
 export function enteredPinnedSection(s: Pick<BrowserState, "tabs" | "groups">, prev: Pick<BrowserState, "tabs" | "groups">, profileId: string): boolean {
+  if (s.groups === prev.groups)
+    return changedIds(s.tabs, prev.tabs).some((id) => !!prev.tabs[id] && pinnedRowIn(s.tabs[id], profileId) && !pinnedRowIn(prev.tabs[id], profileId) && !inPinnedGroupOf(s, id, profileId));
   const before = pinnedSectionTabs(prev, profileId);
   for (const id of pinnedSectionTabs(s, profileId)) if (prev.tabs[id] && !before.has(id)) return true;
   return false;

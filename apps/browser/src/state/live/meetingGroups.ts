@@ -8,6 +8,7 @@ import { connectCalendar, useCalendar } from "./calendar";
 import { eventForCall, isCalendarUrl, meetingOf, relatedLinks, type CalendarEvent } from "./meetings";
 import { groupKeptOpen } from "../groups/closeGuard";
 import { live, setMeetingGroup, updateCalendarSettings, useLive } from "./store";
+import { shownLiveOf } from "../tabs/tabLive";
 
 export const MEETING_FALLBACK_TITLE = "Meeting";
 const CLEANUP_IDLE_MS = 30 * 60_000;
@@ -58,7 +59,7 @@ export function startMeetingGroups() {
   if (started) return;
   started = true;
 
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["tabs"], (s, prev) => {
     for (const id of changedIds(s.tabs, prev.tabs)) {
       const tab = s.tabs[id];
       if (!tab) continue;
@@ -109,7 +110,7 @@ export function tick(s: BrowserState, now: number) {
     }
     const w = s.windows[g.windowId];
     const active = w ? activeTabId(s, w.id) : undefined;
-    const busy = g.tabIds.some((id) => id === active || s.live[id]?.playingAudio);
+    const busy = g.tabIds.some((id) => id === active || shownLiveOf(s, id).playingAudio);
     const lastUse = Math.max(m.endedAt, ...g.tabIds.map((id) => Math.max(s.tabs[id]?.lastActiveAt ?? 0, s.tabs[id]?.restoredAt ?? 0)));
     if (!busy && now - lastUse >= CLEANUP_IDLE_MS) {
       setMeetingGroup(null, m.groupId);

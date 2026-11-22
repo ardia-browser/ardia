@@ -5,6 +5,8 @@ import { applyHostPageTheme, resetHostPage } from "./hostPageLifecycle.ts";
 import { useBrowser } from "../../browser/src/state/browser/store.ts";
 import { pageOf, patchPage, popoverOf, setPopover } from "../../browser/src/state/tabs/pageState.ts";
 import { updateLive, updateTab } from "../../browser/src/state/tabs/actions.ts";
+import { liveOf } from "../../browser/src/state/tabs/tabLive.ts";
+import { COMMIT_THEME_HOLD_MS } from "../../browser/src/state/windows/launchLook.ts";
 import { noteScroll, useToolbarAutoHide } from "../../browser/src/state/windows/toolbarAutoHide.ts";
 
 const lease = { claim: "claim", rendererGeneration: "2", bindingGeneration: "3", documentEpoch: "1" };
@@ -109,20 +111,22 @@ test("create snapshot watermark sorts bounded early controls and drops older or 
   assert.equal(h.receiver.install(snapshot(20)), false);
 });
 
-test("same-URL document reset clears canonical security/theme/popup/status/crash/hung before new navigation", () => {
+test("same-URL document reset clears canonical security/popup/status/crash/hung before new navigation, and the theme one beat later", async () => {
   const h = setup(); h.receiver.install(snapshot(1, [event("security", security)]));
   patchPage(h.tab, { crashed: { status: 1, code: 4, reason: "crashed" }, unresponsive: true, popups: [{ id: "old", url: "x", origin: "x" }], status: "old", themeColorSource: "meta" });
   updateLive(h.tab, { themeColor: "old" }); setPopover(h.tab, "popups"); noteScroll(h.tab, "down");
   h.props.onNavigationChange = (value) => {
     assert.equal(pageOf(h.tab).security, null); assert.equal(pageOf(h.tab).crashed, null);
     assert.equal(pageOf(h.tab).unresponsive, false); assert.equal(pageOf(h.tab).status, ""); assert.deepEqual(pageOf(h.tab).popups, []);
-    assert.equal(pageOf(h.tab).themeColorSource, null); assert.equal(useBrowser.getState().live[h.tab].themeColor, null);
+    assert.equal(pageOf(h.tab).themeColorSource, null); assert.equal(liveOf(h.tab).themeColor, "old", "the toolbar keeps its tint through the commit");
     assert.equal(popoverOf(h.tab), null); assert.equal(useToolbarAutoHide.getState().scrolledDown[h.tab], undefined);
     assert.equal(value.url, navigation.url);
   };
   h.send(control(2));h.send(message(3, "navigation", navigation, { documentEpoch: "2" }));
   h.send(message(4, "security", { ...security, certificate: undefined }, { documentEpoch: "2" }));
   assert.equal(pageOf(h.tab).security.certificate, undefined);
+  await new Promise((done) => setTimeout(done, COMMIT_THEME_HOLD_MS + 20));
+  assert.equal(liveOf(h.tab).themeColor, null, "a page with no theme colour clears it once the hold ends");
 });
 
 test("provisional clears presentation immediately and cancellation restores same-epoch authoritative snapshot once", () => {
@@ -191,17 +195,17 @@ test("same-claim rebind installs a new binding snapshot and rejects buffered pre
   assert.equal(useBrowser.getState().tabs[h.tab].zoom,1.25);
 });
 
-test("explicit native theme clear wins over shared same-URL launch-theme restoration", async () => {
+test("explicit native theme clear wins over shared same-URL launch-theme restoration, one beat later", async () => {
   const {docs}=await import("../../browser/src/test-native/shell.ts");
-  const {restoreLaunchLook,restoredThemeColor}=await import("../../browser/src/state/windows/launchLook.ts");
+  const {restoreLaunchLook,heldThemeColor}=await import("../../browser/src/state/windows/launchLook.ts");
   const h=setup();
   docs.set("launch-look.json",JSON.stringify({version:2,themes:[{tab:h.tab,page:navigation.url,color:"saved"}],favicons:{images:[],profiles:{},themes:{}}}));
-  restoreLaunchLook();assert.equal(restoredThemeColor(h.tab,navigation.url,null,true),"saved");
-  h.props.onNavigationChange=(value)=>updateLive(h.tab,{themeColor:restoredThemeColor(h.tab,value.url,value.themeColor,value.isLoading)});
+  restoreLaunchLook();assert.equal(heldThemeColor(h.tab,navigation.url,null,true),"saved");
+  h.props.onNavigationChange=(value)=>updateLive(h.tab,{themeColor:heldThemeColor(h.tab,value.url,value.themeColor,value.isLoading)});
   h.receiver.install(snapshot(1,[event("navigation",{...navigation,isLoading:true})]));
-  assert.equal(useBrowser.getState().live[h.tab].themeColor,null);
   h.send(control(2));h.send(message(3,"navigation",{...navigation,isLoading:true},{documentEpoch:"2"}));
-  assert.equal(useBrowser.getState().live[h.tab].themeColor,null);assert.equal(pageOf(h.tab).themeColorSource,null);
+  await new Promise((done)=>setTimeout(done,COMMIT_THEME_HOLD_MS+20));
+  assert.equal(liveOf(h.tab).themeColor,null);assert.equal(pageOf(h.tab).themeColorSource,null);
   docs.delete("launch-look.json");
 });
 
@@ -210,7 +214,7 @@ test("an aborted navigation keeps page state the restore snapshot does not repla
   const popup = { id: "kept", url: "https://popup.test", origin: "https://example.test" };
   const prompt = { state: "save", origin: "https://example.test", username: "u", passwordLength: 3, federation: "", usernames: [] };
   patchPage(h.tab, { popups: [popup], status: "https://hover.test", fullscreen: true, passwordPrompt: prompt, unresponsive: true });
-  setPopover(h.tab, "popups"); noteScroll(h.tab, "down");
+  setPopover(h.tab, "popups"); useBrowser.getState().updateSettings({ hideToolbarWhileScrolling: true }); noteScroll(h.tab, "down");
   const kept = () => {
     assert.deepEqual(pageOf(h.tab).popups, [popup]); assert.equal(pageOf(h.tab).status, "https://hover.test");
     assert.equal(pageOf(h.tab).fullscreen, true); assert.deepEqual(pageOf(h.tab).passwordPrompt, prompt);
@@ -222,7 +226,7 @@ test("an aborted navigation keeps page state the restore snapshot does not repla
   const themed = { ...navigation, themeColor: "#123456", themeColorSource: "meta" };
   h.send(control(3, "1", { action: "snapshot", reason: "restore", events: [event("navigation", themed), event("security", security), event("favicon", { url: "icon", urls: ["icon"] })] }));
   assert.deepEqual(pageOf(h.tab).security, security); kept();
-  assert.equal(pageOf(h.tab).themeColorSource, "meta"); assert.equal(useBrowser.getState().live[h.tab].themeColor, "#123456");
+  assert.equal(pageOf(h.tab).themeColorSource, "meta"); assert.equal(liveOf(h.tab).themeColor, "#123456");
   assert.deepEqual(h.calls.at(-1), ["favicon", "icon", ["icon"]]);
   const replacement = { id: "fresh", url: "https://other.test", origin: "https://example.test" };
   h.send(control(4, "1", { action: "snapshot", reason: "restore", events: [event("popupBlocked", replacement), event("status", { text: "" })] }));

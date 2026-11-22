@@ -93,6 +93,7 @@ provideNativeModule("ArdiaDialogs", {
 });
 provideNativeModule("ArdiaAppWindows", {
   windowCornerRadius: () => 19,
+  drawnWindowCornerRadius: () => 19,
   windowIds: async () => [] as string[],
   windowFrame: async (_id: string): Promise<[number, number, number, number] | null> => null,
   frameCornerRadius: async (_id: string): Promise<number> => 0,

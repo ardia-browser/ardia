@@ -24,8 +24,8 @@ test("each launch gets a v7 session id, saved in telemetry.json while the app ru
 });
 
 test("every event and log line carries the session id, queued and in the local copy", () => {
-  client.capture("probe_a", { n: 1 }, { persist: true });
-  client.queueLog("warn", "a warning", { error_type: "none" });
+  client.capture("probe_a", { n: 1 }, client.consentNow(), { persist: true });
+  client.queueLog("warn", "a warning", { error_type: "none" }, client.consentNow());
   client.saveQueueNow();
   const sessionId = state().sessionId;
   for (const e of queued().events) assert.equal(e.properties.$session_id, sessionId);
@@ -51,7 +51,7 @@ test("local writes are batched: nothing reaches the store until 10 s pass, then 
   local.flushLocal();
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const before = stub.telemetryLocal.appendCalls;
-  for (let i = 0; i < 50; i++) client.capture("batched", { i });
+  for (let i = 0; i < 50; i++) client.capture("batched", { i }, client.consentNow());
   assert.equal(stub.telemetryLocal.appendCalls, before);
   t.mock.timers.tick(9_999);
   assert.equal(stub.telemetryLocal.appendCalls, before);
@@ -61,7 +61,7 @@ test("local writes are batched: nothing reaches the store until 10 s pass, then 
 });
 
 test("a fatal error writes the local copy at once, synchronously", () => {
-  client.capture("before_crash");
+  client.capture("before_crash", {}, client.consentNow());
   const before = stub.telemetryLocal.appendNowCalls;
   void client.saveQueueNow();
   assert.equal(stub.telemetryLocal.appendNowCalls, before + 1);
@@ -71,15 +71,15 @@ test("a fatal error writes the local copy at once, synchronously", () => {
 test("with sharing off events are still built and kept locally, without the install id, and never posted", async () => {
   client.setSharing(false, "settings");
   const posts = requests.length;
-  client.capture("while_off", { x: 1 });
-  client.queueLog("error", "an error while off", { error_type: "TypeError" });
+  client.capture("while_off", { x: 1 }, client.consentNow());
+  client.queueLog("error", "an error while off", { error_type: "TypeError" }, client.consentNow());
   local.flushLocal();
   const off = stub.telemetryLocal.records().find((r) => r.event === "while_off");
   assert.equal(off.sent, false);
   assert.equal(off.distinct_id, null);
   assert.match(off.properties.$session_id, UUID7);
   assert.equal(stub.telemetryLocal.records().find((r) => r.message === "an error while off").sent, false);
-  assert.deepEqual(queued(), { version: 1, events: [], logs: [] });
+  assert.deepEqual({ ...queued(), epoch: undefined }, { version: 1, events: [], logs: [], epoch: undefined });
   await client.flush();
   assert.equal(requests.length, posts);
   assert.equal(state().installId, "install-1");
@@ -94,7 +94,7 @@ test("the daily count stays out of the local copy, so it can't be tied to anythi
 test("a line over 256 KB is dropped and counted instead of written", () => {
   local.flushLocal();
   const lines = stub.telemetryLocal.lines().length;
-  client.capture("huge", {}, { raw: { blob: "x".repeat(300_000) } });
+  client.capture("huge", {}, client.consentNow(), { raw: { blob: "x".repeat(300_000) } });
   local.flushLocal();
   assert.equal(stub.telemetryLocal.lines().length, lines);
   assert.ok(local.devLocalStore().oversize >= 1);
@@ -103,7 +103,7 @@ test("a line over 256 KB is dropped and counted instead of written", () => {
 test("a burst flushes early at 2,000 lines so the buffer never grows unbounded", () => {
   local.flushLocal();
   const before = stub.telemetryLocal.appendCalls;
-  for (let i = 0; i < 4_500; i++) client.capture("burst");
+  for (let i = 0; i < 4_500; i++) client.capture("burst", {}, client.consentNow());
   assert.ok(stub.telemetryLocal.appendCalls >= before + 2);
   assert.ok(local.devLocalStore().buffered < 2_000);
 });
@@ -128,7 +128,7 @@ test("the report export takes only lines since the given time", async () => {
 });
 
 test("quitting clears the session id and writes the local copy synchronously", () => {
-  client.capture("last_event");
+  client.capture("last_event", {}, client.consentNow());
   const before = stub.telemetryLocal.appendNowCalls;
   client.endSession();
   assert.equal(state().sessionId, null);
@@ -137,12 +137,13 @@ test("quitting clears the session id and writes the local copy synchronously", (
   assert.ok(stub.telemetryLocal.records().some((r) => r.event === "last_event"));
 });
 
-test("the hourly measurement reports size, timings, drops and posts", async () => {
+test("the hourly measurement reports timings, the queue's size and posts, and never the whole local copy's totals or drops", async () => {
   const { reportLocalStore, LOCAL_STORE_EVENT } = await import("./localStoreReport.ts");
   client.setSharing(true, "settings");
-  client.capture("one_more");
-  const props = await reportLocalStore();
-  for (const key of ["bytes", "lines", "files", "write_ms_p95", "prune_ms", "lines_dropped", "queue_bytes", "bytes_posted", "failed_posts"]) assert.ok(key in props, key);
+  client.capture("one_more", {}, client.consentNow());
+  const props = await reportLocalStore(client.consentToken());
+  for (const key of ["write_ms_p95", "prune_ms", "queue_bytes", "bytes_posted", "failed_posts"]) assert.ok(key in props, key);
+  for (const key of ["bytes", "lines", "files", "lines_dropped"]) assert.ok(!(key in props), key);
   local.flushLocal();
   assert.equal(stub.telemetryLocal.records().at(-1).event, LOCAL_STORE_EVENT);
 });

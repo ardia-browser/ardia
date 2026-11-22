@@ -371,6 +371,6 @@ export const sheetWidth = { xs: 320, s: 420, m: 440, l: 480, xl: 560 } as const;
 
 export type SheetSize = keyof typeof sheetWidth;
 
-export const toastLayout = { bottom: space.xxxl, maxWidth: 420, rise: 10 } as const;
+export const toastLayout = { bottom: space.xxxl, maxWidth: 420 } as const;
 
 export const POPOVER_WIDTH = { s: 300, m: 340, l: 360 } as const;

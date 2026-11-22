@@ -11,9 +11,14 @@ import {
 import { useBrowser } from "../browser/store";
 import { focus, switchToTab } from "../browser/actions";
 import { webviews } from "../../platform/webviews";
+import { webKitNotificationAction } from "../../platform/webkit";
 import { withDeadline } from "../../lib/deadline";
 import { isSilenced } from "../tabs/mute";
 import { noteNotificationShown } from "../automation/notificationEvents";
+import { noteWebNotificationFromShim } from "../telemetry/webNotificationCounts";
+import { recordWebNotificationPost } from "../telemetry/webNotificationFailures";
+import { consentToken, type ConsentToken } from "../telemetry/choice";
+import { noteWebNotificationClicked } from "../telemetry/notificationRequestCounts";
 
 const shown = new Map<string, string>();
 
@@ -32,8 +37,11 @@ function noteReceived(n: WebNotification) {
   }
 }
 
-export function showWebNotification(tabId: string, n: WebNotification) {
+export const showWebNotification = (tabId: string, n: WebNotification) => showStampedWebNotification(tabId, n, consentToken());
+
+export function showStampedWebNotification(tabId: string, n: WebNotification, consent: ConsentToken | null) {
   if (__DEV__) noteReceived(n);
+  noteWebNotificationFromShim();
   const s = useBrowser.getState();
   const tab = s.tabs[tabId];
   const window = tab ? s.windows[tab.windowId] : undefined;
@@ -51,19 +59,23 @@ export function showWebNotification(tabId: string, n: WebNotification) {
     const now = useBrowser.getState();
     const current = now.tabs[tabId];
     noteNotificationShown(tabId, n);
-    void postNotification({
-      id,
-      title: n.title,
-      body: n.body,
-      subtitle: site,
-      silent: n.silent || (!!current && isSilenced(now, current)),
-      icon,
-      tabId,
-      windowId: tab.windowId,
-      origin: n.origin,
-      dismissible: true,
-      data: { engineId: n.id },
-    });
+    void recordWebNotificationPost(
+      postNotification({
+        id,
+        title: n.title,
+        body: n.body,
+        subtitle: site,
+        silent: n.silent || (!!current && isSilenced(now, current)),
+        icon,
+        tabId,
+        windowId: tab.windowId,
+        origin: n.origin,
+        dismissible: true,
+        data: { engineId: n.id },
+      }),
+      { titleLength: n.title.length, bodyLength: n.body.length, iconRequested: !!n.icon, iconSent: !!icon },
+      consent,
+    );
   });
 }
 
@@ -91,12 +103,15 @@ export function handleWebNotificationResponse({ id, action, tabId, data }: Notif
   const engineId = (data as { engineId?: string } | null)?.engineId;
   if (engineId && shown.get(id) === engineId) shown.delete(id);
   const tab = tabId ? useBrowser.getState().tabs[tabId] : undefined;
-  if (!tab) return true;
-  if (action === "click") {
+  if (tab && action === "click") {
+    noteWebNotificationClicked();
     switchToTab(tab.id);
     focus(tab.windowId);
   }
-  if (engineId) void webviews.get(tab.id)?.notificationAction(engineId, action);
+  if (!engineId) return true;
+  const inTab = () => (tab ? webviews.get(tab.id)?.notificationAction(engineId, action) : undefined);
+  if (engineId.startsWith("wk-")) void webKitNotificationAction(engineId, action).catch(inTab);
+  else void inTab();
   return true;
 }
 

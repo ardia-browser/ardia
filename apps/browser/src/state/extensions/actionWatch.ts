@@ -4,12 +4,14 @@ import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import { usePages } from "../tabs/pageState";
 import { extensionProfile, useExtensions, windowExtensions } from "./store";
-import { syncSidePanel, wantedSidePanels } from "./sidePanels";
+import { recheckKeptSidePanels, syncSidePanel, wantedSidePanels } from "./sidePanels";
 import { refreshExtensionsAfterChange } from "./actions";
 import { refreshActionStates } from "./actionStates";
 import { focusedWindowOf } from "../windows/ui";
 import { onProfilesUnloaded } from "../profiles/profileLoading";
 import { noteExtensionActionTabChangeSkipped } from "../telemetry/workCounts";
+import { consentToken, type ConsentToken } from "../telemetry/client";
+import { warnFor } from "../telemetry/logs";
 
 const ACTION_EVENT_COALESCE_MS = 150;
 
@@ -18,12 +20,13 @@ const loadedProfiles = new Set<string>();
 export function watchActionsOf(profile: string): boolean {
   if (loadedProfiles.has(profile)) return false;
   loadedProfiles.add(profile);
-  watchExtensionActions(profile).catch((error: unknown) => console.warn(`[extensions] couldn't watch the toolbar actions of ${profile}`, error));
+  const consent = consentToken();
+  watchExtensionActions(profile).catch((error: unknown) => warnFor(consent, `[extensions] couldn't watch the toolbar actions of ${profile}`, error));
   return true;
 }
 
 const dirtyActions = new Set<string>();
-const dirtyLists = new Set<string>();
+const dirtyLists = new Map<string, ConsentToken | null>();
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
 const windowsOf = (s: BrowserState, profile: string) => s.windowOrder.filter((windowId) => extensionProfile(s, windowId) === profile);
@@ -39,14 +42,18 @@ function showsAction(profile: string, extensionId: string) {
 function flushActionChanges() {
   flushTimer = null;
   if (AppState.currentState !== "active") return;
-  for (const profile of dirtyLists) if (loadedProfiles.has(profile)) void refreshExtensionsAfterChange(profile);
+  for (const [profile, consent] of dirtyLists) if (loadedProfiles.has(profile)) void refreshExtensionsAfterChange(profile, consent);
   dirtyLists.clear();
   if (dirtyActions.size) {
     const profiles = [...dirtyActions];
     dirtyActions.clear();
     void refreshActionStates(profiles);
     const s = useBrowser.getState();
-    for (const [windowId] of wantedSidePanels()) if (profiles.includes(extensionProfile(s, windowId))) void syncSidePanel(windowId);
+    for (const [windowId] of wantedSidePanels()) {
+      if (!profiles.includes(extensionProfile(s, windowId))) continue;
+      void syncSidePanel(windowId);
+      void recheckKeptSidePanels(windowId);
+    }
   }
 }
 
@@ -60,13 +67,13 @@ export function startActionStates() {
     for (const profile of profiles) loadedProfiles.delete(profile);
   });
   onExtensionActionChanged(({ profile, id, kind }) => {
-    if (kind === "registry") dirtyLists.add(profile);
+    if (kind === "registry") dirtyLists.set(profile, dirtyLists.has(profile) ? dirtyLists.get(profile)! : consentToken());
     else if (showsAction(profile, id)) dirtyActions.add(profile);
     else return;
     flushSoon();
   });
   AppState.addEventListener("change", (state) => state === "active" && flushSoon());
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["windows", "ui", "tabs"], (s, prev) => {
     if (s.windows !== prev.windows || focusedWindowOf(s) !== focusedWindowOf(prev)) return void refreshActionStates();
     if (s.tabs === prev.tabs) return;
     const navigated = s.windowOrder.filter((id) => {

@@ -67,9 +67,9 @@ export function inkOn(rows: readonly string[], dark: boolean): string {
   return worst(own) >= MIN_INK_CONTRAST || worst(other) <= worst(own) ? own : other;
 }
 
-function arcSelectionRoles(base: ColorRoles, windowTint: readonly string[]): Pick<Theme, "tabSelected" | "pinnedSelectedFill" | "rowSelectedText" | "tabSelectedText"> {
+function arcSelectionRoles(base: ColorRoles, windowTint: readonly string[], adaptiveInk: boolean): Pick<Theme, "tabSelected" | "pinnedSelectedFill" | "rowSelectedText" | "tabSelectedText"> {
   const tabSelected = base.dark ? arcSelectedFill.dark : visibleSelection(arcSelectedFill.light, ink.black, windowTint);
-  const inkOver = (fill: string) => inkOn(windowTint.map((tint) => over(fill, tint)), base.dark);
+  const inkOver = (fill: string) => (adaptiveInk ? inkOn(windowTint.map((tint) => over(fill, tint)), base.dark) : base.tabSelectedText);
   return {
     tabSelected,
     pinnedSelectedFill: visibleSelection(base.pinnedSelectedFill, base.dark ? ink.white : ink.black, windowTint),
@@ -166,8 +166,8 @@ export function nearestPreset(hexColor: string): ProfileColor {
   return best;
 }
 
-function customTheme(custom: ProfileTheme, color: ProfileColor, appDark: boolean, source: LookSource, base: BasePalette | null | undefined): Theme {
-  const key = `${color}:${requestedDarkFor(custom, appDark, source) ? "dark" : "light"}:${source}`;
+function customTheme(custom: ProfileTheme, color: ProfileColor, appDark: boolean, source: LookSource, base: BasePalette | null | undefined, adaptiveInk: boolean): Theme {
+  const key = `${color}:${requestedDarkFor(custom, appDark, source) ? "dark" : "light"}:${source}:${adaptiveInk ? "adaptive" : "mode"}`;
   const layer = layerOf(base);
   let byKey = layer.custom.get(custom);
   if (!byKey) layer.custom.set(custom, (byKey = new Map()));
@@ -180,9 +180,9 @@ function customTheme(custom: ProfileTheme, color: ProfileColor, appDark: boolean
     const windowTint = opaqueThemeTint(look, dark);
     theme = {
       ...preset,
-      ...arcSelectionRoles(dark ? preset.palettes.dark : preset.palettes.light, windowTint),
+      ...arcSelectionRoles(dark ? preset.palettes.dark : preset.palettes.light, windowTint, adaptiveInk),
       pinnedDivider: visibleLine(preset.divider, inkOn(windowTint, dark), windowTint),
-      adaptiveInk: true,
+      adaptiveInk,
       profileColor: nearestPreset(accent),
       backdrop: {
         ...backdropTint(accent, false),
@@ -199,9 +199,9 @@ function customTheme(custom: ProfileTheme, color: ProfileColor, appDark: boolean
   return theme;
 }
 
-export function profileTheme(profile: ProfileLookFields | undefined, appDark: boolean, source: LookSource = "own", palette?: BasePalette | null): Theme {
+export function profileTheme(profile: ProfileLookFields | undefined, appDark: boolean, source: LookSource = "own", palette?: BasePalette | null, adaptTextToColor = true): Theme {
   const color = profile?.color ?? "plum";
-  if (profile?.theme) return customTheme(profile.theme, color, appDark, source, palette);
+  if (profile?.theme) return customTheme(profile.theme, color, appDark, source, palette, adaptTextToColor);
   return themeFor(`${color}:${appDark ? "dark" : "light"}`, palette);
 }
 
@@ -210,8 +210,8 @@ export function profileAccent(profile: ProfileLookFields | undefined): string {
   return (PROFILE_COLORS[profile?.color ?? "plum"] ?? PROFILE_COLORS.plum).swatch;
 }
 
-export function scopedTheme(incognito: boolean, profile: ProfileLookFields | undefined, appDark: boolean, source: LookSource, palette?: BasePalette | null): Theme {
-  return incognito ? themeFor("incognito", palette) : profileTheme(profile, appDark, source, palette);
+export function scopedTheme(incognito: boolean, profile: ProfileLookFields | undefined, appDark: boolean, source: LookSource, palette?: BasePalette | null, adaptTextToColor = true): Theme {
+  return incognito ? themeFor("incognito", palette) : profileTheme(profile, appDark, source, palette, adaptTextToColor);
 }
 
 export function shadowOpacityOf(level: Omit<ShadowLevel, "opacity"> & { opacity: ShadowLevel["opacity"] | number }, theme: Theme): number {
@@ -267,5 +267,7 @@ export const layout = {
   toolbarButton: 30,
   toolbarIconCenters: [21, 56, 92, 127],
   breadcrumbX: 153,
-  trafficLightsWidth: WINDOW_CHROME.leadingWidth,
+  get trafficLightsWidth() {
+    return WINDOW_CHROME.leadingWidth;
+  },
 } as const;

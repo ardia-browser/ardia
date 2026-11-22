@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { mkdtemp, rm, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { launchArguments, launchEnvironment } from "../../apps/linux/scripts/acceptance/lib/ardia.mjs";
-import { ASSERTIONS, SCRIPT_NAME, SCRIPT_TITLE_PREFIX, USAGE, USER_SCRIPTS_CAPABILITIES, VERSION_PATTERN, appVersionVerdict, cliControlSupport, cliTarball, debLayoutProblems, packageFormat, formatTable, installerRanAgain, launchRefusal, packageStagedFiles, parseArgs, pipeLaunchArguments, splitPipeMessages, summarize, uboTuningProblems, userScriptSource } from "./smoke.mjs";
+import { ASSERTIONS, SCRIPT_NAME, SCRIPT_TITLE_PREFIX, UNKNOWN_WINDOW_ERROR, USAGE, USER_SCRIPTS_CAPABILITIES, VERSION_PATTERN, WINDOW_STATE_CAPABILITIES, windowStateProblems, windowStateSupport, windowStateVerdict, appVersionVerdict, cliControlSupport, cliTarball, debLayoutProblems, privateFolder, packageFormat, formatTable, installerRanAgain, launchRefusal, packageStagedFiles, parseArgs, pipeLaunchArguments, splitPipeMessages, summarize, uboSeedProblems, uboTuningProblems, userScriptSource } from "./smoke.mjs";
 
 test("the package checks are named in the usage and keep the original eight first", () => {
   assert.deepEqual(ASSERTIONS.slice(0, 8), ["ldd", "shell-ui", "bootstrap", "native-tab", "sandbox", "content-blocker", "restart-restore", "staged-install"]);
-  for (const name of ["app-version", "cli-install", "cli-control", "cli-scripts"]) {
+  for (const name of ["app-version", "cli-install", "cli-control", "cli-scripts", "window-state"]) {
     assert.ok(ASSERTIONS.includes(name), name);
     assert.ok(USAGE.includes(name), name);
   }
@@ -96,6 +99,18 @@ test("the packaged uBlock Origin saves its engine soon after a launch and waits 
   assert.deepEqual(uboTuningProblems(""), ["selfieDelayInSeconds is missing", "autoUpdateDelayAfterLaunch is missing"]);
 });
 
+test("the packaged uBlock Origin carries a seed that its start sequence loads", () => {
+  const start = "µb.isReadyPromise = (async function start() {\n    try {\n        await ardiaSeedFromPackage();\n";
+  const keys = ["Main", "NetFilteringEngine", "ExtFilteringEngine"].map((component) => `cache/selfie/staticArdia2${component}`);
+  const storageSource = keys.map((key) => `io.toCache('${key.slice("cache/".length)}', {});`).join("\n");
+  const base = { version: "1.76.4.29", selectedFilterLists: ["user-filters", "easylist"] };
+  const seed = JSON.stringify({ storage: { ...base, ...Object.fromEntries(keys.map((key) => [key, "saved"])) } });
+  assert.deepEqual(uboSeedProblems(seed, start, storageSource), []);
+  assert.deepEqual(uboSeedProblems(null, start, storageSource), ["no readable ardia-seed/storage.json"]);
+  assert.deepEqual(uboSeedProblems(seed, "µb.isReadyPromise = (async function start() {", storageSource), ["js/start.js doesn't load the seed"]);
+  assert.deepEqual(uboSeedProblems(JSON.stringify({ storage: base }), start, storageSource), keys.map((key) => `the seed has no ${key}`));
+});
+
 test("the gate takes a tarball, a .deb or an AppImage and refuses anything else", () => {
   assert.equal(packageFormat("/x/Ardia-0.2.47-linux-x64.tar.xz"), "tar");
   assert.equal(packageFormat("/x/Ardia-0.2.47-linux-x64.deb"), "deb");
@@ -125,4 +140,45 @@ test("a .deb is root-owned with a setuid root helper, the launcher link, the pol
   assert.ok(problems.some((p) => p.includes("chrome-sandbox is not setuid root")));
   assert.ok(problems.some((p) => p.includes("apparmor/ardia is missing")));
   assert.ok(problems.some((p) => p.includes("owned by user/user")));
+});
+
+test("profile folders stay private under a login umask that lets the group write, so the engine opens its control socket there", async () => {
+  const work = await mkdtemp(join(tmpdir(), "smoke-private-"));
+  const before = process.umask(0o002);
+  try {
+    const profile = join(work, "cli-control-profile");
+    await privateFolder(profile);
+    assert.equal((await stat(profile)).mode & 0o777, 0o700);
+    await privateFolder(profile);
+    assert.equal((await stat(profile)).mode & 0o777, 0o700);
+  } finally {
+    process.umask(before);
+    await rm(work, { recursive: true, force: true });
+  }
+});
+
+test("window-state accepts the contract's shapes and the unknown-window error, and names each mismatch", () => {
+  assert.deepEqual(WINDOW_STATE_CAPABILITIES, ["ArdiaShell.windowButtonLayout", "ArdiaShell.windowState"]);
+  assert.deepEqual(windowStateSupport(null), []);
+  assert.deepEqual(windowStateSupport(["engine.setCliControl"]), []);
+  assert.deepEqual(windowStateSupport(["ArdiaShell.windowState"]), ["ArdiaShell.windowState"]);
+  assert.deepEqual(windowStateSupport(["ArdiaShell.windowState", "x", "ArdiaShell.windowButtonLayout"]), WINDOW_STATE_CAPABILITIES);
+  assert.equal(windowStateVerdict(null).status, "old");
+  assert.equal(windowStateVerdict(["engine.setCliControl"]).status, "old");
+  assert.match(windowStateVerdict([]).message, /neither ArdiaShell\.windowButtonLayout nor ArdiaShell\.windowState/);
+  for (const one of WINDOW_STATE_CAPABILITIES) {
+    const verdict = windowStateVerdict([one]);
+    assert.equal(verdict.status, "fail", one);
+    assert.match(verdict.message, new RegExp(`advertises ${one.replace(".", "\\.")} without`));
+  }
+  assert.equal(windowStateVerdict([...WINDOW_STATE_CAPABILITIES, "x"]).status, "pass");
+  const good = { layout: { layout: ":minimize,maximize,close", desktop: "ubuntu:GNOME" }, state: { maximized: false, tiled: false, fullScreen: false }, unknown: UNKNOWN_WINDOW_ERROR };
+  assert.deepEqual(windowStateProblems(good), []);
+  assert.deepEqual(windowStateProblems({ ...good, layout: { layout: null, desktop: "" } }), []);
+  const problems = windowStateProblems({ layout: { layout: 3, desktop: null, extra: 1 }, state: { maximized: "no", tiled: false }, unknown: { answered: null } });
+  assert.equal(problems.length, 7, problems.join("\n"));
+  assert.match(problems.join("\n"), /keys desktop,extra,layout/);
+  assert.match(problems.join("\n"), /windowState.fullScreen is undefined/);
+  assert.match(problems.join("\n"), /unknown window answered \{"answered":null\}/);
+  assert.equal(windowStateProblems(null).length, 3);
 });

@@ -1,11 +1,13 @@
 import { Text } from "react-native";
-import { snappedToDevicePixels } from "../../state/settings/interfaceScale";
 import { Dot, hairline, ink, Symbol, weight } from "../ui";
 import { profileAccent } from "../ui/theme";
 import { typeFace } from "../ui/tokens";
 import type { Profile } from "../../state/browser/types";
 import { profileBadge, profileColors, profileSwitcher } from "./tokens";
 import { iconSymbol } from "../../lib/customIcon";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
+import { snappedToDevicePixels } from "../../state/settings/interfaceScale";
+import { CapCenteredLetter, inkCentered, InkHolder } from "../glyph/CapCenteredLetter";
 
 export const PROFILE_SYMBOLS: { name: string; title: string }[] = [
   { name: "house.fill", title: "Home" },
@@ -57,9 +59,9 @@ export const PROFILE_SYMBOLS: { name: string; title: string }[] = [
 
 export const switcherCellWidth = (icon: string | null) => (icon ? profileSwitcher.iconCell : profileSwitcher.dotCell);
 
-export function switcherIcons(icons: (string | null)[], shown: boolean, room: number): (string | null)[] {
+export function switcherIcons(icons: (string | null)[], room: number): (string | null)[] {
   const fits = icons.reduce((width, icon) => width + switcherCellWidth(icon), 0) <= room;
-  return shown && fits ? icons : icons.map(() => null);
+  return fits ? icons : icons.map(() => null);
 }
 
 export function SwitcherMark({ icon, color, scale = 1 }: { icon: string | null; color: string; scale?: number }) {
@@ -77,32 +79,47 @@ export function SwitcherMark({ icon, color, scale = 1 }: { icon: string | null; 
 
 const BADGE_EDGE_MIN = 22;
 
+const EMOJI_FONT = { ascender: 0.9662, capHeight: 1 } as const;
+
+const badgeEdge = (size: number) => (size >= BADGE_EDGE_MIN ? hairline.ring : 0);
+
+function emojiPlacement(size: number, fontSize: number) {
+  if (!PLATFORM_FEATURES.snapsTextBaselines) {
+    const nudge = snappedToDevicePixels(size * profileBadge.nudge);
+    return { holder: null, text: { transform: [{ translateX: nudge }, { translateY: nudge }] } };
+  }
+  const shiftX = EMOJI_FIT_BY_BADGE[size]?.shiftX ?? fontSize * profileBadge.emojiInkShift;
+  return { holder: inkCentered(size, shiftX, fontSize * profileBadge.emojiInkRise, { ascender: fontSize * EMOJI_FONT.ascender, capHeight: fontSize * EMOJI_FONT.capHeight }, badgeEdge(size)), text: null };
+}
+
+const EMOJI_FIT_BY_BADGE: Partial<Record<number, { fontSize: number; shiftX?: number }>> = PLATFORM_FEATURES.snapsTextBaselines ? profileBadge.emojiFitByBadge : {};
+
 export function ProfileBadge({ profile, size = 26 }: { profile: Pick<Profile, "name" | "color" | "icon"> & Partial<Pick<Profile, "theme">>; size?: number }) {
   const swatch = profileAccent(profile);
   const symbol = iconSymbol(profile.icon);
-  const nudge = snappedToDevicePixels(size * profileBadge.nudge);
-  const tracking = profile.icon ? 0 : size * profileBadge.initialTracking;
   return (
-    <Dot size={size} color={swatch} ring={size >= BADGE_EDGE_MIN ? profileColors.badgeEdge : undefined} ringWidth={hairline.ring}>
+    <Dot size={size} color={swatch} ring={badgeEdge(size) ? profileColors.badgeEdge : undefined} ringWidth={hairline.ring}>
       {symbol ? (
         <Symbol name={symbol} size={size * 0.5} weight="semibold" color={ink.white} style={{ width: size, height: size }} />
+      ) : profile.icon ? (
+        <BadgeEmoji emoji={profile.icon} size={size} />
       ) : (
-        <Text
-          numberOfLines={1}
-          style={{
-            ...typeFace(),
-            width: size,
-            textAlign: "center",
-            fontSize: profile.icon ? size * 0.55 : size * profileBadge.initialScale,
-            letterSpacing: tracking,
-            fontWeight: weight.semibold,
-            color: ink.white,
-            ...(profile.icon ? { transform: [{ translateX: nudge }, { translateY: nudge }] } : { height: size, lineHeight: size, transform: [{ translateX: tracking / 2 }] }),
-          }}
-        >
-          {profile.icon ?? (profile.name.trim()[0] ?? "?").toUpperCase()}
-        </Text>
+        <CapCenteredLetter box={size} inset={badgeEdge(size)} fontSize={size * profileBadge.initialScale} tracking={size * profileBadge.initialTracking} fontWeight={weight.semibold} color={ink.white}>
+          {(profile.name.trim()[0] ?? "?").toUpperCase()}
+        </CapCenteredLetter>
       )}
     </Dot>
+  );
+}
+
+function BadgeEmoji({ emoji, size }: { emoji: string; size: number }) {
+  const fontSize = EMOJI_FIT_BY_BADGE[size]?.fontSize ?? size * profileBadge.emojiScale;
+  const placement = emojiPlacement(size, fontSize);
+  return (
+    <InkHolder style={placement.holder}>
+      <Text numberOfLines={1} style={{ ...typeFace(), width: size, textAlign: "center", fontSize, fontWeight: weight.semibold, color: ink.white, ...placement.text }}>
+        {emoji}
+      </Text>
+    </InkHolder>
   );
 }

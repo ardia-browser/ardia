@@ -3,6 +3,8 @@ import type { BangListReply } from "./documents";
 
 export type AppEvent =
   | { type: "reopen"; pastFloating: boolean }
+  | { type: "pipActivationReturn"; success: boolean; epoch: string }
+  | { type: "pipActivationHandBack"; again: boolean; epoch: string }
   | { type: "willQuit" }
   | { type: "quitCancelled" }
   | { type: "appearance"; dark: boolean }
@@ -10,17 +12,32 @@ export type AppEvent =
   | { type: "resignActive" }
   | { type: "screenLocked" }
   | { type: "lockedOrAsleep" }
-  | { type: "switcherReleased" }
+  | { type: "switcherReleased"; afterMenu?: boolean }
   | { type: "switcherKey"; key: "escape" | "next" | "previous" | "close" }
   | { type: "switcherMouseUp" }
   | { type: "dragEscape" }
   | { type: "unclaimedEscape"; windowId: string }
-  | { type: "snapKeyHandedBack"; windowId: string }
-  | { type: "centeredResize" }
+  | { type: "snapKeyHandedBack"; windowId: string; afterMenu?: boolean }
+  | { type: "centeredResize"; epoch: string }
   | { type: "appLinkOpened"; windowId: string | null }
   | { type: "littleArdiaReturnedToApp" }
-  | { type: "windowTitleRead" }
-  | { type: "keyHoldReplay"; tag: number; count: number };
+  | { type: "littleArdiaReturnDropped"; count: number }
+  | { type: "littleArdiaLinkKeptBehind"; when: "activation" | "arrival" | "open" | "released" | "stageManager" | "keyRestored" | "windowManager" | "raiseSkipped" }
+  | { type: "windowTitleRead"; epoch: string }
+  | { type: "keyHoldReplay"; tag: number; count: number }
+  | { type: "littleArdiaGlobalShortcut" }
+  | { type: "littleArdiaGlobalShortcutBehind" }
+  | { type: "windowDragLoop"; epoch: string }
+  | {
+      type: "pasteRefused";
+      reason: string;
+      epoch: string;
+      gateOpen: boolean;
+      layout?: string;
+      types?: string[];
+      responder?: string;
+      dropped?: number;
+    };
 
 export type AppearanceMode = "auto" | "light" | "dark";
 

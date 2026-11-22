@@ -10,6 +10,7 @@ import { SOURCES } from "../live/sources";
 import { dismissNowBadge, live, markRead, markUnread, setRepoHidden, updateCalendarSettings, updateFolder } from "../live/store";
 import { folderRepos, setShowNewRepos, showAllRepos } from "../live/repoFilter";
 import { noteLiveFolderColorPick, noteLiveRepoMenuPick } from "../telemetry/liveHides";
+import { consentToken } from "../telemetry/client";
 import type { LiveItem, LiveSourceId } from "../live/types";
 import type { GroupColor } from "../browser/types";
 import { groupColorItems } from "./groupMenu";
@@ -163,6 +164,7 @@ export async function openLiveFolderMenu(windowId: string, folderId: string) {
   const folder = live().folders[folderId];
   if (!folder) return;
   let showedRepo = false;
+  const consent = consentToken();
   const choice = await showMenu(liveFolderMenuItems(windowId, folderId), (picked) => {
     showedRepo = runRepoChoice(folderId, picked) || showedRepo;
     noteLiveRepoMenuPick(picked, !!live().folders[folderId]?.showNewRepos);
@@ -190,7 +192,7 @@ export async function openLiveFolderMenu(windowId: string, folderId: string) {
   } else if (choice === "icon") void openIconPicker(windowId, { kind: "live", id: `livefolder|${folderId}` });
   else if (choice.startsWith(COLOR_CHOICE)) {
     const color = chosenColor(choice);
-    noteLiveFolderColorPick();
+    noteLiveFolderColorPick(consent);
     updateFolder(folderId, { color });
   }
   else if (choice === "read") markRead(folderId);

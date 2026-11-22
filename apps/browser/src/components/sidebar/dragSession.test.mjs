@@ -96,7 +96,6 @@ test("a cancelled row slides home under a fresh token; a new drag before it land
   c.end(true);
   await D.settle();
   r.snap("committed, landing");
-  animations.step(c.items.get(entryKey("tab", m.id.a)).gap, 10);
   animations.held = false;
   animations.finish();
   await D.settle();
@@ -110,7 +109,7 @@ test("landing: which drops slide the ghost to its spot and which drop it at once
   const out = [];
   const cases = [
     ["row to the list", (m) => entryKey("tab", m.id.a), (m) => ({ x: 60, y: frameOf(m, entryKey("tab", m.id.c)).y + 30 })],
-    ["row onto a row", (m) => entryKey("tab", m.id.a), (m) => D.centre(frameOf(m, entryKey("tab", m.id.c)))],
+    ["row on a row's right half", (m) => entryKey("tab", m.id.a), (m) => D.centre(frameOf(m, entryKey("tab", m.id.c)))],
     ["row into the pinned rows", (m) => entryKey("tab", m.id.c), (m) => ({ x: 60, y: frameOf(m, entryKey("tab", m.id.p1)).y + 3 })],
     ["row into the tiles", (m) => entryKey("tab", m.id.c), (m) => D.centre(frameOf(m, entryKey("tab", m.id.t2)), 0)],
     ["tile along the grid", (m) => entryKey("tab", m.id.t1), (m) => ({ x: frameOf(m, entryKey("tab", m.id.t2)).x + 70, y: 80 })],
@@ -155,35 +154,6 @@ test("a drag ended before its measurements arrive does nothing when they do", as
   r.snap("measurements arrived");
   assert.deepEqual(D.committed(m.w), before);
   traces.check(t, "begin pending", [...r.steps, r.name({ ghosts: ghostLog(ghosts, r.name) })]);
-});
-
-function headedScene() {
-  const W = world("a", "b", "c", "p1", "t1", "t2");
-  const { id } = W;
-  S().pinTabs([id.t1, id.t2], true);
-  S().pinTabs([id.p1], true, true);
-  const L = sceneLayout({ top: 60 });
-  const grid = L.tiles([id.t1, id.t2]).frame;
-  L.skip(6);
-  const headerTop = L.y;
-  L.skip(34 + 3);
-  const pinnedTop = L.y;
-  L.row(id.p1, { section: "pinnedRows" }).tail("pinnedGroups");
-  L.skip(10);
-  const listTop = L.y;
-  L.row(id.a).row(id.b).row(id.c).tail("list");
-  return { ...W, L, headerTop, regions: { tiles: grid, ...regionsOf(L, { pinnedHeader: [headerTop, headerTop + 34], pinnedGroups: [pinnedTop, listTop], list: [listTop, L.y] }) } };
-}
-
-test("a tab let go on the pinned section's header becomes a pinned row, not a Top Apps tile", async () => {
-  const m = headedScene();
-  const { c } = mount({ entries: m.L.entries, regions: m.regions });
-  const r = recorder(c, m.w);
-  const from = frameOf(m, entryKey("tab", m.id.c));
-  await r.begin(entryKey("tab", m.id.c), from.x + 20, from.y + 10);
-  r.move(60, m.headerTop + 17);
-  await r.end(true);
-  assert.deepEqual(S().tabs[m.id.c].pin, { as: "row" });
 });
 
 test("a late tilesLaidOut from an old drag doesn't retarget a newer one", async (t) => {

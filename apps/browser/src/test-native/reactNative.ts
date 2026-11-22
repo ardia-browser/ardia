@@ -173,6 +173,8 @@ type Readable = number | Pick<AnimatedValue, "__getValue">;
 const read = (node: Readable) => (typeof node === "number" ? node : node.__getValue());
 const combined = (get: () => number) => ({ __getValue: get });
 
+export const PanResponder = { create: () => ({ panHandlers: {} }) };
+
 export const Animated = {
   createAnimatedComponent: <Component>(component: Component) => component,
   Value: AnimatedValue,

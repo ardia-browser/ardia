@@ -61,7 +61,7 @@ native_stamp() {
     cd "$repo" || exit 1
     git ls-files -co --exclude-standard -- \
       apps/browser/macos apps/browser/app.json apps/browser/react-native.config.js \
-      'packages/*/ios/*' 'packages/*/expo-module.config.json' packages/shell/docktile \
+      'packages/*/ios/*' 'packages/*/expo-module.config.json' packages/shell/docktile packages/shell/plugin-host \
       packages/ardiacore/scripts/embed.sh packages/ardiacore/scripts/stage-framework.sh packages/ardiacore/scripts/ubo.sh \
       packages/ardiacore/extensions \
       packages/ardiacore/scripts/signing engine/ardiacore/src/ardia/core/public patches pnpm-lock.yaml

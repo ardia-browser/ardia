@@ -27,10 +27,11 @@ export const profileRows = {
           description: "Used for new windows.",
           keywords: ["new window"],
         },
-        switcherShows: {
-          title: "Switcher in the sidebar shows",
-          description: "Dots, icons, or nothing.",
-          keywords: ["dots", "pager", "profile switcher", "page dots", "sidebar footer", "hide", "show profile dots", "spaces", "space icons", "profile dots", "switcher", "emoji", "symbol", "arc", "show profile icons instead of dots", "profile icons"],
+        showProfileDots: {
+          title: "Show the profile switcher in the sidebar",
+          explained: true,
+          description: "A dot for each profile, or its icon if you gave it one.",
+          keywords: ["dots", "pager", "profile switcher", "page dots", "sidebar footer", "hide", "show profile dots", "spaces", "space icons", "profile dots", "switcher", "emoji", "symbol", "arc", "show profile icons instead of dots", "profile icons", "switcher in the sidebar shows", "nothing"],
         },
         shareTopApps: {
           title: "Share Top Apps",
@@ -47,6 +48,11 @@ export const profileRows = {
     {
       section: "This profile",
       rows: {
+        themeColor: {
+          title: "Colour",
+          description: "Pick a theme colour and edit it: colours, intensity, blur, noise and direction.",
+          keywords: ["theme", "theme colour", "theme color", "color", "gradient", "custom theme", "custom colour", "edit theme", "reset theme", "intensity", "pass-through blur", "noise", "grain", "direction", "tint"],
+        },
         syncThisProfile: {
           title: "Sync this profile",
           keywords: ["sync profile", "sync"],
@@ -58,6 +64,13 @@ export const profileRows = {
           keywords: ["download location", "save to", "folder"],
           shown: (s) => s.separateDownloadFolders,
           needs: "Turn on Separate folder for each profile in General",
+        },
+        preloadPages: {
+          title: "Preload pages",
+          explained: true,
+          description: "Links open faster, but pages you may never visit are fetched too.",
+          keywords: ["preload", "prerender", "preconnect", "prefetch", "speed", "faster", "slow connection", "latency", "network predictions"],
+          shown: () => PLATFORM_FEATURES.preloadPages,
         },
         siteSettings: {
           title: "Site settings",
@@ -95,6 +108,12 @@ export const profileRows = {
     {
       section: "Passwords and autofill",
       rows: {
+        passwordManager: {
+          title: "Password manager",
+          description: "Ardia's own, a password manager plugin, or none when an extension handles logins.",
+          keywords: ["password manager", "passwords app", "passkeys", "verification codes", "2fa", "one time code", "autofill passwords"],
+          shown: () => PLATFORM_FEATURES.systemPasswordManagers && PLATFORM_FEATURES.plugins,
+        },
         offerToSavePasswords: {
           title: "Save and fill passwords",
           description: "Offers to save logins and fills saved ones.",

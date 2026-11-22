@@ -15,11 +15,12 @@ import { bookmarkTab } from "../bookmarks/actions";
 import { isBookmarked } from "../bookmarks/bookmarks";
 import { exitPictureInPicture, useMedia } from "../media/media";
 import { noteTabMenuPinnedReset } from "../telemetry/hoverCardCounts";
+import { consentToken, type ConsentToken } from "../telemetry/choice";
 import { bookmarksShown } from "../bookmarks/visibility";
 import { calendarMenuItem, dismissNowMenuItems, runCalendarMenu } from "./liveMenus";
 import { newFolderWithTab, removeFromFolder } from "./tileFolderUi";
 import { togglePageEngine } from "../engines/actions";
-import { canSwitchEngine, ENGINE_NAMES, otherEngine, tabEngine } from "../engines/engines";
+import { ENGINE_NAMES, otherEngine, switchableEngine, tabEngine } from "../engines/engines";
 import { bookmarkFolderItems, groupItems, hintWhen, profileItems, sections, windowItems, withAlternate, type Destination } from "./menuParts";
 import { openMultiMenu } from "./multiTabMenu";
 import { tileFolderOf } from "../pins/tileFolders";
@@ -27,6 +28,9 @@ import { sendTabFromMenu, sendTabMenuItem } from "../sync/menu";
 import { pageUnread } from "../tabs/unread";
 import { closeIntent, openPages } from "../tabs/tabs";
 import { noteTopAppUnloadedFromMenu } from "../telemetry/tabSleepCounts";
+import { canSleep, sleepTabsFromMenu } from "../tabs/manualSleep";
+import { isPluginMenuChoice, pluginMenuItems, runPluginMenuChoice, type PluginMenuContext } from "../plugins/menus";
+import { urlParts } from "../../lib/urlParts";
 import { ALL_UNREAD_TITLE, canChooseSiteUnread, isUnreadSiteHidden, showUnreadCounts, toggleSiteUnread, unreadSiteTitle } from "../tabs/unreadSites";
 
 const store = () => useBrowser.getState();
@@ -82,7 +86,7 @@ function pinItems(s: BrowserState, tab: Tab, f: Facts): MenuItem[] {
 }
 
 function openItems(s: BrowserState, tab: Tab, f: Facts): MenuItem[] {
-  const engine = canSwitchEngine(tab.url) ? ENGINE_NAMES[otherEngine(tabEngine(s, tab.id))] : null;
+  const engine = switchableEngine(s, tab.url) ? ENGINE_NAMES[otherEngine(tabEngine(s, tab.id))] : null;
   return [
     ...(f.split
       ? [{ id: "unsplit", title: "Remove from Split View", symbol: "rectangle.split.2x1.slash" }]
@@ -163,8 +167,10 @@ function unloadTopApp(tabId: string) {
 }
 
 function closeItems(s: BrowserState, tab: Tab, f: Facts): MenuItem[] {
-  if (f.housed) return f.section === "tile" && s.settings.keepTopAppsRunning && openPages(s, tab.id).length > 0 ? [{ id: "unloadTopApp", title: "Unload", symbol: "moon.zzz" }] : [];
+  const sleep: MenuItem[] = canSleep(s, tab.id) ? [{ id: "sleep", title: "Sleep Tab", symbol: "moon.zzz" }] : [];
+  if (f.housed) return f.section === "tile" && s.settings.keepTopAppsRunning && openPages(s, tab.id).length > 0 ? [{ id: "unloadTopApp", title: "Unload", symbol: "moon.zzz" }] : sleep;
   return [
+    ...sleep,
     { id: "close", title: "Close", symbol: "xmark", ...hintWhen(f.active, "closeTab") },
     ...(f.split ? [{ id: "closeSplit", title: "Close Split View" }] : []),
     { id: "closeOthers", title: "Close Other Tabs", enabled: f.others.length > 0 },
@@ -180,6 +186,16 @@ function sendItems(tab: Tab, f: Facts): MenuItem[] {
   const send = f.incognito ? null : sendTabMenuItem(tab);
   return send ? [send] : [];
 }
+
+function pluginMenuContext(s: BrowserState, windowId: string, tab: Tab, f: Facts): PluginMenuContext {
+  const parts = urlParts(tab.url);
+  return {
+    when: { urlHost: parts?.host ?? "", urlScheme: parts?.scheme ?? "", isPinned: !!tab.pin, isInGroup: !!f.group, isSplit: !!f.split, isActive: f.active, tabCount: viewTabIds(s, windowId).length },
+    data: { url: tab.url, title: tabTitle(tab), tabId: tab.id, windowId },
+  };
+}
+
+const pluginItems = (s: BrowserState, windowId: string, tab: Tab, f: Facts): MenuItem[] => (f.incognito ? [] : pluginMenuItems("tab", pluginMenuContext(s, windowId, tab, f)));
 
 export function tabMenuItems(s: BrowserState, windowId: string, tab: Tab, f: Facts = tabMenuFacts(s, windowId, tab)): TabMenuItem[] {
   return sections<TabMenuItem>(
@@ -206,6 +222,7 @@ export function tabMenuItems(s: BrowserState, windowId: string, tab: Tab, f: Fac
       ...pictureInPictureItems(tab),
       ...unreadItems(s, tab),
     ],
+    pluginItems(s, windowId, tab, f),
     closeItems(s, tab, f),
   );
 }
@@ -216,11 +233,12 @@ export async function openTabMenu(windowId: string, tab: Tab) {
   if (selected.length > 1 && selected.includes(tab.id)) return openMultiMenu(windowId, selected);
   if (s.selection[windowId]?.length) s.setSelection(windowId, []);
   const f = tabMenuFacts(store(), windowId, tab);
+  const consent = consentToken();
   const choice = await chooseFromMenu(tabMenuItems(store(), windowId, tab, f));
   const now = store().tabs[tab.id];
   if (!choice || now?.windowId !== windowId) return;
   const here = (ids: string[]) => ids.filter((id) => store().tabs[id]?.windowId === windowId);
-  runTabChoice(windowId, now, { ...f, others: here(f.others), above: here(f.above), below: here(f.below) }, choice);
+  runTabChoice(windowId, now, { ...f, others: here(f.others), above: here(f.above), below: here(f.below) }, choice, consent);
 }
 
 function openAsSplit(windowId: string, tabId: string, wasActive: boolean) {
@@ -236,9 +254,13 @@ function sendTab(windowId: string, tabId: string, to: Destination) {
   else void bookmarkTabs(windowId, [tabId], to);
 }
 
-function runTabChoice(windowId: string, tab: Tab, f: Facts, choice: string | Destination) {
+function runTabChoice(windowId: string, tab: Tab, f: Facts, choice: string | Destination, consent: ConsentToken | null) {
   if (typeof choice !== "string") return sendTab(windowId, tab.id, choice);
   const s = store();
+  if (isPluginMenuChoice(choice)) {
+    if (!f.incognito) void runPluginMenuChoice(choice, windowId, pluginMenuContext(s, windowId, tab, f), consent);
+    return;
+  }
   const t = { kind: "tab" as const, id: tab.id };
   if (runCalendarMenu(choice) || sendTabFromMenu(choice, tab)) return;
   if (choice === "backToPin") {
@@ -274,6 +296,7 @@ function runTabChoice(windowId: string, tab: Tab, f: Facts, choice: string | Des
   else if (choice === "bookmark") bookmarkTab(windowId, tab.id);
   else if (choice === "close") void closeTab(tab.id);
   else if (choice === "unloadTopApp") unloadTopApp(tab.id);
+  else if (choice === "sleep") void sleepTabsFromMenu([tab.id], "tab");
   else if (choice === "closeSplit" && f.split) closeSplitView(f.split.id);
   else if (choice === "closeOthers") s.closeTabs(f.others);
   else if (choice === "closeAbove") s.closeTabs(f.above);

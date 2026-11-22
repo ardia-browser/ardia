@@ -5,8 +5,8 @@ globalThis.__DEV__ = false;
 const stub = await import("../../test-native/index.ts");
 Object.assign(stub.appInfo, { appVersion: "0.3.0", osVersion: "27.0.1", arch: "arm64", isolatedInstance: false });
 const older = { uuid: "older", event: "app_launched", distinct_id: "install", timestamp: "2026-10-26T00:00:00.000Z", properties: {} };
-stub.docs.set("telemetry.json", JSON.stringify({ version: 1, sharing: true, decidedAt: 1, askDoneAt: 1, installId: "install", crashCursor: 0, lastVersion: "0.3.0", sessionOpen: false }));
-stub.docs.set("telemetry-queue.json", JSON.stringify({ version: 1, events: [older], logs: [] }));
+stub.docs.set("telemetry.json", JSON.stringify({ version: 1, sharing: true, decidedAt: 1, askDoneAt: 1, installId: "install", crashCursor: 0, lastVersion: "0.3.0", sessionOpen: false, epoch: "period" }));
+stub.docs.set("telemetry-queue.json", JSON.stringify({ version: 1, events: [older], logs: [], epoch: "period" }));
 globalThis.fetch = async () => ({ status: 200 });
 
 let forwarded = [];

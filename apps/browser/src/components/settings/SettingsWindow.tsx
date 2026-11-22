@@ -3,10 +3,11 @@ import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { useTheme } from "../ui/theme";
 import { useProfile } from "../../state/browser/hooks";
+import { usePluginTitle } from "../../state/plugins/hooks";
 import { trackSettingsSection } from "../../state/telemetry/track";
-import { clearSettingsReveal, flashSetting, useSettingsSearch } from "../../state/settings/searchState";
+import { clearSettingsReveal, flashSetting, settingsSearchHost, useSettingsSearch } from "../../state/settings/searchState";
 import { anchorView } from "./anchors";
-import { findSetting, PANES, paneTitle } from "./settingsIndex";
+import { findSetting, resolveSettingId, PANES, paneTitle } from "./settingsIndex";
 import { SettingsPaneContext } from "./Form";
 import { PageToolbar } from "../pages/PageLayout";
 import { SettingsSearchField, SettingsSearchResults } from "./SettingsSearch";
@@ -14,10 +15,12 @@ import { AdvancedPane } from "./panes/Advanced";
 import { AppearancePane } from "./panes/Appearance";
 import { AutomationsPane } from "./panes/Automations";
 import { GeneralPane } from "./panes/General";
+import { PluginsPane } from "./panes/Plugins";
 import { ProfilesPane } from "./panes/Profiles";
 import { ShortcutsPane } from "./panes/Shortcuts";
 import { TabsPane } from "./panes/Tabs";
 import { useSettingsSheet } from "../../state/settings/sheet";
+import { SettingsConsentSheet } from "../plugins/SettingsConsentSheet";
 import { goToSettingsPane, SETTINGS_WINDOW_ID, settingsBack, settingsForward, useSettingsNav, type SettingsPane, type SettingsPlace } from "../../state/settings/settingsWindows";
 import { closeProfileIconPickerIn } from "../../state/profiles/iconPicker";
 import { ProfileIconPicker } from "../profiles/ProfileIconPicker";
@@ -30,10 +33,13 @@ import { markCaptionRegions } from "../../state/windows/controls";
 import { LIGHTS_CENTER } from "../../state/windows/dockMotion";
 import { setTrafficLightsCenter } from "../../state/windows/nativeWindow";
 import { WindowControls } from "../window/WindowControls";
+import { LeadingWindowControls } from "../window/LeadingWindowControls";
+import { useWindowChrome } from "../../state/windows/windowButtons";
+import { noteSettingsScroll } from "../../state/settings/growingRows";
 
 const SIDEBAR = settingsLayout.sidebarWidth;
 const TOOLBAR = pageToolbar.window.height;
-const SIDEBAR_TOP = WINDOW_CHROME.leadingWidth ? TOOLBAR : space.ml;
+const sidebarTop = () => (WINDOW_CHROME.leadingWidth ? TOOLBAR : space.ml);
 const TITLE_LEFT = SIDEBAR + 96;
 const CONTROLS_ROOM = WINDOW_CONTROLS.edge + windowControlsWidth() + WINDOW_CONTROLS.gap;
 const REVEAL_MARGIN = 16;
@@ -43,17 +49,21 @@ const pageKey = (s: SettingsPlace) => (s.pane === "profiles" && !s.detail ? "pro
 
 export function SettingsWindow() {
   const look = useSettingsColors();
+  useWindowChrome();
   const nav = useSettingsNav();
-  const shown = nav;
-  const profileName = useProfile(shown?.profileId, (p) => p?.name);
-  const title = shown ? (shown.pane === "profiles" && profileName ? profileName : paneTitle(shown.pane)) : "";
+  const { pane, profileId, detail } = nav;
+  const shown: SettingsPlace = { pane, profileId, detail };
+  const profileName = useProfile(profileId, (p) => p?.name);
+  const pluginTitle = usePluginTitle(pane === "plugins" ? detail : null);
+  const title = pane === "profiles" && profileName ? profileName : pane === "plugins" && pluginTitle ? pluginTitle : paneTitle(pane);
   const sheet = useSettingsSheet((s) => s.sheet);
   useEffect(() => trackSettingsSection(nav.pane), [nav.pane]);
+  useEffect(() => settingsSearchHost(), []);
   useEffect(() => markCaptionRegions(SETTINGS_WINDOW_ID, [[TITLE_LEFT, 0, CONTROLS_ROOM, TOOLBAR]]), []);
   useEffect(() => void setTrafficLightsCenter(SETTINGS_WINDOW_ID, [LIGHTS_CENTER[0], TOOLBAR / 2]), []);
   const scroller = useRef<ScrollView>(null);
-  const key = shown ? shownKey(shown) : "";
-  const page = shown ? pageKey(shown) : "";
+  const key = shownKey(shown);
+  const page = pageKey(shown);
   useLayoutEffect(() => scroller.current?.scrollTo({ y: 0, animated: false }), [page]);
   useEffect(() => closeProfileIconPickerIn(SETTINGS_WINDOW_ID), [key]);
   const content = useRef<View>(null);
@@ -66,10 +76,9 @@ export function SettingsWindow() {
   useEffect(() => {
     if (!reveal) return;
     if (nav.pane !== revealPane) return void clearSettingsReveal();
-    if (shown?.pane !== revealPane) return;
     const animated = switched.current === key;
     const frame = requestAnimationFrame(() => {
-      const target = anchorView(reveal.id);
+      const target = anchorView(resolveSettingId(reveal.id));
       const container = content.current;
       if (!target || !container) return flashSetting("");
       target.measureLayout(
@@ -78,9 +87,9 @@ export function SettingsWindow() {
           const top = animated ? scrollTop.current : 0;
           const inView = y >= top + REVEAL_MARGIN && y + h <= top + viewport.current - REVEAL_MARGIN;
           if (!inView) scroller.current?.scrollTo({ y: Math.max(0, y - viewport.current / 3), animated });
-          flashSetting(reveal.id);
+          flashSetting(resolveSettingId(reveal.id));
         },
-        () => flashSetting(reveal.id),
+        () => flashSetting(resolveSettingId(reveal.id)),
       );
     });
     return () => cancelAnimationFrame(frame);
@@ -93,7 +102,7 @@ export function SettingsWindow() {
     <View style={{ flex: 1, flexDirection: "row", backgroundColor: look.windowFill }}>
       <View style={{ width: SIDEBAR }}>
         <VisualEffect material="sidebar" blendingMode="behindWindow" style={StyleSheet.absoluteFill} />
-        <WindowDragRegion style={{ height: SIDEBAR_TOP }} />
+        <WindowDragRegion style={{ height: sidebarTop() }} />
         <SettingsSearchField />
         {query.trim() ? (
           <SettingsSearchResults query={query} />
@@ -110,30 +119,33 @@ export function SettingsWindow() {
         <PageToolbar size="window" drag>
           <Button variant="icon" toolbar icon="chevron.left" size="l" disabled={!nav.back.length} onPress={() => settingsBack()} tooltip="Back" />
           <Button variant="icon" toolbar icon="chevron.right" size="l" disabled={!nav.forward.length} onPress={() => settingsForward()} tooltip="Forward" />
-          <Text size="title" weight="semibold" style={WINDOW_TITLE}>
+          <Text size="title" weight="semibold" ardiaCentersCapitals style={WINDOW_TITLE}>
             {title}
           </Text>
         </PageToolbar>
         <ScrollView
           ref={scroller}
           scrollEventThrottle={16}
-          onScroll={(e) => void (scrollTop.current = e.nativeEvent.contentOffset.y)}
+          onScroll={({ nativeEvent: { contentOffset, layoutMeasurement, contentSize } }) => {
+            scrollTop.current = contentOffset.y;
+            noteSettingsScroll(contentOffset.y, layoutMeasurement.height, contentSize.height);
+          }}
           onLayout={(e) => void (viewport.current = e.nativeEvent.layout.height)}
           contentContainerStyle={PANE_SCROLL}>
           <View key={page} ref={content} collapsable={false} style={PANE_COLUMN}>
-            {shown ? (
-              <NativeFormContext.Provider value>
-                <SettingsPaneContext.Provider value={shown.pane}>
-                  <Pane {...shown} />
-                </SettingsPaneContext.Provider>
-              </NativeFormContext.Provider>
-            ) : null}
+            <NativeFormContext.Provider value>
+              <SettingsPaneContext.Provider value={shown.pane}>
+                <Pane {...shown} />
+              </SettingsPaneContext.Provider>
+            </NativeFormContext.Provider>
           </View>
         </ScrollView>
       </View>
       <ProfileIconPicker windowId={SETTINGS_WINDOW_ID} />
       {sheet}
+      <SettingsConsentSheet />
       <WindowControls windowId={SETTINGS_WINDOW_ID} centerY={TOOLBAR / 2} size={WINDOW_CONTROLS.regular} />
+      <LeadingWindowControls windowId={SETTINGS_WINDOW_ID} size={WINDOW_CONTROLS.regular} />
     </View>
   );
 }
@@ -148,6 +160,7 @@ const PANE_VIEWS: Record<SettingsPane, (place: SettingsPlace) => ReactNode> = {
   tabs: (place) => <TabsPane {...place} />,
   appearance: (place) => <AppearancePane {...place} />,
   automations: (place) => <AutomationsPane {...place} />,
+  plugins: (place) => <PluginsPane {...place} />,
   shortcuts: (place) => <ShortcutsPane {...place} />,
   advanced: (place) => <AdvancedPane {...place} />,
 };
@@ -162,7 +175,7 @@ function SidebarItem({ title, icon, tint, selected, onPress }: { title: string; 
       <View style={[PANE_TILE, { backgroundColor: tint }]}>
         <Symbol name={icon} size={paneTile.symbol} weight="semibold" color={paneTints.ink} style={PANE_TILE_SYMBOL} />
       </View>
-      <Text tone={selected ? "onAccent" : "textPrimary"}>{title}</Text>
+      <Text tone={selected ? "onAccent" : "textPrimary"} ardiaCentersCapitals>{title}</Text>
     </ListRow>
   );
 }

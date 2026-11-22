@@ -163,7 +163,7 @@ void RestoreCursorOverAppView(NSEvent *event) {
   gRestores++;
   if (hidden) gHiddenRestores++;
   gLastRestore = [NSString stringWithFormat:@"%@ -> %@ over %@", CursorName(current), CursorName(wanted), NSStringFromClass(hit.class)];
-  [ArdiaEvents emit:@"engine.cursorRestored" data:@{@"hidden" : @(hidden)}];
+  [ArdiaEvents emit:@"engine.cursorRestored" data:[ArdiaConsentStamp.begin onto:@{@"hidden" : @(hidden)}]];
 }
 
 void RecordPageCursors() {

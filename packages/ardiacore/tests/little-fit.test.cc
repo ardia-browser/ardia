@@ -24,10 +24,13 @@ static void FitTests() {
   CHECK(Same(Fit(kUltrawide, {2406, 1085}, kMinimum), {517, 165, 2406, 1085}));
 
   const Rect shrunk = Fit(kBuiltIn, {2406, 1085}, kMinimum);
-  CHECK(Same(shrunk, {-1512, 0, 1512, 950}));
+  CHECK(Same(shrunk, {-1361, 95, 1210, 760}));
   CHECK(Contains(kBuiltIn, shrunk));
 
-  CHECK(Same(Fit(kBuiltIn, {1400, 400}, kMinimum), {-1456, 275, 1400, 400}));
+  CHECK(Same(Fit(kBuiltIn, {1400, 400}, kMinimum), {-1361, 275, 1210, 400}));
+  CHECK(Same(Fit(kBuiltIn, {1210, 760}, kMinimum), {-1361, 95, 1210, 760}));
+  CHECK(Same(Fit(kBuiltIn, {1200, 700}, kMinimum), {-1356, 125, 1200, 700}));
+  CHECK(Same(Fit(kUltrawide, {3200, 1400}, kMinimum), {344, 142, 2752, 1132}));
 
   const Rect floor = Fit(kBuiltIn, {100, 100}, kMinimum);
   CHECK(floor.w == 420 && floor.h == 300);
@@ -37,13 +40,16 @@ static void FitTests() {
   CHECK(Same(cramped, {0, 0, 300, 200}));
 
   const Rect raised = Fit({-1512, 40, 1512, 910}, {2406, 1085}, kMinimum);
-  CHECK(Same(raised, {-1512, 40, 1512, 910}));
+  CHECK(Same(raised, {-1361, 131, 1210, 728}));
+
+  const Rect tight = Fit({0, 0, 500, 360}, {900, 640}, kMinimum);
+  CHECK(Same(tight, {40, 30, 420, 300}));
 }
 
 static void CentreTests() {
   CHECK(Same(Fit({0, 0, 1000, 1000}, {500, 400}, kMinimum), {250, 300, 500, 400}));
-  CHECK(Same(Fit({0, 0, 1000, 1000}, {500, 960}, kMinimum), {250, 20, 500, 960}));
-  CHECK(Same(Fit({0, 0, 1000, 1000}, {500, 1000}, kMinimum), {250, 0, 500, 1000}));
+  CHECK(Same(Fit({0, 0, 1000, 1000}, {500, 800}, kMinimum), {250, 100, 500, 800}));
+  CHECK(Same(Fit({0, 0, 1000, 1000}, {500, 960}, kMinimum), {250, 100, 500, 800}));
 }
 
 static void ScreenHoldingTests() {
@@ -78,14 +84,14 @@ static void LandedWindowTests() {
   Rect fitted = {};
 
   const Rect reportedByAppKit = {517, 236, 2406, 1085};
-  CHECK(!FitLanding(reportedByAppKit, displays, kMinimum, &fitted));
+  CHECK(!FitLanding(reportedByAppKit, displays, kMinimum, nullptr, &fitted));
 
   const Rect landed = {-1959, 100, 2406, 1085};
-  CHECK(FitLanding(landed, displays, kMinimum, &fitted));
+  CHECK(FitLanding(landed, displays, kMinimum, nullptr, &fitted));
   CHECK(Contains(visible, fitted));
   CHECK(fitted.w >= kMinimum.w && fitted.h >= kMinimum.h);
   CHECK(fitted.y >= visible.y && fitted.maxY() <= visible.maxY());
-  CHECK(!Contains(visible, Fit(kBuiltInDisplay.frame, {landed.w, landed.h}, kMinimum)));
+  CHECK(fitted.w == 1512 && fitted.h == 886);
 }
 
 static void LandedBeyondTheVisibleFrameTests() {
@@ -96,23 +102,64 @@ static void LandedBeyondTheVisibleFrameTests() {
   const Rect underTheDock = {-1400, 10, 800, 600};
   CHECK(Contains(kBuiltInDisplay.frame, underTheDock));
   CHECK(!Contains(visible, underTheDock));
-  CHECK(FitLanding(underTheDock, displays, kMinimum, &fitted));
+  CHECK(FitLanding(underTheDock, displays, kMinimum, nullptr, &fitted));
   CHECK(Same(fitted, {-1156, 213, 800, 600}));
   CHECK(Contains(visible, fitted));
 
   const Rect underTheMenuBar = {-1400, 500, 800, 480};
   CHECK(Contains(kBuiltInDisplay.frame, underTheMenuBar));
   CHECK(!Contains(visible, underTheMenuBar));
-  CHECK(FitLanding(underTheMenuBar, displays, kMinimum, &fitted));
+  CHECK(FitLanding(underTheMenuBar, displays, kMinimum, nullptr, &fitted));
   CHECK(Contains(visible, fitted));
 
   const Rect inside = {-1400, 100, 800, 600};
   CHECK(Contains(visible, inside));
-  CHECK(!FitLanding(inside, displays, kMinimum, &fitted));
+  CHECK(!FitLanding(inside, displays, kMinimum, nullptr, &fitted));
 
   const Rect nowhere = {9000, 9000, 800, 600};
-  CHECK(!FitLanding(nowhere, displays, kMinimum, &fitted));
-  CHECK(!FitLanding(inside, {}, kMinimum, &fitted));
+  CHECK(!FitLanding(nowhere, displays, kMinimum, nullptr, &fitted));
+  CHECK(!FitLanding(inside, {}, kMinimum, nullptr, &fitted));
+}
+
+static void LandedWithAWantedSizeTests() {
+  const std::vector<Display> displays = {kUltrawideDisplay, kBuiltInDisplay};
+  const Size wanted = {1400, 850};
+  Rect fitted = {};
+
+  const Rect onTheUltrawide = Fit(kUltrawideDisplay.visible, wanted, kMinimum);
+  CHECK(Same(onTheUltrawide, {1020, 283, 1400, 850}));
+  const Placement placedOnTheUltrawide = {wanted, onTheUltrawide};
+  CHECK(!FitLanding(onTheUltrawide, displays, kMinimum, &placedOnTheUltrawide, &fitted));
+
+  const Rect movedToTheLaptop = {-1450, 80, 1400, 850};
+  CHECK(Contains(kBuiltInDisplay.visible, movedToTheLaptop));
+  CHECK(FitLanding(movedToTheLaptop, displays, kMinimum, &placedOnTheUltrawide, &fitted));
+  CHECK(Same(fitted, {-1361, 159, 1210, 709}));
+
+  const Rect onTheLaptop = Fit(kBuiltInDisplay.visible, wanted, kMinimum);
+  const Placement placedOnTheLaptop = {wanted, onTheLaptop};
+  CHECK(!FitLanding(onTheLaptop, displays, kMinimum, &placedOnTheLaptop, &fitted));
+  const Rect movedToTheUltrawide = {200, 200, onTheLaptop.w, onTheLaptop.h};
+  CHECK(FitLanding(movedToTheUltrawide, displays, kMinimum, &placedOnTheLaptop, &fitted));
+  CHECK(Same(fitted, onTheUltrawide));
+
+  const Rect resizedInPlace = {-1450, 100, 1300, 800};
+  CHECK(!FitLanding(resizedInPlace, displays, kMinimum, &placedOnTheLaptop, &fitted));
+
+  const Rect resizedPastTheDock = {-1450, 10, 1300, 800};
+  CHECK(FitLanding(resizedPastTheDock, displays, kMinimum, &placedOnTheLaptop, &fitted));
+  CHECK(fitted.w == 1300 && fitted.h == 800 && Contains(kBuiltInDisplay.visible, fitted));
+
+  const Rect userSized = {-1450, 80, 1400, 850};
+  CHECK(!FitLanding(userSized, displays, kMinimum, nullptr, &fitted));
+}
+
+static void RoundingStaysInsideTests() {
+  const Rect visible = {0, 0, 419.5, 299.5};
+  const Rect fitted = Fit(visible, {900, 640}, kMinimum);
+  CHECK(fitted.w <= visible.w && fitted.h <= visible.h);
+  CHECK(Contains(visible, fitted, 0));
+  CHECK(Same(Fit({0.5, 0, 1000, 1000}, {501, 400}, kMinimum), {250, 300, 501, 400}));
 }
 
 int main() {
@@ -123,6 +170,8 @@ int main() {
   FlipTests();
   LandedWindowTests();
   LandedBeyondTheVisibleFrameTests();
+  LandedWithAWantedSizeTests();
+  RoundingStaysInsideTests();
   if (failures) return 1;
   std::printf("little-fit: all passed\n");
   return 0;

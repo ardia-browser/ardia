@@ -11,16 +11,12 @@ const stub = await import("../../test-native/index.ts");
 
 const S = () => useBrowser.getState();
 
-const DIA = [
-  [0.0337, 0.303], [0.0629, 0.616], [0.0837, 0.805], [0.1212, 0.968], [0.1379, 1.011], [0.1629, 1.011], [0.1837, 1.003],
-  [0.0263, 0.246], [0.0596, 0.524], [0.0805, 0.8], [0.1055, 0.951], [0.1305, 1.008], [0.1555, 1.011], [0.1805, 1.003],
-  [0.0324, 0.316], [0.0657, 0.586], [0.0949, 0.846], [0.1032, 0.973], [0.1365, 1.011], [0.1532, 1.011], [0.1782, 1.005],
-];
-
-test("the slide follows Dia's measured rise and never passes its final width (#1630: Dia's 1 % overshoot laid pages out 3 pt too wide and back)", () => {
-  const rms = Math.sqrt(DIA.reduce((sum, [t, x]) => sum + (dm.slideAt(t) - Math.min(1, x)) ** 2, 0) / DIA.length);
-  assert.ok(rms < 0.025, `rms ${rms.toFixed(3)} against Dia's trace with its overshoot taken out`);
-  assert.ok(dm.slideAt(0.1) > 0.9, "90 % of the travel in 100 ms, as Dia");
+test("the slide is an ease-in-out over 200 ms that never passes its final width (#1630: an overshoot laid pages out too wide and back)", () => {
+  assert.equal(dm.DOCK_SLIDE.duration, 200);
+  assert.deepEqual([...dm.DOCK_SLIDE_CURVE], [0.42, 0, 0.58, 1]);
+  assert.ok(Math.abs(dm.slideAt(0.1) - 0.5) < 0.001, `half the travel at half the time: ${dm.slideAt(0.1)}`);
+  assert.ok(dm.slideAt(0.02) < 0.05, "starts gently");
+  assert.ok(dm.slideAt(0.18) > 0.95, "lands gently");
   let last = 0;
   for (let ms = 0; ms <= 400; ms++) {
     const x = dm.slideAt(ms / 1000);
@@ -54,12 +50,15 @@ test("the traffic lights go with the sidebar: at their place when it's shown, pa
   }
 });
 
-test("the peek keeps the same gap on every edge, with a 4 pt minimum", () => {
+test("the peek sits as far in from the window's edges as the page card, at every frame, and 1 pt in at a zero frame", () => {
   for (let inset = PAGE_FRAME.min; inset <= PAGE_FRAME.max; inset++) {
     const frame = dm.cardFrameOf(inset);
-    const gap = Math.max(4, inset);
+    const gap = Math.max(1, inset);
     assert.deepEqual([frame.peek.left, frame.peek.top, frame.peek.bottom], [gap, gap, gap]);
-    if (inset >= 4) checkPeekCoversCard(frame);
+    if (inset >= 1) {
+      assert.equal(frame.peek.radius, frame.radius, `frame ${inset}: the peek's corners are the card's`);
+      checkPeekCoversCard(frame);
+    }
   }
   assert.equal(DEFAULT_PEEK.left, PAGE_FRAME.default);
 });
@@ -113,11 +112,17 @@ test("the card radius follows the native window radius minus the frame, and the 
   assert.equal(dm.cardFrameOf(0).radius, 0, "edge to edge: square corners; the window rounds the page");
   assert.equal(dm.cardFrameOf(12).radius, 7);
   assert.equal(dm.cardFrameOf(4).radius, 15);
-  assert.equal(pageFrameOf(18, 19, dm.peekRadius()).radius, 2);
+  assert.equal(pageFrameOf(18, 19).radius, 2);
   assert.ok(dm.cardFrameOf(0).splitGap > 0, "split panes keep a hairline gap edge to edge, so they still read as two pages");
   assert.deepEqual(dm.toolbarLightsCenter(false, 0), [25, 21]);
   assert.deepEqual(dm.toolbarLightsCenter(false), [...dm.LIGHTS_CENTER]);
   assert.equal(dm.toolbarLightsCenter(false, 4), dm.toolbarLightsCenter(false, 4), "one array per frame, so effects keyed on it settle");
+});
+
+test("on a window drawn at 16 pt, a thin frame's corner nests in the window's and the default frame keeps its 10 pt", () => {
+  assert.ok(Math.abs(pageFrameOf(1, 19, 16).radius - 46 / 3) < 1e-9, "1 pt in from a 16 pt corner: 15 pt concentric, plus a ninth of the 3 pt the default frame adds");
+  for (const inset of [9, 12]) assert.equal(pageFrameOf(inset, 19, 16).radius, pageFrameOf(inset, 19).radius);
+  assert.equal(pageFrameOf(0, 19, 16).radius, 0);
 });
 
 test("the motion flag is per window, and ending it twice is harmless", () => {
@@ -174,10 +179,11 @@ test("the sidebar's own button (address bar in the sidebar) always fits; back, f
 });
 
 test("in window full screen the sidebar's button sits at Arc's 29 pt, with no room left for traffic lights (macOS shows them in its own title bar)", () => {
-  assert.equal(dm.headerToggleX(true), 29);
-  assert.equal(dm.headerToggleX(false), dm.HEADER_TOOLS.toggleX);
+  const headerToggleX = (windowFullScreen) => dm.headerToggleXIn({ windowFullScreen, pageFullScreen: false, controlsRow: false });
+  assert.equal(headerToggleX(true), 29);
+  assert.equal(headerToggleX(false), dm.HEADER_TOOLS.toggleX);
   for (let w = 150; w <= 400; w += 0.5) {
-    const { buttons, step } = dm.navButtonsFitting(w, 30, true, dm.headerToggleX(true));
+    const { buttons, step } = dm.navButtonsFitting(w, 30, true, headerToggleX(true));
     const windowed = dm.navButtonsFitting(w).buttons.length;
     assert.ok(buttons.length >= windowed, `${w}: full screen never fits fewer buttons`);
     const last = w - dm.HEADER_TOOLS.edge - 15;
@@ -225,9 +231,11 @@ test("Arc's peek slides in on its measured spring and leaves on its ease-in-out;
   assert.ok(Math.abs(peak - arcPeak) < 0.002, `the panel's overshoot ${peak}, Arc's ${arcPeak}`);
 });
 
-test("the peek stays off the window edge even when the page frame is zero", () => {
+test("the peek stays off the window edge even when the page frame is zero, its corner nested in the window's", () => {
   const frameZero = dm.cardFrameOf(PAGE_FRAME.min).peek;
-  assert.deepEqual([frameZero.left, frameZero.top, frameZero.bottom], [4, 4, 4]);
+  assert.deepEqual([frameZero.left, frameZero.top, frameZero.bottom], [1, 1, 1]);
+  assert.equal(frameZero.radius, 18);
+  assert.equal(pageFrameOf(0, 19, 16).peek.radius, 15);
   assert.equal(dm.peekBleed(frameZero.left), 0);
   assert.equal(dm.peekBleed(DEFAULT_PEEK.left), 0);
 });
@@ -371,4 +379,18 @@ test("the dock jumps when it can't animate or Arc docks from an open peek, Arc h
   assert.equal(mv({ arc: true, open: false, peekOut: true }), "arcHide");
   assert.equal(mv({ open: false }), "slide");
   assert.equal(mv({ peekOut: true }), "slide");
+});
+
+test("a peek's light moves that stay wholly off the window at one height aren't sent; the first visible one and the rest place are", () => {
+  const hidden = dm.sidebarLightsCenter(false, 240, 240, 0, [25, 24]);
+  const right = dm.sidebarLightsCenter(true, 240, 240, 0, [25, 24]);
+  assert.equal(dm.lightsOffWindow(hidden), true);
+  assert.equal(dm.lightsOffWindow(right), true);
+  assert.equal(dm.lightsOffWindow(dm.sidebarLightsCenter(true, 240, 0, 0, [25, 24])), false);
+  assert.equal(dm.stillOffWindow(undefined, [-168, 33]), false);
+  assert.equal(dm.stillOffWindow([-168, 33], [-120, 33]), true);
+  assert.equal(dm.stillOffWindow([-120, 33], [-40, 33]), false);
+  assert.equal(dm.stillOffWindow([-168, 33], [-165, 24]), false);
+  assert.equal(dm.stillOffWindow([-60, 33, "right"], [-30, 33, "right"]), true);
+  assert.equal(dm.stillOffWindow([-30, 33, "right"], [10, 33, "right"]), false);
 });

@@ -5,6 +5,8 @@ import { engineProfile, isIncognitoProfile } from "../browser/model";
 import { hasPage, IDLE, needsPage, wakeOf, withWake, wokenPage } from "../tabs/pageSession";
 import { noteProfileUnloaded, noteUnloadedProfileReloaded, noteUnloadedProfileReopened } from "../telemetry/tabSleepCounts";
 import { engineProfiles } from "./engineProfiles";
+import { consentToken } from "../telemetry/client";
+import { warnFor } from "../telemetry/logs";
 import { idleProfiles, profileUnloadDelay } from "./idleProfiles";
 import { markProfileUnloaded, onProfilesOpened, openProfile, profileOpened, shownEngineProfiles } from "./profileLoading";
 
@@ -88,11 +90,12 @@ export async function checkIdleProfiles(now = clock()) {
   if (delay === null) return void readyToUnload([], new Set(), now, null);
   if (checking || engineProfiles(s).length < 2) return;
   checking = true;
+  const consent = consentToken();
   try {
     const loaded = (await loadedProfiles()).filter((profile) => unloadable(profile) && profileOpened(profile));
     for (const profile of readyToUnload(loaded, new Set(shownEngineProfiles(store())), now, delay)) await unload(profile);
   } catch (error) {
-    console.warn("[profiles] couldn't unload idle profiles", error);
+    warnFor(consent, "[profiles] couldn't unload idle profiles", error);
   } finally {
     checking = false;
   }
@@ -100,7 +103,7 @@ export async function checkIdleProfiles(now = clock()) {
 
 function watchProfiles(): () => void {
   readyToUnload.noteShown(new Set(shownEngineProfiles(store())), clock());
-  const shown = useBrowser.subscribe((s, prev) => {
+  const shown = useBrowser.subscribeTo(["windows", "profiles"], (s, prev) => {
     if (s.windows !== prev.windows || s.profiles !== prev.profiles) readyToUnload.noteShown(new Set(shownEngineProfiles(s)), clock());
   });
   const opened = onProfilesOpened((engines) => {
@@ -138,7 +141,7 @@ export function startProfileUnloading() {
     else (stop?.(), (stop = null));
   };
   follow(profileUnloadDelay(store().settings) !== null);
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["settings"], (s, prev) => {
     if (s.settings !== prev.settings) follow(profileUnloadDelay(s.settings) !== null);
   });
   if (__DEV__) (globalThis as { acProfileUnloading?: unknown }).acProfileUnloading = { check: checkIdleProfiles, unload };

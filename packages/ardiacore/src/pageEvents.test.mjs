@@ -13,7 +13,6 @@ const table = pageEvents.slice(pageEvents.indexOf("const PAGE_EVENTS = {"), page
 const PAGE_EVENTS = collect([table], /^ {2}on[A-Za-z]+: "([A-Za-z]+)",$/gm);
 
 const chromiumView = files(/^ArdiaWebView.*\.mm$/).map(native);
-const frameCallers = [...chromiumView, native("ArdiaFairPlay.mm"), native("ArdiaVideoMirror.mm"), ...files(/^ArdiaHLSVideo.*\.mm$/).map(native), ...files(/^ArdiaPVSession.*\.mm$/).map(native)];
 const chromiumEmitters = files(/\.mm$/).map(native);
 const webKitTab = files(/^WebKitTab.*\.swift$/).map(native);
 const pageScript = native("page_script.js");
@@ -48,7 +47,7 @@ test("a popup window receives page messages and records only a protected-media r
   assert.match(popupWindow, /- \(void\)tab:\(ArdiaCoreTab \*\)tab\s+didReceivePageMessage:\(NSString \*\)kind\s+json:\(NSString \*\)json\s+frame:\(NSString \*\)frameId\s+main:\(BOOL\)main\s+origin:\(NSString \*\)verifiedOrigin \{/);
   assert.match(popupReceiverBody, /if \(!\[kind isEqualToString:@"drm"\]\) return;/);
   assert.deepEqual(sorted(collect([popupReceiverBody], /kind isEqualToString:@"([A-Za-z]+)"/g)), ["drm"]);
-  assert.match(popupReceiverBody, /\[ArdiaEvents emit:@"engine\.popupProtectedMedia" data:@\{@"family" : family, @"listed" : @\(OnProtectedVideoSite\(tab\.url\)\)\}\]/);
+  assert.match(popupReceiverBody, /\[ArdiaEvents emit:@"engine\.popupProtectedMedia" data:\[ArdiaConsentStamp\.begin onto:@\{@"family" : family, @"listed" : @\(OnProtectedVideoSite\(tab\.url\)\)\}\]\]/);
 });
 
 test("the popup's log line names the key-system family and nothing else, and nothing is forwarded", () => {
@@ -81,7 +80,7 @@ test("the popup's streaming-site list is PROTECTED_VIDEO_SITES, https only, subd
 });
 
 test("every kind native sends into a frame has a page-script handler, and every handler has a sender", () => {
-  const called = collect(frameCallers, /kind:@"([A-Za-z]+)"/g);
+  const called = collect(chromiumView, /kind:@"([A-Za-z]+)"/g);
   const handled = collect([pageScript], /\bhandlers\.([A-Za-z]+) =/g);
   assert.deepEqual(sorted(handled), sorted(called));
 });

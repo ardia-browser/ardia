@@ -416,6 +416,10 @@ extern "C" __attribute__((visibility("default"))) int ArdiaCoreMain(
   return NS(out.str());
 }
 
+- (NSString*)pictureInPictureCloses {
+  return NS(ardiacore::PictureInPictureCloseRecord());
+}
+
 - (NSString*)chromiumVersion {
   return NS(std::string(version_info::GetVersionNumber()));
 }

@@ -1,12 +1,13 @@
 import { memo, useState, type ReactNode } from "react";
-import { Image, Pressable, View } from "react-native";
+import { Animated, Pressable, View } from "react-native";
 import { useTheme } from "../ui/theme";
-import { ContextMenuArea, Divider, sidebarLineHeight, space, Symbol, Text, useHover } from "../ui";
+import { ContextMenuArea, Divider, drawnSymbol, sidebarLineHeight, space, Text, tintedImage, useHover } from "../ui";
 import { TAB_ROW } from "./tokens";
 import { HoverSlot } from "../ui/HoverSlot";
 import { closeAllTabs } from "../../state/sidebar/clearTabs";
 import { tidy as tidyTabs } from "../../state/sidebar/tidyUi";
 import { openSidebarMenu } from "../../state/sidebar/menus";
+import { PINNED_FOLD_TITLES, togglePinnedFold } from "../../state/sidebar/pinnedFold";
 
 const BROOM = require("../../../assets/tidy-broom.png");
 
@@ -18,12 +19,15 @@ const PADDING = TAB_ROW.contentLeft;
 const DASH_BOX_HEIGHT = 8;
 const ACTIONS_DIVIDER = { marginLeft: space.m } as const;
 
-type DividerProps = { windowId: string; profileId: string; lift: number; clear: boolean; tidy: boolean };
+type PinnedFold = { collapsed: boolean; open: Animated.Value };
 
-export const ClearDivider = memo(function ClearDivider({ windowId, profileId, lift, clear, tidy }: DividerProps) {
+type DividerProps = { windowId: string; profileId: string; lift: number; clear: boolean; tidy: boolean; pinned: PinnedFold | null };
+
+export const ClearDivider = memo(function ClearDivider({ windowId, profileId, lift, clear, tidy, pinned }: DividerProps) {
   const theme = useTheme();
   const { hovered: shown, hoverProps } = useHover();
   const [lineWidth, setLineWidth] = useState(0);
+  const foldShown = !!pinned && (shown || pinned.collapsed);
   const actions = tidy || clear;
   return (
     <ContextMenuArea onContextMenu={() => void openSidebarMenu(windowId)}>
@@ -39,6 +43,7 @@ export const ClearDivider = memo(function ClearDivider({ windowId, profileId, li
           paddingRight: PADDING,
         }}
       >
+        {pinned ? <HoverSlot hovered={foldShown} width="content" reserve="hover" align="start" hover={<FoldButton pinned={pinned} onPress={() => togglePinnedFold(profileId)} />} /> : null}
         <View style={{ flex: 1, height: 1, overflow: "hidden" }}>
           {lineWidth ? (
             <View style={{ position: "absolute", left: 0, bottom: 0, width: lineWidth, height: DASH_BOX_HEIGHT, borderBottomWidth: 1, borderStyle: "dashed", borderColor: theme.pinnedDivider }} />
@@ -56,7 +61,7 @@ export const ClearDivider = memo(function ClearDivider({ windowId, profileId, li
                     title="Tidy"
                     label="Tidy Tabs"
                     onPress={() => tidyTabs(windowId, "tabs", profileId)}
-                    icon={(color) => <Image source={BROOM} style={{ width: 11, height: 11, marginRight: space.xs, tintColor: color }} />}
+                    icon={(color) => tintedImage({ source: BROOM, tint: color, style: { width: 11, height: 11, marginRight: space.xs } })}
                   />
                 ) : null}
                 {tidy && clear ? <Divider vertical thick length={9} style={ACTIONS_DIVIDER} /> : null}
@@ -65,7 +70,7 @@ export const ClearDivider = memo(function ClearDivider({ windowId, profileId, li
                     title="Clear"
                     label="Clear unpinned tabs"
                     onPress={() => closeAllTabs(windowId)}
-                    icon={(color) => <Symbol name="arrow.down" size={9} weight="semibold" color={color} style={{ width: 8, height: 11, marginRight: space.xs }} />}
+                    icon={(color) => drawnSymbol({ name: "arrow.down", size: 9, weight: "semibold", color, style: CLEAR_ARROW })}
                   />
                 ) : null}
               </>
@@ -76,6 +81,32 @@ export const ClearDivider = memo(function ClearDivider({ windowId, profileId, li
     </ContextMenuArea>
   );
 });
+
+function FoldButton({ pinned, onPress }: { pinned: PinnedFold; onPress: () => void }) {
+  const theme = useTheme();
+  const { hovered, hoverProps } = useHover();
+  const label = pinned.collapsed ? PINNED_FOLD_TITLES.expand : PINNED_FOLD_TITLES.collapse;
+  const rotate = pinned.open.interpolate({ inputRange: [0, 1], outputRange: ["-90deg", "0deg"] });
+  return (
+    <View {...hoverProps}>
+      <Pressable tooltip={label} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ expanded: !pinned.collapsed }} onAccessibilityTap={onPress} onPress={onPress}>
+        {({ pressed }) => {
+          const color = pressed ? theme.textSecondary : hovered ? theme.textPrimary : theme.textTertiary;
+          return (
+            <View style={{ height: bandHeight(), flexDirection: "row", alignItems: "center", paddingRight: space.m }}>
+              <Animated.View style={{ width: 10, height: 10, marginRight: space.xs, alignItems: "center", justifyContent: "center", transform: [{ rotate }] }}>
+                {drawnSymbol({ name: "chevron.down", size: 8, weight: "semibold", color, style: CHEVRON })}
+              </Animated.View>
+              <Text size="tiny" weight="medium" color={color}>
+                Pinned
+              </Text>
+            </View>
+          );
+        }}
+      </Pressable>
+    </View>
+  );
+}
 
 function DividerButton({ title, label, onPress, icon }: { title: string; label: string; onPress: () => void; icon: (color: string) => ReactNode }) {
   const theme = useTheme();
@@ -98,3 +129,6 @@ function DividerButton({ title, label, onPress, icon }: { title: string; label: 
     </View>
   );
 }
+
+const CHEVRON = { width: 10, height: 10 } as const;
+const CLEAR_ARROW = { width: 8, height: 11, marginRight: space.xs } as const;

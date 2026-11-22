@@ -163,7 +163,8 @@ void TabState::DidStartNavigation(content::NavigationHandle* handle) {
 void TabState::DidFinishNavigation(content::NavigationHandle* handle) {
   if (handle->HasCommitted() && !handle->IsSameDocument()) {
     if (PageLinks* links = PageLinks::FromWebContents(web_contents())) {
-      links->FrameCommitted(handle->GetRenderFrameHost());
+      links->FrameCommitted(handle->GetRenderFrameHost(),
+                            handle->IsServedFromBackForwardCache());
     }
   }
   if (!handle->IsInPrimaryMainFrame()) {
@@ -294,6 +295,11 @@ void TabState::StopWatchingKeys() {
 void TabState::RenderFrameCreated(content::RenderFrameHost* frame) {
   if (!key_.empty()) {
     WatchKeysOf(frame);
+  }
+  if (!frame->GetParentOrOuterDocument()) {
+    if (PageLinks* links = PageLinks::FromWebContents(web_contents())) {
+      links->RendererReady();
+    }
   }
 }
 

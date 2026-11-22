@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { copyFileSync, existsSync, lstatSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -26,6 +26,14 @@ const onDisk = (windowsPath) => {
   return null;
 };
 
+function within(folder, path, largest) {
+  if (!path.startsWith(`${folder}\\`) || path.split("\\").includes("..")) return null;
+  const file = onDisk(path);
+  if (!file || !existsSync(file)) return null;
+  const s = lstatSync(file);
+  return s.isFile() && s.size <= largest ? file : null;
+}
+
 const cell = (value) => (value instanceof Uint8Array ? { blob: Buffer.from(value).toString("base64") } : typeof value === "bigint" ? Number(value) : value);
 
 export function fakeHost(secrets = {}) {
@@ -51,6 +59,16 @@ export function fakeHost(secrets = {}) {
     async readBase64(path) {
       const file = onDisk(path);
       return file && existsSync(file) ? readFileSync(file).toString("base64") : null;
+    },
+    async readTextWithin(folder, path, largest) {
+      calls.push(["readTextWithin", folder, path, largest]);
+      const file = within(folder, path, largest);
+      return file ? readFileSync(file, "utf8") : null;
+    },
+    async readBase64Within(folder, path, largest) {
+      calls.push(["readBase64Within", folder, path, largest]);
+      const file = within(folder, path, largest);
+      return file ? readFileSync(file).toString("base64") : null;
     },
     async query(path, queries) {
       const opened = await this.openSnapshot(path);

@@ -3,6 +3,7 @@ import { useBrowser } from "./store";
 import { isSilenced, muteState, type MuteState } from "../tabs/mute";
 import { focusedWindowOf } from "../windows/ui";
 import { bookmarkRoots } from "../bookmarks/bookmarks";
+import { shownLiveOf } from "../tabs/tabLive";
 
 export const currentSettings = () => useBrowser.getState().settings;
 export const currentTab = (tabId: string) => useBrowser.getState().tabs[tabId];
@@ -18,7 +19,7 @@ export const currentEngineProfile = (profileId: string) => engineProfile(useBrow
 export const resolvedWindowId = (windowId?: string | null) => resolveWindowId(useBrowser.getState(), windowId);
 export const workspaceSnapshot = () => useBrowser.getState();
 export const downloadsOpenIn = (windowId: string) => !!useBrowser.getState().windowUi[windowId]?.downloadsOpen;
-export const currentLive = (tabId: string) => useBrowser.getState().live[tabId];
+export const currentLive = (tabId: string) => shownLiveOf(useBrowser.getState(), tabId);
 export function currentMuteState(tabId: string): MuteState {
   const s = useBrowser.getState();
   const tab = s.tabs[tabId];

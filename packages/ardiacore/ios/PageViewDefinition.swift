@@ -36,11 +36,7 @@ enum PageViewDefinition {
       AsyncFunction("forceReload") { (view: V) in view.page.reloadIgnoringCache() }.runOnQueue(.main)
       AsyncFunction("stopLoading") { (view: V) in view.page.stopLoading() }.runOnQueue(.main)
       AsyncFunction("focus") { (view: V) in view.page.focusPage() }.runOnQueue(.main)
-      AsyncFunction("focusIfUnfocused") { (view: V) -> Bool in
-        guard let window = view.window, window.firstResponder == nil || window.firstResponder === window else { return false }
-        view.page.focusPage()
-        return true
-      }.runOnQueue(.main)
+      AsyncFunction("focusIfUnfocused") { (view: V) -> Bool in view.page.focusPageIfUnfocused() }.runOnQueue(.main)
       AsyncFunction("setMuted") { (view: V, muted: Bool) in view.page.setMuted(muted) }.runOnQueue(.main)
       AsyncFunction("zoomStep") { (view: V, direction: Int) in view.page.zoomStep(direction) }.runOnQueue(.main)
       AsyncFunction("find") { (view: V, text: String, forward: Bool, findNext: Bool) in
@@ -77,12 +73,17 @@ enum PageViewDefinition {
         view.page.takeControlPress(clickAt: clickAt ?? 0, control: control ?? 0)
       }.runOnQueue(.main)
       AsyncFunction("exitPictureInPicture") { (view: V) in view.page.exitPictureInPicture() }.runOnQueue(.main)
+      AsyncFunction("armElementPick") { (view: V) -> Double in view.page.armElementPick() }.runOnQueue(.main)
+      AsyncFunction("takeElementPick") { (view: V, armed: Double) -> Bool in view.page.takeElementPick(armed) }.runOnQueue(.main)
 
       AsyncFunction("getSecurityInfo") { (view: V, promise: Promise) in
         view.page.securityInfo { promise.resolve($0) }
       }.runOnQueue(.main)
       AsyncFunction("pageCookies") { (view: V, urls: [String], promise: Promise) in
         view.page.pageCookies(urls) { promise.resolve($0 ?? []) }
+      }.runOnQueue(.main)
+      AsyncFunction("siteData") { (view: V, request: [String: Any], promise: Promise) in
+        view.page.siteData(request) { promise.resolve($0) }
       }.runOnQueue(.main)
       AsyncFunction("openBlockedPopup") { (view: V, id: String, always: Bool?) in
         view.page.openBlockedPopup(id, always: always ?? false)
@@ -99,6 +100,9 @@ enum PageViewDefinition {
       }.runOnQueue(.main)
       AsyncFunction("resolveAutofillPrompt") { (view: V, promptId: Int, action: String) in
         view.page.resolveAutofillPrompt(promptId, action: action)
+      }.runOnQueue(.main)
+      AsyncFunction("answerAutofillPrompt") { (view: V, promptId: Int, action: String) -> Bool in
+        view.page.answerAutofillPrompt(promptId, action: action)
       }.runOnQueue(.main)
       AsyncFunction("executeExtensionAction") { (view: V, extensionId: String) -> String? in
         view.page.executeExtensionAction(extensionId)

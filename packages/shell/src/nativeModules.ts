@@ -13,6 +13,7 @@ import type { CalendarNative, KeychainNative } from "./live";
 import type { MenusNative } from "./menus";
 import type { LocationNative } from "./location";
 import type { NotificationsNative } from "./notifications";
+import type { PluginsNative } from "./plugins";
 import type { ReportNative } from "./report";
 import type { ScriptingNative } from "./scripting";
 import type { SystemSignalsNative } from "./systemSignals";
@@ -23,6 +24,7 @@ import type { UpdaterNative } from "./updater";
 import type { UserScriptsNative } from "./userScripts";
 import type { WindowsNative } from "./windows";
 import type { DockSelectionNative, GlassEffectNative } from "./views";
+import type { PeekStageNative } from "./peekStage";
 
 export type ShellNativeModules = {
   ArdiaShell: ShellNative;
@@ -45,11 +47,13 @@ export type ShellNativeModules = {
   ArdiaInlineCompletion: InlineCompletionNative;
   ArdiaTranslate: TranslationModule;
   ArdiaMagnifyArea: MagnifyAreaNative;
+  ArdiaPeekStage: PeekStageNative;
   ArdiaFileDrop: FileDropNative;
   ArdiaCli: CliNative;
   ArdiaUserScripts: UserScriptsNative;
   ArdiaConfig: ConfigNative;
   ArdiaAutomation: AutomationNative;
+  ArdiaPlugins: PluginsNative;
   ArdiaSystemSignals: SystemSignalsNative;
   ArdiaReport: ReportNative;
   ArdiaTelemetryLocal: TelemetryLocalNative;

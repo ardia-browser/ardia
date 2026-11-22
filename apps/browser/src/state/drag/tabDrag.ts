@@ -1,5 +1,5 @@
 import { dragPreview, windowFrame, type DragPreviewShape } from "../../platform/windows";
-import { hapticTick } from "../../platform/haptics";
+import { reorderTick } from "./reorderTick";
 import { create } from "zustand";
 import { focus } from "../browser/actions";
 import { lastPicture, startTabPictures } from "../tabs/tabPictures";
@@ -94,7 +94,7 @@ export function updateTabDrag(x: number, y: number, lifted: boolean | null = nul
   const { session } = drag;
   const s = useBrowser.getState();
   const { outside, overWindow } = windowUnder(s, drag.windowId, x, y, session.liveFrame);
-  if (overWindow && overWindow !== drag.overWindow) hapticTick();
+  if (overWindow && overWindow !== drag.overWindow) reorderTick();
   const screen = overWindow ? screenPoint(s, drag.windowId, x, y, session.liveFrame) : null;
   const over = overWindow ? s.windows[overWindow]?.frame : null;
   const overPoint: [number, number] | null = screen && over ? rootPointIn(over, screen) : null;
@@ -208,8 +208,7 @@ export function endTabDrag(): boolean {
   }
   if (target && tabId) {
     dragPreview.end();
-    dropTabIntoSplit(tabId, target.tabId, target.side);
-    return true;
+    return !!dropTabIntoSplit(tabId, target.tabId, target.side);
   }
   if (!(outside || onPage)) {
     if (shown) dragPreview.end();

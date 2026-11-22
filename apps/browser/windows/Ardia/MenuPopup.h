@@ -1,10 +1,12 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <cstdio>
 #include <deque>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <optional>
 #include <set>
 #include <sstream>
@@ -17,6 +19,7 @@
 #include "MenuStore.h"
 #include "NativeModules.h"
 #include "LaunchConfig.h"
+#include "ModalThread.h"
 #include "Paths.h"
 
 namespace Ardia::Menus {
@@ -307,38 +310,97 @@ inline std::string HandleText(HWND hwnd) {
   return text;
 }
 
-inline std::optional<std::string> TrackPopup(std::vector<PopupItem> const &items, HWND owner) noexcept {
+struct MenuPageReturn {
+  HWND page = nullptr;
+  HWND app = nullptr;
+  std::string windowId;
+};
+
+struct Popup {
+  HWND owner = nullptr;
+  HMENU menu = nullptr;
+  std::vector<std::string> choices;
+  POINT point{};
+  UINT flags = 0;
+  BOOL chosen = 0;
+  DWORD error = 0;
+  std::optional<MenuPageReturn> pageLeft;
+};
+
+inline std::atomic<int> &OpenMenus() noexcept {
+  static std::atomic<int> count{0};
+  return count;
+}
+
+inline std::shared_ptr<Popup> PreparePopup(std::vector<PopupItem> const &items, HWND owner) noexcept {
   try {
     if (!owner || !IsWindow(owner)) {
       MenuLog("pop-up menu not shown: no Ardia window to own it");
-      return std::nullopt;
+      return nullptr;
     }
-    std::vector<std::string> choices;
-    HMENU menu = BuildPopup(items, choices);
-    if (!menu) {
+    auto popup = std::make_shared<Popup>();
+    popup->owner = owner;
+    popup->menu = BuildPopup(items, popup->choices);
+    if (!popup->menu) {
       MenuLog("pop-up menu not shown: CreatePopupMenu failed with error " + std::to_string(GetLastError()));
-      return std::nullopt;
+      return nullptr;
     }
-    POINT point{};
-    GetCursorPos(&point);
+    GetCursorPos(&popup->point);
     bool rightButtonDown = (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
     bool wasForeground = GetForegroundWindow() == owner;
-    BOOL madeForeground = SetForegroundWindow(owner);
-    MenuLog("pop-up menu shown at " + std::to_string(point.x) + "," + std::to_string(point.y) + " with " + std::to_string(choices.size()) +
-            " choices, owner " + HandleText(owner) + (wasForeground ? " (foreground)" : madeForeground ? " (brought to the foreground)" : " (not foreground)") +
-            (rightButtonDown ? ", right button still down" : ""));
+    MenuLog("pop-up menu shown at " + std::to_string(popup->point.x) + "," + std::to_string(popup->point.y) + " with " + std::to_string(popup->choices.size()) +
+            " choices, owner " + HandleText(owner) + (wasForeground ? " (foreground)" : " (not foreground)") + (rightButtonDown ? ", right button still down" : ""));
     UINT align = GetSystemMetrics(SM_MENUDROPALIGNMENT) ? TPM_RIGHTALIGN : TPM_LEFTALIGN;
-    UINT flags = TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY | TPM_TOPALIGN | align;
-    SetLastError(0);
-    BOOL chosen = TrackPopupMenuEx(menu, flags, point.x, point.y, owner, nullptr);
-    DWORD error = GetLastError();
-    PostMessageW(owner, WM_NULL, 0, 0);
-    DestroyMenu(menu);
-    if (chosen <= 0 || static_cast<size_t>(chosen) > choices.size()) {
-      MenuLog(error ? "pop-up menu failed with error " + std::to_string(error) : std::string{"pop-up menu dismissed"});
+    popup->flags = TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY | TPM_TOPALIGN | align;
+    return popup;
+  } catch (...) {
+    return nullptr;
+  }
+}
+
+inline bool ForegroundIsOurs() noexcept {
+  DWORD process = 0;
+  GetWindowThreadProcessId(GetForegroundWindow(), &process);
+  return process == GetCurrentProcessId();
+}
+
+inline void TrackOnThisThread(Popup &popup, bool takesForeground) noexcept {
+  DialogParts::ModalWatch watch(popup.owner, "pop-up menu");
+  DialogParts::ModalParent parent(popup.owner, takesForeground, false);
+  HWND window = parent.Handle();
+  if (!window) return;
+  DialogParts::ModalWatch::OnAbandon([] { EndMenu(); });
+  DWORD thread = GetCurrentThreadId();
+  DialogParts::ModalRegistry &registry = DialogParts::ModalRegistry::Shared();
+  if (takesForeground) {
+    registry.menuThread = thread;
+    if (!SetForegroundWindow(window) || !ForegroundIsOurs()) {
+      MenuLog("pop-up menu not shown: Ardia is no longer in front");
+      parent.Release();
+      registry.menuThread.compare_exchange_strong(thread, 0);
+      return;
+    }
+  }
+  OpenMenus()++;
+  DialogParts::ModalWatch::NoteShown();
+  SetLastError(0);
+  popup.chosen = TrackPopupMenuEx(popup.menu, popup.flags, popup.point.x, popup.point.y, window, nullptr);
+  popup.error = GetLastError();
+  OpenMenus()--;
+  PostMessageW(window, WM_NULL, 0, 0);
+  DialogParts::ModalWatch::Disarm();
+  parent.Release();
+  registry.menuThread.compare_exchange_strong(thread, 0);
+}
+
+inline std::optional<std::string> ChoiceOf(Popup const &popup) noexcept {
+  try {
+    DestroyMenu(popup.menu);
+    if (popup.chosen <= 0 || static_cast<size_t>(popup.chosen) > popup.choices.size()) {
+      MenuLog(popup.error ? "pop-up menu failed with error " + std::to_string(popup.error) : std::string{"pop-up menu dismissed"});
       return std::nullopt;
     }
-    std::string choice = choices[static_cast<size_t>(chosen) - 1];
+    std::string choice = popup.choices[static_cast<size_t>(popup.chosen) - 1];
     MenuLog("pop-up menu chose " + choice);
     return choice;
   } catch (...) {

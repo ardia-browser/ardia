@@ -3,6 +3,7 @@ import test from "node:test";
 import { heldModifiers } from "./clickModifiers.ts";
 import { alternateShown, hasSymbolColumn, menuButtonPresses, menuShown, pickMenuItem, shownMenu, showMenu } from "./menus.tsx";
 import { notingPageFocus } from "./pageFocus.ts";
+import { linuxShellMethod } from "./shellMethods.ts";
 
 const pageTakesFocus = () => notingPageFocus({}).onPageFocus();
 
@@ -105,4 +106,12 @@ test("showMenu takes the anchor point as its second argument as well as after ma
   assert.deepEqual([shownMenu().x, shownMenu().y], [50, 60]);
   pageTakesFocus();
   assert.equal(await withCallback, null);
+});
+
+test("Linux lists no captured page menus and has no menu bar catalog, so the control socket's menu methods answer truthfully", async () => {
+  assert.deepEqual(await linuxShellMethod("openSurfaces")(), []);
+  assert.equal(await linuxShellMethod("capturePageMenus")(true), undefined);
+  for (const [method, args] of [["menuBar", []], ["performMenuBarItem", ["cmd:newTab", "main"]], ["dismissSurface", ["m1"]]]) {
+    await assert.rejects(linuxShellMethod(method)(...args), (error) => error.code === "ERR_UNAVAILABLE", method);
+  }
 });

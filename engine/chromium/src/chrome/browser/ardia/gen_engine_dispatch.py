@@ -3,7 +3,7 @@ import pathlib
 import re
 
 
-CALL = re.compile(r"^AC_(?:ENGINE|PROFILE|ARGS)_CALL\((ac_[a-z0-9_]+)\b[^;{]*\{", re.MULTILINE)
+CALL = re.compile(r"^AC_(?:ENGINE|PROFILE|ARGS)_CALL\(\s*(ac_\w+)\b[^;{]*\{", re.MULTILINE)
 
 
 def service_names(paths):

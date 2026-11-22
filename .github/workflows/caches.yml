@@ -45,4 +45,13 @@ jobs:
           --newest-only windows-app-x64-
           --newest-only windows-app-arm64-
           --newest-only swiftpm-xcode-
-          --newest-only turbo- | tee -a "$GITHUB_STEP_SUMMARY"
+          --newest-only phone-pods-
+          --newest-only turbo-
+          --newest-only ardia-test-tsx-1-of-8-
+          --newest-only ardia-test-tsx-2-of-8-
+          --newest-only ardia-test-tsx-3-of-8-
+          --newest-only ardia-test-tsx-4-of-8-
+          --newest-only ardia-test-tsx-5-of-8-
+          --newest-only ardia-test-tsx-6-of-8-
+          --newest-only ardia-test-tsx-7-of-8-
+          --newest-only ardia-test-tsx-8-of-8- | tee -a "$GITHUB_STEP_SUMMARY"

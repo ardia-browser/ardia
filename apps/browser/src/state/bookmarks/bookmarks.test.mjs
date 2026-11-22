@@ -75,6 +75,43 @@ test("bookmarks.json moves into Chrome once, each bookmark under the UUID sync r
   assert.equal(await migrateBookmarksFile({ keepMs: 0 }), "none");
 });
 
+test("bookmarks.json waits for Chrome's bookmark model to load before it applies, and a model that never answers keeps the file for the next launch", async () => {
+  S().hydrate({});
+  stub.docs.clear();
+  stub.bookmarkDbs.clear();
+  stub.docs.set("bookmarks.json", JSON.stringify(legacyFile()));
+  stub.bookmarkModel.loading.add("");
+  assert.equal(await migrateBookmarksFile({ keepMs: 0 }), "moved", "applies only once bookmarks.tree has answered");
+  assert.ok(stub.chromeBookmarks("").has(bookmarkUuidFor("bm-b")));
+  assert.equal(stub.docs.has("bookmarks.json"), false);
+
+  stub.bookmarkDbs.clear();
+  stub.docs.set("bookmarks.json", JSON.stringify(legacyFile()));
+  stub.bookmarkModel.loading.add("");
+  stub.bookmarkModel.treeFails = true;
+  assert.equal(await migrateBookmarksFile({ keepMs: 0 }), "kept", "a failed tree call fails the migration for this launch");
+  assert.equal(stub.docs.has("bookmarks.json"), true);
+  assert.equal(stub.chromeBookmarks("").has(bookmarkUuidFor("bm-b")), false, "nothing is applied into a model that may still be loading");
+  stub.bookmarkModel.treeFails = false;
+
+  stub.bookmarkModel.treeHangs = true;
+  assert.equal(await migrateBookmarksFile({ keepMs: 0, modelWaitMs: 20 }), "kept", "a tree call that never answers gives up for this launch");
+  assert.equal(stub.docs.has("bookmarks.json"), true);
+  stub.bookmarkModel.treeHangs = false;
+
+  assert.equal(await migrateBookmarksFile({ keepMs: 0 }), "moved", "the next launch moves it");
+  assert.equal(stub.docs.has("bookmarks.json"), false);
+  stub.bookmarkModel.loading.clear();
+});
+
+test("a launch with no bookmarks.json asks Chrome for nothing", async () => {
+  S().hydrate({});
+  stub.docs.clear();
+  stub.bookmarkModel.treeFails = true;
+  assert.equal(await migrateBookmarksFile({ keepMs: 0 }), "none");
+  stub.bookmarkModel.treeFails = false;
+});
+
 test("the store's tree and Chrome's stay alike: the app's edits go as ops, an extension's come back", async () => {
   S().hydrate({});
   stub.docs.clear();

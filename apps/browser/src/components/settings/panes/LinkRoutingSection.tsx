@@ -79,7 +79,7 @@ function RuleRow({ rule, index, last, profiles }: { rule: AirTrafficRule; index:
   };
   return (
     <Row icon={null} title={`${fromLabel(rule.from)} · ${conditionLabel(rule.when)} → ${target ?? "a deleted profile"}`} description={ruleProblem(target, groupGone)}>
-      <Toggle value={rule.enabled} accessibilityLabel="Use this rule" onChange={(enabled) => updateAirTrafficRule(rule.id, { enabled })} />
+      <Toggle value={rule.enabled} accessibilityLabel="Use this rule" onChange={(enabled) => void updateAirTrafficRule(rule.id, { enabled })} />
       <Button variant="icon" icon="pencil" size="m" onPress={() => showSettingsSheet(<RuleSheet rule={rule} />)} tooltip="Edit" />
       <Button variant="icon" icon="ellipsis.circle" size="m" onPress={() => void more()} tooltip="Move or Delete" />
       <Button variant="icon" icon="trash" size="m" onPress={() => removeAirTrafficRule(rule.id)} tooltip="Delete" />

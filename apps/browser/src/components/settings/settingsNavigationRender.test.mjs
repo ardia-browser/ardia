@@ -7,7 +7,7 @@ const localRequire = createRequire(import.meta.url);
 const ts = localRequire("typescript");
 const source = readFileSync(new URL("./SettingsWindow.tsx", import.meta.url), "utf8");
 const javascript = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
-const panes = ["general", "profiles", "tabs", "appearance", "automations", "shortcuts", "advanced"];
+const panes = ["general", "profiles", "tabs", "appearance", "automations", "plugins", "shortcuts", "advanced"];
 const dummy = () => null;
 const unknownModule = new Proxy({}, { get: () => dummy });
 
@@ -22,6 +22,7 @@ function fixture() {
     "../ui": ui,
     "../ui/theme": { useTheme: () => ({}) },
     "../../state/browser/hooks": { useProfile: () => undefined },
+    "../../state/plugins/hooks": { usePluginTitle: id => id ? `Plugin: ${id}` : null },
     "../../state/settings/paneData": { usePaneLoaded: () => false, preparePane: async () => {} },
     "../../state/settings/settingsWindows": { useSettingsNav: () => nav, SETTINGS_WINDOW_ID: "settings" },
     "../../state/settings/searchState": { useSettingsSearch: select => select({ query, reveal: null }) },
@@ -82,4 +83,13 @@ test("search hides navigation rows without making the content selection stale", 
   app.search("");
   const selected = elements(app.render()).filter(node => node.type?.name === "SidebarItem" && node.props.selected);
   assert.deepEqual(selected.map(node => node.props.title), ["appearance"]);
+});
+
+test("plugin details switch with their title while the pane loads", () => {
+  const app = fixture();
+  app.navigate("plugins", null, "example");
+  const tree = app.render();
+  assert.equal(content(tree)?.props.pane, "plugins");
+  assert.equal(content(tree)?.props.detail, "example");
+  assert.ok(elements(tree).some(node => node.props?.children === "Plugin: example"));
 });

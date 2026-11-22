@@ -373,7 +373,7 @@ test("a page process that goes away sends its reason, exit code, visibility and 
 });
 
 test("a lost-hover episode sends only its enums, flags and duration, capped per session", async () => {
-  const episode = { reason: "halfActive", halfActive: true, appActive: false, runningActive: true, frontmost: true, menuActive: true, trigger: "click", keyWindow: "blockerPage", mainWindow: "none", preventKey: true, canKey: false, windowMain: true, overPage: true, cover: "none", coverClear: false, healed: true, healWorked: true, endedBy: "heal", seconds: 3.4, episode: 1 };
+  const episode = { reason: "halfActive", halfActive: true, appActive: false, runningActive: true, frontmost: true, menuActive: true, trigger: "click", keyWindow: "blockerPage", mainWindow: "none", preventKey: true, canKey: false, windowMain: true, overPage: true, cover: "none", coverClear: false, healed: true, healWorked: true, endedBy: "heal", seconds: 3.4, episode: 1, epoch: client.consentEpoch() };
   diagnostics.trackHoverLost(episode);
   diagnostics.trackHoverLost({ ...episode, reason: "https://private.example", keyWindow: "Title of a page", endedBy: 7, healWorked: null, seconds: -5, trigger: "drag" });
   await new Promise((resolve) => setTimeout(resolve, 1100));
@@ -395,6 +395,17 @@ test("a lost-hover episode sends only its enums, flags and duration, capped per 
   assert.equal(healed.heal_worked, true);
   assert.equal(healed.ended_by, "heal");
   assert.equal(healed.lost_seconds, 3);
+  assert.equal(healed.responder, "unknown");
+  assert.equal(healed.cover_window, "none");
+  diagnostics.trackHoverLost({ ...episode, reason: "coveredByWindow", responder: "window", coverWindow: "other" });
+  diagnostics.trackHoverLost({ ...episode, responder: "Some View Class" });
+  await new Promise((resolve) => setTimeout(resolve, 1100));
+  await client.saveQueueNow();
+  const [covered, oddResponder] = events("page_hover_lost").slice(2).map((e) => e.properties);
+  assert.equal(covered.reason, "coveredByWindow");
+  assert.equal(covered.responder, "window");
+  assert.equal(covered.cover_window, "other");
+  assert.equal(oddResponder.responder, "unknown");
   assert.equal(odd.reason, "unknown");
   assert.equal(odd.key_window, "unknown");
   assert.equal(odd.ended_by, "unknown");
@@ -405,6 +416,57 @@ test("a lost-hover episode sends only its enums, flags and duration, capped per 
   await new Promise((resolve) => setTimeout(resolve, 1100));
   await client.saveQueueNow();
   assert.equal(events("page_hover_lost").length, 20);
+});
+
+test("an unpainted window sends its enums, flags, counts and reason bits, capped per session", async () => {
+  const { useBrowser } = await import("../browser/store.ts");
+  const record = { window: "private", trigger: "seen", seen: true, occlusion: "visible", overruled: false, appActive: true, windows: 2, views: 3, unpainted: 2, reasons: (1 << 0) | (1 << 4) | (1 << 7) };
+  diagnostics.trackWindowUnpainted({ ...record, epoch: client.consentEpoch() });
+  diagnostics.trackWindowUnpainted({ epoch: client.consentEpoch(), window: "https://private.example", trigger: "Title of a page", seen: 1, occlusion: 7, overruled: "yes", appActive: "yes", windows: 1e9, views: -4, unpainted: 1e9, reasons: "all", url: "https://private.example", title: "Inbox", profile: "Work" });
+  const settings = useBrowser.getState().settings;
+  useBrowser.setState({ settings: { ...settings, shareTabsAcrossWindows: true } });
+  diagnostics.trackWindowUnpainted({ ...record, epoch: client.consentEpoch() });
+  useBrowser.setState({ settings });
+  await new Promise((resolve) => setTimeout(resolve, 1100));
+  await client.saveQueueNow();
+  const [first, odd, shared] = events("window_unpainted").map((e) => e.properties);
+  assert.equal(first.app_active, true);
+  assert.equal(first.windows, 2);
+  assert.equal(first.share_tabs, false);
+  assert.equal(shared.share_tabs, true);
+  assert.equal(odd.app_active, false);
+  assert.equal(odd.windows, 1000);
+  assert.equal(first.window, "private");
+  assert.equal(first.trigger, "seen");
+  assert.equal(first.seen, true);
+  assert.equal(first.occlusion, "visible");
+  assert.equal(first.overruled, false);
+  assert.equal(first.views, 3);
+  assert.equal(first.unpainted, 2);
+  assert.equal(first.alpha_zero, true);
+  assert.equal(first.view_hidden, false);
+  assert.equal(first.page_hidden, false);
+  assert.equal(first.page_detached, false);
+  assert.equal(first.frame_hold_awaiting, true);
+  assert.equal(first.stand_in_lent, false);
+  assert.equal(first.stand_in_leaving, false);
+  assert.equal(first.veil_up, true);
+  assert.equal(odd.window, "unknown");
+  assert.equal(odd.trigger, "unknown");
+  assert.equal(odd.seen, false);
+  assert.equal(odd.occlusion, "unknown");
+  assert.equal(odd.overruled, false);
+  assert.equal(odd.views, 0);
+  assert.equal(odd.unpainted, 1000);
+  assert.equal(odd.alpha_zero, false);
+  assert.equal(odd.veil_up, false);
+  assert.equal(JSON.stringify(odd).includes("private.example"), false);
+  assert.equal(JSON.stringify(odd).includes("Inbox"), false);
+  assert.equal(JSON.stringify(odd).includes("Work"), false);
+  for (let i = 0; i < 30; i++) diagnostics.trackWindowUnpainted({ ...record, epoch: client.consentEpoch() });
+  await new Promise((resolve) => setTimeout(resolve, 1100));
+  await client.saveQueueNow();
+  assert.equal(events("window_unpainted").length, 20);
 });
 
 test("tab presses count clicks, drags turned into clicks, drags and presses that got no answer", async () => {
@@ -429,10 +491,17 @@ test("tab presses count clicks, drags turned into clicks, drags and presses that
   presses.noteRangeSelect(false);
   presses.notePagePressRefused();
   presses.noteDragWithoutDrop();
-  presses.emitTabPresses();
+  for (const kind of ["gap", "gap", "split_left", "split_right", "split_right", "split_pinned", "split_unpinned", "split_unpinned", "tile", "other_profile", "other_profile", "profile_icon"]) presses.noteSidebarDrop(kind);
+  presses.noteDragProfileSwitch("icon");
+  presses.noteDragProfileSwitch(null);
+  presses.noteDragProfileSwitch("icon");
+  presses.noteDragProfileSwitch("edge");
+  presses.emitTabPresses(client.consentToken());
   await client.saveQueueNow();
   const props = events("tab_presses").at(-1).properties;
   assert.equal(props.drags_without_drop, 1);
+  assert.deepEqual([props.drops_gap, props.drops_split_left, props.drops_split_right, props.drops_split_pinned, props.drops_split_unpinned, props.drops_tile], [2, 1, 2, 1, 2, 1]);
+  assert.deepEqual([props.drops_other_profile, props.drops_profile_icon, props.drag_profile_switches, props.drag_profile_holds, props.drag_profile_edge_holds], [2, 1, 4, 2, 1]);
   assert.deepEqual([props.range_selects, props.range_from_shown], [2, 1]);
   assert.deepEqual([props.repeat_presses, props.repeat_on_new_tab, props.repeat_gap_ms_p50, props.repeat_landed_on], [1, 1, 600, "RCTView<Surface"]);
   assert.equal(props.lost_releases, 2);
@@ -447,16 +516,16 @@ test("tab presses count clicks, drags turned into clicks, drags and presses that
   assert.equal(props.page_refused, 1);
   assert.equal(props.page_click_n, 1);
   assert.ok(props.page_click_ms_p50 >= 0 && props.page_click_ms_p50 < 1000);
-  presses.emitTabPresses();
+  presses.emitTabPresses(client.consentToken());
   await client.saveQueueNow();
   assert.equal(events("tab_presses").length, 1);
   stub.pressesWithoutRelease.count = 3;
-  presses.emitTabPresses();
+  presses.emitTabPresses(client.consentToken());
   await client.saveQueueNow();
   assert.equal(events("tab_presses").length, 2);
   assert.deepEqual([events("tab_presses").at(-1).properties.lost_releases, events("tab_presses").at(-1).properties.presses], [1, 0]);
   presses.noteRangeSelect(true);
-  presses.emitTabPresses();
+  presses.emitTabPresses(client.consentToken());
   await client.saveQueueNow();
   assert.equal(events("tab_presses").length, 3, "a ⇧-click whose press went out in the previous hour still sends its range");
   assert.deepEqual([events("tab_presses").at(-1).properties.range_selects, events("tab_presses").at(-1).properties.presses], [1, 0]);
@@ -465,7 +534,7 @@ test("tab presses count clicks, drags turned into clicks, drags and presses that
 test("an hour with only refused page presses still sends them", async () => {
   presses.notePagePressRefused();
   presses.notePagePressRefused();
-  presses.emitTabPresses();
+  presses.emitTabPresses(client.consentToken());
   await client.saveQueueNow();
   assert.equal(events("tab_presses").length, 4);
   const props = events("tab_presses").at(-1).properties;
@@ -482,11 +551,130 @@ test("an hour with only refused page presses still sends them", async () => {
 
 test("an hour with only a drag let go with no place to drop still sends it", async () => {
   presses.noteDragWithoutDrop();
-  presses.emitTabPresses();
+  presses.emitTabPresses(client.consentToken());
   await client.saveQueueNow();
   assert.equal(events("tab_presses").length, 5);
   const props = events("tab_presses").at(-1).properties;
   assert.deepEqual([props.drags_without_drop, props.presses, props.drags], [1, 0, 0]);
+});
+
+const touch = (x, y, startTimeStamp) => ({ nativeEvent: { identifier: "0", pageX: x, pageY: y }, touchHistory: { touchBank: [{ startTimeStamp }] } });
+const sent = async () => {
+  presses.emitTabPresses(client.consentToken());
+  await client.saveQueueNow();
+  return events("tab_presses").at(-1).properties;
+};
+
+test("a click endHeldTabPress drops is counted under the condition that dropped it, with no tab id", async () => {
+  const held = await import("../sidebar/heldTabPress.ts");
+  const hold = (tabId, start) => held.holdTabPress("win-a", tabId, touch(10, 10, start));
+  hold("tab-1", 100);
+  held.endHeldTabPress(["tab-1"], null);
+  hold("tab-2", 200);
+  held.endHeldTabPress(["other"], touch(10, 10, 200));
+  hold("tab-3", undefined);
+  held.endHeldTabPress(["tab-3"], touch(10, 10, 300));
+  hold("tab-4", 400);
+  held.endHeldTabPress(["tab-4"], touch(10, 10, 999));
+  hold("tab-5", 500);
+  held.endHeldTabPress([], null);
+  hold("tab-6", 600);
+  held.endHeldTabPress(["tab-6"], touch(10, 10, 600));
+
+  const props = await sent();
+  assert.equal(props.presses, 6);
+  assert.equal(props.drags, 5);
+  assert.equal(props.drag_clicks, 1);
+  assert.equal(props.drop_no_release, 2);
+  assert.equal(props.drop_not_dragged, 1);
+  assert.equal(props.drop_no_start, 1);
+  assert.equal(props.drop_start_mismatch, 1);
+  assert.equal(props.drop_no_release + props.drop_not_dragged + props.drop_no_start + props.drop_start_mismatch, props.drags);
+  assert.ok(!JSON.stringify(props).includes("tab-"), "no tab id goes out with the counts");
+});
+
+test("presses Pressable ends without onPress are counted with the window's key state and the drift, whichever of onPress and onPressOut comes first", async () => {
+  const held = await import("../sidebar/heldTabPress.ts");
+  const { useBrowser } = await import("../browser/store.ts");
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+  useBrowser.setState((s) => ({ ui: { ...s.ui, focusOrder: ["win-a", "win-b"] } }));
+  const hold = (windowId, tabId, start) => held.holdTabPress(windowId, tabId, touch(10, 10, start));
+
+  const away = hold("win-b", "tab-1", 100);
+  held.pressOutTabPress(away, touch(17, 10, 100));
+  held.endHeldTabPress([], null);
+  const slow = hold("win-a", "tab-2", 200);
+  held.pressOutTabPress(slow, touch(11, 10, 200));
+  held.clickHeldTabPress("win-a", "tab-2", touch(11, 10, 200), slow);
+  const quick = hold("win-a", "tab-3", 300);
+  held.clickHeldTabPress("win-a", "tab-3", touch(10, 12, 300), quick);
+  held.pressOutTabPress(quick, touch(10, 12, 300));
+  held.pressOutTabPress(quick, touch(10, 12, 300));
+  held.pressOutTabPress(hold("win-a", "tab-4", 400), { nativeEvent: {} });
+  held.pressOutTabPress(hold("win-a", "tab-5", 500), touch(40, 10, 500));
+  await tick();
+
+  const props = await sent();
+  assert.equal(props.presses, 5);
+  assert.equal(props.clicks, 2);
+  assert.equal(props.press_out_no_press, 3);
+  assert.equal(props.unfocused_presses, 1);
+  assert.equal(props.unfocused_no_press, 1);
+  assert.deepEqual([props.drift_lt5, props.drift_5_9, props.drift_10_plus, props.drift_unknown], [2, 1, 1, 1]);
+  assert.deepEqual([props.no_press_drift_lt5, props.no_press_drift_5_9, props.no_press_drift_10_plus, props.no_press_drift_unknown], [0, 1, 1, 1]);
+  assert.ok(!JSON.stringify(props).includes("tab-"), "no tab id goes out with the counts");
+});
+
+test("a press that leaves the tab and comes back before release is one press, and its click counts no lost click", async () => {
+  const held = await import("../sidebar/heldTabPress.ts");
+  const first = held.holdTabPress("win-a", "tab-1", touch(10, 10, 700));
+  held.pressOutTabPress(first, touch(40, 10, 700));
+  const back = held.holdTabPress("win-a", "tab-1", touch(12, 10, 700), first);
+  assert.equal(back, first, "the same gesture keeps its record");
+  held.pressOutTabPress(back, touch(12, 10, 700));
+  held.clickHeldTabPress("win-a", "tab-1", touch(12, 10, 700), back);
+  const early = held.holdTabPress("win-a", "tab-2", touch(10, 10, 710));
+  held.pressOutTabPress(early, touch(40, 10, 710));
+  const again = held.holdTabPress("win-a", "tab-2", touch(10, 10, 710), early);
+  held.clickHeldTabPress("win-a", "tab-2", touch(10, 10, 710), again);
+  held.pressOutTabPress(again, touch(10, 10, 710));
+
+  const props = await sent();
+  assert.equal(props.presses, 2);
+  assert.equal(props.clicks, 2);
+  assert.equal(props.press_out_no_press, 0);
+  assert.deepEqual([props.drift_lt5, props.drift_5_9, props.drift_10_plus, props.drift_unknown], [2, 0, 0, 0], "one drift per gesture, from where it was released");
+});
+
+test("a press released off the tab counts one lost click, at the next press or when the hour's event is built", async () => {
+  const held = await import("../sidebar/heldTabPress.ts");
+  const off = held.holdTabPress("win-a", "tab-1", touch(10, 10, 800));
+  held.pressOutTabPress(off, touch(40, 10, 800));
+  assert.equal(presses.devTabPresses().press_out_no_press, 0, "not counted while Pressable may still answer");
+  const next = held.holdTabPress("win-a", "tab-2", touch(10, 10, 900), off);
+  assert.equal(presses.devTabPresses().press_out_no_press, 1, "the next gesture settles it");
+  held.pressOutTabPress(next, touch(17, 10, 900));
+
+  const props = await sent();
+  assert.equal(props.presses, 2);
+  assert.equal(props.press_out_no_press, 2);
+  assert.deepEqual([props.no_press_drift_lt5, props.no_press_drift_5_9, props.no_press_drift_10_plus, props.no_press_drift_unknown], [0, 1, 1, 0]);
+  assert.equal(presses.devTabPresses().unansweredOut, false);
+});
+
+test("a lost click still waiting when the hour's event is built goes out in that event, even with no press that hour", async () => {
+  const held = await import("../sidebar/heldTabPress.ts");
+  const press = held.holdTabPress("win-a", "tab-1", touch(10, 10, 1000));
+  const before = await sent();
+  assert.equal(before.presses, 1);
+  assert.equal(before.press_out_no_press, 0);
+  held.pressOutTabPress(press, touch(40, 10, 1000));
+  const count = events("tab_presses").length;
+  const props = await sent();
+  assert.equal(events("tab_presses").length, count + 1, "the hour with only the lost click still sends");
+  assert.equal(props.presses, 0);
+  assert.equal(props.press_out_no_press, 1);
+  assert.equal(props.no_press_drift_10_plus, 1);
 });
 
 test("turning sharing off forgets pending presses and samples, so they never go out under the next install id", async () => {
@@ -501,23 +689,27 @@ test("turning sharing off forgets pending presses and samples, so they never go 
   assert.equal(diagnostics.contextSamples().length, 0);
   presses.notePagePress("t9");
   presses.notePressEnded("click", "t9");
-  presses.emitTabPresses();
+  presses.emitTabPresses(client.consentToken());
   await client.saveQueueNow();
   assert.equal(events("tab_presses").length, 0);
-  assert.deepEqual(presses.devTabPresses(), { presses: 0, down_switches: 0, clicks: 0, drag_clicks: 0, drags: 0, drags_without_drop: 0, unanswered: 0, range_selects: 0, range_from_shown: 0, page_refused: 0, pending: false, toPageClick: 0, held: 0 });
+  assert.deepEqual(Object.values(presses.devTabPresses()).filter((n) => n !== 0 && n !== false), []);
+  assert.ok("drop_start_mismatch" in presses.devTabPresses() && "no_press_drift_unknown" in presses.devTabPresses() && "page_refused" in presses.devTabPresses() && "drags_without_drop" in presses.devTabPresses());
 });
 
-test("with sharing off no context is saved, and tab presses stay in the local copy, never queued", async () => {
+test("with sharing off no context is saved, and tab presses aren't counted, kept in the local copy or queued", async () => {
   client.setSharing(false, "settings");
   assert.equal(await diagnostics.recordContext(), null);
   assert.equal(JSON.parse(stub.docs.get("telemetry.json")).context, null);
-  presses.notePressStarted();
-  presses.notePressEnded("click", "t1");
-  presses.emitTabPresses();
   const { flushLocal } = await import("./localStore.ts");
   flushLocal();
-  const local = stub.telemetryLocal.records().filter((r) => r.event === "tab_presses");
-  assert.equal(local.at(-1).sent, false);
-  assert.equal(local.at(-1).distinct_id, null);
+  const tabPressLines = () => stub.telemetryLocal.records().filter((r) => r.event === "tab_presses");
+  const before = tabPressLines().length;
+  presses.notePressStarted();
+  presses.notePressEnded("click", "t1");
+  presses.emitTabPresses(client.consentToken());
+  flushLocal();
+  assert.equal(tabPressLines().length, before);
+  assert.deepEqual(tabPressLines().filter((r) => r.sent === false), []);
+  assert.deepEqual(Object.values(presses.devTabPresses()).filter((n) => n !== 0 && n !== false), []);
   assert.equal(client.devState().queued.events, 0);
 });

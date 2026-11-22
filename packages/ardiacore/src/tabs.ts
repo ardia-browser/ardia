@@ -51,9 +51,9 @@ export type TabStripCommand =
 
 let lastCommand = Math.floor(Math.random() * 1e6) * 1e3;
 
-export function sendTabStripCommand(command: TabStripCommand): number {
+export function sendTabStripCommand(command: TabStripCommand, refused?: (id: number, error: unknown) => void): number {
   const id = ++lastCommand;
-  void call("tabs.stripCommand", { id, command });
+  call("tabs.stripCommand", { id, command }).catch((error: unknown) => refused?.(id, error));
   return id;
 }
 

@@ -12,7 +12,7 @@ import { AUTO_SCROLL_MAX, AUTO_SCROLL_ZONE, LIFT_MS, LIFT_SLOP, TOP_STRIP_HEIGHT
 import { autoScrollSpeed } from "./stripScroll";
 import { noteTabStripEdgeScroll } from "../../state/telemetry/tabStripCounts";
 import { endHeldTabPress, TAB_CLICK_SLOP } from "../../state/sidebar/heldTabPress";
-import { hapticTick } from "../../state/drag/dragNative";
+import { reorderTick } from "../../state/drag/reorderTick";
 
 const IDLE = { kind: "idle" } as const;
 
@@ -122,7 +122,7 @@ export function useStripDrag(item: StripDrag) {
     const aimedBefore = drag.current.to;
     if (!across) makeRoomAt(lifted || from < 0 ? -1 : dropIndex(geometry, from, along));
     const aimedNow = drag.current.to;
-    if (!across && aimedBefore >= 0 && aimedNow >= 0 && aimedNow !== aimedBefore) hapticTick();
+    if (!across && aimedBefore >= 0 && aimedNow >= 0 && aimedNow !== aimedBefore) reorderTick();
     if (!local) updateTabDrag(g.moveX, g.moveY, lifted);
     return lifted || across;
   };

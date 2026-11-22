@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 import { iconAccent } from "../../platform/favicons";
-import { resolveFavicon, useFavicons } from "./favicons";
+import { useResolvedFaviconUri } from "./faviconHooks";
 
 const KEPT = 64;
 
@@ -15,7 +15,7 @@ function remember(uri: string, accent: string | null) {
 }
 
 export function useFaviconAccent(url: string, profileId?: string): string | null | undefined {
-  const uri = useFavicons(() => (url ? (resolveFavicon(url, null, profileId)?.uri ?? null) : null));
+  const uri = useResolvedFaviconUri(url, null, profileId);
   const accent = useFaviconAccents((a) => (uri ? a.byUri[uri] : null));
   useEffect(() => {
     if (!uri || accent !== undefined || asking.has(uri)) return;

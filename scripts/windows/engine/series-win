@@ -1,4 +1,6 @@
+skip chromium-mac-secure-input-window-focus.patch
 skip chromium-safe-storage-no-silent-reset.patch
+skip chromium-extension-state-mirror-hooks.patch
 chromium chromium-win-rtl-unittest-domsub.patch
 chromium chromium-win-load-local-state-delegate.patch
 chromium chromium-win-ardia-layer-calls-mac-only.patch
@@ -19,3 +21,4 @@ chromium chromium-win-keep-every-login.patch
 chromium chromium-win-discard-asks-the-host.patch
 chromium chromium-win-devtools-other-clients.patch
 chromium chromium-win-autoplay-policy.patch
+chromium chromium-win-hosted-theme-change.patch

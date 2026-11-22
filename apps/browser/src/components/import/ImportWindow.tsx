@@ -15,6 +15,8 @@ import { WINDOW_CONTROLS, windowControlsWidth } from "../../lib/windowChrome";
 import { markCaptionRegions } from "../../state/windows/controls";
 import { IMPORT_WINDOW_ID } from "../../state/settings/settingsWindows";
 import { WindowControls } from "../window/WindowControls";
+import { LeadingWindowControls } from "../window/LeadingWindowControls";
+import { useWindowChrome } from "../../state/windows/windowButtons";
 
 const CONTROLS_ROOM = WINDOW_CONTROLS.edge + windowControlsWidth(2) + WINDOW_CONTROLS.gap;
 
@@ -37,6 +39,7 @@ const STEPS: Record<ImportStepName, { Body: StepView; Footer: StepView | null }>
 
 export function ImportWindow() {
   const theme = useTheme();
+  useWindowChrome();
   const flow = useImportFlow();
   useEffect(() => startImport(importMotion.doneDelay), []);
   useImportDevHandle(flow);
@@ -53,6 +56,7 @@ export function ImportWindow() {
         {Footer ? <Footer flow={flow} /> : null}
       </PageToolbar>
       <WindowControls windowId={IMPORT_WINDOW_ID} centerY={importLayout.dragRegion / 2} size={WINDOW_CONTROLS.small} maximizable={false} />
+      <LeadingWindowControls windowId={IMPORT_WINDOW_ID} centerY={importLayout.dragRegion / 2} size={WINDOW_CONTROLS.small} maximizable={false} />
     </View>
   );
 }

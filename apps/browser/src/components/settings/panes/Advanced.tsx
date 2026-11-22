@@ -1,13 +1,19 @@
 import { useState } from "react";
 import { View } from "react-native";
-import { describeCliInstall, installCliInBackground, useCli } from "../../../state/app/cliControl";
+import { describeCommandInstall, installCommandInBackground, useCommandInstall } from "../../../state/app/linuxCommandInstall";
+import { useControlServer } from "../../../state/app/programControl";
+import { programControlOn, setControlFromSettings, setProgramControl } from "../../../state/app/programControlSetting";
+import { usePluginsWithPrograms, usePluginPrograms } from "../../../state/plugins/hooks";
+import { useProgramRegistry } from "../../../state/plugins/programRegistry";
+import { canRelink, relinkPrograms } from "../../../state/plugins/actions";
+import type { ProgramsState } from "../../../state/plugins/store";
+import { goToSettingsPane, type SettingsPlace } from "../../../state/settings/settingsWindows";
 import { useSettings } from "../../../state/browser/hooks";
 import { updateSettings } from "../../../state/settings/actions";
 import { openChromeSettings } from "../../../state/pages/urls";
 import type { BatterySaverWhen, Settings } from "../../../state/settings/settings";
 import { keepSiteActive, stopKeepingSiteActive, type MemorySaverMode } from "../../../state/tabs/memorySaver";
 import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
-import type { SettingsPlace } from "../../../state/settings/settingsWindows";
 import { Button, DialogActions, DialogTitle, lineHeight, PopUp, Sheet, space, Text, TextField, Toggle } from "../../ui";
 import { perLook } from "../../ui/tokens";
 import { Favicon } from "../../favicon/Favicon";
@@ -130,11 +136,92 @@ function PerformanceSection() {
   );
 }
 
+const viaPlugin = PLATFORM_FEATURES.plugins;
+
+export function programsLine(programs: ProgramsState | undefined): string {
+  if (programs?.state === "linked") {
+    const refused = Object.entries(programs.refused).map(([name, reason]) => `${name}: ${reason}`);
+    if (refused.length) return refused.join("; ");
+    if (programs.adoption === "retrying") return "Waiting for the old install to finish updating…";
+    if (programs.adoption === "busy") return "The old install is busy updating. Try again in a moment.";
+    if (programs.adoption === "failed") return "The old install couldn't be switched over to it.";
+    return programs.linked.length ? `On your PATH: ${programs.linked.join(", ")}` : "Nothing on your PATH.";
+  }
+  if (programs?.state === "failed") return `Not on your PATH: ${programs.reason}`;
+  return "Putting it on your PATH…";
+}
+
+function PluginProgramsRow({ name, title }: { name: string; title: string }) {
+  const programs = usePluginPrograms(name);
+  const failed = canRelink(programs);
+  return (
+    <Row
+      title={title}
+      onPress={() => goToSettingsPane("plugins", null, name)}
+      description={
+        <Text selectable size="caption" tone={failed ? "destructive" : "textSecondary"} style={NOTE()}>
+          {programsLine(programs)}
+        </Text>
+      }
+    >
+      {failed ? <Button title="Try Again" onPress={() => relinkPrograms(name)} /> : null}
+    </Row>
+  );
+}
+
+function ProgramControlRow() {
+  const on = useSettings((settings) => programControlOn({ settings }));
+  const server = useControlServer((s) => s.server);
+  const note =
+    server?.state === "external"
+      ? "This instance already has a DevTools port from the command line, so the setting leaves it alone."
+      : server?.reason
+        ? server.reason
+        : on && server?.state === "on"
+          ? server.connections
+            ? `Connected now: ${server.connections === 1 ? "1 session" : `${server.connections} sessions`}.`
+            : "On. Nothing is connected."
+          : null;
+  return (
+    <Row anchor="advanced.programControl" description={note ?? undefined}>
+      <Toggle value={on} accessibilityLabel="Let programs control Ardia" onChange={setControlFromSettings} />
+    </Row>
+  );
+}
+
+function ProgramsRows() {
+  const plugins = usePluginsWithPrograms();
+  const registryUnreadable = useProgramRegistry((s) => s.failClosed);
+  return (
+    <>
+      <ProgramControlRow />
+      <Row
+        anchor="advanced.programs"
+        description={
+          <View>
+            <Text size="caption" tone="textSecondary" style={NOTE()}>
+              {plugins.length ? "Commands your plugins put in your terminal." : "None of your plugins add commands to your terminal."}
+            </Text>
+            {registryUnreadable ? (
+              <Text selectable size="caption" tone="destructive" style={NOTE()}>
+                Ardia's list of program names kept for its built-in plugins is missing or damaged, so no program goes on PATH. Reinstall Ardia from ardia.dev.
+              </Text>
+            ) : null}
+          </View>
+        }
+      />
+      {plugins.map((p) => (
+        <PluginProgramsRow key={p.name} name={p.name} title={p.title} />
+      ))}
+    </>
+  );
+}
+
 function CommandLineSection() {
-  const on = useSettings((s) => s.cliControl);
-  const cli = useCli();
+  const on = useSettings((settings) => programControlOn({ settings }));
+  const install = useCommandInstall();
+  const server = useControlServer((s) => s.server);
   const ruleRows = useAutomationRuleRows();
-  const server = cli.server;
   const serverNote =
     server?.state === "external"
       ? "This instance already has a DevTools port from the command line, so the setting leaves it alone."
@@ -145,15 +232,18 @@ function CommandLineSection() {
             ? `Connected now: ${server.connections === 1 ? "1 session" : `${server.connections} sessions`}.`
             : "On. Nothing is connected."
           : "Installs the ardia command and lets it open, read and act in every page you're signed in to. It stays on after you quit.";
-  const failed = !!cli.error && !cli.installing;
+  const failed = !!install.error && !install.installing;
   const setOn = (next: boolean) => {
-    updateSettings({ cliControl: next });
-    if (next && !cli.installing && (!cli.installedVersion || cli.error)) void installCliInBackground("settings");
+    setProgramControl(next);
+    if (next && !install.installing && (!install.installedVersion || install.error)) void installCommandInBackground("settings");
   };
+  const tryAgain = () => void installCommandInBackground("settings");
+  const installLine = on || install.installedVersion || install.installing || failed ? describeCommandInstall(install) : null;
   return (
     <>
       <SectionHeader title="Command line and automation" />
       <Group>
+        {viaPlugin ? <ProgramsRows /> : (
         <Row
           anchor="advanced.ardiaCommand"
           description={
@@ -161,18 +251,19 @@ function CommandLineSection() {
               <Text size="caption" tone="textSecondary" style={NOTE()}>
                 {serverNote}
               </Text>
-              {on || cli.installedVersion || cli.installing || failed ? (
+              {installLine ? (
                 <Text selectable size="caption" tone={failed ? "destructive" : "textSecondary"} style={NOTE()}>
-                  {describeCliInstall(cli)}
+                  {installLine}
                 </Text>
               ) : null}
             </View>
           }
         >
-          {on && failed ? <Button title="Try Again" onPress={() => void installCliInBackground("settings")} /> : null}
-          {on && !failed && cli.installedVersion && !cli.installing ? <Button title="Reinstall" onPress={() => void installCliInBackground("settings")} /> : null}
+          {failed && on ? <Button title="Try Again" onPress={tryAgain} /> : null}
+          {on && !failed && install.installedVersion && !install.installing ? <Button title="Reinstall" onPress={() => void installCommandInBackground("settings")} /> : null}
           <Toggle value={on} accessibilityLabel="ardia command" onChange={setOn} />
         </Row>
+        )}
         <SettingToggle anchor="advanced.compactCliPill" />
         {ruleRows}
       </Group>

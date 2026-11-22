@@ -2,6 +2,7 @@ import { symbolMarkup } from "../../src/shims/web/symbols/render.ts";
 import { rasterAlpha, readGray } from "./lib.mjs";
 import { layersFor } from "./layers.mjs";
 import { nativePath, renderNative } from "./native.mjs";
+import { RECIPES } from "./recipes.mjs";
 
 export const NUDGE_SIZES = [8, 9, 10, 10.5, 11, 12, 13, 14, 15, 16, 17, 18, 20, 22, 24, 26, 28, 30];
 export const NUDGE_WEIGHTS = ["regular", "medium", "semibold", "bold"];
@@ -15,10 +16,12 @@ function centroid(a, w) {
   return s ? [sx / s, sy / s] : [w / 2, w / 2];
 }
 
-export function computeNudges(fits, names) {
+export function computeNudges(fits, allNames) {
+  const centered = Object.fromEntries(NUDGE_WEIGHTS.map((weight) => [weight, NUDGE_SIZES.map(() => [0, 0])]));
+  const out = Object.fromEntries(allNames.filter((name) => RECIPES[name]?.native).map((name) => [name, centered]));
+  const names = allNames.filter((name) => !RECIPES[name]?.native);
   renderNative(names.flatMap((name) => NUDGE_WEIGHTS.flatMap((weight) => NUDGE_SIZES.map((pt) => ({ name, weight, pt, box: BOX, file: `nudge/${weight}/${pt}/${name}.png` })))), "nudge");
   const quantize = (px) => Math.max(-LIMIT, Math.min(LIMIT, Math.round((px / 2) * EIGHTHS)));
-  const out = {};
   for (const name of names) {
     const layers = layersFor(fits[name]);
     out[name] = {};

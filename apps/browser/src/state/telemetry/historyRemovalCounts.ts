@@ -1,16 +1,17 @@
+import type { ConsentToken } from "./choice";
+import { consentOrNow, countFor } from "./countFor";
+
 const removed = { key: 0, button: 0, menu: 0 };
 const rows = { key: 0, button: 0, menu: 0 };
 let clears = 0;
 let clearFailures = 0;
 
-export function noteBrowsingDataCleared(ok: boolean) {
-  if (ok) clears++;
-  else clearFailures++;
+export function noteBrowsingDataCleared(ok: boolean, consent?: ConsentToken | null) {
+  countFor(consentOrNow(consent), () => void (ok ? clears++ : clearFailures++));
 }
 
-export function noteHistoryRowsRemoved(via: keyof typeof removed, count: number) {
-  removed[via]++;
-  rows[via] += count;
+export function noteHistoryRowsRemoved(via: keyof typeof removed, count: number, consent?: ConsentToken | null) {
+  countFor(consentOrNow(consent), () => void (removed[via]++, (rows[via] += count)));
 }
 
 export function takeHistoryRemovalCounts() {

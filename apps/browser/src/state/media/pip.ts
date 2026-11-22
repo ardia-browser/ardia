@@ -5,10 +5,11 @@ import { useStoreWhile } from "../tabs/tabWatch";
 import { usePages } from "../tabs/pageState";
 import { startCast } from "./cast";
 import { cancelDisplayMediaOnNavigation, startTabShareCleanup } from "./screenShare";
+import { useTabLive } from "../browser/hooks";
 
 export function useAutoPictureInPicture(tabId: string, visible: boolean): boolean {
   const enabled = useStoreWhile(useBrowser, visible, (s) => s.settings.autoPictureInPicture);
-  const audible = useStoreWhile(useBrowser, visible, (s) => !!s.live[tabId]?.playingAudio);
+  const audible = useTabLive(visible ? tabId : undefined, (l) => l.playingAudio);
   const capturing = useStoreWhile(usePages, visible, (s) => !!s.pages[tabId]?.mediaAccess);
   const decided = useRef(false);
   if (visible) decided.current = enabled && (audible || capturing);

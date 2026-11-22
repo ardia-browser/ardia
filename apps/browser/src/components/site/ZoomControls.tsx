@@ -2,7 +2,7 @@ import { memo, useEffect, useState } from "react";
 import { Pressable, View } from "react-native";
 import { webviews } from "../../state/tabs/webviewHandles";
 import { useTab } from "../../state/browser/hooks";
-import { Box, Button, PANEL, Popover, space, Text, usePopoverPresence } from "../ui";
+import { Box, Button, PANEL, Popover, space, Text } from "../ui";
 import { usePages } from "../../state/tabs/pageState";
 import { hoverZoomPopover, toggleZoomPopover, useIsZoomBubble } from "../../state/site/zoomBubble";
 import { closedByThisPress, dismissPopoverByPress } from "../../state/tabs/popoverDismiss";
@@ -33,12 +33,7 @@ export const ZOOM_POPOVER_WIDTH = 236;
 
 export type SitePanelPlace = { tabId: string; right?: number; left?: number; top: number };
 
-export function ZoomPopover({ open, ...place }: SitePanelPlace & { open: boolean }) {
-  const presence = usePopoverPresence(open);
-  return presence.shown ? <ZoomPanel {...place} closing={presence.closing} onClosed={presence.onClosed} /> : null;
-}
-
-function ZoomPanel({ tabId, right, left, top, closing, onClosed }: SitePanelPlace & { closing: boolean; onClosed: () => void }) {
+export function ZoomPanel({ tabId, right, left, top, closing, onClosed }: SitePanelPlace & { closing: boolean; onClosed: () => void }) {
   const zoom = useTab(tabId)?.zoom ?? 1;
   const bubble = useIsZoomBubble(tabId);
   const [hoverProps] = useState(() => markHoverProps({ onMouseEnter: () => hoverZoomPopover(tabId, true), onMouseLeave: () => hoverZoomPopover(tabId, false) }));

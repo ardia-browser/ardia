@@ -1,5 +1,5 @@
 import { webviews } from "../../platform/webviews";
-import { isSharing } from "./choice";
+import { consentToken, counted } from "./client";
 
 const SETTLE_MS = 2000;
 const NONE = { bar_loads: 0, bar_loads_page_focused: 0, link_tab_loads: 0, link_tab_loads_page_focused: 0 };
@@ -8,14 +8,18 @@ let counts = { ...NONE };
 type Count = keyof typeof NONE;
 
 function noteLoad(tabId: string, loads: Count, focusedLoads: Count) {
-  if (!tabId || !isSharing()) return;
+  const token = consentToken();
+  if (!tabId || token === null) return;
   setTimeout(() => {
-    if (!isSharing()) return;
     void webviews.get(tabId)?.evaluate("document.hasFocus()").then(
-      (focused) => {
-        counts[loads]++;
-        if (focused === true) counts[focusedLoads]++;
-      },
+      (focused) =>
+        counted(
+          token,
+          () => {
+            counts[loads]++;
+            if (focused === true) counts[focusedLoads]++;
+          },
+        ),
       () => {},
     );
   }, SETTLE_MS);

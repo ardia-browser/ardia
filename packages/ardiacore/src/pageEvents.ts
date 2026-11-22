@@ -11,7 +11,9 @@ import type {
   DiscardReason,
   DisplayMediaRequest,
   DownloadNavigation,
-  FairPlayReport,
+  FieldProviderHint,
+  FieldProviderOpened,
+  FieldProviderPanelRefusal,
   FindResult,
   FocusRestoreOutcome,
   LoadError,
@@ -26,9 +28,16 @@ import type {
   PasswordPrompt,
   PictureInPictureState,
   PictureInPictureDrag,
+  PictureInPictureResize,
+  PictureInPictureSkip,
+  PictureInPictureStandIn,
+  PictureInPictureActivation,
+  PictureInPictureUnstash,
+  PictureInPictureRelease,
   ProtectedMediaRequest,
   ScrollState,
   SecurityInfo,
+  VerificationCodeFound,
   WebNotification,
   WebViewProps,
   ZoomState,
@@ -57,9 +66,14 @@ type NativeEvents = {
   onNotification: WebNotification;
   onNotificationClose: { id: string };
   onPictureInPicture: PictureInPictureState;
-  onAutoPictureInPictureKept: { appSwitch?: boolean; reason?: string };
+  onAutoPictureInPictureKept: { appSwitch?: boolean; reason?: string; epoch?: string };
   onPictureInPictureDragged: PictureInPictureDrag;
-  onPictureInPictureSkip: { seconds: number };
+  onPictureInPictureResized: PictureInPictureResize;
+  onPictureInPictureSkip: PictureInPictureSkip;
+  onPictureInPictureStandIn: PictureInPictureStandIn;
+  onPictureInPictureUnstashed: PictureInPictureUnstash;
+  onPictureInPictureReleased: PictureInPictureRelease;
+  onPictureInPictureActivated: PictureInPictureActivation;
   onMediaFault: MediaFault;
   onActivateRequest: ActivateRequest;
   onDisplayMediaRequest: DisplayMediaRequest;
@@ -71,7 +85,6 @@ type NativeEvents = {
   onSelection: { selection: PageSelection | null };
   onScroll: { state: ScrollState };
   onProtectedMedia: ProtectedMediaRequest;
-  onFairPlay: FairPlayReport;
   onAutoplayBlocked: { count?: number };
   onReady: object;
   onDiscarded: { url: string; reason?: DiscardReason | "" };
@@ -81,11 +94,15 @@ type NativeEvents = {
   onPreferredSize: { width: number; height: number };
   onTransferRefused: { from: string };
   onAppBadge: AppBadge;
+  onFieldProviderOpened: FieldProviderOpened;
+  onFieldProviderHint: { state?: string };
+  onVerificationCodeFound: VerificationCodeFound;
 };
 export type Handlers = keyof NativeEvents;
 export type PageEvent = { name: string; data: unknown };
 export type NativeProps = Omit<WebViewProps, Handlers> & { pageEvents: string[]; onPageEvent: (e: NativeSyntheticEvent<PageEvent>) => void };
 
+const FIELD_PROVIDER_REFUSALS: readonly FieldProviderPanelRefusal[] = ["hidden", "notFocused", "unavailable", "notKey", "notEditing", "throttled", "refused", "noPanel"];
 const FOCUS_RESTORE_OUTCOMES: readonly FocusRestoreOutcome[] = ["focused", "kept", "refused", "gaveUp"];
 
 const PAGE_EVENTS = {
@@ -113,7 +130,12 @@ const PAGE_EVENTS = {
   onPictureInPicture: "pictureInPicture",
   onAutoPictureInPictureKept: "autoPictureInPictureKept",
   onPictureInPictureDragged: "pictureInPictureDragged",
+  onPictureInPictureResized: "pictureInPictureResized",
   onPictureInPictureSkip: "pictureInPictureSkip",
+  onPictureInPictureStandIn: "pictureInPictureStandIn",
+  onPictureInPictureUnstashed: "pictureInPictureUnstashed",
+  onPictureInPictureReleased: "pictureInPictureReleased",
+  onPictureInPictureActivated: "pictureInPictureActivated",
   onMediaFault: "mediaFault",
   onActivateRequest: "activateRequest",
   onDisplayMediaRequest: "displayMediaRequest",
@@ -125,7 +147,6 @@ const PAGE_EVENTS = {
   onSelection: "selection",
   onScroll: "scroll",
   onProtectedMedia: "protectedMedia",
-  onFairPlay: "fairPlay",
   onAutoplayBlocked: "autoplayBlocked",
   onReady: "ready",
   onDiscarded: "discarded",
@@ -135,6 +156,9 @@ const PAGE_EVENTS = {
   onPreferredSize: "preferredSize",
   onTransferRefused: "transferRefused",
   onAppBadge: "appBadge",
+  onFieldProviderOpened: "fieldProviderOpened",
+  onFieldProviderHint: "fieldProviderHint",
+  onVerificationCodeFound: "verificationCodeFound",
 } as const satisfies Record<Handlers, string>;
 export type PageEventName = (typeof PAGE_EVENTS)[Handlers];
 export const pageEventOf = (handler: Handlers): PageEventName => PAGE_EVENTS[handler];
@@ -163,9 +187,14 @@ const unwrap: { [K in Handlers]: (e: NativeEvents[K]) => Parameters<NonNullable<
   onNotification: (e) => [e],
   onNotificationClose: (e) => [e.id],
   onPictureInPicture: (e) => [e],
-  onAutoPictureInPictureKept: (e) => [e.reason === "nothingPlaying" ? "nothingPlaying" : e.appSwitch ? "appSwitch" : "onScreen"],
-  onPictureInPictureDragged: (e) => [{ offCursor: !!e.offCursor, slowMove: !!e.slowMove }],
-  onPictureInPictureSkip: (e) => [e.seconds],
+  onAutoPictureInPictureKept: (e) => [e.reason === "nothingPlaying" ? "nothingPlaying" : e.appSwitch ? "appSwitch" : "onScreen", typeof e.epoch === "string" ? e.epoch : ""],
+  onPictureInPictureDragged: (e) => [{ offCursor: !!e.offCursor, slowMove: !!e.slowMove, epoch: e.epoch }],
+  onPictureInPictureResized: (e) => [{ inside: !!e.inside, cursorShown: !!e.cursorShown, epoch: e.epoch }],
+  onPictureInPictureSkip: (e) => [{ seconds: e.seconds, epoch: e.epoch }],
+  onPictureInPictureStandIn: (e) => [{ pinch: !!e.pinch, timedOut: !!e.timedOut, epoch: e.epoch }],
+  onPictureInPictureUnstashed: (e) => [{ epoch: e.epoch }],
+  onPictureInPictureReleased: (e) => [{ outcome: e.outcome, epoch: e.epoch }],
+  onPictureInPictureActivated: (e) => [{ move: !!e.move, activated: !!e.activated, epoch: e.epoch }],
   onMediaFault: (e) => [e],
   onActivateRequest: (e) => [e],
   onDisplayMediaRequest: (e) => [e],
@@ -177,7 +206,6 @@ const unwrap: { [K in Handlers]: (e: NativeEvents[K]) => Parameters<NonNullable<
   onSelection: (e) => [e.selection],
   onScroll: (e) => [e.state],
   onProtectedMedia: (e) => [e],
-  onFairPlay: (e) => [e],
   onAutoplayBlocked: (e) => [Number.isInteger(e.count) ? Math.min(Math.max(e.count!, 1), 20) : 1],
   onReady: () => [],
   onDiscarded: (e) => [toAppUrl(e.url), e.reason || null],
@@ -187,6 +215,16 @@ const unwrap: { [K in Handlers]: (e: NativeEvents[K]) => Parameters<NonNullable<
   onPreferredSize: (e) => [e],
   onTransferRefused: (e) => [e.from],
   onAppBadge: (e) => [e],
+  onFieldProviderOpened: (e) => [
+    {
+      via: e.via === "menu" ? "menu" : "badge",
+      shown: e.shown === true,
+      ...(e.shown !== true && FIELD_PROVIDER_REFUSALS.includes(e.reason as FieldProviderPanelRefusal) ? { reason: e.reason } : {}),
+      ...(e.shown === true && (e.panel === "above" || e.panel === "below") ? { panel: e.panel } : {}),
+    },
+  ],
+  onFieldProviderHint: (e) => [{ state: e.state === "dismissed" ? "dismissed" : "shown" } as FieldProviderHint],
+  onVerificationCodeFound: (e) => [{ token: String(e.token), app: String(e.app ?? ""), main: e.main === true }],
 };
 
 export const isPageEventProp = (key: string): key is Handlers => key in unwrap;

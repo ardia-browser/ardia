@@ -21,6 +21,7 @@ import {
   useOnboarding,
 } from "./onboarding";
 import { pinSites } from "./sites";
+import * as pluginsStep from "./pluginsStep";
 
 export const onboardingTestRun = () => devTestValue("onboarding") === "1";
 
@@ -48,6 +49,7 @@ if (__DEV__)
     cancel: cancelOnboarding,
     previewLive,
     pinSites,
+    pluginsStep,
     resolveDraft,
     questionsFor,
     PRESETS,

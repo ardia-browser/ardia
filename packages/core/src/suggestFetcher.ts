@@ -1,7 +1,7 @@
 import { parseRemoteSuggestions, suggestReplyJson, suggestRequestUrl, type RemoteSite, type RemoteSuggestions, type SearchEngine } from "./engines.ts";
 
 type FetchResponse = { ok: boolean; text(): Promise<string> };
-export type FetchLike = (url: string, init: { signal: AbortSignal }) => Promise<FetchResponse>;
+export type FetchLike = (url: string, init: { signal: AbortSignal; engine?: SearchEngine }) => Promise<FetchResponse>;
 
 export type SuggestFetcher = {
   request(engine: SearchEngine, query: string, onResult: (suggestions: string[], sites: RemoteSite[]) => void): void;
@@ -53,7 +53,7 @@ export function createSuggestFetcher({
         timer = undefined;
         const controller = new AbortController();
         inFlight = controller;
-        fetch(url, { signal: controller.signal })
+        fetch(url, { signal: controller.signal, engine })
           .then(async (res) => {
             if (!res.ok) return none;
             try {

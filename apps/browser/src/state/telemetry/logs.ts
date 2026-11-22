@@ -1,10 +1,12 @@
-import { queueLog } from "./client";
+import { queueLog, type ConsentToken } from "./client";
 import { errorCode, errorMessage, errorType, scrubText } from "./sanitize";
 
 const MAX_DISTINCT = 40;
 const seen = new Set<string>();
 
-export function recordLog(level: "warn" | "error", args: unknown[]) {
+export { errorFor, logConsent, warnFor } from "./consoleConsent";
+
+export function recordLog(level: "warn" | "error", args: unknown[], consent: ConsentToken | null) {
   const first = args[0];
   if (typeof first !== "string") return;
   const message = scrubText(first, 160);
@@ -18,5 +20,5 @@ export function recordLog(level: "warn" | "error", args: unknown[]) {
   if (reason) attributes.error_message = reason;
   const code = error ? errorCode(error) : null;
   if (code) attributes.error_code = code;
-  queueLog(level, message, attributes);
+  queueLog(level, message, attributes, consent);
 }

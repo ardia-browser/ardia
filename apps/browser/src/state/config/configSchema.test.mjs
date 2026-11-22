@@ -20,8 +20,9 @@ test("every setting is either on the config allowlist or deliberately left out, 
   for (const key of SETTING_KEYS) assert.ok(allowed.has(key) !== excluded.has(key), `${key} must be in exactly one list`);
   assert.equal(allowed.size + excluded.size, SETTING_KEYS.length, "no stale names in either list");
   assert.deepEqual([...excluded].sort(), [
-    "allowJavaScriptFromAppleEvents", "cliControl", "customSearchEngines", "customSearchUrl", "defaultProfileId", "extensionSearchEngines", "fairPlayInChromium",
-    "newTabUrl", "pageEngine", "protectedVideoInWebKit", "websiteEngines",
+    "allowJavaScriptFromAppleEvents", "cliControl", "customSearchEngines", "customSearchUrl", "defaultProfileId", "engineMode", "engineSwitchAsksAboutUnsavedWork",
+    "engineSwitchCarriesSiteData", "engineSwitchKeepsPage", "extensionSearchEngines", "newTabUrl", "offerWebKitForProtectedVideo", "pageEngine",
+    "protectedVideoInWebKit", "webKitFraudWarnings", "websiteEngines",
   ]);
 });
 
@@ -116,7 +117,7 @@ test("theme.schema.json covers type, metrics, layout and icons with Ardia's defa
 
 test("the schema files are written as 2-space JSON with a final newline", () => {
   const files = schemaFiles(colorRoles);
-  assert.deepEqual(Object.keys(files), ["config.schema.json", "theme.schema.json"]);
+  assert.deepEqual(Object.keys(files), ["config.schema.json", "theme.schema.json", "plugin.schema.json"]);
   for (const text of Object.values(files)) {
     assert.ok(text.endsWith("}\n"));
     assert.equal(text, `${JSON.stringify(JSON.parse(text), null, 2)}\n`);

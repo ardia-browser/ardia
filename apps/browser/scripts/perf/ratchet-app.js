@@ -1,11 +1,36 @@
 const P = globalThis.acPerf;
 const bench = globalThis.acBench;
 if (!P || !bench) throw new Error("load bench-app.js first (and turn the perf probe on)");
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms) => new Promise((resolve) => setTimeout(function benchSleep() {
+  resolve();
+}, ms));
 const pageOf = (tab) => tab.page ?? { nav: tab.navigation, adopt: tab.adoptId };
 const sum = (o) => Object.values(o ?? {}).reduce((a, b) => a + (typeof b === "number" ? b : 0), 0);
 
 const extra = {
+  async nodeChurn({ origin, opens = 60, switches = 120 } = {}) {
+    if (!P.nativeNodes?.()) return { left: null };
+    const S = () => ac.store.getState();
+    const w = S().ui.focusOrder?.[0] ?? S().ui.focusedWindowId;
+    const ids = S().windows[w].tabIds.slice(0, 20);
+    const visit = (n, gap) => Array.from({ length: n }).reduce((p, _, i) => p.then(() => S().activate(ids[(i * 7) % ids.length])).then(() => sleep(gap)), Promise.resolve());
+    await visit(ids.length, 60);
+    S().activate(ids[0]);
+    await sleep(1500);
+    const start = P.nativeNodes().live;
+    for (let i = 0; i < opens; i++) {
+      const made = S().newTab(w, { url: `${origin}/p/churn-${i}-${Date.now()}` });
+      const id = typeof made === "string" ? made : made?.id;
+      await sleep(60);
+      if (id) S().closeTab(id);
+      await sleep(40);
+    }
+    await visit(switches, 25);
+    S().activate(ids[0]);
+    await sleep(2500);
+    const end = P.nativeNodes().live;
+    return { start, end, left: end - start };
+  },
   async launch({ quietMs = 2500, timeoutMs = 30000 } = {}) {
     const state = () => {
       const s = P.read();

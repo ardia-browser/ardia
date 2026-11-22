@@ -52,7 +52,7 @@ function remember(tabId: string): Promise<void> {
 export function startTabPictures() {
   if (started) return;
   started = true;
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["windows", "tabs"], (s, prev) => {
     if (s.windows === prev.windows && s.tabs === prev.tabs) return;
     for (const [windowId, timer] of timers)
       if (!s.windows[windowId]) {

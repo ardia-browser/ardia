@@ -1,31 +1,50 @@
 import AppKit
+import ArdiaCore
 
 final class MenuTarget: NSObject, NSMenuItemValidation {
   static let shared = MenuTarget()
   var swallowsCommands = false
 
-  func dispatch(_ command: String, _ arg: String?, windowId: String?) {
+  func dispatch(_ command: String, _ arg: String?, windowId: String?, mouseButton: String? = nil) {
     guard !swallowsCommands else { return }
-    if command == "closeTab", WindowManager.shared.closeForeignKeyWindow() { return }
-    ShellEvents.send(.command, [
+    if mouseButton == nil, command == "closeTab", WindowManager.shared.closeForeignKeyWindow() { return }
+    let body: [String: Any] = [
       "command": command, "arg": arg as Any, "windowId": windowId as Any, "focusGeneration": FocusHandoff.shared.takeBegun() as Any,
-    ])
+    ]
+    ShellEvents.send(.command, mouseButton.map { ArdiaConsentStamp.begin().onto(body.merging(["mouseButton": $0]) { $1 }) } ?? body)
   }
 
   private static let focusMovingCommands: Set<String> = ["newTab", "focusCommandBar", "findInPage", "showHistory"]
 
   @objc(commandDispatch:) func performCommand(_ sender: NSMenuItem) {
     guard let item = sender as? CommandItem else { return }
-    _ = FocusHandoff.shared.takeBegun()
-    if Self.focusMovingCommands.contains(item.command) || FocusHandoff.shared.gatesKeyWindow, let window = NSApp.keyWindow {
-      FocusHandoff.shared.begin(in: window)
-    }
-    dispatch(item.command, item.arg, windowId: item.windowless ? nil : WindowManager.shared.keyWindowId)
-    if item.command == "tabSwitcher" { SwitcherHold.opened(by: item) }
+    perform(item, in: NSApp.keyWindow, windowId: WindowManager.shared.keyWindowId)
   }
 
-  @objc(cut:) func cutEdit(_ sender: Any?) { forwardEdit(#selector(NSText.cut(_:)), from: sender) }
-  @objc(copy:) func copyEdit(_ sender: Any?) { forwardEdit(#selector(NSText.copy(_:)), from: sender) }
+  func perform(_ item: CommandItem, in window: NSWindow?, windowId: String?, mouseButton: String? = nil) {
+    _ = FocusHandoff.shared.takeBegun()
+    if Self.focusMovingCommands.contains(item.command) || FocusHandoff.shared.gatesKeyWindow, let window {
+      FocusHandoff.shared.begin(in: window)
+    }
+    dispatch(item.command, item.arg, windowId: item.windowless ? nil : windowId, mouseButton: mouseButton)
+    if item.command == "tabSwitcher", mouseButton == nil { SwitcherHold.opened(by: item) }
+  }
+
+  @objc(cut:) func cutEdit(_ sender: Any?) {
+    let field = NSApp.keyWindow?.firstResponder
+    guard let url = FieldCopy.url(for: field) else { return forwardEdit(#selector(NSText.cut(_:)), from: sender) }
+    Self.writeToPasteboard(url)
+    (field as? NSText)?.delete(sender)
+  }
+  @objc(copy:) func copyEdit(_ sender: Any?) {
+    guard let url = FieldCopy.url(for: NSApp.keyWindow?.firstResponder) else { return forwardEdit(#selector(NSText.copy(_:)), from: sender) }
+    Self.writeToPasteboard(url)
+  }
+
+  private static func writeToPasteboard(_ text: String) {
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(text, forType: .string)
+  }
   @objc(paste:) func pasteEdit(_ sender: Any?) { forwardEdit(#selector(NSText.paste(_:)), from: sender) }
   @objc(selectAll:) func selectAllEdit(_ sender: Any?) { forwardEdit(#selector(NSText.selectAll(_:)), from: sender) }
 
@@ -63,14 +82,20 @@ final class MenuTarget: NSObject, NSMenuItemValidation {
     return !MainMenu.editsText(window.firstResponder)
   }
 
+  private static var pageIsCovered: Bool { ArdiaWebView.refusesInputAheadOfSwitch(NSApp.keyWindow?.firstResponder) }
+
   private func forwardEdit(_ action: Selector, from sender: Any?) {
-    if FocusHandoff.shared.defers(action) { return }
+    if Self.pageIsCovered { return }
+    if FocusHandoff.shared.defers(action) {
+      PasteRefusal.reportMenuPaste(action, .deferred)
+      return
+    }
     FocusHandoff.shared.noteForwarded(action)
-    NSApp.sendAction(action, to: nil, from: sender)
+    if !NSApp.sendAction(action, to: nil, from: sender) { PasteRefusal.reportMenuPaste(action, .refused) }
   }
 
   private static func validateForwarded(_ menuItem: NSMenuItem, _ action: Selector) -> Bool {
-    guard let target = NSApp.target(forAction: action) as? NSObject else { return false }
+    guard let target = NSApp.target(forAction: action) as? NSObject, !ArdiaWebView.refusesInputAheadOfSwitch(target) else { return false }
     typealias Validate = @convention(c) (AnyObject, Selector, NSMenuItem) -> ObjCBool
     for name in ["validateMenuItem:", "validateUserInterfaceItem:"] {
       let validate = NSSelectorFromString(name)
@@ -82,6 +107,7 @@ final class MenuTarget: NSObject, NSMenuItemValidation {
   }
 
   func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+    if let action = menuItem.action, FocusHandoff.editActions.contains(action), Self.pageIsCovered { return false }
     if let action = menuItem.action, FocusHandoff.editActions.contains(action), FocusHandoff.shared.gatesKeyWindow { return true }
     if let action = menuItem.action, FocusHandoff.editActions.contains(action), !(menuItem is CommandItem),
       action != #selector(pasteAndMatchStyle(_:)) {
@@ -123,11 +149,16 @@ final class MenuTarget: NSObject, NSMenuItemValidation {
 
   @objc func pasteAndMatchStyle(_ sender: Any?) {
     let web = Selector(("pasteAndMatchStyle:"))
-    if FocusHandoff.shared.defers(web) { return }
-    if NSApp.target(forAction: web) != nil {
-      NSApp.sendAction(web, to: nil, from: sender)
-    } else {
-      NSApp.sendAction(#selector(NSTextView.pasteAsPlainText(_:)), to: nil, from: sender)
+    FocusHandoff.shared.countPasteAndMatchStyleKey(NSApp.currentEvent)
+    if Self.pageIsCovered { return }
+    if FocusHandoff.shared.defers(web) {
+      PasteRefusal.reportMenuPaste(web, .deferred)
+      return
     }
+    let handled =
+      NSApp.target(forAction: web) != nil
+      ? NSApp.sendAction(web, to: nil, from: sender)
+      : NSApp.sendAction(#selector(NSTextView.pasteAsPlainText(_:)), to: nil, from: sender)
+    if !handled { PasteRefusal.reportMenuPaste(web, .refused) }
   }
 }

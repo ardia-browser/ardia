@@ -8,12 +8,14 @@ import { focusedWindowOf } from "../windows/ui";
 import { openReport } from "../report/actions";
 import { openReleaseNotesPage } from "../releaseNotes/releaseNotesPage";
 import { webKitMediaFaultsLine } from "../telemetry/webkitMediaFaults";
+import { freezeSummaryLine, lastFreezeText, localFreezes } from "../telemetry/freezeRecords";
 import type { AppCommand } from "./commandCatalog";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
 
 export const APP_COMMAND_HANDLERS: Readonly<Record<AppCommand, (windowId: string | null) => void>> = {
   reportProblem: (windowId) => reportProblem(windowId),
   copyDiagnostics: () => void diagnostics().then(copyText),
+  copyLastFreeze: () => void copyText(lastFreezeText(localFreezes())),
   showOnboarding: (windowId) => void redoOnboarding(windowId),
   toolTour: (windowId) => void startToolTour(windowId),
   videoTour: (windowId) => openVideoTour(windowId),
@@ -45,6 +47,8 @@ export async function diagnostics(): Promise<string> {
         ? "Updates: not set up for this build"
         : `Updates: automatic checks ${updates.automaticChecks ? "on" : "off"}, feed ${updates.feedURL ?? "none"}`,
     webKitMediaFaultsLine(),
+    freezeSummaryLine(localFreezes()),
     ...(engine?.focus ? [`Focus: ${engine.focus.replace(/\n/g, "\n  ")}`] : []),
+    ...(engine?.pictureInPictureCloses ? [`Picture in Picture closes: ${engine.pictureInPictureCloses.replace(/ \| /g, "\n  ")}`] : []),
   ].join("\n");
 }

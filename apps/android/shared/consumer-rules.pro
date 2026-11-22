@@ -1,2 +1,0 @@
--keep class com.ardia.shared.ScriptEngine { *; }
--keep class com.ardia.shared.ScriptError { <init>(java.lang.String); }

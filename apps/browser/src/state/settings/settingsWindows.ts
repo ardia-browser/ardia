@@ -1,6 +1,7 @@
 import { focusWindow, openWindow } from "../../platform/windows";
 import { create } from "zustand";
 import { useBrowser } from "../browser/store";
+import { consentToken, type ConsentToken } from "../telemetry/choice";
 
 export const SETTINGS_WINDOW_ID = "settings";
 export const IMPORT_WINDOW_ID = "import";
@@ -8,7 +9,7 @@ export const IMPORT_WINDOW_ID = "import";
 export const isUtilityWindowId = (id: string | null | undefined) =>
   id === SETTINGS_WINDOW_ID || id === IMPORT_WINDOW_ID;
 
-export const SETTINGS_PANES = ["general", "profiles", "tabs", "appearance", "automations", "shortcuts", "advanced"] as const;
+export const SETTINGS_PANES = ["general", "profiles", "tabs", "appearance", "automations", "plugins", "shortcuts", "advanced"] as const;
 
 export type SettingsPane = (typeof SETTINGS_PANES)[number];
 
@@ -60,8 +61,16 @@ export const SETTINGS_DETAIL = {
 
 export const detailValue = (detail: string | null, kind: "site" | "extension") => (detail?.startsWith(`${kind}:`) ? detail.slice(kind.length + 1) : null);
 
+const targetedOpenListeners = new Set<(consent: ConsentToken | null) => void>();
+
+export const onTargetedSettingsOpen = (listener: (consent: ConsentToken | null) => void) => void targetedOpenListeners.add(listener);
+
 export function openSettings(pane?: SettingsPane, profileId?: string | null, detail?: string | null) {
-  if (pane) goToSettingsPane(pane, profileId ?? null, detail ?? null);
+  if (pane) {
+    const consent = consentToken();
+    targetedOpenListeners.forEach((listener) => listener(consent));
+    goToSettingsPane(pane, profileId ?? null, detail ?? null);
+  }
   void openWindow(SETTINGS_WINDOW_ID, { kind: "settings", title: "Settings" });
 }
 

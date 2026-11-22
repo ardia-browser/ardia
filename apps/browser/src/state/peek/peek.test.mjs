@@ -5,7 +5,8 @@ const { isPeekTab, otherSitePeekTabIds, peekOpenedFrom, peekSourceOf, peekTabId,
 const { DEFAULT_SETTINGS, splitLinkModifierOf } = await import("../settings/settings.ts");
 const peekModifierOf = (settings) => settings.peekModifier;
 const { stripPlan } = await import("../tabs/liveTabs.ts");
-const { viewTabIds } = await import("../browser/model.ts");
+const { IDLE_LIVE, viewTabIds } = await import("../browser/model.ts");
+const { liveOf } = await import("../tabs/tabLive.ts");
 const { flushPersistence, loadSession, startPersistence } = await import("../session/persist.ts");
 const { SYNCED_SETTINGS } = await import("../sync/settingsAdapter.ts");
 const stub = await import("../../test-native/index.ts");
@@ -60,7 +61,7 @@ test("closing a peek throws its page away without a closed-tab entry", () => {
   const id = S().openPeek(a, "https://peek.example/");
   S().closePeek(a);
   assert.equal(S().tabs[id], undefined);
-  assert.equal(S().live[id], undefined);
+  assert.equal(liveOf(id), IDLE_LIVE);
   assert.equal(S().peeks[a], undefined);
   assert.equal(S().closedTabs.length, closed);
   assert.equal(S().windows[w].activeTabIds.default, a);
@@ -77,7 +78,7 @@ test("Open as Tab keeps the same tab, puts it right after its source and shows i
   assert.equal(S().windows[w].activeTabIds.default, id);
   assert.equal(S().tabs[id].url, "https://peek.example/next");
   assert.equal(S().tabs[id].page.nav.url, "https://peek.example/next");
-  assert.equal(S().live[id].canGoBack, true);
+  assert.equal(liveOf(id).canGoBack, true);
   assert.equal(S().tabs[id].openerId, a);
 });
 
@@ -126,7 +127,7 @@ test("switching tab hides the peek with its tab, and switching back shows the sa
   assert.equal(shownPageId(S(), w), id);
   assert.equal(S().tabs[id].page, page);
   assert.equal(S().tabs[id].url, "https://peek.example/next");
-  assert.equal(S().live[id].canGoBack, true);
+  assert.equal(liveOf(id).canGoBack, true);
   assert.deepEqual(order(w), before);
 });
 

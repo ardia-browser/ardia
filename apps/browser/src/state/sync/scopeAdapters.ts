@@ -1,6 +1,7 @@
 import { emptyScope, SyncNative, type Adapter, type ExtensionsAdapter } from "../../platform/sync";
 import { useBrowser } from "../browser/store";
-import { bookmarksAdapter, deviceAdapter, deviceTabsAdapter, historyAdapter, inTodaysNames, passwordsAdapter, sharedDataAdapter } from "./adapters";
+import { bookmarksAdapter, deviceAdapter, deviceTabsAdapter, inTodaysNames, passwordsAdapter, sharedDataAdapter } from "./adapters";
+import { historyAdapter } from "./historyAdapter";
 import { profileOpenTabsAdapter, profilesAdapter, profileThemesAdapter, profileTopAppsAdapter } from "./profileAdapters";
 import { settingsAdapter } from "./settingsAdapter";
 import { pinnedAreaAdapters } from "./pinned";
@@ -54,7 +55,7 @@ export function appAdapters(doc: SyncDoc, retiring: boolean): Adapter[] {
   return [
     ...(doc.types.settings ? [inTodaysNames(settingsAdapter)] : []),
     sharedDataAdapter(() => doc.profiles, removed),
-    profilesAdapter(withSharedOwners(doc, enabledLinks), removed),
+    profilesAdapter(withSharedOwners(doc, enabledLinks), removed, () => doc.scopes[APP_SCOPE]?.records, enabledLinks),
     profileThemesAdapter(enabledLinks, () => doc.scopes[APP_SCOPE]?.records, removed),
     profileTopAppsAdapter(enabledLinks, removed),
     profileOpenTabsAdapter(enabledLinks, removed),

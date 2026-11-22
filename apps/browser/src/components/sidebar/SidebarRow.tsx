@@ -1,6 +1,6 @@
-import { memo, type ReactNode } from "react";
-import { View, type StyleProp, type ViewStyle } from "react-native";
-import { FadeLabel, perLook, radius, sidebarLineHeight, Surface, type SurfaceProps } from "../ui";
+import { memo, useContext, useMemo, type ReactNode } from "react";
+import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import { drawnFadeLabel, perLook, radius, sidebarLineHeight, Surface, TextScopeContext, type SurfaceProps } from "../ui";
 import { hex, layout, useTheme } from "../ui/theme";
 import { useSelectedTabGlow } from "./rowLook";
 import { SELECTED_ROW_SHADOW_OFFSET, SIDEBAR_TYPE, SLEEPING_TITLE_OPACITY, TAB_ROW } from "./tokens";
@@ -28,30 +28,65 @@ export function SidebarRowSurface({
   padRight?: number;
   children: SurfaceProps["children"];
 }) {
-  const theme = useTheme();
-  const glow = useSelectedTabGlow();
+  const surface = useRowSurfaceLayer({ fill, selected, border, stroke, cornerRadius });
   return (
-    <Surface
-      fill={hex(fill)}
-      cornerRadius={cornerRadius}
-      borderWidth={border}
-      borderColor={stroke === undefined ? undefined : hex(stroke)}
-      borderColors={selected ? theme.tabSelectedBorder.map(hex) : undefined}
-      shadowColor={selected ? glow.shadowColor : undefined}
-      shadowOpacity={selected ? glow.shadowOpacity : 0}
-      shadowRadius={glow.shadowRadius}
-      shadowOffset={SELECTED_ROW_SHADOW_OFFSET}
-      style={{ height: layout.rowHeight, flexDirection: "row", alignItems: "center", paddingLeft: padLeft, paddingRight: padRight }}
-    >
+    <View style={rowSurfaceFrame(padLeft, padRight)}>
+      {surface}
       {children}
-    </Surface>
+    </View>
+  );
+}
+
+const surfaceFrames = new Map<string, ViewStyle>();
+
+export function rowSurfaceFrame(padLeft: number = TAB_ROW.contentLeft, padRight: number = TAB_ROW.trailing): ViewStyle {
+  const key = `${layout.rowHeight}:${padLeft}:${padRight}`;
+  let frame = surfaceFrames.get(key);
+  if (!frame) surfaceFrames.set(key, (frame = { height: layout.rowHeight, flexDirection: "row", alignItems: "center", paddingLeft: padLeft, paddingRight: padRight }));
+  return frame;
+}
+
+export function useRowSurfaceLayer({
+  fill,
+  selected = false,
+  border = 0,
+  stroke,
+  cornerRadius = radius.chrome,
+}: {
+  fill: string;
+  selected?: boolean;
+  border?: number;
+  stroke?: string;
+  cornerRadius?: number;
+}) {
+  const theme = useTheme();
+  const { shadowColor, shadowOpacity, shadowRadius } = useSelectedTabGlow();
+  const selectedBorder = theme.tabSelectedBorder;
+  return useMemo(
+    () => (
+      <Surface
+        pointerEvents="none"
+        fill={hex(fill)}
+        cornerRadius={cornerRadius}
+        borderWidth={border}
+        borderColor={stroke === undefined ? undefined : hex(stroke)}
+        borderColors={selected ? selectedBorder.map(hex) : undefined}
+        shadowColor={selected ? shadowColor : undefined}
+        shadowOpacity={selected ? shadowOpacity : 0}
+        shadowRadius={shadowRadius}
+        shadowOffset={SELECTED_ROW_SHADOW_OFFSET}
+        style={StyleSheet.absoluteFill}
+      />
+    ),
+    [fill, cornerRadius, border, stroke, selected, selectedBorder, shadowColor, shadowOpacity, shadowRadius],
   );
 }
 
 export const SidebarRowLabel = memo(function SidebarRowLabel({ text, color, weight, compact = false, struck = false }: { text: string; color: string; weight?: "medium" | "regular"; compact?: boolean; struck?: boolean }) {
   useTheme();
+  const inSidebar = useContext(TextScopeContext) === "sidebar";
   const frame = compact ? compactTitleFrame() : rowTitleFrame();
-  return <FadeLabel text={text} fontSize={compact ? SIDEBAR_TYPE.compact : SIDEBAR_TYPE.title} weight={weight} color={color} strikethrough={struck} style={struck ? [frame, SLEEPING_TITLE] : frame} />;
+  return drawnFadeLabel({ text, fontSize: compact ? SIDEBAR_TYPE.compact : SIDEBAR_TYPE.title, weight, color, strikethrough: struck, style: struck ? [frame, SLEEPING_TITLE] : frame }, inSidebar);
 });
 
 const SLEEPING_TITLE = { opacity: SLEEPING_TITLE_OPACITY } as const;

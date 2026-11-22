@@ -4,6 +4,7 @@ import type { Profile } from "../browser/types";
 import { legacyThemeOf, themeAngleKey, themeFromRecord, type ProfileRecord } from "./profileAdapters";
 import { PROFILE, PROFILE_THEME, profileRecord } from "./records";
 import type { ProfileLink } from "./syncDoc";
+import { withSyncedColor } from "../../lib/presetLook";
 
 function pairedTheme(app: ScopeState, syncId: string): Pick<Profile, "theme"> | null {
   const record = app.records[`${PROFILE_THEME}${syncId}`]?.v;
@@ -19,7 +20,10 @@ function settledTheme(app: ScopeState, syncId: string): boolean {
 
 export function pairTheme(app: ScopeState | undefined, profileId: string, link: ProfileLink, record?: ProfileRecord) {
   const theme = app ? pairedTheme(app, link.syncId) : record ? legacyThemeOf(record) : null;
-  if (theme) useBrowser.getState().setProfileLook(profileId, theme);
+  const profile = useBrowser.getState().profiles[profileId];
+  const color = (app ? profileRecord(app.records[`${PROFILE}${link.syncId}`]?.v) : record)?.c;
+  const chosen = profile && color ? withSyncedColor(profile, color, theme ? (theme.theme ?? null) : undefined) : null;
+  if (theme || chosen) useBrowser.getState().setProfileLook(profileId, { ...chosen, ...(theme ?? {}) });
   if (app && settledTheme(app, link.syncId)) delete link.themeAdopting;
   else link.themeAdopting = true;
 }

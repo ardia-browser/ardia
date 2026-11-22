@@ -1,5 +1,7 @@
 import type { ArdiaHost } from "./host";
 import { hostProfile, hostSupports, invokeHost } from "./host.ts";
+import { consentToken } from "../../browser/src/state/telemetry/client";
+import { errorFor } from "../../browser/src/state/telemetry/logs";
 
 export type ExtensionViewKind = "popup" | "sidePanel";
 export type ExtensionViewEvent = { type: string; [key: string]: unknown };
@@ -126,10 +128,11 @@ export class HostExtensionView {
     const wanted = shown ? this.focusWanted : null;
     if (!wanted) return;
     this.focusWanted = null;
+    const consent = consentToken();
     void this.enqueue(async () => {
       if (this.disposed || this.id === undefined || !this.shown || !this.focusStillWanted(wanted)) return;
       await invokeHost<void>("extensionView.command", { id: this.id, command: "focus", args: [] }, this.host);
-    }).catch((error) => console.error("[ardia host] extension view focus failed", error));
+    }).catch((error) => errorFor(consent, "[ardia host] extension view focus failed", error));
   }
 
   private focusStillWanted({ owner, at }: FocusRequest) {
@@ -141,6 +144,7 @@ export class HostExtensionView {
     if (this.disposed) return;
     this.disposed = true;
     this.unsubscribe();
-    void this.enqueue(() => this.release()).catch((error) => console.error("[ardia host] extension view release failed", error));
+    const consent = consentToken();
+    void this.enqueue(() => this.release()).catch((error) => errorFor(consent, "[ardia host] extension view release failed", error));
   }
 }

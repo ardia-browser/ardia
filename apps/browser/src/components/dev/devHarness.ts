@@ -16,6 +16,32 @@ import { useLifecycle } from "../../state/tabs/tabLifecycle";
 import { webviews } from "../../platform/webviews";
 import { call, on } from "../../platform/engine";
 
+export function devPluginSeams(): (typeof import("../../state/plugins/store") &
+  typeof import("../../state/plugins/lifecycle") &
+  typeof import("../../state/plugins/pages") &
+  typeof import("../../state/plugins/tools") &
+  typeof import("../../state/plugins/commands") &
+  typeof import("../../state/plugins/socketMethods") &
+  typeof import("../../state/plugins/process") &
+  typeof import("../../state/plugins/official") & {
+    snapshotPage: typeof import("../../platform/plugins").devSnapshotPluginPage;
+    startNative: typeof import("../../platform/plugins").startPluginProcess;
+  }) | null {
+  if (!__DEV__) return null;
+  return {
+    ...require("../../state/plugins/store"),
+    ...require("../../state/plugins/lifecycle"),
+    ...require("../../state/plugins/pages"),
+    ...require("../../state/plugins/tools"),
+    ...require("../../state/plugins/commands"),
+    ...require("../../state/plugins/socketMethods"),
+    ...require("../../state/plugins/process"),
+    ...require("../../state/plugins/official"),
+    snapshotPage: require("../../platform/plugins").devSnapshotPluginPage,
+    startNative: require("../../platform/plugins").startPluginProcess,
+  };
+}
+
 export function startDevHarness() {
   probeStore("pages", usePages);
   probeStore("sidebarUi", useSidebarUi);
@@ -42,6 +68,12 @@ export function startDevHarness() {
     favicons,
     get bookmarks(): typeof import("../../state/bookmarks/bookmarks") {
       return require("../../state/bookmarks/bookmarks");
+    },
+    get persistence(): typeof import("../../state/session/persist") {
+      return require("../../state/session/persist");
+    },
+    get tabLive(): typeof import("../../state/tabs/tabLive") {
+      return require("../../state/tabs/tabLive");
     },
     get history(): typeof import("../../state/history/history") {
       return require("../../state/history/history");
@@ -170,6 +202,7 @@ export function startDevHarness() {
       const { WhatsSentSheet } = require("../settings/panes/ShareDiagnostics") as typeof import("../settings/panes/ShareDiagnostics");
       showSettingsSheet(createElement(WhatsSentSheet));
     },
+    showWebKitLimits: () => (require("../settings/panes/WebKitLimitsSheet") as typeof import("../settings/panes/WebKitLimitsSheet")).showWebKitLimits("engineRow"),
     showFilterLists: () => {
       const { showSettingsSheet } = require("../../state/settings/sheet") as typeof import("../../state/settings/sheet");
       const { FilterListsSheet } = require("../settings/panes/FilterListsSheet") as typeof import("../settings/panes/FilterListsSheet");
@@ -187,8 +220,32 @@ export function startDevHarness() {
     get automation(): typeof import("../../state/automation/approvals") & typeof import("../../state/automation/hookRules") & typeof import("../../state/automation/hookPolicy") & typeof import("../../state/automation/decideSocket") {
       return { ...require("../../state/automation/approvals"), ...require("../../state/automation/hookRules"), ...require("../../state/automation/hookPolicy"), ...require("../../state/automation/decideSocket") };
     },
+    get plugins() {
+      return devPluginSeams();
+    },
+    get passwordManager(): typeof import("../../state/site/passwordManager") & typeof import("../../state/site/verificationCodes") {
+      return { ...require("../../state/site/passwordManager"), ...require("../../state/site/verificationCodes") };
+    },
     get airTraffic(): typeof import("../../state/airTraffic/store") & typeof import("../../state/airTraffic/preview") & typeof import("../../state/littleArdia/actions") {
       return { ...require("../../state/airTraffic/store"), ...require("../../state/airTraffic/preview"), ...require("../../state/littleArdia/actions") };
+    },
+    blockJs(ms: number, garbage = false) {
+      setTimeout(() => {
+        const until = Date.now() + ms;
+        let kept: number[][] = [];
+        while (Date.now() < until) {
+          if (!garbage) continue;
+          kept.push(new Array(256).fill(kept.length));
+          if (kept.length > 4000) kept = [];
+        }
+      }, 0);
+      return ms;
+    },
+    get freezes(): typeof import("../../state/telemetry/freezes") & typeof import("../../state/telemetry/freezeRecords") {
+      return { ...require("../../state/telemetry/freezes"), ...require("../../state/telemetry/freezeRecords") };
+    },
+    get engineSwap(): typeof import("../../state/engines/engineSwap") {
+      return require("../../state/engines/engineSwap");
     },
   };
   (globalThis as { ac?: typeof ac }).ac = ac;

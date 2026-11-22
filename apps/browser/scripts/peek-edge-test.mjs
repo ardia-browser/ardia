@@ -8,7 +8,7 @@ import { launch, reporter, session } from "../../../scripts/lib/instance.mjs";
 const args = process.argv.slice(2);
 const appArg = args.find((a) => !a.startsWith("--"));
 if (!appArg) {
-  console.error("usage: node peek-edge-test.mjs <Debug Ardia.app> [--port=<DevTools port>] [--keep-data]\n\nThe auto-hidden sidebar's peek, through the native edge watcher: a pointer resting on the window's bottom or top edge beside the peek keeps it out instead of flicking it shut and open, one that goes well past the edge closes it, an edge crossing outside the sidebar's column never opens it, once it slides away only the window's edge brings it back, in a full-screen window the pointer resting at the screen's edge keeps it out, pressing the other space's dot keeps it out, and with the window against a screen edge another display shares, the pointer stops at that edge to show the sidebar and a second push goes on through. Also (#1297, #1393, #1679): only the last 3 pt or past the edge open it, it stays out 40 pt past its edge and closes 200 ms after the pointer leaves, a drag on its edge resizes it instead of closing it, and Reveal hidden tabs on hover off leaves the edge alone.");
+  console.error("usage: node peek-edge-test.mjs <Debug Ardia.app> [--port=<DevTools port>] [--keep-data]\n\nThe auto-hidden sidebar's peek, through the native edge watcher: a pointer resting on the window's bottom or top edge beside the peek keeps it out instead of flicking it shut and open, one that goes well past the edge closes it, an edge crossing outside the sidebar's column never opens it, once it slides away only the window's edge brings it back, in a full-screen window the pointer resting at the screen's edge keeps it out, pressing the other space's dot keeps it out, and with the window against a screen edge another display shares, the pointer crosses without being held and coming straight back shows the sidebar. Also (#1297, #1393, #1679): only the last 3 pt or past the edge open it, it stays out 40 pt past its edge and closes 200 ms after the pointer leaves, a drag on its edge resizes it instead of closing it, and Reveal hidden tabs on hover off leaves the edge alone.");
   process.exit(2);
 }
 const appPath = resolve(appArg);
@@ -175,44 +175,51 @@ try {
     assert.equal(out.switched, true);
     assert.deepEqual(out.calls.filter((c) => c === "hide"), [], `no hide: ${out.calls}`);
     assert.equal(out.live, true);
+    await run(`ac.actions.switchProfile("w1", st().profileOrder[0], true); return settle(900).then(() => away());`);
   });
 
-  await rep.check("with the window against the screen's edge, crossing to the next display stops at the edge and peeks; a second push goes through", async () => {
+  await rep.check("with the window against a screen edge another display shares, the pointer is never held there: it crosses, and coming straight back peeks", async () => {
     const frame = (x) => `return globalThis.expo.modules.ArdiaDev.devSetWindowFrame("w1", [${x}, 100, ${WIDTH}, ${HEIGHT}]).then(() => settle(400));`;
+    const listen = `const notes = []; const sub = globalThis.expo.modules.ArdiaAppWindows.addListener("onWindowEvent", (e) => e.screenEdge && notes.push(e.screenEdge));`;
     await run(frame(0));
-    assert.equal(await run(`return at(300, 400).then(() => at(-30, 400)).then(() => settle(500)).then(live);`), true, "stopped at the screen edge, peeking");
-    assert.equal(await run(`return at(-30, 400).then(() => settle(700)).then(live);`), false, "the second push went on to the next display");
-    assert.equal(await run(`return at(300, 400).then(() => settle(500)).then(() => at(-30, 400)).then(() => settle(500)).then(live);`), true, "stops again on the next crossing");
+    const crossed = await run(`${listen}
+      return at(300, 400).then(() => settle(120)).then(() => at(-30, 400)).then(() => settle(500)).then(() => { sub.remove(); return { notes, live: live() }; });`);
+    assert.deepEqual(crossed.notes, ["crossed"], "the crossing goes on to the next display");
+    assert.equal(crossed.live, false, "and leaves the sidebar hidden");
+    const back = await run(`${listen}
+      return at(300, 400).then(() => settle(120)).then(() => at(-30, 400)).then(() => settle(150)).then(() => at(4, 400)).then(() => settle(500)).then(() => { sub.remove(); return { notes, live: live() }; });`);
+    assert.deepEqual(back.notes, ["crossed", "returned"], "an overshoot that comes straight back");
+    assert.equal(back.live, true, "peeks");
+    assert.equal(await run(`return at(80, 400).then(() => settle(500)).then(live);`), true, "and stays out with the pointer over it");
+    assert.equal(await run(`return at(-30, 400).then(() => settle(60)).then(() => !!globalThis.acLayout.peek.w1?.leaving);`), true, "crossing to the next display starts closing it at once, not after the 200 ms grace");
+    assert.equal(await run(`return at(4, 400).then(() => settle(500)).then(live);`), true, "coming straight back while it closes opens it again");
+    assert.equal(await run(`return at(-30, 400).then(() => settle(700)).then(live);`), false, "and crossing again closes it");
     assert.equal(await run(`return away();`), false);
-    const quick = await run(`const notes = []; const sub = globalThis.expo.modules.ArdiaAppWindows.addListener("onWindowEvent", (e) => e.screenEdge && notes.push(e.screenEdge));
-      return at(300, 400).then(() => settle(500)).then(() => at(-30, 400)).then(() => settle(200)).then(() => at(-30, 400)).then(() => settle(300)).then(() => (sub.remove(), notes));`);
-    assert.deepEqual(quick, ["stopped"], "a quick second push after the peek opened is the same stop, not a second one");
+    assert.equal(await run(`return at(300, 400).then(() => settle(120)).then(() => at(-30, 400)).then(() => settle(150)).then(() => at(50, 400)).then(() => settle(500)).then(() => { st().toggleSidebar("w1"); return settle(600); }).then(() => { st().toggleSidebar("w1"); return settle(900); }).then(() => at(1, 400)).then(() => settle(500)).then(live);`), true, "after the edge watch stops and starts again, the edge strip still opens it");
     assert.equal(await run(`return away();`), false);
-    await run(frame(10));
-    const notes = await run(`const notes = []; const sub = globalThis.expo.modules.ArdiaAppWindows.addListener("onWindowEvent", (e) => e.screenEdge && notes.push(e.screenEdge));
-      return at(300, 400).then(() => settle(500)).then(() => at(-5, 400)).then(() => settle(100)).then(() => at(-30, 400)).then(() => settle(100)).then(() => at(-30, 400)).then(() => settle(300)).then(() => (sub.remove(), notes));`);
-    assert.deepEqual(notes, ["stopped"], "one stop, counted even when the gap beside the window already opened the peek, and a quick second push is not a second stop");
+    assert.equal(await run(`return at(300, 400).then(() => settle(500)).then(() => { st().toggleSidebar("w1"); return settle(600); }).then(() => at(-30, 400)).then(() => settle(300)).then(() => { st().toggleSidebar("w1"); return settle(250); }).then(() => at(50, 400)).then(() => settle(500)).then(live);`), false, "a pointer already past the edge when the watch starts again has made no crossing, so coming back in doesn't peek");
     assert.equal(await run(`return away();`), false);
     await run(frame(200));
     assert.equal(await run(`return at(300, 400).then(() => at(-250, 400)).then(() => settle(500)).then(live);`), false, "a window away from the screen edge lets the pointer cross");
   });
 
-  await rep.check("a stop at the screen edge ends when the window moves away from that edge", async () => {
+  await rep.check("a peek opened at the screen edge closes once the window moves away from that edge", async () => {
     const frame = (x) => `return globalThis.expo.modules.ArdiaDev.devSetWindowFrame("w1", [${x}, 100, ${WIDTH}, ${HEIGHT}]).then(() => settle(400));`;
     await run(frame(0));
-    assert.equal(await run(`return at(300, 400).then(() => at(-30, 400)).then(() => settle(500)).then(live);`), true, "stopped at the screen edge, peeking");
+    assert.equal(await run(`return at(300, 400).then(() => settle(120)).then(() => at(-30, 400)).then(() => settle(150)).then(() => at(4, 400)).then(() => settle(500)).then(live);`), true, "came back, peeking");
     await run(frame(300));
     assert.equal(await run(`return at(-300, 400).then(() => settle(700)).then(live);`), false, "the pointer left at the screen edge, 300 pt from the moved window");
-    assert.equal(await run(`return at(-300, 200).then(() => settle(700)).then(live);`), false, "moving along the screen edge");
     await run(frame(200));
   });
 
-  await rep.check("with the sidebar on the right and the window against the screen's right edge, crossing stops there too", async () => {
+  await rep.check("with the sidebar on the right and the window against the screen's right edge, the same holds there", async () => {
     const screenWidth = Number(execFileSync("osascript", ["-l", "JavaScript", "-e", 'ObjC.import("AppKit"); $.NSScreen.screens.objectAtIndex(0).frame.size.width']).toString());
     await run(`st().updateSettings({ sidebarSide: "right" }); return globalThis.expo.modules.ArdiaDev.devSetWindowFrame("w1", [${screenWidth - WIDTH}, 100, ${WIDTH}, ${HEIGHT}]).then(() => settle(600));`);
     try {
-      assert.equal(await run(`return at(${WIDTH - 300}, 400).then(() => at(${WIDTH + 30}, 400)).then(() => settle(500)).then(live);`), true, "stopped at the right screen edge, peeking");
-      assert.equal(await run(`return at(${WIDTH + 30}, 400).then(() => settle(700)).then(live);`), false, "the second push went on to the next display");
+      assert.deepEqual(await run(`const notes = []; const sub = globalThis.expo.modules.ArdiaAppWindows.addListener("onWindowEvent", (e) => e.screenEdge && notes.push(e.screenEdge));
+        return at(${WIDTH - 300}, 400).then(() => settle(120)).then(() => at(${WIDTH - 0.5}, 400)).then(() => settle(200)).then(() => { sub.remove(); return notes; });`), [], "half a point inside the right edge is still this display");
+      assert.equal(await run(`return at(${WIDTH - 300}, 400).then(() => settle(120)).then(() => at(${WIDTH + 30}, 400)).then(() => settle(500)).then(live);`), false, "crossed the right screen edge without peeking");
+      assert.equal(await run(`return at(${WIDTH - 300}, 400).then(() => settle(120)).then(() => at(${WIDTH + 30}, 400)).then(() => settle(150)).then(() => at(${WIDTH - 4}, 400)).then(() => settle(500)).then(live);`), true, "coming straight back peeks");
     } finally {
       await run(`st().updateSettings({ sidebarSide: "left" }); return settle(400);`);
     }

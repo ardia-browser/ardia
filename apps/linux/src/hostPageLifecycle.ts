@@ -2,6 +2,7 @@ import { patchPage, setPopover, usePages } from "../../browser/src/state/tabs/pa
 import { useBrowser } from "../../browser/src/state/browser/store";
 import { updateLive } from "../../browser/src/state/tabs/actions";
 import { revealToolbar } from "../../browser/src/state/windows/toolbarAutoHide";
+import { holdThemeColor, hostThemeColor } from "../../browser/src/state/windows/launchLook";
 import type { NavigationState } from "../../../packages/ardiacore/src/pageTypes";
 
 import type { PageState } from "../../browser/src/state/tabs/pageState";
@@ -31,7 +32,7 @@ export function resetHostPage(tabId: string, reason: PageResetReason, replaced: 
     const patch: Partial<PageState> = {};
     for (const kind of kinds) Object.assign(patch, RESTORED[kind]);
     patchPage(tabId, patch);
-    if (kinds.has("navigation")) updateLive(tabId, { themeColor: null });
+    if (kinds.has("navigation")) holdThemeColor(tabId);
     return;
   }
   patchPage(tabId, {
@@ -47,7 +48,7 @@ export function resetHostPage(tabId: string, reason: PageResetReason, replaced: 
     autofillPrompt: null,
   });
   setPopover(tabId, null);
-  updateLive(tabId, { themeColor: null });
+  holdThemeColor(tabId);
   revealToolbar(tabId);
 }
 
@@ -87,6 +88,6 @@ export function forgetDepartedPage(tabId: string, windowId: string, store: Depar
 }
 
 export function applyHostPageTheme(tabId: string, navigation: NavigationState) {
-  updateLive(tabId, { themeColor: navigation.themeColor });
+  updateLive(tabId, { themeColor: hostThemeColor(tabId, navigation.url, navigation.themeColor, navigation.isLoading) });
   patchPage(tabId, { themeColorSource: navigation.themeColorSource });
 }

@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<map>
+    <boolean name="blocking.cookieBanners" value="false" />
+    <string name="filters.selection">[&quot;adguard-mobile&quot;,&quot;easylist&quot;,&quot;easyprivacy&quot;,&quot;fanboy-cookiemonster&quot;,&quot;plowe-0&quot;,&quot;ublock-badware&quot;,&quot;ublock-filters&quot;,&quot;ublock-privacy&quot;,&quot;ublock-quick-fixes&quot;,&quot;ublock-unbreak&quot;]</string>
+    <boolean name="filters.phoneDefaults" value="true" />
+</map>

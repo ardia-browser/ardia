@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 const HELP = `Click to skip in the video Picture in Picture window (issue #1735), end to end in a hidden instance: a click on the
-left of the video skips back 10 s, on the right ahead 10 s, the centre column (the play button's) does nothing, a drag
-moves the window without seeking (also one that only passes 3 pt at the release), quick repeated clicks skip once each,
+left of the video skips back 10 s, on the right ahead 10 s, the centre column (the play button's) does nothing, a press
+that stays within 3 pt is a click that leaves the window where it was and records no drag (2.9 pt at the release), a
+drag moves the window without seeking (also one that only passes 3 pt at the release, 3.1 pt), quick repeated clicks skip once each,
 the skip moves the video in the window even while it is paused and another one plays, a page's Media Session seek
 handlers get the skip as they get Chrome's own button (seekto on the timeline the page reports, kept current through
 repeated clicks and a pause though the page reports it once, also for a video in a closed shadow root), a stashed
@@ -163,7 +164,10 @@ const skipCount = async () => {
   const info = await pip("skip").catch(() => "");
   return info ? JSON.parse(info).count : 0;
 };
-const skipEvents = async () => (await engine("tabs.devEvents", { tabId })).filter((e) => e.name === "pictureInPictureSkip").length;
+const eventCounts = async () => {
+  const names = (await engine("tabs.devEvents", { tabId })).map((e) => e.name);
+  return { skips: names.filter((n) => n === "pictureInPictureSkip").length, drags: names.filter((n) => n === "pictureInPictureDragged").length };
+};
 const sample = () => page.eval("window.sample()");
 const mouse = async (steps) => {
   for (const step of steps) {
@@ -177,14 +181,14 @@ const click = (x, y, clicks = 1) =>
 
 async function measure(steps) {
   const frameBefore = (await shown()).frame;
-  const [skipsBefore, eventsBefore, a] = [await skipCount(), await skipEvents(), await sample()];
+  const [skipsBefore, eventsBefore, a] = [await skipCount(), await eventCounts(), await sample()];
   await mouse(steps);
   await sleep(700);
   const b = await sample();
-  const [skipsAfter, eventsAfter] = [await skipCount(), await skipEvents()];
+  const [skipsAfter, eventsAfter] = [await skipCount(), await eventCounts()];
   const frameAfter = (await shown())?.frame ?? "";
   const jump = b.time - a.time - (b.at - a.at) / 1000;
-  return { jump, skips: skipsAfter - skipsBefore, events: eventsAfter - eventsBefore, paused: b.paused, pip: b.pip, frameBefore, frameAfter };
+  return { jump, skips: skipsAfter - skipsBefore, events: eventsAfter.skips - eventsBefore.skips, drags: eventsAfter.drags - eventsBefore.drags, paused: b.paused, pip: b.pip, frameBefore, frameAfter };
 }
 
 const fmt = (m) => `moved ${m.jump >= 0 ? "+" : ""}${m.jump.toFixed(1)} s, ${m.skips} skips, ${m.events} events${m.paused ? ", paused" : ""}`;
@@ -218,15 +222,18 @@ if (ok) {
   await seekCheck("right-zone click", click(right, midY), 10);
   await seekCheck("dead-band click", click(centre, midY), 0);
   await seekCheck("dead-band edge click (38 pt off centre)", click(centre - 38, midY), 0);
-  const pressAndRelease = (x, draggedBy, releasedBy) => [`down:${x},${midY}`, `dragged:${x + draggedBy},${midY}`, `up:${x + releasedBy - (before ? 0 : draggedBy)},${midY}`];
-  await seekCheck("left-zone click with a 2 pt wobble", pressAndRelease(left, 2, 2), -10);
-  await seekCheck("press, 2 pt drag, release 4 pt from the press", pressAndRelease(left, 2, 4), 0);
-  await seekCheck("press-drag-release in the right zone", [`down:${right},${midY}`, `dragged:${right - 30},${midY - 20}`, `up:${right - 30},${midY - 20}`], 0,
-    async (m) => {
-      if (before) return null;
-      const [x0, y0] = rect(m.frameBefore), [x1, y1] = rect(m.frameAfter);
-      return Math.abs(x1 - x0 + 30) < 1 && Math.abs(y1 - y0 - 20) < 1 ? null : `the window didn't follow the drag: ${m.frameBefore} → ${m.frameAfter}`;
-    });
+  const pressAndRelease = (x, draggedBy, releasedBy) => [`down:${x},${midY}`, `dragged:${x + draggedBy},${midY}`, `up:${x + releasedBy},${midY}`];
+  const windowMoved = (dx, dy, drags) => async (m) => {
+    if (before) return null;
+    const [x0, y0] = rect(m.frameBefore), [x1, y1] = rect(m.frameAfter);
+    if (Math.abs(x1 - x0 - dx) >= 1 || Math.abs(y1 - y0 - dy) >= 1) return `the window moved ${x1 - x0},${y1 - y0}, expected ${dx},${dy}: ${m.frameBefore} → ${m.frameAfter}`;
+    return m.drags === drags ? null : `expected ${drags} drags recorded, got ${m.drags}`;
+  };
+  await seekCheck("left-zone click with a 2 pt wobble", pressAndRelease(left, 2, 2), -10, windowMoved(0, 0, 0));
+  await seekCheck("press, 2 pt drag, release 2.9 pt from the press: a click, the window stays", pressAndRelease(left, 2, 2.9), -10, windowMoved(0, 0, 0));
+  await seekCheck("press, 2 pt drag, release 3.1 pt from the press: a drag, the window follows", pressAndRelease(left, 2, 3.1), 0, windowMoved(3.1, 0, 1));
+  const grabbedSpot = before ? `${right - 30},${midY - 20}` : `${right},${midY}`;
+  await seekCheck("press-drag-release in the right zone", [`down:${right},${midY}`, `dragged:${right - 30},${midY - 20}`, `up:${grabbedSpot}`], 0, windowMoved(-30, 20, 1));
   const controlsUp = [`moved:${centre},${midY}`, "wait:500"];
   await seekCheck("left-zone click with the controls showing", [...controlsUp, ...click(left, midY)], -10);
   await seekCheck("Chrome's own −10 s button: Chrome seeks, we don't", [...controlsUp, ...click(centre - 76, midY)], -10, null, { byChrome: true });

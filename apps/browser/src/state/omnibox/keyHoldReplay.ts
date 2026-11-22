@@ -1,5 +1,6 @@
 import { onKeyHoldReplay } from "../../platform/keyHold";
 import { noteReplayGuardExpired } from "../telemetry/inlineCompletionCounts";
+import { consentToken } from "../telemetry/client";
 
 export const REPLAY_GUARD_MS = 2000;
 
@@ -15,12 +16,13 @@ function heard(tag: number, count: number) {
   const running = replaying.get(tag);
   if (running) clearTimeout(running);
   replaying.delete(tag);
+  const consent = consentToken();
   if (count > 0)
     replaying.set(
       tag,
       setTimeout(() => {
         replaying.delete(tag);
-        noteReplayGuardExpired();
+        noteReplayGuardExpired(consent);
         changed();
       }, REPLAY_GUARD_MS),
     );

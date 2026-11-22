@@ -65,11 +65,14 @@ Requirements: `openssl` and Node 22 or newer (for the built-in WebSocket client)
 | F02 | #12 | Isolated and shared-data profiles, private windows |
 | F03 | #13 | Site panel connection security for HTTPS, HTTP, mixed, bad-certificate and internal pages |
 | F23 | #33 | History jumps of two or more, zoom feedback, reset and per-site persistence |
-| F08 | #18 | Download events, controls, settings and restart |
+| F08 | #18 | Download events, controls, settings and restart; real presses inside and outside the downloads panel (#2155) |
 | F09 | #19 | Extension management, toolbar action, popup and side panel, with `fixtures/extension/` |
 | F10 | #20 | Online search suggestions through the native host, only when enabled, and never from a private window |
 | F26 | #36 | Unsupported platform settings are hidden and startup has no backend rejections |
 | F27 | #37 | Onboarding starts once on a fresh profile and app services run once per launch |
+| F29 | #2391 | New Tab page and command bar disappear on the first frame after sidebar and Ctrl+Tab switches |
+| F30 | #2736 | Peeking the hidden sidebar never hides the page under it |
+| F31 | #3285 | Opening the hidden toolbar (a hover peek, the reveal a scroll up makes, a click on the strip, a peek revealed and collapsed again at once) and folding it away never hides the page under it |
 | F28 | #2341 | Sidebar rows and Top Apps tiles reorder by drag in a space the window switched to, not only the one it opened in |
 
 Each scenario's report lists its manual steps, such as touchpad pinch zoom, Web Store installs, popup placement and

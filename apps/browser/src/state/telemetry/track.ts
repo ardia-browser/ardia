@@ -1,4 +1,4 @@
-import { capture, isSharing } from "./client";
+import { capture, consentNow, consentToken, counted, isSharing, onConsentPeriodChange, stillValid, type ConsentToken } from "./client";
 import { appInfo } from "./transport";
 import { launchFirstWindow } from "./journeys";
 import type { PanelState } from "../browser/types";
@@ -36,23 +36,37 @@ export function commandBarPlacementLabel(panel: Pick<PanelState, "newTab" | "pla
 }
 
 export const trackSuggestionChosen = (s: SuggestionLike, via?: SuggestionVia) =>
-  capture("suggestion_chosen", { type: suggestionType(s), ...(s?.kind === "action" && s.id ? { command: s.id.split(":")[0] } : {}), ...(via ? { via } : {}) });
+  capture("suggestion_chosen", { type: suggestionType(s), ...(s?.kind === "action" && s.id ? { command: s.id.split(":")[0] } : {}), ...(via ? { via } : {}) }, consentNow());
 
 export type CalendarConnectReport = { before: string; after: string; responsible: string; errored: boolean; settingsOpened: boolean; ms: number };
 
-export const trackCalendarConnect = (r: CalendarConnectReport) =>
-  capture("calendar_connect", { before: r.before, after: r.after, responsible: r.responsible, errored: r.errored, settings_opened: r.settingsOpened, ms: Math.min(Math.max(0, Math.round(r.ms)), 600_000) });
+export const trackCalendarConnect = (r: CalendarConnectReport, consent: ConsentToken | null) =>
+  capture("calendar_connect", { before: r.before, after: r.after, responsible: r.responsible, errored: r.errored, settings_opened: r.settingsOpened, ms: Math.min(Math.max(0, Math.round(r.ms)), 600_000) }, consent);
 
-export const trackSettingsSection = (section: string) => capture("settings_section_opened", { section });
-export const trackAutofillToggleKept = (toggle: AutofillToggle) => capture("autofill_toggle_kept", { toggle });
+export const trackSettingsSection = (section: string) => capture("settings_section_opened", { section }, consentNow());
+export const trackAutofillToggleKept = (toggle: AutofillToggle) => capture("autofill_toggle_kept", { toggle }, consentNow());
 
 const SAMPLE_EVERY = 5;
 const MAX_SAMPLES = 500;
 const latency: number[] = [];
 let keystrokes = 0;
 
-export function sampleOmniboxLatency(ms: number) {
-  if (++keystrokes % SAMPLE_EVERY) return;
+onConsentPeriodChange(() => (keystrokes = 0));
+
+export type OmniboxKey = { at: number; consent: ConsentToken | null };
+
+export const newOmniboxKey = (): OmniboxKey => ({ at: 0, consent: null });
+
+export function omniboxKeyHeard(key: OmniboxKey) {
+  key.at = Date.now();
+  key.consent = consentToken();
+}
+
+export function sampleOmniboxLatency(key: OmniboxKey) {
+  const { at, consent } = key;
+  key.at = 0;
+  if (!at || !stillValid(consent) || ++keystrokes % SAMPLE_EVERY) return;
+  const ms = Date.now() - at;
   if (ms >= 0 && ms < 10_000 && latency.length < MAX_SAMPLES) latency.push(ms);
 }
 
@@ -60,7 +74,7 @@ export const takeOmniboxLatency = () => latency.splice(0);
 
 let suggests = { search_suggest_ok: 0, search_suggest_blocked: 0, search_suggest_failed: 0 };
 
-export const noteSearchSuggest = (outcome: "ok" | "blocked" | "failed") => void suggests[`search_suggest_${outcome}`]++;
+export const noteSearchSuggest = (outcome: "ok" | "blocked" | "failed", consent: ConsentToken | null) => counted(consent, () => void suggests[`search_suggest_${outcome}`]++);
 
 export const takeSearchSuggests = () => {
   const taken = suggests;

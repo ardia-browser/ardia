@@ -2,7 +2,6 @@ import type { StateCreator } from "zustand";
 import type { BrowserState } from "../browser/store";
 import {
   findLast,
-  IDLE_LIVE,
   incognitoProfileId,
   inPinnedContainer,
   isIncognitoProfile,
@@ -15,15 +14,14 @@ import {
   without,
 } from "../browser/model";
 import { MAX_CLOSED_WINDOWS, restoringGroup } from "../pins/closedTabs";
-import { markPinned } from "../pins/pinChoices";
-import { hasLoadedPage, hasPage, IDLE, isAsleep, loadedPage, withWake } from "../tabs/pageSession";
+import { hasLoadedPage, hasPage, IDLE, isAsleep, loadedPage } from "../tabs/pageSession";
 import { adoptParkedPins, parkWindowPins } from "../pins/parkedPins";
 import { settleMovedPins } from "../pins/pinMirror";
 import { holderOf, returnSharedPages, swapPinPage } from "../pins/pinShare";
 import { isTopApp, topAppsShared } from "../pins/topApps";
 import { joinedWithCurrent, newTabPlacement } from "../tabs/openers";
-import { handOverTabs, tabsClosedWithWindow } from "../tabs/sharedWindowClose";
-import { isLastRegularWindow, isOpenRegularWindow, isRegularWindow, isSmall, isSmallWindow, lastActiveProfile, linkProfileOf, mainWindowFor } from "./small";
+import { handOverPins, handOverTabs, tabsClosedWithWindow } from "../tabs/sharedWindowClose";
+import { isOnlyRegularWindow, isOpenRegularWindow, isRegularWindow, isSmall, isSmallWindow, lastActiveProfile, linkProfileOf, mainWindowFor } from "./small";
 import { activated, apply, removeTabs, withNewTab } from "../tabs/tabs";
 import type { AdoptId, BrowserWindow, ClosedWindow, Frame, ParkedPins, Tab, WindowKind } from "../browser/types";
 import { emptyWindow, smallWindow, withWindow } from "./newWindow";
@@ -38,6 +36,8 @@ import { commonGroup, orderSections } from "../groups/groups";
 import { groupOf } from "../pins/tabGrouping";
 import { focusedWindowOf } from "./ui";
 import { closedWindowOf, withoutLastWindowMarks } from "./closedWindow";
+import type { Drop } from "../drag/drops";
+import { droppedInProfile, intoProfile } from "./profileMoves";
 
 export type CreateWindowOptions = {
   profileId?: string;
@@ -64,6 +64,7 @@ export type WindowsSlice = {
 
   createWindow(options?: CreateWindowOptions): string;
   closeWindow(id: string, options?: CloseWindowOptions): void;
+  dropStaleLastWindowMark(): void;
   setWindowFrame(id: string, frame: Frame, restored?: Frame, fitted?: boolean): void;
   setWindowMaximized(id: string, on: boolean): void;
   setWindowFullScreen(id: string, on: boolean, display?: string): void;
@@ -72,6 +73,7 @@ export type WindowsSlice = {
   moveTabsToWindow(tabIds: string[], windowId: string | null, options?: MoveOptions): string | undefined;
   returnRefusedMove(tabId: string, fromWindowId: string): void;
   moveTabToProfile(tabId: string, profileId: string, options?: MoveOptions): void;
+  dropTabsInProfile(tabIds: string[], profileId: string, drop: Drop): Record<string, string> | null;
   moveGroupToWindow(groupId: string, windowId: string | null, options?: MoveOptions): string | undefined;
   moveGroupToProfile(groupId: string, profileId: string, options?: MoveOptions): void;
   mergeAllWindows(windowId: string): void;
@@ -101,14 +103,12 @@ export function moveTabsInto(s: BrowserState, ids: string[], targetId: string): 
   const joinable = new Set(moving.filter((t) => !groupOf(s, t.id) && !inPinnedContainer(s, t.id)).map((t) => t.id));
   let next = removeTabs(s, moving.map((t) => t.id), false);
   const tabs = { ...next.tabs };
-  const live = { ...next.live };
   for (const tab of moving) {
     const t = tab;
     const loaded = hasLoadedPage(tab);
     tabs[t.id] = { ...t, windowId: targetId, page: loaded ? loadedPage(navigationTo(t.url)) : hasPage(tab) ? IDLE : tab.page };
-    live[t.id] = IDLE_LIVE;
   }
-  next = { ...next, tabs, live };
+  next = { ...next, tabs };
   for (const profileId of new Set(moving.map((t) => t.profileId))) {
     next = placeMovedTabs(next, targetId, moving.filter((t) => t.profileId === profileId).map((t) => t.id), joinable);
   }
@@ -142,29 +142,6 @@ function afterGroupOf(s: BrowserState, tabIds: string[], tabId: string | undefin
   let i = from;
   while (tabId && i < tabIds.length && commonGroup(s.groups, [tabId, tabIds[i]!])) i++;
   return i;
-}
-
-function intoProfile(s: BrowserState, tabId: string, profileId: string): BrowserState {
-  const tab = s.tabs[tabId];
-  const w = tab && s.windows[tab.windowId];
-  if (!tab || !w || w.kind === "private" || !s.profiles[profileId] || tab.profileId === profileId) return s;
-  const next = removeTabs(s, [tabId], false);
-  const base = next.windows[w.id] ?? { ...w, tabIds: [], activeTabIds: {} };
-  const loaded = hasLoadedPage(tab);
-  const moved: Tab = { ...tab, profileId, page: loaded ? loadedPage(navigationTo(tab.url)) : hasPage(tab) ? IDLE : withWake(tab.page, undefined), lastActiveAt: Date.now() };
-  const pinChoices = tab.pin ? markPinned(next.pinChoices, profileId, { tabs: [pinKeyOf(moved)], placed: [pinKeyOf(moved)] }) : next.pinChoices;
-  const tabs = { ...next.tabs, [tabId]: moved };
-  const index = Math.min(w.tabIds.indexOf(tabId), base.tabIds.length);
-  const tabIds = [...base.tabIds];
-  tabIds.splice(index, 0, tabId);
-  return {
-    ...next,
-    tabs,
-    pinChoices,
-    live: { ...next.live, [tabId]: IDLE_LIVE },
-    windows: { ...next.windows, [w.id]: { ...base, tabIds: orderSections(tabIds, tabs, next.groups) } },
-    windowOrder: next.windowOrder.includes(w.id) ? next.windowOrder : s.windowOrder,
-  };
 }
 
 export const createWindowsSlice: StateCreator<BrowserState, [], [], WindowsSlice> = (set, get) => ({
@@ -213,31 +190,38 @@ export const createWindowsSlice: StateCreator<BrowserState, [], [], WindowsSlice
   },
 
   closeWindow(id, { keepsLastWindow = false } = {}) {
-    const s = handOverTabs(returnSharedPages(get(), id), id, isOpenRegularWindow);
+    const before = returnSharedPages(get(), id);
+    const s = handOverTabs(before, id, isOpenRegularWindow);
     const w = s.windows[id];
     if (!w) return;
     const tabs = tabsClosedWithWindow(s, id);
     const small = isSmallWindow(w);
-    const last = isLastRegularWindow(s, id);
+    const last = isOnlyRegularWindow(s, id);
     const keeps = last && keepsLastWindow && w.tabIds.some((t) => s.tabs[t]?.url);
     const entry = w.kind !== "private" && !small && (keeps || tabs.some((t) => t.url)) ? closedWindowOf(s, w, tabs, keeps) : null;
     const kept = last ? withoutLastWindowMarks(s.closedWindows) : s.closedWindows;
     const closedWindows = entry ? [...kept, entry].slice(-MAX_CLOSED_WINDOWS) : kept;
     const next = removeTabs(s, w.tabIds, small);
-    set({
+    set(handOverPins({
       ...next,
       windows: without(next.windows, [id]),
       windowOrder: next.windowOrder.filter((w) => w !== id),
       windowUi: without(next.windowUi, [id]),
       closedWindows,
-      parkedPins: small ? s.parkedPins : parkWindowPins(s.parkedPins, w, s),
+      parkedPins: small ? s.parkedPins : parkWindowPins(s.parkedPins, before.windows[id]!, before),
       closedTabs: w.kind === "private" ? next.closedTabs.filter((c) => c.windowId !== id) : next.closedTabs,
       ui: {
         ...next.ui,
         focusOrder: next.ui.focusOrder.filter((f) => f !== id),
         lastProfileId: lastProfileAfterClosing(s, id),
       },
-    });
+    }, before, id, isOpenRegularWindow));
+  },
+
+  dropStaleLastWindowMark() {
+    const s = get();
+    if (!s.closedWindows.some((c) => c.lastWindow) || !Object.values(s.windows).some(isRegularWindow)) return;
+    set({ closedWindows: withoutLastWindowMarks(s.closedWindows) });
   },
 
   setWindowFrame(id, frame, restored, fitted) {
@@ -316,6 +300,14 @@ export const createWindowsSlice: StateCreator<BrowserState, [], [], WindowsSlice
     }
     const next = intoProfile(s, tabId, profileId);
     if (next !== s) set(background ? next : apply(next, activated(next, tabId)));
+  },
+
+  dropTabsInProfile(tabIds, profileId, drop) {
+    const s = get();
+    const { state: next, placed } = droppedInProfile(s, tabIds, profileId, drop);
+    if (next === s) return null;
+    set(next);
+    return placed;
   },
 
   moveGroupToWindow(groupId, windowId, options) {

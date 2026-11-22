@@ -26,8 +26,23 @@ for key in SUFeedURL SUPublicEDKey NSDockTilePlugIn NSCameraUsageDescription NSM
 done
 [ -d "$app/Contents/Frameworks/Sparkle.framework" ] || die "no Sparkle.framework"
 [ -d "$app/Contents/PlugIns/ArdiaDockTile.plugin" ] || die "no dock tile plug-in"
-[ -x "$app/Contents/Helpers/ArdiaFairPlay.app/Contents/MacOS/ArdiaFairPlay" ] || die "no FairPlay helper"
+[ ! -e "$app/Contents/Helpers/ArdiaFairPlay.app" ] || die "the removed FairPlay helper is still in the app"
 [ -f "$app/Contents/embedded.provisionprofile" ] || die "no Developer ID provisioning profile (keychain groups need it)"
+[ ! -e "$app/Contents/Resources/Plugins" ] || die "the app bundles plugins; official plugins are fetched on Install"
+! plutil -extract ArdiaBuiltInPlugins json -o /dev/null "$app/Contents/Info.plist" 2>/dev/null || die "Info.plist still lists built-in plugins"
+recorded_pin="$(plutil -extract ArdiaOfficialPlugins json -o - "$app/Contents/Info.plist" 2>/dev/null || true)"
+[ -n "$recorded_pin" ] || die "Info.plist has no ArdiaOfficialPlugins, so Install has nothing to fetch and verify against"
+expected_pin="$(python3 -I "$root/scripts/release/official-plugins.py" signed-pin)"
+python3 -I -c 'import json, sys; sys.exit(0 if json.loads(sys.argv[1]) == json.loads(sys.argv[2]) else 1)' "$recorded_pin" "$expected_pin" \
+  || die "Info.plist's ArdiaOfficialPlugins isn't apps/browser/official-plugins.json"
+recorded_registry="$(plutil -extract ArdiaProgramRegistry json -o - "$app/Contents/Info.plist" 2>/dev/null || true)"
+[ -n "$recorded_registry" ] || die "Info.plist has no ArdiaProgramRegistry"
+python3 -I "$root/scripts/release/official-plugins.py" verify-registry "$recorded_registry" \
+  || die "Info.plist's ArdiaProgramRegistry doesn't match the pin's reserved programs and legacy installs"
+pinned="$(mktemp -d /tmp/ac-verify-pin.XXXXXX)"
+python3 -I "$root/scripts/release/official-plugins.py" fixtures "$pinned" >/dev/null || { rm -rf "$pinned"; die "the pinned official plugins couldn't be fetched and verified against the pin"; }
+"$root/scripts/release/official-signatures.sh" "$pinned" || { rm -rf "$pinned"; die "a pinned official plugin has a program whose signature is invalid or another team's"; }
+rm -rf "$pinned"
 [ -f "$app/Contents/Resources/Extensions/ublock/manifest.json" ] || die "no uBlock Origin in the app"
 [ -f "$app/Contents/Resources/ContentRules/rulesets.json" ] || die "no WebKit content rules in the app"
 for file in "$root"/LICENSE* "$root/NOTICE"; do
@@ -45,10 +60,6 @@ if grants_browser_passkeys "$app/Contents/embedded.provisionprofile"; then
 else
   [[ "$app_ents" != *web-browser.public-key-credential* ]] || die "the app is signed with com.apple.developer.web-browser.public-key-credential, which its profile doesn't grant"
 fi
-fairplay_ents="$(entitlements "$app/Contents/Helpers/ArdiaFairPlay.app")"
-for key in com.apple.security.app-sandbox com.apple.security.network.client; do
-  [ "$(plutil -extract "${key//./\\.}" raw -o - - <<< "$fairplay_ents" 2>/dev/null)" = true ] || die "the FairPlay helper lacks $key"
-done
 for helper in "$fwv"/Helpers/*"Renderer).app" "$fwv"/Helpers/*"GPU).app"; do
   [[ "$(entitlements "$helper")" == *cs.allow-jit* ]] || die "$(basename "$helper") lost allow-jit"
 done

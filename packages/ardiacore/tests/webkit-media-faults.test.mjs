@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { createContext, runInContext } from "node:vm";
+import { fieldProviderKit, webKitMediaBridge, webKitPageScript } from "./webkit-page-source.mjs";
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
-const pageScript = read("../ios/WebKitPageScript.swift");
 const faultsSwift = read("../ios/WebKitMediaFaults.swift");
+const pageScriptSwift = read("../ios/WebKitPageScript.swift");
 const tab = read("../ios/WebKitTab.swift");
 const engines = read("../../../apps/browser/src/state/engines/engines.ts");
 
@@ -24,14 +25,13 @@ const rawString = (text, name) => {
   return text.slice(from, text.indexOf('"""#', from));
 };
 const filled = (script) => script.replace("\\#(WebKitMediaFaults.sitesJSON)", JSON.stringify(sites)).replace("\\#(WebKitMediaFaults.pageScript)", rawString(faultsSwift, "pageScript"));
-const bridge = filled(rawString(pageScript, "mediaBridge"));
-const source = filled(rawString(pageScript, "source"));
+const bridge = filled(webKitMediaBridge);
+const source = filled(webKitPageScript);
 
-test("the streaming sites are the protected video sites the app opens in WebKit, plus Spotify, which plays in Chromium but can still be moved to WebKit", () => {
+test("the streaming sites are the protected video sites the app opens in WebKit", () => {
   const listed = listIn(engines, /export const PROTECTED_VIDEO_SITES: readonly string\[\] = \[([^\]]*)\]/);
   assert.ok(listed.length > 10);
-  assert.ok(sites.includes("open.spotify.com"));
-  assert.deepEqual(sites.filter((site) => site !== "open.spotify.com"), listed);
+  assert.deepEqual(sites, listed);
 });
 
 test("the reasons a page can report are a fixed set, each short enough to send", () => {
@@ -107,13 +107,20 @@ globalThis.originalAccess = Navigator.prototype.requestMediaKeySystemAccess;
 globalThis.originalPlay = HTMLMediaElement.prototype.play;
 `;
 
-function page({ protocol = "https:", hostname = sites[0] } = {}) {
+const fallbackKit = (() => {
+  const found = pageScriptSwift.match(/return "(  const fieldProviderKit = [^"]*)"/);
+  assert.ok(found, "the fallback kit isn't in WebKitPageScript.swift");
+  return JSON.parse(`"${found[1]}"`);
+})();
+
+function page({ protocol = "https:", hostname = sites[0], kit = fieldProviderKit } = {}) {
   const posted = [];
   const window = {
     location: { protocol, hostname },
     addEventListener() {},
     performance: { now: () => 0 },
     setTimeout() {},
+    requestAnimationFrame() {},
     webkit: { messageHandlers: { ardia: { postMessage: (message) => posted.push(JSON.parse(JSON.stringify(message))) } } },
   };
   window.window = window;
@@ -121,7 +128,7 @@ function page({ protocol = "https:", hostname = sites[0] } = {}) {
   createContext(window);
   const run = (code) => runInContext(code, window);
   run(prelude);
-  run(source);
+  run(kit === fieldProviderKit ? source : source.replace(fieldProviderKit, () => kit));
   run(bridge);
   const json = (code) => JSON.parse(runInContext(`JSON.stringify(${code})`, window));
   const faults = () => posted.filter((m) => m.kind === "mediaFault");
@@ -129,6 +136,12 @@ function page({ protocol = "https:", hostname = sites[0] } = {}) {
 }
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+test("when page_script.js can't be sliced, the fallback kit still sets up the page script with every method", () => {
+  const p = page({ kit: fallbackKit });
+  assert.deepEqual(p.json("['fieldProvider', 'fieldFocusQuery', 'mute', 'media'].map((name) => typeof window.__ardia[name])"), ["function", "function", "function", "function"]);
+  p.run("window.__ardia.fieldProvider({ login: true, generation: 1 }); window.__ardia.fieldFocusQuery({ id: 1 })");
+});
 
 test("a key system the page asks for and gets is reported by name as granted, and the page gets its own result", async () => {
   const p = page();
@@ -278,6 +291,30 @@ test("a subdomain of a streaming site is watched", async () => {
   assert.deepEqual(p.reported(), ["eme_widevine_granted"]);
 });
 
+test("Canal+ is watched: its refused key system, rejected play() and decode error are recorded, on both its hosts and their subdomains", async () => {
+  assert.ok(sites.includes("canalplus.com") && sites.includes("mycanal.fr"));
+  for (const hostname of ["canalplus.com", "www.canalplus.com", "mycanal.fr", "www.mycanal.fr"]) {
+    const p = page({ hostname });
+    p.run(`
+      navigator.answer = () => Promise.reject(new DOMException("no CDM", "NotSupportedError"));
+      navigator.requestMediaKeySystemAccess("com.widevine.alpha", [{}]).catch(() => {});
+      const video = new HTMLMediaElement();
+      video.answer = () => Promise.reject(new DOMException("", "NotAllowedError"));
+      video.play().catch(() => {});
+      video._error = new MediaError(3);
+      video.dispatchEvent(new Event("error"));
+    `);
+    await settle();
+    assert.deepEqual(p.reported(), ["media_error_decode", "eme_widevine_refused_not_supported", "play_rejected_not_allowed"], hostname);
+  }
+  for (const [protocol, hostname] of [["http:", "www.canalplus.com"], ["https:", "canalplus.com.example.com"], ["https:", "notmycanal.fr"], ["http:", "mycanal.fr"]]) {
+    const p = page({ protocol, hostname });
+    p.run("navigator.answer = () => Promise.reject(new DOMException('', 'NotSupportedError')); navigator.requestMediaKeySystemAccess('com.widevine.alpha', [{}]).catch(() => {});");
+    await settle();
+    assert.deepEqual(p.reported(), [], `${protocol}//${hostname}`);
+  }
+});
+
 test("the page script relays a reason that is a short string and nothing else the page's events carry", () => {
   const p = page();
   p.run(`
@@ -301,4 +338,9 @@ test("a page off the streaming sites gets no media fault listener or wrapper", (
     p.run(`document.dispatchEvent(new CustomEvent("ardia:media-fault", { detail: "media_error_decode" }));`);
     assert.deepEqual(p.reported(), [], `${protocol}//${hostname}`);
   }
+});
+
+test("the play() the page sees keeps the native method's name, arity and native source", () => {
+  const p = page();
+  assert.deepEqual(p.json("[HTMLMediaElement.prototype.play.name, HTMLMediaElement.prototype.play.length, /\\[native code\\]/.test(Function.prototype.toString.call(HTMLMediaElement.prototype.play))]"), ["play", 0, true]);
 });

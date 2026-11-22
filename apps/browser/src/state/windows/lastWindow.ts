@@ -1,5 +1,5 @@
 import { useBrowser } from "../browser/store";
-import { capture } from "../telemetry/client";
+import { capture, consentNow } from "../telemetry/client";
 import { ago, bucket } from "../telemetry/journeys";
 import { lastWindowToRestore } from "./reopenClosed";
 import { finishAnimatedCloses } from "./closeAnimated";
@@ -22,6 +22,7 @@ export function openLastWindowOrNew(source: LastWindowSource): string {
   if (!entry) return s.createWindow();
   s.restoreClosed(entry.id);
   const props = { source, tabs: tabCount(entry.tabs.length), pinned_shown: !!entry.activePin, closed_for: ago(Date.now() - entry.closedAt) };
-  setTimeout(() => capture("last_window_restored", props), 0);
+  const consent = consentNow();
+  setTimeout(() => capture("last_window_restored", props, consent), 0);
   return useBrowser.getState().windowOrder.at(-1)!;
 }

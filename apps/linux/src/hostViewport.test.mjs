@@ -192,3 +192,139 @@ test("a page rect off the window or not finite is reported hidden", () => {
   assert.deepEqual(tabViewport({ x: Number.NaN, y: 0, width: 1, height: 1 }, size, true), { rect: { x: 0, y: 0, width: 0, height: 0 }, visible: false });
   assert.equal(tabViewport({ x: 10, y: 10, width: 100, height: 100 }, size, false).visible, false);
 });
+
+test("a page that stops drawing because shell UI covers it is reported once, and a page hidden any other way or sampled off the window is not", async () => {
+  const { watchPageBelowShell } = await import("./shims/web/HostWebView.tsx");
+  const page = { isConnected: true, parentElement: null, getBoundingClientRect: () => box(200, 50, 800, 600), contains: () => false };
+  const toolbar = {};
+  let hit = page;
+  const s = stage({ elementFromPoint: () => hit });
+  try {
+    let wanted = true;
+    let covered = 0;
+    const regions = { setPage() {}, refresh() {}, dropPage() {}, ...cover() };
+    const stop = watchPageBelowShell(page, regions, () => wanted, () => null, undefined, () => covered++);
+    hit = toolbar;
+    s.mutate();
+    s.mutate();
+    assert.equal(covered, 1);
+    hit = page;
+    s.mutate();
+    wanted = false;
+    s.mutate();
+    wanted = true;
+    s.mutate();
+    document.hidden = true;
+    s.events.document.dispatchEvent(new Event("visibilitychange"));
+    document.hidden = false;
+    s.events.document.dispatchEvent(new Event("visibilitychange"));
+    hit = null;
+    s.mutate();
+    hit = page;
+    s.mutate();
+    page.isConnected = false;
+    s.mutate();
+    assert.equal(covered, 1);
+    stop();
+  } finally {
+    s.restore();
+  }
+});
+
+test("a page that only just overlaps the window's bottom edge is hidden but not counted as covered by shell UI beside it", async () => {
+  const { watchPageBelowShell } = await import("./shims/web/HostWebView.tsx");
+  let rect = box(200, 50, 800, 600);
+  const page = { isConnected: true, parentElement: null, getBoundingClientRect: () => rect, contains: () => false };
+  const shell = {};
+  const s = stage({ height: 800, elementFromPoint: (x, y) => (y >= 800 ? null : y >= rect.top && y < rect.bottom ? page : shell) });
+  try {
+    let covered = 0;
+    const hidden = [];
+    const regions = { setPage: (_slot, visible) => hidden.push(!visible), refresh() {}, dropPage() {}, ...cover() };
+    const stop = watchPageBelowShell(page, regions, () => true, () => null, undefined, () => covered++);
+    rect = box(200, 795, 800, 600);
+    s.mutate();
+    assert.deepEqual(hidden, [true]);
+    assert.equal(covered, 0);
+    stop();
+  } finally {
+    s.restore();
+  }
+});
+
+test("a tab page sends its card radii with each viewport and gives the same getter to the page holes", async () => {
+  const { watchPageBelowShell } = await import("./shims/web/HostWebView.tsx");
+  const page = { isConnected: true, parentElement: null, getBoundingClientRect: () => box(200, 50, 800, 600), contains: () => false };
+  const s = stage({ elementFromPoint: () => page });
+  try {
+    let card = { upperLeft: 0, upperRight: 0, lowerRight: 10, lowerLeft: 10 };
+    const cardRadii = () => card;
+    const sent = [];
+    const pages = [];
+    const regions = { setPage: (...args) => pages.push(args), refresh() {}, dropPage() {}, ...cover() };
+    const tab = { identity: {}, disposed: false, viewport: (viewport) => (sent.push(viewport), Promise.resolve()) };
+    const stop = watchPageBelowShell(page, regions, () => true, () => tab, undefined, undefined, cardRadii);
+    s.mutate();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(sent.length, 1);
+    assert.deepEqual(sent[0].radii, { upperLeft: 0, upperRight: 0, lowerRight: 10, lowerLeft: 10 });
+    assert.ok(pages.some(([slot, visible, radii, given]) => slot === page && visible && radii === undefined && given === cardRadii));
+    s.mutate();
+    assert.equal(sent.length, 1);
+    card = { upperLeft: 0, upperRight: 0, lowerRight: 0, lowerLeft: 0 };
+    s.mutate();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(sent.length, 2);
+    assert.deepEqual(sent[1].radii, card);
+    stop();
+  } finally {
+    s.restore();
+  }
+});
+
+test("clipRadii gives a page the card's radius only at the corners it shares with the card", async () => {
+  const { clipRadii } = await import("./shims/web/clipRadii.ts");
+  const previous = globalThis.getComputedStyle;
+  const styles = new Map();
+  globalThis.getComputedStyle = (node) => styles.get(node) ?? { overflowX: "visible", overflowY: "visible", getPropertyValue: () => "0px" };
+  const rounded = (radius) => ({ overflowX: "hidden", overflowY: "hidden", getPropertyValue: () => `${radius}px` });
+  try {
+    const card = { parentElement: null, getBoundingClientRect: () => box(240, 8, 752, 684) };
+    const group = { parentElement: card, getBoundingClientRect: () => box(240, 48, 752, 644) };
+    const page = { parentElement: group, getBoundingClientRect: () => box(240, 48, 752, 644) };
+    styles.set(card, rounded(10));
+    styles.set(group, { overflowX: "hidden", overflowY: "hidden", getPropertyValue: () => "0px" });
+    assert.deepEqual(clipRadii(page), { upperLeft: 0, upperRight: 0, lowerRight: 10, lowerLeft: 10 });
+    const flush = { parentElement: card, getBoundingClientRect: () => box(240, 8, 752, 684) };
+    assert.deepEqual(clipRadii(flush), { upperLeft: 10, upperRight: 10, lowerRight: 10, lowerLeft: 10 });
+    styles.set(card, rounded(0));
+    assert.deepEqual(clipRadii(flush), { upperLeft: 0, upperRight: 0, lowerRight: 0, lowerLeft: 0 });
+  } finally {
+    globalThis.getComputedStyle = previous;
+  }
+});
+
+test("the page watcher leaves counting a refused viewport to the tab that sent it", async () => {
+  globalThis.__DEV__ = false;
+  await import("../../browser/src/test-native/index.ts");
+  const client = await import("../../browser/src/state/telemetry/client.ts");
+  const placement = await import("../../browser/src/state/telemetry/windowPlacementCounts.ts");
+  const { watchPageBelowShell } = await import("./shims/web/HostWebView.tsx");
+  const page = { isConnected: true, parentElement: null, getBoundingClientRect: () => box(200, 50, 800, 600), contains: () => false };
+  const s = stage({ elementFromPoint: () => page });
+  client.loadChoice();
+  client.setSharing(true, "onboarding");
+  placement.takeWindowPlacementCounts();
+  try {
+    const regions = { setPage() {}, refresh() {}, dropPage() {}, ...cover() };
+    const tab = { identity: {}, disposed: false, viewport: () => Promise.reject(new Error("Viewport radii must be four finite, nonnegative corners")) };
+    const stop = watchPageBelowShell(page, regions, () => true, () => tab, undefined, undefined, () => ({ upperLeft: 0, upperRight: 0, lowerRight: 10, lowerLeft: 10 }));
+    s.mutate();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(placement.takeWindowPlacementCounts().linux_page_viewports_rejected, 0);
+    stop();
+  } finally {
+    client.setSharing(false, "settings");
+    s.restore();
+  }
+});

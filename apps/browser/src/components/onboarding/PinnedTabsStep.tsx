@@ -11,7 +11,7 @@ import { capsule, ink, radius, space } from "../ui/tokens";
 import { SelectTile, useOnboardingColors } from "./Parts";
 import { StepActions, StepLayout } from "./StepLayout";
 import { trafficLights } from "./tokens";
-import { WINDOW_CHROME } from "../../lib/windowChrome";
+import { trafficLightsDrawn } from "../../lib/windowChrome";
 
 export function PinnedTabsStep() {
   const windowId = useOnboarding((s) => s.windowId);
@@ -64,34 +64,43 @@ function SiteTile({ title, url, selected, onPress }: { title: string; url: strin
   );
 }
 
-const PREVIEW = { width: 236, scale: 0.75, tile: { width: 64, height: 40 }, row: 22, rowIcon: 12, rowBar: 6 } as const;
+const PREVIEW = { width: 236, scale: 0.75, columns: 3, tileHeight: 40, row: 22, rowIcon: 12, rowBar: 6 } as const;
 const LIGHT = 12;
 
 function PinnedPreview({ selected }: { selected: string[] }) {
   const colors = useOnboardingColors();
   const sites = PINNABLE_SITES.filter((s) => selected.includes(s.id));
-  const slots = Math.max(6, Math.ceil(sites.length / 3) * 3);
+  const slots = Math.max(2, Math.ceil(sites.length / PREVIEW.columns)) * PREVIEW.columns;
   return (
     <ChoiceCard plain radius={radius.sheet} style={{ width: PREVIEW.width, padding: space.xl, gap: space.l }}>
-      {WINDOW_CHROME.leadingWidth ? (
+      {trafficLightsDrawn() ? (
         <View style={{ flexDirection: "row", gap: space.m * PREVIEW.scale }}>
           {trafficLights.map((c) => (
             <Dot key={c} size={LIGHT * PREVIEW.scale} color={c} />
           ))}
         </View>
       ) : null}
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.s }}>
-        {Array.from({ length: slots }, (_, i) => {
-          const site = sites[i];
-          const tile = { ...PREVIEW.tile, alignItems: "center", justifyContent: "center" } as const;
-          return site ? (
-            <ChoiceCard key={site.id} radius={radius.chrome * PREVIEW.scale} fill={colors.button} border={null} style={tile}>
-              <SiteLogo url={site.url} size={18} />
-            </ChoiceCard>
-          ) : (
-            <ChoiceCard key={`empty-${i}`} dashed radius={radius.chrome * PREVIEW.scale} fill={ink.clear} style={tile} />
-          );
-        })}
+      <View style={{ gap: space.s }}>
+        {Array.from({ length: slots / PREVIEW.columns }, (_, row) => (
+          <View key={row} style={{ flexDirection: "row", gap: space.s }}>
+            {Array.from({ length: PREVIEW.columns }, (_, column) => {
+              const i = row * PREVIEW.columns + column;
+              const site = sites[i];
+              const tile = { flex: 1, alignItems: "center", justifyContent: "center" } as const;
+              return (
+                <View key={site?.id ?? `empty-${i}`} style={{ flex: 1, flexBasis: 0, height: PREVIEW.tileHeight }}>
+                  {site ? (
+                    <ChoiceCard radius={radius.chrome * PREVIEW.scale} fill={colors.button} border={null} style={tile}>
+                      <SiteLogo url={site.url} size={18} />
+                    </ChoiceCard>
+                  ) : (
+                    <ChoiceCard dashed radius={radius.chrome * PREVIEW.scale} fill={ink.clear} style={tile} />
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        ))}
       </View>
       <View style={{ height: StyleSheet.hairlineWidth * 2, backgroundColor: colors.separator }} />
       {[0.7, 0.5, 0.6].map((w, i) => (

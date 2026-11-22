@@ -16,6 +16,6 @@ function endClosedPrivateSessions(s: BrowserState, prev: BrowserState) {
 }
 
 export const startPrivateSessions = () =>
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["windows"], (s, prev) => {
     if (s.windows !== prev.windows) endClosedPrivateSessions(s, prev);
   });

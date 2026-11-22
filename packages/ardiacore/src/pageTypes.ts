@@ -1,7 +1,7 @@
 import type { ViewProps } from "react-native";
 import type { ExternalAppRequest } from "./permissions";
 import type { FaviconImage } from "./favicons";
-import type { PageCookie, PageEngine } from "./webkit";
+import type { ChromiumSiteDataReply, ChromiumSiteDataRequest, PageCookie, PageEngine } from "./webkit";
 
 export type NavigationState = {
   url: string;
@@ -19,6 +19,10 @@ export type NavigationState = {
 };
 
 export type AppBadge = { origin: string; count: number | null; flag: boolean };
+export type FieldProviderPanelRefusal = "hidden" | "notFocused" | "unavailable" | "notKey" | "notEditing" | "throttled" | "refused" | "noPanel";
+export type FieldProviderOpened = { via: "badge" | "menu"; shown: boolean; reason?: FieldProviderPanelRefusal; panel?: "above" | "below" };
+export type FieldProviderHint = { state: "shown" | "dismissed" };
+export type VerificationCodeFound = { token: string; app: string; main: boolean };
 
 export type MediaState = { playing: boolean; muted: boolean };
 
@@ -52,6 +56,7 @@ export type OpenWindowRequest = {
   point?: { x: number; y: number };
   site?: boolean;
   fromClick?: boolean;
+  shiftClick?: boolean;
   linkWait?: "matched" | "skipped" | "timedOut";
   popup?: boolean;
 };
@@ -114,12 +119,20 @@ export type WebNotification = {
   isMainFrame: boolean;
 };
 
-export type PictureInPictureState = { kind: "video" | "document"; active: boolean; fullScreenSpaces?: boolean; leftApp?: boolean; leftTab?: boolean };
-export type PictureInPictureDrag = { offCursor: boolean; slowMove: boolean };
+export type PictureInPictureShown = { kind: "video" | "document"; active: true; fullScreenSpaces: boolean; leftApp?: boolean; leftTab: boolean; epoch: string; closedBy?: "app" | "chrome"; auto?: boolean };
+export type PictureInPictureState = { kind: "video" | "document"; active: boolean; closedBy?: "app" | "chrome"; auto?: boolean } | PictureInPictureShown;
+export type PictureInPictureDrag = { offCursor: boolean; slowMove: boolean; epoch: string };
+export type PictureInPictureSkip = { seconds: number; epoch: string };
+export type PictureInPictureStandIn = { pinch: boolean; timedOut: boolean; epoch: string };
+export type PictureInPictureUnstash = { epoch: string };
+export type PictureInPictureReleaseOutcome = "corner" | "flickTuck" | "tuck" | "pullOut" | "cornerPull" | "placed";
+export type PictureInPictureRelease = { outcome: PictureInPictureReleaseOutcome; epoch: string };
+export type PictureInPictureActivation = { move: boolean; activated: boolean; epoch: string };
+export type PictureInPictureResize = { inside: boolean; cursorShown: boolean; epoch: string };
 export type AutoPictureInPictureHold = "onScreen" | "appSwitch" | "nothingPlaying";
 export type MediaFault = { reason: string; muted?: boolean; blockerActive?: boolean };
 export type ControlPress = { clickAt: number; control: number };
-export type ActivateRequest = { reason: "pictureInPicture" };
+export type ActivateRequest = { reason: "pictureInPicture" | "page" | "window"; fromOtherApp?: boolean };
 export type DisplayMediaSource = {
   id: string;
   kind: "screen" | "window";
@@ -130,7 +143,7 @@ export type DisplayMediaSource = {
   height: number;
 };
 export type DisplayMediaAudio = { tab: boolean; screen: boolean; window: "application" | "system" | null };
-export type DisplayMediaRequest = { id: string; origin: string; frameOrigin?: string; audio: DisplayMediaAudio | null; sources: DisplayMediaSource[] };
+export type DisplayMediaRequest = { id: string; origin: string; frameOrigin?: string; audio: DisplayMediaAudio | null; sources: DisplayMediaSource[]; controller?: boolean };
 
 export type ZoomState = { zoom: number; host: string; isDefault: boolean; pinchScale: number; user: boolean };
 export type ContentBlockedState = { count: number; url: string };
@@ -165,17 +178,11 @@ export type ExtensionActionResult = "none" | "popup" | "sidePanel";
 export type PageSelection = { text: string; rect: { x: number; y: number; width: number; height: number } };
 export type ScrollState = "down" | "up" | "top";
 export type FocusRestoreOutcome = "focused" | "kept" | "refused" | "gaveUp" | "unknown";
-export type ProtectedMediaRequest = { keySystem: string; main: boolean };
-export type FairPlayReport = {
-  event: "played" | "failed" | "mirrored" | "mirrorResync" | "pip" | "pipReopen" | "choppy" | "nowPlayingCommand";
-  step?: "license" | "playback" | "player";
-  video?: boolean;
-  site?: "youtube";
-  fitted?: boolean;
-};
+export type ProtectedMediaRequest = { keySystem: string; main: boolean; stage?: "access" | "createMediaKeys" | "licence" | "keystatus" };
 
 export type WebViewProps = ViewProps & {
   engine?: PageEngine;
+  retired?: boolean;
   url?: string;
   profile?: string;
   adoptId?: string;
@@ -215,9 +222,14 @@ export type WebViewProps = ViewProps & {
   onNotification?: (notification: WebNotification) => void;
   onNotificationClose?: (id: string) => void;
   onPictureInPicture?: (state: PictureInPictureState) => void;
-  onAutoPictureInPictureKept?: (reason: AutoPictureInPictureHold) => void;
+  onAutoPictureInPictureKept?: (reason: AutoPictureInPictureHold, epoch: string) => void;
   onPictureInPictureDragged?: (drag: PictureInPictureDrag) => void;
-  onPictureInPictureSkip?: (seconds: number) => void;
+  onPictureInPictureResized?: (resize: PictureInPictureResize) => void;
+  onPictureInPictureSkip?: (skip: PictureInPictureSkip) => void;
+  onPictureInPictureStandIn?: (standIn: PictureInPictureStandIn) => void;
+  onPictureInPictureUnstashed?: (unstash: PictureInPictureUnstash) => void;
+  onPictureInPictureReleased?: (release: PictureInPictureRelease) => void;
+  onPictureInPictureActivated?: (activation: PictureInPictureActivation) => void;
   onMediaFault?: (fault: MediaFault) => void;
   onActivateRequest?: (request: ActivateRequest) => void;
   onDisplayMediaRequest?: (request: DisplayMediaRequest) => void;
@@ -229,7 +241,6 @@ export type WebViewProps = ViewProps & {
   onSelection?: (selection: PageSelection | null) => void;
   onScroll?: (state: ScrollState) => void;
   onProtectedMedia?: (request: ProtectedMediaRequest) => void;
-  onFairPlay?: (report: FairPlayReport) => void;
   onAutoplayBlocked?: (count: number) => void;
   onReady?: () => void;
   onDiscarded?: (url: string, reason: DiscardReason | null) => void;
@@ -239,10 +250,14 @@ export type WebViewProps = ViewProps & {
   onPreferredSize?: (size: { width: number; height: number }) => void;
   onTransferRefused?: (fromWindowId: string) => void;
   onAppBadge?: (badge: AppBadge) => void;
+  onFieldProviderOpened?: (opened: FieldProviderOpened) => void;
+  onFieldProviderHint?: (hint: FieldProviderHint) => void;
+  onVerificationCodeFound?: (found: VerificationCodeFound) => void;
 };
 
 export type WebViewHandle = {
   nativeTag(): number | null;
+  isAttached?(): boolean | Promise<boolean | undefined>;
   loadUrl(url: string, options?: { userInitiated?: boolean }): Promise<void>;
   goBack(): Promise<void>;
   goForward(): Promise<void>;
@@ -257,7 +272,7 @@ export type WebViewHandle = {
   find(text: string, forward: boolean, findNext: boolean): Promise<void>;
   stopFinding(clearSelection: boolean): Promise<void>;
   print(): Promise<void>;
-  runPageCommand(name: "savePage" | "systemPrint" | "caretBrowsing"): Promise<void>;
+  runPageCommand(name: "savePage" | "systemPrint" | "caretBrowsing" | "viewSource"): Promise<void>;
   showDevTools(panel?: string): Promise<void>;
   executeJavaScript(code: string): Promise<void>;
   evaluate<T = unknown>(code: string): Promise<T | null>;
@@ -270,14 +285,18 @@ export type WebViewHandle = {
   requestPictureInPicture(press: ControlPress): Promise<boolean>;
   takeControlPress(press: ControlPress): Promise<boolean>;
   exitPictureInPicture(): Promise<void>;
+  armElementPick?(): Promise<number | null>;
+  takeElementPick?(armed: number): Promise<boolean>;
 
   getSecurityInfo(): Promise<SecurityInfo | null>;
   pageCookies(urls: string[]): Promise<PageCookie[]>;
+  siteData(request: ChromiumSiteDataRequest): Promise<ChromiumSiteDataReply | null>;
   openBlockedPopup(id: string, always?: boolean): Promise<void>;
   clearSiteData(): Promise<{ cookies: number | false; storage: boolean }>;
 
   resolvePasswordPrompt(answer: PasswordPromptAnswer, edits?: { username?: string; password?: string; offer?: string }): Promise<void>;
   resolveAutofillPrompt(id: number, answer: AutofillPromptAnswer): Promise<void>;
+  answerAutofillPrompt?(id: number, answer: AutofillPromptAnswer): Promise<boolean>;
   executeExtensionAction(extensionId: string): Promise<ExtensionActionResult | null>;
 
   resolveDisplayMedia(id: string, sourceId: string | null, audio?: boolean): Promise<void>;
@@ -288,6 +307,28 @@ export type WebViewHandle = {
   discard(options?: { unload?: boolean }): Promise<DiscardOutcome>;
   sleepIfHidden(seconds: number): Promise<DiscardRefusal[]>;
   setFrozen(frozen: boolean): Promise<void>;
+};
+
+export type WebViewNativeHandle = Omit<
+  WebViewHandle,
+  | "nativeTag"
+  | "isAttached"
+  | "evaluate"
+  | "loadUrl"
+  | "resolvePasswordPrompt"
+  | "answerAutofillPrompt"
+  | "discard"
+  | "requestPictureInPicture"
+  | "takeControlPress"
+> & {
+  readonly nativeTag: number | null;
+  answerAutofillPrompt(id: number, answer: string): Promise<boolean>;
+  requestPictureInPicture(clickAt: number, control: number): Promise<boolean>;
+  takeControlPress(clickAt: number, control: number): Promise<boolean>;
+  evaluate(code: string): Promise<string | null>;
+  loadUrl(url: string, userInitiated?: boolean): Promise<void>;
+  resolvePasswordPrompt(answer: string, username: string | null, password: string | null): Promise<void>;
+  discard(unload: boolean): Promise<DiscardOutcome>;
 };
 
 export type DiscardOutcome = "discarded" | "already" | "refused" | "unsupported";

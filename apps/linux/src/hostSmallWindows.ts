@@ -12,6 +12,7 @@ export type ScreenArea = { width: number; height: number; availLeft: number; ava
 export const SMALL_WINDOW_SEED_PREFIX = "ardia.smallWindow.";
 export const SMALL_WINDOW_SEED_LIFE = 60_000;
 export const SMALL_WINDOW_MIN_SIZE: [number, number] = [420, 300];
+export const SMALL_WINDOW_LARGEST_SHARE = 0.8;
 export const SMALL_WINDOWS_CAPABILITY = "ArdiaShell.smallWindows";
 export const SMALL_WINDOW_KIND = "small";
 const SEED_LIMIT = 1024 * 1024;
@@ -139,8 +140,10 @@ export function withSmallWindow(host: ArdiaHost, session: HydrateData, storage?:
 export function smallWindowFrame(size: unknown, screen: ScreenArea): Frame | undefined {
   const [wanted, tall] = Array.isArray(size) && size.length === 2 && size.every((v) => typeof v === "number" && Number.isFinite(v)) ? size as [number, number] : [900, 640];
   if (!(screen.availWidth > 0) || !(screen.availHeight > 0)) return undefined;
-  const width = Math.round(Math.min(Math.max(wanted, SMALL_WINDOW_MIN_SIZE[0]), screen.availWidth));
-  const height = Math.round(Math.min(Math.max(tall, SMALL_WINDOW_MIN_SIZE[1]), screen.availHeight));
+  const side = (want: number, least: number, room: number) =>
+    Math.round(Math.min(Math.max(want, least), Math.min(Math.max(Math.round(room * SMALL_WINDOW_LARGEST_SHARE), least), room)));
+  const width = side(wanted, SMALL_WINDOW_MIN_SIZE[0], screen.availWidth);
+  const height = side(tall, SMALL_WINDOW_MIN_SIZE[1], screen.availHeight);
   const left = Math.round(screen.availLeft + (screen.availWidth - width) / 2);
   const top = Math.round(screen.availTop + (screen.availHeight - height) / 2);
   return [left, screen.height - (top + height), width, height];

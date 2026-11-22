@@ -13,10 +13,11 @@ const MIGRATIONS: Migrations = { 0: unchanged, 1: unchanged };
 export const OPEN_AS = ["tab", "window", "littleArdia"] as const;
 export type OpenAs = (typeof OPEN_AS)[number];
 export type SourceApp = { bundleId: string | null; name: string };
-export type LinkCondition = { kind: "any" } | { kind: "site"; host: string } | { kind: "pattern"; pattern: string };
+export type LinkTextKind = "contains" | "equals";
+export type LinkCondition = { kind: "any" } | { kind: "site"; host: string } | { kind: "pattern"; pattern: string } | { kind: "contains"; text: string } | { kind: "equals"; text: string };
 export type AirTrafficTarget = { profileId: string | null; open: OpenAs; groupKey?: string };
 export type AirTrafficRule = AirTrafficTarget & { id: string; enabled: boolean; from: SourceApp | null; when: LinkCondition };
-export type AirTrafficConfig = { rules: AirTrafficRule[]; fallback: AirTrafficTarget | null };
+export type AirTrafficConfig = { rules: AirTrafficRule[]; fallback: AirTrafficTarget | null; fallbackChosen?: true };
 export type TargetUsable = (profileId: string, groupKey: string | null) => boolean;
 export type AirTrafficMatch = { by: "rule"; rule: AirTrafficRule; index: number; target: AirTrafficTarget } | { by: "fallback"; target: AirTrafficTarget };
 
@@ -34,6 +35,47 @@ export function siteHost(input: string): string | null {
   if (!text) return null;
   const spec = parseMatchPattern(`*://*.${text}/*`);
   return "error" in spec || !spec.host ? null : spec.host;
+}
+
+export const MAX_LINK_TEXT = 2048;
+
+const SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i;
+
+export const linkText = (text: string) => text.trim().toLowerCase().replace(SCHEME, "").replace(/^www\./, "");
+
+function webAddress(text: string): URL | null {
+  try {
+    const url = new URL(text);
+    return (url.protocol === "http:" || url.protocol === "https:") && url.hostname ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+const pageOf = (url: URL) => {
+  const port = url.port === "80" || url.port === "443" ? "" : url.port;
+  return `${url.hostname.replace(/^www\./, "")}${port ? `:${port}` : ""}${url.pathname}`.toLowerCase().replace(/\/+$/, "");
+};
+
+export function exactAddress(text: string): string | null {
+  const raw = text.trim();
+  if (/[?#]/.test(raw)) return null;
+  const url = webAddress(SCHEME.test(raw) ? raw : `http://${raw}`);
+  return url && !url.username && !url.password ? pageOf(url) : null;
+}
+
+export function linkTextProblem(kind: LinkTextKind, text: string): string | null {
+  const t = linkText(text);
+  if (/^[\s/?#.:;,&=]*$/.test(t)) return "it matches every link; pick Any link for that";
+  if (text.length > MAX_LINK_TEXT) return `keep it under ${MAX_LINK_TEXT} characters`;
+  if (kind === "equals" && !exactAddress(text)) return "type a web address like example.com/docs, without ? or # (http and https only)";
+  return null;
+}
+
+function textMatches(kind: LinkTextKind, text: string, url: string): boolean {
+  if (kind === "contains") return linkText(url).includes(linkText(text));
+  const page = webAddress(url);
+  return !!page && pageOf(page) === exactAddress(text);
 }
 
 export const isWildcardPattern = (pattern: string) => pattern !== "<all_urls>" && !pattern.includes("://");
@@ -69,6 +111,7 @@ function specOf(pattern: string): MatchSpec | null {
 
 export function linkMatches(when: LinkCondition, url: string): boolean {
   if (when.kind === "any") return true;
+  if (when.kind === "contains" || when.kind === "equals") return textMatches(when.kind, when.text, url);
   if (when.kind === "pattern" && isWildcardPattern(when.pattern)) return wildcardMatches(when.pattern, url);
   const spec = specOf(when.kind === "site" ? `*://*.${when.host}/*` : when.pattern);
   return !!spec && matchesUrl(spec, url);
@@ -108,6 +151,8 @@ export function airTrafficFallback(config: AirTrafficConfig, usable: TargetUsabl
   return config.fallback && targetUsable(config.fallback, usable) ? { by: "fallback", target: targetOf(config.fallback, usable) } : null;
 }
 
+export const fallbackChosen = (config: AirTrafficConfig) => !!config.fallbackChosen || config.fallback !== null;
+
 export const airTrafficHolds = (config: AirTrafficConfig) => !!config.fallback || config.rules.some((r) => r.enabled);
 
 const isOpenAs = (v: unknown): v is OpenAs => OPEN_AS.includes(v as OpenAs);
@@ -124,6 +169,7 @@ function conditionOf(v: unknown): LinkCondition | null {
   if (v.kind === "any") return { kind: "any" };
   if (v.kind === "site" && typeof v.host === "string" && siteHost(v.host) === v.host) return { kind: "site", host: v.host };
   if (v.kind === "pattern" && typeof v.pattern === "string" && !patternProblem(v.pattern)) return { kind: "pattern", pattern: v.pattern };
+  if ((v.kind === "contains" || v.kind === "equals") && typeof v.text === "string" && !linkTextProblem(v.kind, v.text)) return { kind: v.kind, text: v.text };
   return null;
 }
 
@@ -150,7 +196,9 @@ export function parseAirTraffic(json: string | null | undefined): AirTrafficConf
     .map(ruleOf)
     .filter((r): r is AirTrafficRule => !!r && !seen.has(r.id) && !!seen.add(r.id))
     .slice(0, MAX_AIR_TRAFFIC_RULES);
-  return { rules, fallback: doc.fallback === null || doc.fallback === undefined ? null : targetFrom(doc.fallback) };
+  const fallback = doc.fallback === null || doc.fallback === undefined ? null : targetFrom(doc.fallback);
+  return { rules, fallback, ...(doc.fallbackChosen === true ? { fallbackChosen: true as const } : {}) };
 }
 
-export const airTrafficJson = (config: AirTrafficConfig) => versionedJson({ rules: config.rules, fallback: config.fallback }, AIR_TRAFFIC_VERSION);
+export const airTrafficJson = (config: AirTrafficConfig) =>
+  versionedJson({ rules: config.rules, fallback: config.fallback, ...(config.fallbackChosen ? { fallbackChosen: true } : {}) }, AIR_TRAFFIC_VERSION);

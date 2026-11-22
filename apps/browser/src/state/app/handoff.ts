@@ -19,7 +19,7 @@ export function startHandoff() {
     for (const id of last.keys()) if (!s.windows[id]) last.delete(id);
   };
   let timer: ReturnType<typeof setTimeout> | undefined;
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["tabs", "windows"], (s, prev) => {
     if (s.tabs === prev.tabs && s.windows === prev.windows) return;
     timer ??= setTimeout(() => {
       timer = undefined;

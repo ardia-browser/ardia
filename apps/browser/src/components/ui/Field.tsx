@@ -10,6 +10,7 @@ import { useTheme } from "./theme";
 import { capsule, monoFace, opacity, perLook, proseLineHeight, radius, space, font as typeScale } from "./tokens";
 import { useHover } from "./useHover";
 import { useNativeForm } from "./nativeForm";
+import { useKeyDownEvents, type ExtraKeyProps } from "./fieldKeys";
 
 const SEARCH_KEYS = [{ key: "Escape" }];
 const SEARCH_KEYS_WITH_ENTER = [{ key: "Escape" }, { key: "Enter" }, { key: "Enter", shiftKey: true }];
@@ -30,7 +31,9 @@ export function SearchField({
   onArrow,
   onBlur,
   inputRef,
-}: {
+  extraKeys,
+  onExtraKey,
+}: ExtraKeyProps & {
   value: string;
   onChangeText: (text: string) => void;
   placeholder: string;
@@ -46,6 +49,7 @@ export function SearchField({
 }) {
   const theme = useTheme();
   const bare = look === "bare";
+  const keyDownEvents = useKeyDownEvents(onArrow ? SEARCH_KEYS_WITH_ARROWS : onSubmit ? SEARCH_KEYS_WITH_ENTER : SEARCH_KEYS, extraKeys);
   const clearMotion = usePressScaleMotion(!!value && !bare, buttonMotion.iconPressScale);
   return (
     <View
@@ -81,14 +85,16 @@ export function SearchField({
         selectionColor={theme.selection}
         autoFocus={autoFocus}
         enableFocusRing={false}
+        ardiaCentersCapitals
         onBlur={onBlur}
-        keyDownEvents={onArrow ? SEARCH_KEYS_WITH_ARROWS : onSubmit ? SEARCH_KEYS_WITH_ENTER : SEARCH_KEYS}
+        keyDownEvents={keyDownEvents}
         onKeyDown={(e) => {
           const { key, shiftKey } = e.nativeEvent;
           if (key === "Escape") (onEscape ?? (() => onChangeText("")))();
           else if (key === "Enter") onSubmit?.(!!shiftKey);
           else if (key === "ArrowDown") onArrow?.(1);
           else if (key === "ArrowUp") onArrow?.(-1);
+          else if (onExtraKey?.(e.nativeEvent)) e.stopPropagation();
         }}
         style={{ flex: 1, ...(bare ? typeScale.title : typeScale.body), color: theme.textPrimary, paddingVertical: 0 }}
       />
@@ -118,14 +124,18 @@ export function TextField({
   multiline,
   mono,
   invalid,
+  disabled,
   width,
   style,
-}: {
+  extraKeys,
+  onExtraKey,
+}: ExtraKeyProps & {
   value: string;
   onChangeText: (text: string) => void;
   placeholder?: string;
   autoFocus?: boolean;
   secure?: boolean;
+  disabled?: boolean;
   onSubmit?: () => void;
   onEscape?: () => void;
   onBlur?: () => void;
@@ -137,8 +147,9 @@ export function TextField({
   style?: StyleProp<ViewStyle>;
 }) {
   const theme = useTheme();
+  const keyDownEvents = useKeyDownEvents(onEscape ? ESCAPE_KEY : undefined, extraKeys);
   return (
-    <OutsidePressArea style={[{ width }, style]}>
+    <OutsidePressArea style={[{ width, opacity: disabled ? opacity.disabled : 1 }, style]}>
       <View
         style={{
           height: multiline ? MULTILINE_HEIGHT : 24,
@@ -153,7 +164,8 @@ export function TextField({
       >
         <TextInput
           value={value}
-          onChangeText={onChangeText}
+          onChangeText={disabled ? undefined : onChangeText}
+          editable={!disabled}
           placeholder={placeholder}
           placeholderTextColor={theme.textTertiary}
           selectionColor={theme.selection}
@@ -162,12 +174,16 @@ export function TextField({
           enableFocusRing={false}
           selectTextOnFocus={selectOnFocus}
           multiline={multiline}
+          ardiaCentersCapitals={!multiline}
           autoCorrect={mono ? false : undefined}
           spellCheck={mono ? false : undefined}
-          onSubmitEditing={onSubmit}
+          onSubmitEditing={disabled ? undefined : onSubmit}
           onBlur={onBlur}
-          keyDownEvents={onEscape ? ESCAPE_KEY : undefined}
-          onKeyDown={(e) => e.nativeEvent.key === "Escape" && onEscape?.()}
+          keyDownEvents={keyDownEvents}
+          onKeyDown={(e) => {
+            if (e.nativeEvent.key === "Escape") onEscape?.();
+            else if (onExtraKey?.(e.nativeEvent)) e.stopPropagation();
+          }}
           style={[{ ...typeScale.body, color: theme.textPrimary, paddingVertical: 0 }, multiline && multilineText(), mono && monoFace()]}
         />
       </View>
@@ -216,7 +232,7 @@ export function PopUp<T extends string>({
         {({ pressed }) =>
           native ? (
             <View style={[PLAIN_POPUP, { backgroundColor: pressed ? theme.controlPressed : hovered ? theme.controlHover : undefined }]}>
-              <Text numberOfLines={1} style={{ ...typeScale.body, color: theme.textSecondary, flexShrink: 1 }}>
+              <Text numberOfLines={1} ardiaCentersCapitals style={{ ...typeScale.body, color: theme.textPrimary, flexShrink: 1 }}>
                 {current?.title ?? ""}
               </Text>
               <Symbol name={POP_UP_CHROME.indicator === "chevronDown" ? "chevron.down" : "chevron.up.chevron.down"} size={9} weight="semibold" color={theme.textSecondary} style={PLAIN_POPUP_GLYPH} />
@@ -240,7 +256,7 @@ export function PopUp<T extends string>({
               scaleStyle,
             ]}
           >
-            <Text numberOfLines={1} style={[POP_UP_TITLE, typeScale.body, { color: theme.textPrimary }]}>
+            <Text numberOfLines={1} ardiaCentersCapitals style={[POP_UP_TITLE, typeScale.body, { color: theme.textPrimary }]}>
               {current?.title ?? ""}
             </Text>
             {POP_UP_CHROME.indicator === "chevronDown" ? (

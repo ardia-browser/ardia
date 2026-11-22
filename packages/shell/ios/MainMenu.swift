@@ -17,7 +17,24 @@ enum MainMenu {
   private static var extensions = NSMenu(title: "Extensions")
   private static var extensionIcons: [String: NSImage] = [:]
 
+  static func performAppWideKey(_ event: NSEvent) -> Bool {
+    guard let item = appWideItem(for: event, in: NSApp.mainMenu), MenuTarget.shared.validateMenuItem(item) else { return false }
+    if item.action == #selector(MenuTarget.quit(_:)) { MenuTarget.shared.quit(item) } else { MenuTarget.shared.performCommand(item) }
+    return true
+  }
+
+  private static func appWideItem(for event: NSEvent, in menu: NSMenu?) -> NSMenuItem? {
+    for item in menu?.items ?? [] {
+      if let found = appWideItem(for: event, in: item.submenu) { return found }
+      let appWide = item.action == #selector(MenuTarget.quit(_:)) || (item as? CommandItem)?.command == CommandTable.Command.openSettings.rawValue
+      guard appWide, KeyEquivalentMatch.matches(item, event) else { continue }
+      return item
+    }
+    return nil
+  }
+
   static func build() -> NSMenu {
+    ArdiaWebView.setAppWideKeys { MainMenu.performAppWideKey($0) }
     let appName = ProcessInfo.processInfo.processName
     let main = NSMenu()
     moveToProfile = NSMenu(title: "Move to Profile")
@@ -288,9 +305,12 @@ enum MainMenu {
       profilesItem,
       hidden(.openProfileMenu),
     ])
+    let helpMenu = top("Help", helpItems())
+    MenuCatalog.capture(
+      main, dynamic: [services, shareMenu, moveToProfile, moveToWindow, bookmarkToFolder, profiles, littleArdiaInProfile, history, extensions],
+      growing: [bookmarks, windowMenu])
     NSApp.windowsMenu = windowMenu
-
-    NSApp.helpMenu = top("Help", helpItems())
+    NSApp.helpMenu = helpMenu
 
     built = nil
     refresh()
@@ -347,6 +367,7 @@ enum MainMenu {
       releaseNotesItem(),
       .separator(),
       CommandItem(.copyDiagnostics),
+      CommandItem(.copyLastFreeze),
     ]
     #if DEBUG
     items += [.separator(), CommandItem(.showOnboarding)]

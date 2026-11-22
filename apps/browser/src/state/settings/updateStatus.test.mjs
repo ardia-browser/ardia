@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { checkNowControl, switchCheckLine, switchOutcome, updaterBusy } from "./updateStatus.ts";
+import { checkNowControl, switchCheckLine, switchOutcome, updateUnderWay, updaterBusy } from "./updateStatus.ts";
 
 const state = (switchCheck, extra = {}) => ({
   available: true,
@@ -65,4 +65,26 @@ test("Check Now shows a check in progress as progress, never as a dimmed button"
   assert.equal(checkNowControl(state(null, { canCheck: false })).disabled, true);
   assert.equal(checkNowControl(state(null, { configured: false, canCheck: false })).disabled, false);
   assert.equal(checkNowControl({ available: false }).checking, false);
+});
+
+test("an update that installs itself shows its download, its install and Restart to Update", () => {
+  const downloading = state({ phase: "downloading", channel: "stable", version: "0.2.48" }, { sessionInProgress: true, canCheck: false });
+  assert.equal(switchCheckLine(downloading, "Ardia"), "Downloading Ardia 0.2.48…");
+  assert.equal(updaterBusy(downloading), true);
+  assert.deepEqual(checkNowControl(downloading), { title: "Updating…", checking: true, disabled: false, pressable: false });
+  const installing = state({ phase: "installing", channel: "stable", version: "0.2.48" });
+  assert.equal(switchCheckLine(installing, "Ardia"), "Installing Ardia 0.2.48…");
+  assert.equal(updaterBusy(installing), true);
+  const ready = state({ phase: "ready", channel: "stable", version: "0.2.48" });
+  assert.equal(switchCheckLine(ready, "Ardia"), "Ardia 0.2.48 is ready. Restart to finish updating.");
+  assert.equal(updaterBusy(ready), false);
+  assert.deepEqual(checkNowControl(ready), { title: "Restart to Update", checking: false, disabled: false, pressable: true });
+  for (const phase of ["downloading", "installing", "ready"]) assert.equal(switchOutcome({ phase, channel: "nightly" }), "offered", phase);
+});
+
+test("Settings follows an update the engine is downloading or installing, and only that, at the update's pace", () => {
+  assert.equal(updateUnderWay(state({ phase: "downloading", channel: "stable", version: "0.2.48" })), true);
+  assert.equal(updateUnderWay(state({ phase: "installing", channel: "stable", version: "0.2.48" })), true);
+  for (const phase of ["checking", "found", "ready"]) assert.equal(updateUnderWay(state({ phase, channel: "stable" })), false, phase);
+  assert.equal(updateUnderWay({ available: false }), false);
 });

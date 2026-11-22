@@ -1,0 +1,51 @@
+import type { ColorRoles } from "./tokens";
+import { withAlpha } from "../../lib/color";
+import type { MaterialScheme } from "../../lib/material/schemes";
+
+export const MATERIAL_STATE = { hover: 0.08, focus: 0.1, pressed: 0.1, dragged: 0.16, disabledContent: 0.38, disabledContainer: 0.12, scrim: 0.32 } as const;
+
+export function rolesFromScheme(s: MaterialScheme, dark: boolean): ColorRoles {
+  return {
+    dark,
+    label: s.onSurface,
+    foregroundPrimary: s.onSurface,
+    foregroundSecondary: s.onSurfaceVariant,
+    foregroundTertiary: s.outline,
+    fieldFill: s.surfaceContainerHigh,
+    fieldStroke: s.outlineVariant,
+    rowIcon: s.onSurfaceVariant,
+    rowHighlight: withAlpha(s.onSurface, MATERIAL_STATE.pressed),
+    plusFill: s.secondaryContainer,
+    chevronFill: s.surfaceContainerHighest,
+    controlEdge: s.outlineVariant,
+    disabled: withAlpha(s.onSurface, MATERIAL_STATE.disabledContent),
+    accent: s.primary,
+    formAccent: s.primary,
+    primaryAction: s.primary,
+    onPrimaryAction: s.onPrimary,
+    switchOn: s.primary,
+    trayShadow: "#000000",
+    trayDim: withAlpha(s.scrim, MATERIAL_STATE.scrim),
+    pageSurface: s.surface,
+    tileFill: s.surfaceContainerHigh,
+    tileEdge: s.outlineVariant,
+    cardEdge: s.outlineVariant,
+    headerText: s.onSurface,
+    secondaryLabel: s.onSurfaceVariant,
+    deckControl: s.surfaceContainerHigh,
+    destructive: s.error,
+    panel: s.surfaceContainer,
+    divider: s.outlineVariant,
+    menuScrim: "#00000000",
+    placeholderTints: [s.primaryContainer, s.secondaryContainer, s.tertiaryContainer, s.surfaceContainerHighest, s.surfaceVariant, s.surfaceContainerHigh],
+    groupFill: s.surfaceContainer,
+    separator: s.outlineVariant,
+    tertiaryFill: s.surfaceContainerHighest,
+    tertiaryLabel: s.outline,
+    toastFill: s.inverseSurface,
+    toastLabel: s.inverseOnSurface,
+    toastShadow: withAlpha(s.scrim, MATERIAL_STATE.scrim),
+    panelBorder: s.outlineVariant,
+    dialogScrim: withAlpha(s.scrim, MATERIAL_STATE.scrim),
+  };
+}

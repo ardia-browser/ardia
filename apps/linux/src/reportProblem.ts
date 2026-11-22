@@ -2,7 +2,7 @@ import { systemInfo } from "../../browser/src/platform/app";
 import { diagnostics } from "../../browser/src/state/commands/appCommands";
 import { openUrls } from "../../browser/src/state/browser/actions";
 import { useBrowser } from "../../browser/src/state/browser/store";
-import { capture } from "../../browser/src/state/telemetry/client";
+import { capture, consentNow } from "../../browser/src/state/telemetry/client";
 import { openReport as openReportSheet } from "../../browser/src/state/report/actions";
 import { setReportPlatform } from "../../browser/src/platform/report";
 import { ardiaHost, type ArdiaHost } from "./host.ts";
@@ -41,6 +41,6 @@ export function openReport(windowId: string | null, source: ReportSource = "menu
     openReportSheet(target, source);
     return Promise.resolve();
   }
-  capture("report_sheet_opened", { source, form: "issue_page" });
+  capture("report_sheet_opened", { source, form: "issue_page" }, consentNow());
   return reportPageURL().then((url) => openUrls([url], target));
 }

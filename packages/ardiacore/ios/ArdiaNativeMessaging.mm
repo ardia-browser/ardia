@@ -59,6 +59,10 @@ NSArray<NSDictionary *> *KnownHosts() {
   ];
 }
 
+NSArray<NSString *> *SystemRegisteredHosts() {
+  return @[ @"com.apple.passwordmanager" ];
+}
+
 NSString *ManifestPath(NSString *dir, NSString *name) {
   return [dir stringByAppendingPathComponent:[name stringByAppendingPathExtension:@"json"]];
 }
@@ -82,6 +86,10 @@ NSDictionary<NSString *, NSData *> *InstalledHosts() {
       hosts[name] = [NSJSONSerialization dataWithJSONObject:manifest
                                                     options:NSJSONWritingPrettyPrinted | NSJSONWritingWithoutEscapingSlashes
                                                       error:nil];
+  }
+  for (NSString *name in SystemRegisteredHosts()) {
+    NSData *system = [NSData dataWithContentsOfFile:ManifestPath(kChromeSystemDir, name)];
+    if (system && IsUsable([NSJSONSerialization JSONObjectWithData:system options:0 error:nil], name)) hosts[name] = system;
   }
   return hosts;
 }

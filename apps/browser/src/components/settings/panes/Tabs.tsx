@@ -2,14 +2,15 @@ import { useState } from "react";
 import { View } from "react-native";
 import { useTheme } from "../../ui/theme";
 import { useSettings, useTabLayout } from "../../../state/browser/hooks";
-import { chooseSidebarSide, chooseTabLayout, updateSettings } from "../../../state/settings/actions";
+import { chooseScrollToolbar, chooseSidebarSide, chooseTabLayout, updateSettings } from "../../../state/settings/actions";
 import { customNewTabUrl, type Settings } from "../../../state/settings/settings";
 import { Box, Button, Checkbox, DialogActions, DialogTitle, PopUp, Segmented, Sheet, space, Text, TextField, Toggle, type Option, type SegmentOption } from "../../ui";
 import { durationMinutes, durationParts, type DurationUnit } from "../../../lib/time";
 import { cleanUpChoices, CUSTOM_CLEAN_UP, DAILY_CLEAN_UP_MINUTES } from "../../../state/settings/cleanUpAfter";
 import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
-import { Anchor, Group, Row, SectionHeader, SettingToggle } from "../Form";
-import type { SettingId } from "../settingsIndex";
+import { Anchor, FormField, Group, Row, SectionHeader, SettingToggle } from "../Form";
+import { setting, type SettingId } from "../settingsIndex";
+import { ScrollToolbarPreview } from "../ChoicePreviews";
 import { MiniWindow } from "../MiniWindow";
 import { PictureChoice } from "../PictureChoice";
 import { useSettingsColors } from "../useSettingsColors";
@@ -63,6 +64,12 @@ const NEW_TAB_LINKS: Option<Settings["newTabLinksOpenIn"]>[] = [
   { value: "littleArdia", title: "Little Ardia" },
 ];
 
+const PEEK_BUTTONS: Option<Settings["peekButtons"]>[] = [
+  { value: "top", title: "In the title bar" },
+  { value: "left", title: "On the left" },
+  { value: "right", title: "On the right" },
+];
+
 const NEVER_CLEAN_UP = "never";
 
 const DURATION_UNITS: Option<DurationUnit>[] = [
@@ -104,11 +111,33 @@ function LayoutSection() {
           <Row anchor="tabs.sidebarSide">
             <Segmented options={SIDEBAR_SIDES} value={sidebarSide} onChange={chooseSidebarSide} />
           </Row>
-          <SettingToggle anchor="tabs.hideToolbarWhileScrolling" />
           <ButtonsRow top={top} />
         </Group>
+        <ScrollToolbarChoices />
       </Box>
     </>
+  );
+}
+
+const SCROLL_TOOLBAR: { hides: boolean; title: string; caption: string }[] = [
+  { hides: false, title: "Keep the toolbar", caption: "Stays put while the page scrolls." },
+  { hides: true, title: "Shrink while scrolling", caption: "Shrinks to a strip as you scroll down." },
+];
+
+function ScrollToolbarChoices() {
+  const hides = useSettings((s) => s.hideToolbarWhileScrolling);
+  return (
+    <Anchor id="tabs.hideToolbarWhileScrolling" shape="card">
+      <FormField label={setting("tabs.hideToolbarWhileScrolling").title}>
+        <Box row gap="xl" accessibilityRole="radiogroup">
+          {SCROLL_TOOLBAR.map((c) => (
+            <PictureChoice key={c.title} title={c.title} caption={c.caption} selected={hides === c.hides} onPress={() => chooseScrollToolbar(c.hides)} size="l">
+              <ScrollToolbarPreview hides={c.hides} />
+            </PictureChoice>
+          ))}
+        </Box>
+      </FormField>
+    </Anchor>
   );
 }
 
@@ -151,9 +180,12 @@ function TabsAndTopAppsSection() {
         <SettingToggle anchor="tabs.closedTopAppTiles" />
         <SettingToggle anchor="tabs.balancedTopApps" />
         <SettingToggle anchor="tabs.topAppFolders" />
+        <SettingToggle anchor="tabs.tabReorderHaptics" />
+        <SettingToggle anchor="tabs.swipeBetweenTabs" />
         <SettingToggle anchor="tabs.showTabHoverMenu" />
         <SettingToggle anchor="tabs.showFullUrlInTabHoverMenu" />
         <SettingToggle anchor="tabs.autoPictureInPicture" />
+        <SettingToggle anchor="tabs.playingNowAcrossProfiles" />
         <SettingToggle anchor="tabs.videoUpscaling" />
       </Group>
     </>
@@ -209,6 +241,7 @@ function LinksSection() {
   const littleArdia = useSettings((s) => s.openLinksInLittleArdia);
   const peekOtherSites = useSettings((s) => s.peekLinksToOtherSites);
   const newTabLinks = useSettings((s) => s.newTabLinksOpenIn);
+  const peekButtons = useSettings((s) => s.peekButtons);
   return (
     <>
       <SectionHeader title="Links" />
@@ -221,6 +254,8 @@ function LinksSection() {
               : `A link from ${PLATFORM_TERMS.linkSourceExamples} opens as a new tab in the ${APP} window you used last.`
           }
         />
+        <SettingToggle anchor="tabs.littleArdiaOpensNewTabLinks" />
+        <SettingToggle anchor="tabs.littleArdiaShortcutFromAnyApp" />
         <Row anchor="tabs.peekLinksToOtherSites">
           <PopUp value={peekOtherSites ? "peek" : "same"} options={OTHER_SITE_LINKS} onChange={(v) => updateSettings({ peekLinksToOtherSites: v === "peek" })} />
         </Row>
@@ -228,6 +263,9 @@ function LinksSection() {
           <PopUp value={newTabLinks} options={NEW_TAB_LINKS} onChange={(newTabLinksOpenIn) => updateSettings({ newTabLinksOpenIn })} />
         </Row>
         <SettingToggle anchor="tabs.popupsOpenAsTabs" />
+        <Row anchor="tabs.peekButtons">
+          <PopUp value={peekButtons} options={PEEK_BUTTONS} onChange={(peekButtons) => updateSettings({ peekButtons })} />
+        </Row>
       </Group>
     </>
   );

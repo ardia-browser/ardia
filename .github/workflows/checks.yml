@@ -41,10 +41,14 @@ jobs:
       matrix:
         include:
           - { name: "typecheck and tests", part: rest }
-          - { name: "browser tests, share 1 of 4", part: browser, shard: 1 }
-          - { name: "browser tests, share 2 of 4", part: browser, shard: 2 }
-          - { name: "browser tests, share 3 of 4", part: browser, shard: 3 }
-          - { name: "browser tests, share 4 of 4", part: browser, shard: 4 }
+          - { name: "browser tests, share 1 of 8", part: browser, shard: 1 }
+          - { name: "browser tests, share 2 of 8", part: browser, shard: 2 }
+          - { name: "browser tests, share 3 of 8", part: browser, shard: 3 }
+          - { name: "browser tests, share 4 of 8", part: browser, shard: 4 }
+          - { name: "browser tests, share 5 of 8", part: browser, shard: 5 }
+          - { name: "browser tests, share 6 of 8", part: browser, shard: 6 }
+          - { name: "browser tests, share 7 of 8", part: browser, shard: 7 }
+          - { name: "browser tests, share 8 of 8", part: browser, shard: 8 }
           - { name: "Mac bundle", part: bundle }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -71,10 +75,20 @@ jobs:
       - name: Vouch tests
         if: ${{ !cancelled() && matrix.part == 'rest' }}
         run: node --test .github/vouch/vouch.test.cjs
+      - name: Store simulator, the CI seed set
+        if: ${{ !cancelled() && matrix.part == 'rest' }}
+        run: pnpm --filter @ardia/browser sim
+      - name: The TSX this share transpiled last time
+        if: matrix.part == 'browser'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: apps/browser/node_modules/.cache/ardia-test-tsx
+          key: ardia-test-tsx-${{ matrix.shard }}-of-8-${{ hashFiles('apps/browser/src/test-loader.mjs', 'pnpm-lock.yaml') }}-${{ github.run_id }}
+          restore-keys: ardia-test-tsx-${{ matrix.shard }}-of-8-${{ hashFiles('apps/browser/src/test-loader.mjs', 'pnpm-lock.yaml') }}-
       - name: This share of the browser's tests
         if: matrix.part == 'browser'
         env:
-          NODE_OPTIONS: --test-shard=${{ matrix.shard }}/4
+          NODE_OPTIONS: --test-shard=${{ matrix.shard }}/8
         run: pnpm --filter @ardia/browser test
       - name: Bundle the Mac app's JavaScript as a release build does
         if: matrix.part == 'bundle'

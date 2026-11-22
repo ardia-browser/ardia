@@ -57,6 +57,7 @@ std::optional<base::DictValue> NodeValue(const BookmarkNode* node, int depth) {
   }
   base::DictValue value;
   value.Set("id", node->uuid().AsLowercaseString());
+  value.Set("n", base::NumberToString(node->id()));
   value.Set("t", base::UTF16ToUTF8(node->GetTitle()));
   value.Set("a", Ms(node->date_added()));
   std::string key;

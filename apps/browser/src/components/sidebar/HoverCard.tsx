@@ -23,8 +23,8 @@ import { useBookmarksShown } from "../../state/bookmarks/hooks";
 import { GroupPanel } from "./GroupPanel";
 import { dismissHover, setHoverSpace } from "../../state/sidebar/hover";
 import { cardHoverProps, useCardTarget } from "./hoverController";
-import { HoverCardFrameProvider, useHoverCardMotion, useHoverCardOrigin, useHoverCardPlacement } from "./hoverMotion";
-import { hoverCardAt, sidebarEdgeOf } from "./hoverPlacement";
+import { HoverCardFrameProvider, useHoverCardMotion, useHoverCardOrigin } from "./hoverMotion";
+import { sidebarEdgeOf } from "./hoverPlacement";
 import { usePeekSpan } from "../../state/windows/dockMotion";
 import { TabCardSummary } from "./TabCardSummary";
 import { useSidebarUi, type Anchor, type Hover } from "../../state/sidebar/sidebarUi";
@@ -51,7 +51,6 @@ export function HoverCard({ windowId, width, height }: { windowId: string; width
   const side = useSidebarSide(windowId);
   const sidebarEdge = sidebarEdgeOf(side, width, useSidebarWidth(windowId), usePeekSpan(windowId));
   const frame = useMemo(() => ({ side, windowWidth: width, sidebarEdge }), [side, width, sidebarEdge]);
-  useHoverCardPlacement(motion, shown ? hoverCardAt(shown.anchor, frame) : null, { width, height });
   if (!shown) return null;
   return (
     <HoverCardFrameProvider value={frame}>

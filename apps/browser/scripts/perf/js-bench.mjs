@@ -64,7 +64,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 const appDir = resolve(here, "../..");
 const repo = resolve(appDir, "../..");
 const defaultOut = process.env.AC_PERF_OUT ?? "/tmp/ac-perf-js";
-const BENCH_REVISION = 3;
+const BENCH_REVISION = 5;
+const ACTIVE_PAGE_DELAY_MS = 400;
 
 const [command, ...rest] = process.argv.slice(2);
 const flags = {};
@@ -175,7 +176,7 @@ const TONE = (() => {
 })();
 
 export function startServer(port) {
-  const server = createServer((req, res) => {
+  const serve = (req, res) => {
     const url = new URL(req.url, "http://localhost");
     if (url.pathname.startsWith("/img/") || url.pathname === "/favicon.ico") {
       const delay = Number(url.searchParams.get("d") ?? 0);
@@ -211,13 +212,18 @@ export function startServer(port) {
       return void res.end(`<!doctype html><html><head><title>Long page</title></head><body>${rows}</body></html>`);
     }
     const name = url.pathname.split("/").pop();
-    res.writeHead(200, { "content-type": "text/html", "cache-control": "no-store" });
-    res.end(`<!doctype html><html><head><title>Page ${name}</title></head><body><p>${name}</p></body></html>`);
-  });
-  return new Promise((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(port, "127.0.0.1", () => resolve(server));
-  });
+    setTimeout(() => {
+      res.writeHead(200, { "content-type": "text/html", "cache-control": "no-store" });
+      res.end(`<!doctype html><html><head><title>Page ${name}</title></head><body><p>${name}</p></body></html>`);
+    }, Number(url.searchParams.get("d") ?? 0));
+  };
+  const listen = (host) =>
+    new Promise((resolve, reject) => {
+      const server = createServer(serve);
+      server.once("error", reject);
+      server.listen(port, host, () => resolve(server));
+    });
+  return Promise.all([listen("127.0.0.1"), listen("::1")]).then((servers) => ({ close: () => servers.forEach((s) => s.close()) }));
 }
 
 function pidsOf(binary) {
@@ -310,12 +316,22 @@ function smallSession(dataDir) {
   writeFileSync(file, JSON.stringify(session));
 }
 
+export function appendRefusal(existing, revision = BENCH_REVISION) {
+  if (!existing) return null;
+  return existing.benchRevision === revision ? null
+    : `--append onto a bench revision ${existing.benchRevision ?? "unknown"} report would pool its runs with revision ${revision}'s; write to a new --out or --label`;
+}
+
 const ALL = ["startup", "persistence", "idle", "typing", "switchTabs", "openClose", "scroll", "pageLoad", "hover", "profileSwipe", "storeUpdate", "idleLate"];
 
 async function run() {
   const { app, bundle: jsbundle, label, runs = "5", port = "47817", out = defaultOut } = flags;
   if (!app || !jsbundle || !label) throw new Error("run needs --app, --bundle and --label");
   const scenarios = flags.scenarios ? flags.scenarios.split(",") : ALL;
+  const file = join(out, `${label}.json`);
+  const existing = flags.append && existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : null;
+  const refusal = appendRefusal(existing);
+  if (refusal) throw new Error(refusal);
   const clone = prepareApp(app, join(out, "apps", label), { bundle: jsbundle });
   const version = execFileSync("/usr/libexec/PlistBuddy", ["-c", "Print CFBundleShortVersionString", join(clone, "Contents/Info.plist")], { encoding: "utf8" }).trim();
   const origin = `http://127.0.0.1:${port}`;
@@ -326,7 +342,7 @@ async function run() {
     for (let r = 0; r < Number(runs); r++) {
       const dataDir = join(out, "data", `${label}-${flags.append ? `${Date.now()}-` : ""}${r}`);
       rmSync(dataDir, { recursive: true, force: true });
-      writeSeed(dataDir, origin, version);
+      writeSeed(dataDir, origin, version, { tabsOrigin: `http://[::1]:${port}`, activeDelayMs: ACTIVE_PAGE_DELAY_MS });
       if (flags.seed === "small") smallSession(dataDir);
       if (flags.probe) writeFileSync(join(dataDir, "perf-probe"), flags.probe);
       const { pid, launchedAt } = await launch(clone, dataDir, 9500 + r + (label.length % 50) * 10);
@@ -354,8 +370,7 @@ async function run() {
     server.close();
   }
   const bundleSize = statSync(jsbundle).size;
-  const file = join(out, `${label}.json`);
-  if (flags.append && existsSync(file)) results.unshift(...JSON.parse(readFileSync(file, "utf8")).results);
+  if (existing) results.unshift(...existing.results);
   const revisions = [...new Set(results.map(runRevision))];
   if (revisions.length > 1) console.log(`WARNING: these runs mix probe revisions ${revisions.join(", ")}; their numbers don't compare`);
   const report = {
@@ -378,7 +393,7 @@ const top = (counter, n = 6) =>
     .map(([k, v]) => `${k} ${Math.round(v)}`)
     .join(", ");
 
-export const isHarnessTimer = (name) => name.includes("pollDevEval") || name === "setInterval:anonymous";
+export const isHarnessTimer = (name) => name.includes("pollDevEval") || name.includes("benchSettleStep") || name.includes("benchSleep") || name === "setInterval:anonymous";
 const harnessMs = (stats) => sum(Object.fromEntries(Object.entries(stats.timerMs ?? {}).filter(([k]) => isHarnessTimer(k))));
 
 function statLine(stats) {

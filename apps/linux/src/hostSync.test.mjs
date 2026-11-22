@@ -253,3 +253,45 @@ test("refreshing sync documents drops journal parts stranded after a gap", async
   const result = await refreshSyncDocuments({ refresh: async (name) => disk.has(name), remove: async (name) => void disk.delete(name), maxParts: 12, batch: 5 });
   assert.deepEqual(result, { parts: 2, removed: ["sync-journal-4.nns", "sync-journal-7.nns"] });
 });
+
+test("a sync.now forwarded to the sync window reports that window's answer", async () => {
+  const { syncNowThrough } = await import("./syncForward.ts");
+  const idle = async () => {};
+  assert.equal(await syncNowThrough(idle, async () => false, () => {}), false, "a refused pass stays refused");
+  assert.equal(await syncNowThrough(idle, async () => true, () => {}), true);
+  assert.equal(await syncNowThrough(idle, async () => null, () => {}), true, "a sync window that answers nothing still counts as done");
+  let forwarded = false;
+  await assert.rejects(syncNowThrough(idle, async () => (forwarded = true), () => { throw new Error("control is off"); }));
+  assert.equal(forwarded, false, "nothing is forwarded once the caller's check fails");
+});
+
+test("a forwarded sync.now checks its caller after the sync window's cycle ends, and never starts one behind a busy cycle", async () => {
+  const { syncIdle, syncNowIfIdle, syncNowThrough } = await import("./syncForward.ts");
+  let cycle = null;
+  let started = 0;
+  const engineSyncNow = async (stillWanted) => {
+    while (cycle) await cycle;
+    stillWanted();
+    started += 1;
+    return true;
+  };
+  let finish;
+  cycle = new Promise((resolve) => (finish = resolve)).then(() => (cycle = null));
+  let wanted = true;
+  const forwarded = syncNowThrough(() => syncIdle(engineSyncNow), () => syncNowIfIdle(engineSyncNow), () => {
+    if (!wanted) throw new Error("control is off");
+  });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  wanted = false;
+  finish();
+  await assert.rejects(forwarded, /control is off/);
+  assert.equal(started, 0, "control turned off while the sync window was busy, so no cycle starts");
+
+  cycle = new Promise((resolve) => (finish = resolve)).then(() => (cycle = null));
+  const busy = syncNowIfIdle(engineSyncNow);
+  finish();
+  assert.equal(await busy, "busy", "a start that would have waited behind a cycle answers busy instead");
+  assert.equal(started, 0);
+  assert.equal(await syncNowIfIdle(engineSyncNow), true);
+  assert.equal(started, 1);
+});

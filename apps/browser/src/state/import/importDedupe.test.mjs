@@ -123,7 +123,7 @@ test("importing history into a full list reports the pages it added, not the cha
   S().hydrate({});
   const full = Array.from({ length: MAX_HISTORY }, (_, i) => ({ url: `https://old${i}.example/`, title: "", favicon: null, visits: 1, lastVisit: 1000 + i }));
   useBrowser.setState({ history: { "": { list: full, floor: -Infinity, ready: true } } });
-  const added = importHistory(P, [
+  const added = await importHistory(P, [
     { url: "https://new1.example/", title: "New 1", visits: 1, lastVisit: 999_999 },
     { url: "https://new2.example/", title: "New 2", visits: 1, lastVisit: 999_998 },
   ]);

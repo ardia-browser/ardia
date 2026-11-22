@@ -3,7 +3,7 @@ import { folder, ImportFailure, link, type BookmarkNode, type BookmarkRole, type
 
 type Json = Record<string, unknown>;
 
-export type ArcSidebar = { spaces: SpaceSuggestion[]; favorites: Record<string, ImportedTab[]> };
+export type ArcSidebar = { spaces: SpaceSuggestion[]; favorites: Record<string, ImportedTab[]>; iconItems: Record<string, string> };
 
 const MAX_DEPTH = 64;
 const SPLIT_ROLE: BookmarkRole = "split";
@@ -325,9 +325,14 @@ export function parseArcSidebar(raw: string): ArcSidebar {
   const containers = record(record(top)?.sidebar)?.containers;
   if (!Array.isArray(containers)) throw new ImportFailure("unreadable", "StorableSidebar.json is not an Arc sidebar");
   const box = mainContainer(containers);
-  const out: ArcSidebar = { spaces: [], favorites: {} };
+  const out: ArcSidebar = { spaces: [], favorites: {}, iconItems: {} };
   if (!box) return out;
   const items = new Items(objects(box.items));
+  for (const item of objects(box.items)) {
+    const id = text(item.id);
+    const url = tabOf(item, false)?.url;
+    if (id !== undefined && url !== undefined && !Object.prototype.hasOwnProperty.call(out.iconItems, url)) out.iconItems[url] = id;
+  }
   let untitled = 0;
   for (const space of objects(box.spaces)) {
     const id = text(space.id);

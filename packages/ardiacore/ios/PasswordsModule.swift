@@ -41,5 +41,39 @@ public class PasswordsModule: Module {
       let enabled = try args.bool("enabled")
       ArdiaServices.profileToggles(profile: args.profile, set: ["passwords": NSNumber(value: enabled)]) { _, error in reply.service(nil, error) }
     },
+    "setFieldProviders": { args, reply in
+      let generation = try args.double("generation")
+      let session = try args.text("session")
+      let profiles = try args.dicts("profiles")
+      let applied = ArdiaWebView.setFieldProviders(profiles, generation: generation, session: session)
+      if applied { WebKitHub.shared.transfers.liveTabs.forEach { $0.pushFieldProvider() } }
+      reply.ok(["applied": applied])
+    },
+    "showSystemPanel": { args, reply in
+      let tab = try args.text("tab")
+      let generation = try args.optionalDouble("generation") ?? -1
+      if let live = WebKitHub.shared.transfers.liveTab(tab) { return live.showSystemPanel(generation: generation) { reply.ok($0) } }
+      if !ArdiaWebView.showSystemPanel(tab: tab, generation: generation, completion: { reply.ok($0) }) {
+        reply.ok(["shown": false, "reason": "noTab"])
+      }
+    },
+    "showPanelHint": { args, reply in
+      let tab = try args.text("tab")
+      let label = try args.text("label")
+      let side = try args.text("side")
+      if let live = WebKitHub.shared.transfers.liveTab(tab) { return reply.ok(["shown": live.showFieldProviderHint(label: label, side: side)]) }
+      reply.ok(["shown": ArdiaWebView.showFieldProviderHint(label, side: side, tab: tab)])
+    },
+    "systemPanelAvailable": { _, reply in reply.ok(ArdiaWebView.systemPanelAvailability) },
+    "otpauthHandler": { _, reply in reply.ok(["app": ArdiaWebView.otpauthHandlerName as Any? ?? NSNull()]) },
+    "setUpVerificationCode": { args, reply in
+      let tab = try args.text("tab")
+      let token = try args.text("token")
+      let generation = try args.optionalDouble("generation") ?? -1
+      if let live = WebKitHub.shared.transfers.liveTab(tab) { return live.setUpVerificationCode(token, generation: generation) { reply.ok($0) } }
+      if !ArdiaWebView.setUpVerificationCode(token, tab: tab, generation: generation, completion: { reply.ok($0) }) {
+        reply.ok(["opened": false, "reason": "noTab"])
+      }
+    },
   ])
 }

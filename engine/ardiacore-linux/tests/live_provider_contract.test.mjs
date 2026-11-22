@@ -112,8 +112,9 @@ function pick(route, fallback) {
 
 function defaultFor(host, method, path, body) {
   if (host === "api.github.com") {
-    const query = JSON.parse(body).query;
-    return ["github", query.includes("LiveFolderDetails") ? "details" : query.includes("LiveFolder") ? "folder" : "viewer"];
+    const { query, variables } = JSON.parse(body);
+    if (query.includes("search(")) return ["github", /(^|\s)author:@me(\s|$)/.test(variables.q) ? "folder" : "emptySearch"];
+    return ["github", query.includes("LiveFolderDetails") ? "details" : "viewer"];
   }
   if (host === "github.com") return ["github", path === "/login/device/code" ? "deviceCode" : "deviceToken"];
   if (host === "api.bitbucket.org") {
@@ -184,14 +185,14 @@ test("GitHub: a token connects from the documented viewer reply and a folder map
 test("GitHub: bad credentials, the primary and secondary rate limits and SAML enforcement keep their meaning", async () => {
   serve("api.github.com /graphql", "badCredentials");
   await rejectsWith(SOURCES.github.fetch(prFolder), "signedOut");
+  serve("api.github.com /graphql", "ssoRequired");
+  await rejectsWith(SOURCES.github.fetch(prFolder), "sso");
   serve("api.github.com /graphql", "primaryRateLimit");
-  await rejectsWith(SOURCES.github.fetch(prFolder), "rateLimited", /rate limit already exceeded/);
+  await rejectsWith(SOURCES.github.fetch(prFolder), "rateLimited", /^Rate Limit Exceeded$/);
   serve("api.github.com /graphql", "secondaryRateLimit");
   await rejectsWith(SOURCES.github.fetch(prFolder), "rateLimited");
   serve("api.github.com /graphql", "secondaryRateLimitNoRetryAfter");
   await rejectsWith(SOURCES.github.fetch(prFolder), "rateLimited");
-  serve("api.github.com /graphql", "ssoRequired");
-  await rejectsWith(SOURCES.github.fetch(prFolder), "sso");
   assert.ok(live().accounts.github, "a refresh failure never drops the account");
 });
 

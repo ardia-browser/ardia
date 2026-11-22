@@ -55,7 +55,7 @@ int main() {
 
     def test_the_fetch_is_a_cookieless_get_with_no_redirects_on_the_system_network_context(self):
         fetcher = (LINUX / 'ac_linux_updates.cc').read_text()
-        for needle in ['GURL(policy::UrlFor(source_))', 'request->method = "GET"', 'CredentialsMode::kOmit', 'RedirectMode::kError',
+        for needle in ['GURL(policy::UrlFor(source))', 'request->url = RequestUrl(source_)', 'request->method = "GET"', 'CredentialsMode::kOmit', 'RedirectMode::kError',
                        'system_network_context_manager()', 'GetSharedURLLoaderFactory()', 'DownloadToString(', 'policy::MaxBytesFor(source_)',
                        'base::Seconds(policy::kTimeoutSeconds)', 'policy::AdmitFetch(', 'cookies_allowed: NO', 'DCHECK_CURRENTLY_ON(content::BrowserThread::UI)']:
             self.assertIn(needle, fetcher)

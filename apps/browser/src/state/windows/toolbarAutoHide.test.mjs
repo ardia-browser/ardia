@@ -383,6 +383,7 @@ test("the mode: shown unless the page scrolled down and nothing needs the bar", 
 
 test("page reports, reveals and peeks", () => {
   useBrowser.getState().hydrate({});
+  useBrowser.getState().updateSettings({ hideToolbarWhileScrolling: true });
   const w = useBrowser.getState().createWindow({ url: "https://a.com" });
   const tabId = useBrowser.getState().newTab(w, { url: "https://example.com" });
   const st = () => useToolbarAutoHide.getState();
@@ -409,6 +410,7 @@ test("page reports, reveals and peeks", () => {
 
 test("with Hide toolbar while scrolling off, a page's scrolling is not kept, and turning it off shows every toolbar", () => {
   useBrowser.getState().hydrate({});
+  useBrowser.getState().updateSettings({ hideToolbarWhileScrolling: true });
   const w = useBrowser.getState().createWindow({ url: "https://a.com" });
   const tabId = useBrowser.getState().newTab(w, { url: "https://example.com" });
   const st = () => useToolbarAutoHide.getState();

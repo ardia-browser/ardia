@@ -42,3 +42,17 @@ test("the badge and status marks come after the press area, so they draw over th
   assert.ok(overlays >= 0, "the overlays are not a sibling of the press area");
   assert.ok(overlays > children.indexOf(area), "the overlays come before the press area, so they draw behind the tile and its selection ring");
 });
+
+test("the folder ring and the tile face move as one: both live in the one slot-positioned wrapper", () => {
+  const ring = elements("FolderDropRing")[0];
+  const face = elements("TileFace")[0];
+  assert.ok(ring && face);
+  const slotWrapper = (node) => {
+    for (let n = node.parent; n; n = n.parent)
+      if (isJsx(n) && tagOf(n) === "Animated.View" && (ts.isJsxElement(n) ? n.openingElement : n).getText(file).includes("position.getLayout()")) return n;
+    return null;
+  };
+  assert.ok(slotWrapper(ring), "FolderDropRing is outside the slot wrapper");
+  assert.equal(slotWrapper(face), slotWrapper(ring), "the face and the ring are positioned by different wrappers");
+  assert.equal(all(tile, (n) => ts.isPropertyAccessExpression(n) && n.getText(file) === "position.getLayout").length, 1, "one slot position for the whole tile");
+});

@@ -10,15 +10,23 @@ import { isEmptyCardTab } from "../omnibox/newTabBarPolicy";
 import { askBeforeQuitting } from "./quitWarning";
 import { startClosingWindow, stopClosingWindow } from "./closingWindows";
 import { noteQuitAskedAfterTabsConfirm } from "../telemetry/quitWarningCounts";
+import { consentToken } from "../telemetry/client";
 
 const MIN_TABS = 2;
 
 const pending = new Set<string>();
 
-export function requestWindowClose(windowId: string, onceAgreed?: () => void) {
-  if (pending.has(windowId)) return;
+export type GuardedClose = "closing" | "cancelled" | "stopped";
+export type CloseGuard = { mayClose?: () => boolean; ask?: CloseAsk };
+
+function oneClosePerWindow<T>(windowId: string, run: () => Promise<T>): Promise<T | "busy"> {
+  if (pending.has(windowId)) return Promise.resolve("busy");
   pending.add(windowId);
-  void requestClose(windowId, onceAgreed).finally(() => pending.delete(windowId));
+  return run().finally(() => pending.delete(windowId));
+}
+
+export function requestWindowClose(windowId: string, onceAgreed?: () => void) {
+  void oneClosePerWindow(windowId, () => requestClose(windowId, onceAgreed));
 }
 
 export function startWindowCloseGuard() {
@@ -48,11 +56,26 @@ async function requestClose(windowId: string, onceAgreed?: () => void) {
   const s = useBrowser.getState();
   const w = s.windows[windowId];
   if (!w) return closeWindowWithoutTabs(windowId, onceAgreed);
-  if (isSmall(s, windowId)) return closeLittleArdia(windowId);
-  const { decision, suppressWarning, keepsLastWindow } = await decideWindowClose(windowId);
-  if (suppressWarning) useBrowser.getState().updateSettings({ warnBeforeClosingWindow: false });
-  if (decision === "cancel") return;
-  closeWindowAnimated(windowId, { keepsLastWindow });
+  if (isSmall(s, windowId)) return void (await closeLittleArdia(windowId));
+  await closeAfterAsking(windowId);
+}
+
+export function closeWindowAsked(windowId: string, guard: CloseGuard): Promise<GuardedClose | "busy"> {
+  return oneClosePerWindow(windowId, () => (isSmall(useBrowser.getState(), windowId) ? closeLittleArdia(windowId, guard) : closeAfterAsking(windowId, guard)));
+}
+
+export async function closeAfterAsking(windowId: string, { mayClose = () => true, ask = confirm }: CloseGuard = {}): Promise<GuardedClose> {
+  const { decision, suppressWarning } = await decideWindowClose(windowId, ask, mayClose).catch((error: unknown) => {
+    useBrowser.getState().dropStaleLastWindowMark();
+    throw error;
+  });
+  if (suppressWarning && mayClose()) useBrowser.getState().updateSettings({ warnBeforeClosingWindow: false });
+  if (decision === "cancel") {
+    useBrowser.getState().dropStaleLastWindowMark();
+    return "cancelled";
+  }
+  if (!mayClose()) return "stopped";
+  return (await closeWindowAnimated(windowId, { keepsLastWindow: true })) ? "closing" : mayClose() ? "cancelled" : "stopped";
 }
 
 export type CloseAsk = typeof confirm;
@@ -67,8 +90,9 @@ async function askToClose(windowId: string, ask: CloseAsk, closing?: string[]): 
 
 const cancel = (suppressWarning = false): WindowCloseDecision => ({ decision: "cancel", suppressWarning });
 
-export async function decideWindowClose(windowId: string, ask: CloseAsk = confirm): Promise<WindowCloseDecision> {
-  let quitWarning = await askBeforeQuitting(windowId, ask);
+export async function decideWindowClose(windowId: string, ask: CloseAsk = confirm, mayWrite: () => boolean = () => true): Promise<WindowCloseDecision> {
+  const consent = consentToken();
+  let quitWarning = await askBeforeQuitting(windowId, ask, mayWrite);
   if (quitWarning === "cancelled") return cancel();
   const asked = new Set<string>();
   let suppressWarning = false;
@@ -85,8 +109,8 @@ export async function decideWindowClose(windowId: string, ask: CloseAsk = confir
     if (answer.decision === "cancel") return cancel(suppressWarning);
     for (const id of closing) asked.add(id);
     if (quitWarning !== "notAsked") continue;
-    quitWarning = await askBeforeQuitting(windowId, ask);
-    if (quitWarning !== "notAsked") noteQuitAskedAfterTabsConfirm(quitWarning === "cancelled");
+    quitWarning = await askBeforeQuitting(windowId, ask, mayWrite);
+    if (quitWarning !== "notAsked") noteQuitAskedAfterTabsConfirm(quitWarning === "cancelled", consent);
     if (quitWarning === "cancelled") return cancel(suppressWarning);
   }
 }

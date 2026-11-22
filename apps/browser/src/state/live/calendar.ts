@@ -12,10 +12,12 @@ import { openExternalURL } from "../../platform/app";
 import { readDocument } from "../../platform/documents";
 import { onWindowEvent } from "../../platform/windows";
 import { trackCalendarConnect } from "../telemetry/track";
+import { consentToken, type ConsentToken } from "../telemetry/client";
 import { useEffect, useState } from "react";
 import { create } from "zustand";
 import { devTestValue } from "../../platform/launchConfig";
 import { everySlowly } from "../../platform/slowTimers";
+import { isPerfRun } from "../app/perfRun";
 import type { CalendarEvent } from "./meetings";
 import { live, updateCalendarSettings, useLive } from "./store";
 
@@ -68,6 +70,7 @@ type Fixture = {
 };
 
 const fixtureMode = (() => {
+  if (isPerfRun) return true;
   try {
     return devTestValue("calendarFixture") === "1";
   } catch {
@@ -136,7 +139,7 @@ async function askMacOS(): Promise<CalendarAccessRequest> {
   }
 }
 
-async function requestAccess(): Promise<boolean> {
+async function requestAccess(consent: ConsentToken | null): Promise<boolean> {
   const before = calendarAuthorization();
   if (before === "fullAccess") {
     await refreshCalendar();
@@ -150,13 +153,13 @@ async function requestAccess(): Promise<boolean> {
   useCalendar.setState({ requesting: false, requestError: failure });
   const settingsOpened = !!failure && (request ? access === "notDetermined" && request.responsible !== "other" : true);
   if (settingsOpened) openCalendarPrivacy();
-  trackCalendarConnect({ before, after: access, responsible: request?.responsible ?? "unknown", errored: !!request?.error, settingsOpened, ms: request?.ms ?? 0 });
+  trackCalendarConnect({ before, after: access, responsible: request?.responsible ?? "unknown", errored: !!request?.error, settingsOpened, ms: request?.ms ?? 0 }, consent);
   return access === "fullAccess";
 }
 
 export function connectCalendar(): Promise<boolean> {
   if (fixtureMode) return refreshCalendar().then(() => true);
-  connecting ??= requestAccess().finally(() => (connecting = null));
+  connecting ??= requestAccess(consentToken()).finally(() => (connecting = null));
   return connecting;
 }
 
@@ -171,10 +174,12 @@ export function startCalendar() {
   if (started) return;
   started = true;
   void refreshCalendar();
-  onCalendarChanged(() => void refreshCalendar());
-  onWindowEvent((e) => {
-    if (e.type === "focus" && !calendarConnected() && calendarAuthorization() !== useCalendar.getState().access) void refreshCalendar();
-  });
+  if (!fixtureMode) {
+    onCalendarChanged(() => void refreshCalendar());
+    onWindowEvent((e) => {
+      if (e.type === "focus" && !calendarConnected() && calendarAuthorization() !== useCalendar.getState().access) void refreshCalendar();
+    });
+  }
   everySlowly({
     every: 5 * 60_000,
     run: () => void refreshCalendar(),

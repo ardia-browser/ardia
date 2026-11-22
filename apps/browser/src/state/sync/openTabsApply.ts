@@ -157,7 +157,7 @@ export function applyOpenTabs(profileId: string, visible: Map<string, unknown>, 
   if (changed.size) next = arrange(next, profileId, tabValues, groupValues);
   noteOpenTabsApplied({ opened, closed: gone.length, updated });
   if (next.tabs === s.tabs && next.windows === s.windows && next.groups === s.groups) return true;
-  const { windows, groups, live, find, splits, selection, windowOrder, windowUi } = next;
-  fromSync(() => useBrowser.setState({ tabs: next.tabs, windows, groups, live, find, splits, selection, windowOrder, windowUi }));
+  const { windows, groups, find, splits, selection, windowOrder, windowUi } = next;
+  fromSync(() => useBrowser.setState({ tabs: next.tabs, windows, groups, find, splits, selection, windowOrder, windowUi }));
   return true;
 }

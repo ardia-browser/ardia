@@ -1,6 +1,6 @@
 import type { Settings } from "../settings/settings";
 
-export type OnboardingStep = "intro" | "source" | "layout" | "tabs" | "look" | "searchPrivacy" | "pins" | "home" | "outro";
+export type OnboardingStep = "intro" | "source" | "layout" | "tabs" | "look" | "searchPrivacy" | "pins" | "home" | "plugins" | "outro";
 
 export type QuestionId =
   | "source"
@@ -13,12 +13,13 @@ export type QuestionId =
   | "quit"
   | "windows"
   | "tabsMore"
-  | "color" | "switcher" | "appearance" | "style" | "frame" | "siteColor" | "lookMore"
+  | "color" | "appearance" | "style" | "frame" | "siteColor" | "lookMore"
   | "engine"
   | "crash"
   | "pins"
   | "default"
   | "links"
+  | "plugins"
   | "outro";
 
 export type Question = { id: QuestionId; keys: readonly (keyof Settings)[]; askedWithPreset?: true };
@@ -40,7 +41,6 @@ export const QUESTIONS: Record<Exclude<OnboardingStep, "intro">, Question[]> = {
   ],
   look: [
     { id: "color", keys: [] },
-    { id: "switcher", keys: ["profileSwitcherIcons"], askedWithPreset: true },
     { id: "appearance", keys: ["appearance"] },
     { id: "style", keys: ["interfaceStyle", "glassTintWithTheme", "glassTintAmount"], askedWithPreset: true },
     { id: "frame", keys: ["pageFrame", "borderlessMode"], askedWithPreset: true },
@@ -56,6 +56,7 @@ export const QUESTIONS: Record<Exclude<OnboardingStep, "intro">, Question[]> = {
     { id: "default", keys: [] },
     { id: "links", keys: ["openLinksInLittleArdia"] },
   ],
+  plugins: [{ id: "plugins", keys: [] }],
   outro: [{ id: "outro", keys: [] }],
 };
 

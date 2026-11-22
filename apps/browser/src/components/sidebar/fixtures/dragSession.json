@@ -12,7 +12,9 @@
    "gridGrowth": 0,
    "hold": null,
    "dropInto": null,
-   "onto": null,
+   "split": null,
+   "tile": null,
+   "row": null,
    "pins": false,
    "pinCount": 0,
    "pinBefore": null,
@@ -49,13 +51,15 @@
     ]
    },
    "gapKey": "tail:list",
-   "pitch": 71,
+   "pitch": 74,
    "into": null,
    "external": 2,
    "gridGrowth": 0,
    "hold": null,
    "dropInto": null,
-   "onto": null,
+   "split": null,
+   "tile": null,
+   "row": null,
    "pins": false,
    "pinCount": 0,
    "pinBefore": null,
@@ -65,7 +69,7 @@
    "landing": null,
    "sources": [],
    "gaps": {
-    "tail:list": 71
+    "tail:list": 74
    }
   },
   {
@@ -82,7 +86,7 @@
    },
    "gapKey": "t:b",
    "gaps": {
-    "t:b": 71
+    "t:b": 74
    }
   },
   {
@@ -102,6 +106,10 @@
    "gapKey": "t:t2",
    "pitch": 47,
    "gridGrowth": 47,
+   "tile": {
+    "w": 56,
+    "h": 41
+   },
    "pins": true,
    "pinCount": 2,
    "pinBefore": "t:t2",
@@ -125,13 +133,14 @@
     ]
    },
    "gapKey": "t:c",
-   "pitch": 105,
+   "pitch": 111,
    "gridGrowth": 0,
+   "tile": null,
    "pins": false,
    "pinCount": 0,
    "pinBefore": null,
    "gaps": {
-    "t:c": 105
+    "t:c": 111
    }
   },
   {
@@ -175,7 +184,9 @@
    "gridGrowth": 0,
    "hold": null,
    "dropInto": null,
-   "onto": null,
+   "split": null,
+   "tile": null,
+   "row": null,
    "pins": false,
    "pinCount": 0,
    "pinBefore": null,
@@ -415,10 +426,11 @@
    ]
   },
   {
-   "label": "row onto a row",
+   "label": "row on a row's right half",
    "drop": {
-    "type": "onto",
-    "targetId": "c"
+    "type": "split",
+    "targetId": "c",
+    "side": "right"
    },
    "landing": null,
    "landed": null,
@@ -588,7 +600,9 @@
    "gridGrowth": 0,
    "hold": null,
    "dropInto": null,
-   "onto": null,
+   "split": null,
+   "tile": null,
+   "row": null,
    "pins": false,
    "pinCount": 0,
    "pinBefore": null,
@@ -686,10 +700,7 @@
   },
   {
    "step": "landed",
-   "landing": null,
-   "gaps": {
-    "t:a": 10
-   }
+   "landing": null
   },
   {
    "ghosts": [
@@ -776,7 +787,9 @@
      "gridGrowth": 0,
      "hold": null,
      "dropInto": null,
-     "onto": null,
+     "split": null,
+     "tile": null,
+     "row": null,
      "pins": false,
      "pinCount": 0,
      "pinBefore": null,
@@ -991,7 +1004,9 @@
      "gridGrowth": 0,
      "hold": null,
      "dropInto": null,
-     "onto": null,
+     "split": null,
+     "tile": null,
+     "row": null,
      "pins": false,
      "pinCount": 0,
      "pinBefore": null,
@@ -1192,7 +1207,9 @@
      "gridGrowth": 0,
      "hold": null,
      "dropInto": null,
-     "onto": null,
+     "split": null,
+     "tile": null,
+     "row": null,
      "pins": false,
      "pinCount": 0,
      "pinBefore": null,
@@ -1399,7 +1416,9 @@
      "gridGrowth": 0,
      "hold": null,
      "dropInto": null,
-     "onto": null,
+     "split": null,
+     "tile": null,
+     "row": null,
      "pins": false,
      "pinCount": 0,
      "pinBefore": null,
@@ -1617,7 +1636,9 @@
    "gridGrowth": 0,
    "hold": null,
    "dropInto": null,
-   "onto": null,
+   "split": null,
+   "tile": null,
+   "row": null,
    "pins": false,
    "pinCount": 0,
    "pinBefore": null,
@@ -1730,6 +1751,10 @@
    },
    "gapKey": "t:t1",
    "pitch": 47,
+   "tile": {
+    "w": 56,
+    "h": 41
+   },
    "pins": true,
    "pinCount": 1,
    "pinBefore": "t:t1",
@@ -1753,6 +1778,7 @@
    },
    "gapKey": null,
    "pitch": 0,
+   "tile": null,
    "pins": false,
    "pinCount": 0,
    "pinBefore": null,

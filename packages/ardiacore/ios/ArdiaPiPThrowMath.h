@@ -21,12 +21,13 @@ constexpr double kCornerInset = 10;
 constexpr double kBrowserCardInset = 9, kBrowserCardRadius = 10;
 constexpr double kFreeRadius = 6;
 constexpr double kSnappedRadius = kBrowserCardRadius - (kCornerInset - kBrowserCardInset);
-constexpr double kCornerTolerance = kPi / 4;
 constexpr double kDragFlingSpeed = 350;
-constexpr double kSwipeFlingDelta = 6;
+constexpr double kSwipeSureFlingDelta = 10;
+constexpr double kTuckPastEdge = 0.5, kUntuckPull = 48, kCornerPull = 80;
 constexpr double kSwipeEventsPerSecond = 90;
 constexpr double kResponse = 0.9, kDampingRatio = 0.9, kResolve = 0.2;
 constexpr double kVelocityWindow = 0.1, kVelocityStale = 0.05;
+constexpr double kMomentumWait = 0.08, kMomentumLate = 0.3, kFlickReach = 0.1, kSidewaysFlick = 2;
 
 inline Point CornerPoint(Corner corner, Rect r) {
   const bool left = corner == kTopLeft || corner == kBottomLeft;
@@ -44,7 +45,7 @@ inline Corner PickCorner(Point from, Point velocity, Rect screen) {
   if (velocity.x == 0 && velocity.y == 0) return kNoCorner;
   const double heading = std::atan2(velocity.y, velocity.x);
   Corner best = kNoCorner;
-  double closest = kCornerTolerance;
+  double closest = 2 * kPi;
   for (Corner corner : {kTopLeft, kTopRight, kBottomLeft, kBottomRight}) {
     const Point p = CornerPoint(corner, screen);
     const double apart = AngleApart(std::atan2(p.y - from.y, p.x - from.x), heading);
@@ -68,6 +69,36 @@ inline Corner SnappedCorner(Rect frame, Rect visible) {
   return kNoCorner;
 }
 
+inline Rect FlickLanding(Rect frame, Point velocity) {
+  if (std::fabs(velocity.x) < kSidewaysFlick * std::fabs(velocity.y)) return frame;
+  return {frame.x + velocity.x * kFlickReach, frame.y, frame.w, frame.h};
+}
+
+inline Corner CornerInReach(Rect frame, Rect visible) {
+  Corner best = kNoCorner;
+  double closest = kCornerPull;
+  for (Corner corner : {kTopLeft, kTopRight, kBottomLeft, kBottomRight}) {
+    const Rect at = CornerFrame(corner, frame.w, frame.h, visible);
+    const double apart = std::hypot(at.x - frame.x, at.y - frame.y);
+    if (apart <= closest) best = corner, closest = apart;
+  }
+  return best;
+}
+
+inline Corner CornerPulledInto(Rect start, Rect released, Rect visible) {
+  const Corner corner = CornerInReach(released, visible);
+  return corner == kNoCorner || CornerInReach(start, visible) == corner ? kNoCorner : corner;
+}
+
+inline bool PastEdgeEnoughToTuck(double past, double width) { return past > width * kTuckPastEdge; }
+
+inline bool PulledOutOfTuck(double fromTucked) { return fromTucked >= kUntuckPull; }
+
+inline bool PulledPastHalf(Rect frame, Rect visible, bool tuckedRight) {
+  const double middle = visible.x + visible.w / 2, centre = frame.x + frame.w / 2;
+  return tuckedRight ? centre < middle : centre > middle;
+}
+
 inline double CornerRadius(Rect frame, Rect visible) { return SnappedCorner(frame, visible) == kNoCorner ? kFreeRadius : kSnappedRadius; }
 
 inline Point FingerDelta(double scrollingDeltaX, double scrollingDeltaY, bool inverted) {
@@ -76,7 +107,7 @@ inline Point FingerDelta(double scrollingDeltaX, double scrollingDeltaY, bool in
 
 inline Point SwipeVelocity(Point lastDelta) { return {lastDelta.x * kSwipeEventsPerSecond, lastDelta.y * kSwipeEventsPerSecond}; }
 
-inline bool SwipeFlings(Point lastDelta) { return std::hypot(lastDelta.x, lastDelta.y) > kSwipeFlingDelta; }
+inline bool SwipeSurelyFlings(Point lastDelta) { return std::hypot(lastDelta.x, lastDelta.y) >= kSwipeSureFlingDelta; }
 
 inline bool DragFlings(Point velocity) { return std::hypot(velocity.x, velocity.y) > kDragFlingSpeed; }
 

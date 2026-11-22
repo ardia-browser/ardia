@@ -57,6 +57,15 @@ test("Hermes stacks keep function and bundle names, not the dev host, query or d
   for (const f of frames) assert.equal(f.platform, "custom");
 });
 
+test("a Hermes or V8 stack's header line, the error's own message, is never read as a frame", () => {
+  const stack = ["Error: Failed for someone@customer.example", "    at choose (index.bundle:1:2)"].join("\n");
+  const frames = parseStack(stack);
+  assert.deepEqual(frames.map((f) => f.function), ["choose"]);
+  assert.deepEqual(leaks(JSON.stringify(frames), "someone", "customer.example"), []);
+  const jsc = parseStack(["choose@index.bundle:1:2", "apply@[native code]"].join("\n"));
+  assert.deepEqual(jsc.map((f) => f.function), ["apply", "choose"]);
+});
+
 test("event properties are flat, plain and scrubbed", () => {
   const out = cleanProperties({
     kind: "history",
@@ -300,13 +309,16 @@ test("the settings snapshot reports borderless mode and its default without chan
   assert.equal(snap.default_borderlessMode, "false");
   assert.equal(snap.setting_pageFrame, "6");
   assert.equal(snap.default_pageFrame, "9");
+  assert.equal(snap.window_corner_radius, "19");
   assert.deepEqual(cleanProperties(snap), snap);
 });
 
 test("the snapshot says how many profiles have a custom colour, never which", () => {
   const theme = { stops: [{ x: 0, y: 0, color: { r: 0.88, g: 0.88, b: 0.88, a: 1 } }], intensity: 1, mode: "dark" };
   const counted = customColorProfiles({ a: { name: "Work", theme }, b: { name: "Home" }, c: { name: "Play", theme: null } });
-  assert.deepEqual(counted, { custom_color_profiles: "1" });
+  assert.deepEqual(counted, { custom_color_profiles: "1", edited_presets: "0" }, "a shown look that isn't this Mac's own isn't counted as edited");
+  const withDefault = customColorProfiles({ a: { name: "Work", color: "blue", theme, presetThemes: { plum: theme } } }, "a");
+  assert.deepEqual(withDefault, { custom_color_profiles: "1", edited_presets: "1", default_profile_color_edited: "true" }, "whether the default profile's colour is edited, never which colour");
   assert.deepEqual(cleanProperties(counted), counted);
 });
 

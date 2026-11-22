@@ -17,6 +17,8 @@ import {
   type IcsProperty,
   type Zone,
 } from "./calendarIcs.ts";
+import { consentToken } from "../../browser/src/state/telemetry/consentPeriod";
+import { warnFor } from "../../browser/src/state/telemetry/consoleConsent";
 
 export const CALENDAR_CONSENT_DOCUMENT = "linux-calendar.json";
 export const CALENDAR_CAPABILITIES = ["ArdiaCalendar.status", "ArdiaCalendar.requestAccess", "ArdiaCalendar.sources", "ArdiaCalendar.objects", "ArdiaCalendar.timezones"] as const;
@@ -225,6 +227,7 @@ export function createLinuxCalendar(host: ArdiaHost): LinuxCalendar {
       return (await sources()).map(({ emails: _, ...calendar }) => calendar);
     },
     async events(start, end, calendarIds) {
+      const consent = consentToken();
       if (status !== "fullAccess") return [];
       if (!known.length) await sources();
       const wanted = calendarIds.length ? known.filter((c) => calendarIds.includes(c.id)) : known;
@@ -269,13 +272,13 @@ export function createLinuxCalendar(host: ArdiaHost): LinuxCalendar {
       }
       report = next;
       if (next.truncatedCalendars.length || next.truncatedEvents.length || next.skippedObjects) {
-        console.warn("[ardia linux] calendar refresh incomplete", next);
+        warnFor(consent, "[ardia linux] calendar refresh incomplete", next);
       }
       if (failures.length === wanted.length) {
         const denied = failures.find((f) => f.status === "denied");
         throw calendarError(denied ? "ERR_CALENDAR_DENIED" : "ERR_CALENDAR_FAILED", (denied ?? failures[0])!.message || "Ardia couldn't read your calendars");
       }
-      if (failures.length) console.warn("[ardia linux] calendars skipped", failures.map((f) => f.message));
+      if (failures.length) warnFor(consent, "[ardia linux] calendars skipped", failures.map((f) => f.message));
       return found.sort((a, b) => a.start - b.start);
     },
   };

@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import type { MeadowProps, PowerUpProps, ThemeSwatchProps, WindowBackdropProps } from "@ardia-real/shaders";
+import { backdropUnderColor, type ThemeTexture } from "@ardia/core";
 import { useBrowser } from "../../../browser/src/state/browser/store";
 import { prefersReducedMotion } from "./web/gl/clock";
 import { parseHex } from "./web/gl/colors";
@@ -19,15 +20,51 @@ export * from "@ardia-real/shaders";
 
 const FRAME = 1 / 60;
 
-export function WindowBackdrop({ colors, angle = 180, grainOpacity = 0.09, grainScale = 1, vibrancy, tintColor, tintAlpha, tintLightness, style }: WindowBackdropProps) {
-  const dark = useSurfaceDark();
+const UNDERLAY_FILL: CSSProperties = { position: "absolute", inset: 0, pointerEvents: "none" };
+
+type ThemedVibrancyProps = { colors: number[]; opacity: number; underlayAlpha: number; grain?: number; texture?: ThemeTexture; angle?: number; dark: boolean };
+
+function ThemedVibrancy({ colors, opacity, underlayAlpha, grain = 0, texture, angle, dark }: ThemedVibrancyProps) {
+  const under = backdropUnderColor(underlayAlpha, dark);
+  return (
+    <div style={{ ...UNDERLAY_FILL, backgroundImage: `linear-gradient(${under}, ${under})` }}>
+      <ThemeSwatch colors={colors} angle={angle} style={[StyleSheet.absoluteFill, { opacity }]} />
+      {grain > 0 ? <ThemeSwatch colors={[]} grain={grain} texture={texture} style={StyleSheet.absoluteFill} /> : null}
+    </div>
+  );
+}
+
+export function WindowBackdrop({
+  colors,
+  angle = 180,
+  grainOpacity = 0.09,
+  grainScale = 1,
+  vibrancy,
+  tintColor,
+  tintAlpha,
+  tintLightness,
+  themeColors,
+  themeOpacity,
+  themeBaseAlpha,
+  themeGrain,
+  themeTexture,
+  themeAppearance,
+  themeAngle,
+  style,
+}: WindowBackdropProps) {
+  const surfaceDark = useSurfaceDark();
+  const appDark = useBrowser((s) => s.ui.appDark);
+  const themed = vibrancy && !!themeColors?.length;
+  const dark = themed ? themeAppearance === "dark" || (themeAppearance !== "light" && appDark) : surfaceDark;
   const key = `${colors.join()}|${angle}|${grainOpacity}|${grainScale}`;
   const uniformsAt = useMemo(() => (css: [number, number]) => backdropUniforms({ colors, angle, grainOpacity, grainScale }, css), [key]);
   const layer = useRef<View & HTMLElement>(null);
   usePageHoleLayer(layer);
   return (
     <View ref={layer} pointerEvents="none" style={style}>
-      {vibrancy ? (
+      {themed ? (
+        <ThemedVibrancy colors={themeColors!} opacity={themeOpacity ?? 1} underlayAlpha={themeBaseAlpha ?? 0} grain={themeGrain} texture={themeTexture} angle={themeAngle} dark={dark} />
+      ) : vibrancy ? (
         <Vibrancy dark={dark} tintColor={tintColor} tintAlpha={tintAlpha} tintLightness={tintLightness} />
       ) : webgl2Supported() ? (
         <GLView fragment={backdropFragment} uniformsAt={uniformsAt} version={key} />

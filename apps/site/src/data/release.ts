@@ -16,6 +16,8 @@ export const WINDOWS_SETUP = {
   arm64: `${DOWNLOADS}/windows-alpha/Ardia-Setup-arm64.exe`,
 } as const;
 export type WindowsArch = keyof typeof WINDOWS_SETUP;
+export const ANDROID_VERSION = release.android;
+export const ANDROID_APK = `${DOWNLOADS}/android-v${ANDROID_VERSION}/Ardia-${ANDROID_VERSION}.apk`;
 export const LINUX_VERSION = release.linux;
 export const LINUX_NIGHTLY = LINUX_VERSION.includes("-nightly.");
 export const LINUX_TARBALL = `${DOWNLOADS}/v${LINUX_VERSION}/Ardia-${LINUX_VERSION}-linux-x64.tar.xz`;

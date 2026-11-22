@@ -1,15 +1,24 @@
 import type { StateCreator } from "zustand";
 
+export type KeyedListener<T> = (s: T, prev: T) => void;
+export type SubscribeTo<T> = (keys: readonly (keyof T)[], listener: KeyedListener<T>) => () => void;
+
 export function transactional<T>(heardAlone?: (s: T, prev: T) => boolean, settle?: (s: T, prev: T) => T) {
   let depth = 0;
   let heard: T | null = null;
   let hear = () => {};
+  const afterEach = new Set<() => void>();
 
   const middleware =
     (creator: StateCreator<T>): StateCreator<T> =>
     (set, get, api) => {
       type Listener = (s: T, prev: T) => void;
-      const listeners = new Set<Listener>();
+      type Keys = readonly (keyof T)[] | null;
+      const listeners = new Map<Listener, Keys>();
+      const changedAny = (keys: readonly (keyof T)[], s: T, prev: T) => {
+        for (const key of keys) if (s[key] !== prev[key]) return true;
+        return false;
+      };
       let settling = false;
       const publish = (prev: T) => {
         const current = api.getState();
@@ -22,7 +31,10 @@ export function transactional<T>(heardAlone?: (s: T, prev: T) => boolean, settle
             settling = false;
           }
         }
-        listeners.forEach((listener) => listener(api.getState(), prev));
+        listeners.forEach((keys, listener) => {
+          const s = api.getState();
+          if (!keys || changedAny(keys, s, prev)) listener(s, prev);
+        });
       };
       hear = () => {
         const prev = heard;
@@ -43,12 +55,15 @@ export function transactional<T>(heardAlone?: (s: T, prev: T) => boolean, settle
         heard ??= prev;
         if (heardAlone?.(s, prev)) hear();
       });
-      api.subscribe = (listener) => {
-        listeners.add(listener);
+      const add = (listener: Listener, keys: Keys) => {
+        listeners.set(listener, keys);
         return () => {
           listeners.delete(listener);
         };
       };
+      api.subscribe = (listener) => add(listener, null);
+      const subscribeTo: SubscribeTo<T> = (keys, listener) => add(listener, keys);
+      Object.assign(api, { subscribeTo });
       return creator(set, get, api);
     };
 
@@ -57,8 +72,19 @@ export function transactional<T>(heardAlone?: (s: T, prev: T) => boolean, settle
     try {
       run();
     } finally {
-      if (--depth === 0) hear();
+      if (--depth === 0) {
+        try {
+          hear();
+        } finally {
+          afterEach.forEach((listener) => listener());
+        }
+      }
     }
   };
-  return { middleware, transaction };
+  const afterTransactionIdempotent = (listener: () => void) => {
+    afterEach.add(listener);
+    return () => void afterEach.delete(listener);
+  };
+  const inTransaction = () => depth > 0;
+  return { middleware, transaction, afterTransactionIdempotent, inTransaction };
 }

@@ -18,12 +18,22 @@ struct Rect {
 };
 
 constexpr double kContainTolerance = 1;
+constexpr double kLargestShareOfScreen = 0.8;
+constexpr double kWholeScreen = 1;
 
-inline Rect Fit(Rect visible, Size wanted, Size minimum) {
-  const double width = std::min(std::max(wanted.w, minimum.w), visible.w);
-  const double height = std::min(std::max(wanted.h, minimum.h), visible.h);
-  return {std::round(visible.midX() - width / 2), std::round(visible.midY() - height / 2), std::round(width),
-          std::round(height)};
+inline double FitSide(double wanted, double minimum, double visible, double share) {
+  const double largest = std::min(std::max(std::round(visible * share), minimum), visible);
+  return std::min(std::round(std::min(std::max(wanted, minimum), largest)), visible);
+}
+
+inline double FitOrigin(double start, double extent, double side) {
+  return std::clamp(std::round(start + (extent - side) / 2), start, std::max(start, start + extent - side));
+}
+
+inline Rect Fit(Rect visible, Size wanted, Size minimum, double share = kLargestShareOfScreen) {
+  const double width = FitSide(wanted.w, minimum.w, visible.w, share);
+  const double height = FitSide(wanted.h, minimum.h, visible.h, share);
+  return {FitOrigin(visible.x, visible.w, width), FitOrigin(visible.y, visible.h, height), width, height};
 }
 
 inline bool Contains(Rect outer, Rect inner, double tolerance = kContainTolerance) {
@@ -54,14 +64,23 @@ struct Display {
   Rect visible;
 };
 
-inline bool FitLanding(Rect landed, const std::vector<Display> &displays, Size minimum, Rect *fitted) {
+struct Placement {
+  Size wanted;
+  Rect placed;
+};
+
+inline bool FitLanding(Rect landed, const std::vector<Display> &displays, Size minimum, const Placement *placement, Rect *fitted) {
   std::vector<Rect> frames;
   for (const Display &display : displays) frames.push_back(display.frame);
   const int held = ScreenHolding(landed, frames);
   if (held < 0) return false;
   const Rect visible = displays[held].visible;
+  if (placement && ScreenHolding(placement->placed, frames) != held) {
+    *fitted = Fit(visible, placement->wanted, minimum);
+    return true;
+  }
   if (Contains(visible, landed)) return false;
-  *fitted = Fit(visible, {landed.w, landed.h}, minimum);
+  *fitted = Fit(visible, {landed.w, landed.h}, minimum, kWholeScreen);
   return true;
 }
 

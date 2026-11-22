@@ -5,6 +5,8 @@ import WebKit
 public class WebKitModule: Module {
   public func definition() -> ModuleDefinition {
     Name(Self.calls.moduleName)
+    Events(Self.calls.domain)
+    Self.calls.forwardEvents(to: self)
 
     Self.calls.function
 
@@ -15,13 +17,47 @@ public class WebKitModule: Module {
       reply.ok(WebKitDownloads.removeStaging(try args.text("path")))
     },
     "endPrivateSession": { args, reply in
-      WebKitHub.shared.endPrivateSession(try args.text("session"))
+      WebKitHub.endPrivateSessionIfStarted(try args.text("session"))
       reply.ok()
     },
     "cookieStoreKey": { args, reply in reply.ok(WebKitHub.shared.stores.id(of: args.profile).wireKey) },
     "importCookies": { args, reply in
       let cookies = try args.dicts("cookies")
       WebKitHub.shared.importCookies(cookies, profile: args.profile, storeKey: try args.text("storeKey")) { reply.ok($0) }
+    },
+    "exportCookies": { args, reply in
+      let urls = try args.strings("urls").compactMap(URL.init(string:))
+      let keys = args.values["keys"] == nil ? nil : Set(try args.strings("keys"))
+      WebKitHub.shared.exportCookies(profile: args.profile, urls: urls, keys: keys) { reply.ok($0) }
+    },
+    "setFraudWarnings": { args, reply in
+      WebKitFraudWarnings.set(try args.bool("enabled"))
+      reply.ok()
+    },
+    "watchSiteData": { args, reply in
+      WebKitSiteData.shared.setWatching(try args.bool("enabled"))
+      reply.ok()
+    },
+    "siteDataReady": { args, reply in
+      WebKitSiteData.shared.release(try args.text("id"))
+      reply.ok()
+    },
+    "readSiteData": { args, reply in
+      let origins = try args.strings("origins").compactMap(URL.init(string:)).filter { WebKitSiteData.origin(of: $0) != nil }
+      WebKitSiteData.shared.read(profile: args.profile, domains: try args.strings("domains"), origins: Array(origins.prefix(16))) { reply.ok($0) }
+    },
+    "writeSiteData": { args, reply in
+      let storage = (try args.dict("storage")).compactMapValues { $0 as? [String: Any] }
+      WebKitSiteData.shared.write(profile: args.profile, set: try args.dicts("set"), remove: try args.dicts("remove"), storage: storage) { reply.ok($0) }
+    },
+    "setZoom": { args, reply in
+      WebKitHub.shared.setZoom(try args.double("zoom"), profile: args.profile, host: try args.text("host").lowercased())
+      reply.ok()
+    },
+    "notificationAction": { args, reply in
+      let action = try args.text("action")
+      if WebKitHub.started, action == "click" || action == "close" { WebKitHub.shared.notifications.act(try args.text("id"), action: action) }
+      reply.ok()
     },
     "passkeyAccess": { _, reply in reply.ok(WebKitPasskeys.access()) },
     "requestPasskeyAccess": { _, reply in WebKitPasskeys.requestAccess { reply.ok($0) } },

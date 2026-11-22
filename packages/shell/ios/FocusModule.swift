@@ -1,4 +1,5 @@
 import AppKit
+import ArdiaCore
 import ExpoModulesCore
 
 public class FocusModule: Module {
@@ -40,9 +41,15 @@ public class FocusModule: Module {
     OnDestroy { self.lifetime.end() }
 
     Function("pressesWithoutRelease") { () -> Int in PressRelease.pressesWithoutRelease }
-    Function("takeFocusHandoffCounts") { () -> [String: Int] in FocusHandoff.shared.takeOutcomes() }
+    Function("takeFocusHandoffCounts") { () -> [String: [String: Int]] in FocusHandoff.shared.takeOutcomes() }
+    Function("setConsentEpoch") { (epoch: String) in
+      ArdiaEvents.consentEpoch = epoch
+      FocusHandoff.shared.setConsentEpoch(epoch)
+      PressRelease.forgetPresses()
+    }
     AsyncFunction("pressRepeated") { () -> [String: Any]? in PressRelease.pressRepeated }.runOnQueue(.main)
     Function("takeEditKeyAcks") { () -> [String: Int] in FocusHandoff.shared.takeEditKeyAcks() }
+    Function("takeInputSourceKeys") { () -> Int in InputSourceKeys.takeWebKitTabKeys() }
     AsyncFunction("cancelFocusMove") { (generation: Int, restoringSource: Bool) in
       FocusHandoff.shared.cancel(generation, restoringSource: restoringSource)
     }.runOnQueue(.main)
@@ -70,13 +77,13 @@ public class FocusModule: Module {
       self.lifetime.run { self.setDragEscapeCapture(active) }
     }.runOnQueue(.main)
 
-    Function("switcherPointerMoved") { [weak self] () -> Bool in self?.switcherPointer.moved(to: NSEvent.mouseLocation) ?? true }
+    Function("switcherPointerMoved") { [weak self] () -> Bool in self?.switcherPointer.moved(to: SwitcherPointer.location) ?? true }
   }
 
   private func setSwitcherCapture(_ active: Bool) {
     if let monitor = switcherMonitor { NSEvent.removeMonitor(monitor) }
     switcherMonitor = nil
-    switcherPointer.start(active ? NSEvent.mouseLocation : nil)
+    switcherPointer.start(active ? SwitcherPointer.location : nil)
     guard active else { return }
     let emit: ([String: Any]) -> Void = { ShellEvents.send(.app, $0) }
     switcherMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseUp, .rightMouseUp, .otherMouseUp]) { event in

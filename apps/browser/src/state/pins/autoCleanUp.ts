@@ -67,7 +67,7 @@ function deselectedTabs(s: BrowserState, prev: BrowserState): string[] {
 
 export function startAutoCleanUp() {
   if (unsubscribe) return;
-  unsubscribe = useBrowser.subscribe((s, prev) => {
+  unsubscribe = useBrowser.subscribeTo(["windows", "settings"], (s, prev) => {
     if (s.windows !== prev.windows) {
       const left = deselectedTabs(s, prev);
       if (left.length) noteDeselectedTabs(s, left);

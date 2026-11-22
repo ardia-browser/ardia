@@ -197,6 +197,8 @@ test("with Start fresh on, a relaunch opens a new window instead", async () => {
   await closeByUser(w);
   S().updateSettings({ restoreSession: false });
   flushPersistence();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  flushPersistence();
   try {
     S().hydrate(loadSession());
     assert.equal(S().closedWindows.some((c) => c.lastWindow), false);

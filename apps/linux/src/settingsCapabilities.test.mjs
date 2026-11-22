@@ -11,8 +11,8 @@ import * as engines from "./hostEngines.ts";
 
 const hidden = [
   "general.defaultBrowser", "general.openAtLogin", "advanced.ardiaCommand", "advanced.compactCliPill", "tabs.videoUpscaling",
-  "tabs.openLinksInLittleArdia", "tabs.peekLinksToOtherSites", "tabs.appLinksFirst", "tabs.popupsOpenAsTabs",
-  "advanced.pageEngine", "advanced.fairPlayInChromium", "advanced.websiteEngines",
+  "tabs.openLinksInLittleArdia", "tabs.littleArdiaOpensNewTabLinks", "tabs.peekLinksToOtherSites", "tabs.appLinksFirst", "tabs.popupsOpenAsTabs",
+  "advanced.pageEngine", "advanced.websiteEngines",
 ];
 
 test("Settings navigation and search leave out the unavailable Web engine rows and platform rows", () => {
@@ -68,7 +68,6 @@ test("every engine decision is Chromium on Linux even with stored WebKit setting
   assert.equal(engines.defaultEngine(s), "chromium");
   for (const id of ["t1", "t2", "t3", "missing"]) {
     assert.equal(engines.tabEngine(s, id), "chromium", id);
-    assert.equal(engines.engineMark(s, id), null, id);
   }
   for (const url of ["https://www.netflix.com/", "https://example.com/page", "https://plain.example/"]) {
     assert.equal(engines.ruleFor(s, url), undefined);
@@ -78,6 +77,7 @@ test("every engine decision is Chromium on Linux even with stored WebKit setting
     assert.equal(engines.engineForUrl(s, url), "chromium");
     assert.equal(engines.typedNavigationEngine(s, s.tabs.t2, url), "chromium");
     assert.equal(engines.canSwitchEngine(url), false);
+    assert.equal(engines.switchableEngine(s, url), false);
   }
   assert.equal(engines.offersEngineChoice(), false);
   assert.equal(engines.chosenEngine(s, "chrome://settings"), undefined);

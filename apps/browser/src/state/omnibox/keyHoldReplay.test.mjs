@@ -3,6 +3,8 @@ import { test } from "node:test";
 
 const { keyHoldReplayForCheck, REPLAY_GUARD_MS } = await import("./keyHoldReplay.ts");
 const { takeInlineCompletionCounts } = await import("../telemetry/inlineCompletionCounts.ts");
+const { setConsentPeriod } = await import("../telemetry/consentPeriod.ts");
+setConsentPeriod(true, "key-hold-test");
 
 test("a replay announced for a field holds completion off until it's over, and only for that field", () => {
   const { heard, replayingInto } = keyHoldReplayForCheck;

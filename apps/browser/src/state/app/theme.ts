@@ -1,6 +1,6 @@
 import { useContext } from "react";
 import { spaceLookSource, type LookSource } from "../../lib/profileLook";
-import { PageProfileContext, WindowContext } from "../browser/hooks";
+import { PageProfileContext, useSettings, WindowContext } from "../browser/hooks";
 import { useBrowser } from "../browser/store";
 import type { Profile } from "../browser/types";
 import { focusedWindowOf } from "../windows/ui";
@@ -19,8 +19,8 @@ export function useScopedLook<T>(resolve: (incognito: boolean, profile: Profile 
 }
 
 export function useGlassSettings() {
-  const glass = useBrowser((s) => s.settings.interfaceStyle === "glass");
-  const tint = useBrowser((s) => (s.settings.glassTintWithTheme ? s.settings.glassTintAmount : 0));
+  const glass = useSettings((s) => s.interfaceStyle === "glass");
+  const tint = useSettings((s) => (s.glassTintWithTheme ? s.glassTintAmount : 0));
   return { glass, tint };
 }
 
@@ -29,5 +29,5 @@ export function useSelectedTabGlowSetting() {
 }
 
 export function useSelectedTopApp() {
-  return useBrowser((s) => (s.settings.elementOutlines ? s.settings.selectedTopApp : "fill"));
+  return useSettings((s) => (s.elementOutlines ? s.selectedTopApp : "fill"));
 }

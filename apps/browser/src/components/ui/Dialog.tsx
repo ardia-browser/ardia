@@ -17,6 +17,7 @@ export function Dialog({
   animated = false,
   maxHeight,
   place,
+  backdropCloses = true,
   children,
 }: {
   width: SheetSize;
@@ -27,6 +28,7 @@ export function Dialog({
   animated?: boolean;
   maxHeight?: DimensionValue;
   place?: Pick<ViewStyle, "top" | "left" | "right" | "bottom">;
+  backdropCloses?: boolean;
   children: ReactNode;
 }) {
   const theme = useTheme();
@@ -65,7 +67,7 @@ export function Dialog({
   if (!animated)
     return (
       <View style={CENTERED}>
-        <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: theme.scrim }]} onPress={onDismiss} />
+        <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: theme.scrim }]} onPress={backdropCloses ? onDismiss : undefined} />
         {surface}
       </View>
     );
@@ -102,9 +104,9 @@ function DialogKeys({ onDismiss, onSubmit, pad, children }: { onDismiss?: () => 
   );
 }
 
-export function Sheet({ size = "m", onClose, children }: { size?: SheetSize; onClose: () => void; children: ReactNode }) {
+export function Sheet({ size = "m", onClose, backdropCloses, children }: { size?: SheetSize; onClose: () => void; backdropCloses?: boolean; children: ReactNode }) {
   return (
-    <Dialog width={size} maxHeight="90%" onDismiss={onClose}>
+    <Dialog width={size} maxHeight="90%" onDismiss={onClose} backdropCloses={backdropCloses}>
       {children}
     </Dialog>
   );

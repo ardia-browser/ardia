@@ -1,5 +1,6 @@
 import type { Adapter } from "../../platform/sync";
-import { isSharing, useTelemetry } from "./choice";
+import { consentToken, isSharing, stillValid, onConsentPeriodChange, type ConsentToken } from "./choice";
+import { consentOrNow, countFor, fieldName } from "./countFor";
 import { takePopupProtectedMediaCounts } from "./popupProtectedMedia";
 
 export type SyncWorkKind = "bookmark" | "history";
@@ -7,7 +8,7 @@ type Phase = "extract" | "apply";
 
 const phase = () => ({ runs: 0, msTotal: 0, msMax: 0 });
 const work = () => ({ extract: phase(), apply: phase(), recordsMax: 0 });
-const noSync = () => ({ bookmark: work(), history: work() });
+const noSync = () => ({ bookmark: work(), history: work(), historyTitlesKept: 0 });
 
 let syncPending = noSync();
 
@@ -22,15 +23,18 @@ function noteSyncWork(kind: SyncWorkKind, step: Phase, records: number, ms: numb
 }
 
 function timed<T>(run: () => T, done: (result: Awaited<T>, ms: number) => void): T {
-  if (!isSharing()) return run();
-  const generation = consentGeneration;
+  const token = consentToken();
+  if (token === null) return run();
   const started = performance.now();
-  const finish = (value: Awaited<T>) => { if (generation === consentGeneration && isSharing()) done(value, performance.now() - started); };
+  const finish = (value: Awaited<T>) => { if (stillValid(token)) done(value, performance.now() - started); };
   const result = run();
   if (result instanceof Promise) return result.then((value: Awaited<T>) => (finish(value), value)) as T;
   finish(result as Awaited<T>);
   return result;
 }
+
+export const noteSyncHistoryTitlesKept = (kept: number, consent: ConsentToken | null) =>
+  countFor(consent, () => void (isSharing() && (syncPending.historyTitlesKept += kept)));
 
 export function withSyncWorkCounts(kind: SyncWorkKind, adapter: Adapter): Adapter {
   return {
@@ -50,11 +54,12 @@ export function takeSyncWorkCounts(): Record<string, number> {
       [`sync_${kind}_extract_ms_total`]: Math.round(extract.msTotal),
       [`sync_${kind}_extract_ms_max`]: Math.round(extract.msMax),
       [`sync_${kind}_applies`]: apply.runs,
+      [`sync_${kind}_apply_ms_total`]: Math.round(apply.msTotal),
       [`sync_${kind}_apply_ms_max`]: Math.round(apply.msMax),
       [`sync_${kind}_records_max`]: recordsMax,
     };
   };
-  return { ...fields("bookmark"), ...fields("history") };
+  return { ...fields("bookmark"), ...fields("history"), sync_history_titles_kept: taken.historyTitlesKept };
 }
 
 const none = () => ({
@@ -71,24 +76,21 @@ const none = () => ({
 });
 
 let pending = none();
-let consentGeneration = 0;
 
-useTelemetry.subscribe((current, previous) => {
-  if (current.sharing === previous.sharing) return;
-  consentGeneration++;
-  if (!current.sharing) { syncPending = noSync(); pending = none(); }
+onConsentPeriodChange(() => {
+  syncPending = noSync();
+  pending = none();
 });
 
-const count = (key: keyof ReturnType<typeof none>) => {
-  if (isSharing()) pending[key]++;
-};
+const count = (key: keyof ReturnType<typeof none>, consent?: ConsentToken | null) =>
+  countFor(consentOrNow(consent), () => void (isSharing() && pending[key]++));
 
 export const noteLiveSourceFetch = (shared: boolean) => count(shared ? "liveSourceFetchesShared" : "liveSourceFetches");
 export const noteLiveSave = (changed: boolean, kind: "write" | "intent" = "write") =>
   count(kind === "intent" ? changed ? "liveSaveIntentsQueued" : "liveSaveIntentsUnchanged" : changed ? "liveSavesWritten" : "liveSavesUnchanged");
 export const noteExtensionActionRefresh = () => count("extensionActionRefreshes");
 export const noteExtensionActionStateRequest = () => count("extensionActionStateRequests");
-export const noteExtensionActionStateFailure = () => count("extensionActionStateFailures");
+export const noteExtensionActionStateFailure = (consent?: ConsentToken | null) => count("extensionActionStateFailures", consent);
 export const noteExtensionActionTabChangeSkipped = () => count("extensionActionTabChangesSkipped");
 
 export function takeLiveWorkCounts() {

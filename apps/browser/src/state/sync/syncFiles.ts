@@ -4,6 +4,8 @@ import { parseSaved, unchanged, versionedJson, type Migrations, type SavedObject
 import { profileScope } from "./records";
 import { APP_SCOPE, DOC, DOC_MIGRATIONS, DOC_VERSION, JOURNAL, STATE, defaultTypes, emptyDoc, type SyncDoc } from "./syncDoc";
 import { isFields, numberOr, stringOr } from "../../lib/decode";
+import { consentToken } from "../telemetry/client";
+import { warnFor } from "../telemetry/logs";
 
 type Journal = Record<string, LogFile[]>;
 type ScopeChange = { records: Record<string, SyncRecord | null>; base: Record<string, string | null>; rest: Partial<ScopeState> };
@@ -190,7 +192,7 @@ export function syncFiles(current: () => SyncDoc) {
       const list = (journal.batches[scope] ??= []);
       const fresh = batches.filter((file) => !list.some((f) => f.seq === file.seq));
       if (!fresh.length) return;
-      list.push(...fresh);
+      for (const file of fresh) list.push(file);
       try {
         await writePart({ journal: { [scope]: fresh } });
       } catch (error) {
@@ -202,6 +204,7 @@ export function syncFiles(current: () => SyncDoc) {
     });
 
   function watchScope(scope: string, scoped: ScopeState, clock: Clock) {
+    const consent = consentToken();
     state.clock = clock;
     const { touched: keys, stop } = trackTouchedKeys(scoped);
     return () => {
@@ -217,7 +220,7 @@ export function syncFiles(current: () => SyncDoc) {
           await writePart(part);
           writtenRest.set(scope, rest);
         } catch (error) {
-          console.warn("[sync] couldn't journal this cycle's changes", error);
+          warnFor(consent, "[sync] couldn't journal this cycle's changes", error);
           state.wanted = true;
         }
       });
@@ -259,6 +262,7 @@ export function syncFiles(current: () => SyncDoc) {
   }
 
   async function saveState() {
+    const consent = consentToken();
     const doc = current();
     if (!doc.enabled) {
       if (state.onDisk || state.wanted) writeDocument(STATE, "");
@@ -279,7 +283,7 @@ export function syncFiles(current: () => SyncDoc) {
         if (!sealed) return;
         await saveDocument(STATE, sealed);
       } catch (error) {
-        console.warn("[sync] couldn't save the sync state", error);
+        warnFor(consent, "[sync] couldn't save the sync state", error);
         return;
       }
       Object.assign(state, { json, onDisk: true });

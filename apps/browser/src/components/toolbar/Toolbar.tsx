@@ -1,17 +1,17 @@
 import { colorDistance } from "../../lib/color";
-import { pageHostLabel, urlTrail } from "../../lib/url";
-import { memo, useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
+import { pageHostLabel, urlTrail, withoutUserInfo } from "../../lib/url";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { Animated, Pressable, StyleSheet, View, type ViewStyle } from "react-native";
 import { useTheme } from "../ui/theme";
-import { TOOLBAR_ROWS, urlFieldOf, type ToolbarRow } from "../../lib/toolbarRow";
+import { TOOLBAR_ROWS, toolbarTrailing, urlFieldOf, type ToolbarRow } from "../../lib/toolbarRow";
 import { ToolbarRowContext } from "../ui/toolbarRowContext";
 import { activate } from "../../state/tabs/actions";
 import { toggleSidebar } from "../../state/windows/actions";
 import { openBarFromAddress } from "../../state/omnibox/barState";
-import { useIsBookmarked, useSettings, useSidebarSide, useTab, useTabLayout, useTabLive, useTabsShown } from "../../state/browser/hooks";
+import { useIsBookmarked, useSettings, useTab, useTabLive, useTabsPlace, useTabsShown } from "../../state/browser/hooks";
 import type { Tab } from "../../state/browser/types";
-import { Button, ContextMenuArea, Divider, FadeLabel, ink, sidebarFont, sidebarPoints, space, Symbol, Text, useHover, WindowDragRegion } from "../ui";
+import { Button, ContextMenuArea, Divider, FadeLabel, ink, monoFace, sidebarFont, sidebarPoints, drawnSymbol, space, Text, useHover, WindowDragRegion } from "../ui";
 import { type ToolbarGeometry } from "../window/geometry";
 import { usePage, usePages, type PageState } from "../../state/tabs/pageState";
 import { togglePopover } from "../../state/tabs/popoverDismiss";
@@ -28,12 +28,14 @@ import { SIDEBAR_FIELD } from "../sidebar/geometry";
 import { FieldSiteButton, SidebarFieldFill } from "../sidebar/SidebarField";
 import { showUrlBarMenu } from "../../state/omnibox/paste";
 import { ToolbarExtensions, useToolbarExtensionsWidth } from "../extensions/ToolbarExtensions";
+import { PluginToolbarItems } from "../plugins/PluginToolbarItems";
+import { PLUGIN_CHROME, usePluginChrome } from "../../state/plugins/chrome";
 import { GlassFill, useGlass } from "../ui/Glass";
 import { TranslateButton } from "../site/TranslateControls";
-import { ReaderButton } from "../site/ReaderControls";
+import { ReaderButton, useReaderButtonShown } from "../site/ReaderControls";
 import { ZoomIndicator } from "../site/ZoomControls";
-import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
-import { buttonMotion, curve, usePressScaleMotion } from "../ui/motion";
+import { NAV_HINTS, useShortcutHint, useShortcutHints, withShortcut } from "../../state/commands/commandShortcuts";
+import { curve } from "../ui/motion";
 import { FieldLoadFill } from "./FieldLoadFill";
 import { fieldButtonsShown, sidebarFieldButtons } from "./fieldButtons";
 import { useFieldExtensionsHeld } from "../../state/extensions/store";
@@ -41,6 +43,11 @@ import { noteSiteControls } from "../../state/telemetry/usage";
 import { HistoryButton, ReloadButton } from "./NavButtons";
 import { FIELD_LOAD, TOOLBAR_MOTION } from "./tokens";
 import { useToolbarRow } from "./useToolbarRow";
+import { useStableHandler } from "./useStableHandler";
+import { PAGE_IDENTITY_TAG } from "../../state/tabs/tabReveal";
+import { DeveloperToolsButtons } from "./DeveloperToolsButtons";
+import { TabSwipeArea } from "../window/TabSwipe";
+import { useDeveloperMode } from "../../state/site/developerMode";
 
 type ToolbarTab = Pick<Tab, "id" | "url" | "title" | "windowId" | "zoom">;
 const toolbarTab = (t: Tab | undefined): ToolbarTab | undefined =>
@@ -48,7 +55,8 @@ const toolbarTab = (t: Tab | undefined): ToolbarTab | undefined =>
 const isWebUrl = (url: string) => /^https?:/i.test(url);
 export const useToolbarTab = (tabId: string | undefined) => useTab(tabId, useShallow(toolbarTab));
 
-export const urlFieldRight = (inSplit: boolean, extensionsWidth: number, row: ToolbarRow) => (inSplit ? 12 + 2 * (row.button - 2) : 12) + extensionsWidth;
+export const urlFieldRight = (inSplit: boolean, extensionsWidth: number, row: ToolbarRow, cardRadius: number) =>
+  toolbarTrailing(row, { pinnedWidth: extensionsWidth, split: inSplit, cardRadius }).fieldRight;
 const LOCK = { left: 7, width: 18, gap: space.xs } as const;
 const SIDEBAR_TEXT_GAP = 6;
 const SIDEBAR_TEXT_ALONE = space.ml;
@@ -57,12 +65,13 @@ export const insecureLevel = (p: PageState) =>
   p.security && (p.security.level === "insecure" || p.security.level === "certificateError") ? p.security.level : null;
 
 function useTabsToggleIcon(windowId: string) {
-  const top = useTabLayout(windowId) === "top";
-  const right = useSidebarSide(windowId) === "right";
-  return top ? "rectangle.topthird.inset.filled" : right ? "sidebar.right" : "sidebar.left";
+  const place = useTabsPlace(windowId);
+  return place === "top" ? "rectangle.topthird.inset.filled" : place === "right" ? "sidebar.right" : "sidebar.left";
 }
 
-export function Toolbar({
+const TOOLBAR_HINTS = ["toggleSidebar", "openSplitPane", ...NAV_HINTS] as const;
+
+export const Toolbar = memo(function Toolbar({
   tabId,
   geometry,
   windowId,
@@ -79,7 +88,7 @@ export function Toolbar({
   bare?: boolean;
   loadFill?: boolean;
 }) {
-  const sidebarHint = useShortcutHint("toggleSidebar");
+  const hints = useShortcutHints(TOOLBAR_HINTS);
   const tabsIcon = useTabsToggleIcon(windowId);
   const tabsShown = useTabsShown(windowId);
   const tab = useToolbarTab(tabId);
@@ -89,7 +98,11 @@ export function Toolbar({
   const history = useHistoryAvailability(tabId);
   const row = useToolbarRow();
   const extensionsWidth = useToolbarExtensionsWidth(windowId, Infinity);
-  useEffect(() => setToolbarExtensionsWidth(windowId, extensionsWidth), [windowId, extensionsWidth]);
+  const pluginToolbar = usePluginChrome(PLUGIN_CHROME.toolbar);
+  const [reportedPluginsWidth, setPluginsWidth] = useState(0);
+  const pluginsWidth = pluginToolbar ? reportedPluginsWidth : 0;
+  const trailingWidth = extensionsWidth + pluginsWidth;
+  useEffect(() => setToolbarExtensionsWidth(windowId, trailingWidth), [windowId, trailingWidth]);
   const dim = useRef(new Animated.Value(focused ? 1 : 0.5)).current;
   const dimmedFor = useRef(focused);
   useEffect(() => {
@@ -97,9 +110,12 @@ export function Toolbar({
     dimmedFor.current = focused;
     Animated.timing(dim, { toValue: focused ? 1 : 0.5, duration: TOOLBAR_MOTION.dim, easing: curve.enter, useNativeDriver: true }).start();
   }, [focused]);
-  const focus = useCallback(() => {
+  const focus = useStableHandler(() => {
     if (!focused) activate(tabId);
-  }, [focused, tabId]);
+  });
+  const toggleTabs = useCallback(() => toggleSidebar(windowId), [windowId]);
+  const splitMenu = useCallback(() => showSplitMenu(tabId), [tabId]);
+  const closeThisPane = useCallback(() => closePane(tabId), [tabId]);
   const at = useMemo(() => {
     const top = row.center - row.button / 2;
     const place = (center: number | null) => ({ position: "absolute" as const, top, left: (center ?? 0) - row.button / 2 });
@@ -107,7 +123,12 @@ export function Toolbar({
     const nav = (center: number | null) => ({ style: place(center), hit });
     return { top, sidebarButton: place(geometry.sidebarButton), back: nav(geometry.back), forward: nav(geometry.forward), reload: nav(geometry.reload) };
   }, [geometry, row]);
-  const right = urlFieldRight(inSplit, extensionsWidth, row) + geometry.trailing;
+  const trailing = useMemo(
+    () => toolbarTrailing(row, { pinnedWidth: trailingWidth, split: inSplit, cardRadius: geometry.cardRadius }),
+    [row, trailingWidth, inSplit, geometry.cardRadius],
+  );
+  const right = trailing.fieldRight + geometry.trailing;
+  const extensionsRight = trailing.extensionsRight + geometry.trailing;
   const urlStyle = useMemo(() => ({ position: "absolute" as const, left: geometry.urlLeft, right, top: urlFieldOf(row).top }), [geometry.urlLeft, right, row]);
   if (!tab) return <View style={{ height: row.height }} />;
 
@@ -115,6 +136,7 @@ export function Toolbar({
     <View style={{ height: row.height }}>
       {!bare && <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: band }]} />}
       <WindowDragRegion style={StyleSheet.absoluteFill} />
+      <TabSwipeArea windowId={windowId} surface="toolbar" />
       <Animated.View style={[StyleSheet.absoluteFill, { opacity: dim }]} pointerEvents="box-none">
         {geometry.sidebarButton !== null && (
           <Button variant="icon" toolbar
@@ -122,21 +144,24 @@ export function Toolbar({
             palette={palette}
             icon={tabsIcon}
             look="row"
-            onPress={() => toggleSidebar(windowId)}
-            tooltip={withShortcut(tabsShown ? "Hide Tabs" : "Show Tabs", sidebarHint)}
+            onPress={toggleTabs}
+            tooltip={withShortcut(tabsShown ? "Hide Tabs" : "Show Tabs", hints.toggleSidebar)}
           />
         )}
-        <HistoryButton place={at.back} tabId={tab.id} windowId={tab.windowId} direction={-1} disabled={!history.back} palette={palette} onFocus={focus} />
-        <HistoryButton place={at.forward} tabId={tab.id} windowId={tab.windowId} direction={1} disabled={!history.forward} palette={palette} onFocus={focus} />
-        <ReloadButton place={at.reload} tab={tab} loading={isLoading} palette={palette} onFocus={focus} />
-        <ToolbarExtensions tabId={tab.id} windowId={windowId} palette={palette} top={row.center - row.extensionButton / 2} right={(inSplit ? 8 + 2 * row.button : 8) + geometry.trailing} />
-        {tab.url ? (
-          <ToolbarUrlField tab={tab} palette={palette} windowId={windowId} inSplit={inSplit} loadFill={loadFill} onFocus={focus} style={urlStyle} />
-        ) : null}
+        <HistoryButton place={at.back} tabId={tab.id} windowId={tab.windowId} direction={-1} disabled={!history.back} palette={palette} onFocus={focus} closesTab={history.backCloses} historyHint={hints.back} />
+        <HistoryButton place={at.forward} tabId={tab.id} windowId={tab.windowId} direction={1} disabled={!history.forward} palette={palette} onFocus={focus} historyHint={hints.forward} />
+        <ReloadButton place={at.reload} tab={tab} loading={isLoading} palette={palette} onFocus={focus} reloadHint={hints.reload} />
+        <ToolbarExtensions tabId={tab.id} windowId={windowId} palette={palette} top={row.center - row.extensionButton / 2} right={extensionsRight} />
+        {pluginToolbar ? <PluginToolbarItems windowId={windowId} palette={palette} top={row.center - row.extensionButton / 2} right={extensionsRight + extensionsWidth} onWidth={setPluginsWidth} /> : null}
+        <View nativeID={PAGE_IDENTITY_TAG} collapsable={false} pointerEvents="box-none" style={StyleSheet.absoluteFill}>
+          {tab.url ? (
+            <ToolbarUrlField tab={tab} palette={palette} windowId={windowId} inSplit={inSplit} loadFill={loadFill} onFocus={focus} style={urlStyle} splitHint={hints.openSplitPane} />
+          ) : null}
+        </View>
         {inSplit && (
-          <View style={{ position: "absolute", top: at.top, right: 8 + geometry.trailing, flexDirection: "row", gap: -space.xxs }}>
-            <Button variant="icon" toolbar palette={palette} icon="rectangle.split.2x1" look="row" onPress={() => showSplitMenu(tab.id)} tooltip="Split View" />
-            <Button variant="icon" toolbar palette={palette} icon="xmark" look="row" weight="medium" onPress={() => closePane(tab.id)} tooltip="Close Pane" />
+          <View style={{ position: "absolute", top: at.top, right: trailing.splitRight + geometry.trailing, flexDirection: "row" }}>
+            <Button variant="icon" toolbar palette={palette} icon="rectangle.split.2x1" look="row" onPress={splitMenu} tooltip="Split View" />
+            <Button variant="icon" toolbar palette={palette} icon="xmark" look="row" weight="medium" onPress={closeThisPane} tooltip="Close Pane" />
           </View>
         )}
       </Animated.View>
@@ -144,7 +169,7 @@ export function Toolbar({
       {tab.url && !bare ? <Divider color={palette.divider} style={BOTTOM_LINE} /> : null}
     </View>
   );
-}
+});
 
 const BOTTOM_LINE = { position: "absolute", left: 0, right: 0, bottom: 0 } as const;
 
@@ -162,21 +187,22 @@ export function ToolbarBackdrop({ tabId }: { tabId: string }) {
 }
 
 function useUrlField(tab: ToolbarTab, windowId: string, onFocus: () => void) {
+  const developerMode = useDeveloperMode(tab.url);
   const showFullUrl = useSettings((s) => s.showFullUrl);
   const insecure = usePage(tab.id, insecureLevel);
   const popover = usePages((p) => p.popover[tab.id] ?? null);
   const { hovered: pointerOver, hoverProps } = useHover();
   const hovered = pointerOver || popover === "siteControls";
   const buttonsShown = fieldButtonsShown(useSettings((s) => s.addressBarButtons), hovered);
-  const openPanel = () => {
+  const openPanel = useStableHandler(() => {
     onFocus();
     openBarFromAddress(windowId, tab.url);
-  };
-  const toggleSiteControls = () => {
+  });
+  const toggleSiteControls = useStableHandler(() => {
     onFocus();
     togglePopover(tab.id, "siteControls");
-  };
-  return { insecure, popover, hovered, buttonsShown, hoverProps, openPanel, toggleSiteControls, host: pageHostLabel(tab.url), trail: urlTrail(tab.url, tab.title, { hovered, showFullUrl }) };
+  });
+  return { insecure, popover, hovered, buttonsShown, developerMode, hoverProps, openPanel, toggleSiteControls, host: pageHostLabel(tab.url), trail: urlTrail(tab.url, tab.title, { hovered, showFullUrl }) };
 }
 
 const loadFillColor = (palette: ToolbarPalette, accent: string) =>
@@ -184,48 +210,48 @@ const loadFillColor = (palette: ToolbarPalette, accent: string) =>
 
 type UrlFieldProps = { tab: ToolbarTab; palette: ToolbarPalette; windowId: string; onFocus: () => void };
 
-export const ToolbarUrlField = memo(function ToolbarUrlField({ tab, palette, windowId, inSplit, loadFill, onFocus, style }: UrlFieldProps & { inSplit: boolean; loadFill: boolean; style: ViewStyle }) {
+export const ToolbarUrlField = memo(function ToolbarUrlField({ tab, palette, windowId, inSplit, loadFill, onFocus, style, splitHint }: UrlFieldProps & { inSplit: boolean; loadFill: boolean; style: ViewStyle; splitHint: string | undefined }) {
   const theme = useTheme();
   const row = useToolbarRow();
-  const splitHint = useShortcutHint("openSplitPane");
   const field = useUrlField(tab, windowId, onFocus);
   const { insecure, hovered, buttonsShown, popover, toggleSiteControls } = field;
+  const openSplit = useStableHandler(() => openSplitPane(windowId, { anchorTabId: tab.id }));
   const glass = useGlass();
-  const lockPress = usePressScaleMotion(!!insecure, buttonMotion.iconPressScale);
-  const lockScaleStyle = lockPress.scale ? { transform: [{ scale: lockPress.scale }] } : undefined;
 
   return (
     <View {...field.hoverProps} style={[style, { flexDirection: "row", alignItems: "center", height: row.field, borderRadius: row.fieldRadius, backgroundColor: hovered && !glass ? palette.pill : undefined }]}>
       {glass ? (
         <GlassFill state={hovered ? "lit" : "rest"} radius={row.fieldRadius} dark={palette.background ? palette.text.startsWith(ink.white) : undefined} />
       ) : null}
-      {loadFill && <FieldLoadFill key={tab.id} tabId={tab.id} color={loadFillColor(palette, theme.accent)} height={row.field} radius={row.fieldRadius} />}
+      {loadFill && <FieldLoadFill tabId={tab.id} color={loadFillColor(palette, theme.accent)} height={row.field} radius={row.fieldRadius} />}
       {insecure && (
-        <Pressable onPress={toggleSiteControls} onPressIn={lockPress.onPressIn} onPressOut={lockPress.onPressOut} style={{ paddingLeft: LOCK.left }} tooltip="Connection is not secure">
-          <View style={{ width: LOCK.width, height: row.field, alignItems: "center", justifyContent: "center" }}>
-            <Animated.View pointerEvents="none" style={lockScaleStyle}>
-              <Symbol
-                name="lock.open.trianglebadge.exclamationmark.fill"
-                size={12}
-                color={insecure === "certificateError" ? theme.destructive : palette.secondary}
-                style={{ width: LOCK.width, height: 18 }}
-              />
-            </Animated.View>
-          </View>
+        <Pressable onPress={toggleSiteControls} style={{ paddingLeft: LOCK.left }} tooltip="Connection is not secure">
+          {drawnSymbol({
+            name: "lock.open.trianglebadge.exclamationmark.fill",
+            size: 12,
+            color: insecure === "certificateError" ? theme.destructive : palette.secondary,
+            style: { width: LOCK.width, height: row.field },
+          })}
         </Pressable>
       )}
       <ContextMenuArea style={{ flex: 1 }} onContextMenu={() => void showUrlBarMenu(tab)}>
         <Pressable onPress={field.openPanel} style={{ flex: 1, height: row.field, justifyContent: "center", paddingLeft: insecure ? LOCK.gap : urlTextLeft(false) }}>
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <Text numberOfLines={1} ellipsizeMode="head" weight="medium" color={palette.text} style={HOST_FULL}>
-              {field.host}
+          {field.developerMode ? (
+            <Text numberOfLines={1} ellipsizeMode="middle" color={palette.text} ardiaCentersCapitals style={monoFace()}>
+              {withoutUserInfo(tab.url)}
             </Text>
-            {field.trail ? (
-              <Text numberOfLines={1} color={palette.secondary} style={SHRINK}>
-                {field.trail}
+          ) : (
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <Text numberOfLines={1} ellipsizeMode="head" weight="medium" color={palette.text} ardiaCentersCapitals style={HOST_FULL}>
+                {field.host}
               </Text>
-            ) : null}
-          </View>
+              {field.trail ? (
+                <Text numberOfLines={1} color={palette.secondary} ardiaCentersCapitals style={SHRINK}>
+                  {field.trail}
+                </Text>
+              ) : null}
+            </View>
+          )}
         </Pressable>
       </ContextMenuArea>
       <FieldButtons tab={tab} palette={palette} onFocus={onFocus} popover={popover} toggleSiteControls={toggleSiteControls} quiet={!buttonsShown}>
@@ -237,13 +263,14 @@ export const ToolbarUrlField = memo(function ToolbarUrlField({ tab, palette, win
                 palette={palette}
                 icon="rectangle.split.2x1"
                 look="field"
-                onPress={() => openSplitPane(windowId, { anchorTabId: tab.id })}
+                onPress={openSplit}
                 tooltip={withShortcut("Open Split View", splitHint)}
               />
             )}
             <Button variant="icon" toolbar palette={palette} icon="slider.horizontal.3" look="field" onPress={toggleSiteControls} active={popover === "siteControls"} tooltip="Site Controls" />
           </>
         )}
+        {field.developerMode && <DeveloperToolsButtons tabId={tab.id} palette={palette} look="field" onFocus={onFocus} />}
       </FieldButtons>
     </View>
   );
@@ -255,15 +282,15 @@ export const SidebarUrlField = memo(function SidebarUrlField({ tab, palette, win
   const { insecure, hovered, popover, toggleSiteControls } = field;
   const extensionsHeld = useFieldExtensionsHeld(windowId);
   const shown = sidebarFieldButtons({ mode: useSettings((s) => s.addressBarButtons), hovered, insecure: !!insecure, extensionsHeld });
-  const openSiteControls = () => {
+  const openSiteControls = useStableHandler(() => {
     if (popover !== "siteControls") noteSiteControls("sidebarField");
     toggleSiteControls();
-  };
+  });
 
   return (
     <View {...field.hoverProps} style={{ flexDirection: "row", alignItems: "center", height, borderRadius: SIDEBAR_FIELD.radius }}>
       <SidebarFieldFill hovered={hovered} />
-      <FieldLoadFill key={tab.id} tabId={tab.id} color={loadFillColor(palette, theme.accent)} height={height} radius={SIDEBAR_FIELD.radius} />
+      <FieldLoadFill tabId={tab.id} color={loadFillColor(palette, theme.accent)} height={height} radius={SIDEBAR_FIELD.radius} />
       {shown.leading && (
         <FieldSiteButton
           icon={insecure ? "lock.open.trianglebadge.exclamationmark.fill" : "slider.horizontal.3"}
@@ -277,7 +304,7 @@ export const SidebarUrlField = memo(function SidebarUrlField({ tab, palette, win
       <ContextMenuArea style={{ flex: 1 }} onContextMenu={() => void showUrlBarMenu(tab)}>
         <Pressable onPress={field.openPanel} style={{ flex: 1, height, justifyContent: "center", paddingLeft: shown.leading ? SIDEBAR_TEXT_GAP : SIDEBAR_TEXT_ALONE }}>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <Text numberOfLines={1} ellipsizeMode="head" weight="medium" color={palette.text} style={SHRINK}>
+            <Text numberOfLines={1} ellipsizeMode="head" weight="medium" color={palette.text} ardiaCentersCapitals style={SHRINK}>
               {field.host}
             </Text>
             <FadeLabel text={field.trail} fontSize={sidebarFont.body.fontSize} color={palette.secondary} fadeWidth={14} style={{ flex: 1, height: sidebarPoints(18), marginLeft: -space.xxs }} />
@@ -337,11 +364,12 @@ function FieldButtons({
 }) {
   const popups = usePage(tab.id, (p) => p.popups.length);
   const capture = usePage(tab.id, (p) => p.mediaAccess);
+  const reader = useReaderButtonShown(tab.id, quiet);
   return (
     <View style={{ flexDirection: "row", alignItems: "center", paddingRight: space.xs }}>
       {children}
       {capture && <CaptureIndicator camera={capture.camera} microphone={capture.microphone} screen={capture.screen} onPress={toggleSiteControls} />}
-      <ReaderButton tabId={tab.id} palette={palette} onFocus={onFocus} quiet={quiet} />
+      {reader && <ReaderButton tabId={tab.id} palette={palette} onFocus={onFocus} quiet={quiet} />}
       <TranslateButton tabId={tab.id} palette={palette} onFocus={onFocus} quiet={quiet} />
       <ZoomIndicator tabId={tab.id} zoom={tab.zoom} palette={palette} onFocus={onFocus} quiet={quiet} />
       {popups > 0 && (

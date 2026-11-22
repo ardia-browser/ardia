@@ -6,7 +6,7 @@ import { dictationAvailable, startDictation } from "../../state/omnibox/textInpu
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { findNodeHandle, type TextInput, type View } from "react-native";
 import { journeyBarCommitted, journeyBarFocused, journeyKeystroke, journeyNavigate, journeySuggestions } from "../../state/telemetry/journeys";
-import { sampleOmniboxLatency, trackSuggestionChosen } from "../../state/telemetry/track";
+import { newOmniboxKey, omniboxKeyHeard, sampleOmniboxLatency, trackSuggestionChosen } from "../../state/telemetry/track";
 import { useSettings, useTab, useWindow, useWindowId, useWindowProfileId } from "../../state/browser/hooks";
 import { removeHistory } from "../../state/history/actions";
 import { useWindowUiOf } from "../../state/windows/hooks";
@@ -77,7 +77,7 @@ export function Omnibox({
   useEffect(() => () => bangEnter.cancel(), [bangEnter]);
   useEffect(() => bangEnter.cancel(), [bangEnter, typed, selected, scope]);
   const root = useRef<View>(null);
-  const { items, completion, via, inline, shownCompletion, value, selectedIndex, current, tabScope, previewing, rowsHover, rowsHeld, releaseRows } = useBarItems({
+  const { items, completion, via, inline, shownCompletion, value, selectedIndex, current, tabScope, previewing, rowsHover, rowsHeld, releaseRows, shownUrl } = useBarItems({
     input,
     caret: () => selection.current,
     typed,
@@ -212,7 +212,7 @@ export function Omnibox({
   };
 
   const onContextMenu = async () => {
-    const pick = await showFieldMenu(value, selection);
+    const pick = await showFieldMenu(value, selection, shownUrl);
     if (pick?.kind === "go") return go(pick.url);
     if (pick?.kind === "edit") {
       previewSelection.edited();
@@ -232,13 +232,10 @@ export function Omnibox({
   }, [items]);
 
   const heardAt = useRef(0);
-  const keyAt = useRef(0);
+  const [key] = useState(newOmniboxKey);
   useLayoutEffect(() => {
     if (__DEV__) traceOmnibox({ bar: `${windowId}:${variant}`, typed, heard: heardAt.current, committed: Date.now() });
-    if (keyAt.current) {
-      sampleOmniboxLatency(Date.now() - keyAt.current);
-      keyAt.current = 0;
-    }
+    sampleOmniboxLatency(key);
   });
 
   const onChangeText = (next: string) => {
@@ -252,7 +249,7 @@ export function Omnibox({
     previewSelection.edited();
     bangEnter.cancel();
     focusEcho.current = false;
-    keyAt.current = Date.now();
+    omniboxKeyHeard(key);
     journeyKeystroke(tabId);
     if (hero) markNewTabBar("typed", tabId);
     const bySpace = scope ? null : keywordBySpace(previewing ? value : typed, next);

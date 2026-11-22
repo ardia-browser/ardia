@@ -1,6 +1,8 @@
-import type { FetchLike } from "@ardia/core";
+import { BUILT_IN_ENGINES, type FetchLike, type SearchEngine } from "@ardia/core";
+import { liveExtensionSearchEngines } from "../extensions/searchEngines";
 import { fetchSearchSuggestions, stopSearchSuggestions } from "../../platform/search";
 import { noteSearchSuggest } from "../telemetry/track";
+import { consentNow } from "../telemetry/client";
 import { engineProfile, isIncognitoProfile } from "../browser/model";
 import { useBrowser } from "../browser/store";
 
@@ -11,15 +13,43 @@ export const remoteSuggestionsAllowed = (profileId: string) => !isIncognitoProfi
 
 export const suggestProfileKey = (profileId: string) => engineProfile(useBrowser.getState(), profileId);
 
+const originOf = (url: string) => {
+  try {
+    const parsed = new URL(url);
+    return /^https?:$/.test(parsed.protocol) && !parsed.username && !parsed.password ? parsed.origin : null;
+  } catch {
+    return null;
+  }
+};
+
+export function trustedSuggestTemplate(engine: SearchEngine | undefined, profile: string): string | null {
+  if (!engine) return null;
+  const builtIn = BUILT_IN_ENGINES.find((e) => e.id === engine.id);
+  if (builtIn) return builtIn.suggestUrl ?? null;
+  const id = engine.extension?.id;
+  const installed = id ? liveExtensionSearchEngines(profile).find((e) => e.extensionId === id) : undefined;
+  return typeof installed?.suggestUrl === "string" ? installed.suggestUrl : null;
+}
+
+export function suggestUrlAllowed(url: string, template: unknown): boolean {
+  if (typeof template !== "string" || !template.includes("%s")) return false;
+  const prefix = template.slice(0, template.indexOf("%s"));
+  if (!/^https?:\/\/[^/?#\s]+[/?]/i.test(prefix) || !url.startsWith(prefix)) return false;
+  const origin = originOf(url);
+  return origin !== null && origin === originOf(template.replaceAll("%s", "q"));
+}
+
 export function browserSuggestFetch(profile: string): FetchLike {
-  return async (url, { signal }) => {
+  return async (url, { signal, engine }) => {
+    if (!suggestUrlAllowed(url, trustedSuggestTemplate(engine, profile))) return { ok: false, text: async () => "" };
     const id = nextRequestId++;
+    const consent = consentNow();
     const stop = () => void stopSearchSuggestions(profile, id).catch(() => {});
     signal.addEventListener("abort", stop, { once: true });
     try {
       const reply = await fetchSearchSuggestions(profile, url, id);
       if (reply.stopped || signal.aborted) throw new Error("suggestion request stopped");
-      noteSearchSuggest(reply.status === 200 ? "ok" : BLOCKED_STATUSES.has(reply.status) ? "blocked" : "failed");
+      noteSearchSuggest(reply.status === 200 ? "ok" : BLOCKED_STATUSES.has(reply.status) ? "blocked" : "failed", consent);
       const body = reply.body ?? "";
       return { ok: reply.status === 200 && !!body, text: async () => body };
     } finally {

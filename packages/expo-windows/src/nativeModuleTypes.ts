@@ -51,7 +51,7 @@ export type FileDropOnWindows = {
 
 export type FileDropModule = FileDropNative & FileDropOnWindows;
 
-export type MenusModule = MenusNative & { activeShortcuts(): Promise<Record<string, string[][]>>; recentMenuLog(): Promise<string[]> };
+export type MenusModule = MenusNative & { activeShortcuts(): Promise<Record<string, string[][]>>; recentMenuLog(): Promise<string[]>; openCount(): number; devHoldMenu(windowId: string, onUiThread: boolean): Promise<boolean> };
 
 export type NotificationsModule = NotificationsNative & { notificationCenterPath(): string };
 

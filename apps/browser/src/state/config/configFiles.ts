@@ -15,6 +15,10 @@ import { CONFIG_FILE, launchRestoreSession, readConfig } from "./configSettings"
 import { schemaFiles } from "./configSchema";
 import { reloadHooks } from "../automation/hookRules";
 import { noteConfigProblemToastDismissed, noteConfigProblemToastShown } from "../telemetry/configProblemToasts";
+import { consentToken } from "../telemetry/client";
+import { warnFor } from "../telemetry/logs";
+import { loadPluginTheme, parsePluginThemeKey } from "../plugins/themes";
+import { activeManifest, currentPlugins, usePlugins } from "../plugins/store";
 
 const RECONCILE_DELAY_MS = 100;
 const PROBLEMS_TOAST = "config-problems";
@@ -49,11 +53,43 @@ let watching: string | null | undefined;
 let schemas: Record<string, string> | null = null;
 let timer: ReturnType<typeof setTimeout> | undefined;
 const lastGoodThemes = new Map<string, ThemeParts>();
+const pluginThemeLoads = new Map<string, { parts: ThemeParts; problems: string[] } | "loading">();
+let stopWatchingPlugins: (() => void) | null = null;
 
 const themeFile = (name: string) => `themes/${name}.json`;
 
+function pluginThemeLoaded(name: string, loadKey: string, parts: ThemeParts | null, problems: string[]) {
+  pluginThemeLoads.set(loadKey, { parts: parts ?? lastGoodThemes.get(name) ?? NO_THEME, problems });
+  if (parts) lastGoodThemes.set(name, parts);
+  if (defaults && theme.name === name) reconcileConfig();
+}
+
+function readPluginTheme(name: string, plugin: string, id: string, problems: string[]): ThemeParts {
+  const s = currentPlugins();
+  if (!activeManifest(s, plugin)?.contributes.themes.some((t) => t.id === id)) {
+    problems.push(`${CONFIG_FILE}: theme ${name} needs the ${plugin} plugin turned on with a theme ${id}`);
+    return NO_THEME;
+  }
+  const loadKey = `${name}@${s.listings[plugin]?.hash ?? ""}`;
+  const loaded = pluginThemeLoads.get(loadKey);
+  if (loaded && loaded !== "loading") {
+    problems.push(...loaded.problems);
+    return loaded.parts;
+  }
+  if (!loaded && defaults) {
+    pluginThemeLoads.set(loadKey, "loading");
+    loadPluginTheme(plugin, id, defaults).then(
+      (result) => (result.ok ? pluginThemeLoaded(name, loadKey, { roles: result.theme.roles, look: result.theme.look }, result.theme.problems) : pluginThemeLoaded(name, loadKey, null, [`${CONFIG_FILE}: theme ${name}: ${result.reason}`])),
+      (error: unknown) => pluginThemeLoaded(name, loadKey, null, [`${CONFIG_FILE}: theme ${name}: ${error instanceof Error ? error.message : "couldn't load"}`]),
+    );
+  }
+  return theme.name === name ? { roles: theme.roles, look: theme.look } : (lastGoodThemes.get(name) ?? NO_THEME);
+}
+
 function readTheme(name: string | null, problems: string[]): ThemeParts {
   if (!name || !defaults) return NO_THEME;
+  const pluginTheme = parsePluginThemeKey(name);
+  if (pluginTheme) return readPluginTheme(name, pluginTheme.plugin, pluginTheme.id, problems);
   const file = themeFile(name);
   const read = readConfigFile(file);
   if (read.status === "missing") {
@@ -189,7 +225,8 @@ function report(problems: string[]) {
 function watchNames() {
   if (theme.name === watching) return;
   watching = theme.name;
-  watchConfigFiles(["config.json", "hooks.json", ...(theme.name ? [themeFile(theme.name)] : [])]).then(changed, (error: unknown) => console.warn("[config] couldn't watch the config folder", error));
+  const consent = consentToken();
+  watchConfigFiles(["config.json", "hooks.json", ...(theme.name && !parsePluginThemeKey(theme.name) ? [themeFile(theme.name)] : [])]).then(changed, (error: unknown) => warnFor(consent, "[config] couldn't watch the config folder", error));
 }
 
 export function reconcileConfig(launch = true) {
@@ -213,7 +250,8 @@ export function reconcileConfig(launch = true) {
 function writeSchemas() {
   if (!defaults) return;
   schemas ??= schemaFiles(defaults);
-  writeConfigSchemas(schemas).catch((error: unknown) => console.warn("[config] couldn't write the schemas", error));
+  const consent = consentToken();
+  writeConfigSchemas(schemas).catch((error: unknown) => warnFor(consent, "[config] couldn't write the schemas", error));
 }
 
 function changed() {
@@ -235,12 +273,15 @@ export function startConfigFiles(roles: RolePalettes, launch = true) {
   if (defaults) return;
   defaults = roles;
   reconcileConfig(launch);
-  stopWatchingSidebarText = useBrowser.subscribe((s, prev) => {
+  stopWatchingSidebarText = useBrowser.subscribeTo(["settings"], (s, prev) => {
     if (s.settings.sidebarTextSize !== prev.settings.sidebarTextSize) applyTheme(theme);
   });
-  unsubscribers.push(useBrowser.subscribe((s, prev) => s.settings.elementOutlines !== prev.settings.elementOutlines && applyTheme(theme)));
-  unsubscribers.push(useBrowser.subscribe((s, prev) => s.settings.tabCornerRadius !== prev.settings.tabCornerRadius && applyTheme(theme)));
-  stopWatchingMinimalism = useBrowser.subscribe((s, prev) => {
+  unsubscribers.push(useBrowser.subscribeTo(["settings"], (s, prev) => s.settings.elementOutlines !== prev.settings.elementOutlines && applyTheme(theme)));
+  unsubscribers.push(useBrowser.subscribeTo(["settings"], (s, prev) => s.settings.tabCornerRadius !== prev.settings.tabCornerRadius && applyTheme(theme)));
+  stopWatchingPlugins = usePlugins.subscribe((s, prev) => {
+    if ((s.listings !== prev.listings || s.records !== prev.records || s.order !== prev.order) && theme.name && parsePluginThemeKey(theme.name)) reconcileConfig();
+  });
+  stopWatchingMinimalism = useBrowser.subscribeTo(["settings"], (s, prev) => {
     if (s.settings.minimalismMode !== prev.settings.minimalismMode) applyTheme(theme);
   });
   afterFirstWindow(() => {
@@ -248,7 +289,7 @@ export function startConfigFiles(roles: RolePalettes, launch = true) {
     onConfigChange(changed);
     watchNames();
     writeSchemas();
-    unsubscribers.push(useToasts.subscribe(toastsChanged), useBrowser.subscribe((next, previous) => next.windowOrder !== previous.windowOrder && windowsChanged()));
+    unsubscribers.push(useToasts.subscribe(toastsChanged), useBrowser.subscribeTo(["windowOrder"], (next, previous) => next.windowOrder !== previous.windowOrder && windowsChanged()));
     showProblems();
   });
 }
@@ -274,6 +315,9 @@ export function resetConfigFilesForTests() {
   watching = undefined;
   schemas = null;
   lastGoodThemes.clear();
+  pluginThemeLoads.clear();
+  stopWatchingPlugins?.();
+  stopWatchingPlugins = null;
   setActiveLook(DEFAULT_LOOK);
   useBasePalette.setState({ palette: null, theme: null, look: DEFAULT_LOOK, blocks: null });
 }

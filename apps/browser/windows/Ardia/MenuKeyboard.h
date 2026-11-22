@@ -2,9 +2,11 @@
 
 #include <atomic>
 #include <chrono>
+#include <iterator>
 #include <optional>
 #include <set>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include "Events.h"
@@ -51,12 +53,12 @@ struct WindowsKeyHold {
 
 struct MenuKeyboard {
   static constexpr ULONGLONG WindowsKeyHoldMs = 5000;
+  static constexpr ULONGLONG MenuPressToMenuMs = 2000;
   static constexpr int WindowsKeyCheckDelayMs = 150;
 
   winrt::Microsoft::ReactNative::ReactContext context{nullptr};
   HHOOK keyboardHook = nullptr;
   HHOOK mouseHook = nullptr;
-  bool trackingMenu = false;
   unsigned switcherHeld = 0;
   bool consumedWithAlt = false;
   bool escapeCaptured = false;
@@ -70,6 +72,7 @@ struct MenuKeyboard {
   winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer windowsKeyDeadlineTimer{nullptr};
   unsigned pagesHeldForWindowsKey = 0;
   unsigned pagesGivenBack = 0;
+  unsigned pageReturnRequestsAfterMenu = 0;
   std::optional<winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue>> recording;
 
   static MenuKeyboard &Shared() noexcept {
@@ -102,8 +105,20 @@ struct MenuKeyboard {
     LaunchLog::Write(L"command", Paths::Wide(command));
   }
 
-  void EmitSwitcherReleased() noexcept {
-    EmitEvent(context, L"ArdiaShell", L"onAppEvent", winrt::Microsoft::ReactNative::JSValueObject{{"type", "switcherReleased"}});
+  void EmitSwitcherReleased(bool afterMenu = false) noexcept {
+    winrt::Microsoft::ReactNative::JSValueObject event{{"type", "switcherReleased"}};
+    if (afterMenu) event["afterMenu"] = winrt::Microsoft::ReactNative::JSValue{true};
+    EmitEvent(context, L"ArdiaShell", L"onAppEvent", std::move(event));
+  }
+
+  void ReconcileAfterMenu() noexcept {
+    for (auto key = swallowedKeyUps.begin(); key != swallowedKeyUps.end();) key = PhysicallyDown(static_cast<int>(*key)) ? std::next(key) : swallowedKeyUps.erase(key);
+    if (capturedWHeld && !PhysicallyDown('W')) capturedWHeld = false;
+    if (consumedWithAlt && !PhysicallyDown(VK_MENU)) consumedWithAlt = false;
+    if (!switcherHeld || (PhysicallyHeldModifiers() & switcherHeld) == switcherHeld) return;
+    switcherHeld = 0;
+    LaunchLog::Write(L"keys", L"switcher modifier let go while a menu was open");
+    EmitSwitcherReleased(true);
   }
 
   void SetEscapeCapture(bool active) noexcept {
@@ -499,6 +514,41 @@ struct MenuKeyboard {
     if (!reason.empty()) LaunchLog::Write(L"keys", L"snap keys: the page is let go: " + std::wstring{reason});
   }
 
+  std::optional<MenuPageReturn> PageTheMenuPressLeft(HWND owner) noexcept {
+    HWND page = WindowManager::Shared().TakePageLeftBySecondaryPress(owner, MenuPressToMenuMs);
+    if (!page || GetForegroundWindow() != owner) return std::nullopt;
+    ActiveWindow host = HostOfPage(page);
+    if (host.hwnd != owner) return std::nullopt;
+    return MenuPageReturn{page, owner, host.id};
+  }
+
+  std::wstring_view WhyTheAppKeepsTheKeyboard(MenuPageReturn const &left, bool chosen) const noexcept {
+    if (chosen) return L"a choice was made";
+    if (!IsWindow(left.app) || !IsWindow(left.page)) return L"the page or its window went away";
+    if (WindowManager::Shared().Hwnd(left.windowId) != left.app || HostOfPage(left.page).hwnd != left.app) return L"the page is no longer that window's";
+    HWND foreground = GetForegroundWindow();
+    if (foreground == left.page) return L"the page has the keyboard already";
+    if (foreground != left.app) return L"the window is no longer in front";
+    if (IsIconic(left.app) || !IsWindowVisible(left.page)) return L"the window is minimized or the page hidden";
+    if (!IsWindowEnabled(left.app) || DialogParts::ModalDialogOf(left.app)) return L"a dialog holds the window";
+    if (switcherCaptured || switcherHeld || escapeCaptured) return L"the switcher or a popover is open";
+    if (windowsKeyHold || FocusHold::Shared().active || recording) return L"another keyboard handoff is under way";
+    return {};
+  }
+
+  void GivePageBackAfterMenu(MenuPageReturn const &left, bool chosen) noexcept {
+    std::wstring_view kept = WhyTheAppKeepsTheKeyboard(left, chosen);
+    if (!kept.empty()) {
+      LaunchLog::Write(L"keys", L"menu: the keyboard stays in the app window: " + std::wstring{kept});
+      return;
+    }
+    ++pageReturnRequestsAfterMenu;
+    winrt::Microsoft::ReactNative::JSValueObject event{{"type", "snapKeyHandedBack"}, {"windowId", left.windowId}};
+    event["afterMenu"] = winrt::Microsoft::ReactNative::JSValue{true};
+    EmitEvent(context, L"ArdiaShell", L"onAppEvent", std::move(event));
+    LaunchLog::Write(L"keys", L"menu: asked to give the keyboard back to the page the right-click took it from (" + std::to_wstring(pageReturnRequestsAfterMenu) + L" so far)");
+  }
+
   bool HandleKey(UINT virtualKey, LPARAM flags) noexcept {
     bool keyUp = (flags & (1u << 31)) != 0;
     WatchWindowsKey(virtualKey, keyUp, (flags & (1u << 30)) != 0);
@@ -520,7 +570,6 @@ struct MenuKeyboard {
       if (flags & (1u << 30)) return true;
       capturedWHeld = false;
     }
-    if (trackingMenu) return false;
     KeyPress press = ReadKeyPress(virtualKey, flags);
     if (press.windowsKey || press.altGraph) return false;
     bool handled = false;

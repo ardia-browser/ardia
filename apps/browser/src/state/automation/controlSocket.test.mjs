@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
 const model = await import("../browser/model.ts");
-const { useCli, useCliIndicator } = await import("../app/cliControl.ts");
+const { useControlServer: useCli, useControlIndicator: useCliIndicator } = await import("../app/programControl.ts");
 const { startAutomation } = await import("./controlSocket.ts");
 const { noteCommit } = await import("./automationEvents.ts");
 const { automationWindows } = await import("./automationWindows.ts");
@@ -51,7 +51,13 @@ function fresh() {
 test("hello, unknown methods and malformed lines", async () => {
   fresh();
   await controlOn();
-  assert.deepEqual(call("hello").result, { app: "Ardia", version: "1.0", protocol: 3 });
+  assert.deepEqual(call("hello").result, { app: "Ardia", version: "1.0", protocol: 4, minClientProtocol: 4 });
+  assert.deepEqual(call("hello", { protocol: 4 }).result.protocol, 4, "a client that names the current protocol is welcome");
+  assert.equal(call("hello", { protocol: 9 }).result.protocol, 4, "a newer client gets the app's protocol and decides for itself");
+  const old = call("hello", { protocol: 3 });
+  assert.equal(old.error.code, "unsupported_protocol");
+  assert.match(old.error.message, /speaks control protocol 3, and Ardia 1\.0 needs 4 or later: update the command/);
+  assert.equal(call("hello", { protocol: "4" }).error.code, "bad_request");
   const unknown = call("dance");
   assert.equal(unknown.error.code, "unknown_method");
   const bad = call(null, null, { raw: "not json" });
@@ -374,4 +380,16 @@ test("the pill stays up until the run's reply is written", async (t) => {
   t.mock.timers.tick(1);
   assert.equal(useCliIndicator.getState().shown, false);
   S().updateSettings({ cliControl: false });
+});
+
+test("the owner's apply over the socket still opens file and internal addresses", async () => {
+  fresh();
+  await controlOn();
+  const w = S().createWindow({ url: "https://a.example/" });
+  const opened = await callAsync("apply", { ops: [{ op: "open", urls: ["file:///tmp/notes.html", "ardia://history"], window: w }] });
+  assert.equal(opened.result?.ok, true);
+  const urls = opened.result.tabs.map((t) => t.url);
+  assert.ok(urls.includes("file:///tmp/notes.html"), urls.join());
+  const grouped = await callAsync("apply", { ops: [{ op: "group.create", urls: ["file:///tmp/a.html"], window: w, name: "Files" }] });
+  assert.equal(grouped.result?.ok, true);
 });

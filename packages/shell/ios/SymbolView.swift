@@ -10,6 +10,13 @@ final class SymbolView: ExpoView {
   var name = "questionmark" { didSet { update() } }
   var pointSize: Double = 14 { didSet { update() } }
   var weight = "regular" { didSet { update() } }
+  var centresInk = false {
+    didSet {
+      placeImageView()
+      render()
+    }
+  }
+  private static var inkOffsets: [String: CGVector] = [:]
   var tint: NSColor? {
     didSet {
       imageView.contentTintColor = tint
@@ -34,12 +41,12 @@ final class SymbolView: ExpoView {
 
   override func layout() {
     super.layout()
-    imageView.frame = bounds
+    placeImageView()
   }
 
   override func setFrameSize(_ newSize: NSSize) {
     super.setFrameSize(newSize)
-    imageView.frame = bounds
+    placeImageView()
     render()
   }
 
@@ -50,6 +57,7 @@ final class SymbolView: ExpoView {
 
   override func viewDidChangeBackingProperties() {
     super.viewDidChangeBackingProperties()
+    placeImageView()
     render()
   }
 
@@ -69,7 +77,32 @@ final class SymbolView: ExpoView {
     let config = NSImage.SymbolConfiguration(pointSize: pointSize, weight: weights[weight] ?? .regular)
     image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?.withSymbolConfiguration(config)
     imageView.image = image
+    placeImageView()
     render()
+  }
+
+  private func centredImageRect() -> NSRect? {
+    guard let image else { return nil }
+    return SymbolInk.centredRect(image.size, in: bounds, offset: centresInk ? inkOffset(of: image) : .zero, flipped: isFlipped)
+  }
+
+  private func inkOffset(of image: NSImage) -> CGVector {
+    let density = max(1, backingDensity)
+    let key = "\(name) \(pointSize) \(weight) \(density)"
+    if let known = Self.inkOffsets[key] { return known }
+    let offset = SymbolInk.offset(of: image, density: density)
+    Self.inkOffsets[key] = offset
+    return offset
+  }
+
+  private func placeImageView() {
+    guard let drawn = centredImageRect() else {
+      imageView.frame = bounds
+      return
+    }
+    let origin = convertToBacking(drawn.origin)
+    let snapped = convertFromBacking(NSPoint(x: origin.x.rounded(), y: origin.y.rounded()))
+    imageView.frame = NSRect(origin: snapped, size: drawn.size)
   }
 
   private func render() {
@@ -80,13 +113,10 @@ final class SymbolView: ExpoView {
     if glyph.superlayer !== layer { layer.addSublayer(glyph) }
     let drawsAtWindowScale = window.map { abs(backingDensity - $0.backingScaleFactor) < 0.001 } ?? true
     imageView.isHidden = !drawsAtWindowScale
-    guard !drawsAtWindowScale, let image, bounds.width > 0, bounds.height > 0, image.size.width > 0, image.size.height > 0 else {
+    guard !drawsAtWindowScale, let image, let drawn = centredImageRect() else {
       glyph.contents = nil
       return
     }
-    let fit = min(1, bounds.width / image.size.width, bounds.height / image.size.height)
-    let size = NSSize(width: image.size.width * fit, height: image.size.height * fit)
-    let drawn = NSRect(x: bounds.midX - size.width / 2, y: bounds.midY - size.height / 2, width: size.width, height: size.height)
     let cell = backingAlignedRect(drawn, options: [.alignMinXOutward, .alignMinYOutward, .alignMaxXOutward, .alignMaxYOutward])
     let pixels = convertToBacking(cell).size
     let wide = Int(pixels.width.rounded()), high = Int(pixels.height.rounded())

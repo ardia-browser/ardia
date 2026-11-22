@@ -16,8 +16,7 @@ if not re.fullmatch(VERSION_PATTERN, version):
 
 ARCHIVE = "Ardia.xcarchive"
 APP = f"{ARCHIVE}/Products/Applications/Ardia.app"
-CLI = f"ardia-cli-{version}-macos-arm64.tar.gz"
-TOP_FILES = {"provenance.txt", CLI, f"{CLI}.sha256"}
+TOP_FILES = {"provenance.txt"}
 ARCHIVE_DIRS = {ARCHIVE, f"{ARCHIVE}/Products", f"{ARCHIVE}/Products/Applications", f"{ARCHIVE}/dSYMs"}
 
 
@@ -50,7 +49,7 @@ def check_name(name):
         fail(f"member {shown(name)} has an empty, . or .. component")
     if name in TOP_FILES or name in ARCHIVE_DIRS or name == f"{ARCHIVE}/Info.plist" or bundle_root(name):
         return
-    fail(f"member {shown(name)} isn't part of a build (the archive, provenance.txt, {CLI} and its .sha256)")
+    fail(f"member {shown(name)} isn't part of a build (the archive, provenance.txt)")
 
 
 if os.path.lexists(dest):
@@ -142,7 +141,4 @@ expected = {"CFBundleIdentifier": "com.ardia.browser", "CFBundleExecutable": "Ar
 for key, value in expected.items():
     if info.get(key) != value:
         fail(f"the app's {key} isn't {value}")
-with open(os.path.join(real_dest, f"{CLI}.sha256"), encoding="ascii", errors="replace") as handle:
-    if not re.fullmatch(rf"[0-9a-f]{{64}}  {re.escape(CLI)}\n?", handle.read()):
-        fail(f"{CLI}.sha256 isn't one SHA-256 line for {CLI}")
-print(f"unpacked {len(members)} members into {dest}: Ardia.app {version} (com.ardia.browser), {CLI}")
+print(f"unpacked {len(members)} members into {dest}: Ardia.app {version} (com.ardia.browser)")

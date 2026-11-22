@@ -19,11 +19,11 @@ import type { ClosedTab, Tab, TabLive } from "../browser/types";
 import { activated, apply, closingTabs, withNewTab, type CloseOptions, type NewTabOptions } from "./tabs";
 import { hasPage, loadedPage, navigationOf, renavigated, wakeOf, withWake } from "./pageSession";
 import { cancelOpening, gateOpening, isGatedUrl, settleOpening } from "./openingGate";
+import { drainLive, setLive, stageLive } from "./tabLive";
 
 
 export type TabsSlice = {
   tabs: Record<string, Tab>;
-  live: Record<string, TabLive>;
   closedTabs: ClosedTab[];
 
   newTab(windowId: string, options?: NewTabOptions): string;
@@ -59,7 +59,6 @@ function openOutsideTab(s: BrowserState, url: string, windowId: string): boolean
 
 export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (set, get) => ({
   tabs: {},
-  live: {},
   closedTabs: [],
 
   newTab(windowId, options) {
@@ -123,7 +122,7 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
     if (!hasPage(tab) && holderOf(s, id)) return handOffPinPage(id, () => get().handOffPin(id));
     const shown = activeTabId(s, tab.windowId);
     let next = apply(s, activated(s, id));
-    if (shown && shown !== id && !switchKeepsOpeners(s, shown, id)) next = forgetOpeners(next, tab.windowId);
+    if (shown && shown !== id && !switchKeepsOpeners(s, shown, id)) next = forgetOpeners(next, tab.windowId, tab.profileId);
     set(next);
   },
 
@@ -136,7 +135,7 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
     const shown = activeTabId(s, tab.windowId);
     const target = swapped?.holderId ?? id;
     let next = apply(base, activated(base, target));
-    if (shown && shown !== id && !switchKeepsOpeners(base, shown, target)) next = forgetOpeners(next, tab.windowId);
+    if (shown && shown !== id && !switchKeepsOpeners(base, shown, target)) next = forgetOpeners(next, tab.windowId, tab.profileId);
     set(next);
   },
 
@@ -181,13 +180,15 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
       if (get().windowUi[tab.windowId]?.panel.open) get().closePanel(tab.windowId);
       return;
     }
-    const base = userInitiated && tab.url ? forgetOpeners(s, tab.windowId) : s;
+    const base = userInitiated && tab.url ? forgetOpeners(s, tab.windowId, tab.profileId) : s;
     const navigation = navigationTo(url, userInitiated);
     const engine = userInitiated ? typedNavigationEngine(s, tab, url) : undefined;
     const switching = !!engine && engine !== tabEngine(s, id);
     if (!switching) startNavigation(id, navigation);
     const page = switching ? loadedPage(navigation) : renavigated(tab, navigation);
-    set(apply(base, { tabs: { ...base.tabs, [id]: { ...tab, openerId: base.tabs[id]!.openerId, page, url: tab.url || url, ...(engine ? { engine } : {}) } } }));
+    const { chromeOpened: _, ...typed } = tab;
+    const navigated = userInitiated ? typed : tab;
+    set(apply(base, { tabs: { ...base.tabs, [id]: { ...navigated, openerId: base.tabs[id]!.openerId, page, url: tab.url || url, ...(engine ? { engine } : {}) } } }));
     const ui = get().windowUi[tab.windowId];
     if (ui?.panel.open) get().closePanel(tab.windowId);
   },
@@ -200,20 +201,16 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
     const supersedes = !!wakeOf(tab) && !("page" in patch) && url !== undefined && url !== tab.url;
     const change = supersedes ? { ...patch, page: withWake(tab.page, undefined) } : patch;
     const next = merge(tab, url !== undefined && url !== tab.url ? { ...onUrlChange(s, tab, url), ...change } : change);
-    const live = livePatch ? s.live[id] : undefined;
-    const nextLive = live && livePatch ? merge(live, livePatch) : live;
-    if (next === tab && nextLive === live) return;
-    set((s) => ({
-      ...(next !== tab ? { tabs: { ...s.tabs, [id]: next } } : {}),
-      ...(nextLive !== live ? { live: { ...s.live, [id]: nextLive! } } : {}),
-    }));
+    if (livePatch) stageLive(id, livePatch);
+    try {
+      if (next !== tab) set((s) => ({ tabs: { ...s.tabs, [id]: next } }));
+    } finally {
+      drainLive();
+    }
   },
 
   updateLive(id, patch) {
-    const live = get().live[id];
-    if (!live) return;
-    const next = merge(live, patch);
-    if (next !== live) set((s) => ({ live: { ...s.live, [id]: next } }));
+    setLive(id, patch);
   },
 
   duplicateTab(id) {

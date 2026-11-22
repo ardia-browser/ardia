@@ -55,6 +55,8 @@ public static class ArdiaInput {
   [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr window);
   [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(Point point);
   [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr window, uint flags);
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
   [DllImport("user32.dll", EntryPoint = "PostMessageW")] public static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
   [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassName(IntPtr window, System.Text.StringBuilder name, int size);
   [DllImport("user32.dll", EntryPoint = "SendMessageTimeoutW")] public static extern IntPtr SendMessageTimeout(IntPtr window, uint message, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
@@ -114,6 +116,39 @@ function Send-Click([int]$X, [int]$Y) {
   Start-Sleep -Milliseconds 60
   [ArdiaInput]::mouse_event(4, 0, 0, 0, [UIntPtr]::Zero)
   Start-Sleep -Milliseconds 250
+}
+
+function Send-PeekClick([System.Diagnostics.Process]$Process, [int]$X, [int]$Y, [int[]]$Page) {
+  $Process.Refresh()
+  if ($Process.MainWindowHandle -eq [IntPtr]::Zero) { return "the app has no main window" }
+  $owner = 0
+  foreach ($attempt in 1..5) {
+    [ArdiaInput]::SetForegroundWindow($Process.MainWindowHandle) | Out-Null
+    Start-Sleep -Milliseconds 200
+    [ArdiaInput]::GetWindowThreadProcessId([ArdiaInput]::GetForegroundWindow(), [ref]$owner) | Out-Null
+    if ($owner -eq $Process.Id) { break }
+  }
+  if ($owner -ne $Process.Id) { return "the foreground window belongs to process $owner, not the app ($($Process.Id))" }
+  $point = New-Object ArdiaInput+Point
+  $point.X = $X
+  $point.Y = $Y
+  $hit = [ArdiaInput]::GetAncestor([ArdiaInput]::WindowFromPoint($point), 2)
+  $hitOwner = 0
+  [ArdiaInput]::GetWindowThreadProcessId($hit, [ref]$hitOwner) | Out-Null
+  $rect = Get-HandleRect $hit
+  $class = New-Object System.Text.StringBuilder 256
+  [ArdiaInput]::GetClassName($hit, $class, 256) | Out-Null
+  $where = if ($rect) { "$($rect.Left),$($rect.Top),$($rect.Right - $rect.Left),$($rect.Bottom - $rect.Top)" } else { "no rect" }
+  $isPage = $hit -ne [IntPtr]::Zero -and $hit -ne $Process.MainWindowHandle -and $hitOwner -eq $Process.Id -and $rect -and [Math]::Abs($rect.Left - $Page[0]) -le 1 -and [Math]::Abs($rect.Top - $Page[1]) -le 1 -and [Math]::Abs(($rect.Right - $rect.Left) - $Page[2]) -le 1 -and [Math]::Abs(($rect.Bottom - $rect.Top) - $Page[3]) -le 1
+  if (-not $isPage) { return "($X, $Y) hits $($class.ToString()) at $where in process $hitOwner, not the page window at $($Page -join ',')" }
+  [ArdiaInput]::keybd_event(0x10, 0, 0, [UIntPtr]::Zero)
+  try {
+    Start-Sleep -Milliseconds 60
+    Send-Click $X $Y
+  } finally {
+    [ArdiaInput]::keybd_event(0x10, 0, 2, [UIntPtr]::Zero)
+  }
+  return ""
 }
 
 function Send-Drag([int]$X, [int]$Y, [int]$ByX, [int]$ByY, [int]$Hold = 150) {
@@ -519,9 +554,10 @@ while ($true) {
     }
     $name = @{ "/a" = "a"; "/b" = "b"; "/field" = "field"; "/opener" = "opener"; "/hover" = "hover"; "/sleep" = "sleep"; "/links" = "links"; "/drag" = "drag"; "/media" = "media"; "/framed" = "framed"; "/event/hovered" = "event"; "/event/left" = "event"; "/event/pressed" = "event"; "/event/selected" = "event"; "/event/released" = "event"; "/event/dragstart" = "event"; "/event/fullscreen" = "event"; "/event/windowed" = "event"; "/event/local-state-start" = "event"; "/event/local-state-stop" = "event" }[$($path -replace '\?.*$', '')]
     $status = if ($name -eq "event") { "204 No Content" } elseif ($name) { "200 OK" } else { "404 Not Found" }
-    $text = if ($name -eq "event") { "" } elseif ($name -eq "links") { "<!doctype html><meta charset=utf-8><title>links page</title><style>body{margin:0}a{position:absolute;left:10px;width:200px;height:40px;display:block;background:#ddd}</style><a id=peek style='top:10px' href='/a'>peek</a><a id=blank style='top:70px' target=_blank href='/b'>blank</a><a id=app style='top:130px' href='ardia-sleep-check-link:woke'>app</a>" } elseif ($name -eq "opener") { "<!doctype html><meta charset=utf-8><title>opener page</title><style>body{margin:0}#open{position:absolute;left:0;top:0;width:100%;height:100%;font:24px sans-serif}</style><button id=open>open a pop-up</button><script>document.getElementById('open').addEventListener('click', () => window.open('/field', 'snapcheck', 'popup,width=560,height=420'));</script>" } elseif ($name -eq "field") { "<!doctype html><meta charset=utf-8><title>field page</title><style>body{margin:0}#field{position:absolute;left:0;top:0;width:100%;height:100%;border:0;font:24px sans-serif}</style><input id=field><script>const field = document.getElementById('field'); field.addEventListener('input', () => fetch('/event/typed?' + encodeURIComponent(field.value)));</script>" } elseif ($name -eq "sleep") { "<!doctype html><meta charset=utf-8><title>sleep page</title><body style='margin:0;height:6000px'><input id=field></body>" } elseif ($name -eq "drag") { "<!doctype html><meta charset=utf-8><title>drag page</title><style>body{margin:0;font:18px sans-serif}#words{position:absolute;left:40px;top:120px;width:560px;margin:0}#link{position:absolute;left:40px;top:240px}#full{position:absolute;left:40px;top:320px;width:160px;height:40px}</style><p id=words>Plain words to select by dragging across them, plain words to select by dragging across them.</p><a id=link href='/a'>a link to drag</a><button id=full>full screen</button><script>const report = (name) => fetch('/event/' + name); addEventListener('mousedown', () => report('pressed')); addEventListener('mouseup', () => report(getSelection().toString().length > 0 ? 'selected' : 'released')); addEventListener('dragstart', () => report('dragstart')); document.getElementById('full').addEventListener('click', (event) => { event.stopPropagation(); document.documentElement.requestFullscreen(); }); addEventListener('fullscreenchange', () => report(document.fullscreenElement ? 'fullscreen' : 'windowed'));</script>" } elseif ($name -eq "media") { "<!doctype html><meta charset=utf-8><title>media page</title><style>body{margin:0}#m{width:160px;height:90px}#go{position:absolute;left:0;top:100px;width:200px;height:60px}#next{position:absolute;left:0;top:170px;width:200px;height:30px;display:block;background:#ddd}</style><video id=m src='/tone.wav' loop></video><button id=go>play</button><a id=next href='/media?second'>next</a><script>const m = document.getElementById('m'); if (location.search.includes('muted')) m.muted = true; window.tries = []; const attempt = () => m.play().then(() => 'played', (error) => error.name).then((result) => tries.push(result)); if (location.search.includes('auto')) attempt(); const burst = () => { for (let i = 0; i < 25; i++) new Audio().play().catch(() => {}); }; if (location.search.includes('burst')) burst(); if (location.search.includes('again')) addEventListener('pageshow', (event) => { if (event.persisted) burst(); }); if (location.search.includes('session')) navigator.mediaSession.setActionHandler('play', () => attempt()); if (location.search.includes('touchplay')) addEventListener('pointerdown', (event) => { if (event.pointerType === 'touch') attempt(); }); document.getElementById('go').addEventListener('click', attempt); addEventListener('message', (event) => { if (event.data === 'play-muted') { m.muted = true; attempt(); } if (event.data === 'play-again') attempt(); }); if (parent !== window) setInterval(() => parent.postMessage({ paused: m.paused, time: m.currentTime, tries, active: !!(navigator.userActivation && navigator.userActivation.hasBeenActive) }, '*'), 200);</script>" } elseif ($name -eq "framed") { "<!doctype html><meta charset=utf-8><title>framed page</title><style>body{margin:0}iframe{width:280px;height:200px;border:0}</style><body><script>window.frameState = null; window.restored = false; addEventListener('message', (event) => { frameState = event.data; }); window.showPlay = null; addEventListener('pageshow', (event) => { restored = event.persisted; const shows = Number(sessionStorage.getItem('ardia-shows') || 0) + 1; sessionStorage.setItem('ardia-shows', String(shows)); if (shows > 1 && location.search.includes('showplay')) Object.assign(document.createElement('video'), { muted: true, loop: true, src: '/tone.wav' }).play().then(() => 'played', (error) => error.name).then((result) => { showPlay = result; }); }); if (location.search.includes('burst')) for (let i = 0; i < 25; i++) new Audio().play().catch(() => {}); const frame = document.createElement('iframe'); frame.allow = 'autoplay'; frame.src = (location.search.includes('same') ? location.origin : 'http://localhost:$Port') + '/media' + (location.search.includes('burst') ? '?again' : location.search.includes('quiet') ? '' : '?auto-muted'); document.body.append(frame);</script>" } elseif ($name -eq "hover") { "<!doctype html><meta charset=utf-8><title>ready</title><style>body{margin:0}#strip{height:160px;background:#ddd}</style><div id=strip>hover strip</div><script>const strip = document.getElementById('strip'); strip.addEventListener('mouseenter', () => { document.title = 'hovered'; fetch('/event/hovered'); }); strip.addEventListener('mouseleave', () => { document.title = 'left'; fetch('/event/left'); });</script>" } elseif ($name) { "<!doctype html><meta charset=utf-8><p>cached page $name</p><script>addEventListener('pageshow', (event) => { document.title = (event.persisted ? 'restored ' : 'loaded ') + '$name'; });</script>" } else { "" }
+    $text = if ($name -eq "event") { "" } elseif ($name -eq "links") { "<!doctype html><meta charset=utf-8><title>links page</title><style>body{margin:0}a{position:absolute;left:10px;width:200px;height:40px;display:block;background:#ddd}</style><a id=peek style='top:10px' href='/a'>peek</a><a id=blank style='top:70px' target=_blank href='/b'>blank</a><a id=app style='top:130px' href='ardia-sleep-check-link:woke'>app</a><script>window.downs = 0; window.restored = false; window.lastClick = null; addEventListener('pointerdown', (event) => { if (event.isTrusted) downs++; }, true); addEventListener('pageshow', (event) => { restored = event.persisted; }); addEventListener('mouseup', (event) => { lastClick = { up: true, clicked: false, prevented: false, shift: event.shiftKey, alt: event.altKey }; }, true); addEventListener('click', (event) => { if (lastClick) { lastClick.clicked = true; lastClick.prevented = event.defaultPrevented; } });</script>" } elseif ($name -eq "opener") { "<!doctype html><meta charset=utf-8><title>opener page</title><style>body{margin:0}#open{position:absolute;left:0;top:0;width:100%;height:100%;font:24px sans-serif}</style><button id=open>open a pop-up</button><script>document.getElementById('open').addEventListener('click', () => window.open('/field', 'snapcheck', 'popup,width=560,height=420'));</script>" } elseif ($name -eq "field") { "<!doctype html><meta charset=utf-8><title>field page</title><style>body{margin:0}#field{position:absolute;left:0;top:0;width:100%;height:100%;border:0;font:24px sans-serif}</style><input id=field><script>const field = document.getElementById('field'); field.addEventListener('input', () => fetch('/event/typed?' + encodeURIComponent(field.value)));</script>" } elseif ($name -eq "sleep") { "<!doctype html><meta charset=utf-8><title>sleep page</title><body style='margin:0;height:6000px'><input id=field></body>" } elseif ($name -eq "drag") { "<!doctype html><meta charset=utf-8><title>drag page</title><style>body{margin:0;font:18px sans-serif}#words{position:absolute;left:40px;top:120px;width:560px;margin:0}#link{position:absolute;left:40px;top:240px}#full{position:absolute;left:40px;top:320px;width:160px;height:40px}</style><p id=words>Plain words to select by dragging across them, plain words to select by dragging across them.</p><a id=link href='/a'>a link to drag</a><button id=full>full screen</button><script>const report = (name) => fetch('/event/' + name); addEventListener('mousedown', () => report('pressed')); addEventListener('mouseup', () => report(getSelection().toString().length > 0 ? 'selected' : 'released')); addEventListener('dragstart', () => report('dragstart')); document.getElementById('full').addEventListener('click', (event) => { event.stopPropagation(); document.documentElement.requestFullscreen(); }); addEventListener('fullscreenchange', () => report(document.fullscreenElement ? 'fullscreen' : 'windowed'));</script>" } elseif ($name -eq "media") { "<!doctype html><meta charset=utf-8><title>media page</title><style>body{margin:0}#m{width:160px;height:90px}#go{position:absolute;left:0;top:100px;width:200px;height:60px}#next{position:absolute;left:0;top:170px;width:200px;height:30px;display:block;background:#ddd}</style><video id=m src='/tone.wav' loop></video><button id=go>play</button><a id=next href='/media?second'>next</a><script>const m = document.getElementById('m'); if (location.search.includes('muted')) m.muted = true; window.tries = []; const attempt = () => m.play().then(() => 'played', (error) => error.name).then((result) => tries.push(result)); if (location.search.includes('auto')) attempt(); const burst = () => { for (let i = 0; i < 25; i++) new Audio().play().catch(() => {}); }; if (location.search.includes('burst')) burst(); if (location.search.includes('again')) addEventListener('pageshow', (event) => { if (event.persisted) burst(); }); if (location.search.includes('session')) navigator.mediaSession.setActionHandler('play', () => attempt()); if (location.search.includes('touchplay')) addEventListener('pointerdown', (event) => { if (event.pointerType === 'touch') attempt(); }); document.getElementById('go').addEventListener('click', attempt); addEventListener('message', (event) => { if (event.data === 'play-muted') { m.muted = true; attempt(); } if (event.data === 'play-again') attempt(); }); if (parent !== window) setInterval(() => parent.postMessage({ paused: m.paused, time: m.currentTime, tries, active: !!(navigator.userActivation && navigator.userActivation.hasBeenActive) }, '*'), 200);</script>" } elseif ($name -eq "framed") { "<!doctype html><meta charset=utf-8><title>framed page</title><style>body{margin:0}iframe{width:280px;height:200px;border:0}</style><body><script>window.frameState = null; window.restored = false; addEventListener('message', (event) => { frameState = event.data; }); window.showPlay = null; addEventListener('pageshow', (event) => { restored = event.persisted; const shows = Number(sessionStorage.getItem('ardia-shows') || 0) + 1; sessionStorage.setItem('ardia-shows', String(shows)); if (shows > 1 && location.search.includes('showplay')) Object.assign(document.createElement('video'), { muted: true, loop: true, src: '/tone.wav' }).play().then(() => 'played', (error) => error.name).then((result) => { showPlay = result; }); }); if (location.search.includes('burst')) for (let i = 0; i < 25; i++) new Audio().play().catch(() => {}); const frame = document.createElement('iframe'); frame.allow = 'autoplay'; frame.src = (location.search.includes('same') ? location.origin : 'http://localhost:$Port') + '/media' + (location.search.includes('burst') ? '?again' : location.search.includes('quiet') ? '' : '?auto-muted'); document.body.append(frame);</script>" } elseif ($name -eq "hover") { "<!doctype html><meta charset=utf-8><title>ready</title><style>body{margin:0}#strip{height:160px;background:#ddd}</style><div id=strip>hover strip</div><script>const strip = document.getElementById('strip'); strip.addEventListener('mouseenter', () => { document.title = 'hovered'; fetch('/event/hovered'); }); strip.addEventListener('mouseleave', () => { document.title = 'left'; fetch('/event/left'); });</script>" } elseif ($name) { "<!doctype html><meta charset=utf-8><p>cached page $name</p><script>addEventListener('pageshow', (event) => { document.title = (event.persisted ? 'restored ' : 'loaded ') + '$name'; });</script>" } else { "" }
     $body = [System.Text.Encoding]::UTF8.GetBytes($text)
-    $head = [System.Text.Encoding]::ASCII.GetBytes("HTTP/1.1 $status`r`nContent-Type: text/html; charset=utf-8`r`nContent-Length: $($body.Length)`r`nConnection: close`r`n`r`n")
+    $policy = if ($name -eq "links" -and $path -match '\?sandboxed') { "Content-Security-Policy: sandbox allow-scripts allow-popups`r`n" } else { "" }
+    $head = [System.Text.Encoding]::ASCII.GetBytes("HTTP/1.1 $status`r`nContent-Type: text/html; charset=utf-8`r`n$($policy)Content-Length: $($body.Length)`r`nConnection: close`r`n`r`n")
     $stream.Write($head, 0, $head.Length)
     $stream.Write($body, 0, $body.Length)
     $stream.Flush()
@@ -909,7 +945,7 @@ $edgeLog = Join-Path $Out "top-edge.log"
 $env:ARDIA_DATA_DIR = New-DataDirectory "top-edge-data"
 $env:ARDIA_CONFIG_DIR = $env:ARDIA_DATA_DIR
 Set-Content -Path (Join-Path $env:ARDIA_DATA_DIR "onboarding.json") -Value '{"completedAt":1700000000000,"version":1}' -Encoding utf8NoBOM
-Set-Content -Path (Join-Path $env:ARDIA_DATA_DIR "config.json") -Value '{"settings":{"minimalismMode":true,"sidebarSide":"right","openLinksInLittleArdia":false}}' -Encoding utf8NoBOM
+Set-Content -Path (Join-Path $env:ARDIA_DATA_DIR "config.json") -Value '{"settings":{"minimalismMode":true,"sidebarSide":"right","openLinksInLittleArdia":false,"developerModeSites":{"127.0.0.1":false}}}' -Encoding utf8NoBOM
 if ($withEngineForEdge -and -not $NoInput -and $httpPagesUp) {
   $edge = Start-Process -FilePath $App -ArgumentList "--log-file=`"$edgeLog`"", "http://127.0.0.1:$httpPagesPort/hover" -PassThru
   $env:ARDIA_CONFIG_DIR = ""
@@ -930,7 +966,7 @@ if ($withEngineForEdge -and -not $NoInput -and $httpPagesUp) {
 $env:ARDIA_CONFIG_DIR = ""
 
 if ($Part -ne "gate" -and $withEngineForEdge -and -not $NoInput -and $httpPagesUp) {
-  foreach ($layout in @(@{ Name = "sidebar-left"; Settings = '{"settings":{"openLinksInLittleArdia":false}}' }, @{ Name = "minimal-right"; Settings = '{"settings":{"minimalismMode":true,"sidebarSide":"right","openLinksInLittleArdia":false}}' })) {
+  foreach ($layout in @(@{ Name = "sidebar-left"; Settings = '{"settings":{"openLinksInLittleArdia":false}}' }, @{ Name = "minimal-right"; Settings = '{"settings":{"minimalismMode":true,"sidebarSide":"right","openLinksInLittleArdia":false,"developerModeSites":{"127.0.0.1":false}}}' })) {
     $dragLog = Join-Path $Out "page-drag-$($layout.Name).log"
     $env:ARDIA_DATA_DIR = New-DataDirectory "page-drag-$($layout.Name)-data"
     $env:ARDIA_CONFIG_DIR = $env:ARDIA_DATA_DIR
@@ -1282,6 +1318,46 @@ public static class ArdiaSnapKeys {
     }
   }
   $env:ARDIA_CONFIG_DIR = ""
+}
+
+if ($Part -ne "gate" -and $withEngineForEdge -and -not $NoInput -and $httpPagesUp) {
+  $peekLog = Join-Path $Out "self-check-linkPeeks.log"
+  $env:ARDIA_DATA_DIR = New-DataDirectory "link-peeks-data"
+  $env:ARDIA_TEST = "selfCheckStage=linkPeeks,httpPages=$httpPagesPort"
+  $peekRun = Start-Process -FilePath $App -ArgumentList "--self-check", "--log-file=`"$peekLog`"" -PassThru
+  $env:ARDIA_TEST = ""
+  $clicked = @{}
+  $peekBy = (Get-Date).AddSeconds(240)
+  try {
+    while (-not $peekRun.HasExited -and (Get-Date) -lt $peekBy) {
+      if (Test-Path $peekLog) {
+        foreach ($ready in @(Select-String -Path $peekLog -Pattern "peek stage ready (\w+) try (\d+) at (-?\d+),(-?\d+) page window (-?\d+),(-?\d+),(\d+),(\d+)")) {
+          $groups = $ready.Matches[0].Groups
+          $try = "$($groups[1].Value) try $($groups[2].Value)"
+          if ($clicked.ContainsKey($try)) { continue }
+          $clicked[$try] = $true
+          $miss = Send-PeekClick $peekRun ([int]$groups[3].Value) ([int]$groups[4].Value) @([int]$groups[5].Value, [int]$groups[6].Value, [int]$groups[7].Value, [int]$groups[8].Value)
+          if ($miss) { Write-Host "Link peeks: $($try): not clicked, $miss." }
+          else { Write-Host "Link peeks: $($try): a real Shift+click on the page window." }
+        }
+      }
+      Start-Sleep -Milliseconds 200
+    }
+    if (-not $peekRun.HasExited) { $failures += "link peeks (real input): the stage did not finish within 240 s" }
+    elseif (-not (Test-Path $peekLog)) { $failures += "link peeks (real input): the stage wrote no log" }
+    else {
+      Select-String -Path $peekLog -Pattern "self-check" | ForEach-Object { Write-Host $_.Line }
+      $peekDone = Select-String -Path $peekLog -Pattern "self-check done: (\d+) passed, (\d+) failed" | Select-Object -First 1
+      if (-not $peekDone) { $failures += "link peeks (real input): the stage never reported its result" }
+      elseif ([int]$peekDone.Matches[0].Groups[2].Value -gt 0 -or [int]$peekDone.Matches[0].Groups[1].Value -ne 3) { $failures += "link peeks (real input): $($peekDone.Line)" }
+    }
+  } finally {
+    [ArdiaInput]::keybd_event(0x10, 0, 2, [UIntPtr]::Zero)
+    if (-not $peekRun.HasExited) {
+      Stop-Process -Id $peekRun.Id -Force
+      $peekRun.WaitForExit(10000) | Out-Null
+    }
+  }
 }
 
 $env:ARDIA_DATA_DIR = New-DataDirectory "self-check-data"

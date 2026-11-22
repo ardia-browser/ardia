@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { PAGE_OPTION_CALLS, resolveHostModule } from "./hostModules.ts";
-import { CLI_CONTROL_METHODS, CLI_INSTALL_METHODS, DICTATION_METHOD, LINKS_FROM_OTHER_APPS, USER_SCRIPTS_METHODS, linuxCapabilities, unavailableSettingIds } from "./hostCapabilities.ts";
+import { CLI_CONTROL_METHODS, CLI_INSTALL_METHODS, DICTATION_METHOD, LINKS_FROM_OTHER_APPS, SELF_UPDATE_METHODS, USER_SCRIPTS_METHODS, linuxCapabilities, unavailableSettingIds } from "./hostCapabilities.ts";
 import { CAST_UNAVAILABLE_TITLE, linuxMediaCall } from "./hostCast.ts";
 import { USER_SCRIPTS_LOCK, leadUserScripts } from "./hostUserScripts.ts";
 import { useBrowser } from "../../browser/src/state/browser/store.ts";
@@ -43,13 +43,15 @@ test("Linux capabilities come from the host contract, and WebKit is never offere
   assert.deepEqual(linuxCapabilities(fakeHost().host), {
     defaultBrowser: false, launchAtLogin: false, thinScrollBars: false, webkit: false, cliControl: false, cliInstall: false, userScripts: false, externalLinks: false, performanceRecording: false, taskManager: false, videoUpscaling: false,
     commandScrollZoom: false, littleArdiaNewTabLinks: false, peekOtherSites: false, popupsOpenAsTabs: false, haptics: false, linksFromOtherApps: false, dictation: false, fullScreen: false, pageEdits: false,
-    unloadIdleProfiles: false, hiddenElements: false, blockAutoplayEverywhere: false,
+    unloadIdleProfiles: false, hiddenElements: false, blockAutoplayEverywhere: false, selfUpdate: false,
   });
   const full = linuxCapabilities(fakeHost(["ArdiaSystem.isDefaultBrowser", "ArdiaSystem.setAsDefaultBrowser", "ArdiaSystem.launchAtLoginStatus", "ArdiaSystem.setLaunchAtLogin", "ArdiaSystem.setThinScrollBars", "engine.beginTracing", "engine.endTracing", "engine.isTracing", "engine.openTaskManager", "ArdiaApp.openExternalURL"]).host);
-  assert.deepEqual(full, { defaultBrowser: true, launchAtLogin: true, thinScrollBars: true, webkit: false, cliControl: false, cliInstall: false, userScripts: false, externalLinks: true, performanceRecording: true, taskManager: true, videoUpscaling: false, commandScrollZoom: false, littleArdiaNewTabLinks: false, peekOtherSites: false, popupsOpenAsTabs: false, haptics: false, linksFromOtherApps: false, dictation: false, fullScreen: false, pageEdits: false, unloadIdleProfiles: false, hiddenElements: false, blockAutoplayEverywhere: false });
+  assert.deepEqual(full, { defaultBrowser: true, launchAtLogin: true, thinScrollBars: true, webkit: false, cliControl: false, cliInstall: false, userScripts: false, externalLinks: true, performanceRecording: true, taskManager: true, videoUpscaling: false, commandScrollZoom: false, littleArdiaNewTabLinks: false, peekOtherSites: false, popupsOpenAsTabs: false, haptics: false, linksFromOtherApps: false, dictation: false, fullScreen: false, pageEdits: false, unloadIdleProfiles: false, hiddenElements: false, blockAutoplayEverywhere: false, selfUpdate: false });
   const routed = linuxCapabilities(fakeHost(["webView.setCommandScrollZoom", "webView.setLittleArdiaOpensNewTabLinks", "webView.setPeekOtherSiteTabs", "ArdiaSystem.hapticTick", LINKS_FROM_OTHER_APPS, DICTATION_METHOD]).host);
   assert.deepEqual([routed.commandScrollZoom, routed.littleArdiaNewTabLinks, routed.peekOtherSites, routed.haptics, routed.linksFromOtherApps, routed.dictation], [true, true, true, true, true, true]);
   assert.equal(linuxCapabilities(undefined).taskManager, false);
+  assert.equal(linuxCapabilities(fakeHost([...SELF_UPDATE_METHODS]).host).selfUpdate, true);
+  assert.equal(linuxCapabilities(fakeHost(SELF_UPDATE_METHODS.slice(1)).host).selfUpdate, false);
 });
 
 test("the command bar's Dictate button follows the dictation capability: off while the host has no dictation, without reaching the host", () => {
@@ -61,19 +63,20 @@ test("the command bar's Dictate button follows the dictation capability: off whi
 });
 
 test("unavailable choices map to exact settings ids and the Web engine rows", () => {
-  const ids = ["general.defaultBrowser", "general.openAtLogin", "general.askBefore", "advanced.pageEngine", "advanced.fairPlayInChromium", "advanced.websiteEngines", "profiles.otherEngines", "advanced.ardiaCommand", "advanced.compactCliPill", "advanced.showFullUrl", "tabs.videoUpscaling", "tabs.autoPictureInPicture"];
-  const unrouted = ["tabs.openLinksInLittleArdia", "tabs.appLinksFirst", "tabs.peekLinksToOtherSites", "tabs.popupsOpenAsTabs"];
-  const routedRows = { peekOtherSites: true, popupsOpenAsTabs: true, linksFromOtherApps: true };
-  const webEngine = ["advanced.fairPlayInChromium", "advanced.pageEngine", "advanced.websiteEngines"];
+  const ids = ["general.defaultBrowser", "general.openAtLogin", "general.askBefore", "advanced.pageEngine", "advanced.websiteEngines", "profiles.otherEngines", "advanced.ardiaCommand", "advanced.compactCliPill", "advanced.showFullUrl", "tabs.videoUpscaling", "tabs.autoPictureInPicture"];
+  const unrouted = ["tabs.openLinksInLittleArdia", "tabs.appLinksFirst", "tabs.littleArdiaOpensNewTabLinks", "tabs.peekLinksToOtherSites", "tabs.popupsOpenAsTabs"];
+  const routedRows = { littleArdiaNewTabLinks: true, peekOtherSites: true, popupsOpenAsTabs: true, linksFromOtherApps: true };
+  const webEngine = ["advanced.pageEngine", "advanced.websiteEngines"];
   const none = linuxCapabilities(fakeHost().host);
   assert.deepEqual([...unavailableSettingIds(none, ids)].sort(), [...unrouted, ...webEngine, "advanced.ardiaCommand", "advanced.compactCliPill", "general.autoUpdate", "general.defaultBrowser", "general.openAtLogin", "tabs.videoUpscaling"].sort());
-  for (const [capability, rows] of Object.entries({ peekOtherSites: ["tabs.peekLinksToOtherSites"], popupsOpenAsTabs: ["tabs.popupsOpenAsTabs"], linksFromOtherApps: ["tabs.openLinksInLittleArdia", "tabs.appLinksFirst"] })) {
+  for (const [capability, rows] of Object.entries({ littleArdiaNewTabLinks: ["tabs.littleArdiaOpensNewTabLinks"], peekOtherSites: ["tabs.peekLinksToOtherSites"], popupsOpenAsTabs: ["tabs.popupsOpenAsTabs"], linksFromOtherApps: ["tabs.openLinksInLittleArdia", "tabs.appLinksFirst"] })) {
     const shown = unavailableSettingIds({ ...none, [capability]: true }, ids);
     assert.deepEqual(unrouted.filter((id) => !shown.has(id)), rows, capability);
   }
   assert.deepEqual([...unavailableSettingIds({ ...none, webkit: true }, ids)].filter((id) => webEngine.includes(id)), []);
   assert.deepEqual([...unavailableSettingIds(none, ["general.defaultBrowser"])].filter((id) => webEngine.includes(id)), []);
   assert.deepEqual([...unavailableSettingIds({ ...none, defaultBrowser: true, launchAtLogin: true, cliControl: true, cliInstall: true, videoUpscaling: true, ...routedRows }, ids)].sort(), [...webEngine, "general.autoUpdate"]);
+  assert.equal(unavailableSettingIds({ ...none, selfUpdate: true }, ids).has("general.autoUpdate"), false, "an engine that installs updates lets Settings decide from the install kind");
   const cliRows = (capabilities) => [...unavailableSettingIds(capabilities, ids)].filter((id) => id === "advanced.ardiaCommand" || id === "advanced.compactCliPill").sort();
   assert.deepEqual(cliRows({ ...none, cliControl: true }), []);
   assert.deepEqual(cliRows({ ...none, cliInstall: true }), ["advanced.ardiaCommand", "advanced.compactCliPill"]);
@@ -278,7 +281,7 @@ test("the native bootstrap advertises every route list, and every shared perform
   const used = uses.map((use) => use.name);
   for (const call of ["engine.memorySaver", "engine.validateKeepActiveSite", "engine.tasks"]) assert.ok(used.includes(call), call);
   const gated = { "engine.beginTracing": "performanceRecording", "engine.endTracing": "performanceRecording", "engine.isTracing": "performanceRecording" };
-  const macOnlyEvents = new Set(["engine.hoverLost", "engine.cursorRestored", "engine.popupProtectedMedia"]);
+  const macOnlyEvents = new Set(["engine.hoverLost", "engine.cursorRestored", "engine.pressLoopLong", "engine.windowUnpainted", "engine.popupProtectedMedia", "engine.devToolsKeyKept"]);
   for (const name of macOnlyEvents) assert.deepEqual(uses.filter((use) => use.name === name).map((use) => use.kind), ["on"], `${name} is only listened to`);
   const none = linuxCapabilities(fakeHost().host);
   for (const call of used) {

@@ -10,7 +10,9 @@ export type ImportKind =
   | "autofill"
   | "spaces"
   | "pinnedTabs"
-  | "favorites";
+  | "favorites"
+  | "linkRules"
+  | "archive";
 
 export type BrowserFamily = "chromium" | "firefox" | "safari" | "arc";
 
@@ -38,6 +40,7 @@ export type BrowserProfile = {
   available: ImportKind[];
   spaces?: SpaceSummary[];
   tabsNeedKey?: boolean;
+  diaSidebar?: boolean;
 };
 
 export type BrowserSource = {
@@ -55,7 +58,7 @@ export type BrowserSource = {
   asksAppForTabs?: boolean;
 };
 
-export type BookmarkRole = "toolbar" | "other" | "mobile" | "menu" | "readingList" | "liveGitHubPullRequests" | "liveBitbucketPullRequests" | "split";
+export type BookmarkRole = "toolbar" | "other" | "mobile" | "menu" | "readingList" | "liveGitHubPullRequests" | "liveBitbucketPullRequests" | "split" | "list";
 
 export type BookmarkNode = {
   type: "folder" | "url";
@@ -65,6 +68,8 @@ export type BookmarkNode = {
   children?: BookmarkNode[];
   role?: BookmarkRole;
   pageTitle?: string;
+  icon?: string;
+  color?: TabGroupColor | (string & {});
 };
 
 export type ImportedHistoryEntry = { url: string; title: string; visits: number; lastVisit: number; typedCount?: number };
@@ -109,6 +114,8 @@ export type SpaceSuggestion = {
   tabs: ImportedTab[];
   theme?: string;
   container?: number;
+  openGroups?: BookmarkNode[];
+  favorites?: ImportedTab[];
 };
 
 export type ProfileSuggestion = { name: string; color?: string; avatarPath?: string };
@@ -118,6 +125,13 @@ export type ImportWarning =
   | { kind?: undefined; code: "unreadableBookmarks" | "unreadableHistory" | "unreadableTabs" | "unreadableCookies" | "unreadableFile"; message: string };
 
 export type ImportedFavicon = { page: string; icon: string; png: string };
+
+export type ArcLinkDestination = { kind: "space" | "littleArc" | "mostRecent"; spaceId?: string; spaceName?: string };
+export type ArcLinkRule = { id: string; match: "contains" | "equals"; text: string; to: ArcLinkDestination };
+export type ArcRouting = { rules: ArcLinkRule[]; skipped: number; fallback?: ArcLinkDestination };
+export type ArcArchivedTab = { url: string; title: string; customTitle?: string; archivedAt: number; spaceId?: string; spaceName?: string; auto: boolean };
+export type ArcArchive = { tabs: ArcArchivedTab[]; dropped?: number; cleanUpAfterMinutes?: number };
+export type ImportedSearchEngine = { name: string; keyword: string; url: string; prepopulateId?: number };
 
 export type ImportResult = {
   browserId: string;
@@ -136,7 +150,12 @@ export type ImportResult = {
   spaces: SpaceSuggestion[];
   favorites: ImportedTab[];
   favicons: ImportedFavicon[];
+  searchEngine?: ImportedSearchEngine;
   separateEssentials?: boolean;
+  diaSidebar?: { primarySpaceId?: string };
+  arcRouting?: ArcRouting;
+  arcArchive?: ArcArchive;
+  arcCachedIcons?: number;
   failed: ImportKind[];
   warnings: ImportWarning[];
 };
@@ -163,7 +182,17 @@ export type WrittenCounts = {
   error?: string;
 };
 
-export type ImportedExtension = { id: string; name: string; webStoreUrl: string };
+export type ImportedExtensionSkip = "manifestV2" | "unpacked" | "policy" | "external" | "notWebStore";
+
+export type ImportedExtension = {
+  id: string;
+  name: string;
+  webStoreUrl: string;
+  version?: string;
+  enabled?: boolean;
+  pinnedIndex?: number;
+  skip?: ImportedExtensionSkip;
+};
 
 export type ImportProgress = {
   kind: ImportKind;

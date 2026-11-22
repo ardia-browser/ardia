@@ -22,7 +22,7 @@ function PickerFor({ picker }: { picker: Picker }) {
       symbols={PROFILE_SYMBOLS}
       actions={[
         {
-          title: picker.place === "sidebar" ? "No Icon" : "Initial",
+          title: "No Icon",
           icon: picker.place === "sidebar" ? "circle.fill" : "textformat",
           primary: !current,
           onPress: () => chooseProfileIcon(picker, null),

@@ -30,6 +30,10 @@ import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
 import { goToSettingsPane, SETTINGS_DETAIL } from "../../../state/settings/settingsWindows";
 import { ProfileSubPage } from "./ProfileSubPage";
+import { useGrowingRows } from "../../../state/settings/growingRows";
+import { notePasswordListShown } from "../../../state/telemetry/exportCounts";
+import { useManagerPlugins, useProfilePasswordManager } from "../../../state/site/passwordManager";
+import { offerToSaveHandedOver, PasswordManagerRow } from "./PasswordManagerRow";
 
 function passwordManagerAppsNote() {
   const apps = `1Password, Bitwarden, KeePassXC and Proton Pass extensions connect to their ${PLATFORM_TERMS.computer} apps.`;
@@ -46,13 +50,15 @@ export function PasswordsSection({ profileId }: { profileId: string }) {
   const [addressesAsked] = useResource(autofillToggleAsked, profile, "addresses");
   const [cardsAsked] = useResource(autofillToggleAsked, profile, "cards");
   const open = (detail: string) => goToSettingsPane("profiles", profileId, detail);
+  const handedOver = offerToSaveHandedOver(useProfilePasswordManager(profileId), useManagerPlugins());
 
   return (
     <>
       <SectionHeader title="Passwords and autofill" />
       <Group>
-        <Row anchor="profiles.offerToSavePasswords" description={keptByExtensionNote(autofill, passwordsAsked)}>
-          <Toggle value={autofill} onChange={(v) => setPasswordAutofillFor(profile, v)} />
+        <PasswordManagerRow profileId={profileId} />
+        <Row anchor="profiles.offerToSavePasswords" description={handedOver ?? keptByExtensionNote(autofill, passwordsAsked)}>
+          <Toggle value={!handedOver && autofill} disabled={!!handedOver} onChange={(v) => setPasswordAutofillFor(profile, v)} />
         </Row>
         <Row anchor="profiles.passwords" onPress={() => open(SETTINGS_DETAIL.passwords)} />
         <Row anchor="profiles.addresses" description={keptByExtensionNote(enabled?.addresses, addressesAsked)}>
@@ -77,14 +83,25 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
   const [exportStatus, setExportStatus] = useState("");
   const profile = currentEngineProfile(profileId);
   const unlocked = usePasswordsUnlocked(profile);
+  const arrived = useRef(0);
 
   const load = () => {
-    void listPasswords(profile).catch(orWarn<SavedPassword[]>([])).then(setList);
+    void listPasswords(profile)
+      .catch(orWarn<SavedPassword[]>([]))
+      .then((passwords) => {
+        arrived.current = performance.now();
+        setList(passwords);
+      });
     void getNeverSavePasswordOrigins(profile).catch(orWarn<string[]>([])).then(setNever);
   };
   useEffect(() => {
     if (unlocked) load();
   }, [unlocked, profileId]);
+  useEffect(() => {
+    if (!list || !arrived.current) return;
+    notePasswordListShown(list.length, performance.now() - arrived.current);
+    arrived.current = 0;
+  }, [list]);
 
   const importCsv = async () => {
     try {
@@ -108,6 +125,7 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
   };
 
   const shown = (list ?? []).filter((p) => matchesQuery(query, p.origin, p.username));
+  const rows = useGrowingRows(shown.length, `${profile}|${query}`);
 
   return (
     <ProfileSubPage>
@@ -152,7 +170,7 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
             {list && shown.length === 0 ? (
               <Row title={query ? "No passwords match" : "No saved passwords"} />
             ) : (
-              shown.map((p) => (
+              shown.slice(0, rows).map((p) => (
                 <Row
                   key={`${p.origin}|${p.username}`}
                   icon={<Favicon url={p.origin} />}

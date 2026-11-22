@@ -3,7 +3,7 @@ import os
 import sqlite3
 import unittest
 
-from support import ImportFixture, basic_key, bookmark, encrypt_v10, folder, links, make_history, make_logins, tree_digests, webkit
+from support import ImportFixture, basic_key, bookmark, encrypt_v10, folder, links, make_firefox_key4, make_firefox_logins_db, make_history, make_logins, tree_digests, webkit
 
 
 class FormatTests(ImportFixture):
@@ -280,6 +280,88 @@ class ReaderTests(ImportFixture):
         self.assertEqual(result['failed'], [])
         self.assertEqual([(w['kind'], w['code']) for w in result['warnings']], [('passwords', 'empty')])
         self.assertNotIn('profile', result)
+
+    def test_an_empty_logins_db_means_no_saved_passwords_not_a_failure(self):
+        profile = self.build_firefox()
+        make_firefox_key4(profile / 'key4.db')
+        make_firefox_logins_db(profile / 'logins.db')
+        result = self.read('firefox', 'abcd.default-release', ['passwords'])['result']
+        self.assertEqual(result['failed'], [])
+        self.assertEqual([(w['kind'], w['code']) for w in result['warnings']], [('passwords', 'empty')])
+
+        (profile / 'logins.json').write_text('{"logins": []}')
+        result = self.read('firefox', 'abcd.default-release', ['passwords'])['result']
+        self.assertEqual((result['failed'], result['warnings']), ([], []))
+
+    def test_logins_db_with_logins_reads_every_row_and_still_needs_its_key(self):
+        profile = self.build_firefox()
+        key = bytes(range(32))
+        sealed = lambda user, password: self.run_binary('jwe', key.hex(), json.dumps({'u': user, 'p': password})).strip()
+        make_firefox_logins_db(profile / 'logins.db', [
+            ('g1', 'https://first.example', 'https://first.example', sealed('alice', 'first-pass-1'), 1700000000000, 1700000000000, 2),
+            ('g0', 'chrome://FirefoxAccounts', None, sealed('sync', 'sync-secret-0'), 1, 1, 1),
+            ('g2', 'https://second.example', None, sealed('bob', 'second-pass-2'), 1600000000000, 1600000000000, 1),
+        ])
+        make_firefox_key4(profile / 'key4.db')
+        result = self.read('firefox', 'abcd.default-release', ['passwords'])['result']
+        self.assertEqual(result['failed'], ['passwords'])
+        self.assertEqual([(w['kind'], w['code']) for w in result['warnings']], [('passwords', 'unreadable')])
+
+        (profile / 'key4.db').unlink()
+        make_firefox_key4(profile / 'key4.db', logins_key=key)
+        out = self.read('firefox', 'abcd.default-release', ['passwords'])
+        self.assertEqual((out['result']['failed'], out['result']['warnings']), ([], []))
+        self.assertEqual(sorted((c['username'], c['password']) for c in out['credentials']),
+                         [('alice', 'first-pass-1'), ('bob', 'second-pass-2')])
+
+    def zen_root(self, root, name):
+        profile = root / f'zz{name}.Default (release)'
+        profile.mkdir(parents=True)
+        (profile / 'places.sqlite').write_bytes(b'')
+        (root / 'profiles.ini').write_text(f'[Profile0]\nName={name}\nIsRelative=1\nPath={profile.name}\n')
+        return profile
+
+    def zen_sources(self):
+        return {s['id']: [(p['id'], p['name']) for p in s['profiles']] for s in self.json('discover', *self.env_args())}
+
+    def test_zen_is_found_where_current_zen_keeps_it(self):
+        firefox = self.build_firefox()
+        xdg = self.config / 'zen'
+        xdg.mkdir()
+        firefox.rename(xdg / 'abcd.default-release')
+        (firefox.parent / 'profiles.ini').rename(xdg / 'profiles.ini')
+        self.assertEqual(self.zen_sources()['zen'], [('abcd.default-release', 'default-release')])
+        out = self.read('zen', 'abcd.default-release', ['bookmarks'])
+        self.assertEqual(out['result']['failed'], [])
+        self.assertEqual(out['result']['bookmarks']['children'][0]['children'][0]['url'], 'https://ff-a.example/')
+
+        (self.home / '.zen').mkdir()
+        self.assertEqual(self.zen_sources()['zen'], [('abcd.default-release', 'default-release')])
+        self.zen_root(self.home / '.zen', 'Legacy')
+        self.assertEqual(self.zen_sources()['zen'], [('zzLegacy.Default (release)', 'Legacy')])
+
+    def test_firefox_is_found_where_current_firefox_keeps_it(self):
+        firefox = self.build_firefox()
+        xdg = self.config / 'mozilla' / 'firefox'
+        xdg.parent.mkdir()
+        firefox.parent.rename(xdg)
+        self.assertEqual(self.zen_sources()['firefox'], [('abcd.default-release', 'default-release')])
+        out = self.read('firefox', 'abcd.default-release', ['bookmarks'])
+        self.assertEqual(out['result']['bookmarks']['children'][0]['children'][0]['url'], 'https://ff-a.example/')
+        flatpak = self.home / '.var' / 'app' / 'org.mozilla.firefox'
+        (flatpak / '.mozilla' / 'firefox').mkdir(parents=True)
+        self.zen_root(flatpak / 'config' / 'mozilla' / 'firefox', 'Flat')
+        self.assertEqual(self.zen_sources()['firefoxFlatpak'], [('zzFlat.Default (release)', 'Flat')])
+
+    def test_flatpak_zen_is_found_in_both_of_its_folders(self):
+        app = self.home / '.var' / 'app' / 'app.zen_browser.zen'
+        (app / '.zen').mkdir(parents=True)
+        self.zen_root(app / 'config' / 'zen', 'Flat')
+        self.assertEqual(self.zen_sources()['zenFlatpak'], [('zzFlat.Default (release)', 'Flat')])
+        self.zen_root(app / '.zen', 'Persisted')
+        sources = self.zen_sources()
+        self.assertEqual(sources['zenFlatpak'], [('zzPersisted.Default (release)', 'Persisted')])
+        self.assertNotIn('zen', sources)
 
 class ScratchSweepTests(ImportFixture):
     def test_stale_import_copies_left_by_a_crash_are_removed(self):

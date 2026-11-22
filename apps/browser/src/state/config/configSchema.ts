@@ -1,13 +1,17 @@
 import { BUILT_IN_ENGINES } from "@ardia/core";
 import { JSON_SCHEMA_DIALECT, schemaJson, type JsonSchema } from "../../lib/jsonSchema";
-import { THEME_NAME, themeSchema, type RolePalettes } from "../../lib/themeFile";
+import { themeSchema, type RolePalettes } from "../../lib/themeFile";
 import { CONFIG_SETTING_KEYS } from "../settings/configAllowlist";
 import { SETTING_SPECS } from "../settings/settings";
 import { SHORTCUT_FORMAT, shortcutCatalog, shortcutDescription } from "./configShortcuts";
 import { launchActionIds, MAX_LAUNCH_ACTIONS } from "../automation/launchActions";
+import { PLUGIN_EVENTS } from "../automation/eventNames";
+import { PLUGIN_SCHEMA_FILE, pluginSchemaJson } from "../../lib/pluginSchema";
+import { PLUGIN_RULES } from "../plugins/appChecks";
 
 export const CONFIG_SCHEMA_FILE = "config.schema.json";
 export const THEME_SCHEMA_FILE = "theme.schema.json";
+const CONFIG_THEME_PATTERN = "^(?:[a-z0-9][a-z0-9_-]*|plugin:[a-z0-9][a-z0-9-]{0,39}/[A-Za-z0-9_-]{1,40})$";
 
 function shortcutsSchema(): JsonSchema {
   const properties: Record<string, JsonSchema> = {};
@@ -39,7 +43,7 @@ export function configSchema(): object {
     type: "object",
     properties: {
       $schema: { type: "string" },
-      theme: { type: ["string", "null"], pattern: THEME_NAME.source, description: "A theme in themes/<name>.json, or null for Ardia's own", default: null },
+      theme: { type: ["string", "null"], pattern: CONFIG_THEME_PATTERN, description: "A theme in themes/<name>.json, a plugin's theme as plugin:<plugin>/<theme>, or null for Ardia's own", default: null },
       settings: {
         type: "object",
         properties: Object.fromEntries(CONFIG_SETTING_KEYS.map((key) => [key, settingSchema(key)])),
@@ -52,4 +56,5 @@ export function configSchema(): object {
 export const schemaFiles = (roles: RolePalettes): Record<string, string> => ({
   [CONFIG_SCHEMA_FILE]: schemaJson(configSchema()),
   [THEME_SCHEMA_FILE]: schemaJson(themeSchema(roles)),
+  [PLUGIN_SCHEMA_FILE]: pluginSchemaJson(PLUGIN_EVENTS, PLUGIN_RULES),
 });

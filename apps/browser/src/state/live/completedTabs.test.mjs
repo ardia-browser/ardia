@@ -181,7 +181,7 @@ test("a merged pull request's tab you moved into a pinned group stays there, on 
 
 test("a merged pull request's tab that's playing sound stays until it stops", async () => {
   const { id, tab, merging } = await mergeWithTabOpen(false);
-  const playing = (on) => useBrowser.setState((s) => ({ live: { ...s.live, [tab]: { ...s.live[tab], playingAudio: on } } }));
+  const playing = (on) => S().updateLive(tab, { playingAudio: on });
   playing(true);
   finishCompleting(id, [merging.id]);
   assert.ok(S().tabs[tab], "closing it would stop the sound");
@@ -192,10 +192,10 @@ test("a merged pull request's tab that's playing sound stays until it stops", as
 test("a merged pull request's tab whose video plays through a silent passage stays until it's paused", async () => {
   const { id, tab, merging } = await mergeWithTabOpen(false);
   const session = (playbackState) => ({ title: "", artist: "", album: "", artwork: null, playbackState, position: 0, duration: 60, playbackRate: 1, timestamp: 0, hasVideo: true, actions: [], controllable: true });
-  useBrowser.setState((s) => ({ live: { ...s.live, [tab]: { ...s.live[tab], playingAudio: true } } }));
+  S().updateLive(tab, { playingAudio: true });
   setNowPlaying(tab, session("playing"));
   finishCompleting(id, [merging.id]);
-  useBrowser.setState((s) => ({ live: { ...s.live, [tab]: { ...s.live[tab], playingAudio: false } } }));
+  S().updateLive(tab, { playingAudio: false });
   assert.ok(S().tabs[tab], "silence isn't the end of playback");
   setNowPlaying(tab, session("paused"));
   assert.equal(S().tabs[tab], undefined);

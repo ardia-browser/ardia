@@ -11,8 +11,9 @@ import { useIsActiveIn, useLiveItemTab, useLiveTabOpen, useTabAwayFromPin } from
 import type { CloseControl } from "../../state/sidebar/closeControl";
 import { noteLiveRowHide } from "../../state/telemetry/liveHides";
 import { HoverSlot } from "../ui/HoverSlot";
-import { Badge, Button, ContextMenuArea, Dot, hairline, ink, space, Symbol, Text, useHover, withAlpha } from "../ui";
-import { curve, springs } from "../ui/motion";
+import { Badge, Button, ContextMenuArea, Dot, hairline, HoverFill, ink, radius, space, Symbol, Text, useHover, withAlpha } from "../ui";
+import { curve, liftSpring } from "../ui/motion";
+import { Squish, useSquish } from "../ui/Squish";
 import { hex, layout, useTheme } from "../ui/theme";
 import { useLiveColors, type LiveColors } from "../live/tokens";
 import { modifiersOf } from "../../lib/keys";
@@ -53,13 +54,15 @@ export function LiveItemRow({ folderId, item, windowId, inStack = false }: { fol
       Animated.timing(fold, { toValue: 0, duration: SIDEBAR_MOTION.liveFold, easing: curve.enter, useNativeDriver: false }),
     ]).start();
   }, [completion]);
-  const fill = quiet ? (active ? tokens.quietWash : hovered ? tokens.quietHover : ink.clear) : active ? theme.tabSelected : hovered ? theme.tabHover : ink.clear;
+  const fill = active ? (quiet ? tokens.quietWash : theme.tabSelected) : ink.clear;
+  const hoverFill = quiet ? tokens.quietHover : theme.tabHover;
   const border = active && !quiet ? 0.5 : 0;
   const pressedFill = quiet ? tokens.quietPressed : theme.tabPressed;
   const titleColor = completion ? theme.textSecondary : quiet ? hex(withAlpha(theme.textTab, active ? tokens.quietActiveText : tokens.quietText)) : active ? theme.rowSelectedText : theme.textTab;
   const resettable = away && !completion;
   const resetting = resettable && backToPin.hovered;
   const control = liveRowControl(folderId, item, tabId, tabOpen, closeHint);
+  const squish = useSquish("row");
 
   return (
     <Animated.View style={completion ? { height: fold.interpolate({ inputRange: [0, 1], outputRange: [0, layout.rowHeight] }), opacity: fold, overflow: "hidden" } : null}>
@@ -71,14 +74,18 @@ export function LiveItemRow({ folderId, item, windowId, inStack = false }: { fol
           }}
         >
           <Pressable
+            onPressIn={squish.onPressIn}
+            onPressOut={squish.onPressOut}
             onPress={(e) => {
               dismissHover();
               openLiveItem(windowId, folderId, item, { background: modifiersOf(e).metaKey });
             }}
           >
             {({ pressed }) => (
-              <SidebarRowSurface fill={!active && pressed ? pressedFill : fill} selected={active && !quiet} border={border} padLeft={TAB_ROW.contentLeft + indent - border} padRight={TAB_ROW.trailing - border}>
-                {unread ? <Dot size={5} color={theme.accent} style={{ position: "absolute", left: UNREAD_DOT_LEFT + indent - border }} /> : null}
+              <Squish scale={squish.scale}>
+              <HoverFill shown={!active && (hovered || pressed)} instant={active} color={pressed ? pressedFill : hoverFill} radius={radius.chrome} />
+              <SidebarRowSurface fill={fill} selected={active && !quiet} border={border} padLeft={TAB_ROW.contentLeft + indent}>
+                {unread ? <Dot size={5} color={theme.accent} style={{ position: "absolute", left: UNREAD_DOT_LEFT + indent }} /> : null}
                 <View {...backToPin.hoverProps}>
                   {resettable ? (
                     <Pressable
@@ -111,6 +118,7 @@ export function LiveItemRow({ folderId, item, windowId, inStack = false }: { fol
                   <Trailing item={item} completion={completion} colors={colors} />
                 </HoverSlot>
               </SidebarRowSurface>
+              </Squish>
             )}
           </Pressable>
         </ContextMenuArea>
@@ -158,7 +166,7 @@ function ItemIcon({ item, completion, colors }: { item: LiveItem; completion: Co
   useEffect(() => {
     if (!completion) return;
     pop.setValue(0);
-    Animated.spring(pop, { toValue: 1, ...springs.bouncy, useNativeDriver: true }).start();
+    Animated.spring(pop, { toValue: 1, ...liftSpring(), useNativeDriver: true }).start();
   }, [completion]);
   if (completion) {
     const glyph = COMPLETION_GLYPH[completion];

@@ -26,6 +26,7 @@ import { historyHosts } from "../../state/omnibox/knownHosts";
 import { useProviderSections } from "./useProviderSections";
 import { barFieldMarks } from "../../state/omnibox/barMarks";
 import { browserSuggestFetch, remoteSuggestionsAllowed, suggestProfileKey } from "../../state/omnibox/suggestTransport";
+import { during } from "../../state/app/jobActivity";
 
 const NO_REMOTE: string[] = [];
 const NO_SITES: RemoteSite[] = [];
@@ -141,7 +142,7 @@ export function useSuggestions({
   const result = useMemo(() => {
     if (!active || (!query && scope?.kind !== "provider")) return EMPTY;
     const started = performance.now();
-    const built = buildSuggestions(text, source, {
+    const built = during("omniboxSuggest", () => buildSuggestions(text, source, {
       engine,
       preference: "website",
       remote: remoteList,
@@ -154,7 +155,7 @@ export function useSuggestions({
       preventInline,
       bangs,
       providers,
-    });
+    }));
     barFieldMarks.suggestions(performance.now() - started, text.length);
     return built;
   }, [active, text, query, source, engine, remoteList, remoteSites, windowId, extensions, shortcuts, menuBar, currentTabId, currentUrl, scope, preventInline, bangs, providers]);

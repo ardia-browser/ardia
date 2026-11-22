@@ -9,7 +9,7 @@ import { mediaMotion, useMediaTokens } from "./tokens";
 import { hostOrOrigin } from "../../lib/url";
 import { curve } from "../ui/motion";
 
-const SHARE_BAR_HEIGHT = 38;
+export const SHARE_BAR_HEIGHT = 38;
 const FLEX = { flex: 1 } as const;
 
 export function ShareBar({ tabId }: { tabId: string }) {

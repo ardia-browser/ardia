@@ -8,14 +8,19 @@ public class MenusModule: Module {
 
   public func definition() -> ModuleDefinition {
     Name("ArdiaMenus")
-    Events(ShellEvents.Channel.command.rawValue)
+    Events(ShellEvents.Channel.command.rawValue, "onSurface")
 
     OnCreate {
       self.lifetime.begin(self) {
         ShortcutRecorder.shared.abandon(by: self)
         ShellEvents.retire(self)
+        DispatchQueue.main.async { OpenSurfaces.shared.capturesPageMenus = false }
       }
       ShellEvents.attach(.command, to: self, while: self.lifetime)
+      self.lifetime.onMain {
+        OpenSurfaces.shared.send = { [weak self] type, body in self?.sendEvent("onSurface", body.merging(["type": type]) { first, _ in first }) }
+        OpenSurfaces.shared.start()
+      }
       self.lifetime.onMain { NSApp.mainMenu = MainMenu.build() }
     }
 
@@ -25,8 +30,11 @@ public class MenusModule: Module {
     }
 
     AsyncFunction("setMenuState") { (state: MenuStateUpdate) in
+      let shortcutWasGlobal = MenuState.current.littleArdiaShortcutFromAnyApp
       MenuState.current = MenuState(state)
       MainMenu.refresh()
+      MouseShortcuts.shared.update(MenuState.current.mouseShortcuts)
+      if MenuState.current.littleArdiaShortcutFromAnyApp != shortcutWasGlobal { LittleArdiaHotKey.shared.shortcutsChanged() }
     }.runOnQueue(.main)
     AsyncFunction("setMenuBookmarks") { (bookmarks: MenuBookmarks) in
       MenuState.setBookmarks(bookmarks)
@@ -54,6 +62,19 @@ public class MenusModule: Module {
       MenusModule.update(menu, with: MenusModule.itemsById(items))
     }.runOnQueue(.main)
 
+    AsyncFunction("openSurfaces") { () -> [[String: Any]] in OpenSurfaces.shared.list() }.runOnQueue(.main)
+    AsyncFunction("capturePageMenus") { (captures: Bool) in OpenSurfaces.shared.capturesPageMenus = captures }.runOnQueue(.main)
+    AsyncFunction("dismissSurface") { (id: String) throws in try MenusModule.surfaceCall { try OpenSurfaces.shared.dismiss(id) } }.runOnQueue(.main)
+    AsyncFunction("menuBar") { () throws -> [[String: Any]] in
+      guard !WindowManager.shared.anyIncognitoWindow else {
+        throw Exception(name: "refused", description: OpenSurfaces.privateWindowOpen, code: "refused")
+      }
+      return MenuCatalog.rows
+    }.runOnQueue(.main)
+    AsyncFunction("performMenuBarItem") { (ref: String, windowId: String) throws -> String in
+      try MenusModule.surfaceCall { try MenuBarAction.perform(ref: ref, windowId: windowId) }
+    }.runOnQueue(.main)
+
     AsyncFunction("menuShortcuts") { () -> [[String: Any]] in MainMenu.shortcutList() }.runOnQueue(.main)
 
     AsyncFunction("recordShortcut") { [weak self] (promise: Promise) in
@@ -61,6 +82,17 @@ public class MenusModule: Module {
       self.lifetime.run { ShortcutRecorder.shared.record(promise, for: self) }
     }.runOnQueue(.main)
     AsyncFunction("cancelRecording") { ShortcutRecorder.shared.finish(nil) }.runOnQueue(.main)
+    AsyncFunction("mouseShortcutMonitor") { () -> [String: Any] in
+      ["installed": MouseShortcuts.shared.isInstalled, "installs": MouseShortcuts.shared.installs]
+    }.runOnQueue(.main)
+  }
+
+  private static func surfaceCall<T>(_ body: () throws -> T) throws -> T {
+    do { return try body() } catch OpenSurfaces.Problem.missing(let message) {
+      throw Exception(name: "no_window", description: message, code: "no_window")
+    } catch OpenSurfaces.Problem.refused(let message) {
+      throw Exception(name: "refused", description: message, code: "refused")
+    }
   }
 
   private static func itemsById(_ items: [MenuItem]) -> [String: MenuItem] {

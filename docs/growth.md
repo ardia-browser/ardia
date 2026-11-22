@@ -209,11 +209,22 @@ owner's Mac ──▶ ardia.dev/_ch/ (read-only ClickHouse user)   ardia.dev/_re
     the log, now with the action in front (`browser import`, `csv import`, `settings edit`, `settings delete`,
     `sync delete`). Added to tell which of the two engine refusals the daily password-save warnings are, and from
     which import.
+  - `search_engine_import` (once per import from a Chrome-family browser or Arc, issue #1760): `source` (the browser's
+    import id, such as `arc`, `chrome` or `braveBeta`), `outcome` (`built_in`: the source's engine is one Ardia has
+    built in; `custom`: it came over as a custom engine; `source_default`: the source was on its own default, so
+    Ardia's engine stayed; `unusable`: its address couldn't be used), `changed` (Ardia's engine changed) and `offered`
+    (you had chosen an engine yourself, so Ardia kept it and the done screen offered the source's instead). Never
+    which engine, its name or its address. `usage_counts.import_search_engine_offers_taken` counts presses of that
+    offer's Use … for Search button. `usage_counts.onboarding_preset_kept_imports` counts onboarding's Continue
+    on the browser step leaving out the preset's search engine because an import had already brought one.
   - `tab_presses` (hourly and at quit, when there were any): `presses` on sidebar rows, pinned tiles and top-strip
     chips, `down_switches` (the press switched to the tab on mouse down), `clicks` (the press opened the tab),
     `drag_clicks` (it became a drag and was rescued as a click), `drags`, `drags_without_drop` (sidebar drags let go
     inside the window with no place to drop and no split: on Linux every drag in a space other than the one the window
-    opened in, until #2341), `unanswered` (a press that got neither before
+    opened in, until #2341), `drag_profile_switches` (profile switches during a sidebar tab drag, by any means) and `drag_profile_holds`
+    (those made by holding the tab over a profile's icon), `drag_profile_edge_holds` (those made by holding it at the
+    sidebar's left or right edge), `drops_other_profile` (tabs dropped at a slot in another profile's
+    sidebar) and `drops_profile_icon` (tabs let go on another profile's icon), `unanswered` (a press that got neither before
     the next one), `lost_releases` (presses anywhere in the app's own UI whose mouse up a menu or drag session took, ended when
     the menu began tracking or at that button's next mouse down instead of swallowing that click), `repeat_presses` (a tab or New Tab row press within 3 s and 12 pt
     of a mouse down that reached no row: the click-twice report), `repeat_on_new_tab` (those with an empty New Tab showing),
@@ -222,7 +233,25 @@ owner's Mac ──▶ ardia.dev/_ch/ (read-only ClickHouse user)   ardia.dev/_re
     to the first press in its page, within 60 s), `range_selects` (⇧-clicks that selected a range of tabs) and
     `range_from_shown` (those whose last clicked tab was no longer the shown one, so the range started at the shown tab:
     #1074, where it started at a Top Apps tile and took every pinned tab), `page_refused` (presses on the sidebar or anything else drawn over a
-    WebKit page that the page turned away, `WebKitPagePresses.swift`).
+    WebKit page that the page turned away, `WebKitPagePresses.swift`). Issue #1386 (a sidebar tab sometimes needs a second click) adds
+    counts of where a press is lost: `drop_no_release`/`drop_not_dragged`/`drop_no_start`/`drop_start_mismatch` (the
+    condition that stopped a drag from being rescued as a click; they add up to `drags`), `press_out_no_press` (presses
+    Pressable ended without `onPress`), `unfocused_presses` and `unfocused_no_press` (presses that began while the
+    window was not the key window of an active app, in all and among those without `onPress`), and the pointer's
+    drift from where the press began when Pressable ended it, in buckets of under 5 pt, 5-9 pt, 10 pt or more and
+    unknown, for every press (`drift_lt5`/`drift_5_9`/`drift_10_plus`/`drift_unknown`) and for those without `onPress`
+    (`no_press_drift_*`). Counts only: no tab id, URL, title or position.
+  - `usage_counts` adds `web_notifications_from_shim` (website notifications that reached the page script this
+    period; a notification that never reaches the page script doesn't count, so a gap shows up as missing counts),
+    `web_notification_clicks` (clicks on Ardia's website notifications) and `worker_notification_responses` (clicks or
+    dismissals of a service worker's notifications that the app handed to Chrome). These three count only while
+    sharing is on, and a pending count is dropped whenever sharing is turned on or off.
+  - `web_notification_failed` (a website notification macOS refused or the app couldn't post): `title_length`,
+    `body_length` (never the text), `icon_requested`, `icon_sent`, `icon_status` (`none`, `attached`, `invalid_url`,
+    `download_failed`, `empty`, `write_failed`, `attachment_rejected`, or `unknown` when the call threw; `none` also
+    covers an icon the page script failed to fetch, which reads as `icon_requested` true with `icon_sent` false),
+    `icon_error_code`, `error_domain`, `error_code` (macOS's own), `threw`, `error_type` (when it threw), and
+    `via_shim` (always true: only notifications that came through the page script are posted by the app).
   - `settings_snapshot` adds `setting_app_icon` / `default_app_icon`.
   - The context is saved in `telemetry.json` (`context`) every 10 minutes and 3 s after launch while sharing is on
     (the last 12 samples also stay in memory), and cleared when sharing is turned off or a profile is deleted. It's

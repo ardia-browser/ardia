@@ -60,7 +60,39 @@
   let displaySeq = 0;
   let displayMediaShim = null;
   let nativeGetDisplayMedia = null;
+  const controllerTracks = new WeakMap();
+  const usedControllers = new WeakSet();
+  let zoomLevelsShim = null;
+  let nativeZoomLevels = null;
+  const controllerProto = () => {
+    const Controller = window.CaptureController;
+    return typeof Controller === "function" ? Controller.prototype : null;
+  };
+  const installZoomLevels = () => {
+    const proto = controllerProto();
+    if (!proto || typeof proto.getSupportedZoomLevels !== "function" || zoomLevelsShim) return;
+    const trackProto = window.MediaStreamTrack && window.MediaStreamTrack.prototype;
+    const readyState = trackProto && Object.getOwnPropertyDescriptor(trackProto, "readyState");
+    const readyStateOf = readyState && readyState.get;
+    const settingsOf = trackProto && trackProto.getSettings;
+    if (!readyStateOf || !settingsOf) return;
+    if (!nativeZoomLevels) nativeZoomLevels = proto.getSupportedZoomLevels;
+    zoomLevelsShim = asNative(nativeZoomLevels, (target, self, args) => {
+      const track = controllerTracks.get(self);
+      if (!track || apply(readyStateOf, track, []) !== "live") return apply(target, self, args);
+      if (apply(settingsOf, track, []).displaySurface !== "browser") throw new DOMException("Not a supported surface type.", "NotSupportedError");
+      return [];
+    });
+    proto.getSupportedZoomLevels = zoomLevelsShim;
+  };
+  const restoreZoomLevels = () => {
+    const proto = controllerProto();
+    if (!proto || !zoomLevelsShim || proto.getSupportedZoomLevels !== zoomLevelsShim) return;
+    proto.getSupportedZoomLevels = nativeZoomLevels;
+    zoomLevelsShim = null;
+  };
   const restoreDisplayMedia = () => {
+    restoreZoomLevels();
     const devices = navigator.mediaDevices;
     const proto = devices && Object.getPrototypeOf(devices);
     if (!proto || !displayMediaShim || proto.getDisplayMedia !== displayMediaShim) return;
@@ -70,15 +102,39 @@
   const installDisplayMedia = () => {
     const devices = navigator.mediaDevices;
     const proto = devices && Object.getPrototypeOf(devices);
-    if (!proto || !proto.getDisplayMedia || displayMediaShim) return;
+    if (!proto || !proto.getDisplayMedia) return;
+    if (displayMediaShim) {
+      installZoomLevels();
+      return;
+    }
     nativeGetDisplayMedia = proto.getDisplayMedia;
     const getUserMedia = proto.getUserMedia;
+    const streamProto = window.MediaStream && window.MediaStream.prototype;
+    const videoTracksOf = streamProto && streamProto.getVideoTracks;
     const activation = navigator.userActivation;
     const activationProto = activation && Object.getPrototypeOf(activation);
     const activationState = activationProto && Object.getOwnPropertyDescriptor(activationProto, "isActive");
     const isActive = activationState && activationState.get;
     const policy = document.featurePolicy;
     const allowsFeature = policy && policy.allowsFeature;
+    installZoomLevels();
+    const isPrototypeOf = Object.prototype.isPrototypeOf;
+    const NativeTypeError = TypeError;
+    const isController = (value) => {
+      if ((typeof value !== "object" && typeof value !== "function") || value === null) return false;
+      if (!nativeZoomLevels) {
+        const controllerPrototype = controllerProto();
+        return !!controllerPrototype && apply(isPrototypeOf, controllerPrototype, [value]);
+      }
+      try {
+        apply(nativeZoomLevels, value, []);
+        return true;
+      } catch (error) {
+        return !(error instanceof NativeTypeError);
+      }
+    };
+    const badController = () =>
+      Promise.reject(new NativeTypeError("Failed to execute 'getDisplayMedia' on 'MediaDevices': Failed to read the 'controller' property from 'DisplayMediaStreamOptions': Failed to convert value to 'CaptureController'."));
     const nativeRejects = (self, options) =>
       self !== devices ||
       (options !== undefined && options !== null && typeof options !== "object" && typeof options !== "function") ||
@@ -86,17 +142,34 @@
     displayMediaShim = asNative(nativeGetDisplayMedia, (target, self, args) => {
       const constraints = args[0];
       if (nativeRejects(self, constraints)) return apply(target, self, args);
+      let controller;
+      try {
+        controller = constraints !== undefined && constraints !== null ? constraints.controller : undefined;
+      } catch (error) {
+        return Promise.reject(error);
+      }
+      if (controller !== undefined) installZoomLevels();
+      if (controller !== undefined && !isController(controller)) return badController();
       if (activation && isActive && !apply(isActive, activation, []))
         return Promise.reject(new DOMException("getDisplayMedia() requires transient activation (user gesture).", "InvalidStateError"));
+      if (controller !== undefined && usedControllers.has(controller))
+        return Promise.reject(new DOMException("A CaptureController object may only be used with a single getDisplayMedia() invocation.", "InvalidStateError"));
+      if (controller !== undefined) usedControllers.add(controller);
       return new Promise((resolve, reject) => {
         const id = ++displaySeq;
         const options = constraints || {};
-        displayRequests.set(id, { self, resolve, reject, constraints: options });
+        displayRequests.set(id, { self, resolve, reject, constraints: options, controller });
         const windowAudio = options.windowAudio === "exclude" || options.windowAudio === "window" ? options.windowAudio : "system";
-        send("displayMedia", { id, audio: !!options.audio, systemAudio: options.systemAudio !== "exclude", windowAudio });
+        send("displayMedia", { id, audio: !!options.audio, systemAudio: options.systemAudio !== "exclude", windowAudio, controller: controller !== undefined });
       });
     });
     proto.getDisplayMedia = displayMediaShim;
+    const bindController = (controller, stream) => {
+      if (controller === undefined || !videoTracksOf) return stream;
+      const track = apply(videoTracksOf, stream, [])[0];
+      if (track) controllerTracks.set(controller, track);
+      return stream;
+    };
     handlers.displayMedia = ({ id, sourceId, audio }) => {
       const request = displayRequests.get(id);
       if (!request) return;
@@ -112,7 +185,7 @@
           audio: audio === true ? { mandatory: { chromeMediaSource: "desktop" } } : false,
           video: { mandatory: { chromeMediaSource: "desktop", chromeMediaSourceId: sourceId, maxWidth: 3840, maxHeight: 2160, maxFrameRate: +frameRate || 30 } },
         },
-      ]).then(request.resolve, request.reject);
+      ]).then((stream) => request.resolve(bindController(request.controller, stream)), request.reject);
     };
   };
   installDisplayMedia();
@@ -162,10 +235,6 @@
     listenFor(m, 0);
   };
   const isPlaying = (m) => !m.paused && !m.ended;
-  const askSiteToMatch = guard((paused) => {
-    const action = paused ? "pause" : "play";
-    actions.get(action)?.({ action });
-  });
   const pickMedia = () => {
     const all = [...document.querySelectorAll("video,audio")];
     for (const m of [active, lastHeard]) if (m && !all.includes(m) && tracked.has(m)) all.push(m);
@@ -274,7 +343,7 @@
   const play = HTMLMediaElement.prototype.play;
   const pausedState = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "paused").get;
   const connectedState = Object.getOwnPropertyDescriptor(Node.prototype, "isConnected").get;
-  const trackDetachedMedia = (self) => {
+  HTMLMediaElement.prototype.play = asNative(play, (target, self, args) => {
     let media = false;
     try {
       apply(pausedState, self, []);
@@ -285,11 +354,8 @@
       for (const e of mediaEvents) self.addEventListener(e, onMediaEvent);
       for (const watch of detachedMediaWatchers) guard(watch)(self);
     }
-    return media;
-  };
-  const autoplayRefusal = () => new DOMException("play() failed because the user didn't interact with the document first.", "NotAllowedError");
-  HTMLMediaElement.prototype.play = asNative(play, (target, self, args) => {
-    if (trackDetachedMedia(self) && blockAutoplay && !askedToPlay()) return Promise.reject(autoplayRefusal());
+    if (media && blockAutoplay && !askedToPlay())
+      return Promise.reject(new DOMException("play() failed because the user didn't interact with the document first.", "NotAllowedError"));
     return apply(target, self, args);
   });
 
@@ -441,6 +507,530 @@
     reportNowPlaying();
   };
 
+  const fieldProviderKit = (env) => {
+    const { document, send, guard, later, onReady, revealed, addListener, apply, FrameMutationObserver, setTimeout, addEventListener, requestAnimationFrame, isTop } = env;
+    const { charCodeAt, promiseThen, imul, Detector, detect, toRGBA } = env.intrinsics;
+    const USERNAME_TOKEN = /(^|\s)(username|email|webauthn)(\s|$)/i;
+    const ONE_TIME_CODE = /(^|\s)one-time-code(\s|$)/i;
+    const USERNAME_HINT = /user|e-?mail|login|account/i;
+    const OTPAUTH_PREFIXES = ["otpauth://", "otpauth-migration://"];
+    const hasOwnToggle = (el) => {
+      for (let n = el.parentElement, depth = 0; n && depth < 3 && n.querySelectorAll("input").length === 1; n = n.parentElement, depth++)
+        for (const c of n.querySelectorAll('button, [role="button"], [aria-label], [title], [class*="eye" i], [class*="toggle" i]'))
+          if (c !== el && /show|hide|reveal|toggle|visib|eye|peek|afficher|mostrar|anzeigen/i.test((c.getAttribute("aria-label") || "") + " " + (c.getAttribute("title") || "") + " " + (c.getAttribute("class") || "")))
+            return true;
+      return false;
+    };
+    const nearPassword = (el, shown) => {
+      let scope = el.form;
+      for (let n = el.parentElement, depth = 0; !scope && n && depth < 6; n = n.parentElement, depth++)
+        if (n.querySelectorAll("input").length > 1) scope = n;
+      return !!scope && (!!scope.querySelector('input[type="password"]') || (!!shown && scope.contains(shown)));
+    };
+    const loginFieldKind = (el, shown) => {
+      if (!el || el.localName !== "input" || el.disabled || el.readOnly || el.hidden || el.type === "hidden") return null;
+      if (el.getBoundingClientRect().width < 80) return null;
+      const auto = el.getAttribute("autocomplete") || "";
+      if (el.type === "password" || el === shown) return "password";
+      if (ONE_TIME_CODE.test(auto)) return "code";
+      if (el.type === "email" || USERNAME_TOKEN.test(auto)) return "username";
+      if (el.type !== "text" && el.type !== "tel") return null;
+      const hints = [el.name, el.id, auto, el.getAttribute("placeholder") || ""].join(" ");
+      return USERNAME_HINT.test(hints) && nearPassword(el, shown) ? "username" : null;
+    };
+    const startsWithFolded = (text, prefix) => {
+      if (text.length < prefix.length) return false;
+      for (let i = 0; i < prefix.length; i++) {
+        const code = apply(charCodeAt, text, [i]);
+        const folded = code >= 65 && code <= 90 ? code + 32 : code;
+        if (folded !== apply(charCodeAt, prefix, [i])) return false;
+      }
+      return true;
+    };
+    const verificationSetupURL = (raw) =>
+      typeof raw === "string" && raw.length <= 2048 && (startsWithFolded(raw, OTPAUTH_PREFIXES[0]) || startsWithFolded(raw, OTPAUTH_PREFIXES[1])) ? raw : null;
+
+    const SVG_NS = "http://www.w3.org/2000/svg";
+    const KEY = [
+      ["path", { d: "M5 4.4a3.6 3.6 0 1 0 0 7.2a3.6 3.6 0 1 0 0-7.2ZM4.2 6.9a1.1 1.1 0 1 1 0 2.2a1.1 1.1 0 1 1 0-2.2Z", fill: "currentColor", stroke: "none", "fill-rule": "evenodd" }],
+      ["path", { d: "M8 7.1h5.6v1.8H8ZM10.6 8.9h1.5v1.9h-1.5ZM12.4 8.9h1.2v1.4h-1.2Z", fill: "currentColor", stroke: "none" }],
+      ["path", { d: "M16.6 7.1l1.9 1.9 1.9-1.9", "stroke-width": "1.4" }],
+    ];
+    const KEY_BOX = { viewBox: "0 0 22 16", width: "26", height: "19", fill: "none", stroke: "currentColor", "stroke-width": "1.35", "stroke-linecap": "round", "stroke-linejoin": "round" };
+    const KEY_CSS =
+      "button{all:initial;box-sizing:border-box;display:flex;align-items:center;justify-content:center;border-radius:6px;cursor:default;opacity:1;transition:background-color .12s;background:color-mix(in srgb,currentColor 14%,transparent)}" +
+      "button:hover{background:color-mix(in srgb,currentColor 22%,transparent)}button:active{background:color-mix(in srgb,currentColor 30%,transparent)}";
+    const ON_DARK = "#ffffff";
+    const ON_LIGHT = "#1d1d1f";
+    const DARK_LUMINANCE = 0.179;
+    const parseColor = (text) => {
+      const m = typeof text === "string" ? /^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,/]\s*([\d.]+%?))?\s*\)$/.exec(text) : null;
+      if (!m) return null;
+      const alpha = m[4] === undefined ? 1 : m[4].endsWith("%") ? parseFloat(m[4]) / 100 : parseFloat(m[4]);
+      return { r: +m[1], g: +m[2], b: +m[3], a: alpha };
+    };
+    const luminance = ({ r, g, b }) => {
+      const linear = (c) => ((c /= 255) <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+      return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+    };
+    const readColor = (css) => parseColor(css) || (toRGBA ? toRGBA(css) : null);
+    const badgeInk = (backgrounds, text, pageIsDark) => {
+      for (const background of backgrounds) {
+        const c = readColor(background);
+        if (c && c.a >= 0.5) return luminance(c) < DARK_LUMINANCE ? ON_DARK : ON_LIGHT;
+      }
+      const ink = readColor(text);
+      if (ink && ink.a >= 0.5) return luminance(ink) > 0.5 ? ON_DARK : ON_LIGHT;
+      return (typeof pageIsDark === "function" ? pageIsDark() : pageIsDark) ? ON_DARK : ON_LIGHT;
+    };
+    const pageIsDark = () => {
+      try {
+        const scheme = getComputedStyle(document.documentElement).colorScheme || "";
+        const dark = /\bdark\b/.test(scheme), light = /\blight\b/.test(scheme);
+        if (dark !== light) return dark;
+        const body = document.body ? readColor(getComputedStyle(document.body).color) : null;
+        if (body && body.a >= 0.5) return luminance(body) > 0.5;
+        return !!(typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches);
+      } catch {
+        return false;
+      }
+    };
+    const fieldInk = (field, cs) => {
+      const backgrounds = [cs.backgroundColor];
+      for (let n = field.parentElement, depth = 0; n && depth < 12; n = n.parentElement, depth++) backgrounds.push(getComputedStyle(n).backgroundColor);
+      return badgeInk(backgrounds, cs.color, pageIsDark);
+    };
+    const KEY_ASPECT = 1.4;
+    const HINT_GAP = 8;
+    const HINT_HEIGHT = 28;
+    const HINT_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+    const HINT_CSS =
+      ".chip{all:initial;box-sizing:border-box;display:flex;align-items:center;gap:6px;padding:5px 5px 5px 10px;border-radius:8px;background:#1f2328;color:#f0f6fc;border:1px solid rgba(255,255,255,.14);font:500 12.5px/18px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;white-space:nowrap;box-shadow:0 6px 18px rgba(0,0,0,.35);pointer-events:none}" +
+      "b{font-weight:650;background:rgba(255,255,255,.14);padding:0 6px;border-radius:5px}" +
+      "button{all:initial;pointer-events:auto;cursor:default;width:18px;height:18px;border-radius:5px;display:flex;align-items:center;justify-content:center;color:#9198a1;font:15px/1 -apple-system,system-ui,sans-serif}button:hover{background:rgba(255,255,255,.12);color:#f0f6fc}";
+    const KEY_REPEAT_MS = 600;
+    const QR_MIN = 64;
+    const QR_MAX = 640;
+    const QR_DETECTIONS = 12;
+    const QR_CANVAS_SCANS = 3;
+    const QR_CANVAS_RETRY_MS = 1500;
+    const LINKS_PER_SCAN = 8;
+    const FRAME_DEPTH = 4;
+
+    let config = null;
+    let listening = false;
+    let keyField = null;
+    let keyKind = null;
+    let keyHost = null;
+    let hintHost = null;
+    let hintText = null;
+    let hintClose = null;
+    let hintField = null;
+    let hintSide = "below";
+    let hintLabel = "";
+    let keyButton = null;
+    let keyClickedAt = -Infinity;
+    let reportedFocus;
+    let focusSeq = 0;
+    let observer = null;
+    let qrDetector = null;
+    let qrDetections = 0;
+    let qrChecked = new WeakMap();
+    let qrCanvasScans = new WeakMap();
+    let found = new Set();
+    const typed = new WeakSet();
+    const watchedDocuments = new WeakSet();
+
+    const findsCodes = () => !!config && config.codeSetup && isTop;
+    const wants = (kind) => !!config && (kind === "code" ? config.oneTimeCode : kind ? config.login : false);
+    const svgElement = (tag, attributes) => {
+      const el = document.createElementNS(SVG_NS, tag);
+      for (const name of Object.keys(attributes)) el.setAttribute(name, attributes[name]);
+      return el;
+    };
+    const trailingRect = (field) => {
+      const r = field.getBoundingClientRect();
+      const cs = getComputedStyle(field);
+      const size = Math.min(24, Math.max(18, r.height - 8));
+      const width = Math.round(size * KEY_ASPECT);
+      const rtl = cs.direction === "rtl";
+      const inset = Math.max(4, Math.min(10, parseFloat(rtl ? cs.paddingLeft : cs.paddingRight) || 4));
+      const border = parseFloat(rtl ? cs.borderLeftWidth : cs.borderRightWidth) || 0;
+      return { left: rtl ? r.left + border + inset : r.right - border - inset - width, top: r.top + (r.height - size) / 2, size, width, color: fieldInk(field, cs) };
+    };
+    const hideHint = () => {
+      if (hintHost) hintHost.style.display = "none";
+      hintField = null;
+    };
+    const hideKey = () => {
+      if (keyHost) keyHost.style.display = "none";
+      keyField = keyKind = null;
+      hideHint();
+    };
+    const placeHint = () => {
+      if (!hintHost || !hintField || hintField !== keyField) return;
+      const { left, top, size, width } = (env.keyRect || trailingRect)(keyField);
+      const height = (hintHost.getBoundingClientRect && hintHost.getBoundingClientRect().height) || HINT_HEIGHT;
+      const hintWidth = (hintHost.getBoundingClientRect && hintHost.getBoundingClientRect().width) || 0;
+      hintHost.style.left = Math.max(4, left + width - hintWidth) + "px";
+      hintHost.style.top = (hintSide === "above" ? Math.max(4, top - HINT_GAP - height) : top + size + HINT_GAP) + "px";
+    };
+    const makeHint = () => {
+      if (env.makeHint) return env.makeHint();
+      const host = document.createElement("ardia-field-provider-hint");
+      host.style.cssText = "all:initial;position:fixed;z-index:2147483647;display:none;";
+      const root = host.attachShadow({ mode: "closed" });
+      const style = document.createElement("style");
+      style.textContent = HINT_CSS;
+      root.appendChild(style);
+      const chip = document.createElement("div");
+      chip.className = "chip";
+      const text = document.createElement("span");
+      const close = document.createElement("button");
+      close.type = "button";
+      close.tabIndex = -1;
+      close.textContent = "\u00d7";
+      chip.appendChild(text);
+      chip.appendChild(close);
+      root.appendChild(chip);
+      return { host, text, close };
+    };
+    const showHint = (state) => {
+      const label = state && typeof state.label === "string" ? state.label : "";
+      if (!config || !keyField || !keyHost || keyHost.style.display !== "block" || !HINT_LABEL.test(label)) return hideHint();
+      if (!hintHost || !hintHost.isConnected) {
+        ({ host: hintHost, text: hintText, close: hintClose } = makeHint());
+        hintClose.setAttribute("aria-label", "Close");
+        apply(addListener, hintClose, ["mousedown", (e) => e.preventDefault()]);
+        apply(addListener, hintClose, [
+          "click",
+          guard((e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!e.isTrusted || !hintField) return;
+            hideHint();
+            send("fieldProviderHint", { state: "dismissed" });
+          }),
+        ]);
+        document.documentElement.appendChild(hintHost);
+      }
+      const side = state.side === "above" ? "above" : "below";
+      if (hintField === keyField && hintHost.style.display === "block" && hintLabel === label && hintSide === side) return placeHint();
+      hintLabel = label;
+      const bold = document.createElement("b");
+      bold.textContent = label;
+      hintText.replaceChildren("Type ", bold, " in Passwords to find this site");
+      hintSide = side;
+      hintField = keyField;
+      hintHost.style.display = "block";
+      placeHint();
+      send("fieldProviderHint", { state: "shown" });
+    };
+    const placeKey = () => {
+      if (!keyHost || !keyField) return;
+      const { left, top, size, width, color } = (env.keyRect || trailingRect)(keyField);
+      keyHost.style.left = left + "px";
+      keyHost.style.top = top + "px";
+      keyButton.style.width = width + "px";
+      keyButton.style.height = size + "px";
+      keyButton.style.color = color;
+    };
+    const makeKey = () => {
+      if (env.makeKey) return env.makeKey();
+      const host = document.createElement("ardia-field-provider");
+      host.style.cssText = "all:initial;position:fixed;z-index:2147483647;display:none;";
+      const root = host.attachShadow({ mode: "closed" });
+      const style = document.createElement("style");
+      style.textContent = KEY_CSS;
+      root.appendChild(style);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.tabIndex = -1;
+      const svg = svgElement("svg", KEY_BOX);
+      for (const [tag, attributes] of KEY) svg.appendChild(svgElement(tag, attributes));
+      button.appendChild(svg);
+      root.appendChild(button);
+      return { host, button };
+    };
+    const ensureKey = () => {
+      if (keyHost && keyHost.isConnected) return;
+      ({ host: keyHost, button: keyButton } = makeKey());
+      keyButton.title = "Passwords";
+      keyButton.setAttribute("aria-label", "Fill from Passwords");
+      apply(addListener, keyButton, ["mousedown", (e) => e.preventDefault()]);
+      apply(addListener, keyButton, [
+        "click",
+        guard((e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!e.isTrusted || !config || !keyKind || !keyField || !wants(keyKind)) return;
+          const box = (env.keyRect || trailingRect)(keyField);
+          if (!(e.clientX >= box.left - 2 && e.clientX <= box.left + box.width + 2 && e.clientY >= box.top - 2 && e.clientY <= box.top + box.size + 2)) return;
+          if (e.timeStamp - keyClickedAt < KEY_REPEAT_MS) return;
+          keyClickedAt = e.timeStamp;
+          send("fieldProvider", { field: keyKind, generation: config.generation });
+        }),
+      ]);
+      document.documentElement.appendChild(keyHost);
+    };
+    const updateKey = guard(() => {
+      if (!config) return hideKey();
+      const el = document.activeElement;
+      const kind = loginFieldKind(el, revealed());
+      if (!kind || !wants(kind)) return hideKey();
+      if (el.value && typed.has(el)) return hideKey();
+      if (kind === "password" && keyField !== el && hasOwnToggle(el)) return hideKey();
+      ensureKey();
+      keyField = el;
+      keyKind = kind;
+      keyHost.style.display = "block";
+      if (hintField && hintField !== el) hideHint();
+      placeKey();
+      placeHint();
+    });
+
+    const watchDocument = (doc) => {
+      if (watchedDocuments.has(doc)) return;
+      watchedDocuments.add(doc);
+      apply(addListener, doc, ["focusin", focusGained, true]);
+      apply(addListener, doc, ["focusout", focusLost, true]);
+    };
+    const deepActive = (doc, depth) => {
+      const el = doc.activeElement;
+      if (!el || (el.localName !== "iframe" && el.localName !== "frame") || depth >= FRAME_DEPTH) return el;
+      let inner = null;
+      try {
+        inner = el.contentDocument;
+      } catch {}
+      if (!inner) return null;
+      watchDocument(inner);
+      return deepActive(inner, depth + 1);
+    };
+    const sendFocus = (field, query) => {
+      reportedFocus = field;
+      focusSeq++;
+      send("fieldFocus", query ? { field, seq: focusSeq, generation: config.generation, query } : { field, seq: focusSeq, generation: config.generation });
+    };
+    const reportFocus = guard(() => {
+      if (!isTop || !config) return;
+      const kind = loginFieldKind(deepActive(document, 0), revealed());
+      const field = wants(kind) ? kind : null;
+      if (field !== reportedFocus) sendFocus(field);
+    });
+    const reportFocusSoon = () => setTimeout(reportFocus, 0);
+    const focusQuery = guard((query) => {
+      if (!isTop || !config || typeof query !== "string" || !query || query.length > 64) return;
+      const kind = loginFieldKind(deepActive(document, 0), revealed());
+      sendFocus(wants(kind) ? kind : null, query);
+    });
+    const focusGained = () => {
+      reportFocus();
+      reportFocusSoon();
+    };
+    const focusLost = guard(() => {
+      if (isTop && config && reportedFocus !== null) sendFocus(null);
+      reportFocusSoon();
+    });
+    const codeKey = (url) => {
+      let hash = 0x811c9dc5;
+      for (let i = 0; i < url.length; i++) hash = imul(hash ^ apply(charCodeAt, url, [i]), 0x01000193);
+      return (hash >>> 0).toString(16) + ":" + url.length.toString(36);
+    };
+
+    const noteInput = guard((e) => {
+      const el = e.target;
+      if (!el || el.localName !== "input") return;
+      if (!el.value) typed.delete(el);
+      else if (e.isTrusted) typed.add(el);
+      if (config) updateKey();
+    });
+    const qrCandidate = (el) => {
+      if (el.localName === "img" && !el.complete) return "later";
+      if (el.localName === "img" ? el.naturalWidth < QR_MIN : el.localName !== "canvas") return "never";
+      const r = el.getBoundingClientRect();
+      if (r.width < QR_MIN || r.height < QR_MIN || r.width > QR_MAX || r.height > QR_MAX) return "later";
+      const ratio = r.width / r.height;
+      if (ratio < 0.8 || ratio > 1.25) return "later";
+      return !el.checkVisibility || el.checkVisibility({ opacityProperty: true, visibilityProperty: true }) ? "yes" : "later";
+    };
+    const forgetFound = () => {
+      found = new Set();
+      qrChecked = new WeakMap();
+      qrCanvasScans = new WeakMap();
+      qrDetections = 0;
+    };
+    const noteCode = (raw, generation) => {
+      const url = verificationSetupURL(raw);
+      if (!url || !findsCodes() || config.generation !== generation) return false;
+      const key = codeKey(url);
+      if (found.has(key)) return true;
+      found.add(key);
+      send("verificationCode", { url, generation });
+      return true;
+    };
+    const scanLinks = guard(() => {
+      if (!findsCodes()) return;
+      let seen = 0;
+      for (const link of document.querySelectorAll('a[href^="otpauth" i]')) {
+        if (++seen > LINKS_PER_SCAN) return;
+        noteCode(link.getAttribute("href"), config.generation);
+      }
+    });
+    const scanQR = guard(() => {
+      if (!findsCodes() || !Detector || document.visibilityState !== "visible" || !document.querySelector("input")) return;
+      const generation = config.generation;
+      for (const el of document.querySelectorAll("img, canvas")) {
+        if (qrDetections >= QR_DETECTIONS) return;
+        const canvas = el.localName === "canvas";
+        const src = el.currentSrc || el.src || "";
+        if (canvas ? (qrCanvasScans.get(el) ?? 0) >= QR_CANVAS_SCANS : qrChecked.get(el) === src) continue;
+        const candidate = qrCandidate(el);
+        if (!canvas && candidate !== "later") qrChecked.set(el, src);
+        if (candidate !== "yes") continue;
+        qrDetections++;
+        if (canvas) qrCanvasScans.set(el, (qrCanvasScans.get(el) ?? 0) + 1);
+        if (!qrDetector) qrDetector = new Detector({ formats: ["qr_code"] });
+        const scans = qrCanvasScans;
+        apply(promiseThen, apply(detect, qrDetector, [el]), [
+          guard((codes) => {
+            let accepted = false;
+            for (let i = 0; i < codes.length; i++) if (noteCode(codes[i] && codes[i].rawValue, generation)) accepted = true;
+            if (canvas && accepted) scans.set(el, QR_CANVAS_SCANS);
+            else if (canvas && scans.get(el) < QR_CANVAS_SCANS) setTimeout(scanSoon, QR_CANVAS_RETRY_MS);
+          }),
+          () => {},
+        ]);
+      }
+    });
+    const scan = () => {
+      scanLinks();
+      scanQR();
+    };
+    const scanSoon = later(scan, 400);
+    const listen = () => {
+      if (listening) return;
+      listening = true;
+      watchDocument(document);
+      document.addEventListener("focusin", updateKey, true);
+      document.addEventListener("focusin", () => findsCodes() && scanSoon(), true);
+      document.addEventListener(
+        "focusout",
+        guard((e) => {
+          setTimeout(() => document.activeElement !== e.target && updateKey(), 0);
+        }),
+        true,
+      );
+      document.addEventListener("input", noteInput, true);
+      document.addEventListener("load", (e) => findsCodes() && e.target && e.target.localName === "img" && scanSoon(), true);
+      document.addEventListener("visibilitychange", () => findsCodes() && scanSoon());
+      addEventListener("pageshow", (e) => e.isTrusted && e.persisted && forgetFound());
+      addEventListener("focus", focusGained, true);
+      addEventListener("blur", focusLost, true);
+      addEventListener("scroll", () => keyField && requestAnimationFrame(() => (placeKey(), placeHint())), { passive: true, capture: true });
+      addEventListener("resize", () => keyField && requestAnimationFrame(() => (placeKey(), placeHint())));
+      addEventListener("pagehide", hideHint);
+    };
+    const stopScanning = () => {
+      if (observer) observer.disconnect();
+      observer = null;
+    };
+    const configure = (state) => {
+      const next =
+        state && typeof state === "object"
+          ? { login: state.login === true, oneTimeCode: state.oneTimeCode === true, codeSetup: state.codeSetup === true, generation: typeof state.generation === "number" ? state.generation : 0 }
+          : null;
+      const previous = config;
+      config = next && (next.login || next.oneTimeCode || next.codeSetup) ? next : null;
+      if (!config) {
+        hideKey();
+        stopScanning();
+        found = new Set();
+        reportedFocus = undefined;
+        return;
+      }
+      if (!previous || previous.generation !== config.generation) {
+        found = new Set();
+        qrChecked = new WeakMap();
+        qrCanvasScans = new WeakMap();
+        qrDetections = 0;
+        reportedFocus = undefined;
+      }
+      listen();
+      if (!findsCodes()) stopScanning();
+      else {
+        if (!observer && FrameMutationObserver) {
+          observer = new FrameMutationObserver(scanSoon);
+          observer.observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ["src", "href", "class", "style", "hidden"] });
+        }
+        onReady(scan);
+      }
+      updateKey();
+      reportedFocus = undefined;
+      reportFocus();
+    };
+    return { configure, focusQuery, hint: guard((state) => (state ? showHint(state) : hideHint())), badgeInk, hasOwnToggle, loginFieldKind, verificationSetupURL, codeKey, rememberedCodes: () => found.size };
+  };
+  const fieldProviderIntrinsics = (scope) => {
+    const call = Reflect.apply;
+    const describe = Object.getOwnPropertyDescriptor;
+    const accessor = (proto, name, kind) => (proto && describe(proto, name) ? describe(proto, name)[kind] : undefined);
+    const Offscreen = scope.OffscreenCanvas;
+    const pen = scope.OffscreenCanvasRenderingContext2D && scope.OffscreenCanvasRenderingContext2D.prototype;
+    const getContext = Offscreen && Offscreen.prototype.getContext;
+    const setFill = accessor(pen, "fillStyle", "set");
+    const clearRect = pen && pen.clearRect;
+    const fillRect = pen && pen.fillRect;
+    const getImageData = pen && pen.getImageData;
+    const pixelBytes = accessor(scope.ImageData && scope.ImageData.prototype, "data", "get");
+    const painted = !!(Offscreen && getContext && setFill && clearRect && fillRect && getImageData && pixelBytes);
+    let context = null;
+    const toRGBA = (css) => {
+      if (!painted || typeof css !== "string" || !css || css.length > 200) return null;
+      try {
+        if (!context) context = call(getContext, new Offscreen(1, 1), ["2d", { willReadFrequently: true }]);
+        call(clearRect, context, [0, 0, 1, 1]);
+        call(setFill, context, ["rgba(0, 0, 0, 0)"]);
+        call(setFill, context, [css]);
+        call(fillRect, context, [0, 0, 1, 1]);
+        const bytes = call(pixelBytes, call(getImageData, context, [0, 0, 1, 1]), []);
+        return { r: bytes[0], g: bytes[1], b: bytes[2], a: bytes[3] / 255 };
+      } catch {
+        return null;
+      }
+    };
+    const Detector = typeof scope.BarcodeDetector === "function" ? scope.BarcodeDetector : null;
+    const detect = Detector && Detector.prototype ? Detector.prototype.detect : null;
+    return {
+      charCodeAt: String.prototype.charCodeAt,
+      promiseThen: Promise.prototype.then,
+      imul: Math.imul,
+      Detector: typeof detect === "function" ? Detector : null,
+      detect,
+      toRGBA,
+    };
+  };
+  const nativeMutationObserver = window.MutationObserver;
+  const nativeAddListener = EventTarget.prototype.addEventListener;
+  const fieldIntrinsics = fieldProviderIntrinsics(window);
+  const fieldProviders = fieldProviderKit({
+    document,
+    send,
+    guard,
+    later,
+    onReady,
+    revealed: () => revealedField,
+    addListener: nativeAddListener,
+    apply,
+    FrameMutationObserver: nativeMutationObserver,
+    setTimeout,
+    addEventListener,
+    requestAnimationFrame,
+    isTop,
+    intrinsics: fieldIntrinsics,
+  });
+  handlers.fieldProvider = fieldProviders.configure;
+  handlers.fieldFocusQuery = (message) => fieldProviders.focusQuery(message && message.query);
+  handlers.fieldProviderHint = fieldProviders.hint;
   const typedByUser = new WeakSet();
   let revealedField = null;
   let eyeField = null;
@@ -451,13 +1041,7 @@
     '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8Z"/><circle cx="8" cy="8" r="2.1"/></svg>';
   const EYE_SLASH =
     '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><path d="M6.2 3.8A6.6 6.6 0 0 1 8 3.5c4.1 0 6.5 4.5 6.5 4.5a11 11 0 0 1-1.7 2.2M4.3 4.9C2.5 6.1 1.5 8 1.5 8s2.4 4.5 6.5 4.5c1.2 0 2.3-.4 3.2-.9"/><path d="M6.6 6.6a2.1 2.1 0 0 0 2.8 2.8"/><path d="M2 2l12 12"/></svg>';
-  const hasOwnToggle = (el) => {
-    for (let n = el.parentElement, depth = 0; n && depth < 3 && n.querySelectorAll("input").length === 1; n = n.parentElement, depth++)
-      for (const c of n.querySelectorAll('button, [role="button"], [aria-label], [title], [class*="eye" i], [class*="toggle" i]'))
-        if (c !== el && /show|hide|reveal|toggle|visib|eye|peek|afficher|mostrar|anzeigen/i.test((c.getAttribute("aria-label") || "") + " " + (c.getAttribute("title") || "") + " " + (c.getAttribute("class") || "")))
-          return true;
-    return false;
-  };
+  const { hasOwnToggle } = fieldProviders;
   const placeEye = () => {
     if (!eyeHost || !eyeField) return;
     const r = eyeField.getBoundingClientRect();
@@ -747,57 +1331,6 @@
   const disconnect = PO && PO.prototype.disconnect;
   const { addEventListener: listen, removeEventListener: unlisten } = EventTarget.prototype;
   const raf = window.requestAnimationFrame;
-  const holds = (outer, inner) => {
-    for (let n = inner; n; n = n.parentNode || n.host) if (n === outer) return true;
-    return false;
-  };
-  const pinnedOver = (el, x, y) => {
-    for (let e = document.elementFromPoint(x, y); e && e !== document.body && e !== document.documentElement; e = e.parentElement) {
-      if (holds(e, el)) return null;
-      const position = getComputedStyle(e).position;
-      if (position === "fixed" || position === "sticky") return e.getBoundingClientRect();
-    }
-    return null;
-  };
-  const opaqueBackground = (el) => {
-    for (let e = el; e; e = e.parentElement) {
-      const m = /^rgba?\(([^)]*)\)$/.exec(getComputedStyle(e).backgroundColor);
-      const parts = m ? m[1].split(/[\s,/]+/).filter(Boolean).map(Number) : [];
-      if (parts.length >= 3 && (parts.length < 4 || parts[3] >= 0.98)) return parts.slice(0, 3);
-    }
-    return null;
-  };
-  const cornerRadius = (el, r) => {
-    for (let e = el, depth = 0; e && e !== document.body && depth < 8; e = e.parentElement, depth++) {
-      const style = getComputedStyle(e);
-      const radius = parseFloat(style.borderTopLeftRadius) || 0;
-      if (radius <= 0 || (e !== el && style.overflow === "visible")) continue;
-      const box = e.getBoundingClientRect();
-      const near = (a, b) => Math.abs(a - b) < 2;
-      if (!(near(box.left, r.left) && near(box.right, r.right) && near(box.top, r.top) && near(box.bottom, r.bottom))) break;
-      return { radius, backdrop: opaqueBackground(e.parentElement) };
-    }
-    return { radius: 0, backdrop: null };
-  };
-  const pinnedCover = (el, r) => {
-    const left = Math.max(r.left, 0);
-    const right = Math.min(r.right, innerWidth);
-    const top = Math.max(r.top, 0);
-    const bottom = Math.min(r.bottom, innerHeight);
-    const cover = { top: 0, bottom: 0, radius: 0, backdrop: null };
-    if (right - left < 2 || bottom - top < 2) return cover;
-    const corner = cornerRadius(el, r);
-    cover.radius = corner.radius;
-    cover.backdrop = corner.backdrop;
-    for (let i = 1; i <= 3; i++) {
-      const x = left + ((right - left) * i) / 4;
-      const above = pinnedOver(el, x, top + 1);
-      if (above && above.top <= top + 1) cover.top = Math.max(cover.top, Math.min(above.bottom, bottom) - r.top);
-      const below = pinnedOver(el, x, bottom - 1);
-      if (below && below.bottom >= bottom - 1) cover.bottom = Math.max(cover.bottom, r.bottom - Math.max(below.top, top));
-    }
-    return cover;
-  };
   const dateNow = Date.now;
   const timeOrigin = performance.timeOrigin;
   let fieldTiming = null;
@@ -830,7 +1363,15 @@
   let firstPaintObserver = null;
   handlers.firstPaint = () => {
     if (!isTop || firstPaintObserver) return;
-    const painted = () => send("firstPaint", { url: location.href });
+    let sent = false;
+    const painted = (loaded) => {
+      if (sent) return;
+      sent = true;
+      send("firstPaint", { url: location.href, loaded: !!loaded });
+    };
+    const afterFrames = () => apply(raf, window, [() => apply(raf, window, [() => painted(true)])]);
+    if (document.readyState === "complete") afterFrames();
+    else apply(listen, window, ["load", afterFrames, { once: true }]);
     try {
       firstPaintObserver = new PO((list) => {
         for (const e of list.getEntries())
@@ -842,7 +1383,7 @@
       firstPaintObserver.observe({ type: "paint", buffered: true });
     } catch (e) {
       firstPaintObserver = true;
-      onReady(() => apply(raf, window, [painted]));
+      onReady(() => apply(raf, window, [() => painted(true)]));
     }
   };
   handlers.wakeFrames = () => apply(raf, window, [() => {}]);
@@ -1099,12 +1640,39 @@
     );
     const userActivationOf = window.Navigator && Object.getOwnPropertyDescriptor(Navigator.prototype, "userActivation");
     const activeOf = window.UserActivation && Object.getOwnPropertyDescriptor(UserActivation.prototype, "isActive");
+    const activated = () => {
+      const activation = apply(userActivationOf.get, navigator, []);
+      return !!activation && !!apply(activeOf.get, activation, []);
+    };
+    const tracksActivation = !!(userActivationOf && activeOf);
+    const clickDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "click");
+    if (tracksActivation && clickDescriptor && typeof clickDescriptor.value === "function") {
+      const watchScriptedLinkClick = guard((link) => {
+        if (linkUrl(link) === null || !activated()) return null;
+        let dispatched = null;
+        const seen = (e) => {
+          if (!dispatched) dispatched = e;
+        };
+        apply(listen, link, ["click", seen, true]);
+        return guard(() => {
+          apply(unlisten, link, ["click", seen, true]);
+          if (!dispatched || defaultPrevented(dispatched) || replacesPage(link)) return;
+          const url = linkUrl(link);
+          if (peekable({ link, url, path: [link] })) send("newTabLink", { url });
+        });
+      });
+      const click = asNative(clickDescriptor.value, (target, self, args) => {
+        const settle = watchScriptedLinkClick(self);
+        try {
+          return apply(target, self, args);
+        } finally {
+          if (settle) settle();
+        }
+      });
+      Object.defineProperty(HTMLElement.prototype, "click", { ...clickDescriptor, value: click });
+    }
     const openDescriptor = Object.getOwnPropertyDescriptor(window, "open");
-    if (userActivationOf && activeOf && openDescriptor && typeof openDescriptor.value === "function") {
-      const activated = () => {
-        const activation = apply(userActivationOf.get, navigator, []);
-        return !!activation && !!apply(activeOf.get, activation, []);
-      };
+    if (tracksActivation && openDescriptor && typeof openDescriptor.value === "function") {
       const openedByUser = (args) => {
         if (!args.length || args[0] === undefined || args[0] === null || !activated()) return;
         const raw = `${args[0]}`;
@@ -1122,3130 +1690,6 @@
     addEventListener("pagehide", guard((e) => e.isTrusted && send("peekGone", {})));
   } catch (e) {}
 
-  const videoMirror = (() => {
-    const MIRROR_ORIGINS = ["https://www.netflix.com", "https://www.disneyplus.com", "https://www.youtube.com"];
-    const PLAYER_ROOTS = {
-      "https://www.netflix.com": [".watch-video", "[data-uia='watch-video']"],
-      "https://www.disneyplus.com": [".btm-media-player", "#hudson-wrapper", "disney-web-player"],
-      "https://www.youtube.com": ["#movie_player", ".html5-video-player"],
-    };
-    const PLAYER_OVERLAYS = {
-      "https://www.netflix.com": [".player-info"],
-    };
-    const CAPTION_REGIONS = {
-      "https://www.disneyplus.com": { region: ".timed-text-override-region", box: ".hive-subtitle-renderer-cue-positioning-box", relayoutEvent: "webkitfullscreenchange" },
-    };
-    const CAPTION_SEARCH_MS = 1000;
-    const PART_CHARS = 16000;
-    const PART_BYTES = 63000;
-    const SLOW_MS = 500;
-    const RETRY_MS = 2000;
-    const RETRY_LIMIT = 5;
-    const ROOT_GROWTH = 1.5;
-    const COVER = 0.9;
-    const CANVAS_PIXELS = 160000;
-    const CANVAS_CHARS = 48000;
-    const BLOB_PICTURES = 64;
-    const VALUE_CHARS = 2000;
-    const ATTR_CHARS = 100000;
-    const BATCH_CHARS = 8000000;
-    const SVG_NS = "http://www.w3.org/2000/svg";
-    const MATH_NS = "http://www.w3.org/1998/Math/MathML";
-    const DROPPED = new Set(["script", "noscript", "template", "base", "meta", "title", "link", "style", "track", "param"]);
-    const BLANKED = new Set(["iframe", "frame", "frameset", "object", "embed", "portal", "fencedframe", "applet"]);
-    const MEDIA = new Set(["video", "audio"]);
-    const URL_ATTRS = new Set(["href", "src", "xlink:href", "action", "formaction", "data", "poster", "background", "ping", "srcset", "lowsrc"]);
-    const PSEUDO = /(?<!\\):(focus-visible|focus-within|popover-open|-webkit-full-screen|fullscreen|hover|focus|active|modal|defined)(?![\w-])/g;
-    const PSEUDO_STATE = { "-webkit-full-screen": "fullscreen" };
-    const STATES = ["hover", "active", "focus", "focus-within", "focus-visible", "fullscreen", "popover-open", "modal", "clear"];
-    const idle = { start() {}, ensure() {}, stop() {}, prepare() {} };
-    if (!isTop) return idle;
-    const MO = window.MutationObserver;
-    const RO = window.ResizeObserver;
-    const repeat = window.setInterval;
-    const unrepeat = window.clearInterval;
-    const frameLater = window.requestAnimationFrame;
-    const clock = performance;
-    const clockNow = clock.now;
-    const now = () => apply(clockNow, clock, []);
-    const encoder = new TextEncoder();
-    const closedRoots = new WeakMap();
-    const awaitingDefinition = new WeakSet();
-    let s = null;
-    let testMode = false;
-    let retryVideo = null;
-    let retryAt = 0;
-    let retries = 0;
-
-    const composedParent = (n) => {
-      const p = n.parentNode;
-      return p && p.nodeType === 11 ? p.host : p;
-    };
-    const shadowOf = (el) => (el.nodeType === 1 && (el.shadowRoot || closedRoots.get(el))) || null;
-    const composedContains = (outer, n) => {
-      for (let x = n; x; x = composedParent(x)) if (x === outer) return true;
-      return false;
-    };
-    if (MIRROR_ORIGINS.includes(location.origin) && typeof Element.prototype.attachShadow === "function")
-      Element.prototype.attachShadow = asNative(Element.prototype.attachShadow, (target, self, args) => {
-        const root = apply(target, self, args);
-        if (args[0] && args[0].mode === "closed") closedRoots.set(self, root);
-        if (s && s.known.has(self)) {
-          s.newShadows.add(self);
-          schedule();
-        }
-        return root;
-      });
-
-    const rewriteSelector = (text) =>
-      text.replace(PSEUDO, (m, name) => (name === "defined" ? ":not([data-ardia-undefined])" : `[data-ardia-${PSEUDO_STATE[name] || name}]`));
-    const absolutize = (text, base) =>
-      text.replace(/url\(\s*(['"]?)([^'")]*)\1\s*\)/g, (m, q, u) => {
-        const url = u.trim();
-        if (!url || /^(data:|blob:|about:|#)/i.test(url)) return m;
-        try {
-          return `url("${new URL(url, base).href}")`;
-        } catch (e) {
-          return m;
-        }
-      });
-    const listText = (rules) => {
-      let out = "";
-      for (let i = 0; i < rules.length; i++) out += ruleText(rules[i]) + "\n";
-      return out;
-    };
-    const ruleText = (rule) => {
-      const inner = rule.cssRules;
-      if (rule instanceof CSSStyleRule) return rewriteSelector(rule.selectorText) + "{" + rule.style.cssText + (inner && inner.length ? listText(inner) : "") + "}";
-      if (inner && !(rule instanceof CSSKeyframesRule)) {
-        const text = rule.cssText;
-        const brace = text.indexOf("{");
-        if (brace > 0) return text.slice(0, brace) + "{" + listText(inner) + "}";
-      }
-      return rule.cssText;
-    };
-    const fetched = new Map();
-    const fetchSheet = (href) => {
-      if (fetched.has(href) || !/^https:/.test(href)) return;
-      fetched.set(href, null);
-      fetch(href, { credentials: "omit", mode: "cors" })
-        .then((r) => (r.ok ? r.text() : null))
-        .then((text) => {
-          if (text === null) return;
-          const sheet = new CSSStyleSheet();
-          sheet.replaceSync(text);
-          fetched.set(href, absolutize(listText(sheet.cssRules), href));
-          schedule();
-        })
-        .catch(() => {});
-    };
-    const sheetIds = new WeakMap();
-    let sheetSeq = 0;
-    const sheetEdits = new WeakMap();
-    const noteSheetEdit = (sheet) => {
-      if (!sheet) return;
-      sheetEdits.set(sheet, (sheetEdits.get(sheet) || 0) + 1);
-      if (s) schedule();
-    };
-    const watchSheetEdits = (proto, names, sheetOf) => {
-      if (!proto) return;
-      const edited = (target, self, args) => {
-        const result = apply(target, self, args);
-        const sheet = sheetOf(self);
-        noteSheetEdit(sheet);
-        if (result && typeof result.then === "function") result.then(() => noteSheetEdit(sheet), () => noteSheetEdit(sheet));
-        return result;
-      };
-      for (const name of names) {
-        const was = Object.getOwnPropertyDescriptor(proto, name);
-        if (was && typeof was.value === "function") Object.defineProperty(proto, name, { ...was, value: asNative(was.value, edited) });
-        else if (was && was.set) Object.defineProperty(proto, name, { ...was, set: asNative(was.set, edited) });
-      }
-    };
-    if (MIRROR_ORIGINS.includes(location.origin)) {
-      const ruleSheet = (rule) => rule && rule.parentStyleSheet;
-      watchSheetEdits(window.CSSStyleSheet && CSSStyleSheet.prototype, ["insertRule", "deleteRule", "addRule", "removeRule", "replace", "replaceSync"], (sheet) => sheet);
-      watchSheetEdits(window.CSSGroupingRule && CSSGroupingRule.prototype, ["insertRule", "deleteRule"], ruleSheet);
-      watchSheetEdits(window.CSSKeyframesRule && CSSKeyframesRule.prototype, ["appendRule", "deleteRule"], ruleSheet);
-      watchSheetEdits(window.CSSStyleRule && CSSStyleRule.prototype, ["selectorText"], ruleSheet);
-      watchSheetEdits(window.CSSStyleDeclaration && CSSStyleDeclaration.prototype, ["setProperty", "removeProperty", "cssText"], (style) => ruleSheet(style.parentRule));
-    }
-    const sheetEntry = (sheet) => {
-      let rules = null;
-      try {
-        rules = sheet.cssRules;
-      } catch (e) {}
-      const media = sheet.media && sheet.media.mediaText;
-      const wrap = (text) => (media ? `@media ${media}{${text}}` : text);
-      if (rules) return { sig: `r${rules.length}|${sheetEdits.get(sheet) || 0}|${media || ""}`, x: () => wrap(absolutize(listText(rules), sheet.href || document.baseURI)) };
-      if (!sheet.href) return null;
-      const text = fetched.get(sheet.href);
-      if (text) return { sig: "f|" + (media || ""), x: () => wrap(text) };
-      fetchSheet(sheet.href);
-      return { sig: "h|" + (media || ""), h: sheet.href, m: media || "" };
-    };
-    const sheetList = (scope, pre) => {
-      const ids = [];
-      const all = [...scope.styleSheets, ...(scope.adoptedStyleSheets || [])];
-      for (const sheet of all) {
-        if (sheet.disabled) continue;
-        let id = sheetIds.get(sheet);
-        if (!id) sheetIds.set(sheet, (id = ++sheetSeq));
-        const entry = sheetEntry(sheet);
-        if (!entry) continue;
-        ids.push(id);
-        if (s.sheetSigs.get(id) === entry.sig) continue;
-        s.sheetSigs.set(id, entry.sig);
-        pre.push(entry.h ? { o: "put", id, h: entry.h, m: entry.m } : { o: "put", id, x: entry.x() });
-      }
-      return ids;
-    };
-    const syncSheets = (pre) => {
-      const scopes = [[0, document]];
-      for (const root of s.shadows) if (s.known.has(root.host)) scopes.push([s.ids.get(root.host), root]);
-      for (const [key, scope] of scopes) {
-        const ids = sheetList(scope, pre);
-        const joined = ids.join(",");
-        if (s.sheetLists.get(key) === joined) continue;
-        s.sheetLists.set(key, joined);
-        pre.push({ o: "sl", i: key, l: ids });
-      }
-    };
-
-    const idOf = (n) => {
-      let id = s.ids.get(n);
-      if (!id) s.ids.set(n, (id = ++s.idSeq));
-      return id;
-    };
-    const cleanAttr = (tag, name, value) => {
-      const lower = name.toLowerCase();
-      if (lower.startsWith("on") || lower === "nonce" || lower === "srcdoc" || lower === "autofocus" || lower.startsWith("data-ardia-")) return null;
-      if (MEDIA.has(tag) && (lower === "src" || lower === "poster" || lower === "autoplay" || lower === "controls")) return null;
-      if (BLANKED.has(tag) && (lower === "src" || lower === "data")) return null;
-      if (URL_ATTRS.has(lower) && /^(javascript|vbscript|blob):/.test(value.replace(/[\u0000-\u0020]/g, "").toLowerCase())) return null;
-      return value.length > ATTR_CHARS ? null : value;
-    };
-    const attrsOf = (el) => {
-      const tag = el.localName;
-      const out = [];
-      const list = el.attributes;
-      for (let i = 0; i < list.length; i++) {
-        const value = cleanAttr(tag, list[i].name, list[i].value);
-        if (value !== null) out.push([list[i].name, value]);
-      }
-      if (tag.includes("-") && !customElements.get(tag)) {
-        out.push(["data-ardia-undefined", ""]);
-        if (awaitingDefinition.has(el)) return out;
-        awaitingDefinition.add(el);
-        customElements.whenDefined(tag).then(() => {
-          if (s && s.known.has(el)) {
-            s.dirtyAttrs.add(el);
-            schedule();
-          }
-        });
-      }
-      if (tag === "video" && !el.hasAttribute("width") && el.videoWidth) out.push(["width", String(el.videoWidth)], ["height", String(el.videoHeight)]);
-      if (tag === "img" && /^blob:/i.test((el.getAttribute("src") || "").trim())) {
-        const picture = blobPicture(el);
-        if (picture) out.push(["src", picture]);
-      }
-      return out;
-    };
-    const formState = (el, out) => {
-      if (el.type === "password") return out;
-      if (el.type === "checkbox" || el.type === "radio") out.k = !!el.checked;
-      else if (typeof el.value === "string") out.v = el.value.slice(0, VALUE_CHARS);
-      return out;
-    };
-    const canvasPicture = (c) => {
-      const pixels = c.width * c.height;
-      if (!pixels || pixels > CANVAS_PIXELS) return null;
-      try {
-        const url = c.toDataURL();
-        return url.length <= CANVAS_CHARS ? url : null;
-      } catch (e) {
-        return null;
-      }
-    };
-    const blobPictures = new Map();
-    const loadWatched = new WeakSet();
-    const repaintOnLoad = (img) => {
-      if (loadWatched.has(img)) return;
-      loadWatched.add(img);
-      img.addEventListener("load", () => {
-        if (!s || !s.known.has(img)) return;
-        s.dirtyAttrs.add(img);
-        schedule();
-      });
-    };
-    const dataUrlOf = (blob) =>
-      new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.readAsDataURL(blob);
-      });
-    const blobPicture = (img) => {
-      const src = img.currentSrc || img.src;
-      if (blobPictures.has(src)) return blobPictures.get(src);
-      repaintOnLoad(img);
-      const w = img.naturalWidth;
-      const h = img.naturalHeight;
-      if (!img.complete || !w || !h) return null;
-      blobPictures.set(src, null);
-      if (blobPictures.size > BLOB_PICTURES) blobPictures.delete(blobPictures.keys().next().value);
-      const scale = Math.min(1, Math.sqrt(CANVAS_PIXELS / (w * h)));
-      const c = new OffscreenCanvas(Math.max(1, Math.round(w * scale)), Math.max(1, Math.round(h * scale)));
-      try {
-        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-      } catch (e) {
-        return null;
-      }
-      c.convertToBlob({ type: "image/jpeg", quality: 0.85 })
-        .then(dataUrlOf)
-        .then((url) => {
-          if (typeof url !== "string" || url.length > CANVAS_CHARS || !blobPictures.has(src)) return;
-          blobPictures.set(src, url);
-          if (!s || !s.known.has(img)) return;
-          s.dirtyAttrs.add(img);
-          schedule();
-        })
-        .catch(() => {});
-      return null;
-    };
-    const remember = (n, fresh) => {
-      s.known.add(n);
-      fresh.add(n);
-      return idOf(n);
-    };
-    const describe = (n, fresh) => {
-      if (n.nodeType === 3) return { i: remember(n, fresh), x: n.data };
-      if (n.nodeType !== 1) return null;
-      const tag = n.localName;
-      if (DROPPED.has(tag)) return null;
-      const out = { i: remember(n, fresh), t: BLANKED.has(tag) ? "div" : tag, a: attrsOf(n) };
-      if (n.namespaceURI === SVG_NS) out.n = "s";
-      else if (n.namespaceURI === MATH_NS) out.n = "m";
-      if (n.scrollTop || n.scrollLeft) {
-        out.sx = n.scrollLeft;
-        out.sy = n.scrollTop;
-      }
-      if (MEDIA.has(tag) || BLANKED.has(tag)) return out;
-      if (tag === "canvas") out.cv = canvasPicture(n);
-      if (tag === "input" || tag === "textarea" || tag === "select") formState(n, out);
-      out.c = childrenOf(n, fresh);
-      const root = shadowOf(n);
-      if (root) out.sh = describeShadow(root, fresh);
-      return out;
-    };
-    const describeShadow = (root, fresh) => {
-      watchShadow(root);
-      return { c: childrenOf(root, fresh) };
-    };
-    const childrenOf = (parent, fresh) => {
-      const out = [];
-      for (let n = parent.firstChild; n; n = n.nextSibling) {
-        if (s.known.has(n) && !fresh.has(n)) out.push({ r: s.ids.get(n) });
-        else {
-          const d = describe(n, fresh);
-          if (d) out.push(d);
-        }
-      }
-      if (parent === s.root)
-        for (const o of s.overlays) {
-          const d = s.known.has(o) && !fresh.has(o) ? { r: s.ids.get(o) } : describe(o, fresh);
-          if (d) out.push(d);
-        }
-      return out;
-    };
-    const forget = (n) => {
-      if (!s.known.has(n)) return;
-      s.known.delete(n);
-      for (let c = n.firstChild; c; c = c.nextSibling) forget(c);
-      const root = shadowOf(n);
-      if (root) {
-        if (s.shadows.delete(root)) listenShadow(root, false);
-        for (let c = root.firstChild; c; c = c.nextSibling) forget(c);
-      }
-    };
-    const options = { childList: true, subtree: true, attributes: true, characterData: true };
-    const SHADOW_EVENTS = ["scroll", "change"];
-    const listenShadow = (root, on) => {
-      for (const type of SHADOW_EVENTS) (on ? root.addEventListener : root.removeEventListener).call(root, type, listeners[type], { capture: true, passive: true });
-    };
-    const unwatchShadows = (st) => {
-      for (const root of st.shadows) listenShadow(root, false);
-      st.shadows.clear();
-    };
-    const watchShadow = (root) => {
-      if (s.shadows.has(root)) return;
-      s.shadows.add(root);
-      s.observer.observe(root, options);
-      listenShadow(root, true);
-    };
-
-    const captionRelayout = (() => {
-      const spec = CAPTION_REGIONS[location.origin];
-      if (!spec || !RO) return { start() {}, stop() {} };
-      let region = null;
-      let height = 0;
-      let timer = 0;
-      const findRegion = (scope) => {
-        const hit = scope.querySelector(spec.region);
-        if (hit) return hit;
-        for (const el of scope.querySelectorAll("*")) {
-          const root = shadowOf(el);
-          const found = root && findRegion(root);
-          if (found) return found;
-        }
-        return null;
-      };
-      const relayout = () => {
-        if (!region) return;
-        const was = height;
-        height = region.getBoundingClientRect().height;
-        const delta = height - was;
-        if (!was || !delta) return;
-        for (const box of region.querySelectorAll(spec.box)) {
-          const top = parseFloat(box.style.top);
-          if (isFinite(top) && top + box.offsetHeight / 2 > was / 2) box.style.top = top + delta + "px";
-        }
-        document.dispatchEvent(new Event(spec.relayoutEvent));
-      };
-      const observer = new RO(guard(relayout));
-      const track = () => {
-        if (region && region.isConnected) return;
-        observer.disconnect();
-        region = findRegion(document);
-        height = 0;
-        if (region) observer.observe(region);
-      };
-      return {
-        start() {
-          if (timer) return;
-          track();
-          timer = apply(repeat, window, [guard(track), CAPTION_SEARCH_MS]);
-        },
-        stop() {
-          if (!timer) return;
-          apply(unrepeat, window, [timer]);
-          timer = 0;
-          observer.disconnect();
-          region = null;
-        },
-      };
-    })();
-
-    const pickRoot = (video) => {
-      for (const selector of PLAYER_ROOTS[location.origin] || []) {
-        let found = null;
-        try {
-          found = document.querySelector(selector);
-        } catch (e) {}
-        if (found && composedContains(found, video)) return found;
-      }
-      const base = video.getBoundingClientRect();
-      const limit = Math.max(base.width * base.height, 1) * ROOT_GROWTH;
-      let best = composedParent(video);
-      for (let n = best && composedParent(best); n && n !== document.body && n !== document.documentElement; n = composedParent(n)) {
-        const r = n.getBoundingClientRect();
-        if (r.width * r.height > limit) break;
-        best = n;
-      }
-      while (best && best.getRootNode() !== document) best = best.getRootNode().host || null;
-      return best && best !== document.body && best !== document.documentElement ? best : null;
-    };
-    const overlaysOf = (root) => {
-      const out = [];
-      for (const selector of PLAYER_OVERLAYS[location.origin] || []) {
-        let found = null;
-        try {
-          found = document.querySelector(selector);
-        } catch (e) {}
-        if (found && !composedContains(root, found) && !composedContains(found, root)) out.push(found);
-      }
-      return out;
-    };
-    const syncOverlays = () => {
-      const found = overlaysOf(s.root);
-      if (found.length === s.overlays.length && found.every((o, i) => o === s.overlays[i])) return;
-      for (const o of s.overlays) if (!found.includes(o)) forget(o);
-      for (const o of found) if (!s.overlays.includes(o)) s.observer.observe(o, options);
-      s.overlays = found;
-      s.dirtyChildren.add(s.root);
-    };
-    const pollOverlayValues = () => {
-      for (const o of s.overlays)
-        for (const el of o.querySelectorAll("textarea,input,select")) {
-          if (!s.known.has(el) || s.sentValues.get(el) === el.value) continue;
-          s.sentValues.set(el, el.value);
-          s.dirtyValues.add(el);
-        }
-    };
-    const shellsOf = (root) => {
-      const list = [];
-      for (let n = root.parentElement; n; n = n.parentElement) list.unshift(n);
-      return list;
-    };
-
-    const deepActive = () => {
-      let el = document.activeElement;
-      for (let depth = 0; el && depth < 32; depth++) {
-        const root = shadowOf(el);
-        const inner = root && root.activeElement;
-        if (!inner) break;
-        el = inner;
-      }
-      return el;
-    };
-    const pointed = () => {
-      if (!s.pointer) return null;
-      const { x, y } = s.pointer;
-      let el = document.elementFromPoint(x, y);
-      for (let depth = 0; el && depth < 32; depth++) {
-        const root = shadowOf(el);
-        const inner = root && root.elementFromPoint(x, y);
-        if (!inner || inner === el) break;
-        el = inner;
-      }
-      return el;
-    };
-    const chainOf = (el) => {
-      const out = [];
-      for (let n = el; n && n.nodeType === 1; n = composedParent(n)) if (s.known.has(n)) out.push(s.ids.get(n));
-      return out;
-    };
-    const idsOf = (list) => list.filter((el) => el && s.known.has(el)).map((el) => s.ids.get(el));
-    const alphaOf = (c) => {
-      if (!c || c === "transparent") return 0;
-      const slash = c.lastIndexOf("/");
-      if (slash >= 0) return parseFloat(c.slice(slash + 1));
-      const m = /^rgba\((.*)\)$/.exec(c);
-      return m ? parseFloat(m[1].split(",")[3]) : 1;
-    };
-    const clearList = () => {
-      const box = s.video.getBoundingClientRect();
-      const v = { left: Math.max(box.left, 0), top: Math.max(box.top, 0), right: Math.min(box.right, innerWidth), bottom: Math.min(box.bottom, innerHeight) };
-      const area = Math.max(0, v.right - v.left) * Math.max(0, v.bottom - v.top);
-      const out = [];
-      if (area < 1) return out;
-      const visit = (el) => {
-        if (el.nodeType !== 1 || !s.known.has(el)) return;
-        if (el.offsetWidth * el.offsetHeight >= area * COVER || el === s.root) {
-          const r = el.getBoundingClientRect();
-          const w = Math.min(r.right, v.right) - Math.max(r.left, v.left);
-          const h = Math.min(r.bottom, v.bottom) - Math.max(r.top, v.top);
-          if (w > 0 && h > 0 && w * h >= area * COVER && alphaOf(getComputedStyle(el).backgroundColor) >= 0.98) out.push(s.ids.get(el));
-        }
-        for (let c = el.firstElementChild; c; c = c.nextElementSibling) visit(c);
-        const root = shadowOf(el);
-        if (root) for (let c = root.firstElementChild; c; c = c.nextElementSibling) visit(c);
-      };
-      visit(s.root);
-      return out;
-    };
-    const deepFullscreen = () => {
-      let el = document.fullscreenElement;
-      for (let depth = 0; el && depth < 32; depth++) {
-        const root = shadowOf(el);
-        const inner = root && root.fullscreenElement;
-        if (!inner) break;
-        el = inner;
-      }
-      return el;
-    };
-    const matching = (selector) => {
-      try {
-        return [...s.root.querySelectorAll(selector)];
-      } catch (e) {
-        return [];
-      }
-    };
-    const stateOps = (ops) => {
-      const focused = deepActive();
-      let visible = false;
-      try {
-        visible = !!focused && focused.matches(":focus-visible");
-      } catch (e) {}
-      const lists = {
-        hover: chainOf(pointed()),
-        active: s.pressed ? s.pressed : [],
-        focus: idsOf([focused]),
-        "focus-within": chainOf(focused),
-        "focus-visible": visible ? idsOf([focused]) : [],
-        fullscreen: idsOf([deepFullscreen()]),
-        "popover-open": idsOf(matching(":popover-open")),
-        modal: idsOf(matching(":modal")),
-        clear: s.clear,
-      };
-      for (const k of STATES) {
-        const joined = lists[k].join(",");
-        if (s.stateSent.get(k) === joined) continue;
-        s.stateSent.set(k, joined);
-        ops.push({ o: "st", k, l: lists[k] });
-      }
-    };
-    const round = (v) => Math.round(v * 100) / 100;
-    const frameOp = (ops) => {
-      const r = s.root.getBoundingClientRect();
-      const f = { o: "f", x: round(r.left), y: round(r.top), w: round(r.width), h: round(r.height), vw: innerWidth, vh: innerHeight, dpr: devicePixelRatio };
-      const joined = [f.x, f.y, f.w, f.h, f.vw, f.vh, f.dpr].join(",");
-      if (s.frameSent === joined) return;
-      if (!s.frameSent || !s.frameSent.endsWith("," + f.vw + "," + f.vh + "," + f.dpr)) send("videoMirror", { op: "frame", dpr: f.dpr, vw: f.vw, vh: f.vh });
-      s.frameSent = joined;
-      ops.push(f);
-    };
-
-    const ship = (batch) => {
-      const text = toJSON(batch);
-      if (text.length > BATCH_CHARS) return stop();
-      const seq = ++s.seq;
-      const parts = [];
-      for (let at = 0; at < text.length; ) {
-        let len = Math.min(PART_CHARS, text.length - at);
-        for (;;) {
-          const code = text.charCodeAt(at + len - 1);
-          if (at + len < text.length && code >= 0xd800 && code <= 0xdbff) len--;
-          const chunk = text.slice(at, at + len);
-          const escaped = toJSON(chunk);
-          if (len <= 64 || escaped.length * 3 <= PART_BYTES || encoder.encode(escaped).length <= PART_BYTES) break;
-          len >>= 1;
-        }
-        parts.push(text.slice(at, at + len));
-        at += len;
-      }
-      for (let part = 0; part < parts.length; part++) send("videoMirror", { op: "part", seq, part, parts: parts.length, data: parts[part] });
-    };
-    const resetTracking = () => {
-      s.known = new WeakSet();
-      s.dirtyChildren.clear();
-      s.dirtyAttrs.clear();
-      s.dirtyText.clear();
-      s.dirtyValues.clear();
-      s.dirtyScroll.clear();
-      s.removed.clear();
-      s.newShadows.clear();
-      unwatchShadows(s);
-      s.sheetSigs.clear();
-      s.sheetLists.clear();
-      s.stateSent.clear();
-      s.frameSent = "";
-      s.observer.disconnect();
-    };
-    const snapshot = () => {
-      const t0 = now();
-      const root = pickRoot(s.video);
-      if (!root) return stop();
-      if (root !== s.root) {
-        if (s.resizer) s.resizer.disconnect();
-        s.root = root;
-        if (s.resizer) s.resizer.observe(root);
-      }
-      resetTracking();
-      s.overlays = overlaysOf(root);
-      s.sentValues = new WeakMap();
-      const fresh = new Set();
-      const shellNodes = shellsOf(root);
-      s.shellChain = shellNodes;
-      const shells = shellNodes.map((n) => ({ i: remember(n, fresh), t: n.localName, a: attrsOf(n) }));
-      s.observer.observe(root, options);
-      for (const o of s.overlays) s.observer.observe(o, options);
-      for (const n of shellNodes) s.observer.observe(n, { attributes: true });
-      if (document.head) s.observer.observe(document.head, { childList: true, subtree: true, characterData: true });
-      const tree = describe(root, fresh);
-      const pre = [];
-      syncSheets(pre);
-      s.clear = clearList();
-      const ops = [];
-      stateOps(ops);
-      frameOp(ops);
-      ship({ t: "s", pre, shells, root: tree, ops, pm: round(now() - t0), pt: Date.now() });
-    };
-    const childOp = (parent, fresh, ops) => {
-      if (parent.nodeType === 11) {
-        const host = parent.host;
-        if (host && s.known.has(host) && !fresh.has(host)) ops.push({ o: "c", i: s.ids.get(host), s: 1, c: childrenOf(parent, fresh) });
-        return;
-      }
-      if (!s.known.has(parent) || fresh.has(parent) || MEDIA.has(parent.localName) || BLANKED.has(parent.localName)) return;
-      if (s.shellChain.includes(parent)) return;
-      ops.push({ o: "c", i: s.ids.get(parent), c: childrenOf(parent, fresh) });
-    };
-    const inRoot = (n) => {
-      for (let x = n; x; x = composedParent(x)) if (x === s.root || s.overlays.includes(x)) return true;
-      return false;
-    };
-    const flush = () => {
-      s.queued = false;
-      if (!s.video.isConnected) return stop();
-      const shells = shellsOf(s.root);
-      if (!s.root.isConnected || !composedContains(s.root, s.video) || shells.length !== s.shellChain.length || shells.some((n, i) => n !== s.shellChain[i]))
-        return snapshot();
-      const t0 = now();
-      syncOverlays();
-      if (s.slowDue) pollOverlayValues();
-      const fresh = new Set();
-      const pre = [];
-      const ops = [];
-      for (const host of s.newShadows) {
-        const root = shadowOf(host);
-        if (root && s.known.has(host) && !fresh.has(host)) ops.push({ o: "sr", i: s.ids.get(host), sh: describeShadow(root, fresh) });
-      }
-      s.newShadows.clear();
-      for (const parent of s.dirtyChildren) childOp(parent, fresh, ops);
-      for (const el of s.dirtyAttrs) if (s.known.has(el) && !fresh.has(el)) ops.push({ o: "a", i: s.ids.get(el), a: attrsOf(el) });
-      for (const t of s.dirtyText) if (s.known.has(t) && !fresh.has(t)) ops.push({ o: "x", i: s.ids.get(t), x: t.data });
-      for (const el of s.dirtyValues) if (s.known.has(el)) ops.push({ o: "v", i: s.ids.get(el), ...formState(el, {}) });
-      for (const el of s.dirtyScroll) if (s.known.has(el)) ops.push({ o: "sc", i: s.ids.get(el), x: el.scrollLeft, y: el.scrollTop });
-      for (const n of s.removed) if (!inRoot(n)) forget(n);
-      s.dirtyChildren.clear();
-      s.dirtyAttrs.clear();
-      s.dirtyText.clear();
-      s.dirtyValues.clear();
-      s.dirtyScroll.clear();
-      s.removed.clear();
-      syncSheets(pre);
-      if (s.slowDue) {
-        s.slowDue = false;
-        s.clear = clearList();
-      }
-      stateOps(ops);
-      frameOp(ops);
-      if (!pre.length && !ops.length) return;
-      ship({ t: "p", pre, ops, pm: round(now() - t0), pt: Date.now() });
-    };
-    const schedule = () => {
-      if (!s || s.queued) return;
-      s.queued = true;
-      apply(frameLater, window, [guard(() => s && flush())]);
-    };
-
-    const onRecords = (records) => {
-      if (!s) return;
-      for (const r of records) {
-        if (r.type === "childList") {
-          s.dirtyChildren.add(r.target);
-          for (const n of r.removedNodes) s.removed.add(n);
-        } else if (r.type === "attributes") s.dirtyAttrs.add(r.target);
-        else if (r.type === "characterData") s.dirtyText.add(r.target);
-      }
-      schedule();
-    };
-    const eventTarget = (e) => {
-      const path = e.composedPath();
-      return path.length ? path[0] : e.target;
-    };
-    const listeners = {
-      pointermove: (e) => {
-        s.pointer = { x: e.clientX, y: e.clientY };
-        schedule();
-      },
-      pointerdown: (e) => {
-        s.pointer = { x: e.clientX, y: e.clientY };
-        s.pressed = chainOf(pointed());
-        schedule();
-      },
-      pointerup: () => {
-        s.pressed = null;
-        schedule();
-      },
-      pointercancel: () => {
-        s.pressed = null;
-        schedule();
-      },
-      mouseout: (e) => {
-        if (e.relatedTarget) return;
-        s.pointer = null;
-        schedule();
-      },
-      input: (e) => {
-        s.dirtyValues.add(eventTarget(e));
-        schedule();
-      },
-      change: (e) => {
-        s.dirtyValues.add(eventTarget(e));
-        schedule();
-      },
-      scroll: (e) => {
-        const target = eventTarget(e);
-        if (target && target.nodeType === 1) s.dirtyScroll.add(target);
-        schedule();
-      },
-      focusin: () => schedule(),
-      focusout: () => schedule(),
-      keydown: () => schedule(),
-      fullscreenchange: () => schedule(),
-      resize: () => schedule(),
-    };
-    const start = (video) => {
-      if (!video || video.localName !== "video") return;
-      if (s && s.video === video) return;
-      if (!video.isConnected) return;
-      if (s) stop();
-      s = {
-        video,
-        root: null,
-        overlays: [],
-        sentValues: new WeakMap(),
-        idSeq: 0,
-        ids: new WeakMap(),
-        known: new WeakSet(),
-        shellChain: [],
-        dirtyChildren: new Set(),
-        dirtyAttrs: new Set(),
-        dirtyText: new Set(),
-        dirtyValues: new Set(),
-        dirtyScroll: new Set(),
-        removed: new Set(),
-        newShadows: new Set(),
-        shadows: new Set(),
-        sheetSigs: new Map(),
-        sheetLists: new Map(),
-        stateSent: new Map(),
-        frameSent: "",
-        clear: [],
-        pointer: null,
-        pressed: null,
-        queued: false,
-        slowDue: false,
-        seq: 0,
-        observer: new MO(guard(onRecords)),
-        resizer: RO ? new RO(guard(() => schedule())) : null,
-        timer: 0,
-      };
-      for (const type of keys(listeners)) window.addEventListener(type, listeners[type], { capture: true, passive: true });
-      s.timer = apply(repeat, window, [
-        guard(() => {
-          if (!s) return;
-          s.slowDue = true;
-          schedule();
-        }),
-        SLOW_MS,
-      ]);
-      guard(snapshot)();
-      captionRelayout.start();
-    };
-    const stop = () => {
-      if (!s) return;
-      const was = s;
-      s = null;
-      captionRelayout.stop();
-      was.observer.disconnect();
-      unwatchShadows(was);
-      if (was.resizer) was.resizer.disconnect();
-      apply(unrepeat, window, [was.timer]);
-      for (const type of keys(listeners)) window.removeEventListener(type, listeners[type], { capture: true });
-      send("videoMirror", { op: "stop" });
-    };
-    const startOnPlay = (e) => {
-      const target = e.target;
-      if (testMode && target && target.localName === "video" && (!s || !s.video.isConnected)) start(target);
-    };
-    handlers.videoMirror = (message) => {
-      if (!message) return;
-      if (message.test && !testMode) {
-        testMode = true;
-        document.addEventListener("playing", startOnPlay, true);
-        const playing = [...document.querySelectorAll("video")].find((v) => !v.paused);
-        if (playing) start(playing);
-      }
-      if (message.resync && s) snapshot();
-    };
-    const ensure = (video) => {
-      if (s || !video || !video.isConnected) return;
-      if (video !== retryVideo) {
-        retryVideo = video;
-        retries = 0;
-        retryAt = 0;
-      }
-      if (retries >= RETRY_LIMIT || now() - retryAt < RETRY_MS) return;
-      retries++;
-      retryAt = now();
-      start(video);
-    };
-    const prepare = () => {
-      if (s || !MIRROR_ORIGINS.includes(location.origin)) return;
-      send("videoMirror", { op: "frame", dpr: devicePixelRatio, vw: innerWidth, vh: innerHeight });
-    };
-    return { start: guard(start), ensure: guard(ensure), stop: guard(stop), prepare: guard(prepare) };
-  })();
-  let bridgesProtectedPlayback = () => false;
-  let reportProtectedPlayback = null;
-  const PROTECTED_VIDEO_ORIGINS = ["https://www.netflix.com", "https://www.disneyplus.com"];
-  const PROTECTED_VIDEO_ON = false;
-  const FAIRPLAY_ORIGINS = ["https://open.spotify.com", "https://www.netflix.com", "https://www.disneyplus.com"];
-  try {
-    if (isTop && FAIRPLAY_ORIGINS.includes(location.origin) && !PROTECTED_VIDEO_ORIGINS.includes(location.origin) && typeof Navigator.prototype.requestMediaKeySystemAccess === "function") {
-      const KEY_SYSTEM = "com.apple.fps.1_0";
-      const PLAYLIST_PART = 30000;
-      const CONFIG_WAIT_MS = 3000;
-      const SEEK_GIVE_UP_MS = 2000;
-      const ENCRYPTED_DELAY_MS = 100;
-      const TICK_MS = 250;
-      const READY_GIVE_UP_MS = 45000;
-      const PLAYLIST_URL = /^data:application\/(?:vnd\.apple\.mpegurl|x-mpegurl)((?:;[^,]*)?),/i;
-      const Media = HTMLMediaElement.prototype;
-      const { defineProperty, getOwnPropertyDescriptor } = Object;
-      const { btoa, atob } = window;
-      const fromCharCode = String.fromCharCode;
-      const clock = performance;
-      const clockNow = clock.now;
-      const now = () => apply(clockNow, clock, []);
-      const encoder = new TextEncoder();
-      let enabled = null;
-      const awaitingConfig = [];
-      const configureFairPlay = (on) => {
-        enabled = on;
-        for (const resolve of awaitingConfig.splice(0)) resolve();
-      };
-      const whenConfigured = () =>
-        enabled !== null
-          ? Promise.resolve()
-          : new Promise((resolve) => {
-              awaitingConfig.push(resolve);
-              setTimeout(resolve, CONFIG_WAIT_MS);
-            });
-      const bytesOf = (b) =>
-        b instanceof ArrayBuffer ? new Uint8Array(b) : ArrayBuffer.isView(b) ? new Uint8Array(b.buffer, b.byteOffset, b.byteLength) : new Uint8Array(0);
-      const toBase64 = (bytes) => {
-        let text = "";
-        for (let i = 0; i < bytes.length; i += 0x8000) text += apply(fromCharCode, null, bytes.subarray(i, i + 0x8000));
-        return btoa(text);
-      };
-      const fromBase64 = (text) => {
-        const binary = atob(text);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-        return bytes;
-      };
-      const fire = (el, type) => el.dispatchEvent(new Event(type));
-
-      let certificate = "";
-      let generation = 0;
-      let media = null;
-      let pending = null;
-      let request = null;
-      let ticker = 0;
-      const tracks = new WeakMap();
-      const ownKeys = new WeakSet();
-      const keysOf = new WeakMap();
-      const everKeyed = new WeakSet();
-      let keyed = null;
-      const sessionGeneration = new WeakMap();
-      bridgesProtectedPlayback = () => {
-        const t = media && tracks.get(media);
-        return !!t && !t.failed;
-      };
-
-      const deliverRequest = () => {
-        if (!pending || !request || sessionGeneration.get(pending) !== request.gen) return;
-        const target = pending;
-        const { message } = request;
-        request = null;
-        let event;
-        try {
-          event = new MediaKeyMessageEvent("message", { messageType: "license-request", message });
-        } catch (e) {
-          event = new Event("message");
-          event.messageType = "license-request";
-          event.message = message;
-        }
-        target.dispatchEvent(event);
-      };
-      const createSession = () => {
-        const keySession = new EventTarget();
-        keySession.sessionId = "ardia-" + Math.random().toString(36).slice(2);
-        keySession.expiration = NaN;
-        keySession.keyStatuses = new Map();
-        let closeSession;
-        keySession.closed = new Promise((resolve) => (closeSession = resolve));
-        keySession.generateRequest = () => {
-          sessionGeneration.set(keySession, generation);
-          pending = keySession;
-          deliverRequest();
-          return Promise.resolve();
-        };
-        keySession.update = (response) => {
-          send("fairPlay", { op: "license", gen: sessionGeneration.get(keySession), ckc: toBase64(bytesOf(response)) });
-          keySession.keyStatuses = new Map([[new Uint8Array(16).buffer, "usable"]]);
-          keySession.dispatchEvent(new Event("keystatuseschange"));
-          return Promise.resolve();
-        };
-        keySession.load = () => Promise.resolve(false);
-        keySession.close = () => {
-          closeSession();
-          return Promise.resolve();
-        };
-        keySession.remove = () => Promise.resolve();
-        return keySession;
-      };
-      const createKeys = () => {
-        const keys = {
-          setServerCertificate(server) {
-            const bytes = bytesOf(server);
-            if (bytes.length) certificate = toBase64(bytes);
-            return Promise.resolve(true);
-          },
-          createSession,
-          getStatusForPolicy: () => Promise.resolve("usable"),
-        };
-        ownKeys.add(keys);
-        return keys;
-      };
-
-      const requestAccess = Navigator.prototype.requestMediaKeySystemAccess;
-      defineProperty(Navigator.prototype, "requestMediaKeySystemAccess", {
-        ...getOwnPropertyDescriptor(Navigator.prototype, "requestMediaKeySystemAccess"),
-        value: asNative(requestAccess, (target, self, args) => {
-          if (args[0] !== KEY_SYSTEM) {
-            if (!/^com\.(?:widevine|microsoft\.playready)(?:\.|$)/.test(String(args[0]))) return apply(target, self, args);
-            return whenConfigured().then(() =>
-              enabled === true
-                ? Promise.reject(new DOMException("Unsupported keySystem or supportedConfigurations.", "NotSupportedError"))
-                : apply(target, self, args)
-            );
-          }
-          const configurations = args[1];
-          return whenConfigured().then(() => {
-            if (enabled !== true) return apply(target, self, args);
-            const configuration = (configurations && configurations[0]) || {};
-            return { keySystem: KEY_SYSTEM, getConfiguration: () => configuration, createMediaKeys: () => Promise.resolve(createKeys()) };
-          });
-        }),
-      });
-      const mediaKeys = getOwnPropertyDescriptor(Media, "mediaKeys");
-      defineProperty(Media, "mediaKeys", {
-        ...mediaKeys,
-        get() {
-          return keysOf.has(this) ? keysOf.get(this) : apply(mediaKeys.get, this, []);
-        },
-      });
-      const setMediaKeys = Media.setMediaKeys;
-      Media.setMediaKeys = asNative(setMediaKeys, (target, self, args) => {
-        if (ownKeys.has(args[0])) {
-          keysOf.set(self, args[0]);
-          everKeyed.add(self);
-          keyed = self;
-          return Promise.resolve();
-        }
-        keysOf.delete(self);
-        return apply(target, self, args);
-      });
-
-      const positionOf = (t) =>
-        t.paused || !t.playing ? t.time : Math.min(Number.isNaN(t.duration) ? Infinity : t.duration, t.time + (now() - t.stamp) / 1000);
-      const rangesOf = (t) => ({ length: t.ready ? 1 : 0, start: () => 0, end: () => (Number.isNaN(t.duration) ? 0 : t.duration) });
-      const stopTicking = () => {
-        if (ticker) clearInterval(ticker);
-        ticker = 0;
-      };
-      const startTicking = () => {
-        if (ticker) return;
-        ticker = setInterval(
-          guard(() => {
-            const t = media && tracks.get(media);
-            if (t && !t.paused) fire(media, "timeupdate");
-            else stopTicking();
-          }),
-          TICK_MS
-        );
-      };
-      const finishSeek = (t, el) => {
-        t.seeking = 0;
-        fire(el, "seeked");
-        fire(el, "timeupdate");
-      };
-      const drives = (t) => !t.detached && !t.failed;
-      const seek = (t, el, value) => {
-        const time = +value;
-        if (!isFinite(time) || time < 0) return;
-        t.time = time;
-        t.stamp = now();
-        t.ended = false;
-        if (!drives(t)) {
-          fire(el, "seeking");
-          fire(el, "seeked");
-          fire(el, "timeupdate");
-          return;
-        }
-        const seq = ++t.seeks;
-        t.seeking = seq;
-        send("fairPlay", { op: "seek", time, seq });
-        fire(el, "seeking");
-        setTimeout(
-          guard(() => {
-            if (t.seeking === seq) finishSeek(t, el);
-          }),
-          SEEK_GIVE_UP_MS
-        );
-      };
-      const natives = {};
-      const override = (name, get, set) => {
-        const native = getOwnPropertyDescriptor(Media, name);
-        if (!native || !native.get) return;
-        natives[name] = native;
-        defineProperty(Media, name, {
-          ...native,
-          get() {
-            const t = tracks.get(this);
-            return t ? get(t) : apply(native.get, this, []);
-          },
-          set: native.set
-            ? function (value) {
-                const t = tracks.get(this);
-                if (t && set) set(t, this, value);
-                else apply(native.set, this, [value]);
-              }
-            : undefined,
-        });
-      };
-      override("readyState", (t) => t.ready);
-      override("networkState", (t) => (t.ready ? 1 : 2));
-      override("duration", (t) => t.duration);
-      override("paused", (t) => t.paused);
-      override("ended", (t) => t.ended);
-      override("error", (t) => t.error);
-      override("buffered", rangesOf);
-      override("seekable", rangesOf);
-      override("webkitAudioDecodedByteCount", (t) => (t.ready ? 1 : 0));
-      override("currentTime", positionOf, seek);
-      override("volume", (t) => t.volume, (t, el, value) => {
-        const volume = Math.min(Math.max(+value || 0, 0), 1);
-        t.volume = volume;
-        if (drives(t)) send("fairPlay", { op: "volume", volume });
-        fire(el, "volumechange");
-      });
-      override("muted", (t) => t.muted, (t, el, value) => {
-        t.muted = !!value;
-        if (drives(t)) send("fairPlay", { op: "muted", muted: t.muted });
-        fire(el, "volumechange");
-      });
-      const nativeValue = (el, name, fallback) => {
-        try {
-          return apply(natives[name].get, el, []);
-        } catch (e) {
-          return fallback;
-        }
-      };
-
-      const playMedia = Media.play;
-      Media.play = asNative(playMedia, (target, self, args) => {
-        const t = tracks.get(self);
-        if (!t) return apply(target, self, args);
-        trackDetachedMedia(self);
-        if (t.paused && blockAutoplay && !askedToPlay()) return Promise.reject(autoplayRefusal());
-        if (t.failed) return Promise.reject(new DOMException("The element has no supported sources.", "NotSupportedError"));
-        if (t.detached) {
-          attach(self, t);
-          if (t.time > 0 || t.seeks) send("fairPlay", { op: "seek", time: t.time, seq: ++t.seeks });
-        }
-        if (t.paused) {
-          if (t.ended) seek(t, self, 0);
-          t.paused = false;
-          t.ended = false;
-          t.stamp = now();
-          send("fairPlay", { op: "play" });
-          fire(self, "play");
-          startTicking();
-        }
-        return Promise.resolve();
-      });
-      const pauseMedia = Media.pause;
-      Media.pause = asNative(pauseMedia, (target, self, args) => {
-        const t = tracks.get(self);
-        if (!t) return apply(target, self, args);
-        if (t.paused) return;
-        t.time = positionOf(t);
-        t.paused = true;
-        t.playing = false;
-        send("fairPlay", { op: "pause" });
-        fire(self, "pause");
-      });
-      const loadMedia = Media.load;
-      Media.load = asNative(loadMedia, (target, self, args) => (tracks.has(self) ? undefined : apply(target, self, args)));
-
-      const sendMetadata = () => {
-        if (!media) return;
-        const md = session && session.metadata;
-        send("fairPlay", { op: "metadata", title: (md && md.title) || "", artist: (md && md.artist) || "", album: (md && md.album) || "", artwork: artworkOf(md) || "" });
-      };
-      const sessionProto = session && Object.getPrototypeOf(session);
-      const metadata = sessionProto && getOwnPropertyDescriptor(sessionProto, "metadata");
-      if (metadata && metadata.set)
-        defineProperty(sessionProto, "metadata", {
-          ...metadata,
-          set(value) {
-            apply(metadata.set, this, [value]);
-            guard(sendMetadata)();
-          },
-        });
-
-      const encryptedEvent = (skd) => {
-        const event = new Event("encrypted");
-        event.initDataType = "cbcs";
-        event.initData = encoder.encode(skd);
-        event.fromPolyfill = true;
-        return event;
-      };
-      const bridge = (el, value) => {
-        if (enabled !== true || !el || !everKeyed.has(el)) return false;
-        const url = String(value);
-        const head = url.match(PLAYLIST_URL);
-        if (!head) return false;
-        let playlist;
-        try {
-          playlist = /;base64/i.test(head[1]) ? atob(url.slice(head[0].length)) : decodeURIComponent(url.slice(head[0].length));
-        } catch (e) {
-          return false;
-        }
-        const skd = (playlist.match(/URI="(skd:\/\/[^"]+)"/) || [])[1];
-        if (!/^#EXTM3U/.test(playlist) || !skd || !certificate) return false;
-        const previous = tracks.get(el);
-        if (media && media !== el) release(media);
-        const t = {
-          gen: 0,
-          playlist,
-          cert: certificate,
-          loaded: false,
-          detached: false,
-          ready: 0,
-          time: 0,
-          stamp: now(),
-          duration: NaN,
-          paused: true,
-          playing: false,
-          ended: false,
-          error: null,
-          failed: false,
-          seeks: 0,
-          seeking: 0,
-          volume: previous ? previous.volume : nativeValue(el, "volume", 1),
-          muted: previous ? previous.muted : nativeValue(el, "muted", false),
-        };
-        tracks.set(el, t);
-        stopTicking();
-        attach(el, t);
-        setTimeout(
-          guard(() => {
-            if (tracks.get(el) === t) el.dispatchEvent(encryptedEvent(skd));
-          }),
-          ENCRYPTED_DELAY_MS
-        );
-        return true;
-      };
-      const parentMedia = (source) => (source.parentElement instanceof HTMLMediaElement ? source.parentElement : null);
-      const sourceSrc = getOwnPropertyDescriptor(HTMLSourceElement.prototype, "src");
-      defineProperty(HTMLSourceElement.prototype, "src", {
-        ...sourceSrc,
-        set(value) {
-          if (guard(bridge)(parentMedia(this) || keyed, value)) return;
-          guard(unbridge)(parentMedia(this));
-          apply(sourceSrc.set, this, [value]);
-        },
-      });
-      const mediaSrc = getOwnPropertyDescriptor(Media, "src");
-      defineProperty(Media, "src", {
-        ...mediaSrc,
-        set(value) {
-          if (guard(bridge)(this, value)) return;
-          guard(unbridge)(this);
-          apply(mediaSrc.set, this, [value]);
-        },
-      });
-      const srcObject = getOwnPropertyDescriptor(Media, "srcObject");
-      if (srcObject && srcObject.set)
-        defineProperty(Media, "srcObject", {
-          ...srcObject,
-          set(value) {
-            guard(unbridge)(this);
-            apply(srcObject.set, this, [value]);
-          },
-        });
-      const ElementProto = Element.prototype;
-      const isSrc = (name) => typeof name === "string" && name.toLowerCase() === "src";
-      defineProperty(Media, "setAttribute", {
-        ...getOwnPropertyDescriptor(ElementProto, "setAttribute"),
-        value: asNative(ElementProto.setAttribute, (target, self, args) => {
-          if (isSrc(args[0])) {
-            if (guard(bridge)(self, args[1])) return;
-            guard(unbridge)(self);
-          }
-          return apply(target, self, args);
-        }),
-      });
-      defineProperty(Media, "removeAttribute", {
-        ...getOwnPropertyDescriptor(ElementProto, "removeAttribute"),
-        value: asNative(ElementProto.removeAttribute, (target, self, args) => {
-          if (isSrc(args[0])) guard(unbridge)(self);
-          return apply(target, self, args);
-        }),
-      });
-
-      function attach(el, t) {
-        const previousGen = t.gen;
-        const gen = ++generation;
-        t.gen = gen;
-        t.detached = false;
-        t.loaded = false;
-        if (previousGen && pending && sessionGeneration.get(pending) === previousGen) sessionGeneration.set(pending, gen);
-        media = el;
-        request = null;
-        const { playlist } = t;
-        const parts = Math.max(1, Math.ceil(playlist.length / PLAYLIST_PART));
-        for (let part = 0; part < parts; part++) {
-          const chunk = playlist.slice(part * PLAYLIST_PART, (part + 1) * PLAYLIST_PART);
-          send("fairPlay", { op: "load", gen, part, parts, playlist: chunk, cert: part === 0 ? t.cert : null, volume: t.volume, muted: t.muted });
-        }
-        sendMetadata();
-        setTimeout(
-          guard(() => {
-            if (tracks.get(el) === t && t.gen === gen && !t.loaded && !t.detached) fail(el, t);
-          }),
-          READY_GIVE_UP_MS
-        );
-      }
-      function release(el) {
-        const t = tracks.get(el);
-        if (!t) return;
-        t.detached = true;
-        if (t.paused) return;
-        t.time = positionOf(t);
-        t.paused = true;
-        t.playing = false;
-        stopTicking();
-        fire(el, "pause");
-      }
-      function unbridge(el) {
-        if (!el || !tracks.has(el)) return;
-        tracks.delete(el);
-        if (media === el) {
-          media = null;
-          request = null;
-          stopTicking();
-          send("fairPlay", { op: "stop" });
-        }
-        fire(el, "emptied");
-      }
-      const fail = (el, t) => {
-        if (t.failed) return;
-        if (media === el && drives(t)) {
-          request = null;
-          send("fairPlay", { op: "stop" });
-        }
-        t.failed = true;
-        t.playing = false;
-        t.paused = true;
-        stopTicking();
-        t.error = { code: 3, message: "Protected playback failed", MEDIA_ERR_ABORTED: 1, MEDIA_ERR_NETWORK: 2, MEDIA_ERR_DECODE: 3, MEDIA_ERR_SRC_NOT_SUPPORTED: 4 };
-        fire(el, "error");
-        if (reportProtectedPlayback) reportProtectedPlayback(KEY_SYSTEM);
-      };
-      const remote = (command, time) => {
-        const t = media && tracks.get(media);
-        const action = command === "toggle" ? (t && !t.paused ? "pause" : "play") : command;
-        const handler = actions.get(action);
-        if (handler) return handler(action === "seekto" ? { action, seekTime: time } : { action });
-        if (!media) return;
-        if (action === "play") media.play();
-        else if (action === "pause") media.pause();
-        else if (action === "seekto" && isFinite(time)) media.currentTime = time;
-      };
-      handlers.fairPlay = (m) => {
-        if (m.event === "config") return configureFairPlay(m.on === true);
-        if (m.event === "remote") return remote(m.command, m.time);
-        const el = media;
-        const t = el && tracks.get(el);
-        if (!t || m.gen !== t.gen || t.failed) return;
-        if (m.event === "request") {
-          request = { gen: m.gen, message: fromBase64(m.spc).buffer };
-          deliverRequest();
-        } else if (m.event === "ready") {
-          t.loaded = true;
-          t.duration = m.duration;
-          t.ready = 4;
-          for (const type of ["loadedmetadata", "durationchange", "loadeddata", "canplay", "canplaythrough"]) fire(el, type);
-        } else if (m.event === "position") {
-          if (m.seq < t.seeks) return;
-          t.time = m.time;
-          t.stamp = now();
-          if (t.seeking) finishSeek(t, el);
-          const was = t.playing;
-          t.playing = !!m.playing && !t.paused;
-          if (t.playing && !was) fire(el, "playing");
-          else if (was && !t.playing && !t.paused) fire(el, "waiting");
-        } else if (m.event === "ended") {
-          if (!Number.isNaN(t.duration)) t.time = t.duration;
-          t.playing = false;
-          t.paused = true;
-          t.ended = true;
-          stopTicking();
-          fire(el, "timeupdate");
-          fire(el, "pause");
-          fire(el, "ended");
-        } else if (m.event === "failed") {
-          fail(el, t);
-        } else if (m.event === "stolen") {
-          release(el);
-        }
-      };
-      addEventListener(
-        "pagehide",
-        guard((e) => {
-          if (!e.isTrusted || !media) return;
-          send("fairPlay", { op: "stop" });
-          release(media);
-        })
-      );
-    }
-  } catch (e) {}
-  try {
-    if (isTop && PROTECTED_VIDEO_ON && PROTECTED_VIDEO_ORIGINS.includes(location.origin) && window.MediaSource) {
-      bridgesProtectedPlayback = () => true;
-      const SAFARI_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Safari/605.1.15";
-      const PLAYER_ROUTE = location.origin === "https://www.netflix.com" ? /^\/watch\// : /^\/play\//;
-      const UNDECODABLE = /av01|vp0?9|dvh1|dvhe|dav1/i;
-      const FAIRPLAY = /^com\.apple\.fps/;
-      const OTHER_KEY_SYSTEMS = /^com\.(widevine|microsoft|chromecast|youtube)/;
-      const PART_BYTES = 45000;
-      const MAX_KEY_BYTES = 45000;
-      const MAX_PENDING_BYTES = 64e6;
-      const MAX_BUFFER_ID = 64;
-      const TICK_MS = 250;
-      const FRAME_RATE = 24;
-      const KEY_WAIT_MS = 15000;
-      const AHEAD_LIMIT_S = 1;
-      const KEEP_BEHIND_S = 5;
-      const VIDEO_QUOTA = 200e6;
-      const AUDIO_QUOTA = 24e6;
-      const { defineProperty, getOwnPropertyDescriptor, create } = Object;
-      const fromCharCode = String.fromCharCode;
-      const { btoa, atob } = window;
-      const clock = performance;
-      const clockNow = clock.now;
-      const now = () => apply(clockNow, clock, []);
-      const soon = (fn, ms) => setTimeout(guard(fn), ms);
-      const face = { userAgent: SAFARI_UA, appVersion: SAFARI_UA.slice(8), vendor: "Apple Computer, Inc.", platform: "MacIntel", userAgentData: undefined };
-      for (const name of keys(face)) {
-        const was = getOwnPropertyDescriptor(Navigator.prototype, name);
-        if (was && was.get) defineProperty(Navigator.prototype, name, { ...was, get: asNative(was.get, () => face[name]) });
-      }
-      try {
-        delete window.chrome;
-      } catch (e) {}
-
-      const mp4 = (() => {
-        const fourcc = (u, i) => String.fromCharCode(u[i], u[i + 1], u[i + 2], u[i + 3]);
-        const viewOf = (u) => new DataView(u.buffer, u.byteOffset, u.byteLength);
-        const boxes = (u, start, end) => {
-          const view = viewOf(u);
-          const found = [];
-          let at = start;
-          while (at + 8 <= end) {
-            let size = view.getUint32(at);
-            let header = 8;
-            if (size === 1) {
-              if (at + 16 > end) break;
-              size = view.getUint32(at + 8) * 4294967296 + view.getUint32(at + 12);
-              header = 16;
-            } else if (size === 0) size = end - at;
-            if (size < header || at + size > end) break;
-            found.push({ type: fourcc(u, at + 4), start: at, body: at + header, end: at + size });
-            at += size;
-          }
-          return found;
-        };
-        const child = (u, box, type) => box && boxes(u, box.body, box.end).find((b) => b.type === type);
-        const describeInit = (u) => {
-          const view = viewOf(u);
-          const info = { timescale: 1, sampleDuration: 0, width: 0, height: 0, duration: 0 };
-          const moov = boxes(u, 0, u.length).find((b) => b.type === "moov");
-          const trak = child(u, moov, "trak");
-          const tkhd = child(u, trak, "tkhd");
-          if (tkhd) {
-            const at = tkhd.body + (u[tkhd.body] === 1 ? 88 : 76);
-            if (at + 8 <= tkhd.end) {
-              info.width = view.getUint32(at) >>> 16;
-              info.height = view.getUint32(at + 4) >>> 16;
-            }
-          }
-          const mdhd = child(u, child(u, trak, "mdia"), "mdhd");
-          if (mdhd) info.timescale = view.getUint32(mdhd.body + (u[mdhd.body] === 1 ? 20 : 12)) || 1;
-          const trex = child(u, child(u, moov, "mvex"), "trex");
-          if (trex) info.sampleDuration = view.getUint32(trex.body + 12);
-          const wideAt = (at) => view.getUint32(at) * 4294967296 + view.getUint32(at + 4);
-          const mvhd = child(u, moov, "mvhd");
-          if (mvhd && mvhd.body + 32 <= mvhd.end) {
-            const wide = u[mvhd.body] === 1;
-            const scale = view.getUint32(mvhd.body + (wide ? 20 : 12));
-            const whole = wide ? wideAt(mvhd.body + 24) : view.getUint32(mvhd.body + 16);
-            const mehd = child(u, child(u, moov, "mvex"), "mehd");
-            const fragments = mehd && mehd.body + (u[mehd.body] === 1 ? 12 : 8) <= mehd.end ? (u[mehd.body] === 1 ? wideAt(mehd.body + 4) : view.getUint32(mehd.body + 4)) : 0;
-            const unknown = (n) => n === 0xffffffff || n >= Number.MAX_SAFE_INTEGER;
-            const longest = Math.max(unknown(whole) ? 0 : whole, unknown(fragments) ? 0 : fragments);
-            if (scale && longest) info.duration = longest / scale;
-          }
-          return info;
-        };
-        const fragmentTimes = (u, info) => {
-          const view = viewOf(u);
-          let start = null;
-          let duration = 0;
-          for (const moof of boxes(u, 0, u.length)) {
-            if (moof.type !== "moof") continue;
-            const traf = child(u, moof, "traf");
-            if (!traf) continue;
-            let sampleDuration = info.sampleDuration;
-            const tfhd = child(u, traf, "tfhd");
-            if (tfhd) {
-              const flags = view.getUint32(tfhd.body) & 0xffffff;
-              let at = tfhd.body + 8;
-              if (flags & 1) at += 8;
-              if (flags & 2) at += 4;
-              if (flags & 8) sampleDuration = view.getUint32(at);
-            }
-            const tfdt = child(u, traf, "tfdt");
-            if (tfdt && start === null)
-              start = u[tfdt.body] === 1 ? view.getUint32(tfdt.body + 4) * 4294967296 + view.getUint32(tfdt.body + 8) : view.getUint32(tfdt.body + 4);
-            for (const trun of boxes(u, traf.body, traf.end)) {
-              if (trun.type !== "trun") continue;
-              const flags = view.getUint32(trun.body) & 0xffffff;
-              const count = view.getUint32(trun.body + 4);
-              if (!(flags & 0x100)) {
-                duration += count * sampleDuration;
-                continue;
-              }
-              let at = trun.body + 8 + (flags & 1 ? 4 : 0) + (flags & 4 ? 4 : 0);
-              const stride = 4 + (flags & 0x200 ? 4 : 0) + (flags & 0x400 ? 4 : 0) + (flags & 0x800 ? 4 : 0);
-              for (let k = 0; k < count && at + 4 <= trun.end; k++, at += stride) duration += view.getUint32(at);
-            }
-          }
-          return start === null ? null : [start / info.timescale, (start + duration) / info.timescale];
-        };
-        const split = (u) => {
-          const units = [];
-          let lead = 0;
-          let fragment = false;
-          for (const box of boxes(u, 0, u.length)) {
-            if (box.type === "moov") {
-              units.push({ kind: "init", bytes: u.subarray(lead, box.end) });
-              lead = box.end;
-              fragment = false;
-            } else if (box.type === "moof") {
-              fragment = true;
-            } else if (box.type === "mdat") {
-              if (fragment) units.push({ kind: "segment", bytes: u.subarray(lead, box.end) });
-              lead = box.end;
-              fragment = false;
-            }
-          }
-          return { units, rest: lead };
-        };
-        const merged = (segments) => {
-          const out = [];
-          for (const s of [...segments].sort((a, b) => a.start - b.start)) {
-            const last = out[out.length - 1];
-            if (last && s.start <= last[1] + 0.25) last[1] = Math.max(last[1], s.end);
-            else out.push([s.start, s.end]);
-          }
-          return out;
-        };
-        const intersect = (a, b) => {
-          const out = [];
-          for (let i = 0, j = 0; i < a.length && j < b.length; ) {
-            const start = Math.max(a[i][0], b[j][0]);
-            const end = Math.min(a[i][1], b[j][1]);
-            if (start < end) out.push([start, end]);
-            if (a[i][1] < b[j][1]) i++;
-            else j++;
-          }
-          return out;
-        };
-        return { boxes, describeInit, fragmentTimes, split, merged, intersect };
-      })();
-
-      const bytesOf = (b) =>
-        b instanceof ArrayBuffer ? new Uint8Array(b) : ArrayBuffer.isView(b) ? new Uint8Array(b.buffer, b.byteOffset, b.byteLength) : new Uint8Array(0);
-      const toBase64 = (bytes) => {
-        let text = "";
-        for (let i = 0; i < bytes.length; i += 0x8000) text += apply(fromCharCode, null, bytes.subarray(i, i + 0x8000));
-        return btoa(text);
-      };
-      const fromBase64 = (text) => {
-        const binary = atob(text);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-        return bytes;
-      };
-      const fire = (target, type) => target.dispatchEvent(new Event(type));
-      const fireOwn = (target, type, event = new Event(type)) => {
-        target.dispatchEvent(event);
-        const handler = target["on" + type];
-        if (typeof handler === "function") apply(handler, target, [event]);
-      };
-      const own = (target, values) => {
-        for (const name of keys(values)) defineProperty(target, name, { value: values[name], writable: true, configurable: true, enumerable: true });
-        return target;
-      };
-      const timeRanges = (list) => {
-        const out = create(TimeRanges.prototype);
-        const at = (i) => {
-          if (!(i >= 0 && i < list.length)) throw new DOMException("The index provided is out of range.", "IndexSizeError");
-          return list[i];
-        };
-        defineProperty(out, "length", { value: list.length });
-        defineProperty(out, "start", { value: (i) => at(i)[0] });
-        defineProperty(out, "end", { value: (i) => at(i)[1] });
-        return out;
-      };
-      const unsupported = () => new DOMException("Unsupported keySystem or supportedConfigurations.", "NotSupportedError");
-
-      const keySessions = new Map();
-      const ownKeys = new WeakSet();
-      const keysOf = new WeakMap();
-      let keySessionSeq = 0;
-      const makeKeySession = (keySystem) => {
-        const id = ++keySessionSeq;
-        const keySession = new EventTarget();
-        setPrototypeOf(keySession, MediaKeySession.prototype);
-        let closeSession;
-        const entry = { keySession, waiting: [] };
-        own(keySession, {
-          sessionId: "",
-          expiration: NaN,
-          keyStatuses: new Map(),
-          closed: new Promise((resolve) => (closeSession = resolve)),
-          onmessage: null,
-          onkeystatuseschange: null,
-          generateRequest: (initDataType, initData) => {
-            const data = bytesOf(initData);
-            if (!data.length || data.length > MAX_KEY_BYTES) return Promise.reject(new TypeError("Invalid initData"));
-            keySession.sessionId = "ardia-" + id;
-            send("protectedVideo", { op: "request", session: id, keySystem, type: String(initDataType).slice(0, 16), data: toBase64(data) });
-            return Promise.resolve();
-          },
-          update: (response) =>
-            new Promise((resolve, reject) => {
-              const data = bytesOf(response);
-              if (!data.length || data.length > MAX_KEY_BYTES) return reject(new TypeError("Invalid response"));
-              const waiter = { resolve, reject };
-              entry.waiting.push(waiter);
-              soon(() => {
-                const at = entry.waiting.indexOf(waiter);
-                if (at < 0) return;
-                entry.waiting.splice(at, 1);
-                resolve();
-              }, KEY_WAIT_MS);
-              send("protectedVideo", { op: "update", session: id, data: toBase64(data) });
-            }),
-          load: () => Promise.resolve(false),
-          remove: () => Promise.resolve(),
-          close: () => {
-            if (keySessions.delete(id)) send("protectedVideo", { op: "closeSession", session: id });
-            closeSession();
-            return Promise.resolve();
-          },
-        });
-        keySessions.set(id, entry);
-        return keySession;
-      };
-      const makeKeys = (keySystem) => {
-        const mediaKeys = own(create(MediaKeys.prototype), {
-          setServerCertificate: (certificate) => {
-            const data = bytesOf(certificate);
-            if (!data.length || data.length > MAX_KEY_BYTES) return Promise.reject(new TypeError("Invalid certificate"));
-            send("protectedVideo", { op: "certificate", data: toBase64(data) });
-            return Promise.resolve(true);
-          },
-          createSession: () => makeKeySession(keySystem),
-          getStatusForPolicy: () => Promise.resolve("usable"),
-        });
-        ownKeys.add(mediaKeys);
-        return mediaKeys;
-      };
-      const keyAccess = (keySystem, configuration) =>
-        own(create(MediaKeySystemAccess.prototype), {
-          keySystem,
-          getConfiguration: () => configuration,
-          createMediaKeys: () => Promise.resolve(makeKeys(keySystem)),
-        });
-      const pickConfiguration = (configurations) => {
-        for (const config of isArray(configurations) ? configurations : []) {
-          const asked = isArray(config && config.videoCapabilities) ? config.videoCapabilities : [];
-          const video = asked.filter((c) => !UNDECODABLE.test(String((c && c.contentType) || "")));
-          if (asked.length && !video.length) continue;
-          return {
-            label: (config && config.label) || "",
-            initDataTypes: isArray(config && config.initDataTypes) ? config.initDataTypes : ["cenc"],
-            audioCapabilities: isArray(config && config.audioCapabilities) ? config.audioCapabilities : [],
-            videoCapabilities: video,
-            distinctiveIdentifier: "not-allowed",
-            persistentState: "not-allowed",
-            sessionTypes: ["temporary"],
-          };
-        }
-        return null;
-      };
-      const requestAccess = Navigator.prototype.requestMediaKeySystemAccess;
-      if (typeof requestAccess === "function")
-        Navigator.prototype.requestMediaKeySystemAccess = asNative(requestAccess, (target, self, args) => {
-          const keySystem = String(args[0]);
-          if (FAIRPLAY.test(keySystem)) {
-            const configuration = pickConfiguration(args[1]);
-            return configuration ? Promise.resolve(keyAccess(keySystem, configuration)) : Promise.reject(unsupported());
-          }
-          if (OTHER_KEY_SYSTEMS.test(keySystem)) return Promise.reject(unsupported());
-          return apply(target, self, args);
-        });
-      if (!window.WebKitMediaKeys) {
-        const WebKitMediaKeys = function WebKitMediaKeys() {
-          throw new TypeError("Illegal constructor");
-        };
-        WebKitMediaKeys.isTypeSupported = (keySystem, type) => FAIRPLAY.test(String(keySystem)) && !UNDECODABLE.test(String(type || ""));
-        defineProperty(window, "WebKitMediaKeys", { value: WebKitMediaKeys, writable: true, configurable: true });
-      }
-      const capabilities = window.MediaCapabilities && MediaCapabilities.prototype;
-      if (capabilities && typeof capabilities.decodingInfo === "function")
-        capabilities.decodingInfo = asNative(capabilities.decodingInfo, (target, self, args) => {
-          const config = args[0] || {};
-          const refused = { supported: false, smooth: false, powerEfficient: false, keySystemAccess: null };
-          if (config.video && UNDECODABLE.test(String(config.video.contentType || ""))) return Promise.resolve(refused);
-          const keySystem = config.keySystemConfiguration && String(config.keySystemConfiguration.keySystem || "");
-          if (keySystem && FAIRPLAY.test(keySystem)) {
-            const configuration = {
-              initDataTypes: [config.keySystemConfiguration.initDataType || "cenc"],
-              videoCapabilities: config.video ? [{ contentType: config.video.contentType, robustness: "" }] : [],
-              audioCapabilities: config.audio ? [{ contentType: config.audio.contentType, robustness: "" }] : [],
-              distinctiveIdentifier: "not-allowed",
-              persistentState: "not-allowed",
-              sessionTypes: ["temporary"],
-            };
-            return Promise.resolve({ supported: true, smooth: true, powerEfficient: true, keySystemAccess: keyAccess(keySystem, configuration) });
-          }
-          if (keySystem) return Promise.resolve(refused);
-          return apply(target, self, args);
-        });
-      const SourceType = window.MediaSource;
-      SourceType.isTypeSupported = asNative(SourceType.isTypeSupported, (target, self, args) => !UNDECODABLE.test(String(args[0])) && apply(target, self, args));
-
-      const Media = HTMLMediaElement.prototype;
-      const Video = HTMLVideoElement.prototype;
-      const bridgeOf = new WeakMap();
-      const bridgeOfSource = new WeakMap();
-      const sourceOfUrl = new Map();
-      let bridged = null;
-      let held = null;
-      let mediaSeq = 0;
-      const sendMedia = (b, data) => (b.held ? b.backlog.push(data) : send("protectedVideo", data));
-      const bufferedOf = (b) => {
-        const live = b.states.filter((st) => !st.removed);
-        return live.length ? live.map((st) => mp4.merged(st.segments)).reduce(mp4.intersect) : [];
-      };
-      const holds = (b, time) => bufferedOf(b).some(([start, end]) => time >= start - 0.1 && time < end);
-      const durationOf = (b) => {
-        const duration = b.source.duration;
-        return Number.isNaN(duration) && b.initDuration > 0 ? b.initDuration : duration;
-      };
-      const positionOf = (b) => {
-        if (b.seeking) return b.seekTo;
-        if (b.paused || !b.playing) return b.time;
-        const duration = durationOf(b);
-        return Math.min(b.time + ((now() - b.stamp) / 1000) * b.rate, b.time + AHEAD_LIMIT_S, isFinite(duration) ? duration : Infinity);
-      };
-      const sendDuration = (b) => {
-        const duration = durationOf(b);
-        const known = isFinite(duration) && duration > 0 ? duration : 0;
-        if (known === b.sentDuration) return;
-        b.sentDuration = known;
-        sendMedia(b, { op: "duration", media: b.id, duration: known });
-      };
-      const startMirror = (b) => {
-        if (typeof videoMirror === "undefined") return;
-        const again = b.mirrored;
-        b.mirrored = true;
-        guard(() => (again ? videoMirror.ensure(b.el) : videoMirror.start(b.el)))();
-      };
-      const stopMirror = (b) => {
-        if (!b.mirrored) return;
-        b.mirrored = false;
-        if (typeof videoMirror !== "undefined") guard(() => videoMirror.stop())();
-      };
-      const finishSeek = (b) => {
-        b.seeking = false;
-        b.time = b.seekTo;
-        b.stamp = now();
-        b.playing = false;
-        fire(b.el, "seeked");
-        fire(b.el, "timeupdate");
-      };
-      const progress = (b) => {
-        if (bridgeOf.get(b.el) !== b) return;
-        sendDuration(b);
-        if (!b.metadata && b.states.length && b.states.every((st) => st.info)) {
-          b.metadata = true;
-          fire(b.el, "durationchange");
-          fire(b.el, "loadedmetadata");
-          fire(b.el, "resize");
-        }
-        if (b.seeking && holds(b, b.seekTo)) finishSeek(b);
-        if (b.metadata && !b.loaded && holds(b, positionOf(b))) {
-          b.loaded = true;
-          for (const type of ["loadeddata", "canplay", "canplaythrough"]) fire(b.el, type);
-        }
-      };
-      const stopTicking = (b) => {
-        clearInterval(b.ticker);
-        b.ticker = 0;
-      };
-      const tick = (b) => {
-        if (bridgeOf.get(b.el) !== b || b.paused) return stopTicking(b);
-        const position = positionOf(b);
-        if (b.playing) {
-          b.frames += Math.max(0, position - b.lastPosition) * FRAME_RATE;
-          fire(b.el, "timeupdate");
-        }
-        b.lastPosition = position;
-      };
-      const startTicking = (b) => {
-        if (!b.ticker) b.ticker = setInterval(guard(() => tick(b)), TICK_MS);
-      };
-      const reportRect = (b) => {
-        const r = b.el.getBoundingClientRect();
-        const visible = document.visibilityState === "visible" && b.el.isConnected && r.width > 0 && r.height > 0;
-        const geometry = [r.left, r.top, r.width, r.height].join();
-        if (geometry !== b.coverKey || ++b.coverAge >= 10) {
-          b.cover = visible ? pinnedCover(b.el, r) : { top: 0, bottom: 0, radius: 0, backdrop: null };
-          b.coverKey = geometry;
-          b.coverAge = 0;
-        }
-        const rect = { op: "rect", media: b.id, x: r.left, y: r.top, width: r.width, height: r.height, scale: devicePixelRatio, visible, coverTop: b.cover.top, coverBottom: b.cover.bottom, radius: b.cover.radius, backdrop: b.cover.backdrop };
-        const key = [rect.x, rect.y, rect.width, rect.height, rect.scale, visible, rect.coverTop, rect.coverBottom, rect.radius, rect.backdrop].join();
-        if (key === b.rectKey) return;
-        b.rectKey = key;
-        sendMedia(b, rect);
-      };
-      const watchRect = (b) => {
-        const step = guard(() => {
-          if (bridgeOf.get(b.el) !== b) return;
-          reportRect(b);
-          apply(raf, window, [step]);
-        });
-        apply(raf, window, [step]);
-      };
-      const release = (el) => {
-        const b = bridgeOf.get(el);
-        if (!b) return;
-        bridgeOf.delete(el);
-        bridgeOfSource.delete(b.source);
-        stopTicking(b);
-        stopMirror(b);
-        sendMedia(b, { op: "detach", media: b.id });
-        if (held === b) held = null;
-        if (bridged === b) {
-          bridged = null;
-          if (held) takeOver(held);
-        }
-      };
-      const takeOver = (b) => {
-        if (held === b) held = null;
-        if (bridged && bridged !== b) release(bridged.el);
-        b.held = false;
-        bridged = b;
-        for (const data of b.backlog.splice(0)) send("protectedVideo", data);
-        if (typeof videoMirror !== "undefined") videoMirror.prepare();
-      };
-      const bridge = (el, source) => {
-        const hold = !!(bridged && bridged.played && !bridged.ended && bridged.el !== el);
-        if (held) release(held.el);
-        if (bridged && !hold) release(bridged.el);
-        const b = {
-          id: ++mediaSeq,
-          el,
-          source,
-          states: [],
-          buffers: [],
-          bufferSeq: 0,
-          paused: true,
-          ended: false,
-          seeking: false,
-          seekTo: 0,
-          seekSeq: 0,
-          time: 0,
-          stamp: now(),
-          playing: false,
-          rate: el.playbackRate || 1,
-          metadata: false,
-          loaded: false,
-          sourceEnded: false,
-          frames: 0,
-          dropped: 0,
-          lastPosition: 0,
-          error: null,
-          size: [0, 0],
-          rectKey: "",
-          ticker: 0,
-          mirrored: false,
-          pip: false,
-          pipWindow: null,
-          pipEnter: [],
-          pipExit: [],
-          sentDuration: -1,
-          initDuration: 0,
-          played: false,
-          held: hold,
-          backlog: [],
-        };
-        bridgeOf.set(el, b);
-        bridgeOfSource.set(source, b);
-        if (hold) held = b;
-        else bridged = b;
-        sendMedia(b, { op: "attach", media: b.id });
-        if (!hold && typeof videoMirror !== "undefined") videoMirror.prepare();
-        sendMedia(b, { op: "volume", media: b.id, volume: el.volume, muted: el.muted });
-        if (b.rate !== 1) sendMedia(b, { op: "rate", media: b.id, rate: b.rate });
-        sendDuration(b);
-        watchRect(b);
-      };
-      const ship = (b, st, kind, bytes, start, end) => {
-        const seq = ++st.seq;
-        const parts = Math.max(1, Math.ceil(bytes.length / PART_BYTES));
-        for (let part = 0; part < parts; part++)
-          sendMedia(b, {
-            op: "append",
-            media: b.id,
-            buffer: st.id,
-            kind,
-            seq,
-            part,
-            parts,
-            start,
-            end,
-            data: toBase64(bytes.subarray(part * PART_BYTES, (part + 1) * PART_BYTES)),
-          });
-      };
-      const dropRange = (b, st, start, end) => {
-        const kept = st.segments.filter((s) => {
-          const middle = (s.start + s.end) / 2;
-          return middle < start || middle >= end;
-        });
-        if (kept.length === st.segments.length) return;
-        st.segments = kept;
-        st.bytes = kept.reduce((sum, s) => sum + s.bytes, 0);
-        sendMedia(b, { op: "remove", media: b.id, buffer: st.id, start, end: isFinite(end) ? end : 1e8 });
-      };
-      const makeRoom = (b, st, incoming) => {
-        const quota = st.video ? VIDEO_QUOTA : AUDIO_QUOTA;
-        if (st.bytes + incoming <= quota) return true;
-        const before = positionOf(b) - KEEP_BEHIND_S;
-        const old = st.segments.filter((s) => s.end < before).sort((x, y) => x.start - y.start);
-        if (old.length) dropRange(b, st, -1e6, old[old.length - 1].end);
-        return st.bytes + incoming <= quota;
-      };
-      const take = (b, st, unit) => {
-        if (unit.kind === "init") {
-          st.info = mp4.describeInit(unit.bytes);
-          if (st.info.duration > 0 && !(b.initDuration > 0)) {
-            b.initDuration = st.info.duration;
-            if (Number.isNaN(b.source.duration)) {
-              if (b.metadata) fire(b.el, "durationchange");
-              sendDuration(b);
-            }
-          }
-          if (st.video && st.info.width && st.info.height) {
-            const changed = b.size[0] !== st.info.width || b.size[1] !== st.info.height;
-            b.size = [st.info.width, st.info.height];
-            if (changed && b.metadata) fire(b.el, "resize");
-          }
-          return ship(b, st, "init", unit.bytes, 0, 0);
-        }
-        if (!st.info) return;
-        const times = mp4.fragmentTimes(unit.bytes, st.info);
-        if (!times) return;
-        const start = times[0] + st.offset;
-        const end = Math.max(times[1] + st.offset, start + 0.001);
-        if (end <= st.windowStart || start >= st.windowEnd) return;
-        st.segments = st.segments.filter((s) => !(start < s.end - 0.05 && end > s.start + 0.05));
-        st.segments.push({ start, end, bytes: unit.bytes.length });
-        st.bytes = st.segments.reduce((sum, s) => sum + s.bytes, 0);
-        ship(b, st, "segment", unit.bytes, start, end);
-      };
-      const sourceBufferList = (items) => {
-        const out = new EventTarget();
-        setPrototypeOf(out, SourceBufferList.prototype);
-        defineProperty(out, "length", { value: items.length });
-        items.forEach((item, i) => defineProperty(out, i, { value: item, enumerable: true }));
-        defineProperty(out, Symbol.iterator, { value: () => items[Symbol.iterator]() });
-        return out;
-      };
-      const makeBuffer = (b, mime) => {
-        const sb = new EventTarget();
-        setPrototypeOf(sb, SourceBuffer.prototype);
-        const st = {
-          id: ++b.bufferSeq,
-          video: /^video\//i.test(mime),
-          info: null,
-          pending: new Uint8Array(0),
-          segments: [],
-          bytes: 0,
-          updating: false,
-          offset: 0,
-          windowStart: 0,
-          windowEnd: Infinity,
-          mode: "segments",
-          seq: 0,
-          op: 0,
-          removed: false,
-        };
-        const property = (name, descriptor) => defineProperty(sb, name, { configurable: true, enumerable: true, ...descriptor });
-        const busy = () => new DOMException("This SourceBuffer is still processing an 'appendBuffer' or 'remove' operation.", "InvalidStateError");
-        const gone = () => new DOMException("This SourceBuffer has been removed from the parent media source.", "InvalidStateError");
-        const finish = () => {
-          st.updating = false;
-          fireOwn(sb, "update");
-          fireOwn(sb, "updateend");
-          progress(b);
-        };
-        property("updating", { get: () => st.updating });
-        property("buffered", { get: () => timeRanges(mp4.merged(st.segments)) });
-        property("timestampOffset", { get: () => st.offset, set: (v) => (st.offset = Number(v) || 0) });
-        property("appendWindowStart", { get: () => st.windowStart, set: (v) => (st.windowStart = Number(v) || 0) });
-        property("appendWindowEnd", { get: () => st.windowEnd, set: (v) => (st.windowEnd = Number(v)) });
-        property("mode", { get: () => st.mode, set: (v) => (st.mode = String(v)) });
-        for (const handler of ["onupdatestart", "onupdate", "onupdateend", "onerror", "onabort"]) property(handler, { value: null, writable: true });
-        property("appendBuffer", {
-          value: (data) => {
-            if (st.removed) throw gone();
-            if (st.updating) throw busy();
-            const incoming = bytesOf(data);
-            if (!makeRoom(b, st, incoming.length))
-              throw new DOMException("The SourceBuffer is full, and cannot free space to append additional buffers.", "QuotaExceededError");
-            const combined = new Uint8Array(st.pending.length + incoming.length);
-            combined.set(st.pending);
-            combined.set(incoming, st.pending.length);
-            st.updating = true;
-            const op = ++st.op;
-            if (b.sourceEnded) {
-              b.sourceEnded = false;
-              sendMedia(b, { op: "end", media: b.id, ended: false });
-              fire(b.source, "sourceopen");
-            }
-            soon(() => {
-              if (st.op !== op || !st.updating) return;
-              fireOwn(sb, "updatestart");
-              const { units, rest } = mp4.split(combined);
-              st.pending = combined.length - rest > MAX_PENDING_BYTES ? new Uint8Array(0) : combined.slice(rest);
-              if (bridgeOf.get(b.el) === b) for (const unit of units) take(b, st, unit);
-              finish();
-            }, 0);
-          },
-        });
-        property("remove", {
-          value: (start, end) => {
-            if (st.removed) throw gone();
-            if (st.updating) throw busy();
-            st.updating = true;
-            const op = ++st.op;
-            soon(() => {
-              if (st.op !== op || !st.updating) return;
-              fireOwn(sb, "updatestart");
-              dropRange(b, st, Number(start), Number(end));
-              finish();
-            }, 0);
-          },
-        });
-        property("abort", {
-          value: () => {
-            st.pending = new Uint8Array(0);
-            st.op++;
-            if (!st.updating) return;
-            st.updating = false;
-            fireOwn(sb, "abort");
-            fireOwn(sb, "updateend");
-          },
-        });
-        property("changeType", {
-          value: (type) => {
-            if (UNDECODABLE.test(String(type))) throw new DOMException("The type provided ('" + type + "') is unsupported.", "NotSupportedError");
-            st.video = /^video\//i.test(String(type));
-            sendMedia(b, { op: "buffer", media: b.id, buffer: st.id, mime: String(type).slice(0, 200) });
-          },
-        });
-        b.states.push(st);
-        b.buffers.push(sb);
-        sendMedia(b, { op: "buffer", media: b.id, buffer: st.id, mime: mime.slice(0, 200) });
-        return { sb, st };
-      };
-
-      const SourceProto = SourceType.prototype;
-      SourceProto.addSourceBuffer = asNative(SourceProto.addSourceBuffer, (target, self, args) => {
-        const type = String(args[0]);
-        if (UNDECODABLE.test(type)) throw new DOMException("The type provided ('" + type + "') is unsupported.", "NotSupportedError");
-        const b = bridgeOfSource.get(self);
-        if (!b || b.states.length >= 8) return apply(target, self, args);
-        if (b.bufferSeq >= MAX_BUFFER_ID) throw new DOMException("This MediaSource has reached the limit of SourceBuffer objects it can handle.", "QuotaExceededError");
-        return makeBuffer(b, type).sb;
-      });
-      SourceProto.removeSourceBuffer = asNative(SourceProto.removeSourceBuffer, (target, self, args) => {
-        const b = bridgeOfSource.get(self);
-        const at = b ? b.buffers.indexOf(args[0]) : -1;
-        if (at < 0) return apply(target, self, args);
-        const st = b.states[at];
-        st.removed = true;
-        st.op++;
-        st.updating = false;
-        b.buffers.splice(at, 1);
-        b.states.splice(at, 1);
-        sendMedia(b, { op: "dropBuffer", media: b.id, buffer: st.id });
-      });
-      const sourceGetter = (name, read) => {
-        const was = getOwnPropertyDescriptor(SourceProto, name);
-        if (was && was.get)
-          defineProperty(SourceProto, name, {
-            ...was,
-            get: asNative(was.get, (target, self, args) => {
-              const b = bridgeOfSource.get(self);
-              return b ? read(b, () => apply(target, self, args)) : apply(target, self, args);
-            }),
-          });
-      };
-      sourceGetter("sourceBuffers", (b) => sourceBufferList(b.buffers));
-      sourceGetter("activeSourceBuffers", (b) => sourceBufferList(b.buffers));
-      sourceGetter("readyState", (b, real) => (b.sourceEnded ? "ended" : real()));
-      SourceProto.endOfStream = asNative(SourceProto.endOfStream, (target, self, args) => {
-        const b = bridgeOfSource.get(self);
-        if (!b) return apply(target, self, args);
-        if (args[0]) return;
-        b.sourceEnded = true;
-        sendMedia(b, { op: "end", media: b.id, ended: true });
-        sendDuration(b);
-        fire(self, "sourceended");
-      });
-      const sourceDuration = getOwnPropertyDescriptor(SourceProto, "duration");
-      if (sourceDuration && sourceDuration.set)
-        defineProperty(SourceProto, "duration", {
-          ...sourceDuration,
-          set: asNative(sourceDuration.set, (target, self, args) => {
-            const result = apply(target, self, args);
-            const b = bridgeOfSource.get(self);
-            if (b && bridgeOf.get(b.el) === b) sendDuration(b);
-            return result;
-          }),
-        });
-      const createObjectURL = URL.createObjectURL;
-      URL.createObjectURL = asNative(createObjectURL, (target, self, args) => {
-        const url = apply(target, self, args);
-        if (args[0] instanceof SourceType) {
-          sourceOfUrl.set(url, args[0]);
-          if (sourceOfUrl.size > 32) sourceOfUrl.delete(sourceOfUrl.keys().next().value);
-        }
-        return url;
-      });
-
-      const getter = (proto, name, read) => {
-        const was = getOwnPropertyDescriptor(proto, name);
-        if (!was || !was.get) return;
-        defineProperty(proto, name, {
-          ...was,
-          get: asNative(was.get, (target, self, args) => {
-            const b = bridgeOf.get(self);
-            return b ? read(b, self) : apply(target, self, args);
-          }),
-        });
-      };
-      const setter = (proto, name, write) => {
-        const was = getOwnPropertyDescriptor(proto, name);
-        if (!was || !was.set) return;
-        defineProperty(proto, name, {
-          ...was,
-          set: asNative(was.set, (target, self, args) => {
-            const b = bridgeOf.get(self);
-            return b ? write(b, self, args[0], () => apply(target, self, args)) : apply(target, self, args);
-          }),
-        });
-      };
-      const method = (proto, name, call) => {
-        const was = proto[name];
-        if (typeof was !== "function") return;
-        proto[name] = asNative(was, (target, self, args) => {
-          const b = bridgeOf.get(self);
-          return b ? call(b, self, args, () => apply(target, self, args)) : apply(target, self, args);
-        });
-      };
-      const srcDescriptor = getOwnPropertyDescriptor(Media, "src");
-      defineProperty(Media, "src", {
-        ...srcDescriptor,
-        set: asNative(srcDescriptor.set, (target, self, args) => {
-          release(self);
-          const result = apply(target, self, args);
-          const source = sourceOfUrl.get(String(args[0]));
-          if (source && self instanceof HTMLVideoElement && PLAYER_ROUTE.test(location.pathname)) bridge(self, source);
-          return result;
-        }),
-      });
-      method(Media, "load", (b, el, args, real) => {
-        release(el);
-        return real();
-      });
-      getter(Media, "currentTime", (b) => positionOf(b));
-      setter(Media, "currentTime", (b, el, value) => {
-        const time = Number(value);
-        if (!isFinite(time)) throw new TypeError("Failed to set the 'currentTime' property on 'HTMLMediaElement': The provided double value is non-finite.");
-        const duration = durationOf(b);
-        const target = Math.max(0, isFinite(duration) ? Math.min(time, duration) : time);
-        b.seekSeq++;
-        b.ended = false;
-        sendMedia(b, { op: "seek", media: b.id, time: target, seq: b.seekSeq });
-        if (!b.metadata) {
-          b.time = target;
-          b.stamp = now();
-          return;
-        }
-        b.seekTo = target;
-        b.seeking = true;
-        soon(() => {
-          if (!b.seeking || b.seekTo !== target) return;
-          fire(el, "seeking");
-          progress(b);
-        }, 0);
-      });
-      getter(Media, "paused", (b) => b.paused);
-      getter(Media, "ended", (b) => b.ended);
-      getter(Media, "seeking", (b) => b.seeking);
-      getter(Media, "readyState", (b) => (b.metadata ? (holds(b, positionOf(b)) ? 4 : 1) : 0));
-      getter(Media, "buffered", (b) => timeRanges(bufferedOf(b)));
-      getter(Media, "seekable", (b) => (isFinite(durationOf(b)) ? timeRanges([[0, durationOf(b)]]) : timeRanges(bufferedOf(b))));
-      getter(Media, "duration", (b) => durationOf(b));
-      getter(Media, "error", (b) => b.error);
-      getter(Video, "videoWidth", (b) => b.size[0]);
-      getter(Video, "videoHeight", (b) => b.size[1]);
-      getter(Video, "webkitDecodedFrameCount", (b) => Math.floor(b.frames));
-      const droppedOf = (b) => Math.min(Math.floor(b.dropped), Math.floor(b.frames));
-      getter(Video, "webkitDroppedFrameCount", droppedOf);
-      getter(Media, "webkitVideoDecodedByteCount", (b) => Math.floor(b.frames) * 30000);
-      getter(Media, "webkitAudioDecodedByteCount", (b) => Math.floor(b.frames) * 800);
-      method(Video, "getVideoPlaybackQuality", (b) =>
-        own(create(VideoPlaybackQuality.prototype), { creationTime: now(), totalVideoFrames: Math.floor(b.frames), droppedVideoFrames: droppedOf(b), corruptedVideoFrames: 0 })
-      );
-      const frameCallbacks = new Map();
-      let frameCallbackSeq = 0;
-      method(Video, "requestVideoFrameCallback", (b, el, args) => {
-        const handle = ++frameCallbackSeq;
-        const callback = args[0];
-        const wait = () =>
-          frameCallbacks.set(
-            handle,
-            apply(raf, window, [
-              guard((at) => {
-                if (!frameCallbacks.has(handle)) return;
-                if (b.paused || !b.playing) return wait();
-                frameCallbacks.delete(handle);
-                callback(at, {
-                  presentationTime: at,
-                  expectedDisplayTime: at + 16,
-                  width: b.size[0],
-                  height: b.size[1],
-                  mediaTime: positionOf(b),
-                  presentedFrames: Math.floor(b.frames),
-                  processingDuration: 0.005,
-                });
-              }),
-            ])
-          );
-        wait();
-        return handle;
-      });
-      method(Video, "cancelVideoFrameCallback", (b, el, args, real) => {
-        if (!frameCallbacks.has(args[0])) return real();
-        cancelAnimationFrame(frameCallbacks.get(args[0]));
-        frameCallbacks.delete(args[0]);
-      });
-      const fireSoon = (b, el, types) =>
-        soon(() => {
-          if (bridgeOf.get(el) === b) for (const type of types) fire(el, type);
-        }, 0);
-      method(Media, "play", (b, el) => {
-        if (b.error) return Promise.reject(new DOMException("The element has no supported sources.", "NotSupportedError"));
-        b.played = true;
-        if (b.held) takeOver(b);
-        if (b.paused) {
-          b.paused = false;
-          b.stamp = now();
-          b.lastPosition = positionOf(b);
-          fireSoon(b, el, ["play"]);
-          sendMedia(b, { op: "play", media: b.id });
-        }
-        startTicking(b);
-        return Promise.resolve();
-      });
-      method(Media, "pause", (b, el) => {
-        if (b.paused) return;
-        b.time = positionOf(b);
-        b.paused = true;
-        b.playing = false;
-        sendMedia(b, { op: "pause", media: b.id });
-        fireSoon(b, el, ["timeupdate", "pause"]);
-      });
-      setter(Media, "volume", (b, el, value, real) => {
-        real();
-        sendMedia(b, { op: "volume", media: b.id, volume: el.volume, muted: el.muted });
-      });
-      setter(Media, "muted", (b, el, value, real) => {
-        real();
-        sendMedia(b, { op: "volume", media: b.id, volume: el.volume, muted: el.muted });
-      });
-      setter(Media, "playbackRate", (b, el, value, real) => {
-        real();
-        b.time = positionOf(b);
-        b.stamp = now();
-        b.rate = el.playbackRate || 1;
-        sendMedia(b, { op: "rate", media: b.id, rate: b.rate });
-      });
-      const pictureInPictureWindow = (b) => {
-        const out = new EventTarget();
-        if (window.PictureInPictureWindow) setPrototypeOf(out, PictureInPictureWindow.prototype);
-        return own(out, { width: b.size[0], height: b.size[1], onresize: null });
-      };
-      const pictureInPictureEvent = (type, pipWindow) => {
-        try {
-          return new PictureInPictureEvent(type, { bubbles: true, pictureInPictureWindow: pipWindow });
-        } catch (e) {
-          return own(new Event(type, { bubbles: true }), { pictureInPictureWindow: pipWindow });
-        }
-      };
-      method(Video, "requestPictureInPicture", (b) => {
-        if (b.pip) return Promise.resolve(b.pipWindow);
-        return new Promise((resolve, reject) => {
-          b.pipEnter.push({ resolve, reject });
-          sendMedia(b, { op: "pip", media: b.id, enter: true });
-        });
-      });
-      const documentPip = getOwnPropertyDescriptor(Document.prototype, "pictureInPictureElement");
-      if (documentPip && documentPip.get)
-        defineProperty(Document.prototype, "pictureInPictureElement", {
-          ...documentPip,
-          get: asNative(documentPip.get, (target, self, args) => {
-            if (!bridged || !bridged.pip || self !== document) return apply(target, self, args);
-            let el = bridged.el;
-            while (el.getRootNode() !== document && el.getRootNode().host) el = el.getRootNode().host;
-            return el;
-          }),
-        });
-      const exitPip = Document.prototype.exitPictureInPicture;
-      if (typeof exitPip === "function")
-        Document.prototype.exitPictureInPicture = asNative(exitPip, (target, self, args) => {
-          const b = bridged;
-          if (!b || !b.pip || self !== document) return apply(target, self, args);
-          return new Promise((resolve) => {
-            b.pipExit.push(resolve);
-            sendMedia(b, { op: "pip", media: b.id, enter: false });
-          });
-        });
-      const pipChanged = (b, active) => {
-        if (active && !b.pip) {
-          b.pip = true;
-          b.pipWindow = pictureInPictureWindow(b);
-          for (const waiter of b.pipEnter.splice(0)) waiter.resolve(b.pipWindow);
-          b.el.dispatchEvent(pictureInPictureEvent("enterpictureinpicture", b.pipWindow));
-        } else if (!active) {
-          for (const waiter of b.pipEnter.splice(0)) waiter.reject(new DOMException("Picture-in-Picture could not start.", "NotAllowedError"));
-          for (const resolve of b.pipExit.splice(0)) resolve();
-          if (b.pip) {
-            b.pip = false;
-            b.el.dispatchEvent(pictureInPictureEvent("leavepictureinpicture", b.pipWindow));
-          }
-        }
-      };
-      const mediaKeysDescriptor = getOwnPropertyDescriptor(Media, "mediaKeys");
-      if (mediaKeysDescriptor && mediaKeysDescriptor.get)
-        defineProperty(Media, "mediaKeys", {
-          ...mediaKeysDescriptor,
-          get: asNative(mediaKeysDescriptor.get, (target, self, args) => (keysOf.has(self) ? keysOf.get(self) : apply(target, self, args))),
-        });
-      if (typeof Media.setMediaKeys === "function")
-        Media.setMediaKeys = asNative(Media.setMediaKeys, (target, self, args) => {
-          const mediaKeys = args[0];
-          if (mediaKeys && ownKeys.has(mediaKeys)) {
-            keysOf.set(self, mediaKeys);
-            return Promise.resolve();
-          }
-          keysOf.delete(self);
-          return apply(target, self, args);
-        });
-
-      const onKeys = (m) => {
-        const entry = keySessions.get(m.session);
-        if (!entry) return;
-        if (m.event === "message") {
-          const message = fromBase64(String(m.data || "")).buffer;
-          let event;
-          try {
-            event = new MediaKeyMessageEvent("message", { messageType: "license-request", message });
-          } catch (e) {
-            event = own(new Event("message"), { messageType: "license-request", message });
-          }
-          return fireOwn(entry.keySession, "message", event);
-        }
-        const waiting = entry.waiting.splice(0);
-        if (m.ok !== true) {
-          for (const waiter of waiting) waiter.reject(new DOMException("The key system rejected the licence.", "InvalidStateError"));
-          return;
-        }
-        const statuses = new Map(entry.keySession.keyStatuses);
-        for (const id of isArray(m.keyIDs) ? m.keyIDs : []) statuses.set(fromBase64(String(id)).buffer, "usable");
-        entry.keySession.keyStatuses = statuses;
-        for (const waiter of waiting) waiter.resolve();
-        fireOwn(entry.keySession, "keystatuseschange");
-      };
-      handlers.protectedVideo = (m) => {
-        if (m.event === "message" || m.event === "keys") return onKeys(m);
-        const b = bridged;
-        if (!b || m.media !== b.id) return;
-        if (m.event === "time") {
-          if (m.seq !== b.seekSeq || b.seeking || !isFinite(m.time)) return;
-          b.time = m.time;
-          b.stamp = now();
-          if (isFinite(m.dropped) && m.dropped >= b.dropped) b.dropped = m.dropped;
-          const playing = m.playing === true && !b.paused;
-          if (playing && !b.playing) {
-            b.playing = true;
-            b.lastPosition = b.time;
-            fire(b.el, "playing");
-          } else if (!playing && b.playing) {
-            b.playing = false;
-            if (!b.paused) fire(b.el, "waiting");
-          }
-          if (b.playing) startMirror(b);
-        } else if (m.event === "paused") {
-          if (typeof m.paused === "boolean" && m.paused !== b.paused) askSiteToMatch(m.paused);
-          if (m.paused === true && !b.paused) {
-            b.time = positionOf(b);
-            b.paused = true;
-            b.playing = false;
-            fire(b.el, "pause");
-          } else if (m.paused === false && b.paused) {
-            b.paused = false;
-            b.stamp = now();
-            fire(b.el, "play");
-            startTicking(b);
-          }
-        } else if (m.event === "ended") {
-          const duration = durationOf(b);
-          b.time = isFinite(duration) ? duration : positionOf(b);
-          b.playing = false;
-          b.ended = true;
-          fire(b.el, "timeupdate");
-          if (!b.paused) {
-            b.paused = true;
-            fire(b.el, "pause");
-          }
-          fire(b.el, "ended");
-        } else if (m.event === "pip") {
-          pipChanged(b, m.active === true);
-        } else if (m.event === "seekBy") {
-          if (typeof m.delta === "number" && isFinite(m.delta) && b.metadata) b.el.currentTime = positionOf(b) + m.delta;
-        } else if (m.event === "failed") {
-          b.error = own(create(MediaError.prototype), { code: 3, message: "Protected playback failed" });
-          b.paused = true;
-          b.playing = false;
-          stopTicking(b);
-          fire(b.el, "error");
-        }
-      };
-      addEventListener(
-        "visibilitychange",
-        guard(() => {
-          if (bridged) reportRect(bridged);
-        })
-      );
-      addEventListener(
-        "pagehide",
-        guard((e) => {
-          if (e.isTrusted && bridged) release(bridged.el);
-        })
-      );
-    }
-  } catch (e) {}
-  const HLS_VIDEO_ORIGINS = ["https://www.youtube.com"];
-  try {
-    if (PROTECTED_VIDEO_ON && HLS_VIDEO_ORIGINS.includes(location.origin)) {
-      const SAFARI_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Safari/605.1.15";
-      const { defineProperty, getOwnPropertyDescriptor, create } = Object;
-      const face = { userAgent: SAFARI_UA, appVersion: SAFARI_UA.slice(8), vendor: "Apple Computer, Inc.", platform: "MacIntel", userAgentData: undefined };
-      for (const name of keys(face)) {
-        const was = getOwnPropertyDescriptor(Navigator.prototype, name);
-        if (was && was.get) defineProperty(Navigator.prototype, name, { ...was, get: asNative(was.get, () => face[name]) });
-      }
-      try {
-        delete window.chrome;
-      } catch (e) {}
-      if (isTop) {
-        bridgesProtectedPlayback = () => true;
-        const FAIRPLAY = /^com\.apple\.fps/;
-        const UNDECODABLE = /vp0?[89]|av01|dav1|opus|vorbis/i;
-        const PLAYLIST_URL = /^data:application\/(?:vnd\.apple\.mpegurl|x-mpegurl)((?:;[^,]*)?),/i;
-        const HLS_TYPE = /^\s*(?:application\/(?:vnd\.apple\.mpegurl|x-mpegurl)|audio\/(?:x-)?mpegurl)\s*(?:;|$)/i;
-        const KEYED_PLAYLIST = /URI="skd:\/\//i;
-        const PART_CHARS = 30000;
-        const MAX_PARTS = 40;
-        const MAX_KEY_BYTES = 45000;
-        const TICK_MS = 250;
-        const FRAME_RATE = 24;
-        const AHEAD_LIMIT_S = 1;
-        const READY_GIVE_UP_MS = 45000;
-        const SEEK_GIVE_UP_MS = 10000;
-        const Media = HTMLMediaElement.prototype;
-        const Video = HTMLVideoElement.prototype;
-        const ElementProto = Element.prototype;
-        const fromCharCode = String.fromCharCode;
-        const { btoa, atob } = window;
-        const clock = performance;
-        const clockNow = clock.now;
-        const now = () => apply(clockNow, clock, []);
-        const soon = (fn, ms) => setTimeout(guard(fn), ms);
-        const bytesOf = (b) =>
-          b instanceof ArrayBuffer ? new Uint8Array(b) : ArrayBuffer.isView(b) ? new Uint8Array(b.buffer, b.byteOffset, b.byteLength) : new Uint8Array(0);
-        const toBase64 = (bytes) => {
-          let text = "";
-          for (let i = 0; i < bytes.length; i += 0x8000) text += apply(fromCharCode, null, bytes.subarray(i, i + 0x8000));
-          return btoa(text);
-        };
-        const fromBase64 = (text) => {
-          const binary = atob(String(text || ""));
-          const bytes = new Uint8Array(binary.length);
-          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-          return bytes;
-        };
-        const fire = (target, type) => target.dispatchEvent(new Event(type));
-        const own = (target, values) => {
-          for (const name of keys(values)) defineProperty(target, name, { value: values[name], writable: true, configurable: true, enumerable: true });
-          return target;
-        };
-        const fireOwn = (target, type, values) => {
-          const event = own(new Event(type), values || {});
-          target.dispatchEvent(event);
-          const handler = target["on" + type];
-          if (typeof handler === "function") apply(handler, target, [event]);
-        };
-        const timeRanges = (list) => {
-          const out = create(TimeRanges.prototype);
-          const at = (i) => {
-            if (!(i >= 0 && i < list.length)) throw new DOMException("The index provided is out of range.", "IndexSizeError");
-            return list[i];
-          };
-          defineProperty(out, "length", { value: list.length });
-          defineProperty(out, "start", { value: (i) => at(i)[0] });
-          defineProperty(out, "end", { value: (i) => at(i)[1] });
-          return out;
-        };
-        const playlistOf = (value) => {
-          const url = String(value);
-          const head = url.match(PLAYLIST_URL);
-          if (!head) return null;
-          try {
-            const playlist = /;base64/i.test(head[1]) ? atob(url.slice(head[0].length)) : decodeURIComponent(url.slice(head[0].length));
-            return /^#EXTM3U/.test(playlist) ? playlist : null;
-          } catch (e) {
-            return null;
-          }
-        };
-
-        const keySessions = new Map();
-        const keysOf = new WeakMap();
-        let keySessionSeq = 0;
-        const makeKeySession = (keySystem, data) => {
-          const id = ++keySessionSeq;
-          const keySession = new EventTarget();
-          own(keySession, {
-            keySystem,
-            sessionId: "ardia-" + id,
-            error: null,
-            onwebkitkeymessage: null,
-            onwebkitkeyadded: null,
-            onwebkitkeyerror: null,
-            update: (key) => {
-              const bytes = bytesOf(key);
-              if (!bytes.length || bytes.length > MAX_KEY_BYTES) throw new DOMException("The key is not valid.", "InvalidAccessError");
-              if (keySessions.has(id)) send("hlsVideo", { op: "update", session: id, data: toBase64(bytes) });
-            },
-            close: () => {
-              if (keySessions.delete(id)) send("hlsVideo", { op: "closeSession", session: id });
-            },
-          });
-          keySessions.set(id, keySession);
-          send("hlsVideo", { op: "session", session: id, data: toBase64(data) });
-          return keySession;
-        };
-        const WebKitMediaKeys = function WebKitMediaKeys(keySystem) {
-          if (!new.target) throw new TypeError("Failed to construct 'WebKitMediaKeys': Please use the 'new' operator.");
-          const system = String(keySystem);
-          if (!FAIRPLAY.test(system)) throw new DOMException("The key system is not supported.", "NotSupportedError");
-          defineProperty(this, "keySystem", { value: system, enumerable: true });
-        };
-        defineProperty(WebKitMediaKeys, "isTypeSupported", {
-          value: (keySystem, type) => FAIRPLAY.test(String(keySystem)) && !UNDECODABLE.test(String(type || "")),
-          writable: true,
-          configurable: true,
-        });
-        defineProperty(WebKitMediaKeys.prototype, "createSession", {
-          value: function createSession(type, initData) {
-            const data = bytesOf(initData);
-            if (!data.length || data.length > MAX_KEY_BYTES) throw new DOMException("The init data is not valid.", "InvalidAccessError");
-            return makeKeySession(this.keySystem, data);
-          },
-          writable: true,
-          configurable: true,
-        });
-        defineProperty(window, "WebKitMediaKeys", { value: WebKitMediaKeys, writable: true, configurable: true });
-
-        const canPlayType = Media.canPlayType;
-        Media.canPlayType = asNative(canPlayType, (target, self, args) => (HLS_TYPE.test(String(args[0])) ? "maybe" : apply(target, self, args)));
-
-        const bridgeOf = new WeakMap();
-        const heldPlaylists = new WeakMap();
-        let bridged = null;
-        let mediaSeq = 0;
-        const removeAttributeNative = ElementProto.removeAttribute;
-        const loadNative = Media.load;
-        const positionOf = (b) => {
-          if (b.seeking) return b.seekTo;
-          if (b.paused || !b.playing) return b.time;
-          const limit = isFinite(b.duration) ? b.duration : Infinity;
-          return Math.min(b.time + ((now() - b.stamp) / 1000) * b.rate, b.time + AHEAD_LIMIT_S, limit);
-        };
-        const startMirror = (b) => {
-          if (typeof videoMirror === "undefined") return;
-          const again = b.mirrored;
-          b.mirrored = true;
-          guard(() => (again ? videoMirror.ensure(b.el) : videoMirror.start(b.el)))();
-        };
-        const stopMirror = (b) => {
-          if (!b.mirrored) return;
-          b.mirrored = false;
-          if (typeof videoMirror !== "undefined") guard(() => videoMirror.stop())();
-        };
-        const stopTicking = (b) => {
-          clearInterval(b.ticker);
-          b.ticker = 0;
-        };
-        const tick = (b) => {
-          if (bridgeOf.get(b.el) !== b || b.paused) return stopTicking(b);
-          const position = positionOf(b);
-          if (b.playing) {
-            b.frames += Math.max(0, position - b.lastPosition) * FRAME_RATE;
-            fire(b.el, "timeupdate");
-          }
-          b.lastPosition = position;
-        };
-        const startTicking = (b) => {
-          if (!b.ticker) b.ticker = setInterval(guard(() => tick(b)), TICK_MS);
-        };
-        const fireSoon = (b, types) =>
-          soon(() => {
-            if (bridgeOf.get(b.el) === b) for (const type of types) fire(b.el, type);
-          }, 0);
-        const reportRect = (b) => {
-          const r = b.el.getBoundingClientRect();
-          const visible = document.visibilityState === "visible" && b.el.isConnected && r.width > 0 && r.height > 0;
-          const geometry = [r.left, r.top, r.width, r.height].join();
-          if (geometry !== b.coverKey || ++b.coverAge >= 10) {
-            b.cover = visible ? pinnedCover(b.el, r) : { top: 0, bottom: 0, radius: 0, backdrop: null };
-            b.coverKey = geometry;
-            b.coverAge = 0;
-          }
-          const rect = { op: "rect", media: b.id, x: r.left, y: r.top, width: r.width, height: r.height, scale: devicePixelRatio, visible, coverTop: b.cover.top, coverBottom: b.cover.bottom, radius: b.cover.radius, backdrop: b.cover.backdrop };
-          const key = [rect.x, rect.y, rect.width, rect.height, rect.scale, visible, rect.coverTop, rect.coverBottom, rect.radius, rect.backdrop].join();
-          if (key === b.rectKey) return;
-          b.rectKey = key;
-          send("hlsVideo", rect);
-        };
-        const watchRect = (b) => {
-          const step = guard(() => {
-            if (bridgeOf.get(b.el) !== b) return;
-            reportRect(b);
-            apply(raf, window, [step]);
-          });
-          apply(raf, window, [step]);
-        };
-        const pictureInPictureWindow = (b) => {
-          const out = new EventTarget();
-          if (window.PictureInPictureWindow) setPrototypeOf(out, PictureInPictureWindow.prototype);
-          return own(out, { width: b.size[0], height: b.size[1], onresize: null });
-        };
-        const pictureInPictureEvent = (type, pipWindow) => {
-          try {
-            return new PictureInPictureEvent(type, { bubbles: true, pictureInPictureWindow: pipWindow });
-          } catch (e) {
-            return own(new Event(type, { bubbles: true }), { pictureInPictureWindow: pipWindow });
-          }
-        };
-        const pipChanged = (b, active) => {
-          if (active && !b.pip) {
-            b.pip = true;
-            b.pipWindow = pictureInPictureWindow(b);
-            for (const waiter of b.pipEnter.splice(0)) waiter.resolve(b.pipWindow);
-            b.el.dispatchEvent(pictureInPictureEvent("enterpictureinpicture", b.pipWindow));
-          } else if (!active) {
-            for (const waiter of b.pipEnter.splice(0)) waiter.reject(new DOMException("Picture-in-Picture could not start.", "NotAllowedError"));
-            for (const resolve of b.pipExit.splice(0)) resolve();
-            if (b.pip) {
-              b.pip = false;
-              b.el.dispatchEvent(pictureInPictureEvent("leavepictureinpicture", b.pipWindow));
-            }
-          }
-        };
-        const release = (el) => {
-          const b = bridgeOf.get(el);
-          if (!b) return;
-          bridgeOf.delete(el);
-          stopTicking(b);
-          stopMirror(b);
-          pipChanged(b, false);
-          if (bridged === b) bridged = null;
-          send("hlsVideo", { op: "detach", media: b.id });
-        };
-        const fail = (b) => {
-          if (b.error) return;
-          b.error = own(create(MediaError.prototype), { code: 3, message: "Protected playback failed" });
-          b.paused = true;
-          b.playing = false;
-          stopTicking(b);
-          fire(b.el, "error");
-          send("hlsVideo", { op: "failed", media: b.id });
-        };
-        const bridge = (el, url, playlist) => {
-          if (bridged && bridged.el !== el) release(bridged.el);
-          release(el);
-          heldPlaylists.delete(el);
-          apply(removeAttributeNative, el, ["src"]);
-          apply(loadNative, el, []);
-          const b = {
-            id: ++mediaSeq,
-            el,
-            url,
-            paused: true,
-            ended: false,
-            seeking: false,
-            seekTo: 0,
-            seekSeq: 0,
-            time: 0,
-            stamp: now(),
-            playing: false,
-            rate: el.playbackRate || 1,
-            ready: false,
-            waiting: false,
-            duration: NaN,
-            buffered: [],
-            seekableRange: null,
-            size: [0, 0],
-            error: null,
-            frames: 0,
-            lastPosition: 0,
-            rectKey: "",
-            ticker: 0,
-            mirrored: false,
-            pip: false,
-            pipWindow: null,
-            pipEnter: [],
-            pipExit: [],
-          };
-          bridgeOf.set(el, b);
-          bridged = b;
-          if (typeof videoMirror !== "undefined") videoMirror.prepare();
-          const parts = Math.max(1, Math.ceil(playlist.length / PART_CHARS));
-          for (let part = 0; part < parts; part++)
-            send("hlsVideo", {
-              op: "load",
-              media: b.id,
-              part,
-              parts,
-              playlist: playlist.slice(part * PART_CHARS, (part + 1) * PART_CHARS),
-              volume: el.volume,
-              muted: el.muted,
-              rate: b.rate,
-            });
-          fireSoon(b, ["loadstart"]);
-          watchRect(b);
-          soon(() => {
-            if (bridgeOf.get(el) === b && !b.ready) fail(b);
-          }, READY_GIVE_UP_MS);
-        };
-        const takeSrc = (el, value) => {
-          const url = String(value);
-          const playlist = playlistOf(url);
-          if (playlist === null || !(el instanceof HTMLVideoElement) || playlist.length > PART_CHARS * MAX_PARTS) {
-            heldPlaylists.delete(el);
-            return false;
-          }
-          if (!keysOf.has(el) && !KEYED_PLAYLIST.test(playlist)) {
-            heldPlaylists.set(el, url);
-            return false;
-          }
-          bridge(el, url, playlist);
-          return true;
-        };
-        defineProperty(Media, "webkitSetMediaKeys", {
-          value: function webkitSetMediaKeys(mediaKeys) {
-            if (mediaKeys && !(mediaKeys instanceof WebKitMediaKeys))
-              throw new TypeError("Failed to execute 'webkitSetMediaKeys' on 'HTMLMediaElement': parameter 1 is not of type 'WebKitMediaKeys'.");
-            if (!mediaKeys) return void keysOf.delete(this);
-            keysOf.set(this, mediaKeys);
-            const held = heldPlaylists.get(this);
-            if (held && !bridgeOf.has(this)) guard(takeSrc)(this, held);
-          },
-          writable: true,
-          configurable: true,
-        });
-        defineProperty(Media, "webkitKeys", { get: asNative(function webkitKeys() {}, (target, self) => keysOf.get(self) || null), configurable: true });
-
-        const getter = (proto, name, read) => {
-          const was = getOwnPropertyDescriptor(proto, name);
-          if (!was || !was.get) return;
-          defineProperty(proto, name, {
-            ...was,
-            get: asNative(was.get, (target, self, args) => {
-              const b = bridgeOf.get(self);
-              return b ? read(b, self) : apply(target, self, args);
-            }),
-          });
-        };
-        const setter = (proto, name, write) => {
-          const was = getOwnPropertyDescriptor(proto, name);
-          if (!was || !was.set) return;
-          defineProperty(proto, name, {
-            ...was,
-            set: asNative(was.set, (target, self, args) => {
-              const b = bridgeOf.get(self);
-              return b ? write(b, self, args[0], () => apply(target, self, args)) : apply(target, self, args);
-            }),
-          });
-        };
-        const method = (proto, name, call) => {
-          const was = proto[name];
-          if (typeof was !== "function") return;
-          proto[name] = asNative(was, (target, self, args) => {
-            const b = bridgeOf.get(self);
-            return b ? call(b, self, args, () => apply(target, self, args)) : apply(target, self, args);
-          });
-        };
-        const srcDescriptor = getOwnPropertyDescriptor(Media, "src");
-        defineProperty(Media, "src", {
-          ...srcDescriptor,
-          get: asNative(srcDescriptor.get, (target, self, args) => {
-            const b = bridgeOf.get(self);
-            return b ? b.url : apply(target, self, args);
-          }),
-          set: asNative(srcDescriptor.set, (target, self, args) => {
-            if (guard(takeSrc)(self, args[0])) return;
-            guard(release)(self);
-            return apply(target, self, args);
-          }),
-        });
-        const srcObject = getOwnPropertyDescriptor(Media, "srcObject");
-        if (srcObject && srcObject.set)
-          defineProperty(Media, "srcObject", {
-            ...srcObject,
-            set: asNative(srcObject.set, (target, self, args) => {
-              guard(release)(self);
-              heldPlaylists.delete(self);
-              return apply(target, self, args);
-            }),
-          });
-        const isSrc = (name) => typeof name === "string" && name.toLowerCase() === "src";
-        defineProperty(Media, "setAttribute", {
-          ...getOwnPropertyDescriptor(ElementProto, "setAttribute"),
-          value: asNative(ElementProto.setAttribute, (target, self, args) => {
-            if (isSrc(args[0])) {
-              if (guard(takeSrc)(self, args[1])) return;
-              guard(release)(self);
-            }
-            return apply(target, self, args);
-          }),
-        });
-        defineProperty(Media, "removeAttribute", {
-          ...getOwnPropertyDescriptor(ElementProto, "removeAttribute"),
-          value: asNative(removeAttributeNative, (target, self, args) => {
-            if (isSrc(args[0])) {
-              guard(release)(self);
-              heldPlaylists.delete(self);
-            }
-            return apply(target, self, args);
-          }),
-        });
-        method(Media, "load", (b, el, args, real) => {
-          release(el);
-          return real();
-        });
-        getter(Media, "currentSrc", (b) => b.url);
-        getter(Media, "currentTime", (b) => positionOf(b));
-        setter(Media, "currentTime", (b, el, value) => {
-          const time = Number(value);
-          if (!isFinite(time)) throw new TypeError("Failed to set the 'currentTime' property on 'HTMLMediaElement': The provided double value is non-finite.");
-          const target = Math.max(0, isFinite(b.duration) ? Math.min(time, b.duration) : time);
-          const seq = ++b.seekSeq;
-          b.ended = false;
-          send("hlsVideo", { op: "seek", media: b.id, time: target, seq });
-          if (!b.ready) {
-            b.time = target;
-            b.stamp = now();
-            return;
-          }
-          b.seekTo = target;
-          b.seeking = true;
-          b.playing = false;
-          fireSoon(b, ["seeking"]);
-          soon(() => {
-            if (bridgeOf.get(el) !== b || !b.seeking || b.seekSeq !== seq) return;
-            b.seeking = false;
-            b.time = target;
-            b.stamp = now();
-            fire(el, "seeked");
-            fire(el, "timeupdate");
-          }, SEEK_GIVE_UP_MS);
-        });
-        getter(Media, "paused", (b) => b.paused);
-        getter(Media, "ended", (b) => b.ended);
-        getter(Media, "seeking", (b) => b.seeking);
-        getter(Media, "readyState", (b) => (!b.ready ? 0 : b.seeking || b.waiting ? 2 : 4));
-        getter(Media, "networkState", (b) => (b.ready ? 1 : 2));
-        getter(Media, "buffered", (b) => timeRanges(b.buffered));
-        getter(Media, "seekable", (b) => timeRanges(b.seekableRange ? [b.seekableRange] : isFinite(b.duration) ? [[0, b.duration]] : []));
-        getter(Media, "played", (b) => timeRanges(b.ready ? [[0, positionOf(b)]] : []));
-        getter(Media, "duration", (b) => b.duration);
-        getter(Media, "error", (b) => b.error);
-        getter(Video, "videoWidth", (b) => b.size[0]);
-        getter(Video, "videoHeight", (b) => b.size[1]);
-        getter(Video, "webkitDecodedFrameCount", (b) => Math.floor(b.frames));
-        getter(Video, "webkitDroppedFrameCount", () => 0);
-        getter(Media, "webkitVideoDecodedByteCount", (b) => Math.floor(b.frames) * 30000);
-        getter(Media, "webkitAudioDecodedByteCount", (b) => Math.floor(b.frames) * 800);
-        method(Video, "getVideoPlaybackQuality", (b) =>
-          own(create(VideoPlaybackQuality.prototype), { creationTime: now(), totalVideoFrames: Math.floor(b.frames), droppedVideoFrames: 0, corruptedVideoFrames: 0 })
-        );
-        const frameCallbacks = new Map();
-        let frameCallbackSeq = 0;
-        method(Video, "requestVideoFrameCallback", (b, el, args) => {
-          const handle = ++frameCallbackSeq;
-          const callback = args[0];
-          const wait = () =>
-            frameCallbacks.set(
-              handle,
-              apply(raf, window, [
-                guard((at) => {
-                  if (!frameCallbacks.has(handle)) return;
-                  if (b.paused || !b.playing) return wait();
-                  frameCallbacks.delete(handle);
-                  callback(at, {
-                    presentationTime: at,
-                    expectedDisplayTime: at + 16,
-                    width: b.size[0],
-                    height: b.size[1],
-                    mediaTime: positionOf(b),
-                    presentedFrames: Math.floor(b.frames),
-                    processingDuration: 0.005,
-                  });
-                }),
-              ])
-            );
-          wait();
-          return handle;
-        });
-        method(Video, "cancelVideoFrameCallback", (b, el, args, real) => {
-          if (!frameCallbacks.has(args[0])) return real();
-          cancelAnimationFrame(frameCallbacks.get(args[0]));
-          frameCallbacks.delete(args[0]);
-        });
-        method(Media, "play", (b, el) => {
-          if (b.error) return Promise.reject(new DOMException("The element has no supported sources.", "NotSupportedError"));
-          if (b.paused && blockAutoplay && !askedToPlay()) return Promise.reject(autoplayRefusal());
-          if (b.paused) {
-            if (b.ended) {
-              b.ended = false;
-              b.time = 0;
-              b.seekSeq++;
-              send("hlsVideo", { op: "seek", media: b.id, time: 0, seq: b.seekSeq });
-            }
-            b.paused = false;
-            b.stamp = now();
-            b.lastPosition = positionOf(b);
-            fireSoon(b, ["play"]);
-            send("hlsVideo", { op: "play", media: b.id });
-          }
-          startTicking(b);
-          return Promise.resolve();
-        });
-        method(Media, "pause", (b) => {
-          if (b.paused) return;
-          b.time = positionOf(b);
-          b.stamp = now();
-          b.paused = true;
-          b.playing = false;
-          send("hlsVideo", { op: "pause", media: b.id });
-          fireSoon(b, ["timeupdate", "pause"]);
-        });
-        setter(Media, "volume", (b, el, value, real) => {
-          real();
-          send("hlsVideo", { op: "volume", media: b.id, volume: el.volume, muted: el.muted });
-        });
-        setter(Media, "muted", (b, el, value, real) => {
-          real();
-          send("hlsVideo", { op: "volume", media: b.id, volume: el.volume, muted: el.muted });
-        });
-        setter(Media, "playbackRate", (b, el, value, real) => {
-          real();
-          b.time = positionOf(b);
-          b.stamp = now();
-          b.rate = el.playbackRate || 1;
-          send("hlsVideo", { op: "rate", media: b.id, rate: b.rate });
-        });
-        method(Video, "requestPictureInPicture", (b) => {
-          if (b.pip) return Promise.resolve(b.pipWindow);
-          return new Promise((resolve, reject) => {
-            b.pipEnter.push({ resolve, reject });
-            send("hlsVideo", { op: "pip", media: b.id, enter: true });
-          });
-        });
-        const documentPip = getOwnPropertyDescriptor(Document.prototype, "pictureInPictureElement");
-        if (documentPip && documentPip.get)
-          defineProperty(Document.prototype, "pictureInPictureElement", {
-            ...documentPip,
-            get: asNative(documentPip.get, (target, self, args) => {
-              if (!bridged || !bridged.pip || self !== document) return apply(target, self, args);
-              let el = bridged.el;
-              while (el.getRootNode() !== document && el.getRootNode().host) el = el.getRootNode().host;
-              return el;
-            }),
-          });
-        const exitPip = Document.prototype.exitPictureInPicture;
-        if (typeof exitPip === "function")
-          Document.prototype.exitPictureInPicture = asNative(exitPip, (target, self, args) => {
-            const b = bridged;
-            if (!b || !b.pip || self !== document) return apply(target, self, args);
-            return new Promise((resolve) => {
-              b.pipExit.push(resolve);
-              send("hlsVideo", { op: "pip", media: b.id, enter: false });
-            });
-          });
-
-        const onKeys = (m) => {
-          const keySession = keySessions.get(m.session);
-          if (!keySession) return;
-          if (m.event === "keymessage") return fireOwn(keySession, "webkitkeymessage", { message: fromBase64(m.data), destinationURL: "" });
-          if (m.event === "keyadded") return fireOwn(keySession, "webkitkeyadded");
-          keySession.error = { code: 1, systemCode: typeof m.code === "number" && isFinite(m.code) ? m.code : 0 };
-          fireOwn(keySession, "webkitkeyerror");
-        };
-        const sameSize = (b, size) => isArray(size) && size[0] === b.size[0] && size[1] === b.size[1];
-        const noteTime = (b, m) => {
-          if (isArray(m.buffered)) b.buffered = m.buffered.filter((r) => isArray(r) && isFinite(r[0]) && isFinite(r[1]) && r[1] >= r[0]).slice(0, 16);
-          b.seekableRange = isArray(m.seekable) && isFinite(m.seekable[0]) && isFinite(m.seekable[1]) ? [m.seekable[0], m.seekable[1]] : null;
-          const duration = m.duration === "live" ? Infinity : typeof m.duration === "number" && m.duration > 0 ? m.duration : NaN;
-          if (!(duration === b.duration || (Number.isNaN(duration) && Number.isNaN(b.duration)))) {
-            b.duration = duration;
-            if (b.ready) fire(b.el, "durationchange");
-          }
-          if (isArray(m.size) && m.size[0] > 0 && m.size[1] > 0 && !sameSize(b, m.size)) {
-            b.size = [m.size[0], m.size[1]];
-            if (b.ready) fire(b.el, "resize");
-          }
-        };
-        handlers.hlsVideo = (m) => {
-          if (!m) return;
-          if (m.event === "keymessage" || m.event === "keyadded" || m.event === "keyerror") return onKeys(m);
-          const b = bridged;
-          if (!b || m.media !== b.id) return;
-          if (m.event === "needkey") {
-            const initData = fromBase64(m.data);
-            if (initData.length) fireOwn(b.el, "webkitneedkey", { initData });
-          } else if (m.event === "ready") {
-            noteTime(b, m);
-            if (b.ready) return;
-            b.ready = true;
-            for (const type of ["durationchange", "loadedmetadata", "loadeddata", "canplay", "canplaythrough"]) fire(b.el, type);
-            if (b.size[0]) fire(b.el, "resize");
-          } else if (m.event === "time") {
-            noteTime(b, m);
-            if (m.seq !== b.seekSeq || b.seeking || !isFinite(m.time)) return;
-            b.time = m.time;
-            b.stamp = now();
-            const playing = m.playing === true && !b.paused;
-            const waiting = m.waiting === true && !b.paused;
-            if (playing && !b.playing) {
-              b.playing = true;
-              b.waiting = false;
-              b.lastPosition = b.time;
-              fire(b.el, "playing");
-            } else if (!playing && b.playing) {
-              b.playing = false;
-              if (!b.paused) {
-                b.waiting = true;
-                fire(b.el, "waiting");
-              }
-            } else if (waiting !== b.waiting) {
-              b.waiting = waiting;
-              if (waiting) fire(b.el, "waiting");
-            }
-            if (b.playing) startMirror(b);
-          } else if (m.event === "seeked") {
-            if (m.seq !== b.seekSeq || !isFinite(m.time)) return;
-            b.time = m.time;
-            b.stamp = now();
-            if (!b.seeking) return;
-            b.seeking = false;
-            fire(b.el, "seeked");
-            fire(b.el, "timeupdate");
-          } else if (m.event === "jumped") {
-            if (b.seeking || !isFinite(m.time)) return;
-            b.time = m.time;
-            b.stamp = now();
-            b.ended = false;
-            fire(b.el, "seeking");
-            fire(b.el, "seeked");
-            fire(b.el, "timeupdate");
-          } else if (m.event === "paused") {
-            if (typeof m.paused === "boolean" && m.paused !== b.paused) askSiteToMatch(m.paused);
-            if (m.paused === true && !b.paused) {
-              b.time = positionOf(b);
-              b.stamp = now();
-              b.paused = true;
-              b.playing = false;
-              fire(b.el, "pause");
-            } else if (m.paused === false && b.paused) {
-              b.paused = false;
-              b.stamp = now();
-              fire(b.el, "play");
-              startTicking(b);
-            }
-          } else if (m.event === "ended") {
-            b.time = isFinite(b.duration) ? b.duration : positionOf(b);
-            b.stamp = now();
-            b.playing = false;
-            b.ended = true;
-            fire(b.el, "timeupdate");
-            if (!b.paused) {
-              b.paused = true;
-              fire(b.el, "pause");
-            }
-            stopTicking(b);
-            fire(b.el, "ended");
-          } else if (m.event === "pip") {
-            pipChanged(b, m.active === true);
-          } else if (m.event === "failed") {
-            fail(b);
-          }
-        };
-        addEventListener(
-          "visibilitychange",
-          guard(() => {
-            if (bridged) reportRect(bridged);
-          })
-        );
-        addEventListener(
-          "pagehide",
-          guard((e) => {
-            if (e.isTrusted && bridged) release(bridged.el);
-          })
-        );
-      }
-    }
-  } catch (e) {}
   try {
     const NavigatorType = window.Navigator;
     const requestAccess = NavigatorType && NavigatorType.prototype.requestMediaKeySystemAccess;
@@ -4256,23 +1700,28 @@
       const GRACE_MS = 5000;
       const KEYS_GRACE_MS = 2000;
       const MEDIA_ERR_DECODE = 3;
+      const MEDIA_ERR_ENCRYPTED = 5;
+      const decryptFailure = /decrypt|cdm|licen[cs]e|\bkeys?\b/i;
+      const failedKeyStatus = /^(output-restricted|internal-error)$/;
       let drmSent = false;
       let refused = "";
+      let refusedStage = "";
       const attempted = new Set();
       const grantedOnActivation = new WeakSet();
-      const needsProtectedPlayback = (keySystem) => {
-        if (drmSent || bridgesProtectedPlayback()) return;
+      const protectedKeys = new WeakMap();
+      const protectedSessions = new WeakMap();
+      const needsProtectedPlayback = (keySystem, stage) => {
+        if (drmSent) return;
         drmSent = true;
-        send("drm", { keySystem });
+        send("drm", { keySystem, stage });
       };
-      reportProtectedPlayback = needsProtectedPlayback;
       const progressed = (m) => m.readyState >= 2 && m.currentTime > 0;
       const anyProgressed = () => [...attempted, ...document.querySelectorAll("video, audio")].some(progressed);
       const after = (ms, fn) => setTimeout(guard(fn), ms);
       const stalled = (m) => !m.paused && !m.ended && !progressed(m);
       const judgeAttempt = (m) =>
         after(GRACE_MS, () => {
-          if (refused && stalled(m)) needsProtectedPlayback(refused);
+          if (refused && stalled(m)) needsProtectedPlayback(refused, refusedStage);
         });
       const onAttempt = (m) => {
         if (attempted.size >= 16) attempted.delete(attempted.values().next().value);
@@ -4281,27 +1730,39 @@
       };
       const onNeedsKey = (m) =>
         after(KEYS_GRACE_MS, () => {
-          if (!m.mediaKeys && !progressed(m)) needsProtectedPlayback(refused);
+          if (!m.mediaKeys && !progressed(m)) needsProtectedPlayback(refused, refusedStage || "access");
         });
+      const keysOf = (m) => (m.mediaKeys ? protectedKeys.get(m.mediaKeys) : undefined);
+      const failedDecrypt = (error) =>
+        error.code === MEDIA_ERR_ENCRYPTED || (error.code === MEDIA_ERR_DECODE && typeof error.message === "string" && apply(test, decryptFailure, [error.message]));
+      const onMediaError = (m) => {
+        if (!m.error) return;
+        if (refused && m.error.code === MEDIA_ERR_DECODE) return needsProtectedPlayback(refused, refusedStage);
+        const keys = keysOf(m);
+        if (keys && failedDecrypt(m.error)) needsProtectedPlayback(keys.keySystem, "licence");
+      };
       const onDrmMediaEvent = (e) => {
         const m = e.target;
         if (drmSent || !(m instanceof HTMLMediaElement)) return;
         if (e.type === "play") onAttempt(m);
         else if (e.type === "encrypted" || e.type === "waitingforkey") onNeedsKey(m);
-        else if (e.type === "error" && refused && m.error && m.error.code === MEDIA_ERR_DECODE) needsProtectedPlayback(refused);
+        else if (e.type === "error") onMediaError(m);
       };
       const drmMediaEvents = ["play", "encrypted", "waitingforkey", "error"];
       for (const type of drmMediaEvents) document.addEventListener(type, guard(onDrmMediaEvent), true);
       detachedMediaWatchers.push((m) => {
         for (const type of drmMediaEvents) m.addEventListener(type, guard(onDrmMediaEvent));
       });
-      const onRefused = (keySystem, activated) => {
+      const onRefused = (keySystem, activated, stage) => {
         if (drmSent) return;
-        if (!refused) refused = keySystem;
+        if (!refused || (refusedStage === "access" && stage !== "access")) {
+          refused = keySystem;
+          refusedStage = stage;
+        }
         for (const m of attempted) if (stalled(m)) judgeAttempt(m);
         if (activated)
           after(GRACE_MS, () => {
-            if (!anyProgressed()) needsProtectedPlayback(keySystem);
+            if (!anyProgressed()) needsProtectedPlayback(refused || keySystem, refusedStage || stage);
           });
       };
       const wrapped = asNative(requestAccess, (target, self, args) => {
@@ -4310,7 +1771,7 @@
         if (!drmSent && typeof keySystem === "string" && apply(test, protectedSystem, [keySystem])) {
           const activated = !!(navigator.userActivation && navigator.userActivation.isActive);
           const remember = guard((access) => activated && access && typeof access === "object" && grantedOnActivation.add(access));
-          apply(then, result, [remember, () => onRefused(keySystem, activated)]);
+          apply(then, result, [remember, () => onRefused(keySystem, activated, "access")]);
         }
         return result;
       });
@@ -4329,7 +1790,8 @@
             const keySystem = keySystemFrom(self);
             if (typeof keySystem === "string" && apply(test, protectedSystem, [keySystem])) {
               const activated = !!(navigator.userActivation && navigator.userActivation.isActive) || grantedOnActivation.has(self);
-              apply(then, result, [null, () => onRefused(keySystem, activated)]);
+              const rememberKeys = guard((keys) => keys && typeof keys === "object" && protectedKeys.set(keys, { keySystem, activated }));
+              apply(then, result, [rememberKeys, () => onRefused(keySystem, activated, "createMediaKeys")]);
             }
           }
           return result;
@@ -4338,6 +1800,51 @@
           ...Object.getOwnPropertyDescriptor(AccessType.prototype, "createMediaKeys"),
           value: wrappedCreate,
         });
+        const KeysType = window.MediaKeys;
+        const SessionType = window.MediaKeySession;
+        const createSession = KeysType && KeysType.prototype.createSession;
+        const updateSession = SessionType && SessionType.prototype.update;
+        const keyStatusesOf = SessionType && Object.getOwnPropertyDescriptor(SessionType.prototype, "keyStatuses");
+        const StatusMap = window.MediaKeyStatusMap;
+        const eachStatus = StatusMap && StatusMap.prototype.forEach;
+        const listenOn = window.EventTarget && window.EventTarget.prototype.addEventListener;
+        if (typeof createSession === "function" && typeof updateSession === "function") {
+          const onSessionFailed = (session, stage) => {
+            const keys = protectedSessions.get(session);
+            if (keys) onRefused(keys.keySystem, keys.activated, stage);
+          };
+          const onKeyStatuses = guard((e) => {
+            const session = e.target;
+            if (drmSent || !protectedSessions.has(session)) return;
+            const statuses = apply(keyStatusesOf.get, session, []);
+            let failed = false;
+            apply(eachStatus, statuses, [(status) => (failed = failed || (typeof status === "string" && apply(test, failedKeyStatus, [status])))]);
+            if (failed) onSessionFailed(session, "keystatus");
+          });
+          const watchesStatuses = keyStatusesOf && typeof keyStatusesOf.get === "function" && typeof eachStatus === "function" && typeof listenOn === "function";
+          const wrappedSession = asNative(createSession, (target, self, args) => {
+            const session = apply(target, self, args);
+            const keys = protectedKeys.get(self);
+            if (keys && session && typeof session === "object") {
+              protectedSessions.set(session, keys);
+              if (watchesStatuses) apply(listenOn, session, ["keystatuseschange", onKeyStatuses]);
+            }
+            return session;
+          });
+          const wrappedUpdate = asNative(updateSession, (target, self, args) => {
+            const result = apply(target, self, args);
+            if (!drmSent && protectedSessions.has(self)) apply(then, result, [null, guard(() => onSessionFailed(self, "licence"))]);
+            return result;
+          });
+          Object.defineProperty(KeysType.prototype, "createSession", {
+            ...Object.getOwnPropertyDescriptor(KeysType.prototype, "createSession"),
+            value: wrappedSession,
+          });
+          Object.defineProperty(SessionType.prototype, "update", {
+            ...Object.getOwnPropertyDescriptor(SessionType.prototype, "update"),
+            value: wrappedUpdate,
+          });
+        }
       }
     }
   } catch (e) {}
@@ -4387,28 +1894,14 @@
     else restoreDisplayMedia();
     if (config.fieldTiming) setFieldTiming(true);
     if (typeof config.selectionPopover === "boolean" && handlers.selectionPopover) handlers.selectionPopover(config.selectionPopover);
+    if (config.fieldProvider !== undefined) handlers.fieldProvider(config.fieldProvider);
   };
-  send("hello", { top: isTop, url: location.href, protectedVideo: PROTECTED_VIDEO_ON, started: performance.timeOrigin });
+  send("hello", { top: isTop, url: location.href });
+  const tellExclusive = guard(() => send("exclusive", { held: !!(document.pointerLockElement || document.fullscreenElement) }));
+  document.addEventListener("pointerlockchange", tellExclusive);
+  document.addEventListener("fullscreenchange", tellExclusive);
 
   if (!isTop) return receive;
-
-  let contextMenuAt = null;
-  addEventListener(
-    "contextmenu",
-    (e) => {
-      if (e.isTrusted) contextMenuAt = { x: e.clientX, y: e.clientY, at: performance.now() };
-    },
-    { capture: true, passive: true },
-  );
-  document.addEventListener("ardia-hide-element", () => {
-    const asked = contextMenuAt;
-    contextMenuAt = null;
-    if (asked && performance.now() - asked.at < 60000) send("hideElement", { x: asked.x, y: asked.y });
-  });
-  document.addEventListener("ardia-hide-element-in-frame", () => {
-    contextMenuAt = null;
-    send("hideElement", { x: -1, y: -1 });
-  });
 
   const parse = (css) => {
     if (!css) return null;
@@ -4589,18 +2082,20 @@
     send("theme", { color, source });
   });
   let themeQueued = false;
+  let pageThemeQueued = false;
+  const PAGE_THEME_GAP_MS = 100;
   const themeTouched = (records) => {
+    let page = false;
     for (const r of records) {
       if (r.type === "childList") {
-        for (const n of r.addedNodes) if (n.nodeName === "META") return true;
-        for (const n of r.removedNodes) if (n.nodeName === "META") return true;
-      } else if (r.target.nodeName === "META") return true;
-      else if ((r.target === document.documentElement || r.target === document.body) && r.oldValue !== r.target.getAttribute(r.attributeName)) return true;
+        for (const n of r.addedNodes) if (n.nodeName === "META") return "meta";
+        for (const n of r.removedNodes) if (n.nodeName === "META") return "meta";
+      } else if (r.target.nodeName === "META") return "meta";
+      else if ((r.target === document.documentElement || r.target === document.body) && r.oldValue !== r.target.getAttribute(r.attributeName)) page = true;
     }
-    return false;
+    return page ? "page" : null;
   };
-  const scheduleTheme = () => {
-    metaCache = undefined;
+  const queueTheme = () => {
     if (themeQueued) return;
     themeQueued = true;
     nextFrame(() => {
@@ -4608,9 +2103,26 @@
       reportTheme();
     });
   };
+  const scheduleTheme = () => {
+    metaCache = undefined;
+    queueTheme();
+  };
+  const queuePageTheme = () => {
+    if (pageThemeQueued) return;
+    pageThemeQueued = true;
+    after(() => {
+      pageThemeQueued = false;
+      queueTheme();
+    }, PAGE_THEME_GAP_MS);
+  };
+  const themeChanged = (records) => {
+    const touched = themeTouched(records);
+    if (touched === "meta") scheduleTheme();
+    else if (touched === "page") queuePageTheme();
+  };
   const startTheme = () => {
     reportTheme();
-    const observer = new NativeMutationObserver((records) => themeTouched(records) && scheduleTheme());
+    const observer = new NativeMutationObserver(themeChanged);
     observer.observe(document.head || document.documentElement, {
       childList: true,
       subtree: true,

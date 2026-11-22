@@ -1,3 +1,4 @@
+import { foreignWriteHooks } from "../browser/foreignWriteHooks";
 import { cleanUrl, markdownLink } from "@ardia/core";
 import { copyText } from "../../platform/clipboard";
 import { prompt } from "../../platform/dialogs";
@@ -28,12 +29,6 @@ export function clickTab(windowId: string, tabId: string, mods: ClickMods = {}) 
   const fromShownTab = ranging && anchorOutdated(store(), windowId);
   store().clickTab(windowId, tabId, mods);
   if (ranging && store().selection[windowId]?.length) noteRangeSelect(fromShownTab);
-}
-
-export function tabPlace(tabId: string): string {
-  const s = store();
-  const tab = s.tabs[tabId];
-  return JSON.stringify([tab?.windowId, tab && s.windows[tab.windowId]?.tabIds, tab?.pin, groupOf(s, tabId)?.id ?? null]);
 }
 
 export const resetSidebarWidth = () => store().updateSettings({ sidebarWidth: activeLook().sidebarWidth ?? DEFAULT_SIDEBAR_WIDTH });
@@ -69,7 +64,7 @@ export async function startRename(windowId: string, target: Target) {
         confirmTitle: "Update",
         windowId,
       });
-      if (name !== null) store().updateTab(tab.id, { customTitle: name });
+      if (name !== null) foreignWriteHooks.around(() => store().updateTab(tab.id, { customTitle: name }));
       return;
     }
     const group = groupOf(s, tab.id);
@@ -93,7 +88,7 @@ async function renameGroupInSheet(windowId: string, groupId: string) {
     confirmTitle: "Update",
     windowId,
   });
-  if (name !== null && store().groups[groupId]) store().updateGroup(groupId, { name: name.trim() });
+  if (name !== null && store().groups[groupId]) foreignWriteHooks.around(() => store().updateGroup(groupId, { name: name.trim() }));
 }
 
 export function commitRename(target: Target, text: string) {

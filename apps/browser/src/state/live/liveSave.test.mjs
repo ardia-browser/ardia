@@ -33,3 +33,24 @@ test("refetching a settled folder with nothing new does not rewrite the file", (
   store.flushLive();
   assert.equal(docs.get("live.json"), undefined);
 });
+
+test("a refresh that brings back the same items keeps the folder's items, known and unread as they were", () => {
+  const items = [1, 2].map((n) => ({ id: `same:${n}`, source: "github", url: `https://example.test/${n}`, title: `${n}`, subtitle: "", icon: null, updatedAt: n }));
+  const id = store.createFolder("p", "pullRequests");
+  store.applyFetch(id, items, {}, 1);
+  store.applyFetch(id, items, {}, 2);
+  const before = store.live();
+  let notified = 0;
+  const stop = store.useLive.subscribe((s, prev) => void (s.items !== prev.items || s.known !== prev.known || s.unread !== prev.unread ? notified++ : 0));
+  store.applyFetch(id, [...items], {}, 3);
+  stop();
+  const after = store.live();
+  assert.equal(after.items, before.items);
+  assert.equal(after.known, before.known);
+  assert.equal(after.unread, before.unread);
+  assert.equal(after.status[id].lastFetch, 3);
+  assert.equal(notified, 0);
+  store.applyFetch(id, [{ ...items[0], title: "renamed" }, items[1]], {}, 4);
+  assert.notEqual(store.live().items, before.items);
+  assert.equal(store.live().items[id][0].title, "renamed");
+});

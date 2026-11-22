@@ -1,18 +1,23 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pressable, View, type ViewStyle } from "react-native";
-import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
+import { NAV_HINTS, useShortcutHints, withShortcut, type NavHints } from "../../state/commands/commandShortcuts";
 import { layout, useTheme } from "../ui/theme";
 import { useActiveTabId, useSettings, useSidebarSide, useTabLive, useWindowFullScreen, useWindowId } from "../../state/browser/hooks";
 import { toggleSidebar } from "../../state/windows/actions";
 import { openEmptySidebarField } from "../../state/omnibox/barState";
 import { isAddressBarInSidebar } from "../../state/sidebar/current";
 import { extensionsFitting, ToolbarExtensions, useToolbarExtensionsWidth } from "../extensions/ToolbarExtensions";
+import { PluginToolbarItems } from "../plugins/PluginToolbarItems";
+import { TabSwipeArea } from "../window/TabSwipe";
+import { PLUGIN_CHROME, usePluginChrome } from "../../state/plugins/chrome";
 import { useHistoryAvailability } from "../../state/tabs/navigation";
 import { toolbarPalette, type ToolbarPalette } from "../ui/toolbarColors";
 import { Button, type ButtonHit, FadeLabel, radius, space, ToolbarRowContext, useHover } from "../ui";
 import { TOOLBAR_ROWS } from "../../lib/toolbarRow";
-import { setUrlAnchor, useSidebarCaptionRoom, watchSidebarFieldPlace } from "../../state/windows/layout";
+import { setUrlAnchor, useSidebarCaptionRoom, useSidebarControlsRowIn, watchSidebarFieldPlace } from "../../state/windows/layout";
+import { useFullscreenTab } from "../../state/tabs/pageState";
 import { onInterfaceScaleSettled } from "../../state/settings/interfaceScale";
+import { useWindowChrome } from "../../state/windows/windowButtons";
 import { useSidebarPart } from "../../state/sidebar/chrome";
 import { SIDEBAR_FIELD } from "./geometry";
 import { SIDEBAR_TYPE, TAB_ROW } from "./tokens";
@@ -25,13 +30,22 @@ import { sidebarFieldButtons } from "../toolbar/fieldButtons";
 import { useFieldExtensionsHeld } from "../../state/extensions/store";
 import { HistoryButton, ReloadButton } from "../toolbar/NavButtons";
 import { GLYPH } from "../toolbar/tokens";
-import { HEADER_TOOLS, headerToggleX, navButtonsFitting, type HeaderButton } from "../window/dockMotion";
+import { HEADER_TOOLS, headerToggleXIn, navButtonsFitting, type HeaderButton } from "../window/dockMotion";
 import { ARC_LIGHTS_CENTER } from "../../state/windows/dockMotion";
+import { PAGE_IDENTITY_TAG } from "../../state/tabs/tabReveal";
 
 const BUTTON = layout.toolbarButton;
 const { edge: EDGE } = HEADER_TOOLS;
 const LIGHTS_Y = ARC_LIGHTS_CENTER[1];
-const PLATE = 32;
+const PLATE = HEADER_TOOLS.plate;
+
+export function useHeaderToggleX(windowId: string): number {
+  useWindowChrome();
+  const windowFullScreen = useWindowFullScreen(windowId);
+  const pageFullScreen = !!useFullscreenTab(windowId);
+  const controlsRow = useSidebarControlsRowIn(windowId) > 0;
+  return headerToggleXIn({ windowFullScreen, pageFullScreen, controlsRow });
+}
 
 export function SidebarHeaderTools({ width }: { width: number }) {
   const windowId = useWindowId();
@@ -41,8 +55,8 @@ export function SidebarHeaderTools({ width }: { width: number }) {
   const toggle = useSidebarPart("sidebarButton") && toggleWanted;
   const navShown = useSidebarPart("navButtons");
   const right = useSidebarSide(windowId) === "right";
-  const sidebarHint = useShortcutHint("toggleSidebar");
-  const toggleX = headerToggleX(useWindowFullScreen(windowId));
+  const hints = useShortcutHints(HEADER_HINTS);
+  const toggleX = useHeaderToggleX(windowId);
   const usable = width - useSidebarCaptionRoom();
   const { buttons, step } = navButtonsFitting(usable, BUTTON, toggle, toggleX);
   const shown = tab && navShown ? buttons : [];
@@ -63,24 +77,27 @@ export function SidebarHeaderTools({ width }: { width: number }) {
           icon={right ? "sidebar.right" : "sidebar.left"}
           glyph={GLYPH}
           onPress={() => toggleSidebar(windowId)}
-          tooltip={withShortcut("Hide Tabs", sidebarHint)}
+          tooltip={withShortcut("Hide Tabs", hints.toggleSidebar)}
         />
       )}
-      {tab ? <NavigationButtons tab={tab} palette={palette} buttons={shown} slots={at.slice(toggle ? 1 : 0).map(place)} /> : null}
+      {tab ? <NavigationButtons tab={tab} palette={palette} hints={hints} buttons={shown} slots={at.slice(toggle ? 1 : 0).map(place)} /> : null}
     </>
   );
 }
 
 const alreadyFocused = () => {};
+const HEADER_HINTS = ["toggleSidebar", ...NAV_HINTS] as const;
 
 function NavigationButtons({
   tab,
   palette,
+  hints,
   buttons,
   slots,
 }: {
   tab: NonNullable<ReturnType<typeof useToolbarTab>>;
   palette: ToolbarPalette;
+  hints: NavHints;
   buttons: HeaderButton[];
   slots: { style: ViewStyle; hit: ButtonHit }[];
 }) {
@@ -90,7 +107,7 @@ function NavigationButtons({
     <>
       {buttons.map((b, i) =>
         b === "reload" ? (
-          <ReloadButton key={b} place={slots[i]} tab={tab} loading={loading} palette={palette} onFocus={alreadyFocused} />
+          <ReloadButton key={b} place={slots[i]} tab={tab} loading={loading} palette={palette} onFocus={alreadyFocused} reloadHint={hints.reload} />
         ) : (
           <HistoryButton
             key={b}
@@ -99,8 +116,10 @@ function NavigationButtons({
             windowId={tab.windowId}
             direction={b === "back" ? -1 : 1}
             disabled={b === "back" ? !history.back : !history.forward}
+            closesTab={b === "back" && history.backCloses}
             palette={palette}
             onFocus={alreadyFocused}
+            historyHint={b === "back" ? hints.back : hints.forward}
           />
         ),
       )}
@@ -133,6 +152,8 @@ export function SidebarAddressRow({ width, top }: { width: number; top: number }
     <View
       ref={field}
       onLayout={anchor}
+      nativeID={PAGE_IDENTITY_TAG}
+      collapsable={false}
       style={{ position: "absolute", left: layout.sidebarInset, right: layout.sidebarInset, top, height: SIDEBAR_FIELD.height }}
     >
       <SidebarTextScope>
@@ -144,6 +165,7 @@ export function SidebarAddressRow({ width, top }: { width: number; top: number }
           )}
         </ToolbarRowContext.Provider>
       </SidebarTextScope>
+      <TabSwipeArea windowId={windowId} surface="sidebarField" />
     </View>
   );
 }
@@ -165,12 +187,17 @@ function PageField({ tab, windowId, width }: { tab: NonNullable<ReturnType<typeo
 }
 
 function FieldExtensions({ tabId, windowId, width, palette, onActivate }: { tabId: string; windowId: string; width: number; palette: ToolbarPalette; onActivate?: () => void }) {
-  const limit = extensionsFitting(width - 10 - 3 - HOST_ROOM);
+  const pluginToolbar = usePluginChrome(PLUGIN_CHROME.toolbar);
+  const [reportedPluginsWidth, setPluginsWidth] = useState(0);
+  const pluginsWidth = pluginToolbar ? reportedPluginsWidth : 0;
+  const limit = extensionsFitting(width - 10 - 3 - HOST_ROOM - pluginsWidth);
   const extensionsWidth = useToolbarExtensionsWidth(windowId, limit);
-  if (!extensionsWidth) return null;
+  const total = extensionsWidth + pluginsWidth;
+  if (!total && !pluginToolbar) return null;
   return (
-    <View style={{ width: extensionsWidth - 6, height: 28 }}>
+    <View style={{ width: total, height: total ? 28 : 0 }}>
       <ToolbarExtensions tabId={tabId} windowId={windowId} palette={palette} top={0} right={0} limit={limit} onActivate={onActivate} />
+      {pluginToolbar ? <PluginToolbarItems windowId={windowId} palette={palette} top={0} right={extensionsWidth} onWidth={setPluginsWidth} /> : null}
     </View>
   );
 }

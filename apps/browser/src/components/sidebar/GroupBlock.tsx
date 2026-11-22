@@ -1,4 +1,4 @@
-import { createContext, memo, useContext, useEffect, useState } from "react";
+import { createContext, memo, useContext, useEffect, useMemo, useState } from "react";
 import { Animated, Pressable, View } from "react-native";
 import { useTheme } from "../ui/theme";
 import { useGroup, usePageProfileId, useWindowId, useWindowProfileId } from "../../state/browser/hooks";
@@ -10,7 +10,7 @@ import { newCapture } from "../../state/sidebar/listCapture";
 import { useCapturedGroupEntries, useGroupTabIds, useKeptEntries, useShowsExtraTabs } from "../../state/sidebar/hooks";
 import { MeetingTimeLabel, useMeetingCountdown } from "../live/MeetingCountdown";
 import { HoverSlot } from "../ui/HoverSlot";
-import { Button, ContextMenuArea, FadeLabel, ink, space, Symbol, Text, weight, withAlpha } from "../ui";
+import { Button, ContextMenuArea, ink, Symbol, weight, withAlpha } from "../ui";
 import { commitRename, endRename } from "../../state/sidebar/actions";
 import { useDragFolded, useDragItem, useDropInto } from "./DragProvider";
 import { useShift, type EntryMotion } from "./EntryMotion";
@@ -20,18 +20,20 @@ import { entryHeightNow, foldedGroupHeight, headGap } from "../../state/sidebar/
 import { dismissHover } from "../../state/sidebar/hover";
 import { useGroupHover, useRowHover } from "./hoverController";
 import { useHoverFade } from "./hoverMotion";
+import { Squish, useSquish } from "../ui/Squish";
 import { GhostSlot, ListMotionContext, useGroupMotion } from "./ListMotion";
 import { pressGroupClose, useGroupCloseControlWhile } from "../../state/sidebar/closeControl";
 import { openGroupMenu } from "../../state/sidebar/menus";
 import { registerRow, useSidebarUi } from "../../state/sidebar/sidebarUi";
 import { FolderOrIcon } from "./AnimatedFolder";
 import { RenameField, SplitRowItem, TabRowItem } from "./TabRow";
-import { groupBoxAtRest, groupSurface, SIDEBAR_TYPE, TAB_ROW, TABULAR_NUMS, useSidebarTokens } from "./tokens";
+import { groupBoxAtRest, groupSurface, useSidebarTokens } from "./tokens";
 import { SidebarRowSurface } from "./SidebarRow";
 import { entryKey, parseEntry } from "../../state/sidebar/entryKey";
 import { LiveFolderBlock } from "./LiveFolderBlock";
 import { tailKey, type RowSection } from "./dragModel";
 import { SharedFolderMark } from "./SharedFolderMark";
+import { FolderHeaderTitle } from "./FolderHeaderTitle";
 
 const NO_GROUPS: ReadonlySet<string> = new Set();
 
@@ -158,9 +160,9 @@ export const SidebarEntry = memo(function SidebarEntry({
   return <TabRowItem tabId={id} section={rowSection} parentGroup={parentGroup} motion={motion} />;
 });
 
-const MEASURE_LABEL = { opacity: 0, fontVariant: TABULAR_NUMS } as const;
+const CHEVRON_BOX = { width: 10, height: 10, alignItems: "center", justifyContent: "center" } as const;
 
-function GroupHeader({ groupId, windowId, collapsed, open }: { groupId: string; windowId: string; collapsed: boolean; open: Animated.Value }) {
+const GroupHeader = memo(function GroupHeader({ groupId, windowId, collapsed, open }: { groupId: string; windowId: string; collapsed: boolean; open: Animated.Value }) {
   const theme = useTheme();
   const tokens = useSidebarTokens();
   const group = useGroup(groupId, (g) => g);
@@ -172,6 +174,8 @@ function GroupHeader({ groupId, windowId, collapsed, open }: { groupId: string; 
   const closeControl = useGroupCloseControlWhile(groupId, hovered && !renaming);
   const profileId = usePageProfileId();
   const showsExtra = useShowsExtraTabs(windowId, profileId, groupId);
+  const squish = useSquish(renaming ? null : "row");
+  const chevronTurn = useMemo(() => ({ ...CHEVRON_BOX, transform: [{ rotate: open.interpolate({ inputRange: [0, 1], outputRange: ["-90deg", "0deg"] }) }] }), [open]);
   if (!group) return null;
   const target = { kind: "group" as const, id: groupId };
 
@@ -184,6 +188,8 @@ function GroupHeader({ groupId, windowId, collapsed, open }: { groupId: string; 
         }}
       >
         <Pressable
+          onPressIn={squish.onPressIn}
+          onPressOut={squish.onPressOut}
           onPress={() => {
             dismissHover();
             if (renaming) return;
@@ -193,6 +199,7 @@ function GroupHeader({ groupId, windowId, collapsed, open }: { groupId: string; 
           }}
         >
           {() => (
+            <Squish scale={squish.scale}>
             <SidebarRowSurface fill={dropInto ? theme.tabPressed : ink.clear} cornerRadius={GROUP_INNER_RADIUS}>
               <FolderOrIcon icon={group.icon} open={!collapsed || dropInto} color={group.color} />
               {renaming ? (
@@ -204,26 +211,12 @@ function GroupHeader({ groupId, windowId, collapsed, open }: { groupId: string; 
                   onDone={(text) => (text === null ? endRename(target) : commitRename(target, text))}
                 />
               ) : (
-                <Animated.View style={{ flex: 1, height: TAB_ROW.titleHeight, marginLeft: TAB_ROW.titleGap, flexDirection: "row", alignItems: "center", transform: [{ rotate: countdown.rotate }] }}>
-                  <View style={{ flexShrink: 1, height: TAB_ROW.titleHeight, paddingRight: space.m, justifyContent: "center" }}>
-                    <Text lines={1} weight="medium" style={MEASURE_LABEL}>
-                      {label}
-                    </Text>
-                    <FadeLabel text={label} fontSize={SIDEBAR_TYPE.title} weight="medium" color={tokens.groupTitle} style={{ position: "absolute", left: 0, right: 0, top: 0, height: TAB_ROW.titleHeight }} />
-                  </View>
+                <FolderHeaderTitle label={label} color={tokens.groupTitle} style={{ transform: [{ rotate: countdown.rotate }] }}>
                   <SharedFolderMark groupId={groupId} />
-                  <Animated.View
-                    style={{
-                      width: 10,
-                      height: 10,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      transform: [{ rotate: open.interpolate({ inputRange: [0, 1], outputRange: ["-90deg", "0deg"] }) }],
-                    }}
-                  >
+                  <Animated.View style={chevronTurn}>
                     <Symbol name="chevron.down" size={9} weight="semibold" color={withAlpha(tokens.groupTitle, 0.5)} style={{ width: 10, height: 10 }} />
                   </Animated.View>
-                </Animated.View>
+                </FolderHeaderTitle>
               )}
               <HoverSlot
                 hovered={hovered && !renaming}
@@ -232,9 +225,10 @@ function GroupHeader({ groupId, windowId, collapsed, open }: { groupId: string; 
                 {countdown.label && !renaming ? <MeetingTimeLabel label={countdown.label} urgent={countdown.urgent} /> : null}
               </HoverSlot>
             </SidebarRowSurface>
+            </Squish>
           )}
         </Pressable>
       </ContextMenuArea>
     </View>
   );
-}
+});

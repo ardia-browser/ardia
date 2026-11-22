@@ -1,0 +1,90 @@
+import { requireNativeViewManager, requireOptionalNativeModule } from "expo-modules-core";
+import { forwardRef, useImperativeHandle, useRef, type Ref } from "react";
+import { Platform, type NativeSyntheticEvent, type ViewProps } from "react-native";
+import { nativeFieldColor, type NativeColor } from "./completingField";
+import { normalizeState } from "./normalize";
+import { pages } from "./pages";
+import type { PageEventPayload, PageViewHandle, PageViewProps } from "./pageTypes";
+
+type NativeHandle = PageViewHandle;
+
+type NativeProps = ViewProps & {
+  ref?: Ref<NativeHandle>;
+  pageId: string;
+  initialUrl?: string;
+  title?: string;
+  isPrivate?: boolean;
+  savedState?: string;
+  toneInsets?: [number, number];
+  bottomInsetTransitionMs?: number;
+  summaryBottomInset?: number;
+  obscuredInsets?: [number, number];
+  obscuredColors?: [NativeColor | null, NativeColor | null];
+  topClearance?: number;
+  obscuresSafeTop?: boolean;
+  pinsSafeArea?: boolean;
+  surfaceColor?: NativeColor;
+  coverNativeId?: string;
+  onPageEvent?: (event: NativeSyntheticEvent<PageEventPayload>) => void;
+};
+
+const NativePageView = requireNativeViewManager<NativeProps>("ArdiaPhonePageView");
+
+export const closePage = (pageId: string) => pages.close(pageId);
+
+const pageModule = requireOptionalNativeModule<{ obscuresInsets?: boolean; reportsDrawn?: boolean }>("ArdiaPhonePageView");
+
+const obscuresInsets = pageModule?.obscuresInsets === true;
+
+const reportsDrawn = pageModule?.reportsDrawn === true;
+
+export const pageObscuresInsets = () => obscuresInsets;
+
+export const pageReportsDrawn = () => reportsDrawn;
+
+export const PageView = forwardRef<PageViewHandle, PageViewProps>(function PageView(props, ref) {
+  const { onPageState, onPageTone, onPageError, onPageDrawn, onPageCoverHidden, onSwipedPastHistory, coverNativeId, toneInsets, bottomInsetTransitionMs, summaryBottomInset, obscuredInsets, obscuredColors, surfaceColor, ...rest } = props;
+  const native = useRef<NativeHandle>(null);
+  useImperativeHandle(
+    ref,
+    () => ({
+      loadUrl: async (url) => native.current?.loadUrl(url),
+      goBack: async () => (await native.current?.goBack()) ?? false,
+      goForward: async () => (await native.current?.goForward()) ?? false,
+      reload: async () => native.current?.reload(),
+      stopLoading: async () => native.current?.stopLoading(),
+    }),
+    [],
+  );
+  const onPageEvent = ({ nativeEvent }: NativeSyntheticEvent<PageEventPayload>) => {
+    if (nativeEvent.name === "state") {
+      const { name, ...state } = nativeEvent;
+      onPageState?.(normalizeState(state, props.isPrivate ?? false));
+    } else if (nativeEvent.name === "tone") {
+      onPageTone?.({ top: nativeEvent.top ?? null, bottom: nativeEvent.bottom ?? null });
+    } else if (nativeEvent.name === "drawn") {
+      onPageDrawn?.();
+    } else if (nativeEvent.name === "coverHidden") {
+      onPageCoverHidden?.(nativeEvent.reason, nativeEvent.found);
+    } else if (nativeEvent.name === "swipedPastHistory") {
+      onSwipedPastHistory?.(nativeEvent.direction);
+    } else {
+      onPageError?.({ code: nativeEvent.code, message: nativeEvent.message });
+    }
+  };
+  return (
+    <NativePageView
+      {...rest}
+      {...(Platform.OS === "android" ? { bottomInsetTransitionMs, summaryBottomInset } : {})}
+      ref={native}
+      toneInsets={toneInsets ? [toneInsets.top, toneInsets.bottom] : undefined}
+      obscuredInsets={obscuresInsets && obscuredInsets ? [obscuredInsets.top, obscuredInsets.bottom] : undefined}
+      obscuredColors={
+        obscuresInsets && obscuredColors && Platform.OS === "android" ? [nativeFieldColor(obscuredColors.top ?? undefined) ?? null, nativeFieldColor(obscuredColors.bottom ?? undefined) ?? null] : undefined
+      }
+      surfaceColor={Platform.OS === "android" ? nativeFieldColor(surfaceColor) : undefined}
+      coverNativeId={reportsDrawn ? coverNativeId : undefined}
+      onPageEvent={onPageEvent}
+    />
+  );
+});

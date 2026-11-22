@@ -17,7 +17,7 @@ export type UpdaterState =
     };
 
 export type SwitchCheck = {
-  phase: "waiting" | "checking" | "found" | "upToDate" | "newerThanLatest" | "failed";
+  phase: "waiting" | "checking" | "found" | "upToDate" | "newerThanLatest" | "failed" | "downloading" | "installing" | "ready";
   channel: UpdateChannel;
   version?: string;
 };

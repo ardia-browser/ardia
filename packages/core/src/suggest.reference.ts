@@ -2,7 +2,7 @@ import { findBang, type BangMatch, type BangTable } from "./bangs.ts";
 import { calculate } from "./calculator.ts";
 import { BUILT_IN_ENGINES, searchUrl, type SearchEngine } from "./engines.ts";
 import { matchActions, type ActionCandidate } from "./fuzzy.reference.ts";
-import { fixupUrl, hostOf, urlForDisplay } from "./omnibox.ts";
+import { fixupUrl, hostOf, sameAddress, spacedAddressGuess, urlForDisplay } from "./omnibox.ts";
 import { matchQuickCreate } from "./quickCreate.ts";
 import { scopedSearchUrl, type SearchScope } from "./siteSearch.ts";
 
@@ -426,6 +426,7 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
 
   const search: Suggestion = { kind: "search", query, url: searchUrl(engine, query), engine: engine.name };
   const typedUrl = fixupUrl(query);
+  const guessedUrl = typedUrl ? null : spacedAddressGuess(query);
   const calc = calculate(query);
   const creates = matchQuickCreate(raw.trimStart());
   const actionRows = query.length >= 4 ? 4 : 2;
@@ -440,15 +441,19 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
   else if (actionMatches[0]?.exact) first = actionRow(actionMatches[0].action);
   else if (target && completion) first = known(target.url) ?? { kind: "page", url: target.url, title: "", favicon: target.favicon };
   else if (typedUrl) first = known(typedUrl) ?? { kind: "page", url: typedUrl, title: "", favicon: null };
-  else if (websiteFirst && best && best.m >= 40 && (!noInline || q === best.c.text.shownLower || q === hostPart(best.c.text.shownLower))) first = pageSuggestion(best.c, best.tabId);
+  else if (!guessedUrl && websiteFirst && best && best.m >= 40 && (!noInline || q === best.c.text.shownLower || q === hostPart(best.c.text.shownLower))) first = pageSuggestion(best.c, best.tabId);
   else first = search;
 
+  const savedGuess = guessedUrl ? ranked.find((x) => !x.tabId && sameAddress(x.c.url, guessedUrl)) : undefined;
+  const guessTab = guessedUrl ? source.tabs.find((t) => t.id !== options.currentTabId && sameAddress(t.url, guessedUrl)) : undefined;
+  const guessRow = !guessedUrl ? null : guessTab ? pageSuggestion({ url: guessTab.url, title: guessTab.customTitle || guessTab.title, favicon: guessTab.favicon, visits: 0, bookmarked: false }, guessTab.id) : (known(guessedUrl) ?? (savedGuess ? { ...pageSuggestion(savedGuess.c, null), url: guessedUrl } : { kind: "page", url: guessedUrl, title: "", favicon: null }));
   out.push(first);
   out.push(search);
+  if (guessRow) out.push(guessRow);
   if (calc) out.push({ kind: "calc", expression: calc.expression, value: calc.display, url: searchUrl(engine, calc.expression) });
   out.push(...actionMatches.map((m) => actionRow(m.action)));
   out.push(...creates.map(createRow));
-  const pageRows = ranked.map((x) => pageSuggestion(x.c, x.tabId));
+  const pageRows = ranked.map((x) => pageSuggestion(x.c, x.tabId)).map((row) => (guessedUrl && row.kind === "page" && row.tabId ? { ...row, url: source.tabs.find((t) => t.id === row.tabId)?.url ?? row.url } : row)).filter((row) => !guessedUrl || row.kind !== "page" || !sameAddress(row.url, guessedUrl));
   out.push(...pageRows.slice(0, 3));
   out.push(...remoteRows((text) => searchUrl(engine, text), engine.name));
   out.push(...pageRows.slice(3));

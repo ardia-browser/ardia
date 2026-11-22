@@ -1,7 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { setSharing, useTelemetry } from "../../../state/telemetry/client";
-import { IDENTITY_COPY, LOCAL_COPY, SHARING_COPY, WATCH_COPY, WHATS_SENT } from "../../../state/telemetry/copy";
+import { IDENTITY_COPY, LOCAL_COPY, PLUGIN_SENT_COPY, SELF_INSTALLED_COMMAND_SENT, SHARING_COPY, WATCH_COPY, WHATS_SENT } from "../../../state/telemetry/copy";
+import { usePluginTelemetryDisclosures } from "../../../state/plugins/disclosures";
+import { refreshLegacyInstalls } from "../../../state/plugins/programRegistry";
+import { installsCommandItself } from "../../../state/app/linuxCommandInstall";
 import { identityFor, resetAnonymousId, shortInstallId, stopWatch, useInstallId, useWatchReport, useWatchTurnedSharingOn, useWatchUntil, viewMyData } from "../../../state/telemetry/privacy";
 import { UI_LOCALE } from "../../../lib/uiLocale";
 import { Button, DialogActions, DialogTitle, lineHeight, proseLineHeight, Sheet, space, Text, Toggle } from "../../ui";
@@ -120,15 +123,37 @@ function ResetIdSheet() {
   );
 }
 
+type SentGroup = { title: string; attribution?: string; items: readonly string[] };
+
 function WhatsSentGroups() {
-  const groups = [...WHATS_SENT.slice(0, -1), { title: SHARING_COPY.keptOnThisMac, items: [...LOCAL_COPY.items] }, WHATS_SENT.at(-1)!];
+  const disclosures = usePluginTelemetryDisclosures();
+  const toGroup = (d: (typeof disclosures)[number]): SentGroup => ({ title: d.title, attribution: PLUGIN_SENT_COPY.attribution(d.pluginTitle, d.official), items: d.items });
+  const added = disclosures.filter((d) => !d.official).map(toGroup);
+  const programs: SentGroup[] = [...(installsCommandItself ? [SELF_INSTALLED_COMMAND_SENT] : []), ...disclosures.filter((d) => d.official).map(toGroup)];
+  const sharingOff = WHATS_SENT.findIndex((g) => g.title === "Even with sharing off");
+  const browser: SentGroup[] = sharingOff < 0 ? WHATS_SENT.slice(0, -1) : [...WHATS_SENT.slice(0, sharingOff), ...programs, ...WHATS_SENT.slice(sharingOff, -1)];
+  const groups: SentGroup[] = [...browser, { title: SHARING_COPY.keptOnThisMac, items: [...LOCAL_COPY.items] }, WHATS_SENT.at(-1)!];
   return (
     <>
-      {groups.map((group) => (
+      {[...groups, ...(added.length ? [{ title: PLUGIN_SENT_COPY.addedTitle, heading: true, attribution: PLUGIN_SENT_COPY.addedNote, items: [] }] : []), ...added].map((group: SentGroup & { heading?: boolean }) => group.heading ? (
+        <View key={group.title} style={SENT_GROUP}>
+          <Text size="small" weight="semibold" tone="textPrimary" style={SENT_TITLE}>
+            {group.title}
+          </Text>
+          <Text size="caption" tone="textSecondary" style={SENT_TITLE}>
+            {group.attribution}
+          </Text>
+        </View>
+      ) : (
         <View key={group.title} style={SENT_GROUP}>
           <Text size="small" weight="medium" tone="textSecondary" style={SENT_TITLE}>
             {group.title}
           </Text>
+          {group.attribution ? (
+            <Text size="caption" tone="textTertiary" style={SENT_TITLE}>
+              {group.attribution}
+            </Text>
+          ) : null}
           <Group>
             {group.items.map((item) => (
               <Row
@@ -148,9 +173,10 @@ function WhatsSentGroups() {
 }
 
 export function WhatsSentSheet() {
+  useEffect(() => void refreshLegacyInstalls(), []);
   return (
     <Sheet size="l" onClose={closeSettingsSheet}>
-      <DialogTitle subtitle={`Only while “${SHARING_COPY.toggle}” is on, except what’s under “Even with sharing off” and “${SHARING_COPY.keptOnThisMac}”.`}>{SHARING_COPY.whatsSent}</DialogTitle>
+      <DialogTitle subtitle={`Only while “${SHARING_COPY.toggle}” is on, except what’s under “Even with sharing off”, “${SHARING_COPY.keptOnThisMac}” and “${PLUGIN_SENT_COPY.addedTitle}”.`}>{SHARING_COPY.whatsSent}</DialogTitle>
       <WhatsSentGroups />
       <DialogActions
         note={

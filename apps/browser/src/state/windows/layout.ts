@@ -2,42 +2,39 @@ import { create } from "zustand";
 import { autoHidesTabsIn, sidebarSideOf, tabLayoutOf, tabsShownIn } from "../browser/model";
 import { switchOn } from "../../platform/killSwitches";
 import { ARC_LIGHTS_CENTER, lightsCenter, sidebarLightsCenter, toolbarLightsCenter, TOP_STRIP_LIGHTS_CENTER } from "./dockMotion";
-import { frameCornerRadius, onWindowEvent, windowFrame, type LightsPlace } from "../../platform/windows";
+import { frameCornerRadius, windowFrame, type LightsPlace } from "../../platform/windows";
 import { rootSizeOfFrame } from "../settings/interfaceScale";
 import { DEFAULT_SIDEBAR_WIDTH, pageFrameInsetOf } from "../../lib/windowLayout";
 import { useBrowser, type BrowserState } from "../browser/store";
-import { useWindowId } from "../browser/hooks";
+import { useSettings, useWindowId } from "../browser/hooks";
+import { useWindowSettings } from "../browser/keyedWatch";
+import { onFullScreenExit } from "./fullScreenExits";
 import { useSettingValue } from "../tabs/tabWatch";
-import { BROWSER_WINDOW_BUTTONS, captionClearTop, captionRoom, WINDOW_CHROME, WINDOW_CONTROLS, windowControlsWidth, type WindowChrome } from "../../lib/windowChrome";
+import { captionClearTop, captionRoom, WINDOW_CHROME, WINDOW_CONTROLS, windowControlsWidth, type WindowChrome } from "../../lib/windowChrome";
 import { toolbarRowOf } from "../../lib/toolbarRow";
 import { SMALL_BAR_HEIGHT } from "./small";
 import type { CaptionRegion } from "../../platform/windowControls";
 import { sidebarWidthIn } from "../sidebar/shownWidth";
 import { onWindowRootSizes, windowRootWidth } from "./rootSize";
 
-export { frameCornerRadius, windowCornerRadius, windowFrame } from "../../platform/windows";
+export { drawnWindowCornerRadius, frameCornerRadius, windowCornerRadius, windowFrame } from "../../platform/windows";
 export { onInterfaceScaleChange } from "../settings/interfaceScale";
 
 export const windowRootShape = (windowId: string): Promise<{ width: number; height: number; radius: number } | null> =>
   Promise.all([windowFrame(windowId), frameCornerRadius(windowId)]).then(([frame, radius]) => (frame ? { ...rootSizeOfFrame(frame), radius } : null));
 
-export function onFullScreenLeft(windowId: string, run: () => void): () => void {
-  const subscription = onWindowEvent((e) => {
-    if (e.type === "fullScreen" && e.id === windowId && !e.on) run();
-  });
-  return () => subscription.remove();
-}
+export const onFullScreenLeft = onFullScreenExit;
 
 export function useTabLayout(): "sidebar" | "top" {
   const windowId = useWindowId();
-  return useBrowser((s) => tabLayoutOf(s, windowId));
+  return useWindowSettings(windowId, (s) => tabLayoutOf(s, windowId));
 }
 
 export const minimalismIn = (s: BrowserState, windowId: string): boolean => s.settings.minimalismMode && s.windows[windowId]?.kind !== "small";
 
 export const useMinimalism = (): boolean => {
   const windowId = useWindowId();
-  return useBrowser((s) => minimalismIn(s, windowId));
+  return useWindowSettings(windowId, (s) => minimalismIn(s, windowId));
 };
 
 export const sidebarAddressChosen = (settings: Pick<BrowserState["settings"], "addressBar" | "minimalismMode">): boolean =>
@@ -55,7 +52,7 @@ export function addressBarInSidebar(s: BrowserState, windowId: string): boolean 
 
 export function useAddressBarInSidebar(): boolean {
   const windowId = useWindowId();
-  return useBrowser((s) => addressBarInSidebar(s, windowId));
+  return useWindowSettings(windowId, (s) => addressBarInSidebar(s, windowId));
 }
 
 export function openingLightsCenter(s: BrowserState, windowId: string): LightsPlace | null {
@@ -77,7 +74,7 @@ export function openingLightsCenter(s: BrowserState, windowId: string): LightsPl
 
 export function usePageFrameInset(): number {
   const windowId = useWindowId();
-  return useBrowser((s) =>
+  return useWindowSettings(windowId, (s) =>
     pageFrameInsetOf(s.settings.pageFrame, {
       borderlessMode: s.settings.borderlessMode || minimalismIn(s, windowId),
       zeroInFullScreen: s.settings.pageFrameZeroInFullScreen,
@@ -155,6 +152,11 @@ export function windowControlsLeading(s: BrowserState, windowId: string, chrome:
   return !!chrome.trailingWidth && !!w && !w.fullScreen && w.kind !== "small" && controlsLeadSidebar(s, windowId);
 }
 
+export function windowControlsInset(s: BrowserState, windowId: string, chrome: WindowChrome = WINDOW_CHROME): number {
+  if (!chrome.leadingButtons.length || !windowControlsLeading(s, windowId, chrome)) return WINDOW_CONTROLS.edge;
+  return Math.max(chrome.leadingWidth + WINDOW_CONTROLS.gap, sidebarWidthIn(s, windowId) - WINDOW_CONTROLS.edge - windowControlsWidth(chrome.trailingButtons.length));
+}
+
 export const sidebarControlsRow = (s: BrowserState, windowId: string, chrome: WindowChrome = WINDOW_CHROME): number =>
   windowControlsLeading(s, windowId, chrome) ? WINDOW_CONTROLS.regular + WINDOW_CONTROLS.gap : 0;
 
@@ -167,7 +169,7 @@ export function captionRegions(s: BrowserState, windowId: string, overlaid = fal
   if (!place || overlaid) return [];
   const ui = s.windowUi[windowId];
   if (ui?.panel.open || ui?.downloadsOpen) return [];
-  const controls = windowControlsWidth(BROWSER_WINDOW_BUTTONS) + WINDOW_CONTROLS.edge;
+  const controls = windowControlsWidth(chrome.trailingButtons.length) + WINDOW_CONTROLS.edge;
   const beside = controls + WINDOW_CONTROLS.gap;
   const leadingRoom = s.settings.sidebarWidth - beside;
   const regions: CaptionRegion[] = !windowControlsLeading(s, windowId, chrome)
@@ -197,17 +199,17 @@ export const downloadsInSidebarFooter = (s: BrowserState, windowId: string, chro
 
 export function useSidebarCaptionRoom(): number {
   const windowId = useWindowId();
-  return useBrowser((s) => sidebarCaptionRoom(s, windowId));
+  return useWindowSettings(windowId, (s) => sidebarCaptionRoom(s, windowId));
 }
 
 export function useCardCaptionRoom(frame: number): number {
   const windowId = useWindowId();
-  return useBrowser((s) => cardCaptionRoom(s, windowId, frame));
+  return useWindowSettings(windowId, (s) => cardCaptionRoom(s, windowId, frame));
 }
 
 export function useCardTopInset(frame: number): number {
   const windowId = useWindowId();
-  return useBrowser((s) => cardTopInset(s, windowId, frame));
+  return useWindowSettings(windowId, (s) => cardTopInset(s, windowId, frame));
 }
 
 export function useSidebarHeaderCollapsed(): boolean {
@@ -222,25 +224,30 @@ export function useDownloadsInSidebarFooter(): boolean {
 
 export function useWindowControlsCenterY(): number | null {
   const windowId = useWindowId();
-  return useBrowser((s) => windowControlsPlace(s, windowId, pageFrameIn(s, windowId))?.centerY ?? null);
+  return useWindowSettings(windowId, (s) => windowControlsPlace(s, windowId, pageFrameIn(s, windowId))?.centerY ?? null);
 }
 
 export function useWindowControlsSize(): number {
   const windowId = useWindowId();
-  return useBrowser((s) => windowControlsPlace(s, windowId, pageFrameIn(s, windowId))?.size ?? 0);
+  return useWindowSettings(windowId, (s) => windowControlsPlace(s, windowId, pageFrameIn(s, windowId))?.size ?? 0);
 }
 
 export function useWindowControlsBottom(): number {
   const windowId = useWindowId();
-  return useBrowser((s) => windowControlsBottom(windowControlsPlace(s, windowId, pageFrameIn(s, windowId))));
+  return useWindowSettings(windowId, (s) => windowControlsBottom(windowControlsPlace(s, windowId, pageFrameIn(s, windowId))));
 }
 
 export function useWindowControlsLeading(): boolean {
   const windowId = useWindowId();
-  return useBrowser((s) => windowControlsLeading(s, windowId));
+  return useWindowSettings(windowId, (s) => windowControlsLeading(s, windowId));
 }
 
-export const useSidebarControlsRowIn = (windowId: string): number => useBrowser((s) => sidebarControlsRow(s, windowId));
+export function useWindowControlsInset(): number {
+  const windowId = useWindowId();
+  return useWindowSettings(windowId, (s) => windowControlsInset(s, windowId));
+}
+
+export const useSidebarControlsRowIn = (windowId: string): number => useWindowSettings(windowId, (s) => sidebarControlsRow(s, windowId));
 
 export function watchSidebarControlsRow(windowId: string, listener: (row: number) => void, chrome: WindowChrome = WINDOW_CHROME): () => void {
   let last = sidebarControlsRow(useBrowser.getState(), windowId, chrome);
@@ -270,10 +277,10 @@ export function watchSidebarFieldPlace(windowId: string, listener: () => void, c
 
 export function useWindowControlsHost(): WindowControlsHost | null {
   const windowId = useWindowId();
-  return useBrowser((s) => windowControlsPlace(s, windowId, pageFrameIn(s, windowId))?.host ?? null);
+  return useWindowSettings(windowId, (s) => windowControlsPlace(s, windowId, pageFrameIn(s, windowId))?.host ?? null);
 }
 
-export const useToolbarLightsCenter = (): readonly [number, number] => toolbarLightsCenter(useBrowser((s) => s.settings.compactToolbar), usePageFrameInset());
+export const useToolbarLightsCenter = (): readonly [number, number] => toolbarLightsCenter(useSettings((st) => st.compactToolbar), usePageFrameInset());
 
 type UrlAnchor = { left: number; top: number; width: number; sidebar?: { height: number } };
 

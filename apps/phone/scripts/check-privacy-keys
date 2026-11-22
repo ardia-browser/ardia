@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# Fail before App Store Connect does on a missing or refused privacy key (ITMS-90683).
+#
+#   apps/phone/scripts/check-privacy-keys <Ardia.app> [--default-browser]
+#   apps/phone/scripts/check-privacy-keys -h | --help
+#
+# App Store Connect reads the symbols each binary imports. When one calls an API that needs a purpose string
+# (PHAsset, CNContactStore, CLLocationManager, AVCaptureDevice, ...) the bundle's Info.plist must carry the key,
+# even when the call is dead code in a dependency. The app and each extension are checked against their own
+# Info.plist; the app's binaries are its executable, any debug dylib and Frameworks/.
+#
+# --default-browser also fails on any API whose key Apple refuses in an app with the web-browser entitlement
+# (the full photo library, always-on location, HomeKit, Bluetooth, Health): such a build can't ship at all,
+# so the dependency's code has to go.
+#
+# Runs on any simulator or device build: CI's iOS workflow runs it on the Debug simulator build of every PR,
+# and release-ios on the archive.
+set -euo pipefail
+
+case "${1:-}" in -h | --help | "") sed -n '2,/^set -euo/p' "$0" | sed '$d; s/^# \{0,1\}//'; exit 0 ;; esac
+app="$1"
+defaultBrowser=NO
+[ "${2:-}" = --default-browser ] && defaultBrowser=YES
+[ -d "$app" ] || { echo "error: no app at $app" >&2; exit 2; }
+
+rules=(
+  'Photos|_OBJC_CLASS_\$_PH(Asset|AssetCollection|AssetResourceManager|CachingImageManager|ImageManager|FetchResult|FetchOptions|CollectionList|PhotoLibrary)$|NSPhotoLibraryUsageDescription'
+  'AssetsLibrary|_OBJC_CLASS_\$_ALAssetsLibrary$|NSPhotoLibraryUsageDescription'
+  'Contacts|_OBJC_CLASS_\$_CNContactStore$|NSContactsUsageDescription'
+  'AddressBook|^_ABAddressBook(Create|RequestAccess)|NSContactsUsageDescription'
+  'EventKit|_OBJC_CLASS_\$_EKEventStore$|NSCalendarsFullAccessUsageDescription'
+  'CoreLocation|_OBJC_CLASS_\$_CLLocationManager$|NSLocationWhenInUseUsageDescription'
+  'Camera|_OBJC_CLASS_\$_AVCaptureDevice$|NSCameraUsageDescription'
+  'Microphone|_OBJC_CLASS_\$_AVAudioRecorder$|NSMicrophoneUsageDescription'
+  'Speech|_OBJC_CLASS_\$_SFSpeechRecognizer$|NSSpeechRecognitionUsageDescription'
+  'MediaPlayer|_OBJC_CLASS_\$_MPMediaLibrary$|NSAppleMusicUsageDescription'
+  'CoreMotion|_OBJC_CLASS_\$_CM(MotionActivityManager|Pedometer)$|NSMotionUsageDescription'
+  'CoreBluetooth|_OBJC_CLASS_\$_CB(CentralManager|PeripheralManager)$|NSBluetoothAlwaysUsageDescription'
+  'HealthKit|_OBJC_CLASS_\$_HKHealthStore$|NSHealthShareUsageDescription'
+  'HomeKit|_OBJC_CLASS_\$_HMHomeManager$|NSHomeKitUsageDescription'
+  'Siri|_OBJC_CLASS_\$_INPreferences$|NSSiriUsageDescription'
+  'Tracking|_OBJC_CLASS_\$_ATTrackingManager$|NSUserTrackingUsageDescription'
+  'NearbyInteraction|_OBJC_CLASS_\$_NISession$|NSNearbyInteractionUsageDescription'
+)
+refusedInBrowser=" NSPhotoLibraryUsageDescription NSBluetoothAlwaysUsageDescription NSHealthShareUsageDescription NSHomeKitUsageDescription "
+
+failures=0
+fail() { echo "error: $*" >&2; failures=$((failures + 1)); }
+isMachO() { file -b "$1" | grep -q Mach-O; }
+plistHas() { /usr/libexec/PlistBuddy -c "Print :$2" "$1/Info.plist" >/dev/null 2>&1; }
+
+checkBundle() {
+  local bundle="$1" name binaries=() machO symbols
+  name="$(basename "$bundle")"
+  while IFS= read -r machO; do isMachO "$machO" && binaries+=("$machO"); done < <(find "$bundle" -type f -perm -u+x -not -path "$bundle/PlugIns/*")
+  [ "${#binaries[@]}" -gt 0 ] || { fail "$name has no binary to read"; return; }
+  symbols="$(for machO in "${binaries[@]}"; do nm -u -j "$machO" 2>/dev/null; done | sort -u)"
+  [ -n "$symbols" ] || { fail "$name: nm read no imported symbols, so nothing was checked"; return; }
+  local rule api pattern key hits
+  for rule in "${rules[@]}"; do
+    api="${rule%%|*}"
+    key="${rule##*|}"
+    pattern="${rule#*|}"
+    pattern="${pattern%|*}"
+    hits="$(grep -E "$pattern" <<<"$symbols" | sed 's/_OBJC_CLASS_\$_//' | paste -sd ' ' -)" || continue
+    [ -n "$hits" ] || continue
+    if [ "$defaultBrowser" = YES ] && [[ "$refusedInBrowser" == *" $key "* ]]; then
+      fail "$name calls $api ($hits), so App Store Connect wants $key, which Apple refuses in a default browser: remove that code (see apps/phone/patches)"
+    elif ! plistHas "$bundle" "$key"; then
+      fail "$name calls $api ($hits) but its Info.plist has no $key, which App Store Connect rejects (ITMS-90683)"
+    fi
+  done
+}
+
+checkBundle "$app"
+while IFS= read -r extension; do checkBundle "$extension"; done < <(find "$app/PlugIns" -maxdepth 1 -name '*.appex' 2>/dev/null)
+
+[ "$failures" = 0 ] || exit 1
+echo "privacy keys: every API the app and its extensions call has its purpose string"

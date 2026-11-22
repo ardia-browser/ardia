@@ -4,6 +4,7 @@ import type { BrowserState } from "../browser/store";
 import { innermostGroupOf, leaveGroups, syncGroupOrder } from "../groups/groups";
 import { inPinnedContainer, isPinnedRow, newId, tabLayoutOf } from "../browser/model";
 import { placing } from "../pins/placing";
+import { crossesLane } from "./lanes";
 import { choose } from "../settings/settings";
 import { activated, apply, removeTabs, withNewTab } from "../tabs/tabs";
 import type { AdoptId, BrowserWindow, SplitSlot, SplitView, Tab } from "../browser/types";
@@ -33,6 +34,7 @@ export type OpenPaneOptions = {
   background?: boolean;
   adoptId?: AdoptId;
   inPlaceOf?: string;
+  openedForSplit?: boolean;
 };
 export type OpenPaneResult = { ok: true; tabId: string; splitId: string } | { ok: false; reason: "max" | "invalid" | "unavailable" };
 
@@ -169,7 +171,7 @@ function gatherPinned(s: BrowserState, anchorId: string, members: string[]): Bro
   return { ...next, windows: { ...next.windows, [w.id]: { ...w, tabIds } } };
 }
 
-function gather(s: BrowserState, anchorId: string, members: string[]): BrowserState {
+function gatherLane(s: BrowserState, anchorId: string, members: string[]): BrowserState {
   const anchor = s.tabs[anchorId];
   const w = anchor && s.windows[anchor.windowId];
   if (!anchor || !w) return s;
@@ -184,6 +186,22 @@ function gather(s: BrowserState, anchorId: string, members: string[]): BrowserSt
   const group = innermostGroupOf(s.groups, anchorId);
   if (group && groups[group.id]) groups = { ...groups, [group.id]: { ...groups[group.id]!, tabIds: [...groups[group.id]!.tabIds, ...moving] } };
   return { ...s, windows: { ...s.windows, [w.id]: window }, groups: syncGroupOrder(groups, window) };
+}
+
+function besideAnchor(s: BrowserState, anchorId: string, ids: string[]): BrowserState {
+  const w = s.windows[s.tabs[anchorId]?.windowId ?? ""];
+  if (!w || !ids.length) return s;
+  const tabIds = w.tabIds.filter((id) => !ids.includes(id));
+  tabIds.splice(tabIds.indexOf(anchorId) + 1, 0, ...ids);
+  const window: BrowserWindow = { ...w, tabIds };
+  return { ...s, windows: { ...s.windows, [w.id]: window }, groups: syncGroupOrder(s.groups, window) };
+}
+
+function gather(s: BrowserState, anchorId: string, members: string[], joining: string[] = members): BrowserState {
+  const anchor = s.tabs[anchorId];
+  const crossing = anchor ? members.filter((id) => id !== anchorId && joining.includes(id) && s.tabs[id] && crossesLane(anchor, s.tabs[id]!)) : [];
+  const adopted = crossing.length ? placing(s, crossing, { pinned: isPinnedRow(anchor), row: true, beforeId: anchorId }) : s;
+  return besideAnchor(gatherLane(adopted, anchorId, members), anchorId, crossing);
 }
 
 function placedAfterSplit(s: BrowserState, split: SplitView, tabId: string): BrowserState {
@@ -257,10 +275,11 @@ export const createSplitsSlice: StateCreator<BrowserState, [], [], SplitsSlice> 
     } else {
       [s, tabId] = withNewTab(s, windowId, { url: o.url, adoptId: o.url ? o.adoptId : undefined, profileId: anchor.profileId, openerId: o.url ? anchor.id : undefined, background: true });
     }
+    const joining = o.tabId && !o.openedForSplit ? [tabId] : [];
     const current = existing && s.splits[existing.id];
     if (replaced && current) {
       const split = withPaneIds(current, splitTabIds(current).map((id) => (id === replaced ? tabId : id)));
-      s = gather(s, anchor.id, splitTabIds(split));
+      s = gather(s, anchor.id, splitTabIds(split), joining);
       s = placedAfterSplit({ ...s, splits: { ...s.splits, [split.id]: split } }, split, replaced);
       if (!o.background) s = apply(s, activated(s, tabId));
       set(s);
@@ -268,7 +287,7 @@ export const createSplitsSlice: StateCreator<BrowserState, [], [], SplitsSlice> 
     }
     const split = withPane(current, anchor.id, tabId, o.side ?? "right", windowId);
     if (!split) return { ok: false, reason: "max" };
-    s = gather({ ...s, splits: { ...s.splits, [split.id]: split } }, anchor.id, splitTabIds(split));
+    s = gather({ ...s, splits: { ...s.splits, [split.id]: split } }, anchor.id, splitTabIds(split), joining);
     if (!o.background) s = apply(s, activated(s, tabId));
     set(s);
     return { ok: true, tabId, splitId: split.id };

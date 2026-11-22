@@ -513,6 +513,17 @@ is one folder: Chromium's launcher as `Ardia.exe`, `chrome.dll`, and the app's l
 manifest entries). With `ArdiaApp.dll` beside the launcher the browser process runs the app; without it the same build
 is plain Chromium.
 
+- Features the engine turns off at launch (`AddLaunchSwitches` in `scripts/windows/engine/src/ardia/win/main.cc`,
+  appended to any `--disable-features` the launcher passed, which a launcher's `--enable-features` can't undo):
+  `CalculateNativeWinOcclusion`, and `SettingsGlowupJourneys` (engine `windows-engine-20261117-9`, #2326). The latter
+  feeds Chrome's own guided tours, which Ardia never shows, and its chrome://settings handlers CHECK for a tracked
+  browser view in the tab's window, which a hidden page window doesn't have. The Mac turns it off too (#2289). The
+  `engine settings:` self-checks change a search engine, a site permission, the theme and browsing data through
+  chrome://settings in shown, private, pop-up and hidden pages and ask the engine for the page after each.
+- A browser-theme change (chrome://settings › Appearance › Reset to default, a theme installed or removed) leaves a
+  hosted page window's frame alone (`chromium-win-hosted-theme-change.patch`, engine `windows-engine-20261117-9`,
+  #2332). Chromium regenerates the frame on Windows for every theme change, which asks the window for a DWM frame
+  transition; a hosted window's frame is custom drawn, so that ended in a failed CHECK that closed the app.
 - The Visual C++ runtime ships inside the folder. React Native's DLLs import the app-container CRT (`vcruntime140_app.dll`,
   `msvcp140_app.dll` and the other `*_app.dll`), whose exports forward to the desktop `VCRUNTIME140.dll`, `MSVCP140.dll`
   and friends. A clean Windows 11 has none of those, and the per-user installer can't run `vc_redist`, so
@@ -547,6 +558,18 @@ is plain Chromium.
   rest of the Mac tab's methods, `tab_calls.cc`), `tab.discard`, `tabs.list`, `host.info`, `app.quit`. Events come as
   the topic `tab` with a key, a name and data (navigation, progress, favicon, find, zoom, security, media, pagePress,
   windowClose and more), and `tab.opened` for a tab Chromium made itself, with who opened it.
+- The page view (`engine/EngineWebView.tsx`) is the native view under the shared `WebView`, so its handle is typed as
+  `WebViewNativeHandle` from `@ardia/ardiacore`, the calls the shared `WebView` makes on the Mac's view: a method
+  added to that contract that Windows lacks fails `pnpm -C packages/expo-windows typecheck`. Each method goes to `tab.call`
+  (`engine/pageCalls.ts`), is answered in TypeScript (`capturePicture`, `downloadFavicon`, `focusIfUnfocused`), or is
+  in `NOT_ON_WINDOWS_YET`, which answers the Mac's empty answer and logs the method once. Those need the engine:
+  `downloadImage`, `requestPictureInPicture`, `takeControlPress`, `exitPictureInPicture`, `resolvePasswordPrompt`,
+  `resolveAutofillPrompt`, `answerAutofillPrompt`, `executeExtensionAction`, `resolveDisplayMedia` (Chromium's own
+  picker shows), `mediaCaptureSourceId` and `notificationAction`. A failed `tab.call` rejects with the engine's error,
+  as on the Mac, an `evaluate` result, navigation list or cookie list of the wrong type rejects with `ERR_BAD_REPLY`,
+  and a closed page answers the empty answer. A focus the page takes only once it shows logs `could not take focus`
+  when the engine refuses it. `nativeTag` is null: a page is its own window, with no React Native tag to hand keyboard
+  focus to.
 - `tab.close` closes as the Mac's `TabBridge::CloseAfterUnloadHandlers` does: a page with `beforeunload` or `unload`
   handlers gets `beforeunload` with its prompt cancelled (no "Leave site?" is ever shown for a tab the app closed), then
   its unload handlers whatever it answered, each step with 2 seconds, and then the host deletes the tab
@@ -591,10 +614,26 @@ is plain Chromium.
   into a site being torn down, and `Microsoft.UI.Input` fails fast (`0xc0000602`, seen in a VM dump). Keys typed in it no longer reach the app's shortcut hook. One dialog per window at a time; a dialog whose window goes away, or every
   dialog when the app stops, is cancelled within 250 ms, except the open-file picker: quitting with it open waits the
   stop's full 2 s and leaves its thread running (exit code 0, no crash; #1747). The launch log notes how many dialogs
-  were open at stop, how long they took and how many were left. Pop-up menus (`TrackPopupMenuEx`) still run on the UI thread
-  and stall pages while a menu is open (#1687). The self-check holds a real confirm on both threads and checks that a
-  page loads only in the first case; `dialog_pages_asked` and `dialog_pages_stalled` count pages asked while a dialog
-  was open and how many hadn't loaded 10 s later.
+  were open at stop, how long they took and how many were left. Pop-up menus run the same way (#1687): the UI thread
+  builds the menu and takes the cursor point, and `TrackPopupMenuEx` runs on a `RunModal` thread, owned by that
+  thread's hidden `ModalParent` at the app window, which takes the foreground so keys and outside clicks reach the
+  menu. The app window stays enabled, the `resignActive` its deactivation would send is held back
+  (`ActivatesMenuThread`) and sent after the menu only if another app took the foreground, and a menu is closed
+  (`EndMenu`) when its window goes or the app stops. A right press in the sidebar while a page has the keyboard
+  activates the app window first, before any menu, so the page lost the keyboard to the sidebar for good (#2218, seen on
+  the CI runner: the field kept its caret but `document.hasFocus()` was false and the keys went nowhere). The app window
+  now remembers the page it was activated from when the secondary button was down (`TakePageLeftBySecondaryPress`). The
+  sidebar's presses reach WinUI without passing the UI thread's mouse messages or a `WH_MOUSE` hook (the CI input trace
+  had none and the hook was never called), so the window reads the physical buttons on a 15 ms timer from that press
+  until 2 s after its release, at most 10 s held (`FollowSecondaryPress`); another button or a new right press forgets
+  the page. The menu reads it on the UI thread before its thread starts (`PageTheMenuPressLeft`, within 2 s of the button release and only for
+  the menu's own window), and when the menu is dismissed without a choice it gives the keyboard back through the same
+  follow path the Windows key uses (`snapKeyHandedBack` with `afterMenu`), only if that window is still in front,
+  enabled, not minimized and holds no dialog, the page is still that window's and shown, and no switcher, popover,
+  Windows-key or command-bar hold is under way. A choice keeps today's behaviour, since its command may focus a field.
+  The launch log records each request and why a request was skipped ("menu: …"), and `page_focus_return_requests_after_menu` counts the requests, including ones a focused app field or a later foreground change refuses. The self-check holds a real confirm and a real menu on both
+  threads and checks that a page loads only in the first case; `dialog_pages_asked` and `dialog_pages_stalled` count
+  pages asked while a dialog or a menu was open and how many hadn't loaded 10 s later.
 - A launch while the previous Ardia on the same profile is still closing waits for it to end (up to 45 s) instead of
   handing its command line to a browser that is shutting down, or starting a second browser on the same profile once
   that one has let go of Chromium's process singleton (which happens before its shutdown is over: the old process
@@ -674,8 +713,8 @@ is plain Chromium.
   `platform/keyboardFollow.windows.ts`; the Mac has no such call and subscribes to nothing). `pages.ts` sends it once
   the page shows, unless a text field of that window has the keyboard: React Native's focused field and the window it
   is in decide, and a field the user left by pressing a page of its window no longer counts. A field in the content
-  area of another tab (its New Tab page, an empty split pane, an internal page: the views `TabPane` wraps in
-  `TabContentArea`, whose `contentAreaOf` prop the field walk reads) doesn't count either, since the new page replaces
+  area of another tab (its New Tab page, an empty split pane, an internal page: `TabPane`'s `NewTabDropArea` and
+  `InternalPage`, whose `contentAreaOf` prop the field walk reads) doesn't count either, since the new page replaces
   it; the sidebar, the command bar, the find bar and the toolbar keep the keyboard. Only a page already showing
   in that window gets the ask at once. For any other page (none yet, sleeping, hidden, prewarmed, still opening, or
   still showing in the window a tab moved from) the ask is kept until that page shows in that window, however long it
@@ -731,7 +770,9 @@ is plain Chromium.
   ignores `findNext` (#1425), so reopening the bar on the same words moves one match on.
 - Peek opens as on the Mac. The engine host keeps a DevTools session of its own on each page and puts the Peek part of
   ArdiaCore's page script into an isolated world of every web frame (`page_links.cc`): the page can't see the script
-  or its binding. A click on a link with the Peek key (`webView.setPeekModifier`), the Split key
+  or its binding. It is registered for each new document (`Page.addScriptToEvaluateOnNewDocument` in that world, with
+  the binding scoped to it), so it is in place before a page that just woke from sleep or came by a cross-process
+  navigation takes input (engine `windows-engine-20261117-9`, #2198; the `engine links:` self-checks). A click on a link with the Peek key (`webView.setPeekModifier`), the Split key
   (`setSplitLinkModifier`), or a plain click to another site on a tab that peeks those (`setPeekOtherSiteTabs`), is
   cancelled and reported; the host checks it against the last real left mouse-up over that page and sends the Mac's
   `openWindow` (`peek` or `split`), or falls back as the Mac does. A tab the page opens itself carries `fromClick` only
@@ -898,6 +939,7 @@ is plain Chromium.
 | `permissions.devExternalLaunches` | Default | Mac test hook. |
 | `profiles.loaded` | Engine | The profiles the engine has loaded, plus the `profiles.loaded` event. Today the call fails and the app counts every profile as open, as with lazy loading off. |
 | Profile folder names (no verb) | App | The engine names a profile's folder `Ardia ` plus its id, with lowercase letters, digits and `-` kept and every other byte written `_` and two lowercase hex digits (`profiles.cc`), so each name has its own folder even on a case-insensitive disk and Ardia's own ids (`p-<base36>-<base36>`) keep the folder they always had. `profiles.deleteData` still maps only ids of that shape and refuses the rest; it could map the escape too. |
+| `sites.readStorage`, `writeStorage`, `registrableDomains` | Default | They carry a site's data between Chromium and WebKit pages, and WebKit pages are Mac only. Their engine calls (`ac_local_storage_read`, `_write`, `ac_registrable_domains`) are in `ac_local_storage.cc`, which BUILD.gn's `if (!is_win)` list keeps out of the Windows engine with the WebKit replica calls (`ac_extension_*`, `ac_passwords_page_*`), and `series-win` skips `chromium-extension-state-mirror-hooks.patch`. `windowsEngineCalls.test.mjs` fails when a call the Mac passes straight through is missing here while Windows builds it, or forwarded while it doesn't. |
 | `search.setEngineName` | Default | Names the search engine in the app's own page context menu; Windows shows Chromium's menu, which names Chromium's default engine. Needed again once the app draws that menu. |
 | `tabs.routeLinkTabs`, `stripCommand`, `strips`, `reportCommits` | Default | The Mac's Chromium tab strip; Windows hosts pages only, so the empty answers are right. |
 | `tabs.dev*` (10 verbs) | Default | Mac test hooks. |
@@ -921,7 +963,12 @@ session with track actions, and the mini player shows skip by 15 seconds where t
 
 Answered in TypeScript on Windows since this list was made: `engine.info` (from `host.info`), `favicons.fetch` (the
 icon Chromium stored for that address, from `ac_favicons_get`, asked again after 0.4 and 1.5 s while Chromium writes
-it), and `profiles.deleteData`.
+it), and `profiles.deleteData`. The page call `downloadFavicon` (a page's favicon event) asks the same `favicons.fetch`
+with the page's profile (`engine/pageFavicon.ts`), so a tab shows its site's icon as soon as Chromium stores it rather
+than a letter tile until the next lookup by page address. `usage_counts` carries `page_favicon_downloads` and
+`page_favicon_downloads_empty` (every platform): on Windows the empty share should fall from all of them to a few.
+A fetch that fails rejects instead of answering null; the shared caller logs `[favicons] page download failed` and
+counts it as empty.
 
 Answered on Windows since the engine took Windows paths (`windows-engine-20261112-2`), in `domains/exports.ts`,
 `unpacked.ts` and `systemState.ts`, with the dialogs, file reads and power reading passed in as the domain engine's
@@ -1054,7 +1101,8 @@ that answers the same methods with the same result shapes, so the wizard (`compo
 - What is read, per profile, with the Mac's readers ported: bookmarks (`Bookmarks`, `AccountBookmarks`; Firefox
   `places.sqlite`), history (`History`; `places.sqlite`), open tabs (the newest cleartext `Sessions\Session_*` or
   `Current Session`; Firefox and Zen `sessionstore-backups\recovery.jsonlz4` and the rest, LZ4 in TypeScript), favicons
-  for the imported tabs and bookmarks bar (`Favicons`), a bookmarks HTML file and a passwords CSV file (picked with
+  for the imported tabs and bookmarks bar (`Favicons`; Firefox and Zen `favicons.sqlite` in `firefoxFavicons.ts`, with
+  `FirefoxFavicons.swift`'s rules: PNGs up to 64 px by their own header, SVGs and other formats skipped), a bookmarks HTML file and a passwords CSV file (picked with
   `ArdiaDialogs.pickFiles`).
 - Spaces (`arcSidebar.ts`, `zenSession.ts`, `zenSidebar.ts`, `sidebars.ts`, ported from `ArcSidebar.swift` and
   `ZenSidebar.swift`): Arc for Windows keeps `StorableSidebar.json` beside its `User Data`, in
@@ -1326,7 +1374,9 @@ does run in a test instance. A scratch folder with the marker must get both powe
   (add the label, then push or re-run the run). A pull request can read its base branch's caches and no other pull
   request's, which is why the Windows branch builds on every push: without that, each pull request into it would
   compile once for itself. A full run always compiles, saves that app for pull requests to reuse, and adds the tours, the
-  installers and the install check. Only a full run has the `Ardia-Setup-<cpu>` artifacts that
+  installers and the install check. The tours run beside the launch checks in their own jobs, `x64-tour` (the app
+  alone, then the pages and the typing with the engine; artifacts `tour` and `tour-engine`) and `x64-tour-first-run`
+  (artifact `tour-engine-first-run`), so a full run takes about as long as its slowest job instead of their sum. Only a full run has the `Ardia-Setup-<cpu>` artifacts that
   `scripts/windows/publish-alpha.sh` publishes.
 - With the browser window open, the x64 run also drives the app with real input and fails when the default layout
   marks no caption region; a drag by the gap beside the window buttons is not Windows' own move or does not move the

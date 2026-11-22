@@ -17,6 +17,7 @@ import { useResource } from "../../../state/settings/resources";
 import { closeSettingsSheet } from "../../../state/settings/sheet";
 import { blockerAvailable, filterListAddress, filterListLabel, setFilterList } from "../../../state/site/contentBlocking";
 import { noteContentBlockerUnavailable, noteContentBlockerWriteFailure, noteCustomFilterList } from "../../../state/telemetry/usage";
+import { consentNow, consentToken } from "../../../state/telemetry/client";
 import { UI_LOCALE } from "../../../lib/uiLocale";
 
 export const CATEGORIES: { id: FilterListCategory; section: string; anchor?: SettingId }[] = [
@@ -62,10 +63,11 @@ export function useContentBlocker({ countOutages = false } = {}) {
 }
 
 export async function writeBlocker(write: () => Promise<unknown>, refresh: () => void) {
+  const consent = consentToken();
   try {
     await write();
   } catch {
-    noteContentBlockerWriteFailure();
+    noteContentBlockerWriteFailure(consent);
   } finally {
     refresh();
   }
@@ -142,6 +144,7 @@ function CustomLists({ blocker, refresh }: { blocker: ContentBlockerState | null
   }, [downloading, blocker]);
   const address = filterListAddress(typed);
   const add = async () => {
+    const consent = consentNow();
     if (!blocker || adding) return;
     if (!address) {
       setTried(true);
@@ -155,17 +158,17 @@ function CustomLists({ blocker, refresh }: { blocker: ContentBlockerState | null
       const title = filterListLabel(added.id, blocker.lists.find((l) => l.id === added.id)?.title ?? "");
       if (added.failed && added.custom && !added.existed) {
         await removeFilterList(added.id).catch(() => {});
-        noteCustomFilterList("addFailed");
+        noteCustomFilterList("addFailed", consent);
         setNote({ text: "Couldn't download a filter list from that address.", error: true });
         return;
       }
-      noteCustomFilterList("added");
+      noteCustomFilterList("added", consent);
       if (!blocker.enabled) await setContentBlockerEnabled(true);
       setTyped("");
       if (added.existed) setNote({ text: `${title} is already on.`, error: false });
       else if (!added.custom) setNote({ text: `That's ${title}, one of the lists below. It's on now.`, error: false });
     } catch {
-      noteCustomFilterList("addFailed");
+      noteCustomFilterList("addFailed", consent);
       setNote({ text: "uBlock Origin didn't take that list. Check the address and try again.", error: true });
     } finally {
       setAdding(false);
@@ -173,7 +176,7 @@ function CustomLists({ blocker, refresh }: { blocker: ContentBlockerState | null
     }
   };
   const remove = (l: FilterList) => {
-    noteCustomFilterList("removed");
+    noteCustomFilterList("removed", consentNow());
     void writeBlocker(() => removeFilterList(l.id), refresh);
   };
   const toggle = (l: FilterList, on: boolean) => {

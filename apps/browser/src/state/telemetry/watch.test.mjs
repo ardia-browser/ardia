@@ -33,13 +33,13 @@ test("a watch from someone not sharing turns sharing on for 14 days and tags eve
   assert.equal(s.sharingUntil, T + 14 * DAY);
   assert.equal(s.watchUntil, T + 14 * DAY);
   assert.deepEqual(watch.watchStatus(), { report: "FB-1001", until: T + 14 * DAY, turnedSharingOn: true });
-  client.capture("during_watch");
+  client.capture("during_watch", {}, client.consentNow());
   assert.equal(lastLocal("during_watch").properties.watch_report, "FB-1001");
 });
 
 test("events carry watch_report while the watch runs on the real clock", () => {
   watch.startWatch("FB-1002");
-  client.capture("tagged");
+  client.capture("tagged", {}, client.consentNow());
   assert.equal(lastLocal("tagged").properties.watch_report, "FB-1002");
   assert.equal(lastLocal("tagged").sent, true);
 });

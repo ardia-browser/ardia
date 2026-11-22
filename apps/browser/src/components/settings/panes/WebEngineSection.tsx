@@ -1,18 +1,17 @@
 import { useEffect, useState } from "react";
-import { AppState, Linking, View } from "react-native";
+import { View } from "react-native";
 import { resolveInput } from "@ardia/core";
-import { getPasskeyAccess, NO_PASSKEY_ACCESS, requestPasskeyAccess, type PasskeyAccess, type PasskeyAccessStatus } from "../../../state/engines/passkeys";
 import { defaultEngine, ENGINE_NAMES, PROTECTED_VIDEO_SITES, RECOMMENDED_ENGINE, siteOf, type PageEngine } from "../../../state/engines/engines";
 import { setWebsiteEngine } from "../../../state/engines/actions";
 import { useSettings } from "../../../state/browser/hooks";
 import { updateSettings } from "../../../state/settings/actions";
 import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
-import { Button, DialogActions, DialogTitle, lineHeight, PopUp, Sheet, space, Symbol, Text, TextField } from "../../ui";
-import { perLook } from "../../ui/tokens";
+import { Button, DialogActions, DialogTitle, PopUp, Sheet, space, Symbol, Text, TextField } from "../../ui";
 import { useTheme } from "../../ui/theme";
 import { Favicon } from "../../favicon/Favicon";
 import { FormField, Group, Row, SectionHeader, SettingToggle } from "../Form";
-import { setting } from "../settingsIndex";
+import { PasskeyAccessRow } from "./PasskeyAccessRow";
+import { ABOUT_ENGINES_TITLE, showWebKitLimits } from "./WebKitLimitsSheet";
 
 const ENGINE_OPTIONS: { value: PageEngine; title: string }[] = [
   { value: "chromium", title: ENGINE_NAMES.chromium },
@@ -29,35 +28,33 @@ export function WebEngineSection() {
   const engine = useSettings((settings) => defaultEngine({ settings }));
   const rules = useSettings((s) => s.websiteEngines);
   const protectedVideo = useSettings((s) => s.protectedVideoInWebKit);
+  const automatic = useSettings((s) => s.engineMode === "automatic");
   const sites = Object.keys(rules).sort((a, b) => siteLabel(a).localeCompare(siteLabel(b)));
   return (
     <>
       <SectionHeader title="Web engine" />
       <Group>
-        <Row
-          anchor="advanced.pageEngine"
-          description={
-            <View>
-              <Text size="caption" tone="textSecondary" style={DETAIL()}>
-                {setting("advanced.pageEngine").description}
-              </Text>
-              <View style={HELP_LINK}>
-                <Button variant="text" look="link" pad="none" title="How engines differ" onPress={() => showSettingsSheet(<EnginesDifferSheet />)} />
-              </View>
-            </View>
-          }
-        >
+        <Row anchor="advanced.pageEngine">
           <PopUp value={engine} options={DEFAULT_ENGINE_OPTIONS} onChange={(value) => updateSettings({ pageEngine: value })} minWidth={190} />
         </Row>
-        <SettingToggle anchor="advanced.fairPlayInChromium" />
         <Row anchor="advanced.websiteEngines">
           {!protectedVideo && <Button title="Add Streaming Sites" onPress={() => updateSettings({ protectedVideoInWebKit: true })} />}
           <Button title="Add Rule…" icon="plus" onPress={() => showSettingsSheet(<RuleSheet />)} />
         </Row>
-        {protectedVideo && <StreamingSitesRow />}
-        {sites.map((site) => (
-          <RuleRow key={site} site={site} engine={rules[site]!} />
-        ))}
+        {automatic && protectedVideo && <StreamingSitesRow />}
+        {automatic && sites.map((site) => <RuleRow key={site} site={site} engine={rules[site]!} />)}
+        <SettingToggle anchor="advanced.offerWebKitForProtectedVideo" />
+      </Group>
+      <SectionHeader title="Switching engines" />
+      <Group>
+        <SettingToggle anchor="advanced.engineSwitchKeepsPage" />
+        <SettingToggle anchor="advanced.engineSwitchAsksAboutUnsavedWork" />
+        <SettingToggle anchor="advanced.engineSwitchCarriesSiteData" />
+      </Group>
+      <SectionHeader title="WebKit pages" />
+      <Group>
+        <SettingToggle anchor="advanced.webKitFraudWarnings" />
+        <Row anchor="advanced.enginesDiffer" onPress={() => showSettingsSheet(<EnginesDifferSheet />)} />
       </Group>
     </>
   );
@@ -138,22 +135,18 @@ function RuleSheet({ site, engine: initial }: { site?: string; engine?: PageEngi
 
 const PASSKEYS_WAITING = "WebKit pages can't use passkeys until Apple grants Ardia its browser passkey entitlement. Sign in with a passkey in Chromium meanwhile.";
 
-const PASSKEY_STATUS: Record<Exclude<PasskeyAccessStatus, "entitlementRequired">, string> = {
-  deviceNotConfigured: "Passkeys aren't set up on this Mac. Set up iCloud Keychain or another passkey app in System Settings, then reopen Ardia.",
-  notDetermined: "Allow Ardia to use the passkeys saved on this Mac, from the Passwords app and other passkey apps, in WebKit and Chromium pages.",
-  authorized: "Websites can use the passkeys saved on this Mac, in WebKit and Chromium pages.",
-  denied: "Off. Turn Ardia on in System Settings › Privacy & Security › Passkeys Access for Web Browsers.",
-};
-
 function EnginesDifferSheet() {
   return (
     <Sheet size="l" onClose={closeSettingsSheet}>
       <DialogTitle subtitle="Every page opens in Chromium or WebKit. Here's what changes between them.">How engines differ</DialogTitle>
       <View style={DIFFER_LIST}>
         <Group>
-          <Row title="Separate sign-ins" description="Each engine keeps its own cookies and site data." />
-          <Row title="Extensions and ad blocking are Chromium only" description="WebKit pages run without extensions or the ad blocker for now." />
-          <PasskeysRow />
+          <Row
+            title="Separate sign-ins"
+            description="Each engine keeps its own cookies and site data in every profile. With Bring sign-ins along on, a site's cookies and saved data follow it to the other engine; other offline data stays put."
+          />
+          <PasskeyAccessRow waiting={PASSKEYS_WAITING} />
+          <Row title={ABOUT_ENGINES_TITLE} description="How Automatic picks an engine, and what WebKit pages can't do." onPress={() => showWebKitLimits("enginesPane")} />
         </Group>
       </View>
       <DialogActions>
@@ -163,35 +156,6 @@ function EnginesDifferSheet() {
   );
 }
 
-function PasskeysRow() {
-  const [access, setAccess] = useState<PasskeyAccess | null>(null);
-  const [asking, setAsking] = useState(false);
-  useEffect(() => {
-    let live = true;
-    const refresh = () => void getPasskeyAccess().catch(() => NO_PASSKEY_ACCESS).then((next) => live && setAccess(next));
-    refresh();
-    const watch = AppState.addEventListener("change", (state) => state === "active" && refresh());
-    return () => {
-      live = false;
-      watch.remove();
-    };
-  }, []);
-  if (!access?.entitled) return <Row title="Passkeys" description={PASSKEYS_WAITING} />;
-  const ask = async () => {
-    setAsking(true);
-    setAccess(await requestPasskeyAccess().catch(() => NO_PASSKEY_ACCESS));
-    setAsking(false);
-  };
-  return (
-    <Row title="Passkeys" description={PASSKEY_STATUS[access.status as keyof typeof PASSKEY_STATUS]}>
-      {access.status === "notDetermined" && <Button title="Allow Passkeys…" disabled={asking} onPress={() => void ask()} />}
-      {access.status === "denied" && <Button title="Open System Settings" onPress={() => void Linking.openURL("x-apple.systempreferences:com.apple.preference.security")} />}
-    </Row>
-  );
-}
-
-const DETAIL = perLook(() => ({ marginTop: space.xxs, lineHeight: lineHeight.caption }) as const);
-const HELP_LINK = { flexDirection: "row", marginTop: space.xs } as const;
 const STREAMING_ICON = { width: 20, height: 20 } as const;
 const DIFFER_LIST = { marginTop: space.m } as const;
 const ERROR = { marginTop: space.ml } as const;

@@ -148,26 +148,35 @@ export function tabsOver(pool: Pool, tabs: readonly TabRow[], currentTabId?: str
     for (let i = 0; same && i < tabs.length; i++) same = cached.rows[i] === tabs[i];
     if (same) return cached;
   }
-  const open: TabRow[] = [];
-  const chosen = new Map<string, TabRow>();
-  for (const t of tabs) {
-    if (!t.url || t.id === currentTabId) continue;
-    open.push(t);
-    const key = pageText(t).key;
-    const kept = chosen.get(key);
-    if (!kept || (t.customTitle && !kept.customTitle)) chosen.set(key, t);
-  }
   const tabIds = new Map<string, string>();
-  for (const [key, t] of chosen) tabIds.set(key, t.id);
+  const renamedTabKeys = new Set<string>();
+  const firstOfPage: boolean[] = new Array(tabs.length);
+  for (let i = 0; i < tabs.length; i++) {
+    const t = tabs[i]!;
+    if (!t.url || t.id === currentTabId) continue;
+    const key = pageText(t).key;
+    if (!t.customTitle) {
+      if (!tabIds.has(key)) {
+        tabIds.set(key, t.id);
+        firstOfPage[i] = true;
+      }
+    } else if (!renamedTabKeys.has(key)) {
+      renamedTabKeys.add(key);
+      tabIds.set(key, t.id);
+    }
+  }
   const extra: Candidate[] = [];
   const renamed = new Set<string>();
-  for (const t of open) {
+  for (let i = 0; i < tabs.length; i++) {
+    const t = tabs[i]!;
+    if (!t.url || t.id === currentTabId) continue;
     const key = pageText(t).key;
     const listed = pool.byKey.get(key);
-    if (!listed) {
-      if (!t.customTitle && chosen.get(key) !== t) continue;
-      extra.push({ url: t.url, title: t.customTitle || t.title, pageTitle: t.title, ...(t.customTitle ? { renamed: true as const } : {}), favicon: t.favicon, visits: 0, lastVisit: 0, logVisits: 0, fresh: true, bookmarked: false, tabId: t.id, text: tabPageText(t) });
-    } else if (t.customTitle) {
+    if (!t.customTitle) {
+      if (!listed && firstOfPage[i] && (renamedTabKeys.size === 0 || !renamedTabKeys.has(key))) extra.push({ url: t.url, title: t.title, pageTitle: t.title, favicon: t.favicon, visits: 0, lastVisit: 0, logVisits: 0, fresh: true, bookmarked: false, tabId: t.id, text: tabPageText(t) });
+    } else if (!listed) {
+      extra.push({ url: t.url, title: t.customTitle, pageTitle: t.title, renamed: true, favicon: t.favicon, visits: 0, lastVisit: 0, logVisits: 0, fresh: true, bookmarked: false, tabId: t.id, text: tabPageText(t) });
+    } else {
       renamed.add(key);
       extra.push({ url: t.url, title: t.customTitle, renamed: true, favicon: t.favicon ?? listed.favicon, visits: listed.visits, lastVisit: listed.lastVisit, logVisits: listed.logVisits, bookmarked: listed.bookmarked, tabId: t.id, text: tabPageText(t, listed.text) });
     }

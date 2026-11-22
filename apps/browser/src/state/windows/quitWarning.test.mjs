@@ -245,6 +245,8 @@ const OTHER_WINDOW_CLOSES_DURING_THE_TABS_CONFIRM = `
 const { useBrowser } = await import("./src/state/browser/store.ts");
 const { requestWindowClose } = await import("./src/state/windows/windowClose.ts");
 const { takeQuitWarningCounts } = await import("./src/state/telemetry/quitWarningCounts.ts");
+const { setConsentPeriod } = await import("./src/state/telemetry/consentPeriod.ts");
+setConsentPeriod(true, "quit-warning-test");
 const { shellNativeModules, windows } = await import("./src/test-native/shell.ts");
 const S = () => useBrowser.getState();
 const settle = async () => { for (let turn = 0; turn < 12; turn++) await new Promise((resolve) => setTimeout(resolve, 0)); };

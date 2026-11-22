@@ -1,6 +1,6 @@
 import { appUrlOrigin, toAppUrl } from "./appUrls.ts";
 import { cleanUrl } from "./cleanUrl.ts";
-import { displayHost } from "./idn.ts";
+import { displayHost, punycodeEncode } from "./idn.ts";
 import { PSL_TLDS } from "./tlds.ts";
 
 export type ParsedUrl = { scheme: string; host: string; port: string; path: string; query: string; hash: string };
@@ -75,8 +75,55 @@ export function fixupUrl(raw: string): string | null {
   return url && !isJavaScriptUrl(url) ? toAppUrl(url) : null;
 }
 
+type SpacedAddress = { escaped: string; certain: boolean };
+
+const WIKI_HOST = /(^|\.)(wikipedia|wiktionary|wikimedia|wikiquote|wikibooks|wikisource|wikinews|wikiversity|wikivoyage|wikidata|mediawiki)\.org$/;
+
+function spacedAddress(input: string): SpacedAddress | null {
+  if (!input.includes(" ") || /[^\S ]/.test(input)) return null;
+  const end = input.search(/[/?#]/);
+  if (end <= 0 || input.slice(0, end).includes(" ") || input.startsWith("/ ", end)) return null;
+  const host = matchHost(input);
+  if (!host) return null;
+  const name = host.name.toLowerCase();
+  if (KNOWN_SCHEMES.has(name) || name === "javascript") return null;
+  const port = Number(host.port.slice(1));
+  if (host.port && (port < 1 || port > 65535)) return null;
+  const dotted = name.includes(".") && !/^[\d.]+$/.test(name);
+  const ip = name.startsWith("[") || /^(\d{1,3}\.){3}\d{1,3}$/.test(name);
+  const local = name === "localhost" || ip || (!!host.port && !(dotted && !isLocalHost(name) && (port === 80 || port === 443)));
+  if (!dotted && !local) return null;
+  const rest = input.slice(host.authority.length);
+  const wiki = WIKI_HOST.test(name) && /^\/wiki\/[^\s/?#]/.test(rest);
+  const certain = local || wiki || /^[^\s?#]*\?(?:[^\s#]*&)?[^\s#&=]+=/.test(rest);
+  return { escaped: input.replace(/ /g, "%20"), certain };
+}
+
+const asciiLabel = (label: string) =>
+  /^[\x00-\x7f]*$/.test(label) ? label.replace(/[A-Z]+/g, (upper) => upper.toLowerCase()) : `xn--${punycodeEncode(Array.from(label.normalize("NFKC"), (c) => c.toLowerCase()).join(""))}`;
+
+function addressKey(url: string): string {
+  const m = /^([a-z][a-z0-9+.-]*):\/\/([^/?#]*)(.*)$/i.exec(url.trim());
+  if (!m) return url.trim();
+  const scheme = m[1]!.toLowerCase();
+  const web = scheme === "http" || scheme === "https";
+  const defaultPort = scheme === "https" ? 443 : scheme === "http" ? 80 : -1;
+  const authority = m[2]!.replace(/^[^:@[\]]+/, (host) => host.split(".").map(asciiLabel).join(".")).replace(/[A-Z]+/g, (upper) => upper.toLowerCase()).replace(/:(\d+)$/, (port, digits: string) => (!web ? port : Number(digits) === defaultPort ? "" : `:${Number(digits)}`));
+  const rest = web && !m[3]!.startsWith("/") ? `/${m[3]}` : m[3]!;
+  return `${scheme}://${authority}${rest}`;
+}
+
+export const sameAddress = (a: string, b: string) => addressKey(a) === addressKey(b);
+
+export function spacedAddressGuess(raw: string): string | null {
+  const spaced = spacedAddress(raw.trim());
+  return spaced && !spaced.certain ? fixupUrl(spaced.escaped) : null;
+}
+
 function fixup(raw: string): string | null {
-  const input = raw.trim();
+  const trimmed = raw.trim();
+  const spaced = spacedAddress(trimmed);
+  const input = spaced?.certain ? spaced.escaped : trimmed;
   if (!input || (/\s/.test(input) && !/^([a-z][a-z0-9+.-]*:\/\/|\/[^\s/])/i.test(input))) return null;
   if (/^(about|data|mailto|tel|sms|facetime|view-source):/i.test(input)) return input;
 
@@ -124,7 +171,7 @@ export type PasteAction = { kind: "go"; url: string } | { kind: "search"; query:
 export function classifyPaste(text: string): PasteAction | null {
   const trimmed = withoutJavaScriptScheme(text.trim()).trim();
   if (!trimmed) return null;
-  const url = /\s/.test(trimmed) ? null : fixupUrl(trimmed);
+  const url = /\s/.test(trimmed) && !spacedAddress(trimmed)?.certain ? null : fixupUrl(trimmed);
   if (url && !/^(about|data):/i.test(url)) return { kind: "go", url: cleanUrl(url) };
   return { kind: "search", query: trimmed.replace(/\s+/g, " ").slice(0, 2000) };
 }

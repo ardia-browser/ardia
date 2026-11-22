@@ -65,7 +65,7 @@ export function parseNetscape(html: string): BookmarkNode {
         stack.push(pending);
         pending = undefined;
       } else if (!sawRootList) sawRootList = true;
-      else stack.push(folder("", []));
+      else stack.push(folder("", [], { role: "list" }));
     } else if (!t.open && t.name === "dl") {
       if (pending) {
         top().children!.push(pending);

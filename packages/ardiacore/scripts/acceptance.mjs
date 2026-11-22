@@ -652,7 +652,7 @@ const eventsOf = async (tabId) => {
 };
 const state = () =>
   evalApp(`const s = ac.store.getState(); const w = s.windows[${JSON.stringify(mainWindow)}] ?? Object.values(s.windows).filter((w) => w.kind === "main").sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0))[0];
-    return { windowId: w?.id, profileId: w?.profileId, tabs: (w?.tabIds ?? []).map((id) => ({ id, url: s.tabs[id]?.url, title: s.tabs[id]?.title, favicon: s.tabs[id]?.favicon?.slice(0, 40), adoptId: s.tabs[id]?.page.adopt, profileId: s.tabs[id]?.profileId, loading: s.live[id]?.isLoading, back: s.live[id]?.canGoBack, fwd: s.live[id]?.canGoForward })), active: w ? w.activeTabIds[w.profileId] : null, windows: Object.keys(s.windows).length, profiles: s.profileOrder };`);
+    return { windowId: w?.id, profileId: w?.profileId, tabs: (w?.tabIds ?? []).map((id) => ({ id, url: s.tabs[id]?.url, title: s.tabs[id]?.title, favicon: s.tabs[id]?.favicon?.slice(0, 40), adoptId: s.tabs[id]?.page.adopt, profileId: s.tabs[id]?.profileId, loading: ac.tabLive.liveOf(id)?.isLoading, back: ac.tabLive.liveOf(id)?.canGoBack, fwd: ac.tabLive.liveOf(id)?.canGoForward })), active: w ? w.activeTabIds[w.profileId] : null, windows: Object.keys(s.windows).length, profiles: s.profileOrder };`);
 
 // MARK: Helpers
 
@@ -674,7 +674,7 @@ const shownAndMounted = async (id) => {
 const freshTab = async (url) => {
   const id = await evalApp(`return ac.store.getState().newTab(${JSON.stringify(mainWindow)}, { url: ${JSON.stringify(url)} })`);
   await shownAndMounted(id);
-  await until(`${url} loaded`, () => evalApp(`const s = ac.store.getState(); return s.tabs[${JSON.stringify(id)}]?.url && !s.live[${JSON.stringify(id)}]?.isLoading ? true : null`));
+  await until(`${url} loaded`, () => evalApp(`const s = ac.store.getState(); return s.tabs[${JSON.stringify(id)}]?.url && !ac.tabLive.liveOf(${JSON.stringify(id)})?.isLoading ? true : null`));
   return id;
 };
 const backToA = async () => {
@@ -683,7 +683,7 @@ const backToA = async () => {
   await evalApp(`ac.actions.switchToTab("${first.id}"); return true`);
 };
 const lastEvent = async (tabId, name, test = () => true) => (await eventsOf(tabId)).findLast((x) => x.name === name && test(x.payload ?? {})) ?? null;
-const live = (tabId) => evalApp(`return ac.store.getState().live["${tabId}"] ?? null`);
+const live = (tabId) => evalApp(`return ac.store.getState().tabs["${tabId}"] ? ac.tabLive.liveOf("${tabId}") : null`);
 const pipWindows = () => engine("tabs.devPictureInPicture").catch(() => null);
 const startVideo = async (tabId, audio) => {
   const t = await pageFor(tabId, "/video");
@@ -1367,7 +1367,7 @@ try {
 
   await check("theme-commit", async () => {
     const tab = await openTab(`${base}/red-header?commit`, "Red header");
-    const color = () => evalApp(`return ac.store.getState().live["${tab.id}"]?.themeColor ?? null`);
+    const color = () => evalApp(`return ac.tabLive.liveOf("${tab.id}")?.themeColor ?? null`);
     const settled = (title) => until(title, async () => (await state()).tabs.find((t) => t.id === tab.id && t.title === title && !t.loading));
     try {
       await until("the red header's colour", async () => (await color()) === "#C80000", 5000);
@@ -1695,14 +1695,14 @@ try {
     const shell = "globalThis.expo.modules.ArdiaDialogs";
     const s = (expr) => evalApp(`const s = ac.store.getState(); return ${expr}`);
     const toB = async (tabId, tag) => {
-      await until(`A?${tag} loaded`, async () => (await s(`s.tabs["${tabId}"]?.title === "Page A" && !s.live["${tabId}"]?.isLoading && !!ac.webviews.get("${tabId}")`)) || null, 15000);
+      await until(`A?${tag} loaded`, async () => (await s(`s.tabs["${tabId}"]?.title === "Page A" && !ac.tabLive.liveOf("${tabId}")?.isLoading && !!ac.webviews.get("${tabId}")`)) || null, 15000);
       await evalApp(`ac.store.getState().navigate("${tabId}", "${base}/b?${tag}", { userInitiated: true }); return true`);
-      await until(`B?${tag} with Back`, async () => (await s(`s.tabs["${tabId}"]?.title === "Page B" && s.live["${tabId}"]?.canGoBack && !s.live["${tabId}"]?.isLoading`)) || null, 15000);
+      await until(`B?${tag} with Back`, async () => (await s(`s.tabs["${tabId}"]?.title === "Page B" && ac.tabLive.liveOf("${tabId}")?.canGoBack && !ac.tabLive.liveOf("${tabId}")?.isLoading`)) || null, 15000);
     };
     const backReachesA = async (tabId, tag) => {
       await evalApp(`ac.actions.switchToTab("${tabId}"); return true`);
-      await until(`the reopened B?${tag}`, async () => (await s(`s.tabs["${tabId}"]?.title === "Page B" && !s.live["${tabId}"]?.isLoading && !!ac.webviews.get("${tabId}")`)) || null, 15000);
-      const canGoBack = await until(`Back on the reopened B?${tag}`, async () => (await s(`!!s.live["${tabId}"]?.canGoBack`)) || null, 5000).catch(() => false);
+      await until(`the reopened B?${tag}`, async () => (await s(`s.tabs["${tabId}"]?.title === "Page B" && !ac.tabLive.liveOf("${tabId}")?.isLoading && !!ac.webviews.get("${tabId}")`)) || null, 15000);
+      const canGoBack = await until(`Back on the reopened B?${tag}`, async () => (await s(`!!ac.tabLive.liveOf("${tabId}")?.canGoBack`)) || null, 5000).catch(() => false);
       if (!canGoBack) return { canGoBack };
       await evalApp(`return ac.webviews.get("${tabId}").goBack()`);
       const a = await until(`Back to A?${tag}`, async () => (await s(`s.tabs["${tabId}"]?.title === "Page A" && s.tabs["${tabId}"]?.url`)) || null, 10000).catch(() => null);
@@ -2275,6 +2275,15 @@ try {
     return { levels };
   });
 
+  await check("preload-pages", async () => {
+    await engine("sites.setPreloadPages", { profile: "", on: true });
+    const on = await engine("sites.preloadPages", { profile: "" });
+    await engine("sites.setPreloadPages", { profile: "", on: false });
+    const off = await engine("sites.preloadPages", { profile: "" });
+    if (on !== true || off !== false) throw new Error(`Preload pages didn't follow the setting: on read ${on}, off read ${off}`);
+    return { on, off };
+  });
+
   await check("extensions", async () => {
     const inspected = await engineOrError("extensions.inspectUnpacked", { path: extPath });
     const installed = await engineOrError("extensions.install", { profile: "", path: extPath });
@@ -2740,7 +2749,7 @@ try {
       : await evalApp(`return ac.store.getState().newTab(${JSON.stringify(mainWindow)}, { url: "${firstPage}" })`);
     try {
       await until("the first page", () => evalApp(`const s = ac.store.getState(); const t = s.tabs[${JSON.stringify(tab)}];
-        return t?.title === "Ad first" && !s.live[${JSON.stringify(tab)}]?.isLoading ? true : null`), 20000);
+        return t?.title === "Ad first" && !ac.tabLive.liveOf(${JSON.stringify(tab)})?.isLoading ? true : null`), 20000);
       await sleep(500);
       const first = adsServedFor(firstTag);
       if (first.length) throw new Error(`the first page's ads went out: ${JSON.stringify(first)}`);
@@ -2748,7 +2757,7 @@ try {
         tag = `${tag0}-${tag}`;
         await evalApp(`ac.store.getState().navigate(${JSON.stringify(tab)}, "${page}?${tag}", { userInitiated: true }); return true`);
         await until(`the page (${tag})`, () => evalApp(`const s = ac.store.getState(); const t = s.tabs[${JSON.stringify(tab)}];
-          return t?.url?.endsWith(${JSON.stringify(`?${tag}`)}) && !s.live[${JSON.stringify(tab)}]?.isLoading ? true : null`));
+          return t?.url?.endsWith(${JSON.stringify(`?${tag}`)}) && !ac.tabLive.liveOf(${JSON.stringify(tab)})?.isLoading ? true : null`));
         const t = await until("its target", () => pageTarget(`/adpage?${tag}`));
         const reached = async (url) => {
           const before = adServed.length;
@@ -2799,7 +2808,7 @@ try {
     const w = await evalApp(`return ac.actions.openWindow({ profileId: ${JSON.stringify(id)}, url: "http://adpage.test:${server.address().port}/adfirst?${tag}" })`);
     try {
       await until("the held page", () => evalApp(`const s = ac.store.getState(); const t = s.windows[${JSON.stringify(w)}]?.tabIds[0];
-        return t && s.tabs[t]?.title === "Ad first" && !s.live[t]?.isLoading ? true : null`), 20000);
+        return t && s.tabs[t]?.title === "Ad first" && !ac.tabLive.liveOf(t)?.isLoading ? true : null`), 20000);
       const loadedAfterMs = Date.now() - started;
       await sleep(500);
       const served = adsServedFor(tag);
@@ -2811,6 +2820,41 @@ try {
     }
   });
 
+  await check("content-blocker-unload-cycles", async () => {
+    const pageIdleMs = 36000;
+    const profile = `blocker-unload-cycles-${Date.now() % 1000}`;
+    const unload = async () => {
+      let last = null;
+      try {
+        await until("the profile unloaded", async () => {
+          if (!(await engine("profiles.loaded")).profiles.includes(profile)) return true;
+          if (!last || last.status === "busy") last = await engine("profiles.unloadIdle", { profile });
+          if (last.status === "busy") await sleep(2000);
+          return null;
+        }, 60000);
+      } catch (error) {
+        throw new Error(`${error.message}; last unload: ${JSON.stringify(last)}`);
+      }
+      return last?.status ?? null;
+    };
+    const cycles = [];
+    for (let cycle = 0; cycle < 2; cycle++) {
+      await engine("contentBlocker.hiddenElements", { profile });
+      await sleep(pageIdleMs);
+      cycles.push(await unload());
+      await engine("contentBlocker.setAllowed", { host: "unload-cycles.test", allowed: true });
+      await engine("contentBlocker.setAllowed", { host: "unload-cycles.test", allowed: false });
+    }
+    await engine("contentBlocker.hiddenElements", { profile });
+    await sleep(pageIdleMs);
+    cycles.push(await unload());
+    const afterUnload = await evalApp(`return ac.engine.call("contentBlocker.hiddenElements", ${JSON.stringify({ profile })}).then((r) => ({ ok: r }), (e) => ({ error: e.message }))`);
+    if (afterUnload.error) throw new Error(`the first blocker call after an unload failed: ${afterUnload.error}`);
+    const state = await engine("contentBlocker.state");
+    if (!state?.stats?.ready) throw new Error("the blocker isn't ready after the profile unloaded twice");
+    return { profile, cycles, afterUnload };
+  });
+
   await check("content-blocker-private", async () => {
     const origin = `http://adpage.test:${server.address().port}`;
     const out = [];
@@ -2819,7 +2863,7 @@ try {
       const w = await evalApp(`return ac.actions.openWindow({ kind: "private", url: "${origin}/adfirst?${tag}" })`);
       try {
         await until(`the ${step} private page`, () => evalApp(`const s = ac.store.getState(); const id = s.windows[${JSON.stringify(w)}]?.tabIds[0];
-          return id && s.tabs[id]?.title === "Ad first" && !s.live[id]?.isLoading ? true : null`), 20000);
+          return id && s.tabs[id]?.title === "Ad first" && !ac.tabLive.liveOf(id)?.isLoading ? true : null`), 20000);
         await sleep(500);
         const served = adsServedFor(tag);
         if (served.length) throw new Error(`the ${step} private window's ads went out: ${JSON.stringify(served)}`);
@@ -3894,13 +3938,14 @@ try {
         rmSync(button, { force: true });
         await open();
         if ((await appActive(false)) !== "0") throw new Error("no app-active seam");
-        const from = logLines().length;
+        const from = Math.max(0, logLines().length - 1);
         try {
           if ((await engine("tabs.devPictureInPictureAction", { action: name })) !== "started") throw new Error("no button self-test");
           const clicked = await until(`the ${name} click`, async () => (existsSync(button) ? JSON.parse(readFileSync(button, "utf8")) : null), 10000);
           await sleep(300);
           const raised = logLines().slice(from).filter((l) => /^\S+ \S+ \S+ (makeKey|orderFront)/.test(l) && !l.includes("NativeWidgetMacFramelessNSWindow"));
-          return { ...clicked, raised };
+          const forced = logLines().slice(from).filter((l) => l.includes("activateIgnoringOtherApps (skipped in a test instance)")).length;
+          return { ...clicked, raised, forced };
         } finally {
           await appActive(true);
         }
@@ -3916,8 +3961,9 @@ try {
       const requests = (await eventsOf(tab.id)).filter((x) => x.name === "activateRequest").length;
       const back = await clickButton("backToTab");
       const backRequests = (await eventsOf(tab.id)).filter((x) => x.name === "activateRequest").length - requests;
-      if (!back.closed || !back.preventsActivation || back.activations !== 1 || backRequests !== 1)
-        throw new Error(`Chrome's Back to Tab: ${JSON.stringify({ back, backRequests })}`);
+      const backRequest = await lastEvent(tab.id, "activateRequest");
+      if (!back.closed || !back.preventsActivation || back.activations !== 1 || backRequests !== 1 || back.forced !== 1 || backRequest?.payload?.reason !== "pictureInPicture" || backRequest.payload.fromOtherApp !== true)
+        throw new Error(`Chrome's Back to Tab: ${JSON.stringify({ back, backRequests, backRequest })}`);
       await sleep(500);
       const reducesMotion = (() => {
         try {
@@ -3938,12 +3984,14 @@ try {
           const w = await shown();
           const [x, y] = rect(w.frame);
           return Math.abs(x - spot[corner][0]) < 1 && Math.abs(y - spot[corner][1]) < 1 && w.cornerRadius === 9 ? w : null;
-        }, 5000);
+        }, 5000).catch(async (e) => {
+          throw new Error(`${e.message}; it is at ${(await shown())?.frame} after ${JSON.stringify(JSON.parse(await pipAct("throw")).lastSwipe)}`);
+        });
         await pipAct(`frame:{{${Math.round(vx + (vw - pw) / 2)}, ${Math.round(vy + (vh - ph) / 2)}}, {${pw}, ${ph}}}`);
         await sleep(400);
-        await pipAct("swipe:240,-160,8");
+        await pipAct("swipe:240,-160,8,momentum");
         await landed("bottomRight");
-        for (const [kind, gesture] of [["swipe", "swipe:-400,300,8"], ["drag", "drag:-400,300,6,8"]]) {
+        for (const [kind, gesture] of [["swipe", "swipe:-400,300,8,momentum"], ["drag", "drag:-400,300,6,8"]]) {
           await pipAct(gesture);
           await landed("topLeft");
           const info = await pipAct("throw");
@@ -3952,8 +4000,94 @@ try {
           if (flight.corner !== "topLeft" || !radii.length || radii.some((r) => r !== 6))
             throw new Error(`a ${kind} thrown out of a corner isn't 6 pt in flight: ${JSON.stringify({ corner: flight.corner, radii })}`);
           corners[kind] = { frames: radii.length, flightRadius: [Math.min(...radii), Math.max(...radii)] };
-          await pipAct("swipe:400,-300,8");
+          await pipAct("swipe:400,-300,8,momentum");
           await landed("bottomRight");
+        }
+        await pipAct("swipe:-300,200,10,pause");
+        await sleep(900);
+        const carefully = rect((await shown()).frame);
+        if (Math.abs(carefully[0] - (spot.bottomRight[0] - 300)) > 1 || Math.abs(carefully[1] - (spot.bottomRight[1] + 200)) > 1)
+          throw new Error(`a swipe whose fingers stop before they lift should leave the PiP exactly where it was let go, but it is at ${carefully}`);
+        await pipAct("swipe:300,-200,8,momentum");
+        await landed("bottomRight");
+        await pipAct(`frame:{{${vx + vw - Math.round(pw * 0.2)}, ${vy + 10}}, {${pw}, ${ph}}}`);
+        const rightEdgeOpen = await until("the right edge taking a tuck", async () => ((await shown())?.stashed ? true : null), 2500).catch(() => false);
+        if (rightEdgeOpen) await pipAct("unstash");
+        await sleep(900);
+        await pipAct(`frame:{{${spot.bottomRight[0]}, ${spot.bottomRight[1]}}, {${pw}, ${ph}}}`);
+        await sleep(900);
+        corners.rightEdgeOpen = rightEdgeOpen;
+        if (rightEdgeOpen) {
+          await pipAct("swipe:60,0,6,momentum");
+          await landed("bottomRight");
+          corners.gentleFlickAtEdge = JSON.parse(await pipAct("throw")).lastSwipe.how;
+          await pipAct("swipe:150,0,6,momentum");
+          await until("a hard flick at the edge tucking the PiP away", async () => ((await shown())?.stashed ? true : null), 5000);
+          corners.flickedAway = JSON.parse(await pipAct("throw")).lastSwipe.how;
+          if (corners.flickedAway !== "flickedAway") throw new Error(`a hard flick at the edge should tuck it away: ${corners.flickedAway}`);
+          await pipAct("unstash");
+          await sleep(900);
+          await pipAct("swipe:-300,200,10,pause");
+          await sleep(900);
+          await pipAct("swipe:300,-200,8,momentum");
+          await landed("bottomRight");
+          const untucked = async (what, test) => until(what, async () => {
+            const w = await shown();
+            return w && !w.stashed && test(rect(w.frame)[0]) ? rect(w.frame)[0] : null;
+          }, 5000);
+          const tuck = async () => {
+            await pipAct("stash");
+            await until("the PiP tucked at the right edge", async () => ((await shown())?.stashed ? true : null), 5000);
+            await sleep(500);
+          };
+          await tuck();
+          await pipAct("swipe:-20,0,4,pause");
+          await sleep(1200);
+          if (!(await shown())?.stashed) throw new Error("a 20 pt pull on a tucked PiP should leave it tucked");
+          await pipAct("swipe:-60,0,6,pause");
+          corners.shortPull = await untucked("a tucked PiP pulled out 60 pt, most of it still past the edge, back out at that edge", (x) => Math.abs(x - (vx + vw - pw - 16)) < 1);
+          await pipAct(`frame:{{${vx + vw - Math.round(pw * 0.6)}, ${vy + 10}}, {${pw}, ${ph}}}`);
+          await sleep(1200);
+          if ((await shown())?.stashed) throw new Error("a PiP with 40% of it past the edge should stay where it was put: only more than half tucks it away");
+          await pipAct(`frame:{{${vx + vw - Math.round(pw * 0.4)}, ${vy + 10}}, {${pw}, ${ph}}}`);
+          await until("a PiP with 60% of it past the edge tucking away", async () => ((await shown())?.stashed ? true : null), 5000);
+          await sleep(500);
+          await pipAct(`swipe:${-Math.round(pw * 0.7)},0,8`);
+          corners.pulledOut = await untucked("a PiP pulled a little out of the tuck back at the edge it was tucked on", (x) => Math.abs(x - (vx + vw - pw - 16)) < 1);
+          await tuck();
+          await pipAct(`swipe:${-Math.round(vw * 0.7)},0,12`);
+          corners.pulledPastHalf = await untucked("a PiP pulled past the middle of the screen leaving the side it was tucked on", (x) => x + pw / 2 < vx + vw / 2);
+          const edged = `{{${vx + vw - Math.round(pw * 0.7)}, ${vy + 100}}, {${pw}, ${ph}}}`;
+          await until("the PiP resting 30% past the right edge", async () => {
+            if ((await shown())?.frame === edged) return true;
+            await pipAct(`frame:${edged}`);
+            await sleep(600);
+            return null;
+          }, 8000);
+          await sleep(600);
+          await pipAct("drag:40,0,3,8,0");
+          await until("a click-drag flicked at the edge the PiP is already past tucking it away", async () => ((await shown())?.stashed ? true : null), 5000).catch(async (e) => {
+            throw new Error(`${e.message}; it is at ${(await shown())?.frame} after ${JSON.stringify(JSON.parse(await pipAct("throw")).lastRelease)}`);
+          });
+          corners.dragFlickedAway = JSON.parse(await pipAct("throw")).lastRelease.outcome;
+          if (corners.dragFlickedAway !== "flickTuck") throw new Error(`a click-drag flicked at the edge should tuck it away as a flick: ${corners.dragFlickedAway}`);
+          await pipAct("unstash");
+          corners.arrowOut = await untucked("a tucked PiP brought back by its arrow", (x) => Math.abs(x - (vx + vw - pw - 16)) < 1);
+          const flight = JSON.parse(await pipAct("throw")).lastThrow;
+          if (flight.corner !== "none" || flight.frames.length < 10) throw new Error(`a PiP brought back by its arrow should come out on the spring: ${JSON.stringify({ corner: flight.corner, frames: flight.frames.length })}`);
+          await pipAct(`frame:{{${vx - Math.round(pw * 0.8)}, ${vy + 10}}, {${pw}, ${ph}}}`);
+          corners.leftEdgeOpen = await until("the left edge taking a tuck", async () => ((await shown())?.stashed ? true : null), 2500).catch(() => false);
+          if (corners.leftEdgeOpen) {
+            await sleep(500);
+            await pipAct("swipe:60,0,6,pause");
+            const out = await until("a PiP tucked on the left pulled out 60 pt, back out at that edge", async () => {
+              const w = await shown();
+              return w && !w.stashed && Math.abs(rect(w.frame)[0] - (vx + 16)) < 1 ? rect(w.frame)[0] : null;
+            }, 5000);
+            corners.leftPull = out;
+          }
+          await pipAct(`frame:{{${spot.bottomRight[0]}, ${spot.bottomRight[1]}}, {${pw}, ${ph}}}`);
+          await sleep(900);
         }
       }
       return {
@@ -3962,7 +4096,7 @@ try {
         closeButton: closed.point,
         playing: [before.time.toFixed(1), after.time.toFixed(1)],
         close: { activations: closed.activations, raised: closed.raised.length },
-        backToTab: { activations: back.activations, activateRequests: backRequests },
+        backToTab: { activations: back.activations, activateRequests: backRequests, forced: back.forced, fromOtherApp: backRequest.payload.fromOtherApp },
       };
     } finally {
       await closeTab(tab.id);
@@ -5477,7 +5611,7 @@ try {
     const id = await reopenClosed("create-moved", `ac.store.getState().moveTabsToWindow([id], null)`);
     try {
       const windowId = await until("the tab in its new window", () => evalApp(`const s = ac.store.getState(); const w = s.tabs[${JSON.stringify(id)}]?.windowId; return w && w !== ${JSON.stringify(mainWindow)} && ac.webviews.get(${JSON.stringify(id)}) ? w : null`), 15000);
-      await until("its page", async () => evalApp(`const s = ac.store.getState(); return s.tabs[${JSON.stringify(id)}]?.title === "Page C" && !s.live[${JSON.stringify(id)}]?.isLoading || null`), 15000);
+      await until("its page", async () => evalApp(`const s = ac.store.getState(); return s.tabs[${JSON.stringify(id)}]?.title === "Page C" && !ac.tabLive.liveOf(${JSON.stringify(id)})?.isLoading || null`), 15000);
       await sleep(1500);
       const keys = (await chromeTabKeys()).filter((k) => k === id).length;
       if (keys !== 1) throw new Error(`the moved tab has ${keys} Chrome tabs`);
@@ -5512,7 +5646,7 @@ try {
   await check("page-reports-follow-the-tab", async () => withPopupExtension({}, async () => {
     await engine("sites.setSetting", { profile: "", engine: "chromium", origin: base, type: "notifications", value: "allow" });
     const blocked = (id) => evalApp(`return ac.pageState.getState().pages[${JSON.stringify(id)}]?.blocked ?? 0`);
-    const theme = (id) => evalApp(`return ac.store.getState().live[${JSON.stringify(id)}]?.themeColor ?? null`);
+    const theme = (id) => evalApp(`return ac.tabLive.liveOf(${JSON.stringify(id)})?.themeColor ?? null`);
     const ads = await freshTab(`${base}/ac-ads?reports`);
     const red = (await openTab(`${base}/red-header?reports`, "Red header")).id;
     let windowId = null;
@@ -5621,7 +5755,7 @@ try {
   const inPage = (id, code) => evalApp(`ac.webviews.get(${q(id)})?.executeJavaScript(${q(code)}); return true`);
   const chromiumBrowser = (id) => engine("tabs.devBrowserId", { tabId: id }).catch(() => null);
   const loadedAs = (id, title) =>
-    evalApp(`const s = ac.store.getState(); return s.tabs[${q(id)}]?.title === ${q(title)} && !s.live[${q(id)}]?.isLoading ? true : null`);
+    evalApp(`const s = ac.store.getState(); return s.tabs[${q(id)}]?.title === ${q(title)} && !ac.tabLive.liveOf(${q(id)})?.isLoading ? true : null`);
   const webkitTab = async (path, title, windowId = mainWindow) => {
     await useWebKit();
     const id = await evalApp(`return ac.store.getState().newTab(${q(windowId)}, { url: ${q(webkitBase + path)} })`);
@@ -5897,7 +6031,7 @@ try {
     const windowId = await evalApp(`return ac.actions.openWindow({ kind: "private", url: ${q(`${webkitBase}/c?wk-private`)} })`);
     try {
       const id = await until("the private WebKit tab", () => evalApp(`const s = ac.store.getState(); const id = s.windows[${q(windowId)}]?.tabIds[0];
-        return id && s.tabs[id]?.title === "Page C" && !s.live[id]?.isLoading ? id : null`), 15000);
+        return id && s.tabs[id]?.title === "Page C" && !ac.tabLive.liveOf(id)?.isLoading ? id : null`), 15000);
       if (await chromiumBrowser(id)) throw new Error("the private tab opened in Chromium");
       await evalApp(`globalThis.expo.modules.ArdiaTabs.prepareTransfer(${q(id)}); return true`);
       await engine("webKit.endPrivateSession", { session: "" });
@@ -6303,7 +6437,7 @@ try {
     const tag = `restored-${Date.now()}`;
     const url = `http://adpage.test:${server.address().port}/adfirst?${tag}`;
     const loaded = (id) => evalApp(`const s = ac.store.getState(); const t = s.tabs[${JSON.stringify(id)}];
-      return t?.title === "Ad first" && !s.live[${JSON.stringify(id)}]?.isLoading ? true : null`);
+      return t?.title === "Ad first" && !ac.tabLive.liveOf(${JSON.stringify(id)})?.isLoading ? true : null`);
     const id = await evalApp(`const s = ac.store.getState(); const id = s.newTab(${JSON.stringify(windowId)}, { url: ${JSON.stringify(url)} });
       ac.store.getState().activate(id); return id`);
     await until("the ad page", () => loaded(id), 15000);
@@ -6323,7 +6457,7 @@ try {
     const pagesBefore = adServed.filter((s) => s.startsWith("adpage.test") && s.endsWith(`?${again}`)).length;
     await evalApp(`ac.store.getState().navigate(${JSON.stringify(tab.id)}, ${JSON.stringify(`http://adpage.test:${server.address().port}/adfirst?${again}`)}, { userInitiated: true }); return true`);
     await until("the restored tab's next page", () => evalApp(`const s = ac.store.getState(); const t = s.tabs[${JSON.stringify(tab.id)}];
-      return t?.url?.endsWith(${JSON.stringify(`?${again}`)}) && t.title === "Ad first" && !s.live[${JSON.stringify(tab.id)}]?.isLoading ? true : null`), 20000);
+      return t?.url?.endsWith(${JSON.stringify(`?${again}`)}) && t.title === "Ad first" && !ac.tabLive.liveOf(${JSON.stringify(tab.id)})?.isLoading ? true : null`), 20000);
     await sleep(500);
     const documents = adServed.filter((s) => s.startsWith("adpage.test") && s.endsWith(`?${again}`)).length - pagesBefore;
     if (documents < 1) throw new Error("the next page's document never reached the server");
@@ -6358,9 +6492,9 @@ try {
     const entries = (id) => evalApp(`return ac.webviews.get(${JSON.stringify(id)})?.navigationEntries().then((e) => e.map((x) => { const u = new URL(x.url); return u.pathname + u.search; })) ?? null`);
     const onSamePage = async (tag) => {
       const id = await evalApp(`return ac.store.getState().newTab(${JSON.stringify(windowId)}, { url: "${base}/a?${tag}" })`);
-      await until(`A?${tag}`, async () => (await s(`s.tabs["${id}"]?.title === "Page A" && !s.live["${id}"]?.isLoading && !!ac.webviews.get("${id}")`)) || null, 15000);
+      await until(`A?${tag}`, async () => (await s(`s.tabs["${id}"]?.title === "Page A" && !ac.tabLive.liveOf("${id}")?.isLoading && !!ac.webviews.get("${id}")`)) || null, 15000);
       await evalApp(`ac.store.getState().navigate("${id}", "${base}/b?same", { userInitiated: true }); return true`);
-      await until(`B from A?${tag}`, async () => (await s(`s.tabs["${id}"]?.title === "Page B" && s.live["${id}"]?.canGoBack && !s.live["${id}"]?.isLoading`)) || null, 15000);
+      await until(`B from A?${tag}`, async () => (await s(`s.tabs["${id}"]?.title === "Page B" && ac.tabLive.liveOf("${id}")?.canGoBack && !ac.tabLive.liveOf("${id}")?.isLoading`)) || null, 15000);
       return id;
     };
     const a = await onSamePage("first-closed"), b = await onSamePage("second-closed");

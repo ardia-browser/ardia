@@ -31,7 +31,7 @@ export type Result = ImportResult;
 export type Progress = ImportProgress;
 export type OpenTabs = { tabs: ImportedTab[]; groups: TabGroup[] };
 
-export const KIND_ORDER: ImportKind[] = ["bookmarks", "history", "tabs", "passwords", "cookies", "autofill", "spaces", "pinnedTabs", "favorites"];
+export const KIND_ORDER: ImportKind[] = ["bookmarks", "history", "tabs", "passwords", "cookies", "autofill", "spaces", "pinnedTabs", "favorites", "linkRules", "archive"];
 
 export type Options = Pick<ImportOptions, "historyLimit" | "historySince" | "chunkSize" | "spaceIds"> & { streamHistory?: boolean; historyPage?: number };
 

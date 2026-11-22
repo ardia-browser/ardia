@@ -17,7 +17,8 @@ registerHooks({
     return next(specifier, context);
   },
 });
-const { adoptFavicons, faviconOutlived, noteFavicon, pruneEngineFavicons, resolveFavicon, startFavicons, useFavicon, useFavicons } = await import("./favicons.ts");
+const { adoptFavicons, faviconOutlived, noteFavicon, pruneEngineFavicons, resolveFavicon, startFavicons, useFavicons } = await import("./favicons.ts");
+const { useFavicon } = await import("./faviconHooks.ts");
 const { seedFavicons } = await import("./launchFavicons.ts");
 const { adoptIconPage, dropOutlivedFavicon, noteIconPage } = await import("./iconPage.ts");
 const { useBrowser } = await import("../browser/store.ts");
@@ -181,6 +182,27 @@ test("the cache starts over past 3000 pages with the newest icons, and a waiting
     assert.equal(cached("https://over3.test/"), "data:image/png;base64,O3");
     await waitFor(() => resolveFavicon(waiting, null, "default")?.uri === "data:image/png;base64,LATE");
     row.unmount();
+  } finally {
+    delete globalThis.faviconsForTest;
+  }
+});
+
+test("a page the cache dropped when it started over is looked up again the next time it is shown", async () => {
+  useBrowser.getState().hydrate({});
+  const page = "https://dropped.test/";
+  const asked = [];
+  globalThis.faviconsForTest = (profile, pages) => (asked.push(...pages), answering({ [page]: "data:image/png;base64,DROPPED" })(profile, pages));
+  globalThis.storedFavicons = [];
+  try {
+    const first = mount(() => useFavicon(page, null, "default"));
+    await waitFor(() => cached(page) === "data:image/png;base64,DROPPED");
+    first.unmount();
+    adoptFavicons("default", Array.from({ length: 3001 }, (_, i) => ({ page: `https://flood${i}.test/`, icon: "i", png: `F${i}` })));
+    await waitFor(() => cached(page) === undefined);
+    const second = mount(() => useFavicon(page, null, "default"));
+    await waitFor(() => resolveFavicon(page, null, "default")?.uri === "data:image/png;base64,DROPPED");
+    assert.deepEqual(asked.filter((p) => p === page), [page, page]);
+    second.unmount();
   } finally {
     delete globalThis.faviconsForTest;
   }

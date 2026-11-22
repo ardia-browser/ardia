@@ -12,6 +12,8 @@
 #include <utility>
 #include <vector>
 
+#include "ardia/linux/ac_linux_window_corners.h"
+
 namespace base {
 template <typename T> class WeakPtr {
  public:
@@ -90,14 +92,35 @@ inline Rect operator+(Rect rect, Vector2d offset) { rect.Offset(offset.x, offset
 struct RoundedCornersF { explicit RoundedCornersF(float) {} };
 }
 
+namespace ui {
+struct Layer {
+  Layer* parent() const { return parent_; }
+  Layer* parent_ = nullptr;
+};
+}
+
+namespace views {
+inline const int* const kHostViewKey = nullptr;
+inline bool manages_layers = true;
+}
+
 namespace aura {
 struct Window {
   void Show() { shows++; visible = true; }
   void Hide() { visible = false; }
   bool IsVisible() const { return visible; }
+  ui::Layer* layer() { return &layer_; }
+  const void* GetProperty(const int*) const { return host_view; }
   bool visible = true;
   int shows = 0;
+  bool parented = false;
+  const void* host_view = nullptr;
+  ui::Layer layer_;
 };
+}
+
+namespace gfx {
+using NativeView = aura::Window*;
 }
 
 namespace content {
@@ -194,16 +217,52 @@ class View {
 class FocusManager {
  public:
   View* GetFocusedView() const { return focused; }
+  void ClearFocus() { focused = nullptr; }
   View* focused = nullptr;
 };
 inline FocusManager focus_manager;
+inline bool detach_advances_focus = false;
+inline int focused_detaches = 0;
 inline void View::RequestFocus() { focus_manager.focused = this; }
-struct NativeViewHolder { void SetNativeViewCornerRadii(gfx::RoundedCornersF) {} };
+struct NativeViewHolder {
+  void SetNativeViewCornerRadii(gfx::RoundedCornersF) {}
+  gfx::NativeView native_view() const { return native_; }
+  bool layer_managed_by_views() const { return manages_layers; }
+  ui::Layer* layer() { return native_ ? &layer_ : nullptr; }
+  bool Holds(gfx::NativeView native) {
+    if (native_ != native || !native->parented) return false;
+    return manages_layers ? native->layer()->parent() == &layer_ : native->host_view == this;
+  }
+  void Attach(gfx::NativeView native) {
+    native_ = native;
+    native->parented = true;
+    if (manages_layers) native->layer_.parent_ = &layer_;
+    else native->host_view = this;
+  }
+  void Detach() {
+    gfx::NativeView native = std::exchange(native_, nullptr);
+    native->parented = false;
+    if (native->layer_.parent_ == &layer_) native->layer_.parent_ = nullptr;
+    if (native->host_view == this) native->host_view = nullptr;
+    native->Hide();
+  }
+  gfx::NativeView native_ = nullptr;
+  ui::Layer layer_;
+};
+using NativeViewHost = NativeViewHolder;
 class WebView : public View {
  public:
   void SetWebContents(content::WebContents* contents) {
-    if (contents && contents != contents_ && GetVisible()) contents->GetNativeView()->Show();
+    if (contents == contents_) return;
+    if (contents_) holder_.Detach();
     contents_ = contents;
+    if (!contents && detach_advances_focus && focus_manager.focused == this) {
+      focused_detaches++;
+      focus_manager.focused = nullptr;
+    }
+    if (!contents) return;
+    holder_.Attach(contents->GetNativeView());
+    if (GetVisible()) contents->GetNativeView()->Show();
   }
   content::WebContents* web_contents() const { return contents_; }
   NativeViewHolder* holder() { return &holder_; }
@@ -258,6 +317,8 @@ inline std::vector<content::WebContents*> forgotten_hangs;
 inline void ForgetDeferredLinuxHangs(content::WebContents* contents) { forgotten_hangs.push_back(contents); }
 }
 
+namespace linux_window_corners = ardia::linux_window_corners;
+
 class ShellHostView;
 ARDIA_FRONTEND_WATCH
 
@@ -293,6 +354,7 @@ class TabBinding {
   std::vector<gfx::Rect> pane_shape;
   std::vector<gfx::Rect> pane_input_shape;
   bool pane_visible = false;
+  linux_window_corners::Corners pane_radii = linux_window_corners::kPageCardCorners;
   std::string claim = "claim";
   uint64_t renderer_generation = 1;
   int resets = 0;
@@ -310,6 +372,11 @@ class ShellHostView : public views::View {
   void OnDevToolsDockChanged(content::WebContents* inspected, content::WebContents* devtools);
   void HideDevToolsViewport(TabBinding* binding);
   void Restack() { restacks++; }
+  void ClipPaneView(TabBinding* binding, views::WebView* view);
+  void ClipViewport(views::WebView* view, const linux_window_corners::Corners& own) {
+    clipped.push_back(view);
+    clipped_radii.push_back(own);
+  }
   TabBinding* Binding(int id) {
     for (auto& binding : bindings) {
       if (TabId(binding->contents()) == id) return binding.get();
@@ -374,6 +441,8 @@ class ShellHostView : public views::View {
   int* handler_ = &handler_storage;
   uint64_t renderer_generation_ = 1;
   int restacks = 0;
+  std::vector<views::WebView*> clipped;
+  std::vector<linux_window_corners::Corners> clipped_radii;
   base::WeakPtrFactory<ShellHostView> weak{this};
 };
 

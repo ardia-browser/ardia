@@ -1,5 +1,9 @@
 #import "ArdiaInternal.h"
 #import "ArdiaContentBlockerInternal.h"
+#import "ArdiaPictureInPicture.h"
+#import "ArdiaPointerTrace.h"
+#import "ArdiaEvents.h"
+#import "ArdiaChromeWindowHost.h"
 #import "ArdiaWindowController.h"
 
 #import <objc/message.h>
@@ -42,7 +46,7 @@ NSString *DescribeFocusResponder(NSResponder *responder) {
   return [chain componentsJoinedByString:@" > "];
 }
 
-constexpr NSUInteger kFocusHistoryLength = 16;
+constexpr NSUInteger kFocusHistoryLength = 40;
 
 NSMutableArray<NSString *> *FocusHistory() {
   static NSMutableArray<NSString *> *history = [NSMutableArray array];
@@ -61,6 +65,91 @@ void NoteFocusChange(NSString *what, NSWindow *window) {
   [history addObject:[NSString stringWithFormat:@"%@ %@ %@", [clock stringFromDate:NSDate.date], what,
                                                 window ? DescribeFocusWindow(window) : @""]];
   if (history.count > kFocusHistoryLength) [history removeObjectAtIndex:0];
+}
+
+namespace {
+
+ardia_pointer::Trace &PointerTrace() {
+  static ardia_pointer::Trace trace;
+  return trace;
+}
+
+double Uptime() { return NSProcessInfo.processInfo.systemUptime; }
+
+NSString *DescribeFrame(NSRect frame) {
+  return [NSString stringWithFormat:@"%.0f,%.0f %.0fx%.0f", NSMinX(frame), NSMinY(frame), NSWidth(frame), NSHeight(frame)];
+}
+
+NSArray<NSString *> *PointerLines() {
+  NSMutableArray<NSString *> *lines = [NSMutableArray array];
+  const double now = Uptime();
+  [lines addObject:[NSString stringWithFormat:@"pointer buttons 0x%lx, run loop mode %@", (unsigned long)NSEvent.pressedMouseButtons,
+                                              NSRunLoop.currentRunLoop.currentMode ?: @"none"]];
+  [lines addObject:[@"pointer " stringByAppendingString:@(PointerTrace().LoopLine(now).c_str())]];
+  [lines addObject:[@"pointer pip grabbed " stringByAppendingString:DescribeFocusWindow(ardia_pip::GrabbedWindow())]];
+  [lines addObject:[@"pointer modal " stringByAppendingString:DescribeFocusWindow(NSApp.modalWindow)]];
+  NSArray<NSWindow *> *ordered = NSApp.orderedWindows;
+  for (NSWindow *window in NSApp.windows) {
+    if (window.attachedSheet)
+      [lines addObject:[NSString stringWithFormat:@"pointer sheet %@ on %@", DescribeFocusWindow(window.attachedSheet), DescribeFocusWindow(window)]];
+  }
+  for (NSWindow *window in NSApp.windows) {
+    if (!window.isVisible) continue;
+    const NSUInteger depth = [ordered indexOfObject:window];
+    [lines addObject:[NSString stringWithFormat:@"pointer window %@ frame %@ z%@", DescribeFocusWindow(window), DescribeFrame(window.frame),
+                                                depth == NSNotFound ? @"-" : [NSString stringWithFormat:@"%lu", (unsigned long)depth]]];
+  }
+  for (const std::string &line : PointerTrace().HistoryLines(now)) [lines addObject:@(line.c_str())];
+  return lines;
+}
+
+bool IsBrowserWindow(NSWindow *window) {
+  ArdiaWindowController *controller = [ArdiaWindowController forNSWindow:window];
+  return controller.root && !ardia_content_blocker::IsHiddenPageWindow(window) &&
+         !(controller.standalone || controller.stray || controller.coreWindow.internal);
+}
+
+NSPoint WindowCentre(NSWindow *window) {
+  NSView *content = window.contentView;
+  NSRect bounds = content ? [content convertRect:content.bounds toView:nil] : NSMakeRect(0, 0, NSWidth(window.frame), NSHeight(window.frame));
+  return NSMakePoint(NSMidX(bounds), NSMidY(bounds));
+}
+
+NSString *PageMoveResult(NSWindow *window, NSPoint point, BOOL sendMove) {
+  Class pageClass = NSClassFromString(@"RenderWidgetHostViewCocoa");
+  SEL ignores = NSSelectorFromString(@"shouldIgnoreMouseEvent:");
+  NSEvent *event = [NSEvent mouseEventWithType:NSEventTypeMouseMoved location:point modifierFlags:0
+                                     timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+                                       context:nil eventNumber:0 clickCount:0 pressure:0];
+  NSMutableArray<NSString *> *results = [NSMutableArray array];
+  NSMutableArray<NSView *> *queue = [NSMutableArray arrayWithObject:window.contentView.superview ?: [NSView new]];
+  while (queue.count) {
+    NSView *v = queue.lastObject;
+    [queue removeLastObject];
+    [queue addObjectsFromArray:v.subviews];
+    if (!pageClass || ![v isKindOfClass:pageClass] || v.isHiddenOrHasHiddenAncestor) continue;
+    if (!NSPointInRect(point, [v convertRect:v.bounds toView:nil])) continue;
+    const BOOL ignored = [v respondsToSelector:ignores] && ((BOOL(*)(id, SEL, NSEvent *))objc_msgSend)(v, ignores, event);
+    if (sendMove) [v mouseMoved:event];
+    [results addObject:ignored ? @"ignored" : @"accepted"];
+  }
+  return [results componentsJoinedByString:@","];
+}
+
+NSArray<NSString *> *BrowserWindowLines(NSWindow *window) {
+  NSString *prefix = [NSString stringWithFormat:@"browser #%ld ", (long)window.windowNumber];
+  NSString *move = PageMoveResult(window, WindowCentre(window), NO);
+  NSMutableArray<NSString *> *lines = [NSMutableArray array];
+  [lines addObject:[prefix stringByAppendingFormat:@"page move at centre %@", move.length ? move : @"no page view"]];
+  NSString *(^handoff)(NSWindow *) = ArdiaChromeWindowHost.focusHandoffSummaryHandler;
+  if (handoff) [lines addObject:[prefix stringByAppendingString:handoff(window)]];
+  return lines;
+}
+
+}
+
+void NoteProfileSwitch(ArdiaCoreProfile *profile, NSWindow *window) {
+  NoteFocusChange(profile.offTheRecord ? @"profile switch private" : @"profile switch regular", window);
 }
 
 void WatchFocusChanges() {
@@ -86,8 +175,54 @@ void WatchFocusChanges() {
   [center addObserverForName:NSApplicationDidResignActiveNotification object:nil queue:nil usingBlock:^(NSNotification *) {
     NoteFocusChange(@"app inactive", nil);
   }];
+  [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown | NSEventMaskLeftMouseUp
+                                        handler:^NSEvent *(NSEvent *event) {
+                                          NotePointer(event, nil);
+                                          return event;
+                                        }];
   WatchHover();
   WatchPageCursor();
+  WatchPainting();
+}
+
+void NotePointer(NSEvent *event, NSString *swallowedBy) {
+  const bool down = event.type == NSEventTypeLeftMouseDown;
+  if (!down && event.type != NSEventTypeLeftMouseUp) return;
+  const std::string by = swallowedBy.UTF8String ?: "";
+  ardia_pointer::Trace &trace = PointerTrace();
+  if (trace.Merge(event.timestamp, down, by)) return;
+  NSWindow *window = event.window;
+  NSView *frameView = window.contentView.superview;
+  NSView *hit = frameView ? [frameView hitTest:event.locationInWindow] : nil;
+  trace.Record({event.timestamp, down, (long)window.windowNumber, (long)window.level, hit ? hit.className.UTF8String : "none", by});
+}
+
+namespace {
+
+void ReportLongPressLoop(const std::string &names, bool stillOpen, const std::string &epoch) {
+  const NSUInteger buttons = NSEvent.pressedMouseButtons;
+  NSString *joined = @(names.c_str());
+  NSLog(@"[ardiacore] press loop %@ %@ after %.0fs, pressed buttons 0x%lx", joined, stillOpen ? @"still open" : @"ended",
+        ardia_pointer::kLongLoopSeconds, (unsigned long)buttons);
+  NSArray<NSString *> *loops = [joined componentsSeparatedByString:@">"];
+  NSDictionary *payload = [[[ArdiaConsentStamp alloc] initWithEpoch:@(epoch.c_str())] onto:@{@"loop" : loops.firstObject ?: @"", @"inner" : loops.lastObject ?: @"", @"open" : @(stillOpen), @"buttonsHeld" : @(buttons != 0)}];
+  dispatch_async(dispatch_get_main_queue(), ^{ [ArdiaEvents emit:@"engine.pressLoopLong" data:payload]; });
+}
+
+}
+
+void BeginPressLoop(NSString *name) {
+  const unsigned long generation = PointerTrace().BeginLoop(name.UTF8String ?: "unnamed", Uptime(), ArdiaEvents.consentEpoch.UTF8String ?: "");
+  const int64_t delay = (int64_t)((ardia_pointer::kLongLoopSeconds + 0.1) * NSEC_PER_SEC);
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, delay), dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+    std::string open, epoch;
+    if (PointerTrace().TakeLongLoop(generation, Uptime(), &open, &epoch)) ReportLongPressLoop(open, true, epoch);
+  });
+}
+
+void EndPressLoop() {
+  std::string ended, epoch;
+  if (PointerTrace().EndLoop(Uptime(), &ended, &epoch)) ReportLongPressLoop(ended, false, epoch);
 }
 
 NSString *FocusState() {
@@ -106,29 +241,16 @@ NSString *FocusState() {
     [lines addObject:line];
   }
   [lines addObject:HoverProbeLine()];
+  [lines addObject:PaintProbeLine()];
+  for (NSWindow *window in NSApp.windows)
+    if (IsBrowserWindow(window)) [lines addObjectsFromArray:BrowserWindowLines(window)];
   for (NSString *change in FocusHistory()) [lines addObject:[@"was " stringByAppendingString:change]];
+  [lines addObjectsFromArray:PointerLines()];
   return [lines componentsJoinedByString:@"\n"];
 }
 
 NSString *PageMoveAt(NSWindow *window, NSPoint point) {
-  Class pageClass = NSClassFromString(@"RenderWidgetHostViewCocoa");
-  SEL ignores = NSSelectorFromString(@"shouldIgnoreMouseEvent:");
-  NSEvent *event = [NSEvent mouseEventWithType:NSEventTypeMouseMoved location:point modifierFlags:0
-                                     timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
-                                       context:nil eventNumber:0 clickCount:0 pressure:0];
-  NSMutableArray<NSString *> *results = [NSMutableArray array];
-  NSMutableArray<NSView *> *queue = [NSMutableArray arrayWithObject:window.contentView.superview ?: [NSView new]];
-  while (queue.count) {
-    NSView *v = queue.lastObject;
-    [queue removeLastObject];
-    [queue addObjectsFromArray:v.subviews];
-    if (!pageClass || ![v isKindOfClass:pageClass] || v.isHiddenOrHasHiddenAncestor) continue;
-    if (!NSPointInRect(point, [v convertRect:v.bounds toView:nil])) continue;
-    const BOOL ignored = [v respondsToSelector:ignores] && ((BOOL(*)(id, SEL, NSEvent *))objc_msgSend)(v, ignores, event);
-    [v mouseMoved:event];
-    [results addObject:ignored ? @"ignored" : @"accepted"];
-  }
-  return [results componentsJoinedByString:@","];
+  return PageMoveResult(window, point, YES);
 }
 
 }

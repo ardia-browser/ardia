@@ -14,7 +14,10 @@ export type Anchor = { x: number; y: number; width: number; height: number };
 
 export const extensionPageUrl = (extensionId: string, path: string) => `chrome-extension://${extensionId}/${path.replace(/^\//, "")}`;
 
-export type InstallRequest = { windowId: string; profile: string; source: "webStore" | "unpacked" } & (
+let installKeys = 0;
+export const nextInstallKey = () => ++installKeys;
+
+export type InstallRequest = { key: number; windowId: string; profile: string; source: "webStore" | "unpacked" } & (
   | { status: "error"; error: string }
   | { status: "ready" | "installing"; pkg: ExtensionPackage }
   | { status: "prompt"; prompt: ExtensionInstallPrompt }
@@ -27,6 +30,7 @@ type ExtensionsStore = {
   install: InstallRequest | null;
   pinDialog: { windowId: string } | null;
   sidePanels: Record<string, SidePanel>;
+  sidePanelCards: Record<string, SidePanelCard[]>;
   sidePanelLookups: Record<string, number>;
   toolbarDrag: (ToolbarDrag & { windowId: string }) | null;
 };
@@ -37,9 +41,13 @@ export type SidePanel = {
   pageProfile: string;
   url: string;
   opened: number;
+  tabId?: string;
+  hidden?: boolean;
 };
 
-export const useExtensions = create<ExtensionsStore>()(() => ({ lists: {}, actions: {}, popup: null, install: null, pinDialog: null, sidePanels: {}, sidePanelLookups: {}, toolbarDrag: null }));
+export type SidePanelCard = SidePanel & { owners: string[] };
+
+export const useExtensions = create<ExtensionsStore>()(() => ({ lists: {}, actions: {}, popup: null, install: null, pinDialog: null, sidePanels: {}, sidePanelCards: {}, sidePanelLookups: {}, toolbarDrag: null }));
 
 const EMPTY: InstalledExtension[] = [];
 

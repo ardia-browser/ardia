@@ -1,9 +1,9 @@
 --- a/third_party/blink/public/mojom/navigation/navigation_params.mojom
 +++ b/third_party/blink/public/mojom/navigation/navigation_params.mojom
-@@ -792,6 +792,10 @@
-   // document (e.g. preventing injected scripts from navigating the page without
-   // a user gesture).
-   ScriptInjectionPolicy script_injection_policy = kNone;
+@@ -797,6 +797,10 @@
+   // network.mojom.RestrictedDeviceBoundSessionManager. Computed from facts that
+   // do not change for the document's life. Defaults to false.
+   bool can_use_device_bound_session_js_api = false;
 +
 +  // Ardia: whether the tab's top-level site blocks autoplay, decided by the
 +  // Windows host before the document runs any script.
@@ -13,12 +13,12 @@
  // Parameters used to dispatch the `pageswap` event on the old Document for
 --- a/content/browser/renderer_host/navigation_controller_impl.cc
 +++ b/content/browser/renderer_host/navigation_controller_impl.cc
-@@ -4818,7 +4818,9 @@
-           /*internal_scroll_to_text_fragment=*/
+@@ -4849,7 +4849,9 @@
            params.internal_scroll_to_text_fragment,
            /*is_secure_context_root=*/false,
--          blink::mojom::ScriptInjectionPolicy::kNone);
-+          blink::mojom::ScriptInjectionPolicy::kNone,
+           blink::mojom::ScriptInjectionPolicy::kNone,
+-          /*can_use_device_bound_session_js_api=*/false);
++          /*can_use_device_bound_session_js_api=*/false,
 +          // Ardia: ardia_autoplay_blocked, decided when it commits.
 +          false);
  
@@ -26,43 +26,43 @@
    // navigations.
 --- a/content/browser/renderer_host/navigation_request.cc
 +++ b/content/browser/renderer_host/navigation_request.cc
-@@ -253,6 +253,13 @@
- #include "ui/android/window_android.h"
+@@ -257,6 +257,13 @@
  #include "ui/android/window_android_compositor.h"
  #endif
-+
+ 
 +// Ardia: the Windows host (//ardia/win) answers whether a tab whose top-level
 +// document has this origin blocks autoplay.
 +extern bool (*g_ardia_win_autoplay_blocked)(content::WebContents* contents,
 +                                            const url::Origin& top_level);
 +bool (*g_ardia_win_autoplay_blocked)(content::WebContents* contents,
 +                                     const url::Origin& top_level) = nullptr;
- 
++
  namespace content {
  
-@@ -1430,7 +1437,9 @@
-           /*isolated_app_policy=*/std::nullopt,
+ namespace {
+@@ -1465,7 +1472,9 @@
            /*internal_scroll_to_text_fragment=*/std::nullopt,
            /*is_secure_context_root=*/false,
--          blink::mojom::ScriptInjectionPolicy::kNone);
-+          blink::mojom::ScriptInjectionPolicy::kNone,
+           blink::mojom::ScriptInjectionPolicy::kNone,
+-          /*can_use_device_bound_session_js_api=*/false);
++          /*can_use_device_bound_session_js_api=*/false,
 +          // Ardia: ardia_autoplay_blocked, decided when it commits.
 +          false);
  #if !BUILDFLAG(IS_ANDROID)
    CHECK(!GetContentClient()->browser()->IsInitialWebUIURL(common_params->url));
  #endif
-@@ -1604,7 +1613,9 @@
-           /*isolated_app_policy=*/std::nullopt,
+@@ -1640,7 +1649,9 @@
            /*internal_scroll_to_text_fragment=*/std::nullopt,
            /*is_secure_context_root=*/false,
--          blink::mojom::ScriptInjectionPolicy::kNone);
-+          blink::mojom::ScriptInjectionPolicy::kNone,
+           blink::mojom::ScriptInjectionPolicy::kNone,
+-          /*can_use_device_bound_session_js_api=*/false);
++          /*can_use_device_bound_session_js_api=*/false,
 +          // Ardia: ardia_autoplay_blocked, decided when it commits.
 +          false);
    blink::mojom::BeginNavigationParamsPtr begin_params =
        blink::mojom::BeginNavigationParams::New();
    std::unique_ptr<NavigationRequest> navigation_request(new NavigationRequest(
-@@ -7495,6 +7506,19 @@
+@@ -7758,6 +7769,19 @@
    // cross-site-ness, therefore just sanitize unilaterally.
    SanitizeRedirectsForCommit(common_params, commit_params);
  
@@ -84,12 +84,12 @@
        std::move(response_head), std::move(response_body_),
 --- a/content/browser/renderer_host/navigation_entry_impl.cc
 +++ b/content/browser/renderer_host/navigation_entry_impl.cc
-@@ -1110,7 +1110,9 @@
-           /*permissions_policy_override=*/std::nullopt,
+@@ -1111,7 +1111,9 @@
            /*internal_scroll_to_text_fragment=*/std::nullopt,
            /*is_secure_context_root=*/false,
--          blink::mojom::ScriptInjectionPolicy::kNone);
-+          blink::mojom::ScriptInjectionPolicy::kNone,
+           blink::mojom::ScriptInjectionPolicy::kNone,
+-          /*can_use_device_bound_session_js_api=*/false);
++          /*can_use_device_bound_session_js_api=*/false,
 +          // Ardia: ardia_autoplay_blocked, decided when it commits.
 +          false);
  #if BUILDFLAG(IS_ANDROID)
@@ -112,20 +112,20 @@
  };
 --- a/third_party/blink/public/mojom/frame/frame.mojom
 +++ b/third_party/blink/public/mojom/frame/frame.mojom
-@@ -468,6 +468,10 @@
-   // |update_state == kNotifyActivation|.
+@@ -469,6 +469,10 @@
    UpdateUserActivationState(UserActivationUpdateType update_type,
                              UserActivationNotificationType notification_type);
-+
+ 
 +  // Ardia: a play was refused because the tab blocks autoplay and the
 +  // document's user did not ask for it; the Windows host counts these.
 +  ArdiaAutoplayRefused();
- 
++
    // Called when a history navigation action that could potentially be used to
    // back-trap a user is invoked. Keeps HistoryUserActivationState in sync
+   // between renderer and browser.
 --- a/content/browser/renderer_host/render_frame_host_impl.h
 +++ b/content/browser/renderer_host/render_frame_host_impl.h
-@@ -2382,6 +2382,7 @@
+@@ -2414,6 +2414,7 @@
        blink::mojom::UserActivationUpdateType update_type,
        blink::mojom::UserActivationNotificationType notification_type) override;
    void DidConsumeHistoryUserActivation() override;
@@ -135,32 +135,32 @@
    void HandleAccessibilityFindInPageTermination() override;
 --- a/content/browser/renderer_host/render_frame_host_impl.cc
 +++ b/content/browser/renderer_host/render_frame_host_impl.cc
-@@ -408,6 +408,12 @@
- BASE_FEATURE(kEnforceUserActivationForBeforeUnload,
+@@ -410,6 +410,12 @@
               base::FEATURE_ENABLED_BY_DEFAULT);
  }  // namespace features
-+
+ 
 +// Ardia: the Windows host (//ardia/win) counts the plays Blink refused on a
 +// tab that blocks autoplay.
 +extern void (*g_ardia_win_autoplay_refused)(content::RenderFrameHost* frame);
 +void (*g_ardia_win_autoplay_refused)(content::RenderFrameHost* frame) =
 +    nullptr;
- 
++
  namespace content {
  
-@@ -9864,6 +9870,12 @@
-           ChildProcessSecurityPolicy::IsolatedOriginSource::WEB_TRIGGERED,
-           SiteIsolationPolicy::ShouldPersistIsolatedCOOPSites());
-     }
-+  }
-+}
-+
-+void RenderFrameHostImpl::ArdiaAutoplayRefused() {
-+  if (g_ardia_win_autoplay_refused) {
-+    g_ardia_win_autoplay_refused(this);
+ class RenderFrameHostOrProxy {
+@@ -10103,6 +10109,12 @@
    }
  }
  
++void RenderFrameHostImpl::ArdiaAutoplayRefused() {
++  if (g_ardia_win_autoplay_refused) {
++    g_ardia_win_autoplay_refused(this);
++  }
++}
++
+ void RenderFrameHostImpl::UpdateUserActivationState(
+     blink::mojom::UserActivationUpdateType update_type,
+     blink::mojom::UserActivationNotificationType notification_type) {
 --- a/content/renderer/render_frame_impl.h
 +++ b/content/renderer/render_frame_impl.h
 @@ -390,6 +390,9 @@
@@ -175,26 +175,24 @@
  #if BUILDFLAG(IS_ANDROID)
 --- a/content/renderer/render_frame_impl.cc
 +++ b/content/renderer/render_frame_impl.cc
-@@ -1048,6 +1048,9 @@
- 
+@@ -1052,6 +1052,9 @@
    navigation_params->should_have_sticky_user_activation =
        commit_params.should_have_sticky_user_activation;
-+
+ 
 +  navigation_params->ardia_autoplay_blocked =
 +      commit_params.ardia_autoplay_blocked;
- 
++
    navigation_params->script_injection_policy =
        commit_params.script_injection_policy;
-@@ -2518,8 +2521,17 @@
-   } else {
-     autoplay_flags_ = std::make_pair(origin, flags);
+ 
+@@ -2523,6 +2526,15 @@
    }
-+}
-+
-+void RenderFrameImpl::SetArdiaAutoplayBlocked(bool blocked) {
-+  frame_->SetArdiaAutoplayBlocked(blocked);
  }
  
++void RenderFrameImpl::SetArdiaAutoplayBlocked(bool blocked) {
++  frame_->SetArdiaAutoplayBlocked(blocked);
++}
++
 +void RenderFrameImpl::RunArdiaMediaCommand(int32_t world_id,
 +                                           const std::string& script) {
 +  frame_->RunArdiaMediaCommand(world_id, blink::WebString::FromUtf8(script));
@@ -219,11 +217,10 @@
    std::unique_ptr<WebPolicyContainer> policy_container;
 --- a/third_party/blink/public/web/web_local_frame.h
 +++ b/third_party/blink/public/web/web_local_frame.h
-@@ -941,6 +941,14 @@
- 
+@@ -947,6 +947,14 @@
    // See |blink::Frame::HasTransientUserActivation()|.
    virtual bool HasTransientUserActivation() = 0;
-+
+ 
 +  // Ardia: see |blink::AutoplayPolicy::ArdiaSetFrameBlocked()|.
 +  virtual void SetArdiaAutoplayBlocked(bool blocked) = 0;
 +
@@ -231,24 +228,25 @@
 +  // |world_id|; a play it starts counts as the user's ask.
 +  virtual void RunArdiaMediaCommand(int32_t world_id,
 +                                    const WebString& script) = 0;
- 
++
    // See |blink::LocalFrame::ConsumeTransientUserActivation()|.
    virtual bool ConsumeTransientUserActivation(
+       UserActivationUpdateScope update_scope =
 --- a/third_party/blink/renderer/core/frame/web_local_frame_impl.h
 +++ b/third_party/blink/renderer/core/frame/web_local_frame_impl.h
 @@ -372,6 +372,9 @@
+   void SetAllowsCrossBrowsingInstanceFrameLookup() override;
+   void NotifyUserActivation(
        mojom::blink::UserActivationNotificationType notification_type) override;
-   bool HasStickyUserActivation() override;
-   bool HasTransientUserActivation() override;
 +  void SetArdiaAutoplayBlocked(bool blocked) override;
 +  void RunArdiaMediaCommand(int32_t world_id,
 +                            const WebString& script) override;
-   bool ConsumeTransientUserActivation(UserActivationUpdateSource) override;
-   bool LastActivationWasRestricted() const override;
- #if BUILDFLAG(IS_WIN)
+   bool HasStickyUserActivation() override;
+   bool HasTransientUserActivation() override;
+   bool ConsumeTransientUserActivation(UserActivationUpdateScope) override;
 --- a/third_party/blink/renderer/core/frame/web_local_frame_impl.cc
 +++ b/third_party/blink/renderer/core/frame/web_local_frame_impl.cc
-@@ -214,6 +214,7 @@
+@@ -215,6 +215,7 @@
  #include "third_party/blink/renderer/core/frame/web_frame_widget_impl.h"
  #include "third_party/blink/renderer/core/frame/web_remote_frame_impl.h"
  #include "third_party/blink/renderer/core/html/anchor_element_utils.h"
@@ -256,12 +254,10 @@
  #include "third_party/blink/renderer/core/html/forms/html_form_control_element.h"
  #include "third_party/blink/renderer/core/html/forms/html_form_element.h"
  #include "third_party/blink/renderer/core/html/forms/html_input_element.h"
-@@ -743,6 +744,17 @@
- void WebLocalFrameImpl::NotifyUserActivation(
-     mojom::blink::UserActivationNotificationType notification_type) {
+@@ -747,6 +748,17 @@
    LocalFrame::NotifyUserActivation(GetFrame(), notification_type);
-+}
-+
+ }
+ 
 +void WebLocalFrameImpl::SetArdiaAutoplayBlocked(bool blocked) {
 +  AutoplayPolicy::ArdiaSetFrameBlocked(*GetFrame(), blocked, true);
 +}
@@ -271,25 +267,27 @@
 +  AutoplayPolicy::ArdiaMediaCommandScope scope;
 +  ExecuteScriptInIsolatedWorld(world_id, WebScriptSource(script),
 +                               BackForwardCacheAware::kAllow);
- }
- 
++}
++
  bool WebLocalFrameImpl::HasStickyUserActivation() {
-@@ -2511,6 +2523,12 @@
-   }
+   return GetFrame()->HasStickyUserActivation();
+ }
+@@ -2522,6 +2534,12 @@
  
    Frame* opener_frame = opener ? ToCoreFrame(*opener) : nullptr;
-+
+ 
 +  // Ardia: a new frame copies its maker's autoplay decision now, so a later
 +  // opener = null or removal from its parent changes nothing.
 +  AutoplayPolicy::ArdiaInheritFrameBlocked(
 +      *frame_, parent_frame ? DynamicTo<LocalFrame>(parent_frame)
 +                            : DynamicTo<LocalFrame>(opener_frame));
- 
++
    // We must call init() after frame_ is assigned because it is referenced
    // during init().
+   frame_->Init(opener_frame, document_token, initiator_state_token,
 --- a/third_party/blink/renderer/core/loader/document_loader.h
 +++ b/third_party/blink/renderer/core/loader/document_loader.h
-@@ -876,6 +876,9 @@
+@@ -880,6 +880,9 @@
    // the previously committed document did, and the navigation was same-site.
    bool should_have_sticky_user_activation_ = false;
  
@@ -309,7 +307,7 @@
  #include "third_party/blink/renderer/core/frame/local_frame_client.h"
  #include "third_party/blink/renderer/core/frame/navigator.h"
  #include "third_party/blink/renderer/core/frame/settings.h"
-@@ -621,6 +622,7 @@
+@@ -623,6 +624,7 @@
            params_->is_cross_site_cross_browsing_context_group),
        should_have_sticky_user_activation_(
            params_->should_have_sticky_user_activation),
@@ -317,7 +315,7 @@
        navigation_api_back_entries_(params_->navigation_api_back_entries),
        navigation_api_forward_entries_(params_->navigation_api_forward_entries),
        navigation_api_previous_entry_(params_->navigation_api_previous_entry),
-@@ -3214,6 +3216,13 @@
+@@ -3241,6 +3243,13 @@
      frame_->SetStickyUserActivationState();
    }
  
@@ -396,11 +394,10 @@
  #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
  #include "third_party/blink/renderer/platform/network/network_state_notifier.h"
  #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
-@@ -41,7 +44,115 @@
-     "https://goo.gl.qjz9zk/xX8pDD";
+@@ -42,6 +45,114 @@
  const char kErrorAutoplayFuncMobile[] =
      "play() can only be initiated by a user gesture.";
-+
+ 
 +// Ardia: Windows' autoplay blocking. A frame keeps the browser's word on
 +// whether its tab blocks autoplay, copied at creation from the frame that
 +// made it when the renderer makes it; a frame nothing decided for does not
@@ -497,7 +494,7 @@
 +  return frame && !frame->IsMainFrame() &&
 +         LocalFrame::HasTransientUserActivation(frame);
 +}
- 
++
 +void ArdiaReportRefusal(Document& document) {
 +  ArdiaDocumentAutoplay& state = ArdiaDocumentAutoplay::From(document);
 +  if (state.reported_refusals >= kArdiaMostReportedRefusals) {
@@ -512,7 +509,7 @@
  // Return true if and only if the document settings specifies media playback
  // requires user gesture on the element.
  bool ComputeLockPendingUserGestureRequired(const Document& document) {
-@@ -162,8 +273,71 @@
+@@ -162,6 +273,69 @@
        autoplay_uma_helper_(MakeGarbageCollected<AutoplayUmaHelper>(element)) {
    locked_pending_user_gesture_ =
        ComputeLockPendingUserGestureRequired(element->GetDocument());
@@ -555,8 +552,8 @@
 +  if (frame && frame->GetDocument()) {
 +    ArdiaDocumentAutoplay::From(*frame->GetDocument()).used_here = true;
 +  }
- }
- 
++}
++
 +AutoplayPolicy::ArdiaMediaCommandScope::ArdiaMediaCommandScope() {
 +  ++g_ardia_media_commands;
 +}
@@ -579,11 +576,9 @@
 +  }
 +  ArdiaReportRefusal(document);
 +  return true;
-+}
-+
- void AutoplayPolicy::VideoWillBeDrawnToCanvas() const {
-   autoplay_uma_helper_->VideoWillBeDrawnToCanvas();
  }
+ 
+ void AutoplayPolicy::VideoWillBeDrawnToCanvas() const {
 @@ -179,6 +353,7 @@
      locked_pending_user_gesture_ = true;
  
@@ -634,7 +629,7 @@
        self->element_->ScheduleNamedEvent(event_type_names::kPlay);
 --- a/third_party/blink/renderer/core/html/media/html_media_element.cc
 +++ b/third_party/blink/renderer/core/html/media/html_media_element.cc
-@@ -3198,6 +3198,12 @@
+@@ -3200,6 +3200,12 @@
  void HTMLMediaElement::PlayInternal() {
    DVLOG(3) << "playInternal(" << *this << ")";
  
@@ -647,7 +642,7 @@
    if (web_media_player_) {
      web_media_player_->SetWasPlayedWithUserActivationAndHighMediaEngagement(
          LocalFrame::HasTransientUserActivation(GetDocument().GetFrame()) &&
-@@ -5356,6 +5362,7 @@
+@@ -5360,6 +5366,7 @@
      if (frame) {
        LocalFrame::NotifyUserActivation(
            frame, mojom::blink::UserActivationNotificationType::kInteraction);
@@ -690,7 +685,7 @@
  #include "third_party/blink/renderer/core/frame/local_frame_client.h"
  #include "third_party/blink/renderer/core/frame/local_frame_view.h"
  #include "third_party/blink/renderer/core/frame/settings.h"
-@@ -930,6 +931,7 @@
+@@ -928,6 +929,7 @@
  
    LocalFrame::NotifyUserActivation(
        frame_, mojom::blink::UserActivationNotificationType::kInteraction);
@@ -708,7 +703,7 @@
  #include "third_party/blink/renderer/core/frame/local_frame_view.h"
  #include "third_party/blink/renderer/core/html/canvas/html_canvas_element.h"
  #include "third_party/blink/renderer/core/html/html_dialog_element.h"
-@@ -220,6 +221,13 @@
+@@ -223,6 +224,13 @@
        !check_for_listener || target->HasEventListeners(event_type);
  
    if (!should_filter || listeners_exist) {

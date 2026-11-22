@@ -6,7 +6,7 @@ import { useProfile } from "../../state/browser/hooks";
 import { usePluginTitle } from "../../state/plugins/hooks";
 import { trackSettingsSection } from "../../state/telemetry/track";
 import { clearSettingsReveal, flashSetting, settingsSearchHost, useSettingsSearch } from "../../state/settings/searchState";
-import { anchorView } from "./anchors";
+import { anchorView, onAnchorRegistered } from "./anchors";
 import { findSetting, resolveSettingId, PANES, paneTitle } from "./settingsIndex";
 import { SettingsPaneContext } from "./Form";
 import { PageToolbar } from "../pages/PageLayout";
@@ -73,26 +73,47 @@ export function SettingsWindow() {
   const reveal = useSettingsSearch((s) => s.reveal);
   const revealPane = reveal ? (findSetting(reveal.id)?.pane ?? null) : null;
   const switched = useRef(key);
+  const revealPlace = useRef<{ reveal: typeof reveal; key: string } | null>(null);
   useEffect(() => {
     if (!reveal) return;
-    if (nav.pane !== revealPane) return void clearSettingsReveal();
+    const previous = revealPlace.current;
+    if (pane !== revealPane || (previous?.reveal === reveal && previous.key !== key)) return void clearSettingsReveal();
+    revealPlace.current = { reveal, key };
+    const id = resolveSettingId(reveal.id);
     const animated = switched.current === key;
-    const frame = requestAnimationFrame(() => {
-      const target = anchorView(resolveSettingId(reveal.id));
+    let active = true;
+    let frame: number | null = null;
+    const stillCurrent = () => active && useSettingsSearch.getState().reveal === reveal && shownKey(useSettingsNav.getState()) === key;
+    const measure = () => {
+      frame = null;
+      if (!stillCurrent()) return;
+      const target = anchorView(id);
       const container = content.current;
-      if (!target || !container) return flashSetting("");
+      if (!target || !container) return;
       target.measureLayout(
         container,
         (_x, y, _w, h) => {
+          if (!stillCurrent() || anchorView(id) !== target) return;
           const top = animated ? scrollTop.current : 0;
           const inView = y >= top + REVEAL_MARGIN && y + h <= top + viewport.current - REVEAL_MARGIN;
           if (!inView) scroller.current?.scrollTo({ y: Math.max(0, y - viewport.current / 3), animated });
-          flashSetting(resolveSettingId(reveal.id));
+          flashSetting(id);
         },
-        () => flashSetting(resolveSettingId(reveal.id)),
+        () => {
+          if (stillCurrent() && anchorView(id) === target) flashSetting(id);
+        },
       );
-    });
-    return () => cancelAnimationFrame(frame);
+    };
+    const schedule = () => {
+      if (frame === null) frame = requestAnimationFrame(measure);
+    };
+    const unsubscribe = onAnchorRegistered(id, schedule);
+    schedule();
+    return () => {
+      active = false;
+      unsubscribe();
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
   }, [reveal, key]);
   useEffect(() => {
     switched.current = key;

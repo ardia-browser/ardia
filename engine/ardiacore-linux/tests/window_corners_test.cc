@@ -13,6 +13,7 @@ namespace {
 constexpr corners::Corners kFrame{.upper_left = 8, .upper_right = 8};
 constexpr corners::Corners kSquare{};
 constexpr float kCard = corners::kPageCardRadius;
+constexpr corners::Corners kPageCardCorners12() { return corners::Corners{12, 12, 12, 12}; }
 
 }
 
@@ -157,6 +158,29 @@ int main() {
       if (const auto next = corners::DefaultBoundsWithoutFrame(saved, 945, 1060, kShadow, true, false)) saved = *next;
     }
     assert(saved.width == 925 && saved.height == 1040);
+  }
+  {
+    constexpr corners::Corners kNoCard{};
+    constexpr corners::Corners kToolbarCard{.upper_left = 0, .upper_right = 0, .lower_right = 10, .lower_left = 10};
+    constexpr corners::Corners kGtk{.upper_left = 15, .upper_right = 15};
+    static_assert(corners::ClipToWindow({.x = 0, .y = 42, .width = 900, .height = 658}, 900, 700, kSquare, kNoCard) == kNoCard);
+    static_assert(corners::ClipToWindow({.x = 0, .y = 42, .width = 900, .height = 658}, 900, 700, kGtk, kNoCard) == kNoCard);
+    static_assert(corners::ClipToWindow({.x = 0, .y = 0, .width = 900, .height = 700}, 900, 700, kGtk, kNoCard) == kGtk);
+    static_assert(corners::ClipToWindow({.x = 2, .y = 2, .width = 896, .height = 696}, 900, 700, kGtk, kNoCard) ==
+                  corners::Corners{.upper_left = 13, .upper_right = 13, .lower_right = 0, .lower_left = 0});
+    static_assert(corners::ClipToWindow({.x = 2, .y = 2, .width = 896, .height = 696}, 900, 700, kGtk, kPageCardCorners12()) ==
+                  corners::Corners{.upper_left = 13, .upper_right = 13, .lower_right = 12, .lower_left = 12});
+    static_assert(corners::ClipToWindow({.x = 240, .y = 50, .width = 652, .height = 642}, 900, 700, kGtk, kToolbarCard) == kToolbarCard);
+    static_assert(corners::kPageCardCorners == kPageCardCorners12());
+    const auto doubled = corners::PageRadiiInDip(0, 0, 10, 10.5, 2);
+    assert(doubled && *doubled == (corners::Corners{.upper_left = 0, .upper_right = 0, .lower_right = 20, .lower_left = 21}));
+    assert(corners::PageRadiiInDip(12, 12, 12, 12, 1) == corners::kPageCardCorners);
+    assert(!corners::PageRadiiInDip(-1, 0, 0, 0, 1));
+    assert(!corners::PageRadiiInDip(0, std::nan(""), 0, 0, 1));
+    assert(!corners::PageRadiiInDip(0, 0, std::numeric_limits<double>::infinity(), 0, 1));
+    assert(!corners::PageRadiiInDip(0, 0, 0, 4097, 1));
+    assert(!corners::PageRadiiInDip(0, 0, 0, 0, 0));
+    assert(!corners::PageRadiiInDip(0, 0, 0, 0, std::nan("")));
   }
   std::puts("ok");
   return 0;

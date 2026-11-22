@@ -47,6 +47,7 @@ int main(int argc, char** argv) {
   const std::string mode = argv[1];
   if (mode == "split") {
     Pane p;
+    p.binding->pane_radii = linux_window_corners::Corners{0, 0, 10, 10};
     p.Dock();
     assert(!ardiacore::shown_slot);
     p.host.Show(p.binding, true);
@@ -57,6 +58,10 @@ int main(int argc, char** argv) {
     assert(p.tools()->bounds() == gfx::Rect(100, 50, 800, 600));
     assert(std::ranges::count(p.host.clipped, p.binding->viewport()) == 1);
     assert(std::ranges::count(p.host.clipped, p.tools()) == 1);
+    for (size_t i = 0; i < p.host.clipped.size(); ++i) {
+      if (p.host.clipped[i] == p.binding->viewport()) assert((p.host.clipped_radii[i] == linux_window_corners::Corners{0, 0, 10, 10}));
+      if (p.host.clipped[i] == p.tools()) assert(p.host.clipped_radii[i] == linux_window_corners::kPageCardCorners);
+    }
     assert(*p.host.GetIndexOf(p.tools()) < *p.host.GetIndexOf(p.binding->viewport()));
     DevToolsWindow::strategies[&p.page].hide = true;
     p.host.LayoutPane(p.binding);

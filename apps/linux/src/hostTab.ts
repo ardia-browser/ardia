@@ -1,4 +1,5 @@
 import type { ArdiaHost } from "./host";
+import type { CornerRadii } from "./hostExtensionView";
 import { enqueueTab } from "./hostTabQueue.ts";
 import { queueTabPresentation } from "./hostTabPresentations.ts";
 import { hostProfile, hostSupports, invokeHost } from "./host.ts";
@@ -16,7 +17,7 @@ export type HostPageReceiver = {
 };
 export type HostPageFactory = (claim: string, nativeId: () => number | undefined,
   rebound: (identity: { browserId: number; chromeTabId: number }) => void) => HostPageReceiver;
-export type TabViewport = { rect: { x: number; y: number; width: number; height: number }; visible: boolean };
+export type TabViewport = { rect: { x: number; y: number; width: number; height: number }; visible: boolean; radii?: CornerRadii };
 
 const claims = new WeakMap<ArdiaHost, Map<string, HostTab>>();
 const CREATING_LOAD_MS = 2_000;
@@ -191,8 +192,8 @@ export class HostTab {
 export function showInPlaceOf(from: HostTab, to: HostTab): boolean {
   const viewport = from.shownViewport();
   if (!viewport || from.host !== to.host || !from.presentsNow() || !to.presentsNow() || to.shownViewport()) return false;
-  const shown: TabViewport = { rect: viewport.rect, visible: true };
-  const hidden: TabViewport = { rect: viewport.rect, visible: false };
+  const shown: TabViewport = { ...viewport, visible: true };
+  const hidden: TabViewport = { ...viewport, visible: false };
   const send = (method: string, args: Record<string, unknown>, undo: () => void) => {
     const consent = consentToken();
     void new Promise((resolve) => resolve(to.host.invoke(method, args))).catch((error: unknown) => {

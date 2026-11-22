@@ -940,17 +940,23 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
     it clips what Chromium still paints under the shell, such as the top container), the shell's native view, the
     curtain and, for Settings and Import, the background. While a glass panel is open cc gives the `BrowserView` its
     offscreen surface again for the glass's own rounded layers; the output is the same, only that saving pauses. Each
-    page and DevTools view gets the window's corner where its own corner sits on a window corner; near one (closer
-    than the window's radius R to both edges, inset by dx and dy) it gets a corner concentric with the window's,
-    `max(12, R - min(dx, dy))`, so a page in a thin page frame never pokes out of the window's arc; elsewhere it keeps
-    the 12 px card radius (`ClipToWindow`). A page that fills the window (page full screen, no page frame) never shows
-    rounded corners the window doesn't have. A page edge counts as on the window edge when it's within 1 DIP of it. The corners follow layout, window-state and frame
-    changes. The shell follows the same rule for the holes it cuts over pages (`pageHoles.ts`, `windowCornerRadii`):
-    it rounds the page's rectangle out to whole DIPs through the shell's zoom (`shellZoom` in the bootstrap) against
-    the fractional viewport size (`visualViewport`), as the engine does, and takes the frame's radii from
+    page and DevTools view gets the window's corner where its own corner sits on a window corner; near one (closer than
+    the window's radius R to both edges, inset by dx and dy) it gets a corner concentric with the window's,
+    `max(own, R - min(dx, dy))`, so a page in a thin page frame never pokes out of the window's arc; elsewhere it keeps
+    its own corner (`ClipToWindow`). A tab page's own corners are its card's: `tab.viewport` carries `radii`, the radius
+    of each corner the page shares with the rounded pane around it (`clipRadii`, the shared `TabPane`'s `cardRadius`
+    from `pageFrameOf`, in CSS px, turned into DIP with the shell's zoom), so a page with no page frame (Minimalism,
+    page frame 0) is square, a page under a toolbar is square at the top, and a framed page's bottom corners match the
+    pane's exactly. Without radii (an older shell) and for DevTools the corner stays 12 DIP. The pane paints
+    `theme.card` behind the page, so a page rounder than its pane would show that colour in its corner. A page that
+    fills the window (page full screen, no page frame) never shows rounded corners the window doesn't have. A page edge
+    counts as on the window edge when it's within 1 DIP of it. The corners follow layout, window-state and frame
+    changes. The shell follows the same rule for the holes it cuts over pages (`pageHoles.ts`, `windowCornerRadii`): it
+    rounds the page's rectangle out to whole DIPs through the shell's zoom (`shellZoom` in the bootstrap) against the
+    fractional viewport size (`visualViewport`), as the engine does, and takes the frame's radii from
     `windowDecorations`. A hole corner on a window corner is square, since the window's own clip rounds it, a near one
-    is concentric, and every other corner keeps the card radius, so the shell paints no rounded cover over a page that
-    fills the window.
+    is concentric, and every other corner keeps the page's own radius, so the shell paints no rounded cover over a page
+    that fills the window.
   - Where the compositor decorates (Hyprland, …): `g_ardia_linux_borderless_frame` answers true for that window, and the
     frame view and its layout report no border, input or shadow insets and no corner radius and paint no frame, so the
     client area is the whole window and the compositor rounds, clips and shadows it. The host lays the frame out again
@@ -969,9 +975,7 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
     `_GTK_FRAME_EXTENTS` from the frame insets it had then; the host's `FrameTypeChanged` has X11 rewrite the property
     (`X11Extension::RefreshDecorationInsets`).
   - Known limits: sway and niri are expected to honour the client-side request (not measured here), so there Ardia
-    keeps Chromium's frame. Away from a window corner a page hole keeps 12 CSS px while the engine clips the page to
-    12 DIP; they differ when the shell is zoomed, and with a near-corner corner now in DIP on both sides that
-    difference can show within one page. `windowCornerRadius` and `drawnWindowCornerRadius` still answer a fixed 19 on Linux
+    keeps Chromium's frame. `windowCornerRadius` and `drawnWindowCornerRadius` still answer a fixed 19 on Linux
     (`apps/linux/src/shellMethods.ts`): the shared page-card geometry reads them synchronously for every window, so the
     settings snapshot's `window_corner_radius` reports that, not the frame's radius.
 - **Menu button.** Linux has no global menu bar, so a menu button stands in for the Mac one: usually the `…` beside the

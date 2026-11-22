@@ -315,6 +315,17 @@ inline std::vector<content::WebContents*> forgotten_hangs;
 inline void ForgetDeferredLinuxHangs(content::WebContents* contents) { forgotten_hangs.push_back(contents); }
 }
 
+namespace linux_window_corners {
+struct Corners {
+  float upper_left = 0;
+  float upper_right = 0;
+  float lower_right = 0;
+  float lower_left = 0;
+  friend constexpr bool operator==(const Corners&, const Corners&) = default;
+};
+inline constexpr Corners kPageCardCorners{12, 12, 12, 12};
+}
+
 class ShellHostView;
 ARDIA_FRONTEND_WATCH
 
@@ -350,6 +361,7 @@ class TabBinding {
   std::vector<gfx::Rect> pane_shape;
   std::vector<gfx::Rect> pane_input_shape;
   bool pane_visible = false;
+  linux_window_corners::Corners pane_radii = linux_window_corners::kPageCardCorners;
   std::string claim = "claim";
   uint64_t renderer_generation = 1;
   int resets = 0;
@@ -367,7 +379,10 @@ class ShellHostView : public views::View {
   void OnDevToolsDockChanged(content::WebContents* inspected, content::WebContents* devtools);
   void HideDevToolsViewport(TabBinding* binding);
   void Restack() { restacks++; }
-  void ClipViewport(views::WebView* view) { clipped.push_back(view); }
+  void ClipViewport(views::WebView* view, const linux_window_corners::Corners& own) {
+    clipped.push_back(view);
+    clipped_radii.push_back(own);
+  }
   TabBinding* Binding(int id) {
     for (auto& binding : bindings) {
       if (TabId(binding->contents()) == id) return binding.get();
@@ -433,6 +448,7 @@ class ShellHostView : public views::View {
   uint64_t renderer_generation_ = 1;
   int restacks = 0;
   std::vector<views::WebView*> clipped;
+  std::vector<linux_window_corners::Corners> clipped_radii;
   base::WeakPtrFactory<ShellHostView> weak{this};
 };
 

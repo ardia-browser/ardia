@@ -166,17 +166,37 @@ constexpr float NearCornerRadius(int inset_x, int inset_y, float window_radius, 
   return own_radius;
 }
 
-constexpr Corners ClipToWindow(Box view, int window_width, int window_height, Corners window, float own_radius) {
+constexpr Corners ClipToWindow(Box view, int window_width, int window_height, Corners window, Corners own) {
   const int left = view.x;
   const int top = view.y;
   const int right = window_width - (view.x + view.width);
   const int bottom = window_height - (view.y + view.height);
   return Corners{
-      .upper_left = NearCornerRadius(left, top, window.upper_left, own_radius),
-      .upper_right = NearCornerRadius(right, top, window.upper_right, own_radius),
-      .lower_right = NearCornerRadius(right, bottom, window.lower_right, own_radius),
-      .lower_left = NearCornerRadius(left, bottom, window.lower_left, own_radius),
+      .upper_left = NearCornerRadius(left, top, window.upper_left, own.upper_left),
+      .upper_right = NearCornerRadius(right, top, window.upper_right, own.upper_right),
+      .lower_right = NearCornerRadius(right, bottom, window.lower_right, own.lower_right),
+      .lower_left = NearCornerRadius(left, bottom, window.lower_left, own.lower_left),
   };
+}
+
+constexpr Corners ClipToWindow(Box view, int window_width, int window_height, Corners window, float own_radius) {
+  return ClipToWindow(view, window_width, window_height, window,
+                      Corners{own_radius, own_radius, own_radius, own_radius});
+}
+
+inline constexpr Corners kPageCardCorners{kPageCardRadius, kPageCardRadius, kPageCardRadius, kPageCardRadius};
+inline constexpr double kPageRadiusLimit = 4096.0;
+
+inline std::optional<Corners> PageRadiiInDip(double upper_left, double upper_right, double lower_right,
+                                             double lower_left, double zoom) {
+  for (const double radius : {upper_left, upper_right, lower_right, lower_left}) {
+    if (!std::isfinite(radius) || radius < 0 || radius > kPageRadiusLimit) return std::nullopt;
+  }
+  if (!std::isfinite(zoom) || zoom <= 0) return std::nullopt;
+  return Corners{.upper_left = static_cast<float>(upper_left * zoom),
+                 .upper_right = static_cast<float>(upper_right * zoom),
+                 .lower_right = static_cast<float>(lower_right * zoom),
+                 .lower_left = static_cast<float>(lower_left * zoom)};
 }
 
 }

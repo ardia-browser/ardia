@@ -47,8 +47,8 @@ class WindowCornersTests(unittest.TestCase):
         self.assertNotIn('is_utility()) return', round_corners)
         self.assertNotIn('return;', round_corners[round_corners.index('const linux_window_corners::Corners corners{'):])
         self.assertIn('  if (window_corners_ != corners) ApplyWindowCorners(corners);\n'
-                      '  for (const auto& [id, binding] : bindings_) {\n    ClipViewport(binding->viewport());\n'
-                      '    ClipViewport(binding->devtools_viewport());\n  }', round_corners)
+                      '  for (const auto& [id, binding] : bindings_) {\n    ClipViewport(binding->viewport(), binding->pane_radii);\n'
+                      '    ClipViewport(binding->devtools_viewport(), linux_window_corners::kPageCardCorners);\n  }', round_corners)
         apply = between(HOST, 'void ShellHostView::ApplyWindowCorners(const linux_window_corners::Corners& corners) {', '\n}\n')
         self.assertLess(apply.index('window_corners_ = corners;'), apply.index('shell_->holder()->SetNativeViewCornerRadii(rounded);'))
         self.assertNotIn('ClipViewport', apply)
@@ -60,14 +60,15 @@ class WindowCornersTests(unittest.TestCase):
                       '    browser_view_->layer()->SetFillsBoundsOpaquely(false);\n  }\n'
                       '  if (browser_view_->layer()) {\n    browser_view_->layer()->SetRoundedCornerRadius(rounded);\n'
                       '    browser_view_->layer()->SetIsFastRoundedCorner(true);\n  }', round_corners)
-        clip = between(HOST, 'void ShellHostView::ClipViewport(views::WebView* view) {', '\n}\n')
+        clip = between(HOST, 'void ShellHostView::ClipViewport(views::WebView* view, const linux_window_corners::Corners& own) {', '\n}\n')
         self.assertIn('linux_window_corners::ClipToWindow(', clip)
         self.assertIn('width(), height(),', clip)
-        self.assertIn('linux_window_corners::kPageCardRadius', clip)
+        self.assertIn('window_corners_.value_or(linux_window_corners::Corners()), own)));', clip)
+        self.assertNotIn('kPageCardRadius', clip)
         pane = between(HOST, 'void ShellHostView::LayoutPane(TabBinding* binding) {', '\nvoid ShellHostView::KeepPaneFocus(')
         self.assertNotIn('RoundedCornersF(12.0f)', pane)
-        self.assertIn('    ClipViewport(page);\n', pane)
-        self.assertIn('  ClipViewport(tools);\n', pane)
+        self.assertIn('    ClipViewport(page, binding->pane_radii);\n', pane)
+        self.assertIn('  ClipViewport(tools, linux_window_corners::kPageCardCorners);\n', pane)
 
     def test_each_window_reads_its_own_compositors_answer_and_only_that_window_follows_a_change(self):
         self.assertNotIn('g_ardia_linux_compositor_decoration_mode', HOST)
@@ -105,7 +106,7 @@ class WindowCornersTests(unittest.TestCase):
         self.assertLess(layout.index('SetBoundsRect(browser_view_->GetLocalBounds());'), layout.index('RoundWindowCorners();'))
         self.assertIn('void OnViewBoundsChanged(views::View*) override { LayoutOverlay(); }', HOST)
         round_corners = between(HOST, 'void ShellHostView::RoundWindowCorners() {', '\n}\n')
-        self.assertLess(round_corners.index('ApplyWindowCorners(corners);'), round_corners.index('ClipViewport(binding->viewport());'))
+        self.assertLess(round_corners.index('ApplyWindowCorners(corners);'), round_corners.index('ClipViewport(binding->viewport(), binding->pane_radii);'))
 
     def test_a_window_still_at_the_default_size_keeps_its_visible_size_when_it_loses_the_frame(self):
         keep = between(HOST, 'void ShellHostView::KeepDefaultVisibleSize() {', '\n}\n')
@@ -137,6 +138,16 @@ class WindowCornersTests(unittest.TestCase):
                         follow.index('KeepDefaultVisibleSize();'))
         build = (LINUX / 'BUILD.gn').read_text()
         self.assertIn('"//chrome/browser/ui/views:window_sizer_linux",', build)
+
+    def test_a_tab_viewport_brings_its_card_radii_and_the_page_keeps_them_until_new_ones_arrive(self):
+        self.assertIn('  linux_window_corners::Corners pane_radii = linux_window_corners::kPageCardCorners;\n', HOST)
+        viewport = between(HOST, 'void ShellHostView::SetViewport(', '\n}\n')
+        self.assertIn('if (const base::DictValue* given = args.FindDict("radii")) {', viewport)
+        self.assertIn('radii = linux_window_corners::PageRadiiInDip(', viewport)
+        self.assertIn('given->FindDouble("lowerLeft").value_or(NAN), scale);', viewport)
+        self.assertLess(viewport.index('if (!radii) {\n      return std::move(done).Run(false,'), viewport.index('binding->pane_bounds = bounds;'))
+        self.assertIn('  if (radii) binding->pane_radii = *radii;\n', viewport)
+        self.assertLess(viewport.index('if (radii) binding->pane_radii = *radii;'), viewport.index('LayoutPane(binding);'))
 
     def test_a_viewport_rounds_out_from_doubles_and_windows_report_the_decision_the_frame_follows(self):
         viewport = between(HOST, 'void ShellHostView::SetViewport(', '\n}\n')

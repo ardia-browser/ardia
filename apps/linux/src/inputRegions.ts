@@ -3,8 +3,8 @@ import type { CornerRadii } from "./hostExtensionView.ts";
 
 export type Rect = HostRect;
 export type RegionShape = "box" | "hit";
-export type PageArea = { slot: Element; rect: Rect; radii?: CornerRadii };
-type Page = { visible: boolean; radii?: () => CornerRadii };
+export type PageArea = { slot: Element; rect: Rect; radii?: CornerRadii; cardRadii?: CornerRadii };
+type Page = { visible: boolean; radii?: () => CornerRadii; cardRadii?: () => CornerRadii };
 
 export const REVEAL_DEADLINE_MS = 150;
 export const SETTLE_FRAMES = 12;
@@ -103,10 +103,10 @@ export function createInputRegions(deps: RegionDeps) {
   const measurePages = () => {
     const window = { x: 0, y: 0, ...deps.viewport() };
     const areas: PageArea[] = [];
-    for (const [slot, { visible, radii }] of pages) {
+    for (const [slot, { visible, radii, cardRadii }] of pages) {
       if (!visible || !slot.isConnected) continue;
       const clipped = intersection(deps.rectOf(slot), window);
-      if (clipped) areas.push({ slot, rect: rounded(clipped), ...(radii ? { radii: radii() } : {}) });
+      if (clipped) areas.push({ slot, rect: rounded(clipped), ...(radii ? { radii: radii() } : {}), ...(cardRadii ? { cardRadii: cardRadii() } : {}) });
     }
     return areas;
   };
@@ -167,7 +167,7 @@ export function createInputRegions(deps: RegionDeps) {
   const flush = () => {
     const areas = measurePages();
     const pageRects = areas.map((page) => page.rect);
-    const key = JSON.stringify(areas.map((page) => [page.rect, page.radii ?? null]));
+    const key = JSON.stringify(areas.map((page) => [page.rect, page.radii ?? null, page.cardRadii ?? null]));
     if (key !== pagesKey || areas.length !== pageSlots.length || areas.some((page, index) => page.slot !== pageSlots[index])) {
       pagesKey = key;
       pageSlots = areas.map((page) => page.slot);
@@ -209,10 +209,10 @@ export function createInputRegions(deps: RegionDeps) {
   };
 
   return {
-    setPage(slot: Element, visible: boolean, radii?: () => CornerRadii) {
+    setPage(slot: Element, visible: boolean, radii?: () => CornerRadii, cardRadii?: () => CornerRadii) {
       const known = pages.get(slot);
-      if (known?.visible === visible && known.radii === radii) return;
-      pages.set(slot, { visible, ...(radii ? { radii } : {}) });
+      if (known?.visible === visible && known.radii === radii && known.cardRadii === cardRadii) return;
+      pages.set(slot, { visible, ...(radii ? { radii } : {}), ...(cardRadii ? { cardRadii } : {}) });
       schedule();
     },
     dropPage(slot: Element) {

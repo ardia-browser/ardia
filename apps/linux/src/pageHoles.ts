@@ -33,13 +33,18 @@ export type WindowSize = { width: number; height: number };
 
 const SQUARE_WINDOW: CornerRadii = { upperLeft: 0, upperRight: 0, lowerRight: 0, lowerLeft: 0 };
 
-const nearCornerRadius = (insetX: number, insetY: number, windowRadius: number, radius: number, zoom: number) => {
+const nearCornerRadius = (insetX: number, insetY: number, windowRadius: number, radiusDip: number, radius: number, zoom: number) => {
   if (insetX < 1 && insetY < 1) return 0;
-  if (insetX < windowRadius && insetY < windowRadius) return Math.max(radius, windowRadius - Math.min(insetX, insetY)) / zoom;
+  if (insetX < windowRadius && insetY < windowRadius) return Math.max(radiusDip, windowRadius - Math.min(insetX, insetY)) / zoom;
   return radius;
 };
 
-export function windowCornerRadii(rect: Rect, window: WindowSize, radius = PAGE_CORNER_RADIUS, zoom = 1, frame: CornerRadii = SQUARE_WINDOW): CornerRadii {
+const ownRadii = (radius: number | CornerRadii, zoom: number) =>
+  typeof radius === "number"
+    ? { css: { upperLeft: radius, upperRight: radius, lowerRight: radius, lowerLeft: radius }, dip: { upperLeft: radius, upperRight: radius, lowerRight: radius, lowerLeft: radius } }
+    : { css: radius, dip: { upperLeft: radius.upperLeft * zoom, upperRight: radius.upperRight * zoom, lowerRight: radius.lowerRight * zoom, lowerLeft: radius.lowerLeft * zoom } };
+
+export function windowCornerRadii(rect: Rect, window: WindowSize, radius: number | CornerRadii = PAGE_CORNER_RADIUS, zoom = 1, frame: CornerRadii = SQUARE_WINDOW): CornerRadii {
   const width = Math.round(window.width * zoom);
   const height = Math.round(window.height * zoom);
   const leftEdge = Math.min(Math.max(rect.x * zoom, 0), width);
@@ -50,11 +55,12 @@ export function windowCornerRadii(rect: Rect, window: WindowSize, radius = PAGE_
   const top = Math.floor(topEdge);
   const right = width - Math.ceil(rightEdge);
   const bottom = height - Math.ceil(bottomEdge);
+  const own = ownRadii(radius, zoom);
   return {
-    upperLeft: nearCornerRadius(left, top, frame.upperLeft, radius, zoom),
-    upperRight: nearCornerRadius(right, top, frame.upperRight, radius, zoom),
-    lowerRight: nearCornerRadius(right, bottom, frame.lowerRight, radius, zoom),
-    lowerLeft: nearCornerRadius(left, bottom, frame.lowerLeft, radius, zoom),
+    upperLeft: nearCornerRadius(left, top, frame.upperLeft, own.dip.upperLeft, own.css.upperLeft, zoom),
+    upperRight: nearCornerRadius(right, top, frame.upperRight, own.dip.upperRight, own.css.upperRight, zoom),
+    lowerRight: nearCornerRadius(right, bottom, frame.lowerRight, own.dip.lowerRight, own.css.lowerRight, zoom),
+    lowerLeft: nearCornerRadius(left, bottom, frame.lowerLeft, own.dip.lowerLeft, own.css.lowerLeft, zoom),
   };
 }
 
@@ -164,7 +170,7 @@ const clipFor = (element: HTMLElement, pages: readonly Hole[], pieces: readonly 
 };
 
 export const holesOf = (pages: readonly PageArea[], window: WindowSize, zoom = 1, frame: CornerRadii = SQUARE_WINDOW): Hole[] =>
-  pages.map(({ rect, radii }) => ({ ...rect, radii: radii ?? windowCornerRadii(rect, window, PAGE_CORNER_RADIUS, zoom, frame) }));
+  pages.map(({ rect, radii, cardRadii }) => ({ ...rect, radii: radii ?? windowCornerRadii(rect, window, cardRadii ?? PAGE_CORNER_RADIUS, zoom, frame) }));
 
 const shellViewport = (root: HTMLElement): WindowSize => {
   const view = root.ownerDocument.defaultView?.visualViewport;

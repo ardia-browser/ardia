@@ -67,7 +67,7 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
       },
       {
         text: "In the same daily counts, on iPhone: how many Browse for Me answers Talk to Me read aloud and how many of those you started by holding the phone to your ear, how often its voice finished downloading or failed to, and how often it couldn’t speak. Counts only, never what it read",
-        fields: ["talk_to_me_answers_read", "talk_to_me_ear_listens", "talk_to_me_voice_downloads", "talk_to_me_download_failed", "talk_to_me_failed", "tray_incognito_switches"],
+        fields: ["talk_to_me_answers_read", "talk_to_me_ear_listens", "talk_to_me_voice_downloads", "talk_to_me_download_failed", "talk_to_me_failed", "tray_incognito_switches", "incognito_unavailable"],
       },
       {
         text: "In the same daily counts, on iPhone: how often you summarized a page by pinching in or from the page menu, how many summaries Apple Intelligence wrote on the phone or were the page’s own lines, and how many it couldn’t write. Counts only, never which page or what the summary said",

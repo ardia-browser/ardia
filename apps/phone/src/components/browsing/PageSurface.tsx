@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { StyleSheet } from "react-native";
-import { ARRIVAL_COVER_ID, OPENING_COVER_ID, pageCoverHidden, pageDrawn, pageStateChanged, pageToneChanged, swipedPastHistory } from "../../state/browse/store";
+import { ARRIVAL_COVER_ID, OPENING_COVER_ID, pageCoverHidden, pageDrawn, pageOpenFailed, pageStateChanged, pageToneChanged, swipedPastHistory } from "../../state/browse/store";
 import { useNavigation, usePageArriving, usePageCovered, usePageTone, usePageVeiled } from "../../state/browse/hooks";
 import { shownTone } from "../../lib/pageTone";
 import { registerPageHandle } from "../../state/pages/store";
@@ -54,6 +54,7 @@ export function PageSurface({ tab, toneBottom, obscured, summaryBottomInset, top
       onPageState={(state) => pageStateChanged(id, state)}
       onPageTone={(tone) => pageToneChanged(id, tone)}
       onPageDrawn={() => pageDrawn(id)}
+      onPageError={(error) => pageOpenFailed(id, error.code)}
       coverNativeId={covered ? (arriving ? ARRIVAL_COVER_ID : OPENING_COVER_ID) : undefined}
       onPageCoverHidden={(reason) => pageCoverHidden(id, reason)}
     />

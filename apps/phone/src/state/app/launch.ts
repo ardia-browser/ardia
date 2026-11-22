@@ -64,7 +64,7 @@ async function warmDemoPictures() {
 
 async function runDemoScenario(args: LaunchArguments) {
   demoWarming = warmDemoPictures();
-  if (args.browseIncognito) setIncognito(true);
+  if (args.browseIncognito && !setIncognito(true)) return;
   if (args.browseOpen) openPage(args.browseOpen, "typed");
   if (args.browseQuery !== null) presentSearch("home", args.browseQuery);
   if (args.browseSurface === "browsing") {

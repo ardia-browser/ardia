@@ -106,6 +106,7 @@ object PhonePages {
         }
         shared = made
         downloads = SystemDownloads(context, made)
+        host?.get()?.let { activity -> actAsOldWebView(made, activity) }
         host?.get()?.let(made::attach)
         made.warmUp()
         blocking.start()
@@ -119,8 +120,14 @@ object PhonePages {
         host = WeakReference(activity)
         watchDraws(activity.window.decorView)
         if (shared == null && UpgradeGate.pending(activity)) return
-        engine(activity).attach(activity)
+        val attached = engine(activity)
+        actAsOldWebView(attached, activity)
+        attached.attach(activity)
         blocking.refreshIfDue()
+    }
+
+    private fun actAsOldWebView(engine: DevelopmentWebViewEngine, activity: Activity) {
+        if (LaunchExtras.allowedInThisBuild && activity.intent?.getBooleanExtra(WITHOUT_PRIVATE_PAGES_EXTRA, false) == true) engine.multiProfileSupported = false
     }
 
     fun detach(activity: Activity) {
@@ -499,4 +506,6 @@ object PhonePages {
         CodedException("ERR_PRIVATE_PAGES_UNAVAILABLE", "Private pages need a WebView with multi-profile support", null)
 
     private const val SITE_PREFERENCES = "ardia-site-preferences"
+
+    private const val WITHOUT_PRIVATE_PAGES_EXTRA = "ArdiaWithoutPrivatePages"
 }

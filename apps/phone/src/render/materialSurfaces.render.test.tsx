@@ -186,3 +186,18 @@ onAndroid("in dark, drawn menus sit on surfaceContainerHighest, a tone above the
   unmount(root);
   insets.mockRestore();
 });
+
+onAndroid("a fixed trailing menu respects the right safe inset", async () => {
+  const overlay = require("../components/ui/Overlay");
+  const insets = jest.spyOn(safeArea, "useSafeAreaInsets").mockReturnValue({ top: 0, bottom: 0, left: 0, right: 40 });
+  const frame = jest.spyOn(overlay, "useOverlayFrame").mockReturnValue(() => Promise.resolve({ x: 0, y: 0, width: 250, height: 800 }));
+  const { FloatingMenu } = require("../components/ui");
+  const root = material(<FloatingMenu items={[{ label: "Delete All Downloads", icon: "trash", onPress: () => undefined }]} place={{ top: 100, right: 8 }} onDismiss={() => undefined} />);
+  await act(async () => {});
+  const panel = flat(host(root, "materialMenu"));
+  unmount(root);
+  insets.mockRestore();
+  frame.mockRestore();
+  expect(panel.width).toBe(194);
+  expect(250 - Number(panel.right)).toBeLessThanOrEqual(250 - 40 - 8);
+});

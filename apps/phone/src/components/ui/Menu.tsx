@@ -437,14 +437,18 @@ function triggerPlacer(row: Rect, host: Rect, insets: Insets, width: number, ali
 function fixedPlacer(place: ViewStyle, host: Rect, insets: Insets, width: number): MenuPlacer {
   return (height, _keepBelow, pageWidth = width) => {
     if (host.width > 0) pageWidth = Math.min(pageWidth, Math.max(1, host.width - insets.left - insets.right - MENU_MARGIN * 2));
-    if (typeof place.top !== "number") return { place: { ...place, width: pageWidth }, origin: place.bottom !== undefined ? "bottom" : "top" };
     const room = host.width > 0 ? insetRect(host, insets) : host;
+    const safeLeft = room.x - host.x + MENU_MARGIN;
+    const safeRight = host.x + host.width - room.x - room.width + MENU_MARGIN;
+    const left = host.width > 0 && typeof place.left === "number" ? Math.max(safeLeft, Math.min(place.left, host.width - safeRight - pageWidth)) : place.left;
+    const right = host.width > 0 && typeof place.right === "number" ? Math.max(safeRight, Math.min(place.right, host.width - safeLeft - pageWidth)) : place.right;
+    const fittedPlace = { ...place, width: pageWidth, left, right };
+    if (typeof place.top !== "number") return { place: fittedPlace, origin: place.bottom !== undefined ? "bottom" : "top" };
     const roomTop = room.y + MENU_MARGIN;
     const roomBottom = room.y + room.height - MENU_MARGIN;
     const fitted = Math.min(height, roomBottom - roomTop);
     const top = Math.max(roomTop, Math.min(place.top, roomBottom - fitted)) - host.y;
-    const left = typeof place.left === "number" ? Math.max(room.x + MENU_MARGIN, Math.min(place.left, room.x + room.width - MENU_MARGIN - pageWidth)) - host.x : place.left;
-    return { place: { ...place, width: pageWidth, top, left }, origin: "top", maxHeight: fitted };
+    return { place: { ...fittedPlace, top }, origin: "top", maxHeight: fitted };
   };
 }
 

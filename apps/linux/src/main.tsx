@@ -64,6 +64,7 @@ import { inputRegions, startShellAbove } from "./shellAbove";
 import { InWindowPlayer } from "./InWindowPlayer";
 import { startLinuxUpdates } from "./linuxUpdates";
 import { noticeUnsandboxedLaunch } from "./sandboxNotice";
+import { watchWindowDecorations } from "./windowDecorations";
 import { countLoginPasswordChecks } from "./reauthCounts";
 import { startPipPlayer } from "./pipPlayer";
 import { startLinuxShortcuts } from "./shortcutsRuntime";
@@ -172,6 +173,7 @@ async function start() {
       marks: sessionStorage,
     });
     void noticeUnsandboxedLaunch(ardiaHost, windowId, services.launch);
+    watchWindowDecorations(ardiaHost, windowId);
   }
   createRoot(document.getElementById("root")!, { onUncaughtError: (error) => { reportUncaughtRender(error); console.error("[ardia linux] crashed", error); }, onRecoverableError: (error) => { reportRecoverableRender(error); console.warn("[ardia linux] recovered", error); } }).render(
     <div className={`ardia-desktop host ardia-linux${utility ? " utility" : ""}`} data-ardia-linux-window={windowId}>

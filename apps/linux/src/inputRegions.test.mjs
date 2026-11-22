@@ -413,3 +413,37 @@ test("a page hole is square where it meets a window corner and keeps the card ra
   assert.equal(fullScreen, 'path(evenodd, "M0 0H1920V1080H0Z M0 0H1920V1080H0V0Z")');
   assert.doesNotMatch(fullScreen, /A/);
 });
+
+test("the shell and the engine agree which page corners sit on a window corner, at fractional edges and any shell zoom", () => {
+  const engineTouches = (rect, window, zoom) => {
+    const width = Math.round(window.width * zoom);
+    const height = Math.round(window.height * zoom);
+    const left = Math.min(Math.max(rect.x * zoom, 0), width);
+    const top = Math.min(Math.max(rect.y * zoom, 0), height);
+    const right = Math.min(Math.max((rect.x + rect.width) * zoom, left), width);
+    const bottom = Math.min(Math.max((rect.y + rect.height) * zoom, top), height);
+    return { left: Math.floor(left) < 1, top: Math.floor(top) < 1, right: Math.ceil(right) > width - 1, bottom: Math.ceil(bottom) > height - 1 };
+  };
+  const shellTouches = (rect, window, zoom) => {
+    const radii = windowCornerRadii(rect, window, 12, zoom);
+    return { left: radii.upperLeft === 0 || radii.lowerLeft === 0, top: radii.upperLeft === 0 || radii.upperRight === 0, right: radii.upperRight === 0 || radii.lowerRight === 0, bottom: radii.lowerRight === 0 || radii.lowerLeft === 0 };
+  };
+  const window = { width: 800, height: 600 };
+  let checked = 0;
+  for (const zoom of [0.5, 0.8, 1, 1.25, 2, 2.5, 3]) {
+    for (const edge of [0, 0.2, 0.3, 0.4, 0.5, 0.75, 0.99, 1, 1.2, 2, 8]) {
+      const rect = { x: edge, y: edge, width: 800 - 2 * edge, height: 600 - 2 * edge };
+      const engine = engineTouches(rect, window, zoom);
+      const shell = shellTouches(rect, window, zoom);
+      if (engine.left === engine.top && engine.right === engine.bottom) {
+        assert.equal(shell.left, engine.left, `left at ${edge} css px, zoom ${zoom}`);
+        assert.equal(shell.right, engine.right, `right at ${edge} css px, zoom ${zoom}`);
+        checked++;
+      }
+    }
+  }
+  assert.ok(checked > 60);
+  assert.deepEqual(windowCornerRadii({ x: 0.75, y: 0.75, width: 1918.5, height: 1078.5 }, { width: 1920, height: 1080 }), { upperLeft: 0, upperRight: 0, lowerRight: 0, lowerLeft: 0 });
+  assert.deepEqual(windowCornerRadii({ x: 0.5, y: 0.5, width: 1919, height: 1079 }, { width: 1920, height: 1080 }, 12, 2.5).upperLeft, 12);
+  assert.deepEqual(windowCornerRadii({ x: 0.3, y: 0.3, width: 1919.4, height: 1079.4 }, { width: 1920, height: 1080 }, 12, 2.5).upperLeft, 0);
+});

@@ -20,6 +20,7 @@ const ENGINE = {
   openUrls: listed("ac_linux_open_urls.h", "kOpenUrlCapabilities"),
   windowCommands: listed("ac_linux_window_commands.h", "kWindowCommandCapabilities"),
   windowState: listed("ac_linux_window_state.h", "kWindowStateCapabilities"),
+  windowCorners: listed("ac_linux_window_corners.h", "kWindowCornersCapabilities"),
   notifications: listed("ac_linux_notifications_core.h", "kNotificationCapabilities"),
   hardware: listed("ac_linux_hardware.h", "kHardwareCapabilities"),
   linkTabs: listed("ac_linux_link_tabs.h", "kLinuxLinkTabRoutes"),
@@ -75,6 +76,7 @@ test("the engine advertises the names the shell gates on, spelled the same", () 
   assert.deepEqual(ENGINE.openUrls, ["ArdiaShell.onOpenURLs", "ArdiaShell.listenForOpenURLs"]);
   assert.deepEqual(ENGINE.windowCommands, ["ArdiaShell.toggleFullScreen", "tab.edit", "ArdiaShell.readText"]);
   assert.deepEqual(ENGINE.windowState, ["ArdiaShell.windowButtonLayout", "ArdiaShell.windowState"]);
+  assert.deepEqual(ENGINE.windowCorners, ["ArdiaShell.windowDecorations"]);
   assert.deepEqual(ENGINE.notifications, ["ArdiaApp.notificationPermission", "ArdiaApp.requestNotificationPermission", "ArdiaApp.postNotification", "ArdiaApp.removeNotifications"]);
   assert.deepEqual(ENGINE.hardware, ["ArdiaApp.hardwareInfo", "ArdiaSystem.setThinScrollBars", "ArdiaShell.setAppearance"]);
   assert.deepEqual(ENGINE.linkTabs, ["webView.setPeekOtherSiteTabs", "webView.setLittleArdiaOpensNewTabLinks"]);
@@ -207,4 +209,30 @@ test("an event only the Linux engine sends is declared apart from the Mac's, and
     assert.equal(mac.has(name), false, `${name} is also in the Mac's events`);
     assert.ok(sent.includes(`Emit("${name}"`), `the Linux engine never sends ${name}`);
   }
+});
+
+test("each window reads who decorates it once and counts each change of it, never another window's", async () => {
+  const { watchWindowDecorations, WINDOW_DECORATIONS_METHOD } = await import("./windowDecorations.ts");
+  const noted = [];
+  const listeners = new Set();
+  const asked = [];
+  const fake = {
+    bootstrap: { windowId: "main", profileId: "default", capabilities: [WINDOW_DECORATIONS_METHOD] },
+    invoke: async (method, args) => { asked.push([method, args]); return { decoratedBy: "app", answer: "none" }; },
+    call: async () => "null",
+    onEvent: (listener) => { listeners.add(listener); return () => listeners.delete(listener); },
+  };
+  const stop = watchWindowDecorations(fake, "main", (by, answer) => noted.push([by, answer]));
+  await new Promise(setImmediate);
+  const emit = (payload) => { for (const listener of listeners) listener("ArdiaShell", "windowDecorations", payload); };
+  emit({ windowId: "other", decoratedBy: "compositor", answer: "server" });
+  emit({ windowId: "main", decoratedBy: "app", answer: "none" });
+  emit({ windowId: "main", decoratedBy: "compositor", answer: "server" });
+  stop();
+  emit({ windowId: "main", decoratedBy: "app", answer: "client" });
+  assert.deepEqual(asked, [[WINDOW_DECORATIONS_METHOD, { args: ["main"] }]]);
+  assert.deepEqual(noted, [["app", "none"], ["compositor", "server"]]);
+  assert.equal(listeners.size, 0);
+  const bare = { ...fake, bootstrap: { ...fake.bootstrap, capabilities: [] } };
+  watchWindowDecorations(bare, "main", () => assert.fail("an engine without the call is never asked"));
 });

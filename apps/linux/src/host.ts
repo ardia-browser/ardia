@@ -24,6 +24,7 @@ export type ArdiaHost = {
     chromeMade?: boolean;
     glassPanels?: boolean;
     sandboxDecision?: string;
+    shellZoom?: number;
   };
   call(name: string, profile: string, args: string | null): Promise<string>;
   invoke(method: string, args: Record<string, unknown>): Promise<unknown>;

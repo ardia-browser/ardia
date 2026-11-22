@@ -31,11 +31,11 @@ export function roundedRect({ x, y, width, height }: Rect, radius: number | Radi
 
 export type WindowSize = { width: number; height: number };
 
-export function windowCornerRadii(rect: Rect, window: WindowSize, radius = PAGE_CORNER_RADIUS): CornerRadii {
-  const left = rect.x <= 0.5;
-  const top = rect.y <= 0.5;
-  const right = rect.x + rect.width >= window.width - 0.5;
-  const bottom = rect.y + rect.height >= window.height - 0.5;
+export function windowCornerRadii(rect: Rect, window: WindowSize, radius = PAGE_CORNER_RADIUS, zoom = 1): CornerRadii {
+  const left = rect.x * zoom < 1;
+  const top = rect.y * zoom < 1;
+  const right = (rect.x + rect.width) * zoom > window.width * zoom - 1;
+  const bottom = (rect.y + rect.height) * zoom > window.height * zoom - 1;
   return {
     upperLeft: top && left ? 0 : radius,
     upperRight: top && right ? 0 : radius,
@@ -149,8 +149,8 @@ const clipFor = (element: HTMLElement, pages: readonly Hole[], pieces: readonly 
   return holeClipPath({ width: element.offsetWidth, height: element.offsetHeight }, localHoles(rect, scale, separate.holes), PAGE_CORNER_RADIUS, localPieces(rect, scale, [...separate.pieces, ...pieces]));
 };
 
-export const holesOf = (pages: readonly PageArea[], window: WindowSize): Hole[] =>
-  pages.map(({ rect, radii }) => ({ ...rect, radii: radii ?? windowCornerRadii(rect, window) }));
+export const holesOf = (pages: readonly PageArea[], window: WindowSize, zoom = 1): Hole[] =>
+  pages.map(({ rect, radii }) => ({ ...rect, radii: radii ?? windowCornerRadii(rect, window, PAGE_CORNER_RADIUS, zoom) }));
 
 const shellViewport = (root: HTMLElement): WindowSize => ({
   width: root.ownerDocument.documentElement.clientWidth,
@@ -168,7 +168,7 @@ const overlapping = (a: Element, b: Element) => {
   return !!intersection({ x: one.x, y: one.y, width: one.width, height: one.height }, { x: two.x, y: two.y, width: two.width, height: two.height });
 };
 
-export function createPageHoles(root: HTMLElement) {
+export function createPageHoles(root: HTMLElement, zoom: () => number = () => 1) {
   const layers = new Set<HTMLElement>();
   const hosts = new Map<HTMLElement, string>();
   let pages: readonly PageArea[] = [];
@@ -181,7 +181,7 @@ export function createPageHoles(root: HTMLElement) {
     if (element.style.getPropertyValue(name) !== value) element.style.setProperty(name, value);
   };
 
-  const holesUnder = (element: HTMLElement) => holesOf(pagesAbove(element, pages, stackDom), shellViewport(root));
+  const holesUnder = (element: HTMLElement) => holesOf(pagesAbove(element, pages, stackDom), shellViewport(root), zoom());
 
   const paintLayer = (layer: HTMLElement) => {
     const clip = clipFor(layer, holesUnder(layer), pieces());

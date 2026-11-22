@@ -61,7 +61,7 @@ function conceal(element: Element, hidden: boolean) {
 
 export function startShellAbove(host: ArdiaHost, root: HTMLElement = document.body) {
   document.documentElement.classList.add(SHELL_ABOVE_CLASS);
-  const painter = createPageHoles(root);
+  const painter = createPageHoles(root, () => host.bootstrap.shellZoom ?? 1);
   const glass = startShellGlass(host);
   const registry = createInputRegions({
     ...domRegionDeps(host),

@@ -36,3 +36,9 @@ test("numbers past 999 show as 999+", () => {
   assert.equal(toolbarBadgeText(42), "42");
   assert.equal(toolbarBadgeText(1000), "999+");
 });
+
+test("a count that ends on a 5 rounds up, as written, not as floating point stores it", () => {
+  assert.equal(toolbarBadgeText("1.15k"), "1.2k");
+  assert.equal(toolbarBadgeText("1.45K"), "1.5K");
+  assert.equal(toolbarBadgeText("0.0000001k"), "0k");
+});

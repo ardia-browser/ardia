@@ -17,10 +17,19 @@ function roundedCount(text: string): string | null {
   for (const unit of UNITS.slice(UNITS.indexOf(suffix.toLowerCase()))) {
     const name = upper ? unit.toUpperCase() : unit;
     for (const decimals of [1, 0]) {
-      const shown = `${sign}${Number(amount.toFixed(decimals))}${name}`;
+      const shown = `${sign}${roundedTo(amount, decimals)}${name}`;
       if (shown.length <= BADGE_CHARS) return shown;
     }
     amount /= 1000;
   }
   return null;
+}
+
+function shifted(value: number, places: number): number {
+  const [mantissa, exponent = "0"] = String(value).split("e");
+  return Number(`${mantissa}e${Number(exponent) + places}`);
+}
+
+function roundedTo(value: number, decimals: number): number {
+  return shifted(Math.round(shifted(value, decimals)), -decimals);
 }

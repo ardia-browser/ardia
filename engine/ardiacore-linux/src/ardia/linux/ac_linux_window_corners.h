@@ -1,6 +1,7 @@
 #ifndef ARDIA_LINUX_AC_LINUX_WINDOW_CORNERS_H_
 #define ARDIA_LINUX_AC_LINUX_WINDOW_CORNERS_H_
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <limits>
@@ -185,18 +186,30 @@ constexpr Corners ClipToWindow(Box view, int window_width, int window_height, Co
 }
 
 inline constexpr Corners kPageCardCorners{kPageCardRadius, kPageCardRadius, kPageCardRadius, kPageCardRadius};
+
+constexpr Corners CornersSharedWithPane(Box view, Box pane, Corners pane_radii) {
+  const bool left = view.x == pane.x;
+  const bool top = view.y == pane.y;
+  const bool right = static_cast<long long>(view.x) + view.width == static_cast<long long>(pane.x) + pane.width;
+  const bool bottom = static_cast<long long>(view.y) + view.height == static_cast<long long>(pane.y) + pane.height;
+  return Corners{.upper_left = left && top ? pane_radii.upper_left : 0,
+                 .upper_right = right && top ? pane_radii.upper_right : 0,
+                 .lower_right = right && bottom ? pane_radii.lower_right : 0,
+                 .lower_left = left && bottom ? pane_radii.lower_left : 0};
+}
 inline constexpr double kPageRadiusLimit = 4096.0;
 
 inline std::optional<Corners> PageRadiiInDip(double upper_left, double upper_right, double lower_right,
                                              double lower_left, double zoom) {
   for (const double radius : {upper_left, upper_right, lower_right, lower_left}) {
-    if (!std::isfinite(radius) || radius < 0 || radius > kPageRadiusLimit) return std::nullopt;
+    if (!std::isfinite(radius) || radius < 0) return std::nullopt;
   }
   if (!std::isfinite(zoom) || zoom <= 0) return std::nullopt;
-  return Corners{.upper_left = static_cast<float>(upper_left * zoom),
-                 .upper_right = static_cast<float>(upper_right * zoom),
-                 .lower_right = static_cast<float>(lower_right * zoom),
-                 .lower_left = static_cast<float>(lower_left * zoom)};
+  const auto dip = [zoom](double radius) { return static_cast<float>(std::min(radius, kPageRadiusLimit) * zoom); };
+  return Corners{.upper_left = dip(upper_left),
+                 .upper_right = dip(upper_right),
+                 .lower_right = dip(lower_right),
+                 .lower_left = dip(lower_left)};
 }
 
 }

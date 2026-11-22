@@ -1715,6 +1715,7 @@ class ShellHostView : public views::View,
   void RoundWindowCorners();
   void ApplyWindowCorners(const linux_window_corners::Corners& corners);
   void ClipViewport(views::WebView* view, const linux_window_corners::Corners& own);
+  void ClipPaneView(TabBinding* binding, views::WebView* view);
   void HideCaptionButtons();
   void ShellPainted();
   void LiftCurtain();
@@ -3412,8 +3413,8 @@ void ShellHostView::RoundWindowCorners() {
   };
   if (window_corners_ != corners) ApplyWindowCorners(corners);
   for (const auto& [id, binding] : bindings_) {
-    ClipViewport(binding->viewport(), binding->pane_radii);
-    ClipViewport(binding->devtools_viewport(), linux_window_corners::kPageCardCorners);
+    ClipPaneView(binding.get(), binding->viewport());
+    ClipPaneView(binding.get(), binding->devtools_viewport());
   }
 }
 
@@ -3440,6 +3441,16 @@ void ShellHostView::ApplyWindowCorners(const linux_window_corners::Corners& corn
     curtain_->layer()->SetRoundedCornerRadius(rounded);
     curtain_->layer()->SetIsFastRoundedCorner(true);
   }
+}
+
+void ShellHostView::ClipPaneView(TabBinding* binding, views::WebView* view) {
+  if (!binding || !view) return;
+  const gfx::Rect bounds = view->bounds();
+  const gfx::Rect& pane = binding->pane_bounds;
+  ClipViewport(view, linux_window_corners::CornersSharedWithPane(
+                         {.x = bounds.x(), .y = bounds.y(), .width = bounds.width(), .height = bounds.height()},
+                         {.x = pane.x(), .y = pane.y(), .width = pane.width(), .height = pane.height()},
+                         binding->pane_radii));
 }
 
 void ShellHostView::ClipViewport(views::WebView* view, const linux_window_corners::Corners& own) {
@@ -5353,7 +5364,7 @@ void ShellHostView::LayoutPane(TabBinding* binding) {
   if (visible) {
     owner_view->GetActiveContentsWebView()->SetWebContents(nullptr);
     page->SetWebContents(contents);
-    ClipViewport(page, binding->pane_radii);
+    ClipPaneView(binding, page);
     ardiacore::NoteTabInShownSlot(contents);
   } else {
     page->SetWebContents(nullptr);
@@ -5390,7 +5401,7 @@ void ShellHostView::LayoutPane(TabBinding* binding) {
   if (reattach) tools->SetWebContents(nullptr);
   tools->SetWebContents(devtools);
   if (auto* native = devtools->GetNativeView(); native && !native->IsVisible()) native->Show();
-  ClipViewport(tools, linux_window_corners::kPageCardCorners);
+  ClipPaneView(binding, tools);
   const size_t page_index = GetIndexOf(page).value();
   const size_t tools_index = GetIndexOf(tools).value();
   if (strategy.hide_inspected_contents() ? tools_index < page_index : tools_index > page_index)
@@ -6221,12 +6232,15 @@ void ShellHostView::SetViewport(
   const linux_window_corners::Box box = linux_window_corners::EnclosingBox(left, top, right, bottom);
   const gfx::Rect bounds(box.x, box.y, box.width, box.height);
   std::optional<linux_window_corners::Corners> radii;
-  if (const base::DictValue* given = args.FindDict("radii")) {
-    radii = linux_window_corners::PageRadiiInDip(
-        given->FindDouble("upperLeft").value_or(NAN), given->FindDouble("upperRight").value_or(NAN),
-        given->FindDouble("lowerRight").value_or(NAN), given->FindDouble("lowerLeft").value_or(NAN), scale);
+  if (const base::Value* given = args.Find("radii")) {
+    const base::DictValue* corners = given->GetIfDict();
+    if (corners) {
+      radii = linux_window_corners::PageRadiiInDip(
+          corners->FindDouble("upperLeft").value_or(NAN), corners->FindDouble("upperRight").value_or(NAN),
+          corners->FindDouble("lowerRight").value_or(NAN), corners->FindDouble("lowerLeft").value_or(NAN), scale);
+    }
     if (!radii) {
-      return std::move(done).Run(false, base::Value("Viewport radii must be finite, nonnegative and at most 4096"));
+      return std::move(done).Run(false, base::Value("Viewport radii must be four finite, nonnegative corners"));
     }
   }
   if (!binding->viewport()) {

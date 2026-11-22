@@ -59,8 +59,8 @@ int main(int argc, char** argv) {
     assert(std::ranges::count(p.host.clipped, p.binding->viewport()) == 1);
     assert(std::ranges::count(p.host.clipped, p.tools()) == 1);
     for (size_t i = 0; i < p.host.clipped.size(); ++i) {
-      if (p.host.clipped[i] == p.binding->viewport()) assert((p.host.clipped_radii[i] == linux_window_corners::Corners{0, 0, 10, 10}));
-      if (p.host.clipped[i] == p.tools()) assert(p.host.clipped_radii[i] == linux_window_corners::kPageCardCorners);
+      if (p.host.clipped[i] == p.binding->viewport()) assert((p.host.clipped_radii[i] == linux_window_corners::Corners{0, 0, 0, 10}));
+      if (p.host.clipped[i] == p.tools()) assert((p.host.clipped_radii[i] == linux_window_corners::Corners{0, 0, 10, 10}));
     }
     assert(*p.host.GetIndexOf(p.tools()) < *p.host.GetIndexOf(p.binding->viewport()));
     DevToolsWindow::strategies[&p.page].hide = true;
@@ -249,7 +249,7 @@ class PaneLayoutTests(unittest.TestCase):
         host = HOST.read_text()
         watch = method(host, 'class DevToolsFrontendWatch') + ';' if 'class DevToolsFrontendWatch' in host else 'struct DevToolsFrontendWatch {};'
         methods = '\n'.join(method(host, signature) for signature in [
-            'bool HoldsNativeView(', 'void ShellHostView::LayoutPane(', 'void ShellHostView::OnDevToolsDockChanged(',
+            'bool HoldsNativeView(', 'void ShellHostView::LayoutPane(', 'void ShellHostView::ClipPaneView(', 'void ShellHostView::OnDevToolsDockChanged(',
             'void ShellHostView::HideDevToolsViewport(', 'void TabBinding::WebContentsDestroyed(',
             'void TabBinding::FocusFromHost(', 'void TabBinding::OnWebContentsFocused('])
         methods = methods.replace('content::RenderWidgetHost*', 'void*')
@@ -259,7 +259,7 @@ class PaneLayoutTests(unittest.TestCase):
         root = pathlib.Path(cls.temp.name)
         (root / 'main.cc').write_text(code + MAIN)
         cls.binary = root / 'pane'
-        result = subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', '-Wno-unused-parameter',
+        result = subprocess.run([compiler, '-std=c++20', '-I', str(ROOT / 'src'), '-Wall', '-Wextra', '-Werror', '-Wno-unused-parameter',
                                  '-Wno-unused-private-field', '-fsanitize=address,undefined', '-fno-omit-frame-pointer',
                                  str(root / 'main.cc'), '-o', str(cls.binary)], capture_output=True, text=True, timeout=120)
         if result.returncode:

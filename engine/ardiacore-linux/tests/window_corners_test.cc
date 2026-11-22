@@ -178,9 +178,24 @@ int main() {
     assert(!corners::PageRadiiInDip(-1, 0, 0, 0, 1));
     assert(!corners::PageRadiiInDip(0, std::nan(""), 0, 0, 1));
     assert(!corners::PageRadiiInDip(0, 0, std::numeric_limits<double>::infinity(), 0, 1));
-    assert(!corners::PageRadiiInDip(0, 0, 0, 4097, 1));
+    const auto clamped = corners::PageRadiiInDip(0, 0, 0, 1e9, 2);
+    assert(clamped && clamped->lower_left == 8192 && clamped->upper_left == 0);
     assert(!corners::PageRadiiInDip(0, 0, 0, 0, 0));
     assert(!corners::PageRadiiInDip(0, 0, 0, 0, std::nan("")));
+  }
+  {
+    constexpr corners::Corners kPane{.upper_left = 0, .upper_right = 0, .lower_right = 10, .lower_left = 10};
+    constexpr corners::Box kPaneBox{.x = 100, .y = 50, .width = 800, .height = 600};
+    static_assert(corners::CornersSharedWithPane(kPaneBox, kPaneBox, kPane) == kPane);
+    static_assert(corners::CornersSharedWithPane({.x = 100, .y = 50, .width = 500, .height = 600}, kPaneBox, kPane) ==
+                  corners::Corners{.upper_left = 0, .upper_right = 0, .lower_right = 0, .lower_left = 10});
+    static_assert(corners::CornersSharedWithPane({.x = 600, .y = 50, .width = 300, .height = 600}, kPaneBox, kPane) ==
+                  corners::Corners{.upper_left = 0, .upper_right = 0, .lower_right = 10, .lower_left = 0});
+    static_assert(corners::CornersSharedWithPane({.x = 100, .y = 50, .width = 800, .height = 400}, kPaneBox, kPane) ==
+                  corners::Corners{});
+    static_assert(corners::CornersSharedWithPane({.x = 100, .y = 450, .width = 800, .height = 200}, kPaneBox,
+                                                 corners::kPageCardCorners) ==
+                  corners::Corners{.upper_left = 0, .upper_right = 0, .lower_right = 12, .lower_left = 12});
   }
   std::puts("ok");
   return 0;

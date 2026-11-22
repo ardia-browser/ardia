@@ -12,6 +12,8 @@
 #include <utility>
 #include <vector>
 
+#include "ardia/linux/ac_linux_window_corners.h"
+
 namespace base {
 template <typename T> class WeakPtr {
  public:
@@ -315,16 +317,7 @@ inline std::vector<content::WebContents*> forgotten_hangs;
 inline void ForgetDeferredLinuxHangs(content::WebContents* contents) { forgotten_hangs.push_back(contents); }
 }
 
-namespace linux_window_corners {
-struct Corners {
-  float upper_left = 0;
-  float upper_right = 0;
-  float lower_right = 0;
-  float lower_left = 0;
-  friend constexpr bool operator==(const Corners&, const Corners&) = default;
-};
-inline constexpr Corners kPageCardCorners{12, 12, 12, 12};
-}
+namespace linux_window_corners = ardia::linux_window_corners;
 
 class ShellHostView;
 ARDIA_FRONTEND_WATCH
@@ -379,6 +372,7 @@ class ShellHostView : public views::View {
   void OnDevToolsDockChanged(content::WebContents* inspected, content::WebContents* devtools);
   void HideDevToolsViewport(TabBinding* binding);
   void Restack() { restacks++; }
+  void ClipPaneView(TabBinding* binding, views::WebView* view);
   void ClipViewport(views::WebView* view, const linux_window_corners::Corners& own) {
     clipped.push_back(view);
     clipped_radii.push_back(own);

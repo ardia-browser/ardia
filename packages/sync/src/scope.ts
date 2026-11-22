@@ -26,7 +26,7 @@ const isValue = (o: Record<string, unknown>) => Object.prototype.hasOwnProperty.
 const isOp = (v: unknown) => isObject(v) && typeof v.k === "string" && typeof v.h === "string" && isValue(v);
 const isRecord = (v: unknown) => isObject(v) && typeof v.h === "string" && isOrigin(v.o) && isValue(v);
 
-function parseSyncFile(payload: string): SyncFile | null {
+export function parseSyncFile(payload: string): SyncFile | null {
   let file: unknown;
   try {
     file = JSON.parse(payload);

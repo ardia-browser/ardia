@@ -157,7 +157,7 @@ stays up. That's GPL-3.0 §6(d) for the GPL parts (uBlock Origin today), and it'
 - The engine: ArdiaCore's `Chromium Framework.framework` built in `~/chromium-build` (`scripts/agent/engine-build`;
   `docs/engine-build.md`), and `pod install` in `apps/browser/macos`. A framework built elsewhere goes in through
   `ARDIACORE_FRAMEWORK`. That skips the tree checks and ships no engine archive, unless `ARDIACORE_FRAMEWORK_ENGINE`
-  names the `engine/` git tree it was built from (`engine/engine-key.sh`: one hash of `engine/` and the offline game it packs, checked against HEAD). Then the
+  names the macOS engine key it was built from (`engine/engine-key.sh --platform macos`: one hash of what the macOS engine is built from, `engine/` but for Linux's lines of the series and the offline game it packs, checked against HEAD). Then the
   release packs that engine, and its source when it's Helium, as a build from the tree would.
 
 ## Cutting a release
@@ -292,8 +292,8 @@ The first stable release after that creates `ardia-bin` on the AUR. To create it
 
 The script refuses what `release.sh` refuses: a missing notes file or one whose frontmatter doesn't read, a
 `MARKETING_VERSION` other than `<version>`, and uncommitted changes (here under `apps/browser`, `apps/linux`,
-`plugins`, `packages`, `engine` or `scripts/linux`). It uses the exact Linux engine for HEAD's engine key
-(`engine/engine-key.sh`), published in ardia-browser/ardia. Without one the `linux` job fails and the macOS release
+`plugins`, `packages`, `engine` or `scripts/linux`). It uses the exact Linux engine for HEAD's Linux engine key
+(`engine/engine-key.sh --platform linux`), published in ardia-browser/ardia. Without one the `linux` job fails and the macOS release
 ships alone; build the engine, then run `scripts/linux/release.sh <version>` on a Linux machine at the release commit
 and the `gh release upload` command it prints. A nightly and a stable go the same way.
 See [linux-ci.md](linux-ci.md) › Linux releases.
@@ -379,10 +379,13 @@ steps (the build with no keys, then signing and packaging, then the launch check
 
 The app links a prebuilt Chromium Framework, which a normal CI job can't build. It's built here
 (`docs/engine-build.md`); after building it, `scripts/publish-engine.sh` (`--dry-run` first) packs it as release.sh
-packs one (stripped, unpruned) with its Helium source, uploads both to the prerelease `engine-<engine tree:12>` (never
-latest, so the feed and the download links never move to it) and appends `<tree> engine-<tree:12> <sha256>` to
-`packages/ardiacore/prebuilt-engines.tsv`: commit and push that line before dispatching. A release whose `engine/`
-tree has no engine fails its build at once, saying which script to run.
+packs one (stripped, unpruned) with its Helium source, uploads both to the prerelease `engine-<key:12>` (never
+latest, so the feed and the download links never move to it) and appends `<key> engine-<key:12> <sha256>` to
+`packages/ardiacore/prebuilt-engines.tsv`: commit and push that line before dispatching. The key is the macOS one
+(`engine/engine-key.sh --platform macos`), so a Linux-only engine change needs no new Mac engine. A row may carry a
+fourth field, the key its engine was published under (its archive is `ArdiaCore-<that key:12>.tar.xz`): such rows map
+engines published before the per-platform keys to the new key of the commit they were built from. A release whose
+macOS key has no engine fails its build at once, saying which script to run.
 
 The same script uploads the engine's symbols: `ArdiaCore-<tree:12>-symbols.tar.xz`, the dSYMs the official build writes
 beside the framework in `out/Release_GN_arm64` (`Chromium Framework.dSYM` and the helpers'; function names only, as

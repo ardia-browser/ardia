@@ -17,8 +17,11 @@ publishes: it prints the gh release upload command for the assets.
                      a release must match its source)
   --engine nearest   the nearest earlier published engine: a test build
   --engine DIR       an engine dir (chrome and manifest.json) or a Chromium out
-                     dir, read only: a test build unless its manifest names
-                     this commit'"'"'s engine key (engine/engine-key.sh)
+                     dir, read only: a test build unless it is this commit'"'"'s
+                     engine (scripts/linux/runtime_files.py serves: its manifest
+                     names this commit'"'"'s engine key, engine/engine-key.sh
+                     --platform linux, or the key that key'"'"'s table row was
+                     built under)
   --out DIR          where the assets go (default dist/<version>/linux); an
                      existing DIR must be empty or an earlier output of this script
   --update-key PEM   sign the manifest with this Ed25519 private key (default
@@ -129,7 +132,7 @@ case "$engine_mode" in
   "") die "--engine needs exact, nearest or a directory" ;;
   *) [ -d "$engine_mode" ] || die "--engine $engine_mode is neither exact, nearest nor a directory"; engine=$(cd "$engine_mode" && pwd -P) ;;
 esac
-head_key=$(engine/engine-key.sh) || die "couldn't compute this commit's engine key (engine/engine-key.sh)"
+head_key=$(engine/engine-key.sh --platform linux) || die "couldn't compute this commit's engine key (engine/engine-key.sh --platform linux)"
 manifest_field() {
   python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1])).get(sys.argv[2]) or "")' "$engine/manifest.json" "$1" 2>/dev/null || true
 }
@@ -144,7 +147,7 @@ elif [ -f "$engine/../../chrome/VERSION" ]; then
   chromium_version=$(awk -F= '{ v[$1] = $2 } END { print v["MAJOR"] "." v["MINOR"] "." v["BUILD"] "." v["PATCH"] }' "$engine/../../chrome/VERSION")
 fi
 exact=0
-[ "$engine_key" = "$head_key" ] && exact=1
+python3 -I scripts/linux/runtime_files.py serves --engine "$engine" --key "$head_key" && exact=1
 engine_label=${engine_key:0:12}
 engine_label=${engine_label:-"without a manifest"}
 if [ "$exact" = 1 ]; then
@@ -183,7 +186,7 @@ done
 {
   echo "version $version, $channel, linux-x64"
   echo "commit $(git rev-parse HEAD)${dirty:+ + uncommitted changes}"
-  echo "engine key ${engine_key:-unknown} ($([ "$exact" = 1 ] && echo exact || echo "not this commit's $head_key")), from $engine"
+  echo "engine key ${engine_key:-unknown} ($([ "$exact" = 1 ] && echo "exact, this commit's $head_key" || echo "not this commit's $head_key")), from $engine"
   echo "engine source commit ${engine_commit:-unknown}"
   echo "chromium ${chromium_version:-unknown}"
   echo "package $(cut -d' ' -f1 "$out/$package_name.sha256")  $package_name"

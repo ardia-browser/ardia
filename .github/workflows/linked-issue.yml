@@ -2,7 +2,7 @@ name: Linked issue
 
 on:
   pull_request_target:
-    types: [opened, edited, reopened, synchronize]
+    types: [opened, edited, reopened]
 
 permissions:
   issues: read

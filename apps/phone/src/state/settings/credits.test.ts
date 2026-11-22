@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { creditInputs, CREDITS_FILE, gradleArtifacts, importerBlock, nativeCredits, packageRoot, repositoryUrl } from "../../../test/credits.ts";
+import { creditInputs, CREDITS_FILE, gradleArtifacts, importerBlock, nativeCredits, packageRoot, projectDocument, repositoryUrl } from "../../../test/credits.ts";
 
 test("the licenses page was generated from the current lockfile and the module's Gradle libraries", () => {
   const credits = JSON.parse(readFileSync(CREDITS_FILE, "utf8"));
@@ -31,6 +31,14 @@ test("every Gradle library the module adds needs a recorded license", () => {
   assert.deepEqual(gradleArtifacts(gradle), ["androidx.core:core", "com.google.zxing:core", "com.facebook.react:react-android"]);
   assert.deepEqual(nativeCredits(gradleArtifacts(gradle)).map((credit) => credit.name), ["Android Jetpack (AndroidX)", "ZXing"]);
   assert.throws(() => nativeCredits(["io.unknown:thing"]), /no license recorded/);
+});
+
+test("the app's importer comes from the project document, not pnpm's package manager document before it", () => {
+  const project = "lockfileVersion: '9.0'\n\nimporters:\n\n  .:\n    dependencies:\n      y: 2\n\npackages:\n";
+  const lockfile = `---\nlockfileVersion: '9.0'\n\nimporters:\n\n  .:\n    packageManagerDependencies:\n      pnpm: 12\n\npackages: {}\n\n---\n${project}`;
+  assert.equal(projectDocument(lockfile), project);
+  assert.equal(projectDocument(project), project);
+  assert.equal(importerBlock(projectDocument(lockfile), "."), "  .:\n    dependencies:\n      y: 2\n");
 });
 
 test("the lockfile section for one app ends where the next begins", () => {

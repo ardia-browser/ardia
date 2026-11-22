@@ -14,8 +14,8 @@ const { label, meta, class: className, location, nightly = false, platform = "ma
 
 const pc = {
   "windows-x64": { href: WINDOWS_SETUP.x64, label: "Download for Windows", meta: "Nightly", only: "windows-only x64-only", arch: "x64" },
-  "windows-arm64": { href: WINDOWS_SETUP.arm64, label: "Download for Windows", meta: "Nightly · Arm", only: "windows-only arm-only", arch: "arm64" },
-  linux: { href: LINUX_TARBALL, label: "Download for Linux", meta: LINUX_NIGHTLY ? "Nightly · x86-64" : "x86-64", only: "linux-only", arch: "x64" },
+  "windows-arm64": { href: WINDOWS_SETUP.arm64, label: "Download for Windows", meta: "Nightly, Arm", only: "windows-only arm-only", arch: "arm64" },
+  linux: { href: LINUX_TARBALL, label: "Download for Linux", meta: LINUX_NIGHTLY ? "Nightly, x86-64" : "x86-64", only: "linux-only", arch: "x64" },
 }[platform as Exclude<Platform, "mac">];
 const mac = !pc;
 const href = pc ? pc.href : nightly ? NIGHTLY : DMG;

@@ -139,9 +139,11 @@ Removed, all in git history:
 
 The app's build (`apps/browser/macos`) stages `out/Release_GN_arm64/Chromium Framework.framework` itself
 (`packages/ardiacore/scripts/stage-framework.sh`, under the chromium lock) and embeds it (`embed.sh`). A checkout without a
-Chromium tree downloads the prebuilt engine matching its engine key instead (`engine/engine-key.sh`: one hash of `engine/`,
-`apps/browser/assets/offline-game` and `apps/browser/assets/offline-game-pipeline`, everything the framework is built
-from; `packages/ardiacore/scripts/fetch-engine.sh`,
+Chromium tree downloads the prebuilt engine matching its macOS engine key instead (`engine/engine-key.sh --platform
+macos`: one hash of every file the framework is built from, which is `engine/` but for Linux's lines of
+`engine/patches/series` (read with `series.py`'s parser), their patches and layer, and the translation units a
+`BUILD.gn` lists only under `is_linux`, plus `apps/browser/assets/offline-game` with its pipeline; a Linux-only change
+keeps the key, and Linux has its own; `packages/ardiacore/scripts/fetch-engine.sh`,
 published with each release whose engine changed; `docs/releasing.md`). After an engine change, rebuild incrementally
 with `scripts/agent/engine-build` and the next app build picks it up. Don't call `autoninja` directly for that: the
 script caps siso's parallel jobs by RAM, and siso's defaults ran ~150 mojom generators at once and ran this 32 GB Mac out
@@ -316,7 +318,9 @@ framework.
   Chromium's at the same path (`apply.sh --paths` lists them; `series.py` counts each as the layer's). Only Chromium's
   logo, by Ardia's (`docs/brand/ardia/build.py` writes them): binary files a patch can't carry. Linux builds read
   their window icons from `chromium/linux/` and `default_100_percent/chromium/linux/` instead, so
-  `engine/ardiacore-linux/apply.sh` copies the same logos over Helium's there on every series apply.
+  `engine/ardiacore-linux/apply.sh` copies the same logos over Helium's there on every series apply. What it copies
+  from outside its own `src` is listed once, in `engine/ardiacore-linux/copies.tsv` (`<source><TAB><target>`), which
+  the Linux engine key reads too.
 - **How it links.** One `source_set("ardia")` in `chrome/browser/ardia/BUILD.gn`: add your
   `ac_<domain>.cc` to its sources (sorted) and its deps. A header only when another file calls into the domain
   (`ac_tab_restore.h`, `ac_scripts_policy.h`, `ac_external_apps.h`…); exports need none. `//ardia/core` depends on

@@ -248,6 +248,34 @@ test("one renderer runs sync, the others mirror it and forward their actions, an
   settings.authority.stop();
 });
 
+test("a Settings window picks the sync folder itself and hands turning on, choosing and moving it to the sync window", async (t) => {
+  const host = fakeHost((method) => (method === "ArdiaSync.chooseFolder" ? "/home/tux/Nextcloud" : null));
+  assert.equal(await syncModuleMethod(host, "ArdiaSync", "chooseFolder")("/home/tux"), "/home/tux/Nextcloud");
+  assert.equal(await syncModuleMethod(host, "ArdiaSync", "chooseFolder")(undefined), "/home/tux/Nextcloud");
+  assert.deepEqual(host.calls, [
+    { method: "ArdiaSync.chooseFolder", args: { args: ["/home/tux"] } },
+    { method: "ArdiaSync.chooseFolder", args: { args: [null] } },
+  ]);
+
+  const channelName = `sync-${Math.random()}`;
+  const lease = nativeLease();
+  const engines = [];
+  const browser = renderer("browser", { candidate: true, lease, engines, channelName });
+  const settings = renderer("settings", { candidate: false, lease, engines, channelName });
+  t.after(() => { browser.authority.stop(); settings.authority.stop(); });
+  await tick(80);
+  assert.equal(settings.authority.role(), "client");
+  await settings.authority.call("useFolder", ["/home/tux/Nextcloud/Ardia Sync"]);
+  await settings.authority.call("turnOnSync", ["/home/tux/Nextcloud/Ardia Sync", "picked"]);
+  await settings.authority.call("moveFolder", ["/media/usb/Ardia Sync"]);
+  assert.deepEqual(browser.calls, [
+    { method: "useFolder", args: ["/home/tux/Nextcloud/Ardia Sync"] },
+    { method: "turnOnSync", args: ["/home/tux/Nextcloud/Ardia Sync", "picked"] },
+    { method: "moveFolder", args: ["/media/usb/Ardia Sync"] },
+  ]);
+  assert.deepEqual(settings.calls, [], "the Settings window never runs sync itself");
+});
+
 test("refreshing sync documents drops journal parts stranded after a gap", async () => {
   const disk = new Set(["sync.json", "sync-state.nns", "sync-journal-1.nns", "sync-journal-2.nns", "sync-journal-4.nns", "sync-journal-7.nns"]);
   const result = await refreshSyncDocuments({ refresh: async (name) => disk.has(name), remove: async (name) => void disk.delete(name), maxParts: 12, batch: 5 });

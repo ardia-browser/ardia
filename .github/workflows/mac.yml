@@ -23,6 +23,7 @@ on:
       - "packages/*/expo-module.config.json"
       - "engine/ardiacore/src/ardia/core/public/**"
       - "engine/engine-key.sh"
+      - "engine/engine-key.py"
       - "scripts/lib/paths.sh"
       - "patches/**"
       - "pnpm-lock.yaml"
@@ -85,7 +86,7 @@ jobs:
           xcodebuild -version
           xcrun --sdk macosx --show-sdk-version
       - id: engine-key
-        run: echo "key=$(engine/engine-key.sh)" >> "$GITHUB_OUTPUT"
+        run: echo "key=$(engine/engine-key.sh --platform macos)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: apps/browser/build-ardiacore/prebuilt
@@ -108,10 +109,10 @@ jobs:
           if [ "$short" = "${ENGINE_KEY:0:12}" ]; then
             echo "### Mac engine $short (exact)" >> "$GITHUB_STEP_SUMMARY"
           else
-            read -r -a key_paths <<<"$(engine/engine-key.sh --paths | xargs)"
+            read -r -a key_paths <<<"$(engine/engine-key.sh --platform macos --paths | xargs)"
             base=""
             while read -r commit; do
-              candidate=$(engine/engine-key.sh "$commit" 2>/dev/null || true)
+              candidate=$(engine/engine-key.sh --platform macos "$commit" 2>/dev/null || true)
               if [ "${candidate:0:12}" = "$short" ]; then base=$commit; break; fi
             done < <(git rev-list HEAD -- "${key_paths[@]}")
             if [ -z "$base" ] || [ -n "$(git diff --no-renames --name-only "$base" HEAD -- "$public")" ]; then
@@ -123,7 +124,7 @@ jobs:
             echo "### Mac engine $short (older than this commit's ${ENGINE_KEY:0:12}; strict: $strict)" >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "strict=$strict" >> "$GITHUB_OUTPUT"
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: 24

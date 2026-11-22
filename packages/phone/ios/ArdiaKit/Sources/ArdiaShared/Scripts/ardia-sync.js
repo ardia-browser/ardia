@@ -174,6 +174,7 @@ function assignPositions(existing                        )           {
 
 });
 __define("packages/sync/src/scope.ts", function (exports, __require) {
+  __export(exports, "parseSyncFile", () => parseSyncFile);
   __export(exports, "ingestSnapshot", () => ingestSnapshot);
   __export(exports, "flush", () => flush);
   __export(exports, "restoreJournal", () => restoreJournal);

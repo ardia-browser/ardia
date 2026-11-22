@@ -23,6 +23,7 @@ export const REMOTE_METHODS = [
   "removeSyncedDevice",
   "adoptProfileTheme",
   "useFolder",
+  "moveFolder",
   "sendTargets",
   "sendTab",
 ] as const;

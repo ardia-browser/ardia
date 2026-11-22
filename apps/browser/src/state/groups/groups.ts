@@ -15,6 +15,8 @@ import { groupingOnto } from "../pins/placing";
 
 export { ancestorIds, canNest, commonGroup, depthOf, depthsIn, descendantIds, groupPath, innermostGroupOf, nestGroups, reparent, rootOf, rootsIn, withParent } from "./groupNesting";
 
+export type GroupTabsOptions = { pinned?: boolean; name?: string };
+
 export type GroupsSlice = {
   groups: Record<string, TabGroup>;
 
@@ -28,7 +30,7 @@ export type GroupsSlice = {
   deleteGroup(groupId: string): void;
   closedGroups: ClosedGroup[];
   deletedGroups: ClosedGroup[];
-  groupTabs(ids: string[], options?: { pinned?: boolean; name?: string }): string;
+  groupTabs(ids: string[], options?: GroupTabsOptions): string;
   groupOnto(ids: string[], targetId: string): string;
   moveGroup(groupId: string, placement: GroupPlacement): void;
   duplicateGroup(groupId: string): string;
@@ -266,7 +268,7 @@ export const createGroupsSlice: StateCreator<BrowserState, [], [], GroupsSlice> 
     set(closingGroup(get(), groupId, true));
   },
 
-  groupTabs(ids, { pinned = true, name } = {}) {
+  groupTabs(ids, { pinned = true, name }: GroupTabsOptions = {}) {
     const [next, id] = withRowsGrouped(get(), ids, { pinned, name });
     if (id) set({ ...next, selection: { ...next.selection, [next.groups[id]!.windowId]: [] } });
     return id;

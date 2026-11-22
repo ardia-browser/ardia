@@ -2,15 +2,54 @@ name: Linux
 
 on:
   pull_request:
-    paths:
+    paths: &linux
       - "apps/linux/**"
-      - "apps/browser/**"
-      - "scripts/release/official-plugins.py"
-      - "packages/**"
-      - "engine/**"
+      - "apps/browser/src/**"
+      - "apps/browser/assets/**"
+      - "apps/browser/package.json"
+      - "apps/browser/tsconfig.json"
+      - "apps/browser/official-plugins.json"
+      - "apps/browser/official-plugins.d.json.ts"
+      - "apps/browser/macos/Ardia.xcodeproj/project.pbxproj"
+      - "apps/browser/windows/Ardia/IntroMusic.wav"
+      - "apps/site/src/scripts/meadow/**"
+      - "apps/cli/install.sh"
+      - "packages/core/src/**"
+      - "packages/ardiacore/src/**"
+      - "packages/import/src/**"
+      - "packages/shaders/src/**"
+      - "packages/shell/src/**"
+      - "packages/sync/src/**"
+      - "packages/*/package.json"
+      - "packages/*/tsconfig.json"
+      - "packages/ardiacore/scripts/**"
+      - "packages/ardiacore/ios/ArdiaLittleFitMath.h"
+      - "packages/ardiacore/ios/ArdiaWindowController.mm"
+      - "packages/ardiacore/ios/page_script.js"
+      - "packages/shell/ios/BangListFetch.swift"
+      - "packages/shell/ios/CrashReports.swift"
+      - "packages/shell/ios/ReportFiles.swift"
+      - "packages/shell/ios/ReportUploader.swift"
+      - "packages/shell/ios/ShellModule.swift"
+      - "packages/shell/ios/SystemModule.swift"
+      - "packages/shell/ios/WindowManager.swift"
+      - "packages/sync/ios/Core/Wordlist.swift"
+      - "packages/sync/tests/fixtures/**"
+      - "packages/ardiacore/prebuilt-engines-linux.tsv"
+      - "packages/ardiacore/tests/ubo-scriptlets.test.mjs"
+      - "packages/shaders/ios/Meadow/**"
+      - "packages/shaders/windows/**"
+      - "engine/ardiacore-linux/**"
+      - "engine/ardiacore/src/**"
+      - "engine/chromium/**"
+      - "engine/patches/**"
+      - "engine/engine-key.*"
       - "scripts/linux/**"
       - "scripts/lib/**"
       - "scripts/agent/locked"
+      - "scripts/release/official-plugins.py"
+      - ".claude/skills/release/scripts/publish.sh"
+      - "docs/linux-port.md"
       - "infra/feedback/lib/**"
       - "patches/**"
       - "package.json"
@@ -23,25 +62,7 @@ on:
       - ".github/actions/linux-setup/**"
   push:
     branches: [main]
-    paths:
-      - "apps/linux/**"
-      - "apps/browser/**"
-      - "scripts/release/official-plugins.py"
-      - "packages/**"
-      - "engine/**"
-      - "scripts/linux/**"
-      - "scripts/lib/**"
-      - "scripts/agent/locked"
-      - "infra/feedback/lib/**"
-      - "patches/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "turbo.json"
-      - "tsconfig.base.json"
-      - ".nvmrc"
-      - ".github/workflows/linux.yml"
-      - ".github/actions/linux-setup/**"
+    paths: *linux
   workflow_dispatch:
     inputs:
       engine:
@@ -126,7 +147,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
       - id: engine-key
-        run: echo "key=$(engine/engine-key.sh)" >> "$GITHUB_OUTPUT"
+        run: echo "key=$(engine/engine-key.sh --platform linux)" >> "$GITHUB_OUTPUT"
       - name: Which packages
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
@@ -180,7 +201,7 @@ jobs:
             exit 1
           fi
           selected=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["engine_key"])' "$engine/manifest.json")
-          if [ "$selected" = "$ENGINE_KEY" ]; then
+          if python3 -I scripts/linux/runtime_files.py serves --engine "$engine" --key "$ENGINE_KEY"; then
             label="${GITHUB_SHA:0:12}"
             echo "ENGINE_EXACT=1" >> "$GITHUB_ENV"
             echo "### Linux engine ${ENGINE_KEY:0:12} (exact)" >> "$GITHUB_STEP_SUMMARY"

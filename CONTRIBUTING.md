@@ -48,7 +48,7 @@ do, pick from there, and update its row in the same PR.
 
 ## Getting it running
 
-You need an Apple Silicon Mac on macOS 14 or later, Xcode, CocoaPods, Node and pnpm 11.
+You need an Apple Silicon Mac on macOS 14 or later, Xcode, CocoaPods, Node and pnpm 12.
 
 ```sh
 pnpm install

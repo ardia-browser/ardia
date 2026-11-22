@@ -1,12 +1,15 @@
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import { Platform, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedReaction, useAnimatedStyle, useDerivedValue } from "react-native-reanimated";
 import { DECK, DECK_REDESIGN } from "../../lib/deckGeometry";
 import { pullBarGhosts, pullBarGlyphs, pullBarShift, pullClearsBar, pullPagePose, pullRise } from "../../lib/deckPull";
-import { deckPull, PULL_STAGE, pullFades, setDeckOwnsBar } from "../../state/browse/deckPull";
+import { deckPull, hurryDeckPull, PULL_STAGE, pullFades, setDeckOwnsBar } from "../../state/browse/deckPull";
+import { deckPullSettled, noteDeckTapWhileLanding } from "../../state/browse/store";
 import { tabsInk, usesGlass, useTheme } from "../ui";
 
 const PULL_OFFSTAGE = 100_000;
+const OTHER_PAGE_POSE = { dx: 0, dy: 0, scale: 1, corner: 0, shadow: 0, seen: 0 };
 const SHADOW_FULL_AT = 0.3;
 const FADE_RISE = 100_000;
 const PRIMED = 0.99;
@@ -35,7 +38,9 @@ export function PagePull({ tabId, barTop, children }: { tabId: string; barTop: n
   const pose = useDerivedValue(() => {
     const target = deckPull.target.value;
     const stage = deckPull.stage.value;
-    if (stage === PULL_STAGE.idle || !target || deckPull.id.value !== tabId) return null;
+    if (deckPull.awayId.value === tabId) return OTHER_PAGE_POSE;
+    if (stage !== PULL_STAGE.idle && deckPull.id.value !== tabId) return OTHER_PAGE_POSE;
+    if (stage === PULL_STAGE.idle || !target) return null;
     if (pullFades(stage)) return { dx: 0, dy: 0, scale: 1, corner: 0, shadow: 0, seen: 1 - deckPull.fade.value };
     const shrink = deckPull.shrink.value;
     const page = pullPagePose(target, shrink);
@@ -61,13 +66,29 @@ export function PagePull({ tabId, barTop, children }: { tabId: string; barTop: n
   );
 }
 
+const LANDING_TAP_MS = 500;
+
 export function PullBlocker() {
+  const landingTap = useMemo(
+    () =>
+      Gesture.Tap()
+        .maxDuration(LANDING_TAP_MS)
+        .withTestId("landingTap")
+        .onEnd((event, success) => {
+          if (success && hurryDeckPull(event.absoluteX, event.absoluteY, deckPullSettled)) runOnJS(noteDeckTapWhileLanding)(Date.now());
+        }),
+    [],
+  );
   const style = useAnimatedStyle(() => {
     const stage = deckPull.stage.value;
     const open = stage === PULL_STAGE.idle || (stage === PULL_STAGE.growing && deckPull.pageLive.value);
     return { transform: [{ translateX: open ? PULL_OFFSTAGE : 0 }] };
   });
-  return <Animated.View testID="pagePullBlocker" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[StyleSheet.absoluteFill, style]} />;
+  return (
+    <GestureDetector gesture={landingTap}>
+      <Animated.View testID="pagePullBlocker" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[StyleSheet.absoluteFill, style]} />
+    </GestureDetector>
+  );
 }
 
 type GlyphsProps = { style?: StyleProp<ViewStyle>; children: ReactNode };

@@ -32,13 +32,18 @@ export function importerBlock(lockfile: string, importer: string): string {
   return end < 0 ? rest : rest.slice(0, end + 1);
 }
 
+export function projectDocument(lockfile: string): string {
+  const start = lockfile.lastIndexOf("\n---\n");
+  return start < 0 ? lockfile : lockfile.slice(start + 5);
+}
+
 export function gradleArtifacts(gradle: string): string[] {
   return [...gradle.matchAll(/^\s*(?:implementation|api)\s+["']([^"':]+:[^"':]+)(?::[^"']*)?["']/gm)].map((match) => match[1]!);
 }
 
 export function creditInputs(): string {
   const lockfile = readFileSync(LOCKFILE, "utf8");
-  const inputs = [importerBlock(lockfile, "."), gradleArtifacts(readFileSync(MODULE_GRADLE, "utf8")).join("\n")];
+  const inputs = [importerBlock(projectDocument(lockfile), "."), gradleArtifacts(readFileSync(MODULE_GRADLE, "utf8")).join("\n")];
   return createHash("sha256").update(inputs.join("\n---\n")).digest("hex");
 }
 

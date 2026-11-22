@@ -44,7 +44,7 @@ variables) is in `docs/conventions.md`, enforced by `apps/browser/src/convention
 - react-native-macos quirks: RN shadow props crash → use `Surface` for shadows; RCTView resets
   layer props → draw in sublayers; native views must size subviews in `setFrameSize`.
 - **Patched dependencies** live in `patches/` and are listed under `patchedDependencies` in
-  `pnpm-workspace.yaml` (pnpm 11 reads them there); every `pnpm install` applies them, and the Podfile
+  `pnpm-workspace.yaml` (pnpm reads them there); every `pnpm install` applies them, and the Podfile
   (`macos`) compiles React from `node_modules`, so a rebuild picks a change up (`pod install`
   only if a patch adds or removes files). To change one: `pnpm patch <pkg>@<version> --edit-dir <scratch dir>`,
   edit there, then `scripts/agent/locked pod -- pnpm patch-commit <scratch dir>`, and read the new `.patch`:
@@ -227,7 +227,7 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
 - Tests, test-instance variables and what background mode changes: `docs/testing.md`. Benchmarks and the perf gate:
   `docs/perf/README.md`.
 - The Bash tool runs zsh: quote globs (`--include='*.mm'`, `'/tmp/ac-*.holder'`) or use `git grep -n PAT -- '*.mm'`.
-- **Verify before reporting done.** At minimum: `pnpm -w typecheck` (or `npx tsc -p <pkg>`)
+- **Verify before reporting done.** At minimum: `pnpm -w typecheck` (or `pnpm exec tsrs -p <pkg>`)
   passes for what you touched, the app builds, and you exercised the feature in a running
   instance.
   - Drive the app through the dev harness: `scripts/agent/ac eval <data dir> '<body>'` (a function body that

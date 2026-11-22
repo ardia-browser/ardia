@@ -38,6 +38,8 @@ class SnapshotOptionsRecord : Record {
     @Field val quality: Int? = null
 
     @Field val coveredInsets: List<Double>? = null
+
+    @Field val windowCopy: Boolean? = null
 }
 
 class RequestAnswerRecord : Record {
@@ -228,7 +230,7 @@ class PageViewModule : Module() {
         AsyncFunction("snapshot") Coroutine { pageId: String, options: SnapshotOptionsRecord ->
             withContext(Dispatchers.Main) {
                 val covered = options.coveredInsets?.takeIf { it.size == 2 }?.let { it[0] to it[1] }
-                PhonePages.snapshot(pageId, options.maxWidth ?: com.ardia.browser.Page.SNAPSHOT_WIDTH, options.quality ?: SNAPSHOT_QUALITY, covered)
+                PhonePages.snapshot(pageId, options.maxWidth ?: com.ardia.browser.Page.SNAPSHOT_WIDTH, options.quality ?: SNAPSHOT_QUALITY, covered, options.windowCopy ?: true)
             }
         }
 

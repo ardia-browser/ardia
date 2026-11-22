@@ -88,7 +88,7 @@ test("a scroll that settles where it already was takes no picture", async () => 
   expect(snapshot).not.toHaveBeenCalled();
 });
 
-test("a loaded page's scroll takes no extra picture: leaving it already takes one", async () => {
+test("a loaded page's scroll takes one quiet-page picture when it rests, kept current for the tab switcher and not counted as a picture of a loading page", async () => {
   const id = front();
   pageIs(id, false);
   await scrollWatchTicks(2);
@@ -96,8 +96,12 @@ test("a loaded page's scroll takes no extra picture: leaving it already takes on
   counted.mockClear();
   scrollY = 2400;
   await scrollWatchTicks(2);
-  expect(snapshot).not.toHaveBeenCalled();
+  expect(snapshot).toHaveBeenCalledTimes(1);
+  expect(snapshot.mock.calls[0]![0]).toBe(id);
   expect(counted).not.toHaveBeenCalledWith("page_pictures_scrolled");
+  snapshot.mockClear();
+  await scrollWatchTicks(3);
+  expect(snapshot).not.toHaveBeenCalled();
 });
 
 test("a page that finishes loading after its scroll settled keeps the picture its load ends with", async () => {

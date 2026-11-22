@@ -276,7 +276,7 @@ appeared on 2026-10-03.
 ## Checking a render
 
 ```bash
-pnpm exec tsc --noEmit
+pnpm -C apps/videos typecheck
 pnpm -C apps/videos render launch-16x9
 ffmpeg -i out/launch-16x9.mp4 -af ebur128=peak=true -f null - 2>&1 | tail -12   # -11 LUFS, true peak under -1 dBTP
 ```

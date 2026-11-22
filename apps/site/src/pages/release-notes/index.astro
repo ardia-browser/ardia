@@ -25,9 +25,9 @@ const releases = (await loadReleases()).map((r) => {
 const stable = releases.filter((r) => !r.nightly);
 const nightlyCount = releases.length - stable.length;
 const latest = stable[0]!;
-const longDate = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
-const dayMonth = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
-const monthYear = new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
+const longDate = new Intl.DateTimeFormat("en-US", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+const dayMonth = new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short", timeZone: "UTC" });
+const monthYear = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 const months = releases.reduce<{ label: string; releases: typeof releases }[]>((acc, r) => {
   const label = monthYear.format(r.date);
   const group = acc.at(-1);
@@ -108,20 +108,20 @@ const jsonLd = [
     }
   </script>
   <Header home={`${base}/`} current="notes" />
-  <main class="almanac">
+  <main id="main" class="almanac">
     <section class="masthead" aria-labelledby="notes-title">
       <div class="wrap mast-grid">
         <div class="mast-copy">
           <p class="label kicker">Release notes</p>
           <h1 class="poster title" id="notes-title">
-            <span class="visually-hidden">Ardia release notes: </span>Fresh<br />paint.
+            <span class="visually-hidden">Ardia release notes: </span>Fresh <br />paint.
           </h1>
           <p class="lede">
             Every update, newest on top. {stable.length} so far, and the app brings you here after each one.
           </p>
         </div>
         <a class="newest" href={`#${latest.version}`}>
-          <span class="label newest-tag">Latest · {dayMonth.format(latest.date)}</span>
+          <span class="label newest-tag">Latest, {dayMonth.format(latest.date)}</span>
           <span class="poster newest-version">{latest.version}</span>
           <span class="newest-headline">{latest.headline}</span>
         </a>
@@ -142,13 +142,13 @@ const jsonLd = [
       <span class="grass" aria-hidden="true"></span>
     </section>
 
-    <div class="log paint">
+    <div class="log paint" data-paint="daylong">
       <div class="wrap layout">
         <nav class="index" aria-label="Releases">
           <div class="index-head">
             <p class="label">
               <span class="count-stable">{stable.length} releases</span>
-              <span class="count-all">{stable.length} releases · {nightlyCount} {nightlyCount === 1 ? "nightly" : "nightlies"}</span>
+              <span class="count-all">{stable.length} releases, {nightlyCount} {nightlyCount === 1 ? "nightly" : "nightlies"}</span>
             </p>
             {
               nightlyCount > 0 && (
@@ -188,7 +188,7 @@ const jsonLd = [
             nightlyCount > 0 && (
               <p class="nightly-note">
                 <span class="label nightly-tag">Nightly</span>
-                Wet paint: every fix the day it’s made, smudges and all.{" "}
+                Daily fixes, rough edges included.{" "}
                 <a
                   class="link"
                   href={NIGHTLY}
@@ -196,8 +196,7 @@ const jsonLd = [
                   data-track-version="nightly"
                   data-track-channel="nightly"
                   data-track-location="release_notes">Get the nightly</a
-                >. Back to stable any time in Settings › General. That never downgrades you: you stay put until the next
-                stable catches up.
+                >, or switch back to stable in Settings › General (you stay on your build until the next stable catches up).
               </p>
             )
           }
@@ -245,11 +244,11 @@ const jsonLd = [
       </div>
     </div>
 
-    <section class="end paint edge" aria-labelledby="end-title">
+    <section class="end paint edge" data-paint="sundown" aria-labelledby="end-title">
       <div class="wrap end-inner">
         <p class="label kicker">0.1.0 was the first</p>
         <h2 class="poster end-title" id="end-title">That’s all of them.</h2>
-        <p class="end-line">Nothing before 0.1.0 was ever written down. Reading this in another browser? That can be arranged.</p>
+        <p class="end-line">Download Ardia for Mac and try it yourself.</p>
         <DownloadButton location="release_notes" class="not-phone sun-btn" />
         <SendToMac location="release_notes" main />
       </div>
@@ -285,7 +284,6 @@ const jsonLd = [
   }
   .title {
     font-size: var(--t-mega);
-    line-height: 0.82;
     margin-left: -0.04em;
   }
   .lede {
@@ -329,7 +327,6 @@ const jsonLd = [
   }
   .newest-version {
     font-size: clamp(3rem, 2rem + 3vw, 5.4rem);
-    line-height: 0.84;
   }
   .newest-headline {
     font-size: clamp(1.15rem, 1rem + 0.5vw, 1.45rem);
@@ -370,8 +367,6 @@ const jsonLd = [
   }
 
   .log {
-    --bg: var(--noon);
-    --wash: linear-gradient(180deg, #e9ead8 0%, var(--noon) 22%, var(--golden) 70%, var(--golden-late) 100%);
     padding: clamp(48px, 7vw, 104px) 0 var(--section);
   }
   .layout {
@@ -475,9 +470,6 @@ const jsonLd = [
   .meta > .nightly-tag {
     margin-right: 10px;
   }
-  .meta > .nightly-tag + *::before {
-    content: none;
-  }
   .nightly-note {
     max-width: 40em;
     margin-bottom: clamp(32px, 4vw, 48px);
@@ -550,11 +542,10 @@ const jsonLd = [
     scale: 1;
   }
   .index-version {
-    font-family: var(--poster);
-    font-weight: 800;
-    font-stretch: 75%;
-    font-size: 1.08rem;
-    letter-spacing: 0.01em;
+    font-family: var(--sans);
+    font-weight: 720;
+    font-size: 1.04rem;
+    letter-spacing: -0.02em;
     line-height: 1.2;
   }
   .index-date {
@@ -585,16 +576,8 @@ const jsonLd = [
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 4px 0;
+    gap: 4px 20px;
     color: var(--ink-2);
-  }
-  .meta > * + *::before {
-    content: "·";
-    margin: 0 10px;
-    color: var(--ink-3);
-  }
-  .meta > .here + *::before {
-    content: none;
   }
   .here {
     display: none;
@@ -602,8 +585,7 @@ const jsonLd = [
   .headline {
     margin-top: 12px;
     font-weight: 560;
-    font-stretch: 106%;
-    letter-spacing: -0.028em;
+    letter-spacing: -0.026em;
   }
   .headline a {
     display: grid;
@@ -615,8 +597,8 @@ const jsonLd = [
     position: relative;
     justify-self: start;
     isolation: isolate;
-    font-size: clamp(2.6rem, 1.8rem + 2.6vw, 4.4rem);
-    line-height: 0.86;
+    font-size: clamp(2.2rem, 1.6rem + 2vw, 3.6rem);
+    line-height: 0.96;
     letter-spacing: -0.005em;
   }
   .version::before {
@@ -694,7 +676,7 @@ const jsonLd = [
   }
   @media (prefers-reduced-motion: no-preference) {
     .entry:target .version::before {
-      animation: swipe 800ms var(--ease-out) 200ms both;
+      animation: swipe 420ms var(--ease-out) 80ms both;
     }
   }
   @keyframes swipe {
@@ -747,12 +729,6 @@ const jsonLd = [
   }
 
   .end {
-    --bg: var(--dusk);
-    --bg-top: #e3a585;
-    --wash: linear-gradient(180deg, #e3a585 0%, var(--dusk) 50%, var(--dusk-late) 100%);
-    --ink-2: #3f3437;
-    --ink-3: #5a4a4e;
-    --dab: var(--sun);
     padding: clamp(64px, 8vw, 120px) 0 clamp(96px, 10vw, 160px);
   }
   .end-inner {

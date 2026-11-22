@@ -7,7 +7,7 @@
   "types": "src/index.ts",
   "type": "module",
   "scripts": {
-    "typecheck": "tsc -p .",
+    "typecheck": "tsrs -p .",
     "test": "swift test --scratch-path \"${TMPDIR:-/tmp}/ardia-import-swiftpm\"",
     "fixtures": "python3 fixtures/generate.py"
   },

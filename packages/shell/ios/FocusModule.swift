@@ -46,6 +46,7 @@ public class FocusModule: Module {
       ArdiaEvents.consentEpoch = epoch
       FocusHandoff.shared.setConsentEpoch(epoch)
       PressRelease.forgetPresses()
+      DispatchQueue.main.async { NotificationHub.shared.reportSettingsOnce() }
     }
     AsyncFunction("pressRepeated") { () -> [String: Any]? in PressRelease.pressRepeated }.runOnQueue(.main)
     Function("takeEditKeyAcks") { () -> [String: Int] in FocusHandoff.shared.takeEditKeyAcks() }

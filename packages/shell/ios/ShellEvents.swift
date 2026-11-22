@@ -29,6 +29,7 @@ enum ShellEvents {
         switch channel {
         case .openURLs: OpenURLInbox.flush()
         case .notificationResponse: NotificationHub.shared.flushPending()
+        case .app: NotificationHub.shared.reportSettingsOnce()
         default: break
         }
       }

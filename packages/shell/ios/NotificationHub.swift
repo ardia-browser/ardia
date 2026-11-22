@@ -14,6 +14,7 @@ final class NotificationHub: NSObject, UNUserNotificationCenterDelegate {
   private let categoryLedger = CategoryLedger()
   private let engineDelegateLock = NSLock()
   private weak var engineDelegateStore: UNUserNotificationCenterDelegate?
+  private var settingsReported = false
 
   private var center: UNUserNotificationCenter { .current() }
 
@@ -102,6 +103,50 @@ final class NotificationHub: NSObject, UNUserNotificationCenterDelegate {
     }
   }
 
+  func reportSettingsOnce() {
+    guard !settingsReported else { return }
+    let stamp = ArdiaConsentStamp.begin()
+    guard !stamp.epoch.isEmpty else { return }
+    center.getNotificationSettings { settings in
+      let authorization = Self.name(of: settings.authorizationStatus)
+      let alert = Self.name(of: settings.alertSetting)
+      let style = Self.name(of: settings.alertStyle)
+      DispatchQueue.main.async { [self] in
+        guard !settingsReported else { return }
+        settingsReported = ShellEvents.send(.app, stamp.onto(["type": "notificationSettings", "authorization": authorization, "alertSetting": alert, "alertStyle": style]))
+      }
+    }
+  }
+
+  private static func name(of status: UNAuthorizationStatus) -> String {
+    switch status {
+    case .notDetermined: return "notDetermined"
+    case .denied: return "denied"
+    case .authorized: return "authorized"
+    case .provisional: return "provisional"
+    case .ephemeral: return "ephemeral"
+    @unknown default: return "unknown"
+    }
+  }
+
+  private static func name(of setting: UNNotificationSetting) -> String {
+    switch setting {
+    case .notSupported: return "notSupported"
+    case .disabled: return "disabled"
+    case .enabled: return "enabled"
+    @unknown default: return "unknown"
+    }
+  }
+
+  private static func name(of style: UNAlertStyle) -> String {
+    switch style {
+    case .none: return "none"
+    case .banner: return "banner"
+    case .alert: return "alert"
+    @unknown default: return "unknown"
+    }
+  }
+
   func post(_ options: NotificationOptions, completion: @escaping (NotificationPostResult) -> Void) {
     let id = options.id ?? UUID().uuidString
     let content = UNMutableNotificationContent()
@@ -164,8 +209,14 @@ final class NotificationHub: NSObject, UNUserNotificationCenterDelegate {
   }
 
   func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-    if Self.postedByEngine(notification), let engine = engineDelegate,
-       engine.responds(to: #selector(UNUserNotificationCenterDelegate.userNotificationCenter(_:willPresent:withCompletionHandler:))) {
+    let postedByEngine = Self.postedByEngine(notification)
+    let engine = postedByEngine ? engineDelegate : nil
+    let handedToEngine = engine?.responds(to: #selector(UNUserNotificationCenterDelegate.userNotificationCenter(_:willPresent:withCompletionHandler:))) == true
+    if postedByEngine {
+      let stamp = ArdiaConsentStamp.begin()
+      DispatchQueue.main.async { _ = ShellEvents.send(.app, stamp.onto(["type": "engineNotificationPresented", "handedToEngine": handedToEngine])) }
+    }
+    if handedToEngine, let engine {
       return engine.userNotificationCenter?(center, willPresent: notification, withCompletionHandler: completionHandler) ?? completionHandler([.banner, .list, .sound])
     }
     completionHandler([.banner, .list, .sound])

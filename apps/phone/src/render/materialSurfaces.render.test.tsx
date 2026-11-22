@@ -174,13 +174,15 @@ onAndroid("in dark, drawn menus sit on surfaceContainerHighest, a tone above the
   expect(materialMenuFill(LIGHT, false)).toBe(LIGHT.surfaceContainer);
 });
 
-onAndroid("a wider Material submenu stays inside the right screen edge", () => {
+(Platform.OS === "android" ? test.each([360, 250]) : test.skip.each([360, 250]))("a wider Material submenu stays inside a %i dp screen", (screenWidth) => {
+  const insets = jest.spyOn(safeArea, "useSafeAreaInsets").mockReturnValue({ top: 0, bottom: 0, left: 0, right: 0 });
   const items = [{ label: "More", children: [{ label: "A much longer submenu action label", onPress: () => undefined }] }];
-  const root = material(<Menu items={items} placer={pointPlacer({ x: 340, y: 120 }, { width: 360, height: 800 }, { top: 0, bottom: 0, left: 0, right: 0 }, 112)} onDismiss={() => undefined} />);
+  const root = material(<Menu items={items} placer={pointPlacer({ x: screenWidth - 20, y: 120 }, { width: screenWidth, height: 800 }, { top: 0, bottom: 0, left: 0, right: 0 }, 112)} onDismiss={() => undefined} />);
   const rows = root.root.findAll((node) => node.props.accessibilityLabel === "More" && typeof node.props.onPress === "function");
   act(() => rows[0]!.props.onPress());
   const panel = flat(host(root, "materialMenu"));
-  expect(panel.width).toBe(280);
-  expect(Number(panel.left) + Number(panel.width)).toBeLessThanOrEqual(352);
+  expect(panel.width).toBe(Math.min(280, screenWidth - 16));
+  expect(Number(panel.left) + Number(panel.width)).toBeLessThanOrEqual(screenWidth - 8);
   unmount(root);
+  insets.mockRestore();
 });

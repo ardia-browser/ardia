@@ -80,7 +80,9 @@ function MaterialMenu({ items, place, placer, onDismiss, origin = "top", shown =
   const leaving = usePortalLeaving();
   const left = usePortalLeft();
   const rows = page ? page.children : items;
-  const width = materialMenuWidth(rows);
+  const window = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const width = Math.min(materialMenuWidth(rows), Math.max(1, window.width - insets.left - insets.right - MENU_MARGIN * 2));
   const [content, setContent] = useState<number | null>(null);
   const revealed = shown && (placer === undefined || content !== null);
   const side = useRef<boolean | undefined>(undefined);
@@ -88,7 +90,6 @@ function MaterialMenu({ items, place, placer, onDismiss, origin = "top", shown =
   if (revealed && placer && side.current === undefined) side.current = spot.origin.includes("top");
   const firstRow = useRef<ViewInstance>(null);
   const chosen = useRef(false);
-  const window = useWindowDimensions();
   const openedWidth = useRef(window.width);
   useEffect(() => {
     if (openedWidth.current !== window.width) onDismiss();
@@ -138,7 +139,7 @@ function MaterialMenu({ items, place, placer, onDismiss, origin = "top", shown =
         testID="materialMenu"
         accessibilityRole="menu"
         accessibilityViewIsModal
-        style={[materialStyles.menu, { transformOrigin: spot.origin }, spot.place, { width }, spot.maxHeight === undefined ? null : { maxHeight: spot.maxHeight }, revealed ? null : styles.unseen, enter]}
+        style={[materialStyles.menu, { transformOrigin: spot.origin }, spot.place, { width: Math.min(width, typeof spot.place.width === "number" ? spot.place.width : width) }, spot.maxHeight === undefined ? null : { maxHeight: spot.maxHeight }, revealed ? null : styles.unseen, enter]}
       >
         <ScrollView testID="drawnMenuRows" keyboardShouldPersistTaps="handled" style={styles.scroll} contentContainerStyle={materialStyles.groups} bounces={false} overScrollMode="never" onContentSizeChange={(_width, height) => setContent(height)}>
           {groups.map((group, groupIndex) => (
@@ -419,6 +420,7 @@ type Insets = { top: number; bottom: number; left: number; right: number };
 export function pointPlacer(at: Point, screen: { width: number; height: number }, insets: Insets, width: number, limits?: MenuLimits): MenuPlacer {
   const host = { x: 0, y: 0, width: screen.width, height: screen.height };
   return (height, keepBelow, pageWidth = width) => {
+    pageWidth = Math.min(pageWidth, Math.max(1, screen.width - insets.left - insets.right - MENU_MARGIN * 2));
     const spot = menuAt(at, host, insetRect(host, insets), pageWidth, height, MENU_MARGIN, keepBelow, limits);
     return { place: { left: spot.left, top: spot.top, width: pageWidth }, origin: spot.origin, maxHeight: spot.height };
   };
@@ -426,6 +428,7 @@ export function pointPlacer(at: Point, screen: { width: number; height: number }
 
 function triggerPlacer(row: Rect, host: Rect, insets: Insets, width: number, align?: MenuAlign, clearAnchor = false): MenuPlacer {
   return (height, keepBelow, pageWidth = width) => {
+    if (host.width > 0) pageWidth = Math.min(pageWidth, Math.max(1, host.width - insets.left - insets.right - MENU_MARGIN * 2));
     const spot = menuOnTrigger(row, host, host.width > 0 ? insetRect(host, insets) : host, pageWidth, height, MENU_MARGIN, keepBelow, align, clearAnchor);
     return { place: { left: spot.left, top: spot.top, width: pageWidth }, origin: spot.origin, maxHeight: spot.height, shrink: menuShrink(row, pageWidth, spot.height) };
   };
@@ -433,6 +436,7 @@ function triggerPlacer(row: Rect, host: Rect, insets: Insets, width: number, ali
 
 function fixedPlacer(place: ViewStyle, host: Rect, insets: Insets, width: number): MenuPlacer {
   return (height, _keepBelow, pageWidth = width) => {
+    if (host.width > 0) pageWidth = Math.min(pageWidth, Math.max(1, host.width - insets.left - insets.right - MENU_MARGIN * 2));
     if (typeof place.top !== "number") return { place: { ...place, width: pageWidth }, origin: place.bottom !== undefined ? "bottom" : "top" };
     const room = host.width > 0 ? insetRect(host, insets) : host;
     const roomTop = room.y + MENU_MARGIN;
@@ -481,7 +485,7 @@ export function FloatingMenu({ items, place = {}, onDismiss, anchor, at, align, 
 }
 
 const materialStyles = StyleSheet.create({
-  menu: { position: "absolute", minWidth: 112, maxWidth: 280 },
+  menu: { position: "absolute" },
   groups: { gap: MATERIAL_MENU_GROUP_GAP },
   menuGroup: { borderRadius: materialShape.large, paddingVertical: 4, elevation: 3, overflow: "hidden" },
   menuItem: { flexDirection: "row", alignItems: "center", gap: 12, minHeight: materialSize.touchTarget, paddingHorizontal: 12 },

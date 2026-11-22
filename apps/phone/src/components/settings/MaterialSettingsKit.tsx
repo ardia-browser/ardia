@@ -1,5 +1,5 @@
-import { Children, createContext, useContext, useState, type ReactNode } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { Children, createContext, useContext, useState, type ReactNode, type RefObject } from "react";
+import { ActivityIndicator, StyleSheet, Text, View, type ViewInstance } from "react-native";
 import { Pressable } from "react-native-gesture-handler";
 import { withAlpha } from "../../lib/color";
 import { MaterialIconButton, Symbol, ToggleTrack, type SymbolName } from "../ui";
@@ -146,10 +146,10 @@ export function MaterialNavRow({ title, icon, value, onPress }: RowBase & { valu
   );
 }
 
-export function MaterialToggleRow({ title, icon, value, onChange, detail }: RowBase & { value: boolean; onChange: (value: boolean) => void; detail?: string }) {
+export function MaterialToggleRow({ title, icon, value, onChange, detail, buttonRef }: RowBase & { value: boolean; onChange: (value: boolean) => void; detail?: string; buttonRef?: RefObject<ViewInstance | null> }) {
   const ripple = useMaterialRipple();
   return (
-    <Pressable testID={`materialSettingsRow:${title}`} accessibilityRole="switch" accessibilityLabel={title} accessibilityHint={detail} accessibilityState={{ checked: value }} android_ripple={ripple} onPress={() => onChange(!value)} style={rowStyle(detail)}>
+    <Pressable ref={buttonRef} testID={`materialSettingsRow:${title}`} accessibilityRole="switch" accessibilityLabel={title} accessibilityHint={detail} accessibilityState={{ checked: value }} android_ripple={ripple} onPress={() => onChange(!value)} style={rowStyle(detail)}>
       <View style={styles.rowInner} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
         <MaterialSettingsLeading icon={icon} />
         <ItemText title={title} supporting={detail} />

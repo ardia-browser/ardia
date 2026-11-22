@@ -48,6 +48,9 @@ class WindowCornersTests(unittest.TestCase):
                         round_corners.index('shell_->holder()->SetNativeViewCornerRadii(rounded);'))
         self.assertIn('if (is_utility()) SetBackground(views::CreateRoundedRectBackground(kColorWebContentsBackground, rounded));', round_corners)
         self.assertIn('if (curtain_) curtain_->layer()->SetRoundedCornerRadius(rounded);', round_corners)
+        self.assertIn('if (!browser_view_->layer() && !rounded.IsEmpty()) {\n    browser_view_->SetPaintToLayer();\n'
+                      '    browser_view_->layer()->SetFillsBoundsOpaquely(false);\n  }\n'
+                      '  if (browser_view_->layer()) browser_view_->layer()->SetRoundedCornerRadius(rounded);', round_corners)
         self.assertIn('ClipViewport(binding->viewport());\n    ClipViewport(binding->devtools_viewport());', round_corners)
         clip = between(HOST, 'void ShellHostView::ClipViewport(views::WebView* view) {', '\n}\n')
         self.assertIn('linux_window_corners::ClipToWindow(', clip)

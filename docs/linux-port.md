@@ -924,8 +924,10 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
     and corner shape its theme gives it (GTK's own decoration when the GTK frame is in use, which renders a sample to
     measure the radius). The host clips its UI to that shape, like `overflow: clip` with the frame's `border-radius`:
     `RoundWindowCorners` takes `GetWindowRoundedCorners()` from the frame view, which is square when the window is
-    maximized, tiled or full screen, and applies it to the shell's native view, the curtain and, for Settings and
-    Import, the background. Each page and DevTools view gets the window's corner where its own corner sits on a window
+    maximized, tiled or full screen, and applies it to the `BrowserView`'s own layer (made when a corner is rounded: it
+    clips what Chromium still paints under the shell, such as the top container, whose square corners would otherwise
+    show behind a rounded shell), the shell's native view, the curtain and, for Settings and Import, the background.
+    Each page and DevTools view gets the window's corner where its own corner sits on a window
     corner, and the 12 px card radius elsewhere (`ClipToWindow`), so a page that fills the window (page full screen,
     no page frame) never shows rounded corners the window doesn't have. The corners follow every layout, theme change,
     window-state change and frame refresh. The shell follows the same rule for the holes it cuts over pages

@@ -3390,6 +3390,11 @@ void ShellHostView::RoundWindowCorners() {
   if (window_corners_ == corners) return;
   window_corners_ = corners;
   const gfx::RoundedCornersF rounded = RoundedCorners(corners);
+  if (!browser_view_->layer() && !rounded.IsEmpty()) {
+    browser_view_->SetPaintToLayer();
+    browser_view_->layer()->SetFillsBoundsOpaquely(false);
+  }
+  if (browser_view_->layer()) browser_view_->layer()->SetRoundedCornerRadius(rounded);
   if (is_utility()) SetBackground(views::CreateRoundedRectBackground(kColorWebContentsBackground, rounded));
   shell_->holder()->SetNativeViewCornerRadii(rounded);
   if (curtain_) curtain_->layer()->SetRoundedCornerRadius(rounded);

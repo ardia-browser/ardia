@@ -109,16 +109,20 @@ test("on Linux each window's decoration and the desktop's answer are counted by 
   assert.equal(placement.takeWindowPlacementCounts().linux_windows_app_decorated, 0);
 });
 
-test("on Linux a page viewport the engine refused is counted while sharing and not otherwise", async () => {
+test("on Linux a page viewport the engine refused is counted with the consent of its send", async () => {
   client.loadChoice();
   client.setSharing(true, "onboarding");
-  placement.noteLinuxPageViewportRejected();
-  placement.noteLinuxPageViewportRejected();
+  placement.noteLinuxPageViewportRejected(client.consentToken());
+  placement.noteLinuxPageViewportRejected(client.consentToken());
   usage.sessionEnding();
   await client.saveQueueNow();
   const saved = JSON.parse(stub.docs.get("telemetry-queue.json") ?? '{"events":[]}');
   assert.equal(saved.events.filter((e) => e.event === "usage_counts").at(-1).properties.linux_page_viewports_rejected, 2);
   client.setSharing(false, "settings");
-  placement.noteLinuxPageViewportRejected();
+  const off = client.consentToken();
+  placement.noteLinuxPageViewportRejected(off);
+  client.setSharing(true, "settings");
+  placement.noteLinuxPageViewportRejected(off);
   assert.equal(placement.takeWindowPlacementCounts().linux_page_viewports_rejected, 0);
+  client.setSharing(false, "settings");
 });

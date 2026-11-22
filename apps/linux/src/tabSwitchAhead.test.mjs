@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { HostTab } from "./hostTab.ts";
+import { HostTab, showInPlaceOf } from "./hostTab.ts";
+import { reserveTab } from "./hostTabQueue.ts";
 import { forgetSwitchViews, registerSwitchView, tabsSwitchedAhead, watchTabSwitches } from "./tabSwitchAhead.ts";
 import { createInputRegions } from "./inputRegions.ts";
 
@@ -152,4 +153,107 @@ test("an early switch sends the hidden page's viewport without radii, as the pag
   await a.viewport({ rect: RECT, visible: false });
   assert.equal(sent.filter((call) => call.method === "tab.viewport").length, 0);
   stop();
+});
+
+async function viewportTelemetry() {
+  globalThis.__DEV__ = false;
+  await import("../../browser/src/test-native/index.ts");
+  const client = await import("../../browser/src/state/telemetry/client.ts");
+  const placement = await import("../../browser/src/state/telemetry/windowPlacementCounts.ts");
+  client.loadChoice();
+  client.setSharing(true, "onboarding");
+  placement.takeWindowPlacementCounts();
+  return { client, placement, rejected: () => placement.takeWindowPlacementCounts().linux_page_viewports_rejected };
+}
+
+function refusingHost(answer) {
+  const viewports = [];
+  let nextId = 70;
+  const host = {
+    bootstrap: { windowId: "main", profileId: "default" },
+    call: async () => "null",
+    invoke: (method, args) => {
+      if (method === "tab.create") { nextId++; return Promise.resolve({ browserId: nextId, chromeTabId: nextId }); }
+      if (method === "tab.viewport") { viewports.push(args); return answer(args); }
+      return Promise.resolve(null);
+    },
+    onEvent: () => () => {},
+  };
+  return { host, viewports };
+}
+
+const settled = (promise) => promise.then(() => "ok", () => "refused");
+
+test("a refused page viewport is counted once per send: five queued visible reports make one send and one count", async () => {
+  const t = await viewportTelemetry();
+  try {
+    const { host, viewports } = refusingHost(() => Promise.reject(new Error("refused")));
+    const tab = new HostTab(host, { key: "held", url: "https://held.test/" }, () => {});
+    await tab.ready;
+    const hold = reserveTab(host, "held");
+    const sends = [1, 2, 3, 4, 5].map((n) => tab.viewport({ rect: { ...RECT, width: RECT.width - n }, visible: true }));
+    hold.finish();
+    assert.deepEqual(await Promise.all(sends.map(settled)), ["refused", "refused", "refused", "refused", "refused"]);
+    assert.equal(viewports.length, 1);
+    assert.equal(t.rejected(), 1);
+  } finally {
+    t.client.setSharing(false, "settings");
+  }
+});
+
+test("a refused send whose latest report hid the page is not counted", async () => {
+  const t = await viewportTelemetry();
+  try {
+    const { host, viewports } = refusingHost(() => Promise.reject(new Error("refused")));
+    const tab = new HostTab(host, { key: "hidden", url: "https://hidden.test/" }, () => {});
+    await tab.ready;
+    const hold = reserveTab(host, "hidden");
+    const shown = tab.viewport({ rect: RECT, visible: true });
+    const hidden = tab.viewport({ rect: RECT, visible: false });
+    hold.finish();
+    await Promise.all([settled(shown), settled(hidden)]);
+    assert.deepEqual(viewports.map((args) => args.visible), [false]);
+    assert.equal(t.rejected(), 0);
+  } finally {
+    t.client.setSharing(false, "settings");
+  }
+});
+
+test("an early tab switch counts a refused shown viewport, not the hidden one", async () => {
+  const t = await viewportTelemetry();
+  try {
+    const { host } = refusingHost(() => Promise.reject(new Error("refused")));
+    const from = new HostTab(host, { key: "from", url: "https://from.test/" }, () => {});
+    const to = new HostTab(host, { key: "to", url: "https://to.test/" }, () => {});
+    await from.ready;
+    await to.ready;
+    from.lastViewport = JSON.stringify({ rect: RECT, visible: true });
+    from.presentsNow = () => true;
+    to.presentsNow = () => true;
+    assert.equal(showInPlaceOf(from, to), true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(t.rejected(), 1);
+  } finally {
+    t.client.setSharing(false, "settings");
+  }
+});
+
+test("a viewport sent while sharing is off is not counted when it is refused after sharing turns on", async () => {
+  const t = await viewportTelemetry();
+  try {
+    let refuse;
+    const { host, viewports } = refusingHost(() => new Promise((_resolve, reject) => { refuse = reject; }));
+    const tab = new HostTab(host, { key: "consent", url: "https://consent.test/" }, () => {});
+    await tab.ready;
+    t.client.setSharing(false, "settings");
+    const send = settled(tab.viewport({ rect: RECT, visible: true }));
+    for (let i = 0; i < 20 && !viewports.length; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(viewports.length, 1);
+    t.client.setSharing(true, "settings");
+    refuse(new Error("refused"));
+    assert.equal(await send, "refused");
+    assert.equal(t.rejected(), 0);
+  } finally {
+    t.client.setSharing(false, "settings");
+  }
 });

@@ -39,10 +39,23 @@ const nearCornerRadius = (insetX: number, insetY: number, windowRadius: number, 
   return radius;
 };
 
-const ownRadii = (radius: number | CornerRadii, zoom: number) =>
-  typeof radius === "number"
-    ? { css: { upperLeft: radius, upperRight: radius, lowerRight: radius, lowerLeft: radius }, dip: { upperLeft: radius, upperRight: radius, lowerRight: radius, lowerLeft: radius } }
-    : { css: radius, dip: { upperLeft: radius.upperLeft * zoom, upperRight: radius.upperRight * zoom, lowerRight: radius.lowerRight * zoom, lowerLeft: radius.lowerLeft * zoom } };
+export const PAGE_RADIUS_LIMIT = 4096;
+
+const clampedRadii = (radii: CornerRadii): CornerRadii => ({
+  upperLeft: Math.min(radii.upperLeft, PAGE_RADIUS_LIMIT),
+  upperRight: Math.min(radii.upperRight, PAGE_RADIUS_LIMIT),
+  lowerRight: Math.min(radii.lowerRight, PAGE_RADIUS_LIMIT),
+  lowerLeft: Math.min(radii.lowerLeft, PAGE_RADIUS_LIMIT),
+});
+
+const ownRadii = (radius: number | CornerRadii, zoom: number) => {
+  if (typeof radius === "number") {
+    const uniform = { upperLeft: radius, upperRight: radius, lowerRight: radius, lowerLeft: radius };
+    return { css: uniform, dip: uniform };
+  }
+  const css = clampedRadii(radius);
+  return { css, dip: { upperLeft: css.upperLeft * zoom, upperRight: css.upperRight * zoom, lowerRight: css.lowerRight * zoom, lowerLeft: css.lowerLeft * zoom } };
+};
 
 export function windowCornerRadii(rect: Rect, window: WindowSize, radius: number | CornerRadii = PAGE_CORNER_RADIUS, zoom = 1, frame: CornerRadii = SQUARE_WINDOW): CornerRadii {
   const width = Math.round(window.width * zoom);

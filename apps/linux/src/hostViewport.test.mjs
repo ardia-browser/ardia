@@ -304,7 +304,7 @@ test("clipRadii gives a page the card's radius only at the corners it shares wit
   }
 });
 
-test("a page viewport the engine refuses is counted once per refusal, only for a page meant to show", async () => {
+test("the page watcher leaves counting a refused viewport to the tab that sent it", async () => {
   globalThis.__DEV__ = false;
   await import("../../browser/src/test-native/index.ts");
   const client = await import("../../browser/src/state/telemetry/client.ts");
@@ -316,16 +316,12 @@ test("a page viewport the engine refuses is counted once per refusal, only for a
   client.setSharing(true, "onboarding");
   placement.takeWindowPlacementCounts();
   try {
-    let wanted = true;
     const regions = { setPage() {}, refresh() {}, dropPage() {}, ...cover() };
-    const tab = { identity: {}, disposed: false, viewport: () => Promise.reject(new Error("Viewport radii must be finite, nonnegative and at most 4096")) };
-    const stop = watchPageBelowShell(page, regions, () => wanted, () => tab, undefined, undefined, () => ({ upperLeft: 0, upperRight: 0, lowerRight: 10, lowerLeft: 10 }));
+    const tab = { identity: {}, disposed: false, viewport: () => Promise.reject(new Error("Viewport radii must be four finite, nonnegative corners")) };
+    const stop = watchPageBelowShell(page, regions, () => true, () => tab, undefined, undefined, () => ({ upperLeft: 0, upperRight: 0, lowerRight: 10, lowerLeft: 10 }));
     s.mutate();
     await new Promise((resolve) => setTimeout(resolve, 0));
-    wanted = false;
-    s.mutate();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.equal(placement.takeWindowPlacementCounts().linux_page_viewports_rejected, 1);
+    assert.equal(placement.takeWindowPlacementCounts().linux_page_viewports_rejected, 0);
     stop();
   } finally {
     client.setSharing(false, "settings");

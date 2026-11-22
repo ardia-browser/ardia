@@ -431,6 +431,11 @@ test("a page's own card radii, not a fixed 12, round the corners away from the w
   assert.deepEqual(own.radii, toolbar);
 });
 
+test("a page's card radius over 4096 CSS px is clamped, as the engine clamps it", () => {
+  const huge = { upperLeft: 1e9, upperRight: 0, lowerRight: 0, lowerLeft: 5000 };
+  assert.deepEqual(windowCornerRadii({ x: 100, y: 100, width: 600, height: 500 }, { width: 1000, height: 700 }, huge, 2), { upperLeft: 4096, upperRight: 0, lowerRight: 0, lowerLeft: 4096 });
+});
+
 test("a page whose rect stays put gets new corners when the window around it resizes", () => {
   const saved = { ResizeObserver: globalThis.ResizeObserver, MutationObserver: globalThis.MutationObserver };
   globalThis.ResizeObserver = class { observe() {} unobserve() {} };

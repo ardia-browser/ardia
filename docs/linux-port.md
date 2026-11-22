@@ -922,10 +922,14 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
   keeps the answer on each `XdgToplevel`, the host reads its own window's through
   `WaylandToplevelExtension::CompositorDecorationMode`, and a change of one window's answer reaches only that window's
   host (posted, not run inside the Wayland listener). A window the host doesn't own, such as the Task Manager, which
-  asks for server-side, changes nothing. `ArdiaShell.windowDecorations` `[windowId]` answers
-  `{ decoratedBy: "app" | "compositor", answer: "none" | "client" | "server" }`, and an `ArdiaShell` event of the same
-  name follows each change; the shell counts them in `usage_counts` (`linux_windows_app_decorated`,
-  `linux_windows_compositor_decorated`, `linux_decoration_answers_none`, `_client`, `_server`).
+  asks for server-side, changes nothing. The frame hook answers with the decision the host last followed, so a
+  toplevel Chromium recreates (its answer starts over) keeps its frame until the host follows the new answer.
+  `ArdiaShell.windowDecorations` `[windowId]` answers `{ decoratedBy: "app" | "compositor", answer: "none" | "client" |
+  "server", corners: { upperLeft, upperRight, lowerRight, lowerLeft } }` (the frame's corner radii in DIP), and an
+  `ArdiaShell` event of the same name follows each change of any of them. Every window, Settings and Import too,
+  counts them in `usage_counts`: `linux_windows_app_decorated` or `linux_windows_compositor_decorated` when the
+  decision changes, and `linux_decoration_answers_none`, `_client` or `_server` once per window when the answer
+  settles (a client or server answer at once, no answer after 5 seconds).
   - Where the app decorates (GNOME, KDE, other floating desktops): Chromium's frame stays, with the shadow, outline
     and corner shape its theme gives it (GTK's own decoration when the GTK frame is in use, which renders a sample to
     measure the radius once per frame provider). The host clips its UI to that shape, like `overflow: clip` with the
@@ -934,14 +938,19 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
     composite. It applies the corners to the `BrowserView`'s own layer (made when a corner is rounded, with
     `SetIsFastRoundedCorner` so the compositor clips each quad instead of drawing the window into an offscreen surface;
     it clips what Chromium still paints under the shell, such as the top container), the shell's native view, the
-    curtain and, for Settings and Import, the background. Each page and DevTools view gets the window's corner where
-    its own corner sits on a window corner, and the 12 px card radius elsewhere (`ClipToWindow`), so a page that fills
-    the window (page full screen, no page frame) never shows rounded corners the window doesn't have. A page edge
-    counts as on the window edge when it's within 1 DIP of it. The corners follow layout, window-state and frame
-    changes. The shell follows the same rule for the holes it cuts over pages (`pageHoles.ts`, `windowCornerRadii`),
-    with the same 1 DIP, which it measures in CSS pixels through the shell's zoom (`shellZoom` in the bootstrap): a
-    hole corner on a window corner is square, since the window's own clip rounds it, and every other corner keeps the
-    card radius, so the shell paints no rounded cover over a page that fills the window.
+    curtain and, for Settings and Import, the background. While a glass panel is open cc gives the `BrowserView` its
+    offscreen surface again for the glass's own rounded layers; the output is the same, only that saving pauses. Each
+    page and DevTools view gets the window's corner where its own corner sits on a window corner; near one (closer
+    than the window's radius R to both edges, inset by dx and dy) it gets a corner concentric with the window's,
+    `max(12, R - min(dx, dy))`, so a page in a thin page frame never pokes out of the window's arc; elsewhere it keeps
+    the 12 px card radius (`ClipToWindow`). A page that fills the window (page full screen, no page frame) never shows
+    rounded corners the window doesn't have. A page edge counts as on the window edge when it's within 1 DIP of it. The corners follow layout, window-state and frame
+    changes. The shell follows the same rule for the holes it cuts over pages (`pageHoles.ts`, `windowCornerRadii`):
+    it rounds the page's rectangle out to whole DIPs through the shell's zoom (`shellZoom` in the bootstrap) against
+    the fractional viewport size (`visualViewport`), as the engine does, and takes the frame's radii from
+    `windowDecorations`. A hole corner on a window corner is square, since the window's own clip rounds it, a near one
+    is concentric, and every other corner keeps the card radius, so the shell paints no rounded cover over a page that
+    fills the window.
   - Where the compositor decorates (Hyprland, …): `g_ardia_linux_borderless_frame` answers true for that window, and
     the frame view and its layout report no border, input or shadow insets and no corner radius and paint no frame, so
     the client area is the whole window and the compositor rounds, clips and shadows it. The host lays the frame out

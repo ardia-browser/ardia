@@ -166,7 +166,7 @@ class BorderlessFrameTests(unittest.TestCase):
         self.contains('g_ardia_linux_borderless_frame = [](const BrowserWindowInterface* browser) {\n'
                       '    if (!browser) return false;\n'
                       '    const auto found = Hosts().find(browser->GetSessionID().id());\n'
-                      '    return found != Hosts().end() && found->second->DecoratedByCompositor();\n  };', self.host)
+                      '    return found != Hosts().end() && found->second->FrameIsBorderless();\n  };', self.host)
         desktop = self.host[self.host.index('const std::string& LaunchDesktop() {'):]
         self.contains('static const base::NoDestructor<std::string> desktop(CurrentDesktop());', desktop[:desktop.index('\n}\n')])
 

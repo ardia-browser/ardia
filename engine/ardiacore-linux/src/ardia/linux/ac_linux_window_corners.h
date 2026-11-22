@@ -97,16 +97,25 @@ struct Box {
   int height = 0;
 };
 
+constexpr float NearCornerRadius(int inset_x, int inset_y, float window_radius, float own_radius) {
+  if (inset_x < 1 && inset_y < 1) return window_radius;
+  if (inset_x < window_radius && inset_y < window_radius) {
+    const float concentric = window_radius - static_cast<float>(inset_x < inset_y ? inset_x : inset_y);
+    return concentric > own_radius ? concentric : own_radius;
+  }
+  return own_radius;
+}
+
 constexpr Corners ClipToWindow(Box view, int window_width, int window_height, Corners window, float own_radius) {
-  const bool left = view.x < 1;
-  const bool top = view.y < 1;
-  const bool right = view.x + view.width > window_width - 1;
-  const bool bottom = view.y + view.height > window_height - 1;
+  const int left = view.x;
+  const int top = view.y;
+  const int right = window_width - (view.x + view.width);
+  const int bottom = window_height - (view.y + view.height);
   return Corners{
-      .upper_left = top && left ? window.upper_left : own_radius,
-      .upper_right = top && right ? window.upper_right : own_radius,
-      .lower_right = bottom && right ? window.lower_right : own_radius,
-      .lower_left = bottom && left ? window.lower_left : own_radius,
+      .upper_left = NearCornerRadius(left, top, window.upper_left, own_radius),
+      .upper_right = NearCornerRadius(right, top, window.upper_right, own_radius),
+      .lower_right = NearCornerRadius(right, bottom, window.lower_right, own_radius),
+      .lower_left = NearCornerRadius(left, bottom, window.lower_left, own_radius),
   };
 }
 

@@ -1,4 +1,5 @@
 #include <cassert>
+#include <cmath>
 #include <cstdio>
 
 #include "ardia/linux/ac_linux_window_corners.h"
@@ -63,6 +64,32 @@ int main() {
                 corners::Corners{.upper_left = 8, .upper_right = kCard, .lower_right = kCard, .lower_left = kCard});
   static_assert(corners::ClipToWindow({.x = 1, .y = 0, .width = 899, .height = 700}, 900, 700, kFrame, kCard) ==
                 corners::Corners{.upper_left = kCard, .upper_right = 8, .lower_right = 0, .lower_left = kCard});
+  for (const float window_radius : {12.0f, 19.0f, 24.0f}) {
+    const corners::Corners window{window_radius, window_radius, window_radius, window_radius};
+    for (const int inset : {0, 1, 2, 3, 8}) {
+      const corners::Corners page = corners::ClipToWindow(
+          {.x = inset, .y = inset, .width = 900 - 2 * inset, .height = 700 - 2 * inset}, 900, 700, window, kCard);
+      const float expected = inset == 0 ? window_radius
+                             : inset < window_radius ? std::fmax(kCard, window_radius - static_cast<float>(inset))
+                                                     : kCard;
+      assert(page.upper_left == expected && page.upper_right == expected && page.lower_right == expected &&
+             page.lower_left == expected);
+      for (int y = inset; y < inset + 30; ++y) {
+        for (int x = inset; x < inset + 30; ++x) {
+          const float px = x + 0.5f;
+          const float py = y + 0.5f;
+          const float page_cx = static_cast<float>(inset) + page.upper_left;
+          const float page_cy = static_cast<float>(inset) + page.upper_left;
+          const bool in_page = !(px < page_cx && py < page_cy) || std::hypot(px - page_cx, py - page_cy) <= page.upper_left;
+          const bool in_window = !(px < window_radius && py < window_radius) ||
+                                 std::hypot(px - window_radius, py - window_radius) <= window_radius;
+          assert(!in_page || in_window || inset == 0);
+        }
+      }
+    }
+    const corners::Corners lopsided = corners::ClipToWindow({.x = 0, .y = 5, .width = 900, .height = 695}, 900, 700, window, kCard);
+    assert(lopsided.upper_left == std::fmax(kCard, window_radius));
+  }
   std::puts("ok");
   return 0;
 }

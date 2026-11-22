@@ -1443,6 +1443,7 @@ class ShellHostView : public views::View,
   void RefreshEngineFrame();
   linux_window_corners::DecorationAnswer DecorationAnswer() const;
   bool DecoratedByCompositor() const;
+  bool FrameIsBorderless() const;
   base::DictValue WindowDecorationsValue() const;
   void FollowDecorations();
   bool HostsAcceleratedWidget(gfx::AcceleratedWidget widget) const;
@@ -3400,6 +3401,12 @@ void ShellHostView::RoundWindowCorners() {
   };
   if (window_corners_ == corners) return;
   window_corners_ = corners;
+  VLOG(1) << "ardia window " << window_id_ << " frame corners " << corners.upper_left << " " << corners.upper_right
+          << " " << corners.lower_right << " " << corners.lower_left;
+  if (!window_id_.empty()) {
+    Event("ArdiaShell", linux_window_corners::kWindowDecorationsEvent,
+          base::Value(WindowDecorationsValue().Set("windowId", window_id_)));
+  }
   const gfx::RoundedCornersF rounded = RoundedCorners(corners);
   if (!browser_view_->layer() && !rounded.IsEmpty()) {
     browser_view_->SetPaintToLayer();
@@ -4712,10 +4719,20 @@ bool ShellHostView::DecoratedByCompositor() const {
   return linux_window_corners::CompositorDecorates(DecorationAnswer(), LaunchDesktop());
 }
 
+bool ShellHostView::FrameIsBorderless() const {
+  return followed_decorations_ ? followed_decorations_->first : DecoratedByCompositor();
+}
+
 base::DictValue ShellHostView::WindowDecorationsValue() const {
+  const linux_window_corners::Corners corners = window_corners_.value_or(linux_window_corners::Corners());
   return base::DictValue()
       .Set("decoratedBy", linux_window_corners::DecoratedByName(DecoratedByCompositor()))
-      .Set("answer", linux_window_corners::AnswerName(DecorationAnswer()));
+      .Set("answer", linux_window_corners::AnswerName(DecorationAnswer()))
+      .Set("corners", base::DictValue()
+                          .Set("upperLeft", corners.upper_left)
+                          .Set("upperRight", corners.upper_right)
+                          .Set("lowerRight", corners.lower_right)
+                          .Set("lowerLeft", corners.lower_left));
 }
 
 bool ShellHostView::HostsAcceleratedWidget(gfx::AcceleratedWidget widget) const {
@@ -8533,7 +8550,7 @@ void StartLinuxHost() {
   g_ardia_linux_borderless_frame = [](const BrowserWindowInterface* browser) {
     if (!browser) return false;
     const auto found = Hosts().find(browser->GetSessionID().id());
-    return found != Hosts().end() && found->second->DecoratedByCompositor();
+    return found != Hosts().end() && found->second->FrameIsBorderless();
   };
   g_ardia_linux_compositor_decoration_changed = [](gfx::AcceleratedWidget widget) {
     for (const auto& [id, host] : Hosts()) {

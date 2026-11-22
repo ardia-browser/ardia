@@ -162,3 +162,27 @@ test("opening a tab that now sits in the archive keeps the current selection too
   act(() => browse.openTab("a0"));
   expect(currentTabs().selectedId).toBe(selected);
 });
+
+test("opening an Incognito tab while Incognito is refused closes the Incognito tabs and shows the start page instead of a page that can't load", () => {
+  webViewWith(true, false);
+  act(() => {
+    useTabs.setState({ ...launchTabs(someTabs(2), 0), privates: someTabs(2, true), incognito: false, listing: 0 });
+    browse.useBrowse.setState({ surface: "deck" });
+  });
+  act(() => browse.openTab("p0"));
+  expect(currentTabs().privates).toHaveLength(0);
+  expect(currentTabs().selectedId).not.toBe("p0");
+  expect(useTabs.getState().incognito).toBe(false);
+  expect(browse.useBrowse.getState().surface).toBe("start");
+  expect(useToasts.getState().toast?.message).toBe(INCOGNITO_NEEDS_WEBVIEW);
+});
+
+test("a regular tab still opens while Incognito is refused", () => {
+  webViewWith(true, false);
+  act(() => browse.useBrowse.setState({ surface: "deck" }));
+  const id = currentTabs().open[1]!.id;
+  act(() => browse.openTab(id));
+  expect(currentTabs().selectedId).toBe(id);
+  expect(browse.useBrowse.getState().surface).toBe("browsing");
+  expect(useToasts.getState().toast).toBeNull();
+});

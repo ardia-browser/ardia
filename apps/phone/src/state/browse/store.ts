@@ -300,7 +300,11 @@ export function openTab(id: string) {
   hideArchiveCard();
   dismissSearch();
   showSpaceOf(id);
-  setIncognito(isPrivateTab(currentTabs(), id));
+  if (!setIncognito(isPrivateTab(currentTabs(), id))) {
+    closePrivateTabs();
+    useBrowse.setState({ surface: "start", sheet: null, opening: null, veiled: null, covered: null });
+    return;
+  }
   if (currentTabs().selectedId !== id) selectTabById(id);
   useBrowse.setState({ surface: "browsing", sheet: null, opening: null, veiled: null, covered: null });
   const tab = findTab(currentTabs(), id);

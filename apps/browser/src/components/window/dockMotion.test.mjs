@@ -347,7 +347,7 @@ test("a reveal that passes its final width is counted once, under the consent in
 });
 
 test("Arc's peek leaves on its ease-in-out; its hide is a 100 ms ease-out", () => {
-  const hide = (t) => (t <= 0 ? 0 : t >= dm.ARC_HIDE_MS / 1000 ? 1 : dm.easeOutCubic(t / (dm.ARC_HIDE_MS / 1000)));
+  const hide = (t) => (t <= 0 ? 0 : t >= dm.ARC_DOCK_MS / 1000 ? 1 : dm.easeOutCubic(t / (dm.ARC_DOCK_MS / 1000)));
   for (const motion of ARC_HIDE) {
     const rms = fitT0(motion, hide);
     assert.ok(rms < 0.05, `hide rms ${rms.toFixed(3)}`);
@@ -498,13 +498,14 @@ test("the native edge watch spans the hold while peeking, 8 pt during a tab drag
   assert.equal(dm.edgeStripOverPage(2), true);
 });
 
-test("the dock jumps when it can't animate or Arc docks from an open peek, Arc hides on its ease-out, and otherwise slides", () => {
+test("the dock jumps when it can't animate or Arc docks from an open peek, Arc hides and shows on the same ease-out, and otherwise slides", () => {
   const mv = (o) => dm.dockMove({ open: true, animated: true, arc: false, peekOut: false, ...o });
   assert.equal(mv({ animated: false }), "jump");
   assert.equal(mv({ animated: false, open: false, arc: true }), "jump");
   assert.equal(mv({ arc: true, peekOut: true }), "jump");
-  assert.equal(mv({ arc: true }), "slide");
-  assert.equal(mv({ arc: true, open: false, peekOut: true }), "arcHide");
+  assert.equal(mv({ arc: true }), "arcDock");
+  assert.equal(mv({ arc: true, open: false }), "arcDock");
+  assert.equal(mv({ arc: true, open: false, peekOut: true }), "arcDock");
   assert.equal(mv({ open: false }), "slide");
   assert.equal(mv({ peekOut: true }), "slide");
 });

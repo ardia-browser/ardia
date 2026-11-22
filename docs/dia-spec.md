@@ -320,8 +320,9 @@ screen capture (frames 8–33 ms apart, most 17), so timings are ±1 frame. Edge
   narrower in one frame (a 2 pt settle over three frames after).
 - Hiding the docked sidebar (its button): the sidebar and the card's left edge slide out together, the page laid out at
   every step, much quicker than Dia: ease-out cubic, 100 ms (two hides, rms 1.3 %; Dia's spring misses it by 10 %).
-- Showing from hidden without the peek (⌘S) isn't in the recording: ours uses Dia's spring.
-- Ours (`tokens.ts`: `PEEK_IN_MS`, `ARC_PEEK_OUT_MS`, `ARC_HIDE_MS`; `dockMotion.test.mjs` holds the traced
+- Showing from hidden without the peek (⌘S) isn't in the recording: ours mirrors the hide, the same ease-out cubic
+  over 100 ms, so ⌘S takes as long to show the sidebar as to hide it (it used Dia's 200 ms slide, twice the hide).
+- Ours (`tokens.ts`: `PEEK_IN_MS`, `ARC_PEEK_OUT_MS`, `ARC_DOCK_MS`; `dockMotion.test.mjs` holds the traced
   points), behind `sidebarSlide`.
 
 #### Arc note: Clear above the unpinned tabs (Arc's bundle and a user's screenshot, 2026-10-16)

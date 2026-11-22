@@ -27,7 +27,7 @@ import {
   noteSidebarSlide,
 } from "../../state/telemetry/dockCounts";
 import { ProfileSwipe } from "./ProfileSwipe";
-import { ARC_HIDE_MS, DOCK_SLIDE, SHADOWS } from "./tokens";
+import { ARC_DOCK_MS, DOCK_SLIDE, SHADOWS } from "./tokens";
 import {
   EDGE_ARMED,
   EDGE_DISARMED,
@@ -87,8 +87,8 @@ function useSidebarDock(open: boolean, animate: boolean, arc: boolean): { dock: 
     const watch = dock.addListener(({ value }) => {
       if (value > 1 || value < 0) pastTarget = true;
     });
-    (move === "arcHide"
-      ? Animated.timing(dock, { toValue: 0, duration: ARC_HIDE_MS, easing: curve.enter, useNativeDriver: false })
+    (move === "arcDock"
+      ? Animated.timing(dock, { toValue: open ? 1 : 0, duration: ARC_DOCK_MS, easing: curve.enter, useNativeDriver: false })
       : Animated.timing(dock, { toValue: open ? 1 : 0, ...DOCK_SLIDE, useNativeDriver: false })
     ).start(({ finished }) => {
       dock.removeListener(watch);

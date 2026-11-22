@@ -1,5 +1,5 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { ActivityIndicator, type GestureResponderEvent, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View, type StyleProp, type TextStyle } from "react-native";
+import { createContext, useContext, useEffect, useState, type ReactNode, type RefObject } from "react";
+import { ActivityIndicator, type GestureResponderEvent, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View, type StyleProp, type TextStyle, type ViewInstance } from "react-native";
 import Animated, { FadeIn, FadeOut, LayoutAnimationConfig, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { rememberSettingsScroll, settingsScroll } from "../../state/settings/nav";
@@ -208,10 +208,10 @@ function ClassicNavRow({ title, icon, tint, value, divider, onPress }: RowBase &
   );
 }
 
-function ClassicToggleRow({ title, icon, tint, divider, value, onChange, detail }: RowBase & { value: boolean; onChange: (value: boolean) => void; detail?: string }) {
+function ClassicToggleRow({ title, icon, tint, divider, value, onChange, detail, buttonRef }: RowBase & { value: boolean; onChange: (value: boolean) => void; detail?: string; buttonRef?: RefObject<ViewInstance | null> }) {
   return (
     <View>
-      <SharedToggleRow label={title} detail={detail} detailInset={icon ? settingsLayout.tile + settingsLayout.labelGap : 0} value={value} onChange={onChange} style={styles.row}>
+      <SharedToggleRow buttonRef={buttonRef} label={title} detail={detail} detailInset={icon ? settingsLayout.tile + settingsLayout.labelGap : 0} value={value} onChange={onChange} style={styles.row}>
         <Label title={title} icon={icon} tint={tint} />
       </SharedToggleRow>
       {divider ? <Divider /> : null}

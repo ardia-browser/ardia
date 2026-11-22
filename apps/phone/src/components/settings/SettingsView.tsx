@@ -92,6 +92,7 @@ const shownPageOf = (open: boolean, stack: readonly SettingsRoute[]): ShownPage 
 
 function HandBuiltSettings() {
   const open = useSettingsNav((s) => s.open);
+  const generation = useSettingsNav((s) => s.generation);
   const stack = useSettingsNav((s) => s.stack);
   useEffect(() => {
     if (open) void refreshSettings();
@@ -103,7 +104,7 @@ function HandBuiltSettings() {
   if (!shown) return null;
   return (
     <View testID="settingsStack" style={StyleSheet.absoluteFill}>
-      <View key={shown.key} testID="settingsPage" style={StyleSheet.absoluteFill}>
+      <View key={`${generation}:${shown.key}`} testID="settingsPage" style={StyleSheet.absoluteFill}>
         <SettingsPageFor route={shown.route} />
       </View>
     </View>

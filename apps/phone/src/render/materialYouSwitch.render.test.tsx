@@ -2,6 +2,7 @@ import { Platform, ScrollView, Text } from "react-native";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { Surfaces } from "../App";
 import { DesignProvider, Portal, useDesign } from "../components/ui";
+import * as coverFocus from "../components/ui/coverFocus";
 import { MaterialBottomBar } from "../components/ui/MaterialBottomBar";
 import { pages } from "../platform/pages";
 import { useBrowse } from "../state/browse/store";
@@ -120,5 +121,37 @@ test("a menu portal retains its opening design through its exit", () => {
   expect(root.root.findAll((node) => node.props.testID === "portalDesign")[0]!.props.children).toBe("material");
   act(() => jest.advanceTimersByTime(400));
   expect(root.root.findAll((node) => node.props.testID === "portalDesign")).toHaveLength(0);
+  unmount(root);
+});
+
+onAndroid("Material You returns TalkBack focus to the replacement switch after each flip", () => {
+  const focus = jest.spyOn(coverFocus, "focusForScreenReader").mockImplementation(() => () => undefined);
+  const root = renderSurface(<Surfaces />);
+  act(() => openSettings());
+  settle();
+  focus.mockClear();
+  act(() => materialYouRow(root)!.props.onPress());
+  settle();
+  expect(focus).toHaveBeenCalledTimes(1);
+  focus.mockClear();
+  act(() => materialYouRow(root)!.props.onPress());
+  settle();
+  expect(focus).toHaveBeenCalledTimes(1);
+  unmount(root);
+});
+
+onAndroid("reopening Settings during dismissal starts a fresh scroll view at the top", () => {
+  usePreferences.setState({ materialYou: true });
+  const root = renderSurface(<Surfaces />);
+  act(() => openSettings());
+  settle();
+  const settingsList = () => root.root.findAll((node) => node.props.testID === "settingsPage" && typeof node.type === "string")[0]!.findAll((node) => node.type === ScrollView)[0]!;
+  const previous = settingsList();
+  act(() => previous.props.onScroll({ nativeEvent: { contentOffset: { y: 240 } } }));
+  expect(settingsScroll("Settings")).toBe(240);
+  act(() => closeSettings());
+  act(() => openSettings());
+  expect(settingsList()).not.toBe(previous);
+  expect(settingsList().props.contentOffset).toEqual({ x: 0, y: 0 });
   unmount(root);
 });

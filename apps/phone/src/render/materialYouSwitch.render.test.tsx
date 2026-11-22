@@ -155,3 +155,21 @@ onAndroid("reopening Settings during dismissal starts a fresh scroll view at the
   expect(settingsList().props.contentOffset).toEqual({ x: 0, y: 0 });
   unmount(root);
 });
+
+onAndroid("a final scroll event from the exiting Settings cannot seed the newly opened page", () => {
+  usePreferences.setState({ materialYou: true });
+  const root = renderSurface(<Surfaces />);
+  act(() => openSettings());
+  settle();
+  const settingsList = () => root.root.findAll((node) => node.props.testID === "settingsPage" && typeof node.type === "string")[0]!.findAll((node) => node.type === ScrollView)[0]!;
+  const exitingOnScroll = settingsList().props.onScroll;
+  act(() => exitingOnScroll({ nativeEvent: { contentOffset: { y: 240 } } }));
+  act(() => closeSettings());
+  act(() => {
+    openSettings();
+    exitingOnScroll({ nativeEvent: { contentOffset: { y: 265 } } });
+  });
+  const offset = settingsList().props.contentOffset;
+  unmount(root);
+  expect(offset).toEqual({ x: 0, y: 0 });
+});

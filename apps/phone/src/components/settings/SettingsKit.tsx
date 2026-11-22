@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode, type Re
 import { ActivityIndicator, type GestureResponderEvent, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View, type StyleProp, type TextStyle, type ViewInstance } from "react-native";
 import Animated, { FadeIn, FadeOut, LayoutAnimationConfig, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { rememberSettingsScroll, settingsScroll } from "../../state/settings/nav";
+import { rememberSettingsScroll, settingsScroll, useSettingsNav } from "../../state/settings/nav";
 import { MenuTrigger } from "../ui/MenuTrigger";
 import { MaterialBarButton, MaterialButtonRow, MaterialEmptyState, MaterialGroup, MaterialIconTile, MaterialMediumTitle, MaterialNavRow, MaterialPickerRow, MaterialSettingsAppBar, MaterialToggleRow, MaterialValueRow, materialMediumTitleHeight, materialSettingsListStyles } from "./MaterialSettingsKit";
 import { duration, LookBackdrop, settingsMotion, useSheetFrame, font, ink, settingsLayout, space, Symbol, tabsLayout, ToggleRow as SharedToggleRow, Tappable, smoothCorners, slotAround, controlSize, useDesign, useTheme, type MenuItem, type SymbolName } from "../ui";
@@ -19,6 +19,7 @@ export function SettingsPage({ title, onBack, onClose, leading, trailing, childr
   const insets = useSafeAreaInsets();
   const { fontScale } = useWindowDimensions();
   const mediumTitleHeight = materialMediumTitleHeight(fontScale);
+  const [generation] = useState(() => useSettingsNav.getState().generation);
   const [startOffset] = useState(() => ({ x: 0, y: settingsScroll(title) }));
   const frame = useSheetFrame();
   const [refreshing, setRefreshing] = useState(false);
@@ -111,7 +112,7 @@ export function SettingsPage({ title, onBack, onClose, leading, trailing, childr
           onScroll={(event) => {
             sheetList?.onScroll(event);
             const y = event.nativeEvent.contentOffset.y;
-            rememberSettingsScroll(title, y);
+            rememberSettingsScroll(title, y, generation);
             if (mediumAppBar && (y >= mediumTitleHeight) !== collapsed) setOffset(y);
             if (heroTitle) setHeroAway(y > settingsLayout.heroScrollThreshold);
           }}

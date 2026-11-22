@@ -57,6 +57,7 @@ export type OpenWindowRequest = {
   site?: boolean;
   fromClick?: boolean;
   shiftClick?: boolean;
+  opener?: boolean;
   linkWait?: "matched" | "skipped" | "timedOut";
   popup?: boolean;
 };

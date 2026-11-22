@@ -102,9 +102,9 @@ export const automationRows = {
           title: "Also route links you open inside Ardia",
           explained: true,
           description: PLATFORM_FEATURES.routesLinkClicks
-            ? "Rules for Any app also move links you click, links a page opens in a new tab and addresses you type to their profile. Sign-in pages, pop-ups and private windows stay put, and so do clicks in pages open in WebKit."
-            : "Rules for Any app also move links a page opens in a new tab and addresses you type to their profile. Links you click stay in their tab. Sign-in pages, pop-ups and private windows stay put.",
-          keywords: ["arc", "air traffic control", "atc", "inside ardia", "in-app", "new tab", "target=_blank", "typed", "address bar", "click", "profile"],
+            ? "Rules for Any app also apply to links you click, links a page opens in a new tab and addresses you type. Sign-in pages, pop-ups and private windows stay put, and so do clicks in pages open in WebKit."
+            : "Rules for Any app also apply to links you open with a middle-click or Ctrl-click and to addresses you type. Plain clicks stay in their tab. Sign-in pages, pop-ups and private windows stay put.",
+          keywords: ["arc", "air traffic control", "atc", "inside ardia", "in-app", "new tab", "target=_blank", "typed", "address bar"],
         },
         testLink: {
           title: "Test a link",

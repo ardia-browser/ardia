@@ -5,7 +5,7 @@ import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import { isEmptyCardTab, NEW_TAB_BAR_POLICY, newTabOpensBar } from "./newTabBarPolicy";
 import { commitTypedUrl } from "./openFromBar";
-import { routedInApp } from "../airTraffic/inAppLinks";
+import { openTypedElsewhere } from "../airTraffic/inAppLinks";
 import { hasPage } from "../tabs/pageSession";
 import { isSmall } from "../windows/small";
 import type { NewTabTarget } from "../browser/types";
@@ -65,15 +65,20 @@ export function openFromNewTabBar(windowId: string, target: NewTabTarget, url: s
     return noteBarLoad(into.id);
   }
   const group = target.kind === "group" ? s.groups[target.groupId] : undefined;
-  if (typedUrl && routedInApp(url, { windowId, profileId: w.profileId }, "typed")) return;
-  if (group && group.windowId === windowId && group.profileId === w.profileId) {
-    const id = store().newTabInGroup(group.id);
-    if (!id) return;
-    store().navigate(id, url);
-    store().activate(id);
-    return noteBarLoad(id);
-  }
-  noteBarLoad(store().newTab(windowId, { url, newTabCommand: true }));
+  const open = (target: string, gated: boolean) => {
+    if (!store().windows[windowId]) return;
+    const inGroup = group && store().groups[group.id] && group.windowId === windowId && group.profileId === w.profileId;
+    if (inGroup) {
+      const id = store().newTabInGroup(group.id);
+      if (!id) return;
+      store().navigate(id, target, { gated });
+      store().activate(id);
+      return noteBarLoad(id);
+    }
+    noteBarLoad(store().newTab(windowId, { url: target, newTabCommand: true, gated }));
+  };
+  if (typedUrl) return openTypedElsewhere(url, { windowId, profileId: w.profileId }, open);
+  open(url, false);
 }
 
 const launchTabs = new Set<string>();

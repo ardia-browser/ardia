@@ -233,7 +233,11 @@ static NSString *LinkKeyAction(NSString *key) {
   if ([InAppLinkRoutesFor(key) isEqualToArray:next ?: @[]]) return;
   InAppLinkRoutes()[key] = next;
   for (ArdiaWebView *view in LiveViews().allObjects)
-    if (view->_tab && [(view->_profile ?: @"") isEqualToString:key]) [view callFrame:@"" kind:@"airTrafficConfig" json:JSONText(@{@"linkRoutes" : InAppLinkRoutesFor(key)})];
+    if ([(view->_profile ?: @"") isEqualToString:key]) [view pushInAppLinkRoutes];
+}
+
+- (void)pushInAppLinkRoutes {
+  if (_tab) [self callFrame:@"" kind:@"airTrafficConfig" json:JSONText(@{@"linkRoutes" : InAppLinkRoutesFor(_profile)})];
 }
 
 + (void)setSplitLinkModifier:(NSString *)modifier {

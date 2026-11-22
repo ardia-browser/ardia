@@ -8,13 +8,15 @@ const store = await import("./store.ts");
 const { reloadHooks } = await import("../automation/hookRules.ts");
 const { resetApprovalsForTests } = await import("../automation/approvals.ts");
 const { takeAirTrafficCounts } = await import("../telemetry/airTrafficCounts.ts");
+const { setConsentPeriod } = await import("../telemetry/consentPeriod.ts");
 const { openFromPage } = await import("../tabs/openFromPage.ts");
 const { setOpeningGate } = await import("../tabs/openingGate.ts");
+const { startClosingWindow, stopClosingWindow } = await import("../windows/closingWindows.ts");
 const { commitTypedUrl, openFromBar } = await import("../omnibox/openFromBar.ts");
 const { openFromNewTabBar } = await import("../omnibox/newTabBar.ts");
 const { navigationOf } = await import("../tabs/pageSession.ts");
 const { inAppLinkRoute, routePageClick } = await import("./inAppLinks.ts");
-const { inAppLinkRoutes, MAX_PAGE_LINK_ROUTES, signInLink } = await import("./pageLinkRoutes.ts");
+const { inAppLinkRoutes, MAX_PAGE_LINK_ROUTES, pageLinkPatterns, signInLink } = await import("./pageLinkRoutes.ts");
 const { inAppLinkRoutesByEngineProfile, startInAppLinkSync } = await import("./inAppLinkSync.ts");
 
 const S = () => useBrowser.getState();
@@ -27,6 +29,7 @@ const counted = (over) => ({ air_traffic_rule_links: 0, air_traffic_fallback_lin
 
 function fresh({ rules: list = [], inAppLinks = true } = {}) {
   setOpeningGate(null);
+  setConsentPeriod(true, "in-app-links");
   S().hydrate({ profiles: { default: PERSONAL }, profileOrder: ["default"] });
   const work = S().createProfile({ name: "Work" });
   resetApprovalsForTests();
@@ -54,6 +57,8 @@ test("a link a page opens in a new tab routes only with the switch on, and only 
   assert.ok(inProfile("https://github.com/cmd", work), "a ⌘-click lands in Work");
   openFromPage({ url: "https://github.com/opener", disposition: "foreground", userGesture: true }, page);
   openFromPage({ url: "https://github.com/popup", disposition: "foreground", fromClick: true, userGesture: true, popup: true }, page);
+  openFromPage({ url: "https://github.com/rel-opener", disposition: "foreground", fromClick: true, opener: true, userGesture: true }, page);
+  assert.ok(inProfile("https://github.com/rel-opener", "default"), "a clicked link or window.open that keeps its opener stays with it");
   assert.ok(inProfile("https://github.com/opener", "default"), "a window.open the page keeps a handle on stays with its opener");
   assert.ok(inProfile("https://github.com/popup", "default"), "a pop-up opened as a tab stays with its opener");
   assert.deepEqual(takeAirTrafficCounts(), counted({ air_traffic_in_app_links: 2 }));
@@ -113,6 +118,31 @@ test("a source window that closes while the tab.opening hook decides routes noth
   assert.ok(!Object.values(S().tabs).some((t) => t.url === "https://b.example/late"));
   setOpeningGate(null);
   assert.ok(work);
+});
+
+test("a source window that is closing when the hook answers routes nothing", async () => {
+  const { work, page } = fresh({ rules: [toWork({ kind: "any" })] });
+  let answer;
+  setOpeningGate(() => new Promise((resolve) => (answer = resolve)));
+  openFromPage({ url: "https://b.example/closing", disposition: "foreground", fromClick: true, userGesture: true }, page);
+  startClosingWindow(page.windowId);
+  answer(null);
+  await settle();
+  stopClosingWindow(page.windowId);
+  assert.ok(!inProfile("https://b.example/closing", work));
+  setOpeningGate(null);
+});
+
+test("a typed address opened in a new tab asks tab.opening first: a cancel stops it, a rewrite routes the new address", () => {
+  const { work, page } = fresh({ rules: [toWork({ kind: "site", host: "routed.example" })] });
+  const asked = [];
+  setOpeningGate((url) => (asked.push(url), url.includes("cancel") ? { cancel: true } : url.includes("rewrite") ? { url: "https://routed.example/rewritten" } : null));
+  openFromBar("https://routed.example/cancel", page.tabId, "newTab", true);
+  assert.ok(!Object.values(S().tabs).some((t) => t.url === "https://routed.example/cancel"));
+  openFromBar("https://other.example/rewrite", page.tabId, "newTab", true);
+  assert.ok(inProfile("https://routed.example/rewritten", work));
+  assert.deepEqual(asked, ["https://routed.example/cancel", "https://other.example/rewrite"]);
+  setOpeningGate(null);
 });
 
 test("a typed address whose tab closes while the hook decides routes nothing", async () => {
@@ -201,6 +231,12 @@ const URLS = [
   "https://www.example.org/",
   "https://[::1]:8080/docs/a",
   "https://127.0.0.1/docs",
+  "http://example.org/",
+  "http://example.org:80/a",
+  "https://example.org:80/a",
+  "https://h.example/xaxbxcx",
+  "https://h.example/abca",
+  "https://h.example/acb",
 ];
 
 const CONDITIONS = [
@@ -217,14 +253,19 @@ const CONDITIONS = [
   { kind: "contains", text: "www.docs" },
   { kind: "equals", text: "example.org/a" },
   { kind: "equals", text: "https://example.org:8080/a/" },
+  { kind: "pattern", pattern: "https://example.org:80/*" },
+  { kind: "pattern", pattern: "http://example.org:80/*" },
+  { kind: "pattern", pattern: "*://*/a*b*c*" },
+  { kind: "pattern", pattern: "*e*a*/*a*" },
 ];
 
 test("the routes pushed to a page decide every click exactly as the app does: each condition alone, after a rule that keeps links, and with an earlier rule to the same profile", () => {
   const { work, page } = fresh();
   const keep = rule({ when: { kind: "site", host: "keep.example" }, profileId: "default" });
   const sameProfileFirst = rule({ when: { kind: "contains", text: "doc" }, profileId: "default" });
+  const lastUsed = rule({ when: { kind: "site", host: "example.org" }, profileId: null });
   for (const when of CONDITIONS)
-    for (const before of [[], [keep], [sameProfileFirst]]) {
+    for (const before of [[], [keep], [sameProfileFirst], [lastUsed]]) {
       store.resetAirTrafficForTests({ rules: [...before, rule({ when, profileId: work })], fallback: null, inAppLinks: true });
       const routes = inAppLinkRoutes(store.currentAirTraffic(), new Set(["default"]), store.targetUsableNow, "default");
       for (const url of URLS) assert.equal(pageDecides(routes, url), inAppLinkRoute(url, page) !== null, `${JSON.stringify(when)} after ${before.length ? before[0].when.kind : "nothing"}: ${url}`);
@@ -241,16 +282,36 @@ test("no routes are pushed when nothing would leave the profile, and a full rule
   assert.ok(pageDecides(routes, "https://xn--bcher-kva99.de/"), "the hundredth rule still reaches the page");
 });
 
-test("profiles that share data get one merged list, so neither overwrites the other's routes", () => {
+test("profiles that share data get one list, and a click between them is left to the page instead of cancelled", () => {
   const { work } = fresh();
   const twin = S().createProfile({ name: "Twin", shareWith: "default" });
-  store.resetAirTrafficForTests({ rules: [rule({ when: { kind: "site", host: "twin.example" }, profileId: twin }), rule({ when: { kind: "site", host: "work.example" }, profileId: work })], fallback: null, inAppLinks: true });
+  store.resetAirTrafficForTests({
+    rules: [rule({ when: { kind: "site", host: "twin.example" }, profileId: twin }), rule({ when: { kind: "site", host: "home.example" }, profileId: "default" }), rule({ when: { kind: "site", host: "work.example" }, profileId: work })],
+    fallback: null,
+    inAppLinks: true,
+  });
   const byKey = inAppLinkRoutesByEngineProfile();
   const shared = JSON.parse(byKey.get(""));
-  assert.ok(pageDecides(shared, "https://twin.example/"), "a Personal page catches links bound for Twin");
+  assert.ok(!pageDecides(shared, "https://twin.example/") && !pageDecides(shared, "https://home.example/"), "neither Personal nor Twin cancels a click bound for the other");
   assert.ok(pageDecides(shared, "https://work.example/"));
   const workRoutes = JSON.parse(byKey.get(S().profiles[work].dataId ?? work));
-  assert.ok(pageDecides(workRoutes, "https://twin.example/") && !pageDecides(workRoutes, "https://work.example/"));
+  assert.ok(pageDecides(workRoutes, "https://twin.example/") && pageDecides(workRoutes, "https://home.example/") && !pageDecides(workRoutes, "https://work.example/"));
+});
+
+test("generated routes stay fast on long addresses, take default ports per scheme, and a pattern that can't compile ends the list", () => {
+  const { work } = fresh();
+  const slow = { kind: "pattern", pattern: "*/a*a*a*a*a*a*a*z" };
+  const routes = pageLinkPatterns(slow);
+  const started = performance.now();
+  for (const [source, flags] of routes) new RegExp(source, flags).test(`https://h.example/${"a".repeat(8000)}`);
+  assert.ok(performance.now() - started < 100, `took ${performance.now() - started} ms`);
+  const port80 = pageLinkPatterns({ kind: "pattern", pattern: "https://example.org:80/*" });
+  assert.ok(!port80.some(([source, flags]) => new RegExp(source, flags).test("https://example.org/")));
+  assert.ok(port80.some(([source, flags]) => new RegExp(source, flags).test("https://example.org:80/")));
+  assert.ok(signInLink("https://accounts.google.com./"));
+  assert.doesNotThrow(() => pageLinkPatterns({ kind: "pattern", pattern: "https://x.example/\ud800*" }));
+  store.resetAirTrafficForTests({ rules: [rule({ when: { kind: "site", host: "a.example" }, profileId: work })], fallback: null, inAppLinks: true });
+  assert.ok(inAppLinkRoutes(store.currentAirTraffic(), new Set(["default"]), store.targetUsableNow, "default").length > 0);
 });
 
 test("the sync pushes each engine profile's routes once and clears them when the switch goes off", () => {

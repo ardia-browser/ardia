@@ -150,6 +150,7 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
     [self noteScriptFrame:frameId main:main sameSite:sameSite];
     [self callFrame:frameId kind:@"peekConfig" json:PeekConfigJSON(self)];
     [self callFrame:frameId kind:@"fieldProvider" json:sameSite ? FieldProviderJSON(_profile) : @"false"];
+    if (main) [self pushInAppLinkRoutes];
   } else if ([kind isEqualToString:@"peekGone"]) {
     [self forgetScriptFrame:frameId];
   } else if ([kind isEqualToString:@"exclusive"] && dict) {
@@ -163,7 +164,7 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
   } else if ([kind isEqualToString:@"selection"] && main) {
     [self emit:@"selection" payload:@{@"selection" : SelectionState(dict, RootPointsPerLocalPoint(self)) ?: NSNull.null}];
   } else if ([kind isEqualToString:@"newTabLink"] && dict) {
-    [self noteNewTabLink:Text(dict, @"url", 8192)];
+    [self noteNewTabLink:Text(dict, @"url", 8192) opener:Flag(dict, @"opener")];
   } else if ([kind isEqualToString:@"airTrafficLink"] && dict && main) {
     NSString *url = Text(dict, @"url", 8192);
     NSString *scheme = (url.length ? [NSURL URLWithString:url].scheme.lowercaseString : nil) ?: @"";

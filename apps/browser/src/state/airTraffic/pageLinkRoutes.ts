@@ -9,16 +9,36 @@ export const MAX_PAGE_LINK_ROUTES = 512;
 
 const regexEscape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-const globSource = (glob: string, star: string) => regexEscape(glob).replace(/\\\*/g, star);
+function globSource(glob: string, star: string, groups: { n: number }): string {
+  const parts = glob.split(/\*+/);
+  if (parts.length === 1) return regexEscape(glob);
+  let out = regexEscape(parts[0]!);
+  for (const middle of parts.slice(1, -1)) {
+    groups.n += 1;
+    out += `(?=(${star}*?${regexEscape(middle)}))\\${groups.n}`;
+  }
+  return `${out}${star}*${regexEscape(parts.at(-1)!)}`;
+}
+
+const encodedPath = (path: string) => {
+  try {
+    return encodeURI(path);
+  } catch {
+    return path;
+  }
+};
 
 const asciiGlob = (glob: string) => glob.split(".").map((label) => (/^[\x00-\x7f]*$/.test(label) ? label : `xn--${punycodeEncode(label)}`)).join(".");
 
 const WEB = "^https?://";
-const HOST_CHARS = "[^/?#@:]*";
+const HOST_CHAR = "[^/?#@:]";
+const HOST_CHARS = `${HOST_CHAR}*`;
+const PATH_CHAR = "[^#]";
 const HOST_END = "(?=[:/?#]|$)";
+const DEFAULT_PORTS: Record<string, string> = { http: "80", https: "443" };
 
 export const SIGN_IN_PATTERNS: readonly PageLinkPattern[] = [
-  [`${WEB}(?:accounts\\.google\\.com|login\\.microsoftonline\\.com|login\\.live\\.com|login\\.windows\\.net|appleid\\.apple\\.com|${HOST_CHARS}\\.okta\\.com|${HOST_CHARS}\\.auth0\\.com|id\\.atlassian\\.com)${HOST_END}`, "i"],
+  [`${WEB}(?:accounts\\.google\\.com|login\\.microsoftonline\\.com|login\\.live\\.com|login\\.windows\\.net|appleid\\.apple\\.com|${HOST_CHARS}\\.okta\\.com|${HOST_CHARS}\\.auth0\\.com|id\\.atlassian\\.com)\\.?${HOST_END}`, "i"],
   ["^https?://[^#]*[?&](?:redirect_uri|redirect_url|response_type|client_id|samlrequest|samlresponse|relaystate|openid\\.mode|openid\\.return_to|oauth_token|wctx)=", "i"],
 ];
 
@@ -30,7 +50,7 @@ function hostPatterns(host: string): PageLinkPattern[] {
   return [...new Set([host, displayHost(host)])].map((h) => [`${WEB}(?:${HOST_CHARS}\\.)?${regexEscape(h)}\\.?${HOST_END}`, ""]);
 }
 
-const portSource = (spec: MatchSpec) => (spec.port === "*" ? "(?::\\d+)?" : spec.port === "80" || spec.port === "443" ? `(?::${spec.port})?` : `:${spec.port}`);
+const portSource = (spec: MatchSpec, scheme: string) => (spec.port === "*" ? "(?::\\d+)?" : DEFAULT_PORTS[scheme] === spec.port ? `(?::${spec.port})?` : `:${spec.port}`);
 
 function matchPatternPatterns(pattern: string): PageLinkPattern[] {
   const spec = parseMatchPattern(pattern);
@@ -39,8 +59,8 @@ function matchPatternPatterns(pattern: string): PageLinkPattern[] {
   const schemes = spec.schemes.filter((s) => s === "http" || s === "https");
   if (!schemes.length || spec.file) return [];
   const host = !spec.host ? HOST_CHARS : spec.sub ? `(?:${HOST_CHARS}\\.)?${regexEscape(spec.host)}` : regexEscape(spec.host);
-  const start = `^(?:${schemes.join("|")})://${host}\\.?${portSource(spec)}`;
-  const paths = new Set([globSource(spec.path, "[^#]*"), globSource(encodeURI(spec.path), "[^#]*")]);
+  const start = `^(?:${schemes.map((scheme) => `${scheme}://${host}\\.?${portSource(spec, scheme)}`).join("|")})`;
+  const paths = new Set([spec.path, encodedPath(spec.path)].map((path) => globSource(path, PATH_CHAR, { n: 0 })));
   if (spec.path.endsWith("/*")) paths.add(regexEscape(spec.path.slice(0, -2)));
   return [...paths].map((path) => [`${start}${path}(?=#|$)`, ""]);
 }
@@ -51,11 +71,12 @@ function wildcardPatterns(pattern: string): PageLinkPattern[] {
   const out: PageLinkPattern[] = [];
   for (const g of new Set([glob, asciiGlob(glob)])) {
     const slash = g.indexOf("/");
+    const groups = { n: 0 };
     if (slash < 0) {
-      out.push([`${WEB}${globSource(g, HOST_CHARS)}${HOST_END}`, "i"]);
+      out.push([`${WEB}${globSource(g, HOST_CHAR, groups)}${HOST_END}`, "i"]);
       continue;
     }
-    out.push([`${WEB}${globSource(g.slice(0, slash), HOST_CHARS)}(?::\\d+)?${globSource(g.slice(slash), "[^#]*")}(?=#|$)`, "i"]);
+    out.push([`${WEB}${globSource(g.slice(0, slash), HOST_CHAR, groups)}(?::\\d+)?${globSource(g.slice(slash), PATH_CHAR, groups)}(?=#|$)`, "i"]);
   }
   return out;
 }
@@ -87,22 +108,32 @@ export function pageLinkPatterns(when: LinkCondition): PageLinkPattern[] {
   return matchPatternPatterns(when.pattern);
 }
 
+const compiles = ([source, flags]: PageLinkPattern) => {
+  try {
+    new RegExp(source, flags);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 export function inAppLinkRoutes(config: AirTrafficConfig, sourceProfiles: ReadonlySet<string>, usable: TargetUsable, lastProfile: string): PageLinkRoute[] {
   if (!config.inAppLinks || !sourceProfiles.size) return [];
   const out: PageLinkRoute[] = SIGN_IN_PATTERNS.map(([source, flags]) => [source, flags, "stay"]);
   const seen = new Set<string>();
   let routes = false;
-  for (const rule of config.rules) {
+  build: for (const rule of config.rules) {
     if (!rule.enabled || rule.from) continue;
+    if (rule.profileId !== null && !usable(rule.profileId, null)) continue;
     const target = rule.profileId ?? lastProfile;
-    if (!usable(target, null)) continue;
-    const action = sourceProfiles.size === 1 && sourceProfiles.has(target) ? "stay" : "route";
-    routes ||= action === "route";
-    for (const [source, flags] of pageLinkPatterns(rule.when)) {
-      const key = `${source}\n${flags}`;
+    const action = !usable(target, null) || sourceProfiles.has(target) ? "stay" : "route";
+    for (const pattern of pageLinkPatterns(rule.when)) {
+      if (!compiles(pattern)) break build;
+      const key = pattern.join("\n");
       if (seen.has(key)) continue;
       seen.add(key);
-      out.push([source, flags, action]);
+      out.push([...pattern, action]);
+      routes ||= action === "route";
     }
   }
   return routes ? out.slice(0, MAX_PAGE_LINK_ROUTES) : [];

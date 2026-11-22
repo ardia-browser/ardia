@@ -1440,7 +1440,7 @@
     const MAX_LINK_ROUTES = 512;
     const ROUTED_CLICK_REPEAT_MS = 1000;
     const RegExpCtor = RegExp;
-    const replaceText = String.prototype.replace;
+    const execPattern = RegExp.prototype.exec;
     const namespace = getter(Element.prototype, "namespaceURI");
     const timeStamp = getter(Event.prototype, "timeStamp");
     const persisted = getter(PageTransitionEvent.prototype, "persisted");
@@ -1605,15 +1605,22 @@
       const scale = ratio(window);
       send("peek", { url, key: "site", origin: pageOrigin, x: clientX(e) * scale, y: clientY(e) * scale, moved: 0 });
     };
+    const relOf = (link) => apply(getAttribute, link, ["rel"]) || "";
+    const keepsOpener = (link) => {
+      const rel = relOf(link);
+      if (apply(test, /(?:^|\s)no(?:opener|referrer)(?:\s|$)/i, [rel])) return false;
+      return !apply(test, /^_blank$/i, [targetOf(link)]) || apply(test, /(?:^|\s)opener(?:\s|$)/i, [rel]);
+    };
+    const newTabLink = (link, url) => (keepsOpener(link) ? { url, opener: true } : { url });
     const noteNewTabLink = (e, link) => {
       if (defaultPrevented(e) || replacesPage(link)) return;
       const url = linkUrl(link);
-      if (url && apply(test, /^https?:/i, [url])) send("newTabLink", { url });
+      if (url && apply(test, /^https?:/i, [url])) send("newTabLink", newTabLink(link, url));
     };
     let linkRoutes = [];
     let routedClick = null;
     const linkRouteOf = (url) => {
-      for (let i = 0; i < linkRoutes.length; i++) if (apply(test, linkRoutes[i].pattern, [url])) return linkRoutes[i].route;
+      for (let i = 0; i < linkRoutes.length; i++) if (apply(execPattern, linkRoutes[i].pattern, [url]) !== null) return linkRoutes[i].route;
       return false;
     };
     handlers.airTrafficConfig = (config) => {
@@ -1624,7 +1631,7 @@
         const entry = entries[i];
         if (!entry || entry.length !== 3 || typeof entry[0] !== "string" || typeof entry[1] !== "string") return;
         try {
-          linkRoutes.push({ pattern: new RegExpCtor(entry[0], apply(replaceText, entry[1], [/[^imsu]/g, ""])), route: entry[2] === "route" });
+          linkRoutes.push({ pattern: new RegExpCtor(entry[0], entry[1] === "i" ? "i" : ""), route: entry[2] === "route" });
         } catch {
           return;
         }
@@ -1694,7 +1701,7 @@
           apply(unlisten, link, ["click", seen, true]);
           if (!dispatched || defaultPrevented(dispatched) || replacesPage(link)) return;
           const url = linkUrl(link);
-          if (peekable({ link, url, path: [link] })) send("newTabLink", { url });
+          if (peekable({ link, url, path: [link] })) send("newTabLink", newTabLink(link, url));
         });
       });
       const click = asNative(clickDescriptor.value, (target, self, args) => {
@@ -1714,7 +1721,8 @@
         const raw = `${args[0]}`;
         if (!raw) return;
         const url = new URLCtor(raw, baseURI(document)).href;
-        if (apply(test, /^https?:/i, [url])) send("newTabLink", { url });
+        const features = args.length > 2 && args[2] !== undefined && args[2] !== null ? `${args[2]}` : "";
+        if (apply(test, /^https?:/i, [url])) send("newTabLink", apply(test, /(?:^|[\s,])no(?:opener|referrer)(?:\s*=\s*(?:1|yes|true))?(?:[\s,]|$)/i, [features]) ? { url } : { url, opener: true });
       };
       const open = asNative(openDescriptor.value, (target, self, args) => {
         guard(openedByUser)(args);

@@ -453,8 +453,10 @@ config folder.
   `response_type`, `SAMLRequest` and the like, `signInLink` in `pageLinkRoutes.ts`) change nothing (`inAppLinks.ts`).
   - *New tabs.* A link a page opens into a new tab or window is routed when nothing can still need its opener: a
     ⌘-click or middle-click (`background`), a plain click on a `target=_blank` link (`foreground` matched to the
-    click, `fromClick`), or a ⇧-click window once Peek has had it. A `window.open` without a matching click, a pop-up
-    opened as a tab and a ⇧-click Peek stay where Chrome put them, so "Sign in with Google" keeps talking to its
+    click, `fromClick`; macOS only), or a ⇧-click window once Peek has had it. The page script tells native whether
+    the link it noted keeps its opener (`rel=opener`, a named target, or `window.open` without `noopener`), native
+    passes `opener: true` on the open request, and such a tab stays where Chrome put it, as do a `window.open` with no
+    matching click, a pop-up opened as a tab and a ⇧-click Peek, so "Sign in with Google" keeps talking to its
     opener. The check runs in `openFromPage` after `tab.opening`, so a rewrite routes at its new URL and a cancel stops
     it first; a source window that closed while the hook decided routes nothing. The page the engine prepared under
     the source profile is discarded (`discardOffered`), never adopted under another profile.
@@ -462,16 +464,22 @@ config folder.
     replaces the page is decided inside the page, in the main frame only. For each engine profile the app pushes an
     ordered list of `[regex, flags, "route" | "stay"]` entries (`webView.setInAppLinkRoutes`, `inAppLinkRoutes` in
     `pageLinkRoutes.ts`), one or two per Any-app rule in rule order, sign-in entries first, so the first entry that
-    matches decides as the first rule that matches does in the app; profiles that share data share one engine
-    profile and get one merged list. The page script decides synchronously at the end of the click's dispatch: if the
+    matches decides as the first rule that matches does in the app. Profiles that share data share one engine profile
+    and one list, in which a rule to any of them is a stay entry, so a click between them loads in place. Globs are
+    built with one atomic lookahead per middle segment (leftmost match), so a rule with many `*` stays linear on long
+    addresses; a pattern that doesn't compile ends the list, on both sides. The page matches with the `exec` it
+    captured at start, so a page that patches `RegExp` never sees the rules. The page script decides synchronously at
+    the end of the click's dispatch: if the
     page didn't cancel the click and the first matching entry routes, it cancels the click and reports the URL once
     (a second click within a second is cancelled but not reported again). A click the page stops before it reaches
     the window is left to the browser. The app decides again with the real rules; a click it declines (a stale push)
-    loads in place and counts as a miss. Linux, Windows and pages open in WebKit don't route clicks
-    (`PLATFORM_FEATURES.routesLinkClicks`), and Settings says so.
+    loads in place and counts as a miss. The list is pushed again when a view attaches a tab and when a page comes
+    back from the back/forward cache. Linux, Windows and pages open in WebKit don't route plain clicks or
+    `target=_blank` clicks (`PLATFORM_FEATURES.routesLinkClicks`), and Settings says so.
   - *Typed addresses.* A URL typed in the address bar or the New Tab bar, or a page suggestion picked there, is checked
-    where the bar commits it, after the same `tab.opening` gate (and only while its tab is still open); a typed
-    search is never routed. Form submits, script navigations and redirects are never touched.
+    where the bar commits it, after `tab.opening` (`typed` for the current tab, `newTab` for ⌘-Enter, ⇧-Enter and the
+    New Tab bar's new tabs), so a cancel stops it and a rewrite routes at its new address, and only while its tab and
+    window are still open and not closing; a typed search is never routed. Form submits, script navigations and redirects are never touched.
 - **No approval.** The user makes these rules in Settings, so they count as approved. hooks.json route hooks still need
   approval in Advanced › Automation; the pane lists them read-only with their state.
 - **The hold.** An enabled rule or an Everything Else choice turns the incoming-link hold on, reported again on every

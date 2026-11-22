@@ -826,3 +826,45 @@ test("links in a subframe, modified clicks and a broken route list are never rou
   env.gesture([env.link("https://example.org/off")], {});
   assert.deepEqual(routedLinks(env), []);
 });
+
+test("a page that patches RegExp never sees the routes, and the decision stays the same", () => {
+  const env = environment();
+  const seen = [];
+  const exec = RegExp.prototype.exec;
+  RegExp.prototype.exec = function (text) {
+    seen.push(this.source);
+    return Reflect.apply(exec, this, [text]);
+  };
+  try {
+    env.handlers.airTrafficConfig({ linkRoutes: [["^https?://secret-project\\.example(?=[:/?#]|$)", "", "route"]] });
+    const routed = env.gesture([env.link("https://secret-project.example/a")], {});
+    const plain = env.gesture([env.link("https://other.example/a")], {});
+    assert.ok(routed.defaultPrevented && !plain.defaultPrevented);
+  } finally {
+    RegExp.prototype.exec = exec;
+  }
+  assert.ok(seen.length > 0, "the page's own patch ran");
+  assert.ok(!seen.some((source) => source.includes("secret-project")));
+});
+
+test("a new-tab link says whether it keeps its opener: rel=opener and named targets do, a plain _blank and noopener don't", () => {
+  const env = environment();
+  const notes = () => env.sent.filter((m) => m.kind === "newTabLink").map((m) => [m.url, !!m.opener]);
+  env.gesture([env.link("https://b.example/blank", { target: "_blank" })], {});
+  env.gesture([env.link("https://b.example/rel", { target: "_blank", rel: "opener" })], {});
+  env.gesture([env.link("https://b.example/named", { target: "signin" })], {});
+  env.gesture([env.link("https://b.example/named-noopener", { target: "signin", rel: "noopener" })], {});
+  assert.deepEqual(notes(), [
+    ["https://b.example/blank", false],
+    ["https://b.example/rel", true],
+    ["https://b.example/named", true],
+    ["https://b.example/named-noopener", false],
+  ]);
+  env.activation.active = true;
+  env.window.open("https://b.example/popup", "_blank");
+  env.window.open("https://b.example/noopener", "_blank", "noopener");
+  assert.deepEqual(notes().slice(4), [
+    ["https://b.example/popup", true],
+    ["https://b.example/noopener", false],
+  ]);
+});

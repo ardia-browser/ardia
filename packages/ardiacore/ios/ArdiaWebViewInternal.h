@@ -225,7 +225,7 @@ typedef NS_ENUM(NSInteger, ArdiaTransfer) {
               disposition:(NSString *)disposition
                      link:(BOOL)link
                     tries:(int)tries;
-- (void)noteNewTabLink:(nullable NSString *)url;
+- (void)noteNewTabLink:(nullable NSString *)url opener:(BOOL)opener;
 - (void)tabRemovedFromWindow:(ArdiaCoreWindow *)window;
 - (void)tabActivatedByChrome:(BOOL)chromes;
 - (void)devToolsChanged:(NSView *)devToolsView;
@@ -334,6 +334,7 @@ typedef NS_ENUM(NSInteger, ArdiaTransfer) {
 
 @interface ArdiaWebView (PeekInternal)
 - (void)pushPeekModifier;
+- (void)pushInAppLinkRoutes;
 - (BOOL)peeksLinksToOtherSites;
 - (void)fallBackFromPeek:(NSDictionary *)dict url:(NSString *)url frame:(NSString *)frameId reason:(NSString *)reason test:(BOOL)test;
 - (void)peekLink:(NSDictionary *)dict frame:(NSString *)frameId main:(BOOL)main;

@@ -30,7 +30,7 @@ export function startInAppLinkSync() {
     const next = inAppLinkRoutesByEngineProfile();
     for (const key of sent.keys()) if (!next.has(key)) next.set(key, "[]");
     for (const [key, routes] of next) {
-      if (sent.get(key) === routes) continue;
+      if ((sent.get(key) ?? "[]") === routes) continue;
       if (routes === "[]") sent.delete(key);
       else sent.set(key, routes);
       void setInAppLinkRoutes(key, JSON.parse(routes)).catch(() => sent.delete(key));

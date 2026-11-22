@@ -5,7 +5,8 @@ import type { Tab } from "../browser/types";
 import { openSplitPane } from "../splits/actions";
 import { splitViewAvailable } from "../splits/splits";
 import { gateOpening, isGatedUrl, settleOpening } from "../tabs/openingGate";
-import { routedInApp } from "../airTraffic/inAppLinks";
+import { openTypedElsewhere, routedInApp } from "../airTraffic/inAppLinks";
+import { consentToken } from "../telemetry/consentPeriod";
 import { noteSplit } from "../telemetry/usage";
 import { noteBarLoad } from "../telemetry/barLoadFocus";
 import { originalProfile } from "../windows/small";
@@ -21,13 +22,14 @@ export function dispositionFor(mods: { metaKey?: boolean; altKey?: boolean; shif
 
 export function commitTypedUrl(url: string, page: { windowId: string; profileId: string; tabId: string }) {
   if (!isGatedUrl(url)) return useBrowser.getState().navigate(page.tabId, url);
+  const consent = consentToken();
   const gated = gateOpening(url, { ...page, via: "typed" }, `tab:${page.tabId}`);
   settleOpening(gated, `tab:${page.tabId}`, (verdict) => {
     if (verdict && "cancel" in verdict) return;
     const s = useBrowser.getState();
     if (!s.tabs[page.tabId]) return;
     const target = verdict?.url ?? url;
-    if (!routedInApp(target, page, "typed")) return s.navigate(page.tabId, target, { userInitiated: !verdict, gated: true });
+    if (!routedInApp(target, page, "typed", consent)) return s.navigate(page.tabId, target, { userInitiated: !verdict, gated: true });
     const after = useBrowser.getState();
     if (after.windowUi[page.windowId]?.panel.open) after.closePanel(page.windowId);
   });
@@ -51,10 +53,14 @@ export function openFromBar(url: string, tabId: string, disposition: Disposition
     });
     return;
   }
-  if (typedUrl && routedInApp(url, { windowId: tab.windowId, profileId: tab.profileId, tabId }, "typed")) return;
   s.closePanel(tab.windowId);
-  if (disposition === "newTab") return void s.newTab(tab.windowId, { url, profileId: tab.profileId, openerId: tab.url ? tabId : undefined });
-  openWindow(w?.kind === "private" ? { kind: "private", url, profileId: originalProfile(s, w) } : { profileId: tab.profileId, url });
+  const open = (target: string, gated: boolean) => {
+    const now = useBrowser.getState();
+    if (disposition === "newTab") return void now.newTab(tab.windowId, { url: target, profileId: tab.profileId, openerId: tab.url && now.tabs[tabId] ? tabId : undefined, gated });
+    openWindow(w?.kind === "private" ? { kind: "private", url: target, profileId: originalProfile(now, w) } : { profileId: tab.profileId, url: target });
+  };
+  if (typedUrl) return openTypedElsewhere(url, { windowId: tab.windowId, profileId: tab.profileId, tabId }, open);
+  open(url, false);
 }
 
 export const barSplitsFrom = (tabId: string) => splitViewAvailable && !!useBrowser.getState().tabs[tabId]?.url;

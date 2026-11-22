@@ -1880,8 +1880,7 @@ go back, and `app_launched.material_colors` (`not_material` while it is off) for
 
 ### Android motion and menu follow-up
 
-Settings keeps the same sheet and scroll view when Material You changes, with a compact, steady-color Material
-top bar and a Close button. The covered browser follows at lower
+Settings keeps the same sheet and scroll view when Material You changes. The covered browser follows at lower
 render priority, and open menus keep their opening design through dismissal. Watch the existing
 `material_you_turned_on`, `material_you_turned_off` and drawn-menu usage counts; no new telemetry fields are sent.
 

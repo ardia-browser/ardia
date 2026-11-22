@@ -278,6 +278,15 @@ test("each window counts who decorates it and its desktop's answer once, when th
   quitting.emit({ windowId: "main", decoratedBy: "app", answer: "client" });
   assert.deepEqual(quitNoted, [], "a stopped window counts nothing from a late reply or event");
 
+  const before = fakeHost({ decoratedBy: "app", answer: "client" });
+  const beforeNoted = [];
+  const stopBefore = watchWindowDecorations(before.host, "main", (by, answer) => beforeNoted.push([by, answer]), fakeTimers());
+  await tick();
+  stopBefore();
+  before.reply();
+  await tick();
+  assert.deepEqual(beforeNoted, [], "a watcher stopped before any event counts nothing from its reply");
+
   const bare = fakeHost({});
   bare.host.bootstrap.capabilities = [];
   watchWindowDecorations(bare.host, "main", () => assert.fail("an engine without the call is never asked"));

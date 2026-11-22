@@ -139,7 +139,7 @@ class FramelessUtilityWindowTests(unittest.TestCase):
         self.assertIn('? frame->GetWindowRoundedCorners()', overlay)
         self.assertIn('if (is_utility()) SetBackground(views::CreateRoundedRectBackground(kColorWebContentsBackground, rounded));', overlay)
         self.assertIn('shell_->holder()->SetNativeViewCornerRadii(rounded);', overlay)
-        self.assertIn('if (curtain_) curtain_->layer()->SetRoundedCornerRadius(rounded);', overlay)
+        self.assertIn('    curtain_->layer()->SetRoundedCornerRadius(rounded);', overlay)
         theme = self.host[self.host.index('void ShellHostView::OnWidgetThemeChanged(views::Widget*) {'):]
         self.assertIn('  if (browser_view_) RoundWindowCorners();\n}', theme[:theme.index('\n}\n') + 3])
 

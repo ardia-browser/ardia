@@ -961,7 +961,9 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
     from the frame insets it had then; the host's `FrameTypeChanged` has X11 rewrite the property
     (`X11Extension::RefreshDecorationInsets`).
   - Known limits: sway and niri are expected to honour the client-side request (not measured here), so there Ardia
-    keeps Chromium's frame. `windowCornerRadius` and `drawnWindowCornerRadius` still answer a fixed 19 on Linux
+    keeps Chromium's frame. Away from a window corner a page hole keeps 12 CSS px while the engine clips the page to
+    12 DIP; they differ when the shell is zoomed, and with a near-corner corner now in DIP on both sides that
+    difference can show within one page. `windowCornerRadius` and `drawnWindowCornerRadius` still answer a fixed 19 on Linux
     (`apps/linux/src/shellMethods.ts`): the shared page-card geometry reads them synchronously for every window, so the
     settings snapshot's `window_corner_radius` reports that, not the frame's radius.
 - **Menu button.** Linux has no global menu bar, so a menu button stands in for the Mac one: usually the `…` beside the

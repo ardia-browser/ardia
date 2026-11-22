@@ -120,6 +120,8 @@ int main() {
     assert(near_one.x == 0 && near_one.width == 1001);
     const corners::Box exact = corners::EnclosingBox(1.0, 2.0, 999.0, 698.0);
     assert(exact.x == 1 && exact.y == 2 && exact.width == 998 && exact.height == 696);
+    const corners::Box empty = corners::EnclosingBox(10.5, 20.25, 10.5, 20.25);
+    assert(empty.x == 10 && empty.y == 20 && empty.width == 0 && empty.height == 0);
     const corners::Box huge = corners::EnclosingBox(-1e300, 0.0, 1e300, std::nan(""));
     assert(huge.x == std::numeric_limits<int>::min() && huge.width == std::numeric_limits<int>::max() && huge.height == 0);
   }

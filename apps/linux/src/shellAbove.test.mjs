@@ -64,3 +64,13 @@ test("an animation on an overlay's ancestor or inside it counts as the overlay m
     else globalThis.document = previous;
   }
 });
+
+test("the shell's cleanup stops following the window's corners", async () => {
+  const { readFileSync } = await import("node:fs");
+  const source = readFileSync(new URL("./shellAbove.ts", import.meta.url), "utf8");
+  const start = source.slice(source.indexOf("export function startShellAbove("));
+  const body = start.slice(0, start.indexOf("\n}\n"));
+  assert.match(body, /const stopCorners = onWindowCornersChanged\(\(\) => painter\.windowChanged\(\)\);/);
+  const cleanup = body.slice(body.lastIndexOf("return () => {"));
+  assert.match(cleanup, /\n    stopCorners\(\);\n/);
+});

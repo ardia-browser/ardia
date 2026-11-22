@@ -3418,7 +3418,10 @@ void ShellHostView::RoundWindowCorners() {
   }
   if (is_utility()) SetBackground(views::CreateRoundedRectBackground(kColorWebContentsBackground, rounded));
   shell_->holder()->SetNativeViewCornerRadii(rounded);
-  if (curtain_) curtain_->layer()->SetRoundedCornerRadius(rounded);
+  if (curtain_) {
+    curtain_->layer()->SetRoundedCornerRadius(rounded);
+    curtain_->layer()->SetIsFastRoundedCorner(true);
+  }
   for (const auto& [id, binding] : bindings_) {
     ClipViewport(binding->viewport());
     ClipViewport(binding->devtools_viewport());
@@ -4727,7 +4730,8 @@ base::DictValue ShellHostView::WindowDecorationsValue() const {
   const linux_window_corners::Corners corners = window_corners_.value_or(linux_window_corners::Corners());
   return base::DictValue()
       .Set("decoratedBy", linux_window_corners::DecoratedByName(FrameIsBorderless()))
-      .Set("answer", linux_window_corners::AnswerName(DecorationAnswer()))
+      .Set("answer", linux_window_corners::AnswerName(followed_decorations_ ? followed_decorations_->second
+                                                                             : DecorationAnswer()))
       .Set("corners", base::DictValue()
                           .Set("upperLeft", corners.upper_left)
                           .Set("upperRight", corners.upper_right)

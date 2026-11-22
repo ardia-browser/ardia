@@ -122,7 +122,10 @@ inline int ClampedSpan(int from, int to) {
 inline Box EnclosingBox(double left, double top, double right, double bottom) {
   const int x = ClampedFloor(left);
   const int y = ClampedFloor(top);
-  return Box{.x = x, .y = y, .width = ClampedSpan(x, ClampedCeil(right)), .height = ClampedSpan(y, ClampedCeil(bottom))};
+  return Box{.x = x,
+             .y = y,
+             .width = right > left ? ClampedSpan(x, ClampedCeil(right)) : 0,
+             .height = bottom > top ? ClampedSpan(y, ClampedCeil(bottom)) : 0};
 }
 
 constexpr float NearCornerRadius(int inset_x, int inset_y, float window_radius, float own_radius) {

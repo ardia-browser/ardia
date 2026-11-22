@@ -48,7 +48,8 @@ class WindowCornersTests(unittest.TestCase):
         self.assertLess(round_corners.index('if (window_corners_ == corners) return;'),
                         round_corners.index('shell_->holder()->SetNativeViewCornerRadii(rounded);'))
         self.assertIn('if (is_utility()) SetBackground(views::CreateRoundedRectBackground(kColorWebContentsBackground, rounded));', round_corners)
-        self.assertIn('if (curtain_) curtain_->layer()->SetRoundedCornerRadius(rounded);', round_corners)
+        self.assertIn('if (curtain_) {\n    curtain_->layer()->SetRoundedCornerRadius(rounded);\n'
+                      '    curtain_->layer()->SetIsFastRoundedCorner(true);\n  }', round_corners)
         self.assertIn('if (!browser_view_->layer() && !rounded.IsEmpty()) {\n    browser_view_->SetPaintToLayer();\n'
                       '    browser_view_->layer()->SetFillsBoundsOpaquely(false);\n  }\n'
                       '  if (browser_view_->layer()) {\n    browser_view_->layer()->SetRoundedCornerRadius(rounded);\n'
@@ -98,6 +99,7 @@ class WindowCornersTests(unittest.TestCase):
         self.assertNotIn('gfx::RectF(left, top', viewport)
         decorations = between(HOST, 'base::DictValue ShellHostView::WindowDecorationsValue() const {', '\n}\n')
         self.assertIn('DecoratedByName(FrameIsBorderless())', decorations)
+        self.assertIn('AnswerName(followed_decorations_ ? followed_decorations_->second', decorations)
 
     def test_the_corners_follow_every_change_of_frame_or_window_state(self):
         self.assertIn('  RoundWindowCorners();\n  browser_view_->GetActiveContentsWebView()->SetVisible(false);',

@@ -9,6 +9,7 @@ final class WebKitExtensionBridge {
     let windows: [[String]]
     let timeout: DispatchWorkItem
     let extensionId: String
+    let bridge: ObjectIdentifier
   }
 
   final class Listener {
@@ -119,6 +120,14 @@ final class WebKitExtensionBridge {
   }
 
   func deliverSignal(_ message: [String: Any], to extensionId: String, api: String) { signal(message, to: extensionId, api: api) }
+
+  func deliverWaking(_ message: [String: Any], to extensionId: String, api: String, done: @escaping () -> Void = {}) {
+    guard hub?.loadedExtension(extensionId)?.apis.contains(api) == true else { return done() }
+    whenListening(extensionId, api: api) { [weak self] found in
+      if !found.isEmpty { self?.signal(message, to: extensionId, api: api) }
+      done()
+    }
+  }
 
   func deliverAlarm(_ alarm: [String: Any], to extensionId: String) {
     guard hub?.loadedExtension(extensionId)?.apis.contains("alarms") == true else { return }
@@ -233,6 +242,10 @@ final class WebKitExtensionBridge {
     var args = body["args"] as? [Any] ?? []
     if relayed { args = Self.contentArgs(api, method, args: args, from: body["relayedFrom"]) }
     if api == "runtime", runtimeCall(method, args: args, context: body["context"] as? String, loaded: loaded, reply: reply) { return }
+    if api == "declarativeNetRequest", method == "wakeMirror" {
+      let kinds = (args.first as? [String]) ?? ["dynamic", "session", "rulesets"]
+      return deliverWaking(["signal": "dnrChanged", "kinds": kinds], to: loaded.id, api: api) { reply(["result": NSNull()], nil) }
+    }
     if Self.nativeApis.contains(api) { return nativeCall(api, method, args: args, untrusted: relayed, loaded: loaded, hub: hub, reply: reply) }
     let tabs = (body["tabs"] as? [Any] ?? []).map { hub.resolve($0 as? [String: Any]) }
     let windows = hub.windowTabKeys()
@@ -289,7 +302,7 @@ final class WebKitExtensionBridge {
     Self.nextRequest += 1
     let id = "wk-ext-\(Self.nextRequest)"
     let timeout = DispatchWorkItem { MainActor.assumeIsolated { Self.deliver(id, ["error": "Ardia didn't answer in time."]) } }
-    Self.pending[id] = Pending(reply: reply, windows: windows, timeout: timeout, extensionId: extensionId)
+    Self.pending[id] = Pending(reply: reply, windows: windows, timeout: timeout, extensionId: extensionId, bridge: ObjectIdentifier(self))
     let deadline = Self.dialogCalls.contains("\(api).\(method)") ? Self.dialogReplyDeadline : Self.replyDeadline
     DispatchQueue.main.asyncAfter(deadline: .now() + deadline, execute: timeout)
     var data: [String: Any] = [
@@ -326,7 +339,7 @@ final class WebKitExtensionBridge {
   }
 
   func dropExtension(_ id: String) {
-    for (request, waiting) in Self.pending where waiting.extensionId == id {
+    for (request, waiting) in Self.pending where waiting.extensionId == id && waiting.bridge == ObjectIdentifier(self) {
       Self.pending.removeValue(forKey: request)
       waiting.timeout.cancel()
       waiting.reply(nil, Self.failure("The extension was unloaded."))

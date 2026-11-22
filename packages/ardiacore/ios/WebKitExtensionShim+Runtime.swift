@@ -147,14 +147,15 @@ extension WebKitExtensionShimNamespace {
               post({ reply: message.request, responded: true, response: response === undefined ? null : response });
             };
             let pending = 0;
+            let kept = false;
             const settled = () => {
               pending -= 1;
-              if (!answered && !pending) post({ reply: message.request, responded: false, listened: true });
+              if (!answered && !pending && !kept) post({ reply: message.request, responded: false, listened: true });
             };
             for (const listener of set ? [...set] : []) {
               try {
                 const result = listener(message.message, message.sender, answer);
-                if (result === true) waiting = true;
+                if (result === true) waiting = kept = true;
                 else if (result && typeof result.then === "function") {
                   waiting = true;
                   pending += 1;

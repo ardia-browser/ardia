@@ -1,3 +1,4 @@
+import { listExtensions } from "../../platform/extensions";
 import { addHistoryVisits, deleteHistoryUrls } from "../../platform/history";
 import { clearBrowsingData } from "../profiles/profileData";
 import type { WebKitExtensionCall } from "../../platform/webkit";
@@ -311,7 +312,11 @@ export async function answerExtensionCall(call: WebKitExtensionCall): Promise<{ 
   const handler = group && Object.hasOwn(group, call.method) ? group[call.method] : undefined;
   if (!handler) return { error: `${call.api}.${call.method} isn't supported.` };
   try {
-    if (call.api === "bookmarks") await bookmarksLoaded(call.base);
+    if (call.api === "bookmarks" && !store().bookmarksReady[call.base]) {
+      await bookmarksLoaded(call.base);
+      const running = (await listExtensions(call.base)).some((x) => x.id === call.extensionId && x.enabled);
+      if (!running) return { error: "The extension was turned off while its bookmarks call waited." };
+    }
     const result = await handler(call, store());
     return { result: result === undefined ? null : result };
   } catch (error) {

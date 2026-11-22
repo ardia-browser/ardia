@@ -33,6 +33,7 @@ function downloadOf(call: WebKitExtensionCall, s: BrowserState, id: unknown): Do
 
 const MAX_PATTERN = 256;
 const MAX_MATCHED = 2048;
+const SEARCH_BUDGET_MS = 200;
 const REFERS_BACK = /\\[1-9]|\\k<|\(\?<?[=!]/;
 const REPEATS = new Set(["*", "+", "{"]);
 const MAX_UNBOUNDED_REPEATS = 2;
@@ -67,7 +68,7 @@ function backtracks(pattern: string): boolean {
       if (branching && open.length) open[open.length - 1] = true;
     }
   }
-  return unbounded > MAX_UNBOUNDED_REPEATS || quantifiers > MAX_QUANTIFIERS;
+  return unbounded > (pattern.startsWith("^") ? MAX_UNBOUNDED_REPEATS : 1) || quantifiers > MAX_QUANTIFIERS;
 }
 
 const matches = (pattern: RegExp, value: string) => pattern.test(value.length > MAX_MATCHED ? value.slice(0, MAX_MATCHED) : value);
@@ -87,7 +88,9 @@ export function searchDownloads(items: ChromeDownload[], query: Options): Chrome
   const urlPattern = patternOf(query.urlRegex);
   const finalUrlPattern = patternOf(query.finalUrlRegex);
   const filenamePattern = patternOf(query.filenameRegex);
+  const started = Date.now();
   const found = items.filter((d) => {
+    if ((urlPattern || finalUrlPattern || filenamePattern) && Date.now() - started > SEARCH_BUDGET_MS) fail("The search took too long; try a narrower pattern.");
     if (typeof query.id === "number" && d.id !== query.id) return false;
     if (typeof query.url === "string" && d.url !== query.url && d.finalUrl !== query.url) return false;
     if (typeof query.filename === "string" && d.filename !== query.filename) return false;

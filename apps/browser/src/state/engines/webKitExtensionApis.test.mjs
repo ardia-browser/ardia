@@ -60,13 +60,26 @@ const listen = (apis) => emit("webKit.extensionListeners", { profile: "", base: 
 
 test("bookmarks read and write the app's own bookmarks, with Chrome's root ids, and refuse what Chrome refuses", async () => {
   windowWithTabs("https://home.example/");
-  useBrowser.setState({ bookmarksReady: {} });
-  let answered = false;
-  const early = ask("bookmarks", "getTree", []).then((tree) => ((answered = true), tree));
-  await tick(5);
-  assert.equal(answered, false, "a bookmark call waits until Chrome's bookmark numbers are in, so WebKit never hands out ids of its own");
-  useBrowser.setState({ bookmarksReady: { "": true } });
-  assert.equal((await early)[0].id, "0");
+  let enabled = true;
+  globalThis.acTestUserScripts = { engine: { list: async () => [{ id: "abc", name: "Keeper", enabled, mayModify: true, location: "INTERNAL", sites: [], permissions: [] }] } };
+  try {
+    useBrowser.setState({ bookmarksReady: {} });
+    let answered = false;
+    const early = ask("bookmarks", "getTree", []).then((tree) => ((answered = true), tree));
+    await tick(5);
+    assert.equal(answered, false, "a bookmark call waits until Chrome's bookmark numbers are in, so WebKit never hands out ids of its own");
+    useBrowser.setState({ bookmarksReady: { "": true } });
+    assert.equal((await early)[0].id, "0");
+    useBrowser.setState({ bookmarksReady: {} });
+    const late = ask("bookmarks", "create", [{ parentId: "1", title: "Never" }]);
+    await tick(5);
+    enabled = false;
+    useBrowser.setState({ bookmarksReady: { "": true } });
+    await assert.rejects(late, /turned off/, "a call that waited doesn't act once its extension is off");
+    assert.equal(Object.values(S().bookmarks.nodes).some((n) => n.title === "Never"), false);
+  } finally {
+    delete globalThis.acTestUserScripts;
+  }
   const folder = await ask("bookmarks", "create", [{ parentId: "1", title: "Work" }]);
   assert.equal(folder.parentId, "1");
   const link = await ask("bookmarks", "create", [{ title: "Docs", url: "https://docs.example/" }]);
@@ -342,7 +355,7 @@ test("an extension opens a finished download only after you agree, and a search 
     shellNativeModules.ArdiaSystem.openFile = original;
     delete globalThis.acTestUserScripts;
   }
-  for (const urlRegex of ["(a+)+$", "(?:x*)*y", "(a)\\1", "(?=a)a", "a".repeat(300), "(a|aa)+$", "(?:b|bb){2,}", "((a|b)c)*", ".*.*.*.*.*.*.*.*.*.*Z", "a+b+c+", "x{2,}y{3,}z{1,}", "a{1,500}b{1,500}c{1,500}", "a?a?a?a?a?a?a?aaaaaaa"]) {
+  for (const urlRegex of ["(a+)+$", "(?:x*)*y", "(a)\\1", "(?=a)a", "a".repeat(300), "(a|aa)+$", "(?:b|bb){2,}", "((a|b)c)*", ".*.*.*.*.*.*.*.*.*.*Z", "a+b+c+", "x{2,}y{3,}z{1,}", ".*a.*Z", "a{1,500}b{1,500}c{1,500}", "a?a?a?a?a?a?a?aaaaaaa"]) {
     await assert.rejects(ask("downloads", "search", [{ urlRegex }]), /Invalid query filter/, urlRegex);
   }
   assert.equal((await ask("downloads", "search", [{ urlRegex: "^https://files\\.example/run" }])).length, 1);

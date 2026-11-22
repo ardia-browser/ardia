@@ -208,10 +208,11 @@ function load(engine: string): Promise<void> {
         if (!inApp(engine)) return;
         const read = await queryHistory(engine, MAX_HISTORY, MAX_VISIT_TIMES);
         const floor = read.length >= MAX_HISTORY ? read.reduce((oldest, e) => Math.min(oldest, e.visitTimes.at(-1) ?? 0), Infinity) : -Infinity;
-        let list = read.filter((e) => isWebPageUrl(e.url)).map(toEntry).sort(byLastVisit);
-        list = applyHistoryChanges(list, state.queued.filter(isListChange), gapNoter(engine));
+        const list = read.filter((e) => isWebPageUrl(e.url)).map(toEntry).sort(byLastVisit);
+        const live = state.queued.filter(isListChange);
         if (state.queued.some((c) => c.kind === "deleted" && c.all)) state.again = true;
         setView(engine, list, floor, true);
+        if (live.length) setView(engine, applyHistoryChanges(list, live, gapNoter(engine)), floor);
         if (inApp(engine)) loaded.add(engine);
       } while (state.again && inApp(engine));
     } catch (error) {

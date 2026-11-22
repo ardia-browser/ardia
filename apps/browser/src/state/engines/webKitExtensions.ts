@@ -16,6 +16,8 @@ import { consentToken, type ConsentToken } from "../telemetry/client";
 
 const syncedProfiles = new Set<string>();
 const signatures = new Map<string, string>();
+const restagesAsked = new Map<string, number>();
+const restagesDone = new Map<string, number>();
 const running = new Map<string, Promise<void>>();
 const again = new Set<string>();
 let listening = false;
@@ -40,9 +42,11 @@ async function pass(profile: string, consent: ConsentToken | null) {
   noteExtensionList(profile, list);
   const extensions = useBrowser.getState().settings.webKitExtensions ? forWebKit(list) : [];
   const signature = JSON.stringify(extensions);
-  if (signatures.get(profile) === signature) return;
+  const asked = restagesAsked.get(profile) ?? 0;
+  if (asked === (restagesDone.get(profile) ?? 0) && signatures.get(profile) === signature) return;
   const result = await syncWebKitExtensions(profile, extensions);
   signatures.set(profile, signature);
+  restagesDone.set(profile, asked);
   if (result.available) noteWebKitExtensions(result.loaded.length, result.failed.length, consent);
 }
 
@@ -104,7 +108,7 @@ function listen() {
   onWebKitExtensionCall((call) => void answerWebKitExtension(call));
   onWebKitExtensionListeners(noteExtensionListeners);
   onWebKitExtensionsWanted(({ profile }) => {
-    signatures.delete(profile);
+    restagesAsked.set(profile, (restagesAsked.get(profile) ?? 0) + 1);
     void syncExtensionsToWebKit(profile);
   });
 }

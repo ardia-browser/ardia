@@ -9,7 +9,7 @@ final class WebKitExtensionOffscreen: NSObject, WKNavigationDelegate {
   ]
   static let loadDeadline: TimeInterval = 15
   static let silentAudioLimit: TimeInterval = 30
-  static let audioCheckInterval: TimeInterval = 5
+  static let audioCheckInterval: TimeInterval = 1
   static let notLoaded = "Page failed to load."
   static let closedEarly = "The offscreen document was closed before it loaded."
 

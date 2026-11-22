@@ -696,7 +696,7 @@ test("a rule change made in WebKit is written to Chromium first and comes back t
   });
   native.length = 0;
   await popup.browser.declarativeNetRequest.updateDynamicRules({ addRules: [rule] });
-  assert.deepEqual(plain(popup.sent.map((m) => m.method)), ["update"], "a page writes to Chromium and leaves mirroring to the background, so its snapshot can't undo a newer one");
+  assert.deepEqual(plain(popup.sent.map((m) => [m.method, m.args[0]])), [["update", "dynamic"], ["wakeMirror", ["dynamic"]]], "a page writes to Chromium and wakes the background to mirror it, so its own snapshot can't undo a newer one");
   assert.deepEqual(native, []);
 
   const fallback = [];

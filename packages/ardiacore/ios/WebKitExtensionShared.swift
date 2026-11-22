@@ -120,7 +120,7 @@ enum WebKitExtensionShared {
       DispatchQueue.main.async {
         MainActor.assumeIsolated {
           for bridge in WebKitExtensionBridge.live where bridge.baseProfile == profile {
-            bridge.deliverSignal(["signal": "dnrChanged", "kinds": [kind]], to: id, api: "declarativeNetRequest")
+            bridge.deliverWaking(["signal": "dnrChanged", "kinds": [kind]], to: id, api: "declarativeNetRequest")
           }
           count("extensionDnrMirrored")
         }

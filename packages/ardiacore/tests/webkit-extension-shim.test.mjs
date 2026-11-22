@@ -342,7 +342,7 @@ test("without the shared flag the areas stay WebKit's own", () => {
   assert.equal(browser.storage.local, local);
 });
 
-test("on WebKit, whose namespaces ignore redefining their own members, the shim's overrides reach the extension through views of chrome and browser", async () => {
+test("on WebKit, whose namespaces ignore redefining their own members, the shim's overrides reach the extension through a view of chrome, and browser stays WebKit's own", async () => {
   const stubborn = (object) => new Proxy(object, { defineProperty: () => true, set: () => true });
   const log = [];
   const areas = webKitStorage(log);
@@ -366,7 +366,7 @@ test("on WebKit, whose namespaces ignore redefining their own members, the shim'
   vm.runInNewContext(shim(["runtime", "storage"], { permissions: ["storage"], shared: ["storage"] }), context);
   const chrome = context.chrome;
   assert.notEqual(chrome, native, "the global is a view of WebKit's namespace");
-  assert.equal(context.browser, chrome);
+  assert.equal(context.browser, native, "WebKit delivers runtime messages and ports through its own browser, so a view there drops them");
   assert.equal(chrome.storage, chrome.storage);
   assert.equal(chrome.storage.local, chrome.storage.local);
   assert.deepEqual(plain(await chrome.storage.local.get(["a"])), { a: 1 });

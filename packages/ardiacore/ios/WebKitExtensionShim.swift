@@ -357,12 +357,10 @@ enum WebKitExtensionShim {
       const showViews = () => {
         for (const native of viewRoots) {
           const view = viewAt(native, "");
-          for (const name of ["chrome", "browser"]) {
-            if (root[name] !== native || root[name] === view) continue;
-            try {
-              Object.defineProperty(root, name, { value: view, configurable: true, enumerable: true, writable: true });
-            } catch (error) {}
-          }
+          if (root.chrome !== native || root.chrome === view) continue;
+          try {
+            Object.defineProperty(root, "chrome", { value: view, configurable: true, enumerable: true, writable: true });
+          } catch (error) {}
         }
       };
       const patch = (target, name, value, path) => {

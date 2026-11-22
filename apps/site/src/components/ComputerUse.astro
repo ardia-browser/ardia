@@ -1,17 +1,29 @@
 ---
+import type { ImageMetadata } from "astro";
+import { Image } from "astro:assets";
 import { computerUse as cu } from "../data/computerUse";
+import ardiaLogo from "../assets/app-icon.png";
+import asideLogo from "../assets/logos/aside.png";
+import opencodeLogo from "../assets/logos/opencode.png";
 
 interface Props {
   page?: boolean;
 }
 const { page = false } = Astro.props;
+const Title = page ? "h1" : "h2";
 
-const pct = (value: number, max: number) => `${((value / max) * 100).toFixed(2)}%`;
+const logos: Record<string, ImageMetadata> = {
+  ardia: ardiaLogo,
+  aside: asideLogo,
+  opencode: opencodeLogo,
+};
+
 const runsText = (passes: number, runs: number) => (passes === runs ? `all ${runs} passed` : `passed ${passes} of ${runs}`);
 ---
 
 <section
   class:list={["cu paint", { edge: !page, "cu-page": page }]}
+  data-paint="noon"
   id="cli"
   aria-labelledby="cu-title"
   data-shot="computer-use"
@@ -20,423 +32,889 @@ const runsText = (passes: number, runs: number) => (passes === runs ? `all ${run
     <header class="cu-head">
       <div class="cu-title">
         <p class="label kicker">Bring your own agent</p>
-        <h2 class="poster cu-heading" id="cu-title">CLI.</h2>
+        <Title class="poster cu-heading" id="cu-title">Drive it by CLI.</Title>
         <p class="lede">
-          Your own Claude Code or Codex drives your Ardia with <code>ardia browse</code>, logins and all, and your Mac’s other apps
-          with <code>ardia computer</code>. Tokens spent on eight browser tasks, against Aside and OpenCode Browse.
+          Drive Ardia from Claude Code or Codex with <code>ardia browse</code>, logins included, or automate other Mac apps with{" "}
+          <code>ardia computer</code>. Below: median tokens across {cu.taskCount} tasks, lower is better.
         </p>
-        {!cu.complete && <p class="label status">Bench in progress · {cu.runs} of {cu.planned} runs so far</p>}
+        {!cu.complete && <p class="label status">Bench in progress, {cu.runs} of {cu.planned} runs so far</p>}
       </div>
-      <ul class="key" role="list" aria-label="Who's who">
-        {
-          cu.sides.map((s) => (
-            <li class="label">
-              <span class:list={["swatch", s.side]} aria-hidden="true" />
-              {s.side === "opencode" ? "OpenCode Browse" : s.name}
-            </li>
-          ))
-        }
-      </ul>
     </header>
 
-    <ul class="charts" role="list">
+    <div class="sheet-card" data-cu-root>
+      <div class="card-bar">
+        <div class="model-tabs" role="tablist" aria-label="Select model benchmark" data-cu-tabs>
+          {
+            cu.charts.map((c, idx) => (
+              <button
+                type="button"
+                role="tab"
+                id={`cu-tab-${idx}`}
+                aria-controls={`cu-panel-${idx}`}
+                class:list={["model-tab", { "is-active": idx === 0 }]}
+                aria-selected={idx === 0 ? "true" : "false"}
+                tabindex={idx === 0 ? 0 : -1}
+                data-cu-tab={idx}
+              >
+                <span class="tab-model">{c.model}</span>
+                <span class="tab-agent">{c.agentName}</span>
+              </button>
+            ))
+          }
+        </div>
+
+        <div class="win-stack">
+          {
+            cu.charts.map((c, idx) => (
+              <div class:list={["model-win", { "is-active": idx === 0 }]} data-cu-win={idx}>
+                <span class="win-pill">
+                  <b>{c.headline.figure}</b> fewer tokens
+                </span>
+                <span class="model-sub">
+                  vs OpenCode{c.headline.secondary ? ` · ${c.headline.secondary.replace(" fewer than Aside", " vs Aside")}` : ""}
+                </span>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+
       {
-        cu.charts.map((c) => (
-          <li class="card chart">
-            <h3 class="card-title">
-              {c.title} <span class="agent">· {c.agent}</span>
-            </h3>
-            <p class="totals">
-              {cu.taskCount} tasks:{" "}
-              {c.series.map((s, i) => (
-                <>
-                  {i > 0 && " · "}
-                  <span class:list={{ us: s.side === "ardia" }}>
-                    {s.name} <b>{s.total}</b>
-                  </span>
-                </>
-              ))}
-            </p>
-            <div class="plot" aria-hidden="true">
-              <div class="grid">
-                {c.ticks.map((t) => (
-                  <span class="tick" style={`bottom:${t.at}%`}>
-                    <span class="tick-text">{t.text}</span>
-                  </span>
-                ))}
-              </div>
-              <div class="groups">
-                {cu.tasks.map((task, ti) => (
-                  <div class="group">
-                    <div class="bars">
-                      {c.series.map((s) => {
-                        const b = s.bars[ti];
-                        return b ? (
-                          <span
-                            class:list={["bar", s.side, { partial: b.partial }]}
-                            style={`height:${pct(b.value, c.max)}`}
-                            title={`${task} · ${s.name}: ${b.text}, ${runsText(b.passes, b.runs)}`}
-                          />
-                        ) : (
-                          <span class="bar none" />
-                        );
-                      })}
-                    </div>
-                    <span class="task">{task}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div class="visually-hidden">
-              <table>
-                <caption>
-                  {c.title}, {c.agent}: median per task, lower is better
+        cu.charts.map((c, idx) => (
+          <div
+            id={`cu-panel-${idx}`}
+            role="tabpanel"
+            aria-labelledby={`cu-tab-${idx}`}
+            class:list={["table-panel", { "is-active": idx === 0 }]}
+            hidden={idx !== 0}
+            data-cu-panel={idx}
+          >
+            <div class="table-wrap">
+              <table class="cu-table">
+                <caption class="visually-hidden">
+                  {c.title}, {c.agent}: median tokens per task, lower is better
                 </caption>
+                <colgroup>
+                  <col class="cu-task" />
+                  {c.series.map(() => <col class="cu-num" />)}
+                  <col class="cu-x" />
+                </colgroup>
                 <thead>
                   <tr>
-                    <th scope="col">Task</th>
-                    {c.series.map((s) => (
-                      <th scope="col">{s.name}</th>
-                    ))}
+                    <th scope="col" class="task-col">Task</th>
+                    {c.series.map((s) => {
+                      const logo = logos[s.side];
+                      return (
+                        <th scope="col" class="num-col" data-side={s.side}>
+                          <span class="col-head">
+                            {logo ? (
+                              <Image class="brand-logo" src={logo} alt="" width={20} height={20} densities={[1, 2]} />
+                            ) : (
+                              <i class="dot" aria-hidden="true" />
+                            )}
+                            <span>{s.name}</span>
+                          </span>
+                        </th>
+                      );
+                    })}
+                    <th scope="col" class="x-col">Comparison</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {cu.tasks.map((task, ti) => (
+                  {c.rows.map((row) => (
                     <tr>
-                      <th scope="row">{task}</th>
-                      {c.series.map((s) => {
-                        const b = s.bars[ti];
-                        return <td>{b ? `${b.text}, ${runsText(b.passes, b.runs)}` : "not run"}</td>;
-                      })}
+                      <th scope="row" title={row.title}>
+                        <span class="task-full">{row.title}</span>
+                        <span class="task-short">{row.task}</span>
+                        {row.callout && (
+                          <span class:list={["m-callout", { loss: row.callout.loss }]}>
+                            <b>{row.callout.figure}</b> {row.callout.line}
+                          </span>
+                        )}
+                      </th>
+                      {row.cells.map((cell) => (
+                        <td
+                          class:list={["num", { best: cell.isBest, partial: cell.partial, none: cell.value === null }]}
+                          data-side={cell.side}
+                          title={cell.value !== null ? `${row.task}, ${cell.name}: ${cell.text}, ${runsText(cell.passes, cell.runs)}` : undefined}
+                        >
+                          {cell.partial && (
+                            <>
+                              <span class="pass-tag" aria-hidden="true">
+                                {cell.passes}/{cell.runs}
+                              </span>
+                              <span class="visually-hidden"> ({runsText(cell.passes, cell.runs)})</span>
+                            </>
+                          )}
+                          <span class="val">{cell.text}</span>
+                          {cell.isBest && <span class="visually-hidden">, lowest</span>}
+                        </td>
+                      ))}
+                      <td class:list={["x", { loss: row.callout?.loss }]}>
+                        {row.callout && (
+                          <>
+                            <b>{row.callout.figure}</b> {row.callout.line}
+                          </>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
+                <tfoot>
+                  <tr>
+                    <th scope="row">{cu.taskCount}-task total</th>
+                    {c.series.map((s) => (
+                      <td class:list={["num", { best: s.isBest }]} data-side={s.side}>
+                        <span class="val">{s.total}</span>
+                        {s.isBest && <span class="visually-hidden">, lowest</span>}
+                      </td>
+                    ))}
+                    <td class="x">
+                      <b>{c.headline.figure}</b> fewer than OpenCode
+                    </td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
-          </li>
+          </div>
         ))
       }
+    </div>
 
-      <li class="colophon">
-        <p class="label colophon-title">The small print</p>
-        <ul class="fine" role="list">
-          <li>
-            {cu.taskCount} local web apps, the same prompt for every agent, graded by a checker on each app’s own server.
-            Medians of {cu.repeats} runs{!cu.complete && ` (${cu.runs} of ${cu.planned} done)`}, {cu.dates}. Tokens count every run, passing or
-            not. Lower is better.
-          </li>
-          <li>
-            {cu.passes} of {cu.runs} runs passed.{" "}
-            {cu.partial.length ? `Striped: ${cu.partial.join("; ")}.` : "Every bar passed every run."}
-          </li>
-          <li>
-            Your own Claude Code or Codex drives Ardia through the <code>ardia</code> command, as shipped in 0.2.45-nightly.3. Nothing in
-            Ardia calls a model.
-          </li>
-          <li>OpenCode Browse {cu.opencodeVersion}: the same Claude Code and Codex, through its extension and MCP server.</li>
-          <li>Aside {cu.asideVersion}: its in-browser agent, not its desktop Computer Use, on its own subscription providers.</li>
-          <li>
-            Cold every run: Ardia’s site notes wiped, Aside’s memory off and its bench chats deleted. High effort everywhere. Ardia ran
-            hidden; Aside’s window sat behind other windows.
-          </li>
-          <li>On docs research the shell agents can read pages with curl; Aside’s agent can’t.</li>
-        </ul>
+    <div class="colophon">
+      <p class="colophon-summary">
+        {cu.taskCount} local web apps, medians of {cu.repeats} runs ({cu.dates}). {cu.passes} of {cu.runs} runs passed.
+        {cu.partial.length > 0 && ` Partial pass: ${cu.partial.join("; ")}.`}
+      </p>
+      {
+        page ? (
+          <ul class="fine" role="list">
+            <li>
+              Your own Claude Code or Codex drives Ardia through the <code>ardia</code> command, as shipped in 0.2.45-nightly.3. Nothing in Ardia calls a model.
+            </li>
+            <li>OpenCode Browse {cu.opencodeVersion}: the same Claude Code and Codex, through its extension and MCP server.</li>
+            <li>Aside {cu.asideVersion}: its in-browser agent, not its desktop Computer Use, on its own subscription providers.</li>
+            <li>
+              Fresh state each run: Ardia’s saved notes cleared, Aside’s memory off and prior chats deleted. Models ran at high reasoning effort. Ardia ran hidden; Aside stayed behind other windows.
+            </li>
+            <li>Token medians include failed runs. On docs research the shell agents can read pages with curl; Aside’s agent can’t.</li>
+          </ul>
+        ) : (
+          <details class="fine-details">
+            <summary class="label">Setup and versions</summary>
+            <ul class="fine" role="list">
+              <li>
+                Your own Claude Code or Codex drives Ardia through the <code>ardia</code> command, as shipped in 0.2.45-nightly.3. Nothing in Ardia calls a model.
+              </li>
+              <li>OpenCode Browse {cu.opencodeVersion}: the same Claude Code and Codex, through its extension and MCP server.</li>
+              <li>Aside {cu.asideVersion}: its in-browser agent, not its desktop Computer Use, on its own subscription providers.</li>
+              <li>
+                Fresh state each run: Ardia’s saved notes cleared, Aside’s memory off and prior chats deleted. Models ran at high reasoning effort. Ardia ran hidden; Aside stayed behind other windows.
+              </li>
+              <li>Token medians include failed runs. On docs research the shell agents can read pages with curl; Aside’s agent can’t.</li>
+            </ul>
+          </details>
+        )
+      }
+      <p class="colophon-links">
         <a class="link label" href={cu.source} rel="noopener" data-track="github_clicked" data-track-link="agent_bench" data-track-location="computer_use"
           >Rerun the bench</a
         >
-      </li>
-    </ul>
+      </p>
+    </div>
   </div>
 </section>
 
+<script>
+  for (const root of document.querySelectorAll<HTMLElement>("[data-cu-root]")) {
+    const tabs = [...root.querySelectorAll<HTMLButtonElement>("[data-cu-tab]")];
+    const panels = [...root.querySelectorAll<HTMLElement>("[data-cu-panel]")];
+    const wins = [...root.querySelectorAll<HTMLElement>("[data-cu-win]")];
+    const select = (index: number, focus = false) => {
+      tabs.forEach((tab, i) => {
+        const active = i === index;
+        tab.classList.toggle("is-active", active);
+        tab.setAttribute("aria-selected", active ? "true" : "false");
+        tab.tabIndex = active ? 0 : -1;
+        if (active && focus) tab.focus();
+      });
+      panels.forEach((panel, i) => {
+        const active = i === index;
+        panel.classList.toggle("is-active", active);
+        panel.hidden = !active;
+      });
+      wins.forEach((win, i) => {
+        win.classList.toggle("is-active", i === index);
+      });
+    };
+    tabs.forEach((tab, idx) => {
+      tab.addEventListener("click", () => select(idx));
+      tab.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+          event.preventDefault();
+          const next = (idx + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+          select(next, true);
+        } else if (event.key === "Home") {
+          event.preventDefault();
+          select(0, true);
+        } else if (event.key === "End") {
+          event.preventDefault();
+          select(tabs.length - 1, true);
+        }
+      });
+    });
+  }
+</script>
+
 <style>
   .cu {
-    --bg: var(--noon);
-    --bg-top: #f3e9d6;
-    --wash: linear-gradient(180deg, #f3e9d6 0%, var(--noon) 45%, #f0c983 100%);
-    --dab: var(--forest);
-    --ink-2: #3a372f;
-    --muted: #8c6a4c;
-    --card: #fbf5e8;
-    --card-edge: rgb(22 19 15 / 0.82);
-    --radius: 7px 12px 8px 14px / 11px 7px 13px 8px;
-    --c-ardia: var(--forest);
-    --c-aside: var(--stamp);
-    --c-opencode: var(--sun-deep);
-    --plot-h: clamp(170px, 18vw, 230px);
-    --axis-w: 44px;
-    padding: var(--section) 0 clamp(72px, 9vw, 140px);
+    --side-ardia: oklch(0.38 0.09 162);
+    --side-aside: oklch(0.38 0.11 40);
+    --side-opencode: oklch(0.38 0.1 272);
+    --side-color: var(--rival);
+    padding: clamp(68px, 7.5vw, 128px) 0 clamp(60px, 6.5vw, 108px);
   }
-  .cu + :global(.bb.edge) {
-    padding-top: clamp(56px, 6vw, 112px);
+  .cu [data-side="ardia"] {
+    --side-color: var(--side-ardia);
+  }
+  .cu [data-side="aside"] {
+    --side-color: var(--side-aside);
+  }
+  .cu [data-side="opencode"] {
+    --side-color: var(--side-opencode);
   }
   .cu-page {
-    padding-top: clamp(40px, 5vw, 88px);
+    padding-top: clamp(40px, 5vw, 84px);
   }
   .cu-head {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 16px var(--gutter);
-    margin-bottom: clamp(24px, 3vw, 44px);
+    margin-bottom: clamp(24px, 3vw, 36px);
   }
   .cu-heading {
     font-size: var(--t-h2);
   }
   .lede {
-    max-width: 36em;
+    max-width: 38em;
     margin-top: 14px;
-    font-size: 1.04rem;
-    line-height: 1.4;
-    color: var(--ink-2);
+    font-size: var(--t-lede);
+    line-height: 1.44;
+    color: var(--ink);
+  }
+  .cu code {
+    font-family: var(--mono);
+    font-size: 0.8em;
+    padding: 0.14em 0.44em;
+    border-radius: 6px;
+    background: rgb(22 19 15 / 0.075);
+    word-spacing: -0.22em;
+    white-space: nowrap;
   }
   .status {
     display: inline-block;
-    margin-top: 20px;
+    margin-top: 16px;
     padding: 4px 10px;
     color: var(--stamp);
     border: 1.5px solid currentColor;
-    border-radius: 3px;
+    border-radius: 6px;
     transform: rotate(-1.5deg);
   }
-  .key {
-    list-style: none;
-    margin: 0;
-    padding: 0 0 6px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px 20px;
-  }
-  .key li {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    color: var(--ink);
-    font-weight: 600;
-  }
-  .swatch {
-    width: 14px;
-    height: 14px;
-    border: 1.5px solid var(--ink);
-    border-radius: 3px;
-  }
-  .swatch.ardia,
-  .bar.ardia {
-    background-color: var(--c-ardia);
-  }
-  .swatch.aside,
-  .bar.aside {
-    background-color: var(--c-aside);
-  }
-  .swatch.opencode,
-  .bar.opencode {
-    background-color: var(--c-opencode);
-  }
-  code {
-    font-family: var(--mono);
-    font-size: 0.86em;
-    font-stretch: 87.5%;
+
+  .sheet-card {
+    padding: clamp(18px, 2.2vw, 24px) clamp(10px, 1.4vw, 18px) clamp(16px, 2vw, 24px);
+    border-radius: 18px;
+    background: var(--paper);
+    border: 1px solid transparent;
+    box-shadow:
+      0 0 0 1px rgb(22 19 15 / 0.08),
+      0 1px 2px rgb(22 19 15 / 0.04),
+      0 20px 44px -26px rgb(60 36 16 / 0.18);
   }
 
-  .charts {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: clamp(10px, 1.3vw, 18px);
+  .card-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 14px 20px;
+    padding: 0 14px 18px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid rgb(22 19 15 / 0.08);
   }
-  .card {
+
+  .model-tabs {
+    display: inline-grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+    padding: 4px;
+    border-radius: 12px;
+    background: rgb(22 19 15 / 0.06);
+  }
+  .model-tab {
     display: flex;
     flex-direction: column;
-    min-width: 0;
-    padding: clamp(14px, 1.6vw, 22px);
-    border: 1.5px solid var(--card-edge);
-    border-radius: var(--radius);
-    background-color: var(--card);
-    background-image: var(--impasto-soft);
-    background-size: 520px;
-    background-blend-mode: soft-light;
-    box-shadow: 0 16px 28px -22px rgb(90 50 20 / 0.55);
-  }
-  .card-title {
-    font-family: var(--poster);
-    font-weight: 740;
-    font-stretch: 85%;
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
-    font-size: 0.98rem;
-    line-height: 1.15;
-  }
-  .agent {
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    min-height: 42px;
+    padding: 6px 20px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
     color: var(--ink-2);
+    font-family: var(--sans);
+    cursor: pointer;
+    transition:
+      background-color 150ms var(--ease-out),
+      color 150ms var(--ease-out),
+      box-shadow 150ms var(--ease-out);
+    -webkit-tap-highlight-color: transparent;
   }
-  .totals {
-    margin-top: 4px;
+  @media (hover: hover) {
+    .model-tab:hover:not(.is-active) {
+      color: var(--ink);
+    }
+  }
+  .model-tab.is-active {
+    background: var(--paper);
+    color: var(--ink);
+    box-shadow:
+      0 0 0 1px rgb(22 19 15 / 0.06),
+      0 1px 3px rgb(22 19 15 / 0.1);
+  }
+  .tab-model {
+    font-size: 0.9rem;
+    font-weight: 680;
+    letter-spacing: -0.015em;
+    line-height: 1.15;
+    white-space: nowrap;
+  }
+  .tab-agent {
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--ink-3);
+    line-height: 1.15;
+    white-space: nowrap;
+  }
+
+  .win-stack {
+    display: grid;
+    justify-items: end;
+  }
+  .model-win {
+    grid-area: 1 / 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    text-align: end;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .model-win.is-active {
+    visibility: visible;
+    pointer-events: auto;
+  }
+  .win-pill {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.28em;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: color-mix(in oklch, var(--side-ardia) 11%, transparent);
+    color: var(--side-ardia);
     font-size: 0.86rem;
-    line-height: 1.35;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+    text-box: trim-both cap alphabetic;
+  }
+  .win-pill b {
+    font-size: 1rem;
+    font-weight: 740;
+  }
+  .model-sub {
+    font-size: 0.8rem;
     color: var(--ink-2);
     font-variant-numeric: tabular-nums;
   }
-  .totals span {
-    white-space: nowrap;
+
+  .table-panel {
+    display: none;
   }
-  .totals b {
-    color: var(--ink);
-    font-weight: 700;
+  .table-panel.is-active {
+    display: block;
   }
-  .totals .us b {
-    color: var(--forest-deep);
+  .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
-  .plot {
-    position: relative;
-    margin-top: clamp(16px, 1.8vw, 22px);
-    padding-left: var(--axis-w);
-  }
-  .grid {
-    position: absolute;
-    top: 0;
-    right: 0;
-    left: var(--axis-w);
-    height: var(--plot-h);
-    pointer-events: none;
-  }
-  .tick {
-    position: absolute;
-    left: 0;
-    right: 0;
-    border-top: 1px solid var(--rule);
-  }
-  .tick:first-child {
-    border-top: 1.5px solid var(--ink);
-  }
-  .tick-text {
-    position: absolute;
-    right: calc(100% + 8px);
-    top: -0.62em;
-    font-family: var(--mono);
-    font-stretch: 87.5%;
-    font-size: 0.72rem;
-    color: var(--ink-2);
-    white-space: nowrap;
-  }
-  .groups {
-    position: relative;
-    display: grid;
-    grid-template-columns: repeat(8, minmax(0, 1fr));
-  }
-  .group {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    min-width: 0;
-  }
-  .bars {
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
-    gap: 2px;
+  .cu-table {
     width: 100%;
-    height: var(--plot-h);
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-variant-numeric: tabular-nums;
   }
-  .bar {
-    flex: 0 1 15px;
-    min-width: 4px;
-    border: 1.5px solid var(--ink);
+  col.cu-task {
+    width: 38%;
+  }
+  col.cu-num {
+    width: 13%;
+  }
+  col.cu-x {
+    width: 23%;
+  }
+  .cu-table th,
+  .cu-table td {
+    padding: 12px 0;
+    text-align: end;
+    vertical-align: middle;
+    font-weight: inherit;
+  }
+  .cu-table thead th {
+    padding-block: 0 14px;
+    border-bottom: 1px solid rgb(22 19 15 / 0.1);
+    font-size: 0.82rem;
+    font-weight: 640;
+    letter-spacing: -0.008em;
+    color: var(--ink-3);
+    white-space: nowrap;
+  }
+  .cu-table thead th.task-col {
+    text-align: start;
+    padding-inline-start: 14px;
+  }
+  .cu-table thead th.x-col {
+    text-align: start;
+    padding-inline: clamp(20px, 2.6vw, 40px) 14px;
+  }
+  .cu-table thead th.num-col {
+    color: var(--side-color);
+  }
+  .col-head {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 7px;
+  }
+  .brand-logo {
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+    object-fit: cover;
+    flex: none;
+  }
+  [data-side="ardia"] .brand-logo {
+    outline: 1px solid rgb(22 19 15 / 0.12);
+    outline-offset: -1px;
+  }
+  .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background-color: var(--side-color);
+    flex: none;
+  }
+
+  .cu-table tbody tr > * {
+    border-bottom: 1px solid rgb(22 19 15 / 0.06);
+    transition:
+      background-color 120ms ease,
+      border-color 120ms ease;
+  }
+  .cu-table tbody tr:last-child > * {
     border-bottom: 0;
-    border-radius: 4px 4px 0 0;
   }
-  .bar.none {
-    border: 0;
+  @media (hover: hover) {
+    .cu-table tbody tr:hover > * {
+      background: rgb(22 19 15 / 0.036);
+      border-bottom-color: transparent;
+    }
+    .cu-table tbody tr:has(+ tr:hover) > * {
+      border-bottom-color: transparent;
+    }
+    .cu-table tbody tr:hover > :first-child {
+      border-start-start-radius: 10px;
+      border-end-start-radius: 10px;
+    }
+    .cu-table tbody tr:hover > :last-child {
+      border-start-end-radius: 10px;
+      border-end-end-radius: 10px;
+    }
   }
-  .bar.partial {
-    background-image: repeating-linear-gradient(45deg, transparent 0 3px, var(--card) 3px 5px);
+  .cu-table tbody th {
+    text-align: start;
+    font-size: 0.95rem;
+    font-weight: 540;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+    padding-inline: 14px 16px;
+    text-wrap: pretty;
   }
-  .bar:hover {
-    filter: brightness(1.15);
+  .task-short {
+    display: none;
   }
-  .task {
-    margin-top: 8px;
-    font-size: 0.76rem;
-    font-weight: 560;
+  .m-callout {
+    display: none;
+  }
+  .cu-table td.num {
+    font-size: 0.92rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
     color: var(--ink-2);
     white-space: nowrap;
+    padding-inline-start: 10px;
+  }
+  .cu-table td.num .val {
+    display: inline-block;
+    padding: 4px 8px;
+    margin-inline-end: -8px;
+    border-radius: 7px;
+    text-box: trim-both cap alphabetic;
+  }
+  .cu-table td.num.best .val {
+    background: color-mix(in oklch, var(--side-color) 11%, transparent);
+    color: var(--side-color);
+    font-weight: 700;
+  }
+  .cu-table td.num.partial .val {
+    color: var(--side-aside);
+  }
+  .pass-tag {
+    display: inline-block;
+    margin-inline-end: 4px;
+    padding: 3px 6px;
+    border-radius: 6px;
+    background: color-mix(in oklch, var(--side-aside) 12%, transparent);
+    color: var(--side-aside);
+    font-size: 0.72rem;
+    font-weight: 640;
+    font-variant-numeric: tabular-nums diagonal-fractions;
+    text-box: trim-both cap alphabetic;
+  }
+  .cu-table td.x {
+    text-align: start;
+    padding-inline: clamp(20px, 2.6vw, 40px) 14px;
+    color: var(--ink-2);
+    font-size: 0.9rem;
+    line-height: 1.3;
+  }
+  .cu-table td.x b {
+    color: var(--ink);
+    font-weight: 700;
+    font-size: 0.98rem;
+    margin-inline-end: 0.16em;
+  }
+  .cu-table td.x.loss b {
+    color: var(--ink-2);
+    font-weight: 620;
+  }
+
+  .cu-table tfoot tr > * {
+    padding-block: 14px 4px;
+    border-top: 1.5px solid rgb(22 19 15 / 0.14);
+  }
+  .cu-table tfoot th {
+    text-align: start;
+    padding-inline: 14px 16px;
+    font-size: 0.95rem;
+    font-weight: 660;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+  .cu-table tfoot td.num {
+    font-size: 0.94rem;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .cu-table tfoot td.num.best .val {
+    font-weight: 740;
   }
 
   .colophon {
-    grid-column: 1 / -1;
-    padding: clamp(14px, 1.4vw, 20px) 2px 0;
-    border-top: 1.5px solid var(--ink);
+    margin-top: clamp(24px, 3vw, 36px);
     font-size: 0.84rem;
-    line-height: 1.45;
+    line-height: 1.5;
     color: var(--ink-2);
+    max-width: 58em;
   }
-  .colophon-title {
+  .colophon-summary {
+    margin: 0;
+  }
+  .fine-details {
+    margin-top: 8px;
+  }
+  .fine-details summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
     color: var(--ink);
-    margin-bottom: 8px;
+    font-weight: 620;
+    min-height: 36px;
+    list-style: none;
+  }
+  .fine-details summary::-webkit-details-marker {
+    display: none;
+  }
+  .fine-details summary::after {
+    content: "+";
+    font-size: 1rem;
+    line-height: 1;
+  }
+  .fine-details[open] summary::after {
+    content: "−";
   }
   .fine {
     list-style: none;
-    margin: 0;
+    margin: 10px 0 0;
     padding: 0;
     columns: 2 22em;
     column-gap: clamp(20px, 3vw, 44px);
   }
   .fine li {
     break-inside: avoid;
-    padding-left: 10px;
     margin-bottom: 8px;
-    border-left: 2px solid var(--stamp);
+  }
+  .colophon-links {
+    margin: 8px 0 0;
   }
   .colophon .link {
-    display: inline-block;
-    margin-top: 6px;
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
     color: var(--ink);
-    font-weight: 600;
+    font-weight: 620;
   }
   .colophon .link::after {
     content: " →";
   }
 
-  @media (max-width: 1100px) {
-    .task {
+  @media (max-width: 860px) {
+    .sheet-card {
+      padding: 16px 8px;
+      border-radius: 18px;
+    }
+    .card-bar {
+      padding: 0 10px 14px;
+      margin-bottom: 12px;
+    }
+    col.cu-task {
+      width: 40%;
+    }
+    col.cu-num {
+      width: 20%;
+    }
+    col.cu-x,
+    .cu-table thead th.x-col,
+    .cu-table td.x {
+      display: none;
+    }
+    .cu-table thead th {
+      padding-block: 0 11px;
+      font-size: 0.78rem;
+      vertical-align: bottom;
+    }
+    .cu-table thead th.task-col {
+      padding-inline-start: 10px;
+    }
+    .cu-table thead th.num-col:nth-last-child(2) {
+      padding-inline-end: 10px;
+    }
+    .cu-table th,
+    .cu-table td {
+      padding-block: 11px;
+    }
+    .cu-table tbody tr > :nth-last-child(2),
+    .cu-table tfoot tr > :nth-last-child(2) {
+      padding-inline-end: 10px;
+    }
+    @media (hover: hover) {
+      .cu-table tbody tr:hover > :nth-last-child(2) {
+        border-start-end-radius: 10px;
+        border-end-end-radius: 10px;
+      }
+    }
+    .cu-table tbody th,
+    .cu-table tfoot th {
+      font-size: 0.9rem;
+      line-height: 1.28;
+      padding-inline: 10px 8px;
+    }
+    .task-full {
+      display: none;
+    }
+    .task-short {
+      display: inline;
+    }
+    .m-callout {
+      display: block;
+      margin-top: 3px;
+      font-size: 0.76rem;
+      font-weight: 460;
+      color: var(--ink-2);
+      line-height: 1.25;
+    }
+    .m-callout b {
+      color: var(--side-ardia);
+      font-weight: 700;
+    }
+    .m-callout.loss b {
+      color: var(--ink-2);
+      font-weight: 600;
+    }
+    .cu-table td.num {
+      font-size: 0.88rem;
+      padding-inline-start: 6px;
+    }
+    .cu-table td.num .val {
+      padding: 4px 7px;
+      margin-inline-end: -7px;
+      border-radius: 7px;
+    }
+    .cu-table tfoot td.num {
+      font-size: 0.9rem;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .card-bar {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
+    }
+    .model-tabs {
+      display: grid;
+      width: 100%;
+    }
+    .model-tab {
+      padding: 6px 10px;
+    }
+    .win-stack {
+      justify-items: start;
+    }
+    .model-win {
+      align-items: flex-start;
+      text-align: start;
+    }
+  }
+
+  @media (max-width: 520px) {
+    .sheet-card {
+      padding: 16px 6px;
+    }
+    .card-bar {
+      padding: 0 8px 14px;
+    }
+    col.cu-task {
+      width: 31%;
+    }
+    col.cu-num {
+      width: 23%;
+    }
+    .cu-table thead th {
+      padding-block: 0 10px;
+      font-size: 0.72rem;
+    }
+    .cu-table thead th.task-col {
+      padding-inline-start: 8px;
+    }
+    .cu-table thead th.num-col:nth-last-child(2) {
+      padding-inline-end: 8px;
+    }
+    .dot {
+      width: 6px;
+      height: 6px;
+    }
+    .col-head {
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+    }
+    .cu-table th,
+    .cu-table td {
+      padding-block: 10px;
+    }
+    .cu-table tbody tr > :nth-last-child(2),
+    .cu-table tfoot tr > :nth-last-child(2) {
+      padding-inline-end: 8px;
+    }
+    .cu-table tbody th,
+    .cu-table tfoot th {
+      font-size: 0.82rem;
+      padding-inline: 8px 6px;
+    }
+    .m-callout {
       font-size: 0.7rem;
     }
-  }
-  @media (max-width: 860px) {
-    .charts {
-      grid-template-columns: minmax(0, 1fr);
+    .cu-table td.num,
+    .cu-table tfoot td.num {
+      font-size: 0.76rem;
+      padding-inline-start: 4px;
+    }
+    .cu-table td.num .val {
+      padding: 3px 5px;
+      margin-inline-end: -5px;
+      border-radius: 6px;
+    }
+    .pass-tag {
+      margin-inline-end: 2px;
+      padding: 2px 4px;
+      font-size: 0.66rem;
     }
   }
-  @media (max-width: 600px) {
-    .cu {
-      --radius: 5px 9px 6px 10px / 8px 5px 9px 6px;
-      --plot-h: 160px;
-      --axis-w: 36px;
+  @media (max-width: 360px) {
+    .sheet-card {
+      padding: 14px 4px;
     }
-    .card {
-      padding: 14px 12px;
+    .card-bar {
+      padding: 0 6px 12px;
     }
-    .card-title {
-      font-size: 0.86rem;
+    col.cu-task {
+      width: 28%;
     }
-    .bars {
-      gap: 1px;
+    col.cu-num {
+      width: 24%;
     }
-    .bar {
-      border-width: 1px;
-      border-radius: 3px 3px 0 0;
-    }
-    .task {
-      margin-top: 6px;
+    .cu-table thead th {
       font-size: 0.64rem;
-      writing-mode: vertical-rl;
-      transform: rotate(180deg);
     }
-    .colophon {
-      font-size: 0.8rem;
+    .cu-table thead th.task-col {
+      padding-inline-start: 6px;
+    }
+    .cu-table thead th.num-col:nth-last-child(2),
+    .cu-table tbody tr > :nth-last-child(2),
+    .cu-table tfoot tr > :nth-last-child(2) {
+      padding-inline-end: 6px;
+    }
+    .cu-table tbody th,
+    .cu-table tfoot th {
+      font-size: 0.76rem;
+      padding-inline: 6px 4px;
+    }
+    .cu-table td.num,
+    .cu-table tfoot td.num {
+      font-size: 0.7rem;
+      padding-inline-start: 2px;
+    }
+    .cu-table td.num .val {
+      padding: 2px 4px;
+      margin-inline-end: -4px;
+    }
+    .pass-tag {
+      display: block;
+      width: fit-content;
+      margin-inline: auto 0;
+      margin-bottom: 3px;
+      padding: 2px 4px;
+      font-size: 0.62rem;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .model-tab,
+    .cu-table tbody tr > * {
+      transition: none;
     }
   }
 </style>

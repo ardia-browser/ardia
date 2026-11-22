@@ -3,9 +3,8 @@ const HELP = `Captures the hero meadow's first WebGL frame as WebP posters.
 
   node scripts/hero-posters.mjs [--url http://127.0.0.1:4321/] [--chrome <path>] [--keep <dir>]
 
-Run it against \`pnpm dev\` (it imports the legibility module from the dev server). It opens headless Chrome
-on the real GPU (Metal), reads the canvas at its first frame (dawn, wind at rest, no brush), and works out
-the text tones the scene picks for that frame. It writes the sized WebPs and posters.json to
+Run it against \`pnpm dev\`. It opens headless Chrome on the real GPU (Metal) and reads the canvas at its
+first frame (dawn, wind at rest, no brush). It writes the sized WebPs and posters.json to
 src/assets/hero/. --keep saves the lossless captures there too.`;
 
 import { spawn } from "node:child_process";
@@ -27,7 +26,7 @@ const option = (name, fallback) => {
   const at = args.indexOf(name);
   return at >= 0 ? args[at + 1] : fallback;
 };
-const url = option("--url", "http://127.0.0.1:4321/");
+const url = option("--url", "http://localhost:4321/");
 const chrome = option("--chrome", process.env.CHROME ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome");
 const keep = option("--keep", null);
 const port = Number(option("--port", "9471"));
@@ -49,40 +48,22 @@ const inject = `(() => {
   HTMLCanvasElement.prototype.getContext = function (type, attributes) {
     return getContext.call(this, type, type === "webgl2" ? { ...attributes, preserveDrawingBuffer: true } : attributes);
   };
-  const state = (window.__poster = { first: null, probe: null });
-  const getBufferSubData = WebGL2RenderingContext.prototype.getBufferSubData;
-  WebGL2RenderingContext.prototype.getBufferSubData = function (target, offset, destination, ...rest) {
-    const result = getBufferSubData.call(this, target, offset, destination, ...rest);
-    if (!state.probe && state.first) state.probe = Array.from(destination);
-    return result;
-  };
-  new MutationObserver(() => {
+  const grab = () => {
     const canvas = document.querySelector("[data-meadow-canvas]");
-    if (state.first || !canvas || canvas.dataset.meadow !== "ready") return;
+    if (state.first || !canvas || canvas.dataset.meadow !== "ready") return false;
     const box = canvas.getBoundingClientRect();
     state.first = { png: canvas.toDataURL("image/png"), width: canvas.width, height: canvas.height, cssWidth: canvas.clientWidth, cssHeight: canvas.clientHeight, top: box.top + scrollY };
+    return true;
+  };
+  const state = (window.__poster = { first: null, grab });
+  new MutationObserver(() => {
+    grab();
   }).observe(document, { attributes: true, subtree: true, attributeFilter: ["data-meadow"] });
 })();`;
 
 const decideTones = `(async () => {
-  const { TextTones } = await import("/src/scripts/meadow/legibility.ts");
   const hero = document.querySelector("[data-meadow]");
-  const first = window.__poster.first;
-  const pixels = Uint8Array.from(window.__poster.probe);
-  const probeHeight = pixels.length / 4 / 96;
-  let header = "light";
-  const tones = new TextTones(hero, document.querySelector("[data-bar]"), (tone) => { header = tone; });
-  tones.measure(first.top);
-  tones.decide(pixels, 96, probeHeight, first.cssWidth, first.cssHeight);
-  const groups = {};
-  for (const group of tones.groups) {
-    if (!group.boxes.length) continue;
-    groups[group.name] = { tone: group.tone, halo: Math.round(tones.haloFor(group) / 0.05) * 0.05 };
-  }
-  const headerGroup = tones.header;
-  const headerHalo = Math.round(tones.haloFor(headerGroup) / 0.05) * 0.05;
-  tones.reset();
-  return JSON.stringify({ groups, sky: header, headerHalo, heroHeight: hero.offsetHeight, coarse: matchMedia("(pointer: coarse)").matches, device: document.documentElement.dataset.device });
+  return JSON.stringify({ heroHeight: hero.offsetHeight, coarse: matchMedia("(pointer: coarse)").matches, device: document.documentElement.dataset.device });
 })()`;
 
 async function launch() {
@@ -146,6 +127,7 @@ async function launch() {
 
 async function capture(browser, frame, state) {
   const { targetId } = await browser.send("Target.createTarget", { url: "about:blank" });
+  await browser.send("Target.activateTarget", { targetId });
   const { sessionId } = await browser.send("Target.attachToTarget", { targetId, flatten: true });
   const send = (method, params) => browser.send(method, params, sessionId);
   const evaluate = async (expression) => {
@@ -167,10 +149,15 @@ async function capture(browser, frame, state) {
   await send("Emulation.setUserAgentOverride", { userAgent: frame.ua });
   await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: state.reducedMotion ? "reduce" : "no-preference" }] });
   await send("Page.addScriptToEvaluateOnNewDocument", { source: inject });
-  await send("Page.navigate", { url });
-  const deadline = Date.now() + 60000;
-  while (!(await evaluate("!!(window.__poster && window.__poster.first && window.__poster.probe)"))) {
-    if (Date.now() > deadline) throw new Error(`no first frame for ${state.state}-${frame.frame}`);
+  await sleep(100);
+  const nav = await send("Page.navigate", { url });
+  if (nav?.errorText) throw new Error(`navigate failed for ${state.state}-${frame.frame}: ${nav.errorText}`);
+  const deadline = Date.now() + 20000;
+  while (!(await evaluate("!!(window.__poster && (window.__poster.first || window.__poster.grab()))"))) {
+    if (Date.now() > deadline) {
+      const diag = await evaluate("JSON.stringify({ href: location.href, readyState: document.readyState, hero: document.querySelector('[data-meadow]')?.dataset.meadow, canvas: document.querySelector('[data-meadow-canvas]')?.dataset.meadow, hasPoster: !!window.__poster })");
+      throw new Error(`no first frame for ${state.state}-${frame.frame}: ${diag}`);
+    }
     await sleep(100);
   }
   const first = await evaluate("({ ...window.__poster.first, png: null, pngLength: window.__poster.first.png.length })");
@@ -224,36 +211,38 @@ async function encode(png, frame, name) {
 }
 
 mkdirSync(out, { recursive: true });
-for (const name of readdirSync(out)) if (name.endsWith(".webp")) unlinkSync(join(out, name));
 if (keep) mkdirSync(keep, { recursive: true });
 
 const browser = await launch();
-const posters = [];
+const captured = [];
 try {
   for (const state of STATES) {
     for (const frame of FRAMES) {
       const { first, tones } = await capture(browser, frame, state);
       const png = Buffer.from(first.png.split(",")[1], "base64");
       const name = `${state.state}-${frame.frame}`;
-      if (keep) writeFileSync(join(keep, `${name}.png`), png);
-      const encoded = await encode(png, frame, name);
-      posters.push({
-        state: state.state,
-        frame: frame.frame,
-        viewport: [frame.width, frame.height],
-        heroHeight: tones.heroHeight,
-        width: encoded.width,
-        height: encoded.height,
-        files: encoded.files,
-        lqip: encoded.lqip,
-        tones: tones.groups,
-        sky: tones.sky,
-        headerHalo: tones.headerHalo,
-      });
-      console.log(`${name}: ${encoded.width}×${encoded.height}, ${encoded.files.map((f) => `${f.width}w q${f.quality} ${(f.bytes / 1024).toFixed(1)} KB`).join(", ")}, tones ${JSON.stringify(tones.groups)} sky ${tones.sky} (device ${tones.device}, coarse ${tones.coarse}, hero ${tones.heroHeight}px)`);
+      captured.push({ state, frame, png, tones, name });
     }
   }
 } finally {
   await browser.close();
+}
+
+for (const name of readdirSync(out)) if (name.endsWith(".webp")) unlinkSync(join(out, name));
+const posters = [];
+for (const { state, frame, png, tones, name } of captured) {
+  if (keep) writeFileSync(join(keep, `${name}.png`), png);
+  const encoded = await encode(png, frame, name);
+  posters.push({
+    state: state.state,
+    frame: frame.frame,
+    viewport: [frame.width, frame.height],
+    heroHeight: tones.heroHeight,
+    width: encoded.width,
+    height: encoded.height,
+    files: encoded.files,
+    lqip: encoded.lqip,
+  });
+  console.log(`${name}: ${encoded.width}×${encoded.height}, ${encoded.files.map((f) => `${f.width}w q${f.quality} ${(f.bytes / 1024).toFixed(1)} KB`).join(", ")} (device ${tones.device}, coarse ${tones.coarse}, hero ${tones.heroHeight}px)`);
 }
 writeFileSync(join(out, "posters.json"), `${JSON.stringify(posters, null, 2)}\n`);

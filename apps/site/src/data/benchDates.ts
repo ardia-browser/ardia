@@ -26,7 +26,7 @@ export function measuredLine(browsers: DatedBrowser[]): string | null {
   const oneYear = new Set(dates.map((d) => d.slice(0, 4))).size === 1;
   return dates
     .map((d, i) => `${listed(byDate.get(d)!.map(label))} measured ${dayOf(d, !oneYear || i === dates.length - 1)}`)
-    .join(" · ");
+    .join("; ");
 }
 
 export function olderThanHeadline(entries: DatedBrowser[], headline: Map<string, string>): string | null {

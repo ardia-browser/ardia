@@ -2,7 +2,7 @@ import { GpuClock, Scaler } from "./budget";
 import { GrassBrush } from "./brush";
 import { ColorProbe, TextTones } from "./legibility";
 import { DAY_MOVE_MS, easeInOutSine, SUNRISE_HOLD_MS, sunriseElapsed, sunriseProgress } from "./clock";
-import { CYCLE_SECONDS, CYCLE_STOPS, cycleDelta, dayAt, MOON_RANGE, SUN_RANGE, SUNRISE_FROM, SUNRISE_TO, wrapCycle } from "./cycle";
+import { CYCLE_STOPS, cycleDelta, dayAt, MOON_RANGE, SUN_RANGE, SUNRISE_FROM, SUNRISE_TO, wrapCycle } from "./cycle";
 import { type Daylight, daylightAt } from "./daylight";
 import { bindTexture, createFramebuffer, createTexture, type Program, ProgramBatch } from "./gl";
 import {
@@ -27,7 +27,6 @@ import { WetPaint } from "./smear";
 export interface MeadowOptions {
   canvas: HTMLCanvasElement;
   hero: HTMLElement;
-  hint: HTMLElement | null;
   reducedMotion: boolean;
   onFirstFrame: () => void;
   opening?: [from: number, to: number];
@@ -48,13 +47,23 @@ interface Tier {
   brushRadius: number;
 }
 
-type ProgramName = "bakeHeight" | "bakeAux" | "terrain" | "sky" | "grass" | "paint" | "final" | "particles" | "probe" | "cells";
+type ProgramName = "bakeHeight" | "bakeAux" | "terrain" | "sky" | "grass" | "paint" | "final" | "probe" | "cells";
+type DeferredProgramName = "mob" | "particles";
 type Phase = "compile" | "bake" | "live" | "failed";
-type DayMode = "sunrise" | "cycle" | "drag" | "settle" | "rest";
+type DayMode = "sunrise" | "drag" | "settle" | "rest";
 type Body = "sun" | "moon";
 
-interface Gpu {
-  programs: Record<ProgramName, Program>;
+interface DragState {
+  body: Body;
+  pointerId: number;
+  touch: boolean;
+  lastX: number;
+  lastY: number;
+  phase: number;
+  cycle: number;
+}
+
+interface StaticGpu {
   emptyVao: WebGLVertexArrayObject;
   grassVao: WebGLVertexArrayObject;
   terrainVao: WebGLVertexArrayObject;
@@ -69,6 +78,10 @@ interface Gpu {
   auxFramebuffer: WebGLFramebuffer;
   brushTex: WebGLTexture;
   smearTex: WebGLTexture;
+}
+
+interface Gpu extends StaticGpu {
+  programs: Record<ProgramName, Program>;
 }
 
 interface MobGpu {
@@ -107,6 +120,7 @@ interface Targets {
 }
 
 const BAKE_STRIPS = 4;
+const BAKE_BUDGET_MS = 8;
 const BRUSH_COLUMNS = 84;
 const BRUSH_ROWS = 30;
 const SMEAR_COLUMNS = 64;
@@ -116,18 +130,22 @@ const WIND_DIR = normalize2(1, 0.32);
 const STACKED_HORIZON_SCREEN = 0.69;
 const SHARE_ROW_SLACK = 8;
 const TAP_PX = 10;
+const DRAG_THRESHOLD_PX = 5;
 const AMBIENT_FRAME_MS = 1000 / 30;
 const AMBIENT_EARLY_MS = 4;
 const MAX_HELD_FRAMES = 2;
 const ACTIVE_HOLD_MS = 700;
-const CYCLE_RAMP_SECONDS = 2.5;
 const DRAG_FOLLOW = 18;
 const BODY_HIT_PX = 46;
 const BODY_UP = degrees(-1.5);
-const CONTINUITY_PX = 120;
-const DRAG_SAMPLES = 360;
+const DRAG_SEARCH_STEPS = 24;
+const DRAG_SUN_SPAN_PX = 480;
+const DAY_PHASE_SHARE = 0.75;
+const DRAG_VERTICAL_WEIGHT = 0.45;
+const DRAG_TANGENT_EPS = 0.004;
 const SKY_DARK_NIGHT = 0.4;
 const PROBE_INTERVAL_MS = 1000;
+const TITLE_MIST_SECONDS = 1.2;
 const MOVING_PROBE_INTERVAL_MS = 400;
 const FIREFLY_TEXT_REACH = 48;
 const SUN_MIN_RED = 200;
@@ -135,6 +153,8 @@ const SUN_MAX_BLUE_SHARE = 0.45;
 const MOON_MIN_SUM = 520;
 const MOB_COMPILE_AFTER_FRAMES = 2;
 const STROKE_CELL_PX = 16;
+const RELIEF_PER_CSS_PX = 0.55;
+const PAINT_REVEAL_MS = 900;
 const CELL_MARGIN = 7;
 const KEEP_OUT_TITLE = '[data-meadow-keep-out="title"]';
 const KEEP_OUT_COPY = '[data-meadow-keep-out="copy"], [data-meadow-keep-out="row"] > *';
@@ -159,7 +179,7 @@ function pickTier(): Tier {
 }
 
 export function createMeadow(options: MeadowOptions): Meadow | null {
-  const { canvas, hero, hint, reducedMotion } = options;
+  const { canvas, hero, reducedMotion } = options;
   const gl = canvas.getContext("webgl2", {
     antialias: false,
     alpha: false,
@@ -179,7 +199,7 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
   const look = { x: 0, y: 0, settled: true };
   const [openFrom, openTo] = options.opening ?? [SUNRISE_FROM, SUNRISE_TO];
   const startCycle = reducedMotion ? openTo : openFrom;
-  const day = { c: startCycle, target: startCycle, mode: (reducedMotion ? "rest" : "sunrise") as DayMode, from: 0, to: 0, start: 0, ramp: 0 };
+  const day = { c: startCycle, target: startCycle, mode: (reducedMotion ? "rest" : "sunrise") as DayMode, from: 0, to: 0, start: 0 };
   const bodies = { sun: { x: -999, y: -999, up: false }, moon: { x: -999, y: -999, up: false }, radius: 40 };
   const projection: Mat4 = new Float32Array(16);
   const view: Mat4 = new Float32Array(16);
@@ -187,6 +207,7 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
   const inverseViewProjection: Mat4 = new Float32Array(16);
   let phase: Phase = "compile";
   let batch: ProgramBatch<ProgramName> | null = null;
+  let staticGpu: StaticGpu | null = null;
   let gpu: Gpu | null = null;
   let targets: Targets | null = null;
   let cellTable: CellTable | null = null;
@@ -203,6 +224,9 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
   let firstFrameSent = false;
   let lastNow = 0;
   let windTime = 0;
+  const skipReveal = reducedMotion || "__poster" in window;
+  let paintRevealStart = -1;
+  let paintReveal = skipReveal ? 1 : 0;
   let clock = new GpuClock(gl);
   const scaler = new Scaler();
   let inFlight: WebGLSync | null = null;
@@ -212,8 +236,10 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
   let needsRender = true;
   let framing: Framing = framingFor(1.6);
   const veil = { left: 0, top: 0, right: 0, bottom: 0 };
+  const titleVeil = { left: 0, top: 0, right: 0, bottom: 0 };
+  let titleMist = 0;
   const bar = document.querySelector<HTMLElement>("[data-bar]");
-  const tones = new TextTones(hero, bar, (tone) => {
+  const tones = new TextTones(hero, reducedMotion, (tone) => {
     hero.dataset.sky = tone;
   });
   let probe: ColorProbe | null = null;
@@ -233,21 +259,37 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
   let viewProj: Mat4 | null = null;
   let eye: [number, number, number] = [0, CAMERA_HEIGHT, 0];
   let grassTopCss = 0;
-  let hasDragged = false;
   let cursor = "";
-  let hintBody: Body | null = null;
-  let hintWidth = 0;
-  let hintTransform = "";
+  let pendingDrag: DragState | null = null;
+  let activeDrag: DragState | null = null;
+  let globalDragStyled = false;
+  let savedRootCursor = "";
+  let savedRootUserSelect = "";
   const mobs = new Mobs(reducedMotion);
-  let mobBatch: ProgramBatch<"mob"> | null = null;
+  let mobBatch: ProgramBatch<DeferredProgramName> | null = null;
   let mobGpu: MobGpu | null = null;
+  let particleProgram: Program | null = null;
   let mobsOff = false;
   let mobFraming: Framing | null = null;
   let mobWidth = 0;
   let framesSinceFirst = 0;
   let terrainRead: TerrainRead | null = null;
   let terrainReady = false;
-  if (import.meta.env.DEV) Object.assign(window, { __meadowMobs: mobs });
+  if (import.meta.env.DEV) {
+    Object.assign(window, {
+      __meadowMobs: mobs,
+      __meadowScaler: scaler,
+      __meadowDay: day,
+      __meadowBodies: bodies,
+      __meadowPointer: pointer,
+      __meadowReplayReveal: () => {
+        paintRevealStart = performance.now();
+        paintReveal = 0;
+        needsRender = true;
+        wake();
+      },
+    });
+  }
 
   const fail = (error: unknown) => {
     phase = "failed";
@@ -265,17 +307,17 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
         grass: [SHADERS.grassVs, SHADERS.grassFs],
         paint: [SHADERS.fullscreenVs, SHADERS.paintFs],
         final: [SHADERS.fullscreenVs, SHADERS.finalFs],
-        particles: [SHADERS.particleVs, SHADERS.particleFs],
         probe: [SHADERS.fullscreenVs, SHADERS.probeFs],
         cells: [SHADERS.fullscreenVs, SHADERS.cellFs],
       });
+      staticGpu = buildStaticGpu();
       phase = "compile";
     } catch (error) {
       fail(error);
     }
   };
 
-  const buildGpu = (programs: Record<ProgramName, Program>): Gpu => {
+  const buildStaticGpu = (): StaticGpu => {
     const emptyVao = gl.createVertexArray()!;
 
     const bladeVertices: number[] = [];
@@ -341,7 +383,6 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
     return {
-      programs,
       emptyVao,
       grassVao,
       terrainVao,
@@ -359,9 +400,17 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
     };
   };
 
+  const buildGpu = (programs: Record<ProgramName, Program>): Gpu => ({
+    programs,
+    ...(staticGpu ?? buildStaticGpu()),
+  });
+
   const startMobs = () => {
     try {
-      mobBatch = new ProgramBatch<"mob">(gl, { mob: [SHADERS.mobVs, SHADERS.mobFs] });
+      mobBatch = new ProgramBatch<DeferredProgramName>(gl, {
+        mob: [SHADERS.mobVs, SHADERS.mobFs],
+        particles: [SHADERS.particleVs, SHADERS.particleFs],
+      });
     } catch (error) {
       mobsOff = true;
       console.warn(error);
@@ -409,10 +458,12 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
     needsRender = true;
   };
 
-  const finishMobs = (pending: ProgramBatch<"mob">) => {
+  const finishMobs = (pending: ProgramBatch<DeferredProgramName>) => {
     mobBatch = null;
     try {
-      const program = pending.finish().mob;
+      const deferred = pending.finish();
+      const program = deferred.mob;
+      particleProgram = deferred.particles;
       const vao = gl.createVertexArray()!;
       gl.bindVertexArray(vao);
       gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
@@ -573,21 +624,42 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
     return projectDirection(directionFrom(path.azimuth, path.elevation));
   };
 
-  const nearestCycle = (x: number, y: number, body: Body) => {
+  const unwrapForBody = (cycle: number, body: Body) => {
     const [from, to] = body === "sun" ? SUN_RANGE : MOON_RANGE;
-    let best = day.target;
-    let bestScore = Infinity;
-    for (let i = 0; i <= DRAG_SAMPLES; i++) {
-      const cycle = from + ((to - from) * i) / DRAG_SAMPLES;
-      const point = bodyPoint(cycle, body);
-      if (!point) continue;
-      const score = Math.hypot(point.x - x, point.y - y) + Math.abs(cycleDelta(day.target, cycle)) * CONTINUITY_PX;
-      if (score < bestScore) {
-        bestScore = score;
-        best = wrapCycle(cycle);
+    const wrapped = wrapCycle(cycle);
+    let best = Math.min(to, Math.max(from, wrapped));
+    let bestDist = Math.abs(best - wrapped);
+    for (const offset of [-1, 0, 1]) {
+      const candidate = wrapped + offset;
+      if (candidate >= from && candidate <= to) return candidate;
+      const clamped = Math.min(to, Math.max(from, candidate));
+      const dist = Math.abs(clamped - candidate);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = clamped;
       }
     }
     return best;
+  };
+
+  const cycleForX = (targetX: number, body: Body, fallback: number) => {
+    const [from, to] = body === "sun" ? SUN_RANGE : MOON_RANGE;
+    const startPoint = bodyPoint(from, body);
+    const endPoint = bodyPoint(to, body);
+    if (!startPoint || !endPoint) return fallback;
+    const decreasing = startPoint.x >= endPoint.x;
+    if (decreasing ? targetX >= startPoint.x : targetX <= startPoint.x) return from;
+    if (decreasing ? targetX <= endPoint.x : targetX >= endPoint.x) return to;
+    let low = from;
+    let high = to;
+    for (let i = 0; i < DRAG_SEARCH_STEPS; i++) {
+      const mid = (low + high) / 2;
+      const point = bodyPoint(mid, body);
+      if (!point) return fallback;
+      if (decreasing ? point.x > targetX : point.x < targetX) low = mid;
+      else high = mid;
+    }
+    return (low + high) / 2;
   };
 
   const hitBody = (x: number, y: number): Body | null => {
@@ -612,19 +684,164 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
     else delete hero.dataset.cursor;
   };
 
-  const startDrag = (body: Body) => {
-    pointer.drag = body;
-    day.mode = "drag";
-    day.target = day.c;
-    hasDragged = true;
-    hint?.classList.remove("is-shown");
-    setCursor("grabbing");
-    wake();
+  const applyGlobalDragStyles = () => {
+    if (globalDragStyled) return;
+    const root = document.documentElement;
+    savedRootCursor = root.style.cursor;
+    savedRootUserSelect = root.style.userSelect;
+    root.style.cursor = "grabbing";
+    root.style.userSelect = "none";
+    globalDragStyled = true;
   };
 
-  const resumeCycle = () => {
-    day.mode = reducedMotion ? "rest" : "cycle";
-    day.ramp = 0;
+  const clearGlobalDragStyles = () => {
+    if (!globalDragStyled) return;
+    const root = document.documentElement;
+    root.style.cursor = savedRootCursor;
+    root.style.userSelect = savedRootUserSelect;
+    globalDragStyled = false;
+  };
+
+  const releaseCapture = (pointerId: number) => {
+    try {
+      if (hero.hasPointerCapture(pointerId)) hero.releasePointerCapture(pointerId);
+    } catch {}
+  };
+
+  const requestProbeNow = () => {
+    lastProbeAt = -Infinity;
+    probedCycle = -1;
+    needsRender = true;
+  };
+
+  const stay = () => {
+    if (day.mode !== "rest") {
+      day.mode = "rest";
+      requestProbeNow();
+    }
+  };
+
+  const dragSlopeY = (cycle: number, body: Body) => {
+    const [from, to] = body === "sun" ? SUN_RANGE : MOON_RANGE;
+    const a = bodyPoint(Math.max(from, cycle - DRAG_TANGENT_EPS), body);
+    const b = bodyPoint(Math.min(to, cycle + DRAG_TANGENT_EPS), body);
+    if (!a || !b) return 0;
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    const length = Math.hypot(dx, dy);
+    if (length < 1e-3) return 0;
+    return (dx >= 0 ? dy : -dy) / length;
+  };
+
+  const phaseForCycle = (cycle: number) => {
+    const c = wrapCycle(cycle);
+    if (c >= SUN_RANGE[1]) return DAY_PHASE_SHARE + ((c - SUN_RANGE[1]) / (1 - SUN_RANGE[1])) * (1 - DAY_PHASE_SHARE);
+    const startPoint = bodyPoint(SUN_RANGE[0], "sun");
+    const endPoint = bodyPoint(SUN_RANGE[1], "sun");
+    const current = bodyPoint(c, "sun");
+    if (!startPoint || !endPoint || !current) return (c / SUN_RANGE[1]) * DAY_PHASE_SHARE;
+    const span = startPoint.x - endPoint.x;
+    if (Math.abs(span) < 1e-3) return (c / SUN_RANGE[1]) * DAY_PHASE_SHARE;
+    const t = Math.min(1, Math.max(0, (startPoint.x - current.x) / span));
+    return t * DAY_PHASE_SHARE;
+  };
+
+  const cycleForPhase = (phase: number, fallback: number) => {
+    const u = wrapCycle(phase);
+    if (u >= DAY_PHASE_SHARE) return wrapCycle(mix(SUN_RANGE[1], 1, (u - DAY_PHASE_SHARE) / (1 - DAY_PHASE_SHARE)));
+    const startPoint = bodyPoint(SUN_RANGE[0], "sun");
+    const endPoint = bodyPoint(SUN_RANGE[1], "sun");
+    if (!startPoint || !endPoint) return fallback;
+    const targetX = mix(startPoint.x, endPoint.x, u / DAY_PHASE_SHARE);
+    return wrapCycle(cycleForX(targetX, "sun", fallback));
+  };
+
+  const stepDrag = (drag: DragState, x: number, y: number) => {
+    const dx = x - drag.lastX;
+    const dy = y - drag.lastY;
+    drag.lastX = x;
+    drag.lastY = y;
+    const startPoint = bodyPoint(SUN_RANGE[0], "sun");
+    const endPoint = bodyPoint(SUN_RANGE[1], "sun");
+    if (!startPoint || !endPoint) return drag.cycle;
+    const sunSpan = Math.abs(startPoint.x - endPoint.x);
+    const dayDragPx = Math.max(1, Math.min(sunSpan, DRAG_SUN_SPAN_PX));
+    const loopDragPx = dayDragPx / DAY_PHASE_SHARE;
+    const current = wrapCycle(drag.cycle);
+    const activeBody: Body = current >= SUN_RANGE[1] ? "moon" : "sun";
+    const ty = dragSlopeY(unwrapForBody(current, activeBody), activeBody);
+    const stepX = dx + dy * ty * DRAG_VERTICAL_WEIGHT;
+    const direction = startPoint.x >= endPoint.x ? -1 : 1;
+    drag.phase = wrapCycle(drag.phase + (stepX * direction) / loopDragPx);
+    drag.cycle = cycleForPhase(drag.phase, current);
+    return drag.cycle;
+  };
+
+  const beginPendingDrag = (body: Body, pointerId: number, touch: boolean, x: number, y: number) => {
+    const current = wrapCycle(day.c);
+    pendingDrag = {
+      body,
+      pointerId,
+      touch,
+      lastX: x,
+      lastY: y,
+      phase: phaseForCycle(current),
+      cycle: current,
+    };
+    if (!touch) {
+      try {
+        hero.setPointerCapture(pointerId);
+      } catch {}
+    }
+  };
+
+  const commitDrag = (x: number, y: number) => {
+    if (!pendingDrag) return;
+    activeDrag = pendingDrag;
+    pendingDrag = null;
+    probeEpoch += 1;
+    pointer.drag = activeDrag.body;
+    day.mode = "drag";
+    const next = stepDrag(activeDrag, x, y);
+    day.target = wrapCycle(next);
+    day.c = day.target;
+    needsRender = true;
+    if (!activeDrag.touch) {
+      applyGlobalDragStyles();
+      setCursor("grabbing");
+    }
+    markActive();
+  };
+
+  const moveActiveDrag = (x: number, y: number) => {
+    if (!activeDrag) return;
+    const next = stepDrag(activeDrag, x, y);
+    day.target = wrapCycle(next);
+    needsRender = true;
+    markActive();
+  };
+
+  const finishDrag = (x: number, y: number, allowTap: boolean, blockedTarget: boolean) => {
+    if (activeDrag) {
+      if (!activeDrag.touch) releaseCapture(activeDrag.pointerId);
+      activeDrag = null;
+      pointer.drag = null;
+      clearGlobalDragStyles();
+      stay();
+      setCursor(!pointer.touch && inHero(x, y) && !blockedTarget && hitBody(x, y) ? "grab" : "");
+      markActive();
+      return true;
+    }
+    if (pendingDrag) {
+      if (!pendingDrag.touch) releaseCapture(pendingDrag.pointerId);
+      pendingDrag = null;
+      clearGlobalDragStyles();
+      if (allowTap) advanceToNextStop();
+      setCursor(!pointer.touch && inHero(x, y) && !blockedTarget && hitBody(x, y) ? "grab" : "");
+      markActive();
+      return true;
+    }
+    return false;
   };
 
   const advanceToNextStop = () => {
@@ -636,7 +853,7 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
     if (reducedMotion) {
       day.c = day.target = wrapCycle(day.c + delta);
       day.mode = "rest";
-      needsRender = true;
+      requestProbeNow();
       return;
     }
     day.mode = "settle";
@@ -650,7 +867,7 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
     if (reducedMotion) {
       day.c = day.target = wrapCycle(cycle);
       day.mode = "rest";
-      needsRender = true;
+      requestProbeNow();
     } else if (delta > 1e-4) {
       day.mode = "settle";
       day.from = day.c;
@@ -660,40 +877,31 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
     wake();
   };
 
-  const release = (x: number, y: number) => {
-    pointer.drag = null;
-    if (Math.hypot(x - pointer.downX, y - pointer.downY) < TAP_PX) advanceToNextStop();
-    else resumeCycle();
-    setCursor(hitBody(x, y) ? "grab" : "");
-    wake();
-  };
-
   const updateDay = (now: number, dt: number) => {
     if (day.mode === "sunrise") {
       const elapsed = sunriseElapsed(now);
       day.c = day.target = mix(openFrom, openTo, sunriseProgress(elapsed));
-      if (elapsed > SUNRISE_HOLD_MS + DAY_MOVE_MS) resumeCycle();
+      if (elapsed > SUNRISE_HOLD_MS + DAY_MOVE_MS) stay();
       return;
     }
     if (day.mode === "settle") {
       const t = (now - day.start) / DAY_MOVE_MS;
       day.c = day.target = wrapCycle(mix(day.from, day.to, easeInOutSine(t)));
-      if (t >= 1) resumeCycle();
+      if (t >= 1) stay();
       return;
     }
-    if (day.mode === "cycle") {
-      day.ramp = Math.min(1, day.ramp + dt / CYCLE_RAMP_SECONDS);
-      const advance = (easeInOutSine(day.ramp) * dt) / CYCLE_SECONDS;
-      day.target = wrapCycle(day.target + advance);
-      day.c = wrapCycle(day.c + advance);
+    if (day.mode === "drag") {
+      day.c = day.target;
+      return;
     }
     const lag = cycleDelta(day.c, day.target);
     day.c = Math.abs(lag) < 1e-5 ? day.target : wrapCycle(day.c + lag * (1 - Math.exp(-dt * DRAG_FOLLOW)));
   };
 
   const isBusy = (now: number) => {
-    if (needsRender || (!mobGpu && !mobsOff) || terrainRead || day.mode === "sunrise" || day.mode === "drag" || day.mode === "settle") return true;
+    if (needsRender || paintReveal < 1 || (!mobGpu && !mobsOff) || terrainRead || day.mode === "sunrise" || day.mode === "drag" || day.mode === "settle") return true;
     if (Math.abs(cycleDelta(day.c, day.target)) > 1e-4) return true;
+    if (Math.abs(tones.mist - titleMist) > 0.002) return true;
     if (mobGpu && mobs.searching) return true;
     if (reducedMotion) return !!probe && (probe.pending || probedCycle !== day.c);
     return now < activeUntil || !look.settled || !brush.settled || !wet.settled || particles.busy;
@@ -701,26 +909,41 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
 
   const fireflyShade = (x: number, y: number) => tones.shadeAt(x, y, FIREFLY_TEXT_REACH);
 
+  let probedSunX = -999;
+  let probedSunY = -999;
+  let probedMoonX = -999;
+  let probedMoonY = -999;
+  let probedRadius = 0;
+  let probeEpoch = 0;
+  let capturedEpoch = 0;
+
   const captureProbe = (now: number, t: Targets) => {
-    if (!probe || probe.pending) return;
-    const moving = day.mode === "drag" || day.mode === "settle" || day.mode === "sunrise";
+    if (!probe || probe.pending || day.mode === "drag") return;
+    const moving = day.mode === "settle" || day.mode === "sunrise";
     if (reducedMotion ? probedCycle === day.c : now - lastProbeAt < (moving ? MOVING_PROBE_INTERVAL_MS : PROBE_INTERVAL_MS)) return;
     probe.capture(t.paint);
     lastProbeAt = now;
     probedCycle = day.c;
+    probedSunX = bodies.sun.x;
+    probedSunY = bodies.sun.y;
+    probedMoonX = bodies.moon.x;
+    probedMoonY = bodies.moon.y;
+    probedRadius = bodies.radius;
+    capturedEpoch = probeEpoch;
   };
 
   const readProbe = () => {
     if (!probe?.poll()) return;
+    if (capturedEpoch !== probeEpoch) return;
     tones.decide(probe.pixels, probe.width, probe.height, cssWidth, cssHeight);
-    if (!tonesFromScene) {
-      tonesFromScene = true;
-      tones.ease(Infinity);
-    }
-    const sun = probe.colorAt(bodies.sun.x, bodies.sun.y, bodies.radius * 0.45, cssWidth, cssHeight, true);
-    const moon = probe.colorAt(bodies.moon.x, bodies.moon.y, bodies.radius * 0.8, cssWidth, cssHeight);
+    tonesFromScene = true;
+    const prevSun = sunSeen;
+    const prevMoon = moonSeen;
+    const sun = probe.colorAt(probedSunX, probedSunY, probedRadius * 0.45, cssWidth, cssHeight, true);
+    const moon = probe.colorAt(probedMoonX, probedMoonY, probedRadius * 0.8, cssWidth, cssHeight);
     sunSeen = !!sun && sun[0] >= SUN_MIN_RED && sun[2] <= sun[0] * SUN_MAX_BLUE_SHARE;
     moonSeen = !!moon && moon[0] + moon[1] + moon[2] >= MOON_MIN_SUM;
+    if (sunSeen !== prevSun || moonSeen !== prevMoon) needsRender = true;
   };
 
   function readScroll() {
@@ -737,6 +960,8 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
     return program
       .vec4("uVeil", (veil.left - padX) / cssWidth, 1 - (veil.bottom + padY) / cssHeight, (veil.right + padX) / cssWidth, 1 - (veil.top - padY) / cssHeight)
       .vec2("uVeilFeather", feather / cssWidth, feather / cssHeight)
+      .vec4("uTitleVeil", titleVeil.left / cssWidth, 1 - titleVeil.bottom / cssHeight, titleVeil.right / cssWidth, 1 - titleVeil.top / cssHeight)
+      .float("uTitleMist", titleMist)
       .vec2("uTargetSize", targets?.width ?? 1, targets?.height ?? 1)
       .vec3("uSunDir", light.sunDir)
       .vec3("uKeyDir", light.keyDir)
@@ -766,12 +991,17 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
     const { width, height } = canvas;
     const aspect = width / height;
     const dpr = width / cssWidth;
+    if (paintReveal < 1 && hero.dataset.meadow === "ready") {
+      if (paintRevealStart < 0) paintRevealStart = now;
+      paintReveal = Math.min(1, Math.max(0, (now - paintRevealStart) / PAINT_REVEAL_MS));
+    }
+    const revealAt = paintReveal;
     updateDay(now, dt);
     readScroll();
     const scroll = reducedMotion ? 0 : Math.min(1, Math.max(0, scrollTop / cssHeight));
 
-    if (!pointer.drag) {
-      const follow = 1 - Math.exp(-dt * 2.4);
+    if (!pointer.drag && !pendingDrag) {
+      const follow = 1 - Math.exp(-dt * 4);
       const hovering = !reducedMotion && pointer.active && !pointer.touch;
       const targetX = Math.max(-1, Math.min(1, hovering ? (pointer.x / cssWidth) * 2 - 1 : 0));
       const targetY = Math.max(-1, Math.min(1, hovering ? 1 - (pointer.y / cssHeight) * 2 : 0));
@@ -780,9 +1010,9 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
       look.settled = Math.abs(targetX - look.x) + Math.abs(targetY - look.y) < 0.03;
     }
 
-    eye = [look.x * 0.34, CAMERA_HEIGHT + look.y * 0.07 + scroll * 0.85, -scroll * 0.6];
-    const yaw = framing.yaw - look.x * degrees(1.1);
-    const pitch = framing.pitch + look.y * degrees(0.7) - scroll * degrees(4);
+    eye = [look.x * 0.22, CAMERA_HEIGHT + look.y * 0.05 + scroll * 0.85, -scroll * 0.6];
+    const yaw = framing.yaw - look.x * degrees(0.75);
+    const pitch = framing.pitch + look.y * degrees(0.45) - scroll * degrees(4);
     perspective(framing.verticalFov, aspect, 0.2, 40000, projection);
     viewProj = multiply(projection, lookFrom(eye, yaw, pitch, view), viewProjection);
     const inverseViewProj = invert(viewProj, inverseViewProjection);
@@ -815,12 +1045,15 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
     const grassEdge = project(0, 0, GRASS_FAR * 0.75);
     grassTopCss = grassEdge ? grassEdge.y : cssHeight * 0.7;
 
-    if (tonesFromScene) {
+    if (day.mode === "drag") {
+      const midLum = 0.2126 * light.skyMid[0] + 0.7152 * light.skyMid[1] + 0.0722 * light.skyMid[2];
+      const lowLum = 0.2126 * light.skyLow[0] + 0.7152 * light.skyLow[1] + 0.0722 * light.skyLow[2];
+      tones.estimate(Math.min(midLum, lowLum), Math.max(midLum, lowLum));
+    } else if (!tonesFromScene) {
       tones.fallback(light.night > SKY_DARK_NIGHT ? "dark" : "light");
-      tones.ease(reducedMotion ? Infinity : dt);
     }
+    titleMist = reducedMotion ? tones.mist : titleMist + (tones.mist - titleMist) * (1 - Math.exp(-dt / TITLE_MIST_SECONDS));
 
-    if (hint) placeHint(now);
 
     if (!reducedMotion) {
       const touch = { u: 0, v: 0, active: false };
@@ -1001,7 +1234,8 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
       .vec2("uSunPx", bodies.sun.x * dpr, (cssHeight - bodies.sun.y) * dpr)
       .vec2("uMoonPx", moonPoint ? moonPoint.x * dpr : -9999, moonPoint ? (cssHeight - moonPoint.y) * dpr : -9999)
       .float("uSunRadiusPx", bodies.radius * dpr)
-      .float("uRelief", 1.5 * Math.min(1, Math.max(0.55, dpr / 2)))
+      .float("uRelief", RELIEF_PER_CSS_PX)
+      .float("uReveal", revealAt)
       .int("uCellShape", 4)
       .int("uCellStroke", 5)
       .int("uCellTable", cells ? 1 : 0)
@@ -1009,7 +1243,7 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
       .ivec2("uCellCount", cells?.columns ?? 0, cells?.rows ?? 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
-    if (!reducedMotion) {
+    if (!reducedMotion && paintReveal >= 0.8 && particleProgram) {
       const count = particles.fill(dpr, light.night, fireflyShade);
       if (count > 0) {
         gl.enable(gl.BLEND);
@@ -1017,7 +1251,7 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
         gl.bindVertexArray(g.particleVao);
         gl.bindBuffer(gl.ARRAY_BUFFER, g.particleBuffer);
         gl.bufferSubData(gl.ARRAY_BUFFER, 0, particles.data, 0, (count * PARTICLE_STRIDE) / 4);
-        programs.particles.use().vec2("uResolution", width, height);
+        particleProgram.use().vec2("uResolution", width, height);
         gl.drawArrays(gl.POINTS, 0, count);
         gl.disable(gl.BLEND);
       }
@@ -1036,21 +1270,27 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
     raf = 0;
     if (lost || phase === "failed") return;
     try {
-      if (phase === "compile") {
-        if (batch?.ready) {
-          const programs = batch.finish();
-          batch = null;
-          gpu = buildGpu(programs);
-          phase = "bake";
-          bakeStrip = 0;
+      const sliceStart = performance.now();
+      if (phase === "compile" && batch?.ready) {
+        const programs = batch.finish();
+        batch = null;
+        gpu = buildGpu(programs);
+        staticGpu = null;
+        phase = "bake";
+        bakeStrip = 0;
+      }
+      if (phase === "bake" && gpu) {
+        while (phase === "bake") {
+          if (bakeStep(gpu)) {
+            phase = "live";
+            lastNow = now;
+            break;
+          }
+          if (performance.now() - sliceStart >= BAKE_BUDGET_MS) break;
         }
-      } else if (phase === "bake" && gpu) {
-        if (bakeStep(gpu)) {
-          phase = "live";
-          lastNow = now;
-        }
-      } else if (phase === "live") {
-        readProbe();
+      }
+      if (phase === "live" && (firstFrameSent || performance.now() - sliceStart < BAKE_BUDGET_MS)) {
+        if (day.mode !== "drag") readProbe();
         const busy = isBusy(now);
         if ((busy || now - lastRenderAt >= AMBIENT_FRAME_MS - AMBIENT_EARLY_MS) && !gpuBehind()) renderLive(now, busy);
       }
@@ -1140,38 +1380,20 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
     wake();
   };
 
-  const placeHint = (now: number) => {
-    if (!hint) return;
-    const body: Body | null = bodies.sun.up ? "sun" : bodies.moon.up ? "moon" : null;
-    const settledIn = reducedMotion || sunriseElapsed(now) > SUNRISE_HOLD_MS + DAY_MOVE_MS + 500;
-    const ready = !hasDragged && body !== null && (day.mode === "cycle" || day.mode === "rest") && settledIn;
-    if (ready && body !== hintBody) {
-      hintBody = body;
-      hint.textContent = `Drag the ${body}`;
-      hintWidth = hint.offsetWidth;
-    }
-    const point = body ? bodies[body] : null;
-    const show = ready && !!point && point.x > 0 && point.x < cssWidth;
-    hint.classList.toggle("is-shown", show);
-    if (!show || !point) return;
-    const radius = body === "moon" ? bodies.radius * 0.8 : bodies.radius;
-    const roomRight = point.x + radius + 24 + hintWidth < cssWidth;
-    const hintX = roomRight ? point.x + radius + 14 : point.x - radius - 14 - hintWidth;
-    const side = roomRight ? "right" : "left";
-    const transform = `translate(${Math.round(hintX)}px, ${Math.round(point.y - 7)}px)`;
-    if (hint.dataset.side !== side) hint.dataset.side = side;
-    if (transform !== hintTransform) {
-      hintTransform = transform;
-      hint.style.transform = transform;
-    }
-  };
-
   const localPoint = (clientX: number, clientY: number) => {
     readScroll();
     return { x: clientX - (heroDocLeft - scrollLeft), y: clientY - (heroDocTop - scrollTop) };
   };
   const isInteractive = (target: EventTarget | null) => target instanceof Element && !!target.closest(INTERACTIVE);
-  const isTap = (x: number, y: number) => Math.hypot(x - pointer.downX, y - pointer.downY) < 10 && performance.now() - pointer.downAt < 400;
+  const isCopy = (target: EventTarget | null) => target instanceof Element && !!target.closest(".hero-text");
+  const isBlocked = (target: EventTarget | null) => isInteractive(target) || (target instanceof Element && !!bar?.contains(target));
+  const isTap = (x: number, y: number) => Math.hypot(x - pointer.downX, y - pointer.downY) < TAP_PX && performance.now() - pointer.downAt < 400;
+  const findTouch = (list: TouchList, id: number) => {
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].identifier === id) return list[i];
+    }
+    return null;
+  };
   const nightNow = () => {
     const { p, moon } = dayAt(day.c);
     return daylightAt(p, framing, moon).night;
@@ -1179,14 +1401,17 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
   const inHero = (x: number, y: number) => y >= 0 && y <= cssHeight && x >= 0 && x <= cssWidth;
 
   const onPointerDown = (event: PointerEvent) => {
-    if (event.pointerType === "touch" || event.button !== 0 || isInteractive(event.target)) return;
+    if (event.pointerType === "touch" || event.button !== 0 || isBlocked(event.target)) return;
     const { x, y } = localPoint(event.clientX, event.clientY);
     if (!inHero(x, y)) return;
     Object.assign(pointer, { x, y, active: true, touch: false, down: true, downX: x, downY: y, downAt: performance.now() });
     const body = hitBody(x, y);
     if (body) {
       event.preventDefault();
-      startDrag(body);
+      beginPendingDrag(body, event.pointerId, false, x, y);
+    } else if (isCopy(event.target)) {
+      pointer.down = false;
+      return;
     }
     markActive();
   };
@@ -1196,13 +1421,16 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
     const inside = inHero(x, y);
     const wasActive = pointer.active;
     Object.assign(pointer, { x, y, active: inside, touch: false });
-    if (pointer.drag) {
-      day.target = nearestCycle(x, y, pointer.drag);
-      markActive();
+    if (activeDrag && !activeDrag.touch) {
+      if (activeDrag.pointerId === event.pointerId) moveActiveDrag(x, y);
+      return;
+    }
+    if (pendingDrag && !pendingDrag.touch) {
+      if (pendingDrag.pointerId === event.pointerId && Math.hypot(x - pointer.downX, y - pointer.downY) >= DRAG_THRESHOLD_PX) commitDrag(x, y);
       return;
     }
     if (inside || wasActive) markActive();
-    if (!inside || isInteractive(event.target)) setCursor("");
+    if (!inside || isBlocked(event.target)) setCursor("");
     else if (hitBody(x, y)) setCursor("grab");
     else if (!reducedMotion && y > grassTopCss) setCursor("brush");
     else setCursor("");
@@ -1210,47 +1438,103 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
   const onPointerUp = (event: PointerEvent) => {
     if (event.pointerType === "touch") return;
     const { x, y } = localPoint(event.clientX, event.clientY);
-    if (pointer.drag) release(x, y);
-    else if (!reducedMotion && pointer.down && isTap(x, y) && !isInteractive(event.target)) particles.burst(x, y, nightNow());
+    const dragSession = activeDrag ?? pendingDrag;
+    if (dragSession && !dragSession.touch) {
+      if (dragSession.pointerId === event.pointerId) {
+        finishDrag(x, y, true, isBlocked(event.target));
+        pointer.down = false;
+      }
+      return;
+    }
+    if (!reducedMotion && pointer.down && isTap(x, y) && !isBlocked(event.target)) particles.burst(x, y, nightNow());
     pointer.down = false;
     markActive();
   };
+  const onPointerCancel = (event: PointerEvent) => {
+    if (event.pointerType === "touch") return;
+    const dragSession = activeDrag ?? pendingDrag;
+    if (dragSession && !dragSession.touch && dragSession.pointerId === event.pointerId) {
+      finishDrag(pointer.x, pointer.y, false, true);
+    }
+    pointer.down = false;
+  };
+  const onLostPointerCapture = (event: PointerEvent) => {
+    const dragSession = activeDrag ?? pendingDrag;
+    if (dragSession && !dragSession.touch && dragSession.pointerId === event.pointerId) {
+      finishDrag(pointer.x, pointer.y, false, true);
+      pointer.down = false;
+    }
+  };
   const onPointerLeave = () => {
     pointer.active = false;
-    if (pointer.drag) release(pointer.x, pointer.y);
+    if (activeDrag || pendingDrag) return;
+    setCursor("");
+    markActive();
+  };
+  const onWindowBlur = () => {
+    pointer.active = false;
+    pointer.down = false;
+    if (activeDrag || pendingDrag) finishDrag(pointer.x, pointer.y, false, true);
     setCursor("");
     markActive();
   };
   const onTouchStart = (event: TouchEvent) => {
     const touch = event.touches[0];
-    if (!touch || event.touches.length > 1) return;
+    if (!touch || event.touches.length > 1) {
+      if ((activeDrag ?? pendingDrag)?.touch) finishDrag(pointer.x, pointer.y, false, true);
+      return;
+    }
     const { x, y } = localPoint(touch.clientX, touch.clientY);
     Object.assign(pointer, { x, y, active: true, touch: true, down: true, downX: x, downY: y, downAt: performance.now() });
     markActive();
-    if (isInteractive(event.target)) return;
+    if (isBlocked(event.target)) return;
     const body = hitBody(x, y);
     if (body) {
       event.preventDefault();
-      startDrag(body);
+      beginPendingDrag(body, touch.identifier, true, x, y);
     } else if (!reducedMotion && y > grassTopCss) {
       hero.dataset.brushing = "";
     }
   };
   const onTouchMove = (event: TouchEvent) => {
-    const touch = event.touches[0];
+    const dragSession = activeDrag ?? pendingDrag;
+    const touch = dragSession?.touch ? findTouch(event.touches, dragSession.pointerId) : event.touches[0];
     if (!touch) return;
     const { x, y } = localPoint(touch.clientX, touch.clientY);
     Object.assign(pointer, { x, y, active: true, touch: true });
-    markActive();
-    if (pointer.drag) {
+    if (activeDrag?.touch) {
       event.preventDefault();
-      day.target = nearestCycle(x, y, pointer.drag);
+      moveActiveDrag(x, y);
+      return;
     }
+    if (pendingDrag?.touch) {
+      event.preventDefault();
+      if (Math.hypot(x - pointer.downX, y - pointer.downY) >= DRAG_THRESHOLD_PX) commitDrag(x, y);
+      return;
+    }
+    markActive();
   };
   const onTouchEnd = (event: TouchEvent) => {
     delete hero.dataset.brushing;
-    if (pointer.drag) release(pointer.x, pointer.y);
-    else if (!reducedMotion && pointer.down && isTap(pointer.x, pointer.y) && !isInteractive(event.target)) particles.burst(pointer.x, pointer.y, nightNow());
+    const dragSession = activeDrag ?? pendingDrag;
+    if (dragSession?.touch) {
+      const ended = findTouch(event.changedTouches, dragSession.pointerId);
+      if (ended || event.touches.length === 0) {
+        const point = ended ? localPoint(ended.clientX, ended.clientY) : { x: pointer.x, y: pointer.y };
+        finishDrag(point.x, point.y, true, false);
+        pointer.down = false;
+        pointer.active = false;
+      }
+      return;
+    }
+    if (!reducedMotion && pointer.down && isTap(pointer.x, pointer.y) && !isBlocked(event.target)) particles.burst(pointer.x, pointer.y, nightNow());
+    pointer.down = false;
+    pointer.active = false;
+    markActive();
+  };
+  const onTouchCancel = () => {
+    delete hero.dataset.brushing;
+    if ((activeDrag ?? pendingDrag)?.touch) finishDrag(pointer.x, pointer.y, false, true);
     pointer.down = false;
     pointer.active = false;
     markActive();
@@ -1275,12 +1559,14 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
     clearTimeout(ambientTimer);
     ambientTimer = 0;
     gpu = null;
+    staticGpu = null;
     targets = null;
     cellTable = null;
     probe = null;
     batch = null;
     mobGpu = null;
     mobBatch = null;
+    particleProgram = null;
     terrainRead = null;
     terrainReady = false;
     framesSinceFirst = 0;
@@ -1331,13 +1617,23 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
       veil.right = Math.max(...veiled.map((box) => box.right));
       veil.bottom = Math.max(...veiled.map((box) => box.bottom));
     }
-    tones.measure(heroDocTop);
+    tones.measure();
+    const lines = [...hero.querySelectorAll<HTMLElement>(".hero-title .line > span")].filter((element) => !!element.offsetParent).map(untransformedBox);
+    if (lines.length) {
+      titleVeil.left = Math.min(...lines.map((box) => box.left));
+      titleVeil.top = Math.min(...lines.map((box) => box.top));
+      titleVeil.right = Math.max(...lines.map((box) => box.right));
+      titleVeil.bottom = Math.max(...lines.map((box) => box.bottom));
+    }
     const boxesOf = (selector: string): KeepOut[] =>
       [...hero.querySelectorAll<HTMLElement>(selector)].filter((element) => !!element.offsetParent && element.offsetWidth > 0).map(untransformedBox);
     const copy = boxesOf(KEEP_OUT_COPY);
     const column = copy.length ? { left: 0, top: Math.min(...copy.map((box) => box.top)), right: Math.max(...copy.map((box) => box.right)), bottom: heroHeight } : null;
-    const shareRow = textBlock.querySelector<HTMLElement>(".send-more");
-    const clearEdge = shareRow?.offsetParent ? untransformedBox(shareRow).bottom - SHARE_ROW_SLACK : untransformedBox(textBlock).bottom;
+    const headBlock = hero.querySelector<HTMLElement>(".hero-head") ?? textBlock;
+    const blockBottom = untransformedBox(headBlock).bottom;
+    const shareRow = headBlock.querySelector<HTMLElement>(".send-more");
+    const shareBottom = shareRow?.offsetParent ? untransformedBox(shareRow).bottom : 0;
+    const clearEdge = shareBottom && blockBottom - shareBottom <= SHARE_ROW_SLACK ? shareBottom - SHARE_ROW_SLACK : blockBottom;
     const firstScreen = Math.min(heroHeight, window.innerHeight - Math.max(0, heroDocTop));
     const fold = { left: -Infinity, top: firstScreen, right: Infinity, bottom: Infinity };
     mobs.setKeepOut([...boxesOf(KEEP_OUT_TITLE), ...copy, fold], column);
@@ -1381,16 +1677,19 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
     [window, "pointerdown", onPointerDown as EventListener, { passive: false }],
     [window, "pointermove", onPointerMove as EventListener, { passive: true }],
     [window, "pointerup", onPointerUp as EventListener, { passive: true }],
-    [window, "blur", onPointerLeave, { passive: true }],
+    [window, "pointercancel", onPointerCancel as EventListener, { passive: true }],
+    [hero, "lostpointercapture", onLostPointerCapture as EventListener, { passive: true }],
+    [window, "blur", onWindowBlur, { passive: true }],
     [document.documentElement, "pointerleave", onPointerLeave, { passive: true }],
     [hero, "touchstart", onTouchStart as EventListener, { passive: false }],
     [hero, "touchmove", onTouchMove as EventListener, { passive: false }],
     [hero, "touchend", onTouchEnd as EventListener, { passive: true }],
-    [hero, "touchcancel", onTouchEnd as EventListener, { passive: true }],
+    [hero, "touchcancel", onTouchCancel as EventListener, { passive: true }],
   ];
   for (const [target, type, listener, opts] of listeners) target.addEventListener(type, listener, opts);
 
   measureHero();
+  measureText();
   startCompile();
   wake();
 
@@ -1402,6 +1701,13 @@ export function createMeadow(options: MeadowOptions): Meadow | null {
       clearTimeout(ambientTimer);
       ambientTimer = 0;
       phase = "failed";
+      if (activeDrag && !activeDrag.touch) releaseCapture(activeDrag.pointerId);
+      if (pendingDrag && !pendingDrag.touch) releaseCapture(pendingDrag.pointerId);
+      activeDrag = null;
+      pendingDrag = null;
+      pointer.drag = null;
+      clearGlobalDragStyles();
+      setCursor("");
       resizeObserver.disconnect();
       visibilityObserver?.disconnect();
       canvas.removeEventListener("webglcontextlost", onLost);

@@ -4,9 +4,10 @@ import crowd from "../assets/game/crowd.webp";
 import lost from "../assets/game/lost.webp";
 
 const spot = { x: 0.118, y: 0.31, r: 0.045 };
+const formats = import.meta.env.DEV ? [] : ["avif"];
 ---
 
-<section class="game paint" id="game" aria-labelledby="game-title" data-shot="game">
+<section class="game paint" data-paint="afternoon" id="game" aria-labelledby="game-title" data-shot="game">
   <div class="wrap">
     <div class="game-head">
       <div class="lost">
@@ -18,9 +19,8 @@ const spot = { x: 0.118, y: 0.31, r: 0.045 };
         <h2 class="poster" id="game-title" data-reveal>Where’s the lamb?</h2>
       </div>
       <p class="game-copy" data-reveal style="--i: 1">
-        Wi-Fi died? Chrome gives you a dinosaur. Ardia gives you a hillside of sheep, goats and very helpful dogs,
-        and one lamb with a yellow bell. Find her.<span class="swipe"> Swipe the flock, she’s in there.</span>{" "}Online
-        too, at <code>ardia://game</code>.
+        When Wi-Fi drops, skip the dinosaur and spot the lamb with the yellow bell in a hillside of sheep, goats and dogs.<span class="swipe"> Swipe the flock to look around.</span>{" "}Also
+        at <code>ardia://game</code>.
       </p>
     </div>
 
@@ -31,7 +31,7 @@ const spot = { x: 0.118, y: 0.31, r: 0.045 };
         <Picture
           src={crowd}
           alt="A screenshot of the game: a painted meadow packed with sheep, goats and sheepdogs, the lost lamb somewhere among them."
-          formats={["avif"]}
+          formats={formats}
           fallbackFormat="webp"
           widths={[640, 1024, 1440, 2252]}
           sizes="(max-width: 700px) 240vw, (max-width: 1440px) 94vw, 1360px"
@@ -41,7 +41,7 @@ const spot = { x: 0.118, y: 0.31, r: 0.045 };
           class="found"
           type="button"
           data-found
-          aria-label="That’s her. Reveal the lamb."
+          aria-label="Select the lost lamb"
           style={`left: ${(spot.x - spot.r) * 100}%; top: ${spot.y * 100}%; width: ${spot.r * 200}%`}
         ></button>
       </div>
@@ -54,9 +54,6 @@ const spot = { x: 0.118, y: 0.31, r: 0.045 };
 
 <style>
   .game {
-    --bg: var(--golden-late);
-    --wash: linear-gradient(180deg, var(--golden-late) 0%, #e8a682 100%);
-    --dab: var(--forest);
     padding: clamp(24px, 4vw, 64px) 0 var(--section);
   }
   .game-head {
@@ -234,7 +231,7 @@ const spot = { x: 0.118, y: 0.31, r: 0.045 };
       say(found);
       capture("game_solved", { seconds: s ? Number(s) : null, misses });
     });
-    const lines = ["Not her. That’s just the flock.", "Wrong woolly.", "Close. Look for the yellow bell.", "Not her. Keep looking."];
+    const lines = ["Not her. That’s just the flock.", "Still sheep.", "Look for the yellow bell.", "Not her. Keep looking."];
     board.addEventListener("click", () => say(found || lines[misses++ % lines.length]));
   }
 </script>

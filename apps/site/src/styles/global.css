@@ -1,11 +1,22 @@
+@property --ground {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #f1ece2;
+}
+
 :root {
   color-scheme: light;
 
   --paper: #f1ece2;
   --paper-deep: #e6dfd1;
   --ink: #16130f;
+  --day-ink: #16130f;
   --ink-2: #4d524a;
-  --ink-3: #676b60;
+  --ink-3: #595d53;
+  --ink-on: var(--paper);
+  --figure: var(--forest-deep);
+  --rival: #7d776c;
+  --ground: var(--paper);
   --rule: rgb(22 19 15 / 0.16);
   --rule-strong: rgb(22 19 15 / 0.85);
   --accent: #1e5141;
@@ -40,17 +51,17 @@
   --edge-a: url("../assets/paint/edge-a.svg");
   --edge-b: url("../assets/paint/edge-b.svg");
 
-  --sans: "Mona Sans Variable", -apple-system, "Helvetica Neue", sans-serif;
-  --poster: "Mona Sans Variable", "Arial Narrow", sans-serif;
+  --sans: "Allo", -apple-system, "Helvetica Neue", sans-serif;
+  --poster: "Allo", -apple-system, "Helvetica Neue", sans-serif;
   --mono: "Martian Mono Variable", ui-monospace, "SF Mono", monospace;
 
-  --t-mega: clamp(3.4rem, 1.2rem + 9.4vw, 11.5rem);
-  --t-h2: clamp(2.6rem, 1.3rem + 5.4vw, 7rem);
-  --t-h3: clamp(1.7rem, 1.25rem + 1.5vw, 2.6rem);
-  --t-lede: clamp(1.14rem, 1.02rem + 0.48vw, 1.42rem);
-  --t-body: clamp(1rem, 0.96rem + 0.16vw, 1.1rem);
+  --t-mega: clamp(3rem, 1.4rem + 5.6vw, 7.2rem);
+  --t-h2: clamp(2.35rem, 1.3rem + 3.4vw, 4.65rem);
+  --t-h3: clamp(1.55rem, 1.2rem + 1.2vw, 2.35rem);
+  --t-lede: clamp(1.12rem, 1.02rem + 0.42vw, 1.36rem);
+  --t-body: clamp(1rem, 0.96rem + 0.14vw, 1.08rem);
   --t-small: 0.9rem;
-  --t-label: 0.69rem;
+  --t-label: 0.7rem;
 
   --gutter: clamp(16px, 3.2vw, 40px);
   --max: 1440px;
@@ -59,6 +70,7 @@
 
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --tone-fade: 700ms;
 }
 
 *,
@@ -109,6 +121,21 @@ video {
   height: auto;
 }
 
+img,
+svg,
+canvas {
+  -webkit-user-drag: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.btn,
+button,
+summary {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 a {
   color: inherit;
 }
@@ -126,12 +153,12 @@ h3 {
 }
 
 ::selection {
-  background: var(--sun);
-  color: var(--ink);
+  background: var(--selection, rgb(17 61 46 / 0.22));
+  color: inherit;
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--ink);
   outline-offset: 3px;
   border-radius: 2px;
 }
@@ -173,36 +200,25 @@ h3 {
 }
 
 .dark {
-  color: var(--night-ink);
-  --ink-2: var(--night-ink-2);
-  --ink-3: color-mix(in srgb, var(--night-ink-2) 80%, transparent);
-  --rule: var(--night-rule);
-  --rule-strong: rgb(241 235 220 / 0.7);
-}
-
-.dark ::selection {
-  background: var(--sun);
-  color: var(--ink);
+  font-weight: 400;
 }
 
 .poster {
   font-family: var(--poster);
-  font-weight: 900;
-  font-stretch: 75%;
-  text-transform: uppercase;
-  line-height: 0.86;
-  letter-spacing: -0.01em;
+  font-weight: 740;
+  line-height: 0.98;
+  letter-spacing: -0.026em;
   font-kerning: normal;
 }
 
 .label {
-  font-family: var(--mono);
-  font-size: var(--t-label);
-  font-stretch: 87.5%;
-  font-weight: 460;
-  letter-spacing: 0.06em;
+  font-family: var(--sans);
+  font-size: 0.74rem;
+  font-weight: 620;
+  letter-spacing: 0.065em;
   text-transform: uppercase;
-  line-height: 1.5;
+  font-feature-settings: "case" 1;
+  line-height: 1.4;
 }
 
 .kicker {
@@ -226,6 +242,12 @@ h3 {
   flex: none;
 }
 
+.bits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1.6em;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -233,6 +255,8 @@ h3 {
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 :root:not([data-device="phone"]) .phone-only,
@@ -250,32 +274,30 @@ h3 {
 }
 
 .btn {
-  --h: 56px;
+  --h: 54px;
   --btn-bg: var(--ink);
-  --btn-fg: var(--paper);
-  --btn-wipe: var(--forest);
+  --btn-fg: var(--ink-on);
+  --btn-wipe: var(--figure);
   position: relative;
   isolation: isolate;
   overflow: hidden;
   display: inline-flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   height: var(--h);
   padding: 0 22px 0 20px;
-  border-radius: 4px;
+  border-radius: 10px;
   background: var(--btn-bg);
   color: var(--btn-fg);
-  font-family: var(--poster);
-  font-weight: 740;
-  font-stretch: 85%;
-  font-size: 1.04rem;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  font-family: var(--sans);
+  font-weight: 620;
+  font-size: 0.98rem;
+  letter-spacing: -0.012em;
   text-decoration: none;
   white-space: nowrap;
   transition:
     color 200ms var(--ease-out),
-    transform 160ms var(--ease-out);
+    transform 150ms var(--ease-out);
   touch-action: manipulation;
 }
 
@@ -285,13 +307,8 @@ h3 {
   inset: -2px -24px;
   z-index: -1;
   background-color: var(--btn-wipe);
-  background-image: var(--impasto);
-  background-size: 220px;
-  background-blend-mode: soft-light;
-  -webkit-mask: var(--edge-a) 0 0 / 600px 100% repeat-x;
-  mask: var(--edge-a) 0 0 / 600px 100% repeat-x;
   transform: translateX(-104%) skewX(-12deg);
-  transition: transform 420ms var(--ease-out);
+  transition: transform 240ms var(--ease-out);
 }
 
 @media (hover: hover) {
@@ -301,7 +318,7 @@ h3 {
 }
 
 .btn:active {
-  transform: translateY(1px) scale(0.99);
+  transform: scale(0.96);
 }
 
 .btn svg {
@@ -309,14 +326,13 @@ h3 {
 }
 
 .btn .btn-meta {
-  font-family: var(--mono);
-  font-size: 0.66rem;
-  font-weight: 450;
-  font-stretch: 87.5%;
-  letter-spacing: 0.04em;
-  opacity: 0.66;
-  padding-left: 14px;
-  border-left: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  font-family: var(--sans);
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  opacity: 0.8;
+  padding-left: 12px;
+  border-left: 1px solid color-mix(in srgb, currentColor 24%, transparent);
   align-self: stretch;
   display: inline-flex;
   align-items: center;
@@ -324,7 +340,7 @@ h3 {
 
 .btn.sun-btn {
   --btn-bg: var(--sun);
-  --btn-fg: var(--ink);
+  --btn-fg: var(--day-ink);
   --btn-wipe: var(--sun-pale);
   background-image: var(--impasto);
   background-size: 220px;
@@ -359,11 +375,11 @@ h3 {
 @media (prefers-reduced-motion: no-preference) {
   .js [data-reveal] {
     opacity: 0;
-    transform: translateY(18px);
+    transform: translateY(10px);
     transition:
-      opacity 700ms var(--ease-out),
-      transform 900ms var(--ease-out);
-    transition-delay: calc(var(--i, 0) * 70ms);
+      opacity 320ms var(--ease-out),
+      transform 420ms var(--ease-out);
+    transition-delay: calc(var(--i, 0) * 60ms);
   }
 
   .js [data-reveal].in {
@@ -379,6 +395,9 @@ h3 {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  :root {
+    --tone-fade: 0ms;
+  }
   .btn::before {
     transition: none;
   }

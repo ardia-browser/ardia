@@ -20,7 +20,7 @@ test("Ardia measured later than its rivals: newest first, rivals sharing a day s
       { name: "Dia", version: "1.53.0", measured: "2026-10-19" },
       { name: "Helium", version: "0.19.3.1", measured: "2026-10-19" },
     ]),
-    "Ardia 0.2.46 measured Nov 9 · Dia 1.53.0 and Helium 0.19.3.1 measured Oct 19, 2026",
+    "Ardia 0.2.46 measured Nov 9; Dia 1.53.0 and Helium 0.19.3.1 measured Oct 19, 2026",
   );
 });
 
@@ -30,7 +30,7 @@ test("dates in different years each carry their year", () => {
       { name: "Ardia", version: "0.3.0", measured: "2027-01-04" },
       { name: "Dia", version: "1.53.0", measured: "2026-12-20" },
     ]),
-    "Ardia 0.3.0 measured Jan 4, 2027 · Dia 1.53.0 measured Dec 20, 2026",
+    "Ardia 0.3.0 measured Jan 4, 2027; Dia 1.53.0 measured Dec 20, 2026",
   );
 });
 

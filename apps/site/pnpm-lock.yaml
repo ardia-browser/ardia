@@ -11,12 +11,12 @@ importers:
       '@fontsource-variable/martian-mono':
         specifier: ^5.3.0
         version: 5.3.0
-      '@fontsource-variable/mona-sans':
-        specifier: ^5.3.0
-        version: 5.3.0
       '@rrweb/record':
         specifier: 2.1.6
         version: 2.1.6
+      allo-font:
+        specifier: ^1.0.3
+        version: 1.0.3
       astro:
         specifier: ^7.3.4
         version: 7.3.4(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(yaml@2.9.1)
@@ -425,9 +425,6 @@ packages:
   '@fontsource-variable/martian-mono@5.3.0':
     resolution: {integrity: sha512-0wVODx9ILwNnaYC4XCuSaFRYtj1Prd89MRVaSuv2ng6zLiQkS4SepaWEPefs7vqCZS8sbEOA8jb/4F5KNMnGdg==}
 
-  '@fontsource-variable/mona-sans@5.3.0':
-    resolution: {integrity: sha512-PkxRB3KI4z9Gjpk7vVqgO3GMSyQuOIIj4TaRDbvbcDj8SzWwI38jvLTQxJM/cTRorhcT7h8qjcllR+qjRtM/Fg==}
-
   '@img/colour@1.1.0':
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
     engines: {node: '>=18'}
@@ -816,6 +813,9 @@ packages:
 
   ajv@8.20.0:
     resolution: {integrity: sha512-Thbli+OlOj+iMPYFBVBfJ3OmCAnaSyNn4M1vz9T6Gka5Jt9ba/HIR56joy65tY6kx/FCF5VXNB819Y7/GUrBGA==}
+
+  allo-font@1.0.3:
+    resolution: {integrity: sha512-h1u1ukonlmfTYSRc+MPvrjJU/p12A5xmzXIw5YQXf1/VGNi00cnPJfTf1AxYZOHzXRxK2pBLV7GgxtOm7/f+DQ==}
 
   am-i-vibing@0.4.0:
     resolution: {integrity: sha512-MxT4XZL7pzLHpuvhDKdMaQHMGGkJDLluKBLsbstn+8wv9sWcFT6h+0ve9qkml95amVTZtZV83gQe2hY+ojgHLg==}
@@ -2124,8 +2124,6 @@ snapshots:
 
   '@fontsource-variable/martian-mono@5.3.0': {}
 
-  '@fontsource-variable/mona-sans@5.3.0': {}
-
   '@img/colour@1.1.0': {}
 
   '@img/sharp-darwin-arm64@0.35.4':
@@ -2442,6 +2440,8 @@ snapshots:
       fast-uri: 3.1.8
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
+
+  allo-font@1.0.3: {}
 
   am-i-vibing@0.4.0:
     dependencies:

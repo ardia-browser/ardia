@@ -170,6 +170,7 @@ export const SETTING_SPECS = {
   pageEngine: oneOf(["chromium", "webkit"], "chromium"),
   websiteEngines: shaped<Record<string, "chromium" | "webkit">>({}, (v) => isRecordOf(v, (e) => e === "chromium" || e === "webkit"), recordOf({ type: "string", enum: ["chromium", "webkit"] })),
   protectedVideoInWebKit: flag(true),
+  filesInWebKit: flag(false),
   offerWebKitForProtectedVideo: flag(true),
   engineSwitchKeepsPage: flag(true),
   engineSwitchAsksAboutUnsavedWork: flag(true),

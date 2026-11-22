@@ -43,6 +43,7 @@ export function WebEngineSection() {
         </Row>
         {automatic && protectedVideo && <StreamingSitesRow />}
         {automatic && sites.map((site) => <RuleRow key={site} site={site} engine={rules[site]!} />)}
+        <SettingToggle anchor="advanced.filesInWebKit" />
         <SettingToggle anchor="advanced.offerWebKitForProtectedVideo" />
       </Group>
       <SectionHeader title="Switching engines" />

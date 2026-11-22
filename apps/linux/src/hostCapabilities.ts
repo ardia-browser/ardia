@@ -86,6 +86,7 @@ export const WEB_ENGINE_SETTINGS = [
   "general.engineMode",
   "advanced.pageEngine",
   "advanced.websiteEngines",
+  "advanced.filesInWebKit",
   "advanced.offerWebKitForProtectedVideo",
   "advanced.engineSwitchKeepsPage",
   "advanced.engineSwitchAsksAboutUnsavedWork",

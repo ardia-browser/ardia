@@ -110,8 +110,11 @@ export function protectedVideoSite(url: string | undefined | null): boolean {
 export const builtInEngine = (s: Pick<BrowserState, "settings">, url: string | undefined | null): PageEngine | undefined =>
   PLATFORM_FEATURES.webKit && !singleEngine(s) && s.settings.protectedVideoInWebKit === true && protectedVideoSite(url) ? "webkit" : undefined;
 
+export const fileEngine = (s: Pick<BrowserState, "settings">, url: string | undefined | null): PageEngine | undefined =>
+  PLATFORM_FEATURES.webKit && !singleEngine(s) && s.settings.filesInWebKit === true && !!url && /^file:/i.test(url) ? "webkit" : undefined;
+
 export const chosenEngine = (s: Pick<BrowserState, "settings">, url: string | undefined | null): PageEngine | undefined =>
-  modeEngine(s, url) ?? (webStorePage(url) ? "chromium" : undefined) ?? ruleFor(s, url) ?? builtInEngine(s, url);
+  modeEngine(s, url) ?? (webStorePage(url) ? "chromium" : undefined) ?? ruleFor(s, url) ?? fileEngine(s, url) ?? builtInEngine(s, url);
 
 export const recommendedEngineFor = (s: Pick<BrowserState, "settings">, url: string | undefined | null): PageEngine => modeEngine(s, url) ?? builtInEngine(s, url) ?? defaultEngine(s);
 

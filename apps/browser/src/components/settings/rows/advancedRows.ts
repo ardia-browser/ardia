@@ -68,6 +68,14 @@ export const advancedRows = {
           shown: automaticEngine,
           needs: NEEDS_AUTOMATIC,
         },
+        filesInWebKit: {
+          title: "Open files in WebKit",
+          explained: true,
+          description: "Files on this Mac (file:// addresses) open in WebKit instead of the default engine.",
+          keywords: ["file", "files", "file://", "local file", "local files", "html file", "pdf", "webkit", "chromium", "engine", "open files in webkit"],
+          shown: automaticEngine,
+          needs: NEEDS_AUTOMATIC,
+        },
         offerWebKitForProtectedVideo: {
           title: "Offer WebKit when a video won't play",
           explained: true,

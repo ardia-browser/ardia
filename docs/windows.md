@@ -861,7 +861,7 @@ is plain Chromium.
   CPU's zip with its SHA-256, `fetch-engine.ps1` downloads and checks it, and the Windows workflow assembles the app
   with it, launches it with the self-check (which then loads a page through the engine) and runs the tour's pages
   part. The release is a draft, so only the repository's own runs can fetch it; a fork's pull request skips those
-  steps. A new engine build is a new release and a new `prebuilt.json`.
+  steps. A new engine build is a new release and a new `prebuilt.json`, whose `source` is the commit it was built from.
 - A tab opened with no address shows a committed `about:blank` until its first load, which replaces that entry, so
   the first real page reports `canGoBack: false` and Back never leads to a blank page (the Mac's "ahead blank" rule).
   `downloadNavigation`'s `committedUrl` is the tab's last committed page, empty while it has only that opening page.
@@ -1233,8 +1233,10 @@ Mac, for every nightly and stable:
    `release-files.ps1` names each tested installer `Ardia-<version>-windows-<cpu>-setup.exe` with its `.sha256`, and
    the job leaves them with `Ardia.build.json` in the artifacts `windows-release-x64` and `windows-release-arm64`. Its
    `source` job packs the engine's source, `Ardia-<version>-windows-source.tar.xz` with a `.sha256`, in
-   `windows-release-source`: `scripts/windows/engine-source.sh`, from the Helium tags `helium-pins.ini` pins at that
-   commit, with a README naming Chromium's source and this repository's tree.
+   `windows-release-source`: `scripts/windows/engine-source.sh`, from the Helium tags `helium-pins.ini` pins at the
+   commit `prebuilt.json` names as its engine's `source`, so the archive matches the engine the installers carry even
+   when the pins have moved on ahead of a new prebuilt. Its README names Chromium's source, this repository's tree at
+   that engine commit, and the tree at the release's commit for the app.
 2. `publish` attaches both installers, the engine's source and their `.sha256` files to `v<version>` (`publish.sh`
    checks the hashes and that the build is this version, and refuses installers without their source), so every
    release keeps the source beside its Windows binaries for as long as it stays up. A dry run checks the same and

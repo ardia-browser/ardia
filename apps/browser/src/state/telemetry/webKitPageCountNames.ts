@@ -12,6 +12,26 @@ export type WebKitCount =
   | "workerShownNotification"
   | "workerClick"
   | "translation"
+  | "extensionAction"
+  | "shimDownloads"
+  | "shimHistory"
+  | "shimBookmarks"
+  | "shimTabGroups"
+  | "shimSidePanel"
+  | "shimRuntime"
+  | "shimManagement"
+  | "shimIdle"
+  | "shimTopSites"
+  | "shimSearch"
+  | "shimSessions"
+  | "shimBrowsingData"
+  | "shimDns"
+  | "shimTts"
+  | "shimOffscreen"
+  | "shimStorage"
+  | "shimIdentity"
+  | "shimCommands"
+  | "extensionShortcut"
   | "siteSettingApplied"
   | "uploadFiltered"
   | "screenShareRequest"
@@ -21,7 +41,11 @@ export type WebKitCount =
   | "savePage"
   | "savePageFailure"
   | "quarantineFailure"
+  | "nativeHostLaunch"
+  | "nativeHostFailure"
+  | "privateExtensionLoaded"
   | "contextMenu"
+  | "contextMenuExtension"
   | "linkPeek"
   | "linkSplit"
   | "littleArdiaLink"
@@ -69,6 +93,26 @@ export const WEBKIT_COUNTS = {
   workerShownNotification: "webKitWorkerShownNotifications",
   workerClick: "webKitWorkerClicks",
   translation: "webKitTranslations",
+  extensionAction: "webKitExtensionActions",
+  shimDownloads: "webKitShimDownloads",
+  shimHistory: "webKitShimHistory",
+  shimBookmarks: "webKitShimBookmarks",
+  shimTabGroups: "webKitShimTabGroups",
+  shimSidePanel: "webKitShimSidePanel",
+  shimRuntime: "webKitShimRuntime",
+  shimManagement: "webKitShimManagement",
+  shimIdle: "webKitShimIdle",
+  shimTopSites: "webKitShimTopSites",
+  shimSearch: "webKitShimSearch",
+  shimSessions: "webKitShimSessions",
+  shimBrowsingData: "webKitShimBrowsingData",
+  shimDns: "webKitShimDns",
+  shimTts: "webKitShimTts",
+  shimOffscreen: "webKitShimOffscreen",
+  shimStorage: "webKitShimStorage",
+  shimIdentity: "webKitShimIdentity",
+  shimCommands: "webKitShimCommands",
+  extensionShortcut: "webKitExtensionShortcuts",
   siteSettingApplied: "webKitSiteSettingsApplied",
   uploadFiltered: "webKitUploadsFiltered",
   screenShareRequest: "webKitScreenShareRequests",
@@ -78,7 +122,11 @@ export const WEBKIT_COUNTS = {
   savePage: "webKitPagesSaved",
   savePageFailure: "webKitSavePageFailures",
   quarantineFailure: "webKitQuarantineFailures",
+  nativeHostLaunch: "webKitNativeHostLaunches",
+  nativeHostFailure: "webKitNativeHostFailures",
+  privateExtensionLoaded: "webKitPrivateExtensionsLoaded",
   contextMenu: "webKitContextMenus",
+  contextMenuExtension: "webKitContextMenuExtensionPicks",
   linkPeek: "webKitLinkPeeks",
   linkSplit: "webKitLinkSplits",
   littleArdiaLink: "webKitLittleArdiaLinks",

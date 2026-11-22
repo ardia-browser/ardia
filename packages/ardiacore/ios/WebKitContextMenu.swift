@@ -137,17 +137,26 @@ final class WebKitContextMenu {
   private let tab: WebKitTab
   private let target: WebKitMenuTarget
   private var native: [String: NSMenuItem] = [:]
+  private var extensionItems: [NSMenuItem] = []
   private let menu = NSMenu()
   private var run: WebKitMenuCommands { WebKitMenuCommands(tab: tab, target: target) }
 
-  init(tab: WebKitTab, target: WebKitMenuTarget, proposed: NSMenu) {
+  init(tab: WebKitTab, target: WebKitMenuTarget, proposed: NSMenu, extensionItems fromHub: [NSMenuItem]) {
     self.tab = tab
     self.target = target
+    var offered: [NSMenuItem] = []
     for item in proposed.items {
       if let id = item.identifier?.rawValue, id.hasPrefix("WKMenuItemIdentifier") { native[id] = item }
+      if Self.isExtensionItem(item) { offered.append(item) }
     }
     proposed.removeAllItems()
+    extensionItems = offered.isEmpty ? fromHub : offered
     menu.autoenablesItems = false
+  }
+
+  private static func isExtensionItem(_ item: NSMenuItem) -> Bool {
+    if let submenu = item.submenu { return submenu.items.contains(where: isExtensionItem) }
+    return item.target.map { NSStringFromClass(type(of: $0)).hasPrefix("_WKWebExtension") } ?? false
   }
 
   private func take(_ id: String, as title: String? = nil) -> NSMenuItem? {
@@ -325,6 +334,28 @@ final class WebKitContextMenu {
     addShare(.page)
   }
 
+  private func addExtensionItems() {
+    guard !extensionItems.isEmpty else { return }
+    separate()
+    for item in extensionItems {
+      Self.countPicks(item)
+      menu.addItem(item)
+    }
+  }
+
+  private static func countPicks(_ item: NSMenuItem) {
+    if let submenu = item.submenu { return submenu.items.forEach(countPicks) }
+    guard let action = item.action, !(item.target is WebKitMenuAction) else { return }
+    let target = item.target
+    let forward = WebKitMenuAction { [weak item, weak target] in
+      ArdiaEvents.emit("webKit.counted", data: ArdiaConsentStamp.begin().onto(["name": "contextMenuExtension"]))
+      NSApp.sendAction(action, to: target, from: item)
+    }
+    item.target = forward
+    item.action = #selector(WebKitMenuAction.activate(_:))
+    item.representedObject = forward
+  }
+
   func build() -> NSMenu {
     if target.editable {
       addEditableItems()
@@ -344,6 +375,7 @@ final class WebKitContextMenu {
       }
       if target.link == nil, target.image == nil, target.mediaKind == nil, target.selection.isEmpty { addPageItems() }
     }
+    addExtensionItems()
     separate()
     let tab = tab
     if !target.editable, target.link == nil, target.image == nil, target.mediaKind == nil, target.selection.isEmpty {
@@ -404,6 +436,11 @@ extension WebKitTab {
     return target
   }
 
+  private var extensionMenuItems: [NSMenuItem] {
+    guard #available(macOS 15.4, *), let controller = webView?.configuration.webExtensionController else { return [] }
+    return controller.extensionContexts.sorted { $0.webExtension.displayName ?? "" < $1.webExtension.displayName ?? "" }.flatMap { $0.menuItems(for: self) }
+  }
+
   @objc(_webView:getContextMenuFromProposedMenu:forElement:userInfo:completionHandler:)
   func webView(_ webView: WKWebView, contextMenuFromProposedMenu proposed: NSMenu, forElement element: AnyObject, userInfo: AnyObject?,
                completionHandler: @escaping (NSMenu?) -> Void) {
@@ -412,7 +449,7 @@ extension WebKitTab {
     let wantsSelection = identifiers.contains("WKMenuItemIdentifierCopy") || identifiers.contains("WKMenuItemIdentifierLookUp") || target.editable
     let finish = { [weak self] in
       guard let self else { return completionHandler(proposed) }
-      let menu = WebKitContextMenu(tab: self, target: target, proposed: proposed).build()
+      let menu = WebKitContextMenu(tab: self, target: target, proposed: proposed, extensionItems: self.extensionMenuItems).build()
       ArdiaEvents.emit("webKit.counted", data: ArdiaConsentStamp.begin().onto(["name": "contextMenu"]))
       completionHandler(self.showOrDump(menu, target: target))
     }

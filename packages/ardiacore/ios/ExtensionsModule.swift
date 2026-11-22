@@ -49,10 +49,12 @@ public class ExtensionsModule: Module {
       reply.ok()
     },
     "actionStates": { args, reply in
-      reply.ok(ArdiaHost.actionStates(tabId: try args.text("tabId"), extensions: try args.strings("ids")))
+      let tabId = try args.text("tabId"), ids = try args.strings("ids")
+      reply.ok(WebKitExtensions.shared.actionStates(tabId: tabId, ids: ids) ?? ArdiaHost.actionStates(tabId: tabId, extensions: ids))
     },
     "sidePanelUrl": { args, reply in
-      reply.ok(ArdiaHost.sidePanelURL(tabId: try args.text("tabId"), extension: try args.text("extensionId")))
+      let tabId = try args.text("tabId"), extensionId = try args.text("extensionId")
+      reply.ok(WebKitExtensions.shared.sidePanelURL(tabId: tabId, extensionId: extensionId) ?? ArdiaHost.sidePanelURL(tabId: tabId, extension: extensionId))
     },
     "watchActions": EngineCall.passing("ac_extensions_watch_actions"),
     "syncState": EngineCall.passing("ac_extensions_sync_state"),

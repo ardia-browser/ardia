@@ -54,6 +54,25 @@ public class WebKitModule: Module {
       WebKitHub.shared.setZoom(try args.double("zoom"), profile: args.profile, host: try args.text("host").lowercased())
       reply.ok()
     },
+    "syncExtensions": { args, reply in
+      WebKitExtensions.shared.sync(profile: args.profile, entries: try args.dicts("extensions")) { reply.ok($0) }
+    },
+    "extensionReply": { args, reply in
+      WebKitExtensions.shared.reply(try args.text("id"), payload: try args.dict("reply"))
+      reply.ok()
+    },
+    "extensionEvent": { args, reply in
+      WebKitExtensions.shared.event(profile: args.profile, payload: try args.dict("event"))
+      reply.ok()
+    },
+    "extensionTabLayout": { args, reply in
+      WebKitExtensions.shared.tabLayout(try args.dict("layout"))
+      reply.ok()
+    },
+    "extensionTabsDone": { args, reply in
+      WebKitExtensions.shared.tabsReply(try args.text("request"), reply: try args.dict("reply"))
+      reply.ok()
+    },
     "notificationAction": { args, reply in
       let action = try args.text("action")
       if WebKitHub.started, action == "click" || action == "close" { WebKitHub.shared.notifications.act(try args.text("id"), action: action) }

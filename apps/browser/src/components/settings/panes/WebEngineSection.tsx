@@ -54,6 +54,7 @@ export function WebEngineSection() {
       <SectionHeader title="WebKit pages" />
       <Group>
         <SettingToggle anchor="advanced.webKitFraudWarnings" />
+        <SettingToggle anchor="advanced.webKitExtensions" />
         <Row anchor="advanced.enginesDiffer" onPress={() => showSettingsSheet(<EnginesDifferSheet />)} />
       </Group>
     </>

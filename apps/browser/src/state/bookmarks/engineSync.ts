@@ -9,8 +9,10 @@ import type { BookmarkFolder, BookmarkNode, Bookmarks } from "../browser/types";
 import { engineProfiles } from "../profiles/engineProfiles";
 import { onProfilesOpened, onProfilesUnloaded, openedEngineProfiles, openProfile, profileOpened } from "../profiles/profileLoading";
 import { migrateLegacyFile } from "../app/legacyFiles";
+import { adoptChromeBookmarkNumbers } from "../engines/webKitExtensionData";
+import { noteWebKitExtensionStateCount } from "../telemetry/webKitExtensionStateCounts";
 import { noteBookmarkSyncDiff } from "../telemetry/bookmarkMoves";
-import { consentToken } from "../telemetry/client";
+import { consentToken, type ConsentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
 import { withDeadline } from "../../lib/deadline";
 
@@ -86,13 +88,14 @@ async function sendOps(engine: string, ops: BookmarkOp[]): Promise<boolean> {
   }
 }
 
-async function readTree(engine: string, state: EngineState) {
+async function readTree(engine: string, state: EngineState, consent: ConsentToken | null) {
   const unloads = state.unloads;
   const left = () => state.unloads !== unloads || !isCurrent(engine, state);
   await watchBookmarks(engine);
   if (left()) return;
   const tree = await bookmarkTree(engine);
   if (left()) return;
+  if (adoptChromeBookmarkNumbers(tree)) noteWebKitExtensionStateCount("extensionChromeBookmarkIds", consent);
   const fetched = flatFromEngine(tree, engine);
   const base = state.shadow ?? state.shown ?? flatFromStore({ nodes: {} }, engine);
   const edits = bookmarkOps(base, flatFromStore(store().bookmarks, engine), engine);
@@ -133,7 +136,7 @@ function work(engine: string) {
         if (state.needRead) {
           state.needRead = false;
           state.needPush = false;
-          await readTree(engine, state);
+          await readTree(engine, state, consent);
         } else {
           state.needPush = false;
           await pushTree(engine, state);

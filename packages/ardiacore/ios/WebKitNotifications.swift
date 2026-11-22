@@ -318,7 +318,7 @@ final class WebKitNotifications {
 
   fileprivate func openWindow(_ url: URL, store: WKWebsiteDataStore, profile: String, origin: String, done: @escaping (WKWebView?) -> Void) {
     guard ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return done(nil) }
-    let configuration = WebKitHub.shared.configuration(profile: profile)
+    let configuration = WebKitExtensions.shared.pageConfiguration(for: url.absoluteString, profile: profile) ?? WebKitHub.shared.configuration(profile: profile)
     guard configuration.websiteDataStore === store else { return done(nil) }
     let view = WebKitWebView(frame: .zero, configuration: configuration)
     let adoptId = WebKitHub.shared.transfers.offer(view)

@@ -144,8 +144,9 @@ extension WebKitTab {
   private static let processKey = "_webProcessIdentifier"
   private static let waitBeforeAskingAgain = 15.0
 
-  func makeView() -> WebKitWebView {
-    WebKitWebView(frame: bounds, configuration: WebKitHub.shared.configuration(profile: profile))
+  func makeView(for url: String?) -> WebKitWebView {
+    let configuration = WebKitExtensions.shared.pageConfiguration(for: url, profile: profile) ?? WebKitHub.shared.configuration(profile: profile)
+    return WebKitWebView(frame: bounds, configuration: configuration)
   }
 
   func startFirstPage(_ url: String, in view: WebKitWebView) {
@@ -185,8 +186,7 @@ extension WebKitTab {
     WebKitTabHistory.flush(self)
     cancelDialogs()
     WebKitHub.shared.permissions.drop(browserId: browserId)
-    WebKitHub.shared.logins.forget(self)
-    WebKitAutofill.shared.forget(self)
+    noteExtensionTabClosed()
     pageMedia = WebKitPageMedia()
     if let dropped = dropViewForDiscard() { WebKitHub.close(dropped) }
     emit("discarded", ["url": url, "reason": "external"])
@@ -198,7 +198,7 @@ extension WebKitTab {
   func wakeDiscarded(loading url: String? = nil) -> Bool {
     guard !closed, let page = life.discarded else { return false }
     life.discarded = nil
-    let view = makeView()
+    let view = makeView(for: url ?? page.url)
     attach(view)
     emit("ready", [:])
     ArdiaEvents.emit("webKit.counted", data: ArdiaConsentStamp.begin().onto(["name": "discardWake"]))

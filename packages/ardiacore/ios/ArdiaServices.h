@@ -88,6 +88,9 @@ typedef void (^ArdiaServiceReply)(id _Nullable value, NSString *_Nullable error)
 + (void)clearBrowsingData:(NSString *)profile types:(NSArray<NSString *> *)types since:(double)sinceMs completion:(void (^)(NSString * _Nullable))completion
     NS_SWIFT_NAME(clearBrowsingData(profile:types:since:completion:));
 
++ (nullable NSString *)storeExtensionFolder:(NSString *)profile extension:(NSString *)extensionId version:(NSString *)version
+    NS_SWIFT_NAME(storeExtensionFolder(profile:extension:version:));
++ (NSString *)profileDirectory:(NSString *)profile NS_SWIFT_NAME(profileDirectory(_:));
 @end
 
 NS_ASSUME_NONNULL_END

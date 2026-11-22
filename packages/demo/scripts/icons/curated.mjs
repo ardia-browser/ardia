@@ -1,4 +1,9 @@
 export const CURATED = {
+  qrcode: "L:qr-code T:qrcode P:qr-code I:qr-code M:qrcode",
+  ladybug: "P:bug-beetle L:bug T:bug M:ladybug",
+  "text.bubble": "L:message-square-text T:message-2 P:chat-text M:message-text-outline",
+  "cylinder.split.1x2": "L:database T:database P:database M:database-outline",
+  "line.3.horizontal.decrease": "L:list-filter T:filter P:funnel-simple M:filter-variant",
   "globe.americas.fill": "PF:globe-hemisphere-west-fill M:earth TF:world L:earth P:globe-hemisphere-west",
   "minus.circle": "L:circle-minus T:circle-minus P:minus-circle I:minus-circle M:minus-circle-outline",
   "pause": "L:pause T:player-pause P:pause I:pause M:pause",

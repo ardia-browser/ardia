@@ -13,10 +13,13 @@ import {
   type InstalledExtension,
   type SidePanelRequest,
   type TabsRequest,
+  type WebKitTabLayout,
+  type WebKitTabsReply,
+  type WebKitTabsRequest,
 } from "@ardia/ardiacore";
 
 export { extensionSearchEngines };
-export type { ExtensionsSyncApply, InstalledExtension, ActionState, ExtensionPackage, ExtensionInstallPrompt, TabsRequest };
+export type { ExtensionsSyncApply, InstalledExtension, ActionState, ExtensionPackage, ExtensionInstallPrompt, TabsRequest, WebKitTabLayout, WebKitTabsRequest };
 
 export const listExtensions = async (profile: string) => (await call("extensions.list", { profile })).extensions;
 export const inspectUnpackedExtension = (path: string) => call("extensions.inspectUnpacked", { path });
@@ -62,6 +65,8 @@ export const onExtensionActionChanged = (listener: (e: ExtensionActionChange) =>
 export const onExtensionInstallPrompt = (listener: (e: ExtensionInstallPrompt) => void) => on("extensions.installPrompt", listener);
 export const onExtensionInstallFailed = (listener: (e: { message: string; tabId: string | null }) => void) => on("extensions.installFailed", listener);
 export const onExtensionTabsRequest = (listener: (e: TabsRequest) => void) => on("extensions.tabs", listener);
+export const setWebKitTabLayout = (layout: WebKitTabLayout) => call("webKit.extensionTabLayout", { layout });
+export const replyToWebKitTabs = (request: string, reply: WebKitTabsReply) => call("webKit.extensionTabsDone", { request, reply });
 export const onExtensionSidePanel = (listener: (e: SidePanelRequest) => void) => on("extensions.sidePanel", listener);
 export const onExtensionActionPopup = (listener: (e: ActionPopupRequest) => void) => on("extensions.actionPopup", listener);
 export const onExtensionActionShortcut = (listener: (e: ActionPopupRequest) => void) => on("extensions.actionShortcut", listener);

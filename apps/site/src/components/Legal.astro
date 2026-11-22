@@ -11,19 +11,20 @@ interface Props {
   kicker: string;
   description: string;
   lede: string;
+  updated?: string;
 }
-const { title, heading, kicker, description, lede } = Astro.props;
+const { title, heading, kicker, description, lede, updated = LEGAL.updated } = Astro.props;
 ---
 
 <Base title={title} description={description}>
   <Header home={`${base}/`} />
-  <main>
+  <main id="main">
     <section class="intro" aria-labelledby="legal-title">
       <div class="wrap">
         <p class="label kicker">{kicker}</p>
         <h1 class="poster" id="legal-title">{heading}</h1>
         <p class="lede">{lede}</p>
-        <p class="label fine">Last updated {LEGAL.updated}</p>
+        <p class="label fine">Last updated {updated}</p>
       </div>
     </section>
     <section class="block last">
@@ -41,7 +42,6 @@ const { title, heading, kicker, description, lede } = Astro.props;
   }
   .intro h1 {
     font-size: var(--t-mega);
-    line-height: 0.82;
     margin-left: -0.04em;
   }
   .lede {
@@ -68,11 +68,10 @@ const { title, heading, kicker, description, lede } = Astro.props;
     margin-top: clamp(40px, 4vw, 56px);
     padding-top: 16px;
     border-top: 2px solid var(--ink);
-    font-weight: 620;
-    font-stretch: 104%;
+    font-weight: 640;
     font-size: 1.375rem;
     line-height: 1.25;
-    letter-spacing: -0.018em;
+    letter-spacing: -0.022em;
   }
   .legal :global(h2:first-child) {
     margin-top: 0;

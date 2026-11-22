@@ -33,7 +33,7 @@ export const incognitoPupils = () => EYE_CENTERS.map((cx) => ellipse(cx + PUPIL.
 export const incognitoShines = () => EYE_CENTERS.map((cx) => ellipse(cx + PUPIL.dx + SHINE.dx, SIDE / 2 + PUPIL.dy + SHINE.dy, SHINE.r, SHINE.r)).join("");
 
 export function IncognitoEyes({ size, color, incognito = false, testID }: { size: number; color: string; incognito?: boolean; testID?: string }) {
-  const box = { testID, width: size, height: size, viewBox: `0 0 ${SIDE} ${SIDE}` };
+  const box = { testID, width: size, height: size, viewBox: `0 0 ${SIDE} ${SIDE}`, pointerEvents: "none" as const };
   if (incognito) {
     return (
       <Svg {...box}>

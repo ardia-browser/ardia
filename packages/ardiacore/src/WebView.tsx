@@ -68,6 +68,8 @@ export function webViewHandle(native: { readonly current: WebViewNativeHandle | 
     mediaCommand: (action, seconds) => call(undefined, (n) => n.mediaCommand(action, seconds)),
     requestPictureInPicture: (press) => call(false, (n) => n.requestPictureInPicture(press.clickAt, press.control)),
     takeControlPress: (press) => call(false, (n) => n.takeControlPress(press.clickAt, press.control)),
+    armElementPick: () => call<number | null>(null, (n) => (typeof n.armElementPick === "function" ? n.armElementPick() : Promise.resolve(null))),
+    takeElementPick: (armed) => call(false, (n) => (typeof n.takeElementPick === "function" ? n.takeElementPick(armed) : Promise.resolve(false))),
     exitPictureInPicture: () => call(undefined, (n) => n.exitPictureInPicture()),
     getSecurityInfo: () => call(null, (n) => n.getSecurityInfo()),
     pageCookies: (urls) => call<PageCookie[]>([], (n) => n.pageCookies(urls)),

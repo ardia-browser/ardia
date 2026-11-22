@@ -41,6 +41,8 @@ const NONE = {
   plugin_ui_prompts: 0,
   plugin_net_fetches: 0,
   plugin_net_refusals: 0,
+  plugin_url_refusals_open: 0,
+  plugin_url_refusals_group_create: 0,
   plugin_storage_writes: 0,
   plugin_storage_cancels: 0,
   plugin_secret_writes: 0,

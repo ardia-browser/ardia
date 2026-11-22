@@ -36,12 +36,14 @@ static __weak NSWindow *gSwipeMomentum;
   if (event.type != NSEventTypeScrollWheel) return NO;
   const NSEventPhase phase = event.phase, momentum = event.momentumPhase;
   if (momentum != NSEventPhaseNone) {
-    const BOOL ours = gSwipeMomentum != nil;
+    NSWindow *coasting = gSwipeMomentum;
     if (momentum & (NSEventPhaseEnded | NSEventPhaseCancelled)) gSwipeMomentum = nil;
-    return ours;
+    if (momentum & NSEventPhaseBegan) [[self forWindow:coasting] swipeCoasted:event];
+    return coasting != nil;
   }
   if (phase == NSEventPhaseNone) return NO;
   if (phase & (NSEventPhaseBegan | NSEventPhaseMayBegin)) {
+    if (NSWindow *waiting = gSwipeMomentum) [[self forWindow:waiting] swipeInterrupted];
     gSwipeMomentum = nil;
     [self abandonSwipeOn:gSwipeWindow];
     if (phase != NSEventPhaseBegan || !ThrowEnabled() || !event.hasPreciseScrollingDeltas ||
@@ -67,9 +69,177 @@ static __weak NSWindow *gSwipeMomentum;
   return YES;
 }
 
+- (void)swipeEnded:(NSEvent *)event cancelled:(BOOL)cancelled {
+  [self moveBy:ardia_pip_throw::FingerDelta(event.scrollingDeltaX, event.scrollingDeltaY, event.isDirectionInvertedFromDevice)];
+  _swiping = NO;
+  const ardia_pip_throw::Point last{_swipeLastDelta.x, _swipeLastDelta.y};
+  const BOOL fresh = NSProcessInfo.processInfo.systemUptime - _swipeLastAt <= ardia_pip_throw::kVelocityWindow;
+  const auto lastVelocity = ardia_pip_throw::SwipeVelocity(last);
+  if (cancelled) {
+    if (_stashedEdge != ArdiaPiPEdgeNone && [self edgeBeyond] == ArdiaPiPEdgeNone) [self setStashedEdge:ArdiaPiPEdgeNone];
+    return [self swipeSettledAt:_window.frame thrown:NO how:@"cancelled" stashed:ArdiaPiPEdgeNone velocity:NSZeroPoint];
+  }
+  const NSRect out = [self leaveTuckIfPulledOut:fresh ? NSMakePoint(lastVelocity.x, lastVelocity.y) : NSZeroPoint];
+  if (!NSIsEmptyRect(out)) return [self swipeSettledAt:out thrown:YES how:@"cameOut" stashed:ArdiaPiPEdgeNone velocity:NSZeroPoint];
+  const ArdiaPiPEdge edge = [self edgeBeyond];
+  if (edge != ArdiaPiPEdgeNone) {
+    [self stashAt:edge];
+    return [self swipeSettledAt:[self frameStashedAt:edge] thrown:NO how:@"tucked" stashed:edge velocity:NSZeroPoint];
+  }
+  if (_stashedEdge != ArdiaPiPEdgeNone) [self setStashedEdge:ArdiaPiPEdgeNone];
+  if (NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion) return [self swipeReleased:NSZeroPoint how:@"reduceMotion"];
+  if (fresh && ardia_pip_throw::SwipeSurelyFlings(last))
+    return [self swipeReleased:NSMakePoint(lastVelocity.x, lastVelocity.y) how:@"lastEvent"];
+  _awaitingMomentum = YES;
+  [self performSelector:@selector(swipeDidNotCoast) withObject:nil afterDelay:ardia_pip_throw::kMomentumWait];
+}
+
+- (void)forgetMomentum {
+  if (!_awaitingMomentum) return;
+  _awaitingMomentum = NO;
+  [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(swipeDidNotCoast) object:nil];
+}
+
+- (void)swipeDidNotCoast {
+  if (!_awaitingMomentum) return;
+  _awaitingMomentum = NO;
+  _swipePlaced = _window.frame;
+  [self swipeReleased:NSZeroPoint how:@"placed"];
+}
+
+- (void)reportPlacement {
+  if (!_placementStamp) return;
+  [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(reportPlacement) object:nil];
+  [self reportRelease:@"placed" stamp:_placementStamp];
+  _placementStamp = nil;
+}
+
+- (void)endMomentumWait {
+  [self reportPlacement];
+  if (!_awaitingMomentum) return;
+  [self forgetMomentum];
+  if (!ardia_host::Background()) [NSCursor setHiddenUntilMouseMoves:NO];
+  [self reportRelease:@"placed" stamp:_swipeStamp];
+}
+
+- (void)swipeInterrupted {
+  [self reportPlacement];
+  if (!_awaitingMomentum) return;
+  [self forgetMomentum];
+  [self swipeSettledAt:_window.frame thrown:NO how:@"interrupted" stashed:ArdiaPiPEdgeNone velocity:NSZeroPoint];
+}
+
+- (void)swipeCoasted:(NSEvent *)event {
+  const BOOL late = !_awaitingMomentum && _placementStamp && !_swiping && !_dragging && !_animating && NSEqualRects(_window.frame, _swipePlaced);
+  if (!_awaitingMomentum && !late) return;
+  [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(reportPlacement) object:nil];
+  _placementStamp = nil;
+  [self forgetMomentum];
+  const auto delta = ardia_pip_throw::FingerDelta(event.scrollingDeltaX, event.scrollingDeltaY, event.isDirectionInvertedFromDevice);
+  const auto velocity = ardia_pip_throw::SwipeVelocity(delta);
+  const BOOL flings = ardia_pip_throw::DragFlings(velocity);
+  [self swipeReleased:flings ? NSMakePoint(velocity.x, velocity.y) : NSZeroPoint how:flings ? @"flicked" : @"coastedSlowly"];
+}
+
+- (ArdiaPiPEdge)edgeFlickedPast:(NSPoint)velocity {
+  const NSRect frame = _window.frame;
+  const auto landing = ardia_pip_throw::FlickLanding(ThrowRect(frame), {velocity.x, velocity.y});
+  const NSRect visible = [self homeScreen].visibleFrame;
+  const ArdiaPiPEdge aimedAt = [self edgeBeyondFor:NSMakeRect(landing.x, landing.y, landing.w, landing.h)];
+  const BOOL alreadyPast = aimedAt == ArdiaPiPEdgeRight ? NSMaxX(frame) > NSMaxX(visible) : NSMinX(frame) < NSMinX(visible);
+  return alreadyPast ? aimedAt : ArdiaPiPEdgeNone;
+}
+
+- (void)reportRelease:(NSString *)outcome stamp:(ArdiaConsentStamp *)stamp {
+  if (stamp) [self.view emit:@"pictureInPictureReleased" payload:[stamp onto:@{@"outcome" : outcome}]];
+}
+
+- (void)swipeReleased:(NSPoint)velocity how:(NSString *)how {
+  const NSRect frame = _window.frame;
+  const NSPoint grab = NSMakePoint(NSMinX(frame) + _swipeGrab.x, NSMinY(frame) + _swipeGrab.y);
+  ArdiaPiPEdge edge = ArdiaPiPEdgeNone;
+  NSRect destination = frame;
+  BOOL thrown = NO;
+  if (velocity.x != 0 || velocity.y != 0) {
+    edge = [self edgeFlickedPast:velocity];
+    if (edge != ArdiaPiPEdgeNone) {
+      [self stashAt:edge];
+      destination = [self frameStashedAt:edge];
+      how = @"flickedAway";
+    } else if ([self throwFrom:grab velocity:velocity]) {
+      thrown = YES;
+    }
+  } else if ([self settleIntoCornerPulledInto:NSZeroPoint]) {
+    thrown = YES;
+    how = @"settledInCorner";
+  }
+  if (thrown) destination = NSRectFromString(_lastThrow[@"target"]);
+  [self swipeSettledAt:destination thrown:thrown how:how stashed:edge velocity:velocity];
+}
+
+- (void)swipeSettledAt:(NSRect)destination thrown:(BOOL)thrown how:(NSString *)how stashed:(ArdiaPiPEdge)edge velocity:(NSPoint)velocity {
+  const NSPoint landing = NSMakePoint(NSMinX(destination) + _swipeGrab.x, NSMinY(destination) + _swipeGrab.y);
+  const BOOL unmoved = NSEqualPoints(NSEvent.mouseLocation, _swipePointer);
+  const BOOL warp = edge == ArdiaPiPEdgeNone && unmoved && (!thrown || CACurrentMediaTime() - _swipeBeganAt >= 0.15);
+  if (!ardia_host::Background()) {
+    if (warp) {
+      CGWarpMouseCursorPosition(CGPointMake(landing.x, NSMaxY(NSScreen.screens.firstObject.frame) - landing.y));
+      [NSCursor setHiddenUntilMouseMoves:YES];
+    } else {
+      [NSCursor setHiddenUntilMouseMoves:NO];
+    }
+  }
+  NSString *outcome = [how isEqual:@"cameOut"] ? @"pullOut" : [how isEqual:@"settledInCorner"] ? @"cornerPull" : [how isEqual:@"flickedAway"] ? @"flickTuck" : edge != ArdiaPiPEdgeNone ? @"tuck" : thrown ? @"corner" : @"placed";
+  if ([how isEqual:@"placed"]) {
+    _placementStamp = _swipeStamp;
+    [self performSelector:@selector(reportPlacement) withObject:nil afterDelay:ardia_pip_throw::kMomentumLate];
+  } else {
+    [self reportRelease:outcome stamp:_swipeStamp];
+  }
+  _lastSwipe = @{
+    @"outcome" : outcome,
+    @"start" : NSStringFromRect(_swipeStart),
+    @"released" : NSStringFromRect(_window.frame),
+    @"lastDelta" : NSStringFromPoint(_swipeLastDelta),
+    @"velocity" : NSStringFromPoint(velocity),
+    @"how" : how,
+    @"flings" : @(velocity.x != 0 || velocity.y != 0),
+    @"thrown" : @(thrown),
+    @"stashed" : @(edge),
+    @"warp" : warp ? NSStringFromPoint(landing) : @"",
+  };
+  [self rescueIfLost];
+}
+
+- (BOOL)settleIntoCornerPulledInto:(NSPoint)velocity {
+  const NSRect frame = _window.frame;
+  const auto visible = ThrowRect([self homeScreen].visibleFrame);
+  const auto corner = ardia_pip_throw::CornerPulledInto(ThrowRect(_pullStart), ThrowRect(frame), visible);
+  if (corner == ardia_pip_throw::kNoCorner || !ThrowEnabled() || NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion) return NO;
+  const auto target = ardia_pip_throw::CornerFrame(corner, NSWidth(frame), NSHeight(frame), visible);
+  [self throwTo:NSMakeRect(target.x, target.y, target.w, target.h) velocity:velocity corner:corner];
+  return YES;
+}
+
+- (NSRect)leaveTuckIfPulledOut:(NSPoint)velocity {
+  const ArdiaPiPEdge from = _pulledFrom;
+  _pulledFrom = ArdiaPiPEdgeNone;
+  if (from == ArdiaPiPEdgeNone) return NSZeroRect;
+  const NSRect frame = _window.frame;
+  NSScreen *tuckedOn = _pulledFromScreen;
+  const NSRect visible = (tuckedOn ?: [self homeScreen]).visibleFrame;
+  const CGFloat fromTucked = from == ArdiaPiPEdgeRight ? NSMaxX(visible) - kPeek - NSMinX(frame) : NSMaxX(frame) - (NSMinX(visible) + kPeek);
+  if ([self edgeBeyond] != ArdiaPiPEdgeNone && !ardia_pip_throw::PulledOutOfTuck(fromTucked)) return NSZeroRect;
+  if (ardia_pip_throw::PulledPastHalf(ThrowRect(frame), ThrowRect(visible), from == ArdiaPiPEdgeRight)) return NSZeroRect;
+  return [self leaveTuckAt:from on:visible velocity:velocity];
+}
+
 - (void)dragBegan:(NSEvent *)event {
   [ArdiaPiPController abandonSwipeOn:_window];
   [self stopMotion];
+  _pulledFrom = _stashedEdge;
+  _pulledFromScreen = [self gestureHome];
+  _pullStart = _window.frame;
   const NSPoint pointer = PointerOf(event);
   const NSRect frame = _window.frame;
   _dragging = YES;

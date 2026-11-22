@@ -24,6 +24,8 @@ import { withoutFragment } from "../../lib/url";
 import { developerBarShown, paneBar, type CardChrome } from "./paneChrome";
 import { DeveloperBar } from "../toolbar/DeveloperBar";
 import { useDeveloperMode } from "../../state/site/developerMode";
+import { PluginPageBar } from "../plugins/PluginPageBar";
+import type { PageBarMatch } from "../../state/plugins/pageBar";
 import { PageOverlays } from "./PageOverlays";
 import { useProfileTheme } from "./ThemeScope";
 import { markNewTabPane } from "../../state/omnibox/newTabMarks";
@@ -51,6 +53,7 @@ export const TabPane = memo(function TabPane({
   peekShown,
   lingering,
   seeThrough,
+  pageBar,
   sidebarFieldOpen,
   cardRadius,
   toolbarHeight,
@@ -76,6 +79,7 @@ export const TabPane = memo(function TabPane({
   peekShown: boolean;
   lingering: boolean;
   seeThrough: boolean;
+  pageBar: PageBarMatch | null;
   sidebarFieldOpen: boolean;
   cardRadius: number;
   toolbarHeight: number;
@@ -142,6 +146,7 @@ export const TabPane = memo(function TabPane({
       {bar.kind === "backdrop" && <ToolbarBackdrop tabId={tabId} />}
       {bar.kind === "spacer" && <View style={{ height: toolbarHeight }} />}
       {developerBar && <DeveloperBar tabId={tabId} windowId={windowId} />}
+      {!developerBar && pageBar && <PluginPageBar tabId={tabId} windowId={windowId} match={pageBar} />}
       {!autoLayout && bookmarksBar && <BookmarksBar tabId={tabId} placeholder={!visible} />}
       <Animated.View style={autoLayout ? motion.groupStyle : { flex: 1 }}>
         {autoLayout && bookmarksBar && <BookmarksBar tabId={tabId} placeholder={!visible} />}

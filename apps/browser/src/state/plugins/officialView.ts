@@ -51,7 +51,9 @@ function installedView(plugin: OfficialPlugin, programs: ProgramsState | undefin
   return base;
 }
 
-export function officialView(plugin: OfficialPlugin, programs: ProgramsState | undefined, attempt: OfficialAttempt, fetch?: OfficialFetch): OfficialView {
+export const olderInstallLine = (plugin: OfficialPlugin, program: string) => `An older ${program} is installed. Install ${officialTitle(plugin)} to update it.`;
+
+export function officialView(plugin: OfficialPlugin, programs: ProgramsState | undefined, attempt: OfficialAttempt, fetch?: OfficialFetch, olderProgram: string | null = null): OfficialView {
   if (plugin.state === "unsupported") return HIDDEN;
   if (plugin.state === "comingSoon") return { ...HIDDEN, shown: true, note: "comingSoon" };
   if (plugin.state === "installed") return installedView(plugin, programs, attempt, fetch);
@@ -61,7 +63,7 @@ export function officialView(plugin: OfficialPlugin, programs: ProgramsState | u
   if (attempt?.state === "asking") return { ...base, busy: true };
   if (attempt?.state === "installing") return { ...base, status: "Installing…", busy: true };
   if (attempt?.state === "failed") return { ...base, status: attempt.reason, failed: true, action: "again" };
-  return { ...base, action: "install" };
+  return { ...base, action: "install", status: olderProgram ? olderInstallLine(plugin, olderProgram) : null };
 }
 
 export const officialTitle = (plugin: OfficialPlugin) => plugin.title || plugin.name;

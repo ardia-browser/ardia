@@ -107,7 +107,7 @@ export function startSiteData() {
   });
   let watching = carriesSiteData();
   void watchWebKitSiteData(watching).catch(() => {});
-  useBrowser.subscribe((s, prev) => {
+  useBrowser.subscribeTo(["settings", "tabs"], (s, prev) => {
     if (s.settings !== prev.settings && carriesSiteData(s) !== watching) {
       watching = carriesSiteData(s);
       void watchWebKitSiteData(watching).catch(() => {});

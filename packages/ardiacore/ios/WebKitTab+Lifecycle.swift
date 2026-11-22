@@ -4,6 +4,7 @@ import WebKit
 struct WebKitDiscardedPage {
   let state: Any?
   let url: String
+  let generation: Int?
 }
 
 struct WebKitTabLife {
@@ -31,6 +32,7 @@ enum WebKitTabHistory {
   private static var bound = Set<String>()
   private static var pruned = Set<String>()
   private static var waiting: [ObjectIdentifier: WebKitTab] = [:]
+  private static let gate = WebKitHistoryGate()
   private static let flushAtQuit: NSObjectProtocol = NotificationCenter.default.addObserver(
     forName: NSApplication.willTerminateNotification, object: nil, queue: .main
   ) { _ in flushAll() }
@@ -54,11 +56,55 @@ enum WebKitTabHistory {
 
   static func bind(_ key: String) { bound.insert(key) }
 
+  static func generation(_ profile: String) -> Int { gate.generation(profile) }
+
+  static func generation(of view: AnyObject) -> Int? { gate.generation(of: view) }
+
+  static func isCurrent(_ generation: Int?, profile: String) -> Bool { gate.isCurrent(generation, profile: profile) }
+
+  static func stamp(_ view: AnyObject, profile: String) { gate.stamp(view, profile: profile) }
+
+  private static func marker(_ profile: String, _ kind: String) -> URL? {
+    directory(profile).map { $0.deletingLastPathComponent().appendingPathComponent($0.lastPathComponent + "." + kind) }
+  }
+
+  private static func forgottenOnDisk(_ profile: String) -> Bool {
+    marker(profile, "forgotten").map { FileManager.default.fileExists(atPath: $0.path) } ?? false
+  }
+
+  private static func epoch(_ profile: String) -> String? {
+    marker(profile, "cleared").flatMap { try? String(contentsOf: $0, encoding: .utf8) }
+  }
+
+  private static func survivedClear(_ saved: [String: Any], profile: String) -> Bool {
+    if forgottenOnDisk(profile) { return true }
+    guard let current = epoch(profile) else { return false }
+    return saved["epoch"] as? String != current
+  }
+
+  private static func endHistory(_ profile: String, _ kind: String, in directory: URL) {
+    files.sync {
+      var marked = false
+      if let marker = marker(profile, kind) {
+        do {
+          try FileManager.default.createDirectory(at: marker.deletingLastPathComponent(), withIntermediateDirectories: true)
+          try Data(UUID().uuidString.utf8).write(to: marker, options: .atomic)
+          marked = true
+        } catch {
+          NSLog("[webkit] tab history marker couldn't be written: %@", error.localizedDescription)
+        }
+      }
+      let removed = removeAll(directory)
+      if !marked, !removed { NSLog("[webkit] tab history for a cleared profile is still on disk") }
+    }
+  }
+
   static func take(profile: String, key: String, url: String) -> Saved? {
-    guard !bound.contains(key), let file = file(profile, key: key) else { return nil }
+    guard !bound.contains(key), gate.keepsHistory(profile), let file = file(profile, key: key) else { return nil }
     let read: Saved? = files.sync {
       guard let data = try? Data(contentsOf: file, options: .mappedIfSafe), data.count <= maxBytes,
         let saved = try? JSONSerialization.jsonObject(with: data) as? [String: Any], saved["version"] as? Int == version,
+        !survivedClear(saved, profile: profile),
         let savedURL = saved["url"] as? String, let encoded = saved["state"] as? String, let state = Data(base64Encoded: encoded)
       else { return nil }
       return Saved(url: savedURL, state: state)
@@ -68,7 +114,7 @@ enum WebKitTabHistory {
   }
 
   static func scheduleSave(_ tab: WebKitTab) {
-    guard let key = tab.transferKey, file(tab.profile, key: key) != nil else { return }
+    guard let key = tab.transferKey, file(tab.profile, key: key) != nil, gate.keepsHistory(tab.profile) else { return }
     _ = flushAtQuit
     tab.life.historySave?.cancel()
     let work = DispatchWorkItem { [weak tab] in tab.map(saveNow) }
@@ -90,11 +136,13 @@ enum WebKitTabHistory {
     let url: String
     let state: Data
     if let page = tab.life.discarded {
-      guard let saved = page.state as? Data else { return }
+      guard let saved = page.state as? Data, gate.isCurrent(page.generation, profile: tab.profile) else { return }
       url = page.url
       state = saved
     } else {
-      guard let view = tab.webView, let current = view.backForwardList.currentItem, let saved = view.interactionState as? Data else { return }
+      guard let view = tab.webView, gate.isCurrent(view: view, profile: tab.profile), let current = view.backForwardList.currentItem,
+        let saved = view.interactionState as? Data
+      else { return }
       url = current.url.absoluteString
       state = saved
     }
@@ -103,7 +151,9 @@ enum WebKitTabHistory {
     let profile = tab.profile
     let prune = pruned.insert(profile).inserted
     files.async {
-      let body: [String: Any] = ["version": version, "url": url, "state": state.base64EncodedString()]
+      guard !forgottenOnDisk(profile) else { return }
+      var body: [String: Any] = ["version": version, "url": url, "state": state.base64EncodedString()]
+      if let current = epoch(profile) { body["epoch"] = current }
       guard let data = try? JSONSerialization.data(withJSONObject: body), data.count <= maxBytes else { return }
       try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
       try? data.write(to: file, options: .atomic)
@@ -124,15 +174,40 @@ enum WebKitTabHistory {
     }
   }
 
-  static func cleared(profile: String, live: [WebKitTab]) {
+  static func cleared(profile: String) {
     guard let directory = directory(profile) else { return }
-    files.async { try? FileManager.default.removeItem(at: directory) }
-    for tab in live where tab.profile == profile { scheduleSave(tab) }
+    gate.advance(profile)
+    dropPendingSaves(of: profile)
+    endHistory(profile, "cleared", in: directory)
   }
 
   static func forget(profile: String) {
     guard let directory = directory(profile) else { return }
-    files.async { try? FileManager.default.removeItem(at: directory) }
+    gate.forget(profile)
+    dropPendingSaves(of: profile)
+    endHistory(profile, "forgotten", in: directory)
+  }
+
+  private static func dropPendingSaves(of profile: String) {
+    for tab in Array(waiting.values) where tab.profile == profile {
+      tab.life.historySave?.cancel()
+      tab.life.historySave = nil
+      waiting.removeValue(forKey: ObjectIdentifier(tab))
+    }
+  }
+
+  @discardableResult
+  private static func removeAll(_ directory: URL) -> Bool {
+    let fileManager = FileManager.default
+    do {
+      try fileManager.removeItem(at: directory)
+      return true
+    } catch {
+      guard fileManager.fileExists(atPath: directory.path) else { return true }
+      for file in (try? fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? [] { try? fileManager.removeItem(at: file) }
+      NSLog("[webkit] tab history folder couldn't be removed whole: %@", error.localizedDescription)
+      return ((try? fileManager.contentsOfDirectory(atPath: directory.path)) ?? []).isEmpty
+    }
   }
 }
 
@@ -145,7 +220,9 @@ extension WebKitTab {
   private static let waitBeforeAskingAgain = 15.0
 
   func makeView() -> WebKitWebView {
-    WebKitWebView(frame: bounds, configuration: WebKitHub.shared.configuration(profile: profile))
+    let view = WebKitWebView(frame: bounds, configuration: WebKitHub.shared.configuration(profile: profile))
+    WebKitTabHistory.stamp(view, profile: profile)
+    return view
   }
 
   func startFirstPage(_ url: String, in view: WebKitWebView) {
@@ -159,14 +236,15 @@ extension WebKitTab {
     let keys = [restoreKey, transferKey].compactMap { $0 }
     guard let saved = keys.lazy.compactMap({ WebKitTabHistory.take(profile: self.profile, key: $0, url: url) }).first else { return false }
     if let key = transferKey { WebKitTabHistory.bind(key) }
-    restoreState(saved.state, orLoad: url, in: view)
+    restoreState(saved.state, orLoad: url, in: view, generation: WebKitTabHistory.generation(profile))
     ArdiaEvents.emit("webKit.counted", data: ArdiaConsentStamp.begin().onto(["name": "historyRestored"]))
     return true
   }
 
-  private func restoreState(_ state: Any, orLoad url: String, in view: WebKitWebView) {
+  private func restoreState(_ state: Any, orLoad url: String, in view: WebKitWebView, generation: Int?) {
     WebKitContentBlocker.shared.whenReady(within: 1) { [weak self, weak view] in
       guard let self, let view, self.webView === view, view.url == nil, !view.isLoading else { return }
+      guard WebKitTabHistory.isCurrent(generation, profile: self.profile) else { return self.loadURL(url, userInitiated: false) }
       view.interactionState = state
       if view.backForwardList.currentItem == nil { self.loadURL(url, userInitiated: false) }
     }
@@ -177,7 +255,7 @@ extension WebKitTab {
     if life.discarded != nil { return "already" }
     guard !closed, let view = webView, let url = view.url?.absoluteString, !url.isEmpty else { return "refused" }
     let state = view.interactionState
-    life.discarded = WebKitDiscardedPage(state: state, url: url)
+    life.discarded = WebKitDiscardedPage(state: state, url: url, generation: WebKitTabHistory.generation(of: view))
     life.unresponsiveRecheck?.cancel()
     life.unresponsive = false
     life.suspended = false
@@ -196,14 +274,15 @@ extension WebKitTab {
 
   @discardableResult
   func wakeDiscarded(loading url: String? = nil) -> Bool {
-    guard !closed, let page = life.discarded else { return false }
+    guard !closed, let found = life.discarded else { return false }
+    let page = WebKitTabHistory.isCurrent(found.generation, profile: profile) ? found : WebKitDiscardedPage(state: nil, url: found.url, generation: nil)
     life.discarded = nil
     let view = makeView()
     attach(view)
     emit("ready", [:])
     ArdiaEvents.emit("webKit.counted", data: ArdiaConsentStamp.begin().onto(["name": "discardWake"]))
     if let state = page.state, url == nil {
-      restoreState(state, orLoad: page.url, in: view)
+      restoreState(state, orLoad: page.url, in: view, generation: page.generation)
     } else if let state = page.state {
       view.interactionState = state
       loadURL(url ?? page.url, userInitiated: true)

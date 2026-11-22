@@ -87,6 +87,8 @@ export const SWIPE_MOTION = {
   dismiss: { duration: duration.base, easing: curve.exit },
 } as const;
 
+export const TAB_SWIPE = { distance: 16 } as const;
+
 export const SWIPE_PILL_SPRING = { response: 0.27, damping: 0.9 } as const;
 
 export const DOCK_SLIDE_CURVE = [0.42, 0, 0.58, 1] as const;

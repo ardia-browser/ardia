@@ -58,7 +58,7 @@ export async function openAppMenu(windowId: string, button: HTMLElement) {
   void hostModuleMethod("ArdiaShell", choice.action === "minimize" ? "minimizeWindow" : "toggleMaximizeWindow")(windowId).catch(reportHostError);
 }
 
-export function AppMenuButton({ windowId }: { windowId: string }) {
+export function AppMenuButton({ windowId, size }: { windowId: string; size?: number }) {
   const theme = useTheme();
   const button = useRef<HTMLButtonElement>(null);
   const [presses] = useState(() => menuButtonPresses(() => {
@@ -72,6 +72,7 @@ export function AppMenuButton({ windowId }: { windowId: string }) {
       aria-label="Menu"
       aria-haspopup="menu"
       title="Menu"
+      style={size ? { width: size, height: size, flex: `0 0 ${size}px` } : undefined}
       onPointerDown={presses.pointerDown}
       onClick={presses.click}
     >

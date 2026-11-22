@@ -61,7 +61,7 @@ test("production graph uses current Linux adapters and one canonical shared stat
     ["components/window/PageOverlays.tsx", "PageOverlays.tsx", ["BesidePeekPopovers", "PageOverlays", "PeekPage"]],
     ["components/window/WindowOverlays.tsx", "WindowOverlays.tsx", ["windowOverlays"]],
     ["components/downloads/Downloads.tsx", "DownloadsPopover.tsx", ["DownloadMagnet", "DownloadsPopover"]],
-    ["components/profiles/ProfileIndicator.tsx", "ProfileIndicator.tsx", ["PROFILE_INDICATOR_X", "ProfileIndicator", "useProfileIndicatorWidth"]],
+    ["components/profiles/ProfileIndicator.tsx", "ProfileIndicator.tsx", ["HeaderAppMenu", "profileIndicatorX", "ProfileIndicator", "useAppMenuInHeader", "useProfileIndicatorWidth"]],
     ["components/sidebar/AddressBar.tsx", "SidebarAddressBar.tsx", ["SidebarAddressRow", "SidebarHeaderTools"]],
     ["components/sidebar/TileFace.tsx", "TileFace.tsx", ["FolderDropRing", "RestingTile", "TileFace", "useSlotPosition"]],
     ["state/settings/settingsWindows.ts", "settingsWindows.ts", ["goToSettingsPane", "openImport", "openSettings", "useSettingsNav"]],
@@ -116,13 +116,20 @@ test("production graph uses current Linux adapters and one canonical shared stat
   const sharedControls = graph.get(`${browser}components/window/WindowControls.tsx`);
   assert.deepEqual(sharedControls.importers, [`${linux}WindowControls.tsx`], "the shared window buttons are reached only through the Linux wrapper");
   assert.ok(sharedControls.importedIds.includes(`${linux}captionControls.ts`) && !sharedControls.importedIds.includes(`${browser}state/windows/controls.ts`), "Close goes to the Linux close coordinator once");
+  assert.ok(!graph.has(`${browser}components/window/LeadingWindowControls.tsx`), "the left group is Linux's own, drawn where the traffic lights would be");
+  for (const host of ["components/window/BrowserWindowControls.tsx", "components/settings/SettingsWindow.tsx", "components/import/ImportWindow.tsx"]) {
+    assert.ok(graph.get(`${browser}${host}`).importedIds.includes(`${linux}LeadingWindowControls.tsx`), `${host} draws the desktop's left buttons`);
+  }
+  assert.ok(graph.get(`${linux}LeadingWindowControls.tsx`).importedIds.includes(`${linux}WindowControls.tsx`), "the left group goes through the same Linux wrapper as the right one");
+  assert.ok(graph.get(`${linux}main.tsx`).importedIds.includes(`${linux}desktopButtonLayout.ts`), "every window follows the desktop's button layout");
   const controls = graph.get(`${browser}components/window/BrowserWindowControls.tsx`).importedIds;
   assert.ok(controls.includes(`${linux}clusterAppMenu.ts`) && !controls.includes(`${browser}state/app/appMenu.ts`), "the … beside the window buttons opens Linux's full app menu");
   for (const importer of ["components/sidebar/Sidebar.tsx", "components/downloads/Downloads.tsx", "components/sidebar/AddressBar.tsx"]) {
     const imported = graph.get(`${browser}${importer}`).importedIds;
     assert.ok(imported.includes(`${linux}sidebarHeaderLayout.ts`) && !imported.includes(`${browser}state/windows/layout.ts`), `${importer} keeps the header, and its menu, whenever the window buttons are hidden`);
   }
-  assert.ok(!graph.has(`${linux}TrafficLights.tsx`));
+  assert.ok(graph.get(`${linux}main.tsx`).importedIds.includes(`${linux}TrafficLights.tsx`), "Linux draws its own traffic lights when they are chosen");
+  assert.ok(graph.get(`${linux}TrafficLights.tsx`).importedIds.includes(`${linux}captionControls.ts`), "the traffic lights close, minimize and maximize through the same adapters as the native buttons");
 
   for (const twin of ["lib/platformFeatures", "lib/platformTerms", "lib/platformChrome"]) {
     assert.ok(graph.has(`${browser}${twin}.linux.ts`), `${twin} resolves to its .linux twin`);

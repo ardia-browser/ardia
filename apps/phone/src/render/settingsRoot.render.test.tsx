@@ -69,7 +69,7 @@ onAndroid("on the hand-built Settings Android keeps, the sync card's status line
     useSync.setState((state) => ({ ...state, status: { ...state.status, attention: "phrase" } as never }));
   });
   const second = line()!;
-  expect(second.props.children).toBe("Enter Your Recovery Phrase");
+  expect(second.props.children).toBe("Enter Recovery Phrase");
   unmount(root);
 });
 

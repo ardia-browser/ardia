@@ -27,7 +27,7 @@ public class WebKitModule: Module {
     },
     "exportCookies": { args, reply in
       let urls = try args.strings("urls").compactMap(URL.init(string:))
-      let keys = (args.values["keys"] as? [String]).map(Set.init)
+      let keys = args.values["keys"] == nil ? nil : Set(try args.strings("keys"))
       WebKitHub.shared.exportCookies(profile: args.profile, urls: urls, keys: keys) { reply.ok($0) }
     },
     "setFraudWarnings": { args, reply in

@@ -3,6 +3,7 @@ import type { Animated } from "react-native";
 import { setTrafficLightsCenter } from "../../state/windows/nativeWindow";
 import { dockMoving, sidebarLightsCenter, stillOffWindow, TOP_STRIP_LIGHTS_CENTER } from "../../state/windows/dockMotion";
 import { currentValue } from "../ui/motion";
+import { noteSidebarLightsLeftBehind } from "../../state/telemetry/dockCounts";
 
 export function useTopStripLights(windowId: string, dock: Animated.Value, on: boolean, travel: number, open: boolean) {
   useEffect(() => {
@@ -18,7 +19,7 @@ export function useTopStripLights(windowId: string, dock: Animated.Value, on: bo
   }, [windowId, dock, on, travel, open]);
 }
 
-export type SidebarLights = { width: number; peeking: boolean; fullscreen: boolean; lights: readonly [number, number]; right: boolean; peekAt: { left: number; top: number } };
+export type SidebarLights = { width: number; moving: boolean; peeking: boolean; fullscreen: boolean; lights: readonly [number, number]; right: boolean; peekAt: { left: number; top: number } };
 
 export function useSidebarLights(windowId: string, dock: Animated.Value, slide: Animated.Value, o: SidebarLights) {
   const values = useRef({ dock: 1, slide: 0 });
@@ -52,6 +53,9 @@ export function useSidebarLights(windowId: string, dock: Animated.Value, slide: 
     });
     return () => slide.removeListener(b);
   }, [slide, o.peeking]);
+  useEffect(() => {
+    if (!o.moving && values.current.dock !== currentValue(dock)) noteSidebarLightsLeftBehind();
+  }, [dock, o.moving]);
   useEffect(() => apply.current(), [o.width, o.peeking, o.fullscreen, o.lights, o.right, o.peekAt.left, o.peekAt.top]);
 }
 

@@ -28,6 +28,10 @@ internal interface PageSummaryLocal {
 
     suspend fun characterBudget(): Int
 
+    suspend fun prepare() {}
+
+    suspend fun fit(instructions: String, characters: Int, prompt: (Int) -> String): String = prompt(characters)
+
     suspend fun stream(instructions: String, prompt: String, onText: (String) -> Unit)
 }
 
@@ -42,6 +46,10 @@ internal class PageSummaryWriting(private val cloud: PageSummaryCloud, private v
     data class Written(val text: String, val writer: Writer, val note: String, val chatGPTFellBack: Boolean) : Result
 
     data class Unwritten(val message: String, val geminiNanoMissing: String? = null) : Result
+
+    suspend fun prepare(provider: PageSummaryProvider) {
+        if (provider == PageSummaryProvider.OnDevice || !cloud.isConnected) local.prepare()
+    }
 
     suspend fun write(content: ReadableContent, provider: PageSummaryProvider, onText: (String) -> Unit, reason: String? = null): Result {
         var note = reason
@@ -79,10 +87,12 @@ internal class PageSummaryWriting(private val cloud: PageSummaryCloud, private v
             else -> return Unwritten(joined(problem, "${availability.reason}."), availability.telemetry)
         }
         val budget = local.characterBudget()
+        var failure: Exception? = null
         for (share in listOf(budget, budget / 2)) {
             try {
                 var shown = ""
-                local.stream(PageSummaryDigest.INSTRUCTIONS, PageSummaryDigest.prompt(content, share)) {
+                val prompt = local.fit(PageSummaryDigest.INSTRUCTIONS, share) { PageSummaryDigest.prompt(content, it) }
+                local.stream(PageSummaryDigest.INSTRUCTIONS, prompt) {
                     shown = it
                     onText(it)
                 }
@@ -94,9 +104,11 @@ internal class PageSummaryWriting(private val cloud: PageSummaryCloud, private v
             } catch (error: Exception) {
                 currentCoroutineContext().ensureActive()
                 onText("")
+                failure = error
             }
         }
-        return Unwritten(joined(problem, NANO_FAILED))
+        val missed = OnDeviceWriter.Availability.ofWriting(failure)
+        return Unwritten(joined(problem, if (missed == OnDeviceWriter.Availability.WriteFailed) NANO_FAILED else "${missed.reason}."), missed.telemetry)
     }
 
     private fun joined(first: String?, second: String): String = listOfNotNull(first, second).joinToString(" ")
@@ -119,6 +131,10 @@ internal class PageSummaryWriting(private val cloud: PageSummaryCloud, private v
                 override suspend fun availability(): OnDeviceWriter.Availability = OnDeviceWriter.availability()
 
                 override suspend fun characterBudget(): Int = OnDeviceWriter.characterBudget()
+
+                override suspend fun prepare() = OnDeviceWriter.prepare()
+
+                override suspend fun fit(instructions: String, characters: Int, prompt: (Int) -> String): String = OnDeviceWriter.fit(instructions, characters, prompt)
 
                 override suspend fun stream(instructions: String, prompt: String, onText: (String) -> Unit) = OnDeviceWriter.stream(instructions, prompt, onText)
             },

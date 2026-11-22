@@ -1,5 +1,6 @@
 import { consentToken, onConsentPeriodChange, stillValid } from "../telemetry/choice";
 import { beginActivity } from "../app/jobActivity";
+import { takeFolderCounts } from "./folderMove";
 import { takeReturnedDeviceRemovals, takeReturnedProfileRemovals, takeSyncedDeviceRemovals, takeSyncedProfileRemovals } from "./profileRemoval";
 
 const NO_CYCLES = { cycles: 0, ms: 0, longestMs: 0 };
@@ -32,7 +33,7 @@ export function noteSnapshot({ snapshotBytes }: { snapshotBytes: number }) {
 }
 
 export function takeSnapshotWrites() {
-  const taken = { ...snapshotWrites, ...takeCycleWork(), removedProfiles: takeSyncedProfileRemovals(), removedDevices: takeSyncedDeviceRemovals(), removalsReturned: takeReturnedProfileRemovals() + takeReturnedDeviceRemovals() };
+  const taken = { ...snapshotWrites, ...takeCycleWork(), removedProfiles: takeSyncedProfileRemovals(), removedDevices: takeSyncedDeviceRemovals(), removalsReturned: takeReturnedProfileRemovals() + takeReturnedDeviceRemovals(), folders: takeFolderCounts() };
   snapshotWrites = { count: 0, bytes: 0 };
   return taken;
 }

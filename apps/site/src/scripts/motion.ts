@@ -6,6 +6,9 @@ const reveal = new IntersectionObserver(
       reveal.unobserve(e.target);
     }
   },
-  { threshold: 0 },
+  { threshold: 0, rootMargin: "0px 0px 80px 0px" },
 );
-for (const el of document.querySelectorAll("[data-reveal]")) reveal.observe(el);
+for (const el of document.querySelectorAll("[data-reveal]")) {
+  if (el.getBoundingClientRect().bottom <= 0) el.classList.add("in");
+  else reveal.observe(el);
+}

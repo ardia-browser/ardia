@@ -5,8 +5,9 @@ import { openSettings } from "../../state/settings/nav";
 import { openRemote } from "../../state/sync/actions";
 import { remoteTitle } from "../../state/sync/spaces";
 import type { PinnedTile, SyncedProfile } from "../../state/sync/store";
-import { capsule, controlRadius, Favicon, font, isSymbolName, screenReaderActions, space, spacesLayout, Symbol, useTheme } from "../ui";
+import { capsule, controlRadius, Favicon, font, isSymbolName, screenReaderActions, space, spacesLayout, Symbol, useTheme, ActionButton, slopToReach, Tappable, usePressStyle } from "../ui";
 import type { Point } from "../../lib/menuPlace";
+import { destinationWords } from "../../lib/sharedWords";
 
 const TILE_MIN_WIDTH = 72;
 const TILE_HEIGHT = 56;
@@ -53,6 +54,7 @@ function TileButton({
 }) {
   const theme = useTheme();
   const anchor = useRef<ViewInstance>(null);
+  const tileStyle = usePressStyle("icon", { style: styles.tile });
   const folder = tile.folder?.length ? tile.folder : null;
   const label = tile.title.trim() || remoteTitle("", tile.url);
   return (
@@ -63,7 +65,7 @@ function TileButton({
       onPress={() => (folder ? onFolder(tile, anchor) : openRemote(tile.url, tile.title, profileId, tile.key))}
       onLongPress={folder ? undefined : (event) => onLink(tile.url, tile.title, { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY })}
       {...(folder ? {} : screenReaderActions([{ name: "longpress", run: () => onLink(tile.url, tile.title, null) }]))}
-      style={styles.tile}
+      style={tileStyle}
     >
       <View testID="spaceTileFace" style={[styles.tileFace, { height, backgroundColor: theme.groupFill }]}>
         {folder ? <Symbol name="folderFill" size={22} color={theme.secondaryLabel} /> : <Favicon iconUrl={null} pageUrl={tile.url} size={24} />}
@@ -93,16 +95,18 @@ export function Switcher({ profiles, selected, onChoose, bottom }: { profiles: S
         {profiles.map((profile) => {
           const isSelected = profile.syncId === selected;
           return (
-            <Pressable
+            <Tappable
               key={profile.syncId}
-              accessibilityRole="tab"
-              accessibilityLabel={profile.name}
-              accessibilityState={{ selected: isSelected }}
+              kind="icon"
+              role="tab"
+              label={profile.name}
+              selected={isSelected}
+              hitSlop={slopToReach(spacesLayout.switchWidth, spacesLayout.switchHeight)}
               onPress={() => onChoose(profile.syncId)}
-              style={[styles.switch, { opacity: isSelected ? 1 : 0.35 }]}
+              style={[styles.switch, isSelected ? null : styles.switchUnselected]}
             >
               <ProfileMark icon={profile.icon} />
-            </Pressable>
+            </Tappable>
           );
         })}
       </ScrollView>
@@ -124,9 +128,9 @@ export function Unavailable({ isOff }: { isOff: boolean }) {
       <Symbol name="macAndPhone" size={48} color={theme.secondaryLabel} />
       <Text style={[font.title2, styles.bold, styles.centered, { color: theme.label }]}>Your Mac’s Spaces</Text>
       <Text style={[font.subheadline, styles.centered, { color: theme.secondaryLabel }]}>{isOff ? "Every tab, anywhere." : "Waiting for your Mac."}</Text>
-      <Pressable accessibilityRole="button" onPress={() => openSettings({ page: isOff ? "syncConnect" : "sync" })} style={[styles.primary, { backgroundColor: theme.label }]}>
-        <Text style={[font.body, styles.bold, { color: theme.groupFill }]}>{isOff ? "Sync With Mac" : "Sync Settings"}</Text>
-      </Pressable>
+      <View style={styles.primary}>
+        <ActionButton title={destinationWords.sync} variant="filled" tone="accent" size="compact" onPress={() => openSettings({ page: isOff ? "syncConnect" : "sync" })} />
+      </View>
     </View>
   );
 }
@@ -142,8 +146,9 @@ const styles = StyleSheet.create({
   switcherRow: { alignItems: "center", paddingTop: space.xs },
   switcherContent: { flexDirection: "row", alignItems: "center", paddingHorizontal: space.xs },
   switcher: { flexGrow: 0, maxWidth: "100%", height: 44, borderRadius: controlRadius(44), borderCurve: "continuous", borderWidth: StyleSheet.hairlineWidth },
-  switch: { width: 52, height: 36, alignItems: "center", justifyContent: "center" },
+  switch: { width: spacesLayout.switchWidth, height: spacesLayout.switchHeight, alignItems: "center", justifyContent: "center" },
+  switchUnselected: { opacity: spacesLayout.switchUnselectedOpacity },
   dot: { width: spacesLayout.dot, height: spacesLayout.dot, borderRadius: capsule(spacesLayout.dot) },
   unavailable: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacesLayout.stackGap, paddingHorizontal: space.xxl },
-  primary: { minHeight: 44, borderRadius: controlRadius(44), borderCurve: "continuous", paddingHorizontal: space.xl, justifyContent: "center", marginTop: spacesLayout.buttonTop },
+  primary: { marginTop: spacesLayout.buttonTop },
 });

@@ -115,21 +115,48 @@ test("main's PageTheme and distinctTitle rules", () => {
   expect(distinctTitle(" Docs ", "a.example")).toBe("Docs");
 });
 
-test("on iPhone a failed page's Try Again is main's filled large capsule: 50 points tall, 20 point sides, the system's secondary fill and no stroke; Android keeps Compose's outlined one", () => {
+test("on iPhone a failed page's Try Again is the shared action in main's filled large capsule: 50 points tall, 20 point sides, the system's secondary fill and no stroke; Android keeps an outlined one at the 44 point target", () => {
   const tab = currentTabs().open[0]!;
   storeNavigation(tab.id, navigation({ isLoading: false, failure: crashed }));
   const root = renderSurface(<BrowsingScreen tab={tab} />, { flushTimers: false });
   const retry = style(node(root, "pageFailureRetry")!);
   if (onIPhone) {
-    expect(retry).toMatchObject({ minHeight: 50, paddingHorizontal: 20, borderRadius: 25, backgroundColor: "rgba(118,118,128,0.16)" });
-    expect(retry.borderWidth).toBeUndefined();
+    expect(retry).toMatchObject({ minHeight: 50, paddingHorizontal: 20, borderRadius: 25, borderCurve: "continuous", backgroundColor: "rgba(120,120,128,0.16)", borderWidth: 0 });
   } else {
-    expect(retry).toMatchObject({ minHeight: 40, paddingHorizontal: 24, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth });
-    expect(retry.backgroundColor).toBeUndefined();
+    expect(retry).toMatchObject({ minHeight: 44, borderRadius: 22, borderWidth: 1 });
   }
+  expect(node(root, "pageFailureRetry")!.props.accessibilityLabel).toBe("Try Again");
   expect(style(node(root, "pageFailureIcon")!)).toMatchObject({ width: 36, height: 36, marginBottom: 4 });
   const glyph = node(root, "pageFailureIcon")!.findAll((found) => typeof found.props.viewBox === "string")[0]!;
   expect(glyph.props.width).toBeCloseTo(onIPhone ? 43.2 : 36, 3);
+  unmount(root);
+});
+
+test("a failed page fills with the neutral app surface, not the profile's colour", () => {
+  const tab = currentTabs().open[0]!;
+  storeNavigation(tab.id, navigation({ isLoading: false, failure: crashed }));
+  const root = renderSurface(
+    <DesignProvider design="redesigned">
+      <BrowsingScreen tab={tab} />
+    </DesignProvider>,
+    { flushTimers: false },
+  );
+  const fill = style(node(root, "pageFailure")!).backgroundColor;
+  expect(fill).toBe("#FFFFFF");
+  unmount(root);
+});
+
+test("while a retry loads, the failure stays on screen and Try Again is busy and takes no second press; it clears once the load ends", () => {
+  const tab = currentTabs().open[0]!;
+  act(() => storeNavigation(tab.id, navigation({ isLoading: false, failure: crashed })));
+  const root = renderSurface(<BrowsingScreen tab={tab} />, { flushTimers: false });
+  expect(node(root, "pageFailureRetry")!.props.accessibilityState).toMatchObject({ busy: false, disabled: false });
+  act(() => storeNavigation(tab.id, navigation({ isLoading: true, failure: null })));
+  expect(node(root, "pageFailure")).toBeDefined();
+  expect(node(root, "pageFailureRetry")!.props.accessibilityState).toMatchObject({ busy: true, disabled: true });
+  expect(node(root, "pageFailureRetryBusy")).toBeDefined();
+  act(() => storeNavigation(tab.id, navigation({ isLoading: false, failure: null, progress: 1 })));
+  expect(node(root, "pageFailure")).toBeUndefined();
   unmount(root);
 });
 

@@ -71,6 +71,7 @@ extension WebKitTab {
     let configuration = WebKitHub.shared.configuration(profile: profile)
     configuration.defaultWebpagePreferences.allowsContentJavaScript = false
     let child = WebKitWebView(frame: .zero, configuration: configuration)
+    WebKitTabHistory.stamp(child, profile: profile)
     child.navigationDelegate = WebKitPopupPolicy.shared
     child.loadHTMLString(Self.sourcePage(text, url: url), baseURL: nil)
     let id = WebKitHub.shared.transfers.offer(child)

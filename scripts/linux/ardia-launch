@@ -12,6 +12,14 @@ if [[ -z "${APPDIR:-}" ]]; then
   unset APPIMAGE
 fi
 
+data_home=${XDG_DATA_HOME:-}
+[[ "$data_home" == /* ]] || data_home="${HOME:-}/.local/share"
+ardia_command="${ARDIA_CLI_HOME:-$data_home/ardia/cli}/current/bin/ardia"
+command_word='^[abcdefghijklmnopqrstuvwxyz][abcdefghijklmnopqrstuvwxyz0123456789-]*$'
+if [[ $# -gt 0 && "$1" =~ $command_word && ! -f "$1" && $EUID -ne 0 && -f "$ardia_command" && -x "$ardia_command" ]]; then
+  exec "$ardia_command" "$@"
+fi
+
 number() {
   if [[ -r "$1" ]]; then tr -dc '0-9' < "$1"; else printf '%s' "$2"; fi
 }

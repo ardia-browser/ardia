@@ -4,7 +4,7 @@ import type { experimentOn } from "../../platform/killSwitches";
 export type OfficialEntry = { name: string; title: string; blurb: string; icon: string };
 type Experiment = Parameters<typeof experimentOn>[0];
 export type OfficialTelemetry = { title: string; items: string[] };
-type PinEntry = OfficialEntry & { preselected?: boolean; anchorAliases?: readonly string[]; telemetry?: OfficialTelemetry; example?: string };
+type PinEntry = OfficialEntry & { preselected?: boolean; anchorAliases?: readonly string[]; telemetry?: OfficialTelemetry; example?: string; legacyInstall?: { program: string } };
 type Pin = { plugins: readonly PinEntry[]; comingSoon?: readonly (OfficialEntry & { experiment: string })[] };
 
 const entryOf = ({ name, title, blurb, icon }: OfficialEntry): OfficialEntry => ({ name, title, blurb, icon });
@@ -17,6 +17,7 @@ export function officialCatalogue(given: Pin) {
     examples: Object.fromEntries(given.plugins.flatMap((p) => (typeof p.example === "string" ? [[p.name, p.example]] : []))) as Record<string, string>,
     telemetry: Object.fromEntries(given.plugins.flatMap((p) => (p.telemetry ? [[p.name, { title: p.telemetry.title, items: [...p.telemetry.items] }]] : []))) as Record<string, OfficialTelemetry>,
     anchorAliases: Object.fromEntries(given.plugins.map((p) => [p.name, [...(p.anchorAliases ?? [])]])) as Record<string, string[]>,
+    legacyPrograms: Object.fromEntries(given.plugins.flatMap((p) => (typeof p.legacyInstall?.program === "string" ? [[p.name, p.legacyInstall.program]] : []))) as Record<string, string>,
   };
 }
 
@@ -29,3 +30,4 @@ export const OFFICIAL_NAMES: readonly string[] = [...CATALOGUE.plugins, ...CATAL
 export const OFFICIAL_ANCHOR_ALIASES: Readonly<Record<string, readonly string[]>> = CATALOGUE.anchorAliases;
 export const OFFICIAL_TELEMETRY: Readonly<Record<string, OfficialTelemetry>> = CATALOGUE.telemetry;
 export const OFFICIAL_EXAMPLES: Readonly<Record<string, string>> = CATALOGUE.examples;
+export const OFFICIAL_LEGACY_PROGRAMS: Readonly<Record<string, string>> = CATALOGUE.legacyPrograms;

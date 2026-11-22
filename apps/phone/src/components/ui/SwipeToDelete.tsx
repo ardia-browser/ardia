@@ -6,9 +6,8 @@ import { rowDeletes, rowOffset } from "../../lib/sheetDrag";
 import { tabsMotion } from "./motion";
 import { Symbol } from "./Symbol";
 import { useTheme } from "./theme";
-import { ink, space } from "./tokens";
-
-const SWIPE_SLOP = 12;
+import { font, ink, space, swipeDeleteLayout } from "./tokens";
+import { usePressStyle } from "./pressFeedback";
 
 export function SwipeToDelete({ onDelete, revealsOnly = false, children }: { onDelete: () => void; revealsOnly?: boolean; children: ReactNode }) {
   const theme = useTheme();
@@ -17,14 +16,14 @@ export function SwipeToDelete({ onDelete, revealsOnly = false, children }: { onD
   const swipe = useMemo(
     () =>
       Gesture.Pan()
-        .activeOffsetX([-SWIPE_SLOP, SWIPE_SLOP])
-        .failOffsetY([-SWIPE_SLOP, SWIPE_SLOP])
+        .activeOffsetX([-swipeDeleteLayout.slop, swipeDeleteLayout.slop])
+        .failOffsetY([-swipeDeleteLayout.slop, swipeDeleteLayout.slop])
         .onUpdate((event) => {
           x.value = rowOffset(event.translationX);
         })
         .onEnd((event) => {
           if (revealsOnly) {
-            x.value = withSpring(event.translationX < -REVEAL_WIDTH / 2 ? -REVEAL_WIDTH : 0, tabsMotion.settle);
+            x.value = withSpring(event.translationX < -swipeDeleteLayout.revealWidth / 2 ? -swipeDeleteLayout.revealWidth : 0, tabsMotion.settle);
             return;
           }
           if (rowDeletes(event.translationX, event.velocityX)) {
@@ -37,6 +36,7 @@ export function SwipeToDelete({ onDelete, revealsOnly = false, children }: { onD
   );
   const row = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }));
   const under = useAnimatedStyle(() => ({ opacity: x.value < 0 ? 1 : 0 }));
+  const revealStyle = usePressStyle("text", { style: styles.reveal });
   return (
     <GestureDetector gesture={swipe}>
       <View
@@ -52,12 +52,12 @@ export function SwipeToDelete({ onDelete, revealsOnly = false, children }: { onD
                   if (finished) runOnJS(onDelete)();
                 });
               }}
-              style={styles.reveal}
+              style={revealStyle}
             >
               <Text style={styles.revealText}>Delete</Text>
             </Pressable>
           ) : (
-            <Symbol name="trash" size={20} color={ink.white} />
+            <Symbol name="trash" size={swipeDeleteLayout.glyph} color={ink.white} />
           )}
         </Animated.View>
         <Animated.View style={row}>{children}</Animated.View>
@@ -66,10 +66,8 @@ export function SwipeToDelete({ onDelete, revealsOnly = false, children }: { onD
   );
 }
 
-const REVEAL_WIDTH = 88;
-
 const styles = StyleSheet.create({
   under: { alignItems: "flex-end", justifyContent: "center", paddingHorizontal: space.xl },
-  reveal: { position: "absolute", right: 0, top: 0, bottom: 0, width: REVEAL_WIDTH, alignItems: "center", justifyContent: "center" },
-  revealText: { color: ink.white, fontSize: 17, fontWeight: "600" },
+  reveal: { position: "absolute", right: 0, top: 0, bottom: 0, width: swipeDeleteLayout.revealWidth, alignItems: "center", justifyContent: "center" },
+  revealText: { ...font.body, color: ink.white, fontWeight: "600" },
 });

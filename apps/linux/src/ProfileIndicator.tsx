@@ -8,24 +8,31 @@ import { setMeasuredWidth, useMeasuredWidth } from "../../browser/src/state/wind
 import { useMenuBesideWindowButtons } from "./sidebarHeaderLayout";
 import { headerIndicatorLayout } from "./profileIndicatorLayout";
 
-export { PROFILE_INDICATOR_X } from "../../browser/src/components/profiles/ProfileIndicator";
+export { profileIndicatorX } from "../../browser/src/components/profiles/ProfileIndicator";
 
-function useIndicator(room: number) {
+function useIndicator(room: number, profileShown: boolean) {
   const incognito = useIsIncognito();
   const profiles = useProfiles();
   const profile = useWindowProfile();
   const name = incognito ? "Incognito" : profile?.name ?? "Personal";
   const textWidth = useMeasuredWidth(`linux-profile-name|${name}`);
   const menuInHeader = !useMenuBesideWindowButtons();
-  return { incognito, profile, name, textWidth, ...headerIndicatorLayout({ room, textWidth, named: incognito || profiles.length >= 2, menuInHeader }) };
+  return { incognito, profile, name, textWidth, ...headerIndicatorLayout({ room, textWidth, named: profileShown && (incognito || profiles.length >= 2), menuInHeader }) };
 }
 
-export const useProfileIndicatorWidth = (room: number) => useIndicator(room).width;
+export const useProfileIndicatorWidth = (room: number, profileShown = true) => useIndicator(room, profileShown).width;
 
-export function ProfileIndicator({ room }: { room: number }) {
+export const useAppMenuInHeader = (): boolean => !useMenuBesideWindowButtons();
+
+export function HeaderAppMenu({ size }: { size: number }) {
+  const windowId = useWindowId();
+  return useAppMenuInHeader() ? <AppMenuButton windowId={windowId} size={size} /> : null;
+}
+
+export function ProfileIndicator({ room, profileShown = true }: { room: number; profileShown?: boolean }) {
   const theme = useTheme();
   const windowId = useWindowId();
-  const { incognito, profile, name, textWidth, shown, showName, nameWidth, width, menuInHeader } = useIndicator(room);
+  const { incognito, profile, name, textWidth, shown, showName, nameWidth, width, menuInHeader } = useIndicator(room, profileShown);
   const measure = useRef<HTMLSpanElement>(null);
   useLayoutEffect(() => {
     if (measure.current) setMeasuredWidth(`linux-profile-name|${name}`, Math.ceil(measure.current.getBoundingClientRect().width));

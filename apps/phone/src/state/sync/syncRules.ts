@@ -1,5 +1,6 @@
 import type { ConnectResult, PhraseCheck, SyncedDevice, SyncedProfile, SyncedView, SyncPhase, SyncStatus } from "../../platform/sync.ts";
 import { copy } from "../../lib/platformCopy.ts";
+import { syncWords } from "../../lib/sharedWords.ts";
 
 export const MAC_HINT = "On your Mac: Settings › Sync › Connect Another Device.";
 export const YOUR_MAC = "Your Mac";
@@ -28,7 +29,7 @@ export function syncRowSubtitle(status: SyncStatus): StatusLine {
     case "folder":
       return { text: "Choose Your Sync Folder Again", isWarning: true };
     case "phrase":
-      return { text: "Enter Your Recovery Phrase", isWarning: true };
+      return { text: syncWords.enterRecoveryPhrase, isWarning: true };
     case "reset":
       return { text: "Out of Sync", isWarning: true };
     case "stalled":

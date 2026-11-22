@@ -179,10 +179,11 @@ test("the sidebar's own button (address bar in the sidebar) always fits; back, f
 });
 
 test("in window full screen the sidebar's button sits at Arc's 29 pt, with no room left for traffic lights (macOS shows them in its own title bar)", () => {
-  assert.equal(dm.headerToggleX(true), 29);
-  assert.equal(dm.headerToggleX(false), dm.HEADER_TOOLS.toggleX);
+  const headerToggleX = (windowFullScreen) => dm.headerToggleXIn({ windowFullScreen, pageFullScreen: false, controlsRow: false });
+  assert.equal(headerToggleX(true), 29);
+  assert.equal(headerToggleX(false), dm.HEADER_TOOLS.toggleX);
   for (let w = 150; w <= 400; w += 0.5) {
-    const { buttons, step } = dm.navButtonsFitting(w, 30, true, dm.headerToggleX(true));
+    const { buttons, step } = dm.navButtonsFitting(w, 30, true, headerToggleX(true));
     const windowed = dm.navButtonsFitting(w).buttons.length;
     assert.ok(buttons.length >= windowed, `${w}: full screen never fits fewer buttons`);
     const last = w - dm.HEADER_TOOLS.edge - 15;

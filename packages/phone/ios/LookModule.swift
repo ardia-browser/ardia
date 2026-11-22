@@ -31,6 +31,7 @@ public final class LookModule: Module {
       Prop("color") { (view: DeckBackdropView, value: String?) in view.colors.color = value }
       Prop("themeColors") { (view: DeckBackdropView, value: [String]?) in view.colors.themeColors = value }
       Prop("darkThemeColors") { (view: DeckBackdropView, value: [String]?) in view.colors.darkThemeColors = value }
+      Prop("themeLook") { (view: DeckBackdropView, value: [String: Any]?) in view.colors.themeLook = ThemeLook(sanitizing: value) }
       Prop("dark") { (view: DeckBackdropView, value: Bool?) in view.dark = value }
       Prop("reduceMotion") { (view: DeckBackdropView, value: Bool?) in view.reduceMotion = value }
       Prop("reduceTransparency") { (view: DeckBackdropView, value: Bool?) in view.reduceTransparency = value }
@@ -42,6 +43,7 @@ public final class LookModule: Module {
       Prop("color") { (view: ProfileBackdropView, value: String?) in view.colors.color = value }
       Prop("themeColors") { (view: ProfileBackdropView, value: [String]?) in view.colors.themeColors = value }
       Prop("darkThemeColors") { (view: ProfileBackdropView, value: [String]?) in view.colors.darkThemeColors = value }
+      Prop("themeLook") { (view: ProfileBackdropView, value: [String: Any]?) in view.colors.themeLook = ThemeLook(sanitizing: value) }
       Prop("dark") { (view: ProfileBackdropView, value: Bool?) in view.dark = value }
       Prop("themed") { (view: ProfileBackdropView, value: Bool?) in view.themed = value == true }
       Prop("softened") { (view: ProfileBackdropView, value: Bool?) in view.softened = value == true }
@@ -71,11 +73,13 @@ public final class LookModule: Module {
       Prop("surface") { (view: GlassView, value: String?) in view.surface = GlassView.Surface(rawValue: value ?? "") ?? .glass }
       Prop("tinted") { (view: GlassView, value: Bool?) in view.tinted = value == true }
       Prop("barShadow") { (view: GlassView, value: Bool?) in view.barShadow = value == true }
+      Prop("classicChrome") { (view: GlassView, value: ClassicChrome?) in view.classicChrome = value ?? ClassicChrome() }
       Prop("shown") { (view: GlassView, value: Bool?) in view.shown = value ?? true }
       Prop("shownMs") { (view: GlassView, value: Double?) in view.shownDuration = max(0, value ?? 200) / 1000 }
       Prop("color") { (view: GlassView, value: String?) in view.colors.color = value }
       Prop("themeColors") { (view: GlassView, value: [String]?) in view.colors.themeColors = value }
       Prop("darkThemeColors") { (view: GlassView, value: [String]?) in view.colors.darkThemeColors = value }
+      Prop("themeLook") { (view: GlassView, value: [String: Any]?) in view.colors.themeLook = ThemeLook(sanitizing: value) }
       OnViewDidUpdateProps { (view: GlassView) in view.render() }
     }
 
@@ -87,6 +91,7 @@ public final class LookModule: Module {
       Prop("color") { (view: FrostView, value: String?) in view.colors.color = value }
       Prop("themeColors") { (view: FrostView, value: [String]?) in view.colors.themeColors = value }
       Prop("darkThemeColors") { (view: FrostView, value: [String]?) in view.colors.darkThemeColors = value }
+      Prop("themeLook") { (view: FrostView, value: [String: Any]?) in view.colors.themeLook = ThemeLook(sanitizing: value) }
       Prop("dark") { (view: FrostView, value: Bool?) in view.dark = value }
       Prop("reduceTransparency") { (view: FrostView, value: Bool?) in view.reduceTransparency = value }
       OnViewDidUpdateProps { (view: FrostView) in view.render() }
@@ -169,7 +174,7 @@ final class DeckBackdropView: LookHostView {
 
   func render() {
     let look = colors.color == nil && (colors.themeColors ?? []).isEmpty ? ProfileLook.plum : colors.look
-    show(TabsBackdrop(look: look, reduceMotion: reduceMotion, reduceTransparency: reduceTransparency), dark: colors.isIncognito ? true : dark)
+    show(TabsBackdrop(look: look, themeLook: colors.shownThemeLook, reduceMotion: reduceMotion, reduceTransparency: reduceTransparency), dark: colors.isIncognito ? true : dark)
   }
 }
 
@@ -180,9 +185,27 @@ final class ProfileBackdropView: LookHostView {
   var softened = false
   var fadesOut = false
 
+  required init(appContext: AppContext? = nil) {
+    super.init(appContext: appContext)
+    registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: ProfileBackdropView, _: UITraitCollection) in
+      view.rememberLaunchLook()
+    }
+  }
+
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    rememberLaunchLook()
+  }
+
   func render() {
-    if themed { LaunchLook.remember(colors) }
-    show(ProfileBackdrop(look: colors.look, themed: themed, softened: softened, fadesOut: fadesOut), dark: colors.isIncognito ? true : dark)
+    rememberLaunchLook()
+    show(ProfileBackdrop(look: colors.look, themeLook: colors.shownThemeLook, themed: themed, softened: softened, fadesOut: fadesOut), dark: colors.isIncognito ? true : dark)
+  }
+
+  private func rememberLaunchLook() {
+    guard themed, window != nil else { return }
+    let appDark = traitCollection.userInterfaceStyle == .dark
+    LaunchLook.remember(colors, drawnDark: dark ?? appDark, appDark: appDark)
   }
 }
 
@@ -201,6 +224,14 @@ final class FilmGrainView: LookHostView {
 
 final class FrostSourceView: ExpoView {}
 
+struct ClassicChrome: Record {
+  @Field var edgeWidth: Double = 0
+  @Field var edge: UIColor? = nil
+  @Field var shadowRadius: Double = 0
+  @Field var shadowY: Double = 0
+  @Field var shadow: UIColor? = nil
+}
+
 final class GlassView: ExpoView {
   enum Shape: String {
     case capsule
@@ -213,11 +244,6 @@ final class GlassView: ExpoView {
     case classic
   }
 
-  static let classicEdge = UIColor.label.withAlphaComponent(0.12)
-  static let classicEdgeWidth: CGFloat = 0.5
-  static let classicShadowRadius: CGFloat = 10
-  static let classicShadowOffset = CGSize(width: 0, height: 2)
-
   var shape: Shape = .capsule
   var cornerRadius: CGFloat = 0
   var tint: UIColor?
@@ -227,6 +253,7 @@ final class GlassView: ExpoView {
   var surface: Surface = .glass
   var tinted = false
   var barShadow = false
+  var classicChrome = ClassicChrome()
   var shown = true
   var shownDuration: TimeInterval = 0.2
   var colors = LookColors()
@@ -311,18 +338,17 @@ final class GlassView: ExpoView {
 
   private func applyClassicEdgeAndShadow() {
     let classic = isSolid
-    effectView.layer.borderWidth = classic ? Self.classicEdgeWidth : 0
-    effectView.layer.borderColor = classic ? Self.classicEdge.resolvedColor(with: traitCollection).cgColor : nil
-    let shadows = classic && barShadow
+    effectView.layer.borderWidth = classic ? CGFloat(classicChrome.edgeWidth) : 0
+    effectView.layer.borderColor = classic ? classicChrome.edge?.resolvedColor(with: traitCollection).cgColor : nil
+    let shadows = classic && barShadow && classicChrome.shadow != nil
     layer.shadowOpacity = shadows ? 1 : 0
     guard shadows else {
       layer.shadowPath = nil
       return
     }
-    let dark = traitCollection.userInterfaceStyle == .dark
-    layer.shadowColor = UIColor.black.withAlphaComponent(dark ? 0.4 : 0.12).cgColor
-    layer.shadowRadius = Self.classicShadowRadius / 2
-    layer.shadowOffset = Self.classicShadowOffset
+    layer.shadowColor = classicChrome.shadow?.resolvedColor(with: traitCollection).cgColor
+    layer.shadowRadius = CGFloat(classicChrome.shadowRadius)
+    layer.shadowOffset = CGSize(width: 0, height: classicChrome.shadowY)
     layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: classicRadius).cgPath
   }
 }

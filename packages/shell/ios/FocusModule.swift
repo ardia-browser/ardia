@@ -77,13 +77,13 @@ public class FocusModule: Module {
       self.lifetime.run { self.setDragEscapeCapture(active) }
     }.runOnQueue(.main)
 
-    Function("switcherPointerMoved") { [weak self] () -> Bool in self?.switcherPointer.moved(to: NSEvent.mouseLocation) ?? true }
+    Function("switcherPointerMoved") { [weak self] () -> Bool in self?.switcherPointer.moved(to: SwitcherPointer.location) ?? true }
   }
 
   private func setSwitcherCapture(_ active: Bool) {
     if let monitor = switcherMonitor { NSEvent.removeMonitor(monitor) }
     switcherMonitor = nil
-    switcherPointer.start(active ? NSEvent.mouseLocation : nil)
+    switcherPointer.start(active ? SwitcherPointer.location : nil)
     guard active else { return }
     let emit: ([String: Any]) -> Void = { ShellEvents.send(.app, $0) }
     switcherMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseUp, .rightMouseUp, .otherMouseUp]) { event in

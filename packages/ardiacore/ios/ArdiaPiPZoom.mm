@@ -378,9 +378,9 @@ static __weak ArdiaPiPZoom *gEdgeResizing;
 
 - (void)pinchBy:(double)factor at:(NSPoint)pointer {
   if (!_standIn) return [self zoomBy:factor at:pointer ease:NO];
-  const NSRect frame = _pinchTarget;
-  if (_width <= 0 || fabs(_width - NSWidth(frame)) > 1 || !(_aspect > 0) || !std::isfinite(_aspect)) {
-    _aspect = NSWidth(frame) / MAX(NSHeight(frame), 1);
+  const NSRect frame = _pinchTarget, live = _window.frame;
+  if (_width <= 0 || fabs(_width - NSWidth(frame)) > 1 || !(_aspect > 0) || !std::isfinite(_aspect) || fabs(NSWidth(live) / _aspect - NSHeight(live)) > 1) {
+    _aspect = NSWidth(live) / MAX(NSHeight(live), 1);
     _width = NSWidth(frame);
   }
   _pointer = pointer;

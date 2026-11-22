@@ -57,6 +57,7 @@ export type PageViewProps = ViewProps & {
   savedState?: string;
   toneInsets?: PageToneInsets;
   bottomInsetTransitionMs?: number;
+  summaryBottomInset?: number;
   obscuredInsets?: PageObscuredInsets;
   obscuredColors?: PageObscuredColors;
   topClearance?: number;

@@ -14,8 +14,14 @@ const store = () => useBrowser.getState();
 
 const HISTORY_WINDOW_MS = 90 * 86_400_000;
 
-const lastVisitOf = (v: HistoryValue) => Math.max(0, ...v.vt);
+const lastVisitOf = (v: HistoryValue) => v.vt.reduce((m, t) => Math.max(m, t), 0);
 const SAME_VISIT_MS = 1;
+const keptVisits = (vt: number[]) => {
+  if (vt.length <= MAX_VISIT_TIMES) return vt;
+  const out: number[] = [];
+  for (const t of [...vt].sort((a, z) => a - z)) if (!out.length || t - out[out.length - 1]! > SAME_VISIT_MS) out.push(t);
+  return out.slice(-MAX_VISIT_TIMES);
+};
 const sameVisits = (a: number[], b: number[]) => a.length === b.length && a.every((t, i) => Math.abs(b[i]! - t) <= SAME_VISIT_MS);
 
 export function historyExpired(key: string, value: unknown, now: number) {
@@ -124,7 +130,7 @@ export function historyAdapter(profileId: string): Adapter {
         const old = byUrl.get(url);
         if (v) {
           const have = old?.visitTimes ?? [];
-          const fresh = v.vt.filter((t) => t >= since && !have.some((h) => Math.abs(h - t) <= SAME_VISIT_MS));
+          const fresh = keptVisits(v.vt).filter((t) => t >= since && !have.some((h) => Math.abs(h - t) <= SAME_VISIT_MS));
           if (fresh.length) add.push({ url, title: v.t, visitTimes: fresh });
           const times = [...have, ...fresh].sort((a, z) => a - z).slice(-MAX_VISIT_TIMES);
           if (!times.length) continue;

@@ -12,6 +12,7 @@ import { Dialog, Favicon, font, settingsLayout, settingsTint, Symbol, useDesign,
 import { Divider, Group, NavRow, PickerRow, SettingsPage, ToggleRow } from "./SettingsKit";
 import { useSyncEnabled, useSyncView } from "../../state/sync/hooks";
 import { syncedEngineName } from "../../state/sync/syncRules";
+import { dismissWords } from "../../lib/sharedWords";
 
 export const SWIPE_NAVIGATION = [
   { id: "anywhere" as const, title: "From Anywhere" },
@@ -108,7 +109,7 @@ function AllowedSite({ grant, divider }: { grant: SitePermissionGrant; divider: 
   const buttons: DialogButton[] = [
     ...(kinds.length > 1 ? kinds.map((kind) => ({ title: `Revoke ${PERMISSION_NAMES[kind]}`, destructive: true, onPress: () => revoke(kind) })) : []),
     { title: kinds.length > 1 ? "Revoke All" : `Revoke ${summary}`, destructive: true, onPress: () => revoke() },
-    { title: "Cancel", onPress: () => setAsking(false) },
+    { title: dismissWords.cancel, onPress: () => setAsking(false) },
   ];
   return (
     <View>

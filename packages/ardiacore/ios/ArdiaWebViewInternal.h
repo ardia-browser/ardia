@@ -107,6 +107,16 @@ struct ArdiaCommits {
   int documents{};
 };
 
+struct ArdiaElementPick {
+  __weak ArdiaCoreTab *tab;
+  int documents{};
+  double armed{};
+  BOOL input{};
+  NSPoint menuPoint{};
+  CFTimeInterval menuAt{-1};
+  __weak ArdiaCoreTab *menuTab;
+};
+
 struct ArdiaFocusAsk {
   BOOL asked{};
   BOOL onlyIfUnfocused{};
@@ -166,6 +176,7 @@ struct ArdiaPageFocusState {
   BOOL _pinned;
   NSView *_devtoolsView;
   CFTimeInterval _linkDropAt;
+  ArdiaElementPick _elementPick;
   NSMutableArray<NSDictionary<NSString *, id> *> *_newTabLinks;
   id _sightObserver;
   id _interfaceScaleObserver;

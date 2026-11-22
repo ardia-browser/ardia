@@ -1,10 +1,11 @@
 import { requireNativeViewManager, requireOptionalNativeModule } from "expo-modules-core";
 import { createElement, forwardRef, useImperativeHandle, useRef, type ComponentType, type ReactNode, type Ref } from "react";
 import { Platform, View, type ColorValue, type NativeSyntheticEvent, type ViewProps } from "react-native";
+import type { ClassicChrome } from "./look";
 
 export type SearchStageExit = "morph" | "depart" | "drop";
 
-export type SearchStageMorphLook = { usesGlass: boolean; panelTint: ColorValue; panelDark: boolean; classicPanel: ColorValue; frosted?: boolean };
+export type SearchStageMorphLook = { usesGlass: boolean; panelTint: ColorValue; panelDark: boolean; classicPanel: ColorValue; frosted?: boolean; classicChrome?: ClassicChrome };
 
 export type SearchStageCorners = { anchor?: number; panel: number; field?: number };
 
@@ -55,6 +56,7 @@ type NativeProps = Omit<SearchStageProps, "onLift" | "onReveal" | "onSettled" | 
   morphFrosted?: boolean;
   morphPanelDark?: boolean;
   morphClassicPanel?: ColorValue;
+  morphClassicChrome?: ClassicChrome;
   anchorRadius?: number;
   panelRadius?: number;
   fieldRadius?: number;
@@ -103,6 +105,7 @@ export const SearchStage = forwardRef<SearchStageHandle, SearchStageProps>(funct
     morphFrosted: morphLook?.frosted,
     morphPanelDark: morphLook?.panelDark,
     morphClassicPanel: morphLook?.classicPanel,
+    morphClassicChrome: morphLook?.classicChrome,
     anchorRadius: morphCorners?.anchor,
     panelRadius: morphCorners?.panel,
     fieldRadius: morphCorners?.field,

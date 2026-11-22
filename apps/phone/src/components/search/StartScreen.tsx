@@ -11,6 +11,7 @@ import { openSettings } from "../../state/settings/hooks";
 import { DeckBar } from "../tabs/DeckBar";
 import { MaterialStart } from "./MaterialStart";
 import { StartPage } from "./StartPage";
+import { actionWords, destinationWords } from "../../lib/sharedWords";
 
 const BAR_RESERVE = 58;
 
@@ -42,15 +43,15 @@ function OriginalStart() {
   const leading = hasTabs
     ? { icon: "squareOnSquare" as const, label: "Tabs", onPress: showDeck }
     : syncs
-      ? { icon: "laptop" as const, label: "Synced Tabs", onPress: openSpaces }
-      : { icon: "archivebox" as const, label: "Archive", onPress: openArchive };
+      ? { icon: "laptop" as const, label: destinationWords.spaces, onPress: openSpaces }
+      : { icon: "archivebox" as const, label: destinationWords.archive, onPress: openArchive };
   const items: MenuItem[] = incognito
     ? [
-        { label: "New Tab", icon: "plus", onPress: newRegularTab },
-        { label: "New Incognito Tab", icon: "eyes", onPress: newTab },
+        { label: actionWords.newTab, icon: "plus", onPress: newRegularTab },
+        { label: actionWords.newIncognitoTab, icon: "eyes", onPress: newTab },
       ]
     : [
-        { label: "New Incognito Tab", icon: "eyes", onPress: newIncognitoTab },
+        { label: actionWords.newIncognitoTab, icon: "eyes", onPress: newIncognitoTab },
         ...(canReopen ? [{ label: "Reopen Closed Tab", icon: "arrowUturnBackward" as const, onPress: reopenLastClosed }] : []),
       ];
   return (
@@ -73,7 +74,7 @@ function OriginalStart() {
       >
         <DeckBar
             leading={leading}
-            plusLabel={incognito ? "New Incognito Tab" : "New Tab"}
+            plusLabel={incognito ? actionWords.newIncognitoTab : actionWords.newTab}
             frost={{ source: START_FROST, variant: "glass", incognito }}
             covered={trayUp}
             onPlus={newTab}

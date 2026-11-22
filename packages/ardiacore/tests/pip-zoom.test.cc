@@ -124,8 +124,8 @@ int main() {
         Result r = Zoom(frame, width, aspect, f, {frame.x + frame.w / 2, frame.y + frame.h / 2}, visible, minSize, maxSize);
         CHECK(r.frame.x >= std::min(visible.x, frame.x) - 0.51 && r.frame.maxX() <= std::max(visible.maxX(), frame.maxX()) + 0.51);
         CHECK(r.frame.y >= std::min(visible.y, frame.y) - 0.51 && r.frame.maxY() <= std::max(visible.maxY(), frame.maxY()) + 0.51);
-        CHECK(visible.x - r.frame.x <= r.frame.w / 2 && r.frame.maxX() - visible.maxX() <= r.frame.w / 2);
-        CHECK(visible.y - r.frame.y <= r.frame.h / 2 && r.frame.maxY() - visible.maxY() <= r.frame.h / 2);
+        CHECK(visible.x - r.frame.x <= r.frame.w * kMostPastEdge && r.frame.maxX() - visible.maxX() <= r.frame.w * kMostPastEdge);
+        CHECK(visible.y - r.frame.y <= r.frame.h * kMostPastEdge && r.frame.maxY() - visible.maxY() <= r.frame.h * kMostPastEdge);
         frame = r.frame, width = r.width;
       }
     }
@@ -136,7 +136,8 @@ int main() {
     CHECK(KeptWithin(-300, 400, -200, 480, 0, 1512) == -200);
     CHECK(KeptWithin(1300, 400, 800, 480, 0, 1512) == 1112);
     CHECK(KeptWithin(1352, 360, 1232, 480, 0, 1512) == 1332);
-    CHECK(KeptWithin(-320, 360, -200, 480, 0, 1512) == -180);
+    CHECK(KeptWithin(1500, 200, 1232, 480, 0, 1512) == 1412);
+    CHECK(KeptWithin(-320, 200, -200, 480, 0, 1512) == -100);
   }
   if (failures) return std::printf("%d failed\n", failures), 1;
   std::printf("pip-zoom: all passed\n");

@@ -23,12 +23,17 @@ public class SitesModule: Module {
       try engine(args).siteSettings(profile: args.profile, origin: try args.text("origin")) { reply.service($0, $1) }
     },
     "setSetting": { args, reply in
-      try engine(args).setSiteSetting(profile: args.profile, origin: try args.text("origin"), type: try args.text("type"), value: try args.text("value"))
+      let origin = try args.text("origin")
+      let type = try args.text("type")
+      try engine(args).setSiteSetting(profile: args.profile, origin: origin, type: type, value: try args.text("value"))
+      if type == "notifications" { WebKitHub.shared.notifications.refresh(profile: args.profile, origin: origin) }
       reply.ok()
     },
     "origins": { args, reply in ArdiaServices.siteSettingsOrigins(profile: args.profile) { reply.service($0, $1) } },
     "reset": { args, reply in
-      ArdiaServices.resetSiteSettings(profile: args.profile, origin: try args.text("origin"))
+      let origin = try args.text("origin")
+      ArdiaServices.resetSiteSettings(profile: args.profile, origin: origin)
+      WebKitHub.shared.notifications.refresh(profile: args.profile, origin: origin)
       reply.ok()
     },
     "clearData": { args, reply in

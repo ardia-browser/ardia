@@ -12,7 +12,7 @@ if (!stable && !nightly) {
   process.exit(64);
 }
 const root = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
-const repo = "mantrakp04/ardia";
+const repo = "ardia-browser/ardia";
 const assets = JSON.parse(execFileSync("gh", ["release", "view", `v${version}`, "-R", repo, "--json", "assets"], { encoding: "utf8" })).assets;
 const releasePath = `${root}/apps/site/src/data/release.json`;
 const release = JSON.parse(readFileSync(releasePath, "utf8"));

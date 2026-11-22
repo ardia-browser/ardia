@@ -104,7 +104,7 @@ internal class BrowseForMeHost private constructor(context: Context) {
 
     private fun report(settled: ResearchSession) {
         if (settled !== session) return
-        send(mapOf("name" to "settled", "outcome" to outcome(settled), "chatGPTFellBack" to settled.chatGPTFellBack, "geminiNanoMissing" to settled.geminiNanoMissing))
+        send(mapOf("name" to "settled", "outcome" to outcome(settled), "chatGPTFellBack" to settled.chatGPTFellBack, "geminiNanoMissing" to settled.geminiNanoMissing, "rewroteAfterGeminiNanoDownload" to settled.rewroteAfterGeminiNanoDownload))
     }
 
     private fun outcome(settled: ResearchSession): String {

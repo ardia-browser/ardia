@@ -1,13 +1,13 @@
 import { StyleSheet, Text, View } from "react-native";
 import { tileGradient } from "../../lib/favicon";
 import { linearGradientCss } from "../../lib/gradient";
-import { AppIcon, font, onboardingArt, PROFILE_COLORS, space, Symbol, useTheme } from "../ui";
+import { AppIcon, font, onboardingArt, PROFILE_COLORS, shadowCss, smoothCorners, space, Symbol, useTheme } from "../ui";
 
 export function LinkBubble() {
   const theme = useTheme();
   return (
     <View style={styles.row} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-      <View style={[styles.card, { backgroundColor: theme.groupFill, shadowColor: theme.trayShadow }]}>
+      <View style={[styles.card, { backgroundColor: theme.groupFill, boxShadow: shadowCss("card", theme.dark) }]}>
         <View style={[styles.strip, { experimental_backgroundImage: linearGradientCss(tileGradient(PROFILE_COLORS.plum.swatch), false, 1, 1) }]} />
         <View style={styles.words}>
           <Text style={[font.subheadline, styles.bold, { color: theme.label }]} numberOfLines={1}>
@@ -17,7 +17,7 @@ export function LinkBubble() {
         </View>
       </View>
       <View style={styles.arrow}>
-        <Symbol name="arrowRight" size={22} color={theme.spaceAccentInk} />
+        <Symbol name="arrowRight" size={onboardingArt.arrowGlyph} color={theme.spaceAccentInk} />
       </View>
       <View testID="linkBubbleIcon" style={styles.icon}>
         <AppIcon side={onboardingArt.appIcon} shadow scalesWithText={false} />
@@ -31,13 +31,11 @@ const styles = StyleSheet.create({
   card: {
     width: onboardingArt.linkCardWidth,
     borderRadius: onboardingArt.linkCardRadius,
+    ...smoothCorners,
     overflow: "hidden",
-    elevation: 6,
-    shadowOpacity: 0.08,
-    shadowRadius: onboardingArt.shadowRadius,
   },
   strip: { minHeight: onboardingArt.stripHeight },
-  words: { paddingHorizontal: space.m, paddingVertical: space.s + 2, gap: space.tight },
+  words: { paddingHorizontal: space.m, paddingVertical: onboardingArt.wordsVertical, gap: space.tight },
   bold: { fontWeight: "700" },
   arrow: { paddingBottom: onboardingArt.arrowLift },
   icon: { marginBottom: space.s },

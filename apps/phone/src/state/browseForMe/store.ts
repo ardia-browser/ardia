@@ -28,7 +28,7 @@ export function startBrowseForMe(query: string): boolean {
 
 export function noteBrowseForMe(event: BrowseForMeEvent) {
   if (event.name === "account") useBrowseForMe.setState(event.account ? { connected: event.connected, account: event.account } : { connected: event.connected });
-  if (event.name === "settled" && counting()) for (const field of [...browseForMeCounts(event.outcome, event.chatGPTFellBack), ...geminiNanoMissingCount(event.geminiNanoMissing)]) countUsage(field);
+  if (event.name === "settled" && counting()) for (const field of [...browseForMeCounts(event.outcome, event.chatGPTFellBack), ...geminiNanoMissingCount(event.geminiNanoMissing), ...(event.rewroteAfterGeminiNanoDownload ? (["gemini_nano_download_rewrites"] as const) : [])]) countUsage(field);
   if (event.name === "talkToMe" && counting()) {
     const field = talkToMeCount(event.count);
     if (field) countUsage(field);

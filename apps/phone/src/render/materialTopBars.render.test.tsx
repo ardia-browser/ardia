@@ -31,7 +31,7 @@ const node = (root: Root, id: string) => root.root.findAll((found) => found.prop
 const texts = (root: Root) => root.root.findAll((found) => found.type === Text).map((found) => found.props.children);
 const material = (child: React.ReactElement) => renderSurface(<DesignProvider design="material">{child}</DesignProvider>);
 
-onAndroid("the Archive opens on a Material top app bar: a close icon at the start, the title start-aligned in titleLarge, Options at the end, a Material search field, and no iPhone Done", () => {
+onAndroid("the Archive opens on a Material top app bar: a close icon at the start, the title start-aligned in titleLarge, More at the end, a Material search field, and no iPhone Done", () => {
   const closed = jest.spyOn(browse, "closeArchive").mockImplementation(() => undefined);
   const root = material(<ArchiveView />);
   expect(node(root, "materialTopBar")).toBeDefined();

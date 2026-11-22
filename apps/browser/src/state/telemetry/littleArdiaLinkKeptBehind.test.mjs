@@ -14,6 +14,7 @@ test("a link from another app counts when Ardia kept its other windows behind th
   noteLittleArdiaLinkKeptBehind("windowManager");
   noteLittleArdiaLinkKeptBehind("windowManager");
   noteLittleArdiaLinkKeptBehind("keyRestored");
+  noteLittleArdiaLinkKeptBehind("raiseSkipped");
   const taken = takeLittleArdiaEscapeCloses();
   assert.equal(taken.little_ardia_link_windows_kept_at_activation, 2);
   assert.equal(taken.little_ardia_link_windows_kept_on_arrival, 1);
@@ -22,5 +23,6 @@ test("a link from another app counts when Ardia kept its other windows behind th
   assert.equal(taken.little_ardia_link_holds_left_to_stage_manager, 1);
   assert.equal(taken.little_ardia_link_holds_left_to_window_manager, 2);
   assert.equal(taken.little_ardia_link_hold_key_restored, 1);
+  assert.equal(taken.little_ardia_link_raises_skipped, 1);
   assert.equal(takeLittleArdiaEscapeCloses().little_ardia_link_windows_kept_at_activation, 0, "taking the counts starts the next hour at zero");
 });

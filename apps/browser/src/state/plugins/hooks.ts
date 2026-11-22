@@ -9,11 +9,13 @@ import { useBrowser } from "../browser/store";
 import { useKeyed, watchWindowRecord } from "../browser/keyedWatch";
 import { eligibleKind } from "../automation/automationWindows";
 import { valuesOf } from "./values";
+import { consentVerbOf } from "./consentWords";
 
 export const usePluginOrder = () => usePlugins((s) => s.order);
 export { useOfficialPlugins } from "./official";
 export const usePluginListing = (name: string) => usePlugins((s) => s.listings[name]);
 export const useConsentListing = (name: string, hash: string) => usePlugins((s) => consentListing(s, name, hash));
+export const useConsentVerb = (name: string, hash: string) => usePlugins((s) => consentVerbOf(s, name, hash));
 export const useOfficialFetch = (name: string) => usePlugins((s) => (Object.hasOwn(s.fetches, name) ? s.fetches[name] : undefined));
 export const usePluginTitle = (name: string | null | undefined) => usePlugins((s) => (name && Object.hasOwn(s.listings, name) ? (s.listings[name]!.manifest?.title ?? name) : null));
 export const usePluginRecord = (name: string) => usePlugins((s) => recordOf(s, name));
@@ -21,6 +23,7 @@ export const usePluginActive = (name: string) => usePlugins((s) => !!activeManif
 export const usePluginNeedsReview = (name: string) => usePlugins((s) => needsReview(s, name));
 export const usePluginProcess = (name: string) => usePlugins((s) => s.processes[name]);
 export const usePluginPrograms = (name: string) => usePlugins((s) => s.programs[name]);
+export const usePluginUnsaved = (name: string) => usePlugins((s) => s.unsaved === name);
 export function usePluginsWithPrograms(): { name: string; title: string }[] {
   const key = usePlugins((s) => JSON.stringify(s.order.flatMap((name) => { const m = activeManifest(s, name); return m?.programs.length ? [{ name, title: m.title }] : []; })));
   return useMemo(() => JSON.parse(key) as { name: string; title: string }[], [key]);

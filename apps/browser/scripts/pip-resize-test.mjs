@@ -40,6 +40,10 @@ const data = join(out, "data");
 mkdirSync(media, { recursive: true });
 
 const clip = join(media, "clip.mp4");
+const wideClip = join(media, "wide.mp4");
+if (!existsSync(wideClip))
+  execFileSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=640x270:r=30", "-t", "120",
+    "-c:v", "libx264", "-preset", "veryfast", "-crf", "30", "-pix_fmt", "yuv420p", "-movflags", "+faststart", wideClip], { stdio: "inherit" });
 if (!existsSync(clip))
   execFileSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=640x360:r=30", "-t", "120",
     "-c:v", "libx264", "-preset", "veryfast", "-crf", "30", "-pix_fmt", "yuv420p", "-movflags", "+faststart", clip], { stdio: "inherit" });
@@ -348,6 +352,56 @@ try {
         await appActive(true).catch(() => null);
         await sleep(900);
       }
+    });
+    await r.check("a pinch after the video changed shape keeps the window at the video's new shape", async () => {
+      const page = await instance.page(url, { timeout: 5000 });
+      const play = (src) => page.eval(`(async () => { const v = document.getElementById("v"); v.src = ${JSON.stringify(src)}; await new Promise((r) => v.addEventListener("loadedmetadata", r, { once: true })); await v.play(); return v.videoWidth / v.videoHeight; })()`, { timeout: 15000 });
+      const ratio = (s) => s.width / s.height;
+      const before = await state();
+      try {
+        const wide = await play("wide.mp4");
+        const reshaped = await until("Chromium to give the window the new shape", async () => { const s = await state(); return s && Math.abs(ratio(s) - wide) < 0.05 ? s : null; }, 8000);
+        if (Math.abs(reshaped.width - before.width) > 1) throw new Error(`inconclusive: Chromium changed the width too (${before.width} to ${reshaped.width}), so the stale ratio would be dropped anyway`);
+        await pip("pinch:1.15,24,120");
+        await sleep(400);
+        await until("the hand-off", async () => !(await pip("standIn")), 5000);
+        await sleep(400);
+        const pinched = await state();
+        if (pinched.width <= reshaped.width + 10) throw new Error(`the pinch didn't grow it: ${size(pinched)}`);
+        if (Math.abs(ratio(pinched) - wide) > 0.05) throw new Error(`the pinch left it ${size(pinched)}, ratio ${ratio(pinched).toFixed(2)}; the video is ${wide.toFixed(2)} and the window was ${ratio(before).toFixed(2)} before the change`);
+        return { before: size(before), reshaped: size(reshaped), pinched: size(pinched), video: wide.toFixed(2) };
+      } finally {
+        await play("clip.mp4").catch(() => null);
+        await sleep(1500);
+      }
+    });
+    await r.check("a pinch that starts right after a swipe ends isn't interrupted by the swipe's release", async () => {
+      const lastSwipe = async () => JSON.stringify(JSON.parse(await pip("throw")).lastSwipe);
+      const settle = async () => {
+        await sleep(400);
+        await until("the hand-off", async () => !(await pip("standIn")), 5000);
+        await sleep(600);
+      };
+      const before = await lastSwipe();
+      await pip("swipe:-40,30,10");
+      await sleep(900);
+      const alone = await lastSwipe();
+      if (alone === before) throw new Error("inconclusive: a slow swipe with nothing after it recorded no release");
+      const tries = [];
+      for (let i = 0; i < 3; i++) {
+        const was = await lastSwipe(), releases = await eventCount("pictureInPictureReleased");
+        const swiped = pip("swipe:40,-30,10");
+        await sleep(110);
+        await Promise.all([swiped, pip("pinch:1.1,12,120")]);
+        await settle();
+        tries.push((await lastSwipe()) === was ? "left alone" : "released");
+        if (tries.at(-1) === "left alone") {
+          const counted = (await eventCount("pictureInPictureReleased")) - releases;
+          if (counted !== 1) throw new Error(`the swipe the pinch cut short was counted ${counted} times, not once`);
+          return { tries };
+        }
+      }
+      throw new Error(`the swipe's release ran under the pinch every time: ${tries.join(", ")}`);
     });
     await r.check("closing Picture in Picture in the middle of a pinch takes the stand-in away", async () => {
       await pip("pinch:1.5,240,120");

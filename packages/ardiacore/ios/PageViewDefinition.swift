@@ -73,6 +73,8 @@ enum PageViewDefinition {
         view.page.takeControlPress(clickAt: clickAt ?? 0, control: control ?? 0)
       }.runOnQueue(.main)
       AsyncFunction("exitPictureInPicture") { (view: V) in view.page.exitPictureInPicture() }.runOnQueue(.main)
+      AsyncFunction("armElementPick") { (view: V) -> Double in view.page.armElementPick() }.runOnQueue(.main)
+      AsyncFunction("takeElementPick") { (view: V, armed: Double) -> Bool in view.page.takeElementPick(armed) }.runOnQueue(.main)
 
       AsyncFunction("getSecurityInfo") { (view: V, promise: Promise) in
         view.page.securityInfo { promise.resolve($0) }

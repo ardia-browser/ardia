@@ -23,7 +23,7 @@ DISPATCH = '''if [ "${1:-}" = --arch ]; then
 fi
 
 '''
-FIXTURE_FILES = ('engine/engine-key.sh', 'scripts/linux/fetch-engine.sh', 'scripts/linux/runtime_files.py', 'scripts/linux/publish-engine.sh',
+FIXTURE_FILES = ('engine/engine-key.sh', 'engine/engine-key.py', 'scripts/linux/fetch-engine.sh', 'scripts/linux/runtime_files.py', 'scripts/linux/publish-engine.sh',
                  'scripts/linux/publish_engine.py', 'scripts/linux/package.py', 'scripts/agent/locked', MAC_FETCH)
 GIT_ENV = {'GIT_CONFIG_GLOBAL': os.devnull, 'GIT_CONFIG_NOSYSTEM': '1', 'GIT_AUTHOR_NAME': 'Test', 'GIT_AUTHOR_EMAIL': 'test@example.com',
            'GIT_COMMITTER_NAME': 'Test', 'GIT_COMMITTER_EMAIL': 'test@example.com'}
@@ -123,7 +123,7 @@ class Fixture:
         self.git('commit', '-q', '-m', content)
 
     def key(self, rev='HEAD'):
-        result = run([self.repo / 'engine/engine-key.sh', rev], cwd=self.repo, env=self.env)
+        result = run([self.repo / 'engine/engine-key.sh', '--platform', 'linux', rev], cwd=self.repo, env=self.env)
         if result.returncode != 0:
             raise AssertionError(result.stderr)
         return result.stdout.strip()
@@ -140,11 +140,12 @@ class ArchiveMaker:
         self.table.write_text('')
 
     def manifest(self, key, **overrides):
-        manifest = {'format': 2, 'engine_key': key, 'source_commit': None, 'target_os': 'linux', 'target_cpu': 'x64'}
+        manifest = {'format': 2, 'engine_key': key, 'source_commit': None, 'target_os': 'linux', 'target_cpu': 'x64',
+                    'chrome_sha256': hashlib.sha256(b'runtime').hexdigest()}
         manifest.update(overrides)
         return json.dumps(manifest).encode()
 
-    def publish(self, key, members=None, manifest=None, sha=None, skip=()):
+    def publish(self, key, members=None, manifest=None, sha=None, skip=(), row_key=None):
         tag = runtime.release_tag(key)
         folder = self.assets / tag
         folder.mkdir(parents=True, exist_ok=True)
@@ -170,11 +171,110 @@ class ArchiveMaker:
                 add(**member)
         digest = sha or hashlib.sha256(archive.read_bytes()).hexdigest()
         with self.table.open('a') as handle:
-            handle.write(f'{key}\t{tag}\t{digest}\n')
+            handle.write(f'{row_key}\t{tag}\t{digest}\t{key}\n' if row_key else f'{key}\t{tag}\t{digest}\n')
         return archive
 
 
 class RuntimeSelectionTests(unittest.TestCase):
+    def make_engine(self, directory, key, **overrides):
+        fake_runtime(directory, junk=False)
+        manifest = {'format': 2, 'engine_key': key, 'source_commit': None, 'target_os': 'linux', 'target_cpu': 'x64',
+                    'chrome_sha256': hashlib.sha256((directory / 'chrome').read_bytes()).hexdigest()}
+        manifest.update(overrides)
+        (directory / 'manifest.json').write_text(json.dumps(manifest))
+        return directory
+
+    def test_an_engine_serves_its_own_key_and_the_keys_whose_rows_name_it(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            root = pathlib.Path(scratch)
+            engine = root / 'engine'
+            engine.mkdir()
+            table = root / 'table.tsv'
+            built, alias, other = 'a' * 40, 'b' * 40, 'c' * 40
+            table.write_text(f'{built}\tengine-{built[:12]}\t{"0" * 64}\n{alias}\tengine-{built[:12]}\t{"0" * 64}\t{built}\n')
+            self.assertFalse(runtime.serves(engine, built, table))
+            self.make_engine(engine, built)
+            self.assertTrue(runtime.serves(engine, built, table))
+            self.assertTrue(runtime.serves(engine, alias, table))
+            self.assertFalse(runtime.serves(engine, other, table))
+            self.assertEqual(runtime.built_key(table, alias), built)
+            self.assertEqual(runtime.built_key(table, built), built)
+            self.assertIsNone(runtime.built_key(table, other))
+            command = [sys.executable, '-I', LINUX / 'runtime_files.py', 'serves', '--engine', engine, '--table', table, '--key']
+            self.assertEqual(run([*command, alias]).returncode, 0)
+            self.assertEqual(run([*command, other]).returncode, 1)
+
+    def test_serves_needs_a_linux_x64_manifest_the_runtime_and_the_chrome_it_names(self):
+        built, alias = 'a' * 40, 'b' * 40
+        cases = [
+            ('a manifest alone', lambda engine: (engine / 'manifest.json').write_text(json.dumps({'format': 1, 'engine_key': built, 'target_os': 'mac', 'target_cpu': 'arm64'}))),
+            ('format 1', lambda engine: self.make_engine(engine, built, format=1)),
+            ('a macOS target', lambda engine: self.make_engine(engine, built, target_os='mac')),
+            ('an arm64 target', lambda engine: self.make_engine(engine, built, target_cpu='arm64')),
+            ('no chrome digest', lambda engine: self.make_engine(engine, built, chrome_sha256=None)),
+            ('another chrome', lambda engine: (self.make_engine(engine, built), (engine / 'chrome').write_bytes(b'other'))),
+            ('a missing runtime file', lambda engine: (self.make_engine(engine, built), (engine / 'icudtl.dat').unlink())),
+            ('a directory for a runtime file', lambda engine: (self.make_engine(engine, built), (engine / 'icudtl.dat').unlink(), (engine / 'icudtl.dat').mkdir())),
+            ('a file for locales', lambda engine: (self.make_engine(engine, built), shutil.rmtree(engine / 'locales'), (engine / 'locales').write_bytes(b'locale'))),
+            ('a chrome that is not executable', lambda engine: (self.make_engine(engine, built), (engine / 'chrome').chmod(0o644))),
+            ('a broken manifest', lambda engine: (self.make_engine(engine, built), (engine / 'manifest.json').write_text('{'))),
+        ]
+        for name, prepare in cases:
+            with self.subTest(name), tempfile.TemporaryDirectory() as scratch:
+                root = pathlib.Path(scratch)
+                engine = root / 'engine'
+                engine.mkdir()
+                table = root / 'table.tsv'
+                table.write_text(f'{alias}\tengine-{built[:12]}\t{"0" * 64}\t{built}\n')
+                prepare(engine)
+                self.assertFalse(runtime.serves(engine, built, table))
+                self.assertFalse(runtime.serves(engine, alias, table))
+
+    def test_the_row_a_fetch_verified_makes_the_engine_exact_without_the_table(self):
+        built, alias, other, sha = 'a' * 40, 'b' * 40, 'c' * 40, 'd' * 64
+        tag = f'engine-{built[:12]}'
+        with tempfile.TemporaryDirectory() as scratch:
+            root = pathlib.Path(scratch)
+            engine = self.make_engine(root / alias[:12], built)
+            empty = root / 'empty.tsv'
+            empty.write_text('')
+            complete = engine / '.complete'
+
+            def bound(*row, digest=sha):
+                complete.write_text(f'{digest}\n' + '\t'.join(row) + '\n')
+
+            self.assertFalse(runtime.serves(engine, alias, empty))
+            complete.write_text(sha + '\n')
+            self.assertFalse(runtime.serves(engine, alias, empty))
+            bound(alias, tag, sha, built)
+            self.assertTrue(runtime.serves(engine, alias, empty))
+            self.assertTrue(runtime.serves(engine, built, empty))
+            self.assertFalse(runtime.serves(engine, other, empty))
+            bound(other, tag, sha, built)
+            self.assertFalse(runtime.serves(engine, other, empty))
+            self.assertFalse(runtime.serves(engine, alias, empty))
+            bound(alias, tag, sha, built, digest='e' * 64)
+            self.assertFalse(runtime.serves(engine, alias, empty))
+            bound(alias, tag, '', built, digest='')
+            self.assertFalse(runtime.serves(engine, alias, empty))
+            bound(alias, tag, 'damaged', built, digest='damaged')
+            self.assertFalse(runtime.serves(engine, alias, empty))
+            bound(alias, '1.2.3', sha, built)
+            self.assertTrue(runtime.serves(engine, alias, empty))
+            bound(alias, f'engine-{other[:12]}', sha, built)
+            self.assertFalse(runtime.serves(engine, alias, empty))
+            bound(alias, tag, sha, built)
+            moved = engine.rename(root / other[:12])
+            self.assertFalse(runtime.serves(moved, alias, empty))
+            moved.rename(engine)
+            conflicting = root / 'conflicting.tsv'
+            conflicting.write_text(f'{alias}\tengine-{other[:12]}\t{sha}\t{other}\n')
+            self.assertFalse(runtime.serves(engine, alias, conflicting))
+            agreeing = root / 'agreeing.tsv'
+            agreeing.write_text(f'{alias}\t{tag}\t{sha}\t{built}\n')
+            complete.unlink()
+            self.assertTrue(runtime.serves(engine, alias, agreeing))
+
     def test_allowlist_keeps_runtime_files_and_drops_build_files(self):
         with tempfile.TemporaryDirectory() as scratch:
             out = fake_runtime(pathlib.Path(scratch) / 'out')
@@ -432,7 +532,43 @@ class FetcherTests(unittest.TestCase):
         self.assert_fetched(again, key)
         self.assertIn('cached', again.stderr)
         self.assertEqual(sorted(path.name for path in self.fixture.store.iterdir()), ['.lock', key[:12]])
-        self.assertEqual((engine / '.complete').read_text().strip(), self.assets.table.read_text().split()[2])
+        self.assertEqual((engine / '.complete').read_text().split('\n')[0], self.assets.table.read_text().split()[2])
+
+    def test_a_row_built_under_another_key_fetches_that_archive_for_this_key(self):
+        older = self.fixture.key()
+        key = self.fixture.commit_engine('two')
+        self.assets.publish(older, row_key=key)
+        result = self.fetch()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        engine = self.fixture.store / key[:12]
+        self.assertEqual(result.stdout, f'{engine}\n')
+        self.assertEqual(json.loads((engine / 'manifest.json').read_text())['engine_key'], older)
+        again = self.fetch()
+        self.assertEqual(again.stdout, f'{engine}\n')
+        self.assertIn('cached', again.stderr)
+        self.assertEqual((self.fixture.repo / 'packages/ardiacore/prebuilt-engines-linux.tsv').read_text(), '')
+        serves = run([sys.executable, '-I', self.fixture.repo / 'scripts/linux/runtime_files.py', 'serves', '--engine', engine, '--key', key])
+        self.assertEqual(serves.returncode, 0, serves.stderr)
+        other = run([sys.executable, '-I', self.fixture.repo / 'scripts/linux/runtime_files.py', 'serves', '--engine', engine, '--key', older])
+        self.assertEqual(other.returncode, 0, other.stderr)
+
+    def test_a_cached_engine_fetched_through_a_carried_over_row_needs_no_table_again(self):
+        older = self.fixture.key()
+        key = self.fixture.commit_engine('two')
+        self.assets.publish(older, row_key=key)
+        engine = self.fixture.store / key[:12]
+        self.assertEqual(self.fetch().stdout, f'{engine}\n')
+        self.assets.table.unlink()
+        for directory in self.assets.assets.iterdir():
+            shutil.rmtree(directory)
+        offline = self.fetch()
+        self.assertEqual(offline.returncode, 0, offline.stderr)
+        self.assertEqual(offline.stdout, f'{engine}\n')
+        self.assertIn('cached', offline.stderr)
+        (engine / '.complete').write_text((engine / '.complete').read_text().replace(key, 'f' * 40))
+        tampered = self.fetch()
+        self.assertNotEqual(tampered.returncode, 0)
+        self.assertEqual(tampered.stdout, '')
 
     def test_exact_miss_names_the_key_to_build(self):
         older = self.fixture.key()

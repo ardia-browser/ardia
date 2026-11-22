@@ -163,10 +163,7 @@ if (!window[KEY]) {
       page.append(head, body);
       scroller.append(page);
       const bar = make("div", "bar");
-      this.smaller = this.button("small", "A", "Smaller Text", () => this.setLook({ size: this.look.size - 1 }));
-      this.larger = this.button("large", "A", "Larger Text", () => this.setLook({ size: this.look.size + 1 }));
-      this.face = this.button("sans", "Aa", "Use Sans-Serif", () => this.setLook({ font: this.look.font === "serif" ? "sans" : "serif" }));
-      bar.append(this.smaller, this.larger, this.face, this.button("close", "✕", "Close Reader (Esc)", () => this.hide()));
+      bar.append(this.button("close", "✕", "Close Reader (Esc)", () => this.hide()));
       shadow.append(scroller, bar);
       shadow.addEventListener("click", (e) => {
         const link = e.target && e.target.closest ? e.target.closest("a[href]") : null;
@@ -197,12 +194,6 @@ if (!window[KEY]) {
         this.bar.setAttribute("data-theme", theme);
         this.scroller.style.setProperty("--size", SIZES[next.size] + "px");
         this.scroller.style.setProperty("--font", FONTS[next.font]);
-        this.smaller.disabled = next.size === 0;
-        this.larger.disabled = next.size === SIZES.length - 1;
-        const other = next.font === "serif" ? "sans" : "serif";
-        this.face.className = other;
-        this.face.title = other === "sans" ? "Use Sans-Serif" : "Use Serif";
-        this.face.setAttribute("aria-label", this.face.title);
       }
       return this.report();
     },

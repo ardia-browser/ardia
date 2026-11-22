@@ -92,12 +92,18 @@ export function setNeverTranslate(tabId: string, never: boolean) {
 
 type Sample = { lang: string; text: string; active: boolean };
 
+function sampleOf(raw: unknown): Sample | null {
+  if (!raw || typeof raw !== "object") return null;
+  const { lang, text, active } = raw as Record<string, unknown>;
+  return { lang: typeof lang === "string" ? lang : "", text: typeof text === "string" ? text.slice(0, 3000) : "", active: active === true };
+}
+
 async function pageLanguage(tabId: string): Promise<{ language: string | null; active: boolean } | null> {
   if (stateOf(tabId).status !== "idle") atStage(tabId, "detect");
-  const sample = await webviews.get(tabId)?.evaluate<Sample>(translatorCall("sample"));
+  const sample = sampleOf(await webviews.get(tabId)?.evaluate<unknown>(translatorCall("sample")));
   if (!sample || !translation) return null;
   const detected = sample.text.length >= 40 ? await translation.detect(sample.text.slice(0, 3000)) : null;
-  return { language: detected ?? (sample.lang ? String(sample.lang).slice(0, 20) : null), active: !!sample.active };
+  return { language: detected ?? (sample.lang ? sample.lang.slice(0, 20) : null), active: sample.active };
 }
 
 async function detect(tabId: string) {

@@ -55,7 +55,9 @@ internal class ResearchSession(context: Context, val query: String, val forcesEx
         private set
     var chatGPTFellBack = false
         private set
-    var geminiNanoMissing: String? = null
+    var geminiNanoMissing: String? by mutableStateOf<String?>(null)
+        private set
+    var rewroteAfterGeminiNanoDownload = false
         private set
     var isWritingWithChatGPT = false
         private set
@@ -69,12 +71,14 @@ internal class ResearchSession(context: Context, val query: String, val forcesEx
 
     fun start() {
         if (task != null) return
+        if (!forcesExcerpts && !chatGPT.isConnected) scope.launch { OnDeviceWriter.prepare() }
         task = scope.launch { research() }
     }
 
     fun retry() {
         task?.cancel()
         task = null
+        rewroteAfterGeminiNanoDownload = false
         phase = Phase.Searching
         links = emptyList()
         sources = emptyList()
@@ -83,9 +87,10 @@ internal class ResearchSession(context: Context, val query: String, val forcesEx
         start()
     }
 
-    fun rewrite() {
+    fun rewrite(afterGeminiNanoDownload: Boolean = false) {
         if (sources.isEmpty() || !isFinished && !isWritingWithChatGPT) return retry()
         task?.cancel()
+        rewroteAfterGeminiNanoDownload = afterGeminiNanoDownload
         answer = ""
         writer = null
         phase = Phase.Writing
@@ -178,6 +183,7 @@ internal class ResearchSession(context: Context, val query: String, val forcesEx
 
     private suspend fun write() {
         chatGPTFellBack = false
+        geminiNanoMissing = null
         if (forcesExcerpts) return quoteSources("Showing the most relevant lines from the pages.")
         var fallback: String? = null
         if (chatGPT.isConnected) {
@@ -204,18 +210,24 @@ internal class ResearchSession(context: Context, val query: String, val forcesEx
             return quoteSources(listOfNotNull(fallback, availability.excerptsNote).joinToString(" "))
         }
         val budget = OnDeviceWriter.characterBudget()
+        var failure: Exception? = null
         for (share in listOf(budget, budget / 2)) {
             try {
-                OnDeviceWriter.stream(ResearchDigest.INSTRUCTIONS, ResearchDigest.prompt(query, sources, share)) { answer = it }
+                val prompt = OnDeviceWriter.fit(ResearchDigest.INSTRUCTIONS, share) { ResearchDigest.prompt(query, sources, it) }
+                OnDeviceWriter.stream(ResearchDigest.INSTRUCTIONS, prompt) { answer = it }
                 writer = Writer.OnDevice(fallback)
                 return
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
+                currentCoroutineContext().ensureActive()
                 answer = ""
+                failure = error
             }
         }
-        quoteSources(listOfNotNull(fallback, "Gemini Nano couldn’t answer this one, so here are the most relevant lines from the pages.").joinToString(" "))
+        val missed = OnDeviceWriter.Availability.ofWriting(failure)
+        geminiNanoMissing = missed.telemetry
+        quoteSources(listOfNotNull(fallback, missed.excerptsNote).joinToString(" "))
     }
 
     private fun quoteSources(reason: String) {

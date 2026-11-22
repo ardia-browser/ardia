@@ -29,6 +29,54 @@ export function roundedRect({ x, y, width, height }: Rect, radius: number | Radi
   return `M${n(x + tl)} ${n(y)}H${n(right - tr)}${arc(tr, right, y + tr)}V${n(bottom - br)}${arc(br, right - br, bottom)}H${n(x + bl)}${arc(bl, x, bottom - bl)}V${n(y + tl)}${arc(tl, x + tl, y)}Z`;
 }
 
+export type WindowSize = { width: number; height: number };
+
+const SQUARE_WINDOW: CornerRadii = { upperLeft: 0, upperRight: 0, lowerRight: 0, lowerLeft: 0 };
+
+const nearCornerRadius = (insetX: number, insetY: number, windowRadius: number, radiusDip: number, radius: number, zoom: number) => {
+  if (insetX < 1 && insetY < 1) return 0;
+  if (insetX < windowRadius && insetY < windowRadius) return Math.max(radiusDip, windowRadius - Math.min(insetX, insetY)) / zoom;
+  return radius;
+};
+
+const PAGE_RADIUS_LIMIT = 4096;
+
+const clampedRadii = (radii: CornerRadii): CornerRadii => ({
+  upperLeft: Math.min(radii.upperLeft, PAGE_RADIUS_LIMIT),
+  upperRight: Math.min(radii.upperRight, PAGE_RADIUS_LIMIT),
+  lowerRight: Math.min(radii.lowerRight, PAGE_RADIUS_LIMIT),
+  lowerLeft: Math.min(radii.lowerLeft, PAGE_RADIUS_LIMIT),
+});
+
+const ownRadii = (radius: number | CornerRadii, zoom: number) => {
+  if (typeof radius === "number") {
+    const uniform = { upperLeft: radius, upperRight: radius, lowerRight: radius, lowerLeft: radius };
+    return { css: uniform, dip: uniform };
+  }
+  const css = clampedRadii(radius);
+  return { css, dip: { upperLeft: css.upperLeft * zoom, upperRight: css.upperRight * zoom, lowerRight: css.lowerRight * zoom, lowerLeft: css.lowerLeft * zoom } };
+};
+
+export function windowCornerRadii(rect: Rect, window: WindowSize, radius: number | CornerRadii = PAGE_CORNER_RADIUS, zoom = 1, frame: CornerRadii = SQUARE_WINDOW): CornerRadii {
+  const width = Math.round(window.width * zoom);
+  const height = Math.round(window.height * zoom);
+  const leftEdge = Math.min(Math.max(rect.x * zoom, 0), width);
+  const topEdge = Math.min(Math.max(rect.y * zoom, 0), height);
+  const rightEdge = Math.min(Math.max((rect.x + rect.width) * zoom, leftEdge), width);
+  const bottomEdge = Math.min(Math.max((rect.y + rect.height) * zoom, topEdge), height);
+  const left = Math.floor(leftEdge);
+  const top = Math.floor(topEdge);
+  const right = width - Math.ceil(rightEdge);
+  const bottom = height - Math.ceil(bottomEdge);
+  const own = ownRadii(radius, zoom);
+  return {
+    upperLeft: nearCornerRadius(left, top, frame.upperLeft, own.dip.upperLeft, own.css.upperLeft, zoom),
+    upperRight: nearCornerRadius(right, top, frame.upperRight, own.dip.upperRight, own.css.upperRight, zoom),
+    lowerRight: nearCornerRadius(right, bottom, frame.lowerRight, own.dip.lowerRight, own.css.lowerRight, zoom),
+    lowerLeft: nearCornerRadius(left, bottom, frame.lowerLeft, own.dip.lowerLeft, own.css.lowerLeft, zoom),
+  };
+}
+
 export function holeClipPath(box: { width: number; height: number }, holes: readonly Hole[], radius = PAGE_CORNER_RADIUS, pieces: readonly HolePiece[] = []) {
   if (!holes.length && !pieces.length) return "";
   const outer = `M0 0H${n(box.width)}V${n(box.height)}H0Z`;
@@ -134,7 +182,15 @@ const clipFor = (element: HTMLElement, pages: readonly Hole[], pieces: readonly 
   return holeClipPath({ width: element.offsetWidth, height: element.offsetHeight }, localHoles(rect, scale, separate.holes), PAGE_CORNER_RADIUS, localPieces(rect, scale, [...separate.pieces, ...pieces]));
 };
 
-const holesOf = (pages: readonly PageArea[]): Hole[] => pages.map(({ rect, radii }) => (radii ? { ...rect, radii } : rect));
+export const holesOf = (pages: readonly PageArea[], window: WindowSize, zoom = 1, frame: CornerRadii = SQUARE_WINDOW): Hole[] =>
+  pages.map(({ rect, radii, cardRadii }) => ({ ...rect, radii: radii ?? windowCornerRadii(rect, window, cardRadii ?? PAGE_CORNER_RADIUS, zoom, frame) }));
+
+const shellViewport = (root: HTMLElement): WindowSize => {
+  const view = root.ownerDocument.defaultView?.visualViewport;
+  if (view && view.width > 0 && view.height > 0) return { width: view.width, height: view.height };
+  const { width, height } = root.ownerDocument.documentElement.getBoundingClientRect();
+  return { width, height };
+};
 
 const stackDom: StackDom<Element> = {
   stackOf: (element) => element.closest(`[${PAGE_STACK_ATTRIBUTE}]`),
@@ -147,7 +203,7 @@ const overlapping = (a: Element, b: Element) => {
   return !!intersection({ x: one.x, y: one.y, width: one.width, height: one.height }, { x: two.x, y: two.y, width: two.width, height: two.height });
 };
 
-export function createPageHoles(root: HTMLElement) {
+export function createPageHoles(root: HTMLElement, zoom: () => number = () => 1, frame: () => CornerRadii = () => SQUARE_WINDOW) {
   const layers = new Set<HTMLElement>();
   const hosts = new Map<HTMLElement, string>();
   let pages: readonly PageArea[] = [];
@@ -160,7 +216,7 @@ export function createPageHoles(root: HTMLElement) {
     if (element.style.getPropertyValue(name) !== value) element.style.setProperty(name, value);
   };
 
-  const holesUnder = (element: HTMLElement) => holesOf(pagesAbove(element, pages, stackDom));
+  const holesUnder = (element: HTMLElement) => holesOf(pagesAbove(element, pages, stackDom), shellViewport(root), zoom(), frame());
 
   const paintLayer = (layer: HTMLElement) => {
     const clip = clipFor(layer, holesUnder(layer), pieces());
@@ -226,6 +282,10 @@ export function createPageHoles(root: HTMLElement) {
   return {
     pagesChanged(next: readonly PageArea[]) {
       pages = next;
+      for (const layer of layers) paintLayer(layer);
+      syncHosts();
+    },
+    windowChanged() {
       for (const layer of layers) paintLayer(layer);
       syncHosts();
     },

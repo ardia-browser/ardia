@@ -47,7 +47,7 @@ test("the default browser step's art ends at the 60-point app icon with its shad
   expect(icon.props).toMatchObject({ side: 60, shadow: true, scalesWithText: false });
   const drawn = StyleSheet.flatten(hostWithTestId(root, "appIcon").props.style);
   expect(drawn.width).toBe(60);
-  expect(drawn.boxShadow).toBe("0px 4px 20px rgba(0, 0, 0, 0.12)");
+  expect(drawn.boxShadow).toBe("0px 4px 20px rgba(0,0,0,0.12)");
   unmount(root);
 });
 

@@ -16,6 +16,7 @@ import { PAGE_FRAME } from "../../../lib/windowLayout";
 import { FrameSlider, TabCornersSlider } from "./FrameSlider";
 import { BookmarksBarRow } from "./BookmarksBarSection";
 import { InterfaceSizeControl } from "./InterfaceSize";
+import { WindowButtonsPicker } from "./WindowButtonsPicker";
 import { modePreview, stylePreview } from "../tokens";
 import { APP_ICON_SIZE, appIconChoices, chooseAppIcon } from "../../../state/settings/paneData";
 import { useResource } from "../../../state/settings/resources";
@@ -90,6 +91,7 @@ export function AppearancePane(_place: SettingsPlace) {
   return (
     <View>
       <LookSection />
+      <WindowButtonsPicker />
       <SizeAndTextSection />
       <SwitchingTabsSection />
       <ToolbarSection />

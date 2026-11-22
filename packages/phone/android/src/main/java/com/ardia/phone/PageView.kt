@@ -41,6 +41,7 @@ class PageView(context: Context, appContext: AppContext) : ExpoView(context, app
     private val host = FrameLayout(context)
     private var scope: CoroutineScope? = null
     private var sampled: PageTone? = null
+    private var sampledDocument = -1L
     private var sentTone: PageTone? = null
     private var toneSampledSinceBind = false
     private var failedId: String? = null
@@ -59,6 +60,12 @@ class PageView(context: Context, appContext: AppContext) : ExpoView(context, app
     var toneInsets: Pair<Double, Double> = 0.0 to 0.0
     var obscuredInsets: Pair<Double, Double> = 0.0 to 0.0
     var bottomInsetTransitionMs = 0
+    var summaryBottomInset: Double = 0.0
+        set(value) {
+            if (field == value) return
+            field = value
+            if (summaryLayer?.visibility == View.VISIBLE) layOutChildren()
+        }
     private var appliedObscuredInsets: Pair<Double, Double> = 0.0 to 0.0
     private val insetSettlement = PageInsetSettlement()
     private var insetPage: Page? = null
@@ -446,7 +453,10 @@ class PageView(context: Context, appContext: AppContext) : ExpoView(context, app
             val (top, bottom) = PageBands.toneOffsets((toneInsets.first * density).roundToInt() to (toneInsets.second * density).roundToInt(), bands())
             val taken = page.sampleTone(top, bottom)
             toneSampledSinceBind = true
-            if (taken != null) sampled = taken
+            if (taken != null) {
+                sampled = taken.over(sampled.takeIf { sampledDocument == document.generation })
+                sampledDocument = document.generation
+            }
             sendTone(page.state.value)
         }
     }
@@ -572,12 +582,19 @@ class PageView(context: Context, appContext: AppContext) : ExpoView(context, app
         val layer = summaryLayer ?: return
         if (layer.visibility == View.GONE) return
         val density = resources.displayMetrics.density
-        val bottom = maxOf(bands.bottom, (toneInsets.second * density).roundToInt()) + (SUMMARY_MARGIN_DP * density).roundToInt()
-        val room = (height - bands.top - bottom).coerceAtLeast(0)
-        val tallest = minOf(room / density, maxOf((height - bands.top - bands.bottom) * SUMMARY_HEIGHT_SHARE / density, SUMMARY_MINIMUM_HEIGHT_DP))
-        if (summaryPresenter.maxHeightDp != tallest) summaryPresenter.maxHeightDp = tallest
-        layer.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(room, MeasureSpec.AT_MOST))
-        val top = height - bottom - layer.measuredHeight
+        val placement = PageBands.summaryPlacement(
+            height = height,
+            density = density,
+            bands = bands,
+            toneBottomPx = (toneInsets.second * density).roundToInt(),
+            summaryBottomPx = (summaryBottomInset * density).roundToInt(),
+            marginDp = SUMMARY_MARGIN_DP,
+            heightShare = SUMMARY_HEIGHT_SHARE,
+            minimumHeightDp = SUMMARY_MINIMUM_HEIGHT_DP,
+        )
+        if (summaryPresenter.maxHeightDp != placement.maxHeightDp) summaryPresenter.maxHeightDp = placement.maxHeightDp
+        layer.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(placement.roomPx, MeasureSpec.AT_MOST))
+        val top = height - placement.bottomPx - layer.measuredHeight
         layer.layout(0, top, width, top + layer.measuredHeight)
     }
 

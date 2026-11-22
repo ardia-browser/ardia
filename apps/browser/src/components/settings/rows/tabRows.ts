@@ -86,6 +86,12 @@ export const tabRows = {
           keywords: ["haptic", "haptics", "trackpad", "force touch", "tick", "vibration", "feedback", "drag", "reorder", "move tabs"],
           shown: () => PLATFORM_FEATURES.haptics,
         },
+        swipeBetweenTabs: {
+          title: "Swipe between tabs",
+          description: "Swipe left or right with two fingers on the address bar to go to the tab above or below.",
+          keywords: ["swipe", "gesture", "trackpad", "two fingers", "next tab", "previous tab", "toolbar", "address bar", "scroll"],
+          shown: () => PLATFORM_FEATURES.trackpadGestures,
+        },
         showTabHoverMenu: {
           title: "Show tab hover menu",
           description: "Rest on a tab to see its address and quick actions.",

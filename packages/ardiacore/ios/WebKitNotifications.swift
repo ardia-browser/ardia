@@ -24,6 +24,7 @@ final class WebKitNotifications {
   private var workerShown: [String: WorkerShown] = [:]
   private var workerDelegates: [ObjectIdentifier: WebKitWorkerNotifications] = [:]
   private var granted: [String: [String: Bool]] = [:]
+  private var forgottenProfiles = Set<String>()
   private var workerCount = 0
   private var sequence = 0
   private static let launch = String(UUID().uuidString.prefix(8)).lowercased()
@@ -188,11 +189,16 @@ final class WebKitNotifications {
   }
 
   func note(_ allowed: Bool?, profile: String, origin: String) {
-    guard let allowed, !WebKitStores.isPrivate(profile) else { return }
+    guard !WebKitStores.isPrivate(profile) else { return }
     let base = ArdiaHost.baseProfile(of: profile)
-    guard granted[base]?[origin] != allowed else { return }
-    granted[base, default: [:]][origin] = allowed
-    Self.announce(allowed, origin: origin)
+    guard !forgottenProfiles.contains(base), granted[base]?[origin] != allowed else { return }
+    if let allowed { granted[base, default: [:]][origin] = allowed } else { granted[base]?[origin] = nil }
+    announceShared(origin)
+  }
+
+  private func announceShared(_ origin: String) {
+    let profiles = Set(workerDelegates.values.map { ArdiaHost.baseProfile(of: $0.profile) })
+    Self.announce(WebKitNotificationPolicy.shared(granted, origin: origin, profiles: profiles) ?? false, origin: origin)
   }
 
   private typealias PolicyUpdate = @convention(c) (UnsafeRawPointer, UnsafeRawPointer, Bool) -> Void
@@ -236,10 +242,19 @@ final class WebKitNotifications {
     for manager in notificationManagers() { update(manager, securityOrigin, allowed) }
   }
 
+  func refresh(profile: String, origin: String) {
+    guard let site = URL(string: origin), let normalized = Origins.of(site), ["http", "https"].contains(site.scheme?.lowercased() ?? "") else { return }
+    WebKitHub.shared.permissions.answers(profile: profile, origin: normalized, kinds: ["notifications"]) { [weak self] answers in
+      self?.note(answers["notifications"], profile: profile, origin: normalized)
+    }
+  }
+
   func forgetProfile(_ profile: String) {
-    granted.removeValue(forKey: ArdiaHost.baseProfile(of: profile))
-    workerShown = workerShown.filter { $0.value.profile != profile }
+    forgottenProfiles.insert(ArdiaHost.baseProfile(of: profile))
+    let decided = granted.removeValue(forKey: ArdiaHost.baseProfile(of: profile))?.keys.map { $0 } ?? []
     workerDelegates = workerDelegates.filter { $0.value.profile != profile }
+    for origin in Set(decided).union(granted.values.flatMap(\.keys)) { announceShared(origin) }
+    workerShown = workerShown.filter { $0.value.profile != profile }
     shown = shown.compactMapValues { list in
       let kept = list.filter { $0.profile != profile }
       return kept.isEmpty ? nil : kept
@@ -252,6 +267,7 @@ final class WebKitNotifications {
     let delegate = WebKitWorkerNotifications(profile: profile, owner: self)
     workerDelegates[ObjectIdentifier(store)] = delegate
     store.perform(setter, with: delegate)
+    for origin in Set(granted.values.flatMap(\.keys)) { announceShared(origin) }
     primePermissions(profile)
   }
 
@@ -292,7 +308,7 @@ final class WebKitNotifications {
     let tag = Self.text(notification, "tag")
     let silent = notification.responds(to: NSSelectorFromString("alert")) && (notification.value(forKey: "alert") as? NSNumber)?.intValue == 1
     WebKitHub.shared.permissions.answers(profile: profile, origin: origin, kinds: ["notifications"]) { [weak self, weak store] answers in
-      guard let self, let store else { return }
+      guard let self, let store, !self.forgottenProfiles.contains(ArdiaHost.baseProfile(of: profile)) else { return }
       self.note(answers["notifications"], profile: profile, origin: origin)
       guard answers["notifications"] == true else { return }
       let tab = Self.liveTab(profile: profile, origin: origin)

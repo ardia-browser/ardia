@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { PlatformColor } from "react-native";
-import { Button, ConfirmationDialog, Form, HStack, Image, Label, LabeledContent, NavigationLink, ProgressView, Section, Spacer, Text, TextField, useNativeState } from "@expo/ui/swift-ui";
-import { accessibilityElement, accessibilityHidden, buttonBorderShape, buttonStyle, controlSize, disabled, font, foregroundStyle, frame, padding, refreshable, submitLabel, textInputAutocapitalization, tint } from "@expo/ui/swift-ui/modifiers";
+import { Button, ConfirmationDialog, Form, HStack, Image, Label, LabeledContent, NavigationLink, Section, Spacer, Text, TextField, useNativeState } from "@expo/ui/swift-ui";
+import { accessibilityElement, accessibilityHidden, font, foregroundStyle, frame, padding, refreshable, submitLabel, textInputAutocapitalization, tint } from "@expo/ui/swift-ui/modifiers";
+import { destinationWords, syncWords } from "../../lib/sharedWords";
 import { copy } from "../../lib/platformCopy";
 import { haptics } from "../../state/app/haptics";
 import { settingsRouteKey, pushSettings } from "../../state/settings/nav";
@@ -10,9 +11,8 @@ import { useSyncStatus, useSyncView } from "../../state/sync/hooks";
 import { useSync } from "../../state/sync/store";
 import { connectMessage, deviceIcon, deviceSeen, inboxNotice, isSyncConnected, isSyncOff, orderedDevices, sendReceivers, shownProfile, syncHeroSubtitle, syncNowFeedback } from "../../state/sync/syncRules";
 import { modifierList, settingsChrome, settingsPage, useTheme } from "../ui";
-import { ExpoHero } from "./ExpoSettingsParts";
+import { ExpoBusyButton, ExpoHero, ExpoSettingsAction } from "./ExpoSettingsParts";
 
-const FILL = Number.MAX_SAFE_INTEGER;
 const SECONDARY = { type: "hierarchical", style: "secondary" } as const;
 const NAME_SETTLE_MS = 600;
 const DEVICE_SYMBOLS = { phone: "iphone", laptop: "laptopcomputer", desktop: "desktopcomputer", studio: "macstudio", mini: "macmini" } as const;
@@ -53,13 +53,9 @@ export function ExpoSyncPage() {
     setStopping(false);
   };
   return (
-    <Form modifiers={modifierList(settingsPage("Sync With Mac"), tint(PlatformColor("systemBlue")), settingsChrome(), status.isEnabled ? refreshable(syncNow) : null)}>
-      <ExpoHero title="Sync With Mac" subtitle={hero.text} warning={hero.isWarning} systemImage="macbook.and.iphone" tint="sync">
-        {off ? (
-          <Button onPress={() => pushSettings({ page: "syncConnect" })} modifiers={[buttonStyle("borderedProminent"), buttonBorderShape("roundedRectangle", 12), controlSize("large"), tint(theme.primaryAction), foregroundStyle(theme.onPrimaryAction), padding({ top: 8 })]}>
-            <Text modifiers={[frame({ maxWidth: FILL })]}>Connect to Your Mac</Text>
-          </Button>
-        ) : null}
+    <Form modifiers={modifierList(settingsPage(destinationWords.sync), tint(PlatformColor("systemBlue")), settingsChrome(), status.isEnabled ? refreshable(syncNow) : null)}>
+      <ExpoHero title={destinationWords.sync} subtitle={hero.text} warning={hero.isWarning} systemImage="macbook.and.iphone" tint="sync">
+        {off ? <ExpoSettingsAction title={syncWords.connect} size="full" onPress={() => pushSettings({ page: "syncConnect" })} /> : null}
       </ExpoHero>
       {off ? (
         <Section title="What You Get" footer={<Text>{copy().syncFeatureFooter}</Text>}>
@@ -84,7 +80,7 @@ export function ExpoSyncPage() {
       {status.attention === "phrase" ? (
         <Section>
           <NavigationLink value={settingsRouteKey({ page: "syncConnect" })}>
-            <Text>Enter Recovery Phrase</Text>
+            <Text>{syncWords.enterRecoveryPhrase}</Text>
           </NavigationLink>
         </Section>
       ) : null}
@@ -92,7 +88,7 @@ export function ExpoSyncPage() {
         <Section footer={<Text>{copy().syncTabsStay}</Text>}>
           <Button onPress={() => void acknowledgeSyncReset().then(() => pushSettings({ page: "syncConnect" }))} modifiers={[tint("primary")]}>
             <HStack>
-              <Text>Connect Again</Text>
+              <Text>{syncWords.connectAgain}</Text>
               <Spacer />
               <Image systemName="chevron.right" modifiers={[font({ textStyle: "footnote", weight: "semibold" }), foregroundStyle({ type: "hierarchical", style: "tertiary" })]} />
             </HStack>
@@ -102,13 +98,7 @@ export function ExpoSyncPage() {
       {isSyncConnected(status) ? (
         <>
           <Section>
-            <Button onPress={() => void runSyncNow()} modifiers={[disabled(syncing)]}>
-              <HStack>
-                <Text>{syncing ? "Syncing…" : "Sync Now"}</Text>
-                <Spacer />
-                {syncing ? <ProgressView /> : null}
-              </HStack>
-            </Button>
+            <ExpoBusyButton title={syncWords.syncNow} busy={syncing} busyValue={syncWords.syncing} onPress={() => void runSyncNow()} />
           </Section>
           {devices.length ? (
             <Section title="Devices" footer={noReceivers ? <Text>Update Ardia on your Mac to send tabs to it.</Text> : undefined}>
@@ -132,13 +122,7 @@ export function ExpoSyncPage() {
           <Section footer={<Text>{copy().stopSyncingFooter}</Text>}>
             <ConfirmationDialog title="Stop Syncing This Device?" isPresented={confirmingStop} onIsPresentedChange={setConfirmingStop} titleVisibility="visible">
               <ConfirmationDialog.Trigger>
-                <Button role="destructive" onPress={() => setConfirmingStop(true)} modifiers={[disabled(stopping)]}>
-                  <HStack>
-                    <Text>Stop Syncing…</Text>
-                    <Spacer />
-                    {stopping ? <ProgressView /> : null}
-                  </HStack>
-                </Button>
+                <ExpoBusyButton role="destructive" title="Stop Syncing…" busy={stopping} onPress={() => setConfirmingStop(true)} />
               </ConfirmationDialog.Trigger>
               <ConfirmationDialog.Actions>
                 <Button role="destructive" label="Stop Syncing" onPress={() => void stop()} />

@@ -31,6 +31,19 @@ class OnDeviceWriterAvailabilityTest {
     }
 
     @Test
+    fun aWriteOrDownloadFailureKeepsAICoresReasonAndOtherwiseSaysWhichStepFailed() {
+        val busy = GenAiException(IllegalStateException("AICore"), GenAiException.ErrorCode.BUSY)
+        val full = GenAiException(IllegalStateException("AICore"), GenAiException.ErrorCode.NOT_ENOUGH_DISK_SPACE)
+        assertEquals(OnDeviceWriter.Availability.Busy, OnDeviceWriter.Availability.ofWriting(busy))
+        assertEquals(OnDeviceWriter.Availability.WriteFailed, OnDeviceWriter.Availability.ofWriting(IllegalStateException("Gemini Nano returned nothing")))
+        assertEquals(OnDeviceWriter.Availability.WriteFailed, OnDeviceWriter.Availability.ofWriting(null))
+        assertEquals(OnDeviceWriter.Availability.NeedsSpace, OnDeviceWriter.Availability.ofDownload(full))
+        assertEquals(OnDeviceWriter.Availability.DownloadFailed, OnDeviceWriter.Availability.ofDownload(GenAiException(IllegalStateException("AICore"), GenAiException.ErrorCode.UNKNOWN)))
+        assertEquals("write_failed", OnDeviceWriter.Availability.WriteFailed.telemetry)
+        assertEquals("download_failed", OnDeviceWriter.Availability.DownloadFailed.telemetry)
+    }
+
+    @Test
     fun everyMissingModelExplainsItselfAndIsCounted() {
         for (availability in OnDeviceWriter.Availability.entries.filter { it != OnDeviceWriter.Availability.Available }) {
             assertFalse(availability.reason.isNullOrBlank())

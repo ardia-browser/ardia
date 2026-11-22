@@ -105,6 +105,10 @@ extension WebKitTab: PageTab {
 
   func exitPictureInPicture() { setPictureInPicture(false) { _ in } }
 
+  func armElementPick() -> Double { 0 }
+
+  func takeElementPick(_ armed: Double) -> Bool { false }
+
   func pageCookies(_ urls: [String], completion: @escaping ([[String: Any]]?) -> Void) {
     WebKitHub.shared.engineCookies(profile: profile, urls: urls.compactMap(URL.init(string:)), completion: completion)
   }

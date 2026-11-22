@@ -8,6 +8,7 @@ import { emitAppEvent, emitCommand, menuShown, setWindowCloseDecider } from "@ar
 import { WindowRoot } from "../../browser/src/App";
 import { startNativeSync } from "../../browser/src/state/app/nativeSync";
 import { startTabPages } from "../../browser/src/state/tabs/tabPages";
+import { startReader } from "../../browser/src/state/reader/reader";
 import { startTabLifecycle, useLifecycle } from "../../browser/src/state/tabs/tabLifecycle";
 import { useMedia } from "../../browser/src/state/media/media";
 import { useToolbarAutoHide } from "../../browser/src/state/windows/toolbarAutoHide";
@@ -64,10 +65,14 @@ import { inputRegions, startShellAbove } from "./shellAbove";
 import { InWindowPlayer } from "./InWindowPlayer";
 import { startLinuxUpdates } from "./linuxUpdates";
 import { noticeUnsandboxedLaunch } from "./sandboxNotice";
+import { watchWindowDecorations } from "./windowDecorations";
 import { countLoginPasswordChecks } from "./reauthCounts";
 import { startPipPlayer } from "./pipPlayer";
 import { startLinuxShortcuts } from "./shortcutsRuntime";
 import { linuxWindowMenu } from "./linuxWindowMenu";
+import { TrafficLights } from "./TrafficLights";
+import { startWindowButtonStyle } from "../../browser/src/state/windows/windowButtons";
+import { followDesktopButtonLayout } from "./desktopButtonLayout";
 import { followWindowMaximized } from "./windowMaximized";
 import { createUtilitySessionSnapshot, initialLinuxSession, isLinuxUtility, setSessionDeparture, setSessionFlush } from "./session";
 import { startUtility } from "./utility";
@@ -112,10 +117,13 @@ async function start() {
   const restoreSession = launch ? configRestoreSession() : undefined;
   setStoreBatching(unstable_batchedUpdates);
   hydrateLaunchSession(saved, initialLinuxSession(ardiaHost, saved?.settings && restoreSession !== undefined ? { ...saved, settings: { ...saved.settings, restoreSession } } : saved));
+  followDesktopButtonLayout(ardiaHost);
+  startWindowButtonStyle();
   followWindowMaximized(ardiaHost, windowId);
   startConfigFiles(colorRoles, launch);
   startHostTelemetry({ host: ardiaHost, candidate: !utility, locks: navigator.locks as unknown as LeaderLocks });
   countLoginPasswordChecks(linuxTelemetryHooks.leading);
+  watchWindowDecorations(ardiaHost, windowId);
   const capabilities = linuxCapabilities(ardiaHost);
   if (capabilities.cliControl) startProgramControl();
   await startLinuxShortcuts(ardiaHost);
@@ -148,6 +156,7 @@ async function start() {
     if (!saved) await recordFreshProfile();
     await persistence.flush();
     startTabPages();
+    startReader();
     startNativeSync();
     listenForOpenUrls(ardiaHost);
     startHostDownloads(ardiaHost, useBrowser);
@@ -178,6 +187,7 @@ async function start() {
       <div className="ardia-window">
         {!utility && <InWindowPlayer windowId={windowId} />}
         <WindowRoot windowId={windowId} />
+        <TrafficLights windowId={windowId} />
       </div>
       <MenuHost />
       <FirstWindowCommitted typeahead={!utility} />

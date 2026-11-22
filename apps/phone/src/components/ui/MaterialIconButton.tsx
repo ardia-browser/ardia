@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 import {
   StyleSheet,
   View,
@@ -6,6 +6,7 @@ import {
   type AccessibilityActionInfo,
   type AccessibilityValue,
   type StyleProp,
+  type ViewInstance,
   type ViewStyle,
 } from "react-native";
 import { Pressable, type PressableEvent } from "react-native-gesture-handler";
@@ -42,6 +43,7 @@ export type MaterialIconButtonProps = {
   onPress: (event: PressableEvent) => void;
   onPressIn?: (event: PressableEvent) => void;
   onLongPress?: (event: PressableEvent) => void;
+  buttonRef?: Ref<ViewInstance>;
 };
 
 type IconButtonColors = {
@@ -122,6 +124,7 @@ export function MaterialIconButton({
   onPress,
   onPressIn,
   onLongPress,
+  buttonRef,
 }: MaterialIconButtonProps) {
   const theme = useMaterialTheme();
   const activeScheme = scheme ?? theme.scheme;
@@ -134,6 +137,7 @@ export function MaterialIconButton({
 
   return (
     <Pressable
+      ref={buttonRef}
       testID={testID}
       accessibilityRole="button"
       accessibilityLabel={label}

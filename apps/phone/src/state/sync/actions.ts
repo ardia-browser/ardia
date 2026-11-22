@@ -3,6 +3,7 @@ import { haptics } from "../app/haptics";
 import { isDemoSession } from "../app/launchFlags";
 import { sync, type ConnectResult, type PhraseCheck, type SyncedDevice } from "../../platform/sync";
 import { choiceAfterMatchToggle, type ProfileLook } from "../../lib/profileLook";
+import { actionWords } from "../../lib/sharedWords";
 import { pasteText } from "../../platform/system";
 import { openTab, showDeck, useBrowse } from "../browse/store";
 import { history } from "../history/store";
@@ -48,9 +49,12 @@ function announce(opened: BrowserTab[]) {
   }
   const ids = opened.map((tab) => tab.id);
   const sender = receivedSender(opened.map((tab) => tab.receivedFromDevice));
-  showToast(receivedToast(sender, ids.length), /iphone|android/i.test(sender) ? "iphone" : "laptop", TOAST_LONG_DURATION_MS, () => {
-    if (ids.length === 1 && findTab(currentTabs(), ids[0]!)) openTab(ids[0]!);
-    else void showDeck();
+  showToast(receivedToast(sender, ids.length), /iphone|android/i.test(sender) ? "iphone" : "laptop", TOAST_LONG_DURATION_MS, {
+    label: ids.length === 1 ? actionWords.open : actionWords.showTabs,
+    run: () => {
+      if (ids.length === 1 && findTab(currentTabs(), ids[0]!)) openTab(ids[0]!);
+      else void showDeck();
+    },
   });
   quietly(() => sync.clearIncoming());
 }
@@ -172,7 +176,9 @@ export function selectProfile(profileSyncId: string) {
 }
 
 export function matchMyMac(on: boolean, look: ProfileLook) {
-  setPreference("colorChoice", choiceAfterMatchToggle(on, look, "plum") as ColorChoice | null);
+  const choice = choiceAfterMatchToggle(on, look, "plum") as ColorChoice | null;
+  if (choice === "custom" && look.custom) setPreference("customTheme", look.custom.theme);
+  setPreference("colorChoice", choice);
 }
 
 export function sendTargetsFor(tab: BrowserTab | null): SyncedDevice[] {
@@ -195,7 +201,7 @@ export const isTabPinned = (tab: BrowserTab | null) => Boolean(tab && syncData()
 export async function pinToMac(tab: BrowserTab, onSetup: () => void, showInTitle: ((text: string) => void) | null = null) {
   if (tab.isPrivate || !isSyncableUrl(tab.url)) return;
   if (!syncData().status.isEnabled) {
-    showToast(SYNC_TO_PIN_TOAST, "laptop", undefined, onSetup);
+    showToast(SYNC_TO_PIN_TOAST, "laptop", undefined, { label: actionWords.setUp, run: onSetup });
     return;
   }
   const announce = (outcome: PinOutcome) => {

@@ -127,3 +127,32 @@ test("the pin's own fields are checked: preselected, anchor aliases and a legacy
   assert.match(bad((p) => (p.example = "")), /example must be a command/);
   assert.match(bad((p) => (p.reservedPrograms = [])), /legacyInstall.program ardia must be one of its reservedPrograms/);
 });
+
+const historyFile = join(root, "apps/browser/official-plugins-history.json");
+const hasTags = spawnSync("git", ["-C", root, "tag", "-l", "v*"], { encoding: "utf8" }).stdout.trim().length > 0;
+
+test("the signed pin carries each plugin's earlier pinned artifacts and shipped bundled digests from the history", () => {
+  const signed = JSON.parse(run(["signed-pin"]));
+  const history = JSON.parse(readFileSync(historyFile, "utf8"));
+  for (const plugin of signed.plugins) {
+    const entries = history.plugins[plugin.name] ?? [];
+    if (!entries.length) continue;
+    assert.deepEqual(plugin.trusted.artifacts, [...new Set(entries.map((e) => e.artifact))].sort());
+    assert.deepEqual(plugin.trusted.bundledDigests, [...new Set(entries.filter((e) => e.bundledDigest).map((e) => e.bundledDigest))].sort());
+  }
+  assert.ok(signed.plugins.find((p) => p.name === "cli").trusted.bundledDigests.length >= 1, "0.2.47's kept Command Line is covered");
+});
+
+test("the history lists every release tag that pinned an official plugin still in the pin", { skip: !hasTags && "no v* tags in this clone" }, () => {
+  assert.match(run(["history-check"]), /cover every pinned release tag/);
+});
+
+test("a history missing a pinned release fails the check, and a malformed one is refused", { skip: !hasTags && "no v* tags in this clone" }, () => {
+  const dir = mkdtempSync(join(tmpdir(), "ac-history-"));
+  const history = JSON.parse(readFileSync(historyFile, "utf8"));
+  const short = { ...history, plugins: { cli: history.plugins.cli.slice(1) } };
+  writeFileSync(join(dir, "short.json"), JSON.stringify(short));
+  assert.match(run(["--history", join(dir, "short.json"), "history-check"], { ok: false }), /behind the release tags/);
+  writeFileSync(join(dir, "bad.json"), JSON.stringify({ version: 1, plugins: { cli: [{ release: "v0.0.1", version: "0.0.1", artifact: "nope" }] } }));
+  assert.match(run(["--history", join(dir, "bad.json"), "signed-pin"], { ok: false }), /artifact must be a SHA-256/);
+});

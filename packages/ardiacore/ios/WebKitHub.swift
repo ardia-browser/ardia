@@ -157,7 +157,7 @@ final class WebKitHub: NSObject, WKScriptMessageHandler {
   ])
 
   func clearBrowsingData(profile: String, types: [String], since: Double, completion: @escaping () -> Void) {
-    if types.contains("history") { WebKitTabHistory.cleared(profile: profile, live: transfers.liveTabs) }
+    if types.contains("history") { WebKitTabHistory.cleared(profile: profile) }
     if types.contains("siteData") { certificates.forgetTransportSecurity(profile: profile) }
     guard stores.hasStore(for: profile) else { return completion() }
     var kinds = Set<String>()

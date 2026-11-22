@@ -54,11 +54,16 @@ export {
   type FrostProps,
   type FrostSourceProps,
   type FrostVariant,
+  type ClassicChrome,
   type GlassProps,
   type GlassShape,
   type GlassSurface,
   type LookColors,
+  type LookDynamicColor,
   type ProfileBackdropProps,
+  type ThemeLook,
+  type ThemeLookStop,
+  type ThemeTexture,
 } from "./look";
 export { lookBudget, useLookBudgetProbe } from "./lookBudget";
 export { systemLookNow, useSystemLook, useSystemReduceMotion, useSystemReduceTransparency } from "./systemLook";

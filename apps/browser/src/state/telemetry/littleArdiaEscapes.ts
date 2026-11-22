@@ -3,7 +3,7 @@ export type EscapePressedIn = "page" | "window" | "blankBar";
 const none = (): Record<EscapePressedIn, number> => ({ page: 0, window: 0, blankBar: 0 });
 
 let closes = none();
-const noHandoffs = () => ({ appLinkCloses: 0, returnsToApp: 0, returnsDropped: 0, globalShortcutOpens: 0, globalShortcutBehind: 0, fitsBelowSaved: 0, keptAtActivation: 0, keptOnArrival: 0, keptOnOpen: 0, heldWithoutLink: 0, holdsLeftToStageManager: 0, keyRestoredAtRelease: 0, holdsLeftToWindowManager: 0 });
+const noHandoffs = () => ({ appLinkCloses: 0, returnsToApp: 0, returnsDropped: 0, globalShortcutOpens: 0, globalShortcutBehind: 0, fitsBelowSaved: 0, keptAtActivation: 0, keptOnArrival: 0, keptOnOpen: 0, heldWithoutLink: 0, holdsLeftToStageManager: 0, keyRestoredAtRelease: 0, holdsLeftToWindowManager: 0, raisesSkipped: 0 });
 
 let handoffs = noHandoffs();
 
@@ -13,7 +13,7 @@ export function noteLittleArdiaAppHandoff(what: keyof typeof handoffCounter) {
   handoffs[handoffCounter[what]]++;
 }
 
-const keptBehindCounter = { activation: "keptAtActivation", arrival: "keptOnArrival", open: "keptOnOpen", released: "heldWithoutLink", stageManager: "holdsLeftToStageManager", keyRestored: "keyRestoredAtRelease", windowManager: "holdsLeftToWindowManager" } as const;
+const keptBehindCounter = { activation: "keptAtActivation", arrival: "keptOnArrival", open: "keptOnOpen", released: "heldWithoutLink", stageManager: "holdsLeftToStageManager", keyRestored: "keyRestoredAtRelease", windowManager: "holdsLeftToWindowManager", raiseSkipped: "raisesSkipped" } as const;
 
 export function noteLittleArdiaLinkKeptBehind(when: keyof typeof keptBehindCounter) {
   handoffs[keptBehindCounter[when]]++;
@@ -49,6 +49,7 @@ export function takeLittleArdiaEscapeCloses() {
     little_ardia_link_holds_without_link: handedOff.heldWithoutLink,
     little_ardia_link_holds_left_to_stage_manager: handedOff.holdsLeftToStageManager,
     little_ardia_link_holds_left_to_window_manager: handedOff.holdsLeftToWindowManager,
+    little_ardia_link_raises_skipped: handedOff.raisesSkipped,
     little_ardia_link_hold_key_restored: handedOff.keyRestoredAtRelease,
     little_ardia_escape_closes: taken.page,
     little_ardia_escape_closes_unfocused: taken.window,

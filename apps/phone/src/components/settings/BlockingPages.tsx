@@ -31,11 +31,14 @@ import {
   filterListAddress,
   FILTER_LIST_ADDRESS,
 } from "../../state/settings/settingsRules";
-import { ConfirmSheet, duration, font, ink, screenReaderActions, Sheet, usePresence, settingsLayout, settingsTint, space, Symbol, Toggle, useDesign, useTheme, type Confirmation, useWarningInk } from "../ui";
+import { capsule, ConfirmSheet, duration, font, ink, screenReaderActions, Sheet, usePresence, settingsLayout, settingsTint, space, Symbol, Toggle, useDesign, useTheme, type Confirmation, useWarningInk, Tappable, slopToReach, smoothCorners, controlSize } from "../ui";
 import { copy } from "../../lib/platformCopy";
 
 const FILTER_SYNTAX_URL = "https://github.com/gorhill/uBlock/wiki/Static-filter-syntax";
+const FILTER_SYNTAX = "Filter Syntax";
 import { BarButton, ButtonRow, CrossfadeText, Divider, EmptyState, Group, IconTile, NavRow, SettingsPage, ToggleRow, ValueRow } from "./SettingsKit";
+import { TRUSTED_SITES_EMPTY } from "./ExpoBlockingPages";
+import { actionWords, dismissWords } from "../../lib/sharedWords";
 
 export function FilterListsPage() {
   const theme = useTheme();
@@ -112,12 +115,12 @@ function ListRow({ list, now, divider }: { list: FilterListInfo; now: number; di
   return (
     <View>
       <View style={styles.listRow}>
-        <Pressable accessibilityRole="button" accessibilityHint="Shows the list’s details" onPress={() => pushSettings({ page: "filterList", id: list.id })} style={styles.fill}>
+        <Tappable kind="text" label={list.title} hint="Shows the list’s details" onPress={() => pushSettings({ page: "filterList", id: list.id })} style={styles.fill}>
           <Text style={[font.body, { color: theme.label }]} numberOfLines={2}>
             {list.title}
           </Text>
           <CrossfadeText testID="listFacts" text={facts.text} style={[font.footnote, { color: facts.isWarning ? warningInk : theme.secondaryLabel }]} />
-        </Pressable>
+        </Tappable>
         {listIsBusy(list) ? <ActivityIndicator testID="listBusy" size="small" color={theme.secondaryLabel} /> : null}
         <Toggle label={list.title} value={list.isEnabled} onChange={(on) => setListEnabled(list.id, on)} />
       </View>
@@ -149,7 +152,7 @@ export function FilterListDetailPage({ id }: { id: string }) {
             <Text style={[font.body, styles.fill, { color: theme.label }]}>{list.failure ?? "This list couldn’t be updated."}</Text>
           </View>
           <Divider />
-          <ButtonRow title="Try Again" enabled={!updating} onPress={() => void updateLists()} />
+          <ButtonRow title={actionWords.tryAgain} enabled={!updating} onPress={() => void updateLists()} />
         </Group>
       ) : null}
       <Group footer={list.skippedCount > 0 ? copy().filterRulesUnsupported : null}>
@@ -249,7 +252,7 @@ function AddListSheet({ open, onClose, onHidden }: { open: boolean; onClose: () 
     <Sheet open={open} onDismiss={close} onHidden={onHidden}>
       <View style={styles.sheetBar}>
         <View style={styles.sheetSide}>
-          <BarButton title="Cancel" onPress={close} />
+          <BarButton title={dismissWords.cancel} onPress={close} />
         </View>
         <Text accessibilityRole="header" style={[font.body, styles.bold, styles.sheetTitle, { color: theme.label }]} numberOfLines={1}>
           Add a List
@@ -360,9 +363,9 @@ export function MyFiltersPage() {
           style={[font.footnote, styles.bold, { color: changed ? theme.formAccent : theme.secondaryLabel }]}
         />
         {large ? null : <Text style={[font.footnote, { color: theme.secondaryLabel }]}>||site.com^ blocks a site. site.com##.ad hides part of a page. Lines that start with ! are notes.</Text>}
-        <Pressable accessibilityRole="link" onPress={() => openFromSettings(FILTER_SYNTAX_URL)} style={styles.syntax}>
-          <Text style={[font.footnote, styles.bold, { color: theme.formAccent }]}>Filter Syntax</Text>
-        </Pressable>
+        <Tappable kind="text" role="link" label={FILTER_SYNTAX} hitSlop={slopToReach(controlSize.hitTarget, font.footnote.lineHeight + space.xs * 2)} onPress={() => openFromSettings(FILTER_SYNTAX_URL)} style={styles.syntax}>
+          <Text style={[font.footnote, styles.bold, { color: theme.formAccent }]}>{FILTER_SYNTAX}</Text>
+        </Tappable>
       </View>
       <Animated.View style={lift} />
     </SettingsPage>
@@ -378,10 +381,10 @@ export function TrustedSitesPage() {
     <SettingsPage
       title="Trusted Sites"
       onBack={popSettings}
-      trailing={hosts.length ? <BarButton title={editingShown ? "Done" : "Edit"} emphasized={editingShown} onPress={() => setEditing(!editingShown)} /> : null}
+      trailing={hosts.length ? <BarButton title={editingShown ? dismissWords.done : "Edit"} emphasized={editingShown} onPress={() => setEditing(!editingShown)} /> : null}
     >
       {hosts.length === 0 ? (
-        <EmptyState title="No Trusted Sites" message="Sites you allow from the page menu show up here." icon="checkmarkShield" />
+        <EmptyState title={TRUSTED_SITES_EMPTY.title} message={TRUSTED_SITES_EMPTY.message} icon="checkmarkShield" />
       ) : (
         <Group>
           {hosts.map((host, index) => (
@@ -408,9 +411,9 @@ function TrustedSiteRow({ host, editing, divider }: { host: string; editing: boo
       >
         {editing ? (
           <Animated.View entering={FadeIn.duration(duration.crossfade)} exiting={FadeOut.duration(duration.crossfade)}>
-            <Pressable accessibilityRole="button" accessibilityLabel={removeLabel} onPress={remove} style={[styles.removeDot, { backgroundColor: theme.destructive }]}>
-              <Symbol name="minus" size={14} color={ink.white} />
-            </Pressable>
+            <Tappable kind="icon" label={removeLabel} onPress={remove} hitSlop={slopToReach(settingsLayout.removeDot)} style={[styles.removeDot, { backgroundColor: theme.destructive }]}>
+              <Symbol name="minus" size={settingsLayout.removeGlyph} color={ink.white} />
+            </Tappable>
           </Animated.View>
         ) : null}
         <Animated.View layout={LinearTransition.duration(duration.crossfade)} style={styles.trustedLabel}>
@@ -439,13 +442,13 @@ const styles = StyleSheet.create({
   sheetTitle: { textAlign: "center" },
   sheetBody: { paddingVertical: space.l, gap: space.s },
   sheetLabel: { paddingHorizontal: settingsLayout.rowInset + space.l },
-  fieldSurface: { marginHorizontal: space.l, borderRadius: settingsLayout.groupRadius, paddingHorizontal: settingsLayout.rowInset, minHeight: settingsLayout.rowMinHeight, justifyContent: "center" },
+  fieldSurface: { marginHorizontal: space.l, borderRadius: settingsLayout.groupRadius, ...smoothCorners, paddingHorizontal: settingsLayout.rowInset, minHeight: settingsLayout.rowMinHeight, justifyContent: "center" },
   sheetField: { minHeight: settingsLayout.rowMinHeight },
   paste: { alignItems: "center", paddingTop: space.s },
-  editor: { flex: 1, marginHorizontal: space.l, marginTop: space.xs, borderRadius: settingsLayout.groupRadius, padding: space.l },
+  editor: { flex: 1, marginHorizontal: space.l, marginTop: space.xs, borderRadius: settingsLayout.groupRadius, ...smoothCorners, padding: space.l },
   barSpinner: { marginRight: space.s },
   editorText: { flex: 1, textAlignVertical: "top", fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" },
   footer: { paddingHorizontal: space.l + settingsLayout.rowInset, gap: space.xs },
-  removeDot: { width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  removeDot: { width: settingsLayout.removeDot, height: settingsLayout.removeDot, borderRadius: capsule(settingsLayout.removeDot), alignItems: "center", justifyContent: "center" },
   trustedLabel: { flex: 1, flexDirection: "row", alignItems: "center", gap: settingsLayout.labelGap },
 });

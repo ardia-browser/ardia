@@ -118,6 +118,17 @@ test("a Picture in Picture drag is stamped when it begins and its report sends t
   assert.match(swipe, /emit:@"pictureInPictureDragged" payload:\[_dragStamp onto:/);
 });
 
+test("how a moved Picture in Picture window was let go is reported with the stamp taken when its drag or swipe began", () => {
+  assert.match(read("../ios/ArdiaPictureInPictureInternal.h"), /ArdiaConsentStamp \*_swipeStamp;/);
+  const controller = read("../ios/ArdiaPiPController.mm");
+  const began = controller.slice(controller.indexOf("- (void)swipeBegan:"), controller.indexOf("- (void)swipeBegan:") + 400);
+  assert.match(began, /_swipeStamp = ArdiaConsentStamp\.begin;/);
+  assert.match(controller, /\[self reportRelease:outcome stamp:_dragStamp\];/);
+  const swipe = read("../ios/ArdiaPiPController+Swipe.mm");
+  assert.match(swipe, /\[self reportRelease:outcome stamp:_swipeStamp\];/);
+  assert.match(swipe, /if \(stamp\) \[self\.view emit:@"pictureInPictureReleased" payload:\[stamp onto:@\{@"outcome" : outcome\}\]\];/);
+});
+
 test("a click skip sends the stamp taken at mouse-down, and only the keyboard skip takes a fresh one", () => {
   const skip = read("../ios/ArdiaPiPController+Skip.mm");
   assert.match(skip, /- \(BOOL\)skipDraggedBy:\(double\)seconds at:\(NSPoint\)point clickCount:\(NSInteger\)clickCount \{\s*return \[self skipBy:seconds at:point clickCount:clickCount stamp:_dragStamp\];/);

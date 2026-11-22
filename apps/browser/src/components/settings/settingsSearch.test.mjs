@@ -324,6 +324,7 @@ test("a row its pane doesn't draw is left out of search, by the same rule the pa
   const webkitOnly = unshown({ engineMode: "webkit" }, { top: false });
   for (const id of ["advanced.pageEngine", "advanced.websiteEngines", "advanced.offerWebKitForProtectedVideo"]) assert.ok(webkitOnly.has(id), id);
   for (const id of ["general.engineMode", "advanced.enginesDiffer", "advanced.webKitFraudWarnings"]) assert.ok(!webkitOnly.has(id), id);
+  assert.ok(unshown({}, { top: false }).has("appearance.windowButtons"), "the Mac and Windows have no choice of window buttons");
 });
 
 const SHOWN_BY_LOADED_DATA = ["UpdatesSection.tsx: general.autoUpdate", "UpdatesSection.tsx: general.updateChannel"];

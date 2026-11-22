@@ -217,6 +217,12 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)exitPictureInPicture;
 @end
 
+@interface ArdiaWebView (ElementPick)
+- (double)armElementPick NS_SWIFT_NAME(armElementPick());
+- (BOOL)takeElementPick:(double)armed NS_SWIFT_NAME(takeElementPick(_:));
+- (void)noteElementPickInput;
+@end
+
 @interface ArdiaWebView (FirstPaint)
 + (NSDictionary<NSString *, NSNumber *> *)takeFirstPaintHolds;
 @end

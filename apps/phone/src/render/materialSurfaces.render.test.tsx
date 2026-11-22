@@ -51,7 +51,7 @@ test("the scheme's roles follow Material's rules: text on surface, panels by con
   expect(roles.panel).toBe(LIGHT.surfaceContainer);
   expect(roles.fieldFill).toBe(LIGHT.surfaceContainerHigh);
   expect(roles.formAccent).toBe(LIGHT.primary);
-  expect(roles.onPrimaryAction).toBe(LIGHT.onPrimary);
+  expect(roles.accent).toBe(LIGHT.primary);
   expect(roles.destructive).toBe(LIGHT.error);
   expect(roles.divider).toBe(LIGHT.outlineVariant);
   expect(roles.toastFill).toBe(LIGHT.inverseSurface);
@@ -61,7 +61,7 @@ test("the scheme's roles follow Material's rules: text on surface, panels by con
 
 function ThemeProbe() {
   const theme = useTheme();
-  return <Text testID="probe">{`${theme.label}|${theme.surface}|${theme.formAccent}`}</Text>;
+  return <Text testID="probe">{`${theme.label}|${theme.canvas}|${theme.formAccent}`}</Text>;
 }
 
 onAndroid("the material design's theme comes from the fallback scheme when the phone gives none, and from the wallpaper's when it does", () => {

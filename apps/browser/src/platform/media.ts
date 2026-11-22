@@ -19,6 +19,7 @@ export {
   type PictureInPictureStandIn,
   type PictureInPictureActivation,
   type PictureInPictureUnstash,
+  type PictureInPictureRelease,
 } from "@ardia/ardiacore";
 
 export const getDisplayMediaSources = () => call("media.displayMediaSources");

@@ -11,7 +11,7 @@ import { capsule, ink, radius, space } from "../ui/tokens";
 import { SelectTile, useOnboardingColors } from "./Parts";
 import { StepActions, StepLayout } from "./StepLayout";
 import { trafficLights } from "./tokens";
-import { WINDOW_CHROME } from "../../lib/windowChrome";
+import { trafficLightsDrawn } from "../../lib/windowChrome";
 
 export function PinnedTabsStep() {
   const windowId = useOnboarding((s) => s.windowId);
@@ -73,7 +73,7 @@ function PinnedPreview({ selected }: { selected: string[] }) {
   const slots = Math.max(2, Math.ceil(sites.length / PREVIEW.columns)) * PREVIEW.columns;
   return (
     <ChoiceCard plain radius={radius.sheet} style={{ width: PREVIEW.width, padding: space.xl, gap: space.l }}>
-      {WINDOW_CHROME.leadingWidth ? (
+      {trafficLightsDrawn() ? (
         <View style={{ flexDirection: "row", gap: space.m * PREVIEW.scale }}>
           {trafficLights.map((c) => (
             <Dot key={c} size={LIGHT * PREVIEW.scale} color={c} />

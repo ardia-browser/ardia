@@ -187,8 +187,8 @@ export function readManifest(text: string): ManifestRead {
   return { manifest, problems: problems.map((p) => `${MANIFEST_FILE}: ${legacy ? v1Problem(p) : p}`), newer: false };
 }
 
-export type Contribution = "settings" | "commands" | "page" | "process" | "programs" | "hooks" | "tools" | "passwordManager" | "main" | "menus" | "toolbar" | "sidebarViews" | "panels" | "omnibox" | "themes";
-export const CONTRIBUTIONS: readonly Contribution[] = ["settings", "commands", "page", "process", "programs", "hooks", "tools", "passwordManager", "main", "menus", "toolbar", "sidebarViews", "panels", "omnibox", "themes"];
+export type Contribution = "settings" | "commands" | "page" | "process" | "programs" | "hooks" | "tools" | "passwordManager" | "main" | "menus" | "toolbar" | "sidebarViews" | "panels" | "omnibox" | "themes" | "siteSwitches" | "pageBar";
+export const CONTRIBUTIONS: readonly Contribution[] = ["settings", "commands", "page", "process", "programs", "hooks", "tools", "passwordManager", "main", "menus", "toolbar", "sidebarViews", "panels", "omnibox", "themes", "siteSwitches", "pageBar"];
 
 export function contributionsOf(m: PluginManifest): Contribution[] {
   const k = m.contributes;
@@ -208,6 +208,8 @@ export function contributionsOf(m: PluginManifest): Contribution[] {
     panels: k.panels.some((p) => p !== pagePanelOf(k.panels)),
     omnibox: k.omnibox.length > 0,
     themes: k.themes.length > 0,
+    siteSwitches: k.siteSwitches.length > 0,
+    pageBar: k.pageBar !== null,
   };
   return CONTRIBUTIONS.filter((c) => has[c]);
 }

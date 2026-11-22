@@ -98,3 +98,12 @@ test("wherever a strip is kept, its buttons sit inside the inset and a closed ca
     assert.ok(buttonLeft - (466 - span.right) >= 12, `inset ${inset}`);
   }
 });
+
+test("Duo's strip control is the shared 48-point bar control, not a second definition", async () => {
+  const { DUO_BAR } = await import("./bottomBarSpan.ts");
+  const { FLOATING_BAR_PLACE } = await import("./deckGeometry.ts");
+  const source = await import("node:fs").then((fs) => fs.readFileSync(new URL("./bottomBarSpan.ts", import.meta.url), "utf8"));
+  assert.equal(DUO_BAR.button, FLOATING_BAR_PLACE.control);
+  assert.match(source, /button: FLOATING_BAR_PLACE\.control/);
+  assert.equal(DUO_BAR.axis, 48);
+});

@@ -1,4 +1,4 @@
-import type { PictureInPictureActivation, PictureInPictureDrag, PictureInPictureResize, PictureInPictureSkip, PictureInPictureStandIn, PictureInPictureUnstash } from "../../platform/media";
+import type { PictureInPictureActivation, PictureInPictureDrag, PictureInPictureRelease, PictureInPictureResize, PictureInPictureSkip, PictureInPictureStandIn, PictureInPictureUnstash } from "../../platform/media";
 import type { PageEngine } from "../engines/engines";
 import { counted, type ConsentToken } from "./client";
 import { nativeConsent } from "./nativeConsent";
@@ -12,6 +12,9 @@ const clickSkips = { back: 0, ahead: 0 };
 const noResizes = () => ({ started: 0, withoutCursor: 0 });
 let resizes = noResizes();
 let handleUnstashes = 0;
+const releaseFields = { corner: "pip_releases_to_corner", flickTuck: "pip_releases_flicked_into_tuck", tuck: "pip_releases_tucked", pullOut: "pip_releases_pulled_out_of_tuck", cornerPull: "pip_releases_pulled_into_corner", placed: "pip_releases_placed" } as const;
+const noReleases = () => ({ pip_releases_to_corner: 0, pip_releases_flicked_into_tuck: 0, pip_releases_tucked: 0, pip_releases_pulled_out_of_tuck: 0, pip_releases_pulled_into_corner: 0, pip_releases_placed: 0 });
+let releases = noReleases();
 const noStandIns = () => ({ pinches: 0, timeouts: 0 });
 let standIns = noStandIns();
 const noActivations = () => ({ asked: 0, failed: 0 });
@@ -67,6 +70,15 @@ export function notePictureInPictureHandleUnstash(unstash: PictureInPictureUnsta
   );
 }
 
+export function notePictureInPictureReleased(release: PictureInPictureRelease) {
+  const field = releaseFields[release.outcome];
+  if (!field) return;
+  counted(
+    nativeConsent(release),
+    () => releases[field]++,
+  );
+}
+
 export function notePictureInPictureStandIn(standIn: PictureInPictureStandIn) {
   const { pinch, timedOut } = standIn;
   counted(
@@ -100,7 +112,8 @@ export function notePictureInPictureHandBack(again: boolean, consent: ConsentTok
 }
 
 export function takePictureInPictureCounts() {
-  const taken = { nothingPlaying, backToTab: { ...backToTab }, backToTabFromOtherApp, drags, resizes, clickSkips: { ...clickSkips }, handleUnstashes, standIns, activations, handBacks };
+  const taken = { nothingPlaying, backToTab: { ...backToTab }, backToTabFromOtherApp, drags, resizes, clickSkips: { ...clickSkips }, handleUnstashes, releases, standIns, activations, handBacks };
+  releases = noReleases();
   standIns = noStandIns();
   activations = noActivations();
   handBacks = noHandBacks();

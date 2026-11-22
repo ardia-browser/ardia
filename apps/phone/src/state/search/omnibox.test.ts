@@ -129,7 +129,7 @@ test("an untitled history row still shows only its host", () => {
 
 test("the escaped row stays beside a tab open at another fragment, and shows its fragment", () => {
   const url = "https://example.com/My%20Folder/index.html";
-  setSources({ tabs: [{ id: "t1", url: `${url}#tail`, title: "My Folder", favicon: null, lastActiveAt: Date.now() }], history: [{ url, title: "My Folder", favicon: null, visits: 3, lastVisit: Date.now() - 1000 }], bookmarks: [] });
+  setSources({ tabs: [{ id: "t1", url: `${url}#tail`, title: "My Folder", favicon: null }], history: [{ url, title: "My Folder", favicon: null, visits: 3, lastVisit: Date.now() - 1000 }], bookmarks: [] });
   const rows = suggest("example.com/My Folder/index.html", [], context).rows;
   assert.ok(rows.some((r) => r.kind === "page" && r.url === url && !r.switchesTab), "the exact address is still offered");
   assert.ok(rows.some((r) => r.kind === "page" && r.switchesTab && r.tabId === "t1"), "and so is the tab at #tail");
@@ -146,7 +146,7 @@ test("a remote suggestion at the escaped row's address doesn't add a second row"
 });
 
 test("a tab open at the escaped address and a remote copy of it show as one Switch to Tab row", () => {
-  setSources({ tabs: [{ id: "t2", url: "https://example.com/#Chapter%202", title: "Chapter", favicon: null, lastActiveAt: Date.now() }], history: [], bookmarks: [] });
+  setSources({ tabs: [{ id: "t2", url: "https://example.com/#Chapter%202", title: "Chapter", favicon: null }], history: [], bookmarks: [] });
   const pages = suggest("example.com#Chapter 2", ["https://example.com/#Chapter%202"], context).rows.filter((r) => r.kind === "page");
   assert.equal(pages.length, 1);
   assert.ok(pages[0]?.kind === "page" && pages[0].switchesTab);

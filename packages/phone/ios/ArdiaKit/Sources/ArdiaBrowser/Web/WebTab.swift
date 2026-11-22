@@ -778,7 +778,7 @@ final class WebTabCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, UIS
         UIAction(title: String(localized: "Copy Link"), image: UIImage(systemName: "link")) { _ in
           engine?.copyLink(link)
         },
-        UIAction(title: String(localized: "Share…"), image: UIImage(systemName: "square.and.arrow.up")) { _ in
+        UIAction(title: String(localized: "Share"), image: UIImage(systemName: "square.and.arrow.up")) { _ in
           engine?.share(link)
         },
         UIAction(title: String(localized: "Download Linked File"), image: UIImage(systemName: "arrow.down.circle")) { _ in

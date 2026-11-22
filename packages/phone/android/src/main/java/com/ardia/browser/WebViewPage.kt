@@ -300,25 +300,25 @@ internal class WebViewPage(
         }
     }
 
-    override suspend fun snapshot(maxWidth: Int): Bitmap? = withContext(Dispatchers.Main.immediate) {
+    override suspend fun snapshot(maxWidth: Int, windowCopy: Boolean): Bitmap? = withContext(Dispatchers.Main.immediate) {
         val web = webView ?: return@withContext null
         if (mutableState.value.url == null) return@withContext null
         if (!ErrorPages.capturable(mutableState.value.failure)) return@withContext null
         if (web.parent == null && !web.isAttachedToWindow) {
             return@withContext engine.parked(web) {
                 repeat(PARKED_FRAMES) { awaitPaintedFrame(web) }
-                if (webView === web) drawSnapshot(web, maxWidth) else null
+                if (webView === web) drawSnapshot(web, maxWidth, windowCopy) else null
             }
         }
-        drawSnapshot(web, maxWidth)
+        drawSnapshot(web, maxWidth, windowCopy)
     }
 
-    private suspend fun drawSnapshot(web: WebView, maxWidth: Int): Bitmap? {
+    private suspend fun drawSnapshot(web: WebView, maxWidth: Int, windowCopy: Boolean): Bitmap? {
         if (!PageCapture.isDrawable(web)) return null
-        return captureSnapshot(web, maxWidth)
+        return captureSnapshot(web, maxWidth, windowCopy)
     }
 
-    private suspend fun captureSnapshot(web: WebView, maxWidth: Int): Bitmap? = withContext(Dispatchers.Main.immediate) {
+    private suspend fun captureSnapshot(web: WebView, maxWidth: Int, windowCopy: Boolean): Bitmap? = withContext(Dispatchers.Main.immediate) {
         val scale = min(1f, maxWidth.toFloat() / web.width)
         val width = (web.width * scale).roundToInt().coerceAtLeast(1)
         val height = (web.height * scale).roundToInt().coerceAtLeast(1)
@@ -333,7 +333,7 @@ internal class WebViewPage(
             drawn.recycle()
             if (attempt < DRAW_ATTEMPTS - 1) awaitPaintedFrame(web)
         }
-        if (webView !== web || !PageCapture.windowCopyIsTrustworthy(web)) return@withContext null
+        if (!windowCopy || webView !== web || !PageCapture.windowCopyIsTrustworthy(web)) return@withContext null
         val copied = PageCapture.copyWindow(web, region, width, height) ?: return@withContext null
         if (isSuspect(copied)) {
             copied.recycle()
@@ -364,11 +364,12 @@ internal class WebViewPage(
             }
         }
         lastCaptureRoute = topCapture.route
-        val topColor = ToneSampler.dominant(PageCapture.pixels(topCapture.bitmap))
-        val bottomColor = ToneSampler.dominant(PageCapture.pixels(bottomCapture.bitmap))
+        val topPixels = PageCapture.pixels(topCapture.bitmap)
+        val bottomPixels = PageCapture.pixels(bottomCapture.bitmap)
         topCapture.bitmap.recycle()
         bottomCapture.bitmap.recycle()
-        if (topColor == null && bottomColor == null) null else PageTone(topColor, bottomColor)
+        val tone = PageTone(ToneSampler.dominant(topPixels), ToneSampler.dominant(bottomPixels), ToneSampler.shade(topPixels), ToneSampler.shade(bottomPixels))
+        if (tone == PageTone()) null else tone
     }
 
     private suspend fun sampleBand(web: WebView, region: Rect, preferred: CaptureRoute): Capture? {

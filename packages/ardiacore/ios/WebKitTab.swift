@@ -135,6 +135,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
 
   func attach(_ view: WebKitWebView) {
     webView = view
+    WebKitTabHistory.stamp(view, profile: profile)
     defer { WebKitHeldPopup.release(view, to: self) }
     WebKitHub.shared.transfers.register(view, tab: self)
     view.navigationDelegate = self

@@ -265,6 +265,39 @@ cp "$here/../external.h" "$src/shared/external.h"
         (self.tree / 'value').write_text('drift\n')
         self.run_command('check', success=False)
 
+    def test_a_patch_added_after_others_that_edit_the_same_file_applies_to_a_tree_holding_them(self):
+        (self.tree / 'value').write_text('a\nb\nc\nd\ne\nf\ng\n')
+        for unused in ('mac.patch', 'linux.patch'):
+            (self.here / unused).unlink()
+        (self.here / 'first.patch').write_text('--- a/value\n+++ b/value\n@@ -1,3 +1,3 @@\n a\n-b\n+b1\n c\n')
+        (self.here / 'second.patch').write_text('--- a/value\n+++ b/value\n@@ -1,3 +1,3 @@\n a\n-b1\n+b2\n c\n')
+        (self.here / 'series').write_text('chromium first.patch linux\nchromium second.patch linux\n')
+        self.run_command('capture-base')
+        self.run_command('apply')
+        self.assertEqual((self.tree / 'value').read_text(), 'a\nb2\nc\nd\ne\nf\ng\n')
+        (self.here / 'third.patch').write_text('--- a/value\n+++ b/value\n@@ -5,3 +5,3 @@\n e\n-f\n+f3\n g\n')
+        (self.here / 'series').write_text('chromium first.patch linux\nchromium second.patch linux\nchromium third.patch linux\n')
+        result = self.run_command('apply')
+        self.assertIn('already applied first.patch', result.stdout)
+        self.assertIn('already applied second.patch', result.stdout)
+        self.assertIn('applied chromium third.patch', result.stdout)
+        self.assertEqual((self.tree / 'value').read_text(), 'a\nb2\nc\nd\ne\nf3\ng\n')
+        self.run_command('check')
+        again = self.run_command('apply')
+        self.assertIn('already applied third.patch', again.stdout)
+
+    def test_a_file_a_patch_edits_and_a_later_layer_replaces_reapplies(self):
+        (self.here / 'mac.patch').unlink()
+        (self.here / 'linux.patch').write_text('--- a/shared/external.h\n+++ b/shared/external.h\n@@ -1 +1 @@\n-original header\n+patched header\n')
+        (self.here / 'series').write_text('chromium linux.patch linux\nlayer engine/linux linux\n')
+        self.run_command('capture-base')
+        self.run_command('apply')
+        self.assertEqual((self.tree / 'shared/external.h').read_text(), 'replacement header\n')
+        again = self.run_command('apply')
+        self.assertIn('already applied linux.patch', again.stdout)
+        self.assertEqual((self.tree / 'shared/external.h').read_text(), 'replacement header\n')
+        self.run_command('check')
+
     def test_mac_selection_and_separate_default_base(self):
         self.run_command('capture-base', platform='mac')
         self.run_command('apply', platform='mac')

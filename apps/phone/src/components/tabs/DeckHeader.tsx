@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { actionWords, destinationWords } from "../../lib/sharedWords";
 import { haptics } from "../../state/app/haptics";
 import { newIncognitoTab, openArchive, openSpaces, reopenLastClosed } from "../../state/browse/store";
 import { menuOpenedHaptic } from "../../state/browse/tabMenus";
@@ -7,7 +8,7 @@ import { selectProfile } from "../../state/sync/actions";
 import { useSelectedProfile, useSyncStatus, useSyncView } from "../../state/sync/hooks";
 import { useCanReopen, useIncognito } from "../../state/tabs/hooks";
 import { countUsage } from "../../state/telemetry/telemetry";
-import { browseLayout, ChromeSurface, deckChromeLayout, font, menuLook, tabsLayout, useTheme, type MenuItem } from "../ui";
+import { browseLayout, ChromeSurface, deckChromeLayout, font, iconRoles, menuLook, smoothCorners, Tappable, tabsLayout, useTheme, type MenuItem } from "../ui";
 import { deckLook } from "./deckLook";
 import { MenuTrigger, nativeMenus, spaceSystemImage } from "../ui/MenuTrigger";
 import { SpaceTitle, spaceMenuSymbol } from "../search/StartSpaces";
@@ -34,9 +35,9 @@ function joinMenuGroups(groups: readonly MenuItem[][], ruled: boolean = menuGrou
 export function deckMoreMenuItems({ syncEnabled, canReopen, hasTabs, onCloseAll, archive = true, material = false }: { syncEnabled: boolean; canReopen: boolean; hasTabs: boolean; onCloseAll: () => void; archive?: boolean; material?: boolean }): MenuItem[] {
   return joinMenuGroups(
     [
-      [...(archive ? [{ label: "Archive", icon: "archivebox" as const, onPress: openArchive }] : []), ...(syncEnabled ? [{ label: "Spaces From Your Mac", icon: "macAndPhone" as const, onPress: openSpaces }] : [])],
-      [{ label: "New Incognito Tab", icon: "eyes", onPress: newIncognitoTab }, ...(canReopen ? [{ label: "Reopen Closed Tab", icon: "arrowUturnBackward" as const, onPress: reopenLastClosed }] : []), ...(hasTabs ? [{ label: "Close All Tabs", icon: "xmark" as const, destructive: true, onPress: onCloseAll }] : [])],
-      [{ label: "Settings", icon: "gearshape", onPress: () => openSettings() }],
+      [...(archive ? [{ label: destinationWords.archive, icon: "archivebox" as const, onPress: openArchive }] : []), ...(syncEnabled ? [{ label: destinationWords.spaces, icon: "macAndPhone" as const, onPress: openSpaces }] : [])],
+      [{ label: actionWords.newIncognitoTab, icon: "eyes", onPress: newIncognitoTab }, ...(canReopen ? [{ label: "Reopen Closed Tab", icon: "arrowUturnBackward" as const, onPress: reopenLastClosed }] : []), ...(hasTabs ? [{ label: "Close All Tabs", icon: "xmark" as const, destructive: true, onPress: onCloseAll }] : [])],
+      [{ label: destinationWords.settings, icon: "gearshape", onPress: () => openSettings() }],
     ],
     material ? true : menuGroupsRuled(),
   );
@@ -61,6 +62,7 @@ export function useDeckSpaces() {
 
 export function DeckHeader({ safeTop, safeSide, sideInset, hasTabs, onCloseAll, menusShown = true, onMenu, glassShown, glassShownMs, glyphFade }: Props) {
   const theme = useTheme();
+  const incognito = useIncognito();
   const canReopen = useCanReopen();
   const { syncEnabled, spaces, current, spaceItems } = useDeckSpaces();
   const side = safeSide + sideInset;
@@ -74,12 +76,12 @@ export function DeckHeader({ safeTop, safeSide, sideInset, hasTabs, onCloseAll, 
       {current && spaces.length > 1 ? (
         <MenuTrigger items={spaceItems} {...menu} place={{ top: below, left: side, width: tabsLayout.menuWidth }} style={styles.switcher}>
           {({ onPress }) => (
-            <ChromeSurface testID="deckSwitcherGlass" shape="capsule" cornerRadius={deckLook.switcherCorner} dark={theme.dark} shown={glassShown} shownMs={glassShownMs}>
-              <Pressable accessibilityRole="button" accessibilityLabel={`Space, ${current.name}`} accessibilityHint="Shows your Mac’s spaces." onPress={onPress} style={styles.switcherPress}>
+            <ChromeSurface testID="deckSwitcherGlass" shape="rounded" cornerRadius={deckLook.switcherCorner} incognito={incognito} dark={theme.dark} shown={glassShown} shownMs={glassShownMs} style={smoothCorners}>
+              <Tappable kind="text" label={`Space, ${current.name}`} hint="Shows your Mac’s spaces." onPress={onPress ?? noop} style={styles.switcherPress}>
                 <FadingGlyphs testID="deckSwitcher" fade={glyphFade}>
                   <SpaceTitle space={current} dark={theme.dark} showsChevron />
                 </FadingGlyphs>
-              </Pressable>
+              </Tappable>
             </ChromeSurface>
           )}
         </MenuTrigger>
@@ -98,7 +100,7 @@ export function DeckHeader({ safeTop, safeSide, sideInset, hasTabs, onCloseAll, 
       )}
       <View style={styles.spacer} />
       <MenuTrigger items={moreItems} {...menu} place={{ top: below, right: side, width: tabsLayout.menuWidth }}>
-        {({ onPress }) => <GlassCircleButton icon="ellipsis" label="More" testID="deckHeaderMore" diameter={deckChromeLayout.headerCircle} dark={theme.dark} glassShown={glassShown} glassShownMs={glassShownMs} glyphFade={glyphFade} onPress={onPress ?? noop} />}
+        {({ onPress }) => <GlassCircleButton icon={iconRoles.more} label={actionWords.more} testID="deckHeaderMore" diameter={deckChromeLayout.headerCircle} face={{ kind: "rounded", corner: deckLook.moreCorner }} incognito={incognito} dark={theme.dark} glassShown={glassShown} glassShownMs={glassShownMs} glyphFade={glyphFade} onPress={onPress ?? noop} />}
       </MenuTrigger>
     </View>
   );

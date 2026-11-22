@@ -84,6 +84,7 @@ if [ "$part" != engine ]; then
   start linux-smoke-gate node --test scripts/linux/smoke.test.mjs
   start linux-ubo-seed node --test scripts/linux/ubo-seed.test.mjs
   start linux-sign-update node --test scripts/linux/sign-update.test.mjs
+  start linux-launcher node --test scripts/linux/ardia-launch.test.mjs
   report
 fi
 

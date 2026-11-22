@@ -174,7 +174,7 @@ function assignPositions(existing                        )           {
 
 });
 __define("packages/sync/src/scope.ts", function (exports, __require) {
-  __export(exports, "covered", () => covered);
+  __export(exports, "parseSyncFile", () => parseSyncFile);
   __export(exports, "ingestSnapshot", () => ingestSnapshot);
   __export(exports, "flush", () => flush);
   __export(exports, "restoreJournal", () => restoreJournal);
@@ -189,7 +189,8 @@ const { hlcWall } = __require("packages/sync/src/hlc.ts");
 const { holdsBack, noteFileHealth } = __require("packages/sync/src/fileHealth.ts");
 const { baseKeysWith, dropBase, dropRecord, putBase, putRecord, visible, withBaseIndex } = __require("packages/sync/src/scopeKeys.ts");
 
-                                                                                                                                         
+const { covered, isApplied, markApplied, raiseApplied } = __require("packages/sync/src/applied.ts");
+                                                                                                                                 
 
 const DEFAULTS                                                        = {
   expired: () => false,
@@ -226,22 +227,6 @@ function parseSyncFile(payload        )                  {
   return null;
 }
 
-const covered = (vv                        , [device, seq]        ) => (vv[device] ?? 0) >= seq;
-
-function markApplied(state            , device        , seq        ) {
-  if (covered(state.vv, [device, seq])) return;
-  const extra = new Set(state.extra[device] ?? []);
-  extra.add(seq);
-  let top = state.vv[device] ?? 0;
-  while (extra.delete(top + 1)) top++;
-  state.vv[device] = top;
-  if (extra.size) state.extra[device] = [...extra].sort((a, b) => a - b);
-  else delete state.extra[device];
-}
-
-const isApplied = (state            , [device, seq]        ) =>
-  covered(state.vv, [device, seq]) || (state.extra[device]?.includes(seq) ?? false);
-
 function see(state            , device        , at        ) {
   if (!(device in state.seen) || at > state.seen[device] ) state.seen[device] = at;
 }
@@ -276,15 +261,7 @@ function ingestSnapshot(state            , file              , clock       , cha
       changed.add(key);
     }
   }
-  for (const [device, seq] of Object.entries(file.vv)) {
-    if (seq > (state.vv[device] ?? 0)) {
-      state.vv[device] = seq;
-      const extra = (state.extra[device] ?? []).filter((s) => s > seq);
-      for (let top = seq; extra[0] === top + 1; top++) state.vv[device] = extra.shift() ;
-      if (extra.length) state.extra[device] = extra;
-      else delete state.extra[device];
-    }
-  }
+  for (const [device, seq] of Object.entries(file.vv)) raiseApplied(state, device, seq);
 }
 
 const parseBase = (json                    ) => (json === undefined ? undefined : (JSON.parse(json)           ));
@@ -726,6 +703,58 @@ const pullSettled = (state            ) =>
   state.pending === 0 && Object.keys(state.damaged).length === 0 && !Object.values(state.files).some((f) => f.k === "bad");
 
 });
+__define("packages/sync/src/applied.ts", function (exports, __require) {
+  __export(exports, "covered", () => covered);
+  __export(exports, "markApplied", () => markApplied);
+  __export(exports, "isApplied", () => isApplied);
+  __export(exports, "raiseApplied", () => raiseApplied);
+                                                          
+
+const covered = (vv                        , [device, seq]        ) => (vv[device] ?? 0) >= seq;
+
+function sortedIndex(list          , seq        ) {
+  let lo = 0;
+  let hi = list.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (list[mid]  < seq) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+function markApplied(state            , device        , seq        ) {
+  if (covered(state.vv, [device, seq])) return;
+  const extra = state.extra[device] ?? [];
+  const at = sortedIndex(extra, seq);
+  if (extra[at] !== seq) extra.splice(at, 0, seq);
+  let top = state.vv[device] ?? 0;
+  let taken = 0;
+  while (extra[taken] === top + 1) top = extra[taken++] ;
+  state.vv[device] = top;
+  const left = taken ? extra.slice(taken) : extra;
+  if (left.length) state.extra[device] = left;
+  else delete state.extra[device];
+}
+
+const isApplied = (state            , [device, seq]        ) => {
+  if (covered(state.vv, [device, seq])) return true;
+  const extra = state.extra[device];
+  return !!extra && extra[sortedIndex(extra, seq)] === seq;
+};
+
+function raiseApplied(state            , device        , seq        ) {
+  if (seq <= (state.vv[device] ?? 0)) return;
+  state.vv[device] = seq;
+  const extra = (state.extra[device] ?? []).filter((s) => s > seq);
+  let taken = 0;
+  for (let top = seq; extra[taken] === top + 1; top++) state.vv[device] = extra[taken++] ;
+  const left = extra.slice(taken);
+  if (left.length) state.extra[device] = left;
+  else delete state.extra[device];
+}
+
+});
 __define("packages/sync/src/scopeState.ts", function (exports, __require) {
   __export(exports, "emptyScope", () => emptyScope);
                                     
@@ -1104,16 +1133,22 @@ async function runCompanionCycle(input            )                       {
     const tabsOf = new Map                    ();
     for (const t of input.tabs ?? []) {
       const p = profileOf(app, ids, fallback, t.p);
-      if (p) tabsOf.set(p, [...(tabsOf.get(p) ?? []), t]);
+      if (!p) continue;
+      const list = tabsOf.get(p);
+      if (list) list.push(t);
+      else tabsOf.set(p, [t]);
     }
     const visitsOf = new Map                                        ();
     const visited = (c.visited ??= {});
+    const removing = new WeakMap                       ();
     for (const v of input.visits ?? []) {
       const p = profileOf(app, ids, fallback, v.p);
       if (!p || typeof v.u !== "string" || !Array.isArray(v.vt)) continue;
       const o = owner.get(p) ?? p;
-      visitsOf.set(o, [...(visitsOf.get(o) ?? []), { ...v, p }]);
-      const newest = Math.max(...v.vt.filter((t) => Number.isFinite(t)));
+      const list = visitsOf.get(o);
+      if (list) list.push({ ...v, p });
+      else visitsOf.set(o, [{ ...v, p }]);
+      const newest = v.vt.reduce((m, t) => (Number.isFinite(t) ? Math.max(m, t) : m), -Infinity);
       const mine = (visited[profileScope(o)] ??= {});
       if (Number.isFinite(newest) && newest > (mine[v.u] ?? -Infinity)) mine[v.u] = newest;
     }
@@ -1150,7 +1185,11 @@ async function runCompanionCycle(input            )                       {
                 },
                 removed: (p, url) => {
                   const list = (c.removals [p] ??= []);
-                  if (!list.includes(url)) list.push(url);
+                  let listed = removing.get(list);
+                  if (!listed) removing.set(list, (listed = new Set(list)));
+                  if (listed.has(url)) return;
+                  listed.add(url);
+                  list.push(url);
                 },
                 ready: () => !!input.visits && (!!c.pulled[scope] || ++extracts > 1),
               }),
@@ -1250,7 +1289,8 @@ function companionSend(input                                                    
 function companionRemovalsDone(input                                                  ) {
   const c = loaded();
   for (const { profile, urls } of input.items) {
-    const left = (c.removals?.[profile] ?? []).filter((url) => !urls.includes(url));
+    const done = new Set(urls);
+    const left = (c.removals?.[profile] ?? []).filter((url) => !done.has(url));
     if (left.length) c.removals [profile] = left;
     else delete c.removals?.[profile];
   }
@@ -1345,7 +1385,7 @@ const isWebUrl = (url        ) => /^https?:\/\//i.test(url);
 const historyExpired = (key        , value         , now        ) =>
   key.startsWith("h:") && lastVisitOf(value                ) < now - HISTORY_WINDOW_MS;
 
-const lastVisitOf = (v                                 ) => (v && Array.isArray(v.vt) ? Math.max(0, ...v.vt) : 0);
+const lastVisitOf = (v                                 ) => (v && Array.isArray(v.vt) ? v.vt.reduce((m, t) => Math.max(m, t), 0) : 0);
 
 const dayOf = (at        ) => new Date(at).toISOString().slice(0, 10).replaceAll("-", "");
 
@@ -1390,6 +1430,8 @@ function unionTimes(a          , b          )           {
   return out.slice(-MAX_VISIT_TIMES);
 }
 
+const keptTimes = (times          )           => (times.length > MAX_VISIT_TIMES ? unionTimes(times.filter((t) => Number.isFinite(t)), []) : times);
+
                               
                                          
                      
@@ -1413,9 +1455,9 @@ function historyAdapter(ctx                )          {
         const entry = byUrl.get(v.u) ?? { title: "", times: [], profiles: new Set(), newest: 0 };
         const times = v.vt.filter((t) => Number.isFinite(t) && t >= since);
         if (!times.length) continue;
-        entry.times.push(...times);
+        for (const t of times) entry.times.push(t);
         entry.profiles.add(v.p);
-        const newest = Math.max(...times);
+        const newest = times.reduce((m, t) => Math.max(m, t), -Infinity);
         if (newest >= entry.newest) {
           entry.newest = newest;
           if (v.t) entry.title = v.t;
@@ -1441,8 +1483,8 @@ function historyAdapter(ctx                )          {
           values.set(key, { t: entry.title, n: local.length, vt: local }                       );
           continue;
         }
-        const knownTimes = Array.isArray(known.vt) ? known.vt.filter((t) => Number.isFinite(t)) : [];
-        const oldestKept = knownTimes.length >= MAX_VISIT_TIMES ? Math.min(...knownTimes) : -Infinity;
+        const knownTimes = keptTimes(Array.isArray(known.vt) ? known.vt.filter((t) => Number.isFinite(t)) : []);
+        const oldestKept = knownTimes.length >= MAX_VISIT_TIMES ? knownTimes.reduce((m, t) => Math.min(m, t), Infinity) : -Infinity;
         const missing = local.filter((t) => t >= oldestKept && !near(knownTimes, t));
         if (!missing.length) continue;
         const vt = unionTimes(knownTimes, local);
@@ -1461,8 +1503,8 @@ function historyAdapter(ctx                )          {
         const value = visible.get(key)                            ;
         if (value) {
           const mine = ctx.visited[url];
-          const times = Array.isArray(value.vt) ? value.vt : [];
-          const oldestKept = times.length >= MAX_VISIT_TIMES ? Math.min(...times) : -Infinity;
+          const times = keptTimes(Array.isArray(value.vt) ? value.vt : []);
+          const oldestKept = times.length >= MAX_VISIT_TIMES ? times.reduce((m, t) => Math.min(m, t), Infinity) : -Infinity;
           if (mine !== undefined && mine >= oldestKept && mine > (ctx.floors[url] ?? -Infinity) && !near(times, mine)) ctx.due(url);
           continue;
         }
@@ -1540,7 +1582,10 @@ function bookmarksAdapter(ctx                 )          {
       const children = new Map                  ();
       for (const [k, v] of view) {
         const parent = (v                 ).p;
-        if (typeof parent === "string") children.set(parent, [...(children.get(parent) ?? []), k.slice(3)]);
+        if (typeof parent !== "string") continue;
+        const list = children.get(parent);
+        if (list) list.push(k.slice(3));
+        else children.set(parent, [k.slice(3)]);
       }
       const otherPositions = [...view]
         .filter(([, v]) => (v                 ).p === "other" && typeof (v                 ).pos === "string")
@@ -1570,7 +1615,7 @@ function bookmarksAdapter(ctx                 )          {
             const at = stack.pop() ;
             if (deletes.has(`bm:${at}`)) continue;
             deletes.add(`bm:${at}`);
-            stack.push(...(children.get(at) ?? []));
+            for (const child of children.get(at) ?? []) stack.push(child);
           }
         }
       }
@@ -1633,15 +1678,19 @@ __define("packages/sync/src/companion/view.ts", function (exports, __require) {
 const { visible } = __require("packages/sync/src/scope.ts");
                                                    
 const { fromLegacy } = __require("packages/sync/src/companion/legacy.ts");
+const { folderChildren } = __require("packages/sync/src/folders.ts");
 const { lastVisitOf } = __require("packages/sync/src/companion/adapters.ts");
+const { themeOf } = __require("packages/sync/src/companion/theme.ts");
+
+                                                                                            
 
 const MAX_HISTORY_ITEMS = 2_000;
+const MAX_BOOKMARK_DEPTH = 100;
 
                             
                                                                                           
 
                                                                                                                                         
-                                                                          
                                                                                                                           
                                                                                              
                                                                                 
@@ -1695,32 +1744,6 @@ function dataOwner(app                        , syncId        )         {
     path.push(owner);
     at = owner;
   }
-}
-
-function hex(n         ) {
-  const v = typeof n === "number" && Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0;
-  return Math.round(v * 255).toString(16).padStart(2, "0").toUpperCase();
-}
-
-function colorsOf(look         )                  {
-  if (!look || typeof look !== "object" || !Array.isArray((look                       ).stops)) return null;
-  const out           = [];
-  for (const stop of (look                        ).stops.slice(0, 16)) {
-    if (out.length >= 3) break;
-    const c = (stop                                              )?.color;
-    if (!c || ![c.r, c.g, c.b].every((n) => typeof n === "number" && Number.isFinite(n) && Math.abs(n) < 4)) continue;
-    const alpha = typeof c.a === "number" && Number.isFinite(c.a) ? Math.min(1, Math.max(0, c.a)) : 1;
-    out.push(`#${hex(c.r)}${hex(c.g)}${hex(c.b)}${alpha < 1 ? hex(alpha) : ""}`);
-  }
-  return out.length ? out : null;
-}
-
-function themeOf(app            , syncId        , profile               )                   {
-  const record = app.records[`pth:${syncId}`]?.v                                              ;
-  const theme = record ? (record.preset === true ? null : record.t) : profile.th;
-  const colors = colorsOf(theme);
-  if (!colors) return null;
-  return { colors, darkColors: colorsOf((theme                      ).dark) };
 }
 
 function deviceTabs(scope                        , me        , devices                         )                   {
@@ -1890,25 +1913,14 @@ function bookmarkTree(scope                        )                 {
   const values = new Map                       ();
   for (const [k, v] of visible(scope, "bm:")) {
     const b = v                 ;
-    if (b && typeof b === "object" && (b.k === "u" || b.k === "f")) values.set(k.slice(3), fromLegacy(b));
+    if (k !== "bm:bar" && k !== "bm:other" && b && typeof b === "object" && (b.k === "u" || b.k === "f")) values.set(k.slice(3), fromLegacy(b));
   }
   const parentOf = new Map                ();
   for (const [key, v] of values) {
     const p = typeof v.p === "string" ? v.p : "other";
     parentOf.set(key, p === "bar" || p === "other" ? p : values.get(p)?.k === "f" ? p : "other");
   }
-  for (const key of [...values.keys()].sort()) {
-    const seen = new Set([key]);
-    for (let at = parentOf.get(key) ; parentOf.has(at); at = parentOf.get(at) ) {
-      if (seen.has(at)) {
-        parentOf.set(key, "other");
-        break;
-      }
-      seen.add(at);
-    }
-  }
-  const children = new Map                  ();
-  for (const key of values.keys()) children.set(parentOf.get(key) , [...(children.get(parentOf.get(key) ) ?? []), key]);
+  const children = folderChildren(parentOf, [...values.keys()].sort(), "other");
   const sorted = (parent        ) =>
     (children.get(parent) ?? []).map((key) => ({ key, pos: str(values.get(key) .pos) })).sort(byPosThenKey).map((x) => x.key);
   const node = (key        , root                        )               => {
@@ -1920,10 +1932,21 @@ function bookmarkTree(scope                        )                 {
       url: folder ? null : str(v.u),
       added: typeof v.a === "number" && Number.isFinite(v.a) ? v.a : 0,
       root,
-      children: folder ? sorted(key).map((k) => node(k, null)) : null,
+      children: folder ? [] : null,
     };
   };
-  return [...sorted("bar").map((k) => node(k, "bar")), ...sorted("other").map((k) => node(k, "other"))];
+  const tree = [...sorted("bar").map((k) => node(k, "bar")), ...sorted("other").map((k) => node(k, "other"))];
+  const folders = tree.map((folder) => ({ folder, depth: 1 }));
+  while (folders.length) {
+    const { folder, depth } = folders.pop() ;
+    if (!folder.children || depth >= MAX_BOOKMARK_DEPTH) continue;
+    for (const k of sorted(folder.key)) {
+      const child = node(k, null);
+      folder.children.push(child);
+      folders.push({ folder: child, depth: depth + 1 });
+    }
+  }
+  return tree;
 }
 
 function historyList(scope                        )                {
@@ -2015,7 +2038,7 @@ function buildView(scopes                            , me        )       {
       color: optStr(p.c),
       icon: optStr(p.i),
       isDefault: syncId === defaultId,
-      theme: themeOf(app, syncId, p),
+      theme: themeOf(app, syncId, p.th),
       sendTargets: sendTargets(own, me, devices),
       deviceTabs: deviceTabs(own, me, devices),
       pinned: pinnedArea(own),
@@ -2027,6 +2050,106 @@ function buildView(scopes                            , me        )       {
   const placed = (p             ) => rank.get(p.syncId) ?? rank.size;
   profileList.sort((a, z) => placed(a) - placed(z) || Number(z.isDefault) - Number(a.isDefault) || a.name.localeCompare(z.name) || (a.syncId < z.syncId ? -1 : 1));
   return { devices: deviceList, profiles: profileList, search: searchOf(app), look: lookOf(app) };
+}
+
+});
+__define("packages/sync/src/folders.ts", function (exports, __require) {
+  __export(exports, "folderChildren", () => folderChildren);
+function folderChildren(parentOf                     , keys          , fallback        )                        {
+  const rooted = new Set        ();
+  for (const key of keys) {
+    const path = [key];
+    const seen = new Set([key]);
+    let looped = false;
+    for (let at = parentOf.get(key) ; parentOf.has(at) && !rooted.has(at); at = parentOf.get(at) ) {
+      if (seen.has(at)) {
+        parentOf.set(key, fallback);
+        looped = true;
+        break;
+      }
+      seen.add(at);
+      path.push(at);
+    }
+    if (looped) rooted.add(key);
+    else for (const at of path) rooted.add(at);
+  }
+  const children = new Map                  ();
+  for (const key of parentOf.keys()) {
+    const list = children.get(parentOf.get(key) );
+    if (list) list.push(key);
+    else children.set(parentOf.get(key) , [key]);
+  }
+  return children;
+}
+
+});
+__define("packages/sync/src/companion/theme.ts", function (exports, __require) {
+  __export(exports, "themeOf", () => themeOf);
+                                                   
+
+                                                                                                            
+                                                                    
+                                                                                                                                                         
+                                                                                                                                                            
+
+function hex(n         ) {
+  const v = typeof n === "number" && Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0;
+  return Math.round(v * 255).toString(16).padStart(2, "0").toUpperCase();
+}
+
+function colorsOf(look         )                  {
+  if (!look || typeof look !== "object" || !Array.isArray((look                       ).stops)) return null;
+  const out           = [];
+  for (const stop of (look                        ).stops.slice(0, 16)) {
+    if (out.length >= 3) break;
+    const c = (stop                                              )?.color;
+    if (!c || ![c.r, c.g, c.b].every((n) => typeof n === "number" && Number.isFinite(n) && Math.abs(n) < 4)) continue;
+    const alpha = typeof c.a === "number" && Number.isFinite(c.a) ? Math.min(1, Math.max(0, c.a)) : 1;
+    out.push(`#${hex(c.r)}${hex(c.g)}${hex(c.b)}${alpha < 1 ? hex(alpha) : ""}`);
+  }
+  return out.length ? out : null;
+}
+
+const TEXTURES                              = ["grain", "sand", "denim", "tweed"];
+const DEFAULT_ANGLE = 135;
+const unit = (v         , fallback        ) => (typeof v === "number" && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : fallback);
+const degrees = (v         ) => (typeof v === "number" && Number.isFinite(v) ? ((v % 360) + 360) % 360 : null);
+
+function themeLookOf(look         , angle         )                       {
+  if (!look || typeof look !== "object" || !Array.isArray((look                       ).stops)) return null;
+  const t = look                           ;
+  const stops                  = [];
+  for (const raw of (t.stops             ).slice(0, 16)) {
+    if (stops.length >= 3) break;
+    const s = raw                                  ;
+    const c = s?.color                                       ;
+    if (!c || ![c.r, c.g, c.b].every((n) => typeof n === "number" && Number.isFinite(n) && Math.abs(n) < 4)) continue;
+    stops.push({ color: { r: c.r          , g: c.g          , b: c.b          , a: unit(c.a, 1) }, x: unit(s .x, 0.5), y: unit(s .y, 0.5) });
+  }
+  if (!stops.length) return null;
+  return {
+    stops,
+    intensity: unit(t.intensity, 0.6),
+    grain: unit(t.grain, 0),
+    texture: TEXTURES.includes(t.texture                    ) ? (t.texture                    ) : "grain",
+    translucency: unit(t.translucency, 1),
+    angle: degrees(angle) ?? degrees(t.angle) ?? DEFAULT_ANGLE,
+  };
+}
+
+function themeOf(app            , syncId        , profileTheme         )                   {
+  const record = app.records[`pth:${syncId}`]?.v                                              ;
+  const theme = record ? (record.preset === true ? null : record.t) : profileTheme;
+  const colors = colorsOf(theme);
+  if (!colors) return null;
+  const angles = (record ? app.records[`pth:${syncId}:angle`]?.v : null)                                              ;
+  const t = theme                           ;
+  const look = themeLookOf(theme, angles?.a);
+  if (!look) return null;
+  const lightAngle = degrees(angles?.a) ?? degrees(t.angle);
+  const dark = themeLookOf(t.dark, angles?.d ?? (t.dark                                       )?.angle ?? lightAngle);
+  const mode = t.mode === "light" || t.mode === "dark" ? t.mode : "auto";
+  return { colors, darkColors: colorsOf(t.dark), mode, look, dark };
 }
 
 });

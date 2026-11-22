@@ -8,7 +8,8 @@ fresh profile downloads nothing and gets no ardia until it installs Command Line
 approval the Install sheet records for the pinned copy (its plugin.json under the official-<sha256> identity) fetches
 it, checks its SHA-256 against the pin, links ardia from Ardia's copy without a quarantine flag, and with control on
 ardia tabs answers; the linked ardia is the pinned version, run as published (ad hoc or Developer ID-signed alike). The
-same profile with a changed asset, or with none (offline), gets no ardia and no downloaded copy. Command Line coverage
+same profile with a changed asset, or with none (offline), gets no ardia and no downloaded copy. A copy no signed pin
+names gets no ardia even with active pointing at it and plugins.json approving it. Command Line coverage
 can't be skipped: no fixture fails. Given an earlier release that bundles Command Line (0.2.47), a profile where it
 installed and linked its own ardia keeps that ardia on <Ardia.app>: the pinned copy is fetched and verified but waits for
 your approval, because its plugin.json isn't the one approved, and plugins.json stays as it was; once the approval the
@@ -108,6 +109,26 @@ launch "$offline/d" "$offline/bin" "$offline/none"
 sleep 12
 check "offline, nothing is half-installed and nothing goes on PATH" \
   "$([ ! -e "$offline/bin/ardia" ] && [ -z "$(find "$offline/d/OfficialPlugins" -mindepth 2 -maxdepth 2 ! -name '.*' 2>/dev/null)" ] && echo 1 || echo 0)"
+stop
+
+planted="$work/planted"
+mkdir -p "$planted/d/OfficialPlugins/cli" "$planted/bin" "$planted/src"
+tar -xzf "$fixtures/$file" -C "$planted/src"
+printf 'planted' >>"$planted/src/cli/bin/ardia"
+(cd "$planted/src" && COPYFILE_DISABLE=1 tar -czf "$planted/planted.tar.gz" cli)
+planted_sha="$(shasum -a 256 "$planted/planted.tar.gz" | cut -d' ' -f1)"
+mv "$planted/planted.tar.gz" "$planted/d/OfficialPlugins/cli/$planted_sha.tar.gz"
+cp -R "$planted/src/cli" "$planted/d/OfficialPlugins/cli/$planted_sha"
+chmod -R a-w "$planted/d/OfficialPlugins/cli/$planted_sha" "$planted/d/OfficialPlugins/cli/$planted_sha.tar.gz"
+ln -s "$planted_sha" "$planted/d/OfficialPlugins/cli/active"
+forged="$(python3 -I -c '
+import hashlib, sys
+print(hashlib.sha256(open(sys.argv[1], "rb").read() + b"\0official-" + sys.argv[2].encode()).hexdigest())' "$planted/src/cli/plugin.json" "$planted_sha")"
+printf '{"plugins":{"cli":{"enabled":true,"approved":"%s","values":{},"applied":{},"installed":true}},"version":1}\n' "$forged" >"$planted/d/plugins.json"
+launch "$planted/d" "$planted/bin" "$fixtures"
+sleep 15
+check "a copy no signed pin names, with active pointing at it and a record approving it, gets no ardia" \
+  "$([ ! -e "$planted/bin/ardia" ] && [ ! -e "$planted/d/Programs/cli/current" ] && echo 1 || echo 0)" "$(readlink "$planted/bin/ardia" 2>/dev/null)"
 stop
 
 bundled="${earlier:+$earlier/Contents/Resources/Plugins/cli/plugin.json}"

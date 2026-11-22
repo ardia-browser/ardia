@@ -4,8 +4,9 @@ import { act } from "react-test-renderer";
 import { DeckBar } from "../components/tabs/DeckBar";
 import { IncognitoChip } from "../components/tabs/DeckChrome";
 import { TabDeck } from "../components/tabs/TabDeck";
-import { ConfirmSheet, DesignProvider, IncognitoSpecs, Symbol, SystemGlyph, tabsInk } from "../components/ui";
+import { BarPlusGlyph, ConfirmSheet, elevation, PressInPlace, shadowCss, ToggleIconButton, controlRadius, controlSize, DesignProvider, press, IncognitoSpecs, NoResultsState, reachesTarget, rolesFor, Symbol, SystemGlyph, tabsLayout } from "../components/ui";
 import { IncognitoEyes } from "../components/ui/IncognitoEyes";
+import { PRIVATE_ACCENT } from "../components/ui/theme";
 import { DECK, DECK_ARC, deckGeometry, redesignedBarCenterFromBottom } from "../lib/deckGeometry";
 import { designFor, type Design } from "../lib/design";
 import { haptics } from "../state/app/haptics";
@@ -101,6 +102,17 @@ test("the original deck keeps its bar and its Incognito chip, and none of the re
   unmount(root);
 });
 
+test("the original deck's Incognito chip is a continuous rounded rectangle on the control radius, not a capsule, and dims on press", () => {
+  const root = renderSurface(<IncognitoChip count={2} top={0} onPress={() => undefined} />);
+  const chip = root.root.findAll((node) => node.props.testID === "deckIncognitoChip" && typeof node.props.style === "function")[0]!;
+  const rest = StyleSheet.flatten(chip.props.style({ pressed: false }));
+  expect(rest).toMatchObject({ borderRadius: controlRadius(tabsLayout.chipHeight), borderCurve: "continuous" });
+  expect(rest.borderRadius).toBeLessThan(tabsLayout.chipHeight / 2);
+  expect(StyleSheet.flatten(chip.props.style({ pressed: true })).opacity).toBe(press.filledOpacity);
+  expect(chip.props.accessibilityLabel).toBe("Incognito, 2 tabs");
+  unmount(root);
+});
+
 test("the redesign drops the old bar and chip for main's header and bottom bar", () => {
   withPrivateTabs(2);
   const root = deck();
@@ -130,7 +142,7 @@ test("the redesigned cards stack as Arc Search's: two thirds of the screen wide 
   unmount(root);
 });
 
-test("the header is centred 26 points under the safe top, 24 in from the sides like the bottom bar, and its ··· is a 44-point glass circle", () => {
+test("the header is centred 26 points under the safe top, 24 in from the sides like the bottom bar, and its More is a 44-point glass rounded rectangle", () => {
   const root = deck();
   const header = style(root, "deckHeader");
   expect(header.top + header.height / 2).toBe(SAFE_TOP + 26);
@@ -138,8 +150,8 @@ test("the header is centred 26 points under the safe top, 24 in from the sides l
   expect(style(root, "deckBottomBar")).toMatchObject({ paddingLeft: header.paddingHorizontal, paddingRight: header.paddingHorizontal });
   const more = root.root.findAll((node) => Array.isArray(node.props.items) && node.props.place && node.props.items.some((item: { label?: string }) => item?.label === "Settings"))[0]!;
   expect(more.props.place).toMatchObject({ right: 24 });
-  expect(style(root, "deckHeaderMore")).toMatchObject({ width: 44, height: 44, borderRadius: 22 });
-  expect(host(root, "deckHeaderMore")!.props.shape ?? "circle").toBe("circle");
+  expect(style(root, "deckHeaderMore")).toMatchObject({ width: 44, height: 44, borderRadius: 12, borderCurve: "continuous" });
+  expect(root.root.findAll((node) => node.props.testID === "deckHeaderMore" && node.props.shape === "rounded").length).toBeGreaterThan(0);
   unmount(root);
 });
 
@@ -162,7 +174,7 @@ test("without spaces the switcher reads Tabs; with one space it is that space's 
   unmount(many);
 });
 
-test("the ··· menu holds New Incognito Tab, Close All Tabs and Settings, adding Spaces From Your Mac with sync on and Reopen Closed Tab when there is one; the Archive lives in Settings, not the deck", () => {
+test("the ··· menu holds New Incognito Tab, Close All Tabs and Settings, adding Spaces with sync on and Reopen Closed Tab when there is one; the Archive lives in Settings, not the deck", () => {
   const plain = deck();
   act(() => pressable(plain, "More").props.onPress());
   expect(menuLabels(plain)).toEqual(["New Incognito Tab", "Close All Tabs", "Settings"]);
@@ -171,7 +183,7 @@ test("the ··· menu holds New Incognito Tab, Close All Tabs and Settings, addi
   jest.spyOn(tabHooks, "useCanReopen").mockReturnValue(true);
   const full = deck();
   act(() => pressable(full, "More").props.onPress());
-  expect(menuLabels(full)).toEqual(["Spaces From Your Mac", "New Incognito Tab", "Reopen Closed Tab", "Close All Tabs", "Settings"]);
+  expect(menuLabels(full)).toEqual(["Spaces", "New Incognito Tab", "Reopen Closed Tab", "Close All Tabs", "Settings"]);
   unmount(full);
 });
 
@@ -187,7 +199,7 @@ test("each ··· row does its action: the Spaces sheet, a private tab, reopenin
     act(() => pressable(root, "More").props.onPress());
     pickMenu(root, label);
   };
-  choose("Spaces From Your Mac");
+  choose("Spaces");
   expect(browse.useBrowse.getState().sheet).toBe("spaces");
   act(() => browse.useBrowse.setState({ sheet: null }));
   choose("New Incognito Tab");
@@ -269,6 +281,25 @@ test("the bar's left button is an Incognito switch: Arc Search's two solid eyes,
   unmount(original);
 });
 
+test("the deck's Incognito switch is the search tray's toggled icon: it dims in place on the press with no spring, gives the bar haptic, keeps its 48-point glass and names Close Incognito Tabs for screen readers", () => {
+  withPrivateTabs(2);
+  const barPress = jest.spyOn(haptics, "barPress").mockImplementation(() => undefined);
+  const root = deck();
+  const toggle = incognitoSwitch(root)!;
+  expect(root.root.findAll((node) => node.type === ToggleIconButton && node.props.testID === "deckBarIncognitoSwitch")).toHaveLength(1);
+  expect(StyleSheet.flatten(toggle.props.style({ pressed: true }))).toMatchObject({ width: 48, height: 48, opacity: press.iconOpacity });
+  expect(StyleSheet.flatten(toggle.props.style({ pressed: false })).opacity).toBeUndefined();
+  act(() => toggle.props.onPressIn());
+  expect(barPress).toHaveBeenCalledTimes(1);
+  const holdsGlass = (node: { findAll: (test: (inner: { props: { testID?: string } }) => boolean) => unknown[] }) => node.findAll((inner) => inner.props.testID === "deckBarIncognito").length > 0;
+  expect(root.root.findAll((node) => node.type === ToggleIconButton && holdsGlass(node))).toHaveLength(1);
+  expect(root.root.findAll((node) => node.type === PressInPlace && holdsGlass(node))).toHaveLength(0);
+  expect(typeof toggle.props.onLongPress).toBe("function");
+  const named = (toggle.props.accessibilityActions ?? []) as { name: string; label?: string }[];
+  expect(named.some((action) => action.name === "Close Incognito Tabs" || action.label === "Close Incognito Tabs")).toBe(true);
+  unmount(root);
+});
+
 test("a tap on the switch shows only the Incognito tabs, fills the whole switch and turns its eyes to the switch's ink, the plus makes Incognito tabs, and a second tap brings the normal deck back; only the switch to Incognito is counted", () => {
   withPrivateTabs(2);
   const root = deck();
@@ -279,7 +310,7 @@ test("a tap on the switch shows only the Incognito tabs, fills the whole switch 
   expect(hosts(root, "deckCard")).toHaveLength(2);
   expect(incognitoSwitch(root)!.props.accessibilityState).toMatchObject({ checked: true });
   expect(incognitoSwitch(root)!.props.accessibilityHint).toBe("Shows your tabs.");
-  expect(root.root.findAll((node) => node.props.testID === "deckBarIncognito" && node.props.incognito === true)).toHaveLength(0);
+  expect(root.root.findAll((node) => node.props.testID === "deckBarIncognito" && node.props.incognito === true).length).toBeGreaterThan(0);
   expect(host(root, "deckBarIncognitoOn")).toBeUndefined();
   expect(host(root, "deckBarIncognitoGlyph")!.findAll((node) => node.type === IncognitoEyes && node.props.incognito === true)).toHaveLength(1);
   expect(pressable(root, "New Incognito Tab")).toBeDefined();
@@ -289,6 +320,55 @@ test("a tap on the switch shows only the Incognito tabs, fills the whole switch 
   expect(useTabs.getState().incognito).toBe(false);
   expect(hosts(root, "deckCard")).toHaveLength(9);
   expect(counted.mock.calls.filter(([name]) => name === "deck_incognito_switches")).toHaveLength(1);
+  unmount(root);
+});
+
+test("Incognito carries one look through the whole deck in light mode: the private backdrop, private glass on the header, field, switch and plus, a dark keyboard and dark ink", () => {
+  const privateGlass = (root: Root, id: string) => root.root.findAll((node) => node.props.testID === id && node.props.incognito === true).length > 0;
+  const chrome = ["deckHeaderMore", "deckSearchTabs", "deckBarIncognito", "deckBarPlus"];
+  const root = deck();
+  expect(searchField(root).props.keyboardAppearance).toBe("light");
+  expect(searchField(root).props.selectionColor).not.toBe(PRIVATE_ACCENT.spaceAccentInk);
+  expect(chrome.filter((id) => privateGlass(root, id))).toEqual([]);
+  expect(root.root.findAll((node) => node.props.testID === "deckIncognitoBackdrop")).toHaveLength(0);
+  act(() => incognitoSwitch(root)!.props.onPress());
+  act(() => jest.advanceTimersByTime(600));
+  expect(searchField(root).props.keyboardAppearance).toBe("dark");
+  expect(searchField(root).props.selectionColor).toBe(PRIVATE_ACCENT.spaceAccentInk);
+  expect(chrome.filter((id) => privateGlass(root, id))).toEqual(chrome);
+  expect(root.root.findAll((node) => node.props.testID === "deckIncognitoBackdrop").length).toBeGreaterThan(0);
+  const empty = root.root.findAll((node) => typeof node.type === "string" && node.props.children === "No Incognito Tabs")[0]!;
+  expect(StyleSheet.flatten(empty.props.style).color).toBe(rolesFor(true).label);
+  act(() => incognitoSwitch(root)!.props.onPress());
+  act(() => jest.advanceTimersByTime(1000));
+  expect(searchField(root).props.keyboardAppearance).toBe("light");
+  expect(chrome.filter((id) => privateGlass(root, id))).toEqual([]);
+  unmount(root);
+});
+
+test("the stack card's shadow is the named stack elevation role on both renderers, at the measured 6 down and 28 blur", () => {
+  expect(elevation.stack).toMatchObject({ y: 6, blur: 28, android: 14 });
+  const root = deck();
+  const card = style(root, "deckCard");
+  if (Platform.OS === "android") expect(card).toMatchObject({ elevation: elevation.stack.android, shadowColor: elevation.stack.light });
+  else expect(card.boxShadow).toBe(shadowCss("stack", false));
+  unmount(root);
+});
+
+test("the deck's + draws the shared bar plus, its Clear Text reaches 44 points with the shared dim, and the bar is the shared 48-point control", () => {
+  const root = deck();
+  expect(host(root, "deckBarPlusGlyph")!.findAll((node) => node.type === BarPlusGlyph)).toHaveLength(1);
+  expect(style(root, "deckBottomBar")).toMatchObject({ height: controlSize.bar });
+  search(root, "Site");
+  const clear = host(root, "deckSearchClear")!;
+  expect(clear.props.accessibilityLabel).toBe("Clear Text");
+  const { width, height } = StyleSheet.flatten(clear.props.style) as { width: number; height: number };
+  expect({ width, height }).toEqual({ width: 44, height: 44 });
+  expect(clear.props.hitSlop).toBeUndefined();
+  expect(reachesTarget(width, height)).toBe(true);
+  expect(root.root.findAll((node) => node.props.testID === "deckSearchClear" && node.props.glyph !== undefined)).toHaveLength(0);
+  const pressable = root.root.findAll((node) => node.props.testID === "deckSearchClear" && typeof node.props.style === "function")[0]!;
+  expect(StyleSheet.flatten(pressable.props.style({ pressed: true }))).toMatchObject({ opacity: 0.35 });
   unmount(root);
 });
 
@@ -363,22 +443,24 @@ test("the plus opens a tab, and holding it offers a private tab and reopening wi
   unmount(root);
 });
 
-test("Search Tabs filters the deck to the tabs whose title or address match, says No Matching Tabs when none do, and clearing brings every tab back", () => {
+test("Search Tabs filters the deck to the tabs whose title or address match, shows the shared No Results state when none do, and Clear Text brings every tab back", () => {
   const root = deck();
   expect(hosts(root, "deckCard")).toHaveLength(9);
   search(root, "Site 3");
   act(() => jest.advanceTimersByTime(600));
   expect(hosts(root, "deckCard")).toHaveLength(1);
-  expect(style(root, "deckSearchTabs").paddingRight).toBe(8);
+  expect(style(root, "deckSearchTabs").paddingRight).toBe(8 + 32 / 2 - 44 / 2);
   search(root, "site5.example");
   act(() => jest.advanceTimersByTime(600));
   expect(hosts(root, "deckCard")).toHaveLength(1);
   search(root, "nothing like it");
   act(() => jest.advanceTimersByTime(600));
   expect(hosts(root, "deckCard")).toHaveLength(0);
-  expect(textOf(root)).toContain("No Matching Tabs");
+  expect(textOf(root)).toContain("No Results");
+  expect(textOf(root)).toContain("“nothing like it”");
+  expect(root.root.findAll((node) => node.type === NoResultsState)).toHaveLength(1);
   expect(textOf(root)).not.toContain("No Open Tabs");
-  act(() => pressable(root, "Clear Search").props.onPress());
+  act(() => pressable(root, "Clear Text").props.onPress());
   act(() => jest.advanceTimersByTime(600));
   expect(hosts(root, "deckCard")).toHaveLength(9);
   expect(host(root, "deckSearchClear")).toBeUndefined();
@@ -415,11 +497,14 @@ test("the redesigned deck shows no Archive banner, icon or link, even when the o
   unmount(original);
 });
 
-test("the space switcher sits on a glass capsule as tall as the ··· circle", () => {
+test("the space switcher sits on a glass rounded rectangle as tall as More, and dims on the press", () => {
   withSpaces([profile("work", "Work"), profile("home", "Home")]);
   const root = deck();
-  expect(style(root, "deckSwitcherGlass")).toMatchObject({ borderRadius: 22 });
-  expect(root.root.findAll((node) => node.props.testID === "deckSwitcherGlass" && node.props.shape === "capsule").length).toBeGreaterThan(0);
+  expect(style(root, "deckSwitcherGlass")).toMatchObject({ borderRadius: 12, borderCurve: "continuous" });
+  expect(root.root.findAll((node) => node.props.testID === "deckSwitcherGlass" && node.props.shape === "rounded").length).toBeGreaterThan(0);
+  const switcher = root.root.findAll((node) => node.props.accessibilityLabel === "Space, Work" && typeof node.props.style === "function")[0]!;
+  expect(StyleSheet.flatten(switcher.props.style({ pressed: true }))).toMatchObject({ opacity: 0.35 });
+  expect(StyleSheet.flatten(switcher.props.style({ pressed: false })).opacity).toBeUndefined();
   unmount(root);
 });
 

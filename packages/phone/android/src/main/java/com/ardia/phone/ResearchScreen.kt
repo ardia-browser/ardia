@@ -65,6 +65,7 @@ import com.ardia.design.semibold
 import com.ardia.design.weight
 import com.ardia.research.ResearchAnswer
 import com.ardia.research.ResearchSearch
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -246,6 +247,7 @@ private fun WriterNote(session: ResearchSession, writer: ResearchSession.Writer,
             Icon(symbol, null, Modifier.size(16.dp).padding(top = 1.dp), tint = SystemPalette.secondaryLabel.current)
             Text(note, style = ArdiaType.footnote, color = SystemPalette.secondaryLabel.current)
         }
+        if (writer is ResearchSession.Writer.Excerpts && session.geminiNanoMissing == OnDeviceWriter.Availability.Downloading.telemetry) GeminiNanoDownload(session)
         if (!account.isConnected && !session.forcesExcerpts) {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.tight)) {
                 ContinueWithChatGPT(account.isSigningIn) {
@@ -259,6 +261,20 @@ private fun WriterNote(session: ResearchSession, writer: ResearchSession.Writer,
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun GeminiNanoDownload(session: ResearchSession) {
+    val download by OnDeviceWriter.download.collectAsState()
+    when (val state = download) {
+        is OnDeviceWriter.Download.Ready -> Row { Pill("Rewrite with Gemini Nano", prominent = true) { session.rewrite(afterGeminiNanoDownload = true) } }
+        is OnDeviceWriter.Download.Running -> Text(
+            state.fraction?.let { "Downloading Gemini Nano… ${(it * 100).roundToInt()}%. You can rewrite this answer with it when it’s done." } ?: "Downloading Gemini Nano… You can rewrite this answer with it when it’s done.",
+            style = ArdiaType.footnote,
+            color = SystemPalette.secondaryLabel.current,
+        )
+        else -> Unit
     }
 }
 

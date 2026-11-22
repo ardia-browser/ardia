@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from "react";
-import { useActiveTabId, useWindowId } from "../../state/browser/hooks";
-import { usePageFrameInset, useWindowControlsCenterY, useWindowControlsHost, useWindowControlsLeading, useWindowControlsSize } from "../../state/windows/layout";
+import { useActiveTabId, useWindow, useWindowId } from "../../state/browser/hooks";
+import { usePageFrameInset, useWindowControlsCenterY, useWindowControlsHost, useWindowControlsInset, useWindowControlsLeading, useWindowControlsSize } from "../../state/windows/layout";
+import { useWindowChrome } from "../../state/windows/windowButtons";
 import { STRIP_HEIGHT } from "../../state/windows/toolbarAutoHide";
 import { showAppMenu } from "../../state/app/appMenu";
 import { WINDOW_CONTROLS } from "../../lib/windowChrome";
@@ -8,21 +9,36 @@ import { TintInk } from "../ui/TintInk";
 import { useSitePalette } from "../toolbar/useSitePalette";
 import { usePaneChrome } from "../toolbar/WindowToolbar";
 import { controlsShown, WindowControls } from "./WindowControls";
+import { LeadingWindowControls } from "./LeadingWindowControls";
 
-export const browserWindowControls = () => (controlsShown ? <PlacedControls /> : null);
+export const browserWindowControls = () =>
+  controlsShown ? (
+    <>
+      <PlacedControls />
+      <PlacedLeadingControls />
+    </>
+  ) : null;
+
+function PlacedLeadingControls() {
+  const windowId = useWindowId();
+  const small = useWindow(windowId, (w) => w?.kind === "small");
+  return <LeadingWindowControls windowId={windowId} size={small ? WINDOW_CONTROLS.small : WINDOW_CONTROLS.regular} />;
+}
 
 function PlacedControls() {
+  useWindowChrome();
   const windowId = useWindowId();
   const centerY = useWindowControlsCenterY();
   const size = useWindowControlsSize();
   const host = useWindowControlsHost();
   const leading = useWindowControlsLeading();
+  const inset = useWindowControlsInset();
   const onMenu = useCallback(() => void showAppMenu(windowId), [windowId]);
   if (centerY === null || !host) return null;
   if (host === "toolbar") return <ToolbarControls windowId={windowId} centerY={centerY} size={size} onMenu={onMenu} />;
   return (
     <TintInk>
-      <WindowControls windowId={windowId} onMenu={onMenu} centerY={centerY} size={size} leading={leading} />
+      <WindowControls windowId={windowId} onMenu={onMenu} centerY={centerY} size={size} leading={leading} inset={inset} />
     </TintInk>
   );
 }

@@ -155,7 +155,7 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
   const page = tab?.url ? tab : undefined;
   const web = tabId ? webviews.get(tabId) : undefined;
   const ui = s.windowUi[windowId];
-  if (page && (runHidingCommand(command, page.id) || runReaderCommand(command, page.id, mayWrite))) return;
+  if (page && (runHidingCommand(command, page.id) || runReaderCommand(command, page.id))) return;
   if (!targeted && runSidebarCommand(command, arg, windowId)) return;
 
   switch (command) {
@@ -224,8 +224,8 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
       return page ? void jumpToSelection(page.id) : undefined;
     case "useSelectionForFind":
       if (!page || !web) return;
-      return void web.evaluate<string>("post('result', JSON.stringify(String(getSelection() || '').trim().slice(0, 500)))").then((query) => {
-        if (query) openFind(page.id, { query });
+      return void web.evaluate<unknown>("post('result', JSON.stringify(String(getSelection() || '').trim().slice(0, 500)))").then((query) => {
+        if (typeof query === "string" && query) openFind(page.id, { query: query.slice(0, 500) });
       });
     case "findNext":
     case "findPrevious":

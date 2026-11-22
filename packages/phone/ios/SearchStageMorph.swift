@@ -94,6 +94,7 @@ struct StageMorphLook {
   var panelTint: UIColor = .clear
   var panelStyle: UIUserInterfaceStyle = .unspecified
   var classicPanel: UIColor = .secondarySystemBackground
+  var classicChrome = ClassicChrome()
 }
 
 struct StageCardPlace {
@@ -483,12 +484,14 @@ final class StageMorphView: UIView {
     } else {
       surface = UIView()
       surface.backgroundColor = look.classicPanel
-      surface.layer.borderWidth = 0.5
-      surface.layer.borderColor = UIColor.label.withAlphaComponent(0.12).cgColor
+      let edgeTraits = look.panelStyle == .unspecified ? UITraitCollection.current : UITraitCollection(userInterfaceStyle: look.panelStyle)
+      surface.layer.borderWidth = CGFloat(look.classicChrome.edgeWidth)
+      surface.layer.borderColor = look.classicChrome.edge?.resolvedColor(with: edgeTraits).cgColor
       surface.layer.cornerCurve = .continuous
       classicFill = .systemBackground
     }
     super.init(frame: .zero)
+    surface.layer.cornerCurve = .continuous
     isUserInteractionEnabled = false
     accessibilityElementsHidden = true
     contents.clipsToBounds = true

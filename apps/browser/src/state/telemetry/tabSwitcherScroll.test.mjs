@@ -7,7 +7,7 @@ globalThis.fetch = async () => ({ status: 200 });
 
 const client = await import("./client.ts");
 const usage = await import("./usage.ts");
-const { noteTabSwitcherOverflowClick, noteTabSwitcherOverflowOpened, noteTabSwitcherWheelScrolled } = await import("./tabSwitcherOpens.ts");
+const { noteTabSwitcherOverflowClick, noteTabSwitcherOverflowOpened, noteTabSwitcherPictureLate, noteTabSwitcherWheelScrolled } = await import("./tabSwitcherOpens.ts");
 after(() => client.setSharing(false, "settings"));
 
 async function usageCounts() {
@@ -22,12 +22,14 @@ test("an hour with only overflowing switcher opens, clicks and wheel scrolls sen
   noteTabSwitcherOverflowOpened();
   noteTabSwitcherOverflowClick();
   noteTabSwitcherWheelScrolled();
+  noteTabSwitcherPictureLate();
   usage.sessionEnding();
   const sent = await usageCounts();
   assert.equal(sent.length, 1);
   assert.equal(sent[0].tab_switcher_overflow_opens, 2);
   assert.equal(sent[0].tab_switcher_overflow_clicks, 1);
   assert.equal(sent[0].tab_switcher_wheel_scrolls, 1);
+  assert.equal(sent[0].tab_switcher_pictures_late, 1);
   usage.sessionEnding();
   assert.equal((await usageCounts()).length, 1);
 });

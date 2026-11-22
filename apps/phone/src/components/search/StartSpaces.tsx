@@ -6,14 +6,16 @@ import { redesignedBarCenterFromBottom } from "../../lib/deckGeometry";
 import { linearGradientCss } from "../../lib/gradient";
 import { lookForApp, type ProfileLook } from "../../lib/profileLook";
 import { sfSymbol } from "../../lib/sfSymbols";
+import { actionWords } from "../../lib/sharedWords";
 import { haptics } from "../../state/app/haptics";
 import { newTab } from "../../state/browse/store";
 import { usePreferences } from "../../state/settings/hooks";
+import { useCustomTheme } from "../../state/settings/themeDraft";
 import { selectProfile } from "../../state/sync/actions";
 import { useSelectedProfile, useSyncStatus, useSyncView } from "../../state/sync/hooks";
 import type { SyncedProfile } from "../../state/sync/store";
 import { countUsage } from "../../state/telemetry/telemetry";
-import { AppIcon, browseLayout, DEFAULT_PROFILE_COLOR, font, isSymbolName, PROFILE_PRESETS, rolesFor, spring, startInk, startLayout, Symbol, SystemGlyph, tabsCurve, useProfileLook, useReduceMotion, type SymbolName } from "../ui";
+import { AppIcon, browseLayout, CustomLookBackdrop, DEFAULT_PROFILE_COLOR, font, isSymbolName, PROFILE_PRESETS, rolesFor, spring, startInk, startLayout, Symbol, SystemGlyph, tabsCurve, useProfileLook, useReduceMotion, type SymbolName } from "../ui";
 import { startGradient, startLogo } from "./startLook";
 
 export type StartGeometry = { width: number; height: number; safeSide: number; barCenterY: number };
@@ -26,6 +28,7 @@ export function StartSpaces({ geometry, dark, incognito, interactive = true }: {
   const shown = useSelectedProfile();
   const appLook = useProfileLook();
   const choice = usePreferences((p) => p.colorChoice);
+  const custom = useCustomTheme();
   const spaces = status.isEnabled ? view.profiles : [];
   const [chosen, setChosen] = useState<string | null>(null);
   const current = (chosen ? spaces.find((p) => p.syncId === chosen) : undefined) ?? shown ?? spaces[0] ?? null;
@@ -47,7 +50,8 @@ export function StartSpaces({ geometry, dark, incognito, interactive = true }: {
     pagerIndex.current = index;
     pager.current?.scrollToOffset({ offset: index * geometry.width, animated: false });
   }, [index, geometry.width]);
-  const looks = useMemo(() => new Map(spaces.map((space) => [space.syncId, lookForApp(choice, true, space, PROFILE_PRESETS, DEFAULT_PROFILE_COLOR)])), [spaces, choice]);
+  const looks = useMemo(() => new Map(spaces.map((space) => [space.syncId, lookForApp(choice, true, space, PROFILE_PRESETS, DEFAULT_PROFILE_COLOR, custom)])), [spaces, choice, custom]);
+  const pagerLooks = useMemo(() => ({ width: geometry.width, height: geometry.height, dark, incognito, looks }), [geometry.width, geometry.height, dark, incognito, looks]);
   const select = (id: string) => {
     pagerIndex.current = spaces.findIndex((p) => p.syncId === id);
     haptics.selection();
@@ -95,7 +99,7 @@ export function StartSpaces({ geometry, dark, incognito, interactive = true }: {
           bounces={false}
           showsHorizontalScrollIndicator={false}
           initialScrollIndex={index}
-          extraData={`${geometry.width}:${geometry.height}:${dark}:${incognito}:${choice}`}
+          extraData={pagerLooks}
           getItemLayout={(_data, at) => ({ length: geometry.width, offset: geometry.width * at, index: at })}
           onMomentumScrollEnd={settle}
           renderItem={({ item }) => <StartBackdrop look={looks.get(item.syncId) ?? appLook} width={geometry.width} height={geometry.height} dark={dark} incognito={incognito} />}
@@ -110,6 +114,11 @@ export function StartSpaces({ geometry, dark, incognito, interactive = true }: {
 }
 
 function StartBackdrop({ look, width, height, dark, incognito }: { look: ProfileLook; width: number; height: number; dark: boolean; incognito: boolean }) {
+  if (look.custom && !incognito) return <CustomLookBackdrop testID="startTheme" look={look} dark={dark} style={{ width, height }} />;
+  return <StartGradient look={look} width={width} height={height} dark={dark} incognito={incognito} />;
+}
+
+function StartGradient({ look, width, height, dark, incognito }: { look: ProfileLook; width: number; height: number; dark: boolean; incognito: boolean }) {
   const stops = useMemo(() => startGradient(look, dark, incognito), [look, dark, incognito]);
   return <View testID="startGradient" pointerEvents="none" style={{ width, height, experimental_backgroundImage: linearGradientCss(stops, true, width, height) }} />;
 }
@@ -148,9 +157,9 @@ export function StartMark({ incognito }: { incognito: boolean }) {
     [reduceMotion],
   );
   const moved = useAnimatedStyle(() => {
-    const scale = reduceMotion ? 1 : 1 + (startLogo.dragLift - 1) * lifted.value - (1 - startLogo.pressScale) * pressed.value;
+    const scale = reduceMotion ? 1 : 1 + (startLogo.dragLift - 1) * lifted.value;
     const tilt = reduceMotion ? 0 : (x.value / DRAG_REACH) * startLogo.dragTilt;
-    return { opacity: reduceMotion ? 1 - (1 - startLayout.logoPressOpacity) * pressed.value : 1, transform: [{ translateX: x.value }, { translateY: y.value }, { rotate: `${tilt}deg` }, { scale }] };
+    return { opacity: 1 - (1 - startLayout.logoPressOpacity) * pressed.value, transform: [{ translateX: x.value }, { translateY: y.value }, { rotate: `${tilt}deg` }, { scale }] };
   }, [reduceMotion]);
   const search = () => {
     if (Platform.OS === "android" && !incognito) countUsage("start_logo_taps");
@@ -162,14 +171,13 @@ export function StartMark({ incognito }: { incognito: boolean }) {
         <Pressable
           testID="startLogoButton"
           accessibilityRole="button"
-          accessibilityLabel="Search"
-          accessibilityHint="Opens Search."
+          accessibilityLabel={incognito ? actionWords.newIncognitoTab : actionWords.newTab}
           onPressIn={() => {
             haptics.barPress();
-            pressed.value = reduceMotion ? withTiming(1, { duration: startLogo.reducedSettleMs / 2 }) : withSpring(1, press);
+            pressed.value = 1;
           }}
           onPressOut={() => {
-            pressed.value = reduceMotion ? withTiming(0, { duration: startLogo.reducedSettleMs }) : withSpring(0, settle);
+            pressed.value = 0;
           }}
           onPress={search}
           style={styles.logoButton}

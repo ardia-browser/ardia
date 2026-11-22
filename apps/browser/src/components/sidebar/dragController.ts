@@ -1,5 +1,5 @@
 import { layout } from "../ui/theme";
-import { Animated, type GestureResponderEvent, type View } from "react-native";
+import { Animated, type View } from "react-native";
 import { NO_DROP } from "../../state/drag/drops";
 import { dropTabs } from "../../state/pins/actions";
 import { dragHomeOf, movingTabsFrom, profileBeside, splitIdOfNow } from "../../state/sidebar/current";
@@ -19,7 +19,6 @@ import { type DragSession, newDragSession } from "./dragGeometry";
 import { captureEscape, hapticTick } from "../../state/drag/dragNative";
 import { entryKey } from "../../state/sidebar/entryKey";
 import { endHeldTabPress } from "../../state/sidebar/heldTabPress";
-import { tabPlace } from "../../state/sidebar/actions";
 import { dropTabsInProfile, switchProfile } from "../../state/browser/actions";
 
 export class DragController extends DragTargeting {
@@ -241,10 +240,10 @@ export class DragController extends DragTargeting {
   }
 
   interrupt() {
-    this.end(false, null, true);
+    this.end(false, true);
   }
 
-  end(commit: boolean, release: GestureResponderEvent | null = null, interrupted = false) {
+  end(commit: boolean, interrupted = false) {
     const session = this.session;
     if (session?.external) return void this.finishExternal(false);
     if (!session?.sources.length) return endHeldTabPress([], null);
@@ -264,7 +263,6 @@ export class DragController extends DragTargeting {
         ? this.landingSpot(commit ? drop : NO_DROP)
         : null;
     const dragged = sources.flatMap((i) => i.tabIds);
-    const places = dragged.map(tabPlace).join();
     const dropped = commit && !splitDrop && measured && sources.length > 0;
     let settled: (() => void) | null = null;
     if (dropped && drop.type === "none" && !toIcon) noteDragWithoutDrop(session);
@@ -287,9 +285,7 @@ export class DragController extends DragTargeting {
     }
     this.reset();
     settled?.();
-    const moved = dragged.map(tabPlace).join() !== places;
-    const stayed = commit && !splitDrop && !into && !moved && !elsewhere;
-    endHeldTabPress(dragged, stayed ? release : null);
+    endHeldTabPress(dragged, null);
     if (leftPanel) closeFolderPanel();
     if (!spot || !ghost) {
       this.token = null;

@@ -13,8 +13,12 @@ struct OfficialPinEntry: Equatable {
   let sha256: String
   let reservedPrograms: [String]
   let legacyInstall: OfficialLegacyInstall?
+  var trustedArtifacts: Set<String> = []
+  var bundledDigests: Set<String> = []
 
   var folderId: String { OfficialPin.folderId(sha256) }
+
+  func trusts(_ sha: String) -> Bool { sha == sha256 || trustedArtifacts.contains(sha) }
   var file: String { url.lastPathComponent }
 }
 
@@ -27,6 +31,7 @@ struct OfficialPin: Equatable {
   static let folderPrefix = "official-"
   static let legacyFolderId = "bundled"
   static let maxEntries = 16
+  static let maxTrusted = 256
   private static let versionPattern = try! NSRegularExpression(pattern: "^[0-9]{1,4}\\.[0-9]{1,4}\\.[0-9]{1,4}(-[a-z]{1,16}\\.[0-9]{1,4})?$")
   private static let shaPattern = try! NSRegularExpression(pattern: "^[0-9a-f]{64}$")
 
@@ -75,7 +80,19 @@ struct OfficialPin: Equatable {
         else { return nil }
         legacy = OfficialLegacyInstall(program: program, root: root, current: current)
       }
-      entries.append(OfficialPinEntry(name: name, version: version, url: url, sha256: sha, reservedPrograms: programs, legacyInstall: legacy))
+      var trustedArtifacts: Set<String> = []
+      var bundledDigests: Set<String> = []
+      if let given = plugin["trusted"] {
+        guard let fields = given as? [String: Any], let artifacts = fields["artifacts"] as? [String] ?? (fields["artifacts"] == nil ? [] : nil),
+          let bundled = fields["bundledDigests"] as? [String] ?? (fields["bundledDigests"] == nil ? [] : nil), artifacts.allSatisfy(isSha), bundled.allSatisfy(isSha),
+          artifacts.count <= maxTrusted, bundled.count <= maxTrusted
+        else { return nil }
+        trustedArtifacts = Set(artifacts)
+        bundledDigests = Set(bundled)
+      }
+      entries.append(
+        OfficialPinEntry(
+          name: name, version: version, url: url, sha256: sha, reservedPrograms: programs, legacyInstall: legacy, trustedArtifacts: trustedArtifacts, bundledDigests: bundledDigests))
     }
     return OfficialPin(entries: entries)
   }

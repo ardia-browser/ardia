@@ -132,6 +132,8 @@ chromium chromium-linux-thin-scroll-bars.patch linux
 chromium chromium-linux-unhandled-key.patch linux
 chromium chromium-linux-window-minimum-size.patch linux
 chromium chromium-linux-frameless-utility-windows.patch linux
+chromium chromium-linux-window-state.patch linux
+chromium chromium-linux-borderless-frame.patch linux
 chromium chromium-linux-geolocation.patch linux
 
 layer engine/chromium

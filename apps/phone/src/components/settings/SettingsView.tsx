@@ -9,6 +9,7 @@ import { useCoverFocus } from "../ui/coverFocus";
 import { FilterListDetailPage, FilterListsPage, MyFiltersPage, TrustedSitesPage } from "./BlockingPages";
 import { AboutPage, ClearDataPage, LicensesPage } from "./DataPages";
 import { AppearancePage } from "./AppearancePage";
+import { ThemePage } from "./ThemePage";
 import { SettingsRoot } from "./SettingsRoot";
 import { SearchEnginePage, SiteSettingsPage } from "./SitePages";
 import { SyncConnect } from "../sync/SyncConnect";
@@ -34,6 +35,8 @@ export function SettingsPageFor({ route }: { route: SettingsRoute }) {
       return <SettingsRoot />;
     case "appearance":
       return <AppearancePage />;
+    case "theme":
+      return <ThemePage />;
     case "searchEngine":
       return <SearchEnginePage />;
     case "siteSettings":

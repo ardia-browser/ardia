@@ -13,7 +13,7 @@ import { DragController } from "./dragController";
 import { DragItems } from "./dragItems";
 import { onAppEvent } from "../../state/drag/dragNative";
 import { WindowDropGlow } from "../tabstrip/WindowDropGlow";
-import { TAB_CLICK_SLOP } from "../../state/sidebar/heldTabPress";
+import { dragGesture } from "./dragGesture";
 
 const dropGlowPlace = perLook(() => ({ left: 5, right: 5, top: 44, bottom: 6, borderRadius: radius.chrome }));
 
@@ -112,29 +112,17 @@ export function useDragItem(key: string, spec: ItemSpec, clip: ClipSource | null
     return items.add(key, item);
   }, [items, item, key]);
 
-  const responder = useMemo(() => {
-    let far = 0;
-    let pressAt = [0, 0];
-    const reach = (x: number, y: number) => (far = Math.max(far, Math.hypot(x - pressAt[0]!, y - pressAt[1]!)));
-    return PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) => {
-        pressAt = [g.moveX - g.dx, g.moveY - g.dy];
-        return spec.kind !== "tail" && Math.hypot(g.dx, g.dy) > 4;
-      },
-      onPanResponderGrant: (_, g) => {
-        far = 0;
-        reach(g.moveX, g.moveY);
-        void controller?.begin(key, g.x0, g.y0);
-      },
-      onPanResponderMove: (_, g) => {
-        reach(g.moveX, g.moveY);
-        controller?.move(g.moveX, g.moveY);
-      },
-      onPanResponderRelease: (e, g) => controller?.end(true, Math.max(reach(g.moveX, g.moveY), reach(e.nativeEvent.pageX, e.nativeEvent.pageY)) <= TAB_CLICK_SLOP ? e : null),
-      onPanResponderTerminate: () => controller?.interrupt(),
-      onPanResponderTerminationRequest: () => false,
-    });
-  }, [controller, key]);
+  const responder = useMemo(
+    () =>
+      PanResponder.create(
+        dragGesture(spec.kind !== "tail", {
+          begin: (x, y) => void controller?.begin(key, x, y),
+          move: (x, y) => controller?.move(x, y),
+          end: (commit) => (commit ? controller?.end(true) : controller?.interrupt()),
+        }),
+      ),
+    [controller, key],
+  );
   const ref = useCallback(
     (view: View | null) => {
       if (item) item.view = view;

@@ -26,6 +26,11 @@ GitHub Actions. Each has these assets:
 - `ArdiaCore-<engine tree:12>-symbols.tar.xz` and `ArdiaCore-<engine tree:12>-uuids.txt`, only on an `engine-<tree:12>`
   prerelease: the dSYMs of the engine's unstripped build and the UUID of each image they name, which
   `scripts/symbolicate-crash.sh` reads to name the frames of a crash in Chromium Framework. See "Engines" below.
+- `Ardia-<version>-symbols.tar.xz` and `Ardia-<version>-uuids.txt`, on every Mac release and nightly: the dSYM of the
+  app's own executable, `Ardia.app.dSYM` from the release's `Ardia.xcarchive`, and the UUID of the `Contents/MacOS/Ardia`
+  it names. `scripts/symbolicate-crash.sh` reads them to name the `Ardia + 0x…` frames of a crash. Unlike the build
+  artifact that holds the archive, which expires after 3 days, they stay on the release. See "Engines"
+  below.
 
 Each version's notes are a file in the repo, `docs/release-notes/<version>.md` (how to write one:
 `docs/release-notes/README.md`). The GitHub release, the update dialog and the website's
@@ -152,7 +157,7 @@ stays up. That's GPL-3.0 §6(d) for the GPL parts (uBlock Origin today), and it'
 - The engine: ArdiaCore's `Chromium Framework.framework` built in `~/chromium-build` (`scripts/agent/engine-build`;
   `docs/engine-build.md`), and `pod install` in `apps/browser/macos`. A framework built elsewhere goes in through
   `ARDIACORE_FRAMEWORK`. That skips the tree checks and ships no engine archive, unless `ARDIACORE_FRAMEWORK_ENGINE`
-  names the `engine/` git tree it was built from (`engine/engine-key.sh`: one hash of `engine/` and the offline game it packs, checked against HEAD). Then the
+  names the macOS engine key it was built from (`engine/engine-key.sh --platform macos`: one hash of what the macOS engine is built from, `engine/` but for Linux's lines of the series and the offline game it packs, checked against HEAD). Then the
   release packs that engine, and its source when it's Helium, as a build from the tree would.
 
 ## Cutting a release
@@ -287,8 +292,8 @@ The first stable release after that creates `ardia-bin` on the AUR. To create it
 
 The script refuses what `release.sh` refuses: a missing notes file or one whose frontmatter doesn't read, a
 `MARKETING_VERSION` other than `<version>`, and uncommitted changes (here under `apps/browser`, `apps/linux`,
-`plugins`, `packages`, `engine` or `scripts/linux`). It uses the exact Linux engine for HEAD's engine key
-(`engine/engine-key.sh`), published in ardia-browser/ardia. Without one the `linux` job fails and the macOS release
+`plugins`, `packages`, `engine` or `scripts/linux`). It uses the exact Linux engine for HEAD's Linux engine key
+(`engine/engine-key.sh --platform linux`), published in ardia-browser/ardia. Without one the `linux` job fails and the macOS release
 ships alone; build the engine, then run `scripts/linux/release.sh <version>` on a Linux machine at the release commit
 and the `gh release upload` command it prints. A nightly and a stable go the same way.
 See [linux-ci.md](linux-ci.md) › Linux releases.
@@ -330,8 +335,9 @@ the engine if `engine/` changed (below).
   run if the checkout changed, and only then it runs the launch check (`--phase check`, the final app opened hidden, uBO
   must be ready, the signature must survive), checks the zip's EdDSA signature against the app's `SUPublicEDKey`
   (`.github/release/check-sparkle.sh <dist> <version>`, so a `SPARKLE_ED_PRIVATE_KEY` that doesn't match the app
-  fails here instead of on every update) and uploads the DMG, zip, appcast and notes. A failed launch check
-  fails the run, so nothing publishes.
+  fails here instead of on every update) and uploads the DMG, zip, appcast, notes and the app's symbols
+  (`Ardia-<version>-symbols.tar.xz` and `-uuids.txt`, which `release.sh --phase sign` packs from the build artifact's
+  `Ardia.xcarchive/dSYMs`). A failed launch check fails the run, so nothing publishes.
   Every `actions/*` step is pinned by commit SHA.
 - **publish** tags the commit and runs `publish.sh`. Before creating anything, `publish.sh` refuses a build that isn't
   above every other build in the merged feed, and a stable whose version isn't above the
@@ -373,10 +379,13 @@ steps (the build with no keys, then signing and packaging, then the launch check
 
 The app links a prebuilt Chromium Framework, which a normal CI job can't build. It's built here
 (`docs/engine-build.md`); after building it, `scripts/publish-engine.sh` (`--dry-run` first) packs it as release.sh
-packs one (stripped, unpruned) with its Helium source, uploads both to the prerelease `engine-<engine tree:12>` (never
-latest, so the feed and the download links never move to it) and appends `<tree> engine-<tree:12> <sha256>` to
-`packages/ardiacore/prebuilt-engines.tsv`: commit and push that line before dispatching. A release whose `engine/`
-tree has no engine fails its build at once, saying which script to run.
+packs one (stripped, unpruned) with its Helium source, uploads both to the prerelease `engine-<key:12>` (never
+latest, so the feed and the download links never move to it) and appends `<key> engine-<key:12> <sha256>` to
+`packages/ardiacore/prebuilt-engines.tsv`: commit and push that line before dispatching. The key is the macOS one
+(`engine/engine-key.sh --platform macos`), so a Linux-only engine change needs no new Mac engine. A row may carry a
+fourth field, the key its engine was published under (its archive is `ArdiaCore-<that key:12>.tar.xz`): such rows map
+engines published before the per-platform keys to the new key of the commit they were built from. A release whose
+macOS key has no engine fails its build at once, saying which script to run.
 
 The same script uploads the engine's symbols: `ArdiaCore-<tree:12>-symbols.tar.xz`, the dSYMs the official build writes
 beside the framework in `out/Release_GN_arm64` (`Chromium Framework.dSYM` and the helpers'; function names only, as
@@ -385,7 +394,23 @@ image. It copies them with the framework under the chromium lock and refuses a f
 UUID. The framework itself is already stripped, so strip-engine.sh's copies in `symbols/` name almost nothing. A crash's
 "Chromium Framework + 0x2e2334" is named with `scripts/symbolicate-crash.sh <Chromium Framework UUID> 0x2e2334 …`: it
 finds the engine release whose rows hold that UUID, downloads that dSYM into `dist/engine-symbols` and runs
-`atos -arch arm64 -l 0x0` on the offsets. Engines published before the symbols were uploaded have none: the next build
+`atos -arch arm64 -offset` on the offsets. `-offset` reads each one as relative to the image's `__TEXT` segment, which is
+what a crash's `+ 0x…` is: `-l 0x0` only works for an image whose `__TEXT` starts at 0 (Chromium Framework, a dylib)
+and leaves every frame of Ardia, an executable whose `__TEXT` starts at `0x100000000`, unnamed.
+
+The app's own frames work the same way: a crash's "Ardia + 0x18828" is named with `scripts/symbolicate-crash.sh <Ardia
+image UUID> 0x18828 …`, the UUID being the one the crash's `crash_images` lists for Ardia. The script searches the app
+releases (`v<version>`, nightlies included) as well as the `engine-*` ones, newest first, and `--tag v<version>` goes
+straight to one. `release.sh` packs `Ardia.app.dSYM` from the archive's `dSYMs` through `scripts/lib/pack-symbols.sh
+--app` after `verify.sh`, and refuses an app whose executable's UUID no dSYM in the archive carries. `publish.sh`
+uploads the two files and refuses a `dist` that lacks either one, dry runs included. A local release always has them. In
+CI the build job's `build.tar` carries the whole `Ardia.xcarchive`, dSYMs included, `unpack-build.py` keeps them, the
+sign job packs the pair, checks both exist and its `release` artifact lists them, and the publish job checks them again
+after the download, before it tags; `scripts/symbolicate-crash.test.mjs` fails if that chain loses them. Releases from
+before the app's symbols were uploaded have none: the build artifact that held their archive has expired, so their
+`Ardia + 0x…` frames stay unnamed.
+
+Engines published before the symbols were uploaded have none: the next build
 overwrites `out/`'s dSYMs. To backfill one, rebuild its engine key; if the framework comes back with the published UUID,
 copy the framework and its dSYMs out of `out/` under the lock and upload the pair under the exact names
 `symbolicate-crash.sh` downloads (`key` is the release tag without `engine-`):

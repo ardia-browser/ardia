@@ -126,16 +126,22 @@ export async function runCompanionCycle(input: CycleInput): Promise<CycleOutput>
     const tabsOf = new Map<string, LocalTab[]>();
     for (const t of input.tabs ?? []) {
       const p = profileOf(app, ids, fallback, t.p);
-      if (p) tabsOf.set(p, [...(tabsOf.get(p) ?? []), t]);
+      if (!p) continue;
+      const list = tabsOf.get(p);
+      if (list) list.push(t);
+      else tabsOf.set(p, [t]);
     }
     const visitsOf = new Map<string, (LocalVisit & { p: string })[]>();
     const visited = (c.visited ??= {});
+    const removing = new WeakMap<string[], Set<string>>();
     for (const v of input.visits ?? []) {
       const p = profileOf(app, ids, fallback, v.p);
       if (!p || typeof v.u !== "string" || !Array.isArray(v.vt)) continue;
       const o = owner.get(p) ?? p;
-      visitsOf.set(o, [...(visitsOf.get(o) ?? []), { ...v, p }]);
-      const newest = Math.max(...v.vt.filter((t) => Number.isFinite(t)));
+      const list = visitsOf.get(o);
+      if (list) list.push({ ...v, p });
+      else visitsOf.set(o, [{ ...v, p }]);
+      const newest = v.vt.reduce((m, t) => (Number.isFinite(t) ? Math.max(m, t) : m), -Infinity);
       const mine = (visited[profileScope(o)] ??= {});
       if (Number.isFinite(newest) && newest > (mine[v.u] ?? -Infinity)) mine[v.u] = newest;
     }
@@ -172,7 +178,11 @@ export async function runCompanionCycle(input: CycleInput): Promise<CycleOutput>
                 },
                 removed: (p, url) => {
                   const list = (c.removals![p] ??= []);
-                  if (!list.includes(url)) list.push(url);
+                  let listed = removing.get(list);
+                  if (!listed) removing.set(list, (listed = new Set(list)));
+                  if (listed.has(url)) return;
+                  listed.add(url);
+                  list.push(url);
                 },
                 ready: () => !!input.visits && (!!c.pulled[scope] || ++extracts > 1),
               }),
@@ -272,7 +282,8 @@ export function companionSend(input: { profile: string; key: string; u: string; 
 export function companionRemovalsDone(input: { items: { profile: string; urls: string[] }[] }) {
   const c = loaded();
   for (const { profile, urls } of input.items) {
-    const left = (c.removals?.[profile] ?? []).filter((url) => !urls.includes(url));
+    const done = new Set(urls);
+    const left = (c.removals?.[profile] ?? []).filter((url) => !done.has(url));
     if (left.length) c.removals![profile] = left;
     else delete c.removals?.[profile];
   }

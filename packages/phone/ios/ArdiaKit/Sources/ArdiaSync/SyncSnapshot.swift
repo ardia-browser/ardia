@@ -80,10 +80,60 @@ public struct SyncedProfile: Codable, Equatable, Hashable, Identifiable, Sendabl
 public struct SyncedTheme: Codable, Equatable, Hashable, Sendable {
   public var colors: [String]
   public var darkColors: [String]?
+  public var mode: String?
+  public var look: SyncedThemeLook?
+  public var dark: SyncedThemeLook?
 
-  public init(colors: [String], darkColors: [String]?) {
+  public init(colors: [String], darkColors: [String]?, mode: String? = nil, look: SyncedThemeLook? = nil, dark: SyncedThemeLook? = nil) {
     self.colors = colors
     self.darkColors = darkColors
+    self.mode = mode
+    self.look = look
+    self.dark = dark
+  }
+}
+
+public struct SyncedThemeLook: Codable, Equatable, Hashable, Sendable {
+  public var stops: [SyncedThemeStop]
+  public var intensity: Double
+  public var grain: Double
+  public var texture: String
+  public var translucency: Double
+  public var angle: Double?
+
+  public init(stops: [SyncedThemeStop], intensity: Double, grain: Double, texture: String, translucency: Double, angle: Double?) {
+    self.stops = stops
+    self.intensity = intensity
+    self.grain = grain
+    self.texture = texture
+    self.translucency = translucency
+    self.angle = angle
+  }
+}
+
+public struct SyncedThemeStop: Codable, Equatable, Hashable, Sendable {
+  public var color: SyncedThemeColor
+  public var x: Double
+  public var y: Double
+
+  public init(color: SyncedThemeColor, x: Double, y: Double) {
+    self.color = color
+    self.x = x
+    self.y = y
+  }
+}
+
+public struct SyncedThemeColor: Codable, Equatable, Hashable, Sendable {
+  public var r: Double
+  public var g: Double
+  public var b: Double
+  public var a: Double
+
+  public init(r: Double, g: Double, b: Double, a: Double) {
+    self.r = r
+    self.g = g
+    self.b = b
+    self.a = a
   }
 }
 

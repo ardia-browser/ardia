@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 const { layout } = await import("../ui/theme.ts");
-const { HEADER_TOOLS, headerToggleX } = await import("./dockMotion.ts");
+const { HEADER_TOOLS, headerToggleXIn } = await import("./dockMotion.ts");
+const headerToggleX = (windowFullScreen) => headerToggleXIn({ windowFullScreen, pageFullScreen: false, controlsRow: false });
 const { NO_TOOLBAR, toolbarGeometry } = await import("./geometry.ts");
 
 test("the Mac keeps every place laid out around the traffic lights where it was", () => {
@@ -9,6 +10,9 @@ test("the Mac keeps every place laid out around the traffic lights where it was"
   assert.equal(HEADER_TOOLS.toggleX, 97.75);
   assert.equal(headerToggleX(false), 97.75);
   assert.equal(headerToggleX(true), 29);
+  for (const state of [{ windowFullScreen: false, pageFullScreen: true, controlsRow: false }, { windowFullScreen: false, pageFullScreen: false, controlsRow: true }]) {
+    assert.equal(headerToggleXIn(state), 97.75, "the traffic lights keep their toggle whatever the page or the controls row do");
+  }
 });
 
 test("the Mac toolbar keeps its buttons and leaves no trailing room", () => {

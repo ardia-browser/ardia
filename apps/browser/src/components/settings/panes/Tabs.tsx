@@ -181,6 +181,7 @@ function TabsAndTopAppsSection() {
         <SettingToggle anchor="tabs.balancedTopApps" />
         <SettingToggle anchor="tabs.topAppFolders" />
         <SettingToggle anchor="tabs.tabReorderHaptics" />
+        <SettingToggle anchor="tabs.swipeBetweenTabs" />
         <SettingToggle anchor="tabs.showTabHoverMenu" />
         <SettingToggle anchor="tabs.showFullUrlInTabHoverMenu" />
         <SettingToggle anchor="tabs.autoPictureInPicture" />

@@ -64,16 +64,15 @@ struct PluginFolders {
     Self.isName(name) ? (pluginsLexical as NSString).appendingPathComponent(name) : nil
   }
 
-  func officialCopy(_ name: String, folderId: String, pin: OfficialPin? = PluginFolders.officialPin()) -> OfficialCopy? {
-    guard let sha = OfficialPin.sha(ofFolderId: folderId), let entry = pin?.entry(name) else { return nil }
-    let store = officialStore()
-    if let active = store.active(name), active.sha == sha { return active }
-    return sha == entry.sha256 ? store.copy(name, sha: sha) : nil
+  func officialCopy(_ name: String, folderId: String, pin: OfficialPin? = PluginFolders.officialPin(), fresh: Bool = false) -> OfficialCopy? {
+    OfficialTrust.copy(officialStore(), name: name, folderId: folderId, pin: pin, fresh: fresh)
   }
 
   func legacyFolder(_ name: String, pin: OfficialPin? = PluginFolders.officialPin()) -> String? {
-    guard pin?.entry(name) != nil, officialStore().active(name) == nil, case .success(let places) = programPlaces() else { return nil }
-    return PluginPrograms.legacyCopy(plugin: name, places: places)
+    guard let entry = pin?.entry(name), OfficialTrust.trustedActive(officialStore(), entry) == nil, case .success(let places) = programPlaces(),
+      let folder = PluginPrograms.legacyCopy(plugin: name, places: places), OfficialTrust.bundledCopyHolds(folder, digests: entry.bundledDigests)
+    else { return nil }
+    return folder
   }
 
   private func source(_ name: String, folderId: String) -> (path: String, identity: String?)? {
@@ -120,7 +119,7 @@ struct PluginFolders {
   func officialEntry(_ entry: OfficialPinEntry) -> [String: Any]? {
     let store = officialStore()
     store.sweep(entry.name, keeping: [entry.sha256])
-    let active = store.active(entry.name)
+    let active = OfficialTrust.trustedActive(store, entry)
     var result: [String: Any]?
     if let active {
       let read = Self.manifestText(active.path)

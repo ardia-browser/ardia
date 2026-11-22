@@ -14,10 +14,12 @@ import { consentToken } from "../telemetry/client";
 import { isWindowClosing } from "../windows/closingWindows";
 import { setSidebarUi, sidebarUi } from "./sidebarUi";
 
+const MOUNT_AFTER_MS = 70;
 const SHOW_AFTER_MS = 140;
 const SESSION_START = Date.now();
 const POINTER_POLL_MS = 50;
 let showTimer: ReturnType<typeof setTimeout> | undefined;
+let mountTimer: ReturnType<typeof setTimeout> | undefined;
 let pointerTimer: ReturnType<typeof setInterval> | undefined;
 let hoveredRow: number | null = null;
 let keyboardMoves = 0;
@@ -33,13 +35,23 @@ export function switcherStep(windowId: string, backward: boolean) {
   const from = activeTabId(s, windowId);
   if (from) void rememberPicture(from);
   if (from && tabEngine(s, from) === "webkit") noteTabSwitcherOpenedInWebKit();
-  setSidebarUi({ switcher: { windowId, ids, index: backward ? ids.length - 1 : 1, visible: false } });
+  setSidebarUi({ switcher: { windowId, ids, index: backward ? ids.length - 1 : 1, mounted: false, visible: false } });
   void setSwitcherCapture(true);
+  clearTimeout(mountTimer);
   clearTimeout(showTimer);
+  mountTimer = setTimeout(mountSwitcher, MOUNT_AFTER_MS);
   showTimer = setTimeout(() => {
     const s = sidebarUi().switcher;
-    if (s) setSidebarUi({ switcher: { ...s, visible: true } });
+    if (!s) return;
+    setSidebarUi({ switcher: { ...s, mounted: true, visible: true } });
+    if (hoveredRow !== null && !pointerStale) watchPointer();
   }, SHOW_AFTER_MS);
+}
+
+function mountSwitcher() {
+  clearTimeout(mountTimer);
+  const s = sidebarUi().switcher;
+  if (s && !s.mounted) setSidebarUi({ switcher: { ...s, mounted: true } });
 }
 
 function syncSwitcherTabs(windowId: string, state = useBrowser.getState()) {
@@ -78,6 +90,7 @@ export function subscribeSwitcherTabChanges(windowId: string) {
 export function moveSwitcher(step: 1 | -1) {
   const s = sidebarUi().switcher;
   if (!s) return;
+  mountSwitcher();
   focusSwitcherRow(s.index + step);
   stopPointerWatch();
   pointerStale = true;
@@ -98,7 +111,7 @@ export function focusSwitcherRow(index: number) {
 
 export function hoverSwitcherRow(index: number) {
   hoveredRow = index;
-  if (pointerStale) return;
+  if (pointerStale || !sidebarUi().switcher?.visible) return;
   if (switcherPointerMoved()) {
     stopPointerWatch();
     return focusSwitcherRow(index);
@@ -157,6 +170,7 @@ export function cancelSwitcher() {
 }
 
 function endSwitcher() {
+  clearTimeout(mountTimer);
   clearTimeout(showTimer);
   stopPointerWatch();
   hoveredRow = null;

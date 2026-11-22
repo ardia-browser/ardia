@@ -65,6 +65,7 @@ internal class PageSummarySession(
 
     fun start() {
         if (task != null) return
+        scope.launch { writing.prepare(provider) }
         task = scope.launch { run() }
     }
 
@@ -101,6 +102,7 @@ internal class PageSummarySession(
 
     private suspend fun write(extracted: ReadableContent, using: PageSummaryProvider, reason: String?) {
         phase = Phase.Writing
+        geminiNanoMissing = null
         writesWithChatGPT = using == PageSummaryProvider.ChatGPT
         val result = try {
             writing.write(extracted, using, { if (isCurrent()) text = it }, reason)

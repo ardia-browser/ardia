@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "ArdiaPiPThrowMath.h"
+
 namespace ardia_pip_zoom {
 
 struct Rect {
@@ -19,7 +21,7 @@ struct Point {
 
 constexpr double kPerPoint = 0.004, kPerLine = 0.08;
 constexpr double kDockSlop = 64;
-constexpr double kMostPastEdge = 0.5;
+constexpr double kMostPastEdge = ardia_pip_throw::kTuckPastEdge;
 constexpr double kPinchFollow = 0.05;
 constexpr double kHandOffLinger = 0.25, kHandOffTimeout = 0.6;
 constexpr double kHittableHiddenAlpha = 0.01;

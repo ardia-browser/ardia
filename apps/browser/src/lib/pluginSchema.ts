@@ -5,6 +5,7 @@ import { SPLIT_SIDES } from "./pluginCommands";
 import { MENU_SLOTS, PANEL_MODES } from "./pluginContributions";
 import { TAB_ACCESS } from "./pluginPermissions";
 import { MAX_WHEN_LENGTH } from "./pluginWhen";
+import { BUTTON_DIVIDER, HOST_ACTION_NAMES, PAGE_BAR_LIMITS, PAGE_BAR_LOOKS } from "./pluginPageBar";
 import { builtInFlags, closed, commandBase, key, name, openCommandProperties, passwordManagerSchema, pluginPath, processSchema, programsSchemaV2, rowSchema, symbol, textOf, toolsSchema } from "./pluginSchemaParts";
 import { legacyPluginBody } from "./pluginSchemaV1";
 import { MANIFEST_VERSION } from "./pluginManifest";
@@ -60,6 +61,24 @@ function contributes(hookNames: readonly string[]): JsonSchema {
     ),
     omnibox: list(LIMITS.omnibox, closed({ id: key, title: textOf(LIMITS.title), keyword: { type: "string", pattern: KEYWORD_PATTERN }, global: { type: "boolean", description: "Shows in every search; takes no keyword" } }, ["id", "title"])),
     themes: list(LIMITS.themes, closed({ id: key, title: textOf(LIMITS.title), file: { ...pluginPath("A theme file in the plugin's folder"), pattern: "^[^/\\\\][^\\\\]*\\.json$" } }, ["id", "title", "file"])),
+    siteSwitches: list(PAGE_BAR_LIMITS.siteSwitches, closed({ key, title: textOf(PAGE_BAR_LIMITS.switchTitle), icon: symbol }, ["key", "title"]), "Switches Site Controls shows for each http(s) site, kept per origin on this device"),
+    pageBar: {
+      ...closed(
+        {
+          look: { enum: [...PAGE_BAR_LOOKS], description: "stripes: Arc's striped developer bar above the page, or in the toolbar's address field" },
+          when: closed(
+            {
+              siteSwitch: { ...key, description: "One of this plugin's siteSwitches: the bar shows on sites where it is on" },
+              localAddresses: { ...key, description: "A toggle row: while it is on, a local address typed in the address bar turns siteSwitch on for that site" },
+            },
+            ["siteSwitch"],
+          ),
+          buttons: { type: "array", minItems: 1, maxItems: PAGE_BAR_LIMITS.buttons, items: { enum: [...HOST_ACTION_NAMES, BUTTON_DIVIDER] }, description: `Host actions in order; ${BUTTON_DIVIDER} is a divider` },
+        },
+        ["look", "when", "buttons"],
+      ),
+      description: "A bar Ardia draws above the pages the plugin's site switch is on for, with buttons that run Ardia's own actions on that tab",
+    },
   });
 }
 

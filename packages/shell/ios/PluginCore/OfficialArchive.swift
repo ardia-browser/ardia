@@ -32,20 +32,91 @@ enum OfficialArchive {
     return hasher.finalize().map { String(format: "%02x", $0) }.joined()
   }
 
-  static func unpack(_ archive: String, top: String, into stage: String, scratch: String) -> String? {
-    let tar = (scratch as NSString).appendingPathComponent("payload.tar")
-    defer { unlink(tar) }
-    if let problem = gunzip(archive, to: tar, limit: maxExpanded) { return problem }
+  struct Snapshot {
+    let fd: Int32
+    let sha: String
+
+    func close() { Darwin.close(fd) }
+  }
+
+  static func anonymousFile(in folder: String) -> Int32? {
+    let path = (folder as NSString).appendingPathComponent(".snapshot-\(getpid())-\(UInt32.random(in: 0...UInt32.max))")
+    let fd = open(path, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
+    guard fd >= 0 else { return nil }
+    guard unlink(path) == 0 else {
+      Darwin.close(fd)
+      return nil
+    }
+    return fd
+  }
+
+  static func snapshot(_ path: String, in scratch: String) -> Snapshot? {
+    let input = open(path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+    guard input >= 0 else { return nil }
+    defer { Darwin.close(input) }
+    var info = stat()
+    guard fstat(input, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG, info.st_size <= maxDownload, let output = anonymousFile(in: scratch) else { return nil }
+    var hasher = SHA256()
+    let buffer = UnsafeMutableRawPointer.allocate(byteCount: chunk, alignment: 16)
+    defer { buffer.deallocate() }
+    var total: Int64 = 0
+    while true {
+      let count = read(input, buffer, chunk)
+      if count < 0 && errno == EINTR { continue }
+      if count < 0 {
+        Darwin.close(output)
+        return nil
+      }
+      if count == 0 { break }
+      total += Int64(count)
+      guard total <= maxDownload, writeAll(output, buffer, count) else {
+        Darwin.close(output)
+        return nil
+      }
+      hasher.update(bufferPointer: UnsafeRawBufferPointer(start: buffer, count: count))
+    }
+    guard lseek(output, 0, SEEK_SET) == 0 else {
+      Darwin.close(output)
+      return nil
+    }
+    return Snapshot(fd: output, sha: hasher.finalize().map { String(format: "%02x", $0) }.joined())
+  }
+
+  static func writeAll(_ fd: Int32, _ bytes: UnsafeRawPointer, _ count: Int) -> Bool {
+    var offset = 0
+    while offset < count {
+      let wrote = write(fd, bytes + offset, count - offset)
+      if wrote < 0 {
+        if errno == EINTR { continue }
+        return false
+      }
+      offset += wrote
+    }
+    return true
+  }
+
+  static func copyAll(from input: Int32, to output: Int32) -> Bool {
+    guard lseek(input, 0, SEEK_SET) == 0 else { return false }
+    let buffer = UnsafeMutableRawPointer.allocate(byteCount: chunk, alignment: 16)
+    defer { buffer.deallocate() }
+    while true {
+      let count = read(input, buffer, chunk)
+      if count < 0 && errno == EINTR { continue }
+      if count < 0 { return false }
+      if count == 0 { return true }
+      guard writeAll(output, buffer, count) else { return false }
+    }
+  }
+
+  static func unpack(_ archive: Int32, top: String, into stage: Int32, scratch: String) -> String? {
+    guard let tar = anonymousFile(in: scratch) else { return "the download couldn't be unpacked" }
+    defer { Darwin.close(tar) }
+    if let problem = gunzip(input: archive, output: tar, limit: maxExpanded) { return problem }
     return extract(tar: tar, top: top, into: stage, limit: maxExpanded)
   }
 
-  static func gunzip(_ source: String, to destination: String, limit: Int64) -> String? {
-    let input = open(source, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
-    guard input >= 0 else { return "the download couldn't be read" }
-    defer { close(input) }
-    let output = open(destination, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
-    guard output >= 0 else { return "the download couldn't be unpacked" }
-    defer { close(output) }
+  static func gunzip(input: Int32, output: Int32, limit: Int64) -> String? {
+    guard lseek(input, 0, SEEK_SET) == 0 else { return "the download couldn't be read" }
     var data = Data()
     var headerLength: Int?
     while headerLength == nil {
@@ -208,15 +279,33 @@ enum OfficialArchive {
     return .some(path)
   }
 
-  static func extract(tar: String, top: String, into stage: String, limit: Int64) -> String? {
+  static func openParent(_ stage: Int32, of path: String) -> (folder: Int32, name: String)? {
+    let parts = path.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+    guard let name = parts.last, !name.isEmpty, parts.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }) else { return nil }
+    var current = dup(stage)
+    guard current >= 0 else { return nil }
+    for part in parts.dropLast() {
+      let next = openat(current, part, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+      Darwin.close(current)
+      guard next >= 0 else { return nil }
+      current = next
+    }
+    return (current, name)
+  }
+
+  static func extract(tar: Int32, top: String, into stage: Int32, limit: Int64) -> String? {
     var out: Int32 = -1
     let problem = walk(
       tar: tar, top: top, limit: limit,
       folder: { path in
-        mkdir((stage as NSString).appendingPathComponent(path), 0o755) == 0 ? nil : "\(path) couldn't be made (\(String(cString: strerror(errno))))"
+        guard let parent = openParent(stage, of: path) else { return "\(path) couldn't be made (its folder changed while it was unpacked)" }
+        defer { Darwin.close(parent.folder) }
+        return mkdirat(parent.folder, parent.name, 0o755) == 0 ? nil : "\(path) couldn't be made (\(String(cString: strerror(errno))))"
       },
       file: { path, _ in
-        out = open((stage as NSString).appendingPathComponent(path), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
+        guard let parent = openParent(stage, of: path) else { return "\(path) couldn't be written (its folder changed while it was unpacked)" }
+        defer { Darwin.close(parent.folder) }
+        out = openat(parent.folder, parent.name, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
         return out >= 0 ? nil : "\(path) couldn't be written (\(String(cString: strerror(errno))))"
       },
       bytes: { path, chunk in
@@ -238,52 +327,21 @@ enum OfficialArchive {
         }
         return fchmod(out, executable ? 0o755 : 0o644) == 0 ? nil : "\(path) couldn't be written"
       })
-    if out >= 0 { close(out) }
+    if out >= 0 { Darwin.close(out) }
     return problem
   }
 
   static func verifiedPayloadDigest(archive: String, sha: String, top: String, scratch: String, limit: Int64 = maxExpanded) -> String? {
-    let input = open(archive, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
-    guard input >= 0 else { return nil }
-    defer { close(input) }
-    var info = stat()
-    guard fstat(input, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG, info.st_size <= maxDownload else { return nil }
-    let held = (scratch as NSString).appendingPathComponent(".verify-\(getpid())-\(UInt32.random(in: 0...UInt32.max))")
-    guard mkdir(held, 0o700) == 0 else { return nil }
-    defer { try? FileManager.default.removeItem(atPath: held) }
-    let copy = (held as NSString).appendingPathComponent("download.tar.gz")
-    let output = open(copy, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
-    guard output >= 0 else { return nil }
-    var hasher = SHA256()
-    let buffer = UnsafeMutableRawPointer.allocate(byteCount: chunk, alignment: 16)
-    defer { buffer.deallocate() }
-    var failed = false
-    while !failed {
-      let count = read(input, buffer, chunk)
-      if count < 0 && errno == EINTR { continue }
-      if count < 0 { failed = true }
-      if count <= 0 { break }
-      hasher.update(bufferPointer: UnsafeRawBufferPointer(start: buffer, count: count))
-      var offset = 0
-      while offset < count {
-        let wrote = write(output, buffer + offset, count - offset)
-        if wrote < 0 {
-          if errno == EINTR { continue }
-          failed = true
-          break
-        }
-        offset += wrote
-      }
-    }
-    close(output)
-    guard !failed, hasher.finalize().map({ String(format: "%02x", $0) }).joined() == sha else { return nil }
-    return payloadDigest(archive: copy, top: top, scratch: held, limit: limit)
+    guard let held = snapshot(archive, in: scratch) else { return nil }
+    defer { held.close() }
+    guard held.sha == sha else { return nil }
+    return payloadDigest(archive: held.fd, top: top, scratch: scratch, limit: limit)
   }
 
-  static func payloadDigest(archive: String, top: String, scratch: String, limit: Int64 = maxExpanded) -> String? {
-    let tar = (scratch as NSString).appendingPathComponent("digest-\(getpid())-\(UInt32.random(in: 0...UInt32.max)).tar")
-    defer { unlink(tar) }
-    guard gunzip(archive, to: tar, limit: limit) == nil else { return nil }
+  static func payloadDigest(archive: Int32, top: String, scratch: String, limit: Int64 = maxExpanded) -> String? {
+    guard let tar = anonymousFile(in: scratch) else { return nil }
+    defer { Darwin.close(tar) }
+    guard gunzip(input: archive, output: tar, limit: limit) == nil else { return nil }
     var listing: [(String, String)] = []
     var hasher = SHA256()
     let skipped: (String) -> Bool = { _ in false }
@@ -313,12 +371,10 @@ enum OfficialArchive {
   }
 
   private static func walk(
-    tar: String, top: String, limit: Int64, folder: (String) -> String?, file: (String, Int64) -> String?, bytes: (String, Data) -> String?,
+    tar fd: Int32, top: String, limit: Int64, folder: (String) -> String?, file: (String, Int64) -> String?, bytes: (String, Data) -> String?,
     done: (String, Bool) -> String?
   ) -> String? {
-    let fd = open(tar, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
-    guard fd >= 0 else { return "the download couldn't be unpacked" }
-    defer { close(fd) }
+    guard lseek(fd, 0, SEEK_SET) == 0 else { return "the download couldn't be unpacked" }
     func readExactly(_ count: Int) -> [UInt8]? {
       var bytes = [UInt8](repeating: 0, count: count)
       var offset = 0

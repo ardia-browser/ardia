@@ -5,10 +5,11 @@ import { answerRequest, dismissPress, pressAction } from "../../state/page/actio
 import { usePageRequest, usePress } from "../../state/page/hooks";
 import { confirmAnswer, pressHeading, pressMenuGroups, PRESS_TITLES, requestPlan, type PressAction, type Request } from "../../state/page/pagePrompts";
 import { presentSystemRequest } from "./systemRequest";
-import { ActionSheet, Dialog, dialogLayout, font, Menu, menuExitMs, menuLook, pointPlacer, Portal, radius, space, useDesign, useTheme, type MenuItem, type SymbolName } from "../ui";
+import { ActionSheet, Dialog, dialogLayout, font, Menu, menuExitMs, menuLook, pointPlacer, Portal, radius, space, useDesign, useTheme, type MenuItem, type SymbolName, smoothCorners } from "../ui";
 import { materialMenuWidth } from "../ui/MaterialSurfaces";
 import { currentTabs } from "../../state/tabs/store";
 import { findTab } from "../../state/tabs/tabsState";
+import { dismissWords } from "../../lib/sharedWords";
 
 export function PageRequestHost({ tabId }: { tabId: string }) {
   const request = usePageRequest(tabId);
@@ -45,7 +46,7 @@ function RequestDialog({ tabId, request }: { tabId: string; request: Request }) 
     />
   );
   if (dialog.choices.length)
-    return <ActionSheet title={dialog.title || null} message={dialog.message} cancel={dialog.cancel ?? "Cancel"} onCancel={dismiss} actions={dialog.choices.map((choice) => ({ title: choice.title, onPress: () => answerRequest(tabId, request, choice.answer) }))} />;
+    return <ActionSheet title={dialog.title || null} message={dialog.message} cancel={dialog.cancel ?? dismissWords.cancel} onCancel={dismiss} actions={dialog.choices.map((choice) => ({ title: choice.title, onPress: () => answerRequest(tabId, request, choice.answer) }))} />;
   return (
     <Dialog
       title={dialog.title}
@@ -96,5 +97,5 @@ export function PressMenu({ width, height }: { width: number; height: number }) 
 const pressedPrivately = (tabId: string) => findTab(currentTabs(), tabId)?.isPrivate === true;
 
 const styles = StyleSheet.create({
-  field: { minHeight: dialogLayout.fieldHeight, borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.row, paddingHorizontal: space.m },
+  field: { minHeight: dialogLayout.fieldHeight, borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.row, ...smoothCorners, paddingHorizontal: space.m },
 });

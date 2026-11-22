@@ -67,8 +67,8 @@ struct OfficialStore {
     return lstat(path, &info) == 0 && (info.st_mode & S_IFMT) == S_IFREG
   }
 
-  func publish(_ name: String, staged: String, archive: String, sha: String) -> Result<OfficialCopy, FolderRefusal> {
-    guard OfficialPin.isSha(sha) else { return .failure(FolderRefusal(reason: "its digest isn't valid")) }
+  func publish(_ name: String, staged: String, archive: OfficialArchive.Snapshot, sha: String) -> Result<OfficialCopy, FolderRefusal> {
+    guard OfficialPin.isSha(sha), archive.sha == sha else { return .failure(FolderRefusal(reason: "its digest isn't valid")) }
     let published = withLock(name) { () -> Result<OfficialCopy, FolderRefusal> in
       if let existing = copy(name, sha: sha) {
         PluginPrograms.discard(staged)
@@ -76,17 +76,29 @@ struct OfficialStore {
       }
       if PluginPrograms.isRealFolder(copyPath(name, sha)) { PluginPrograms.discard(copyPath(name, sha)) }
       unlink(archivePath(name, sha))
-      if !Self.clearQuarantine(archive) {
+      guard let folder = PluginPrograms.realFolder(pluginFolder(name), creating: true) else {
         PluginPrograms.discard(staged)
-        return .failure(FolderRefusal(reason: "its download couldn't be cleared for use"))
+        return .failure(FolderRefusal(reason: "its folder isn't one you own"))
       }
-      guard chmod(archive, 0o444) == 0, PluginPrograms.seal(staged, keepingRootWritable: false) else {
+      let kept = (folder as NSString).appendingPathComponent(".download-\(getpid())-\(UInt32.random(in: 0...UInt32.max))")
+      let keptFile = open(kept, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
+      guard keptFile >= 0 else {
+        let reason = String(cString: strerror(errno))
+        PluginPrograms.discard(staged)
+        return .failure(FolderRefusal(reason: "its download couldn't be kept (\(reason))"))
+      }
+      let written = OfficialArchive.copyAll(from: archive.fd, to: keptFile) && fchmod(keptFile, 0o444) == 0
+      close(keptFile)
+      guard written, PluginPrograms.seal(staged, keepingRootWritable: false) else {
+        unlink(kept)
         PluginPrograms.discard(staged)
         return .failure(FolderRefusal(reason: "its copy couldn't be made read-only"))
       }
-      guard rename(archive, archivePath(name, sha)) == 0 else {
+      guard rename(kept, archivePath(name, sha)) == 0 else {
+        let reason = String(cString: strerror(errno))
+        unlink(kept)
         PluginPrograms.discard(staged)
-        return .failure(FolderRefusal(reason: "its download couldn't be kept (\(String(cString: strerror(errno))))"))
+        return .failure(FolderRefusal(reason: "its download couldn't be kept (\(reason))"))
       }
       guard renamex_np(staged, copyPath(name, sha), UInt32(RENAME_EXCL)) == 0 else {
         let reason = String(cString: strerror(errno))
@@ -139,7 +151,7 @@ struct OfficialStore {
       let path = (folder as NSString).appendingPathComponent(entry)
       if entry.hasPrefix(".trash-") {
         PluginPrograms.discard(path)
-      } else if entry.hasPrefix(".stage-") || entry.hasPrefix(".fetch-") {
+      } else if [".stage-", ".fetch-", ".download-", ".snapshot-"].contains(where: entry.hasPrefix) {
         if olderThan(path, seconds: Self.staleSeconds) { PluginPrograms.discard(path) }
       } else if entry.hasSuffix(Self.archiveSuffix) {
         let sha = String(entry.dropLast(Self.archiveSuffix.count))
@@ -185,7 +197,7 @@ final class OfficialVerification {
     return [Int64(info.st_dev), Int64(info.st_ino), Int64(info.st_size), Int64(info.st_mtimespec.tv_sec), Int64(info.st_mtimespec.tv_nsec), Int64(info.st_ctimespec.tv_sec), Int64(info.st_ctimespec.tv_nsec)]
   }
 
-  private static func treeStamp(_ root: String) -> [[Int64]]? {
+  static func treeStamp(_ root: String) -> [[Int64]]? {
     guard let top = stamp(root), let walker = FileManager.default.enumerator(atPath: root) else { return nil }
     var stamps = [top]
     var names: [String] = []

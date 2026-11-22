@@ -6,6 +6,7 @@ import os
 import re
 import shutil
 import stat
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -14,6 +15,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 PIN = ROOT / "apps/browser/official-plugins.json"
+HISTORY = ROOT / "apps/browser/official-plugins-history.json"
+FETCHED_ERA_MARKER = "packages/shell/ios/PluginCore/OfficialInstaller.swift"
 INSTALLER = ROOT / "apps/cli/install.sh"
 NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 VERSION = re.compile(r"^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}(-[a-z]{1,16}\.[0-9]{1,4})?$")
@@ -37,7 +40,11 @@ script takes from a release goes through fetch(), which refuses an artifact whos
   fixtures <out dir>            every published macos-arm64 artifact, verified, under its own file name: the local
                                 copy the release smoke hands a hidden instance (ARDIA_INSTANCE officialPluginsFrom)
   signed-pin                    prints the pin as export-sign.sh puts it in Info.plist (ArdiaOfficialPlugins): the
-                                file itself, less artifacts that aren't published yet
+                                file itself, less artifacts that aren't published yet, with each plugin's "trusted"
+                                artifacts and bundled payload digests from earlier releases (official-plugins-history.json)
+  history-check                 checks official-plugins-history.json against every v* tag: each tag that pinned a
+                                macOS artifact of a plugin still in the pin has its entry, and a tag from before fetched official plugins has the
+                                payload digest of the copy it bundled
   registry                      prints the program registry (reserved names, legacy installs) the pin implies, the
                                 JSON export-sign.sh puts in Info.plist as ArdiaProgramRegistry
   verify-registry <json>        checks a recorded registry against the pin
@@ -204,11 +211,75 @@ def macos_plugins(pin):
     return [p for p in pin["plugins"] if (p["artifacts"].get("macos-arm64") or {}).get("sha256")]
 
 
-def signed_pin(pin):
+def load_history(path=HISTORY):
+    try:
+        history = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        fail(f"{path} can't be read: {error}")
+    if not isinstance(history, dict) or history.get("version") != 1 or not isinstance(history.get("plugins"), dict):
+        fail(f"{path}: version must be 1 and plugins an object")
+    for name, entries in history["plugins"].items():
+        if not NAME.match(name) or not isinstance(entries, list):
+            fail(f"{path}: plugins.{name} must be a list")
+        for index, entry in enumerate(entries):
+            where = f"{path}: plugins.{name}[{index}]"
+            if not isinstance(entry, dict) or not isinstance(entry.get("release"), str) or not isinstance(entry.get("version"), str) or not VERSION.match(entry["version"]):
+                fail(f"{where} needs release and version")
+            if not isinstance(entry.get("artifact"), str) or not SHA.match(entry["artifact"]):
+                fail(f"{where}.artifact must be a SHA-256")
+            if "bundledDigest" in entry and not (isinstance(entry["bundledDigest"], str) and SHA.match(entry["bundledDigest"])):
+                fail(f"{where}.bundledDigest must be a SHA-256")
+    return history
+
+
+def signed_pin(pin, history=None):
     signed = json.loads(json.dumps(pin))
+    known = (history or {"plugins": {}})["plugins"]
     for plugin in signed["plugins"]:
         plugin["artifacts"] = {k: v for k, v in plugin["artifacts"].items() if v.get("sha256")}
+        entries = known.get(plugin["name"], [])
+        artifacts = sorted({e["artifact"] for e in entries})
+        bundled = sorted({e["bundledDigest"] for e in entries if "bundledDigest" in e})
+        if artifacts or bundled:
+            plugin["trusted"] = {"artifacts": artifacts, "bundledDigests": bundled}
     return signed
+
+
+def git(*args):
+    return subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True, text=True)
+
+
+def history_check(pin, history):
+    tags = [t for t in git("tag", "-l", "v*").stdout.split() if t]
+    if not tags:
+        fail("no v* tags here (a shallow clone?); fetch tags to check the history")
+    problems = []
+    known = history["plugins"]
+    current = {plugin["name"] for plugin in pin["plugins"]}
+    for tag in tags:
+        shown = git("show", f"{tag}:apps/browser/official-plugins.json")
+        if shown.returncode != 0:
+            continue
+        try:
+            pinned = json.loads(shown.stdout)
+        except ValueError:
+            problems.append(f"{tag}: its official-plugins.json isn't JSON")
+            continue
+        fetched_era = git("cat-file", "-e", f"{tag}:{FETCHED_ERA_MARKER}").returncode == 0
+        for plugin in pinned.get("plugins", []):
+            sha = ((plugin.get("artifacts") or {}).get("macos-arm64") or {}).get("sha256")
+            if not sha or plugin.get("name") not in current:
+                continue
+            entry = next((e for e in known.get(plugin["name"], []) if e["release"] == tag), None)
+            if entry is None:
+                problems.append(f"{tag}: no history entry for {plugin['name']} {plugin.get('version')} ({sha})")
+            elif entry["artifact"] != sha or entry["version"] != plugin.get("version"):
+                problems.append(f"{tag}: {plugin['name']}'s entry says {entry['version']} {entry['artifact']}, the tag pins {plugin.get('version')} {sha}")
+            elif not fetched_era and "bundledDigest" not in entry:
+                problems.append(f"{tag}: bundled {plugin['name']} {plugin.get('version')}, so its entry needs the bundled copy's payload digest (plugin-digest.py on the shipped app's Contents/Resources/Plugins/{plugin['name']})")
+    if problems:
+        fail("official-plugins-history.json is behind the release tags:\n  " + "\n  ".join(problems))
+    print(f"history: {sum(len(v) for v in known.values())} entries cover every pinned release tag")
 
 
 def registry(pin):
@@ -293,6 +364,7 @@ def write_pin(name, version, origin=None, path=PIN):
 def main():
     parser = argparse.ArgumentParser(description=DESCRIPTION, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--pin", default=str(PIN), help="the pin file (default: apps/browser/official-plugins.json)")
+    parser.add_argument("--history", default=str(HISTORY), help="the release history (default: apps/browser/official-plugins-history.json)")
     parser.add_argument("--from", dest="origin", help="read artifacts from this folder instead of the release")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("check")
@@ -307,6 +379,7 @@ def main():
     every = commands.add_parser("fixtures")
     every.add_argument("out")
     commands.add_parser("signed-pin")
+    commands.add_parser("history-check")
     commands.add_parser("registry")
     verifying = commands.add_parser("verify-registry")
     verifying.add_argument("recorded")
@@ -339,7 +412,9 @@ def main():
     if args.command == "registry":
         return print(json.dumps(registry(pin), separators=(",", ":")))
     if args.command == "signed-pin":
-        return print(json.dumps(signed_pin(pin), separators=(",", ":"), ensure_ascii=False))
+        return print(json.dumps(signed_pin(pin, load_history(args.history)), separators=(",", ":"), ensure_ascii=False))
+    if args.command == "history-check":
+        return history_check(pin, load_history(args.history))
     if args.command == "linux-cli":
         return linux_cli(pin, args.app_version, args.out, args.origin)
     fixtures(pin, args.out, args.origin)

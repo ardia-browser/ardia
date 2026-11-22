@@ -6,6 +6,7 @@ import { useMaterialTheme } from "./materialTheme";
 import { materialShape, materialSize, materialType } from "./materialTokens";
 import { Symbol } from "./Symbol";
 import type { SymbolName } from "./symbolPaths";
+import { actionWords, dismissWords } from "../../lib/sharedWords";
 
 type TopBarProps = { title?: string; titleTestID?: string; nav: "close" | "back"; navLabel?: string; onNav: () => void; actions?: ReactNode; ink?: string; fill?: string };
 
@@ -14,7 +15,7 @@ export function MaterialTopBar({ title, titleTestID, nav, navLabel, onNav, actio
   const color = ink ?? scheme.onSurface;
   return (
     <View testID="materialTopBar" style={[styles.bar, fill ? { backgroundColor: fill } : null]}>
-      <MaterialIconAction testID="materialTopBarNav" icon={nav === "close" ? "xmark" : "arrowRight"} flipped={nav === "back"} label={navLabel ?? (nav === "close" ? "Close" : "Back")} ink={color} onPress={onNav} />
+      <MaterialIconAction testID="materialTopBarNav" icon={nav === "close" ? "xmark" : "arrowRight"} flipped={nav === "back"} label={navLabel ?? (nav === "close" ? dismissWords.close : "Back")} ink={color} onPress={onNav} />
       {title ? (
         <Text testID={titleTestID} accessibilityRole="header" numberOfLines={1} style={[materialType.titleLarge, styles.title, { color }]}>
           {title}
@@ -51,7 +52,7 @@ export function MaterialSearchField({ value, placeholder, onChangeText, testID }
         autoCapitalize="none"
         style={[materialType.bodyLarge, styles.input, { color: scheme.onSurface }]}
       />
-      {value ? <MaterialIconAction icon="xmark" label="Clear Search" onPress={() => onChangeText("")} /> : null}
+      {value ? <MaterialIconAction icon="xmark" label={actionWords.clearText} onPress={() => onChangeText("")} /> : null}
     </View>
   );
 }

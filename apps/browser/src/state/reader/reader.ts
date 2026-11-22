@@ -7,7 +7,7 @@ import { liveOf, onLiveChange } from "../tabs/tabLive";
 import { activeTabId } from "../browser/model";
 import { peekTabId } from "../peek/peek";
 import { showToast } from "../app/toasts";
-import { noteReaderCheck, noteReaderNoArticle, noteReaderOpened } from "../telemetry/readerCounts";
+import { noteReaderCheck, noteReaderLookChanged, noteReaderNoArticle, noteReaderOpened } from "../telemetry/readerCounts";
 import { consentToken } from "../telemetry/client";
 import { readerCall, readerCheckCall, readerToggleCall, type ReaderLook, type ReaderReport } from "./readerPage";
 import { READER_SIZE_NAMES } from "./tokens";
@@ -37,34 +37,51 @@ function lookFrom(s: BrowserState): ReaderLook {
   return { dark: s.ui.appDark, size: size < 0 ? 1 : size, font: s.settings.readerFont };
 }
 
-function keepLook(look: ReaderLook | undefined) {
-  if (!look) return;
+function reportOf(raw: unknown): ReaderReport | null {
+  if (!raw || typeof raw !== "object") return null;
+  const { active, readerable, noArticle } = raw as Record<string, unknown>;
+  return { active: active === true, readerable: readerable === true, noArticle: noArticle === true };
+}
+
+export function stepReaderSize(delta: -1 | 1) {
   const s = useBrowser.getState();
-  const readerTextSize = READER_SIZE_NAMES[look.size] ?? s.settings.readerTextSize;
-  const readerFont = look.font === "sans" ? "sans" : "serif";
-  if (readerTextSize !== s.settings.readerTextSize || readerFont !== s.settings.readerFont) s.updateSettings({ readerTextSize, readerFont });
+  const at = READER_SIZE_NAMES.indexOf(s.settings.readerTextSize);
+  const next = READER_SIZE_NAMES[Math.max(0, Math.min(READER_SIZE_NAMES.length - 1, (at < 0 ? 1 : at) + delta))]!;
+  if (next === s.settings.readerTextSize) return;
+  s.updateSettings({ readerTextSize: next });
+  noteReaderLookChanged();
+}
+
+export function toggleReaderFont() {
+  const s = useBrowser.getState();
+  s.updateSettings({ readerFont: s.settings.readerFont === "serif" ? "sans" : "serif" });
+  noteReaderLookChanged();
 }
 
 async function callPage(tabId: string, code: string): Promise<ReaderReport | null> {
   const web = webviews.get(tabId);
   if (!web) return null;
-  return withDeadline(web.evaluate<ReaderReport>(code), CALL_DEADLINE_MS, null).catch(() => null);
+  return withDeadline(web.evaluate<unknown>(code), CALL_DEADLINE_MS, null).then(reportOf, () => null);
 }
 
-let lookPushes = 0;
+const documents = new Map<string, number>();
+let nextDocument = 0;
+const documentOf = (tabId: string) => documents.get(tabId) ?? 0;
+
+function replaceDocument(tabId: string) {
+  documents.set(tabId, ++nextDocument);
+}
 
 function pushLook(s: BrowserState) {
-  lookPushes++;
   const look = lookFrom(s);
   for (const [tabId, state] of Object.entries(useReader.getState())) if (state?.active) void callPage(tabId, readerCall("setLook", look));
 }
 
-function settle(tabId: string, url: string, report: ReaderReport, available?: boolean, pushesBefore = lookPushes, mayWrite?: () => boolean) {
+function settle(tabId: string, url: string, report: ReaderReport, available: boolean | undefined, documentBefore: number) {
   const tab = useBrowser.getState().tabs[tabId];
-  if (!tab || tab.url !== url) return;
+  if (!tab || tab.url !== url || documentOf(tabId) !== documentBefore) return;
   const before = readerState(tabId);
   set(tabId, { url, available: available ?? before.available, active: report.active });
-  if ((report.active || before.active) && pushesBefore === lookPushes && (!mayWrite || mayWrite())) keepLook(report.look);
 }
 
 const counted = new Map<string, string>();
@@ -73,7 +90,7 @@ async function check(tabId: string) {
   const tab = useBrowser.getState().tabs[tabId];
   if (!tab || !readable(tab.url)) return;
   const url = tab.url;
-  const pushes = lookPushes;
+  const documentBefore = documentOf(tabId);
   const consent = consentToken();
   const report = await callPage(tabId, readerCheckCall());
   if (!report) return;
@@ -83,7 +100,7 @@ async function check(tabId: string) {
     counted.set(tabId, url);
     noteReaderCheck(available, consent);
   }
-  settle(tabId, url, report, available, pushes);
+  settle(tabId, url, report, available, documentBefore);
   if (first && !available && useBrowser.getState().tabs[tabId]?.url === url) later(tabId, url);
 }
 
@@ -100,37 +117,37 @@ function later(tabId: string, url: string) {
   );
 }
 
-export function runReaderCommand(command: string, tabId: string, mayWrite?: () => boolean): boolean {
+export function runReaderCommand(command: string, tabId: string): boolean {
   if (command !== "toggleReader") return false;
-  void toggleReader(tabId, mayWrite);
+  void toggleReader(tabId);
   return true;
 }
 
-export async function toggleReader(tabId: string, mayWrite?: () => boolean) {
+export async function toggleReader(tabId: string) {
   const s = useBrowser.getState();
   const tab = s.tabs[tabId];
   if (!tab || !readable(tab.url)) return;
   const url = tab.url;
-  const pushes = lookPushes;
+  const documentBefore = documentOf(tabId);
   const consent = consentToken();
   const report = await callPage(tabId, readerToggleCall(lookFrom(s)));
   if (!report) return;
   if (report.noArticle) {
     noteReaderNoArticle(consent);
-    settle(tabId, url, report, false, pushes, mayWrite);
+    settle(tabId, url, report, false, documentBefore);
     showToast(tab.windowId, "No article found on this page", undefined, { icon: "doc.plaintext" });
     return;
   }
   if (report.active) noteReaderOpened(consent);
-  settle(tabId, url, report, true, pushes, mayWrite);
+  settle(tabId, url, report, true, documentBefore);
 }
 
-export async function closeReader(tabId: string, mayWrite?: () => boolean) {
+export async function closeReader(tabId: string) {
   const url = useBrowser.getState().tabs[tabId]?.url;
   if (!url || !readerState(tabId).active) return;
-  const pushes = lookPushes;
+  const documentBefore = documentOf(tabId);
   const report = await callPage(tabId, readerCall("hide"));
-  if (report) settle(tabId, url, report, undefined, pushes, mayWrite);
+  if (report) settle(tabId, url, report, undefined, documentBefore);
 }
 
 function shownTabIds(s: BrowserState): Set<string> {
@@ -165,6 +182,7 @@ function forget(tabId: string) {
     timers.delete(tabId);
   }
   counted.delete(tabId);
+  documents.delete(tabId);
 }
 
 function navigated(tabId: string, from: string, to: string) {
@@ -172,6 +190,7 @@ function navigated(tabId: string, from: string, to: string) {
   if (before === NONE) return;
   if (before.active && withoutHash(from) === withoutHash(to)) return set(tabId, { ...before, url: to });
   if (before.active) void callPage(tabId, readerCall("hide"));
+  replaceDocument(tabId);
   set(tabId, NONE);
 }
 
@@ -180,9 +199,9 @@ async function sync() {
   const shown = shownTabIds(s);
   for (const [tabId, state] of Object.entries(useReader.getState())) {
     if (!state?.active || !shown.has(tabId)) continue;
-    const pushes = lookPushes;
+    const documentBefore = documentOf(tabId);
     const report = await callPage(tabId, readerCall("state"));
-    if (report) settle(tabId, state.url, report, undefined, pushes);
+    if (report) settle(tabId, state.url, report, undefined, documentBefore);
   }
 }
 
@@ -210,6 +229,7 @@ export function startReader() {
   };
   const stopLive = onLiveChange((id, live, prev) => {
     if (live.isLoading === prev.isLoading) return;
+    if (live.isLoading) replaceDocument(id);
     const s = useBrowser.getState();
     if (!live.isLoading && s.tabs[id] && readerState(id).url) set(id, { ...readerState(id), url: "" });
     scheduleShown(s);

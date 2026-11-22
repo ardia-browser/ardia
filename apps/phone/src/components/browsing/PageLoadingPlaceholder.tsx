@@ -1,11 +1,10 @@
 import { useEffect } from "react";
 import { Platform, StyleSheet, Text } from "react-native";
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withTiming } from "react-native-reanimated";
-import { Favicon, useTheme } from "../ui";
+import Animated, { useAnimatedStyle, useSharedValue, withDelay, withTiming } from "react-native-reanimated";
+import { Favicon, motionAliases, smoothCorners, useTheme } from "../ui";
 import { siteHost } from "./FloatingBar";
 import { loadingPlaceholderLayout as layout } from "./pageStateTokens";
-
-const EASE_OUT = Easing.bezier(0, 0, 0.58, 1);
+import { pageWords } from "../../lib/sharedWords";
 
 export type PlaceholderTab = { url: string; title: string; faviconUrl: string | null; themeColorHex: string | null };
 
@@ -23,7 +22,7 @@ export function pageTheme(hex: string | null): PageTheme | null {
 
 export function distinctTitle(title: string, host: string | null): string | null {
   const trimmed = title.trim();
-  if (!trimmed) return host === null ? "New Tab" : null;
+  if (!trimmed) return host === null ? pageWords.untitledTab : null;
   if (host === null) return trimmed;
   const bare = (text: string) => text.toLowerCase().replaceAll("www.", "");
   if (bare(trimmed) === bare(host) || trimmed.toLowerCase().startsWith("http")) return null;
@@ -40,17 +39,17 @@ export function PageLoadingPlaceholder({ tab, revealed = false }: { tab: Placeho
   const reveal = useSharedValue(revealed ? 1 : 0);
   useEffect(() => {
     if (revealed) return;
-    reveal.value = withDelay(layout.revealDelayMs, withTiming(1, { duration: layout.revealMs, easing: EASE_OUT }));
+    reveal.value = withDelay(layout.revealDelayMs, withTiming(1, { duration: layout.revealMs, easing: motionAliases.loadingRevealEase }));
   }, []);
   const shown = useAnimatedStyle(() => ({ opacity: reveal.value }));
-  const spoken = tab.title.trim() || host || "New Tab";
+  const spoken = tab.title.trim() || host || pageWords.untitledTab;
   return (
     <Animated.View
       testID="pageLoadingPlaceholder"
       accessible={Platform.OS === "ios"}
       accessibilityLabel={`Loading ${spoken}`}
       importantForAccessibility="no-hide-descendants"
-      style={[StyleSheet.absoluteFill, styles.page, { backgroundColor: page?.color ?? theme.surface }]}
+      style={[StyleSheet.absoluteFill, styles.page, { backgroundColor: page?.color ?? theme.canvas }]}
     >
       <Animated.View testID="pageLoadingContent" style={[styles.column, shown]}>
         <Animated.View testID="pageLoadingIcon" style={styles.icon}>
@@ -74,6 +73,6 @@ export function PageLoadingPlaceholder({ tab, revealed = false }: { tab: Placeho
 const styles = StyleSheet.create({
   page: { alignItems: "center", justifyContent: "center", paddingHorizontal: layout.sideInset },
   column: { alignItems: "center", gap: layout.spacing },
-  icon: { width: layout.icon, height: layout.icon, borderRadius: layout.iconCorner, boxShadow: layout.iconShadow },
+  icon: { width: layout.icon, height: layout.icon, borderRadius: layout.iconCorner, ...smoothCorners, boxShadow: layout.iconShadow },
   centred: { textAlign: "center" },
 });

@@ -2,7 +2,8 @@ import { memo } from "react";
 import { Animated, Pressable, View } from "react-native";
 import { Symbol, useHover } from "../ui";
 import { useTheme } from "../ui/theme";
-import { WINDOW_CHROME, WINDOW_CONTROLS, windowControlsWidth } from "../../lib/windowChrome";
+import { WINDOW_CHROME, WINDOW_CONTROLS, windowButtonsChoosable, windowButtonsFor, windowControlsDrawn, windowControlsWidth, type WindowButton } from "../../lib/windowChrome";
+import { useWindowChrome } from "../../state/windows/windowButtons";
 import { useWindowMaximized } from "../../state/windows/captionRegions";
 import { WINDOW_BUTTONS } from "./tokens";
 import { closeFromWindowControls, minimizeWindow, toggleWindowMaximized } from "../../state/windows/controls";
@@ -66,36 +67,46 @@ export type WindowControlsProps = {
   opacity?: Animated.AnimatedInterpolation<number> | number;
   hidden?: boolean;
   leading?: boolean;
+  inset?: number;
+  buttons?: readonly WindowButton[];
 };
 
-export const controlsShown = WINDOW_CHROME.trailingWidth > 0;
+export const controlsShown = windowControlsDrawn() || windowButtonsChoosable;
 
-export const WindowControls = memo(function WindowControls({ windowId, centerY, size, maximizable = true, minimizable = true, onMenu, ink, opacity = 1, hidden = false, leading = false }: WindowControlsProps) {
+const pressOf = (button: WindowButton, windowId: string, onMenu: (() => void) | undefined): (() => void) =>
+  button === "menu" ? (onMenu ?? (() => {})) : button === "minimize" ? () => minimizeWindow(windowId) : button === "maximize" ? () => toggleWindowMaximized(windowId) : () => closeFromWindowControls(windowId);
+
+export const useControlsShown = (): boolean => {
+  useWindowChrome();
+  return windowControlsDrawn();
+};
+
+export const WindowControls = memo(function WindowControls({ windowId, centerY, size, maximizable = true, minimizable = true, onMenu, ink, opacity = 1, hidden = false, leading = false, inset = WINDOW_CONTROLS.edge, buttons }: WindowControlsProps) {
   const theme = useTheme();
   const maximized = useWindowMaximized(windowId);
-  if (!controlsShown) return null;
+  const shown = useControlsShown();
+  const drawn = windowButtonsFor(buttons ?? WINDOW_CHROME.trailingButtons, { menu: !!onMenu, minimizable, maximizable });
+  if (!shown || !drawn.length) return null;
   const colors: Ink = { icon: ink?.icon ?? theme.icon, hover: ink?.hover ?? theme.toolbarHover, pressed: ink?.pressed ?? theme.toolbarPressed };
   const width = WINDOW_CONTROLS.button;
   const plateRadius = Math.min(B.plateRadius.most, Math.round(size / B.plateRadius.share));
-  const count = 1 + (maximizable ? 1 : 0) + (minimizable ? 1 : 0) + (onMenu ? 1 : 0);
   return (
     <Animated.View
       pointerEvents={hidden ? "none" : "box-none"}
       style={{
         position: "absolute",
-        [leading ? "left" : "right"]: WINDOW_CONTROLS.edge,
+        [leading ? "left" : "right"]: inset,
         top: centerY - size / 2,
-        width: windowControlsWidth(count),
+        width: windowControlsWidth(drawn.length),
         height: size,
         flexDirection: "row",
         gap: WINDOW_CONTROLS.gap,
         opacity,
       }}
     >
-      {onMenu ? <ControlButton kind="menu" width={width} height={size} radius={plateRadius} ink={colors} onPress={onMenu} /> : null}
-      {minimizable ? <ControlButton kind="minimize" width={width} height={size} radius={plateRadius} ink={colors} onPress={() => minimizeWindow(windowId)} /> : null}
-      {maximizable ? <ControlButton kind={maximized ? "restore" : "maximize"} width={width} height={size} radius={plateRadius} ink={colors} onPress={() => toggleWindowMaximized(windowId)} /> : null}
-      <ControlButton kind="close" width={width} height={size} radius={plateRadius} ink={colors} onPress={() => closeFromWindowControls(windowId)} />
+      {drawn.map((button) => (
+        <ControlButton key={button} kind={button === "maximize" && maximized ? "restore" : button} width={width} height={size} radius={plateRadius} ink={colors} onPress={pressOf(button, windowId, onMenu)} />
+      ))}
     </Animated.View>
   );
 });

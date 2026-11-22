@@ -22,19 +22,20 @@ import { syncOffered } from "../../state/sync/offer";
 import { browseForMeOffered, refreshChatGPTConnected, useChatGPTConnected } from "../../state/browseForMe/store";
 import { pageSummariesSwitchable, refreshPageSummariesEnabled, setPageSummariesEnabled, usePageSummariesEnabled } from "../../state/pageSummary/enabled";
 import { PAGE_SUMMARY_COPY } from "../../state/pageSummary/copy";
+import { destinationWords } from "../../lib/sharedWords";
 
 const INTERVALS = (Object.keys(AUTO_ARCHIVE_INTERVALS) as AutoArchiveInterval[]).map((id) => ({ id, title: autoArchiveTitle(id) }));
 const APP_LINKS = [
   { id: "ardia", title: "Ardia" },
   { id: "app", title: "App" },
 ] as const;
-const SHORTCUTS = [{ id: "archive", title: "Archive" }, { id: "spaces", title: "Spaces" }];
+const SHORTCUTS = [{ id: "archive", title: destinationWords.archive }, { id: "spaces", title: destinationWords.spaces }];
 const ARCHIVE_ONLY = SHORTCUTS.filter((shortcut) => shortcut.id === "archive");
 const SYNC_TILE = 56;
 const TOP_SECTION_SPACING = 12;
 
 const link = (route: SettingsRoute) => settingsRouteKey(route);
-const colorName = (choice: string) => PROFILE_COLORS[choice as ProfileColor]?.name ?? choice;
+const colorName = (choice: string) => (choice === "custom" ? "Custom" : (PROFILE_COLORS[choice as ProfileColor]?.name ?? choice));
 
 export function ExpoSettingsRoot() {
   const engineId = usePreferences((p) => p.searchEngineId);
@@ -61,7 +62,7 @@ export function ExpoSettingsRoot() {
   }, []);
   return (
     <ExpoSettingsDone>
-      <Form modifiers={modifierList(navigationTitle("Settings"), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), contentMargins({ edges: "top", length: settingsLayout.expoListTop }))}>
+      <Form modifiers={modifierList(navigationTitle(destinationWords.settings), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), contentMargins({ edges: "top", length: settingsLayout.expoListTop }))}>
         {syncOffered() ? (
           <Section modifiers={[listSectionSpacing(TOP_SECTION_SPACING)]}>
             <NavigationLink value={link({ page: "sync" })}>
@@ -185,7 +186,7 @@ function SyncRow() {
         <Image systemName="macbook.and.iphone" size={SYNC_TILE / 2} color={settingsTint.sync} />
       )}
       <VStack alignment="leading" spacing={2}>
-        <Text modifiers={[font({ textStyle: "headline" })]}>Sync With Mac</Text>
+        <Text modifiers={[font({ textStyle: "headline" })]}>{destinationWords.sync}</Text>
         <Text modifiers={[font({ textStyle: "subheadline" }), foregroundStyle(line.isWarning ? warningInk : { type: "hierarchical", style: "secondary" }), contentTransition("opacity")]}>{line.text}</Text>
       </VStack>
     </HStack>

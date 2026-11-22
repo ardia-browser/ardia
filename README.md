@@ -10,11 +10,11 @@
 </p>
 
 <h3 align="center">
-  <a href="https://github.com/mantrakp04/ardia/releases/download/v0.2.47/Ardia-0.2.47.dmg">Download Ardia 0.2.47 for Mac</a>
+  <a href="https://github.com/mantrakp04/ardia/releases/download/v0.2.48/Ardia-0.2.48.dmg">Download Ardia 0.2.48 for Mac</a>
 </h3>
 
 <p align="center">
-  143 MB DMG · macOS 14 Sonoma or later · Apple Silicon · Notarized by Apple<br>
+  134 MB DMG · macOS 14 Sonoma or later · Apple Silicon · Notarized by Apple<br>
   Like your paint wet? <a href="https://ardia.dev/nightly">The nightly</a> has every fix the day it’s made, smudges and all.<br>
   Homebrew: <code>brew install ardia-browser/tap/ardia</code><br>
   On your phone: <a href="https://testflight.apple.com/join/yXHasDmr">iPhone (TestFlight)</a> · <a href="https://github.com/ardia-browser/ardia/releases/download/android-v1.0.2/Ardia-1.0.2.apk">Android (APK)</a><br>
@@ -86,11 +86,11 @@ Not WebKit. Not Electron. Every window is Chrome’s own, so sites, extensions a
 | Intel Macs | Apple Silicon only. | ✗ No |
 
 <h3 align="center">
-  <a href="https://github.com/mantrakp04/ardia/releases/download/v0.2.47/Ardia-0.2.47.dmg">Download Ardia 0.2.47</a>
+  <a href="https://github.com/mantrakp04/ardia/releases/download/v0.2.48/Ardia-0.2.48.dmg">Download Ardia 0.2.48</a>
 </h3>
 
 <p align="center">
-  It’s 143 MB and one drag into Applications.<br>
+  It’s 134 MB and one drag into Applications.<br>
   Not on a Mac? Watch › Custom › Releases up top and GitHub tells you when it is.
 </p>
 
@@ -122,15 +122,15 @@ The Linux desktop target is `apps/linux`, for x86-64 Linux on Wayland or X11. Re
 `ardia-bin` on the AUR: [docs/linux-port.md › Installing on Linux](docs/linux-port.md#installing-on-linux). The same
 file has the source-build and packaging instructions. It builds against the dedicated Linux Chromium host.
 
-The macOS app requires Xcode 26+, CocoaPods, Node 24 (pinned in `.nvmrc`), pnpm 11.
+The macOS app requires Xcode 26+, CocoaPods, Node 24 (pinned in `.nvmrc`), pnpm 12.
 
 ```bash
 pnpm install
 ```
 
 The engine (Chrome's framework, built from our patched Chromium) comes prebuilt: with no local engine build, the app's
-build downloads the one matching your checkout's `engine/` (about 110 MB, once; Apple Silicon only) and checks it
-against `packages/ardiacore/prebuilt-engines.tsv`. Every release whose engine changed publishes one. If `main`'s engine
+build downloads the one matching your checkout's macOS engine key (`engine/engine-key.sh --platform macos`; about
+110 MB, once; Apple Silicon only) and checks it against `packages/ardiacore/prebuilt-engines.tsv`. Every release whose engine changed publishes one. If `main`'s engine
 is newer than the last release's, work from a release tag (`v0.2.30`, say), or run
 `packages/ardiacore/scripts/fetch-engine.sh --nearest` to build against the newest prebuilt anyway. Passkeys and saved
 cards need our team ID and won't work in a build signed by anyone else.

@@ -13,7 +13,8 @@ import { AUTO_ARCHIVE_INTERVALS, autoArchiveTitle, type AutoArchiveInterval, typ
 import { clearArchivedTabs, loadArchive, searchArchive, setAutoArchiveInterval } from "../../state/tabs/store";
 import { MenuTrigger, confirmInSheet } from "../ui/MenuTrigger";
 import { MaterialEmptyIcon, MaterialIconAction, MaterialSearchField, MaterialTopBar } from "../ui/MaterialTopBar";
-import { ConfirmSheet, Favicon, FloatingMenu, font, ink, LookBackdrop, radius, smoothCorners, space, SwipeToDelete, Symbol, tabsLayout, tabsMotion, useDesign, useSheetFrame, useTheme, type Confirmation, type MenuItem } from "../ui";
+import { actionWords, destinationWords, dismissWords } from "../../lib/sharedWords";
+import { ConfirmSheet, Favicon, FieldAccessory, FloatingMenu, iconRoles, font, NoResultsState, Tappable, ink, LookBackdrop, radius, smoothCorners, space, SwipeToDelete, Symbol, tabsLayout, tabsMotion, useDesign, useSheetFrame, useTheme, type Confirmation, type MenuItem, slopToReach, capsule } from "../ui";
 import type { Point } from "../../lib/menuPlace";
 
 export function ArchiveView() {
@@ -87,12 +88,12 @@ export function ArchiveView() {
         {material ? (
           <>
             <MaterialTopBar
-              title="Archive"
+              title={destinationWords.archive}
               nav="close"
               onNav={closeArchive}
               actions={
                 <MenuTrigger items={items} trigger="tap" frost={null} place={{ right: space.s, width: Math.min(tabsLayout.menuWidth, width - space.l) }}>
-                  {({ onPress }) => <MaterialIconAction icon="ellipsis" turned label="Options" onPress={onPress ?? (() => undefined)} />}
+                  {({ onPress }) => <MaterialIconAction icon="ellipsis" turned label={actionWords.more} onPress={onPress ?? (() => undefined)} />}
                 </MenuTrigger>
               }
             />
@@ -104,9 +105,9 @@ export function ArchiveView() {
           <>
         <View style={styles.top}>
           <View style={styles.side}>
-            <Pressable accessibilityRole="button" disabled={!hasArchive && !editing} onPress={() => setEditing((now) => !now)} style={styles.topButton}>
-              <Text style={[font.body, editing ? styles.bold : null, { color: hasArchive || editing ? theme.spaceAccentInk : theme.tertiaryLabel }]}>{editing ? "Done" : "Edit"}</Text>
-            </Pressable>
+            <Tappable kind="text" label={editing ? dismissWords.done : EDIT} disabled={!hasArchive && !editing} onPress={() => setEditing((now) => !now)} style={styles.topButton}>
+              <Text style={[font.body, editing ? styles.bold : null, { color: hasArchive || editing ? theme.spaceAccentInk : theme.tertiaryLabel }]}>{editing ? dismissWords.done : EDIT}</Text>
+            </Tappable>
           </View>
           <Text accessibilityRole="header" style={[font.body, styles.bold, { color: theme.label }]}>
             Archive
@@ -114,14 +115,14 @@ export function ArchiveView() {
           <View style={[styles.side, styles.end]}>
             <MenuTrigger items={items} trigger="tap" place={{ right: space.s, width: Math.min(tabsLayout.menuWidth, width - space.l) }}>
               {({ onPress }) => (
-                <Pressable accessibilityRole="button" accessibilityLabel="Options" onPress={onPress} style={[styles.topButton, styles.iconButton]}>
-                  <Symbol name="ellipsis" size={20} color={theme.spaceAccentInk} />
-                </Pressable>
+                <Tappable kind="icon" label={actionWords.more} onPress={onPress ?? (() => undefined)} style={[styles.topButton, styles.iconButton]}>
+                  <Symbol name={iconRoles.more} size={tabsLayout.archiveMoreGlyph} color={theme.spaceAccentInk} />
+                </Tappable>
               )}
             </MenuTrigger>
-            <Pressable accessibilityRole="button" onPress={closeArchive} style={[styles.topButton, styles.endButton]}>
-              <Text style={[font.body, styles.bold, { color: theme.spaceAccentInk }]}>Done</Text>
-            </Pressable>
+            <Tappable kind="text" label={dismissWords.done} onPress={closeArchive} style={[styles.topButton, styles.endButton]}>
+              <Text style={[font.body, styles.bold, { color: theme.spaceAccentInk }]}>{dismissWords.done}</Text>
+            </Tappable>
           </View>
         </View>
         <View style={[styles.search, { backgroundColor: theme.fieldFill }]}>
@@ -137,9 +138,7 @@ export function ArchiveView() {
             autoCapitalize="none"
           />
           {query ? (
-            <Pressable accessibilityRole="button" accessibilityLabel="Clear Search" onPress={() => setQuery("")}>
-              <Symbol name="xmarkCircleFill" size={18} color={theme.secondaryLabel} />
-            </Pressable>
+            <FieldAccessory icon={iconRoles.clearText} label={actionWords.clearText} color={theme.secondaryLabel} layout="slop" onPress={() => setQuery("")} />
           ) : null}
         </View>
           </>
@@ -151,10 +150,8 @@ export function ArchiveView() {
             <Text style={[font.subheadline, styles.centered, { color: theme.secondaryLabel }]}>Closed and inactive tabs show up here.</Text>
           </View>
         ) : results && !results.length ? (
-          <View style={styles.empty} accessible accessibilityLabel={`No Results for “${searched}”. Check the spelling or try a new search.`}>
-            <Symbol name="magnifyingglass" size={NO_RESULTS_ICON} color={theme.secondaryLabel} />
-            <Text style={[font.title2, styles.bold, styles.centered, { color: theme.label }]}>{`No Results for “${searched}”`}</Text>
-            <Text style={[font.subheadline, styles.centered, { color: theme.secondaryLabel }]}>Check the spelling or try a new search.</Text>
+          <View style={styles.noResults}>
+            <NoResultsState testID="archiveNoResults" query={searched} />
           </View>
         ) : (
           <SectionList
@@ -200,12 +197,12 @@ export function ArchiveView() {
 function rowMenuItems(tab: BrowserTab): MenuItem[] {
   const sharing: MenuItem[] = canShareTab(tab)
     ? [
-        { label: "Copy Link", icon: "link", onPress: () => copyTabLink(tab) },
-        { label: "Share", icon: "squareAndArrowUp", onPress: () => shareTab(tab) },
+        { label: actionWords.copyLink, icon: iconRoles.copyLink, onPress: () => copyTabLink(tab) },
+        { label: actionWords.share, icon: iconRoles.share, onPress: () => shareTab(tab) },
       ]
     : [];
   return [
-    { label: "Open", icon: "arrowUpForward", systemImage: "arrow.up.forward.square", onPress: () => restoreRow(tab) },
+    { label: actionWords.open, icon: "arrowUpForward", systemImage: "arrow.up.forward.square", onPress: () => restoreRow(tab) },
     ...sharing,
     "divider",
     { label: "Delete", icon: "trash", destructive: true, onPress: () => deleteArchivedTab(tab) },
@@ -226,11 +223,11 @@ function ArchiveRow({ tab, first, last, editing, faviconSize, onMenu }: { tab: B
       <SwipeToDelete onDelete={() => deleteArchivedTab(tab)} revealsOnly={Platform.OS === "ios"}>
         <View style={[styles.rowLine, { backgroundColor: theme.groupFill }]}>
           {editing ? (
-            <Pressable accessibilityRole="button" accessibilityLabel={`Delete ${tab.title || shown.host}`} onPress={() => deleteArchivedTab(tab)} hitSlop={archiveGroup.deleteSlop} style={styles.deleteHit}>
+            <Tappable kind="icon" label={`Delete ${tab.title || shown.host}`} onPress={() => deleteArchivedTab(tab)} hitSlop={slopToReach(archiveGroup.rowPadding + archiveGroup.deleteGlyph, archiveGroup.deleteGlyph)} style={styles.deleteHit}>
               <View style={[styles.deleteDot, { backgroundColor: theme.destructive }]}>
                 <Symbol name="minus" size={archiveGroup.deleteGlyph * 0.6} color={ink.white} />
               </View>
-            </Pressable>
+            </Tappable>
           ) : null}
           <Pressable
             accessibilityRole="button"
@@ -257,9 +254,9 @@ function ArchiveRow({ tab, first, last, editing, faviconSize, onMenu }: { tab: B
   );
 }
 
-const archiveGroup = { inset: 16, radius: 12, rowGap: 14, rowPadding: 14, rowVertical: 5, deleteGlyph: 22, deleteSlop: 8 } as const;
+const archiveGroup = { inset: 16, radius: 12, rowGap: 14, rowPadding: 14, rowVertical: 5, deleteGlyph: 22 } as const;
 const EMPTY_TILE = 64;
-const NO_RESULTS_ICON = 44;
+const EDIT = "Edit";
 const EMPTY_WIDTH = 320;
 const ROW_FAVICON = 20;
 const ROW_FAVICON_SCALE_CAP = 2;
@@ -283,6 +280,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.s + 2,
     minHeight: tabsLayout.archiveField,
     borderRadius: radius.field - space.xs,
+    ...smoothCorners,
   },
   input: { flex: 1, paddingVertical: space.s },
   section: { paddingHorizontal: archiveGroup.inset * 2, paddingTop: space.xl, paddingBottom: space.s - 2 },
@@ -290,9 +288,10 @@ const styles = StyleSheet.create({
   group: { marginHorizontal: archiveGroup.inset, overflow: "hidden", ...smoothCorners },
   rowLine: { flexDirection: "row", alignItems: "center" },
   deleteHit: { paddingLeft: archiveGroup.rowPadding },
-  deleteDot: { width: archiveGroup.deleteGlyph, height: archiveGroup.deleteGlyph, borderRadius: archiveGroup.deleteGlyph / 2, alignItems: "center", justifyContent: "center" },
+  deleteDot: { width: archiveGroup.deleteGlyph, height: archiveGroup.deleteGlyph, borderRadius: capsule(archiveGroup.deleteGlyph), alignItems: "center", justifyContent: "center" },
   row: { flex: 1, flexDirection: "row", alignItems: "center", gap: archiveGroup.rowGap, paddingLeft: archiveGroup.rowPadding },
   centered: { textAlign: "center" },
   label: { flex: 1, gap: 1, paddingVertical: archiveGroup.rowVertical + space.xs, paddingRight: archiveGroup.rowPadding },
+  noResults: { flex: 1, justifyContent: "center" },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: space.xs + 2, paddingHorizontal: space.xxl, maxWidth: EMPTY_WIDTH, alignSelf: "center" },
 });

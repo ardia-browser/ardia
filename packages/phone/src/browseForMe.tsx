@@ -22,7 +22,7 @@ export type BrowseForMeEvent =
   | { name: "searchWeb"; query: string }
   | { name: "openLink"; url: string }
   | { name: "closed" }
-  | { name: "settled"; outcome: BrowseForMeOutcome; chatGPTFellBack: boolean; geminiNanoMissing?: string | null }
+  | { name: "settled"; outcome: BrowseForMeOutcome; chatGPTFellBack: boolean; geminiNanoMissing?: string | null; rewroteAfterGeminiNanoDownload?: boolean }
   | { name: "talkToMe"; count: string }
   | { name: "account"; connected: boolean; account?: ChatGPTAccountState };
 

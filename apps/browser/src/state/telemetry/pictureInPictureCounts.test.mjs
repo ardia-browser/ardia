@@ -153,3 +153,26 @@ test("activations Ardia handed back after it was left over a Picture in Picture 
   usage.sessionEnding();
   assert.equal((await sentCounts()).length, before + 1);
 });
+
+test("the ways a moved Picture in Picture window was let go are counted by outcome, sent with the usage counts, then start again from zero, and one from before sharing's last change isn't", async () => {
+  client.loadChoice();
+  client.setSharing(true, "onboarding");
+  const fields = ["pip_releases_to_corner", "pip_releases_flicked_into_tuck", "pip_releases_tucked", "pip_releases_pulled_out_of_tuck", "pip_releases_pulled_into_corner", "pip_releases_placed"];
+  const releasesSent = async () => {
+    await client.saveQueueNow();
+    const saved = JSON.parse(stub.docs.get("telemetry-queue.json") ?? '{"events":[]}');
+    return saved.events.filter((e) => e.event === "usage_counts" && fields.some((f) => e.properties[f])).map((e) => fields.map((f) => e.properties[f]));
+  };
+  const before = (await releasesSent()).length;
+
+  for (const outcome of ["corner", "corner", "flickTuck", "tuck", "pullOut", "cornerPull", "placed", "placed", "placed"]) pipCounts.notePictureInPictureReleased({ outcome, epoch: client.consentEpoch() });
+  pipCounts.notePictureInPictureReleased({ outcome: "corner", epoch: "an epoch from before" });
+  pipCounts.notePictureInPictureReleased({ outcome: "somewhere new", epoch: client.consentEpoch() });
+  usage.sessionEnding();
+  const sent = await releasesSent();
+  assert.equal(sent.length, before + 1);
+  assert.deepEqual(sent.at(-1), [2, 1, 1, 1, 1, 3]);
+
+  usage.sessionEnding();
+  assert.equal((await releasesSent()).length, before + 1);
+});

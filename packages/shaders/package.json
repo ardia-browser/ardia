@@ -6,7 +6,7 @@
   "main": "src/index.tsx",
   "types": "src/index.tsx",
   "scripts": {
-    "typecheck": "tsc -p .",
+    "typecheck": "tsrs -p .",
     "shaders:check": "node scripts/check-shaders.mjs",
     "test": "node scripts/meadow.mjs --check",
     "meadow": "node scripts/meadow.mjs"

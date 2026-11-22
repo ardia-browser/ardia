@@ -81,6 +81,7 @@ export type EngineCalls = {
   "permissions.devExternalLaunches": [{}, Record<string, unknown>[]];
 
   "profiles.loaded": [{}, { profiles: string[] }];
+  "profiles.ctrlTabMru": [{}, { profiles: Record<string, boolean> }];
   "profiles.release": [Profile, null];
   "profiles.unloadIdle": [Profile, { status: "released" | "pending" | "busy"; tabs: string[]; heldBy?: string }];
   "profiles.deleteData": [Profile, { remaining: string[] }];

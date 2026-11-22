@@ -67,20 +67,21 @@ def key_paths(source):
     script = key_script(source)
     if not script.is_file():
         raise PublishError(f'{source} has no engine/engine-key.sh')
-    result = subprocess.run([str(script), '--paths'], text=True, capture_output=True)
+    result = subprocess.run([str(script), '--platform', 'linux', '--paths'], text=True, capture_output=True)
     paths = result.stdout.split()
     if result.returncode != 0 or not paths:
         raise PublishError(f'{script} --paths failed: {result.stderr.strip()}')
     return paths
 
 
-def commit_key(checkout, commit):
-    result = subprocess.run([str(key_script(checkout)), commit], cwd=checkout, text=True, capture_output=True)
+def commit_key(checkout, commit, env=None):
+    result = subprocess.run([str(key_script(checkout)), '--platform', 'linux', commit], cwd=checkout, env=env, text=True, capture_output=True)
     return result.stdout.strip() if result.returncode == 0 else ''
 
 
 def contents_key(source, paths):
-    absent = [path for path in paths if not (source / path).is_dir()]
+    paths = [path for path in paths if not path.startswith(':')]
+    absent = [path for path in paths if not (source / path).exists()]
     if absent:
         raise PublishError(f'{source} has no ' + ', '.join(absent))
     with tempfile.TemporaryDirectory(prefix='ardia-engine-key-') as scratch:
@@ -88,14 +89,11 @@ def contents_key(source, paths):
         git('init', '-q', '--bare', str(repo))
         env = dict(os.environ, GIT_INDEX_FILE=str(pathlib.Path(scratch) / 'index'))
         git(f'--git-dir={repo}', f'--work-tree={source}', 'add', '-A', '--', *paths, cwd=source, env=env)
-        listing = ''
-        for path in paths:
-            tree = git(f'--git-dir={repo}', 'write-tree', f'--prefix={path}/', cwd=source, env=env).stdout.strip()
-            listing += f'{path} {tree}\n'
-        hashed = subprocess.run(['git', f'--git-dir={repo}', 'hash-object', '--stdin'], cwd=source, env=env, input=listing, text=True, capture_output=True)
-        if hashed.returncode != 0:
-            raise PublishError(f'git hash-object failed: {hashed.stderr.strip()}')
-        return hashed.stdout.strip()
+        tree = git(f'--git-dir={repo}', 'write-tree', cwd=source, env=env).stdout.strip()
+        key = commit_key(source, tree, env=dict(env, GIT_DIR=str(repo)))
+        if not key:
+            raise PublishError(f'engine/engine-key.sh found no engine key for the copy at {source}')
+        return key
 
 
 def engine_identity(source):
@@ -240,7 +238,7 @@ def upload(repo, key, source_commit, pairs, row):
     tag = runtime_files.release_tag(key)
     view = gh('release', 'view', tag, '-R', repo, '--json', 'assets', check=False)
     if view.returncode != 0:
-        notes = f'Prebuilt Linux x64 ArdiaCore engine for engine key {key} (engine/engine-key.sh), built from {source_commit or "an unrecorded commit"}.'
+        notes = f'Prebuilt Linux x64 ArdiaCore engine for engine key {key} (engine/engine-key.sh --platform linux), built from {source_commit or "an unrecorded commit"}.'
         say(f'creating the prerelease {tag} in {repo}')
         gh('release', 'create', tag, '-R', repo, '--prerelease', '--latest=false', '--title', f'Engine {key[:12]}', '--notes', notes)
         assets = set()

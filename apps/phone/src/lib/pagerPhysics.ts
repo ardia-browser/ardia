@@ -9,7 +9,14 @@ export const PAGER = {
   opposingVelocity: 240,
   maxVelocity: 4000,
   minimumDistance: 14,
+  landedWithin: 6,
+  peekDistance: 56,
 } as const;
+
+export function landedNear(offset: number, target: number, width: number): boolean {
+  "worklet";
+  return width > 0 && Math.abs(offset - target * width) < PAGER.landedWithin;
+}
 
 export function rubberBand(distance: number, limit?: number): number {
   "worklet";

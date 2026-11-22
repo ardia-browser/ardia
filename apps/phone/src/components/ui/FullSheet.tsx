@@ -17,13 +17,14 @@ import { initialPresence, presenceSettled, presenceShown, presenceTarget } from 
 import { iPhoneOr, reducedMotionMs, tabsCurve, tabsMotion } from "./motion";
 import { screenCornerRadius } from "../../state/app/displayCorner";
 import { useTheme } from "./theme";
-import { sheetInk, sheetLayout, tabsLayout } from "./tokens";
+import { sheetInk, sheetLayout, smoothCorners, tabsLayout } from "./tokens";
 import { MenuFrostProvider } from "./Menu";
 import { useDesign } from "./design";
 import { withAlpha } from "../../lib/color";
 import { MATERIAL_STATE } from "./materialRoles";
 import { useMaterialTheme } from "./materialTheme";
 import { materialDuration, materialMotion, materialMove, materialShape } from "./materialTokens";
+import { FabricCatchUp } from "./FabricCatchUp";
 
 const SHEET_REDUCED_MS = reducedMotionMs(tabsMotion.sheetReduced);
 
@@ -156,10 +157,15 @@ export function FullSheet<T extends string>({ sheet, progress, onDismiss, childr
 
   const scrim = useAnimatedStyle(() => ({ opacity: progress.value }));
   const slide = useAnimatedStyle(() => ({ transform: [{ translateY: offset.value }] }));
+  const sheetMotionNow = () => {
+    "worklet";
+    return offset.value;
+  };
   const shown = sheet ?? presenceShown(presence.current);
   if (!shown) return null;
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents={sheet ? "auto" : "none"} collapsable={false} importantForAccessibility={sheet ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={!sheet}>
+      {sheet ? <FabricCatchUp motion={sheetMotionNow} testID="fullSheetFabricCatchUp" /> : null}
       <Animated.View style={[StyleSheet.absoluteFill, material ? { backgroundColor: withAlpha(scheme.scrim, MATERIAL_STATE.scrim) } : styles.scrim, scrim]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
       <GestureDetector gesture={drag}>
         <Animated.View
@@ -191,7 +197,7 @@ export function SheetBackground({ progress, children }: { progress: SharedValue<
     borderRadius: !material && progress.value > 0 ? sheetLayout.backgroundRadius : 0,
   }));
   return (
-    <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.surface }]}>
+    <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.canvas }]}>
       <Animated.View style={[StyleSheet.absoluteFill, styles.clip, shrink]}>{children}</Animated.View>
     </View>
   );
@@ -208,5 +214,5 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: sheetLayout.radius,
     borderTopRightRadius: sheetLayout.radius,
   },
-  clip: { overflow: "hidden" },
+  clip: { overflow: "hidden", ...smoothCorners },
 });

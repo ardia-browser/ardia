@@ -21,7 +21,7 @@ export function sendTargetsIn(doc: SyncDoc, profileId: string): SendTarget[] {
   const scope = link ? doc.scopes[profileScope(link.syncId)] : undefined;
   if (!doc.enabled || !doc.deviceId || !link?.enabled || link.retire || !app || !scope) return [];
   const now = Date.now();
-  const seenAt = (id: string) => Math.max(...Object.values(doc.scopes).map((s) => s.seen[id] ?? -Infinity));
+  const seenAt = (id: string) => Object.values(doc.scopes).reduce((m, s) => Math.max(m, s.seen[id] ?? -Infinity), -Infinity);
   return [...deviceRecords(app)]
     .filter(([id, record]) => id !== doc.deviceId && offersTabs(record, seenAt(id), now) && (deviceKindOf(record) === "phone" || id in scope.seen))
     .sort(([a], [b]) => (scope.seen[b] ?? app.seen[b] ?? 0) - (scope.seen[a] ?? app.seen[a] ?? 0))

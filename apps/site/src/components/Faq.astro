@@ -3,12 +3,11 @@ import { base } from "../data/site";
 import { FAQ } from "../data/faq";
 ---
 
-<section class="faq paint edge" id="faq" aria-labelledby="faq-title" data-shot="press">
+<section class="faq paint edge" data-paint="plum" id="faq" aria-labelledby="faq-title" data-shot="press">
   <div class="wrap faq-grid">
     <header class="faq-head">
       <p class="label kicker">FAQ</p>
       <h2 class="poster" id="faq-title" data-reveal>Fair questions.</h2>
-      <p class="sub" data-reveal style="--i: 1">Short answers. All of them true.</p>
     </header>
 
     <dl class="qa">
@@ -36,14 +35,6 @@ import { FAQ } from "../data/faq";
 
 <style>
   .faq {
-    /* Follows Voices; ends on #8a5f7f so Closing's edge still matches. */
-    --bg: #9a6580;
-    --bg-top: var(--dusk-late);
-    --wash: linear-gradient(180deg, var(--dusk-late) 0%, #9a6580 55%, #8a5f7f 100%);
-    --dab: var(--sun);
-    --ink-2: #3f3437;
-    --ink-3: #5a4a4e;
-    --rule: rgb(22 25 26 / 0.2);
     padding: var(--section) 0;
   }
   .faq-grid {
@@ -59,58 +50,24 @@ import { FAQ } from "../data/faq";
     top: 100px;
   }
   h2 {
-    font-size: clamp(2.6rem, 1.2rem + 4vw, 5.6rem);
-  }
-  .sub {
-    margin-top: 20px;
-    font-size: var(--t-lede);
-    color: var(--ink-2);
+    font-size: clamp(2.3rem, 1.15rem + 3vw, 4.2rem);
   }
   .qa {
     grid-column: 7 / -1;
-    margin: 0;
-    border-top: 2px solid var(--ink);
-  }
-  .item {
     display: grid;
-    grid-template-columns: 2.4rem minmax(0, 1fr);
-    padding: 24px 0 26px;
-    border-bottom: 1px solid var(--rule);
-  }
-  dt,
-  dd {
-    grid-column: 2;
+    gap: 36px;
+    margin: 0;
   }
   dt {
-    font-weight: 620;
-    font-stretch: 104%;
-    font-size: 1.2rem;
-    line-height: 1.25;
-    letter-spacing: -0.018em;
-    position: relative;
-  }
-  dt::before,
-  dd::before {
-    position: absolute;
-    left: -2.4rem;
-    font-family: var(--mono);
-    font-size: var(--t-label);
-    font-stretch: 87.5%;
-    letter-spacing: 0.06em;
-    color: var(--ink-3);
-    line-height: 2.2;
-  }
-  dt::before {
-    content: "Q.";
+    font-weight: 640;
+    font-size: 1.18rem;
+    line-height: 1.28;
+    letter-spacing: -0.02em;
   }
   dd {
-    margin: 10px 0 0;
+    margin: 8px 0 0;
+    max-width: 36em;
     color: var(--ink-2);
-    position: relative;
-  }
-  dd::before {
-    content: "A.";
-    top: 0;
   }
   b {
     font-weight: 600;

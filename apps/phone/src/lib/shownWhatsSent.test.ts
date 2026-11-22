@@ -11,6 +11,8 @@ test("where sync isn't offered, What's Sent names no Mac, no Match My Mac and no
     assert.doesNotMatch(text, /iPhone/);
   }
   assert.ok(texts("android", false).some((text) => text === "With each launch, the Appearance you chose: Glass or Classic, and Light, Dark or System"));
+  assert.ok(texts("android", false).some((text) => text === "With each launch, whether your color is one of Ardia’s colors or a custom theme. Never which colors"));
+  assert.ok(texts("ios", true).some((text) => /color matches your Mac/.test(text)));
   assert.doesNotMatch(shownSharingFootnote(false), /sync/);
   assert.match(shownSharingFootnote(true), /This setting doesn’t sync\./);
 });

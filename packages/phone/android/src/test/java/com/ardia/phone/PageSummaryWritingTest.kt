@@ -2,6 +2,7 @@ package com.ardia.phone
 
 import com.ardia.browser.ReadableContent
 import com.ardia.chatgpt.ChatGPTFailure
+import com.google.mlkit.genai.common.GenAiException
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -20,7 +21,7 @@ class PageSummaryWritingTest {
         }
     }
 
-    private class Local(val availability: OnDeviceWriter.Availability = OnDeviceWriter.Availability.Available, val fails: Boolean = false, val writes: String = "- From Gemini Nano") : PageSummaryLocal {
+    private class Local(val availability: OnDeviceWriter.Availability = OnDeviceWriter.Availability.Available, val fails: Boolean = false, val writes: String = "- From Gemini Nano", val failure: Exception = IllegalStateException("Gemini Nano returned nothing")) : PageSummaryLocal {
         val prompts = mutableListOf<String>()
 
         override suspend fun availability(): OnDeviceWriter.Availability = availability
@@ -29,7 +30,7 @@ class PageSummaryWritingTest {
 
         override suspend fun stream(instructions: String, prompt: String, onText: (String) -> Unit) {
             prompts += prompt
-            if (fails) throw IllegalStateException("Gemini Nano returned nothing")
+            if (fails) throw failure
             onText(writes)
         }
     }
@@ -89,6 +90,16 @@ class PageSummaryWritingTest {
         assertEquals(2, local.prompts.size)
         assertEquals(PageSummaryWriting.NANO_FAILED, message)
         assertTrue(shown.all { it.isEmpty() })
+    }
+
+    @Test
+    fun aFailedLocalWriteIsCountedAndABusyModelSaysSo() = runTest {
+        val failed = PageSummaryWriting(Cloud(isConnected = false), Local(fails = true)).write(extracted, PageSummaryProvider.OnDevice, {}) as PageSummaryWriting.Unwritten
+        assertEquals("write_failed", failed.geminiNanoMissing)
+        val busy = Local(fails = true, failure = GenAiException(IllegalStateException("AICore"), GenAiException.ErrorCode.PER_APP_BATTERY_USE_QUOTA_EXCEEDED))
+        val refused = PageSummaryWriting(Cloud(isConnected = false), busy).write(extracted, PageSummaryProvider.OnDevice, {}) as PageSummaryWriting.Unwritten
+        assertEquals("errors", refused.geminiNanoMissing)
+        assertEquals("Gemini Nano is busy right now.", refused.message)
     }
 
     @Test

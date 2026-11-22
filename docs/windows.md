@@ -1357,9 +1357,10 @@ does run in a test instance. A scratch folder with the marker must get both powe
   which launches it three times and uploads each launch's log: a first launch (onboarding) and a launch with
   onboarding done (the browser window), each with a screenshot when the runner allows a capture, then a hidden
   self-check launch.
-- A pull request gets the fast run. The `gate` job waits for a vouch, like the iPhone build. Then three things start
-  together. A Linux job (`javascript`) bundles the app's JavaScript with Metro, once for both CPUs. Each CPU's build
-  job (`app`, `arm64-app`, both on x64 runners) looks in the Actions cache for an app built from the same native code
+- A pull request gets the fast run. For a pull request from a fork the `gate` job waits for a vouch, like the iPhone
+  build; a branch of this repository skips it. Then a Linux job (`javascript`) bundles the app's JavaScript with
+  Metro, once for both CPUs, while `identity` reads the version and, live, the `full-ci` label. After `identity`, each
+  CPU's build job (`app`, `arm64-app`, both on x64 runners) looks in the Actions cache for an app built from the same native code
   (`windows-app-<cpu>-<hash>`; the hash covers `apps/browser/windows`, each package's `package.json` and `windows`
   folder, the lockfile, the patches and the workflow) and compiles only when none is there, then saves it.
 - Each CPU then has two jobs side by side on its own kind of runner: `x64` and `arm64` run the launch check's

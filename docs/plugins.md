@@ -133,9 +133,15 @@ is the only source of which version may be fetched.
     read-only (folders 0555, files 0555 or 0444), and keeps the download beside it as `<sha256>.tar.gz` (0444). Program
     copies in `Programs/<name>/<version>/` are sealed the same way once they verify, except their top folder, where
     Ardia keeps its leases and after-update marks; removing either unseals it first.
-- **What makes a copy official.** A copy counts only while its download still has the pinned SHA-256 and the payload
-  digest of the copy (`PluginPrograms.payloadDigest`) equals the one computed by streaming that download's tar
-  (`OfficialArchive.payloadDigest`, `OfficialVerification`).
+- **What makes a copy official.** A copy counts only while its download still has a SHA-256 the signed app vouches
+  for, and the payload digest of the copy (`PluginPrograms.payloadDigest`) equals the one computed by streaming that
+  download's tar (`OfficialArchive.payloadDigest`, `OfficialVerification`).
+  - The SHA-256s the app vouches for are the current pin's and those of earlier pinned artifacts listed in
+    `apps/browser/official-plugins-history.json`, which `export-sign.sh` writes into Info.plist with the pin (each
+    plugin's `trusted.artifacts`, `OfficialTrust`). `OfficialPlugins/<name>/active` only selects among copies that pass,
+    and `plugins.json` plays no part in it: a copy no signed pin names is never official, whatever the record says.
+  - `official-plugins.py history-check` fails when a `v*` tag that pinned a plugin still in the pin has no history entry,
+    and the release-script tests run it, so a pin bump has to add the release it replaces.
   - Each lookup re-checks the stamps of the download and of every file in the copy, the digests are recomputed whenever
     one changed, and promotion always re-checks from scratch.
   - A replaced or damaged copy isn't listed as official, can't be promoted, and can't be linked. Linking stages the
@@ -170,7 +176,10 @@ is the only source of which version may be fetched.
 - **0.2.47 installs.** 0.2.47 bundled Command Line 0.4.0, approved as `sha256(manifest + "\0bundled")` and copied to
   `Programs/cli/<version>` with `ardia` linked to `Programs/cli/current/bin/ardia`.
   - Until a fetched copy is active, the scan lists that copy as the plugin (folder identity `bundled`, `legacy`), but
-    only while the record's old receipt approves it exactly. Its programs are kept linked in place
+    only while its payload digest is the one a release shipped (`trusted.bundledDigests`, one per release, since each
+    re-signed its bundled copy) and the record's old receipt approves it exactly. The history covers every release that
+    bundled Command Line: 0.2.47-nightly.7 (0.3.0), 0.2.47-nightly.8, 0.2.47-nightly.9 and 0.2.47 (0.4.0). A copy from
+    anywhere else stops counting as official: its `ardia` is taken off PATH and Install… is offered. Its programs are kept linked in place
     (`PluginPrograms.keepLegacy`), with nothing restaged or switched.
   - The launch sweep keeps every installed official plugin's link, listing or not (`programsKeptAtLaunch`).
   - The fetched replacement switches over silently when its `plugin.json` is the one already approved (it carries
@@ -359,7 +368,8 @@ plugin that isn't needed yet costs nothing: no host process, no memory. The firs
 | `control` | `true` | Turning it on turns on `cliControl`, unless you turned control off yourself: an Off you chose wins, and the consent sheet points to the switch, Settings › Advanced › Let programs control Ardia |
 
 The old list form (`["tabs", "network"]`) still reads, as above. Contributions grant their own reach and are shown on
-the consent sheet too: a toolbar button, a sidebar view, a context-menu item, a theme, a decide hook.
+the consent sheet too: a toolbar button, a sidebar view, a context-menu item, a theme, a decide hook, site switches in
+Site Controls and a page bar with the actions it names.
 
 ### settings
 
@@ -633,8 +643,9 @@ Ardia never runs a plugin's program itself, with one exception for official plug
   read it.
 - **Not sandboxed.** A program isn't a helper: you, or a program you use, run it from a shell, as you, so neither the
   sandbox nor the plugin's other permissions apply to it, and the consent sheet says so ("Adds ardia to your PATH. It runs as you,
-  outside Ardia's sandbox", and "Adds ~/.local/bin to your PATH in your shell's login file"). It reaches Ardia the way any program does: the control socket
-  and the token server, while "Let the ardia command control Ardia" is on (`docs/automation.md`, `docs/cli.md`).
+  outside Ardia's sandbox", and "Adds ~/.local/bin to your PATH in your shell's login file"). It reaches Ardia the way any program does, while "Let the ardia command control Ardia" is on: the
+  control socket, which checks only that its peer runs as the same user, and the engine's token connection, whose token
+  sits in `ArdiaControl.json` for the user's processes to read (`docs/cli.md`, `docs/control-socket.md`).
 
 Code: `PluginCore/PluginPrograms.swift` (the store, links and leases; `plugin-tests/PluginProgramsTests.swift`),
 `PluginCore/PluginProgramRegistry.swift` (claims and legacy installs; `plugin-tests/PluginProgramRegistryTests.swift`),
@@ -751,6 +762,94 @@ native verbs in `PasswordsModule.swift` (`passwords.setFieldProviders`, `showSys
 `otpauthHandler`, `setUpVerificationCode`) and the page events `fieldProviderOpened {via, shown}` and
 `verificationCodeFound {token, main}`. A plugin adds none of these; its manifest switches them on.
 
+### siteSwitches
+
+Manifest 2, in `contributes`. Up to 4 switches Site Controls shows for each site, as a row titled `title` with `icon`
+(an SF Symbol name, default `puzzlepiece`). Mac only (`PLATFORM_FEATURES.plugins`).
+
+```json
+"siteSwitches": [{ "key": "on", "title": "Developer Mode", "icon": "hammer" }]
+```
+
+- A row appears in Site Controls for an http(s) page in a tab, never in a private window, a Peek or an internal page
+  (`ardia://…`). Pressing it turns the switch on or off for that page's origin.
+- Values are kept per **canonical origin**: scheme, host and port, lowercased, the host's trailing dot dropped, default
+  ports left out and IPv6 hosts in brackets, so `http://localhost:8318` and `http://localhost:5173` are separate
+  sites. Each value is an explicit on or off; a site you never touched has none (and reads as off).
+- They are stored in `plugins.json` beside the plugin's record (`sites: { <key>: { <origin>: true | false } }`), on this
+  device and for all its profiles, and never in `values`: main, the sidecar, the `plugin.values` event, the socket and
+  the `ardia` command never see them, and no plugin API reports a site's value or which sites match.
+- Turning the plugin off withdraws its rows (and its page bar) at once; the values stay for when it's back. Removing the
+  plugin deletes them with its record.
+
+### pageBar
+
+Manifest 2, in `contributes`. One per plugin: a bar Ardia draws for a page whose site switch is on, with buttons that
+run Ardia's own actions on that tab. The plugin declares it; Ardia draws all of it, and no plugin code runs in the
+browser's interface. It needs no `main` and no permission; the consent sheet lists the switch, the bar and its
+actions.
+
+```json
+"pageBar": {
+  "look": "stripes",
+  "when": { "siteSwitch": "on", "localAddresses": "localAddresses" },
+  "buttons": ["siteControls", "address", "copyLink", "|", "console", "network", "inspect", "|", "extensions", "split"]
+}
+```
+
+- `look` (required): `stripes`, Arc's striped developer bar. With the address in the sidebar (or no toolbar), it is a
+  strip above the page with the page's address in a monospaced face; with a toolbar, the toolbar's address field
+  takes that face and the DevTools buttons the bar declares.
+- `when.siteSwitch` (required) names one of the plugin's `siteSwitches`: the bar shows on sites where it is on.
+- `when.localAddresses` (optional) names one of the plugin's `toggle` rows. While that row is on, typing or picking a
+  local address in the address bar (`localhost`, `*.localhost`, `127.0.0.0/8`, `0.0.0.0`, `[::1]`) turns the switch on
+  for that origin. It is a one-use intent recorded at the address bar's commit, tied to that tab and that origin, spent
+  on the tab's next document and dropped if that document is anything else. Redirects, links, pages a site opens,
+  restored tabs, the `ardia` command, automation and links from other apps never turn anything on, and a site you turned
+  off stays off. So an OAuth callback on `127.0.0.1` that another site redirected you to gets no bar.
+- `buttons` (1 to 16): host actions from one table, each at most once, with `|` for a divider. `siteControls` opens
+  Site Controls, `address` makes the address editable (without it the address is a plain label), `copyLink` copies
+  the page address, `console`, `network` and `inspect` open DevTools there (Chromium pages only; `network` where the
+  platform has DevTools panels), `extensions` is the extensions menu, `split` the menu that adds a split on a side.
+  The schema and the consent lines come from the same table (`HOST_ACTIONS` in `lib/pluginPageBar.ts`).
+
+**When it shows.** One host function decides for every pane from the window's real layout
+(`pageBarFor` in `state/plugins/pageBar.ts`): the pane is the visible one (or one of a visible split), not a warm,
+lingering, covered, discarded, sleeping or frozen pane, not a Peek, not a tab of another profile or a private window,
+not in a small window, and neither the page nor the window is full screen. The same result draws the strip, the
+toolbar's field, split panes' toolbars and the frozen page's offset, so a tab further down the sidebar never draws its
+bar over the one you're on. None of it runs until an enabled plugin declares a page bar (`PLUGIN_CHROME.pageBars` in
+`state/plugins/chrome.ts`).
+
+**Which document.** The decision uses the page's committed document as the web view reports it (`committedUrl`,
+`committedAt`), never the address while it loads: no bar while the shown and committed addresses differ, a new document
+shows its bar once it has stayed committed for 300 ms (a page that redirects away sooner never shows it), a change
+within the same document keeps the decision and only updates the address, and switching to a tab whose document has
+settled shows it at once. The address shown and every action's target are that confirmed document's.
+
+**Actions.** Only the buttons Ardia draws run them. Ardia resolves the target tab when you press, checks it again after
+a menu closes (the split menu), and returns nothing to the plugin.
+
+**Several plugins.** When more than one plugin's bar matches a page, the first by plugin name draws it.
+
+#### Host extension points for page bars
+
+All host code a plugin can't reach past: the manifest checks (`lib/pluginPageBar.ts`), the site switch store and the
+typed-address intent (`state/plugins/siteSwitches.ts`, `typedAddresses.ts`), the document tracker
+(`state/plugins/pageBarDocuments.ts`), the per-pane decision and its published result (`pageBar.ts`,
+`pageBarPanes.ts`), the actions (`hostActions.ts`), the bar's components (`components/plugins/PluginPageBar.tsx`,
+`PageBarButtons.tsx`, `SiteSwitchRows.tsx`) and the web view's commit reports. Commit reports are off unless a reader
+asks: automation's event feed and page bars each ask as their own reader (`reportPageCommits(reader, on)` in
+`platform/tabs.ts`), which keeps the set and sends `tabs.reportCommits {on}` only when the first reader starts or the
+last one stops, so one stopping never turns them off under the other; a call native refused is sent again on the next
+change. The tracker keeps each tab's last report, so pages already open show their bar as soon as a page-bar plugin
+turns on, and on the Mac pages already open report again when reports turn on. A page that crashes or is discarded
+forgets its document until it commits a new one, and its old report can't bring it back. A typed local address is
+kept as an intent only while a page-bar plugin is on, for at most 20 s, and is spent only by the navigation it started:
+the address bar's own navigation of that tab (a `tab.opening` hook may hold it and let it through unchanged; one that
+cancels or redirects it leaves nothing to spend), or the new tab it opened. It goes with the tab. A typed address
+opened in a split or a new window, from a frozen pinned copy, or in a new tab a hook held, records no intent.
+
 
 ### The channel
 
@@ -770,6 +869,7 @@ Requests from the helper (`{"id", "method", "params"}`):
 | `windows` | `tabs` | as on the socket |
 | `run` `{"command", "arg"?, "window"?, "tab"?}` | `commands` | as on the socket |
 | `open` `{"urls", "activate"?}` | `commands` | opens 1 to 10 `http:` or `https:` URLs as background tabs in the last focused window (`activate` selects the first there without raising the window). Each URL, at most 2048 characters, is parsed whole as http or https with a host, before anything opens: the host as written must be ASCII (a Unicode name is refused; send it in punycode, `xn--`), with no user name or password and a port from 1 to 65535; an IPv6 host is put in its short form, and dotted IPv4 must have four parts. Raw spaces (percent-encode them), backslashes and control characters are refused before parsing. What opens is the normalised address: scheme and host lower-cased, the default port dropped, non-ASCII in the path, query and fragment percent-encoded as UTF-8, everything else as given. Anything else (`file:`, a path, `ardia:` or `chrome:` pages, `about:`, `javascript:`, `data:`, `ardia-plugin:`) is `bad_request`, and the message names the first bad entry, as in `urls[1] isn't a valid address`. It runs only while the run that asked is still the plugin's current run and still has `commands`; one queued behind other work when that stops opens nothing. Answers `{"ok": true, "tabs": [ids]}`: the tabs it made, nothing else |
+| `apply` `{"ops"}` | `workspace`, or `tabs: write` for `open`, `tab.close` and `tab.activate` | as on the socket, except that every URL in `open` and `group.create` is read by `open`'s rules above (http or https only). A batch with any other address is `refused` whole before anything in it runs, and the message names the address |
 | `page.post` `{"message", "view"?}` | a `page` | `{"ok": true}`, or `overloaded`: a message to the plugin's page views ([Pages and their helper](#pages-and-their-helper)); `refused` for a plugin with no page, however the method name is spelled in JSON |
 | `page.open` `{"path"?, "split"?, "side"?, "context"?}` | a `page`; `context` needs `tabs` | `{"tabId", "windowId"}`: opens the plugin's page at that path in the last focused window, as a tab or in Split View beside the current tab |
 | `tools.call` `{"plugin", "tool", "input"?}` | every permission the other plugin has | the tool's result, or its error; the plugin must be on and running. A plugin can't reach through another plugin's tools to what it wasn't granted itself |
@@ -936,6 +1036,9 @@ The control socket's protocol 4 adds `plugins`, `plugins.enable` (`{"waiting": t
   `state/sidebar/tabMenu.ts` (the tab menu), `state/config/configFiles.ts` (plugin themes),
   `state/automation/decideHooks.ts` (decide hooks after `hooks.json`).
 - `state/site/passwordManager*.ts`, `verificationCodes.ts`: the `passwordManager` contribution's host side.
+- `lib/pluginPageBar.ts` and `state/plugins/{siteSwitches,typedAddresses,pageBarDocuments,pageBar,pageBarPanes,hostActions,pageBarCommits}.ts`:
+  the `siteSwitches` and `pageBar` contributions' host side; `components/plugins/PluginPageBar.tsx`, `PageBarButtons.tsx`,
+  `SiteSwitchRows.tsx` draw them.
 - `platform/plugins.ts` binds `ArdiaPlugins` (`packages/shell/ios/PluginsModule.swift`, `PluginProcess.swift`,
   `PluginHost.swift`, `PluginHostFetch.swift`, `PluginPageView.swift`, `PluginSchemeHandler.swift`, `PluginCore/`
   (`PluginSandbox`, `PluginFiles`, `PluginFetchPolicy`, `PluginStorage`, `PluginProcessTree`, `PluginRuns`,
@@ -964,6 +1067,8 @@ in the local copy. Hourly `usage_counts`:
   `plugin_menu_runs`, `plugin_action_shortcuts` (an action run by its declared shortcut), `plugin_omnibox_queries`,
   `plugin_ui_prompts` (a quick pick, input box or confirm shown),
   `plugin_net_fetches`, `plugin_net_refusals` (a fetch outside `permissions.network` or to a private address),
+  `plugin_url_refusals_open`, `plugin_url_refusals_group_create` (an `apply` batch refused for an address outside the
+  plugin URL rules, such as one that isn't http or https or has a user name and password, by the operation that held it),
   `plugin_storage_writes`, `plugin_storage_cancels` (a storage request dropped because the plugin was being removed),
   `plugin_secret_writes`, `plugin_page_reads` (`activePage` reads), `plugin_decide_calls`,
   `plugin_decide_timeouts`.
@@ -972,7 +1077,14 @@ The daily settings snapshot has `plugins_installed`, `plugins_enabled` and, amon
 `plugins_with_settings`, `plugins_with_commands`, `plugins_with_page`, `plugins_with_process`,
 `plugins_with_programs`, `plugins_with_hooks`, `plugins_with_tools`, `plugins_with_passwordManager`, and for v2
 `plugins_with_main`, `plugins_with_menus`, `plugins_with_toolbar`, `plugins_with_sidebarViews`,
-`plugins_with_panels`, `plugins_with_omnibox`, `plugins_with_themes`.
+`plugins_with_panels`, `plugins_with_omnibox`, `plugins_with_themes`, `plugins_with_siteSwitches`, `plugins_with_pageBar`.
+
+Page bars: hourly `plugin_page_bar_shown_<official|other>` (once per tab per document), `plugin_page_bar_press_<action>`
+(`site_controls`, `address`, `copy_link`, `console`, `network`, `inspect`, `extensions`, `split`),
+`plugin_site_switch_<on|off>` (your presses in Site Controls), `plugin_site_switch_auto_on_typed` (a local address you
+typed turned a switch on) and `plugin_page_bar_superseded` (another plugin's bar matched the same page). Watch
+`plugin_page_bar_shown_official` against `plugin_site_switch_off`: a bar shown where people then turn it off is a
+misfire.
 
 Password managers: hourly `password_manager_panel_opens_<badge|menu>`, `password_manager_panel_refused_<badge|menu>`,
 and each refusal's reason
@@ -987,5 +1099,6 @@ and each refusal's reason
 
 Dashboard: watch `plugin_process_crashes` against `plugin_process_starts`, `plugin_activation_failures` against
 `plugin_activations`, `plugin_decide_timeouts` against `plugin_decide_calls` (a plugin slowing navigation),
-`plugin_net_refusals` against `plugin_net_fetches`, `program_link_failures` against `program_links`, and `program_after_update_quit_kills` against
+`plugin_net_refusals` against `plugin_net_fetches`, `plugin_url_refusals_open` and `plugin_url_refusals_group_create`
+(a plugin trying addresses it may not open), `program_link_failures` against `program_links`, and `program_after_update_quit_kills` against
 `program_after_update_quit_exits` (afterUpdate commands that ignore TERM at quit).

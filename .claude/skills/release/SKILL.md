@@ -22,7 +22,8 @@ There are two channels (`docs/releasing.md` › Channels):
 - **Stable** (`0.2.37`): everything below, about 2 h with the smoke test, the update test, the ratchet, the
   perf gate and the site's benchmarks. Its perf is compared with the previous **stable** release, never a nightly.
 
-When the owner asks for a nightly, or a fix is ready and nobody said stable, run the nightly loop.
+When the owner asks for a nightly, or asks for a release without saying stable, run the nightly loop. A fix being
+ready is not a request: never start a nightly or a stable unless the owner asks for a release in that request.
 
 ## The nightly loop
 
@@ -48,7 +49,7 @@ For each fix:
      All of it must pass, as for stable. To test CI's own build instead of a local one, see "Smoke-testing CI's build"
      in step 5.
    - Publish: commit and push the bump and notes, then
-     `gh workflow run release.yml -R mantrakp04/ardia -f version=<version> -f dry_run=false` and
+     `gh workflow run release.yml -R ardia-browser/ardia -f version=<version> -f dry_run=false` and
      watch it (`gh run watch <id> --exit-status`, in pieces under 10 minutes). It builds, tags, and runs
      `.claude/skills/release/scripts/publish.sh <version>` (a prerelease with the DMG, zip, appcast and CLI
      tarball, plus the Linux and Windows files when their jobs passed; the merged feed onto the latest stable release;
@@ -83,7 +84,8 @@ everything since the previous stable, nightlies included.
   plain `open`. The smoke script does this for you.
 - **Build from a clean tree.** release.sh archives the working tree, so another agent's half-finished
   edit would ship. Check `git status` first (below).
-- **Commits** go to `main` with the trailer `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+- **Commits** go to `main` with no attribution lines: no `Co-Authored-By: Claude…`, "Generated with …" or session
+  links (`AGENTS.md` › No attribution lines).
 
 ## 1. Check the tree
 
@@ -314,8 +316,8 @@ Both channels publish with `publish.sh` (`docs/releasing.md` › Cutting a relea
 and, for a stable, the perf gate passed:
 
 ```bash
-gh workflow run release.yml -R mantrakp04/ardia -f version=<version> -f dry_run=false
-gh run list -R mantrakp04/ardia -w release.yml -L 1        # its id; then gh run watch <id> --exit-status, in pieces
+gh workflow run release.yml -R ardia-browser/ardia -f version=<version> -f dry_run=false
+gh run list -R ardia-browser/ardia -w release.yml -L 1        # its id; then gh run watch <id> --exit-status, in pieces
 .claude/skills/release/scripts/feed.sh <version>           # with a local dist/<version>/export, or curl ardia.dev/appcast.xml
 ```
 
@@ -333,7 +335,7 @@ keys and deletes them before the launch check (`docs/releasing.md` › CI releas
 on it:
 
 ```bash
-gh run download <id> -R mantrakp04/ardia -n release -D dist/<version>-rc
+gh run download <id> -R ardia-browser/ardia -n release -D dist/<version>-rc
 mnt="$(mktemp -d)" && hdiutil attach -nobrowse -readonly -mountpoint "$mnt" dist/<version>-rc/Ardia-<version>.dmg
 mkdir -p dist/<version>-rc/export && ditto "$mnt/Ardia.app" dist/<version>-rc/export/Ardia.app && hdiutil detach "$mnt"
 .claude/skills/release/scripts/smoke.sh <version> <previous> --rc
@@ -409,13 +411,14 @@ included, then the `.deb` installed and purged on Debian 13 and Ubuntu 24.04), a
 `Ardia-<version>-linux-x64.tar.xz`, `.deb` and `.AppImage`, `ardia-bin-<version>.src.tar.gz` (the Arch PKGBUILD),
 `ardia-cli-<version>-linux-x64.tar.gz` (the pinned `ardia` command, renamed for this version) and their `.sha256` files to the release, nightly or stable. A `.deb` that
 fails the install test is dropped (`deb dropped` in `provenance.txt`) and the rest still ships. That needs the Linux engine for the release commit's engine
-key (`engine/engine-key.sh`) published in ardia-browser/ardia. Without it the `linux` job fails, the Mac release
+key (`engine/engine-key.sh --platform linux`) published in ardia-browser/ardia. Without it the `linux` job fails, the Mac release
 still ships, and `publish` warns that Linux was skipped. After a stable release the `aur` job moves the AUR package
 `ardia-bin` to it (`scripts/linux/arch/publish-aur.sh`) when the `AUR_SSH_PRIVATE_KEY` secret is set; a dry run, or a
 missing secret, only shows the commit it would push.
 
-Linux engines are built on a Boat VM (boat.dev, `boat new --type xlarge`), never in GitHub Actions. On the VM, at the
-commit whose engine key needs one:
+Linux engines are built on a Boat VM (boat.dev, `boat new --type xlarge --ttl 21600`, or resumed from a saved
+builder snapshot and stopped right after publishing — never `--no-auto-stop`, and never in GitHub Actions). On the
+VM, at the commit whose engine key needs one:
 
 ```bash
 scripts/linux/build.sh --apply
@@ -524,8 +527,10 @@ The SEO data follows `release.json` and the notes by itself, with no extra step;
   `description` in `src/pages/index.astro`: ~150 characters, and it is also the share text.
 - If `og.png` changes, its URL's `?v=` hash changes with it, so X and others fetch the new card.
 
-Deploying makes things public. The user has asked for releases to go all the way through, so deploy as
-part of a release; for site changes outside a release, ask first.
+Deploying makes things public. Never cut or publish a nightly or stable release unless the owner explicitly asks for
+a release in that request; scheduled and background jobs open a PR with the `full-stop` skill and stop for the owner.
+Once the owner has asked for the release, deploy the site as part of it; for site changes outside a release, ask
+first.
 
 ### 6b. The before-and-after film (every release, nightlies included)
 
@@ -560,9 +565,9 @@ redeploys and plays it above the notes. `release.sh` links it in the GitHub body
 the build, so for a film made after publishing add the same section by hand:
 
 ```bash
-gh release view v<version> -R mantrakp04/ardia --json body -q .body > /tmp/body.md
+gh release view v<version> -R ardia-browser/ardia --json body -q .body > /tmp/body.md
 printf '\n## Before and after\n\nThe fixes, filmed on the previous release and on this one: https://ardia.dev/release-videos/fixes-<id>.mp4\n' >> /tmp/body.md
-gh release edit v<version> -R mantrakp04/ardia --notes-file /tmp/body.md
+gh release edit v<version> -R ardia-browser/ardia --notes-file /tmp/body.md
 ```
 
 The section goes before `## Install` when release.sh writes it; appended at the end is fine by hand. Keep the footage

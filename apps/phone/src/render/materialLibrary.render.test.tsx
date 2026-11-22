@@ -3,7 +3,7 @@ import { act, type ReactTestInstance } from "react-test-renderer";
 import { predictiveBack } from "@ardia/phone-native";
 import { Surfaces } from "../App";
 import { libraryBackStep, MaterialLibrary, materialLibraryMs } from "../components/library/MaterialLibrary";
-import { DesignProvider } from "../components/ui";
+import { DesignProvider, FloatingMenu } from "../components/ui";
 import { SEEDED_SCHEMES } from "../lib/material/schemes";
 import { setDynamicScheme } from "../state/app/dynamicScheme";
 import * as browse from "../state/browse/store";
@@ -127,6 +127,11 @@ onAndroid("the active tab is labelled in primary over a 3 dp primary indicator w
   expect(node(root, "materialLibrarySearch")).toBeUndefined();
   expect(node(root, "materialLibraryMore")).toBeDefined();
   expect(textOf(root)).toContain("No Downloads");
+  act(() => {
+    pressable(root, "materialLibraryMore").props.onPress({ nativeEvent: { pageX: 0, pageY: 0, locationX: 0, locationY: 0 }, currentTarget: null });
+  });
+  const menu = root.root.findAll((inner) => inner.type === FloatingMenu)[0]!;
+  expect((menu.props.items as { label?: string }[]).map((item) => item.label)).toEqual(["Delete All…"]);
   unmount(root);
 });
 

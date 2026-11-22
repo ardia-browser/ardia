@@ -1,7 +1,8 @@
-import { Platform } from "react-native";
+import { Platform, StyleSheet } from "react-native";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { Surfaces } from "../App";
 import { LibraryView } from "../components/library/LibraryView";
+import { controlSize } from "../components/ui/tokens";
 import * as browse from "../state/browse/store";
 import * as tabMenus from "../state/browse/tabMenus";
 import { downloads } from "../platform/downloads";
@@ -81,7 +82,13 @@ onAndroid("on Android the Library opens in the drawn sheet with its title, Done,
   expect(textOf(root)).toContain("History");
   const tabs = hosts(root.root, (props) => props.accessibilityRole === "tab" && typeof props.testID === "string" && (props.testID as string).startsWith("librarySection:"));
   expect(tabs.map((tab) => tab.props.accessibilityLabel)).toEqual(["History", "Bookmarks", "Downloads"]);
-  expect(tabs[0]!.props.accessibilityState).toEqual({ selected: true });
+  expect(tabs[0]!.props.accessibilityState).toMatchObject({ selected: true });
+  for (const tab of tabs) {
+    const box = StyleSheet.flatten(typeof tab.props.style === "function" ? tab.props.style({ pressed: false }) : tab.props.style);
+    expect(box.height).toBeGreaterThanOrEqual(controlSize.hitTarget);
+    expect(box.minWidth).toBeGreaterThanOrEqual(controlSize.hitTarget);
+    expect(tab.props.hitSlop).toBeUndefined();
+  }
   expect(hosts(root.root, (props) => props.testID === "librarySearch")[0]!.props.placeholder).toBe("Search History");
   await act(async () => section(root, "downloads").props.onPress());
   expect(useLibrary.getState().section).toBe("downloads");
@@ -102,7 +109,9 @@ onAndroid("History lists day sections of rows with host and time; search narrows
   const shared = jest.spyOn(tabMenus, "shareUrl").mockImplementation(() => undefined);
   const root = renderSurface(<Surfaces />);
   await openAt("history");
+  expect(textOf(root)).toContain("Loading…");
   await act(async () => useLibrary.setState({ historyLoaded: true, history: [] }));
+  expect(textOf(root)).not.toContain("Loading…");
   expect(textOf(root)).toContain("No History");
   await act(async () => useLibrary.setState({ history: [entry(0), entry(1, "otherDevice"), entry(2, "thisDevice", NOW - 86_400_000 * 1.5)] }));
   const shown = textOf(root);
@@ -113,7 +122,8 @@ onAndroid("History lists day sections of rows with host and time; search narrows
   expect(textOf(root)).toContain("Visited 1");
   expect(textOf(root)).not.toContain("Visited 0");
   await act(async () => hosts(root.root, (props) => props.testID === "librarySearch")[0]!.props.onChangeText("nothing here"));
-  expect(textOf(root)).toContain("No Results for “nothing here”");
+  expect(textOf(root)).toContain("No Results");
+  expect(textOf(root)).toContain("Check the spelling or try a new search for “nothing here”.");
   await act(async () => hosts(root.root, (props) => props.testID === "librarySearch")[0]!.props.onChangeText(""));
   await pressTitled(root, "Visited 0");
   expect(opened).toHaveBeenCalledWith("https://site0.example/page", "Visited 0");
@@ -217,13 +227,13 @@ onAndroid("More opens Clear Browsing Data inside the Library, and Back and clear
   unmount(root);
 });
 
-onAndroid("More offers Delete All Downloads… only on Downloads and asks before deleting files", async () => {
+onAndroid("More offers Delete All… only on Downloads and asks before deleting files, with the scope in the question", async () => {
   const cleared = jest.spyOn(downloads, "deleteAll").mockResolvedValue(1);
   await openAt("downloads");
   const again = renderSurface(<LibraryView />);
   await act(async () => useLibrary.setState({ filesLoaded: true, files: [file(0)] }));
   await act(async () => void labelled(again, "More")[0]!.props.onPress());
-  expect(labels(drawnMenu(again))).toEqual(["Delete All Downloads…", "divider", "Clear Browsing Data"]);
+  expect(labels(drawnMenu(again))).toEqual(["Delete All…", "divider", "Clear Browsing Data"]);
   await act(async () => (drawnMenu(again)[0] as { onPress: () => void }).onPress());
   expect(again.root.findAll((node) => node.type === ConfirmSheet)[0]!.props.confirmation).toMatchObject({ title: "Delete All Downloads?", action: "Delete All" });
   await act(async () => void again.root.findAll((node) => node.props.accessibilityLabel === "Delete All" && typeof node.props.onPress === "function")[0]!.props.onPress());

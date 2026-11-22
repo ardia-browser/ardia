@@ -184,10 +184,6 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
       NSNumber *at = [dict[what] isKindOfClass:NSNumber.class] ? dict[what] : nil;
       if (at && fabs(at.doubleValue - ArdiaFieldNow()) < 600000) ArdiaFieldMark(_transferKey, what, at.doubleValue);
     }
-  } else if ([kind isEqualToString:@"hideElement"] && main && dict) {
-    double x, y;
-    if (Finite(dict, @"x", &x) && Finite(dict, @"y", &y))
-      [self emit:@"command" payload:@{@"command" : @"hideElement", @"text" : @"", @"point" : @[ @(x), @(y) ]}];
   } else if ([kind isEqualToString:@"scroll"] && main) {
     NSString *state = Text(dict, @"state", 8);
     if ([@[ @"down", @"up", @"top" ] containsObject:state ?: @""])

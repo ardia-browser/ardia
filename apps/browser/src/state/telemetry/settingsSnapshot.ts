@@ -13,6 +13,9 @@ import { isMouseKey } from "../commands/mouseButtons";
 import { currentInterfaceScale } from "../settings/interfaceScale";
 import { INTERFACE_SCALE, interfaceScalePercent, rootLength, windowLength } from "../../lib/interfaceScale";
 import { drawnWindowCornerRadius } from "../../platform/windows";
+import { desktopButtonLayout, useDesktopButtons, type DesktopButtons } from "../windows/windowButtons";
+import { buttonLayoutCount, buttonLayoutSide } from "../../lib/windowButtonLayout";
+import { windowButtonsChoosable } from "../../lib/windowChrome";
 
 export const SETTINGS_SNAPSHOT_EVENT = "settings_snapshot";
 
@@ -59,6 +62,12 @@ export function settingsSnapshot(settings: Settings): Record<string, string> {
     unread_hidden_sites: String(Array.isArray(settings.unreadHiddenSites) ? settings.unreadHiddenSites.length : 0),
     custom_new_tab_url: customNewTabUrl({ newTabOpens: "page", minimalismMode: false, newTabUrl: typeof settings.newTabUrl === "string" ? settings.newTabUrl : "" }) ? "true" : "false",
   };
+}
+
+export function windowButtonLayoutSnapshot(desktop: DesktopButtons = useDesktopButtons.getState(), choosable = windowButtonsChoosable): Record<string, string> {
+  if (!choosable) return {};
+  const layout = desktopButtonLayout(desktop);
+  return { window_buttons_side: buttonLayoutSide(layout), window_buttons_count: String(buttonLayoutCount(layout)), window_buttons_from_desktop: typeof desktop.raw === "string" ? "true" : "false", window_buttons_tiling_desktop: desktop.tiling ? "true" : "false" };
 }
 
 export const appIconSetting = (icon: string | null): Record<string, string> =>

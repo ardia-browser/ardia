@@ -1,0 +1,187 @@
+The Ardia Linux host reports the desktop's window-button layout and a window's tiled state to the shell. GTK keeps
+the raw gtk-decoration-layout string it parses (Qt forwards to its GTK fallback), a browser window keeps the tiled
+edges the compositor last reported and tells the host when they change, and Wayland notifies each change of edges
+against the edges it last notified, so a configure the window never applied can't hide the next change.
+--- a/chrome/browser/ui/views/frame/browser_desktop_window_tree_host_linux.cc
++++ b/chrome/browser/ui/views/frame/browser_desktop_window_tree_host_linux.cc
+@@ -32,6 +32,8 @@
+ #include "ui/views/widget/widget.h"
+ #include "ui/views/window/frame_view_utils_linux.h"
+ 
++void (*g_ardia_linux_tiled_edges_changed)(views::Widget* widget) = nullptr;
++
+ namespace {
+ 
+ #if BUILDFLAG(USE_DBUS)
+@@ -331,6 +333,7 @@
+ 
+   browser_widget_->set_tiled(new_tiled_edges.top || new_tiled_edges.left ||
+                              new_tiled_edges.bottom || new_tiled_edges.right);
++  browser_widget_->set_tiled_edges(new_tiled_edges);
+   UpdateFrameHints();
+   if (SupportsClientFrameShadow()) {
+     // Trigger a re-layout as the insets will change even if the bounds don't.
+@@ -340,6 +343,9 @@
+       GetWidget()->non_client_view()->SchedulePaint();
+     }
+   }
++  if (g_ardia_linux_tiled_edges_changed) {
++    g_ardia_linux_tiled_edges_changed(browser_widget_);
++  }
+ }
+ 
+ void BrowserDesktopWindowTreeHostLinux::OnNativeThemeUpdated(
+--- a/chrome/browser/ui/views/frame/browser_widget.h
++++ b/chrome/browser/ui/views/frame/browser_widget.h
+@@ -11,6 +11,7 @@
+ #include "ui/base/mojom/menu_source_type.mojom-forward.h"
+ #include "ui/base/mojom/window_show_state.mojom-forward.h"
+ #include "ui/base/pointer/touch_ui_controller.h"
++#include "ui/base/ui_base_types.h"
+ #include "ui/views/context_menu_controller.h"
+ #include "ui/views/widget/widget.h"
+ 
+@@ -69,6 +70,10 @@
+   // Returns whether the frame is in a tiled state.
+   bool tiled() const { return tiled_; }
+   void set_tiled(bool tiled) { tiled_ = tiled; }
++  const ui::WindowTiledEdges& tiled_edges() const { return tiled_edges_; }
++  void set_tiled_edges(const ui::WindowTiledEdges& edges) {
++    tiled_edges_ = edges;
++  }
+ #endif
+ 
+   // Initialize the frame (creates the underlying native window).
+@@ -195,6 +200,7 @@
+ 
+ #if BUILDFLAG(IS_LINUX)
+   bool tiled_ = false;
++  ui::WindowTiledEdges tiled_edges_;
+ #endif
+ };
+ 
+--- a/ui/gtk/gtk_ui.cc
++++ b/ui/gtk/gtk_ui.cc
+@@ -515,6 +515,14 @@
+       &ui::WindowButtonOrderObserver::OnWindowButtonOrderingChange);
+ }
+ 
++void GtkUi::SetWindowButtonLayout(const std::string& layout) {
++  window_button_layout_ = layout;
++}
++
++std::optional<std::string> GtkUi::GetWindowButtonLayout() const {
++  return window_button_layout_;
++}
++
+ void GtkUi::SetWindowFrameAction(WindowFrameActionSource source,
+                                  WindowFrameAction action) {
+   window_frame_actions_[source] = action;
+--- a/ui/gtk/gtk_ui.h
++++ b/ui/gtk/gtk_ui.h
+@@ -57,6 +57,7 @@
+   void SetWindowButtonOrdering(
+       const std::vector<views::FrameButton>& leading_buttons,
+       const std::vector<views::FrameButton>& trailing_buttons);
++  void SetWindowButtonLayout(const std::string& layout);
+   void SetWindowFrameAction(WindowFrameActionSource source,
+                             WindowFrameAction action);
+ 
+@@ -83,6 +84,7 @@
+                                                  int text_flags) override;
+   gfx::FontRenderParams GetDefaultFontRenderParams() override;
+   bool AnimationsEnabled() const override;
++  std::optional<std::string> GetWindowButtonLayout() const override;
+   void AddWindowButtonOrderObserver(
+       ui::WindowButtonOrderObserver* observer) override;
+   void RemoveWindowButtonOrderObserver(
+@@ -209,6 +211,7 @@
+   // Objects to notify when the window frame button order changes.
+   base::ObserverList<ui::WindowButtonOrderObserver>::Unchecked
+       window_button_order_observer_list_;
++  std::optional<std::string> window_button_layout_;
+ 
+   std::vector<ScopedGSignal> signals_;
+   // Two signals are registered for each monitor, so keep them in a pair.
+--- a/ui/gtk/settings_provider_gtk.cc
++++ b/ui/gtk/settings_provider_gtk.cc
+@@ -99,6 +99,7 @@
+   std::vector<views::FrameButton> leading_buttons;
+   std::vector<views::FrameButton> trailing_buttons;
+   ParseButtonLayout(gtk_layout, &leading_buttons, &trailing_buttons);
++  delegate_->SetWindowButtonLayout(gtk_layout);
+   delegate_->SetWindowButtonOrdering(leading_buttons, trailing_buttons);
+ }
+ 
+--- a/ui/linux/linux_ui.cc
++++ b/ui/linux/linux_ui.cc
+@@ -52,6 +52,10 @@
+ 
+ LinuxUi::~LinuxUi() = default;
+ 
++std::optional<std::string> LinuxUi::GetWindowButtonLayout() const {
++  return std::nullopt;
++}
++
+ LinuxUi::CmdLineArgs::CmdLineArgs() = default;
+ 
+ LinuxUi::CmdLineArgs::CmdLineArgs(CmdLineArgs&&) = default;
+--- a/ui/linux/linux_ui.h
++++ b/ui/linux/linux_ui.h
+@@ -216,6 +216,8 @@
+   virtual void RemoveWindowButtonOrderObserver(
+       WindowButtonOrderObserver* observer) = 0;
+ 
++  virtual std::optional<std::string> GetWindowButtonLayout() const;
++
+   // What action we should take when the user clicks on the non-client area.
+   // |source| describes the type of click.
+   virtual WindowFrameAction GetWindowFrameAction(
+--- a/ui/ozone/platform/wayland/host/wayland_toplevel_window.cc
++++ b/ui/ozone/platform/wayland/host/wayland_toplevel_window.cc
+@@ -621,9 +621,10 @@
+   // WindowTreeHostPlatform::OnStateUpdate instead like all other state changes.
+   // The only issue there is when doing that a regression was seen in kwin. See
+   // the bug description for additional details.
+-  if (window_states.tiled_edges != applied_state().tiled_edges) {
++  if (window_states.tiled_edges != notified_tiled_edges_) {
+     // This configure changes the decoration insets.  We should adjust the
+     // bounds appropriately.
++    notified_tiled_edges_ = window_states.tiled_edges;
+     auto weak_this = AsWeakPtr();
+     delegate()->OnWindowTiledStateChanged(window_states.tiled_edges);
+     if (!weak_this) {
+--- a/ui/ozone/platform/wayland/host/wayland_toplevel_window.h
++++ b/ui/ozone/platform/wayland/host/wayland_toplevel_window.h
+@@ -253,6 +253,7 @@
+   bool is_active_ = false;
+   bool is_xdg_active_ = false;
+   bool is_suspended_ = false;
++  WindowTiledEdges notified_tiled_edges_;
+ 
+   // Id of the chromium app passed through
+   // PlatformWindowInitProperties::wm_class_name. This is used by Wayland
+--- a/ui/qt/qt_ui.cc
++++ b/ui/qt/qt_ui.cc
+@@ -556,6 +556,11 @@
+   return shim_->GetAnimationDurationMs() > 0;
+ }
+ 
++std::optional<std::string> QtUi::GetWindowButtonLayout() const {
++  return fallback_linux_ui_ ? fallback_linux_ui_->GetWindowButtonLayout()
++                            : std::nullopt;
++}
++
+ void QtUi::AddWindowButtonOrderObserver(
+     ui::WindowButtonOrderObserver* observer) {
+   if (fallback_linux_ui_) {
+--- a/ui/qt/qt_ui.h
++++ b/ui/qt/qt_ui.h
+@@ -59,6 +59,7 @@
+                                                  int text_flags) override;
+   gfx::FontRenderParams GetDefaultFontRenderParams() override;
+   bool AnimationsEnabled() const override;
++  std::optional<std::string> GetWindowButtonLayout() const override;
+   void AddWindowButtonOrderObserver(
+       ui::WindowButtonOrderObserver* observer) override;
+   void RemoveWindowButtonOrderObserver(

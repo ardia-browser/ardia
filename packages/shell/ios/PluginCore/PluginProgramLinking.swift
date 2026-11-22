@@ -89,7 +89,7 @@ extension PluginPrograms {
   }
 
   static func dropCurrentUnlessTrusted(
-    plugin: String, programs: [PluginProgram], places: ProgramPlaces, trusted: [TrustedProgramCopy], onlyVersion: String? = nil
+    plugin: String, programs: [PluginProgram], places: ProgramPlaces, trusted: [TrustedProgramCopy], bundledDigests: Set<String> = [], onlyVersion: String? = nil
   ) -> CurrentCheck {
     guard let lock = lock(plugin, places) else { return .stuck }
     defer { close(lock) }
@@ -98,7 +98,9 @@ extension PluginPrograms {
     if let onlyVersion, linkTarget(currentPath) != onlyVersion { return .trusted }
     var info = stat()
     if lstat(currentPath, &info) != 0 && errno == ENOENT { return .trusted }
-    if let version = linkTarget(currentPath), currentIsTrusted(version, plugin: plugin, programs: programs, places: places, trusted: trusted) { return .trusted }
+    if let version = linkTarget(currentPath), currentIsTrusted(version, plugin: plugin, programs: programs, places: places, trusted: trusted, bundledDigests: bundledDigests) {
+      return .trusted
+    }
     var offPath = false
     if let bin = binLock(places) {
       unlinkOthers(plugin: plugin, keeping: [], places: places)
@@ -122,10 +124,14 @@ extension PluginPrograms {
     return linkTarget(path).map { isInside($0, pluginStore) } ?? false
   }
 
-  static func currentIsTrusted(_ version: String, plugin: String, programs: [PluginProgram], places: ProgramPlaces, trusted: [TrustedProgramCopy]) -> Bool {
+  static func currentIsTrusted(
+    _ version: String, plugin: String, programs: [PluginProgram], places: ProgramPlaces, trusted: [TrustedProgramCopy], bundledDigests: Set<String> = []
+  ) -> Bool {
     guard !version.contains("/") else { return false }
     let folder = (places.pluginStore(plugin) as NSString).appendingPathComponent(version)
-    if legacyCopy(plugin: plugin, places: places) == folder { return hasPrivateAncestry(places.pluginStore(plugin)) && legacyHolds(folder, programs: programs) }
+    if legacyCopy(plugin: plugin, places: places) == folder {
+      return hasPrivateAncestry(places.pluginStore(plugin)) && legacyHolds(folder, programs: programs) && OfficialTrust.bundledCopyHolds(folder, digests: bundledDigests)
+    }
     let sources = trusted.filter { source in
       let base = versionFolderName(version: source.version, approved: source.approved)
       return version == base || version.hasPrefix(base + "-r")

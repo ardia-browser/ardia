@@ -12,7 +12,7 @@
     "./protocol": "./src/protocol.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsrs --noEmit",
     "test": "node --no-warnings --import ../../apps/browser/src/test-loader.mjs --test src/*.test.mjs"
   }
 }

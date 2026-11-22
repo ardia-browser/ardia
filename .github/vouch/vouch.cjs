@@ -59,7 +59,7 @@ const REVIEW_BOT_BLOCKS = [
   /<!--\s*This is an auto-generated comment\b[^>]*-->[\s\S]*?(?:<!--\s*end of auto-generated comment\b[^>]*-->|$)/gi,
 ];
 const CLOSING_REFERENCE = /(?:^|[^A-Za-z0-9_])(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?[^\S\n]+#(\d+)/gim;
-const GATED_WORKFLOWS = ["ios.yml", "android.yml", "linux.yml", "windows.yml"];
+const GATED_WORKFLOWS = ["ios.yml", "android.yml", "linux.yml", "windows.yml", "mac.yml"];
 const GATE_JOB = "gate";
 const TRUSTED_STATUSES = ["bot", "team", "collaborator", "vouched"];
 const WRITE_PERMISSIONS = ["admin", "write"];

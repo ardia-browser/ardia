@@ -1,5 +1,6 @@
 import { MENU_SLOTS, type PluginManifest } from "../../lib/pluginManifest";
 import type { PasswordField } from "../../lib/pluginPasswordManager";
+import { pageBarConsent } from "../../lib/pluginPageBar";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import { contributionLines } from "./consentContributions";
 
@@ -73,5 +74,6 @@ export function consentLines(m: PluginManifest, context: ConsentContext = {}): C
   if (m.tools.length) lines.push({ icon: "wrench.and.screwdriver", text: `Offers tools to the ardia command and other plugins: ${m.tools.map((t) => t.title).join(", ")}` });
   lines.push(...contributionLines(m, MENU_SLOTS));
   lines.push(...passwordManagerLines(m, context));
+  lines.push(...pageBarConsent(m.contributes.siteSwitches, m.contributes.pageBar));
   return lines;
 }

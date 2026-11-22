@@ -38,6 +38,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)releaseProfile:(NSString *)profile;
 + (NSDictionary<NSString *, id> *)unloadIdleProfile:(NSString *)profile NS_SWIFT_NAME(unloadIdleProfile(_:));
 @property(class, readonly) NSArray<NSString *> *loadedProfiles;
+@property(class, readonly) NSDictionary<NSString *, NSString *> *loadedProfilePaths;
 + (BOOL)stopCapture:(NSString *)tabId NS_SWIFT_NAME(stopCapture(tabId:));
 + (BOOL)showAutofillSuggestions:(NSString *)tabId passwords:(BOOL)passwords NS_SWIFT_NAME(showAutofillSuggestions(tabId:passwords:));
 + (int)chromeTabIdOfTab:(NSString *)tabId NS_SWIFT_NAME(chromeTabId(ofTab:));

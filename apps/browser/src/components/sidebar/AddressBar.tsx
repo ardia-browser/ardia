@@ -8,13 +8,16 @@ import { openEmptySidebarField } from "../../state/omnibox/barState";
 import { isAddressBarInSidebar } from "../../state/sidebar/current";
 import { extensionsFitting, ToolbarExtensions, useToolbarExtensionsWidth } from "../extensions/ToolbarExtensions";
 import { PluginToolbarItems } from "../plugins/PluginToolbarItems";
+import { TabSwipeArea } from "../window/TabSwipe";
 import { PLUGIN_CHROME, usePluginChrome } from "../../state/plugins/chrome";
 import { useHistoryAvailability } from "../../state/tabs/navigation";
 import { toolbarPalette, type ToolbarPalette } from "../ui/toolbarColors";
 import { Button, type ButtonHit, FadeLabel, radius, space, ToolbarRowContext, useHover } from "../ui";
 import { TOOLBAR_ROWS } from "../../lib/toolbarRow";
-import { setUrlAnchor, useSidebarCaptionRoom, watchSidebarFieldPlace } from "../../state/windows/layout";
+import { setUrlAnchor, useSidebarCaptionRoom, useSidebarControlsRowIn, watchSidebarFieldPlace } from "../../state/windows/layout";
+import { useFullscreenTab } from "../../state/tabs/pageState";
 import { onInterfaceScaleSettled } from "../../state/settings/interfaceScale";
+import { useWindowChrome } from "../../state/windows/windowButtons";
 import { useSidebarPart } from "../../state/sidebar/chrome";
 import { SIDEBAR_FIELD } from "./geometry";
 import { SIDEBAR_TYPE, TAB_ROW } from "./tokens";
@@ -27,14 +30,22 @@ import { sidebarFieldButtons } from "../toolbar/fieldButtons";
 import { useFieldExtensionsHeld } from "../../state/extensions/store";
 import { HistoryButton, ReloadButton } from "../toolbar/NavButtons";
 import { GLYPH } from "../toolbar/tokens";
-import { HEADER_TOOLS, headerToggleX, navButtonsFitting, type HeaderButton } from "../window/dockMotion";
+import { HEADER_TOOLS, headerToggleXIn, navButtonsFitting, type HeaderButton } from "../window/dockMotion";
 import { ARC_LIGHTS_CENTER } from "../../state/windows/dockMotion";
 import { PAGE_IDENTITY_TAG } from "../../state/tabs/tabReveal";
 
 const BUTTON = layout.toolbarButton;
 const { edge: EDGE } = HEADER_TOOLS;
 const LIGHTS_Y = ARC_LIGHTS_CENTER[1];
-const PLATE = 32;
+const PLATE = HEADER_TOOLS.plate;
+
+export function useHeaderToggleX(windowId: string): number {
+  useWindowChrome();
+  const windowFullScreen = useWindowFullScreen(windowId);
+  const pageFullScreen = !!useFullscreenTab(windowId);
+  const controlsRow = useSidebarControlsRowIn(windowId) > 0;
+  return headerToggleXIn({ windowFullScreen, pageFullScreen, controlsRow });
+}
 
 export function SidebarHeaderTools({ width }: { width: number }) {
   const windowId = useWindowId();
@@ -45,7 +56,7 @@ export function SidebarHeaderTools({ width }: { width: number }) {
   const navShown = useSidebarPart("navButtons");
   const right = useSidebarSide(windowId) === "right";
   const hints = useShortcutHints(HEADER_HINTS);
-  const toggleX = headerToggleX(useWindowFullScreen(windowId));
+  const toggleX = useHeaderToggleX(windowId);
   const usable = width - useSidebarCaptionRoom();
   const { buttons, step } = navButtonsFitting(usable, BUTTON, toggle, toggleX);
   const shown = tab && navShown ? buttons : [];
@@ -154,6 +165,7 @@ export function SidebarAddressRow({ width, top }: { width: number; top: number }
           )}
         </ToolbarRowContext.Provider>
       </SidebarTextScope>
+      <TabSwipeArea windowId={windowId} surface="sidebarField" />
     </View>
   );
 }

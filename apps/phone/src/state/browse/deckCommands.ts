@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type DeckCommand = { kind: "scroll"; index: number } | { kind: "closeFocused" } | { kind: "openFocused" } | { kind: "openSelected" } | { kind: "lift"; offset: number } | { kind: "showArchiveCard" };
+export type DeckCommand = { kind: "scroll"; index: number } | { kind: "closeFocused" } | { kind: "openFocused" } | { kind: "openSelected" } | { kind: "open"; tabId: string; tappedAt: number } | { kind: "lift"; offset: number } | { kind: "showArchiveCard" };
 
 type Sent = DeckCommand & { id: number };
 

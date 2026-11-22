@@ -3,7 +3,7 @@ import type { BrowserState } from "../browser/store";
 import { engineBookmarkRoots, ensureRoots, removeBookmarkTree } from "../bookmarks/bookmarks";
 import { engineProfile, incognitoOriginal, newId, viewTabIds, without } from "../browser/model";
 import { handPagesOutOfProfile } from "../pins/pinShare";
-import { DEFAULT_PROFILE_ID } from "../settings/settings";
+import { DEFAULT_PROFILE_ID, settingsWith } from "../settings/settings";
 import { activated, apply, removeTabs, withNewTab } from "../tabs/tabs";
 import type { Profile, ProfileColor } from "../browser/types";
 import { patchedProfile } from "./switcherMark";
@@ -95,11 +95,10 @@ export const createProfilesSlice: StateCreator<BrowserState, [], [], ProfilesSli
       let s = handPagesOutOfProfile(get(), id);
       const profileOrder = s.profileOrder.filter((p) => p !== id);
       const fallback = s.settings.defaultProfileId === id ? profileOrder[0]! : s.settings.defaultProfileId;
-      const settings = {
-        ...s.settings,
+      const settings = settingsWith(s.settings, {
         defaultProfileId: s.settings.defaultProfileId === id ? fallback : s.settings.defaultProfileId,
         neverTranslateSites: without(s.settings.neverTranslateSites, [id]),
-      };
+      });
       const engine = engineProfile(s, id);
       const engineLeft = !profileOrder.some((p) => engineProfile(s, p) === engine);
       const orphaned = !engineLeft || s.orphanedProfileData.includes(engine) ? s.orphanedProfileData : [...s.orphanedProfileData, engine];
@@ -156,7 +155,7 @@ export const createProfilesSlice: StateCreator<BrowserState, [], [], ProfilesSli
     },
 
     setDefaultProfile(id) {
-      set((s) => (s.profiles[id] ? { settings: { ...s.settings, defaultProfileId: id } } : {}));
+      set((s) => (typeof id === "string" && s.profiles[id] ? { settings: settingsWith(s.settings, { defaultProfileId: id }) } : {}));
     },
 
     profileDataDeleted(engineId) {

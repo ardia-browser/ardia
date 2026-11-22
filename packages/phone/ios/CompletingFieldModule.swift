@@ -18,6 +18,12 @@ final class CompletingFieldView: ExpoView {
   var fontSize: CGFloat = 17
   var fontWeight: UIFont.Weight = .regular
 
+  static let largestTextScale: CGFloat = 1.35
+
+  private var scaledFont: UIFont {
+    UIFontMetrics(forTextStyle: .body).scaledFont(for: .systemFont(ofSize: fontSize, weight: fontWeight), maximumPointSize: fontSize * Self.largestTextScale)
+  }
+
   let field = CompletingTextField()
   let editing = CompletingFieldEditing()
   private var eventCount = 0
@@ -40,7 +46,8 @@ final class CompletingFieldView: ExpoView {
     field.smartDashesType = .no
     field.enablesReturnKeyAutomatically = true
     field.clearButtonMode = .never
-    field.font = .systemFont(ofSize: fontSize, weight: fontWeight)
+    field.adjustsFontForContentSizeCategory = true
+    field.font = scaledFont
     editing.attach(field)
     editing.onTyped = { [weak self] typed in
       guard let self else { return }
@@ -65,7 +72,7 @@ final class CompletingFieldView: ExpoView {
 
   @MainActor
   func propsUpdated() {
-    field.font = .systemFont(ofSize: fontSize, weight: fontWeight)
+    field.font = scaledFont
     field.attributedPlaceholder = placeholder.map { text in
       NSAttributedString(string: text, attributes: placeholderColor.map { [.foregroundColor: $0] } ?? [:])
     }

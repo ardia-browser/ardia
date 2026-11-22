@@ -23,6 +23,7 @@ const none = () => ({
   site_data_clear_wait_timeouts: 0,
   site_data_sites_unresolved: 0,
   site_data_storage_over_quota: 0,
+  site_data_blocked_cookies_held: 0,
 });
 
 let tally = none();
@@ -69,6 +70,10 @@ const SKIP_FIELDS = {
 
 export function noteSiteDataOverQuota(keys: number, consent: ConsentToken | null) {
   if (keys > 0) counted(consent, () => void (tally.site_data_storage_over_quota += keys));
+}
+
+export function noteSiteDataBlockedCookies(cookies: number, consent: ConsentToken | null) {
+  if (cookies > 0) counted(consent, () => void (tally.site_data_blocked_cookies_held += cookies));
 }
 
 export function noteSiteDataSkip(reason: keyof typeof SKIP_FIELDS, consent: ConsentToken | null) {

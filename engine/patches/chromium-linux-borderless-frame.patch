@@ -12,6 +12,9 @@ Chrome maps its startup window before the host starts, so X11 sets _GTK_FRAME_EX
 then and rewrites it only on a window state change. When the host lays the frame out again (FrameTypeChanged), the
 browser's window tree host now asks X11 for the insets once more through X11Extension::RefreshDecorationInsets, so
 a window manager that honours the property sees none.
+WindowSizerLinux remembers which browsers it gave Chromium's default size, and ArdiaLinuxTakeDefaultSizedBrowser hands
+that to the host once per browser, so the host gives a borderless window the frame margin back only when its bounds
+came from the default size, not from saved or copied bounds that happen to match it.
 --- a/chrome/browser/ui/views/frame/browser_frame_view_layout_linux.cc
 +++ b/chrome/browser/ui/views/frame/browser_frame_view_layout_linux.cc
 @@ -12,6 +12,10 @@
@@ -313,3 +316,76 @@ a window manager that honours the property sees none.
   protected:
    virtual ~WaylandToplevelExtension();
  
+--- a/chrome/browser/ui/views/BUILD.gn
++++ b/chrome/browser/ui/views/BUILD.gn
+@@ -739,6 +739,7 @@
+       "//chrome/browser/ui/views/frame:browser_frame_view_linux",
+       "//chrome/common:constants",
+       "//components/prefs",
++      "//components/sessions:session_id",
+       "//ui/base/mojom:ui_base_types",
+       "//ui/ozone",
+     ]
+--- a/chrome/browser/ui/views/window_sizer_linux.h
++++ b/chrome/browser/ui/views/window_sizer_linux.h
+@@ -9,6 +9,8 @@
+ 
+ class BrowserWindowInterface;
+ 
++bool ArdiaLinuxTakeDefaultSizedBrowser(const BrowserWindowInterface* browser);
++
+ class WindowSizerLinux : public WindowSizer {
+  public:
+   WindowSizerLinux(std::unique_ptr<StateProvider> state_provider,
+@@ -19,6 +21,8 @@
+ 
+  protected:
+   void AdjustWorkAreaForPlatform(gfx::Rect& work_area) override;
++  gfx::Rect GetDefaultWindowBounds(
++      const display::Display& display) const override;
+ };
+ 
+ #endif  // CHROME_BROWSER_UI_VIEWS_WINDOW_SIZER_LINUX_H_
+--- a/chrome/browser/ui/views/window_sizer_linux.cc
++++ b/chrome/browser/ui/views/window_sizer_linux.cc
+@@ -4,15 +4,28 @@
+ 
+ #include "chrome/browser/ui/views/window_sizer_linux.h"
+ 
++#include "base/containers/flat_set.h"
++#include "base/no_destructor.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+ #include "chrome/browser/ui/views/frame/browser_frame_view_linux.h"
+ #include "chrome/common/pref_names.h"
+ #include "components/prefs/pref_service.h"
++#include "components/sessions/core/session_id.h"
+ #include "ui/base/mojom/window_show_state.mojom.h"
+ #include "ui/gfx/geometry/insets.h"
+ #include "ui/ozone/public/ozone_platform.h"
+ 
++static base::flat_set<SessionID::id_type>& ArdiaDefaultSizedBrowsers() {
++  static base::NoDestructor<base::flat_set<SessionID::id_type>> browsers;
++  return *browsers;
++}
++
++bool ArdiaLinuxTakeDefaultSizedBrowser(const BrowserWindowInterface* browser) {
++  return browser &&
++         ArdiaDefaultSizedBrowsers().erase(browser->GetSessionID().id()) > 0;
++}
++
+ // static
+ void WindowSizer::GetBrowserWindowBoundsAndShowState(
+     std::unique_ptr<StateProvider> state_provider,
+@@ -51,3 +64,11 @@
+         BrowserFrameViewLinux::GetShadowValues(true)));
+   }
+ }
++
++gfx::Rect WindowSizerLinux::GetDefaultWindowBounds(
++    const display::Display& display) const {
++  if (browser()) {
++    ArdiaDefaultSizedBrowsers().insert(browser()->GetSessionID().id());
++  }
++  return WindowSizer::GetDefaultWindowBounds(display);
++}

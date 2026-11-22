@@ -956,16 +956,18 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
     client area is the whole window and the compositor rounds, clips and shadows it. The host lays the frame out again
     (`RefreshEngineFrame`) when it attaches to a window the compositor decorates, and whenever a window's decision
     changes. Chromium sizes a window with no saved or copied size from the screen with its frame's margin counted in, so
-    a borderless window still at that default size gives back the margin its frame would have, once, when its
-    xdg-decoration answer arrives (at once on X11; `KeepDefaultVisibleSize`, `DefaultBoundsWithoutFrame`). It waits for
-    the answer because the compositor's first configure sets the states the margin depends on: Hyprland calls a floating
-    window tiled, so the margin is the 10 px resize border, not the shadow. The window opens at the same visible size as
-    with Chromium's frame (925 × 1040 on a 1920 × 1080 screen rather than 945 × 1060, which ran under Omarchy's top bar
-    and off the screen). A saved or resized size is never the default, so it is kept. Edge resizing stays on a floating
-    window that can be resized: a thin band along the edges answers as a resize border (`NonClientHitTest`); a tiled
-    window has none, and Import, which can't be resized, keeps its edges for its content. On X11 Chrome maps its startup
-    window before the host starts and sets `_GTK_FRAME_EXTENTS` from the frame insets it had then; the host's
-    `FrameTypeChanged` has X11 rewrite the property (`X11Extension::RefreshDecorationInsets`).
+    a borderless window whose bounds came from that default gives back the margin its frame would have, once, when its
+    xdg-decoration answer arrives (at once on X11; `KeepDefaultVisibleSize`, `DefaultBoundsWithoutFrame`).
+    `WindowSizerLinux` marks the browsers it gives the default size, and the host takes the mark when it attaches
+    (`ArdiaLinuxTakeDefaultSizedBrowser`). It waits for the answer because the compositor's first configure sets the
+    states the margin depends on: Hyprland calls a floating window tiled, so the margin is the 10 px resize border, not
+    the shadow. The window opens at the same visible size as with Chromium's frame (925 × 1040 on a 1920 × 1080 screen
+    rather than 945 × 1060, which ran under Omarchy's top bar and off the screen). Saved, copied and resized sizes are
+    kept, even one that equals the default. Edge resizing stays on a floating window that can be resized: a thin band
+    along the edges answers as a resize border (`NonClientHitTest`); a tiled window has none, and Import, which can't be
+    resized, keeps its edges for its content. On X11 Chrome maps its startup window before the host starts and sets
+    `_GTK_FRAME_EXTENTS` from the frame insets it had then; the host's `FrameTypeChanged` has X11 rewrite the property
+    (`X11Extension::RefreshDecorationInsets`).
   - Known limits: sway and niri are expected to honour the client-side request (not measured here), so there Ardia
     keeps Chromium's frame. Away from a window corner a page hole keeps 12 CSS px while the engine clips the page to
     12 DIP; they differ when the shell is zoomed, and with a near-corner corner now in DIP on both sides that

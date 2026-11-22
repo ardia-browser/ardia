@@ -1748,6 +1748,7 @@ class ShellHostView : public views::View,
   std::optional<std::pair<bool, linux_window_corners::DecorationAnswer>> followed_decorations_;
   bool measuring_framed_insets_ = false;
   bool default_size_followed_ = false;
+  bool sized_by_default_ = false;
   base::OneShotTimer curtain_timer_;
   raw_ptr<HostMessageHandler> handler_ = nullptr;
   uint64_t renderer_generation_ = 0;
@@ -2689,6 +2690,7 @@ ShellHostView::~ShellHostView() {
 }
 
 void ShellHostView::Initialize() {
+  sized_by_default_ = ArdiaLinuxTakeDefaultSizedBrowser(browser_);
   documents_ = DocumentsFor(profile());
   dialogs_ = std::make_unique<LinuxWindowDialogs>(window_id_, DialogProfile(), GetWidget(),
                                                   ardiacore::BackgroundInstance());
@@ -4767,7 +4769,9 @@ bool ShellHostView::HostsAcceleratedWidget(gfx::AcceleratedWidget widget) const 
 class DefaultWindowSizer : public WindowSizerLinux {
  public:
   explicit DefaultWindowSizer(BrowserWindowInterface* browser) : WindowSizerLinux(nullptr, browser) {}
-  gfx::Rect DefaultBounds(const display::Display& display) const { return GetDefaultWindowBounds(display); }
+  gfx::Rect DefaultBounds(const display::Display& display) const {
+    return WindowSizer::GetDefaultWindowBounds(display);
+  }
 };
 
 linux_window_corners::FrameInsets ShellHostView::FramedRestoredInsets() {
@@ -4790,7 +4794,7 @@ void ShellHostView::KeepDefaultVisibleSize() {
       display::Screen::Get()->GetDisplayNearestWindow(widget->GetNativeWindow()));
   const std::optional<linux_window_corners::Box> kept = linux_window_corners::DefaultBoundsWithoutFrame(
       {.x = bounds.x(), .y = bounds.y(), .width = bounds.width(), .height = bounds.height()},
-      default_bounds.width(), default_bounds.height(), FramedRestoredInsets(), restored);
+      default_bounds.width(), default_bounds.height(), FramedRestoredInsets(), restored, sized_by_default_);
   if (!kept) return;
   VLOG(1) << "ardia window " << window_id_ << " keeps its default visible size " << kept->width << "x"
           << kept->height << " without the frame";

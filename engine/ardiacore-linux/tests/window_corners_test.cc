@@ -134,24 +134,27 @@ int main() {
   {
     constexpr corners::FrameInsets kShadow{.left = 10, .top = 10, .right = 10, .bottom = 10};
     constexpr corners::Box kDefault{.x = 0, .y = 0, .width = 945, .height = 1060};
-    constexpr auto kept = corners::DefaultBoundsWithoutFrame(kDefault, 945, 1060, kShadow, true);
+    constexpr auto kept = corners::DefaultBoundsWithoutFrame(kDefault, 945, 1060, kShadow, true, true);
     static_assert(kept && kept->x == 10 && kept->y == 10 && kept->width == 925 && kept->height == 1040);
-    static_assert(!corners::DefaultBoundsWithoutFrame(kDefault, 945, 1060, kShadow, false));
-    static_assert(!corners::DefaultBoundsWithoutFrame({.width = 925, .height = 1040}, 945, 1060, kShadow, true));
-    static_assert(!corners::DefaultBoundsWithoutFrame({.width = 945, .height = 1040}, 945, 1060, kShadow, true));
-    static_assert(!corners::DefaultBoundsWithoutFrame(kDefault, 945, 1060, {}, true));
-    static_assert(!corners::DefaultBoundsWithoutFrame({.width = 20, .height = 20}, 20, 20, kShadow, true));
+    static_assert(!corners::DefaultBoundsWithoutFrame(kDefault, 945, 1060, kShadow, false, true));
+    static_assert(!corners::DefaultBoundsWithoutFrame(kDefault, 945, 1060, kShadow, true, false));
+    static_assert(!corners::DefaultBoundsWithoutFrame({.width = 925, .height = 1040}, 945, 1060, kShadow, true, true));
+    static_assert(!corners::DefaultBoundsWithoutFrame({.width = 945, .height = 1040}, 945, 1060, kShadow, true, true));
+    static_assert(!corners::DefaultBoundsWithoutFrame(kDefault, 945, 1060, {}, true, true));
+    static_assert(!corners::DefaultBoundsWithoutFrame({.width = 20, .height = 20}, 20, 20, kShadow, true, true));
     constexpr auto lopsided =
         corners::DefaultBoundsWithoutFrame({.x = 100, .y = 50, .width = 800, .height = 600}, 800, 600,
-                                           {.left = 3, .top = 40, .right = 5, .bottom = -2}, true);
+                                           {.left = 3, .top = 40, .right = 5, .bottom = -2}, true, true);
     static_assert(lopsided && lopsided->x == 103 && lopsided->y == 90 && lopsided->width == 792 &&
                   lopsided->height == 560);
     const auto far = corners::DefaultBoundsWithoutFrame(
-        {.x = std::numeric_limits<int>::max() - 5, .y = 0, .width = 945, .height = 1060}, 945, 1060, kShadow, true);
+        {.x = std::numeric_limits<int>::max() - 5, .y = 0, .width = 945, .height = 1060}, 945, 1060, kShadow, true, true);
     assert(!far);
+    constexpr corners::Box kSavedAtDefaultSize{.x = 30, .y = 40, .width = 945, .height = 1060};
+    static_assert(!corners::DefaultBoundsWithoutFrame(kSavedAtDefaultSize, 945, 1060, kShadow, true, false));
     corners::Box saved = *kept;
     for (int launch = 0; launch < 3; ++launch) {
-      if (const auto next = corners::DefaultBoundsWithoutFrame(saved, 945, 1060, kShadow, true)) saved = *next;
+      if (const auto next = corners::DefaultBoundsWithoutFrame(saved, 945, 1060, kShadow, true, false)) saved = *next;
     }
     assert(saved.width == 925 && saved.height == 1040);
   }

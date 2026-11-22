@@ -191,6 +191,21 @@ class BorderlessFrameTests(unittest.TestCase):
         self.assertNotIn("doesn't replace its frame", outer)
 
 
+    def test_the_linux_window_sizer_marks_only_the_browsers_it_gives_the_default_size(self):
+        files = self.patched()
+        header = files['chrome/browser/ui/views/window_sizer_linux.h']
+        self.contains('bool ArdiaLinuxTakeDefaultSizedBrowser(const BrowserWindowInterface* browser);', header)
+        self.contains('  gfx::Rect GetDefaultWindowBounds(\n      const display::Display& display) const override;', header)
+        self.contains('      "//components/sessions:session_id",\n', files['chrome/browser/ui/views/BUILD.gn'])
+        sizer = files['chrome/browser/ui/views/window_sizer_linux.cc']
+        self.contains('#include "components/sessions/core/session_id.h"', sizer)
+        mark = sizer[sizer.index('gfx::Rect WindowSizerLinux::GetDefaultWindowBounds('):]
+        self.assertLess(mark.index('ArdiaDefaultSizedBrowsers().insert(browser()->GetSessionID().id());'),
+                        mark.index('return WindowSizer::GetDefaultWindowBounds(display);'))
+        take = sizer[sizer.index('bool ArdiaLinuxTakeDefaultSizedBrowser('):]
+        self.contains('ArdiaDefaultSizedBrowsers().erase(browser->GetSessionID().id()) > 0;', take[:take.index('\n}\n')])
+        self.assertNotIn('ArdiaDefaultSizedBrowsers', sizer[:sizer.index('static base::flat_set<SessionID::id_type>& ArdiaDefaultSizedBrowsers()')])
+
     def test_the_patch_matches_a_real_tree_when_one_is_at_hand(self):
         tree = Path(os.environ.get('CHROMIUM_SRC', ''))
         if not os.environ.get('CHROMIUM_SRC') or not (tree / 'ui/ozone/platform/wayland/host/xdg_toplevel.cc').exists():

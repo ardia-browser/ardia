@@ -137,8 +137,10 @@ struct FrameInsets {
 };
 
 constexpr std::optional<Box> DefaultBoundsWithoutFrame(Box bounds, int default_width, int default_height,
-                                                       FrameInsets framed, bool restored) {
-  if (!restored || bounds.width != default_width || bounds.height != default_height) return std::nullopt;
+                                                       FrameInsets framed, bool restored, bool sized_by_default) {
+  if (!sized_by_default || !restored || bounds.width != default_width || bounds.height != default_height) {
+    return std::nullopt;
+  }
   const int left = framed.left > 0 ? framed.left : 0;
   const int top = framed.top > 0 ? framed.top : 0;
   const int right = framed.right > 0 ? framed.right : 0;

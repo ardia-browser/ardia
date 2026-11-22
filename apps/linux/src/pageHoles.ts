@@ -39,7 +39,7 @@ const nearCornerRadius = (insetX: number, insetY: number, windowRadius: number, 
   return radius;
 };
 
-export const PAGE_RADIUS_LIMIT = 4096;
+const PAGE_RADIUS_LIMIT = 4096;
 
 const clampedRadii = (radii: CornerRadii): CornerRadii => ({
   upperLeft: Math.min(radii.upperLeft, PAGE_RADIUS_LIMIT),

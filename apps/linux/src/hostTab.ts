@@ -150,8 +150,11 @@ export class HostTab {
       const json = JSON.stringify(latest);
       if (json === this.lastViewport) return;
       this.lastViewport = json;
+      const args = { id: this.identity.browserId, claim: this.claim, ...latest };
+      const host = this.host;
       const consent = consentToken();
-      return invokeHost<void>("tab.viewport", { id: this.identity.browserId, claim: this.claim, ...latest }, this.host).catch((error) => {
+      const sent = host ? new Promise<void>((resolve) => resolve(host.invoke("tab.viewport", args) as Promise<void>)) : invokeHost<void>("tab.viewport", args, host);
+      return sent.catch((error) => {
         if (this.lastViewport === json) this.lastViewport = "";
         if (latest.visible) noteLinuxPageViewportRejected(consent);
         throw error;

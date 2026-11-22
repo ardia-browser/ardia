@@ -952,16 +952,17 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
     are square. A viewport without radii (an older shell) keeps 12 DIP; `radii` that isn't four finite, nonnegative
     corners rejects the viewport, and a corner over 4096 CSS px is clamped. An early tab switch keeps each page's hole
     radii (`setPage` keeps the getters it knows when called without them) and sends the hidden page's viewport without
-    radii, as the page itself would. A refused viewport is counted (`linux_page_viewports_rejected` in `usage_counts`).
-    The pane paints `theme.card` behind the page, so a page rounder than its pane would show that colour in its corner.
-    A page that fills the window (page full screen, no page frame) never shows rounded corners the window doesn't have.
-    A page edge counts as on the window edge when it's within 1 DIP of it. The corners follow layout, window-state and
-    frame changes. The shell follows the same rule for the holes it cuts over pages (`pageHoles.ts`,
-    `windowCornerRadii`): it rounds the page's rectangle out to whole DIPs through the shell's zoom (`shellZoom` in the
-    bootstrap) against the fractional viewport size (`visualViewport`), as the engine does, and takes the frame's radii
-    from `windowDecorations`. A hole corner on a window corner is square, since the window's own clip rounds it, a near
-    one is concentric, and every other corner keeps the page's own radius, so the shell paints no rounded cover over a
-    page that fills the window.
+    radii, as the page itself would. A refused visible viewport is counted, once per send
+    (`linux_page_viewports_rejected` in `usage_counts`); read it as zero against non-zero, since any refusal means the
+    shell sent a viewport the engine won't take. The pane paints `theme.card` behind the page, so a page rounder than
+    its pane would show that colour in its corner. A page that fills the window (page full screen, no page frame) never
+    shows rounded corners the window doesn't have. A page edge counts as on the window edge when it's within 1 DIP of
+    it. The corners follow layout, window-state and frame changes. The shell follows the same rule for the holes it cuts
+    over pages (`pageHoles.ts`, `windowCornerRadii`): it rounds the page's rectangle out to whole DIPs through the
+    shell's zoom (`shellZoom` in the bootstrap) against the fractional viewport size (`visualViewport`), as the engine
+    does, and takes the frame's radii from `windowDecorations`. A hole corner on a window corner is square, since the
+    window's own clip rounds it, a near one is concentric, and every other corner keeps the page's own radius, so the
+    shell paints no rounded cover over a page that fills the window.
   - Where the compositor decorates (Hyprland, …): `g_ardia_linux_borderless_frame` answers true for that window, and the
     frame view and its layout report no border, input or shadow insets and no corner radius and paint no frame, so the
     client area is the whole window and the compositor rounds, clips and shadows it. The host lays the frame out again

@@ -257,3 +257,34 @@ test("a viewport sent while sharing is off is not counted when it is refused aft
     t.client.setSharing(false, "settings");
   }
 });
+
+test("a viewport send is counted by the consent in force when the host was handed it, whatever microtask sharing turns on in", async () => {
+  const t = await viewportTelemetry();
+  try {
+    for (let depth = 0; depth < 8; depth++) {
+      t.client.setSharing(false, "settings");
+      t.rejected();
+      let sharingAtInvoke = null;
+      const { host } = refusingHost(() => Promise.reject(new Error("refused")));
+      const invoke = host.invoke;
+      host.invoke = (method, args) => {
+        if (method === "tab.viewport") sharingAtInvoke = t.client.isSharing();
+        return invoke(method, args);
+      };
+      const key = `depth-${depth}`;
+      const tab = new HostTab(host, { key, url: `https://${key}.test/` }, () => {});
+      await tab.ready;
+      const hold = reserveTab(host, key);
+      const send = settled(tab.viewport({ rect: RECT, visible: true }));
+      hold.finish();
+      let step = Promise.resolve();
+      for (let i = 0; i < depth; i++) step = step.then(() => {});
+      await step.then(() => t.client.setSharing(true, "settings"));
+      assert.equal(await send, "refused");
+      assert.notEqual(sharingAtInvoke, null, `depth ${depth}: the host was never handed the viewport`);
+      assert.equal(t.rejected(), sharingAtInvoke ? 1 : 0, `depth ${depth}: sharing ${sharingAtInvoke ? "on" : "off"} when the host was handed the viewport`);
+    }
+  } finally {
+    t.client.setSharing(false, "settings");
+  }
+});

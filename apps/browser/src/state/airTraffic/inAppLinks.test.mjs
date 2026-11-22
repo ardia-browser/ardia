@@ -191,8 +191,17 @@ test("the New Tab bar keeps a typed search over an empty card in its profile and
   assert.deepEqual(takeAirTrafficCounts(), counted({ air_traffic_in_app_typed: 1 }));
 });
 
+const formOf = (flags, url) => {
+  if (flags !== "ih" && flags !== "ip") return url;
+  const parsed = new URL(url);
+  return (flags === "ih" ? parsed.hostname : `${parsed.hostname}${parsed.pathname}${parsed.search}`).toLowerCase();
+};
 const pageDecides = (routes, url) => {
-  for (const [source, flags, action] of routes) if (new RegExp(source, flags.replace(/[^imsu]/g, "")).test(url)) return action === "route";
+  if (!/^https?:/i.test(url)) return false;
+  for (const [source, flags, action] of routes) {
+    if ((flags === "ih" || flags === "ip") && /^[a-z][a-z0-9+.-]*:\/\/[^/?#]*@/i.test(url)) continue;
+    if (new RegExp(source, flags ? "i" : "").test(formOf(flags, url))) return action === "route";
+  }
   return false;
 };
 
@@ -237,6 +246,8 @@ const URLS = [
   "https://h.example/xaxbxcx",
   "https://h.example/abca",
   "https://h.example/acb",
+  "https://example.org/archive/docs",
+  "https://h.example:8443/x",
 ];
 
 const CONDITIONS = [
@@ -257,6 +268,8 @@ const CONDITIONS = [
   { kind: "pattern", pattern: "http://example.org:80/*" },
   { kind: "pattern", pattern: "*://*/a*b*c*" },
   { kind: "pattern", pattern: "*e*a*/*a*" },
+  { kind: "pattern", pattern: "*/docs*" },
+  { kind: "pattern", pattern: "*:8443*" },
 ];
 
 test("the routes pushed to a page decide every click exactly as the app does: each condition alone, after a rule that keeps links, and with an earlier rule to the same profile", () => {
@@ -264,8 +277,9 @@ test("the routes pushed to a page decide every click exactly as the app does: ea
   const keep = rule({ when: { kind: "site", host: "keep.example" }, profileId: "default" });
   const sameProfileFirst = rule({ when: { kind: "contains", text: "doc" }, profileId: "default" });
   const lastUsed = rule({ when: { kind: "site", host: "example.org" }, profileId: null });
+  const localDocs = rule({ when: { kind: "pattern", pattern: "*/docs*" }, profileId: "default" });
   for (const when of CONDITIONS)
-    for (const before of [[], [keep], [sameProfileFirst], [lastUsed]]) {
+    for (const before of [[], [keep], [sameProfileFirst], [lastUsed], [localDocs]]) {
       store.resetAirTrafficForTests({ rules: [...before, rule({ when, profileId: work })], fallback: null, inAppLinks: true });
       const routes = inAppLinkRoutes(store.currentAirTraffic(), new Set(["default"]), store.targetUsableNow, "default");
       for (const url of URLS) assert.equal(pageDecides(routes, url), inAppLinkRoute(url, page) !== null, `${JSON.stringify(when)} after ${before.length ? before[0].when.kind : "nothing"}: ${url}`);
@@ -303,7 +317,7 @@ test("generated routes stay fast on long addresses, take default ports per schem
   const slow = { kind: "pattern", pattern: "*/a*a*a*a*a*a*a*z" };
   const routes = pageLinkPatterns(slow);
   const started = performance.now();
-  for (const [source, flags] of routes) new RegExp(source, flags).test(`https://h.example/${"a".repeat(8000)}`);
+  for (const [source, flags] of routes) new RegExp(source, flags ? "i" : "").test(formOf(flags, `https://h.example/${"a".repeat(8000)}`));
   assert.ok(performance.now() - started < 100, `took ${performance.now() - started} ms`);
   const port80 = pageLinkPatterns({ kind: "pattern", pattern: "https://example.org:80/*" });
   assert.ok(!port80.some(([source, flags]) => new RegExp(source, flags).test("https://example.org/")));

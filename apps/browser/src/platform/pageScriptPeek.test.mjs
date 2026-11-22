@@ -868,3 +868,48 @@ test("a new-tab link says whether it keeps its opener: rel=opener and named targ
     ["https://b.example/noopener", false],
   ]);
 });
+
+test("routes built by the app run through the page script as the app decides: a host+path wildcard that keeps links comes first, a port isn't part of a host wildcard", async () => {
+  const { pageLinkPatterns } = await import("../state/airTraffic/pageLinkRoutes.ts");
+  const entries = (when, action) => pageLinkPatterns(when).map(([source, flags]) => [source, flags, action]);
+  const env = environment();
+  env.handlers.airTrafficConfig({ linkRoutes: [...entries({ kind: "pattern", pattern: "*/docs*" }, "stay"), ...entries({ kind: "pattern", pattern: "*:8443*" }, "route"), ...entries({ kind: "pattern", pattern: "*example.org*" }, "route")] });
+  const decided = (href) => env.gesture([env.link(href)], {}).defaultPrevented;
+  assert.equal(decided("https://example.org/archive/docs"), false);
+  assert.equal(decided("https://h.example:8443/x"), false);
+  assert.equal(decided("https://user@example.org/x"), false);
+  assert.equal(decided("https://shop.example.org/x"), true);
+  assert.deepEqual(routedLinks(env), ["https://shop.example.org/x"]);
+});
+
+test("a page that patches Array.prototype never sees the routes, and routing still works", () => {
+  const env = environment();
+  let seen = "";
+  const push = Array.prototype.push;
+  const note = (value) => void (seen += ` ${value?.pattern?.source ?? typeof value}`);
+  Array.prototype.push = function (...items) {
+    items.forEach(note);
+    return Reflect.apply(push, this, items);
+  };
+  Object.defineProperty(Array.prototype, "0", { configurable: true, set: note });
+  try {
+    env.handlers.airTrafficConfig({ linkRoutes: [["^https?://secret-project\\.example(?=[:/?#]|$)", "", "route"]] });
+  } finally {
+    delete Array.prototype[0];
+    Array.prototype.push = push;
+  }
+  assert.ok(env.gesture([env.link("https://secret-project.example/a")], {}).defaultPrevented);
+  assert.ok(!seen.includes("secret-project"));
+});
+
+test("a page that breaks RegExp.prototype.exec can't make a link that keeps its opener look routable", () => {
+  const env = environment();
+  const exec = RegExp.prototype.exec;
+  RegExp.prototype.exec = () => null;
+  try {
+    env.gesture([env.link("https://b.example/rel", { target: "_blank", rel: "opener" })], {});
+  } finally {
+    RegExp.prototype.exec = exec;
+  }
+  assert.ok(env.sent.filter((m) => m.kind === "newTabLink").every((m) => m.opener));
+});

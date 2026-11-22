@@ -246,7 +246,7 @@ const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
     return;
   }
   if (link && _tab) return [self matchLinkTab:tab adoptId:adoptId disposition:disposition firstURL:url ?: @"" hidden:tries > 0 tries:0];
-  [self emitOpenedTab:tab adoptId:adoptId disposition:disposition clicked:NO linkWait:nil opener:NO];
+  [self emitOpenedTab:tab adoptId:adoptId disposition:disposition clicked:NO linkWait:nil opener:[self notedOpenerFor:url ?: @""]];
 }
 
 - (void)matchLinkTab:(ArdiaCoreTab *)tab
@@ -311,6 +311,13 @@ const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
     return link;
   }
   return nil;
+}
+
+- (BOOL)notedOpenerFor:(NSString *)url {
+  [self dropStaleNewTabLinks];
+  for (NSDictionary *link in _newTabLinks)
+    if ([link[@"opener"] boolValue] && [link[@"url"] isEqualToString:url]) return YES;
+  return NO;
 }
 
 - (nullable NSDictionary *)takeNewTabLinkNoted:(CFTimeInterval)within {

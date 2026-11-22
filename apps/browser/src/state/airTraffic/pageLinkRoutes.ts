@@ -2,8 +2,8 @@ import { displayHost, punycodeEncode } from "@ardia/core";
 import { parseMatchPattern, type MatchSpec } from "../../lib/matchPattern";
 import { exactAddress, isWildcardPattern, linkText, type AirTrafficConfig, type LinkCondition, type TargetUsable } from "./rules";
 
-export type PageLinkPattern = [source: string, flags: string];
-export type PageLinkRoute = [source: string, flags: string, action: "route" | "stay"];
+export type PageLinkPattern = [source: string, flags: "" | "i" | "ih" | "ip"];
+export type PageLinkRoute = [source: PageLinkPattern[0], flags: PageLinkPattern[1], action: "route" | "stay"];
 
 export const MAX_PAGE_LINK_ROUTES = 512;
 
@@ -34,6 +34,9 @@ const WEB = "^https?://";
 const HOST_CHAR = "[^/?#@:]";
 const HOST_CHARS = `${HOST_CHAR}*`;
 const PATH_CHAR = "[^#]";
+const ANY_CHAR = "[^]";
+const HOST_FORM = "ih";
+const HOST_PATH_FORM = "ip";
 const HOST_END = "(?=[:/?#]|$)";
 const DEFAULT_PORTS: Record<string, string> = { http: "80", https: "443" };
 
@@ -42,7 +45,7 @@ export const SIGN_IN_PATTERNS: readonly PageLinkPattern[] = [
   ["^https?://[^#]*[?&](?:redirect_uri|redirect_url|response_type|client_id|samlrequest|samlresponse|relaystate|openid\\.mode|openid\\.return_to|oauth_token|wctx)=", "i"],
 ];
 
-const SIGN_IN = SIGN_IN_PATTERNS.map(([source, flags]) => new RegExp(source, flags));
+const SIGN_IN = SIGN_IN_PATTERNS.map(([source, flags]) => new RegExp(source, flags ? "i" : ""));
 
 export const signInLink = (url: string) => SIGN_IN.some((pattern) => pattern.test(url));
 
@@ -68,17 +71,8 @@ function matchPatternPatterns(pattern: string): PageLinkPattern[] {
 function wildcardPatterns(pattern: string): PageLinkPattern[] {
   const lower = pattern.toLowerCase();
   const glob = lower.includes("*") ? lower : `*${lower}*`;
-  const out: PageLinkPattern[] = [];
-  for (const g of new Set([glob, asciiGlob(glob)])) {
-    const slash = g.indexOf("/");
-    const groups = { n: 0 };
-    if (slash < 0) {
-      out.push([`${WEB}${globSource(g, HOST_CHAR, groups)}${HOST_END}`, "i"]);
-      continue;
-    }
-    out.push([`${WEB}${globSource(g.slice(0, slash), HOST_CHAR, groups)}(?::\\d+)?${globSource(g.slice(slash), PATH_CHAR, groups)}(?=#|$)`, "i"]);
-  }
-  return out;
+  const form = glob.includes("/") ? HOST_PATH_FORM : HOST_FORM;
+  return [...new Set([glob, asciiGlob(glob)])].map((g) => [`^${globSource(g, ANY_CHAR, { n: 0 })}$`, form]);
 }
 
 function containsPatterns(text: string): PageLinkPattern[] {
@@ -110,7 +104,7 @@ export function pageLinkPatterns(when: LinkCondition): PageLinkPattern[] {
 
 const compiles = ([source, flags]: PageLinkPattern) => {
   try {
-    new RegExp(source, flags);
+    new RegExp(source, flags ? "i" : "");
     return true;
   } catch {
     return false;

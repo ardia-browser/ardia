@@ -1441,6 +1441,9 @@
     const ROUTED_CLICK_REPEAT_MS = 1000;
     const RegExpCtor = RegExp;
     const execPattern = RegExp.prototype.exec;
+    const objectCreate = Object.create;
+    const lowerText = String.prototype.toLowerCase;
+    const matches = (pattern, text) => apply(execPattern, pattern, [text]) !== null;
     const namespace = getter(Element.prototype, "namespaceURI");
     const timeStamp = getter(Event.prototype, "timeStamp");
     const persisted = getter(PageTransitionEvent.prototype, "persisted");
@@ -1448,6 +1451,8 @@
     const pageHost = location.hostname;
     const pageIsWeb = apply(test, /^https?:$/, [location.protocol]);
     const hostnameOf = getter(URL.prototype, "hostname");
+    const pathnameOf = getter(URL.prototype, "pathname");
+    const searchOf = getter(URL.prototype, "search");
     const querySelector = Document.prototype.querySelector;
     const selectionOf = Document.prototype.getSelection;
     const collapsed = getter(Selection.prototype, "isCollapsed");
@@ -1608,8 +1613,8 @@
     const relOf = (link) => apply(getAttribute, link, ["rel"]) || "";
     const keepsOpener = (link) => {
       const rel = relOf(link);
-      if (apply(test, /(?:^|\s)no(?:opener|referrer)(?:\s|$)/i, [rel])) return false;
-      return !apply(test, /^_blank$/i, [targetOf(link)]) || apply(test, /(?:^|\s)opener(?:\s|$)/i, [rel]);
+      if (matches(/(?:^|\s)no(?:opener|referrer)(?:\s|$)/i, rel)) return false;
+      return !matches(/^_blank$/i, targetOf(link)) || matches(/(?:^|\s)opener(?:\s|$)/i, rel);
     };
     const newTabLink = (link, url) => (keepsOpener(link) ? { url, opener: true } : { url });
     const noteNewTabLink = (e, link) => {
@@ -1617,28 +1622,42 @@
       const url = linkUrl(link);
       if (url && apply(test, /^https?:/i, [url])) send("newTabLink", newTabLink(link, url));
     };
-    let linkRoutes = [];
+    const ROUTE_FORMS = { "": 0, i: 0, ih: 1, ip: 2 };
+    let linkRoutes = apply(objectCreate, Object, [null]);
+    let linkRouteCount = 0;
     let routedClick = null;
     const linkRouteOf = (url) => {
-      for (let i = 0; i < linkRoutes.length; i++) if (apply(execPattern, linkRoutes[i].pattern, [url]) !== null) return linkRoutes[i].route;
+      let parsed = null;
+      for (let i = 0; i < linkRouteCount; i++) {
+        const entry = linkRoutes[i];
+        let text = url;
+        if (entry.form) {
+          if (matches(/^[a-z][a-z0-9+.-]*:\/\/[^/?#]*@/i, url)) continue;
+          if (!parsed) parsed = new URLCtor(url);
+          text = apply(lowerText, entry.form === 1 ? hostnameOf(parsed) : `${hostnameOf(parsed)}${pathnameOf(parsed)}${searchOf(parsed)}`, []);
+        }
+        if (matches(entry.pattern, text)) return entry.route;
+      }
       return false;
     };
     handlers.airTrafficConfig = (config) => {
-      linkRoutes = [];
+      linkRoutes = apply(objectCreate, Object, [null]);
+      linkRouteCount = 0;
       const entries = config && config.linkRoutes;
       if (!isTop || !entries || !entries.length) return;
-      for (let i = 0; i < entries.length && linkRoutes.length < MAX_LINK_ROUTES; i++) {
+      for (let i = 0; i < entries.length && linkRouteCount < MAX_LINK_ROUTES; i++) {
         const entry = entries[i];
-        if (!entry || entry.length !== 3 || typeof entry[0] !== "string" || typeof entry[1] !== "string") return;
+        if (!entry || entry.length !== 3 || typeof entry[0] !== "string" || typeof entry[1] !== "string" || !(entry[1] === "" || entry[1] === "i" || entry[1] === "ih" || entry[1] === "ip")) return;
         try {
-          linkRoutes.push({ pattern: new RegExpCtor(entry[0], entry[1] === "i" ? "i" : ""), route: entry[2] === "route" });
+          linkRoutes[linkRouteCount] = { pattern: new RegExpCtor(entry[0], entry[1] ? "i" : ""), route: entry[2] === "route", form: ROUTE_FORMS[entry[1]] };
         } catch {
           return;
         }
+        linkRouteCount++;
       }
     };
     const routeLink = (e, link) => {
-      if (!isTop || !linkRoutes.length || defaultPrevented(e) || !replacesPage(link)) return false;
+      if (!isTop || !linkRouteCount || defaultPrevented(e) || !replacesPage(link)) return false;
       const url = linkUrl(link);
       if (!peekable({ link, url, path: [] }) || url.length > MAX_SITE_PEEK_URL || !linkRouteOf(url)) return false;
       apply(preventDefault, e, []);
@@ -1721,8 +1740,9 @@
         const raw = `${args[0]}`;
         if (!raw) return;
         const url = new URLCtor(raw, baseURI(document)).href;
-        const features = args.length > 2 && args[2] !== undefined && args[2] !== null ? `${args[2]}` : "";
-        if (apply(test, /^https?:/i, [url])) send("newTabLink", apply(test, /(?:^|[\s,])no(?:opener|referrer)(?:\s*=\s*(?:1|yes|true))?(?:[\s,]|$)/i, [features]) ? { url } : { url, opener: true });
+        const features = args.length > 2 ? args[2] : undefined;
+        const noOpener = typeof features === "string" && matches(/(?:^|[\s,])no(?:opener|referrer)(?:\s*=\s*(?:1|yes|true))?(?:[\s,]|$)/i, features);
+        if (apply(test, /^https?:/i, [url])) send("newTabLink", noOpener ? { url } : { url, opener: true });
       };
       const open = asNative(openDescriptor.value, (target, self, args) => {
         guard(openedByUser)(args);

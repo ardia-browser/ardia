@@ -455,7 +455,8 @@ config folder.
     ⌘-click or middle-click (`background`), a plain click on a `target=_blank` link (`foreground` matched to the
     click, `fromClick`; macOS only), or a ⇧-click window once Peek has had it. The page script tells native whether
     the link it noted keeps its opener (`rel=opener`, a named target, or `window.open` without `noopener`), native
-    passes `opener: true` on the open request, and such a tab stays where Chrome put it, as do a `window.open` with no
+    passes `opener: true` on the open request (for a ⌘-, middle- or ⇧-click tab too, when a `window.open` with an
+    opener was noted for its address), and such a tab stays where Chrome put it, as do a `window.open` with no
     matching click, a pop-up opened as a tab and a ⇧-click Peek, so "Sign in with Google" keeps talking to its
     opener. The check runs in `openFromPage` after `tab.opening`, so a rewrite routes at its new URL and a cancel stops
     it first; a source window that closed while the hook decided routes nothing. The page the engine prepared under
@@ -467,8 +468,10 @@ config folder.
     matches decides as the first rule that matches does in the app. Profiles that share data share one engine profile
     and one list, in which a rule to any of them is a stay entry, so a click between them loads in place. Globs are
     built with one atomic lookahead per middle segment (leftmost match), so a rule with many `*` stays linear on long
-    addresses; a pattern that doesn't compile ends the list, on both sides. The page matches with the `exec` it
-    captured at start, so a page that patches `RegExp` never sees the rules. The page script decides synchronously at
+    addresses; a wildcard is matched, as in the app, against the link's host (flags `ih`) or its host, path and query
+    (`ip`), never its port; a pattern that doesn't compile ends the list, on both sides. The page keeps the list in a
+    null-prototype object and matches with the `exec` it captured at start, so a page that patches `Array` or
+    `RegExp` never sees the rules. The page script decides synchronously at
     the end of the click's dispatch: if the
     page didn't cancel the click and the first matching entry routes, it cancels the click and reports the URL once
     (a second click within a second is cancelled but not reported again). A click the page stops before it reaches

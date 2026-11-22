@@ -11,10 +11,11 @@ public class ProfilesModule: Module {
 
   static let calls = CallTable(domain: "profiles", handlers: [
     "loaded": { _, reply in reply.ok(["profiles": ArdiaHost.loadedProfiles]) },
-    "ctrlTabMru": { _, reply in
+    "chromePrefs": { args, reply in
+      let prefs = try args.strings("paths")
       let paths = ArdiaHost.loadedProfilePaths
       DispatchQueue.global(qos: .utility).async {
-        let values = paths.compactMapValues(ChromeTabCyclingPref.isMostRecentFirst(inProfileAt:))
+        let values = paths.compactMapValues { ChromeProfilePrefs.booleans(prefs, inProfileAt: $0) }
         DispatchQueue.main.async { reply.ok(["profiles": values]) }
       }
     },

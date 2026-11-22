@@ -1,5 +1,6 @@
 import { requireNativeModule } from "expo-modules-core";
 import type { Subscription } from "./pageTypes";
+import type { ThemeLook } from "./look";
 
 export type SyncPhase = "off" | "starting" | "updating" | "updated" | "stalled" | "offline" | "needsFolderAccess" | "locked" | "reset";
 
@@ -54,13 +55,15 @@ export type BookmarkItem = { key: string; title: string; url: string | null; add
 
 export type SyncedHistoryItem = { url: string; title: string; visits: number; lastVisit: number };
 
+export type SyncedProfileTheme = { colors: string[]; darkColors: string[] | null; mode?: "auto" | "light" | "dark"; look?: ThemeLook | null; dark?: ThemeLook | null };
+
 export type SyncedProfile = {
   syncId: string;
   name: string;
   color: string | null;
   icon: string | null;
   isDefault: boolean;
-  theme: { colors: string[]; darkColors: string[] | null } | null;
+  theme: SyncedProfileTheme | null;
   deviceTabs: DeviceTabs[];
   pinned: { tiles: PinnedTile[]; sections: PinnedSection[] };
   bookmarks: BookmarkItem[];

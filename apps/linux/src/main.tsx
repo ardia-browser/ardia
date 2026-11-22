@@ -11,9 +11,10 @@ import { startTabPages } from "../../browser/src/state/tabs/tabPages";
 import { startTabLifecycle, useLifecycle } from "../../browser/src/state/tabs/tabLifecycle";
 import { useMedia } from "../../browser/src/state/media/media";
 import { useToolbarAutoHide } from "../../browser/src/state/windows/toolbarAutoHide";
-import { noteSidebarPeekPageHidden, noteToolbarPeekPageHidden } from "../../browser/src/state/telemetry/usage";
+import { noteSidebarPeekPageHidden, noteToolbarPageHidden } from "../../browser/src/state/telemetry/usage";
 import { peekShown } from "../../browser/src/state/windows/dockMotion";
 import { onPageCovered } from "./shims/web/HostWebView";
+import { toolbarMoving } from "./AutoHideToolbarRegion";
 import { copyLinkToSelection, jumpToSelection, replaceInField, usePageSelection } from "../../browser/src/state/site/selection";
 import { webviews } from "../../browser/src/platform/webviews";
 import { startMemoryTrim } from "../../browser/src/state/tabs/memoryTrim";
@@ -63,10 +64,14 @@ import { inputRegions, startShellAbove } from "./shellAbove";
 import { InWindowPlayer } from "./InWindowPlayer";
 import { startLinuxUpdates } from "./linuxUpdates";
 import { noticeUnsandboxedLaunch } from "./sandboxNotice";
+import { watchWindowDecorations } from "./windowDecorations";
 import { countLoginPasswordChecks } from "./reauthCounts";
 import { startPipPlayer } from "./pipPlayer";
 import { startLinuxShortcuts } from "./shortcutsRuntime";
 import { linuxWindowMenu } from "./linuxWindowMenu";
+import { TrafficLights } from "./TrafficLights";
+import { startWindowButtonStyle } from "../../browser/src/state/windows/windowButtons";
+import { followDesktopButtonLayout } from "./desktopButtonLayout";
 import { followWindowMaximized } from "./windowMaximized";
 import { createUtilitySessionSnapshot, initialLinuxSession, isLinuxUtility, setSessionDeparture, setSessionFlush } from "./session";
 import { startUtility } from "./utility";
@@ -111,10 +116,13 @@ async function start() {
   const restoreSession = launch ? configRestoreSession() : undefined;
   setStoreBatching(unstable_batchedUpdates);
   hydrateLaunchSession(saved, initialLinuxSession(ardiaHost, saved?.settings && restoreSession !== undefined ? { ...saved, settings: { ...saved.settings, restoreSession } } : saved));
+  followDesktopButtonLayout(ardiaHost);
+  startWindowButtonStyle();
   followWindowMaximized(ardiaHost, windowId);
   startConfigFiles(colorRoles, launch);
   startHostTelemetry({ host: ardiaHost, candidate: !utility, locks: navigator.locks as unknown as LeaderLocks });
   countLoginPasswordChecks(linuxTelemetryHooks.leading);
+  watchWindowDecorations(ardiaHost, windowId);
   const capabilities = linuxCapabilities(ardiaHost);
   if (capabilities.cliControl) startProgramControl();
   await startLinuxShortcuts(ardiaHost);
@@ -133,7 +141,7 @@ async function start() {
     startHostData();
     startHostTabLifecycle(ardiaHost, useBrowser);
     startShellAbove(ardiaHost);
-    onPageCovered((tabId) => linuxTelemetryHooks.leading() && useToolbarAutoHide.getState().peek[tabId] && noteToolbarPeekPageHidden());
+    onPageCovered((tabId) => linuxTelemetryHooks.leading() && noteToolbarPageHidden(useToolbarAutoHide.getState().peek[tabId] ? "peek" : toolbarMoving(tabId) ? "motion" : null));
     onPageCovered(() => peekShown(windowId) && noteSidebarPeekPageHidden());
     startPipPlayer(ardiaHost);
     watchTabSwitches(useBrowser);
@@ -177,6 +185,7 @@ async function start() {
       <div className="ardia-window">
         {!utility && <InWindowPlayer windowId={windowId} />}
         <WindowRoot windowId={windowId} />
+        <TrafficLights windowId={windowId} />
       </div>
       <MenuHost />
       <FirstWindowCommitted typeahead={!utility} />

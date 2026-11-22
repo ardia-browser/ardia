@@ -33,6 +33,7 @@ for file in "$dmg" "$zip" "$feed"; do
   [ -f "$file" ] || die "no $file (scripts/release.sh $version first)"
   assets+=("$file")
 done
+"$root/scripts/release/check-packages.sh" "$dist" "$version" || die "the update zip or the DMG isn't laid out as installs expect (scripts/release/check-packages.sh)"
 linux="$dist/linux"
 if [ -d "$linux" ]; then
   linux_package="$linux/Ardia-$version-linux-x64.tar.xz"
@@ -61,6 +62,13 @@ if [ -d "$linux" ]; then
   (cd "$linux" && shasum -a 256 -c --quiet "${linux_sums[@]}") \
     || die "the Linux assets in $linux don't match their .sha256 files"
   echo "PASS  the Linux assets join the release: ${linux_files[*]##*/}"
+  linux_update="$linux/Ardia-$version-linux-update.txt"
+  if [ -f "$linux_update" ] && [ -f "$linux_update.sig" ]; then
+    assets+=("$linux_update" "$linux_update.sig")
+    echo "PASS  the signed Linux self-update manifest joins the release"
+  else
+    echo "note: no signed $(basename "$linux_update") in $linux: installed Linux apps won't update themselves to $version"
+  fi
 else
   echo "note: no $linux: the release ships without the Linux tarball"
 fi

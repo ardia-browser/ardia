@@ -34,10 +34,10 @@ export function SmallBar({
   fieldLeft: number;
   field: ReactNode;
   buttons: SmallBarButton[];
-  trailing?: ReactNode;
+  trailing?: ReactNode[];
   children?: ReactNode;
 }) {
-  const count = buttons.length + (trailing ? 1 : 0);
+  const count = buttons.length + (trailing?.length ?? 0);
   const buttonsWidth = count * SMALL_BAR_BUTTON + Math.max(0, count - 1) * SMALL_BAR_GAP;
   const mid = height / 2;
   const right = SMALL_INSET + trailingRoom;

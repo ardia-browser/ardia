@@ -3,6 +3,7 @@ import { hostSupports, INPUT_REGIONS_METHOD, invokeHost, reportHostError, type A
 import { createInputRegions, type InputRegionsRegistry, type RegionDeps, type RegionShape } from "./inputRegions.ts";
 import { createPageHoles, type PageHoles } from "./pageHoles.ts";
 import { startShellGlass } from "./shellGlass.ts";
+import { currentWindowCorners, onWindowCornersChanged } from "./windowDecorations.ts";
 
 export const SHELL_ABOVE_CLASS = "ardia-shell-above";
 const MOTION_EVENTS = ["transitionrun", "transitionend", "transitioncancel", "animationstart", "animationend", "animationcancel"] as const;
@@ -61,7 +62,8 @@ function conceal(element: Element, hidden: boolean) {
 
 export function startShellAbove(host: ArdiaHost, root: HTMLElement = document.body) {
   document.documentElement.classList.add(SHELL_ABOVE_CLASS);
-  const painter = createPageHoles(root);
+  const painter = createPageHoles(root, () => host.bootstrap.shellZoom ?? 1, currentWindowCorners);
+  const stopCorners = onWindowCornersChanged(() => painter.windowChanged());
   const glass = startShellGlass(host);
   const registry = createInputRegions({
     ...domRegionDeps(host),
@@ -74,13 +76,18 @@ export function startShellAbove(host: ArdiaHost, root: HTMLElement = document.bo
   holes = painter;
   regions = registry;
   const refresh = () => registry.refresh();
-  window.addEventListener("resize", refresh);
+  const resized = () => {
+    registry.refresh();
+    painter.windowChanged();
+  };
+  window.addEventListener("resize", resized);
   window.addEventListener("scroll", refresh, true);
   return () => {
-    window.removeEventListener("resize", refresh);
+    window.removeEventListener("resize", resized);
     window.removeEventListener("scroll", refresh, true);
     document.documentElement.classList.remove(SHELL_ABOVE_CLASS);
     glass.stop();
+    stopCorners();
     if (regions === registry) regions = null;
     if (holes === painter) holes = null;
   };

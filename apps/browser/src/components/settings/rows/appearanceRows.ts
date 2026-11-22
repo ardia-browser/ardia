@@ -4,6 +4,7 @@ import { keyText } from "../../../state/commands/keyText";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 import { interfaceScaleAdjustable } from "../../../state/settings/interfaceScale";
+import { windowButtonsChoosable } from "../../../lib/windowChrome";
 
 const inSidebar = (_: unknown, env: SettingsEnv) => !env.top;
 
@@ -56,6 +57,17 @@ export const appearanceRows = {
           description: "Shown in the Dock and the app switcher.",
           keywords: ["dock icon", "logo"],
           shown: () => PLATFORM_FEATURES.appIcon,
+        },
+      },
+    },
+    {
+      section: "Window buttons",
+      rows: {
+        windowButtons: {
+          title: "Window buttons",
+          description: "Native follows your desktop's button layout, and on tiling desktops such as Hyprland or sway draws no window buttons. Traffic lights put close, minimize and maximize at the top left, as on a Mac. Full screen hides both. Hidden draws none on any desktop and keeps no room for them; the menu button stays in the header.",
+          keywords: ["window controls", "title bar", "titlebar", "close button", "minimize", "maximize", "traffic lights", "gnome", "kde", "native", "decorations", "linux", "hidden", "none", "tiling", "i3", "sway", "hyprland"],
+          shown: () => windowButtonsChoosable,
         },
       },
     },

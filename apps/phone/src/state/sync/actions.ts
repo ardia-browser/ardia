@@ -172,7 +172,9 @@ export function selectProfile(profileSyncId: string) {
 }
 
 export function matchMyMac(on: boolean, look: ProfileLook) {
-  setPreference("colorChoice", choiceAfterMatchToggle(on, look, "plum") as ColorChoice | null);
+  const choice = choiceAfterMatchToggle(on, look, "plum") as ColorChoice | null;
+  if (choice === "custom" && look.custom) setPreference("customTheme", look.custom.theme);
+  setPreference("colorChoice", choice);
 }
 
 export function sendTargetsFor(tab: BrowserTab | null): SyncedDevice[] {

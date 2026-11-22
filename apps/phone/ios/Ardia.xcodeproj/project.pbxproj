@@ -795,7 +795,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 4FD90E245DFB5335ACF4F908 /* Pods-Ardia.debug.xcconfig */;
 			buildSettings = {
-				ARDIA_DEFAULT_BROWSER = NO;
+				ARDIA_DEFAULT_BROWSER = YES;
 				ARDIA_ENTITLEMENTS_NO = Config/Ardia.entitlements;
 				ARDIA_ENTITLEMENTS_YES = "Config/Ardia-DefaultBrowser.entitlements";
 				ARDIA_RELEASE_VERSION = "";
@@ -956,7 +956,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = AE704818C60C688ED50FBD96 /* Pods-Ardia.release.xcconfig */;
 			buildSettings = {
-				ARDIA_DEFAULT_BROWSER = NO;
+				ARDIA_DEFAULT_BROWSER = YES;
 				ARDIA_ENTITLEMENTS_NO = Config/Ardia.entitlements;
 				ARDIA_ENTITLEMENTS_YES = "Config/Ardia-DefaultBrowser.entitlements";
 				ARDIA_RELEASE_VERSION = "";

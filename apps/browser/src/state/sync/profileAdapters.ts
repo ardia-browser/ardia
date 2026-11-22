@@ -2,6 +2,7 @@ import { canonical, type Adapter } from "../../platform/sync";
 import { useBrowser } from "../browser/store";
 import { DEFAULT_PROFILE_ID } from "../settings/settings";
 import { sanitizeTheme } from "../../lib/profileLook";
+import { withSyncedColor } from "../../lib/presetLook";
 import type { Profile, ProfileTheme } from "../browser/types";
 import { noteTopAppsSharingFromSync, startedBySync } from "../telemetry/topAppsSharing";
 import { PROFILE, PROFILE_OPEN_TABS, PROFILE_THEME, PROFILE_TOP_APPS, SHARE, openTabsRecord, profileRecord, topAppsRecord, type OpenTabsRecord, type TopAppsRecord } from "./records";
@@ -17,6 +18,9 @@ export type ProfileRecord = { n: string; c: Profile["color"]; i: string | null; 
 export type ProfileThemeRecord = { t: ProfileTheme } | { preset: true };
 
 export type ThemeAngleRecord = { a?: number; d?: number };
+
+type Stamped = { v: unknown; o?: readonly [string, number] };
+
 
 export const themeAngleKey = (syncId: string) => `${PROFILE_THEME}${syncId}:angle`;
 
@@ -46,7 +50,7 @@ export function legacyThemeOf(record: ProfileRecord): Pick<Profile, "theme"> | n
   return theme ? { theme } : null;
 }
 
-export function profilesAdapter(links: () => Record<string, { syncId: string }>, removed: Removed = NOTHING_REMOVED): Adapter {
+export function profilesAdapter(links: () => Record<string, { syncId: string }>, removed: Removed = NOTHING_REMOVED, records: () => Record<string, Stamped> | undefined = () => undefined, themed: () => Record<string, unknown> = links): Adapter {
   const linked = () => Object.entries(links()).filter(([id]) => store().profiles[id]);
   return {
     prefix: PROFILE,
@@ -69,13 +73,16 @@ export function profilesAdapter(links: () => Record<string, { syncId: string }>,
       const gone = removed();
       return { values, ignore: (key) => !mine.has(key) && !gone.has(key) };
     },
-    apply: (visible, changed, _base, records) => {
+    apply: (visible, changed, _base, applied) => {
       for (const [id, { syncId }] of linked()) {
         const record = profileRecord(visible.get(`${PROFILE}${syncId}`));
         if (!record || !changed.has(`${PROFILE}${syncId}`)) continue;
-        const legacy = store().profiles[id]!.theme === undefined && !records.known(`${PROFILE_THEME}${syncId}`) ? legacyThemeOf(record) : null;
+        const legacy = store().profiles[id]!.theme === undefined && !applied.known(`${PROFILE_THEME}${syncId}`) ? legacyThemeOf(record) : null;
         store().updateProfile(id, { name: record.n, icon: record.i });
-        store().setProfileLook(id, { color: record.c, ...legacy });
+        const synced = themed()[id] ? records()?.[`${PROFILE_THEME}${syncId}`] : undefined;
+        const look = synced ? themeFromRecord(synced.v, records()?.[themeAngleKey(syncId)]?.v) : null;
+        const chosen = legacy || !themed()[id] ? null : withSyncedColor(store().profiles[id]!, record.c, look ? look.theme : undefined);
+        store().setProfileLook(id, chosen ?? { color: record.c, ...legacy });
       }
     },
   };
@@ -83,7 +90,7 @@ export function profilesAdapter(links: () => Record<string, { syncId: string }>,
 
 export function profileThemesAdapter(
   links: () => Record<string, { syncId: string; themeAdopting?: true }>,
-  records: () => Record<string, { v: unknown }> | undefined,
+  records: () => Record<string, Stamped> | undefined,
   removed: Removed = NOTHING_REMOVED,
 ): Adapter {
   const linked = () => Object.entries(links()).filter(([id]) => store().profiles[id]);
@@ -176,4 +183,8 @@ export function profileOpenTabsAdapter(links: () => Record<string, { syncId: str
       }
     },
   };
+}
+
+export function profileSyncAdapters(links: () => Record<string, { syncId: string; themeAdopting?: true }>, records: () => Record<string, Stamped> | undefined): Adapter[] {
+  return [profilesAdapter(links, NOTHING_REMOVED, records), profileThemesAdapter(links, records)];
 }

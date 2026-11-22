@@ -68,9 +68,9 @@
     ],
     "passwords": ["autofillEnabled", "setAutofillEnabled", "setFieldProviders", "showSystemPanel", "showPanelHint", "systemPanelAvailable", "otpauthHandler", "setUpVerificationCode"],
     "permissions": ["resolve", "devExternalLaunches"],
-    "profiles": ["loaded", "unloadIdle"],
+    "profiles": ["loaded", "unloadIdle", "ctrlTabMru"],
     "search": ["setEngineName"],
-    "sites": ["preloadPages", "setPreloadPages"],
+    "sites": ["preloadPages", "setPreloadPages", "readStorage", "writeStorage", "registrableDomains"],
     "tabs": [
       "routeLinkTabs",
       "stripCommand",

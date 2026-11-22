@@ -17,11 +17,9 @@ SPEC.loader.exec_module(DISPATCH)
 def sources(platform):
     gn = (ROOT / "BUILD.gn").read_text()
     common = re.search(r"ardia_sources = \[(.*?)\n\]", gn, re.S).group(1)
-    specific = re.search(
-        rf"if \(is_{platform}\) \{{\n  ardia_sources \+= \[(.*?)\n  \]\n",
-        gn,
-        re.S,
-    ).group(1)
+    taken = {f"is_{platform}", "!is_win"}
+    blocks = re.findall(r"^if \((!?is_\w+)\) \{\n  ardia_sources \+= \[(.*?)\n  \]\n", gn, re.S | re.M)
+    specific = "".join(listed for condition, listed in blocks if condition in taken)
     return [ROOT / name for name in re.findall(r'"([^\"]+)"', common + specific)]
 
 
@@ -49,6 +47,18 @@ def checked(command, **kwargs):
 
 
 class RegistryTests(unittest.TestCase):
+    def test_windows_excluded_sources_reach_mac_and_linux(self):
+        for platform in ("mac", "linux"):
+            names = {path.name for path in sources(platform)}
+            self.assertIn("ac_local_storage.cc", names)
+            self.assertIn("ac_passwords_page.cc", names)
+            self.assertIn("ac_extension_mirror.cc", names)
+        self.assertIn("ac_registrable_domains", DISPATCH.service_names(service_sources("linux")))
+
+    def test_dispatch_registry_reads_the_sources_listed_before_it(self):
+        gn = (ROOT / "BUILD.gn").read_text()
+        self.assertLess(gn.index("if (!is_win) {\n  ardia_sources += ["), gn.index('action("engine_dispatch_registry")'))
+
     def test_platforms_have_same_services(self):
         linux = DISPATCH.service_names(service_sources("linux"))
         mac = DISPATCH.service_names(service_sources("mac"))
@@ -60,6 +70,22 @@ class RegistryTests(unittest.TestCase):
         self.assertIn("ac_downloads_command", linux)
         self.assertIn(ROOT / "ac_engine_dispatch.cc", sources("linux"))
         self.assertNotIn(ROOT / "ac_engine_dispatch.cc", sources("mac"))
+
+    def test_registry_keeps_every_declared_service(self):
+        declared = set()
+        for path in service_sources("linux"):
+            declared.update(re.findall(r"^AC_(?:ENGINE|PROFILE|ARGS)_CALL\(\s*(\w+)", path.read_text(), re.M))
+        self.assertEqual(set(DISPATCH.service_names(service_sources("linux"))), declared)
+
+    def test_registry_reads_mixed_case_and_multiline_services(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = pathlib.Path(folder) / "calls.cc"
+            path.write_text(
+                "AC_PROFILE_CALL(ac_demo_getAll, ardia::OffTheRecord::kAllow) {\n}\n"
+                "AC_PROFILE_CALL(ac_demo_save,\n                ardia::Sensitive{ardia::kMax}) {\n}\n"
+                "AC_ARGS_CALL(ac_demo_plain) {\n}\n"
+            )
+            self.assertEqual(DISPATCH.service_names([path]), ["ac_demo_getAll", "ac_demo_plain", "ac_demo_save"])
 
     def test_registry_is_deterministic_and_rejects_duplicates(self):
         paths = service_sources("linux")

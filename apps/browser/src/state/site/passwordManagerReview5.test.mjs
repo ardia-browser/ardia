@@ -28,8 +28,8 @@ const pushedProfiles = () => native.calls.filter((c) => c[0] === "setFieldProvid
 const setPref = (on) => stub.profileToggles.user.set("", { ...stub.profileToggles.user.get(""), passwords: on });
 
 test("setup", async () => {
-  offer.OWED_RETRY.firstMs = 30;
-  offer.OWED_RETRY.maxMs = 30;
+  offer.OFFER_TO_SAVE_RETRY.firstMs = 30;
+  offer.OFFER_TO_SAVE_RETRY.maxMs = 30;
   S().hydrate({ profiles: { default: { id: "default", name: "Personal", color: "plum", icon: null, createdAt: 0 } }, profileOrder: ["default"] });
   S().createWindow({ url: "https://a.example/", profileId: "default" });
   startPlugins();

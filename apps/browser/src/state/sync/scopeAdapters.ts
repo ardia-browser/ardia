@@ -55,7 +55,7 @@ export function appAdapters(doc: SyncDoc, retiring: boolean): Adapter[] {
   return [
     ...(doc.types.settings ? [inTodaysNames(settingsAdapter)] : []),
     sharedDataAdapter(() => doc.profiles, removed),
-    profilesAdapter(withSharedOwners(doc, enabledLinks), removed),
+    profilesAdapter(withSharedOwners(doc, enabledLinks), removed, () => doc.scopes[APP_SCOPE]?.records, enabledLinks),
     profileThemesAdapter(enabledLinks, () => doc.scopes[APP_SCOPE]?.records, removed),
     profileTopAppsAdapter(enabledLinks, removed),
     profileOpenTabsAdapter(enabledLinks, removed),

@@ -57,6 +57,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface ArdiaWebView (Tab)
 + (void)setLittleArdiaOpensNewTabLinks:(BOOL)enabled NS_SWIFT_NAME(setLittleArdiaOpensNewTabLinks(_:));
++ (BOOL)littleArdiaOpensNewTabLinksInPlace;
 + (void)setPopupsOpenAsTabs:(BOOL)enabled NS_SWIFT_NAME(setPopupsOpenAsTabs(_:));
 - (void)resolveUnresponsive:(BOOL)terminate NS_SWIFT_NAME(resolveUnresponsive(terminate:));
 - (NSString *)discard:(BOOL)unload NS_SWIFT_NAME(discard(unload:));
@@ -190,10 +191,14 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)setSplitLinkModifier:(NSString *)modifier;
 + (void)setPeekOtherSiteTabs:(NSArray<NSString *> *)tabIds;
 + (BOOL)devPostPeekMouseUp:(NSString *)keys over:(NSString *)transferKey;
++ (NSString *)peekModifierInUse;
++ (NSString *)splitLinkModifierInUse;
++ (BOOL)peeksLinksToOtherSitesInTab:(nullable NSString *)transferKey NS_SWIFT_NAME(peeksLinksToOtherSites(inTab:));
 @end
 
 @interface ArdiaWebView (ContextMenu)
 + (void)setSearchEngineName:(NSString *)name;
++ (NSString *)searchEngineNameInUse;
 + (void)removeSharedImage:(NSURL *)file NS_SWIFT_NAME(removeSharedImage(_:));
 + (void)removeSharedImages;
 @end
@@ -210,6 +215,12 @@ NS_ASSUME_NONNULL_BEGIN
                                   control:(NSInteger)target
                                completion:(void (^)(BOOL ok))completion NS_SWIFT_NAME(requestPictureInPicture(clickAt:control:_:));
 - (void)exitPictureInPicture;
+@end
+
+@interface ArdiaWebView (ElementPick)
+- (double)armElementPick NS_SWIFT_NAME(armElementPick());
+- (BOOL)takeElementPick:(double)armed NS_SWIFT_NAME(takeElementPick(_:));
+- (void)noteElementPickInput;
 @end
 
 @interface ArdiaWebView (FirstPaint)
@@ -255,6 +266,12 @@ NS_ASSUME_NONNULL_BEGIN
     NS_SWIFT_NAME(downloadImage(_:maxPixels:completion:));
 - (void)mediaCommand:(NSString *)action seconds:(double)seconds NS_SWIFT_NAME(mediaCommand(_:seconds:));
 - (void)seekPictureInPictureBy:(double)seconds;
+@end
+
+@interface ArdiaWebView (SiteData)
+- (void)siteData:(NSDictionary<NSString *, id> *)request
+      completion:(void (^)(NSDictionary<NSString *, id> *_Nullable reply))completion
+    NS_SWIFT_NAME(siteData(_:completion:));
 @end
 
 @interface ArdiaWebView (Site)

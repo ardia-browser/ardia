@@ -1,26 +1,11 @@
 import { findFibers, nameOf, roots, walk, type Fiber } from "./perfFibers";
 import { countNativeNodes, nativeNodes } from "./perfNativeNodes";
 import { bump, fresh, now, type Counter } from "./perfStats";
+import { perfProbeOptions } from "./perfRun";
 
-if (!(globalThis as { expo?: unknown }).expo) {
-  try {
-    const { TurboModuleRegistry } = require("react-native") as typeof import("react-native");
-    (TurboModuleRegistry.get("ExpoModulesCore") as { installModules?: () => void } | null)?.installModules?.();
-  } catch {}
-}
 const modules = (globalThis as { expo?: { modules?: Record<string, Record<string, (...a: unknown[]) => unknown>> } }).expo?.modules;
 const shell = modules?.ArdiaDocuments;
-
-const probeOptions = (() => {
-  try {
-    const info = modules?.ArdiaApp?.systemInfo?.() as { isolatedInstance?: boolean } | undefined;
-    if (!info?.isolatedInstance || typeof shell?.readDocument !== "function") return null;
-    const file = shell.readDocument("perf-probe");
-    return typeof file === "string" ? file : null;
-  } catch {
-    return null;
-  }
-})();
+const probeOptions = perfProbeOptions;
 
 export const perfProbeEnabled = probeOptions !== null;
 

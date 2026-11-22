@@ -93,8 +93,21 @@ test("a Picture in Picture window is stamped when the page enters it, and the re
   assert.match(pip, /bool Attach\(ArdiaWebView \*view, NSString \*host, ArdiaConsentStamp \*stamp\)/);
   assert.match(pip, /Attach\(strongView, host, stamp\)/);
   assert.match(pip, /void DocumentEntered\(ArdiaWebView \*view, ArdiaConsentStamp \*stamp\)/);
-  assert.doesNotMatch(pip, /ArdiaConsentStamp\.begin/);
+  const entries = pip.slice(pip.indexOf("bool Attach(ArdiaWebView *view"), pip.indexOf("namespace ardia_pip {")) + pip.slice(pip.indexOf("void VideoEntered("));
+  assert.ok(entries.includes("void DocumentEntered("), "the slices cover every entry function");
+  assert.doesNotMatch(entries, /ArdiaConsentStamp\.begin/, "an entry never takes a fresh stamp: it uses the one it was handed");
   assert.match(read("../ios/ArdiaPictureInPicture.h"), /void VideoEntered\(ArdiaWebView \*view, NSString \*host, ArdiaConsentStamp \*stamp\);/);
+});
+
+test("an activation asked for by a press or a move on Picture in Picture is stamped when asked, and its later report sends that stamp to the source view", () => {
+  const pip = read("../ios/ArdiaPictureInPicture.mm");
+  const activation = pip.slice(pip.indexOf("void ActivateWithOnlyPictureInPicture("), pip.indexOf("void WatchZoom()"));
+  assert.equal(pip.match(/ArdiaConsentStamp\.begin/g).length, 1, "the activation's stamp is the only fresh one in the file");
+  assert.match(activation, /ArdiaConsentStamp \*activationStamp = ArdiaConsentStamp\.begin;/);
+  assert.ok(activation.indexOf("activationStamp = ArdiaConsentStamp.begin") < activation.indexOf("dispatch_after("), "the stamp is taken at the press, before the report waits");
+  assert.match(activation, /__weak ArdiaWebView \*source = controller\.view;/, "the report holds the source view itself, so closing the window (which drops its controller) doesn't lose it");
+  assert.match(activation, /\[source emit:@"pictureInPictureActivated" payload:\[activationStamp onto:/);
+  assert.doesNotMatch(activation.slice(activation.indexOf("dispatch_after(")), /controller\./, "nothing in the report reads the controller");
 });
 
 test("a Picture in Picture drag is stamped when it begins and its report sends that stamp", () => {
@@ -103,6 +116,17 @@ test("a Picture in Picture drag is stamped when it begins and its report sends t
   const began = swipe.slice(swipe.indexOf("- (void)dragBegan:"), swipe.indexOf("- (void)dragBegan:") + 900);
   assert.match(began, /_dragStamp = ArdiaConsentStamp\.begin;/);
   assert.match(swipe, /emit:@"pictureInPictureDragged" payload:\[_dragStamp onto:/);
+});
+
+test("how a moved Picture in Picture window was let go is reported with the stamp taken when its drag or swipe began", () => {
+  assert.match(read("../ios/ArdiaPictureInPictureInternal.h"), /ArdiaConsentStamp \*_swipeStamp;/);
+  const controller = read("../ios/ArdiaPiPController.mm");
+  const began = controller.slice(controller.indexOf("- (void)swipeBegan:"), controller.indexOf("- (void)swipeBegan:") + 400);
+  assert.match(began, /_swipeStamp = ArdiaConsentStamp\.begin;/);
+  assert.match(controller, /\[self reportRelease:outcome stamp:_dragStamp\];/);
+  const swipe = read("../ios/ArdiaPiPController+Swipe.mm");
+  assert.match(swipe, /\[self reportRelease:outcome stamp:_swipeStamp\];/);
+  assert.match(swipe, /if \(stamp\) \[self\.view emit:@"pictureInPictureReleased" payload:\[stamp onto:@\{@"outcome" : outcome\}\]\];/);
 });
 
 test("a click skip sends the stamp taken at mouse-down, and only the keyboard skip takes a fresh one", () => {

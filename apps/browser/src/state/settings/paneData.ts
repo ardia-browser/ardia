@@ -1,8 +1,6 @@
 import { useBrowser } from "../browser/store";
 import {
   engineInfo,
-  listComponents,
-  WIDEVINE_COMPONENT_ID,
   appIcons,
   currentAppIcon,
   isDefaultBrowser,
@@ -31,7 +29,7 @@ import { currentSyncFolder, folderInfo } from "../sync/engine";
 import { extensionsProfileId, refreshExtensions } from "../extensions/actions";
 import { cached, load, loadAll, need, resource, store, useAllLoaded, type Needed } from "./resources";
 import type { SettingsPane } from "./settingsWindows";
-import { FOLLOW_EVERY_MS, FOLLOW_FOR_MS, switchOutcome, updaterBusy } from "./updateStatus";
+import { FOLLOW_EVERY_MS, FOLLOW_FOR_MS, FOLLOW_UPDATE_EVERY_MS, FOLLOW_UPDATE_FOR_MS, switchOutcome, updateUnderWay, updaterBusy } from "./updateStatus";
 import { noteUpdateChannelSwitch } from "../telemetry/usage";
 import { consentToken } from "../telemetry/client";
 import { forgetPendingOfferToSave, passwordAutofill } from "../site/passwordManager";
@@ -70,20 +68,13 @@ export const shortcutItems = resource("menuShortcuts", () =>
   ),
 );
 export const engineVersion = resource("engineInfo", () => engineInfo().catch(() => null));
-export const widevine = resource("widevine", () =>
-  listComponents().then(
-    (list) => list.find((c) => c.id === WIDEVINE_COMPONENT_ID) ?? null,
-    () => null,
-  ),
-);
-
 const defaultProfile = () => engineProfile(useBrowser.getState(), currentSettings().defaultProfileId);
 
 export function paneNeeds(pane: SettingsPane, profileId: string | null): Needed[] {
   const profile = profileId ? engineProfile(useBrowser.getState(), profileId) : defaultProfile();
   switch (pane) {
     case "general":
-      return [need(loginItem), need(defaultBrowser), need(updater), need(downloadSettings, profile), need(contentBlocker), need(syncFolder, currentSyncFolder() ?? null), need(engineVersion), need(widevine)];
+      return [need(loginItem), need(defaultBrowser), need(updater), need(downloadSettings, profile), need(contentBlocker), need(syncFolder, currentSyncFolder() ?? null), need(engineVersion)];
     case "profiles":
       return [
         need(downloadSettings, profile),
@@ -166,11 +157,12 @@ export function followUpdater(settled?: (state: UpdaterState) => void) {
   if (followingNow && !settled) return;
   const run = ++following;
   followingNow = true;
-  const until = Date.now() + FOLLOW_FOR_MS;
+  const started = Date.now();
   const tick = (): Promise<void> =>
     load(updater, [], { fresh: true }).then((state) => {
       if (run !== following) return;
-      if (updaterBusy(state) && Date.now() < until) return new Promise<void>((done) => setTimeout(done, FOLLOW_EVERY_MS)).then(tick);
+      const updating = updateUnderWay(state);
+      if (updaterBusy(state) && Date.now() < started + (updating ? FOLLOW_UPDATE_FOR_MS : FOLLOW_FOR_MS)) return new Promise<void>((done) => setTimeout(done, updating ? FOLLOW_UPDATE_EVERY_MS : FOLLOW_EVERY_MS)).then(tick);
       followingNow = false;
       settled?.(state);
     });

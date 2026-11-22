@@ -84,6 +84,7 @@ onAndroid("the material page bar has a rounded capsule with tabs, centered searc
   expect(flat(node(root, "pageArea")).marginBottom).toBe(0);
   const pageView = root.root.findAll((found) => found.props.pageId !== undefined && found.props.obscuredInsets !== undefined)[0]!;
   expect(pageView.props.obscuredInsets.bottom).toBe(0);
+  expect(pageView.props.summaryBottomInset).toBe(barHeight(24, "material"));
   expect(pageView.props.toneInsets).toEqual({ top: 0, bottom: 0 });
   expect(node(root, "pageBar")!.props.pointerEvents).toBe("box-none");
   expect(flat(node(root, "pageBar")).backgroundColor).toBeUndefined();
@@ -387,9 +388,21 @@ onAndroid("a wallpaper scheme change re-themes the bar", () => {
   unmount(root);
 });
 
+onAndroid("an open Material Find bar keeps the summary card clear of it", () => {
+  const root = screen();
+  act(() => usePageUi.setState({ findOpen: true }));
+  settle();
+  const pageView = root.root.findAll((found) => found.props.pageId !== undefined && found.props.obscuredInsets !== undefined)[0]!;
+  expect(pageView.props.summaryBottomInset).toBe(barHeight(24, "material"));
+  unmount(root);
+});
+
 onAndroid("scrolling a page down folds the Material bottom bar into a host pill by default, and the pill or scrolling up brings it back", () => {
   scrolled("up");
   const root = screen();
+  const pageView = () => root.root.findAll((found) => found.props.pageId !== undefined && found.props.obscuredInsets !== undefined)[0]!;
+  const expandedSummaryInset = pageView().props.summaryBottomInset as number;
+  expect(expandedSummaryInset).toBe(barHeight(24, "material"));
   scrolled("down");
   settle();
   expect(node(root, "materialBarFold")!).toHaveAnimatedStyle({ opacity: 0 });
@@ -399,17 +412,21 @@ onAndroid("scrolling a page down folds the Material bottom bar into a host pill 
   expect(node(root, "materialBarPillPlace")!.props.pointerEvents).toBe("box-none");
   expect(flat(node(root, "materialBarPill"))).toMatchObject({ height: 36, borderRadius: 9999, elevation: 3 });
   expect(flat(node(root, "materialBarPillPlace"))).toMatchObject({ height: 60, paddingVertical: 12 });
+  expect(pageView().props.summaryBottomInset).toBeGreaterThan(0);
+  expect(pageView().props.summaryBottomInset).toBeLessThan(expandedSummaryInset);
   scrolled("up");
   settle();
   expect(node(root, "materialBarFold")!).toHaveAnimatedStyle({ opacity: 1 });
   expect(node(root, "materialBarFold")!.props.pointerEvents).toBe("box-none");
   expect(node(root, "materialBarPillPlace")!).toHaveAnimatedStyle({ opacity: 0 });
   expect(node(root, "materialBarPillPlace")!.props.accessibilityElementsHidden).toBe(true);
+  expect(pageView().props.summaryBottomInset).toBe(expandedSummaryInset);
   scrolled("down");
   settle();
   act(() => pressable(root, "materialBarPill").props.onPress());
   settle();
   expect(node(root, "materialBarFold")!).toHaveAnimatedStyle({ opacity: 1 });
+  expect(pageView().props.summaryBottomInset).toBe(expandedSummaryInset);
   unmount(root);
 });
 

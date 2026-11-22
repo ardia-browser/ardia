@@ -69,6 +69,8 @@ class DevelopmentWebViewEngine(
 
     var desktopTrace: ((pageId: String, line: String) -> Unit)? = null
 
+    var onNightShadeVerdict: ((NightShadeVerdictUse) -> Unit)? = null
+
     override var isInspectable: Boolean = false
         set(value) {
             if (field == value) return

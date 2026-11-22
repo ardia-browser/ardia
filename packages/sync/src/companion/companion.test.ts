@@ -380,9 +380,11 @@ test("the iPhone keeps every record kind the Mac writes byte for byte, and write
     { u: "https://phone-only.example/", t: "Phone only", vt: [START], p: P1 },
   ];
   let received: string[] = [];
+  let view: Awaited<ReturnType<typeof phone.cycle>>["view"];
   for (let i = 0; i < 10; i++) {
     folder.now += i === 6 ? 40 * DAY : 15_000;
     const out = await phone.cycle();
+    view = out.view ?? view;
     received.push(...out.received.map((r) => r.key));
     if (i === 2) companionAcknowledge({ items: [{ profile: P1, key: SEND_TO_PHONE }] });
     if (i === 4) {
@@ -392,6 +394,13 @@ test("the iPhone keeps every record kind the Mac writes byte for byte, and write
   }
   await mac.sync();
   assert.deepEqual([...new Set(received)], [SEND_TO_PHONE]);
+  assert.deepEqual(view?.profiles.find((p) => p.syncId === P3)?.theme, {
+    colors: ["#00FF00"],
+    darkColors: null,
+    mode: "light",
+    look: { stops: [{ color: { r: 0, g: 1, b: 0, a: 1 }, x: 0.5, y: 0.5 }], intensity: 1, grain: 0.3, texture: "grain", translucency: 0.5, angle: 10 },
+    dark: null,
+  });
 
   assert.equal(recordsWithout(mac.scopes, own), before);
   const phoneScopes = phone.state().scopes;
@@ -671,7 +680,23 @@ test("the view orders pins, bookmarks, profiles and search as the Mac does", asy
     [["Personal", true], ["School", false], ["Work", false]],
   );
   const personal = view.profiles[0]!;
-  assert.deepEqual(personal.theme, { colors: ["#FF8000", "#0000FF80"], darkColors: null });
+  assert.deepEqual(personal.theme, {
+    colors: ["#FF8000", "#0000FF80"],
+    darkColors: null,
+    mode: "auto",
+    look: {
+      stops: [
+        { color: { r: 1, g: 0.5, b: 0, a: 1 }, x: 0, y: 0 },
+        { color: { r: 0, g: 0, b: 1, a: 0.5 }, x: 1, y: 1 },
+      ],
+      intensity: 0.6,
+      grain: 0,
+      texture: "grain",
+      translucency: 1,
+      angle: 45,
+    },
+    dark: null,
+  });
   assert.deepEqual(
     personal.pinned.tiles.map((t) => [t.key, t.title, t.folder?.map((f) => f.title) ?? null]),
     [["t1", "Calendar", null], ["tilefold:F", "Reading", ["A", "B page"]]],

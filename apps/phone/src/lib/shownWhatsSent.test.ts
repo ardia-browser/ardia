@@ -11,6 +11,8 @@ test("where sync isn't offered, What's Sent names no Mac, no Match My Mac and no
     assert.doesNotMatch(text, /iPhone/);
   }
   assert.ok(texts("android", false).some((text) => text === "With each launch, the Appearance you chose: Glass or Classic, and Light, Dark or System"));
+  assert.ok(texts("android", false).some((text) => text === "With each launch, whether your color is one of Ardia’s colors or a custom theme. Never which colors"));
+  assert.ok(texts("ios", true).some((text) => /color matches your Mac/.test(text)));
   assert.doesNotMatch(shownSharingFootnote(false), /sync/);
   assert.match(shownSharingFootnote(true), /This setting doesn’t sync\./);
 });
@@ -43,4 +45,10 @@ test("each phone lists only its own page summary counts: ChatGPT and Gemini Nano
   assert.ok(!texts("android", false).some((text) => /Apple Intelligence wrote on the phone/.test(text)));
   assert.ok(texts("ios", true).some((text) => /on iPhone: how often you summarized a page/.test(text)));
   assert.ok(!texts("ios", true).some((text) => /on Android: how often you summarized a page/.test(text)));
+});
+
+test("only Android lists why Gemini Nano wasn't used", () => {
+  const listed = (os: string) => shownWhatsSent(os, false).some((section) => section.items.some((item) => item.fields.includes("gemini_nano_not_offered")));
+  assert.ok(listed("android"));
+  assert.ok(!listed("ios"));
 });

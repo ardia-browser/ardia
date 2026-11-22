@@ -78,12 +78,13 @@ class PageSummarySessionTest {
 
     @Test
     fun anUnavailableModelFailsWithPlainWordsAndCountsAsFailed() {
-        val made = session(PageSummaryProvider.OnDevice, Cloud(isConnected = true), Local(OnDeviceWriter.Availability.Unavailable))
+        val made = session(PageSummaryProvider.OnDevice, Cloud(isConnected = true), Local(OnDeviceWriter.Availability.NotOffered))
         made.start()
         idle()
-        assertEquals(PageSummarySession.Phase.Failed("Gemini Nano is unavailable on this phone."), made.phase)
+        assertEquals(PageSummarySession.Phase.Failed("Google lets apps use Gemini Nano only on newer phones, such as the Pixel 9 and Galaxy S25."), made.phase)
         assertEquals("", made.text)
         assertEquals("failed", made.outcome)
+        assertEquals("not_offered", made.geminiNanoMissing)
         assertEquals(listOf(made), settled)
     }
 

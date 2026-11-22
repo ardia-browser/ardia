@@ -376,6 +376,7 @@ namespace {
 
 NSString *const kHidingRules =
     @"const hidingRule = /^[a-z0-9.-]+##[^+^\\s][^\\n{}]*$/;"
+     "const savedHidingRule = /^[a-z0-9.-]+##(?![+^\\s])(?!.*\\/\\*)[^\\0-\\x1f\\x7f\\x85\\u2028\\u2029{}]+$/;"
      "const userFilters = () => chrome.extension.getBackgroundPage().µBlock.loadUserFilters().then((d) => {"
      "  if (!d || d.error || typeof d.content !== 'string') throw new Error(`user filters: ${d && d.error || 'unreadable'}`);"
      "  return d.content;"
@@ -386,7 +387,7 @@ NSString *const kReadHidden = @"userFilters().then((content) => content.split('\
 NSString *const kHide =
     @"Promise.resolve(%@).then((want) => {"
      "  for (const f of want) {"
-     "    if (typeof f !== 'string' || f.length > 1024 || !hidingRule.test(f)) throw new Error('not a hiding rule');"
+     "    if (typeof f !== 'string' || f.length > 1024 || !savedHidingRule.test(f)) throw new Error('not a hiding rule');"
      "    document.createDocumentFragment().querySelector(f.slice(f.indexOf('##') + 2));"
      "  }"
      "  return userFilters().then((content) => {"
@@ -508,6 +509,13 @@ NSArray<NSString *> *Strings(id value) {
   });
 }
 
++ (void)userFilters:(void (^)(NSDictionary<NSString *, id> *, NSString *))completion {
+  NSString *script = @"send({what: 'readUserFilters'}).then((u) => ({content: typeof u.content === 'string' ? u.content : '', enabled: u.enabled !== false, trusted: !!u.trusted}))";
+  Call(kProfile, script, ^(id value, NSString *error) {
+    completion([value isKindOfClass:NSDictionary.class] ? value : nil, error ?: ([value isKindOfClass:NSDictionary.class] ? nil : @"no user filters"));
+  });
+}
+
 + (void)hiddenElementsInProfile:(NSString *)profile completion:(void (^)(NSArray<NSString *> *, NSString *))completion {
   Call(ardia_host::OriginalProfileName(profile), WithHidingRules(kReadHidden), ^(id filters, NSString *error) {
     completion(error ? nil : Strings(filters), error);
@@ -517,12 +525,18 @@ NSArray<NSString *> *Strings(id value) {
 + (void)hideElements:(NSArray<NSString *> *)filters inProfile:(NSString *)profile completion:(void (^)(NSString *))completion {
   if (ardia_host::IsPrivateProfile(profile)) return completion(@"a private window keeps its hidden elements for the session");
   if (!filters.count) return completion(nil);
-  Call(profile, WithHidingRules(ScriptWith(kHide, @[ filters ])), ^(id, NSString *error) { completion(error); });
+  Call(profile, WithHidingRules(ScriptWith(kHide, @[ filters ])), ^(id, NSString *error) {
+    if (!error) Publish(@{@"userFilters" : @YES});
+    completion(error);
+  });
 }
 
 + (void)restoreElements:(NSArray<NSString *> *)filters inProfile:(NSString *)profile completion:(void (^)(NSString *))completion {
   if (!filters.count) return completion(nil);
-  Call(ardia_host::OriginalProfileName(profile), WithHidingRules(ScriptWith(kRestore, @[ filters ])), ^(id, NSString *error) { completion(error); });
+  Call(ardia_host::OriginalProfileName(profile), WithHidingRules(ScriptWith(kRestore, @[ filters ])), ^(id, NSString *error) {
+    if (!error) Publish(@{@"userFilters" : @YES});
+    completion(error);
+  });
 }
 
 + (void)devFailNextMessage {

@@ -251,11 +251,13 @@ public class DevModule: Module {
       let select = NSSelectorFromString("ardia_setPointerOverride:")
       guard let view = NSClassFromString("RCTView"), (view as AnyObject).responds(to: select) else { return false }
       guard on else {
+        SwitcherPointer.devLocation = nil
         _ = (view as AnyObject).perform(select, with: nil)
         return true
       }
       guard let window = WindowManager.shared.window(windowId) else { return false }
       let screen = SyntheticInput.screenPoint(x: x, top: y, in: window)
+      SwitcherPointer.devLocation = screen
       _ = (view as AnyObject).perform(select, with: NSValue(point: screen))
       return true
     }.runOnQueue(.main)

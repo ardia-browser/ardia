@@ -17,6 +17,7 @@ import { showUrlBarMenu } from "../../state/omnibox/paste";
 import { copyPageUrl } from "../../state/site/selection";
 import { ProfileBadge } from "../profiles/ProfileIcons";
 import { useProfileDotsShown } from "../profiles/ProfileDots";
+import { HeaderAppMenu, useAppMenuInHeader } from "../profiles/ProfileIndicator";
 import { closeLittleArdia, openInMainWindow, openLittleArdiaProfileMenu } from "../../state/littleArdia/actions";
 import { isWindowClosing } from "../../state/windows/closeAnimated";
 import { notePinch, noteSwipeClose } from "../../state/telemetry/usage";
@@ -25,7 +26,8 @@ import { useCardFrame } from "../window/cardFrame";
 import { startLittleArdiaNewTabLinks } from "../../state/littleArdia/newTabLinks";
 import { PageLabel, SMALL_BAR_BUTTON, SmallBar } from "./SmallChrome";
 import { SMALL_LIGHTS_CENTER } from "../../state/windows/small";
-import { littleArdiaBarLayout } from "./barLayout";
+import { littleArdiaBarLayout, type LittleArdiaBarLayout } from "./barLayout";
+import { useWindowChromeVersion } from "../../state/windows/windowButtons";
 import { HistoryButton } from "../toolbar/NavButtons";
 import { NAV_HINTS, useShortcutHints } from "../../state/commands/commandShortcuts";
 import { toolbarPalette } from "../ui/toolbarColors";
@@ -34,10 +36,13 @@ import { LITTLE_ARDIA_PINCH, LITTLE_ARDIA_SWIPE_CLOSE, SMALL_FIELD_MAX_WIDTH, sm
 import { perLook } from "../ui/tokens";
 import { keyText } from "../../state/commands/keyText";
 
-const BAR = littleArdiaBarLayout();
 const NAV_HIT = perLook(() => ({ width: SMALL_BAR_BUTTON, height: SMALL_BAR_BUTTON, plateX: 0, plateY: 0, box: smallBarRow().button, radius: smallBarRow().buttonRadius }));
-const BACK_AT = perLook(() => ({ style: { position: "absolute" as const, top: BAR.buttonTop, left: BAR.navLeft }, hit: NAV_HIT() }));
-const FORWARD_AT = perLook(() => ({ style: { position: "absolute" as const, top: BAR.buttonTop, left: BAR.navLeft + BAR.navPitch }, hit: NAV_HIT() }));
+const navPlace = (bar: LittleArdiaBarLayout, slot: number, hit: ReturnType<typeof NAV_HIT>) => ({ style: { position: "absolute" as const, top: bar.buttonTop, left: bar.navLeft + slot * bar.navPitch }, hit });
+
+function useBarLayout(): LittleArdiaBarLayout {
+  const chrome = useWindowChromeVersion();
+  return useMemo(() => littleArdiaBarLayout(), [chrome]);
+}
 const alreadyFocused = () => {};
 const SPREAD_STARTS = 0.0001;
 
@@ -51,8 +56,9 @@ export function LittleArdiaWindow() {
   const gestures = !fullScreen;
   const pinch = useLittleArdiaPinch(windowId);
   const swipe = useLittleArdiaSwipeClose(windowId);
+  const bar = useBarLayout();
   const windowRadius = windowCornerRadius();
-  const headroom = Math.min(BAR.height, windowRadius);
+  const headroom = Math.min(bar.height, windowRadius);
   const corner = useMemo(
     () => zoomedCorner(pinch.scale, { ...size, inset: frame, cardRadius, windowRadius }),
     [pinch.scale, size.width, size.height, frame, cardRadius, windowRadius],
@@ -71,7 +77,7 @@ export function LittleArdiaWindow() {
         <PinchArea enabled={gestures} motion={pinch.motion} style={StyleSheet.absoluteFill}>
           <Animated.View style={{ flex: 1, transform: [{ scale: pinch.scale }] }}>
             <SwipeCloseContext.Provider value={gestures ? swipe.onSwipe : null}>
-              <View style={{ flex: 1, flexDirection: "row", paddingTop: BAR.height - headroom, paddingLeft: frame, paddingRight: frame, paddingBottom: frame }}>
+              <View style={{ flex: 1, flexDirection: "row", paddingTop: bar.height - headroom, paddingLeft: frame, paddingRight: frame, paddingBottom: frame }}>
                 <Animated.View pointerEvents="box-none" style={{ flex: 1, flexDirection: "row", paddingTop: headroom, ...(corner ? { borderRadius: corner, overflow: "hidden" } : null) }}>
                   <ContentCard />
                 </Animated.View>
@@ -158,8 +164,10 @@ function LittleArdiaBar() {
   const tab = useActiveTab();
   const panelOpen = useWindowUi().panel.open;
   const switcherShown = useProfileDotsShown();
+  const appMenu = useAppMenuInHeader();
   const [copied, setCopied] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const bar = useBarLayout();
   useEffect(() => {
     void setTrafficLightsCenter(windowId, SMALL_LIGHTS_CENTER);
   }, [windowId]);
@@ -175,31 +183,37 @@ function LittleArdiaBar() {
 
   return (
     <SmallBar
-      height={BAR.height}
-      trailingRoom={BAR.trailingRoom}
-      fieldLeft={BAR.fieldLeft}
+      height={bar.height}
+      trailingRoom={bar.trailingRoom}
+      fieldLeft={bar.fieldLeft}
       field={tab ? <PageField tab={tab} windowId={windowId} hidden={panelOpen} /> : null}
       buttons={[
         { icon: copied ? "checkmark" : "link", disabled: !tab?.url, tooltip: `Copy Link (${keyText("⇧⌘C")})`, onPress: copy },
         { icon: "arrow.up.left.and.arrow.down.right", tooltip: `Open in Ardia (${keyText("⌘O")})`, onPress: () => openInMainWindow(windowId) },
       ]}
-      trailing={switcherShown ? <ProfileButton windowId={windowId} /> : undefined}
+      trailing={[
+        ...(switcherShown ? [<ProfileButton key="profile" windowId={windowId} />] : []),
+        ...(appMenu ? [<HeaderAppMenu key="menu" size={SMALL_BAR_BUTTON} />] : []),
+      ]}
     >
       <WindowDragRegion style={StyleSheet.absoluteFill} />
-      {tab ? <HistoryButtons tabId={tab.id} windowId={windowId} /> : null}
-      {tab ? <ToolbarPopupAnchor windowId={windowId} tabId={tab.id} top={BAR.buttonTop} right={BAR.controlsRight} /> : null}
+      {tab ? <HistoryButtons tabId={tab.id} windowId={windowId} bar={bar} /> : null}
+      {tab ? <ToolbarPopupAnchor windowId={windowId} tabId={tab.id} top={bar.buttonTop} right={bar.controlsRight} /> : null}
     </SmallBar>
   );
 }
 
-function HistoryButtons({ tabId, windowId }: { tabId: string; windowId: string }) {
+function HistoryButtons({ tabId, windowId, bar }: { tabId: string; windowId: string; bar: LittleArdiaBarLayout }) {
   const palette = toolbarPalette(useTheme(), null);
   const history = useHistoryAvailability(tabId);
   const hints = useShortcutHints(NAV_HINTS);
+  const hit = NAV_HIT();
+  const back = useMemo(() => navPlace(bar, 0, hit), [bar, hit]);
+  const forward = useMemo(() => navPlace(bar, 1, hit), [bar, hit]);
   return (
     <>
-      <HistoryButton place={BACK_AT()} tabId={tabId} windowId={windowId} direction={-1} disabled={!history.back} palette={palette} onFocus={alreadyFocused} closesTab={history.backCloses} historyHint={hints.back} />
-      <HistoryButton place={FORWARD_AT()} tabId={tabId} windowId={windowId} direction={1} disabled={!history.forward} palette={palette} onFocus={alreadyFocused} historyHint={hints.forward} />
+      <HistoryButton place={back} tabId={tabId} windowId={windowId} direction={-1} disabled={!history.back} palette={palette} onFocus={alreadyFocused} closesTab={history.backCloses} historyHint={hints.back} />
+      <HistoryButton place={forward} tabId={tabId} windowId={windowId} direction={1} disabled={!history.forward} palette={palette} onFocus={alreadyFocused} historyHint={hints.forward} />
     </>
   );
 }

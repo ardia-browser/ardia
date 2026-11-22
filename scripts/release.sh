@@ -177,13 +177,10 @@ if [ "$phase" != sign ]; then
   "$stages/archive.sh" "$dist" "$framework_src" "${RELEASE_BUILD_DIR:-$root/apps/browser/build-release}" "$archive_signing" \
     ${version_settings[@]+"${version_settings[@]}"} AC_UPDATE_CHANNEL="$channel" \
     ${extra_build_settings[@]+"${extra_build_settings[@]}"}
-  echo "==> Official plugins (pinned in apps/browser/official-plugins.json)"
-  python3 -I "$stages/official-plugins.py" ${OFFICIAL_PLUGINS_FROM:+--from "$OFFICIAL_PLUGINS_FROM"} bundle "$dist/plugins" \
-    || die "the pinned official plugins couldn't be fetched and verified"
 fi
 if [ "$phase" = build ]; then
   echo
-  echo "Built $archive (signed ad hoc) with the pinned official plugins; sign it with --phase sign."
+  echo "Built $archive (signed ad hoc); sign it with --phase sign. Official plugins aren't bundled: Install fetches the pinned ones."
   exit 0
 fi
 if [ "$phase" = sign ] && [ -n "$build_input" ]; then
@@ -191,10 +188,7 @@ if [ "$phase" = sign ] && [ -n "$build_input" ]; then
   mkdir -p "$dist"
   [ -f "$build_input/provenance.txt" ] && [ ! -L "$build_input/provenance.txt" ] || die "no provenance.txt in $build_input"
   cp "$build_input/provenance.txt" "$dist/provenance.txt"
-  [ -d "$build_input/plugins" ] || die "no plugins in $build_input"
-  ditto "$build_input/plugins" "$dist/plugins"
 fi
-[ -f "$dist/plugins/cli/plugin.json" ] || die "no official plugins in $dist/plugins from --phase build"
 
 "$stages/export-sign.sh" "$dist" "$archive" "$identity" ${provisioning_profile:+"$provisioning_profile"}
 "$stages/verify.sh" "$app" "$archive" "$version" "$release_build"

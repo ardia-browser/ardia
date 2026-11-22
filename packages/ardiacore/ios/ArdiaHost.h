@@ -42,6 +42,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)releaseProfile:(NSString *)profile;
 + (NSDictionary<NSString *, id> *)unloadIdleProfile:(NSString *)profile NS_SWIFT_NAME(unloadIdleProfile(_:));
 @property(class, readonly) NSArray<NSString *> *loadedProfiles;
+@property(class, readonly) NSDictionary<NSString *, NSString *> *loadedProfilePaths;
 + (BOOL)stopCapture:(NSString *)tabId NS_SWIFT_NAME(stopCapture(tabId:));
 + (BOOL)showAutofillSuggestions:(NSString *)tabId passwords:(BOOL)passwords NS_SWIFT_NAME(showAutofillSuggestions(tabId:passwords:));
 + (int)chromeTabIdOfTab:(NSString *)tabId NS_SWIFT_NAME(chromeTabId(ofTab:));
@@ -59,6 +60,13 @@ NS_ASSUME_NONNULL_BEGIN
 + (NSString *)baseProfileOf:(NSString *)profile NS_SWIFT_NAME(baseProfile(of:));
 + (void)resolvePermission:(NSString *)requestId result:(NSString *)result remember:(BOOL)remember
     NS_SWIFT_NAME(resolvePermission(_:result:remember:));
+
+@end
+
+@interface ArdiaHost (NavigationDownloads)
+
++ (void)noteNavigationDownload:(NSString *)url profile:(NSString *)profile NS_SWIFT_NAME(noteNavigationDownload(_:profile:));
++ (BOOL)wasNavigationDownload:(NSString *)url profile:(NSString *)profile NS_SWIFT_NAME(wasNavigationDownload(_:profile:));
 
 @end
 

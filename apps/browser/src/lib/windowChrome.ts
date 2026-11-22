@@ -1,6 +1,7 @@
-import { WINDOW_CHROME, type WindowChrome } from "./platformChrome";
+import { applyWindowButtonStyle, WINDOW_BUTTON_STYLES, WINDOW_CHROME, type WindowButtonStyle, type WindowChrome } from "./platformChrome";
 
-export { WINDOW_CHROME, type WindowChrome };
+export { applyWindowButtonStyle, WINDOW_BUTTON_STYLES, WINDOW_CHROME, type WindowButtonStyle, type WindowChrome };
+export { TRAFFIC_LIGHTS_WIDTH, WINDOW_CONTROLS, windowButtonsFor, windowControlsWidth, type WindowButton } from "./windowButtonLayout";
 
 export function captionRoom(fromRight: number, fromTop = 0, chrome: WindowChrome = WINDOW_CHROME): number {
   if (fromTop >= chrome.titleBarHeight) return 0;
@@ -16,8 +17,23 @@ export function trailingClearance(top: number, margin: number, controlsBottom: n
   return top < controlsBottom ? Math.max(margin, chrome.trailingWidth) : margin;
 }
 
-export const WINDOW_CONTROLS = { edge: 12, gap: 3, button: 30, regular: 30, small: 28, band: 26, strip: 18 } as const;
+export const windowButtonsChoosable = WINDOW_BUTTON_STYLES.length > 1;
 
-export const BROWSER_WINDOW_BUTTONS = 4;
+export const trafficLightsDrawn = (chrome: WindowChrome = WINDOW_CHROME): boolean => chrome.leadingWidth > 0 && !chrome.leadingButtons.length;
 
-export const windowControlsWidth = (count = 3) => count * WINDOW_CONTROLS.button + (count - 1) * WINDOW_CONTROLS.gap;
+export const windowControlsDrawn = (chrome: WindowChrome = WINDOW_CHROME): boolean => chrome.leadingButtons.length + chrome.trailingButtons.length > 0;
+
+let chromeVersion = 0;
+const chromeWatchers = new Set<() => void>();
+
+export const windowChromeVersion = (): number => chromeVersion;
+
+export function onWindowChromeChange(listener: () => void): () => void {
+  chromeWatchers.add(listener);
+  return () => void chromeWatchers.delete(listener);
+}
+
+export function noteWindowChromeChanged() {
+  chromeVersion += 1;
+  for (const watcher of [...chromeWatchers]) watcher();
+}

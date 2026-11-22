@@ -13,6 +13,7 @@ const replacements = new Map([
   ...inputAdapters,
   [here("../browser/src/platform/livePersistence.ts"), here("./src/livePersistence.ts")],
   [here("../browser/src/platform/fieldTiming.ts"), here("./src/fieldTiming.ts")],
+  [here("../browser/src/platform/pickConfirmation.ts"), here("./src/pickConfirmation.ts")],
   [here("../../packages/core/src/suggestFetcher.ts"), here("./src/suggestFetcher.ts")],
   [here("../browser/src/components/settings/settingsIndex.ts"), here("./src/settingsIndex.ts")],
   [here("../browser/src/components/settings/Form.tsx"), here("./src/settingsForm.tsx")],
@@ -39,6 +40,7 @@ const replacements = new Map([
   [here("../browser/src/components/extensions/ActionPopup.tsx"), here("./src/ExtensionActionPopup.tsx")],
   [here("../browser/src/platform/windowControls.ts"), here("./src/hostWindowControls.ts")],
   [here("../browser/src/components/window/WindowControls.tsx"), here("./src/WindowControls.tsx")],
+  [here("../browser/src/components/window/LeadingWindowControls.tsx"), here("./src/LeadingWindowControls.tsx")],
 ]);
 const importedPasswordSave = {
   source: here("../browser/src/state/site/passwords.ts"),

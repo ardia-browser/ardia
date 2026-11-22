@@ -13,7 +13,7 @@ type SidebarUi = {
   iconPicker: (Target & { windowId: string; anchor: Anchor | null }) | null;
   hover: Hover | null;
   searchTabs: string | null;
-  switcher: { windowId: string; ids: string[]; index: number; visible: boolean } | null;
+  switcher: { windowId: string; ids: string[]; index: number; mounted: boolean; visible: boolean } | null;
   dragWidth: Record<string, number>;
 };
 

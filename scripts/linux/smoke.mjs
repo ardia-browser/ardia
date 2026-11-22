@@ -11,6 +11,7 @@ import { pathToFileURL } from "node:url";
 import { SHELL_PREFIX, closeAllApps, killAllAppsNow, launchArdia, launchArguments, launchEnvironment } from "../../apps/linux/scripts/acceptance/lib/ardia.mjs";
 import { connectCdp, evaluate } from "../../apps/linux/scripts/acceptance/lib/cdp.mjs";
 import { errorText, js, nonce, until, withDeadline } from "../../apps/linux/scripts/acceptance/lib/util.mjs";
+import { selfieKeys } from "./ubo-seed.mjs";
 
 export const USAGE = `Usage: node scripts/linux/smoke.mjs --package <Ardia-*linux-x64*.tar.xz|.deb|.AppImage> --results <dir> [--timeout-ms N] [--keep] [--allow-old-engine]
 
@@ -43,12 +44,16 @@ ARDIA_BACKGROUND=1, a throwaway profile and HOME, the sandbox on) without
                     loads a userscript that retitles the fixture page, ardia scripts list shows it as
                     reported, the fixture opens retitled, and after ardia scripts uninstall it opens
                     with its own title (skip: no lib/ardia/cli; old: no ArdiaUserScripts methods)
+  window-state      ArdiaShell.windowButtonLayout answers {layout: string|null, desktop: string},
+                    ArdiaShell.windowState for the shell's own window answers three booleans, and for
+                    an unknown window fails with "No such native window" (old: neither call advertised)
 
 It writes <results>/results.json ({ok, package, started, assertions[]}) and the
 launch logs to <results>, prints a table, and exits 0 only when every check ran
 and passed or was skipped. A check whose feature the engine's host predates
 (appVersion is Chromium's version; no engine.setCliControl, ArdiaCli.install or
-ArdiaAutomation.start capability) reports "old": a failure, unless
+ArdiaAutomation.start capability; neither ArdiaShell.windowButtonLayout nor
+ArdiaShell.windowState) reports "old": a failure, unless
 --allow-old-engine accepts it, as CI and release.sh do for an engine that isn't
 the commit's own.
 
@@ -60,7 +65,8 @@ the commit's own.
   -h, --help        show this help
 `;
 
-export const ASSERTIONS = ["ldd", "shell-ui", "bootstrap", "native-tab", "sandbox", "content-blocker", "restart-restore", "staged-install", "app-version", "cli-install", "cli-control", "cli-scripts"];
+export const privateFolder = (path) => mkdir(path, { recursive: true, mode: 0o700 });
+export const ASSERTIONS = ["ldd", "shell-ui", "bootstrap", "native-tab", "sandbox", "content-blocker", "restart-restore", "staged-install", "app-version", "cli-install", "cli-control", "cli-scripts", "window-state"];
 export const FORBIDDEN_SWITCHES = ["--no-sandbox", "--disable-seccomp-filter-sandbox", "--disable-namespace-sandbox", "--disable-setuid-sandbox", "--disable-gpu-sandbox", "--no-zygote-sandbox", "--single-process", "--in-process-gpu"];
 export const TREE_FORBIDDEN_SWITCHES = ["--no-sandbox", "--disable-seccomp-filter-sandbox", "--disable-namespace-sandbox", "--disable-setuid-sandbox"];
 export const STAGED_FILES = [
@@ -74,7 +80,7 @@ export const BLOCKER_FILES = ["manifest.json", "js/vapi.js", "js/vapi-common.js"
 export const UBO_TUNING = { selfieDelayInSeconds: 3, autoUpdateDelayAfterLaunch: 600 };
 export const UBO_SEED = "ardia-seed/storage.json";
 
-export function uboSeedProblems(seedText, start) {
+export function uboSeedProblems(seedText, start, storageSource) {
   const problems = [];
   if (!start.includes("await ardiaSeedFromPackage();")) problems.push("js/start.js doesn't load the seed");
   let storage = null;
@@ -84,7 +90,11 @@ export function uboSeedProblems(seedText, start) {
   if (!storage || typeof storage !== "object") return [...problems, `no readable ${UBO_SEED}`];
   if (typeof storage.version !== "string" || !storage.version) problems.push("the seed has no version");
   if (!Array.isArray(storage.selectedFilterLists)) problems.push("the seed has no list selection");
-  for (const key of ["cache/selfie/staticMain", "cache/selfie/staticNetFilteringEngine"]) if (typeof storage[key] !== "string" || !storage[key]) problems.push(`the seed has no ${key}`);
+  try {
+    for (const key of selfieKeys(storageSource)) if (typeof storage[key] !== "string" || !storage[key]) problems.push(`the seed has no ${key}`);
+  } catch (error) {
+    problems.push(errorText(error));
+  }
   return problems;
 }
 
@@ -98,6 +108,8 @@ export function uboTuningProblems(background, tuning = UBO_TUNING) {
 export const VERSION_PATTERN = /^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$/;
 export const CLI_CONTROL_CAPABILITIES = ["engine.setCliControl", "ArdiaCli.install", "ArdiaAutomation.start"];
 export const USER_SCRIPTS_CAPABILITIES = ["ArdiaUserScripts.watch", "ArdiaUserScripts.read", "ArdiaUserScripts.readStatus", "ArdiaUserScripts.writeStatus"];
+export const WINDOW_STATE_CAPABILITIES = ["ArdiaShell.windowButtonLayout", "ArdiaShell.windowState"];
+export const UNKNOWN_WINDOW_ERROR = "No such native window";
 export const SCRIPT_NAME = "Ardia smoke script";
 export const SCRIPT_TITLE_PREFIX = "Scripted: ";
 
@@ -280,6 +292,40 @@ export function appVersionVerdict(version, appVersion) {
   if (appVersion === version) return { status: "pass", message: `appVersion is ${version}` };
   if (typeof appVersion === "string" && /^\d+\.\d+\.\d+\.\d+$/.test(appVersion)) return { status: "old", message: `the host reports Chromium's version ${appVersion} as appVersion, not lib/ardia/VERSION ${version}: the engine predates lib/ardia/VERSION` };
   return { status: "fail", message: `appVersion is ${JSON.stringify(appVersion)}, not lib/ardia/VERSION ${version}` };
+}
+
+export function windowStateProblems(reply) {
+  const problems = [];
+  const layout = reply?.layout;
+  if (!layout || typeof layout !== "object" || Array.isArray(layout)) problems.push(`windowButtonLayout answered ${JSON.stringify(layout)}, not an object`);
+  else {
+    const keys = Object.keys(layout).sort().join(",");
+    if (keys !== "desktop,layout") problems.push(`windowButtonLayout has keys ${keys}, not desktop,layout`);
+    if (layout.layout !== null && typeof layout.layout !== "string") problems.push(`windowButtonLayout.layout is ${JSON.stringify(layout.layout)}, not a string or null`);
+    if (typeof layout.desktop !== "string") problems.push(`windowButtonLayout.desktop is ${JSON.stringify(layout.desktop)}, not a string`);
+  }
+  const state = reply?.state;
+  if (!state || typeof state !== "object" || Array.isArray(state)) problems.push(`windowState answered ${JSON.stringify(state)}, not an object`);
+  else {
+    const keys = Object.keys(state).sort().join(",");
+    if (keys !== "fullScreen,maximized,tiled") problems.push(`windowState has keys ${keys}, not fullScreen,maximized,tiled`);
+    for (const key of ["maximized", "tiled", "fullScreen"]) if (typeof state[key] !== "boolean") problems.push(`windowState.${key} is ${JSON.stringify(state[key])}, not a boolean`);
+  }
+  if (reply?.unknown !== UNKNOWN_WINDOW_ERROR) problems.push(`windowState for an unknown window answered ${JSON.stringify(reply?.unknown)}, not the error ${JSON.stringify(UNKNOWN_WINDOW_ERROR)}`);
+  return problems;
+}
+
+export function windowStateSupport(capabilities) {
+  const list = Array.isArray(capabilities) ? capabilities : [];
+  return WINDOW_STATE_CAPABILITIES.filter((name) => list.includes(name));
+}
+
+export function windowStateVerdict(capabilities) {
+  const advertised = windowStateSupport(capabilities);
+  if (!advertised.length) return { status: "old", message: `the host advertises neither ${WINDOW_STATE_CAPABILITIES.join(" nor ")}: the engine predates window state on Linux` };
+  const missing = WINDOW_STATE_CAPABILITIES.filter((name) => !advertised.includes(name));
+  if (missing.length) return { status: "fail", message: `the host advertises ${advertised.join(", ")} without ${missing.join(", ")}: the engine ships the two together` };
+  return { status: "pass", message: `the host advertises ${advertised.join(" and ")}` };
 }
 
 export function cliControlSupport(capabilities) {
@@ -551,7 +597,7 @@ class Smoke {
       if (!(await fileInfo(path))?.isFile) throw new Error(`the package has no ${path.slice(into.length + 1)}`);
     }
     this.profile = join(this.work, "profile");
-    await mkdir(this.profile);
+    await privateFolder(this.profile);
     this.version = (await readFile(join(this.runtime, "VERSION"), "utf8").catch(() => null))?.trim() || null;
     this.cliDir = join(this.runtime, "cli");
     this.hasCli = Boolean((await stat(this.cliDir).catch(() => null))?.isDirectory());
@@ -669,7 +715,11 @@ class Smoke {
     if (typeof manifest.key !== "string" || manifest.manifest_version !== 2) throw new Error("the packaged manifest is not the keyed MV2 uBlock Origin build");
     const tuning = uboTuningProblems(await readFile(join(blocker, "js", "background.js"), "utf8").catch(() => ""));
     if (tuning.length) throw new Error(`the packaged uBlock Origin is not tuned for launch: ${tuning.join("; ")}`);
-    const seeding = uboSeedProblems(await readFile(join(blocker, UBO_SEED), "utf8").catch(() => null), await readFile(join(blocker, "js", "start.js"), "utf8").catch(() => ""));
+    const seeding = uboSeedProblems(
+      await readFile(join(blocker, UBO_SEED), "utf8").catch(() => null),
+      await readFile(join(blocker, "js", "start.js"), "utf8").catch(() => ""),
+      await readFile(join(blocker, "js", "storage.js"), "utf8").catch(() => ""),
+    );
     if (seeding.length) throw new Error(`the packaged uBlock Origin is not seeded: ${seeding.join("; ")}`);
     let last;
     const state = await until(async () => {
@@ -792,6 +842,23 @@ class Smoke {
     return { format: "appimage" };
   }
 
+  async windowState(shell) {
+    const verdict = windowStateVerdict(this.capabilities);
+    if (verdict.status === "old") throw outcome("old", verdict.message, { capabilities: this.capabilities?.length ?? null });
+    if (verdict.status === "fail") throw new Error(verdict.message);
+    const reply = await shell.eval(`(async () => {
+      const host = globalThis.__ardiaHost;
+      const call = (method, args) => host.invoke(method, { args });
+      const layout = await call("ArdiaShell.windowButtonLayout", []);
+      const state = await call("ArdiaShell.windowState", [host.bootstrap.windowId]);
+      const unknown = await call("ArdiaShell.windowState", [${js(nonce("no-such-window"))}]).then((value) => ({ answered: value }), (error) => String(error?.message ?? error));
+      return { windowId: host.bootstrap.windowId, layout, state, unknown };
+    })()`);
+    const problems = windowStateProblems(reply);
+    if (problems.length) throw Object.assign(new Error(problems.join("; ")), { detail: reply });
+    return reply;
+  }
+
   async appVersion(shell) {
     if (!this.version) throw outcome("skip", "a dev package: no lib/ardia/VERSION");
     if (!VERSION_PATTERN.test(this.version)) throw new Error(`lib/ardia/VERSION reads ${JSON.stringify(this.version)}, not a version`);
@@ -860,7 +927,8 @@ class Smoke {
 
   async pipeInstance(name, { extensions = false } = {}) {
     const profile = join(this.work, `${name}-profile`);
-    await mkdir(join(profile, "home"), { recursive: true });
+    await privateFolder(profile);
+    await mkdir(join(profile, "home"));
     const args = pipeLaunchArguments(launchArguments({ scratch: profile, extensions }));
     const env = launchEnvironment({ scratch: profile });
     const refused = launchRefusal(args, env);
@@ -1029,11 +1097,12 @@ class Smoke {
       return this.shellUi(shell);
     }, { timeout: 120000 });
     if (!first) {
-      for (const name of [...ASSERTIONS.slice(2, 7), "app-version"]) this.skip(name, `Ardia did not start: ${launched.detail.error}`);
+      for (const name of [...ASSERTIONS.slice(2, 7), "app-version", "window-state"]) this.skip(name, `Ardia did not start: ${launched.detail.error}`);
     } else {
       await this.record("bootstrap", () => this.bootstrap(first.shell));
       this.capabilities = await first.shell.eval("globalThis.__ardiaHost?.bootstrap?.capabilities ?? []").catch(() => null);
       await this.record("app-version", () => this.appVersion(first.shell));
+      await this.record("window-state", () => this.windowState(first.shell));
       await this.record("content-blocker", () => this.contentBlocker(first.shell), { timeout: 90000 });
       const tab = await this.record("native-tab", () => this.nativeTab(first.app, first.shell), { timeout: 90000 });
       if (tab.ok) first.tabId = tab.detail.tabId;

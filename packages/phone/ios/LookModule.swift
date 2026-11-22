@@ -31,6 +31,7 @@ public final class LookModule: Module {
       Prop("color") { (view: DeckBackdropView, value: String?) in view.colors.color = value }
       Prop("themeColors") { (view: DeckBackdropView, value: [String]?) in view.colors.themeColors = value }
       Prop("darkThemeColors") { (view: DeckBackdropView, value: [String]?) in view.colors.darkThemeColors = value }
+      Prop("themeLook") { (view: DeckBackdropView, value: [String: Any]?) in view.colors.themeLook = ThemeLook(sanitizing: value) }
       Prop("dark") { (view: DeckBackdropView, value: Bool?) in view.dark = value }
       Prop("reduceMotion") { (view: DeckBackdropView, value: Bool?) in view.reduceMotion = value }
       Prop("reduceTransparency") { (view: DeckBackdropView, value: Bool?) in view.reduceTransparency = value }
@@ -42,6 +43,7 @@ public final class LookModule: Module {
       Prop("color") { (view: ProfileBackdropView, value: String?) in view.colors.color = value }
       Prop("themeColors") { (view: ProfileBackdropView, value: [String]?) in view.colors.themeColors = value }
       Prop("darkThemeColors") { (view: ProfileBackdropView, value: [String]?) in view.colors.darkThemeColors = value }
+      Prop("themeLook") { (view: ProfileBackdropView, value: [String: Any]?) in view.colors.themeLook = ThemeLook(sanitizing: value) }
       Prop("dark") { (view: ProfileBackdropView, value: Bool?) in view.dark = value }
       Prop("themed") { (view: ProfileBackdropView, value: Bool?) in view.themed = value == true }
       Prop("softened") { (view: ProfileBackdropView, value: Bool?) in view.softened = value == true }
@@ -76,6 +78,7 @@ public final class LookModule: Module {
       Prop("color") { (view: GlassView, value: String?) in view.colors.color = value }
       Prop("themeColors") { (view: GlassView, value: [String]?) in view.colors.themeColors = value }
       Prop("darkThemeColors") { (view: GlassView, value: [String]?) in view.colors.darkThemeColors = value }
+      Prop("themeLook") { (view: GlassView, value: [String: Any]?) in view.colors.themeLook = ThemeLook(sanitizing: value) }
       OnViewDidUpdateProps { (view: GlassView) in view.render() }
     }
 
@@ -87,6 +90,7 @@ public final class LookModule: Module {
       Prop("color") { (view: FrostView, value: String?) in view.colors.color = value }
       Prop("themeColors") { (view: FrostView, value: [String]?) in view.colors.themeColors = value }
       Prop("darkThemeColors") { (view: FrostView, value: [String]?) in view.colors.darkThemeColors = value }
+      Prop("themeLook") { (view: FrostView, value: [String: Any]?) in view.colors.themeLook = ThemeLook(sanitizing: value) }
       Prop("dark") { (view: FrostView, value: Bool?) in view.dark = value }
       Prop("reduceTransparency") { (view: FrostView, value: Bool?) in view.reduceTransparency = value }
       OnViewDidUpdateProps { (view: FrostView) in view.render() }
@@ -169,7 +173,7 @@ final class DeckBackdropView: LookHostView {
 
   func render() {
     let look = colors.color == nil && (colors.themeColors ?? []).isEmpty ? ProfileLook.plum : colors.look
-    show(TabsBackdrop(look: look, reduceMotion: reduceMotion, reduceTransparency: reduceTransparency), dark: colors.isIncognito ? true : dark)
+    show(TabsBackdrop(look: look, themeLook: colors.shownThemeLook, reduceMotion: reduceMotion, reduceTransparency: reduceTransparency), dark: colors.isIncognito ? true : dark)
   }
 }
 
@@ -180,9 +184,27 @@ final class ProfileBackdropView: LookHostView {
   var softened = false
   var fadesOut = false
 
+  required init(appContext: AppContext? = nil) {
+    super.init(appContext: appContext)
+    registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: ProfileBackdropView, _: UITraitCollection) in
+      view.rememberLaunchLook()
+    }
+  }
+
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    rememberLaunchLook()
+  }
+
   func render() {
-    if themed { LaunchLook.remember(colors) }
-    show(ProfileBackdrop(look: colors.look, themed: themed, softened: softened, fadesOut: fadesOut), dark: colors.isIncognito ? true : dark)
+    rememberLaunchLook()
+    show(ProfileBackdrop(look: colors.look, themeLook: colors.shownThemeLook, themed: themed, softened: softened, fadesOut: fadesOut), dark: colors.isIncognito ? true : dark)
+  }
+
+  private func rememberLaunchLook() {
+    guard themed, window != nil else { return }
+    let appDark = traitCollection.userInterfaceStyle == .dark
+    LaunchLook.remember(colors, drawnDark: dark ?? appDark, appDark: appDark)
   }
 }
 

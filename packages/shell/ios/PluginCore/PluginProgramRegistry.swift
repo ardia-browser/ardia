@@ -57,22 +57,6 @@ struct ProgramRegistry: Equatable {
     return programs.compactMap { entry in entry["claim"] as? Bool == true ? entry["name"] as? String : nil }
   }
 
-  static func derivedClaims(_ bundled: [String: [String]]) -> (claims: [String: String], consistent: Bool) {
-    var claims: [String: String] = [:]
-    var consistent = true
-    for owner in bundled.keys.sorted() {
-      for program in bundled[owner] ?? [] {
-        guard PluginPrograms.isName(program) else {
-          consistent = false
-          continue
-        }
-        if let other = claims[program], other != owner { consistent = false }
-        claims[program] = claims[program] ?? owner
-      }
-    }
-    return (claims, consistent)
-  }
-
   static func closed(_ claims: [String: String]) -> ProgramRegistry {
     ProgramRegistry(claims: claims, legacy: [], failClosed: true)
   }
@@ -82,34 +66,31 @@ struct ProgramRegistry: Equatable {
     return legacy.map { LegacyInstall(owner: $0.owner, program: $0.program, base: base, relative: "", current: $0.current) }
   }
 
-  static func agrees(_ registry: ProgramRegistry, with derived: (claims: [String: String], consistent: Bool)) -> Bool {
-    derived.consistent && derived.claims.allSatisfy { registry.claims[$0.key] == $0.value }
+  static func agrees(_ registry: ProgramRegistry, with derived: ProgramRegistry) -> Bool {
+    registry.claims == derived.claims && registry.legacy == derived.legacy
   }
 
-  static func resolve(
-    info: Any?, fixture: Any? = nil, bundled: [String: [String]], hasBundled: Bool, home: String, isolated: Bool, testInstance: Bool, scratchLegacyBase: String?
-  ) -> ProgramRegistry {
-    let derived = derivedClaims(bundled)
+  static func resolve(info: Any?, pin: OfficialPin?, fixture: Any? = nil, home: String, isolated: Bool, testInstance: Bool, scratchLegacyBase: String?) -> ProgramRegistry {
+    let derived = pin.flatMap { parse($0.registryDocument, home: home) }
     if let info {
-      guard let signed = parse(info, home: home), agrees(signed, with: derived) else {
-        return closed((parse(info, home: home)?.claims ?? [:]).merging(derived.claims) { kept, _ in kept })
+      guard let signed = parse(info, home: home), let derived, agrees(signed, with: derived) else {
+        return closed((parse(info, home: home)?.claims ?? [:]).merging(derived?.claims ?? [:]) { kept, _ in kept })
       }
       return isolated ? ProgramRegistry(claims: signed.claims, legacy: rerooted(signed.legacy, at: scratchLegacyBase), failClosed: false) : signed
     }
-    guard testInstance else { return hasBundled || !derived.claims.isEmpty ? closed(derived.claims) : empty }
+    guard testInstance else { return closed(derived?.claims ?? [:]) }
     if let fixture {
-      guard let given = parse(fixture, home: home), agrees(given, with: derived) else { return closed(derived.claims) }
+      guard let given = parse(fixture, home: home), derived.map({ agrees(given, with: $0) }) ?? true else { return closed(derived?.claims ?? [:]) }
       return ProgramRegistry(claims: given.claims, legacy: rerooted(given.legacy, at: scratchLegacyBase), failClosed: false)
     }
-    guard derived.consistent else { return closed(derived.claims) }
-    let legacy = derived.claims.keys.sorted().map { LegacyInstall(owner: derived.claims[$0]!, program: $0, base: home, relative: "", current: PluginPrograms.currentName) }
-    return ProgramRegistry(claims: derived.claims, legacy: rerooted(legacy, at: scratchLegacyBase), failClosed: false)
+    guard let derived else { return empty }
+    return ProgramRegistry(claims: derived.claims, legacy: rerooted(derived.legacy, at: scratchLegacyBase), failClosed: false)
   }
 
   func refusal(program: String, plugin: String, builtIn: Bool) -> String? {
-    if failClosed { return "Ardia's list of program names kept for its built-in plugins is missing or damaged, so no program goes on PATH" }
+    if failClosed { return "Ardia's list of program names kept for its official plugins is missing or damaged, so no program goes on PATH" }
     guard let owner = claims[program] else { return nil }
-    return builtIn && owner == plugin ? nil : "\(program) belongs to Ardia's built-in \(owner) plugin"
+    return builtIn && owner == plugin ? nil : "\(program) belongs to Ardia's official \(owner) plugin"
   }
 
   func adoption(for plugin: String, programs: [String], builtIn: Bool) -> LegacyInstall? {

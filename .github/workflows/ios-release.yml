@@ -13,9 +13,9 @@ on:
         type: string
         default: ""
       default_browser:
-        description: Sign with the default-browser entitlement (only once Apple has granted it)
+        description: Sign with the default-browser entitlement, which lists Ardia as a browser in iOS Settings
         type: boolean
-        default: false
+        default: true
       public_testers:
         description: Uploads go to Internal. Use public-link to submit the processed build to Public Testers.
         type: boolean
@@ -49,7 +49,7 @@ on:
         default: ""
       default_browser:
         type: boolean
-        default: false
+        default: true
       public_testers:
         type: boolean
         default: false
@@ -308,7 +308,7 @@ jobs:
           args=("$BUILD" --out "$OUT")
           [ -z "$RELEASE_VERSION" ] || args+=(--version "$RELEASE_VERSION")
           if [ "$MODE" = device ]; then args+=(--development); elif [ "$MODE" != upload ]; then args+=(--no-upload); fi
-          [ "$DEFAULT_BROWSER" != true ] || args+=(--default-browser)
+          [ "$DEFAULT_BROWSER" = true ] || args+=(--no-default-browser)
           apps/phone/scripts/release-ios "${args[@]}" | tee -a "$GITHUB_STEP_SUMMARY"
       - if: inputs.mode == 'upload'
         name: Wait for App Store Connect to process the build

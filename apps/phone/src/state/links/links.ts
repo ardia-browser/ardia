@@ -61,7 +61,7 @@ async function run(link: IncomingLink, expired: () => boolean = () => false) {
       return;
     case "tray": {
       const was = useTabs.getState().incognito;
-      setIncognito(action.incognito);
+      if (!setIncognito(action.incognito)) return;
       presentSearch(useBrowse.getState().surface === "start" ? "start" : "page", action.query, was);
       return;
     }

@@ -112,7 +112,34 @@ object SyncDemo {
             color = "green",
             icon = "briefcase",
             isDefault = false,
-            theme = SyncedTheme(listOf("#4F7CFF", "#9B6BFF"), listOf("#1E2A5A", "#3A2466")),
+            theme = SyncedTheme(
+                colors = listOf("#4F7CFF", "#9B6BFF"),
+                darkColors = listOf("#1E2A5A", "#3A2466"),
+                mode = "auto",
+                look = SyncedThemeLook(
+                    stops = listOf(
+                        SyncedThemeStop(SyncedThemeColor(0x4F / 255.0, 0x7C / 255.0, 0xFF / 255.0), 0.78, 0.24),
+                        SyncedThemeStop(SyncedThemeColor(0x9B / 255.0, 0x6B / 255.0, 0xFF / 255.0), 0.86, 0.62),
+                        SyncedThemeStop(SyncedThemeColor(0.96, 0.62, 0.72, 0.85), 0.22, 0.4),
+                    ),
+                    intensity = 0.75,
+                    grain = 0.7,
+                    texture = "tweed",
+                    translucency = 0.35,
+                    angle = 160.0,
+                ),
+                dark = SyncedThemeLook(
+                    stops = listOf(
+                        SyncedThemeStop(SyncedThemeColor(0x1E / 255.0, 0x2A / 255.0, 0x5A / 255.0), 0.6, 0.3),
+                        SyncedThemeStop(SyncedThemeColor(0x3A / 255.0, 0x24 / 255.0, 0x66 / 255.0), 0.7, 0.5),
+                    ),
+                    intensity = 0.8,
+                    grain = 0.7,
+                    texture = "tweed",
+                    translucency = 0.35,
+                    angle = 160.0,
+                ),
+            ),
             deviceTabs = listOf(
                 DeviceTabs(mac.id, mac.name, SyncedDevice.MAC, listOf(RemoteTab("https://linear.app/", "Linear"), RemoteTab("https://www.notion.so/", "Notion"))),
             ),

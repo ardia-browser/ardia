@@ -3,15 +3,14 @@ import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { turnOffPlugin } from "./lifecycle";
 import { consentNow } from "../telemetry/choice";
 
-export { dismissPluginConsent, enablePlugin, removePlugin, requestPluginConsent, setPluginValue } from "./lifecycle";
+export { dismissPluginConsent, enablePlugin, removePlugin, requestPluginConsent, setPluginValue, turnOnApprovedPlugin } from "./lifecycle";
 export const disablePlugin = (name: string) => turnOffPlugin(name, consentNow());
 export { restartProcess as restartPlugin } from "./process";
 export { removePluginAfterConfirm } from "./removeConfirmed";
 export { openPluginPage, pluginPagePath } from "./pages";
 export { consentLines, type ConsentLine } from "./consent";
 export { canRelink, relinkPrograms } from "./programs";
-export { isAlwaysOn } from "./store";
-export { installOfficialPlugin, officialPlugins, COMING_SOON, OFFICIAL_CATALOGUE, type OfficialPlugin, type OfficialPluginState } from "./official";
+export { cancelOfficialInstall, installOfficialPlugin, officialPlugins, COMING_SOON, OFFICIAL_CATALOGUE, type OfficialPlugin, type OfficialPluginState } from "./official";
 export type { InstallResult } from "./installWaiters";
 export { ensurePluginActivated, PluginActivationError } from "./activation";
 export { runPluginCommand, runPluginAction, pluginBarActions } from "./commands";

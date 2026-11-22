@@ -1,7 +1,7 @@
 import { layout } from "../ui/theme";
 import { DOCK_SLIDE, DOCK_SLIDE_CURVE } from "./tokens";
 import type { SpringSpec } from "../ui/motion";
-import { WINDOW_CHROME } from "../../lib/windowChrome";
+import { TRAFFIC_LIGHTS_WIDTH, WINDOW_CHROME, type WindowChrome } from "../../lib/windowChrome";
 
 export const easeOutCubic = (u: number) => 1 - (1 - u) ** 3;
 export const easeInOutCubic = (u: number) => (u < 0.5 ? 4 * u ** 3 : 1 - (-2 * u + 2) ** 3 / 2);
@@ -40,13 +40,24 @@ export const dockedCardInset = (sidebarWidth: number, inset: number) => sidebarW
 export const cardInsetAt = (dock: number, sidebarWidth: number, inset: number) => inset + (dockedCardInset(sidebarWidth, inset) - inset) * dock;
 
 const FULL_SCREEN_TOGGLE_X = 29;
-export const HEADER_TOOLS = { toggleX: WINDOW_CHROME.leadingWidth ? 70.75 + 27 : FULL_SCREEN_TOGGLE_X, fullScreenToggleX: FULL_SCREEN_TOGGLE_X, pitch: 35, edge: layout.sidebarInset + 1 } as const;
+
+export const headerToggleXFor = (chrome: WindowChrome): number => (chrome.leadingWidth ? 70.75 + 27 + chrome.leadingWidth - TRAFFIC_LIGHTS_WIDTH : FULL_SCREEN_TOGGLE_X);
+export const HEADER_TOOLS = {
+  get toggleX() {
+    return headerToggleXFor(WINDOW_CHROME);
+  },
+  fullScreenToggleX: FULL_SCREEN_TOGGLE_X, pitch: 35, plate: 32, edge: layout.sidebarInset + 1 } as const;
+
+export type HeaderToggleState = { windowFullScreen: boolean; pageFullScreen: boolean; controlsRow: boolean };
+
+export function headerToggleXIn({ windowFullScreen, pageFullScreen, controlsRow }: HeaderToggleState, chrome: WindowChrome = WINDOW_CHROME): number {
+  if (windowFullScreen || (chrome.leadingButtons.length && (controlsRow || pageFullScreen))) return FULL_SCREEN_TOGGLE_X;
+  return headerToggleXFor(chrome);
+}
+
+export const headerToggleRightEdge = (toggleX: number) => toggleX + HEADER_TOOLS.plate / 2;
 
 export type HeaderButton = "back" | "forward" | "reload";
-
-export function headerToggleX(windowFullScreen: boolean): number {
-  return windowFullScreen ? HEADER_TOOLS.fullScreenToggleX : HEADER_TOOLS.toggleX;
-}
 
 export function navButtonsFitting(width: number, button = 30, toggle = true, toggleX: number = HEADER_TOOLS.toggleX): { buttons: HeaderButton[]; step: number } {
   const { pitch, edge } = HEADER_TOOLS;

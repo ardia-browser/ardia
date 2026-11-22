@@ -364,14 +364,16 @@ public final class PageViewModule: Module {
 
     AsyncFunction("clearWebsiteData") { (kinds: [String], promise: Promise) in
       Self.main(promise) {
-        await BrowsingDataCleaner.clear(try Self.dataKinds(kinds), tabs: PhonePages.shared.engine.tabs)
+        let engine = PhonePages.shared.engine
+        await BrowsingDataCleaner.clear(try Self.dataKinds(kinds), tabs: engine.tabs, nightShadeVerdicts: engine.preferences.nightShadeVerdicts)
       }
     }.runOnQueue(.main)
 
     AsyncFunction("clearWebsiteDataSince") { (kinds: [String], since: Double, promise: Promise) in
       Self.main(promise) {
         let date = Date(timeIntervalSince1970: since / 1000)
-        await BrowsingDataCleaner.clear(try Self.dataKinds(kinds), since: date, tabs: PhonePages.shared.engine.tabs)
+        let engine = PhonePages.shared.engine
+        await BrowsingDataCleaner.clear(try Self.dataKinds(kinds), since: date, tabs: engine.tabs, nightShadeVerdicts: engine.preferences.nightShadeVerdicts)
       }
     }.runOnQueue(.main)
 

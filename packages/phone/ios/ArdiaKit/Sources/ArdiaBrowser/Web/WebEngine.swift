@@ -30,6 +30,13 @@ public final class WebEngine {
   @ObservationIgnored public var omnibox: Omnibox?
   @ObservationIgnored private let pageScriptControllers = NSHashTable<WKUserContentController>.weakObjects()
   @ObservationIgnored private var sharedPrivateDataStore: WKWebsiteDataStore?
+  @ObservationIgnored private var nightShadeBakes: [ObjectIdentifier: BakedNightShade] = [:]
+
+  struct BakedNightShade: Equatable {
+    var host: String?
+    var isPrivate: Bool
+    var state: NightShadeBake
+  }
 
   public let preferences: BrowsingPreferences
 
@@ -139,14 +146,49 @@ public final class WebEngine {
     Task { await store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) }
   }
 
-  func installPageScripts(on controller: WKUserContentController) {
-    guard !pageScriptControllers.contains(controller) else { return }
-    pageScriptControllers.add(controller)
-    controller.addScriptMessageHandler(PageMessageProxy(engine: self), contentWorld: ReadableContent.world, name: PageScripts.handlerName)
-    controller.addUserScript(WKUserScript(source: PageScripts.nightShade, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: ReadableContent.world))
+  func installPageScripts(on controller: WKUserContentController, host: String?, isPrivate: Bool) {
+    if !pageScriptControllers.contains(controller) {
+      pageScriptControllers.add(controller)
+      nightShadeBakes[ObjectIdentifier(controller)] = nil
+      controller.addScriptMessageHandler(PageMessageProxy(engine: self), contentWorld: ReadableContent.world, name: PageScripts.handlerName)
+    }
+    bakeNightShade(into: controller, host: host, isPrivate: isPrivate)
+  }
+
+  func prepareNightShade(of controller: WKUserContentController, toHost host: String?, isPrivate: Bool) {
+    guard pageScriptControllers.contains(controller) else { return }
+    bakeNightShade(into: controller, host: host, isPrivate: isPrivate)
+  }
+
+  func bakedNightShade(of controller: WKUserContentController) -> BakedNightShade? {
+    nightShadeBakes[ObjectIdentifier(controller)]
+  }
+
+  func recordNightShadeVerdict(_ verdict: NightShadeVerdict, host: String?, isPrivate: Bool) {
+    preferences.nightShadeVerdicts.record(verdict, for: host, isPrivate: isPrivate)
+  }
+
+  private func bakeNightShade(into controller: WKUserContentController, host: String?, isPrivate: Bool) {
+    let key = ObjectIdentifier(controller)
+    let state = NightShadeBake(
+      mode: preferences.nightShade(for: host, isPrivate: isPrivate),
+      verdict: preferences.nightShadeVerdicts.verdict(for: host, isPrivate: isPrivate)
+    )
+    let previous = nightShadeBakes[key]
+    nightShadeBakes[key] = BakedNightShade(host: host, isPrivate: isPrivate, state: state)
+    guard previous?.state != state else { return }
+    controller.removeAllUserScripts()
+    blocker.restoreUserScripts(on: controller)
+    controller.addUserScript(WKUserScript(source: PageScripts.nightShade(state), injectionTime: .atDocumentStart, forMainFrameOnly: true, in: ReadableContent.world))
+    let live = Set(pageScriptControllers.allObjects.map(ObjectIdentifier.init))
+    nightShadeBakes = nightShadeBakes.filter { live.contains($0.key) }
   }
 
   private func broadcastNightShade() {
+    for controller in pageScriptControllers.allObjects {
+      guard let baked = nightShadeBakes[ObjectIdentifier(controller)] else { continue }
+      bakeNightShade(into: controller, host: baked.host, isPrivate: baked.isPrivate)
+    }
     for id in roster.liveIDs {
       guard let page = roster.page(id) else { continue }
       page.applyNightShade(preferences.nightShade(for: page.host, isPrivate: page.isPrivate))
@@ -217,8 +259,17 @@ final class PageMessageProxy: NSObject, WKScriptMessageHandlerWithReply {
   }
 
   func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) async -> (Any?, String?) {
-    guard let engine, let body = message.body as? [String: Any], body["type"] as? String == "nightShade" else { return (nil, nil) }
-    return (engine.preferences.nightShade(for: message.webView?.url?.host(), isPrivate: message.isFromPrivatePage).rawValue, nil)
+    guard let engine, let body = message.body as? [String: Any], let type = body["type"] as? String else { return (nil, nil) }
+    switch type {
+    case "nightShade":
+      return (engine.preferences.nightShade(for: message.webView?.url?.host(), isPrivate: message.isFromPrivatePage).rawValue, nil)
+    case "nightShadeVerdict":
+      guard message.frameInfo.isMainFrame, let verdict = (body["verdict"] as? String).flatMap(NightShadeVerdict.init(rawValue:)) else { return (nil, nil) }
+      engine.recordNightShadeVerdict(verdict, host: message.frameInfo.securityOrigin.host, isPrivate: message.isFromPrivatePage)
+      return (nil, nil)
+    default:
+      return (nil, nil)
+    }
   }
 }
 #endif

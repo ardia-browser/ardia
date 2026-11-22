@@ -13,17 +13,25 @@ const settle = async () => {
   for (let i = 0; i < 8; i++) await tick();
 };
 
-const AUTO = JSON.stringify({ manifest: 2, name: "auto", title: "Auto", alwaysOn: true, autoInstall: true, official: true, permissions: { control: true }, contributes: { programs: [{ name: "auto-tool", path: "bin/auto", claim: true }] } });
+const AUTO = JSON.stringify({ manifest: 2, name: "auto", title: "Auto", alwaysOn: true, autoInstall: true, official: true, permissions: { control: true }, contributes: { programs: [{ name: "auto-tool", path: "bin/auto" }] } });
 
 setConsentPeriod(true, "test-epoch");
 S().hydrate({});
 host.links.length = 0;
 host.linkResult = { ok: true, linked: ["auto-tool"], refused: {}, binDir: "/home/.local/bin" };
-host.folders = [{ name: "auto", text: AUTO, status: "ok", folderId: "bundled", bundled: true }];
+host.folders = [{ name: "auto", text: AUTO, status: "ok", folderId: `official-${"a".repeat(64)}`, official: true }];
 startPlugins();
 await settle();
 
-test("the first install of an autoInstall plugin grants control once", () => {
+test("autoInstall installs nothing by itself: activation waits for the user's approval, and Install grants control once", async () => {
+  const { usePlugins, activeManifest } = await import("./store.ts");
+  assert.equal(activeManifest(usePlugins.getState(), "auto"), null);
+  assert.deepEqual(host.links, []);
+  assert.equal(S().settings.cliControl, false);
+  assert.ok(lifecycle.requestPluginConsent("auto"));
+  assert.ok(lifecycle.enablePlugin("auto", usePlugins.getState().consent.hash));
+  await settle();
+  assert.ok(activeManifest(usePlugins.getState(), "auto"));
   assert.equal(S().settings.cliControl, true);
 });
 

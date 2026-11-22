@@ -70,21 +70,22 @@ function Snapshot({ uri, fill, under, paintedAs }: { uri: string; fill: string; 
   const [loaded, setLoaded] = useState(false);
   const [wasShown] = useState(() => snapshotWasShown(uri));
   const [covered, setCovered] = useState(!wasShown);
+  const [failed, setFailed] = useState(false);
   const appear = useSharedValue(wasShown ? 1 : 0);
   const appearing = useAnimatedStyle(() => ({ opacity: appear.value }));
   useEffect(() => {
-    if (!loaded) return;
+    if (!loaded && !failed) return;
     const key = paintedAs ? pictureKey(paintedAs, uri) : uri;
     const frame = requestAnimationFrame(() => notePicturePainted(key));
     return () => {
       cancelAnimationFrame(frame);
       forgetPicturePainted(key);
     };
-  }, [loaded, aspect, uri, paintedAs]);
+  }, [loaded, failed, aspect, uri, paintedAs]);
   return (
     <View style={[StyleSheet.absoluteFill, { backgroundColor: fill }]}>
-      {covered ? under : null}
-      <Animated.Image
+      {covered || failed ? under : null}
+      {failed ? null : <Animated.Image
         source={{ uri }}
         resizeMethod="scale"
         onLoad={(event) => {
@@ -105,9 +106,10 @@ function Snapshot({ uri, fill, under, paintedAs }: { uri: string; fill: string; 
           });
         }}
         style={[aspect ? [styles.snapshot, { aspectRatio: aspect }] : StyleSheet.absoluteFill, appearing]}
+        onError={() => setFailed(true)}
         resizeMode="cover"
         fadeDuration={0}
-      />
+      />}
     </View>
   );
 }

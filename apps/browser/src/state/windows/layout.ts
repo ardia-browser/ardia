@@ -10,7 +10,7 @@ import { useSettings, useWindowId } from "../browser/hooks";
 import { useWindowSettings } from "../browser/keyedWatch";
 import { onFullScreenExit } from "./fullScreenExits";
 import { useSettingValue } from "../tabs/tabWatch";
-import { BROWSER_WINDOW_BUTTONS, captionClearTop, captionRoom, WINDOW_CHROME, WINDOW_CONTROLS, windowControlsWidth, type WindowChrome } from "../../lib/windowChrome";
+import { captionClearTop, captionRoom, WINDOW_CHROME, WINDOW_CONTROLS, windowControlsWidth, type WindowChrome } from "../../lib/windowChrome";
 import { toolbarRowOf } from "../../lib/toolbarRow";
 import { SMALL_BAR_HEIGHT } from "./small";
 import type { CaptionRegion } from "../../platform/windowControls";
@@ -152,6 +152,11 @@ export function windowControlsLeading(s: BrowserState, windowId: string, chrome:
   return !!chrome.trailingWidth && !!w && !w.fullScreen && w.kind !== "small" && controlsLeadSidebar(s, windowId);
 }
 
+export function windowControlsInset(s: BrowserState, windowId: string, chrome: WindowChrome = WINDOW_CHROME): number {
+  if (!chrome.leadingButtons.length || !windowControlsLeading(s, windowId, chrome)) return WINDOW_CONTROLS.edge;
+  return Math.max(chrome.leadingWidth + WINDOW_CONTROLS.gap, sidebarWidthIn(s, windowId) - WINDOW_CONTROLS.edge - windowControlsWidth(chrome.trailingButtons.length));
+}
+
 export const sidebarControlsRow = (s: BrowserState, windowId: string, chrome: WindowChrome = WINDOW_CHROME): number =>
   windowControlsLeading(s, windowId, chrome) ? WINDOW_CONTROLS.regular + WINDOW_CONTROLS.gap : 0;
 
@@ -164,7 +169,7 @@ export function captionRegions(s: BrowserState, windowId: string, overlaid = fal
   if (!place || overlaid) return [];
   const ui = s.windowUi[windowId];
   if (ui?.panel.open || ui?.downloadsOpen) return [];
-  const controls = windowControlsWidth(BROWSER_WINDOW_BUTTONS) + WINDOW_CONTROLS.edge;
+  const controls = windowControlsWidth(chrome.trailingButtons.length) + WINDOW_CONTROLS.edge;
   const beside = controls + WINDOW_CONTROLS.gap;
   const leadingRoom = s.settings.sidebarWidth - beside;
   const regions: CaptionRegion[] = !windowControlsLeading(s, windowId, chrome)
@@ -235,6 +240,11 @@ export function useWindowControlsBottom(): number {
 export function useWindowControlsLeading(): boolean {
   const windowId = useWindowId();
   return useWindowSettings(windowId, (s) => windowControlsLeading(s, windowId));
+}
+
+export function useWindowControlsInset(): number {
+  const windowId = useWindowId();
+  return useWindowSettings(windowId, (s) => windowControlsInset(s, windowId));
 }
 
 export const useSidebarControlsRowIn = (windowId: string): number => useWindowSettings(windowId, (s) => sidebarControlsRow(s, windowId));

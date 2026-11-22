@@ -1,8 +1,10 @@
 import type { ArdiaHost } from "./host";
+import type { CornerRadii } from "./hostExtensionView";
 import { enqueueTab } from "./hostTabQueue.ts";
 import { queueTabPresentation } from "./hostTabPresentations.ts";
 import { hostProfile, hostSupports, invokeHost } from "./host.ts";
-import { consentToken } from "../../browser/src/state/telemetry/client";
+import { consentToken, type ConsentToken } from "../../browser/src/state/telemetry/client";
+import { noteLinuxPageViewportRejected } from "../../browser/src/state/telemetry/windowPlacementCounts";
 import { errorFor } from "../../browser/src/state/telemetry/logs";
 
 export type HostTabEvent = { type: string; [key: string]: unknown };
@@ -16,7 +18,7 @@ export type HostPageReceiver = {
 };
 export type HostPageFactory = (claim: string, nativeId: () => number | undefined,
   rebound: (identity: { browserId: number; chromeTabId: number }) => void) => HostPageReceiver;
-export type TabViewport = { rect: { x: number; y: number; width: number; height: number }; visible: boolean };
+export type TabViewport = { rect: { x: number; y: number; width: number; height: number }; visible: boolean; radii?: CornerRadii };
 
 const claims = new WeakMap<ArdiaHost, Map<string, HostTab>>();
 const CREATING_LOAD_MS = 2_000;
@@ -148,8 +150,13 @@ export class HostTab {
       const json = JSON.stringify(latest);
       if (json === this.lastViewport) return;
       this.lastViewport = json;
-      return invokeHost<void>("tab.viewport", { id: this.identity.browserId, claim: this.claim, ...latest }, this.host).catch((error) => {
+      const args = { id: this.identity.browserId, claim: this.claim, ...latest };
+      const host = this.host;
+      const consent = consentToken();
+      const sent = host ? new Promise<void>((resolve) => resolve(host.invoke("tab.viewport", args) as Promise<void>)) : invokeHost<void>("tab.viewport", args, host);
+      return sent.catch((error) => {
         if (this.lastViewport === json) this.lastViewport = "";
+        if (latest.visible) noteLinuxPageViewportRejected(consent);
         throw error;
       });
     });
@@ -191,12 +198,12 @@ export class HostTab {
 export function showInPlaceOf(from: HostTab, to: HostTab): boolean {
   const viewport = from.shownViewport();
   if (!viewport || from.host !== to.host || !from.presentsNow() || !to.presentsNow() || to.shownViewport()) return false;
-  const shown: TabViewport = { rect: viewport.rect, visible: true };
+  const shown: TabViewport = { ...viewport, visible: true };
   const hidden: TabViewport = { rect: viewport.rect, visible: false };
-  const send = (method: string, args: Record<string, unknown>, undo: () => void) => {
+  const send = (method: string, args: Record<string, unknown>, undo: (consent: ConsentToken | null) => void) => {
     const consent = consentToken();
     void new Promise((resolve) => resolve(to.host.invoke(method, args))).catch((error: unknown) => {
-      undo();
+      undo(consent);
       errorFor(consent, "[ardia host] early tab switch failed", error);
     });
   };
@@ -205,7 +212,10 @@ export function showInPlaceOf(from: HostTab, to: HostTab): boolean {
   const toId = to.identity!.browserId;
   const fromId = from.identity!.browserId;
   send("tab.presentations", { tabs: [{ id: toId, claim: to.claim, visible: true }, { id: fromId, claim: from.claim, visible: false }] }, () => {});
-  send("tab.viewport", { id: toId, claim: to.claim, ...shown }, () => { if (to.lastViewport === JSON.stringify(shown)) to.lastViewport = ""; });
+  send("tab.viewport", { id: toId, claim: to.claim, ...shown }, (consent) => {
+    if (to.lastViewport === JSON.stringify(shown)) to.lastViewport = "";
+    noteLinuxPageViewportRejected(consent);
+  });
   send("tab.viewport", { id: fromId, claim: from.claim, ...hidden }, () => { if (from.lastViewport === JSON.stringify(hidden)) from.lastViewport = ""; });
   return true;
 }

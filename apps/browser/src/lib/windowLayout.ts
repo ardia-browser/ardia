@@ -17,7 +17,7 @@ export const CARD_INSET = 9;
 export const PAGE_FRAME = { min: 0, max: 12, default: CARD_INSET } as const;
 
 const SPLIT_MIN_GAP = 2;
-const MIN_PEEK_GAP = 4;
+const MIN_PEEK_GAP = 1;
 
 export const validPageFrame = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= PAGE_FRAME.min && v <= PAGE_FRAME.max;
 
@@ -53,7 +53,7 @@ export type PageFrame = {
   peek: { left: number; top: number; bottom: number; radius: number };
 };
 
-export function pageFrameOf(inset: number, windowRadius: number, peekRadius: number, drawnWindowRadius = windowRadius): PageFrame {
+export function pageFrameOf(inset: number, windowRadius: number, drawnWindowRadius = windowRadius): PageFrame {
   const settled = Math.min(1, inset / CARD_INSET);
   const concentric = Math.max(drawnWindowRadius + (windowRadius - drawnWindowRadius) * settled - inset, 2);
   const peekGap = Math.max(MIN_PEEK_GAP, inset);
@@ -61,6 +61,6 @@ export function pageFrameOf(inset: number, windowRadius: number, peekRadius: num
     inset,
     radius: inset <= 0 ? 0 : concentric,
     splitGap: Math.max(inset, SPLIT_MIN_GAP),
-    peek: { left: peekGap, top: peekGap, bottom: peekGap, radius: Math.max(0, Math.min(peekRadius, concentric + inset - peekGap)) },
+    peek: { left: peekGap, top: peekGap, bottom: peekGap, radius: Math.max(0, concentric + inset - peekGap) },
   };
 }

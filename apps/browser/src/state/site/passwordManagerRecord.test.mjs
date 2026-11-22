@@ -12,7 +12,7 @@ const PERSONAL = { id: "default", name: "Personal", color: "plum", icon: null, c
 const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
 const passwords = () => stub.profileToggles.user.get("")?.passwords;
 
-test("offer to save goes off only after its record has landed, and comes back on only after the record is cleared", async () => {
+test("offer to save goes off only after its record has landed, and comes back on with the record kept until a later launch confirms it", async () => {
   S().hydrate({ profiles: { default: PERSONAL }, profileOrder: ["default"] });
   startPlugins();
   stub.pluginHost.folders = [];
@@ -33,18 +33,19 @@ test("offer to save goes off only after its record has landed, and comes back on
   stub.heldSaves.on = true;
   choosePasswordManager("default", "ardia");
   await settle();
-  assert.equal(passwords(), false, "the record isn't cleared yet, so the pref stays off: a crash here never turns on what the person turned off");
+  assert.equal(passwords(), true, "the pref goes on while the record still holds the profile, so a crash before Chrome writes it sets it again next launch");
+  assert.doesNotMatch(stub.docs.get("password-manager.json") ?? "", /offerToSaveRestored/);
   stub.heldSaves.on = false;
   for (const land of stub.heldSaves.queue.splice(0)) land();
   await settle();
   assert.equal(passwords(), true);
-  assert.match(stub.docs.get("password-manager.json") ?? "", /"offerToSaveHeldOff":\[\]/);
+  assert.match(stub.docs.get("password-manager.json") ?? "", /"offerToSaveHeldOff":\[""\],"offerToSaveRestored":\[""\]/, "marked, and left for a later launch to confirm");
 
   stub.refusedSaves.on = true;
   try {
     choosePasswordManager("default", "none");
     await settle();
-    assert.equal(passwords(), true, "without a record, offer to save stays on");
+    assert.equal(passwords(), true, "the Off waits for its own record, so offer to save stays on");
     choosePasswordManager("default", "ardia");
     await settle();
     assert.equal(passwords(), true, "so switching back to Ardia finds it on");

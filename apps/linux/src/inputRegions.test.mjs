@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createInputRegions, REVEAL_DEADLINE_MS, subtract } from "./inputRegions.ts";
-import { holeClipPath, localHoles, pagesAbove, paintersBeneath, separateHoles } from "./pageHoles.ts";
+import { createPageHoles, holeClipPath, holesOf, localHoles, pagesAbove, paintersBeneath, PAGE_CORNER_RADIUS, separateHoles, windowCornerRadii } from "./pageHoles.ts";
 
 function node(rect, { children = [], pointer = true } = {}) {
   const element = { rect, children, pointer, isConnected: true, parent: null };
@@ -394,4 +394,159 @@ test("a page inside another page's hole adds no hole of its own, so the even-odd
   const split = separateHoles([pane, peek]);
   assert.deepEqual(split.holes, [pane]);
   assert.deepEqual(split.pieces, [{ rect: { x: 790, y: 96, width: 564, height: 737 }, radii: [0, 12, 12, 0] }]);
+});
+
+test("a page hole is square where it meets a window corner and keeps the card radius elsewhere", () => {
+  const window = { width: 1920, height: 1080 };
+  const square = { upperLeft: 0, upperRight: 0, lowerRight: 0, lowerLeft: 0 };
+  const card = { upperLeft: PAGE_CORNER_RADIUS, upperRight: PAGE_CORNER_RADIUS, lowerRight: PAGE_CORNER_RADIUS, lowerLeft: PAGE_CORNER_RADIUS };
+  assert.deepEqual(windowCornerRadii({ x: 0, y: 0, width: 1920, height: 1080 }, window), square);
+  assert.deepEqual(windowCornerRadii({ x: 0.3, y: -2, width: 1920.4, height: 1082 }, window), square);
+  assert.deepEqual(windowCornerRadii({ x: 8, y: 8, width: 1904, height: 1064 }, window), card);
+  assert.deepEqual(windowCornerRadii({ x: 240, y: 0, width: 1680, height: 1080 }, window), { ...card, upperRight: 0, lowerRight: 0 });
+  assert.deepEqual(windowCornerRadii({ x: 240, y: 40, width: 1680, height: 1040 }, window), { ...card, lowerRight: 0 });
+  const slot = {};
+  const own = { upperLeft: 4, upperRight: 4, lowerRight: 4, lowerLeft: 4 };
+  assert.deepEqual(holesOf([{ slot, rect: { x: 0, y: 0, width: 1920, height: 1080 } }, { slot, rect: { x: 0, y: 0, width: 1920, height: 1080 }, radii: own }], window),
+    [{ x: 0, y: 0, width: 1920, height: 1080, radii: square }, { x: 0, y: 0, width: 1920, height: 1080, radii: own }]);
+  const fullScreen = holeClipPath(window, holesOf([{ slot, rect: { x: 0, y: 0, width: 1920, height: 1080 } }], window));
+  assert.equal(fullScreen, 'path(evenodd, "M0 0H1920V1080H0Z M0 0H1920V1080H0V0Z")');
+  assert.doesNotMatch(fullScreen, /A/);
+});
+
+test("a page's own card radii, not a fixed 12, round the corners away from the window's, and the window's rules still win", () => {
+  const window = { width: 1000, height: 700 };
+  const gtk = { upperLeft: 15, upperRight: 15, lowerRight: 0, lowerLeft: 0 };
+  const none = { upperLeft: 0, upperRight: 0, lowerRight: 0, lowerLeft: 0 };
+  assert.deepEqual(windowCornerRadii({ x: 0, y: 42, width: 1000, height: 658 }, window, none, 1, gtk), none);
+  assert.deepEqual(windowCornerRadii({ x: 2, y: 2, width: 996, height: 696 }, window, none, 1, gtk), { upperLeft: 13, upperRight: 13, lowerRight: 0, lowerLeft: 0 });
+  const toolbar = { upperLeft: 0, upperRight: 0, lowerRight: 10, lowerLeft: 10 };
+  assert.deepEqual(windowCornerRadii({ x: 240, y: 50, width: 752, height: 642 }, window, toolbar, 1, gtk), toolbar);
+  assert.deepEqual(windowCornerRadii({ x: 240, y: 50, width: 752, height: 642 }, window, toolbar, 2, gtk), toolbar);
+  assert.deepEqual(windowCornerRadii({ x: 240, y: 50, width: 752, height: 642 }, window), { upperLeft: 12, upperRight: 12, lowerRight: 12, lowerLeft: 12 });
+  const slot = {};
+  const [carded] = holesOf([{ slot, rect: { x: 0, y: 42, width: 1000, height: 658 }, cardRadii: none }], window, 1, gtk);
+  assert.deepEqual(carded.radii, none);
+  const [own] = holesOf([{ slot, rect: { x: 0, y: 42, width: 1000, height: 658 }, radii: toolbar, cardRadii: none }], window, 1, gtk);
+  assert.deepEqual(own.radii, toolbar);
+});
+
+test("a page's card radius over 4096 CSS px is clamped, as the engine clamps it", () => {
+  const huge = { upperLeft: 1e9, upperRight: 0, lowerRight: 0, lowerLeft: 5000 };
+  assert.deepEqual(windowCornerRadii({ x: 100, y: 100, width: 600, height: 500 }, { width: 1000, height: 700 }, huge, 2), { upperLeft: 4096, upperRight: 0, lowerRight: 0, lowerLeft: 4096 });
+});
+
+test("a page whose rect stays put gets new corners when the window around it resizes", () => {
+  const saved = { ResizeObserver: globalThis.ResizeObserver, MutationObserver: globalThis.MutationObserver };
+  globalThis.ResizeObserver = class { observe() {} unobserve() {} };
+  globalThis.MutationObserver = class { observe() {} disconnect() {} };
+  try {
+    const viewport = { width: 900, height: 700 };
+    const root = { ownerDocument: { defaultView: { visualViewport: viewport } }, closest: () => null };
+    const layer = { style: { clipPath: "" }, offsetWidth: 120, offsetHeight: 700, closest: () => null, getBoundingClientRect: () => ({ x: 800, y: 0, width: 120, height: 700 }) };
+    const page = { slot: { parentElement: root }, rect: { x: 240, y: 0, width: 660, height: 700 } };
+    const clipAt = (width) => holeClipPath({ width: 120, height: 700 }, localHoles({ x: 800, y: 0, width: 120, height: 700 }, { x: 1, y: 1 }, holesOf([page], { width, height: 700 })));
+    const painter = createPageHoles(root);
+    painter.addLayer(layer);
+    painter.pagesChanged([page]);
+    assert.equal(layer.style.clipPath, clipAt(900));
+    assert.deepEqual(holesOf([page], { width: 900, height: 700 })[0].radii, { upperLeft: 12, upperRight: 0, lowerRight: 0, lowerLeft: 12 });
+    viewport.width = 1000;
+    assert.deepEqual(holesOf([page], { width: 1000, height: 700 })[0].radii, { upperLeft: 12, upperRight: 12, lowerRight: 12, lowerLeft: 12 });
+    assert.notEqual(clipAt(1000), clipAt(900));
+    painter.windowChanged();
+    assert.equal(layer.style.clipPath, clipAt(1000));
+  } finally {
+    globalThis.ResizeObserver = saved.ResizeObserver;
+    globalThis.MutationObserver = saved.MutationObserver;
+  }
+});
+
+test("the shell cuts the same corners the engine clips, at fractional edges, any zoom, window widths that don't divide by it, and a rounded window", () => {
+  const engineRadius = (insetX, insetY, windowRadius, own) => {
+    if (insetX < 1 && insetY < 1) return { kind: "window", dip: windowRadius };
+    if (insetX < windowRadius && insetY < windowRadius) {
+      const concentric = windowRadius - (insetX < insetY ? insetX : insetY);
+      return { kind: "near", dip: concentric > own ? concentric : own };
+    }
+    return { kind: "own", dip: own };
+  };
+  const engineCorners = (rect, widthDip, heightDip, zoom, windowRadius) => {
+    const left = Math.min(Math.max(rect.x * zoom, 0), widthDip);
+    const top = Math.min(Math.max(rect.y * zoom, 0), heightDip);
+    const right = Math.min(Math.max((rect.x + rect.width) * zoom, left), widthDip);
+    const bottom = Math.min(Math.max((rect.y + rect.height) * zoom, top), heightDip);
+    const insets = { l: Math.floor(left), t: Math.floor(top), r: widthDip - Math.ceil(right), b: heightDip - Math.ceil(bottom) };
+    return [engineRadius(insets.l, insets.t, windowRadius, 12), engineRadius(insets.r, insets.t, windowRadius, 12), engineRadius(insets.r, insets.b, windowRadius, 12), engineRadius(insets.l, insets.b, windowRadius, 12)];
+  };
+  const shellExpects = (corner, zoom) => (corner.kind === "window" ? 0 : corner.kind === "near" ? corner.dip / zoom : 12);
+  let checked = 0;
+  for (const [widthDip, heightDip] of [[800, 600], [1000, 700], [1001, 667], [997, 613]]) {
+    for (const zoom of [0.5, 0.8, 1, 1.25, 2, 2.5, 3]) {
+      const window = { width: widthDip / zoom, height: heightDip / zoom };
+      for (const windowRadius of [0, 12, 19, 24]) {
+        const frame = { upperLeft: windowRadius, upperRight: windowRadius, lowerRight: windowRadius, lowerLeft: windowRadius };
+        for (const edge of [0, 0.2, 0.3, 0.4, 0.5, 0.75, 0.99, 1, 1.2, 2, 3, 8, 25]) {
+          const css = edge / zoom;
+          const rect = { x: css, y: css, width: window.width - 2 * css, height: window.height - 2 * css };
+          const engine = engineCorners(rect, widthDip, heightDip, zoom, windowRadius);
+          const shell = windowCornerRadii(rect, window, 12, zoom, frame);
+          const got = [shell.upperLeft, shell.upperRight, shell.lowerRight, shell.lowerLeft];
+          engine.forEach((corner, index) => assert.ok(Math.abs(got[index] - shellExpects(corner, zoom)) < 1e-9, `corner ${index} at ${edge} DIP, zoom ${zoom}, ${widthDip}x${heightDip}, radius ${windowRadius}: ${got[index]} vs ${JSON.stringify(corner)}`));
+          checked++;
+        }
+      }
+    }
+  }
+  assert.ok(checked > 1000);
+  const ownEngine = (insetX, insetY, windowRadius, ownDip) => engineRadius(insetX, insetY, windowRadius, ownDip);
+  const shellExpectsCard = (corner, zoom) => (corner.kind === "window" ? 0 : corner.dip / zoom);
+  let carded = 0;
+  for (const card of [0, 12]) {
+    for (const zoom of [0.5, 1, 1.25, 2, 3]) {
+      for (const [widthDip, heightDip] of [[1000, 700], [1001, 667]]) {
+        const window = { width: widthDip / zoom, height: heightDip / zoom };
+        for (const windowRadius of [0, 8, 15]) {
+          const frame = { upperLeft: windowRadius, upperRight: windowRadius, lowerRight: windowRadius, lowerLeft: windowRadius };
+          for (const [edgeX, edgeY] of [[0, 0], [0, 42], [1, 1], [2, 2], [3, 9], [8, 8], [25, 25]]) {
+            const rect = { x: edgeX / zoom, y: edgeY / zoom, width: window.width - (2 * edgeX) / zoom, height: window.height - (2 * edgeY) / zoom };
+            const left = Math.min(Math.max(rect.x * zoom, 0), widthDip);
+            const top = Math.min(Math.max(rect.y * zoom, 0), heightDip);
+            const right = Math.min(Math.max((rect.x + rect.width) * zoom, left), widthDip);
+            const bottom = Math.min(Math.max((rect.y + rect.height) * zoom, top), heightDip);
+            const insets = { l: Math.floor(left), t: Math.floor(top), r: widthDip - Math.ceil(right), b: heightDip - Math.ceil(bottom) };
+            const ownDip = card * zoom;
+            const engine = [ownEngine(insets.l, insets.t, windowRadius, ownDip), ownEngine(insets.r, insets.t, windowRadius, ownDip), ownEngine(insets.r, insets.b, windowRadius, ownDip), ownEngine(insets.l, insets.b, windowRadius, ownDip)];
+            const radii = { upperLeft: card, upperRight: card, lowerRight: card, lowerLeft: card };
+            const shell = windowCornerRadii(rect, window, radii, zoom, frame);
+            const got = [shell.upperLeft, shell.upperRight, shell.lowerRight, shell.lowerLeft];
+            engine.forEach((corner, index) => assert.ok(Math.abs(got[index] - shellExpectsCard(corner, zoom)) < 1e-9, `card ${card}, corner ${index} at ${edgeX},${edgeY} DIP, zoom ${zoom}, ${widthDip}x${heightDip}, radius ${windowRadius}: ${got[index]} vs ${JSON.stringify(corner)}`));
+            carded++;
+          }
+        }
+      }
+    }
+  }
+  assert.ok(carded > 400);
+  for (const [widthDip, heightDip] of [[900, 700], [1000, 700], [900, 800]]) {
+    const rect = { x: 240, y: 0, width: 660, height: 700 };
+    const engine = engineCorners(rect, widthDip, heightDip, 1, 0);
+    const shell = windowCornerRadii(rect, { width: widthDip, height: heightDip });
+    const got = [shell.upperLeft, shell.upperRight, shell.lowerRight, shell.lowerLeft];
+    engine.forEach((corner, index) => assert.equal(got[index], shellExpects(corner, 1), `corner ${index} of the same page in a ${widthDip}x${heightDip} window`));
+  }
+  const ring = (radius) => ({ upperLeft: radius, upperRight: radius, lowerRight: radius, lowerLeft: radius });
+  const atThreeHundred = windowCornerRadii({ x: 1 / 3, y: 1 / 3, width: 1000 / 3 - 2 / 3, height: 700 / 3 - 2 / 3 }, { width: 1000 / 3, height: 700 / 3 }, 12, 3, ring(24));
+  assert.ok(Math.abs(atThreeHundred.upperLeft * 3 - 23) < 1e-9, "the hole is the engine's 23 DIP at 300 %, not 36");
+  const atHalf = windowCornerRadii({ x: 16, y: 16, width: 1600 - 32, height: 1200 - 32 }, { width: 1600, height: 1200 }, 12, 0.5, ring(19));
+  assert.equal(atHalf.upperLeft * 0.5, 12, "the hole is the engine's 12 DIP at 50 %, not 11");
+  const third = { width: 1000 / 3, height: 700 / 3 };
+  assert.equal(windowCornerRadii({ x: 0, y: 0, width: 998.25 / 3, height: 700 / 3 }, third, 12, 3).upperRight, 12, "998.25 of 1000 DIP is inset, as the engine says");
+  for (const windowRadius of [12, 19, 24]) {
+    const frame = { upperLeft: windowRadius, upperRight: windowRadius, lowerRight: windowRadius, lowerLeft: windowRadius };
+    for (const inset of [0, 1, 2, 3, 8]) {
+      const radii = windowCornerRadii({ x: inset, y: inset, width: 800 - 2 * inset, height: 600 - 2 * inset }, { width: 800, height: 600 }, 12, 1, frame);
+      assert.equal(radii.upperLeft, inset === 0 ? 0 : inset < windowRadius ? Math.max(12, windowRadius - inset) : 12, `inset ${inset} at radius ${windowRadius}`);
+    }
+  }
 });

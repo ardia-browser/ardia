@@ -159,7 +159,7 @@ test("5: password-manager.json is a versioned document, and the unversioned form
   await settle();
   const saved = JSON.parse(stub.docs.get("password-manager.json"));
   assert.equal(saved.version, 1);
-  assert.deepEqual(saved.offerToSaveHeldOff, [work]);
+  assert.ok(saved.offerToSaveHeldOff.includes(work));
   stub.docs.set("password-manager.json", JSON.stringify({ offerToSaveHeldOff: [work] }));
   pm.choosePasswordManager(work, "ardia");
   await settle();

@@ -23,7 +23,7 @@ export function managerPlugins(p: PluginsView): ManagerPlugin[] {
   if (!PLATFORM_FEATURES.systemPasswordManagers || !PLATFORM_FEATURES.plugins) return [];
   return p.order.flatMap((name) => {
     const m = activeManifest(p, name);
-    return m?.passwordManager ? [{ name, title: m.title, spec: m.passwordManager, builtIn: !!p.listings[name]?.bundled, approval: p.listings[name]?.hash ?? "" }] : [];
+    return m?.passwordManager ? [{ name, title: m.title, spec: m.passwordManager, builtIn: !!p.listings[name]?.official, approval: p.listings[name]?.hash ?? "" }] : [];
   });
 }
 

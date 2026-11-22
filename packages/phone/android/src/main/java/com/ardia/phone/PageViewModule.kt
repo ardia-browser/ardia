@@ -331,6 +331,12 @@ class PageViewModule : Module() {
             engine.refreshSitePreferences()
         }.runOnQueue(Queues.MAIN)
 
+        AsyncFunction("forgetNightShadeVerdicts") { since: Double? ->
+            val engine = PhonePages.engine(context)
+            PhonePages.sitePreferences.forgetNightShadeVerdicts(since?.toLong())
+            engine.refreshSitePreferences()
+        }.runOnQueue(Queues.MAIN)
+
         AsyncFunction("setOpensLinksInApps") { host: String, opens: Boolean? ->
             PhonePages.engine(context)
             PhonePages.sitePreferences.setOpensLinksInApps(host, opens)
@@ -399,6 +405,8 @@ class PageViewModule : Module() {
             }
 
             Prop("bottomInsetTransitionMs") { view: PageView, millis: Int? -> view.bottomInsetTransitionMs = (millis ?: 0).coerceIn(0, 300) }
+
+            Prop("summaryBottomInset") { view: PageView, inset: Double? -> view.summaryBottomInset = (inset ?: 0.0).coerceAtLeast(0.0) }
 
             Prop("obscuredInsets") { view: PageView, insets: List<Double>? ->
                 view.obscuredInsets = insets?.takeIf { it.size == 2 }?.let { it[0].coerceAtLeast(0.0) to it[1].coerceAtLeast(0.0) } ?: (0.0 to 0.0)

@@ -3,7 +3,7 @@ import type { BrowserState } from "../browser/store";
 import { engineBookmarkRoots, ensureRoots, removeBookmarkTree } from "../bookmarks/bookmarks";
 import { engineProfile, incognitoOriginal, newId, viewTabIds, without } from "../browser/model";
 import { handPagesOutOfProfile } from "../pins/pinShare";
-import { DEFAULT_PROFILE_ID } from "../settings/settings";
+import { DEFAULT_PROFILE_ID, settingsWith } from "../settings/settings";
 import { activated, apply, removeTabs, withNewTab } from "../tabs/tabs";
 import type { Profile, ProfileColor } from "../browser/types";
 import { patchedProfile } from "./switcherMark";
@@ -15,14 +15,14 @@ export type ProfilesSlice = {
 
   createProfile(options: { name: string; color?: ProfileColor; icon?: string | null; shareWith?: string | null; shareTopApps?: boolean }): string;
   updateProfile(id: string, patch: Partial<Pick<Profile, "name" | "icon" | "switcherDot" | "pinnedCollapsed" | "shareTopApps" | "syncTabs" | "passwordManager">>): void;
-  setProfileLook(id: string, look: Partial<Pick<Profile, "color" | "theme">>): void;
+  setProfileLook(id: string, look: Partial<Pick<Profile, "color" | "theme" | "presetThemes">>): void;
   deleteProfile(id: string): void;
   reorderProfiles(ids: string[]): void;
   setDefaultProfile(id: string): void;
   profileDataDeleted(engineId: string): void;
 };
 
-export const DEFAULT_PROFILE: Profile = { id: DEFAULT_PROFILE_ID, name: "Personal", color: "plum", icon: null, createdAt: 0 };
+export const DEFAULT_PROFILE: Profile = { id: DEFAULT_PROFILE_ID, name: "Personal", color: "plum", icon: null, createdAt: 0, presetThemes: {}, seenTheme: null, seenColor: "plum" };
 
 const COLORS: ProfileColor[] = ["blue", "green", "orange", "purple", "red", "yellow", "pink"];
 
@@ -57,12 +57,16 @@ export const createProfilesSlice: StateCreator<BrowserState, [], [], ProfilesSli
     createProfile({ name, color, icon = null, shareWith, shareTopApps }) {
       const s = get();
       const source = shareWith ? s.profiles[shareWith] : undefined;
+      const chosen = color ?? unusedProfileColor(s.profiles);
       const profile: Profile = {
         id: newId("p"),
         name: name.trim() || `Profile ${s.profileOrder.length + 1}`,
-        color: color ?? unusedProfileColor(s.profiles),
+        color: chosen,
         icon,
         createdAt: Date.now(),
+        presetThemes: {},
+        seenTheme: null,
+        seenColor: chosen,
         ...(source ? { dataId: dataIdOf(source) } : {}),
         ...(shareTopApps ? { shareTopApps: true as const } : {}),
       };
@@ -77,7 +81,12 @@ export const createProfilesSlice: StateCreator<BrowserState, [], [], ProfilesSli
     },
 
     setProfileLook(id, look) {
-      set((s) => (s.profiles[id] ? { profiles: { ...s.profiles, [id]: { ...s.profiles[id]!, ...look } } } : {}));
+      set((s) => {
+        const profile = s.profiles[id];
+        if (!profile) return {};
+        const seen = "theme" in look ? { seenTheme: look.theme, seenColor: look.color ?? profile.color } : {};
+        return { profiles: { ...s.profiles, [id]: { ...profile, ...look, ...seen } } };
+      });
     },
 
     deleteProfile(id) {
@@ -86,11 +95,10 @@ export const createProfilesSlice: StateCreator<BrowserState, [], [], ProfilesSli
       let s = handPagesOutOfProfile(get(), id);
       const profileOrder = s.profileOrder.filter((p) => p !== id);
       const fallback = s.settings.defaultProfileId === id ? profileOrder[0]! : s.settings.defaultProfileId;
-      const settings = {
-        ...s.settings,
+      const settings = settingsWith(s.settings, {
         defaultProfileId: s.settings.defaultProfileId === id ? fallback : s.settings.defaultProfileId,
         neverTranslateSites: without(s.settings.neverTranslateSites, [id]),
-      };
+      });
       const engine = engineProfile(s, id);
       const engineLeft = !profileOrder.some((p) => engineProfile(s, p) === engine);
       const orphaned = !engineLeft || s.orphanedProfileData.includes(engine) ? s.orphanedProfileData : [...s.orphanedProfileData, engine];
@@ -147,7 +155,7 @@ export const createProfilesSlice: StateCreator<BrowserState, [], [], ProfilesSli
     },
 
     setDefaultProfile(id) {
-      set((s) => (s.profiles[id] ? { settings: { ...s.settings, defaultProfileId: id } } : {}));
+      set((s) => (typeof id === "string" && s.profiles[id] ? { settings: settingsWith(s.settings, { defaultProfileId: id }) } : {}));
     },
 
     profileDataDeleted(engineId) {

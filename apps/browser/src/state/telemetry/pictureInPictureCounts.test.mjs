@@ -8,6 +8,7 @@ globalThis.fetch = async () => ({ status: 503 });
 const client = await import("./client.ts");
 const usage = await import("./usage.ts");
 const pipCounts = await import("./pictureInPictureCounts.ts");
+const nativeConsent = await import("./nativeConsent.ts");
 after(() => client.setSharing(false, "settings"));
 
 async function sentUsageCounts() {
@@ -15,18 +16,18 @@ async function sentUsageCounts() {
   const saved = JSON.parse(stub.docs.get("telemetry-queue.json") ?? '{"events":[]}');
   return saved.events
     .filter((e) => e.event === "usage_counts")
-    .map((e) => ({ chromium: e.properties.pip_back_to_tab, webkit: e.properties.pip_back_to_tab_webkit }));
+    .map((e) => ({ chromium: e.properties.pip_back_to_tab, webkit: e.properties.pip_back_to_tab_webkit, fromOtherApp: e.properties.pip_back_to_tab_from_other_app }));
 }
 
-test("going back to a tab from its Picture in Picture window is counted per engine, sent on its own, then starts again from zero", async () => {
+test("going back to a tab from its Picture in Picture window is counted per engine and from another app, sent on its own, then starts again from zero", async () => {
   client.loadChoice();
   client.setSharing(true, "onboarding");
 
   pipCounts.notePictureInPictureBackToTab("webkit");
-  pipCounts.notePictureInPictureBackToTab("webkit");
-  pipCounts.notePictureInPictureBackToTab("chromium");
+  pipCounts.notePictureInPictureBackToTab("webkit", true);
+  pipCounts.notePictureInPictureBackToTab("chromium", true);
   usage.sessionEnding();
-  assert.deepEqual(await sentUsageCounts(), [{ chromium: 1, webkit: 2 }]);
+  assert.deepEqual(await sentUsageCounts(), [{ chromium: 1, webkit: 2, fromOtherApp: 2 }]);
 
   usage.sessionEnding();
   assert.equal((await sentUsageCounts()).length, 1);
@@ -76,4 +77,102 @@ test("clicks on a tucked Picture in Picture window's arrow are counted, sent wit
 
   usage.sessionEnding();
   assert.equal((await unstashesSent()).length, before + 1);
+});
+
+test("pinches on a Picture in Picture window and resizes that ended before Chromium caught up are counted, then start again from zero", async () => {
+  client.loadChoice();
+  client.setSharing(true, "onboarding");
+  const sentCounts = async () => {
+    await client.saveQueueNow();
+    const saved = JSON.parse(stub.docs.get("telemetry-queue.json") ?? '{"events":[]}');
+    return saved.events
+      .filter((e) => e.event === "usage_counts" && (e.properties.pip_pinches || e.properties.pip_stand_in_timeouts))
+      .map((e) => [e.properties.pip_pinches, e.properties.pip_stand_in_timeouts]);
+  };
+  const before = (await sentCounts()).length;
+
+  pipCounts.notePictureInPictureStandIn({ pinch: true, timedOut: false, epoch: client.consentEpoch() });
+  pipCounts.notePictureInPictureStandIn({ pinch: true, timedOut: true, epoch: client.consentEpoch() });
+  pipCounts.notePictureInPictureStandIn({ pinch: false, timedOut: true, epoch: client.consentEpoch() });
+  pipCounts.notePictureInPictureStandIn({ pinch: true, timedOut: false, epoch: "an epoch from before" });
+  usage.sessionEnding();
+  const sent = await sentCounts();
+  assert.equal(sent.length, before + 1);
+  assert.deepEqual(sent.at(-1), [2, 2]);
+
+  usage.sessionEnding();
+  assert.equal((await sentCounts()).length, before + 1);
+});
+
+test("activations asked for by a press or a move on a Picture in Picture window, and the ones that didn't take, are counted, then start again from zero", async () => {
+  client.loadChoice();
+  client.setSharing(true, "onboarding");
+  const sentCounts = async () => {
+    await client.saveQueueNow();
+    const saved = JSON.parse(stub.docs.get("telemetry-queue.json") ?? '{"events":[]}');
+    return saved.events
+      .filter((e) => e.event === "usage_counts" && e.properties.pip_activations)
+      .map((e) => [e.properties.pip_activations, e.properties.pip_activation_failures]);
+  };
+  const before = (await sentCounts()).length;
+
+  pipCounts.notePictureInPictureActivated({ move: false, activated: true, epoch: client.consentEpoch() });
+  pipCounts.notePictureInPictureActivated({ move: true, activated: true, epoch: client.consentEpoch() });
+  pipCounts.notePictureInPictureActivated({ move: false, activated: false, epoch: client.consentEpoch() });
+  pipCounts.notePictureInPictureActivated({ move: true, activated: true, epoch: "an epoch from before" });
+  usage.sessionEnding();
+  const sent = await sentCounts();
+  assert.equal(sent.length, before + 1);
+  assert.deepEqual(sent.at(-1), [3, 1]);
+
+  usage.sessionEnding();
+  assert.equal((await sentCounts()).length, before + 1);
+});
+
+test("activations Ardia handed back after it was left over a Picture in Picture window, and repeats, are counted, then start again from zero", async () => {
+  client.loadChoice();
+  client.setSharing(true, "onboarding");
+  const sentCounts = async () => {
+    await client.saveQueueNow();
+    const saved = JSON.parse(stub.docs.get("telemetry-queue.json") ?? '{"events":[]}');
+    return saved.events
+      .filter((e) => e.event === "usage_counts" && e.properties.pip_activation_hand_backs)
+      .map((e) => [e.properties.pip_activation_hand_backs, e.properties.pip_activation_hand_back_repeats]);
+  };
+  const before = (await sentCounts()).length;
+
+  pipCounts.notePictureInPictureHandBack(false, nativeConsent.nativeConsent({ epoch: client.consentEpoch() }));
+  pipCounts.notePictureInPictureHandBack(true, nativeConsent.nativeConsent({ epoch: client.consentEpoch() }));
+  pipCounts.notePictureInPictureHandBack(false, nativeConsent.nativeConsent({ epoch: client.consentEpoch() }));
+  pipCounts.notePictureInPictureHandBack(false, nativeConsent.nativeConsent({ epoch: "an epoch from before" }));
+  usage.sessionEnding();
+  const sent = await sentCounts();
+  assert.equal(sent.length, before + 1);
+  assert.deepEqual(sent.at(-1), [3, 1]);
+
+  usage.sessionEnding();
+  assert.equal((await sentCounts()).length, before + 1);
+});
+
+test("the ways a moved Picture in Picture window was let go are counted by outcome, sent with the usage counts, then start again from zero, and one from before sharing's last change isn't", async () => {
+  client.loadChoice();
+  client.setSharing(true, "onboarding");
+  const fields = ["pip_releases_to_corner", "pip_releases_flicked_into_tuck", "pip_releases_tucked", "pip_releases_pulled_out_of_tuck", "pip_releases_pulled_into_corner", "pip_releases_placed"];
+  const releasesSent = async () => {
+    await client.saveQueueNow();
+    const saved = JSON.parse(stub.docs.get("telemetry-queue.json") ?? '{"events":[]}');
+    return saved.events.filter((e) => e.event === "usage_counts" && fields.some((f) => e.properties[f])).map((e) => fields.map((f) => e.properties[f]));
+  };
+  const before = (await releasesSent()).length;
+
+  for (const outcome of ["corner", "corner", "flickTuck", "tuck", "pullOut", "cornerPull", "placed", "placed", "placed"]) pipCounts.notePictureInPictureReleased({ outcome, epoch: client.consentEpoch() });
+  pipCounts.notePictureInPictureReleased({ outcome: "corner", epoch: "an epoch from before" });
+  pipCounts.notePictureInPictureReleased({ outcome: "somewhere new", epoch: client.consentEpoch() });
+  usage.sessionEnding();
+  const sent = await releasesSent();
+  assert.equal(sent.length, before + 1);
+  assert.deepEqual(sent.at(-1), [2, 1, 1, 1, 1, 3]);
+
+  usage.sessionEnding();
+  assert.equal((await releasesSent()).length, before + 1);
 });

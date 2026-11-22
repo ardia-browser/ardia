@@ -21,7 +21,7 @@ S().updateSettings({ cliControl: false });
 stub.shellNativeModules.ArdiaDocuments.writeDocument("plugins.json", JSON.stringify({ plugins: { cli: { enabled: true, approved: "a".repeat(64), values: {}, applied: {}, installed: true, controlGranted: true } }, version: 1 }));
 host.links.length = 0;
 host.linkResult = { ok: true, linked: ["ardia"], refused: {}, binDir: "/home/.local/bin" };
-host.folders = [{ name: "cli", text: CLI, status: "ok", folderId: "bundled", bundled: true }];
+host.folders = [{ name: "cli", text: CLI, status: "ok", folderId: "bundled", official: true }];
 startPlugins();
 await settle();
 

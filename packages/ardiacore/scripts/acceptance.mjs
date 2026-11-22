@@ -3938,13 +3938,14 @@ try {
         rmSync(button, { force: true });
         await open();
         if ((await appActive(false)) !== "0") throw new Error("no app-active seam");
-        const from = logLines().length;
+        const from = Math.max(0, logLines().length - 1);
         try {
           if ((await engine("tabs.devPictureInPictureAction", { action: name })) !== "started") throw new Error("no button self-test");
           const clicked = await until(`the ${name} click`, async () => (existsSync(button) ? JSON.parse(readFileSync(button, "utf8")) : null), 10000);
           await sleep(300);
           const raised = logLines().slice(from).filter((l) => /^\S+ \S+ \S+ (makeKey|orderFront)/.test(l) && !l.includes("NativeWidgetMacFramelessNSWindow"));
-          return { ...clicked, raised };
+          const forced = logLines().slice(from).filter((l) => l.includes("activateIgnoringOtherApps (skipped in a test instance)")).length;
+          return { ...clicked, raised, forced };
         } finally {
           await appActive(true);
         }
@@ -3960,8 +3961,9 @@ try {
       const requests = (await eventsOf(tab.id)).filter((x) => x.name === "activateRequest").length;
       const back = await clickButton("backToTab");
       const backRequests = (await eventsOf(tab.id)).filter((x) => x.name === "activateRequest").length - requests;
-      if (!back.closed || !back.preventsActivation || back.activations !== 1 || backRequests !== 1)
-        throw new Error(`Chrome's Back to Tab: ${JSON.stringify({ back, backRequests })}`);
+      const backRequest = await lastEvent(tab.id, "activateRequest");
+      if (!back.closed || !back.preventsActivation || back.activations !== 1 || backRequests !== 1 || back.forced !== 1 || backRequest?.payload?.reason !== "pictureInPicture" || backRequest.payload.fromOtherApp !== true)
+        throw new Error(`Chrome's Back to Tab: ${JSON.stringify({ back, backRequests, backRequest })}`);
       await sleep(500);
       const reducesMotion = (() => {
         try {
@@ -3982,12 +3984,14 @@ try {
           const w = await shown();
           const [x, y] = rect(w.frame);
           return Math.abs(x - spot[corner][0]) < 1 && Math.abs(y - spot[corner][1]) < 1 && w.cornerRadius === 9 ? w : null;
-        }, 5000);
+        }, 5000).catch(async (e) => {
+          throw new Error(`${e.message}; it is at ${(await shown())?.frame} after ${JSON.stringify(JSON.parse(await pipAct("throw")).lastSwipe)}`);
+        });
         await pipAct(`frame:{{${Math.round(vx + (vw - pw) / 2)}, ${Math.round(vy + (vh - ph) / 2)}}, {${pw}, ${ph}}}`);
         await sleep(400);
-        await pipAct("swipe:240,-160,8");
+        await pipAct("swipe:240,-160,8,momentum");
         await landed("bottomRight");
-        for (const [kind, gesture] of [["swipe", "swipe:-400,300,8"], ["drag", "drag:-400,300,6,8"]]) {
+        for (const [kind, gesture] of [["swipe", "swipe:-400,300,8,momentum"], ["drag", "drag:-400,300,6,8"]]) {
           await pipAct(gesture);
           await landed("topLeft");
           const info = await pipAct("throw");
@@ -3996,8 +4000,94 @@ try {
           if (flight.corner !== "topLeft" || !radii.length || radii.some((r) => r !== 6))
             throw new Error(`a ${kind} thrown out of a corner isn't 6 pt in flight: ${JSON.stringify({ corner: flight.corner, radii })}`);
           corners[kind] = { frames: radii.length, flightRadius: [Math.min(...radii), Math.max(...radii)] };
-          await pipAct("swipe:400,-300,8");
+          await pipAct("swipe:400,-300,8,momentum");
           await landed("bottomRight");
+        }
+        await pipAct("swipe:-300,200,10,pause");
+        await sleep(900);
+        const carefully = rect((await shown()).frame);
+        if (Math.abs(carefully[0] - (spot.bottomRight[0] - 300)) > 1 || Math.abs(carefully[1] - (spot.bottomRight[1] + 200)) > 1)
+          throw new Error(`a swipe whose fingers stop before they lift should leave the PiP exactly where it was let go, but it is at ${carefully}`);
+        await pipAct("swipe:300,-200,8,momentum");
+        await landed("bottomRight");
+        await pipAct(`frame:{{${vx + vw - Math.round(pw * 0.2)}, ${vy + 10}}, {${pw}, ${ph}}}`);
+        const rightEdgeOpen = await until("the right edge taking a tuck", async () => ((await shown())?.stashed ? true : null), 2500).catch(() => false);
+        if (rightEdgeOpen) await pipAct("unstash");
+        await sleep(900);
+        await pipAct(`frame:{{${spot.bottomRight[0]}, ${spot.bottomRight[1]}}, {${pw}, ${ph}}}`);
+        await sleep(900);
+        corners.rightEdgeOpen = rightEdgeOpen;
+        if (rightEdgeOpen) {
+          await pipAct("swipe:60,0,6,momentum");
+          await landed("bottomRight");
+          corners.gentleFlickAtEdge = JSON.parse(await pipAct("throw")).lastSwipe.how;
+          await pipAct("swipe:150,0,6,momentum");
+          await until("a hard flick at the edge tucking the PiP away", async () => ((await shown())?.stashed ? true : null), 5000);
+          corners.flickedAway = JSON.parse(await pipAct("throw")).lastSwipe.how;
+          if (corners.flickedAway !== "flickedAway") throw new Error(`a hard flick at the edge should tuck it away: ${corners.flickedAway}`);
+          await pipAct("unstash");
+          await sleep(900);
+          await pipAct("swipe:-300,200,10,pause");
+          await sleep(900);
+          await pipAct("swipe:300,-200,8,momentum");
+          await landed("bottomRight");
+          const untucked = async (what, test) => until(what, async () => {
+            const w = await shown();
+            return w && !w.stashed && test(rect(w.frame)[0]) ? rect(w.frame)[0] : null;
+          }, 5000);
+          const tuck = async () => {
+            await pipAct("stash");
+            await until("the PiP tucked at the right edge", async () => ((await shown())?.stashed ? true : null), 5000);
+            await sleep(500);
+          };
+          await tuck();
+          await pipAct("swipe:-20,0,4,pause");
+          await sleep(1200);
+          if (!(await shown())?.stashed) throw new Error("a 20 pt pull on a tucked PiP should leave it tucked");
+          await pipAct("swipe:-60,0,6,pause");
+          corners.shortPull = await untucked("a tucked PiP pulled out 60 pt, most of it still past the edge, back out at that edge", (x) => Math.abs(x - (vx + vw - pw - 16)) < 1);
+          await pipAct(`frame:{{${vx + vw - Math.round(pw * 0.6)}, ${vy + 10}}, {${pw}, ${ph}}}`);
+          await sleep(1200);
+          if ((await shown())?.stashed) throw new Error("a PiP with 40% of it past the edge should stay where it was put: only more than half tucks it away");
+          await pipAct(`frame:{{${vx + vw - Math.round(pw * 0.4)}, ${vy + 10}}, {${pw}, ${ph}}}`);
+          await until("a PiP with 60% of it past the edge tucking away", async () => ((await shown())?.stashed ? true : null), 5000);
+          await sleep(500);
+          await pipAct(`swipe:${-Math.round(pw * 0.7)},0,8`);
+          corners.pulledOut = await untucked("a PiP pulled a little out of the tuck back at the edge it was tucked on", (x) => Math.abs(x - (vx + vw - pw - 16)) < 1);
+          await tuck();
+          await pipAct(`swipe:${-Math.round(vw * 0.7)},0,12`);
+          corners.pulledPastHalf = await untucked("a PiP pulled past the middle of the screen leaving the side it was tucked on", (x) => x + pw / 2 < vx + vw / 2);
+          const edged = `{{${vx + vw - Math.round(pw * 0.7)}, ${vy + 100}}, {${pw}, ${ph}}}`;
+          await until("the PiP resting 30% past the right edge", async () => {
+            if ((await shown())?.frame === edged) return true;
+            await pipAct(`frame:${edged}`);
+            await sleep(600);
+            return null;
+          }, 8000);
+          await sleep(600);
+          await pipAct("drag:40,0,3,8,0");
+          await until("a click-drag flicked at the edge the PiP is already past tucking it away", async () => ((await shown())?.stashed ? true : null), 5000).catch(async (e) => {
+            throw new Error(`${e.message}; it is at ${(await shown())?.frame} after ${JSON.stringify(JSON.parse(await pipAct("throw")).lastRelease)}`);
+          });
+          corners.dragFlickedAway = JSON.parse(await pipAct("throw")).lastRelease.outcome;
+          if (corners.dragFlickedAway !== "flickTuck") throw new Error(`a click-drag flicked at the edge should tuck it away as a flick: ${corners.dragFlickedAway}`);
+          await pipAct("unstash");
+          corners.arrowOut = await untucked("a tucked PiP brought back by its arrow", (x) => Math.abs(x - (vx + vw - pw - 16)) < 1);
+          const flight = JSON.parse(await pipAct("throw")).lastThrow;
+          if (flight.corner !== "none" || flight.frames.length < 10) throw new Error(`a PiP brought back by its arrow should come out on the spring: ${JSON.stringify({ corner: flight.corner, frames: flight.frames.length })}`);
+          await pipAct(`frame:{{${vx - Math.round(pw * 0.8)}, ${vy + 10}}, {${pw}, ${ph}}}`);
+          corners.leftEdgeOpen = await until("the left edge taking a tuck", async () => ((await shown())?.stashed ? true : null), 2500).catch(() => false);
+          if (corners.leftEdgeOpen) {
+            await sleep(500);
+            await pipAct("swipe:60,0,6,pause");
+            const out = await until("a PiP tucked on the left pulled out 60 pt, back out at that edge", async () => {
+              const w = await shown();
+              return w && !w.stashed && Math.abs(rect(w.frame)[0] - (vx + 16)) < 1 ? rect(w.frame)[0] : null;
+            }, 5000);
+            corners.leftPull = out;
+          }
+          await pipAct(`frame:{{${spot.bottomRight[0]}, ${spot.bottomRight[1]}}, {${pw}, ${ph}}}`);
+          await sleep(900);
         }
       }
       return {
@@ -4006,7 +4096,7 @@ try {
         closeButton: closed.point,
         playing: [before.time.toFixed(1), after.time.toFixed(1)],
         close: { activations: closed.activations, raised: closed.raised.length },
-        backToTab: { activations: back.activations, activateRequests: backRequests },
+        backToTab: { activations: back.activations, activateRequests: backRequests, forced: back.forced, fromOtherApp: backRequest.payload.fromOtherApp },
       };
     } finally {
       await closeTab(tab.id);

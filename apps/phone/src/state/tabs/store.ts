@@ -17,6 +17,7 @@ import {
 } from "../store/browserDatabase";
 import { tabDatabase } from "../store/database";
 import { forgetPictures, forTheDatabase } from "./pictures";
+import { privatePagesRefused, refuseIncognito } from "./privatePages";
 import { receiveTabs, type IncomingTab } from "./received";
 import type { AutoArchiveInterval, BrowserTab, TabPatch } from "./tabModels";
 import { countUsage } from "../telemetry/telemetry";
@@ -181,7 +182,14 @@ export function setAutoArchiveInterval(interval: AutoArchiveInterval) {
   archiveDueTabs();
 }
 
-export const setIncognito = (incognito: boolean) => useTabs.setState({ incognito });
+export function setIncognito(incognito: boolean): boolean {
+  if (incognito && !useTabs.getState().incognito && privatePagesRefused()) {
+    refuseIncognito();
+    return false;
+  }
+  useTabs.setState({ incognito });
+  return true;
+}
 
 export const archivedTabById = (id: string): BrowserTab | null => readArchivedTab(tabDatabase(), id);
 

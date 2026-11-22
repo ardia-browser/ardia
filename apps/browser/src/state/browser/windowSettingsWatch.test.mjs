@@ -89,3 +89,17 @@ test("a tab's row flags carry its split, so the row reads no split state of its 
   assert.ok(rowFlags(S(), w, ids[1]) & IN_SPLIT);
   assert.equal(rowFlags(S(), w, ids[3]) & IN_SPLIT, 0);
 });
+
+test("a window chrome change, like the desktop moving its window buttons, wakes every window's layout reads, and unwatching stops both sources", async () => {
+  const { w, other } = session();
+  const { noteWindowChromeChanged } = await import("../../lib/windowChrome.ts");
+  const woken = [];
+  const offs = [w, other].map((id) => watchWindowSettings(id, () => woken.push(id)));
+  noteWindowChromeChanged();
+  assert.deepEqual(woken.sort(), [w, other].sort());
+  woken.length = 0;
+  offs.forEach((off) => off());
+  noteWindowChromeChanged();
+  S().updateSettings({ pageFrame: 3 });
+  assert.deepEqual(woken, [], "neither the chrome nor the store wakes a watcher that stopped");
+});

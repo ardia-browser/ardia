@@ -26,6 +26,8 @@ public final class ContentBlocker {
   @ObservationIgnored private let controllers = NSHashTable<WKUserContentController>.weakObjects()
   @ObservationIgnored private var applied: [ObjectIdentifier: AppliedLists] = [:]
   @ObservationIgnored private var preparing: Task<Void, Never>?
+  @ObservationIgnored private let userScripts: [WKUserScript]
+  static let world = WKContentWorld.world(name: "ArdiaBlocking")
 
   struct AppliedLists: Equatable {
     var revision: Int
@@ -36,6 +38,10 @@ public final class ContentBlocker {
     self.settings = settings
     self.directory = directory
     self.filterLists = filterLists ?? FilterLists(directory: directory.appending(path: "Filters", directoryHint: .isDirectory), defaults: defaults ?? settings.defaults, session: session)
+    userScripts = [
+      WKUserScript(source: BlockingScripts.counter, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: Self.world),
+      WKUserScript(source: BlockingScripts.consent, injectionTime: .atDocumentEnd, forMainFrameOnly: false, in: Self.world),
+    ]
     settings.onChange = { [weak self] in self?.listsChanged() }
     self.filterLists.onCompiledChange = { [weak self] in self?.filtersChanged() }
   }
@@ -131,12 +137,15 @@ public final class ContentBlocker {
     let key = ObjectIdentifier(controller)
     if controllers.contains(controller) { return }
     controllers.add(controller)
-    let world = WKContentWorld.world(name: "ArdiaBlocking")
-    controller.addScriptMessageHandler(BlockingMessageProxy(blocker: self, counter: counter), contentWorld: world, name: BlockingScripts.handlerName)
-    controller.addUserScript(WKUserScript(source: BlockingScripts.counter, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: world))
-    controller.addUserScript(WKUserScript(source: BlockingScripts.consent, injectionTime: .atDocumentEnd, forMainFrameOnly: false, in: world))
+    controller.addScriptMessageHandler(BlockingMessageProxy(blocker: self, counter: counter), contentWorld: Self.world, name: BlockingScripts.handlerName)
+    restoreUserScripts(on: controller)
     applied[key] = nil
     apply(to: controller, exempt: false)
+  }
+
+  func restoreUserScripts(on controller: WKUserContentController) {
+    guard controllers.contains(controller) else { return }
+    for script in userScripts { controller.addUserScript(script) }
   }
 
   public func prepareNavigation(of controller: WKUserContentController, toHost host: String?, isPrivate: Bool = false) {

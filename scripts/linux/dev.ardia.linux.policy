@@ -12,4 +12,14 @@
       <allow_active>auth_self</allow_active>
     </defaults>
   </action>
+  <action id="dev.ardia.linux.update">
+    <description>Install a signed update of Ardia</description>
+    <message>Authentication is needed to install Ardia's update.</message>
+    <defaults>
+      <allow_any>auth_self</allow_any>
+      <allow_inactive>auth_self</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/lib/ardia/ardia-update</annotate>
+  </action>
 </policyconfig>

@@ -46,7 +46,6 @@ export const settingsInk = {
   onAccentSecondary: "rgba(255,255,255,0.8)",
   knobOutline: "rgba(0,0,0,0.25)",
   thumbBorder: "rgba(0,0,0,0.2)",
-  customSwatch: "#8E8E93",
 } as const;
 
 export const settingsType = {
@@ -54,6 +53,8 @@ export const settingsType = {
   get lead() { return font.small; },
   get code() { return display.code; },
 } as const;
+
+export const aboutEngines = { labelWidth: 176 } as const;
 
 export const settingsMotion = {
   searchFlashIn: duration.fast,

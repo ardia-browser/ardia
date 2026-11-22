@@ -1,7 +1,5 @@
 package com.ardia.phone
 
-import android.database.Cursor
-import android.database.sqlite.SQLiteDatabase
 import com.ardia.sync.HistoryRemoval
 import com.ardia.sync.LocalBrowsingNotReady
 import com.ardia.sync.LocalBrowsingSource
@@ -18,27 +16,13 @@ interface BrowserRows {
     fun <T> open(block: (BrowserQuery) -> T): T?
 }
 
-class SqliteBrowserRows(private val file: File) : BrowserRows {
+class ExpoSqliteBrowserRows(private val file: File) : BrowserRows {
     override fun <T> open(block: (BrowserQuery) -> T): T? {
         if (!file.isFile) return null
-        val database = SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READONLY)
-        return database.use { db ->
-            val query = BrowserQuery { sql, args ->
-                db.rawQuery(sql, args.toTypedArray()).use { cursor ->
-                    buildList {
-                        while (cursor.moveToNext()) add(List(cursor.columnCount) { column -> value(cursor, column) })
-                    }
-                }
-            }
-            block(query)
+        return ExpoSqliteConnection(file.path).use { connection ->
+            connection.query("PRAGMA query_only = ON", emptyList())
+            block(BrowserQuery { sql, args -> connection.query(sql, args) })
         }
-    }
-
-    private fun value(cursor: Cursor, column: Int): Any? = when (cursor.getType(column)) {
-        Cursor.FIELD_TYPE_NULL -> null
-        Cursor.FIELD_TYPE_INTEGER -> cursor.getLong(column)
-        Cursor.FIELD_TYPE_FLOAT -> cursor.getDouble(column)
-        else -> cursor.getString(column)
     }
 }
 

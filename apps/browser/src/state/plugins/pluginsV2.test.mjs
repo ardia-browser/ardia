@@ -1404,3 +1404,54 @@ test("an omnibox query cancelled while its lazy plugin starts never goes out, an
   await ask("reader", "result", { call: sent.call, result: [{ title: "Late", url: "https://late.example/" }] }, run);
   lifecycle.disablePlugin("reader", consentToken());
 });
+
+const ARRANGER = { manifest: 2, name: "arranger", title: "Arranger", main: "index.js", permissions: { tabs: "write", fullUrls: true, workspace: true } };
+const NOT_WEB = ["file:///etc/hosts", "chrome://settings/", "ardia://history", "javascript:alert(1)", "data:text/html,hi", "https://user:pw@ok.example/"];
+const tabCount = () => Object.keys(S().tabs).length;
+const groupCount = () => Object.keys(S().groups).length;
+
+test("a plugin's apply opens only http and https addresses, and a batch with one other address is refused whole", async () => {
+  await enable(TABBER);
+  const run = await activated("tabber");
+  const w = S().createWindow({ url: "https://a.example/" });
+  takePluginCounts();
+  for (const url of NOT_WEB) {
+    const before = tabCount();
+    const refused = await ask("tabber", "apply", { ops: [{ op: "open", urls: ["https://ok.example/"], window: w }, { op: "open", urls: [url], window: w }] }, run);
+    assert.equal(refused.error?.code, "refused", url);
+    assert.equal(tabCount(), before, `${url}: nothing in the batch opened`);
+  }
+  assert.equal(takePluginCounts().plugin_url_refusals_open, NOT_WEB.length);
+  const opened = await ask("tabber", "apply", { ops: [{ op: "open", urls: ["https://ok.example/", "http://plain.example/"], window: w }] }, run);
+  assert.equal(opened.result?.ok, true);
+});
+
+test("a plugin's group.create takes only http and https addresses", async () => {
+  await enable(ARRANGER);
+  const run = await activated("arranger");
+  const w = S().createWindow({ url: "https://a.example/" });
+  takePluginCounts();
+  for (const url of NOT_WEB) {
+    const before = tabCount();
+    const groups = groupCount();
+    const refused = await ask("arranger", "apply", { ops: [{ op: "group.create", urls: [url], window: w, name: "G" }] }, run);
+    assert.equal(refused.error?.code, "refused", url);
+    assert.equal(tabCount(), before, url);
+    assert.equal(groupCount(), groups, `${url}: no group was made`);
+  }
+  assert.equal(takePluginCounts().plugin_url_refusals_group_create, NOT_WEB.length);
+  const made = await ask("arranger", "apply", { ops: [{ op: "group.create", urls: ["https://ok.example/"], window: w, name: "G" }] }, run);
+  assert.equal(made.result?.ok, true);
+});
+
+test("an address within the plugin rules opens even when percent-encoding makes it longer than the limit", async () => {
+  await enable(TABBER);
+  const run = await activated("tabber");
+  const w = S().createWindow({ url: "https://a.example/" });
+  const long = `https://example.com/${"é".repeat(400)}`;
+  assert.ok(long.length < 2048 && encodeURI(long).length > 2048);
+  const opened = await ask("tabber", "open", { urls: [long] }, run);
+  assert.equal(opened.result?.ok, true, JSON.stringify(opened.error));
+  const applied = await ask("tabber", "apply", { ops: [{ op: "open", urls: [long], window: w }] }, run);
+  assert.equal(applied.result?.ok, true, JSON.stringify(applied.error));
+});

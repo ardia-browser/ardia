@@ -179,9 +179,9 @@ export function LookStep() {
         </View>
       </Page>
     );
-  const name = customTheme ? "Custom" : color ? PROFILE_COLORS[color]?.name : null;
+  const name = color ? PROFILE_COLORS[color]?.name : null;
   return (
-    <Page id="color" title="Pick a color" subtitle="It tints the sidebar and the window." patch={{}} picked={name ? [`${name} theme`] : []} preview={preview}>
+    <Page id="color" title="Pick a color" subtitle="It tints the sidebar and the window." patch={{}} picked={name ? [customTheme ? `${name} theme, edited` : `${name} theme`] : []} preview={preview}>
       <ThemePicker windowId={windowId} size={32} gap={space.xs} onPreset={previewColor} onTheme={previewTheme} />
     </Page>
   );

@@ -207,7 +207,7 @@ final class PluginProgramsTests: XCTestCase {
     XCTAssertEqual(run(binPath), "one", "a folder put at the old path after approval is never read")
     var info = stat()
     XCTAssertEqual(stat("\(pluginStore)/current/bin/hello", &info), 0)
-    XCTAssertEqual(info.st_mode & 0o7777, 0o755)
+    XCTAssertEqual(info.st_mode & 0o7777, 0o555, "trimmed, then sealed read-only once it verified")
   }
 
   func testAdoptingTheOldHomeRepointsItsCurrentAndClearsItsUnusedVersions() throws {
@@ -324,7 +324,7 @@ final class PluginProgramsTests: XCTestCase {
     let approved = PluginFiles.approvalHash(text: text, folderId: opened.id)
     let result = PluginPrograms.install(plugin: "greeter", from: opened, approved: approved, version: "1.0.0", programs: [tool], places: places, expectedDigest: signed)
     guard case .failure(let refusal) = result else { return XCTFail("a changed payload installed") }
-    XCTAssertEqual(refusal.reason, "its files don't match the ones this Ardia was signed with")
+    XCTAssertEqual(refusal.reason, "its files don't match the ones Ardia downloaded and checked")
     XCTAssertEqual(versions(), [])
     XCTAssertNil(PluginPrograms.linkTarget(binPath))
     XCTAssertEqual(chmod("\(folder)/bin/hello", 0o755), 0)
@@ -355,6 +355,7 @@ final class PluginProgramsTests: XCTestCase {
     try "planted".write(toFile: "\(folder)/lib/__pycache__/x.pyc", atomically: true, encoding: .utf8)
     let linked = try install(folder, version: "1.0.0")
     XCTAssertFalse(FileManager.default.fileExists(atPath: "\(pluginStore)/\(linked.version)/lib/__pycache__"), "a cache in the source is never copied")
+    XCTAssertEqual(chmod("\(pluginStore)/\(linked.version)/lib", 0o755), 0)
     try FileManager.default.createDirectory(atPath: "\(pluginStore)/\(linked.version)/lib/__pycache__", withIntermediateDirectories: true)
     try "written by python".write(toFile: "\(pluginStore)/\(linked.version)/lib/__pycache__/y.pyc", atomically: true, encoding: .utf8)
     let again = try install(folder, version: "1.0.0")

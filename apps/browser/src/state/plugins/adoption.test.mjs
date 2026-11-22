@@ -18,8 +18,8 @@ const settle = async () => {
 };
 
 const CLI = JSON.stringify({ manifest: 2, name: "cli", title: "Command Line", version: "0.3.0", alwaysOn: true, official: true, permissions: { control: true }, contributes: { programs: [{ name: "ardia", path: "bin/ardia", claim: true }] } });
-const AUTO = JSON.stringify({ manifest: 1, name: "auto", title: "Auto", alwaysOn: true, autoInstall: true, permissions: ["control"], programs: [{ name: "auto-tool", path: "bin/auto" }] });
-const BUILT_IN = { status: "ok", folderId: "bundled", bundled: true };
+const { officialPinnedFromPin } = await import("../../test-native/shell.ts");
+const BUILT_IN = { status: "ok", folderId: officialPinnedFromPin().find((p) => p.name === "cli").folderId, official: true };
 
 const { installOfficialPlugin } = await import("./official.ts");
 setConsentPeriod(true, "test-epoch");
@@ -28,102 +28,36 @@ S().updateSettings({ cliControl: true });
 host.legacyInstalled = ["cli"];
 host.linkResult = { ok: true, linked: ["ardia"], refused: {}, binDir: "/home/.local/bin", adopted: true, adoption: "adopted" };
 host.folders = [{ name: "cli", text: CLI, ...BUILT_IN }];
-const native = stub.shellNativeModules.ArdiaPlugins;
-const legacyProgramsInstalled = native.legacyProgramsInstalled;
-let release;
-const gate = new Promise((resolve) => (release = resolve));
-native.legacyProgramsInstalled = () => gate.then(legacyProgramsInstalled);
 startPlugins();
 await settle();
-const asked = installOfficialPlugin("cli", { showSheet: false });
-const sheetBefore = P().consent?.name;
-release();
-await settle();
-const answered = await asked;
-native.legacyProgramsInstalled = legacyProgramsInstalled;
 
-test("an Install sheet open while the old install is found closes, and its promise says ok", () => {
-  assert.equal(sheetBefore, "cli");
-  assert.deepEqual(answered, { ok: true });
+test("an ardia installed the old way is found but never approved by itself: nothing is written or linked, Install stays offered, and it counts as waiting", () => {
   assert.equal(P().consent, null);
-});
-
-test("an ardia installed the old way is adopted silently on update: installed, linked once, no sheet, control untouched", () => {
-  assert.equal(P().consent, null);
-  assert.equal(P().records.cli.installed, true);
-  assert.equal(P().records.cli.enabled, true);
-  assert.equal(P().records.cli.approved, P().listings.cli.hash);
-  assert.ok(activeManifest(P(), "cli"));
-  assert.equal(host.links.length, 1);
-  assert.equal(Object.hasOwn(host.links[0], "adopt"), false, "the native side adopts from its signed registry");
-  assert.equal(P().programs.cli.state, "linked");
-  assert.equal(S().settings.cliControl, true, "control was on, so it stays on");
-  assert.equal(officialPlugins(P(), true, () => false)[0].state, "installed");
+  assert.equal(P().records.cli, undefined);
+  assert.equal(activeManifest(P(), "cli"), null);
+  assert.deepEqual(host.links, []);
+  assert.equal(officialPlugins(P(), true, () => false)[0].state, "available");
   const counts = takePluginCounts();
-  assert.equal(counts.plugin_adoptions, 1);
-  assert.equal(counts.program_adoptions, 1);
-  assert.equal(lifecycle.disablePlugin("cli", null), false);
+  assert.equal(counts.plugin_adoptions_waiting, 1);
+  assert.equal(counts.plugin_adoptions, 0);
 });
 
-test("adoption is checked once per launch: a later scan doesn't ask again", async () => {
-  host.links.length = 0;
+test("adoption is checked once per launch: a later scan doesn't count it again", async () => {
   await lifecycle.rescanPlugins();
   await settle();
+  assert.equal(takePluginCounts().plugin_adoptions_waiting, 0);
   assert.equal(host.links.length, 0);
 });
 
-test("a built-in marked autoInstall links at its first scan with no click and grants control once, unless you turned control off", async () => {
-  host.linkResult = { ok: true, linked: ["auto-tool"], refused: {}, binDir: "/home/.local/bin" };
-  S().updateSettings({ cliControl: false });
-  host.folders = [{ name: "auto", text: AUTO, ...BUILT_IN }, { name: "cli", text: CLI, ...BUILT_IN }];
-  await lifecycle.rescanPlugins();
-  await settle();
-  assert.equal(P().consent, null);
-  assert.equal(P().programs.auto.state, "linked");
-  assert.equal(P().records.auto.controlGranted, true);
-  assert.equal(S().settings.cliControl, false, "a choice made before it first linked is kept");
-  assert.equal(lifecycle.requestPluginConsent("auto"), false);
-  assert.equal(lifecycle.disablePlugin("auto", null), false);
-});
-
-test("an autoInstall grant that didn't stick (the setting was lost, never chosen) is applied again on Try Again", async () => {
-  useBrowser.setState((s) => ({ settings: { ...s.settings, cliControl: false }, settingsMeta: { chosen: s.settingsMeta.chosen.filter((k) => k !== "cliControl"), inferred: s.settingsMeta.inferred } }));
-  usePlugins.setState((s) => ({ programs: { ...s.programs, auto: { state: "failed", hash: s.listings.auto.hash, reason: "busy" } } }));
-  const { relinkPrograms } = await import("./programs.ts");
-  relinkPrograms("auto");
-  await settle();
-  assert.equal(S().settings.cliControl, true);
-  host.linkResult = null;
-  host.legacyInstalled = [];
-});
-
-test("an adoption is counted and settled only once its link works, and a held old-install lock is tried again", async () => {
-  const { ADOPTION_RETRY, adoptLegacyInstalls } = await import("./programs.ts");
-  const DELAY = ADOPTION_RETRY.delayMs;
-  ADOPTION_RETRY.delayMs = 60;
-  const OWN = JSON.stringify({ manifest: 2, name: "own", title: "Own", alwaysOn: true, official: true, contributes: { programs: [{ name: "own-tool", path: "bin/own", claim: true }] } });
-  host.folders = [{ name: "own", text: OWN, ...BUILT_IN }];
-  host.legacyInstalled = ["own"];
-  host.links.length = 0;
-  host.linkResult = { ok: true, linked: ["own-tool"], refused: {}, binDir: "/home/.local/bin", adopted: false, adoptBusy: true, adoption: "busy" };
-  await lifecycle.rescanPlugins();
-  takePluginCounts();
-  const { resetAdoptionForTests } = await import("./programs.ts");
-  resetAdoptionForTests();
-  const { consentToken } = await import("../telemetry/consentPeriod.ts");
-  assert.equal(await adoptLegacyInstalls(consentToken()), true);
-  lifecycle.reconcilePlugins(consentToken());
-  await settle();
-  assert.equal(takePluginCounts().plugin_adoptions, 0, "not counted while the old installer holds its lock");
-  const first = host.links.length;
-  host.linkResult = { ok: true, linked: ["own-tool"], refused: {}, binDir: "/home/.local/bin", adopted: true, adoption: "adopted" };
-  await new Promise((resolve) => setTimeout(resolve, 100));
-  await settle();
-  assert.ok(host.links.length > first, "linked again after the delay");
-  const counts = takePluginCounts();
-  assert.equal(counts.plugin_adoptions, 1);
-  assert.equal(counts.program_adoptions, 1);
-  ADOPTION_RETRY.delayMs = DELAY;
+test("once you confirm Install, its link takes over the old home natively and that is counted", async () => {
+  const done = installOfficialPlugin("cli", { showSheet: false });
+  assert.equal(P().consent?.name, "cli");
+  assert.ok(lifecycle.enablePlugin("cli", P().consent.hash));
+  assert.deepEqual(await done, { ok: true });
+  assert.equal(host.links.length, 1);
+  assert.equal(Object.hasOwn(host.links[0], "adopt"), false, "the native side adopts from its signed registry");
+  assert.equal(P().programs.cli.state, "linked");
+  assert.equal(takePluginCounts().program_adoptions, 1);
   host.linkResult = null;
   host.legacyInstalled = [];
 });
@@ -192,6 +126,10 @@ test("a missing native method, a malformed answer or failClosed blocks every JS 
   const MINE = JSON.stringify({ manifest: 2, name: "blocked", title: "Blocked", alwaysOn: true, autoInstall: true, official: true, contributes: { programs: [{ name: "blocked-tool", path: "bin/b" }] } });
   host.folders = [{ name: "blocked", text: MINE, ...BUILT_IN }];
   host.linkResult = null;
+  await lifecycle.rescanPlugins();
+  assert.ok(lifecycle.requestPluginConsent("blocked"));
+  assert.ok(lifecycle.enablePlugin("blocked", P().consent.hash));
+  await settle();
   try {
     for (const broken of [undefined, () => ({ claims: [], failClosed: false }), () => ({ claims: {}, failClosed: true })]) {
       native.programRegistry = broken;

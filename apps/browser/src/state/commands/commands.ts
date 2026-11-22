@@ -37,6 +37,7 @@ import { addFolderToSidebar, restoreArcFolders } from "../bookmarks/bookmarkGrou
 import { withLivePage } from "../tabs/livePage";
 import { webviews } from "../../platform/webviews";
 import { togglePageEngine } from "../engines/actions";
+import { tabEngine } from "../engines/engines";
 import { runReaderCommand } from "../reader/reader";
 import { goBack, goForward } from "../tabs/navigation";
 import { awaitsFirstPage } from "../tabs/pendingAddress";
@@ -154,7 +155,7 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
   const page = tab?.url ? tab : undefined;
   const web = tabId ? webviews.get(tabId) : undefined;
   const ui = s.windowUi[windowId];
-  if (page && (runHidingCommand(command, page.id) || runReaderCommand(command, page.id, mayWrite))) return;
+  if (page && (runHidingCommand(command, page.id) || runReaderCommand(command, page.id))) return;
   if (!targeted && runSidebarCommand(command, arg, windowId)) return;
 
   switch (command) {
@@ -223,8 +224,8 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
       return page ? void jumpToSelection(page.id) : undefined;
     case "useSelectionForFind":
       if (!page || !web) return;
-      return void web.evaluate<string>("post('result', JSON.stringify(String(getSelection() || '').trim().slice(0, 500)))").then((query) => {
-        if (query) openFind(page.id, { query });
+      return void web.evaluate<unknown>("post('result', JSON.stringify(String(getSelection() || '').trim().slice(0, 500)))").then((query) => {
+        if (typeof query === "string" && query) openFind(page.id, { query: query.slice(0, 500) });
       });
     case "findNext":
     case "findPrevious":
@@ -257,6 +258,7 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
       return void web?.showDevTools("console");
     case "viewSource":
       if (!page || !web || !isWebPageUrl(page.url)) return;
+      if (tabEngine(s, page.id) === "webkit") return void web.runPageCommand("viewSource");
       return void s.newTab(windowId, { url: `view-source:${page.url}`, openerId: page.id, profileId: page.profileId });
     case "back":
       return tabId ? goBack(tabId) : undefined;

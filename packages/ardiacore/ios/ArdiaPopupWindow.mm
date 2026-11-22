@@ -54,7 +54,12 @@ NSString *KeySystemFamily(NSString *keySystem) {
 BOOL OnProtectedVideoSite(NSString *url) {
   static NSArray<NSString *> *domains = @[
     @"netflix.com", @"disneyplus.com", @"max.com", @"hbomax.com", @"primevideo.com", @"hulu.com", @"tv.apple.com", @"music.apple.com",
-    @"open.spotify.com", @"peacocktv.com", @"paramountplus.com", @"crunchyroll.com", @"hotstar.com", @"jiohotstar.com", @"v.qq.com"
+    @"open.spotify.com", @"peacocktv.com", @"paramountplus.com", @"crunchyroll.com", @"hotstar.com", @"jiohotstar.com", @"v.qq.com",
+    @"audible.com", @"audible.co.uk", @"audible.ca", @"audible.com.au", @"audible.de", @"audible.fr", @"audible.it", @"audible.es",
+    @"audible.co.jp", @"audible.in", @"audible.com.br",
+    @"canalplus.com", @"mycanal.fr",
+    @"tv.youtube.com",
+    @"osnplus.com", @"anghami.com"
   ];
   NSURL *parsed = [NSURL URLWithString:url ?: @""];
   if (![parsed.scheme.lowercaseString isEqualToString:@"https"]) return NO;

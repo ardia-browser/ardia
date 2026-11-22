@@ -28,7 +28,7 @@ public enum NetscapeBookmarks {
         } else if !sawRootList {
           sawRootList = true
         } else {
-          stack.append(.folder("", []))
+          stack.append(.folder("", [], role: "list"))
         }
       case .close("dl"):
         if let pending = pendingFolder {

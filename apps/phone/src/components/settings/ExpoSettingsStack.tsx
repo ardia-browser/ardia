@@ -7,7 +7,7 @@ import { useSettingsNav } from "../../state/settings/hooks";
 import { closeSettings, followSettingsPath, settingsPath, settingsRouteFromKey, type SettingsRoute } from "../../state/settings/nav";
 import { nativeLookColors } from "../../lib/profileLook";
 import { PHONE_SHARING_COPY } from "../../lib/telemetryCopy";
-import { LookBackdrop, modifierList, profileLook, settingsUIAvailable, useProfileLook, usesGlass } from "../ui";
+import { LookBackdrop, modifierList, profileLook, settingsUIAvailable, useProfileLook, usesGlass, useTheme } from "../ui";
 import { useChromeStyle } from "../../state/settings/appearance";
 import { ExpoAppearancePage } from "./ExpoAppearancePage";
 import { ExpoSiteSettingsPage } from "./ExpoSiteSettingsPage";
@@ -47,6 +47,7 @@ const CONVERTED: Partial<Record<SettingsRoute["page"], (props: { route: Settings
 const TITLES: Record<SettingsRoute["page"], string> = {
   root: "Settings",
   appearance: "Appearance",
+  theme: "Theme",
   searchEngine: "Search Engine",
   browseForMe: "Browse for Me",
   pageSummary: "Pinch to Summarize",
@@ -102,12 +103,13 @@ function SettingsNavigation() {
   const open = useSettingsNav((s) => s.open);
   const stack = useSettingsNav((s) => s.stack);
   const look = useProfileLook();
+  const dark = useTheme().dark;
   const glass = useChromeStyle() === "glass" && usesGlass();
   const kept = useRef(stack);
   if (open && stack.length) kept.current = stack;
   const path = settingsPath(open ? stack : kept.current);
   return (
-    <NavigationStack path={path} onPathChange={followSettingsPath} modifiers={modifierList(profileLook({ ...nativeLookColors(look), usesGlass: glass }))}>
+    <NavigationStack path={path} onPathChange={followSettingsPath} modifiers={modifierList(profileLook({ ...nativeLookColors(look, dark), usesGlass: glass }))}>
       <StackRoot route={(open ? stack : kept.current)[0]} />
       {path.map((key) => (
         <NavigationDestination key={key} value={key}>

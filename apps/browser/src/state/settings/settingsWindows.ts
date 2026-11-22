@@ -62,8 +62,17 @@ export const SETTINGS_DETAIL = {
 export const detailValue = (detail: string | null, kind: "site" | "extension") => (detail?.startsWith(`${kind}:`) ? detail.slice(kind.length + 1) : null);
 
 const targetedOpenListeners = new Set<(consent: ConsentToken | null) => void>();
+const openListeners = new Set<(pane: SettingsPane, profileId: string | null) => void>();
+let pendingOpenAt: number | null = null;
 
 export const onTargetedSettingsOpen = (listener: (consent: ConsentToken | null) => void) => void targetedOpenListeners.add(listener);
+export const onSettingsOpen = (listener: (pane: SettingsPane, profileId: string | null) => void) => void openListeners.add(listener);
+export const currentSettingsOpenAt = () => pendingOpenAt;
+export function consumeSettingsOpenAt(): number | null {
+  const at = pendingOpenAt;
+  pendingOpenAt = null;
+  return at;
+}
 
 export function openSettings(pane?: SettingsPane, profileId?: string | null, detail?: string | null) {
   if (pane) {
@@ -71,6 +80,9 @@ export function openSettings(pane?: SettingsPane, profileId?: string | null, det
     targetedOpenListeners.forEach((listener) => listener(consent));
     goToSettingsPane(pane, profileId ?? null, detail ?? null);
   }
+  const nav = useSettingsNav.getState();
+  pendingOpenAt = Date.now();
+  openListeners.forEach((listener) => listener(nav.pane, nav.profileId));
   void openWindow(SETTINGS_WINDOW_ID, { kind: "settings", title: "Settings" });
 }
 

@@ -42,6 +42,14 @@ final class ManagedWindow {
     reveal = .waiting(then: waiting, entrance: entrance)
   }
 
+  func waitToReveal(entrance: Bool?, timeout: TimeInterval, onTimeout: @escaping (ManagedWindow) -> Void) {
+    window.alphaValue = 0
+    reveal = .waiting(then: [], entrance: entrance)
+    DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
+      if let self { onTimeout(self) }
+    }
+  }
+
   func takeReveal() -> (then: [() -> Void], entrance: Bool?)? {
     guard case .waiting(let then, let entrance) = reveal else { return nil }
     reveal = .shown

@@ -53,33 +53,50 @@ enum AppIcons {
     }
   }
 
+  static let previewQueue = DispatchQueue(label: "ardia.appIcons", qos: .userInitiated)
+  private static let cacheLock = NSLock()
   private static var cache: [String: NSImage] = [:]
+  private static var previewCache: [String: String] = [:]
 
   static var base: NSImage = NSImage(named: "AppIcon") ?? NSWorkspace.shared.icon(forFile: Bundle.main.bundlePath) {
-    didSet { cache.removeAll() }
+    didSet {
+      cacheLock.withLock {
+        cache.removeAll()
+        previewCache.removeAll()
+      }
+    }
   }
 
   static var imageNamed: (String) -> NSImage? = { NSImage(named: $0) } {
-    didSet { cache.removeAll() }
+    didSet {
+      cacheLock.withLock {
+        cache.removeAll()
+        previewCache.removeAll()
+      }
+    }
   }
 
   static func image(_ id: String, size: CGFloat) -> NSImage? {
     let key = "\(id)@\(size)"
-    if let hit = cache[key] { return hit }
+    if let hit = cacheLock.withLock({ cache[key] }) { return hit }
     guard variants.contains(where: { $0.id == id }) else { return nil }
     let artwork = id == "default" ? base : imageNamed("AppIcon-\(id)") ?? base
     let image = NSImage(size: NSSize(width: size, height: size), flipped: false) { rect in
       artwork.draw(in: rect)
       return true
     }
-    cache[key] = image
+    cacheLock.withLock { cache[key] = image }
     return image
   }
 
   static func preview(_ id: String, size: CGFloat) -> String? {
+    let key = "\(id)@\(size)"
+    if let hit = cacheLock.withLock({ previewCache[key] }) { return hit }
     guard let image = image(id, size: size * 2),
           let tiff = image.tiffRepresentation,
           let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else { return nil }
-    return "data:image/png;base64,\(png.base64EncodedString())"
+    let encoded = "data:image/png;base64,\(png.base64EncodedString())"
+    cacheLock.withLock { previewCache[key] = encoded }
+    return encoded
   }
 }

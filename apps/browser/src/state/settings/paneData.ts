@@ -28,7 +28,7 @@ import { engineProfile } from "../browser/model";
 import { currentSyncFolder, folderInfo } from "../sync/engine";
 import { extensionsProfileId, refreshExtensions } from "../extensions/actions";
 import { cached, load, loadAll, need, resource, store, useAllLoaded, type Needed } from "./resources";
-import type { SettingsPane } from "./settingsWindows";
+import { onSettingsOpen, type SettingsPane } from "./settingsWindows";
 import { FOLLOW_EVERY_MS, FOLLOW_FOR_MS, FOLLOW_UPDATE_EVERY_MS, FOLLOW_UPDATE_FOR_MS, switchOutcome, updateUnderWay, updaterBusy } from "./updateStatus";
 import { noteUpdateChannelSwitch } from "../telemetry/usage";
 import { consentToken } from "../telemetry/client";
@@ -102,6 +102,8 @@ export function paneNeeds(pane: SettingsPane, profileId: string | null): Needed[
 export const usePaneLoaded = (pane: SettingsPane, profileId: string | null) => useAllLoaded(paneNeeds(pane, profileId));
 
 export const preparePane = (pane: SettingsPane, profileId: string | null) => loadAll(paneNeeds(pane, profileId));
+
+onSettingsOpen((pane, profileId) => void preparePane(pane, profileId));
 
 function noteAsked(profile: string, toggle: AutofillToggle, asked: boolean, now: boolean) {
   rememberAsked(profile, toggle, asked, now);

@@ -151,3 +151,14 @@ test("opening a tab that was closed meanwhile keeps the current selection", () =
   expect(currentTabs().selectedId).toBe(selected);
   expect(browse.useBrowse.getState().surface).toBe("start");
 });
+
+test("opening a tab that now sits in the archive keeps the current selection too", () => {
+  const [archived] = someTabs(1).map((tab) => ({ ...tab, id: "a0", archivedAt: 1_790_000_100_000 }));
+  act(() => {
+    useTabs.setState({ ...launchTabs(someTabs(2), 0), archive: [archived!], incognito: false, listing: 0 });
+    browse.useBrowse.setState({ surface: "browsing" });
+  });
+  const selected = currentTabs().selectedId;
+  act(() => browse.openTab("a0"));
+  expect(currentTabs().selectedId).toBe(selected);
+});

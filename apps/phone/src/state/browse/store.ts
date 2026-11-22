@@ -294,7 +294,8 @@ export function stopOpeningTab(id: string) {
 }
 
 export function openTab(id: string) {
-  if (!findTab(currentTabs(), id)) return;
+  const tabs = currentTabs();
+  if (!tabs.open.some((tab) => tab.id === id) && !tabs.privates.some((tab) => tab.id === id)) return;
   takeLeavingPicture(id);
   hideArchiveCard();
   dismissSearch();

@@ -5,9 +5,11 @@ import { parseSaved, versionedJson } from "../../lib/savedDocument";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import type { Settings } from "../settings/settings";
+import { setShortcutOverride } from "../settings/actions";
 import { noteChromeSwitchFollowed, noteCtrlTabFollowedChrome, type FollowedChromeSwitch } from "../telemetry/settingsPickerCounts";
 import { consentToken, type ConsentToken } from "../telemetry/client";
-import { ctrlTabChoice, setCtrlTab } from "./commandShortcuts";
+import { ctrlTabChoice, resolvedShortcuts, setCtrlTab } from "./commandShortcuts";
+import { comboKey, storedShortcut, type ResolvedShortcuts, type Shortcut, type ShortcutOverrides } from "./shortcuts";
 import type { CtrlTabChoice, CtrlTabPreset } from "./ctrlTabKeys";
 
 const DOC = "chrome-switches.json";
@@ -22,6 +24,7 @@ export type ChromeSwitch = "ctrlTab" | FollowedChromeSwitch;
 export const CHROME_SWITCHES: Readonly<Record<ChromeSwitch, { pref: string; chromeDefault: boolean }>> = {
   ctrlTab: { pref: "helium.browser.mru_tab_cycling", chromeDefault: false },
   newTabs: { pref: "helium.browser.new_tab_next_to_active", chromeDefault: false },
+  hideTabsKey: { pref: "helium.settings.behavior.vertical_collapse_shortcut", chromeDefault: true },
 };
 
 const SWITCHES = Object.keys(CHROME_SWITCHES) as ChromeSwitch[];
@@ -60,6 +63,23 @@ export function newTabPositionFollowing({ on, firstLook }: SwitchChange, setting
   if (!on) return position === "nextToCurrent" ? settings.newTabButtonPosition : null;
   if (position === "nextToCurrent" || (firstLook && position !== "bottom")) return null;
   return "nextToCurrent";
+}
+
+const COLLAPSE_KEY = "s";
+
+export function hideTabsKeysOf(resolved: Pick<ResolvedShortcuts, "defaultsOf">): { collapse: Shortcut; kept: Shortcut } | null {
+  const defaults = resolved.defaultsOf("toggleSidebar");
+  const collapse = defaults.find((k) => k.key === COLLAPSE_KEY && k.modifiers.length === 1);
+  const kept = defaults.find((k) => k !== collapse);
+  return collapse && kept ? { collapse, kept } : null;
+}
+
+export function hideTabsKeyFollowing({ on }: SwitchChange, overrides: ShortcutOverrides, resolved: Pick<ResolvedShortcuts, "defaultsOf">): Shortcut | null | undefined {
+  const keys = hideTabsKeysOf(resolved);
+  if (!keys) return undefined;
+  const stored = overrides.toggleSidebar;
+  if (on) return stored?.[0] && comboKey(storedShortcut(stored)) === comboKey(keys.kept) ? null : undefined;
+  return stored === undefined ? keys.kept : undefined;
 }
 
 function prefsFrom(doc: ReturnType<typeof parseSaved>, read: (value: unknown) => Record<string, boolean> | null): ChromePrefs {
@@ -118,6 +138,11 @@ function follow(name: ChromeSwitch, change: SwitchChange, consent: ConsentToken 
       const position = newTabPositionFollowing(change, s.settings);
       if (position) s.updateSettings({ newTabPosition: position });
       return noted(!!position);
+    }
+    case "hideTabsKey": {
+      const shortcut = hideTabsKeyFollowing(change, s.settings.shortcuts, resolvedShortcuts(s));
+      if (shortcut !== undefined) setShortcutOverride("toggleSidebar", shortcut);
+      return noted(shortcut !== undefined);
     }
   }
 }

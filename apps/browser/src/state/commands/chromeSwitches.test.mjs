@@ -46,3 +46,24 @@ test("opening new tabs next to the active tab picks Next to current tab, and off
   assert.equal(newTabPositionFollowing(first(true), { newTabPosition: "bottom", newTabButtonPosition: "bottom" }), "nextToCurrent");
   assert.equal(newTabPositionFollowing(first(true), { newTabPosition: "top", newTabButtonPosition: "top" }), null);
 });
+
+const sidebarDefaults = {
+  defaultsOf: (id) =>
+    id === "toggleSidebar"
+      ? [
+          { key: "s", modifiers: ["command"] },
+          { key: "l", modifiers: ["command", "shift"] },
+        ]
+      : [],
+};
+
+test("the vertical tabs key off takes ⌘S from Auto-Hide Tabs and keeps its other key, and on gives ⌘S back", () => {
+  const { hideTabsKeyFollowing } = switches;
+  const COLLAPSE = CHROME_SWITCHES.hideTabsKey.pref;
+  assert.deepEqual(switchChanges({}, { "": all({ [COLLAPSE]: false }) }), { hideTabsKey: first(false) });
+  assert.deepEqual(hideTabsKeyFollowing(changed(false), {}, sidebarDefaults), { key: "l", modifiers: ["command", "shift"] });
+  assert.equal(hideTabsKeyFollowing(changed(true), { toggleSidebar: ["l", "command", "shift"] }, sidebarDefaults), null);
+  assert.equal(hideTabsKeyFollowing(changed(true), { toggleSidebar: ["h", "command"] }, sidebarDefaults), undefined);
+  assert.equal(hideTabsKeyFollowing(changed(false), { toggleSidebar: ["h", "command"] }, sidebarDefaults), undefined);
+  assert.equal(hideTabsKeyFollowing(changed(false), {}, { defaultsOf: () => [] }), undefined);
+});

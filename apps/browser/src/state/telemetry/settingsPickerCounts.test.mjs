@@ -22,6 +22,8 @@ const ZERO = {
   ctrl_tab_follows_chrome_switcher: 0,
   new_tabs_follow_chrome_on: 0,
   new_tabs_follow_chrome_off: 0,
+  hide_tabs_key_follows_chrome_on: 0,
+  hide_tabs_key_follows_chrome_off: 0,
 };
 
 test("each picture picker counts its picks by the option chosen, and taking them starts over", () => {
@@ -51,8 +53,10 @@ test("⌃Tab following Chrome's own setting counts apart from a pick in Settings
 
 test("each other Chrome switch Ardia follows counts by which way it went", () => {
   noteChromeSwitchFollowed("newTabs", true);
+  noteChromeSwitchFollowed("hideTabsKey", false);
   assert.deepEqual(takeSettingsPickerCounts(), {
     ...ZERO,
     new_tabs_follow_chrome_on: 1,
+    hide_tabs_key_follows_chrome_off: 1,
   });
 });

@@ -193,14 +193,17 @@ test("the New Tab bar keeps a typed search over an empty card in its profile and
 
 const formOf = (flags, url) => {
   if (flags !== "ih" && flags !== "ip") return url;
-  const parsed = new URL(url);
-  return (flags === "ih" ? parsed.hostname : `${parsed.hostname}${parsed.pathname}${parsed.search}`).toLowerCase();
+  const found = /^[a-z][a-z0-9+.-]*:\/\/([^/?#]*)([^?#]*)(\?[^#]*)?/i.exec(url);
+  const at = found && !/[@%]/.test(found[1]) && /^(\[[0-9a-f:.]+\]|[^:]*)(?::([^]*))?$/i.exec(found[1]);
+  if (!at || (at[2] !== undefined && !/^[1-9]\d{0,4}$/.test(at[2]))) return null;
+  const host = at[1].toLowerCase();
+  return flags === "ih" ? host : `${host}${found[2] || "/"}${found[3] ?? ""}`.toLowerCase();
 };
 const pageDecides = (routes, url) => {
   if (!/^https?:/i.test(url)) return false;
   for (const [source, flags, action] of routes) {
-    if ((flags === "ih" || flags === "ip") && /^[a-z][a-z0-9+.-]*:\/\/[^/?#]*@/i.test(url)) continue;
-    if (new RegExp(source, flags ? "i" : "").test(formOf(flags, url))) return action === "route";
+    const text = formOf(flags, url);
+    if (text !== null && new RegExp(source, flags ? "i" : "").test(text)) return action === "route";
   }
   return false;
 };
@@ -248,6 +251,13 @@ const URLS = [
   "https://h.example/acb",
   "https://example.org/archive/docs",
   "https://h.example:8443/x",
+  "https://example.org/docs?",
+  "https://example.org/docs",
+  "http://x.example:0/docs",
+  "http://example.org:0/a",
+  "https://xn--fidlity-dva.com/",
+  "https://www.xn--bcher-kva.de/",
+  "https://xn--80ak6aa92e.com/",
 ];
 
 const CONDITIONS = [
@@ -270,6 +280,9 @@ const CONDITIONS = [
   { kind: "pattern", pattern: "*e*a*/*a*" },
   { kind: "pattern", pattern: "*/docs*" },
   { kind: "pattern", pattern: "*:8443*" },
+  { kind: "pattern", pattern: "*example.org/docs" },
+  { kind: "pattern", pattern: "*.fidélity.com" },
+  { kind: "pattern", pattern: "*büch*" },
 ];
 
 test("the routes pushed to a page decide every click exactly as the app does: each condition alone, after a rule that keeps links, and with an earlier rule to the same profile", () => {
@@ -278,11 +291,17 @@ test("the routes pushed to a page decide every click exactly as the app does: ea
   const sameProfileFirst = rule({ when: { kind: "contains", text: "doc" }, profileId: "default" });
   const lastUsed = rule({ when: { kind: "site", host: "example.org" }, profileId: null });
   const localDocs = rule({ when: { kind: "pattern", pattern: "*/docs*" }, profileId: "default" });
+  const localIdn = rule({ when: { kind: "pattern", pattern: "*büch*" }, profileId: "default" });
   for (const when of CONDITIONS)
-    for (const before of [[], [keep], [sameProfileFirst], [lastUsed], [localDocs]]) {
+    for (const before of [[], [keep], [sameProfileFirst], [lastUsed], [localDocs], [localIdn]]) {
       store.resetAirTrafficForTests({ rules: [...before, rule({ when, profileId: work })], fallback: null, inAppLinks: true });
       const routes = inAppLinkRoutes(store.currentAirTraffic(), new Set(["default"]), store.targetUsableNow, "default");
-      for (const url of URLS) assert.equal(pageDecides(routes, url), inAppLinkRoute(url, page) !== null, `${JSON.stringify(when)} after ${before.length ? before[0].when.kind : "nothing"}: ${url}`);
+      for (const url of URLS) {
+        const label = `${JSON.stringify(when)} after ${before.length ? JSON.stringify(before[0].when) : "nothing"}: ${url}`;
+        const app = inAppLinkRoute(url, page) !== null;
+        if (pageDecides(routes, url)) assert.ok(app, `the page cancels a click the app declines: ${label}`);
+        else if (/^[\x00-\x7f]*$/.test(JSON.stringify(when)) && !url.includes("xn--")) assert.ok(!app, `the page misses a click the app routes: ${label}`);
+      }
     }
 });
 

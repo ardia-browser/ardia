@@ -1451,8 +1451,6 @@
     const pageHost = location.hostname;
     const pageIsWeb = apply(test, /^https?:$/, [location.protocol]);
     const hostnameOf = getter(URL.prototype, "hostname");
-    const pathnameOf = getter(URL.prototype, "pathname");
-    const searchOf = getter(URL.prototype, "search");
     const querySelector = Document.prototype.querySelector;
     const selectionOf = Document.prototype.getSelection;
     const collapsed = getter(Selection.prototype, "isCollapsed");
@@ -1491,7 +1489,7 @@
       return false;
     };
     const peekable = (hit) =>
-      !!hit && !!hit.url && !apply(hasAttribute, hit.link, ["download"]) && apply(test, /^https?:/i, [hit.url]) && !inEditable(hit.path);
+      !!hit && !!hit.url && !apply(hasAttribute, hit.link, ["download"]) && matches(/^https?:/i, hit.url) && !inEditable(hit.path);
     const keys = (e) => ({ alt: altKey(e), shift: shiftKey(e), meta: metaKey(e), ctrl: ctrlKey(e) });
     const keyOf = (e) => {
       if (ctrlKey(e)) return null;
@@ -1518,7 +1516,7 @@
       const base = apply(querySelector, document, ["base[target]"]);
       return base ? apply(getAttribute, base, ["target"]) || "" : "";
     };
-    const replacesPage = (link) => apply(test, /^(_self|_top|_parent)?$/i, [targetOf(link)]);
+    const replacesPage = (link) => matches(/^(_self|_top|_parent)?$/i, targetOf(link));
     const otherSite = (url) => withoutWww(hostnameOf(new URLCtor(url))) !== withoutWww(pageHost);
     const selecting = () => {
       const selection = apply(selectionOf, document, []);
@@ -1613,8 +1611,8 @@
     const relOf = (link) => apply(getAttribute, link, ["rel"]) || "";
     const keepsOpener = (link) => {
       const rel = relOf(link);
-      if (matches(/(?:^|\s)no(?:opener|referrer)(?:\s|$)/i, rel)) return false;
-      return !matches(/^_blank$/i, targetOf(link)) || matches(/(?:^|\s)opener(?:\s|$)/i, rel);
+      if (matches(/(?:^|[\t\n\f\r ])no(?:opener|referrer)(?:[\t\n\f\r ]|$)/i, rel)) return false;
+      return !matches(/^_blank$/i, targetOf(link)) || matches(/(?:^|[\t\n\f\r ])opener(?:[\t\n\f\r ]|$)/i, rel);
     };
     const newTabLink = (link, url) => (keepsOpener(link) ? { url, opener: true } : { url });
     const noteNewTabLink = (e, link) => {
@@ -1623,18 +1621,29 @@
       if (url && apply(test, /^https?:/i, [url])) send("newTabLink", newTabLink(link, url));
     };
     const ROUTE_FORMS = { "": 0, i: 0, ih: 1, ip: 2 };
+    const hostAndPathOf = (url) => {
+      if (matches(/[\u0000- \u007f\\]/, url)) return null;
+      const found = apply(execPattern, /^[a-z][a-z0-9+.-]*:\/\/([^/?#]*)([^?#]*)(\?[^#]*)?/i, [url]);
+      if (!found || matches(/[@%]/, found[1])) return null;
+      const hostAndPort = found[1];
+      const at = apply(execPattern, /^(\[[0-9a-f:.]+\]|[^:]*)(?::([^]*))?$/i, [hostAndPort]);
+      if (!at || (at[2] !== undefined && !matches(/^(?:[1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d\d|655[0-2]\d|6553[0-5])$/, at[2]))) return null;
+      const host = apply(lowerText, at[1], []);
+      if (!matches(/^\[/, host) && (!matches(/^[a-z0-9_-]+(?:\.[a-z0-9_-]+)*\.?$/, host) || (matches(/(?:^|\.)(?:0x[0-9a-f]*|\d+)\.?$/, host) && !matches(/^(?:\d{1,3}\.){3}\d{1,3}$/, host)))) return null;
+      return { host, rest: apply(lowerText, `${found[2] || "/"}${found[3] === undefined ? "" : found[3]}`, []) };
+    };
     let linkRoutes = apply(objectCreate, Object, [null]);
     let linkRouteCount = 0;
     let routedClick = null;
     const linkRouteOf = (url) => {
-      let parsed = null;
+      let parts;
       for (let i = 0; i < linkRouteCount; i++) {
         const entry = linkRoutes[i];
         let text = url;
         if (entry.form) {
-          if (matches(/^[a-z][a-z0-9+.-]*:\/\/[^/?#]*@/i, url)) continue;
-          if (!parsed) parsed = new URLCtor(url);
-          text = apply(lowerText, entry.form === 1 ? hostnameOf(parsed) : `${hostnameOf(parsed)}${pathnameOf(parsed)}${searchOf(parsed)}`, []);
+          if (parts === undefined) parts = hostAndPathOf(url);
+          if (!parts) continue;
+          text = entry.form === 1 ? parts.host : `${parts.host}${parts.rest}`;
         }
         if (matches(entry.pattern, text)) return entry.route;
       }
@@ -1660,9 +1669,9 @@
       if (!isTop || !linkRouteCount || defaultPrevented(e) || !replacesPage(link)) return false;
       const url = linkUrl(link);
       if (!peekable({ link, url, path: [] }) || url.length > MAX_SITE_PEEK_URL || !linkRouteOf(url)) return false;
+      const at = apply(dateNow, undefined, []);
+      const repeat = !!routedClick && routedClick.url === url && at - routedClick.at < ROUTED_CLICK_REPEAT_MS;
       apply(preventDefault, e, []);
-      const at = now();
-      const repeat = routedClick && routedClick.url === url && at - routedClick.at < ROUTED_CLICK_REPEAT_MS;
       routedClick = { url, at };
       if (!repeat) send("airTrafficLink", { url });
       return true;
@@ -1741,7 +1750,7 @@
         if (!raw) return;
         const url = new URLCtor(raw, baseURI(document)).href;
         const features = args.length > 2 ? args[2] : undefined;
-        const noOpener = typeof features === "string" && matches(/(?:^|[\s,])no(?:opener|referrer)(?:\s*=\s*(?:1|yes|true))?(?:[\s,]|$)/i, features);
+        const noOpener = typeof features === "string" && matches(/(?:^|[\t\n\f\r ,=])no(?:opener|referrer)(?:[\t\n\f\r ]*=[\t\n\f\r ]*(?:1|yes|true))?(?:[\t\n\f\r ,=]|$)/i, features);
         if (apply(test, /^https?:/i, [url])) send("newTabLink", noOpener ? { url } : { url, opener: true });
       };
       const open = asNative(openDescriptor.value, (target, self, args) => {

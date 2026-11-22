@@ -469,7 +469,10 @@ config folder.
     and one list, in which a rule to any of them is a stay entry, so a click between them loads in place. Globs are
     built with one atomic lookahead per middle segment (leftmost match), so a rule with many `*` stays linear on long
     addresses; a wildcard is matched, as in the app, against the link's host (flags `ih`) or its host, path and query
-    (`ip`), never its port; a pattern that doesn't compile ends the list, on both sides. The page keeps the list in a
+    (`ip`), never its port, read from the address the way `urlParts` reads it (no user info, ports 1 to 65535, an
+    empty `?` kept). A wildcard with non-ASCII text, which the app may match against a host's Unicode form, never
+    cancels a click; as a stay entry it keeps every link to an IDN host. A pattern that doesn't compile ends the list,
+    on both sides. The page keeps the list in a
     null-prototype object and matches with the `exec` it captured at start, so a page that patches `Array` or
     `RegExp` never sees the rules. The page script decides synchronously at
     the end of the click's dispatch: if the

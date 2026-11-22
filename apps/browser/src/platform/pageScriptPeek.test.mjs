@@ -827,7 +827,7 @@ test("links in a subframe, modified clicks and a broken route list are never rou
   assert.deepEqual(routedLinks(env), []);
 });
 
-test("a page that patches RegExp never sees the routes, and the decision stays the same", () => {
+test("a page that patches RegExp.prototype.exec sees nothing of a click the routes decide, and the decision stays the same", () => {
   const env = environment();
   const seen = [];
   const exec = RegExp.prototype.exec;
@@ -843,8 +843,7 @@ test("a page that patches RegExp never sees the routes, and the decision stays t
   } finally {
     RegExp.prototype.exec = exec;
   }
-  assert.ok(seen.length > 0, "the page's own patch ran");
-  assert.ok(!seen.some((source) => source.includes("secret-project")));
+  assert.deepEqual(seen, []);
 });
 
 test("a new-tab link says whether it keeps its opener: rel=opener and named targets do, a plain _blank and noopener don't", () => {
@@ -912,4 +911,18 @@ test("a page that breaks RegExp.prototype.exec can't make a link that keeps its 
     RegExp.prototype.exec = exec;
   }
   assert.ok(env.sent.filter((m) => m.kind === "newTabLink").every((m) => m.opener));
+});
+
+test("the page reads a link's address as the app's parser does: an empty query, port 0 and a rel token with a no-break space", async () => {
+  const { pageLinkPatterns } = await import("../state/airTraffic/pageLinkRoutes.ts");
+  const entries = (when) => pageLinkPatterns(when).map(([source, flags]) => [source, flags, "route"]);
+  const env = environment();
+  env.handlers.airTrafficConfig({ linkRoutes: [...entries({ kind: "pattern", pattern: "*example.org/docs" }), ...entries({ kind: "site", host: "port.example" })] });
+  const decided = (href) => env.gesture([env.link(href)], {}).defaultPrevented;
+  assert.equal(decided("https://example.org/docs"), true);
+  assert.equal(decided("https://example.org/docs?"), false);
+  assert.equal(decided("http://port.example:0/"), false);
+  assert.equal(decided("http://port.example:8080/"), true);
+  env.gesture([env.link("https://b.example/nbsp", { target: "signin", rel: "noopener " })], {});
+  assert.deepEqual(env.sent.filter((m) => m.kind === "newTabLink").map((m) => !!m.opener), [true]);
 });

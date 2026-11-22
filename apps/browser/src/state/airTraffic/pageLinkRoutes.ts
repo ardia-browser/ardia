@@ -1,9 +1,10 @@
-import { displayHost, punycodeEncode } from "@ardia/core";
+import { displayHost } from "@ardia/core";
 import { parseMatchPattern, type MatchSpec } from "../../lib/matchPattern";
 import { exactAddress, isWildcardPattern, linkText, type AirTrafficConfig, type LinkCondition, type TargetUsable } from "./rules";
 
 export type PageLinkPattern = [source: string, flags: "" | "i" | "ih" | "ip"];
-export type PageLinkRoute = [source: PageLinkPattern[0], flags: PageLinkPattern[1], action: "route" | "stay"];
+export type PageLinkAction = "route" | "stay";
+export type PageLinkRoute = [source: PageLinkPattern[0], flags: PageLinkPattern[1], action: PageLinkAction];
 
 export const MAX_PAGE_LINK_ROUTES = 512;
 
@@ -28,8 +29,6 @@ const encodedPath = (path: string) => {
   }
 };
 
-const asciiGlob = (glob: string) => glob.split(".").map((label) => (/^[\x00-\x7f]*$/.test(label) ? label : `xn--${punycodeEncode(label)}`)).join(".");
-
 const WEB = "^https?://";
 const HOST_CHAR = "[^/?#@:]";
 const HOST_CHARS = `${HOST_CHAR}*`;
@@ -38,6 +37,8 @@ const ANY_CHAR = "[^]";
 const HOST_FORM = "ih";
 const HOST_PATH_FORM = "ip";
 const HOST_END = "(?=[:/?#]|$)";
+const PORT = ":[1-9]\\d{0,4}";
+const SITE_END = `(?=(?:${PORT})?(?:[/?#]|$))`;
 const DEFAULT_PORTS: Record<string, string> = { http: "80", https: "443" };
 
 export const SIGN_IN_PATTERNS: readonly PageLinkPattern[] = [
@@ -50,15 +51,15 @@ const SIGN_IN = SIGN_IN_PATTERNS.map(([source, flags]) => new RegExp(source, fla
 export const signInLink = (url: string) => SIGN_IN.some((pattern) => pattern.test(url));
 
 function hostPatterns(host: string): PageLinkPattern[] {
-  return [...new Set([host, displayHost(host)])].map((h) => [`${WEB}(?:${HOST_CHARS}\\.)?${regexEscape(h)}\\.?${HOST_END}`, ""]);
+  return [...new Set([host, displayHost(host)])].map((h) => [`${WEB}(?:${HOST_CHARS}\\.)?${regexEscape(h)}\\.?${SITE_END}`, ""]);
 }
 
-const portSource = (spec: MatchSpec, scheme: string) => (spec.port === "*" ? "(?::\\d+)?" : DEFAULT_PORTS[scheme] === spec.port ? `(?::${spec.port})?` : `:${spec.port}`);
+const portSource = (spec: MatchSpec, scheme: string) => (spec.port === "*" ? `(?:${PORT})?` : DEFAULT_PORTS[scheme] === spec.port ? `(?::${spec.port})?` : `:${spec.port}`);
 
 function matchPatternPatterns(pattern: string): PageLinkPattern[] {
   const spec = parseMatchPattern(pattern);
   if ("error" in spec) return [];
-  if (spec.all) return [["^https?://[^/?#@]*(?:[/?#]|$)", ""]];
+  if (spec.all) return [[`^https?://(?:\\[[0-9a-f:.]+\\]|[a-z0-9_.-]+)(?:${PORT})?(?:[/?#]|$)`, "i"]];
   const schemes = spec.schemes.filter((s) => s === "http" || s === "https");
   if (!schemes.length || spec.file) return [];
   const host = !spec.host ? HOST_CHARS : spec.sub ? `(?:${HOST_CHARS}\\.)?${regexEscape(spec.host)}` : regexEscape(spec.host);
@@ -68,11 +69,14 @@ function matchPatternPatterns(pattern: string): PageLinkPattern[] {
   return [...paths].map((path) => [`${start}${path}(?=#|$)`, ""]);
 }
 
-function wildcardPatterns(pattern: string): PageLinkPattern[] {
+const IDN_HOST: PageLinkPattern = ["(?:^|\\.)xn--", HOST_FORM];
+
+function wildcardPatterns(pattern: string, action: PageLinkAction): PageLinkPattern[] {
   const lower = pattern.toLowerCase();
   const glob = lower.includes("*") ? lower : `*${lower}*`;
   const form = glob.includes("/") ? HOST_PATH_FORM : HOST_FORM;
-  return [...new Set([glob, asciiGlob(glob)])].map((g) => [`^${globSource(g, ANY_CHAR, { n: 0 })}$`, form]);
+  const ascii: PageLinkPattern[] = /^[\x00-\x7f]*$/.test(glob) ? [[`^${globSource(glob, ANY_CHAR, { n: 0 })}$`, form]] : [];
+  return action === "stay" ? [IDN_HOST, ...ascii] : ascii;
 }
 
 function containsPatterns(text: string): PageLinkPattern[] {
@@ -93,12 +97,12 @@ function equalsPatterns(text: string): PageLinkPattern[] {
   return [[`^https?://(?:[^/?#@]*@)?(?:www\\.)?${regexEscape(host)}${port}${regexEscape(path)}/*(?=[?#]|$)`, "i"]];
 }
 
-export function pageLinkPatterns(when: LinkCondition): PageLinkPattern[] {
+export function pageLinkPatterns(when: LinkCondition, action: PageLinkAction = "route"): PageLinkPattern[] {
   if (when.kind === "any") return [["^https?:", ""]];
   if (when.kind === "site") return hostPatterns(when.host);
   if (when.kind === "contains") return containsPatterns(when.text);
   if (when.kind === "equals") return equalsPatterns(when.text);
-  if (isWildcardPattern(when.pattern)) return wildcardPatterns(when.pattern);
+  if (isWildcardPattern(when.pattern)) return wildcardPatterns(when.pattern, action);
   return matchPatternPatterns(when.pattern);
 }
 
@@ -121,7 +125,7 @@ export function inAppLinkRoutes(config: AirTrafficConfig, sourceProfiles: Readon
     if (rule.profileId !== null && !usable(rule.profileId, null)) continue;
     const target = rule.profileId ?? lastProfile;
     const action = !usable(target, null) || sourceProfiles.has(target) ? "stay" : "route";
-    for (const pattern of pageLinkPatterns(rule.when)) {
+    for (const pattern of pageLinkPatterns(rule.when, action)) {
       if (!compiles(pattern)) break build;
       const key = pattern.join("\n");
       if (seen.has(key)) continue;

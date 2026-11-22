@@ -315,8 +315,11 @@ const CFTimeInterval kHiddenNewTabLinkSeconds = 1;
 
 - (BOOL)notedOpenerFor:(NSString *)url {
   [self dropStaleNewTabLinks];
-  for (NSDictionary *link in _newTabLinks)
-    if ([link[@"opener"] boolValue] && [link[@"url"] isEqualToString:url]) return YES;
+  for (NSUInteger i = 0; i < _newTabLinks.count; i++) {
+    if (![_newTabLinks[i][@"opener"] boolValue] || ![_newTabLinks[i][@"url"] isEqualToString:url]) continue;
+    [_newTabLinks removeObjectAtIndex:i];
+    return YES;
+  }
   return NO;
 }
 

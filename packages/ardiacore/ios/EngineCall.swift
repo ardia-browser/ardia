@@ -40,7 +40,11 @@ final class CallArgs {
   func dict(_ key: String) throws -> [String: Any] { try required(key, "an object") }
   func dicts(_ key: String) throws -> [[String: Any]] { try required(key, "a list of objects") }
   func strings(_ key: String) throws -> [String] { try required(key, "a list of strings") }
-  func stringPairs(_ key: String) throws -> [[String]] { try required(key, "a list of string pairs") }
+  func stringTuples(_ key: String, count: Int) throws -> [[String]] {
+    let rows: [[String]] = try required(key, "a list of lists of strings")
+    guard rows.allSatisfy({ $0.count == count }) else { throw BadCallArgs(message: "\(key) has an entry that isn't \(count) strings") }
+    return rows
+  }
 
   func choice<Choice: RawRepresentable>(_ key: String, _: Choice.Type = Choice.self) throws -> Choice where Choice.RawValue == String {
     let raw = try text(key)

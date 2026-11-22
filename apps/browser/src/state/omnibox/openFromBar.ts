@@ -5,7 +5,7 @@ import type { Tab } from "../browser/types";
 import { openSplitPane } from "../splits/actions";
 import { splitViewAvailable } from "../splits/splits";
 import { gateOpening, isGatedUrl, settleOpening } from "../tabs/openingGate";
-import { routedInAppTyped } from "../tabs/openFromPage";
+import { routedInApp } from "../airTraffic/inAppLinks";
 import { noteSplit } from "../telemetry/usage";
 import { noteBarLoad } from "../telemetry/barLoadFocus";
 import { originalProfile } from "../windows/small";
@@ -20,20 +20,16 @@ export function dispositionFor(mods: { metaKey?: boolean; altKey?: boolean; shif
 }
 
 export function commitTypedUrl(url: string, page: { windowId: string; profileId: string; tabId: string }) {
-  const settle = (verdict: { url?: string } | null, target: string) => {
-    if (routedInAppTyped(target, page)) return;
-    const s = useBrowser.getState();
-    if (s.tabs[page.tabId]) s.navigate(page.tabId, target, { userInitiated: !verdict, gated: true });
-  };
-  if (!isGatedUrl(url)) {
-    if (routedInAppTyped(url, page)) return;
-    useBrowser.getState().navigate(page.tabId, url);
-    return;
-  }
+  if (!isGatedUrl(url)) return useBrowser.getState().navigate(page.tabId, url);
   const gated = gateOpening(url, { ...page, via: "typed" }, `tab:${page.tabId}`);
   settleOpening(gated, `tab:${page.tabId}`, (verdict) => {
     if (verdict && "cancel" in verdict) return;
-    settle(verdict, verdict?.url ?? url);
+    const s = useBrowser.getState();
+    if (!s.tabs[page.tabId]) return;
+    const target = verdict?.url ?? url;
+    if (!routedInApp(target, page, "typed")) return s.navigate(page.tabId, target, { userInitiated: !verdict, gated: true });
+    const after = useBrowser.getState();
+    if (after.windowUi[page.windowId]?.panel.open) after.closePanel(page.windowId);
   });
 }
 
@@ -55,7 +51,7 @@ export function openFromBar(url: string, tabId: string, disposition: Disposition
     });
     return;
   }
-  if (typedUrl && routedInAppTyped(url, { windowId: tab.windowId, profileId: tab.profileId, tabId })) return;
+  if (typedUrl && routedInApp(url, { windowId: tab.windowId, profileId: tab.profileId, tabId }, "typed")) return;
   s.closePanel(tab.windowId);
   if (disposition === "newTab") return void s.newTab(tab.windowId, { url, profileId: tab.profileId, openerId: tab.url ? tabId : undefined });
   openWindow(w?.kind === "private" ? { kind: "private", url, profileId: originalProfile(s, w) } : { profileId: tab.profileId, url });
@@ -80,11 +76,11 @@ export function switchFromBar(targetTabId: string, url: string, barTabId: string
   switchToTab(targetTabId);
 }
 
-export const otherOpenTabs = (windowId: string, limit: number): Tab[] => {
+export function otherOpenTabs(windowId: string, limit: number): Tab[] {
   const s = useBrowser.getState();
   const active = activeTabId(s, windowId);
   return viewTabIds(s, windowId)
     .map((id) => s.tabs[id]!)
     .filter((t) => t.id !== active && t.url)
     .slice(0, limit);
-};
+}

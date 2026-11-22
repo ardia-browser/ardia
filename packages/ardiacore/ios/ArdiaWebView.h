@@ -190,7 +190,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)setPeekModifier:(NSString *)modifier;
 + (void)setSplitLinkModifier:(NSString *)modifier;
 + (void)setPeekOtherSiteTabs:(NSArray<NSString *> *)tabIds;
-+ (void)setInAppLinkPatterns:(NSString *)profile patterns:(NSArray<NSArray<NSString *> *> *)patterns;
++ (void)setInAppLinkRoutes:(NSString *)profile routes:(NSArray<NSArray<NSString *> *> *)routes;
 + (BOOL)devPostPeekMouseUp:(NSString *)keys over:(NSString *)transferKey;
 + (NSString *)peekModifierInUse;
 + (NSString *)splitLinkModifierInUse;

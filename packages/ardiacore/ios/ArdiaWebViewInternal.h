@@ -417,7 +417,7 @@ BOOL PeekTracing();
 void PeekTrace(NSDictionary *entry);
 NSString *SplitLinkModifier();
 NSString *PeekConfigJSON(ArdiaWebView *view);
-NSString *InAppLinkPatternsJSON(NSString *profile);
+NSArray<NSArray<NSString *> *> *InAppLinkRoutesFor(NSString *_Nullable profile);
 NSDictionary *_Nullable RecentClickPoint(ArdiaWebView *view);
 
 NSPoint RootPointFromWindow(NSWindow *window, NSPoint inWindow);

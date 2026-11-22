@@ -40,7 +40,7 @@ export function LinkRoutingSection({ profileId }: { profileId: string | null }) 
   const profiles = useRoutableProfiles();
   return (
     <View>
-      <SectionHeader title="Link routing" description="Send links from other apps to the profile you want. Links you click and addresses you type inside Ardia stay where they are, unless you turn the switch below on." />
+      <SectionHeader title="Link routing" description="Choose where links from other apps open." />
       <Box gap="xl">
         <Group>
           <Row anchor="automations.linkRules">
@@ -218,7 +218,7 @@ function InAppLinksRow() {
   const { inAppLinks } = useAirTrafficConfig();
   return (
     <Group>
-      <Row anchor="automations.inAppLinks" title="Also route links you open inside Ardia">
+      <Row anchor="automations.inAppLinks">
         <Toggle value={inAppLinks} accessibilityLabel="Also route links you open inside Ardia" onChange={setAirTrafficInAppLinks} />
       </Row>
     </Group>

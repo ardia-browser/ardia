@@ -1437,6 +1437,10 @@
     const SVG = "http://www.w3.org/2000/svg";
     const PRESS_SLOP = 5;
     const MAX_SITE_PEEK_URL = 8192;
+    const MAX_LINK_ROUTES = 512;
+    const ROUTED_CLICK_REPEAT_MS = 1000;
+    const RegExpCtor = RegExp;
+    const replaceText = String.prototype.replace;
     const namespace = getter(Element.prototype, "namespaceURI");
     const timeStamp = getter(Event.prototype, "timeStamp");
     const persisted = getter(PageTransitionEvent.prototype, "persisted");
@@ -1606,22 +1610,36 @@
       const url = linkUrl(link);
       if (url && apply(test, /^https?:/i, [url])) send("newTabLink", { url });
     };
-    let linkFilters = [];
-    const linkRouted = (url) => {
-      for (let i = 0; i < linkFilters.length; i++) if (apply(test, linkFilters[i], [url])) return true;
+    let linkRoutes = [];
+    let routedClick = null;
+    const linkRouteOf = (url) => {
+      for (let i = 0; i < linkRoutes.length; i++) if (apply(test, linkRoutes[i].pattern, [url])) return linkRoutes[i].route;
       return false;
     };
     handlers.airTrafficConfig = (config) => {
-      linkFilters = [];
-      const pairs = config && config.patterns;
-      if (!pairs || !pairs.length) return;
-      for (let i = 0; i < pairs.length && linkFilters.length < 100; i++) {
-        const pair = pairs[i];
-        if (!pair || pair.length !== 2) continue;
+      linkRoutes = [];
+      const entries = config && config.linkRoutes;
+      if (!isTop || !entries || !entries.length) return;
+      for (let i = 0; i < entries.length && linkRoutes.length < MAX_LINK_ROUTES; i++) {
+        const entry = entries[i];
+        if (!entry || entry.length !== 3 || typeof entry[0] !== "string" || typeof entry[1] !== "string") return;
         try {
-          linkFilters.push(new RegExp(pair[0], pair[1] ? String(pair[1]).replace(/[^gimsuy]/g, "") : ""));
-        } catch {}
+          linkRoutes.push({ pattern: new RegExpCtor(entry[0], apply(replaceText, entry[1], [/[^imsu]/g, ""])), route: entry[2] === "route" });
+        } catch {
+          return;
+        }
       }
+    };
+    const routeLink = (e, link) => {
+      if (!isTop || !linkRoutes.length || defaultPrevented(e) || !replacesPage(link)) return false;
+      const url = linkUrl(link);
+      if (!peekable({ link, url, path: [] }) || url.length > MAX_SITE_PEEK_URL || !linkRouteOf(url)) return false;
+      apply(preventDefault, e, []);
+      const at = now();
+      const repeat = routedClick && routedClick.url === url && at - routedClick.at < ROUTED_CLICK_REPEAT_MS;
+      routedClick = { url, at };
+      if (!repeat) send("airTrafficLink", { url });
+      return true;
     };
     addEventListener(
       "click",
@@ -1638,15 +1656,8 @@
         const decide = guard((ev) => {
           if (ev !== e || decided) return;
           decided = true;
-          if (replacesPage(link)) {
-            const routed = linkUrl(link);
-            if (linkRouted(routed) && !defaultPrevented(e)) {
-              apply(preventDefault, e, []);
-              send("airTrafficLink", { url: routed });
-              return;
-            }
-          }
           if (forSite && replacesPage(link)) return peekSiteLink(e, link);
+          if (routeLink(e, link)) return;
           noteNewTabLink(e, link);
         });
         apply(listen, window, ["click", decide]);
@@ -1655,14 +1666,6 @@
             apply(unlisten, window, ["click", decide]);
             if (decided) return;
             decided = true;
-            if (replacesPage(link)) {
-              const routed = linkUrl(link);
-              if (linkRouted(routed) && !defaultPrevented(e)) {
-                apply(preventDefault, e, []);
-                send("airTrafficLink", { url: routed });
-                return;
-              }
-            }
             if (forSite && replacesPage(link)) return trace("the click never reached the window", {});
             noteNewTabLink(e, link);
           }),
@@ -1917,7 +1920,7 @@
 
   handlers.config = (config) => {
     handlers.peekConfig({ modifier: config.peek, split: config.split, trace: config.peekTrace, otherSites: config.peekOtherSites });
-    handlers.airTrafficConfig(config);
+    if (handlers.airTrafficConfig) handlers.airTrafficConfig(config);
     blockAutoplay = !!config.blockAutoplay;
     pipTrace = !!config.pipTrace;
     if (pipTrace && pipHandlerSet !== null)

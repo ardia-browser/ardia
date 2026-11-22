@@ -22,7 +22,11 @@ public class WebViewModule: Module {
     "setPeekModifier": setting { ArdiaWebView.setPeekModifier(try $0.text("modifier")) },
     "setSplitLinkModifier": setting { ArdiaWebView.setSplitLinkModifier(try $0.text("modifier")) },
     "setPeekOtherSiteTabs": setting { ArdiaWebView.setPeekOtherSiteTabs(try $0.strings("tabIds")) },
-    "setInAppLinkPatterns": setting { args in ArdiaWebView.setInAppLinkPatterns(args.profile, patterns: try args.stringPairs("patterns")) },
+    "setInAppLinkRoutes": setting { args in
+      let routes = try args.stringTuples("routes", count: 3)
+      guard routes.allSatisfy({ $0[2] == "route" || $0[2] == "stay" }) else { throw BadCallArgs(message: "routes has an entry that is neither route nor stay") }
+      ArdiaWebView.setInAppLinkRoutes(args.profile, routes: routes)
+    },
     "setSelectionPopover": setting { args in
       let enabled = try args.bool("enabled")
       ArdiaWebView.setSelectionPopoverEnabled(enabled)

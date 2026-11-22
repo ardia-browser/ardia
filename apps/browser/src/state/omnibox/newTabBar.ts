@@ -5,6 +5,7 @@ import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import { isEmptyCardTab, NEW_TAB_BAR_POLICY, newTabOpensBar } from "./newTabBarPolicy";
 import { commitTypedUrl } from "./openFromBar";
+import { routedInApp } from "../airTraffic/inAppLinks";
 import { hasPage } from "../tabs/pageSession";
 import { isSmall } from "../windows/small";
 import type { NewTabTarget } from "../browser/types";
@@ -52,17 +53,20 @@ export function closeNewTabBar(windowId: string) {
   if (active && store().tabs[active]?.url) void webviews.get(active)?.focus();
 }
 
-export function openFromNewTabBar(windowId: string, target: NewTabTarget, url: string) {
+export function openFromNewTabBar(windowId: string, target: NewTabTarget, url: string, typedUrl = false) {
   const s = store();
-  if (!url || !s.windows[windowId] || !s.windowUi[windowId]?.panel.newTab) return;
+  const w = s.windows[windowId];
+  if (!url || !w || !s.windowUi[windowId]?.panel.newTab) return;
   s.closePanel(windowId);
   const into = target.kind === "into" ? s.tabs[target.tabId] : undefined;
   if (into && into.windowId === windowId && isEmptyCardTab(s, into)) {
-    commitTypedUrl(url, { windowId, profileId: into.profileId, tabId: into.id });
+    if (typedUrl) commitTypedUrl(url, { windowId, profileId: into.profileId, tabId: into.id });
+    else store().navigate(into.id, url);
     return noteBarLoad(into.id);
   }
   const group = target.kind === "group" ? s.groups[target.groupId] : undefined;
-  if (group && group.windowId === windowId && group.profileId === s.windows[windowId]!.profileId) {
+  if (typedUrl && routedInApp(url, { windowId, profileId: w.profileId }, "typed")) return;
+  if (group && group.windowId === windowId && group.profileId === w.profileId) {
     const id = store().newTabInGroup(group.id);
     if (!id) return;
     store().navigate(id, url);

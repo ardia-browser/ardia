@@ -756,3 +756,73 @@ test("the target is read once click handlers have run: one they add counts, one 
   env.flush();
   assert.deepEqual(newTabLinks(env), ["https://page.example/made-blank"]);
 });
+
+const ROUTES = [
+  ["^https?://keep\\.example(?=[:/?#]|$)", "", "stay"],
+  ["^https?://(?:[^/?#@:]*\\.)?example\\.org(?=[:/?#]|$)", "", "route"],
+];
+const routedLinks = (env) => env.sent.filter((m) => m.kind === "airTrafficLink").map((m) => m.url);
+
+test("a plain click on a link a rule routes elsewhere is cancelled during its dispatch and reported once", () => {
+  const env = environment();
+  env.handlers.airTrafficConfig({ linkRoutes: ROUTES });
+  const click = env.gesture([env.link("https://example.org/a")], {});
+  assert.ok(click.defaultPrevented);
+  assert.deepEqual(routedLinks(env), ["https://example.org/a"]);
+  env.flush();
+  assert.deepEqual(routedLinks(env), ["https://example.org/a"]);
+});
+
+test("a click the page stops before it reaches the window is never routed afterwards, so it can't open twice", () => {
+  const env = environment();
+  env.handlers.airTrafficConfig({ linkRoutes: ROUTES });
+  const click = env.gesture([env.link("https://example.org/a")], {}, { page: (e) => e.stopPropagation() });
+  env.flush();
+  assert.equal(click.defaultPrevented, false);
+  assert.deepEqual(routedLinks(env), []);
+});
+
+test("a double click on a routed link cancels both clicks and reports the link once", () => {
+  const env = environment();
+  env.handlers.airTrafficConfig({ linkRoutes: ROUTES });
+  const a = env.link("https://example.org/a");
+  const first = env.gesture([a], {});
+  env.tick(150);
+  const second = env.gesture([a], {});
+  assert.ok(first.defaultPrevented && second.defaultPrevented);
+  assert.deepEqual(routedLinks(env), ["https://example.org/a"]);
+  env.tick(1500);
+  env.gesture([a], {});
+  assert.equal(routedLinks(env).length, 2);
+});
+
+test("the first route that matches decides: a link a rule keeps, an unmatched link, a cancelled click and a new-tab link are left alone", () => {
+  const env = environment();
+  env.handlers.airTrafficConfig({ linkRoutes: [["^https?://(?:[^/?#@:]*\\.)?example\\.org/keep", "", "stay"], ...ROUTES] });
+  for (const [path, page] of [
+    [[env.link("https://example.org/keep/x")]],
+    [[env.link("https://keep.example/x")]],
+    [[env.link("https://other.example/x")]],
+    [[env.link("https://example.org/spa")], (e) => e.preventDefault()],
+    [[env.link("https://example.org/tab", { target: "_blank" })]],
+  ]) {
+    const click = env.gesture(path, {}, { page });
+    if (!page) assert.equal(click.defaultPrevented, false, path[0].attrs.href);
+  }
+  assert.deepEqual(routedLinks(env), []);
+});
+
+test("links in a subframe, modified clicks and a broken route list are never routed", () => {
+  const frame = environment({ top: false });
+  frame.handlers.airTrafficConfig({ linkRoutes: ROUTES });
+  assert.equal(frame.gesture([frame.link("https://example.org/a")], {}).defaultPrevented, false);
+  assert.deepEqual(routedLinks(frame), []);
+  const env = environment();
+  env.handlers.airTrafficConfig({ linkRoutes: ROUTES });
+  env.gesture([env.link("https://example.org/meta")], { meta: true });
+  env.handlers.airTrafficConfig({ linkRoutes: [["(", "", "stay"], ...ROUTES] });
+  env.gesture([env.link("https://example.org/broken")], {});
+  env.handlers.airTrafficConfig({ linkRoutes: [] });
+  env.gesture([env.link("https://example.org/off")], {});
+  assert.deepEqual(routedLinks(env), []);
+});

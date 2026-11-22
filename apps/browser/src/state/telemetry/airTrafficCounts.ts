@@ -5,26 +5,27 @@ export type AirTrafficRouted = "rule" | "fallback" | "group";
 
 const counts: Record<AirTrafficRouted, number> = { rule: 0, fallback: 0, group: 0 };
 const ROUTED: readonly AirTrafficRouted[] = ["rule", "fallback", "group"];
-let byInApp = 0;
-let byInAppClick = 0;
-let byInAppTyped = 0;
+export type InAppLinkVia = "newTab" | "click" | "typed";
+type InAppCount = InAppLinkVia | "clickMiss";
+
+const inApp: Record<InAppCount, number> = { newTab: 0, click: 0, typed: 0, clickMiss: 0 };
+const IN_APP_FIELDS: Record<InAppCount, string> = {
+  newTab: "air_traffic_in_app_links",
+  click: "air_traffic_in_app_clicks",
+  typed: "air_traffic_in_app_typed",
+  clickMiss: "air_traffic_in_app_click_misses",
+};
 
 export const noteAirTrafficLink = (by: AirTrafficRouted) => void counts[by]++;
-export const noteAirTrafficInAppLink = () => void byInApp++;
-export const noteAirTrafficInAppClick = () => void byInAppClick++;
-export const noteAirTrafficInAppTyped = () => void byInAppTyped++;
+export const noteAirTrafficInApp = (via: InAppCount) => void inApp[via]++;
 
 export function takeAirTrafficCounts() {
-  const taken = {
-    ...Object.fromEntries(ROUTED.map((by) => [`air_traffic_${by}_links`, counts[by]])),
-    air_traffic_in_app_links: byInApp,
-    air_traffic_in_app_clicks: byInAppClick,
-    air_traffic_in_app_typed: byInAppTyped,
-  };
+  const taken: Record<string, number> = Object.fromEntries(ROUTED.map((by) => [`air_traffic_${by}_links`, counts[by]]));
+  for (const via of Object.keys(inApp) as InAppCount[]) {
+    taken[IN_APP_FIELDS[via]] = inApp[via];
+    inApp[via] = 0;
+  }
   for (const by of ROUTED) counts[by] = 0;
-  byInApp = 0;
-  byInAppClick = 0;
-  byInAppTyped = 0;
   return taken;
 }
 

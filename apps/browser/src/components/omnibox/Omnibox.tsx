@@ -147,7 +147,7 @@ export function Omnibox({
     bangEnter.cancel();
     if (!url) return;
     const disposition = asked === "split" && !barSplitsFrom(tabId) ? (opensTab ? "newTab" : "current") : asked;
-    if (opensTab && disposition !== "newWindow" && disposition !== "split") return openFromNewTabBar(windowId, opensTab, url);
+    if (opensTab && disposition !== "newWindow" && disposition !== "split") return openFromNewTabBar(windowId, opensTab, url, typedUrl);
     if (disposition === "current") journeyNavigate(tabId);
     openFromBar(url, tabId, disposition, typedUrl);
     if (disposition !== "current") dismiss();

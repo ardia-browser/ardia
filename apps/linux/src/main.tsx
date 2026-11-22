@@ -117,6 +117,7 @@ async function start() {
   startConfigFiles(colorRoles, launch);
   startHostTelemetry({ host: ardiaHost, candidate: !utility, locks: navigator.locks as unknown as LeaderLocks });
   countLoginPasswordChecks(linuxTelemetryHooks.leading);
+  watchWindowDecorations(ardiaHost, windowId);
   const capabilities = linuxCapabilities(ardiaHost);
   if (capabilities.cliControl) startProgramControl();
   await startLinuxShortcuts(ardiaHost);
@@ -173,7 +174,6 @@ async function start() {
       marks: sessionStorage,
     });
     void noticeUnsandboxedLaunch(ardiaHost, windowId, services.launch);
-    watchWindowDecorations(ardiaHost, windowId);
   }
   createRoot(document.getElementById("root")!, { onUncaughtError: (error) => { reportUncaughtRender(error); console.error("[ardia linux] crashed", error); }, onRecoverableError: (error) => { reportRecoverableRender(error); console.warn("[ardia linux] recovered", error); } }).render(
     <div className={`ardia-desktop host ardia-linux${utility ? " utility" : ""}`} data-ardia-linux-window={windowId}>

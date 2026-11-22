@@ -414,36 +414,47 @@ test("a page hole is square where it meets a window corner and keeps the card ra
   assert.doesNotMatch(fullScreen, /A/);
 });
 
-test("the shell and the engine agree which page corners sit on a window corner, at fractional edges and any shell zoom", () => {
-  const engineTouches = (rect, window, zoom) => {
-    const width = Math.round(window.width * zoom);
-    const height = Math.round(window.height * zoom);
-    const left = Math.min(Math.max(rect.x * zoom, 0), width);
-    const top = Math.min(Math.max(rect.y * zoom, 0), height);
-    const right = Math.min(Math.max((rect.x + rect.width) * zoom, left), width);
-    const bottom = Math.min(Math.max((rect.y + rect.height) * zoom, top), height);
-    return { left: Math.floor(left) < 1, top: Math.floor(top) < 1, right: Math.ceil(right) > width - 1, bottom: Math.ceil(bottom) > height - 1 };
+test("the shell cuts the same corners the engine clips, at fractional edges, any zoom, window widths that don't divide by it, and a rounded window", () => {
+  const engineRadius = (insetX, insetY, windowRadius, own) => {
+    if (insetX < 1 && insetY < 1) return { kind: "window" };
+    if (insetX < windowRadius && insetY < windowRadius) return { kind: "near", concentric: windowRadius - Math.min(insetX, insetY), own };
+    return { kind: "own" };
   };
-  const shellTouches = (rect, window, zoom) => {
-    const radii = windowCornerRadii(rect, window, 12, zoom);
-    return { left: radii.upperLeft === 0 || radii.lowerLeft === 0, top: radii.upperLeft === 0 || radii.upperRight === 0, right: radii.upperRight === 0 || radii.lowerRight === 0, bottom: radii.lowerRight === 0 || radii.lowerLeft === 0 };
+  const engineCorners = (rect, widthDip, heightDip, zoom, windowRadius) => {
+    const left = Math.min(Math.max(rect.x * zoom, 0), widthDip);
+    const top = Math.min(Math.max(rect.y * zoom, 0), heightDip);
+    const right = Math.min(Math.max((rect.x + rect.width) * zoom, left), widthDip);
+    const bottom = Math.min(Math.max((rect.y + rect.height) * zoom, top), heightDip);
+    const insets = { l: Math.floor(left), t: Math.floor(top), r: widthDip - Math.ceil(right), b: heightDip - Math.ceil(bottom) };
+    return [engineRadius(insets.l, insets.t, windowRadius, 12), engineRadius(insets.r, insets.t, windowRadius, 12), engineRadius(insets.r, insets.b, windowRadius, 12), engineRadius(insets.l, insets.b, windowRadius, 12)];
   };
-  const window = { width: 800, height: 600 };
+  const shellExpects = (corner, zoom) => (corner.kind === "window" ? 0 : corner.kind === "near" ? Math.max(12, corner.concentric / zoom) : 12);
   let checked = 0;
-  for (const zoom of [0.5, 0.8, 1, 1.25, 2, 2.5, 3]) {
-    for (const edge of [0, 0.2, 0.3, 0.4, 0.5, 0.75, 0.99, 1, 1.2, 2, 8]) {
-      const rect = { x: edge, y: edge, width: 800 - 2 * edge, height: 600 - 2 * edge };
-      const engine = engineTouches(rect, window, zoom);
-      const shell = shellTouches(rect, window, zoom);
-      if (engine.left === engine.top && engine.right === engine.bottom) {
-        assert.equal(shell.left, engine.left, `left at ${edge} css px, zoom ${zoom}`);
-        assert.equal(shell.right, engine.right, `right at ${edge} css px, zoom ${zoom}`);
-        checked++;
+  for (const [widthDip, heightDip] of [[800, 600], [1000, 700], [1001, 667], [997, 613]]) {
+    for (const zoom of [0.5, 0.8, 1, 1.25, 2, 2.5, 3]) {
+      const window = { width: widthDip / zoom, height: heightDip / zoom };
+      for (const windowRadius of [0, 12, 19, 24]) {
+        const frame = { upperLeft: windowRadius, upperRight: windowRadius, lowerRight: windowRadius, lowerLeft: windowRadius };
+        for (const edge of [0, 0.2, 0.3, 0.4, 0.5, 0.75, 0.99, 1, 1.2, 2, 3, 8, 25]) {
+          const css = edge / zoom;
+          const rect = { x: css, y: css, width: window.width - 2 * css, height: window.height - 2 * css };
+          const engine = engineCorners(rect, widthDip, heightDip, zoom, windowRadius);
+          const shell = windowCornerRadii(rect, window, 12, zoom, frame);
+          const got = [shell.upperLeft, shell.upperRight, shell.lowerRight, shell.lowerLeft];
+          engine.forEach((corner, index) => assert.ok(Math.abs(got[index] - shellExpects(corner, zoom)) < 1e-9, `corner ${index} at ${edge} DIP, zoom ${zoom}, ${widthDip}x${heightDip}, radius ${windowRadius}: ${got[index]} vs ${JSON.stringify(corner)}`));
+          checked++;
+        }
       }
     }
   }
-  assert.ok(checked > 60);
-  assert.deepEqual(windowCornerRadii({ x: 0.75, y: 0.75, width: 1918.5, height: 1078.5 }, { width: 1920, height: 1080 }), { upperLeft: 0, upperRight: 0, lowerRight: 0, lowerLeft: 0 });
-  assert.deepEqual(windowCornerRadii({ x: 0.5, y: 0.5, width: 1919, height: 1079 }, { width: 1920, height: 1080 }, 12, 2.5).upperLeft, 12);
-  assert.deepEqual(windowCornerRadii({ x: 0.3, y: 0.3, width: 1919.4, height: 1079.4 }, { width: 1920, height: 1080 }, 12, 2.5).upperLeft, 0);
+  assert.ok(checked > 1000);
+  const third = { width: 1000 / 3, height: 700 / 3 };
+  assert.equal(windowCornerRadii({ x: 0, y: 0, width: 998.25 / 3, height: 700 / 3 }, third, 12, 3).upperRight, 12, "998.25 of 1000 DIP is inset, as the engine says");
+  for (const windowRadius of [12, 19, 24]) {
+    const frame = { upperLeft: windowRadius, upperRight: windowRadius, lowerRight: windowRadius, lowerLeft: windowRadius };
+    for (const inset of [0, 1, 2, 3, 8]) {
+      const radii = windowCornerRadii({ x: inset, y: inset, width: 800 - 2 * inset, height: 600 - 2 * inset }, { width: 800, height: 600 }, 12, 1, frame);
+      assert.equal(radii.upperLeft, inset === 0 ? 0 : inset < windowRadius ? Math.max(12, windowRadius - inset) : 12, `inset ${inset} at radius ${windowRadius}`);
+    }
+  }
 });

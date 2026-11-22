@@ -211,28 +211,61 @@ test("an event only the Linux engine sends is declared apart from the Mac's, and
   }
 });
 
-test("each window reads who decorates it once and counts each change of it, never another window's", async () => {
-  const { watchWindowDecorations, WINDOW_DECORATIONS_METHOD } = await import("./windowDecorations.ts");
-  const noted = [];
-  const listeners = new Set();
-  const asked = [];
-  const fake = {
-    bootstrap: { windowId: "main", profileId: "default", capabilities: [WINDOW_DECORATIONS_METHOD] },
-    invoke: async (method, args) => { asked.push([method, args]); return { decoratedBy: "app", answer: "none" }; },
-    call: async () => "null",
-    onEvent: (listener) => { listeners.add(listener); return () => listeners.delete(listener); },
+test("each window counts who decorates it when that changes and its desktop's answer once it settles, never another window's", async () => {
+  const { watchWindowDecorations, WINDOW_DECORATIONS_METHOD, ANSWER_SETTLE_MS, currentWindowCorners } = await import("./windowDecorations.ts");
+  const fakeTimers = () => {
+    const pending = new Map();
+    let next = 0;
+    return { set: (run, ms) => { pending.set(++next, { run, ms }); return next; }, clear: (id) => pending.delete(id), fire: () => { for (const [id, { run }] of [...pending]) { pending.delete(id); run(); } }, pending };
   };
-  const stop = watchWindowDecorations(fake, "main", (by, answer) => noted.push([by, answer]));
+  const fakeHost = (reply) => {
+    const listeners = new Set();
+    const asked = [];
+    let answer;
+    const host = {
+      bootstrap: { windowId: "main", profileId: "default", capabilities: [WINDOW_DECORATIONS_METHOD] },
+      invoke: (method, args) => { asked.push([method, args]); return new Promise((resolve) => { answer = () => resolve(reply); }); },
+      call: async () => "null",
+      onEvent: (listener) => { listeners.add(listener); return () => listeners.delete(listener); },
+    };
+    const emit = (payload) => { for (const listener of listeners) listener("ArdiaShell", "windowDecorations", payload); };
+    return { host, listeners, asked, emit, reply: () => answer() };
+  };
+
+  const timers = fakeTimers();
+  const gnome = fakeHost({ decoratedBy: "app", answer: "none", corners: { upperLeft: 9, upperRight: 9, lowerRight: 0, lowerLeft: 0 } });
+  const noted = [];
+  const stop = watchWindowDecorations(gnome.host, "main", (by, answer) => noted.push([by, answer]), timers);
   await new Promise(setImmediate);
-  const emit = (payload) => { for (const listener of listeners) listener("ArdiaShell", "windowDecorations", payload); };
-  emit({ windowId: "other", decoratedBy: "compositor", answer: "server" });
-  emit({ windowId: "main", decoratedBy: "app", answer: "none" });
-  emit({ windowId: "main", decoratedBy: "compositor", answer: "server" });
+  gnome.reply();
+  await new Promise(setImmediate);
+  assert.deepEqual(gnome.asked, [[WINDOW_DECORATIONS_METHOD, { args: ["main"] }]]);
+  assert.deepEqual(noted, [["app", undefined]]);
+  assert.deepEqual(currentWindowCorners(), { upperLeft: 9, upperRight: 9, lowerRight: 0, lowerLeft: 0 });
+  assert.equal([...timers.pending.values()][0].ms, ANSWER_SETTLE_MS);
+  gnome.emit({ windowId: "other", decoratedBy: "compositor", answer: "server" });
+  gnome.emit({ windowId: "main", decoratedBy: "app", answer: "none", corners: { upperLeft: 0, upperRight: 0, lowerRight: 0, lowerLeft: 0 } });
+  assert.deepEqual(noted, [["app", undefined]]);
+  assert.deepEqual(currentWindowCorners(), { upperLeft: 0, upperRight: 0, lowerRight: 0, lowerLeft: 0 });
+  timers.fire();
+  assert.deepEqual(noted, [["app", undefined], [undefined, "none"]]);
+  gnome.emit({ windowId: "main", decoratedBy: "app", answer: "client" });
+  assert.equal(noted.length, 2, "the answer counts once");
   stop();
-  emit({ windowId: "main", decoratedBy: "app", answer: "client" });
-  assert.deepEqual(asked, [[WINDOW_DECORATIONS_METHOD, { args: ["main"] }]]);
-  assert.deepEqual(noted, [["app", "none"], ["compositor", "server"]]);
-  assert.equal(listeners.size, 0);
-  const bare = { ...fake, bootstrap: { ...fake.bootstrap, capabilities: [] } };
-  watchWindowDecorations(bare, "main", () => assert.fail("an engine without the call is never asked"));
+  assert.equal(gnome.listeners.size, 0);
+
+  const hypr = fakeHost({ decoratedBy: "app", answer: "none" });
+  const hyprNoted = [];
+  watchWindowDecorations(hypr.host, "main", (by, answer) => hyprNoted.push([by, answer]), fakeTimers());
+  hypr.emit({ windowId: "main", decoratedBy: "compositor", answer: "none" });
+  hypr.emit({ windowId: "main", decoratedBy: "compositor", answer: "server" });
+  await new Promise(setImmediate);
+  hypr.reply();
+  await new Promise(setImmediate);
+  assert.deepEqual(hyprNoted, [["compositor", undefined], [undefined, "server"]], "the reply that arrives after an event is stale and ignored");
+
+  const bare = fakeHost({});
+  bare.host.bootstrap.capabilities = [];
+  watchWindowDecorations(bare.host, "main", () => assert.fail("an engine without the call is never asked"));
+  assert.deepEqual(bare.asked, []);
 });

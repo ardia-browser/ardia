@@ -49,7 +49,7 @@ extension WebKitExtensionBridge {
     return WebKitExtensionAccess.acceptsExternal(from: sender, manifest: manifest)
   }
 
-  private func receivers(of extensionId: String, api: String) -> [ObjectIdentifier] {
+  func receivers(of extensionId: String, api: String) -> [ObjectIdentifier] {
     listeners.filter { $0.value.extensionId == extensionId && !$0.value.relayed && $0.value.apis.contains(api) && !$0.value.port.isDisconnected }.map(\.key)
   }
 

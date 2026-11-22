@@ -140,7 +140,6 @@ extension WebKitExtensionShimNamespace {
           signals.set("message", (message) => {
             const set = listeners.get("runtime.onMessageExternal");
             let answered = false;
-            let waiting = false;
             const answer = (response) => {
               if (answered) return;
               answered = true;
@@ -148,16 +147,17 @@ extension WebKitExtensionShimNamespace {
             };
             let pending = 0;
             let kept = false;
+            let calling = true;
+            const unanswered = () => post({ reply: message.request, responded: false, listened: !!set && set.size > 0 });
             const settled = () => {
               pending -= 1;
-              if (!answered && !pending && !kept) post({ reply: message.request, responded: false, listened: true });
+              if (!calling && !answered && !pending && !kept) unanswered();
             };
             for (const listener of set ? [...set] : []) {
               try {
                 const result = listener(message.message, message.sender, answer);
-                if (result === true) waiting = kept = true;
+                if (result === true) kept = true;
                 else if (result && typeof result.then === "function") {
-                  waiting = true;
                   pending += 1;
                   result.then((value) => (answer(value), settled()), settled);
                 }
@@ -165,7 +165,8 @@ extension WebKitExtensionShimNamespace {
                 console.error(error);
               }
             }
-            if (!answered && !waiting) post({ reply: message.request, responded: false, listened: !!set && set.size > 0 });
+            calling = false;
+            if (!answered && !kept && !pending) unanswered();
           });
           signals.set("connect", (message) => {
             const set = listeners.get("runtime.onConnectExternal");

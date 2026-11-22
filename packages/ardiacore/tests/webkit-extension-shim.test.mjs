@@ -267,6 +267,24 @@ test("an extension answers another extension's message with sendResponse, and sa
   assert.equal(replies.r3.listened, true);
 });
 
+test("an async listener answers another extension with its promise's value, and a rejection doesn't cut off a listener still answering", async () => {
+  const { browser, ports } = world({ apis: ["runtime"], background: true });
+  browser.runtime.onMessageExternal.addListener((message) => (message.async ? Promise.resolve({ promised: true }) : undefined));
+  browser.runtime.onMessageExternal.addListener((message) => (message.reject ? { then: (_, fail) => fail(new Error("no")) } : undefined));
+  browser.runtime.onMessageExternal.addListener((message, sender, reply) => {
+    if (!message.reject) return;
+    setTimeout(() => reply({ slow: true }), 1);
+    return true;
+  });
+  const fire = (message) => ports[0].onMessage.fire({ ardia: 1, signal: "message", request: `r${message.n}`, message, sender: { id: "other" } });
+  fire({ n: 1, async: true });
+  fire({ n: 2, reject: true });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const replies = ports[0].posted.filter((m) => m.reply).map((m) => plain(m));
+  assert.deepEqual(replies.find((m) => m.reply === "r1").response, { promised: true });
+  assert.deepEqual(replies.filter((m) => m.reply === "r2").map((m) => [m.responded, m.response]), [[true, { slow: true }]]);
+});
+
 test("a Chrome-only member survives the engine making a fresh namespace object, as WebKit does after a collection", async () => {
   class Commands {
     getAll() {

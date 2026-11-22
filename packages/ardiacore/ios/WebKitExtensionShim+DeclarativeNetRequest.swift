@@ -77,7 +77,8 @@ extension WebKitExtensionShimNamespace {
                 try {
                   await direct("declarativeNetRequest", "update", [kind, options && typeof options === "object" ? options : {}]);
                   if (!BACKGROUND) {
-                    direct("declarativeNetRequest", "wakeMirror", [kind === "static" ? ["rulesets", "disabled"] : [kind]]).catch(() => {});
+                    const applied = await direct("declarativeNetRequest", "wakeMirror", [kind === "static" ? ["rulesets", "disabled"] : [kind]]).catch(() => true);
+                    if (applied === false) throw new Error("WebKit couldn't apply the updated rules; Chromium kept them and WebKit tries again on the next change.");
                     return undefined;
                   }
                   if (!(await queue(kind === "static" ? ["rulesets"] : [kind]))) throw new Error("WebKit couldn't apply the updated rules; Chromium kept them and WebKit tries again on the next change.");
@@ -93,7 +94,10 @@ extension WebKitExtensionShimNamespace {
           );
         }
         if (BACKGROUND) {
-          signals.set("dnrChanged", (message) => queue(Array.isArray(message.kinds) ? message.kinds : ["dynamic", "session", "rulesets"]));
+          signals.set("dnrChanged", (message) => {
+            const done = queue(Array.isArray(message.kinds) ? message.kinds : ["dynamic", "session", "rulesets"]);
+            if (message.acknowledge) done.then((applied) => direct("declarativeNetRequest", "mirrored", [applied !== false]).catch(() => {}));
+          });
           hold("declarativeNetRequest", true);
           queue(["dynamic", "session", "rulesets"]);
         }

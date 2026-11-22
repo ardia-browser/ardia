@@ -32,7 +32,7 @@ function downloadOf(call: WebKitExtensionCall, s: BrowserState, id: unknown): Do
 }
 
 const MAX_PATTERN = 256;
-const MAX_MATCHED = 2048;
+const MAX_MATCHED = 1024;
 const SEARCH_BUDGET_MS = 200;
 const REFERS_BACK = /\\[1-9]|\\k<|\(\?<?[=!]/;
 const REPEATS = new Set(["*", "+", "{"]);

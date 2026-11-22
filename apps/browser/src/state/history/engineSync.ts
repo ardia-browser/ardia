@@ -77,13 +77,13 @@ const inApp = (engine: string) => engineProfiles(store()).includes(engine);
 
 let legacyMoved = false;
 
-function setView(engine: string, list: HistoryEntry[], floor?: number, reloaded = false) {
+function setView(engine: string, list: HistoryEntry[], floor?: number, reloaded = false, replayed: string[] = []) {
   useBrowser.setState((s) => {
     if (!engineProfiles(s).includes(engine)) return {};
     const was = s.history[engine];
     const full = list.length >= MAX_HISTORY ? list[list.length - 1]!.lastVisit : -Infinity;
     const reloads = (was?.reloads ?? 0) + (reloaded ? 1 : 0);
-    const next = { list, floor: Math.max(floor ?? was?.floor ?? -Infinity, full), ready: legacyMoved || !!was?.ready, reloads };
+    const next = { list, floor: Math.max(floor ?? was?.floor ?? -Infinity, full), ready: legacyMoved || !!was?.ready, reloads, ...(reloaded ? { replayed } : {}) };
     if (was && was.list === next.list && was.floor === next.floor && was.ready === next.ready && (was.reloads ?? 0) === reloads) return {};
     return { history: { ...s.history, [engine]: next } };
   });
@@ -211,8 +211,8 @@ function load(engine: string): Promise<void> {
         const list = read.filter((e) => isWebPageUrl(e.url)).map(toEntry).sort(byLastVisit);
         const live = state.queued.filter(isListChange);
         if (state.queued.some((c) => c.kind === "deleted" && c.all)) state.again = true;
-        setView(engine, list, floor, true);
-        if (live.length) setView(engine, applyHistoryChanges(list, live, gapNoter(engine)), floor);
+        const visited = live.flatMap((c) => (c.kind === "visit" ? [c.url] : []));
+        setView(engine, applyHistoryChanges(list, live, gapNoter(engine)), floor, true, visited);
         if (inApp(engine)) loaded.add(engine);
       } while (state.again && inApp(engine));
     } catch (error) {

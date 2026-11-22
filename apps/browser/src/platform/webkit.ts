@@ -43,6 +43,7 @@ export const setWebKitZoom = (profile: string, host: string, zoom: number) => ca
 export const syncWebKitExtensions = (profile: string, extensions: WebKitExtension[]) => call("webKit.syncExtensions", { profile, extensions });
 export const onWebKitCount = (listener: (e: { name: WebKitCount; epoch?: string }) => void) => on("webKit.counted", listener);
 export const onWebKitExtensionCall = (listener: (e: WebKitExtensionCall) => void) => on("webKit.extensionCall", listener);
+export const onWebKitExtensionCallsCancelled = (listener: (e: { ids: string[] }) => void) => on("webKit.extensionCallsCancelled", listener);
 export const onWebKitExtensionListeners = (listener: (e: WebKitExtensionListeners) => void) => on("webKit.extensionListeners", listener);
 export const onWebKitExtensionsWanted = (listener: (e: { profile: string }) => void) => on("webKit.extensionsWanted", listener);
 export const replyToWebKitExtension = (id: string, reply: WebKitExtensionReply) => call("webKit.extensionReply", { id, reply });

@@ -1,6 +1,7 @@
 import { listExtensions, onExtensionsChanged, type InstalledExtension } from "../../platform/extensions";
 import {
   onWebKitExtensionCall,
+  onWebKitExtensionCallsCancelled,
   onWebKitExtensionListeners,
   onWebKitExtensionsWanted,
   replyToWebKitExtension,
@@ -10,7 +11,7 @@ import {
 } from "../../platform/webkit";
 import { noteWebKitExtensions } from "../telemetry/engineSwitchCounts";
 import { useBrowser } from "../browser/store";
-import { answerExtensionCall } from "./webKitExtensionApis";
+import { answerExtensionCall, noteCancelledCalls } from "./webKitExtensionApis";
 import { noteExtensionList, noteExtensionListeners } from "./webKitExtensionEvents";
 import { consentToken, type ConsentToken } from "../telemetry/client";
 
@@ -106,6 +107,7 @@ function listen() {
     if (event === "reloaded") void syncWhenReloaded(profile, id);
   });
   onWebKitExtensionCall((call) => void answerWebKitExtension(call));
+  onWebKitExtensionCallsCancelled(({ ids }) => noteCancelledCalls(ids));
   onWebKitExtensionListeners(noteExtensionListeners);
   onWebKitExtensionsWanted(({ profile }) => {
     restagesAsked.set(profile, (restagesAsked.get(profile) ?? 0) + 1);

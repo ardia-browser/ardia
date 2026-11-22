@@ -60,8 +60,6 @@ const listen = (apis) => emit("webKit.extensionListeners", { profile: "", base: 
 
 test("bookmarks read and write the app's own bookmarks, with Chrome's root ids, and refuse what Chrome refuses", async () => {
   windowWithTabs("https://home.example/");
-  let enabled = true;
-  globalThis.acTestUserScripts = { engine: { list: async () => [{ id: "abc", name: "Keeper", enabled, mayModify: true, location: "INTERNAL", sites: [], permissions: [] }] } };
   try {
     useBrowser.setState({ bookmarksReady: {} });
     let answered = false;
@@ -73,12 +71,12 @@ test("bookmarks read and write the app's own bookmarks, with Chrome's root ids, 
     useBrowser.setState({ bookmarksReady: {} });
     const late = ask("bookmarks", "create", [{ parentId: "1", title: "Never" }]);
     await tick(5);
-    enabled = false;
+    emit("webKit.extensionCallsCancelled", { ids: [`t${calls}`] });
     useBrowser.setState({ bookmarksReady: { "": true } });
-    await assert.rejects(late, /turned off/, "a call that waited doesn't act once its extension is off");
+    await assert.rejects(late, /turned off/, "a call WebKit cancelled while it waited doesn't act");
     assert.equal(Object.values(S().bookmarks.nodes).some((n) => n.title === "Never"), false);
   } finally {
-    delete globalThis.acTestUserScripts;
+    useBrowser.setState({ bookmarksReady: { "": true } });
   }
   const folder = await ask("bookmarks", "create", [{ parentId: "1", title: "Work" }]);
   assert.equal(folder.parentId, "1");
@@ -240,6 +238,10 @@ test("history searches the profile's history the way Chrome does, last day by de
   reload([]);
   await tick();
   assert.deepEqual(sentEvents.map((e) => e.args[0]), [{ allHistory: true, urls: [] }], "a reload that finds history cleared still says so");
+  sentEvents.length = 0;
+  useBrowser.setState((s) => ({ history: { ...s.history, "": { list: [entry("https://during.example/", "During", now)], floor: -Infinity, ready: true, reloads: s.history[""].reloads + 1, replayed: ["https://during.example/"] } } }));
+  await tick();
+  assert.deepEqual(sentEvents.map((e) => [e.event, e.args[0].url]), [["onVisited", "https://during.example/"]], "a visit made while history reloaded is still reported");
   listen([]);
 });
 

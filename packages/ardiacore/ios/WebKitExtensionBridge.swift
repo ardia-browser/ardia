@@ -68,6 +68,7 @@ final class WebKitExtensionBridge {
   private var oneShots: [UUID: WebKitExtensionNativeHost] = [:]
   private var announced: Set<String> = []
   private var watched: Set<String> = []
+  private var dnrWaiters: [String: [(Bool) -> Void]] = [:]
   var externals: [String: External] = [:]
   var channels: [String: Channel] = [:]
   private var idleIntervals: [String: Int] = [:]
@@ -120,6 +121,23 @@ final class WebKitExtensionBridge {
   }
 
   func deliverSignal(_ message: [String: Any], to extensionId: String, api: String) { signal(message, to: extensionId, api: api) }
+
+  static let mirrorDeadline: TimeInterval = 3
+
+  private func awaitMirror(_ extensionId: String, kinds: [String], done: @escaping (Bool) -> Void) {
+    var settled = false
+    let once = { (applied: Bool) in
+      guard !settled else { return }
+      settled = true
+      done(applied)
+    }
+    dnrWaiters[extensionId, default: []].append(once)
+    DispatchQueue.main.asyncAfter(deadline: .now() + Self.mirrorDeadline) { MainActor.assumeIsolated { once(true) } }
+    deliverWaking(["signal": "dnrChanged", "kinds": kinds, "acknowledge": true], to: extensionId, api: "declarativeNetRequest") { [weak self] in
+      guard self?.receivers(of: extensionId, api: "declarativeNetRequest").isEmpty != false else { return }
+      self?.dnrWaiters.removeValue(forKey: extensionId)?.forEach { $0(true) }
+    }
+  }
 
   func deliverWaking(_ message: [String: Any], to extensionId: String, api: String, done: @escaping () -> Void = {}) {
     guard hub?.loadedExtension(extensionId)?.apis.contains(api) == true else { return done() }
@@ -244,7 +262,12 @@ final class WebKitExtensionBridge {
     if api == "runtime", runtimeCall(method, args: args, context: body["context"] as? String, loaded: loaded, reply: reply) { return }
     if api == "declarativeNetRequest", method == "wakeMirror" {
       let kinds = (args.first as? [String]) ?? ["dynamic", "session", "rulesets"]
-      return deliverWaking(["signal": "dnrChanged", "kinds": kinds], to: loaded.id, api: api) { reply(["result": NSNull()], nil) }
+      return awaitMirror(loaded.id, kinds: kinds) { applied in reply(["result": applied], nil) }
+    }
+    if api == "declarativeNetRequest", method == "mirrored" {
+      let applied = args.first as? Bool ?? true
+      for waiter in dnrWaiters.removeValue(forKey: loaded.id) ?? [] { waiter(applied) }
+      return reply(["result": NSNull()], nil)
     }
     if Self.nativeApis.contains(api) { return nativeCall(api, method, args: args, untrusted: relayed, loaded: loaded, hub: hub, reply: reply) }
     let tabs = (body["tabs"] as? [Any] ?? []).map { hub.resolve($0 as? [String: Any]) }
@@ -339,11 +362,15 @@ final class WebKitExtensionBridge {
   }
 
   func dropExtension(_ id: String) {
+    var cancelled: [String] = []
     for (request, waiting) in Self.pending where waiting.extensionId == id && waiting.bridge == ObjectIdentifier(self) {
       Self.pending.removeValue(forKey: request)
       waiting.timeout.cancel()
       waiting.reply(nil, Self.failure("The extension was unloaded."))
+      cancelled.append(request)
     }
+    if !cancelled.isEmpty { ArdiaEvents.emit("webKit.extensionCallsCancelled", data: ArdiaConsentStamp.begin().onto(["ids": cancelled])) }
+    for reply in dnrWaiters.removeValue(forKey: id) ?? [] { reply(false) }
     for (key, listener) in listeners where listener.extensionId == id {
       listener.port.disconnect()
       listeners.removeValue(forKey: key)
@@ -401,9 +428,9 @@ final class WebKitExtensionBridge {
     let base = ArdiaHost.baseProfile(of: hub.profile)
     var wanted = listeners.values.reduce(into: Set<String>()) { keys, listener in
       if listener.apis.contains("storage") { keys.insert("storage|\(listener.extensionId)") }
-      if listener.apis.contains("declarativeNetRequest") { keys.insert("dnr|\(listener.extensionId)") }
     }
     for entry in hub.loaded.values where entry.apis.contains("alarms") { wanted.insert("alarms|\(entry.id)") }
+    for entry in hub.loaded.values where entry.apis.contains("declarativeNetRequest") { wanted.insert("dnr|\(entry.id)") }
     for key in wanted.symmetricDifference(watched) {
       let parts = key.split(separator: "|", maxSplits: 1).map(String.init)
       guard parts.count == 2, let feature = WebKitExtensionShared.Feature(rawValue: parts[0]) else { continue }

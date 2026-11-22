@@ -251,6 +251,7 @@ export type EngineEvents = {
   "webKit.siteDataWanted": { id: string; profile: string; origin: string; epoch?: string };
   "webKit.siteCookiesChanged": { profile: string; domains: string[]; epoch?: string };
   "webKit.extensionCall": WebKitExtensionCall;
+  "webKit.extensionCallsCancelled": { ids: string[]; epoch?: string };
   "webKit.extensionListeners": WebKitExtensionListeners;
   "webKit.extensionsWanted": { profile: string };
   "webKit.notification": { profile: string; notification: WebNotification; epoch?: string };

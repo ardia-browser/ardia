@@ -111,8 +111,11 @@ function historyEvents(s: BrowserState, prev: BrowserState, base: string): Event
   const before = historyOf(prev, profileId);
   const now = historyOf(s, profileId);
   if (before === now) return [];
-  if ((historyViewOf(prev, profileId)?.reloads ?? 0) !== (historyViewOf(s, profileId)?.reloads ?? 0)) {
-    return !now.length && before.length ? [{ api: "history", event: "onVisitRemoved", args: [{ allHistory: true, urls: [] }] }] : [];
+  const view = historyViewOf(s, profileId);
+  if ((historyViewOf(prev, profileId)?.reloads ?? 0) !== (view?.reloads ?? 0)) {
+    const replayed = new Set(view?.replayed ?? []);
+    const visits: Event[] = now.filter((h) => replayed.has(h.url)).map((h) => ({ api: "history", event: "onVisited", args: [chromeHistoryItem(h)] }));
+    return !now.length && before.length ? [...visits, { api: "history", event: "onVisitRemoved", args: [{ allHistory: true, urls: [] }] }] : visits;
   }
   const was = new Map<string, HistoryEntry>(before.map((h) => [h.url, h]));
   const events: Event[] = [];

@@ -1,4 +1,3 @@
-import { listExtensions } from "../../platform/extensions";
 import { addHistoryVisits, deleteHistoryUrls } from "../../platform/history";
 import { clearBrowsingData } from "../profiles/profileData";
 import type { WebKitExtensionCall } from "../../platform/webkit";
@@ -290,6 +289,12 @@ const tabGroups: Record<string, Handler> = {
 const handlers: Record<string, Record<string, Handler>> = { downloads: downloadHandlers, history, bookmarks, tabGroups, ...moreHandlers };
 
 const BOOKMARKS_READY_MS = 5000;
+const parkedCalls = new Set<string>();
+const cancelledCalls = new Set<string>();
+
+export function noteCancelledCalls(ids: readonly string[]) {
+  for (const id of ids) if (parkedCalls.has(id)) cancelledCalls.add(id);
+}
 
 function bookmarksLoaded(engine: string): Promise<void> {
   if (store().bookmarksReady[engine]) return Promise.resolve();
@@ -313,9 +318,13 @@ export async function answerExtensionCall(call: WebKitExtensionCall): Promise<{ 
   if (!handler) return { error: `${call.api}.${call.method} isn't supported.` };
   try {
     if (call.api === "bookmarks" && !store().bookmarksReady[call.base]) {
-      await bookmarksLoaded(call.base);
-      const running = (await listExtensions(call.base)).some((x) => x.id === call.extensionId && x.enabled);
-      if (!running) return { error: "The extension was turned off while its bookmarks call waited." };
+      parkedCalls.add(call.id);
+      try {
+        await bookmarksLoaded(call.base);
+      } finally {
+        parkedCalls.delete(call.id);
+      }
+      if (cancelledCalls.delete(call.id)) return { error: "The extension was turned off while its bookmarks call waited." };
     }
     const result = await handler(call, store());
     return { result: result === undefined ? null : result };

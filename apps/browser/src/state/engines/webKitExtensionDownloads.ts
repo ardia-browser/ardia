@@ -35,10 +35,17 @@ const MAX_PATTERN = 256;
 const MAX_MATCHED = 2048;
 const REFERS_BACK = /\\[1-9]|\\k<|\(\?<?[=!]/;
 const REPEATS = new Set(["*", "+", "{"]);
+const MAX_UNBOUNDED_REPEATS = 2;
+const MAX_QUANTIFIERS = 6;
+const BRACE_QUANTIFIER = /^\{(\d+)(,(\d*))?\}/;
+const MAX_BOUNDED_REPEAT = 16;
+const unboundedBrace = (brace: RegExpExecArray | null) => !!brace && Math.max(Number(brace[1]), brace[2] ? (brace[3] ? Number(brace[3]) : Infinity) : 0) > MAX_BOUNDED_REPEAT;
 
 function backtracks(pattern: string): boolean {
   if (REFERS_BACK.test(pattern)) return true;
   const open: boolean[] = [];
+  let unbounded = 0;
+  let quantifiers = 0;
   for (let i = 0; i < pattern.length; i++) {
     const c = pattern[i];
     if (c === "\\") {
@@ -47,7 +54,12 @@ function backtracks(pattern: string): boolean {
       for (i++; i < pattern.length && pattern[i] !== "]"; i++) if (pattern[i] === "\\") i++;
     } else if (c === "(") {
       open.push(false);
+    } else if (c === "?") {
+      if (!"(*+?}".includes(pattern[i - 1] ?? "(")) quantifiers++;
     } else if (c === "|" || REPEATS.has(c!)) {
+      const brace = c === "{" ? BRACE_QUANTIFIER.exec(pattern.slice(i)) : null;
+      if (c === "*" || c === "+" || unboundedBrace(brace)) unbounded++;
+      if (c !== "|" && (c !== "{" || brace)) quantifiers++;
       if (open.length) open[open.length - 1] = true;
     } else if (c === ")") {
       const branching = open.pop() ?? false;
@@ -55,7 +67,7 @@ function backtracks(pattern: string): boolean {
       if (branching && open.length) open[open.length - 1] = true;
     }
   }
-  return false;
+  return unbounded > MAX_UNBOUNDED_REPEATS || quantifiers > MAX_QUANTIFIERS;
 }
 
 const matches = (pattern: RegExp, value: string) => pattern.test(value.length > MAX_MATCHED ? value.slice(0, MAX_MATCHED) : value);

@@ -235,11 +235,12 @@ final class WebKitExtensionBridge {
     if Self.nativeApis.contains(api) { return nativeCall(api, method, args: args, untrusted: relayed, loaded: loaded, hub: hub, reply: reply) }
     let tabs = (body["tabs"] as? [Any] ?? []).map { hub.resolve($0 as? [String: Any]) }
     let windows = hub.windowTabKeys()
-    if api == "sidePanel" {
-      return reply(hub.sidePanelCall(method, args: args, tabs: tabs, extensionId: loaded.id), nil)
-    }
     let gesture = { [self] in
       !relayed && body["activation"] as? Bool == true && hasPageGesture(loaded.id) || hub.shownTab().map(loaded.context.hasActiveUserGesture(in:)) == true
+    }
+    if api == "sidePanel" {
+      if method == "open", !gesture() { return reply(["error": "`sidePanel.open()` may only be called in response to a user gesture."], nil) }
+      return reply(hub.sidePanelCall(method, args: args, tabs: tabs, extensionId: loaded.id), nil)
     }
     if api == "downloads", method == "open" {
       guard Self.apiPermissions(loaded).contains("downloads.open") else { return reply(["error": "The extension doesn't have the downloads.open permission."], nil) }

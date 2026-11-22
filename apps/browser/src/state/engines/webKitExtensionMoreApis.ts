@@ -333,6 +333,7 @@ const REMOVABLE = ["appcache", "cache", "cacheStorage", "cookies", "downloads", 
 type Removable = (typeof REMOVABLE)[number];
 
 const SITE_DATA = new Set<Removable>(["appcache", "cacheStorage", "cookies", "fileSystems", "indexedDB", "localStorage", "serviceWorkers", "webSQL"]);
+const SITE_DATA_CLEARED_TOGETHER: readonly Removable[] = ["cacheStorage", "cookies", "fileSystems", "indexedDB", "localStorage", "serviceWorkers"];
 
 export function browsingDataTypes(wanted: Iterable<string>): BrowsingDataType[] {
   const types = new Set<BrowsingDataType>();
@@ -350,7 +351,10 @@ const listsSites = (value: unknown) => Array.isArray(value) && value.length > 0;
 async function removeData(call: WebKitExtensionCall, options: unknown, wanted: Iterable<string>) {
   const { since, origins, excludeOrigins, hostnames } = optionsOf(options);
   if (listsSites(origins) || listsSites(excludeOrigins) || listsSites(hostnames)) fail("Removing data for only some sites isn't supported.");
-  const types = browsingDataTypes(wanted);
+  const asked = new Set(wanted);
+  if ([...asked].some((name) => SITE_DATA.has(name as Removable)) && !SITE_DATA_CLEARED_TOGETHER.every((name) => asked.has(name)))
+    fail("Removing only some kinds of site data isn't supported: cookies, local storage, IndexedDB, service workers, cache storage and file systems are removed together.");
+  const types = browsingDataTypes(asked);
   if (types.length) await clearBrowsingData(call.base, types, typeof since === "number" && since > 0 ? since : undefined);
 }
 

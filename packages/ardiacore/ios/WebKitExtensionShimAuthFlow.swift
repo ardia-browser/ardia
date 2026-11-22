@@ -21,6 +21,13 @@ final class WebKitExtensionAuthFlow: NSObject, WKNavigationDelegate, NSWindowDel
 
   static func redirectHost(_ extensionId: String) -> String { "\(extensionId).chromiumapp.org" }
 
+  static func loadable(_ url: URL?) -> Bool {
+    guard let url, let scheme = url.scheme?.lowercased() else { return false }
+    if scheme == "https" || scheme == "about" { return true }
+    guard scheme == "http", let host = url.host?.lowercased() else { return false }
+    return host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "[::1]"
+  }
+
   init(extensionId: String, title: String, options: [String: Any], dataStore: WKWebsiteDataStore) {
     self.extensionId = extensionId
     self.title = title
@@ -36,6 +43,12 @@ final class WebKitExtensionAuthFlow: NSObject, WKNavigationDelegate, NSWindowDel
 
   func start(_ url: URL, done: @escaping (_ redirect: String?, _ error: String?) -> Void) {
     self.done = done
+    guard Self.loadable(url) else { return finish(nil, Self.notLoaded) }
+    if !interactive {
+      let expire = DispatchWorkItem { [weak self] in MainActor.assumeIsolated { self?.finish(nil, Self.interactionRequired) } }
+      waiting = expire
+      DispatchQueue.main.asyncAfter(deadline: .now() + nonInteractiveTimeout, execute: expire)
+    }
     view.load(URLRequest(url: url))
   }
 
@@ -64,11 +77,7 @@ final class WebKitExtensionAuthFlow: NSObject, WKNavigationDelegate, NSWindowDel
   private func needsUser() {
     guard done != nil else { return }
     guard interactive else {
-      if abortOnLoad { return finish(nil, Self.interactionRequired) }
-      let expire = DispatchWorkItem { [weak self] in MainActor.assumeIsolated { self?.finish(nil, Self.interactionRequired) } }
-      waiting?.cancel()
-      waiting = expire
-      DispatchQueue.main.asyncAfter(deadline: .now() + nonInteractiveTimeout, execute: expire)
+      if abortOnLoad { finish(nil, Self.interactionRequired) }
       return
     }
     show()
@@ -97,7 +106,14 @@ final class WebKitExtensionAuthFlow: NSObject, WKNavigationDelegate, NSWindowDel
   nonisolated func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
                            decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void) {
     MainActor.assumeIsolated {
-      decisionHandler(caught(navigationAction.request.url) ? .cancel : .allow)
+      guard navigationAction.targetFrame?.isMainFrame == true else { return decisionHandler(.allow) }
+      let url = navigationAction.request.url
+      if caught(url) { return decisionHandler(.cancel) }
+      guard Self.loadable(url) else {
+        decisionHandler(.cancel)
+        return finish(nil, Self.notLoaded)
+      }
+      decisionHandler(.allow)
     }
   }
 
@@ -107,7 +123,6 @@ final class WebKitExtensionAuthFlow: NSObject, WKNavigationDelegate, NSWindowDel
 
   nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
     MainActor.assumeIsolated {
-      waiting?.cancel()
       if !caught(webView.url) { needsUser() }
     }
   }

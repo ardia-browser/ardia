@@ -12,9 +12,11 @@ extension WebKitExtensionHub {
     let asking = permissions.subtracting(allowed).intersection(webExtension.optionalPermissions)
     guard !asking.isEmpty, hasGesture(tab, extensionContext) else { return completionHandler(allowed, nil) }
     WebKitExtensionGrants.request(profile: profile, extensionId: id, apis: asking.map(\.rawValue), hosts: []) { [weak self] written in
-      guard let written else { return completionHandler(allowed, nil) }
-      self?.adoptGrants(written, for: id)
-      completionHandler(allowed.union(asking.filter { written.apis.contains($0.rawValue) }), nil)
+      guard let self else { return completionHandler([], nil) }
+      let now = written ?? self.loaded[id]?.grants ?? .none
+      let current = permissions.intersection(webExtension.requestedPermissions.union(webExtension.optionalPermissions.filter { now.apis.contains($0.rawValue) }))
+      if let written { self.adoptGrants(written, for: id) }
+      completionHandler(current, nil)
     }
   }
 
@@ -37,9 +39,12 @@ extension WebKitExtensionHub {
     let asking: Set<WKWebExtension.MatchPattern> = matchPatterns.subtracting(allowed).filter { webExtension.optionalPermissionMatchPatterns.contains($0) || webExtension.requestedPermissionMatchPatterns.contains($0) }
     guard !asking.isEmpty, hasGesture(tab, extensionContext) else { return completionHandler(allowed, nil) }
     WebKitExtensionGrants.request(profile: profile, extensionId: id, apis: [], hosts: asking.map(\.string)) { [weak self] written in
-      guard let written else { return completionHandler(allowed, nil) }
-      self?.adoptGrants(written, for: id)
-      completionHandler(allowed.union(asking.filter { written.hosts.contains($0.string) }), nil)
+      guard let self else { return completionHandler([], nil) }
+      let now = written ?? self.loaded[id]?.grants ?? .none
+      let everything = self.allSites.contains(id)
+      let current = matchPatterns.filter { now.hosts.contains($0.string) || (everything && webExtension.requestedPermissionMatchPatterns.contains($0)) }
+      if let written { self.adoptGrants(written, for: id) }
+      completionHandler(current, nil)
     }
   }
 
@@ -50,7 +55,11 @@ extension WebKitExtensionHub {
 
   private func adoptGrants(_ grants: WebKitExtensionGrants, for id: String) {
     guard var entry = loaded[id] else { return }
+    let added = grants.apis.subtracting(entry.grants.apis)
     entry.grants = grants
     loaded[id] = entry
+    guard !added.isEmpty else { return }
+    let base = ArdiaHost.baseProfile(of: profile)
+    DispatchQueue.main.async { ArdiaEvents.emit("webKit.extensionsWanted", data: ArdiaConsentStamp.begin().onto(["profile": base])) }
   }
 }

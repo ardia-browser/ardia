@@ -9,7 +9,7 @@ struct WebKitExtensionStaging {
     let signature: String
   }
 
-  static let revision = 6
+  static let revision = 7
   static let shimmed = WebKitExtensionShim.names
   static let workerFile = "__ardia_webkit_worker.js"
   static let backgroundFlagFile = "__ardia_webkit_background.js"
@@ -129,7 +129,7 @@ struct WebKitExtensionStaging {
       contentScripts = contentScripts.map(withContentShim)
       if !contentScripts.isEmpty { edited["content_scripts"] = contentScripts }
     }
-    if let scripts = edited["content_scripts"] as? [[String: Any]] { edited["content_scripts"] = scripts.map(withoutPorts) }
+    if let scripts = edited["content_scripts"] as? [[String: Any]] { edited["content_scripts"] = scripts.compactMap(withoutPorts) }
     let connectable = ((manifest["externally_connectable"] as? [String: Any])?["matches"] as? [Any] ?? []).compactMap { $0 as? String }
     if !connectable.isEmpty {
       try pageAlias.write(to: target.appendingPathComponent(pageFile), atomically: true, encoding: .utf8)
@@ -167,25 +167,40 @@ struct WebKitExtensionStaging {
     return edited
   }
 
-  static func withoutPorts(_ entry: [String: Any]) -> [String: Any] {
+  static func withoutPorts(_ entry: [String: Any]) -> [String: Any]? {
     var edited = entry
-    for key in ["matches", "exclude_matches"] {
-      guard let patterns = entry[key] as? [String] else { continue }
+    if let patterns = entry["matches"] as? [String] {
       var seen = Set<String>()
-      edited[key] = patterns.map(withoutPort).filter { seen.insert($0).inserted }
+      let kept = patterns.filter { !hasFixedPort($0) }.map(withoutPort).filter { seen.insert($0).inserted }
+      guard !kept.isEmpty else { return nil }
+      edited["matches"] = kept
+    }
+    if let patterns = entry["exclude_matches"] as? [String] {
+      var seen = Set<String>()
+      edited["exclude_matches"] = patterns.map(withoutPort).filter { seen.insert($0).inserted }
     }
     return edited
   }
 
-  static func withoutPort(_ pattern: String) -> String {
-    guard let scheme = pattern.range(of: "://") else { return pattern }
+  private static func port(of pattern: String) -> (host: Range<String.Index>, colon: String.Index)? {
+    guard let scheme = pattern.range(of: "://") else { return nil }
     let rest = pattern[scheme.upperBound...]
     let hostEnd = rest.firstIndex(of: "/") ?? rest.endIndex
-    let host = rest[..<hostEnd]
-    guard !host.hasPrefix("["), let colon = host.lastIndex(of: ":") else { return pattern }
-    let port = host[host.index(after: colon)...]
-    guard port == "*" || (!port.isEmpty && port.allSatisfy(\.isNumber)) else { return pattern }
-    return String(pattern[..<scheme.upperBound]) + host[..<colon] + rest[hostEnd...]
+    let host = rest.startIndex..<hostEnd
+    guard !pattern[host].hasPrefix("["), let colon = pattern[host].lastIndex(of: ":") else { return nil }
+    let digits = pattern[pattern.index(after: colon)..<hostEnd]
+    guard digits == "*" || (!digits.isEmpty && digits.allSatisfy(\.isNumber)) else { return nil }
+    return (host, colon)
+  }
+
+  static func hasFixedPort(_ pattern: String) -> Bool {
+    guard let found = port(of: pattern) else { return false }
+    return pattern[pattern.index(after: found.colon)..<found.host.upperBound] != "*"
+  }
+
+  static func withoutPort(_ pattern: String) -> String {
+    guard let found = port(of: pattern) else { return pattern }
+    return String(pattern[..<found.colon]) + pattern[found.host.upperBound...]
   }
 
   private static func relative(_ path: String) -> String { String(path.drop { $0 == "/" }) }
@@ -203,8 +218,10 @@ struct WebKitExtensionStaging {
     let wrapper = (background["type"] as? String) == "module"
       ? imports.map { "import \"/\($0)\";\n" }.joined()
       : "importScripts(\(imports.map { "\"/\($0)\"" }.joined(separator: ", ")));\n"
-    try wrapper.write(to: target.appendingPathComponent(workerFile), atomically: true, encoding: .utf8)
-    background["service_worker"] = workerFile
+    let folder = (path as NSString).deletingLastPathComponent
+    let wrapperPath = folder.isEmpty ? workerFile : "\(folder)/\(workerFile)"
+    try wrapper.write(to: target.appendingPathComponent(wrapperPath), atomically: true, encoding: .utf8)
+    background["service_worker"] = wrapperPath
   }
 
   static func injected(_ html: String, background: Bool = false) -> String {

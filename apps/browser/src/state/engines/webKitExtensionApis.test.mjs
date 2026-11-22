@@ -262,6 +262,17 @@ test("clearing browsing data for some sites is refused instead of clearing every
   assert.deepEqual(engineVerbs("profiles"), ["clearBrowsingData"]);
 });
 
+test("clearing only cookies is refused instead of clearing every site's storage with them", async () => {
+  engineCalls.length = 0;
+  await assert.rejects(ask("browsingData", "removeCookies", [{}]), /only some kinds of site data/);
+  await assert.rejects(ask("browsingData", "removeLocalStorage", [{}]), /only some kinds of site data/);
+  await assert.rejects(ask("browsingData", "remove", [{}, { cookies: true, history: true }]), /only some kinds of site data/);
+  assert.deepEqual(engineVerbs("profiles"), [], "nothing is cleared, history included, when part of the request can't be honoured");
+  const settings = await ask("browsingData", "settings", []);
+  await ask("browsingData", "remove", [{}, settings.dataToRemove]);
+  assert.deepEqual(engineVerbs("profiles"), ["clearBrowsingData"], "everything Settings' defaults name, site data together, still goes");
+});
+
 test("a dangerous download is kept only after you agree, and a download opens only once it's finished", async () => {
   windowWithTabs("https://home.example/");
   S().upsertDownload(download({ id: "wk-danger", url: "https://files.example/x.dmg", path: "/tmp/x.dmg", dangerous: true }));
@@ -306,10 +317,11 @@ test("an extension opens a finished download only after you agree, and a search 
     shellNativeModules.ArdiaSystem.openFile = original;
     delete globalThis.acTestUserScripts;
   }
-  for (const urlRegex of ["(a+)+$", "(?:x*)*y", "(a)\\1", "(?=a)a", "a".repeat(300), "(a|aa)+$", "(?:b|bb){2,}", "((a|b)c)*"]) {
+  for (const urlRegex of ["(a+)+$", "(?:x*)*y", "(a)\\1", "(?=a)a", "a".repeat(300), "(a|aa)+$", "(?:b|bb){2,}", "((a|b)c)*", ".*.*.*.*.*.*.*.*.*.*Z", "a+b+c+", "x{2,}y{3,}z{1,}", "a{1,500}b{1,500}c{1,500}", "a?a?a?a?a?a?a?aaaaaaa"]) {
     await assert.rejects(ask("downloads", "search", [{ urlRegex }]), /Invalid query filter/, urlRegex);
   }
   assert.equal((await ask("downloads", "search", [{ urlRegex: "^https://files\\.example/run" }])).length, 1);
+  assert.equal((await ask("downloads", "search", [{ urlRegex: "^https://.*\\.example/.*run(?:ner)?\\.d[a-z]{1,3}$" }])).length, 0);
 });
 
 test("a search from a private window stays in that private window", async () => {

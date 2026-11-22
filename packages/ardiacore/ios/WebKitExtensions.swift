@@ -22,6 +22,7 @@ final class WebKitExtensions {
   private var wantedByProfile: [String: [Wanted]] = [:]
   private var asked: Set<String> = []
   private var loadRetries: [String: (failed: Set<String>, attempt: Int)] = [:]
+  private var generations: [String: Int] = [:]
   private static let retryDelays: [TimeInterval] = [2, 5, 15]
   private static let staging = DispatchQueue(label: "dev.ardia.webkit.extensions.staging", qos: .userInitiated)
 
@@ -106,10 +107,14 @@ final class WebKitExtensions {
     let missing = Set(entries.compactMap { $0["id"] as? String }).subtracting(wanted.map(\.id))
     DispatchQueue.main.async {
       MainActor.assumeIsolated {
+        let generation = self.generations[profile, default: 0]
         WebKitExtensionGrants.live(profile: profile, ids: wanted.map(\.id)) { live in
           Self.staging.async {
             let staged = Self.staged(wanted, profile: profile, live: live)
-            DispatchQueue.main.async { self.adopt(staged, profile: profile, missing: missing, done: done) }
+            DispatchQueue.main.async {
+              guard self.generations[profile, default: 0] == generation else { return done(["available": true, "loaded": [String](), "failed": [String]()]) }
+              self.adopt(staged, profile: profile, missing: missing, done: done)
+            }
           }
         }
       }
@@ -223,6 +228,7 @@ final class WebKitExtensions {
   }
 
   func forgetProfile(_ profile: String) {
+    generations[profile, default: 0] += 1
     wantedByProfile.removeValue(forKey: profile)
     asked.remove(profile)
     loadRetries.removeValue(forKey: profile)

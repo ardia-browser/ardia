@@ -347,7 +347,7 @@ final class WebKitContextMenu {
     if let submenu = item.submenu { return submenu.items.forEach(countPicks) }
     guard let action = item.action, !(item.target is WebKitMenuAction) else { return }
     let target = item.target
-    let forward = WebKitMenuAction {
+    let forward = WebKitMenuAction { [weak item, weak target] in
       ArdiaEvents.emit("webKit.counted", data: ArdiaConsentStamp.begin().onto(["name": "contextMenuExtension"]))
       NSApp.sendAction(action, to: target, from: item)
     }

@@ -85,6 +85,7 @@ extension WebKitExtensionHub {
     case "getLayout":
       return ["result": ["side": "right"]]
     case "open", "close":
+      if tab == nil, options["windowId"] != nil, windowTab == nil { return ["error": "No window with the given id."] }
       guard let target = tab ?? windowTab ?? shownTab(), let key = target.transferKey else { return ["error": "No window to show the side panel in."] }
       if method == "open", entry.sidePanel.page(tab: key) == nil { return ["error": "No active side panel for this tab."] }
       ArdiaEvents.emit("extensions.sidePanel", data: ArdiaConsentStamp.begin().onto(["tabId": key, "extensionId": extensionId, "open": method == "open"]))

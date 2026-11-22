@@ -33,7 +33,7 @@ extension WebKitExtensionHub {
     for entry in Self.tabLayout.windows {
       let tabs = entry.keys.compactMap { byKey[$0] }
       guard let host = tabs.lazy.compactMap(\.window).first else { continue }
-      for tab in tabs { add(tab, host) }
+      for tab in tabs { add(tab, tab.window ?? host) }
     }
     for tab in own {
       if let host = tab.window { add(tab, host) }
@@ -64,7 +64,7 @@ extension WebKitExtensionHub {
 
   func extensionWindow(for host: NSWindow) -> WebKitExtensionWindow {
     let key = ObjectIdentifier(host)
-    windows = windows.filter { $0.value.window != nil }
+    windows = windows.filter { $0.value.window != nil || announcedWindows.contains($0.key) }
     if let known = windows[key] { return known }
     let made = WebKitExtensionWindow(window: host, hub: self)
     windows[key] = made

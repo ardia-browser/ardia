@@ -5,7 +5,7 @@ import { changedIds } from "../browser/changes";
 import { activeTabId, engineProfile, incognitoOriginal, isIncognitoProfile } from "../browser/model";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { tabEngine } from "../engines/engines";
-import { isPeekTab } from "../peek/peek";
+import { isPeekTab, shownPageId } from "../peek/peek";
 import { asAdoptId } from "../tabs/adoptIds";
 import { usePages } from "../tabs/pageState";
 import { chromeChanged } from "../tabs/liveTabs";
@@ -170,7 +170,7 @@ export function webKitTabLayout(s: BrowserState): WebKitTabLayout {
     if (!w) continue;
     const keys = w.tabIds.filter((t) => s.tabs[t] && !isPeekTab(s, t));
     const pinned = keys.filter((t) => s.tabs[t]!.pin);
-    windows.push({ id, tabs: [...pinned, ...keys.filter((t) => !s.tabs[t]!.pin)], pinned });
+    windows.push({ id, tabs: [...pinned, ...keys.filter((t) => !s.tabs[t]!.pin)], pinned, shown: shownPageId(s, id) });
     const active = new Set(Object.values(w.activeTabIds));
     for (const t of [...keys.filter((k) => active.has(k)), ...keys.filter((k) => !active.has(k))]) {
       const tab = s.tabs[t]!;

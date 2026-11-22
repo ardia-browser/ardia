@@ -110,7 +110,7 @@ export type WebKitTabsRequest = WebKitTabsAsk &
 export type WebKitTabsReply = { tabId?: string; windowId?: string; webKit?: boolean; error?: string };
 
 export type WebKitTabLayout = {
-  windows: { id: string; tabs: string[]; pinned: string[] }[];
+  windows: { id: string; tabs: string[]; pinned: string[]; shown?: string }[];
   openers: Record<string, string>;
   focus: string[];
   chromiumTabs: Record<string, string[]>;

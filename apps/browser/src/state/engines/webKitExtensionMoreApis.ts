@@ -148,6 +148,7 @@ async function uninstall(call: WebKitExtensionCall, id: unknown, askEvenForSelf:
     });
     if (!confirmed) fail("Extension uninstall canceled by user.");
     if (!answeredInTime(call)) fail("Extension uninstall timed out.");
+    if (!self && !(await extensionsOf(call)).some((x) => x.id === call.extensionId && x.enabled)) fail("The extension that asked is no longer running.");
   }
   await uninstallExtension(target.id, call.base);
 }

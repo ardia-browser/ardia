@@ -8,6 +8,7 @@ extension WebKitExtensionHub {
       let id: String
       let keys: [String]
       let pinned: Set<String>
+      let shown: String?
     }
 
     private(set) var windows: [Window] = []
@@ -23,7 +24,7 @@ extension WebKitExtensionHub {
         guard let id = entry["id"] as? String else { continue }
         let keys = entry["tabs"] as? [String] ?? []
         for key in keys { windowOfKey[key] = windows.count }
-        windows.append(Window(id: id, keys: keys, pinned: Set(entry["pinned"] as? [String] ?? [])))
+        windows.append(Window(id: id, keys: keys, pinned: Set(entry["pinned"] as? [String] ?? []), shown: entry["shown"] as? String))
       }
       openers = payload["openers"] as? [String: String] ?? [:]
       focusOrder = payload["focus"] as? [String] ?? []

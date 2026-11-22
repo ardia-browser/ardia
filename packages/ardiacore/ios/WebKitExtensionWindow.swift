@@ -49,6 +49,10 @@ final class WebKitExtensionWindow: NSObject, WKWebExtensionWindow {
 
   func setWindowState(_ state: WKWebExtension.WindowState, for context: WKWebExtensionContext, completionHandler: @escaping ((any Error)?) -> Void) {
     ArdiaEvents.emit("webKit.counted", data: ArdiaConsentStamp.begin().onto(["name": "extensionWindowUpdate"]))
+    if state == .minimized, LaunchConfig.shared.background, let window, !window.isMiniaturized {
+      NSLog("[webkit] extension asked to minimize a window (background mode, not minimized)")
+      return completionHandler(WebKitExtensionBridge.failure("Windows can't be minimized while Ardia runs in the background."))
+    }
     place(frame: nil, state: state)
     completionHandler(nil)
   }

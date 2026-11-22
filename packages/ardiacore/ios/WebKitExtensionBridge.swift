@@ -8,6 +8,7 @@ final class WebKitExtensionBridge {
     let reply: (Any?, (any Error)?) -> Void
     let windows: [[String]]
     let timeout: DispatchWorkItem
+    let extensionId: String
   }
 
   final class Listener {
@@ -288,7 +289,7 @@ final class WebKitExtensionBridge {
     Self.nextRequest += 1
     let id = "wk-ext-\(Self.nextRequest)"
     let timeout = DispatchWorkItem { MainActor.assumeIsolated { Self.deliver(id, ["error": "Ardia didn't answer in time."]) } }
-    Self.pending[id] = Pending(reply: reply, windows: windows, timeout: timeout)
+    Self.pending[id] = Pending(reply: reply, windows: windows, timeout: timeout, extensionId: extensionId)
     let deadline = Self.dialogCalls.contains("\(api).\(method)") ? Self.dialogReplyDeadline : Self.replyDeadline
     DispatchQueue.main.asyncAfter(deadline: .now() + deadline, execute: timeout)
     var data: [String: Any] = [
@@ -325,6 +326,11 @@ final class WebKitExtensionBridge {
   }
 
   func dropExtension(_ id: String) {
+    for (request, waiting) in Self.pending where waiting.extensionId == id {
+      Self.pending.removeValue(forKey: request)
+      waiting.timeout.cancel()
+      waiting.reply(nil, Self.failure("The extension was unloaded."))
+    }
     for (key, listener) in listeners where listener.extensionId == id {
       listener.port.disconnect()
       listeners.removeValue(forKey: key)

@@ -111,7 +111,8 @@ final class WebKitExtensionShortcuts {
     let shown = WebKitHub.shared.transfers.liveTabs.filter { $0.visible && $0.window === window && $0.webView != nil && !$0.closed }
     let focused = (window.firstResponder as? NSView).flatMap { responder in shown.first { responder.isDescendant(of: $0) } }
     let chromiumFocused = window.firstResponder.map { NSStringFromClass(type(of: $0)).contains("RenderWidgetHostView") } ?? false
-    guard let tab = focused ?? (chromiumFocused ? nil : shown.first) else { return false }
+    let selected = { (tab: WebKitTab) in tab.transferKey.map { key in WebKitExtensionHub.tabLayout.window(of: key).map { $0.shown == nil || $0.shown == key } ?? true } ?? true }
+    guard let tab = focused ?? (chromiumFocused ? nil : shown.first(where: selected)) else { return false }
     for bridge in WebKitExtensionBridge.live where bridge.owns(tab) {
       if bridge.performShortcut(event, tab: tab) { return true }
     }

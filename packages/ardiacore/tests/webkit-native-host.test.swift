@@ -182,7 +182,7 @@ struct WebKitNativeHostTests {
     defer { try? FileManager.default.removeItem(at: root) }
     try FileManager.default.createDirectory(at: root.appendingPathComponent("NativeMessagingHosts"), withIntermediateDirectories: true)
     ArdiaHost.dataDirectory = root.path
-    try install("test.stubborn", script: "signal.signal(signal.SIGTERM, signal.SIG_IGN)\ntime.sleep(30)\n", in: root)
+    try install("test.stubborn", script: "signal.signal(signal.SIGTERM, signal.SIG_IGN)\nopen(sys.argv[0] + '.ready', 'w').write('1')\ntime.sleep(30)\n", in: root)
     try install("test.echo", script: """
       while True:
           raw = sys.stdin.buffer.read(4)
@@ -196,7 +196,9 @@ struct WebKitNativeHostTests {
 
     var exits: [NSError?] = []
     let stubborn = try WebKitExtensionNativeHost.launch("test.stubborn", extensionId: "abc", onMessage: { _ in }, onExit: { exits.append($0) })
-    spin(until: { pid("test.stubborn", in: root) != nil }, seconds: 5)
+    let ready = root.appendingPathComponent("test.stubborn.py.ready")
+    spin(until: { FileManager.default.fileExists(atPath: ready.path) }, seconds: 5)
+    expect(FileManager.default.fileExists(atPath: ready.path), "the stubborn host has its SIGTERM handler in place before it's closed")
     let started = Date()
     expect(stubborn.send(String(repeating: "x", count: 300_000)), "a large message to a host that never reads is queued")
     expect(Date().timeIntervalSince(started) < 0.5, "sending to a host that never reads doesn't block the caller")

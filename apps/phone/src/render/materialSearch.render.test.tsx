@@ -1,5 +1,5 @@
 import { Dimensions, Platform, StyleSheet, Text } from "react-native";
-import { State } from "react-native-gesture-handler";
+import { Pressable as GesturePressable, State } from "react-native-gesture-handler";
 import { fireGestureHandler, getByGestureTestId } from "react-native-gesture-handler/jest-utils";
 import * as Reanimated from "react-native-reanimated";
 import { getAnimatedStyle, KeyboardState, makeMutable } from "react-native-reanimated";
@@ -13,6 +13,7 @@ import * as browse from "../state/browse/store";
 import { history } from "../state/history/store";
 import { dismissSearch, presentSearch, searchState, typeSearch } from "../state/search/store";
 import { OFF_STATUS, useSync } from "../state/sync/store";
+import { selectedTab } from "../state/tabs/tabsState";
 import { useTabs } from "../state/tabs/store";
 import { currentPreferences, setPreference } from "../state/settings/store";
 import { renderSurface, textOf, unmount, withTabs, withMaterialYou } from "../../test/render/harness";
@@ -96,6 +97,18 @@ onAndroid("the Material search capsule uses the same docked sheet as the page me
   expect(flat(segments[1])).toMatchObject({ borderTopLeftRadius: 4, borderBottomLeftRadius: 4 });
   expect(flat(segments.at(-1))).toMatchObject({ borderTopLeftRadius: 4, borderBottomLeftRadius: 20 });
   expect(flat(node(root, "materialSearchIconSlot"))).toMatchObject({ width: 20, height: 20 });
+  unmount(root);
+});
+
+onAndroid("a recent query in the empty Material search sheet opens its results", () => {
+  act(() => presentSearch("start", ""));
+  const root = tray();
+  const recent = node(root, "materialSearchRows")!.findAll((row) => row.type === GesturePressable)
+    .find((row) => row.findAll((child) => child.props.accessibilityLabel === "Refine otters").length > 0)!;
+  expect(recent).toBeDefined();
+  act(() => recent.props.onPress());
+  expect(browse.useBrowse.getState().surface).toBe("browsing");
+  expect(new URL(selectedTab(useTabs.getState())!.url).searchParams.get("q")).toBe("otters");
   unmount(root);
 });
 

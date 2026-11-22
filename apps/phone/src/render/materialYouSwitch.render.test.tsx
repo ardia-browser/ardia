@@ -59,14 +59,16 @@ onAndroid("turning Material You on changes the whole app at once, without a rela
   settle();
   expect(currentPreferences().materialYou).toBe(true);
   expect(counted).toHaveBeenCalledWith("material_you_turned_on");
-  expect(root.root.findAll((node) => node.props.testID === "materialSettingsScreen" && typeof node.type === "string")).toHaveLength(1);
+  expect(root.root.findAll((node) => node.props.testID === "materialSettingsPage" && typeof node.type === "string")).toHaveLength(1);
+  expect(root.root.findAll((node) => node.props.testID === "fullSheet" && typeof node.type === "string")).toHaveLength(1);
   expect(materialBars(root)).toHaveLength(1);
   expect(materialYouRow(root)).toBeDefined();
   act(() => materialYouRow(root)!.props.onPress());
   settle();
   expect(currentPreferences().materialYou).toBe(false);
   expect(counted).toHaveBeenCalledWith("material_you_turned_off");
-  expect(root.root.findAll((node) => node.props.testID === "materialSettingsScreen" && typeof node.type === "string")).toHaveLength(0);
+  expect(root.root.findAll((node) => node.props.testID === "materialSettingsPage" && typeof node.type === "string")).toHaveLength(0);
+  expect(root.root.findAll((node) => node.props.testID === "fullSheet" && typeof node.type === "string")).toHaveLength(1);
   expect(materialBars(root)).toHaveLength(0);
   unmount(root);
 });

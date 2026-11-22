@@ -1,7 +1,7 @@
 import { Platform, ScrollView, StyleSheet } from "react-native";
 import { act, type ReactTestInstance } from "react-test-renderer";
-import { MaterialSettingsScreen, SettingsView } from "../components/settings/SettingsView";
-import { materialAppBarFill } from "../components/settings/MaterialSettingsKit";
+import { Surfaces } from "../App";
+import { SettingsView } from "../components/settings/SettingsView";
 import { DesignProvider } from "../components/ui";
 import { SEEDED_SCHEMES } from "../lib/material/schemes";
 import { setDynamicScheme } from "../state/app/dynamicScheme";
@@ -39,21 +39,20 @@ const flat = (found: ReactTestInstance | undefined) => StyleSheet.flatten(found?
 const settings = () =>
   renderSurface(
     <DesignProvider design="material">
-      <MaterialSettingsScreen />
+      <Surfaces />
     </DesignProvider>,
   );
 
-onAndroid("Material Settings fills the screen with a 112 dp medium top app bar and no sheet scrim or grip", () => {
+onAndroid("Material Settings uses a compact top app bar inside a bottom sheet", () => {
   const root = settings();
-  expect(flat(node(root, "materialSettingsScreen"))).toMatchObject(StyleSheet.absoluteFill);
-  expect(node(root, "materialScrim")).toBeUndefined();
-  expect(node(root, "materialSheetGrip")).toBeUndefined();
+  expect(flat(node(root, "fullSheet"))).toMatchObject({ top: 50, bottom: 0 });
+  expect(node(root, "fullSheet")!.props.accessibilityViewIsModal).toBe(true);
   expect(flat(node(root, "materialSettingsPage")).backgroundColor).toBe(LIGHT.surfaceContainer);
   const bar = node(root, "materialTopAppBar")!;
   expect(flat(bar).backgroundColor).toBe(LIGHT.surfaceContainer);
   expect(flat(bar.findAll((found) => typeof found.type === "string" && flat(found).minHeight === 64)[0])).toMatchObject({ minHeight: 64 });
-  expect(flat(node(root, "materialMediumTitle"))).toMatchObject({ height: 48, fontSize: 28, color: LIGHT.onSurface });
-  expect(node(root, "settingsTitle")!.props.children).toBeNull();
+  expect(node(root, "materialMediumTitle")).toBeUndefined();
+  expect(node(root, "settingsTitle")!.props.children).toBe("Settings");
   const row = node(root, "materialSettingsRow:Search Engine")!;
   expect(flat(row).minHeight).toBeGreaterThanOrEqual(56);
   expect(pressable(root, "materialSettingsRow:Search Engine").props.android_ripple).toMatchObject({ borderless: false });
@@ -63,16 +62,16 @@ onAndroid("Material Settings fills the screen with a 112 dp medium top app bar a
   unmount(root);
 });
 
-onAndroid("the app bar takes surfaceContainerHigh once the list scrolls under it, as Material's top app bar does", () => {
+onAndroid("the Material Settings top bar keeps its color while scrolling", () => {
   const root = settings();
-  const list = root.root.findAll((found) => found.type === ScrollView)[0]!;
+  const list = node(root, "materialSettingsPage")!.findAll((found) => found.type === ScrollView)[0]!;
   act(() => list.props.onScroll({ nativeEvent: { contentOffset: { x: 0, y: 80 } } }));
-  expect(flat(node(root, "materialTopAppBar")).backgroundColor).toBe(LIGHT.surfaceContainerHigh);
+  expect(flat(node(root, "materialTopAppBar")).backgroundColor).toBe(LIGHT.surfaceContainer);
   expect(node(root, "settingsTitle")!.props.children).toBe("Settings");
   expect(flat(node(root, "settingsTitle"))).toMatchObject({ fontSize: 22 });
   act(() => list.props.onScroll({ nativeEvent: { contentOffset: { x: 0, y: 0 } } }));
-  expect(node(root, "settingsTitle")!.props.children).toBeNull();
-  expect(materialAppBarFill(LIGHT, false)).toBe(LIGHT.surfaceContainer);
+  expect(node(root, "settingsTitle")!.props.children).toBe("Settings");
+  expect(flat(node(root, "materialTopAppBar")).backgroundColor).toBe(LIGHT.surfaceContainer);
   unmount(root);
 });
 

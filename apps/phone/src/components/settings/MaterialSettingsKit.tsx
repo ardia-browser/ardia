@@ -1,5 +1,6 @@
 import { Children, createContext, useContext, useState, type ReactNode } from "react";
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Pressable } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { withAlpha } from "../../lib/color";
 import { rememberSettingsScroll, settingsScroll } from "../../state/settings/nav";
@@ -16,8 +17,6 @@ const MEDIUM_TITLE_HEIGHT = 48;
 
 type PageProps = { title: string; onBack?: () => void; onClose?: () => void; leading?: ReactNode; trailing?: ReactNode; children: ReactNode; scroll?: boolean; onRefresh?: () => Promise<unknown>; mediumAppBar?: boolean; overlay?: ReactNode; dismissesKeyboard?: boolean };
 
-export const materialAppBarFill = (scheme: { surfaceContainer: string; surfaceContainerHigh: string }, scrolled: boolean) => (scrolled ? scheme.surfaceContainerHigh : scheme.surfaceContainer);
-
 export function MaterialSettingsPage({ title, onBack, onClose, leading, trailing, children, scroll = true, onRefresh, mediumAppBar = false, overlay, dismissesKeyboard = false }: PageProps) {
   const { scheme } = useMaterialTheme();
   const insets = useSafeAreaInsets();
@@ -25,7 +24,6 @@ export function MaterialSettingsPage({ title, onBack, onClose, leading, trailing
   const mediumTitleHeight = Math.max(MEDIUM_TITLE_HEIGHT, Math.ceil(materialType.headlineMedium.lineHeight * fontScale) + 12);
   const frame = useSheetFrame();
   const [startOffset] = useState(() => ({ x: 0, y: settingsScroll(title) }));
-  const [scrolled, setScrolled] = useState(startOffset.y > 0);
   const [offset, setOffset] = useState(startOffset.y);
   const collapsed = offset >= mediumTitleHeight;
   const [refreshing, setRefreshing] = useState(false);
@@ -38,7 +36,7 @@ export function MaterialSettingsPage({ title, onBack, onClose, leading, trailing
   const sheetList = frame?.list(refresh !== null);
   return (
     <View testID="materialSettingsPage" style={[StyleSheet.absoluteFill, { backgroundColor: scheme.surfaceContainer }]}>
-      <View testID="materialTopAppBar" style={[styles.appBar, { paddingTop: frame ? 0 : insets.top, paddingLeft: insets.left + 4, paddingRight: insets.right + 4, backgroundColor: materialAppBarFill(scheme, scrolled) }]}>
+      <View testID="materialTopAppBar" style={[styles.appBar, { paddingTop: frame ? 0 : insets.top, paddingLeft: insets.left + 4, paddingRight: insets.right + 4, backgroundColor: scheme.surfaceContainer }]}>
         <View style={styles.appBarRow}>
           {onBack ? (
             <MaterialIconButton testID="materialSettingsBack" icon="arrowRight" flipped label="Back" ink={scheme.onSurface} onPress={onBack} />
@@ -66,7 +64,6 @@ export function MaterialSettingsPage({ title, onBack, onClose, leading, trailing
             sheetList?.onScroll(event);
             const y = event.nativeEvent.contentOffset.y;
             rememberSettingsScroll(title, y);
-            if (y > 0 !== scrolled) setScrolled(y > 0);
             if (mediumAppBar && (y >= mediumTitleHeight) !== collapsed) setOffset(y);
           }}
         >

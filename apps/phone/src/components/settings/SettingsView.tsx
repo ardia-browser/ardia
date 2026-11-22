@@ -1,11 +1,8 @@
-import { useEffect, useRef, useState } from "react";
-import { Platform, StyleSheet, View, type ViewInstance } from "react-native";
-import Animated, { Easing, FadeIn, FadeOut } from "react-native-reanimated";
+import { useEffect, useState } from "react";
+import { Platform, StyleSheet, View } from "react-native";
 import { refreshSettings } from "../../state/settings/actions";
 import { useSettingsNav, type SettingsRoute } from "../../state/settings/hooks";
 import { LookBackdrop } from "../ui";
-import { materialEasing, materialMotion } from "../ui/materialTokens";
-import { useCoverFocus } from "../ui/coverFocus";
 import { FilterListDetailPage, FilterListsPage, MyFiltersPage, TrustedSitesPage } from "./BlockingPages";
 import { AboutPage, ClearDataPage, LicensesPage } from "./DataPages";
 import { AppearancePage } from "./AppearancePage";
@@ -23,11 +20,6 @@ import { popSettings, pushSettings, settingsRouteKey } from "../../state/setting
 import { ExpoSettingsStack } from "./ExpoSettingsStack";
 import { BrowseForMePage } from "./BrowseForMePage";
 import { PageSummaryPage } from "./PageSummaryPage";
-
-const axisIn = Easing.bezier(...materialEasing[materialMotion.sharedAxisIn.easing]);
-const axisOut = Easing.bezier(...materialEasing[materialMotion.sharedAxisOut.easing]);
-const SCREEN_IN = FadeIn.duration(materialMotion.sharedAxisIn.durationMs).easing(axisIn);
-const SCREEN_OUT = FadeOut.duration(materialMotion.sharedAxisOut.durationMs).easing(axisOut);
 
 export function SettingsPageFor({ route }: { route: SettingsRoute }) {
   switch (route.page) {
@@ -90,16 +82,6 @@ export function SettingsPageFor({ route }: { route: SettingsRoute }) {
 export function SettingsView() {
   if (Platform.OS === "ios") return <ExpoSettingsStack />;
   return <HandBuiltSettings />;
-}
-
-export function MaterialSettingsScreen() {
-  const screen = useRef<ViewInstance>(null);
-  useCoverFocus(screen);
-  return (
-    <Animated.View ref={screen} testID="materialSettingsScreen" entering={SCREEN_IN} exiting={SCREEN_OUT} style={StyleSheet.absoluteFill} accessibilityViewIsModal>
-      <HandBuiltSettings />
-    </Animated.View>
-  );
 }
 
 type ShownPage = { key: string; route: SettingsRoute };

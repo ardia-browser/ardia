@@ -19,7 +19,7 @@ import { ExpoLibrarySheet } from "./components/library/ExpoLibrary";
 import { MaterialLibrary } from "./components/library/MaterialLibrary";
 import { LibraryView } from "./components/library/LibraryView";
 import { closeLibrary, useLibrary } from "./state/library/store";
-import { MaterialSettingsScreen, SettingsView } from "./components/settings/SettingsView";
+import { SettingsView } from "./components/settings/SettingsView";
 import { SpacesView } from "./components/sync/SpacesView";
 import { ToastHost } from "./components/toasts/ToastHost";
 import { followDesign, tabsMotion, useDesign, useTheme, DEFAULT_PROFILE_COLOR, FrostSource, FullSheet, OverlayHost, PROFILE_PRESETS, onDrawnMenuOpened, onNativeMenuOpened, ProfileLookContext, Shade, SheetBackground, SURFACES_FROST } from "./components/ui";
@@ -148,22 +148,21 @@ export function Surfaces() {
   const voice = useVoicePresented();
   const sheetProgress = useSharedValue(0);
   const libraryOpen = useLibrary((s) => s.open);
-  const material = useDesign() === "material";
-  const settingsScreen = material && settingsOpen && !SYSTEM_SHEETS;
+  const material = design === "material";
   const libraryCovers = material && libraryOpen;
   const systemSheet = SYSTEM_SHEETS && (settingsOpen || libraryOpen || sheet === "archive" || sheet === "spaces");
-  const front = settingsScreen ? null : frontSheet(settingsOpen && !SYSTEM_SHEETS, SYSTEM_SHEETS && (sheet === "archive" || sheet === "spaces") ? null : sheet, libraryOpen && !SYSTEM_SHEETS && !libraryCovers);
-  const sheetCovers = front !== null || systemSheet || settingsScreen;
+  const front = frontSheet(settingsOpen && !SYSTEM_SHEETS, SYSTEM_SHEETS && (sheet === "archive" || sheet === "spaces") ? null : sheet, libraryOpen && !SYSTEM_SHEETS && !libraryCovers);
+  const sheetCovers = front !== null || systemSheet;
   const theme = useTheme();
   countRender("Surfaces");
   const incognito = useIncognito();
   const layer = inkLayer({ onboarding, voice, sheet: sheetCovers, searching: searching || libraryCovers, surface });
   const incognitoScheme = useMaterialTheme(true).scheme;
   const behind = material && incognito ? incognitoScheme.surface : theme.backdrop[0];
-  const lightIcons = settingsScreen && layer === "sheet" ? theme.dark : lightStatusIcons(layer, { cover: behind, surface: theme.canvas, deck: behind, incognito: incognito && !libraryCovers });
+  const lightIcons = lightStatusIcons(layer, { cover: behind, surface: front === "settings" ? behind : theme.canvas, deck: behind, incognito: incognito && !libraryCovers });
   useEffect(goBackToStartIfEmpty, [tab, surface]);
   const duo = useScreenLayout((s) => s.layout.name === "wide" || s.layout.name === "split");
-  const deckMounted = useDeckStandby(surface, surface === "browsing" && tab !== null && opening === null && leaving === null && !searching && !voice && !onboarding && front === null && !settingsScreen, tab?.id ?? null);
+  const deckMounted = useDeckStandby(surface, surface === "browsing" && tab !== null && opening === null && leaving === null && !searching && !voice && !onboarding && front === null, tab?.id ?? null);
   const page = !duo && (surface === "browsing" || pageUnderDeck) && tab ? <BrowsingScreen tab={tab} /> : null;
   const deck = !duo && deckMounted ? <TabDeck key="deck" /> : null;
   const pageLayer = page && tab ? (
@@ -191,7 +190,6 @@ export function Surfaces() {
         <FullSheet sheet={front} progress={sheetProgress} onDismiss={front === "settings" ? closeSettings : front === "library" ? closeLibrary : closeArchive}>
           {(shown) => (shown === "settings" ? <SettingsView /> : shown === "library" ? <LibraryView /> : shown === "archive" ? <ArchiveView /> : <SpacesView />)}
         </FullSheet>
-        {settingsScreen ? <MaterialSettingsScreen /> : null}
       </Layer>
       {SYSTEM_SHEETS ? <ExpoSettingsSheet /> : null}
       {SYSTEM_SHEETS ? <ExpoArchiveSheet /> : null}

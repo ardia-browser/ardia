@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { StyleSheet, useWindowDimensions, View, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
+import { StyleSheet, useWindowDimensions, View, type ViewInstance, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   runOnJS,
@@ -10,6 +10,7 @@ import Animated, {
   withTiming,
   type SharedValue,
 } from "react-native-reanimated";
+import { useCoverFocus } from "./coverFocus";
 import { useReduceMotion } from "./contrast";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { backgroundScale, draggedOffset, sheetDismisses, sheetProgress } from "../../lib/sheetDrag";
@@ -51,9 +52,12 @@ export function FullSheet<T extends string>({ sheet, progress, onDismiss, childr
   const reduceMotion = useReduceMotion();
   const material = useDesign() === "material";
   const { scheme } = useMaterialTheme();
-  const top = insets.top + (material ? 0 : iPhoneOr(sheetLayout.iPhoneTopGap, sheetLayout.topGap));
-  const bottomCorner = material ? 0 : iPhoneOr(screenCornerRadius(tabsLayout.displayCornerRadius), 0);
   const presence = useRef(initialPresence(sheet));
+  const shown = sheet ?? presenceShown(presence.current);
+  const sheetView = useRef<ViewInstance>(null);
+  useCoverFocus(sheetView, material && sheet === "settings");
+  const top = insets.top + (material && shown !== "settings" ? 0 : iPhoneOr(sheetLayout.iPhoneTopGap, sheetLayout.topGap));
+  const bottomCorner = material ? 0 : iPhoneOr(screenCornerRadius(tabsLayout.displayCornerRadius), 0);
   const [, redraw] = useState(0);
   const initialHeight = Math.max(1, window.height - top);
   const height = useSharedValue(initialHeight);
@@ -161,7 +165,6 @@ export function FullSheet<T extends string>({ sheet, progress, onDismiss, childr
     "worklet";
     return offset.value;
   };
-  const shown = sheet ?? presenceShown(presence.current);
   if (!shown) return null;
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents={sheet ? "auto" : "none"} collapsable={false} importantForAccessibility={sheet ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={!sheet}>
@@ -169,6 +172,8 @@ export function FullSheet<T extends string>({ sheet, progress, onDismiss, childr
       <Animated.View style={[StyleSheet.absoluteFill, material ? { backgroundColor: withAlpha(scheme.scrim, MATERIAL_STATE.scrim) } : styles.scrim, scrim]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
       <GestureDetector gesture={drag}>
         <Animated.View
+          ref={sheetView}
+          testID="fullSheet"
           accessibilityViewIsModal
           onLayout={(event) => {
             height.value = Math.max(1, event.nativeEvent.layout.height);

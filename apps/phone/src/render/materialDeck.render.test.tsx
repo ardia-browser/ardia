@@ -157,10 +157,11 @@ onAndroid("the deck keeps its card geometry where the Material bars fit, and mov
   expect(short.safeBottom).toBe(48);
 });
 
-onAndroid("the top app bar is Material's: 64 dp under the status bar on surface, the title in titleLarge, and ··· a 48 dp icon button with an unbounded ripple that opens the deck's menu", () => {
+onAndroid("the transparent header keeps the title and the 48 dp More button above the cards", () => {
   const root = deck();
-  expect(flat(host(root, "materialDeckTopBar"))).toMatchObject({ paddingTop: SAFE.top, height: SAFE.top + 64, backgroundColor: LIGHT.surface });
-  expect(flat(host(root, "materialDeckTitle"))).toMatchObject({ fontSize: 22, lineHeight: 28, color: LIGHT.onSurface });
+  expect(flat(host(root, "materialDeckTopBar"))).toMatchObject({ paddingTop: SAFE.top, height: SAFE.top + 64 });
+  expect(flat(host(root, "materialDeckTopBar")).backgroundColor).toBeUndefined();
+  expect(flat(host(root, "materialDeckTitle"))).toMatchObject({ fontSize: 16, lineHeight: 24, color: LIGHT.onSurface });
   const more = pressable(root, "materialDeckMore")!;
   expect(more.props.accessibilityLabel).toBe("More");
   expect(flat(more)).toMatchObject({ width: 48, height: 48 });
@@ -223,7 +224,7 @@ onAndroid("Incognito takes the dark scheme of the same colours: its switch's eye
   expect(pressable(incognito, "materialDeckIncognito")!.props.accessibilityValue).toEqual({ text: "On" });
   expect(pressable(incognito, "materialDeckIncognito")!.findAll((node) => node.type === IncognitoEyes && node.props.incognito === true)).toHaveLength(1);
   expect(flat(host(incognito, "materialDeckBackdrop")).backgroundColor).toBe("#000000");
-  expect(flat(host(incognito, "materialDeckTopBar")).backgroundColor).toBe("#000000");
+  expect(flat(host(incognito, "materialDeckTopBar")).backgroundColor).toBeUndefined();
   expect(flat(host(incognito, "materialDeckBottomRow")).backgroundColor).toBe("#000000");
   expect(flat(host(incognito, "materialDeckSearch")).backgroundColor).toBe("#000000");
   const fab = pressable(incognito, "materialDeckFab")!;
@@ -261,12 +262,12 @@ onAndroid("the bar's Incognito switch: a tap shows only the Incognito tabs, a se
   leave.mockRestore();
 });
 
-onAndroid("a scheme change re-themes the open deck: cards, top app bar, search, FAB and the Incognito switch's eyes", () => {
+onAndroid("a scheme change re-themes the open deck: cards, search, FAB and the Incognito switch's eyes", () => {
   withPrivates(1);
   const root = deck();
   act(() => setDynamicScheme(WALLPAPER));
   expect(flat(cards(root).find((card) => flat(card).backgroundColor !== WALLPAPER.dark.surfaceContainerLow))!.backgroundColor).toBe("#ABCDEF");
-  expect(flat(host(root, "materialDeckTopBar")).backgroundColor).toBe(WALLPAPER.light.surface);
+  expect(flat(host(root, "materialDeckTopBar")).backgroundColor).toBeUndefined();
   expect(flat(host(root, "materialDeckBottomRow")).backgroundColor).toBe(WALLPAPER.light.surfaceContainer);
   expect(flat(host(root, "materialDeckSearch")).backgroundColor).toBe(WALLPAPER.light.surfaceContainerHigh);
   expect(pressable(root, "materialDeckIncognito")!.findAll((node) => node.type === IncognitoEyes)[0]!.props.color).toBe(WALLPAPER.light.onSurfaceVariant);

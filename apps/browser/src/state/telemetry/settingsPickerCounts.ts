@@ -19,6 +19,10 @@ const ZERO = {
   scroll_toolbar_picks_hide: 0,
   ctrl_tab_follows_chrome_step: 0,
   ctrl_tab_follows_chrome_switcher: 0,
+  new_tabs_follow_chrome_on: 0,
+  new_tabs_follow_chrome_off: 0,
+  copy_url_key_follows_chrome_on: 0,
+  copy_url_key_follows_chrome_off: 0,
 };
 
 type Field = keyof typeof ZERO;
@@ -34,6 +38,18 @@ export function noteSettingsPick<P extends keyof Picks>(picker: P, option: Picks
 
 export function noteCtrlTabFollowedChrome(option: Picks["ctrlTab"], consent?: ConsentToken | null) {
   countFor(consentOrNow(consent), () => void counts[`ctrl_tab_follows_chrome_${option}`]++);
+}
+
+export type FollowedChromeSwitch = "newTabs" | "copyUrlKey";
+
+const FOLLOW_PREFIX: { [S in FollowedChromeSwitch]: string } = {
+  newTabs: "new_tabs_follow_chrome",
+  copyUrlKey: "copy_url_key_follows_chrome",
+};
+
+export function noteChromeSwitchFollowed(followed: FollowedChromeSwitch, on: boolean, consent?: ConsentToken | null) {
+  const field = `${FOLLOW_PREFIX[followed]}_${on ? "on" : "off"}` as Field;
+  countFor(consentOrNow(consent), () => void counts[field]++);
 }
 
 export function takeSettingsPickerCounts() {

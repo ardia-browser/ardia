@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
-import { noteCtrlTabFollowedChrome, noteSettingsPick, takeSettingsPickerCounts } from "./settingsPickerCounts.ts";
+import { noteChromeSwitchFollowed, noteCtrlTabFollowedChrome, noteSettingsPick, takeSettingsPickerCounts } from "./settingsPickerCounts.ts";
 globalThis.__DEV__ = false;
 await import("../../test-native/index.ts");
 globalThis.fetch = async () => ({ status: 503 });
@@ -20,6 +20,10 @@ const ZERO = {
   scroll_toolbar_picks_hide: 0,
   ctrl_tab_follows_chrome_step: 0,
   ctrl_tab_follows_chrome_switcher: 0,
+  new_tabs_follow_chrome_on: 0,
+  new_tabs_follow_chrome_off: 0,
+  copy_url_key_follows_chrome_on: 0,
+  copy_url_key_follows_chrome_off: 0,
 };
 
 test("each picture picker counts its picks by the option chosen, and taking them starts over", () => {
@@ -45,4 +49,14 @@ test("⌃Tab following Chrome's own setting counts apart from a pick in Settings
   noteCtrlTabFollowedChrome("step");
   noteCtrlTabFollowedChrome("switcher");
   assert.deepEqual(takeSettingsPickerCounts(), { ...ZERO, ctrl_tab_follows_chrome_switcher: 2, ctrl_tab_follows_chrome_step: 1 });
+});
+
+test("each other Chrome switch Ardia follows counts by which way it went", () => {
+  noteChromeSwitchFollowed("newTabs", true);
+  noteChromeSwitchFollowed("copyUrlKey", false);
+  assert.deepEqual(takeSettingsPickerCounts(), {
+    ...ZERO,
+    new_tabs_follow_chrome_on: 1,
+    copy_url_key_follows_chrome_off: 1,
+  });
 });

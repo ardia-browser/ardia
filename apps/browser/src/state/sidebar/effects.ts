@@ -10,7 +10,7 @@ import { dismissHover } from "./hover";
 import { sidebarUi } from "./sidebarUi";
 import { cancelSwitcher, closeSwitcherRow, commitSwitcher, moveSwitcher } from "./switcher";
 import { noteTabSwitcherReleasedInMenu } from "../telemetry/tabSwitcherOpens";
-import { followChromeCtrlTab } from "../commands/chromeCtrlTab";
+import { followChromeSwitches } from "../commands/chromeSwitches";
 
 let started = false;
 
@@ -50,5 +50,5 @@ export function startSidebarEffects() {
   });
 
   startAutoCleanUp();
-  followChromeCtrlTab();
+  followChromeSwitches();
 }

@@ -475,40 +475,53 @@ test("an Incognito card's native menu on iPhone is not counted either", () => {
   onNativeMenuOpened(() => undefined);
 });
 
-test("drawn_menus_opened is never counted while browsing privately: on the deck's Incognito side, on an Incognito page, or for an Incognito card's menu", () => {
+test("drawn menus count public opens and Android selections once, but neither is counted while browsing privately", () => {
   const telemetry = require("../state/telemetry/telemetry") as typeof import("../state/telemetry/telemetry");
   const counted = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
-  const { countDrawnMenu } = require("../state/browse/menuCounts") as typeof import("../state/browse/menuCounts");
+  const { countDrawnMenu, countDrawnMenuAction } = require("../state/browse/menuCounts") as typeof import("../state/browse/menuCounts");
+  const { onDrawnMenuActionChosen, onDrawnMenuOpened } = require("../components/ui/Menu") as typeof import("../components/ui/Menu");
   const { useTabs } = require("../state/tabs/store") as typeof import("../state/tabs/store");
   const { useBrowse } = require("../state/browse/store") as typeof import("../state/browse/store");
   const { launchTabs } = require("../state/tabs/tabsState") as typeof import("../state/tabs/tabsState");
   const { someTabs } = require("../../test/render/harness") as typeof import("../../test/render/harness");
+  const tabs = useTabs.getState();
+  const browse = useBrowse.getState();
   const privateTab = someTabs(1, true)[0]!;
-  act(() => {
-    useTabs.setState({ ...launchTabs(someTabs(2), 0), incognito: false, listing: 0 });
-    useBrowse.setState({ surface: "deck" });
-  });
-  countDrawnMenu(false);
-  expect(counted).toHaveBeenCalledTimes(1);
-  countDrawnMenu(true);
-  expect(counted).toHaveBeenCalledTimes(1);
-  act(() => useTabs.setState({ incognito: true }));
-  countDrawnMenu(false);
-  expect(counted).toHaveBeenCalledTimes(1);
-  act(() => {
-    useTabs.setState((state) => ({ ...state, incognito: false, privates: [privateTab], selectedId: privateTab.id }));
-    useBrowse.setState({ surface: "browsing" });
-  });
-  countDrawnMenu(false);
-  expect(counted).toHaveBeenCalledTimes(1);
-  expect(counted).toHaveBeenCalledWith("drawn_menus_opened");
-  const { onDrawnMenuOpened } = require("../components/ui/Menu") as typeof import("../components/ui/Menu");
-  const opened = jest.fn();
-  onDrawnMenuOpened(opened);
-  const root = renderSurface(<Menu items={ITEMS} place={{ top: 100, left: 20, width: 250 }} privately onDismiss={() => undefined} />);
-  expect(opened).toHaveBeenCalledWith(true);
-  unmount(root);
-  onDrawnMenuOpened(() => undefined);
+  const openAndChoose = (privately = false) => {
+    const root = renderSurface(<Menu items={ITEMS} place={{ top: 100, left: 20, width: 250 }} privately={privately} onDismiss={() => undefined} />);
+    try {
+      pickMenu(root, "Copy Link");
+      pickMenu(root, "Copy Link");
+    } finally {
+      unmount(root);
+    }
+  };
+  onDrawnMenuOpened(countDrawnMenu);
+  onDrawnMenuActionChosen(countDrawnMenuAction);
+  try {
+    act(() => {
+      useTabs.setState({ ...launchTabs(someTabs(2), 0), incognito: false, listing: 0 });
+      useBrowse.setState({ surface: "deck" });
+    });
+    openAndChoose();
+    openAndChoose(true);
+    act(() => useTabs.setState({ incognito: true }));
+    openAndChoose();
+    act(() => {
+      useTabs.setState({ incognito: false, privates: [privateTab], selectedId: privateTab.id });
+      useBrowse.setState({ surface: "browsing" });
+    });
+    openAndChoose();
+    expect(ran).toEqual(["copy", "copy", "copy", "copy"]);
+    expect(counted.mock.calls).toEqual(Platform.OS === "android" ? [["drawn_menus_opened"], ["drawn_menu_actions_chosen"]] : [["drawn_menus_opened"]]);
+  } finally {
+    onDrawnMenuOpened(() => undefined);
+    onDrawnMenuActionChosen(() => undefined);
+    act(() => {
+      useTabs.setState(tabs);
+      useBrowse.setState(browse);
+    });
+  }
 });
 
 test("a confirmation's button labels wrap instead of truncating, and the card grows with the text size up to the screen's width", () => {

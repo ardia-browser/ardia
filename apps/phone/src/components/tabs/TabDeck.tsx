@@ -1280,6 +1280,7 @@ export const TabDeck = memo(function TabDeck() {
         <Menu
           items={[{ label: "Close Incognito Tabs", icon: "xmark", destructive: true, onPress: confirmLeaveIncognito }]}
           place={{ top: g.safeTop + tabsLayout.chipHeight + tabsLayout.headerGap * 2, left: (width - tabsLayout.menuWidth) / 2, width: tabsLayout.menuWidth }}
+          privately
           onDismiss={() => setMenu(null)}
         />
       ) : null}

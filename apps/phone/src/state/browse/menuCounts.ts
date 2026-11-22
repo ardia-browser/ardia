@@ -17,3 +17,8 @@ export function countDrawnMenu(privately: boolean) {
   if (privately || browsingPrivately()) return;
   countUsage("drawn_menus_opened");
 }
+
+export function countDrawnMenuAction(privately: boolean) {
+  if (privately || browsingPrivately()) return;
+  countUsage("drawn_menu_actions_chosen");
+}

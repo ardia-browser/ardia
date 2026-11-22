@@ -62,6 +62,10 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         fields: ["usage_counts", "tabs_opened", "searches", "pins_to_mac", "tabs_sent", "page_processes_gone", "links_given_up", "pages_reloaded_online", "find_opened_system", "find_opened_bar", "find_closed_bar", "spaces_swiped", "tray_hidden_rows_opened", "deck_pictures_late", "tray_back_swiped", "search_tabs_opened", "spaces_picked", "tabs_moved_to_space", "pages_printed", "pages_translated", "pinned_tabs_refound", "site_permissions_revoked", "card_opens_waited", "native_menus_opened", "drawn_menus_opened", "library_opened", "deck_grid_shown", "landscape_shown", "duo_layout_shown", "list_sheets_late", "list_pages_added", "search_reveals_late", "address_field_scrolled", "deck_bar_swipes", "tabs_swiped_closed", "tabs_swiped_reopened", "page_menu_tapped_away", "new_tab_search_opened", "deck_incognito_switches", "deck_bar_swipes_returned", "tabs_bar_swiped", "tab_swipe_hints_shown", "deck_pulls_hitched", "bottom_bar_collapses"],
       },
       {
+        text: "In the same daily counts, on Android: how many actions you chose in menus Ardia draws, never which action or while browsing privately",
+        fields: ["drawn_menu_actions_chosen"],
+      },
+      {
         text: "In the same daily counts: how often you opened Browse for Me, how many of its answers ChatGPT wrote, the phone’s own model wrote (Apple Intelligence on iPhone, Gemini Nano on Android) or were the pages’ own lines, how many it couldn’t write, and how often ChatGPT couldn’t answer so the phone did. Counts only, never what you searched for or what the answer said",
         fields: ["browse_for_me_opened", "browse_answers_chatgpt", "browse_answers_on_device", "browse_answers_excerpts", "browse_answers_failed", "browse_chatgpt_fallbacks"],
       },

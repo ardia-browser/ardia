@@ -22,7 +22,7 @@ import { closeLibrary, useLibrary } from "./state/library/store";
 import { MaterialSettingsScreen, SettingsView } from "./components/settings/SettingsView";
 import { SpacesView } from "./components/sync/SpacesView";
 import { ToastHost } from "./components/toasts/ToastHost";
-import { followDesign, tabsMotion, useDesign, useTheme, DEFAULT_PROFILE_COLOR, FrostSource, FullSheet, OverlayHost, PROFILE_PRESETS, onDrawnMenuOpened, onNativeMenuOpened, ProfileLookContext, Shade, SheetBackground, SURFACES_FROST } from "./components/ui";
+import { followDesign, tabsMotion, useDesign, useTheme, DEFAULT_PROFILE_COLOR, FrostSource, FullSheet, OverlayHost, PROFILE_PRESETS, onDrawnMenuActionChosen, onDrawnMenuOpened, onNativeMenuOpened, ProfileLookContext, Shade, SheetBackground, SURFACES_FROST } from "./components/ui";
 import { useLook } from "./state/sync/hooks";
 import { startSettingsSources } from "./state/settings/actions";
 import { startSync } from "./state/sync/actions";
@@ -55,7 +55,7 @@ import { inkLayer, lightStatusIcons } from "./lib/statusInk";
 import { countUsage, reportLaunch, startTelemetry } from "./state/telemetry/telemetry";
 import { useIncognito, useSelectedTab } from "./state/tabs/hooks";
 import { syncOffered } from "./state/sync/offer";
-import { countDrawnMenu, countNativeMenu } from "./state/browse/menuCounts";
+import { countDrawnMenu, countDrawnMenuAction, countNativeMenu } from "./state/browse/menuCounts";
 import { browseForMeOffered } from "./state/browseForMe/offer";
 import { pageSummaryChoiceOffered } from "./state/pageSummary/store";
 import { listenForBrowseForMe } from "./state/browseForMe/events";
@@ -127,6 +127,7 @@ function applyDesign(design: Design) {
 
 onNativeMenuOpened(countNativeMenu);
 onDrawnMenuOpened(countDrawnMenu);
+onDrawnMenuActionChosen(countDrawnMenuAction);
 
 onMaterialBackSwiped(() => {
   if (!useTabs.getState().incognito) countUsage("material_back_swiped");

@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { insetRect, MENU_MARGIN, menuAt, menuHeight, menuOnTrigger, menuShrink, type MenuAlign, type MenuLimits, type Point, type Rect } from "../../lib/menuPlace";
 import { useReduceMotion } from "./contrast";
 import { focusForScreenReader } from "./coverFocus";
+import { FabricCatchUp } from "./FabricCatchUp";
 import { LookFrost, SURFACES_FROST } from "./LookViews";
 import { menuMotion } from "./motion";
 import { measureAnchor, Portal, useOverlayFrame, usePortalLeaving, usePortalLeft } from "./Overlay";
@@ -32,6 +33,12 @@ export const onDrawnMenuOpened = (handler: (privately: boolean) => void) => {
 };
 
 export const countDrawnMenuOpened = (privately = false) => drawnMenuOpened(privately);
+
+let drawnMenuActionChosen: (privately: boolean) => void = () => undefined;
+
+export const onDrawnMenuActionChosen = (handler: (privately: boolean) => void) => {
+  drawnMenuActionChosen = handler;
+};
 
 export type MenuPlacer = (height: number, keepBelow?: boolean) => { place: ViewStyle; origin: string; maxHeight?: number; shrink?: { x: number; y: number } };
 
@@ -130,12 +137,17 @@ export function Menu({ items, place, placer, onDismiss, dimmed = false, origin =
     const open = fromScale + (1 - fromScale) * opened.value;
     return { transform: [{ scaleX: open * (1 + (shrinkX - 1) * closed.value) }, { scaleY: open * (1 + (shrinkY - 1) * closed.value) }] };
   });
+  const openingScale = () => {
+    "worklet";
+    return opened.value;
+  };
   const dimStyle = useAnimatedStyle(() => ({ opacity: dim.value }));
   const fade = useAnimatedStyle(() => ({ opacity: glass.value }));
   const rowsFade = useAnimatedStyle(() => ({ opacity: shownContent.value }));
   const choose = (action: () => void) => {
     if (chosen.current) return;
     chosen.current = true;
+    if (Platform.OS === "android") drawnMenuActionChosen(privately);
     onDismiss(true);
     action();
   };
@@ -237,6 +249,7 @@ export function Menu({ items, place, placer, onDismiss, dimmed = false, origin =
           </Animated.View>
           </ScrollView>
         </MenuMaterial>
+        {revealed && !leaving && !reduceMotion ? <FabricCatchUp motion={openingScale} /> : null}
       </Animated.View>
       </Animated.View>
     </View>

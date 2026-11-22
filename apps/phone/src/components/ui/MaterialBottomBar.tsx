@@ -173,6 +173,7 @@ function OverviewControls({ scheme, search, incognito, privateCount = 0, onClose
         frost={null}
         haptic={menuOpenedHaptic}
         disabled={!closesIncognito}
+        privately
         onOpen={() => onMenu(true)}
         onClose={() => onMenu(false)}
         place={{ bottom: materialBottomBar.field + MATERIAL_DECK.keyboardGap, left: 0 }}

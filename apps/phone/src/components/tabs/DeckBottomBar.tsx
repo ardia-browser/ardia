@@ -165,7 +165,7 @@ export function DeckBottomBar({ shown, barCenterY, deckHeight, width, layout, in
   const closeIncognito: MenuItem[] = onCloseIncognito ? [{ label: "Close Incognito Tabs", destructive: true, onPress: onCloseIncognito }] : [];
   const switchMenuShown = menusShown && privateCount > 0 && closeIncognito.length > 0;
   const incognitoSwitch = (
-    <MenuTrigger items={closeIncognito} trigger="longPress" haptic={menuOpenedHaptic} disabled={!switchMenuShown} onOpen={() => onMenu?.(true)} onClose={() => onMenu?.(false)} place={switchPlace} style={{ width: deckChromeLayout.barCircle, height: deckChromeLayout.barCircle }}>
+    <MenuTrigger items={closeIncognito} trigger="longPress" haptic={menuOpenedHaptic} disabled={!switchMenuShown} privately onOpen={() => onMenu?.(true)} onClose={() => onMenu?.(false)} place={switchPlace} style={{ width: deckChromeLayout.barCircle, height: deckChromeLayout.barCircle }}>
       {({ onLongPress }) => <IncognitoSwitch incognito={incognito} dark={dark} onLongPress={switchMenuShown ? onLongPress : undefined} {...fade} />}
     </MenuTrigger>
   );

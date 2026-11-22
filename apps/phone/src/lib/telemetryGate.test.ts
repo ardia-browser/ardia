@@ -226,6 +226,7 @@ test("the day's counts go out once, the first time the day has changed, and star
   gate.count("tabs_opened");
   gate.count("tabs_opened");
   gate.count("searches");
+  gate.count("drawn_menu_actions_chosen");
   gate.rollDaily();
   advance(DAY);
   gate.rollDaily();
@@ -237,6 +238,7 @@ test("the day's counts go out once, the first time the day has changed, and star
   assert.equal(usage[0]!.properties.tabs_opened, 2);
   assert.equal(usage[0]!.properties.searches, 1);
   assert.equal(usage[0]!.properties.pins_to_mac, 0);
+  assert.equal(usage[0]!.properties.drawn_menu_actions_chosen, 1);
   assert.deepEqual(recordProblems(usage[0]!), []);
   assert.equal(JSON.parse(stored.get(DAILY_KEY)!).pins_to_mac, 1);
 });

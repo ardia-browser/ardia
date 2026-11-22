@@ -66,7 +66,7 @@ class LiveServiceTests(unittest.TestCase):
         self.node_suite('live_services.test.mjs', 15)
 
     def test_core_against_documented_provider_replies(self):
-        self.node_suite('live_provider_contract.test.mjs', 9)
+        self.node_suite('live_provider_contract.test.mjs', 10)
 
     def test_native_fixed_requests_match_the_shared_provider_contract(self):
         native = json.loads(run(self, [self.tool, '--contract']))

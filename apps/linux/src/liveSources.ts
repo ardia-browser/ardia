@@ -20,7 +20,12 @@ export function normalizeConfluenceSite(site: string): string {
 }
 
 export function linuxLiveSources(client: LiveClient) {
-  const githubClient = createGithubClient((_scope, payload) => client.request("github", "graphql", payload));
+  const githubClient = createGithubClient(
+    (_scope, payload) => client.request("github", "graphql", payload),
+    undefined,
+    undefined,
+    (_scope, q) => client.request("github", "search", { q }),
+  );
   const githubScope = () => `host:${live().accounts.github?.connectedAt ?? ""}`;
 
   const github: LiveSource = {

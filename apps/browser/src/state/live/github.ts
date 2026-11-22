@@ -85,7 +85,7 @@ export function changeKey(listed: ListedPR | undefined): string | null {
 
 export type RateLimitInfo = { limit: number; remaining: number; resetAt: string };
 
-type GraphqlError = { type?: string; message: string; path?: (string | number)[] };
+export type GraphqlError = { type?: string; message: string; path?: (string | number)[] };
 
 type SearchNode = ListedPR | RawPR | { id: string } | Record<string, never> | null;
 
@@ -102,6 +102,12 @@ export type GithubResponse = {
 export type SearchResponse = { data?: { rateLimit?: RateLimitInfo | null; search: { nodes: SearchNode[] } } | null; errors?: GraphqlError[] };
 
 const ORG_SSO = /SAML|single sign-on/i;
+
+const CLASSIC_PAT = /forbids access via a personal access token \(classic\)/i;
+
+export function isClassicPat(error: GraphqlError): boolean {
+  return error.type === "FORBIDDEN" && CLASSIC_PAT.test(error.message);
+}
 
 export function blockedNodes(errors: readonly GraphqlError[] | undefined): GraphqlError[] {
   return (errors ?? []).filter((e) => e.type === "FORBIDDEN" && e.path?.[1] === "nodes" && e.path.length === 3);
@@ -173,6 +179,63 @@ export function prItem(raw: RawPR, section?: PullRequestSection): LiveItem {
   };
 }
 
+type RestIssue = {
+  node_id?: string;
+  number: number;
+  title: string;
+  html_url: string;
+  updated_at: string;
+  draft?: boolean;
+  comments?: number;
+  user?: { login: string; avatar_url: string } | null;
+  repository_url?: string;
+  pull_request?: { merged_at?: string | null } | null;
+};
+
+export type RestSearch = { items: RestIssue[]; incomplete_results?: boolean };
+
+export const restQuery = (q: string) => q.replace(/\s*sort:updated-desc/, "");
+
+function repoOf(repositoryUrl: string | undefined): string | null {
+  const parts = repositoryUrl?.split("/") ?? [];
+  const owner = parts[parts.length - 2];
+  const name = parts[parts.length - 1];
+  return owner && name ? `${owner}/${name}` : null;
+}
+
+function restPr(issue: RestIssue): RawPR | null {
+  const repo = repoOf(issue.repository_url);
+  if (!issue.node_id || !repo || !issue.pull_request) return null;
+  return {
+    id: issue.node_id,
+    state: "OPEN",
+    number: issue.number,
+    title: issue.title,
+    url: issue.html_url,
+    isDraft: !!issue.draft,
+    updatedAt: issue.updated_at,
+    headRefName: "",
+    baseRefName: "",
+    mergeable: "UNKNOWN",
+    reviewDecision: null,
+    additions: 0,
+    deletions: 0,
+    changedFiles: 0,
+    repository: { nameWithOwner: repo },
+    author: issue.user ? { login: issue.user.login, avatarUrl: issue.user.avatar_url } : null,
+    comments: { totalCount: issue.comments ?? 0 },
+    reviewThreads: { nodes: [] },
+    commits: { nodes: [] },
+  };
+}
+
+export function restItems(json: RestSearch): LiveItem[] {
+  return json.items.flatMap((issue) => {
+    const raw = restPr(issue);
+    return raw ? [prItem(raw)] : [];
+  });
+}
+
 const isPR = (n: SearchNode): n is RawPR => !!n && "number" in n;
 
 export type Listing = { authored: string[]; review: string[]; direct: Set<string> };
@@ -225,7 +288,7 @@ export function mapGithub(json: GithubResponse, filters: { authored: boolean; re
 
 export function withStacks(items: LiveItem[]): LiveItem[] {
   const byHead = new Map<string, LiveItem>();
-  for (const it of items) if (it.pr) byHead.set(`${it.pr.repo}:${it.pr.headRef}`, it);
+  for (const it of items) if (it.pr?.headRef) byHead.set(`${it.pr.repo}:${it.pr.headRef}`, it);
   const parent = (it: LiveItem) => (it.pr ? byHead.get(`${it.pr.repo}:${it.pr.baseRef}`) : undefined);
   const bottomOf = (it: LiveItem) => {
     let cur = it;

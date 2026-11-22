@@ -24,8 +24,13 @@ async function secret(source: LiveSourceId): Promise<string> {
   return value;
 }
 
-const githubClient = createGithubClient((token, payload, onHeaders) =>
-  request(endpoints.githubGraphql, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(payload) }, onHeaders),
+const githubClient = createGithubClient(
+  (token, payload, onHeaders) =>
+    request(endpoints.githubGraphql, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(payload) }, onHeaders),
+  undefined,
+  undefined,
+  (token, q, onHeaders) =>
+    request(`${endpoints.githubRest}/search/issues?per_page=50&sort=updated&order=desc&q=${encodeURIComponent(q)}`, { headers: { Authorization: `Bearer ${token}` } }, onHeaders),
 );
 
 const github: LiveSource = {

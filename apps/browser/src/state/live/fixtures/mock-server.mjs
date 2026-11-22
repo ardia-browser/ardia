@@ -11,6 +11,7 @@ let state;
 let approved;
 let detailsError;
 let bitbucketState;
+let blockedClassic;
 const log = [];
 function reset() {
   github = load("github.json");
@@ -19,6 +20,7 @@ function reset() {
   approved = false;
   detailsError = null;
   bitbucketState = "OPEN";
+  blockedClassic = new Set();
 }
 reset();
 
@@ -34,6 +36,26 @@ const bodyOf = (req) => new Promise((resolve) => {
 const nodes = (key) => github.data[key].nodes;
 const drop = (id) => {
   for (const key of ["authored", "review", "direct"]) github.data[key].nodes = nodes(key).filter((n) => n.id !== id);
+};
+const restIssues = (key) => {
+  const list = key === "direct" ? nodes("direct").map((n) => prs.get(n.id)).filter(Boolean) : nodes(key);
+  return list.map((n) => ({
+    node_id: n.id,
+    number: n.number,
+    title: n.title,
+    html_url: n.url,
+    updated_at: n.updatedAt,
+    draft: n.isDraft,
+    comments: n.comments.totalCount,
+    user: n.author ? { login: n.author.login, avatar_url: n.author.avatarUrl } : null,
+    repository_url: `https://api.github.com/repos/${n.repository.nameWithOwner}`,
+    pull_request: { merged_at: null },
+  }));
+};
+const classicPat = {
+  type: "FORBIDDEN",
+  path: ["search", "nodes", 0],
+  message: "`acme` forbids access via a personal access token (classic). Please use a GitHub App, OAuth App, or a personal access token with fine-grained permissions.",
 };
 
 createServer(async (req, res) => {
@@ -68,6 +90,12 @@ createServer(async (req, res) => {
     return send(res, 200, { ok: true, id: template.id });
   }
 
+  if (p === "/mock/block-classic") {
+    const kind = url.searchParams.get("kind") ?? "all";
+    for (const key of kind === "all" ? ["authored", "review", "direct"] : [kind]) blockedClassic.add(key);
+    return send(res, 200, { ok: true });
+  }
+
   if (p === "/mock/details-error") {
     const id = url.searchParams.get("id");
     detailsError = id ? { id, type: url.searchParams.get("type") ?? "OTHER" } : null;
@@ -98,7 +126,15 @@ createServer(async (req, res) => {
     if (query.includes("LiveFolderGone")) return send(res, 200, { data: { nodes: variables.ids.map((id) => ({ id, state: state[id] ?? "OPEN" })) } });
     if (!query.includes("search(")) return send(res, 200, { data: { viewer: github.data.viewer } });
     const key = variables.q.includes("user-review-requested") ? "direct" : variables.q.includes("review-requested") ? "review" : "authored";
+    if (blockedClassic.has(key)) return send(res, 200, { data: { search: { nodes: [] } }, errors: [classicPat] });
     return send(res, 200, { data: { search: { nodes: github.data[key].nodes } } });
+  }
+  if (p === "/github/search/issues") {
+    if (auth !== "Bearer mock-token") return send(res, 401, { message: "Bad credentials" });
+    const q = url.searchParams.get("q") ?? "";
+    const key = q.includes("user-review-requested") ? "direct" : q.includes("review-requested") ? "review" : "authored";
+    const items = restIssues(key);
+    return send(res, 200, { total_count: items.length, incomplete_results: false, items });
   }
 
   if (p.startsWith("/notion/")) {

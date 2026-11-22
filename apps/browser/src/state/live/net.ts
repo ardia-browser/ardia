@@ -15,6 +15,7 @@ export const isMocked = !!mock;
 
 export const endpoints = {
   githubGraphql: mock ? `${mock}/github/graphql` : "https://api.github.com/graphql",
+  githubRest: mock ? `${mock}/github` : "https://api.github.com",
   githubWeb: mock ? `${mock}/github` : "https://github.com",
   bitbucket: mock ? `${mock}/bitbucket/2.0` : "https://api.bitbucket.org/2.0",
   notion: mock ? `${mock}/notion/v1` : "https://api.notion.com/v1",

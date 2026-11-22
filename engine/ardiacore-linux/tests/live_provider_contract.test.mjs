@@ -112,6 +112,7 @@ function pick(route, fallback) {
 
 function defaultFor(host, method, path, body) {
   if (host === "api.github.com") {
+    if (path === "/search/issues") return ["github", "restSearch"];
     const { query, variables } = JSON.parse(body);
     if (query.includes("search(")) return ["github", /(^|\s)author:@me(\s|$)/.test(variables.q) ? "folder" : "emptySearch"];
     return ["github", query.includes("LiveFolderDetails") ? "details" : "viewer"];
@@ -182,17 +183,33 @@ test("GitHub: a token connects from the documented viewer reply and a folder map
   assert.ok(graphql.every((r) => r.method === "POST" && r.headers.authorization === `Bearer ${CREDENTIALS.github}` && r.headers.accept === "application/json"));
 });
 
+test("GitHub: a classic token policy falls back to the search API, which the host allows and authorizes", async () => {
+  await linux.connectGithub(CREDENTIALS.github);
+  serve("api.github.com /graphql", "classicBlocked");
+  const items = await SOURCES.github.fetch(prFolder, { interactive: true });
+  assert.deepEqual(items.map((it) => [it.id, it.pr.repo, it.pr.number, it.pr.checks.length, it.pr.mergeable]), [["github:PR_kwDOAJy2Ks5vZ3Qx", "octocat/Hello-World", 1347, 0, "unknown"]]);
+  assert.equal(SOURCES.github.warning(), null);
+  const rest = requests.filter((r) => r.host === "api.github.com" && r.path === "/search/issues");
+  assert.deepEqual(rest.map((r) => new URLSearchParams(r.search).get("q")).sort(), [
+    "is:pr is:open author:@me archived:false",
+    "is:pr is:open review-requested:@me archived:false",
+    "is:pr is:open user-review-requested:@me archived:false",
+  ]);
+  assert.ok(rest.every((r) => r.method === "GET" && r.headers.authorization === `Bearer ${CREDENTIALS.github}` && r.search.includes("per_page=50") && r.search.includes("sort=updated&order=desc")));
+  assert.ok(!requests.some((r) => r.host === "api.github.com" && r.path === "/graphql" && r.body.includes("LiveFolderDetails")));
+});
+
 test("GitHub: bad credentials, the primary and secondary rate limits and SAML enforcement keep their meaning", async () => {
   serve("api.github.com /graphql", "badCredentials");
-  await rejectsWith(SOURCES.github.fetch(prFolder), "signedOut");
+  await rejectsWith(SOURCES.github.fetch(prFolder, { interactive: true }), "signedOut");
   serve("api.github.com /graphql", "ssoRequired");
-  await rejectsWith(SOURCES.github.fetch(prFolder), "sso");
+  await rejectsWith(SOURCES.github.fetch(prFolder, { interactive: true }), "sso");
   serve("api.github.com /graphql", "primaryRateLimit");
-  await rejectsWith(SOURCES.github.fetch(prFolder), "rateLimited", /^Rate Limit Exceeded$/);
+  await rejectsWith(SOURCES.github.fetch(prFolder, { interactive: true }), "rateLimited", /^Rate Limit Exceeded$/);
   serve("api.github.com /graphql", "secondaryRateLimit");
-  await rejectsWith(SOURCES.github.fetch(prFolder), "rateLimited");
+  await rejectsWith(SOURCES.github.fetch(prFolder, { interactive: true }), "rateLimited");
   serve("api.github.com /graphql", "secondaryRateLimitNoRetryAfter");
-  await rejectsWith(SOURCES.github.fetch(prFolder), "rateLimited");
+  await rejectsWith(SOURCES.github.fetch(prFolder, { interactive: true }), "rateLimited");
   assert.ok(live().accounts.github, "a refresh failure never drops the account");
 });
 

@@ -16,6 +16,7 @@ using linux_sync::Wipe;
 
 constexpr char kCredentialHeader[] = "ardia-live-1";
 constexpr char kGithubGraphql[] = "https://api.github.com/graphql";
+constexpr char kGithubRest[] = "https://api.github.com";
 constexpr char kGithubWeb[] = "https://github.com";
 constexpr char kBitbucket[] = "https://api.bitbucket.org/2.0";
 constexpr char kNotion[] = "https://api.notion.com/v1";
@@ -46,6 +47,7 @@ struct Operation {
 
 constexpr Operation kOperations[] = {
     {Source::kGithub, "graphql", true, true},       {Source::kGithub, "deviceCode", true, false},
+    {Source::kGithub, "search", true, true},
     {Source::kBitbucket, "pullRequests", true, true}, {Source::kBitbucket, "statuses", true, true},
     {Source::kBitbucket, "pullRequest", true, true},  {Source::kBitbucket, "user", false, true},
     {Source::kNotion, "search", true, true},          {Source::kNotion, "users", true, true},
@@ -594,6 +596,15 @@ std::optional<HttpRequest> BuildRequest(Source source, std::string_view operatio
         if (!client || !Printable(*client, 256)) return refuse("A GitHub client ID is required");
         return Post(std::string(kGithubWeb) + "/login/device/code", "application/x-www-form-urlencoded",
                     Form({{"client_id", *client}, {"scope", kGithubScope}}));
+      }
+      if (operation == "search") {
+        const std::string* q = Text(params, "q");
+        if (!q || q->empty() || q->size() > 512 || q->find_first_of("\r\n") != std::string::npos)
+          return refuse("A GitHub search query is required");
+        HttpRequest request =
+            Get(std::string(kGithubRest) + "/search/issues?per_page=50&sort=updated&order=desc&q=" + PercentEncode(*q));
+        Authorize(request, Bearer(credential->token));
+        return request;
       }
       const std::string* query = Text(params, "query");
       if (!query || !ReadOnlyGraphql(*query)) return refuse("Only read-only GitHub queries are allowed");

@@ -343,6 +343,17 @@ int SelfTest() {
   EXPECT(keys::SyncKeySchema().name == std::string("dev.ardia.linux.SyncKey"));
   std::string error;
   EXPECT(!live::BuildRequest(live::Source::kGithub, "graphql", keys::JsonValue::Object(), &confluence, &error));
+  live::Credential github;
+  github.source = live::Source::kGithub;
+  github.token = FixtureSecret("ghp_");
+  keys::JsonValue searchParams = keys::JsonValue::Object();
+  searchParams.Set("q", keys::JsonValue::String("is:pr is:open author:@me"));
+  const auto search = live::BuildRequest(live::Source::kGithub, "search", searchParams, &github, &error);
+  EXPECT(search && search->method == "GET");
+  EXPECT(search && search->url ==
+                       std::string("https://api.github.com/search/issues?per_page=50&sort=updated&order=desc&q=is%3Apr%20is%3Aopen%20author%3A%40me"));
+  EXPECT(search && search->headers.size() == 2);
+  EXPECT(!live::BuildRequest(live::Source::kGithub, "search", keys::JsonValue::Object(), &github, &error));
   std::cout << "live self-test passed" << std::endl;
   return 0;
 }

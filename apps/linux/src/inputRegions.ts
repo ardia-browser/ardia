@@ -211,8 +211,10 @@ export function createInputRegions(deps: RegionDeps) {
   return {
     setPage(slot: Element, visible: boolean, radii?: () => CornerRadii, cardRadii?: () => CornerRadii) {
       const known = pages.get(slot);
-      if (known?.visible === visible && known.radii === radii && known.cardRadii === cardRadii) return;
-      pages.set(slot, { visible, ...(radii ? { radii } : {}), ...(cardRadii ? { cardRadii } : {}) });
+      const keptRadii = radii ?? known?.radii;
+      const keptCardRadii = cardRadii ?? known?.cardRadii;
+      if (known?.visible === visible && known.radii === keptRadii && known.cardRadii === keptCardRadii) return;
+      pages.set(slot, { visible, ...(keptRadii ? { radii: keptRadii } : {}), ...(keptCardRadii ? { cardRadii: keptCardRadii } : {}) });
       schedule();
     },
     dropPage(slot: Element) {

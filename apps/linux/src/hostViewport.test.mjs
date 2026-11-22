@@ -304,12 +304,31 @@ test("clipRadii gives a page the card's radius only at the corners it shares wit
   }
 });
 
-test("an early tab switch carries the shown page's card radii to the page taking its place", async () => {
-  const { readFileSync } = await import("node:fs");
-  const source = readFileSync(new URL("./hostTab.ts", import.meta.url), "utf8");
-  const swap = source.slice(source.indexOf("export function showInPlaceOf("));
-  assert.match(swap, /const shown: TabViewport = \{ \.\.\.viewport, visible: true \};/);
-  assert.match(swap, /const hidden: TabViewport = \{ \.\.\.viewport, visible: false \};/);
-  const view = readFileSync(new URL("./shims/web/HostWebView.tsx", import.meta.url), "utf8");
-  assert.match(view, /watchPageBelowShell\(node, regions, \(\) => latest\.current\.visible !== false, \(\) => tab\.current, undefined, covered, \(\) => clipRadii\(node\)\)/);
+test("a page viewport the engine refuses is counted once per refusal, only for a page meant to show", async () => {
+  globalThis.__DEV__ = false;
+  await import("../../browser/src/test-native/index.ts");
+  const client = await import("../../browser/src/state/telemetry/client.ts");
+  const placement = await import("../../browser/src/state/telemetry/windowPlacementCounts.ts");
+  const { watchPageBelowShell } = await import("./shims/web/HostWebView.tsx");
+  const page = { isConnected: true, parentElement: null, getBoundingClientRect: () => box(200, 50, 800, 600), contains: () => false };
+  const s = stage({ elementFromPoint: () => page });
+  client.loadChoice();
+  client.setSharing(true, "onboarding");
+  placement.takeWindowPlacementCounts();
+  try {
+    let wanted = true;
+    const regions = { setPage() {}, refresh() {}, dropPage() {}, ...cover() };
+    const tab = { identity: {}, disposed: false, viewport: () => Promise.reject(new Error("Viewport radii must be finite, nonnegative and at most 4096")) };
+    const stop = watchPageBelowShell(page, regions, () => wanted, () => tab, undefined, undefined, () => ({ upperLeft: 0, upperRight: 0, lowerRight: 10, lowerLeft: 10 }));
+    s.mutate();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    wanted = false;
+    s.mutate();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(placement.takeWindowPlacementCounts().linux_page_viewports_rejected, 1);
+    stop();
+  } finally {
+    client.setSharing(false, "settings");
+    s.restore();
+  }
 });

@@ -193,7 +193,7 @@ export function showInPlaceOf(from: HostTab, to: HostTab): boolean {
   const viewport = from.shownViewport();
   if (!viewport || from.host !== to.host || !from.presentsNow() || !to.presentsNow() || to.shownViewport()) return false;
   const shown: TabViewport = { ...viewport, visible: true };
-  const hidden: TabViewport = { ...viewport, visible: false };
+  const hidden: TabViewport = { rect: viewport.rect, visible: false };
   const send = (method: string, args: Record<string, unknown>, undo: () => void) => {
     const consent = consentToken();
     void new Promise((resolve) => resolve(to.host.invoke(method, args))).catch((error: unknown) => {

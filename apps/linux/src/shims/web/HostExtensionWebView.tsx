@@ -10,8 +10,6 @@ import { inputRegions } from "../../shellAbove";
 import { watchPageBelowShell } from "./HostWebView";
 import { clipRadii } from "./clipRadii";
 
-export { clipRadii };
-
 export type HostExtensionWebViewProps = WebViewProps & {
   placement?: Omit<PopupPlacement, "visible" | "decorated" | "decoratedScale">;
   onNativeFrame?: (frame: NativeFrame) => void;

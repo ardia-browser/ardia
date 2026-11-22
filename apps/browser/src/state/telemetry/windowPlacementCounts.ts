@@ -14,6 +14,7 @@ const NO_LINUX_DECORATIONS = {
   linux_decoration_answers_none: 0,
   linux_decoration_answers_client: 0,
   linux_decoration_answers_server: 0,
+  linux_page_viewports_rejected: 0,
 };
 let linuxDecorations = { ...NO_LINUX_DECORATIONS };
 const LINUX_DECORATED_BY = { app: "linux_windows_app_decorated", compositor: "linux_windows_compositor_decorated" } as const;
@@ -42,6 +43,8 @@ export function noteLinuxWindowDecorations(decoratedBy: unknown, answer: unknown
   if (typeof decoratedBy === "string" && Object.hasOwn(LINUX_DECORATED_BY, decoratedBy)) linuxDecorations[LINUX_DECORATED_BY[decoratedBy as keyof typeof LINUX_DECORATED_BY]]++;
   if (typeof answer === "string" && Object.hasOwn(LINUX_DECORATION_ANSWERS, answer)) linuxDecorations[LINUX_DECORATION_ANSWERS[answer as keyof typeof LINUX_DECORATION_ANSWERS]]++;
 }
+
+export const noteLinuxPageViewportRejected = () => void (isSharing() && linuxDecorations.linux_page_viewports_rejected++);
 
 export function takeWindowPlacementCounts() {
   const taken = { window_centered_resizes: centeredResizes, windows_reopened_maximized: reopenedMaximized, window_titles_read: titlesRead, window_drag_loops: dragLoops, window_close_pins_kept: closePinsKept, ...linuxDecorations };

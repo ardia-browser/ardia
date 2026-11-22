@@ -18,6 +18,7 @@ import type { CornerRadii } from "../../hostExtensionView";
 import { focusPageIfShellUnfocused, notePageFocusRequest, notingPageFocus } from "../../pageFocus";
 import { withPopupDismissal } from "../../popupDismissal";
 import { registerSwitchView } from "../../tabSwitchAhead";
+import { noteLinuxPageViewportRejected } from "../../../../browser/src/state/telemetry/windowPlacementCounts.ts";
 
 const pageCoveredListeners = new Set<(tabId: string) => void>();
 export function onPageCovered(listener: (tabId: string) => void) {
@@ -139,6 +140,7 @@ export function watchPageBelowShell(node: HTMLElement, regions: InputRegionsRegi
       if (mine === revision && !current.disposed && viewport.visible) regions.setPage(node, true, radii, cardRadii);
     }, (error) => {
       if (mine === revision) last = "";
+      if (viewport.visible) noteLinuxPageViewportRejected();
       reportHostError(error);
     });
   }, regions);

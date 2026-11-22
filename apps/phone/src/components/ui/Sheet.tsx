@@ -250,7 +250,7 @@ function ClassicSheet({ open, onDismiss, onHidden, fill, onTapAway, halfOpen = f
   }));
   const sheetMotionNow = () => {
     "worklet";
-    return shown.value + rest.value + drag.value + sheetHeight.value;
+    return (1 - shown.value) * sheetHeight.value + rest.value + drag.value;
   };
   const grabber = menuLayout.sheetGrabber ?? (halfOpen ? menuLayout.halfSheetGrabber : null);
   const grabberRoom = menuLayout.sheetGrabber ? 0 : grabber ? grabber.top + grabber.height : 0;

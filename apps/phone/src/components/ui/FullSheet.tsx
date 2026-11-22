@@ -159,7 +159,7 @@ export function FullSheet<T extends string>({ sheet, progress, onDismiss, childr
   const slide = useAnimatedStyle(() => ({ transform: [{ translateY: offset.value }] }));
   const sheetMotionNow = () => {
     "worklet";
-    return offset.value + height.value;
+    return offset.value;
   };
   const shown = sheet ?? presenceShown(presence.current);
   if (!shown) return null;

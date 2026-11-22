@@ -237,6 +237,7 @@
 #include "ui/aura/client/focus_client.h"
 #include "ui/aura/env.h"
 #include "ui/aura/window_tree_host.h"
+#include "ui/aura/window_tree_host_platform.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_event_dispatcher.h"
 #include "ui/aura/window_targeter.h"
@@ -274,6 +275,7 @@
 #include "ui/events/keycodes/keyboard_code_conversion.h"
 #include "ui/native_theme/native_theme.h"
 #include "ui/ozone/public/ozone_platform.h"
+#include "ui/platform_window/extensions/wayland_extension.h"
 #include "ui/views/background.h"
 #include "ui/views/controls/webview/webview.h"
 #include "ui/views/controls/native/native_view_host.h"
@@ -324,8 +326,7 @@ extern bool (*g_ardia_linux_automation_window)(const BrowserWindowInterface*);
 extern int (*g_ardia_linux_window_tab_count)(const BrowserWindowInterface*);
 extern bool (*g_ardia_linux_frameless_app)(const std::string& app_name);
 extern bool (*g_ardia_linux_borderless_frame)(const BrowserWindowInterface*);
-extern int g_ardia_linux_compositor_decoration_mode;
-extern void (*g_ardia_linux_compositor_decoration_changed)();
+extern void (*g_ardia_linux_compositor_decoration_changed)(gfx::AcceleratedWidget widget);
 extern bool (*g_ardia_linux_shell_passes_point)(gfx::NativeView child, const gfx::Point& location);
 extern void (*g_ardia_linux_tiled_edges_changed)(views::Widget* widget);
 
@@ -1440,6 +1441,11 @@ class ShellHostView : public views::View,
   linux_window_state::WindowState NativeWindowState() const;
   void ScheduleWindowStateReport();
   void RefreshEngineFrame();
+  linux_window_corners::DecorationAnswer DecorationAnswer() const;
+  bool DecoratedByCompositor() const;
+  base::DictValue WindowDecorationsValue() const;
+  void FollowDecorations();
+  bool HostsAcceleratedWidget(gfx::AcceleratedWidget widget) const;
   PrefService* WindowOutputPrefs() const;
   void RememberWindowOutput();
   void ForgetWindowOutput();
@@ -1732,6 +1738,7 @@ class ShellHostView : public views::View,
   std::unique_ptr<ShellTransparency> shell_transparency_;
   raw_ptr<views::View> curtain_ = nullptr;
   std::optional<linux_window_corners::Corners> window_corners_;
+  std::optional<std::pair<bool, linux_window_corners::DecorationAnswer>> followed_decorations_;
   base::OneShotTimer curtain_timer_;
   raw_ptr<HostMessageHandler> handler_ = nullptr;
   uint64_t renderer_generation_ = 0;
@@ -2711,7 +2718,7 @@ void ShellHostView::Initialize() {
   }
   if (small_ && !is_utility()) GetWidget()->OnSizeConstraintsChanged();
   LayoutOverlay();
-  RefreshEngineFrame();
+  FollowDecorations();
   StartLinuxContentBlocker(profile(), page_profile());
   if (!title_.empty()) {
     browser_->GetWindow()->GetNativeWindow()->SetTitle(base::UTF8ToUTF16(title_));
@@ -3310,6 +3317,7 @@ base::DictValue ShellHostView::Bootstrap() const {
   }
   for (const char* capability : ardia::linux_commands::kWindowCommandCapabilities) capabilities.Append(capability);
   for (const char* capability : ardia::linux_window_state::kWindowStateCapabilities) capabilities.Append(capability);
+  for (const char* capability : ardia::linux_window_corners::kWindowCornersCapabilities) capabilities.Append(capability);
   for (const char* capability : ardiacore::linux_capture::kCaptureCapabilities) capabilities.Append(capability);
   for (const char* capability : ardiacore::linux_cast::kCastCapabilities) capabilities.Append(capability);
   for (const char* capability : ardiacore::linux_automation_window::kCapabilities) capabilities.Append(capability);
@@ -3345,6 +3353,7 @@ base::DictValue ShellHostView::Bootstrap() const {
   bootstrap.Set("pageProfile", page_profile_);
   if (!private_window_.empty()) bootstrap.Set("privateWindow", private_window_.Clone());
   bootstrap.Set("windowKind", WindowKind());
+  bootstrap.Set("shellZoom", blink::ZoomLevelToZoomFactor(zoom::ZoomController::GetZoomLevelForWebContents(shell())));
   if (const base::CommandLine* command = base::CommandLine::ForCurrentProcess();
       command->HasSwitch(sandbox::policy::switches::kNoSandbox)) {
     const std::string decision = command->GetSwitchValueASCII("ardia-sandbox-decision");
@@ -3380,7 +3389,9 @@ gfx::RoundedCornersF RoundedCorners(const linux_window_corners::Corners& corners
 void ShellHostView::RoundWindowCorners() {
   if (!browser_view_ || !browser_view_->browser_widget()) return;
   BrowserFrameView* frame = browser_view_->browser_widget()->GetFrameView();
-  const gfx::RoundedCornersF frame_corners = frame ? frame->GetWindowRoundedCorners() : gfx::RoundedCornersF();
+  const gfx::RoundedCornersF frame_corners = frame && views::Widget::IsWindowCompositingSupported()
+                                                  ? frame->GetWindowRoundedCorners()
+                                                  : gfx::RoundedCornersF();
   const linux_window_corners::Corners corners{
       .upper_left = frame_corners.upper_left(),
       .upper_right = frame_corners.upper_right(),
@@ -3394,7 +3405,10 @@ void ShellHostView::RoundWindowCorners() {
     browser_view_->SetPaintToLayer();
     browser_view_->layer()->SetFillsBoundsOpaquely(false);
   }
-  if (browser_view_->layer()) browser_view_->layer()->SetRoundedCornerRadius(rounded);
+  if (browser_view_->layer()) {
+    browser_view_->layer()->SetRoundedCornerRadius(rounded);
+    browser_view_->layer()->SetIsFastRoundedCorner(true);
+  }
   if (is_utility()) SetBackground(views::CreateRoundedRectBackground(kColorWebContentsBackground, rounded));
   shell_->holder()->SetNativeViewCornerRadii(rounded);
   if (curtain_) curtain_->layer()->SetRoundedCornerRadius(rounded);
@@ -4680,10 +4694,55 @@ std::string CurrentDesktop() {
   return desktop && linux_window_state::ReportableToolkitString(*desktop) ? *desktop : std::string();
 }
 
-bool CompositorDecorates() {
+const std::string& LaunchDesktop() {
   static const base::NoDestructor<std::string> desktop(CurrentDesktop());
-  return linux_window_corners::CompositorDecorates(
-      linux_window_corners::DecorationAnswerOf(g_ardia_linux_compositor_decoration_mode), *desktop);
+  return *desktop;
+}
+
+linux_window_corners::DecorationAnswer ShellHostView::DecorationAnswer() const {
+  const views::Widget* widget = GetWidget();
+  aura::Window* window = widget ? widget->GetNativeWindow() : nullptr;
+  auto* tree_host = window ? static_cast<aura::WindowTreeHostPlatform*>(window->GetHost()) : nullptr;
+  const ui::PlatformWindow* platform = tree_host ? tree_host->platform_window() : nullptr;
+  const ui::WaylandToplevelExtension* toplevel = platform ? ui::GetWaylandToplevelExtension(*platform) : nullptr;
+  return linux_window_corners::DecorationAnswerOf(toplevel ? toplevel->CompositorDecorationMode() : 0);
+}
+
+bool ShellHostView::DecoratedByCompositor() const {
+  return linux_window_corners::CompositorDecorates(DecorationAnswer(), LaunchDesktop());
+}
+
+base::DictValue ShellHostView::WindowDecorationsValue() const {
+  return base::DictValue()
+      .Set("decoratedBy", linux_window_corners::DecoratedByName(DecoratedByCompositor()))
+      .Set("answer", linux_window_corners::AnswerName(DecorationAnswer()));
+}
+
+bool ShellHostView::HostsAcceleratedWidget(gfx::AcceleratedWidget widget) const {
+  const views::Widget* own = GetWidget();
+  aura::Window* window = own ? own->GetNativeWindow() : nullptr;
+  return window && window->GetHost() && window->GetHost()->GetAcceleratedWidget() == widget;
+}
+
+void ShellHostView::FollowDecorations() {
+  const linux_window_corners::DecorationAnswer answer = DecorationAnswer();
+  const bool decorated = DecoratedByCompositor();
+  VLOG(1) << "ardia window " << window_id_ << " decorated by "
+          << linux_window_corners::DecoratedByName(decorated) << ", xdg-decoration answer "
+          << linux_window_corners::AnswerName(answer);
+  const bool attaching = !followed_decorations_;
+  const bool changed = attaching || followed_decorations_->first != decorated;
+  if (followed_decorations_ == std::pair(decorated, answer)) return;
+  followed_decorations_ = std::pair(decorated, answer);
+  if (changed && (decorated || !attaching)) {
+    RefreshEngineFrame();
+  } else if (changed) {
+    RoundWindowCorners();
+  }
+  if (!window_id_.empty()) {
+    Event("ArdiaShell", linux_window_corners::kWindowDecorationsEvent,
+          base::Value(WindowDecorationsValue().Set("windowId", window_id_)));
+  }
 }
 
 base::Value WindowButtonLayoutValue() {
@@ -7402,6 +7461,7 @@ void ShellHostView::Invoke(
   }
   if (method == "ArdiaShell.windowFrame" || method == "ArdiaShell.closeWindow" ||
       method == "ArdiaShell.minimizeWindow" || method == linux_window_state::kWindowStateCall ||
+      method == linux_window_corners::kWindowDecorationsCall ||
       method == "ArdiaShell.toggleMaximizeWindow" ||
       method == ardia::linux_commands::kToggleFullScreenCall ||
       method == "ArdiaShell.focusWindow" || method == "ArdiaShell.utilityReady" ||
@@ -7431,6 +7491,9 @@ void ShellHostView::Invoke(
     }
     if (method == "ArdiaShell.windowFrame") {
       return std::move(done).Run(true, base::Value(SharedFrameValue(target->browser()->GetWindow()->GetBounds())));
+    }
+    if (method == linux_window_corners::kWindowDecorationsCall) {
+      return std::move(done).Run(true, base::Value(target->WindowDecorationsValue()));
     }
     if (method == linux_window_state::kWindowStateCall) {
       return std::move(done).Run(true, base::Value(WindowStateValue(target->NativeWindowState())));
@@ -8468,14 +8531,16 @@ void StartLinuxHost() {
   g_ardia_linux_is_companion = [](const BrowserWindowInterface* browser) { return IsCompanion(browser); };
   g_ardia_linux_frameless_app = &IsUtilityAppName;
   g_ardia_linux_borderless_frame = [](const BrowserWindowInterface* browser) {
-    return browser && Hosts().contains(browser->GetSessionID().id()) && CompositorDecorates();
+    if (!browser) return false;
+    const auto found = Hosts().find(browser->GetSessionID().id());
+    return found != Hosts().end() && found->second->DecoratedByCompositor();
   };
-  g_ardia_linux_compositor_decoration_changed = [] {
-    static std::optional<bool> followed;
-    const bool decorates = CompositorDecorates();
-    if (followed == decorates) return;
-    followed = decorates;
-    for (const auto& [id, host] : Hosts()) host->RefreshEngineFrame();
+  g_ardia_linux_compositor_decoration_changed = [](gfx::AcceleratedWidget widget) {
+    for (const auto& [id, host] : Hosts()) {
+      if (!host->HostsAcceleratedWidget(widget)) continue;
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, base::BindOnce(&ShellHostView::FollowDecorations, host->GetWeakPtr()));
+    }
   };
   g_ardia_linux_automation_window = &ardiacore::IsLinuxAutomationWindow;
   g_ardia_linux_shell_passes_point = [](gfx::NativeView child, const gfx::Point& location) {

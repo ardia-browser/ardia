@@ -1,12 +1,13 @@
 The Ardia Linux host draws the whole window itself: its sidebar and page card sit on the BrowserView, and it hides the
-caption buttons. Where the compositor decorates windows itself (it answers xdg-decoration with server-side, as Hyprland
-does, or the desktop is a tiling one), Chromium's custom Linux frame only adds a themed band with its own shadow and
-rounded corners inside the compositor's. The host names those windows through g_ardia_linux_borderless_frame; for them
-the frame view and its layout report no border, input or shadow insets and no corner radius, and paint no frame, so
-the client area is the whole window. A thin band along the edges still answers as a resize border so a window can be
-resized where the compositor draws none. The hook is null outside the Linux host. XdgToplevel records the
-compositor's last xdg-decoration answer in g_ardia_linux_compositor_decoration_mode and tells the host through
-g_ardia_linux_compositor_decoration_changed.
+caption buttons. Where the compositor decorates a window itself (it answered that toplevel's xdg-decoration with
+server-side, as Hyprland does, or there is no answer and the desktop is a tiling one), Chromium's custom Linux frame
+only adds a themed band with its own shadow and rounded corners inside the compositor's. The host names those windows
+through g_ardia_linux_borderless_frame; for them the frame view and its layout report no border, input or shadow
+insets and no corner radius, and paint no frame, so the client area is the whole window. A thin band along the edges
+still answers as a resize border so a floating window can be resized where the compositor draws none; a tiled one
+has none. The hook is null outside the Linux host. Each XdgToplevel keeps the mode its compositor last answered,
+WaylandToplevelExtension::CompositorDecorationMode reads it for a window, and
+g_ardia_linux_compositor_decoration_changed tells the host which window's answer changed.
 Chrome maps its startup window before the host starts, so X11 sets _GTK_FRAME_EXTENTS from the frame insets it had
 then and rewrites it only on a window state change. When the host lays the frame out again (FrameTypeChanged), the
 browser's window tree host now asks X11 for the insets once more through X11Extension::RefreshDecorationInsets, so
@@ -108,11 +109,12 @@ a window manager that honours the property sees none.
    return static_cast<BrowserNativeWidgetAuraLinux*>(
               browser_widget()->browser_native_widget())
        ->ShouldDrawRestoredFrameShadow();
-@@ -114,6 +122,18 @@
+@@ -114,6 +122,19 @@
  }
  
  int BrowserFrameViewLinux::NonClientHitTest(const gfx::Point& point) {
-+  if (ArdiaLinuxBorderlessFrame(GetBrowserView()) && !IsFrameCondensed()) {
++  if (ArdiaLinuxBorderlessFrame(GetBrowserView()) && !IsFrameCondensed() &&
++      !browser_widget()->tiled()) {
 +    views::WidgetDelegate* delegate = browser_widget()->widget_delegate();
 +    if (delegate && delegate->CanResize()) {
 +      constexpr int kResizeAreaCornerSize = 16;
@@ -233,26 +235,81 @@ a window manager that honours the property sees none.
   protected:
    virtual ~X11Extension();
  
+--- a/ui/ozone/platform/wayland/host/wayland_toplevel_window.cc
++++ b/ui/ozone/platform/wayland/host/wayland_toplevel_window.cc
+@@ -899,6 +899,12 @@
+   appmenu_object_path_.clear();
+ }
+ 
++int WaylandToplevelWindow::CompositorDecorationMode() const {
++  return xdg_toplevel_
++             ? static_cast<int>(xdg_toplevel_->compositor_decoration_mode())
++             : 0;
++}
++
+ void WaylandToplevelWindow::SetSystemModal(bool modal) {
+   system_modal_ = modal;
+   if (xdg_toplevel_) {
+--- a/ui/ozone/platform/wayland/host/wayland_toplevel_window.h
++++ b/ui/ozone/platform/wayland/host/wayland_toplevel_window.h
+@@ -136,6 +136,7 @@
+   void SetAppmenu(const std::string& service_name,
+                   const std::string& object_path) override;
+   void UnsetAppmenu() override;
++  int CompositorDecorationMode() const override;
+ 
+   // WorkspaceExtension:
+   std::string GetWorkspace() const override;
 --- a/ui/ozone/platform/wayland/host/xdg_toplevel.cc
 +++ b/ui/ozone/platform/wayland/host/xdg_toplevel.cc
-@@ -34,6 +34,9 @@
+@@ -34,6 +34,8 @@
  #include "ui/ozone/platform/wayland/host/wayland_window.h"
  #include "ui/ozone/platform/wayland/host/xdg_surface.h"
  
-+int g_ardia_linux_compositor_decoration_mode = 0;
-+void (*g_ardia_linux_compositor_decoration_changed)() = nullptr;
++void (*g_ardia_linux_compositor_decoration_changed)(gfx::AcceleratedWidget widget) = nullptr;
 +
  namespace ui {
  
  namespace {
-@@ -296,6 +299,10 @@
+@@ -296,6 +298,10 @@
    auto* self = static_cast<XdgToplevel*>(data);
    DCHECK(self);
    self->decoration_mode_ = ToDecorationMode(mode);
-+  g_ardia_linux_compositor_decoration_mode = static_cast<int>(mode);
-+  if (g_ardia_linux_compositor_decoration_changed) {
-+    g_ardia_linux_compositor_decoration_changed();
++  self->compositor_decoration_mode_ = mode;
++  if (g_ardia_linux_compositor_decoration_changed && self->window()) {
++    g_ardia_linux_compositor_decoration_changed(self->window()->GetWidget());
 +  }
  }
  
  void XdgToplevel::SetTopLevelDecorationMode(DecorationMode requested_mode) {
+--- a/ui/ozone/platform/wayland/host/xdg_toplevel.h
++++ b/ui/ozone/platform/wayland/host/xdg_toplevel.h
+@@ -55,6 +55,9 @@
+   void SetAppId(const std::string& app_id);
+   void ShowWindowMenu(WaylandConnection* connection, const gfx::Point& point);
+   void SetDecoration(DecorationMode decoration);
++  uint32_t compositor_decoration_mode() const {
++    return compositor_decoration_mode_;
++  }
+   void SetSystemModal(bool modal);
+   void SetIcon(const gfx::ImageSkia& icon);
+ 
+@@ -105,6 +108,7 @@
+   // On client side, it keeps track of the decoration mode currently in
+   // use if xdg-decoration protocol extension is available.
+   DecorationMode decoration_mode_ = DecorationMode::kNone;
++  uint32_t compositor_decoration_mode_ = 0;
+ };
+ 
+ }  // namespace ui
+--- a/ui/platform_window/extensions/wayland_extension.h
++++ b/ui/platform_window/extensions/wayland_extension.h
+@@ -68,6 +68,8 @@
+   // Unsets the appmenu associated with this toplevel.
+   virtual void UnsetAppmenu() = 0;
+ 
++  virtual int CompositorDecorationMode() const = 0;
++
+  protected:
+   virtual ~WaylandToplevelExtension();
+ 

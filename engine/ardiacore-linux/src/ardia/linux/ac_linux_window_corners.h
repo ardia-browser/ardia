@@ -7,6 +7,9 @@
 namespace ardia::linux_window_corners {
 
 inline constexpr float kPageCardRadius = 12.0f;
+inline constexpr char kWindowDecorationsCall[] = "ArdiaShell.windowDecorations";
+inline constexpr char kWindowDecorationsEvent[] = "windowDecorations";
+inline constexpr const char* kWindowCornersCapabilities[] = {"ArdiaShell.windowDecorations"};
 inline constexpr std::string_view kTilingDesktops[] = {
     "hyprland", "sway", "niri", "i3", "river", "dwl", "bspwm", "awesome", "qtile", "xmonad", "dwm", "herbstluftwm",
     "regolith"};
@@ -51,7 +54,31 @@ constexpr bool IsTilingDesktop(std::string_view desktop) {
 }
 
 constexpr bool CompositorDecorates(DecorationAnswer answer, std::string_view desktop) {
-  return answer == DecorationAnswer::kServerSide || IsTilingDesktop(desktop);
+  switch (answer) {
+    case DecorationAnswer::kServerSide:
+      return true;
+    case DecorationAnswer::kClientSide:
+      return false;
+    case DecorationAnswer::kNone:
+      return IsTilingDesktop(desktop);
+  }
+  return false;
+}
+
+constexpr std::string_view DecoratedByName(bool compositor) {
+  return compositor ? "compositor" : "app";
+}
+
+constexpr std::string_view AnswerName(DecorationAnswer answer) {
+  switch (answer) {
+    case DecorationAnswer::kClientSide:
+      return "client";
+    case DecorationAnswer::kServerSide:
+      return "server";
+    case DecorationAnswer::kNone:
+      return "none";
+  }
+  return "none";
 }
 
 struct Corners {
@@ -71,10 +98,10 @@ struct Box {
 };
 
 constexpr Corners ClipToWindow(Box view, int window_width, int window_height, Corners window, float own_radius) {
-  const bool left = view.x <= 0;
-  const bool top = view.y <= 0;
-  const bool right = view.x + view.width >= window_width;
-  const bool bottom = view.y + view.height >= window_height;
+  const bool left = view.x < 1;
+  const bool top = view.y < 1;
+  const bool right = view.x + view.width > window_width - 1;
+  const bool bottom = view.y + view.height > window_height - 1;
   return Corners{
       .upper_left = top && left ? window.upper_left : own_radius,
       .upper_right = top && right ? window.upper_right : own_radius,

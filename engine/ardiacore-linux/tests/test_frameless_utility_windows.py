@@ -136,7 +136,7 @@ class FramelessUtilityWindowTests(unittest.TestCase):
     def test_a_utility_window_rounds_its_page_with_the_frame(self):
         overlay = self.host[self.host.index('void ShellHostView::LayoutOverlay() {'):self.host.index('void ShellHostView::ShellPainted() {')]
         self.assertIn('  RoundWindowCorners();\n', overlay)
-        self.assertIn('frame ? frame->GetWindowRoundedCorners() : gfx::RoundedCornersF();', overlay)
+        self.assertIn('? frame->GetWindowRoundedCorners()', overlay)
         self.assertIn('if (is_utility()) SetBackground(views::CreateRoundedRectBackground(kColorWebContentsBackground, rounded));', overlay)
         self.assertIn('shell_->holder()->SetNativeViewCornerRadii(rounded);', overlay)
         self.assertIn('if (curtain_) curtain_->layer()->SetRoundedCornerRadius(rounded);', overlay)

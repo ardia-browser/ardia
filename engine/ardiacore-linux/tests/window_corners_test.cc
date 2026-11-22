@@ -33,10 +33,20 @@ int main() {
   static_assert(corners::CompositorDecorates(DecorationAnswer::kServerSide, "ubuntu:GNOME"));
   static_assert(corners::CompositorDecorates(DecorationAnswer::kServerSide, ""));
   static_assert(corners::CompositorDecorates(DecorationAnswer::kNone, "Hyprland"));
-  static_assert(corners::CompositorDecorates(DecorationAnswer::kClientSide, "sway"));
+  static_assert(!corners::CompositorDecorates(DecorationAnswer::kClientSide, "sway"));
+  static_assert(!corners::CompositorDecorates(DecorationAnswer::kClientSide, "Hyprland"));
   static_assert(!corners::CompositorDecorates(DecorationAnswer::kNone, "ubuntu:GNOME"));
   static_assert(!corners::CompositorDecorates(DecorationAnswer::kClientSide, "KDE"));
   static_assert(!corners::CompositorDecorates(DecorationAnswer::kNone, ""));
+  for (const char* desktop : {"KDE", "sway", "", "ubuntu:GNOME", "Hyprland"}) {
+    const bool main_window = corners::CompositorDecorates(DecorationAnswer::kClientSide, desktop);
+    const bool task_manager = corners::CompositorDecorates(DecorationAnswer::kServerSide, desktop);
+    assert(!main_window && task_manager);
+  }
+  static_assert(corners::DecoratedByName(true) == "compositor" && corners::DecoratedByName(false) == "app");
+  static_assert(corners::AnswerName(DecorationAnswer::kNone) == "none");
+  static_assert(corners::AnswerName(DecorationAnswer::kClientSide) == "client");
+  static_assert(corners::AnswerName(DecorationAnswer::kServerSide) == "server");
 
   static_assert(corners::ClipToWindow({.width = 900, .height = 700}, 900, 700, kFrame, 0) == kFrame);
   static_assert(corners::ClipToWindow({.width = 900, .height = 700}, 900, 700, kSquare, kCard) == kSquare);
@@ -49,6 +59,10 @@ int main() {
                 corners::Corners{.upper_left = 8, .upper_right = kCard, .lower_right = kCard, .lower_left = 0});
   static_assert(corners::ClipToWindow({.x = 240, .y = 40, .width = 660, .height = 660}, 900, 700, kFrame, kCard) ==
                 corners::Corners{.upper_left = kCard, .upper_right = kCard, .lower_right = 0, .lower_left = kCard});
+  static_assert(corners::ClipToWindow({.x = 0, .y = 0, .width = 899, .height = 699}, 900, 700, kFrame, kCard) ==
+                corners::Corners{.upper_left = 8, .upper_right = kCard, .lower_right = kCard, .lower_left = kCard});
+  static_assert(corners::ClipToWindow({.x = 1, .y = 0, .width = 899, .height = 700}, 900, 700, kFrame, kCard) ==
+                corners::Corners{.upper_left = kCard, .upper_right = 8, .lower_right = 0, .lower_left = kCard});
   std::puts("ok");
   return 0;
 }

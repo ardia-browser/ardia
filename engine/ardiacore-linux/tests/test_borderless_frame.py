@@ -1,3 +1,4 @@
+import os
 import re
 import shutil
 import subprocess
@@ -75,16 +76,25 @@ class BorderlessFrameTests(unittest.TestCase):
                       '  return browser && g_ardia_linux_borderless_frame(browser);\n}\n', view)
         self.assertNotIn('ArdiaLinuxFramelessApp(browser) ||', PATCH.read_text())
 
-    def test_wayland_records_the_compositors_decoration_answer_and_tells_the_host(self):
-        toplevel = self.patched()['ui/ozone/platform/wayland/host/xdg_toplevel.cc']
-        self.contains('int g_ardia_linux_compositor_decoration_mode = 0;\n'
-                      'void (*g_ardia_linux_compositor_decoration_changed)() = nullptr;\n\nnamespace ui {\n', toplevel)
+    def test_each_toplevel_keeps_its_compositors_answer_and_tells_the_host_which_window_changed(self):
+        files = self.patched()
+        toplevel = files['ui/ozone/platform/wayland/host/xdg_toplevel.cc']
+        self.contains('void (*g_ardia_linux_compositor_decoration_changed)(gfx::AcceleratedWidget widget) = nullptr;\n\n'
+                      'namespace ui {\n', toplevel)
         self.contains('  self->decoration_mode_ = ToDecorationMode(mode);\n'
-                      '  g_ardia_linux_compositor_decoration_mode = static_cast<int>(mode);\n'
-                      '  if (g_ardia_linux_compositor_decoration_changed) {\n'
-                      '    g_ardia_linux_compositor_decoration_changed();\n  }\n}\n', toplevel)
-        self.contains('extern int g_ardia_linux_compositor_decoration_mode;', self.host)
-        self.contains('extern void (*g_ardia_linux_compositor_decoration_changed)();', self.host)
+                      '  self->compositor_decoration_mode_ = mode;\n'
+                      '  if (g_ardia_linux_compositor_decoration_changed && self->window()) {\n'
+                      '    g_ardia_linux_compositor_decoration_changed(self->window()->GetWidget());\n  }\n}\n', toplevel)
+        self.assertNotIn('g_ardia_linux_compositor_decoration_mode', PATCH.read_text())
+        header = files['ui/ozone/platform/wayland/host/xdg_toplevel.h']
+        self.contains('  uint32_t compositor_decoration_mode() const {\n    return compositor_decoration_mode_;\n  }\n', header)
+        self.contains('  uint32_t compositor_decoration_mode_ = 0;\n', header)
+        self.contains('  virtual int CompositorDecorationMode() const = 0;\n', files['ui/platform_window/extensions/wayland_extension.h'])
+        self.contains('  int CompositorDecorationMode() const override;\n', files['ui/ozone/platform/wayland/host/wayland_toplevel_window.h'])
+        self.contains('int WaylandToplevelWindow::CompositorDecorationMode() const {\n  return xdg_toplevel_\n'
+                      '             ? static_cast<int>(xdg_toplevel_->compositor_decoration_mode())\n             : 0;\n}\n',
+                      files['ui/ozone/platform/wayland/host/wayland_toplevel_window.cc'])
+        self.contains('extern void (*g_ardia_linux_compositor_decoration_changed)(gfx::AcceleratedWidget widget);', self.host)
 
     def test_the_frame_layout_gives_the_client_the_whole_window(self):
         files = self.patched()
@@ -126,7 +136,7 @@ class BorderlessFrameTests(unittest.TestCase):
         view = self.patched()['browser_frame_view_linux.cc']
         hit = view[view.index('int BrowserFrameViewLinux::NonClientHitTest('):]
         hit = hit[:hit.index('float BrowserFrameViewLinux::GetRestoredCornerRadiusDip')]
-        self.contains('ArdiaLinuxBorderlessFrame(GetBrowserView()) && !IsFrameCondensed()', hit)
+        self.contains('ArdiaLinuxBorderlessFrame(GetBrowserView()) && !IsFrameCondensed() &&\n      !browser_widget()->tiled()) {', hit)
         self.contains('browser_widget()->widget_delegate()', hit)
         self.contains('point, gfx::Insets(kResizeTopBorderThickness)', hit)
         self.contains('if (delegate && delegate->CanResize()) {', hit)
@@ -151,24 +161,22 @@ class BorderlessFrameTests(unittest.TestCase):
         refresh = self.host[self.host.index('void ShellHostView::RefreshEngineFrame() {'):]
         self.contains('GetWidget()->FrameTypeChanged();', refresh[:refresh.index('\n}\n')])
 
-    def test_the_host_drops_the_frame_only_where_the_compositor_decorates(self):
+    def test_the_host_drops_the_frame_only_where_the_compositor_decorates_that_window(self):
         self.contains('extern bool (*g_ardia_linux_borderless_frame)(const BrowserWindowInterface*);', self.host)
         self.contains('g_ardia_linux_borderless_frame = [](const BrowserWindowInterface* browser) {\n'
-                      '    return browser && Hosts().contains(browser->GetSessionID().id()) && CompositorDecorates();\n  };',
-                      self.host)
-        decides = self.host[self.host.index('bool CompositorDecorates() {'):]
-        decides = decides[:decides.index('\n}\n')]
-        self.contains('static const base::NoDestructor<std::string> desktop(CurrentDesktop());', decides)
-        self.contains('DecorationAnswerOf(g_ardia_linux_compositor_decoration_mode), *desktop', decides)
-        changed = self.host[self.host.index('g_ardia_linux_compositor_decoration_changed = [] {'):]
-        changed = changed[:changed.index('\n  };\n')]
-        self.assertLess(changed.index('if (followed == decorates) return;'),
-                        changed.index('for (const auto& [id, host] : Hosts()) host->RefreshEngineFrame();'))
+                      '    if (!browser) return false;\n'
+                      '    const auto found = Hosts().find(browser->GetSessionID().id());\n'
+                      '    return found != Hosts().end() && found->second->DecoratedByCompositor();\n  };', self.host)
+        desktop = self.host[self.host.index('const std::string& LaunchDesktop() {'):]
+        self.contains('static const base::NoDestructor<std::string> desktop(CurrentDesktop());', desktop[:desktop.index('\n}\n')])
 
-    def test_the_host_lays_the_frame_out_again_once_the_window_is_its_own(self):
+    def test_the_host_lays_the_frame_out_again_only_for_a_window_the_compositor_decorates(self):
         initialize = self.host[self.host.index('void ShellHostView::Initialize() {'):]
         initialize = initialize[:initialize.index('\n}\n')]
-        self.contains('  LayoutOverlay();\n  RefreshEngineFrame();\n', initialize)
+        self.contains('  LayoutOverlay();\n  FollowDecorations();\n', initialize)
+        follow = self.host[self.host.index('void ShellHostView::FollowDecorations() {'):]
+        follow = follow[:follow.index('\n}\n')]
+        self.contains('if (changed && (decorated || !attaching)) {\n    RefreshEngineFrame();', follow)
         refresh = self.host[self.host.index('void ShellHostView::RefreshEngineFrame() {'):]
         refresh = refresh[:refresh.index('\n}\n')]
         self.contains('GetWidget()->FrameTypeChanged();', refresh)
@@ -181,6 +189,14 @@ class BorderlessFrameTests(unittest.TestCase):
         outer = outer[:outer.index('- **Menu button.**')]
         self.contains('chromium-linux-borderless-frame.patch', outer)
         self.assertNotIn("doesn't replace its frame", outer)
+
+
+    def test_the_patch_matches_a_real_tree_when_one_is_at_hand(self):
+        tree = Path(os.environ.get('CHROMIUM_SRC', ''))
+        if not os.environ.get('CHROMIUM_SRC') or not (tree / 'ui/ozone/platform/wayland/host/xdg_toplevel.cc').exists():
+            self.skipTest('series.py check guards drift against the real tree; set CHROMIUM_SRC to a tree the series was applied to')
+        result = subprocess.run(['git', 'apply', '--check', '-R', str(PATCH)], cwd=tree, capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 0, f'{PATCH.name} is not what {tree} holds: {result.stderr}')
 
 
 if __name__ == '__main__':

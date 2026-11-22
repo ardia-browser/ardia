@@ -5,9 +5,11 @@ import { parseSaved, versionedJson } from "../../lib/savedDocument";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import type { Settings } from "../settings/settings";
+import { setShortcutOverride } from "../settings/actions";
 import { noteChromeSwitchFollowed, noteCtrlTabFollowedChrome, type FollowedChromeSwitch } from "../telemetry/settingsPickerCounts";
 import { consentToken, type ConsentToken } from "../telemetry/client";
 import { ctrlTabChoice, setCtrlTab } from "./commandShortcuts";
+import type { Shortcut, ShortcutOverrides } from "./shortcuts";
 import type { CtrlTabChoice, CtrlTabPreset } from "./ctrlTabKeys";
 
 const DOC = "chrome-switches.json";
@@ -22,6 +24,7 @@ export type ChromeSwitch = "ctrlTab" | FollowedChromeSwitch;
 export const CHROME_SWITCHES: Readonly<Record<ChromeSwitch, { pref: string; chromeDefault: boolean }>> = {
   ctrlTab: { pref: "helium.browser.mru_tab_cycling", chromeDefault: false },
   newTabs: { pref: "helium.browser.new_tab_next_to_active", chromeDefault: false },
+  copyUrlKey: { pref: "helium.settings.a11y.copy_page_url_shortcut", chromeDefault: true },
 };
 
 const SWITCHES = Object.keys(CHROME_SWITCHES) as ChromeSwitch[];
@@ -60,6 +63,15 @@ export function newTabPositionFollowing({ on, firstLook }: SwitchChange, setting
   if (!on) return position === "nextToCurrent" ? settings.newTabButtonPosition : null;
   if (position === "nextToCurrent" || (firstLook && position !== "bottom")) return null;
   return "nextToCurrent";
+}
+
+const NO_SHORTCUT: Shortcut = { key: "", modifiers: [] };
+const isCleared = (stored: readonly string[] | undefined) => !!stored && !stored[0];
+
+export function copyUrlKeyFollowing({ on }: SwitchChange, overrides: ShortcutOverrides): Shortcut | null | undefined {
+  const stored = overrides.copyUrl;
+  if (on) return isCleared(stored) ? null : undefined;
+  return stored === undefined ? NO_SHORTCUT : undefined;
 }
 
 function prefsFrom(doc: ReturnType<typeof parseSaved>, read: (value: unknown) => Record<string, boolean> | null): ChromePrefs {
@@ -118,6 +130,11 @@ function follow(name: ChromeSwitch, change: SwitchChange, consent: ConsentToken 
       const position = newTabPositionFollowing(change, s.settings);
       if (position) s.updateSettings({ newTabPosition: position });
       return noted(!!position);
+    }
+    case "copyUrlKey": {
+      const shortcut = copyUrlKeyFollowing(change, s.settings.shortcuts);
+      if (shortcut !== undefined) setShortcutOverride("copyUrl", shortcut);
+      return noted(shortcut !== undefined);
     }
   }
 }

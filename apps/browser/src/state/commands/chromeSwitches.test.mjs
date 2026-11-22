@@ -46,3 +46,15 @@ test("opening new tabs next to the active tab picks Next to current tab, and off
   assert.equal(newTabPositionFollowing(first(true), { newTabPosition: "bottom", newTabButtonPosition: "bottom" }), "nextToCurrent");
   assert.equal(newTabPositionFollowing(first(true), { newTabPosition: "top", newTabButtonPosition: "top" }), null);
 });
+
+test("quick page link copying off clears Copy URL's key, and on gives it back, leaving a key you set alone", () => {
+  const { copyUrlKeyFollowing } = switches;
+  const COPY = CHROME_SWITCHES.copyUrlKey.pref;
+  assert.deepEqual(switchChanges({ "": all({ [COPY]: false }) }, { "": all() }), { copyUrlKey: changed(true) });
+  assert.deepEqual(switchChanges({}, { "": all({ [COPY]: false }) }), { copyUrlKey: first(false) });
+  assert.deepEqual(copyUrlKeyFollowing(changed(false), {}), { key: "", modifiers: [] });
+  assert.equal(copyUrlKeyFollowing(changed(false), { copyUrl: ["u", "command"] }), undefined);
+  assert.equal(copyUrlKeyFollowing(changed(true), { copyUrl: [""] }), null);
+  assert.equal(copyUrlKeyFollowing(changed(true), { copyUrl: ["u", "command"] }), undefined);
+  assert.equal(copyUrlKeyFollowing(changed(true), {}), undefined);
+});

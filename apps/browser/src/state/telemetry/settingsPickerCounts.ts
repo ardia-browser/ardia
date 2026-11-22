@@ -21,6 +21,8 @@ const ZERO = {
   ctrl_tab_follows_chrome_switcher: 0,
   new_tabs_follow_chrome_on: 0,
   new_tabs_follow_chrome_off: 0,
+  copy_url_key_follows_chrome_on: 0,
+  copy_url_key_follows_chrome_off: 0,
 };
 
 type Field = keyof typeof ZERO;
@@ -38,10 +40,11 @@ export function noteCtrlTabFollowedChrome(option: Picks["ctrlTab"], consent?: Co
   countFor(consentOrNow(consent), () => void counts[`ctrl_tab_follows_chrome_${option}`]++);
 }
 
-export type FollowedChromeSwitch = "newTabs";
+export type FollowedChromeSwitch = "newTabs" | "copyUrlKey";
 
 const FOLLOW_PREFIX: { [S in FollowedChromeSwitch]: string } = {
   newTabs: "new_tabs_follow_chrome",
+  copyUrlKey: "copy_url_key_follows_chrome",
 };
 
 export function noteChromeSwitchFollowed(followed: FollowedChromeSwitch, on: boolean, consent?: ConsentToken | null) {

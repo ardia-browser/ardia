@@ -27,6 +27,7 @@ import { useReduceMotion, useScreenReader } from "./contrast";
 import { MenuFrostProvider } from "./Menu";
 import { useDesign } from "./design";
 import { MaterialSheet } from "./MaterialSurfaces";
+import { FabricCatchUp } from "./FabricCatchUp";
 
 const SHEET_REDUCED_MS = reducedMotionMs(trayMotion.reduced);
 
@@ -247,6 +248,10 @@ function ClassicSheet({ open, onDismiss, onHidden, fill, onTapAway, halfOpen = f
       { translateY: (1 - shown.value) * sheetHeight.value + rest.value + drag.value },
     ],
   }));
+  const sheetMotionNow = () => {
+    "worklet";
+    return shown.value + rest.value + drag.value + sheetHeight.value;
+  };
   const grabber = menuLayout.sheetGrabber ?? (halfOpen ? menuLayout.halfSheetGrabber : null);
   const grabberRoom = menuLayout.sheetGrabber ? 0 : grabber ? grabber.top + grabber.height : 0;
   return (
@@ -256,6 +261,7 @@ function ClassicSheet({ open, onDismiss, onHidden, fill, onTapAway, halfOpen = f
       importantForAccessibility={open ? "auto" : "no-hide-descendants"}
       accessibilityElementsHidden={!open}
     >
+      {open ? <FabricCatchUp motion={sheetMotionNow} testID="sheetFabricCatchUp" /> : null}
       <Animated.View style={[StyleSheet.absoluteFill, dim]}>
         <Pressable
           accessibilityLabel="Close"

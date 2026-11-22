@@ -260,6 +260,7 @@ export function withoutTabs(entries: StripEntry[], hidden: ReadonlySet<string>):
   return entries.flatMap((e): StripEntry[] => {
     if (e.kind === "dock") return [e];
     if (e.kind !== "group") return kept(e) ? [e] : [];
+    if (hidden.has(e.id)) return [];
     const members = e.members.filter(kept);
     return [members.length === e.members.length ? e : { ...e, members, memberTabIds: e.memberTabIds ?? e.members.flatMap(tabsOf) }];
   });
@@ -291,16 +292,16 @@ export function stripOverflow(entries: StripEntry[], activeId: string, pageWidth
   const roomy = SELECTED_STEPS.find((selected) => step(tightEnd, selected) <= limit && fits(NO_OVERFLOW, selected));
   if (roomy !== undefined) return { hidden: NO_OVERFLOW, selectedMin: roomy, titledMin: TITLED_CHIP, compactMin: COMPACT_CHIP };
   if (!least.compactShown && even()) return { hidden: NO_OVERFLOW, selectedMin: tight, titledMin: TITLE_MIN_CHIP, compactMin: TITLE_MIN_CHIP };
-  const candidates = overflowCandidates(entries, activeId, wideId, needsTitle);
+  const candidates = overflowCandidates(entries, activeId, wideId, needsTitle, (groupId) => measured.groupChip(groupId) ?? 0);
   const order: string[] = [];
   const membersLeft = new Map<string, number>();
   const hiddenInGroup = new Map<string, number>();
   let end = tightEnd;
-  for (const { id, group } of candidates) {
+  for (const { id, group, width } of candidates) {
     if (end <= limit) break;
     order.push(id);
     if (!group) {
-      end -= TITLED_CHIP + GAP;
+      end -= width + GAP;
       continue;
     }
     const left = (membersLeft.get(group.id) ?? group.members.length) - 1;
@@ -325,19 +326,22 @@ export function stripOverflow(entries: StripEntry[], activeId: string, pageWidth
   return { hidden, selectedMin: tight, titledMin: TITLED_CHIP, compactMin: COMPACT_CHIP };
 }
 
-type OverflowCandidate = { id: string; at: number; group: StripGroupEntry | null; last: number };
+type OverflowCandidate = { id: string; at: number; group: StripGroupEntry | null; last: number; width: number };
 
-function overflowCandidates(entries: StripEntry[], activeId: string, wideId: string, needsTitle: (tabId: string) => boolean): OverflowCandidate[] {
+function overflowCandidates(entries: StripEntry[], activeId: string, wideId: string, needsTitle: (tabId: string) => boolean, groupChip: (groupId: string) => number): OverflowCandidate[] {
   const order = new Map<string, number>();
   const candidates: OverflowCandidate[] = [];
   const emptiable: [number, number][] = [];
+  const lastOpen = entries.reduce((at, e, i) => (e.kind === "group" && !e.collapsed ? i : at), -1);
   const visit = (m: StripMember, group: StripGroupEntry | null) => {
-    if (m.kind === "tab" && m.id !== activeId && m.id !== wideId && needsTitle(m.id)) candidates.push({ id: m.id, at: order.size, group, last: 0 });
+    const titled = m.kind === "tab" && m.id !== activeId && m.id !== wideId ? needsTitle(m.id) : null;
+    if (titled !== null && (titled || !group)) candidates.push({ id: m.id, at: order.size, group, last: titled ? 0 : 2, width: titled ? TITLED_CHIP : COMPACT_CHIP });
     for (const id of tabsOf(m)) order.set(id, order.size);
   };
   for (const e of entries) {
     if (e.kind === "dock") continue;
     if (e.kind !== "group") visit(e, null);
+    else if (e.collapsed && entries.indexOf(e) > lastOpen && !e.members.some((m) => holds(m, activeId) || holds(m, wideId))) candidates.push({ id: e.id, at: order.size, group: null, last: 3, width: groupChip(e.id) + GROUP_MARGIN_LEFT + GROUP_MARGIN_RIGHT });
     else if (!e.collapsed) {
       const from = candidates.length;
       for (const m of e.members) visit(m, e);

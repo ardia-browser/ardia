@@ -7,6 +7,7 @@ const client = await import("./client.ts");
 import { noteTabLayoutSwitch } from "./tabLayoutCounts.ts";
 import {
   noteTabStripChipsMeasured,
+  noteTabStripToggleHidSelected,
   noteTabStripCommandRefused,
   noteTabStripCompact,
   noteTabStripReadable,
@@ -26,6 +27,7 @@ import {
 const ZERO = {
   tab_strip_group_toggles: 0,
   tab_strip_toggle_remeasures: 0,
+  tab_strip_toggle_hid_selected: 0,
   pinned_rows_made_text_only: 0,
   tab_strip_compact_layouts: 0,
   tab_strip_readable_layouts: 0,
@@ -110,6 +112,7 @@ test("tab layout switches go out with the strip's counts, and taking them starts
 let clock = 1e9;
 const EVERY_FIELD = [
   ["tab_strip_group_toggles", () => noteTabStripGroupToggle("w", (clock += 10_000)), 1],
+  ["tab_strip_toggle_hid_selected", () => noteTabStripToggleHidSelected(), 1],
   ["tab_strip_toggle_remeasures", () => (noteTabStripGroupToggle("w", (clock += 10_000)), noteTabStripChipsMeasured("w", (clock += 50))), 1],
   ["pinned_rows_made_text_only", () => noteTextOnlyRow(), 1],
   ["tab_strip_compact_layouts", () => noteTabStripCompact(), 1],

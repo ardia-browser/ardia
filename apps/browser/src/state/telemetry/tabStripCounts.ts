@@ -17,6 +17,7 @@ const revealsHeldForScroll = consentedCount();
 const scrollStalls = consentedCount();
 const commandsRefused = consentedCount();
 const toggleRemeasures = consentedCount();
+const toggleHidSelected = consentedCount();
 let lastScrollAt = -Infinity;
 let lastToggle = { windowId: "", at: -Infinity };
 onConsentPeriodChange(() => {
@@ -32,6 +33,10 @@ const STALL_GAP_MS = 34;
 export function noteTabStripGroupToggle(windowId: string, at: number) {
   groupToggles.note();
   lastToggle = { windowId, at };
+}
+
+export function noteTabStripToggleHidSelected() {
+  toggleHidSelected.note();
 }
 
 export function noteTabStripChipsMeasured(windowId: string, at: number) {
@@ -93,6 +98,7 @@ export function takeTabStripCounts() {
   return {
     tab_strip_group_toggles: groupToggles.take(),
     tab_strip_toggle_remeasures: toggleRemeasures.take(),
+    tab_strip_toggle_hid_selected: toggleHidSelected.take(),
     pinned_rows_made_text_only: textOnlyRows.take(),
     tab_strip_compact_layouts: compactLayouts.take(),
     tab_strip_readable_layouts: readableLayouts.take(),

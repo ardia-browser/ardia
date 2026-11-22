@@ -24,3 +24,6 @@ export function revealedMembers(start: number, offsets: readonly number[], width
 }
 
 export const toggleFrame = (from: number, to: number, t: number) => from + (to - from) * toggleEase(Math.max(0, Math.min(1, t)));
+
+
+export const spanInView = ([left, width]: readonly [number, number], scrolled: number, viewport: number) => left - scrolled >= -0.5 && left + width - scrolled <= viewport + 0.5;

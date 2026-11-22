@@ -120,7 +120,17 @@ function overflowOneByOne(entries, activeId, pageWidth, measured, wideId = activ
     if (e.kind !== "group" || e.collapsed || !e.members.every((m) => m.kind === "tab" && sorted.includes(m.id))) return [];
     return [sorted.filter((id) => e.members.some((m) => m.id === id)).at(-1)];
   });
-  const candidates = [...sorted.filter((id) => !lastOfGroup.includes(id)), ...sorted.filter((id) => lastOfGroup.includes(id))];
+  const loose = entries
+    .flatMap((e) => (e.kind === "tab" && e.id !== activeId && e.id !== wideId && !measured.needsTitle(e.id) ? [e.id] : []))
+    .sort((a, b) => Math.abs(order.indexOf(b) - anchor) - Math.abs(order.indexOf(a) - anchor) || order.indexOf(b) - order.indexOf(a));
+  const groupAt = [];
+  let seen = 0;
+  for (const e of entries) {
+    if (e.kind === "group" && e.collapsed && entries.indexOf(e) > entries.findLastIndex((x) => x.kind === "group" && !x.collapsed) && !e.members.some((m) => (m.kind === "tab" ? [m.id] : m.tabIds).some((id) => id === activeId || id === wideId))) groupAt.push([e.id, seen]);
+    seen += e.kind === "group" ? (e.collapsed ? 0 : e.members.flatMap((m) => (m.kind === "tab" ? [m.id] : m.tabIds)).length) : e.kind === "tab" ? 1 : e.tabIds?.length ?? 0;
+  }
+  const collapsed = groupAt.sort((a, b) => Math.abs(b[1] - anchor) - Math.abs(a[1] - anchor) || b[1] - a[1]).map(([id]) => id);
+  const candidates = [...sorted.filter((id) => !lastOfGroup.includes(id)), ...sorted.filter((id) => lastOfGroup.includes(id)), ...loose, ...collapsed];
   const hidden = new Set();
   for (const id of candidates) {
     hidden.add(id);

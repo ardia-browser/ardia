@@ -89,7 +89,7 @@
     "apps/browser/src/state/windows/windowClose.ts": 1,
     "apps/linux/src/hostExtensionView.ts": 1,
     "apps/linux/src/hostPolicies.ts": 1,
-    "apps/linux/src/hostTab.ts": 2,
+    "apps/linux/src/hostTab.ts": 1,
     "apps/linux/src/sandboxNotice.ts": 1
   },
   "consentNow": {

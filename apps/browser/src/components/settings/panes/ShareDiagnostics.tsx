@@ -12,10 +12,12 @@ import { Group, Row, SectionHeader } from "../Form";
 import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
 import { AnonymousAvatar } from "../AnonymousAvatar";
 import { perLook } from "../../ui/tokens";
+import { t } from "../../../lib/uiLanguage";
+
 
 const AVATAR_SIZE = 28;
 
-const longDate = (ms: number) => new Date(ms).toLocaleDateString(UI_LOCALE, { month: "long", day: "numeric", hour: "numeric", minute: "2-digit" });
+const longDate = (ms: number) => new Date(ms).toLocaleDateString(UI_LOCALE, { month: "long", day: "numeric", hour: "numeric", minute: t(`2-digit`) });
 
 export function ShareDiagnosticsToggle() {
   const sharing = useTelemetry((s) => s.sharing);
@@ -29,7 +31,7 @@ export function ShareDiagnosticsToggle() {
 export function ShareDiagnosticsSection() {
   return (
     <>
-      <SectionHeader title="Crash reports and usage" description={SHARING_COPY.dailyCountShort} />
+      <SectionHeader title={t(`Crash reports and usage`)} description={SHARING_COPY.dailyCountShort} />
       <Group>
         <ShareDiagnosticsToggle />
         <Row title={SHARING_COPY.whatsSent} onPress={() => showSettingsSheet(<WhatsSentSheet />)} />
@@ -43,7 +45,7 @@ export function CrashReportDetails() {
   const until = useWatchUntil();
   return (
     <View>
-      <SectionHeader title="Your anonymous ID" description={SHARING_COPY.dailyCountShort} />
+      <SectionHeader title={t(`Your anonymous ID`)} description={SHARING_COPY.dailyCountShort} />
       <Group>
         {report && until !== null ? <WatchRow report={report} until={until} /> : null}
         <IdentityRow />
@@ -111,10 +113,10 @@ function ResetIdSheet() {
       <DialogTitle subtitle={done ? IDENTITY_COPY.resetDone(done) : IDENTITY_COPY.resetBody}>{IDENTITY_COPY.resetTitle}</DialogTitle>
       <DialogActions>
         {done ? (
-          <Button title="Done" kind="primary" onPress={closeSettingsSheet} />
+          <Button title={t(`Done`)} kind="primary" onPress={closeSettingsSheet} />
         ) : (
           <>
-            <Button title="Cancel" onPress={closeSettingsSheet} />
+            <Button title={t(`Cancel`)} onPress={closeSettingsSheet} />
             <Button title={IDENTITY_COPY.resetConfirm} kind="destructive" onPress={() => void reset()} />
           </>
         )}
@@ -130,7 +132,7 @@ function WhatsSentGroups() {
   const toGroup = (d: (typeof disclosures)[number]): SentGroup => ({ title: d.title, attribution: PLUGIN_SENT_COPY.attribution(d.pluginTitle, d.official), items: d.items });
   const added = disclosures.filter((d) => !d.official).map(toGroup);
   const programs: SentGroup[] = [...(installsCommandItself ? [SELF_INSTALLED_COMMAND_SENT] : []), ...disclosures.filter((d) => d.official).map(toGroup)];
-  const sharingOff = WHATS_SENT.findIndex((g) => g.title === "Even with sharing off");
+  const sharingOff = WHATS_SENT.findIndex((g) => g.title === t(`Even with sharing off`));
   const browser: SentGroup[] = sharingOff < 0 ? WHATS_SENT.slice(0, -1) : [...WHATS_SENT.slice(0, sharingOff), ...programs, ...WHATS_SENT.slice(sharingOff, -1)];
   const groups: SentGroup[] = [...browser, { title: SHARING_COPY.keptOnThisMac, items: [...LOCAL_COPY.items] }, WHATS_SENT.at(-1)!];
   return (
@@ -185,7 +187,7 @@ export function WhatsSentSheet() {
           </Text>
         }
       >
-        <Button title="Done" kind="primary" onPress={closeSettingsSheet} />
+        <Button title={t(`Done`)} kind="primary" onPress={closeSettingsSheet} />
       </DialogActions>
     </Sheet>
   );

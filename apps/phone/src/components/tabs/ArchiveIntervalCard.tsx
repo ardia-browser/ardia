@@ -8,6 +8,8 @@ import { AUTO_ARCHIVE_INTERVALS, autoArchiveTitle, type AutoArchiveInterval } fr
 import { archiveCardLayout, FloatingMenu, screenReaderActions, font, radius, shadowRadius, space, Symbol, tabsLayout, tabsMotion, useTheme, useReduceMotion } from "../ui";
 
 import { ArchiveTile } from "./ArchiveTile";
+import { t } from "../../lib/uiLanguage";
+
 
 const INTERVALS = Object.keys(AUTO_ARCHIVE_INTERVALS) as AutoArchiveInterval[];
 
@@ -27,14 +29,14 @@ export function ArchiveIntervalCard({ edgeY }: { edgeY: number }) {
       style={[styles.place, { height: edgeY }]}
     >
       <View
-        {...screenReaderActions([{ name: "dismiss", label: "Dismiss", run: () => dismissArchiveCard() }])}
+        {...screenReaderActions([{ name: "dismiss", label: t(`Dismiss`), run: () => dismissArchiveCard() }])}
         style={[styles.card, { backgroundColor: theme.panel, shadowColor: theme.trayShadow }]}
       >
         <View style={styles.label}>
           <ArchiveTile side={side} />
           <Text style={[font.body, { color: theme.label }]}>Archive Inactive Tabs</Text>
         </View>
-        <Pressable ref={picker} accessibilityRole="button" accessibilityLabel="Archive Inactive Tabs" accessibilityValue={{ text: autoArchiveTitle(interval) }} onPress={() => setOpen(true)} style={styles.picker}>
+        <Pressable ref={picker} accessibilityRole="button" accessibilityLabel={t(`Archive Inactive Tabs`)} accessibilityValue={{ text: autoArchiveTitle(interval) }} onPress={() => setOpen(true)} style={styles.picker}>
           <Text style={[font.body, { color: theme.secondaryLabel }]}>{autoArchiveTitle(interval)}</Text>
           <Symbol name="chevronUpChevronDown" size={14} color={theme.secondaryLabel} />
         </Pressable>

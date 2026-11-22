@@ -2,6 +2,8 @@ import { create } from "zustand";
 import { legacyProgramsInstalled, programRegistry } from "../../platform/plugins";
 import { isFields } from "../../lib/decode";
 import { type ProgramClaims } from "./appChecks";
+import { t } from "../../lib/uiLanguage";
+
 
 export const UNREADABLE_CLAIMS: ProgramClaims = { claims: {}, failClosed: true };
 
@@ -25,7 +27,7 @@ export async function loadProgramClaims(): Promise<ProgramClaims> {
   return claims;
 }
 
-export const REGISTRY_UNREADABLE = "Ardia's list of program names kept for its built-in plugins is missing or damaged, so no program goes on PATH";
+export const REGISTRY_UNREADABLE = t(`Ardia's list of program names kept for its built-in plugins is missing or damaged, so no program goes on PATH`);
 
 export const programsBlocked = () => useProgramRegistry.getState().failClosed;
 

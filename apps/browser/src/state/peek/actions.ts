@@ -18,6 +18,8 @@ import { holdPeekDonor } from "./donors";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { endPeekToolbarPreview, previewPeekToolbar } from "./toolbarPreview";
 import { revealToolbar } from "../windows/toolbarAutoHide";
+import { t } from "../../lib/uiLanguage";
+
 
 const store = () => useBrowser.getState();
 type PeekMotionHandle = { tabId: string; close: () => Promise<boolean>; promote: () => Promise<boolean> };
@@ -85,7 +87,7 @@ export function openPeekInSplit(windowId: string) {
   const peek = shownPeek(s, windowId);
   if (!peek) return;
   if ((splitTabIdsOf(splitOf(s, peek.sourceId))?.length ?? 0) >= MAX_SPLIT_PANES) {
-    return showToast(windowId, "Cannot Add New Pane", `Split View can show up to ${MAX_SPLIT_PANES} tabs at once.`);
+    return showToast(windowId, t(`Cannot Add New Pane`), `Split View can show up to ${MAX_SPLIT_PANES} tabs at once.`);
   }
   const id = s.peekToTab(windowId, { activate: false });
   if (!id) return;

@@ -3,6 +3,8 @@ import type { Settings } from "../settings/settings";
 import type { Tab } from "../browser/types";
 import { useBrowser } from "../browser/store";
 import { isIncognitoProfile } from "../browser/model";
+import { t } from "../../lib/uiLanguage";
+
 
 export type UnreadSiteSettings = Pick<Settings, "showUnreadCounts" | "unreadHiddenSites">;
 
@@ -28,9 +30,9 @@ export function isUnreadSiteHidden(settings: UnreadSiteSettings, url: string): b
 export const isUnreadShown = (settings: UnreadSiteSettings, url: string): boolean =>
   settings.showUnreadCounts !== false && !isUnreadSiteHidden(settings, url);
 
-export const unreadSiteTitle = (hidden: boolean) => (hidden ? "Show Unread Count" : "Hide Unread Count");
+export const unreadSiteTitle = (hidden: boolean) => (hidden ? t(`Show Unread Count`) : t(`Hide Unread Count`));
 
-export const ALL_UNREAD_TITLE = "Show Unread Counts";
+export const ALL_UNREAD_TITLE = t(`Show Unread Counts`);
 
 export const showUnreadCounts = (shown: boolean) => useBrowser.getState().updateSettings({ showUnreadCounts: shown });
 

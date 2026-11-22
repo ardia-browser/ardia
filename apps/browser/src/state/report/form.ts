@@ -1,8 +1,9 @@
+import { t } from "../../lib/uiLanguage";
 export const REPORT_KINDS = [
-  { value: "bug", title: "Bug" },
-  { value: "slow", title: "Slow" },
-  { value: "idea", title: "Idea" },
-  { value: "other", title: "Other" },
+  { value: "bug", title: t(`Bug`) },
+  { value: "slow", title: t(`Slow`) },
+  { value: "idea", title: t(`Idea`) },
+  { value: "other", title: t(`Other`) },
 ] as const;
 
 export type ReportKind = (typeof REPORT_KINDS)[number]["value"];
@@ -165,9 +166,9 @@ const PROBLEM_FIELD: Record<DraftProblem, DraftField> = {
 };
 
 const PROBLEM_HINT: Record<DraftProblem, string> = {
-  title: "Add a title to send",
+  title: t(`Add a title to send`),
   titleTooLong: `Shorten the title to ${TITLE_MAX} characters`,
-  description: "Say what happened to send",
+  description: t(`Say what happened to send`),
   descriptionTooLong: `Shorten this to ${DESCRIPTION_MAX.toLocaleString("en-US")} characters`,
   contactTooLong: `Shorten this to ${CONTACT_MAX} characters`,
 };

@@ -8,6 +8,8 @@ import { browseLayout, Favicon, font, MaterialIconButton, radius, screenReaderAc
 import { useMaterialRipple } from "../ui/MaterialSurfaces";
 import { materialBottomBar, materialSize, materialType } from "../ui/materialTokens";
 import { searchPanel } from "./searchPanelTokens";
+import { t } from "../../lib/uiLanguage";
+
 
 const MATERIAL_ROW_ICON = 20;
 
@@ -39,7 +41,7 @@ type Props = {
 };
 
 export const SuggestionRow = memo(function SuggestionRow({ row, typed, roles, interactive = true, highlightsPress = true, menu = [], onActivate, onRefine, onMenu }: Props) {
-  countRender("SuggestionRow");
+  countRender(t(`SuggestionRow`));
   const design = useDesign();
   const material = design === "material";
   const ripple = useMaterialRipple();

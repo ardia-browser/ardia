@@ -5,6 +5,8 @@ import { usePeekOpenedFrom } from "../../state/peek/hooks";
 import { Favicon } from "../favicon/Favicon";
 import { useTheme } from "../ui/theme";
 import { PEEK_MARK } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 export const PeekMark = memo(function PeekMark({ tabId, size }: { tabId: string; size: number }) {
   const peekId = usePeekOpenedFrom(tabId);
@@ -21,7 +23,7 @@ function PeekedFavicon({ peekId, size }: { peekId: string; size: number }) {
   return (
     <View
       pointerEvents="none"
-      accessibilityLabel="Has a Peek open"
+      accessibilityLabel={t(`Has a Peek open`)}
       style={{
         position: "absolute",
         right: -box / 2,

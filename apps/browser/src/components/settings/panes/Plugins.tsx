@@ -31,6 +31,8 @@ import { OfficialPluginsSection, usePluginsBelowOfficial } from "./OfficialPlugi
 import { useControlTurnedOff } from "../../../state/app/programControlSetting";
 import { useNeverChosenCount } from "../../../state/site/passwordManager";
 import { PasswordManagerDetails } from "./PasswordManagerPlugin";
+import { t } from "../../../lib/uiLanguage";
+
 
 export function PluginsPane({ detail }: SettingsPlace) {
   if (!PLATFORM_FEATURES.plugins) return <UnavailablePage />;
@@ -42,7 +44,7 @@ function UnavailablePage() {
     <View>
       <SectionHeader anchor="plugins.plugins" />
       <Group>
-        <Row title="Plugins aren't here yet" description={`Plugins aren't available on ${PLATFORM_TERMS.os} yet.`} />
+        <Row title={t(`Plugins aren't here yet`)} description={`Plugins aren't available on ${PLATFORM_TERMS.os} yet.`} />
       </Group>
     </View>
   );
@@ -59,8 +61,8 @@ function PluginList() {
         {order.length ? (
           order.map((name) => <PluginRow key={name} name={name} />)
         ) : (
-          <Row title="None yet" description={how ? `Put a plugin's folder in ${pluginsFolderPath()}, or run ardia plugins install <folder>.` : undefined}>
-            {how ? null : <Button variant="text" look="link" pad="none" title="How to add one" onPress={() => setHow(true)} />}
+          <Row title={t(`None yet`)} description={how ? `Put a plugin's folder in ${pluginsFolderPath()}, or run ardia plugins install <folder>.` : undefined}>
+            {how ? null : <Button variant="text" look="link" pad="none" title={t(`How to add one`)} onPress={() => setHow(true)} />}
           </Row>
         )}
       </Group>
@@ -69,18 +71,18 @@ function PluginList() {
 }
 
 function processText(p: ProcessState | undefined, onDemand = false): string | null {
-  if (!p) return onDemand ? "Ready (on demand)" : null;
-  if (p.state === "running") return "Running";
-  if (p.state === "starting") return "Starting…";
+  if (!p) return onDemand ? t(`Ready (on demand)`) : null;
+  if (p.state === "running") return t(`Running`);
+  if (p.state === "starting") return t(`Starting…`);
   if (p.state === "waiting") return `Restarting after ${p.failures === 1 ? "a crash" : `${p.failures} crashes`}…`;
   if (p.state === "crashed") return `Its program crashed (${p.reason}) and was stopped`;
   if (p.state === "failed") return `Its program couldn't start: ${p.reason}`;
-  return onDemand ? "Ready (on demand)" : "Its program finished";
+  return onDemand ? t(`Ready (on demand)`) : t(`Its program finished`);
 }
 
 function programsText(p: ProgramsState | undefined): string | null {
   if (!p) return null;
-  if (p.state === "linking") return "Putting its commands on PATH…";
+  if (p.state === "linking") return t(`Putting its commands on PATH…`);
   if (p.state === "failed") return `Its commands couldn't go on PATH: ${p.reason}`;
   const refused = Object.values(p.refused);
   if (refused.length) return refused.join("; ");
@@ -89,12 +91,12 @@ function programsText(p: ProgramsState | undefined): string | null {
 
 function originText(listing: PluginListing | undefined, active: boolean): string | null {
   if (listing?.ignoresUserFolder) return `Official (the folder of the same name in ${pluginsFolderPath()} is ignored)`;
-  return listing?.official ? "Official" : null;
+  return listing?.official ? t(`Official`) : null;
 }
 
 function statusOf(m: PluginManifest | null, problems: string[], active: boolean, review: boolean, p: ProcessState | undefined, describe = true): string {
-  if (!m) return problems.slice(0, 2).join("; ") || "This plugin can't load";
-  if (review) return "Its plugin.json changed. Review it to turn it back on.";
+  if (!m) return problems.slice(0, 2).join("; ") || t(`This plugin can't load`);
+  if (review) return t(`Its plugin.json changed. Review it to turn it back on.`);
   const running = active ? processText(p, !!m.main) : null;
   return [describe ? m.description : null, running].filter(Boolean).join(" · ");
 }
@@ -154,7 +156,7 @@ function TextRow({ name, row, value }: { name: string; row: Extract<RowSpec, { t
 
 function numberProblem(row: Extract<RowSpec, { type: "number" }>, text: string): string | null {
   const n = Number(text.trim());
-  if (!text.trim() || !Number.isFinite(n)) return "Enter a number.";
+  if (!text.trim() || !Number.isFinite(n)) return t(`Enter a number.`);
   if (row.min !== undefined && n < row.min) return `At least ${row.min}.`;
   if (row.max !== undefined && n > row.max) return `At most ${row.max}.`;
   if (row.step !== undefined && row.step > 0) {
@@ -202,12 +204,12 @@ function SecretRow({ name, row }: { name: string; row: Extract<RowSpec, { type: 
     setDraft("");
     setSaved(value !== null && value !== "");
   };
-  const status = problem ?? (saved === null ? null : saved ? `Saved in ${PLATFORM_TERMS.secretStore}` : "Not set");
+  const status = problem ?? (saved === null ? null : saved ? `Saved in ${PLATFORM_TERMS.secretStore}` : t(`Not set`));
   return (
     <Row title={row.title} description={[row.description, status].filter(Boolean).join(" · ") || undefined}>
       <TextField value={draft} width={180} secure placeholder={saved ? "••••••••" : row.placeholder} onChangeText={setDraft} onSubmit={() => draft && void write(draft)} />
-      <Button title="Save" disabled={!draft || busy} onPress={() => void write(draft)} />
-      {saved ? <Button title="Clear" disabled={busy} onPress={() => void write(null)} /> : null}
+      <Button title={t(`Save`)} disabled={!draft || busy} onPress={() => void write(draft)} />
+      {saved ? <Button title={t(`Clear`)} disabled={busy} onPress={() => void write(null)} /> : null}
     </Row>
   );
 }
@@ -227,31 +229,31 @@ function PluginPage({ name }: { name: string }) {
   const values = usePluginValues(name);
   const movesProfiles = useNeverChosenCount();
   const m = listing?.manifest ?? null;
-  if (!listing) return <PaneSubPage intro="This plugin isn't installed any more.">{null}</PaneSubPage>;
+  if (!listing) return <PaneSubPage intro={t(`This plugin isn't installed any more.`)}>{null}</PaneSubPage>;
   return (
     <PaneSubPage intro={m?.description || undefined}>
       <Group>
         <Row
-          title={active ? "On" : review ? "Changed since you turned it on" : "Off"}
+          title={active ? t(`On`) : review ? t(`Changed since you turned it on`) : t(`Off`)}
           description={[originText(listing, active), statusOf(m, listing.problems, active, review, process, false)].filter(Boolean).join(" · ") || undefined}
         >
           <Toggle value={active} disabled={!m} asksFirst={!active} accessibilityLabel={`Turn on ${m?.title ?? name}`} onChange={(on) => setOn(name, on)} />
         </Row>
         {active && (m?.process || (m?.main && process)) ? (
-          <Row title={m?.process ? "Its program" : "Its code"} description={m?.process ? m.process.run.join(" ") : typeof m?.main === "string" ? m.main : m?.main?.entry}>
-            <Button title="Show Log" onPress={() => showPluginLog(name)} />
-            <Button title="Restart" onPress={() => restartPlugin(name)} />
+          <Row title={m?.process ? t(`Its program`) : t(`Its code`)} description={m?.process ? m.process.run.join(" ") : typeof m?.main === "string" ? m.main : m?.main?.entry}>
+            <Button title={t(`Show Log`)} onPress={() => showPluginLog(name)} />
+            <Button title={t(`Restart`)} onPress={() => restartPlugin(name)} />
           </Row>
         ) : null}
         {m?.programs.length && active ? (
-          <Row title={m.programs.length === 1 ? "Its command" : "Its commands"} description={programsText(programs) ?? m.programs.map((p) => p.name).join(", ")}>
-            {canRelink(programs) ? <Button title="Try Again" onPress={() => relinkPrograms(name)} /> : null}
+          <Row title={m.programs.length === 1 ? t(`Its command`) : t(`Its commands`)} description={programsText(programs) ?? m.programs.map((p) => p.name).join(", ")}>
+            {canRelink(programs) ? <Button title={t(`Try Again`)} onPress={() => relinkPrograms(name)} /> : null}
           </Row>
         ) : null}
       </Group>
       {m && active && m.settings.rows.length ? (
         <>
-          <SectionHeader title="Settings" />
+          <SectionHeader title={t(`Settings`)} />
           <Group>
             {m.settings.rows.map((row) => (
               <ValueRow key={row.key} name={name} row={row} value={values[row.key] ?? row.default} />
@@ -262,7 +264,7 @@ function PluginPage({ name }: { name: string }) {
       {m?.passwordManager && active ? <PasswordManagerDetails name={name} spec={m.passwordManager} /> : null}
       {m ? (
         <>
-          <SectionHeader title="What it gets" />
+          <SectionHeader title={t(`What it gets`)} />
           <Group>
             {consentLines(m, { controlOff, official: !!listing.official && !active, movesProfiles }).map((line) => (
               <Row key={line.text} title={line.text} icon={<Symbol name={line.icon} size={13} color={theme.icon} style={ICON} />} />
@@ -271,7 +273,7 @@ function PluginPage({ name }: { name: string }) {
         </>
       ) : (
         <>
-          <SectionHeader title="Problems" />
+          <SectionHeader title={t(`Problems`)} />
           <Group>
             {listing.problems.map((p) => (
               <Row key={p} title={p} />
@@ -280,8 +282,8 @@ function PluginPage({ name }: { name: string }) {
         </>
       )}
       <Group>
-        <Row title="Remove" description={listing.official ? "Removes its download and its commands on your PATH. Its data stays." : `Moves the plugin to the ${PLATFORM_TERMS.trash}.`}>
-          <Button title="Remove…" kind="destructive" onPress={() => void confirmRemove(name, m?.title ?? name)} />
+        <Row title={t(`Remove`)} description={listing.official ? t(`Removes its download and its commands on your PATH. Its data stays.`) : `Moves the plugin to the ${PLATFORM_TERMS.trash}.`}>
+          <Button title={t(`Remove…`)} kind="destructive" onPress={() => void confirmRemove(name, m?.title ?? name)} />
         </Row>
       </Group>
     </PaneSubPage>

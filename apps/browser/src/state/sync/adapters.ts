@@ -14,6 +14,8 @@ import { isWebPageUrl } from "../../lib/url";
 import { BOOKMARK, DEVICE, DEVICE_TABS, RECEIVES_TABS, SHARE, bookmarkValue, passwordValue, recordId, type BookmarkValue, type DeviceRecord, type DeviceTabs, type PasswordValue, type ShareRecord } from "./records";
 import { isAsleep } from "../tabs/pageSession";
 import { withSyncWorkCounts } from "../telemetry/workCounts";
+import { t } from "../../lib/uiLanguage";
+
 
 const store = () => useBrowser.getState();
 
@@ -250,7 +252,7 @@ export function passwordsAdapter(profileId: string, logins: SealedPasswords = na
           if (saved) records.landed(key);
           ok = saved && ok;
         } else if (have) {
-          const deleted = await deletePassword(profile(), have.o, have.u).catch(orWarn(false, "sync delete"));
+          const deleted = await deletePassword(profile(), have.o, have.u).catch(orWarn(false, t(`sync delete`)));
           if (deleted) records.landed(key);
           ok = deleted && ok;
         }

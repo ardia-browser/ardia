@@ -1,3 +1,4 @@
+import { t } from "../../lib/uiLanguage";
 export type BaseLink = { kind: "link"; key: string; file: string; name: string; url: string; id?: string | null };
 export type BaseDir = { kind: "dir"; key: string; file: string; name: string; children: BaseEntry[] };
 export type BaseEntry = BaseLink | BaseDir;
@@ -56,7 +57,7 @@ export function cleanName(name: string, fallback: string): string {
   return capBytes(cleaned || fallback, MAX_NAME_BYTES).trim() || fallback;
 }
 
-export const fileNameFor = (name: string, kind: "link" | "dir") => (kind === "link" ? `${cleanName(name, "Link")}${LINK_EXTENSION}` : cleanName(name, "Folder"));
+export const fileNameFor = (name: string, kind: "link" | "dir") => (kind === "link" ? `${cleanName(name, "Link")}${LINK_EXTENSION}` : cleanName(name, t(`Folder`)));
 
 export function uniqueFileName(name: string, kind: "link" | "dir", taken: Set<string>): string {
   const first = fileNameFor(name, kind);

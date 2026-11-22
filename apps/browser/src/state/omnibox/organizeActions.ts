@@ -4,6 +4,8 @@ import { activeTab, isIncognitoProfile, viewTabIds } from "../browser/model";
 import { hiddenEmptyCard } from "../omnibox/newTabBarPolicy";
 import { isStacked, MAX_SPLIT_PANES, splitOf, splitTabIds, splitTabIdsOf, splitViewAvailable } from "../splits/splits";
 import type { SplitView, Tab } from "../browser/types";
+import { t } from "../../lib/uiLanguage";
+
 
 export type OrganizeContext = { s: BrowserState; windowId: string; tab: Tab; split: SplitView | undefined };
 
@@ -31,86 +33,86 @@ const organizeDefs = <const Id extends string>(defs: OrganizeDef<Id>[]) => defs;
 const DEFS = organizeDefs([
   {
     id: "split:sideBySide",
-    title: "Split View Side by Side",
+    title: t(`Split View Side by Side`),
     icon: "rectangle.split.2x1",
-    keywords: ["split view", "side by side", "new split", "vertical split"],
+    keywords: [t(`split view`), t(`side by side`), t(`new split`), t(`vertical split`)],
     shows: (c) => !c.split,
   },
   {
     id: "split:stacked",
-    title: "Split View Stacked",
+    title: t(`Split View Stacked`),
     icon: "rectangle.split.1x2",
-    keywords: ["split view", "stacked", "top and bottom", "horizontal split"],
+    keywords: [t(`split view`), "stacked", t(`top and bottom`), t(`horizontal split`)],
     shows: (c) => !c.split,
   },
   {
     id: "split:withTab",
-    title: ({ split }) => (split ? "Add Tab to Split View…" : "Split View with Tab…"),
+    title: ({ split }) => (split ? t(`Add Tab to Split View…`) : t(`Split View with Tab…`)),
     icon: "plus.rectangle.on.rectangle",
-    keywords: ["split view", "add tab to split", "split with tab", "add pane"],
+    keywords: [t(`split view`), t(`add tab to split`), t(`split with tab`), t(`add pane`)],
     shows: (c) => hasRoom(c.split) && splitCandidates(c).length > 0,
   },
   {
     id: "split:add",
-    title: ({ split }) => (sideBySide(split) ? "Add Vertical Split View" : "Add Horizontal Split View"),
+    title: ({ split }) => (sideBySide(split) ? t(`Add Vertical Split View`) : t(`Add Horizontal Split View`)),
     icon: "rectangle.split.3x1",
-    keywords: ["split view", "add pane", "new pane"],
+    keywords: [t(`split view`), t(`add pane`), t(`new pane`)],
     shows: (c) => !!c.split && hasRoom(c.split),
   },
   {
     id: "split:cross",
-    title: ({ split }) => (sideBySide(split) ? "Add Bottom Split" : "Add Right Split"),
+    title: ({ split }) => (sideBySide(split) ? t(`Add Bottom Split`) : t(`Add Right Split`)),
     icon: "rectangle.bottomhalf.inset.filled",
-    keywords: ["split view", "add pane", "stacked", "side by side"],
+    keywords: [t(`split view`), t(`add pane`), "stacked", t(`side by side`)],
     shows: (c) => !!c.split && hasRoom(c.split) && !stacked(c),
   },
   {
     id: "split:flip",
-    title: "Flip Split View",
+    title: t(`Flip Split View`),
     icon: "arrow.left.arrow.right",
-    keywords: ["split view", "swap panes"],
+    keywords: [t(`split view`), t(`swap panes`)],
     shows: (c) => !!c.split,
   },
   {
     id: "split:convert",
-    title: ({ split }) => (sideBySide(split) ? "Convert to Vertical Split View" : "Convert to Horizontal Split View"),
+    title: ({ split }) => (sideBySide(split) ? t(`Convert to Vertical Split View`) : t(`Convert to Horizontal Split View`)),
     icon: "rectangle.split.1x2",
-    keywords: ["split view", "rotate split", "stacked", "side by side"],
+    keywords: [t(`split view`), t(`rotate split`), "stacked", t(`side by side`)],
     shows: (c) => !!c.split,
   },
   {
     id: "split:remove",
-    title: "Remove from Split View",
+    title: t(`Remove from Split View`),
     icon: "rectangle.portrait.and.arrow.right",
-    keywords: ["split view", "remove pane", "unsplit tab"],
+    keywords: [t(`split view`), t(`remove pane`), t(`unsplit tab`)],
     shows: (c) => !!c.split,
   },
   {
     id: "split:exit",
-    title: "Exit Split View",
+    title: t(`Exit Split View`),
     icon: "rectangle.split.3x1",
-    keywords: ["split view", "separate all tabs", "unsplit", "close split view", "end split"],
+    keywords: [t(`split view`), t(`separate all tabs`), "unsplit", t(`close split view`), t(`end split`)],
     shows: (c) => !!c.split,
   },
   {
     id: "profile:moveTab",
-    title: "Move Tab to Profile…",
+    title: t(`Move Tab to Profile…`),
     icon: "person.crop.circle",
-    keywords: ["move tab", "move to profile", "move to space", "send tab to profile"],
+    keywords: [t(`move tab`), t(`move to profile`), t(`move to space`), t(`send tab to profile`)],
     shows: inProfiles,
   },
   {
     id: "profile:rename",
-    title: "Rename Profile…",
+    title: t(`Rename Profile…`),
     icon: "pencil",
-    keywords: ["rename profile", "rename space", "profile name"],
+    keywords: [t(`rename profile`), t(`rename space`), t(`profile name`)],
     shows: inProfiles,
   },
   {
     id: "profile:edit",
-    title: "Edit Profiles…",
+    title: t(`Edit Profiles…`),
     icon: "person.2",
-    keywords: ["manage profiles", "reorder profiles", "delete profile", "spaces", "profile settings"],
+    keywords: [t(`manage profiles`), t(`reorder profiles`), t(`delete profile`), "spaces", t(`profile settings`)],
     shows: inProfiles,
   },
 ]);
@@ -141,9 +143,9 @@ export function organizeActions(s: BrowserState, windowId: string): CommandActio
     for (const id of s.profileOrder) {
       if (id === c.tab.profileId) continue;
       const name = s.profiles[id]?.name ?? "";
-      out.push({ id: `moveTabToProfile:${id}`, title: `Move Tab to ${name}`, icon: "arrow.right.circle", keywords: [name, "move tab", "move to profile", "move to space"] });
+      out.push({ id: `moveTabToProfile:${id}`, title: `Move Tab to ${name}`, icon: "arrow.right.circle", keywords: [name, t(`move tab`), t(`move to profile`), t(`move to space`)] });
     }
-    out.push({ id: "moveTabToProfile:new", title: "Move Tab to New Profile", icon: "person.crop.circle.badge.plus", keywords: ["move tab", "new profile", "new space"] });
+    out.push({ id: "moveTabToProfile:new", title: t(`Move Tab to New Profile`), icon: "person.crop.circle.badge.plus", keywords: [t(`move tab`), t(`new profile`), t(`new space`)] });
   }
   return out;
 }

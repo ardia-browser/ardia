@@ -4,6 +4,8 @@ import { choicePlugin, type ManagerPlugin, type PasswordManagerChoice } from "..
 import { choosePasswordManager, useManagerPlugins, useProfilePasswordManager, useProfilesSharingChoice, useStoredPasswordManager } from "../../../state/site/passwordManager";
 import { type Option, PopUp } from "../../ui";
 import { Row } from "../Form";
+import { t } from "../../../lib/uiLanguage";
+
 
 type StoredPlugin = { title: string; installed: boolean } | null;
 
@@ -12,10 +14,10 @@ export function managerPopUp(plugins: readonly ManagerPlugin[], stored: Password
   return {
     value: offPlugin ?? effective,
     options: [
-      { value: "ardia", title: "Ardia" },
+      { value: "ardia", title: t(`Ardia`) },
       ...plugins.map((p) => ({ value: `plugin:${p.name}` as PasswordManagerChoice, title: p.title })),
       ...(offPlugin ? [{ value: offPlugin, title: `${storedPlugin?.title ?? choicePlugin(offPlugin)} (${storedPlugin?.installed === false ? "not installed" : "off"})` }] : []),
-      { value: "none", title: "None (an extension handles logins)", separatorBefore: true },
+      { value: "none", title: t(`None (an extension handles logins)`), separatorBefore: true },
     ],
   };
 }
@@ -61,7 +63,7 @@ function PasswordManagerChoiceRow({ profileId }: { profileId: string }) {
 
 export function offerToSaveHandedOver(effective: PasswordManagerChoice, plugins: readonly ManagerPlugin[]): string | null {
   if (effective === "ardia") return null;
-  if (effective === "none") return "Your password manager extension handles logins in this profile, so Ardia doesn't offer to save them.";
+  if (effective === "none") return t(`Your password manager extension handles logins in this profile, so Ardia doesn't offer to save them.`);
   const plugin = plugins.find((p) => `plugin:${p.name}` === effective);
   return `${plugin?.title ?? "Another password manager"} handles logins in this profile, so Ardia doesn't offer to save them. Logins already saved in Ardia still fill.`;
 }

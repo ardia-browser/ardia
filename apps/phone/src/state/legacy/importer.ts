@@ -15,6 +15,8 @@ import {
   writeTabState,
 } from "../store/browserDatabase.ts";
 import {
+import { t } from "../../lib/uiLanguage";
+
   countReason,
   exclusionCounts,
   importPreferences,
@@ -239,9 +241,9 @@ export async function startWithoutImport(deps: ImportDeps): Promise<boolean> {
     await deps.legacy.startFresh();
     writePreference(deps.db, LEGACY_FRESH_KEY, LEGACY_FRESH_VERSION);
   } catch {
-    deps.log("ardia-legacy start-fresh failed");
+    deps.log(t(`ardia-legacy start-fresh failed`));
     return false;
   }
-  deps.log("ardia-legacy started fresh");
+  deps.log(t(`ardia-legacy started fresh`));
   return true;
 }

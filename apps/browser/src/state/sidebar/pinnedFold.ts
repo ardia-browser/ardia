@@ -7,8 +7,10 @@ import { updateProfile } from "../profiles/actions";
 import { keptEntry } from "./entries";
 import { pinnedSequence } from "./pinnedOrder";
 import { entryKey } from "./entryKey";
+import { t } from "../../lib/uiLanguage";
 
-export const PINNED_FOLD_TITLES = { collapse: "Collapse Pinned Tabs", expand: "Expand Pinned Tabs" } as const;
+
+export const PINNED_FOLD_TITLES = { collapse: t(`Collapse Pinned Tabs`), expand: t(`Expand Pinned Tabs`) } as const;
 
 export const pinnedCollapsed = (s: Pick<BrowserState, "profiles">, profileId: string): boolean => !!s.profiles[profileId]?.pinnedCollapsed;
 

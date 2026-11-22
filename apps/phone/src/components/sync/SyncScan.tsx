@@ -8,6 +8,8 @@ import { copy } from "../../lib/platformCopy";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import Svg, { Path } from "react-native-svg";
 import { controlRadius, CodeCamera, font, ink, Portal, scanInk, scanLayout, space, Symbol, tabsMotion, useTheme } from "../ui";
+import { t } from "../../lib/uiLanguage";
+
 
 const CAMERA_STOP_MS = 120;
 
@@ -73,15 +75,15 @@ export function SyncScan({ onScan, onEnterWords, onCancel, inline = false }: Pro
               ) : (
                 <View />
               )}
-              <GlassButton title="Enter Words Instead" onPress={() => leave(onEnterWords)} />
+              <GlassButton title={t(`Enter Words Instead`)} onPress={() => leave(onEnterWords)} />
             </View>
           </>
         ) : null}
         {access === "denied" ? (
           <Unavailable
             icon="gearshape"
-            title="Allow Camera Access"
-            message="Ardia uses the camera only to read the code your Mac shows. You can allow it in Settings, or type the 24 words instead."
+            title={t(`Allow Camera Access`)}
+            message={t(`Ardia uses the camera only to read the code your Mac shows. You can allow it in Settings, or type the 24 words instead.`)}
             onSettings={openCameraSettings}
             onEnterWords={onEnterWords}
           />
@@ -90,7 +92,7 @@ export function SyncScan({ onScan, onEnterWords, onCancel, inline = false }: Pro
           <Unavailable
             icon="qrcodeViewfinder"
             title={copy().cantScanTitle}
-            message="Type the 24 words of your recovery phrase instead. Your Mac shows them under Connect Another Device."
+            message={t(`Type the 24 words of your recovery phrase instead. Your Mac shows them under Connect Another Device.`)}
             onEnterWords={onEnterWords}
           />
         ) : null}
@@ -126,8 +128,8 @@ function Unavailable({ icon, title, message, onSettings, onEnterWords }: { icon:
       <Symbol name={icon} size={48} color={scanInk.unavailableIcon} />
       <Text style={[font.title3, styles.bold, styles.white, styles.centered]}>{title}</Text>
       <Text style={[font.subheadline, styles.soft]}>{message}</Text>
-      {onSettings ? <GlassButton title="Open Settings" prominent onPress={onSettings} /> : null}
-      <GlassButton title="Enter Words Instead" onPress={onEnterWords} />
+      {onSettings ? <GlassButton title={t(`Open Settings`)} prominent onPress={onSettings} /> : null}
+      <GlassButton title={t(`Enter Words Instead`)} onPress={onEnterWords} />
     </View>
   );
 }

@@ -8,9 +8,11 @@ import { SETTINGS_WINDOW_ID } from "../../../state/settings/settingsWindows";
 import { Button, Segmented, type SegmentOption } from "../../ui";
 import { Row } from "../Form";
 import { showWebKitLimits, ABOUT_ENGINES_TITLE } from "./WebKitLimitsSheet";
+import { t } from "../../../lib/uiLanguage";
+
 
 const MODE_OPTIONS: SegmentOption<EngineMode>[] = [
-  { value: "automatic", title: "Automatic" },
+  { value: "automatic", title: t(`Automatic`) },
   { value: "chromium", title: ENGINE_NAMES.chromium },
   { value: "webkit", title: ENGINE_NAMES.webkit },
 ];

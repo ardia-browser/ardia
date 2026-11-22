@@ -7,6 +7,8 @@ import { Badge, Box, Button, Dialog, EmptyState, ListRow, SearchField, Symbol, T
 import { usePluginTitle } from "../../state/plugins/hooks";
 import { OVERLAY, SURFACE } from "./tokens";
 import { fuzzyFilter, useRevealRow } from "./surfaceNodes";
+import { t } from "../../lib/uiLanguage";
+
 
 const itemFields = (item: QuickPickItem) => [item.title, item.subtitle, ...(item.keywords ?? [])];
 
@@ -55,7 +57,7 @@ export function PluginQuickPick({ request }: { request: QuickPickRequest }) {
             setQuery(text);
             setHighlight(0);
           }}
-          placeholder={options.placeholder ?? "Search"}
+          placeholder={options.placeholder ?? t(`Search`)}
           autoFocus
           onEscape={cancel}
           onArrow={(step) => shown.length && setHighlight((at + step + shown.length) % shown.length)}
@@ -69,7 +71,7 @@ export function PluginQuickPick({ request }: { request: QuickPickRequest }) {
               </View>
             ))
           ) : (
-            <EmptyState symbol="magnifyingglass" title="No matches" />
+            <EmptyState symbol="magnifyingglass" title={t(`No matches`)} />
           )}
         </ScrollView>
         {many ? (
@@ -77,8 +79,8 @@ export function PluginQuickPick({ request }: { request: QuickPickRequest }) {
             <Text size="caption" tone="textTertiary" style={FLEX}>
               {`${picked.size} selected`}
             </Text>
-            <Button title="Cancel" onPress={cancel} />
-            <Button title="Done" kind="primary" onPress={confirm} />
+            <Button title={t(`Cancel`)} onPress={cancel} />
+            <Button title={t(`Done`)} kind="primary" onPress={confirm} />
           </Box>
         ) : null}
       </Box>

@@ -17,65 +17,67 @@ import { useSettingsColors } from "../useSettingsColors";
 import { keyText } from "../../../state/commands/keyText";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 import type { SettingsPlace } from "../../../state/settings/settingsWindows";
+import { t } from "../../../lib/uiLanguage";
 
-const APP = "Ardia";
+
+const APP = t(`Ardia`);
 
 const SIDEBAR_SIDES: SegmentOption<Settings["sidebarSide"]>[] = [
-  { value: "left", title: "Left" },
-  { value: "right", title: "Right" },
+  { value: "left", title: t(`Left`) },
+  { value: "right", title: t(`Right`) },
 ];
 
 type SleepingLook = "normal" | "fade" | "strike" | "both";
 
 const SLEEPING_LOOKS: Option<SleepingLook>[] = [
-  { value: "normal", title: "Look normal" },
-  { value: "fade", title: "Fade icon" },
-  { value: "strike", title: "Strike through" },
-  { value: "both", title: "Both" },
+  { value: "normal", title: t(`Look normal`) },
+  { value: "fade", title: t(`Fade icon`) },
+  { value: "strike", title: t(`Strike through`) },
+  { value: "both", title: t(`Both`) },
 ];
 
 const NEW_TAB_OPENS: Option<Settings["newTabOpens"]>[] = [
-  { value: "page", title: "New Tab page" },
-  { value: "commandBar", title: "Command bar" },
+  { value: "page", title: t(`New Tab page`) },
+  { value: "commandBar", title: t(`Command bar`) },
 ];
 
 const NEW_TABS_DOWN: Option<Settings["newTabPosition"]>[] = [
-  { value: "bottom", title: "At the bottom" },
-  { value: "top", title: "At the top" },
-  { value: "nextToCurrent", title: "Below the current tab" },
+  { value: "bottom", title: t(`At the bottom`) },
+  { value: "top", title: t(`At the top`) },
+  { value: "nextToCurrent", title: t(`Below the current tab`) },
 ];
 
 const NEW_TABS_ACROSS: Option<Settings["newTabPosition"]>[] = [
-  { value: "bottom", title: "On the right" },
-  { value: "top", title: "On the left" },
-  { value: "nextToCurrent", title: "Next to the current tab" },
+  { value: "bottom", title: t(`On the right`) },
+  { value: "top", title: t(`On the left`) },
+  { value: "nextToCurrent", title: t(`Next to the current tab`) },
 ];
 
 type OtherSiteLinks = "same" | "peek";
 
 const OTHER_SITE_LINKS: Option<OtherSiteLinks>[] = [
-  { value: "same", title: "Same tab" },
-  { value: "peek", title: "Peek" },
+  { value: "same", title: t(`Same tab`) },
+  { value: "peek", title: t(`Peek`) },
 ];
 
 const NEW_TAB_LINKS: Option<Settings["newTabLinksOpenIn"]>[] = [
-  { value: "tab", title: "New tab" },
-  { value: "peek", title: "Peek" },
-  { value: "littleArdia", title: "Little Ardia" },
+  { value: "tab", title: t(`New tab`) },
+  { value: "peek", title: t(`Peek`) },
+  { value: "littleArdia", title: t(`Little Ardia`) },
 ];
 
 const PEEK_BUTTONS: Option<Settings["peekButtons"]>[] = [
-  { value: "top", title: "In the title bar" },
-  { value: "left", title: "On the left" },
-  { value: "right", title: "On the right" },
+  { value: "top", title: t(`In the title bar`) },
+  { value: "left", title: t(`On the left`) },
+  { value: "right", title: t(`On the right`) },
 ];
 
 const NEVER_CLEAN_UP = "never";
 
 const DURATION_UNITS: Option<DurationUnit>[] = [
-  { value: "minutes", title: "Minutes" },
-  { value: "hours", title: "Hours" },
-  { value: "days", title: "Days" },
+  { value: "minutes", title: t(`Minutes`) },
+  { value: "hours", title: t(`Hours`) },
+  { value: "days", title: t(`Days`) },
 ];
 
 export function TabsPane(_place: SettingsPlace) {
@@ -95,12 +97,12 @@ function LayoutSection() {
   const sidebarSide = useSettings((s) => s.sidebarSide);
   return (
     <>
-      <SectionHeader title="Layout" />
+      <SectionHeader title={t(`Layout`)} />
       <Box gap="xl">
         <Anchor id="tabs.layout" shape="card">
           <Box row gap="xl">
-            <LayoutChoice layout="sidebar" title="Vertical sidebar" selected={!top} side={sidebarSide} />
-            <LayoutChoice layout="top" title="Horizontal row" selected={top} />
+            <LayoutChoice layout="sidebar" title={t(`Vertical sidebar`)} selected={!top} side={sidebarSide} />
+            <LayoutChoice layout="top" title={t(`Horizontal row`)} selected={top} />
           </Box>
         </Anchor>
         <Group>
@@ -120,8 +122,8 @@ function LayoutSection() {
 }
 
 const SCROLL_TOOLBAR: { hides: boolean; title: string; caption: string }[] = [
-  { hides: false, title: "Keep the toolbar", caption: "Stays put while the page scrolls." },
-  { hides: true, title: "Shrink while scrolling", caption: "Shrinks to a strip as you scroll down." },
+  { hides: false, title: t(`Keep the toolbar`), caption: t(`Stays put while the page scrolls.`) },
+  { hides: true, title: t(`Shrink while scrolling`), caption: t(`Shrinks to a strip as you scroll down.`) },
 ];
 
 function ScrollToolbarChoices() {
@@ -145,10 +147,10 @@ function ButtonsRow({ top }: { top: boolean }) {
   const sidebarButton = useSettings((s) => s.showSidebarButton !== false);
   const clearButton = useSettings((s) => s.showClearButton);
   return (
-    <Row anchor="tabs.buttons" description={top ? "Hide Tabs in the toolbar." : undefined}>
+    <Row anchor="tabs.buttons" description={top ? t(`Hide Tabs in the toolbar.`) : undefined}>
       <Box row gap="l" style={CHECKLIST}>
-        <Checkbox value={sidebarButton} label="Hide Tabs" onChange={(showSidebarButton) => updateSettings({ showSidebarButton })} />
-        {top ? null : <Checkbox value={clearButton} label="Clear" onChange={(showClearButton) => updateSettings({ showClearButton })} />}
+        <Checkbox value={sidebarButton} label={t(`Hide Tabs`)} onChange={(showSidebarButton) => updateSettings({ showSidebarButton })} />
+        {top ? null : <Checkbox value={clearButton} label={t(`Clear`)} onChange={(showClearButton) => updateSettings({ showClearButton })} />}
       </Box>
     </Row>
   );
@@ -163,10 +165,10 @@ function TabsAndTopAppsSection() {
   const strike = useSettings((s) => s.strikeSleepingTabs);
   return (
     <>
-      <SectionHeader title="Tabs and Top Apps" />
+      <SectionHeader title={t(`Tabs and Top Apps`)} />
       <Group>
         <Row anchor="tabs.badges">
-          <Toggle value={unread || topAppBadges} accessibilityLabel="Badges" onChange={(on) => updateSettings({ showUnreadCounts: on, showTopAppBadges: on })} />
+          <Toggle value={unread || topAppBadges} accessibilityLabel={t(`Badges`)} onChange={(on) => updateSettings({ showUnreadCounts: on, showTopAppBadges: on })} />
         </Row>
         <Row anchor="tabs.sleepingTabs">
           <PopUp
@@ -200,9 +202,9 @@ function NewTabsSection() {
     updateSettings(position === "nextToCurrent" ? { newTabPosition: position } : { newTabPosition: position, newTabButtonPosition: position });
   return (
     <>
-      <SectionHeader title="New tabs" />
+      <SectionHeader title={t(`New tabs`)} />
       <Group>
-        <Row anchor="tabs.newTabOpens" description={minimal ? "Minimalism mode opens the command bar. Your choice here comes back when you turn it off." : undefined}>
+        <Row anchor="tabs.newTabOpens" description={minimal ? t(`Minimalism mode opens the command bar. Your choice here comes back when you turn it off.`) : undefined}>
           <PopUp value={minimal ? "commandBar" : newTabOpens} disabled={minimal} options={NEW_TAB_OPENS} onChange={(v) => updateSettings({ newTabOpens: v })} minWidth={160} />
         </Row>
         <NewTabUrlRow anchor="tabs.newTabUrl" />
@@ -231,7 +233,7 @@ function NewTabUrlRow({ anchor }: { anchor: SettingId }) {
   };
   return (
     <Row anchor={anchor}>
-      <TextField value={draft} onChangeText={setDraft} placeholder="New Tab page" onSubmit={save} onBlur={save} invalid={invalid} width={220} />
+      <TextField value={draft} onChangeText={setDraft} placeholder={t(`New Tab page`)} onSubmit={save} onBlur={save} invalid={invalid} width={220} />
     </Row>
   );
 }
@@ -243,7 +245,7 @@ function LinksSection() {
   const peekButtons = useSettings((s) => s.peekButtons);
   return (
     <>
-      <SectionHeader title="Links" />
+      <SectionHeader title={t(`Links`)} />
       <Group>
         <SettingToggle
           anchor="tabs.openLinksInLittleArdia"
@@ -273,7 +275,7 @@ function LinksSection() {
 function CleanUpSection() {
   const minutes = useSettings((s) => s.cleanUpInactiveTabsAfterMinutes);
   const shown = minutes ?? DAILY_CLEAN_UP_MINUTES;
-  const options = [{ value: NEVER_CLEAN_UP, title: "Never" }, ...cleanUpChoices(shown)];
+  const options = [{ value: NEVER_CLEAN_UP, title: t(`Never`) }, ...cleanUpChoices(shown)];
   const choose = (v: string) => {
     if (v === NEVER_CLEAN_UP) return updateSettings({ cleanUpInactiveTabsAfterMinutes: null });
     if (v === CUSTOM_CLEAN_UP) return showSettingsSheet(<CustomCleanUpSheet minutes={shown} />);
@@ -281,7 +283,7 @@ function CleanUpSection() {
   };
   return (
     <>
-      <SectionHeader title="Clean up" />
+      <SectionHeader title={t(`Clean up`)} />
       <Group>
         <Row anchor="tabs.cleanUp">
           <PopUp value={minutes === null ? NEVER_CLEAN_UP : String(minutes)} options={options} onChange={choose} minWidth={130} />
@@ -306,7 +308,7 @@ function CustomCleanUpSheet({ minutes }: { minutes: number }) {
   };
   return (
     <Sheet size="s" onClose={closeSettingsSheet}>
-      <DialogTitle subtitle="Close unused tabs after:">Custom Clean Up Time</DialogTitle>
+      <DialogTitle subtitle={t(`Close unused tabs after:`)}>Custom Clean Up Time</DialogTitle>
       <Box row gap="m" style={FIELDS}>
         <TextField
           value={amount}
@@ -336,8 +338,8 @@ function CustomCleanUpSheet({ minutes }: { minutes: number }) {
         </Text>
       )}
       <DialogActions>
-        <Button title="Cancel" onPress={closeSettingsSheet} />
-        <Button title="Save" kind="primary" onPress={save} />
+        <Button title={t(`Cancel`)} onPress={closeSettingsSheet} />
+        <Button title={t(`Save`)} kind="primary" onPress={save} />
       </DialogActions>
     </Sheet>
   );

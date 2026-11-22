@@ -2,6 +2,8 @@ import { readDocument, writeDocument } from "../../platform/documents";
 import type { AutofillToggle } from "../../platform/autofill";
 import { isFields } from "../../lib/decode";
 import { parseSaved, versionedJson } from "../../lib/savedDocument";
+import { t } from "../../lib/uiLanguage";
+
 
 const DOC = "autofill-toggles-asked.json";
 const VERSION = 1;
@@ -38,6 +40,6 @@ export function rememberAsked(profile: string, toggle: AutofillToggle, asked: bo
   try {
     writeDocument(DOC, versionedJson({ profiles: all }, VERSION));
   } catch (error) {
-    console.warn("[settings] couldn't save the autofill toggles asked for", error);
+    console.warn(t(`[settings] couldn't save the autofill toggles asked for`), error);
   }
 }

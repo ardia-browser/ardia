@@ -2,6 +2,8 @@ import { readDocument, writeDocument } from "../../platform/documents";
 import { parseSaved, unchanged, versionedJson, type Migrations } from "../../lib/savedDocument";
 import type { BrowserSourceId, Preset } from "./presets";
 import type { OnboardingStep, QuestionId } from "./questionList";
+import { t } from "../../lib/uiLanguage";
+
 
 const DOC = "onboarding.json";
 const DOC_VERSION = 1;
@@ -31,7 +33,7 @@ export function saveOnboarding(patch: Partial<Saved>) {
   try {
     writeDocument(DOC, versionedJson({ completedAt: null, ...readSaved(), ...patch } satisfies Saved, DOC_VERSION));
   } catch (error) {
-    console.warn("Couldn't save onboarding state", error);
+    console.warn(t(`Couldn't save onboarding state`), error);
   }
 }
 

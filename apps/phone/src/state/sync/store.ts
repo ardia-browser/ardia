@@ -8,13 +8,15 @@ import { tabSpacesFor } from "../tabs/spaces";
 import type { Design } from "../../lib/design";
 import { pinKey, pinsStillOnTheirWay } from "./spaces";
 import { shownProfile } from "./syncRules";
+import { t } from "../../lib/uiLanguage";
+
 
 export const notePinSent = (profileSyncId: string | null, url: string) =>
   useSync.setState((state) => ({ pinsOnTheirWay: [...state.pinsOnTheirWay, pinKey(profileSyncId, url)] }));
 
 export const OFF_STATUS: SyncStatus = {
   phase: "off",
-  statusText: "Off",
+  statusText: t(`Off`),
   stalledMessage: null,
   attention: "none",
   isEnabled: false,

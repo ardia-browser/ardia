@@ -5,6 +5,8 @@ import { uuidv4 } from "./ids";
 import { appInfo, mayPost, post, telemetryHost } from "./transport";
 import { EVENTS_SCOPE, eventRecord, logsRequest, outcome } from "./otlp";
 import { parseSaved, versionedJson, unchanged, type Migrations } from "../../lib/savedDocument";
+import { t } from "../../lib/uiLanguage";
+
 
 export const DAILY_DOC = "telemetry-daily.json";
 const DAILY_VERSION = 1;
@@ -98,7 +100,7 @@ export function dailyProperties(flags: DailyFlags, channel: string | null): Reco
   return {
     $lib: DAILY_LIB,
     $lib_version: "1",
-    $app_name: "Ardia",
+    $app_name: t(`Ardia`),
     $app_version: info.appVersion,
     $os: telemetryHost().os,
     os_major: (info.osVersion ?? "").split(".")[0] || null,

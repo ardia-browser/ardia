@@ -7,6 +7,8 @@ import { webviews } from "../../platform/webviews";
 import { errorText } from "../../lib/errors";
 import { changedIds } from "../browser/changes";
 import { onLiveChange, shownLiveOf } from "../tabs/tabLive";
+import { t } from "../../lib/uiLanguage";
+
 
 const STRUCTURE_DELAY_MS = 100;
 const TITLE_DELAY_MS = 1000;
@@ -112,12 +114,12 @@ async function runScriptCommand(request: Exclude<ScriptCommand, { command: "read
   const s = useBrowser.getState();
   const tabOf = (tabId: string) => {
     const tab = s.tabs[tabId];
-    if (!tab) throw new Error("That tab no longer exists.");
+    if (!tab) throw new Error(t(`That tab no longer exists.`));
     return tab;
   };
   const loaded = (tabId: string) => {
     const web = webviews.get(tabId);
-    if (!web) throw new Error("The tab hasn't loaded yet; focus it first.");
+    if (!web) throw new Error(t(`The tab hasn't loaded yet; focus it first.`));
     return web;
   };
   const scriptJavaScriptAllowed = s.settings.allowJavaScriptFromAppleEvents;
@@ -154,7 +156,7 @@ async function runScriptCommand(request: Exclude<ScriptCommand, { command: "read
       tabOf(request.tabId);
       return s.closeTab(request.tabId);
     case "closeWindow":
-      if (!s.windows[request.windowId]) throw new Error("That window no longer exists.");
+      if (!s.windows[request.windowId]) throw new Error(t(`That window no longer exists.`));
       return s.closeWindow(request.windowId);
     case "reload": {
       const tab = tabOf(request.tabId);
@@ -173,21 +175,21 @@ async function runScriptCommand(request: Exclude<ScriptCommand, { command: "read
       tabOf(request.tabId);
       return switchToTab(request.tabId);
     case "setActiveTabIndex": {
-      if (!s.windows[request.windowId]) throw new Error("That window no longer exists.");
-      if (request.index < 1 || request.index > viewTabIds(s, request.windowId).length) throw new Error("There's no tab at that index.");
+      if (!s.windows[request.windowId]) throw new Error(t(`That window no longer exists.`));
+      if (request.index < 1 || request.index > viewTabIds(s, request.windowId).length) throw new Error(t(`There's no tab at that index.`));
       return s.activateIndex(request.windowId, request.index - 1);
     }
     case "focusProfile": {
       const windowId = resolveWindowId(s, null);
-      if (!s.profiles[request.profileId]) throw new Error("That profile no longer exists.");
-      if (!windowId || s.windows[windowId]!.kind === "private") throw new Error("There's no window to show the profile in.");
+      if (!s.profiles[request.profileId]) throw new Error(t(`That profile no longer exists.`));
+      if (!windowId || s.windows[windowId]!.kind === "private") throw new Error(t(`There's no window to show the profile in.`));
       return switchProfile(windowId, request.profileId);
     }
     case "execute": {
       tabOf(request.tabId);
       if (!scriptJavaScriptAllowed) return JAVASCRIPT_FROM_APPLE_EVENTS_REFUSED;
       const outcome = await loaded(request.tabId).evaluate<{ value?: string; error?: string }>(executeWrapper(request.code));
-      if (!outcome) throw new Error("The page didn't answer.");
+      if (!outcome) throw new Error(t(`The page didn't answer.`));
       if (outcome.error) throw new Error(outcome.error);
       return { value: outcome.value ?? "" };
     }

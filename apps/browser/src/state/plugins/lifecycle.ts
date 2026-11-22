@@ -26,15 +26,17 @@ import { dropCalls } from "./tools";
 import { sendValues } from "./channel";
 import { adoptLegacyInstalls, reconcilePrograms, removePrograms } from "./programs";
 import { isBundledRetiredRecord, noteRetiredRecords, RETIRED_OFFICIAL_PLUGINS } from "./retiredOfficial";
+import { t } from "../../lib/uiLanguage";
+
 
 export const MAX_PLUGINS = 64;
 
 const READ_PROBLEMS: Record<Exclude<PluginFolderEntry["status"], "ok">, string> = {
-  missing: "The folder has no plugin.json",
-  link: "plugin.json is a link; it must be a file in the plugin's folder",
-  notFile: "plugin.json isn't a file",
-  tooBig: "plugin.json is over 1 MB",
-  unreadable: "plugin.json couldn't be read",
+  missing: t(`The folder has no plugin.json`),
+  link: t(`plugin.json is a link; it must be a file in the plugin's folder`),
+  notFile: t(`plugin.json isn't a file`),
+  tooBig: t(`plugin.json is over 1 MB`),
+  unreadable: t(`plugin.json couldn't be read`),
 };
 
 const officialFlags = (e: PluginFolderEntry): Partial<PluginListing> => ({
@@ -165,7 +167,7 @@ export function rescanPlugins(consent: ConsentToken | null): Promise<void> {
       const asked = scan.consent;
       nextScan = null;
       const entries = await listPluginFolders().catch((error: unknown) => {
-        warnFor(asked, "[plugins] couldn't list the plugins folder", error);
+        warnFor(asked, t(`[plugins] couldn't list the plugins folder`), error);
         return null;
       });
       if (entries && currentPlugins().pinned === null) {
@@ -192,13 +194,13 @@ export function rescanPlugins(consent: ConsentToken | null): Promise<void> {
 
 let lastConsentId = 0;
 
-export const ALREADY_ASKING = "Ardia is already asking about a plugin. Answer that first, then try again.";
+export const ALREADY_ASKING = t(`Ardia is already asking about a plugin. Answer that first, then try again.`);
 
 function closeChangedConsent() {
   const asked = currentPlugins().consent;
   if (!asked || consentListing(currentPlugins(), asked.name, asked.hash)?.hash === asked.hash) return;
   usePlugins.setState({ consent: null });
-  settleInstall(asked.name, { ok: false, reason: "It changed while installing. Try again." });
+  settleInstall(asked.name, { ok: false, reason: t(`It changed while installing. Try again.`) });
 }
 
 export function consentTarget(name: string, official = false): PluginListing | undefined {
@@ -279,7 +281,7 @@ export async function promoteCandidate(name: string, candidate: PluginListing, c
   const saved = exact && (await pluginRecordsSaved(consent));
   const record = recordOf(currentPlugins(), name);
   if (!saved || !record.enabled || !approvalMatches(candidate, record.approved)) {
-    setOfficialFetch(name, { state: "failed", code: "failed", reason: saved ? "Its approval changed before it could be switched to." : "plugins.json couldn't be saved." });
+    setOfficialFetch(name, { state: "failed", code: "failed", reason: saved ? t(`Its approval changed before it could be switched to.`) : t(`plugins.json couldn't be saved.`) });
     return false;
   }
   const promoted = await promoteOfficialPlugin(name, candidate.folderId, candidate.hash!).catch((error: unknown) => ({ ok: false as const, reason: String(error) }));
@@ -343,29 +345,29 @@ export function removalIdentity(name: string): RemovalIdentity {
 }
 
 export async function removePlugin(name: string, mayGoOn: () => boolean = () => true, expected?: RemovalIdentity): Promise<{ ok: boolean; removed?: boolean; reason?: string }> {
-  if (removing.has(name)) return { ok: false, reason: "It is already being removed." };
+  if (removing.has(name)) return { ok: false, reason: t(`It is already being removed.`) };
   const identity = removalIdentity(name);
   const official = identity.official;
-  if (expected && (expected.official !== identity.official || expected.folderId !== identity.folderId)) return { ok: false, reason: "It changed while you were deciding. Try again." };
+  if (expected && (expected.official !== identity.official || expected.folderId !== identity.folderId)) return { ok: false, reason: t(`It changed while you were deciding. Try again.`) };
   const consent = consentToken();
   removing.add(name);
   try {
-    if (!(await turnOffPlugin(name, consent))) return { ok: false, reason: "It couldn't be turned off, because plugins.json couldn't be saved." };
-    if (!(await pluginRecordsSaved(consent))) return { ok: false, reason: "It couldn't be turned off, because plugins.json couldn't be saved." };
-    if (!mayGoOn()) return { ok: false, reason: "Control was turned off after Ardia turned it off, so its files are still there." };
+    if (!(await turnOffPlugin(name, consent))) return { ok: false, reason: t(`It couldn't be turned off, because plugins.json couldn't be saved.`) };
+    if (!(await pluginRecordsSaved(consent))) return { ok: false, reason: t(`It couldn't be turned off, because plugins.json couldn't be saved.`) };
+    if (!mayGoOn()) return { ok: false, reason: t(`Control was turned off after Ardia turned it off, so its files are still there.`) };
     await removePrograms(name, consent);
-    if (!mayGoOn()) return { ok: false, reason: "Control was turned off after Ardia unlinked its programs, so its files are still there." };
+    if (!mayGoOn()) return { ok: false, reason: t(`Control was turned off after Ardia unlinked its programs, so its files are still there.`) };
     await closePluginStorage(name);
     const now = removalIdentity(name);
     if (expected && (now.official !== official || (!official && expected.folderId !== null && now.folderId !== null && now.folderId !== expected.folderId)))
-      return { ok: false, reason: "It changed while it was being removed, so its files are still there. Try again." };
+      return { ok: false, reason: t(`It changed while it was being removed, so its files are still there. Try again.`) };
     const removed = await removePluginFiles(name, official, official ? null : (expected?.folderId ?? identity.folderId)).catch((error: unknown) => ({ ok: false as const, reason: String(error) }));
     if (!removed.ok) return removed;
     const secrets = official ? { ok: true, remaining: [] } : await clearPluginSecrets(name).catch((error: unknown): SecretsCleared => (warnFor(consent, `[plugins] couldn't remove ${name}'s secrets`, error), { ok: false, remaining: [] }));
     const forgotten = updateRecord(name, () => null, consent) && (await pluginRecordsSaved(consent));
     if (!forgotten) toForget.add(name);
     await rescanPlugins(consent);
-    if (!forgotten) return { ok: false, removed: true, reason: "Its files are removed, but plugins.json couldn't be updated; Ardia drops its record the next time it can save." };
+    if (!forgotten) return { ok: false, removed: true, reason: t(`Its files are removed, but plugins.json couldn't be updated; Ardia drops its record the next time it can save.`) };
     if (!secrets.ok) return { ok: false, removed: true, reason: secretsLeftReason(name, secrets) };
     return { ok: true };
   } finally {

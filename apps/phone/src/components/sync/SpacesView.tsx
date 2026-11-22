@@ -44,6 +44,8 @@ import {
   useReduceMotion,
 } from "../ui";
 import type { Point } from "../../lib/menuPlace";
+import { t } from "../../lib/uiLanguage";
+
 
 const BANNER_ICONS: Record<BannerIcon, SymbolName> = { folder: "folderFill", lock: "lockFill", reset: "arrowClockwise", warning: "exclamationmarkTriangle", offline: "wifiSlash" };
 const IPHONE_BANNER_ICONS: Record<BannerIcon, SymbolName> = { folder: "folderBadgeQuestionmark", lock: "lockFill", reset: "exclamationmarkArrowTriangle2Circlepath", warning: "exclamationmarkIcloud", offline: "wifiSlash" };
@@ -112,14 +114,14 @@ export function SpacesView() {
       <FadingBackdrop colors={tone} />
       <View style={[styles.column, { paddingTop: frame ? 0 : insets.top }]}>
         {material ? (
-          <MaterialTopBar title={profile?.name ?? "Spaces"} titleTestID="spacesTitle" nav="close" onNav={closeArchive} actions={<MaterialIconAction icon="archivebox" label="Archive" onPress={openArchive} />} />
+          <MaterialTopBar title={profile?.name ?? t(`Spaces`)} titleTestID="spacesTitle" nav="close" onNav={closeArchive} actions={<MaterialIconAction icon="archivebox" label={t(`Archive`)} onPress={openArchive} />} />
         ) : (
           <View style={styles.header}>
-            <View accessibilityRole="header" accessible accessibilityLabel={profile?.name ?? "Spaces"} style={styles.fill}>
-              <CrossfadeText testID="spacesTitle" text={profile?.name ?? "Spaces"} style={[font.title2, styles.bold, { color: theme.label }]} />
+            <View accessibilityRole="header" accessible accessibilityLabel={profile?.name ?? t(`Spaces`)} style={styles.fill}>
+              <CrossfadeText testID="spacesTitle" text={profile?.name ?? t(`Spaces`)} style={[font.title2, styles.bold, { color: theme.label }]} />
             </View>
-            <HeaderButton icon="archivebox" label="Archive" onPress={openArchive} />
-            <HeaderButton icon="xmark" label="Close" onPress={closeArchive} />
+            <HeaderButton icon="archivebox" label={t(`Archive`)} onPress={openArchive} />
+            <HeaderButton icon="xmark" label={t(`Close`)} onPress={closeArchive} />
           </View>
         )}
         {banner ? (
@@ -205,11 +207,11 @@ function SpacePage({ profile, isShown, onMenu, bottom }: { profile: SyncedProfil
     menuOpenedHaptic();
     const sharing: MenuItem[] = /^https?:\/\//i.test(url)
       ? [
-          { label: "Copy Link", icon: "link", onPress: () => copyLink(url) },
-          { label: "Share", icon: "squareAndArrowUp", onPress: () => shareUrl(url, title) },
+          { label: t(`Copy Link`), icon: "link", onPress: () => copyLink(url) },
+          { label: t(`Share`), icon: "squareAndArrowUp", onPress: () => shareUrl(url, title) },
         ]
       : [];
-    onMenu({ items: [{ label: "Open", icon: "arrowUpForward", onPress: () => openRemote(url, title, profile.syncId) }, ...sharing], at });
+    onMenu({ items: [{ label: t(`Open`), icon: "arrowUpForward", onPress: () => openRemote(url, title, profile.syncId) }, ...sharing], at });
   };
   return (
     <FlatList
@@ -310,7 +312,7 @@ function Row({ row, profileId, tint, onToggle, onShowAll, onLongPress, onFolder 
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ expanded: row.isOpen }}
-          {...screenReaderActions([{ name: "activate", label: row.isOpen ? "Collapse" : "Expand", run: () => onToggle(row.key) }])}
+          {...screenReaderActions([{ name: "activate", label: row.isOpen ? t(`Collapse`) : t(`Expand`), run: () => onToggle(row.key) }])}
           onPress={() => onToggle(row.key)}
           style={({ pressed }) => [styles.row, { paddingLeft: space.l + INDENT * row.depth }, pressed ? { backgroundColor: theme.rowHighlight } : null]}
         >

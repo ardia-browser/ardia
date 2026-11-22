@@ -38,6 +38,8 @@ import { MenuTrigger } from "../ui/MenuTrigger";
 import { syncOffered } from "../../state/sync/offer";
 import { usePageSummariesEnabled } from "../../state/pageSummary/enabled";
 import { pageMenuCardInk, pageMenuCards } from "./pageMenuTokens";
+import { t } from "../../lib/uiLanguage";
+
 
 export const usePageMenuInk = () => pageMenuCardInk[useTheme().dark ? "dark" : "light"];
 
@@ -56,34 +58,34 @@ export function PageMenuWords({ tabId, model, onTranslate }: { tabId: string; mo
     <SheetScrollView testID="pageMenuWords" style={styles.scroll} contentContainerStyle={[styles.column, large ? styles.largeBottom : null]} bounces={false}>
       <NavigationBar tabId={tabId} model={model} large={large} />
       <View style={styles.actions}>
-        <ActionTile icon="docPlaintext" label="Reader" enabled={model.tiles} large={large} onPress={showReader} />
-        <ActionTile icon="textMagnifyingglass" label="Find on Page" enabled={model.find} large={large} onPress={showFind} />
-        <ActionTile icon="link" label="Copy Link" enabled={model.tiles} large={large} onPress={copyCurrentLink} />
-        <ActionTile icon="squareAndArrowUp" label="Share" enabled={model.tiles} large={large} onPress={shareCurrentPage} />
+        <ActionTile icon="docPlaintext" label={t(`Reader`)} enabled={model.tiles} large={large} onPress={showReader} />
+        <ActionTile icon="textMagnifyingglass" label={t(`Find on Page`)} enabled={model.find} large={large} onPress={showFind} />
+        <ActionTile icon="link" label={t(`Copy Link`)} enabled={model.tiles} large={large} onPress={copyCurrentLink} />
+        <ActionTile icon="squareAndArrowUp" label={t(`Share`)} enabled={model.tiles} large={large} onPress={shareCurrentPage} />
       </View>
       <Group>
-        {offersSummary ? <Row icon="sparkles" title="Summarize Page" enabled={model.summarize} onPress={summarizeCurrentPage} /> : null}
+        {offersSummary ? <Row icon="sparkles" title={t(`Summarize Page`)} enabled={model.summarize} onPress={summarizeCurrentPage} /> : null}
         {model.isWebPage && devices.length ? <SendRow devices={devices} /> : null}
         {model.pageRows ? (
-          <ToggleRow icon={model.blockersEnabled ? "handRaised" : "handRaisedSlash"} title="Block Ads and Trackers" value={model.blockersEnabled} enabled={model.isWebPage} detail={model.blockedCount} onChange={setBlockersOn} />
+          <ToggleRow icon={model.blockersEnabled ? "handRaised" : "handRaisedSlash"} title={t(`Block Ads and Trackers`)} value={model.blockersEnabled} enabled={model.isWebPage} detail={model.blockedCount} onChange={setBlockersOn} />
         ) : null}
       </Group>
       <Group>
-        {model.pageRows ? <ToggleRow icon={model.nightShadeOn ? "moonFill" : "moon"} title="Night Shade" value={model.nightShadeOn} enabled={model.isWebPage} onChange={setNightShadeOn} /> : null}
+        {model.pageRows ? <ToggleRow icon={model.nightShadeOn ? "moonFill" : "moon"} title={t(`Night Shade`)} value={model.nightShadeOn} enabled={model.isWebPage} onChange={setNightShadeOn} /> : null}
         {model.pageRows ? <ZoomRow model={model} large={large} /> : null}
-        {model.pageRows ? <ToggleRow icon="desktop" title="Desktop Site" value={model.desktopSite} enabled={model.isWebPage} onChange={setDesktopSite} /> : null}
+        {model.pageRows ? <ToggleRow icon="desktop" title={t(`Desktop Site`)} value={model.desktopSite} enabled={model.isWebPage} onChange={setDesktopSite} /> : null}
         {model.pageRows ? <Row icon="translate" title={model.translateTitle} enabled={model.translate} onPress={onTranslate} /> : null}
-        {canPrintPages() ? <Row icon="printer" title="Print" enabled={model.print} onPress={printCurrentPage} /> : null}
-        <Row icon="gearshape" title="Site Settings" enabled onPress={openSiteSettingsSheet} />
+        {canPrintPages() ? <Row icon="printer" title={t(`Print`)} enabled={model.print} onPress={printCurrentPage} /> : null}
+        <Row icon="gearshape" title={t(`Site Settings`)} enabled onPress={openSiteSettingsSheet} />
       </Group>
       <Group>
-        <Row icon="clockArrow" title="History" enabled onPress={() => openFromMenu("history")} />
-        <Row icon="star" title="Bookmarks" enabled onPress={() => openFromMenu("bookmarks")} />
-        <Row icon="arrowDownCircle" title="Downloads" enabled onPress={() => openFromMenu("downloads")} />
+        <Row icon="clockArrow" title={t(`History`)} enabled onPress={() => openFromMenu("history")} />
+        <Row icon="star" title={t(`Bookmarks`)} enabled onPress={() => openFromMenu("bookmarks")} />
+        <Row icon="arrowDownCircle" title={t(`Downloads`)} enabled onPress={() => openFromMenu("downloads")} />
       </Group>
       {model.pageRows && model.offersDefaultBrowser ? (
         <Group>
-          <Row icon="arrowUpForwardAppFill" title="Open in Default Browser" enabled onPress={openInDefaultBrowser} />
+          <Row icon="arrowUpForwardAppFill" title={t(`Open in Default Browser`)} enabled onPress={openInDefaultBrowser} />
         </Group>
       ) : null}
     </SheetScrollView>
@@ -97,7 +99,7 @@ function NavigationBar({ tabId, model, large }: { tabId: string; model: MenuMode
   const feedback = useTitleFeedback();
   const shown = feedback ?? title;
   const titleButton = (
-    <Pressable testID="pageMenuTitle" accessibilityRole="button" accessibilityLabel={shown} accessibilityHint="Edits the search" onPress={editPageQuery} style={large ? styles.titleBelow : styles.title}>
+    <Pressable testID="pageMenuTitle" accessibilityRole="button" accessibilityLabel={shown} accessibilityHint={t(`Edits the search`)} onPress={editPageQuery} style={large ? styles.titleBelow : styles.title}>
       <Animated.Text
         key={shown}
         entering={TITLE_IN}
@@ -112,11 +114,11 @@ function NavigationBar({ tabId, model, large }: { tabId: string; model: MenuMode
   return (
     <View testID="pageMenuCapsule" style={[styles.navigation, large ? styles.navigationTall : styles.navigationPill, { backgroundColor: ink.cell }]}>
       <View testID="pageMenuCapsuleRow" style={styles.navigationRow}>
-        <BarButton icon="chevronLeft" label="Back" enabled={model.back} onPress={menuBack} />
-        <BarButton icon="chevronRight" label="Forward" enabled={model.forward} onPress={menuForward} />
+        <BarButton icon="chevronLeft" label={t(`Back`)} enabled={model.back} onPress={menuBack} />
+        <BarButton icon="chevronRight" label={t(`Forward`)} enabled={model.forward} onPress={menuForward} />
         {large ? <View style={styles.fill} /> : titleButton}
         {syncOffered() ? <PinButton tabId={tabId} enabled={model.isWebPage} /> : null}
-        {model.reload === "stop" ? <BarButton icon="xmark" label="Stop" enabled onPress={menuStop} /> : <BarButton icon="arrowClockwise" label="Reload" enabled={model.reloadEnabled} onPress={menuReload} />}
+        {model.reload === "stop" ? <BarButton icon="xmark" label={t(`Stop`)} enabled onPress={menuStop} /> : <BarButton icon="arrowClockwise" label={t(`Reload`)} enabled={model.reloadEnabled} onPress={menuReload} />}
       </View>
       {large ? <View style={[styles.navigationDivider, { backgroundColor: ink.separator }]} /> : null}
       {large ? titleButton : null}
@@ -127,7 +129,7 @@ function NavigationBar({ tabId, model, large }: { tabId: string; model: MenuMode
 function PinButton({ tabId, enabled }: { tabId: string; enabled: boolean }) {
   const tab = useTab(tabId);
   const pinned = useIsPinned(tabId);
-  return <BarButton icon={pinned ? "starFill" : "star"} label={pinned ? "Pinned to Mac" : "Pin to Mac"} enabled={enabled && !tab?.isPrivate} onPress={pinCurrentToMac} />;
+  return <BarButton icon={pinned ? "starFill" : "star"} label={pinned ? t(`Pinned to Mac`) : t(`Pin to Mac`)} enabled={enabled && !tab?.isPrivate} onPress={pinCurrentToMac} />;
 }
 
 function BarButton({ icon, label, enabled, onPress }: { icon: SymbolName; label: string; enabled: boolean; onPress: () => void }) {
@@ -209,7 +211,7 @@ export function SendRow({ devices }: { devices: ReturnType<typeof useSendTargets
   return (
     <MenuTrigger items={items} trigger="tap" place={{ left: space.xxl, width: SEND_MENU_WIDTH }}>
       {({ onPress }) => (
-        <Pressable testID="pageMenuRow:Send to Device" accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.row, pressed ? { backgroundColor: ink.rowPressed } : null]}>
+        <Pressable testID={t(`pageMenuRow:Send to Device`)} accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.row, pressed ? { backgroundColor: ink.rowPressed } : null]}>
           <RowIcon name="paperplane" enabled />
           <Text style={[font.body, styles.rowTitle, { color: theme.label }]}>Send to Device</Text>
           <Symbol name="chevronUpChevronDown" size={14} color={theme.tertiaryLabel} />
@@ -266,11 +268,11 @@ function ZoomRow({ model, large }: { model: MenuModel; large: boolean }) {
       {large ? <View style={styles.zoomHeading}>{heading}</View> : heading}
       <View style={[styles.zoom, large ? styles.zoomIndented : null]}>
         <View pointerEvents="none" style={[styles.zoomFill, { backgroundColor: ink.stepper }]} />
-        {zoomButton("minus", "Zoom Out", model.zoomOut, zoomOut)}
-        <Pressable accessibilityRole="button" accessibilityLabel="Reset Zoom" accessibilityValue={{ text: model.zoomPercent }} disabled={!model.isWebPage} onPress={resetZoom} style={styles.zoomReset}>
+        {zoomButton("minus", t(`Zoom Out`), model.zoomOut, zoomOut)}
+        <Pressable accessibilityRole="button" accessibilityLabel={t(`Reset Zoom`)} accessibilityValue={{ text: model.zoomPercent }} disabled={!model.isWebPage} onPress={resetZoom} style={styles.zoomReset}>
           <Text style={[font.subheadline, styles.digits, styles.semibold, { color: theme.label }]}>{model.zoomPercent}</Text>
         </Pressable>
-        {zoomButton("plus", "Zoom In", model.zoomIn, zoomIn)}
+        {zoomButton("plus", t(`Zoom In`), model.zoomIn, zoomIn)}
       </View>
     </View>
   );

@@ -23,6 +23,8 @@ import { meadowIntroFor } from "./introPage";
 import { INTRO_TAB_KEYS, introHoldsKeyboard, nextIntroStop } from "./introKeys";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { noteIntroEnded, noteIntroShown, noteIntroSkipped, type IntroScene } from "../../state/telemetry/introCounts";
+import { t } from "../../lib/uiLanguage";
+
 
 const ICON = require("../../../assets/app-icon.png");
 const CUES = INTRO_CUES;

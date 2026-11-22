@@ -19,6 +19,8 @@ import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
 import { loadPluginTheme, parsePluginThemeKey } from "../plugins/themes";
 import { activeManifest, currentPlugins, usePlugins } from "../plugins/store";
+import { t } from "../../lib/uiLanguage";
+
 
 const RECONCILE_DELAY_MS = 100;
 const PROBLEMS_TOAST = "config-problems";
@@ -26,9 +28,9 @@ const PROBLEMS_SHOWN = 2;
 const UNKNOWN_KEY = /^(.*?)([^\s:]+) isn't an? (.+) key \((.+)\)$/;
 
 const READ_PROBLEMS: Record<Exclude<ConfigFileRead["status"], "ok" | "missing">, string> = {
-  notFile: "isn't a regular file",
-  tooBig: "is over 1 MB",
-  unreadable: "can't be read",
+  notFile: t(`isn't a regular file`),
+  tooBig: t(`is over 1 MB`),
+  unreadable: t(`can't be read`),
 };
 
 type ThemeParts = { roles: ThemeRoles | null; look: LookBlocks | null };
@@ -170,7 +172,7 @@ function groupedUnknownKeys(lines: readonly string[]): string[] {
 export function problemsToast(problems: readonly string[]): { title: string; message: string } {
   const files = new Set(problems.map(fileOf));
   const file = files.size === 1 ? [...files][0]! : "";
-  const count = problems.length === 1 ? "a problem" : `${problems.length} problems`;
+  const count = problems.length === 1 ? t(`a problem`) : `${problems.length} problems`;
   const title = file ? `${file} has ${count}` : `Your config files have ${count}`;
   const lines = groupedUnknownKeys(problems.map((problem) => (file ? problem.slice(file.length + 2) : problem)));
   const rest = lines.length - PROBLEMS_SHOWN;
@@ -196,7 +198,7 @@ function showProblems() {
   for (const id of showing) if (id !== windowId) hideKeyedToast(id, PROBLEMS_TOAST);
   if (!occupant) noteConfigProblemToastShown();
   const { title, message } = problemsToast([...reported]);
-  showToast(windowId, title, message, { icon: "exclamationmark.triangle", key: PROBLEMS_TOAST, sticky: true, action: { title: "Dismiss", run: noteConfigProblemToastDismissed } });
+  showToast(windowId, title, message, { icon: "exclamationmark.triangle", key: PROBLEMS_TOAST, sticky: true, action: { title: t(`Dismiss`), run: noteConfigProblemToastDismissed } });
 }
 
 function toastsChanged(next: ReturnType<typeof useToasts.getState>, previous: ReturnType<typeof useToasts.getState>) {
@@ -226,7 +228,7 @@ function watchNames() {
   if (theme.name === watching) return;
   watching = theme.name;
   const consent = consentToken();
-  watchConfigFiles(["config.json", "hooks.json", ...(theme.name && !parsePluginThemeKey(theme.name) ? [themeFile(theme.name)] : [])]).then(changed, (error: unknown) => warnFor(consent, "[config] couldn't watch the config folder", error));
+  watchConfigFiles(["config.json", "hooks.json", ...(theme.name && !parsePluginThemeKey(theme.name) ? [themeFile(theme.name)] : [])]).then(changed, (error: unknown) => warnFor(consent, t(`[config] couldn't watch the config folder`), error));
 }
 
 export function reconcileConfig(launch = true) {
@@ -251,7 +253,7 @@ function writeSchemas() {
   if (!defaults) return;
   schemas ??= schemaFiles(defaults);
   const consent = consentToken();
-  writeConfigSchemas(schemas).catch((error: unknown) => warnFor(consent, "[config] couldn't write the schemas", error));
+  writeConfigSchemas(schemas).catch((error: unknown) => warnFor(consent, t(`[config] couldn't write the schemas`), error));
 }
 
 function changed() {

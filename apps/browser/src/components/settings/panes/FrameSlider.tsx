@@ -6,6 +6,8 @@ import { useSettings } from "../../../state/browser/hooks";
 import { updateSettings } from "../../../state/settings/actions";
 import { useBasePalette } from "../../../state/config/basePalette";
 import { TAB_CORNERS, tabCornersControl } from "../../../lib/tabCorners";
+import { t } from "../../../lib/uiLanguage";
+
 
 const FRAME_SLIDER_WIDTH = 160;
 const FRAME_VALUE_WIDTH = 36;
@@ -31,7 +33,7 @@ export function TabCornersSlider() {
   const control = tabCornersControl(inForce, chosen);
   return (
     <FrameSlider position={control.position} tooltip={`${inForce} pt`} label={control.label} onChange={(v) => updateSettings({ tabCornerRadius: Math.round(v * TAB_CORNERS.max) })}>
-      {control.followsTheme ? null : <Button variant="icon" icon="arrow.uturn.backward" size="m" onPress={() => updateSettings({ tabCornerRadius: null })} tooltip="Follow the Theme" />}
+      {control.followsTheme ? null : <Button variant="icon" icon="arrow.uturn.backward" size="m" onPress={() => updateSettings({ tabCornerRadius: null })} tooltip={t(`Follow the Theme`)} />}
     </FrameSlider>
   );
 }

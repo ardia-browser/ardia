@@ -24,61 +24,63 @@ import { useSidebarHighContrast } from "../../../state/sidebar/textLook";
 import { perLook } from "../../ui/tokens";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import type { SettingsPlace } from "../../../state/settings/settingsWindows";
+import { t } from "../../../lib/uiLanguage";
 
-const ADDRESS_BAR_IN_MENU = PLATFORM_FEATURES.menuBar ? "Also in View › Show Address Bar in Sidebar." : "";
+
+const ADDRESS_BAR_IN_MENU = PLATFORM_FEATURES.menuBar ? t(`Also in View › Show Address Bar in Sidebar.`) : "";
 
 const MODES: { value: Settings["appearance"]; title: string; description: string }[] = [
-  { value: "auto", title: "Automatic", description: "Follow the system appearance setting" },
-  { value: "light", title: "Light", description: "Use the light application appearance" },
-  { value: "dark", title: "Dark", description: "Use the dark application appearance" },
+  { value: "auto", title: t(`Automatic`), description: t(`Follow the system appearance setting`) },
+  { value: "light", title: t(`Light`), description: t(`Use the light application appearance`) },
+  { value: "dark", title: t(`Dark`), description: t(`Use the dark application appearance`) },
 ];
 
 const STYLES: { value: Settings["interfaceStyle"]; title: string }[] = [
-  { value: "glass", title: "Glass" },
-  { value: "classic", title: "Classic" },
+  { value: "glass", title: t(`Glass`) },
+  { value: "classic", title: t(`Classic`) },
 ];
 
 const GLOWS: Option<Settings["selectedTabGlow"]>[] = [
-  { value: "full", title: "Full" },
-  { value: "soft", title: "Soft" },
-  { value: "off", title: "Off" },
+  { value: "full", title: t(`Full`) },
+  { value: "soft", title: t(`Soft`) },
+  { value: "off", title: t(`Off`) },
 ];
 
 const SELECTED_TOP_APP: Option<Settings["selectedTopApp"]>[] = [
-  { value: "ring", title: "Ring" },
-  { value: "fill", title: "Fill only" },
-  { value: "outline", title: "Outline only" },
+  { value: "ring", title: t(`Ring`) },
+  { value: "fill", title: t(`Fill only`) },
+  { value: "outline", title: t(`Outline only`) },
 ];
 
 const SIDEBAR_TEXT_SIZES: Option<Settings["sidebarTextSize"]>[] = [
-  { value: "default", title: "Default" },
-  { value: "large", title: "Large" },
-  { value: "larger", title: "Larger" },
+  { value: "default", title: t(`Default`) },
+  { value: "large", title: t(`Large`) },
+  { value: "larger", title: t(`Larger`) },
 ];
 
 const ADDRESS_BAR: { value: Settings["addressBar"]; title: string; caption: string }[] = [
-  { value: "toolbar", title: "In the toolbar", caption: "Above the page, with its buttons." },
-  { value: "sidebar", title: "In the sidebar", caption: "Above your tabs; the page gets more room." },
+  { value: "toolbar", title: t(`In the toolbar`), caption: t(`Above the page, with its buttons.`) },
+  { value: "sidebar", title: t(`In the sidebar`), caption: t(`Above your tabs; the page gets more room.`) },
 ];
 
 type CommandBarPlace = "field" | "centred";
 
 const COMMAND_BAR_PLACES: { value: CommandBarPlace; title: string; caption: string }[] = [
-  { value: "field", title: "At the address", caption: "Opens where the address is, like Chrome." },
-  { value: "centred", title: "In the center", caption: "Floats over the page, like Arc." },
+  { value: "field", title: t(`At the address`), caption: t(`Opens where the address is, like Chrome.`) },
+  { value: "centred", title: t(`In the center`), caption: t(`Floats over the page, like Arc.`) },
 ];
 
 const ADDRESS_BAR_BUTTONS: Option<Settings["addressBarButtons"]>[] = [
-  { value: "hover", title: "Show on hover" },
-  { value: "always", title: "Always show" },
+  { value: "hover", title: t(`Show on hover`) },
+  { value: "always", title: t(`Always show`) },
 ];
 
 type FullScreenFrame = "keep" | "remove" | "tabsHidden";
 
 const FULL_SCREEN_FRAME: Option<FullScreenFrame>[] = [
-  { value: "keep", title: "Keep frame" },
-  { value: "remove", title: "Remove" },
-  { value: "tabsHidden", title: "Remove when tabs are hidden" },
+  { value: "keep", title: t(`Keep frame`) },
+  { value: "remove", title: t(`Remove`) },
+  { value: "tabsHidden", title: t(`Remove when tabs are hidden`) },
 ];
 
 const FULL_SCREEN_PATCH: Record<FullScreenFrame, Pick<Settings, "pageFrameZeroInFullScreen" | "pageFrameZeroWhenTabsHidden">> = {
@@ -107,7 +109,7 @@ function LookSection() {
   const topApp = useSettings((s) => s.selectedTopApp);
   return (
     <>
-      <SectionHeader title="Look" />
+      <SectionHeader title={t(`Look`)} />
       <Box gap="xl">
         <Anchor id="appearance.theme" shape="card">
           <FormField label={setting("appearance.theme").title}>
@@ -154,7 +156,7 @@ function GlassTintRow({ anchor }: { anchor: SettingId }) {
       <FrameSlider
         position={shown}
         tooltip={`${percent} %`}
-        label={percent === 0 ? "Off" : `${percent} %`}
+        label={percent === 0 ? t(`Off`) : `${percent} %`}
         onChange={(v) => {
           const next = Math.round(v * 100) / 100;
           updateSettings(next === 0 ? { glassTintWithTheme: false } : { glassTintWithTheme: true, glassTintAmount: next });
@@ -169,7 +171,7 @@ function SizeAndTextSection() {
   const highContrast = useSidebarHighContrast();
   return (
     <>
-      <SectionHeader title="Size and text" />
+      <SectionHeader title={t(`Size and text`)} />
       <Group>
         <Row anchor="appearance.interfaceScale">
           <InterfaceSizeControl />
@@ -178,7 +180,7 @@ function SizeAndTextSection() {
           <PopUp value={size} options={SIDEBAR_TEXT_SIZES} onChange={(v) => updateSettings({ sidebarTextSize: v })} minWidth={120} />
         </Row>
         <Row anchor="appearance.sidebarTextContrast">
-          <Toggle value={highContrast} accessibilityLabel="Higher contrast sidebar text" onChange={(on) => updateSettings({ sidebarTextContrast: on ? "high" : "standard" })} />
+          <Toggle value={highContrast} accessibilityLabel={t(`Higher contrast sidebar text`)} onChange={(on) => updateSettings({ sidebarTextContrast: on ? "high" : "standard" })} />
         </Row>
       </Group>
     </>
@@ -196,7 +198,7 @@ function ToolbarSection() {
   const fieldIn = addressBar === "sidebar" && !addressBarFixed ? "sidebar" : "toolbar";
   return (
     <>
-      <SectionHeader title="Toolbar" />
+      <SectionHeader title={t(`Toolbar`)} />
       <Box gap="xl">
         <Anchor id="appearance.addressBar" shape="card">
           <FormField label={setting("appearance.addressBar").title}>
@@ -260,13 +262,13 @@ function PageFrameSection() {
   const shown = borderless ? 0 : frame;
   return (
     <>
-      <SectionHeader title="Page frame" />
+      <SectionHeader title={t(`Page frame`)} />
       <Group>
         <Row anchor="appearance.pageFrame">
           <FrameSlider
             position={shown / PAGE_FRAME.max}
             tooltip={`${shown} pt`}
-            label={shown === 0 ? "None" : `${shown} pt`}
+            label={shown === 0 ? t(`None`) : `${shown} pt`}
             onChange={(v) => {
               const next = Math.round(v * PAGE_FRAME.max);
               updateSettings(next === 0 ? { borderlessMode: true } : { borderlessMode: false, pageFrame: next });

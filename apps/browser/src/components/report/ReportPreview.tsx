@@ -6,6 +6,8 @@ import { Box, Button, DialogActions, DialogTitle, radius, space, Text, useTheme 
 import { monoFace } from "../ui/tokens";
 import { REPORT } from "./tokens";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
+import { t } from "../../lib/uiLanguage";
+
 
 export function ReportPreview() {
   const theme = useTheme();
@@ -50,7 +52,7 @@ export function ReportPreview() {
         </ScrollView>
       </View>
       <DialogActions>
-        <Button title="Back" onPress={() => setPreview(false)} />
+        <Button title={t(`Back`)} onPress={() => setPreview(false)} />
       </DialogActions>
     </>
   );

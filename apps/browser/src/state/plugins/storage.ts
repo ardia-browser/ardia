@@ -1,5 +1,7 @@
 import { isFields } from "../../lib/decode";
 import { readStorageText, writeStorageText } from "./hostIo";
+import { t } from "../../lib/uiLanguage";
+
 
 export const MAX_STORAGE_BYTES = 2 * 1024 * 1024;
 export const STORAGE_LIMITS = { key: 128, keys: 1000, valueBytes: 256 * 1024, totalBytes: MAX_STORAGE_BYTES } as const;
@@ -17,7 +19,7 @@ const generations = new Map<string, number>();
 const epochs = new Map<string, number>();
 const closed = new Set<string>();
 
-const CLOSED_MESSAGE = "The plugin is being removed, so its storage is closed.";
+const CLOSED_MESSAGE = t(`The plugin is being removed, so its storage is closed.`);
 
 const bytes = (text: string) => new TextEncoder().encode(text).length;
 const fail = <T,>(code: "bad_request" | "failed", message: string): StorageOutcome<T> => ({ ok: false, code, message });
@@ -39,9 +41,9 @@ function queued<T>(name: string, work: (epoch: number) => Promise<StorageOutcome
 function parsedStorage(text: string): Loaded {
   try {
     const parsed: unknown = JSON.parse(text);
-    return isFields(parsed) ? { ok: true, data: parsed } : { ok: false, message: "The plugin's storage file isn't a JSON object, so Ardia leaves it alone." };
+    return isFields(parsed) ? { ok: true, data: parsed } : { ok: false, message: t(`The plugin's storage file isn't a JSON object, so Ardia leaves it alone.`) };
   } catch {
-    return { ok: false, message: "The plugin's storage file isn't valid JSON, so Ardia leaves it alone." };
+    return { ok: false, message: t(`The plugin's storage file isn't valid JSON, so Ardia leaves it alone.`) };
   }
 }
 
@@ -80,7 +82,7 @@ async function save(name: string, next: Data, epoch: number): Promise<StorageOut
   if (!isOpen(name, epoch)) return cancelled();
   const generation = generations.get(name) ?? 0;
   const written = await writeStorageText(name, text);
-  if (!written.ok) return fail("failed", written.reason ?? "The plugin's storage couldn't be saved.");
+  if (!written.ok) return fail("failed", written.reason ?? t(`The plugin's storage couldn't be saved.`));
   if ((generations.get(name) ?? 0) === generation) loaded.set(name, next);
   return { ok: true, value: true };
 }
@@ -93,7 +95,7 @@ export function storageSet(name: string, key: unknown, value: unknown): Promise<
   } catch {
     text = undefined;
   }
-  if (text === undefined) return Promise.resolve(fail("bad_request", "value must be JSON."));
+  if (text === undefined) return Promise.resolve(fail("bad_request", t(`value must be JSON.`)));
   if (bytes(text) > STORAGE_LIMITS.valueBytes) return Promise.resolve(fail("bad_request", `value is over ${STORAGE_LIMITS.valueBytes / 1024} KB.`));
   const copy = JSON.parse(text) as unknown;
   return withData(name, (data, epoch) => {

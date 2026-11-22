@@ -5,12 +5,14 @@ import { backgroundInstance } from "../app/appSettings";
 import { useBrowser } from "../browser/store";
 import { isUtilityWindowId } from "../settings/settingsWindows";
 import { isWindowClosing } from "./closingWindows";
+import { t } from "../../lib/uiLanguage";
+
 
 export const QUIT_WARNING = {
-  title: "Are you sure you want to quit Ardia?",
-  message: "Your windows and tabs will be restored the next time you open it.",
-  confirmTitle: "Quit",
-  suppression: "Don’t ask again",
+  title: t(`Are you sure you want to quit Ardia?`),
+  message: t(`Your windows and tabs will be restored the next time you open it.`),
+  confirmTitle: t(`Quit`),
+  suppression: t(`Don’t ask again`),
 } as const;
 
 export type QuitWarning = "notAsked" | "confirmed" | "cancelled";

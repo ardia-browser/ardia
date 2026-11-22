@@ -12,6 +12,8 @@ import { menuMotion } from "./motion";
 import { Portal, usePortalLeaving, usePortalLeft } from "./Overlay";
 import { actionSheetInk, actionSheetLook, ink, materialDialogInk, materialDialogLook, shape, smoothCorners } from "./tokens";
 import { useTheme } from "./theme";
+import { t } from "../../lib/uiLanguage";
+
 
 export type SheetAction = { title: string; destructive?: boolean; onPress: () => void };
 
@@ -66,7 +68,7 @@ function useSheetFade(leaving: boolean, reduceMotion: boolean, left: () => void)
 
 const spokenHeading = (title?: string | null, message?: string | null) => (title && message ? `${title}${/[.?!]$/.test(title) ? "" : "."} ${message}` : title || message || "");
 
-function MaterialDialogCard({ title, message, actions, cancel = "Cancel", onCancel }: Props) {
+function MaterialDialogCard({ title, message, actions, cancel = t(`Cancel`), onCancel }: Props) {
   const theme = useTheme();
   const paint = theme.dark ? materialDialogInk.dark : materialDialogInk.light;
   const reduceMotion = useReduceMotion();
@@ -124,7 +126,7 @@ function MaterialDialogCard({ title, message, actions, cancel = "Cancel", onCanc
 
 export const materialDialogWidth = (room: number) => Math.min(materialDialogLook.maxWidth, room - 2 * materialDialogLook.screenMargin);
 
-function SheetCard({ title, message, actions, cancel = "Cancel", onCancel }: Props) {
+function SheetCard({ title, message, actions, cancel = t(`Cancel`), onCancel }: Props) {
   const theme = useTheme();
   const paint = theme.dark ? actionSheetInk.dark : actionSheetInk.light;
   const reduceMotion = useReduceMotion();

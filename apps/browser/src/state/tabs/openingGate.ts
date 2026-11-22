@@ -1,3 +1,4 @@
+import { t } from "../../lib/uiLanguage";
 export type OpeningVia = "typed" | "newTab" | "link" | "external";
 export type OpeningContext = { tabId: string | null; windowId: string | null; profileId: string | null; via: OpeningVia };
 export type OpeningVerdict = { url: string } | { cancel: true } | null;
@@ -41,7 +42,7 @@ export function gateOpening(url: string, context: OpeningContext, key: string | 
   try {
     result = gate(url, context, signal);
   } catch (error) {
-    console.warn("[automation] tab.opening failed; opening as asked", error);
+    console.warn(t(`[automation] tab.opening failed; opening as asked`), error);
     result = null;
   }
   if (!(result instanceof Promise)) {

@@ -13,6 +13,8 @@ import { measureRow, type Anchor } from "../../state/sidebar/sidebarUi";
 import { OverlappingAvatars } from "./CalendarPreview";
 import { liveMotion, useLiveColors } from "./tokens";
 import { perLook } from "../ui/tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 const WIDTH = 300;
 const EDGE = space.m;
@@ -72,14 +74,14 @@ function AlertCard({ event, windowId, windowWidth }: { event: CalendarEvent; win
         <Box row gap="s" style={CENTER}>
           <View style={[DOT(), { backgroundColor: event.color }]} />
           <Text lines={1} size="caption" weight="medium" color={running ? colors.now : theme.textSecondary} style={FILL}>
-            {running ? "Now" : relativeTime(event.start, now)}
+            {running ? t(`Now`) : relativeTime(event.start, now)}
             {calendarName ? <Span style={{ fontWeight: weight.regular, color: theme.textSecondary }}> · {calendarName}</Span> : null}
           </Text>
-          <Button variant="icon" icon="xmark" size="xs" weight="semibold" onPress={() => dismiss(event)} tooltip="Ignore" style={CLOSE} />
+          <Button variant="icon" icon="xmark" size="xs" weight="semibold" onPress={() => dismiss(event)} tooltip={t(`Ignore`)} style={CLOSE} />
         </Box>
         <Box gap="xxs">
           <Text lines={2} size="title" weight="semibold" style={TITLE()}>
-            {event.title || "Untitled event"}
+            {event.title || t(`Untitled event`)}
           </Text>
           <Text size="small" tone="textSecondary">
             {timeRange(event)}
@@ -100,7 +102,7 @@ function AlertCard({ event, windowId, windowWidth }: { event: CalendarEvent; win
             <Button
               variant="pill"
               tone="chip"
-              title="View Event"
+              title={t(`View Event`)}
               icon="calendar"
               size="l"
               onPress={() => {
@@ -111,7 +113,7 @@ function AlertCard({ event, windowId, windowWidth }: { event: CalendarEvent; win
           ) : null}
           {link && related.length ? (
             <View tooltip={`Opens ${related.length === 1 ? "1 link" : `${related.length} links`} from the invitation, then joins`}>
-              <Button variant="pill" tone="chip" title="Open All and Join" icon="square.stack" size="l" onPress={() => joinEvent(event, true, windowId)} />
+              <Button variant="pill" tone="chip" title={t(`Open All and Join`)} icon="square.stack" size="l" onPress={() => joinEvent(event, true, windowId)} />
             </View>
           ) : null}
         </Box>

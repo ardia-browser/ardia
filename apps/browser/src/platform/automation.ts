@@ -1,9 +1,11 @@
 import { nativeModule, type ControlRequest, type ControlSocketStatus } from "@ardia/shell";
+import { t } from "../lib/uiLanguage";
+
 
 export type { ControlRequest, ControlSocketStatus };
 
-let bound: ReturnType<typeof nativeModule<"ArdiaAutomation">> | null = null;
-const Automation = () => (bound ??= nativeModule("ArdiaAutomation"));
+let bound: ReturnType<typeof nativeModule<t(`ArdiaAutomation`)>> | null = null;
+const Automation = () => (bound ??= nativeModule(t(`ArdiaAutomation`)));
 
 export const startControlSocket = () => Automation().start();
 export const stopControlSocket = () => Automation().stop();

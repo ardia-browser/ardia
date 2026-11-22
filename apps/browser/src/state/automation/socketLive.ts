@@ -11,6 +11,8 @@ import { PAGE_BYTE_BUDGET } from "./socketWire";
 import { expect, now, page, profileArg, windowOrFocused } from "./socketTargets";
 import { OpError } from "./workspaceTargets";
 import { programControlOn } from "../app/programControlSetting";
+import { t } from "../../lib/uiLanguage";
+
 
 const KINDS = ["pullRequests", "documents"] as const satisfies readonly LiveFolderKind[];
 const SOURCES_OF: Record<LiveFolderKind, readonly LiveSourceId[]> = { pullRequests: ["github", "bitbucket"], documents: ["notion", "confluence", "gdrive"] };
@@ -107,7 +109,7 @@ function create(params: Record<string, unknown>) {
   const name = params.name !== undefined ? nameOf(params.name) : undefined;
   const sources = sourcesFor(kind, params.sources);
   const folderId = newProfileLiveFolder(profile, kind, sources, { name, allowed: controlStillOn });
-  expect(!!live().folders[folderId], "the live folder wasn't made.");
+  expect(!!live().folders[folderId], t(`the live folder wasn't made.`));
   return folderRow(live().folders[folderId]!);
 }
 
@@ -129,7 +131,7 @@ function update(params: Record<string, unknown>, call: SocketCall) {
   if (params.color !== undefined) patch.color = params.color as GroupColor | null;
   if (params.filters !== undefined) patch.filters = { ...folder.filters, ...(params.filters as Partial<LiveFolder["filters"]>) };
   if (params.sources !== undefined) patch.sources = sourcesFor(folder.kind, params.sources);
-  if (!Object.keys(patch).length) throw new OpError("bad_request", "live.update needs something to change.");
+  if (!Object.keys(patch).length) throw new OpError("bad_request", t(`live.update needs something to change.`));
   updateFolder(folder.id, patch);
   if (patch.filters || patch.sources) void refreshFolderWhile(folder.id, false, controlStillOn);
   return folderRow(live().folders[folder.id]!);
@@ -138,7 +140,7 @@ function update(params: Record<string, unknown>, call: SocketCall) {
 async function refresh(params: Record<string, unknown>, call: SocketCall) {
   const folder = folderOf(params.folder);
   await manualRefresh(folder.id, call.serving);
-  if (!call.serving()) throw new OpError("failed", "Control was turned off during the refresh. The folder's hidden items were already shown again; nothing else changed.");
+  if (!call.serving()) throw new OpError("failed", t(`Control was turned off during the refresh. The folder's hidden items were already shown again; nothing else changed.`));
   return folderRow(live().folders[folder.id] ?? folder);
 }
 
@@ -154,8 +156,8 @@ function hide(params: Record<string, unknown>) {
 
 function setRepo(params: Record<string, unknown>, call: SocketCall) {
   const folder = folderOf(params.folder);
-  if (folder.kind !== "pullRequests") throw new OpError("bad_request", "Only pull request folders filter by repository.");
-  if (!/^[a-z]+:[^\s]+$/.test(params.repo as string)) throw new OpError("bad_request", "repo is source:owner/name, like github:ardia-browser/ardia.");
+  if (folder.kind !== "pullRequests") throw new OpError("bad_request", t(`Only pull request folders filter by repository.`));
+  if (!/^[a-z]+:[^\s]+$/.test(params.repo as string)) throw new OpError("bad_request", t(`repo is source:owner/name, like github:ardia-browser/ardia.`));
   setRepoHidden(folder.id, params.repo as string, params.hidden as boolean);
   if (!params.hidden) void refreshFolderWhile(folder.id, false, call.serving);
   return folderRow(live().folders[folder.id]!);
@@ -167,14 +169,14 @@ function open(params: Record<string, unknown>) {
   const item = [...(l.items[folder.id] ?? []), ...(l.hidden[folder.id] ?? []), ...(l.completed[folder.id] ?? []).map((c) => c.item)].find((it) => it.id === params.item);
   if (!item) throw new OpError("no_window", `There's no item ${String(params.item)} in that folder.`);
   const w = windowOrFocused(params.window);
-  if (w.profileId !== folder.profileId) throw new OpError("bad_request", "That window shows another profile than the folder's.");
+  if (w.profileId !== folder.profileId) throw new OpError("bad_request", t(`That window shows another profile than the folder's.`));
   const tab = openLiveItem(w.id, folder.id, item, { background: params.background === true });
-  expect(!!now().tabs[tab], "the tab didn't open.");
+  expect(!!now().tabs[tab], t(`the tab didn't open.`));
   return { tab, window: w.id };
 }
 
-const FOLDER = id("A live folder id from live.list");
-const ROW = "{id, profile, kind, name, sources, filters, status, items, unread, hidden, …}";
+const FOLDER = id(t(`A live folder id from live.list`));
+const ROW = t(`{id, profile, kind, name, sources, filters, status, items, unread, hidden, …}`);
 const withFolder = (run: (folderId: string) => void) => (params: Record<string, unknown>) => {
   const folder = folderOf(params.folder);
   run(folder.id);
@@ -182,60 +184,60 @@ const withFolder = (run: (folderId: string) => void) => (params: Record<string, 
 };
 
 export const LIVE_METHODS: MethodSpec[] = [
-  { name: "live.list", mutates: false, description: "Live folders (pull requests, documents) with their status and counts, and the connected accounts", params: obj({ profile: { ...PROFILE, description: "Only this profile's folders; every profile's when left out" } }), result: `{folders: [${ROW}], accounts}`, run: list },
+  { name: "live.list", mutates: false, description: t(`Live folders (pull requests, documents) with their status and counts, and the connected accounts`), params: obj({ profile: { ...PROFILE, description: t(`Only this profile's folders; every profile's when left out`) } }), result: `{folders: [${ROW}], accounts}`, run: list },
   {
     name: "live.items",
     mutates: false,
-    description: "A live folder's items, a page at a time: listed, then hidden, then recently completed, each with whether it's unread",
+    description: t(`A live folder's items, a page at a time: listed, then hidden, then recently completed, each with whether it's unread`),
     params: obj({ folder: FOLDER, ...PAGE }, ["folder"]),
-    result: "{items: [{item, shown, unread, completed}], total, nextOffset}",
+    result: t(`{items: [{item, shown, unread, completed}], total, nextOffset}`),
     run: items,
   },
   {
     name: "live.create",
     mutates: true,
-    description: "Make a live folder in a profile's sidebar; it fetches at once",
-    params: obj({ profile: PROFILE, kind: oneOf(KINDS, "pullRequests or documents"), sources: { type: "array", items: oneOf(ALL_SOURCES, "A connected source"), minItems: 1, maxItems: 3, description: "Connected sources; all connected ones of its kind when left out, refused when none is" }, name: text("Its name") }, ["kind"]),
+    description: t(`Make a live folder in a profile's sidebar; it fetches at once`),
+    params: obj({ profile: PROFILE, kind: oneOf(KINDS, t(`pullRequests or documents`)), sources: { type: "array", items: oneOf(ALL_SOURCES, t(`A connected source`)), minItems: 1, maxItems: 3, description: t(`Connected sources; all connected ones of its kind when left out, refused when none is`) }, name: text(t(`Its name`)) }, ["kind"]),
     result: ROW,
     run: create,
   },
   {
     name: "live.update",
     mutates: true,
-    description: "Rename a live folder or change its icon, colour, sources, filters and options",
+    description: t(`Rename a live folder or change its icon, colour, sources, filters and options`),
     params: obj({
       folder: FOLDER,
-      name: text("Its name"),
-      icon: { type: ["string", "null"], description: "An SF Symbol name or emoji; null for the default" },
-      color: { type: ["string", "null"], enum: [...COLORS, null], description: "Its colour; null for the default" },
-      collapsed: bool("Folded in the sidebar"),
-      sources: { type: "array", items: oneOf(ALL_SOURCES, "A connected source"), minItems: 1, maxItems: 3, description: "Connected sources of its kind" },
-      filters: obj({ authored: bool("Pull requests you opened"), reviewRequests: bool("Reviews asked of you") }),
-      groupStacks: bool("Group stacked pull requests"),
-      showCompleted: bool("Show merged, closed and reviewed items for a while"),
+      name: text(t(`Its name`)),
+      icon: { type: ["string", "null"], description: t(`An SF Symbol name or emoji; null for the default`) },
+      color: { type: ["string", "null"], enum: [...COLORS, null], description: t(`Its colour; null for the default`) },
+      collapsed: bool(t(`Folded in the sidebar`)),
+      sources: { type: "array", items: oneOf(ALL_SOURCES, t(`A connected source`)), minItems: 1, maxItems: 3, description: t(`Connected sources of its kind`) },
+      filters: obj({ authored: bool(t(`Pull requests you opened`)), reviewRequests: bool(t(`Reviews asked of you`)) }),
+      groupStacks: bool(t(`Group stacked pull requests`)),
+      showCompleted: bool(t(`Show merged, closed and reviewed items for a while`)),
     }, ["folder"]),
     result: ROW,
     run: update,
   },
-  { name: "live.remove", mutates: true, description: "Delete a live folder and close the tabs opened from it", params: obj({ folder: FOLDER }, ["folder"]), result: "{ok}", run: (p) => (deleteLiveFolder(folderOf(p.folder).id), { ok: true }) },
-  { name: "live.refresh", mutates: true, description: "Fetch a live folder now, bringing back the items hidden in it", params: obj({ folder: FOLDER }, ["folder"]), result: ROW, run: refresh },
-  { name: "live.hide", mutates: true, description: "Hide items from a live folder until it's refreshed by hand", params: obj({ folder: FOLDER, items: ids("Item ids from live.items", 200) }, ["folder", "items"]), result: ROW, run: hide },
-  { name: "live.unhide", mutates: true, description: "Show a live folder's hidden items again", params: obj({ folder: FOLDER }, ["folder"]), result: ROW, run: withFolder(unhide) },
+  { name: "live.remove", mutates: true, description: t(`Delete a live folder and close the tabs opened from it`), params: obj({ folder: FOLDER }, ["folder"]), result: "{ok}", run: (p) => (deleteLiveFolder(folderOf(p.folder).id), { ok: true }) },
+  { name: "live.refresh", mutates: true, description: t(`Fetch a live folder now, bringing back the items hidden in it`), params: obj({ folder: FOLDER }, ["folder"]), result: ROW, run: refresh },
+  { name: "live.hide", mutates: true, description: t(`Hide items from a live folder until it's refreshed by hand`), params: obj({ folder: FOLDER, items: ids(t(`Item ids from live.items`), 200) }, ["folder", "items"]), result: ROW, run: hide },
+  { name: "live.unhide", mutates: true, description: t(`Show a live folder's hidden items again`), params: obj({ folder: FOLDER }, ["folder"]), result: ROW, run: withFolder(unhide) },
   {
     name: "live.markRead",
     mutates: true,
-    description: "Mark a live folder's items read; all of them when items is left out",
-    params: obj({ folder: FOLDER, items: ids("Item ids from live.items", 200) }, ["folder"]),
+    description: t(`Mark a live folder's items read; all of them when items is left out`),
+    params: obj({ folder: FOLDER, items: ids(t(`Item ids from live.items`), 200) }, ["folder"]),
     result: ROW,
     run: (p) => withFolder((f) => markRead(f, p.items as string[] | undefined))(p),
   },
-  { name: "live.setRepoHidden", mutates: true, description: "Hide or show a repository's pull requests in a folder", params: obj({ folder: FOLDER, repo: text("source:owner/name, like github:ardia-browser/ardia"), hidden: bool("Hidden") }, ["folder", "repo", "hidden"]), result: ROW, run: setRepo },
+  { name: "live.setRepoHidden", mutates: true, description: t(`Hide or show a repository's pull requests in a folder`), params: obj({ folder: FOLDER, repo: text(t(`source:owner/name, like github:ardia-browser/ardia`)), hidden: bool(t(`Hidden`)) }, ["folder", "repo", "hidden"]), result: ROW, run: setRepo },
   {
     name: "live.open",
     mutates: true,
-    description: "Open a live folder's item as a tab in a window showing its profile",
-    params: obj({ folder: FOLDER, item: id("An item id from live.items"), window: { ...WINDOW, description: "A window id from windows; the focused one when left out" }, background: bool("Open without switching to it") }, ["folder", "item"]),
-    result: "{tab, window}",
+    description: t(`Open a live folder's item as a tab in a window showing its profile`),
+    params: obj({ folder: FOLDER, item: id(t(`An item id from live.items`)), window: { ...WINDOW, description: t(`A window id from windows; the focused one when left out`) }, background: bool(t(`Open without switching to it`)) }, ["folder", "item"]),
+    result: t(`{tab, window}`),
     run: open,
   },
 ];

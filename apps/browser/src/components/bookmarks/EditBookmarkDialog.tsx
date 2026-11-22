@@ -8,6 +8,8 @@ import { FormField } from "../settings/Form";
 import { closeBookmarkEditor, useBookmarkEditor, type EditorState } from "../../state/bookmarks/edit";
 import { bookmarkUrlFrom } from "../../state/bookmarks/bookmarklets";
 import { FolderPicker } from "./DialogParts";
+import { t } from "../../lib/uiLanguage";
+
 
 export function EditBookmarkDialog() {
   const windowId = useWindowId();
@@ -40,27 +42,27 @@ function Sheet({ state }: { state: EditorState }) {
     close();
   };
 
-  const heading = state.folder ? (node ? "Rename Folder" : "New Folder") : node ? "Edit Bookmark" : "Add Bookmark";
+  const heading = state.folder ? (node ? t(`Rename Folder`) : t(`New Folder`)) : node ? t(`Edit Bookmark`) : t(`Add Bookmark`);
 
   return (
     <Dialog width="s" pad="xl" onDismiss={close}>
       <DialogTitle>{heading}</DialogTitle>
-      <FormField label="Name">
+      <FormField label={t(`Name`)}>
         <TextField value={title} onChangeText={setTitle} autoFocus selectOnFocus onSubmit={save} onEscape={close} />
       </FormField>
       {!state.folder && (
-        <FormField label="URL">
+        <FormField label={t(`URL`)}>
           <TextField value={url} onChangeText={setUrl} placeholder="https://" onSubmit={save} onEscape={close} />
         </FormField>
       )}
       {(!state.folder || !node) && (
-        <FormField label="Folder">
+        <FormField label={t(`Folder`)}>
           <FolderPicker profileId={state.profileId} selectedId={parentId} onSelect={setParentId} />
         </FormField>
       )}
       <DialogActions>
-        <Button title="Cancel" onPress={close} />
-        <Button title="Save" kind="primary" disabled={!valid} onPress={save} />
+        <Button title={t(`Cancel`)} onPress={close} />
+        <Button title={t(`Save`)} kind="primary" disabled={!valid} onPress={save} />
       </DialogActions>
     </Dialog>
   );

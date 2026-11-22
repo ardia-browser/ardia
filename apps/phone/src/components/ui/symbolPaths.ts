@@ -1,4 +1,6 @@
 import { incognitoEyesLidded } from "./IncognitoEyes";
+import { t } from "../../lib/uiLanguage";
+
 
 export type SymbolLayer = { d: string; stroke?: number; fill?: boolean; evenOdd?: boolean; rotate?: number; scale?: number; shift?: number };
 
@@ -38,16 +40,16 @@ function roundRect(x: number, y: number, width: number, height: number, r: numbe
   );
 }
 
-const DOCUMENT = "M13.5 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V8.5z";
-const DOCUMENT_FOLD = "M13.5 3v3.5a2 2 0 0 0 2 2H19";
+const DOCUMENT = t(`M13.5 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V8.5z`);
+const DOCUMENT_FOLD = t(`M13.5 3v3.5a2 2 0 0 0 2 2H19`);
 const HAND =
-  "M8 13V6.5a1.5 1.5 0 0 1 3 0V12" +
-  "M11 11V5a1.5 1.5 0 0 1 3 0v6" +
-  "M14 11V6.5a1.5 1.5 0 0 1 3 0V14a7 7 0 0 1-7 7h-.5a6 6 0 0 1-4.6-2.2L3.2 15a1.5 1.5 0 0 1 2.3-1.9L8 15.5";
+  t(`M8 13V6.5a1.5 1.5 0 0 1 3 0V12`) +
+  t(`M11 11V5a1.5 1.5 0 0 1 3 0v6`) +
+  t(`M14 11V6.5a1.5 1.5 0 0 1 3 0V14a7 7 0 0 1-7 7h-.5a6 6 0 0 1-4.6-2.2L3.2 15a1.5 1.5 0 0 1 2.3-1.9L8 15.5`);
 
 const POINTING = { turn: -35, x: 1.328, y: 0.212 } as const;
 
-const SHIELD = "M12 2.8l7.5 2.9v5.6c0 4.8-3.1 8.6-7.5 10-4.4-1.4-7.5-5.2-7.5-10V5.7z";
+const SHIELD = t(`M12 2.8l7.5 2.9v5.6c0 4.8-3.1 8.6-7.5 10-4.4-1.4-7.5-5.2-7.5-10V5.7z`);
 
 function sparkle(cx: number, cy: number, r: number): string {
   const k = r * 0.28;
@@ -82,13 +84,13 @@ export const SYMBOLS = {
   xmark: [{ d: line(6.5, 6.5, 17.5, 17.5) + line(17.5, 6.5, 6.5, 17.5), stroke: BOLD }],
   chevronUp: [{ d: polyline(5.5, 15.5, 12, 9, 18.5, 15.5), stroke: BOLD }],
   checkmark: [{ d: polyline(5, 12.5, 9.8, 17.3, 19, 6.6), stroke: BOLD }],
-  arrowUturnBackward: [{ d: polyline(8.5, 13.5, 3.5, 8.5, 8.5, 3.5) + "M3.5 8.5H14a6 6 0 0 1 0 12H10.5", stroke: STROKE }],
+  arrowUturnBackward: [{ d: polyline(8.5, 13.5, 3.5, 8.5, 8.5, 3.5) + t(`M3.5 8.5H14a6 6 0 0 1 0 12H10.5`), stroke: STROKE }],
   trash: [
     {
       d:
         line(4, 6.5, 20, 6.5) +
-        "M9.5 6.5V4.8a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.7" +
-        "M6 6.5l1 13a2 2 0 0 0 2 1.8h6a2 2 0 0 0 2-1.8l1-13" +
+        t(`M9.5 6.5V4.8a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.7`) +
+        t(`M6 6.5l1 13a2 2 0 0 0 2 1.8h6a2 2 0 0 0 2-1.8l1-13`) +
         line(10, 10.5, 10, 17.5) +
         line(14, 10.5, 14, 17.5),
       stroke: STROKE,
@@ -96,13 +98,13 @@ export const SYMBOLS = {
   ],
   archivebox: [
     {
-      d: roundRect(3, 3.5, 18, 5, 1.4) + "M4.5 8.5V18a2.5 2.5 0 0 0 2.5 2.5h10a2.5 2.5 0 0 0 2.5-2.5V8.5" + line(10, 12.5, 14, 12.5),
+      d: roundRect(3, 3.5, 18, 5, 1.4) + t(`M4.5 8.5V18a2.5 2.5 0 0 0 2.5 2.5h10a2.5 2.5 0 0 0 2.5-2.5V8.5`) + line(10, 12.5, 14, 12.5),
       stroke: STROKE,
     },
   ],
   squareOnSquare: [
     {
-      d: roundRect(3.5, 8, 12.5, 12.5, 2.6) + "M8 8V6.5A2.5 2.5 0 0 1 10.5 4h7A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H16",
+      d: roundRect(3.5, 8, 12.5, 12.5, 2.6) + t(`M8 8V6.5A2.5 2.5 0 0 1 10.5 4h7A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H16`),
       stroke: STROKE,
     },
   ],
@@ -114,33 +116,33 @@ export const SYMBOLS = {
   link: [{ d: roundRect(3.6, 9.2, 9.8, 5.6, 2.8) + roundRect(10.6, 9.2, 9.8, 5.6, 2.8), stroke: STROKE, rotate: -45 }],
   squareAndArrowUp: [
     {
-      d: "M8.5 9.5H7.5A2.5 2.5 0 0 0 5 12v6.5A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V12a2.5 2.5 0 0 0-2.5-2.5h-1" + line(12, 2.8, 12, 14.5) + polyline(8.6, 6.2, 12, 2.8, 15.4, 6.2),
+      d: t(`M8.5 9.5H7.5A2.5 2.5 0 0 0 5 12v6.5A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V12a2.5 2.5 0 0 0-2.5-2.5h-1`) + line(12, 2.8, 12, 14.5) + polyline(8.6, 6.2, 12, 2.8, 15.4, 6.2),
       stroke: STROKE,
     },
   ],
   docPlaintext: [{ d: DOCUMENT + DOCUMENT_FOLD + line(8.5, 10, 11.5, 10) + line(8.5, 13, 15.5, 13) + line(8.5, 16.5, 15.5, 16.5), stroke: STROKE }],
   textMagnifyingglass: [{ d: line(3, 6, 13, 6) + line(3, 10.5, 8, 10.5) + line(3, 15, 7, 15) + circle(15, 14, 4.2) + line(18.1, 17.1, 21, 20), stroke: STROKE }],
-  translate: [{ d: "M3 5h10M8 3v2M5.5 5c.8 3.6 3.2 6.4 6.5 8M11 5c-.9 3.9-3.6 7.1-7.5 9M13 21l4-10 4 10M14.4 17.5h5.2", stroke: STROKE }],
-  moon: [{ d: "M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z", stroke: STROKE }],
-  moonFill: [{ d: "M20 14.5A8.5 8.5 0 1 1 9.5 4A8 8 0 0 0 20 14.5Z", fill: true }],
+  translate: [{ d: t(`M3 5h10M8 3v2M5.5 5c.8 3.6 3.2 6.4 6.5 8M11 5c-.9 3.9-3.6 7.1-7.5 9M13 21l4-10 4 10M14.4 17.5h5.2`), stroke: STROKE }],
+  moon: [{ d: t(`M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z`), stroke: STROKE }],
+  moonFill: [{ d: t(`M20 14.5A8.5 8.5 0 1 1 9.5 4A8 8 0 0 0 20 14.5Z`), fill: true }],
   textformatSize: [
     { d: polyline(2.5, 19, 8, 5, 13.5, 19) + line(4.6, 14, 11.4, 14), stroke: STROKE },
     { d: polyline(14.2, 19, 17.6, 10.5, 21, 19) + line(15.3, 16.2, 19.9, 16.2), stroke: 1.8 },
   ],
-  desktop: [{ d: "M4 4.5h16a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 15V6A1.5 1.5 0 0 1 4 4.5zM12 16.5v3.5M8 20h8", stroke: STROKE }],
+  desktop: [{ d: t(`M4 4.5h16a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 15V6A1.5 1.5 0 0 1 4 4.5zM12 16.5v3.5M8 20h8`), stroke: STROKE }],
   handRaised: [{ d: HAND, stroke: STROKE }],
   handPointUpLeftFill: [
     { d: roundRect(9.9 - POINTING.x, 1.5 + POINTING.y, 2.7, 11, 1.35) + roundRect(9.6 - POINTING.x, 9.4 + POINTING.y, 9.8, 12, 4), fill: true, rotate: POINTING.turn },
     { d: roundRect(6.2 - POINTING.x, 12 + POINTING.y, 5, 2.5, 1.25), fill: true, rotate: POINTING.turn },
   ],
-  handRaisedSlash: [{ d: HAND + "M3 3l18 18", stroke: STROKE }],
-  plusSquareOnSquare: [{ d: "M8 3.5h10.5a2 2 0 0 1 2 2V16M5.5 7.5h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-9a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2zM10 11v6M7 14h6", stroke: STROKE }],
-  arrowDownCircle: [{ d: "M12 3a9 9 0 1 1 0 18a9 9 0 1 1 0-18zM12 7.5v8.5M8.5 12.5L12 16l3.5-3.5", stroke: STROKE }],
-  exclamationmarkTriangle: [{ d: "M12 3.5L21.5 20h-19zM12 9.5v5M12 17.3h.01", stroke: STROKE }],
-  exclamationmarkTriangleFill: [{ d: "M12 2.6L22.3 20.6H1.7Z" + roundRect(11.05, 8.6, 1.9, 6.4, 0.95) + circle(12, 17.4, 1.1), fill: true, evenOdd: true }],
-  arrowDownCircleFill: [{ d: circle(12, 12, 9.6) + "M11.05 6.6H12.95V12.6H16.1L12 17L7.9 12.6H11.05Z", fill: true, evenOdd: true }],
-  eyeglassesThin: [{ d: "M5.2 10h2.7a2.6 2.6 0 0 1 2.6 2.6v1.0a2.6 2.6 0 0 1 -2.6 2.6h-2.7a2.6 2.6 0 0 1 -2.6 -2.6v-1.0a2.6 2.6 0 0 1 2.6 -2.6zM16.1 10h2.7a2.6 2.6 0 0 1 2.6 2.6v1.0a2.6 2.6 0 0 1 -2.6 2.6h-2.7a2.6 2.6 0 0 1 -2.6 -2.6v-1.0a2.6 2.6 0 0 1 2.6 -2.6zM10.5 12.4q1.5-1.3 3 0M2.6 11.4l-1.1-1.9M21.4 11.4l1.1-1.9", stroke: 1.1 }],
-  eyeglasses: [{ d: circle(6.3, 13.5, 3.6) + circle(17.7, 13.5, 3.6) + "M9.9 13.2a2.6 2.6 0 0 1 4.2 0" + line(2.7, 13, 4.4, 7.5) + line(21.3, 13, 19.6, 7.5), stroke: STROKE }],
+  handRaisedSlash: [{ d: HAND + t(`M3 3l18 18`), stroke: STROKE }],
+  plusSquareOnSquare: [{ d: t(`M8 3.5h10.5a2 2 0 0 1 2 2V16M5.5 7.5h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-9a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2zM10 11v6M7 14h6`), stroke: STROKE }],
+  arrowDownCircle: [{ d: t(`M12 3a9 9 0 1 1 0 18a9 9 0 1 1 0-18zM12 7.5v8.5M8.5 12.5L12 16l3.5-3.5`), stroke: STROKE }],
+  exclamationmarkTriangle: [{ d: t(`M12 3.5L21.5 20h-19zM12 9.5v5M12 17.3h.01`), stroke: STROKE }],
+  exclamationmarkTriangleFill: [{ d: t(`M12 2.6L22.3 20.6H1.7Z`) + roundRect(11.05, 8.6, 1.9, 6.4, 0.95) + circle(12, 17.4, 1.1), fill: true, evenOdd: true }],
+  arrowDownCircleFill: [{ d: circle(12, 12, 9.6) + t(`M11.05 6.6H12.95V12.6H16.1L12 17L7.9 12.6H11.05Z`), fill: true, evenOdd: true }],
+  eyeglassesThin: [{ d: t(`M5.2 10h2.7a2.6 2.6 0 0 1 2.6 2.6v1.0a2.6 2.6 0 0 1 -2.6 2.6h-2.7a2.6 2.6 0 0 1 -2.6 -2.6v-1.0a2.6 2.6 0 0 1 2.6 -2.6zM16.1 10h2.7a2.6 2.6 0 0 1 2.6 2.6v1.0a2.6 2.6 0 0 1 -2.6 2.6h-2.7a2.6 2.6 0 0 1 -2.6 -2.6v-1.0a2.6 2.6 0 0 1 2.6 -2.6zM10.5 12.4q1.5-1.3 3 0M2.6 11.4l-1.1-1.9M21.4 11.4l1.1-1.9`), stroke: 1.1 }],
+  eyeglasses: [{ d: circle(6.3, 13.5, 3.6) + circle(17.7, 13.5, 3.6) + t(`M9.9 13.2a2.6 2.6 0 0 1 4.2 0`) + line(2.7, 13, 4.4, 7.5) + line(21.3, 13, 19.6, 7.5), stroke: STROKE }],
   info: [
     { d: circle(12, 6.3, 1.5), fill: true },
     { d: polyline(10, 10.5, 12.2, 10.5, 12.2, 18.7) + line(9.6, 18.7, 14.6, 18.7), stroke: 2 },
@@ -148,7 +150,7 @@ export const SYMBOLS = {
   paintpaletteFill: [
     {
       d:
-        "M12 2.5C6.8 2.5 2.5 6.6 2.5 11.7c0 5 4.1 9.3 9.2 9.3 1.4 0 2.1-.8 2.1-1.8 0-.5-.2-.9-.5-1.3-.3-.4-.5-.8-.5-1.3 0-1 .8-1.8 1.8-1.8h2.2c3 0 5.2-2.3 5.2-5.2C22 6.5 17.5 2.5 12 2.5z" +
+        t(`M12 2.5C6.8 2.5 2.5 6.6 2.5 11.7c0 5 4.1 9.3 9.2 9.3 1.4 0 2.1-.8 2.1-1.8 0-.5-.2-.9-.5-1.3-.3-.4-.5-.8-.5-1.3 0-1 .8-1.8 1.8-1.8h2.2c3 0 5.2-2.3 5.2-5.2C22 6.5 17.5 2.5 12 2.5z`) +
         circle(7.3, 11.6, 1.5) +
         circle(9.6, 7.4, 1.5) +
         circle(14.4, 7.4, 1.5) +
@@ -169,7 +171,7 @@ export const SYMBOLS = {
   ],
   eraserFill: [
     {
-      d: "M13.6 3.9a1.6 1.6 0 0 1 2.3 0l4.2 4.2a1.6 1.6 0 0 1 0 2.3L11 19.5H6.8l-3-3a1.6 1.6 0 0 1 0-2.3z" + polyline(7.76, 10.14, 14.06, 16.44, 13.14, 17.36, 6.84, 11.06) + "Z",
+      d: t(`M13.6 3.9a1.6 1.6 0 0 1 2.3 0l4.2 4.2a1.6 1.6 0 0 1 0 2.3L11 19.5H6.8l-3-3a1.6 1.6 0 0 1 0-2.3z`) + polyline(7.76, 10.14, 14.06, 16.44, 13.14, 17.36, 6.84, 11.06) + t(`Z`),
       fill: true,
       evenOdd: true,
     },
@@ -186,17 +188,17 @@ export const SYMBOLS = {
   ],
   shieldLefthalf: [
     { d: SHIELD, stroke: STROKE },
-    { d: "M12 2.8L4.5 5.7v5.6c0 4.8 3.1 8.6 7.5 10z", fill: true },
+    { d: t(`M12 2.8L4.5 5.7v5.6c0 4.8 3.1 8.6 7.5 10z`), fill: true },
   ],
   gearshape: [{ d: gear(12, 12, 9.6, 7.6, 8) + circle(12, 12, 3.1), stroke: 1.8 }],
   docText: [{ d: DOCUMENT + DOCUMENT_FOLD + line(8.5, 13, 15.5, 13) + line(8.5, 16.5, 13.5, 16.5), stroke: STROKE }],
   code: [{ d: polyline(7.5, 7, 2.5, 12, 7.5, 17) + polyline(16.5, 7, 21.5, 12, 16.5, 17) + line(14, 4.5, 10, 19.5), stroke: STROKE }],
-  handWave: [{ d: HAND + "M18.5 4.5c1.2.6 2 1.6 2.3 2.8M20 2.5c1.6.8 2.7 2.2 3 3.8", stroke: STROKE }],
+  handWave: [{ d: HAND + t(`M18.5 4.5c1.2.6 2 1.6 2.3 2.8M20 2.5c1.6.8 2.7 2.2 3 3.8`), stroke: STROKE }],
   arrowRight: [{ d: line(4, 12, 19.5, 12) + polyline(13.5, 6, 19.5, 12, 13.5, 18), stroke: STROKE }],
   arrowRightCircle: [{ d: circle(12, 12, 9.5) + line(7.5, 12, 16, 12) + polyline(12.5, 8.5, 16, 12, 12.5, 15.5), stroke: STROKE }],
   chevronLeft: [{ d: polyline(15.5, 5, 8.5, 12, 15.5, 19), stroke: BOLD }],
   chevronRight: [{ d: polyline(8.5, 5, 15.5, 12, 8.5, 19), stroke: BOLD }],
-  arrowClockwise: [{ d: "M19.5 12.5A7.5 7.5 0 1 1 15.6 5.9" + polyline(13.96, 2.25, 15.6, 5.9, 11.64, 6.45), stroke: STROKE }],
+  arrowClockwise: [{ d: t(`M19.5 12.5A7.5 7.5 0 1 1 15.6 5.9`) + polyline(13.96, 2.25, 15.6, 5.9, 11.64, 6.45), stroke: STROKE }],
   arrowUpForward: [{ d: line(6.5, 17.5, 17, 7) + polyline(8.5, 7, 17, 7, 17, 15.5), stroke: STROKE }],
   magnifyingglass: [
     { d: circle(10.5, 10.5, 6.5), stroke: STROKE },
@@ -211,11 +213,11 @@ export const SYMBOLS = {
     {
       d:
         circle(12, 12, 9) +
-        "M12 3c-2.6 2.5-3.8 5.5-3.8 9s1.2 6.5 3.8 9" +
-        "M12 3c2.6 2.5 3.8 5.5 3.8 9s-1.2 6.5-3.8 9" +
+        t(`M12 3c-2.6 2.5-3.8 5.5-3.8 9s1.2 6.5 3.8 9`) +
+        t(`M12 3c2.6 2.5 3.8 5.5 3.8 9s-1.2 6.5-3.8 9`) +
         line(3, 12, 21, 12) +
-        "M4.8 7.6c4.6 1.3 9.8 1.3 14.4 0" +
-        "M4.8 16.4c4.6-1.3 9.8-1.3 14.4 0",
+        t(`M4.8 7.6c4.6 1.3 9.8 1.3 14.4 0`) +
+        t(`M4.8 16.4c4.6-1.3 9.8-1.3 14.4 0`),
       stroke: 1.6,
     },
   ],
@@ -225,35 +227,35 @@ export const SYMBOLS = {
   macStudio: [{ d: roundRect(4.5, 7, 15, 11, 2.2) + line(4.5, 14.5, 19.5, 14.5) + line(8, 16.3, 9.2, 16.3), stroke: STROKE }],
   macMini: [{ d: roundRect(3.5, 10, 17, 5.5, 1.8) + line(7, 12.75, 8.2, 12.75), stroke: STROKE }],
   macAndPhone: [{ d: roundRect(2.5, 5, 13, 9, 1.4) + line(1.5, 17, 13, 17) + roundRect(16, 8, 6, 11.5, 1.5), stroke: STROKE }],
-  star: [{ d: "M12 3.2l2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 17l-5.4 2.9 1.1-6.1-4.5-4.2 6.1-.8z", stroke: STROKE }],
-  starFill: [{ d: "M12 3.2l2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 17l-5.4 2.9 1.1-6.1-4.5-4.2 6.1-.8z", fill: true }],
-  paperplane: [{ d: "M3.5 11.2L20.5 3.5l-6.8 17-3-6.9z" + line(10.7, 13.6, 20.5, 3.5), stroke: STROKE }],
+  star: [{ d: t(`M12 3.2l2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 17l-5.4 2.9 1.1-6.1-4.5-4.2 6.1-.8z`), stroke: STROKE }],
+  starFill: [{ d: t(`M12 3.2l2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 17l-5.4 2.9 1.1-6.1-4.5-4.2 6.1-.8z`), fill: true }],
+  paperplane: [{ d: t(`M3.5 11.2L20.5 3.5l-6.8 17-3-6.9z`) + line(10.7, 13.6, 20.5, 3.5), stroke: STROKE }],
   folderBadgeQuestionmark: [
-    { d: "M3 7.5A1.5 1.5 0 0 1 4.5 6h4.2l1.8 2h9a1.5 1.5 0 0 1 1.5 1.5V12M3 7.5v10A1.5 1.5 0 0 0 4.5 19h8", stroke: STROKE },
-    { d: "M15.6 15a2.2 2.2 0 1 1 3 2.05c-.6.25-.9.6-.9 1.2M17.7 20.6h.01", stroke: STROKE },
+    { d: t(`M3 7.5A1.5 1.5 0 0 1 4.5 6h4.2l1.8 2h9a1.5 1.5 0 0 1 1.5 1.5V12M3 7.5v10A1.5 1.5 0 0 0 4.5 19h8`), stroke: STROKE },
+    { d: t(`M15.6 15a2.2 2.2 0 1 1 3 2.05c-.6.25-.9.6-.9 1.2M17.7 20.6h.01`), stroke: STROKE },
   ],
   exclamationmarkArrowTriangle2Circlepath: [
-    { d: "M5.2 9.5A7.5 7.5 0 0 1 18 7M18.8 14.5A7.5 7.5 0 0 1 6 17M18 3.6V7h-3.4M6 20.4V17h3.4M12 8.8v3.8M12 15.4h.01", stroke: STROKE },
+    { d: t(`M5.2 9.5A7.5 7.5 0 0 1 18 7M18.8 14.5A7.5 7.5 0 0 1 6 17M18 3.6V7h-3.4M6 20.4V17h3.4M12 8.8v3.8M12 15.4h.01`), stroke: STROKE },
   ],
   exclamationmarkIcloud: [
-    { d: "M7 18.5h10.5a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.6 9.3 4.6 4.6 0 0 0 7 18.5zM12 9.8v3.8M12 16.1h.01", stroke: STROKE },
+    { d: t(`M7 18.5h10.5a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.6 9.3 4.6 4.6 0 0 0 7 18.5zM12 9.8v3.8M12 16.1h.01`), stroke: STROKE },
   ],
-  folderFill: [{ d: "M3 7a2 2 0 0 1 2-2h4.2l2 2.2H19a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z", fill: true }],
-  lockFill: [{ d: roundRect(5, 10.5, 14, 10, 2.2), fill: true }, { d: "M8 10.5V7.8a4 4 0 0 1 8 0v2.7", stroke: STROKE }],
-  lockOpenFill: [{ d: roundRect(4.5, 10, 15, 11.5, 2.2) + circle(12, 15.75, 1.7), fill: true, evenOdd: true }, { d: "M16.5 10V6.8a4.5 4.5 0 0 0-9 0", stroke: STROKE }],
-  wifiSlash: [{ d: "M2.8 9.2a13.5 13.5 0 0 1 18.4 0M5.8 12.4a9 9 0 0 1 12.4 0M8.9 15.6a4.6 4.6 0 0 1 6.2 0" + line(4, 4, 20, 20) + circle(12, 19, 0.6), stroke: STROKE }],
-  printer: [{ d: roundRect(3.5, 8.5, 17, 8.5, 2) + "M7 8.5V4.5h10v4M7 13.5h10v6H7z", stroke: STROKE }],
+  folderFill: [{ d: t(`M3 7a2 2 0 0 1 2-2h4.2l2 2.2H19a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z`), fill: true }],
+  lockFill: [{ d: roundRect(5, 10.5, 14, 10, 2.2), fill: true }, { d: t(`M8 10.5V7.8a4 4 0 0 1 8 0v2.7`), stroke: STROKE }],
+  lockOpenFill: [{ d: roundRect(4.5, 10, 15, 11.5, 2.2) + circle(12, 15.75, 1.7), fill: true, evenOdd: true }, { d: t(`M16.5 10V6.8a4.5 4.5 0 0 0-9 0`), stroke: STROKE }],
+  wifiSlash: [{ d: t(`M2.8 9.2a13.5 13.5 0 0 1 18.4 0M5.8 12.4a9 9 0 0 1 12.4 0M8.9 15.6a4.6 4.6 0 0 1 6.2 0`) + line(4, 4, 20, 20) + circle(12, 19, 0.6), stroke: STROKE }],
+  printer: [{ d: roundRect(3.5, 8.5, 17, 8.5, 2) + t(`M7 8.5V4.5h10v4M7 13.5h10v6H7z`), stroke: STROKE }],
   squareGrid2x2: [{ d: roundRect(3.5, 3.5, 7.2, 7.2, 1.8) + roundRect(13.3, 3.5, 7.2, 7.2, 1.8) + roundRect(3.5, 13.3, 7.2, 7.2, 1.8) + roundRect(13.3, 13.3, 7.2, 7.2, 1.8), stroke: STROKE }],
-  squareStack: [{ d: roundRect(3.85, 6.9, 16.3, 16, 3) + "M6.45 4.1h11.1M9.05 1.2h5.9", stroke: STROKE }],
-  pinFill: [{ d: "M9 3.5h6l-1 5.5 3 3.2V14H7v-1.8l3-3.2z", fill: true }, { d: line(12, 14, 12, 21), stroke: STROKE }],
+  squareStack: [{ d: roundRect(3.85, 6.9, 16.3, 16, 3) + t(`M6.45 4.1h11.1M9.05 1.2h5.9`), stroke: STROKE }],
+  pinFill: [{ d: t(`M9 3.5h6l-1 5.5 3 3.2V14H7v-1.8l3-3.2z`), fill: true }, { d: line(12, 14, 12, 21), stroke: STROKE }],
   clockArrow: [{ d: circle(12, 12, 8.5) + polyline(12, 7.5, 12, 12, 15, 14), stroke: STROKE }],
   textCursor: [{ d: line(12, 4.5, 12, 19.5) + line(9, 4.5, 15, 4.5) + line(9, 19.5, 15, 19.5), stroke: STROKE }],
-  docOnDoc: [{ d: roundRect(8, 8, 12, 13, 2) + "M5 16V5.5A2 2 0 0 1 7 3.5h9", stroke: STROKE }],
+  docOnDoc: [{ d: roundRect(8, 8, 12, 13, 2) + t(`M5 16V5.5A2 2 0 0 1 7 3.5h9`), stroke: STROKE }],
   checkmarkCircle: [{ d: circle(12, 12, 9.2) + polyline(7.8, 12.3, 10.7, 15.2, 16.3, 9.2), stroke: STROKE }],
   qrcodeViewfinder: [
     {
       d:
-        "M3.5 8V5.5a2 2 0 0 1 2-2H8M16 3.5h2.5a2 2 0 0 1 2 2V8M20.5 16v2.5a2 2 0 0 1-2 2H16M8 20.5H5.5a2 2 0 0 1-2-2V16" +
+        t(`M3.5 8V5.5a2 2 0 0 1 2-2H8M16 3.5h2.5a2 2 0 0 1 2 2V8M20.5 16v2.5a2 2 0 0 1-2 2H16M8 20.5H5.5a2 2 0 0 1-2-2V16`) +
         roundRect(7, 7, 4, 4, 0.6) +
         roundRect(13, 7, 4, 4, 0.6) +
         roundRect(7, 13, 4, 4, 0.6) +
@@ -263,21 +265,21 @@ export const SYMBOLS = {
   ],
   equalCircleFill: [{ d: circle(12, 12, 10) + roundRect(7.3, 8.8, 9.4, 2, 1) + roundRect(7.3, 13.2, 9.4, 2, 1), fill: true, evenOdd: true }],
   xmarkCircleFill: [{ d: circle(12, 12, 10) + cross(12, 12, 4.4, 1.05), fill: true, evenOdd: true }],
-  arrowUpForwardAppFill: [{ d: roundRect(3, 3, 18, 18, 5.5) + "M8.09 14.88L9.42 16.21L13.38 12.24L13.38 15.0L15.25 15.0L15.25 9.05L9.3 9.05L9.3 10.92L12.06 10.92Z", fill: true, evenOdd: true }],
+  arrowUpForwardAppFill: [{ d: roundRect(3, 3, 18, 18, 5.5) + t(`M8.09 14.88L9.42 16.21L13.38 12.24L13.38 15.0L15.25 15.0L15.25 9.05L9.3 9.05L9.3 10.92L12.06 10.92Z`), fill: true, evenOdd: true }],
   safariFill: [
-    { d: circle(12, 12, 10) + polyline(16.6, 7.4, 13.4, 13.4, 7.4, 16.6, 10.6, 10.6) + "Z", fill: true, evenOdd: true },
-    { d: polyline(16.6, 7.4, 13.4, 13.4, 10.6, 10.6) + "Z", fill: true },
+    { d: circle(12, 12, 10) + polyline(16.6, 7.4, 13.4, 13.4, 7.4, 16.6, 10.6, 10.6) + t(`Z`), fill: true, evenOdd: true },
+    { d: polyline(16.6, 7.4, 13.4, 13.4, 10.6, 10.6) + t(`Z`), fill: true },
   ],
   chevronUpChevronDown: [{ d: polyline(8, 9.5, 12, 5.5, 16, 9.5) + polyline(8, 14.5, 12, 18.5, 16, 14.5), stroke: STROKE }],
   camera: [
     {
-      d: "M4 7.5h3l1.5-2.5h7L17 7.5h3a1.5 1.5 0 0 1 1.5 1.5v9.5A1.5 1.5 0 0 1 20 20H4a1.5 1.5 0 0 1-1.5-1.5V9A1.5 1.5 0 0 1 4 7.5zM12 10a3.5 3.5 0 1 1 0 7a3.5 3.5 0 1 1 0-7z",
+      d: t(`M4 7.5h3l1.5-2.5h7L17 7.5h3a1.5 1.5 0 0 1 1.5 1.5v9.5A1.5 1.5 0 0 1 20 20H4a1.5 1.5 0 0 1-1.5-1.5V9A1.5 1.5 0 0 1 4 7.5zM12 10a3.5 3.5 0 1 1 0 7a3.5 3.5 0 1 1 0-7z`),
       stroke: STROKE,
     },
   ],
-  video: [{ d: "M3.5 7h11a1.5 1.5 0 0 1 1.5 1.5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 2 15.5v-7A1.5 1.5 0 0 1 3.5 7zM16 10.5l5-3v9l-5-3", stroke: STROKE }],
-  mic: [{ d: roundRect(9, 2.8, 6, 11.4, 3) + "M5.8 11a6.2 6.2 0 0 0 12.4 0" + line(12, 17.2, 12, 21), stroke: STROKE }],
-  micFill: [{ d: roundRect(8.6, 2.5, 6.8, 12, 3.4), fill: true }, { d: "M5.8 11a6.2 6.2 0 0 0 12.4 0" + line(12, 17.2, 12, 21), stroke: STROKE }],
+  video: [{ d: t(`M3.5 7h11a1.5 1.5 0 0 1 1.5 1.5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 2 15.5v-7A1.5 1.5 0 0 1 3.5 7zM16 10.5l5-3v9l-5-3`), stroke: STROKE }],
+  mic: [{ d: roundRect(9, 2.8, 6, 11.4, 3) + t(`M5.8 11a6.2 6.2 0 0 0 12.4 0`) + line(12, 17.2, 12, 21), stroke: STROKE }],
+  micFill: [{ d: roundRect(8.6, 2.5, 6.8, 12, 3.4), fill: true }, { d: t(`M5.8 11a6.2 6.2 0 0 0 12.4 0`) + line(12, 17.2, 12, 21), stroke: STROKE }],
   stopFill: [{ d: roundRect(5.5, 5.5, 13, 13, 2.8), fill: true }],
   platterBottomArrowDown: [
     { d: roundRect(6, 2, 12, 20, 2.8), stroke: STROKE },
@@ -285,7 +287,7 @@ export const SYMBOLS = {
     { d: line(12, 5.2, 12, 11.4) + polyline(9.6, 9.2, 12, 11.6, 14.4, 9.2), stroke: 1.7 },
   ],
   handDrawFill: [
-    { d: "M2.5 9.5c1.5-3.5 4-4.5 5-2.5s-1 4.5 1 5 4-3 5.5-3", stroke: 1.6 },
+    { d: t(`M2.5 9.5c1.5-3.5 4-4.5 5-2.5s-1 4.5 1 5 4-3 5.5-3`), stroke: 1.6 },
     {
       d: roundRect(6.9, 4.6, 2.6, 10, 1.3) + roundRect(9.9, 2.8, 2.6, 11, 1.3) + roundRect(12.9, 3.6, 2.6, 10, 1.3) + roundRect(15.9, 6, 2.4, 8.5, 1.2) + roundRect(6.9, 9.8, 11.4, 11.7, 4.6),
       fill: true,

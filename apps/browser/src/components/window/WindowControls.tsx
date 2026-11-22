@@ -7,13 +7,15 @@ import { useWindowChrome } from "../../state/windows/windowButtons";
 import { useWindowMaximized } from "../../state/windows/captionRegions";
 import { WINDOW_BUTTONS } from "./tokens";
 import { closeFromWindowControls, minimizeWindow, toggleWindowMaximized } from "../../state/windows/controls";
+import { t } from "../../lib/uiLanguage";
+
 
 const B = WINDOW_BUTTONS;
 
 type Ink = { icon: string; hover: string; pressed: string };
 type Kind = "menu" | "minimize" | "maximize" | "restore" | "close";
 
-const LABEL: Record<Kind, string> = { menu: "Menu", minimize: "Minimize", maximize: "Maximize", restore: "Restore Down", close: "Close" };
+const LABEL: Record<Kind, string> = { menu: t(`Menu`), minimize: t(`Minimize`), maximize: t(`Maximize`), restore: t(`Restore Down`), close: t(`Close`) };
 
 function Glyph({ kind, color, box }: { kind: Kind; color: string; box: number }) {
   if (kind === "menu") return <Symbol name="ellipsis" size={box + 4} weight="regular" color={color} style={{ width: box + 6, height: box + 6 }} />;

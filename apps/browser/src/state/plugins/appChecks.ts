@@ -4,6 +4,8 @@ import { DECIDE_EVENTS, PLUGIN_EVENTS } from "../automation/eventNames";
 import { checkedSettings } from "../config/configSettings";
 import type { Settings } from "../settings/settings";
 import type { PluginListing } from "./store";
+import { t } from "../../lib/uiLanguage";
+
 
 export const APPROVED_SETTINGS: readonly string[] = ["omniboxProviders", "launchActions"];
 
@@ -55,7 +57,7 @@ export function appProblems(m: PluginManifest, settings: Settings, appVersion: s
     else if (p.claim && owner !== m.name) problems.push(`${at}.claim: ${p.name} isn't in the list of programs this Ardia reserves for its official plugins`);
   });
   for (const key of ["alwaysOn", "official", "autoInstall"] as const) if (m[key] && !builtIn) problems.push(`plugin.json: ${key} is only for Ardia's official plugins`);
-  if (m.autoInstall && !m.alwaysOn) problems.push("plugin.json: autoInstall needs alwaysOn");
+  if (m.autoInstall && !m.alwaysOn) problems.push(t(`plugin.json: autoInstall needs alwaysOn`));
   m.programs.forEach((p, i) => {
     if (p.afterUpdate.length && !builtIn) problems.push(`plugin.json: ${within}programs[${i}].afterUpdate is only for Ardia's official plugins`);
   });
@@ -64,7 +66,7 @@ export function appProblems(m: PluginManifest, settings: Settings, appVersion: s
 }
 
 export function listingOf(name: string, text: string | null, readProblem: string | null, settings: Settings, appVersion: string, folderId = "", registry: ProgramClaims = NO_CLAIMS): PluginListing {
-  if (text === null) return { name, manifest: null, problems: [readProblem ?? "plugin.json couldn't be read"], hash: null, folderId };
+  if (text === null) return { name, manifest: null, problems: [readProblem ?? t(`plugin.json couldn't be read`)], hash: null, folderId };
   const hash = manifestHash(text, folderId);
   const read = readManifest(text);
   if (!read.manifest) return { name, manifest: null, problems: read.problems, hash, folderId };

@@ -104,6 +104,8 @@ import { deckPullGrowing, endDeckPull, growDeckPull, peekDeckPullEntrance, publi
 import { DECK_PULL, pullTarget, stackPullTarget } from "../../lib/deckPull";
 import { barSpanCenter } from "../../lib/bottomBarSpan";
 import { useBarGlyphFade, useDeckPulled } from "./deckPulled";
+import { t } from "../../lib/uiLanguage";
+
 
 type Phase = { kind: "opening" | "settled" | "closing"; id: string | null };
 
@@ -133,7 +135,7 @@ const entrancePhase = (ids: readonly string[], target: string | null): Phase => 
 const sameOrder = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((id, index) => id === b[index]);
 
 export const TabDeck = memo(function TabDeck() {
-  countRender("TabDeck");
+  countRender(t(`TabDeck`));
   const measuresInteractions = interactionPerfEnabled();
   const deckSurface = useSurface();
   const shown = deckSurface === "deck";
@@ -410,7 +412,7 @@ export const TabDeck = memo(function TabDeck() {
       if (entrance && grid) deckEntered(entrance);
       return;
     }
-    beginInteraction("deck open", INTERACTION_WINDOW_MS.deckOpen);
+    beginInteraction(t(`deck open`), INTERACTION_WINDOW_MS.deckOpen);
     deckPhase.value = DECK_PHASE.opening;
     expandedIndex.value = index;
     scaleProgress.value = 0;
@@ -634,7 +636,7 @@ export const TabDeck = memo(function TabDeck() {
 
   useEffect(() => () => void (openingId.current = null), []);
   const open = (index: number) => {
-    beginInteraction("card open", INTERACTION_WINDOW_MS.cardOpen);
+    beginInteraction(t(`card open`), INTERACTION_WINDOW_MS.cardOpen);
     const id = order[index];
     if (!id || phase.kind !== "settled" || dragIndex.value === index) return;
     if (searchChrome) Keyboard.dismiss();
@@ -885,7 +887,7 @@ export const TabDeck = memo(function TabDeck() {
     .onStart((e) => {
       const down = touchDown.value;
       const card = deckCardAt(g, count, scroll.value, down.x, down.y, anchor, DECK_MOUNT_REACH);
-      if (measuresInteractions) runOnJS(beginInteraction)("deck scroll", INTERACTION_WINDOW_MS.deckScroll);
+      if (measuresInteractions) runOnJS(beginInteraction)(t(`deck scroll`), INTERACTION_WINDOW_MS.deckScroll);
       startScroll.value = scroll.value;
       scrollFrom.value = e.absoluteX;
       touching.value = true;
@@ -1005,16 +1007,16 @@ export const TabDeck = memo(function TabDeck() {
   const cardMenuItems = (index: number): MenuItem[] => {
     const tab = tabs.get(order[index] ?? "");
     const closeCard = () => close(index, 0);
-    if (!tab) return [{ label: "Close Tab", destructive: true, onPress: closeCard }];
+    if (!tab) return [{ label: t(`Close Tab`), destructive: true, onPress: closeCard }];
     return deckCardMenu(tab, { devices: sendTargetsFor(tab), pinned: isTabPinned(tab), syncEnabled, spaces: redesigned ? spaceMoveTargets(tab) : [], icons: true }, closeCard);
   };
 
   const ask = (confirmation: Confirmation) => confirmInSheet(confirmation, () => setConfirmation(confirmation));
   const confirmCloseAll = () =>
     ask({
-      title: count === 1 ? "Close 1 Tab?" : `Close ${count} Tabs?`,
-      message: privateCount ? "Incognito tabs aren’t saved. Other tabs stay in your Archive." : "They’ll stay in your Archive.",
-      action: count === 1 ? "Close Tab" : "Close All Tabs",
+      title: count === 1 ? t(`Close 1 Tab?`) : `Close ${count} Tabs?`,
+      message: privateCount ? t(`Incognito tabs aren’t saved. Other tabs stay in your Archive.`) : t(`They’ll stay in your Archive.`),
+      action: count === 1 ? t(`Close Tab`) : t(`Close All Tabs`),
       run: () => {
         hideArchiveCard();
         haptics.press();
@@ -1023,9 +1025,9 @@ export const TabDeck = memo(function TabDeck() {
     });
   const confirmLeaveIncognito = () =>
     ask({
-      title: "Close Incognito Tabs?",
-      message: "Their pages, cookies and history are cleared.",
-      action: "Close Incognito Tabs",
+      title: t(`Close Incognito Tabs?`),
+      message: t(`Their pages, cookies and history are cleared.`),
+      action: t(`Close Incognito Tabs`),
       run: () => {
         haptics.press();
         leaveIncognito();
@@ -1073,16 +1075,16 @@ export const TabDeck = memo(function TabDeck() {
   }) : [];
   const plusItems: MenuItem[] = incognito
     ? [
-        { label: "New Tab", icon: "plus", onPress: newRegularTab },
-        { label: "New Incognito Tab", icon: "eyes", onPress: newTab },
+        { label: t(`New Tab`), icon: "plus", onPress: newRegularTab },
+        { label: t(`New Incognito Tab`), icon: "eyes", onPress: newTab },
       ]
     : [
-        { label: "New Incognito Tab", icon: "eyes", onPress: newIncognitoTab },
-        ...(canReopen ? [{ label: "Reopen Closed Tab", icon: "arrowUturnBackward" as const, onPress: reopenLastClosed }] : []),
+        { label: t(`New Incognito Tab`), icon: "eyes", onPress: newIncognitoTab },
+        ...(canReopen ? [{ label: t(`Reopen Closed Tab`), icon: "arrowUturnBackward" as const, onPress: reopenLastClosed }] : []),
       ];
   if (count)
     plusItems.push("divider", {
-      label: incognito ? "Close Incognito Tabs" : "Close All Tabs",
+      label: incognito ? t(`Close Incognito Tabs`) : t(`Close All Tabs`),
       icon: "xmark",
       destructive: true,
       onPress: incognito ? confirmLeaveIncognito : confirmCloseAll,
@@ -1252,9 +1254,9 @@ export const TabDeck = memo(function TabDeck() {
           >
             <DeckBar
               leading={
-                syncEnabled ? { icon: "laptop", label: "Synced Tabs", onPress: openSpaces } : { icon: "archivebox", label: "Archive", onPress: openArchive }
+                syncEnabled ? { icon: "laptop", label: t(`Synced Tabs`), onPress: openSpaces } : { icon: "archivebox", label: t(`Archive`), onPress: openArchive }
               }
-              plusLabel={incognito ? "New Incognito Tab" : "New Tab"}
+              plusLabel={incognito ? t(`New Incognito Tab`) : t(`New Tab`)}
               frost={{ source: DECK_FROST, variant: "bar" }}
               covered={trayOpen}
               onPlus={newTab}
@@ -1278,7 +1280,7 @@ export const TabDeck = memo(function TabDeck() {
       ) : null}
       {menu === "chip" ? (
         <Menu
-          items={[{ label: "Close Incognito Tabs", icon: "xmark", destructive: true, onPress: confirmLeaveIncognito }]}
+          items={[{ label: t(`Close Incognito Tabs`), icon: "xmark", destructive: true, onPress: confirmLeaveIncognito }]}
           place={{ top: g.safeTop + tabsLayout.chipHeight + tabsLayout.headerGap * 2, left: (width - tabsLayout.menuWidth) / 2, width: tabsLayout.menuWidth }}
           onDismiss={() => setMenu(null)}
         />

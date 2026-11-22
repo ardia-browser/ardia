@@ -5,6 +5,8 @@ import { formatDay } from "../../state/report/form";
 import { AnonymousAvatar } from "../settings/AnonymousAvatar";
 import { Box, Button, Dialog, Dot, space, Symbol, Text, useTheme } from "../ui";
 import { REPORT } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 export function SentView({ sent }: { sent: SentReport }) {
   const theme = useTheme();
@@ -22,7 +24,7 @@ export function SentView({ sent }: { sent: SentReport }) {
         </Text>
         {sent.issueUrl ? (
           <View style={{ marginTop: space.xs }}>
-            <Button variant="text" look="link" title={sent.issueNumber ? `View on GitHub · #${sent.issueNumber}` : "View on GitHub"} onPress={viewIssue} />
+            <Button variant="text" look="link" title={sent.issueNumber ? `View on GitHub · #${sent.issueNumber}` : t(`View on GitHub`)} onPress={viewIssue} />
           </View>
         ) : null}
       </View>
@@ -30,7 +32,7 @@ export function SentView({ sent }: { sent: SentReport }) {
         <AnonymousAvatar avatar={sent.avatar} size={REPORT.avatar} />
         <View style={FLEX}>
           <Text>
-            {"You appear to us as "}
+            {t(`You appear to us as `)}
             <Text weight="semibold">{sent.name}</Text>
           </Text>
           <Text size="small" tone="textSecondary">
@@ -46,7 +48,7 @@ export function SentView({ sent }: { sent: SentReport }) {
         </Text>
       ) : null}
       <View style={{ marginTop: space.xl, alignItems: "center" }}>
-        <Button title="Done" kind="primary" onPress={finishReport} />
+        <Button title={t(`Done`)} kind="primary" onPress={finishReport} />
       </View>
     </Dialog>
   );

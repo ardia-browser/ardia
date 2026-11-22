@@ -18,6 +18,8 @@ import { barAddress, spokenAddress } from "./FloatingBar";
 import { NotSecureLock } from "./NotSecureLock";
 import { useMaterialTheme } from "../ui/materialTheme";
 import { materialBarPill, materialBottomBar, materialShape, materialType } from "../ui/materialTokens";
+import { t } from "../../lib/uiLanguage";
+
 
 type BarCollapse = {
   progress: SharedValue<number>;
@@ -220,7 +222,7 @@ export function MaterialBarPill({ tab, scheme, onExpand }: { tab: BrowserTab; sc
     <Pressable
       testID="materialBarPill"
       accessibilityRole="button"
-      accessibilityLabel="Show Toolbar"
+      accessibilityLabel={t(`Show Toolbar`)}
       accessibilityValue={{ text: spokenAddress(address) }}
       android_ripple={{ color: scheme.onSurface, borderless: false, foreground: true }}
       onPressIn={haptics.barPress}

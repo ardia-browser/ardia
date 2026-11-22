@@ -4,6 +4,8 @@ import { requireOptionalNativeModule } from "expo-modules-core";
 import { AndroidHaptics, impactAsync, ImpactFeedbackStyle, notificationAsync, NotificationFeedbackType, performAndroidHapticsAsync, selectionAsync } from "expo-haptics";
 import { getLocales } from "expo-localization";
 import { Image, Linking, Platform, Share } from "react-native";
+import { t } from "../lib/uiLanguage";
+
 
 export const copyText = (text: string) => setStringAsync(text);
 
@@ -51,7 +53,7 @@ export const pasteText = () => getStringAsync();
 
 export const pasteForGo = async (): Promise<string> => (clipboard.readsOnTap() ? ((await clipboard.read()) ?? "") : getStringAsync());
 
-const readsClipOffers = requireOptionalNativeModule("ArdiaPhoneClipboard") !== null;
+const readsClipOffers = requireOptionalNativeModule(t(`ArdiaPhoneClipboard`)) !== null;
 
 export async function clipboardOffer(): Promise<ClipboardOffer | null> {
   if (readsClipOffers) return clipboard.offer();

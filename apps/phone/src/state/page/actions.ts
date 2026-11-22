@@ -36,11 +36,13 @@ import { syncData } from "../sync/store";
 import { libraryBack } from "../library/store";
 import { showToast, TOAST_LONG_DURATION_MS } from "../toasts/store";
 import { syncOffered } from "../../platform/system";
+import { t } from "../../lib/uiLanguage";
+
 
 const TITLE_FEEDBACK_MS = 1000;
 const FIND_AFTER_MENU_MS = 350;
-const COPIED_URL = "Copied URL";
-const NO_APP_FOR_LINK = "No App Can Open This Link";
+const COPIED_URL = t(`Copied URL`);
+const NO_APP_FOR_LINK = t(`No App Can Open This Link`);
 
 const quietly = (call: () => Promise<unknown>) => void settled(call, undefined);
 

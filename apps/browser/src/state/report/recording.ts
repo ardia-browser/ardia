@@ -14,6 +14,8 @@ import {
 import { RECORDING_MAX_SECONDS, TRACE_MAX_SECONDS } from "./form";
 import { currentReport, patchReport } from "./store";
 import { useBrowser } from "../browser/store";
+import { t } from "../../lib/uiLanguage";
+
 
 let subscribed = false;
 let traceTimer: ReturnType<typeof setTimeout> | undefined;
@@ -66,7 +68,7 @@ async function recordingStopped(result: RecordingResult | null) {
   void finishTrace();
   const r = currentReport().recording;
   lastResult = result;
-  if (!result) return patchReport({ recording: { phase: "failed", message: "The recording couldn't be saved." } });
+  if (!result) return patchReport({ recording: { phase: "failed", message: t(`The recording couldn't be saved.`) } });
   const dir = ensureDraftDir();
   const thumbnail = `${typeof dir === "string" ? dir : await dir}/recording-${Date.now()}.png`;
   const made = await recordingThumbnail(result.path, thumbnail).catch(() => false);
@@ -98,7 +100,7 @@ export async function startRecording() {
   const started = await startWindowRecording(s.windowId, includePages, path, RECORDING_MAX_SECONDS).catch(() => false);
   if (!started) {
     void finishTrace();
-    return patchReport({ recording: { phase: "failed", message: "Ardia couldn't record this window." } });
+    return patchReport({ recording: { phase: "failed", message: t(`Ardia couldn't record this window.`) } });
   }
   patchReport({ recording: { phase: "recording", seconds: 0, includePages } });
 }
@@ -107,7 +109,7 @@ export async function stopRecording() {
   const r = currentReport().recording;
   if (r.phase !== "recording") return;
   patchReport({ recording: { phase: "saving", includePages: r.includePages } });
-  if (!(await stopWindowRecording().catch(() => false))) patchReport({ recording: { phase: "failed", message: "The recording couldn't be saved." } });
+  if (!(await stopWindowRecording().catch(() => false))) patchReport({ recording: { phase: "failed", message: t(`The recording couldn't be saved.`) } });
 }
 
 export function discardRecording() {

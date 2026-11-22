@@ -32,6 +32,8 @@ import { canSleep, sleepTabsFromMenu } from "../tabs/manualSleep";
 import { isPluginMenuChoice, pluginMenuItems, runPluginMenuChoice, type PluginMenuContext } from "../plugins/menus";
 import { urlParts } from "../../lib/urlParts";
 import { ALL_UNREAD_TITLE, canChooseSiteUnread, isUnreadSiteHidden, showUnreadCounts, toggleSiteUnread, unreadSiteTitle } from "../tabs/unreadSites";
+import { t } from "../../lib/uiLanguage";
+
 
 const store = () => useBrowser.getState();
 
@@ -61,18 +63,18 @@ type Facts = ReturnType<typeof tabMenuFacts>;
 function pinItems(s: BrowserState, tab: Tab, f: Facts): MenuItem[] {
   const toRows = `Move to ${pinnedSectionTitle(s, tab)}`;
   const backToPin: MenuItem[] = f.housed
-    ? [{ id: "backToPin", title: "Reset Pinned Tab", symbol: "arrow.uturn.backward", enabled: awayFromPin(tab), ...hintWhen(f.active, "returnToPinnedUrl", s) }]
+    ? [{ id: "backToPin", title: t(`Reset Pinned Tab`), symbol: "arrow.uturn.backward", enabled: awayFromPin(tab), ...hintWhen(f.active, "returnToPinnedUrl", s) }]
     : [];
   const editPinned: MenuItem[] = f.housed
     ? [
         {
           id: "pinnedPage",
-          title: "Edit Pinned Page",
-          children: [{ id: "replacePin", title: "Replace Pinned URL with Current", enabled: awayFromPin(tab) }, { separator: true }, { id: "editPin", title: "Edit Pinned URL…" }],
+          title: t(`Edit Pinned Page`),
+          children: [{ id: "replacePin", title: t(`Replace Pinned URL with Current`), enabled: awayFromPin(tab) }, { separator: true }, { id: "editPin", title: t(`Edit Pinned URL…`) }],
         },
       ]
     : [];
-  if (f.memberPin) return [{ id: "unpinMember", title: "Unpin", symbol: "pin.slash" }, ...backToPin, ...editPinned];
+  if (f.memberPin) return [{ id: "unpinMember", title: t(`Unpin`), symbol: "pin.slash" }, ...backToPin, ...editPinned];
   const row = f.section === "row";
   const toggle: MenuItem = { id: "pin", title: togglePinTitle(tab), symbol: tab.pin ? "pin.slash" : "pin", ...(row ? hintWhen(f.active, "togglePinnedRow", s) : {}) };
   const other: MenuItem[] = f.splitRow
@@ -81,7 +83,7 @@ function pinItems(s: BrowserState, tab: Tab, f: Facts): MenuItem[] {
       ? [{ id: "pinRow", title: toRows, ...hintWhen(f.active, "togglePinnedRow", s) }]
       : f.section === "tile"
         ? [{ id: "pinRow", title: toRows }]
-        : [{ id: "pinTile", title: "Move to Top Apps" }];
+        : [{ id: "pinTile", title: t(`Move to Top Apps`) }];
   return [toggle, ...backToPin, ...other, ...editPinned];
 }
 
@@ -89,12 +91,12 @@ function openItems(s: BrowserState, tab: Tab, f: Facts): MenuItem[] {
   const engine = switchableEngine(s, tab.url) ? ENGINE_NAMES[otherEngine(tabEngine(s, tab.id))] : null;
   return [
     ...(f.split
-      ? [{ id: "unsplit", title: "Remove from Split View", symbol: "rectangle.split.2x1.slash" }]
+      ? [{ id: "unsplit", title: t(`Remove from Split View`), symbol: "rectangle.split.2x1.slash" }]
       : f.section === "tile" || !splitViewAvailable
         ? []
-        : [{ id: "split", title: "Open as Split", symbol: "rectangle.split.2x1", ...hintWhen(f.active, "openSplitPane", s) }]),
-    { id: "duplicate", title: "Duplicate", symbol: "plus.square.on.square" },
-    ...(f.housed ? [{ id: "newWindow", title: "Open in New Window", symbol: "macwindow.badge.plus", enabled: !!tab.url && !f.incognito }] : []),
+        : [{ id: "split", title: t(`Open as Split`), symbol: "rectangle.split.2x1", ...hintWhen(f.active, "openSplitPane", s) }]),
+    { id: "duplicate", title: t(`Duplicate`), symbol: "plus.square.on.square" },
+    ...(f.housed ? [{ id: "newWindow", title: t(`Open in New Window`), symbol: "macwindow.badge.plus", enabled: !!tab.url && !f.incognito }] : []),
     ...(engine ? [{ id: "engine", title: `Open in ${engine}` }] : []),
   ];
 }
@@ -111,35 +113,35 @@ function organiseItems(s: BrowserState, windowId: string, tab: Tab, f: Facts): T
   const grouping: TabMenuItem[] =
     f.section === "tile"
       ? tileFolderOf(tab)
-        ? [{ id: "leaveFolder", title: "Remove from Folder", symbol: "folder.badge.minus" }]
+        ? [{ id: "leaveFolder", title: t(`Remove from Folder`), symbol: "folder.badge.minus" }]
         : s.settings.topAppFolders
-          ? [{ id: "newFolder", title: "New Folder…", symbol: "folder.badge.plus" }]
+          ? [{ id: "newFolder", title: t(`New Folder…`), symbol: "folder.badge.plus" }]
           : []
       : [
           ...(f.memberPin
             ? []
             : f.group
-              ? [{ id: "ungroupTab", title: "Remove from Group", symbol: "folder.badge.minus" }]
-              : [{ id: "newGroup", title: "New Group with Tab", symbol: "folder.badge.plus", ...hintWhen(f.active, "newGroupWithTabs", s) }]),
-          ...(groups.length ? [{ id: "moveToGroup", title: "Move to Group", symbol: "folder", children: groups }] : []),
+              ? [{ id: "ungroupTab", title: t(`Remove from Group`), symbol: "folder.badge.minus" }]
+              : [{ id: "newGroup", title: t(`New Group with Tab`), symbol: "folder.badge.plus", ...hintWhen(f.active, "newGroupWithTabs", s) }]),
+          ...(groups.length ? [{ id: "moveToGroup", title: t(`Move to Group`), symbol: "folder", children: groups }] : []),
         ];
   return [
     ...grouping,
-    { id: "moveToProfile", title: "Move to Profile", symbol: "person", enabled: !f.incognito, children: profileItems(s, (id) => id === tab.profileId) },
-    { id: "moveToWindow", title: "Move to Window", symbol: "macwindow", enabled: !f.incognito, children: windowItems(s, windowId) },
+    { id: "moveToProfile", title: t(`Move to Profile`), symbol: "person", enabled: !f.incognito, children: profileItems(s, (id) => id === tab.profileId) },
+    { id: "moveToWindow", title: t(`Move to Window`), symbol: "macwindow", enabled: !f.incognito, children: windowItems(s, windowId) },
   ];
 }
 
 function pictureInPictureItems(tab: Tab): MenuItem[] {
-  return useMedia.getState().pipOpen[tab.id] ? [{ id: "exitPip", title: "Exit Picture in Picture", symbol: "pip.exit" }] : [];
+  return useMedia.getState().pipOpen[tab.id] ? [{ id: "exitPip", title: t(`Exit Picture in Picture`), symbol: "pip.exit" }] : [];
 }
 
 function bookmarkItems(s: BrowserState, windowId: string, tab: Tab, f: Facts): TabMenuItem[] {
   const saved = !!tab.url && isBookmarked(s, bookmarkProfileId(s, s.windows[windowId]), tab.url);
   return [
-    { id: "bookmark", title: saved ? "Edit Bookmark…" : "Add to Bookmarks…", symbol: saved ? "bookmark.fill" : "bookmark", enabled: !!tab.url, ...hintWhen(f.active, "bookmarkPage", s) },
-    ...(saved ? [{ id: "unbookmark", title: "Remove Bookmark" }] : []),
-    { id: "bookmarkTo", title: "Add Bookmark to Folder", enabled: !!tab.url, children: bookmarkFolderItems(s, windowId) },
+    { id: "bookmark", title: saved ? t(`Edit Bookmark…`) : t(`Add to Bookmarks…`), symbol: saved ? "bookmark.fill" : "bookmark", enabled: !!tab.url, ...hintWhen(f.active, "bookmarkPage", s) },
+    ...(saved ? [{ id: "unbookmark", title: t(`Remove Bookmark`) }] : []),
+    { id: "bookmarkTo", title: t(`Add Bookmark to Folder`), enabled: !!tab.url, children: bookmarkFolderItems(s, windowId) },
   ];
 }
 
@@ -167,16 +169,16 @@ function unloadTopApp(tabId: string) {
 }
 
 function closeItems(s: BrowserState, tab: Tab, f: Facts): MenuItem[] {
-  const sleep: MenuItem[] = canSleep(s, tab.id) ? [{ id: "sleep", title: "Sleep Tab", symbol: "moon.zzz" }] : [];
-  if (f.housed) return f.section === "tile" && s.settings.keepTopAppsRunning && openPages(s, tab.id).length > 0 ? [{ id: "unloadTopApp", title: "Unload", symbol: "moon.zzz" }] : sleep;
+  const sleep: MenuItem[] = canSleep(s, tab.id) ? [{ id: "sleep", title: t(`Sleep Tab`), symbol: "moon.zzz" }] : [];
+  if (f.housed) return f.section === "tile" && s.settings.keepTopAppsRunning && openPages(s, tab.id).length > 0 ? [{ id: "unloadTopApp", title: t(`Unload`), symbol: "moon.zzz" }] : sleep;
   return [
     ...sleep,
-    { id: "close", title: "Close", symbol: "xmark", ...hintWhen(f.active, "closeTab") },
-    ...(f.split ? [{ id: "closeSplit", title: "Close Split View" }] : []),
-    { id: "closeOthers", title: "Close Other Tabs", enabled: f.others.length > 0 },
+    { id: "close", title: t(`Close`), symbol: "xmark", ...hintWhen(f.active, "closeTab") },
+    ...(f.split ? [{ id: "closeSplit", title: t(`Close Split View`) }] : []),
+    { id: "closeOthers", title: t(`Close Other Tabs`), enabled: f.others.length > 0 },
     ...withAlternate(
-      { id: "closeBelow", title: f.across ? "Close Tabs to the Right" : "Close Tabs Below", enabled: f.below.length > 0 },
-      { id: "closeAbove", title: f.across ? "Close Tabs to the Left" : "Close Tabs Above", enabled: f.above.length > 0 },
+      { id: "closeBelow", title: f.across ? t(`Close Tabs to the Right`) : t(`Close Tabs Below`), enabled: f.below.length > 0 },
+      { id: "closeAbove", title: f.across ? t(`Close Tabs to the Left`) : t(`Close Tabs Above`), enabled: f.above.length > 0 },
       null,
     ),
   ];
@@ -206,18 +208,18 @@ export function tabMenuItems(s: BrowserState, windowId: string, tab: Tab, f: Fac
     bookmarksShown(s.settings) ? bookmarkItems(s, windowId, tab, f) : [],
     [
       ...withAlternate(
-        { id: "copy", title: "Copy Link", symbol: "link", enabled: !!tab.url },
-        { id: "copyMd", title: "Copy Link as Markdown", symbol: "link", enabled: !!tab.url },
+        { id: "copy", title: t(`Copy Link`), symbol: "link", enabled: !!tab.url },
+        { id: "copyMd", title: t(`Copy Link as Markdown`), symbol: "link", enabled: !!tab.url },
         f.active ? ["copyUrl", "copyUrlAsMarkdown"] : null,
         s,
       ),
       ...sendItems(tab, f),
     ],
     [
-      { id: "rename", title: "Rename…", symbol: "pencil" },
-      ...(tab.customTitle ? [{ id: "resetName", title: "Reset Name" }] : []),
-      { id: "icon", title: "Change Icon…", symbol: "photo" },
-      ...(tab.customIcon ? [{ id: "resetIcon", title: "Reset Icon" }] : []),
+      { id: "rename", title: t(`Rename…`), symbol: "pencil" },
+      ...(tab.customTitle ? [{ id: "resetName", title: t(`Reset Name`) }] : []),
+      { id: "icon", title: t(`Change Icon…`), symbol: "photo" },
+      ...(tab.customIcon ? [{ id: "resetIcon", title: t(`Reset Icon`) }] : []),
       ...muteItems(s, tab),
       ...pictureInPictureItems(tab),
       ...unreadItems(s, tab),

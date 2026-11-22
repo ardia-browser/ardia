@@ -1,10 +1,11 @@
+import { t } from "../../lib/uiLanguage";
 export type FindResult = { query: string; activeIndex: number; total: number; isDone: boolean };
 
 export type FindCount = { kind: "match"; label: string } | { kind: "none"; label: string } | null;
 
 export function findCount(result: FindResult | null, query: string): FindCount {
   if (!query || !result || result.query !== query) return null;
-  if (result.total === 0) return result.isDone ? { kind: "none", label: "No matches" } : null;
+  if (result.total === 0) return result.isDone ? { kind: "none", label: t(`No matches`) } : null;
   return { kind: "match", label: `${Math.max(result.activeIndex, 0) + 1} of ${result.total}` };
 }
 
@@ -61,30 +62,30 @@ function fileChooserPlan(request: Extract<Request, { kind: "fileChooser" }>, bas
   }
   if (!request.offersPhoto && !request.offersVideo) return { kind: "answer", answer: { type: "pickFiles" } };
   const choices: RequestChoice[] = [
-    ...(request.offersPhoto ? [{ title: "Take Photo", icon: "camera" as const, answer: { type: "takePhoto" as const } }] : []),
-    ...(request.offersVideo ? [{ title: "Record Video", icon: "video" as const, answer: { type: "recordVideo" as const } }] : []),
-    { title: request.allowsMultiple ? "Choose Files" : "Choose File", icon: "folder", answer: { type: "pickFiles" } },
+    ...(request.offersPhoto ? [{ title: t(`Take Photo`), icon: "camera" as const, answer: { type: "takePhoto" as const } }] : []),
+    ...(request.offersVideo ? [{ title: t(`Record Video`), icon: "video" as const, answer: { type: "recordVideo" as const } }] : []),
+    { title: request.allowsMultiple ? t(`Choose Files`) : t(`Choose File`), icon: "folder", answer: { type: "pickFiles" } },
   ];
   return { kind: "dialog", dialog: { ...base, message: null, confirm: "", choices } };
 }
 
 export function requestPlan(request: Request): RequestPlan {
-  const base = { title: request.title, message: request.message, defaultText: "", cancel: "Cancel" as string | null, field: "none" as RequestDialog["field"], choices: [] };
+  const base = { title: request.title, message: request.message, defaultText: "", cancel: t(`Cancel`) as string | null, field: "none" as RequestDialog["field"], choices: [] };
   switch (request.kind) {
     case "fileChooser":
       return fileChooserPlan(request, base);
     case "alert":
-      return { kind: "dialog", dialog: { ...base, confirm: "OK", cancel: null } };
+      return { kind: "dialog", dialog: { ...base, confirm: t(`OK`), cancel: null } };
     case "confirm":
-      return { kind: "dialog", dialog: { ...base, confirm: "OK" } };
+      return { kind: "dialog", dialog: { ...base, confirm: t(`OK`) } };
     case "prompt":
-      return { kind: "dialog", dialog: { ...base, field: "text", defaultText: request.defaultText, confirm: "OK" } };
+      return { kind: "dialog", dialog: { ...base, field: "text", defaultText: request.defaultText, confirm: t(`OK`) } };
     case "openExternal":
-      return { kind: "dialog", dialog: { ...base, confirm: "Open" } };
+      return { kind: "dialog", dialog: { ...base, confirm: t(`Open`) } };
     case "httpAuthentication":
-      return { kind: "dialog", dialog: { ...base, field: "credentials", confirm: "Sign In" } };
+      return { kind: "dialog", dialog: { ...base, field: "credentials", confirm: t(`Sign In`) } };
     case "permission":
-      return { kind: "dialog", dialog: { ...base, confirm: "Allow", cancel: "Don’t Allow" } };
+      return { kind: "dialog", dialog: { ...base, confirm: t(`Allow`), cancel: t(`Don’t Allow`) } };
   }
 }
 
@@ -139,12 +140,12 @@ export function pressPlan(
 }
 
 export const PRESS_TITLES: Record<PressAction, string> = {
-  openInNewTab: "Open in New Tab",
-  openInBackground: "Open in Background",
-  copyLink: "Copy Link",
-  share: "Share…",
-  download: "Download Linked File",
-  saveImage: "Save Image",
+  openInNewTab: t(`Open in New Tab`),
+  openInBackground: t(`Open in Background`),
+  copyLink: t(`Copy Link`),
+  share: t(`Share…`),
+  download: t(`Download Linked File`),
+  saveImage: t(`Save Image`),
 };
 
 export type BackLayer = "fullscreen" | "request" | "tray" | "pressMenu" | "reader" | "menuSubpage" | "menu" | "find" | "pageHistory" | "deck";
@@ -176,13 +177,13 @@ export function backLayer(state: BackState): BackLayer | null {
   return null;
 }
 
-export const downloadingToast = (fileName: string) => (fileName ? `Downloading ${fileName}` : "Downloading");
+export const downloadingToast = (fileName: string) => (fileName ? `Downloading ${fileName}` : t(`Downloading`));
 
 export const downloadedToast = (fileName: string) => `Downloaded ${fileName}`;
 
-export const downloadFailedToast = (fileName: string) => (fileName ? `Couldn’t Download ${fileName}` : "Couldn’t Download File");
+export const downloadFailedToast = (fileName: string) => (fileName ? `Couldn’t Download ${fileName}` : t(`Couldn’t Download File`));
 
-export const stoppedPrivateDownloadsToast = (count: number) => (count === 1 ? "Stopped 1 Private Download" : `Stopped ${count} Private Downloads`);
+export const stoppedPrivateDownloadsToast = (count: number) => (count === 1 ? t(`Stopped 1 Private Download`) : `Stopped ${count} Private Downloads`);
 
 export const leadImageAspect = (width: number, height: number, tallest: number): number | null =>
   width > 1 && height > 1 ? Math.max(width / height, tallest) : null;

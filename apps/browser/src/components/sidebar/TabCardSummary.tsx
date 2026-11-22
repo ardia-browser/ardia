@@ -12,6 +12,8 @@ import { HOVER_CARD_HEADER } from "./hoverPlacement";
 import { TabIcon } from "./TabIcon";
 import { tabCardAddress } from "./tabCardAddress";
 import { TAB_ROW } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 export function TabCardSummary({ tab }: { tab: Tab }) {
   const theme = useTheme();
@@ -35,7 +37,7 @@ export function TabCardSummary({ tab }: { tab: Tab }) {
         </Text>
       ) : null}
       {sleeping ? (
-        <View accessible accessibilityLabel="Web content has been discarded" style={{ flexDirection: "row", alignItems: "center", gap: space.xs, marginTop: space.xs }}>
+        <View accessible accessibilityLabel={t(`Web content has been discarded`)} style={{ flexDirection: "row", alignItems: "center", gap: space.xs, marginTop: space.xs }}>
           <Symbol name="moon.zzz" size={10} color={theme.textTertiary} style={{ width: 14, height: 14 }} />
           <Text size="caption" tone="textTertiary">
             This tab needs to reload

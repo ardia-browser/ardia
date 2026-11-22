@@ -9,6 +9,8 @@ import { perLook } from "../ui/tokens";
 import { anchorInside, type Rect } from "./downloadsPlacement";
 import { DOWNLOADS_BUTTON } from "./tokens";
 import { noteDownloadsPanelToggle } from "../../state/telemetry/downloadsPanelCauses";
+import { t } from "../../lib/uiLanguage";
+
 
 const downloadsButtons = new Map<string, Set<View>>();
 
@@ -53,7 +55,7 @@ export function DownloadsButton({ windowId }: { windowId: string }) {
         glyph={DOWNLOADS_BUTTON.icon}
         hit={DOWNLOADS_HIT()}
         active={open}
-        tooltip={open ? undefined : withShortcut("Downloads", hint)}
+        tooltip={open ? undefined : withShortcut(t(`Downloads`), hint)}
         onPress={(press: GestureResponderEvent) => {
           const startedAt = pressedAt.current;
           pressedAt.current = undefined;

@@ -1,6 +1,8 @@
 import { errorText } from "./errors";
+import { t } from "./uiLanguage";
 
-export type PasswordAction = "browser import" | "csv import" | "settings edit" | "settings delete" | "sync delete";
+
+export type PasswordAction = t(`browser import`) | t(`csv import`) | t(`settings edit`) | t(`settings delete`) | t(`sync delete`);
 
 export const orWarn =
   <T,>(fallback: T, action?: PasswordAction) =>
@@ -13,7 +15,7 @@ export type PasswordFailure = "refused-or-already-saved" | "not-landed-in-time" 
 
 export function passwordFailure(error: unknown): PasswordFailure {
   const text = errorText(error);
-  if (text.includes("Could not save the password")) return "refused-or-already-saved";
-  if (text.includes("didn't take the change")) return "not-landed-in-time";
+  if (text.includes(t(`Could not save the password`))) return "refused-or-already-saved";
+  if (text.includes(t(`didn't take the change`))) return "not-landed-in-time";
   return "other";
 }

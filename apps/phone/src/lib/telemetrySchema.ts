@@ -1,3 +1,4 @@
+import { t } from "./uiLanguage";
 export const PHONE_LIB = "ardia-phone-telemetry";
 export const PHONE_SERVICE = "ardia-phone";
 
@@ -18,11 +19,11 @@ export type FieldRule =
 export const CONTEXT_FIELDS = {
   $lib: { kind: "const", value: PHONE_LIB },
   $lib_version: { kind: "const", value: "1" },
-  $app_name: { kind: "const", value: "Ardia" },
+  $app_name: { kind: "const", value: t(`Ardia`) },
   app: { kind: "const", value: "phone" },
   platform: { kind: "enum", values: ["android", "ios"] },
   $app_version: { kind: "pattern", pattern: VERSION },
-  $os: { kind: "enum", values: ["Android", "iOS"] },
+  $os: { kind: "enum", values: [t(`Android`), "iOS"] },
   $os_version: { kind: "pattern", pattern: VERSION },
   $environment: { kind: "enum", values: ["dev", "test", "production"] },
   $process_person_profile: { kind: "const", value: false },
@@ -40,6 +41,7 @@ export const EVENT_FIELDS = {
     color_scheme: { kind: "enum", values: ["match_mac", "system", "light", "dark"] },
     material_colors: { kind: "enum", values: ["wallpaper", "profile", "fallback", "not_material"] },
     color_choice: { kind: "enum", values: ["match_mac", "preset", "custom"] },
+    ui_language: { kind: "enum", values: ["en", "zh-Hans"] },
   },
   perf_launch: { launch_ms: { kind: "ms" }, js_ms: { kind: "ms" } },
   perf_backdrop: { backdrop_ms: { kind: "ms" } },
@@ -147,17 +149,17 @@ export type PhoneRecord = { uuid: string; event: PhoneEvent; distinct_id: string
 function fieldProblem(rule: FieldRule, value: unknown): string | null {
   switch (rule.kind) {
     case "const":
-      return value === rule.value ? null : "not the fixed value";
+      return value === rule.value ? null : t(`not the fixed value`);
     case "enum":
-      return typeof value === "string" && rule.values.includes(value) ? null : "not one of its values";
+      return typeof value === "string" && rule.values.includes(value) ? null : t(`not one of its values`);
     case "pattern":
-      return typeof value === "string" && rule.pattern.test(value) ? null : "not in its format";
+      return typeof value === "string" && rule.pattern.test(value) ? null : t(`not in its format`);
     case "count":
-      return Number.isSafeInteger(value) && (value as number) >= 0 && (value as number) <= MAX_COUNT ? null : "not a count";
+      return Number.isSafeInteger(value) && (value as number) >= 0 && (value as number) <= MAX_COUNT ? null : t(`not a count`);
     case "ms":
-      return Number.isSafeInteger(value) && (value as number) >= 0 && (value as number) <= MAX_MS ? null : "not a duration";
+      return Number.isSafeInteger(value) && (value as number) >= 0 && (value as number) <= MAX_MS ? null : t(`not a duration`);
     case "flag":
-      return typeof value === "boolean" ? null : "not a flag";
+      return typeof value === "boolean" ? null : t(`not a flag`);
   }
 }
 
@@ -187,11 +189,11 @@ export function eventContext(device: DeviceFacts, sessionId: string): Record<str
   return {
     $lib: PHONE_LIB,
     $lib_version: "1",
-    $app_name: "Ardia",
+    $app_name: t(`Ardia`),
     app: "phone",
     platform: device.platform,
     $app_version: device.appVersion,
-    $os: device.platform === "ios" ? "iOS" : "Android",
+    $os: device.platform === "ios" ? "iOS" : t(`Android`),
     $os_version: device.osVersion,
     $environment: device.environment,
     $process_person_profile: false,

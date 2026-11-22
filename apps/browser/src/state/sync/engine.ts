@@ -23,6 +23,8 @@ import { markOpenTabsSynced, openTabsClosed, recordOpenTabCloses } from "./openT
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
+import { t } from "../../lib/uiLanguage";
+
 
 export { onTabsReceived } from "./sentTabs";
 export { takeSnapshotWrites } from "./cycleWork";
@@ -187,9 +189,9 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
     publishUi({ status: "updated", error: null, pending });
   } catch (error) {
     if ((error as { code?: unknown } | null)?.code === "ERR_SYNC_FOLDER_UNREADABLE") {
-      publishUi({ status: "offline", error: "The sync folder can’t be read. Check that it’s still there and that Ardia can open it." });
+      publishUi({ status: "offline", error: t(`The sync folder can’t be read. Check that it’s still there and that Ardia can open it.`) });
     } else if (useSync.getState().status !== "locked") {
-      warnFor(consent, "[sync] cycle failed", error);
+      warnFor(consent, t(`[sync] cycle failed`), error);
       publishUi({ status: "stalled", error: errorText(error) });
     }
   } finally {
@@ -220,7 +222,7 @@ async function resetFromElsewhere() {
   await SyncNative?.forget(doc.deviceId!);
   doc = { ...emptyDoc(), folder: doc.folder, types: doc.types };
   startOver();
-  publishUi({ status: "reset", error: "This device is out of sync. Sync may have been reset from another device." });
+  publishUi({ status: "reset", error: t(`This device is out of sync. Sync may have been reset from another device.`) });
 }
 
 export async function folderInfo(path?: string | null): Promise<FolderInfo | null> {
@@ -249,7 +251,7 @@ function begin(folder: string, deviceId: string, joining: boolean) {
 
 export async function turnOnSync(folder: string): Promise<{ ok: true } | { error: string }> {
   const native = SyncNative;
-  if (!native) return { error: "Sync isn’t available in this build." };
+  if (!native) return { error: t(`Sync isn’t available in this build.`) };
   const deviceId = native.newDeviceId();
   try {
     if (!(await native.createPhrase(deviceId))) return { error: `Couldn’t save the sync key in ${PLATFORM_TERMS.secretStore}.` };
@@ -290,7 +292,7 @@ export async function stopSync({ deleteData = false } = {}) {
 async function retire(native: NonNullable<typeof SyncNative>, deleteData: boolean) {
   clearTimeout(timer);
   const consent = consentToken();
-  const reportFailure = (error: unknown) => warnFor(consent, "[sync] the last cycle before stopping failed", error);
+  const reportFailure = (error: unknown) => warnFor(consent, t(`[sync] the last cycle before stopping failed`), error);
   while (cycle) await cycle.catch(reportFailure);
   if (useSync.getState().status !== "locked") await runCycle({ retiring: true }).catch(reportFailure);
   clearTimeout(timer);
@@ -299,7 +301,7 @@ async function retire(native: NonNullable<typeof SyncNative>, deleteData: boolea
     try {
       await native.deleteChain(folder);
     } catch (error) {
-      warnFor(consent, "[sync] deleting sync data failed", error);
+      warnFor(consent, t(`[sync] deleting sync data failed`), error);
     }
   }
   if (doc.deviceId) await native.forget(doc.deviceId);
@@ -370,7 +372,7 @@ export function startSync() {
         scheduleSync(500);
       })
       .catch((error: unknown) => {
-        warnFor(consent, "[sync] unlocking at launch failed", error);
+        warnFor(consent, t(`[sync] unlocking at launch failed`), error);
         publishUi({ status: "stalled", error: errorText(error) });
       });
   }

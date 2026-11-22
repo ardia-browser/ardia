@@ -16,6 +16,8 @@ import { onProfilesOpened, profileOpened } from "../profiles/profileLoading";
 import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
 import { programControlOn } from "../app/programControlSetting";
+import { t } from "../../lib/uiLanguage";
+
 
 export type ScriptsOutcome = { ok: true } | { disabled: true } | { removed: true } | { error: string };
 type Status = { generation: number; profiles: Record<string, ScriptsOutcome> };
@@ -45,7 +47,7 @@ const openedTargets = (targets: Map<string, string[]>) => new Map([...targets].f
 const withoutPrivate = (path: string) => path.replace(/^\/private(?=\/(tmp|var|etc)\/)/, "");
 const loadedFrom = (ext: InstalledExtension, path: string) => !!ext.path && withoutPrivate(ext.path) === withoutPrivate(path);
 
-const BLOCKED = "Ardia Scripts can only hold content scripts, and the engine blocked this copy.";
+const BLOCKED = t(`Ardia Scripts can only hold content scripts, and the engine blocked this copy.`);
 
 async function load(profile: string, path: string): Promise<ScriptsOutcome> {
   try {
@@ -57,7 +59,7 @@ async function load(profile: string, path: string): Promise<ScriptsOutcome> {
     }
     const id = await installExtension({ path }, profile);
     const loaded = await find((x) => x.id === id);
-    if (!loaded) return { error: "The extension didn't load." };
+    if (!loaded) return { error: t(`The extension didn't load.`) };
     if (loaded.enabled) return { ok: true };
     if (loaded.blockedByPolicy) return { error: loaded.errors[0] ?? BLOCKED };
     return loaded.state === "DISABLED" ? { disabled: true } : { error: `The extension is ${loaded.state.toLowerCase()}.` };
@@ -101,7 +103,7 @@ async function seed() {
       applied.set(engine, { generation: status.generation, wanted: wantedBy(outcome), outcome });
     }
   } catch (error) {
-    warnFor(consent, "[scripts] couldn't read status.json", error);
+    warnFor(consent, t(`[scripts] couldn't read status.json`), error);
   }
 }
 
@@ -150,7 +152,7 @@ const schedule = singleFlight(async (flight) => {
   try {
     await reconcile(flight);
   } catch (error) {
-    warnFor(consent, "[scripts] couldn't apply the ardia scripts", error);
+    warnFor(consent, t(`[scripts] couldn't apply the ardia scripts`), error);
   }
 }, enabled);
 

@@ -19,6 +19,8 @@ import { closeSettings } from "./nav";
 import type { ColorChoice, NightShadeMode, Preferences, SwipeNavigationMode } from "./preferences";
 import { clearSince, exportableUrls, FALLBACK_ENGINES, FILTER_LIST_ADDRESS, pickerEngines, listsUpdateFailed, websiteDataKinds, type ClearChoice, type ClearRange } from "./settingsRules";
 import { currentPreferences, setPreference } from "./store";
+import { t } from "../../lib/uiLanguage";
+
 
 export type { BlockingState };
 export { appVersion };
@@ -152,7 +154,7 @@ export async function clearBrowsingData(choice: ClearChoice, range: ClearRange) 
   const kinds = websiteDataKinds(choice);
   if (kinds.length) await settled(() => pages.clearWebsiteData(kinds, clearSince(range, Date.now())), undefined);
   if (choice.archive && range === "allTime") clearArchivedTabs();
-  showToast("Cleared Browsing Data", "checkmark");
+  showToast(t(`Cleared Browsing Data`), "checkmark");
 }
 
 export const websiteDataClearsByTime = () => pages.clearsWebsiteDataSince();
@@ -160,10 +162,10 @@ export const websiteDataClearsByTime = () => pages.clearsWebsiteDataSince();
 export function exportOpenTabs() {
   const urls = exportableUrls(currentTabs().open);
   if (!urls.length) {
-    showToast("No Open Tabs", "warning");
+    showToast(t(`No Open Tabs`), "warning");
     return;
   }
-  quietly(() => shareText(urls.join("\n"), "Open Tabs from Ardia"));
+  quietly(() => shareText(urls.join("\n"), t(`Open Tabs from Ardia`)));
 }
 
 export function openFromSettings(url: string) {

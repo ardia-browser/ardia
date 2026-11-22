@@ -5,6 +5,8 @@ import { id, ids, int, obj, PAGE, PROFILE, text } from "./socketSchema";
 import { expect, now, page, profileArg } from "./socketTargets";
 import { openableUrl } from "./workspaceOps";
 import { OpError } from "./workspaceTargets";
+import { t } from "../../lib/uiLanguage";
+
 
 const MAX_DEPTH = 64;
 export const TREE_MAX_ITEMS = 5000;
@@ -111,7 +113,7 @@ function placeOf(params: Record<string, unknown>) {
 
 function linkUrl(value: unknown): string {
   const url = openableUrl(value as string);
-  if (typeof url !== "string" || !url) throw new OpError("refused", typeof url === "string" ? "A bookmark needs a page." : url.error);
+  if (typeof url !== "string" || !url) throw new OpError("refused", typeof url === "string" ? t(`A bookmark needs a page.`) : url.error);
   return url;
 }
 
@@ -119,21 +121,21 @@ function add(params: Record<string, unknown>) {
   const { profileId, parentId } = placeOf(params);
   const url = linkUrl(params.url);
   const made = now().addBookmark({ profileId, url, title: (params.title as string | undefined) ?? url, parentId, index: params.index as number | undefined });
-  expect(!!now().bookmarks.nodes[made], "the bookmark wasn't added.");
+  expect(!!now().bookmarks.nodes[made], t(`the bookmark wasn't added.`));
   return bookmarkRow(now().bookmarks.nodes[made]!, 0);
 }
 
 function addFolder(params: Record<string, unknown>) {
   const { profileId, parentId } = placeOf(params);
   const made = now().addBookmarkFolder({ profileId, title: params.title as string, parentId, index: params.index as number | undefined });
-  expect(!!now().bookmarks.nodes[made], "the folder wasn't added.");
+  expect(!!now().bookmarks.nodes[made], t(`the folder wasn't added.`));
   return bookmarkRow(now().bookmarks.nodes[made]!, 0);
 }
 
 function update(params: Record<string, unknown>) {
   const node = nodeOf(params.id);
-  if (params.url !== undefined && node.kind !== "url") throw new OpError("bad_request", "A folder has no URL.");
-  if (params.title === undefined && params.url === undefined) throw new OpError("bad_request", "bookmarks.update needs title or url.");
+  if (params.url !== undefined && node.kind !== "url") throw new OpError("bad_request", t(`A folder has no URL.`));
+  if (params.title === undefined && params.url === undefined) throw new OpError("bad_request", t(`bookmarks.update needs title or url.`));
   now().updateBookmark(node.id, { ...(params.title !== undefined ? { title: params.title as string } : {}), ...(params.url !== undefined ? { url: linkUrl(params.url) } : {}) });
   return bookmarkRow(now().bookmarks.nodes[node.id]!, 0);
 }
@@ -153,7 +155,7 @@ function move(params: Record<string, unknown>) {
   const after = now().bookmarks.nodes;
   expect(
     nodes.every((n) => (carried.includes(n) ? after[n.id]?.parentId === n.parentId : after[n.id]?.parentId === parent.id)),
-    "the bookmarks didn't move.",
+    t(`the bookmarks didn't move.`),
   );
   return bookmarkRow(now().bookmarks.nodes[parent.id]!, 1);
 }
@@ -163,19 +165,19 @@ function remove(params: Record<string, unknown>) {
   const root = nodes.find((n) => n.parentId === null);
   if (root) throw new OpError("refused", `${root.id} is a root folder.`);
   now().removeBookmarks(nodes.map((n) => n.id));
-  expect(nodes.every((n) => !now().bookmarks.nodes[n.id]), "the bookmarks weren't removed.");
+  expect(nodes.every((n) => !now().bookmarks.nodes[n.id]), t(`the bookmarks weren't removed.`));
   return { removed: nodes.length };
 }
 
-const BOOKMARK_PLACE = { profile: PROFILE, parent: id("A folder id; the profile's Bookmarks Bar when left out"), index: int("Position in the folder; the end when left out", 0) };
+const BOOKMARK_PLACE = { profile: PROFILE, parent: id(t(`A folder id; the profile's Bookmarks Bar when left out`)), index: int(t(`Position in the folder; the end when left out`), 0) };
 
 export const LIBRARY_METHODS: MethodSpec[] = [
-  { name: "bookmarks.tree", mutates: false, description: "A profile's Bookmarks Bar and Other Bookmarks, or one folder, as a tree", params: obj({ profile: PROFILE, folder: id("Only this folder"), depth: int("How many folder levels to open (all when left out)", 0, MAX_DEPTH) }), result: "{bar, other, truncated} | {…folder, truncated}", run: tree },
-  { name: "bookmarks.search", mutates: false, description: "Bookmarks and folders whose title or URL contains the query, newest first", params: obj({ profile: PROFILE, query: text("Text to look for; every bookmark when left out"), ...PAGE }), result: "{items, total, nextOffset}", run: search },
-  { name: "bookmarks.get", mutates: false, description: "One bookmark or folder", params: obj({ id: id("A bookmark id") }, ["id"]), result: "bookmark", run: (p) => bookmarkRow(nodeOf(p.id), 1) },
-  { name: "bookmarks.add", mutates: true, description: "Bookmark a page", params: obj({ url: text("The page"), title: text("Its title; the URL when left out"), ...BOOKMARK_PLACE }, ["url"]), result: "bookmark", run: add },
-  { name: "bookmarks.addFolder", mutates: true, description: "Make a bookmarks folder", params: obj({ title: text("Its name"), ...BOOKMARK_PLACE }, ["title"]), result: "folder", run: addFolder },
-  { name: "bookmarks.update", mutates: true, description: "Rename a bookmark or folder, or change a bookmark's URL", params: obj({ id: id("A bookmark id"), title: text("New title"), url: text("New URL") }, ["id"]), result: "bookmark", run: update },
-  { name: "bookmarks.move", mutates: true, description: "Move bookmarks and folders into a folder", params: obj({ ids: ids("Bookmark ids, in the order they should land"), parent: id("The folder"), index: int("Position in the folder; the end when left out", 0) }, ["ids", "parent"]), result: "folder", run: move },
-  { name: "bookmarks.remove", mutates: true, description: "Delete bookmarks and folders (with what's in them)", params: obj({ ids: ids("Bookmark ids") }, ["ids"]), result: "{removed}", run: remove },
+  { name: "bookmarks.tree", mutates: false, description: t(`A profile's Bookmarks Bar and Other Bookmarks, or one folder, as a tree`), params: obj({ profile: PROFILE, folder: id(t(`Only this folder`)), depth: int(t(`How many folder levels to open (all when left out)`), 0, MAX_DEPTH) }), result: t(`{bar, other, truncated} | {…folder, truncated}`), run: tree },
+  { name: "bookmarks.search", mutates: false, description: t(`Bookmarks and folders whose title or URL contains the query, newest first`), params: obj({ profile: PROFILE, query: text(t(`Text to look for; every bookmark when left out`)), ...PAGE }), result: t(`{items, total, nextOffset}`), run: search },
+  { name: "bookmarks.get", mutates: false, description: t(`One bookmark or folder`), params: obj({ id: id(t(`A bookmark id`)) }, ["id"]), result: "bookmark", run: (p) => bookmarkRow(nodeOf(p.id), 1) },
+  { name: "bookmarks.add", mutates: true, description: t(`Bookmark a page`), params: obj({ url: text(t(`The page`)), title: text(t(`Its title; the URL when left out`)), ...BOOKMARK_PLACE }, ["url"]), result: "bookmark", run: add },
+  { name: "bookmarks.addFolder", mutates: true, description: t(`Make a bookmarks folder`), params: obj({ title: text(t(`Its name`)), ...BOOKMARK_PLACE }, ["title"]), result: "folder", run: addFolder },
+  { name: "bookmarks.update", mutates: true, description: t(`Rename a bookmark or folder, or change a bookmark's URL`), params: obj({ id: id(t(`A bookmark id`)), title: text(t(`New title`)), url: text(t(`New URL`)) }, ["id"]), result: "bookmark", run: update },
+  { name: "bookmarks.move", mutates: true, description: t(`Move bookmarks and folders into a folder`), params: obj({ ids: ids(t(`Bookmark ids, in the order they should land`)), parent: id(t(`The folder`)), index: int(t(`Position in the folder; the end when left out`), 0) }, ["ids", "parent"]), result: "folder", run: move },
+  { name: "bookmarks.remove", mutates: true, description: t(`Delete bookmarks and folders (with what's in them)`), params: obj({ ids: ids(t(`Bookmark ids`)) }, ["ids"]), result: "{removed}", run: remove },
 ];

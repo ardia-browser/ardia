@@ -2,6 +2,8 @@ import type { NotificationPostResult } from "../../platform/notifications";
 import type { ConsentToken } from "./choice";
 import { capture } from "./client";
 import { errorType } from "./sanitize";
+import { t } from "../../lib/uiLanguage";
+
 
 export const WEB_NOTIFICATION_FAILED = "web_notification_failed";
 
@@ -13,7 +15,7 @@ export type SentWebNotification = {
 };
 
 const ICON_STATUSES = new Set(["none", "invalid_url", "attached", "attachment_rejected", "empty", "download_failed", "write_failed"]);
-const ERROR_DOMAINS = new Set(["UNErrorDomain", "NSCocoaErrorDomain", "NSPOSIXErrorDomain", "NSOSStatusErrorDomain"]);
+const ERROR_DOMAINS = new Set([t(`UNErrorDomain`), t(`NSCocoaErrorDomain`), t(`NSPOSIXErrorDomain`), t(`NSOSStatusErrorDomain`)]);
 const known = (names: Set<string>, value: unknown) => (typeof value === "string" && names.has(value) ? value : "other");
 
 export function webNotificationFailureProperties(sent: SentWebNotification, result: NotificationPostResult | null | undefined, thrown?: { error: unknown }) {

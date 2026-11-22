@@ -18,6 +18,8 @@ import { countUsage } from "../telemetry/telemetry";
 import { heldLinks, holdLink, takeHeldLinks } from "./heldLinks";
 import { useBoot } from "../app/bootState";
 import { ALL_COVERS, coversToClose, heldAfterOnboarding, keptLinks, linkAction, restoredLinks, type Cover, type IncomingLink } from "./linkRules";
+import { t } from "../../lib/uiLanguage";
+
 
 let started = false;
 
@@ -117,7 +119,7 @@ function quietlyOnDatabase(work: () => void) {
   try {
     work();
   } catch {
-    console.log("ardia-links kept links unavailable");
+    console.log(t(`ardia-links kept links unavailable`));
   }
 }
 

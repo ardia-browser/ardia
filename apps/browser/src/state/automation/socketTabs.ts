@@ -15,6 +15,8 @@ import { bool, id, obj, PROFILE, TAB, text, WINDOW } from "./socketSchema";
 import { expect, now, profileArg, tabOf, windowOf, windowOrFocused } from "./socketTargets";
 import { openableUrl } from "./workspaceOps";
 import { OpError } from "./workspaceTargets";
+import { t } from "../../lib/uiLanguage";
+
 
 export function tabRow(s: BrowserState, tabId: string) {
   const t = s.tabs[tabId]!;
@@ -56,7 +58,7 @@ function navigate(params: Record<string, unknown>) {
   const t = tabOf(params.tab);
   const url = openableUrl(params.url as string);
   if (typeof url !== "string") throw new OpError("refused", url.error);
-  refuseSyncedLinkChange(t.id, "loading another page");
+  refuseSyncedLinkChange(t.id, t(`loading another page`));
   now().navigate(t.id, url || "ardia://newtab", { userInitiated: true });
   return tabRow(now(), t.id);
 }
@@ -70,7 +72,7 @@ async function reload(params: Record<string, unknown>, call: SocketCall) {
 
 async function forward(params: Record<string, unknown>, call: SocketCall) {
   const t = tabOf(params.tab);
-  refuseSyncedLinkChange(t.id, "going forward");
+  refuseSyncedLinkChange(t.id, t(`going forward`));
   if (await goForwardAsking(t.id, call.serving)) return { ok: true };
   call.stillServing();
   throw new OpError("failed", `Tab ${t.id} didn't go forward: it has no page, or its shared page couldn't be brought to it.`);
@@ -78,7 +80,7 @@ async function forward(params: Record<string, unknown>, call: SocketCall) {
 
 async function back(params: Record<string, unknown>, call: SocketCall) {
   const t = tabOf(params.tab);
-  refuseSyncedLinkChange(t.id, "going back");
+  refuseSyncedLinkChange(t.id, t(`going back`));
   if (await goBackAsking(t.id, call.serving, askWhereSeen(`Tab ${t.id} stayed on its page`, call))) return { ok: true };
   call.stillServing();
   throw new OpError("refused", `Tab ${t.id} stayed on its page: the page has changes that going back may lose and the user chose to stay, the page moved on meanwhile, or its shared page couldn't be brought to it.`);
@@ -90,7 +92,7 @@ function setPinnedUrl(params: Record<string, unknown>) {
   let url: string | undefined;
   if (params.url !== undefined) {
     const given = openableUrl(params.url as string);
-    if (typeof given !== "string" || !given) throw new OpError("refused", typeof given === "string" ? "A pinned tab's home can't be a New Tab." : given.error);
+    if (typeof given !== "string" || !given) throw new OpError("refused", typeof given === "string" ? t(`A pinned tab's home can't be a New Tab.`) : given.error);
     url = given;
   }
   now().setPinnedUrl(t.id, url);
@@ -136,29 +138,29 @@ function closedClear(params: Record<string, unknown>) {
 }
 
 export const TAB_METHODS: MethodSpec[] = [
-  { name: "tabs.list", mutates: false, description: "Every tab the command may use, with its pin, group, split, page state and times", params: obj({ window: WINDOW, profile: PROFILE }), result: "[tab]", run: listTabs },
-  { name: "tabs.get", mutates: false, description: "One tab", params: obj({ tab: TAB }, ["tab"]), result: "tab", run: (p) => tabRow(now(), tabOf(p.tab).id) },
-  { name: "tabs.navigate", mutates: true, description: "Load a URL in a tab, as typing it in the address bar does", params: obj({ tab: TAB, url: text("http, https or file URL, about:blank or ardia://history, bookmarks, downloads, newtab") }, ["tab", "url"]), result: "tab", run: navigate },
-  { name: "tabs.reload", mutates: true, description: "Reload a tab's page", params: obj({ tab: TAB, bypassCache: bool("Reload without the cache") }, ["tab"]), result: "{ok}", run: reload },
-  { name: "tabs.back", mutates: true, description: "Go back in a tab's history; when that leaves a page with unsaved changes, the reply waits for the user's answer", params: obj({ tab: TAB }, ["tab"]), result: "{ok}", run: back },
-  { name: "tabs.forward", mutates: true, description: "Go forward in a tab's history", params: obj({ tab: TAB }, ["tab"]), result: "{ok}", run: forward },
+  { name: "tabs.list", mutates: false, description: t(`Every tab the command may use, with its pin, group, split, page state and times`), params: obj({ window: WINDOW, profile: PROFILE }), result: "[tab]", run: listTabs },
+  { name: "tabs.get", mutates: false, description: t(`One tab`), params: obj({ tab: TAB }, ["tab"]), result: "tab", run: (p) => tabRow(now(), tabOf(p.tab).id) },
+  { name: "tabs.navigate", mutates: true, description: t(`Load a URL in a tab, as typing it in the address bar does`), params: obj({ tab: TAB, url: text("http, https or file URL, about:blank or ardia://history, bookmarks, downloads, newtab") }, ["tab", "url"]), result: "tab", run: navigate },
+  { name: "tabs.reload", mutates: true, description: t(`Reload a tab's page`), params: obj({ tab: TAB, bypassCache: bool(t(`Reload without the cache`)) }, ["tab"]), result: "{ok}", run: reload },
+  { name: "tabs.back", mutates: true, description: t(`Go back in a tab's history; when that leaves a page with unsaved changes, the reply waits for the user's answer`), params: obj({ tab: TAB }, ["tab"]), result: "{ok}", run: back },
+  { name: "tabs.forward", mutates: true, description: t(`Go forward in a tab's history`), params: obj({ tab: TAB }, ["tab"]), result: "{ok}", run: forward },
   {
     name: "tabs.duplicate",
     mutates: true,
-    description: "Duplicate a tab beside it",
+    description: t(`Duplicate a tab beside it`),
     params: obj({ tab: TAB }, ["tab"]),
     result: "tab",
     run: (p) => {
       const copy = now().duplicateTab(tabOf(p.tab).id);
-      expect(!!copy, "the tab wasn't duplicated.");
+      expect(!!copy, t(`the tab wasn't duplicated.`));
       return tabRow(now(), copy!);
     },
   },
-  { name: "tabs.setPinnedUrl", mutates: true, description: "Make a pinned tab's home its current page, or the URL given", params: obj({ tab: TAB, url: text("The new home; the tab's current page when left out") }, ["tab"]), result: "tab", run: setPinnedUrl },
+  { name: "tabs.setPinnedUrl", mutates: true, description: t(`Make a pinned tab's home its current page, or the URL given`), params: obj({ tab: TAB, url: text(t(`The new home; the tab's current page when left out`)) }, ["tab"]), result: "tab", run: setPinnedUrl },
   {
     name: "tabs.returnToPinnedUrl",
     mutates: true,
-    description: "Take a pinned tab back to its home",
+    description: t(`Take a pinned tab back to its home`),
     params: obj({ tab: TAB }, ["tab"]),
     result: "tab",
     run: (p) => {
@@ -171,17 +173,17 @@ export const TAB_METHODS: MethodSpec[] = [
   {
     name: "closed.list",
     mutates: false,
-    description: "Recently closed tabs, windows and groups of a window's profile, newest first, as its History menu lists them",
-    params: obj({ window: id("A window; the last focused main window when left out") }),
-    result: "[{id, kind, closedAt, …}]",
+    description: t(`Recently closed tabs, windows and groups of a window's profile, newest first, as its History menu lists them`),
+    params: obj({ window: id(t(`A window; the last focused main window when left out`)) }),
+    result: t(`[{id, kind, closedAt, …}]`),
     run: closedList,
   },
-  { name: "closed.restore", mutates: true, description: "Reopen a closed tab, window or group", params: obj({ id: id("An id from closed.list"), window: WINDOW }, ["id"]), result: "{tabs}", run: closedRestore },
+  { name: "closed.restore", mutates: true, description: t(`Reopen a closed tab, window or group`), params: obj({ id: id(t(`An id from closed.list`)), window: WINDOW }, ["id"]), result: "{tabs}", run: closedRestore },
   {
     name: "closed.clear",
     mutates: true,
-    description: "Forget what closed.list lists for the same window: a window's profile's recently closed tabs, windows and groups",
-    params: obj({ window: id("A window; the last focused main window when left out") }),
+    description: t(`Forget what closed.list lists for the same window: a window's profile's recently closed tabs, windows and groups`),
+    params: obj({ window: id(t(`A window; the last focused main window when left out`)) }),
     result: "{cleared}",
     run: closedClear,
   },

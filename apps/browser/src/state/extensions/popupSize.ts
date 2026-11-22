@@ -1,4 +1,5 @@
-export const MEASURE_POPUP_SCRIPT = `
+import { t } from "../../lib/uiLanguage";
+export const MEASURE_POPUP_SCRIPT = t(`
 const measure = () => {
   const d = document.documentElement, b = document.body;
   return { w: Math.ceil(Math.max(d.scrollWidth, b ? b.scrollWidth : 0)), h: Math.ceil(Math.max(d.scrollHeight, b ? b.scrollHeight : 0)) };
@@ -18,4 +19,4 @@ if (!last || last.w !== now.w || last.h !== now.h) {
   });
   ro.observe(document.documentElement);
   if (document.body) ro.observe(document.body);
-}`;
+}`);

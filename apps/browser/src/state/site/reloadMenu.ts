@@ -11,6 +11,8 @@ import { useBrowser } from "../browser/store";
 import { openSettings } from "../settings/settingsWindows";
 import { showToast } from "../app/toasts";
 import { setPopover } from "../tabs/pageState";
+import { t } from "../../lib/uiLanguage";
+
 
 export function siteOrigin(url: string): string | null {
   try {
@@ -27,7 +29,7 @@ export async function setSiteBlocking(tab: Pick<Tab, "id" | "windowId">, host: s
     () => true,
   );
   const allowed = await isContentBlockerAllowed(host);
-  if (failed) showToast(tab.windowId, "Couldn't Change the Ad Blocker", `Blocking on ${host} is as it was. Try again.`, { icon: "exclamationmark.triangle" });
+  if (failed) showToast(tab.windowId, t(`Couldn't Change the Ad Blocker`), `Blocking on ${host} is as it was. Try again.`, { icon: "exclamationmark.triangle" });
   else void webviews.get(tab.id)?.reload();
   return allowed;
 }
@@ -36,8 +38,8 @@ export async function clearSiteDataAfterConfirm(tab: Pick<Tab, "id" | "windowId"
   const host = new URL(origin).hostname;
   const { confirmed } = await confirm({
     title: `Clear cookies and site data for ${host}?`,
-    message: "You'll be signed out of this site, and its offline data will be deleted.",
-    confirmTitle: "Clear",
+    message: t(`You'll be signed out of this site, and its offline data will be deleted.`),
+    confirmTitle: t(`Clear`),
     destructive: true,
     windowId: tab.windowId,
   });
@@ -53,13 +55,13 @@ export type ReloadMenuState = { blocker: "on" | "off" | "offInSettings" | "unava
 
 export function reloadMenuItems({ blocker }: ReloadMenuState): MenuItem[] {
   return menuSections(
-    [{ id: "blocking", title: "Block Ads & Trackers", symbol: "hand.raised", checked: blocker === "on", enabled: blocker !== "unavailable" }],
+    [{ id: "blocking", title: t(`Block Ads & Trackers`), symbol: "hand.raised", checked: blocker === "on", enabled: blocker !== "unavailable" }],
     [
       {
         id: "site",
-        title: "Site Settings",
+        title: t(`Site Settings`),
         symbol: "gearshape",
-        children: menuSections([{ id: "clearData", title: "Clear Cookies and Site Data…", symbol: "trash" }], [{ id: "siteControls", title: "Site Controls…" }]),
+        children: menuSections([{ id: "clearData", title: t(`Clear Cookies and Site Data…`), symbol: "trash" }], [{ id: "siteControls", title: t(`Site Controls…`) }]),
       },
     ],
   );

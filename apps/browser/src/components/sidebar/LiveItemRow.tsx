@@ -26,6 +26,8 @@ import { TabIcon } from "./TabIcon";
 import { SIDEBAR_MOTION, sidebarTokens, TAB_ROW, useSidebarTokens } from "./tokens";
 import { useSidebarRowLook } from "./rowLook";
 import { SidebarRowLabel, SidebarRowSurface } from "./SidebarRow";
+import { t } from "../../lib/uiLanguage";
+
 
 const liveRowKey = (folderId: string, itemId: string) => `live|${folderId}|${itemId}`;
 
@@ -90,9 +92,9 @@ export function LiveItemRow({ folderId, item, windowId, inStack = false }: { fol
                   {resettable ? (
                     <Pressable
                       onPress={() => tabId && returnLiveTab(tabId)}
-                      tooltip={withShortcut("Back to Pinned URL", backToPinHint)}
+                      tooltip={withShortcut(t(`Back to Pinned URL`), backToPinHint)}
                       accessibilityRole="button"
-                      accessibilityLabel="Back to Pinned URL"
+                      accessibilityLabel={t(`Back to Pinned URL`)}
                     >
                       {resetting ? (
                         <Symbol name="arrow.uturn.backward" size={11} weight="semibold" color={active ? theme.rowSelectedText : theme.textTab} style={{ width: 16, height: 16 }} />
@@ -105,7 +107,7 @@ export function LiveItemRow({ folderId, item, windowId, inStack = false }: { fol
                   )}
                 </View>
                 <SidebarRowLabel
-                  text={resetting ? "Back to Pinned URL" : item.title}
+                  text={resetting ? t(`Back to Pinned URL`) : item.title}
                   weight={unread ? "medium" : undefined}
                   color={titleColor}
                 />
@@ -134,11 +136,11 @@ const POSITION_CHIP = { marginLeft: space.xs } as const;
 type LiveRowControl = CloseControl & { press(): void };
 
 function liveRowControl(folderId: string, item: LiveItem, tabId: string | null, tabOpen: boolean, closeHint: string | undefined): LiveRowControl | null {
-  if (tabId) return { icon: "minus", tooltip: withShortcut("Close Tab", closeHint), press: () => void closeTab(tabId) };
+  if (tabId) return { icon: "minus", tooltip: withShortcut(t(`Close Tab`), closeHint), press: () => void closeTab(tabId) };
   if (item.pr && !tabOpen)
     return {
       icon: "xmark",
-      tooltip: "Hide Until Refresh",
+      tooltip: t(`Hide Until Refresh`),
       press: () => {
         hideItems(folderId, [item]);
         noteLiveRowHide();
@@ -184,12 +186,12 @@ function ItemIcon({ item, completion, colors }: { item: LiveItem; completion: Co
 }
 
 const BADGES: Record<NonNullable<ReturnType<typeof prBadge>>, { symbol: string | null; color: keyof LiveColors; tip: string }> = {
-  conflict: { symbol: "exclamationmark.triangle.fill", color: "conflict", tip: "Merge conflicts" },
-  failing: { symbol: "xmark.circle.fill", color: "failure", tip: "Checks are failing" },
-  changesRequested: { symbol: "arrow.uturn.backward.circle.fill", color: "failure", tip: "Changes Requested" },
-  pending: { symbol: null, color: "pending", tip: "Some checks haven't completed yet" },
-  approved: { symbol: "checkmark.circle.fill", color: "success", tip: "Approved" },
-  passed: { symbol: "checkmark", color: "success", tip: "All checks have passed" },
+  conflict: { symbol: "exclamationmark.triangle.fill", color: "conflict", tip: t(`Merge conflicts`) },
+  failing: { symbol: "xmark.circle.fill", color: "failure", tip: t(`Checks are failing`) },
+  changesRequested: { symbol: "arrow.uturn.backward.circle.fill", color: "failure", tip: t(`Changes Requested`) },
+  pending: { symbol: null, color: "pending", tip: t(`Some checks haven't completed yet`) },
+  approved: { symbol: "checkmark.circle.fill", color: "success", tip: t(`Approved`) },
+  passed: { symbol: "checkmark", color: "success", tip: t(`All checks have passed`) },
 };
 
 const COMPLETION_LABEL = { marginRight: space.xs } as const;
@@ -199,7 +201,7 @@ function Trailing({ item, completion, colors }: { item: LiveItem; completion: Co
   if (completion) {
     return (
       <Text size="caption" weight="medium" color={colors[COMPLETION_GLYPH[completion].color]} style={COMPLETION_LABEL}>
-        {completion === "merged" ? "Merged" : completion === "reviewed" ? "Reviewed" : "Closed"}
+        {completion === "merged" ? t(`Merged`) : completion === "reviewed" ? t(`Reviewed`) : t(`Closed`)}
       </Text>
     );
   }

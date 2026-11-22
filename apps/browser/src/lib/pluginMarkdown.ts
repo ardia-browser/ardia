@@ -1,4 +1,6 @@
 import { pluginWebUrl } from "./pluginWebUrl";
+import { t } from "./uiLanguage";
+
 
 export type MarkdownSpan = { text: string; bold?: boolean; italic?: boolean; code?: boolean; url?: string };
 
@@ -14,8 +16,8 @@ export type MarkdownBlock =
 
 type SpanStyle = Omit<MarkdownSpan, "text">;
 
-const INLINE_START = /[\\`[*_]/g;
-const ESCAPABLE = "\\`*_[]()#>!+.-";
+const INLINE_START = /[\\t(`[*_]/g;
+const ESCAPABLE = "\\`)*_[]()#>!+.-";
 const LINK_TAIL = /\(\s*<?((?:[^()\s<>]|\([^()\s]*\))+)>?(?:\s+"[^"]*")?\s*\)/y;
 const LINE_END = /[\n\r\u2028\u2029]/g;
 const SPACE = /\s/;

@@ -15,6 +15,8 @@ import { bookmarksBar, type BarSize } from "./tokens";
 import { chipFrame } from "./chipFrame";
 import { measureRect, useEased, useSlide } from "./barMotion";
 import { useBarSize } from "./barSize";
+import { t } from "../../lib/uiLanguage";
+
 
 export function useBookmarkDragResponder(
   view: { current: View | null },
@@ -203,7 +205,7 @@ const TITLE = { flexShrink: 1 } as const;
 export function ImportButton() {
   return (
     <ContextMenuArea onContextMenu={() => void openImportButtonMenu()}>
-      <BarButton icon="rectangle.portrait.and.arrow.right" title="Import bookmarks" tooltip="Add bookmarks from another browser" onPress={() => openImport()} />
+      <BarButton icon="rectangle.portrait.and.arrow.right" title={t(`Import bookmarks`)} tooltip={t(`Add bookmarks from another browser`)} onPress={() => openImport()} />
     </ContextMenuArea>
   );
 }

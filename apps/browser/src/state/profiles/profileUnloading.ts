@@ -9,6 +9,8 @@ import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
 import { idleProfiles, profileUnloadDelay } from "./idleProfiles";
 import { markProfileUnloaded, onProfilesOpened, openProfile, profileOpened, shownEngineProfiles } from "./profileLoading";
+import { t } from "../../lib/uiLanguage";
+
 
 const CHECK_MS = 60_000;
 const REMOUNT_MS = 100;
@@ -95,7 +97,7 @@ export async function checkIdleProfiles(now = clock()) {
     const loaded = (await loadedProfiles()).filter((profile) => unloadable(profile) && profileOpened(profile));
     for (const profile of readyToUnload(loaded, new Set(shownEngineProfiles(store())), now, delay)) await unload(profile);
   } catch (error) {
-    warnFor(consent, "[profiles] couldn't unload idle profiles", error);
+    warnFor(consent, t(`[profiles] couldn't unload idle profiles`), error);
   } finally {
     checking = false;
   }

@@ -10,6 +10,8 @@ import { errorText } from "../../lib/errors";
 import { noteCliAutoEnabled, noteCliInstall, type CliInstallReason } from "../telemetry/cliCounts";
 import { consentToken } from "../telemetry/client";
 import { programControlOn, setProgramControl, userTurnedControlOff } from "./programControlSetting";
+import { t } from "../../lib/uiLanguage";
+
 
 export const installsCommandItself = PLATFORM_FEATURES.ardiaCommand && !PLATFORM_FEATURES.plugins;
 
@@ -50,7 +52,7 @@ function save(patch: Saved): boolean {
     writeDocument(DOC, versionedJson({ ...readSaved(), ...patch, at: Date.now() }, DOC_VERSION, SCHEMA_FIELD));
     return true;
   } catch (error) {
-    console.warn("[command install] couldn't save the install status", error);
+    console.warn(t(`[command install] couldn't save the install status`), error);
     return false;
   }
 }
@@ -76,7 +78,7 @@ export function installCommandInBackground(reason: CliInstallReason): Promise<Co
     if (step) useCommandInstall.setState({ step });
   });
   running = installCommand()
-    .then((result): CommandInstallResult => result ?? { ok: false, appVersion: "", error: "The installer stopped.", lines: [] })
+    .then((result): CommandInstallResult => result ?? { ok: false, appVersion: "", error: t(`The installer stopped.`), lines: [] })
     .catch((e: unknown): CommandInstallResult => ({ ok: false, appVersion: "", error: errorText(e), lines: [] }))
     .then((result) => {
       lines.remove();
@@ -87,7 +89,7 @@ export function installCommandInBackground(reason: CliInstallReason): Promise<Co
         save({ binPath: result.binPath ?? null, version: result.version ?? installedVersion, error: null });
         useCommandInstall.setState({ installing: null, step: null, installedVersion, binPath: result.binPath ?? null, error: null });
       } else {
-        const error = result.error ?? "The installer stopped.";
+        const error = result.error ?? t(`The installer stopped.`);
         save({ error });
         useCommandInstall.setState({ installing: null, step: null, installedVersion, error });
       }
@@ -97,10 +99,10 @@ export function installCommandInBackground(reason: CliInstallReason): Promise<Co
 }
 
 export function describeCommandInstall(state: Pick<CommandInstallState, "installing" | "step" | "installedVersion" | "binPath" | "error">): string {
-  if (state.installing) return state.step ? `Installing (${state.step})…` : "Installing…";
+  if (state.installing) return state.step ? `Installing (${state.step})…` : t(`Installing…`);
   if (state.error) return state.error;
   if (state.installedVersion) return state.binPath ? `Installed at ${state.binPath}` : `Version ${state.installedVersion} is installed.`;
-  return "Not installed.";
+  return t(`Not installed.`);
 }
 
 function neverInstalled(record: Saved) {

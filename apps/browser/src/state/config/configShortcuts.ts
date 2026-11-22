@@ -1,5 +1,7 @@
 import { COMMANDS, staticShortcutSources } from "../commands/commandCatalog";
 import { formatShortcut, parseShortcut, sameShortcut, type Shortcut } from "../commands/shortcuts";
+import { t } from "../../lib/uiLanguage";
+
 
 const MODIFIER_WORDS: Record<string, string> = {
   cmd: "⌘",
@@ -13,7 +15,7 @@ const MODIFIER_WORDS: Record<string, string> = {
   fn: "🌐",
 };
 const KEY_WORDS: Record<string, string> = {
-  space: "Space",
+  space: t(`Space`),
   tab: "⇥",
   return: "↩",
   escape: "⎋",
@@ -32,9 +34,9 @@ const FUNCTION_KEY = /^F([1-9]|1\d|20)$/;
 const WORD_FORM = /^((?:[a-z]+\+)*)(.+)$/i;
 
 export const SHORTCUT_FORMAT =
-  "One shortcut: modifiers cmd, opt (option, alt), ctrl (control), shift or fn joined by +, then one key " +
-  "(a character, f1–f20, space, tab, return, escape, delete, up, down, left, right, home, end, pageup, pagedown), " +
-  'as in "cmd+shift+t"; or in glyphs, as in "⇧⌘T". "" unbinds the command.';
+  t(`One shortcut: modifiers cmd, opt (option, alt), ctrl (control), shift or fn joined by +, then one key `) +
+  t(`(a character, f1–f20, space, tab, return, escape, delete, up, down, left, right, home, end, pageup, pagedown), `) +
+  t(`as in "cmd+shift+t"; or in glyphs, as in "⇧⌘T". "" unbinds the command.`);
 
 function wordGlyphs(text: string): string | null {
   const m = WORD_FORM.exec(text);

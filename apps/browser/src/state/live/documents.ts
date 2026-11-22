@@ -1,4 +1,6 @@
 import type { LiveItem } from "./types";
+import { t } from "../../lib/uiLanguage";
+
 
 type NotionRichText = { plain_text: string }[];
 type NotionPage = {
@@ -24,7 +26,7 @@ export const NOTION_SEARCH_BODY = {
 
 function notionTitle(p: NotionPage): string {
   const title = p.title ?? Object.values(p.properties ?? {}).find((v) => v.type === "title")?.title ?? [];
-  return title.map((t) => t.plain_text).join("").trim() || "Untitled";
+  return title.map((t) => t.plain_text).join("").trim() || t(`Untitled`);
 }
 
 export function mapNotion(json: NotionSearch, users: NotionUsers | null, workspace: string | null): LiveItem[] {
@@ -36,10 +38,10 @@ export function mapNotion(json: NotionSearch, users: NotionUsers | null, workspa
       source: "notion" as const,
       url: p.url,
       title: notionTitle(p),
-      subtitle: workspace ?? "Notion",
+      subtitle: workspace ?? t(`Notion`),
       icon: p.icon?.type === "emoji" ? p.icon.emoji : p.icon?.type === "external" ? p.icon.external.url : p.icon?.type === "file" ? p.icon.file.url : null,
       updatedAt: Date.parse(p.last_edited_time) || 0,
-      doc: { kind: p.object === "database" ? "Database" : "Page", editedBy: (p.last_edited_by && names.get(p.last_edited_by.id)) ?? null, place: workspace },
+      doc: { kind: p.object === "database" ? t(`Database`) : t(`Page`), editedBy: (p.last_edited_by && names.get(p.last_edited_by.id)) ?? null, place: workspace },
     }));
 }
 
@@ -55,7 +57,7 @@ export type ConfluenceSearch = {
   _links?: { base?: string };
 };
 
-export const CONFLUENCE_CQL = "type=page AND (contributor=currentUser() OR creator=currentUser() OR watcher=currentUser()) ORDER BY lastmodified DESC";
+export const CONFLUENCE_CQL = t(`type=page AND (contributor=currentUser() OR creator=currentUser() OR watcher=currentUser()) ORDER BY lastmodified DESC`);
 
 export function mapConfluence(json: ConfluenceSearch, site: string): LiveItem[] {
   const base = json._links?.base ?? `${site.replace(/\/$/, "")}/wiki`;
@@ -63,11 +65,11 @@ export function mapConfluence(json: ConfluenceSearch, site: string): LiveItem[] 
     id: `confluence:${r.id}`,
     source: "confluence" as const,
     url: base + r._links.webui,
-    title: r.title || "Untitled",
-    subtitle: r.space?.name ?? "Confluence",
+    title: r.title || t(`Untitled`),
+    subtitle: r.space?.name ?? t(`Confluence`),
     icon: null,
     updatedAt: Date.parse(r.history?.lastUpdated?.when ?? "") || 0,
-    doc: { kind: "Page", editedBy: r.history?.lastUpdated?.by?.displayName ?? null, place: r.space?.name ?? null },
+    doc: { kind: t(`Page`), editedBy: r.history?.lastUpdated?.by?.displayName ?? null, place: r.space?.name ?? null },
   }));
 }
 
@@ -84,19 +86,19 @@ export type DriveFiles = {
 };
 
 export const DRIVE_QUERY = {
-  q: "trashed = false and mimeType != 'application/vnd.google-apps.folder' and (viewedByMeTime > '1970-01-01T00:00:00Z' or 'me' in owners)",
-  orderBy: "modifiedTime desc",
+  q: t(`trashed = false and mimeType != 'application/vnd.google-apps.folder' and (viewedByMeTime > '1970-01-01T00:00:00Z' or 'me' in owners)`),
+  orderBy: t(`modifiedTime desc`),
   pageSize: "30",
   fields: "files(id,name,mimeType,webViewLink,iconLink,modifiedTime,lastModifyingUser(displayName))",
 };
 
 const DRIVE_KINDS: Record<string, string> = {
-  "application/vnd.google-apps.document": "Document",
-  "application/vnd.google-apps.spreadsheet": "Spreadsheet",
-  "application/vnd.google-apps.presentation": "Presentation",
-  "application/vnd.google-apps.form": "Form",
-  "application/vnd.google-apps.drawing": "Drawing",
-  "application/pdf": "PDF",
+  "application/vnd.google-apps.document": t(`Document`),
+  "application/vnd.google-apps.spreadsheet": t(`Spreadsheet`),
+  "application/vnd.google-apps.presentation": t(`Presentation`),
+  "application/vnd.google-apps.form": t(`Form`),
+  "application/vnd.google-apps.drawing": t(`Drawing`),
+  "application/pdf": t(`PDF`),
 };
 
 export function mapDrive(json: DriveFiles): LiveItem[] {
@@ -104,11 +106,11 @@ export function mapDrive(json: DriveFiles): LiveItem[] {
     id: `gdrive:${f.id}`,
     source: "gdrive" as const,
     url: f.webViewLink,
-    title: f.name || "Untitled",
-    subtitle: DRIVE_KINDS[f.mimeType] ?? "Google Drive",
+    title: f.name || t(`Untitled`),
+    subtitle: DRIVE_KINDS[f.mimeType] ?? t(`Google Drive`),
     icon: null,
     updatedAt: Date.parse(f.modifiedTime) || 0,
-    doc: { kind: DRIVE_KINDS[f.mimeType] ?? "File", editedBy: f.lastModifyingUser?.displayName ?? null, place: null },
+    doc: { kind: DRIVE_KINDS[f.mimeType] ?? t(`File`), editedBy: f.lastModifyingUser?.displayName ?? null, place: null },
   }));
 }
 
@@ -125,7 +127,7 @@ export type BitbucketPR = {
   participants?: { role: string; state: "approved" | "changes_requested" | null }[];
 };
 
-export type BitbucketStatuses = { values: { state: "SUCCESSFUL" | "FAILED" | "INPROGRESS" | "STOPPED"; name: string; url: string }[] };
+export type BitbucketStatuses = { values: { state: t(`SUCCESSFUL`) | t(`FAILED`) | t(`INPROGRESS`) | t(`STOPPED`); name: string; url: string }[] };
 
 export function mapBitbucket(pr: BitbucketPR, statuses: BitbucketStatuses | null): LiveItem {
   const reviewers = (pr.participants ?? []).filter((p) => p.role === "REVIEWER");

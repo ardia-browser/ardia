@@ -14,6 +14,8 @@ import { useSidebarField } from "../../state/sidebar/chrome";
 import { sidebarHeaderWithField } from "../sidebar/geometry";
 import { useCardFrame } from "../window/cardFrame";
 import { useSidebarControlsRowIn } from "../../state/windows/layout";
+import { t } from "../../lib/uiLanguage";
+
 
 export function BookmarkDialog() {
   const windowId = useWindowId();
@@ -49,7 +51,7 @@ function DialogPanel({ state }: { state: BookmarkDialogState }) {
       if (name.trim() && name !== bookmark?.title) updateBookmark(state.bookmarkId, { title: name.trim() });
       if (folderId && folderId !== bookmark?.parentId) moveBookmark(state.bookmarkId, folderId);
     } else {
-      const title = name.trim() || "Tabs";
+      const title = name.trim() || t(`Tabs`);
       addBookmarkTree(state.profileId, [{ title, children: state.tabs.map((t) => ({ title: t.title, url: t.url })) }], folderId ?? undefined);
     }
     close();
@@ -61,13 +63,13 @@ function DialogPanel({ state }: { state: BookmarkDialogState }) {
   };
 
   const newFolder = async () => {
-    const title = await prompt({ title: "New Folder", placeholder: "Folder name", confirmTitle: "Create", windowId: state.windowId });
+    const title = await prompt({ title: t(`New Folder`), placeholder: t(`Folder name`), confirmTitle: t(`Create`), windowId: state.windowId });
     if (!title || !profileId) return;
     const id = addBookmarkFolder({ profileId, title, parentId: folderId ?? undefined });
     setFolderId(id);
   };
 
-  const heading = state.kind === "allTabs" ? `Bookmark ${state.tabs.length} Tabs` : "Bookmark Added";
+  const heading = state.kind === "allTabs" ? `Bookmark ${state.tabs.length} Tabs` : t(`Bookmark Added`);
 
   return (
     <Dialog
@@ -83,15 +85,15 @@ function DialogPanel({ state }: { state: BookmarkDialogState }) {
       }
     >
       <Text weight="semibold">{heading}</Text>
-      <FormField label={state.kind === "allTabs" ? "Folder name" : "Name"}>
-        <TextField value={name} onChangeText={setName} autoFocus selectOnFocus placeholder={state.kind === "allTabs" ? "Tabs" : "Name"} onSubmit={done} onEscape={done} />
+      <FormField label={state.kind === "allTabs" ? t(`Folder name`) : t(`Name`)}>
+        <TextField value={name} onChangeText={setName} autoFocus selectOnFocus placeholder={state.kind === "allTabs" ? t(`Tabs`) : t(`Name`)} onSubmit={done} onEscape={done} />
       </FormField>
-      <FormField label="Folder">
+      <FormField label={t(`Folder`)}>
         <FolderPicker profileId={profileId} selectedId={folderId} onSelect={setFolderId} />
       </FormField>
-      <DialogActions leading={<Button title="New Folder" onPress={newFolder} />}>
-        {state.kind === "page" ? <Button title="Remove" onPress={remove} /> : <Button title="Cancel" onPress={close} />}
-        <Button title={state.kind === "page" ? "Done" : "Save"} kind="primary" onPress={done} />
+      <DialogActions leading={<Button title={t(`New Folder`)} onPress={newFolder} />}>
+        {state.kind === "page" ? <Button title={t(`Remove`)} onPress={remove} /> : <Button title={t(`Cancel`)} onPress={close} />}
+        <Button title={state.kind === "page" ? t(`Done`) : t(`Save`)} kind="primary" onPress={done} />
       </DialogActions>
     </Dialog>
   );

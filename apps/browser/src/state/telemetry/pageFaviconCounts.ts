@@ -1,6 +1,8 @@
 import type { ConsentToken } from "./choice";
 import { warnFor } from "./consoleConsent";
 import { consentOrNow, countFor } from "./countFor";
+import { t } from "../../lib/uiLanguage";
+
 
 const counts = { downloads: 0, empty: 0 };
 
@@ -14,7 +16,7 @@ export function notePageFavicon(uri: string | null, consent?: ConsentToken | nul
 
 export function notePageFaviconFailed(error: unknown, consent?: ConsentToken | null): null {
   const token = consentOrNow(consent);
-  warnFor(token, "[favicons] page download failed", error);
+  warnFor(token, t(`[favicons] page download failed`), error);
   notePageFavicon(null, token);
   return null;
 }

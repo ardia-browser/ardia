@@ -24,6 +24,8 @@ import { DuoSidebar } from "./DuoSidebar";
 import { DuoToolbar } from "./DuoToolbar";
 import { DUO, sidebarFrame, splitCardFrame, splitPanelFrame, toolbarFrame, wideCardFrame, type DuoFrame } from "./duoLayout";
 import { duoInk, duoMotion } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 export function DuoBrowsing() {
   const layout = useScreenLayout((s) => s.layout);
@@ -108,7 +110,7 @@ function SidebarOverlay({ sidebar, frame, reduceMotion }: { sidebar: Sidebar; fr
   return (
     <>
       <Animated.View testID="duoDim" collapsable={false} style={[StyleSheet.absoluteFill, dimStyle]} pointerEvents={sidebar.shown ? "auto" : "none"} importantForAccessibility={sidebar.shown ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={!sidebar.shown}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Hide Sidebar" onPress={hide} style={[StyleSheet.absoluteFill, { backgroundColor: duoInk.pageDim }]} />
+        <Pressable accessibilityRole="button" accessibilityLabel={t(`Hide Sidebar`)} onPress={hide} style={[StyleSheet.absoluteFill, { backgroundColor: duoInk.pageDim }]} />
       </Animated.View>
       <Animated.View
         testID="duoSidebarPlace"

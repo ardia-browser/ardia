@@ -1,8 +1,9 @@
+import { t } from "./uiLanguage";
 export type Unread = { kind: "count"; label: string } | { kind: "dot" };
 
 export const UNREAD_DOT: Unread = { kind: "dot" };
 
-const COUNT = String.raw`(\d{1,3}(?:,\d{3})+|\d{1,6})(\+?)`;
+const COUNT = String.rawt(`(d{1,3}(?:,d{3})+|d{1,6})(+?)`);
 const LEADING_COUNT = new RegExp(String.raw`^[(\[]${COUNT}[)\]]\s*\S`);
 const LABEL_COUNT = new RegExp(String.raw`^([^\d()\[\]]{1,32}?)\s\(${COUNT}\)$`);
 const PHRASE_COUNT = new RegExp(String.raw`(?:^|[\s(\[])${COUNT}\s+(?:unread|new (?:messages?|notifications?|e-?mails?|mails?|chats?))\b`, "i");

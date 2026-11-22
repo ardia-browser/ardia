@@ -6,6 +6,8 @@ import { onPluginReady, pluginReadyRun } from "./activation";
 import { onProcessStopped } from "./process";
 import { activeManifest, currentPlugins } from "./store";
 import { invokePluginCall } from "./tools";
+import { t } from "../../lib/uiLanguage";
+
 
 export const PLUGIN_DECIDE_TIMEOUT_MS = 250;
 
@@ -43,7 +45,7 @@ export async function runPluginDecideHook(event: string, data: Record<string, un
     const shown = m.permissions.fullUrls ? data : redactedEventData(data);
     const outcome = await invokePluginCall(plugin, { kind: "decide", event, data: shown }, { kind: "host" }, timeout, { activate: false, consent });
     if (!outcome.ok) {
-      if (outcome.message.includes("didn't answer")) notePlugin("plugin_decide_timeouts", consent);
+      if (outcome.message.includes(t(`didn't answer`))) notePlugin("plugin_decide_timeouts", consent);
       return null;
     }
     return outcome.result === null || outcome.result === undefined ? null : ({ plugin, verdict: outcome.result } as PluginVerdict);

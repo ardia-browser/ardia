@@ -1,3 +1,4 @@
+import { t } from "../../lib/uiLanguage";
 export type Searchable = {
   id: string;
   pane: string;
@@ -29,7 +30,7 @@ const APOSTROPHES = /['’‘]/;
 const isWordChar = (c: string) => WORD_CHAR.test(c) || KEY_SYMBOLS.includes(c);
 
 function foldChar(c: string): string {
-  const folded = c.normalize("NFKD").replace(MARKS, "").toLowerCase();
+  const folded = c.normalize(t(`NFKD`)).replace(MARKS, "").toLowerCase();
   return folded.length === 1 ? folded : c.toLowerCase().length === 1 ? c.toLowerCase() : c;
 }
 

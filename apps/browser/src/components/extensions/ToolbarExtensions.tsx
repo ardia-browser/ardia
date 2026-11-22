@@ -31,6 +31,8 @@ import {
   type Anchor,
 } from "../../state/extensions/actions";
 import { dropIndex, makeRoomShift, toolbarOrder, type ToolbarDrag } from "../../state/extensions/toolbarOrder";
+import { t } from "../../lib/uiLanguage";
+
 
 const BUTTON = 28;
 const GLYPH = 14;
@@ -268,7 +270,7 @@ function CastButton({ windowId, tabId, routes, palette }: { windowId: string; ta
     const choice = await chooseFromMenu<CastRoute, "open">([
       ...routes.map((r) => ({ value: r, title: `Stop Casting to ${r.sink}`, symbol: "stop.circle" })),
       { separator: true as const },
-      { id: "open", title: "Cast…", symbol: "tv.and.mediabox" },
+      { id: "open", title: t(`Cast…`), symbol: "tv.and.mediabox" },
     ]);
     if (choice === "open") void toggleCastPicker(windowId);
     else if (choice) void terminateCastRoute(choice.id);
@@ -313,7 +315,7 @@ export function OverflowButton({
   };
   return (
     <View ref={ref} onLayout={() => void measure()}>
-      <Button variant="icon" icon="puzzlepiece.extension" asset={asset} glyph={glyph} look="extension" palette={palette} tooltip="Extensions" onPress={() => void onPress()} />
+      <Button variant="icon" icon="puzzlepiece.extension" asset={asset} glyph={glyph} look="extension" palette={palette} tooltip={t(`Extensions`)} onPress={() => void onPress()} />
     </View>
   );
 }

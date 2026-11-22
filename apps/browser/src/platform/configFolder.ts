@@ -1,8 +1,10 @@
 import { nativeModule, type ConfigFileRead } from "@ardia/shell";
+import { t } from "../lib/uiLanguage";
+
 
 export type { ConfigFileRead };
 
-const Config = nativeModule("ArdiaConfig");
+const Config = nativeModule(t(`ArdiaConfig`));
 
 export const readConfigFile = (name: string): ConfigFileRead => Config.readFile(name);
 export const watchConfigFiles = (names: string[]) => Config.watch(names);

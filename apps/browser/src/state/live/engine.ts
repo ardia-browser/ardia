@@ -19,6 +19,8 @@ import { usePages } from "../tabs/pageState";
 import { liveOf, onLiveChange } from "../tabs/tabLive";
 import { capturing, whenCaptureEndsUnderHiddenCompleted } from "./captureEnds";
 import { during } from "../app/jobActivity";
+import { t } from "../../lib/uiLanguage";
+
 
 const INTERVAL_MS: Record<LiveFolderKind, number> = { pullRequests: 3 * 60_000, documents: 10 * 60_000 };
 const STALE_ON_FOCUS_MS = 60_000;
@@ -95,7 +97,7 @@ const sameFolder = (a: unknown, b: unknown) => JSON.stringify(a, sortedKeys) ===
 function claimRefresh(folderId: string) {
   const refresh = beginLiveRefresh(folderId);
   const consent = consentToken();
-  return refresh?.catch((error: unknown) => { warnFor(consent, "Couldn't claim the live folder refresh", error); return null; }).then((fence) => {
+  return refresh?.catch((error: unknown) => { warnFor(consent, t(`Couldn't claim the live folder refresh`), error); return null; }).then((fence) => {
     if (fence === null && live().folders[folderId]) setStatus(folderId, { state: "idle" });
     return fence;
   });
@@ -197,12 +199,12 @@ export function statusText(folderId: string, now = Date.now()): string {
 
 function fetchText(folderId: string, now: number): string {
   const st = live().status[folderId];
-  if (!st || st.state === "initializing") return "Loading…";
-  if (st.state === "updating") return "Updating…";
+  if (!st || st.state === "initializing") return t(`Loading…`);
+  if (st.state === "updating") return t(`Updating…`);
   if (st.error) return errorText(st.error.kind, st.error.source, now);
-  if (!st.lastFetch) return "Not updated yet";
+  if (!st.lastFetch) return t(`Not updated yet`);
   const min = Math.floor((now - st.lastFetch) / 60_000);
-  return min < 1 ? "Updated just now" : min < 60 ? `Updated ${min} min ago` : `Updated ${Math.floor(min / 60)} hr ago`;
+  return min < 1 ? t(`Updated just now`) : min < 60 ? `Updated ${min} min ago` : `Updated ${Math.floor(min / 60)} hr ago`;
 }
 
 export function errorText(kind: LiveError["kind"], source: LiveSourceId, now = Date.now()): string {

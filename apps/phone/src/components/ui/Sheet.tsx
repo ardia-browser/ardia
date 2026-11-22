@@ -27,6 +27,8 @@ import { useReduceMotion, useScreenReader } from "./contrast";
 import { MenuFrostProvider } from "./Menu";
 import { useDesign } from "./design";
 import { MaterialSheet } from "./MaterialSurfaces";
+import { t } from "../../lib/uiLanguage";
+
 
 const SHEET_REDUCED_MS = reducedMotionMs(trayMotion.reduced);
 
@@ -258,7 +260,7 @@ function ClassicSheet({ open, onDismiss, onHidden, fill, onTapAway, halfOpen = f
     >
       <Animated.View style={[StyleSheet.absoluteFill, dim]}>
         <Pressable
-          accessibilityLabel="Close"
+          accessibilityLabel={t(`Close`)}
           style={[StyleSheet.absoluteFill, { backgroundColor: theme.trayDim }]}
           onPress={() => {
             if (menuLayout.sheetGrabber) onTapAway?.();

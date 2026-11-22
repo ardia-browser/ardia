@@ -1,10 +1,12 @@
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { capsule, font, IncognitoSpecs, space, tabsInk, tabsLayout, useTheme } from "../ui";
+import { t } from "../../lib/uiLanguage";
+
 
 export function deckEmptyWords(searching: boolean, incognito: boolean): { title: string; detail: string | null } {
-  if (searching) return { title: "No Matching Tabs", detail: null };
-  if (incognito) return { title: "No Incognito Tabs", detail: "Incognito tabs aren’t saved to your history or the Archive." };
-  return { title: "No Open Tabs", detail: "Tabs you open appear here. Inactive tabs move to the Archive." };
+  if (searching) return { title: t(`No Matching Tabs`), detail: null };
+  if (incognito) return { title: t(`No Incognito Tabs`), detail: t(`Incognito tabs aren’t saved to your history or the Archive.`) };
+  return { title: t(`No Open Tabs`), detail: t(`Tabs you open appear here. Inactive tabs move to the Archive.`) };
 }
 
 export function DeckEmpty({ centerY, showsArchive, onArchive, searching = false, incognito = false }: { centerY: number; showsArchive: boolean; onArchive: () => void; searching?: boolean; incognito?: boolean }) {
@@ -31,7 +33,7 @@ export function IncognitoChip({ count, top, onPress }: { count: number; top: num
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Incognito, ${count} ${count === 1 ? "tab" : "tabs"}`}
-        accessibilityHint="Shows the option to close incognito tabs."
+        accessibilityHint={t(`Shows the option to close incognito tabs.`)}
         onPress={onPress}
         style={[styles.chip, { backgroundColor: tabsInk.incognitoOnLight, borderRadius: capsule(tabsLayout.chipHeight) }]}
       >

@@ -31,6 +31,8 @@ import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import { freshExtensions, refreshExtensions, refreshExtensionsAfterChange } from "./lists";
 import { cancelInstall, confirmInstall, showInstallSheet } from "./installSheet";
 import { movedToolbarOrder, toolbarOrder, type ToolbarDrag } from "./toolbarOrder";
+import { t } from "../../lib/uiLanguage";
+
 
 export * from "./sidePanels";
 export * from "./store";
@@ -43,7 +45,7 @@ const WEB_STORE_HOME = "https://chromewebstore.google.com/category/extensions";
 export function addFromWebStore(windowId: string, urlOrId: string, profile = extensionProfile(useBrowser.getState(), windowId)) {
   const id = webStoreExtensionId(urlOrId);
   if (!id) {
-    showInstallSheet({ key: nextInstallKey(), windowId, profile, source: "webStore", status: "error", error: "That isn't a link to an extension in the Chrome Web Store." });
+    showInstallSheet({ key: nextInstallKey(), windowId, profile, source: "webStore", status: "error", error: t(`That isn't a link to an extension in the Chrome Web Store.`) });
     return;
   }
   openInExtensionProfile(`https://chromewebstore.google.com/detail/${id}`, profile, { windowId });
@@ -66,8 +68,8 @@ export function openInExtensionProfile(url: string, profile: string, { windowId,
 export async function removeExtension(profile: string, ext: InstalledExtension, windowId?: string, mayRemove: () => boolean = () => true, ask: typeof confirm = confirm) {
   const { confirmed } = await ask({
     title: `Remove “${ext.name}”?`,
-    message: ext.fromWebStore ? "Its data and settings will be removed too." : `The extension's folder stays on your ${PLATFORM_TERMS.computer}.`,
-    confirmTitle: "Remove",
+    message: ext.fromWebStore ? t(`Its data and settings will be removed too.`) : `The extension's folder stays on your ${PLATFORM_TERMS.computer}.`,
+    confirmTitle: t(`Remove`),
     destructive: true,
     windowId,
   });
@@ -78,8 +80,8 @@ export async function removeExtension(profile: string, ext: InstalledExtension, 
 }
 
 export async function setEnabled(profile: string, id: string, enabled: boolean) {
-  patchExtension(profile, id, { enabled, state: enabled ? "ENABLED" : "DISABLED" });
-  await changeThenRefresh(profile, enabled ? "turn on" : "turn off", () => setExtensionEnabled(id, profile, enabled));
+  patchExtension(profile, id, { enabled, state: enabled ? t(`ENABLED`) : t(`DISABLED`) });
+  await changeThenRefresh(profile, enabled ? t(`turn on`) : t(`turn off`), () => setExtensionEnabled(id, profile, enabled));
 }
 
 export async function setPinned(profile: string, id: string, pinned: boolean): Promise<boolean> {
@@ -216,15 +218,15 @@ export function extensionMenuItems(ext: Pick<InstalledExtension, "name" | "enabl
   return menuSections(
     [{ id: "name", title: ext.name, enabled: false }],
     [
-      { id: "options", title: "Options", symbol: "gearshape", enabled: !!ext.optionsUrl && ext.enabled },
-      !!ext.sidePanel && ext.enabled && { id: "sidePanel", title: sidePanelOpen ? "Close Side Panel" : "Open Side Panel", symbol: "sidebar.right" },
-      { id: "pin", title: ext.pinned ? "Unpin from Toolbar" : "Pin to Toolbar", symbol: ext.pinned ? "pin.slash" : "pin" },
+      { id: "options", title: t(`Options`), symbol: "gearshape", enabled: !!ext.optionsUrl && ext.enabled },
+      !!ext.sidePanel && ext.enabled && { id: "sidePanel", title: sidePanelOpen ? t(`Close Side Panel`) : t(`Open Side Panel`), symbol: "sidebar.right" },
+      { id: "pin", title: ext.pinned ? t(`Unpin from Toolbar`) : t(`Pin to Toolbar`), symbol: ext.pinned ? "pin.slash" : "pin" },
     ],
     [
-      { id: "enable", title: ext.enabled ? "Turn Off" : "Turn On", symbol: "power" },
-      { id: "manage", title: "Manage Extension", symbol: "puzzlepiece.extension" },
+      { id: "enable", title: ext.enabled ? t(`Turn Off`) : t(`Turn On`), symbol: "power" },
+      { id: "manage", title: t(`Manage Extension`), symbol: "puzzlepiece.extension" },
     ],
-    [{ id: "remove", title: "Remove Extension…", symbol: "trash", enabled: ext.mayModify }],
+    [{ id: "remove", title: t(`Remove Extension…`), symbol: "trash", enabled: ext.mayModify }],
   );
 }
 
@@ -248,9 +250,9 @@ export async function showExtensionMenu(windowId: string, ext: InstalledExtensio
 export type ExtensionListChoice = "add" | "manage" | "pin";
 
 export const EXTENSION_LIST_ITEMS: ChoiceItem<never, ExtensionListChoice>[] = [
-  { id: "add", title: "Add Extension…", symbol: "plus" },
-  { id: "manage", title: "Manage Extensions…", symbol: "puzzlepiece.extension" },
-  { id: "pin", title: "Pin Extensions…", symbol: "pin" },
+  { id: "add", title: t(`Add Extension…`), symbol: "plus" },
+  { id: "manage", title: t(`Manage Extensions…`), symbol: "puzzlepiece.extension" },
+  { id: "pin", title: t(`Pin Extensions…`), symbol: "pin" },
 ];
 
 export type ExtensionOverflowChoice = InstalledExtension | { front: InstalledExtension };
@@ -259,7 +261,7 @@ export function extensionOverflowItems(enabled: InstalledExtension[], hidden: In
   return [
     ...enabled.map((x) => ({ value: x, title: x.name, symbol: x.pinned ? "pin.fill" : undefined })),
     ...(enabled.length ? [{ separator: true as const }] : []),
-    ...(hidden.length ? [{ id: "front" as const, title: "Move to Front", symbol: "arrow.left.to.line", children: hidden.map((x) => ({ value: { front: x }, title: x.name })) }, { separator: true as const }] : []),
+    ...(hidden.length ? [{ id: "front" as const, title: t(`Move to Front`), symbol: "arrow.left.to.line", children: hidden.map((x) => ({ value: { front: x }, title: x.name })) }, { separator: true as const }] : []),
     ...EXTENSION_LIST_ITEMS,
   ];
 }

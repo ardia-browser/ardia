@@ -9,6 +9,8 @@ import { ALERT_LEADS, dueAlerts, joinLink, joinTitle, relativeTime, type Calenda
 import { everySlowly } from "../../platform/slowTimers";
 import { dismissAlert, live } from "./store";
 import { focusedWindowOf } from "../windows/ui";
+import { t } from "../../lib/uiLanguage";
+
 
 export const useMeetingAlert = create<{ event: CalendarEvent | null }>()(() => ({ event: null }));
 
@@ -31,7 +33,7 @@ function check() {
   const when = relativeTime(event.start, Date.now());
   void postNotification({
     id: `meeting:${event.occurrence}`,
-    title: event.title || "Untitled event",
+    title: event.title || t(`Untitled event`),
     body: `${when === "Now" ? "Starting now" : event.start < Date.now() ? `Started ${when}` : `Starts ${when}`}${link ? ` · ${joinTitle(link.provider)}` : ""}`,
     data: { meeting: event.occurrence },
   });

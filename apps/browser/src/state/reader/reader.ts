@@ -11,6 +11,8 @@ import { noteReaderCheck, noteReaderNoArticle, noteReaderOpened } from "../telem
 import { consentToken } from "../telemetry/client";
 import { readerCall, readerCheckCall, readerToggleCall, type ReaderLook, type ReaderReport } from "./readerPage";
 import { READER_SIZE_NAMES } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 export type ReaderState = { url: string; available: boolean; active: boolean };
 
@@ -118,7 +120,7 @@ export async function toggleReader(tabId: string, mayWrite?: () => boolean) {
   if (report.noArticle) {
     noteReaderNoArticle(consent);
     settle(tabId, url, report, false, pushes, mayWrite);
-    showToast(tab.windowId, "No article found on this page", undefined, { icon: "doc.plaintext" });
+    showToast(tab.windowId, t(`No article found on this page`), undefined, { icon: "doc.plaintext" });
     return;
   }
   if (report.active) noteReaderOpened(consent);

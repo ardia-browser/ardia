@@ -1,4 +1,6 @@
 import type { ThemeLook } from "./themeLook";
+import { t } from "./uiLanguage";
+
 
 export const TAB_CORNERS = { min: 0, max: 20 } as const;
 
@@ -13,7 +15,7 @@ export function withTabCorners(look: ThemeLook, corners: number | null): ThemeLo
 export function tabCornersControl(inForce: number, chosen: number | null) {
   return {
     position: Math.min(1, Math.max(0, inForce / TAB_CORNERS.max)),
-    label: inForce === 0 ? "Square" : `${inForce} pt`,
+    label: inForce === 0 ? t(`Square`) : `${inForce} pt`,
     followsTheme: chosen === null,
   };
 }

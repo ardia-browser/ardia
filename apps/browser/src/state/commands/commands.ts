@@ -67,6 +67,8 @@ import { runHidingCommand } from "../site/hiddenElements";
 import { requestWindowClose } from "../windows/windowClose";
 import { commandTarget } from "./commandTarget";
 import { runLittleArdiaCommand } from "./littleArdiaCommands";
+import { t } from "../../lib/uiLanguage";
+
 
 const newOrId = (arg: string) => (arg === "new" ? null : arg);
 
@@ -224,7 +226,7 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
       return page ? void jumpToSelection(page.id) : undefined;
     case "useSelectionForFind":
       if (!page || !web) return;
-      return void web.evaluate<string>("post('result', JSON.stringify(String(getSelection() || '').trim().slice(0, 500)))").then((query) => {
+      return void web.evaluate<string>(t(`post('result', JSON.stringify(String(getSelection() || '').trim().slice(0, 500)))`)).then((query) => {
         if (query) openFind(page.id, { query });
       });
     case "findNext":
@@ -352,7 +354,7 @@ async function addBookmarkToFolder(windowId: string, tabId: string, folder: stri
   const profileId = bookmarkProfileId(s, s.windows[windowId]);
   let parentId = folder;
   if (folder === "new") {
-    const title = await prompt({ title: "New Folder", placeholder: "Folder name", confirmTitle: "Create", windowId });
+    const title = await prompt({ title: t(`New Folder`), placeholder: t(`Folder name`), confirmTitle: t(`Create`), windowId });
     if (!title) return;
     foreignWriteHooks.around(() => void (parentId = useBrowser.getState().addBookmarkFolder({ profileId, title })));
   }

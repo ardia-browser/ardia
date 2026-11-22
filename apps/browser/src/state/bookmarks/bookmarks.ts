@@ -4,6 +4,8 @@ import type { BrowserState } from "../browser/store";
 import { engineProfile, without } from "../browser/model";
 import type { BookmarkFolder, BookmarkNode, Bookmarks } from "../browser/types";
 import { noteBookmarksMoved } from "../telemetry/bookmarkMoves";
+import { t } from "../../lib/uiLanguage";
+
 
 export type BookmarksSlice = {
   bookmarks: Bookmarks;
@@ -62,7 +64,7 @@ export function bookmarkUuidFor(id: string): string {
 
 export const rootIdsFor = (engine: string) => ({ bar: `bar@${engine || "default"}`, other: `other@${engine || "default"}` });
 
-export const ROOT_TITLES = { bar: "Bookmarks Bar", other: "Other Bookmarks" } as const;
+export const ROOT_TITLES = { bar: t(`Bookmarks Bar`), other: t(`Other Bookmarks`) } as const;
 
 const MAX_DEPTH = 64;
 

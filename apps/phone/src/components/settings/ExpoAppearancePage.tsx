@@ -16,6 +16,8 @@ import { syncOffered } from "../../state/sync/offer";
 import { setDeckGrid, useDeckGrid } from "../../state/browse/deckGrid";
 import { useIncognito } from "../../state/tabs/hooks";
 import { capsule, CheckmarkLabel, ColorSwatch, ink, contentMargins, modifierList, PROFILE_COLORS, settingsChrome, settingsLayout, settingsSwitchStyle, settingsTint, settingsUIAvailable, themeEditorLayout, useProfileLook, type ProfileColor } from "../ui";
+import { t } from "../../lib/uiLanguage";
+
 
 const COLORS = Object.keys(PROFILE_COLORS) as ProfileColor[];
 const FILL = Number.MAX_SAFE_INTEGER;
@@ -36,7 +38,7 @@ export function ExpoAppearancePage() {
   const grid = useDeckGrid();
   const incognito = useIncognito();
   return (
-    <Form modifiers={modifierList(navigationTitle("Appearance"), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), contentMargins({ edges: "top", length: settingsLayout.expoListTop }))}>
+    <Form modifiers={modifierList(navigationTitle(t(`Appearance`)), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), contentMargins({ edges: "top", length: settingsLayout.expoListTop }))}>
       <Section>
         <VStack alignment="leading" spacing={12} modifiers={[padding({ vertical: 4 })]}>
           <Text>Color</Text>
@@ -63,19 +65,19 @@ export function ExpoAppearancePage() {
           </Toggle>
         ) : null}
       </Section>
-      <Section title="Interface Style" footer={offersSync ? <Text>Match My Mac follows your Mac. Reduce Transparency in iOS Settings always uses Classic.</Text> : undefined}>
+      <Section title={t(`Interface Style`)} footer={offersSync ? <Text>Match My Mac follows your Mac. Reduce Transparency in iOS Settings always uses Classic.</Text> : undefined}>
         {styleChoices.map((choice) => (
           <Choice key={choice} title={INTERFACE_STYLE_NAMES[choice]} checked={style === choice} onPress={() => setInterfaceStyle(choice)} />
         ))}
       </Section>
-      <Section title="Light or Dark" footer={<Text>{offersSync ? "Match My Mac follows your Mac. System follows this device." : "System follows this device."}</Text>}>
+      <Section title={t(`Light or Dark`)} footer={<Text>{offersSync ? t(`Match My Mac follows your Mac. System follows this device.`) : t(`System follows this device.`)}</Text>}>
         {schemeChoices.map((choice) => (
           <Choice key={choice} title={SCHEME_NAMES[choice]} checked={scheme === choice} onPress={() => setSchemeChoice(choice)} />
         ))}
       </Section>
-      <Section title="Tabs" footer={<Text>{TABS_STYLE_FOOTER}</Text>}>
-        <Choice title="Stack" checked={!grid} onPress={() => setDeckGrid(false, !incognito)} />
-        <Choice title="Grid" checked={grid} onPress={() => setDeckGrid(true, !incognito)} />
+      <Section title={t(`Tabs`)} footer={<Text>{TABS_STYLE_FOOTER}</Text>}>
+        <Choice title={t(`Stack`)} checked={!grid} onPress={() => setDeckGrid(false, !incognito)} />
+        <Choice title={t(`Grid`)} checked={grid} onPress={() => setDeckGrid(true, !incognito)} />
       </Section>
     </Form>
   );
@@ -96,7 +98,7 @@ function CustomSwatch({ selected }: { selected: boolean }) {
   const colors = useMemo(() => (saved ? themePalette(saved) : RAINBOW), [saved]);
   const ring = saved ? themeAccent(saved) : settingsTint.neutral;
   return (
-    <Button onPress={() => openThemeEditor(look)} modifiers={[buttonStyle("plain"), frame({ maxWidth: FILL, minHeight: SWATCH_HIT }), accessibilityLabel("Custom"), accessibilityAddTraits(selected ? ["isButton", "isSelected"] : ["isButton"])]}>
+    <Button onPress={() => openThemeEditor(look)} modifiers={[buttonStyle("plain"), frame({ maxWidth: FILL, minHeight: SWATCH_HIT }), accessibilityLabel(t(`Custom`)), accessibilityAddTraits(selected ? ["isButton", "isSelected"] : ["isButton"])]}>
       <RNHostView matchContents>
         <View pointerEvents="none" style={styles.ringBox}>
           <View style={[StyleSheet.absoluteFill, styles.ring, { borderColor: selected ? ring : ink.clear }]} />

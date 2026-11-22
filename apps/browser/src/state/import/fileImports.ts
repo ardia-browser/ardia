@@ -4,6 +4,8 @@ import { finishImport, importNow, importSignal, NO_EXTENSIONS, patchImport, star
 import { importModule } from "./importApi";
 import { consentToken } from "../telemetry/client";
 import { noteUntitledBookmarks } from "../telemetry/importRuns";
+import { t } from "../../lib/uiLanguage";
+
 
 export const chooseSafariExport = () => importModule().chooseImportFile("safariExport");
 export const openFullDiskAccessSettings = () => void importModule().openFullDiskAccessSettings();
@@ -23,7 +25,7 @@ export async function importSafariExport(path: string) {
     finishImport(signal, { counts, failures: failed.map((kind) => ({ kind, profiles: [] })), notes: [], extensions: NO_EXTENSIONS });
   } catch (e) {
     if (signal.aborted) return;
-    patchImport({ step: { name: "safari", error: ardiaError(e).code === "unsupported" ? "Please select a folder or zip file." : "The selected file is invalid. Please try again." } });
+    patchImport({ step: { name: "safari", error: ardiaError(e).code === "unsupported" ? t(`Please select a folder or zip file.`) : t(`The selected file is invalid. Please try again.`) } });
   }
 }
 
@@ -46,7 +48,7 @@ export async function importSafariDirect() {
     patchImport({
       step: {
         name: "safari",
-        error: code === "locked" ? "Ardia still doesn't have Full Disk Access. Grant it above, or use the export file below." : "Couldn't read Safari's data. Try the export file below.",
+        error: code === "locked" ? t(`Ardia still doesn't have Full Disk Access. Grant it above, or use the export file below.`) : t(`Couldn't read Safari's data. Try the export file below.`),
       },
       fullDiskAccess: api.safariHasFullDiskAccess(),
     });
@@ -61,10 +63,10 @@ export async function importBookmarksHtml() {
   if (!path || signal.aborted) return;
   try {
     const root = await api.importBookmarksHTML(path);
-    const bookmarks = importBookmarks(importNow().target, root, "HTML File");
+    const bookmarks = importBookmarks(importNow().target, root, t(`HTML File`));
     noteUntitledBookmarks(untitledLinks(root), consent);
     patchImport({ source: null, step: { name: "done", counts: { ...emptyCounts(), bookmarks }, failures: [], notes: [], extensions: NO_EXTENSIONS } });
   } catch {
-    if (!signal.aborted) patchImport({ step: { name: "choose", error: "The selected file is invalid. Please try again." } });
+    if (!signal.aborted) patchImport({ step: { name: "choose", error: t(`The selected file is invalid. Please try again.`) } });
   }
 }

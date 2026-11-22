@@ -1,6 +1,8 @@
 import { confirm } from "../../platform/dialogs";
 import { locationPermission, openLocationSettings, requestLocationPermission, type LocationPermission } from "../../platform/location";
 import { capture, consentToken, type ConsentToken } from "../telemetry/client";
+import { t } from "../../lib/uiLanguage";
+
 
 let toldAboutSettings = false;
 
@@ -33,12 +35,12 @@ export async function ensureLocationPermission(windowId?: string): Promise<boole
   toldAboutSettings = true;
   const off = status === "servicesOff";
   const { confirmed } = await confirm({
-    title: off ? "Location Services Are Off" : "Ardia Needs Location Permission",
+    title: off ? t(`Location Services Are Off`) : t(`Ardia Needs Location Permission`),
     message: off
-      ? "Turn on Location Services in System Settings so websites you allow can use your location."
-      : "You need to open System Settings to give Ardia permission to use your location.",
-    confirmTitle: "Open System Settings",
-    cancelTitle: "Not Now",
+      ? t(`Turn on Location Services in System Settings so websites you allow can use your location.`)
+      : t(`You need to open System Settings to give Ardia permission to use your location.`),
+    confirmTitle: t(`Open System Settings`),
+    cancelTitle: t(`Not Now`),
     windowId,
   });
   if (confirmed) void openLocationSettings();

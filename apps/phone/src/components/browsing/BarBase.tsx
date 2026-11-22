@@ -1,8 +1,10 @@
 import { StyleSheet } from "react-native";
 import Animated, { useAnimatedStyle, type SharedValue } from "react-native-reanimated";
 import { PullGlyphs } from "./PagePull";
+import { t } from "../../lib/uiLanguage";
 
-export const barBaseLook = { fade: 28, fadeAlpha: "E0", solidFromControl: 0.5 } as const;
+
+export const barBaseLook = { fade: 28, fadeAlpha: t(`E0`), solidFromControl: 0.5 } as const;
 
 export function barBaseGradient(color: string, controlTop: number, control: number): { height: number; image: string } {
   const height = controlTop + barBaseLook.fade;

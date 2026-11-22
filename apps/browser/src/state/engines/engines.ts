@@ -5,10 +5,12 @@ import { isWebPageUrl } from "../../lib/url";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { adoptKind } from "../tabs/adoptIds";
 import { adoptOf, navigationOf } from "../tabs/pageSession";
+import { t } from "../../lib/uiLanguage";
+
 
 export type { PageEngine } from "../../platform/tabs";
 
-export const ENGINE_NAMES: Record<PageEngine, string> = { chromium: "Chromium", webkit: "WebKit" };
+export const ENGINE_NAMES: Record<PageEngine, string> = { chromium: t(`Chromium`), webkit: t(`WebKit`) };
 export const ENGINE_SYMBOLS: Record<PageEngine, string> = { chromium: "globe", webkit: "safari" };
 export const RECOMMENDED_ENGINE: PageEngine = "chromium";
 export const otherEngine = (engine: PageEngine): PageEngine => (engine === "webkit" ? "chromium" : "webkit");

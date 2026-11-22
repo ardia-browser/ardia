@@ -1,6 +1,8 @@
 import { nativeModule, type ConfirmOptions, type PromptOptions } from "@ardia/shell";
+import { t } from "../lib/uiLanguage";
 
-const Dialogs = nativeModule("ArdiaDialogs");
+
+const Dialogs = nativeModule(t(`ArdiaDialogs`));
 
 export const confirm = (options: ConfirmOptions) => Dialogs.confirm(options);
 export const canDismissShownOnlyDialogs = () => Dialogs.dismissesShownOnly === true;

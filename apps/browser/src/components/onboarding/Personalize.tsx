@@ -7,19 +7,21 @@ import { Segmented, Text, type SegmentOption } from "../ui";
 import { OptionCard } from "./OptionCard";
 import { useOnboardingColors } from "./Parts";
 import { radius, space } from "../ui/tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 export const PERSONALIZE_COPY = {
-  title: "Make it yours",
-  subtitle: "Pick the theme color and layout that feel right for you.",
-  layouts: "Choose how you would like to view your tabs:",
-  side: "Sidebar on the",
+  title: t(`Make it yours`),
+  subtitle: t(`Pick the theme color and layout that feel right for you.`),
+  layouts: t(`Choose how you would like to view your tabs:`),
+  side: t(`Sidebar on the`),
 } as const;
 
 type Side = Settings["sidebarSide"];
 
 const SIDE_OPTIONS: SegmentOption<Side>[] = [
-  { value: "left", title: "Left" },
-  { value: "right", title: "Right" },
+  { value: "left", title: t(`Left`) },
+  { value: "right", title: t(`Right`) },
 ];
 
 const OFF_OPACITY = 0.4;
@@ -33,9 +35,9 @@ export function TabLayoutPicker({ windowId }: { windowId: string }) {
   const sideOn = layout === "sidebar";
   return (
     <View style={{ gap: space.ml }}>
-      <View style={{ flexDirection: "row", gap: space.ml }} accessibilityRole="radiogroup" accessibilityLabel="Tab layout">
-        <LayoutButton kind="sidebar" side={side} title="Sidebar" subtitle="Tabs down the side" selected={layout === "sidebar"} onPress={() => pick("sidebar")} />
-        <LayoutButton kind="top" side="left" title="Classic" subtitle="Tabs along the top" selected={layout === "top"} onPress={() => pick("top")} />
+      <View style={{ flexDirection: "row", gap: space.ml }} accessibilityRole="radiogroup" accessibilityLabel={t(`Tab layout`)}>
+        <LayoutButton kind="sidebar" side={side} title={t(`Sidebar`)} subtitle={t(`Tabs down the side`)} selected={layout === "sidebar"} onPress={() => pick("sidebar")} />
+        <LayoutButton kind="top" side="left" title={t(`Classic`)} subtitle={t(`Tabs along the top`)} selected={layout === "top"} onPress={() => pick("top")} />
       </View>
       <View
         pointerEvents={sideOn ? "auto" : "none"}

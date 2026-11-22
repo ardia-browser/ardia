@@ -1,125 +1,127 @@
 import { type SettingsEnv, type SettingSection } from "./types";
 import type { SettingsPane } from "../../../state/settings/settingsWindows";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
+import { t } from "../../../lib/uiLanguage";
+
 
 const calendarOffered = () => PLATFORM_FEATURES.calendar;
 const calendarOn = (_: unknown, env: SettingsEnv) => PLATFORM_FEATURES.calendar && !!env.calendarAccess;
-const LINK_WORDS = ["arc", "air traffic control", "atc", "links from other apps", "route links", "open links in profile", "default browser"];
+const LINK_WORDS = ["arc", t(`air traffic control`), "atc", t(`links from other apps`), t(`route links`), t(`open links in profile`), t(`default browser`)];
 
 export const automationRows = {
   automations: [
     {
-      section: "Calendar",
+      section: t(`Calendar`),
       rows: {
         calendarAccess: {
-          title: "Calendar access",
-          keywords: ["connect calendar", "google calendar", "outlook", "icloud"],
+          title: t(`Calendar access`),
+          keywords: [t(`connect calendar`), t(`google calendar`), "outlook", "icloud"],
           shown: calendarOffered,
         },
         meetingAlert: {
-          title: "Meeting alert",
-          keywords: ["reminder", "join", "popup", "show next meeting alert"],
+          title: t(`Meeting alert`),
+          keywords: ["reminder", "join", "popup", t(`show next meeting alert`)],
           shown: calendarOn,
-          needs: "Allow calendar access to use this",
+          needs: t(`Allow calendar access to use this`),
         },
         meetingAlertCondition: {
-          title: "Show alerts",
+          title: t(`Show alerts`),
           explained: true,
-          description: "With Always, alerts also show while you're in another app.",
-          keywords: ["system alerts", "banner"],
+          description: t(`With Always, alerts also show while you're in another app.`),
+          keywords: [t(`system alerts`), "banner"],
           shown: calendarOn,
-          needs: "Allow calendar access to use this",
+          needs: t(`Allow calendar access to use this`),
         },
         calendarPreview: {
-          title: "Show calendar preview",
-          description: "Hover a pinned calendar tab to see your day.",
+          title: t(`Show calendar preview`),
+          description: t(`Hover a pinned calendar tab to see your day.`),
           keywords: ["hover"],
           shown: calendarOn,
-          needs: "Allow calendar access to use this",
+          needs: t(`Allow calendar access to use this`),
         },
         countdown: {
-          title: "Countdown to next meeting",
-          description: "How long before a meeting the badge appears.",
-          keywords: ["countdown", "minutes", "lead time", "next meeting", "start countdown", "now", "dismiss", "show time to next meeting"],
+          title: t(`Countdown to next meeting`),
+          description: t(`How long before a meeting the badge appears.`),
+          keywords: ["countdown", "minutes", t(`lead time`), t(`next meeting`), t(`start countdown`), "now", "dismiss", t(`show time to next meeting`)],
           shown: calendarOn,
-          needs: "Allow calendar access to use this",
+          needs: t(`Allow calendar access to use this`),
         },
         groupMeetingTabs: {
-          title: "Group tabs for meetings",
-          description: "Joining a call puts its tabs in a group.",
-          keywords: ["zoom", "meet", "call", "tab groups", "automatically group tabs for meetings", "calendar"],
+          title: t(`Group tabs for meetings`),
+          description: t(`Joining a call puts its tabs in a group.`),
+          keywords: ["zoom", "meet", "call", t(`tab groups`), t(`automatically group tabs for meetings`), "calendar"],
           shown: calendarOn,
-          needs: "Allow calendar access to use this",
+          needs: t(`Allow calendar access to use this`),
         },
       },
     },
     {
-      section: "Live folders",
+      section: t(`Live folders`),
       rows: {
         liveFolders: {
-          title: "Live folders",
+          title: t(`Live folders`),
           explained: true,
-          description: "Right-click the sidebar and choose New Live Folder.",
-          keywords: ["new live folder", "hidden", "refresh", "stack", "stacked pull requests", "group stacked pull requests", "completed", "merged", "closed", "show completed pull requests"],
+          description: t(`Right-click the sidebar and choose New Live Folder.`),
+          keywords: [t(`new live folder`), "hidden", "refresh", "stack", t(`stacked pull requests`), t(`group stacked pull requests`), "completed", "merged", "closed", t(`show completed pull requests`)],
         },
         github: {
-          title: "GitHub",
-          description: "Your pull requests and review requests.",
-          keywords: ["pull requests", "connect"],
+          title: t(`GitHub`),
+          description: t(`Your pull requests and review requests.`),
+          keywords: [t(`pull requests`), "connect"],
         },
         bitbucket: {
-          title: "Bitbucket",
-          description: "Your open pull requests.",
-          keywords: ["pull requests", "connect"],
+          title: t(`Bitbucket`),
+          description: t(`Your open pull requests.`),
+          keywords: [t(`pull requests`), "connect"],
         },
         notion: {
-          title: "Notion",
-          description: "Recently edited pages.",
+          title: t(`Notion`),
+          description: t(`Recently edited pages.`),
           keywords: ["documents", "connect"],
         },
         confluence: {
-          title: "Confluence",
-          description: "Pages you created, edited or watch.",
+          title: t(`Confluence`),
+          description: t(`Pages you created, edited or watch.`),
           keywords: ["documents", "atlassian", "connect"],
         },
         gdrive: {
-          title: "Google Drive",
-          description: "Recently changed documents.",
+          title: t(`Google Drive`),
+          description: t(`Recently changed documents.`),
           keywords: ["documents", "docs", "connect"],
         },
       },
     },
     {
-      section: "Link routing",
+      section: t(`Link routing`),
       rows: {
         linkRules: {
-          title: "Rules",
+          title: t(`Rules`),
           explained: true,
-          description: "The first rule that matches a link decides where it opens.",
-          keywords: [...LINK_WORDS, "work profile", "rule", "add rule", "tab group", "group", "link rules", "hooks", "hooks.json", "link.opening", "automation", "link hooks from hooks.json"],
+          description: t(`The first rule that matches a link decides where it opens.`),
+          keywords: [...LINK_WORDS, t(`work profile`), "rule", t(`add rule`), t(`tab group`), "group", t(`link rules`), "hooks", "hooks.json", "link.opening", "automation", t(`link hooks from hooks.json`)],
         },
         testLink: {
-          title: "Test a link",
+          title: t(`Test a link`),
           explained: true,
-          description: "See where a link would open, without opening it.",
-          keywords: ["air traffic control", "atc", "test", "preview", "check", "try a link"],
+          description: t(`See where a link would open, without opening it.`),
+          keywords: [t(`air traffic control`), "atc", "test", "preview", "check", t(`try a link`)],
         },
         linkFallback: {
-          title: "Links no rule catches",
+          title: t(`Links no rule catches`),
           explained: true,
-          description: "Where links open when no rule decides.",
-          keywords: ["everything else", "fallback", "otherwise", "air traffic control", "links from other apps"],
+          description: t(`Where links open when no rule decides.`),
+          keywords: [t(`everything else`), "fallback", "otherwise", t(`air traffic control`), t(`links from other apps`)],
         },
         linkFallbackGroup: {
-          title: "Tab group",
-          description: "The group these links join.",
-          keywords: ["everything else", "fallback", "tab group", "group"],
+          title: t(`Tab group`),
+          description: t(`The group these links join.`),
+          keywords: [t(`everything else`), "fallback", t(`tab group`), "group"],
         },
         appLinks: {
-          title: "Apps that open links",
+          title: t(`Apps that open links`),
           explained: true,
-          description: "Sites that open another app without asking first.",
-          keywords: ["external apps", "protocol handlers", "zoom links", "apps allowed to open links"],
+          description: t(`Sites that open another app without asking first.`),
+          keywords: [t(`external apps`), t(`protocol handlers`), t(`zoom links`), t(`apps allowed to open links`)],
         },
       },
     },

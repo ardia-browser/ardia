@@ -8,6 +8,8 @@ import { useTheme } from "../ui/theme";
 import { Button, Dot, space, Symbol, Text, usePresence } from "../ui";
 import { Hud } from "./Hud";
 import { CONTROL_PILL_MOTION } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 const PILL_HEIGHT = 32;
 const PILL_BOTTOM = 12;
@@ -50,7 +52,7 @@ export function ControlPill({ style }: { style?: Animated.WithAnimatedValue<View
                   {line.rest}
                 </Text>
               )}
-              <Button variant="pill" tone="chip" title="Stop" onPress={stopProgramControl} />
+              <Button variant="pill" tone="chip" title={t(`Stop`)} onPress={stopProgramControl} />
             </View>
           </Hud>
         </Animated.View>

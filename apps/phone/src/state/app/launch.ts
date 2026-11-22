@@ -21,6 +21,8 @@ import { launchArguments } from "./launchFlags";
 import { isLabBuild } from "../../platform/lab";
 import { runDeckPullScript } from "../browse/deckPullScript";
 import { DEMO_PRIVATE_URLS, manyTabTitle, sampleToast } from "./launchRules";
+import { t } from "../../lib/uiLanguage";
+
 
 
 const DEMO_WARM_BATCH = 3;
@@ -174,7 +176,7 @@ async function deckStep({ kind, argument }: DeckStep) {
     }
     case "private": {
       const tab = openNewTab({ url: DEMO_PRIVATE_URLS[0], origin: "typed", isPrivate: true, selecting: false });
-      updateTabById(tab.id, { title: "Moon - Wikipedia" });
+      updateTabById(tab.id, { title: t(`Moon - Wikipedia`) });
       return;
     }
     case "empty":
@@ -189,7 +191,7 @@ async function deckStep({ kind, argument }: DeckStep) {
       return;
     case "received":
       receiveSentTabs([
-        { key: `demo-received-${Date.now()}`, url: "https://www.swift.org/blog/", title: "Blog | Swift.org", fromDevice: "MacBook Pro", sentAt: Date.now(), profileSyncId: "demo-personal" },
+        { key: `demo-received-${Date.now()}`, url: "https://www.swift.org/blog/", title: t(`Blog | Swift.org`), fromDevice: t(`MacBook Pro`), sentAt: Date.now(), profileSyncId: "demo-personal" },
       ]);
       return;
     case "many":

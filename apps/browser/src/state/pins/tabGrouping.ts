@@ -6,6 +6,8 @@ import { inPinnedContainer, isIncognitoProfile, isPinnedRow, newId, pinKeyOf } f
 import { splitOf, splitTabIdsOf, withSplitRows } from "../splits/splits";
 import { markPinned } from "./pinChoices";
 import type { BrowserWindow, Tab, TabGroup } from "../browser/types";
+import { t } from "../../lib/uiLanguage";
+
 
 export type GroupPlacement = { pinned: boolean; beforeId?: string | null; parentId?: string | null };
 
@@ -22,7 +24,7 @@ export function groupLabel(s: Pick<BrowserState, "tabs">, g: TabGroup): string {
     return cached.label;
   }
   const members = g.tabIds.map((id) => s.tabs[id]);
-  const label = autoGroupName(members.filter((t): t is Tab => !!t?.url)) || "New Group";
+  const label = autoGroupName(members.filter((t): t is Tab => !!t?.url)) || t(`New Group`);
   autoLabels.set(g, { tabs: s.tabs, members, label });
   return label;
 }

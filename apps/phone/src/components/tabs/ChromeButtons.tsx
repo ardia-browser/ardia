@@ -3,6 +3,8 @@ import { haptics } from "../../state/app/haptics";
 import Animated, { useAnimatedStyle, type SharedValue } from "react-native-reanimated";
 import { newIncognitoTab, newRegularTab, newTab, reopenLastClosed } from "../../state/browse/store";
 import { capsule, ChromeSurface, PressScale, rolesFor, startLayout, Symbol, SystemGlyph, type MenuItem, type SymbolName } from "../ui";
+import { t } from "../../lib/uiLanguage";
+
 
 const CIRCLE_SYSTEM_NAMES: Partial<Record<SymbolName, string>> = {
   ellipsis: "ellipsis",
@@ -20,11 +22,11 @@ export function plusMenuItems(incognito: boolean, canReopen: boolean): MenuItem[
   return [
     ...(incognito
       ? [
-          { label: "New Tab", icon: "plus" as const, onPress: newRegularTab },
-          { label: "New Incognito Tab", icon: "eyes" as const, onPress: newTab },
+          { label: t(`New Tab`), icon: "plus" as const, onPress: newRegularTab },
+          { label: t(`New Incognito Tab`), icon: "eyes" as const, onPress: newTab },
         ]
-      : [{ label: "New Incognito Tab", icon: "eyes" as const, onPress: newIncognitoTab }]),
-    ...(canReopen ? [{ label: "Reopen Closed Tab", icon: "arrowUturnBackward" as const, onPress: reopenLastClosed }] : []),
+      : [{ label: t(`New Incognito Tab`), icon: "eyes" as const, onPress: newIncognitoTab }]),
+    ...(canReopen ? [{ label: t(`Reopen Closed Tab`), icon: "arrowUturnBackward" as const, onPress: reopenLastClosed }] : []),
   ];
 }
 
@@ -59,7 +61,7 @@ export function GlassCircleButton({ icon, label, testID, diameter = startLayout.
 export function GlassPlusButton({ width, label, testID, dark, incognito = false, glassShown, glassShownMs, glyphFade, onPress, onLongPress }: Look & ChromeFade & { width: number; label: string; testID: string; onPress: () => void; onLongPress: () => void }) {
   const size = { width, height: startLayout.barPlus.height };
   return (
-    <PressScale label={label} hint="Touch and hold for more options." onPress={onPress} onLongPress={onLongPress} onPressIn={haptics.barPress} style={size}>
+    <PressScale label={label} hint={t(`Touch and hold for more options.`)} onPress={onPress} onLongPress={onLongPress} onPressIn={haptics.barPress} style={size}>
       <ChromeSurface testID={testID} shape={width === size.height ? "circle" : "capsule"} cornerRadius={capsule(size.height)} incognito={incognito} dark={dark} shown={glassShown} shownMs={glassShownMs} style={[styles.centered, size]}>
         <FadingGlyphs testID={`${testID}Glyph`} pointerEvents="none" fade={glyphFade}>
           <SystemGlyph systemName="plus" pointSize={PLUS_SYSTEM_GLYPH} weight="medium" name="plus" size={startLayout.plusGlyph} color={rolesFor(dark).label} />

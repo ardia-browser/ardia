@@ -8,28 +8,30 @@ import type {
   SpaceSummary,
 } from "../../state/import/apply";
 import { IMPORT_KINDS } from "../../state/import/flow";
+import { t } from "../../lib/uiLanguage";
+
 
 export type { BrowserProfile, BrowserSource, DiaTabsResult, ImportedExtension, ImportKind, ImportResult, SpaceSummary };
 
-export const APP = "Ardia";
+export const APP = t(`Ardia`);
 
 const KIND_LOOK: Record<ImportKind, { title: string; icon: string }> = {
-  bookmarks: { title: "Bookmarks", icon: "bookmark" },
-  history: { title: "History", icon: "clock" },
-  passwords: { title: "Passwords", icon: "key" },
-  cookies: { title: "Cookies (stay signed in)", icon: "person.badge.key" },
-  autofill: { title: "Addresses and cards", icon: "creditcard" },
-  tabs: { title: "Tabs", icon: "square.on.square" },
-  spaces: { title: "Spaces", icon: "square.stack" },
-  pinnedTabs: { title: "Pinned tabs", icon: "pin" },
-  favorites: { title: "Favorites", icon: "star" },
-  linkRules: { title: "Air Traffic Control", icon: "airplane" },
-  archive: { title: "Archived tabs", icon: "archivebox" },
+  bookmarks: { title: t(`Bookmarks`), icon: "bookmark" },
+  history: { title: t(`History`), icon: "clock" },
+  passwords: { title: t(`Passwords`), icon: "key" },
+  cookies: { title: t(`Cookies (stay signed in)`), icon: "person.badge.key" },
+  autofill: { title: t(`Addresses and cards`), icon: "creditcard" },
+  tabs: { title: t(`Tabs`), icon: "square.on.square" },
+  spaces: { title: t(`Spaces`), icon: "square.stack" },
+  pinnedTabs: { title: t(`Pinned tabs`), icon: "pin" },
+  favorites: { title: t(`Favorites`), icon: "star" },
+  linkRules: { title: t(`Air Traffic Control`), icon: "airplane" },
+  archive: { title: t(`Archived tabs`), icon: "archivebox" },
 };
 export const KINDS: { kind: ImportKind; title: string; icon: string }[] = IMPORT_KINDS.map((kind) => ({ kind, ...KIND_LOOK[kind] }));
 export const kindTitle = (k: ImportKind) => KIND_LOOK[k].title;
 
-const DIA_NOT_SHARED = "Custom tab names, colours, spaces and folders stay in Dia: its AppleScript doesn't share them.";
+const DIA_NOT_SHARED = t(`Custom tab names, colours, spaces and folders stay in Dia: its AppleScript doesn't share them.`);
 const DIA_ASKED = `${APP} asks Dia for its open and pinned tabs, opening it in the background if it isn't running.`;
 const DIA_READ = `${APP} reads Dia's sidebar from its own files, without opening Dia: spaces, folders, groups, split views and renamed tabs come over as they are.`;
 

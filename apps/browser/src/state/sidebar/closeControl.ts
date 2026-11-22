@@ -5,14 +5,16 @@ import { useBrowserWhile } from "../tabs/tabWatch";
 import { rootOf } from "../groups/groups";
 import { closeIntent, closeKind, openPages } from "../tabs/tabs";
 import { middleClickTab } from "./clearTabs";
+import { t } from "../../lib/uiLanguage";
+
 
 export type CloseControl = { icon: "xmark" | "minus"; tooltip: string };
 
-const REMOVE_PIN: CloseControl = { icon: "xmark", tooltip: "Remove Pinned Tab" };
-const CLOSE_GROUP: CloseControl = { icon: "xmark", tooltip: "Close Group" };
-const UNLOAD_GROUP: CloseControl = { icon: "minus", tooltip: "Unload Tabs" };
+const REMOVE_PIN: CloseControl = { icon: "xmark", tooltip: t(`Remove Pinned Tab`) };
+const CLOSE_GROUP: CloseControl = { icon: "xmark", tooltip: t(`Close Group`) };
+const UNLOAD_GROUP: CloseControl = { icon: "minus", tooltip: t(`Unload Tabs`) };
 
-const CLOSE_KEY_CONTROLS = { close: { icon: "xmark", title: "Close Tab" }, unload: { icon: "minus", title: "Unload Tab" } } as const;
+const CLOSE_KEY_CONTROLS = { close: { icon: "xmark", title: t(`Close Tab`) }, unload: { icon: "minus", title: t(`Unload Tab`) } } as const;
 const keyedControls = new Map<string, CloseControl>();
 
 function closeKeyControl({ icon, title }: { icon: CloseControl["icon"]; title: string }, s: BrowserState): CloseControl {

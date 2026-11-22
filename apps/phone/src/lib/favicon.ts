@@ -1,4 +1,6 @@
 import { mixColors } from "./color.ts";
+import { t } from "./uiLanguage";
+
 
 const MONOGRAM_PALETTE = ["#5E6AD2", "#2F9E8F", "#D9663F", "#8A5CC7", "#3A8DDE", "#C2477A", "#5F9E3A", "#B8862B"] as const;
 const MONOGRAM_NEUTRAL = "#8E8E93";
@@ -55,7 +57,7 @@ export function monogram(pageUrl: string | null): Monogram {
 }
 
 export const FAVICON_USER_AGENT =
-  "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Mobile Safari/537.36";
+  t(`Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Mobile Safari/537.36`);
 
 export type FaviconBacking = "light" | "dark" | null;
 

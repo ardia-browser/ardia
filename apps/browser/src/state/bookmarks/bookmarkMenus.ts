@@ -11,13 +11,15 @@ import type { BookmarkNode, Bookmarks } from "../browser/types";
 import { openImport } from "../settings/settingsWindows";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { exportBookmarksFromWindow } from "./exportHtml";
+import { t } from "../../lib/uiLanguage";
+
 
 export const organizeMenuItems = (): MenuItem[] => [
-  { id: "bookmark", title: "Add Page…", symbol: "bookmark" },
-  { id: "folder", title: "New Folder…", symbol: "folder.badge.plus" },
+  { id: "bookmark", title: t(`Add Page…`), symbol: "bookmark" },
+  { id: "folder", title: t(`New Folder…`), symbol: "folder.badge.plus" },
   { separator: true },
-  { id: "import", title: "Import Bookmarks…", symbol: "square.and.arrow.down" },
-  ...(PLATFORM_FEATURES.exportsBookmarksAndPasswords ? [{ id: "export", title: "Export Bookmarks…", symbol: "square.and.arrow.up" }] : []),
+  { id: "import", title: t(`Import Bookmarks…`), symbol: "square.and.arrow.down" },
+  ...(PLATFORM_FEATURES.exportsBookmarksAndPasswords ? [{ id: "export", title: t(`Export Bookmarks…`), symbol: "square.and.arrow.up" }] : []),
 ];
 
 export async function openOrganizeMenu(windowId: string, profileId: string, folderId: string | null) {
@@ -34,23 +36,23 @@ export type RowMenuTarget =
   | { kind: "folder"; links: number; makesGroup: boolean; restoresArc: boolean; showPath: boolean }
   | { kind: "several"; links: number; items: number; noun: string };
 
-const showInFolder = (showPath: boolean) => showPath && { id: "show", title: "Show in Folder", symbol: "folder" };
+const showInFolder = (showPath: boolean) => showPath && { id: "show", title: t(`Show in Folder`), symbol: "folder" };
 
 export function bookmarkRowMenuItems(target: RowMenuTarget): MenuItem[] {
   if (target.kind === "url")
-    return menuSections([...openLinkItems(), showInFolder(target.showPath)], copyLinkItems(), [{ id: "edit", title: "Edit…", symbol: "pencil" }], [{ id: "delete", title: "Delete", symbol: "trash" }]);
+    return menuSections([...openLinkItems(), showInFolder(target.showPath)], copyLinkItems(), [{ id: "edit", title: t(`Edit…`), symbol: "pencil" }], [{ id: "delete", title: t(`Delete`), symbol: "trash" }]);
   if (target.kind === "folder")
     return menuSections(
       [...openAllItems(target.links), showInFolder(target.showPath)],
       [
-        { id: "addGroup", title: "Add to Sidebar as Group", symbol: "sidebar.left", enabled: target.makesGroup },
-        target.restoresArc && { id: "restoreArc", title: "Restore Arc Folders as Groups" },
+        { id: "addGroup", title: t(`Add to Sidebar as Group`), symbol: "sidebar.left", enabled: target.makesGroup },
+        target.restoresArc && { id: "restoreArc", title: t(`Restore Arc Folders as Groups`) },
       ],
       [
-        { id: "edit", title: "Rename…", symbol: "pencil" },
-        { id: "newFolder", title: "New Folder…", symbol: "folder.badge.plus" },
+        { id: "edit", title: t(`Rename…`), symbol: "pencil" },
+        { id: "newFolder", title: t(`New Folder…`), symbol: "folder.badge.plus" },
       ],
-      [{ id: "delete", title: "Delete Folder", symbol: "trash" }],
+      [{ id: "delete", title: t(`Delete Folder`), symbol: "trash" }],
     );
   return menuSections(openAllItems(target.links, target.links), copyLinkItems(target.links), [
     { id: "delete", title: `Delete ${target.items} ${target.noun}`, symbol: "trash" },
@@ -62,7 +64,7 @@ function linksOf(b: Bookmarks, nodes: BookmarkNode[]): Link[] {
 }
 
 const nounFor = (nodes: BookmarkNode[]) =>
-  nodes.every((n) => n.kind === "url") ? "Bookmarks" : nodes.every((n) => n.kind === "folder") ? "Folders" : "Items";
+  nodes.every((n) => n.kind === "url") ? t(`Bookmarks`) : nodes.every((n) => n.kind === "folder") ? t(`Folders`) : t(`Items`);
 
 export function rowMenuTarget(s: BookmarkOwners, nodes: BookmarkNode[], showPath: boolean): RowMenuTarget | null {
   const [node] = nodes;

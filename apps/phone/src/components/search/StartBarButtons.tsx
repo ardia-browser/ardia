@@ -8,6 +8,8 @@ import { MenuTrigger } from "../ui/MenuTrigger";
 import { SF_SYMBOL_NAMES } from "../ui/sfSymbolNames";
 import { plusMenu } from "../tabs/DeckBottomBar";
 import { startButtonFill } from "./startLook";
+import { t } from "../../lib/uiLanguage";
+
 
 export function StartCircleButton({ icon, label, testID, diameter = startLayout.barCircle, dark, incognito, onPress }: { icon: SymbolName; label: string; testID: string; diameter?: number; dark: boolean; incognito: boolean; onPress: () => void }) {
   const size = { width: diameter, height: diameter };
@@ -27,7 +29,7 @@ export function StartPlusButton({ width, label, testID, dark, incognito, place, 
   return (
     <MenuTrigger items={plusMenu(tabIncognito, canReopen)} trigger="longPress" haptic={menuOpenedHaptic} disabled={!menusShown} place={place} style={size}>
       {({ onLongPress }) => (
-        <PressScale label={label} hint="Touch and hold for more options." onPress={newTab} onLongPress={onLongPress ?? noop} onPressIn={haptics.barPress} style={size}>
+        <PressScale label={label} hint={t(`Touch and hold for more options.`)} onPress={newTab} onLongPress={onLongPress ?? noop} onPressIn={haptics.barPress} style={size}>
           <View testID={testID} style={[styles.centered, size, { borderRadius: capsule(size.height), backgroundColor: startButtonFill[dark || incognito ? "dark" : "light"] }]}>
             <SystemGlyph testID={`${testID}Glyph`} systemName="plus" pointSize={18} weight="medium" name="plus" size={startLayout.plusGlyph} color={rolesFor(dark).label} />
           </View>

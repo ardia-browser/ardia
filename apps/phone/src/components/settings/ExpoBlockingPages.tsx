@@ -38,6 +38,8 @@ import { PasteAction, SYSTEM_PASTE_SIZE } from "../sync/SyncPage";
 import { FilterTextEditor, legibleInk, modifierList, navigationBarBackButtonHidden, settingsChrome, settingsLayout, settingsPage, settingsSwitchStyle } from "../ui";
 import { haptics } from "../../state/app/haptics";
 import { ExpoHero } from "./ExpoSettingsParts";
+import { t } from "../../lib/uiLanguage";
+
 
 const FILL = Number.MAX_SAFE_INTEGER;
 const SECONDARY = { type: "hierarchical", style: "secondary" } as const;
@@ -58,8 +60,8 @@ export function ExpoFilterListsPage() {
   const updating = busy || Boolean(state?.isUpdating);
   const now = Date.now();
   return (
-    <Form modifiers={modifierList(settingsPage("Filter Lists"), tint(BLUE), settingsChrome(), refreshable(async () => void (await updateLists())))}>
-      <ExpoHero title="Filter Lists" subtitle={`${listsText(enabled.length)} · ${rulesText(state?.enabledRuleCount ?? 0)}`} systemImage="shield.lefthalf.filled" tint="ads">
+    <Form modifiers={modifierList(settingsPage(t(`Filter Lists`)), tint(BLUE), settingsChrome(), refreshable(async () => void (await updateLists())))}>
+      <ExpoHero title={t(`Filter Lists`)} subtitle={`${listsText(enabled.length)} · ${rulesText(state?.enabledRuleCount ?? 0)}`} systemImage="shield.lefthalf.filled" tint="ads">
         <Text modifiers={modifierList(font({ textStyle: "footnote" }), state?.isOffline ? legibleInk("orange") : foregroundStyle(SECONDARY), contentTransition("opacity"))}>
           {listsStatus(updating, Boolean(state?.isOffline), state?.lastUpdated ?? null, now)}
         </Text>
@@ -67,7 +69,7 @@ export function ExpoFilterListsPage() {
       <Section footer={<Text>Checked weekly.</Text>}>
         <Button onPress={() => void updateListsFromButton()} modifiers={[disabled(updating)]}>
           <HStack>
-            <Text>{updating ? "Updating Lists…" : "Update Now"}</Text>
+            <Text>{updating ? t(`Updating Lists…`) : t(`Update Now`)}</Text>
             <Spacer />
             {updating ? <ProgressView /> : null}
           </HStack>
@@ -83,18 +85,18 @@ export function ExpoFilterListsPage() {
       <Section>
         <AddListSheet open={adding} onOpen={() => setAdding(true)} onClose={() => setAdding(false)} />
         <NavigationLink value={settingsRouteKey({ page: "myFilters" })}>
-          <LabeledContent label="My Filters">
+          <LabeledContent label={t(`My Filters`)}>
             <Text>{myFiltersCount(state?.myFiltersRuleCount ?? 0)}</Text>
           </LabeledContent>
         </NavigationLink>
       </Section>
       <Section>
-        <ConfirmationDialog title="Restore Default Filter Lists?" isPresented={confirmingReset} onIsPresentedChange={setConfirmingReset} titleVisibility="visible">
+        <ConfirmationDialog title={t(`Restore Default Filter Lists?`)} isPresented={confirmingReset} onIsPresentedChange={setConfirmingReset} titleVisibility="visible">
           <ConfirmationDialog.Trigger>
-            <Button role="destructive" label="Restore Defaults…" onPress={() => setConfirmingReset(true)} />
+            <Button role="destructive" label={t(`Restore Defaults…`)} onPress={() => setConfirmingReset(true)} />
           </ConfirmationDialog.Trigger>
           <ConfirmationDialog.Actions>
-            <Button role="destructive" label="Restore Defaults" onPress={() => void resetLists()} />
+            <Button role="destructive" label={t(`Restore Defaults`)} onPress={() => void resetLists()} />
           </ConfirmationDialog.Actions>
           <ConfirmationDialog.Message>
             <Text>{resetMessage(lists.filter((list) => list.isCustom).length)}</Text>
@@ -109,7 +111,7 @@ function FilterListRow({ list, now }: { list: FilterListInfo; now: number }) {
   const facts = listFacts(list, now);
   return (
     <HStack spacing={12} modifiers={[padding({ vertical: 2 })]}>
-      <Button onPress={() => pushSettings({ page: "filterList", id: list.id })} modifiers={[buttonStyle("plain"), accessibilityHint("Shows the list’s details")]}>
+      <Button onPress={() => pushSettings({ page: "filterList", id: list.id })} modifiers={[buttonStyle("plain"), accessibilityHint(t(`Shows the list’s details`))]}>
         <VStack alignment="leading" spacing={2} modifiers={[frame({ maxWidth: FILL, alignment: "leading" })]}>
           <Text>{list.title}</Text>
           <Text modifiers={modifierList(font({ textStyle: "subheadline" }), facts.isWarning ? legibleInk("orange") : foregroundStyle(SECONDARY), contentTransition("opacity"))}>{facts.text}</Text>
@@ -152,12 +154,12 @@ function AddListSheet({ open, onOpen, onClose }: { open: boolean; onOpen: () => 
   };
   const footer = failure ? <Text modifiers={modifierList(legibleInk("red"))}>{failure}</Text> : "message" in check && address ? <Text modifiers={[foregroundStyle(SECONDARY)]}>{check.message}</Text> : <Text>{FILTER_LIST_ADDRESS.footer}</Text>;
   return (
-    <BottomSheet anchor={<Button label="Add a List…" onPress={onOpen} />} isPresented={open} onIsPresentedChange={(presented) => (presented ? undefined : close())}>
+    <BottomSheet anchor={<Button label={t(`Add a List…`)} onPress={onOpen} />} isPresented={open} onIsPresentedChange={(presented) => (presented ? undefined : close())}>
       <Group modifiers={[presentationDetents(["medium", "large"]), presentationDragIndicator("hidden"), interactiveDismissDisabled(adding)]}>
         <NavigationStack>
           <Toolbar>
-            <Form modifiers={[navigationTitle("Add a List"), navigationBarTitleDisplayMode("inline"), tint(BLUE)]}>
-              <Section title="List Address" footer={footer}>
+            <Form modifiers={[navigationTitle(t(`Add a List`)), navigationBarTitleDisplayMode("inline"), tint(BLUE)]}>
+              <Section title={t(`List Address`)} footer={footer}>
                 <TextField
                   text={text}
                   placeholder="https://example.com/filters.txt"
@@ -187,9 +189,9 @@ function AddListSheet({ open, onOpen, onClose }: { open: boolean; onOpen: () => 
             </Form>
             <Toolbar.Content>
               <ToolbarItem placement="cancellationAction">
-                <Button label="Cancel" role="cancel" onPress={close} />
+                <Button label={t(`Cancel`)} role="cancel" onPress={close} />
               </ToolbarItem>
-              <ToolbarItem placement="confirmationAction">{adding ? <ProgressView /> : <Button label="Add" onPress={() => void add()} modifiers={[disabled(url === null)]} />}</ToolbarItem>
+              <ToolbarItem placement="confirmationAction">{adding ? <ProgressView /> : <Button label={t(`Add`)} onPress={() => void add()} modifiers={[disabled(url === null)]} />}</ToolbarItem>
             </Toolbar.Content>
           </Toolbar>
         </NavigationStack>
@@ -205,8 +207,8 @@ export function ExpoFilterListPage({ route }: { route: SettingsRoute }) {
   const [confirmingRemoval, setConfirmingRemoval] = useState(false);
   if (!list) {
     return (
-      <Form modifiers={modifierList(navigationTitle("Filter List"), navigationBarTitleDisplayMode("inline"), settingsChrome())}>
-        <ContentUnavailableView title="List Removed" systemImage="list.bullet.rectangle" />
+      <Form modifiers={modifierList(navigationTitle(t(`Filter List`)), navigationBarTitleDisplayMode("inline"), settingsChrome())}>
+        <ContentUnavailableView title={t(`List Removed`)} systemImage="list.bullet.rectangle" />
       </Form>
     );
   }
@@ -219,44 +221,44 @@ export function ExpoFilterListPage({ route }: { route: SettingsRoute }) {
       </Section>
       {list.state === "failed" ? (
         <Section>
-          <Label title={list.failure ?? "This list couldn’t be updated."} icon={<Image systemName="exclamationmark.triangle.fill" modifiers={modifierList(legibleInk("orange"))} />} />
-          <Button label="Try Again" onPress={() => void updateLists()} modifiers={[disabled(updating)]} />
+          <Label title={list.failure ?? t(`This list couldn’t be updated.`)} icon={<Image systemName="exclamationmark.triangle.fill" modifiers={modifierList(legibleInk("orange"))} />} />
+          <Button label={t(`Try Again`)} onPress={() => void updateLists()} modifiers={[disabled(updating)]} />
         </Section>
       ) : null}
       <Section footer={list.skippedCount > 0 ? <Text>{copy().filterRulesUnsupported}</Text> : undefined}>
-        <LabeledContent label="Status">
+        <LabeledContent label={t(`Status`)}>
           <Text>{listStatus(list)}</Text>
         </LabeledContent>
-        <LabeledContent label="Last Updated">
-          <Text>{list.updatedAt ? listUpdatedAt(list.updatedAt) : "Never"}</Text>
+        <LabeledContent label={t(`Last Updated`)}>
+          <Text>{list.updatedAt ? listUpdatedAt(list.updatedAt) : t(`Never`)}</Text>
         </LabeledContent>
-        <LabeledContent label="Rules">
+        <LabeledContent label={t(`Rules`)}>
           <Text>{formatNumber(list.ruleCount)}</Text>
         </LabeledContent>
-        <LabeledContent label="Skipped">
+        <LabeledContent label={t(`Skipped`)}>
           <Text>{formatNumber(list.skippedCount)}</Text>
         </LabeledContent>
       </Section>
       {list.sourceUrl || list.supportUrl ? (
-        <Section title="Source">
+        <Section title={t(`Source`)}>
           {list.sourceUrl ? (
-            <Button onPress={() => openFromSettings(list.sourceUrl!)} modifiers={[accessibilityHint("Opens the link in a new tab")]}>
+            <Button onPress={() => openFromSettings(list.sourceUrl!)} modifiers={[accessibilityHint(t(`Opens the link in a new tab`))]}>
               <Text modifiers={[font({ textStyle: "subheadline" }), lineLimit(2), truncationMode("middle")]}>{list.sourceUrl}</Text>
             </Button>
           ) : null}
-          {list.supportUrl ? <Button label="Visit the List’s Website" onPress={() => openFromSettings(list.supportUrl!)} modifiers={[accessibilityHint("Opens the link in a new tab")]} /> : null}
+          {list.supportUrl ? <Button label={t(`Visit the List’s Website`)} onPress={() => openFromSettings(list.supportUrl!)} modifiers={[accessibilityHint(t(`Opens the link in a new tab`))]} /> : null}
         </Section>
       ) : null}
       {list.isCustom ? (
         <Section>
-          <ConfirmationDialog title="Remove This List?" isPresented={confirmingRemoval} onIsPresentedChange={setConfirmingRemoval} titleVisibility="visible">
+          <ConfirmationDialog title={t(`Remove This List?`)} isPresented={confirmingRemoval} onIsPresentedChange={setConfirmingRemoval} titleVisibility="visible">
             <ConfirmationDialog.Trigger>
-              <Button role="destructive" label="Remove List…" onPress={() => setConfirmingRemoval(true)} />
+              <Button role="destructive" label={t(`Remove List…`)} onPress={() => setConfirmingRemoval(true)} />
             </ConfirmationDialog.Trigger>
             <ConfirmationDialog.Actions>
               <Button
                 role="destructive"
-                label="Remove List"
+                label={t(`Remove List`)}
                 onPress={() => {
                   removeList(list.id);
                   popSettings();
@@ -277,9 +279,9 @@ export function ExpoTrustedSitesPage() {
   const exempt = useBlocking((s) => s.state?.exemptHosts);
   const hosts = useMemo(() => [...(exempt ?? [])].sort(), [exempt]);
   const [editing, setEditing] = useState(false);
-  const page = [navigationTitle("Trusted Sites"), navigationBarTitleDisplayMode("inline"), tint(BLUE)];
+  const page = [navigationTitle(t(`Trusted Sites`)), navigationBarTitleDisplayMode("inline"), tint(BLUE)];
   if (hosts.length === 0) {
-    return <ContentUnavailableView title="No Trusted Sites" systemImage="checkmark.shield" description="Sites you allow from the page menu show up here." modifiers={modifierList(...page, frame({ maxWidth: FILL, maxHeight: FILL }), settingsChrome())} />;
+    return <ContentUnavailableView title={t(`No Trusted Sites`)} systemImage="checkmark.shield" description={t(`Sites you allow from the page menu show up here.`)} modifiers={modifierList(...page, frame({ maxWidth: FILL, maxHeight: FILL }), settingsChrome())} />;
   }
   return (
     <Toolbar>
@@ -294,7 +296,7 @@ export function ExpoTrustedSitesPage() {
       </List>
       <Toolbar.Content>
         <ToolbarItem placement="topBarTrailing">
-          <Button label={editing ? "Done" : "Edit"} onPress={() => setEditing(!editing)} modifiers={editing ? [font({ weight: "semibold" })] : []} />
+          <Button label={editing ? t(`Done`) : t(`Edit`)} onPress={() => setEditing(!editing)} modifiers={editing ? [font({ weight: "semibold" })] : []} />
         </ToolbarItem>
       </Toolbar.Content>
     </Toolbar>
@@ -325,7 +327,7 @@ export function ExpoMyFiltersPage() {
   };
   return (
     <Toolbar>
-      <VStack spacing={0} modifiers={modifierList(navigationTitle("My Filters"), navigationBarTitleDisplayMode("inline"), navigationBarBackButtonHidden(changed), tint(BLUE), settingsChrome())}>
+      <VStack spacing={0} modifiers={modifierList(navigationTitle(t(`My Filters`)), navigationBarTitleDisplayMode("inline"), navigationBarBackButtonHidden(changed), tint(BLUE), settingsChrome())}>
         <ZStack alignment="topLeading">
           <FilterTextEditor text={text} onTextChange={setDraft} />
           {text ? null : (
@@ -335,16 +337,16 @@ export function ExpoMyFiltersPage() {
         <VStack alignment="leading" spacing={4} modifiers={[frame({ maxWidth: FILL, alignment: "leading" }), padding({ horizontal: 16, vertical: 12 }), backgroundOverlay({ color: PlatformColor("secondarySystemBackground") })]}>
           <Text modifiers={[font({ textStyle: "footnote", weight: "semibold" }), changed ? legibleInk("orange") : foregroundStyle(SECONDARY), contentTransition("opacity")].filter((modifier) => modifier !== null)}>{myFiltersSummary(state?.myFiltersRuleCount ?? 0, state?.myFiltersSkippedCount ?? 0, changed)}</Text>
           {large ? null : <Text modifiers={[font({ textStyle: "footnote" }), foregroundStyle(SECONDARY)]}>||site.com^ blocks a site. site.com##.ad hides part of a page. Lines that start with ! are notes.</Text>}
-          <Button label="Filter Syntax" onPress={() => openFromSettings(FILTER_SYNTAX_URL)} modifiers={[buttonStyle("plain"), font({ textStyle: "footnote", weight: "semibold" }), foregroundStyle(BLUE)]} />
+          <Button label={t(`Filter Syntax`)} onPress={() => openFromSettings(FILTER_SYNTAX_URL)} modifiers={[buttonStyle("plain"), font({ textStyle: "footnote", weight: "semibold" }), foregroundStyle(BLUE)]} />
         </VStack>
       </VStack>
       <Toolbar.Content>
         {changed ? (
           <ToolbarItem placement="cancellationAction">
-            <Button label="Revert" onPress={() => setDraft(null)} />
+            <Button label={t(`Revert`)} onPress={() => setDraft(null)} />
           </ToolbarItem>
         ) : null}
-        <ToolbarItem placement="confirmationAction">{applying ? <ProgressView /> : <Button label="Apply" onPress={() => void apply()} modifiers={[buttonStyle("glassProminent"), disabled(!changed)]} />}</ToolbarItem>
+        <ToolbarItem placement="confirmationAction">{applying ? <ProgressView /> : <Button label={t(`Apply`)} onPress={() => void apply()} modifiers={[buttonStyle("glassProminent"), disabled(!changed)]} />}</ToolbarItem>
       </Toolbar.Content>
     </Toolbar>
   );

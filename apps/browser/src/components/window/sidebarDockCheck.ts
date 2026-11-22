@@ -3,6 +3,8 @@ import { toggleSidebar } from "../../state/windows/actions";
 import { closeCheckPage, openCheckPage, windowIsEmpty } from "../../state/windows/dockCheckPage";
 import { animating, currentValue } from "../ui/motion";
 import type { usePeek } from "./usePeek";
+import { t } from "../../lib/uiLanguage";
+
 
 type SidebarDockLayer = { opacity: unknown; transform: { translateX: unknown }[] };
 
@@ -59,30 +61,30 @@ function offIdentity(probe: SidebarDockProbe) {
 
 function probeFor(windowId: string) {
   const probe = probes.get(windowId);
-  if (!probe) throw new Error("the sidebar dock went away");
+  if (!probe) throw new Error(t(`the sidebar dock went away`));
   return probe;
 }
 
 async function setDocked(windowId: string, open: boolean) {
   if (probeFor(windowId).open === open) return;
   toggleSidebar(windowId);
-  await until(open ? "the sidebar to show" : "the sidebar to hide", () => probeFor(windowId).open === open);
+  await until(open ? t(`the sidebar to show`) : t(`the sidebar to hide`), () => probeFor(windowId).open === open);
   await seen(() => probeFor(windowId).moving, START_MOVING_MS);
-  await until("the dock to stop moving", () => !probeFor(windowId).moving);
+  await until(t(`the dock to stop moving`), () => !probeFor(windowId).moving);
 }
 
 async function dockMidClose(windowId: string, moment: DockMoment) {
   const probe = () => probeFor(windowId);
   await setDocked(windowId, false);
   probe().peek.show();
-  await until("the peek to slide out", () => probe().peek.live && currentValue(probe().peek.slide) === 1 && !animating(probe().peek.slide));
+  await until(t(`the peek to slide out`), () => probe().peek.live && currentValue(probe().peek.slide) === 1 && !animating(probe().peek.slide));
   probe().peek.hide();
-  await until("the closing slide to start", () => currentValue(probe().peek.slide) < 1);
+  await until(t(`the closing slide to start`), () => currentValue(probe().peek.slide) < 1);
   const closing = Date.now();
   await until(`the moment to dock ${moment.label}`, () => moment.ready(Date.now() - closing, currentValue(probe().peek.slide)));
   const slideAtDock = currentValue(probe().peek.slide);
   await setDocked(windowId, true);
-  await until("the peek to settle", () => !probe().peek.live && !probe().peek.leaving && !animating(probe().peek.slide));
+  await until(t(`the peek to settle`), () => !probe().peek.live && !probe().peek.leaving && !animating(probe().peek.slide));
   await pause(STRAY_WRITES_MS);
   const off = offIdentity(probe());
   if (off) {
@@ -95,11 +97,11 @@ async function dockMidClose(windowId: string, moment: DockMoment) {
 async function checkSidebarPeek() {
   const windowId = probes.keys().next().value;
   if (windowId === undefined) {
-    console.info("[ardia windows] self-check note: sidebar peek skipped, no window shows tabs in the sidebar");
+    console.info(t(`[ardia windows] self-check note: sidebar peek skipped, no window shows tabs in the sidebar`));
     return;
   }
   if (probeFor(windowId).fullscreen) {
-    console.info("[ardia windows] self-check note: sidebar peek skipped, the window is full screen");
+    console.info(t(`[ardia windows] self-check note: sidebar peek skipped, the window is full screen`));
     return;
   }
   const wasOpen = probeFor(windowId).open;
@@ -107,7 +109,7 @@ async function checkSidebarPeek() {
   const slides: number[] = [];
   const pageTab = windowIsEmpty(windowId) ? openCheckPage(windowId) : null;
   try {
-    await until("a page to open in the window", () => !windowIsEmpty(windowId));
+    await until(t(`a page to open in the window`), () => !windowIsEmpty(windowId));
     await setDocked(windowId, true);
     for (const moment of DOCK_MOMENTS) slides.push(await dockMidClose(windowId, moment));
   } finally {
@@ -123,4 +125,4 @@ async function checkSidebarPeek() {
   if (numericLayers > 0) throw new Error(`the peek layer took a plain number instead of its gated value in ${numericLayers} renders`);
 }
 
-selfChecks.register({ name: "sidebar peek layer rests at identity after docking mid-close", run: checkSidebarPeek });
+selfChecks.register({ name: t(`sidebar peek layer rests at identity after docking mid-close`), run: checkSidebarPeek });

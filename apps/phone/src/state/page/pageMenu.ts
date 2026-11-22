@@ -1,4 +1,6 @@
 import { isSyncableUrl } from "../tabs/tabModels.ts";
+import { t } from "../../lib/uiLanguage";
+
 
 export type NightShadeMode = "disabled" | "automatic" | "always";
 
@@ -69,7 +71,7 @@ export function menuModel(input: MenuInput): MenuModel {
     summarize: web && !input.isLoading,
     pageRows: input.hasPage,
     translate: web,
-    translateTitle: input.translationLanguageName ? `Translate to ${input.translationLanguageName}` : "Translate",
+    translateTitle: input.translationLanguageName ? `Translate to ${input.translationLanguageName}` : t(`Translate`),
     nightShadeOn: nightShadeIsOn(input.nightShade, input.systemDark),
     zoomPercent: zoomPercent(input.pageZoom),
     zoomOut: web && input.pageZoom > levels[0]! + 0.001,

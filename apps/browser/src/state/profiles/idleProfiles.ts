@@ -1,14 +1,16 @@
 import type { Settings } from "../settings/settings";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
+import { t } from "../../lib/uiLanguage";
+
 
 const MINUTE_MS = 60_000;
 
 const DELAYS: Record<Settings["unloadProfilesAfter"], number | null> = {
   never: null,
-  "5m": 5 * MINUTE_MS,
-  "15m": 15 * MINUTE_MS,
-  "1h": 60 * MINUTE_MS,
-  "2h": 120 * MINUTE_MS,
+  t(`5m`): 5 * MINUTE_MS,
+  t(`15m`): 15 * MINUTE_MS,
+  t(`1h`): 60 * MINUTE_MS,
+  t(`2h`): 120 * MINUTE_MS,
 };
 
 export const profileUnloadDelay = (settings: Pick<Settings, "memorySaver" | "unloadProfilesAfter">): number | null =>

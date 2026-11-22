@@ -7,6 +7,8 @@ import { remoteTitle } from "../../state/sync/spaces";
 import type { PinnedTile, SyncedProfile } from "../../state/sync/store";
 import { capsule, controlRadius, Favicon, font, isSymbolName, screenReaderActions, space, spacesLayout, Symbol, useTheme } from "../ui";
 import type { Point } from "../../lib/menuPlace";
+import { t } from "../../lib/uiLanguage";
+
 
 const TILE_MIN_WIDTH = 72;
 const TILE_HEIGHT = 56;
@@ -123,9 +125,9 @@ export function Unavailable({ isOff }: { isOff: boolean }) {
     <View style={styles.unavailable}>
       <Symbol name="macAndPhone" size={48} color={theme.secondaryLabel} />
       <Text style={[font.title2, styles.bold, styles.centered, { color: theme.label }]}>Your Mac’s Spaces</Text>
-      <Text style={[font.subheadline, styles.centered, { color: theme.secondaryLabel }]}>{isOff ? "Every tab, anywhere." : "Waiting for your Mac."}</Text>
+      <Text style={[font.subheadline, styles.centered, { color: theme.secondaryLabel }]}>{isOff ? t(`Every tab, anywhere.`) : t(`Waiting for your Mac.`)}</Text>
       <Pressable accessibilityRole="button" onPress={() => openSettings({ page: isOff ? "syncConnect" : "sync" })} style={[styles.primary, { backgroundColor: theme.label }]}>
-        <Text style={[font.body, styles.bold, { color: theme.groupFill }]}>{isOff ? "Sync With Mac" : "Sync Settings"}</Text>
+        <Text style={[font.body, styles.bold, { color: theme.groupFill }]}>{isOff ? t(`Sync With Mac`) : t(`Sync Settings`)}</Text>
       </Pressable>
     </View>
   );

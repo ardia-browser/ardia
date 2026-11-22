@@ -1,18 +1,20 @@
 import { TAB_GROUP_COLORS } from "@ardia/core";
 import type { GroupColor } from "../browser/types";
+import { t } from "../../lib/uiLanguage";
+
 
 export type GroupTint = Exclude<GroupColor, "none">;
 
 export const GROUP_COLORS: Record<GroupTint, { name: string; hex: string }> = {
-  grey: { name: "Grey", hex: "#8E8E93" },
-  blue: { name: "Blue", hex: "#4C8DF6" },
-  red: { name: "Red", hex: "#E5534B" },
-  yellow: { name: "Yellow", hex: "#E3B341" },
-  green: { name: "Green", hex: "#3FB06C" },
-  pink: { name: "Pink", hex: "#DB61A2" },
-  purple: { name: "Purple", hex: "#9B6CF0" },
-  cyan: { name: "Cyan", hex: "#35B8C6" },
-  orange: { name: "Orange", hex: "#EE8434" },
+  grey: { name: t(`Grey`), hex: "#8E8E93" },
+  blue: { name: t(`Blue`), hex: "#4C8DF6" },
+  red: { name: t(`Red`), hex: "#E5534B" },
+  yellow: { name: t(`Yellow`), hex: "#E3B341" },
+  green: { name: t(`Green`), hex: "#3FB06C" },
+  pink: { name: t(`Pink`), hex: "#DB61A2" },
+  purple: { name: t(`Purple`), hex: "#9B6CF0" },
+  cyan: { name: t(`Cyan`), hex: "#35B8C6" },
+  orange: { name: t(`Orange`), hex: "#EE8434" },
 };
 
 export const NEUTRAL_GROUP_SWATCH = { light: "#0000004D", dark: "#FFFFFF4D" };

@@ -4,6 +4,8 @@ import type { Tab } from "../browser/types";
 import { isIncognitoProfile, without } from "../browser/model";
 import { hostOf } from "@ardia/core";
 import { isString, listOf } from "../../lib/decode";
+import { t } from "../../lib/uiLanguage";
+
 
 export type MuteState = "site" | "tab" | null;
 
@@ -40,11 +42,11 @@ export const muteState = (s: SiteMutes, tab: MutedTab): MuteState => (isSiteMute
 export const isSilenced = (s: SiteMutes, tab: MutedTab): boolean => tab.muted || isSiteMuted(s, tab);
 
 export function muteTitle(state: MuteState): string {
-  if (state === "site") return "Unmute Site";
-  return state === "tab" ? "Unmute Tab" : "Mute Tab";
+  if (state === "site") return t(`Unmute Site`);
+  return state === "tab" ? t(`Unmute Tab`) : t(`Mute Tab`);
 }
 
-export const siteMuteTitle = (state: MuteState): string => (state === "site" ? "Unmute Site" : "Mute Site");
+export const siteMuteTitle = (state: MuteState): string => (state === "site" ? t(`Unmute Site`) : t(`Mute Site`));
 
 export const muteSymbol = (state: MuteState): string => (state ? "speaker.wave.2" : "speaker.slash");
 

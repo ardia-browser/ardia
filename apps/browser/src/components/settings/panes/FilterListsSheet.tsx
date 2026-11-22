@@ -19,19 +19,21 @@ import { blockerAvailable, filterListAddress, filterListLabel, setFilterList } f
 import { noteContentBlockerUnavailable, noteContentBlockerWriteFailure, noteCustomFilterList } from "../../../state/telemetry/usage";
 import { consentNow, consentToken } from "../../../state/telemetry/client";
 import { UI_LOCALE } from "../../../lib/uiLocale";
+import { t } from "../../../lib/uiLanguage";
+
 
 export const CATEGORIES: { id: FilterListCategory; section: string; anchor?: SettingId }[] = [
-  { id: "ads", section: "Ad blockers", anchor: "general.blockAds" },
-  { id: "trackers", section: "Trackers", anchor: "general.blockTrackers" },
-  { id: "cookies", section: "Cookie banners", anchor: "general.blockCookieBanners" },
-  { id: "annoyances", section: "Annoyances" },
-  { id: "security", section: "Malware and scams" },
-  { id: "regional", section: "Regional blockers" },
+  { id: "ads", section: t(`Ad blockers`), anchor: "general.blockAds" },
+  { id: "trackers", section: t(`Trackers`), anchor: "general.blockTrackers" },
+  { id: "cookies", section: t(`Cookie banners`), anchor: "general.blockCookieBanners" },
+  { id: "annoyances", section: t(`Annoyances`) },
+  { id: "security", section: t(`Malware and scams`) },
+  { id: "regional", section: t(`Regional blockers`) },
 ];
 
 const filtersText = (n: number) => `${n.toLocaleString(UI_LOCALE)} ${n === 1 ? "filter" : "filters"}`;
 
-const customListText = (l: FilterList) => (l.failed ? "Couldn't download. uBlock Origin tries again at the next update." : l.filters ? filtersText(l.filters) : "Downloading…");
+const customListText = (l: FilterList) => (l.failed ? t(`Couldn't download. uBlock Origin tries again at the next update.`) : l.filters ? filtersText(l.filters) : t(`Downloading…`));
 
 const LIST_DOWNLOAD_RECHECK_MS = 10_000;
 
@@ -124,7 +126,7 @@ export function FilterListsSheet() {
           </Text>
         }
       >
-        <Button title="Done" kind="primary" onPress={closeSettingsSheet} />
+        <Button title={t(`Done`)} kind="primary" onPress={closeSettingsSheet} />
       </DialogActions>
     </Sheet>
   );
@@ -148,7 +150,7 @@ function CustomLists({ blocker, refresh }: { blocker: ContentBlockerState | null
     if (!blocker || adding) return;
     if (!address) {
       setTried(true);
-      setNote({ text: "That doesn't look like a web address.", error: true });
+      setNote({ text: t(`That doesn't look like a web address.`), error: true });
       return;
     }
     setAdding(true);
@@ -159,7 +161,7 @@ function CustomLists({ blocker, refresh }: { blocker: ContentBlockerState | null
       if (added.failed && added.custom && !added.existed) {
         await removeFilterList(added.id).catch(() => {});
         noteCustomFilterList("addFailed", consent);
-        setNote({ text: "Couldn't download a filter list from that address.", error: true });
+        setNote({ text: t(`Couldn't download a filter list from that address.`), error: true });
         return;
       }
       noteCustomFilterList("added", consent);
@@ -169,7 +171,7 @@ function CustomLists({ blocker, refresh }: { blocker: ContentBlockerState | null
       else if (!added.custom) setNote({ text: `That's ${title}, one of the lists below. It's on now.`, error: false });
     } catch {
       noteCustomFilterList("addFailed", consent);
-      setNote({ text: "uBlock Origin didn't take that list. Check the address and try again.", error: true });
+      setNote({ text: t(`uBlock Origin didn't take that list. Check the address and try again.`), error: true });
     } finally {
       setAdding(false);
       refresh();
@@ -184,7 +186,7 @@ function CustomLists({ blocker, refresh }: { blocker: ContentBlockerState | null
   };
   return (
     <View>
-      <SectionHeader title="Your lists" description="Filter lists you add by address, in Adblock Plus or uBlock Origin format." />
+      <SectionHeader title={t(`Your lists`)} description={t(`Filter lists you add by address, in Adblock Plus or uBlock Origin format.`)} />
       <Group>
         {lists.map((l) => (
           <Row
@@ -192,7 +194,7 @@ function CustomLists({ blocker, refresh }: { blocker: ContentBlockerState | null
             title={<Checkbox value={l.enabled} onChange={(v) => toggle(l, v)} label={filterListLabel(l.id, l.title)} />}
             description={customListText(l)}
           >
-            <Button variant="icon" icon="trash" size="m" onPress={() => remove(l)} tooltip="Remove" />
+            <Button variant="icon" icon="trash" size="m" onPress={() => remove(l)} tooltip={t(`Remove`)} />
           </Row>
         ))}
         <Row
@@ -210,7 +212,7 @@ function CustomLists({ blocker, refresh }: { blocker: ContentBlockerState | null
             />
           }
         >
-          <Button title={adding ? "Adding…" : "Add"} disabled={!blocker || !typed.trim() || adding} onPress={() => void add()} />
+          <Button title={adding ? t(`Adding…`) : t(`Add`)} disabled={!blocker || !typed.trim() || adding} onPress={() => void add()} />
         </Row>
       </Group>
       {note && (

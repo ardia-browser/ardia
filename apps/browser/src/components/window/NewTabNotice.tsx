@@ -5,6 +5,8 @@ import { capsule, space, Symbol, Text, useHover, usePresence } from "../ui";
 import { useTheme } from "../ui/theme";
 import { Hud } from "./Hud";
 import { NEW_TAB_NOTICE, windowColors } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 export function NewTabNotice({ windowId, tabId, right, top }: { windowId: string; tabId: string; right: number; top: number }) {
   const theme = useTheme();
@@ -28,7 +30,7 @@ export function NewTabNotice({ windowId, tabId, right, top }: { windowId: string
         }}
       >
         <View {...hoverProps} style={POINTER}>
-          <Pressable onPress={() => goToNoticedTab(windowId, shown)} accessibilityRole="button" accessibilityLabel="New tab opened. Go to the new tab." style={POINTER}>
+          <Pressable onPress={() => goToNoticedTab(windowId, shown)} accessibilityRole="button" accessibilityLabel={t(`New tab opened. Go to the new tab.`)} style={POINTER}>
             {({ pressed }) => (
               <View style={{ opacity: pressed ? NEW_TAB_NOTICE.pressedOpacity : 1 }}>
                 <Hud shape="capsule" height={NEW_TAB_NOTICE.height}>

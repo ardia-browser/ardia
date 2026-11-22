@@ -13,6 +13,8 @@ import { acceptsLine, onProcessStopped, processExited } from "./process";
 import { valuesFor } from "./values";
 import { dropHiddenRetainedSidePanels } from "./surfaces";
 import { answerMethod } from "./channelApi";
+import { t } from "../../lib/uiLanguage";
+
 
 export { CHANNEL_PROTOCOL, MAX_OPEN_URLS, type ChannelCaller } from "./channelApi";
 export { pluginWebUrl, MAX_OPEN_URL_LENGTH, type PluginWebUrl } from "../../lib/pluginWebUrl";
@@ -34,7 +36,7 @@ export const observedHooks = (m: PluginManifest) => m.hooks.filter((h) => !isDec
 
 function subscribe(c: Connection, m: PluginManifest, params: Record<string, unknown>): Body {
   const given = params.events;
-  if (!Array.isArray(given)) return failure("bad_request", "subscribe needs events: a list of event names, or [\"*\"].");
+  if (!Array.isArray(given)) return failure("bad_request", t(`subscribe needs events: a list of event names, or ["*"].`));
   const hooks = observedHooks(m);
   const events = given.includes("*") ? hooks : given;
   const outside = events.filter((name) => typeof name !== "string" || !hooks.includes(name));
@@ -74,7 +76,7 @@ export function handlePluginLine({ name, run, launch, line }: PluginLine) {
   const c = connectionFor(name, run);
   const request = parseRequest(line);
   if ("error" in request) return reply(c, request.id, { error: request.error });
-  if (!manifest) return reply(c, request.id, failure("refused", "This plugin is off."));
+  if (!manifest) return reply(c, request.id, failure("refused", t(`This plugin is off.`)));
   let body: Body | Promise<Body>;
   try {
     body = answer(c, manifest, request.method, request.params);
@@ -127,7 +129,7 @@ export function startChannels() {
     try {
       handlePluginLine(line);
     } catch (error) {
-      console.warn("[plugins] a helper's request failed", error);
+      console.warn(t(`[plugins] a helper's request failed`), error);
     }
   });
   onPluginExit(processExited);

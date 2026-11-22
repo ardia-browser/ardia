@@ -1,6 +1,8 @@
 import { nativeModule, type TelemetryLocalExport, type TelemetryLocalStats } from "@ardia/shell";
+import { t } from "../lib/uiLanguage";
 
-const Local = nativeModule("ArdiaTelemetryLocal");
+
+const Local = nativeModule(t(`ArdiaTelemetryLocal`));
 
 export type { TelemetryLocalExport, TelemetryLocalStats };
 

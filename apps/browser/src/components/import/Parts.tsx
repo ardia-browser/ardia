@@ -5,6 +5,8 @@ import { Button, Dot, PopUp, space, Symbol, Text, useTheme } from "../ui";
 import { SelectableCard } from "../settings/SelectableCard";
 import { APP } from "./model";
 import { importLayout, importType } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 export function Title({ title, subtitle, spinner }: { title: string; subtitle?: string; spinner?: boolean }) {
   return (
@@ -71,7 +73,7 @@ export function SettingsSteps({ steps, openTitle, onOpen, onRecheck }: { steps: 
       </View>
       <View style={{ flexDirection: "row", alignItems: "center", gap: space.ml }}>
         <Button title={openTitle} kind="primary" onPress={onOpen} />
-        <Button title="Check Again" onPress={onRecheck} />
+        <Button title={t(`Check Again`)} onPress={onRecheck} />
       </View>
     </>
   );
@@ -91,8 +93,8 @@ function StepBadge({ children }: { children: ReactNode }) {
 export function FullDiskAccessSteps({ onOpen, onRecheck }: { onOpen: () => void; onRecheck: () => void }) {
   return (
     <SettingsSteps
-      steps={["Click “Open Full Disk Access Settings” below", `Turn on ${APP} in the list`, "Come back here: we'll continue automatically"]}
-      openTitle="Open Full Disk Access Settings"
+      steps={[t(`Click “Open Full Disk Access Settings” below`), `Turn on ${APP} in the list`, t(`Come back here: we'll continue automatically`)]}
+      openTitle={t(`Open Full Disk Access Settings`)}
       onOpen={onOpen}
       onRecheck={onRecheck}
     />
@@ -117,7 +119,7 @@ export function FileDrop({ onFile, onChoose }: { onFile: (path: string) => void;
         <Symbol name="doc.zipper" size={24} color={theme.textSecondary} style={{ width: 32, height: 32 }} />
         <Text tone="textSecondary">Choose .zip file or drag it here</Text>
         <Button
-          title="Choose .zip file"
+          title={t(`Choose .zip file`)}
           onPress={() =>
             void onChoose().then((path) => {
               if (path) onFile(path);

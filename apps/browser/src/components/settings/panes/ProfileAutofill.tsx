@@ -23,6 +23,8 @@ import { useResource } from "../../../state/settings/resources";
 import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
 import { setting } from "../settingsIndex";
 import { ProfileSubPage } from "./ProfileSubPage";
+import { t } from "../../../lib/uiLanguage";
+
 
 export function AddressesPage({ profileId }: { profileId: string }) {
   const theme = useTheme();
@@ -33,19 +35,19 @@ export function AddressesPage({ profileId }: { profileId: string }) {
   return (
     <ProfileSubPage>
       <SectionHeader
-        title="Addresses"
+        title={t(`Addresses`)}
         description={setting("profiles.addresses").description}
-        action={<Button title="Add Address…" onPress={() => showSettingsSheet(<AddressSheet profile={profile} onChanged={load} />)} />}
+        action={<Button title={t(`Add Address…`)} onPress={() => showSettingsSheet(<AddressSheet profile={profile} onChanged={load} />)} />}
       />
       <Group>
         {addresses && !addresses.length ? (
-          <Row title="No saved addresses" description="Addresses you enter in forms can be saved here." />
+          <Row title={t(`No saved addresses`)} description={t(`Addresses you enter in forms can be saved here.`)} />
         ) : (
           (addresses ?? []).map((a) => (
             <Row
               key={a.id}
               icon={<Symbol name="person.crop.circle" size={15} color={theme.icon} style={PERSON_ICON} />}
-              title={a.name || firstLine(a.street) || a.email || "Address"}
+              title={a.name || firstLine(a.street) || a.email || t(`Address`)}
               description={addressSummary(a)}
               onPress={() => showSettingsSheet(<AddressSheet profile={profile} saved={a} onChanged={load} />)}
             />
@@ -64,13 +66,13 @@ export function CardsPage({ profileId }: { profileId: string }) {
   return (
     <ProfileSubPage>
       <SectionHeader
-        title="Cards"
+        title={t(`Cards`)}
         description={`${setting("profiles.cards").description} Card numbers are kept in ${PLATFORM_TERMS.secretStore}.`}
-        action={<Button title="Add Card…" onPress={() => showSettingsSheet(<CardSheet profile={profile} onChanged={load} />)} />}
+        action={<Button title={t(`Add Card…`)} onPress={() => showSettingsSheet(<CardSheet profile={profile} onChanged={load} />)} />}
       />
       <Group>
         {cards && !cards.length ? (
-          <Row title="No saved cards" description="Cards you enter at checkout can be saved here." />
+          <Row title={t(`No saved cards`)} description={t(`Cards you enter at checkout can be saved here.`)} />
         ) : (
           (cards ?? []).map((c) => (
             <Row
@@ -127,30 +129,30 @@ function FormRow({ title, children }: { title: string; children: ReactNode }) {
 }
 
 async function confirmDelete(title: string, message: string) {
-  const { confirmed } = await confirm({ title, message, confirmTitle: "Delete", destructive: true });
+  const { confirmed } = await confirm({ title, message, confirmTitle: t(`Delete`), destructive: true });
   return confirmed;
 }
 
 function SheetButtons({ canDelete, onDelete, onSave, saveDisabled }: { canDelete: boolean; onDelete: () => void; onSave: () => void; saveDisabled?: boolean }) {
   return (
-    <DialogActions leading={canDelete ? <Button title="Delete" kind="destructive" onPress={onDelete} /> : null}>
-      <Button title="Cancel" onPress={closeSettingsSheet} />
-      <Button title="Save" kind="primary" disabled={saveDisabled} onPress={onSave} />
+    <DialogActions leading={canDelete ? <Button title={t(`Delete`)} kind="destructive" onPress={onDelete} /> : null}>
+      <Button title={t(`Cancel`)} onPress={closeSettingsSheet} />
+      <Button title={t(`Save`)} kind="primary" disabled={saveDisabled} onPress={onSave} />
     </DialogActions>
   );
 }
 
 const ADDRESS_FIELDS: { key: keyof SavedAddress | "line1" | "line2"; title: string }[] = [
-  { key: "name", title: "Name" },
-  { key: "organization", title: "Organization" },
-  { key: "line1", title: "Street Address" },
-  { key: "line2", title: "Apt, Suite, etc." },
-  { key: "city", title: "City" },
-  { key: "state", title: "State / Province" },
-  { key: "postalCode", title: "ZIP / Postal Code" },
-  { key: "country", title: "Country / Region" },
-  { key: "phone", title: "Phone" },
-  { key: "email", title: "Email" },
+  { key: "name", title: t(`Name`) },
+  { key: "organization", title: t(`Organization`) },
+  { key: "line1", title: t(`Street Address`) },
+  { key: "line2", title: t(`Apt, Suite, etc.`) },
+  { key: "city", title: t(`City`) },
+  { key: "state", title: t(`State / Province`) },
+  { key: "postalCode", title: t(`ZIP / Postal Code`) },
+  { key: "country", title: t(`Country / Region`) },
+  { key: "phone", title: t(`Phone`) },
+  { key: "email", title: t(`Email`) },
 ];
 
 function AddressSheet({ profile, saved, onChanged }: { profile: string; saved?: SavedAddress; onChanged: () => void }) {
@@ -178,7 +180,7 @@ function AddressSheet({ profile, saved, onChanged }: { profile: string; saved?: 
     closeSettingsSheet();
   };
   const remove = async () => {
-    if (!saved || !(await confirmDelete("Delete this address?", "It won't be offered in forms any more."))) return;
+    if (!saved || !(await confirmDelete(t(`Delete this address?`), t(`It won't be offered in forms any more.`)))) return;
     await deleteAddress(profile, saved.id).catch(orWarn(undefined));
     onChanged();
     closeSettingsSheet();
@@ -186,7 +188,7 @@ function AddressSheet({ profile, saved, onChanged }: { profile: string; saved?: 
 
   return (
     <Sheet size="l" onClose={closeSettingsSheet}>
-      <DialogTitle>{saved ? "Edit Address" : "Add Address"}</DialogTitle>
+      <DialogTitle>{saved ? t(`Edit Address`) : t(`Add Address`)}</DialogTitle>
       <View style={SHEET_BODY}>
         <Group>
           {ADDRESS_FIELDS.map((f, i) => (
@@ -201,12 +203,12 @@ function AddressSheet({ profile, saved, onChanged }: { profile: string; saved?: 
   );
 }
 
-const MONTHS: Option<string>[] = [{ value: "", title: "Month" }, ...Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), title: pad(i + 1) }))];
+const MONTHS: Option<string>[] = [{ value: "", title: t(`Month`) }, ...Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), title: pad(i + 1) }))];
 function yearOptions(current?: number): Option<string>[] {
   const now = new Date().getFullYear();
   const years = Array.from({ length: 16 }, (_, i) => now + i);
   if (current && !years.includes(current)) years.unshift(current);
-  return [{ value: "", title: "Year" }, ...years.map((y) => ({ value: String(y), title: String(y) }))];
+  return [{ value: "", title: t(`Year`) }, ...years.map((y) => ({ value: String(y), title: String(y) }))];
 }
 
 const FIELD_WIDTH = 250;
@@ -229,12 +231,12 @@ function CardSheet({ profile, saved, onChanged }: { profile: string; saved?: Sav
   const save = async () => {
     const card = { id: saved?.id, name: name.trim(), expMonth: month ? Number(month) : undefined, expYear: year ? Number(year) : undefined };
     const id = await saveCard(profile, card, number === null ? undefined : digits).catch(orWarn(null));
-    if (!id) return setError("That isn't a valid card number.");
+    if (!id) return setError(t(`That isn't a valid card number.`));
     onChanged();
     closeSettingsSheet();
   };
   const remove = async () => {
-    if (!saved || !(await confirmDelete("Delete this card?", `Its number is removed from ${PLATFORM_TERMS.secretStore} too.`))) return;
+    if (!saved || !(await confirmDelete(t(`Delete this card?`), `Its number is removed from ${PLATFORM_TERMS.secretStore} too.`))) return;
     await deleteCard(profile, saved.id).catch(orWarn(undefined));
     onChanged();
     closeSettingsSheet();
@@ -242,14 +244,14 @@ function CardSheet({ profile, saved, onChanged }: { profile: string; saved?: Sav
 
   return (
     <Sheet size="l" onClose={closeSettingsSheet}>
-      <DialogTitle icon={saved ? <NetworkBadge network={saved.network} /> : undefined}>{saved ? `${cardNetworkName(saved.network)} •••• ${saved.last4}` : "Add Card"}</DialogTitle>
+      <DialogTitle icon={saved ? <NetworkBadge network={saved.network} /> : undefined}>{saved ? `${cardNetworkName(saved.network)} •••• ${saved.last4}` : t(`Add Card`)}</DialogTitle>
       <View style={SHEET_BODY}>
         <Group>
-          <FormRow title="Card Number">
+          <FormRow title={t(`Card Number`)}>
             {number === null ? (
               <Box row center gap="xs">
                 <Text>{`•••• •••• •••• ${saved?.last4 ?? ""}`}</Text>
-                <Button variant="icon" icon="eye" size="m" onPress={() => void reveal()} tooltip="Show Card Number" />
+                <Button variant="icon" icon="eye" size="m" onPress={() => void reveal()} tooltip={t(`Show Card Number`)} />
               </Box>
             ) : (
               <Box row center gap="xs">
@@ -263,14 +265,14 @@ function CardSheet({ profile, saved, onChanged }: { profile: string; saved?: Sav
                   autoFocus={!saved}
                   width={saved ? FIELD_WIDTH - 28 : FIELD_WIDTH}
                 />
-                {saved ? <Button variant="icon" icon="doc.on.doc" size="m" onPress={() => copyText(digits)} tooltip="Copy Card Number" /> : null}
+                {saved ? <Button variant="icon" icon="doc.on.doc" size="m" onPress={() => copyText(digits)} tooltip={t(`Copy Card Number`)} /> : null}
               </Box>
             )}
           </FormRow>
-          <FormRow title="Name on Card">
+          <FormRow title={t(`Name on Card`)}>
             <TextField value={name} onChangeText={setName} width={FIELD_WIDTH} />
           </FormRow>
-          <FormRow title="Expiration Date">
+          <FormRow title={t(`Expiration Date`)}>
             <Box row gap="s">
               <PopUp value={month} options={MONTHS} onChange={setMonth} minWidth={90} />
               <PopUp value={year} options={yearOptions(saved?.expYear)} onChange={setYear} minWidth={90} />

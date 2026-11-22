@@ -13,6 +13,8 @@ import type { ConsentToken } from "../telemetry/client";
 import { isRegularWindow, mainWindowFor } from "../windows/small";
 import { parseArcTheme } from "./arcTheme";
 import { importFavicons, importTabs, importTabsWithSplits, linksOf, windowFor, type ImportedTabs, type IncomingTab } from "./tabImport";
+import { t } from "../../lib/uiLanguage";
+
 
 const SPLIT_ROLE = "split";
 const isSplitNode = (n: ImportedNode) => n.type === "folder" && n.role === SPLIT_ROLE;
@@ -154,7 +156,7 @@ export function importArcSpace(profileId: string, space: SpaceSuggestion, favico
   importFavicons(profileId, favicons, [...linksOf(space.pinned), ...space.tabs.map((t) => t.url)]);
   const windowId = sidebarWindowFor(profileId);
   const rows = importPinnedRows(profileId, windowId, space.pinned);
-  const today = importTabsWithSplits(profileId, space.tabs.map((t) => ({ ...t, pinned: false })), "Imported", "anyPin", windowId);
+  const today = importTabsWithSplits(profileId, space.tabs.map((t) => ({ ...t, pinned: false })), t(`Imported`), "anyPin", windowId);
   const pinned = importPinnedFolders(profileId, windowId, space.pinned, rows);
   const theme = space.theme ? parseArcTheme(space.theme) : null;
   if (theme) setProfileTheme(profileId, theme);
@@ -172,7 +174,7 @@ export function importDiaSpace(profileId: string, space: SpaceSuggestion, favico
   const tiles = favorites.length ? importTabs(profileId, favorites.map((t) => ({ ...t, pinned: true })), null, "tiles", windowId) : 0;
   const pinned = importPinnedFolders(profileId, windowId, space.pinned, importPinnedRows(profileId, windowId, space.pinned));
   const groups = importFolders(profileId, windowId, openGroups.filter((n) => n.type === "folder" && !isSplitNode(n)), false);
-  const loose = importTabsWithSplits(profileId, space.tabs.map((t) => ({ ...t, pinned: false })), "Imported", "anyPin", windowId);
+  const loose = importTabsWithSplits(profileId, space.tabs.map((t) => ({ ...t, pinned: false })), t(`Imported`), "anyPin", windowId);
   const open = sumSections(groups, sectionOf(loose));
   noteImportedPins({ rows: pinned.rows, splits: pinned.splits + open.splits }, consent);
   return { tabs: tiles + pinned.tabs + open.tabs, skipped: pinned.skipped + open.skipped, groups: pinned.groups + open.groups, splits: pinned.splits + open.splits };

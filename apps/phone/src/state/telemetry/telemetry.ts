@@ -14,6 +14,7 @@ import { currentPreferences } from "../settings/store";
 import { readPreferences, writePreference } from "../store/browserDatabase";
 import { browserDatabase } from "../store/database";
 import { syncOffered } from "../../platform/system";
+import { uiLanguage } from "../../lib/uiLanguage";
 
 const DAILY_CHECK_MS = 60 * 60_000;
 
@@ -78,7 +79,7 @@ export async function reportLaunch(firstScreenAt: number) {
   const { interfaceStyle, schemeChoice, colorChoice, dynamicColors } = currentPreferences();
   const material_colors = materialColorSource(useAppearanceDesign.getState().design === "material", colorChoice, useDynamicScheme.getState().pair, dynamicColors);
   const color_choice = colorChoiceTelemetry(colorChoice);
-  gate.capture("app_launched", { legacy_import: legacyImportOutcome(boot.outcome), legacy_import_failures: boot.failures, look_mode: look, ...appearanceTelemetry(offeredInterfaceStyle(interfaceStyle, syncOffered()), offeredScheme(schemeChoice, syncOffered())), material_colors, color_choice });
+  gate.capture("app_launched", { legacy_import: legacyImportOutcome(boot.outcome), legacy_import_failures: boot.failures, look_mode: look, ...appearanceTelemetry(offeredInterfaceStyle(interfaceStyle, syncOffered()), offeredScheme(schemeChoice, syncOffered())), material_colors, color_choice, ui_language: uiLanguage() });
   const processStart = await processStartedAt();
   const timings = launchProps(processStart, JS_STARTED_AT, firstScreenAt);
   if (timings) gate.capture("perf_launch", timings);

@@ -4,6 +4,8 @@ import { noteLiveSave } from "../telemetry/workCounts";
 import { repoKey, stackMembers } from "./rows";
 import type { CompletedItem, CompletionState, FolderStatus, LiveAccount, LiveFolder, LiveFolderKind, LiveItem, LiveSourceId } from "./types";
 import { DEFAULT_COUNTDOWN_LEAD, keepDismissedNow, type DismissedNow } from "./meetings";
+import { t } from "../../lib/uiLanguage";
+
 
 export type LiveConfig = {
   githubClientId: string;
@@ -138,8 +140,8 @@ export const beginLiveRefresh = (folderId: string) => liveRefreshClaims.begin(fo
 export const flushLive = () => persistence.flush();
 
 export const FOLDER_DEFAULTS: Record<LiveFolderKind, { name: string; sources: LiveSourceId[] }> = {
-  pullRequests: { name: "Pull Requests", sources: ["github"] },
-  documents: { name: "Documents", sources: ["notion"] },
+  pullRequests: { name: t(`Pull Requests`), sources: ["github"] },
+  documents: { name: t(`Documents`), sources: ["notion"] },
 };
 
 export function createFolder(profileId: string, kind: LiveFolderKind, sources?: LiveSourceId[]): string {

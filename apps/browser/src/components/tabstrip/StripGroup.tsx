@@ -21,6 +21,8 @@ import { setMeasuredWidth } from "../../state/windows/measuredWidths";
 import { useChipHover, useChipHovered, type ChipHover } from "./reachableHover";
 import { GROUP_NAME_INSET, memberClipEdge, TOGGLE_MS, toggleEase } from "./stripToggle";
 import { reduceMotion } from "../ui/reduceMotion";
+import { t } from "../../lib/uiLanguage";
+
 
 export function StripGroup({
   entry,
@@ -56,7 +58,7 @@ export function StripGroup({
   const groupClose = useGroupCloseControl(entry.id);
   const hover = useChipHover();
   const expanded = !entry.collapsed;
-  const chipTip = useTooltip(expanded ? "Collapse Group" : "Expand Group");
+  const chipTip = useTooltip(expanded ? t(`Collapse Group`) : t(`Expand Group`));
   const widths = entry.members.map(memberWidth);
   const shown = entry.members.findIndex((m) => holds(m, activeId));
   const chipSize = chipWidth === undefined ? 0 : chipWidth + overflowCountRoom(overflowCount);

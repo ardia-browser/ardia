@@ -20,6 +20,8 @@ import { Favicon } from "../favicon/Favicon";
 import { useMedia } from "../../state/media/media";
 import { originForSecurityDisplay } from "../../lib/url";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
+import { t } from "../../lib/uiLanguage";
+
 
 const WIDTH = 460;
 const REFRESH_MS = 2500;
@@ -29,7 +31,7 @@ const AUDIO_SHARED_BY_DEFAULT = { tab: true, screen: false, window: false };
 type SourceKind = keyof typeof AUDIO_SHARED_BY_DEFAULT;
 
 const audioLabel = (kind: SourceKind, audio: DisplayMediaAudio) =>
-  kind === "tab" ? "Also share tab audio" : kind === "window" && audio.window === "application" ? "Also share application audio" : "Also share system audio";
+  kind === "tab" ? t(`Also share tab audio`) : kind === "window" && audio.window === "application" ? t(`Also share application audio`) : t(`Also share system audio`);
 
 const audioOffered = (kind: SourceKind | null, audio: DisplayMediaAudio | null) =>
   !!audio && (kind === "tab" ? audio.tab : kind === "screen" ? audio.screen : kind === "window" ? !!audio.window : false);
@@ -95,7 +97,7 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
   };
   const cancel = () => answerDisplayMedia(tabId, null);
   const frameHost = request.frameOrigin ? originForSecurityDisplay(request.frameOrigin) : "";
-  const receiver = frameHost && frameHost !== originForSecurityDisplay(request.origin) ? `${frameHost}, a frame on this page,` : "The site";
+  const receiver = frameHost && frameHost !== originForSecurityDisplay(request.origin) ? `${frameHost}, a frame on this page,` : t(`The site`);
   const width = Math.min(WIDTH, paneWidth - 24);
 
   return (
@@ -122,14 +124,14 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
           ref={list}
           focusable
           enableFocusRing={false}
-          keyDownEvents={[{ key: "Escape" }, { key: "Enter" }]}
+          keyDownEvents={[{ key: t(`Escape`) }, { key: t(`Enter`) }]}
           onKeyDown={(e) => (e.nativeEvent.key === "Escape" ? cancel() : share())}
           style={{ maxHeight: 340, marginTop: space.xs }}
           contentContainerStyle={{ paddingHorizontal: PANEL.rowInset }}
         >
           {tabs.length ? (
             <>
-              <SectionTitle title="Tabs" />
+              <SectionTitle title={t(`Tabs`)} />
               {tabs.map((t) => (
                 <SourceRow
                   key={t.id}
@@ -139,7 +141,7 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
                     </View>
                   }
                   title={t.title || t.url}
-                  detail={t.id === tabId ? "This Tab" : null}
+                  detail={t.id === tabId ? t(`This Tab`) : null}
                   selected={TAB + t.id === selected}
                   onSelect={() => setSelected(TAB + t.id)}
                   onShare={() => share(TAB + t.id)}
@@ -149,7 +151,7 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
           ) : null}
           {screens.length ? (
             <>
-              <SectionTitle title={screens.length === 1 ? "Screen" : "Screens"} />
+              <SectionTitle title={screens.length === 1 ? t(`Screen`) : t(`Screens`)} />
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.m }}>
                 {screens.map((s) => (
                   <ScreenTile key={s.id} source={s} width={(width - 2 * PANEL.rowInset - space.m) / 2} selected={s.id === selected} onSelect={() => setSelected(s.id)} onShare={() => share(s.id)} />
@@ -159,7 +161,7 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
           ) : null}
           {windows.length ? (
             <>
-              <SectionTitle title="Windows" />
+              <SectionTitle title={t(`Windows`)} />
               {windows.map((s) => (
                 <WindowRow key={s.id} source={s} icon={s.pid !== undefined ? icons[s.pid] : null} selected={s.id === selected} onSelect={() => setSelected(s.id)} onShare={() => share(s.id)} />
               ))}
@@ -167,7 +169,7 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
           ) : null}
           {screenAccess === false ? (
             <>
-              <SectionTitle title="Screens and Windows" />
+              <SectionTitle title={t(`Screens and Windows`)} />
               <ScreenRecordingNeeded />
             </>
           ) : null}
@@ -183,9 +185,9 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
             />
           ) : null}
           <View style={{ flex: 1 }} />
-          <Button variant="pill" title="Cancel" onPress={cancel} />
+          <Button variant="pill" title={t(`Cancel`)} onPress={cancel} />
           <View pointerEvents={valid ? "auto" : "none"} style={{ opacity: valid ? 1 : 0.4 }}>
-            <Button variant="pill" title="Share" primary onPress={() => share()} />
+            <Button variant="pill" title={t(`Share`)} primary onPress={() => share()} />
           </View>
         </View>
       </View>
@@ -202,7 +204,7 @@ function ScreenRecordingNeeded() {
       <Text size="small" tone="textSecondary">
         To share a window or your entire screen, turn on Ardia in System Settings › Privacy & Security › Screen Recording, then quit and reopen Ardia.
       </Text>
-      <Button variant="pill" title="Open System Settings" onPress={() => void askForScreenRecording()} />
+      <Button variant="pill" title={t(`Open System Settings`)} onPress={() => void askForScreenRecording()} />
     </View>
   );
 }
@@ -265,7 +267,7 @@ const ROW_DETAIL = { flexShrink: 2 } as const;
 
 function WindowRow({ source, icon, selected, onSelect, onShare }: { source: DisplayMediaSource; icon: string | null | undefined; selected: boolean; onSelect(): void; onShare(): void }) {
   const theme = useTheme();
-  const title = source.name || source.app || "Window";
+  const title = source.name || source.app || t(`Window`);
   const app = source.app && source.app !== title ? source.app : null;
   return (
     <SourceRow

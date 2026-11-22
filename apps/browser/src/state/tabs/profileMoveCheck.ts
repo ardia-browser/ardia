@@ -3,6 +3,8 @@ import { useBrowser } from "../browser/store";
 import { webviews } from "../../platform/webviews";
 import { httpPagesPort } from "../../platform/launchConfig";
 import { lastTabClosesWindow } from "../../platform/tabs";
+import { t } from "../../lib/uiLanguage";
+
 
 const STORAGE_KEY = "ardia-profile-check";
 const COOKIE = "ardiaProfileCheck";
@@ -68,7 +70,7 @@ async function run(handle: WebViewHandle, tabId: string, step: string, code: str
 
 async function checkMovedTabProfile() {
   if (
-    !(await withDeadline(lastTabClosesWindow(), ENGINE_ASK_MS, "the engine, asked whether it runs,").then(
+    !(await withDeadline(lastTabClosesWindow(), ENGINE_ASK_MS, t(`the engine, asked whether it runs,`)).then(
       () => true,
       (error: unknown) => {
         if (error instanceof PastDeadline) throw error;
@@ -78,11 +80,11 @@ async function checkMovedTabProfile() {
   )
     return;
   const port = httpPagesPort();
-  if (!port) throw new Error("no loopback page server: the launch has no httpPages port");
+  if (!port) throw new Error(t(`no loopback page server: the launch has no httpPages port`));
   const url = `http://127.0.0.1:${port}/a`;
   const first = S().profileOrder[0];
-  if (!first) throw new Error("no profile");
-  const second = S().createProfile({ name: "Self-check moved tab" });
+  if (!first) throw new Error(t(`no profile`));
+  const second = S().createProfile({ name: t(`Self-check moved tab`) });
   const made: string[] = [];
   try {
     const firstWindow = S().createWindow({ url, profileId: first });
@@ -91,18 +93,18 @@ async function checkMovedTabProfile() {
     made.push(secondWindow);
     const movedTab = S().windows[firstWindow]!.tabIds[0]!;
     const secondTab = S().windows[secondWindow]!.tabIds[0]!;
-    const before = await loadedPage(movedTab, url, "loading in the first profile");
-    const seeded = await run(before, movedTab, "seeding the first profile", writeCode("first"));
+    const before = await loadedPage(movedTab, url, t(`loading in the first profile`));
+    const seeded = await run(before, movedTab, t(`seeding the first profile`), writeCode("first"));
     if (seeded.storage !== "first" || seeded.cookie !== "first") throw new Error(`the first profile's page kept no value: ${JSON.stringify(seeded)}`);
-    const secondSeeded = await run(await loadedPage(secondTab, url, "loading in the second profile"), secondTab, "seeding the second profile", writeCode("second"));
+    const secondSeeded = await run(await loadedPage(secondTab, url, t(`loading in the second profile`)), secondTab, t(`seeding the second profile`), writeCode("second"));
     if (secondSeeded.storage !== "second" || secondSeeded.cookie !== "second") throw new Error(`the second profile's page kept no value: ${JSON.stringify(secondSeeded)}`);
-    const again = await run(before, movedTab, "reading the first profile before the move", readCode);
+    const again = await run(before, movedTab, t(`reading the first profile before the move`), readCode);
     if (again.storage !== "first" || again.cookie !== "first") throw new Error(`the two profiles share storage before the move: ${JSON.stringify(again)}`);
 
     S().moveTabToProfile(movedTab, second);
-    if (S().tabs[movedTab]?.profileId !== second) throw new Error("the store did not move the tab");
-    const after = await loadedPage(movedTab, url, "loading again after the move", before);
-    const seen = await run(after, movedTab, "reading after the move", readCode);
+    if (S().tabs[movedTab]?.profileId !== second) throw new Error(t(`the store did not move the tab`));
+    const after = await loadedPage(movedTab, url, t(`loading again after the move`), before);
+    const seen = await run(after, movedTab, t(`reading after the move`), readCode);
     if (seen.storage !== "second" || seen.cookie !== "second") throw new Error(`after the move the page reads ${JSON.stringify({ storage: seen.storage, cookie: seen.cookie })}, not the second profile's values: it still runs in the first profile`);
   } finally {
     for (const id of made) if (S().windows[id]) S().closeWindow(id);
@@ -112,4 +114,4 @@ async function checkMovedTabProfile() {
 
 export { checkMovedTabProfile };
 
-selfChecks.register({ name: "a tab moved to another profile gets a new page in that profile, with that profile's storage and cookies, and none of the old profile's", run: checkMovedTabProfile });
+selfChecks.register({ name: t(`a tab moved to another profile gets a new page in that profile, with that profile's storage and cookies, and none of the old profile's`), run: checkMovedTabProfile });

@@ -4,25 +4,27 @@ import { dispositionFor, type Disposition } from "../../state/omnibox/openFromBa
 import type { offeredScope } from "../../state/omnibox/scopes";
 import { isRemovable } from "./SuggestionRow";
 import type { useBarText } from "./useBarText";
+import { t } from "../../lib/uiLanguage";
+
 
 const BASE_KEYS = [
-  { key: "Escape" },
-  { key: "ArrowUp" },
-  { key: "ArrowDown" },
-  { key: "PageUp" },
-  { key: "PageDown" },
-  { key: "Tab" },
-  { key: "Tab", shiftKey: true },
+  { key: t(`Escape`) },
+  { key: t(`ArrowUp`) },
+  { key: t(`ArrowDown`) },
+  { key: t(`PageUp`) },
+  { key: t(`PageDown`) },
+  { key: t(`Tab`) },
+  { key: t(`Tab`), shiftKey: true },
   { key: "n", ctrlKey: true },
   { key: "p", ctrlKey: true },
-  { key: "Enter", metaKey: true },
-  { key: "Enter", altKey: true },
-  { key: "Enter", shiftKey: true },
-  { key: "Enter", ctrlKey: true },
-  { key: "Enter", ctrlKey: true, shiftKey: true },
+  { key: t(`Enter`), metaKey: true },
+  { key: t(`Enter`), altKey: true },
+  { key: t(`Enter`), shiftKey: true },
+  { key: t(`Enter`), ctrlKey: true },
+  { key: t(`Enter`), ctrlKey: true, shiftKey: true },
 ];
-const SCOPE_KEYS = [...BASE_KEYS, { key: "Backspace" }];
-const REMOVE_KEYS = [...BASE_KEYS, { key: "Delete", shiftKey: true }];
+const SCOPE_KEYS = [...BASE_KEYS, { key: t(`Backspace`) }];
+const REMOVE_KEYS = [...BASE_KEYS, { key: t(`Delete`), shiftKey: true }];
 
 export const PASTED_TYPES = ["string" as const];
 

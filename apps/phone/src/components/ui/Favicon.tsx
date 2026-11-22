@@ -7,10 +7,12 @@ import { linearGradientCss } from "../../lib/gradient";
 import { Symbol } from "./Symbol";
 import { useTheme } from "./theme";
 import { faviconInk } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 const failedIcons = new Set<string>();
 const looks = new Map<string, Promise<FaviconLookResult>>();
-const readsLooks = requireOptionalNativeModule("ArdiaPhoneFavicons") !== null;
+const readsLooks = requireOptionalNativeModule(t(`ArdiaPhoneFavicons`)) !== null;
 
 function lookOf(url: string, dark: boolean): Promise<FaviconLookResult> {
   const key = `${dark ? "d" : "l"}|${url}`;
@@ -58,7 +60,7 @@ export const Favicon = memo(function Favicon({ iconUrl, pageUrl, size }: Props) 
     >
       <Image
         key={chosen.url}
-        source={{ uri: chosen.url, headers: { "User-Agent": FAVICON_USER_AGENT, Accept: "image/*" } }}
+        source={{ uri: chosen.url, headers: { t(`User-Agent`): FAVICON_USER_AGENT, Accept: "image/*" } }}
         onError={() => {
           failedIcons.add(chosen.url);
           setFailures((count) => count + 1);

@@ -30,6 +30,8 @@ import { useSettings } from "../../state/browser/hooks";
 import { useProfileOrder } from "../../state/profiles/hooks";
 import { shortcutItems } from "../../state/settings/paneData";
 import { useResource } from "../../state/settings/resources";
+import { t } from "../../lib/uiLanguage";
+
 
 export type SettingsHit = SearchHit<SettingEntry>;
 export type CommandKeyHit = { item: MenuShortcut; keys: string };
@@ -67,7 +69,7 @@ export function SettingsSearchField() {
         inputRef={input}
         value={query}
         onChangeText={setSettingsQuery}
-        placeholder="Search"
+        placeholder={t(`Search`)}
         onSubmit={() => {
           const { query, selected } = currentSettingsSearch();
           const keyHit = keyHits[selected];
@@ -146,7 +148,7 @@ export function SettingsSearchResults({ query }: { query: string }) {
   if (empty) {
     const combo = parseCombo(query);
     const subtitle = combo ? `No command or setting uses ${formatShortcut(combo)}.` : `Nothing matches “${query.trim()}”. Try a setting's name or a shorter word, like “dark” or “downloads”.`;
-    return <EmptyState symbol="magnifyingglass" title="No Results" subtitle={subtitle} />;
+    return <EmptyState symbol="magnifyingglass" title={t(`No Results`)} subtitle={subtitle} />;
   }
   return (
     <ScrollView
@@ -204,7 +206,7 @@ function ResultRow({ hit, selected, rank, needs }: { hit: SettingsHit; selected:
         </Text>
         {note ? (
           <Text size="caption" lines={2} color={secondary}>
-            {keyword ? "Also called “" : ""}
+            {keyword ? t(`Also called “`) : ""}
             <Marked text={note.text} ranges={note.ranges} color={secondary} />
             {keyword ? "”" : ""}
           </Text>

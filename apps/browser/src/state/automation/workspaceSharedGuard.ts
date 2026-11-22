@@ -3,8 +3,10 @@ import { innermostGroupOf, rootOf } from "../groups/groups";
 import { sharedFolderOfGroup } from "../sharedFolders/removal";
 import type { Op } from "./workspaceOps";
 import { anchorRef, groupRef, normalWindow, OpError, space, store, tabRefs, type NameScope, type OpResult } from "./workspaceTargets";
+import { t } from "../../lib/uiLanguage";
 
-export const SHARED_GROUPS_SIDEBAR_ONLY = "shared folder groups change only from the sidebar";
+
+export const SHARED_GROUPS_SIDEBAR_ONLY = t(`shared folder groups change only from the sidebar`);
 
 export function sharedRoot(s: BrowserState, groupId: string): string | null {
   const root = rootOf(s.groups, groupId);
@@ -118,7 +120,7 @@ export function refuseSyncedLinkChange(tabId: string | null | undefined, what: s
 
 export function refuseSharedRunCommand(command: string, tabId: string | null, targeted = false) {
   if (!tabId) return;
-  if (command === "back" || command === "forward") return refuseSyncedLinkChange(tabId, command === "back" ? "going back" : "going forward");
+  if (command === "back" || command === "forward") return refuseSyncedLinkChange(tabId, command === "back" ? t(`going back`) : t(`going forward`));
   if (command !== "closeTab" && command !== "closeTabGroup") return;
   const s = store();
   const panel = s.windowUi[s.tabs[tabId]?.windowId ?? ""]?.panel;

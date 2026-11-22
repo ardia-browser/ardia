@@ -34,6 +34,8 @@ import { noteTabClosedByUser } from "../sync/openTabCloses";
 import type { Drop } from "../drag/drops";
 import { movesAcrossProfiles } from "../windows/profileMoves";
 import { noteSidebarDrop } from "../telemetry/tabPresses";
+import { t } from "../../lib/uiLanguage";
+
 
 const store = () => useBrowser.getState();
 
@@ -92,8 +94,8 @@ export async function closeGroup(groupId: string, mayWrite?: () => boolean) {
     const { confirmed, suppressed } = await confirm({
       title: `Close “${groupLabel(s, group)}”?`,
       message: w.kind === "private" ? `Its ${tabs} close with it.` : `Its ${tabs} close with it. History › Recently Closed Groups brings it back.`,
-      confirmTitle: "Close Group",
-      suppression: "Don’t ask me again",
+      confirmTitle: t(`Close Group`),
+      suppression: t(`Don’t ask me again`),
       windowId: w.id,
     });
     if (mayWrite && !mayWrite()) return;
@@ -131,7 +133,7 @@ export async function deleteProfile(profileId: string, windowId?: string, mayDel
     message: sharing.length
       ? `Its tabs will be closed. Its cookies, passwords, extensions, bookmarks and history stay with ${profileNames(sharing)}, which share them.`
       : `All data associated with this Profile will be removed. This action cannot be undone.${engineProfile(s, profileId) === "" ? await keptExtensionsNote() : ""}`,
-    confirmTitle: "Delete Profile",
+    confirmTitle: t(`Delete Profile`),
     destructive: true,
     windowId,
   });
@@ -157,10 +159,10 @@ async function profileMoveTarget(move: ProfileMove, target: string | null): Prom
   const shared = engineProfile(useBrowser.getState(), profileId) === engineProfile(useBrowser.getState(), move.fromProfileId);
   if (!store().settings.warnBeforeMovingTabsToProfile || shared) return profileId;
   const { confirmed, suppressed } = await confirm({
-    title: move.title(store().profiles[profileId]?.name ?? "Profile"),
-    message: "Moving tabs between profiles could result in some data being lost.",
+    title: move.title(store().profiles[profileId]?.name ?? t(`Profile`)),
+    message: t(`Moving tabs between profiles could result in some data being lost.`),
     confirmTitle: move.confirmTitle,
-    suppression: "Don't warn me again",
+    suppression: t(`Don't warn me again`),
     windowId: move.windowId,
   });
   if (suppressed) foreignWriteHooks.around(() => store().updateSettings({ warnBeforeMovingTabsToProfile: false }));
@@ -175,8 +177,8 @@ function tabsMove(tabIds: string[]): ProfileMove | null {
   return {
     windowId: first.windowId,
     fromProfileId: first.profileId,
-    title: () => (many ? `Move ${tabs.length} Tabs to Profile?` : "Move Tab to Profile?"),
-    confirmTitle: many ? "Move Tabs" : "Move Tab",
+    title: () => (many ? `Move ${tabs.length} Tabs to Profile?` : t(`Move Tab to Profile?`)),
+    confirmTitle: many ? t(`Move Tabs`) : t(`Move Tab`),
   };
 }
 
@@ -214,7 +216,7 @@ export const moveTabToProfile = (tabId: string, target: string | null, mayWrite?
 export async function moveGroupToProfile(groupId: string, target: string | null) {
   const g = store().groups[groupId];
   if (!g) return;
-  const profileId = await profileMoveTarget({ windowId: g.windowId, fromProfileId: g.profileId, title: (name) => `Move Group to ${name}?`, confirmTitle: "Move Group" }, target);
+  const profileId = await profileMoveTarget({ windowId: g.windowId, fromProfileId: g.profileId, title: (name) => `Move Group to ${name}?`, confirmTitle: t(`Move Group`) }, target);
   if (profileId) store().moveGroupToProfile(groupId, profileId);
 }
 
@@ -274,8 +276,8 @@ export async function openProfileMenu(windowId: string) {
       return [switchItem, { value: { open: "window" as const, profileId: id }, title: `${profile.name} ↗`, alternate: true, swatch, ...alternate }];
     }),
     { separator: true },
-    { id: "new", title: "New Profile", symbol: "plus" },
-    { id: "edit", title: "Edit Profiles…", symbol: "pencil" },
+    { id: "new", title: t(`New Profile`), symbol: "plus" },
+    { id: "edit", title: t(`Edit Profiles…`), symbol: "pencil" },
   ];
   const choice = await chooseFromMenu(items);
   if (!choice) return;

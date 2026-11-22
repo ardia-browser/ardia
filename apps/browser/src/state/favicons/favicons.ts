@@ -14,6 +14,8 @@ import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
 import { notePageFavicon, notePageFaviconFailed } from "../telemetry/pageFaviconCounts";
 import { fetchFailedBefore, forgetAsked, markAsked, noteFetchFailed, unmarkAsked } from "./askedFavicons";
+import { t } from "../../lib/uiLanguage";
+
 
 type Icons = {
   pages: Record<string, string | null>;
@@ -121,7 +123,7 @@ function lookUpPages(key: string, list: string[]) {
     )
     .catch((error) => {
       for (const page of list) unmarkAsked(key, page);
-      warnFor(consent, "[favicons] lookup failed", error);
+      warnFor(consent, t(`[favicons] lookup failed`), error);
     })
     .finally(() => {
       for (const { id, entry } of pending) if (--entry.lookups === 0) inFlight.delete(id);

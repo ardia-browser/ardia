@@ -35,6 +35,8 @@ import { hostOf } from "@ardia/core";
 import { Marquee, useMarqueeGroup } from "./Marquee";
 import { TimeBar } from "./MiniPlayer";
 import { useMediaTokens } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 const ROW_HEIGHT = 40;
 const ROW_INSET = space.s;
@@ -170,7 +172,7 @@ function TimeLeftRoom({ duration }: { duration: number }) {
 }
 
 function PlayButton({ tabId, playing, size }: { tabId: string; playing: boolean; size: "m" | "l" }) {
-  return <Button variant="icon" icon={playing ? "pause.fill" : "play.fill"} size={size} tooltip={playing ? "Pause" : "Play"} onPress={() => mediaCommand(tabId, "toggle")} />;
+  return <Button variant="icon" icon={playing ? "pause.fill" : "play.fill"} size={size} tooltip={playing ? t(`Pause`) : t(`Play`)} onPress={() => mediaCommand(tabId, "toggle")} />;
 }
 
 function TimeLeft({ tabId, session }: { tabId: string; session: Session }) {
@@ -180,7 +182,7 @@ function TimeLeft({ tabId, session }: { tabId: string; session: Session }) {
   return (
     <Pressable
       accessibilityLabel={`${left} left`}
-      accessibilityHint="Pause"
+      accessibilityHint={t(`Pause`)}
       onPress={() => mediaCommand(tabId, "toggle")}
       style={{ height: BUTTON, minWidth: BUTTON, paddingHorizontal: space.xs, alignItems: "flex-end", justifyContent: "center" }}
     >
@@ -215,7 +217,7 @@ const PlayerControls = memo(function PlayerControls({ tabId, live, reveal, pinne
         </View>
         <Animated.View pointerEvents={pinned ? "none" : "box-none"} style={{ opacity: reveal.unpinned }}>
           {video ? (
-            <Button variant="icon" icon={pip ? "pip.exit" : "pip.enter"} size="m" tooltip={pip ? "Exit Picture in Picture" : "Picture in Picture"} onPress={togglePip} />
+            <Button variant="icon" icon={pip ? "pip.exit" : "pip.enter"} size="m" tooltip={pip ? t(`Exit Picture in Picture`) : t(`Picture in Picture`)} onPress={togglePip} />
           ) : (
             <View style={{ width: BUTTON }} />
           )}
@@ -247,13 +249,13 @@ const PlayerRow = memo(function PlayerRow({ tabId, hovered, reveal }: { tabId: s
       onPressOut={pressMotion.onPressOut}
       style={{ flex: 1, minWidth: 0, alignSelf: "stretch", flexDirection: "row", alignItems: "center", marginRight: TRAILING_INSET }}
     >
-      <Animated.View tooltip="Back to Tab" style={artScaleStyle}>
+      <Animated.View tooltip={t(`Back to Tab`)} style={artScaleStyle}>
         <View style={{ width: ART, height: ART, borderRadius: radius.control, overflow: "hidden", backgroundColor: media.artPlaceholder, alignItems: "center", justifyContent: "center" }}>
           {artwork ? <Image source={{ uri: artwork }} resizeMode="cover" style={{ width: ART, height: ART }} /> : <Favicon url={tab.url} favicon={tab.favicon} size={16} profileId={tab.profileId} />}
         </View>
       </Animated.View>
       {isLive(session) ? (
-        <View accessibilityLabel="Live" style={{ marginLeft: space.m }}>
+        <View accessibilityLabel={t(`Live`)} style={{ marginLeft: space.m }}>
           <Dot size={LIVE_DOT} color={theme.destructive} />
         </View>
       ) : null}
@@ -335,7 +337,7 @@ export function SidebarPlayer({ tabId, motion, docked }: { tabId: string; motion
                   {playing && session.duration ? <TimeLeftRoom duration={session.duration} /> : <View style={{ width: BUTTON }} />}
                 </View>
                 <Animated.View pointerEvents={settled ? "box-none" : "none"} style={{ position: "absolute", top: 0, right: 0, opacity: reveal.closing }}>
-                  <Button variant="icon" icon="xmark" size="m" tooltip="Close Player" onPress={() => dismissPlayer(tabId)} />
+                  <Button variant="icon" icon="xmark" size="m" tooltip={t(`Close Player`)} onPress={() => dismissPlayer(tabId)} />
                 </Animated.View>
               </View>
             </View>

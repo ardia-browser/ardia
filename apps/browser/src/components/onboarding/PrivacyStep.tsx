@@ -16,6 +16,8 @@ import { OptionCard } from "./OptionCard";
 import { SelectTile, useOnboardingColors } from "./Parts";
 import { useSiteRing } from "./GlassBacking";
 import { onboardingType, receiptStamp } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 const KEYS = keysOf("searchPrivacy");
 const ENGINES = ["google", "duckduckgo", "bing", "kagi", "ecosia", "brave", "startpage"];
@@ -38,7 +40,7 @@ export function SearchPrivacyStep() {
         title={SHARING_COPY.onboarding.title}
         subtitle={SHARING_COPY.onboarding.subtitle}
         patch={{}}
-        picked={share ? ["Sharing crash reports"] : []}
+        picked={share ? [t(`Sharing crash reports`)] : []}
         onConfirm={() => {
           if (share !== isSharing() || !redo) setSharing(share, redo ? "settings" : "onboarding");
         }}
@@ -51,13 +53,13 @@ export function SearchPrivacyStep() {
   return (
     <Page
       id="engine"
-      title="Search with what?"
-      subtitle="For anything that isn't a website."
+      title={t(`Search with what?`)}
+      subtitle={t(`For anything that isn't a website.`)}
       patch={{ searchEngine: values.searchEngine }}
       picked={[`Search with ${engine?.name ?? "your engine"}`]}
       preview={<MockPanel settings={mock} focus={focus.focus} />}
     >
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.m }} accessibilityRole="radiogroup" accessibilityLabel="Search engine">
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.m }} accessibilityRole="radiogroup" accessibilityLabel={t(`Search engine`)}>
         {engines.map((e) => (
           <EngineTile key={e.id} title={e.name} url={`https://${engineHost(e)}`} selected={e.id === values.searchEngine} onPress={() => setDraft({ searchEngine: e.id })} />
         ))}
@@ -75,9 +77,9 @@ function EngineTile({ title, url, selected, onPress }: { title: string; url: str
   );
 }
 
-const SENT = ["Crash reports", "Error types", "Feature counts", "Speed and memory"];
-const ALWAYS = ["Daily open count"];
-const NEVER = ["Sites you visit", "What you type", "Your tabs", "Your name"];
+const SENT = [t(`Crash reports`), t(`Error types`), t(`Feature counts`), t(`Speed and memory`)];
+const ALWAYS = [t(`Daily open count`)];
+const NEVER = [t(`Sites you visit`), t(`What you type`), t(`Your tabs`), t(`Your name`)];
 
 const RECEIPT_WIDTH = 250;
 
@@ -108,7 +110,7 @@ function Receipt({ on }: { on: boolean }) {
         backgroundColor: colors.card,
         borderWidth: StyleSheet.hairlineWidth * 2,
         borderColor: colors.rowBorder,
-        transform: [{ rotate: "2deg" }],
+        transform: [{ rotate: t(`2deg`) }],
       }}
     >
       <Text size="caption" weight="bold" color={colors.title} style={[mono, { letterSpacing: tracking.wide, textAlign: "center" }]}>
@@ -119,11 +121,11 @@ function Receipt({ on }: { on: boolean }) {
       </Text>
       {rule}
       <View style={{ gap: space.s }}>
-        {SENT.map((label) => line(label, on ? "SENT" : "—", !on))}
-        {ALWAYS.map((label) => line(label, "SENT", false))}
+        {SENT.map((label) => line(label, on ? t(`SENT`) : "—", !on))}
+        {ALWAYS.map((label) => line(label, t(`SENT`), false))}
       </View>
       {rule}
-      <View style={{ gap: space.s }}>{NEVER.map((label) => line(label, "NEVER", false))}</View>
+      <View style={{ gap: space.s }}>{NEVER.map((label) => line(label, t(`NEVER`), false))}</View>
       {rule}
       <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
         <Text size="caption" weight="bold" color={colors.title} style={mono}>
@@ -146,7 +148,7 @@ function Receipt({ on }: { on: boolean }) {
         }}
       >
         <Text color={on ? receiptStamp : colors.steps} style={[onboardingType.receiptStamp, mono]}>
-          {on ? "THANK YOU" : "NOT SHARED"}
+          {on ? t(`THANK YOU`) : t(`NOT SHARED`)}
         </Text>
       </View>
     </View>

@@ -1,6 +1,8 @@
 import type { Tab } from "../browser/types";
 import type { LiveFolder, LiveItem, PullRequestSection } from "./types";
 import { showAllKey } from "./store";
+import { t } from "../../lib/uiLanguage";
+
 
 export type FolderRow =
   | { kind: "item"; key: string; item: LiveItem }
@@ -10,8 +12,8 @@ export type FolderRow =
 
 export const SECTION_TITLES: Record<PullRequestSection, string | null> = {
   authored: null,
-  review: "Review Requests",
-  team: "Team Review Requests",
+  review: t(`Review Requests`),
+  team: t(`Team Review Requests`),
 };
 
 export const PAGE_SIZE = 8;

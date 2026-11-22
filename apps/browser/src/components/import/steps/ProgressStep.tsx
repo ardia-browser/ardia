@@ -6,6 +6,8 @@ import { cancelImport, type ImportFlow, type KindStatus } from "../../../state/i
 import { KINDS } from "../model";
 import { Spacer, Title } from "../Parts";
 import { importLayout, importMotion } from "../tokens";
+import { t } from "../../../lib/uiLanguage";
+
 
 export function ProgressBody({ flow }: { flow: ImportFlow }) {
   const { step, source } = flow;
@@ -13,7 +15,7 @@ export function ProgressBody({ flow }: { flow: ImportFlow }) {
   const { status, preparing } = step;
   return (
     <>
-      <Title title={`Importing from ${source?.name ?? "file"}`} subtitle={preparing > 1 ? `Preparing ${preparing} profiles` : "Preparing your profile"} spinner />
+      <Title title={`Importing from ${source?.name ?? "file"}`} subtitle={preparing > 1 ? `Preparing ${preparing} profiles` : t(`Preparing your profile`)} spinner />
       <Text size="small" tone="textSecondary" style={{ marginBottom: space.l }}>
         Hold on while we fetch your data...
       </Text>
@@ -30,7 +32,7 @@ export function ProgressFooter() {
   return (
     <>
       <Spacer />
-      <Button title="Cancel" onPress={cancelImport} />
+      <Button title={t(`Cancel`)} onPress={cancelImport} />
     </>
   );
 }

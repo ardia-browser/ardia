@@ -1,9 +1,11 @@
 import { nativeModule, type RecordingResult, type ReportEvent, type UploadReply } from "@ardia/shell";
+import { t } from "../lib/uiLanguage";
+
 
 export type { RecordingResult, ReportEvent, UploadReply };
 
-let bound: ReturnType<typeof nativeModule<"ArdiaReport">> | null = null;
-const Report = () => (bound ??= nativeModule("ArdiaReport"));
+let bound: ReturnType<typeof nativeModule<t(`ArdiaReport`)>> | null = null;
+const Report = () => (bound ??= nativeModule(t(`ArdiaReport`)));
 
 export type ReportPost = (url: string, body: string, headers: Record<string, string>, timeoutMs: number) => Promise<{ status: number; text: string }>;
 export type ReportPlatform = { recording: boolean; post: ReportPost };
@@ -12,7 +14,7 @@ const postWithFetch: ReportPost = async (url, body, headers, timeoutMs) => {
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), timeoutMs);
   try {
-    const response = await fetch(url, { method: "POST", headers, body, signal: abort.signal });
+    const response = await fetch(url, { method: t(`POST`), headers, body, signal: abort.signal });
     return { status: response.status, text: await response.text() };
   } finally {
     clearTimeout(timer);

@@ -11,6 +11,8 @@ import { withDeadline } from "../../lib/deadline";
 import { awaitLate } from "./tabCalls";
 import type { IconValue, Op } from "./workspaceOps";
 import { OpError, store, tabRef, tabRefs, type OpResult } from "./workspaceTargets";
+import { t } from "../../lib/uiLanguage";
+
 
 const str = (v: unknown) => v as string;
 
@@ -48,7 +50,7 @@ async function settled(work: Promise<string>, id: string, doing: string, done: s
 }
 
 function goingOn(stillOn: () => boolean, done: string[]) {
-  if (!stillOn()) throw stopped("Control was turned off during this op; the tabs after the ones in changed were left alone.", done);
+  if (!stillOn()) throw stopped(t(`Control was turned off during this op; the tabs after the ones in changed were left alone.`), done);
 }
 
 export async function sleep(results: OpResult[], op: Op, stillOn: () => boolean = () => true, owner = 0): Promise<OpResult> {
@@ -57,7 +59,7 @@ export async function sleep(results: OpResult[], op: Op, stillOn: () => boolean 
   const done: string[] = [];
   for (const id of ids) {
     goingOn(stillOn, done);
-    outcomes[id] = await settled(sleepTab(id, { mayWrite: stillOn }), id, "going to sleep", done, stillOn, owner);
+    outcomes[id] = await settled(sleepTab(id, { mayWrite: stillOn }), id, t(`going to sleep`), done, stillOn, owner);
     if (CHANGED.has(outcomes[id]!)) done.push(id);
   }
   return { tabs: ids, outcomes };
@@ -126,7 +128,7 @@ export function rename(results: OpResult[], op: Op): OpResult {
 export function tabIcon(results: OpResult[], op: Op): OpResult {
   const id = tabRef(results, str(op.tab));
   const none = op.icon === NO_GROUP_ICON;
-  if (none && !isPinnedRow(store().tabs[id])) throw new OpError("bad_request", "\"none\" is for groups and pinned rows; give null to reset a tab's icon.");
+  if (none && !isPinnedRow(store().tabs[id])) throw new OpError("bad_request", t(`"none" is for groups and pinned rows; give null to reset a tab's icon.`));
   const icon = none ? NO_ROW_ICON : (op.icon as IconValue);
   store().updateTab(id, { customIcon: icon });
   if (store().tabs[id]?.customIcon !== icon) throw new OpError("failed", `Ardia didn't do that: tab ${id}'s icon didn't change.`);

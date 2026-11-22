@@ -2,6 +2,8 @@ import { isFields, type Fields } from "./decode";
 import type { Migrations } from "./savedDocument";
 import { legacyPermissions } from "./pluginPermissions";
 import { PAGE_PANEL_ID } from "./pluginContributions";
+import { t } from "./uiLanguage";
+
 
 const MOVED_INTO_CONTRIBUTES = ["commands", "tools", "hooks", "settings", "programs", "passwordManager"] as const;
 
@@ -39,7 +41,7 @@ const V1_PATHS: [RegExp, string][] = [
   [/contributes\.panels\[0\]/g, "page"],
   [/contributes\./g, ""],
   [/^sidecar\b/, "process"],
-  [/ needs a main or a sidecar$/, " needs a process"],
+  [/ needs a main or a sidecar$/, t(` needs a process`)],
 ];
 
 export const v1Problem = (problem: string): string => V1_PATHS.reduce((text, [pattern, replacement]) => text.replace(pattern, replacement), problem);

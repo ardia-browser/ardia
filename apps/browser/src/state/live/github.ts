@@ -1,6 +1,8 @@
 import { LiveError, type CheckState, type LiveItem, type PullRequestCheck, type PullRequestInfo, type PullRequestSection } from "./types";
+import { t } from "../../lib/uiLanguage";
 
-const PR_FIELDS = `
+
+const PR_FIELDS = t(`
   ... on PullRequest {
     id number title url isDraft updatedAt createdAt
     headRefName baseRefName mergeable reviewDecision
@@ -16,11 +18,11 @@ const PR_FIELDS = `
         ... on StatusContext { context state targetUrl }
       } } } } }
     }
-  }`;
+  }`);
 
-const CHANGE_FIELDS = `id updatedAt headRefOid mergeable commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }`;
+const CHANGE_FIELDS = t(`id updatedAt headRefOid mergeable commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }`);
 
-const RATE_LIMIT = "rateLimit { limit remaining resetAt }";
+const RATE_LIMIT = t(`rateLimit { limit remaining resetAt }`);
 
 export const GITHUB_SEARCH_QUERY = `query LiveFolderSearch($q: String!) { ${RATE_LIMIT} search(query: $q, type: ISSUE, first: 50) { nodes { ... on PullRequest { ${CHANGE_FIELDS} } } } }`;
 
@@ -31,24 +33,24 @@ export const GITHUB_DETAILS_QUERY = `query LiveFolderDetails($ids: [ID!]!) { ${R
 export const DETAILS_PAGE = 10;
 
 export const GITHUB_SEARCHES = {
-  authored: "is:pr is:open author:@me archived:false sort:updated-desc",
-  review: "is:pr is:open review-requested:@me archived:false sort:updated-desc",
-  direct: "is:pr is:open user-review-requested:@me archived:false",
+  authored: t(`is:pr is:open author:@me archived:false sort:updated-desc`),
+  review: t(`is:pr is:open review-requested:@me archived:false sort:updated-desc`),
+  direct: t(`is:pr is:open user-review-requested:@me archived:false`),
 };
 
-export const GITHUB_STATE_QUERY = `query LiveFolderGone($ids: [ID!]!) {
+export const GITHUB_STATE_QUERY = t(`query LiveFolderGone($ids: [ID!]!) {
   nodes(ids: $ids) { ... on PullRequest { id state } }
-}`;
+}`);
 
-export const VIEWER_QUERY = `query { viewer { login name avatarUrl(size: 64) } }`;
+export const VIEWER_QUERY = t(`query { viewer { login name avatarUrl(size: 64) } }`);
 
 type RawCheck =
-  | { __typename: "CheckRun"; name: string; status: string; conclusion: string | null; detailsUrl: string | null }
-  | { __typename: "StatusContext"; context: string; state: string; targetUrl: string | null };
+  | { __typename: t(`CheckRun`); name: string; status: string; conclusion: string | null; detailsUrl: string | null }
+  | { __typename: t(`StatusContext`); context: string; state: string; targetUrl: string | null };
 
 export type RawPR = {
   id: string;
-  state?: "OPEN" | "CLOSED" | "MERGED";
+  state?: t(`OPEN`) | t(`CLOSED`) | t(`MERGED`);
   number: number;
   title: string;
   url: string;
@@ -56,8 +58,8 @@ export type RawPR = {
   updatedAt: string;
   headRefName: string;
   baseRefName: string;
-  mergeable: "MERGEABLE" | "CONFLICTING" | "UNKNOWN";
-  reviewDecision: "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | null;
+  mergeable: t(`MERGEABLE`) | t(`CONFLICTING`) | t(`UNKNOWN`);
+  reviewDecision: t(`APPROVED`) | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | null;
   additions: number;
   deletions: number;
   changedFiles: number;
@@ -114,7 +116,7 @@ export function blockedError(blocked: readonly GraphqlError[]): LiveError | null
 }
 
 export function blockedLink(message: string): string | null {
-  return message.match(/https:\/\/github\.com\/(?:settings|orgs)\/[^\s"')]+/)?.[0]?.replace(/[.,]$/, "") ?? null;
+  return message.match(/https:\/\/github\.com\/(?:settings|orgs)\/[^\st(`')]+/)?.[0]?.replace(/[.,]$/, `)") ?? null;
 }
 
 export function checkState(c: RawCheck): CheckState {
@@ -125,11 +127,11 @@ export function checkState(c: RawCheck): CheckState {
   }
   if (c.status !== "COMPLETED") return c.status === "IN_PROGRESS" ? "pending" : "queued";
   switch (c.conclusion) {
-    case "SUCCESS":
+    case t(`SUCCESS`):
       return "success";
-    case "NEUTRAL":
-    case "SKIPPED":
-    case "STALE":
+    case t(`NEUTRAL`):
+    case t(`SKIPPED`):
+    case t(`STALE`):
       return "neutral";
     default:
       return "failure";
@@ -202,7 +204,7 @@ export function detailNodes(ids: string[], res: DetailsResponse): RawPR[] {
   const limited = errors.find((e) => e.type === "RATE_LIMITED");
   if (limited) throw new LiveError("rateLimited", limited.message);
   const nodes = res.data?.nodes;
-  const fail = (error?: GraphqlError) => new LiveError("other", (error ?? errors[0])?.message ?? "Missing pull request details");
+  const fail = (error?: GraphqlError) => new LiveError("other", (error ?? errors[0])?.message ?? t(`Missing pull request details`));
   if (!nodes || nodes.length !== ids.length) throw fail();
   return nodes.filter((node, i): node is RawPR => {
     if (node) return true;
@@ -269,10 +271,10 @@ export function summarizeChecks(checks: PullRequestCheck[]): CheckSummary | null
   const queued = checks.filter((c) => c.state === "queued").length;
   const success = checks.length - failure - pending;
   const counts = { success, failure, pending };
-  if (failure) return { text: failure === 1 ? "1 check is failing" : `${failure} checks are failing`, tone: "failure", counts };
-  if (queued && queued === pending && !checks.some((c) => c.state === "success")) return { text: "Checks are queued", tone: "pending", counts };
-  if (pending) return { text: "Some checks haven't completed yet", tone: "pending", counts };
-  return { text: "All checks have passed", tone: "success", counts };
+  if (failure) return { text: failure === 1 ? t(`1 check is failing`) : `${failure} checks are failing`, tone: "failure", counts };
+  if (queued && queued === pending && !checks.some((c) => c.state === "success")) return { text: t(`Checks are queued`), tone: "pending", counts };
+  if (pending) return { text: t(`Some checks haven't completed yet`), tone: "pending", counts };
+  return { text: t(`All checks have passed`), tone: "success", counts };
 }
 
 export function prBadge(pr: PullRequestInfo): "conflict" | "failing" | "changesRequested" | "pending" | "approved" | "passed" | null {

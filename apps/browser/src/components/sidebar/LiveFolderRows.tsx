@@ -15,6 +15,8 @@ import { RefreshSpinner } from "./RefreshSpinner";
 import { SectionLabel } from "./SectionLabel";
 import { SidebarListRow } from "./SidebarRow";
 import { TAB_ROW } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 const SECTION_HEIGHT = 22;
 
@@ -81,7 +83,7 @@ export function StackRow({ folderId, windowId, stack }: { folderId: string; wind
   const fold = useFold(collapsed);
   const { hovered, hoverProps } = useHover();
   const tabOpen = useStackTabOpen(folderId, stack.id);
-  const chevronRotation = reduceMotion() === false ? fold.open.interpolate({ inputRange: [0, 1], outputRange: ["-90deg", "0deg"] }) : collapsed ? "-90deg" : "0deg";
+  const chevronRotation = reduceMotion() === false ? fold.open.interpolate({ inputRange: [0, 1], outputRange: ["-90deg", t(`0deg`)] }) : collapsed ? "-90deg" : t(`0deg`);
   const hide = () => {
     hideStack(folderId, stack.id);
     noteLiveStackHide();
@@ -92,7 +94,7 @@ export function StackRow({ folderId, windowId, stack }: { folderId: string; wind
       <View {...hoverProps}>
         <Pressable
           onPress={() => toggleStack(stack.id)}
-          accessibilityLabel={collapsed ? "Expand pull request stack" : "Collapse pull request stack"}
+          accessibilityLabel={collapsed ? t(`Expand pull request stack`) : t(`Collapse pull request stack`)}
         >
           <SidebarListRow height={26} padRight={space.m} fill={hovered ? theme.rowHover : undefined}>
             <Symbol name="square.stack.3d.up" size={11} color={theme.textSecondary} style={{ width: 16, height: 16 }} />
@@ -101,7 +103,7 @@ export function StackRow({ folderId, windowId, stack }: { folderId: string; wind
             </Text>
             <HoverSlot
               hovered={hovered && !tabOpen}
-              hover={<Button variant="icon" icon="xmark" size="s" weight="semibold" onPress={hide} tooltip="Hide Stack Until Refresh" />}
+              hover={<Button variant="icon" icon="xmark" size="s" weight="semibold" onPress={hide} tooltip={t(`Hide Stack Until Refresh`)} />}
               style={STACK_COUNT}
             >
               <Badge text={stack.items.length} size="m" />

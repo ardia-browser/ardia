@@ -11,6 +11,8 @@ import { notePlugin } from "../telemetry/pluginCounts";
 import { recentPluginGesture } from "./gestures";
 import { closePluginCommandView, closePluginPopover, closePluginSidePanel, isMountedSurface, mountedEntry, mountedInstancesOf, PROMPT_BUSY, setPluginSurfaceTree, showPluginInputBox, showPluginQuickPick, updatePluginToolbar, usePluginSurfaces } from "./surfaces";
 import { closePluginPanel, openPluginPanel, pluginPanel } from "./panels";
+import { t } from "../../lib/uiLanguage";
+
 
 export const TOAST_GAP_MS = 1500;
 const SYMBOL = /^[a-z0-9.]{1,64}$/;
@@ -32,9 +34,9 @@ const textOf = (value: unknown, max: number) => (typeof value === "string" && va
 
 async function quickPick(c: Caller, params: Record<string, unknown>): Promise<Body> {
   const items = quickPickItemsOf(params.items);
-  if (!items) return failure("bad_request", "items is a list of up to 500 { id, title } with unique ids.");
+  if (!items) return failure("bad_request", t(`items is a list of up to 500 { id, title } with unique ids.`));
   const windowId = windowFor(c.name, params.windowId);
-  if (!windowId) return failure("no_window", "No window to ask in.");
+  if (!windowId) return failure("no_window", t(`No window to ask in.`));
   const asked = showPluginQuickPick(c.name, windowId, items, quickPickOptionsOf(params.options));
   if (!asked) return failure("failed", PROMPT_BUSY);
   return { result: { picked: await asked } };
@@ -42,9 +44,9 @@ async function quickPick(c: Caller, params: Record<string, unknown>): Promise<Bo
 
 async function inputBox(c: Caller, params: Record<string, unknown>): Promise<Body> {
   const options = inputBoxOptionsOf(params.options ?? params);
-  if (!options) return failure("bad_request", "showInputBox needs a title.");
+  if (!options) return failure("bad_request", t(`showInputBox needs a title.`));
   const windowId = windowFor(c.name, params.windowId);
-  if (!windowId) return failure("no_window", "No window to ask in.");
+  if (!windowId) return failure("no_window", t(`No window to ask in.`));
   const asked = showPluginInputBox(c.name, windowId, options);
   if (!asked) return failure("failed", PROMPT_BUSY);
   return { result: { value: await asked } };
@@ -53,10 +55,10 @@ async function inputBox(c: Caller, params: Record<string, unknown>): Promise<Bod
 async function confirmBox(c: Caller, m: PluginManifest, params: Record<string, unknown>): Promise<Body> {
   const options = isFields(params.options) ? params.options : params;
   const title = textOf(options.title, 120);
-  if (!title) return failure("bad_request", "showConfirm needs a title.");
+  if (!title) return failure("bad_request", t(`showConfirm needs a title.`));
   if (confirming.has(c.name)) return failure("failed", PROMPT_BUSY);
   const windowId = windowFor(c.name, params.windowId);
-  if (!windowId) return failure("no_window", "No window to ask in.");
+  if (!windowId) return failure("no_window", t(`No window to ask in.`));
   confirming.add(c.name);
   notePlugin("plugin_ui_prompts");
   try {
@@ -69,7 +71,7 @@ async function confirmBox(c: Caller, m: PluginManifest, params: Record<string, u
       windowId,
       sheetOnly: true,
     });
-    if (answer.unavailable === true) return failure("no_window", "No visible window to show the dialog.");
+    if (answer.unavailable === true) return failure("no_window", t(`No visible window to show the dialog.`));
     return { result: { confirmed: answer.confirmed === true } };
   } finally {
     confirming.delete(c.name);
@@ -78,11 +80,11 @@ async function confirmBox(c: Caller, m: PluginManifest, params: Record<string, u
 
 function toast(c: Caller, params: Record<string, unknown>): Body {
   const title = textOf(params.title, 120);
-  if (!title) return failure("bad_request", "showToast needs a title.");
+  if (!title) return failure("bad_request", t(`showToast needs a title.`));
   const now = Date.now();
-  if (now - (lastToast.get(c.name) ?? 0) < TOAST_GAP_MS) return failure("failed", "Toasts from one plugin come at most every 1.5 s.");
+  if (now - (lastToast.get(c.name) ?? 0) < TOAST_GAP_MS) return failure("failed", t(`Toasts from one plugin come at most every 1.5 s.`));
   const windowId = windowFor(c.name, params.windowId);
-  if (!windowId) return failure("no_window", "No window to show it in.");
+  if (!windowId) return failure("no_window", t(`No window to show it in.`));
   lastToast.set(c.name, now);
   const options = isFields(params.options) ? params.options : {};
   const icon = typeof options.icon === "string" && SYMBOL.test(options.icon) ? options.icon : "puzzlepiece";
@@ -131,7 +133,7 @@ function closeInstance(plugin: string, instance: { viewId: string; windowId: str
 
 function closeSurface(c: Caller, params: Record<string, unknown>): Body {
   const surfaceId = params.surfaceId;
-  if (typeof surfaceId !== "string") return failure("bad_request", "surface.close needs a surfaceId.");
+  if (typeof surfaceId !== "string") return failure("bad_request", t(`surface.close needs a surfaceId.`));
   const instance = mountedEntry(c.name, surfaceId);
   if (instance) return { result: { ok: true, closed: closeInstance(c.name, instance) } };
   const s = usePluginSurfaces.getState();
@@ -152,7 +154,7 @@ function toolbar(m: PluginManifest, c: Caller, params: Record<string, unknown>):
   const itemId = params.itemId;
   if (typeof itemId !== "string" || !m.contributes.toolbar.some((t) => t.id === itemId)) return failure("refused", `This plugin declares no toolbar item ${String(itemId).slice(0, 40)}.`);
   const update = toolbarUpdateOf(params.update);
-  if (!update) return failure("bad_request", "update takes icon, label, badge, tooltip and tone.");
+  if (!update) return failure("bad_request", t(`update takes icon, label, badge, tooltip and tone.`));
   updatePluginToolbar(c.name, itemId, update);
   return { result: { ok: true } };
 }
@@ -160,7 +162,7 @@ function toolbar(m: PluginManifest, c: Caller, params: Record<string, unknown>):
 function panel(c: Caller, method: string, params: Record<string, unknown>): Body {
   if (typeof params.panelId !== "string") return failure("bad_request", `${method} needs a panelId.`);
   const windowId = windowFor(c.name, params.windowId);
-  if (!windowId) return failure("no_window", "No window for the panel.");
+  if (!windowId) return failure("no_window", t(`No window for the panel.`));
   const outcome = method === "panel.open" ? openPluginPanel(windowId, c.name, params.panelId) : closePluginPanel(windowId, c.name, params.panelId);
   return outcome.ok ? { result: { ok: true, windowId, ...(outcome.tabId ? { tabId: outcome.tabId } : {}) } } : failure("failed", outcome.reason);
 }

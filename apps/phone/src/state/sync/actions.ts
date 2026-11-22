@@ -24,6 +24,8 @@ import { noteLocalChange, notePinSent, selectedProfile, selectedProfileId, start
 import { copy } from "../../lib/platformCopy";
 import { countUsage, usageCountingWindow } from "../telemetry/telemetry";
 import {
+import { t } from "../../lib/uiLanguage";
+
   CONNECTED_TOAST,
   couldNotSendToast,
   pinAnnouncement,
@@ -116,14 +118,14 @@ export function startSync() {
   });
 }
 
-const OFF_CHECK: PhraseCheck = { wordCount: 0, counterText: "0/24 words", isTooLong: false, problem: null, isValid: false };
+const OFF_CHECK: PhraseCheck = { wordCount: 0, counterText: t(`0/24 words`), isTooLong: false, problem: null, isValid: false };
 
 export function checkPhrase(phrase: string): PhraseCheck {
   try {
     return sync.check(phrase);
   } catch {
     const count = phrase.trim() ? phrase.trim().split(/\s+/).length : 0;
-    return { ...OFF_CHECK, wordCount: count, counterText: count > 24 ? "too many words" : `${count}/24 words`, isTooLong: count > 24 };
+    return { ...OFF_CHECK, wordCount: count, counterText: count > 24 ? t(`too many words`) : `${count}/24 words`, isTooLong: count > 24 };
   }
 }
 

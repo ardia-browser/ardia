@@ -9,8 +9,10 @@ import { eventForCall, isCalendarUrl, meetingOf, relatedLinks, type CalendarEven
 import { groupKeptOpen } from "../groups/closeGuard";
 import { live, setMeetingGroup, updateCalendarSettings, useLive } from "./store";
 import { shownLiveOf } from "../tabs/tabLive";
+import { t } from "../../lib/uiLanguage";
 
-export const MEETING_FALLBACK_TITLE = "Meeting";
+
+export const MEETING_FALLBACK_TITLE = t(`Meeting`);
 const CLEANUP_IDLE_MS = 30 * 60_000;
 
 const store = () => useBrowser.getState();
@@ -85,10 +87,10 @@ export function startMeetingGroups() {
 async function offerAlerts(windowId: string) {
   updateCalendarSettings({ prompted: true });
   const { confirmed } = await confirm({
-    title: "Would you like to see meeting alerts for this calendar?",
-    message: "Ardia can alert you when a new meeting is about to begin. You can hide these alerts or manage how close to a meeting start they show up.",
-    confirmTitle: "Show Alerts",
-    cancelTitle: "Don't Show These Alerts",
+    title: t(`Would you like to see meeting alerts for this calendar?`),
+    message: t(`Ardia can alert you when a new meeting is about to begin. You can hide these alerts or manage how close to a meeting start they show up.`),
+    confirmTitle: t(`Show Alerts`),
+    cancelTitle: t(`Don't Show These Alerts`),
     windowId,
   });
   if (confirmed) await connectCalendar();

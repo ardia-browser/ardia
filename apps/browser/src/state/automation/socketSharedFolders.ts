@@ -8,6 +8,8 @@ import { eligibleKind } from "./automationWindows";
 import type { MethodSpec } from "./socketCatalog";
 import { obj } from "./socketSchema";
 import { now } from "./socketTargets";
+import { t } from "../../lib/uiLanguage";
+
 
 const linkCount = (base: BaseEntry[]): number => base.reduce((n, b) => n + (b.kind === "link" ? 1 : linkCount(b.children)), 0);
 
@@ -40,8 +42,8 @@ function list() {
     .map(({ profileId, key, folder }) => row(profileId, key, folder));
 }
 
-const ROW = "{profile, key, groups, name, path, url, links, state, waiting, error, addedAt}";
+const ROW = t(`{profile, key, groups, name, path, url, links, state, waiting, error, addedAt}`);
 
 export const SHARED_FOLDER_METHODS: MethodSpec[] = [
-  { name: "sharedFolders.list", mutates: false, description: "Sidebar folders backed by a folder on disk (shared through iCloud Drive or another synced folder), with their sync state", params: obj({}), result: `[${ROW}]`, run: list },
+  { name: "sharedFolders.list", mutates: false, description: t(`Sidebar folders backed by a folder on disk (shared through iCloud Drive or another synced folder), with their sync state`), params: obj({}), result: `[${ROW}]`, run: list },
 ];

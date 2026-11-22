@@ -39,6 +39,8 @@ import { useTrayKeyboard } from "./useTrayKeyboard";
 import { useKeyboardTopFromBottom } from "./useKeyboardHeight";
 import { searchPanel, searchPanelFieldCenter, searchPanelHeight, searchPanelInk } from "./searchPanelTokens";
 import type { Point } from "../../lib/menuPlace";
+import { t } from "../../lib/uiLanguage";
+
 
 const SHEET_ABOVE_KEYBOARD = 274;
 
@@ -137,7 +139,7 @@ function SheetTray() {
 type LayerProps = { session: number; closing: boolean; onClosed: () => void };
 
 function TrayLayer({ session, closing, onClosed }: LayerProps) {
-  countRender("TrayLayer");
+  countRender(t(`TrayLayer`));
   const origin = useSearchOrigin();
   const theme = useTrayTheme();
   const incognito = useIncognito();
@@ -398,7 +400,7 @@ function TrayLayer({ session, closing, onClosed }: LayerProps) {
       {fabricLagsAnimations && !closing ? <FabricCatchUp motion={trayMotionNow} /> : null}
       <Animated.View testID="trayDim" style={[StyleSheet.absoluteFill, dimStyle]}>
         <Pressable
-          accessibilityLabel="Close Search"
+          accessibilityLabel={t(`Close Search`)}
           accessibilityRole="button"
           {...screenReaderActions([{ name: "activate", run: closeFromTouch }])}
           onPressIn={closeOnPressIn}
@@ -502,7 +504,7 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 
 function StagedTray() {
-  countRender("TrayLayer");
+  countRender(t(`TrayLayer`));
   const open = useSearchOpen();
   const session = useSearchSession();
   const origin = useSearchOrigin();
@@ -786,7 +788,7 @@ function StagedTray() {
     >
       <AnimatedPressable
         testID="trayDim"
-        accessibilityLabel="Close Search"
+        accessibilityLabel={t(`Close Search`)}
         accessibilityRole="button"
         {...screenReaderActions([{ name: "activate", run: closeFromTouch }])}
         collapsable={false}
@@ -952,7 +954,7 @@ function FieldInput({ first, closing }: { first: boolean; closing: boolean }) {
         <View testID="trayFieldReveal" nativeID={staged ? SEARCH_REVEAL_ID : undefined} collapsable={false} style={[styles.fieldContents, panelField ? styles.panelField : null]}>
         {fieldGone ? (
           <Text testID="trayFieldLeaving" numberOfLines={1} style={[font.title3, styles.input, styles.leavingText, arc ? styles.searchPanelWeight : null, { color: lastText.current ? theme.foregroundPrimary : theme.foregroundTertiary }]}>
-            {lastText.current || "Search…"}
+            {lastText.current || t(`Search…`)}
           </Text>
         ) : (
         <TrayInput
@@ -982,7 +984,7 @@ function FieldInput({ first, closing }: { first: boolean; closing: boolean }) {
         />
         )}
         {hasText ? (
-          <Pressable accessibilityRole="button" accessibilityLabel="Clear Text" style={styles.accessory} onPress={() => input.current?.clearsInPlace() || setSearchText("")}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t(`Clear Text`)} style={styles.accessory} onPress={() => input.current?.clearsInPlace() || setSearchText("")}>
             <SystemGlyph testID="trayClearGlyph" systemName="xmark.circle.fill" pointSize={FIELD_SYSTEM_GLYPH} name="xmarkCircleFill" size={panelField ? PANEL_GLYPHS.clear : 18} color={theme.foregroundTertiary} />
           </Pressable>
         ) : (
@@ -1002,7 +1004,7 @@ function VoiceButton() {
   const panelField = useDesign() === "redesigned";
   if (incognito || fontScale > LARGE_FONT_SCALE || !canSearchByVoice()) return null;
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel="Voice Search" style={styles.accessory} onPress={presentVoiceSearch}>
+    <Pressable accessibilityRole="button" accessibilityLabel={t(`Voice Search`)} style={styles.accessory} onPress={presentVoiceSearch}>
       <SystemGlyph testID="trayMicGlyph" systemName="mic" pointSize={FIELD_SYSTEM_GLYPH} weight="medium" name="mic" size={panelField ? PANEL_GLYPHS.mic : 19} color={theme.foregroundTertiary} />
     </Pressable>
   );
@@ -1018,7 +1020,7 @@ function IncognitoToggle() {
     <Pressable
       testID="trayIncognito"
       accessibilityRole="button"
-      accessibilityLabel={on ? "Deactivate Incognito" : "Activate Incognito"}
+      accessibilityLabel={on ? t(`Deactivate Incognito`) : t(`Activate Incognito`)}
       onPress={toggleTrayIncognito}
       style={[styles.incognito, panelField ? styles.panelIncognito : null]}
     >
@@ -1034,7 +1036,7 @@ function PanelIncognitoToggle() {
   const on = useIncognito();
   const { fontScale } = useWindowDimensions();
   return (
-    <Pressable testID="trayIncognito" accessibilityRole="button" accessibilityLabel={on ? "Deactivate Incognito" : "Activate Incognito"} hitSlop={space.xs} onPress={toggleTrayIncognito} style={styles.panelIncognitoToggle}>
+    <Pressable testID="trayIncognito" accessibilityRole="button" accessibilityLabel={on ? t(`Deactivate Incognito`) : t(`Activate Incognito`)} hitSlop={space.xs} onPress={toggleTrayIncognito} style={styles.panelIncognitoToggle}>
       {on && fontScale <= LARGE_FONT_SCALE ? (
         <Animated.Text testID="trayIncognitoLabel" entering={modeToggleIn} exiting={modeToggleOut} numberOfLines={1} style={[styles.panelIncognitoLabel, { color: searchPanel.incognito.label }]}>
           Incognito
@@ -1186,7 +1188,7 @@ function CurrentPageRow({ page }: { page: OpenedPage }) {
   const theme = useTrayTheme();
   const { url, title, faviconUrl, initialText } = page;
   return (
-    <Pressable testID="trayCurrentPage" accessibilityRole="button" accessibilityLabel={`Edit ${title}`} accessibilityHint="Puts this page's address in the search field" onPress={() => setSearchText(initialText)} style={({ pressed }) => [styles.searchPanelRow, pressed ? { backgroundColor: theme.rowHighlight } : null]}>
+    <Pressable testID="trayCurrentPage" accessibilityRole="button" accessibilityLabel={`Edit ${title}`} accessibilityHint={t(`Puts this page's address in the search field`)} onPress={() => setSearchText(initialText)} style={({ pressed }) => [styles.searchPanelRow, pressed ? { backgroundColor: theme.rowHighlight } : null]}>
       <View style={styles.searchPanelIcon}>
         <Favicon iconUrl={faviconUrl} pageUrl={url} size={searchPanel.iconSlot} />
       </View>
@@ -1196,7 +1198,7 @@ function CurrentPageRow({ page }: { page: OpenedPage }) {
       <View style={[styles.searchPanelTrailing, styles.refineArrow]}>
         <Symbol name="arrowUpForward" size={searchPanel.trailingGlyph} color={theme.rowIcon} />
       </View>
-      <Pressable testID="trayCurrentPageCopy" accessibilityRole="button" accessibilityLabel="Copy Link" hitSlop={space.xs} onPress={() => copyLink(url)} style={styles.searchPanelTrailing}>
+      <Pressable testID="trayCurrentPageCopy" accessibilityRole="button" accessibilityLabel={t(`Copy Link`)} hitSlop={space.xs} onPress={() => copyLink(url)} style={styles.searchPanelTrailing}>
         <SystemGlyph systemName="doc.on.doc" pointSize={searchPanel.trailingGlyph} weight="medium" name="docOnDoc" size={searchPanel.trailingGlyph} color={theme.rowIcon} />
       </Pressable>
     </Pressable>

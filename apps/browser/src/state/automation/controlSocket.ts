@@ -42,6 +42,8 @@ import { dropAllHistoryHandles, dropHistoryHandles } from "./historyHandles";
 import { dropLateResults, forgetTabCalls } from "./tabCalls";
 import { backgroundInstance } from "../app/appSettings";
 import { programControlOn } from "../app/programControlSetting";
+import { t } from "../../lib/uiLanguage";
+
 
 export const useControlSocket = create<{ status: ControlSocketStatus | null }>()(() => ({ status: null }));
 
@@ -133,7 +135,7 @@ export function handleControlRequest({ connection, generation: tagged, line }: C
   const request = parseRequest(line);
   if ("error" in request) return send(connection, request.id, { error: request.error });
   const { id, method, params } = request;
-  if (tagged !== generation || !controlOn()) return send(connection, id, failure("failed", "Control is off."));
+  if (tagged !== generation || !controlOn()) return send(connection, id, failure("failed", t(`Control is off.`)));
   openConnections.add(connection);
   const ticket = method === "run" ? ++nextTicket : 0;
   const caller = callers.get(connection);
@@ -178,7 +180,7 @@ export async function windowsWithTargets(windows: AutomationWindow[]): Promise<A
 }
 
 export function runMethod(params: Record<string, unknown>, background = backgroundInstance, stillOn: () => boolean = () => true): Body {
-  if (background) return failure("refused", "run isn't available in background instances; use the dedicated methods (apply, tabs.*, windows.*, closed.restore, …).");
+  if (background) return failure("refused", t(`run isn't available in background instances; use the dedicated methods (apply, tabs.*, windows.*, closed.restore, …).`));
   const plan = planRun(useBrowser.getState(), params);
   if ("error" in plan) return plan;
   const target = commandTarget(useBrowser.getState(), plan.command, plan.windowId, plan.tabId);
@@ -293,7 +295,7 @@ function listen() {
     try {
       handleControlRequest(request);
     } catch (error) {
-      console.warn("[automation] a request failed", error);
+      console.warn(t(`[automation] a request failed`), error);
     }
   });
   onControlClose(handleClose);
@@ -347,7 +349,7 @@ function sync() {
     .then(() => (on ? start(consent) : stop()))
     .catch((error: unknown) => {
       useControlSocket.setState({ status: { state: "off", generation: 0, path: "", reason: errorText(error) } });
-      warnFor(consent, "[automation] the control socket failed", error);
+      warnFor(consent, t(`[automation] the control socket failed`), error);
     });
 }
 

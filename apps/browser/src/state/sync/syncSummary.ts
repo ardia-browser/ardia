@@ -6,6 +6,8 @@ import { remoteProfileRecord, sharedDataChain } from "./profileLinks";
 import { beingRemoved, sharesItsData } from "./profileRemoval";
 import { deviceBeingRemoved } from "./deviceRemoval";
 import { APP_SCOPE, type RemoteProfile, type RemoteTabs, type SyncDoc, type SyncedDevice, type SyncUi } from "./syncDoc";
+import { t } from "../../lib/uiLanguage";
+
 
 export function summarize(doc: SyncDoc): Pick<SyncUi, "devices" | "remoteTabs" | "remoteProfiles"> {
   const app = doc.scopes[APP_SCOPE];
@@ -40,7 +42,7 @@ export function summarize(doc: SyncDoc): Pick<SyncUi, "devices" | "remoteTabs" |
       .filter(({ deviceId, value }) => deviceId !== doc.deviceId && names.has(deviceId) && value.tabs.length > 0)
       .map(({ deviceId, value }) => ({
         deviceId,
-        name: names.get(deviceId) || value.n || "Unknown Device",
+        name: names.get(deviceId) || value.n || t(`Unknown Device`),
         kind: deviceKindOf(records.get(deviceId)?.k ? records.get(deviceId) : value),
         tabs: value.tabs.map((t) => ({ url: t.u, title: t.t })),
       }));

@@ -1,6 +1,8 @@
 import { settleInstall } from "./installWaiters";
 import { confirmConsentRequest, dismissConsentRequest } from "./lifecycle";
 import { currentPlugins, type PluginsStore } from "./store";
+import { t } from "../../lib/uiLanguage";
+
 
 type ConsentRequest = NonNullable<PluginsStore["consent"]>;
 export type ConsentOwner = "onboarding" | "settings";
@@ -46,7 +48,7 @@ const owns = (owner: ConsentOwner, id: number) => {
   return consent?.id === id && consentOwner(consent) === owner;
 };
 
-export const CONFIRM_REFUSED = "Can't install it right now.";
+export const CONFIRM_REFUSED = t(`Can't install it right now.`);
 
 export function confirmConsentAs(owner: ConsentOwner, id: number): boolean {
   if (!owns(owner, id)) return false;

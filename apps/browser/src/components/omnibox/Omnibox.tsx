@@ -38,6 +38,8 @@ import { useBarText } from "./useBarText";
 import { markNewTabBar } from "../../state/omnibox/newTabMarks";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { usePreviewSelection } from "./usePreviewSelection";
+import { t } from "../../lib/uiLanguage";
+
 
 export { PANEL_TEXT_LEFT } from "./tokens";
 
@@ -387,7 +389,7 @@ async function openTabOrFile(windowId: string, tabId: string, onGo: (url: string
   const choice = await chooseFromMenu<{ tab: string }, "files">([
     ...others.map((t) => ({ value: { tab: t.id }, title: t.title || displayUrl(t.url) })),
     ...(others.length ? [{ separator: true as const }] : []),
-    { id: "files", title: "Open File…", symbol: "doc" },
+    { id: "files", title: t(`Open File…`), symbol: "doc" },
   ]);
   if (choice && typeof choice === "object") switchFromBar(choice.tab, "", tabId, "current");
   if (choice === "files") {

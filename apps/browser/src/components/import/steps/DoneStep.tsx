@@ -13,18 +13,20 @@ import { APP, kindTitle } from "../model";
 import { Spacer, Title } from "../Parts";
 import { ExtensionListingView } from "./ExtensionListing";
 import { importLayout, importMotion, importType } from "../tokens";
+import { t } from "../../../lib/uiLanguage";
+
 
 function summaryOf(counts: ImportCounts) {
   return [
     counts.bookmarks && plural(counts.bookmarks, "bookmark"),
-    counts.history && plural(counts.history, "history item"),
+    counts.history && plural(counts.history, t(`history item`)),
     counts.passwords && plural(counts.passwords, "password"),
     counts.cookies && plural(counts.cookies, "cookie"),
     counts.addresses && `${counts.addresses} ${counts.addresses === 1 ? "address" : "addresses"}`,
     counts.cards && plural(counts.cards, "card"),
     counts.tabs && plural(counts.tabs, "tab"),
-    counts.rules && plural(counts.rules, "Air Traffic Control rule"),
-    counts.archived && plural(counts.archived, "archived tab"),
+    counts.rules && plural(counts.rules, t(`Air Traffic Control rule`)),
+    counts.archived && plural(counts.archived, t(`archived tab`)),
     counts.settings && plural(counts.settings, "setting"),
   ].filter(Boolean) as string[];
 }
@@ -34,7 +36,7 @@ function ExtensionList({ flow }: { flow: ImportFlow }) {
   const onboarding = useOnboarding((s) => s.windowId !== null);
   if (step.name !== "done") return null;
   const { extensions } = step;
-  if (extensions.listing) return <ExtensionListingView listing={extensions.listing} sourceName={source?.name ?? "Your browser"} />;
+  if (extensions.listing) return <ExtensionListingView listing={extensions.listing} sourceName={source?.name ?? t(`Your browser`)} />;
   if (!extensions.list.length) return null;
   const centered = { textAlign: "center" } as const;
   return (
@@ -52,7 +54,7 @@ function ExtensionList({ flow }: { flow: ImportFlow }) {
       ) : (
         <View style={{ alignItems: "center" }}>
           <Button
-            title={extensions.list.length === 1 ? "Open in Chrome Web Store" : `Open ${extensions.list.length} in Chrome Web Store`}
+            title={extensions.list.length === 1 ? t(`Open in Chrome Web Store`) : `Open ${extensions.list.length} in Chrome Web Store`}
             onPress={openFoundExtensions}
           />
         </View>
@@ -74,7 +76,7 @@ function SearchEngineLine({ flow, failed }: { flow: ImportFlow; failed: boolean 
   const { source, step } = flow;
   if (step.name !== "done" || !step.searchEngine) return null;
   const { name, offered } = step.searchEngine;
-  const from = source?.name ?? "Your other browser";
+  const from = source?.name ?? t(`Your other browser`);
   const line = offered ? `${from} searches with ${name}. ${APP} kept the search engine you chose.` : `Search uses ${name} now, as in ${from}. You can change it in Settings › Profiles.`;
   return (
     <View style={{ alignItems: failed ? "flex-start" : "center", gap: space.m, marginTop: failed ? space.s : 0 }}>
@@ -94,7 +96,7 @@ function RestoreArcFolders() {
   if (!arcHolders.length) return null;
   return (
     <Button
-      title="Restore Arc Folders as Groups"
+      title={t(`Restore Arc Folders as Groups`)}
       onPress={() => {
         for (const id of arcHolders) restoreArcFolders(id, null);
       }}
@@ -110,7 +112,7 @@ export function DoneBody({ flow }: { flow: ImportFlow }) {
   if (failures.length)
     return (
       <>
-        <Title title={summary.length ? "Partially imported" : "Import failed"} subtitle="Only some of your data imported. Please try again!" />
+        <Title title={summary.length ? t(`Partially imported`) : t(`Import failed`)} subtitle={t(`Only some of your data imported. Please try again!`)} />
         <Text weight="semibold" style={{ marginBottom: space.s }}>
           Some import steps failed:
         </Text>
@@ -135,7 +137,7 @@ export function DoneBody({ flow }: { flow: ImportFlow }) {
         You're all set
       </Text>
       <Text tone="textSecondary" style={{ textAlign: "center" }}>
-        {summary.length ? `Imported ${summary.join(", ")}.` : "There was nothing new to import."}
+        {summary.length ? `Imported ${summary.join(", ")}.` : t(`There was nothing new to import.`)}
       </Text>
       <SearchEngineLine flow={flow} failed={false} />
       <LeftBehind notes={notes} failed={false} />
@@ -150,8 +152,8 @@ export function DoneFooter({ flow }: { flow: ImportFlow }) {
   return (
     <>
       <Spacer />
-      {failed && <Button title="Try Again" onPress={() => backTo("choose")} />}
-      <Button title={failed ? "Continue" : "Finish importing"} kind="primary" onPress={closeImport} />
+      {failed && <Button title={t(`Try Again`)} onPress={() => backTo("choose")} />}
+      <Button title={failed ? t(`Continue`) : t(`Finish importing`)} kind="primary" onPress={closeImport} />
     </>
   );
 }

@@ -1,4 +1,6 @@
 import type { ImportedExtension, ImportedExtensionSkip } from "../../platform/importModule";
+import { t } from "../../lib/uiLanguage";
+
 
 export type ExtensionGroup = { sourceProfile: string; profileId: string; list: ImportedExtension[] };
 
@@ -63,12 +65,12 @@ export function leftOutCounts(listing: ExtensionListing): Record<LeftOutReason, 
 }
 
 const LEFT_OUT_WORDS: Record<LeftOutReason, string> = {
-  installed: "already in Ardia",
-  manifestV2: "uses Manifest V2, which Chrome no longer runs",
-  unpacked: "loaded unpacked in developer mode",
-  policy: "installed by your organization's policy",
-  external: "added by another app",
-  notWebStore: "not from the Chrome Web Store",
+  installed: t(`already in Ardia`),
+  manifestV2: t(`uses Manifest V2, which Chrome no longer runs`),
+  unpacked: t(`loaded unpacked in developer mode`),
+  policy: t(`installed by your organization's policy`),
+  external: t(`added by another app`),
+  notWebStore: t(`not from the Chrome Web Store`),
 };
 
 export const leftOutText = (e: LeftOutExtension) => `${e.name} (${LEFT_OUT_WORDS[e.reason]})`;

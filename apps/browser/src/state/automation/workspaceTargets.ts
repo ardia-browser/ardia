@@ -9,6 +9,8 @@ import { eligibleKind, isEligibleTab, lastFocusedEligibleWindow, ownEntry } from
 import type { GroupName, Op } from "./workspaceOps";
 import { iconName, isEligibleGroup } from "./workspaceTree";
 import { isTabBusy } from "./tabCalls";
+import { t } from "../../lib/uiLanguage";
+
 
 export type Changed = { tabs?: string[]; groups?: string[] };
 
@@ -124,7 +126,7 @@ export function defaultWindow(profileId?: string): string {
   const showing = profileId ? order.find((id) => s.windows[id]!.profileId === profileId) : undefined;
   const last = lastFocusedEligibleWindow(s);
   const found = showing ?? (last && isNormal(s, last) ? last : order[0]);
-  if (!found) throw new OpError("no_window", "No browser window the ardia command can use is open.");
+  if (!found) throw new OpError("no_window", t(`No browser window the ardia command can use is open.`));
   return found;
 }
 

@@ -8,6 +8,8 @@ import { splitOf } from "../splits/splits";
 import { useUrlAnchors } from "../windows/layout";
 import { keyText } from "../commands/keyText";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
+import { t } from "../../lib/uiLanguage";
+
 
 export type TourAnchor = "commandBar" | "page" | "tabs" | "sidebarButton";
 
@@ -40,7 +42,7 @@ export type TourStop = {
 const TOUR_STOPS: TourStop[] = [
   {
     id: "commandBar",
-    title: "Search or go anywhere",
+    title: t(`Search or go anywhere`),
     body: `Type a question, an address or the name of an open tab. ${keyText("⌘L")} brings the command bar up from any page, and ${keyText("⌘T")} opens a new tab.`,
     anchor: "commandBar",
     placement: "below",
@@ -49,8 +51,8 @@ const TOUR_STOPS: TourStop[] = [
   },
   {
     id: "tabs",
-    title: "Your tabs live in the sidebar",
-    body: "New tabs land here. Drag them to reorder or group them; right-click one to pin it, so it's always a click away.",
+    title: t(`Your tabs live in the sidebar`),
+    body: t(`New tabs land here. Drag them to reorder or group them; right-click one to pin it, so it's always a click away.`),
     anchor: "tabs",
     placement: "besideSidebar",
     radius: 10,
@@ -58,7 +60,7 @@ const TOUR_STOPS: TourStop[] = [
   },
   {
     id: "sidebar",
-    title: "Room to focus",
+    title: t(`Room to focus`),
     body: `${keyText("⌘S")} hides the sidebar. Move the pointer to the window's left edge to peek at your tabs while it's hidden.`,
     anchor: "sidebarButton",
     placement: "below",
@@ -67,7 +69,7 @@ const TOUR_STOPS: TourStop[] = [
   },
   {
     id: "split",
-    title: "Two pages, side by side",
+    title: t(`Two pages, side by side`),
     body: `Drag a tab onto the page to split the window, or press ${keyText("⌃⇧=")}. ${keyText("⌃⇧]")} and ${keyText("⌃⇧[")} move between the panes.`,
     anchor: "page",
     placement: "inside",
@@ -76,9 +78,9 @@ const TOUR_STOPS: TourStop[] = [
   },
   {
     id: "done",
-    title: "You're all set",
+    title: t(`You're all set`),
     body: PLATFORM_FEATURES.menuBar
-      ? "Everything else is in the menu bar and in Settings (⌘,). You can take this tour again from the Help menu."
+      ? t(`Everything else is in the menu bar and in Settings (⌘,). You can take this tour again from the Help menu.`)
       : `Everything else is in Settings (${keyText("⌘,")}).`,
   },
 ];

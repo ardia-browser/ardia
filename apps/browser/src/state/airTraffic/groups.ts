@@ -2,12 +2,14 @@ import type { BrowserState } from "../browser/store";
 import { pinKeyOf } from "../browser/model";
 import { groupLabel } from "../pins/tabGrouping";
 import { isOpenRegularWindow } from "../windows/small";
+import { t } from "../../lib/uiLanguage";
+
 
 type GroupWorld = Pick<BrowserState, "groups" | "parkedPins" | "tabs">;
 
 export type RouteGroup = { key: string; name: string };
 
-const PARKED_GROUP_NAME = "Tab Group";
+const PARKED_GROUP_NAME = t(`Tab Group`);
 
 export function routeGroups(s: GroupWorld, profileId: string): RouteGroup[] {
   const seen = new Set<string>();

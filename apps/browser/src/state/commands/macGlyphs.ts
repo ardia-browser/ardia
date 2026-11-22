@@ -1,6 +1,8 @@
 import type { ShortcutModifier } from "../../platform/commands";
 import { FIRST_FUNCTION_KEY, LAST_FUNCTION_KEY, MODIFIER_ORDER, ordered } from "./modifiers";
 import type { Shortcut } from "./shortcuts";
+import { t } from "../../lib/uiLanguage";
+
 
 export const MODIFIER_GLYPHS: Record<ShortcutModifier, string> = { control: "⌃", option: "⌥", shift: "⇧", command: "⌘", function: "🌐" };
 const KEY_GLYPHS: Record<string, string> = {
@@ -11,7 +13,7 @@ const KEY_GLYPHS: Record<string, string> = {
   "\u007f": "⌫",
   "": "⌦",
   "\u001b": "⎋",
-  " ": "Space",
+  " ": t(`Space`),
   "": "↑",
   "": "↓",
   "": "←",

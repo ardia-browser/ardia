@@ -2,6 +2,8 @@ import { isFields } from "./decode";
 import type { PluginNode, QuickPickItem, QuickPickOptions, InputBoxOptions, ToolbarUpdate } from "./pluginProtocol";
 import { TONES } from "./pluginProtocol";
 import { pluginShortcutOf, pluginShortcutText } from "./pluginShortcuts";
+import { t } from "./uiLanguage";
+
 
 export const NODE_LIMITS = { depth: 24, nodes: 2000, textBytes: 256 * 1024, props: 32, propBytes: 16 * 1024, items: 500 } as const;
 
@@ -23,7 +25,7 @@ function propValue(value: unknown, budget: Budget, depth: number): unknown {
     budget.bytes += value.length;
     return clean(value);
   }
-  if (depth > 4) throw new Error("has props nested too deep");
+  if (depth > 4) throw new Error(t(`has props nested too deep`));
   if (Array.isArray(value)) {
     if (value.length > NODE_LIMITS.items) throw new Error(`has a prop list over ${NODE_LIMITS.items}`);
     return value.map((v) => propValue(v, budget, depth + 1));
@@ -40,10 +42,10 @@ function nodeOf(raw: unknown, budget: Budget, depth: number): PluginNode | strin
   if (typeof raw === "number") return String(raw);
   if (depth > NODE_LIMITS.depth) throw new Error(`nests deeper than ${NODE_LIMITS.depth}`);
   if (++budget.nodes > NODE_LIMITS.nodes) throw new Error(`has more than ${NODE_LIMITS.nodes} nodes`);
-  if (!isFields(raw)) throw new Error("has a node that isn't an object or text");
-  if (typeof raw.type !== "string" || !NODE_TYPE.test(raw.type)) throw new Error("has a node whose type isn't a component name");
+  if (!isFields(raw)) throw new Error(t(`has a node that isn't an object or text`));
+  if (typeof raw.type !== "string" || !NODE_TYPE.test(raw.type)) throw new Error(t(`has a node whose type isn't a component name`));
   const props: Record<string, unknown> = {};
-  if (raw.props !== undefined && !isFields(raw.props)) throw new Error("has props that aren't an object");
+  if (raw.props !== undefined && !isFields(raw.props)) throw new Error(t(`has props that aren't an object`));
   const given = Object.entries((raw.props as Record<string, unknown> | undefined) ?? {});
   if (given.length > NODE_LIMITS.props) throw new Error(`has a node with more than ${NODE_LIMITS.props} props`);
   for (const [name, value] of given) {
@@ -58,7 +60,7 @@ function nodeOf(raw: unknown, budget: Budget, depth: number): PluginNode | strin
     if (budget.bytes - before > NODE_LIMITS.propBytes) throw new Error(`has a prop over ${NODE_LIMITS.propBytes / 1024} KB`);
   }
   const children = raw.children === undefined ? [] : Array.isArray(raw.children) ? raw.children : null;
-  if (!children) throw new Error("has children that aren't a list");
+  if (!children) throw new Error(t(`has children that aren't a list`));
   const key = typeof raw.key === "string" ? raw.key.slice(0, 200) : typeof raw.key === "number" && Number.isFinite(raw.key) ? raw.key : undefined;
   const node: PluginNode = { type: raw.type, props, children: children.flatMap((child) => (child === null || child === undefined || typeof child === "boolean" ? [] : [nodeOf(child, budget, depth + 1)])) };
   if (key !== undefined) node.key = key;
@@ -69,7 +71,7 @@ function nodeOf(raw: unknown, budget: Budget, depth: number): PluginNode | strin
 export function checkPluginNode(raw: unknown): NodeCheck {
   try {
     const tree = nodeOf(raw, { nodes: 0, bytes: 0 }, 0);
-    if (typeof tree === "string") return { ok: false, problem: "must be a node, not text" };
+    if (typeof tree === "string") return { ok: false, problem: t(`must be a node, not text`) };
     return { ok: true, tree };
   } catch (error) {
     return { ok: false, problem: (error as Error).message };

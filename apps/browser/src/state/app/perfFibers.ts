@@ -1,4 +1,6 @@
 import { bump, type PerfStats } from "./perfStats";
+import { t } from "../../lib/uiLanguage";
+
 
 export type Fiber = {
   tag: number;
@@ -21,7 +23,7 @@ type Hook = { memoizedState: unknown; queue: unknown; next: Hook | null };
 export const roots = new Set<{ current: Fiber }>();
 
 export function nameOf(type: unknown): string {
-  if (typeof type === "function") return (type as { displayName?: string }).displayName || type.name || "Anonymous";
+  if (typeof type === "function") return (type as { displayName?: string }).displayName || type.name || t(`Anonymous`);
   if (type && typeof type === "object") {
     const t = type as { displayName?: string; render?: unknown; type?: unknown };
     if (t.displayName) return t.displayName;

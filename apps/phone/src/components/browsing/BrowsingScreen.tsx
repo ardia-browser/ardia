@@ -74,9 +74,11 @@ import { labTrace } from "../../platform/lab";
 import { shownTone } from "../../lib/pageTone";
 import { besideStrip, bottomBarLayout, DUO_BAR, duoSqueeze } from "../../lib/bottomBarSpan";
 import { useScreenLayout } from "../../state/app/screenLayout";
+import { t } from "../../lib/uiLanguage";
+
 
 export const BrowsingScreen = memo(function BrowsingScreen({ tab }: { tab: BrowserTab }) {
-  countRender("BrowsingScreen");
+  countRender(t(`BrowsingScreen`));
   const theme = useTheme();
   const design = useDesign();
   const insets = useSafeAreaInsets();
@@ -168,7 +170,7 @@ export const BrowsingScreen = memo(function BrowsingScreen({ tab }: { tab: Brows
   const swipesUp = !searching && !collapse.hidden && !(pulls && collapse.collapsed);
   const openDeckFromBar = () => {
     if (!incognito) countUsage("deck_bar_swipes");
-    if (pulls) labTrace("PAGELAB bar swipe recognised with no pull to track");
+    if (pulls) labTrace(t(`PAGELAB bar swipe recognised with no pull to track`));
     void showDeck();
   };
   const pullBegan = () => deckPullBegan(tab.id);
@@ -365,7 +367,7 @@ function useBarCollapse(tabId: string, isPrivate: boolean, finding: boolean, des
 
 function tabsMenuItems(order: BrowserTab[]): MenuItem[] {
   const others = recentTabs(order).map((tab): MenuItem => ({ label: tabTitle(tab), onPress: () => switchToTab(tab.id) }));
-  return [...others, ...(others.length ? ["divider" as const] : []), { label: "Close Tab", icon: "xmark", destructive: true, onPress: closeFrontTab }];
+  return [...others, ...(others.length ? ["divider" as const] : []), { label: t(`Close Tab`), icon: "xmark", destructive: true, onPress: closeFrontTab }];
 }
 
 export type BarPull = { id: string; prepare: () => void; began: () => void; released: (lands: boolean) => void; settled: PullSettled };

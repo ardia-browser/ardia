@@ -20,6 +20,8 @@ import { DEVELOPER_ICONS } from "./developerIcons";
 import { withoutUserInfo } from "../../lib/url";
 import { DEVELOPER_BAR_ANCHOR } from "../../state/extensions/toolbarAnchors";
 import { DEVELOPER_BAR, DEVELOPER_ROW as ROW } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 const STRIPES = {
   lightInk: require("../../../assets/dev-stripes-light-ink.png"),
@@ -58,23 +60,23 @@ export const DeveloperBar = memo(function DeveloperBar({ tabId, windowId }: { ta
             look="row"
             active={popover === "siteControls"}
             onPress={press("siteControls", () => togglePopover(tabId, "siteControls"))}
-            tooltip="Site Controls"
+            tooltip={t(`Site Controls`)}
           />
           <ContextMenuArea style={{ flex: 1 }} onContextMenu={() => void showUrlBarMenu(tab)}>
-            <Pressable accessibilityRole="button" accessibilityLabel="Edit Address" onPress={press("address", () => openBarFromDeveloperBar(windowId, tabId, tab.url))} style={{ flex: 1, height: ROW.button, justifyContent: "center", paddingLeft: DEVELOPER_BAR.urlGap, paddingRight: DEVELOPER_BAR.groupGap }}>
+            <Pressable accessibilityRole="button" accessibilityLabel={t(`Edit Address`)} onPress={press("address", () => openBarFromDeveloperBar(windowId, tabId, tab.url))} style={{ flex: 1, height: ROW.button, justifyContent: "center", paddingLeft: DEVELOPER_BAR.urlGap, paddingRight: DEVELOPER_BAR.groupGap }}>
               <Text numberOfLines={1} ellipsizeMode="middle" color={palette.text} style={[monoFace(), { fontSize: DEVELOPER_BAR.urlSize }]}>
                 {withoutUserInfo(tab.url)}
               </Text>
             </Pressable>
           </ContextMenuArea>
           <View style={DEVELOPER_BUTTON_ROW}>
-            <Button variant="icon" toolbar palette={palette} asset={DEVELOPER_ICONS.link} glyph={DEVELOPER_BAR.glyph} look="row" onPress={press("copyLink", () => void copyPageUrl(tabId))} tooltip={withShortcut("Copy URL", copyHint)} />
+            <Button variant="icon" toolbar palette={palette} asset={DEVELOPER_ICONS.link} glyph={DEVELOPER_BAR.glyph} look="row" onPress={press("copyLink", () => void copyPageUrl(tabId))} tooltip={withShortcut(t(`Copy URL`), copyHint)} />
             {divider}
             <DeveloperToolsButtons tabId={tabId} palette={palette} look="row" glyph={DEVELOPER_BAR.glyph} />
             {divider}
             <OverflowButton windowId={windowId} tabId={tabId} hidden={[]} palette={palette} slot={DEVELOPER_BAR_ANCHOR} asset={DEVELOPER_ICONS.extensions} glyph={DEVELOPER_BAR.extensionsGlyph} onActivate={() => noteDeveloperBarPress("extensions")} />
             {splitViewAvailable && (
-              <Button variant="icon" toolbar palette={palette} asset={DEVELOPER_ICONS.split} glyph={DEVELOPER_BAR.glyph} look="row" onPress={press("split", () => void showSplitSidesMenu(tabId))} tooltip="Split View Options" />
+              <Button variant="icon" toolbar palette={palette} asset={DEVELOPER_ICONS.split} glyph={DEVELOPER_BAR.glyph} look="row" onPress={press("split", () => void showSplitSidesMenu(tabId))} tooltip={t(`Split View Options`)} />
             )}
           </View>
         </View>

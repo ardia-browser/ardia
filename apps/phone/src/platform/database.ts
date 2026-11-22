@@ -1,5 +1,7 @@
 import { openDatabaseSync, type SQLiteDatabase } from "expo-sqlite";
 import type { SqlDatabase, SqlValue } from "../lib/sqlDatabase";
+import { t } from "../lib/uiLanguage";
+
 
 function bind(native: SQLiteDatabase): SqlDatabase {
   const params = (values: readonly SqlValue[] | undefined) => (values ? [...values] : []);
@@ -15,7 +17,7 @@ function bind(native: SQLiteDatabase): SqlDatabase {
 
 export function openSqlDatabase(name: string): SqlDatabase {
   const native = openDatabaseSync(name);
-  native.execSync("PRAGMA journal_mode = WAL");
+  native.execSync(t(`PRAGMA journal_mode = WAL`));
   return bind(native);
 }
 

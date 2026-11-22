@@ -8,6 +8,8 @@ import { hex, useTheme, type Theme } from "./theme";
 import { capsule, closeOnArt, opacity, pillHeight, radius as radii, space, stepperSize, font as typeScale, weight as weights } from "./tokens";
 import { buttonMotion, usePressScaleMotion } from "./motion";
 import type { CloseProps, PillProps, PushProps, StepperProps } from "./Button";
+import { t } from "../../lib/uiLanguage";
+
 
 function ScaledGlyph({ scale, size, children }: { scale: Animated.Value | null; size: number; children: ReactNode }) {
   const style = { width: size, height: size, alignItems: "center" as const, justifyContent: "center" as const };
@@ -122,7 +124,7 @@ export function PillButtonView(props: PillProps) {
 }
 
 export function CloseButtonView(props: CloseProps) {
-  const { onPress, look, tooltip = "Dismiss", label, style } = props;
+  const { onPress, look, tooltip = t(`Dismiss`), label, style } = props;
   const theme = useTheme();
   const { hovered, hoverProps } = useHover();
   const pressMotion = usePressScaleMotion();

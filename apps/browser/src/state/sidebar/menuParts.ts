@@ -6,6 +6,8 @@ import type { BrowserState } from "../browser/store";
 import { bookmarkProfileId, windowTitle } from "../browser/model";
 import { groupLabel } from "../pins/tabGrouping";
 import { groupPath } from "../groups/groups";
+import { t } from "../../lib/uiLanguage";
+
 
 export { menuSections as sections } from "../app/menuSections";
 
@@ -44,7 +46,7 @@ export function profileItems(s: BrowserState, isCurrent: (profileId: string) => 
   return [
     ...s.profileOrder.map((id) => ({ value: { kind: "profile" as const, profileId: id }, title: s.profiles[id]!.name, checked: isCurrent(id), enabled: !isCurrent(id) })),
     sep,
-    { value: { kind: "profile", profileId: null }, title: "New Profile…" },
+    { value: { kind: "profile", profileId: null }, title: t(`New Profile…`) },
   ];
 }
 
@@ -53,7 +55,7 @@ export function windowItems(s: BrowserState, windowId: string): DestinationItem[
   return [
     ...others.map((id) => ({ value: { kind: "window" as const, windowId: id }, title: windowTitle(s, id) })),
     ...(others.length ? [sep] : []),
-    { value: { kind: "window", windowId: null }, title: "New Window" },
+    { value: { kind: "window", windowId: null }, title: t(`New Window`) },
   ];
 }
 
@@ -69,7 +71,7 @@ export function groupItems(s: BrowserState, windowId: string, exclude: string | 
   const pinned = listed.filter((g) => g.pinned).map((g) => g.item).sort(byTitle);
   const rest = listed.filter((g) => !g.pinned).map((g) => g.item).sort(byTitle);
   if (!pinned.length) return rest;
-  return [{ id: "pinnedGroupsHeader", title: "Pinned", enabled: false }, ...pinned, ...(rest.length ? [sep, ...rest] : [])];
+  return [{ id: "pinnedGroupsHeader", title: t(`Pinned`), enabled: false }, ...pinned, ...(rest.length ? [sep, ...rest] : [])];
 }
 
 export function bookmarkFolderItems(s: BrowserState, windowId: string): DestinationItem[] {
@@ -81,6 +83,6 @@ export function bookmarkFolderItems(s: BrowserState, windowId: string): Destinat
     ...(roots ? [folder(roots.other, ROOT_TITLES.other)] : []),
     ...folders.map((f) => folder(f.id, f.title)),
     sep,
-    { value: { kind: "newFolder" }, title: "New Folder…" },
+    { value: { kind: "newFolder" }, title: t(`New Folder…`) },
   ];
 }

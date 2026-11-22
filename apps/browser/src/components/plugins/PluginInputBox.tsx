@@ -3,6 +3,8 @@ import { resolveInputBox } from "../../state/plugins/actions";
 import { usePluginTitle } from "../../state/plugins/hooks";
 import type { InputBoxRequest } from "../../state/plugins/surfaces";
 import { Box, Button, Dialog, DialogActions, DialogTitle, Text, TextField } from "../ui";
+import { t } from "../../lib/uiLanguage";
+
 
 export function PluginInputBox({ request }: { request: InputBoxRequest }) {
   const { id, options } = request;
@@ -22,8 +24,8 @@ export function PluginInputBox({ request }: { request: InputBoxRequest }) {
         ) : null}
       </Box>
       <DialogActions>
-        <Button title="Cancel" onPress={cancel} />
-        <Button title={options.confirmTitle ?? "OK"} kind="primary" onPress={confirm} />
+        <Button title={t(`Cancel`)} onPress={cancel} />
+        <Button title={options.confirmTitle ?? t(`OK`)} kind="primary" onPress={confirm} />
       </DialogActions>
     </Dialog>
   );

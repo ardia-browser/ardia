@@ -16,6 +16,8 @@ import { Box, Button, EmptyState, MouseArea, opacity, ProgressTrack, space, Text
 import { hostLabel, matchesQuery, PAGE_WIDTH, PageHeader } from "./PageLayout";
 import { downloadCard, pageList, pageType } from "./tokens";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
+import { t } from "../../lib/uiLanguage";
+
 
 export function DownloadsPage({ tabId }: { tabId: string }) {
   const windowId = useTab(tabId, (t) => t?.windowId ?? "");
@@ -26,15 +28,15 @@ export function DownloadsPage({ tabId }: { tabId: string }) {
   return (
     <View style={{ flex: 1 }}>
       <PageHeader
-        title="Downloads"
+        title={t(`Downloads`)}
         query={query}
         onQuery={setQuery}
-        actions={downloads.some((d) => d.state !== "downloading") ? <Button title="Clear All" onPress={() => clearDownloads(windowId)} /> : null}
+        actions={downloads.some((d) => d.state !== "downloading") ? <Button title={t(`Clear All`)} onPress={() => clearDownloads(windowId)} /> : null}
       />
       {shown.length === 0 ? (
         <EmptyState
           symbol="arrow.down.circle"
-          title={query ? "No search results found" : "Files you download appear here"}
+          title={query ? t(`No search results found`) : t(`Files you download appear here`)}
         />
       ) : (
         <FlatList
@@ -74,7 +76,7 @@ function DownloadCard({ d: listed, windowId }: { d: Download; windowId: string }
                 tone={exists ? "textPrimary" : "textSecondary"}
                 style={{ ...pageType.fileName, textDecorationLine: exists ? "none" : "line-through" }}
               >
-                {d.filename || "Preparing…"}
+                {d.filename || t(`Preparing…`)}
               </Text>
             </Pressable>
             <Pressable onPress={() => openUrl(d.url, windowId, "foreground")}>
@@ -96,20 +98,20 @@ function DownloadCard({ d: listed, windowId }: { d: Download; windowId: string }
           </View>
           {blocked ? (
             <View style={ROW_BUTTONS}>
-              <Button title="Keep" onPress={() => void keepDownload(d.id)} />
-              <Button title="Discard" kind="destructive" onPress={() => void cancelDownload(d.id)} />
+              <Button title={t(`Keep`)} onPress={() => void keepDownload(d.id)} />
+              <Button title={t(`Discard`)} kind="destructive" onPress={() => void cancelDownload(d.id)} />
             </View>
           ) : d.state === "downloading" ? (
             <View style={ROW_BUTTONS}>
-              <Button title={d.paused ? "Resume" : "Pause"} onPress={() => void (d.paused ? resumeDownload(d.id) : pauseDownload(d.id))} />
-              <Button title="Cancel" onPress={() => void cancelDownload(d.id)} />
+              <Button title={d.paused ? t(`Resume`) : t(`Pause`)} onPress={() => void (d.paused ? resumeDownload(d.id) : pauseDownload(d.id))} />
+              <Button title={t(`Cancel`)} onPress={() => void cancelDownload(d.id)} />
             </View>
           ) : done ? (
             <Button title={`Show in ${PLATFORM_TERMS.fileManager}`} onPress={() => void revealFile(d.path)} />
           ) : null}
-          <Button variant="icon" icon="ellipsis" size="l" onPress={() => void downloadMenu(d, windowId)} tooltip="More actions" />
+          <Button variant="icon" icon="ellipsis" size="l" onPress={() => void downloadMenu(d, windowId)} tooltip={t(`More actions`)} />
           {d.state !== "downloading" && (
-            <Button variant="icon" icon="xmark" size="l" onPress={() => removeDownload(d.id)} tooltip="Remove from List" />
+            <Button variant="icon" icon="xmark" size="l" onPress={() => removeDownload(d.id)} tooltip={t(`Remove from List`)} />
           )}
         </Box>
       </MouseArea>

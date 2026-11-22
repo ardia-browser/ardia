@@ -9,6 +9,8 @@ import { deviceKindOf, deviceLabel, deviceRecords, deviceSymbol, offersTabs } fr
 import { SEND, profileScope, type DeviceRecord, type SendRecord } from "./records";
 import { sendableUrl, type ReceivedSend, type SendLedger } from "./sentTabsAdapter";
 import { APP_SCOPE, type ReceivedTab, type SendTarget, type SyncDoc } from "./syncDoc";
+import { t } from "../../lib/uiLanguage";
+
 
 export function sendLedger(doc: SyncDoc, scope: string): SendLedger {
   const sends = (doc.sends ??= {});
@@ -25,7 +27,7 @@ export function sendTargetsIn(doc: SyncDoc, profileId: string): SendTarget[] {
   return [...deviceRecords(app)]
     .filter(([id, record]) => id !== doc.deviceId && offersTabs(record, seenAt(id), now) && (deviceKindOf(record) === "phone" || id in scope.seen))
     .sort(([a], [b]) => (scope.seen[b] ?? app.seen[b] ?? 0) - (scope.seen[a] ?? app.seen[a] ?? 0))
-    .map(([id, record]) => ({ id, name: record.n || "Unknown Device", kind: deviceKindOf(record) }));
+    .map(([id, record]) => ({ id, name: record.n || t(`Unknown Device`), kind: deviceKindOf(record) }));
 }
 
 export function queueSend(doc: SyncDoc, tabId: string, deviceId: string): boolean {
@@ -62,7 +64,7 @@ export function deliverSentTabs(doc: SyncDoc, profileId: string, arrived: Receiv
     const windowId = front ?? s.createWindow({ profileId, url: send.u, background: true });
     const tabId = front ? s.newTab(front, { url: send.u, background: true, profileId }) : activeTabId(useBrowser.getState(), windowId);
     const sender = devices.get(send.from);
-    if (tabId) opened.push({ windowId, tabId, send, from: { name: sender?.n || "Unknown Device", kind: deviceKindOf(sender) } });
+    if (tabId) opened.push({ windowId, tabId, send, from: { name: sender?.n || t(`Unknown Device`), kind: deviceKindOf(sender) } });
   }
   flushPersistence();
   showReceivedTabs(opened);
@@ -70,7 +72,7 @@ export function deliverSentTabs(doc: SyncDoc, profileId: string, arrived: Receiv
     try {
       listener(opened);
     } catch (error) {
-      console.warn("[sync] a received-tab listener failed", error);
+      console.warn(t(`[sync] a received-tab listener failed`), error);
     }
   }
   return true;
@@ -84,10 +86,10 @@ function showReceivedTabs(received: ReceivedTab[]) {
   for (const [windowId, tabs] of byWindow) {
     const last = tabs[tabs.length - 1]!;
     const labels = new Set(tabs.map((r) => deviceLabel(r.from.kind, r.from.name)));
-    const from = labels.size === 1 ? [...labels][0]! : "Your Devices";
+    const from = labels.size === 1 ? [...labels][0]! : t(`Your Devices`);
     const title = tabs.length === 1 ? `Tab from ${from}` : `${plural(tabs.length, "Tab")} from ${from}`;
     const message = tabs.length === 1 ? last.send.t || hostOf(last.send.u) : undefined;
     const icon = labels.size === 1 ? deviceSymbol(last.from.kind, last.from.name) : "macbook.and.iphone";
-    showToast(windowId, title, message, { icon, action: { title: "Show", run: () => switchToTab(last.tabId) } });
+    showToast(windowId, title, message, { icon, action: { title: t(`Show`), run: () => switchToTab(last.tabId) } });
   }
 }

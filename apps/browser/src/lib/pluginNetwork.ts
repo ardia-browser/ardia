@@ -1,3 +1,4 @@
+import { t } from "./uiLanguage";
 export const ANY_HOST = "*";
 export const MAX_HOST_LENGTH = 253;
 
@@ -19,19 +20,19 @@ function isHostName(host: string): boolean {
 }
 
 export function hostPatternProblem(pattern: unknown): string | null {
-  if (typeof pattern !== "string") return "isn't text";
+  if (typeof pattern !== "string") return t(`isn't text`);
   if (pattern === ANY_HOST) return null;
-  if (pattern !== pattern.toLowerCase()) return "must be lowercase";
-  if (/[\s/:@?#\\[\]]/.test(pattern)) return "must be a bare host, like api.example.com or *.example.com, without a scheme, port or path";
+  if (pattern !== pattern.toLowerCase()) return t(`must be lowercase`);
+  if (/[\s/:@?#\\[\]]/.test(pattern)) return t(`must be a bare host, like api.example.com or *.example.com, without a scheme, port or path`);
   if (pattern.startsWith("*.")) {
     const rest = pattern.slice(2);
-    if (rest.includes("*")) return "can only have one * at its start";
-    if (IPV4.test(rest)) return "can't put * in front of an IP address";
-    if (!isHostName(rest) || rest.split(".").length < 2) return "must put * in front of a domain with at least two parts, like *.example.com";
+    if (rest.includes("*")) return t(`can only have one * at its start`);
+    if (IPV4.test(rest)) return t(`can't put * in front of an IP address`);
+    if (!isHostName(rest) || rest.split(".").length < 2) return t(`must put * in front of a domain with at least two parts, like *.example.com`);
     return null;
   }
-  if (pattern.includes("*")) return "can only have * on its own or as *. at its start";
-  if (!isHostName(pattern)) return "isn't a valid host name";
+  if (pattern.includes("*")) return t(`can only have * on its own or as *. at its start`);
+  if (!isHostName(pattern)) return t(`isn't a valid host name`);
   return null;
 }
 

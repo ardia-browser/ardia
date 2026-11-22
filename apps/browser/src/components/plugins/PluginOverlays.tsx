@@ -10,6 +10,8 @@ import { PluginQuickPick } from "./PluginQuickPick";
 import { PluginSurface } from "./PluginSurface";
 import type { SurfaceKeys } from "./surfaceShortcuts";
 import { OVERLAY } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 export function PluginOverlays() {
   const windowId = useWindowId();
@@ -53,7 +55,7 @@ function CommandSheet({ windowId, view }: { windowId: string; view: CommandView 
         <Text weight="semibold" numberOfLines={1} style={FLEX}>
           {view.title}
         </Text>
-        <Button variant="close" look="panel" tooltip="Close" onPress={close} />
+        <Button variant="close" look="panel" tooltip={t(`Close`)} onPress={close} />
       </Box>
       <Divider />
       <ScrollView style={BODY} contentContainerStyle={BODY_CONTENT}>
@@ -83,7 +85,7 @@ function ToolbarPopover({ windowId, popover }: { windowId: string; popover: Plug
   );
 }
 
-const ESCAPE_KEY = [{ key: "Escape" }];
+const ESCAPE_KEY = [{ key: t(`Escape`) }];
 const FLEX = { flex: 1 } as const;
 const HEADER = { alignItems: "center" } as const;
 const ICON = { width: OVERLAY.commandIcon + POPOVER_MARGIN / 2, height: OVERLAY.commandIcon + POPOVER_MARGIN / 2 } as const;

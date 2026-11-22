@@ -10,6 +10,8 @@ import { curve } from "../ui/motion";
 import { capsule, concentric, ink, radius, space, tracking } from "../ui/tokens";
 import { onboardingColorsOf, onboardingMotion, onboardingType, TILE_WIDTH } from "./tokens";
 import { CARD_BORDER, ChoiceCard, SELECTED_BORDER } from "./ChoiceCard";
+import { t } from "../../lib/uiLanguage";
+
 
 export const useOnboardingColors = () => onboardingColorsOf(useTheme());
 
@@ -79,7 +81,7 @@ export function StepProgress() {
         ) : null}
         {redo ? (
           <View mouseDownCanMoveWindow={false} style={{ marginLeft: "auto" }}>
-            <Button variant="text" look="link" tone="textSecondary" title="Cancel" label="Cancel setup and keep your settings" onPress={cancelOnboarding} />
+            <Button variant="text" look="link" tone="textSecondary" title={t(`Cancel`)} label={t(`Cancel setup and keep your settings`)} onPress={cancelOnboarding} />
           </View>
         ) : null}
       </View>

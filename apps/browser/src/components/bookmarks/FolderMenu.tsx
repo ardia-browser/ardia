@@ -19,6 +19,8 @@ import { ChipIcon, useBookmarkDragResponder, type IconMetrics } from "./BarItem"
 import { measureRect, useEased, useSlide } from "./barMotion";
 import { useBarSize } from "./barSize";
 import { bookmarksBar, folderMenu, type BarSize } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 const PAD = PANEL.rowInset;
 const FAVICON_LEFT = PANEL.rowInset + PANEL.rowPadding;
@@ -59,7 +61,7 @@ export function FolderMenu({ windowId, panel, layer, closing, onClosed }: { wind
   const [contentHeight, setContentHeight] = useState<number | null>(null);
   const place = placeMenu(panel, layer, size.menuWidth, height, size);
   const appear = usePopoverMotion(closing, onClosed, height !== null && contentHeight !== null);
-  const motion = usePopoverMotionStyle(appear, "top left");
+  const motion = usePopoverMotionStyle(appear, t(`top left`));
   const views = useRef(new Map<string, View>());
   const scrollY = useRef(0);
   const row = size.menuRow;
@@ -161,7 +163,7 @@ export function FolderMenu({ windowId, panel, layer, closing, onClosed }: { wind
             <ActionRow
               size={size}
               symbol="sidebar.left"
-              title="Add to Sidebar as Group"
+              title={t(`Add to Sidebar as Group`)}
               disabled={!footer.group}
               onPress={() => {
                 closeFolderMenus();

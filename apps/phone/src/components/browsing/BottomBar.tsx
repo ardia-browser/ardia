@@ -4,6 +4,8 @@ import { StyleSheet, View } from "react-native";
 import type { BrowserTab } from "../../state/tabs/tabModels";
 import { display } from "../../state/search/omnibox";
 import { browseLayout, capsule, PressScale, shadowRadius, Symbol, TabFace, tabsInk, tabsLayout, type ColorRoles } from "../ui";
+import { t } from "../../lib/uiLanguage";
+
 
 type Props = {
   order: BrowserTab[];
@@ -25,14 +27,14 @@ export function BottomBar({ order, roles, showsPlus, onTabs, onTabsMenu, onStep,
         <TabsMenuTrigger order={order} onTabsMenu={onTabsMenu}>
           {({ onLongPress, screenReaderActions }) => (
             <PressScale
-              label="Tabs"
+              label={t(`Tabs`)}
               value={`${count} ${count === 1 ? "tab" : "tabs"}`}
-              hint="Touch and hold for recent tabs."
-              longPressLabel="Recent Tabs"
+              hint={t(`Touch and hold for recent tabs.`)}
+              longPressLabel={t(`Recent Tabs`)}
               actions={[
                 ...screenReaderActions,
-                { name: "previousTab", label: "Previous Tab", run: () => onStep(-1) },
-                { name: "nextTab", label: "Next Tab", run: () => onStep(1) },
+                { name: "previousTab", label: t(`Previous Tab`), run: () => onStep(-1) },
+                { name: "nextTab", label: t(`Next Tab`), run: () => onStep(1) },
               ]}
               onPress={onTabs}
               onPressIn={haptics.barPress}
@@ -47,7 +49,7 @@ export function BottomBar({ order, roles, showsPlus, onTabs, onTabsMenu, onStep,
       <View style={{ width: plus.width, height: plus.height }}>
         {showsPlus ? (
           <PressScale
-            label="New Search"
+            label={t(`New Search`)}
             onPress={onPlus}
             onPressIn={haptics.barPress}
             style={[
@@ -60,7 +62,7 @@ export function BottomBar({ order, roles, showsPlus, onTabs, onTabsMenu, onStep,
         ) : null}
       </View>
       <View style={[styles.side, styles.end]}>
-        <PressScale label="Page Menu" onPress={onMore} onPressIn={haptics.barPress} style={styles.more}>
+        <PressScale label={t(`Page Menu`)} onPress={onMore} onPressIn={haptics.barPress} style={styles.more}>
           <View
             style={[
               styles.center,
@@ -91,7 +93,7 @@ export function TabStack({ tabs, roles }: { tabs: BrowserTab[]; roles: ColorRole
   return (
     <View testID="tabStack" style={{ width: tile.width, height: tile.height }}>
       <Thumbnail tab={tabs[0]!} roles={roles} turn="-12deg" x={-4} y={1} />
-      <Thumbnail tab={tabs[1]!} roles={roles} turn="6deg" x={4} y={-1} />
+      <Thumbnail tab={tabs[1]!} roles={roles} turn={t(`6deg`)} x={4} y={-1} />
     </View>
   );
 }

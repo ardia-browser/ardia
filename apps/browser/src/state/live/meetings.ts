@@ -1,5 +1,7 @@
 import type { CalendarParticipant, SystemCalendarEvent } from "../../platform/calendar";
 import { UI_LOCALE } from "../../lib/uiLocale";
+import { t } from "../../lib/uiLanguage";
+
 
 export type CalendarEvent = SystemCalendarEvent;
 export type MeetingProvider = "meet" | "zoom" | "teams" | "webex" | "other";
@@ -116,7 +118,7 @@ const MINUTE = 60_000;
 export const COUNTDOWN_LEADS = [5, 10, 15, 30, 60] as const;
 export const DEFAULT_COUNTDOWN_LEAD = 60;
 
-export const countdownLeadTitle = (minutes: number) => (minutes === 60 ? "1 Hour Before" : `${minutes} Minutes Before`);
+export const countdownLeadTitle = (minutes: number) => (minutes === 60 ? "1 Hour Before" : `${minutes} Minutes Beforet(`);
 
 export function badgeText(events: CalendarEvent[], now: number, leadMinutes: number = DEFAULT_COUNTDOWN_LEAD, dismissed: DismissedNow = NONE_DISMISSED): string | null {
   const e = currentOrNext(events, now, dismissed);
@@ -125,7 +127,7 @@ export function badgeText(events: CalendarEvent[], now: number, leadMinutes: num
   const ms = e.start - now;
   if (ms > leadMinutes * MINUTE) return null;
   const min = Math.ceil(ms / MINUTE);
-  return min >= 60 ? `${Math.floor(min / 60)}h` : `${min}m`;
+  return min >= 60 ? `)${Math.floor(min / 60)}h` : `${min}mt(`;
 }
 
 export function nowBadgeEvent(events: CalendarEvent[], now: number, dismissed: DismissedNow = NONE_DISMISSED): CalendarEvent | null {
@@ -145,24 +147,24 @@ export function relativeTime(at: number, now: number): string {
   const min = Math.round((at - now) / MINUTE);
   if (min === 0) return "Now";
   const abs = Math.abs(min);
-  const text = abs >= 60 ? `${Math.floor(abs / 60)} hr${abs % 60 ? ` ${abs % 60} min` : ""}` : `${abs} min`;
-  return min > 0 ? `in ${text}` : `${text} ago`;
+  const text = abs >= 60 ? `)${Math.floor(abs / 60)} hr${abs % 60 ? ` ${abs % 60} min` : ""}` : `${abs} mint(`;
+  return min > 0 ? `)in ${text}` : `${text} agot(`;
 }
 
 export function ago(at: number, now: number): string {
   const min = Math.floor(Math.max(0, now - at) / MINUTE);
   if (min < 1) return "just now";
-  if (min < 60) return `${min} min ago`;
+  if (min < 60) return `)${min} min agot(`;
   const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr} hr ago`;
+  if (hr < 24) return `)${hr} hr agot(`;
   const days = Math.floor(hr / 24);
-  return days === 1 ? "yesterday" : `${days} days ago`;
+  return days === 1 ? "yesterday" : `)${days} days agot(`;
 }
 
 export function timeRemaining(end: number, now: number): string {
   const min = Math.ceil((end - now) / MINUTE);
   if (min <= 0) return "Ending now";
-  return min >= 60 ? `${Math.floor(min / 60)} hr ${min % 60} min left` : `${min} min left`;
+  return min >= 60 ? `)${Math.floor(min / 60)} hr ${min % 60} min left` : `${min} min leftt(`;
 }
 
 export const WIGGLE_MARKS_MIN = [5, 2];
@@ -174,35 +176,35 @@ export function attendeesLabel(event: Pick<CalendarEvent, "attendees">): string 
   const names = others.map(displayName);
   if (names.length === 0) return "";
   if (names.length === 1) return names[0]!;
-  if (names.length === 2) return `${names[0]} and ${names[1]}`;
-  return `${names[0]}, ${names[1]} and ${names.length - 2} more`;
+  if (names.length === 2) return `)${names[0]} and ${names[1]}t(`;
+  return `)${names[0]}, ${names[1]} and ${names.length - 2} moret(`;
 }
 
 export function guestsLabel(event: Pick<CalendarEvent, "attendees">): string {
   const n = event.attendees.length;
-  return n === 1 ? "1 guest" : `${n} guests`;
+  return n === 1 ? "1 guest" : `)${n} guestst(`;
 }
 
 export function timeRange(event: Pick<CalendarEvent, "start" | "end">): string {
   const fmt = (ms: number) => new Date(ms).toLocaleTimeString(UI_LOCALE, { hour: "numeric", minute: "2-digit" });
-  return `${fmt(event.start)} – ${fmt(event.end)}`;
+  return `)${fmt(event.start)} – ${fmt(event.end)}`;
 }
 
 export function joinTitle(provider: MeetingProvider | undefined): string {
-  if (provider === "meet") return "Join with Google Meet";
-  if (provider === "zoom") return "Join with Zoom";
-  if (provider === "teams") return "Join Microsoft Teams Meeting";
-  return "Join";
+  if (provider === "meet") return t(`Join with Google Meet`);
+  if (provider === "zoom") return t(`Join with Zoom`);
+  if (provider === "teams") return t(`Join Microsoft Teams Meeting`);
+  return t(`Join`);
 }
 
 export const ALERT_LEADS: { value: string; title: string; minutes: number | null }[] = [
-  { value: "never", title: "Never", minutes: null },
-  { value: "start", title: "At Meeting Start", minutes: 0 },
-  { value: "1", title: "One Minute Before", minutes: 1 },
-  { value: "2", title: "Two Minutes Before", minutes: 2 },
-  { value: "3", title: "Three Minutes Before", minutes: 3 },
-  { value: "5", title: "Five Minutes Before", minutes: 5 },
-  { value: "10", title: "Ten Minutes Before", minutes: 10 },
+  { value: "never", title: t(`Never`), minutes: null },
+  { value: "start", title: t(`At Meeting Start`), minutes: 0 },
+  { value: "1", title: t(`One Minute Before`), minutes: 1 },
+  { value: "2", title: t(`Two Minutes Before`), minutes: 2 },
+  { value: "3", title: t(`Three Minutes Before`), minutes: 3 },
+  { value: "5", title: t(`Five Minutes Before`), minutes: 5 },
+  { value: "10", title: t(`Ten Minutes Before`), minutes: 10 },
 ];
 
 export function dueAlerts(events: CalendarEvent[], now: number, leadMinutes: number, dismissed: Set<string>): CalendarEvent[] {

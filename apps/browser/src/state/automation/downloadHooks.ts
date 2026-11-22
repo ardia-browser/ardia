@@ -6,6 +6,8 @@ import { activeHook, onHooksChanged, useHookRules } from "./hookRules";
 import { isInsideDownloads } from "./hookPolicy";
 import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
+import { t } from "../../lib/uiLanguage";
+
 
 export type MoveResult = { ok: true; path: string } | { ok: false; reason: string; stagedPath?: string; strayPath?: string };
 export type DownloadMover = {
@@ -36,7 +38,7 @@ function pushApprovedFolders() {
   try {
     mover.approveFolders(folders);
   } catch (error) {
-    console.warn("[automation] couldn't pass the approved download folders on", error);
+    console.warn(t(`[automation] couldn't pass the approved download folders on`), error);
   }
 }
 

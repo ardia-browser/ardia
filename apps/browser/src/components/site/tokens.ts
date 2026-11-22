@@ -1,5 +1,7 @@
 import { useTheme } from "../ui/theme";
 import { font, lineHeight, tracking } from "../ui/tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 const DARK = {
   tile: "rgba(255,255,255,0.07)",
@@ -30,13 +32,13 @@ export function useSiteTokens(): SiteTokens {
 export const connectionColor = { caution: "#F2B33D" } as const;
 
 export const CARD_BADGES = {
-  visa: { label: "VISA", fill: "#1A1F71" },
+  visa: { label: t(`VISA`), fill: "#1A1F71" },
   mastercard: { label: "", fill: "#1C1C1E" },
-  amex: { label: "AMEX", fill: "#2E77BC" },
-  discover: { label: "DISC", fill: "#FF6000" },
-  diners: { label: "DC", fill: "#0079BE" },
-  jcb: { label: "JCB", fill: "#0B7A3E" },
-  unionpay: { label: "UP", fill: "#D7282F" },
+  amex: { label: t(`AMEX`), fill: "#2E77BC" },
+  discover: { label: t(`DISC`), fill: "#FF6000" },
+  diners: { label: t(`DC`), fill: "#0079BE" },
+  jcb: { label: t(`JCB`), fill: "#0B7A3E" },
+  unionpay: { label: t(`UP`), fill: "#D7282F" },
   card: { label: "", fill: "#8E8E93" },
 } as const;
 

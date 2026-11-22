@@ -6,6 +6,8 @@ import { activeTabId, plural } from "../browser/model";
 import { dissolveTileFolder, folderIn, folderLabel, folderMembers, leaveTileFolder, newTileFolder, renameTileFolder } from "../pins/tileFolders";
 import { dismissHover } from "./hover";
 import { measureRow } from "./sidebarUi";
+import { t } from "../../lib/uiLanguage";
+
 
 type Open = { windowId: string; folderId: string; anchor: { x: number; y: number; width: number; height: number } };
 
@@ -52,10 +54,10 @@ export async function toggleFolderPanel(windowId: string, folderId: string) {
 
 const store = () => useBrowser.getState();
 
-export async function renameFolder(windowId: string, folderId: string, title = "Rename Folder") {
+export async function renameFolder(windowId: string, folderId: string, title = t(`Rename Folder`)) {
   const folder = folderIn(store(), windowId, folderId);
   if (!folder) return;
-  const name = await prompt({ title, value: folder.name, placeholder: "Folder", confirmTitle: "Update", windowId });
+  const name = await prompt({ title, value: folder.name, placeholder: t(`Folder`), confirmTitle: t(`Update`), windowId });
   if (name !== null) useBrowser.setState((s) => renameTileFolder(s, windowId, folderId, name));
 }
 
@@ -63,7 +65,7 @@ export function newFolderWithTab(windowId: string, tabId: string) {
   const { state, folderId } = newTileFolder(store(), [tabId]);
   if (!folderId) return;
   useBrowser.setState(state);
-  void renameFolder(windowId, folderId, "Name Folder");
+  void renameFolder(windowId, folderId, t(`Name Folder`));
 }
 
 export function removeFromFolder(tabId: string) {
@@ -74,9 +76,9 @@ export function tileFolderContextItems(count: number): MenuItem[] {
   return [
     { id: "unpin", title: `Unpin ${plural(count, "Tab")}`, symbol: "pin.slash" },
     { separator: true },
-    { id: "rename", title: "Rename…", symbol: "pencil" },
+    { id: "rename", title: t(`Rename…`), symbol: "pencil" },
     { separator: true },
-    { id: "remove", title: "Remove Folder", symbol: "folder.badge.minus" },
+    { id: "remove", title: t(`Remove Folder`), symbol: "folder.badge.minus" },
   ];
 }
 

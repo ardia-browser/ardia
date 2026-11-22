@@ -14,6 +14,8 @@ import { useArchiveDays, useArchiveLoaded } from "../../state/tabs/hooks";
 import { clearArchivedTabs, loadArchiveUnlessPrepared, searchArchive, setAutoArchiveInterval } from "../../state/tabs/store";
 import { AUTO_ARCHIVE_INTERVALS, autoArchiveTitle, type AutoArchiveInterval, type BrowserTab } from "../../state/tabs/tabModels";
 import { Favicon, modifierList, settingsChrome } from "../ui";
+import { t } from "../../lib/uiLanguage";
+
 
 const SECONDARY = { type: "hierarchical", style: "secondary" } as const;
 const FILL = Number.MAX_SAFE_INTEGER;
@@ -69,7 +71,7 @@ const WARM_ROWS: BrowserTab[] = [{ id: "archive-warm", url: "https://example.com
 
 function WarmArchive() {
   const searchText = useNativeState("");
-  const page = modifierList(navigationTitle("Archive"), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), searchable(searchText, { placement: "navigationBarDrawer", prompt: "Search Archive" }));
+  const page = modifierList(navigationTitle(t(`Archive`)), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), searchable(searchText, { placement: "navigationBarDrawer", prompt: t(`Search Archive`) }));
   return (
     <NavigationStack>
       <Toolbar>
@@ -80,13 +82,13 @@ function WarmArchive() {
         </List>
         <Toolbar.Content>
           <ToolbarItem placement="topBarLeading">
-            <Button label="Edit" onPress={noop} />
+            <Button label={t(`Edit`)} onPress={noop} />
           </ToolbarItem>
           <ToolbarItem placement="primaryAction">
-            <Menu label="Options" systemImage="ellipsis">{null}</Menu>
+            <Menu label={t(`Options`)} systemImage="ellipsis">{null}</Menu>
           </ToolbarItem>
           <ToolbarItem placement="confirmationAction">
-            <Button label="Done" onPress={noop} />
+            <Button label={t(`Done`)} onPress={noop} />
           </ToolbarItem>
         </Toolbar.Content>
       </Toolbar>
@@ -134,13 +136,13 @@ function ArchiveNavigation({ requestedAt }: { requestedAt: MutableRefObject<numb
   const results = useMemo(() => (searched ? searchArchive(searched) : null), [searched, days]);
   const hasArchive = days.some((day) => day.tabs.length > 0);
   const now = Date.now();
-  const page = modifierList(navigationTitle("Archive"), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), searchable(searchText, { placement: "navigationBarDrawer", prompt: "Search Archive", onChange: setQuery }));
+  const page = modifierList(navigationTitle(t(`Archive`)), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), searchable(searchText, { placement: "navigationBarDrawer", prompt: t(`Search Archive`), onChange: setQuery }));
   const content = !loaded ? (
     <List modifiers={page}>{null}</List>
   ) : !hasArchive ? (
-    <ContentUnavailableView title="No Archived Tabs" systemImage="archivebox.fill" description="Closed and inactive tabs show up here." modifiers={page} />
+    <ContentUnavailableView title={t(`No Archived Tabs`)} systemImage="archivebox.fill" description={t(`Closed and inactive tabs show up here.`)} modifiers={page} />
   ) : results && !results.length ? (
-    <ContentUnavailableView title={`No Results for “${searched}”`} systemImage="magnifyingglass" description="Check the spelling or try a new search." modifiers={page} />
+    <ContentUnavailableView title={`No Results for “${searched}”`} systemImage="magnifyingglass" description={t(`Check the spelling or try a new search.`)} modifiers={page} />
   ) : (
     <List modifiers={modifierList(...page, listStyle("insetGrouped"), environment("editMode", editing ? "active" : "inactive"), ...(shown ? [] : [onAppear(appeared)]))}>
       {results ? (
@@ -155,12 +157,12 @@ function ArchiveNavigation({ requestedAt }: { requestedAt: MutableRefObject<numb
   return (
     <NavigationStack>
       <Toolbar>
-        <ConfirmationDialog title="Delete All Archived Tabs?" isPresented={confirmingClear} onIsPresentedChange={setConfirmingClear} titleVisibility="visible">
+        <ConfirmationDialog title={t(`Delete All Archived Tabs?`)} isPresented={confirmingClear} onIsPresentedChange={setConfirmingClear} titleVisibility="visible">
           <ConfirmationDialog.Trigger>{content}</ConfirmationDialog.Trigger>
           <ConfirmationDialog.Actions>
             <Button
               role="destructive"
-              label="Delete All"
+              label={t(`Delete All`)}
               onPress={() => {
                 haptics.warning();
                 clearArchivedTabs();
@@ -173,13 +175,13 @@ function ArchiveNavigation({ requestedAt }: { requestedAt: MutableRefObject<numb
         </ConfirmationDialog>
         <Toolbar.Content>
           <ToolbarItem placement="topBarLeading">
-            <Button label={editing ? "Done" : "Edit"} onPress={() => setEditing((now) => !now)} modifiers={[disabled(!hasArchive && !editing)]} />
+            <Button label={editing ? t(`Done`) : t(`Edit`)} onPress={() => setEditing((now) => !now)} modifiers={[disabled(!hasArchive && !editing)]} />
           </ToolbarItem>
           <ToolbarItem placement="primaryAction">
-            <Menu label="Options" systemImage="ellipsis">
+            <Menu label={t(`Options`)} systemImage="ellipsis">
               {shown ? (
                 <>
-                  <Picker label="Archive Inactive Tabs" systemImage="archivebox" selection={interval} onSelectionChange={(next: AutoArchiveInterval) => setAutoArchiveInterval(next)} modifiers={[pickerStyle("menu")]}>
+                  <Picker label={t(`Archive Inactive Tabs`)} systemImage="archivebox" selection={interval} onSelectionChange={(next: AutoArchiveInterval) => setAutoArchiveInterval(next)} modifiers={[pickerStyle("menu")]}>
                     {INTERVALS.map((option) => (
                       <Text key={option} modifiers={[tag(option)]}>
                         {autoArchiveTitle(option)}
@@ -187,13 +189,13 @@ function ArchiveNavigation({ requestedAt }: { requestedAt: MutableRefObject<numb
                     ))}
                   </Picker>
                   <Divider />
-                  <Button label="Delete All…" systemImage="trash" role="destructive" onPress={() => setConfirmingClear(true)} modifiers={[disabled(!hasArchive)]} />
+                  <Button label={t(`Delete All…`)} systemImage="trash" role="destructive" onPress={() => setConfirmingClear(true)} modifiers={[disabled(!hasArchive)]} />
                 </>
               ) : null}
             </Menu>
           </ToolbarItem>
           <ToolbarItem placement="confirmationAction">
-            <Button label="Done" onPress={closeArchive} />
+            <Button label={t(`Done`)} onPress={closeArchive} />
           </ToolbarItem>
         </Toolbar.Content>
       </Toolbar>
@@ -235,7 +237,7 @@ function ArchiveRow({ tab, iconSize }: { tab: BrowserTab; iconSize: number }) {
   return (
     <ContextMenu modifiers={[listRowInsets(ROW_INSETS)]}>
       <ContextMenu.Trigger>
-        <Button onPress={restore} modifiers={[buttonStyle("plain"), accessibilityHint("Reopens the tab.")]}>
+        <Button onPress={restore} modifiers={[buttonStyle("plain"), accessibilityHint(t(`Reopens the tab.`))]}>
           <HStack alignment="center" spacing={ROW_GAP} modifiers={[frame({ maxWidth: FILL, alignment: "leading" }), accessibilityElement("combine")]}>
             <RNHostView matchContents>
               <View style={{ width: iconSize, height: iconSize }}>
@@ -251,11 +253,11 @@ function ArchiveRow({ tab, iconSize }: { tab: BrowserTab; iconSize: number }) {
         </Button>
       </ContextMenu.Trigger>
       <ContextMenu.Items>
-        <Button label="Open" systemImage="arrow.up.forward.square" onPress={restore} />
-        {canShareTab(tab) ? <Button label="Copy Link" systemImage="link" onPress={() => copyTabLink(tab)} /> : null}
-        {canShareTab(tab) ? <ShareLink item={tab.url}><Label title="Share" systemImage="square.and.arrow.up" /></ShareLink> : null}
+        <Button label={t(`Open`)} systemImage="arrow.up.forward.square" onPress={restore} />
+        {canShareTab(tab) ? <Button label={t(`Copy Link`)} systemImage="link" onPress={() => copyTabLink(tab)} /> : null}
+        {canShareTab(tab) ? <ShareLink item={tab.url}><Label title={t(`Share`)} systemImage="square.and.arrow.up" /></ShareLink> : null}
         <Divider />
-        <Button label="Delete" systemImage="trash" role="destructive" onPress={() => deleteArchivedTab(tab)} />
+        <Button label={t(`Delete`)} systemImage="trash" role="destructive" onPress={() => deleteArchivedTab(tab)} />
       </ContextMenu.Items>
     </ContextMenu>
   );

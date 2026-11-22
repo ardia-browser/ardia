@@ -18,6 +18,8 @@ import { syncFolderAfterNow, syncFolderNow } from "./engine";
 import { bindFolder, bindFolderIfUnbound, folderRef, sharedFolderOf, unbindFolder, useSharedFolders } from "./store";
 import { canShareGroup, sharedFolderOfGroup } from "./removal";
 import { showToast } from "../app/toasts";
+import { t } from "../../lib/uiLanguage";
+
 
 const store = () => useBrowser.getState();
 
@@ -27,20 +29,20 @@ async function chooseParent(windowId: string): Promise<string | null> {
   const location = sharedLocation();
   if (location.iCloudAvailable) return location.path;
   const { confirmed } = await confirm({
-    title: "iCloud Drive Is Off",
+    title: t(`iCloud Drive Is Off`),
     message:
-      "Shared folders live in iCloud Drive, where the people you invite get your changes. Turn it on in System Settings › Apple Account › iCloud, or keep the folder in another folder that syncs, like one in Dropbox.",
-    confirmTitle: "Choose Folder…",
+      t(`Shared folders live in iCloud Drive, where the people you invite get your changes. Turn it on in System Settings › Apple Account › iCloud, or keep the folder in another folder that syncs, like one in Dropbox.`),
+    confirmTitle: t(`Choose Folder…`),
     windowId,
   });
-  return confirmed ? pickFolder(null, "Use Folder") : null;
+  return confirmed ? pickFolder(null, t(`Use Folder`)) : null;
 }
 
 export function withSharedGroup(s: BrowserState, windowId: string, name: string): [BrowserState, string] {
   const w = s.windows[windowId];
   if (!isRegularWindow(w)) return [s, ""];
   const profileId = w.profileId;
-  const tab: Tab = { ...makeTab(windowId, profileId, EMPTY_FOLDER_URL, { title: "Empty Folder", customTitle: "Empty Folder" }), page: ASLEEP };
+  const tab: Tab = { ...makeTab(windowId, profileId, EMPTY_FOLDER_URL, { title: t(`Empty Folder`), customTitle: t(`Empty Folder`) }), page: ASLEEP };
   const id = newId("g");
   const groups = nestGroups({
     ...s.groups,
@@ -61,10 +63,10 @@ export async function addSharedFolder(windowId: string) {
   const location = sharedLocation();
   const start = location.iCloudAvailable ? location.path : await chooseParent(windowId);
   if (!start) return;
-  const picked = await pickFolder(start, "Add Folder");
+  const picked = await pickFolder(start, t(`Add Folder`));
   if (!picked) return;
   const found = await resolveSharedFolder(picked).catch((error: unknown) => {
-    showToast(windowId, "Couldn’t add this folder", errorText(error), { icon: "exclamationmark.icloud" });
+    showToast(windowId, t(`Couldn’t add this folder`), errorText(error), { icon: "exclamationmark.icloud" });
     return null;
   });
   if (!found) return;
@@ -78,7 +80,7 @@ export async function addSharedFolder(windowId: string) {
     showToast(windowId, `“${(g && groupLabel(store(), g)) || path.split("/").at(-1)}” is already in your sidebar`, undefined, { icon: "person.2" });
     return syncFolderNow(profileId, known.key);
   }
-  const [next, groupId] = withSharedGroup(store(), windowId, path.split("/").filter(Boolean).at(-1) ?? "Shared Folder");
+  const [next, groupId] = withSharedGroup(store(), windowId, path.split("/").filter(Boolean).at(-1) ?? t(`Shared Folder`));
   if (!groupId) return;
   useBrowser.setState(next);
   const key = pinKeyOf(store().groups[groupId]!);
@@ -96,7 +98,7 @@ export async function shareFolder(windowId: string, groupId: string) {
     if (!folder) {
       const parent = await chooseParent(windowId);
       if (!parent) return;
-      const made = await createSharedFolder(parent, groupLabel(s, g) || "Shared Folder");
+      const made = await createSharedFolder(parent, groupLabel(s, g) || t(`Shared Folder`));
       if (!bindFolderIfUnbound(g.profileId, key, made)) await discardSharedFolder(made).catch(() => false);
     }
     await syncFolderAfterNow(g.profileId, key);
@@ -105,13 +107,13 @@ export async function shareFolder(windowId: string, groupId: string) {
     const state = useSharedFolders.getState().sync[folderRef(g.profileId, key)]?.state;
     if (state !== "synced" && state !== "waiting") {
       const why = useSharedFolders.getState().sync[folderRef(g.profileId, key)]?.error;
-      const reason = why ?? (state === "missing" ? "Its folder can’t be found any more. Stop syncing it, then share it again." : "Its links aren’t in the folder yet. Try again in a moment.");
-      return showToast(windowId, "Couldn’t share this folder yet", reason, { icon: "exclamationmark.icloud" });
+      const reason = why ?? (state === "missing" ? t(`Its folder can’t be found any more. Stop syncing it, then share it again.`) : t(`Its links aren’t in the folder yet. Try again in a moment.`));
+      return showToast(windowId, t(`Couldn’t share this folder yet`), reason, { icon: "exclamationmark.icloud" });
     }
     const anchor = await measureRow(windowId, groupId);
     await sharePage(fileUrlOf(folder.path), groupLabel(store(), g) || null, windowId, anchor ? [anchor.x, anchor.y, anchor.width, anchor.height] : null);
   } catch (error) {
-    showToast(windowId, "Couldn’t share this folder", error instanceof Error ? error.message : String(error), { icon: "exclamationmark.icloud" });
+    showToast(windowId, t(`Couldn’t share this folder`), error instanceof Error ? error.message : String(error), { icon: "exclamationmark.icloud" });
   }
 }
 

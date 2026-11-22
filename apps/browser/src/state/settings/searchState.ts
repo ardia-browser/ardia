@@ -3,6 +3,8 @@ import { goToSettingsPane, onTargetedSettingsOpen, type SettingsPane, useSetting
 import { settingsProfileFor } from "../extensions/store";
 import { noteSettingsSearch, noteSettingsSearchReveal } from "../telemetry/usage";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
+import { t } from "../../lib/uiLanguage";
+
 
 type SearchUi = {
   query: string;
@@ -19,7 +21,7 @@ type SearchUi = {
 
 type Target = { id: string; pane: SettingsPane; section: string };
 
-const MENU_COMMANDS: Target = { id: "shortcuts.menuCommands", pane: "shortcuts", section: "Keyboard" };
+const MENU_COMMANDS: Target = { id: "shortcuts.menuCommands", pane: "shortcuts", section: t(`Keyboard`) };
 
 export const useSettingsSearch = create<SearchUi>()(() => ({
   query: "",

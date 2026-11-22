@@ -1,5 +1,7 @@
 import { Platform } from "react-native";
 import { colorRoles, menuInk, menuLook, shape } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 const DRAWN_MENU_PRESS_INSET = 6;
 
@@ -20,7 +22,7 @@ const iPhoneDrawnMenuLook: typeof menuLook = {
   dividerInset: 0,
   dividerLine: 1,
   label: { fontSize: 17, lineHeight: 22 },
-  shadow: "0px 8px 32px rgba(0,0,0,0.18)",
+  shadow: t(`0px 8px 32px rgba(0,0,0,0.18)`),
 };
 
 const iPhoneDrawnMenuInk: typeof menuInk = {

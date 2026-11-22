@@ -8,6 +8,8 @@ import { activeManifest, currentPlugins } from "./store";
 import { ensurePluginActivated, onPluginReady, pluginReadyRun } from "./activation";
 import { notePluginGesture } from "./gestures";
 import { sendSurfaceMessage } from "./tools";
+import { t } from "../../lib/uiLanguage";
+
 
 export type Anchor = { x: number; y: number; width: number; height: number };
 export type SidePanel = { plugin: string; panelId: string; opened: number; generation: number; hidden?: boolean };
@@ -163,7 +165,7 @@ const quickPickAnswers = new Map<string, Answer<string[] | null>>();
 const inputBoxAnswers = new Map<string, Answer<string | null>>();
 let promptSeq = 0;
 
-export const PROMPT_BUSY = "Another plugin prompt is open.";
+export const PROMPT_BUSY = t(`Another plugin prompt is open.`);
 
 export function showPluginQuickPick(plugin: string, windowId: string, items: QuickPickItem[], options: QuickPickOptions): Promise<string[] | null> | null {
   if (usePluginSurfaces.getState().quickPick || usePluginSurfaces.getState().inputBox) return null;

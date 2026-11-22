@@ -1,11 +1,13 @@
 import { consentListing, type PluginRecord, type PluginsStore } from "./store";
+import { t } from "../../lib/uiLanguage";
+
 
 export type ConsentVerb = "install" | "update" | "turnOn";
 
 export const CONSENT_WORDS: Readonly<Record<ConsentVerb, { title: string; button: string }>> = {
-  install: { title: "Install", button: "Install" },
-  update: { title: "Update", button: "Update" },
-  turnOn: { title: "Turn on", button: "Turn On" },
+  install: { title: t(`Install`), button: t(`Install`) },
+  update: { title: t(`Update`), button: t(`Update`) },
+  turnOn: { title: t(`Turn on`), button: t(`Turn On`) },
 };
 
 export function consentVerb(official: boolean, record: Pick<PluginRecord, "approved"> | undefined, hash: string): ConsentVerb {

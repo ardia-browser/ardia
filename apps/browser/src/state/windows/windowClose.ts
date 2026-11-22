@@ -11,6 +11,8 @@ import { askBeforeQuitting } from "./quitWarning";
 import { startClosingWindow, stopClosingWindow } from "./closingWindows";
 import { noteQuitAskedAfterTabsConfirm } from "../telemetry/quitWarningCounts";
 import { consentToken } from "../telemetry/client";
+import { t } from "../../lib/uiLanguage";
+
 
 const MIN_TABS = 2;
 
@@ -84,7 +86,7 @@ export type WindowCloseDecision = { decision: "allow" | "cancel"; suppressWarnin
 const allow = (suppressWarning = false): WindowCloseDecision => ({ decision: "allow", suppressWarning });
 
 async function askToClose(windowId: string, ask: CloseAsk, closing?: string[]): Promise<WindowCloseDecision> {
-  const { confirmed, suppressed } = await ask({ ...closeWindowDialog(windowId, closing), suppression: "Don’t ask me again", windowId });
+  const { confirmed, suppressed } = await ask({ ...closeWindowDialog(windowId, closing), suppression: t(`Don’t ask me again`), windowId });
   return { decision: confirmed ? "allow" : "cancel", suppressWarning: suppressed };
 }
 
@@ -144,11 +146,11 @@ export function closeWindowDialog(windowId: string, closing = unpinnedOpenTabIds
   const count = closing.length;
   const message =
     byProfile.size > 1
-      ? ["Closing this window closes all tabs open across profiles:", ...[...byProfile].map(([id, n]) => `  • ${tabs(n)} in ${profileFor(s, id).name}`)].join("\n")
+      ? [t(`Closing this window closes all tabs open across profiles:`), ...[...byProfile].map(([id, n]) => `  • ${tabs(n)} in ${profileFor(s, id).name}`)].join("\n")
       : `This window has ${tabs(count)} open in your ${profileFor(s, [...byProfile.keys()][0] ?? w.profileId).name} profile.`;
   return {
-    title: count === 1 ? "Close 1 tab?" : `Close ${count} tabs?`,
+    title: count === 1 ? t(`Close 1 tab?`) : `Close ${count} tabs?`,
     message,
-    confirmTitle: count === 1 ? "Close Tab" : "Close All Tabs",
+    confirmTitle: count === 1 ? t(`Close Tab`) : t(`Close All Tabs`),
   };
 }

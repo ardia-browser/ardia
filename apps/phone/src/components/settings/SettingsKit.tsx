@@ -6,6 +6,8 @@ import { rememberSettingsScroll, settingsScroll } from "../../state/settings/nav
 import { MenuTrigger } from "../ui/MenuTrigger";
 import { MaterialBarButton, MaterialButtonRow, MaterialEmptyState, MaterialGroup, MaterialIconTile, MaterialNavRow, MaterialPickerRow, MaterialSettingsPage, MaterialToggleRow, MaterialValueRow } from "./MaterialSettingsKit";
 import { duration, LookBackdrop, settingsMotion, useSheetFrame, font, ink, settingsLayout, space, Symbol, tabsLayout, ToggleTrack, useDesign, useTheme, type MenuItem, type SymbolName } from "../ui";
+import { t } from "../../lib/uiLanguage";
+
 
 export const SettingsHostedContext = createContext(false);
 
@@ -46,7 +48,7 @@ function ClassicSettingsPage({ title, onBack, leading, trailing, children, scrol
       <View style={[styles.top, { paddingTop: frame ? 0 : insets.top }]}>
         <View style={styles.topSide}>
           {onBack ? (
-            <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={onBack} style={styles.back}>
+            <Pressable accessibilityRole="button" accessibilityLabel={t(`Back`)} onPress={onBack} style={styles.back}>
               <Symbol name="chevronLeft" size={22} color={theme.formAccent} />
             </Pressable>
           ) : null}

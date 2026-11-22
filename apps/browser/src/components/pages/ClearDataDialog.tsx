@@ -10,13 +10,15 @@ import { noteBrowsingDataCleared } from "../../state/telemetry/historyRemovalCou
 import { consentToken } from "../../state/telemetry/client";
 import { Box, Button, Checkbox, Dialog, DialogActions, DialogTitle, Group, PopUp, Row, space, Text } from "../ui";
 import { clearDataDialog } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 const RANGES = [
-  { value: "hour", title: "Last hour", ms: 3_600_000 },
-  { value: "day", title: "Last 24 hours", ms: 86_400_000 },
-  { value: "week", title: "Last 7 days", ms: 7 * 86_400_000 },
-  { value: "month", title: "Last 4 weeks", ms: 28 * 86_400_000 },
-  { value: "all", title: "All time", ms: Infinity },
+  { value: "hour", title: t(`Last hour`), ms: 3_600_000 },
+  { value: "day", title: t(`Last 24 hours`), ms: 86_400_000 },
+  { value: "week", title: t(`Last 7 days`), ms: 7 * 86_400_000 },
+  { value: "month", title: t(`Last 4 weeks`), ms: 28 * 86_400_000 },
+  { value: "all", title: t(`All time`), ms: Infinity },
 ] as const;
 type Range = (typeof RANGES)[number]["value"];
 
@@ -79,8 +81,8 @@ export function ClearDataDialog({ profileId, onClose }: { profileId: string; onC
       </Box>
       <View style={OPTIONS}>
         <Group>
-          <Option value={history} onChange={setHistory} disabled={busy} title="Browsing history" subtitle="Clears the pages you visited from History and the command bar." />
-          <Option value={siteData} onChange={setSiteData} disabled={busy} title="Cookies, site data and cached files" subtitle="Signs you out of most sites." />
+          <Option value={history} onChange={setHistory} disabled={busy} title={t(`Browsing history`)} subtitle={t(`Clears the pages you visited from History and the command bar.`)} />
+          <Option value={siteData} onChange={setSiteData} disabled={busy} title={t(`Cookies, site data and cached files`)} subtitle={t(`Signs you out of most sites.`)} />
         </Group>
       </View>
       {error && (
@@ -89,8 +91,8 @@ export function ClearDataDialog({ profileId, onClose }: { profileId: string; onC
         </Text>
       )}
       <DialogActions>
-        <Button title="Cancel" onPress={leave} />
-        <Button title={error ? "Retry" : "Clear Data"} kind="primary" disabled={busy || (!history && !siteData)} onPress={() => void clear()} />
+        <Button title={t(`Cancel`)} onPress={leave} />
+        <Button title={error ? t(`Retry`) : t(`Clear Data`)} kind="primary" disabled={busy || (!history && !siteData)} onPress={() => void clear()} />
       </DialogActions>
     </Dialog>
   );

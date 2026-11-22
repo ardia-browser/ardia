@@ -1,8 +1,10 @@
 import { nativeModule, type ScriptCommand, type ScriptState } from "@ardia/shell";
+import { t } from "../lib/uiLanguage";
+
 
 export type { ScriptCommand, ScriptState };
 
-const Scripting = nativeModule("ArdiaScripting");
+const Scripting = nativeModule(t(`ArdiaScripting`));
 
 export const setScriptState = (state: ScriptState) => Scripting.setScriptState(state);
 export const replyToScript = (id: string, result: Record<string, unknown> | null, error: string | null = null) =>

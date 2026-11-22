@@ -5,10 +5,12 @@ import { activeManifest, currentPlugins } from "./store";
 import { ensurePluginActivated, pluginReadyRun } from "./activation";
 import { openPluginPage, panelPath } from "./pages";
 import { closePluginSidePanel, isSurfaceWindowEligible, openPluginSidePanel, usePluginSurfaces } from "./surfaces";
+import { t } from "../../lib/uiLanguage";
+
 
 export type PanelOutcome = { ok: true; tabId?: string } | { ok: false; reason: string };
 
-const INELIGIBLE = "Plugins don't run in private windows.";
+const INELIGIBLE = t(`Plugins don't run in private windows.`);
 
 export function pluginPanel(plugin: string, panelId: string): PanelSpec | null {
   return activeManifest(currentPlugins(), plugin)?.contributes.panels.find((p) => p.id === panelId) ?? null;
@@ -31,7 +33,7 @@ export function openPluginPanel(windowId: string, plugin: string, panelId: strin
   }
   const path = pagePanelOf(m.contributes.panels)?.id === panel.id ? "" : panelPath(panel.id);
   const tabId = openPluginPage(windowId, plugin, { split: panel.mode === "split", side: panel.side, path, consent });
-  if (!tabId) return { ok: false, reason: "The panel couldn't open." };
+  if (!tabId) return { ok: false, reason: t(`The panel couldn't open.`) };
   notePlugin("plugin_panel_opens", consent);
   return { ok: true, tabId };
 }

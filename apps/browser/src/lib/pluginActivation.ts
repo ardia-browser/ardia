@@ -1,6 +1,8 @@
 import { at, KEY, LIMITS, list, NAME, type Check } from "./pluginChecks";
 import { MENU_SLOTS, type PluginContributions } from "./pluginContributions";
 import { isHostPattern } from "./pluginNetwork";
+import { t } from "./uiLanguage";
+
 
 export const STARTUP_EVENTS = ["*", "onStartupFinished"] as const;
 export const ACTIVATION_PREFIXES = ["onCommand", "onView", "onPanel", "onToolbar", "onOmnibox", "onMenu", "onEvent", "onUrl"] as const;
@@ -24,7 +26,7 @@ function argumentOk(prefix: ActivationPrefix, arg: string): boolean {
 }
 
 export function activationEventProblem(event: unknown): string | null {
-  if (typeof event !== "string") return "must be text";
+  if (typeof event !== "string") return t(`must be text`);
   if ((STARTUP_EVENTS as readonly string[]).includes(event)) return null;
   const colon = event.indexOf(":");
   const prefix = colon < 0 ? event : event.slice(0, colon);

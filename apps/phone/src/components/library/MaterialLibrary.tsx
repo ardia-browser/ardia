@@ -38,6 +38,8 @@ import { backSwipe, countMaterialBackSwipe, useMaterialRipple } from "../ui/Mate
 import { useMaterialTheme } from "../ui/materialTheme";
 import { materialDuration, materialMotion, materialMove, materialShape, materialSize, materialType } from "../ui/materialTokens";
 import { reducedMotionMs } from "../ui/motion";
+import { t } from "../../lib/uiLanguage";
+
 
 const FOLDER = "folder:";
 const HIDE_FALLBACK_MS = 900;
@@ -185,7 +187,7 @@ function MaterialLibraryView({ open, onGone }: { open: boolean; onGone: () => vo
       haptics.warning();
       deleteAllDownloads();
     };
-    setConfirmation({ title: "Delete All Downloads?", message: "The files are removed from this phone.", action: "Delete All", run });
+    setConfirmation({ title: t(`Delete All Downloads?`), message: t(`The files are removed from this phone.`), action: t(`Delete All`), run });
   }, []);
   const searchable = LIBRARY_SEARCH_PROMPTS[section] !== null && folderKey === null;
   return (
@@ -222,21 +224,21 @@ function LibraryTopBar({ section, folderKey, onBack, onSearch, onDeleteAll, show
   const bookmarks = useBookmarks();
   const hasFiles = useLibrary((s) => s.files.length > 0);
   const folder = folderKey === null ? null : findBookmarkFolder(bookmarks, folderKey);
-  const title = folderKey === null ? LIBRARY_NAMES[section] : folder?.title || "Untitled Folder";
+  const title = folderKey === null ? LIBRARY_NAMES[section] : folder?.title || t(`Untitled Folder`);
   return (
     <View testID="materialLibraryBar" style={[styles.bar, { backgroundColor: scheme.surface }]}>
-      <IconButton testID="materialLibraryBack" label={folderKey === null ? "Close Library" : "Back"} icon="arrowRight" color={scheme.onSurface} onPress={onBack} flipped />
+      <IconButton testID="materialLibraryBack" label={folderKey === null ? t(`Close Library`) : t(`Back`)} icon="arrowRight" color={scheme.onSurface} onPress={onBack} flipped />
       <Text testID="materialLibraryTitle" accessibilityRole="header" numberOfLines={1} style={[materialType.titleLarge, styles.title, { color: scheme.onSurface }]}>
         {title}
       </Text>
-      {onSearch ? <IconButton testID="materialLibrarySearch" label={LIBRARY_SEARCH_PROMPTS[section] ?? "Search"} icon="magnifyingglass" color={scheme.onSurfaceVariant} onPress={onSearch} /> : null}
+      {onSearch ? <IconButton testID="materialLibrarySearch" label={LIBRARY_SEARCH_PROMPTS[section] ?? t(`Search`)} icon="magnifyingglass" color={scheme.onSurfaceVariant} onPress={onSearch} /> : null}
       {onDeleteAll ? (
         <IconButton
           testID="materialLibraryMore"
-          label="More"
+          label={t(`More`)}
           icon="ellipsis"
           color={scheme.onSurfaceVariant}
-          onPress={(event) => showMenu([{ label: "Delete All", icon: "trash", destructive: true, disabled: !hasFiles, onPress: onDeleteAll }], event, true)}
+          onPress={(event) => showMenu([{ label: t(`Delete All`), icon: "trash", destructive: true, disabled: !hasFiles, onPress: onDeleteAll }], event, true)}
         />
       ) : null}
     </View>
@@ -247,7 +249,7 @@ function LibrarySearchBar({ prompt, query, onQuery, onEnd }: { prompt: string; q
   const { scheme } = useMaterialTheme();
   return (
     <View testID="materialLibraryBar" style={[styles.bar, { backgroundColor: scheme.surface }]}>
-      <IconButton testID="materialLibraryBack" label="Close Search" icon="arrowRight" color={scheme.onSurface} onPress={onEnd} flipped />
+      <IconButton testID="materialLibraryBack" label={t(`Close Search`)} icon="arrowRight" color={scheme.onSurface} onPress={onEnd} flipped />
       <TextInput
         testID="materialLibrarySearchField"
         autoFocus
@@ -262,7 +264,7 @@ function LibrarySearchBar({ prompt, query, onQuery, onEnd }: { prompt: string; q
         autoCapitalize="none"
         style={[materialType.bodyLarge, styles.input, { color: scheme.onSurface }]}
       />
-      {query ? <IconButton testID="materialLibraryClear" label="Clear Text" icon="xmark" color={scheme.onSurfaceVariant} onPress={() => onQuery("")} /> : null}
+      {query ? <IconButton testID="materialLibraryClear" label={t(`Clear Text`)} icon="xmark" color={scheme.onSurfaceVariant} onPress={() => onQuery("")} /> : null}
     </View>
   );
 }
@@ -352,7 +354,7 @@ function EmptyState({ icon, title, message }: { icon: SymbolName; title: string;
   );
 }
 
-const noResults = (query: string) => <EmptyState icon="magnifyingglass" title={`No Results for “${query.trim()}”`} message="Check the spelling or try a new search." />;
+const noResults = (query: string) => <EmptyState icon="magnifyingglass" title={`No Results for “${query.trim()}”`} message={t(`Check the spelling or try a new search.`)} />;
 
 const pageFavicon = (url: string) => <Favicon iconUrl={null} pageUrl={url} size={materialSize.icon} />;
 
@@ -374,7 +376,7 @@ function HistoryList({ open, query, showMenu }: { open: boolean; query: string; 
   const renderItem = useCallback(({ item }: { item: HistoryEntry }) => <HistoryRow entry={item} showMenu={showMenu} />, [showMenu]);
   const renderHeader = useCallback(({ section }: { section: DaySection }) => <SectionHeader title={section.title} />, []);
   if (!loaded) return null;
-  if (!entries.length) return <EmptyState icon="clockArrow" title="No History" message="Pages you visit here and on your Mac show up here." />;
+  if (!entries.length) return <EmptyState icon="clockArrow" title={t(`No History`)} message={t(`Pages you visit here and on your Mac show up here.`)} />;
   if (!shown.length) return noResults(query);
   return (
     <SectionList
@@ -397,7 +399,7 @@ function HistoryList({ open, query, showMenu }: { open: boolean; query: string; 
 function HistoryRow({ entry, showMenu }: { entry: HistoryEntry; showMenu: ShowMenu }) {
   const host = historyHost(entry.url);
   const time = clockTime(entry.visitedAt);
-  const items: MenuItem[] = [...(shareable(entry.url) ? [{ label: "Copy Link", icon: "link" as const, onPress: () => copyLink(entry.url) }] : []), { label: "Delete", icon: "trash", destructive: true, onPress: () => deleteHistoryEntry(entry) }];
+  const items: MenuItem[] = [...(shareable(entry.url) ? [{ label: t(`Copy Link`), icon: "link" as const, onPress: () => copyLink(entry.url) }] : []), { label: t(`Delete`), icon: "trash", destructive: true, onPress: () => deleteHistoryEntry(entry) }];
   return (
     <ListItem
       testID="materialLibraryHistoryRow"
@@ -405,7 +407,7 @@ function HistoryRow({ entry, showMenu }: { entry: HistoryEntry; showMenu: ShowMe
       headline={entry.title || entry.url}
       supporting={`${host} · ${time}`}
       label={`${entry.title || entry.url}, ${host}, ${time}, ${entry.source === "thisDevice" ? "This phone" : "Another device"}`}
-      hint="Opens the page."
+      hint={t(`Opens the page.`)}
       onPress={() => {
         haptics.selection();
         openFromLibrary(entry.url, entry.title);
@@ -441,8 +443,8 @@ function BookmarkList({ query, folderKey, showMenu }: { query: string; folderKey
   }, [bookmarks, trimmed, folderKey]);
   const renderItem = useCallback(({ item }: { item: BookmarkItem }) => <BookmarkRow item={item} showMenu={showMenu} />, [showMenu]);
   const renderHeader = useCallback(({ section }: { section: BookmarkGroup }) => (section.title ? <SectionHeader title={section.title} /> : null), []);
-  if (!bookmarks.length) return <EmptyState icon="star" title="No Bookmarks" message={enabled ? "Bookmarks you save on your Mac show up here." : "Sync with your Mac to see its bookmarks here."} />;
-  if (!groups) return trimmed ? noResults(trimmed) : <EmptyState icon="folderFill" title="Empty Folder" />;
+  if (!bookmarks.length) return <EmptyState icon="star" title={t(`No Bookmarks`)} message={enabled ? t(`Bookmarks you save on your Mac show up here.`) : t(`Sync with your Mac to see its bookmarks here.`)} />;
+  if (!groups) return trimmed ? noResults(trimmed) : <EmptyState icon="folderFill" title={t(`Empty Folder`)} />;
   return (
     <SectionList
       testID="materialLibraryBookmarks"
@@ -467,10 +469,10 @@ function BookmarkRow({ item, showMenu }: { item: BookmarkItem; showMenu: ShowMen
       <ListItem
         testID="materialLibraryFolderRow"
         leading={<Symbol name="folderFill" size={materialSize.icon} color={scheme.onSurfaceVariant} />}
-        headline={item.title || "Untitled Folder"}
+        headline={item.title || t(`Untitled Folder`)}
         trailing={count.toLocaleString()}
         label={`${item.title || "Untitled Folder"}, ${count} items`}
-        hint="Opens the folder."
+        hint={t(`Opens the folder.`)}
         onPress={() => pushLibraryPage(`${FOLDER}${item.key}`)}
       />
     );
@@ -482,12 +484,12 @@ function BookmarkRow({ item, showMenu }: { item: BookmarkItem; showMenu: ShowMen
       leading={pageFavicon(url)}
       headline={item.title || url}
       supporting={historyHost(url)}
-      hint="Opens the page."
+      hint={t(`Opens the page.`)}
       onPress={() => {
         haptics.selection();
         openFromLibrary(url, item.title);
       }}
-      onLongPress={shareable(url) ? (event) => showMenu([{ label: "Copy Link", icon: "link", onPress: () => copyLink(url) }], event) : undefined}
+      onLongPress={shareable(url) ? (event) => showMenu([{ label: t(`Copy Link`), icon: "link", onPress: () => copyLink(url) }], event) : undefined}
     />
   );
 }
@@ -499,7 +501,7 @@ function DownloadList({ open, showMenu }: { open: boolean; showMenu: ShowMenu })
     if (open) void loadDownloads();
   }, [open]);
   const renderItem = useCallback(({ item }: { item: DownloadedFile }) => <DownloadRow file={item} showMenu={showMenu} />, [showMenu]);
-  if (loaded && !files.length) return <EmptyState icon="arrowDownCircle" title="No Downloads" message="Files you download show up here." />;
+  if (loaded && !files.length) return <EmptyState icon="arrowDownCircle" title={t(`No Downloads`)} message={t(`Files you download show up here.`)} />;
   return <FlatList testID="materialLibraryDownloads" data={files} keyExtractor={(file) => file.uri} renderItem={renderItem} initialNumToRender={14} windowSize={9} />;
 }
 
@@ -511,13 +513,13 @@ function DownloadRow({ file, showMenu }: { file: DownloadedFile; showMenu: ShowM
       leading={<Symbol name={MATERIAL_FILE_ICONS[file.kind]} size={materialSize.icon} color={scheme.onSurfaceVariant} />}
       headline={file.name}
       supporting={downloadSubtitle(file.size, file.modified)}
-      hint="Shows the file."
+      hint={t(`Shows the file.`)}
       onPress={() => previewDownload(file)}
       onLongPress={(event) =>
         showMenu(
           [
-            { label: "Share", icon: "squareAndArrowUp", onPress: () => shareDownload(file) },
-            { label: "Delete", icon: "trash", destructive: true, onPress: () => deleteDownload(file) },
+            { label: t(`Share`), icon: "squareAndArrowUp", onPress: () => shareDownload(file) },
+            { label: t(`Delete`), icon: "trash", destructive: true, onPress: () => deleteDownload(file) },
           ],
           event,
         )

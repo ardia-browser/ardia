@@ -1,10 +1,11 @@
+import { t } from "../../lib/uiLanguage";
 export type ConsentButton = "cancel" | "install";
 
 export type ConsentKeyState = { selected: ConsentButton | null; spaceDown: boolean };
 
 export type ConsentKeyPress = { key: string; shiftKey?: boolean; altKey?: boolean; ctrlKey?: boolean; metaKey?: boolean };
 
-export const CONSENT_KEYS = [{ key: "Escape" }, { key: "Tab" }, { key: "Tab", shiftKey: true }, { key: " " }];
+export const CONSENT_KEYS = [{ key: t(`Escape`) }, { key: t(`Tab`) }, { key: t(`Tab`), shiftKey: true }, { key: " " }];
 
 export const CONSENT_KEYS_UP = [{ key: " " }];
 

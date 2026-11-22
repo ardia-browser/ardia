@@ -1,6 +1,8 @@
 import { isFields } from "./decode";
 import { LIMITS, only, type Check } from "./pluginChecks";
 import { ANY_HOST, hostPatternCovers, hostPatternProblem } from "./pluginNetwork";
+import { t } from "./uiLanguage";
+
 
 export const PLUGIN_PERMISSIONS = ["tabs", "fullUrls", "commands", "network", "control"] as const;
 export type PluginPermission = (typeof PLUGIN_PERMISSIONS)[number];
@@ -66,7 +68,7 @@ export function permissionsOf(c: Check, value: unknown): PluginPermissions {
   const out: PluginPermissions = { ...NO_PERMISSIONS };
   if (value.tabs !== undefined && value.tabs !== false) {
     if ((TAB_ACCESS as readonly unknown[]).includes(value.tabs)) out.tabs = value.tabs as TabAccess;
-    else c.problems.push("permissions.tabs must be read, write or false");
+    else c.problems.push(t(`permissions.tabs must be read, write or false`));
   }
   for (const key of BOOLEAN_KEYS) {
     const given = value[key];
@@ -75,8 +77,8 @@ export function permissionsOf(c: Check, value: unknown): PluginPermissions {
     else c.problems.push(`permissions.${key} must be true or false`);
   }
   out.network = networkOf(c, value.network);
-  if (out.fullUrls && !out.tabs) c.problems.push("permissions: fullUrls needs tabs");
-  if (out.workspace && (out.tabs !== "write" || !out.fullUrls)) c.problems.push("permissions: workspace needs tabs: write and fullUrls, since it sees and moves every tab");
+  if (out.fullUrls && !out.tabs) c.problems.push(t(`permissions: fullUrls needs tabs`));
+  if (out.workspace && (out.tabs !== "write" || !out.fullUrls)) c.problems.push(t(`permissions: workspace needs tabs: write and fullUrls, since it sees and moves every tab`));
   return out;
 }
 

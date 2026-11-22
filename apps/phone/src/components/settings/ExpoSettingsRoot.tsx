@@ -22,19 +22,21 @@ import { syncOffered } from "../../state/sync/offer";
 import { browseForMeOffered, refreshChatGPTConnected, useChatGPTConnected } from "../../state/browseForMe/store";
 import { pageSummariesSwitchable, refreshPageSummariesEnabled, setPageSummariesEnabled, usePageSummariesEnabled } from "../../state/pageSummary/enabled";
 import { PAGE_SUMMARY_COPY } from "../../state/pageSummary/copy";
+import { t } from "../../lib/uiLanguage";
+
 
 const INTERVALS = (Object.keys(AUTO_ARCHIVE_INTERVALS) as AutoArchiveInterval[]).map((id) => ({ id, title: autoArchiveTitle(id) }));
 const APP_LINKS = [
-  { id: "ardia", title: "Ardia" },
-  { id: "app", title: "App" },
+  { id: "ardia", title: t(`Ardia`) },
+  { id: "app", title: t(`App`) },
 ] as const;
-const SHORTCUTS = [{ id: "archive", title: "Archive" }, { id: "spaces", title: "Spaces" }];
+const SHORTCUTS = [{ id: "archive", title: t(`Archive`) }, { id: "spaces", title: t(`Spaces`) }];
 const ARCHIVE_ONLY = SHORTCUTS.filter((shortcut) => shortcut.id === "archive");
 const SYNC_TILE = 56;
 const TOP_SECTION_SPACING = 12;
 
 const link = (route: SettingsRoute) => settingsRouteKey(route);
-const colorName = (choice: string) => (choice === "custom" ? "Custom" : (PROFILE_COLORS[choice as ProfileColor]?.name ?? choice));
+const colorName = (choice: string) => (choice === "custom" ? t(`Custom`) : (PROFILE_COLORS[choice as ProfileColor]?.name ?? choice));
 
 export function ExpoSettingsRoot() {
   const engineId = usePreferences((p) => p.searchEngineId);
@@ -61,7 +63,7 @@ export function ExpoSettingsRoot() {
   }, []);
   return (
     <ExpoSettingsDone>
-      <Form modifiers={modifierList(navigationTitle("Settings"), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), contentMargins({ edges: "top", length: settingsLayout.expoListTop }))}>
+      <Form modifiers={modifierList(navigationTitle(t(`Settings`)), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), contentMargins({ edges: "top", length: settingsLayout.expoListTop }))}>
         {syncOffered() ? (
           <Section modifiers={[listSectionSpacing(TOP_SECTION_SPACING)]}>
             <NavigationLink value={link({ page: "sync" })}>
@@ -72,22 +74,22 @@ export function ExpoSettingsRoot() {
         <Section modifiers={[listRowBackground("clear"), listRowInsets({ top: 0, leading: 0, bottom: 0, trailing: 0 }), listSectionSpacing(TOP_SECTION_SPACING)]}>
           <SettingsShortcuts shortcuts={syncOffered() ? SHORTCUTS : ARCHIVE_ONLY} onPress={(id) => leaveFor(id === "archive" ? openArchive : openSpaces)} />
         </Section>
-        <Section title="General">
+        <Section title={t(`General`)}>
           <NavigationLink value={link({ page: "appearance" })}>
-            <LabeledContent label={<ExpoRowLabel title="Appearance" systemImage="paintpalette.fill" tint="swatch" />}>
+            <LabeledContent label={<ExpoRowLabel title={t(`Appearance`)} systemImage="paintpalette.fill" tint="swatch" />}>
               <Text>{appearance}</Text>
             </LabeledContent>
           </NavigationLink>
           <NavigationLink value={link({ page: "siteSettings" })}>
-            <ExpoRowLabel title="Site Settings" systemImage="globe" tint="neutral" />
+            <ExpoRowLabel title={t(`Site Settings`)} systemImage="globe" tint="neutral" />
           </NavigationLink>
           {offersDefault ? (
             <NavigationLink value={link({ page: "defaultBrowser" })}>
-              <ExpoRowLabel title="Default Browser" systemImage="safari.fill" tint="defaultBrowser" />
+              <ExpoRowLabel title={t(`Default Browser`)} systemImage="safari.fill" tint="defaultBrowser" />
             </NavigationLink>
           ) : null}
           <Picker
-            label={<ExpoRowLabel title="Open App Links In" systemImage="arrow.up.forward.app.fill" tint="appLinks" />}
+            label={<ExpoRowLabel title={t(`Open App Links In`)} systemImage="arrow.up.forward.app.fill" tint="appLinks" />}
             selection={appLinks}
             onSelectionChange={(next: (typeof APP_LINKS)[number]["id"]) => setAppLinks(next)}
             modifiers={[pickerStyle("menu"), tint("secondary")]}
@@ -99,22 +101,22 @@ export function ExpoSettingsRoot() {
             ))}
           </Picker>
         </Section>
-        <Section title="Search">
+        <Section title={t(`Search`)}>
           <NavigationLink value={link({ page: "searchEngine" })}>
-            <LabeledContent label={<ExpoRowLabel title="Search Engine" systemImage="magnifyingglass" tint="search" />}>
+            <LabeledContent label={<ExpoRowLabel title={t(`Search Engine`)} systemImage="magnifyingglass" tint="search" />}>
               <Text>{engineName}</Text>
             </LabeledContent>
           </NavigationLink>
           <Toggle isOn={suggestions} onIsOnChange={setSearchSuggestions} modifiers={modifierList(settingsSwitchStyle())}>
-            <ExpoRowLabel title="Search Suggestions" systemImage="text.magnifyingglass" tint="blue" />
+            <ExpoRowLabel title={t(`Search Suggestions`)} systemImage="text.magnifyingglass" tint="blue" />
           </Toggle>
           <Toggle isOn={keyboard} onIsOnChange={setAutoOpenKeyboard} modifiers={modifierList(settingsSwitchStyle())}>
-            <ExpoRowLabel title="Auto-Open Keyboard" systemImage="keyboard.fill" tint="keyboard" />
+            <ExpoRowLabel title={t(`Auto-Open Keyboard`)} systemImage="keyboard.fill" tint="keyboard" />
           </Toggle>
         </Section>
-        <Section title="Tabs">
+        <Section title={t(`Tabs`)}>
           <Picker
-            label={<ExpoRowLabel title="Archive Inactive Tabs" systemImage="archivebox.fill" tint="archive" />}
+            label={<ExpoRowLabel title={t(`Archive Inactive Tabs`)} systemImage="archivebox.fill" tint="archive" />}
             selection={interval}
             onSelectionChange={(next: AutoArchiveInterval) => setArchiveInterval(next)}
             modifiers={[pickerStyle("menu"), tint("secondary")]}
@@ -126,12 +128,12 @@ export function ExpoSettingsRoot() {
             ))}
           </Picker>
           <Button onPress={exportOpenTabs} modifiers={[tint("primary")]}>
-            <ExpoRowLabel title="Export Open Tabs" systemImage="square.and.arrow.up.fill" tint="export" />
+            <ExpoRowLabel title={t(`Export Open Tabs`)} systemImage="square.and.arrow.up.fill" tint="export" />
           </Button>
         </Section>
-        <Section title="Privacy">
+        <Section title={t(`Privacy`)}>
           <NavigationLink value={link({ page: "clearData" })}>
-            <ExpoRowLabel title="Clear Browsing Data" systemImage="eraser.fill" tint="clearData" />
+            <ExpoRowLabel title={t(`Clear Browsing Data`)} systemImage="eraser.fill" tint="clearData" />
           </NavigationLink>
           <Toggle isOn={sharing} onIsOnChange={(on) => setUsageSharing(on, "settings")} modifiers={modifierList(settingsSwitchStyle())}>
             <ExpoRowLabel title={PHONE_SHARING_COPY.toggle} systemImage="checkmark.shield" tint="neutral" />
@@ -141,11 +143,11 @@ export function ExpoSettingsRoot() {
           </NavigationLink>
         </Section>
         {browseForMeOffered() || switchesSummaries ? (
-          <Section title="Experimental" footer={switchesSummaries ? <Text>{PAGE_SUMMARY_COPY.iPhoneFooter}</Text> : undefined}>
+          <Section title={t(`Experimental`)} footer={switchesSummaries ? <Text>{PAGE_SUMMARY_COPY.iPhoneFooter}</Text> : undefined}>
             {browseForMeOffered() ? (
               <NavigationLink value={link({ page: "browseForMe" })}>
-                <LabeledContent label={<ExpoRowLabel title="Browse for Me" systemImage="sparkle.magnifyingglass" tint="nightShade" />}>
-                  <Text>{chatGPT ? "ChatGPT" : "On iPhone"}</Text>
+                <LabeledContent label={<ExpoRowLabel title={t(`Browse for Me`)} systemImage="sparkle.magnifyingglass" tint="nightShade" />}>
+                  <Text>{chatGPT ? t(`ChatGPT`) : t(`On iPhone`)}</Text>
                 </LabeledContent>
               </NavigationLink>
             ) : null}
@@ -156,12 +158,12 @@ export function ExpoSettingsRoot() {
             ) : null}
           </Section>
         ) : null}
-        <Section title="About" footer={<Text modifiers={[frame({ maxWidth: Number.MAX_SAFE_INTEGER }), multilineTextAlignment("center")]}>{appVersion()}</Text>}>
+        <Section title={t(`About`)} footer={<Text modifiers={[frame({ maxWidth: Number.MAX_SAFE_INTEGER }), multilineTextAlignment("center")]}>{appVersion()}</Text>}>
           <Button onPress={showOnboarding} modifiers={[tint("primary")]}>
-            <ExpoRowLabel title="Show Onboarding" systemImage="hand.wave.fill" tint="onboarding" />
+            <ExpoRowLabel title={t(`Show Onboarding`)} systemImage="hand.wave.fill" tint="onboarding" />
           </Button>
           <NavigationLink value={link({ page: "about" })}>
-            <ExpoRowLabel title="About Ardia" systemImage="info" tint="neutral" />
+            <ExpoRowLabel title={t(`About Ardia`)} systemImage="info" tint="neutral" />
           </NavigationLink>
         </Section>
       </Form>

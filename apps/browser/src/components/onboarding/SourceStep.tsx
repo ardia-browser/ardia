@@ -18,6 +18,8 @@ import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { importModule } from "../../state/import/importApi";
 import { sourceTiles, type SourceCandidate, type SourceTile } from "./sourceTiles";
+import { t } from "../../lib/uiLanguage";
+
 
 const ICON = require("../../../assets/app-icon.png");
 
@@ -70,14 +72,14 @@ export function SourceStep() {
     skipStep();
   };
 
-  const done = () => confirmAnswer("source", sourcePatch(), chosen ? [`Coming from ${chosen.name}`] : source === "fresh" ? ["Starting fresh"] : []);
+  const done = () => confirmAnswer("source", sourcePatch(), chosen ? [`Coming from ${chosen.name}`] : source === "fresh" ? [t(`Starting fresh`)] : []);
 
   if (pastingCode) return <SetupCodeStep onBack={() => setPastingCode(false)} />;
 
   return (
     <StepLayout
-      title="Where are you coming from?"
-      subtitle="Ardia sets itself up the way you're used to."
+      title={t(`Where are you coming from?`)}
+      subtitle={t(`Ardia sets itself up the way you're used to.`)}
       actions={
         <>
           <StepActions
@@ -96,10 +98,10 @@ export function SourceStep() {
                 {importing === chosen.id ? `Importing from ${chosen.name}` : `Bring your stuff from ${chosen.name}`}
               </Text>
               <Text size="small" color={colors.rowSubtitle}>
-                {importing === chosen.id ? "It runs in its own window. Carry on here." : "Bookmarks, history, passwords and tabs."}
+                {importing === chosen.id ? t(`It runs in its own window. Carry on here.`) : t(`Bookmarks, history, passwords and tabs.`)}
               </Text>
             </View>
-            {importing === chosen.id ? <Checkbox look="ring" size="m" value /> : <SecondaryButton title="Import…" filled onPress={startImport} />}
+            {importing === chosen.id ? <Checkbox look="ring" size="m" value /> : <SecondaryButton title={t(`Import…`)} filled onPress={startImport} />}
           </ChoiceCard>
         ) : null
       }
@@ -113,7 +115,7 @@ export function SourceStep() {
         </View>
       ) : null}
       <View style={{ gap: space.m }}>
-        <SectionLabel title={found.length ? "Others" : "Browsers"} />
+        <SectionLabel title={found.length ? t(`Others`) : t(`Browsers`)} />
         <TileGrid tiles={others} selected={source} onPress={choose} fresh />
       </View>
     </StepLayout>
@@ -126,7 +128,7 @@ function TileGrid({ tiles, selected, onPress, fresh }: { tiles: Tile[]; selected
       {tiles.map((t) => (
         <SourceTile key={t.id} title={t.name} icon={browserIcon(t.id, t.icon)} symbol="globe" selected={selected === t.id} onPress={() => onPress(t.id)} />
       ))}
-      {fresh ? <SourceTile title="Starting fresh" icon={null} symbol="sparkles" selected={selected === "fresh"} onPress={() => onPress("fresh")} /> : null}
+      {fresh ? <SourceTile title={t(`Starting fresh`)} icon={null} symbol="sparkles" selected={selected === "fresh"} onPress={() => onPress("fresh")} /> : null}
     </View>
   );
 }

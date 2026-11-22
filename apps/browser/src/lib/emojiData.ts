@@ -1,6 +1,7 @@
+import { t } from "./uiLanguage";
 export const EMOJI_GROUPS: readonly { title: string; list: string }[] = [
   {
-    title: "Smileys",
+    title: t(`Smileys`),
     list: `😀	grinning face	cheerful cheery grin happy laugh nice smile smiling teeth
 😃	grinning face with big eyes	awesome grin happy mouth open smile smiling teeth yay
 😄	grinning face with smiling eyes	eye grin happy laugh lol mouth open smile
@@ -169,7 +170,7 @@ export const EMOJI_GROUPS: readonly { title: string; list: string }[] = [
 💤	zzz	comic good goodnight night sleep sleeping sleepy tired`,
   },
   {
-    title: "People",
+    title: t(`People`),
     list: `👋	waving hand	bye cya g2g greetings gtg hello hey hi later outtie ttfn ttyl wave yo you
 🤚	raised back of hand	backhand
 🖐️	hand with fingers splayed	finger raised stop
@@ -535,7 +536,7 @@ export const EMOJI_GROUPS: readonly { title: string; list: string }[] = [
 👣	footprints	barefoot clothing footprint omw print walk`,
   },
   {
-    title: "Animals & Nature",
+    title: t(`Animals & Nature`),
     list: `🐵	monkey face	animal banana
 🐒	monkey	animal banana
 🦍	gorilla	animal
@@ -690,7 +691,7 @@ export const EMOJI_GROUPS: readonly { title: string; list: string }[] = [
 🍄	mushroom	fungus toadstool`,
   },
   {
-    title: "Food & Drink",
+    title: t(`Food & Drink`),
     list: `🍇	grapes	dionysus fruit grape
 🍈	melon	cantaloupe fruit
 🍉	watermelon	fruit
@@ -826,7 +827,7 @@ export const EMOJI_GROUPS: readonly { title: string; list: string }[] = [
 🏺	amphora	aquarius cooking drink jug tool weapon zodiac`,
   },
   {
-    title: "Activities",
+    title: t(`Activities`),
     list: `🎃	jack-o-lantern	celebration halloween jack lantern pumpkin
 🎄	christmas tree	celebration
 🎆	fireworks	boom celebration entertainment yolo
@@ -914,7 +915,7 @@ export const EMOJI_GROUPS: readonly { title: string; list: string }[] = [
 🪢	knot	cord rope tangled tie twine twist`,
   },
   {
-    title: "Travel & Places",
+    title: t(`Travel & Places`),
     list: `🌍	globe showing europe-africa	africa earth europe world
 🌎	globe showing americas	earth world
 🌏	globe showing asia-australia	asia australia earth world
@@ -1135,7 +1136,7 @@ export const EMOJI_GROUPS: readonly { title: string; list: string }[] = [
 🌊	water wave	nature ocean surf surfer surfing`,
   },
   {
-    title: "Objects",
+    title: t(`Objects`),
     list: `👓	glasses	clothing eye eyeglasses eyewear
 🕶️	sunglasses	dark eye eyewear glasses
 🥽	goggles	dive eye protection scuba swimming welding
@@ -1399,7 +1400,7 @@ export const EMOJI_GROUPS: readonly { title: string; list: string }[] = [
 🪪	identification card	credentials document id license security`,
   },
   {
-    title: "Symbols",
+    title: t(`Symbols`),
     list: `🏧	atm sign	automated bank cash money teller
 🚮	litter in bin sign	litterbin
 🚰	potable water	drinking
@@ -1625,7 +1626,7 @@ export const EMOJI_GROUPS: readonly { title: string; list: string }[] = [
 🔲	black square button	geometric`,
   },
   {
-    title: "Flags",
+    title: t(`Flags`),
     list: `🏁	chequered flag	checkered finish flags game race racing sport win
 🚩	triangular flag	construction golf post
 🎌	crossed flags	celebration cross japanese

@@ -31,6 +31,8 @@ import { PRESS_MOTIONS } from "../../lib/pressMotion";
 import { noteAutoHideTabsChosen } from "../telemetry/autoHideTabsChoices";
 import { READER_FONTS, READER_SIZE_NAMES } from "../reader/tokens";
 import { noteMinimalismToggled } from "../telemetry/minimalismCounts";
+import { t } from "../../lib/uiLanguage";
+
 
 export const DEFAULT_PROFILE_ID = "default";
 
@@ -137,7 +139,7 @@ export const SETTING_SPECS = {
   strikeSleepingTabs: flag(false, SYNCED),
   warnBeforeClosingTabGroup: flag(true, SYNCED),
   batterySaverWhen: oneOf(["lowBattery", "unplugged", "never"], "lowBattery"),
-  unloadProfilesAfter: oneOf(["never", "5m", "15m", "1h", "2h"], "never"),
+  unloadProfilesAfter: oneOf(["never", t(`5m`), t(`15m`), t(`1h`), t(`2h`)], "never"),
   memorySaver: flag(true),
   memorySaverMode: oneOf(["moderate", "balanced", "maximum"], "balanced"),
   loadProfilesWhenOpened: flag(true),
@@ -240,7 +242,7 @@ export function searchEngines(settings: Settings): SearchEngine[] {
   const engines = allEngines(custom, extension);
   if (settings.customSearchUrl.includes("%s")) {
     const at = engines.findIndex((e) => e.extension);
-    engines.splice(at < 0 ? engines.length : at, 0, { id: "custom", name: "Custom", keyword: "custom", url: settings.customSearchUrl, custom: true });
+    engines.splice(at < 0 ? engines.length : at, 0, { id: "custom", name: t(`Custom`), keyword: "custom", url: settings.customSearchUrl, custom: true });
   }
   engineCache.set(custom, { legacyUrl: settings.customSearchUrl, extension, engines });
   return engines;
@@ -382,7 +384,7 @@ export const createSettingsSlice: StateCreator<BrowserState, [], [], SettingsSli
 
   updateCustomEngine(id, input) {
     const { settings } = get();
-    if (!settings.customSearchEngines.some((e) => e.id === id)) return "This search engine no longer exists.";
+    if (!settings.customSearchEngines.some((e) => e.id === id)) return t(`This search engine no longer exists.`);
     const error = validateCustomEngine(settings, input, id);
     if (error) return error;
     get().updateSettings({ customSearchEngines: settings.customSearchEngines.map((e) => (e.id === id ? makeCustomEngine(input, id) : e)) });

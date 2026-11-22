@@ -5,6 +5,8 @@ import { useNow } from "../../state/live/calendar";
 import { timeRemaining, WIGGLE_MARKS_MIN } from "../../state/live/meetings";
 import { useLive } from "../../state/live/store";
 import { liveMotion, useLiveColors } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 const SHOW_WITHIN_MIN = 10;
 const wiggled = new Set<string>();
@@ -30,7 +32,7 @@ export function useMeetingCountdown(groupId: string) {
   return {
     label,
     urgent: minutesLeft !== null && minutesLeft <= 2,
-    rotate: wiggle.interpolate({ inputRange: [-1, 1], outputRange: ["-4deg", "4deg"] }),
+    rotate: wiggle.interpolate({ inputRange: [-1, 1], outputRange: ["-4deg", t(`4deg`)] }),
   };
 }
 

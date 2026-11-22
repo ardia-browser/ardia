@@ -16,10 +16,12 @@ import { Box, Button, PopUp, Symbol, Text, TextField, Toggle, useTheme, type Opt
 import { Favicon } from "../../favicon/Favicon";
 import { Group, ProfilePicker, Row, SectionHeader, useSettingsProfile } from "../Form";
 import { AppPicker, CLOSED_GROUP, conditionLabel, fromLabel, GroupPicker, OPEN_LABELS, OPEN_OPTIONS, profileOptions, RuleSheet, USED_LAST } from "./AirTrafficSheet";
+import { t } from "../../../lib/uiLanguage";
+
 
 const USUAL = "usual";
-const GROUP_CLOSED = "Its tab group isn't open, so links open as a plain tab in this profile. Edit it to pick another.";
-const FALLBACK_GROUP_CLOSED = "That tab group isn't open, so these links open as a plain tab in this profile. Pick another.";
+const GROUP_CLOSED = t(`Its tab group isn't open, so links open as a plain tab in this profile. Edit it to pick another.`);
+const FALLBACK_GROUP_CLOSED = t(`That tab group isn't open, so these links open as a plain tab in this profile. Pick another.`);
 const APP_ICON = { width: 20, height: 20 } as const;
 const RESULT_ICON = { width: 20, height: 20 } as const;
 
@@ -30,7 +32,7 @@ function targetLabel(target: AirTrafficTarget, profiles: RoutableProfile[], grou
 }
 
 function ruleProblem(target: string | null, groupGone: boolean): string | null {
-  if (!target) return "Its profile is gone, so this rule is skipped. Edit it to pick another.";
+  if (!target) return t(`Its profile is gone, so this rule is skipped. Edit it to pick another.`);
   return groupGone ? GROUP_CLOSED : null;
 }
 
@@ -40,20 +42,20 @@ export function LinkRoutingSection({ profileId }: { profileId: string | null }) 
   const profiles = useRoutableProfiles();
   return (
     <View>
-      <SectionHeader title="Link routing" description="Choose where links from other apps open." />
+      <SectionHeader title={t(`Link routing`)} description={t(`Choose where links from other apps open.`)} />
       <Box gap="xl">
         <Group>
           <Row anchor="automations.linkRules">
             <Box row gap="s">
-              {hooks.length ? <Button title="Automation…" onPress={() => goToSettingsPane("advanced")} /> : null}
-              <Button title="Add Rule…" icon="plus" onPress={() => showSettingsSheet(<RuleSheet />)} />
+              {hooks.length ? <Button title={t(`Automation…`)} onPress={() => goToSettingsPane("advanced")} /> : null}
+              <Button title={t(`Add Rule…`)} icon="plus" onPress={() => showSettingsSheet(<RuleSheet />)} />
             </Box>
           </Row>
           {hooks.map((h) => (
             <HookRow key={`hook:${h.name}`} hook={h} />
           ))}
           {rules.length === 0 ? (
-            <Row key="none" icon={null} title="No rules yet" description="Add one to send links from an app, or links to a site, to a profile." />
+            <Row key="none" icon={null} title={t(`No rules yet`)} description={t(`Add one to send links from an app, or links to a site, to a profile.`)} />
           ) : (
             rules.map((rule, i) => <RuleRow key={rule.id} rule={rule} index={i} last={i === rules.length - 1} profiles={profiles} />)
           )}
@@ -72,31 +74,31 @@ function RuleRow({ rule, index, last, profiles }: { rule: AirTrafficRule; index:
   const target = targetLabel(rule, profiles, groupName);
   const groupGone = !!rule.groupKey && !groupName;
   const more = async () => {
-    const choice = await showMenu([{ id: "edit", title: "Edit…" }, { separator: true }, { id: "up", title: "Move Up", enabled: index > 0 }, { id: "down", title: "Move Down", enabled: !last }, { separator: true }, { id: "delete", title: "Delete" }]);
+    const choice = await showMenu([{ id: "edit", title: t(`Edit…`) }, { separator: true }, { id: "up", title: t(`Move Up`), enabled: index > 0 }, { id: "down", title: t(`Move Down`), enabled: !last }, { separator: true }, { id: "delete", title: t(`Delete`) }]);
     if (choice === "edit") showSettingsSheet(<RuleSheet rule={rule} />);
     else if (choice === "up" || choice === "down") moveAirTrafficRule(rule.id, choice === "up" ? -1 : 1);
     else if (choice === "delete") removeAirTrafficRule(rule.id);
   };
   return (
     <Row icon={null} title={`${fromLabel(rule.from)} · ${conditionLabel(rule.when)} → ${target ?? "a deleted profile"}`} description={ruleProblem(target, groupGone)}>
-      <Toggle value={rule.enabled} accessibilityLabel="Use this rule" onChange={(enabled) => void updateAirTrafficRule(rule.id, { enabled })} />
-      <Button variant="icon" icon="pencil" size="m" onPress={() => showSettingsSheet(<RuleSheet rule={rule} />)} tooltip="Edit" />
-      <Button variant="icon" icon="ellipsis.circle" size="m" onPress={() => void more()} tooltip="Move or Delete" />
-      <Button variant="icon" icon="trash" size="m" onPress={() => removeAirTrafficRule(rule.id)} tooltip="Delete" />
+      <Toggle value={rule.enabled} accessibilityLabel={t(`Use this rule`)} onChange={(enabled) => void updateAirTrafficRule(rule.id, { enabled })} />
+      <Button variant="icon" icon="pencil" size="m" onPress={() => showSettingsSheet(<RuleSheet rule={rule} />)} tooltip={t(`Edit`)} />
+      <Button variant="icon" icon="ellipsis.circle" size="m" onPress={() => void more()} tooltip={t(`Move or Delete`)} />
+      <Button variant="icon" icon="trash" size="m" onPress={() => removeAirTrafficRule(rule.id)} tooltip={t(`Delete`)} />
     </Row>
   );
 }
 
 const HOOK_STATES: Record<LinkHookState, string> = {
-  active: "On",
-  approved: "Approved",
-  waiting: "Waiting for approval",
-  off: "Off",
+  active: t(`On`),
+  approved: t(`Approved`),
+  waiting: t(`Waiting for approval`),
+  off: t(`Off`),
 };
 
 function hookSummary(hook: LinkHookRow): string {
-  const from = hook.from.length ? `From ${hook.from.join(", ")}` : "Any app";
-  const links = hook.patterns.length ? hook.patterns.join(", ") : "any link";
+  const from = hook.from.length ? `From ${hook.from.join(", ")}` : t(`Any app`);
+  const links = hook.patterns.length ? hook.patterns.join(", ") : t(`any link`);
   return `${from} · ${links} → ${hook.answer} · ${HOOK_STATES[hook.state]}`;
 }
 
@@ -125,7 +127,7 @@ function FallbackGroup({ profiles }: { profiles: RoutableProfile[] }) {
 function FallbackRow({ profiles }: { profiles: RoutableProfile[] }) {
   const { fallback } = useAirTrafficConfig();
   const options: Option<string>[] = [
-    { value: USUAL, title: "Ardia's usual routing" },
+    { value: USUAL, title: t(`Ardia's usual routing`) },
     ...profileOptions(profiles).map((o, i) => ({
       ...o,
       separatorBefore: i <= 1,
@@ -143,7 +145,7 @@ function FallbackRow({ profiles }: { profiles: RoutableProfile[] }) {
           },
     );
   return (
-    <Row anchor="automations.linkFallback" description={fallback ? undefined : "They open as Settings › Tabs says, in the profile you used last."}>
+    <Row anchor="automations.linkFallback" description={fallback ? undefined : t(`They open as Settings › Tabs says, in the profile you used last.`)}>
       <PopUp value={value} options={options} onChange={pick} minWidth={180} />
       {fallback ? <PopUp value={fallback.open} options={OPEN_OPTIONS} onChange={(open) => setAirTrafficFallback({ ...fallback, open })} /> : null}
     </Row>
@@ -172,7 +174,7 @@ function FallbackGroupRow() {
 }
 
 function landing(preview: Extract<LinkPreview, { ok: true }>): string {
-  if (preview.dropped) return "Dropped: nothing opens.";
+  if (preview.dropped) return t(`Dropped: nothing opens.`);
   const where = preview.groupName ? ` › ${preview.groupName}` : "";
   return `Opens in ${preview.profileName}${preview.usedLast ? " (used last)" : ""}${where} · ${OPEN_LABELS[preview.open]}`;
 }
@@ -191,7 +193,7 @@ function caughtBy(preview: Extract<LinkPreview, { ok: true }>): {
   if (opening.by === "cancel")
     return {
       title: `hooks.json: ${opening.hook} blocks it`,
-      detail: "Nothing opens.",
+      detail: t(`Nothing opens.`),
     };
   const trace = preview.trace!;
   const lands = landing(preview) + openingNote(opening);
@@ -206,9 +208,9 @@ function caughtBy(preview: Extract<LinkPreview, { ok: true }>): {
       title: `hooks.json: ${trace.hook.name} asks ${trace.hook.program?.[0] ?? "a program"}`,
       detail: `If it doesn't answer: ${lands}`,
     };
-  if (trace.by === "fallback") return { title: "Links no rule catches", detail: lands };
+  if (trace.by === "fallback") return { title: t(`Links no rule catches`), detail: lands };
   return {
-    title: "No rule catches it",
+    title: t(`No rule catches it`),
     detail: `Ardia's usual routing. ${lands}`,
   };
 }
@@ -225,12 +227,12 @@ function TestLink() {
   return (
     <Group of="automations.testLink">
       <Row anchor="automations.testLink">
-        <AppPicker value={app} onChange={(a) => setApp(a === "other" ? null : a)} anyTitle="An unknown app" extras={extras} />
+        <AppPicker value={app} onChange={(a) => setApp(a === "other" ? null : a)} anyTitle={t(`An unknown app`)} extras={extras} />
       </Row>
-      <Row icon={null} title={<TextField value={typed} onChangeText={setTyped} placeholder="Paste a link, like github.com/ardia" />} />
+      <Row icon={null} title={<TextField value={typed} onChangeText={setTyped} placeholder={t(`Paste a link, like github.com/ardia`)} />} />
       <Row
         icon={<Symbol name={result ? "airplane" : "link"} size={13} color={theme.icon} style={RESULT_ICON} />}
-        title={result?.title ?? (preview ? "That isn't a link Ardia can open." : "Type a link to see where it lands.")}
+        title={result?.title ?? (preview ? t(`That isn't a link Ardia can open.`) : t(`Type a link to see where it lands.`))}
         description={result?.detail ?? null}
       />
     </Group>
@@ -245,12 +247,12 @@ function AppLinks({ profileId: initialProfileId }: { profileId: string | null })
 
   return (
     <>
-      <SectionHeader anchor="automations.appLinks" title="Apps that open links" action={<ProfilePicker value={profileId} onChange={setProfileId} />} />
+      <SectionHeader anchor="automations.appLinks" title={t(`Apps that open links`)} action={<ProfilePicker value={profileId} onChange={setProfileId} />} />
       <Group of="automations.appLinks">
         {allowed === null ? (
           <Row icon={null} title=" " description=" " />
         ) : allowed.length === 0 ? (
-          <Row icon={null} title="No apps yet" description="Check “Always allow” when a site opens an app, and it shows up here." />
+          <Row icon={null} title={t(`No apps yet`)} description={t(`Check “Always allow” when a site opens an app, and it shows up here.`)} />
         ) : (
           allowed.map((a) => (
             <Row
@@ -259,7 +261,7 @@ function AppLinks({ profileId: initialProfileId }: { profileId: string | null })
               title={a.origin.replace(/^https?:\/\//, "")}
               description={`Opens ${a.scheme}: links in ${a.app ?? "an app that's no longer installed"}`}
             >
-              <Button title="Remove" onPress={() => void removeExternalAppAllowance(currentEngineProfile(profileId), a.origin, a.scheme).then(refresh)} />
+              <Button title={t(`Remove`)} onPress={() => void removeExternalAppAllowance(currentEngineProfile(profileId), a.origin, a.scheme).then(refresh)} />
             </Row>
           ))
         )}

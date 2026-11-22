@@ -8,6 +8,8 @@ import { fill, hairline, type Geo } from "./geometry";
 import { Favicon, Glyph, Label } from "./Kit";
 import { pick, type Look } from "./look";
 import { mockNtp } from "./tokens";
+import { t } from "../../../lib/uiLanguage";
+
 
 export function Hero({ g, look, a, height }: { g: Geo; look: Look; a: Article; height: number }) {
   const h = a.hero;
@@ -25,11 +27,11 @@ export function Page({ g, look, a = NOTES, top = 0, children }: { g: Geo; look: 
   return (
     <View style={[fill, { top: top * g.s, backgroundColor: look.page }]} pointerEvents="none">
       <View style={{ height: 58 * g.s, backgroundColor: pick(look, a.band), flexDirection: "row", alignItems: "center", paddingHorizontal: space.huge * g.s, justifyContent: "space-between" }}>
-        <Label g={g} size={font.large.fontSize} color={look.ink} weight="700" family="Georgia">
+        <Label g={g} size={font.large.fontSize} color={look.ink} weight="700" family={t(`Georgia`)}>
           {a.site}
         </Label>
         <View style={{ flexDirection: "row", gap: space.xl * g.s }}>
-          {["Journal", "Maps", "About"].map((n) => (
+          {[t(`Journal`), t(`Maps`), t(`About`)].map((n) => (
             <Label key={n} g={g} size={font.caption.fontSize} color={look.inkDim}>
               {n}
             </Label>
@@ -39,7 +41,7 @@ export function Page({ g, look, a = NOTES, top = 0, children }: { g: Geo; look: 
       <View style={{ alignSelf: "center", width: "84%", maxWidth: 600 * g.s, paddingTop: space.xxxl * g.s, gap: space.l * g.s }}>
         <Hero g={g} look={look} a={a} height={168} />
         <View style={{ gap: space.xs * g.s }}>
-          <Label g={g} size={display.title.fontSize} color={look.ink} weight="700" family="Georgia" lines={2}>
+          <Label g={g} size={display.title.fontSize} color={look.ink} weight="700" family={t(`Georgia`)} lines={2}>
             {a.title}
           </Label>
           <Label g={g} size={font.caption.fontSize} color={look.inkFaint}>

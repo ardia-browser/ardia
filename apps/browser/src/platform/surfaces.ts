@@ -1,8 +1,10 @@
 import { nativeModule, type OpenSurface, type SurfaceEvent, type SurfaceItem } from "@ardia/shell";
+import { t } from "../lib/uiLanguage";
+
 
 export type { OpenSurface, SurfaceEvent, SurfaceItem };
 
-const Menus = () => nativeModule("ArdiaMenus");
+const Menus = () => nativeModule(t(`ArdiaMenus`));
 
 export const openSurfaces = () => Menus().openSurfaces();
 export const capturePageMenus = (captures: boolean) => Promise.resolve().then(() => Menus().capturePageMenus(captures));

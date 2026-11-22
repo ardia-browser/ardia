@@ -23,10 +23,12 @@ import { browseForMeRowValue } from "../../state/browseForMe/copy";
 import { pageSummaryChoiceOffered, refreshPageSummaryProvider, usePageSummaryProvider } from "../../state/pageSummary/store";
 import { pageSummaryRowValue } from "../../state/pageSummary/copy";
 import { refreshPageSummariesEnabled, usePageSummariesEnabled } from "../../state/pageSummary/enabled";
+import { t } from "../../lib/uiLanguage";
+
 
 const APP_LINKS = [
-  { id: "ardia" as const, title: "Ardia" },
-  { id: "app" as const, title: "App" },
+  { id: "ardia" as const, title: t(`Ardia`) },
+  { id: "app" as const, title: t(`App`) },
 ];
 
 const INTERVALS = (Object.keys(AUTO_ARCHIVE_INTERVALS) as AutoArchiveInterval[]).map((id) => ({ id, title: autoArchiveTitle(id) }));
@@ -63,7 +65,7 @@ export function SettingsRoot() {
     void refreshPageSummariesEnabled();
   }, []);
   return (
-    <SettingsPage title="Settings" mediumAppBar onClose={material ? closeSettings : undefined} trailing={material ? undefined : <BarButton title="Done" emphasized onPress={closeSettings} />}>
+    <SettingsPage title={t(`Settings`)} mediumAppBar onClose={material ? closeSettings : undefined} trailing={material ? undefined : <BarButton title={t(`Done`)} emphasized onPress={closeSettings} />}>
       {syncOffered() ? (
         <Group>
           <SyncCard stacks={stacks} />
@@ -97,12 +99,12 @@ export function SettingsRoot() {
           </Pressable>
         ) : null}
       </View>
-      <Group header="General">
+      <Group header={t(`General`)}>
         {redesigned ? (
           <AppearanceRow />
         ) : material ? (
           <>
-            <ToggleRow title="Dynamic Colors" icon="paintpaletteFill" tint={settingsTint.neutral} value={dynamicColors} divider onChange={setDynamicColors} />
+            <ToggleRow title={t(`Dynamic Colors`)} icon="paintpaletteFill" tint={settingsTint.neutral} value={dynamicColors} divider onChange={setDynamicColors} />
             {!dynamicColors ? <ColorRow plainIcon /> : null}
           </>
         ) : (
@@ -112,20 +114,20 @@ export function SettingsRoot() {
           </>
         )}
         {material ? null : <View style={[styles.divider, { backgroundColor: theme.separator }]} />}
-        {materialYouOffered() ? <ToggleRow title="Material You" icon="handDrawFill" tint={settingsTint.nightShade} value={material} divider onChange={setMaterialYou} /> : null}
-        <NavRow title="Site Settings" icon="globe" tint={settingsTint.neutral} divider onPress={() => pushSettings({ page: "siteSettings" })} />
-        {offersDefault ? <NavRow title="Default Browser" icon="safariFill" tint={settingsTint.defaultBrowser} divider onPress={() => pushSettings({ page: "defaultBrowser" })} /> : null}
-        <PickerRow title="Open App Links In" icon="arrowUpForwardAppFill" tint={settingsTint.appLinks} options={APP_LINKS} selected={appLinks} onSelect={setAppLinks} />
+        {materialYouOffered() ? <ToggleRow title={t(`Material You`)} icon="handDrawFill" tint={settingsTint.nightShade} value={material} divider onChange={setMaterialYou} /> : null}
+        <NavRow title={t(`Site Settings`)} icon="globe" tint={settingsTint.neutral} divider onPress={() => pushSettings({ page: "siteSettings" })} />
+        {offersDefault ? <NavRow title={t(`Default Browser`)} icon="safariFill" tint={settingsTint.defaultBrowser} divider onPress={() => pushSettings({ page: "defaultBrowser" })} /> : null}
+        <PickerRow title={t(`Open App Links In`)} icon="arrowUpForwardAppFill" tint={settingsTint.appLinks} options={APP_LINKS} selected={appLinks} onSelect={setAppLinks} />
       </Group>
-      <Group header="Search">
-        <NavRow title="Search Engine" icon="magnifyingglass" tint={settingsTint.search} value={engineName} divider onPress={() => pushSettings({ page: "searchEngine" })} />
-        <ToggleRow title="Search Suggestions" icon="textMagnifyingglass" tint={settingsTint.blue} value={suggestions} divider onChange={setSearchSuggestions} />
-        <ToggleRow title="Auto-Open Keyboard" icon="keyboardFill" tint={settingsTint.keyboard} value={keyboard} onChange={setAutoOpenKeyboard} />
+      <Group header={t(`Search`)}>
+        <NavRow title={t(`Search Engine`)} icon="magnifyingglass" tint={settingsTint.search} value={engineName} divider onPress={() => pushSettings({ page: "searchEngine" })} />
+        <ToggleRow title={t(`Search Suggestions`)} icon="textMagnifyingglass" tint={settingsTint.blue} value={suggestions} divider onChange={setSearchSuggestions} />
+        <ToggleRow title={t(`Auto-Open Keyboard`)} icon="keyboardFill" tint={settingsTint.keyboard} value={keyboard} onChange={setAutoOpenKeyboard} />
       </Group>
-      <Group header="Tabs">
-        <PickerRow title="Archive Inactive Tabs" icon="archivebox" tint={settingsTint.archive} options={INTERVALS} selected={interval} divider onSelect={setArchiveInterval} />
+      <Group header={t(`Tabs`)}>
+        <PickerRow title={t(`Archive Inactive Tabs`)} icon="archivebox" tint={settingsTint.archive} options={INTERVALS} selected={interval} divider onSelect={setArchiveInterval} />
         {material ? (
-          <NavRow title="Export Open Tabs" icon="squareAndArrowUp" tint={settingsTint.export} onPress={exportOpenTabs} />
+          <NavRow title={t(`Export Open Tabs`)} icon="squareAndArrowUp" tint={settingsTint.export} onPress={exportOpenTabs} />
         ) : (
           <Pressable accessibilityRole="button" onPress={exportOpenTabs} style={({ pressed }) => [styles.row, pressed ? { backgroundColor: theme.rowHighlight } : null]}>
             <IconTile icon="squareAndArrowUp" tint={settingsTint.export} />
@@ -133,8 +135,8 @@ export function SettingsRoot() {
           </Pressable>
         )}
       </Group>
-      <Group header="Privacy">
-        <NavRow title="Clear Browsing Data" icon="eraserFill" tint={settingsTint.clearData} divider onPress={() => pushSettings({ page: "clearData" })} />
+      <Group header={t(`Privacy`)}>
+        <NavRow title={t(`Clear Browsing Data`)} icon="eraserFill" tint={settingsTint.clearData} divider onPress={() => pushSettings({ page: "clearData" })} />
         <ToggleRow
           title={PHONE_SHARING_COPY.toggle}
           icon="checkmarkShield"
@@ -146,23 +148,23 @@ export function SettingsRoot() {
         <NavRow title={PHONE_SHARING_COPY.whatsSent} icon="info" tint={settingsTint.neutral} onPress={() => pushSettings({ page: "whatsSent" })} />
       </Group>
       {offersBrowseForMe || offersSummaryChoice ? (
-        <Group header="Experimental">
+        <Group header={t(`Experimental`)}>
           {offersBrowseForMe ? (
-            <NavRow title="Browse for Me" icon="sparkleMagnifyingglass" tint={settingsTint.nightShade} value={browseForMeRowValue(chatGPT)} divider={offersSummaryChoice} onPress={() => pushSettings({ page: "browseForMe" })} />
+            <NavRow title={t(`Browse for Me`)} icon="sparkleMagnifyingglass" tint={settingsTint.nightShade} value={browseForMeRowValue(chatGPT)} divider={offersSummaryChoice} onPress={() => pushSettings({ page: "browseForMe" })} />
           ) : null}
           {offersSummaryChoice ? (
-            <NavRow title="Pinch to Summarize" icon="sparkles" tint={settingsTint.nightShade} value={pageSummaryRowValue(summaries, summaryProvider, chatGPT)} onPress={() => pushSettings({ page: "pageSummary" })} />
+            <NavRow title={t(`Pinch to Summarize`)} icon="sparkles" tint={settingsTint.nightShade} value={pageSummaryRowValue(summaries, summaryProvider, chatGPT)} onPress={() => pushSettings({ page: "pageSummary" })} />
           ) : null}
         </Group>
       ) : null}
-      <Group header="About">
-        {material ? <NavRow title="Show Onboarding" icon="handWave" onPress={showOnboardingFromSettings} /> : null}
+      <Group header={t(`About`)}>
+        {material ? <NavRow title={t(`Show Onboarding`)} icon="handWave" onPress={showOnboardingFromSettings} /> : null}
         {material ? null : <Pressable accessibilityRole="button" onPress={showOnboardingFromSettings} style={({ pressed }) => [styles.row, pressed ? { backgroundColor: theme.rowHighlight } : null]}>
           <IconTile icon="handWave" tint={settingsTint.onboarding} />
           <Text style={[font.body, { color: theme.label }]}>Show Onboarding</Text>
         </Pressable>}
         {material ? null : <View style={[styles.divider, { backgroundColor: theme.separator }]} />}
-        <NavRow title="About Ardia" icon="info" tint={settingsTint.neutral} onPress={() => pushSettings({ page: "about" })} />
+        <NavRow title={t(`About Ardia`)} icon="info" tint={settingsTint.neutral} onPress={() => pushSettings({ page: "about" })} />
       </Group>
       <Text style={[font.footnote, styles.centered, { color: theme.secondaryLabel }]}>{appVersion()}</Text>
     </SettingsPage>
@@ -177,7 +179,7 @@ function SyncCard({ stacks }: { stacks: boolean }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel="Sync With Mac"
+      accessibilityLabel={t(`Sync With Mac`)}
       accessibilityValue={{ text: line.text }}
       onPress={() => pushSettings({ page: "sync" })}
       style={({ pressed }) => [styles.syncCard, pressed ? { backgroundColor: theme.rowHighlight } : null]}

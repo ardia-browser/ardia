@@ -4,6 +4,8 @@ import { devTestValue } from "../../platform/launchConfig";
 import { create } from "zustand";
 import { parseSaved, unchanged, versionedJson, type Migrations } from "../../lib/savedDocument";
 import { hasSavedSession } from "../session/sessionDocument";
+import { t } from "../../lib/uiLanguage";
+
 
 export type ReleaseNotes = {
   version: string;
@@ -16,16 +18,16 @@ export type ReleaseNotes = {
 const RELEASE_NOTES: ReleaseNotes[] = [
   {
     version: "1.0",
-    date: "September 2026",
-    title: "Hello, Ardia",
-    summary: "The first release: a calm, fast browser that keeps your tabs, your pages and your focus in one place.",
+    date: t(`September 2026`),
+    title: t(`Hello, Ardia`),
+    summary: t(`The first release: a calm, fast browser that keeps your tabs, your pages and your focus in one place.`),
     items: [
-      { title: "A command bar for everything", body: "Search, type an address or jump to an open tab from the New Tab page, or from any page with ⌘L." },
-      { title: "Split view", body: "Drag a tab onto the page to see two or three side by side, stacked or in columns." },
-      { title: "Tab groups and pinned tabs", body: "Group related tabs, pin the ones you live in, and let Clean Up Tabs tidy the rest." },
-      { title: "Picture in Picture that stays out of the way", body: "Stash a video at the edge of the screen; click its site name to jump back to the tab." },
-      { title: "Bring everything with you", body: "Import bookmarks, history, passwords and open tabs from Chrome, Safari, Arc and more." },
-      { title: "Profiles with their own colour", body: "Keep work and personal apart, each with its own theme on the New Tab page." },
+      { title: t(`A command bar for everything`), body: t(`Search, type an address or jump to an open tab from the New Tab page, or from any page with ⌘L.`) },
+      { title: t(`Split view`), body: t(`Drag a tab onto the page to see two or three side by side, stacked or in columns.`) },
+      { title: t(`Tab groups and pinned tabs`), body: t(`Group related tabs, pin the ones you live in, and let Clean Up Tabs tidy the rest.`) },
+      { title: t(`Picture in Picture that stays out of the way`), body: t(`Stash a video at the edge of the screen; click its site name to jump back to the tab.`) },
+      { title: t(`Bring everything with you`), body: t(`Import bookmarks, history, passwords and open tabs from Chrome, Safari, Arc and more.`) },
+      { title: t(`Profiles with their own colour`), body: t(`Keep work and personal apart, each with its own theme on the New Tab page.`) },
     ],
   },
 ];
@@ -49,7 +51,7 @@ function save(saved: Saved) {
   try {
     writeDocument(DOC, versionedJson(saved, DOC_VERSION));
   } catch (error) {
-    console.warn("Couldn't save release notes state", error);
+    console.warn(t(`Couldn't save release notes state`), error);
   }
 }
 

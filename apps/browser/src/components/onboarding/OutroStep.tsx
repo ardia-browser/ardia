@@ -8,11 +8,13 @@ import { useOnboardingColors } from "./Parts";
 import { keyText } from "../../state/commands/keyText";
 import { StepActions, StepLayout } from "./StepLayout";
 import { onboardingType } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 const SHORTCUTS = [
-  ["⌘T", "Open a new tab"],
-  ["⌘L", "Go anywhere from the command bar"],
-  ["⌘S", "Hide the sidebar for more room"],
+  ["⌘T", t(`Open a new tab`)],
+  ["⌘L", t(`Go anywhere from the command bar`)],
+  ["⌘S", t(`Hide the sidebar for more room`)],
 ] as const;
 
 export function OutroStep() {
@@ -22,12 +24,13 @@ export function OutroStep() {
   const lines = QUESTION_ORDER.flatMap((q) => picked[q] ?? []);
   return (
     <StepLayout
-      title={"Welcome to your new\nhome on the internet"}
-      subtitle="Everything you set up is saved. Change any of it later in Settings."
+      title={t(`Welcome to your new
+home on the internet`)}
+      subtitle={t(`Everything you set up is saved. Change any of it later in Settings.`)}
       actions={
         <>
-          <StepActions icon="arrow.right" continueTitle={redo ? "Done" : "Get Started"} onContinue={() => finishOnboarding()} />
-          {redo ? null : <SecondaryButton title="Take the Tour" onPress={() => finishOnboarding({ tour: true })} />}
+          <StepActions icon="arrow.right" continueTitle={redo ? t(`Done`) : t(`Get Started`)} onContinue={() => finishOnboarding()} />
+          {redo ? null : <SecondaryButton title={t(`Take the Tour`)} onPress={() => finishOnboarding({ tour: true })} />}
         </>
       }
       preview={<Postcard lines={lines} />}
@@ -62,7 +65,7 @@ function Postcard({ lines }: { lines: string[] }) {
         {shown.length ? (
           <View style={{ gap: space.xs }}>
             <Text size="caption" color={colors.subtitle} style={CAPTION_LINE()}>
-              {"You picked:"}
+              {t(`You picked:`)}
             </Text>
             {shown.map((line) => (
               <View key={line} style={{ flexDirection: "row", gap: space.s, alignItems: "flex-start" }}>
@@ -75,13 +78,13 @@ function Postcard({ lines }: { lines: string[] }) {
           </View>
         ) : (
           <Text size="small" color={colors.subtitle} style={GREETING()}>
-            {"Glad you're here. Make yourself at home. Your tabs, bookmarks and pins are ready."}
+            {t(`Glad you're here. Make yourself at home. Your tabs, bookmarks and pins are ready.`)}
           </Text>
         )}
       </View>
       <View style={{ width: StyleSheet.hairlineWidth * 2, backgroundColor: colors.separator }} />
       <View style={{ width: 96, paddingLeft: space.xl, justifyContent: "space-between", alignItems: "flex-end" }}>
-        <PostageStamp icon={WELCOME_STAMP.icon} ring={WELCOME_STAMP.ring} label="WELCOME" tilt={WELCOME_STAMP.tilt} ink={{ frame: colors.rowBorder, ring: colors.steps, label: colors.steps }} ringAt={WELCOME_STAMP.ringAt} />
+        <PostageStamp icon={WELCOME_STAMP.icon} ring={WELCOME_STAMP.ring} label={t(`WELCOME`)} tilt={WELCOME_STAMP.tilt} ink={{ frame: colors.rowBorder, ring: colors.steps, label: colors.steps }} ringAt={WELCOME_STAMP.ringAt} />
         <View style={{ alignSelf: "stretch", gap: space.l }}>
           {[0, 1, 2].map((i) => (
             <View key={i} style={{ height: 1, backgroundColor: colors.separator }} />

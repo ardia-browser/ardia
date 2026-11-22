@@ -4,6 +4,8 @@ import { menuShortcut } from "../commands/commandShortcuts";
 import { runCommand } from "../commands/commands";
 import { checkForUpdates } from "./appSettings";
 import { menuSections } from "./menuSections";
+import { t } from "../../lib/uiLanguage";
+
 
 type Listed = "newTab" | "newWindow" | "newIncognitoWindow" | "showHistory" | "downloads" | "findInPage" | "print" | "openSettings" | "keyboardShortcuts" | "reportProblem" | "releaseNotes";
 
@@ -16,7 +18,7 @@ export const appMenuItems = (): MenuItem[] =>
     [listed("newTab"), listed("newWindow"), listed("newIncognitoWindow")],
     [listed("showHistory"), listed("downloads")],
     [listed("findInPage"), listed("print")],
-    [listed("openSettings"), listed("keyboardShortcuts"), { id: CHECK_FOR_UPDATES, title: "Check for Updates…" }],
+    [listed("openSettings"), listed("keyboardShortcuts"), { id: CHECK_FOR_UPDATES, title: t(`Check for Updates…`) }],
     [listed("releaseNotes"), listed("reportProblem")],
   );
 

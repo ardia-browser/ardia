@@ -1,3 +1,4 @@
+import { t } from "./uiLanguage";
 const ESCAPES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;" };
 const NAMED: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
 
@@ -13,9 +14,9 @@ function unescapeXml(text: string): string {
 
 export function weblocText(url: string, id: string | null = null): string {
   return [
-    `<?xml version="1.0" encoding="UTF-8"?>`,
+    t(`<?xml version="1.0" encoding="UTF-8"?>`),
     `<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">`,
-    `<plist version="1.0">`,
+    t(`<plist version="1.0">`),
     `<dict>`,
     `\t<key>URL</key>`,
     `\t<string>${escapeXml(url)}</string>`,
@@ -32,8 +33,8 @@ const stringFor = (text: string, key: string) => {
   return found ? unescapeXml(found[1]!).trim() || null : null;
 };
 
-export const parseWebloc = (text: string): string | null => stringFor(text, "URL");
+export const parseWebloc = (text: string): string | null => stringFor(text, t(`URL`));
 
-export const weblocLinkId = (text: string): string | null => stringFor(text, "ArdiaLink");
+export const weblocLinkId = (text: string): string | null => stringFor(text, t(`ArdiaLink`));
 
 export const newLinkId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;

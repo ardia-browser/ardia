@@ -11,6 +11,8 @@ import { cleanUpWithUndo, closeAllTabs } from "./clearTabs";
 import { DAILY_CLEAN_UP_MINUTES } from "../settings/cleanUpAfter";
 import { sep } from "./menuParts";
 import { clearableRecentlyClosed, closedWindowTitle } from "../windows/recentlyClosedList";
+import { t } from "../../lib/uiLanguage";
+
 
 export { openTabMenu } from "./tabMenu";
 export { openGroupMenu } from "./groupMenu";
@@ -44,20 +46,20 @@ export async function openOverflowMenu(windowId: string) {
   const daily = s.settings.cleanUpInactiveTabsAfterMinutes !== null;
   const synced = syncedDevicesMenuItem(w.profileId);
   const choice = await chooseFromMenu<OverflowChoice, string>([
-    { id: "search", title: "Search Tabs…", symbol: "magnifyingglass", ...menuShortcut("searchTabs") },
+    { id: "search", title: t(`Search Tabs…`), symbol: "magnifyingglass", ...menuShortcut("searchTabs") },
     sep,
     {
       id: "open",
-      title: "Open Tabs",
+      title: t(`Open Tabs`),
       symbol: "square.stack",
       enabled: open.length > 0,
       children: open.map((t) => ({ value: { open: t.id }, title: tabTitle(t), checked: w.activeTabIds[w.profileId] === t.id })),
     },
     ...(synced ? [synced] : []),
-    { id: "closed", title: "Recently Closed", symbol: "clock.arrow.circlepath", enabled: closed.length > 0, children: closed.length ? [...closed, ...(clearable ? [sep, { id: "clearClosed", title: "Clear Recently Closed" }] : [])] : [{ id: "none", title: "Empty", enabled: false }] },
+    { id: "closed", title: t(`Recently Closed`), symbol: "clock.arrow.circlepath", enabled: closed.length > 0, children: closed.length ? [...closed, ...(clearable ? [sep, { id: "clearClosed", title: t(`Clear Recently Closed`) }] : [])] : [{ id: "none", title: t(`Empty`), enabled: false }] },
     {
       id: "cleaned",
-      title: "Recently Cleaned",
+      title: t(`Recently Cleaned`),
       symbol: "wand.and.stars",
       enabled: cleaned.length > 0,
       children: cleaned.length
@@ -66,15 +68,15 @@ export async function openOverflowMenu(windowId: string) {
             sep,
             { id: "restoreAll", title: `Restore ${plural(allCleaned.length, "Tab")}` },
           ]
-        : [{ id: "none", title: "Empty", enabled: false }],
+        : [{ id: "none", title: t(`Empty`), enabled: false }],
     },
-    ...(deleted.length ? [{ id: "deleted", title: "Recently Deleted Groups", symbol: "trash", children: deleted }] : []),
+    ...(deleted.length ? [{ id: "deleted", title: t(`Recently Deleted Groups`), symbol: "trash", children: deleted }] : []),
     sep,
-    { id: "clean", title: "Clean Up Tabs", symbol: "wand.and.stars", ...menuShortcut("cleanUpTabs") },
-    { id: "daily", title: "Clean Up Daily", checked: daily },
+    { id: "clean", title: t(`Clean Up Tabs`), symbol: "wand.and.stars", ...menuShortcut("cleanUpTabs") },
+    { id: "daily", title: t(`Clean Up Daily`), checked: daily },
     sep,
-    { id: "mute", title: muted ? "Unmute All Tabs" : "Mute All Tabs", symbol: muted ? "speaker.wave.2" : "speaker.slash" },
-    { id: "closeAll", title: "Close All Tabs", symbol: "xmark", ...menuShortcut("closeAllTabs") },
+    { id: "mute", title: muted ? t(`Unmute All Tabs`) : t(`Mute All Tabs`), symbol: muted ? "speaker.wave.2" : "speaker.slash" },
+    { id: "closeAll", title: t(`Close All Tabs`), symbol: "xmark", ...menuShortcut("closeAllTabs") },
   ]);
   if (!choice) return;
   if (typeof choice !== "string") {

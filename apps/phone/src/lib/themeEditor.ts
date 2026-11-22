@@ -1,14 +1,16 @@
 import { colorHex, padColor, requestedDarkFor, resolveTheme, shownLook, withStopAt, type ProfileTheme, type ThemeLook, type ThemeMode } from "@ardia/core/src/theme.ts";
+import { t } from "./uiLanguage";
+
 
 export type PadPoint = { x: number; y: number };
 
 export const THEME_MODES: readonly { id: ThemeMode; title: string }[] = [
-  { id: "light", title: "Light" },
-  { id: "dark", title: "Dark" },
-  { id: "auto", title: "Match System" },
+  { id: "light", title: t(`Light`) },
+  { id: "dark", title: t(`Dark`) },
+  { id: "auto", title: t(`Match System`) },
 ];
 
-export const TEXTURE_NAMES = { grain: "Grain", sand: "Sand", denim: "Denim", tweed: "Tweed" } as const;
+export const TEXTURE_NAMES = { grain: t(`Grain`), sand: t(`Sand`), denim: t(`Denim`), tweed: t(`Tweed`) } as const;
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 

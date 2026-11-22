@@ -2,6 +2,8 @@ import { create } from "zustand";
 import { readDocument, writeDocument } from "../../platform/documents";
 import { isFields } from "../../lib/decode";
 import { parseSaved, versionedJson } from "../../lib/savedDocument";
+import { t } from "../../lib/uiLanguage";
+
 
 export type ApprovalKind = "program" | "rewrite" | "route" | "folder" | "omnibox" | "omniboxProvider" | "launchAction";
 export type ApprovalSource = "hooks.json" | "config.json" | "omnibox";
@@ -42,7 +44,7 @@ function save() {
   try {
     writeDocument(DOC, versionedJson({ approved, dismissed }, VERSION));
   } catch (error) {
-    console.warn("[automation] couldn't save the approvals", error);
+    console.warn(t(`[automation] couldn't save the approvals`), error);
   }
 }
 

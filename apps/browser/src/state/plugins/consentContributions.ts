@@ -1,10 +1,12 @@
 import type { MenuSlot, PanelMode, PluginManifest } from "../../lib/pluginManifest";
 import { isDecideEvent } from "../automation/eventNames";
+import { t } from "../../lib/uiLanguage";
+
 
 type Line = { icon: string; text: string };
 
 const SLOT_WORDS: Record<MenuSlot, string> = { tab: "tabs", group: "groups" };
-const MODE_WORDS: Record<PanelMode, string> = { sidecar: "a side panel", tab: "a tab", split: "Split View" };
+const MODE_WORDS: Record<PanelMode, string> = { sidecar: t(`a side panel`), tab: t(`a tab`), split: t(`Split View`) };
 
 const listed = (items: string[]) => (items.length <= 1 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`);
 
@@ -21,6 +23,6 @@ export function contributionLines(m: PluginManifest, slots: readonly MenuSlot[])
   if (k.themes.length) lines.push({ icon: "paintpalette", text: `Offers themes: ${k.themes.map((t) => t.title).join(", ")}` });
   const deciding = k.hooks.filter(isDecideEvent);
   if (deciding.length) lines.push({ icon: "arrow.triangle.swap", text: `Can stop or redirect ${deciding.join(", ")}` });
-  if (k.settings.rows.some((r) => r.type === "secret")) lines.push({ icon: "lock.shield", text: "Asks for secrets in its settings, which stay in your Keychain" });
+  if (k.settings.rows.some((r) => r.type === "secret")) lines.push({ icon: "lock.shield", text: t(`Asks for secrets in its settings, which stay in your Keychain`) });
   return lines;
 }

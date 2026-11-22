@@ -15,6 +15,8 @@ import { MenuTrigger, confirmInSheet } from "../ui/MenuTrigger";
 import { MaterialEmptyIcon, MaterialIconAction, MaterialSearchField, MaterialTopBar } from "../ui/MaterialTopBar";
 import { ConfirmSheet, Favicon, FloatingMenu, font, ink, LookBackdrop, radius, smoothCorners, space, SwipeToDelete, Symbol, tabsLayout, tabsMotion, useDesign, useSheetFrame, useTheme, type Confirmation, type MenuItem } from "../ui";
 import type { Point } from "../../lib/menuPlace";
+import { t } from "../../lib/uiLanguage";
+
 
 export function ArchiveView() {
   const theme = useTheme();
@@ -58,9 +60,9 @@ export function ArchiveView() {
   const ask = (asked: Confirmation) => confirmInSheet(asked, () => setConfirmation(asked));
   const confirmClear = () =>
     ask({
-      title: "Delete All Archived Tabs?",
-      message: "This can’t be undone.",
-      action: "Delete All",
+      title: t(`Delete All Archived Tabs?`),
+      message: t(`This can’t be undone.`),
+      action: t(`Delete All`),
       run: () => {
         haptics.warning();
         clearArchivedTabs();
@@ -68,7 +70,7 @@ export function ArchiveView() {
     });
   const items: MenuItem[] = [
     {
-      label: "Archive Inactive Tabs",
+      label: t(`Archive Inactive Tabs`),
       icon: "archivebox",
       children: (Object.keys(AUTO_ARCHIVE_INTERVALS) as AutoArchiveInterval[]).map((option) => ({
         label: autoArchiveTitle(option),
@@ -77,7 +79,7 @@ export function ArchiveView() {
       })),
     },
     "divider",
-    { label: "Delete All…", icon: "trash", destructive: true, disabled: !hasArchive, onPress: confirmClear },
+    { label: t(`Delete All…`), icon: "trash", destructive: true, disabled: !hasArchive, onPress: confirmClear },
   ];
 
   return (
@@ -87,17 +89,17 @@ export function ArchiveView() {
         {material ? (
           <>
             <MaterialTopBar
-              title="Archive"
+              title={t(`Archive`)}
               nav="close"
               onNav={closeArchive}
               actions={
                 <MenuTrigger items={items} trigger="tap" frost={null} place={{ right: space.s, width: Math.min(tabsLayout.menuWidth, width - space.l) }}>
-                  {({ onPress }) => <MaterialIconAction icon="ellipsis" turned label="Options" onPress={onPress ?? (() => undefined)} />}
+                  {({ onPress }) => <MaterialIconAction icon="ellipsis" turned label={t(`Options`)} onPress={onPress ?? (() => undefined)} />}
                 </MenuTrigger>
               }
             />
             <View style={styles.materialSearch}>
-              <MaterialSearchField value={query} onChangeText={setQuery} placeholder="Search Archive" />
+              <MaterialSearchField value={query} onChangeText={setQuery} placeholder={t(`Search Archive`)} />
             </View>
           </>
         ) : (
@@ -105,7 +107,7 @@ export function ArchiveView() {
         <View style={styles.top}>
           <View style={styles.side}>
             <Pressable accessibilityRole="button" disabled={!hasArchive && !editing} onPress={() => setEditing((now) => !now)} style={styles.topButton}>
-              <Text style={[font.body, editing ? styles.bold : null, { color: hasArchive || editing ? theme.spaceAccentInk : theme.tertiaryLabel }]}>{editing ? "Done" : "Edit"}</Text>
+              <Text style={[font.body, editing ? styles.bold : null, { color: hasArchive || editing ? theme.spaceAccentInk : theme.tertiaryLabel }]}>{editing ? t(`Done`) : t(`Edit`)}</Text>
             </Pressable>
           </View>
           <Text accessibilityRole="header" style={[font.body, styles.bold, { color: theme.label }]}>
@@ -114,7 +116,7 @@ export function ArchiveView() {
           <View style={[styles.side, styles.end]}>
             <MenuTrigger items={items} trigger="tap" place={{ right: space.s, width: Math.min(tabsLayout.menuWidth, width - space.l) }}>
               {({ onPress }) => (
-                <Pressable accessibilityRole="button" accessibilityLabel="Options" onPress={onPress} style={[styles.topButton, styles.iconButton]}>
+                <Pressable accessibilityRole="button" accessibilityLabel={t(`Options`)} onPress={onPress} style={[styles.topButton, styles.iconButton]}>
                   <Symbol name="ellipsis" size={20} color={theme.spaceAccentInk} />
                 </Pressable>
               )}
@@ -129,7 +131,7 @@ export function ArchiveView() {
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Search Archive"
+            placeholder={t(`Search Archive`)}
             placeholderTextColor={theme.secondaryLabel}
             style={[font.body, styles.input, { color: theme.label }]}
             selectionColor={theme.spaceAccentInk}
@@ -137,7 +139,7 @@ export function ArchiveView() {
             autoCapitalize="none"
           />
           {query ? (
-            <Pressable accessibilityRole="button" accessibilityLabel="Clear Search" onPress={() => setQuery("")}>
+            <Pressable accessibilityRole="button" accessibilityLabel={t(`Clear Search`)} onPress={() => setQuery("")}>
               <Symbol name="xmarkCircleFill" size={18} color={theme.secondaryLabel} />
             </Pressable>
           ) : null}
@@ -145,7 +147,7 @@ export function ArchiveView() {
           </>
         )}
         {loaded && !hasArchive ? (
-          <View style={styles.empty} accessible accessibilityRole="header" accessibilityLabel="No Archived Tabs. Closed and inactive tabs show up here.">
+          <View style={styles.empty} accessible accessibilityRole="header" accessibilityLabel={t(`No Archived Tabs. Closed and inactive tabs show up here.`)}>
             {material ? <MaterialEmptyIcon icon="archivebox" /> : <ArchiveTile side={EMPTY_TILE} />}
             <Text style={[font.title2, styles.bold, styles.centered, { color: theme.label }]}>No Archived Tabs</Text>
             <Text style={[font.subheadline, styles.centered, { color: theme.secondaryLabel }]}>Closed and inactive tabs show up here.</Text>
@@ -200,15 +202,15 @@ export function ArchiveView() {
 function rowMenuItems(tab: BrowserTab): MenuItem[] {
   const sharing: MenuItem[] = canShareTab(tab)
     ? [
-        { label: "Copy Link", icon: "link", onPress: () => copyTabLink(tab) },
-        { label: "Share", icon: "squareAndArrowUp", onPress: () => shareTab(tab) },
+        { label: t(`Copy Link`), icon: "link", onPress: () => copyTabLink(tab) },
+        { label: t(`Share`), icon: "squareAndArrowUp", onPress: () => shareTab(tab) },
       ]
     : [];
   return [
-    { label: "Open", icon: "arrowUpForward", systemImage: "arrow.up.forward.square", onPress: () => restoreRow(tab) },
+    { label: t(`Open`), icon: "arrowUpForward", systemImage: "arrow.up.forward.square", onPress: () => restoreRow(tab) },
     ...sharing,
     "divider",
-    { label: "Delete", icon: "trash", destructive: true, onPress: () => deleteArchivedTab(tab) },
+    { label: t(`Delete`), icon: "trash", destructive: true, onPress: () => deleteArchivedTab(tab) },
   ];
 }
 
@@ -234,7 +236,7 @@ function ArchiveRow({ tab, first, last, editing, faviconSize, onMenu }: { tab: B
           ) : null}
           <Pressable
             accessibilityRole="button"
-            accessibilityHint="Reopens the tab."
+            accessibilityHint={t(`Reopens the tab.`)}
             disabled={editing}
             onPress={() => restoreRow(tab)}
             onLongPress={(event) => onMenu({ x: event.nativeEvent.pageX, y: event.nativeEvent.pageY })}

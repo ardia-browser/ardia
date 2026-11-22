@@ -1,5 +1,7 @@
 import { isMarkedHover } from "../../lib/hoverMarks";
 import { HoverSlot } from "./HoverSlot";
+import { t } from "../../lib/uiLanguage";
+
 
 type Fiber = {
   type: unknown;
@@ -36,7 +38,7 @@ function* fibers(root: Fiber, skip?: (f: Fiber) => boolean): Generator<Fiber> {
 function roots(): Fiber[] {
   const hook = (globalThis as { __REACT_DEVTOOLS_GLOBAL_HOOK__?: { renderers: Map<number, unknown>; getFiberRoots(id: number): Set<{ current: Fiber }> } })
     .__REACT_DEVTOOLS_GLOBAL_HOOK__;
-  if (!hook) throw new Error("no React DevTools hook (a Debug build has one)");
+  if (!hook) throw new Error(t(`no React DevTools hook (a Debug build has one)`));
   return [...hook.renderers.keys()].flatMap((id) => [...hook.getFiberRoots(id)].map((r) => r.current));
 }
 

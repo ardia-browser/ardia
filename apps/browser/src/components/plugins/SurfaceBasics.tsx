@@ -8,6 +8,8 @@ import { SurfaceMarkdown } from "./SurfaceMarkdown";
 import { SURFACE } from "./tokens";
 import { bool, fillToneOf, isHandlerRef, isNode, num, pluginFileUrl, sizeOf, spaceOf, str, textOf, toneOf, useSurface } from "./surfaceNodes";
 import { panelShortcuts, shortcutHint, useShortcutRegistration } from "./surfaceShortcuts";
+import { t } from "../../lib/uiLanguage";
+
 
 type NodeProps = { node: PluginNode };
 
@@ -164,7 +166,7 @@ export function ActionNode({ node }: NodeProps) {
   useShortcutRegistration(actions);
   return (
     <WithShortcutHint hint={shortcutHint(panelShortcuts(actions).get(node))}>
-      <Button title={str(p.title) ?? "Action"} icon={str(p.icon)} kind={bool(p.destructive) ? "destructive" : "default"} onPress={() => void run(node)} />
+      <Button title={str(p.title) ?? t(`Action`)} icon={str(p.icon)} kind={bool(p.destructive) ? "destructive" : "default"} onPress={() => void run(node)} />
     </WithShortcutHint>
   );
 }

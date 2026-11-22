@@ -14,6 +14,8 @@ import { openProfileItemMenu } from "../../profiles/profileMenu";
 import { requestCreateProfile } from "../../../state/profiles/createProfileRequest";
 import { curve } from "../../ui/motion";
 import { settingsMotion } from "../tokens";
+import { t } from "../../../lib/uiLanguage";
+
 
 export const listOf = (names: string[], joiner = "and") => (names.length <= 2 ? names.join(` ${joiner} `) : `${names.slice(0, -1).join(", ")}, ${joiner} ${names.at(-1)}`);
 
@@ -132,7 +134,7 @@ export function ProfileBar({ selectedId }: { selectedId: string }) {
           </View>
         </ScrollView>
       </View>
-      <Button variant="icon" icon="plus" box={PILL_HEIGHT} glyph={PILL_PLUS_GLYPH} capsule tooltip="Create Profile" onPress={() => void requestCreateProfile()} />
+      <Button variant="icon" icon="plus" box={PILL_HEIGHT} glyph={PILL_PLUS_GLYPH} capsule tooltip={t(`Create Profile`)} onPress={() => void requestCreateProfile()} />
     </Box>
   );
 }

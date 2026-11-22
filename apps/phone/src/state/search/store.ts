@@ -12,6 +12,8 @@ import { settled } from "../pages/store";
 import { buildSources, recentSearches, sourcesKey } from "./sources";
 import { spaceTabs } from "../tabs/tabsState";
 import { browseForMeOffered } from "../browseForMe/offer";
+import { t } from "../../lib/uiLanguage";
+
 
 export type SearchOrigin = "home" | "start" | "page";
 
@@ -117,7 +119,7 @@ export function applySearchEngine() {
 }
 
 export function presentSearch(origin: SearchOrigin, text = "", incognitoOnCancel: boolean | null = null, page: SuggestContext | null = null, arrival: TrayArrival = "rises") {
-  beginInteraction("tray open", INTERACTION_WINDOW_MS.trayOpen);
+  beginInteraction(t(`tray open`), INTERACTION_WINDOW_MS.trayOpen);
   inFlight?.abort();
   remote = { text: "", values: [] };
   context = page ?? { currentUrl: null, currentTabId: null };

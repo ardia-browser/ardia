@@ -7,6 +7,8 @@ import { warnFor } from "../telemetry/consoleConsent";
 import { userTurnedControlOff } from "../app/programControlSetting";
 import { programsBlocked, refreshLegacyInstalls, REGISTRY_UNREADABLE } from "./programRegistry";
 import { activeManifest, currentPlugins, usePlugins, type ProgramsState } from "./store";
+import { t } from "../../lib/uiLanguage";
+
 
 const requested = new Map<string, string[]>();
 let requests = 0;
@@ -49,7 +51,7 @@ async function link(name: string, consent?: ConsentToken | null) {
   if (now?.state !== "linking" || now.request !== request || (!result.ok && result.stale)) return;
   if (!result.ok) {
     notePlugin("program_link_failures", consent);
-    setPrograms(name, { state: "failed", hash, reason: result.reason ?? "its commands couldn't go on PATH" });
+    setPrograms(name, { state: "failed", hash, reason: result.reason ?? t(`its commands couldn't go on PATH`) });
     return;
   }
   notePlugin(Object.keys(result.refused).length ? "program_link_failures" : "program_links", consent);
@@ -178,8 +180,8 @@ export function programsStatus(name: string): OwnProgramsStatus {
 
 export function relinkOwnPrograms(name: string): { ok: true } | { ok: false; reason: string } {
   const s = currentPlugins();
-  if (!activeManifest(s, name)?.programs.length) return { ok: false, reason: "This plugin has no programs." };
-  if (s.programs[name]?.state === "linking") return { ok: false, reason: "Its programs are being put on PATH now." };
+  if (!activeManifest(s, name)?.programs.length) return { ok: false, reason: t(`This plugin has no programs.`) };
+  if (s.programs[name]?.state === "linking") return { ok: false, reason: t(`Its programs are being put on PATH now.`) };
   setPrograms(name, null);
   reconcilePrograms(consentToken());
   return { ok: true };

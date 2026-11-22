@@ -32,6 +32,8 @@ import { MoreRow, NoteRow, SectionTitle, StackRow } from "./LiveFolderRows";
 import { LiveItemRow } from "./LiveItemRow";
 import { CompletedFooter, useCompletedShown } from "./CompletedFooter";
 import { entryKey } from "../../state/sidebar/entryKey";
+import { t } from "../../lib/uiLanguage";
+
 
 const PAD = LIVE_FOLDER_PAD;
 const EMPTY: LiveItem[] = [];
@@ -116,10 +118,10 @@ function FolderNote({ folderId, windowId }: { folderId: string; windowId: string
   const status = useLive((s) => s.status[folderId]);
   const kind = useLive((s) => s.folders[folderId]?.kind);
   const hidden = useLive((s) => s.hidden[folderId]?.length ?? 0);
-  if (!status || status.state === "initializing" || (status.state === "updating" && !status.lastFetch)) return <NoteRow text="Loading…" spinner />;
+  if (!status || status.state === "initializing" || (status.state === "updating" && !status.lastFetch)) return <NoteRow text={t(`Loading…`)} spinner />;
   if (status.error) return <NoteRow text={errorText(status.error.kind, status.error.source)} onPress={() => fixError(windowId, status.error)} icon="exclamationmark.triangle.fill" />;
   if (hidden) return <NoteRow text={`${hidden} hidden until you refresh`} onPress={() => void manualRefresh(folderId)} />;
-  return <NoteRow text={kind === "pullRequests" ? "No open pull requests" : "No recent documents"} />;
+  return <NoteRow text={kind === "pullRequests" ? t(`No open pull requests`) : t(`No recent documents`)} />;
 }
 
 function FolderHeader({ folderId, windowId, collapsed }: { folderId: string; windowId: string; collapsed: boolean }) {

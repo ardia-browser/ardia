@@ -14,6 +14,8 @@ import { startDeviceChoosers } from "./deviceChoosers";
 import { originForSecurityDisplay } from "../../lib/url";
 import { permissionGate } from "./permissionGate";
 import { noteNotificationRequestAutoDenied } from "../telemetry/notificationRequestCounts";
+import { t } from "../../lib/uiLanguage";
+
 
 const queues = new Map<string, PermissionRequest[]>();
 let started = false;
@@ -118,28 +120,28 @@ type Describe = { icon: string; noun?: string; question?: (site: string) => stri
 const KINDS: Record<PermissionKind, Describe> = {
   camera: { icon: "video", noun: "camera" },
   microphone: { icon: "mic", noun: "microphone" },
-  cameraPanTiltZoom: { icon: "video", noun: "camera's pan, tilt and zoom" },
+  cameraPanTiltZoom: { icon: "video", noun: t(`camera's pan, tilt and zoom`) },
   screen: { icon: "rectangle.on.rectangle", question: (s) => `Allow ${s} to share your screen?` },
   location: { icon: "location", noun: "location" },
   notifications: { icon: "bell", question: (s) => `Allow ${s} to send you notifications?` },
   clipboard: { icon: "doc.on.clipboard", noun: "clipboard" },
-  midi: { icon: "pianokeys", noun: "MIDI devices" },
+  midi: { icon: "pianokeys", noun: t(`MIDI devices`) },
   multipleDownloads: { icon: "arrow.down.circle", question: (s) => `Allow ${s} to download multiple files?` },
   localFonts: { icon: "textformat", noun: "fonts" },
   idleDetection: { icon: "person.crop.circle.badge.clock", question: (s) => `Allow ${s} to know when you're actively using this device?` },
   storageAccess: { icon: "externaldrive", question: (s) => `Allow ${s} to use cookies and site data while embedded?` },
   diskQuota: { icon: "internaldrive", question: (s) => `Allow ${s} to store files on your device?` },
-  windowManagement: { icon: "macwindow.on.rectangle", noun: "displays to open and place windows" },
+  windowManagement: { icon: "macwindow.on.rectangle", noun: t(`displays to open and place windows`) },
   fileSystem: { icon: "folder", noun: "files" },
   keyboardLock: { icon: "keyboard", noun: "keyboard" },
-  pointerLock: { icon: "cursorarrow", noun: "mouse pointer" },
+  pointerLock: { icon: "cursorarrow", noun: t(`mouse pointer`) },
   protectedMedia: { icon: "lock.shield", question: (s) => `Allow ${s} to play protected content?` },
   protocolHandler: { icon: "envelope", question: (s) => `Make ${s} your default mail app?` },
-  sensors: { icon: "gyroscope", noun: "motion sensors" },
-  localNetwork: { icon: "network", noun: "devices on your local network" },
-  vr: { icon: "visionpro", noun: "virtual reality devices" },
-  ar: { icon: "visionpro", noun: "augmented reality data" },
-  handTracking: { icon: "hand.raised", noun: "hand tracking" },
+  sensors: { icon: "gyroscope", noun: t(`motion sensors`) },
+  localNetwork: { icon: "network", noun: t(`devices on your local network`) },
+  vr: { icon: "visionpro", noun: t(`virtual reality devices`) },
+  ar: { icon: "visionpro", noun: t(`augmented reality data`) },
+  handTracking: { icon: "hand.raised", noun: t(`hand tracking`) },
   identityProvider: { icon: "person.badge.key", question: (s) => `Allow ${s} to sign you in with an identity provider?` },
   webAppInstallation: { icon: "app.badge", question: (s) => `Allow ${s} to install web apps?` },
   capturedSurfaceControl: { icon: "rectangle.on.rectangle", question: (s) => `Allow ${s} to scroll and zoom the tab you share?` },

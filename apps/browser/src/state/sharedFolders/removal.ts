@@ -4,6 +4,8 @@ import { useBrowser, type BrowserState } from "../browser/store";
 import { isIncognitoProfile, pinKeyOf } from "../browser/model";
 import { groupLabel } from "../pins/tabGrouping";
 import { sharedFolderOf, type SharedFolder } from "./store";
+import { t } from "../../lib/uiLanguage";
+
 
 const store = () => useBrowser.getState();
 
@@ -24,7 +26,7 @@ export const canAddSharedFolder = (profileId: string | undefined) => sharedFolde
 
 export function folderLabel(path: string): string {
   const iCloudPath = sharedFoldersAvailable() ? sharedLocation().iCloudPath : null;
-  if (iCloudPath && path.startsWith(`${iCloudPath}/`)) return ["iCloud Drive", ...path.slice(iCloudPath.length + 1).split("/")].join(" › ");
+  if (iCloudPath && path.startsWith(`${iCloudPath}/`)) return [t(`iCloud Drive`), ...path.slice(iCloudPath.length + 1).split("/")].join(" › ");
   return path;
 }
 
@@ -32,11 +34,11 @@ export async function confirmRemovingShared(windowId: string, groupId: string): 
   const shared = sharedFolderOfGroup(store(), groupId);
   if (!shared) return true;
   const g = store().groups[groupId];
-  const name = (g && groupLabel(store(), g)) || "this folder";
+  const name = (g && groupLabel(store(), g)) || t(`this folder`);
   const { confirmed } = await confirm({
     title: `Remove “${name}” from the Sidebar?`,
     message: `The folder stays in ${folderLabel(shared.folder.path)}, with every link in it, and the people you shared it with keep it. Ardia only stops syncing it on this Mac.`,
-    confirmTitle: "Remove",
+    confirmTitle: t(`Remove`),
     destructive: true,
     windowId,
   });

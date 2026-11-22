@@ -24,6 +24,8 @@ import { ExpoSettingsRoot } from "./ExpoSettingsRoot";
 import { ExpoSettingsDone } from "./ExpoSettingsDone";
 import { SettingsHostedContext } from "./SettingsKit";
 import { SettingsPageFor } from "./SettingsView";
+import { t } from "../../lib/uiLanguage";
+
 
 const CONVERTED: Partial<Record<SettingsRoute["page"], (props: { route: SettingsRoute }) => React.JSX.Element>> = {
   appearance: ExpoAppearancePage,
@@ -45,25 +47,25 @@ const CONVERTED: Partial<Record<SettingsRoute["page"], (props: { route: Settings
 };
 
 const TITLES: Record<SettingsRoute["page"], string> = {
-  root: "Settings",
-  appearance: "Appearance",
-  theme: "Theme",
-  searchEngine: "Search Engine",
-  browseForMe: "Browse for Me",
-  pageSummary: "Pinch to Summarize",
-  siteSettings: "Site Settings",
-  filterLists: "Filter Lists",
-  filterList: "Filter List",
-  myFilters: "My Filters",
-  trustedSites: "Trusted Sites",
-  clearData: "Clear Browsing Data",
-  sync: "Sync With Mac",
-  defaultBrowser: "Default Browser",
-  syncConnect: "Connect to Your Mac",
-  syncWords: "Enter Words",
-  syncScan: "Scan Code",
-  about: "About Ardia",
-  licenses: "Open Source Licenses",
+  root: t(`Settings`),
+  appearance: t(`Appearance`),
+  theme: t(`Theme`),
+  searchEngine: t(`Search Engine`),
+  browseForMe: t(`Browse for Me`),
+  pageSummary: t(`Pinch to Summarize`),
+  siteSettings: t(`Site Settings`),
+  filterLists: t(`Filter Lists`),
+  filterList: t(`Filter List`),
+  myFilters: t(`My Filters`),
+  trustedSites: t(`Trusted Sites`),
+  clearData: t(`Clear Browsing Data`),
+  sync: t(`Sync With Mac`),
+  defaultBrowser: t(`Default Browser`),
+  syncConnect: t(`Connect to Your Mac`),
+  syncWords: t(`Enter Words`),
+  syncScan: t(`Scan Code`),
+  about: t(`About Ardia`),
+  licenses: t(`Open Source Licenses`),
   whatsSent: PHONE_SHARING_COPY.whatsSent,
 };
 

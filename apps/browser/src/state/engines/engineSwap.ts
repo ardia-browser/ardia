@@ -10,6 +10,8 @@ import { noteEngineSwap } from "../telemetry/engineSwitchCounts";
 import { consentToken, type ConsentToken } from "../telemetry/client";
 import { updateLive } from "../tabs/actions";
 import { setPageProgress } from "../tabs/pageProgress";
+import { t } from "../../lib/uiLanguage";
+
 
 export type RetiringPage = { engine: PageEngine };
 
@@ -37,7 +39,7 @@ const POLL_MS = 50;
 const HIDDEN_POLL_MS = 250;
 const EVALUATE_MS = 400;
 
-const SCROLL_POSITION = `post("result", JSON.stringify({ x: scrollX, y: scrollY }))`;
+const SCROLL_POSITION = t(`post("result", JSON.stringify({ x: scrollX, y: scrollY }))`);
 
 export const firstPaintScript = (scroll: { x: number; y: number } | null, onScreen: boolean) => `(() => {
   const shown = /^(https?|file):$/.test(location.protocol) && location.href !== "about:blank";

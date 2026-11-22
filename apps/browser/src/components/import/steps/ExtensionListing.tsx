@@ -5,6 +5,8 @@ import { openExtensionStorePage, openListedExtensionsInStore } from "../../../st
 import { useOnboarding } from "../../../state/onboarding/onboarding";
 import { Button, space, Text } from "../../ui";
 import { APP } from "../model";
+import { t } from "../../../lib/uiLanguage";
+
 
 const centered = { textAlign: "center" } as const;
 
@@ -24,7 +26,7 @@ function TargetList({ target, sourceName }: { target: ExtensionTarget; sourceNam
                 {e.id}
               </Text>
             </View>
-            <Button variant="text" look="link" pad="none" title="Store Page" onPress={() => openExtensionStorePage(target.profileId, e.webStoreUrl)} />
+            <Button variant="text" look="link" pad="none" title={t(`Store Page`)} onPress={() => openExtensionStorePage(target.profileId, e.webStoreUrl)} />
           </View>
         );
       })}
@@ -53,7 +55,7 @@ export function ExtensionListingView({ listing, sourceName }: { listing: Extensi
             </Text>
           ) : (
             <View style={{ alignItems: "center" }}>
-              <Button title={total === 1 ? "Open in Chrome Web Store" : `Open ${total} in Chrome Web Store`} onPress={openListedExtensionsInStore} />
+              <Button title={total === 1 ? t(`Open in Chrome Web Store`) : `Open ${total} in Chrome Web Store`} onPress={openListedExtensionsInStore} />
             </View>
           )}
         </>

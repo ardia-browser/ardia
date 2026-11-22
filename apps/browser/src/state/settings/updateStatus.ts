@@ -1,8 +1,10 @@
 import type { UpdateChannel, UpdaterState } from "../../platform/app";
+import { t } from "../../lib/uiLanguage";
+
 
 type SwitchCheck = NonNullable<Extract<UpdaterState, { available: true }>["switchCheck"]>;
 
-const CHANNEL_NAMES: Record<UpdateChannel, string> = { stable: "Stable", nightly: "Nightly" };
+const CHANNEL_NAMES: Record<UpdateChannel, string> = { stable: t(`Stable`), nightly: t(`Nightly`) };
 
 export const FOLLOW_EVERY_MS = 400;
 export const FOLLOW_FOR_MS = 120_000;
@@ -42,13 +44,13 @@ export function updateUnderWay(state: UpdaterState | undefined): boolean {
 export type CheckNowControl = { title: string; checking: boolean; disabled: boolean; pressable: boolean };
 
 export function checkNowControl(state: UpdaterState | undefined): CheckNowControl {
-  const idle = { title: "Check Now", checking: false, disabled: false, pressable: true };
+  const idle = { title: t(`Check Now`), checking: false, disabled: false, pressable: true };
   if (!state?.available || !state.configured) return idle;
   const phase = state.switchCheck?.phase;
-  if (phase === "ready") return { title: "Restart to Update", checking: false, disabled: false, pressable: true };
-  if (phase === "downloading" || phase === "installing") return { title: "Updating…", checking: true, disabled: false, pressable: false };
-  if (phase === "waiting" || phase === "checking") return { title: "Checking…", checking: true, disabled: false, pressable: true };
-  if (!state.canCheck && state.sessionInProgress) return { title: "Checking…", checking: true, disabled: false, pressable: false };
+  if (phase === "ready") return { title: t(`Restart to Update`), checking: false, disabled: false, pressable: true };
+  if (phase === "downloading" || phase === "installing") return { title: t(`Updating…`), checking: true, disabled: false, pressable: false };
+  if (phase === "waiting" || phase === "checking") return { title: t(`Checking…`), checking: true, disabled: false, pressable: true };
+  if (!state.canCheck && state.sessionInProgress) return { title: t(`Checking…`), checking: true, disabled: false, pressable: false };
   return state.canCheck ? idle : { ...idle, disabled: true, pressable: false };
 }
 
@@ -73,11 +75,11 @@ export function switchCheckLine(state: UpdaterState | undefined, app: string): s
     case "failed":
       return `Couldn't check ${name}. Try Check Now.`;
     case "downloading":
-      return version ? `Downloading ${app} ${version}…` : "Downloading the update…";
+      return version ? `Downloading ${app} ${version}…` : t(`Downloading the update…`);
     case "installing":
-      return version ? `Installing ${app} ${version}…` : "Installing the update…";
+      return version ? `Installing ${app} ${version}…` : t(`Installing the update…`);
     case "ready":
-      return version ? `${app} ${version} is ready. Restart to finish updating.` : "Restart to finish updating.";
+      return version ? `${app} ${version} is ready. Restart to finish updating.` : t(`Restart to finish updating.`);
     default:
       return null;
   }

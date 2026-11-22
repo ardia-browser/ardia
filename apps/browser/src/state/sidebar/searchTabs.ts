@@ -3,6 +3,8 @@ import { tabTitle } from "../browser/model";
 import type { GroupColor, Tab } from "../browser/types";
 import { isPeekTab } from "../peek/peek";
 import { sharedTabsIn, sharesTabs } from "../tabs/tabShare";
+import { t } from "../../lib/uiLanguage";
+
 
 export type Row =
   | { kind: "tab"; id: string; title: string; url: string; favicon: string | null; icon: string | null; where: string | null; current: boolean }
@@ -40,7 +42,7 @@ function candidates(s: BrowserState, windowId: string): { open: Row[]; closed: R
       favicon: c.tabs[0]?.favicon ?? null,
       icon: c.group.icon,
       group: { color: c.group.color ?? null },
-      detail: c.tabs.length === 1 ? "Group · 1 tab" : `Group · ${c.tabs.length} tabs`,
+      detail: c.tabs.length === 1 ? t(`Group · 1 tab`) : `Group · ${c.tabs.length} tabs`,
       at: c.closedAt,
     })),
   ]

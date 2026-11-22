@@ -1,10 +1,12 @@
 import { PHONE_SHARING_COPY, PHONE_WHATS_SENT, type SentItem } from "./telemetryCopy.ts";
+import { t } from "./uiLanguage";
 
-const SYNC_ONLY_PHRASES = ["pages you pinned to your Mac, ", "tabs you sent to another device, "];
 
-const APPEARANCE_WITHOUT_SYNC = "With each launch, the Appearance you chose: Glass or Classic, and Light, Dark or System";
+const SYNC_ONLY_PHRASES = [t(`pages you pinned to your Mac, `), t(`tabs you sent to another device, `)];
 
-const COLOR_WITHOUT_SYNC = "With each launch, whether your color is one of Ardia’s colors or a custom theme. Never which colors";
+const APPEARANCE_WITHOUT_SYNC = t(`With each launch, the Appearance you chose: Glass or Classic, and Light, Dark or System`);
+
+const COLOR_WITHOUT_SYNC = t(`With each launch, whether your color is one of Ardia’s colors or a custom theme. Never which colors`);
 
 const IPHONE_ONLY_FIELDS = ["perf_backdrop", "browse_for_me_opened", "page_summaries_pinched", "talk_to_me_answers_read"];
 
@@ -26,4 +28,4 @@ export function shownWhatsSent(os: string, offersSync: boolean): { title: string
   }));
 }
 
-export const shownSharingFootnote = (offersSync: boolean) => (offersSync ? PHONE_SHARING_COPY.footnote : PHONE_SHARING_COPY.footnote.replace(" This setting doesn’t sync.", ""));
+export const shownSharingFootnote = (offersSync: boolean) => (offersSync ? PHONE_SHARING_COPY.footnote : PHONE_SHARING_COPY.footnote.replace(t(` This setting doesn’t sync.`), ""));

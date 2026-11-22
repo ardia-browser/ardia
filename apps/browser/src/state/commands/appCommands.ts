@@ -11,6 +11,8 @@ import { webKitMediaFaultsLine } from "../telemetry/webkitMediaFaults";
 import { freezeSummaryLine, lastFreezeText, localFreezes } from "../telemetry/freezeRecords";
 import type { AppCommand } from "./commandCatalog";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
+import { t } from "../../lib/uiLanguage";
+
 
 export const APP_COMMAND_HANDLERS: Readonly<Record<AppCommand, (windowId: string | null) => void>> = {
   reportProblem: (windowId) => reportProblem(windowId),
@@ -37,14 +39,14 @@ export async function diagnostics(): Promise<string> {
   const regular = s.windowOrder.filter((id) => s.windows[id]?.kind !== "private");
   return [
     `${app.appName} ${app.appVersion} (${app.appBuild}) — ${app.configuration}`,
-    engine ? `Engine: ArdiaCore, Chromium ${engine.chromiumVersion}` : "Engine: unavailable",
+    engine ? `Engine: ArdiaCore, Chromium ${engine.chromiumVersion}` : t(`Engine: unavailable`),
     `${PLATFORM_TERMS.os} ${app.osVersion} (${app.osBuild}), ${app.arch}, ${app.model}, ${Math.round(app.memoryGB)} GB`,
     `Bundle: ${app.bundleId}, locale ${app.locale}`,
     `Windows: ${regular.length} (+${s.windowOrder.length - regular.length} incognito), tabs: ${Object.keys(s.tabs).length}, profiles: ${s.profileOrder.length}`,
     !updates?.available
-      ? "Updates: not built in"
+      ? t(`Updates: not built in`)
       : !updates.configured
-        ? "Updates: not set up for this build"
+        ? t(`Updates: not set up for this build`)
         : `Updates: automatic checks ${updates.automaticChecks ? "on" : "off"}, feed ${updates.feedURL ?? "none"}`,
     webKitMediaFaultsLine(),
     freezeSummaryLine(localFreezes()),

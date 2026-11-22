@@ -1,4 +1,5 @@
-const HEX = "0123456789ABCDEF";
+import { t } from "./uiLanguage";
+const HEX = t(`0123456789ABCDEF`);
 
 export function newUuid(random: () => number = Math.random): string {
   let out = "";

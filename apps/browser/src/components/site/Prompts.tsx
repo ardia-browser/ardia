@@ -20,6 +20,8 @@ import { Box, Button, DialogActions, MenuRow, MenuSeparator, PANEL, PanelCloseBu
 import { answerPermission, describePermission } from "../../state/site/permissions";
 import { hostOrOrigin } from "../../lib/url";
 import { CheckRow, PromptIcon, usePromptInputGuard, Well } from "./PromptParts";
+import { t } from "../../lib/uiLanguage";
+
 
 export function PromptBody({
   icons,
@@ -73,9 +75,9 @@ export function PermissionPrompt({ tabId, left, top }: { tabId: string; left: nu
   return (
     <Popover key={request.id} width={PERMISSION_PROMPT_WIDTH} top={top} left={left} modal={false}>
       <View>
-        <PromptBody icons={icons} title={question} message="Click the lock to change this any time">
-          <Button variant="pill" title="Don't Allow" onPress={guard(() => answerPermission(tabId, request.id, "deny"))} />
-          <Button variant="pill" title="Allow" primary onPress={guard(() => answerPermission(tabId, request.id, "accept"))} />
+        <PromptBody icons={icons} title={question} message={t(`Click the lock to change this any time`)}>
+          <Button variant="pill" title={t(`Don't Allow`)} onPress={guard(() => answerPermission(tabId, request.id, "deny"))} />
+          <Button variant="pill" title={t(`Allow`)} primary onPress={guard(() => answerPermission(tabId, request.id, "accept"))} />
         </PromptBody>
         <PanelCloseButton onPress={guard(() => answerPermission(tabId, request.id, "dismiss"))} />
       </View>
@@ -106,21 +108,21 @@ export function BlockedPopupsPrompt({ tabId, right, left, top }: { tabId: string
           message={`Allow ${site} to always open pop-up windows, choose every time, or always deny pop-ups.`}
         >
           <Button variant="pill"
-            title="Always Deny"
+            title={t(`Always Deny`)}
             onPress={() => {
               void setSiteSetting(profile(), origin, "popups", "block");
               done();
             }}
           />
           <Button variant="pill"
-            title="Only Once"
+            title={t(`Only Once`)}
             onPress={() => {
               for (const p of popups) void web()?.openBlockedPopup(p.id, false);
               done();
             }}
           />
           <Button variant="pill"
-            title="Always Allow"
+            title={t(`Always Allow`)}
             primary
             onPress={() => {
               for (const p of popups) void web()?.openBlockedPopup(p.id, true);
@@ -168,8 +170,8 @@ export function PasswordPrompt({ tabId, right, top }: { tabId: string; right: nu
       <View>
         <PromptBody
           icons={["key.fill"]}
-          title={update ? "Update saved password?" : `Save password for ${site}?`}
-          message={update ? `It will be auto-filled on ${site}` : "That way, it'll be auto-filled next time"}
+          title={update ? t(`Update saved password?`) : `Save password for ${site}?`}
+          message={update ? `It will be auto-filled on ${site}` : t(`That way, it'll be auto-filled next time`)}
           detail={
             choices.length ? (
               <Well list>
@@ -180,7 +182,7 @@ export function PasswordPrompt({ tabId, right, top }: { tabId: string; right: nu
             ) : (
               <Well gap="xs">
                 <Text lines={1} size="small" weight="medium">
-                  {username || (prompt.federation ? `Signed in with ${hostOrOrigin(prompt.federation)}` : "No username")}
+                  {username || (prompt.federation ? `Signed in with ${hostOrOrigin(prompt.federation)}` : t(`No username`))}
                 </Text>
                 {prompt.passwordLength > 0 && (
                   <Text lines={1} size="small" tone="textSecondary" style={{ letterSpacing: tracking.wide }}>
@@ -191,9 +193,9 @@ export function PasswordPrompt({ tabId, right, top }: { tabId: string; right: nu
             )
           }
         >
-          {!update && <Button variant="pill" title="Never on This Site" onPress={() => answer("never")} />}
-          <Button variant="pill" title="Not Now" onPress={() => answer(update ? "nope" : "dismiss")} />
-          <Button variant="pill" title={update ? "Update" : "Save"} primary onPress={() => answer(update ? "update" : "save")} />
+          {!update && <Button variant="pill" title={t(`Never on This Site`)} onPress={() => answer("never")} />}
+          <Button variant="pill" title={t(`Not Now`)} onPress={() => answer(update ? "nope" : "dismiss")} />
+          <Button variant="pill" title={update ? t(`Update`) : t(`Save`)} primary onPress={() => answer(update ? "update" : "save")} />
         </PromptBody>
         <PanelCloseButton onPress={() => answer("dismiss")} />
       </View>
@@ -266,8 +268,8 @@ export function VerificationCodePrompt({ tabId, right, top }: { tabId: string; r
     <Popover key={offer.token} width={POPOVER_WIDTH.s} top={top} right={right} modal={false}>
       <View>
         <PromptBody icons={["key.fill"]} title={title} message={message}>
-          <Button variant="pill" title="Not Now" onPress={close} />
-          <Button variant="pill" title="Set Up" primary onPress={guard(() => acceptVerificationCode(tabId))} />
+          <Button variant="pill" title={t(`Not Now`)} onPress={close} />
+          <Button variant="pill" title={t(`Set Up`)} primary onPress={guard(() => acceptVerificationCode(tabId))} />
         </PromptBody>
         <PanelCloseButton onPress={close} />
       </View>
@@ -301,8 +303,8 @@ export function ExternalAppPrompt({ tabId, left, top }: { tabId: string; left: n
             request.remember ? <CheckRow value={always} onChange={guard(setAlways)} label={request.remember} /> : undefined
           }
         >
-          <Button variant="pill" title="Cancel" onPress={() => answer(false)} />
-          <Button variant="pill" title="Open" primary onPress={() => answer(true)} />
+          <Button variant="pill" title={t(`Cancel`)} onPress={() => answer(false)} />
+          <Button variant="pill" title={t(`Open`)} primary onPress={() => answer(true)} />
         </PromptBody>
         <PanelCloseButton onPress={() => answer(false)} />
       </View>
@@ -312,7 +314,7 @@ export function ExternalAppPrompt({ tabId, left, top }: { tabId: string; left: n
 
 function UsernameChoice({ name, selected, onPress }: { name: string; selected: boolean; onPress: () => void }) {
   const theme = useTheme();
-  return <MenuRow leading={selected ? <Symbol name="checkmark" size={10} weight="semibold" color={theme.textPrimary} style={CHECK_GLYPH} /> : <View style={CHECK_GLYPH} />} title={name || "No username"} onPress={onPress} />;
+  return <MenuRow leading={selected ? <Symbol name="checkmark" size={10} weight="semibold" color={theme.textPrimary} style={CHECK_GLYPH} /> : <View style={CHECK_GLYPH} />} title={name || t(`No username`)} onPress={onPress} />;
 }
 
 const CHECK_GLYPH = { width: 14, height: 14 } as const;

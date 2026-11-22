@@ -9,33 +9,35 @@ import { opensWhenDone, toggleOpenWhenDone } from "../windows/downloadWatch";
 import { cancelDownload, keepDownload, pauseDownload, resumeDownload, type Download } from "./actions";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import { awaitsKeep } from "./status";
+import { t } from "../../lib/uiLanguage";
+
 
 export type DownloadMenuState = { held: boolean; downloading: boolean; paused: boolean; opensWhenDone: boolean; fileExists: boolean };
 
 export function downloadMenuItems(d: DownloadMenuState): MenuItem[] {
   const lead: MenuItem[] = d.held
     ? [
-        { id: "keep", title: "Keep", symbol: "checkmark.circle" },
-        { id: "cancel", title: "Discard", symbol: "xmark.circle" },
+        { id: "keep", title: t(`Keep`), symbol: "checkmark.circle" },
+        { id: "cancel", title: t(`Discard`), symbol: "xmark.circle" },
       ]
     : d.downloading
       ? [
-          { id: "whenDone", title: "Open When Done", checked: d.opensWhenDone },
-          d.paused ? { id: "resume", title: "Resume", symbol: "play" } : { id: "pause", title: "Pause", symbol: "pause" },
-          { id: "cancel", title: "Cancel", symbol: "xmark.circle" },
+          { id: "whenDone", title: t(`Open When Done`), checked: d.opensWhenDone },
+          d.paused ? { id: "resume", title: t(`Resume`), symbol: "play" } : { id: "pause", title: t(`Pause`), symbol: "pause" },
+          { id: "cancel", title: t(`Cancel`), symbol: "xmark.circle" },
         ]
       : [
-          { id: "open", title: "Open", symbol: "arrow.up.forward.app", enabled: d.fileExists },
+          { id: "open", title: t(`Open`), symbol: "arrow.up.forward.app", enabled: d.fileExists },
           { id: "reveal", title: `Show in ${PLATFORM_TERMS.fileManager}`, symbol: "folder", enabled: d.fileExists },
         ];
   return menuSections(
     lead,
     [
-      { id: "copy", title: "Copy Link", symbol: "link" },
-      { id: "page", title: "Show All Downloads", symbol: "arrow.down.circle" },
+      { id: "copy", title: t(`Copy Link`), symbol: "link" },
+      { id: "page", title: t(`Show All Downloads`), symbol: "arrow.down.circle" },
     ],
     [
-      { id: "remove", title: "Remove from List", symbol: "minus.circle", enabled: !d.downloading },
+      { id: "remove", title: t(`Remove from List`), symbol: "minus.circle", enabled: !d.downloading },
       d.fileExists && { id: "trash", title: `Move to ${PLATFORM_TERMS.trash}`, symbol: "trash" },
     ],
   );

@@ -16,22 +16,24 @@ import { addAllRemoteProfiles, confirmRemoveDevice, folderLabel, lookingForProfi
 import { ago } from "../../../lib/time";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 import { Checklist } from "./Checklist";
+import { t } from "../../../lib/uiLanguage";
+
 
 function statusLine(status: SyncStatus, lastSyncedAt: number | null, pending: number): string {
   const since = lastSyncedAt ? ago(lastSyncedAt) : null;
   const line = (() => {
     switch (status) {
       case "starting":
-        return "Starting up";
+        return t(`Starting up`);
       case "updating":
-        return "Updating";
+        return t(`Updating`);
       case "offline":
-        return "Offline";
+        return t(`Offline`);
       case "stalled":
       case "locked":
-        return since ? `Not syncing · last synced ${since}` : "Not syncing";
+        return since ? `Not syncing · last synced ${since}` : t(`Not syncing`);
       default:
-        return since && since !== "just now" ? `Updated ${since}` : "Updated just now";
+        return since && since !== t(`just now`) ? `Updated ${since}` : t(`Updated just now`);
     }
   })();
   return pending ? `${line} · waiting for ${pending === 1 ? "1 file" : `${pending} files`} to download` : line;
@@ -50,9 +52,9 @@ export function SyncSection() {
   if (status === "unavailable") {
     return (
       <>
-        <SectionHeader title="Sync" />
+        <SectionHeader title={t(`Sync`)} />
         <Group>
-          <Row anchor="general.sync" description="Sync isn’t available in this build." />
+          <Row anchor="general.sync" description={t(`Sync isn’t available in this build.`)} />
         </Group>
       </>
     );
@@ -90,10 +92,10 @@ function SyncOff({ info }: { info: FolderInfo | null }) {
   const enterPhrase = () => showPhraseEntry(info, () => void chooseSyncFolder().then(() => folderInfo().then((i) => showPhraseEntry(i))));
   const otherOptions = async () => {
     const choice = await showMenu([
-      { id: "folder", title: "Choose Sync Folder…" },
+      { id: "folder", title: t(`Choose Sync Folder…`) },
       { separator: true },
-      ...(hasData ? [{ id: "new", title: "Set Up Without Another Device", enabled: !noICloud }] : []),
-      { id: "phrase", title: "Enter Recovery Phrase…" },
+      ...(hasData ? [{ id: "new", title: t(`Set Up Without Another Device`), enabled: !noICloud }] : []),
+      { id: "phrase", title: t(`Enter Recovery Phrase…`) },
     ]);
     if (choice === "folder") void chooseSyncFolder();
     else if (choice === "new") void turnOn();
@@ -103,7 +105,7 @@ function SyncOff({ info }: { info: FolderInfo | null }) {
 
   return (
     <>
-      <SectionHeader title="Sync" />
+      <SectionHeader title={t(`Sync`)} />
       <Group>
         <Row
           icon={<SyncIcon on={false} />}
@@ -112,15 +114,15 @@ function SyncOff({ info }: { info: FolderInfo | null }) {
             status === "reset" && error
               ? error
               : hasData
-                ? "This folder has synced data already. To sync with your other devices, enter the recovery phrase from one of them."
+                ? t(`This folder has synced data already. To sync with your other devices, enter the recovery phrase from one of them.`)
                 : `Off. Your ${PLATFORM_TERMS.syncedComputer}s meet in a folder you choose, end-to-end encrypted. ${where}`
           }
         >
-          <Button title="More" onPress={() => void otherOptions()} />
+          <Button title={t(`More`)} onPress={() => void otherOptions()} />
           {hasData ? (
-            <Button title="Enter Recovery Phrase…" kind="primary" onPress={enterPhrase} />
+            <Button title={t(`Enter Recovery Phrase…`)} kind="primary" onPress={enterPhrase} />
           ) : (
-            <Button title={busy ? "Turning On…" : "Turn On"} kind="primary" disabled={busy || noICloud || !info} onPress={() => void turnOn()} />
+            <Button title={busy ? t(`Turning On…`) : t(`Turn On`)} kind="primary" disabled={busy || noICloud || !info} onPress={() => void turnOn()} />
           )}
         </Row>
         {noICloud ? (
@@ -129,8 +131,8 @@ function SyncOff({ info }: { info: FolderInfo | null }) {
             title={`${PLATFORM_TERMS.cloudDrive} is off on this ${PLATFORM_TERMS.computer}`}
             description={`${PLATFORM_TERMS.turnOnCloudDrive}, or pick any folder that syncs, like Dropbox.`}
           >
-            {PLATFORM_TERMS.cloudDriveSettingsUrl ? <Button title="Open iCloud Settings" onPress={() => void Linking.openURL(PLATFORM_TERMS.cloudDriveSettingsUrl)} /> : null}
-            <Button title="Choose…" onPress={() => void chooseSyncFolder()} />
+            {PLATFORM_TERMS.cloudDriveSettingsUrl ? <Button title={t(`Open iCloud Settings`)} onPress={() => void Linking.openURL(PLATFORM_TERMS.cloudDriveSettingsUrl)} /> : null}
+            <Button title={t(`Choose…`)} onPress={() => void chooseSyncFolder()} />
           </Row>
         ) : null}
       </Group>
@@ -164,13 +166,13 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
   const locked = status === "locked";
   const advanced = async () => {
     const choice = await showMenu([
-      { id: "kit", title: "Save Recovery Kit…", symbol: "arrow.down.doc", enabled: !locked },
-      { id: "copy", title: "Copy Recovery Code", symbol: "doc.on.doc", enabled: !locked },
+      { id: "kit", title: t(`Save Recovery Kit…`), symbol: "arrow.down.doc", enabled: !locked },
+      { id: "copy", title: t(`Copy Recovery Code`), symbol: "doc.on.doc", enabled: !locked },
       { separator: true },
-      { id: "now", title: "Sync Now", symbol: "arrow.triangle.2.circlepath" },
+      { id: "now", title: t(`Sync Now`), symbol: "arrow.triangle.2.circlepath" },
       { id: "reveal", title: `Show Sync Folder in ${PLATFORM_TERMS.fileManager}`, symbol: "folder", enabled: !!info?.exists },
       { separator: true },
-      { id: "stop", title: "Stop Syncing…", symbol: "xmark.circle" },
+      { id: "stop", title: t(`Stop Syncing…`), symbol: "xmark.circle" },
     ]);
     if (choice === "kit") showRecoveryKit();
     else if (choice === "copy") await copyRecoveryPhrase();
@@ -185,15 +187,15 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
 
   return (
     <>
-      <SectionHeader title="Sync" />
+      <SectionHeader title={t(`Sync`)} />
       <Group>
         <Row icon={<SyncIcon on={!locked} />} anchor="general.sync" description={statusLine(status, lastSyncedAt, pending)}>
           {locked ? (
-            <Button title="Enter Recovery Phrase…" kind="primary" onPress={() => showPhraseEntry(info)} />
+            <Button title={t(`Enter Recovery Phrase…`)} kind="primary" onPress={() => showPhraseEntry(info)} />
           ) : (
-            <Button title="Connect Another Device…" onPress={showConnectDevice} />
+            <Button title={t(`Connect Another Device…`)} onPress={showConnectDevice} />
           )}
-          <Button title="Advanced…" onPress={() => void advanced()} />
+          <Button title={t(`Advanced…`)} onPress={() => void advanced()} />
         </Row>
         <Row anchor="general.syncFolder" description={info ? folderLabel(info) : " "} />
         <Checklist
@@ -203,7 +205,7 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
             ...DATA_TYPES.map((t) => ({ key: t.id, label: t.title, value: types[t.id], onChange: (on: boolean) => setTypeSynced(t.id, on) })),
             {
               key: "allOpenTabs",
-              label: "All open tabs, not just pinned ones",
+              label: t(`All open tabs, not just pinned ones`),
               value: synced.length > 0 && allTabs.length === synced.length,
               mixed: allTabs.length > 0 && allTabs.length < synced.length,
               disabled: !types.tabs || synced.length === 0,
@@ -214,7 +216,7 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
         <Row anchor="general.syncDevices" description={devices.length ? undefined : `Just this ${PLATFORM_TERMS.computer} so far. Other devices show here once they sync.`} />
         {devices.map((d) => (
           <Row key={d.id} title={d.current ? `${d.name} (This ${PLATFORM_TERMS.computerTitle})` : d.name} description={d.current ? statusLine(status, lastSyncedAt, 0) : deviceDetail(d, ago)}>
-            {d.current ? null : <Button title="Remove…" onPress={() => void confirmRemoveDevice(d)} />}
+            {d.current ? null : <Button title={t(`Remove…`)} onPress={() => void confirmRemoveDevice(d)} />}
           </Row>
         ))}
       </Group>
@@ -229,9 +231,9 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
       {joining || remoteProfiles.length ? (
         <>
           <SectionHeader
-            title="Profiles on your other devices"
+            title={t(`Profiles on your other devices`)}
             description={joining ? lookingForProfiles(pending) : `Add them to this ${PLATFORM_TERMS.computer}. Choose which profiles sync on each profile's page.`}
-            action={remoteProfiles.filter((p) => !p.waiting).length > 1 ? <Button title="Add All" onPress={() => addAllRemoteProfiles(remoteProfiles)} /> : undefined}
+            action={remoteProfiles.filter((p) => !p.waiting).length > 1 ? <Button title={t(`Add All`)} onPress={() => addAllRemoteProfiles(remoteProfiles)} /> : undefined}
           />
           {remoteProfiles.length ? (
             <Group>

@@ -42,6 +42,8 @@ import { showAllDeviceTabs, toggleSpaceRow, useSpaceOpenFor } from "../../state/
 import { syncBanner, type BannerIcon } from "../../state/sync/syncRules";
 import { countUsage } from "../../state/telemetry/telemetry";
 import { DEFAULT_PROFILE_COLOR, expoSpacesLayout as L, Favicon, chromeSurface, contentMargins, GlassCircleButton, minListRowHeight, modifierList, PinnedTiles, PROFILE_PRESETS, settingsUIAvailable, spaceBackdrop, spaceColor, spaceMenuSymbol, SpacePageDots, spaceSymbol, SpaceTitle, useIncreasedContrast, useReduceMotion, useTheme } from "../ui";
+import { t } from "../../lib/uiLanguage";
+
 
 const SECONDARY = { type: "hierarchical", style: "secondary" } as const;
 const FILL = Number.MAX_SAFE_INTEGER;
@@ -96,7 +98,7 @@ function SpacesSheetContent() {
           <Image systemName={BANNER_SYMBOLS[banner.icon] as never} color={PlatformColor("systemOrange")} />
           <Text modifiers={[font({ textStyle: "subheadline" })]}>{banner.text}</Text>
           <Spacer minLength={8} />
-          {banner.needsAction ? <Button label="Fix" onPress={() => openSettings({ page: "sync" })} modifiers={[font({ textStyle: "subheadline", weight: "semibold" }), buttonStyle("bordered")]} /> : null}
+          {banner.needsAction ? <Button label={t(`Fix`)} onPress={() => openSettings({ page: "sync" })} modifiers={[font({ textStyle: "subheadline", weight: "semibold" }), buttonStyle("bordered")]} /> : null}
         </HStack>
       ) : null}
       {profile ? (
@@ -112,11 +114,11 @@ function SpacesSheetContent() {
         </ZStack>
       ) : (
         <ContentUnavailableView
-          title="Your Mac’s Spaces"
+          title={t(`Your Mac’s Spaces`)}
           systemImage="macbook.and.iphone"
-          description={status.phase === "off" ? "Every tab, anywhere." : "Waiting for your Mac."}
+          description={status.phase === "off" ? t(`Every tab, anywhere.`) : t(`Waiting for your Mac.`)}
           modifiers={[frame({ maxHeight: FILL })]}
-          actions={<Button label={status.phase === "off" ? "Sync With Mac" : "Sync Settings"} onPress={() => openSettings({ page: status.phase === "off" ? "syncConnect" : "sync" })} modifiers={[buttonStyle("borderedProminent"), buttonBorderShape("roundedRectangle", 12)]} />}
+          actions={<Button label={status.phase === "off" ? t(`Sync With Mac`) : t(`Sync Settings`)} onPress={() => openSettings({ page: status.phase === "off" ? "syncConnect" : "sync" })} modifiers={[buttonStyle("borderedProminent"), buttonBorderShape("roundedRectangle", 12)]} />}
         />
       )}
     </VStack>
@@ -124,12 +126,12 @@ function SpacesSheetContent() {
 }
 
 function SpacesHeader({ profiles, current, onSelect }: { profiles: SyncedProfile[]; current: SyncedProfile | null; onSelect: (id: string) => void }) {
-  const title = current?.name ?? "Spaces";
+  const title = current?.name ?? t(`Spaces`);
   return (
     <HStack spacing={L.headerGap} modifiers={[padding({ leading: L.headerLeading, trailing: L.page, top: L.small, bottom: L.tight })]}>
       {current && profiles.length > 1 ? (
-        <Menu label={<SpaceTitle name={title} showsChevron {...lookOf(current)} />} modifiers={[buttonStyle("plain"), accessibilityLabel(`Space, ${title}`), accessibilityHint("Shows your Mac’s spaces.")]}>
-          <Picker label="Space" selection={current.syncId} onSelectionChange={(id: string) => onSelect(id)}>
+        <Menu label={<SpaceTitle name={title} showsChevron {...lookOf(current)} />} modifiers={[buttonStyle("plain"), accessibilityLabel(`Space, ${title}`), accessibilityHint(t(`Shows your Mac’s spaces.`))]}>
+          <Picker label={t(`Space`)} selection={current.syncId} onSelectionChange={(id: string) => onSelect(id)}>
             {profiles.map((space) => (
               <Label key={space.syncId} title={space.name} systemImage={(spaceMenuSymbol(space.name, space.icon) ?? "square.stack") as never} modifiers={[tag(space.syncId)]} />
             ))}
@@ -142,8 +144,8 @@ function SpacesHeader({ profiles, current, onSelect }: { profiles: SyncedProfile
       )}
       <Spacer />
       <HStack spacing={L.headerGap} modifiers={[dynamicTypeSize({ max: "xxxLarge" })]}>
-        <GlassCircleButton symbol="archivebox" label="Archive" diameter={L.headerCircle} onPress={openArchive} />
-        <GlassCircleButton symbol="xmark" label="Close" diameter={L.headerCircle} onPress={closeArchive} />
+        <GlassCircleButton symbol="archivebox" label={t(`Archive`)} diameter={L.headerCircle} onPress={openArchive} />
+        <GlassCircleButton symbol="xmark" label={t(`Close`)} diameter={L.headerCircle} onPress={closeArchive} />
       </HStack>
     </HStack>
   );
@@ -181,7 +183,7 @@ function SpacePage({ profile, dotsBelow }: { profile: SyncedProfile; dotsBelow: 
         );
       })}
       {pinnedEmpty && devices.length === 0 ? (
-        <ContentUnavailableView title="Nothing Here Yet" systemImage="square.stack" description={`Pinned and open tabs from ${profile.name} show up here.`} modifiers={[...SPACE_ROW, padding({ top: L.section })]} />
+        <ContentUnavailableView title={t(`Nothing Here Yet`)} systemImage="square.stack" description={`Pinned and open tabs from ${profile.name} show up here.`} modifiers={[...SPACE_ROW, padding({ top: L.section })]} />
       ) : null}
     </List>
   );
@@ -242,11 +244,11 @@ function RemoteRow({ title, url, symbol, pinnedKey = null, open }: { title: stri
         </Button>
       </ContextMenu.Trigger>
       <ContextMenu.Items>
-        <Button label="Open" systemImage="arrow.up.forward.square" onPress={go} />
-        {shareable(url) ? <Button label="Copy Link" systemImage="link" onPress={() => copyLink(url)} /> : null}
+        <Button label={t(`Open`)} systemImage="arrow.up.forward.square" onPress={go} />
+        {shareable(url) ? <Button label={t(`Copy Link`)} systemImage="link" onPress={() => copyLink(url)} /> : null}
         {shareable(url) ? (
           <ShareLink item={url}>
-            <Label title="Share" systemImage="square.and.arrow.up" />
+            <Label title={t(`Share`)} systemImage="square.and.arrow.up" />
           </ShareLink>
         ) : null}
       </ContextMenu.Items>

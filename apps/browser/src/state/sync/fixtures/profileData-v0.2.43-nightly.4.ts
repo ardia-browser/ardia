@@ -5,6 +5,8 @@ import { MAX_HISTORY, MAX_VISIT_TIMES } from "../../history/history";
 import { useBrowser, type BrowserState } from "../../browser/store";
 import { engineProfile } from "../../browser/model";
 import type { BookmarkNode, HistoryEntry } from "../../browser/types";
+import { t } from "../../../lib/uiLanguage";
+
 
 type Bookmarks = { nodes: Record<string, BookmarkNode>; roots: Record<string, { bar: string; other: string }> };
 
@@ -27,8 +29,8 @@ function ensureRoots(b: Bookmarks, profileId: string): [Bookmarks, { bar: string
   if (existing) return [b, existing];
   const roots = rootIdsFor(engineProfile(useBrowser.getState(), profileId));
   const nodes = { ...b.nodes };
-  nodes[roots.bar] ??= { kind: "folder", id: roots.bar, parentId: null, title: "Bookmarks Bar", children: [], addedAt: 0 };
-  nodes[roots.other] ??= { kind: "folder", id: roots.other, parentId: null, title: "Other Bookmarks", children: [], addedAt: 0 };
+  nodes[roots.bar] ??= { kind: "folder", id: roots.bar, parentId: null, title: t(`Bookmarks Bar`), children: [], addedAt: 0 };
+  nodes[roots.other] ??= { kind: "folder", id: roots.other, parentId: null, title: t(`Other Bookmarks`), children: [], addedAt: 0 };
   return [{ nodes, roots: { ...b.roots, [profileId]: roots } }, roots];
 }
 

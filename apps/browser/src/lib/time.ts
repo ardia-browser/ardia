@@ -1,8 +1,9 @@
+import { t } from "./uiLanguage";
 const units = (n: number, unit: string) => (n === 1 ? `1 ${unit} ago` : `${n} ${unit}s ago`);
 
 export function ago(at: number, now = Date.now()): string {
   const s = Math.max(0, (now - at) / 1000);
-  if (s < 60) return "just now";
+  if (s < 60) return t(`just now`);
   const m = Math.floor(s / 60);
   if (m < 60) return units(m, "minute");
   const h = Math.floor(m / 60);

@@ -9,6 +9,8 @@ import { WINDOW_CHROME } from "../../lib/windowChrome";
 import { arcSelectedFill, colorRoles, HIGH_CONTRAST_INK, ink, INCOGNITO_TINT, withAlpha, PROFILE_COLORS, radius, type ColorRoles, type ProfileColorSpec, type ShadowLevel } from "./tokens";
 import type { BasePalette } from "../../lib/themeFile";
 import { visibleLine, visibleSelection } from "../../lib/selectionContrast";
+import { t } from "../../lib/uiLanguage";
+
 
 export { PROFILE_COLORS } from "./tokens";
 
@@ -228,7 +230,7 @@ export const useScopedTheme = (): Theme | null => use(PageThemeContext) ?? use(T
 export function useTheme(): Theme {
   const scoped = useScopedTheme();
   if (scoped) return scoped;
-  if (__DEV__) console.warn("useTheme outside a ThemeScope");
+  if (__DEV__) console.warn(t(`useTheme outside a ThemeScope`));
   return themeFor("plum:dark");
 }
 

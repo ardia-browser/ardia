@@ -1,6 +1,8 @@
 import { EVENTS_SCOPE, eventRecord, LOGS_SCOPE, logsRequest, type OtlpLogRecord, type QueuedEvent } from "./otlp";
 import { appInfo, telemetryHost } from "./transport";
 import { savedChoice as saved, sessionId } from "./choice";
+import { t } from "../../lib/uiLanguage";
+
 
 let engineVersion: string | null = null;
 
@@ -14,7 +16,7 @@ export function context(): Record<string, unknown> {
   return {
     $lib: "ardia-telemetry",
     $lib_version: "1",
-    $app_name: "Ardia",
+    $app_name: t(`Ardia`),
     $app_version: info.appVersion,
     $app_build: info.appBuild,
     $os: telemetryHost().os,

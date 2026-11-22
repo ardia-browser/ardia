@@ -1,5 +1,7 @@
 import { fillProviderTemplate, parseProviderReply, PROVIDER_LIMITS, remoteRequestAllowed, type ProviderRowInput } from "@ardia/core";
 import { isTestInstance } from "../../platform/launchConfig";
+import { t } from "../../lib/uiLanguage";
+
 
 export const REMOTE_PROVIDER = { debounceMs: 120, maxBytes: 131_072, maxInFlight: 4, cacheSize: 64, cacheMs: 300_000, maxQuery: 512 } as const;
 
@@ -55,11 +57,11 @@ export function cappedRequest(url: string, signal: AbortSignal, maxBytes: number
       xhr.abort();
     };
     const tooBig = (loaded: number) => loaded > maxBytes || (xhr.responseText?.length ?? 0) > maxBytes;
-    xhr.open("GET", url, true);
+    xhr.open(t(`GET`), url, true);
     xhr.withCredentials = false;
     xhr.responseType = "text";
-    xhr.setRequestHeader("Accept", "application/json");
-    xhr.setRequestHeader("Cache-Control", "no-store");
+    xhr.setRequestHeader(t(`Accept`), "application/json");
+    xhr.setRequestHeader(t(`Cache-Control`), "no-store");
     xhr.onreadystatechange = () => {
       if (xhr.readyState >= 2 && Number(xhr.getResponseHeader("content-length") ?? 0) > maxBytes) stop();
     };

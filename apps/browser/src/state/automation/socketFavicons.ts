@@ -5,6 +5,8 @@ import type { MethodSpec } from "./socketCatalog";
 import { obj, PROFILE } from "./socketSchema";
 import { profileArg } from "./socketTargets";
 import { OpError } from "./workspaceTargets";
+import { t } from "../../lib/uiLanguage";
+
 
 const DATA_URI = /^data:([^;,]+);base64,(.*)$/s;
 
@@ -39,9 +41,9 @@ export const FAVICON_METHODS: MethodSpec[] = [
   {
     name: "favicons.get",
     mutates: false,
-    description: "A page's icon as Ardia keeps it: the image as base64, from the app's cache or the profile's icon database",
+    description: t(`A page's icon as Ardia keeps it: the image as base64, from the app's cache or the profile's icon database`),
     params: obj({ url: { type: "string", description: "A page address like https://example.com/" }, profile: PROFILE }, ["url"]),
-    result: "{url, profile, found, mime, data}",
+    result: t(`{url, profile, found, mime, data}`),
     run: favicon,
   },
 ];

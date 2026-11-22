@@ -7,6 +7,8 @@ import { SurfaceIcon } from "./SurfaceBasics";
 import { SURFACE } from "./tokens";
 import { actionsIn, bool, fillToneOf, flattenNodes, fuzzyScore, isHandlerRef, isNode, records, str, strings, useRevealRow, useSurface } from "./surfaceNodes";
 import { ShortcutScopeContext, useDeeperShortcutScope, useShortcutRegistration, useSurfaceKeys } from "./surfaceShortcuts";
+import { t } from "../../lib/uiLanguage";
+
 
 type Entry = { kind: "section"; key: string; title?: string; subtitle?: string } | { kind: "item"; key: string; node: PluginNode; id: string };
 
@@ -97,7 +99,7 @@ export function ListNode({ node }: { node: PluginNode }) {
     <ShortcutScopeContext.Provider value={deeper}>
     <Box gap="s" style={FLEX}>
       <Box row gap="s" style={CENTER}>
-        <SearchField value={query} onChangeText={change} placeholder={str(p.searchBarPlaceholder) ?? "Search"} autoFocus onArrow={step} onSubmit={() => activate(current)} extraKeys={keys.keys} onExtraKey={keys.press} style={FLEX} />
+        <SearchField value={query} onChangeText={change} placeholder={str(p.searchBarPlaceholder) ?? t(`Search`)} autoFocus onArrow={step} onSubmit={() => activate(current)} extraKeys={keys.keys} onExtraKey={keys.press} style={FLEX} />
         {bool(p.isLoading) ? <ActivitySpinner style={SPINNER} /> : null}
         <ActionMenuButton panel={p.actions} />
       </Box>
@@ -116,7 +118,7 @@ export function ListNode({ node }: { node: PluginNode }) {
           ) : isNode(p.emptyView) ? (
             render(p.emptyView, 0)
           ) : (
-            <EmptyState symbol="magnifyingglass" title={query ? "No results" : "Nothing here yet"} />
+            <EmptyState symbol="magnifyingglass" title={query ? t(`No results`) : t(`Nothing here yet`)} />
           )}
         </ScrollView>
         {detail ? (

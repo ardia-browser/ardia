@@ -12,8 +12,10 @@ import { useResource } from "../../../state/settings/resources";
 import { UI_LOCALE } from "../../../lib/uiLocale";
 import { Group, Row, SectionHeader } from "../Form";
 import { setting } from "../settingsIndex";
+import { t } from "../../../lib/uiLanguage";
 
-const APP = "Ardia";
+
+const APP = t(`Ardia`);
 const REPOSITORY = "https://github.com/mantrakp04/ardia";
 
 export function UpdatesSection() {
@@ -31,7 +33,7 @@ export function UpdatesSection() {
   const ready = !!live?.configured;
   const lastCheck = live?.lastCheck
     ? `Last checked ${new Date(live.lastCheck).toLocaleString(UI_LOCALE, { dateStyle: "medium", timeStyle: "short" })}.`
-    : "Not checked yet.";
+    : t(`Not checked yet.`);
   const status = ready ? (switchCheckLine(state, APP) ?? lastCheck) : null;
   const checkNow = checkNowControl(state);
   const version = live ? (live.displayVersion ?? live.version) : systemInfo().appVersion;
@@ -42,7 +44,7 @@ export function UpdatesSection() {
 
   return (
     <>
-      <SectionHeader title="Updates" description={live && !ready ? "Updates aren't set up for this build." : undefined} />
+      <SectionHeader title={t(`Updates`)} description={live && !ready ? t(`Updates aren't set up for this build.`) : undefined} />
       <Group>
         {live && (
           <Row anchor="general.autoUpdate" description={`${setting("general.autoUpdate").description} ${SHARING_COPY.updateChecks} ${SHARING_COPY.switchFile}`}>
@@ -54,8 +56,8 @@ export function UpdatesSection() {
             <Segmented
               value={live.channel}
               options={[
-                { value: "stable", title: "Stable" },
-                { value: "nightly", title: "Nightly" },
+                { value: "stable", title: t(`Stable`) },
+                { value: "nightly", title: t(`Nightly`) },
               ]}
               onChange={(channel) => ready && setUpdaterPrefs({ channel })}
             />
@@ -88,8 +90,8 @@ function VersionDetails({ status }: { status: string | null }) {
         {engines}
       </Text>
       <View style={LINKS}>
-        <Button variant="text" look="link" pad="none" title="Source code" onPress={() => openUrls([`${REPOSITORY}/tree/v${systemInfo().appVersion}`])} />
-        <Button variant="text" look="link" pad="none" title="Licenses" onPress={() => openUrls(["chrome://credits"])} />
+        <Button variant="text" look="link" pad="none" title={t(`Source code`)} onPress={() => openUrls([`${REPOSITORY}/tree/v${systemInfo().appVersion}`])} />
+        <Button variant="text" look="link" pad="none" title={t(`Licenses`)} onPress={() => openUrls(["chrome://credits"])} />
       </View>
     </View>
   );

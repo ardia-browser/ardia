@@ -6,62 +6,64 @@ import { pickableApps, sourceAppKey } from "../../../state/airTraffic/sourceApps
 import { useRecentSourceApps, useRoutableProfiles, useRouteGroups, type RoutableProfile } from "../../../state/airTraffic/hooks";
 import { closeSettingsSheet } from "../../../state/settings/sheet";
 import { Button, DialogActions, DialogTitle, PopUp, Sheet, space, Text, TextField, type Option } from "../../ui";
+import { t } from "../../../lib/uiLanguage";
 
-export const OPEN_LABELS: Record<OpenAs, string> = { tab: "New tab", window: "New window", littleArdia: "Little Ardia" };
+
+export const OPEN_LABELS: Record<OpenAs, string> = { tab: t(`New tab`), window: t(`New window`), littleArdia: t(`Little Ardia`) };
 export const OPEN_OPTIONS: Option<OpenAs>[] = [
   { value: "tab", title: OPEN_LABELS.tab },
   { value: "window", title: OPEN_LABELS.window },
   { value: "littleArdia", title: OPEN_LABELS.littleArdia },
 ];
-export const USED_LAST = "Profile you used last";
+export const USED_LAST = t(`Profile you used last`);
 const USED_LAST_VALUE = "";
 const ANY = "any";
 const OTHER = "other";
 
 export const conditionLabel = (when: LinkCondition) =>
-  when.kind === "any" ? "any link" : when.kind === "site" ? when.host : when.kind === "pattern" ? when.pattern : when.kind === "contains" ? `containing “${when.text}”` : `exactly ${when.text}`;
-export const fromLabel = (from: SourceApp | null) => (from ? `From ${from.name}` : "Any app");
+  when.kind === "any" ? t(`any link`) : when.kind === "site" ? when.host : when.kind === "pattern" ? when.pattern : when.kind === "contains" ? `containing “${when.text}”` : `exactly ${when.text}`;
+export const fromLabel = (from: SourceApp | null) => (from ? `From ${from.name}` : t(`Any app`));
 
 const NO_GROUP = "";
-export const CLOSED_GROUP = "A closed tab group";
+export const CLOSED_GROUP = t(`A closed tab group`);
 
 export function GroupPicker({ profileId, value, onChange }: { profileId: string; value: string; onChange: (groupKey: string) => void }) {
   const groups = useRouteGroups(profileId);
   const known = !value || groups.some((g) => g.key === value);
   const options: Option<string>[] = [
-    { value: NO_GROUP, title: "None" },
+    { value: NO_GROUP, title: t(`None`) },
     ...(known ? [] : [{ value, title: CLOSED_GROUP }]),
     ...groups.map((g, i) => ({ value: g.key, title: g.name, separatorBefore: i === 0 })),
   ];
-  return <PopUp value={value} options={options} onChange={onChange} minWidth={180} accessibilityLabel="Tab group" />;
+  return <PopUp value={value} options={options} onChange={onChange} minWidth={180} accessibilityLabel={t(`Tab group`)} />;
 }
 
 export function profileOptions(profiles: RoutableProfile[], usedLast = USED_LAST): Option<string>[] {
   return [{ value: USED_LAST_VALUE, title: usedLast }, ...profiles.map((p, i) => ({ value: p.id, title: p.name, separatorBefore: i === 0 }))];
 }
 
-export function AppPicker({ value, onChange, anyTitle = "Any app", other, extras = [] }: { value: SourceApp | null; onChange: (app: SourceApp | null | "other") => void; anyTitle?: string; other?: boolean; extras?: readonly (SourceApp | null)[] }) {
+export function AppPicker({ value, onChange, anyTitle = t(`Any app`), other, extras = [] }: { value: SourceApp | null; onChange: (app: SourceApp | null | "other") => void; anyTitle?: string; other?: boolean; extras?: readonly (SourceApp | null)[] }) {
   const lists = pickableApps(useRecentSourceApps(), [value, ...extras]);
   const byKey = new Map([...lists.recent, ...lists.common].map((a) => [sourceAppKey(a), a]));
   const options: Option<string>[] = [
     { value: ANY, title: anyTitle },
     ...lists.recent.map((a, i) => ({ value: sourceAppKey(a), title: a.name, separatorBefore: i === 0 })),
     ...lists.common.map((a, i) => ({ value: sourceAppKey(a), title: a.name, separatorBefore: i === 0 })),
-    ...(other ? [{ value: OTHER, title: "Other…", separatorBefore: true }] : []),
+    ...(other ? [{ value: OTHER, title: t(`Other…`), separatorBefore: true }] : []),
   ];
   const pick = (key: string) => onChange(key === ANY ? null : key === OTHER ? "other" : (byKey.get(key) ?? null));
   return <PopUp value={value ? sourceAppKey(value) : ANY} options={options} onChange={pick} minWidth={180} />;
 }
 
 const KIND_OPTIONS: Option<LinkCondition["kind"]>[] = [
-  { value: "any", title: "Any link" },
-  { value: "site", title: "Links to a site" },
-  { value: "pattern", title: "Links matching a pattern" },
-  { value: "contains", title: "Links containing" },
-  { value: "equals", title: "Links to exactly" },
+  { value: "any", title: t(`Any link`) },
+  { value: "site", title: t(`Links to a site`) },
+  { value: "pattern", title: t(`Links matching a pattern`) },
+  { value: "contains", title: t(`Links containing`) },
+  { value: "equals", title: t(`Links to exactly`) },
 ];
 
-const UNSAVED = "Ardia couldn't save the rule. Your changes are still here; try again.";
+const UNSAVED = t(`Ardia couldn't save the rule. Your changes are still here; try again.`);
 
 const conditionText = (when: LinkCondition | undefined) =>
   !when || when.kind === "any" ? "" : when.kind === "site" ? when.host : when.kind === "pattern" ? when.pattern : when.text;
@@ -98,11 +100,11 @@ export function RuleSheet({ rule }: { rule?: AirTrafficRule }) {
   };
   const save = () => {
     const app = typing ? typedApp(typed) : from;
-    if (typing && !app) return setError("Type the app's name or bundle ID, like com.tinyspeck.slackmacgap.");
+    if (typing && !app) return setError(t(`Type the app's name or bundle ID, like com.tinyspeck.slackmacgap.`));
     let when: LinkCondition = { kind: "any" };
     if (kind === "site") {
       const host = siteHost(text);
-      if (!host) return setError("Enter a site, like github.com. Its subdomains count too.");
+      if (!host) return setError(t(`Enter a site, like github.com. Its subdomains count too.`));
       when = { kind: "site", host };
     } else if (kind === "pattern") {
       const problem = patternProblem(text);
@@ -118,23 +120,23 @@ export function RuleSheet({ rule }: { rule?: AirTrafficRule }) {
       if (!updateAirTrafficRule(rule.id, draft)) return setError(UNSAVED);
     } else {
       const added = tryAddAirTrafficRule(draft);
-      if ("refused" in added) return setError(added.refused === "full" ? "That's the most rules Ardia keeps. Remove one first." : UNSAVED);
+      if ("refused" in added) return setError(added.refused === "full" ? t(`That's the most rules Ardia keeps. Remove one first.`) : UNSAVED);
     }
     closeSettingsSheet();
   };
 
   return (
     <Sheet onClose={closeSettingsSheet}>
-      <DialogTitle subtitle="Links from other apps that fit this rule open where you choose.">{rule ? "Edit Rule" : "Add Rule"}</DialogTitle>
-      <Line label="From">
+      <DialogTitle subtitle={t(`Links from other apps that fit this rule open where you choose.`)}>{rule ? t(`Edit Rule`) : t(`Add Rule`)}</DialogTitle>
+      <Line label={t(`From`)}>
         <AppPicker value={typing ? null : from} onChange={pickApp} other />
       </Line>
       {typing ? (
         <View style={FIELD_BELOW}>
-          <TextField value={typed} onChangeText={setTyped} placeholder="App name or bundle ID" autoFocus onSubmit={save} onEscape={closeSettingsSheet} />
+          <TextField value={typed} onChangeText={setTyped} placeholder={t(`App name or bundle ID`)} autoFocus onSubmit={save} onEscape={closeSettingsSheet} />
         </View>
       ) : null}
-      <Line label="Links">
+      <Line label={t(`Links`)}>
         <PopUp value={kind} options={KIND_OPTIONS} onChange={(k) => (setKind(k), setError(null))} minWidth={180} />
       </Line>
       {kind !== "any" ? (
@@ -142,14 +144,14 @@ export function RuleSheet({ rule }: { rule?: AirTrafficRule }) {
           <TextField value={text} onChangeText={setText} placeholder={PLACEHOLDERS[kind]} mono={kind === "pattern"} onSubmit={save} onEscape={closeSettingsSheet} />
         </View>
       ) : null}
-      <Line label="Open in">
+      <Line label={t(`Open in`)}>
         <PopUp value={profileId} options={profileOptions(profiles)} onChange={(p) => (setProfileId(p), setGroupKey(NO_GROUP))} minWidth={180} />
       </Line>
-      <Line label="As">
+      <Line label={t(`As`)}>
         <PopUp value={open} options={OPEN_OPTIONS} onChange={setOpen} minWidth={180} />
       </Line>
       {grouped ? (
-        <Line label="Group">
+        <Line label={t(`Group`)}>
           <GroupPicker profileId={profileId} value={groupKey} onChange={setGroupKey} />
         </Line>
       ) : null}
@@ -159,10 +161,10 @@ export function RuleSheet({ rule }: { rule?: AirTrafficRule }) {
         </Text>
       ) : null}
       <DialogActions
-        leading={rule ? <Button title="Remove" kind="destructive" onPress={() => (removeAirTrafficRule(rule.id), closeSettingsSheet())} /> : null}
+        leading={rule ? <Button title={t(`Remove`)} kind="destructive" onPress={() => (removeAirTrafficRule(rule.id), closeSettingsSheet())} /> : null}
       >
-        <Button title="Cancel" onPress={closeSettingsSheet} />
-        <Button title={rule ? "Save" : "Add"} kind="primary" onPress={save} />
+        <Button title={t(`Cancel`)} onPress={closeSettingsSheet} />
+        <Button title={rule ? t(`Save`) : t(`Add`)} kind="primary" onPress={save} />
       </DialogActions>
     </Sheet>
   );

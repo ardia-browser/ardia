@@ -7,6 +7,8 @@ import { useTheme } from "./theme";
 import { useDesign } from "./design";
 import { MaterialDialog } from "./MaterialSurfaces";
 import { dialogLayout, font, smoothCorners, space } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 export type DialogButton = { title: string; onPress: () => void; destructive?: boolean };
 
@@ -28,7 +30,7 @@ function ClassicDialog({ title, message, buttons, onDismiss, children }: Props) 
   return (
     <Portal>
       <Animated.View entering={FadeIn.duration(tabsMotion.surfaceFade)} style={StyleSheet.absoluteFill}>
-        <Pressable accessibilityLabel="Dismiss" style={[StyleSheet.absoluteFill, { backgroundColor: theme.dialogScrim }]} onPress={onDismiss} />
+        <Pressable accessibilityLabel={t(`Dismiss`)} style={[StyleSheet.absoluteFill, { backgroundColor: theme.dialogScrim }]} onPress={onDismiss} />
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.center} pointerEvents="box-none">
           <View accessibilityViewIsModal style={[styles.panel, { backgroundColor: theme.panel, shadowColor: theme.trayShadow }]}>
             <Text accessibilityRole="header" style={[font.title3, styles.title, { color: theme.label }]}>
@@ -68,7 +70,7 @@ export function ConfirmDialog({ confirmation, onClose }: { confirmation: Confirm
       message={confirmation.message}
       onDismiss={onClose}
       buttons={[
-        { title: "Cancel", onPress: onClose },
+        { title: t(`Cancel`), onPress: onClose },
         {
           title: confirmation.action,
           destructive: confirmation.destructive ?? true,
@@ -87,7 +89,7 @@ export function showActionSheet(confirmation: Confirmation) {
     {
       title: confirmation.title,
       message: confirmation.message,
-      options: [confirmation.action, "Cancel"],
+      options: [confirmation.action, t(`Cancel`)],
       destructiveButtonIndex: confirmation.destructive === false ? undefined : 0,
       cancelButtonIndex: 1,
     },

@@ -1,12 +1,13 @@
+import { t } from "../../lib/uiLanguage";
 
 const FILE_EXTENSIONS =
-  "json|jsonl|js|mjs|cjs|jsx|ts|tsx|map|bundle|jsbundle|hbc|html?|css|txt|md|rtf|csv|log|ips|plist|xml|ya?ml|pdf|docx?|xlsx?|pptx?|key|pages|numbers|png|jpe?g|gif|webp|heic|svg|ico|icns|mp[34]|m4[av]|mov|avi|mkv|webm|wav|aac|flac|zip|gz|tgz|tar|7z|rar|dmg|pkg|app|crx|xpi|db|sqlite|sqlite3|ldb|sst";
+  t(`json|jsonl|js|mjs|cjs|jsx|ts|tsx|map|bundle|jsbundle|hbc|html?|css|txt|md|rtf|csv|log|ips|plist|xml|ya?ml|pdf|docx?|xlsx?|pptx?|key|pages|numbers|png|jpe?g|gif|webp|heic|svg|ico|icns|mp[34]|m4[av]|mov|avi|mkv|webm|wav|aac|flac|zip|gz|tgz|tar|7z|rar|dmg|pkg|app|crx|xpi|db|sqlite|sqlite3|ldb|sst`);
 
 const RULES: [RegExp, string][] = [
   [/\b(?:about|data|blob|javascript|mailto|file|chrome|ardia|chrome-extension|devtools|view-source):\S+/gi, "<url>"],
-  [/\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>)\]}]*/gi, "<url>"],
+  [/\b[a-z][a-z0-9+.-]*:\/\/[^\st(`'<>)]}]*/gi, `)<url>"],
   [/[\w.%+-]+@[\w-]+(?:\.[\w-]+)+/g, "<email>"],
-  [/(^|[\s(\[{=:,"'])~?\/?(?:[^\s/"'<>()\[\]{}]+\/)+[^\s"'<>()\[\]{},;]*/g, "$1<path>"],
+  [/(^|[\s(\[{=:,t(`'])~?/?(?:[^s/`)'<>()\[\]{}]+\/)+[^\s"'<>()\[\]{},;]*/g, "$1<path>"],
   [/(^|[\s(\[{=:,])~(?=$|[\s)\]},;])/g, "$1<path>"],
   [/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "<id>"],
   [/\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?\b/g, "<ip>"],
@@ -59,10 +60,10 @@ export function errorType(error: unknown): string {
     if (typeof name === "string" && IDENTIFIER.test(name)) return name;
     const ctor = (error as { constructor?: { name?: unknown } }).constructor?.name;
     if (typeof ctor === "string" && IDENTIFIER.test(ctor)) return ctor;
-    return "Error";
+    return t(`Error`);
   }
-  if (typeof error === "string") return "Error";
-  return typeof error === "undefined" ? "Undefined" : error === null ? "Null" : "NonError";
+  if (typeof error === "string") return t(`Error`);
+  return typeof error === "undefined" ? t(`Undefined`) : error === null ? t(`Null`) : t(`NonError`);
 }
 
 export const JS_FATAL_KINDS = [
@@ -102,10 +103,10 @@ function hermesFatalKind(text: string): JsFatalKind {
 function reactNativeFatalKind(text: string): JsFatalKind {
   const js = /^Unhandled JS Exception: (?:([A-Za-z]+Error)\b)?/.exec(text);
   if (js) return /Maximum call stack size exceeded/.test(text) ? "rn_js_stack_overflow" : (RN_JS_ERRORS[js[1] ?? ""] ?? "rn_js_error");
-  if (text.startsWith("Exception in HostFunction")) return "rn_host_function";
-  if (text.startsWith("Exception in HostObject")) return "rn_host_object";
-  if (text.startsWith("non-std ObjC Exception")) return "rn_objc_exception";
-  if (text.startsWith("non-std C++ exception")) return "rn_cpp_exception";
+  if (text.startsWith(t(`Exception in HostFunction`))) return "rn_host_function";
+  if (text.startsWith(t(`Exception in HostObject`))) return "rn_host_object";
+  if (text.startsWith(t(`non-std ObjC Exception`))) return "rn_objc_exception";
+  if (text.startsWith(t(`non-std C++ exception`))) return "rn_cpp_exception";
   return "rn_other";
 }
 
@@ -167,7 +168,7 @@ function stackFrames(error: unknown, keep: (file: string) => boolean): Exception
   if (!error || typeof error !== "object") return [];
   const { stack, name, message } = error as { stack?: unknown; name?: unknown; message?: unknown };
   if (typeof stack !== "string") return [];
-  const kind = name === undefined ? "Error" : String(name);
+  const kind = name === undefined ? t(`Error`) : String(name);
   const text = typeof message === "string" ? message : "";
   const headers = [kind && text ? `${kind}: ${text}` : "", text, kind].filter(Boolean);
   const header = headers.find((h) => stack.startsWith(h) && (stack.length === h.length || stack[h.length] === "\n"));
@@ -234,7 +235,7 @@ function realSymbol(f: NativeFrame, inApp: boolean): string | null {
   if (inApp) {
     if (typeof f.symbolOffset === "number" ? f.symbolOffset >= NEAREST_EXPORT_DISTANCE : STRIPPED_EXPORT.test(f.symbol)) return null;
   }
-  return f.symbol.replace(/\S*\/\S*/g, "<path>").replace(/"[^"]*"/g, "<text>").slice(0, 200);
+  return f.symbol.replace(/\S*\/\S*/g, "<path>").replace(/"[^"]*t(`/g, `)<text>").slice(0, 200);
 }
 
 export function nativeFrames(frames: NativeFrame[], limit = 64): ExceptionFrame[] {
@@ -284,14 +285,14 @@ type NativeCrash = {
 };
 
 export function nativeCrashExceptions(report: NativeCrash) {
-  const machType = report.exceptionType && SYSTEM_NAME.test(report.exceptionType) ? report.exceptionType : "Crash";
+  const machType = report.exceptionType && SYSTEM_NAME.test(report.exceptionType) ? report.exceptionType : t(`Crash`);
   const signal = report.signal && SYSTEM_NAME.test(report.signal) ? report.signal : null;
   const name = report.exceptionName && EXCEPTION_NAME.test(report.exceptionName) ? report.exceptionName : null;
   const subtype = report.exceptionSubtype && SUBTYPE.test(report.exceptionSubtype) ? report.exceptionSubtype : null;
   const images = nativeImages(report.images);
   const crash = { type: machType, value: signal ? `${machType} (${signal})` : machType, frames: nativeFrames(report.frames) };
   if (!report.exceptionFrames?.length && !name) return { name, signal, subtype, images, exceptions: [crash] };
-  const type = name ?? "NSException";
+  const type = name ?? t(`NSException`);
   const thrown = { type, value: `Uncaught ${type}`, frames: nativeFrames(report.exceptionFrames ?? []) };
   return { name, signal, subtype, images, exceptions: [thrown, crash] };
 }
@@ -302,7 +303,7 @@ type PropertyValue = string | number | boolean | null;
 
 const WEBUI_PAGE_KEY = /(?:^|_)webui_page$/;
 const WEBUI_PAGES_KEY = /(?:^|_)webui_pages$/;
-const WEBUI_PAGE_NAME = "[a-z0-9-]{1,32}(?:/[a-z0-9-]{1,32})?";
+const WEBUI_PAGE_NAME = t(`[a-z0-9-]{1,32}(?:/[a-z0-9-]{1,32})?`);
 export const WEBUI_PAGE_VALUE = new RegExp(`^${WEBUI_PAGE_NAME}$`);
 const WEBUI_PAGES_VALUE = new RegExp(`^${WEBUI_PAGE_NAME}:\\d{1,6}(?:,${WEBUI_PAGE_NAME}:\\d{1,6}){0,2}$`);
 

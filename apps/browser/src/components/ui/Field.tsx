@@ -11,12 +11,14 @@ import { capsule, monoFace, opacity, perLook, proseLineHeight, radius, space, fo
 import { useHover } from "./useHover";
 import { useNativeForm } from "./nativeForm";
 import { useKeyDownEvents, type ExtraKeyProps } from "./fieldKeys";
+import { t } from "../../lib/uiLanguage";
 
-const SEARCH_KEYS = [{ key: "Escape" }];
-const SEARCH_KEYS_WITH_ENTER = [{ key: "Escape" }, { key: "Enter" }, { key: "Enter", shiftKey: true }];
-const SEARCH_KEYS_WITH_ARROWS = [{ key: "Escape" }, { key: "Enter" }, { key: "Enter", shiftKey: true }, { key: "ArrowUp" }, { key: "ArrowDown" }];
+
+const SEARCH_KEYS = [{ key: t(`Escape`) }];
+const SEARCH_KEYS_WITH_ENTER = [{ key: t(`Escape`) }, { key: t(`Enter`) }, { key: t(`Enter`), shiftKey: true }];
+const SEARCH_KEYS_WITH_ARROWS = [{ key: t(`Escape`) }, { key: t(`Enter`) }, { key: t(`Enter`), shiftKey: true }, { key: t(`ArrowUp`) }, { key: t(`ArrowDown`) }];
 const BARE_SEARCH = { glyph: 13, glyphBox: 16 } as const;
-const ESCAPE_KEY = [{ key: "Escape" }];
+const ESCAPE_KEY = [{ key: t(`Escape`) }];
 
 export function SearchField({
   value,
@@ -99,7 +101,7 @@ export function SearchField({
         style={{ flex: 1, ...(bare ? typeScale.title : typeScale.body), color: theme.textPrimary, paddingVertical: 0 }}
       />
       {value && !bare ? (
-        <View tooltip="Clear">
+        <View tooltip={t(`Clear`)}>
           <Pressable onPress={() => onChangeText("")} onPressIn={clearMotion.onPressIn} onPressOut={clearMotion.onPressOut}>
             <Animated.View style={[CLEAR_GLYPH, clearMotion.scale ? { transform: [{ scale: clearMotion.scale }] } : null]}>
               <Symbol name="xmark.circle.fill" size={12} color={theme.textTertiary} style={CLEAR_GLYPH} />

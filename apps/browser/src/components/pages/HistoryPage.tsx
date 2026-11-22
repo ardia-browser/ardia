@@ -17,6 +17,8 @@ import { consentToken } from "../../state/telemetry/client";
 import { HistoryList } from "./HistoryList";
 import { hostLabel, PageHeader } from "./PageLayout";
 import { COMMAND_KEY, commandHeld } from "../../state/commands/keyNotation";
+import { t } from "../../lib/uiLanguage";
+
 
 
 export function HistoryPage({ tabId, profileId, initialQuery }: { tabId: string; profileId: string; initialQuery: string }) {
@@ -95,20 +97,20 @@ export function HistoryPage({ tabId, profileId, initialQuery }: { tabId: string;
     selected.size > 0 ? (
       <>
         <Text size="small" tone="textSecondary">{`${selected.size} selected`}</Text>
-        <Button title="Cancel" onPress={() => setSelection((prev) => ({ ...prev, selected: new Set() }))} />
-        <Button title="Delete" kind="primary" onPress={() => void deleteSelected("button")} />
+        <Button title={t(`Cancel`)} onPress={() => setSelection((prev) => ({ ...prev, selected: new Set() }))} />
+        <Button title={t(`Delete`)} kind="primary" onPress={() => void deleteSelected("button")} />
       </>
     ) : (
-      <Button title="Clear Browsing Data…" onPress={() => setClearOpen(true)} />
+      <Button title={t(`Clear Browsing Data…`)} onPress={() => setClearOpen(true)} />
     );
 
   return (
     <View style={{ flex: 1 }}>
-      <PageHeader title="History" query={query} onQuery={setQuery} actions={actions} searchRef={search} onArrow={enterList} />
+      <PageHeader title={t(`History`)} query={query} onQuery={setQuery} actions={actions} searchRef={search} onArrow={enterList} />
       {layout.rows.length === 0 ? (
         <EmptyState
           symbol="clock"
-          title={query ? "No search results found" : "Your browsing history appears here"}
+          title={query ? t(`No search results found`) : t(`Your browsing history appears here`)}
         />
       ) : (
         <View ref={list} focusable enableFocusRing={false} keyDownEvents={selected.size ? LIST_KEYS_WITH_ESCAPE : LIST_KEYS} onKeyDown={onListKey} style={LIST_KEYS_VIEW}>
@@ -131,14 +133,14 @@ export function HistoryPage({ tabId, profileId, initialQuery }: { tabId: string;
 }
 
 const LIST_KEYS = [
-  { key: "ArrowDown" },
-  { key: "ArrowUp" },
-  { key: "ArrowDown", shiftKey: true },
-  { key: "ArrowUp", shiftKey: true },
+  { key: t(`ArrowDown`) },
+  { key: t(`ArrowUp`) },
+  { key: t(`ArrowDown`), shiftKey: true },
+  { key: t(`ArrowUp`), shiftKey: true },
   { key: " " },
   { key: "a", [COMMAND_KEY]: true },
-  { key: "Backspace" },
-  { key: "Delete" },
+  { key: t(`Backspace`) },
+  { key: t(`Delete`) },
 ];
-const LIST_KEYS_WITH_ESCAPE = [...LIST_KEYS, { key: "Escape" }];
+const LIST_KEYS_WITH_ESCAPE = [...LIST_KEYS, { key: t(`Escape`) }];
 const LIST_KEYS_VIEW = { flex: 1 } as const;

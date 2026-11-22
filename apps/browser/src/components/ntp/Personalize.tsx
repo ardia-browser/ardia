@@ -8,6 +8,8 @@ import { PERSONALIZE_PANEL } from "./tokens";
 import { closePersonalizePanelOf, setPersonalizePanel as setOpen, usePersonalizePanel } from "../../state/pages/personalizePanel";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
 import { perLook } from "../ui/tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 const INSET = space.xl;
 const BUTTON = 30;
@@ -23,13 +25,13 @@ export function PersonalizeButton({ windowId }: { windowId: string }) {
   return (
     <>
       {open ? <PersonalizePanel windowId={windowId} onClose={() => setOpen(null)} /> : null}
-      <View {...hoverProps} tooltip="Personalize" style={{ position: "absolute", right: INSET, bottom: INSET - GLYPH_DROP }}>
+      <View {...hoverProps} tooltip={t(`Personalize`)} style={{ position: "absolute", right: INSET, bottom: INSET - GLYPH_DROP }}>
         <Pressable
           onPress={() => setOpen(open ? null : windowId)}
           onPressIn={pressMotion.onPressIn}
           onPressOut={pressMotion.onPressOut}
           accessibilityRole="button"
-          accessibilityLabel="Personalize"
+          accessibilityLabel={t(`Personalize`)}
           accessibilityState={{ expanded: open }}
         >
           {({ pressed }) => (
@@ -63,7 +65,7 @@ function PersonalizePanel({ windowId, onClose }: { windowId: string; onClose: ()
   }, []);
   return (
     <>
-      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close Personalize" />
+      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel={t(`Close Personalize`)} />
       <Animated.View
         style={{
           position: "absolute",

@@ -17,6 +17,8 @@ import { valuesFor } from "./values";
 import { netFetch, readActivePage, secretsMethod, storageMethod } from "./channelData";
 import { UI_METHODS, uiMethod } from "./channelUi";
 import { programsStatus, relinkOwnPrograms } from "./programs";
+import { t } from "../../lib/uiLanguage";
+
 
 export const CHANNEL_PROTOCOL = 2;
 export const LEGACY_CHANNEL_PROTOCOL = 1;
@@ -31,20 +33,20 @@ function minimizedWindows(full: boolean) {
 }
 
 function openPage(name: string, m: PluginManifest, params: Record<string, unknown>): Body {
-  if (!m.page) return failure("refused", "This plugin has no page.");
+  if (!m.page) return failure("refused", t(`This plugin has no page.`));
   const { path, split, side, context } = params;
-  if (path !== undefined && (typeof path !== "string" || !isPagePath(path))) return failure("bad_request", "page.open's path is /like/this?q=1, at most 512 characters.");
-  if (side !== undefined && !(SPLIT_SIDES as readonly unknown[]).includes(side)) return failure("bad_request", "side is left, right, top or bottom.");
-  if (context === true && !m.permissions.tabs) return failure("refused", "Handing the page a tab needs the tabs permission.");
+  if (path !== undefined && (typeof path !== "string" || !isPagePath(path))) return failure("bad_request", t(`page.open's path is /like/this?q=1, at most 512 characters.`));
+  if (side !== undefined && !(SPLIT_SIDES as readonly unknown[]).includes(side)) return failure("bad_request", t(`side is left, right, top or bottom.`));
+  if (context === true && !m.permissions.tabs) return failure("refused", t(`Handing the page a tab needs the tabs permission.`));
   const windowId = lastFocusedEligibleWindow(useBrowser.getState());
-  if (!windowId) return failure("no_window", "No window to open the page in.");
+  if (!windowId) return failure("no_window", t(`No window to open the page in.`));
   const tabId = openPluginPage(windowId, name, { path: (path as string | undefined) ?? "", split: split === true, side: side as PageSide | undefined, context: context === true });
-  return tabId ? { result: { tabId, windowId } } : failure("failed", "The page couldn't open.");
+  return tabId ? { result: { tabId, windowId } } : failure("failed", t(`The page couldn't open.`));
 }
 
 async function toolsCall(name: string, m: PluginManifest, params: Record<string, unknown>): Promise<Body> {
   const { plugin, tool, input } = params;
-  if (typeof plugin !== "string" || typeof tool !== "string") return failure("bad_request", "tools.call needs a plugin and a tool.");
+  if (typeof plugin !== "string" || typeof tool !== "string") return failure("bad_request", t(`tools.call needs a plugin and a tool.`));
   const callee = activeManifest(currentPlugins(), plugin);
   const missing = callee ? missingPermissions(m.permissions, callee.permissions) : [];
   if (missing.length) return failure("refused", `${plugin} has permissions this plugin doesn't (${missing.join(", ")}), so it can't call its tools.`);
@@ -58,7 +60,7 @@ const stillAllowed = (c: ChannelCaller, allowed: (m: PluginManifest) => boolean)
 };
 
 async function openTabs(c: ChannelCaller, m: PluginManifest, params: Record<string, unknown>): Promise<Body> {
-  if (!canOpenTabs(m.permissions)) return failure("refused", "open needs the commands permission or tabs: write.");
+  if (!canOpenTabs(m.permissions)) return failure("refused", t(`open needs the commands permission or tabs: write.`));
   const { urls, activate } = params;
   if (!Array.isArray(urls) || urls.length < 1 || urls.length > MAX_OPEN_URLS) return failure("bad_request", `open takes urls: a list of 1 to ${MAX_OPEN_URLS} http or https addresses.`);
   const checked = urls.map(pluginWebUrl);
@@ -68,7 +70,7 @@ async function openTabs(c: ChannelCaller, m: PluginManifest, params: Record<stri
   const current = stillAllowed(c, (now) => canOpenTabs(now.permissions));
   const body = await applyMethod({ ops: [{ op: "open", urls: normalised, ...(activate === true ? { activate: true } : {}) }] }, current);
   const applied = "result" in body ? (body.result as { ok?: boolean; results?: { tabs?: string[] }[] }) : null;
-  if (!applied?.ok) return failure(current() ? "failed" : "refused", current() ? "The tabs couldn't open." : "This run of the helper has ended or lost commands, so nothing opened.");
+  if (!applied?.ok) return failure(current() ? "failed" : "refused", current() ? t(`The tabs couldn't open.`) : t(`This run of the helper has ended or lost commands, so nothing opened.`));
   return { result: { ok: true, tabs: applied.results?.[0]?.tabs ?? [] } };
 }
 
@@ -83,9 +85,9 @@ function minimizedApply(body: Body, full: boolean): Body {
 }
 
 function workspace(c: ChannelCaller, m: PluginManifest, method: string, params: Record<string, unknown>): Body | Promise<Body> {
-  if (method === "workspace") return m.permissions.workspace ? workspaceMethod(params) : failure("refused", "workspace needs the workspace permission.");
+  if (method === "workspace") return m.permissions.workspace ? workspaceMethod(params) : failure("refused", t(`workspace needs the workspace permission.`));
   const tabOnly = tabOnlyOps(params);
-  if (!mayApply(m, tabOnly)) return failure("refused", "apply needs the workspace permission, or tabs: write for open, tab.close and tab.activate.");
+  if (!mayApply(m, tabOnly)) return failure("refused", t(`apply needs the workspace permission, or tabs: write for open, tab.close and tab.activate.`));
   const body = applyMethod(params, stillAllowed(c, (now) => mayApply(now, tabOnly)));
   const full = m.permissions.fullUrls;
   return body instanceof Promise ? body.then((b) => minimizedApply(b, full)) : minimizedApply(body, full);
@@ -94,15 +96,15 @@ function workspace(c: ChannelCaller, m: PluginManifest, method: string, params: 
 export function answerMethod(c: ChannelCaller, m: PluginManifest, method: string, params: Record<string, unknown>): Body | Promise<Body> | null {
   switch (method) {
     case "hello":
-      return { result: { app: "Ardia", version: systemInfo().appVersion, protocol: m.main ? CHANNEL_PROTOCOL : LEGACY_CHANNEL_PROTOCOL, plugin: c.name, values: valuesFor(c.name) } };
+      return { result: { app: t(`Ardia`), version: systemInfo().appVersion, protocol: m.main ? CHANNEL_PROTOCOL : LEGACY_CHANNEL_PROTOCOL, plugin: c.name, values: valuesFor(c.name) } };
     case "values":
       return { result: valuesFor(c.name) };
     case "ready":
-      return markPluginReady(c.name, c.run) ? { result: { ok: true } } : failure("refused", "This run of the plugin has ended.");
+      return markPluginReady(c.name, c.run) ? { result: { ok: true } } : failure("refused", t(`This run of the plugin has ended.`));
     case "windows":
-      return m.permissions.tabs ? { result: minimizedWindows(m.permissions.fullUrls) } : failure("refused", "windows needs the tabs permission.");
+      return m.permissions.tabs ? { result: minimizedWindows(m.permissions.fullUrls) } : failure("refused", t(`windows needs the tabs permission.`));
     case "run":
-      return m.permissions.commands ? runMethod(params) : failure("refused", "run needs the commands permission.");
+      return m.permissions.commands ? runMethod(params) : failure("refused", t(`run needs the commands permission.`));
     case "open":
       return openTabs(c, m, params);
     case "workspace":

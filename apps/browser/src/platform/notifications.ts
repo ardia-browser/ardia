@@ -1,8 +1,10 @@
 import { nativeModule, type NotificationOptions, type NotificationPostResult, type NotificationResponse } from "@ardia/shell";
+import { t } from "../lib/uiLanguage";
+
 
 export type { NotificationPostResult, NotificationResponse };
 
-const Notifications = nativeModule("ArdiaNotifications");
+const Notifications = nativeModule(t(`ArdiaNotifications`));
 
 export const notificationPermission = () => Notifications.notificationPermission();
 export const requestNotificationPermission = () => Notifications.requestNotificationPermission();

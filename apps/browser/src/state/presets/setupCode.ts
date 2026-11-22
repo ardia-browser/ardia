@@ -3,6 +3,8 @@ import type { Preset } from "../onboarding/onboarding";
 import type { Settings } from "../settings/settings";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import { keyText } from "../commands/keyText";
+import { t } from "../../lib/uiLanguage";
+
 
 export const SETUP_CODE_VERSION = 1;
 export const SETUP_CODE_PREFIX = `ardia${SETUP_CODE_VERSION}-`;
@@ -79,11 +81,11 @@ const CHECK_DIGITS = 2;
 const CHECK_SPACE = 36 ** CHECK_DIGITS;
 
 export const SETUP_CODE_ERRORS = {
-  empty: "Paste a setup code first.",
+  empty: t(`Paste a setup code first.`),
   shape: `That doesn't look like a setup code. It starts with ${SETUP_CODE_PREFIX}`,
-  newer: "That code is from a newer Ardia. Update Ardia, then paste it again.",
-  damaged: "That code looks cut off or mistyped. Copy it again from ardia.dev.",
-  nothing: "That code has nothing this version of Ardia can apply.",
+  newer: t(`That code is from a newer Ardia. Update Ardia, then paste it again.`),
+  damaged: t(`That code looks cut off or mistyped. Copy it again from ardia.dev.`),
+  nothing: t(`That code has nothing this version of Ardia can apply.`),
 } as const;
 
 function checksum(body: string): string {
@@ -184,14 +186,14 @@ export function decodeSetupCode(input: string): SetupCodeResult {
   return { ok: true, choices };
 }
 
-const APPEARANCE_LINE = { auto: `Appearance follows your ${PLATFORM_TERMS.computer}`, light: "Always light", dark: "Always dark" } as const;
+const APPEARANCE_LINE = { auto: `Appearance follows your ${PLATFORM_TERMS.computer}`, light: t(`Always light`), dark: t(`Always dark`) } as const;
 
 export function describeSetupChoices(choices: SetupChoices): string[] {
   const s = choices.settings;
   const lines: string[] = [];
-  if (s.tabLayout) lines.push(s.tabLayout === "top" ? "Tabs along the top" : "Tabs in the sidebar");
-  if (s.sidebarSide === "right" && s.tabLayout !== "top") lines.push("Sidebar on the right");
-  if (s.addressBar && s.tabLayout !== "top") lines.push(s.addressBar === "sidebar" ? "Address in the sidebar" : "Address in the toolbar");
+  if (s.tabLayout) lines.push(s.tabLayout === "top" ? t(`Tabs along the top`) : t(`Tabs in the sidebar`));
+  if (s.sidebarSide === "right" && s.tabLayout !== "top") lines.push(t(`Sidebar on the right`));
+  if (s.addressBar && s.tabLayout !== "top") lines.push(s.addressBar === "sidebar" ? t(`Address in the sidebar`) : t(`Address in the toolbar`));
   if (s.newTabOpens) lines.push(s.newTabOpens === "commandBar" ? `${keyText("⌘T")} opens the command bar` : `${keyText("⌘T")} opens the New Tab page`);
   if (s.appearance) lines.push(APPEARANCE_LINE[s.appearance]);
   if (choices.color) lines.push(`${choices.color[0]!.toUpperCase()}${choices.color.slice(1)} theme`);

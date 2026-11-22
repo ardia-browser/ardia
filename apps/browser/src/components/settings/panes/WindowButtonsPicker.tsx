@@ -4,11 +4,13 @@ import { updateSettings } from "../../../state/settings/actions";
 import type { Settings } from "../../../state/settings/settings";
 import { windowButtonsChoosable } from "../../../lib/windowChrome";
 import { Group, Row, SectionHeader } from "../Form";
+import { t } from "../../../lib/uiLanguage";
+
 
 const WINDOW_BUTTON_CHOICES: Option<Settings["windowButtons"]>[] = [
-  { value: "native", title: "Native" },
-  { value: "trafficLights", title: "Traffic lights" },
-  { value: "hidden", title: "Hidden" },
+  { value: "native", title: t(`Native`) },
+  { value: "trafficLights", title: t(`Traffic lights`) },
+  { value: "hidden", title: t(`Hidden`) },
 ];
 
 export function WindowButtonsPicker() {
@@ -16,7 +18,7 @@ export function WindowButtonsPicker() {
   if (!windowButtonsChoosable) return null;
   return (
     <>
-      <SectionHeader title="Window buttons" />
+      <SectionHeader title={t(`Window buttons`)} />
       <Group>
         <Row anchor="appearance.windowButtons">
           <PopUp value={windowButtons} options={WINDOW_BUTTON_CHOICES} onChange={(v) => updateSettings({ windowButtons: v })} minWidth={180} />

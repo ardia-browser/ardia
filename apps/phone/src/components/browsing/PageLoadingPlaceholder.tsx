@@ -4,6 +4,8 @@ import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withTimi
 import { Favicon, useTheme } from "../ui";
 import { siteHost } from "./FloatingBar";
 import { loadingPlaceholderLayout as layout } from "./pageStateTokens";
+import { t } from "../../lib/uiLanguage";
+
 
 const EASE_OUT = Easing.bezier(0, 0, 0.58, 1);
 
@@ -23,7 +25,7 @@ export function pageTheme(hex: string | null): PageTheme | null {
 
 export function distinctTitle(title: string, host: string | null): string | null {
   const trimmed = title.trim();
-  if (!trimmed) return host === null ? "New Tab" : null;
+  if (!trimmed) return host === null ? t(`New Tab`) : null;
   if (host === null) return trimmed;
   const bare = (text: string) => text.toLowerCase().replaceAll("www.", "");
   if (bare(trimmed) === bare(host) || trimmed.toLowerCase().startsWith("http")) return null;
@@ -43,7 +45,7 @@ export function PageLoadingPlaceholder({ tab, revealed = false }: { tab: Placeho
     reveal.value = withDelay(layout.revealDelayMs, withTiming(1, { duration: layout.revealMs, easing: EASE_OUT }));
   }, []);
   const shown = useAnimatedStyle(() => ({ opacity: reveal.value }));
-  const spoken = tab.title.trim() || host || "New Tab";
+  const spoken = tab.title.trim() || host || t(`New Tab`);
   return (
     <Animated.View
       testID="pageLoadingPlaceholder"

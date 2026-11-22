@@ -1,3 +1,4 @@
+import { t } from "../../lib/uiLanguage";
 export type HistorySource = "thisDevice" | "otherDevice";
 
 export type HistoryEntry = { url: string; title: string; visitedAt: number; source: HistorySource };
@@ -83,9 +84,9 @@ export function historyDayTitle(day: number, now: number, locale?: string): stri
   const date = new Date(startOfDay(day));
   switch (historyDayLabel(day, now)) {
     case "today":
-      return "Today";
+      return t(`Today`);
     case "yesterday":
-      return "Yesterday";
+      return t(`Yesterday`);
     case "weekday":
       return date.toLocaleDateString(locale, { weekday: "long" });
     case "date":

@@ -6,6 +6,8 @@ import Svg, { Circle, Defs, Path, RadialGradient, Stop } from "react-native-svg"
 import { colorHex, stopLightness, withStopAt, withStopLightness, type ProfileTheme } from "@ardia/core/src/theme.ts";
 import { dialAngle, lightnessSteps, padCentre, padPoint, padWedges, stepped, stopAt, turnedStop } from "../../lib/themeEditor";
 import { capsule, font, ink, settingsLayout, space, themeEditorInk, themeEditorLayout as L, useTheme } from "../ui";
+import { t } from "../../lib/uiLanguage";
+
 
 type Change = (next: ProfileTheme, settle: boolean) => void;
 
@@ -158,7 +160,7 @@ export function LightnessBar({ theme, index, onChange, blocks }: { theme: Profil
   const change = (value: number, settle: boolean) => onChange(withStopLightness(latest.current, index, value), settle);
   return (
     <Track
-      label="Brightness"
+      label={t(`Brightness`)}
       value={stopLightness(stop)}
       thumbColor={colorHex(stop.color)}
       blocks={blocks}
@@ -227,7 +229,7 @@ export function DirectionDial({ angle, onChange, blocks }: { angle: number; onCh
         testID="themeDial"
         accessible
         accessibilityRole="adjustable"
-        accessibilityLabel="Direction"
+        accessibilityLabel={t(`Direction`)}
         accessibilityValue={{ text: `${Math.round(angle)}°` }}
         accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
         onAccessibilityAction={(event) => step(event.nativeEvent.actionName === "increment" ? 1 : -1)}

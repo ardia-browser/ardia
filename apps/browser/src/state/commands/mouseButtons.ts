@@ -1,9 +1,11 @@
 import type { MouseShortcutButton } from "../../platform/commands";
+import { t } from "../../lib/uiLanguage";
+
 
 export const MOUSE_BUTTONS = {
-  "mouse:middle": { title: "Middle Click", telemetry: "middle" },
-  "mouse:4": { title: "Mouse Button 4", telemetry: "button4" },
-  "mouse:5": { title: "Mouse Button 5", telemetry: "button5" },
+  "mouse:middle": { title: t(`Middle Click`), telemetry: "middle" },
+  "mouse:4": { title: t(`Mouse Button 4`), telemetry: "button4" },
+  "mouse:5": { title: t(`Mouse Button 5`), telemetry: "button5" },
 } as const satisfies Record<string, { title: string; telemetry: MouseShortcutButton }>;
 
 export type MouseButtonKey = keyof typeof MOUSE_BUTTONS;

@@ -6,20 +6,22 @@ import { ChipButton } from "./SiteControlsParts";
 import { Well } from "./PromptParts";
 import { connectionColor, useSiteTokens } from "./tokens";
 import { UI_LOCALE } from "../../lib/uiLocale";
+import { t } from "../../lib/uiLanguage";
+
 
 type Security = PageState["security"];
 
 function connectionLook(security: Security, theme: Theme) {
   const level = security?.level ?? "none";
-  if (level === "secure") return { level, chip: "Secure", icon: "lock.fill", color: undefined };
-  if (level === "local" || level === "none") return { level, chip: "Local Page", icon: "info.circle", color: undefined };
-  if (level === "mixed") return { level, chip: "Not Fully Secure", icon: "lock.open.trianglebadge.exclamationmark.fill", color: connectionColor.caution };
-  return { level, chip: "Not Secure", icon: "lock.open.trianglebadge.exclamationmark.fill", color: theme.destructive };
+  if (level === "secure") return { level, chip: t(`Secure`), icon: "lock.fill", color: undefined };
+  if (level === "local" || level === "none") return { level, chip: t(`Local Page`), icon: "info.circle", color: undefined };
+  if (level === "mixed") return { level, chip: t(`Not Fully Secure`), icon: "lock.open.trianglebadge.exclamationmark.fill", color: connectionColor.caution };
+  return { level, chip: t(`Not Secure`), icon: "lock.open.trianglebadge.exclamationmark.fill", color: theme.destructive };
 }
 
 export function ConnectionChip({ security, open, onPress }: { security: Security; open: boolean; onPress: () => void }) {
   const look = connectionLook(security, useTheme());
-  return <ChipButton icon={look.icon} title={look.chip} color={look.color} open={open} onPress={onPress} tooltip={open ? "Hide Connection Details" : "Connection Details"} />;
+  return <ChipButton icon={look.icon} title={look.chip} color={look.color} open={open} onPress={onPress} tooltip={open ? t(`Hide Connection Details`) : t(`Connection Details`)} />;
 }
 
 export function ConnectionRow({ security }: { security: Security }) {
@@ -28,14 +30,14 @@ export function ConnectionRow({ security }: { security: Security }) {
   const { level } = look;
   const secure = level === "secure";
   const local = level === "local" || level === "none";
-  const title = secure ? "Connection is secure" : local ? "This is a local or internal page" : "Connection is not secure";
+  const title = secure ? t(`Connection is secure`) : local ? t(`This is a local or internal page`) : t(`Connection is not secure`);
   const detail =
     level === "certificateError"
-      ? "The site's certificate isn't valid. Don't enter passwords or payment details."
+      ? t(`The site's certificate isn't valid. Don't enter passwords or payment details.`)
       : level === "mixed"
-        ? "Parts of this page aren't secure (such as images)."
+        ? t(`Parts of this page aren't secure (such as images).`)
         : level === "insecure"
-          ? "Don't enter sensitive information on this site."
+          ? t(`Don't enter sensitive information on this site.`)
           : secure && security?.certificate
             ? `Certificate issued by ${security.certificate.issuer.organizations[0] || security.certificate.issuer.commonName}`
             : undefined;
@@ -49,13 +51,13 @@ export function CertificateDetails({ security }: { security: NonNullable<Securit
   const cert = security.certificate!;
   const date = (ms: number) => new Date(ms).toLocaleDateString(UI_LOCALE, { year: "numeric", month: "short", day: "numeric" });
   const rows: [string, string][] = [
-    ["Issued to", cert.subject.commonName || cert.subject.displayName],
-    ["Organization", cert.subject.organizations.join(", ") || "—"],
-    ["Issued by", cert.issuer.commonName || cert.issuer.displayName],
-    ["Valid from", date(cert.validFrom)],
-    ["Expires", date(cert.validUntil)],
-    ...(security.protocol ? [["Protocol", security.protocol] as [string, string]] : []),
-    ...(cert.sha256 ? [["SHA-256", cert.sha256.replace(/[^0-9a-f]/gi, "").replace(/(.{2})(?!$)/g, "$1 ").slice(0, 47) + "…"] as [string, string]] : []),
+    [t(`Issued to`), cert.subject.commonName || cert.subject.displayName],
+    [t(`Organization`), cert.subject.organizations.join(", ") || "—"],
+    [t(`Issued by`), cert.issuer.commonName || cert.issuer.displayName],
+    [t(`Valid from`), date(cert.validFrom)],
+    [t(`Expires`), date(cert.validUntil)],
+    ...(security.protocol ? [[t(`Protocol`), security.protocol] as [string, string]] : []),
+    ...(cert.sha256 ? [[t(`SHA-256`), cert.sha256.replace(/[^0-9a-f]/gi, "").replace(/(.{2})(?!$)/g, "$1 ").slice(0, 47) + "…"] as [string, string]] : []),
   ];
   return (
     <View style={{ marginHorizontal: PANEL.inset, marginTop: space.xxs, marginBottom: space.xs }}>

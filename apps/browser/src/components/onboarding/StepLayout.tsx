@@ -8,6 +8,8 @@ import { ONBOARDING_CARD, OnboardingCardContext, Reveal, StepProgress, StepTitle
 import { radius, space } from "../ui/tokens";
 import { curve, duration } from "../ui/motion";
 import { ScrollEdgeLine } from "../sidebar/ScrollEdge";
+import { t } from "../../lib/uiLanguage";
+
 
 const COLUMN = { width: CONTENT_WIDTH + space.xxxl * 2, padding: space.xxxl, top: 34 };
 
@@ -203,7 +205,7 @@ function FittedPreview({ children }: { children: ReactNode }) {
 
 export function StepActions({
   onContinue,
-  continueTitle = "Continue",
+  continueTitle = t(`Continue`),
   disabled,
   onSkip,
   icon,
@@ -223,7 +225,7 @@ export function StepActions({
     <>
       {first ? null : <BackButton onPress={back} />}
       <PrimaryButton title={continueTitle} icon={icon} onPress={onContinue} disabled={disabled} />
-      {onSkip ? <SecondaryButton title="Skip" onPress={onSkip} /> : null}
+      {onSkip ? <SecondaryButton title={t(`Skip`)} onPress={onSkip} /> : null}
     </>
   );
 }

@@ -5,6 +5,8 @@ import { SettingsWindow } from "./SettingsWindow";
 import { SETTINGS_WINDOW_ID } from "../../state/settings/settingsWindows";
 import { consentToken } from "../../state/telemetry/client";
 import { warnFor } from "../../state/telemetry/logs";
+import { t } from "../../lib/uiLanguage";
+
 
 const EMPTY_CHECK_MS = 2000;
 
@@ -15,7 +17,7 @@ function useReportEmptyContent(id: string) {
     const timer = setTimeout(() => {
       const laidOut = size.current;
       if (laidOut && laidOut.width > 0 && laidOut.height > 0) return;
-      const shown = laidOut ? `${Math.round(laidOut.width)}x${Math.round(laidOut.height)}` : "never laid out";
+      const shown = laidOut ? `${Math.round(laidOut.width)}x${Math.round(laidOut.height)}` : t(`never laid out`);
       warnFor(consent, `[window] ${id} content is empty ${EMPTY_CHECK_MS} ms after opening: ${shown}`);
     }, EMPTY_CHECK_MS);
     return () => clearTimeout(timer);

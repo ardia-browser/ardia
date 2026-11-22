@@ -1,3 +1,4 @@
+import { t } from "./uiLanguage";
 export type PluginThemeRoles = { scheme: "light" | "dark"; roles: Readonly<Record<string, unknown>> };
 
 const ROLE_NAME = /^[A-Za-z][A-Za-z0-9]{0,47}$/;
@@ -32,13 +33,13 @@ export function buildPluginThemeCss(theme: PluginThemeRoles): string {
   const scheme = theme.scheme === "dark" ? "dark" : "light";
   const variables = pluginThemeVariables(theme.roles).map(([name, value]) => `  ${name}: ${value};`);
   return [
-    ":root {",
+    t(`:root {`),
     `  color-scheme: ${scheme};`,
     ...variables,
     "}",
-    "*, *::before, *::after { box-sizing: border-box; }",
+    t(`*, *::before, *::after { box-sizing: border-box; }`),
     `html, body { margin: 0; padding: 0; background: ${fallback("background", "Canvas")}; color: ${fallback("text", "CanvasText")}; }`,
-    "body { font: 13px/1.4 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }",
+    t(`body { font: 13px/1.4 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }`),
     `a { color: ${fallback("accent", "LinkText")}; }`,
     `::selection { background: ${fallback("selection", "Highlight")}; }`,
     "",

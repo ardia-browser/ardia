@@ -20,6 +20,8 @@ import { MaterialIconButton } from "./MaterialIconButton";
 import { MenuTrigger } from "./MenuTrigger";
 import { useMaterialRipple } from "./MaterialSurfaces";
 import { materialBottomBar, materialShape, materialSize, materialType } from "./materialTokens";
+import { t } from "../../lib/uiLanguage";
+
 
 export type MaterialPageBarProps = {
   tab: BrowserTab;
@@ -89,15 +91,15 @@ function PageControls({ scheme, tab, order, showsPlus, addressDocked, onTabs, on
         {({ onLongPress, screenReaderActions: menuActions }) => (
           <MaterialIconButton
             testID="materialBarTabs"
-            label="Tabs"
+            label={t(`Tabs`)}
             value={{ text: `${count} ${count === 1 ? "tab" : "tabs"}` }}
-            hint="Touch and hold for recent tabs."
+            hint={t(`Touch and hold for recent tabs.`)}
             scheme={scheme}
             {...screenReaderActions([
               { name: "activate", run: onTabs },
               ...menuActions,
-              { name: "previousTab", label: "Previous Tab", run: () => onStep(-1) },
-              { name: "nextTab", label: "Next Tab", run: () => onStep(1) },
+              { name: "previousTab", label: t(`Previous Tab`), run: () => onStep(-1) },
+              { name: "nextTab", label: t(`Next Tab`), run: () => onStep(1) },
             ])}
             onPress={onTabs}
             onLongPress={onLongPress ? () => onLongPress() : undefined}
@@ -112,10 +114,10 @@ function PageControls({ scheme, tab, order, showsPlus, addressDocked, onTabs, on
         <Pressable
           testID="materialAddressField"
           accessibilityRole="button"
-          accessibilityLabel="Address"
+          accessibilityLabel={t(`Address`)}
           accessibilityValue={{ text: spokenAddress(address) }}
-          accessibilityHint="Opens search with this page’s address. Touch and hold for the page menu."
-          {...screenReaderActions([{ name: "activate", run: onAddress }, { name: "pageMenu", label: "Page Menu", run: onMore }])}
+          accessibilityHint={t(`Opens search with this page’s address. Touch and hold for the page menu.`)}
+          {...screenReaderActions([{ name: "activate", run: onAddress }, { name: "pageMenu", label: t(`Page Menu`), run: onMore }])}
           android_ripple={field}
           onPress={onAddress}
           onLongPress={onMore}
@@ -126,7 +128,7 @@ function PageControls({ scheme, tab, order, showsPlus, addressDocked, onTabs, on
             testID="materialBarSiteSettings"
             icon="ellipsis"
             iconSize={FIELD_ICON}
-            label="Page Menu"
+            label={t(`Page Menu`)}
             scheme={scheme}
             size="compact"
             turned
@@ -135,7 +137,7 @@ function PageControls({ scheme, tab, order, showsPlus, addressDocked, onTabs, on
         </Pressable>
       </View>
       {showsPlus ? (
-        <MaterialIconButton testID="materialBarPlus" icon="plus" label="New Search" scheme={scheme} onPress={onPlus} />
+        <MaterialIconButton testID="materialBarPlus" icon="plus" label={t(`New Search`)} scheme={scheme} onPress={onPlus} />
       ) : null}
     </>
   );
@@ -162,9 +164,9 @@ export function MaterialAddressContent({ address, scheme, testID }: { address: R
 
 function OverviewControls({ scheme, search, incognito, privateCount = 0, onCloseIncognito, canReopen, menusShown, onMenu }: OverviewProps & { scheme: MaterialScheme }) {
   const { input, text, change, focus, blur } = search;
-  const fabLabel = incognito ? "New Incognito Tab" : "New Tab";
+  const fabLabel = incognito ? t(`New Incognito Tab`) : t(`New Tab`);
   const closesIncognito = menusShown && privateCount > 0 && onCloseIncognito !== undefined;
-  const closeItems = onCloseIncognito ? [{ label: "Close Incognito Tabs", destructive: true, onPress: onCloseIncognito }] : [];
+  const closeItems = onCloseIncognito ? [{ label: t(`Close Incognito Tabs`), destructive: true, onPress: onCloseIncognito }] : [];
   return (
     <>
       <MenuTrigger
@@ -181,9 +183,9 @@ function OverviewControls({ scheme, search, incognito, privateCount = 0, onClose
         {({ onLongPress }) => (
           <MaterialIconButton
             testID="materialDeckIncognito"
-            label="Incognito"
-            value={{ text: incognito ? "On" : "Off" }}
-            hint={incognito ? "Shows your tabs." : "Shows your Incognito tabs."}
+            label={t(`Incognito`)}
+            value={{ text: incognito ? t(`On`) : t(`Off`) }}
+            hint={incognito ? t(`Shows your tabs.`) : t(`Shows your Incognito tabs.`)}
             scheme={scheme}
             onPressIn={haptics.barPress}
             onPress={switchDeckIncognito}
@@ -200,8 +202,8 @@ function OverviewControls({ scheme, search, incognito, privateCount = 0, onClose
         <TextInput
           ref={input}
           testID="deckSearchField"
-          accessibilityLabel="Search Tabs"
-          placeholder="Search Tabs"
+          accessibilityLabel={t(`Search Tabs`)}
+          placeholder={t(`Search Tabs`)}
           placeholderTextColor={scheme.onSurfaceVariant}
           cursorColor={scheme.secondary}
           selectionColor={withAlpha(scheme.secondary, 0.4)}
@@ -215,7 +217,7 @@ function OverviewControls({ scheme, search, incognito, privateCount = 0, onClose
           returnKeyType="search"
           style={[materialType.bodyLarge, styles.field, { color: scheme.onSurface }]}
         />
-        {text ? <MaterialBarIconButton testID="materialDeckSearchClear" icon="xmark" label="Clear Search" scheme={scheme} onPress={() => change("")} /> : null}
+        {text ? <MaterialBarIconButton testID="materialDeckSearchClear" icon="xmark" label={t(`Clear Search`)} scheme={scheme} onPress={() => change("")} /> : null}
       </Pressable>
       <MenuTrigger
         items={plusMenuItems(incognito, canReopen)}
@@ -233,7 +235,7 @@ function OverviewControls({ scheme, search, incognito, privateCount = 0, onClose
             testID="materialDeckFab"
             icon="plus"
             label={fabLabel}
-            hint="Touch and hold for more options."
+            hint={t(`Touch and hold for more options.`)}
             scheme={scheme}
             onPressIn={haptics.barPress}
             onPress={newTab}
@@ -252,8 +254,8 @@ function StartControls({ scheme, incognito, onSearch }: MaterialStartBarProps & 
       <Pressable
         testID="materialStartSearch"
         accessibilityRole="button"
-        accessibilityLabel={incognito ? "New Incognito Tab" : "New Tab"}
-        accessibilityHint="Opens search."
+        accessibilityLabel={incognito ? t(`New Incognito Tab`) : t(`New Tab`)}
+        accessibilityHint={t(`Opens search.`)}
         android_ripple={field}
         onPress={onSearch}
         style={[styles.fieldContainer, styles.fieldPressable, styles.startField, { backgroundColor: scheme.surfaceContainerHigh }]}

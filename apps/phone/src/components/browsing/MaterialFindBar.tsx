@@ -12,6 +12,8 @@ import { MaterialBottomBarSurface } from "../ui/MaterialBottomBar";
 import { useMaterialBack } from "../ui/MaterialSurfaces";
 import { useMaterialTheme } from "../ui/materialTheme";
 import { materialBottomBar, materialShape, materialType } from "../ui/materialTokens";
+import { t } from "../../lib/uiLanguage";
+
 
 export function MaterialFindBar({ tabId }: { tabId: string }) {
   const { dark, scheme } = useMaterialTheme();
@@ -52,17 +54,17 @@ export function MaterialFindBar({ tabId }: { tabId: string }) {
         ref={input}
         testID="materialFindInput"
         fieldOnly
-        fieldLabel="Find on Page"
-        placeholder="Find on Page"
+        fieldLabel={t(`Find on Page`)}
+        placeholder={t(`Find on Page`)}
         text={query}
         appearance={{ dark, scheme }}
         onTypedChange={typeFind}
         onSubmit={() => matches && findNext()}
         style={styles.field}
       />
-      <FindControl icon="chevronUp" label="Previous Match" enabled={matches} onPress={findPrevious} />
-      <FindControl icon="chevronDown" label="Next Match" enabled={matches} onPress={findNext} />
-      <FindControl icon="xmark" label="Close Find" enabled onPress={dismiss} />
+      <FindControl icon="chevronUp" label={t(`Previous Match`)} enabled={matches} onPress={findPrevious} />
+      <FindControl icon="chevronDown" label={t(`Next Match`)} enabled={matches} onPress={findNext} />
+      <FindControl icon="xmark" label={t(`Close Find`)} enabled onPress={dismiss} />
     </MaterialBottomBarSurface>
   );
 }

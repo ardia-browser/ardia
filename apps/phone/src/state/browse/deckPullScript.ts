@@ -4,6 +4,8 @@ import { currentTabs } from "../tabs/store";
 import { sendDeckCommand } from "./deckCommands";
 import { deckPullArmed, deckStandbyId, replayDeckPull, type PullPath } from "./deckPull";
 import { deckPullBegan, deckPullReleased, deckPullSettled, useBrowse, type Surface } from "./store";
+import { t } from "../../lib/uiLanguage";
+
 
 export const DECK_PULL_SCRIPT = {
   startMs: 2500,
@@ -72,7 +74,7 @@ export async function runDeckPullScript(times: number, log: (line: string) => vo
   if (await until(() => pullablePage() !== null, DECK_PULL_SCRIPT.readyMs)) {
     const id = pullablePage();
     if (id) {
-      log("PAGELAB deck pull script: early release");
+      log(t(`PAGELAB deck pull script: early release`));
       if ((await replay(id, DECK_PULL_SCRIPT.returns)) === "returned") returned = 1;
       await wait(DECK_PULL_SCRIPT.settleMs);
     }

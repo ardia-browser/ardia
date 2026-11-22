@@ -4,6 +4,8 @@ import { command, SPLIT_SIDES, tool, whenOf, type CommandSpec, type PageSide, ty
 import { passwordManagerOf, type PasswordManagerSpec } from "./pluginPasswordManager";
 import { settingsOf, type SettingsSpec } from "./pluginRows";
 import { program, type ProgramSpec } from "./pluginRuntime";
+import { t } from "./uiLanguage";
+
 
 export const MENU_SLOTS = ["tab", "group"] as const;
 export type MenuSlot = (typeof MENU_SLOTS)[number];
@@ -44,7 +46,7 @@ function menuItem(c: Check, path: string, value: unknown): MenuContribution | nu
   const doc = object(c, path, value);
   if (!doc) return null;
   only(c, path, doc, ["command", "title", "icon", "when"]);
-  const name = matching(c, `${path}.command`, doc.command, NAME, "one of the plugin's commands");
+  const name = matching(c, `${path}.command`, doc.command, NAME, t(`one of the plugin's commands`));
   const title = text(c, `${path}.title`, doc.title, LIMITS.title, false);
   const icon = doc.icon === undefined ? null : symbolOf(c, `${path}.icon`, doc.icon);
   const when = whenOf(c, `${path}.when`, doc.when);
@@ -71,10 +73,10 @@ function toolbarItem(c: Check, path: string, value: unknown): ToolbarItem | null
   only(c, path, doc, ["id", "title", "icon", "command", "view", "tooltip"]);
   const id = idOf(c, path, doc);
   const title = text(c, `${path}.title`, doc.title, LIMITS.title);
-  const icon = matching(c, `${path}.icon`, doc.icon, /^[a-z0-9.]{1,64}$/, "an SF Symbol name");
+  const icon = matching(c, `${path}.icon`, doc.icon, /^[a-z0-9.]{1,64}$/, t(`an SF Symbol name`));
   const tooltip = text(c, `${path}.tooltip`, doc.tooltip, LIMITS.tooltip, false);
   if ((doc.command === undefined) === (doc.view === undefined)) c.problems.push(`${path} needs either command or view`);
-  const cmd = doc.command === undefined ? null : matching(c, `${path}.command`, doc.command, NAME, "one of the plugin's commands");
+  const cmd = doc.command === undefined ? null : matching(c, `${path}.command`, doc.command, NAME, t(`one of the plugin's commands`));
   const view = doc.view === undefined ? null : matching(c, `${path}.view`, doc.view, KEY, KEY_RULE);
   if (!id || !title || !icon || (!cmd && !view)) return null;
   return { id, title, icon, ...(cmd ? { command: cmd } : {}), ...(view ? { view } : {}), ...(tooltip ? { tooltip } : {}) };
@@ -108,7 +110,7 @@ function panel(c: Check, path: string, value: unknown): PanelSpec | null {
     c.problems.push(`${path}.file must be a path inside the plugin's folder, like page/index.html, or the panel needs a view`);
     return null;
   }
-  const file = doc.file === undefined ? null : pluginFile(c, `${path}.file`, doc.file, "a path inside the plugin's folder, like page/index.html");
+  const file = doc.file === undefined ? null : pluginFile(c, `${path}.file`, doc.file, t(`a path inside the plugin's folder, like page/index.html`));
   const view = doc.view === undefined ? null : matching(c, `${path}.view`, doc.view, KEY, KEY_RULE);
   if (doc.side !== undefined && mode !== "split") c.problems.push(`${path}.side only goes with mode split`);
   const side = doc.side === undefined ? undefined : (SPLIT_SIDES as readonly unknown[]).includes(doc.side) ? (doc.side as PageSide) : (c.problems.push(`${path}.side must be left, right, top or bottom`), undefined);
@@ -122,7 +124,7 @@ function omnibox(c: Check, path: string, value: unknown): OmniboxSpec | null {
   only(c, path, doc, ["id", "title", "keyword", "global"]);
   const id = idOf(c, path, doc);
   const title = text(c, `${path}.title`, doc.title, LIMITS.title);
-  const keyword = matching(c, `${path}.keyword`, doc.keyword, KEYWORD, "1 to 32 letters, digits, - and _", false);
+  const keyword = matching(c, `${path}.keyword`, doc.keyword, KEYWORD, t(`1 to 32 letters, digits, - and _`), false);
   const global = flag(c, `${path}.global`, doc.global);
   if (!keyword && !global) c.problems.push(`${path} needs a keyword or global: true, or it never shows`);
   if (keyword && global) c.problems.push(`${path} takes a keyword or global: true, not both`);
@@ -135,7 +137,7 @@ function theme(c: Check, path: string, value: unknown): ThemeSpec | null {
   only(c, path, doc, ["id", "title", "file"]);
   const id = idOf(c, path, doc);
   const title = text(c, `${path}.title`, doc.title, LIMITS.title);
-  const file = pluginFile(c, `${path}.file`, doc.file, "a .json file inside the plugin's folder, like themes/dusk.json", ".json");
+  const file = pluginFile(c, `${path}.file`, doc.file, t(`a .json file inside the plugin's folder, like themes/dusk.json`), ".json");
   return id && title && file ? { id, title, file } : null;
 }
 
@@ -159,10 +161,10 @@ export function contributesOf(c: Check, value: unknown, hasMain: boolean): Plugi
     programs: parsed(c, "programs", doc.programs, LIMITS.programs, program, (p) => p.name, "programs"),
     passwordManager,
     menus: menusOf(c, doc.menus),
-    toolbar: parsed(c, "toolbar", doc.toolbar, LIMITS.toolbar, toolbarItem, (t) => t.id, "toolbar items"),
-    sidebarViews: parsed(c, "sidebarViews", doc.sidebarViews, LIMITS.sidebarViews, sidebarView, (v) => v.id, "sidebar views"),
+    toolbar: parsed(c, "toolbar", doc.toolbar, LIMITS.toolbar, toolbarItem, (t) => t.id, t(`toolbar items`)),
+    sidebarViews: parsed(c, "sidebarViews", doc.sidebarViews, LIMITS.sidebarViews, sidebarView, (v) => v.id, t(`sidebar views`)),
     panels: parsed(c, "panels", doc.panels, LIMITS.panels, panel, (p) => p.id, "panels"),
-    omnibox: parsed(c, "omnibox", doc.omnibox, LIMITS.omnibox, omnibox, (o) => o.id, "omnibox providers"),
+    omnibox: parsed(c, "omnibox", doc.omnibox, LIMITS.omnibox, omnibox, (o) => o.id, t(`omnibox providers`)),
     themes: parsed(c, "themes", doc.themes, LIMITS.themes, theme, (t) => t.id, "themes"),
   };
 }

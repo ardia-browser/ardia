@@ -5,6 +5,8 @@ import { APP_INGEST_KEY, INGEST_KEY_HEADER } from "@ardia/core";
 import { DEV_SEND_TEST_KEY, LOGS_URL } from "./config";
 import { logRequest, type RequestLogEntry } from "./requestLog";
 import { consentToken, counted } from "./choice";
+import { t } from "../../lib/uiLanguage";
+
 
 let app: SystemInfo | null = null;
 export const appInfo = () => (app ??= systemInfo());
@@ -33,7 +35,7 @@ export function takePostStats() {
 
 export const resetPostStats = () => void takePostStats();
 
-export const POST_HEADERS: Readonly<Record<string, string>> = { "Content-Type": "application/json", [INGEST_KEY_HEADER]: APP_INGEST_KEY };
+export const POST_HEADERS: Readonly<Record<string, string>> = { t(`Content-Type`): "application/json", [INGEST_KEY_HEADER]: APP_INGEST_KEY };
 
 export async function post(kind: RequestLogEntry["kind"], body: string, count: number, signal?: AbortSignal): Promise<number> {
   const entry: RequestLogEntry = { at: new Date().toISOString(), kind, url: LOGS_URL, count, bytes: body.length, status: null };
@@ -43,7 +45,7 @@ export async function post(kind: RequestLogEntry["kind"], body: string, count: n
     return 200;
   }
   try {
-    entry.status = host.send ? await host.send(body, signal) : (await fetch(LOGS_URL, { method: "POST", headers: POST_HEADERS, body, signal })).status;
+    entry.status = host.send ? await host.send(body, signal) : (await fetch(LOGS_URL, { method: t(`POST`), headers: POST_HEADERS, body, signal })).status;
   } catch {
     entry.status = 0;
   }

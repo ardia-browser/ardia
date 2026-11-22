@@ -66,6 +66,8 @@ import { rememberPageTones, restorePageTones } from "../pages/toneMemory";
 import { followColorInWidgets } from "../settings/widgetColor";
 import { coverIsCapturable, isSyncableUrl, pageStatePatch, titleAfterFailedLoad, type BrowserTab, type TabOrigin } from "../tabs/tabModels";
 import { syncOffered } from "../../platform/system";
+import { t } from "../../lib/uiLanguage";
+
 
 export type Surface = "start" | "browsing" | "deck";
 export type Sheet = "archive" | "spaces" | null;
@@ -387,9 +389,9 @@ let trackedPull: string | null = null;
 
 const pullCounts = (id: string) => !useTabs.getState().incognito && !findTab(currentTabs(), id)?.isPrivate;
 
-const PULL_PERF = "deck pull";
+const PULL_PERF = t(`deck pull`);
 const PULLED_PAGE_TOP = 0;
-const PULL_LANDING_PERF = "deck pull landing";
+const PULL_LANDING_PERF = t(`deck pull landing`);
 
 export function deckPullBegan(id: string, tracked = true) {
   const tab = findTab(currentTabs(), id);
@@ -409,7 +411,7 @@ export function deckPullBegan(id: string, tracked = true) {
 
 export function deckPullReleased(id: string, lands: boolean) {
   cutInteraction(PULL_PERF);
-  beginInteraction(lands ? PULL_LANDING_PERF : "deck pull return", INTERACTION_WINDOW_MS.deckPullLanding);
+  beginInteraction(lands ? PULL_LANDING_PERF : t(`deck pull return`), INTERACTION_WINDOW_MS.deckPullLanding);
   if (pullCounts(id)) countUsage(lands ? "deck_bar_swipes" : "deck_bar_swipes_returned");
 }
 
@@ -418,7 +420,7 @@ function landDeckFromRest(id: string) {
   landingFromRest = id;
   deckPullBegan(id, false);
   if (deckStandbyId() !== id) {
-    labTrace("PAGELAB deck pull waits for the deck to be ready for this page");
+    labTrace(t(`PAGELAB deck pull waits for the deck to be ready for this page`));
     refreshHiddenDeck();
     wantDeckStandby();
   }
@@ -427,13 +429,13 @@ function landDeckFromRest(id: string) {
     if (useBrowse.getState().surface !== "browsing" || currentTabs().selectedId !== id) {
       landingFromRest = null;
       pullCapture = null;
-      labTrace("PAGELAB deck pull dropped, its page is no longer in front");
+      labTrace(t(`PAGELAB deck pull dropped, its page is no longer in front`));
       return;
     }
     if (!ready) {
       landingFromRest = null;
       pullCapture = null;
-      labTrace("PAGELAB deck pull gave up waiting, the deck opens without it");
+      labTrace(t(`PAGELAB deck pull gave up waiting, the deck opens without it`));
       void enterDeck();
       return;
     }
@@ -469,7 +471,7 @@ function whenPullPicturePainted(id: string, then: () => void) {
         } else {
           if (now === null || !picturePainted(pictureKey(`deck:${id}`, now))) {
             if (pullCounts(id)) countUsage("deck_pictures_late");
-            labTrace("PAGELAB deck pull handed over before its picture had painted");
+            labTrace(t(`PAGELAB deck pull handed over before its picture had painted`));
           }
           then();
         }
@@ -497,7 +499,7 @@ function deckPullRefused(id: string) {
   landingFromRest = null;
   if (trackedPull !== null || useBrowse.getState().surface !== "browsing" || currentTabs().selectedId !== id) return;
   pullCapture = null;
-  labTrace("PAGELAB deck pull refused on the UI thread, the deck opens without it");
+  labTrace(t(`PAGELAB deck pull refused on the UI thread, the deck opens without it`));
   void enterDeck();
 }
 

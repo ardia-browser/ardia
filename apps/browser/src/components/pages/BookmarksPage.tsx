@@ -16,6 +16,8 @@ import { DropTargets } from "./dropTargets";
 import { PageHeader } from "./PageLayout";
 import { bookmarkList, pagesColors, undoToast } from "./tokens";
 import { COMMAND_KEY, commandHeld } from "../../state/commands/keyNotation";
+import { t } from "../../lib/uiLanguage";
+
 
 
 type Target = { kind: "folder"; id: string } | { kind: "row"; id: string; index: number; folder: boolean };
@@ -109,17 +111,17 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
     selected.length > 0 ? (
       <>
         <Text size="small" tone="textSecondary">{`${selected.length} selected`}</Text>
-        <Button title="Delete" kind="primary" onPress={() => remove(selected)} />
+        <Button title={t(`Delete`)} kind="primary" onPress={() => remove(selected)} />
       </>
     ) : (
-      <Button variant="icon" icon="ellipsis.circle" onPress={() => void openOrganizeMenu(windowId, profileId, folderId)} tooltip="Organize" />
+      <Button variant="icon" icon="ellipsis.circle" onPress={() => void openOrganizeMenu(windowId, profileId, folderId)} tooltip={t(`Organize`)} />
     );
 
   const indicator = drop && "index" in drop ? drop.index : null;
 
   return (
     <View style={{ flex: 1 }}>
-      <PageHeader title="Bookmarks" query={query} onQuery={setQuery} actions={actions} />
+      <PageHeader title={t(`Bookmarks`)} query={query} onQuery={setQuery} actions={actions} />
       <View style={BODY}>
         <ScrollView style={TREE} contentContainerStyle={TREE_CONTENT}>
           <FolderTree
@@ -146,14 +148,14 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
               {searching ? `Results for “${query.trim()}”` : folderTitle}
             </Text>
             {!searching && folderId && (
-              <Button title="Open All" onPress={() => void openFolder(folderId, windowId)} disabled={!ids.length} />
+              <Button title={t(`Open All`)} onPress={() => void openFolder(folderId, windowId)} disabled={!ids.length} />
             )}
           </Box>
           <Divider thick />
           {ids.length === 0 ? (
             <EmptyState
               symbol={searching ? "magnifyingglass" : "bookmark"}
-              title={searching ? "No search results found" : "This folder is empty"}
+              title={searching ? t(`No search results found`) : t(`This folder is empty`)}
             />
           ) : (
             <View
@@ -206,7 +208,7 @@ export function BookmarksPage({ tabId, profileId }: { tabId: string; profileId: 
       {undo && (
         <Toast
           title={`${plural(undo.count, "item")} deleted`}
-          action="Undo"
+          action={t(`Undo`)}
           onAction={undoRemove}
           closing={undoClosing}
           onClosed={() => setUndo(null)}
@@ -220,7 +222,7 @@ function DropLine({ top, color }: { top: number; color: string }) {
   return <View style={[DROP_LINE, { top: top - bookmarkList.dropLine / 2, backgroundColor: color }]} />;
 }
 
-const LIST_KEYS = [{ key: "Backspace" }, { key: "Delete" }, { key: "a", [COMMAND_KEY]: true }];
+const LIST_KEYS = [{ key: t(`Backspace`) }, { key: t(`Delete`) }, { key: "a", [COMMAND_KEY]: true }];
 
 const BODY = { flex: 1, flexDirection: "row", paddingHorizontal: space.xl, paddingBottom: space.xl, gap: space.xl } as const;
 const TREE = { width: bookmarkList.treeWidth, flexGrow: 0 } as const;

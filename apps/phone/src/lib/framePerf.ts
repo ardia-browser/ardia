@@ -1,3 +1,4 @@
+import { t } from "./uiLanguage";
 export const FRAME_BUDGET_MS = { at60: 1000 / 60, at120: 1000 / 120 } as const;
 
 export type FrameSummary = { frames: number; p50: number; p90: number; max: number; overBudget: number };
@@ -48,8 +49,8 @@ export function interactionLine(name: string, windowMs: number, js: FrameSummary
   return [
     `PAGELAB perf ${name} ${Math.round(windowMs)}ms`,
     frameText("js", js),
-    ui ? frameText("ui", ui) : "ui unmeasured",
+    ui ? frameText("ui", ui) : t(`ui unmeasured`),
     `renders ${total}${counted.length ? ` (${counted.join(" ")})` : ""}`,
-    look ? lookText(look) : "look unmeasured",
+    look ? lookText(look) : t(`look unmeasured`),
   ].join(" | ");
 }

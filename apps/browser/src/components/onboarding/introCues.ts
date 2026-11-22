@@ -1,6 +1,8 @@
 import type { IntroMusicCues } from "../../state/onboarding/onboarding";
+import { t } from "../../lib/uiLanguage";
 
-export const WORDMARK = "Ardia";
+
+export const WORDMARK = t(`Ardia`);
 export const LETTER = 0.52;
 export const TAGLINE = 0.6;
 export const EXIT = 0.65;

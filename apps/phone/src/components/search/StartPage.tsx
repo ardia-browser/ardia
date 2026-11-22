@@ -14,6 +14,8 @@ import { StartCircleButton, StartPlusButton } from "./StartBarButtons";
 import { StartMark, StartSpaces, startBarCenterY, type StartGeometry } from "./StartSpaces";
 import { useBottomBarLayout } from "../ui/useBottomBarLayout";
 import { barSpanCenter, besideStrip, DUO_BAR } from "../../lib/bottomBarSpan";
+import { t } from "../../lib/uiLanguage";
+
 
 export function StartPage() {
   const insets = useSafeAreaInsets();
@@ -43,7 +45,7 @@ export function StartPage() {
   const plus = (
     <StartPlusButton
       width={strip ? DUO_BAR.button : startLayout.barPlus.width}
-      label={incognito ? "New Incognito Tab" : "New Tab"}
+      label={incognito ? t(`New Incognito Tab`) : t(`New Tab`)}
       testID="startBarPlus"
       dark={dark}
       incognito={incognito}
@@ -60,7 +62,7 @@ export function StartPage() {
       <Animated.View testID="startBar" {...hidden} style={[styles.bar, { top: barTop, paddingLeft: barSpan.left, paddingRight: barSpan.right }, strip?.ends ? styles.barEnds : null, barStyle]}>
         {strip ? null : tabs}
         {strip ? null : plus}
-        <StartCircleButton icon="gearshape" label="Settings" testID="startBarSettings" dark={dark} incognito={incognito} onPress={() => openSettings()} />
+        <StartCircleButton icon="gearshape" label={t(`Settings`)} testID="startBarSettings" dark={dark} incognito={incognito} onPress={() => openSettings()} />
       </Animated.View>
       {strip ? (
         <>
@@ -79,13 +81,13 @@ export function StartPage() {
 function useStartLeading(incognito: boolean): { icon: SymbolName; label: string; testID: string; onPress: () => void } {
   const hasTabs = useHasTabs();
   const syncs = useSyncEnabled();
-  if (hasTabs) return { icon: "squareOnSquare", label: "Tabs", testID: "startBarTabs", onPress: showDeck };
+  if (hasTabs) return { icon: "squareOnSquare", label: t(`Tabs`), testID: "startBarTabs", onPress: showDeck };
   const open = syncs ? openSpaces : openArchive;
   const onPress = () => {
     if (!incognito) countUsage("start_no_tabs_button_taps");
     open();
   };
-  return syncs ? { icon: "laptop", label: "Synced Tabs", testID: "startBarSynced", onPress } : { icon: "archivebox", label: "Archive", testID: "startBarArchive", onPress };
+  return syncs ? { icon: "laptop", label: t(`Synced Tabs`), testID: "startBarSynced", onPress } : { icon: "archivebox", label: t(`Archive`), testID: "startBarArchive", onPress };
 }
 
 const styles = StyleSheet.create({

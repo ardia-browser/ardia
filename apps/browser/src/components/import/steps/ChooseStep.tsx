@@ -9,6 +9,8 @@ import { chooseSource, closeImport, importsBySpaces, setImportTarget, toggleImpo
 import { importBookmarksHtml } from "../../../state/import/fileImports";
 import { continueImport } from "../../../state/import/runImport";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
+import { t } from "../../../lib/uiLanguage";
+
 
 const HIDDEN_KINDS: ImportKind[] = ["spaces", "pinnedTabs"];
 
@@ -23,7 +25,7 @@ export function ChooseBody({ flow }: { flow: ImportFlow }) {
     : KINDS.filter((k) => source.profiles.some((p) => p.available.includes(k.kind)) && (!HIDDEN_KINDS.includes(k.kind) || (diaTabs && k.kind === "pinnedTabs")));
   return (
     <>
-      <Title title="Import from Another Browser" subtitle="Import once and stay in your flow. Your tabs, passwords, bookmarks and history come with you, and you stay signed in." />
+      <Title title={t(`Import from Another Browser`)} subtitle={t(`Import once and stay in your flow. Your tabs, passwords, bookmarks and history come with you, and you stay signed in.`)} />
       {browsers.length === 0 ? (
         <Note text={`No other browsers with data to import were found on this ${PLATFORM_TERMS.computer}.`} />
       ) : (
@@ -35,12 +37,12 @@ export function ChooseBody({ flow }: { flow: ImportFlow }) {
       )}
       {source && !source.requiresExport && !source.needsFullDiskAccess && (
         <View>
-          <SectionHeader title="What to import" />
+          <SectionHeader title={t(`What to import`)} />
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.xl }}>
             {shown.map((k) => (
               <Checkbox
                 key={k.kind}
-                label={k.kind === "tabs" && bySpaces ? "Spaces and tabs" : k.kind === "tabs" && diaTabs ? "Open tabs" : k.kind === "favorites" && source.sidebar === "zen" ? "Essentials" : k.title}
+                label={k.kind === "tabs" && bySpaces ? t(`Spaces and tabs`) : k.kind === "tabs" && diaTabs ? t(`Open tabs`) : k.kind === "favorites" && source.sidebar === "zen" ? t(`Essentials`) : k.title}
                 value={kinds.has(k.kind)}
                 onChange={(v) => toggleImportKind(k.kind, v)}
               />
@@ -62,11 +64,11 @@ export function ChooseFooter({ flow }: { flow: ImportFlow }) {
   const { source, kinds } = flow;
   return (
     <>
-      <Button title="Bookmarks HTML File…" onPress={() => void importBookmarksHtml()} />
+      <Button title={t(`Bookmarks HTML File…`)} onPress={() => void importBookmarksHtml()} />
       <Spacer />
       <TargetPicker target={flow.target} onChange={setImportTarget} />
-      <Button title="Cancel" onPress={closeImport} />
-      <Button title="Continue" kind="primary" disabled={!source || (!source.requiresExport && !source.needsFullDiskAccess && kinds.size === 0)} onPress={continueImport} />
+      <Button title={t(`Cancel`)} onPress={closeImport} />
+      <Button title={t(`Continue`)} kind="primary" disabled={!source || (!source.requiresExport && !source.needsFullDiskAccess && kinds.size === 0)} onPress={continueImport} />
     </>
   );
 }

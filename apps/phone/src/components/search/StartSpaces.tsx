@@ -16,6 +16,8 @@ import type { SyncedProfile } from "../../state/sync/store";
 import { countUsage } from "../../state/telemetry/telemetry";
 import { AppIcon, browseLayout, CustomLookBackdrop, DEFAULT_PROFILE_COLOR, font, isSymbolName, PROFILE_PRESETS, rolesFor, spring, startInk, startLayout, Symbol, SystemGlyph, tabsCurve, useProfileLook, useReduceMotion, type SymbolName } from "../ui";
 import { startGradient, startLogo } from "./startLook";
+import { t } from "../../lib/uiLanguage";
+
 
 export type StartGeometry = { width: number; height: number; safeSide: number; barCenterY: number };
 
@@ -170,8 +172,8 @@ export function StartMark({ incognito }: { incognito: boolean }) {
         <Pressable
           testID="startLogoButton"
           accessibilityRole="button"
-          accessibilityLabel="Search"
-          accessibilityHint="Opens Search."
+          accessibilityLabel={t(`Search`)}
+          accessibilityHint={t(`Opens Search.`)}
           onPressIn={() => {
             haptics.barPress();
             pressed.value = reduceMotion ? withTiming(1, { duration: startLogo.reducedSettleMs / 2 }) : withSpring(1, press);

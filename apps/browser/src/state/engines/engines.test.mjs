@@ -380,3 +380,14 @@ test("many tabs don't make an open tab record its page again", () => {
 test("the Mac always offers a page engine choice, so Site Controls keeps Opens in for every page, local files included", () => {
   assert.equal(offersEngineChoice(), true);
 });
+
+test("files open in WebKit when the files switch is on, and follow the default when it's off", () => {
+  const file = "file:///Users/me/page.html";
+  assert.equal(engineForUrl(state([]), file), "chromium");
+  assert.equal(engineForUrl(state([], { pageEngine: "webkit" }), file), "webkit");
+  assert.equal(engineForUrl(state([], { filesInWebKit: true }), file), "webkit");
+  assert.equal(engineForUrl(state([], { filesInWebKit: true }), "https://example.com/"), "chromium");
+  assert.equal(engineForUrl(state([], { filesInWebKit: true, engineMode: "chromium" }), file), "chromium");
+  const s = state([tab("page", { engine: "chromium", url: "https://example.com/" })], { filesInWebKit: true });
+  assert.equal(typedNavigationEngine(s, s.tabs.page, file), "webkit");
+});

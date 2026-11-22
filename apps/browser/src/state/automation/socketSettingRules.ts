@@ -50,6 +50,7 @@ export const SOCKET_SETTING_RULES: Partial<Record<SettingKey, Rule>> = {
   pageEngine: (value) => shaped("pageEngine", value, () => (value === "webkit" && !PLATFORM_FEATURES.webKit ? { problem: `pageEngine: ${NO_WEBKIT}` } : { patch: { pageEngine: value as Settings["pageEngine"] } })),
   websiteEngines: (value) => needsWebKit("websiteEngines", value, () => websiteEngines(value)),
   protectedVideoInWebKit: (value) => needsWebKit("protectedVideoInWebKit", value, () => ({ patch: { protectedVideoInWebKit: value as boolean } })),
+  filesInWebKit: (value) => needsWebKit("filesInWebKit", value, () => ({ patch: { filesInWebKit: value as boolean } })),
   newTabUrl: (value) => shaped("newTabUrl", value, () => newTabUrl(value)),
   customSearchUrl: (value, settings, requested) => shaped("customSearchUrl", value, () => customSearchUrl(value, settings, requested)),
 };

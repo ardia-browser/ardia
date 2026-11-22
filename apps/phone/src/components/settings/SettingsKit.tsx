@@ -29,7 +29,6 @@ export function SettingsPage({ title, onBack, onClose, leading, trailing, childr
       }
     : null;
   const sheetList = frame?.list(refresh !== null);
-  const [scrolled, setScrolled] = useState(startOffset.y > 0);
   const [offset, setOffset] = useState(startOffset.y);
   const collapsed = offset >= mediumTitleHeight;
   const [heroAway, setHeroAway] = useState(false);
@@ -51,7 +50,6 @@ export function SettingsPage({ title, onBack, onClose, leading, trailing, childr
           leading={leading}
           trailing={trailing}
           mediumAppBar={mediumAppBar}
-          scrolled={scrolled}
           collapsed={collapsed}
           topInset={frame ? 0 : insets.top}
           leftInset={insets.left}
@@ -114,7 +112,6 @@ export function SettingsPage({ title, onBack, onClose, leading, trailing, childr
             sheetList?.onScroll(event);
             const y = event.nativeEvent.contentOffset.y;
             rememberSettingsScroll(title, y);
-            if (y > 0 !== scrolled) setScrolled(y > 0);
             if (mediumAppBar && (y >= mediumTitleHeight) !== collapsed) setOffset(y);
             if (heroTitle) setHeroAway(y > settingsLayout.heroScrollThreshold);
           }}

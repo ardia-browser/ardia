@@ -20,8 +20,7 @@ const DesignContext = createContext<Design | null>(null);
 
 export function useDesign(): Design {
   const pinned = useContext(DesignContext);
-  const materialYou = usePreferences((p) => p.materialYou);
-  return pinned ?? designWith(materialYou);
+  return usePreferences((p) => pinned ?? designWith(p.materialYou));
 }
 
 export function followDesign(apply: (design: Design) => void): () => void {

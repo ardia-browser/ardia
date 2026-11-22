@@ -1880,8 +1880,12 @@ go back, and `app_launched.material_colors` (`not_material` while it is off) for
 
 ### Android motion and menu follow-up
 
+Settings keeps the same sheet and scroll view when Material You changes. The covered browser follows at lower
+render priority, and open menus keep their opening design through dismissal. Watch the existing
+`material_you_turned_on`, `material_you_turned_off` and drawn-menu usage counts; no new telemetry fields are sent.
+
 - Android Settings subpages change instantly on push and Back. The top-level Settings sheet opens and dismisses
-  with its own motion.
+  with its own motion. Material You uses a compact top bar with a Close button.
 - Without a connected Mac, Android's redesigned start page shows the Ardia logo. Tap it to open Search. Sync
   setup is available in Settings. Watch `start_logo_taps` in `usage_counts` for how often people use the logo to
   start a search. Incognito taps are excluded.

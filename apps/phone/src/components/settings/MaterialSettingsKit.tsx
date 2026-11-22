@@ -1,5 +1,6 @@
 import { Children, createContext, useContext, useState, type ReactNode } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { Pressable } from "react-native-gesture-handler";
 import { withAlpha } from "../../lib/color";
 import { MaterialIconButton, Symbol, ToggleTrack, type SymbolName } from "../ui";
 import { MATERIAL_STATE } from "../ui/materialRoles";
@@ -14,8 +15,6 @@ const MEDIUM_TITLE_HEIGHT = 48;
 
 export const materialMediumTitleHeight = (fontScale: number) => Math.max(MEDIUM_TITLE_HEIGHT, Math.ceil(materialType.headlineMedium.lineHeight * fontScale) + 12);
 
-export const materialAppBarFill = (scheme: { surfaceContainer: string; surfaceContainerHigh: string }, scrolled: boolean) => (scrolled ? scheme.surfaceContainerHigh : scheme.surfaceContainer);
-
 type AppBarProps = {
   title: string;
   onBack?: () => void;
@@ -23,17 +22,16 @@ type AppBarProps = {
   leading?: ReactNode;
   trailing?: ReactNode;
   mediumAppBar: boolean;
-  scrolled: boolean;
   collapsed: boolean;
   topInset: number;
   leftInset: number;
   rightInset: number;
 };
 
-export function MaterialSettingsAppBar({ title, onBack, onClose, leading, trailing, mediumAppBar, scrolled, collapsed, topInset, leftInset, rightInset }: AppBarProps) {
+export function MaterialSettingsAppBar({ title, onBack, onClose, leading, trailing, mediumAppBar, collapsed, topInset, leftInset, rightInset }: AppBarProps) {
   const { scheme } = useMaterialTheme();
   return (
-    <View testID="materialTopAppBar" style={[styles.appBar, { paddingTop: topInset, paddingLeft: leftInset + 4, paddingRight: rightInset + 4, backgroundColor: materialAppBarFill(scheme, scrolled) }]}>
+    <View testID="materialTopAppBar" style={[styles.appBar, { paddingTop: topInset, paddingLeft: leftInset + 4, paddingRight: rightInset + 4, backgroundColor: scheme.surfaceContainer }]}>
       <View style={styles.appBarRow}>
         {onBack ? (
           <MaterialIconButton testID="materialSettingsBack" icon="arrowRight" flipped label="Back" ink={scheme.onSurface} onPress={onBack} />

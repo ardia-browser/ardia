@@ -489,9 +489,22 @@ test("once the peek closes it opens again only after the pointer has left the ed
   assert.equal(arm.armed, true, "after ⌘S hides the sidebar, the watch's first report away from the edge arms it");
 });
 
-test("the native edge watch spans the hold while peeking, 8 pt during a tab drag, the edge strip when the frame is thinner than it, nothing otherwise", () => {
+test("the whole page frame beside the sidebar reveals the peek, never less than the 3 pt edge strip", () => {
+  assert.equal(dm.peekRevealBand(0), 3);
+  assert.equal(dm.peekRevealBand(2), 3);
+  assert.equal(dm.peekRevealBand(9), 9);
+  assert.equal(dm.peekRevealBand(12), 12);
+  assert.equal(dm.peekRevealBand(6, true), 8);
+  assert.equal(dm.edgeEventReveals("away", 8, false, 1200, dm.peekRevealBand(9)), true);
+  assert.equal(dm.edgeEventReveals("away", 9, false, 1200, dm.peekRevealBand(9)), false);
+  assert.equal(dm.edgeEventReveals("away", 1200 - 9, true, 1200, dm.peekRevealBand(9)), true);
+  assert.equal(dm.edgeEventReveals("away", 1200 - 10, true, 1200, dm.peekRevealBand(9)), false);
+});
+
+test("the native edge watch spans the hold while peeking, the frame or at least 8 pt during a tab drag, the edge strip when the frame is thinner than it, nothing otherwise", () => {
   assert.equal(dm.edgeWatchWidth(true, true, 269, 9), 269);
-  assert.equal(dm.edgeWatchWidth(false, true, 269, 9), 8);
+  assert.equal(dm.edgeWatchWidth(false, true, 269, 9), 9);
+  assert.equal(dm.edgeWatchWidth(false, true, 269, 6), 8);
   assert.equal(dm.edgeWatchWidth(false, false, 269, 9), 0);
   assert.equal(dm.edgeWatchWidth(false, false, 269, 2), 3, "edge to edge the strip would cover the page, so the native watch takes it and clicks reach the page");
   assert.equal(dm.edgeStripOverPage(3), false);

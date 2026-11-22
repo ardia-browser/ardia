@@ -65,8 +65,10 @@ try {
     assert.equal(await run(`return away();`), false);
   });
 
-  await rep.check("only the window's edge opens it: 5 pt in doesn't, 2 pt in and past the edge do (#1297)", async () => {
-    assert.equal(await run(`return at(300, 400).then(() => settle(300)).then(() => at(5, 400)).then(() => settle(500)).then(live);`), false, "5 pt in");
+  await rep.check("only the page frame beside the sidebar opens it: 12 pt in, on the page, doesn't; 5 pt and 2 pt in, on the 9 pt frame, do (#1297)", async () => {
+    assert.equal(await run(`return at(300, 400).then(() => settle(300)).then(() => at(12, 400)).then(() => settle(500)).then(live);`), false, "12 pt in");
+    assert.equal(await run(`return at(5, 400).then(() => settle(500)).then(live);`), true, "5 pt in");
+    assert.equal(await run(`return away();`), false);
     assert.equal(await run(`return at(2, 400).then(() => settle(500)).then(live);`), true, "2 pt in");
     assert.equal(await run(`return away();`), false);
   });

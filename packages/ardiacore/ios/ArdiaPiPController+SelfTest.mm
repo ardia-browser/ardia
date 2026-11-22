@@ -75,6 +75,7 @@ using namespace ardia_pip;
   };
   __block NSString *rightClickAt = @"", *leftClickAt = @"";
   auto dragTo = [=](CGFloat x) {
+    [self stopMotion];
     self->_sawDrag = YES;
     [window setFrameOrigin:NSMakePoint(x, NSMinY(window.frame))];
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(settle) object:nil];

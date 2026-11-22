@@ -128,10 +128,10 @@ const TAB_SWITCHER_DARK = {
   fill: "#1C1C1EF2",
   focusFill: "rgba(255,255,255,0.14)",
   restRing: "rgba(255,255,255,0.12)",
-  pageFill: "#FFFFFF",
   blankFill: "#3A3A3C",
   onPanel: "#FFFFFFB3",
   onPage: "#000000A6",
+  onDark: "#FFFFFFB3",
   title: "#FFFFFF",
 };
 
@@ -139,10 +139,10 @@ const TAB_SWITCHER_LIGHT: typeof TAB_SWITCHER_DARK = {
   fill: "#F2F2F7F2",
   focusFill: "rgba(0,0,0,0.18)",
   restRing: "rgba(0,0,0,0.1)",
-  pageFill: "#FFFFFF",
   blankFill: "#D1D1D6",
   onPanel: "#000000A6",
   onPage: "#000000A6",
+  onDark: "#FFFFFFB3",
   title: "#000000D9",
 };
 

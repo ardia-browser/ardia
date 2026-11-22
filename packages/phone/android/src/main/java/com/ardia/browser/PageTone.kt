@@ -3,12 +3,20 @@ package com.ardia.browser
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
-data class PageTone(val top: Int? = null, val bottom: Int? = null) {
+data class PageTone(val top: Int? = null, val bottom: Int? = null, val topShade: Int? = null, val bottomShade: Int? = null) {
+    fun over(earlier: PageTone?): PageTone = PageTone(top ?: earlier?.top, bottom ?: earlier?.bottom, topShade ?: earlier?.topShade, bottomShade ?: earlier?.bottomShade)
+
     companion object {
         fun resolve(themeColor: Int?, backgroundColor: Int?, sampled: PageTone?, stored: Int?): PageTone = PageTone(
-            top = themeColor ?: sampled?.top ?: backgroundColor ?: stored,
-            bottom = sampled?.bottom ?: backgroundColor ?: themeColor ?: stored,
+            top = edge(sampled?.topShade, themeColor, sampled?.top, backgroundColor, stored),
+            bottom = edge(sampled?.bottomShade, sampled?.bottom, backgroundColor, themeColor, stored),
         )
+
+        private fun edge(drawn: Int?, vararg choices: Int?): Int? {
+            val known = choices.filterNotNull()
+            if (drawn == null) return known.firstOrNull()
+            return known.firstOrNull { PageColors.isDark(it) == PageColors.isDark(drawn) } ?: drawn
+        }
     }
 }
 
@@ -55,6 +63,14 @@ object ToneSampler {
     const val BAND_HEIGHT_DP = 4f
 
     fun dominant(pixels: IntArray): Int? {
+        val best = commonest(pixels) ?: return null
+        if (best[0] * 3 < pixels.size) return null
+        return average(best)
+    }
+
+    fun shade(pixels: IntArray): Int? = commonest(pixels)?.let(::average)
+
+    private fun commonest(pixels: IntArray): IntArray? {
         if (pixels.isEmpty()) return null
         val counts = HashMap<Int, IntArray>()
         for (pixel in pixels) {
@@ -68,10 +84,12 @@ object ToneSampler {
             bucket[2] += green
             bucket[3] += blue
         }
-        val best = counts.values.maxByOrNull { it[0] } ?: return null
-        if (best[0] * 3 < pixels.size) return null
-        val count = best[0].toDouble()
-        return PageColors.opaque((best[1] / count).roundToInt(), (best[2] / count).roundToInt(), (best[3] / count).roundToInt())
+        return counts.values.maxByOrNull { it[0] }
+    }
+
+    private fun average(bucket: IntArray): Int {
+        val count = bucket[0].toDouble()
+        return PageColors.opaque((bucket[1] / count).roundToInt(), (bucket[2] / count).roundToInt(), (bucket[3] / count).roundToInt())
     }
 }
 

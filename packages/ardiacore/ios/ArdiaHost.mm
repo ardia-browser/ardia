@@ -189,6 +189,13 @@ static void (^gQuitCancelledHandler)(void);
   return ardia_host::LoadedDataProfileNames();
 }
 
++ (NSDictionary<NSString *, NSString *> *)loadedProfilePaths {
+  NSMutableDictionary<NSString *, NSString *> *paths = [NSMutableDictionary dictionary];
+  for (NSString *name in ardia_host::LoadedDataProfileNames())
+    if (NSString *path = ardia_host::LoadedProfile(name).path) paths[name] = path;
+  return paths;
+}
+
 + (BOOL)stopCapture:(NSString *)tabId {
   ArdiaCoreTab *tab = ardia_host::TabWithAppTabId(tabId);
   return [tab stopCapture];

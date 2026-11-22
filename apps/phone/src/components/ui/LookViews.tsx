@@ -12,7 +12,8 @@ import {
 import type { ReactNode } from "react";
 import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import {
-  lookAccents,
+  backdropStops,
+  lookGlassTint,
   nativeLookColors,
   windowTintStops,
   type NativeLookColors,
@@ -44,12 +45,11 @@ const INCOGNITO_COLORS: NativeLookColors = {
   color: INCOGNITO_LOOK,
   themeColors: [],
   darkThemeColors: null,
+  themeLook: null,
 };
 
-const lookGlassTint = (look: ProfileLook, dark: boolean) => lookAccents(look, dark)?.glassTint;
-
-const lookColors = (look: ProfileLook, incognito: boolean): NativeLookColors =>
-  incognito ? INCOGNITO_COLORS : nativeLookColors(look);
+const lookColors = (look: ProfileLook, incognito: boolean, dark: boolean): NativeLookColors =>
+  incognito ? INCOGNITO_COLORS : nativeLookColors(look, dark);
 
 type BackdropProps = {
   themed?: boolean;
@@ -114,7 +114,7 @@ export function LookBackdrop(props: BackdropProps) {
       <ProfileBackdrop
         pointerEvents="none"
         style={StyleSheet.absoluteFill}
-        {...lookColors(look, incognito)}
+        {...lookColors(look, incognito, shade)}
         dark={shade}
         themed={themed}
         softened={softened}
@@ -137,12 +137,26 @@ export function DeckLookBackdrop({ baseOutside = false }: { baseOutside?: boolea
       <DeckBackdrop
         pointerEvents="none"
         style={StyleSheet.absoluteFill}
-        {...nativeLookColors(look)}
+        {...nativeLookColors(look, theme.dark)}
         dark={theme.dark}
         reduceMotion={reduceMotion}
         reduceTransparency={reduceTransparency}
       />
     </>
+  );
+}
+
+export function CustomLookBackdrop({ look, dark, testID, style }: { look: ProfileLook; dark: boolean; testID?: string; style?: StyleProp<ViewStyle> }) {
+  const nativeLook = useNativeLook();
+  const stops = backdropStops(look, dark, true);
+  return (
+    <View testID={testID} pointerEvents="none" style={[style, { backgroundColor: stops[0] }]}>
+      {nativeLook ? (
+        <ProfileBackdrop pointerEvents="none" style={StyleSheet.absoluteFill} {...nativeLookColors(look, dark)} dark={dark} themed />
+      ) : (
+        <Backdrop colors={stops} diagonal />
+      )}
+    </View>
   );
 }
 
@@ -179,13 +193,14 @@ export function LookFrost({
         {children}
       </View>
     );
+  const shade = incognito || (dark ?? theme.dark);
   return (
     <Frost
       source={source}
       variant={variant}
       cornerRadius={cornerRadius}
-      {...lookColors(look, incognito)}
-      dark={incognito || (dark ?? theme.dark)}
+      {...lookColors(look, incognito, shade)}
+      dark={shade}
       reduceTransparency={reduceTransparency}
       style={[style, { borderRadius: cornerRadius, backgroundColor: fill }]}
     >
@@ -227,8 +242,9 @@ export function ChromeSurface({
   const theme = useTheme();
   const surface = useChromeStyle();
   if (glassIsNative()) {
+    const shade = dark ?? (incognito || theme.dark);
     return (
-      <Glass testID={testID} source={SURFACES_FROST} shape={shape} cornerRadius={cornerRadius} tint={incognito ? undefined : lookGlassTint(look, theme.dark)} interactive={interactive} tinted={tinted} surface={surface} barShadow={barShadow} shown={shown} shownMs={shownMs} {...lookColors(look, incognito)} dark={dark ?? (incognito || theme.dark)} style={[style, { borderRadius: cornerRadius }]}>
+      <Glass testID={testID} source={SURFACES_FROST} shape={shape} cornerRadius={cornerRadius} tint={incognito ? undefined : lookGlassTint(look)} interactive={interactive} tinted={tinted} surface={surface} barShadow={barShadow} shown={shown} shownMs={shownMs} {...lookColors(look, incognito, shade)} dark={shade} style={[style, { borderRadius: cornerRadius }]}>
         {children}
       </Glass>
     );
@@ -260,14 +276,15 @@ export function LookGlass({
   const look = useProfileLook();
   const theme = useTheme();
   if (!glassIsNative()) return <LookFrost {...frost} />;
+  const shade = (frost.incognito ?? false) || (frost.dark ?? theme.dark);
   return (
     <Glass
       testID="deckGlass"
       source={frost.source}
       shape={shape}
-      tint={frost.incognito ? undefined : lookGlassTint(look, frost.dark ?? theme.dark)}
-      {...lookColors(look, frost.incognito ?? false)}
-      dark={frost.incognito || (frost.dark ?? theme.dark)}
+      tint={frost.incognito ? undefined : lookGlassTint(look)}
+      {...lookColors(look, frost.incognito ?? false, shade)}
+      dark={shade}
       style={frost.style}
     >
       {frost.children}

@@ -7,6 +7,7 @@ export type AppMenuShortcuts = ReadonlyMap<string, { key: string; modifiers: rea
 export type AppMenuChoice =
   | { kind: "window"; action: WindowAction }
   | { kind: "about" }
+  | { kind: "updates"; restart: boolean }
   | { kind: "edit"; action: EditAction }
   | { kind: "command"; command: BrowserCommand; arg: string | null };
 
@@ -14,9 +15,11 @@ type WindowAction = "minimize" | "minimizeAll" | "maximize" | "close";
 const WINDOW_ACTIONS: readonly string[] = ["minimize", "minimizeAll", "maximize", "close"] satisfies WindowAction[];
 const WINDOW_ACTION_PREFIX = "window:";
 const ABOUT = "about";
+const CHECK_FOR_UPDATES = "checkForUpdates";
+const RESTART_TO_UPDATE = "restartToUpdate";
 const QUIT = "std:quit:";
 const FULL_SCREEN = "std:toggleFullScreen:";
-export type AppMenuContext = { fullScreen?: boolean; edit?: EditMenu | null };
+export type AppMenuContext = { fullScreen?: boolean; edit?: EditMenu | null; updates?: "check" | "restart" | null };
 const separator: MenuItem = { separator: true };
 
 const commandTitle = (command: string, arg?: string) => {
@@ -84,6 +87,7 @@ export function appMenuItems(state: MenuState, shortcuts: AppMenuShortcuts = new
   return [
     sub("Ardia", [
       { id: ABOUT, title: "About Ardia" },
+      ...(context.updates === "restart" ? [{ id: RESTART_TO_UPDATE, title: "Restart to Update" }] : context.updates === "check" ? [{ id: CHECK_FOR_UPDATES, title: "Check for Updates…" }] : []),
       separator,
       cmd("openSettings"),
       cmd("importBrowserData"),
@@ -258,6 +262,7 @@ export function appMenuChoice(id: string): AppMenuChoice | null {
     return WINDOW_ACTIONS.includes(action) ? { kind: "window", action: action as WindowAction } : null;
   }
   if (id === ABOUT) return { kind: "about" };
+  if (id === CHECK_FOR_UPDATES || id === RESTART_TO_UPDATE) return { kind: "updates", restart: id === RESTART_TO_UPDATE };
   const edit = editActionOf(id);
   if (edit) return { kind: "edit", action: edit };
   const standard = LINUX_STANDARD_ITEMS[id];

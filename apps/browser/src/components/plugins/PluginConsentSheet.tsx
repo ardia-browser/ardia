@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ScrollView, View } from "react-native";
-import { consentLines, isAlwaysOn } from "../../state/plugins/actions";
+import { consentLines } from "../../state/plugins/actions";
 import { CONSENT_KEYS, CONSENT_KEYS_UP, consentKeyDown, consentKeyUp, FRESH_CONSENT_KEYS, type ConsentButton } from "../../state/plugins/consentKeys";
-import { usePluginListing } from "../../state/plugins/hooks";
+import { useConsentListing, useConsentVerb } from "../../state/plugins/hooks";
+import { CONSENT_WORDS } from "../../state/plugins/consentWords";
 import type { PluginsStore } from "../../state/plugins/store";
 import { Box, Button, DialogActions, DialogTitle, Sheet, Symbol, Text } from "../ui";
 import { useTheme } from "../ui/theme";
@@ -15,11 +16,11 @@ type ConsentRequest = NonNullable<PluginsStore["consent"]>;
 export function PluginConsentSheet({ request, onCancel, onConfirm, onClosed }: { request: ConsentRequest; onCancel: (id: number) => boolean; onConfirm: (id: number) => boolean; onClosed: () => void }) {
   const theme = useTheme();
   const { id, name, hash } = request;
-  const listing = usePluginListing(name);
+  const listing = useConsentListing(name, hash);
   const m = listing?.manifest;
   const controlOff = useControlTurnedOff();
   const movesProfiles = useNeverChosenCount();
-  const install = isAlwaysOn(listing);
+  const words = CONSENT_WORDS[useConsentVerb(name, hash)];
   const [selected, setSelected] = useState<ConsentButton | null>(null);
   const keyState = useRef(FRESH_CONSENT_KEYS);
   const keys = useRef<View>(null);
@@ -52,14 +53,14 @@ export function PluginConsentSheet({ request, onCancel, onConfirm, onClosed }: {
         style={KEYS}
       >
         <DialogTitle icon={<Symbol name={m?.icon ?? "puzzlepiece.fill"} size={22} color={theme.icon} style={TITLE_ICON} />} subtitle={m?.description || undefined}>
-          {`${install ? "Install" : "Turn on"} ${m?.title ?? name}?`}
+          {`${words.title} ${m?.title ?? name}?`}
         </DialogTitle>
         <ScrollView style={LINES}>
           <Box gap="s" pad="m">
             {changed ? (
               <Text tone="textSecondary">The plugin changed while this was open. Close this and try again.</Text>
             ) : (
-              consentLines(m, { controlOff, bundled: !!listing?.bundled, movesProfiles }).map((line, index) => (
+              consentLines(m, { controlOff, official: !!listing?.official, movesProfiles }).map((line, index) => (
                 <Box key={`${index}:${line.text}`} row gap="m">
                   <Symbol name={line.icon} size={13} color={theme.icon} style={ICON} />
                   <Text style={LINE}>{line.text}</Text>
@@ -73,7 +74,7 @@ export function PluginConsentSheet({ request, onCancel, onConfirm, onClosed }: {
             <Button title="Cancel" onPress={close} />
           </Ring>
           <Ring on={selected === "install"} color={theme.formAccent}>
-            <Button title={install ? "Install" : "Turn On"} kind="primary" disabled={changed} onPress={confirm} />
+            <Button title={words.button} kind="primary" disabled={changed} onPress={confirm} />
           </Ring>
         </DialogActions>
       </View>

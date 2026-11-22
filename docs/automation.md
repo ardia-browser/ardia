@@ -315,7 +315,10 @@ environment (no `ARDIA_TITLE`, no `ARDIA_URL`) and the runner never logs it.
   holds the quit open.
 - `tab.idle`: a tab is touched while it is the active tab of the focused window, and when it was last activated. It
   goes idle after the threshold without that (checked every 30 s) and fires once per idle stretch; `tab.resumed`
-  follows when it is shown again. Pinned tabs are included, with `pinned: true`.
+  follows when it is shown again. Moving a tab to another profile starts a new stretch without a `tab.resumed`. Pinned
+  tabs are included, with `pinned: true`. A connection that starts listening
+  for `tab.idle` at a threshold is sent the tabs already idle at it once, just after the `subscribe` reply; other
+  connections coming and going never send them again.
 - `system.sleep`, `system.wake`, `user.idle` and `user.active` come from the native system signals
   (`platform/systemSignals.ts`); an older build without them just sends none.
 

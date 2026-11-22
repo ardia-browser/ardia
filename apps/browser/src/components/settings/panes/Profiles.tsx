@@ -229,7 +229,7 @@ function ThisProfileSection({ profileId }: { profileId: string }) {
         <Row anchor="profiles.siteSettings" onPress={() => goToSettingsPane("profiles", profileId, SETTINGS_DETAIL.sites)} />
       </Group>
 
-      <ThemeSection profileId={profileId} />
+      <ThemeSection profileId={profileId} anchor="profiles.themeColor" />
     </>
   );
 }

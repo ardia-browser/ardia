@@ -8,7 +8,7 @@ const lifecycle = await import("./lifecycle.ts");
 const { takePluginCounts } = await import("../telemetry/pluginCounts.ts");
 const { setConsentPeriod } = await import("../telemetry/consentPeriod.ts");
 const { officialPlugins, installOfficialPlugin } = await import("./official.ts");
-const { ADOPT_WITH_CONTROL_OFF } = await import("./programs.ts");
+
 
 const S = () => useBrowser.getState();
 const P = () => usePlugins.getState();
@@ -19,7 +19,8 @@ const settle = async () => {
 };
 
 const CLI = JSON.stringify({ manifest: 2, name: "cli", title: "Command Line", version: "0.3.0", alwaysOn: true, official: true, permissions: { control: true }, contributes: { programs: [{ name: "ardia", path: "bin/ardia", claim: true }] } });
-const BUILT_IN = { status: "ok", folderId: "bundled", bundled: true };
+const { officialPinnedFromPin } = await import("../../test-native/shell.ts");
+const BUILT_IN = { status: "ok", folderId: officialPinnedFromPin().find((p) => p.name === "cli").folderId, official: true };
 
 setConsentPeriod(true, "test-epoch");
 S().hydrate({});
@@ -32,7 +33,6 @@ startPlugins();
 await settle();
 
 test("an old install whose control was off isn't adopted: the plugin is offered, control stays off, its command is left alone", () => {
-  assert.equal(ADOPT_WITH_CONTROL_OFF, false, "the owner hasn't chosen to turn control on for them");
   assert.equal(P().records.cli, undefined);
   assert.equal(activeManifest(P(), "cli"), null);
   assert.equal(officialPlugins(P(), true, () => false)[0].state, "available");

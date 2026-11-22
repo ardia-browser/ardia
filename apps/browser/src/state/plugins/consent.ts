@@ -13,12 +13,11 @@ function passwordManagerLines(m: PluginManifest, context: ConsentContext): Conse
   const lines: ConsentLine[] = [
     { icon: "key.fill", text: "Becomes a password manager you can pick for each profile. Profiles that use it stop offering to save passwords in Ardia" },
   ];
-  const moves = context.bundled ? (context.movesProfiles ?? 0) : 0;
+  const moves = context.official ? (context.movesProfiles ?? 0) : 0;
   if (moves > 0) lines.push({ icon: "person.2", text: `Moves ${moves === 1 ? "1 profile" : `${moves} profiles`} that never picked a password manager to ${m.title}` });
   const fields = pm.fields.map((f) => FIELD_WORDS[f]).join(" and ");
   lines.push({ icon: "key", text: `Shows a key in ${fields} fields on every site. It opens macOS's Passwords panel there, which fills the field; the plugin never sees what's filled` });
   if (pm.verificationCodeSetup) lines.push({ icon: "qrcode", text: "Offers to set up two-factor codes a page shows in the app macOS uses for them" });
-  if (pm.passkeys) lines.push({ icon: "person.badge.key", text: `Shows whether Ardia may use passkeys saved on this ${PLATFORM_TERMS.computer}, and can ask macOS for access` });
   return lines;
 }
 
@@ -46,8 +45,7 @@ function networkLines(m: PluginManifest): ConsentLine[] {
 function permissionLines(m: PluginManifest): ConsentLine[] {
   const p = m.permissions;
   const lines: ConsentLine[] = [];
-  if (p.control) lines.push({ icon: "hand.raised", text: m.alwaysOn ? "Lets any program you run drive your tabs and pages, with your logins, while control is on in Settings › Advanced. The plugin stays installed once you install it" : "Lets any program you run drive your tabs and pages, with your logins" });
-  else if (m.alwaysOn) lines.push({ icon: "lock", text: "Once installed, there's no off switch" });
+  if (p.control) lines.push({ icon: "hand.raised", text: "Lets any program you run drive your tabs and pages, with your logins, while control is on in Settings › Advanced" });
   lines.push(...networkLines(m));
   if (p.tabs) lines.push({ icon: "square.on.square", text: `${p.fullUrls ? "Sees the full address and title of your tabs" : "Sees the address (without what follows ? or #) and title of your tabs"}${p.tabs === "write" ? ", and can open, close and switch tabs" : ""}` });
   if (p.workspace) lines.push({ icon: "square.grid.2x2", text: "Sees and rearranges every window, tab and group: it can move, close and group your tabs" });
@@ -59,7 +57,7 @@ function permissionLines(m: PluginManifest): ConsentLine[] {
   return lines;
 }
 
-export type ConsentContext = { controlOff?: boolean; bundled?: boolean; movesProfiles?: number };
+export type ConsentContext = { controlOff?: boolean; official?: boolean; movesProfiles?: number };
 
 export const CONTROL_OFF_LINE = "Control is off, as you set it, and installing this leaves it off. To let programs drive Ardia, turn on “Let programs control Ardia” in Settings › Advanced";
 

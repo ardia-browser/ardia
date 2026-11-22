@@ -4,7 +4,7 @@ import { NO_BOOKMARKS, poolFor, savedBookmark, savedVisit, tabsOver, type Candid
 import { extensionSuggestions } from "./extensionRows.ts";
 import { BUILT_IN_ENGINES, searchUrl } from "./engines.ts";
 import { matchActions } from "./fuzzy.ts";
-import { fixupUrl, hostOf, searchUrlFor } from "./omnibox.ts";
+import { fixupUrl, hostOf, sameAddress, searchUrlFor, spacedAddressGuess } from "./omnibox.ts";
 import { matchScore, matchScoreWord, narrowing, parseQuery, remember, TopList, type Ranked } from "./pageMatch.ts";
 import { hostLowerOfPage, hostOfPage, hostPart, originOfPage, pageKey, type PageText, withRootSlash } from "./pageText.ts";
 import { globalProviderRows, providerUrl, safeProviderRows, type ProviderSection, type ProviderSuggestion } from "./providerRows.ts";
@@ -142,6 +142,7 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
 
   const search: Suggestion = { kind: "search", query, url: searchUrl(engine, query), engine: engine.name };
   const typedUrl = fixupUrl(query);
+  const guessedUrl = typedUrl ? null : spacedAddressGuess(query);
   const calc = calculate(query);
   const creates = matchQuickCreate(raw.trimStart());
   const actionRows = query.length >= 4 ? 4 : 2;
@@ -158,23 +159,29 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
   else if (target && completion) first = tag(known(target.url) ?? { kind: "page", url: target.url, title: "", favicon: target.favicon }, !websiteFirst && "search_first_inline");
   else if (typedUrl) first = known(typedUrl) ?? { kind: "page", url: typedUrl, title: "", favicon: null };
   else if (extensionMatches.exact) first = extensionMatches.rows[0]!;
-  else if (websiteFirst && best && best.m >= 40 && (!noInline || typedIsPage(best.c.text, q))) first = tag(pageSuggestion(best.c, best.tabId), best.c.renamed && "renamed_tab");
+  else if (!guessedUrl && websiteFirst && best && best.m >= 40 && (!noInline || typedIsPage(best.c.text, q))) first = tag(pageSuggestion(best.c, best.tabId), best.c.renamed && "renamed_tab");
   else first = search;
 
+  const savedGuess = guessedUrl ? ranked.find((x) => !x.tabId && sameAddress(x.c.url, guessedUrl)) : undefined;
+  const guessTab = guessedUrl ? source.tabs.find((t) => t.id !== options.currentTabId && sameAddress(t.url, guessedUrl)) : undefined;
+  const guessRow = !guessedUrl ? null : guessTab ? pageSuggestion({ url: guessTab.url, title: guessTab.customTitle || guessTab.title, favicon: guessTab.favicon, visits: 0, bookmarked: false }, guessTab.id) : (known(guessedUrl) ?? (savedGuess ? { ...pageSuggestion(savedGuess.c, null), url: guessedUrl } : { kind: "page", url: guessedUrl, title: "", favicon: null }));
   out.push(first);
   out.push(search);
+  if (guessRow) out.push(guessRow);
   if (calc) out.push({ kind: "calc", expression: calc.expression, value: calc.display, url: searchUrl(engine, calc.expression) });
   out.push(...actionMatches.map((m) => actionRow(m.action)));
   out.push(...extensionMatches.rows);
   out.push(...creates.map(createRow));
-  const pageRows = ranked.map((x) => tag(pageSuggestion(x.c, x.tabId), x.c.renamed && "renamed_tab"));
+  const pageRows = ranked.map((x) => tag(pageSuggestion(x.c, x.tabId), x.c.renamed && "renamed_tab")).map((row) => (guessedUrl && row.kind === "page" && row.tabId ? { ...row, url: source.tabs.find((t) => t.id === row.tabId)?.url ?? row.url } : row)).filter((row) => !guessedUrl || row.kind !== "page" || !sameAddress(row.url, guessedUrl));
   out.push(...pageRows.slice(0, 3));
-  out.push(...(options.remoteSites ?? []).slice(0, 2).map((site): Suggestion => known(site.url) ?? tag({ kind: "page", url: site.url, title: site.title, favicon: null }, "engine_site")));
+  const remoteSites = (options.remoteSites ?? []).slice(0, 2).filter((site) => !guessedUrl || !sameAddress(site.url, guessedUrl));
+  out.push(...remoteSites.map((site): Suggestion => known(site.url) ?? tag({ kind: "page", url: site.url, title: site.title, favicon: null }, "engine_site")));
   const providerAt = out.items.length;
   out.push(...remoteRows((text) => searchUrl(engine, text), engine.name));
   out.push(...pageRows.slice(3));
   const providerRows = options.providers?.length ? globalProviderRows(options.providers, out.items) : [];
   const items = providerRows.length ? [...out.items.slice(0, providerAt), ...providerRows, ...out.items.slice(providerAt)] : out.items;
+  if (guessRow && out.items.includes(guessRow)) tag(guessRow, "spaced_address");
   const shownVia = tagged ? viaOf(items, via) : undefined;
   return shownVia ? { items, completion, via: shownVia } : { items, completion };
 }

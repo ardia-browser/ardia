@@ -12,10 +12,10 @@ const manifest = readManifest(readFileSync(new URL("../../../../../tests/fixture
 
 test("the shared consent sheet tells you which never-chosen profiles a built-in password manager takes over, as Settings does", () => {
   assert.match(sheet, /useNeverChosenCount\(\)/);
-  assert.match(sheet, /consentLines\(m, \{ controlOff, bundled: !!listing\?\.bundled, movesProfiles \}\)/);
+  assert.match(sheet, /consentLines\(m, \{ controlOff, official: !!listing\?\.official, movesProfiles \}\)/);
   assert.match(settingsRow, /movesProfiles/);
   useBrowser.getState().hydrate({ profiles: { default: { id: "default", name: "Personal", color: "plum", icon: null, createdAt: 0 } }, profileOrder: ["default"] });
   assert.equal(neverChosenCount(), 1);
-  const lines = consentLines(manifest, { bundled: true, movesProfiles: neverChosenCount() }).map((l) => l.text);
+  const lines = consentLines(manifest, { official: true, movesProfiles: neverChosenCount() }).map((l) => l.text);
   assert.ok(lines.some((text) => /^Moves 1 profile that never picked a password manager to /.test(text)), lines.join("\n"));
 });

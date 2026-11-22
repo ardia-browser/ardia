@@ -4,7 +4,13 @@ import { View, type ViewProps } from "react-native";
 
 export const INCOGNITO_LOOK = "incognito";
 
-export type LookColors = { color?: string | null; themeColors?: string[]; darkThemeColors?: string[] | null };
+export type ThemeTexture = "grain" | "sand" | "denim" | "tweed";
+
+export type ThemeLookStop = { color: { r: number; g: number; b: number; a: number }; x: number; y: number };
+
+export type ThemeLook = { stops: ThemeLookStop[]; intensity: number; grain: number; texture: ThemeTexture; translucency: number; angle: number };
+
+export type LookColors = { color?: string | null; themeColors?: string[]; darkThemeColors?: string[] | null; themeLook?: ThemeLook | null };
 
 export type DeckBackdropProps = ViewProps & LookColors & { dark?: boolean; reduceMotion?: boolean; reduceTransparency?: boolean };
 

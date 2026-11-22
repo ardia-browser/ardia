@@ -5,7 +5,7 @@ import { noteCliEdits } from "../telemetry/usage";
 import { consentToken, type ConsentToken } from "../telemetry/client";
 import { failure, type ErrorCode, type MethodError } from "./automationMethods";
 import { eligibleKind, isEligibleTab, ownEntry } from "./automationWindows";
-import { parseOps, type Op } from "./workspaceOps";
+import { parseOps, type Op, type UrlRule } from "./workspaceOps";
 import { runOp } from "./workspaceApply";
 import { takeLateResults } from "./tabCalls";
 import { OpError, type Changed, type OpResult } from "./workspaceTargets";
@@ -89,10 +89,10 @@ async function runAll(ops: Op[], stillOn: () => boolean, consent: ConsentToken |
   };
 }
 
-export function applyMethod(params: Record<string, unknown>, stillOn: () => boolean, connection = 0): Body | Promise<Body> {
+export function applyMethod(params: Record<string, unknown>, stillOn: () => boolean, connection = 0, urlRule?: UrlRule): Body | Promise<Body> {
   const unknown = Object.keys(params).filter((key) => key !== "ops");
   if (unknown.length) return failure("bad_request", `apply takes ops, not ${unknown.join(", ")}.`);
-  const ops = parseOps(params.ops);
+  const ops = parseOps(params.ops, urlRule);
   if (!Array.isArray(ops)) {
     noteCliEdits(0, 0, 1);
     return failure(ops.code, ops.message);

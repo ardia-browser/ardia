@@ -161,11 +161,15 @@ It refuses any sandbox-disabling switch. Every check must run and pass:
     of a userscript that prefixes the fixture's title must report the profile `loaded`, `ardia scripts list` must show
     it as reported by Ardia, and the fixture opened with `ardia browse` must read retitled. After
     `ardia scripts uninstall` it must report `removed`, and the fixture must open with its own title.
+13. `window-state`: in the first instance, `ArdiaShell.windowButtonLayout` must answer `{ layout, desktop }` (a string
+    or `null`, and a string), `ArdiaShell.windowState` for the shell's own window three booleans (`maximized`, `tiled`,
+    `fullScreen`), and `windowState` for an unknown window the error `No such native window`.
 
-Checks 9 to 12 report `skip` and pass for a dev package without `VERSION` or `cli/`. Each can also report `old` when
-the engine's host predates the feature: `appVersion` is Chromium's own version, the bootstrap advertises none of
-`engine.setCliControl`, `ArdiaCli.install` and `ArdiaAutomation.start`, or (for `cli-scripts`) not all four
-`ArdiaUserScripts` methods. `old` fails the gate unless
+Checks 9 to 12 report `skip` and pass for a dev package without `VERSION` or `cli/`. Checks 9 to 13 can also report
+`old` when the engine's host predates the feature: `appVersion` is Chromium's own version, the bootstrap advertises
+none of `engine.setCliControl`, `ArdiaCli.install` and `ArdiaAutomation.start`, (for `cli-scripts`) not all four
+`ArdiaUserScripts` methods, or (for `window-state`) neither `ArdiaShell.windowButtonLayout` nor
+`ArdiaShell.windowState`; an engine that advertises only one of the two fails `window-state`. `old` fails the gate unless
 `--allow-old-engine` is passed. CI and `release.sh` pass it only for an engine that isn't the commit's own.
 
 It takes about 8 s without the CLI, and writes `results.json`, the launch logs and `cli.log`.
@@ -200,6 +204,10 @@ The Release workflow (`release.yml`) runs it in its `linux` job, beside the Mac 
 artifact. When the install test fails (after apt's and the image pulls' retries), the job deletes the `.deb` and its
 `.sha256`, adds a `deb dropped` line to `provenance.txt` and warns, and still succeeds: the tarball, AppImage, Arch
 source package and CLI ship without it. Only a `deb dropped` line lets `publish.sh` go on without the `.deb`.
+The `linux-sign` job, the only one that sees the `LINUX_UPDATE_ED_PRIVATE_KEY` secret, downloads that artifact and
+signs `Ardia-<version>-linux-update.txt` with `scripts/linux/sign-update.mjs`, which refuses a key that doesn't match
+`scripts/linux/linux-update.pem`; it uploads the manifest and its `.sig` as the `linux-update` artifact. When signing
+fails, `publish` warns and the release ships without them, so installed Linux apps fall back to the release page for it.
 `publish` puts that artifact in `dist/<version>/linux/`, and `publish.sh` attaches the assets to the GitHub release it
 creates. It refuses a Linux folder whose provenance names an inexact engine or uncommitted changes. A dry run
 publishes nothing. When the `linux` job fails, usually because the release's engine key has no published Linux

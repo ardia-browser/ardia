@@ -1,5 +1,6 @@
 import { createContext, startTransition, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { IncognitoEyes } from "../ui/IncognitoEyes";
+import { FabricCatchUp } from "../ui/FabricCatchUp";
 import { countRender } from "../../state/app/interactionPerf";
 import { AppState, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { SheetScrollContext, SheetScrollView, sheetPullTranslation, type SheetScroll } from "../ui/Sheet";
@@ -378,6 +379,10 @@ function TrayLayer({ session, closing, onClosed }: LayerProps) {
       back.value = withSpring(0, trayMotion.settle);
     };
   }, [trayOnTop]);
+  const trayMotionNow = () => {
+    "worklet";
+    return landing.value + keyboard.height.value + keyboard.full.value + drag.value + back.value + heldLift.value + dim.value;
+  };
   const trayStyle = useAnimatedStyle(() => {
     const lift = currentLift();
     const rise = reduceMotion ? 1 : Math.max(landing.value, keyboardProgress(keyboard.height.value, keyboard.full.value, 0));
@@ -391,6 +396,7 @@ function TrayLayer({ session, closing, onClosed }: LayerProps) {
   return (
     <DepartContext.Provider value={beginDeparture}>
     <View testID="trayRoot" style={StyleSheet.absoluteFill} pointerEvents={closing ? "none" : "box-none"} collapsable={false} importantForAccessibility={closing ? "no-hide-descendants" : "auto"} accessibilityElementsHidden={closing}>
+      {closing ? null : <FabricCatchUp motion={trayMotionNow} testID="trayFabricCatchUp" />}
       <Animated.View testID="trayDim" style={[StyleSheet.absoluteFill, dimStyle]}>
         <Pressable
           accessibilityLabel="Close Search"
@@ -459,6 +465,7 @@ function TrayLayer({ session, closing, onClosed }: LayerProps) {
     </DepartContext.Provider>
   );
 }
+
 
 let knownLift = 0;
 let knownFieldHeight = 0;

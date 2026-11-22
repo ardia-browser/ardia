@@ -48,6 +48,7 @@ chromium chromium-extension-sync-installer-hook.patch
 chromium chromium-unpacked-load-path-hook.patch
 chromium chromium-extension-window-hidden.patch
 chromium chromium-active-web-contents-without-active-tab.patch
+chromium chromium-extension-state-mirror-hooks.patch
 chromium chromium-tpm-metrics-off.patch
 chromium chromium-component-extension-restricted-urls.patch
 chromium chromium-component-extension-disk-messages.patch
@@ -77,6 +78,7 @@ chromium chromium-os-crypt-decrypt-erase.patch
 chromium chromium-window-docked-devtools.patch
 chromium chromium-window-hosted.patch
 chromium chromium-window-hosted-mac.patch mac
+chromium chromium-mac-secure-input-window-focus.patch mac
 chromium chromium-linux-document-close.patch linux
 chromium chromium-linux-devtools-authority.patch linux
 chromium chromium-extension-installed-bubble.patch
@@ -130,6 +132,8 @@ chromium chromium-linux-thin-scroll-bars.patch linux
 chromium chromium-linux-unhandled-key.patch linux
 chromium chromium-linux-window-minimum-size.patch linux
 chromium chromium-linux-frameless-utility-windows.patch linux
+chromium chromium-linux-window-state.patch linux
+chromium chromium-linux-borderless-frame.patch linux
 chromium chromium-linux-geolocation.patch linux
 
 layer engine/chromium

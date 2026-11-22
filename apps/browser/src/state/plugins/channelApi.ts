@@ -8,6 +8,8 @@ import { failure } from "../automation/automationMethods";
 import { automationWindows, lastFocusedEligibleWindow } from "../automation/automationWindows";
 import { runMethod, type Body } from "../automation/controlSocket";
 import { applyMethod, workspaceMethod } from "../automation/workspaceMethods";
+import type { UrlRule } from "../automation/workspaceOps";
+import { notePlugin } from "../telemetry/pluginCounts";
 import { activeManifest, currentPlugins } from "./store";
 import { answerCall, callTool } from "./tools";
 import { acceptsRun } from "./process";
@@ -52,6 +54,15 @@ async function toolsCall(name: string, m: PluginManifest, params: Record<string,
   return outcome.ok ? { result: outcome.result } : failure(outcome.code, outcome.message);
 }
 
+const URL_REFUSALS = { open: "plugin_url_refusals_open", "group.create": "plugin_url_refusals_group_create" } as const;
+
+export const pluginUrlRule: UrlRule = (value, op) => {
+  const checked = pluginWebUrl(value);
+  if ("url" in checked) return checked.url;
+  if (op === "open" || op === "group.create") notePlugin(URL_REFUSALS[op]);
+  return { error: `${JSON.stringify(value.slice(0, 200))} ${checked.problem}: a plugin opens only http and https addresses.` };
+};
+
 const stillAllowed = (c: ChannelCaller, allowed: (m: PluginManifest) => boolean) => () => {
   const m = activeManifest(currentPlugins(), c.name);
   return acceptsRun(c.name, c.run) && !!m && allowed(m);
@@ -64,9 +75,8 @@ async function openTabs(c: ChannelCaller, m: PluginManifest, params: Record<stri
   const checked = urls.map(pluginWebUrl);
   const bad = checked.findIndex((u) => "problem" in u);
   if (bad >= 0) return failure("bad_request", `urls[${bad}] ${(checked[bad] as { problem: string }).problem}.`);
-  const normalised = checked.map((u) => (u as { url: string }).url);
   const current = stillAllowed(c, (now) => canOpenTabs(now.permissions));
-  const body = await applyMethod({ ops: [{ op: "open", urls: normalised, ...(activate === true ? { activate: true } : {}) }] }, current);
+  const body = await applyMethod({ ops: [{ op: "open", urls, ...(activate === true ? { activate: true } : {}) }] }, current, 0, pluginUrlRule);
   const applied = "result" in body ? (body.result as { ok?: boolean; results?: { tabs?: string[] }[] }) : null;
   if (!applied?.ok) return failure(current() ? "failed" : "refused", current() ? "The tabs couldn't open." : "This run of the helper has ended or lost commands, so nothing opened.");
   return { result: { ok: true, tabs: applied.results?.[0]?.tabs ?? [] } };
@@ -86,7 +96,7 @@ function workspace(c: ChannelCaller, m: PluginManifest, method: string, params: 
   if (method === "workspace") return m.permissions.workspace ? workspaceMethod(params) : failure("refused", "workspace needs the workspace permission.");
   const tabOnly = tabOnlyOps(params);
   if (!mayApply(m, tabOnly)) return failure("refused", "apply needs the workspace permission, or tabs: write for open, tab.close and tab.activate.");
-  const body = applyMethod(params, stillAllowed(c, (now) => mayApply(now, tabOnly)));
+  const body = applyMethod(params, stillAllowed(c, (now) => mayApply(now, tabOnly)), 0, pluginUrlRule);
   const full = m.permissions.fullUrls;
   return body instanceof Promise ? body.then((b) => minimizedApply(b, full)) : minimizedApply(body, full);
 }

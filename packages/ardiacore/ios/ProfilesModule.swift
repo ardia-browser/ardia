@@ -11,6 +11,13 @@ public class ProfilesModule: Module {
 
   static let calls = CallTable(domain: "profiles", handlers: [
     "loaded": { _, reply in reply.ok(["profiles": ArdiaHost.loadedProfiles]) },
+    "ctrlTabMru": { _, reply in
+      let paths = ArdiaHost.loadedProfilePaths
+      DispatchQueue.global(qos: .utility).async {
+        let values = paths.compactMapValues(ChromeTabCyclingPref.isMostRecentFirst(inProfileAt:))
+        DispatchQueue.main.async { reply.ok(["profiles": values]) }
+      }
+    },
     "release": { args, reply in
       ArdiaHost.releaseProfile(args.profile)
       reply.ok()

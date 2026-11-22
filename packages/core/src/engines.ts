@@ -86,8 +86,20 @@ export const BUILT_IN_ENGINES: readonly SearchEngine[] = [
   },
 ];
 
+export const validSearchTemplate = (url: unknown): url is string => typeof url === "string" && /^https?:\/\/[^/?#\s]+/i.test(url) && url.includes("%s");
+
+export function customEngineFrom(raw: unknown): CustomSearchEngine | null {
+  if (!raw || typeof raw !== "object") return null;
+  const { id, name, keyword, url } = raw as Record<string, unknown>;
+  if (typeof id !== "string" || typeof name !== "string" || typeof keyword !== "string" || !validSearchTemplate(url)) return null;
+  return { id, name, keyword, url };
+}
+
+export const customEnginesFrom = (raw: unknown): CustomSearchEngine[] =>
+  Array.isArray(raw) ? raw.flatMap((e) => customEngineFrom(e) ?? []) : [];
+
 export function allEngines(custom: readonly CustomSearchEngine[] = [], extension: readonly ExtensionSearchEngine[] = []): SearchEngine[] {
-  const engines: SearchEngine[] = [...BUILT_IN_ENGINES, ...custom.map((e) => ({ ...e, custom: true }))];
+  const engines: SearchEngine[] = [...BUILT_IN_ENGINES, ...customEnginesFrom(custom).map((e) => ({ ...e, custom: true }))];
   const seen = new Set<string>();
   for (const e of extension) {
     if (seen.has(e.extensionId)) continue;
@@ -117,7 +129,7 @@ export function engineById(engines: readonly SearchEngine[], id: string | undefi
 export const searchUrl = (engine: Pick<SearchEngine, "url">, query: string) => searchUrlFor(engine.url, query);
 
 export const suggestRequestUrl = (engine: SearchEngine, query: string) =>
-  engine.suggestUrl && query.trim() ? searchUrlFor(engine.suggestUrl, query) : null;
+  engine.suggestUrl && !engine.custom && query.trim() ? searchUrlFor(engine.suggestUrl, query) : null;
 
 export const engineHost = (engine: Pick<SearchEngine, "url">) => hostOf(engine.url.replace(/%s/g, "q"));
 

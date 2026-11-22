@@ -24,6 +24,7 @@ import { withAlpha } from "../../lib/color";
 import { MATERIAL_STATE } from "./materialRoles";
 import { useMaterialTheme } from "./materialTheme";
 import { materialDuration, materialMotion, materialMove, materialShape } from "./materialTokens";
+import { FabricCatchUp } from "./FabricCatchUp";
 
 const SHEET_REDUCED_MS = reducedMotionMs(tabsMotion.sheetReduced);
 
@@ -156,10 +157,15 @@ export function FullSheet<T extends string>({ sheet, progress, onDismiss, childr
 
   const scrim = useAnimatedStyle(() => ({ opacity: progress.value }));
   const slide = useAnimatedStyle(() => ({ transform: [{ translateY: offset.value }] }));
+  const sheetMotionNow = () => {
+    "worklet";
+    return offset.value;
+  };
   const shown = sheet ?? presenceShown(presence.current);
   if (!shown) return null;
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents={sheet ? "auto" : "none"} collapsable={false} importantForAccessibility={sheet ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={!sheet}>
+      {sheet ? <FabricCatchUp motion={sheetMotionNow} testID="fullSheetFabricCatchUp" /> : null}
       <Animated.View style={[StyleSheet.absoluteFill, material ? { backgroundColor: withAlpha(scheme.scrim, MATERIAL_STATE.scrim) } : styles.scrim, scrim]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
       <GestureDetector gesture={drag}>
         <Animated.View

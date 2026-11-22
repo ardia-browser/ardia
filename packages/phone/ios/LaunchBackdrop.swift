@@ -19,8 +19,7 @@ public enum LaunchBackdrop {
 
   public static func install(in rootView: UIView) {
     guard host == nil else { return }
-    let look = LaunchLook.recalled().look
-    let host = UIHostingController(rootView: AnyView(ProfileBackdrop(look: look, themed: true).ignoresSafeArea()))
+    let host = UIHostingController(rootView: AnyView(LaunchProfileBackdrop(recalled: LaunchLook.recalled()).ignoresSafeArea()))
     host.view.backgroundColor = .clear
     host.view.frame = rootView.bounds
     host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -44,5 +43,17 @@ public enum LaunchBackdrop {
       view.removeFromSuperview()
       host = nil
     }
+  }
+}
+
+private struct LaunchProfileBackdrop: View {
+  let recalled: LaunchLook.Recalled
+
+  @Environment(\.colorScheme) private var colorScheme
+
+  var body: some View {
+    let drawn = recalled.drawn(appDark: colorScheme == .dark)
+    ProfileBackdrop(look: drawn.colors.look, themeLook: drawn.colors.themeLook, themed: true)
+      .environment(\.colorScheme, drawn.dark.map { $0 ? .dark : .light } ?? colorScheme)
   }
 }

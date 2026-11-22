@@ -5,14 +5,14 @@ import Foundation
 struct PluginFolders {
   static let maxPlugins = 64
   static let manifestName = "plugin.json"
+  static let officialFolderName = "OfficialPlugins"
   private static let namePattern = try! NSRegularExpression(pattern: "^[a-z0-9][a-z0-9-]{0,39}$")
 
-  static let bundledId = "bundled"
+  static let legacyId = OfficialPin.legacyFolderId
 
   let config: String
   let appData: String
   let pluginsLexical: String
-  let bundled: String?
 
   static func current() -> PluginFolders? {
     guard let marker = try? DocumentStore.url("plugins.json") else { return nil }
@@ -20,27 +20,17 @@ struct PluginFolders {
     let config = LaunchConfig.shared.configDirectory
     return PluginFolders(
       config: PluginSandbox.resolved(config) ?? config, appData: PluginSandbox.resolved(appData) ?? appData,
-      pluginsLexical: (config as NSString).appendingPathComponent("plugins"), bundled: bundledRoot())
+      pluginsLexical: (config as NSString).appendingPathComponent("plugins"))
   }
 
-  static func bundledRoot() -> String? {
-    if LaunchConfig.shared.isolated, let path = LaunchConfig.shared.testValue("bundledPlugins") { return PluginSandbox.resolved(path) ?? path }
-    guard let resources = Bundle.main.resourcePath else { return nil }
-    let root = (resources as NSString).appendingPathComponent("Plugins")
-    return FileManager.default.fileExists(atPath: root) ? root : nil
+  static func officialPin() -> OfficialPin? {
+    if LaunchConfig.shared.testInstance, let path = LaunchConfig.shared.testValue(OfficialPin.pinFixtureKey) {
+      return FileManager.default.contents(atPath: path).flatMap { try? JSONSerialization.jsonObject(with: $0) }.flatMap(OfficialPin.parse)
+    }
+    return OfficialPin.parse(Bundle.main.infoDictionary?[OfficialPin.infoKey])
   }
 
-  func bundledFolder(_ name: String) -> String? {
-    guard Self.isName(name), let bundled else { return nil }
-    return (bundled as NSString).appendingPathComponent(name)
-  }
-
-  func isUserPlugin(_ name: String) -> Bool {
-    guard let path = lexicalFolder(name) else { return false }
-    var info = stat()
-    guard lstat(path, &info) == 0 else { return false }
-    return LaunchConfig.shared.isolated || bundledFolder(name).map { !FileManager.default.fileExists(atPath: $0) } ?? true
-  }
+  func officialStore() -> OfficialStore { OfficialStore(root: (appData as NSString).appendingPathComponent(Self.officialFolderName)) }
 
   func programPlaces() -> Result<ProgramPlaces, FolderRefusal> {
     let home = FileManager.default.homeDirectoryForCurrentUser.path
@@ -50,41 +40,20 @@ struct PluginFolders {
       }
       return .success(ProgramPlaces(store: (appData as NSString).appendingPathComponent("Programs"), binDir: bin))
     }
-    let support = (home as NSString).appendingPathComponent("Library/Application Support/Ardia")
+    let given = (home as NSString).appendingPathComponent("Library/Application Support/Ardia")
+    try? FileManager.default.createDirectory(atPath: given, withIntermediateDirectories: true)
+    let support = PluginSandbox.resolved(given) ?? given
     return .success(ProgramPlaces(store: (support as NSString).appendingPathComponent("Programs"), binDir: (home as NSString).appendingPathComponent(".local/bin")))
   }
 
   static let isolatedLegacyKey = "cliHome"
 
-  func bundledClaims() -> [String: [String]] {
-    guard let bundled, let names = try? FileManager.default.contentsOfDirectory(atPath: bundled) else { return [:] }
-    var claims: [String: [String]] = [:]
-    for name in names where Self.isName(name) {
-      let manifest = ((bundled as NSString).appendingPathComponent(name) as NSString).appendingPathComponent(Self.manifestName)
-      guard let data = FileManager.default.contents(atPath: manifest) else { continue }
-      let claimed = ProgramRegistry.claimedPrograms(manifest: data)
-      if !claimed.isEmpty { claims[name] = claimed }
-    }
-    return claims
-  }
-
-  static let registryFixtureName = "program-registry.json"
-
-  func programRegistryFixture() -> Any? {
-    guard LaunchConfig.shared.testInstance, let bundled else { return nil }
-    let path = (bundled as NSString).appendingPathComponent(Self.registryFixtureName)
-    return FileManager.default.contents(atPath: path).flatMap { try? JSONSerialization.jsonObject(with: $0) }
-  }
-
-  func programRegistry() -> ProgramRegistry {
+  func programRegistry(pin: OfficialPin? = PluginFolders.officialPin()) -> ProgramRegistry {
     let isolated = LaunchConfig.shared.isolated
-    let hasBundled = bundled.map { ((try? FileManager.default.contentsOfDirectory(atPath: $0)) ?? []).contains(where: Self.isName) } ?? false
     return ProgramRegistry.resolve(
-      info: Bundle.main.infoDictionary?[ProgramRegistry.infoKey], fixture: programRegistryFixture(), bundled: bundledClaims(), hasBundled: hasBundled,
-      home: FileManager.default.homeDirectoryForCurrentUser.path, isolated: isolated, testInstance: LaunchConfig.shared.testInstance,
-      scratchLegacyBase: isolated ? LaunchConfig.shared.instance(Self.isolatedLegacyKey) : nil)
+      info: Bundle.main.infoDictionary?[ProgramRegistry.infoKey], pin: pin, home: FileManager.default.homeDirectoryForCurrentUser.path, isolated: isolated,
+      testInstance: LaunchConfig.shared.testInstance, scratchLegacyBase: isolated ? LaunchConfig.shared.instance(Self.isolatedLegacyKey) : nil)
   }
-
 
   static func isName(_ name: String) -> Bool {
     let whole = NSRange(name.startIndex..., in: name)
@@ -95,12 +64,25 @@ struct PluginFolders {
     Self.isName(name) ? (pluginsLexical as NSString).appendingPathComponent(name) : nil
   }
 
+  func officialCopy(_ name: String, folderId: String, pin: OfficialPin? = PluginFolders.officialPin(), fresh: Bool = false) -> OfficialCopy? {
+    OfficialTrust.copy(officialStore(), name: name, folderId: folderId, pin: pin, fresh: fresh)
+  }
+
+  func legacyFolder(_ name: String, pin: OfficialPin? = PluginFolders.officialPin()) -> String? {
+    guard let entry = pin?.entry(name), OfficialTrust.trustedActive(officialStore(), entry) == nil, case .success(let places) = programPlaces(),
+      let folder = PluginPrograms.legacyCopy(plugin: name, places: places), OfficialTrust.bundledCopyHolds(folder, digests: entry.bundledDigests)
+    else { return nil }
+    return folder
+  }
+
   private func source(_ name: String, folderId: String) -> (path: String, identity: String?)? {
-    if folderId == Self.bundledId {
-      guard !isUserPlugin(name), let path = bundledFolder(name) else { return nil }
-      return (path, Self.bundledId)
-    }
+    if folderId == Self.legacyId { return legacyFolder(name).map { ($0, Self.legacyId) } }
+    if OfficialPin.sha(ofFolderId: folderId) != nil { return officialCopy(name, folderId: folderId).map { ($0.path, folderId) } }
     return lexicalFolder(name).map { ($0, nil) }
+  }
+
+  func isOfficial(_ name: String, folderId: String) -> Bool {
+    folderId == Self.legacyId ? legacyFolder(name) != nil : officialCopy(name, folderId: folderId) != nil
   }
 
   func approvedFolder(_ name: String, folderId: String, approved: String) -> Result<OpenedFolder, FolderRefusal> {
@@ -122,32 +104,79 @@ struct PluginFolders {
     return PluginFiles.openDataFolder(folder)
   }
 
-  func list() -> [[String: Any]] {
-    let user = Set(((try? FileManager.default.contentsOfDirectory(atPath: pluginsLexical)) ?? []).filter(Self.isName))
-    let builtIn = Set(bundled.flatMap { try? FileManager.default.contentsOfDirectory(atPath: $0) }?.filter(Self.isName) ?? [])
-    let overrides = LaunchConfig.shared.isolated
-    let shown = (builtIn.sorted() + user.subtracting(builtIn).sorted()).prefix(Self.maxPlugins).sorted()
-    return shown.map { name in
-      let fromUser = user.contains(name) && (overrides || !builtIn.contains(name))
-      let path = fromUser ? (pluginsLexical as NSString).appendingPathComponent(name) : bundledFolder(name)!
-      var entry: [String: Any] = [
-        "name": name, "status": "missing", "bundled": !fromUser, "replacesBundled": fromUser && builtIn.contains(name),
-        "ignoresUserFolder": !fromUser && user.contains(name),
-      ]
-      guard let folder = PluginFiles.openFolder(path) else { return entry }
-      defer { folder.close() }
-      let read = PluginFiles.readManifest(in: folder)
-      entry["status"] = read.status
-      entry["folderId"] = fromUser ? folder.id : Self.bundledId
-      if case .text(let text) = read { entry["text"] = text }
-      return entry
-    }
+  static func manifestText(_ path: String) -> (status: String, text: String?, id: String?) {
+    guard let folder = PluginFiles.openFolder(path) else { return ("missing", nil, nil) }
+    defer { folder.close() }
+    let read = PluginFiles.readManifest(in: folder)
+    if case .text(let text) = read { return (read.status, text, folder.id) }
+    return (read.status, nil, folder.id)
   }
 
-  func remove(_ name: String) -> String? {
+  static func candidate(_ text: String, folderId: String, version: String) -> [String: Any] {
+    ["folderId": folderId, "text": text, "legacyHash": PluginFiles.approvalHash(text: text, folderId: legacyId), "version": version]
+  }
+
+  func officialEntry(_ entry: OfficialPinEntry) -> [String: Any]? {
+    let store = officialStore()
+    store.sweep(entry.name, keeping: [entry.sha256])
+    let active = OfficialTrust.trustedActive(store, entry)
+    var result: [String: Any]?
+    if let active {
+      let read = Self.manifestText(active.path)
+      result = ["name": entry.name, "status": read.status, "official": true, "folderId": active.folderId]
+      if active.sha != entry.sha256 { result!["legacy"] = true }
+      if let text = read.text {
+        result!["text"] = text
+        if active.sha == entry.sha256 { result!["legacyHash"] = PluginFiles.approvalHash(text: text, folderId: Self.legacyId) }
+      }
+    } else if let folder = legacyFolder(entry.name), case let read = Self.manifestText(folder), let text = read.text, OfficialPin.manifestName(text) == entry.name {
+      result = ["name": entry.name, "status": read.status, "official": true, "legacy": true, "folderId": Self.legacyId, "text": text]
+    }
+    if active?.sha != entry.sha256, let copy = store.copy(entry.name, sha: entry.sha256), let text = Self.manifestText(copy.path).text {
+      if result == nil { result = ["name": entry.name, "status": "missing", "official": true, "candidateOnly": true] }
+      result!["candidate"] = Self.candidate(text, folderId: copy.folderId, version: entry.version)
+    }
+    result?["autoInstall"] = LaunchConfig.shared.testInstance
+    return result
+  }
+
+  func list() -> [[String: Any]] {
+    let user = Set(((try? FileManager.default.contentsOfDirectory(atPath: pluginsLexical)) ?? []).filter(Self.isName))
+    var official: [String: [String: Any]] = [:]
+    for entry in Self.officialPin()?.entries ?? [] {
+      if let found = officialEntry(entry) { official[entry.name] = found }
+    }
+    let installed = Set(official.filter { $0.value["candidateOnly"] as? Bool != true }.keys)
+    let shown = (installed.sorted() + user.subtracting(installed).sorted()).prefix(Self.maxPlugins).sorted()
+    var entries: [[String: Any]] = shown.map { name in
+      if var entry = official[name], installed.contains(name) {
+        if user.contains(name) { entry["ignoresUserFolder"] = true }
+        return entry
+      }
+      var entry: [String: Any] = ["name": name, "status": "missing", "official": false]
+      let read = Self.manifestText((pluginsLexical as NSString).appendingPathComponent(name))
+      entry["status"] = read.status
+      if let id = read.id { entry["folderId"] = id }
+      if let text = read.text { entry["text"] = text }
+      return entry
+    }
+    for (name, entry) in official where !installed.contains(name) { entries.append(entry) }
+    return entries
+  }
+
+  func remove(_ name: String, official: Bool, folderId: String?) -> String? {
     guard Self.isName(name) else { return "That isn't a plugin's name." }
     let link = (pluginsLexical as NSString).appendingPathComponent(name)
     var info = stat()
+    if official {
+      return officialStore().remove(name) ? nil : "Its downloaded copy couldn't be removed."
+    }
+    if let folderId, lstat(link, &info) == 0, PluginFiles.openFolder(link).map({ folder -> String in
+      defer { folder.close() }
+      return folder.id
+    }) != folderId {
+      return "Another folder took its place while it was being removed, so nothing was deleted. Try again."
+    }
     if lstat(link, &info) == 0 {
       do {
         if LaunchConfig.shared.dataDirectory != nil {

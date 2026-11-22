@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { luminance } from "./color.ts";
-import { backdropStops, choiceAfterMatchToggle, lookAccents, lookAction, lookForApp, lookOf, nativeLookColors, presetLook, showsTheme, spaceTone, windowTintStops } from "./profileLook.ts";
+import { startingTheme, themeUnderColor, themeLayerAlpha, themeUnderlayAlpha, themeGrainAlpha, readableDark, opaqueThemeTint, type ProfileTheme } from "@ardia/core/src/theme.ts";
+import { activeCustomLook, backdropStops, choiceAfterMatchToggle, customLook, lookGlassTint, lookForApp, lookOf, nativeLookColors, presetLook, showsTheme, spaceTone, themedScheme, themeLookFor, windowTintStops } from "./profileLook.ts";
 
 const presets = [
   { key: "plum", swatch: "#C07A98", tint: "#B25B6B" },
@@ -85,21 +85,116 @@ test("with Increased Contrast the Spaces tone moves further toward the backgroun
 });
 
 test("the native look views get a preset by name, and the Mac's own look by its colour and theme", () => {
-  assert.deepEqual(nativeLookColors(presetLook(presets[1]!)), { color: "blue", themeColors: [], darkThemeColors: null });
-  assert.deepEqual(nativeLookColors(lookOf(macTheme, presets, "plum")), { color: "#BD5380", themeColors: ["#FF6A00", "#7A3CFF"], darkThemeColors: ["#401A00", "#1E0F40"] });
+  assert.deepEqual(nativeLookColors(presetLook(presets[1]!), false), { color: "blue", themeColors: [], darkThemeColors: null, themeLook: null });
+  assert.deepEqual(nativeLookColors(lookOf(macTheme, presets, "plum"), true), { color: "#BD5380", themeColors: ["#FF6A00", "#7A3CFF"], darkThemeColors: ["#401A00", "#1E0F40"], themeLook: null });
 });
 
-test("the look's accent is the swatch lifted 0.12 (plum's own action colour), legible as text on its surface, and the neutral look keeps the system accent", () => {
-  const plum = presetLook({ key: "plum", swatch: "#B25B6B", tint: "#B25B6B" });
-  assert.equal(lookAction(plum), "#DD899B");
-  const green = presetLook({ key: "green", swatch: "#3EB489" });
-  assert.notEqual(lookAction(green), green.swatch);
-  const contrast = (ink: string, surface: number) => (Math.max(luminance(ink), surface) + 0.05) / (Math.min(luminance(ink), surface) + 0.05);
-  for (const dark of [false, true]) {
-    const accents = lookAccents(green, dark)!;
-    assert.equal(accents.accent, lookAction(green));
-    assert.ok(contrast(accents.formAccent, dark ? 0 : 1) >= 4.4);
-    assert.match(accents.glassTint, /^rgba\(/);
-  }
-  assert.equal(lookAccents(presetLook({ key: "neutral", swatch: "#8E8E93" }), false), null);
+test("the glass takes the look's tint at 15%, and the neutral look leaves the glass untinted", () => {
+  assert.equal(lookGlassTint(presetLook({ key: "plum", swatch: "#B25B6B", tint: "#B25B6B" })), "rgba(178, 91, 107, 0.15)");
+  assert.equal(lookGlassTint(presetLook({ key: "neutral", swatch: "#8E8E93" })), undefined);
+});
+
+const blue = startingTheme("#4691C3");
+const look = (stops: [number, number, number][], extra: Partial<ProfileTheme> = {}): ProfileTheme => ({
+  ...blue,
+  stops: stops.map(([r, g, b], i) => ({ color: { r, g, b, a: 1 }, x: 0.2 + i * 0.3, y: 0.5 })),
+  ...extra,
+});
+const macFull = {
+  color: null,
+  theme: {
+    colors: ["#FF6A00", "#7A3CFF"],
+    darkColors: ["#401A00", "#1E0F40"],
+    mode: "auto" as const,
+    look: { ...blue, angle: 90, grain: 0.4, texture: "denim" as const },
+    dark: { ...look([[0.1, 0.05, 0.2], [0.05, 0.1, 0.2]]), angle: 200 },
+  },
+};
+
+test("the Mac's starting theme and its alphas hold the Mac's numbers", () => {
+  assert.equal(blue.stops.length, 2);
+  assert.equal(blue.intensity, 0.6);
+  assert.equal(blue.translucency, 1);
+  assert.equal(blue.mode, "auto");
+  assert.equal(themeUnderColor(blue, false), "#F5F5F5");
+  assert.equal(themeUnderColor(blue, true), "#222222");
+  assert.equal(themeLayerAlpha(blue), 0.53);
+  assert.equal(themeUnderlayAlpha(blue, false), 0.5);
+  assert.equal(themeUnderlayAlpha(blue, true), 0.175);
+  assert.equal(themeGrainAlpha({ ...blue, grain: 0.5, texture: "sand" }), 0.075);
+  assert.deepEqual(opaqueThemeTint(blue, false), ["#A4E5E3", "#A4AFE5"]);
+  assert.equal(readableDark(blue, false), false);
+  assert.equal(readableDark(blue, true), true);
+});
+
+test("the phone's own theme is a look of its own: accent swatch, palette, and the theme drawn natively", () => {
+  const own = customLook(blue, "own");
+  assert.equal(own.preset, null);
+  assert.equal(own.swatch, "#5D94D7");
+  assert.deepEqual(own.theme, ["#5CD6D3", "#5C71D6"]);
+  assert.equal(own.darkTheme, null);
+  assert.equal(showsTheme(own, false, true), true);
+  assert.deepEqual(backdropStops(own, false, true), ["#A4E5E3", "#A4AFE5"]);
+  assert.deepEqual(backdropStops(own, false, false), windowTintStops(own, false));
+  const colors = nativeLookColors(own, false);
+  assert.equal(colors.color, "#5D94D7");
+  assert.deepEqual(colors.themeColors, ["#5CD6D3", "#5C71D6"]);
+  assert.deepEqual(colors.themeLook, { stops: blue.stops, intensity: 0.6, grain: 0, texture: "grain", translucency: 1, angle: 135 });
+});
+
+test("Custom wins with a saved theme, and without one falls back to the default preset", () => {
+  assert.equal(lookForApp("custom", true, macTheme, presets, "plum", blue).custom?.source, "own");
+  assert.equal(lookForApp("custom", true, macTheme, presets, "plum", null).preset, "plum");
+  assert.equal(lookForApp("green", true, macTheme, presets, "plum", blue).preset, "green");
+});
+
+test("Match My Mac draws the Mac's full theme, its dark look in dark, and follows the app's appearance", () => {
+  const mac = lookForApp(null, true, macFull, presets, "plum");
+  assert.equal(mac.custom?.source, "app");
+  assert.deepEqual(mac.theme, ["#5CD6D3", "#5C71D6"]);
+  assert.equal(themeLookFor(mac, false)?.angle, 90);
+  assert.equal(themeLookFor(mac, false)?.texture, "denim");
+  assert.equal(themeLookFor(mac, true)?.angle, 200);
+  assert.deepEqual(themeLookFor(mac, true)?.stops[0]?.color, { r: 0.1, g: 0.05, b: 0.2, a: 1 });
+  assert.equal(lookForApp(null, false, macFull, presets, "plum").preset, "plum");
+  assert.deepEqual(activeCustomLook(null, null, true, macFull)?.source, "app");
+  assert.equal(activeCustomLook(null, null, false, macFull), null);
+  assert.equal(activeCustomLook("blue", blue, true, macFull), null);
+  assert.equal(activeCustomLook("custom", blue, false, null)?.source, "own");
+});
+
+test("a Mac theme without its full look still draws as colours, as before", () => {
+  const old = lookForApp(null, true, macTheme, presets, "plum");
+  assert.equal(old.custom, null);
+  assert.equal(themeLookFor(old, false), null);
+});
+
+test("the theme's mode and readable ink decide light or dark, the way the Mac does", () => {
+  const own = (theme: ProfileTheme) => ({ theme, source: "own" as const });
+  assert.equal(themedScheme(null, null), null);
+  assert.equal(themedScheme(null, "dark"), "dark");
+  assert.equal(themedScheme(own(blue), null), null);
+  assert.equal(themedScheme(own(blue), "light"), "light");
+  assert.equal(themedScheme(own({ ...blue, mode: "dark" }), "light"), "dark");
+  assert.equal(themedScheme(own({ ...blue, mode: "light" }), "dark"), "light");
+  const night = look([[0.05, 0.05, 0.1], [0.05, 0.08, 0.1]], { translucency: 0, mode: "light" });
+  assert.equal(themedScheme(own(night), "light"), "dark");
+  assert.equal(themedScheme(own({ ...night, mode: "auto" }), null), "dark");
+  const app = { theme: { ...blue, mode: "dark" as const }, source: "app" as const };
+  assert.equal(themedScheme(app, "light"), "light");
+});
+
+test("the native look is the one shown for the view's light or dark, kept dark when the ink needs it", () => {
+  const night = look([[0.05, 0.05, 0.1], [0.05, 0.08, 0.1]], { translucency: 0, mode: "light" });
+  const view = customLook(night, "own");
+  assert.deepEqual(themeLookFor(view, true)?.stops.map((s) => s.color.r), [0.05, 0.05]);
+  const split = customLook({ ...blue, dark: { ...look([[0.2, 0.1, 0.1]]), angle: 30 } }, "own");
+  assert.equal(themeLookFor(split, true)?.stops.length, 1);
+  assert.equal(themeLookFor(split, true)?.angle, 30);
+  assert.equal(themeLookFor(split, false)?.stops.length, 2);
+  assert.equal(themeLookFor(split, false)?.angle, 135);
+});
+
+test("turning Match My Mac off keeps the Mac's full theme as Custom", () => {
+  assert.equal(choiceAfterMatchToggle(false, lookForApp(null, true, macFull, presets, "plum"), "plum"), "custom");
 });

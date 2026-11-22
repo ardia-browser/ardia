@@ -89,8 +89,7 @@
     "apps/browser/src/state/windows/windowClose.ts": 1,
     "apps/linux/src/hostExtensionView.ts": 1,
     "apps/linux/src/hostPolicies.ts": 1,
-    "apps/linux/src/hostTab.ts": 2,
-    "apps/linux/src/hostUpdates.ts": 1,
+    "apps/linux/src/hostTab.ts": 1,
     "apps/linux/src/sandboxNotice.ts": 1
   },
   "consentNow": {
@@ -152,6 +151,7 @@
     "apps/browser/src/state/live/engine.ts": 1,
     "apps/browser/src/state/live/githubClient.ts": 1,
     "apps/browser/src/state/pins/tabCleanup.ts": 1,
+    "apps/browser/src/state/plugins/official.ts": 1,
     "apps/browser/src/state/plugins/programs.ts": 1,
     "apps/browser/src/state/plugins/tools.ts": 1,
     "apps/browser/src/state/reader/reader.ts": 1,

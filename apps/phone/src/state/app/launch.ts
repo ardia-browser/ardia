@@ -1,6 +1,7 @@
 import type { InterfaceStyleChoice, SchemeChoice } from "../../lib/appearance";
 import { deckSteps, LAUNCH_TIMING, TRUSTED_SITES_SAMPLE, type DeckStep, type LaunchArguments } from "../../lib/launchArguments";
 import { neighbourAt } from "../../lib/pagerPhysics";
+import { demoTheme } from "../../lib/themeEditor";
 import { sendDeckCommand } from "../browse/deckCommands";
 import { captureSnapshot, newTab, openArchive, openPage, openSpaces, openTab, showDeck, swipeOrder, switchToNeighbour, useBrowse } from "../browse/store";
 import { openLibrary } from "../library/store";
@@ -11,7 +12,7 @@ import { presentHeardVoiceSearch } from "../voice/store";
 import { trustSite } from "../settings/actions";
 import { openSettings, settingsRouteFromKey } from "../settings/nav";
 import { acceptsPreference, type ColorChoice } from "../settings/preferences";
-import { setPreference } from "../settings/store";
+import { currentPreferences, setPreference } from "../settings/store";
 import { closeEveryTab, closeTabById, currentTabs, openNewTab, receiveSentTabs, setIncognito, updateTabById } from "../tabs/store";
 import { deckOrder } from "../tabs/tabsState";
 import { showToast } from "../toasts/store";
@@ -32,6 +33,7 @@ export function applyLaunchSettings() {
   if (!args.showsOnboarding) setPreference("hasFinishedOnboarding", true);
   if (args.restingStart) setPreference("autoOpensKeyboard", false);
   const color = args.color?.toLowerCase() ?? null;
+  if (color === "custom" && !currentPreferences().customTheme) setPreference("customTheme", demoTheme());
   if (color && acceptsPreference("colorChoice", color)) setPreference("colorChoice", color as ColorChoice);
   if (args.interfaceStyle && acceptsPreference("interfaceStyle", args.interfaceStyle)) setPreference("interfaceStyle", args.interfaceStyle as InterfaceStyleChoice);
   if (args.colorScheme && acceptsPreference("schemeChoice", args.colorScheme)) setPreference("schemeChoice", args.colorScheme as SchemeChoice);
@@ -62,7 +64,7 @@ async function warmDemoPictures() {
 
 async function runDemoScenario(args: LaunchArguments) {
   demoWarming = warmDemoPictures();
-  if (args.browseIncognito) setIncognito(true);
+  if (args.browseIncognito && !setIncognito(true)) return;
   if (args.browseOpen) openPage(args.browseOpen, "typed");
   if (args.browseQuery !== null) presentSearch("home", args.browseQuery);
   if (args.browseSurface === "browsing") {

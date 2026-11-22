@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Usage: scripts/release/plugin-digest.py <plugin folder>
   Prints the folder's payload digest, the one PluginPrograms.payloadDigest computes for the copy it publishes: the
-  SHA-256 of one line per entry, sorted by path bytes, `d <path>` or `f <mode & 755> <sha256> <path>`, leaving out
+  SHA-256 of one line per entry, sorted by path bytes, `d <path>` or `f <755 if executable, else 644> <sha256> <path>`, leaving out
   every __pycache__ folder and the top-level names Ardia keeps for itself (.leases, .after-update, .after-update-claim).
   A link, a name with control characters or any other kind of file is refused, as Ardia refuses it."""
 import hashlib
@@ -32,7 +32,7 @@ def digest(root: str) -> str:
         elif stat.S_ISREG(info.st_mode):
             with open(path, "rb") as handle:
                 content = hashlib.sha256(handle.read()).hexdigest()
-            listing += f"f {oct(info.st_mode & 0o755)[2:]} {content} {relative}\n".encode()
+            listing += f"f {'755' if info.st_mode & 0o111 else '644'} {content} {relative}\n".encode()
         else:
             raise SystemExit(f"plugin-digest: {relative} isn't a file or a folder")
     return hashlib.sha256(bytes(listing)).hexdigest()

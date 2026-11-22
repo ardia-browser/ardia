@@ -46,6 +46,7 @@ import { useToolbarRow } from "./useToolbarRow";
 import { useStableHandler } from "./useStableHandler";
 import { PAGE_IDENTITY_TAG } from "../../state/tabs/tabReveal";
 import { DeveloperToolsButtons } from "./DeveloperToolsButtons";
+import { TabSwipeArea } from "../window/TabSwipe";
 import { useDeveloperMode } from "../../state/site/developerMode";
 
 type ToolbarTab = Pick<Tab, "id" | "url" | "title" | "windowId" | "zoom">;
@@ -135,6 +136,7 @@ export const Toolbar = memo(function Toolbar({
     <View style={{ height: row.height }}>
       {!bare && <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: band }]} />}
       <WindowDragRegion style={StyleSheet.absoluteFill} />
+      <TabSwipeArea windowId={windowId} surface="toolbar" />
       <Animated.View style={[StyleSheet.absoluteFill, { opacity: dim }]} pointerEvents="box-none">
         {geometry.sidebarButton !== null && (
           <Button variant="icon" toolbar

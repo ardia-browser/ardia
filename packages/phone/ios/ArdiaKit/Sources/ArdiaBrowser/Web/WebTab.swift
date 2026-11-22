@@ -261,7 +261,7 @@ public final class WebTab: DiscardablePage, Identifiable {
     webView.scrollView.contentInsetAdjustmentBehavior = .always
     webView.isInspectable = engine.isInspectable
     engine.blocker.install(on: configuration.userContentController, counter: blockedResources)
-    engine.installPageScripts(on: configuration.userContentController)
+    engine.installPageScripts(on: configuration.userContentController, host: host, isPrivate: isPrivate)
     self.webView = webView
     observe(webView)
     let stored = engine.tabs.tab(id)
@@ -421,6 +421,7 @@ public final class WebTab: DiscardablePage, Identifiable {
       let targetHost = BrowserURL.host(of: target.absoluteString)
       if let controller = webView?.configuration.userContentController {
         engine?.blocker.prepareNavigation(of: controller, toHost: targetHost, isPrivate: isPrivate)
+        engine?.prepareNightShade(of: controller, toHost: targetHost, isPrivate: isPrivate)
       }
       let zoom = engine?.preferences.settings(for: targetHost, isPrivate: isPrivate).pageZoom ?? 1
       if zoom != pageZoom {

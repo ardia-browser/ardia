@@ -27,14 +27,14 @@ export { SystemGlyph, systemGlyphsAvailable, type SystemGlyphWeight } from "./Sy
 export { placeholderTint, TabFace, tabFill } from "./TabFace";
 export { isSymbolName, type SymbolName } from "./symbolPaths";
 export { DEFAULT_PROFILE_COLOR, PROFILE_PRESETS, ProfileLookContext, rolesFor, spaceAccentFor, useProfileLook, useTheme, type SpaceAccent, type StartBackdrop, type Theme } from "./theme";
-export { appIconLayout, browseLayout, capsule, controlRadius, shape, smoothCorners, font, ink, radius, space, dialogLayout, actionSheetLook, menuLayout, menuLook, pageInk, pageMenuInk, pageMenuLayout, readerInk, readerLayout, settingsLayout, settingsTint, PROFILE_COLORS, scanInk, scanLayout, shadowRadius, spacesLayout, expoSpacesLayout, syncInk, tabsInk, voiceInk, voiceLayout, failureLayout, archiveCardLayout, onboardingArt, syncSketch, chromeInk, chromeLayout, floatingBarLayout, floatingPanelLayout, deckChromeInk, deckChromeLayout, startInk, startLayout, tabsLayout, toastLayout, trayShadow, type ColorRoles, type ProfileColor } from "./tokens";
+export { appIconLayout, browseLayout, capsule, controlRadius, shape, smoothCorners, font, ink, radius, space, dialogLayout, actionSheetLook, menuLayout, menuLook, pageInk, pageMenuInk, pageMenuLayout, readerInk, readerLayout, settingsLayout, settingsTint, themeEditorInk, themeEditorLayout, PROFILE_COLORS, scanInk, scanLayout, shadowRadius, spacesLayout, expoSpacesLayout, syncInk, tabsInk, voiceInk, voiceLayout, failureLayout, archiveCardLayout, onboardingArt, syncSketch, chromeInk, chromeLayout, floatingBarLayout, floatingPanelLayout, deckChromeInk, deckChromeLayout, startInk, startLayout, tabsLayout, toastLayout, trayShadow, type ColorRoles, type ProfileColor } from "./tokens";
 export { focusForScreenReader, useCoverFocus } from "./coverFocus";
 export { useFocusReturn } from "./focusReturn";
 export { FullSheet, SheetBackground, useSheetFrame } from "./FullSheet";
 export { SwipeToDelete } from "./SwipeToDelete";
 export { useIncreasedContrast, useReduceMotion, useReduceTransparency } from "./contrast";
 export { FadingBackdrop } from "./FadingBackdrop";
-export { ChromeSurface, DeckLookBackdrop, DeckLookBackdropBase, LookBackdrop, LookBackdropBase, LookFrost, LookGlass, SURFACES_FROST, usesGlass } from "./LookViews";
+export { ChromeSurface, CustomLookBackdrop, DeckLookBackdrop, DeckLookBackdropBase, LookBackdrop, LookBackdropBase, LookFrost, LookGlass, SURFACES_FROST, usesGlass } from "./LookViews";
 export { appDesign, currentDesign, DesignProvider, designWith, followDesign, materialYouOffered, useDesign, usePageUnderBars } from "./design";
 export { FadeView, fadeIsNative, FrostSource, motionReportsNearEnd, pageObscuresInsets, pageReportsDrawn, PasteButton, pasteButtonIsNative, ScrollActions } from "@ardia/phone-native";
 export { MotionView, type MotionCurve, type MotionTarget } from "@ardia/phone-native";

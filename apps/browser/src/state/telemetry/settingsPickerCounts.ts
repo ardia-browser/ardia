@@ -17,6 +17,8 @@ const ZERO = {
   command_bar_picks_centred: 0,
   scroll_toolbar_picks_keep: 0,
   scroll_toolbar_picks_hide: 0,
+  ctrl_tab_follows_chrome_step: 0,
+  ctrl_tab_follows_chrome_switcher: 0,
 };
 
 type Field = keyof typeof ZERO;
@@ -28,6 +30,10 @@ let counts = { ...ZERO };
 export function noteSettingsPick<P extends keyof Picks>(picker: P, option: Picks[P], consent?: ConsentToken | null) {
   const field = `${FIELD_PREFIX[picker]}_${option}` as Field;
   countFor(consentOrNow(consent), () => void counts[field]++);
+}
+
+export function noteCtrlTabFollowedChrome(option: Picks["ctrlTab"], consent?: ConsentToken | null) {
+  countFor(consentOrNow(consent), () => void counts[`ctrl_tab_follows_chrome_${option}`]++);
 }
 
 export function takeSettingsPickerCounts() {

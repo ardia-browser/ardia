@@ -38,6 +38,10 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         fields: ["interface_style", "color_scheme"],
       },
       {
+        text: "With each launch, whether your color matches your Mac, is one of Ardia’s colors, or is a custom theme. Never which colors",
+        fields: ["color_choice"],
+      },
+      {
         text: "On Android, with each launch, whether the Material You design was off, and with it on, whether Dynamic Colors used your wallpaper, Ardia used your custom colour, or the phone gave no wallpaper palette and Ardia used its own",
         fields: ["material_colors"],
       },
@@ -54,8 +58,8 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         fields: ["perf_launch_tray", "tray_ms"],
       },
       {
-        text: "At most once a day, for the last day you used Ardia before today: how many tabs you opened, searches you made, pages you pinned to your Mac, tabs you sent to another device, pages that stopped working because their page process ended, links from other apps Ardia gave up on because they took too long, and pages that reloaded by themselves when the phone came back online, how often the tab switcher opened before a page's picture was ready, how often you searched your tabs, how often you picked a space from its menu, how many tabs you moved to another space, how many pages you printed, how many you translated, how often a pinned site took you back to its tab after the page had moved on, how often you showed the tab switcher as a grid, how often you opened the tab switcher by swiping up on the bottom bar instead of tapping its tabs button, how often a back swipe closed a tab or a forward swipe reopened one, how often Archive or History took more than 0.4 seconds to show its list, how often you scrolled far enough in them to show older days, how often you swiped a long address in the search field to read the rest of it, how often you swiped up on the bottom bar and let go early so the page came back, how often the page stalled for more than a twentieth of a second while it shrank into the tab switcher, how often the bottom bar collapsed on Android, and how often you opened a menu or a confirmation, counted apart for the phone's own menus and the ones Ardia draws, never while browsing privately. Counts only, never which",
-        fields: ["usage_counts", "tabs_opened", "searches", "pins_to_mac", "tabs_sent", "page_processes_gone", "links_given_up", "pages_reloaded_online", "find_opened_system", "find_opened_bar", "find_closed_bar", "spaces_swiped", "tray_hidden_rows_opened", "deck_pictures_late", "tray_back_swiped", "search_tabs_opened", "spaces_picked", "tabs_moved_to_space", "pages_printed", "pages_translated", "pinned_tabs_refound", "site_permissions_revoked", "card_opens_waited", "native_menus_opened", "drawn_menus_opened", "library_opened", "deck_grid_shown", "landscape_shown", "duo_layout_shown", "list_sheets_late", "list_pages_added", "search_reveals_late", "address_field_scrolled", "deck_bar_swipes", "tabs_swiped_closed", "tabs_swiped_reopened", "page_menu_tapped_away", "new_tab_search_opened", "deck_incognito_switches", "deck_bar_swipes_returned", "deck_pulls_hitched", "bottom_bar_collapses"],
+        text: "At most once a day, for the last day you used Ardia before today: how many tabs you opened, searches you made, pages you pinned to your Mac, tabs you sent to another device, pages that stopped working because their page process ended, links from other apps Ardia gave up on because they took too long, and pages that reloaded by themselves when the phone came back online, how often the tab switcher opened before a page's picture was ready, how often you searched your tabs, how often you picked a space from its menu, how many tabs you moved to another space, how many pages you printed, how many you translated, how often a pinned site took you back to its tab after the page had moved on, how often you showed the tab switcher as a grid, how often you opened the tab switcher by swiping up on the bottom bar instead of tapping its tabs button, how often a back swipe closed a tab or a forward swipe reopened one, how often Archive or History took more than 0.4 seconds to show its list, how often you scrolled far enough in them to show older days, how often you swiped a long address in the search field to read the rest of it, how often you swiped up on the bottom bar and let go early so the page came back, how often you switched tabs by swiping the bottom bar sideways, whether the one-time hint about that swipe was shown on Android, how often the page stalled for more than a twentieth of a second while it shrank into the tab switcher, how often the bottom bar collapsed on Android, and how often you opened a menu or a confirmation, counted apart for the phone's own menus and the ones Ardia draws, never while browsing privately. Counts only, never which",
+        fields: ["usage_counts", "tabs_opened", "searches", "pins_to_mac", "tabs_sent", "page_processes_gone", "links_given_up", "pages_reloaded_online", "find_opened_system", "find_opened_bar", "find_closed_bar", "spaces_swiped", "tray_hidden_rows_opened", "deck_pictures_late", "tray_back_swiped", "search_tabs_opened", "spaces_picked", "tabs_moved_to_space", "pages_printed", "pages_translated", "pinned_tabs_refound", "site_permissions_revoked", "card_opens_waited", "native_menus_opened", "drawn_menus_opened", "library_opened", "deck_grid_shown", "landscape_shown", "duo_layout_shown", "list_sheets_late", "list_pages_added", "search_reveals_late", "address_field_scrolled", "deck_bar_swipes", "tabs_swiped_closed", "tabs_swiped_reopened", "page_menu_tapped_away", "new_tab_search_opened", "deck_incognito_switches", "deck_bar_swipes_returned", "tabs_bar_swiped", "tab_swipe_hints_shown", "deck_pulls_hitched", "bottom_bar_collapses"],
       },
       {
         text: "In the same daily counts: how often you opened Browse for Me, how many of its answers ChatGPT wrote, the phone’s own model wrote (Apple Intelligence on iPhone, Gemini Nano on Android) or were the pages’ own lines, how many it couldn’t write, and how often ChatGPT couldn’t answer so the phone did. Counts only, never what you searched for or what the answer said",
@@ -66,8 +70,16 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         fields: ["talk_to_me_answers_read", "talk_to_me_ear_listens", "talk_to_me_voice_downloads", "talk_to_me_download_failed", "talk_to_me_failed"],
       },
       {
+        text: "In the same daily counts: how often you turned Incognito on with the eyes in the search panel, and on Android how often Ardia couldn’t turn Incognito on because the phone’s Android System WebView is too old to keep Incognito pages separate. Counts only, never what you browsed",
+        fields: ["tray_incognito_switches", "incognito_unavailable"],
+      },
+      {
         text: "In the same daily counts, on iPhone: how often you summarized a page by pinching in or from the page menu, how many summaries Apple Intelligence wrote on the phone or were the page’s own lines, and how many it couldn’t write. Counts only, never which page or what the summary said",
         fields: ["page_summaries_pinched", "page_summaries_from_menu", "page_summaries_on_device", "page_summaries_excerpts", "page_summaries_failed"],
+      },
+      {
+        text: "In the same daily counts, on Android: when a search answer or a page summary couldn’t use Gemini Nano, why: it was still downloading, its download stopped, Google doesn’t offer it to apps on this phone, it needed a Google AICore or system update, it didn’t start, or it started but couldn’t write; and how often you rewrote a search answer with Gemini Nano once its download finished. Counts only, never what you searched for or which page",
+        fields: ["gemini_nano_downloading", "gemini_nano_not_offered", "gemini_nano_needs_update", "gemini_nano_errors", "gemini_nano_download_failed", "gemini_nano_write_failed", "gemini_nano_download_rewrites"],
       },
       {
         text: "In the same daily counts: how often you tapped Paste and Go with a link or with text, and how often it found nothing to paste because you didn’t allow the paste or the clipboard had emptied. Never what you copied, and never while browsing privately",
@@ -82,6 +94,18 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         fields: ["start_no_tabs_button_taps"],
       },
       {
+        text: "In the same daily counts, on Android: how often a page opened with Night Shade already knowing from an earlier visit whether that site is light or dark, how often it had to learn that on this visit, and how often a site had changed so what it knew was wrong. Counts only, never which site, and never while browsing privately",
+        fields: ["night_shade_verdicts_reused", "night_shade_verdicts_learned", "night_shade_verdicts_corrected"],
+      },
+      {
+        text: "In the same daily counts: how often a picture of a page for the tab switcher was thrown away because it came out as one flat colour or the page was not on screen, and how often it had to come from the page engine instead of a copy of the screen. Counts only, and never while browsing privately",
+        fields: ["page_pictures_blank", "page_pictures_hidden", "page_pictures_webkit"],
+      },
+      {
+        text: "In the same daily counts: how often you chose Custom in Settings › Appearance, and how many changes you made on its Theme page. Counts only, never the colors or settings you picked",
+        fields: ["custom_theme_chosen", "theme_edits"],
+      },
+      {
         text: "In the same daily counts, on Android: how often you tapped the Ardia logo on the start page to search. Counts only, and never while browsing privately",
         fields: ["start_logo_taps"],
       },
@@ -90,7 +114,7 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         fields: ["page_summaries_chatgpt", "page_summaries_chatgpt_fallbacks"],
       },
       {
-        text: "In the same daily counts, on Android: how often you turned the Material You design on or off in Settings, how often you closed the find bar, and with Material You on, how often you closed a tab with its card’s close button, went back with the system’s back swipe, opened Archive from the bottom bar, opened the page menu from the address bar, and pulled Search or the page menu up to full screen. Counts only, never which page, and never while browsing privately",
+        text: "In the same daily counts, on Android: how often you turned the Material You design on or off in Settings, how often you closed the find bar, and with Material You on, how often you closed a tab with its card’s close button, went back with the system’s back swipe, opened Archive from the bottom bar, opened the page menu from the address bar, and pulled Search or the page menu up to full screen, and with it off, how often you dragged the page menu from half height to full. Counts only, never which page, and never while browsing privately",
         fields: ["find_closed_bar", "card_close_tapped", "material_back_swiped", "archive_bar_opened", "site_settings_sheet_opened", "search_sheet_expanded", "site_settings_sheet_expanded", "material_you_turned_on", "material_you_turned_off"],
       },
     ],

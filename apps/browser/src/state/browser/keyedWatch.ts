@@ -1,6 +1,7 @@
 import { useMemo, useSyncExternalStore } from "react";
 import { changedIds } from "./changes";
 import { useBrowser, type BrowserState } from "./store";
+import { onWindowChromeChange } from "../../lib/windowChrome";
 
 type Readable<S> = { getState(): S; subscribe(listener: (s: S, prev: S) => void): () => void };
 type Listener = () => void;
@@ -61,10 +62,14 @@ export const watchTabRecord = recordWatch(browser, (s: BrowserState) => s.tabs);
 export const watchWindowRecord = recordWatch(browser, (s: BrowserState) => s.windows);
 export const watchSettings = fieldWatch(browser, (s: BrowserState) => s.settings);
 export const watchAppDark = fieldWatch(browser, (s: BrowserState) => s.ui.appDark);
-export const watchWindowSettings = keyedWatch(browser, (s: BrowserState, prev: BrowserState, wake) => {
+const watchWindowSettingsInStore = keyedWatch(browser, (s: BrowserState, prev: BrowserState, wake) => {
   if (s.settings !== prev.settings) return true;
   if (s.windows !== prev.windows) for (const id of changedIds(s.windows, prev.windows)) wake(id);
 });
+export const watchWindowSettings: KeyedWatch = (key, listener) => {
+  const stops = [watchWindowSettingsInStore(key, listener), onWindowChromeChange(listener)];
+  return () => stops.forEach((stop) => stop());
+};
 export const useWindowSettings = <T,>(windowId: string, read: (s: BrowserState) => T): T => useKeyed(watchWindowSettings, windowId, () => read(useBrowser.getState()));
 export const ALL = "";
 export const watchFocusedWindowSettings = keyedWatch(browser, (s: BrowserState, prev: BrowserState) =>

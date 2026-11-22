@@ -6,6 +6,12 @@ const NO_METRO = "127.0.0.1:1";
 
 export const INJECTION_ENTITLEMENTS = ["com.apple.security.cs.allow-dyld-environment-variables", "com.apple.security.cs.disable-library-validation"];
 
+const LSREGISTER = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister";
+const copiesToUnregister = new Set();
+process.on("exit", () => {
+  for (const copy of copiesToUnregister) spawnSync(LSREGISTER, ["-u", copy], { stdio: "ignore" });
+});
+
 export const signingIdentity = (app) => spawnSync("codesign", ["-dvv", app], { encoding: "utf8" }).stderr.match(/^Authority=(.+)$/m)?.[1] ?? "-";
 
 export function prepareApp(app, dir, { bundle = null, entitlements: extra = [] } = {}) {
@@ -17,6 +23,7 @@ export function prepareApp(app, dir, { bundle = null, entitlements: extra = [] }
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
   execFileSync("cp", ["-cR", source, copy]);
+  copiesToUnregister.add(copy);
   const shipped = join(copy, "Contents/Resources/main.jsbundle");
   const swapped = !!bundle && !(existsSync(shipped) && readFileSync(bundle).equals(readFileSync(shipped)));
   if (swapped) cpSync(bundle, shipped);

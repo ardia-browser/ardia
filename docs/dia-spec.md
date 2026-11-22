@@ -98,12 +98,13 @@ Measured materials (our own non-activating panels over solid backdrops; sRGB; ac
   (`pageFrameZeroInFullScreen`, `pageFrameZeroWhenTabsHidden`): the first drops the effective inset to 0 in macOS full
   screen; the second only when full screen and Auto-Hide Tabs are both on (`pageFrameInsetOf`); borderless wins over both.
   Otherwise the slider still applies. The inset applies at the window's edges, below the top strip's
-  sides, in Little Ardia below its bar, and to the peek panel's top, bottom and side (its side is `min(5, frame)`);
+  sides, in Little Ardia below its bar, and to the floating sidebar (the peek), which sits `max(1, frame)` from the window's left, top and bottom, so it lines up with the card at every frame and keeps 1 pt off the edges at 0 (#3381);
   split panes and the extension side panel sit `max(frame, 2)` apart, so two panes still read as two edge to edge.
   Docked beside the sidebar the card starts at the sidebar's edge for any frame up to 9 (the sidebar's rows keep their
   9 pt), and `frame - 9` past it above that. The corner radius scales with the frame, `10 × min(1, frame / 9)` rounded
   to half points (0 edge to edge, where the window's own corner rounds the page), and the peek's is
-  `min(12, radius + frame - its side)`, so its corners still cover the card's. The traffic lights stay 21 pt below the
+  `radius + frame - its side`: the card's own radius at every frame from 1 pt, nested in the window's corner (15.3 pt
+  at 1 pt on a 16 pt window, 10 pt at 9, 7 pt at 12), so its corners cover the card's and never poke past the window's. The traffic lights stay 21 pt below the
   card's top (y = frame + 21; the compact toolbar lifts them as before). The sidebar's header and its first row rise by
   the same lift (`sidebarHeaderOf`, `firstRowTopOf` in `components/sidebar/geometry.ts`; issue #1364), so the first tab or
   Top Apps tile stays 24 pt below the lights; with the address bar in the sidebar the lights are fixed and so is the
@@ -1069,12 +1070,24 @@ on its window.
 - **Tilt**: Dia also tilts the window while it's dragged (`dragAngleAnimation`, 0.005 × speed).
 
 **Ardia** (`ArdiaPiPController.mm`, the maths in `ArdiaPiPThrowMath.h`, tested by `pnpm -C packages/ardiacore test`)
-does the same on Chrome's video PiP window, using the same thresholds, corner rule, 10 pt inset and spring. It
+does the same on Chrome's video PiP window, using the same drag threshold, 10 pt inset and spring. It
 differs in a few places:
 - Chrome's window can't tilt.
 - The window is remembered by its frame (Chrome's `ArdiaPictureInPicture.plist`), not by its corner.
 - A drag or swipe past a screen side keeps Ardia's 28 pt peek stash rather than Dia's off-screen one.
 - A swipe whose fingers rested more than 0.1 s before lifting doesn't throw.
+- A swipe is a flick when its last event moved **10 pt** or more (`kSwipeSureFlingDelta`), or when macOS starts
+  momentum for it at over 350 pt/s. Ardia waits **80 ms** for that momentum (`kMomentumWait`) and accepts it up to
+  **0.3 s** late (`kMomentumLate`). Dia's 6 pt last-event rule isn't used, with inertia
+  off either: a scroll event doesn't say which device sent it, so the inertia setting can't be matched to it.
+- A flick goes to the corner closest to its direction, with no ±45° limit, so it always lands somewhere.
+- A flick tucks the window away only when the window already reaches past that side, the flick is at least twice
+  as sideways as vertical (`kSidewaysFlick`), and **0.1 s** of its travel (`kFlickReach`) would carry more than half
+  the window past the edge.
+- A release with no flick that brings the window to within **80 pt** of a corner's resting spot settles into it on
+  the spring (`kCornerPull`); one that starts within that reach stays put.
+- A tucked window pulled out **48 pt** or more comes out on the spring (`kUntuckPull`), at the edge it was tucked on
+  unless its centre passed the middle of that display.
 - Its screen is the one the window overlaps most.
 - While a swipe or drag moves it, the window keeps at least 60 pt × 40 % on a display. It slides along an edge rather than leaving, and stays below the menu bar and above the Dock unless another display lies that way.
 - A window larger than its display stays on that display.

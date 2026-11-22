@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo } from "react";
 import { useDarkScheme } from "../../state/settings/appearance";
-import { backdropStops, lookAccents, presetLook, showsTheme, windowTintStops, type PresetSpec, type ProfileLook } from "../../lib/profileLook";
+import { backdropStops, presetLook, showsTheme, windowTintStops, type PresetSpec, type ProfileLook } from "../../lib/profileLook";
 import { withAlpha } from "../../lib/color";
 import { colorRoles, PROFILE_COLORS, type ColorRoles, type ProfileColor } from "./tokens";
 import { useDesign } from "./design";
@@ -52,8 +52,7 @@ export function useTheme(): Theme {
     }
     const backdrop = windowTintStops(look, dark);
     const start = { colors: backdropStops(look, dark, true), diagonal: showsTheme(look, dark, true) };
-    const accents = lookAccents(look, dark);
-    const tinted = accents ? { accent: accents.accent, formAccent: accents.formAccent } : null;
-    return { ...rolesFor(dark), ...spaceAccentFor(look, dark), ...tinted, backdrop, surface: backdrop[0], start };
+    const space = spaceAccentFor(look, dark);
+    return { ...rolesFor(dark), ...space, accent: space.spaceAccent, formAccent: space.spaceAccentInk, backdrop, surface: backdrop[0], start };
   }, [look, dark, material, scheme]);
 }

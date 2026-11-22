@@ -13,29 +13,35 @@ final class PluginProgramRegistryTests: XCTestCase {
     let registry = resolve(info: signed)
     XCTAssertFalse(registry.failClosed)
     XCTAssertNil(registry.refusal(program: "ardia", plugin: "cli", builtIn: true))
-    XCTAssertEqual(registry.refusal(program: "ardia", plugin: "cli", builtIn: false), "ardia belongs to Ardia's built-in cli plugin")
-    XCTAssertEqual(registry.refusal(program: "ardia", plugin: "copycat", builtIn: true), "ardia belongs to Ardia's built-in cli plugin")
+    XCTAssertEqual(registry.refusal(program: "ardia", plugin: "cli", builtIn: false), "ardia belongs to Ardia's official cli plugin")
+    XCTAssertEqual(registry.refusal(program: "ardia", plugin: "copycat", builtIn: true), "ardia belongs to Ardia's official cli plugin")
     XCTAssertNil(registry.refusal(program: "other", plugin: "copycat", builtIn: false))
     XCTAssertEqual(registry.adoption(for: "cli", programs: ["ardia"], builtIn: true)?.folder, "/Users/someone/Library/Application Support/Ardia/CLI")
     XCTAssertNil(registry.adoption(for: "cli", programs: ["ardia"], builtIn: false))
     XCTAssertNil(registry.adoption(for: "copycat", programs: ["ardia"], builtIn: true))
   }
 
+  let pin = OfficialPin.parse([
+    "version": 1,
+    "plugins": [[
+      "name": "cli", "version": "0.6.0", "release": "https://github.com/ardia-browser/plugins/releases/download/cli-v0.6.0", "reservedPrograms": ["ardia"],
+      "legacyInstall": ["program": "ardia", "root": "Library/Application Support/Ardia/CLI", "current": "current"],
+      "artifacts": ["macos-arm64": ["file": "cli-plugin-0.6.0-macos-arm64.tar.gz", "sha256": String(repeating: "a", count: 64)]],
+    ]],
+  ])!
+
   func testAMissingOrDamagedRegistryFailsClosed() {
-    let bundled = ["cli": ["ardia"]]
-    let missing = resolve(info: nil, bundled: bundled, hasBundled: true)
+    let missing = resolve(info: nil, pin: pin)
     XCTAssertTrue(missing.failClosed)
     XCTAssertNotNil(missing.refusal(program: "ardia", plugin: "cli", builtIn: true), "no signed list, so not even its owner links it")
-    XCTAssertNotNil(missing.refusal(program: "ardia", plugin: "copycat", builtIn: false))
     XCTAssertNotNil(missing.refusal(program: "anything-else", plugin: "mine", builtIn: false), "a distributed build without valid metadata links no program at all")
     XCTAssertNil(missing.adoption(for: "cli", programs: ["ardia"], builtIn: true))
-    let damaged = resolve(info: ["version": 1, "claims": "ardia"], bundled: bundled, hasBundled: true)
-    XCTAssertTrue(damaged.failClosed)
-    let disagrees = resolve(info: signed, bundled: ["other": ["ardia"]], hasBundled: true)
-    XCTAssertTrue(disagrees.failClosed, "a bundled manifest claiming a name the signed list gives another is inconsistent")
-    XCTAssertEqual(resolve(info: nil), .empty, "a dev build with no bundled plugins has nothing to reserve")
-    XCTAssertTrue(resolve(info: nil, hasBundled: true).failClosed, "bundled plugins with no signed list and no manifest claims still fail closed")
-    XCTAssertTrue(resolve(info: nil, hasBundled: true, isolated: true).failClosed, "a signed smoke instance isn't a test instance, so it gets no fixture")
+    XCTAssertTrue(resolve(info: nil, usePin: false).failClosed, "a distributed build fails closed even with no official plugin installed or pinned")
+    XCTAssertTrue(resolve(info: ["version": 1, "claims": "ardia"], pin: pin).failClosed)
+    XCTAssertTrue(resolve(info: ["version": 1, "claims": ["ardia": "other"]], pin: pin).failClosed, "a signed list the pin disagrees with is inconsistent")
+    XCTAssertTrue(resolve(info: signed, usePin: false).failClosed, "a signed list with no pin to agree with it fails closed")
+    XCTAssertTrue(resolve(info: nil, pin: pin, isolated: true).failClosed, "a signed smoke instance isn't a test instance, so it gets no fixture")
+    XCTAssertFalse(resolve(info: signed, pin: pin).failClosed)
   }
 
   func testLegacyEntriesNameOnlyKnownRootsAndOneComponent() {
@@ -47,20 +53,20 @@ final class PluginProgramRegistryTests: XCTestCase {
     }
   }
 
-  func resolve(info: Any?, fixture: Any? = nil, bundled: [String: [String]] = [:], hasBundled: Bool = false, isolated: Bool = false, testInstance: Bool = false, scratch: String? = nil) -> ProgramRegistry {
-    ProgramRegistry.resolve(info: info, fixture: fixture, bundled: bundled, hasBundled: hasBundled, home: home, isolated: isolated, testInstance: testInstance, scratchLegacyBase: scratch)
+  func resolve(info: Any?, pin given: OfficialPin? = nil, usePin: Bool = true, fixture: Any? = nil, isolated: Bool = false, testInstance: Bool = false, scratch: String? = nil) -> ProgramRegistry {
+    ProgramRegistry.resolve(info: info, pin: usePin ? (given ?? pin) : nil, fixture: fixture, home: home, isolated: isolated, testInstance: testInstance, scratchLegacyBase: scratch)
   }
 
-  func testATestInstanceUsesTheBundleFixtureOrTheManifestsAndAdoptsOnlyFromItsScratchHome() {
-    let derived = resolve(info: nil, bundled: ["cli": ["ardia"]], hasBundled: true, isolated: true, testInstance: true, scratch: "/tmp/old-home")
+  func testATestInstanceDerivesTheRegistryFromThePinAndAdoptsOnlyFromItsScratchHome() {
+    let derived = resolve(info: nil, isolated: true, testInstance: true, scratch: "/tmp/old-home")
     XCTAssertFalse(derived.failClosed)
     XCTAssertEqual(derived.claims, ["ardia": "cli"])
     XCTAssertEqual(derived.adoption(for: "cli", programs: ["ardia"], builtIn: true)?.folder, "/tmp/old-home")
-    let fixture = resolve(info: nil, fixture: signed, bundled: [:], hasBundled: true, isolated: true, testInstance: true, scratch: nil)
-    XCTAssertEqual(fixture.claims, ["ardia": "cli"], "the bundle's program-registry.json carries the pin's reservations")
+    let fixture = resolve(info: nil, fixture: signed, isolated: true, testInstance: true, scratch: nil)
+    XCTAssertEqual(fixture.claims, ["ardia": "cli"])
     XCTAssertNil(fixture.adoption(for: "cli", programs: ["ardia"], builtIn: true), "no scratch cliHome, no adoption")
-    let clash = resolve(info: nil, bundled: ["a": ["tool"], "b": ["tool"]], hasBundled: true, isolated: true, testInstance: true)
-    XCTAssertTrue(clash.failClosed, "two built-ins claiming one name is refused")
+    XCTAssertTrue(resolve(info: nil, fixture: ["version": 1, "claims": ["ardia": "other"]], isolated: true, testInstance: true).failClosed, "a fixture that disagrees with the pin is refused")
+    XCTAssertEqual(resolve(info: nil, usePin: false, isolated: true, testInstance: true), .empty, "a dev build with no pin has nothing to reserve")
   }
 
   func testASignedScratchInstanceKeepsTheClaimsButNeverTouchesTheRealHome() {

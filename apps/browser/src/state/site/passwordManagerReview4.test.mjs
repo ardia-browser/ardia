@@ -91,11 +91,13 @@ test("a profile change while a withdrawal waits for native pushes the withdrawn 
 });
 
 test("a held-off record that can't be written keeps the request and retries it, then saving goes off", async () => {
-  offer.OWED_RETRY.firstMs = 50;
+  offer.OFFER_TO_SAVE_RETRY.firstMs = 50;
   pm.choosePasswordManager("default", "ardia");
   await settle();
   await wait(50);
   assert.equal(offerToSave(""), true);
+  await setPasswordAutofillFor("", true);
+  assert.ok(!record().includes(""), "turning it on yourself clears the record");
   stub.refusedSaves.on = true;
   pm.choosePasswordManager("default", "plugin:one-pm");
   await settle();
@@ -117,7 +119,7 @@ test("a give-back native refuses (profile not loaded) leaves the record, and a r
   stub.profileToggles.unloadable.delete("");
   await wait(400);
   assert.equal(offerToSave(""), true, "given back on retry");
-  assert.ok(!record().includes(""));
+  assert.deepEqual(JSON.parse(stub.docs.get("password-manager.json")).offerToSaveRestored, [""], "marked for a later launch to confirm");
 });
 
 test("turning offer to save off in Settings is refused while the record can't drop the profile, so a restart can't turn it back on", async () => {

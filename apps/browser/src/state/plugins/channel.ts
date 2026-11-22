@@ -3,6 +3,7 @@ import { errorText } from "../../lib/errors";
 import { redactedEventData } from "../automation/eventRedaction";
 import type { PluginManifest } from "../../lib/pluginManifest";
 import { failure, parseRequest, parseSubscription, type RequestId, type Subscription } from "../automation/automationMethods";
+import { changeSubscription } from "../automation/automationFeed";
 import { eventTargets, refreshFeed, setFeedConsumer, type Body } from "../automation/controlSocket";
 import { launchToReplay } from "../automation/lifecycleEvents";
 import { isDecideEvent, type AutomationEventName } from "../automation/eventNames";
@@ -19,6 +20,7 @@ export { pluginWebUrl, MAX_OPEN_URL_LENGTH, type PluginWebUrl } from "../../lib/
 type Connection = { name: string; run: number; sub: Subscription | null; launchSent: boolean };
 
 const connections = new Map<string, Connection>();
+const idleReplays = new Map<Connection, Record<string, unknown>[]>();
 const key = (name: string, run: number) => `${name}#${run}`;
 
 function connectionFor(name: string, run: number): Connection {
@@ -39,8 +41,11 @@ function subscribe(c: Connection, m: PluginManifest, params: Record<string, unkn
   if (outside.length) return failure("refused", `This plugin's hooks don't list ${outside.join(", ")}.`);
   const sub = parseSubscription({ events, idle: params.idle, fullUrls: m.permissions.fullUrls });
   if ("error" in sub) return sub;
-  c.sub = sub.events.size ? sub : null;
-  refreshFeed();
+  const replay = changeSubscription(c.sub, sub.events.size ? sub : null, () => {
+    c.sub = sub.events.size ? sub : null;
+    refreshFeed();
+  });
+  if (replay.length) idleReplays.set(c, replay);
   if (c.sub?.events.has("app.launched") && !c.launchSent) {
     const launch = launchToReplay();
     if (launch) {
@@ -57,7 +62,10 @@ function answer(c: Connection, m: PluginManifest, method: string, params: Record
 }
 
 function reply(c: Connection, id: RequestId, body: Body) {
+  const replay = idleReplays.get(c) ?? [];
+  idleReplays.delete(c);
   replyToPlugin(c.name, c.run, JSON.stringify({ id, ...body }));
+  for (const data of replay) deliverTo(c, "tab.idle", data, Date.now());
 }
 
 export function handlePluginLine({ name, run, launch, line }: PluginLine) {

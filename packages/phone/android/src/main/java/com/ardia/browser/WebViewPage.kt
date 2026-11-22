@@ -77,6 +77,9 @@ internal class WebViewPage(
     private var systemUserAgent = ""
     private var filterHandler: ScriptHandler? = null
     private var desktopViewportHandler: ScriptHandler? = null
+    private var nightShadeHandler: ScriptHandler? = null
+    private var nightShadeSource: String? = null
+    private var nightShadeUrl: String? = null
     private var desktopRewritesShown = 0
     private var desktopStartShown = false
     private var desktopFinishedWidth: Double? = null
@@ -361,11 +364,12 @@ internal class WebViewPage(
             }
         }
         lastCaptureRoute = topCapture.route
-        val topColor = ToneSampler.dominant(PageCapture.pixels(topCapture.bitmap))
-        val bottomColor = ToneSampler.dominant(PageCapture.pixels(bottomCapture.bitmap))
+        val topPixels = PageCapture.pixels(topCapture.bitmap)
+        val bottomPixels = PageCapture.pixels(bottomCapture.bitmap)
         topCapture.bitmap.recycle()
         bottomCapture.bitmap.recycle()
-        if (topColor == null && bottomColor == null) null else PageTone(topColor, bottomColor)
+        val tone = PageTone(ToneSampler.dominant(topPixels), ToneSampler.dominant(bottomPixels), ToneSampler.shade(topPixels), ToneSampler.shade(bottomPixels))
+        if (tone == PageTone()) null else tone
     }
 
     private suspend fun sampleBand(web: WebView, region: Rect, preferred: CaptureRoute): Capture? {
@@ -412,6 +416,7 @@ internal class WebViewPage(
     internal fun applySitePreferences() {
         val web = webView ?: return
         val host = mutableState.value.host
+        installNightShade(web, nightShadeUrl ?: web.url)
         applyNightShade(web, engine.sitePreferences.nightShade(host, isPrivate))
         applyZoom(engine.sitePreferences.pageZoom(host, isPrivate) ?: 1.0)
     }
@@ -465,16 +470,23 @@ internal class WebViewPage(
         web.setOnLongClickListener { longPressed(web) }
         web.setOnScrollChangeListener { _, _, scrollY, _, _ -> scrolled(web, scrollY) }
         web.addOnLayoutChangeListener { view, left, top, right, bottom, _, _, _, _ -> engine.notePageSize(view, right - left, bottom - top) }
-        if (engine.supportsDocumentStartScripts) {
-            WebViewCompat.addDocumentStartJavaScript(web, PageScripts.mainFrameOnly(engine.scripts.nightShade), setOf("*"))
-            if (engine.supportsMessageListener) WebViewCompat.addDocumentStartJavaScript(web, TouchScrollers.script, setOf("*"))
+        installNightShade(web, mutableState.value.url)
+        if (engine.supportsDocumentStartScripts && engine.supportsMessageListener) {
+            WebViewCompat.addDocumentStartJavaScript(web, TouchScrollers.script, setOf("*"))
         }
         if (engine.supportsMessageListener) {
-            WebViewCompat.addWebMessageListener(web, PageScripts.BRIDGE_NAME, setOf("*")) { _, message, origin, _, reply ->
-                if (message.data == PageScripts.NIGHT_SHADE_MESSAGE) {
-                    reply.postMessage(engine.sitePreferences.nightShade(BrowserUrl.host(origin.toString()), isPrivate).raw)
-                } else {
-                    TouchScrollers.report(web, message.data, android.os.SystemClock.uptimeMillis())
+            WebViewCompat.addWebMessageListener(web, PageScripts.BRIDGE_NAME, setOf("*")) { _, message, origin, isMainFrame, reply ->
+                val data = message.data
+                when {
+                    data == PageScripts.NIGHT_SHADE_MESSAGE -> {
+                        val host = BrowserUrl.host(origin.toString())
+                        val sites = engine.sitePreferences
+                        reply.postMessage(PageScripts.nightShadeState(sites.nightShade(host, isPrivate), sites.nightShadeVerdict(host, isPrivate)))
+                    }
+                    data?.startsWith(PageScripts.NIGHT_SHADE_VERDICT_MESSAGE) == true -> {
+                        if (isMainFrame) nightShadeMeasured(web, BrowserUrl.host(origin.toString()), PageScripts.nightShadeVerdict(data))
+                    }
+                    else -> TouchScrollers.report(web, data, android.os.SystemClock.uptimeMillis())
                 }
             }
         }
@@ -550,6 +562,9 @@ internal class WebViewPage(
         mutableFind.value = null
         filterHandler = null
         desktopViewportHandler = null
+        nightShadeHandler = null
+        nightShadeSource = null
+        nightShadeUrl = null
         installedStart = null
         installedEnd = null
         installedBundle = null
@@ -567,7 +582,35 @@ internal class WebViewPage(
 
     internal fun prepareNavigation(web: WebView, url: String) {
         filterPageUrl = url
+        installNightShade(web, url)
         installFilterScripts(web, url)
+    }
+
+    @SuppressLint("RequiresFeature")
+    private fun installNightShade(web: WebView, url: String?) {
+        nightShadeUrl = url
+        val host = url?.let(BrowserUrl::host)
+        val sites = engine.sitePreferences
+        val source = PageScripts.nightShadeAtStart(engine.scripts.nightShade, host, sites.nightShade(host, isPrivate), sites.nightShadeVerdict(host, isPrivate))
+        if (source == nightShadeSource) return
+        nightShadeSource = source
+        if (!engine.supportsDocumentStartScripts) return
+        nightShadeHandler?.remove()
+        nightShadeHandler = WebViewCompat.addDocumentStartJavaScript(web, source, setOf("*"))
+    }
+
+    private fun nightShadeMeasured(web: WebView, host: String?, verdict: NightShadeVerdict?) {
+        if (web !== webView || host == null || verdict == null) return
+        val use = engine.sitePreferences.rememberNightShadeVerdict(host, isPrivate, verdict)
+        if (use != null && !isPrivate) engine.onNightShadeVerdict?.invoke(use)
+        if (host == nightShadeUrl?.let(BrowserUrl::host)) installNightShade(web, nightShadeUrl)
+    }
+
+    private fun countNightShadeReuse(host: String?) {
+        if (isPrivate || host == null) return
+        val sites = engine.sitePreferences
+        if (sites.nightShade(host, false) == NightShadeMode.Disabled || sites.nightShadeVerdict(host, false) == null) return
+        engine.onNightShadeVerdict?.invoke(NightShadeVerdictUse.Reused)
     }
 
     @SuppressLint("RequiresFeature")
@@ -597,15 +640,17 @@ internal class WebViewPage(
         desktopStartShown = false
         desktopFinishedWidth = null
         if (desktopSite) traceDesktop("start ${viewNumbers(web)}")
+        installNightShade(web, url)
         val changed = installFilterScripts(web, url)
         if (!engine.supportsDocumentStartScripts) {
-            web.evaluateJavascript(PageScripts.mainFrameOnly(engine.scripts.nightShade), null)
+            nightShadeSource?.let { web.evaluateJavascript(it, null) }
             if (desktopSite) web.evaluateJavascript(PageScripts.desktopViewport, null)
             installedBundle?.let { web.evaluateJavascript(it, null) }
         } else if (changed) {
             installedBundle?.let { web.evaluateJavascript(it, null) }
         }
         val host = BrowserUrl.host(url)
+        countNightShadeReuse(host)
         val lastDesktopHost = desktopHost
         if (host != null) desktopHost = host
         DesktopSites.onEnter(host, lastDesktopHost, desktopSite, host?.let { engine.sitePreferences.desktopSite(it, isPrivate) })?.let { wanted ->

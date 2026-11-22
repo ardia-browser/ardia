@@ -10,6 +10,7 @@ import { pickOnLinuxPage, pickerStartPoint } from "../../elementPickerHost";
 import { HostTab, type HostPageFactory, type HostTabEvent } from "../../hostTab";
 import { extensionViewsSupported } from "../../hostExtensionView";
 import { HostExtensionWebView } from "./HostExtensionWebView";
+import { clipRadii } from "./clipRadii";
 import { refreshTabViewports, watchTabViewport, type TabViewport } from "../../hostViewport";
 import { inputRegions } from "../../shellAbove";
 import type { InputRegionsRegistry } from "../../inputRegions";
@@ -107,7 +108,7 @@ const HostTabWebView = forwardRef<WebViewHandle, WebViewProps>(function HostTabW
       const tabId = latest.current.tabId;
       if (tabId) for (const listener of pageCoveredListeners) listener(tabId);
     };
-    const stop = watchPageBelowShell(node, regions, () => latest.current.visible !== false, () => tab.current, undefined, covered);
+    const stop = watchPageBelowShell(node, regions, () => latest.current.visible !== false, () => tab.current, undefined, covered, () => clipRadii(node));
     const unregister = props.tabId ? registerSwitchView(props.tabId, { tab: () => tab.current, slot: node, regions }) : () => {};
     return () => {
       unregister();
@@ -118,23 +119,24 @@ const HostTabWebView = forwardRef<WebViewHandle, WebViewProps>(function HostTabW
   return <View style={[props.style, { backgroundColor: "transparent" }]}><div ref={element} data-ardia-native-tab={key.current} style={{ position: "absolute", inset: 0 }} /></View>;
 });
 
-export function watchPageBelowShell(node: HTMLElement, regions: InputRegionsRegistry, visible: () => boolean, page: () => { identity?: unknown; disposed?: boolean; viewport(viewport: TabViewport): Promise<void> } | null, radii?: () => CornerRadii, covered?: () => void) {
+export function watchPageBelowShell(node: HTMLElement, regions: InputRegionsRegistry, visible: () => boolean, page: () => { identity?: unknown; disposed?: boolean; viewport(viewport: TabViewport): Promise<void> } | null, radii?: () => CornerRadii, covered?: () => void, cardRadii?: () => CornerRadii) {
   let last = "";
   let shown = false;
   let revision = 0;
   const stop = watchTabViewport(node, visible, (viewport, coveredByShell) => {
-    if (!viewport.visible) regions.setPage(node, false, radii);
+    if (!viewport.visible) regions.setPage(node, false, radii, cardRadii);
     if (shown && coveredByShell) covered?.();
     shown = viewport.visible;
     regions.refresh();
     const current = page();
     if (!current?.identity) return;
-    const json = JSON.stringify(viewport);
+    const sent = cardRadii && viewport.visible ? { ...viewport, radii: cardRadii() } : viewport;
+    const json = JSON.stringify(sent);
     if (json === last) return;
     last = json;
     const mine = ++revision;
-    void current.viewport(viewport).then(() => {
-      if (mine === revision && !current.disposed && viewport.visible) regions.setPage(node, true, radii);
+    void current.viewport(sent).then(() => {
+      if (mine === revision && !current.disposed && viewport.visible) regions.setPage(node, true, radii, cardRadii);
     }, (error) => {
       if (mine === revision) last = "";
       reportHostError(error);

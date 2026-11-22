@@ -5,27 +5,17 @@ import { currentPlugins, type PluginsStore } from "./store";
 type ConsentRequest = NonNullable<PluginsStore["consent"]>;
 export type ConsentOwner = "onboarding" | "settings";
 
-let asking: { name: string; before: number | null } | null = null;
 let onboarding: { id: number; alive: () => boolean; windowId: string | null } | null = null;
 
-export function askConsentInOnboarding<T>(name: string, windowId: string | null, alive: () => boolean, ask: () => T): { result: T; id: number | null } {
-  const before = currentPlugins().consent?.id ?? null;
-  asking = { name, before };
-  let result: T;
-  try {
-    result = ask();
-  } finally {
-    asking = null;
-  }
-  const request = currentPlugins().consent;
-  const id = request && request.name === name && request.id !== before ? request.id : null;
-  if (id !== null) onboarding = { id, alive, windowId };
-  return { result, id };
+export function claimOnboardingConsent(id: number, windowId: string | null, alive: () => boolean): boolean {
+  if (currentPlugins().consent?.id !== id || !alive()) return false;
+  onboarding = { id, alive, windowId };
+  return true;
 }
 
 let settingsPresenters = 0;
 
-const onboardingOwned = (consent: ConsentRequest) => onboarding?.id === consent.id || (consent.name === asking?.name && consent.id !== asking.before);
+const onboardingOwned = (consent: ConsentRequest) => onboarding?.id === consent.id;
 
 const orphaned = (consent: ConsentRequest) => {
   if (onboarding?.id === consent.id) return !onboarding.alive();

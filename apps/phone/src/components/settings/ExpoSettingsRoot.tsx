@@ -34,7 +34,7 @@ const SYNC_TILE = 56;
 const TOP_SECTION_SPACING = 12;
 
 const link = (route: SettingsRoute) => settingsRouteKey(route);
-const colorName = (choice: string) => PROFILE_COLORS[choice as ProfileColor]?.name ?? choice;
+const colorName = (choice: string) => (choice === "custom" ? "Custom" : (PROFILE_COLORS[choice as ProfileColor]?.name ?? choice));
 
 export function ExpoSettingsRoot() {
   const engineId = usePreferences((p) => p.searchEngineId);

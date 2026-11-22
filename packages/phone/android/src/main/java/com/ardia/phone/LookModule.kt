@@ -179,6 +179,7 @@ class LookModule : Module() {
             Prop("color") { view: DeckBackdropView, value: String? -> view.color = value }
             Prop("themeColors") { view: DeckBackdropView, value: List<String>? -> view.themeColors = value }
             Prop("darkThemeColors") { view: DeckBackdropView, value: List<String>? -> view.darkThemeColors = value }
+            Prop("themeLook") { view: DeckBackdropView, value: Map<String, Any?>? -> view.themeLook = ThemeLook.from(value) }
             Prop("dark") { view: DeckBackdropView, value: Boolean? -> view.dark = value }
             Prop("reduceMotion") { view: DeckBackdropView, value: Boolean? -> view.reduceMotion = value == true }
             Prop("reduceTransparency") { view: DeckBackdropView, value: Boolean? -> view.reduceTransparency = value == true }
@@ -190,6 +191,7 @@ class LookModule : Module() {
             Prop("color") { view: ProfileBackdropView, value: String? -> view.color = value }
             Prop("themeColors") { view: ProfileBackdropView, value: List<String>? -> view.themeColors = value }
             Prop("darkThemeColors") { view: ProfileBackdropView, value: List<String>? -> view.darkThemeColors = value }
+            Prop("themeLook") { view: ProfileBackdropView, value: Map<String, Any?>? -> view.themeLook = ThemeLook.from(value) }
             Prop("dark") { view: ProfileBackdropView, value: Boolean? -> view.dark = value }
             Prop("themed") { view: ProfileBackdropView, value: Boolean? -> view.themed = value == true }
             Prop("softened") { view: ProfileBackdropView, value: Boolean? -> view.softened = value == true }
@@ -217,6 +219,7 @@ class LookModule : Module() {
             Prop("color") { view: FrostView, value: String? -> view.color = value }
             Prop("themeColors") { view: FrostView, value: List<String>? -> view.themeColors = value }
             Prop("darkThemeColors") { view: FrostView, value: List<String>? -> view.darkThemeColors = value }
+            Prop("themeLook") { view: FrostView, value: Map<String, Any?>? -> view.themeLook = ThemeLook.from(value) }
             Prop("dark") { view: FrostView, value: Boolean? -> view.dark = value }
             Prop("reduceTransparency") { view: FrostView, value: Boolean? -> view.reduceTransparency = value == true }
             OnViewDidUpdateProps { view -> view.update() }
@@ -230,6 +233,7 @@ class LookModule : Module() {
             Prop("color") { view: GlassView, value: String? -> view.color = value }
             Prop("themeColors") { view: GlassView, value: List<String>? -> view.themeColors = value }
             Prop("darkThemeColors") { view: GlassView, value: List<String>? -> view.darkThemeColors = value }
+            Prop("themeLook") { view: GlassView, value: Map<String, Any?>? -> view.themeLook = ThemeLook.from(value) }
             Prop("dark") { view: GlassView, value: Boolean? -> view.dark = value }
             Prop("reduceTransparency") { view: GlassView, value: Boolean? -> view.reduceTransparency = value == true }
             Prop("shape") { view: GlassView, value: String? -> view.shape = value }

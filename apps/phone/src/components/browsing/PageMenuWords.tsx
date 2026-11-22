@@ -1,10 +1,7 @@
-import { Children, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Pressable, StyleSheet, Text, useWindowDimensions, View, type ViewInstance } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { FadeIn, FadeOut, runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Children, type ReactNode } from "react";
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { copy } from "../../lib/platformCopy";
-import { trayDragDismisses } from "../../lib/trayMotion";
 import {
   canPrintPages,
   canSummarizePages,
@@ -36,13 +33,11 @@ import { useMenuTitle, useTitleFeedback } from "../../state/page/hooks";
 import { openLibrary, type LibrarySection } from "../../state/library/store";
 import { useIsPinned, useSendTargets } from "../../state/sync/hooks";
 import { useTab } from "../../state/tabs/hooks";
-import { barCenterFromBottom, floatingBarLayout, font, MenuFrostProvider, pageMenuLayout, pageMenuMotion, PressScale, SheetScrollView, smoothCorners, space, SURFACES_FROST, Symbol, tabsCurve, Toggle, useCoverFocus, useReduceMotion, useTheme, type MenuItem, type SymbolName } from "../ui";
-import { MenuMaterial } from "../ui/Menu";
+import { font, pageMenuLayout, pageMenuMotion, PressScale, SheetScrollView, smoothCorners, space, Symbol, Toggle, useTheme, type MenuItem, type SymbolName } from "../ui";
 import { MenuTrigger } from "../ui/MenuTrigger";
-import { SheetScrollContext, sheetPullOffset, type SheetScroll } from "../ui/Sheet";
 import { syncOffered } from "../../state/sync/offer";
 import { usePageSummariesEnabled } from "../../state/pageSummary/enabled";
-import { pageMenuCardInk, pageMenuCardMotion, pageMenuCards } from "./pageMenuTokens";
+import { pageMenuCardInk, pageMenuCards } from "./pageMenuTokens";
 
 export const usePageMenuInk = () => pageMenuCardInk[useTheme().dark ? "dark" : "light"];
 
@@ -53,109 +48,10 @@ function openFromMenu(section: LibrarySection) {
 
 const useAccessibilityText = () => useWindowDimensions().fontScale >= copy().menuLargeTextScale;
 
-const HIDE_FALLBACK_MS = 900;
-
-export function pageMenuCardPlace(screen: { width: number; height: number }, insets: { top: number; bottom: number; left: number; right: number }) {
-  const bottom = barCenterFromBottom(insets.bottom, "redesigned") + floatingBarLayout.control / 2 + pageMenuCards.aboveBar;
-  const room = screen.width - insets.left - insets.right;
-  const width = Math.min(room - 2 * pageMenuCards.side, pageMenuCards.maxWidth);
-  return { left: insets.left + (room - width) / 2, width, bottom, maxHeight: Math.max(0, screen.height - insets.top - pageMenuCards.topGap - bottom) };
-}
-
-export function PageMenuCard({ open, onDismiss, onHidden, onTapAway, children }: { open: boolean; onDismiss: () => void; onHidden: () => void; onTapAway?: () => void; children: ReactNode }) {
-  const ink = usePageMenuInk();
-  const insets = useSafeAreaInsets();
-  const screen = useWindowDimensions();
-  const reduceMotion = useReduceMotion();
-  const panel = useRef<ViewInstance>(null);
-  useCoverFocus(panel);
-  const shown = useSharedValue(0);
-  const faded = useSharedValue(0);
-  const drag = useSharedValue(0);
-  const cardHeight = useSharedValue(screen.height);
-  const atTop = useSharedValue(true);
-  const scrolls = useSharedValue(false);
-  const native = useMemo(() => Gesture.Native(), []);
-  const scroll = useMemo<SheetScroll>(() => ({ native, atTop, scrolls }), [native]);
-  useEffect(() => {
-    if (open) {
-      drag.value = 0;
-      atTop.value = true;
-      faded.value = withTiming(1, { duration: reduceMotion ? pageMenuCardMotion.reduced : pageMenuCardMotion.fadeIn, easing: tabsCurve.easeOut });
-      shown.value = reduceMotion ? 1 : withSpring(1, pageMenuCardMotion.open);
-      return;
-    }
-    const hidden = (finished?: boolean) => {
-      "worklet";
-      if (finished) runOnJS(onHidden)();
-    };
-    if (!reduceMotion) shown.value = withSpring(0, pageMenuCardMotion.close);
-    faded.value = withTiming(0, { duration: reduceMotion ? pageMenuCardMotion.reduced : pageMenuCardMotion.fadeOut, easing: tabsCurve.easeInOut }, hidden);
-    const fallback = setTimeout(onHidden, HIDE_FALLBACK_MS);
-    return () => clearTimeout(fallback);
-  }, [open]);
-  const pull = Gesture.Pan()
-    .withTestId("pageMenuCardDrag")
-    .enabled(open)
-    .activeOffsetY([-12, 12])
-    .failOffsetX([-24, 24])
-    .simultaneousWithExternalGesture(native)
-    .onUpdate((event) => {
-      drag.value = sheetPullOffset(event.translationY, scrolls.value, atTop.value);
-    })
-    .onEnd((event) => {
-      if ((!scrolls.value || drag.value > 0) && trayDragDismisses(event.translationY, event.velocityY, cardHeight.value)) {
-        runOnJS(onDismiss)();
-        return;
-      }
-      drag.value = reduceMotion ? withTiming(0, { duration: pageMenuCardMotion.reduced, easing: tabsCurve.easeOut }) : withSpring(0, pageMenuCardMotion.open);
-    });
-  const scrim = useAnimatedStyle(() => ({ opacity: faded.value }));
-  const lift = useAnimatedStyle(() => ({
-    opacity: faded.value,
-    transform: [{ translateY: (1 - shown.value) * pageMenuCardMotion.rise + drag.value }, { scale: pageMenuCardMotion.fromScale + (1 - pageMenuCardMotion.fromScale) * shown.value }],
-  }));
-  const place = pageMenuCardPlace(screen, insets);
-  return (
-    <View style={StyleSheet.absoluteFill} pointerEvents={open ? "box-none" : "none"} collapsable={false} importantForAccessibility={open ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={!open}>
-      <Animated.View style={[StyleSheet.absoluteFill, scrim]}>
-        <Pressable
-          testID="pageMenuScrim"
-          accessibilityLabel="Close"
-          style={[StyleSheet.absoluteFill, { backgroundColor: ink.scrim }]}
-          onPress={() => {
-            onTapAway?.();
-            onDismiss();
-          }}
-        />
-      </Animated.View>
-      <GestureDetector gesture={pull}>
-        <Animated.View
-          ref={panel}
-          testID="pageMenuCard"
-          accessibilityViewIsModal
-          onLayout={(event) => {
-            cardHeight.value = event.nativeEvent.layout.height;
-          }}
-          style={[styles.cardPlace, { left: place.left, width: place.width, bottom: place.bottom, maxHeight: place.maxHeight, boxShadow: ink.shadow }, lift]}
-        >
-          <MenuMaterial source={SURFACES_FROST} fill={ink.tint} solid={ink.solid} radius={pageMenuCards.radius} style={[styles.cardMaterial, { maxHeight: place.maxHeight }]}>
-            <SheetScrollContext.Provider value={scroll}>
-              <MenuFrostProvider value={null}>{children}</MenuFrostProvider>
-            </SheetScrollContext.Provider>
-            <View testID="pageMenuCardRim" pointerEvents="none" style={[StyleSheet.absoluteFill, styles.cardRim, { borderColor: ink.rim }]} />
-          </MenuMaterial>
-        </Animated.View>
-      </GestureDetector>
-    </View>
-  );
-}
-
 export function PageMenuWords({ tabId, model, onTranslate }: { tabId: string; model: MenuModel; onTranslate: () => void }) {
   const large = useAccessibilityText();
   const devices = useSendTargets(tabId);
   const offersSummary = usePageSummariesEnabled() && canSummarizePages();
-  const [more, setMore] = useState(false);
   return (
     <SheetScrollView testID="pageMenuWords" style={styles.scroll} contentContainerStyle={[styles.column, large ? styles.largeBottom : null]} bounces={false}>
       <NavigationBar tabId={tabId} model={model} large={large} />
@@ -171,29 +67,24 @@ export function PageMenuWords({ tabId, model, onTranslate }: { tabId: string; mo
         {model.pageRows ? (
           <ToggleRow icon={model.blockersEnabled ? "handRaised" : "handRaisedSlash"} title="Block Ads and Trackers" value={model.blockersEnabled} enabled={model.isWebPage} detail={model.blockedCount} onChange={setBlockersOn} />
         ) : null}
-        {more ? null : <Row icon="ellipsis" title="More" enabled onPress={() => setMore(true)} />}
       </Group>
-      {more ? (
-        <>
-          <Group>
-            {model.pageRows ? <ToggleRow icon={model.nightShadeOn ? "moonFill" : "moon"} title="Night Shade" value={model.nightShadeOn} enabled={model.isWebPage} onChange={setNightShadeOn} /> : null}
-            {model.pageRows ? <ZoomRow model={model} large={large} /> : null}
-            {model.pageRows ? <ToggleRow icon="desktop" title="Desktop Site" value={model.desktopSite} enabled={model.isWebPage} onChange={setDesktopSite} /> : null}
-            {model.pageRows ? <Row icon="translate" title={model.translateTitle} enabled={model.translate} onPress={onTranslate} /> : null}
-            {canPrintPages() ? <Row icon="printer" title="Print" enabled={model.print} onPress={printCurrentPage} /> : null}
-            <Row icon="gearshape" title="Site Settings" enabled onPress={openSiteSettingsSheet} />
-          </Group>
-          <Group>
-            <Row icon="clockArrow" title="History" enabled onPress={() => openFromMenu("history")} />
-            <Row icon="star" title="Bookmarks" enabled onPress={() => openFromMenu("bookmarks")} />
-            <Row icon="arrowDownCircle" title="Downloads" enabled onPress={() => openFromMenu("downloads")} />
-          </Group>
-          {model.pageRows && model.offersDefaultBrowser ? (
-            <Group>
-              <Row icon="arrowUpForwardAppFill" title="Open in Default Browser" enabled onPress={openInDefaultBrowser} />
-            </Group>
-          ) : null}
-        </>
+      <Group>
+        {model.pageRows ? <ToggleRow icon={model.nightShadeOn ? "moonFill" : "moon"} title="Night Shade" value={model.nightShadeOn} enabled={model.isWebPage} onChange={setNightShadeOn} /> : null}
+        {model.pageRows ? <ZoomRow model={model} large={large} /> : null}
+        {model.pageRows ? <ToggleRow icon="desktop" title="Desktop Site" value={model.desktopSite} enabled={model.isWebPage} onChange={setDesktopSite} /> : null}
+        {model.pageRows ? <Row icon="translate" title={model.translateTitle} enabled={model.translate} onPress={onTranslate} /> : null}
+        {canPrintPages() ? <Row icon="printer" title="Print" enabled={model.print} onPress={printCurrentPage} /> : null}
+        <Row icon="gearshape" title="Site Settings" enabled onPress={openSiteSettingsSheet} />
+      </Group>
+      <Group>
+        <Row icon="clockArrow" title="History" enabled onPress={() => openFromMenu("history")} />
+        <Row icon="star" title="Bookmarks" enabled onPress={() => openFromMenu("bookmarks")} />
+        <Row icon="arrowDownCircle" title="Downloads" enabled onPress={() => openFromMenu("downloads")} />
+      </Group>
+      {model.pageRows && model.offersDefaultBrowser ? (
+        <Group>
+          <Row icon="arrowUpForwardAppFill" title="Open in Default Browser" enabled onPress={openInDefaultBrowser} />
+        </Group>
       ) : null}
     </SheetScrollView>
   );
@@ -391,9 +282,6 @@ const TITLE_OUT = FadeOut.duration(pageMenuMotion.titleFade);
 const LABEL_START = pageMenuCards.rowInset + pageMenuCards.iconSlot + pageMenuCards.iconGap;
 
 const styles = StyleSheet.create({
-  cardPlace: { position: "absolute", borderRadius: pageMenuCards.radius, ...smoothCorners },
-  cardMaterial: { overflow: "hidden", borderRadius: pageMenuCards.radius, ...smoothCorners },
-  cardRim: { borderRadius: pageMenuCards.radius, borderWidth: pageMenuCards.rim, ...smoothCorners },
   scroll: { flexGrow: 0, flexShrink: 1 },
   column: { padding: pageMenuCards.padding, gap: pageMenuCards.sectionGap },
   largeBottom: { paddingBottom: pageMenuCards.padding + pageMenuLayout.accessibilityBottom },

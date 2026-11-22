@@ -36,12 +36,16 @@ final class QuitFlow {
   }
 
   func shouldTerminate() -> NSApplication.TerminateReply {
+    PluginProgramLinks.holdAfterUpdates()
     guard ShellEvents.isAttached(.app), ShellEvents.isAttached(.window) else {
-      guard AppUpdater.shared.holdsQuitForStagedUpdate else { return .terminateNow }
+      guard AppUpdater.shared.holdsQuitForStagedUpdate || PluginProgramLinks.afterUpdatesRunning else { return .terminateNow }
       quitAfterUpdaterSettles()
       return .terminateLater
     }
-    guard confirmActiveDownloads() else { return .terminateCancel }
+    guard confirmActiveDownloads() else {
+      PluginProgramLinks.resumeAfterUpdates()
+      return .terminateCancel
+    }
     attempt += 1
     phase = .saving(wait: nil, lateAlert: nil)
     WindowManager.shared.flushFrameReports()
@@ -105,6 +109,7 @@ final class QuitFlow {
     guard ok else {
       phase = .idle
       attempt += 1
+      PluginProgramLinks.resumeAfterUpdates()
       return NSApp.reply(toApplicationShouldTerminate: false)
     }
     guard isSaving else { return }
@@ -116,10 +121,14 @@ final class QuitFlow {
     if case .idle = phase { attempt += 1 }
     phase = .waitingForUpdater
     let attempt = self.attempt
-    AppUpdater.shared.dropOffChannelStagedUpdateBeforeQuit { [weak self] in
-      guard let self, self.attempt == attempt, case .waitingForUpdater = self.phase else { return }
+    var holds = 2
+    let settled = { [weak self] in
+      holds -= 1
+      guard holds == 0, let self, self.attempt == attempt, case .waitingForUpdater = self.phase else { return }
       self.phase = .idle
       NSApp.reply(toApplicationShouldTerminate: true)
     }
+    PluginProgramLinks.stopAfterUpdates(done: settled)
+    AppUpdater.shared.dropOffChannelStagedUpdateBeforeQuit(then: settled)
   }
 }

@@ -7,13 +7,12 @@ import type { PluginListing, ProcessState, ProgramsState } from "../../../state/
 import {
   consentLines,
   disablePlugin,
-  installOfficialPlugin,
-  isAlwaysOn,
   pluginsFolderPath,
   relinkPrograms,
   canRelink,
   removePluginAfterConfirm,
   requestPluginConsent,
+  turnOnApprovedPlugin,
   restartPlugin,
   setPluginValue,
   setPluginSecretRow,
@@ -89,10 +88,8 @@ function programsText(p: ProgramsState | undefined): string | null {
 }
 
 function originText(listing: PluginListing | undefined, active: boolean): string | null {
-  const builtIn = isAlwaysOn(listing) ? (active ? "Built in, installed" : "Built in, not installed") : "Built in";
-  if (listing?.ignoresUserFolder) return `${builtIn} (the folder of the same name in ${pluginsFolderPath()} is ignored)`;
-  if (listing?.bundled) return builtIn;
-  return listing?.replacesBundled ? "Replaces the built-in plugin" : null;
+  if (listing?.ignoresUserFolder) return `Official (the folder of the same name in ${pluginsFolderPath()} is ignored)`;
+  return listing?.official ? "Official" : null;
 }
 
 function statusOf(m: PluginManifest | null, problems: string[], active: boolean, review: boolean, p: ProcessState | undefined, describe = true): string {
@@ -104,6 +101,7 @@ function statusOf(m: PluginManifest | null, problems: string[], active: boolean,
 
 function setOn(name: string, on: boolean): Promise<unknown> | void {
   if (on) {
+    if (turnOnApprovedPlugin(name)) return;
     releaseOrphanedConsent();
     requestPluginConsent(name);
   }
@@ -125,11 +123,7 @@ function PluginRow({ name }: { name: string }) {
       icon={<Symbol name={m?.icon ?? m?.page?.icon ?? "puzzlepiece"} size={14} color={theme.icon} style={ICON} />}
       onPress={() => goToSettingsPane("plugins", null, name)}
     >
-      {isAlwaysOn(listing) ? (
-        active ? null : <Button title="Install…" onPress={() => void installOfficialPlugin(name, { showSheet: false })} />
-      ) : (
-        <Toggle value={active} disabled={!m} asksFirst={!active} accessibilityLabel={`Turn on ${m?.title ?? name}`} onChange={(on) => setOn(name, on || (record.enabled && review))} />
-      )}
+      <Toggle value={active} disabled={!m} asksFirst={!active} accessibilityLabel={`Turn on ${m?.title ?? name}`} onChange={(on) => setOn(name, on || (record.enabled && review))} />
     </Row>
   );
 }
@@ -238,14 +232,10 @@ function PluginPage({ name }: { name: string }) {
     <PaneSubPage intro={m?.description || undefined}>
       <Group>
         <Row
-          title={isAlwaysOn(listing) ? (active ? "Installed" : "Not installed") : active ? "On" : review ? "Changed since you turned it on" : "Off"}
+          title={active ? "On" : review ? "Changed since you turned it on" : "Off"}
           description={[originText(listing, active), statusOf(m, listing.problems, active, review, process, false)].filter(Boolean).join(" · ") || undefined}
         >
-          {isAlwaysOn(listing) ? (
-            active ? null : <Button title="Install…" onPress={() => void installOfficialPlugin(name, { showSheet: false })} />
-          ) : (
-            <Toggle value={active} disabled={!m} asksFirst={!active} accessibilityLabel={`Turn on ${m?.title ?? name}`} onChange={(on) => setOn(name, on)} />
-          )}
+          <Toggle value={active} disabled={!m} asksFirst={!active} accessibilityLabel={`Turn on ${m?.title ?? name}`} onChange={(on) => setOn(name, on)} />
         </Row>
         {active && (m?.process || (m?.main && process)) ? (
           <Row title={m?.process ? "Its program" : "Its code"} description={m?.process ? m.process.run.join(" ") : typeof m?.main === "string" ? m.main : m?.main?.entry}>
@@ -274,7 +264,7 @@ function PluginPage({ name }: { name: string }) {
         <>
           <SectionHeader title="What it gets" />
           <Group>
-            {consentLines(m, { controlOff, bundled: !!listing.bundled && !active, movesProfiles }).map((line) => (
+            {consentLines(m, { controlOff, official: !!listing.official && !active, movesProfiles }).map((line) => (
               <Row key={line.text} title={line.text} icon={<Symbol name={line.icon} size={13} color={theme.icon} style={ICON} />} />
             ))}
           </Group>
@@ -289,13 +279,11 @@ function PluginPage({ name }: { name: string }) {
           </Group>
         </>
       )}
-      {listing.bundled ? null : (
-        <Group>
-          <Row title="Remove" description={`Moves the plugin to the ${PLATFORM_TERMS.trash}.`}>
-            <Button title="Remove…" kind="destructive" onPress={() => void confirmRemove(name, m?.title ?? name)} />
-          </Row>
-        </Group>
-      )}
+      <Group>
+        <Row title="Remove" description={listing.official ? "Removes its download and its commands on your PATH. Its data stays." : `Moves the plugin to the ${PLATFORM_TERMS.trash}.`}>
+          <Button title="Remove…" kind="destructive" onPress={() => void confirmRemove(name, m?.title ?? name)} />
+        </Row>
+      </Group>
     </PaneSubPage>
   );
 }

@@ -12,7 +12,7 @@ export function pluginTelemetryDisclosures(s: Pick<PluginsStore, "order" | "list
   for (const name of s.order) {
     const m = activeManifest(s, name);
     if (!m) continue;
-    const official = !!s.listings[name]?.bundled && m.official;
+    const official = !!s.listings[name]?.official && m.official;
     const telemetry = m.telemetry ?? (official && Object.hasOwn(OFFICIAL_TELEMETRY, name) ? OFFICIAL_TELEMETRY[name] : null);
     if (telemetry) out.push({ plugin: name, pluginTitle: m.title, title: telemetry.title, items: [...telemetry.items], official });
   }

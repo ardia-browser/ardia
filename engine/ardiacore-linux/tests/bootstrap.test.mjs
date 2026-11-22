@@ -151,6 +151,16 @@ test("the ardia command's installer outlives its native 300 s deadline, kill gra
   assert.deepEqual([...f.delays.values()], [330000, 30000]);
 });
 
+test("the engine-owned update answers at once, so its calls keep the ordinary deadline", () => {
+  const f = fixture();
+  void f.host.invoke("ArdiaUpdates.update", { args: ["0.2.48"] });
+  void f.host.invoke("ArdiaUpdates.status", { args: [] });
+  void f.host.invoke("ArdiaUpdates.claimOutcome", { args: [1] });
+  void f.host.invoke("ArdiaUpdates.installKind", { args: [] });
+  void f.host.invoke("ArdiaUpdates.restart", { args: [] });
+  assert.deepEqual([...f.delays.values()], [30000, 30000, 30000, 30000, 30000]);
+});
+
 test("calendar requests that may open Evolution Data Server backends get room to finish", () => {
   const f = fixture();
   void f.host.invoke("ArdiaCalendar.status", { args: [] });

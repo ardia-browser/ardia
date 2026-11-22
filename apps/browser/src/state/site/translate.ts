@@ -11,6 +11,8 @@ import { stopDocumentWatch, watchDocument } from "./documentWatch";
 import { drainPassages, type PageBatch, type Passage, type Translated } from "./translateDrain";
 import { errorText } from "../../lib/errors";
 import { capture, consentToken, type ConsentToken } from "../telemetry/client";
+import { noteWebKitCount } from "../telemetry/engineSwitchCounts";
+import { tabEngine } from "../engines/engines";
 
 export { translation } from "../../platform/text";
 
@@ -90,12 +92,18 @@ export function setNeverTranslate(tabId: string, never: boolean) {
 
 type Sample = { lang: string; text: string; active: boolean };
 
+function sampleOf(raw: unknown): Sample | null {
+  if (!raw || typeof raw !== "object") return null;
+  const { lang, text, active } = raw as Record<string, unknown>;
+  return { lang: typeof lang === "string" ? lang : "", text: typeof text === "string" ? text.slice(0, 3000) : "", active: active === true };
+}
+
 async function pageLanguage(tabId: string): Promise<{ language: string | null; active: boolean } | null> {
   if (stateOf(tabId).status !== "idle") atStage(tabId, "detect");
-  const sample = await webviews.get(tabId)?.evaluate<Sample>(translatorCall("sample"));
+  const sample = sampleOf(await webviews.get(tabId)?.evaluate<unknown>(translatorCall("sample")));
   if (!sample || !translation) return null;
   const detected = sample.text.length >= 40 ? await translation.detect(sample.text.slice(0, 3000)) : null;
-  return { language: detected ?? (sample.lang ? String(sample.lang).slice(0, 20) : null), active: !!sample.active };
+  return { language: detected ?? (sample.lang ? sample.lang.slice(0, 20) : null), active: sample.active };
 }
 
 async function detect(tabId: string) {
@@ -233,6 +241,7 @@ export async function translatePage(tabId: string, target = defaultTarget()) {
       return void reportFirstPass("stopped", started, progress, consent);
     }
     reportFirstPass("done", started, progress, consent);
+    if (tabEngine(useBrowser.getState(), tabId) === "webkit") noteWebKitCount("translation", consent);
     if (holds(tabId, mine)) set(tabId, { status: "translated", source, target, token: mine });
     toast(tabId, `Translated to ${languageName(target)}`);
     void follow(tabId, mine);

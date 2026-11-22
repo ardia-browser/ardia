@@ -2,6 +2,7 @@
 #import "ArdiaRuntime.h"
 #import "ArdiaLaunchConfig.h"
 #import "ArdiaPictureInPicture.h"
+#import "ArdiaChromeWindowHost.h"
 
 #import <objc/runtime.h>
 
@@ -202,7 +203,8 @@ BOOL TracingPictureInPicture() {
 + (BOOL)playsForAutoPictureInPictureInWindow:(NSWindow *)window {
   for (ArdiaWebView *view in LiveViews().allObjects)
     if (view.window == window && view->_visible && view->_tab && view.playsForAutoPictureInPicture) return YES;
-  return NO;
+  BOOL (^webKitPlays)(NSWindow *) = ArdiaChromeWindowHost.playsForAutoPictureInPictureHandler;
+  return webKitPlays && webKitPlays(window);
 }
 
 - (void)autoPictureInPictureInputsChanged {
@@ -259,8 +261,9 @@ BOOL TracingPictureInPicture() {
 }
 
 - (void)tab:(ArdiaCoreTab *)tab requestsActivation:(NSString *)reason {
-  ardia_pip::TabRequestedActivation(self);
-  [self emit:@"activateRequest" payload:@{@"reason" : reason ?: @"page"}];
+  BOOL fromOtherApp = NO;
+  const BOOL backToTab = ardia_pip::TabRequestedActivation(self, &fromOtherApp);
+  [self emit:@"activateRequest" payload:@{@"reason" : backToTab ? @"pictureInPicture" : reason ?: @"page", @"fromOtherApp" : @(fromOtherApp)}];
 }
 
 @end

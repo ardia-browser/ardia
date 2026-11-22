@@ -17,6 +17,7 @@ Pod::Spec.new do |s|
 
   s.dependency 'ExpoModulesCore'
   s.dependency 'ExpoUI'
+  s.dependency 'ExpoSQLite'
 
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',

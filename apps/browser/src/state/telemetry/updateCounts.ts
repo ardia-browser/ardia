@@ -1,6 +1,33 @@
 import { consentToken, consentOrNow, countFor, type ConsentToken } from "./consentPeriod";
 
+export const UPDATE_DOWNLOAD_FAILURES = ["version", "kind", "network", "manifest", "tooLarge", "busy", "disk", "other"] as const;
+export const UPDATE_INSTALL_FAILURES = ["usage", "missing", "manifest", "signature", "notNewer", "kind", "checksum", "install", "busy", "polkit", "timeout", "other"] as const;
+export const UPDATE_INSTALL_KINDS = ["deb", "tarball", "appimage"] as const;
+
+export type UpdateDownloadFailure = (typeof UPDATE_DOWNLOAD_FAILURES)[number];
+export type UpdateInstallFailure = (typeof UPDATE_INSTALL_FAILURES)[number];
+export type UpdateInstallKind = (typeof UPDATE_INSTALL_KINDS)[number];
+
+const snake = (name: string) => name.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+const downloadFailureField = (reason: UpdateDownloadFailure) => `update_download_failures_${snake(reason)}`;
+const installFailureField = (reason: UpdateInstallFailure) => `update_install_failures_${snake(reason)}`;
+const installField = (kind: UpdateInstallKind) => `update_installs_${kind}`;
+
+const SELF_UPDATE_FIELDS = [
+  "update_downloads_started",
+  "update_downloads_finished",
+  ...UPDATE_DOWNLOAD_FAILURES.map(downloadFailureField),
+  ...UPDATE_INSTALL_KINDS.map(installField),
+  ...UPDATE_INSTALL_FAILURES.map(installFailureField),
+  "update_restarts",
+];
+
+const noSelfUpdates = () => Object.fromEntries(SELF_UPDATE_FIELDS.map((field) => [field, 0])) as Record<string, number>;
+
 let checks = { asked: 0, automatic: 0, failed: 0, found: 0, pageOpens: 0, switchRefreshes: 0, switchRefreshFailures: 0, unsandboxed: 0, passwordGranted: 0, passwordDenied: 0, passwordCancelled: 0 };
+let selfUpdates = noSelfUpdates();
+
+const countSelfUpdate = (field: string, consent: ConsentToken | null | undefined) => countFor(consentOrNow(consent), () => void (selfUpdates[field] = (selfUpdates[field] ?? 0) + 1));
 
 export function noteUpdateCheck(asked: boolean, outcome: "found" | "upToDate" | "failed", consent?: ConsentToken | null) {
   const fields = { update_checks_asked: +asked, update_checks_automatic: +!asked, update_check_failures: +(outcome === "failed"), update_checks_found: +(outcome === "found") };
@@ -13,6 +40,16 @@ export function noteUpdateCheck(asked: boolean, outcome: "found" | "upToDate" | 
 }
 
 export const noteUpdatePageOpened = (consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void (checks.pageOpens += 1));
+
+export const updateDownloadFailure = (reason: unknown): UpdateDownloadFailure => (UPDATE_DOWNLOAD_FAILURES as readonly unknown[]).includes(reason) ? (reason as UpdateDownloadFailure) : "other";
+export const updateInstallFailure = (reason: unknown): UpdateInstallFailure => (UPDATE_INSTALL_FAILURES as readonly unknown[]).includes(reason) ? (reason as UpdateInstallFailure) : "other";
+
+export const noteUpdateDownloadStarted = (consent: ConsentToken | null) => countSelfUpdate("update_downloads_started", consent);
+export const noteUpdateDownloadFinished = (consent: ConsentToken | null) => countSelfUpdate("update_downloads_finished", consent);
+export const noteUpdateDownloadFailed = (reason: unknown, consent: ConsentToken | null) => countSelfUpdate(downloadFailureField(updateDownloadFailure(reason)), consent);
+export const noteUpdateInstalled = (kind: UpdateInstallKind, consent: ConsentToken | null) => countSelfUpdate(installField(kind), consent);
+export const noteUpdateInstallFailed = (reason: unknown, consent: ConsentToken | null) => countSelfUpdate(installFailureField(updateInstallFailure(reason)), consent);
+export const noteUpdateRestart = (consent: ConsentToken | null) => countSelfUpdate("update_restarts", consent);
 
 export function noteSwitchRefresh(result: "updated" | "failed" | "already") {
   if (result === "updated") checks.switchRefreshes += 1;
@@ -40,7 +77,9 @@ export function takeUpdateCounts() {
     login_password_checks_granted: checks.passwordGranted,
     login_password_checks_denied: checks.passwordDenied,
     login_password_checks_cancelled: checks.passwordCancelled,
+    ...selfUpdates,
   };
   checks = { asked: 0, automatic: 0, failed: 0, found: 0, pageOpens: 0, switchRefreshes: 0, switchRefreshFailures: 0, unsandboxed: 0, passwordGranted: 0, passwordDenied: 0, passwordCancelled: 0 };
+  selfUpdates = noSelfUpdates();
   return taken;
 }

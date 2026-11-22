@@ -273,7 +273,7 @@ test("a v1 manifest migrates into v2's shape: process is the sidecar, page the d
   assert.deepEqual(manifest.activationEvents.slice(0, 1), ["onStartupFinished"]);
 });
 
-test("the built-in plugins' v1 manifests still read: cli's control and programs, apple-passwords' password manager", () => {
+test("the built-in plugins' v1 manifests still read: cli's control and programs, a password manager's passwordManager", () => {
   const cli = readManifest(JSON.stringify({ manifest: 1, name: "cli", title: "Command Line", version: "0.3.0", alwaysOn: true, official: true, icon: "terminal.fill", permissions: ["control"], programs: [{ name: "ardia", path: "bin/ardia", afterUpdate: [["skills", "refresh"]] }] }));
   assert.deepEqual(cli.problems, []);
   assert.equal(cli.manifest.permissions.control, true);

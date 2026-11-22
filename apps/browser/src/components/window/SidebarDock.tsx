@@ -20,6 +20,7 @@ import {
   noteFullScreenPeekClosed,
   notePageFullScreenPeek,
   noteSidebarPeekClosedWhileResizing,
+  noteSidebarPeekFrame,
   noteSidebarPeekRevealHeldBack,
   noteSidebarScreenEdge,
   noteSidebarSlide,
@@ -221,6 +222,7 @@ function SidebarDock({
   pageFullScreen.current = fullscreen;
   const opened = (bounce: boolean) => {
     noteSidebarPeek(bounce);
+    noteSidebarPeekFrame(frame.inset);
     emptyWindow.opened();
     if (pageFullScreen.current) notePageFullScreenPeek();
     if (windowFullScreen.current) noteFullScreenPeek();

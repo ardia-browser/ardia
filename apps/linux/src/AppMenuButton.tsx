@@ -8,11 +8,12 @@ import { linuxMenuShortcuts } from "./shortcuts";
 import { appMenuChoice, appMenuItems } from "./appMenu";
 import { minimizeAllWindows } from "./windowMenu";
 import { currentEditMenu, currentEditTarget, runEdit } from "./editTargets";
-import { hostModuleMethod, reportHostError } from "./host";
+import { ardiaHost, hostModuleMethod, reportHostError } from "./host";
 import { linuxCapabilities, unavailableCommands } from "./hostCapabilities";
 import { videoTourUrl } from "../../browser/src/state/onboarding/tour";
 import { showToast } from "../../browser/src/state/app/toasts";
-import { engineInfo, systemInfo } from "../../browser/src/platform/app";
+import { checkForUpdates, engineInfo, systemInfo } from "../../browser/src/platform/app";
+import { linuxUpdaterFor, updateMenuItem } from "./linuxUpdates";
 import "./linkShareSurface";
 
 const hiddenCommands = () => {
@@ -37,7 +38,8 @@ export async function openAppMenu(windowId: string, button: HTMLElement) {
   ]));
   const focusOrder = [windowId, ...state.ui.focusOrder.filter((id) => id !== windowId)];
   const editTarget = currentEditTarget();
-  const items = appMenuItems(menuState({ ...state, ui: { ...state.ui, focusOrder } }), shortcuts, hiddenCommands(), { fullScreen: !!state.windows[windowId]?.fullScreen, edit: currentEditMenu(windowId, editTarget) });
+  const updates = ardiaHost ? await updateMenuItem(ardiaHost).catch(() => null) : null;
+  const items = appMenuItems(menuState({ ...state, ui: { ...state.ui, focusOrder } }), shortcuts, hiddenCommands(), { fullScreen: !!state.windows[windowId]?.fullScreen, edit: currentEditMenu(windowId, editTarget), updates });
   const { left, bottom } = button.getBoundingClientRect();
   const openedByPointer = !button.matches(":focus-visible");
   const id = await showMenu(items, undefined, { x: left, y: bottom + 4 });
@@ -45,6 +47,10 @@ export async function openAppMenu(windowId: string, button: HTMLElement) {
   const choice = id ? appMenuChoice(id) : null;
   if (!choice) return;
   if (choice.kind === "about") return showAbout(windowId);
+  if (choice.kind === "updates") {
+    const updater = ardiaHost ? linuxUpdaterFor(ardiaHost) : null;
+    return void (!updater ? checkForUpdates() : choice.restart ? updater.restartWhenReady() : updater.check(true)).catch(reportHostError);
+  }
   if (choice.kind === "edit") return runEdit(windowId, choice.action, editTarget).catch(reportHostError);
   if (choice.kind === "command") return emitCommand({ command: choice.command, arg: choice.arg, windowId });
   if (choice.action === "close") return void closeWindow(windowId).catch(reportHostError);
@@ -52,7 +58,7 @@ export async function openAppMenu(windowId: string, button: HTMLElement) {
   void hostModuleMethod("ArdiaShell", choice.action === "minimize" ? "minimizeWindow" : "toggleMaximizeWindow")(windowId).catch(reportHostError);
 }
 
-export function AppMenuButton({ windowId }: { windowId: string }) {
+export function AppMenuButton({ windowId, size }: { windowId: string; size?: number }) {
   const theme = useTheme();
   const button = useRef<HTMLButtonElement>(null);
   const [presses] = useState(() => menuButtonPresses(() => {
@@ -66,6 +72,7 @@ export function AppMenuButton({ windowId }: { windowId: string }) {
       aria-label="Menu"
       aria-haspopup="menu"
       title="Menu"
+      style={size ? { width: size, height: size, flex: `0 0 ${size}px` } : undefined}
       onPointerDown={presses.pointerDown}
       onClick={presses.click}
     >

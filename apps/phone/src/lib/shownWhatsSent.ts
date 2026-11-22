@@ -4,15 +4,18 @@ const SYNC_ONLY_PHRASES = ["pages you pinned to your Mac, ", "tabs you sent to a
 
 const APPEARANCE_WITHOUT_SYNC = "With each launch, the Appearance you chose: Glass or Classic, and Light, Dark or System";
 
+const COLOR_WITHOUT_SYNC = "With each launch, whether your color is one of Ardia’s colors or a custom theme. Never which colors";
+
 const IPHONE_ONLY_FIELDS = ["perf_backdrop", "browse_for_me_opened", "page_summaries_pinched", "talk_to_me_answers_read"];
 
-const ANDROID_ONLY_FIELDS = ["page_summaries_chatgpt", "start_logo_taps"];
+const ANDROID_ONLY_FIELDS = ["page_summaries_chatgpt", "start_logo_taps", "gemini_nano_not_offered"];
 
 const shownOn = (os: string, item: SentItem) => !(os === "ios" ? ANDROID_ONLY_FIELDS : IPHONE_ONLY_FIELDS).some((field) => item.fields.includes(field));
 
 function shownItem(item: SentItem, offersSync: boolean): SentItem {
   if (offersSync) return item;
   if (item.fields.includes("interface_style")) return { ...item, text: APPEARANCE_WITHOUT_SYNC };
+  if (item.fields.includes("color_choice")) return { ...item, text: COLOR_WITHOUT_SYNC };
   return { ...item, text: SYNC_ONLY_PHRASES.reduce((text, phrase) => text.replace(phrase, ""), item.text) };
 }
 

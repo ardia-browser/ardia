@@ -144,6 +144,10 @@ jobs:
         with:
           path: packages/ardiacore/vendor/ubol-webkit
           key: ubol-webkit-${{ hashFiles('packages/ardiacore/scripts/ubol.sh', 'packages/ardiacore/scripts/ubol-webkit.py') }}
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: packages/ardiacore/vendor/hsts-preload
+          key: hsts-preload-${{ hashFiles('packages/ardiacore/scripts/hsts-preload.sh', 'packages/ardiacore/scripts/hsts-preload.py') }}
       - name: Pods
         working-directory: apps/browser/macos
         run: pod install
@@ -179,7 +183,7 @@ jobs:
         env:
           DIST: ${{ steps.paths.outputs.dist }}
         run: |
-          COPYFILE_DISABLE=1 tar --no-mac-metadata -cf "$RUNNER_TEMP/build.tar" -C "$DIST" Ardia.xcarchive provenance.txt plugins
+          COPYFILE_DISABLE=1 tar --no-mac-metadata -cf "$RUNNER_TEMP/build.tar" -C "$DIST" Ardia.xcarchive provenance.txt
       - if: always() && steps.cas.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -375,6 +379,53 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  linux-sign:
+    needs: [linux]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: linux
+          path: ${{ runner.temp }}/linux
+      - name: Sign the self-update manifest
+        env:
+          LINUX_UPDATE_ED_PRIVATE_KEY: ${{ secrets.LINUX_UPDATE_ED_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$LINUX_UPDATE_ED_PRIVATE_KEY" ]; then
+            echo "::error::no LINUX_UPDATE_ED_PRIVATE_KEY secret, so v$VERSION can't carry a signed Linux self-update manifest"
+            exit 1
+          fi
+          key="$RUNNER_TEMP/linux-update-key.pem"
+          install -m 600 /dev/null "$key"
+          printf '%s\n' "$LINUX_UPDATE_ED_PRIVATE_KEY" > "$key"
+          (cd "$RUNNER_TEMP/linux" && sha256sum -c --quiet ./*.sha256)
+          node scripts/linux/sign-update.mjs --key "$key" --dir "$RUNNER_TEMP/linux" --version "$VERSION"
+          mkdir -p "$RUNNER_TEMP/linux-update"
+          mv "$RUNNER_TEMP/linux/Ardia-$VERSION-linux-update.txt" "$RUNNER_TEMP/linux/Ardia-$VERSION-linux-update.txt.sig" "$RUNNER_TEMP/linux-update/"
+          {
+            echo "- Linux: self-update manifest signed"
+            sed 's/^/    /' "$RUNNER_TEMP/linux-update/Ardia-$VERSION-linux-update.txt"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - if: always()
+        name: Remove the key
+        run: rm -f "$RUNNER_TEMP/linux-update-key.pem"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: linux-update
+          path: |
+            ${{ runner.temp }}/linux-update/Ardia-${{ inputs.version }}-linux-update.txt
+            ${{ runner.temp }}/linux-update/Ardia-${{ inputs.version }}-linux-update.txt.sig
+          if-no-files-found: error
+          retention-days: 14
+
   windows:
     needs: preflight
     permissions:
@@ -385,7 +436,7 @@ jobs:
       version: ${{ inputs.version }}
 
   publish:
-    needs: [preflight, checks, sign, linux, windows]
+    needs: [preflight, checks, sign, linux, linux-sign, windows]
     if: ${{ !cancelled() && needs.checks.result == 'success' && needs.sign.result == 'success' }}
     runs-on: macos-15
     timeout-minutes: 30
@@ -411,6 +462,18 @@ jobs:
         run: |
           echo "::warning::the Linux job ended $LINUX_RESULT, so v$VERSION ships without the Linux tarball: build it with scripts/linux/release.sh and upload it by hand once the engine is published"
           echo "- Linux: skipped (the linux job ended $LINUX_RESULT)" >> "$GITHUB_STEP_SUMMARY"
+      - if: needs.linux.result == 'success' && needs.linux-sign.result == 'success'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: linux-update
+          path: dist/${{ inputs.version }}/linux
+      - name: Linux self-update manifest
+        if: needs.linux.result == 'success' && needs.linux-sign.result != 'success'
+        env:
+          SIGN_RESULT: ${{ needs.linux-sign.result }}
+        run: |
+          echo "::warning::the linux-sign job ended $SIGN_RESULT, so v$VERSION ships without Ardia-$VERSION-linux-update.txt and installed Linux apps can't update themselves to it: sign it with scripts/linux/sign-update.mjs and upload the manifest and its .sig by hand"
+          echo "- Linux: no self-update manifest (the linux-sign job ended $SIGN_RESULT)" >> "$GITHUB_STEP_SUMMARY"
       - if: needs.windows.result == 'success'
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:

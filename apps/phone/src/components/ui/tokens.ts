@@ -65,6 +65,7 @@ const lightRoles = {
   tertiaryFill: "rgba(118,118,128,0.12)",
   tertiaryLabel: "rgba(60,60,67,0.3)",
   toastFill: "rgba(255,255,255,0.97)",
+  toastLabel: "#000000",
   toastShadow: "rgba(0,0,0,0.18)",
   panelBorder: "rgba(0,0,0,0.1)",
   dialogScrim: "rgba(0,0,0,0.32)",
@@ -110,6 +111,7 @@ const darkRoles: ColorRoles = {
   tertiaryFill: "rgba(118,118,128,0.24)",
   tertiaryLabel: "rgba(235,235,245,0.3)",
   toastFill: "rgba(28,28,30,0.97)",
+  toastLabel: "#FFFFFF",
   toastShadow: "rgba(0,0,0,0.5)",
   panelBorder: "rgba(255,255,255,0.1)",
   dialogScrim: "rgba(0,0,0,0.48)",
@@ -129,6 +131,7 @@ export const menuLayout = {
   zoomReset: 48,
   sheetTopGap: Platform.OS === "ios" ? 10 : 24,
   sheetGrabber: Platform.OS === "ios" ? { width: 36, height: 5, top: 6 } : null,
+  halfSheetGrabber: { width: 32, height: 4, top: 10 },
 } as const;
 
 export const pageMenuLayout = { actionGlyph: 24, barSpacing: 8, groupSpacing: 16, zoomHeight: 32, zoomButtonWidth: 40, zoomReset: 48, rowInset: 16, accessibilityBottom: 24, pressedScale: 0.94 } as const;
@@ -172,6 +175,32 @@ export const settingsLayout = {
   stepShift: 60,
   titleWidth: 240,
 } as const;
+
+export const themeEditorLayout = {
+  pad: 232,
+  padWedges: 90,
+  knob: 30,
+  knobHitSlop: 10,
+  knobBorder: 2,
+  knobBorderSelected: 3,
+  knobHalo: 3,
+  lightnessSteps: 24,
+  lightnessHeight: 10,
+  track: 4,
+  thumb: 26,
+  dial: 44,
+  dialSnap: 4,
+  dialNotch: 45,
+  dialHand: 2,
+  dialHub: 6,
+  preview: 150,
+  stepper: 32,
+  accessibilityStep: 0.1,
+  accessibilityTurn: 1 / 24,
+  rainbowStops: 7,
+} as const;
+
+export const themeEditorInk = { knobOutline: "rgba(0,0,0,0.25)" } as const;
 
 export const settingsTint = {
   neutral: "#86888D",

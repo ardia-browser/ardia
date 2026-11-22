@@ -52,9 +52,13 @@ Settings; removing the link brings it back at the next launch.
 On Linux, Settings › Advanced › Command line installs it from the package (`install.sh --version <app version> --sha256
 <digest>` with a `file://` URL), as before.
 
-`cliControl` (`state/app/cliControl.ts`) stays the stored key, the control pill and the token server stay in the app
-(`docs/automation.md`), and on Linux and in older data folders it means what it always did; Linux keeps its switch in
-Settings › Advanced.
+`cliControl` (`state/app/cliControl.ts`) stays the stored key, the control pill stays in the app, and on Linux and in
+older data folders it means what it always did; Linux keeps its switch in Settings › Advanced. While it is on, `ardia`
+reaches Ardia two ways (`docs/automation.md`, `docs/control-socket.md`):
+- **The control socket** (`ArdiaControl.sock`, mode 0600) carries the owner's methods. It has no token: the server
+  only checks that the peer runs as the same user (`getpeereid`), so every process of that user is admitted.
+- **The engine's token connection** carries `ardia browse`. It listens on loopback with a token written to
+  `ArdiaControl.json`, which the user's own processes can read, and its token policy limits what that path can do.
 
 ## The contract
 

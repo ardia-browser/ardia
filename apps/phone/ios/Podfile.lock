@@ -1,6 +1,7 @@
 PODS:
   - ArdiaPhoneNative (0.0.0):
     - ExpoModulesCore
+    - ExpoSQLite
     - ExpoUI
   - boost (1.84.0):
     - ReactNativeDependencies
@@ -2492,7 +2493,7 @@ EXTERNAL SOURCES:
     :path: build/rncore-facades/Yoga
 
 SPEC CHECKSUMS:
-  ArdiaPhoneNative: d35aff1306e0e5400193b5d5caf92bc01385e91a
+  ArdiaPhoneNative: fc786ec00dd407b3df3b41b6b6bc1aad6c552466
   boost: 8502bfdc46e2804408af2e163049ece181009af4
   DoubleConversion: 501a575c40c0b50c89685762dd3e415e6bb26fb0
   EXConstants: aeda76f4be923fc719522ae162dd0b8c6483f9cc

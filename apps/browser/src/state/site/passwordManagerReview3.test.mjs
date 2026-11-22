@@ -68,7 +68,8 @@ for (const [why, arm] of [
   });
 }
 
-test("b1: a debt owed after a failed compensation is written with the next record write that succeeds", async () => {
+test("b: plugin → Ardia → plugin while the record can't be written keeps the profile in the record, leaves saving on, and a timer turns it off once the record lands", async () => {
+  offer.OFFER_TO_SAVE_RETRY.firstMs = 50;
   turnOn("one-pm");
   pm.choosePasswordManager("default", "plugin:one-pm");
   await settle();
@@ -84,32 +85,10 @@ test("b1: a debt owed after a failed compensation is written with the next recor
   for (const land of stub.heldSaves.queue.splice(0)) land();
   await settle();
   await settle();
-  stub.refusedSaves.on = false;
-  assert.ok(!record().includes(""), "the debt isn't on disk yet");
-  pm.choosePasswordManager(work, "plugin:one-pm");
-  await settle();
-  await settle();
-  assert.ok(record().includes(work));
-  assert.ok(record().includes(""), "written with the next successful write, so a restart keeps it");
-});
-
-test("b2: while a debt is owed and nothing else writes, a timer retries it", async () => {
-  offer.OWED_RETRY.firstMs = 50;
-  pm.choosePasswordManager(work, "ardia");
-  await settle();
-  await wait(100);
-  stub.heldSaves.on = true;
-  pm.choosePasswordManager("default", "ardia");
-  await settle();
-  pm.choosePasswordManager("default", "plugin:one-pm");
-  await settle();
-  stub.heldSaves.on = false;
-  stub.refusedSaves.on = true;
-  for (const land of stub.heldSaves.queue.splice(0)) land();
-  await settle();
-  await settle();
-  assert.ok(!record().includes(""));
+  assert.ok(record().includes(""), "never dropped from the record, so a restart still knows Ardia turned it off");
+  assert.equal(offerToSave(""), true, "the Off waits until its own record lands");
   stub.refusedSaves.on = false;
   await wait(400);
-  assert.ok(record().includes(""), "the timer paid it");
+  assert.ok(record().includes(""));
+  assert.equal(offerToSave(""), false, "the timer finished the Off");
 });

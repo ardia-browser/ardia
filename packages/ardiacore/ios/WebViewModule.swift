@@ -23,7 +23,11 @@ public class WebViewModule: Module {
     "setSplitLinkModifier": setting { ArdiaWebView.setSplitLinkModifier(try $0.text("modifier")) },
     "setPeekOtherSiteTabs": setting { ArdiaWebView.setPeekOtherSiteTabs(try $0.strings("tabIds")) },
     "setInAppLinkPatterns": setting { args in ArdiaWebView.setInAppLinkPatterns(args.profile, patterns: try args.stringPairs("patterns")) },
-    "setSelectionPopover": setting { ArdiaWebView.setSelectionPopoverEnabled(try $0.bool("enabled")) },
+    "setSelectionPopover": setting { args in
+      let enabled = try args.bool("enabled")
+      ArdiaWebView.setSelectionPopoverEnabled(enabled)
+      WebKitPageGestures.selectionPopover = enabled
+    },
     "setBlockAutoplayEverywhere": setting { ArdiaWebView.setBlockAutoplayEverywhere(try $0.bool("enabled")) },
     "setCommandScrollZoom": setting { ArdiaWebView.setCommandScrollZoomEnabled(try $0.bool("enabled")) },
     "setLittleArdiaOpensNewTabLinks": setting { ArdiaWebView.setLittleArdiaOpensNewTabLinks(try $0.bool("enabled")) },

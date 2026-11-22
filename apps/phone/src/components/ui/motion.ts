@@ -45,6 +45,8 @@ export const tabsMotion = {
   settle: spring(0.28, 1),
   gapClose: spring(0.22, 1),
   pagerSettle: spring(0.26, 1),
+  pagerPeek: 260,
+  pagerArrive: 90,
   fade: 150,
   sideLeave: 90,
   flyAway: 160,

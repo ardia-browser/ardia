@@ -26,6 +26,7 @@ const localReport = await import("./localStoreReport.ts");
 const failures = await import("./webNotificationFailures.ts");
 const relay = await import("./relay.ts");
 const { browserSuggestFetch } = await import("../omnibox/suggestTransport.ts");
+const { BUILT_IN_ENGINES } = await import("@ardia/core");
 const { connectCalendar } = await import("../live/calendar.ts");
 const { webviews } = await import("../../platform/webviews.ts");
 after(() => client.setSharing(false, "settings"));
@@ -120,7 +121,7 @@ test("4 a search suggestion request made while sharing was off isn't counted whe
   let reply;
   globalThis.acTestSuggest = () => new Promise((resolve) => (reply = resolve));
   try {
-    const fetched = browserSuggestFetch("")("https://suggest.example/?q=a", { signal: new AbortController().signal });
+    const fetched = browserSuggestFetch("")("https://duckduckgo.com/ac/?q=a&type=list", { signal: new AbortController().signal, engine: BUILT_IN_ENGINES.find((e) => e.id === "duckduckgo") });
     await turn();
     client.setSharing(true, "settings");
     reply({ status: 200, body: "[]" });

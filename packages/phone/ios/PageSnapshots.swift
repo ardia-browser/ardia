@@ -44,6 +44,58 @@ enum PageSnapshots {
     return files.filter { $0.lastPathComponent.hasPrefix("\(stem)-") && $0.pathExtension == "jpg" }
   }
 
+  @MainActor
+  static func isOnScreen(_ view: UIView) -> Bool {
+    guard let window = view.window, !window.isHidden else { return false }
+    var current: UIView? = view
+    while let shown = current {
+      if shown.isHidden || shown.alpha < 0.01 { return false }
+      current = shown.superview
+    }
+    return view.convert(view.bounds, to: window).intersects(window.bounds)
+  }
+
+  static let screenCopyScale: CGFloat = 2
+
+  @MainActor
+  static func screenCopy(of view: UIView, width: CGFloat) -> UIImage? {
+    guard view.bounds.width > 0, width > 0 else { return nil }
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = screenCopyScale * width / view.bounds.width
+    format.opaque = true
+    var drawn = false
+    let image = UIGraphicsImageRenderer(bounds: view.bounds, format: format).image { _ in
+      drawn = view.drawHierarchy(in: view.bounds, afterScreenUpdates: false)
+    }
+    return drawn ? image : nil
+  }
+
+  static let flatSample = 16
+  static let flatSpread = 3
+
+  static func isFlat(_ image: UIImage) -> Bool {
+    guard let cgImage = image.cgImage else { return false }
+    let side = flatSample
+    var pixels = [UInt8](repeating: 0, count: side * side * 4)
+    let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
+      guard let context = CGContext(data: buffer.baseAddress, width: side, height: side, bitsPerComponent: 8, bytesPerRow: side * 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return false }
+      context.interpolationQuality = .medium
+      context.draw(cgImage, in: CGRect(x: 0, y: 0, width: side, height: side))
+      return true
+    }
+    guard drawn else { return false }
+    for channel in 0..<3 {
+      var low = UInt8.max
+      var high = UInt8.min
+      for at in stride(from: channel, to: pixels.count, by: 4) {
+        low = min(low, pixels[at])
+        high = max(high, pixels[at])
+      }
+      if Int(high) - Int(low) > flatSpread { return false }
+    }
+    return true
+  }
+
   static func fileStem(_ pageID: String) -> String {
     if pageID.count <= 64, pageID.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_") }) { return pageID }
     return SHA256.hash(data: Data(pageID.utf8)).prefix(16).map { String(format: "%02x", $0) }.joined()

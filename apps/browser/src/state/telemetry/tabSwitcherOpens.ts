@@ -39,7 +39,7 @@ export function takeTabSwitcherMenuReleases(): number {
   return taken;
 }
 
-const scrollCounts = { overflowOpens: 0, overflowClicks: 0, wheelScrolls: 0 };
+const scrollCounts = { overflowOpens: 0, overflowClicks: 0, wheelScrolls: 0, picturesLate: 0 };
 
 export function noteTabSwitcherOverflowOpened() {
   scrollCounts.overflowOpens++;
@@ -53,12 +53,17 @@ export function noteTabSwitcherWheelScrolled() {
   scrollCounts.wheelScrolls++;
 }
 
+export function noteTabSwitcherPictureLate() {
+  scrollCounts.picturesLate++;
+}
+
 export function takeTabSwitcherScrollCounts() {
   const taken = {
     tab_switcher_overflow_opens: scrollCounts.overflowOpens,
     tab_switcher_overflow_clicks: scrollCounts.overflowClicks,
     tab_switcher_wheel_scrolls: scrollCounts.wheelScrolls,
+    tab_switcher_pictures_late: scrollCounts.picturesLate,
   };
-  scrollCounts.overflowOpens = scrollCounts.overflowClicks = scrollCounts.wheelScrolls = 0;
+  scrollCounts.overflowOpens = scrollCounts.overflowClicks = scrollCounts.wheelScrolls = scrollCounts.picturesLate = 0;
   return taken;
 }

@@ -16,6 +16,7 @@ import { asAdoptId } from "../tabs/adoptIds";
 import type { AdoptId } from "../browser/types";
 import { linkGate, type LinkGateResult, type LinkRouteChoice, type LinkSourceInfo } from "./linkGate";
 import { externalLinkOpen, type ExternalLinkOpen } from "./externalLinkOpen";
+import { admitIncomingUrl } from "./incomingUrls";
 import { noteExternalLink } from "../telemetry/usage";
 import { openInRouteGroup } from "../airTraffic/openAt";
 import { noteLittleArdiaAppHandoff, noteLittleArdiaEscapeClose, type EscapePressedIn } from "../telemetry/littleArdiaEscapes";
@@ -31,13 +32,21 @@ export function openLittleArdia(url?: string, profileId?: string, adoptId?: Adop
 }
 
 
-export function openExternalUrls(given: string[], pointer?: [number, number], source?: LinkSourceInfo, returnTo?: string) {
+export function openExternalUrls(given: string[], pointer?: [number, number], source?: LinkSourceInfo, returnTo?: string): number {
   const settings = store().settings;
-  const urls = settings.allowJavaScriptFromAppleEvents ? given : given.filter((url) => !runsJavaScript(url, settings));
-  if (!urls.length) return;
+  const urls = given.flatMap((url) => {
+    if (settings.allowJavaScriptFromAppleEvents && runsJavaScript(url, settings)) return [url];
+    const admitted = admitIncomingUrl(url);
+    return admitted === null ? [] : [admitted];
+  });
+  const refused = given.length - urls.length;
+  if (!urls.length) return refused;
   const gate = linkGate();
   const app = returnTo ?? source?.bundleId ?? undefined;
-  if (!gate) return openUndecided(urls, pointer, false, app);
+  if (!gate) {
+    openUndecided(urls, pointer, false, app);
+    return refused;
+  }
   const verdicts = urls.map((url): LinkGateResult | Promise<LinkGateResult> => {
     try {
       return gate(url, source ?? null);
@@ -49,12 +58,14 @@ export function openExternalUrls(given: string[], pointer?: [number, number], so
     const plain: string[] = [];
     results.forEach((result, i) => {
       if (!result) return;
+      if (result.url !== urls[i] && admitIncomingUrl(result.url) === null) return;
       if (result.route) return openRoutedUrl(result.url, result.route, pointer, app);
       if (result.url !== urls[i]) return openUrlsFromApps([result.url], { profileId: null, adoptIds: [undefined] }, pointer, true, app);
       plain.push(result.url);
     });
     if (plain.length) openUndecided(plain, pointer, results.some((r) => r?.decided), app);
   });
+  return refused;
 }
 
 function openRoutedUrl(url: string, route: LinkRouteChoice, pointer?: [number, number], app?: string) {

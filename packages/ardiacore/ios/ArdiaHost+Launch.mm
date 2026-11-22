@@ -128,11 +128,16 @@ static NSString *AppDataDirectory() {
   return [support URLByAppendingPathComponent:NSBundle.mainBundle.bundleIdentifier ?: @"Ardia"].path;
 }
 
+static bool IsWebLink(NSURL *link) {
+  NSString *scheme = link.scheme.lowercaseString;
+  return link.host.length && ([scheme isEqualToString:@"http"] || [scheme isEqualToString:@"https"]);
+}
+
 static void ParkLaunchLinks(NSArray<NSURL *> *links, NSString *linkProfile) {
   if (!links.count || !linkProfile || LaunchTabSwitchedOff() || HoldsIncomingLinks()) return;
   NSMutableArray<NSString *> *urls = [NSMutableArray array];
   for (NSURL *link in links)
-    if (!link.isFileURL && link.absoluteString.length) [urls addObject:link.absoluteString];
+    if (IsWebLink(link)) [urls addObject:link.absoluteString];
   [ArdiaWebView startLinkTabs:urls profile:linkProfile];
 }
 

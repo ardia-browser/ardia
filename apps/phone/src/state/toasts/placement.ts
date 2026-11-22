@@ -9,6 +9,10 @@ export type ToastPlacement = {
 
 export const TOAST_KEYBOARD_TOP = 4;
 
+export function pageBarClearance(materialBar: { inset: number; height: number } | null, floatingClearance: number, gap: number): number {
+  return materialBar ? materialBar.inset + materialBar.height + gap : floatingClearance;
+}
+
 export function toastPlace(place: ToastPlacement & { safeTop: number }): { top: number } | { bottom: number } {
   if (place.keyboardLift !== null) return { top: place.safeTop + TOAST_KEYBOARD_TOP };
   return { bottom: toastBottom({ ...place, keyboardLift: null }) };

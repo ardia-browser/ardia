@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { incomingPose, neighbourAt, neighbours, outgoingPose } from "./pagerPhysics.ts";
+import { incomingPose, neighbourAt, neighbours, outgoingPose, landedNear } from "./pagerPhysics.ts";
 
 test("a step goes delta places along the swipe order, as Compose's SwipeOrder.neighbor does, and off either end it goes nowhere", () => {
   const order = ["a", "b", "c", "d"];
@@ -18,4 +18,12 @@ test("with Reduce Motion the outgoing page stays still and the incoming one fade
   const moving = incomingPose(1, -100, 400, true, true);
   assert.equal(moving.x, 300);
   assert.equal(moving.shadow, 0.75);
+});
+
+test("a settling swipe counts as landed once the card is within 6 points of its place, about 0.25 s into the 0.26 s critical spring, not when its tail stops 0.15 s later", () => {
+  assert.equal(landedNear(-387.5, -1, 393), true);
+  assert.equal(landedNear(-386.5, -1, 393), false);
+  assert.equal(landedNear(388, 1, 393), true);
+  assert.equal(landedNear(5, 0, 393), true);
+  assert.equal(landedNear(0, 1, 0), false);
 });

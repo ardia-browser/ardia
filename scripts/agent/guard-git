@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-import json, re, sys
+import json, re, subprocess, sys, time
 
 try:
-    command = json.load(sys.stdin).get("tool_input", {}).get("command", "")
+    payload = json.load(sys.stdin)
+    command = payload.get("tool_input", {}).get("command", "")
+    cwd = payload.get("cwd") or None
 except Exception:
     sys.exit(0)
 
@@ -21,6 +23,41 @@ for pattern, name in rules:
             f"Blocked: {name} in the shared checkout wipes other agents' uncommitted work. "
             "Undo your own hunks by editing the file; read an old version with `git show <rev>:<path>`; "
             "unstage with `git restore --staged <path>`.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+STALE_AFTER_SECONDS = 6 * 3600
+
+
+def git(*args, timeout=10):
+    return subprocess.run(
+        ["git", *args], cwd=cwd, capture_output=True, text=True, timeout=timeout
+    )
+
+
+def missing_upstream_age():
+    try:
+        if git("rev-parse", "--abbrev-ref", "HEAD").stdout.strip() != "main":
+            return None
+        git("fetch", "-q", "origin", "main", timeout=15)
+        dates = git("log", "--first-parent", "--format=%ct", "HEAD..origin/main").stdout.split()
+        if not dates:
+            return None
+        return len(dates), time.time() - int(dates[-1])
+    except Exception:
+        return None
+
+
+if re.search(G + r"commit\b", command):
+    stale = missing_upstream_age()
+    if stale and stale[1] > STALE_AFTER_SECONDS:
+        count, age = stale
+        print(
+            f"Blocked: this checkout's main is {count} commits behind origin/main, and the oldest of them "
+            f"reached origin/main {age / 3600:.0f} hours ago. Work built on it may target files that moved or no longer exist. "
+            "Run `git pull --ff-only` (or `git pull --rebase` when main has local commits), check your change "
+            "still applies to the current tree, then commit.",
             file=sys.stderr,
         )
         sys.exit(2)

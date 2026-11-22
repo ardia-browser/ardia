@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type ToastIcon = "checkmark" | "warning" | "download" | "blocking" | "link" | "laptop" | "star" | "sent" | "calculation" | "iphone";
+export type ToastIcon = "checkmark" | "warning" | "download" | "blocking" | "link" | "laptop" | "star" | "sent" | "calculation" | "iphone" | "swipe";
 
 export type Toast = { id: number; message: string; icon: ToastIcon; durationMs: number; onTap: (() => void) | null };
 

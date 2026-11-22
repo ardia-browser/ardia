@@ -61,7 +61,7 @@ export async function showProfileMenu(
       place,
       hasIcon: !!profile.icon,
       colors,
-      color: profile.theme ? null : profile.color,
+      color: profile.color,
       isDefault: currentSettings().defaultProfileId === profileId,
       only: currentProfileOrder().length <= 1,
       sharesTopApps: sharingProfiles({ profiles: currentProfiles(), profileOrder: currentProfileOrder() }, profileId).length ? !!profile.shareTopApps : null,

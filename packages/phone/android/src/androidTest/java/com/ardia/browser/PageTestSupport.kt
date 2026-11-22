@@ -34,8 +34,20 @@ class PageTestActivity : Activity() {
 
 class RecordingPreferences(var nightShade: NightShadeMode = NightShadeMode.Disabled) : SitePreferences {
     val zooms = HashMap<String, Double?>()
+    val verdicts = java.util.concurrent.ConcurrentHashMap<String, NightShadeVerdict>()
 
     override fun nightShade(host: String?, isPrivate: Boolean) = nightShade
+
+    override fun nightShadeVerdict(host: String?, isPrivate: Boolean): NightShadeVerdict? = host?.let { verdicts[it] }
+
+    override fun rememberNightShadeVerdict(host: String, isPrivate: Boolean, verdict: NightShadeVerdict): NightShadeVerdictUse? {
+        val before = verdicts.put(host, verdict)
+        return when {
+            before == null -> NightShadeVerdictUse.Learned
+            before != verdict -> NightShadeVerdictUse.Corrected
+            else -> null
+        }
+    }
 
     override fun pageZoom(host: String?, isPrivate: Boolean): Double? = host?.let { zooms[it] }
 

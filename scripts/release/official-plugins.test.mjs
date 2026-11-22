@@ -57,33 +57,32 @@ test("the checked-in pin is well formed and apps/cli/install.sh is its installer
 
 test("an artifact that isn't published yet is refused with what to do", () => {
   const { dir, artifacts, pin } = scratch();
-  const out = run(["--pin", pin, "--from", artifacts, "bundle", join(dir, "plugins")], { ok: false });
+  const out = run(["--pin", pin, "--from", artifacts, "fetch", "cli", "macos-arm64", join(dir, "cli.tar.gz")], { ok: false });
   assert.match(out, /has no SHA-256 for cli-plugin-0\.3\.0-macos-arm64\.tar\.gz: publish it from its repo, then run official-plugins\.py pin cli 0\.3\.0/);
 });
 
-test("pinned, verified and unpacked: the bundle the release signs", () => {
+test("pinned and verified: the local copy the release smoke installs from, and the pin Info.plist carries", () => {
   const { dir, artifacts, pin } = scratch();
   run(["--pin", pin, "--from", artifacts, "pin", "cli", "0.3.0"]);
   const pinned = JSON.parse(readFileSync(pin, "utf8")).plugins[0];
   assert.match(pinned.artifacts["macos-arm64"].sha256, /^[0-9a-f]{64}$/);
   assert.equal(pinned.release, "https://github.com/ardia-browser/plugins/releases/download/cli-v0.3.0");
-  run(["--pin", pin, "--from", artifacts, "bundle", join(dir, "plugins")]);
-  assert.deepEqual(readdirSync(join(dir, "plugins")), ["cli", "program-registry.json"]);
-  assert.deepEqual(JSON.parse(readFileSync(join(dir, "plugins", "program-registry.json"), "utf8")).claims, { ardia: "cli" }, "the pin's reservation holds while the v1 cli claims nothing itself");
-  assert.ok(existsSync(join(dir, "plugins/cli/bin/ardia")));
+  run(["--pin", pin, "--from", artifacts, "fixtures", join(dir, "fixtures")]);
+  assert.deepEqual(readdirSync(join(dir, "fixtures")), ["cli-plugin-0.3.0-macos-arm64.tar.gz"]);
+  const signed = JSON.parse(run(["--pin", pin, "signed-pin"]));
+  assert.deepEqual(signed.plugins[0].artifacts["macos-arm64"], pinned.artifacts["macos-arm64"]);
+  const half = structuredClone(JSON.parse(readFileSync(pin, "utf8")));
+  half.plugins[0].artifacts["linux-x64"].sha256 = null;
+  writeFileSync(pin, JSON.stringify(half));
+  assert.equal(JSON.parse(run(["--pin", pin, "signed-pin"])).plugins[0].artifacts["linux-x64"], undefined, "Info.plist holds no null: an unpublished artifact is left out");
 });
 
-test("a changed artifact, a link inside it, or a folder whose version isn't the pinned one is refused", () => {
+test("a changed artifact is refused", () => {
   const changed = scratch();
   run(["--pin", changed.pin, "--from", changed.artifacts, "pin", "cli", "0.3.0"]);
   writeFileSync(join(changed.artifacts, "cli-plugin-0.3.0-macos-arm64.tar.gz"), "swapped");
-  assert.match(run(["--pin", changed.pin, "--from", changed.artifacts, "bundle", join(changed.dir, "plugins")], { ok: false }), /not the pinned/);
-  const linked = scratch({ link: true });
-  run(["--pin", linked.pin, "--from", linked.artifacts, "pin", "cli", "0.3.0"]);
-  assert.match(run(["--pin", linked.pin, "--from", linked.artifacts, "bundle", join(linked.dir, "plugins")], { ok: false }), /link or a special file/);
-  const other = scratch({ pluginVersion: "0.2.9" });
-  run(["--pin", other.pin, "--from", other.artifacts, "pin", "cli", "0.3.0"]);
-  assert.match(run(["--pin", other.pin, "--from", other.artifacts, "bundle", join(other.dir, "plugins")], { ok: false }), /says cli 0\.2\.9, not the pinned cli 0\.3\.0/);
+  assert.match(run(["--pin", changed.pin, "--from", changed.artifacts, "fixtures", join(changed.dir, "fixtures")], { ok: false }), /not the pinned/);
+  assert.equal(existsSync(join(changed.dir, "fixtures", "cli-plugin-0.3.0-macos-arm64.tar.gz")), false);
 });
 
 test("Linux gets the pinned command under the app's version, the name its engine's installer expects", () => {
@@ -97,28 +96,18 @@ test("Linux gets the pinned command under the app's version, the name its engine
   assert.match(readFileSync(`${out}.sha256`, "utf8"), /^[0-9a-f]{64} {2}ardia-cli-0\.2\.48-linux-x64\.tar\.gz\n$/);
 });
 
-test("the program registry lists the bundled claims and the pin's reservations and legacy installs, and refuses to lose a reservation", () => {
-  const dir = mkdtempSync(join(tmpdir(), "ac-registry-"));
-  const plugin = (name, manifest) => {
-    mkdirSync(join(dir, name), { recursive: true });
-    writeFileSync(join(dir, name, "plugin.json"), JSON.stringify(manifest));
-  };
+test("the program registry is the pin's reservations and legacy installs, with or without anything installed", () => {
   const LEGACY = [{ owner: "cli", program: "ardia", root: "Library/Application Support/Ardia/CLI", current: "current" }];
-  plugin("cli", { manifest: 1, name: "cli", programs: [{ name: "ardia", path: "bin/ardia" }] });
-  assert.deepEqual(JSON.parse(run(["registry", dir])), { version: 1, claims: { ardia: "cli" }, legacyInstalls: LEGACY }, "a v1 cli keeps ardia through the pin");
-  plugin("cli", { manifest: 2, name: "cli", contributes: { programs: [{ name: "ardia", path: "bin/ardia", claim: true }, { name: "spare", path: "bin/spare", claim: true }] } });
-  const both = JSON.parse(run(["registry", dir]));
-  assert.deepEqual(both.claims, { ardia: "cli", spare: "cli" });
-  run(["verify-registry", dir, JSON.stringify(both)]);
-  assert.match(run(["verify-registry", dir, JSON.stringify({ ...both, claims: { spare: "cli" } })], { ok: false }), /lost the pin's reservation of ardia/);
-  assert.match(run(["verify-registry", dir, JSON.stringify({ ...both, legacyInstalls: [] })], { ok: false }), /doesn't match/);
-  plugin("cli", { manifest: 2, name: "cli", contributes: { programs: [{ name: "other", path: "bin/other" }] } });
-  assert.match(run(["registry", dir], { ok: false }), /declares no such program/);
-  const empty = mkdtempSync(join(tmpdir(), "ac-registry-empty-"));
-  assert.match(run(["registry", empty], { ok: false }), /isn't bundled, so the registry would lose the reservation/);
-  plugin("cli", { manifest: 2, name: "cli", contributes: { programs: [{ name: "ardia", path: "bin/ardia", claim: true }] } });
-  plugin("copycat", { manifest: 2, name: "copycat", contributes: { programs: [{ name: "ardia", path: "bin/ardia", claim: true }] } });
-  assert.match(run(["registry", dir], { ok: false }), /ardia is claimed by both/);
+  const registry = JSON.parse(run(["registry"]));
+  assert.deepEqual(registry, { version: 1, claims: { ardia: "cli" }, legacyInstalls: LEGACY });
+  run(["verify-registry", JSON.stringify(registry)]);
+  assert.match(run(["verify-registry", JSON.stringify({ ...registry, claims: {} })], { ok: false }), /lost the pin's reservation of ardia/);
+  assert.match(run(["verify-registry", JSON.stringify({ ...registry, legacyInstalls: [] })], { ok: false }), /doesn't match/);
+  const dir = mkdtempSync(join(tmpdir(), "ac-registry-"));
+  const unpublished = structuredClone(realPin);
+  for (const plugin of unpublished.plugins) plugin.artifacts["macos-arm64"] = { file: plugin.artifacts["macos-arm64"]?.file ?? "x.tar.gz", sha256: null };
+  writeFileSync(join(dir, "pin.json"), JSON.stringify(unpublished));
+  assert.deepEqual(JSON.parse(run(["--pin", join(dir, "pin.json"), "registry"])), { version: 1, claims: {}, legacyInstalls: [] }, "the app derives the same from a pin with nothing published");
 });
 
 test("the pin's own fields are checked: preselected, anchor aliases and a legacy install under a known root", () => {
@@ -137,4 +126,33 @@ test("the pin's own fields are checked: preselected, anchor aliases and a legacy
   assert.match(bad((p) => (p.reservedPrograms = ["ardia", "ardia"])), /reservedPrograms must be a list of distinct program names/);
   assert.match(bad((p) => (p.example = "")), /example must be a command/);
   assert.match(bad((p) => (p.reservedPrograms = [])), /legacyInstall.program ardia must be one of its reservedPrograms/);
+});
+
+const historyFile = join(root, "apps/browser/official-plugins-history.json");
+const hasTags = spawnSync("git", ["-C", root, "tag", "-l", "v*"], { encoding: "utf8" }).stdout.trim().length > 0;
+
+test("the signed pin carries each plugin's earlier pinned artifacts and shipped bundled digests from the history", () => {
+  const signed = JSON.parse(run(["signed-pin"]));
+  const history = JSON.parse(readFileSync(historyFile, "utf8"));
+  for (const plugin of signed.plugins) {
+    const entries = history.plugins[plugin.name] ?? [];
+    if (!entries.length) continue;
+    assert.deepEqual(plugin.trusted.artifacts, [...new Set(entries.map((e) => e.artifact))].sort());
+    assert.deepEqual(plugin.trusted.bundledDigests, [...new Set(entries.filter((e) => e.bundledDigest).map((e) => e.bundledDigest))].sort());
+  }
+  assert.ok(signed.plugins.find((p) => p.name === "cli").trusted.bundledDigests.length >= 1, "0.2.47's kept Command Line is covered");
+});
+
+test("the history lists every release tag that pinned an official plugin still in the pin", { skip: !hasTags && "no v* tags in this clone" }, () => {
+  assert.match(run(["history-check"]), /cover every pinned release tag/);
+});
+
+test("a history missing a pinned release fails the check, and a malformed one is refused", { skip: !hasTags && "no v* tags in this clone" }, () => {
+  const dir = mkdtempSync(join(tmpdir(), "ac-history-"));
+  const history = JSON.parse(readFileSync(historyFile, "utf8"));
+  const short = { ...history, plugins: { cli: history.plugins.cli.slice(1) } };
+  writeFileSync(join(dir, "short.json"), JSON.stringify(short));
+  assert.match(run(["--history", join(dir, "short.json"), "history-check"], { ok: false }), /behind the release tags/);
+  writeFileSync(join(dir, "bad.json"), JSON.stringify({ version: 1, plugins: { cli: [{ release: "v0.0.1", version: "0.0.1", artifact: "nope" }] } }));
+  assert.match(run(["--history", join(dir, "bad.json"), "signed-pin"], { ok: false }), /artifact must be a SHA-256/);
 });

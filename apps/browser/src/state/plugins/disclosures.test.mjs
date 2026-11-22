@@ -6,7 +6,7 @@ const { PLUGIN_SENT_COPY } = await import("../telemetry/copy.ts");
 
 const listing = (text, extra = {}) => {
   const manifest = readManifest(JSON.stringify(text)).manifest;
-  return { name: manifest.name, manifest, problems: [], hash: "h", folderId: extra.bundled ? "bundled" : "1:1", ...extra };
+  return { name: manifest.name, manifest, problems: [], hash: "h", folderId: extra.official ? "bundled" : "1:1", ...extra };
 };
 const store = (...listings) => ({
   order: listings.map((l) => l.name),
@@ -15,12 +15,12 @@ const store = (...listings) => ({
 });
 
 test("an official plugin whose manifest has no telemetry block keeps the pin's disclosure; its own block wins, and a plugin you added is labelled as its own", () => {
-  const cli = listing({ manifest: 1, name: "cli", title: "Command Line", alwaysOn: true, official: true, programs: [{ name: "ardia", path: "bin/ardia" }] }, { bundled: true });
+  const cli = listing({ manifest: 1, name: "cli", title: "Command Line", alwaysOn: true, official: true, programs: [{ name: "ardia", path: "bin/ardia" }] }, { official: true });
   const [fallback] = pluginTelemetryDisclosures(store(cli));
   assert.equal(fallback.title, "The ardia command");
   assert.equal(fallback.official, true);
   assert.equal(fallback.items.length, 5);
-  const own = listing({ manifest: 2, name: "cli", title: "Command Line", alwaysOn: true, official: true, telemetry: { title: "Its own words", items: ["x"] } }, { bundled: true });
+  const own = listing({ manifest: 2, name: "cli", title: "Command Line", alwaysOn: true, official: true, telemetry: { title: "Its own words", items: ["x"] } }, { official: true });
   assert.equal(pluginTelemetryDisclosures(store(own))[0].title, "Its own words");
   const added = listing({ manifest: 2, name: "mine", title: "Mine", telemetry: { title: "Mine sends", items: ["y"] } });
   const [third] = pluginTelemetryDisclosures(store(added));

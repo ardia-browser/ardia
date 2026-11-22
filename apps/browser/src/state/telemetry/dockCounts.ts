@@ -14,9 +14,11 @@ const NONE = {
   sidebar_full_screen_peeks: 0,
   sidebar_full_screen_peek_quick_closes: 0,
   sidebar_field_remeasures: 0,
+  sidebar_thin_frame_peeks: 0,
 };
 
 export const QUICK_PEEK_CLOSE_MS = 500;
+export const FRAME_UNDER_OLD_PEEK_GAP = 4;
 let counts = { ...NONE };
 
 export function noteSidebarSlide(pastTarget: boolean) {
@@ -42,6 +44,8 @@ export const noteSidebarScreenEdge = (edge: ScreenEdge) => void counts[SCREEN_ED
 export const noteFullScreenPeek = () => void counts.sidebar_full_screen_peeks++;
 
 export const noteFullScreenPeekClosed = (shownMs: number) => void (shownMs < QUICK_PEEK_CLOSE_MS && counts.sidebar_full_screen_peek_quick_closes++);
+
+export const noteSidebarPeekFrame = (frameInset: number) => void (frameInset < FRAME_UNDER_OLD_PEEK_GAP && counts.sidebar_thin_frame_peeks++);
 
 export const noteSidebarFieldRemeasure = () => void counts.sidebar_field_remeasures++;
 

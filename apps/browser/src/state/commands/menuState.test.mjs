@@ -212,3 +212,31 @@ test("the menu state tells the shell whether links from other apps open in Littl
   S().updateSettings({ openLinksInLittleArdia: false });
   assert.equal(menuState(S()).linksOpenInLittleArdia, false);
 });
+
+test("reader writes the menu can't show don't re-sync it, and ones it shows do", async () => {
+  const { readerChangesMenu } = await import("./menuState.ts");
+  const none = { url: "", available: false, active: false };
+  const checked = { url: "https://a.example/", available: false, active: false };
+  assert.equal(readerChangesMenu({ t1: checked }, {}), false);
+  assert.equal(readerChangesMenu({ t1: { ...checked, url: "https://b.example/" } }, { t1: checked }), false);
+  assert.equal(readerChangesMenu({ t1: none }, { t1: undefined }), false);
+  assert.equal(readerChangesMenu({ t1: { ...checked, available: true } }, { t1: checked }), true);
+  assert.equal(readerChangesMenu({ t1: { ...checked, active: true } }, { t1: { ...checked, available: true } }), true);
+  assert.equal(readerChangesMenu({}, { t1: { ...checked, active: true } }), true);
+  assert.equal(readerChangesMenu({}, { t1: checked }), false);
+});
+
+test("an extension list fetched again with what the menu shows unchanged doesn't re-sync it", async () => {
+  const { extensionsChangeMenu } = await import("./menuState.ts");
+  const ext = { id: "abc", name: "Blocker", icon: "icon.png", actionIcon: null, enabled: true, incognito: false, pinned: true, pinnedIndex: 0 };
+  const before = { p1: [ext] };
+  assert.equal(extensionsChangeMenu({ p1: [{ ...ext }] }, before), false);
+  assert.equal(extensionsChangeMenu({ p1: [{ ...ext, pinnedIndex: 3 }] }, before), false);
+  assert.equal(extensionsChangeMenu({ ...before, p2: [] }, before), false);
+  assert.equal(extensionsChangeMenu({ p1: [{ ...ext, name: "Blocker Pro" }] }, before), true);
+  assert.equal(extensionsChangeMenu({ p1: [{ ...ext, actionIcon: "badge.png" }] }, before), true);
+  assert.equal(extensionsChangeMenu({ p1: [{ ...ext, enabled: false }] }, before), true);
+  assert.equal(extensionsChangeMenu({ p1: [{ ...ext, incognito: true }] }, before), true);
+  assert.equal(extensionsChangeMenu({ p1: [ext, { ...ext, id: "def" }] }, before), true);
+  assert.equal(extensionsChangeMenu({}, before), true);
+});

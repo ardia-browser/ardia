@@ -2,6 +2,7 @@ package com.ardia.phone
 
 import com.ardia.browser.ReadableContent
 import com.ardia.chatgpt.ChatGPTFailure
+import com.google.mlkit.genai.common.GenAiException
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -20,7 +21,7 @@ class PageSummaryWritingTest {
         }
     }
 
-    private class Local(val availability: OnDeviceWriter.Availability = OnDeviceWriter.Availability.Available, val fails: Boolean = false, val writes: String = "- From Gemini Nano") : PageSummaryLocal {
+    private class Local(val availability: OnDeviceWriter.Availability = OnDeviceWriter.Availability.Available, val fails: Boolean = false, val writes: String = "- From Gemini Nano", val failure: Exception = IllegalStateException("Gemini Nano returned nothing")) : PageSummaryLocal {
         val prompts = mutableListOf<String>()
 
         override suspend fun availability(): OnDeviceWriter.Availability = availability
@@ -29,7 +30,7 @@ class PageSummaryWritingTest {
 
         override suspend fun stream(instructions: String, prompt: String, onText: (String) -> Unit) {
             prompts += prompt
-            if (fails) throw IllegalStateException("Gemini Nano returned nothing")
+            if (fails) throw failure
             onText(writes)
         }
     }
@@ -65,9 +66,9 @@ class PageSummaryWritingTest {
     fun anUnavailableModelSaysSoPlainlyWithoutThePagesLinesOrAskingChatGPT() = runTest {
         val cloud = Cloud(isConnected = true)
         val shown = mutableListOf<String>()
-        val message = unwritten(PageSummaryWriting(cloud, Local(OnDeviceWriter.Availability.Unavailable)).write(extracted, PageSummaryProvider.OnDevice, { shown += it }))
+        val message = unwritten(PageSummaryWriting(cloud, Local(OnDeviceWriter.Availability.NotOffered)).write(extracted, PageSummaryProvider.OnDevice, { shown += it }))
         assertTrue(cloud.prompts.isEmpty())
-        assertEquals("Gemini Nano is unavailable on this phone.", message)
+        assertEquals("Google lets apps use Gemini Nano only on newer phones, such as the Pixel 9 and Galaxy S25.", message)
         assertTrue(shown.isEmpty())
         assertFalse(quotesThePage(message))
     }
@@ -89,6 +90,16 @@ class PageSummaryWritingTest {
         assertEquals(2, local.prompts.size)
         assertEquals(PageSummaryWriting.NANO_FAILED, message)
         assertTrue(shown.all { it.isEmpty() })
+    }
+
+    @Test
+    fun aFailedLocalWriteIsCountedAndABusyModelSaysSo() = runTest {
+        val failed = PageSummaryWriting(Cloud(isConnected = false), Local(fails = true)).write(extracted, PageSummaryProvider.OnDevice, {}) as PageSummaryWriting.Unwritten
+        assertEquals("write_failed", failed.geminiNanoMissing)
+        val busy = Local(fails = true, failure = GenAiException(IllegalStateException("AICore"), GenAiException.ErrorCode.PER_APP_BATTERY_USE_QUOTA_EXCEEDED))
+        val refused = PageSummaryWriting(Cloud(isConnected = false), busy).write(extracted, PageSummaryProvider.OnDevice, {}) as PageSummaryWriting.Unwritten
+        assertEquals("errors", refused.geminiNanoMissing)
+        assertEquals("Gemini Nano is busy right now.", refused.message)
     }
 
     @Test
@@ -135,8 +146,8 @@ class PageSummaryWritingTest {
     @Test
     fun whenChatGPTFailsAndGeminiNanoIsUnavailableNeitherWritesAndBothReasonsAreGiven() = runTest {
         val shown = mutableListOf<String>()
-        val message = unwritten(PageSummaryWriting(Cloud(isConnected = true, fails = ChatGPTFailure.UsageLimit), Local(OnDeviceWriter.Availability.Unavailable)).write(extracted, PageSummaryProvider.ChatGPT, { shown += it }))
-        assertEquals("${ChatGPTFailure.UsageLimit.message} Gemini Nano is unavailable on this phone.", message)
+        val message = unwritten(PageSummaryWriting(Cloud(isConnected = true, fails = ChatGPTFailure.UsageLimit), Local(OnDeviceWriter.Availability.NotOffered)).write(extracted, PageSummaryProvider.ChatGPT, { shown += it }))
+        assertEquals("${ChatGPTFailure.UsageLimit.message} Google lets apps use Gemini Nano only on newer phones, such as the Pixel 9 and Galaxy S25.", message)
         assertEquals(listOf(""), shown)
         assertFalse(quotesThePage(message))
     }
@@ -144,9 +155,9 @@ class PageSummaryWritingTest {
     @Test
     fun chatGPTChosenButNotConnectedWithNoLocalModelSaysHowToReconnect() = runTest {
         val cloud = Cloud(isConnected = false)
-        val message = unwritten(PageSummaryWriting(cloud, Local(OnDeviceWriter.Availability.Unavailable)).write(extracted, PageSummaryProvider.ChatGPT, {}))
+        val message = unwritten(PageSummaryWriting(cloud, Local(OnDeviceWriter.Availability.NotOffered)).write(extracted, PageSummaryProvider.ChatGPT, {}))
         assertTrue(cloud.prompts.isEmpty())
-        assertEquals("${PageSummaryWriting.NOT_CONNECTED_UNWRITTEN} ${PageSummaryWriting.NANO_UNAVAILABLE}", message)
+        assertEquals("${PageSummaryWriting.NOT_CONNECTED_UNWRITTEN} Google lets apps use Gemini Nano only on newer phones, such as the Pixel 9 and Galaxy S25.", message)
     }
 
     @Test
@@ -168,8 +179,8 @@ class PageSummaryWritingTest {
         val result = written(PageSummaryWriting(cloud, Local()).write(extracted, PageSummaryProvider.OnDevice, {}, reason = "ChatGPT was disconnected."))
         assertTrue(cloud.prompts.isEmpty())
         assertTrue(result.note.startsWith("ChatGPT was disconnected."))
-        val unavailable = unwritten(PageSummaryWriting(cloud, Local(OnDeviceWriter.Availability.Unavailable)).write(extracted, PageSummaryProvider.OnDevice, {}, reason = "ChatGPT was disconnected."))
-        assertEquals("ChatGPT was disconnected. Gemini Nano is unavailable on this phone.", unavailable)
+        val unavailable = unwritten(PageSummaryWriting(cloud, Local(OnDeviceWriter.Availability.NotOffered)).write(extracted, PageSummaryProvider.OnDevice, {}, reason = "ChatGPT was disconnected."))
+        assertEquals("ChatGPT was disconnected. Google lets apps use Gemini Nano only on newer phones, such as the Pixel 9 and Galaxy S25.", unavailable)
     }
 
     @Test

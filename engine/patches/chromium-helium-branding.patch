@@ -16,7 +16,7 @@ icons already replaced from ardia_resources.txt); it covers what those can't rea
 - chrome://flags: descriptions say Ardia, Helium's flag ids are ardia-*, and the updater channel and update server
   flags are gone (the app has its own updater), as are the Proxy server and Proxy bypass list flags (on a real profile
   ArdiaCore drops --proxy-server from the browser's command line, after chrome://flags apply);
-- cr:chrome-product is Ardia's mark (traced from docs/brand/ardia/source/mark-small.png), as are the product
+- cr:chrome-product is Ardia's mark (the one-color mark, with a cut between the hills), as are the product
   vector icons and logos ardia_resources.txt copies in;
 - Helium's indigo palette is undone (helium-color-scheme.patch reversed): chrome:// pages and dialogs use
   Chromium's colours, as Ardia does today;

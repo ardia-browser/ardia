@@ -9,8 +9,7 @@ Pod::Spec.new do |s|
   s.source         = { git: '' }
   s.static_framework = true
   s.dependency 'ExpoModulesCore'
-  s.frameworks     = 'WebKit'
-  s.weak_frameworks = 'ScreenCaptureKit'
+  s.frameworks     = 'WebKit', 'ScreenCaptureKit'
   s.source_files   = '*.{h,c,mm,swift}'
   s.public_header_files = 'ArdiaHost.h', 'ArdiaWebView.h', 'ArdiaTabStrip.h', 'ArdiaEngineBridge.h', 'ArdiaServices.h', 'ArdiaContentBlocker.h', 'ArdiaFavicons.h', 'ArdiaSwipe.h', 'ArdiaChromeWindowHost.h', 'ArdiaInterfaceScale.h', 'ArdiaLaunchConfig.h', 'ArdiaEvents.h', 'ArdiaNowPlaying.h', 'ArdiaTransferLedger.h', 'ArdiaDownloadMover.h', 'ArdiaDisplayIdentity.h'
   s.resources      = 'page_script.js'

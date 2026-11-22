@@ -10,10 +10,6 @@ NS_ASSUME_NONNULL_BEGIN
 @property(class, readonly) NSArray<NSDictionary<NSString *, id> *> *chromeWindows;
 @property(class, readonly) NSArray<NSDictionary<NSString *, id> *> *displayMediaSources;
 @property(class, readonly) BOOL screenRecordingAllowed;
-+ (void)displayMediaThumbnails:(NSArray<NSString *> *)sourceIds
-                     maxWidth:(double)maxWidth
-                    completion:(void (^)(NSDictionary<NSString *, NSString *> *found))completion
-    NS_SWIFT_NAME(displayMediaThumbnails(_:maxWidth:completion:));
 + (BOOL)requestScreenRecording;
 + (BOOL)mayCaptureDesktopSource:(NSString *)sourceId;
 + (void)resolveExternalApp:(NSString *)requestId open:(BOOL)open remember:(BOOL)remember NS_SWIFT_NAME(resolveExternalApp(_:open:remember:));
@@ -60,6 +56,15 @@ NS_ASSUME_NONNULL_BEGIN
 + (NSString *)baseProfileOf:(NSString *)profile NS_SWIFT_NAME(baseProfile(of:));
 + (void)resolvePermission:(NSString *)requestId result:(NSString *)result remember:(BOOL)remember
     NS_SWIFT_NAME(resolvePermission(_:result:remember:));
+
+@end
+
+@interface ArdiaHost (Thumbnails)
+
++ (void)displayMediaThumbnails:(NSArray<NSString *> *)sourceIds
+                     maxWidth:(double)maxWidth
+                    completion:(void (^)(NSDictionary<NSString *, NSString *> *found))completion
+    NS_SWIFT_NAME(displayMediaThumbnails(_:maxWidth:completion:));
 
 @end
 

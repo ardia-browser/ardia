@@ -15,7 +15,6 @@ const light = {
   shareBarBorder: "rgba(0,0,0,0.08)",
   iconTile: "rgba(0,0,0,0.05)",
   pickerSelected: "rgba(0,0,0,0.08)",
-  pickerSelectedStroke: "rgba(0,0,0,0.08)",
   previewBorder: "rgba(0,0,0,0.12)",
   previewFill: "rgba(0,0,0,0.03)",
 };
@@ -31,7 +30,6 @@ const dark: typeof light = {
   shareBarBorder: "rgba(255,255,255,0.1)",
   iconTile: "rgba(255,255,255,0.08)",
   pickerSelected: "rgba(255,255,255,0.14)",
-  pickerSelectedStroke: "rgba(255,255,255,0.14)",
   previewBorder: "rgba(255,255,255,0.15)",
   previewFill: "rgba(255,255,255,0.05)",
 };

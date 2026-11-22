@@ -274,7 +274,7 @@ over, `-[ArdiaCoreTab setTemporarySource:]`) is the tab a closed window's entry 
 | `releaseProfile` | partial | Destroys a private profile once no window shows it (engine-proven) |
 | `onPermissionDismissed` | partial | Wired; no check dismisses a prompt by navigating yet |
 | `onContentBlocker` | partial | Reported by the blocker's state changes; not asserted on its own |
-| `setDisplayMediaPicker`, `displayMediaSources` | ✅ | The app's own picker runs in every page that asks to share (`setDisplayMediaPicker` turns Chrome's picker off); `displayMediaSources` lists screens and windows, `displayMediaThumbnails` returns JPEG previews of them |
+| `setDisplayMediaPicker`, `displayMediaSources` | ✅ | The app's own picker runs in every page that asks to share (`setDisplayMediaPicker` turns Chrome's picker off); `displayMediaSources` lists screens and windows, `displayMediaThumbnails` returns base64 JPEG previews of them by source id (ScreenCaptureKit; empty in a hidden run). Linux and Windows keep Chrome's picker |
 | `devScrollZoom` | stubbed | CEF's test hook for its own pinch path; ArdiaCore's pinch is Chrome's |
 
 ## `ArdiaExtensions` (`packages/ardiacore/src/extensions.ts`)

@@ -10,6 +10,7 @@ const edgeScrollDrags = consentedCount();
 const revealsAfterPress = consentedCount();
 const mostTabs = consentedMax();
 const heldCloses = consentedCount();
+const heldCloseStretches = consentedCount();
 const mostTitledTabs = consentedMax();
 const mostTabsInOverflow = consentedMax();
 const scrolls = consentedCount();
@@ -70,6 +71,10 @@ export function noteTabStripHeldClose() {
   heldCloses.note();
 }
 
+export function noteTabStripHeldCloseStretch() {
+  heldCloseStretches.note();
+}
+
 export function noteTabStripTitledTabs(tabs: number) {
   mostTitledTabs.note(tabs);
 }
@@ -100,6 +105,7 @@ export function takeTabStripCounts() {
     tab_strip_reveals_after_press: revealsAfterPress.take(),
     tab_strip_most_tabs: mostTabs.take(),
     tab_strip_held_closes: heldCloses.take(),
+    tab_strip_held_close_stretches: heldCloseStretches.take(),
     tab_strip_most_titled_tabs: mostTitledTabs.take(),
     tab_strip_most_tabs_in_overflow: mostTabsInOverflow.take(),
     tab_strip_scrolls: scrolls.take(),

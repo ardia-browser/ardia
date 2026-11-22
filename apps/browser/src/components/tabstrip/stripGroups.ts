@@ -164,7 +164,8 @@ export function layoutDock(dock: StripDock | undefined): Dock | null {
   return { ids: dock.ids, left: -dockSpan(dock), geometry: dragGeometry(dock.ids.map((id) => ({ tabIds: dockTabs(dock, id), width: PINNED_CELL })), PINNED_SPACING) };
 }
 
-export function layoutStrip(entries: StripEntry[], activeId: string, pageWidth: number, measured: StripMeasures, dockLayout: Dock | null, held?: TabWidths, wideId: string = activeId, selectedMin: number = SELECTED_MIN_CHIP, titledMin: number = TITLED_CHIP, compactMin: number = COMPACT_CHIP): StripLayout {
+export type Stretch = { tabId: string; by: number };
+export function layoutStrip(entries: StripEntry[], activeId: string, pageWidth: number, measured: StripMeasures, dockLayout: Dock | null, held?: TabWidths, wideId: string = activeId, selectedMin: number = SELECTED_MIN_CHIP, titledMin: number = TITLED_CHIP, compactMin: number = COMPACT_CHIP, stretch: Stretch | null = null): StripLayout {
   const dock = dockEntry(entries);
   const rows = entries.filter((e): e is StripGroupEntry | StripMember => e.kind !== "dock");
   const groupChip = (g: StripGroupEntry) => measured.groupChip(g.id) ?? 0;
@@ -195,7 +196,7 @@ export function layoutStrip(entries: StripEntry[], activeId: string, pageWidth: 
     max: MAX_CHIP,
   });
   const { chip, selected } = widths;
-  const tabWidth = (tabId: string) => (tabId === wideId ? selected : needsTitle(tabId) ? widths.titled : chip);
+  const tabWidth = (tabId: string) => (tabId === wideId ? selected : needsTitle(tabId) ? widths.titled : chip) + (tabId === stretch?.tabId ? stretch.by : 0);
   const unitsWidth = (m: StripMember) => shownTabs(m).reduce((n, id) => n + tabWidth(id), 0);
   const memberWidth = (m: StripMember) => (m.kind === "folder" ? folderChip(m) + (holds(m, activeId) ? MEMBERS_INSET + tabWidth(activeId) : 0) : unitsWidth(m));
   const groups = new Map(

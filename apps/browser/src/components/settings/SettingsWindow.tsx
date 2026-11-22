@@ -1,13 +1,12 @@
 import { Button, ListRow, NativeFormContext, space, Symbol, Text, VisualEffect, WindowDragRegion } from "../ui";
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { useTheme } from "../ui/theme";
 import { useProfile } from "../../state/browser/hooks";
 import { usePluginTitle } from "../../state/plugins/hooks";
 import { trackSettingsSection } from "../../state/telemetry/track";
-import { preparePane, usePaneLoaded } from "../../state/settings/paneData";
-import { clearSettingsReveal, flashSetting, settingsSearchHost, useSettingsSearch } from "../../state/settings/searchState";
-import { anchorView } from "./anchors";
+import { clearSettingsReveal, currentSettingsSearch, flashSetting, settingsSearchHost, useSettingsSearch } from "../../state/settings/searchState";
+import { anchorView, onAnchorRegistered } from "./anchors";
 import { findSetting, resolveSettingId, PANES, paneTitle } from "./settingsIndex";
 import { SettingsPaneContext } from "./Form";
 import { PageToolbar } from "../pages/PageLayout";
@@ -22,7 +21,7 @@ import { ShortcutsPane } from "./panes/Shortcuts";
 import { TabsPane } from "./panes/Tabs";
 import { useSettingsSheet } from "../../state/settings/sheet";
 import { SettingsConsentSheet } from "../plugins/SettingsConsentSheet";
-import { goToSettingsPane, SETTINGS_WINDOW_ID, settingsBack, settingsForward, useSettingsNav, type SettingsPane, type SettingsPlace } from "../../state/settings/settingsWindows";
+import { currentSettingsPlace, goToSettingsPane, SETTINGS_WINDOW_ID, settingsBack, settingsForward, useSettingsNav, type SettingsPane, type SettingsPlace } from "../../state/settings/settingsWindows";
 import { closeProfileIconPickerIn } from "../../state/profiles/iconPicker";
 import { ProfileIconPicker } from "../profiles/ProfileIconPicker";
 import { settingsProfileFor } from "../../state/extensions/store";
@@ -43,56 +42,28 @@ const TOOLBAR = pageToolbar.window.height;
 const sidebarTop = () => (WINDOW_CHROME.leadingWidth ? TOOLBAR : space.ml);
 const TITLE_LEFT = SIDEBAR + 96;
 const CONTROLS_ROOM = WINDOW_CONTROLS.edge + windowControlsWidth() + WINDOW_CONTROLS.gap;
-const HOLD_CAP_MS = 250;
 const REVEAL_MARGIN = 16;
 
 const shownKey = (s: SettingsPlace) => `${s.pane}:${s.profileId ?? ""}:${s.detail ?? ""}`;
 const pageKey = (s: SettingsPlace) => (s.pane === "profiles" && !s.detail ? "profiles::" : shownKey(s));
 
-function useShownPane(): SettingsPlace | null {
-  const nav = useSettingsNav();
-  const target = { pane: nav.pane, profileId: nav.profileId, detail: nav.detail };
-  const key = shownKey(target);
-  const loaded = usePaneLoaded(nav.pane, nav.profileId);
-  const [expired, setExpired] = useState<string | null>(null);
-  const [last, setLast] = useState<SettingsPlace | null>(null);
-  const ready = loaded || expired === key;
-  useEffect(() => {
-    if (ready) return setLast(target);
-    void preparePane(target.pane, target.profileId);
-    const timer = setTimeout(() => setExpired(key), HOLD_CAP_MS);
-    return () => clearTimeout(timer);
-  }, [key, ready]);
-  return ready ? target : last;
-}
-
-function usePrefetchAllPanes(enabled: boolean) {
-  useEffect(() => {
-    if (!enabled) return;
-    const timer = setTimeout(() => {
-      for (const p of PANES) void preparePane(p.id, null);
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [enabled]);
-}
-
 export function SettingsWindow() {
   const look = useSettingsColors();
   useWindowChrome();
   const nav = useSettingsNav();
-  const shown = useShownPane();
-  usePrefetchAllPanes(!!shown);
-  const profileName = useProfile(shown?.profileId, (p) => p?.name);
-  const pluginTitle = usePluginTitle(shown?.pane === "plugins" ? shown.detail : null);
-  const title = shown ? (shown.pane === "profiles" && profileName ? profileName : shown.pane === "plugins" && pluginTitle ? pluginTitle : paneTitle(shown.pane)) : "";
+  const { pane, profileId, detail } = nav;
+  const shown: SettingsPlace = { pane, profileId, detail };
+  const profileName = useProfile(profileId, (p) => p?.name);
+  const pluginTitle = usePluginTitle(pane === "plugins" ? detail : null);
+  const title = pane === "profiles" && profileName ? profileName : pane === "plugins" && pluginTitle ? pluginTitle : paneTitle(pane);
   const sheet = useSettingsSheet((s) => s.sheet);
   useEffect(() => trackSettingsSection(nav.pane), [nav.pane]);
   useEffect(() => settingsSearchHost(), []);
   useEffect(() => markCaptionRegions(SETTINGS_WINDOW_ID, [[TITLE_LEFT, 0, CONTROLS_ROOM, TOOLBAR]]), []);
   useEffect(() => void setTrafficLightsCenter(SETTINGS_WINDOW_ID, [LIGHTS_CENTER[0], TOOLBAR / 2]), []);
   const scroller = useRef<ScrollView>(null);
-  const key = shown ? shownKey(shown) : "";
-  const page = shown ? pageKey(shown) : "";
+  const key = shownKey(shown);
+  const page = pageKey(shown);
   useLayoutEffect(() => scroller.current?.scrollTo({ y: 0, animated: false }), [page]);
   useEffect(() => closeProfileIconPickerIn(SETTINGS_WINDOW_ID), [key]);
   const content = useRef<View>(null);
@@ -102,27 +73,47 @@ export function SettingsWindow() {
   const reveal = useSettingsSearch((s) => s.reveal);
   const revealPane = reveal ? (findSetting(reveal.id)?.pane ?? null) : null;
   const switched = useRef(key);
+  const revealPlace = useRef<{ reveal: typeof reveal; key: string } | null>(null);
   useEffect(() => {
     if (!reveal) return;
-    if (nav.pane !== revealPane) return void clearSettingsReveal();
-    if (shown?.pane !== revealPane) return;
+    const previous = revealPlace.current;
+    if (pane !== revealPane || (previous?.reveal === reveal && previous.key !== key)) return void clearSettingsReveal();
+    revealPlace.current = { reveal, key };
+    const id = resolveSettingId(reveal.id);
     const animated = switched.current === key;
-    const frame = requestAnimationFrame(() => {
-      const target = anchorView(resolveSettingId(reveal.id));
+    let active = true;
+    let frame: number | null = null;
+    const stillCurrent = () => active && currentSettingsSearch().reveal === reveal && shownKey(currentSettingsPlace()) === key;
+    const measure = () => {
+      frame = null;
+      if (!stillCurrent()) return;
+      const target = anchorView(id);
       const container = content.current;
-      if (!target || !container) return flashSetting("");
+      if (!target || !container) return;
       target.measureLayout(
         container,
         (_x, y, _w, h) => {
+          if (!stillCurrent() || anchorView(id) !== target) return;
           const top = animated ? scrollTop.current : 0;
           const inView = y >= top + REVEAL_MARGIN && y + h <= top + viewport.current - REVEAL_MARGIN;
           if (!inView) scroller.current?.scrollTo({ y: Math.max(0, y - viewport.current / 3), animated });
-          flashSetting(resolveSettingId(reveal.id));
+          flashSetting(id);
         },
-        () => flashSetting(resolveSettingId(reveal.id)),
+        () => {
+          if (stillCurrent() && anchorView(id) === target) flashSetting(id);
+        },
       );
-    });
-    return () => cancelAnimationFrame(frame);
+    };
+    const schedule = () => {
+      if (frame === null) frame = requestAnimationFrame(measure);
+    };
+    const unsubscribe = onAnchorRegistered(id, schedule);
+    schedule();
+    return () => {
+      active = false;
+      unsubscribe();
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
   }, [reveal, key]);
   useEffect(() => {
     switched.current = key;
@@ -163,13 +154,11 @@ export function SettingsWindow() {
           onLayout={(e) => void (viewport.current = e.nativeEvent.layout.height)}
           contentContainerStyle={PANE_SCROLL}>
           <View key={page} ref={content} collapsable={false} style={PANE_COLUMN}>
-            {shown ? (
-              <NativeFormContext.Provider value>
-                <SettingsPaneContext.Provider value={shown.pane}>
-                  <Pane {...shown} />
-                </SettingsPaneContext.Provider>
-              </NativeFormContext.Provider>
-            ) : null}
+            <NativeFormContext.Provider value>
+              <SettingsPaneContext.Provider value={shown.pane}>
+                <Pane {...shown} />
+              </SettingsPaneContext.Provider>
+            </NativeFormContext.Provider>
           </View>
         </ScrollView>
       </View>

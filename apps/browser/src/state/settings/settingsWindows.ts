@@ -22,6 +22,8 @@ const placeOf = ({ pane, profileId, detail }: SettingsPlace): SettingsPlace => (
 
 export const useSettingsNav = create<Nav>()(() => ({ pane: "general", profileId: null, detail: null, back: [], forward: [] }));
 
+export const currentSettingsPlace = () => placeOf(useSettingsNav.getState());
+
 export function goToSettingsPane(pane: SettingsPane, profileId: string | null = null, detail: string | null = null) {
   const current = useSettingsNav.getState();
   if (current.pane === pane && current.profileId === profileId && current.detail === detail) return;

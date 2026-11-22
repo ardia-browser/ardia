@@ -21,6 +21,7 @@
 #include "ui/base/window_open_disposition.h"
 #include "ui/events/event_handler.h"
 #include "ui/gfx/geometry/rect.h"
+#include "ui/views/view_tracker.h"
 
 class Browser;
 class BrowserWindowInterface;
@@ -63,7 +64,7 @@ class Host : public TabStripModelObserver,
   void DeleteClosedTab(content::WebContents* contents);
   void ParentDestroying(HWND parent);
   void ParentMoved(HWND parent);
-  void ParentActivated(HWND parent);
+  void ParentActivated(HWND parent, HWND previous, bool mouse_activated);
   bool HandOverWindowCommand(HWND window, WPARAM command, LPARAM point);
   void HoldPagePlace(HWND window, WINDOWPOS& change);
   void PageMoved(HWND window, const WINDOWPOS& change);
@@ -92,6 +93,7 @@ class Host : public TabStripModelObserver,
     raw_ptr<Profile> profile = nullptr;
     std::string shown;
     gfx::Rect place;
+    views::ViewTracker extension_popup_anchor;
   };
 
   Host();
@@ -108,6 +110,9 @@ class Host : public TabStripModelObserver,
   base::DictValue CloseTab(const base::DictValue& args);
   std::optional<base::DictValue> CallTab(content::WebContents* contents,
                                          const base::DictValue& args);
+  base::DictValue RunExtensionAction(content::WebContents* contents,
+                                     HWND parent,
+                                     const base::DictValue& args);
   base::DictValue DiscardOffered(const base::DictValue& args);
   base::DictValue HitTest(const base::DictValue& args);
   base::DictValue MoveWindowForTest(content::WebContents* contents,

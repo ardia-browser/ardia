@@ -27,6 +27,7 @@ import { notePrivateWindowExtensionOpen, noteExtensionProfilePageOpen, noteToolb
 import { extensionPageUrl, extensionProfile, extensionsProfileId, isPrivate, nextInstallKey, pageProfile, shownIn, useExtensions, windowExtensions, readyTabOf, tabProfile, type Anchor } from "./store";
 import { consentToken, type ConsentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
+import { noteWindowsExtensionPopup } from "../telemetry/workCounts";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import { freshExtensions, refreshExtensions, refreshExtensionsAfterChange } from "./lists";
 import { cancelInstall, confirmInstall, showInstallSheet } from "./installSheet";
@@ -187,7 +188,9 @@ export async function activateExtension(
   if (!shownIn(windowId, ext.id)) return;
   if (isPrivate(useBrowser.getState(), windowId)) notePrivateWindowExtensionOpen();
   const web = tabId ? webviews.get(tabId) : undefined;
-  const result = web ? await web.executeExtensionAction(ext.id) : null;
+  const consent = consentToken();
+  const result = web ? await web.executeExtensionAction(ext.id, anchor) : null;
+  if (result === "nativePopup") return noteWindowsExtensionPopup(consent);
   const readyTab = readyTabOf(tabId);
   if (!state && result === "popup" && readyTab) state = (await extensionActionStates(readyTab, [ext.id], tabProfile(readyTab)))[ext.id];
   const url = state ? state.popup : ext.popup ? extensionPageUrl(ext.id, ext.popup) : "";

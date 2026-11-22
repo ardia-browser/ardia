@@ -75,6 +75,7 @@ const none = () => ({
   extensionActionStateRequests: 0,
   extensionActionStateFailures: 0,
   extensionActionTabChangesSkipped: 0,
+  windowsExtensionPopupsRequested: 0,
 });
 
 let pending = none();
@@ -95,6 +96,7 @@ export const noteExtensionActionRefresh = () => count("extensionActionRefreshes"
 export const noteExtensionActionStateRequest = () => count("extensionActionStateRequests");
 export const noteExtensionActionStateFailure = (consent?: ConsentToken | null) => count("extensionActionStateFailures", consent);
 export const noteExtensionActionTabChangeSkipped = () => count("extensionActionTabChangesSkipped");
+export const noteWindowsExtensionPopup = (consent: ConsentToken | null) => count("windowsExtensionPopupsRequested", consent);
 
 export function takeLiveWorkCounts() {
   const taken = pending;
@@ -110,6 +112,7 @@ export function takeLiveWorkCounts() {
     extension_action_state_requests: taken.extensionActionStateRequests,
     extension_action_state_failures: taken.extensionActionStateFailures,
     extension_action_tab_changes_skipped: taken.extensionActionTabChangesSkipped,
+    windows_extension_popups_requested: taken.windowsExtensionPopupsRequested,
   };
 }
 

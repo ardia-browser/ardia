@@ -13,6 +13,7 @@
 #include "ardia/core/ac_launch_switches.h"
 #include "ardia/win/autoplay.h"
 #include "ardia/win/context_menu.h"
+#include "ardia/win/extension_actions.h"
 #include "ardia/win/frame_view.h"
 #include "ardia/win/hooks.h"
 #include "ardia/win/main.h"
@@ -142,7 +143,8 @@ LRESULT CALLBACK ParentProcedure(HWND window,
     Host::Get()->ParentMoved(window);
   }
   if (message == WM_ACTIVATE && LOWORD(w_param) != WA_INACTIVE) {
-    Host::Get()->ParentActivated(window);
+    Host::Get()->ParentActivated(window, reinterpret_cast<HWND>(l_param),
+                                 LOWORD(w_param) == WA_CLICKACTIVE);
   }
   if (message == WM_NCDESTROY) {
     ::RemoveWindowSubclass(window, &ParentProcedure, id);
@@ -359,6 +361,10 @@ void Host::Call(const std::string& verb,
     content::WebContents* contents = Find(Text(args, "key"));
     if (!contents) {
       std::move(reply).Run(Error("no such tab"));
+      return;
+    }
+    if (Text(args, "method") == "executeExtensionAction") {
+      std::move(reply).Run(RunExtensionAction(contents, window, args));
       return;
     }
     if (std::optional<base::DictValue> done = CallTab(contents, args)) {
@@ -899,6 +905,30 @@ std::optional<base::DictValue> Host::CallTab(content::WebContents* contents,
   return Ok();
 }
 
+base::DictValue Host::RunExtensionAction(content::WebContents* contents,
+                                         HWND parent,
+                                         const base::DictValue& args) {
+  Browser* browser = BrowserOf(contents);
+  auto found = hosted_.find(browser);
+  base::DictValue result = Ok();
+  result.Set("result", "none");
+  if (found == hosted_.end() || !::IsWindow(parent) ||
+      found->second.parent != parent ||
+      found->second.shown != Text(args, "key") ||
+      browser->GetTabStripModel()->GetActiveWebContents() != contents) {
+    return result;
+  }
+  for (auto& [other, page] : hosted_) {
+    if (other != browser && page.parent == parent) {
+      CloseExtensionActionPopup(page.extension_popup_anchor);
+    }
+  }
+  result.Set("result", OpenOrRunExtensionAction(
+                           *browser, *contents, parent, args,
+                           found->second.extension_popup_anchor));
+  return result;
+}
+
 base::DictValue Host::Info() {
   base::DictValue result;
   result.Set("chromium", version_info::GetVersionNumber());
@@ -1037,10 +1067,9 @@ Browser* Host::NewPage(HWND parent, Profile* profile) {
   if (!browser) {
     return nullptr;
   }
-  Hosted hosted;
+  Hosted& hosted = hosted_[browser];
   hosted.parent = parent;
   hosted.profile = profile;
-  hosted_[browser] = hosted;
   WatchParent(parent);
   Adopt(browser);
   return browser;
@@ -1142,6 +1171,7 @@ void Host::ParkForeign(base::WeakPtr<BrowserWindowInterface> browser) {
 }
 
 void Host::Hide(Browser* browser, Hosted& hosted) {
+  CloseExtensionActionPopup(hosted.extension_popup_anchor);
   if (hosted.parent) {
     auto wanted = keyboard_wanted_.find(hosted.parent);
     if (wanted != keyboard_wanted_.end() && wanted->second == hosted.shown) {
@@ -1194,7 +1224,13 @@ void Host::GiveKeyboard(Browser* browser,
   contents->Focus();
 }
 
-void Host::ParentActivated(HWND parent) {
+void Host::ParentActivated(HWND parent, HWND previous, bool mouse_activated) {
+  for (auto& entry : hosted_) {
+    if (entry.second.parent == parent) {
+      DismissExtensionActionPopup(entry.second.extension_popup_anchor, previous,
+                                  mouse_activated);
+    }
+  }
   if (!keyboard_wanted_.contains(parent)) {
     return;
   }

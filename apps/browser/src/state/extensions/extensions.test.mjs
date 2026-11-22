@@ -3,10 +3,11 @@ import { test } from "node:test";
 const native = await import("../../test-native/index.ts");
 const { useBrowser } = await import("../browser/store.ts");
 const { usePages } = await import("../tabs/pageState.ts");
+const { webviews } = await import("../../platform/webviews.ts");
 const { useExtensions } = await import("./store.ts");
 const { refreshActionStates } = await import("./actionStates.ts");
 const panels = await import("./sidePanels.ts");
-const { extensionMenuItems } = await import("./actions.ts");
+const { activateExtension, extensionMenuItems } = await import("./actions.ts");
 
 const S = () => useBrowser.getState();
 const E = () => useExtensions.getState();
@@ -29,6 +30,20 @@ function setup() {
   };
   return { w, a, b, asked, answer };
 }
+
+test("a popup opened by the engine stays native even when there is a manifest popup", async () => {
+  const { w, a } = setup();
+  const anchor = { x: 320, y: 8, width: 30, height: 30 };
+  const calls = [];
+  webviews.set(a, { executeExtensionAction: async (...args) => (calls.push(args), "nativePopup") });
+  try {
+    await activateExtension(w, { ...EXT, popup: "popup.html" }, anchor);
+    assert.deepEqual(calls, [[EXT.id, anchor]]);
+    assert.equal(E().popup, null);
+  } finally {
+    webviews.delete(a);
+  }
+});
 
 test("a tab switch while a tab's states are on their way gets its own states right after, with no timer", async () => {
   const { a, b, asked, answer } = setup();

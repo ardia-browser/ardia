@@ -4,7 +4,7 @@ extension WebKitExtensionShimNamespace {
         const ownId = runtime.id;
         const here = () => {
           const href = root.location ? String(root.location.href) : "";
-          const page = BACKGROUND_PATH && /\/__ardia_webkit_worker\.js$/.test(href) ? href.replace(/__ardia_webkit_worker\.js$/, BACKGROUND_PATH) : href;
+          const page = BACKGROUND_PATH ? href.replace(/^([a-z-]+:\/\/[^/]+\/)(?:.*\/)?__ardia_webkit_worker\.js$/, (_, base) => base + BACKGROUND_PATH) : href;
           return page.replace(/^webkit-extension:\/\/[^/]+/, `chrome-extension://${ownId}`);
         };
         const originOf = (url) => {
@@ -45,13 +45,13 @@ extension WebKitExtensionShimNamespace {
             onDisconnect: { addListener: onDisconnect.addListener, removeListener: onDisconnect.removeListener, hasListener: onDisconnect.hasListener, hasListeners: onDisconnect.hasListeners },
             postMessage(message) {
               if (!open) throw new Error("Attempting to use a disconnected port object");
-              request("runtime", "portPost", [channel, message === undefined ? null : message]).catch(() => {});
+              direct("runtime", "portPost", [channel, message === undefined ? null : message]).catch(() => {});
             },
             disconnect() {
               if (!open) return;
               open = false;
               close(channel);
-              request("runtime", "portClose", [channel]).catch(() => {});
+              direct("runtime", "portClose", [channel]).catch(() => {});
             },
           };
           if (sender) port.sender = sender;
@@ -100,13 +100,14 @@ extension WebKitExtensionShimNamespace {
                     done = true;
                     resolve(value);
                   };
-                  let kept = false;
+                  let result;
                   try {
-                    kept = listener(message, sender, respond) === true;
+                    result = listener(message, sender, respond);
                   } catch (error) {
                     console.error(error);
                   }
-                  if (!kept && !done) resolve(undefined);
+                  if (result && typeof result.then === "function") return void result.then(respond, () => respond(undefined));
+                  if (result !== true && !done) resolve(undefined);
                 }),
               );
             }
@@ -145,9 +146,20 @@ extension WebKitExtensionShimNamespace {
               answered = true;
               post({ reply: message.request, responded: true, response: response === undefined ? null : response });
             };
+            let pending = 0;
+            const settled = () => {
+              pending -= 1;
+              if (!answered && !pending) post({ reply: message.request, responded: false, listened: true });
+            };
             for (const listener of set ? [...set] : []) {
               try {
-                if (listener(message.message, message.sender, answer) === true) waiting = true;
+                const result = listener(message.message, message.sender, answer);
+                if (result === true) waiting = true;
+                else if (result && typeof result.then === "function") {
+                  waiting = true;
+                  pending += 1;
+                  result.then((value) => (answer(value), settled()), settled);
+                }
               } catch (error) {
                 console.error(error);
               }
@@ -199,12 +211,9 @@ extension WebKitExtensionShimNamespace {
             const callback = typeof args[args.length - 1] === "function" ? args.pop() : null;
             const target = args.length >= 2 && (typeof args[0] === "string" || args[0] == null) ? args[0] : null;
             if (!isExternal(target)) return callback ? runtimeSend(...args, callback) : runtimeSend(...args);
-            const done = request("runtime", "sendExternal", [target, args[1] === undefined ? null : args[1], self()]);
+            const done = direct("runtime", "sendExternal", [target, args[1] === undefined ? null : args[1], self()]);
             if (!callback) return done;
-            done.then(callback, (error) => {
-              console.error(error);
-              callback();
-            });
+            done.then(callback, (error) => callbackError(error, callback));
             return undefined;
           }, "runtime");
         }
@@ -216,7 +225,7 @@ extension WebKitExtensionShimNamespace {
             const info = (args[1] && typeof args[1] === "object" ? args[1] : {}) || {};
             const channel = `${ownId}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2)}`;
             const port = openChannel(channel, info.name, null);
-            request("runtime", "connectExternal", [target, info.name || "", channel, self()]).catch(() => {
+            direct("runtime", "connectExternal", [target, info.name || "", channel, self()]).catch(() => {
               const made = channels.get(channel);
               if (made) made.end();
             });

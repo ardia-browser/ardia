@@ -2,7 +2,7 @@ import type { InstalledExtension } from "../../platform/extensions";
 import { sendWebKitExtensionEvent, type WebKitExtensionApi, type WebKitExtensionListeners } from "../../platform/webkit";
 import { useBrowser, type BrowserState } from "../browser/store";
 import type { BookmarkNode, HistoryEntry } from "../browser/types";
-import { historyOf } from "../history/history";
+import { historyOf, historyViewOf } from "../history/history";
 import {
   appProfileOf,
   bookmarkIds,
@@ -111,6 +111,9 @@ function historyEvents(s: BrowserState, prev: BrowserState, base: string): Event
   const before = historyOf(prev, profileId);
   const now = historyOf(s, profileId);
   if (before === now) return [];
+  if ((historyViewOf(prev, profileId)?.reloads ?? 0) !== (historyViewOf(s, profileId)?.reloads ?? 0)) {
+    return !now.length && before.length ? [{ api: "history", event: "onVisitRemoved", args: [{ allHistory: true, urls: [] }] }] : [];
+  }
   const was = new Map<string, HistoryEntry>(before.map((h) => [h.url, h]));
   const events: Event[] = [];
   for (const h of now) {

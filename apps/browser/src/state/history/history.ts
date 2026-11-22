@@ -7,7 +7,7 @@ import type { ClosedTab, HistoryEntry } from "../browser/types";
 import { withImportedCleaned } from "../pins/importedCleaned";
 import { isWebPageUrl } from "../../lib/url";
 
-export type HistoryView = { list: HistoryEntry[]; floor: number; ready: boolean };
+export type HistoryView = { list: HistoryEntry[]; floor: number; ready: boolean; reloads?: number };
 
 export type HistorySlice = {
   history: Record<string, HistoryView>;

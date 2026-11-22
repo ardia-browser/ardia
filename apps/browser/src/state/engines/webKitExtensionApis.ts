@@ -261,7 +261,15 @@ const tabGroups: Record<string, Handler> = {
     });
     return chromeTabGroup(store(), store().groups[group.id] ?? group);
   },
-  move: (call, s) => chromeTabGroup(s, groupTarget(call, s, call.args[0])),
+  move: (call, s) => {
+    const group = groupTarget(call, s, call.args[0]);
+    const props = optionsOf(call.args[1]);
+    if (typeof props.index !== "number" || !Number.isInteger(props.index) || props.index < -1) fail("Invalid index.");
+    const windowId = props.windowId === undefined ? group.windowId : (windowOfRef(s, refsOf(call), props.windowId) ?? fail(`No window with id: ${String(props.windowId)}.`));
+    if (props.index !== -1) fail("Ardia keeps groups in the sidebar's order, so a group can only move to the end of a window (index -1).");
+    if (windowId !== group.windowId) store().moveGroupToWindow(group.id, windowId, { background: true });
+    return chromeTabGroup(store(), store().groups[group.id] ?? group);
+  },
   group: (call, s) => {
     const options = optionsOf(call.args[0]);
     const tabs = tabsOf(call, options.tabIds);
@@ -280,11 +288,30 @@ const tabGroups: Record<string, Handler> = {
 
 const handlers: Record<string, Record<string, Handler>> = { downloads: downloadHandlers, history, bookmarks, tabGroups, ...moreHandlers };
 
+const BOOKMARKS_READY_MS = 5000;
+
+function bookmarksLoaded(engine: string): Promise<void> {
+  if (store().bookmarksReady[engine]) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      stop();
+      reject(new Error("Bookmarks aren't ready."));
+    }, BOOKMARKS_READY_MS);
+    const stop = useBrowser.subscribeTo(["bookmarksReady"], (s) => {
+      if (!s.bookmarksReady[engine]) return;
+      clearTimeout(timer);
+      stop();
+      resolve();
+    });
+  });
+}
+
 export async function answerExtensionCall(call: WebKitExtensionCall): Promise<{ result: unknown } | { error: string }> {
   const group = Object.hasOwn(handlers, call.api) ? handlers[call.api] : undefined;
   const handler = group && Object.hasOwn(group, call.method) ? group[call.method] : undefined;
   if (!handler) return { error: `${call.api}.${call.method} isn't supported.` };
   try {
+    if (call.api === "bookmarks") await bookmarksLoaded(call.base);
     const result = await handler(call, store());
     return { result: result === undefined ? null : result };
   } catch (error) {

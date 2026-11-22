@@ -14,6 +14,7 @@ final class WebKitExtensions {
     var apis: Set<String> = []
     var nativeMessaging = false
     var grants = WebKitExtensionGrants.none
+    var unstaged = false
   }
 
   static let shared = WebKitExtensions()
@@ -94,6 +95,7 @@ final class WebKitExtensions {
       want.signature = staged.signature
       want.apis = staged.apis
       want.nativeMessaging = staged.nativeMessaging
+      want.unstaged = staged.unstaged
       return want
     }
     return result
@@ -225,6 +227,12 @@ final class WebKitExtensions {
   func tabChanged(_ tab: WebKitTab) {
     guard #available(macOS 15.4, *) else { return }
     liveHub(tab.profile)?.tabChanged(tab)
+  }
+
+  func extensionIds(profile: String) -> Set<String> {
+    var ids = Set((wantedByProfile[ArdiaHost.baseProfile(of: profile)] ?? []).map(\.id))
+    if #available(macOS 15.4, *) { for hub in allHubs() where ArdiaHost.baseProfile(of: hub.profile) == ArdiaHost.baseProfile(of: profile) { ids.formUnion(hub.loaded.keys) } }
+    return ids
   }
 
   func forgetProfile(_ profile: String) {

@@ -12,9 +12,11 @@ extension WebKitExtensionShimNamespace {
         const applied = async (run) => {
           try {
             await run();
+            return true;
           } catch (error) {
             console.error(error);
             direct("declarativeNetRequest", "noteApplyFailure", []).catch(() => {});
+            return false;
           }
         };
         let stopped = false;
@@ -34,7 +36,7 @@ extension WebKitExtensionShimNamespace {
           }
         };
         const mirror = async (kinds) => {
-          if (stopped) return;
+          if (stopped) return true;
           let state;
           try {
             state = await direct("declarativeNetRequest", "mirrorState", [kinds.includes("rulesets") ? [...new Set([...kinds, "disabled"])] : kinds]);
@@ -43,23 +45,25 @@ extension WebKitExtensionShimNamespace {
               stopped = true;
               if (BACKGROUND) hold("declarativeNetRequest", false);
             }
-            return;
+            return false;
           }
-          if (!state) return;
-          if (Array.isArray(state.dynamic)) await applied(() => replace("getDynamicRules", "updateDynamicRules", state.dynamic));
-          if (Array.isArray(state.session)) await applied(() => replace("getSessionRules", "updateSessionRules", state.session));
+          if (!state) return true;
+          let ok = true;
+          if (Array.isArray(state.dynamic)) ok = (await applied(() => replace("getDynamicRules", "updateDynamicRules", state.dynamic))) && ok;
+          if (Array.isArray(state.session)) ok = (await applied(() => replace("getSessionRules", "updateSessionRules", state.session))) && ok;
           if (Array.isArray(state.rulesets)) {
-            await applied(async () => {
+            ok = (await applied(async () => {
               const now = (await call("getEnabledRulesets")) || [];
               const enableRulesetIds = state.rulesets.filter((id) => !now.includes(id));
               const disableRulesetIds = now.filter((id) => !state.rulesets.includes(id));
               if (enableRulesetIds.length || disableRulesetIds.length) await call("updateEnabledRulesets", { enableRulesetIds, disableRulesetIds });
-            });
+            })) && ok;
           }
-          if (state.disabled && typeof state.disabled === "object") await applied(() => disabled(state.disabled));
+          if (state.disabled && typeof state.disabled === "object") ok = (await applied(() => disabled(state.disabled))) && ok;
+          return ok;
         };
         const queue = (kinds) => {
-          running = running.then(() => mirror(kinds)).catch((error) => console.error(error));
+          running = running.then(() => mirror(kinds)).catch((error) => (console.error(error), false));
           return running;
         };
         const writes = { updateDynamicRules: "dynamic", updateSessionRules: "session", updateEnabledRulesets: "rulesets", updateStaticRules: "static" };
@@ -72,7 +76,8 @@ extension WebKitExtensionShimNamespace {
               if (!stopped) {
                 try {
                   await direct("declarativeNetRequest", "update", [kind, options && typeof options === "object" ? options : {}]);
-                  await queue(kind === "static" ? ["rulesets"] : [kind]);
+                  if (!BACKGROUND) return undefined;
+                  if (!(await queue(kind === "static" ? ["rulesets"] : [kind]))) throw new Error("WebKit couldn't apply the updated rules; Chromium kept them and WebKit tries again on the next change.");
                   return undefined;
                 } catch (error) {
                   if (!isUnshared(error)) throw error;

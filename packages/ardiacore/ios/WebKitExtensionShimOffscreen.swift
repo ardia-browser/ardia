@@ -8,11 +8,17 @@ final class WebKitExtensionOffscreen: NSObject, WKNavigationDelegate {
     "LOCAL_STORAGE", "WORKERS", "BATTERY_STATUS", "MATCH_MEDIA", "GEOLOCATION",
   ]
   static let loadDeadline: TimeInterval = 15
+  static let silentAudioLimit: TimeInterval = 30
+  static let audioCheckInterval: TimeInterval = 5
+  static let notLoaded = "Page failed to load."
+  static let closedEarly = "The offscreen document was closed before it loaded."
 
   private struct Document {
     let view: WKWebView
     let url: URL
     var ready: [(String?) -> Void]
+    let audioOnly: Bool
+    var heard = Date()
   }
 
   private var documents: [String: Document] = [:]
@@ -30,31 +36,52 @@ final class WebKitExtensionOffscreen: NSObject, WKNavigationDelegate {
     guard let configuration = context.webViewConfiguration else { return done("The extension isn't loaded.") }
     let view = WKWebView(frame: NSRect(x: 0, y: 0, width: 800, height: 600), configuration: configuration)
     view.navigationDelegate = self
-    documents[extensionId] = Document(view: view, url: url, ready: [done])
+    documents[extensionId] = Document(view: view, url: url, ready: [done], audioOnly: Set(reasons) == ["AUDIO_PLAYBACK"])
     view.load(URLRequest(url: url))
     DispatchQueue.main.asyncAfter(deadline: .now() + Self.loadDeadline) { [weak self, weak view] in
       MainActor.assumeIsolated {
-        guard let self, let view else { return }
-        self.finish(view, nil)
+        guard let self, let view, let (id, document) = self.documents.first(where: { $0.value.view === view }), !document.ready.isEmpty else { return }
+        self.documents.removeValue(forKey: id)
+        self.tearDown(document, Self.notLoaded)
+      }
+    }
+    if documents[extensionId]?.audioOnly == true { watchAudio(extensionId, view: view) }
+  }
+
+  private func watchAudio(_ extensionId: String, view: WKWebView) {
+    DispatchQueue.main.asyncAfter(deadline: .now() + Self.audioCheckInterval) { [weak self, weak view] in
+      MainActor.assumeIsolated {
+        guard let self, let view, self.documents[extensionId]?.view === view else { return }
+        view.requestMediaPlaybackState { state in
+          MainActor.assumeIsolated {
+            guard self.documents[extensionId]?.view === view else { return }
+            if state == .playing { self.documents[extensionId]?.heard = Date() }
+            if let heard = self.documents[extensionId]?.heard, Date().timeIntervalSince(heard) >= Self.silentAudioLimit {
+              _ = self.close(extensionId)
+              return
+            }
+            self.watchAudio(extensionId, view: view)
+          }
+        }
       }
     }
   }
 
   func close(_ extensionId: String) -> String? {
     guard let document = documents.removeValue(forKey: extensionId) else { return "No current offscreen document." }
-    tearDown(document)
+    tearDown(document, Self.closedEarly)
     return nil
   }
 
   func closeAll(of extensionId: String? = nil) {
     for (id, document) in documents where extensionId == nil || id == extensionId {
       documents.removeValue(forKey: id)
-      tearDown(document)
+      tearDown(document, Self.closedEarly)
     }
   }
 
-  private func tearDown(_ document: Document) {
-    document.ready.forEach { $0(nil) }
+  private func tearDown(_ document: Document, _ pending: String) {
+    document.ready.forEach { $0(pending) }
     document.view.navigationDelegate = nil
     document.view.stopLoading()
     document.view.loadHTMLString("", baseURL: nil)
@@ -73,10 +100,10 @@ final class WebKitExtensionOffscreen: NSObject, WKNavigationDelegate {
   }
 
   nonisolated func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: any Error) {
-    MainActor.assumeIsolated { finish(webView, "Page failed to load.") }
+    MainActor.assumeIsolated { finish(webView, Self.notLoaded) }
   }
 
   nonisolated func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: any Error) {
-    MainActor.assumeIsolated { finish(webView, "Page failed to load.") }
+    MainActor.assumeIsolated { finish(webView, Self.notLoaded) }
   }
 }

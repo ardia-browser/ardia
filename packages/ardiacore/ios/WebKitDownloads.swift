@@ -25,7 +25,9 @@ final class WebKitDownloads: NSObject, WKDownloadDelegate {
   }
 
   private final class Item {
-    let uuid = UUID().uuidString
+    var uuid = UUID().uuidString
+    var requestedName: String?
+    var saveAs: Bool?
     var id: String { WebKitDownloads.idPrefix + uuid }
     var download: WKDownload?
     weak var webView: WKWebView?
@@ -74,8 +76,11 @@ final class WebKitDownloads: NSObject, WKDownloadDelegate {
     }
   }
 
-  func adopt(_ download: WKDownload, profile: String, webView: WKWebView?) {
+  func adopt(_ download: WKDownload, profile: String, webView: WKWebView?, uuid: String? = nil, name: String? = nil, saveAs: Bool? = nil) {
     let item = Item(url: download.originalRequest?.url?.absoluteString ?? "", profile: profile)
+    if let uuid { item.uuid = uuid }
+    item.requestedName = name
+    item.saveAs = saveAs
     item.webView = webView
     item.referrer = webView?.backForwardList.currentItem?.url
     item.request = download.originalRequest
@@ -183,7 +188,7 @@ final class WebKitDownloads: NSObject, WKDownloadDelegate {
       report(item)
       return completionHandler(file)
     }
-    let name = WebKitDownloadNames.safe(suggestedFilename.isEmpty ? (response.suggestedFilename ?? "download") : suggestedFilename)
+    let name = WebKitDownloadNames.safe(item.requestedName ?? (suggestedFilename.isEmpty ? (response.suggestedFilename ?? "download") : suggestedFilename))
     item.mimeType = response.mimeType ?? ""
     item.total = max(0, response.expectedContentLength)
     let accept = { (target: URL?, replacing: Bool) in
@@ -203,7 +208,8 @@ final class WebKitDownloads: NSObject, WKDownloadDelegate {
       self.report(item)
       completionHandler(file)
     }
-    resolveDestination(for: item.profile) { folder, ask in
+    resolveDestination(for: item.profile) { folder, preference in
+      let ask = item.saveAs ?? preference
       guard ask, !LaunchConfig.shared.background else { return accept(folder.appendingPathComponent(name), false) }
       let panel = NSSavePanel()
       panel.directoryURL = folder

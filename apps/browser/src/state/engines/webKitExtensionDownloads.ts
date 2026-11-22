@@ -117,8 +117,8 @@ export function searchDownloads(items: ChromeDownload[], query: Options): Chrome
   return limit > 0 ? found.slice(0, limit) : found;
 }
 
-function waitForDownload(url: string, before: ReadonlySet<string>): Promise<number> {
-  const pick = (s: BrowserState) => s.downloads.find((d) => d.url === url && !before.has(d.id));
+function waitForDownload(url: string, before: ReadonlySet<string>, id?: string): Promise<number> {
+  const pick = (s: BrowserState) => s.downloads.find((d) => (id ? d.id === id : d.url === url && !before.has(d.id)));
   const now = pick(store());
   if (now) return Promise.resolve(numberFor("download", now.id));
   return new Promise((resolve, reject) => {
@@ -141,7 +141,10 @@ const downloadsSeen = (s: BrowserState) => new Set(s.downloads.map((d) => d.id))
 const answeredInTime = (call: WebKitExtensionCall) => call.answerBy === undefined || Date.now() <= call.answerBy;
 
 export const downloadHandlers: Record<string, Handler> = {
-  download: (call, s) => waitForDownload(textOf(optionsOf(call.args[0]).url), downloadsSeen(s)),
+  download: (call, s) => {
+    const started = optionsOf(call.args[0]);
+    return waitForDownload(textOf(started.url), downloadsSeen(s), typeof started.id === "string" && started.id ? started.id : undefined);
+  },
   search: (call, s) => searchDownloads(downloadsFor(s, call.profile, call.base, call.private).map((d) => chromeDownload(d)), optionsOf(call.args[0])),
   pause: async (call, s) => void (await pauseDownload(downloadOf(call, s, call.args[0]).id)),
   resume: async (call, s) => void (await resumeDownload(downloadOf(call, s, call.args[0]).id)),

@@ -203,6 +203,22 @@ enum WebKitExtensionShim {
       };
       const isUnshared = (error) => !!error && error.message === UNSHARED;
 
+      const callbackError = (error, callback) => {
+        const lastError = { message: String((error && error.message) || error || "An unknown error occurred.") };
+        if (!viewed.has("runtime")) viewed.set("runtime", new Map());
+        const overrides = viewed.get("runtime");
+        const had = overrides.has("lastError");
+        const before = overrides.get("lastError");
+        overrides.set("lastError", lastError);
+        viewPaths.add("runtime");
+        showViews();
+        try {
+          callback();
+        } finally {
+          if (had) overrides.set("lastError", before);
+          else overrides.delete("lastError");
+        }
+      };
       const withCallback = (run) =>
         function (...args) {
           const callback = typeof args[args.length - 1] === "function" ? args.pop() : null;
@@ -210,10 +226,7 @@ enum WebKitExtensionShim {
           if (!callback) return done;
           done.then(
             (value) => callback(value),
-            (error) => {
-              console.error(error);
-              callback();
-            },
+            (error) => callbackError(error, callback),
           );
           return undefined;
         };
@@ -471,10 +484,7 @@ enum WebKitExtensionShim {
               .catch(() => undefined)
               .then(() => execute(injection));
             if (!callback) return done;
-            done.then(callback, (error) => {
-              console.error(error);
-              callback();
-            });
+            done.then(callback, (error) => callbackError(error, callback));
             return undefined;
           });
         }
@@ -491,10 +501,7 @@ enum WebKitExtensionShim {
               .catch(() => undefined)
               .then(() => tabsExecute(...within(details)));
             if (!callback) return done;
-            done.then(callback, (error) => {
-              console.error(error);
-              callback();
-            });
+            done.then(callback, (error) => callbackError(error, callback));
             return undefined;
           });
         }

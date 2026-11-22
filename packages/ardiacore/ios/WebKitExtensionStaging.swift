@@ -7,6 +7,7 @@ struct WebKitExtensionStaging {
     let apis: Set<String>
     let nativeMessaging: Bool
     let signature: String
+    var unstaged = false
   }
 
   static let revision = 7
@@ -68,7 +69,9 @@ struct WebKitExtensionStaging {
     } catch {
       NSLog("[webkit] extension %@ couldn't be staged: %@", id, error.localizedDescription)
       try? FileManager.default.removeItem(at: scratch)
-      return plain
+      var failed = plain
+      failed.unstaged = true
+      return failed
     }
   }
 
@@ -95,17 +98,17 @@ struct WebKitExtensionStaging {
     contentScripts.filter { !(($0["js"] as? [String]) ?? []).contains(pageFile) }.flatMap { $0["matches"] as? [String] ?? [] }
   }
 
-  private static func newestChange(in folder: URL) -> Int {
-    let keys: [URLResourceKey] = [.contentModificationDateKey, .isRegularFileKey]
-    guard let files = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: keys) else { return 0 }
-    var newest = 0.0
-    var count = 0
+  private static func newestChange(in folder: URL) -> String {
+    let keys: [URLResourceKey] = [.contentModificationDateKey, .isRegularFileKey, .fileSizeKey]
+    guard let files = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: keys) else { return "" }
+    let base = folder.standardizedFileURL.path
+    var entries: [String] = []
     for case let file as URL in files {
       guard let values = try? file.resourceValues(forKeys: Set(keys)), values.isRegularFile == true else { continue }
-      count += 1
-      newest = max(newest, values.contentModificationDate?.timeIntervalSince1970 ?? 0)
+      let path = String(file.standardizedFileURL.path.dropFirst(base.count))
+      entries.append("\(path)\u{1}\(values.fileSize ?? -1)\u{1}\(values.contentModificationDate?.timeIntervalSince1970.bitPattern ?? 0)")
     }
-    return Int(newest) * 100_000 + count
+    return version(of: entries.sorted().joined(separator: "\n"))
   }
 
   private static func write(_ manifest: [String: Any], from source: URL, to target: URL, apis: Set<String>, permissions granted: Set<String>,
@@ -137,7 +140,7 @@ struct WebKitExtensionStaging {
         + [["matches": connectable, "js": [pageFile], "world": "MAIN", "run_at": "document_start", "all_frames": true]]
     }
     var background = manifest["background"] as? [String: Any] ?? [:]
-    if background.isEmpty, contentShim {
+    if background.isEmpty, contentShim || (apis.contains("declarativeNetRequest") && shared.contains("dnr")) {
       background = (manifest["manifest_version"] as? Int ?? 2) >= 3 ? ["service_worker": backgroundFlagFile] : ["scripts": [backgroundFlagFile], "persistent": false]
     }
     let backgroundPath = (background["service_worker"] as? String).map(relative) ?? ""
@@ -228,15 +231,32 @@ struct WebKitExtensionStaging {
     let shim = "<script src=\"/\(WebKitExtensionShim.fileName)\"></script>"
     let tag = background ? "<script src=\"/\(backgroundFlagFile)\"></script>" + shim : shim
     guard !html.contains(shim) else { return html }
+    let comments = commentRanges(in: html)
     for opener in ["<head[\\s>]", "<html[\\s>]"] {
-      guard let start = html.range(of: opener, options: [.regularExpression, .caseInsensitive]),
-        let end = html.range(of: ">", range: start.lowerBound..<html.endIndex)
-      else { continue }
-      return html.replacingCharacters(in: end.upperBound..<end.upperBound, with: tag)
+      var from = html.startIndex
+      while let start = html.range(of: opener, options: [.regularExpression, .caseInsensitive], range: from..<html.endIndex) {
+        if let comment = comments.first(where: { $0.contains(start.lowerBound) }) {
+          from = comment.upperBound
+          continue
+        }
+        guard let end = html.range(of: ">", range: start.lowerBound..<html.endIndex) else { break }
+        return html.replacingCharacters(in: end.upperBound..<end.upperBound, with: tag)
+      }
     }
     let doctype = html.range(of: "<!doctype", options: .caseInsensitive).flatMap { html.range(of: ">", range: $0.upperBound..<html.endIndex) }
     guard let doctype else { return tag + html }
     return html.replacingCharacters(in: doctype.upperBound..<doctype.upperBound, with: tag)
+  }
+
+  private static func commentRanges(in html: String) -> [Range<String.Index>] {
+    var ranges: [Range<String.Index>] = []
+    var from = html.startIndex
+    while let open = html.range(of: "<!--", range: from..<html.endIndex) {
+      let close = html.range(of: "-->", range: open.upperBound..<html.endIndex)?.upperBound ?? html.endIndex
+      ranges.append(open.lowerBound..<close)
+      from = close
+    }
+    return ranges
   }
 
   private static func injectPages(in folder: URL, background: String?) throws {

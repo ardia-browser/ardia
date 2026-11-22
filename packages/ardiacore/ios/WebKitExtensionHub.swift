@@ -112,6 +112,10 @@ final class WebKitExtensionHub: NSObject, WKWebExtensionControllerDelegate {
           continue
         }
         if loaded[want.id] != nil { unload(want.id) }
+        guard !want.unstaged else {
+          failed.append(want.id)
+          continue
+        }
         do {
           let webExtension = try await WKWebExtension(resourceBaseURL: want.folder)
           guard !closed else { continue }
@@ -173,11 +177,19 @@ final class WebKitExtensionHub: NSObject, WKWebExtensionControllerDelegate {
       request.setValue(value, forHTTPHeaderField: name)
     }
     if let body = options["body"] as? String { request.httpBody = Data(body.utf8) }
+    let filename = (options["filename"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+    if let filename, filename.hasPrefix("/") || filename.split(separator: "/").contains(where: { $0 == ".." || $0 == "." }) {
+      throw WebKitExtensionBridge.failure("Invalid filename")
+    }
+    let saveAs = options["saveAs"] as? Bool
     let view: WKWebView = openTabs().first?.webView ?? WebKitHub.shared.resumeHost(for: profile)
     let owner = profile
-    view.startDownload(using: request) { [weak view] download in WebKitHub.shared.downloads.adopt(download, profile: owner, webView: view) }
-    var started: [String: Any] = ["url": url.absoluteString]
-    if let filename = options["filename"] as? String { started["filename"] = filename }
+    let uuid = UUID().uuidString
+    view.startDownload(using: request) { [weak view] download in
+      WebKitHub.shared.downloads.adopt(download, profile: owner, webView: view, uuid: uuid, name: filename.map { ($0 as NSString).lastPathComponent }, saveAs: saveAs)
+    }
+    var started: [String: Any] = ["url": url.absoluteString, "id": WebKitDownloads.idPrefix + uuid]
+    if let filename { started["filename"] = filename }
     return started
   }
 

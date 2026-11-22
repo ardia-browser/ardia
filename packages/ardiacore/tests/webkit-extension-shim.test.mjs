@@ -69,6 +69,22 @@ function listenerSet() {
   return { addListener: (l) => set.add(l), fire: (...args) => [...set].forEach((l) => l(...args)) };
 }
 
+test("a callback-style call that fails sees runtime.lastError, and only while its callback runs", async () => {
+  const sent = [];
+  const browser = {
+    runtime: { sendNativeMessage: async (application, message) => (sent.push(message), { error: "Can't find bookmark for id." }), connectNative: () => ({ onMessage: listenerSet(), onDisconnect: listenerSet(), postMessage() {} }) },
+    tabs: { get: async () => null, query: async () => [] },
+    windows: { getAll: async () => [], getCurrent: async () => ({ id: 1 }) },
+  };
+  const context = { browser, chrome: browser, console, setTimeout, Promise, Object, Array, Set, Map, WeakMap, Error, JSON, String, Number };
+  context.globalThis = context;
+  vm.runInNewContext(shim(["bookmarks"]), context);
+  const seen = await new Promise((resolve) => context.chrome.bookmarks.get("99", () => resolve(context.chrome.runtime.lastError && context.chrome.runtime.lastError.message)));
+  assert.equal(seen, "Can't find bookmark for id.");
+  assert.equal(context.chrome.runtime.lastError, undefined, "lastError is gone once the callback returns");
+  await assert.rejects(context.chrome.bookmarks.get("99"), /Can't find bookmark/, "a promise caller still gets the rejection");
+});
+
 test("the shim adds only the APIs it was staged with, and never replaces one the engine has", () => {
   const ownHistory = { search: () => "engine" };
   const { browser } = load(["bookmarks", "history"], { extra: { history: ownHistory } });
@@ -633,6 +649,7 @@ test("a rule change made in WebKit is written to Chromium first and comes back t
     apis: ["runtime", "declarativeNetRequest"],
     permissions: ["declarativeNetRequest"],
     shared: ["dnr"],
+    background: "bg.js",
     extra: { declarativeNetRequest: dnr },
     answer: (m) => {
       if (m.method === "update" && m.args[0] === "dynamic") chromium = { ...chromium, dynamic: m.args[1].addRules };
@@ -641,6 +658,9 @@ test("a rule change made in WebKit is written to Chromium first and comes back t
       return { result: null };
     },
   });
+  await tick();
+  page.sent.length = 0;
+  native.length = 0;
   const rule = { id: 3, action: { type: "block" }, condition: { urlFilter: "ads" } };
   await page.browser.declarativeNetRequest.updateDynamicRules({ addRules: [rule] });
   assert.deepEqual(
@@ -659,9 +679,25 @@ test("a rule change made in WebKit is written to Chromium first and comes back t
   assert.deepEqual(plain(native), [["static", { rulesetId: "main", disableRuleIds: [9], enableRuleIds: [] }]], "a disabled static rule reaches WebKit too");
 
   page.sent.length = 0;
-  await page.browser.declarativeNetRequest.updateDynamicRules({ addRules: [{ id: 4, action: { type: "unsupported" }, condition: {} }] });
+  await assert.rejects(
+    page.browser.declarativeNetRequest.updateDynamicRules({ addRules: [{ id: 4, action: { type: "unsupported" }, condition: {} }] }),
+    /WebKit couldn't apply/,
+    "a rule WebKit can't apply fails the write instead of reporting success",
+  );
   await tick();
   assert.ok(page.sent.some((m) => m.method === "noteApplyFailure"), "a rule WebKit can't apply is counted, not just logged");
+
+  const popup = world({
+    apis: ["runtime", "declarativeNetRequest"],
+    permissions: ["declarativeNetRequest"],
+    shared: ["dnr"],
+    extra: { declarativeNetRequest: dnr },
+    answer: () => ({ result: null }),
+  });
+  native.length = 0;
+  await popup.browser.declarativeNetRequest.updateDynamicRules({ addRules: [rule] });
+  assert.deepEqual(plain(popup.sent.map((m) => m.method)), ["update"], "a page writes to Chromium and leaves mirroring to the background, so its snapshot can't undo a newer one");
+  assert.deepEqual(native, []);
 
   const fallback = [];
   const old = world({

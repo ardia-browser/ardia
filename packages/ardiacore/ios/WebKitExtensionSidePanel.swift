@@ -17,7 +17,8 @@ struct WebKitExtensionSidePanel: Equatable {
 
   func options(tab: String?) -> Options {
     let own = tab.flatMap { tabs[$0] }
-    return Options(path: own?.path ?? defaults.path, enabled: own?.enabled ?? defaults.enabled ?? true)
+    guard let own else { return Options(path: defaults.path, enabled: defaults.enabled ?? true) }
+    return Options(path: own.path ?? defaults.path, enabled: own.enabled ?? true)
   }
 
   func page(tab: String?) -> String? {

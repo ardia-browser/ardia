@@ -67,8 +67,14 @@ final class WebKitExtensionSpeech: NSObject, AVSpeechSynthesizerDelegate {
   }
 
   func stop(extensionId: String) {
+    let dropped = queue.filter { $0.extensionId == extensionId }
     queue.removeAll { $0.extensionId == extensionId }
-    if current?.extensionId == extensionId { stop() }
+    for spoken in dropped { send(spoken, "cancelled", index: 0) }
+    guard let current, current.extensionId == extensionId else { return }
+    self.current = nil
+    send(current, "interrupted", index: 0)
+    synthesizer.stopSpeaking(at: .immediate)
+    next()
   }
 
   func pause() {

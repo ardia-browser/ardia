@@ -35,7 +35,8 @@ const WEBKIT_LIMITS: LimitGroup[] = [
     limits: [
       { label: "chrome.debugger", detail: "Not supported" },
       { label: "webRequest", detail: "Can watch but not block or change" },
-      { label: "Extension State", detail: "Storage, alarms, permissions kept apart" },
+      { label: "Extension State", detail: "Shared through chrome.*, not browser.*" },
+      { label: "Notifications", detail: "Not supported" },
     ],
   },
   {

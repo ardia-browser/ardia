@@ -253,7 +253,7 @@ extension WebKitExtensionHub {
     let muted = configuration.shouldBeMuted
     ask("create", payload) { [weak self] reply in
       if let error = Self.failure(reply) { return completionHandler(nil, error) }
-      guard configuration.url != nil else { return completionHandler(nil, nil) }
+      guard configuration.url != nil || reply["webKit"] as? Bool == true else { return completionHandler(nil, Self.openedInChromium) }
       self?.awaitTab(reply["tabId"] as? String) { tab in
         if muted { tab?.setMuted(true) }
         completionHandler(tab, nil)
@@ -278,7 +278,8 @@ extension WebKitExtensionHub {
     let state = configuration.windowState
     ask("createWindow", payload) { [weak self] reply in
       if let error = Self.failure(reply) { return completionHandler(nil, error) }
-      guard let self, !moved.isEmpty || !urls.isEmpty else { return completionHandler(nil, nil) }
+      guard let self else { return completionHandler(nil, nil) }
+      guard !moved.isEmpty || !urls.isEmpty || reply["webKit"] as? Bool == true else { return completionHandler(nil, Self.openedInChromium) }
       self.awaitTab(reply["tabId"] as? String, replacing: movedTabs) { tab in
         guard let tab else { return completionHandler(nil, nil) }
         self.awaitHost(tab, until: Date().addingTimeInterval(Self.shownDeadline)) { window in

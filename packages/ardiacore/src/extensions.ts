@@ -107,7 +107,7 @@ export type WebKitTabsRequest = WebKitTabsAsk &
     | { op: "focusWindow"; windowId: string }
   );
 
-export type WebKitTabsReply = { tabId?: string; windowId?: string; error?: string };
+export type WebKitTabsReply = { tabId?: string; windowId?: string; webKit?: boolean; error?: string };
 
 export type WebKitTabLayout = {
   windows: { id: string; tabs: string[]; pinned: string[] }[];

@@ -220,11 +220,15 @@ extension WebKitExtensionHub {
   func awaitShown(_ tab: WebKitTab, done: @escaping () -> Void) {
     guard !isActive(tab) else { return done() }
     let key = "shown:\(ObjectIdentifier(tab).hashValue)"
-    arrivals.removeValue(forKey: key)?.done(nil)
+    let displaced = arrivals.removeValue(forKey: key)
+    displaced?.timeout.cancel()
     let timeout = DispatchWorkItem { [weak self] in
       MainActor.assumeIsolated { self?.arrivals.removeValue(forKey: key)?.done(nil) }
     }
-    arrivals[key] = Arrival(done: { _ in done() }, timeout: timeout)
+    arrivals[key] = Arrival(done: { tab in
+      displaced?.done(tab)
+      done()
+    }, timeout: timeout)
     DispatchQueue.main.asyncAfter(deadline: .now() + Self.shownDeadline, execute: timeout)
   }
 
@@ -235,6 +239,8 @@ extension WebKitExtensionHub {
     arrival.timeout.cancel()
     arrival.done(tab)
   }
+
+  static let openedInChromium = WebKitExtensionBridge.failure("The new tab opened on the start page in Chromium, which the extension's WebKit copy can't see.")
 
   static func failure(_ reply: [String: Any]) -> NSError? {
     (reply["error"] as? String).map(WebKitExtensionBridge.failure)

@@ -7,12 +7,15 @@ import { useBrowser, type BrowserState } from "../browser/store";
 import { tabEngine } from "../engines/engines";
 import { isPeekTab } from "../peek/peek";
 import { asAdoptId } from "../tabs/adoptIds";
+import { usePages } from "../tabs/pageState";
 import { chromeChanged } from "../tabs/liveTabs";
 import { errorText } from "../../lib/errors";
 import { extensionProfile, readyTabOf, useExtensions } from "./store";
 
 type Request<O extends WebKitTabsRequest["op"]> = Extract<WebKitTabsRequest, { op: O }>;
-type Reply = { tabId?: string; windowId?: string };
+type Reply = { tabId?: string; windowId?: string; webKit?: boolean };
+
+const inWebKit = (tabId: string | undefined) => !!tabId && !!store().tabs[tabId] && tabEngine(store(), tabId) === "webkit";
 
 const CHROMIUM_SOURCES = 3;
 const store = () => useBrowser.getState();
@@ -124,7 +127,7 @@ function create(request: Request<"create">): Reply {
     pinned: request.pinned || undefined,
     index: anchor >= 0 ? anchor : undefined,
   });
-  return { tabId: tabId || undefined, windowId };
+  return { tabId: tabId || undefined, windowId, webKit: inWebKit(tabId || undefined) };
 }
 
 function createWindow(request: Request<"createWindow">): Reply {
@@ -150,7 +153,7 @@ function createWindow(request: Request<"createWindow">): Reply {
     if (!moving.length && i === 0) return;
     store().newTab(windowId!, { url, adoptId: asAdoptId(request.adoptIds[i]), background: true, profileId });
   });
-  return { tabId, windowId };
+  return { tabId, windowId, webKit: inWebKit(tabId) };
 }
 
 function privateOriginal(s: BrowserState, sourceProfile: string | undefined, engine: string): string | undefined {
@@ -224,6 +227,9 @@ export function startWebKitTabs() {
   });
   useExtensions.subscribe((e, prev) => {
     if (e.lists !== prev.lists) push();
+  });
+  usePages.subscribe((p, prev) => {
+    if (p.ready !== prev.ready) push();
   });
   push();
 }

@@ -103,13 +103,20 @@ extension WebKitExtensionBridge {
     guard var entry = externals[request], entry.waiting.contains(key) else { return }
     if body["responded"] as? Bool == true {
       externals.removeValue(forKey: request)
-      if let channel = entry.channel { accept(channel, by: key) }
+      if let channel = entry.channel {
+        guard channels[channel] != nil else {
+          listeners[key]?.port.sendMessage(["ardia": 1, "signal": "portDisconnect", "channel": channel], completionHandler: nil)
+          return entry.reply(["error": Self.noReceiver], nil)
+        }
+        accept(channel, by: key)
+      }
       return entry.reply(["result": body["response"] ?? NSNull()], nil)
     }
     entry.waiting.remove(key)
     entry.listened = entry.listened || body["listened"] as? Bool == true
-    if entry.waiting.isEmpty, let next = entry.queue.first, let message = entry.body {
+    while entry.waiting.isEmpty, let next = entry.queue.first, let message = entry.body {
       entry.queue.removeFirst()
+      guard listeners[next] != nil else { continue }
       entry.waiting = [next]
       externals[request] = entry
       listeners[next]?.port.sendMessage(message, completionHandler: nil)
@@ -131,6 +138,7 @@ extension WebKitExtensionBridge {
   }
 
   func listenerGone(_ key: ObjectIdentifier) {
+    for (request, entry) in externals where entry.queue.contains(key) { externals[request]?.queue.removeAll { $0 == key } }
     for request in externals.filter({ $0.value.waiting.contains(key) }).map(\.key) {
       externalReplied(request, from: key, body: ["responded": false, "listened": true])
     }

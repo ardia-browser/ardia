@@ -167,23 +167,16 @@ final class WebKitHub: NSObject, WKScriptMessageHandler {
     if types.contains("siteData") { stores.forgetSitePermissions(of: profile) }
     guard !kinds.isEmpty else { return completion() }
     let store = stores.dataStore(for: profile)
-    let extensionIds = loadedExtensionIds()
+    let extensionIds = loadedExtensionIds().union(WebKitExtensions.shared.extensionIds(profile: profile))
     store.fetchDataRecords(ofTypes: kinds) { records in
       let held = records.filter { Self.belongsToExtension($0, ids: extensionIds) }
       let web = records.filter { !Self.belongsToExtension($0, ids: extensionIds) }
       guard since > 0 else { return store.removeData(ofTypes: kinds, for: web, completionHandler: completion) }
-      let wholesale = kinds.intersection(Self.workerTypes.union(held.flatMap(\.dataTypes)))
-      let ranged = kinds.subtracting(wholesale)
-      let removals = DispatchGroup()
-      if !ranged.isEmpty {
-        removals.enter()
-        store.removeData(ofTypes: ranged, modifiedSince: Date(timeIntervalSince1970: since / 1000)) { removals.leave() }
-      }
-      if !wholesale.isEmpty {
-        removals.enter()
-        store.removeData(ofTypes: wholesale, for: web) { removals.leave() }
-      }
-      removals.notify(queue: .main, execute: completion)
+      let undated = kinds.intersection(Self.workerTypes.union(held.flatMap(\.dataTypes)))
+      let ranged = kinds.subtracting(undated)
+      if !undated.isEmpty { NSLog("[webkit] a time-limited clear left %d data types it can't limit to the period", undated.count) }
+      guard !ranged.isEmpty else { return completion() }
+      store.removeData(ofTypes: ranged, modifiedSince: Date(timeIntervalSince1970: since / 1000), completionHandler: completion)
     }
   }
 

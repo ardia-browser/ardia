@@ -60,6 +60,13 @@ const listen = (apis) => emit("webKit.extensionListeners", { profile: "", base: 
 
 test("bookmarks read and write the app's own bookmarks, with Chrome's root ids, and refuse what Chrome refuses", async () => {
   windowWithTabs("https://home.example/");
+  useBrowser.setState({ bookmarksReady: {} });
+  let answered = false;
+  const early = ask("bookmarks", "getTree", []).then((tree) => ((answered = true), tree));
+  await tick(5);
+  assert.equal(answered, false, "a bookmark call waits until Chrome's bookmark numbers are in, so WebKit never hands out ids of its own");
+  useBrowser.setState({ bookmarksReady: { "": true } });
+  assert.equal((await early)[0].id, "0");
   const folder = await ask("bookmarks", "create", [{ parentId: "1", title: "Work" }]);
   assert.equal(folder.parentId, "1");
   const link = await ask("bookmarks", "create", [{ title: "Docs", url: "https://docs.example/" }]);
@@ -147,6 +154,8 @@ test("tab groups act on the sidebar's groups through the tabs the extension name
   assert.deepEqual(updated.windowId.__windowTabs.sort(), [...S().windows[w].tabIds].sort());
   assert.equal((await ask("tabGroups", "query", [{ windowId: { __window: 0 } }], { windows })).length, 1);
   assert.equal((await ask("tabGroups", "query", [{ color: "red" }])).length, 0);
+  await assert.rejects(ask("tabGroups", "move", [groupId, { index: 0 }]), /only move to the end/, "a position Ardia can't honour fails instead of reporting a move");
+  assert.equal((await ask("tabGroups", "move", [groupId, { index: -1 }])).id, groupId);
   await ask("tabGroups", "ungroup", [{ tabIds: [{ __tab: 0 }, { __tab: 1 }] }], { tabKeys: [tabs[0], tabs[1]] });
   assert.equal(Object.values(S().groups).length, 0);
   await tick();
@@ -178,6 +187,14 @@ test("downloads list the profile's downloads under stable numbers, follow their 
   S().upsertDownload(download({ id: "wk-download-2", url: "https://files.example/c.zip", filename: "c.zip", path: "/tmp/c.zip" }));
   const newId = await started;
   assert.equal((await ask("downloads", "search", [{ id: newId }]))[0].url, "https://files.example/c.zip");
+  const first = ask("downloads", "download", [{ url: "https://files.example/same.zip", id: "wk-download-same-1" }]);
+  const second = ask("downloads", "download", [{ url: "https://files.example/same.zip", id: "wk-download-same-2" }]);
+  await tick(5);
+  S().upsertDownload(download({ id: "wk-download-same-2", url: "https://files.example/same.zip", filename: "same.zip", path: "/tmp/same 2.zip" }));
+  S().upsertDownload(download({ id: "wk-download-same-1", url: "https://files.example/same.zip", filename: "same.zip", path: "/tmp/same.zip" }));
+  const [firstId, secondId] = await Promise.all([first, second]);
+  assert.notEqual(firstId, secondId, "two downloads of one URL each get their own id, whichever starts first");
+  assert.equal((await ask("downloads", "search", [{ id: secondId }]))[0].filename, "/tmp/same 2.zip");
   assert.deepEqual(await ask("downloads", "erase", [{ id: item.id }]), [item.id]);
   await tick();
   assert.ok(sentEvents.some((e) => e.event === "onErased" && e.args[0] === item.id));
@@ -202,6 +219,14 @@ test("history searches the profile's history the way Chrome does, last day by de
     ["onVisited", "https://fresh.example/"],
     ["onVisitRemoved", ["https://old.example/"]],
   ]);
+  sentEvents.length = 0;
+  const reload = (list) => useBrowser.setState((s) => ({ history: { ...s.history, "": { list, floor: -Infinity, ready: true, reloads: (s.history[""].reloads ?? 0) + 1 } } }));
+  reload([entry("https://loaded.example/", "Loaded", now - 5000), entry("https://fresh.example/", "Fresh", now)]);
+  await tick();
+  assert.deepEqual(sentEvents, [], "reloading the window of history the browser keeps loaded is neither a visit nor a removal");
+  reload([]);
+  await tick();
+  assert.deepEqual(sentEvents.map((e) => e.args[0]), [{ allHistory: true, urls: [] }], "a reload that finds history cleared still says so");
   listen([]);
 });
 

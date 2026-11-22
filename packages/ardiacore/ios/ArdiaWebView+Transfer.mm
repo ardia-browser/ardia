@@ -36,7 +36,7 @@ static NSString *SavedHistoryGeneration(ArdiaCoreProfile *profile) {
   return generation;
 }
 
-static ArdiaCoreTab *RestoreSavedHistory(ArdiaWindowController *controller, ArdiaCoreProfile *profile, NSString *key, NSString *url) {
+static ArdiaCoreTab *RestoreSavedHistory(ArdiaWindowController *controller, ArdiaCoreProfile *profile, NSString *key, NSString *url, BOOL load) {
   if (!key.length || !url.length || [BoundRestoreKeys() containsObject:key] || !profile.path.length ||
       profile.offTheRecord || !controller.coreWindow)
     return nil;
@@ -58,7 +58,7 @@ static ArdiaCoreTab *RestoreSavedHistory(ArdiaWindowController *controller, Ardi
   controller.hostChanges++;
   ArdiaCoreTab *tab = [controller.coreWindow restoreTab:state profile:profile foreground:NO];
   controller.hostChanges--;
-  [tab loadIfNeeded];
+  if (load) [tab loadIfNeeded];
   return tab;
 }
 
@@ -72,7 +72,7 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
   if (!profile || ardia_host::WasNavigationDownload(url, profileName)) return nil;
   ArdiaWindowController *keeper = [ArdiaWindowController strayWindowForProfile:profile];
   if (!keeper) return nil;
-  ArdiaCoreTab *tab = RestoreSavedHistory(keeper, profile, key, url);
+  ArdiaCoreTab *tab = RestoreSavedHistory(keeper, profile, key, url, YES);
   keeper.hostChanges++;
   if (!tab) tab = [keeper.coreWindow openTab:url profile:profile foreground:NO];
   keeper.hostChanges--;
@@ -124,6 +124,27 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
   [ArdiaTabParking claimLaunchTab:transferKey url:url profile:profile];
 }
 
++ (BOOL)materializeTab:(NSString *)transferKey
+                   url:(NSString *)url
+               profile:(NSString *)profileName
+                window:(NSString *)appWindowId {
+  if (!transferKey.length || !url.length || !appWindowId.length) return NO;
+  if ([ArdiaTabRegistry tabWithKey:transferKey]) return YES;
+  ArdiaCoreProfile *profile = ardia_host::LoadedProfile(profileName);
+  if (!profile || profile.offTheRecord) return NO;
+  for (ArdiaWindowController *controller in ArdiaWindowController.all) {
+    if (controller.stray || controller.standalone || !controller.coreWindow) continue;
+    if (![controller.appWindowId isEqualToString:appWindowId]) continue;
+    ArdiaCoreTab *tab = RestoreSavedHistory(controller, profile, transferKey, url, NO);
+    if (!tab) return NO;
+    [ArdiaTabRegistry rememberKey:transferKey forTab:tab];
+    [ArdiaServices call:@"ac_tab_restore_tag" profile:profileName args:@{@"tab" : @(tab.tabId), @"key" : transferKey} completion:^(NSDictionary *) {}];
+    [ArdiaTabStrip changedInWindow:controller profile:profile];
+    return YES;
+  }
+  return NO;
+}
+
 + (void)startLinkTabs:(NSArray<NSString *> *)urls profile:(NSString *)profileName {
   NSString *profile = [profileName copy] ?: @"";
   [ArdiaTabParking holdLinkTabs:urls profile:profile opening:^ArdiaCoreTab *(NSString *url) {
@@ -148,6 +169,14 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
 - (void)ensureTab {
   if (_tab || !_life.canCreate() || _life.offerClosed || !self.window || !ArdiaHost.isStarted || !self.controller) return;
   if ([self takeTransferredTab] != ArdiaTransferNone) return;
+  if (_transferKey.length) {
+    ArdiaCoreTab *existing = [ArdiaTabRegistry tabWithKey:_transferKey];
+    if (existing && !existing.closed && ![ArdiaTabRegistry viewForTab:existing] && [self canTake:existing]) {
+      [ArdiaTabRegistry expectFirstShowFocus:YES forTab:existing];
+      [self attach:existing];
+      return;
+    }
+  }
   if ([_adoptId hasPrefix:@"link:"]) {
     NSString *link = _adoptId;
     _adoptId = nil;
@@ -247,7 +276,7 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
     }
     if (url.length) ArdiaFieldMarkNow(view->_transferKey, @"request");
     ArdiaCoreTab *tab = !standalone && !userInitiated && !ardia_host::IsPrivateProfile(view->_profile)
-                            ? RestoreSavedHistory(controller, profile, view->_transferKey, url)
+                            ? RestoreSavedHistory(controller, profile, view->_transferKey, url, YES)
                             : nil;
     controller.hostChanges++;
     if (!tab) tab = [controller.coreWindow openTab:url.length ? url : @"" profile:profile foreground:NO];

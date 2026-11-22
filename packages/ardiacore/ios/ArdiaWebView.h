@@ -50,6 +50,10 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)releaseTransfer:(NSString *)transferKey;
 + (void)startLaunchTab:(NSString *)transferKey url:(NSString *)url profile:(NSString *)profile;
 + (void)claimLaunchTab:(NSString *)transferKey url:(NSString *)url profile:(NSString *)profile;
++ (BOOL)materializeTab:(NSString *)transferKey
+                   url:(NSString *)url
+               profile:(NSString *)profile
+                window:(NSString *)appWindowId;
 + (void)startLinkTabs:(NSArray<NSString *> *)urls profile:(NSString *)profile;
 + (NSDictionary<NSString *, id> *)routeLinkTabs:(NSArray<NSString *> *)urls;
 - (void)closeBrowser;

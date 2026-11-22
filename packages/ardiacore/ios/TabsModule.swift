@@ -24,6 +24,9 @@ public class TabsModule: Module {
     Function("claimLaunchTab") { (key: String, url: String, profile: String) in
       ArdiaWebView.claimLaunchTab(key, url: url, profile: profile)
     }
+    AsyncFunction("materializeTab") { (key: String, url: String, profile: String, window: String) -> Bool in
+      ArdiaWebView.materializeTab(key, url: url, profile: profile, window: window)
+    }.runOnQueue(.main)
     Function("revealTab") { (key: String, press: Int) in ArdiaWebView.revealTab(key, press: UInt(max(press, 0))) }
     Function("dropTabReveals") { (key: String, press: Int, incoming: String) in ArdiaWebView.dropTabReveals(key, press: UInt(max(press, 0)), to: incoming) }
     Function("claimTabPress") { (key: String, stamp: Double) -> Int in Int(ArdiaWebView.claimTabPress(key, stamp: stamp)) }

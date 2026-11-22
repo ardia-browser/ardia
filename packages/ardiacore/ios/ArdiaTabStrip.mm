@@ -83,6 +83,7 @@ NSDictionary *Strip(ArdiaWindowController *controller, ArdiaCoreProfile *profile
   for (NSUInteger i = 0; i < live.count; i++) {
     ArdiaCoreTab *tab = live[i];
     NSString *key = [ArdiaTabRegistry viewForTab:tab].transferKey;
+    if (!key.length) key = [ArdiaTabRegistry keyForTab:tab];
     [tabs addObject:@{
       @"key" : key.length ? key : NSNull.null,
       @"browser" : @(ardia_host::BrowserId(tab)),

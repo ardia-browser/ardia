@@ -15,6 +15,11 @@ NSMutableDictionary<NSString *, ArdiaCoreTab *> *Offered() {
   return offered;
 }
 
+NSMapTable<NSString *, ArdiaCoreTab *> *KeyedTabs() {
+  static NSMapTable *keyed = [NSMapTable strongToWeakObjectsMapTable];
+  return keyed;
+}
+
 NSHashTable<ArdiaCoreTab *> *AwaitingFirstShowFocus() {
   static NSHashTable *tabs = [NSHashTable weakObjectsHashTable];
   return tabs;
@@ -33,6 +38,30 @@ constexpr int64_t kOfferSeconds = 30;
 
 + (ArdiaWebView *)viewForTab:(ArdiaCoreTab *)tab {
   return [Views() objectForKey:tab];
+}
+
++ (void)rememberKey:(NSString *)key forTab:(ArdiaCoreTab *)tab {
+  if (!key.length || !tab) return;
+  for (NSString *old in [[KeyedTabs() keyEnumerator] allObjects])
+    if ([KeyedTabs() objectForKey:old] == tab) [KeyedTabs() removeObjectForKey:old];
+  [KeyedTabs() setObject:tab forKey:key];
+}
+
++ (ArdiaCoreTab *)tabWithKey:(NSString *)key {
+  if (!key.length) return nil;
+  ArdiaCoreTab *tab = [KeyedTabs() objectForKey:key];
+  if (tab && tab.closed) {
+    [KeyedTabs() removeObjectForKey:key];
+    return nil;
+  }
+  return tab;
+}
+
++ (NSString *)keyForTab:(ArdiaCoreTab *)tab {
+  if (!tab) return nil;
+  for (NSString *key in [[KeyedTabs() keyEnumerator] allObjects])
+    if ([KeyedTabs() objectForKey:key] == tab) return key;
+  return nil;
 }
 
 + (NSString *)offerTab:(ArdiaCoreTab *)tab {
@@ -75,6 +104,8 @@ constexpr int64_t kOfferSeconds = 30;
   [Views() removeObjectForKey:tab];
   [AwaitingFirstShowFocus() removeObject:tab];
   for (NSString *key in [Offered() allKeysForObject:tab]) [Offered() removeObjectForKey:key];
+  for (NSString *key in [[KeyedTabs() keyEnumerator] allObjects])
+    if ([KeyedTabs() objectForKey:key] == tab) [KeyedTabs() removeObjectForKey:key];
 }
 
 @end

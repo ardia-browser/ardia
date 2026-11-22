@@ -34,6 +34,7 @@ import { perfMark, perfProbeEnabled, probeStore } from "./state/app/perfProbe";
 import { startTabLifecycle } from "./state/tabs/tabLifecycle";
 import { startBusyTabWatch } from "./state/tabs/busyTabWatch";
 import { startTabPages } from "./state/tabs/tabPages";
+import { startMaterializeRestoredTabs } from "./state/tabs/materializeRestoredTabs";
 import { startTabReveal } from "./state/tabs/tabReveal";
 import { startSync } from "./state/sync/engine";
 import { startSharedFolders } from "./state/sharedFolders/engine";
@@ -76,6 +77,7 @@ afterFirstWindow(startAutomation);
 afterFirstWindow(startPlugins);
 afterFirstWindow(startSharedFolders);
 afterFirstWindow(startBusyTabWatch);
+afterFirstWindow(startMaterializeRestoredTabs);
 startMemoryTrim();
 if (__DEV__ || perfProbeEnabled) require("./components/dev/devHarness").startDevHarness();
 

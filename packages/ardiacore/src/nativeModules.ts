@@ -9,6 +9,7 @@ export type ArdiaCoreNativeModules = {
     prepareTransfer(tabId: string): void;
     releaseTransfer(tabId: string): void;
     claimLaunchTab(tabId: string, url: string, profile: string): void;
+    materializeTab(tabId: string, url: string, profile: string, window: string): Promise<boolean>;
     revealTab(tabId: string, press: number): void;
     dropTabReveals(overTabId: string, press: number, toTabId: string): void;
     claimTabPress(tabId: string, startedAt: number): number;

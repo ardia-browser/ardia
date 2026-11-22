@@ -228,6 +228,8 @@ globalThis.acTestTabStrip = chrome;
 const { useBrowser } = await import("../browser/store.ts");
 const model = await import("../browser/model.ts");
 const { chromeTabsBookkeeping, startChromeTabs } = await import("./chromeTabs.ts");
+const { markMaterialized } = await import("./materialized.ts");
+const { hasTabAccess, materializeCandidates } = await import("./materializePlan.ts");
 const { splitTabIdsOf } = await import("../splits/splits.ts");
 startChromeTabs();
 
@@ -756,6 +758,61 @@ test("Chrome selecting a Peek's source dismisses the Peek instead of bouncing ba
   assert.equal(S().tabs[peek], undefined);
   assert.equal(shown(win.w), "a");
   assert.equal(chromeShown(win.strip), "a");
+});
+
+test("a materialized lazy tab joins Chrome's group without taking over the sidebar's order", async () => {
+  const win = windowWith("a", "b");
+  await settle(win);
+  const lazy1 = S().newTab(win.w, { url: "lazy1.com", background: true });
+  const lazy2 = S().newTab(win.w, { url: "lazy2.com", background: true });
+  S().updateTab(lazy1, { page: { kind: "idle" } });
+  S().updateTab(lazy2, { page: { kind: "idle" } });
+  markMaterialized(lazy1);
+  markMaterialized(lazy2);
+  const before = order(win.w);
+  chrome.create(win.strip, lazy1);
+  chrome.create(win.strip, lazy2);
+  chrome.reorder(win.strip, ["a", "b", "lazy2", "lazy1"].map((u) => S().windows[win.w].tabIds.find((t) => urlOf(t) === u)));
+  await settle(win);
+  assert.deepEqual(order(win.w), before, "Chrome's strip order doesn't reorder the sidebar");
+  assert.equal(S().tabs[lazy1].page.kind, "idle");
+  assert.equal(S().tabs[lazy2].page.kind, "idle");
+
+  chrome.group([lazy1, lazy2], "Lazy test", "blue");
+  await settle(win);
+  const group = Object.values(S().groups).find((g) => g.name === "Lazy test");
+  assert.ok(group, "the extension's group reaches the sidebar");
+  assert.deepEqual(group.tabIds.map(urlOf).sort(), ["lazy1", "lazy2"]);
+  assert.equal(S().tabs[lazy1].page.kind, "idle", "grouping doesn't wake the tabs");
+  assert.equal(S().tabs[lazy2].page.kind, "idle");
+});
+
+test("materializePlan picks only loose lazy web tabs that aren't pinned, shared, grouped, split or internal", async () => {
+  const win = windowWith("a", "b");
+  await settle(win);
+  const mk = (url, patch = {}) => {
+    const id = S().newTab(win.w, { url, background: true });
+    S().updateTab(id, { page: { kind: "idle" }, ...patch });
+    return id;
+  };
+  const loose = mk("https://loose.com/");
+  const materialized = mk("https://already.com/");
+  markMaterialized(materialized);
+  const pinned = mk("https://pinned.com/");
+  S().pinTabs([pinned], true, true);
+  const grouped1 = mk("https://grouped1.com/");
+  const grouped2 = mk("https://grouped2.com/");
+  S().groupTabs([grouped1, grouped2], { pinned: false });
+  const shared = mk("https://shared.com/", { pinKey: "shared:1" });
+  mk("chrome://settings/");
+
+  assert.deepEqual(materializeCandidates(S(), win.w).map((t) => t.url), ["https://loose.com/"]);
+  assert.equal(hasTabAccess([{ enabled: true, permissions: ["tabs"] }]), true);
+  assert.equal(hasTabAccess([{ enabled: true, permissions: ["tabGroups"] }]), true);
+  assert.equal(hasTabAccess([{ enabled: true, permissions: ["Read your browsing history"] }]), true);
+  assert.equal(hasTabAccess([{ enabled: true, permissions: ["View and manage your tab groups"] }]), true);
+  assert.equal(hasTabAccess([{ enabled: false, permissions: ["tabs"] }]), false);
+  assert.equal(hasTabAccess([{ enabled: true, permissions: [] }]), false);
 });
 
 test("an extension that shows a tab of another space that shares data, then discards the shown one, is obeyed: that space is shown and Chrome keeps the pick", async () => {

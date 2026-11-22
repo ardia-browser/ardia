@@ -35,6 +35,7 @@ ardia_sources = [
   "ac_extensions_sync_internal.h",
   "ac_favicons.cc",
   "ac_history.cc",
+  "ac_input_frame_rate.h",
   "ac_memory.cc",
   "ac_memory_saver.cc",
   "ac_passwords.cc",
@@ -69,6 +70,7 @@ if (is_mac) {
   ardia_sources += [
     "ac_external_apps.h",
     "ac_external_apps.mm",
+    "ac_input_frame_rate.mm",
     "ac_reauth.cc",
     "pip/ac_pip_mac.mm",
   ]
@@ -92,6 +94,7 @@ if (is_linux) {
     "ac_engine_dispatch.cc",
     "ac_external_apps_linux.cc",
     "ac_host_visibility_linux.cc",
+    "ac_input_frame_rate_linux.cc",
     "ac_reauth_linux.cc",
     "ac_reauth_linux.h",
     "ac_reauth_linux_policy.h",
@@ -110,6 +113,12 @@ if (is_linux) {
              rebase_path(outputs[0], root_build_dir),
            ] + rebase_path(inputs, root_build_dir)
   }
+}
+
+if (is_win) {
+  ardia_sources += [
+    "ac_input_frame_rate_win.cc",
+  ]
 }
 
 source_set("ardia") {

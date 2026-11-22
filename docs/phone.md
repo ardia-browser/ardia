@@ -1881,6 +1881,10 @@ go back, and `app_launched.material_colors` (`not_material` while it is off) for
 
 ### Android motion and menu follow-up
 
+Settings keeps the same sheet and scroll view when Material You changes. The covered browser follows at lower
+render priority, and open menus keep their opening design through dismissal. Watch the existing
+`material_you_turned_on`, `material_you_turned_off` and drawn-menu usage counts; no new telemetry fields are sent.
+
 - Android Settings subpages change instantly on push and Back. The top-level Settings sheet opens and dismisses
   with its own motion. Material You uses a compact top bar with a Close button.
 - The Material tab switcher header is transparent, including in Incognito. The Tabs title and Space name use Material's 16 sp title style. The tab switcher still uses the existing `tabs_opened` count for new tabs.

@@ -1,13 +1,14 @@
-import { Platform } from "react-native";
+import { Platform, ScrollView, Text } from "react-native";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { Surfaces } from "../App";
+import { DesignProvider, Portal, useDesign } from "../components/ui";
 import { MaterialBottomBar } from "../components/ui/MaterialBottomBar";
 import { pages } from "../platform/pages";
 import { useBrowse } from "../state/browse/store";
-import { closeSettings, openSettings } from "../state/settings/nav";
+import { closeSettings, openSettings, settingsScroll } from "../state/settings/nav";
 import { currentPreferences, usePreferences } from "../state/settings/store";
 import * as telemetry from "../state/telemetry/telemetry";
-import { renderSurface, unmount, withTabs } from "../../test/render/harness";
+import { renderSurface, unmount, updateSurface, withTabs } from "../../test/render/harness";
 
 const onAndroid = Platform.OS === "android" ? test : test.skip;
 const onIPhone = Platform.OS === "ios" ? test : test.skip;
@@ -55,20 +56,26 @@ onAndroid("turning Material You on changes the whole app at once, without a rela
   const root = renderSurface(<Surfaces />);
   act(() => openSettings());
   settle();
+  const sheet = root.root.findAll((node) => node.props.testID === "fullSheet" && typeof node.type === "string")[0];
+  const scroll = root.root.findAll((node) => node.props.testID === "settingsPage" && typeof node.type === "string")[0]!.findByType(ScrollView);
+  act(() => scroll.props.onScroll({ nativeEvent: { contentOffset: { y: 120 } } }));
   act(() => materialYouRow(root)!.props.onPress());
   settle();
+  expect(root.root.findAll((node) => node.props.testID === "fullSheet" && typeof node.type === "string")[0]).toBe(sheet);
+  expect(root.root.findAll((node) => node.props.testID === "settingsPage" && typeof node.type === "string")[0]!.findByType(ScrollView)).toBe(scroll);
+  expect(settingsScroll("Settings")).toBe(120);
   expect(currentPreferences().materialYou).toBe(true);
   expect(counted).toHaveBeenCalledWith("material_you_turned_on");
   expect(root.root.findAll((node) => node.props.testID === "materialSettingsPage" && typeof node.type === "string")).toHaveLength(1);
-  expect(root.root.findAll((node) => node.props.testID === "fullSheet" && typeof node.type === "string")).toHaveLength(1);
   expect(materialBars(root)).toHaveLength(1);
   expect(materialYouRow(root)).toBeDefined();
   act(() => materialYouRow(root)!.props.onPress());
   settle();
+  expect(root.root.findAll((node) => node.props.testID === "settingsPage" && typeof node.type === "string")[0]!.findByType(ScrollView)).toBe(scroll);
+  expect(settingsScroll("Settings")).toBe(120);
   expect(currentPreferences().materialYou).toBe(false);
   expect(counted).toHaveBeenCalledWith("material_you_turned_off");
   expect(root.root.findAll((node) => node.props.testID === "materialSettingsPage" && typeof node.type === "string")).toHaveLength(0);
-  expect(root.root.findAll((node) => node.props.testID === "fullSheet" && typeof node.type === "string")).toHaveLength(1);
   expect(materialBars(root)).toHaveLength(0);
   unmount(root);
 });
@@ -78,5 +85,40 @@ onIPhone("iPhone never offers Material You", () => {
   act(() => openSettings());
   settle();
   expect(materialYouRow(root)).toBeUndefined();
+  unmount(root);
+});
+
+onAndroid("rapid Material You flips and dismissal leave the browser in the final design", () => {
+  const root = renderSurface(<Surfaces />);
+  act(() => openSettings());
+  settle();
+  act(() => {
+    usePreferences.setState({ materialYou: true });
+    usePreferences.setState({ materialYou: false });
+    usePreferences.setState({ materialYou: true });
+    closeSettings();
+  });
+  settle();
+  expect(materialBars(root)).toHaveLength(1);
+  act(() => {
+    openSettings();
+    usePreferences.setState({ materialYou: false });
+    closeSettings();
+  });
+  settle();
+  expect(materialBars(root)).toHaveLength(0);
+  unmount(root);
+});
+
+test("a menu portal retains its opening design through its exit", () => {
+  function DesignLabel() {
+    return <Text testID="portalDesign">{useDesign()}</Text>;
+  }
+  const root = renderSurface(<DesignProvider design="material"><Portal exitMs={200}><DesignLabel /></Portal></DesignProvider>);
+  expect(root.root.findByProps({ testID: "portalDesign" }).props.children).toBe("material");
+  updateSurface(root, <DesignProvider design="redesigned">{null}</DesignProvider>);
+  expect(root.root.findByProps({ testID: "portalDesign" }).props.children).toBe("material");
+  act(() => jest.advanceTimersByTime(400));
+  expect(root.root.findAllByProps({ testID: "portalDesign" })).toHaveLength(0);
   unmount(root);
 });

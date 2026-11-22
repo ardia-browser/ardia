@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Platform, StyleSheet, View } from "react-native";
 import { refreshSettings } from "../../state/settings/actions";
 import { useSettingsNav, type SettingsRoute } from "../../state/settings/hooks";
-import { LookBackdrop } from "../ui";
 import { FilterListDetailPage, FilterListsPage, MyFiltersPage, TrustedSitesPage } from "./BlockingPages";
 import { AboutPage, ClearDataPage, LicensesPage } from "./DataPages";
 import { AppearancePage } from "./AppearancePage";
@@ -104,7 +103,6 @@ function HandBuiltSettings() {
   if (!shown) return null;
   return (
     <View testID="settingsStack" style={StyleSheet.absoluteFill}>
-      <LookBackdrop />
       <View key={shown.key} testID="settingsPage" style={StyleSheet.absoluteFill}>
         <SettingsPageFor route={shown.route} />
       </View>

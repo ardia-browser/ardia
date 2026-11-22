@@ -55,7 +55,7 @@ export function FullSheet<T extends string>({ sheet, progress, onDismiss, childr
   const presence = useRef(initialPresence(sheet));
   const shown = sheet ?? presenceShown(presence.current);
   const sheetView = useRef<ViewInstance>(null);
-  useCoverFocus(sheetView, material && sheet === "settings");
+  useCoverFocus(sheetView, sheet === "settings");
   const top = insets.top + (material && shown !== "settings" ? 0 : iPhoneOr(sheetLayout.iPhoneTopGap, sheetLayout.topGap));
   const bottomCorner = material ? 0 : iPhoneOr(screenCornerRadius(tabsLayout.displayCornerRadius), 0);
   const [, redraw] = useState(0);
@@ -76,8 +76,8 @@ export function FullSheet<T extends string>({ sheet, progress, onDismiss, childr
     presence.current = step.presence;
     if (step.motion === "none") return;
     if (step.motion === "in") {
-      if (step.fromHidden) offset.value = height.value;
       scrollTop.value = 0;
+      if (step.fromHidden) offset.value = height.value;
       if (material) offset.value = materialMove(0, materialMotion.sheetEnter.easing, reduceMotion ? SHEET_REDUCED_MS : materialMotion.sheetEnter.durationMs);
       else offset.value = reduceMotion ? withTiming(0, { duration: SHEET_REDUCED_MS, easing: tabsCurve.easeOut }) : withSpring(0, tabsMotion.sheetRise);
       return;

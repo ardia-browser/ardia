@@ -35,7 +35,7 @@ const SQUARE_WINDOW: CornerRadii = { upperLeft: 0, upperRight: 0, lowerRight: 0,
 
 const nearCornerRadius = (insetX: number, insetY: number, windowRadius: number, radius: number, zoom: number) => {
   if (insetX < 1 && insetY < 1) return 0;
-  if (insetX < windowRadius && insetY < windowRadius) return Math.max(radius, (windowRadius - Math.min(insetX, insetY)) / zoom);
+  if (insetX < windowRadius && insetY < windowRadius) return Math.max(radius, windowRadius - Math.min(insetX, insetY)) / zoom;
   return radius;
 };
 

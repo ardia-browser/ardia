@@ -63,7 +63,7 @@ function conceal(element: Element, hidden: boolean) {
 export function startShellAbove(host: ArdiaHost, root: HTMLElement = document.body) {
   document.documentElement.classList.add(SHELL_ABOVE_CLASS);
   const painter = createPageHoles(root, () => host.bootstrap.shellZoom ?? 1, currentWindowCorners);
-  onWindowCornersChanged(() => painter.windowChanged());
+  const stopCorners = onWindowCornersChanged(() => painter.windowChanged());
   const glass = startShellGlass(host);
   const registry = createInputRegions({
     ...domRegionDeps(host),
@@ -83,6 +83,7 @@ export function startShellAbove(host: ArdiaHost, root: HTMLElement = document.bo
     window.removeEventListener("scroll", refresh, true);
     document.documentElement.classList.remove(SHELL_ABOVE_CLASS);
     glass.stop();
+    stopCorners();
     if (regions === registry) regions = null;
     if (holes === painter) holes = null;
   };

@@ -40,38 +40,39 @@ const realTimers: Timers = { set: (run, ms) => setTimeout(run, ms), clear: (time
 
 export function watchWindowDecorations(host: ArdiaHost, windowId: string, note: Note = noteLinuxWindowDecorations, timers: Timers = realTimers): () => void {
   if (!hostSupports(WINDOW_DECORATIONS_METHOD, host)) return () => {};
-  let countedBy: unknown = undefined;
-  let answerCounted = false;
+  let stopped = false;
+  let decoratedBy: unknown = undefined;
+  let counted = false;
   let heardEvent = false;
   let settle: unknown = null;
-  const countAnswer = (answer: unknown) => {
-    if (answerCounted) return;
-    answerCounted = true;
+  const count = (answer: unknown) => {
+    if (stopped || counted) return;
+    counted = true;
     if (settle !== null) timers.clear(settle);
     settle = null;
-    note(undefined, answer);
+    note(decoratedBy, answer);
   };
   const record = (value: Decorations) => {
+    if (stopped) return;
     const corners = cornersOf(value.corners);
     if (corners) setWindowCorners(corners);
-    if (value.decoratedBy !== countedBy) {
-      countedBy = value.decoratedBy;
-      note(value.decoratedBy, undefined);
-    }
-    if (answerCounted) return;
-    if (value.answer === "client" || value.answer === "server") countAnswer(value.answer);
-    else if (value.answer === "none" && settle === null) settle = timers.set(() => countAnswer("none"), ANSWER_SETTLE_MS);
+    decoratedBy = value.decoratedBy;
+    if (counted) return;
+    if (value.answer === "client" || value.answer === "server") count(value.answer);
+    else if (value.answer === "none" && settle === null) settle = timers.set(() => count("none"), ANSWER_SETTLE_MS);
   };
-  const stop = host.onEvent((module, event, payload) => {
+  const unsubscribe = host.onEvent((module, event, payload) => {
     if (module !== "ArdiaShell" || event !== WINDOW_DECORATIONS_EVENT || !isDecorations(payload) || (payload as { windowId?: unknown }).windowId !== windowId) return;
     heardEvent = true;
     record(payload);
   });
   void invokeHost<unknown>(WINDOW_DECORATIONS_METHOD, { args: [windowId] }, host).then((reply) => {
-    if (!heardEvent && isDecorations(reply)) record(reply);
+    if (!stopped && !heardEvent && isDecorations(reply)) record(reply);
   }, () => {});
   return () => {
-    stop();
+    stopped = true;
+    unsubscribe();
     if (settle !== null) timers.clear(settle);
+    settle = null;
   };
 }

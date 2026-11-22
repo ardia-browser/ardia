@@ -416,9 +416,12 @@ test("a page hole is square where it meets a window corner and keeps the card ra
 
 test("the shell cuts the same corners the engine clips, at fractional edges, any zoom, window widths that don't divide by it, and a rounded window", () => {
   const engineRadius = (insetX, insetY, windowRadius, own) => {
-    if (insetX < 1 && insetY < 1) return { kind: "window" };
-    if (insetX < windowRadius && insetY < windowRadius) return { kind: "near", concentric: windowRadius - Math.min(insetX, insetY), own };
-    return { kind: "own" };
+    if (insetX < 1 && insetY < 1) return { kind: "window", dip: windowRadius };
+    if (insetX < windowRadius && insetY < windowRadius) {
+      const concentric = windowRadius - (insetX < insetY ? insetX : insetY);
+      return { kind: "near", dip: concentric > own ? concentric : own };
+    }
+    return { kind: "own", dip: own };
   };
   const engineCorners = (rect, widthDip, heightDip, zoom, windowRadius) => {
     const left = Math.min(Math.max(rect.x * zoom, 0), widthDip);
@@ -428,7 +431,7 @@ test("the shell cuts the same corners the engine clips, at fractional edges, any
     const insets = { l: Math.floor(left), t: Math.floor(top), r: widthDip - Math.ceil(right), b: heightDip - Math.ceil(bottom) };
     return [engineRadius(insets.l, insets.t, windowRadius, 12), engineRadius(insets.r, insets.t, windowRadius, 12), engineRadius(insets.r, insets.b, windowRadius, 12), engineRadius(insets.l, insets.b, windowRadius, 12)];
   };
-  const shellExpects = (corner, zoom) => (corner.kind === "window" ? 0 : corner.kind === "near" ? Math.max(12, corner.concentric / zoom) : 12);
+  const shellExpects = (corner, zoom) => (corner.kind === "window" ? 0 : corner.kind === "near" ? corner.dip / zoom : 12);
   let checked = 0;
   for (const [widthDip, heightDip] of [[800, 600], [1000, 700], [1001, 667], [997, 613]]) {
     for (const zoom of [0.5, 0.8, 1, 1.25, 2, 2.5, 3]) {
@@ -448,6 +451,11 @@ test("the shell cuts the same corners the engine clips, at fractional edges, any
     }
   }
   assert.ok(checked > 1000);
+  const ring = (radius) => ({ upperLeft: radius, upperRight: radius, lowerRight: radius, lowerLeft: radius });
+  const atThreeHundred = windowCornerRadii({ x: 1 / 3, y: 1 / 3, width: 1000 / 3 - 2 / 3, height: 700 / 3 - 2 / 3 }, { width: 1000 / 3, height: 700 / 3 }, 12, 3, ring(24));
+  assert.ok(Math.abs(atThreeHundred.upperLeft * 3 - 23) < 1e-9, "the hole is the engine's 23 DIP at 300 %, not 36");
+  const atHalf = windowCornerRadii({ x: 16, y: 16, width: 1600 - 32, height: 1200 - 32 }, { width: 1600, height: 1200 }, 12, 0.5, ring(19));
+  assert.equal(atHalf.upperLeft * 0.5, 12, "the hole is the engine's 12 DIP at 50 %, not 11");
   const third = { width: 1000 / 3, height: 700 / 3 };
   assert.equal(windowCornerRadii({ x: 0, y: 0, width: 998.25 / 3, height: 700 / 3 }, third, 12, 3).upperRight, 12, "998.25 of 1000 DIP is inset, as the engine says");
   for (const windowRadius of [12, 19, 24]) {

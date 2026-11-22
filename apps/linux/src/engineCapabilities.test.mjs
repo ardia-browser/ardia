@@ -211,7 +211,7 @@ test("an event only the Linux engine sends is declared apart from the Mac's, and
   }
 });
 
-test("each window counts who decorates it when that changes and its desktop's answer once it settles, never another window's", async () => {
+test("each window counts who decorates it and its desktop's answer once, when the answer settles, and nothing after it stops", async () => {
   const { watchWindowDecorations, WINDOW_DECORATIONS_METHOD, ANSWER_SETTLE_MS, currentWindowCorners } = await import("./windowDecorations.ts");
   const fakeTimers = () => {
     const pending = new Map();
@@ -221,7 +221,7 @@ test("each window counts who decorates it when that changes and its desktop's an
   const fakeHost = (reply) => {
     const listeners = new Set();
     const asked = [];
-    let answer;
+    let answer = () => {};
     const host = {
       bootstrap: { windowId: "main", profileId: "default", capabilities: [WINDOW_DECORATIONS_METHOD] },
       invoke: (method, args) => { asked.push([method, args]); return new Promise((resolve) => { answer = () => resolve(reply); }); },
@@ -231,41 +231,76 @@ test("each window counts who decorates it when that changes and its desktop's an
     const emit = (payload) => { for (const listener of listeners) listener("ArdiaShell", "windowDecorations", payload); };
     return { host, listeners, asked, emit, reply: () => answer() };
   };
+  const tick = () => new Promise(setImmediate);
 
   const timers = fakeTimers();
   const gnome = fakeHost({ decoratedBy: "app", answer: "none", corners: { upperLeft: 9, upperRight: 9, lowerRight: 0, lowerLeft: 0 } });
   const noted = [];
   const stop = watchWindowDecorations(gnome.host, "main", (by, answer) => noted.push([by, answer]), timers);
-  await new Promise(setImmediate);
+  await tick();
   gnome.reply();
-  await new Promise(setImmediate);
+  await tick();
   assert.deepEqual(gnome.asked, [[WINDOW_DECORATIONS_METHOD, { args: ["main"] }]]);
-  assert.deepEqual(noted, [["app", undefined]]);
+  assert.deepEqual(noted, [], "nothing counts before the answer settles");
   assert.deepEqual(currentWindowCorners(), { upperLeft: 9, upperRight: 9, lowerRight: 0, lowerLeft: 0 });
   assert.equal([...timers.pending.values()][0].ms, ANSWER_SETTLE_MS);
   gnome.emit({ windowId: "other", decoratedBy: "compositor", answer: "server" });
   gnome.emit({ windowId: "main", decoratedBy: "app", answer: "none", corners: { upperLeft: 0, upperRight: 0, lowerRight: 0, lowerLeft: 0 } });
-  assert.deepEqual(noted, [["app", undefined]]);
   assert.deepEqual(currentWindowCorners(), { upperLeft: 0, upperRight: 0, lowerRight: 0, lowerLeft: 0 });
   timers.fire();
-  assert.deepEqual(noted, [["app", undefined], [undefined, "none"]]);
-  gnome.emit({ windowId: "main", decoratedBy: "app", answer: "client" });
-  assert.equal(noted.length, 2, "the answer counts once");
+  assert.deepEqual(noted, [["app", "none"]]);
+  gnome.emit({ windowId: "main", decoratedBy: "compositor", answer: "server" });
+  assert.deepEqual(noted, [["app", "none"]], "a window counts once, in one decision bucket");
   stop();
   assert.equal(gnome.listeners.size, 0);
 
   const hypr = fakeHost({ decoratedBy: "app", answer: "none" });
   const hyprNoted = [];
   watchWindowDecorations(hypr.host, "main", (by, answer) => hyprNoted.push([by, answer]), fakeTimers());
+  await tick();
   hypr.emit({ windowId: "main", decoratedBy: "compositor", answer: "none" });
   hypr.emit({ windowId: "main", decoratedBy: "compositor", answer: "server" });
-  await new Promise(setImmediate);
   hypr.reply();
-  await new Promise(setImmediate);
-  assert.deepEqual(hyprNoted, [["compositor", undefined], [undefined, "server"]], "the reply that arrives after an event is stale and ignored");
+  await tick();
+  assert.deepEqual(hyprNoted, [["compositor", "server"]], "the reply that arrives after an event is stale and ignored");
+
+  const quitTimers = fakeTimers();
+  const quitting = fakeHost({ decoratedBy: "app", answer: "client" });
+  const quitNoted = [];
+  const stopEarly = watchWindowDecorations(quitting.host, "main", (by, answer) => quitNoted.push([by, answer]), quitTimers);
+  quitting.emit({ windowId: "main", decoratedBy: "app", answer: "none" });
+  assert.equal(quitTimers.pending.size, 1);
+  stopEarly();
+  assert.equal(quitTimers.pending.size, 0, "stopping clears the settle timer");
+  await tick();
+  quitting.reply();
+  await tick();
+  quitting.emit({ windowId: "main", decoratedBy: "app", answer: "client" });
+  assert.deepEqual(quitNoted, [], "a stopped window counts nothing from a late reply or event");
 
   const bare = fakeHost({});
   bare.host.bootstrap.capabilities = [];
   watchWindowDecorations(bare.host, "main", () => assert.fail("an engine without the call is never asked"));
   assert.deepEqual(bare.asked, []);
+});
+
+test("a corner listener that unsubscribes hears no later change of the window's corners", async () => {
+  const { watchWindowDecorations, WINDOW_DECORATIONS_METHOD, onWindowCornersChanged } = await import("./windowDecorations.ts");
+  const listeners = new Set();
+  const host = {
+    bootstrap: { windowId: "main", profileId: "default", capabilities: [WINDOW_DECORATIONS_METHOD] },
+    invoke: () => new Promise(() => {}),
+    call: async () => "null",
+    onEvent: (listener) => { listeners.add(listener); return () => listeners.delete(listener); },
+  };
+  const emit = (radius) => { for (const listener of listeners) listener("ArdiaShell", "windowDecorations", { windowId: "main", decoratedBy: "app", answer: "client", corners: { upperLeft: radius, upperRight: radius, lowerRight: 0, lowerLeft: 0 } }); };
+  const stopWatching = watchWindowDecorations(host, "main", () => {});
+  let heard = 0;
+  const stop = onWindowCornersChanged(() => heard++);
+  emit(31);
+  emit(32);
+  stop();
+  emit(33);
+  stopWatching();
+  assert.equal(heard, 2);
 });

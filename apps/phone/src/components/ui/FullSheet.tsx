@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { StyleSheet, useWindowDimensions, View, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -43,9 +43,9 @@ const SheetFrameContext = createContext<SheetFrame | null>(null);
 
 export const useSheetFrame = (): SheetFrame | null => useContext(SheetFrameContext);
 
-type Props<T extends string> = { sheet: T | null; progress: SharedValue<number>; onDismiss: () => void; children: (shown: T) => ReactNode };
+type Props<T extends string> = { sheet: T | null; progress: SharedValue<number>; immediate?: boolean; onDismiss: () => void; children: (shown: T) => ReactNode };
 
-export function FullSheet<T extends string>({ sheet, progress, onDismiss, children }: Props<T>) {
+export function FullSheet<T extends string>({ sheet, progress, immediate = false, onDismiss, children }: Props<T>) {
   const insets = useSafeAreaInsets();
   const window = useWindowDimensions();
   const reduceMotion = useReduceMotion();
@@ -67,13 +67,25 @@ export function FullSheet<T extends string>({ sheet, progress, onDismiss, childr
     height.value = Math.max(1, window.height - top);
   }, [window.height, top]);
 
+  useLayoutEffect(() => {
+    if (immediate && sheet) {
+      offset.value = 0;
+      progress.value = 1;
+    }
+  }, [immediate, sheet]);
+
   useEffect(() => {
     const step = presenceTarget(presence.current, sheet);
     presence.current = step.presence;
     if (step.motion === "none") return;
     if (step.motion === "in") {
-      if (step.fromHidden) offset.value = height.value;
       scrollTop.value = 0;
+      if (immediate) {
+        offset.value = 0;
+        progress.value = 1;
+        return;
+      }
+      if (step.fromHidden) offset.value = height.value;
       if (material) offset.value = materialMove(0, materialMotion.sheetEnter.easing, reduceMotion ? SHEET_REDUCED_MS : materialMotion.sheetEnter.durationMs);
       else offset.value = reduceMotion ? withTiming(0, { duration: SHEET_REDUCED_MS, easing: tabsCurve.easeOut }) : withSpring(0, tabsMotion.sheetRise);
       return;
@@ -85,6 +97,12 @@ export function FullSheet<T extends string>({ sheet, progress, onDismiss, childr
       presence.current = next;
       redraw((count) => count + 1);
     };
+    if (immediate) {
+      offset.value = height.value;
+      progress.value = 0;
+      settle(true);
+      return;
+    }
     const settled = (finished?: boolean) => {
       "worklet";
       runOnJS(settle)(finished === true);

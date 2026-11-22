@@ -4,16 +4,21 @@ import Animated, { FadeIn, FadeOut, LayoutAnimationConfig, useAnimatedStyle, use
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { rememberSettingsScroll, settingsScroll } from "../../state/settings/nav";
 import { MenuTrigger } from "../ui/MenuTrigger";
-import { MaterialBarButton, MaterialButtonRow, MaterialEmptyState, MaterialGroup, MaterialIconTile, MaterialNavRow, MaterialPickerRow, MaterialSettingsPage, MaterialToggleRow, MaterialValueRow } from "./MaterialSettingsKit";
+import { MaterialBarButton, MaterialButtonRow, MaterialEmptyState, MaterialGroup, MaterialIconTile, MaterialMediumTitle, MaterialNavRow, MaterialPickerRow, MaterialSettingsAppBar, MaterialToggleRow, MaterialValueRow, materialMediumTitleHeight, materialSettingsListStyles } from "./MaterialSettingsKit";
 import { duration, LookBackdrop, settingsMotion, useSheetFrame, font, ink, settingsLayout, space, Symbol, tabsLayout, ToggleTrack, useDesign, useTheme, type MenuItem, type SymbolName } from "../ui";
+import { useMaterialTheme } from "../ui/materialTheme";
 
 export const SettingsHostedContext = createContext(false);
 
 type PageProps = { title: string; onBack?: () => void; onClose?: () => void; leading?: ReactNode; trailing?: ReactNode; children: ReactNode; scroll?: boolean; onRefresh?: () => Promise<unknown>; heroTitle?: boolean; mediumAppBar?: boolean; overlay?: ReactNode; dismissesKeyboard?: boolean };
 
-function ClassicSettingsPage({ title, onBack, leading, trailing, children, scroll = true, onRefresh, heroTitle = false, overlay, dismissesKeyboard = false }: PageProps) {
+export function SettingsPage({ title, onBack, onClose, leading, trailing, children, scroll = true, onRefresh, heroTitle = false, mediumAppBar = false, overlay, dismissesKeyboard = false }: PageProps) {
+  const material = useDesign() === "material";
   const theme = useTheme();
+  const { scheme } = useMaterialTheme();
   const insets = useSafeAreaInsets();
+  const { fontScale } = useWindowDimensions();
+  const mediumTitleHeight = materialMediumTitleHeight(fontScale);
   const [startOffset] = useState(() => ({ x: 0, y: settingsScroll(title) }));
   const frame = useSheetFrame();
   const [refreshing, setRefreshing] = useState(false);
@@ -24,6 +29,9 @@ function ClassicSettingsPage({ title, onBack, leading, trailing, children, scrol
       }
     : null;
   const sheetList = frame?.list(refresh !== null);
+  const [scrolled, setScrolled] = useState(startOffset.y > 0);
+  const [offset, setOffset] = useState(startOffset.y);
+  const collapsed = offset >= mediumTitleHeight;
   const [heroAway, setHeroAway] = useState(false);
   const titleShown = !heroTitle || heroAway;
   const titleOpacity = useSharedValue(titleShown ? 1 : 0);
@@ -33,9 +41,23 @@ function ClassicSettingsPage({ title, onBack, leading, trailing, children, scrol
   const titleStyle = useAnimatedStyle(() => ({ opacity: titleOpacity.value }));
   const hosted = useContext(SettingsHostedContext);
   return (
-    <View style={StyleSheet.absoluteFill}>
-      <LookBackdrop />
-      {hosted ? (
+    <View testID={material ? "materialSettingsPage" : undefined} style={[StyleSheet.absoluteFill, material ? { backgroundColor: scheme.surfaceContainer } : null]}>
+      {material ? null : <LookBackdrop />}
+      {material ? (
+        <MaterialSettingsAppBar
+          title={title}
+          onBack={onBack}
+          onClose={onClose}
+          leading={leading}
+          trailing={trailing}
+          mediumAppBar={mediumAppBar}
+          scrolled={scrolled}
+          collapsed={collapsed}
+          topInset={frame ? 0 : insets.top}
+          leftInset={insets.left}
+          rightInset={insets.right}
+        />
+      ) : hosted ? (
         leading || trailing ? (
           <View testID="settingsHostedActions" style={styles.hostedActions}>
             <View style={styles.topSide}>{leading}</View>
@@ -43,44 +65,61 @@ function ClassicSettingsPage({ title, onBack, leading, trailing, children, scrol
           </View>
         ) : null
       ) : (
-      <View style={[styles.top, { paddingTop: frame ? 0 : insets.top }]}>
-        <View style={styles.topSide}>
-          {onBack ? (
-            <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={onBack} style={styles.back}>
-              <Symbol name="chevronLeft" size={22} color={theme.formAccent} />
-            </Pressable>
-          ) : null}
-          {leading}
+        <View style={[styles.top, { paddingTop: frame ? 0 : insets.top }]}>
+          <View style={styles.topSide}>
+            {onBack ? (
+              <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={onBack} style={styles.back}>
+                <Symbol name="chevronLeft" size={22} color={theme.formAccent} />
+              </Pressable>
+            ) : null}
+            {leading}
+          </View>
+          <Animated.Text
+            testID="settingsTitle"
+            accessibilityRole="header"
+            accessibilityElementsHidden={!titleShown}
+            importantForAccessibility={titleShown ? "auto" : "no-hide-descendants"}
+            style={[font.body, styles.bold, styles.title, { color: theme.label }, titleStyle]}
+            numberOfLines={1}
+          >
+            {title}
+          </Animated.Text>
+          <View style={[styles.topSide, styles.end]}>{trailing}</View>
         </View>
-        <Animated.Text
-          testID="settingsTitle"
-          accessibilityRole="header"
-          accessibilityElementsHidden={!titleShown}
-          importantForAccessibility={titleShown ? "auto" : "no-hide-descendants"}
-          style={[font.body, styles.bold, styles.title, { color: theme.label }, titleStyle]}
-          numberOfLines={1}
-        >
-          {title}
-        </Animated.Text>
-        <View style={[styles.topSide, styles.end]}>{trailing}</View>
-      </View>
       )}
       {scroll ? (
         <ScrollView
-          style={{ marginBottom: insets.bottom }}
-          contentContainerStyle={[styles.content, { paddingBottom: space.huge }]}
+          style={material ? [materialSettingsListStyles.list, { marginBottom: insets.bottom }] : { marginBottom: insets.bottom }}
+          contentContainerStyle={
+            material
+              ? [materialSettingsListStyles.content, mediumAppBar ? materialSettingsListStyles.mediumContent : null, { paddingLeft: insets.left, paddingRight: insets.right }]
+              : [styles.content, { paddingBottom: space.huge }]
+          }
           contentOffset={startOffset}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode={dismissesKeyboard ? "on-drag" : "none"}
-          refreshControl={refresh ? <RefreshControl refreshing={refreshing} onRefresh={refresh} /> : undefined}
+          refreshControl={
+            refresh ? (
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={refresh}
+                colors={material ? [scheme.primary] : undefined}
+                progressBackgroundColor={material ? scheme.surfaceContainerHigh : undefined}
+              />
+            ) : undefined
+          }
           {...sheetList}
           scrollEventThrottle={16}
           onScroll={(event) => {
             sheetList?.onScroll(event);
-            rememberSettingsScroll(title, event.nativeEvent.contentOffset.y);
-            if (heroTitle) setHeroAway(event.nativeEvent.contentOffset.y > settingsLayout.heroScrollThreshold);
+            const y = event.nativeEvent.contentOffset.y;
+            rememberSettingsScroll(title, y);
+            if (y > 0 !== scrolled) setScrolled(y > 0);
+            if (mediumAppBar && (y >= mediumTitleHeight) !== collapsed) setOffset(y);
+            if (heroTitle) setHeroAway(y > settingsLayout.heroScrollThreshold);
           }}
         >
+          {material && mediumAppBar ? <MaterialMediumTitle title={title} height={mediumTitleHeight} collapsed={collapsed} /> : null}
           {children}
         </ScrollView>
       ) : (
@@ -256,10 +295,6 @@ function ClassicEmptyState({ title, message, icon }: { title: string; message: s
       {message ? <Text style={[font.subheadline, styles.centered, { color: theme.secondaryLabel }]}>{message}</Text> : null}
     </View>
   );
-}
-
-export function SettingsPage(props: Parameters<typeof ClassicSettingsPage>[0]) {
-  return useDesign() === "material" ? <MaterialSettingsPage {...props} /> : <ClassicSettingsPage {...props} />;
 }
 
 export function BarButton(props: Parameters<typeof ClassicBarButton>[0]) {

@@ -3,7 +3,6 @@ import { Platform, StyleSheet, View, type ViewInstance } from "react-native";
 import Animated, { Easing, FadeIn, FadeOut } from "react-native-reanimated";
 import { refreshSettings } from "../../state/settings/actions";
 import { useSettingsNav, type SettingsRoute } from "../../state/settings/hooks";
-import { LookBackdrop } from "../ui";
 import { materialEasing, materialMotion } from "../ui/materialTokens";
 import { useCoverFocus } from "../ui/coverFocus";
 import { FilterListDetailPage, FilterListsPage, MyFiltersPage, TrustedSitesPage } from "./BlockingPages";
@@ -122,7 +121,6 @@ function HandBuiltSettings() {
   if (!shown) return null;
   return (
     <View testID="settingsStack" style={StyleSheet.absoluteFill}>
-      <LookBackdrop />
       <View key={shown.key} testID="settingsPage" style={StyleSheet.absoluteFill}>
         <SettingsPageFor route={shown.route} />
       </View>

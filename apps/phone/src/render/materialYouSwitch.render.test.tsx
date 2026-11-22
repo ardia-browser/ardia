@@ -56,6 +56,7 @@ onAndroid("turning Material You on changes the whole app at once, without a rela
   act(() => openSettings());
   settle();
   act(() => materialYouRow(root)!.props.onPress());
+  expect(materialBars(root)).toHaveLength(0);
   settle();
   expect(currentPreferences().materialYou).toBe(true);
   expect(counted).toHaveBeenCalledWith("material_you_turned_on");
@@ -63,6 +64,7 @@ onAndroid("turning Material You on changes the whole app at once, without a rela
   expect(materialBars(root)).toHaveLength(1);
   expect(materialYouRow(root)).toBeDefined();
   act(() => materialYouRow(root)!.props.onPress());
+  expect(materialBars(root)).toHaveLength(1);
   settle();
   expect(currentPreferences().materialYou).toBe(false);
   expect(counted).toHaveBeenCalledWith("material_you_turned_off");

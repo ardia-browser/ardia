@@ -1,7 +1,7 @@
 # Building the engine for Windows
 
 The Windows engine is the same tree as the Mac's (`docs/engine-build.md`): **Chromium 158.0.8127.36**, **Helium**
-0.22.1 (helium-chromium) with **helium-windows** 0.22.1.1 in place of helium-macos, then our patch series. It is
+0.22.2 (helium-chromium) with **helium-windows** 0.22.2.1 in place of helium-macos, then our patch series. It is
 cross-built on a **Linux host**, a Boat VM ([On a Linux host](#on-a-linux-host)): Linux is Chromium's supported host for
 Windows cross builds (`docs/win_cross.md` in the tree). The same scripts still run on a Mac, where the first engines were
 built, but **never build a Windows engine on the owner's Mac** (the owner's rule since 2026-11-15: a cross build pins
@@ -93,7 +93,7 @@ What differs from a Mac host, all in the scripts:
 | `package_win.py` | Matches the archive config's names to the built files without regard to case |
 
 The Windows pins (`helium-pins.ini` here) are the Windows build's own: the Mac moved to Chromium .50 and Helium 0.21.2
-on 2026-11-12 while the Windows engine stays on 0.21.1, so `03-helium.py` no longer requires the two to match. Its guard
+on 2026-11-12 while the Windows engine stayed on 0.21.1, so `03-helium.py` no longer requires the two to match. Its guard
 stage still fails on a shared skip the Windows series lacks.
 
 The toolchain made on Linux is MSVC **14.52.37025** with SDK 10.0.28000 (hash `44da279f35`, 4.58 GB in 9,901 files):
@@ -169,8 +169,8 @@ must not be published, and the repo is public.
 
 ## Helium for Windows
 
-helium-windows 0.22.1.1 (`8a04093`) is Helium's Windows packaging for 0.22.1; its `helium-chromium` submodule is exactly
-the 0.22.1 tag we pin (`1bccd2b`). Under 0.21.1.1 (`d6806de`) the submodule sat one commit past the tag (`42da6c5`, only `devutils/set_quilt_vars`), so
+helium-windows 0.22.2.1 (`35ea155`) is Helium's Windows packaging for 0.22.2; its `helium-chromium` submodule is exactly
+the 0.22.2 tag we pin (`f32f2c0`). No Windows engine has been built from it yet: the prebuilt in `prebuilt.json` is from 0.22.1 (its `source`, `38e436c`, pins 0.22.1, and the release source archive follows it), and 0.22.2.1 adds `helium/windows/bundle-hyphenation-data` to the Windows series. Under 0.21.1.1 (`d6806de`) the submodule sat one commit past the tag (`42da6c5`, only `devutils/set_quilt_vars`), so
 the patches are the same. `helium-pins.ini` pins both. Over helium-chromium's series it adds:
 
 - ungoogled-chromium's Windows patches: build fixes (`windows-fix-*`, `windows-disable-reorder-fix-linking`,

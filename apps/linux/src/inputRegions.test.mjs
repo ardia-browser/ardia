@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createInputRegions, REVEAL_DEADLINE_MS, subtract } from "./inputRegions.ts";
-import { holeClipPath, holesOf, localHoles, pagesAbove, paintersBeneath, PAGE_CORNER_RADIUS, separateHoles, windowCornerRadii } from "./pageHoles.ts";
+import { createPageHoles, holeClipPath, holesOf, localHoles, pagesAbove, paintersBeneath, PAGE_CORNER_RADIUS, separateHoles, windowCornerRadii } from "./pageHoles.ts";
 
 function node(rect, { children = [], pointer = true } = {}) {
   const element = { rect, children, pointer, isConnected: true, parent: null };
@@ -414,6 +414,32 @@ test("a page hole is square where it meets a window corner and keeps the card ra
   assert.doesNotMatch(fullScreen, /A/);
 });
 
+test("a page whose rect stays put gets new corners when the window around it resizes", () => {
+  const saved = { ResizeObserver: globalThis.ResizeObserver, MutationObserver: globalThis.MutationObserver };
+  globalThis.ResizeObserver = class { observe() {} unobserve() {} };
+  globalThis.MutationObserver = class { observe() {} disconnect() {} };
+  try {
+    const viewport = { width: 900, height: 700 };
+    const root = { ownerDocument: { defaultView: { visualViewport: viewport } }, closest: () => null };
+    const layer = { style: { clipPath: "" }, offsetWidth: 120, offsetHeight: 700, closest: () => null, getBoundingClientRect: () => ({ x: 800, y: 0, width: 120, height: 700 }) };
+    const page = { slot: { parentElement: root }, rect: { x: 240, y: 0, width: 660, height: 700 } };
+    const clipAt = (width) => holeClipPath({ width: 120, height: 700 }, localHoles({ x: 800, y: 0, width: 120, height: 700 }, { x: 1, y: 1 }, holesOf([page], { width, height: 700 })));
+    const painter = createPageHoles(root);
+    painter.addLayer(layer);
+    painter.pagesChanged([page]);
+    assert.equal(layer.style.clipPath, clipAt(900));
+    assert.deepEqual(holesOf([page], { width: 900, height: 700 })[0].radii, { upperLeft: 12, upperRight: 0, lowerRight: 0, lowerLeft: 12 });
+    viewport.width = 1000;
+    assert.deepEqual(holesOf([page], { width: 1000, height: 700 })[0].radii, { upperLeft: 12, upperRight: 12, lowerRight: 12, lowerLeft: 12 });
+    assert.notEqual(clipAt(1000), clipAt(900));
+    painter.windowChanged();
+    assert.equal(layer.style.clipPath, clipAt(1000));
+  } finally {
+    globalThis.ResizeObserver = saved.ResizeObserver;
+    globalThis.MutationObserver = saved.MutationObserver;
+  }
+});
+
 test("the shell cuts the same corners the engine clips, at fractional edges, any zoom, window widths that don't divide by it, and a rounded window", () => {
   const engineRadius = (insetX, insetY, windowRadius, own) => {
     if (insetX < 1 && insetY < 1) return { kind: "window", dip: windowRadius };
@@ -451,6 +477,13 @@ test("the shell cuts the same corners the engine clips, at fractional edges, any
     }
   }
   assert.ok(checked > 1000);
+  for (const [widthDip, heightDip] of [[900, 700], [1000, 700], [900, 800]]) {
+    const rect = { x: 240, y: 0, width: 660, height: 700 };
+    const engine = engineCorners(rect, widthDip, heightDip, 1, 0);
+    const shell = windowCornerRadii(rect, { width: widthDip, height: heightDip });
+    const got = [shell.upperLeft, shell.upperRight, shell.lowerRight, shell.lowerLeft];
+    engine.forEach((corner, index) => assert.equal(got[index], shellExpects(corner, 1), `corner ${index} of the same page in a ${widthDip}x${heightDip} window`));
+  }
   const ring = (radius) => ({ upperLeft: radius, upperRight: radius, lowerRight: radius, lowerLeft: radius });
   const atThreeHundred = windowCornerRadii({ x: 1 / 3, y: 1 / 3, width: 1000 / 3 - 2 / 3, height: 700 / 3 - 2 / 3 }, { width: 1000 / 3, height: 700 / 3 }, 12, 3, ring(24));
   assert.ok(Math.abs(atThreeHundred.upperLeft * 3 - 23) < 1e-9, "the hole is the engine's 23 DIP at 300 %, not 36");

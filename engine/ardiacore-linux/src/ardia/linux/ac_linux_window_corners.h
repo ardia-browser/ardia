@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
+#include <optional>
 #include <string_view>
 
 namespace ardia::linux_window_corners {
@@ -126,6 +127,32 @@ inline Box EnclosingBox(double left, double top, double right, double bottom) {
              .y = y,
              .width = right > left ? ClampedSpan(x, ClampedCeil(right)) : 0,
              .height = bottom > top ? ClampedSpan(y, ClampedCeil(bottom)) : 0};
+}
+
+struct FrameInsets {
+  int left = 0;
+  int top = 0;
+  int right = 0;
+  int bottom = 0;
+};
+
+constexpr std::optional<Box> DefaultBoundsWithoutFrame(Box bounds, int default_width, int default_height,
+                                                       FrameInsets framed, bool restored) {
+  if (!restored || bounds.width != default_width || bounds.height != default_height) return std::nullopt;
+  const int left = framed.left > 0 ? framed.left : 0;
+  const int top = framed.top > 0 ? framed.top : 0;
+  const int right = framed.right > 0 ? framed.right : 0;
+  const int bottom = framed.bottom > 0 ? framed.bottom : 0;
+  const long long width = static_cast<long long>(bounds.width) - left - right;
+  const long long height = static_cast<long long>(bounds.height) - top - bottom;
+  const long long x = static_cast<long long>(bounds.x) + left;
+  const long long y = static_cast<long long>(bounds.y) + top;
+  if ((left | top | right | bottom) == 0 || width < 1 || height < 1 || x > std::numeric_limits<int>::max() ||
+      y > std::numeric_limits<int>::max()) {
+    return std::nullopt;
+  }
+  return Box{.x = static_cast<int>(x), .y = static_cast<int>(y), .width = static_cast<int>(width),
+             .height = static_cast<int>(height)};
 }
 
 constexpr float NearCornerRadius(int inset_x, int inset_y, float window_radius, float own_radius) {

@@ -74,3 +74,15 @@ test("the shell's cleanup stops following the window's corners", async () => {
   const cleanup = body.slice(body.lastIndexOf("return () => {"));
   assert.match(cleanup, /\n    stopCorners\(\);\n/);
 });
+
+test("a window resize repaints the page holes as well as the regions", async () => {
+  const { readFileSync } = await import("node:fs");
+  const source = readFileSync(new URL("./shellAbove.ts", import.meta.url), "utf8");
+  const start = source.slice(source.indexOf("export function startShellAbove("));
+  const body = start.slice(0, start.indexOf("\n}\n"));
+  assert.match(body, /const resized = \(\) => \{\n    registry\.refresh\(\);\n    painter\.windowChanged\(\);\n  \};/);
+  assert.match(body, /window\.addEventListener\("resize", resized\);/);
+  const cleanup = body.slice(body.lastIndexOf("return () => {"));
+  assert.match(cleanup, /window\.removeEventListener\("resize", resized\);/);
+  assert.doesNotMatch(body, /addEventListener\("resize", refresh\)/);
+});

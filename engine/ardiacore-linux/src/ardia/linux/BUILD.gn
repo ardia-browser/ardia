@@ -409,6 +409,7 @@ source_set("linux") {
     "//chrome/browser/ui/select_file_policy",
     "//chrome/browser/ui/tab_contents",
     "//chrome/browser/ui/tabs:tab_strip",
+    "//chrome/browser/ui/views:window_sizer_linux",
     "//chrome/common",
     "//components/autofill/content/browser",
     "//components/infobars/content",

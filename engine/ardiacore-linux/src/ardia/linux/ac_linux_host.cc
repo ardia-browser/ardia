@@ -190,6 +190,7 @@
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/browser_widget.h"
 #include "chrome/browser/ui/views/frame/contents_container_view.h"
+#include "chrome/browser/ui/views/window_sizer_linux.h"
 #include "chrome/browser/ui/views/tab_contents/chrome_web_contents_view_focus_helper.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/chrome_switches.h"
@@ -276,6 +277,7 @@
 #include "ui/native_theme/native_theme.h"
 #include "ui/ozone/public/ozone_platform.h"
 #include "ui/platform_window/extensions/wayland_extension.h"
+#include "ui/platform_window/platform_window_delegate.h"
 #include "ui/views/background.h"
 #include "ui/views/controls/webview/webview.h"
 #include "ui/views/controls/native/native_view_host.h"
@@ -1446,6 +1448,9 @@ class ShellHostView : public views::View,
   bool FrameIsBorderless() const;
   base::DictValue WindowDecorationsValue() const;
   void FollowDecorations();
+  linux_window_corners::FrameInsets FramedRestoredInsets();
+  bool HasWaylandToplevel() const;
+  void KeepDefaultVisibleSize();
   bool HostsAcceleratedWidget(gfx::AcceleratedWidget widget) const;
   PrefService* WindowOutputPrefs() const;
   void RememberWindowOutput();
@@ -1707,6 +1712,7 @@ class ShellHostView : public views::View,
   void ReportWindowState();
   void LayoutOverlay();
   void RoundWindowCorners();
+  void ApplyWindowCorners(const linux_window_corners::Corners& corners);
   void ClipViewport(views::WebView* view);
   void HideCaptionButtons();
   void ShellPainted();
@@ -1740,6 +1746,8 @@ class ShellHostView : public views::View,
   raw_ptr<views::View> curtain_ = nullptr;
   std::optional<linux_window_corners::Corners> window_corners_;
   std::optional<std::pair<bool, linux_window_corners::DecorationAnswer>> followed_decorations_;
+  bool measuring_framed_insets_ = false;
+  bool default_size_followed_ = false;
   base::OneShotTimer curtain_timer_;
   raw_ptr<HostMessageHandler> handler_ = nullptr;
   uint64_t renderer_generation_ = 0;
@@ -3399,7 +3407,14 @@ void ShellHostView::RoundWindowCorners() {
       .lower_right = frame_corners.lower_right(),
       .lower_left = frame_corners.lower_left(),
   };
-  if (window_corners_ == corners) return;
+  if (window_corners_ != corners) ApplyWindowCorners(corners);
+  for (const auto& [id, binding] : bindings_) {
+    ClipViewport(binding->viewport());
+    ClipViewport(binding->devtools_viewport());
+  }
+}
+
+void ShellHostView::ApplyWindowCorners(const linux_window_corners::Corners& corners) {
   window_corners_ = corners;
   VLOG(1) << "ardia window " << window_id_ << " frame corners " << corners.upper_left << " " << corners.upper_right
           << " " << corners.lower_right << " " << corners.lower_left;
@@ -3421,10 +3436,6 @@ void ShellHostView::RoundWindowCorners() {
   if (curtain_) {
     curtain_->layer()->SetRoundedCornerRadius(rounded);
     curtain_->layer()->SetIsFastRoundedCorner(true);
-  }
-  for (const auto& [id, binding] : bindings_) {
-    ClipViewport(binding->viewport());
-    ClipViewport(binding->devtools_viewport());
   }
 }
 
@@ -4709,13 +4720,20 @@ const std::string& LaunchDesktop() {
   return *desktop;
 }
 
-linux_window_corners::DecorationAnswer ShellHostView::DecorationAnswer() const {
-  const views::Widget* widget = GetWidget();
+const ui::WaylandToplevelExtension* WaylandToplevelOf(const views::Widget* widget) {
   aura::Window* window = widget ? widget->GetNativeWindow() : nullptr;
   auto* tree_host = window ? static_cast<aura::WindowTreeHostPlatform*>(window->GetHost()) : nullptr;
   const ui::PlatformWindow* platform = tree_host ? tree_host->platform_window() : nullptr;
-  const ui::WaylandToplevelExtension* toplevel = platform ? ui::GetWaylandToplevelExtension(*platform) : nullptr;
+  return platform ? ui::GetWaylandToplevelExtension(*platform) : nullptr;
+}
+
+linux_window_corners::DecorationAnswer ShellHostView::DecorationAnswer() const {
+  const ui::WaylandToplevelExtension* toplevel = WaylandToplevelOf(GetWidget());
   return linux_window_corners::DecorationAnswerOf(toplevel ? toplevel->CompositorDecorationMode() : 0);
+}
+
+bool ShellHostView::HasWaylandToplevel() const {
+  return WaylandToplevelOf(GetWidget()) != nullptr;
 }
 
 bool ShellHostView::DecoratedByCompositor() const {
@@ -4723,6 +4741,7 @@ bool ShellHostView::DecoratedByCompositor() const {
 }
 
 bool ShellHostView::FrameIsBorderless() const {
+  if (measuring_framed_insets_) return false;
   return followed_decorations_ ? followed_decorations_->first : DecoratedByCompositor();
 }
 
@@ -4745,6 +4764,39 @@ bool ShellHostView::HostsAcceleratedWidget(gfx::AcceleratedWidget widget) const 
   return window && window->GetHost() && window->GetHost()->GetAcceleratedWidget() == widget;
 }
 
+class DefaultWindowSizer : public WindowSizerLinux {
+ public:
+  explicit DefaultWindowSizer(BrowserWindowInterface* browser) : WindowSizerLinux(nullptr, browser) {}
+  gfx::Rect DefaultBounds(const display::Display& display) const { return GetDefaultWindowBounds(display); }
+};
+
+linux_window_corners::FrameInsets ShellHostView::FramedRestoredInsets() {
+  const views::Widget* widget = GetWidget();
+  aura::Window* window = widget ? widget->GetNativeWindow() : nullptr;
+  ui::PlatformWindowDelegate* tree_host =
+      window ? static_cast<aura::WindowTreeHostPlatform*>(window->GetHost()) : nullptr;
+  if (!tree_host) return {};
+  base::AutoReset<bool> framed(&measuring_framed_insets_, true);
+  const gfx::Insets insets = tree_host->CalculateInsetsInDIP(ui::PlatformWindowState::kNormal);
+  return {.left = insets.left(), .top = insets.top(), .right = insets.right(), .bottom = insets.bottom()};
+}
+
+void ShellHostView::KeepDefaultVisibleSize() {
+  views::Widget* widget = GetWidget();
+  if (!widget || !browser_) return;
+  const bool restored = !widget->IsMaximized() && !widget->IsFullscreen() && !widget->IsMinimized();
+  const gfx::Rect bounds = widget->GetWindowBoundsInScreen();
+  const gfx::Rect default_bounds = DefaultWindowSizer(browser_).DefaultBounds(
+      display::Screen::Get()->GetDisplayNearestWindow(widget->GetNativeWindow()));
+  const std::optional<linux_window_corners::Box> kept = linux_window_corners::DefaultBoundsWithoutFrame(
+      {.x = bounds.x(), .y = bounds.y(), .width = bounds.width(), .height = bounds.height()},
+      default_bounds.width(), default_bounds.height(), FramedRestoredInsets(), restored);
+  if (!kept) return;
+  VLOG(1) << "ardia window " << window_id_ << " keeps its default visible size " << kept->width << "x"
+          << kept->height << " without the frame";
+  widget->SetBounds(gfx::Rect(kept->x, kept->y, kept->width, kept->height));
+}
+
 void ShellHostView::FollowDecorations() {
   const linux_window_corners::DecorationAnswer answer = DecorationAnswer();
   const bool decorated = DecoratedByCompositor();
@@ -4759,6 +4811,11 @@ void ShellHostView::FollowDecorations() {
     RefreshEngineFrame();
   } else if (changed) {
     RoundWindowCorners();
+  }
+  if (decorated && !default_size_followed_ &&
+      (answer != linux_window_corners::DecorationAnswer::kNone || !HasWaylandToplevel())) {
+    default_size_followed_ = true;
+    KeepDefaultVisibleSize();
   }
   if (!window_id_.empty()) {
     Event("ArdiaShell", linux_window_corners::kWindowDecorationsEvent,

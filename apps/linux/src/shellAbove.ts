@@ -76,10 +76,14 @@ export function startShellAbove(host: ArdiaHost, root: HTMLElement = document.bo
   holes = painter;
   regions = registry;
   const refresh = () => registry.refresh();
-  window.addEventListener("resize", refresh);
+  const resized = () => {
+    registry.refresh();
+    painter.windowChanged();
+  };
+  window.addEventListener("resize", resized);
   window.addEventListener("scroll", refresh, true);
   return () => {
-    window.removeEventListener("resize", refresh);
+    window.removeEventListener("resize", resized);
     window.removeEventListener("scroll", refresh, true);
     document.documentElement.classList.remove(SHELL_ABOVE_CLASS);
     glass.stop();

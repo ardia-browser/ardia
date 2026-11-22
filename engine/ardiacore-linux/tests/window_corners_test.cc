@@ -66,6 +66,12 @@ int main() {
                 corners::Corners{.upper_left = 8, .upper_right = kCard, .lower_right = kCard, .lower_left = kCard});
   static_assert(corners::ClipToWindow({.x = 1, .y = 0, .width = 899, .height = 700}, 900, 700, kFrame, kCard) ==
                 corners::Corners{.upper_left = kCard, .upper_right = 8, .lower_right = 0, .lower_left = kCard});
+  static_assert(corners::ClipToWindow({.x = 240, .y = 0, .width = 660, .height = 700}, 900, 700, kSquare, kCard) ==
+                corners::Corners{.upper_left = kCard, .upper_right = 0, .lower_right = 0, .lower_left = kCard});
+  static_assert(corners::ClipToWindow({.x = 240, .y = 0, .width = 660, .height = 700}, 1000, 700, kSquare, kCard) ==
+                corners::Corners{.upper_left = kCard, .upper_right = kCard, .lower_right = kCard, .lower_left = kCard});
+  static_assert(corners::ClipToWindow({.x = 240, .y = 0, .width = 660, .height = 700}, 900, 800, kSquare, kCard) ==
+                corners::Corners{.upper_left = kCard, .upper_right = 0, .lower_right = kCard, .lower_left = kCard});
   for (const float window_radius : {12.0f, 19.0f, 24.0f}) {
     const corners::Corners window{window_radius, window_radius, window_radius, window_radius};
     for (const int inset : {0, 1, 2, 3, 8}) {
@@ -124,6 +130,30 @@ int main() {
     assert(empty.x == 10 && empty.y == 20 && empty.width == 0 && empty.height == 0);
     const corners::Box huge = corners::EnclosingBox(-1e300, 0.0, 1e300, std::nan(""));
     assert(huge.x == std::numeric_limits<int>::min() && huge.width == std::numeric_limits<int>::max() && huge.height == 0);
+  }
+  {
+    constexpr corners::FrameInsets kShadow{.left = 10, .top = 10, .right = 10, .bottom = 10};
+    constexpr corners::Box kDefault{.x = 0, .y = 0, .width = 945, .height = 1060};
+    constexpr auto kept = corners::DefaultBoundsWithoutFrame(kDefault, 945, 1060, kShadow, true);
+    static_assert(kept && kept->x == 10 && kept->y == 10 && kept->width == 925 && kept->height == 1040);
+    static_assert(!corners::DefaultBoundsWithoutFrame(kDefault, 945, 1060, kShadow, false));
+    static_assert(!corners::DefaultBoundsWithoutFrame({.width = 925, .height = 1040}, 945, 1060, kShadow, true));
+    static_assert(!corners::DefaultBoundsWithoutFrame({.width = 945, .height = 1040}, 945, 1060, kShadow, true));
+    static_assert(!corners::DefaultBoundsWithoutFrame(kDefault, 945, 1060, {}, true));
+    static_assert(!corners::DefaultBoundsWithoutFrame({.width = 20, .height = 20}, 20, 20, kShadow, true));
+    constexpr auto lopsided =
+        corners::DefaultBoundsWithoutFrame({.x = 100, .y = 50, .width = 800, .height = 600}, 800, 600,
+                                           {.left = 3, .top = 40, .right = 5, .bottom = -2}, true);
+    static_assert(lopsided && lopsided->x == 103 && lopsided->y == 90 && lopsided->width == 792 &&
+                  lopsided->height == 560);
+    const auto far = corners::DefaultBoundsWithoutFrame(
+        {.x = std::numeric_limits<int>::max() - 5, .y = 0, .width = 945, .height = 1060}, 945, 1060, kShadow, true);
+    assert(!far);
+    corners::Box saved = *kept;
+    for (int launch = 0; launch < 3; ++launch) {
+      if (const auto next = corners::DefaultBoundsWithoutFrame(saved, 945, 1060, kShadow, true)) saved = *next;
+    }
+    assert(saved.width == 925 && saved.height == 1040);
   }
   std::puts("ok");
   return 0;

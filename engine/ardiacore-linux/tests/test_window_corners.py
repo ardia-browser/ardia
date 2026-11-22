@@ -45,8 +45,14 @@ class WindowCornersTests(unittest.TestCase):
         self.assertIn('frame && views::Widget::IsWindowCompositingSupported()', round_corners)
         self.assertIn('? frame->GetWindowRoundedCorners()', round_corners)
         self.assertNotIn('is_utility()) return', round_corners)
-        self.assertLess(round_corners.index('if (window_corners_ == corners) return;'),
-                        round_corners.index('shell_->holder()->SetNativeViewCornerRadii(rounded);'))
+        self.assertNotIn('return;', round_corners[round_corners.index('const linux_window_corners::Corners corners{'):])
+        self.assertIn('  if (window_corners_ != corners) ApplyWindowCorners(corners);\n'
+                      '  for (const auto& [id, binding] : bindings_) {\n    ClipViewport(binding->viewport());\n'
+                      '    ClipViewport(binding->devtools_viewport());\n  }', round_corners)
+        apply = between(HOST, 'void ShellHostView::ApplyWindowCorners(const linux_window_corners::Corners& corners) {', '\n}\n')
+        self.assertLess(apply.index('window_corners_ = corners;'), apply.index('shell_->holder()->SetNativeViewCornerRadii(rounded);'))
+        self.assertNotIn('ClipViewport', apply)
+        round_corners = apply
         self.assertIn('if (is_utility()) SetBackground(views::CreateRoundedRectBackground(kColorWebContentsBackground, rounded));', round_corners)
         self.assertIn('if (curtain_) {\n    curtain_->layer()->SetRoundedCornerRadius(rounded);\n'
                       '    curtain_->layer()->SetIsFastRoundedCorner(true);\n  }', round_corners)
@@ -54,7 +60,6 @@ class WindowCornersTests(unittest.TestCase):
                       '    browser_view_->layer()->SetFillsBoundsOpaquely(false);\n  }\n'
                       '  if (browser_view_->layer()) {\n    browser_view_->layer()->SetRoundedCornerRadius(rounded);\n'
                       '    browser_view_->layer()->SetIsFastRoundedCorner(true);\n  }', round_corners)
-        self.assertIn('ClipViewport(binding->viewport());\n    ClipViewport(binding->devtools_viewport());', round_corners)
         clip = between(HOST, 'void ShellHostView::ClipViewport(views::WebView* view) {', '\n}\n')
         self.assertIn('linux_window_corners::ClipToWindow(', clip)
         self.assertIn('width(), height(),', clip)
@@ -68,9 +73,11 @@ class WindowCornersTests(unittest.TestCase):
         self.assertNotIn('g_ardia_linux_compositor_decoration_mode', HOST)
         self.assertIn('extern void (*g_ardia_linux_compositor_decoration_changed)(gfx::AcceleratedWidget widget);', HOST)
         answer = between(HOST, 'linux_window_corners::DecorationAnswer ShellHostView::DecorationAnswer() const {', '\n}\n')
-        self.assertIn('static_cast<aura::WindowTreeHostPlatform*>(window->GetHost())', answer)
-        self.assertIn('ui::GetWaylandToplevelExtension(*platform)', answer)
+        self.assertIn('WaylandToplevelOf(GetWidget())', answer)
         self.assertIn('toplevel->CompositorDecorationMode()', answer)
+        toplevel = between(HOST, 'const ui::WaylandToplevelExtension* WaylandToplevelOf(const views::Widget* widget) {', '\n}\n')
+        self.assertIn('static_cast<aura::WindowTreeHostPlatform*>(window->GetHost())', toplevel)
+        self.assertIn('ui::GetWaylandToplevelExtension(*platform)', toplevel)
         decided = between(HOST, 'bool ShellHostView::DecoratedByCompositor() const {', '\n}\n')
         self.assertIn('CompositorDecorates(DecorationAnswer(), LaunchDesktop())', decided)
         borderless = between(HOST, 'g_ardia_linux_borderless_frame = [](const BrowserWindowInterface* browser) {', '\n  };\n')
@@ -92,6 +99,41 @@ class WindowCornersTests(unittest.TestCase):
         self.assertIn('return std::move(done).Run(true, base::Value(target->WindowDecorationsValue()));', route)
         self.assertIn('for (const char* capability : ardia::linux_window_corners::kWindowCornersCapabilities) capabilities.Append(capability);', HOST)
         self.assertIn('bootstrap.Set("shellZoom", blink::ZoomLevelToZoomFactor(', HOST)
+
+    def test_a_window_resize_reclips_every_page_even_when_the_frame_radii_stay(self):
+        layout = between(HOST, 'void ShellHostView::LayoutOverlay() {', '\n}\n')
+        self.assertLess(layout.index('SetBoundsRect(browser_view_->GetLocalBounds());'), layout.index('RoundWindowCorners();'))
+        self.assertIn('void OnViewBoundsChanged(views::View*) override { LayoutOverlay(); }', HOST)
+        round_corners = between(HOST, 'void ShellHostView::RoundWindowCorners() {', '\n}\n')
+        self.assertLess(round_corners.index('ApplyWindowCorners(corners);'), round_corners.index('ClipViewport(binding->viewport());'))
+
+    def test_a_window_still_at_the_default_size_keeps_its_visible_size_when_it_loses_the_frame(self):
+        keep = between(HOST, 'void ShellHostView::KeepDefaultVisibleSize() {', '\n}\n')
+        self.assertIn('const bool restored = !widget->IsMaximized() && !widget->IsFullscreen() && !widget->IsMinimized();', keep)
+        self.assertNotIn('tiled()', keep)
+        self.assertIn('DefaultWindowSizer(browser_).DefaultBounds(', keep)
+        self.assertIn('linux_window_corners::DefaultBoundsWithoutFrame(', keep)
+        self.assertIn('FramedRestoredInsets(), restored);\n  if (!kept) return;', keep)
+        self.assertIn('widget->SetBounds(gfx::Rect(kept->x, kept->y, kept->width, kept->height));', keep)
+        sizer = between(HOST, 'class DefaultWindowSizer : public WindowSizerLinux {', '\n};\n')
+        self.assertIn('WindowSizerLinux(nullptr, browser)', sizer)
+        self.assertIn('return GetDefaultWindowBounds(display);', sizer)
+        framed = between(HOST, 'linux_window_corners::FrameInsets ShellHostView::FramedRestoredInsets() {', '\n}\n')
+        self.assertLess(framed.index('base::AutoReset<bool> framed(&measuring_framed_insets_, true);'),
+                        framed.index('tree_host->CalculateInsetsInDIP(ui::PlatformWindowState::kNormal)'))
+        borderless = between(HOST, 'bool ShellHostView::FrameIsBorderless() const {', '\n}\n')
+        self.assertLess(borderless.index('if (measuring_framed_insets_) return false;'),
+                        borderless.index('return followed_decorations_'))
+        follow = between(HOST, 'void ShellHostView::FollowDecorations() {', '\n}\n')
+        self.assertEqual(follow.count('KeepDefaultVisibleSize();'), 1)
+        self.assertIn('if (decorated && !default_size_followed_ &&\n'
+                      '      (answer != linux_window_corners::DecorationAnswer::kNone || !HasWaylandToplevel())) {\n'
+                      '    default_size_followed_ = true;\n    KeepDefaultVisibleSize();\n  }', follow)
+        self.assertLess(follow.index('RefreshEngineFrame();'), follow.index('KeepDefaultVisibleSize();'))
+        self.assertLess(follow.index('if (followed_decorations_ == std::pair(decorated, answer)) return;'),
+                        follow.index('KeepDefaultVisibleSize();'))
+        build = (LINUX / 'BUILD.gn').read_text()
+        self.assertIn('"//chrome/browser/ui/views:window_sizer_linux",', build)
 
     def test_a_viewport_rounds_out_from_doubles_and_windows_report_the_decision_the_frame_follows(self):
         viewport = between(HOST, 'void ShellHostView::SetViewport(', '\n}\n')

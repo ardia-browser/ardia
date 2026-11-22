@@ -278,6 +278,8 @@ a Windows build needs.
 | `chromium-helium-ntp-third-party.patch` | applies | OS-neutral | Shared; nothing more |
 | `chromium-helium-context-menu-cast.patch` | applies | OS-neutral | Shared; nothing more |
 | `chromium-helium-devtools-inspect-shortcut.patch` | applies | OS-neutral | Shared; nothing more |
+| `chromium-helium-noise-common-hardware.patch` | not yet built | OS-neutral | Shared: the core count; the GPU name only changes on an Apple GPU. Neither helium-windows nor a Windows patch touches its files |
+| `chromium-device-memory-cap.patch` | not yet built | OS-neutral | Shared; nothing more |
 | `chromium-neterror-game.patch` | applies | OS-neutral | Shared; nothing more |
 | `chromium-branding.patch` | applies | OS-neutral | The `BRANDING` file; its bundle and team ids are Mac's. Windows install names come from the same file and Helium's Windows branding |
 | `chromium-safe-storage-name.patch` | applies | Mac only | None: Windows keeps the cookie and password key in `Local State`, encrypted with DPAPI, with no item name |

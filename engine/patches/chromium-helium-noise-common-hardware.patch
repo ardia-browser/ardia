@@ -1,0 +1,230 @@
+SPDX-License-Identifier: GPL-3.0-only
+Changes code from Helium's helium/core/noise/hardware-concurrency.patch (GPL-3.0, The Helium Authors).
+
+What a page reads about the processor and the GPU is a common value instead of this machine's, so it adds little to a
+fingerprint. Bits are from EFF's Cover Your Tracks (2026-11-20, about 367,000 browsers tested in the last 45 days).
+
+- navigator.hardwareConcurrency, in pages, workers and a detached frame's navigator, is 8 on a machine with 8 or more
+  cores, 4 with 4 to 7, and 2 below, instead of Helium's per-site pick of n, n-2 or n-4 from n clamped to 16: 2.0 bits
+  for 8, against 4.4 to 7.2 for 12, 14 or 16. It is bucketed before a DevTools override applies, so emulation reports
+  the value it sets.
+- UNMASKED_RENDERER_WEBGL (WEBGL_debug_renderer_info), and the GL_RENDERER of a webglcontextcreationerror's message,
+  name a common chip of the same Apple GPU generation instead of this one: "ANGLE (Apple, ANGLE Metal Renderer: Apple
+  M1, Unspecified Version)" for every M1, M2's for every M2, and M4's for M3 and later; only the chip changes, so the
+  error message keeps its version. Other APIs already tell the generations apart (WebGPU's atomic-vec2u-min-max from
+  M2, AV1 hardware decoding in Media Capabilities and WebCodecs from M3), so a name from an earlier generation would
+  contradict them. An M5 Pro goes from 9.7 bits to 7.5 (M4); an M1 reads 7.8 and an M2 8.1. The vendor string is
+  already the same on every Apple GPU, and other GPUs (Linux, Windows, a virtual Mac's) keep their real name. Safari's
+  "Apple GPU" scores 3.0 bits on its own, but next to Chrome's user agent and client hints it is a pairing only Ardia
+  would send. When a user turns on ungoogled's SpoofWebGLInfo flag, its strings still win.
+
+Both follow Helium's noise switches: the "Common CPU core count and GPU name" flag (Helium's hardware-concurrency
+flag, reworded) turns both off, and a site exempt from Helium's noise reads the real values. The GPU itself, WebGL's
+limits and Chrome's own thread pools are untouched: only a page that sizes a worker pool from hardwareConcurrency gets
+fewer workers, on a machine with 3, 5 to 7, or more than 8 cores. Measured on an 18-core M5 Pro, interleaved against
+the same engine without this patch: Speedometer 3.1 55.3 against 55.7 and JetStream 2.2 626 against 619 (noise), pools
+of a fixed 8, 12 or 18 workers equal, and a CPU-bound pool sized from hardwareConcurrency 5.8 s against 3.6 s (8
+workers against Helium's 14 or 16 in these runs; it picks 12 to 16). Shared by every platform: on Linux and Windows
+the GPU name is unchanged and only the core count moves.
+
+diff --git a/chrome/browser/helium_flag_entries.h b/chrome/browser/helium_flag_entries.h
+--- a/chrome/browser/helium_flag_entries.h
++++ b/chrome/browser/helium_flag_entries.h
+@@ -37,9 +37,10 @@
+      "fingerprinting. Ardia flag.",
+      kOsAll, FEATURE_VALUE_TYPE(blink::features::kHeliumNoiseAudio)},
+     {helium::kHeliumNoiseCpuCoresCommandLine,
+-     "[Ardia Noise] Randomize number of CPU cores",
+-     "Randomizes the number of cores returned by "
+-     "`navigator.hardwareConcurrency` in a reasonable range. Ardia flag.",
++     "[Ardia Noise] Common CPU core count and GPU name",
++     "Reports a common number of cores (8, 4 or 2) in "
++     "`navigator.hardwareConcurrency` and a common Apple GPU name in WebGL "
++     "instead of this machine's. Ardia flag.",
+      kOsAll, FEATURE_VALUE_TYPE(blink::features::kHeliumNoiseCpuCores)},
+     // core/network
+     {helium::kDisableEchCommandLine, "Disable Encrypted Client Hello (ECH)",
+diff --git a/third_party/blink/renderer/core/execution_context/navigator_base.cc b/third_party/blink/renderer/core/execution_context/navigator_base.cc
+--- a/third_party/blink/renderer/core/execution_context/navigator_base.cc
++++ b/third_party/blink/renderer/core/execution_context/navigator_base.cc
+@@ -9,7 +9,6 @@
+ #include "third_party/blink/public/common/features.h"
+ #include "third_party/blink/renderer/core/execution_context/execution_context.h"
+ #include "third_party/blink/renderer/core/frame/navigator_concurrent_hardware.h"
+-#include "third_party/blink/renderer/core/helium_noise/helium_noise_hash.h"
+ #include "third_party/blink/renderer/core/probe/core_probes.h"
+ #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
+ #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
+@@ -57,50 +56,21 @@ String GetReducedNavigatorPlatform() {
+ #endif
+ }
+ 
+-constexpr const unsigned kMinNoisedCores = 2;
+-constexpr const unsigned kMaxNoisedCores = 16;
+-
+-std::vector<unsigned> PossibleValuesForCoreCount(unsigned n) {
+-  // Clamp the number of cores between [2..=16], as other
+-  // configurations are less common.
+-  n = std::clamp(n, kMinNoisedCores, kMaxNoisedCores);
+-
+-  // A machine with a odd number of CPUs is very uncommon.
+-  // Floor it to the lower even number.
+-  if (n % 2) {
+-    n -= 1;
++unsigned CommonCoreCount(unsigned n) {
++  if (n >= 8) {
++    return 8;
+   }
+-
+-  // If we can subtract some amount and still end up with
+-  // a common CPU count (which is the case for most configurations)
+-  // let's add it to the list of possible values.
+-  std::vector<unsigned> candidates = {n};
+-  if (n > 4) {
+-    candidates.push_back(n - 4);
+-  }
+-
+-  if (n > 2) {
+-    candidates.push_back(n - 2);
+-  }
+-
+-  return candidates;
++  return n >= 4 ? 4 : 2;
+ }
+ 
+ unsigned MaybeNoiseCoreCount(ExecutionContext* execution_context, unsigned n) {
+   if (!base::FeatureList::IsEnabled(blink::features::kHeliumNoiseCpuCores) ||
+-      !execution_context ||
+-      !execution_context->GetHeliumNoiseTokens().contains(
+-          HeliumNoiseFeature::kHardware)) {
++      (execution_context &&
++       !execution_context->GetHeliumNoiseTokens().contains(
++           HeliumNoiseFeature::kHardware))) {
+     return n;
+   }
+-
+-  auto token_hash =
+-      HeliumNoiseHash(execution_context->GetHeliumNoiseTokens().at(
+-          HeliumNoiseFeature::kHardware));
+-  token_hash.Update(n);
+-
+-  auto values = PossibleValuesForCoreCount(n);
+-  return values[token_hash.GetValueBelow(static_cast<int>(values.size()))];
++  return CommonCoreCount(n);
+ }
+ 
+ }  // namespace
+@@ -134,12 +104,12 @@ void NavigatorBase::Trace(Visitor* visitor) const {
+ unsigned int NavigatorBase::hardwareConcurrency() const {
+   if (base::FeatureList::IsEnabled(blink::features::kReducedSystemInfo))
+     return 2;
+-  unsigned int hardware_concurrency =
+-      NavigatorConcurrentHardware::hardwareConcurrency();
++  unsigned int hardware_concurrency = MaybeNoiseCoreCount(
++      GetExecutionContext(), NavigatorConcurrentHardware::hardwareConcurrency());
+ 
+   probe::ApplyHardwareConcurrencyOverride(
+       probe::ToCoreProbeSink(GetExecutionContext()), hardware_concurrency);
+-  return MaybeNoiseCoreCount(GetExecutionContext(), hardware_concurrency);
++  return hardware_concurrency;
+ }
+ 
+ ExecutionContext* NavigatorBase::GetUAExecutionContext() const {
+diff --git a/third_party/blink/renderer/modules/webgl/webgl_rendering_context_base.cc b/third_party/blink/renderer/modules/webgl/webgl_rendering_context_base.cc
+--- a/third_party/blink/renderer/modules/webgl/webgl_rendering_context_base.cc
++++ b/third_party/blink/renderer/modules/webgl/webgl_rendering_context_base.cc
+@@ -64,6 +64,7 @@
+ #include "media/gfx/paint_canvas_video_renderer.h"
+ #include "media/gfx/video_frame_shared_image_cache.h"
+ #include "third_party/blink/public/common/features.h"
++#include "third_party/blink/public/common/helium_noise/noise_token.h"
+ #include "third_party/blink/public/common/thread_safe_browser_interface_broker_proxy.h"
+ #include "third_party/blink/public/mojom/gpu/gpu.mojom-blink.h"
+ #include "third_party/blink/public/platform/platform.h"
+@@ -163,6 +164,7 @@
+ #include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
+ #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
+ #include "third_party/blink/renderer/platform/wtf/functional.h"
++#include "third_party/blink/renderer/platform/wtf/text/ascii_ctype.h"
+ #include "third_party/blink/renderer/platform/wtf/text/format.h"
+ #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
+ #include "third_party/blink/renderer/platform/wtf/text/string_utf8_adaptor.h"
+@@ -369,6 +371,37 @@ WebGLRenderingContextBaseMap& ForciblyEvictedContexts() {
+   return holder_persistent->Value();
+ }
+ 
++String CommonRendererName(ExecutionContext* execution_context,
++                          const String& renderer) {
++  constexpr char kAppleMetalRenderer[] =
++      "ANGLE (Apple, ANGLE Metal Renderer: Apple M";
++  constexpr wtf_size_t kChipAt =
++      static_cast<wtf_size_t>(sizeof(kAppleMetalRenderer) - 1);
++  if (!base::FeatureList::IsEnabled(blink::features::kHeliumNoiseCpuCores) ||
++      (execution_context &&
++       !execution_context->GetHeliumNoiseTokens().contains(
++           HeliumNoiseFeature::kHardware)) ||
++      !renderer.starts_with(kAppleMetalRenderer)) {
++    return renderer;
++  }
++  const wtf_size_t chip_end = renderer.find(", ", kChipAt);
++  if (chip_end == String::npos) {
++    return renderer;
++  }
++  unsigned generation = 0;
++  for (wtf_size_t i = kChipAt; i < chip_end && IsAsciiDigit(renderer[i]);
++       ++i) {
++    generation = generation * 10 + static_cast<unsigned>(renderer[i] - '0');
++  }
++  if (generation == 0) {
++    return renderer;
++  }
++  const char* common_generation =
++      generation >= 3 ? "4" : generation == 2 ? "2" : "1";
++  return StrCat({StringView(renderer, 0, kChipAt), common_generation,
++                 StringView(renderer, chip_end)});
++}
++
+ }  // namespace
+ 
+ ScopedRGBEmulationColorMask::ScopedRGBEmulationColorMask(
+@@ -701,6 +734,7 @@ static void FormatWebGLStatusString(const StringView& gl_info,
+ }
+ 
+ static String ExtractWebGLContextCreationError(
++    ExecutionContext* execution_context,
+     const Platform::WebGLContextInfo& info) {
+   StringBuilder builder;
+   builder.Append("Could not create a WebGL context");
+@@ -711,7 +745,9 @@ static String ExtractWebGLContextCreationError(
+       "DEVICE", info.device_id ? Format("0x{:04x}", info.device_id) : "0xffff",
+       builder);
+   FormatWebGLStatusString("GL_VENDOR", info.vendor_info, builder);
+-  FormatWebGLStatusString("GL_RENDERER", info.renderer_info, builder);
++  FormatWebGLStatusString(
++      "GL_RENDERER", CommonRendererName(execution_context, info.renderer_info),
++      builder);
+   FormatWebGLStatusString("GL_VERSION", info.driver_version, builder);
+   FormatWebGLStatusString("Sandboxed", info.sandboxed ? "yes" : "no", builder);
+   FormatWebGLStatusString("Optimus", info.optimus ? "yes" : "no", builder);
+@@ -759,7 +795,7 @@ WebGLRenderingContextBase::CreateContextProviderInternal(
+     g_should_fail_context_creation_for_testing = false;
+     host->HostDispatchEvent(WebGLContextEvent::Create(
+         event_type_names::kWebglcontextcreationerror,
+-        ExtractWebGLContextCreationError(*context_info)));
++        ExtractWebGLContextCreationError(execution_context, *context_info)));
+     return nullptr;
+   }
+   gpu::gles2::GLES2Interface* gl = context_provider->ContextGL();
+@@ -4297,8 +4333,10 @@ ScriptValue WebGLRenderingContextBase::getParameter(ScriptState* script_state,
+       if (ExtensionEnabled(kWebGLDebugRendererInfoName)) {
+         if (base::FeatureList::IsEnabled(blink::features::kSpoofWebGLInfo))
+           return WebGLAny(script_state, String(blink::features::kSpoofWebGLRendererParam.Get()));
+-        return WebGLAny(script_state,
+-                        String(ContextGL()->GetString(GL_RENDERER)));
++        return WebGLAny(
++            script_state,
++            CommonRendererName(ExecutionContext::From(script_state),
++                               String(ContextGL()->GetString(GL_RENDERER))));
+       }
+       SynthesizeGLError(
+           GL_INVALID_ENUM, "getParameter",

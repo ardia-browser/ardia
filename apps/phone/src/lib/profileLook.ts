@@ -1,4 +1,4 @@
-import { hslToRgb, rgbToHsl } from "./color.ts";
+import { hslToRgb, rgbToHsl, withAlpha } from "./color.ts";
 
 type Rgb = readonly [number, number, number];
 
@@ -130,6 +130,10 @@ export function spaceTone(source: LookSource | null, dark: boolean, increasedCon
 }
 
 export type NativeLookColors = { color: string; themeColors: string[]; darkThemeColors: string[] | null };
+
+const GLASS_TINT_SHARE = 0.15;
+
+export const lookGlassTint = (look: ProfileLook): string | undefined => (look.isNeutral ? undefined : withAlpha(look.tint, GLASS_TINT_SHARE));
 
 export function nativeLookColors(look: ProfileLook): NativeLookColors {
   return { color: look.preset ?? look.swatch, themeColors: [...look.theme], darkThemeColors: look.darkTheme ? [...look.darkTheme] : null };

@@ -3938,13 +3938,14 @@ try {
         rmSync(button, { force: true });
         await open();
         if ((await appActive(false)) !== "0") throw new Error("no app-active seam");
-        const from = logLines().length;
+        const from = Math.max(0, logLines().length - 1);
         try {
           if ((await engine("tabs.devPictureInPictureAction", { action: name })) !== "started") throw new Error("no button self-test");
           const clicked = await until(`the ${name} click`, async () => (existsSync(button) ? JSON.parse(readFileSync(button, "utf8")) : null), 10000);
           await sleep(300);
           const raised = logLines().slice(from).filter((l) => /^\S+ \S+ \S+ (makeKey|orderFront)/.test(l) && !l.includes("NativeWidgetMacFramelessNSWindow"));
-          return { ...clicked, raised };
+          const forced = logLines().slice(from).filter((l) => l.includes("activateIgnoringOtherApps (skipped in a test instance)")).length;
+          return { ...clicked, raised, forced };
         } finally {
           await appActive(true);
         }
@@ -3960,8 +3961,9 @@ try {
       const requests = (await eventsOf(tab.id)).filter((x) => x.name === "activateRequest").length;
       const back = await clickButton("backToTab");
       const backRequests = (await eventsOf(tab.id)).filter((x) => x.name === "activateRequest").length - requests;
-      if (!back.closed || !back.preventsActivation || back.activations !== 1 || backRequests !== 1)
-        throw new Error(`Chrome's Back to Tab: ${JSON.stringify({ back, backRequests })}`);
+      const backRequest = await lastEvent(tab.id, "activateRequest");
+      if (!back.closed || !back.preventsActivation || back.activations !== 1 || backRequests !== 1 || back.forced !== 1 || backRequest?.payload?.reason !== "pictureInPicture" || backRequest.payload.fromOtherApp !== true)
+        throw new Error(`Chrome's Back to Tab: ${JSON.stringify({ back, backRequests, backRequest })}`);
       await sleep(500);
       const reducesMotion = (() => {
         try {
@@ -4006,7 +4008,7 @@ try {
         closeButton: closed.point,
         playing: [before.time.toFixed(1), after.time.toFixed(1)],
         close: { activations: closed.activations, raised: closed.raised.length },
-        backToTab: { activations: back.activations, activateRequests: backRequests },
+        backToTab: { activations: back.activations, activateRequests: backRequests, forced: back.forced, fromOtherApp: backRequest.payload.fromOtherApp },
       };
     } finally {
       await closeTab(tab.id);

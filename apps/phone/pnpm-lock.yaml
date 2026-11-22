@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: false
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  expo-file-system@58.0.13: 2fafb700764169323d13f056b2cf902bf8fed438df1e0b9512321550cf30e3b6
+
 importers:
 
   .:
@@ -5722,7 +5725,7 @@ snapshots:
       - supports-color
       - typescript
 
-  expo-file-system@58.0.13(expo@58.0.25(@babel/core@7.29.13)(react-native-worklets@0.13.0(@babel/core@7.29.13)(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@6.0.3))(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.0)):
+  expo-file-system@58.0.13(patch_hash=2fafb700764169323d13f056b2cf902bf8fed438df1e0b9512321550cf30e3b6)(expo@58.0.25(@babel/core@7.29.13)(react-native-worklets@0.13.0(@babel/core@7.29.13)(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@6.0.3))(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.0)):
     dependencies:
       expo: 58.0.25(@babel/core@7.29.13)(react-native-worklets@0.13.0(@babel/core@7.29.13)(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@6.0.3)
       react-native: 0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.0)
@@ -5812,7 +5815,7 @@ snapshots:
       babel-preset-expo: 58.0.25(@babel/core@7.29.13)(@babel/runtime@7.29.14)(expo@58.0.25(@babel/core@7.29.13)(react-native-worklets@0.13.0(@babel/core@7.29.13)(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@6.0.3))(react-refresh@0.14.2)
       expo-asset: 58.0.21(expo@58.0.25(@babel/core@7.29.13)(react-native-worklets@0.13.0(@babel/core@7.29.13)(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@6.0.3))(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@6.0.3)
       expo-constants: 58.0.16(expo@58.0.25(@babel/core@7.29.13)(react-native-worklets@0.13.0(@babel/core@7.29.13)(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@6.0.3))(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.0))(typescript@6.0.3)
-      expo-file-system: 58.0.13(expo@58.0.25(@babel/core@7.29.13)(react-native-worklets@0.13.0(@babel/core@7.29.13)(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@6.0.3))(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.0))
+      expo-file-system: 58.0.13(patch_hash=2fafb700764169323d13f056b2cf902bf8fed438df1e0b9512321550cf30e3b6)(expo@58.0.25(@babel/core@7.29.13)(react-native-worklets@0.13.0(@babel/core@7.29.13)(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@6.0.3))(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.0))
       expo-font: 58.0.12(expo@58.0.25(@babel/core@7.29.13)(react-native-worklets@0.13.0(@babel/core@7.29.13)(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@6.0.3))(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
       expo-keep-awake: 58.0.4(expo@58.0.25(@babel/core@7.29.13)(react-native-worklets@0.13.0(@babel/core@7.29.13)(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.13)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@6.0.3))(react@19.3.0)
       expo-modules-autolinking: 58.1.0(typescript@6.0.3)

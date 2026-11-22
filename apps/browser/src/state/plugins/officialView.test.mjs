@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 const stub = await import("../../test-native/index.ts");
 globalThis.fetch = async () => ({ status: 503 });
@@ -14,11 +15,11 @@ const { usePlugins } = await import("./store.ts");
 const lifecycle = await import("./lifecycle.ts");
 const { installOfficialPlugin, officialPlugins } = await import("./official.ts");
 const { installedLabel, isOffered, officialView, wasCancelled } = await import("./officialView.ts");
-const { noteOfficialPlugin, officialPluginField, takeOfficialPluginCounts, OFFICIAL_EVENTS, OFFICIAL_SURFACES } = await import("../telemetry/officialPluginCounts.ts");
+const { noteOfficialPlugin, officialPluginField, takeOfficialPluginCounts, OFFICIAL_COUNTED_NAMES, OFFICIAL_EVENTS, OFFICIAL_SURFACES } = await import("../telemetry/officialPluginCounts.ts");
 const { takeHourlyExtras } = await import("../telemetry/hourlyExtras.ts");
 const { WHATS_SENT } = await import("../telemetry/copy.ts");
 
-const plugin = (state, name = "cli") => ({ name, title: "Command Line", blurb: "The ardia command.", icon: "terminal.fill", version: "0.3.0", state });
+const plugin = (state, name = "cli", example = name === "cli" ? "ardia tabs" : null) => ({ name, title: "Command Line", blurb: "The ardia command.", icon: "terminal.fill", version: "0.3.0", example, state });
 const LINKED = { state: "linked", hash: "h", linked: ["ardia"], refused: {}, binDir: "/Users/me/.local/bin" };
 
 test("an unsupported plugin shows nothing, and a coming-soon one shows no button", () => {
@@ -38,7 +39,7 @@ test("an available plugin offers Install, waits while its sheet is open, and sho
   assert.deepEqual([failed.action, failed.failed, failed.status], ["again", true, "It can't load."]);
 });
 
-test("an installed plugin shows no sentence, only a first command to copy when it has one", () => {
+test("an installed plugin shows no sentence, only the first command its manifest gives to copy", () => {
   const view = officialView(plugin("installed"), LINKED, null);
   assert.deepEqual([view.note, view.action, view.failed, view.busy, view.status], ["installed", null, false, false, null]);
   assert.equal(view.firstCommand, "ardia tabs");
@@ -48,6 +49,13 @@ test("an installed plugin shows no sentence, only a first command to copy when i
 test("an installed row says so beside its title, with the version when the seam has one", () => {
   assert.equal(installedLabel(plugin("installed")), "Installed · 0.3.0");
   assert.equal(installedLabel({ ...plugin("installed"), version: null }), "Installed");
+});
+
+test("a failed update stays on the row with Update to try again, while the old command keeps working", () => {
+  const ready = officialView({ ...plugin("installed"), update: "0.6.0" }, LINKED, null);
+  assert.deepEqual([ready.action, ready.failed], ["update", false]);
+  const failed = officialView({ ...plugin("installed"), update: "0.6.0" }, LINKED, { state: "failed", reason: "The download didn't match." });
+  assert.deepEqual([failed.action, failed.failed, failed.status], ["update", true, "The download didn't match."]);
 });
 
 test("an installed plugin whose command isn't on PATH says why and offers Retry", () => {
@@ -67,12 +75,14 @@ test("only a plugin that can still be chosen counts as offered", () => {
 
 const CLI = JSON.stringify({ manifest: 1, name: "cli", title: "Command Line", version: "0.3.0", alwaysOn: true, official: true, icon: "terminal.fill", permissions: ["control"], programs: [{ name: "ardia", path: "bin/ardia" }] });
 useBrowser.getState().hydrate({});
-stub.pluginHost.folders = [{ name: "cli", text: CLI, status: "ok", folderId: "bundled", bundled: true }];
+stub.pluginHost.folders = [];
+stub.pluginHost.officialArtifacts = { cli: CLI };
 startPlugins();
 for (let i = 0; i < 8; i++) await new Promise((resolve) => setTimeout(resolve, 0));
 
 test("closing the consent is no error: the seam marks it cancelled, and nothing else counts as cancelled", async () => {
   const asked = installOfficialPlugin("cli", { showSheet: false });
+  for (let i = 0; i < 8; i++) await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(usePlugins.getState().consent.name, "cli");
   lifecycle.dismissPluginConsent("cli");
   const result = await asked;
@@ -102,43 +112,46 @@ test("official plugin counts are a fixed set of fields, sent with the hourly cou
   assert.equal(sent.official_plugin_settings_shown_ai, 1);
   assert.equal(sent.official_plugin_onboarding_skipped_other, 1);
   assert.equal(sent.official_plugin_settings_skipped_cli, undefined);
-  const fields = new Set(OFFICIAL_SURFACES.flatMap((s) => OFFICIAL_EVENTS.flatMap((e) => ["cli", "ai", "other"].map((n) => officialPluginField(s, e, n)))));
+  const fields = new Set(OFFICIAL_SURFACES.flatMap((s) => OFFICIAL_EVENTS.flatMap((e) => [...OFFICIAL_COUNTED_NAMES, "other"].map((n) => officialPluginField(s, e, n)))));
   for (const key of Object.keys(sent).filter((k) => k.startsWith("official_plugin_"))) assert.ok(fields.has(key), key);
   assert.deepEqual(takeOfficialPluginCounts(), {});
   assert.ok(WHATS_SENT.some((group) => group.items.some((item) => item.includes("official plugin") && item.includes("onboarding") && item.includes("Settings"))));
 });
 
-test("a built-in plugin with an off switch offers Turn On, and once on shows On with its switch; an always-on one still installs", () => {
-  const switchable = (state) => ({ ...plugin(state, "passwords"), switchable: true });
-  const off = officialView(switchable("available"), undefined, null);
-  assert.deepEqual([off.action, off.note, off.toggle], ["turnOn", null, false]);
-  const on = officialView(switchable("installed"), undefined, null);
-  assert.deepEqual([on.note, on.toggle, on.action, on.firstCommand], ["on", true, null, null]);
-  const cli = officialView({ ...plugin("available"), switchable: false }, undefined, null);
-  assert.deepEqual([cli.action, cli.toggle], ["install", false]);
-  assert.equal(officialView({ ...plugin("installed"), switchable: false }, LINKED, null).note, "installed");
+test("every official plugin offers the same Install and, once installed, the same Installed row with no switch", () => {
+  for (const name of ["cli", "passwords"]) {
+    const off = officialView(plugin("available", name), undefined, null);
+    assert.deepEqual([off.action, off.note], ["install", null], name);
+    assert.equal("toggle" in off, false, name);
+    const on = officialView(plugin("installed", name), undefined, null);
+    assert.deepEqual([on.note, on.action], ["installed", null], name);
+  }
+  assert.equal(officialView(plugin("installed"), LINKED, null).note, "installed");
 });
 
-test("a switchable plugin that is on keeps its program-link failure and Try Again next to its switch", () => {
-  const switchable = { ...plugin("installed", "passwords"), switchable: true };
-  const failed = officialView(switchable, { state: "failed", reason: "no bin dir" }, null);
-  assert.deepEqual([failed.note, failed.toggle, failed.failed, failed.action, failed.status], ["on", true, true, "again", "Not on your PATH: no bin dir"]);
-  const refused = officialView(switchable, { ...LINKED, refused: { ardia: "taken" } }, null);
-  assert.deepEqual([refused.note, refused.toggle, refused.failed, refused.action], ["on", true, true, "again"]);
-  const linking = officialView(switchable, { state: "linking" }, null);
-  assert.deepEqual([linking.note, linking.toggle, linking.busy], ["on", true, true]);
+test("an installed official plugin keeps its program-link failure and Try Again", () => {
+  const installed = plugin("installed", "passwords");
+  const failed = officialView(installed, { state: "failed", reason: "no bin dir" }, null);
+  assert.deepEqual([failed.note, failed.failed, failed.action, failed.status], ["installed", true, "again", "Not on your PATH: no bin dir"]);
+  const refused = officialView(installed, { ...LINKED, refused: { ardia: "taken" } }, null);
+  assert.deepEqual([refused.note, refused.failed, refused.action], ["installed", true, "again"]);
+  const linking = officialView(installed, { state: "linking" }, null);
+  assert.deepEqual([linking.note, linking.busy], ["installed", true]);
 });
 
-test("the seam marks a built-in plugin switchable unless it's always on", async () => {
-  const manifest = (name, extra) => JSON.stringify({ manifest: 1, name, title: name, version: "1.0.0", official: true, icon: "key.fill", ...extra });
-  const listed = (name, extra) => ({ name, status: "ok", text: manifest(name, extra), folderId: "bundled", bundled: true });
-  useBrowser.getState().hydrate({});
-  startPlugins();
-  stub.pluginHost.folders = [listed("switchy", { passwordManager: { fill: "system", fields: ["login"] } }), listed("stays", { alwaysOn: true })];
-  await lifecycle.rescanPlugins(null);
-  const byName = Object.fromEntries(officialPlugins(usePlugins.getState(), true).map((p) => [p.name, p]));
-  assert.equal(byName.switchy?.switchable, true);
-  assert.equal(byName.stays?.switchable, false);
-  stub.pluginHost.folders = [];
-  await lifecycle.rescanPlugins(null);
+test("the Settings row and the consent sheet say Install for every official plugin, and the row has no switch", () => {
+  const row = readFileSync(new URL("../../components/settings/panes/OfficialPlugins.tsx", import.meta.url), "utf8");
+  const sheet = readFileSync(new URL("../../components/plugins/PluginConsentSheet.tsx", import.meta.url), "utf8");
+  assert.match(row, /<Button title="Install…"/);
+  assert.doesNotMatch(row, /Turn On|<Toggle/);
+  assert.match(sheet, /const install = !!m\?\.official;/);
+});
+
+
+test("every pinned or coming-soon plugin is counted by name, a retired one as other, and cli and ai keep their field names", () => {
+  assert.deepEqual([...OFFICIAL_COUNTED_NAMES].sort(), ["ai", "cli"]);
+  assert.equal(officialPluginField("settings", "installed", "apple-passwords"), "official_plugin_settings_installed_other");
+  assert.equal(officialPluginField("settings", "shown", "cli"), "official_plugin_settings_shown_cli");
+  assert.equal(officialPluginField("onboarding", "installed", "ai"), "official_plugin_onboarding_installed_ai");
+  assert.equal(officialPluginField("settings", "shown", "not-pinned"), "official_plugin_settings_shown_other");
 });

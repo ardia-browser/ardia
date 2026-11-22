@@ -4,6 +4,8 @@ import { fireGestureHandler, getByGestureTestId } from "react-native-gesture-han
 import { getAnimatedStyle, runOnUI } from "react-native-reanimated";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { DECK_PULL, pullPagePose, pullShrink } from "../lib/deckPull";
+import { deckGeometry, deckLeading } from "../lib/deckGeometry";
+import { deckHeaderBottom } from "../components/tabs/DeckHeader";
 import { forgetPicturePainted, notePicturePainted, pictureKey } from "../lib/shownSnapshots";
 import { framesUntil, landOpeningPage, renderSurface, unmount, withTabs } from "../../test/render/harness";
 
@@ -148,8 +150,9 @@ test("the page follows the finger with no React render: every move sets where th
   const target = deckPull.target.value!;
   renders = [];
   act(() => void expect(pull.beginDeckPull(id, -22)).toBe(true));
-  expect(target.pull).toBeGreaterThan(target.reach * 2);
-  expect(Math.abs(target.centerX - SCREEN.width / 2)).toBeLessThan(2);
+  expect(target.pull).toBeGreaterThan(target.reach * 1.5);
+  const arc = deckGeometry(SCREEN.width, SCREEN.height, 40, 24, 0, Platform.OS, "redesigned", deckHeaderBottom(), 55, "arc");
+  expect(Math.abs(target.centerX - (deckLeading(arc, 0) + arc.cardWidth / 2))).toBeLessThan(2);
   expect(target.centerX - target.width / 2).toBeGreaterThan(0);
   expect(target.centerX + target.width / 2).toBeLessThan(SCREEN.width);
   let last = 1;

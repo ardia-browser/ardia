@@ -1,4 +1,4 @@
-import { appDesign, DesignProvider } from "../components/ui";
+import { DesignProvider } from "../components/ui";
 import type { Design } from "../lib/design";
 import { StyleSheet } from "react-native";
 import { State } from "react-native-gesture-handler";
@@ -27,7 +27,7 @@ const rows = queries(["otters", "otter facts", "otter videos"]);
 const manyRows = queries(["otters", "otter facts", "otter videos", "otters cafe", "otters club", "otters meaning", "otters in india"]);
 const ROOM_ABOVE_KEYBOARD = 200;
 
-function openTray(shownRows: TrayRow[] = rows, room: number = ROW_HEIGHT * shownRows.length, design: Design = appDesign) {
+function openTray(shownRows: TrayRow[] = rows, room: number = ROW_HEIGHT * shownRows.length, design: Design = "original") {
   withTabs(1);
   browse.useBrowse.setState({ surface: "start" });
   presentSearch("start", "otter");

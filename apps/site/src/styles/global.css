@@ -239,6 +239,7 @@ h3 {
 :root:not([data-device="other"]) .other-only,
 :root[data-device="phone"] .not-phone,
 :root:not([data-os="ios"]) .ios-only,
+:root:not([data-os="android"]) .android-only,
 :root:not([data-pc]) .pc-only,
 :root:not([data-pc="windows"]) .windows-only,
 :root:not([data-pc="linux"]) .linux-only,

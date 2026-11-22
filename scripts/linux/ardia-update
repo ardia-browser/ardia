@@ -1,0 +1,429 @@
+#!/bin/bash
+set -euo pipefail
+umask 077
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export LC_ALL=C
+IFS=$' \t\n'
+
+usage='usage: ardia-update kind
+       ardia-update install <dir>
+
+Installs a signed Ardia update for Linux.
+
+  kind           prints how this Ardia is installed: deb, tarball, appimage,
+                 managed, or unsupported <reason>
+  install <dir>  verifies Ardia-<V>-linux-update.txt and its .sig in <dir>
+                 against lib/ardia/linux-update.pem, then installs the package
+                 for this kind of install when <V> is newer than lib/ardia/VERSION.
+                 A .deb or tarball install runs it as root through pkexec; an
+                 AppImage replaces the file APPIMAGE names, as its user. The last line on
+                 stdout is "installed <V>" or "failed <reason>". The whole
+                 install gets 9 minutes, then fails with timeout.'
+
+self=$(readlink -f -- "${BASH_SOURCE[0]}")
+libdir=${self%/*}
+key="$libdir/linux-update.pem"
+policy=/usr/share/polkit-1/actions/dev.ardia.linux.policy
+action_id=dev.ardia.linux.update
+max_package=536870912
+max_manifest=4096
+signature_size=64
+install_budget=540
+watchdog_seconds=$((install_budget + 30))
+start_time_slack=0.25
+small_copy_seconds=60
+version_pattern='^([0-9]{1,9})\.([0-9]{1,9})\.([0-9]{1,9})(-nightly\.([0-9]{1,9}))?$'
+version_line_pattern='^version (.+)$'
+package_line_pattern='^(deb|tarball|appimage) ([^ ]+) ([0-9a-f]{64}) ([1-9][0-9]{0,9})$'
+manifest_name_pattern='^Ardia-(.+)-linux-update\.txt$'
+
+reported=0
+install_deadline=0
+left=0
+owner=""
+owner_group=""
+work=""
+staged=""
+appimage=""
+launch_ticks=""
+
+note() { printf 'ardia-update: %s\n' "$*" >&2; }
+
+finish() {
+  reported=1
+  printf '%s\n' "$1"
+}
+
+fail() {
+  [[ -z "${2:-}" ]] || note "$2"
+  finish "failed $1"
+  exit 1
+}
+
+on_exit() {
+  local status=$?
+  [[ -z "$staged" ]] || rm -f -- "$staged"
+  [[ -z "$work" ]] || rm -rf -- "$work"
+  if [[ "$reported" == 0 ]]; then
+    printf 'failed install\n'
+    exit 1
+  fi
+  exit "$status"
+}
+
+version_parts() {
+  [[ "$1" =~ $version_pattern ]] || return 1
+  local nightly=1000000000
+  [[ -z "${BASH_REMATCH[4]}" ]] || nightly=$((10#${BASH_REMATCH[5]}))
+  printf '%d %d %d %d' "$((10#${BASH_REMATCH[1]}))" "$((10#${BASH_REMATCH[2]}))" "$((10#${BASH_REMATCH[3]}))" "$nightly"
+}
+
+newer_than() {
+  local candidate current index
+  read -r -a candidate <<<"$(version_parts "$1")"
+  read -r -a current <<<"$(version_parts "$2")"
+  for index in 0 1 2 3; do
+    ((candidate[index] == current[index])) && continue
+    ((candidate[index] > current[index]))
+    return
+  done
+  return 1
+}
+
+installed_version() {
+  local file="$libdir/VERSION" line
+  [[ -f "$file" && ! -L "$file" ]] || return 1
+  (($(stat -c %s -- "$file") <= 64)) || return 1
+  IFS= read -r line <"$file" || [[ -n "$line" ]] || return 1
+  version_parts "$line" >/dev/null || return 1
+  printf '%s' "$line"
+}
+
+caller_start_ticks() {
+  local stat
+  stat=$(cat "/proc/$PPID/stat" 2>/dev/null) || return 1
+  read -r -a stat <<<"${stat##*) }"
+  [[ "${stat[19]:-}" =~ ^[0-9]+$ ]] || return 1
+  printf '%s' "${stat[19]}"
+}
+
+appimage_changed_since_launch() {
+  local ticks now changed
+  ticks=$(getconf CLK_TCK 2>/dev/null) || return 0
+  now=$(date +%s.%N) || return 0
+  changed=$(stat -c %.9Z -- "$appimage" 2>/dev/null) || return 0
+  [[ "$launch_ticks" =~ ^[0-9]+$ && "$ticks" =~ ^[1-9][0-9]*$ && "$now" =~ ^[0-9]+\.[0-9]+$ && "$changed" =~ ^[0-9]+\.[0-9]+$ ]] || return 0
+  awk -v started="$launch_ticks" -v ticks="$ticks" -v now="$now" -v changed="$changed" -v slack="$start_time_slack" \
+    '{ exit !(changed > now - $1 + started / ticks + slack) }' /proc/uptime
+  (($? != 1))
+}
+
+appimage_target() {
+  [[ -z "${PKEXEC_UID:-}" && -n "${APPIMAGE:-}" && "$APPIMAGE" == /* ]] || return 1
+  if [[ -n "${APPDIR:-}" ]]; then
+    local mount
+    mount=$(readlink -f -- "$APPDIR" 2>/dev/null) || return 1
+    [[ "$libdir" == "$mount/lib/ardia" ]] || return 1
+  fi
+  local target
+  target=$(readlink -f -- "$APPIMAGE" 2>/dev/null) || return 1
+  [[ -f "$target" && ! -L "$target" && -w "$(dirname -- "$target")" ]] || return 1
+  printf '%s' "$target"
+}
+
+owned_by_other_manager() {
+  if command -v pacman >/dev/null 2>&1 && pacman -Qqo -- "$libdir/chrome" >/dev/null 2>&1; then
+    return 0
+  fi
+  if command -v rpm >/dev/null 2>&1 && rpm -qf -- "$libdir/chrome" >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
+}
+
+dpkg_owner() {
+  command -v dpkg-query >/dev/null 2>&1 || return 1
+  local owner
+  owner=$(dpkg-query -S -- "$libdir/chrome" 2>/dev/null | sed -n 1p) || return 1
+  [[ -n "$owner" ]] || return 1
+  printf '%s' "${owner%%: *}"
+}
+
+openssl_ready() {
+  command -v openssl >/dev/null 2>&1 || return 1
+  local line
+  line=$(openssl version 2>/dev/null) || return 1
+  [[ "$line" =~ ^OpenSSL\ ([0-9]+)\. ]] && ((BASH_REMATCH[1] >= 3)) || return 1
+  openssl pkeyutl -help 2>&1 | grep -- '-rawin' >/dev/null
+}
+
+policy_names_this_helper() {
+  [[ -f "$policy" ]] || return 1
+  local path
+  path=$(awk -v id="$action_id" '
+    index($0, "<action id=\"" id "\"") { inside = 1 }
+    inside && index($0, "org.freedesktop.policykit.exec.path") && match($0, />[^<]*</) { print substr($0, RSTART + 1, RLENGTH - 2) }
+    inside && index($0, "</action>") { inside = 0 }
+  ' "$policy" 2>/dev/null | sed -n 1p)
+  [[ -n "$path" && "$path" == "$self" ]]
+}
+
+detect_kind() {
+  local kind owner
+  if appimage=$(appimage_target); then
+    kind=appimage
+  elif owned_by_other_manager; then
+    printf 'managed'
+    return
+  elif owner=$(dpkg_owner); then
+    if [[ "$owner" == ardia || "$owner" == ardia:amd64 ]]; then
+      kind=deb
+    else
+      printf 'managed'
+      return
+    fi
+  else
+    kind=tarball
+  fi
+  if ! installed_version >/dev/null; then printf 'unsupported noVersion'; return; fi
+  if [[ ! -f "$key" ]]; then printf 'unsupported noKey'; return; fi
+  if ! openssl_ready; then printf 'unsupported noOpenssl'; return; fi
+  if [[ "$kind" != appimage ]]; then
+    local pkexec
+    pkexec=$(command -v pkexec 2>/dev/null || true)
+    if [[ -z "$pkexec" || ! -u "$pkexec" ]]; then printf 'unsupported noPkexec'; return; fi
+    if ! policy_names_this_helper; then printf 'unsupported noPolicy'; return; fi
+  fi
+  printf '%s' "$kind"
+}
+
+refresh_left() {
+  left=$((install_deadline - SECONDS))
+  ((left > 0)) || fail timeout "the install step ran out of its ${install_budget}s"
+}
+
+limited() {
+  local seconds=$1
+  shift
+  timeout --kill-after=15 "$seconds" "$@"
+}
+
+settle() {
+  local status=$1 reason=$2 message=$3
+  ((status != 0)) || return 0
+  ((status != 124 && status != 137)) || fail timeout "$message: past the deadline"
+  fail "$reason" "$message"
+}
+
+copy_in() {
+  local name=$1 cap=$2 destination=$3 oversize=$4 seconds=$5 info type uid links size copied
+  local source="$dir/$name"
+  info=$(stat -c '%F|%u|%h|%s' -- "$source" 2>/dev/null) || fail missing "no $name in the update folder"
+  IFS='|' read -r type uid links size <<<"$info"
+  [[ "$type" == "regular file" || "$type" == "regular empty file" ]] || fail missing "$name is not a regular file"
+  [[ "$uid" == "$owner" ]] || fail missing "$name is not owned by uid $owner"
+  [[ "$links" == 1 ]] || fail missing "$name has other hard links"
+  ((size <= cap)) || fail "$oversize" "$name is larger than $cap bytes"
+  local reader=(dd if="$source" "iflag=nofollow,nonblock,count_bytes" count=$((cap + 1)) bs=1M status=none)
+  if [[ "$EUID" == 0 && "$owner" != 0 ]]; then
+    reader=(setpriv --reuid="$owner" --regid="$owner_group" --clear-groups -- "${reader[@]}")
+  fi
+  local statuses=()
+  {
+    limited "$seconds" "${reader[@]}" </dev/null 9>&- | limited "$seconds" head -c "$((cap + 1))" >"$destination"
+    statuses=("${PIPESTATUS[@]}")
+  } || true
+  settle "${statuses[1]}" install "couldn't store $name"
+  settle "${statuses[0]}" missing "couldn't read $name"
+  copied=$(stat -c %s -- "$destination")
+  ((copied <= cap)) || fail "$oversize" "$name grew past $cap bytes"
+}
+
+parse_manifest() {
+  local file=$1 line format name digest size rank previous=-1 expected
+  local -a lines
+  mapfile -t lines <"$file"
+  ((${#lines[@]} >= 2 && ${#lines[@]} <= 5)) || fail manifest "the manifest has ${#lines[@]} lines"
+  [[ "${lines[0]}" == "ardia-linux-update 1" ]] || fail manifest "the manifest is not format 1"
+  [[ "${lines[1]}" =~ $version_line_pattern ]] || fail manifest "the manifest has no version line"
+  version=${BASH_REMATCH[1]}
+  version_parts "$version" >/dev/null || fail manifest "the manifest's version is malformed"
+  : >"$work/canonical"
+  printf 'ardia-linux-update 1\nversion %s\n' "$version" >>"$work/canonical"
+  package_name=""
+  for line in "${lines[@]:2}"; do
+    [[ "$line" =~ $package_line_pattern ]] || fail manifest "a manifest line is malformed"
+    format=${BASH_REMATCH[1]} name=${BASH_REMATCH[2]} digest=${BASH_REMATCH[3]} size=${BASH_REMATCH[4]}
+    case "$format" in
+      deb) rank=0 expected="Ardia-$version-linux-x64.deb" ;;
+      tarball) rank=1 expected="Ardia-$version-linux-x64.tar.xz" ;;
+      appimage) rank=2 expected="Ardia-$version-linux-x64.AppImage" ;;
+    esac
+    ((rank > previous)) || fail manifest "the manifest's package lines are out of order"
+    previous=$rank
+    [[ "$name" == "$expected" ]] || fail manifest "the manifest names a file that isn't $expected"
+    ((size <= max_package)) || fail manifest "the manifest's $format is larger than $max_package bytes"
+    printf '%s %s %s %s\n' "$format" "$name" "$digest" "$size" >>"$work/canonical"
+    if [[ "$format" == "$kind" ]]; then
+      package_name=$name package_digest=$digest package_size=$size
+    fi
+  done
+  cmp -s -- "$work/canonical" "$file" || fail manifest "the manifest isn't in canonical form"
+}
+
+install_deb() {
+  local expected=${version/-/\~} installed status=0
+  refresh_left
+  limited "$left" env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends --no-remove \
+    -o Dpkg::Options::=--force-confold -o DPkg::Lock::Timeout=120 -- "$work/$package_name" \
+    </dev/null >&2 || status=$?
+  settle "$status" install "apt-get couldn't install $package_name"
+  left=$((install_deadline - SECONDS))
+  ((left > 0)) || left=1
+  status=0
+  # shellcheck disable=SC2016
+  installed=$(limited "$((left < 30 ? left : 30))" dpkg-query -W -f='${Version}' ardia 2>/dev/null) || status=$?
+  settle "$status" install "dpkg-query couldn't report the installed version"
+  [[ "$installed" == "$expected" ]] || fail install "dpkg reports ardia $installed after the install, not $expected"
+}
+
+install_tarball() {
+  local prefix=${libdir%/lib/ardia}
+  [[ "$libdir" == */lib/ardia && "$prefix" =~ ^/[A-Za-z0-9._/+-]+$ && "/$prefix/" != */../* ]] \
+    || fail kind "$libdir is not <prefix>/lib/ardia"
+  mkdir -- "$work/unpacked"
+  local status=0
+  refresh_left
+  limited "$left" tar -xJf "$work/$package_name" -C "$work/unpacked" --no-same-owner </dev/null >&2 || status=$?
+  settle "$status" install "couldn't unpack $package_name"
+  local installer="$work/unpacked/ardia/install.sh"
+  [[ -f "$installer" && ! -L "$installer" && -x "$installer" ]] || fail install "$package_name has no ardia/install.sh"
+  refresh_left
+  limited "$left" "$installer" --prefix "$prefix" </dev/null >&2 || status=$?
+  settle "$status" install "install.sh failed"
+}
+
+install_appimage() {
+  mv -f -- "$staged" "$appimage" || fail install "couldn't replace $appimage"
+  staged=""
+}
+
+run_install() {
+  dir=$1
+  [[ "$dir" == /* && ${#dir} -le 4096 && "$dir" != *$'\n'* ]] || fail usage "the update folder must be an absolute path"
+  if [[ -n "${PKEXEC_UID:-}" ]]; then
+    [[ "$PKEXEC_UID" =~ ^[0-9]{1,10}$ ]] || fail usage "PKEXEC_UID is malformed"
+    owner=$PKEXEC_UID
+  else
+    owner=$EUID
+  fi
+  install_deadline=$((SECONDS + install_budget))
+  owner_group=$(id -g -- "$owner" 2>/dev/null) || fail usage "uid $owner has no account"
+  [[ "$owner_group" =~ ^[0-9]{1,10}$ ]] || fail usage "uid $owner has no primary group"
+  kind=$(detect_kind)
+  case "$kind" in
+    deb|tarball)
+      [[ "$EUID" == 0 ]] || fail usage "a $kind install runs as root through pkexec"
+      exec 9>>/run/ardia-update.lock || fail install "couldn't open the lock"
+      ;;
+    appimage)
+      launch_ticks=$(caller_start_ticks) || fail install "couldn't tell when Ardia started"
+      appimage=$(appimage_target) || fail kind "APPIMAGE no longer names a writable AppImage"
+      exec 9<"$(dirname -- "$appimage")" || fail install "couldn't open the lock"
+      ;;
+    *) fail kind "this Ardia can't update itself: $kind" ;;
+  esac
+  flock -n 9 || fail busy "another update is running"
+
+  local info
+  info=$(stat -c '%F|%u' -- "$dir" 2>/dev/null) || fail missing "no folder at $dir"
+  [[ "$info" == "directory|$owner" ]] || fail missing "$dir is not a folder owned by uid $owner"
+
+  local current
+  current=$(installed_version) || fail kind "no valid $libdir/VERSION"
+
+  if [[ "$kind" == appimage ]]; then
+    find "$(dirname -- "$appimage")" -maxdepth 1 -type f -name '.ardia-update-??????' -user "$EUID" -delete 2>/dev/null || true
+    work=$(mktemp -d /tmp/ardia-update.XXXXXXXXXX)
+  else
+    find /var/tmp -maxdepth 1 -type d -name 'ardia-update.??????????' -user 0 -exec rm -rf -- {} + 2>/dev/null || true
+    work=$(mktemp -d /var/tmp/ardia-update.XXXXXXXXXX)
+  fi
+
+  local names=() entry
+  for entry in "$dir"/Ardia-*-linux-update.txt; do
+    [[ -e "$entry" || -L "$entry" ]] && names+=("${entry##*/}")
+  done
+  ((${#names[@]} == 1)) || fail missing "the update folder holds ${#names[@]} manifests, not one"
+  local manifest_name=${names[0]}
+  [[ "$manifest_name" =~ $manifest_name_pattern ]] || fail manifest "the manifest's file name is malformed"
+  local named_version=${BASH_REMATCH[1]}
+  version_parts "$named_version" >/dev/null || fail manifest "the manifest's file name has a malformed version"
+
+  refresh_left
+  copy_in "$manifest_name" "$max_manifest" "$work/manifest" manifest "$((left < small_copy_seconds ? left : small_copy_seconds))"
+  refresh_left
+  copy_in "$manifest_name.sig" "$signature_size" "$work/signature" signature "$((left < small_copy_seconds ? left : small_copy_seconds))"
+  [[ "$(stat -c %s -- "$work/signature")" == "$signature_size" ]] || fail signature "the signature is not $signature_size bytes"
+  openssl pkeyutl -verify -pubin -inkey "$key" -rawin -in "$work/manifest" -sigfile "$work/signature" >/dev/null 2>&1 \
+    || fail signature "the manifest's signature doesn't verify"
+
+  version="" package_name="" package_digest="" package_size=""
+  parse_manifest "$work/manifest"
+  [[ "$version" == "$named_version" ]] || fail manifest "the manifest is for $version, not $named_version"
+  newer_than "$version" "$current" || fail notNewer "$version is not newer than the installed $current"
+  [[ -n "$package_name" ]] || fail kind "the manifest has no $kind package"
+
+  local destination="$work/$package_name"
+  if [[ "$kind" == appimage ]]; then
+    staged=$(mktemp "$(dirname -- "$appimage")/.ardia-update-XXXXXX")
+    destination=$staged
+  fi
+  refresh_left
+  copy_in "$package_name" "$package_size" "$destination" checksum "$left"
+  [[ "$(stat -c %s -- "$destination")" == "$package_size" ]] || fail checksum "$package_name is not $package_size bytes"
+  local digest
+  refresh_left
+  digest=$(limited "$left" sha256sum <"$destination") || settle $? checksum "hashing $package_name"
+  [[ "${digest%% *}" == "$package_digest" ]] || fail checksum "$package_name doesn't match the manifest's sha256"
+
+  umask 022
+  case "$kind" in
+    deb) install_deb ;;
+    tarball) install_tarball ;;
+    appimage)
+      chmod 0755 -- "$staged"
+      ! appimage_changed_since_launch || fail notNewer "$appimage changed after this Ardia started"
+      install_appimage
+      ;;
+  esac
+  if [[ "$kind" != appimage ]]; then
+    [[ "$(installed_version || true)" == "$version" ]] || fail install "$libdir/VERSION isn't $version after the install"
+  fi
+  finish "installed $version"
+}
+
+case "${1:-}" in
+  kind)
+    (($# == 1)) || { echo "$usage" >&2; exit 2; }
+    printf '%s\n' "$(detect_kind)"
+    ;;
+  install)
+    if [[ "$EUID" == 0 && -n "${PKEXEC_UID:-}" && "${ARDIA_UPDATE_WATCHED:-}" != 1 ]]; then
+      exec timeout --kill-after=15 "$watchdog_seconds" env ARDIA_UPDATE_WATCHED=1 "$self" "$@"
+    fi
+    trap on_exit EXIT
+    trap 'exit 1' INT HUP
+    trap 'fail timeout "the install ran past its ${watchdog_seconds}s watchdog"' TERM
+    (($# == 2)) || fail usage "install takes one folder"
+    run_install "$2"
+    ;;
+  -h|--help)
+    echo "$usage"
+    ;;
+  *)
+    echo "$usage" >&2
+    finish "failed usage"
+    exit 2
+    ;;
+esac

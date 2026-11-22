@@ -566,3 +566,89 @@ test("each new path tags its row, so the bar can report which path a pick came f
   assert.equal(buildSuggestions("you", { tabs: [], history: yt }, { now }).via, undefined, "website first completes as it always did");
   for (const r of [literal, renamed, site, searchFirst]) for (const key of Object.keys(r.via ?? {})) assert.ok(r.items.some((x) => suggestionKey(x) === key), key);
 });
+
+test("a spaced address that could be prose searches first, with its escaped URL right after", () => {
+  const { items, via } = buildSuggestions("asp.net/core vs django", { tabs: [], history: [] }, { now });
+  assert.equal(items[0]?.kind, "search");
+  assert.deepEqual(items[1], { kind: "page", url: "https://asp.net/core%20vs%20django", title: "", favicon: null });
+  assert.equal(via?.[suggestionKey(items[1]!)], "spaced_address");
+  const wiki = buildSuggestions("en.wikipedia.org/wiki/Jim Beam", { tabs: [], history: [] }, { now }).items;
+  assert.deepEqual(wiki[0], { kind: "page", url: "https://en.wikipedia.org/wiki/Jim%20Beam", title: "", favicon: null });
+  assert.equal(wiki.filter((i) => i.kind === "page").length, 1);
+});
+
+test("the escaped address offered below a spaced search is the open tab when one shows it, and keeps its own telemetry tag", () => {
+  const url = "https://example.com/My%20Folder/index.html";
+  const tab = { id: "t9", url, title: "My Folder", customTitle: null, favicon: null };
+  const { items } = buildSuggestions("example.com/My Folder/index.html", { tabs: [tab], history: [] }, { now, limit: 2 });
+  assert.equal(items[0]?.kind, "search");
+  assert.equal(items[1]?.kind === "page" && items[1].tabId, "t9");
+  assert.equal(buildSuggestions("example.com/My Folder/index.html", { tabs: [tab], history: [] }, { now }).items.filter((i) => i.kind === "page" && i.url === url).length, 1);
+  const sites = buildSuggestions("example.com/My Folder/index.html", { tabs: [], history: [] }, { now, remoteSites: [{ url, title: "My Folder" }] });
+  const guess = sites.items.find((i) => i.kind === "page" && i.url === url);
+  assert.equal(sites.via?.[suggestionKey(guess!)], "spaced_address");
+});
+
+test("a saved page can't outrank the search for a spaced address that could be prose", () => {
+  const history = [{ url: "https://asp.net/wiki/discussion", title: "asp.net/wiki/Core vs Django discussion", favicon: null, visits: 40, lastVisit: now - 1000 }];
+  const { items } = buildSuggestions("asp.net/wiki/Core vs Django", { tabs: [], history }, { now, limit: 2 });
+  assert.equal(items[0]?.kind, "search");
+  assert.equal(items[1]?.kind === "page" && items[1].url, "https://asp.net/wiki/Core%20vs%20Django");
+});
+
+test("the escaped row switches only to a tab at exactly that address, whatever the host's case", () => {
+  const url = "https://example.com/My%20Folder/index.html";
+  const history = [{ url, title: "My Folder", favicon: null, visits: 3, lastVisit: now - 1000 }];
+  const elsewhere = { id: "t1", url: `${url}#tail`, title: "My Folder", customTitle: null, favicon: null };
+  const guess = (text: string, tabs: { id: string; url: string; title: string; customTitle: null; favicon: null }[]) => buildSuggestions(text, { tabs, history }, { now, limit: 2 }).items[1];
+  const fragment = guess("example.com/My Folder/index.html", [elsewhere]);
+  assert.equal(fragment?.kind === "page" && fragment.url, url);
+  assert.equal(fragment?.kind === "page" && fragment.tabId, undefined);
+  const exact = { id: "t2", url, title: "My Folder", customTitle: null, favicon: null };
+  const upper = guess("EXAMPLE.com/My Folder/index.html", [exact]);
+  assert.equal(upper?.kind === "page" && upper.tabId, "t2");
+});
+
+test("the escaped row appears once beside a matching open tab and site suggestion, and keeps its telemetry tag", () => {
+  const url = "https://example.com/My%20Folder/index.html";
+  const tab = { id: "t3", url, title: "My Folder", customTitle: "Renamed", favicon: null };
+  const history = [{ url, title: "My Folder", favicon: null, visits: 2, lastVisit: now - 1000 }];
+  const result = buildSuggestions("example.com/My Folder/index.html", { tabs: [tab], history }, { now, remoteSites: [{ url, title: "My Folder" }] });
+  const rows = result.items.filter((i) => i.kind === "page" && i.url === url);
+  assert.equal(rows.length, 1);
+  assert.equal(result.via?.[suggestionKey(rows[0]!)], "spaced_address");
+});
+
+test("the escaped row treats a default port, a missing root slash and host case as the same address", () => {
+  const tabAt = (id: string, url: string) => ({ id, url, title: "Open", customTitle: null, favicon: null });
+  const pages = (text: string, tabs: ReturnType<typeof tabAt>[], history: { url: string; title: string; favicon: null; visits: number; lastVisit: number }[] = []) => buildSuggestions(text, { tabs, history }, { now }).items.filter((i) => i.kind === "page");
+  const chapter = pages("example.com#Chapter 2", [tabAt("t4", "https://example.com/#Chapter%202")]);
+  assert.deepEqual(chapter.map((i) => i.kind === "page" && i.tabId), ["t4"]);
+  const port = pages("example.com:443/My Folder/index.html", [tabAt("t5", "https://example.com/My%20Folder/index.html")]);
+  assert.deepEqual(port.map((i) => i.kind === "page" && i.tabId), ["t5"]);
+  const history = [{ url: "https://EXAMPLE.com/My%20Folder/index.html", title: "My Folder", favicon: null, visits: 4, lastVisit: now - 1000 }];
+  const cased = pages("example.com/My Folder/index.html", [tabAt("t6", "https://example.com/My%20Folder/index.html")], history);
+  assert.deepEqual(cased.map((i) => i.kind === "page" && i.tabId), ["t6"]);
+});
+
+test("the escaped row leaves a tab open at another fragment alone, borrows a saved row's title, and reads a zero-padded default port", () => {
+  const url = "https://example.com/My%20Folder/index.html";
+  const tab = (id: string, at: string) => ({ id, url: at, title: "Open", customTitle: null, favicon: null });
+  const saved = (at: string) => [{ url: at, title: "My Folder", favicon: "f.ico", visits: 4, lastVisit: now - 1000 }];
+  const pages = (text: string, tabs: ReturnType<typeof tab>[], history: ReturnType<typeof saved>) => buildSuggestions(text, { tabs, history }, { now }).items.filter((i) => i.kind === "page");
+  const tail = pages("example.com/My Folder/index.html", [tab("t7", `${url}#tail`)], saved(url));
+  assert.ok(tail.some((i) => i.kind === "page" && i.tabId === "t7" && i.url === `${url}#tail`), "the tab at #tail is still offered, at its own address");
+  assert.ok(tail.some((i) => i.kind === "page" && i.url === url && !i.tabId), "and so is the exact address");
+  const titled = pages("example.com/My Folder/index.html", [], saved("https://EXAMPLE.com/My%20Folder/index.html"));
+  assert.equal(titled.length, 1);
+  assert.equal(titled[0]?.kind === "page" && titled[0].title, "My Folder");
+  assert.equal(titled[0]?.kind === "page" && titled[0].url, url, "it still opens the escaped address");
+  const padded = pages("example.com:00443/My Folder/index.html", [tab("t8", url)], []);
+  assert.deepEqual(padded.map((i) => i.kind === "page" && i.tabId), ["t8"]);
+});
+
+test("the escaped row finds a tab open at the punycode form of a Unicode host", () => {
+  const tab = { id: "t9", url: "https://xn--bcher-kva.de/My%20Folder/index.html", title: "Bücher", customTitle: null, favicon: null };
+  const pages = buildSuggestions("bücher.de/My Folder/index.html", { tabs: [tab], history: [] }, { now }).items.filter((i) => i.kind === "page");
+  assert.deepEqual(pages.map((i) => i.kind === "page" && i.tabId), ["t9"]);
+});

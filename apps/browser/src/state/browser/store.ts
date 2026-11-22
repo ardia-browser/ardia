@@ -1,4 +1,5 @@
 import { create, type StateCreator, type StoreApi, type UseBoundStore } from "zustand";
+import { withToolbarKeptWhileScrolling } from "../settings/toolbarScrollDefault";
 import { setHeldReportsTransaction } from "../../platform/nativeEvents";
 import { createBookmarksSlice, ensureRoots, type BookmarksSlice } from "../bookmarks/bookmarks";
 import { changedIds } from "./changes";
@@ -127,7 +128,8 @@ const createdBrowser = create<BrowserState>()(actionsApart(transactions.middlewa
       ...(data.profileOrder ?? []).filter((id) => profiles[id]),
       ...Object.keys(profiles).filter((id) => !data.profileOrder?.includes(id)),
     ];
-    const settings = parseSettings(data.settings);
+    const kept = withToolbarKeptWhileScrolling(data.settings, parseSettingsMeta(data.settingsMeta));
+    const settings = parseSettings(kept.settings);
     if (!profiles[settings.defaultProfileId]) settings.defaultProfileId = profileOrder[0]!;
 
     notePinChoices(data.pinChoices ?? {});
@@ -168,7 +170,7 @@ const createdBrowser = create<BrowserState>()(actionsApart(transactions.middlewa
       profileOrder,
       orphanedProfileData: (data.orphanedProfileData ?? []).filter((e) => !engines.has(e)),
       settings,
-      settingsMeta: parseSettingsMeta(data.settingsMeta),
+      settingsMeta: kept.settingsMeta,
       windows,
       windowOrder,
       tabs,

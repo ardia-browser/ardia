@@ -30,6 +30,11 @@ const CODE_FIELDS: Record<VerificationCodeStep, string> = {
 };
 
 const RECORD_FAILED = "password_manager_record_failed";
+const MOVED_BACK = "password_manager_profiles_moved_back";
+const RESTORE_FIELDS: Record<"restored" | "failed", string> = {
+  restored: "password_manager_offer_to_save_restored",
+  failed: "password_manager_offer_to_save_restore_failures",
+};
 
 export type PanelHintStep = "shown" | "dismissed";
 const HINT_FIELDS: Record<PanelHintStep, string> = {
@@ -43,10 +48,10 @@ const CHOICE_FIELDS: Record<PasswordManagerKind, string> = {
   plugin: "password_manager_chose_plugin",
 };
 
-const FIELDS = [...Object.values(PANEL_FIELDS).flat(), ...Object.values(PANEL_REFUSALS), ...Object.values(HINT_FIELDS), ...Object.values(CODE_FIELDS), ...Object.values(CHOICE_FIELDS), RECORD_FAILED];
+const FIELDS = [...Object.values(PANEL_FIELDS).flat(), ...Object.values(PANEL_REFUSALS), ...Object.values(HINT_FIELDS), ...Object.values(CODE_FIELDS), ...Object.values(CHOICE_FIELDS), RECORD_FAILED, MOVED_BACK, ...Object.values(RESTORE_FIELDS)];
 
 let counts: Record<string, number> = {};
-const bump = (field: string, consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void (counts[field] = (counts[field] ?? 0) + 1));
+const bump = (field: string, consent?: ConsentToken | null, by = 1) => countFor(consentOrNow(consent), () => void (counts[field] = (counts[field] ?? 0) + by));
 
 export function notePasswordPanel(opener: PanelOpener, shown: boolean, reason?: PanelRefusal) {
   bump(PANEL_FIELDS[opener][shown ? 0 : 1]);
@@ -56,6 +61,12 @@ export function notePasswordPanel(opener: PanelOpener, shown: boolean, reason?: 
 export const noteVerificationCodeSetup = (step: VerificationCodeStep, consent?: ConsentToken | null) => bump(CODE_FIELDS[step], consent);
 
 export const notePasswordManagerRecordFailed = (consent?: ConsentToken | null) => bump(RECORD_FAILED, consent);
+
+export function noteProfilesMovedBack(moved: number, consent?: ConsentToken | null) {
+  if (moved > 0) bump(MOVED_BACK, consent, moved);
+}
+
+export const noteOfferToSaveRestore = (restored: boolean, consent?: ConsentToken | null) => bump(RESTORE_FIELDS[restored ? "restored" : "failed"], consent);
 
 export const notePanelHint = (step: PanelHintStep) => bump(HINT_FIELDS[step]);
 

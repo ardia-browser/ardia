@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { View } from "react-native";
 import type { OfficialPlugin } from "../../state/plugins/actions";
 import { consentOwner } from "../../state/plugins/consentSurface";
-import { useOfficialPlugins, usePluginConsent, usePluginPrograms } from "../../state/plugins/hooks";
+import { useOfficialFetch, useOfficialPlugins, usePluginConsent, usePluginPrograms } from "../../state/plugins/hooks";
 import { usePlugins } from "../../state/plugins/store";
 import { useOnboarding } from "../../state/onboarding/onboarding";
 import { PluginConsentSheet } from "../plugins/PluginConsentSheet";
@@ -66,10 +66,11 @@ function PluginCard({ plugin, picked, asking }: { plugin: OfficialPlugin; picked
   const working = usePluginsStep((s) => s.phase === "working" && s.current === plugin.name);
   const failure = usePluginsStep((s) => s.failures[plugin.name]);
   const programs = usePluginPrograms(plugin.name);
-  const view = officialView(plugin, programs, failure ? { state: "failed", reason: failure } : working ? { state: "installing" } : null);
+  const fetch = useOfficialFetch(plugin.name);
+  const view = officialView(plugin, programs, failure ? { state: "failed", reason: failure } : working ? { state: "installing" } : null, working ? fetch : undefined);
   if (plugin.state === "available" && (phase === "offer" || asking))
     return <OptionCard control="check" icon={plugin.icon} title={officialTitle(plugin)} subtitle={plugin.blurb} subtitleLines={1} selected={picked} onPress={() => togglePluginPick(plugin)} />;
-  return <StatusCard plugin={plugin} status={view.note === "comingSoon" ? "" : (view.status ?? (view.note === "installed" ? "Installed" : view.note === "on" ? "On" : null))} failed={view.failed} busy={view.busy} soon={view.note === "comingSoon"} done={(view.note === "installed" || view.note === "on") && !view.failed && !view.busy} />;
+  return <StatusCard plugin={plugin} status={view.note === "comingSoon" ? "" : (view.status ?? (view.note === "installed" ? "Installed" : null))} failed={view.failed} busy={view.busy} soon={view.note === "comingSoon"} done={view.note === "installed" && !view.failed && !view.busy} />;
 }
 
 function StatusCard({ plugin, status, failed, busy, soon, done }: { plugin: OfficialPlugin; status: string | null; failed: boolean; busy: boolean; soon: boolean; done: boolean }) {

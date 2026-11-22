@@ -7,7 +7,7 @@ import { captionRoom, WINDOW_CHROME, type WindowChrome } from "../../lib/windowC
 export const GROUP_MARGIN_LEFT = 3.5;
 export const GROUP_MARGIN_RIGHT = 4;
 export const MEMBERS_INSET = 6.5;
-const TAIL_COLLAPSED = 4.5;
+export const TAIL_COLLAPSED = 4.5;
 export const TAIL_EXPANDED = 30.25;
 
 type GroupLayout = { offsets: number[]; width: number };

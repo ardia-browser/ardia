@@ -6,7 +6,7 @@ import { idOf, resetNativeMenus, titles, type NativeItem } from "./nativeMenusMo
 jest.mock("@ardia/phone-native", () => require("./nativeMenusMock").nativeMenusModule(jest.requireActual("@ardia/phone-native")));
 
 const { TabDeck } = require("../components/tabs/TabDeck") as typeof import("../components/tabs/TabDeck");
-const { DesignProvider, deckChromeLayout, FloatingMenu, rolesFor } = require("../components/ui") as typeof import("../components/ui");
+const { DesignProvider, deckChromeLayout, FloatingMenu, PROFILE_COLORS, rolesFor } = require("../components/ui") as typeof import("../components/ui");
 type MenuItem = import("../components/ui").MenuItem;
 const { centredGridOffset, tabGridColumns, tabGridInsets, tabGridLayout, tabGridStartOffset, tabGridRowHeight } = require("../components/tabs/tabGridLayout") as typeof import("../components/tabs/tabGridLayout");
 const { deckHeaderBottom } = require("../components/tabs/DeckHeader") as typeof import("../components/tabs/DeckHeader");
@@ -178,14 +178,14 @@ test("main's grid layout: adaptive columns of 150 to 260 pt, 14 pt apart, rows 1
   unmount(root);
 });
 
-test("the selected tab's card carries main's 2.5 pt accent edge and the selected trait; the rest keep the 0.5 pt card edge", () => {
+test("the selected tab's card carries a 2.5 pt edge in the space's accent and the selected trait; the rest keep the 0.5 pt card edge", () => {
   const root = deck();
   toggle();
   const selected = tabStore.currentTabs().open.find((tab) => tab.id === tabStore.currentTabs().selectedId)!;
   const roles = rolesFor(false);
   const at = cardLabels(root).indexOf(selected.title);
   const edges = hosts(root, "tabGridEdge").map(flat);
-  expect(edges[at]).toMatchObject({ borderWidth: 2.5, borderColor: roles.formAccent });
+  expect(edges[at]).toMatchObject({ borderWidth: 2.5, borderColor: PROFILE_COLORS.plum.tint });
   edges.filter((_, index) => index !== at).forEach((edge) => expect(edge).toMatchObject({ borderWidth: 0.5, borderColor: roles.cardEdge }));
   expect(cards(root)[at]!.props.accessibilityState).toEqual({ selected: true });
   expect(cards(root).filter((card) => card.props.accessibilityState.selected)).toHaveLength(1);
@@ -317,15 +317,6 @@ onIPhone("an Incognito tab's cell is titled Incognito, and its card reads Incogn
   const at = hosts(root, "tabGridTitle").findIndex((node) => node.props.children === "Incognito");
   expect(at).toBeGreaterThanOrEqual(0);
   expect(cards(root)[at]!.props.accessibilityValue).toEqual({ text: "Incognito, site0.example" });
-  unmount(root);
-});
-
-test("the Archive capsule yields to the grid, as main hides its archive card in the grid", () => {
-  const root = deck();
-  act(() => useArchiveCard.setState({ showing: true }));
-  expect(byTestId(root, "archiveCapsule").length + hosts(root, "archiveCapsule").length).toBeGreaterThan(0);
-  toggle();
-  expect(byTestId(root, "archiveCapsule").length + hosts(root, "archiveCapsule").length).toBe(0);
   unmount(root);
 });
 

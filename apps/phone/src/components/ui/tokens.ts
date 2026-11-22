@@ -3,6 +3,10 @@ import { FLOATING_BAR_PLACE } from "../../lib/deckGeometry";
 import { ANDROID_MENU_SIZES, IPHONE_MENU_SIZES } from "../../lib/menuPlace";
 export const ink = { white: "#FFFFFF", black: "#000000", clear: "#00000000", knobShadow: "rgba(0,0,0,0.25)" } as const;
 
+export const shape = { control: 12, field: 12, row: 12, card: 16, panel: 22 } as const;
+
+export const smoothCorners = { borderCurve: "continuous" } as const;
+
 const ANDROID_DARK_SURFACE = "#1E1B1D";
 
 export const toggleLayout = { width: 51, height: 31, knob: 27, inset: 2 } as const;
@@ -43,7 +47,7 @@ const lightRoles = {
   onPrimaryAction: "#FFFFFF",
   switchOn: "#34C759",
   trayShadow: "#000000",
-  trayDim: "rgba(0,0,0,0.28)",
+  trayDim: "rgba(0,0,0,0.16)",
   pageSurface: "#FFFFFF",
   tileFill: "rgba(118,118,128,0.2)",
   tileEdge: "rgba(0,0,0,0.14)",
@@ -60,7 +64,8 @@ const lightRoles = {
   separator: "rgba(60,60,67,0.29)",
   tertiaryFill: "rgba(118,118,128,0.12)",
   tertiaryLabel: "rgba(60,60,67,0.3)",
-  toastFill: "rgba(255,255,255,0.92)",
+  toastFill: "rgba(255,255,255,0.97)",
+  toastLabel: "#000000",
   toastShadow: "rgba(0,0,0,0.18)",
   panelBorder: "rgba(0,0,0,0.1)",
   dialogScrim: "rgba(0,0,0,0.32)",
@@ -88,7 +93,7 @@ const darkRoles: ColorRoles = {
   onPrimaryAction: "#000000",
   switchOn: "#30D158",
   trayShadow: "#000000",
-  trayDim: "rgba(0,0,0,0.28)",
+  trayDim: "rgba(0,0,0,0.42)",
   pageSurface: "#000000",
   tileFill: "rgba(255,255,255,0.2)",
   tileEdge: "rgba(255,255,255,0.28)",
@@ -97,7 +102,7 @@ const darkRoles: ColorRoles = {
   secondaryLabel: "rgba(235,235,245,0.6)",
   deckControl: "rgba(255,255,255,0.14)",
   destructive: "#FF453A",
-  panel: "#2A2A2A",
+  panel: "#1C1C1E",
   divider: "rgba(255,255,255,0.09)",
   menuScrim: "rgba(0,0,0,0.3)",
   placeholderTints: ["#262447", "#3F2532", "#1E3046", "#1F3527", "#3D3020", "#30243F"] as readonly string[],
@@ -105,7 +110,8 @@ const darkRoles: ColorRoles = {
   separator: "rgba(84,84,88,0.6)",
   tertiaryFill: "rgba(118,118,128,0.24)",
   tertiaryLabel: "rgba(235,235,245,0.3)",
-  toastFill: "rgba(44,42,43,0.9)",
+  toastFill: "rgba(28,28,30,0.97)",
+  toastLabel: "#FFFFFF",
   toastShadow: "rgba(0,0,0,0.5)",
   panelBorder: "rgba(255,255,255,0.1)",
   dialogScrim: "rgba(0,0,0,0.48)",
@@ -134,7 +140,7 @@ export const pageMenuInk = {
   dark: { sheet: "#000000", group: "#171717", rowPressed: "rgba(120,120,128,0.36)" },
 } as const;
 
-export const toastLayout = { minHeight: 44, verticalPadding: 11, iconSize: 17, barClearance: 64, sideInset: 32, shadowRadius: 14, shadowY: 6 } as const;
+export const toastLayout = { radius: shape.control, minHeight: 44, verticalPadding: 11, iconSize: 17, barClearance: 64, sideInset: 32, shadowRadius: 14, shadowY: 6 } as const;
 
 export const pageInk = { findError: "#C93333" } as const;
 
@@ -146,11 +152,11 @@ export const readerInk = {
 
 export const readerLayout = { minLeadAspect: 0.75, maxWidth: 680, topBar: 52, chromeBand: 46, chromeSide: 16, chromeButton: 44, chromeCapsulePadding: 16, leadRadius: 12, lineHeight: 1.52, titleScale: 1.55, titleLine: 1.2, paragraphGap: 0.9, headerGap: 1.2 } as const;
 
-export const dialogLayout = { width: 312, radius: 28, fieldHeight: 48 } as const;
+export const dialogLayout = { width: 312, radius: shape.panel, fieldHeight: 48 } as const;
 
 export const settingsLayout = {
   expoListTop: 12,
-  groupRadius: 26,
+  groupRadius: shape.panel,
   rowMinHeight: 52,
   rowInset: 16,
   labelGap: 16,
@@ -164,7 +170,7 @@ export const settingsLayout = {
   swatch: 26,
   swatchRing: 2,
   swatchGap: 3,
-  primaryButton: { radius: 14, height: { ios: 190 / 3, android: 50 } },
+  primaryButton: { radius: shape.card, height: { ios: 190 / 3, android: 50 } },
   stepShift: 60,
   titleWidth: 240,
 } as const;
@@ -399,7 +405,7 @@ export const failureLayout = { icon: 36, textWidth: 320, button: 40 } as const;
 
 export const archiveCardLayout = { radius: 16, tile: 28, maxWidth: 520, aboveBarCenter: 28, tint: "#B059EE" } as const;
 
-export const onboardingArt = { appIcon: 60, linkCardWidth: 210, linkCardRadius: 18, stripHeight: 64, arrowLift: 26, shadowRadius: 12, sheetRadius: 38 } as const;
+export const onboardingArt = { appIcon: 60, linkCardWidth: 210, linkCardRadius: shape.card, stripHeight: 64, arrowLift: 26, shadowRadius: 12, sheetRadius: 38 } as const;
 
 export const floatingBarLayout = {
   control: FLOATING_BAR_PLACE.control,
@@ -426,8 +432,12 @@ export const floatingPanelLayout = {
   fieldInset: 9,
   fieldBottom: 1,
   fieldEdge: 0.5,
-  fieldLight: { fill: "#FFFFFF", edge: "rgba(0,0,0,0.06)" },
-  fieldDark: { fill: "rgba(255,255,255,0.12)", edge: "rgba(255,255,255,0.08)" },
+  fieldLight: { fill: "rgba(118,118,128,0.12)", edge: "rgba(0,0,0,0)" },
+  fieldDark: { fill: "rgba(118,118,128,0.24)", edge: "rgba(255,255,255,0)" },
+  panelRadius: shape.panel,
+  panelLight: "#FFFFFF",
+  panelDark: "#1C1C1E",
+  reachRows: 5.5,
   tintShare: 0.55,
   incognitoShare: 0.85,
   incognitoFill: "#151517",
@@ -448,7 +458,7 @@ export const startLayout = {
   tileSide: 20,
   tileGap: 8,
   tileHeight: 52,
-  tileRadius: 14,
+  tileRadius: shape.row,
   tileIcon: 20,
   tilePressScale: 0.94,
   folderIconShare: 0.95,
@@ -563,7 +573,7 @@ export const syncSketch = {
   ],
 } as const;
 
-export const sheetInk = { scrim: "rgba(0,0,0,0.25)" } as const;
+export const sheetInk = { scrim: "rgba(0,0,0,0.25)", fill: { light: "#F2F2F7", dark: "#1C1C1E" } } as const;
 
 export const sheetLayout = { topGap: 10, iPhoneTopGap: 0, radius: 32, backgroundRadius: 24 } as const;
 
@@ -580,7 +590,7 @@ export const expoSpacesLayout = {
   section: 32,
   bannerGap: 10,
   bannerPadding: 12,
-  bannerRadius: 14,
+  bannerRadius: shape.row,
   rowInset: 20,
   rowHeight: 48,
   showAllHeight: 44,
@@ -594,7 +604,7 @@ export const spacesLayout = {
   headerCircle: 32,
   bannerGap: 10,
   bannerPadding: 12,
-  bannerRadius: 14,
+  bannerRadius: shape.row,
   headerGap: 6,
   headerBottom: 4,
   tileGap: 6,
@@ -610,6 +620,7 @@ export const spacesLayout = {
 export const tabsInk = {
   incognitoCard: "#1C1D22",
   incognitoCardRaised: "#2A2B31",
+  incognitoOnLight: "rgba(28,29,34,0.6)",
   incognitoBackdrop: ["#1A1A1E", "#0E0E10"] as const,
   incognitoSheet: "#151517",
   cardShadow: "rgba(0,0,0,0.18)",
@@ -657,9 +668,11 @@ export const space = { none: 0, hair: 1, tight: 2, xs: 4, s: 8, m: 12, l: 16, xl
 
 export const shadowRadius = { tile: 1.5, knob: 2, card: 16, lifted: 24 } as const;
 
-export const radius = { row: 14, field: 16, card: 20, sheet: 40 } as const;
+export const radius = { row: shape.row, field: shape.field, card: shape.card, sheet: 40 } as const;
 
 export const capsule = (height: number) => height / 2;
+
+export const controlRadius = (side: number) => Math.min(shape.control, Math.round(side * 0.3));
 
 export const appIconLayout = {
   maxScale: 1.4,

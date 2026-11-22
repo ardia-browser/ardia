@@ -390,6 +390,8 @@ public struct SettingsShortcut: Identifiable, Equatable {
 }
 
 public struct SettingsShortcuts: View {
+  private static let corner: CGFloat = 12
+
   public var shortcuts: [SettingsShortcut]
   public var action: (SettingsShortcut) -> Void
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -411,8 +413,8 @@ public struct SettingsShortcuts: View {
           Text(LocalizedStringKey(shortcut.title))
             .font(.body.weight(.medium))
             .frame(maxWidth: .infinity, minHeight: 48)
-            .background(Color(.secondarySystemGroupedBackground), in: .capsule)
-            .contentShape(.capsule)
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: Self.corner, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: Self.corner, style: .continuous))
         }
         .buttonStyle(PressableStyle())
         .foregroundStyle(.primary)

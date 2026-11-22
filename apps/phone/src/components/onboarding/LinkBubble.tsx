@@ -17,7 +17,7 @@ export function LinkBubble() {
         </View>
       </View>
       <View style={styles.arrow}>
-        <Symbol name="arrowRight" size={22} color={theme.formAccent} />
+        <Symbol name="arrowRight" size={22} color={theme.spaceAccentInk} />
       </View>
       <View testID="linkBubbleIcon" style={styles.icon}>
         <AppIcon side={onboardingArt.appIcon} shadow scalesWithText={false} />

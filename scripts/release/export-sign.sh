@@ -29,25 +29,14 @@ else
 fi
 [ "$(lipo -archs "$app/Contents/MacOS/Ardia")" = arm64 ] || die "the app's executable is $(lipo -archs "$app/Contents/MacOS/Ardia"), not arm64"
 
-echo "==> Built-in plugins"
-bundled="$app/Contents/Resources/Plugins"
+echo "==> Official plugins (fetched on Install; the app carries only the pin and the program registry)"
 plist="$app/Contents/Info.plist"
-rm -rf "$bundled"
-mkdir -p "$bundled"
+[ ! -e "$app/Contents/Resources/Plugins" ] || die "the export bundles plugins; official plugins are fetched on Install"
 /usr/libexec/PlistBuddy -c "Delete :ArdiaBuiltInPlugins" "$plist" 2>/dev/null || true
-/usr/libexec/PlistBuddy -c "Add :ArdiaBuiltInPlugins dict" "$plist"
-for folder in "$dist"/plugins/*/; do
-  name="$(basename "$folder")"
-  [ -f "$folder/plugin.json" ] || continue
-  ditto --norsrc --noextattr "$folder" "$bundled/$name"
-  find "$bundled/$name" -type f \( -name '*.so' -o -name '*.dylib' \) -print0 | while IFS= read -r -d '' lib; do
-    sign_as "$identity" --options runtime "$lib"
-  done
-  find "$bundled/$name" -type f -perm -u+x ! -name '*.so' ! -name '*.dylib' -print0 | while IFS= read -r -d '' exe; do
-    if file -b "$exe" | grep -q '^Mach-O'; then sign_as "$identity" --options runtime "$exe"; fi
-  done
-  /usr/libexec/PlistBuddy -c "Add :ArdiaBuiltInPlugins:$name string $("$root/scripts/release/plugin-digest.py" "$bundled/$name")" "$plist"
-done
+signed_pin="$(python3 -I "$root/scripts/release/official-plugins.py" signed-pin)" || die "the official plugins' pin couldn't be read"
+plutil -replace ArdiaOfficialPlugins -json "$signed_pin" "$plist" || die "couldn't write ArdiaOfficialPlugins into Info.plist"
+registry="$(python3 -I "$root/scripts/release/official-plugins.py" registry)" || die "the pin's program registry couldn't be made"
+plutil -replace ArdiaProgramRegistry -json "$registry" "$plist" || die "couldn't write ArdiaProgramRegistry into Info.plist"
 
 echo "==> Licenses"
 licenses="$app/Contents/Resources/Licenses"
@@ -73,6 +62,8 @@ sign_as "$identity" --options restrict,library,kill,runtime "$fwv/Helpers/app_mo
 [ -e "$fwv/Helpers/web_app_shortcut_copier" ] && sign_as "$identity" --options restrict,library,kill,runtime \
   --identifier com.ardia.browser.web_app_shortcut_copier "$fwv/Helpers/web_app_shortcut_copier"
 sign_as "$identity" "$fw"
+plugin_host="$app/Contents/Helpers/ArdiaPluginHost"
+[ -e "$plugin_host" ] && sign_as "$identity" --options runtime --identifier com.ardia.browser.plugin-host "$plugin_host"
 [ -d "$app/Contents/Frameworks/hermes.framework" ] \
   && sign_as "$identity" --preserve-metadata=identifier,entitlements,flags,runtime "$app/Contents/Frameworks/hermes.framework"
 sign_as "$identity" --preserve-metadata=entitlements,requirements,flags,runtime "$app"

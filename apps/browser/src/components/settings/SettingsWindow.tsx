@@ -8,7 +8,7 @@ import { trackSettingsSection } from "../../state/telemetry/track";
 import { preparePane, usePaneLoaded } from "../../state/settings/paneData";
 import { clearSettingsReveal, flashSetting, useSettingsSearch } from "../../state/settings/searchState";
 import { anchorView } from "./anchors";
-import { findSetting, PANES, paneTitle } from "./settingsIndex";
+import { findSetting, resolveSettingId, PANES, paneTitle } from "./settingsIndex";
 import { SettingsPaneContext } from "./Form";
 import { PageToolbar } from "../pages/PageLayout";
 import { SettingsSearchField, SettingsSearchResults } from "./SettingsSearch";
@@ -104,7 +104,7 @@ export function SettingsWindow() {
     if (shown?.pane !== revealPane) return;
     const animated = switched.current === key;
     const frame = requestAnimationFrame(() => {
-      const target = anchorView(reveal.id);
+      const target = anchorView(resolveSettingId(reveal.id));
       const container = content.current;
       if (!target || !container) return flashSetting("");
       target.measureLayout(
@@ -113,9 +113,9 @@ export function SettingsWindow() {
           const top = animated ? scrollTop.current : 0;
           const inView = y >= top + REVEAL_MARGIN && y + h <= top + viewport.current - REVEAL_MARGIN;
           if (!inView) scroller.current?.scrollTo({ y: Math.max(0, y - viewport.current / 3), animated });
-          flashSetting(reveal.id);
+          flashSetting(resolveSettingId(reveal.id));
         },
-        () => flashSetting(reveal.id),
+        () => flashSetting(resolveSettingId(reveal.id)),
       );
     });
     return () => cancelAnimationFrame(frame);

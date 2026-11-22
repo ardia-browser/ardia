@@ -1232,6 +1232,8 @@ __define("packages/core/src/omnibox.ts", function (exports, __require) {
   __export(exports, "isJavaScriptUrl", () => isJavaScriptUrl);
   __export(exports, "withoutJavaScriptScheme", () => withoutJavaScriptScheme);
   __export(exports, "fixupUrl", () => fixupUrl);
+  __export(exports, "sameAddress", () => sameAddress);
+  __export(exports, "spacedAddressGuess", () => spacedAddressGuess);
   __export(exports, "searchUrlFor", () => searchUrlFor);
   __export(exports, "resolveInput", () => resolveInput);
   __export(exports, "classifyPaste", () => classifyPaste);
@@ -1240,7 +1242,7 @@ __define("packages/core/src/omnibox.ts", function (exports, __require) {
   __export(exports, "urlForDisplay", () => urlForDisplay);
 const { appUrlOrigin, toAppUrl } = __require("packages/core/src/appUrls.ts");
 const { cleanUrl } = __require("packages/core/src/cleanUrl.ts");
-const { displayHost } = __require("packages/core/src/idn.ts");
+const { displayHost, punycodeEncode } = __require("packages/core/src/idn.ts");
 const { PSL_TLDS } = __require("packages/core/src/tlds.ts");
 
                                                                                                                   
@@ -1315,8 +1317,55 @@ function fixupUrl(raw        )                {
   return url && !isJavaScriptUrl(url) ? toAppUrl(url) : null;
 }
 
+                                                           
+
+const WIKI_HOST = /(^|\.)(wikipedia|wiktionary|wikimedia|wikiquote|wikibooks|wikisource|wikinews|wikiversity|wikivoyage|wikidata|mediawiki)\.org$/;
+
+function spacedAddress(input        )                       {
+  if (!input.includes(" ") || /[^\S ]/.test(input)) return null;
+  const end = input.search(/[/?#]/);
+  if (end <= 0 || input.slice(0, end).includes(" ") || input.startsWith("/ ", end)) return null;
+  const host = matchHost(input);
+  if (!host) return null;
+  const name = host.name.toLowerCase();
+  if (KNOWN_SCHEMES.has(name) || name === "javascript") return null;
+  const port = Number(host.port.slice(1));
+  if (host.port && (port < 1 || port > 65535)) return null;
+  const dotted = name.includes(".") && !/^[\d.]+$/.test(name);
+  const ip = name.startsWith("[") || /^(\d{1,3}\.){3}\d{1,3}$/.test(name);
+  const local = name === "localhost" || ip || (!!host.port && !(dotted && !isLocalHost(name) && (port === 80 || port === 443)));
+  if (!dotted && !local) return null;
+  const rest = input.slice(host.authority.length);
+  const wiki = WIKI_HOST.test(name) && /^\/wiki\/[^\s/?#]/.test(rest);
+  const certain = local || wiki || /^[^\s?#]*\?(?:[^\s#]*&)?[^\s#&=]+=/.test(rest);
+  return { escaped: input.replace(/ /g, "%20"), certain };
+}
+
+const asciiLabel = (label        ) =>
+  /^[\x00-\x7f]*$/.test(label) ? label.replace(/[A-Z]+/g, (upper) => upper.toLowerCase()) : `xn--${punycodeEncode(Array.from(label.normalize("NFKC"), (c) => c.toLowerCase()).join(""))}`;
+
+function addressKey(url        )         {
+  const m = /^([a-z][a-z0-9+.-]*):\/\/([^/?#]*)(.*)$/i.exec(url.trim());
+  if (!m) return url.trim();
+  const scheme = m[1] .toLowerCase();
+  const web = scheme === "http" || scheme === "https";
+  const defaultPort = scheme === "https" ? 443 : scheme === "http" ? 80 : -1;
+  const authority = m[2] .replace(/^[^:@[\]]+/, (host) => host.split(".").map(asciiLabel).join(".")).replace(/[A-Z]+/g, (upper) => upper.toLowerCase()).replace(/:(\d+)$/, (port, digits        ) => (!web ? port : Number(digits) === defaultPort ? "" : `:${Number(digits)}`));
+  const rest = web && !m[3] .startsWith("/") ? `/${m[3]}` : m[3] ;
+  return `${scheme}://${authority}${rest}`;
+}
+
+const sameAddress = (a        , b        ) => addressKey(a) === addressKey(b);
+
+function spacedAddressGuess(raw        )                {
+  const spaced = spacedAddress(raw.trim());
+  return spaced && !spaced.certain ? fixupUrl(spaced.escaped) : null;
+}
+
 function fixup(raw        )                {
-  const input = raw.trim();
+  const trimmed = raw.trim();
+  const spaced = spacedAddress(trimmed);
+  const input = spaced?.certain ? spaced.escaped : trimmed;
   if (!input || (/\s/.test(input) && !/^([a-z][a-z0-9+.-]*:\/\/|\/[^\s/])/i.test(input))) return null;
   if (/^(about|data|mailto|tel|sms|facetime|view-source):/i.test(input)) return input;
 
@@ -1364,7 +1413,7 @@ function resolveInput(raw        , search        )         {
 function classifyPaste(text        )                     {
   const trimmed = withoutJavaScriptScheme(text.trim()).trim();
   if (!trimmed) return null;
-  const url = /\s/.test(trimmed) ? null : fixupUrl(trimmed);
+  const url = /\s/.test(trimmed) && !spacedAddress(trimmed)?.certain ? null : fixupUrl(trimmed);
   if (url && !/^(about|data):/i.test(url)) return { kind: "go", url: cleanUrl(url) };
   return { kind: "search", query: trimmed.replace(/\s+/g, " ").slice(0, 2000) };
 }
@@ -2726,7 +2775,7 @@ const { NO_BOOKMARKS, poolFor, savedBookmark, savedVisit, tabsOver } = __require
 const { extensionSuggestions } = __require("packages/core/src/extensionRows.ts");
 const { BUILT_IN_ENGINES, searchUrl } = __require("packages/core/src/engines.ts");
 const { matchActions } = __require("packages/core/src/fuzzy.ts");
-const { fixupUrl, hostOf, searchUrlFor } = __require("packages/core/src/omnibox.ts");
+const { fixupUrl, hostOf, sameAddress, searchUrlFor, spacedAddressGuess } = __require("packages/core/src/omnibox.ts");
 const { matchScore, matchScoreWord, narrowing, parseQuery, remember, TopList } = __require("packages/core/src/pageMatch.ts");
 const { hostLowerOfPage, hostOfPage, hostPart, originOfPage, pageKey, withRootSlash } = __require("packages/core/src/pageText.ts");
 const { globalProviderRows, providerUrl, safeProviderRows } = __require("packages/core/src/providerRows.ts");
@@ -2864,6 +2913,7 @@ function buildSuggestions(raw        , source                  , options        
 
   const search             = { kind: "search", query, url: searchUrl(engine, query), engine: engine.name };
   const typedUrl = fixupUrl(query);
+  const guessedUrl = typedUrl ? null : spacedAddressGuess(query);
   const calc = calculate(query);
   const creates = matchQuickCreate(raw.trimStart());
   const actionRows = query.length >= 4 ? 4 : 2;
@@ -2880,23 +2930,29 @@ function buildSuggestions(raw        , source                  , options        
   else if (target && completion) first = tag(known(target.url) ?? { kind: "page", url: target.url, title: "", favicon: target.favicon }, !websiteFirst && "search_first_inline");
   else if (typedUrl) first = known(typedUrl) ?? { kind: "page", url: typedUrl, title: "", favicon: null };
   else if (extensionMatches.exact) first = extensionMatches.rows[0] ;
-  else if (websiteFirst && best && best.m >= 40 && (!noInline || typedIsPage(best.c.text, q))) first = tag(pageSuggestion(best.c, best.tabId), best.c.renamed && "renamed_tab");
+  else if (!guessedUrl && websiteFirst && best && best.m >= 40 && (!noInline || typedIsPage(best.c.text, q))) first = tag(pageSuggestion(best.c, best.tabId), best.c.renamed && "renamed_tab");
   else first = search;
 
+  const savedGuess = guessedUrl ? ranked.find((x) => !x.tabId && sameAddress(x.c.url, guessedUrl)) : undefined;
+  const guessTab = guessedUrl ? source.tabs.find((t) => t.id !== options.currentTabId && sameAddress(t.url, guessedUrl)) : undefined;
+  const guessRow = !guessedUrl ? null : guessTab ? pageSuggestion({ url: guessTab.url, title: guessTab.customTitle || guessTab.title, favicon: guessTab.favicon, visits: 0, bookmarked: false }, guessTab.id) : (known(guessedUrl) ?? (savedGuess ? { ...pageSuggestion(savedGuess.c, null), url: guessedUrl } : { kind: "page", url: guessedUrl, title: "", favicon: null }));
   out.push(first);
   out.push(search);
+  if (guessRow) out.push(guessRow);
   if (calc) out.push({ kind: "calc", expression: calc.expression, value: calc.display, url: searchUrl(engine, calc.expression) });
   out.push(...actionMatches.map((m) => actionRow(m.action)));
   out.push(...extensionMatches.rows);
   out.push(...creates.map(createRow));
-  const pageRows = ranked.map((x) => tag(pageSuggestion(x.c, x.tabId), x.c.renamed && "renamed_tab"));
+  const pageRows = ranked.map((x) => tag(pageSuggestion(x.c, x.tabId), x.c.renamed && "renamed_tab")).map((row) => (guessedUrl && row.kind === "page" && row.tabId ? { ...row, url: source.tabs.find((t) => t.id === row.tabId)?.url ?? row.url } : row)).filter((row) => !guessedUrl || row.kind !== "page" || !sameAddress(row.url, guessedUrl));
   out.push(...pageRows.slice(0, 3));
-  out.push(...(options.remoteSites ?? []).slice(0, 2).map((site)             => known(site.url) ?? tag({ kind: "page", url: site.url, title: site.title, favicon: null }, "engine_site")));
+  const remoteSites = (options.remoteSites ?? []).slice(0, 2).filter((site) => !guessedUrl || !sameAddress(site.url, guessedUrl));
+  out.push(...remoteSites.map((site)             => known(site.url) ?? tag({ kind: "page", url: site.url, title: site.title, favicon: null }, "engine_site")));
   const providerAt = out.items.length;
   out.push(...remoteRows((text) => searchUrl(engine, text), engine.name));
   out.push(...pageRows.slice(3));
   const providerRows = options.providers?.length ? globalProviderRows(options.providers, out.items) : [];
   const items = providerRows.length ? [...out.items.slice(0, providerAt), ...providerRows, ...out.items.slice(providerAt)] : out.items;
+  if (guessRow && out.items.includes(guessRow)) tag(guessRow, "spaced_address");
   const shownVia = tagged ? viaOf(items, via) : undefined;
   return shownVia ? { items, completion, via: shownVia } : { items, completion };
 }

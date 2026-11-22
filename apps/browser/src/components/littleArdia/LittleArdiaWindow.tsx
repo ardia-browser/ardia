@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 import { useTheme } from "../ui/theme";
 import { openPanel } from "../../state/windows/actions";
-import { useActiveTab, useSettings, useWindowFullScreen, useWindowId, useWindowProfile, useWindowUi } from "../../state/browser/hooks";
+import { useActiveTab, useWindowFullScreen, useWindowId, useWindowProfile, useWindowUi } from "../../state/browser/hooks";
 import type { Tab } from "../../state/browser/types";
 import { CommandPanel } from "../omnibox/CommandPanel";
 import { ContentCard } from "../window/ContentCard";
@@ -206,10 +206,9 @@ function HistoryButtons({ tabId, windowId }: { tabId: string; windowId: string }
 
 function ProfileButton({ windowId }: { windowId: string }) {
   const profile = useWindowProfile();
-  const iconsShown = useSettings((s) => s.profileSwitcherIcons);
   return (
     <Button variant="icon" look="row" tooltip={`Profile: ${profile.name}`} onPress={() => void openLittleArdiaProfileMenu(windowId)}>
-      <ProfileBadge profile={iconsShown ? profile : { ...profile, icon: null }} size={16} />
+      <ProfileBadge profile={profile.switcherDot ? { ...profile, icon: null } : profile} size={16} />
     </Button>
   );
 }

@@ -50,8 +50,9 @@ Ardia never creates the folder. `ardia config init` does, or the user does.
   (`apps/browser/src/state/settings/settings.ts`). A test makes every setting either allowlisted or deliberately
   left out, so a new setting never becomes file-writable by accident. Left out, because they grant control, send
   data somewhere or change which engine handles a site: `cliControl`, `allowJavaScriptFromAppleEvents`,
-  `extensionSearchEngines`, `defaultProfileId`, `customSearchUrl`, `newTabUrl`, `customSearchEngines`, `pageEngine`,
-  `websiteEngines`, `protectedVideoInWebKit`. `searchEngine` must name an engine that already exists (built in, or
+  `extensionSearchEngines`, `defaultProfileId`, `customSearchUrl`, `newTabUrl`, `customSearchEngines`, `engineMode`, `pageEngine`,
+  `websiteEngines`, `protectedVideoInWebKit`, `offerWebKitForProtectedVideo`, `engineSwitchKeepsPage`,
+  `engineSwitchAsksAboutUnsavedWork`, `engineSwitchCarriesSiteData`, `webKitFraudWarnings`. `searchEngine` must name an engine that already exists (built in, or
   one the user added in Settings).
 - `interfaceScale` (0.8 to 1.5 in steps of 0.05, default 1; this Mac only, not synced) is Settings › Appearance ›
   Interface size: it scales the whole app's UI, not web pages, and applies live.
@@ -81,7 +82,7 @@ Ardia never creates the folder. `ardia config init` does, or the user does.
 - `theme` is a theme name (`^[a-z0-9][a-z0-9_-]*$`, the file `themes/<name>.json`) or `null`. A bad value, or a
   `config.json` that doesn't parse, keeps the theme that is showing.
 - `commandScrollZoom` (⌘-scroll zooms the page), `sidebarMediaControls` (the sidebar's media card and a pinned tab's
-  media controls) and `adaptTextToColor` (a custom theme's text follows its colour), all `true` by default, and
+  media controls) and `adaptTextToColor` (an edited theme colour's text follows its colours), all `true` by default, and
   `bookmarksImportDismissed` have no row in Settings. They keep a choice made in 0.2.46, whose Settings had them (the
   last as `hideBookmarksBarImport`); this file is the way to change them now.
 - Unknown keys inside `settings` are reported and ignored. Other top-level keys are ignored.

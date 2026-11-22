@@ -6,16 +6,20 @@ import { pictureChoice } from "./tokens";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
 
 const CHECK = { width: 14, height: 14 } as const;
+const LABELS = { alignItems: "center" } as const;
+const CAPTION = { textAlign: "center" } as const;
 
 export function PictureChoice({
   title,
   selected,
   onPress,
   tooltip,
+  caption,
   size,
   children,
 }: {
   title: string;
+  caption?: string;
   selected: boolean;
   onPress: () => void;
   tooltip?: string;
@@ -29,7 +33,7 @@ export function PictureChoice({
   const icon = size === "icon";
   return (
     <View {...hoverProps} style={icon ? { width: pictureChoice.iconWidth } : { flex: 1 }}>
-      <Pressable onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} tooltip={tooltip} accessibilityRole="radio" accessibilityState={{ selected }} accessibilityLabel={title}>
+      <Pressable onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} tooltip={tooltip} accessibilityRole="radio" accessibilityState={{ selected }} accessibilityLabel={title} accessibilityHint={caption}>
         <Box gap="m" style={{ alignItems: "center" }}>
           <Animated.View style={[icon ? { width: pictureChoice.icon } : { width: "100%" }, scaleStyle]}>
             <SelectableCard
@@ -42,11 +46,18 @@ export function PictureChoice({
               {children}
             </SelectableCard>
           </Animated.View>
-          <Box row gap="xs" style={{ alignItems: "center" }}>
-            {selected && <Symbol name="checkmark.circle.fill" size={12} color={theme.formAccent} style={CHECK} />}
-            <Text size="small" tone={selected ? "textPrimary" : "textSecondary"} lines={1}>
-              {title}
-            </Text>
+          <Box gap="xxs" style={LABELS}>
+            <Box row gap="xs" style={{ alignItems: "center" }}>
+              {selected && <Symbol name="checkmark.circle.fill" size={12} color={theme.formAccent} style={CHECK} />}
+              <Text size="small" tone={selected ? "textPrimary" : "textSecondary"} lines={1}>
+                {title}
+              </Text>
+            </Box>
+            {caption ? (
+              <Text size="caption" tone="textTertiary" lines={2} style={CAPTION}>
+                {caption}
+              </Text>
+            ) : null}
           </Box>
         </Box>
       </Pressable>

@@ -56,7 +56,7 @@ export function ExpoSyncPage() {
     <Form modifiers={modifierList(settingsPage("Sync With Mac"), tint(PlatformColor("systemBlue")), settingsChrome(), status.isEnabled ? refreshable(syncNow) : null)}>
       <ExpoHero title="Sync With Mac" subtitle={hero.text} warning={hero.isWarning} systemImage="macbook.and.iphone" tint="sync">
         {off ? (
-          <Button onPress={() => pushSettings({ page: "syncConnect" })} modifiers={[buttonStyle("borderedProminent"), buttonBorderShape("capsule"), controlSize("large"), tint(theme.primaryAction), foregroundStyle(theme.onPrimaryAction), padding({ top: 8 })]}>
+          <Button onPress={() => pushSettings({ page: "syncConnect" })} modifiers={[buttonStyle("borderedProminent"), buttonBorderShape("roundedRectangle", 12), controlSize("large"), tint(theme.primaryAction), foregroundStyle(theme.onPrimaryAction), padding({ top: 8 })]}>
             <Text modifiers={[frame({ maxWidth: FILL })]}>Connect to Your Mac</Text>
           </Button>
         ) : null}

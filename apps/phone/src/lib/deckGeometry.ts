@@ -11,6 +11,10 @@ export type DeckGeometry = {
   focusLeading: number;
   spacing: number;
   leftReach: number;
+  rightReach: number;
+  stack: DeckStack;
+  tail: number;
+  cardCorner: number;
   cardCenterY: number;
   barCenterY: number;
   tabButtonX: number;
@@ -27,11 +31,15 @@ export const DECK = {
   topReserve: 12,
   launcherStartWidth: 22,
   launcherStartRadius: 4,
-  cardRadius: 13,
+  cardRadius: 16,
   displayCornerRadius: 55,
 } as const;
 
-export const DECK_REDESIGN = { barReserve: 67, chromeGap: 21, minSafeBottom: 20, barAboveSafeBottom: 11 } as const;
+export const DECK_REDESIGN = { barReserve: 67, chromeGap: 21, minSafeBottom: 20, barAboveSafeBottom: 11, cardWidthRatio: 0.56, stepRatio: 0.33, pileEdge: 8 } as const;
+
+export type DeckStack = "pile" | "arc";
+
+export const DECK_ARC = { cardWidthRatio: 0.655, step: 0.844, peek: 0.264, tail: 0.091, focusNudge: 0.03, centerRatio: 0.514, cardCorner: 20, nearShrink: 0.02, farShrink: 0.07, leastScale: 0.6 } as const;
 
 export const BUTTON_NAVIGATION_INSET = 32;
 const BAR_HALF_HEIGHT = 22;
@@ -63,7 +71,7 @@ function reach(peek: number, spacing: number): number {
   return value;
 }
 
-export function deckGeometry(width: number, height: number, safeTop: number, safeBottom: number, safeSide = 0, os: string = "android", design: Design = "original", chromeHeight = 0, screenCorner: number = DECK.displayCornerRadius): DeckGeometry {
+export function deckGeometry(width: number, height: number, safeTop: number, safeBottom: number, safeSide = 0, os: string = "android", design: Design = "original", chromeHeight = 0, screenCorner: number = DECK.displayCornerRadius, stack: DeckStack = "pile"): DeckGeometry {
   const w = Math.max(width, 1);
   const h = Math.max(height, 1);
   const redesigned = design === "redesigned";
@@ -72,9 +80,12 @@ export function deckGeometry(width: number, height: number, safeTop: number, saf
   const bandBottom = redesigned ? h - barCenter + DECK_REDESIGN.barAboveSafeBottom - DECK_REDESIGN.barReserve + 24 : h - barCenter + BAR_GAP - DECK.barReserve + 24;
   const band = Math.max(bandBottom - bandTop, 120);
   const aspect = h / w;
-  const cardWidth = Math.min(w * DECK.cardWidthRatio, band / aspect);
-  const focusLeading = w * DECK.focusLeadingRatio;
-  const spacing = Math.min(cardWidth, w * DECK.stepRatio);
+  if (redesigned && stack === "arc") return arcGeometry(w, h, safeTop, safeBottom, safeSide, bandTop, bandBottom, band, aspect, barCenter, screenCorner);
+  const cardWidth = Math.min(w * (redesigned ? DECK_REDESIGN.cardWidthRatio : DECK.cardWidthRatio), band / aspect);
+  const focusLeading = redesigned ? (w - cardWidth) / 2 : w * DECK.focusLeadingRatio;
+  const spacing = Math.min(cardWidth, w * (redesigned ? DECK_REDESIGN.stepRatio : DECK.stepRatio));
+  const leftReach = redesigned ? Math.max(focusLeading - safeSide - DECK_REDESIGN.pileEdge, 8) : reach(Math.min(DECK.leftPeek, focusLeading - 6), spacing);
+  const rightReach = redesigned ? Math.max(w - safeSide - DECK_REDESIGN.pileEdge - focusLeading - spacing, 8) : 0;
   return {
     width: w,
     height: h,
@@ -85,7 +96,11 @@ export function deckGeometry(width: number, height: number, safeTop: number, saf
     cardHeight: cardWidth * aspect,
     focusLeading,
     spacing,
-    leftReach: reach(Math.min(DECK.leftPeek, focusLeading - 6), spacing),
+    leftReach,
+    rightReach,
+    stack: "pile",
+    tail: 0,
+    cardCorner: DECK.cardRadius,
     cardCenterY: bandTop + band / 2,
     barCenterY: h - barCenter,
     tabButtonX: safeSide + 16 + 17.5,
@@ -93,25 +108,53 @@ export function deckGeometry(width: number, height: number, safeTop: number, saf
   };
 }
 
-export type DeckMorph = { dx: number; dy: number; scale: number; originX: number; originY: number };
+function arcGeometry(w: number, h: number, safeTop: number, safeBottom: number, safeSide: number, bandTop: number, bandBottom: number, band: number, aspect: number, barCenter: number, screenCorner: number): DeckGeometry {
+  const cardWidth = Math.min(w * DECK_ARC.cardWidthRatio, band / aspect);
+  const cardHeight = cardWidth * aspect;
+  const spacing = cardWidth * DECK_ARC.step;
+  const tail = cardWidth * DECK_ARC.tail;
+  const centred = Math.min(Math.max(h * DECK_ARC.centerRatio, bandTop + cardHeight / 2), bandBottom - cardHeight / 2);
+  return {
+    width: w,
+    height: h,
+    safeTop,
+    safeBottom,
+    safeSide,
+    cardWidth,
+    cardHeight,
+    focusLeading: Math.max((w - spacing) / 2 - cardWidth * DECK_ARC.focusNudge, safeSide + cardWidth * DECK_ARC.peek),
+    spacing,
+    leftReach: reach(cardWidth * DECK_ARC.peek - tail, spacing - tail),
+    rightReach: 0,
+    stack: "arc",
+    tail,
+    cardCorner: DECK_ARC.cardCorner,
+    cardCenterY: centred,
+    barCenterY: h - barCenter,
+    tabButtonX: safeSide + 16 + 17.5,
+    screenCorner,
+  };
+}
 
-export const NO_DECK_MORPH: DeckMorph = { dx: 0, dy: 0, scale: 1, originX: 0, originY: 0 };
-
-export function deckMorphFrom(was: DeckGeometry, now: DeckGeometry): DeckMorph {
-  const originX = now.focusLeading + now.cardWidth / 2;
-  return { dx: was.focusLeading + was.cardWidth / 2 - originX, dy: was.cardCenterY - now.cardCenterY, scale: was.cardWidth / Math.max(now.cardWidth, 1), originX, originY: now.cardCenterY };
+export function deckPileScale(g: DeckGeometry, relative: number): number {
+  "worklet";
+  if (g.stack !== "arc" || relative >= 0) return 1;
+  const back = -relative;
+  return Math.max(1 - DECK_ARC.nearShrink * Math.min(back, 1) - DECK_ARC.farShrink * Math.max(back - 1, 0), DECK_ARC.leastScale);
 }
 
 export function deckLeading(g: DeckGeometry, relative: number): number {
   "worklet";
-  if (relative >= 0) return g.focusLeading + g.spacing * relative;
-  return g.focusLeading - g.leftReach * (1 - Math.exp((relative * g.spacing) / g.leftReach));
+  if (relative < 0) return g.focusLeading - g.leftReach * (1 - Math.exp((relative * (g.spacing - g.tail)) / g.leftReach)) + g.tail * relative;
+  if (g.rightReach <= 0 || relative <= 1) return g.focusLeading + g.spacing * relative;
+  return g.focusLeading + g.spacing + g.rightReach * (1 - Math.exp((-(relative - 1) * g.spacing) / g.rightReach));
 }
 
 export function deckVisibleWidth(g: DeckGeometry, relative: number, isLast: boolean): number {
   "worklet";
-  if (isLast) return g.cardWidth;
-  return Math.min(g.cardWidth, Math.max(0, deckLeading(g, relative + 1) - deckLeading(g, relative)));
+  const leading = deckLeading(g, relative);
+  const covered = isLast ? g.cardWidth : Math.min(g.cardWidth, Math.max(0, deckLeading(g, relative + 1) - leading));
+  return g.rightReach > 0 || g.stack === "arc" ? Math.min(covered, Math.max(0, g.width - leading)) : covered;
 }
 
 export function swiftRound(value: number): number {
@@ -142,14 +185,19 @@ export function deckShouldClose(translation: number, velocity: number, cardHeigh
   return -translation > cardHeight / 3 && velocity < 250;
 }
 
-export function deckCardAt(g: DeckGeometry, count: number, scroll: number, x: number, y: number): number {
+export function deckCardAt(g: DeckGeometry, count: number, scroll: number, x: number, y: number, mountedAround: number = scroll, mountedReach: number = Infinity): number {
   "worklet";
   if (count <= 0) return -1;
   const half = g.cardHeight / 2;
   if (y < g.cardCenterY - half || y > g.cardCenterY + half) return -1;
   for (let index = count - 1; index >= 0; index--) {
-    const leading = deckLeading(g, index - scroll);
-    if (x >= leading && x <= leading + g.cardWidth) return index;
+    if (Math.abs(index - mountedAround) > mountedReach) continue;
+    const relative = index - scroll;
+    const scale = deckPileScale(g, relative);
+    const centerX = deckLeading(g, relative) + g.cardWidth / 2;
+    const halfWidth = (g.cardWidth * scale) / 2;
+    const halfHeight = (g.cardHeight * scale) / 2;
+    if (x >= centerX - halfWidth && x <= centerX + halfWidth && y >= g.cardCenterY - halfHeight && y <= g.cardCenterY + halfHeight) return index;
   }
   return -1;
 }
@@ -258,7 +306,12 @@ export const lerp = (from: number, to: number, t: number) => {
   return from + (to - from) * t;
 };
 
-export const DECK_HEADER = { titleHidden: 52, titleShown: 84, iconFade: 12, inset: 8, edge: 16, maxFontScale: 1.35, trailingFade: 14 } as const;
+export const DECK_HEADER = { titleHidden: 52, titleShown: 84, iconFade: 12, inset: 8, edge: 16, maxFontScale: 1.35, trailingFade: 14, wholeHidden: 60, wholeShown: 80 } as const;
+
+export function deckHeaderReveal(available: number): number {
+  "worklet";
+  return Math.min(Math.max((available - DECK_HEADER.wholeHidden) / (DECK_HEADER.wholeShown - DECK_HEADER.wholeHidden), 0), 1);
+}
 
 export function deckHeaderPlacement(cardLeft: number, visible: number): { available: number; left: number } {
   "worklet";
@@ -266,6 +319,18 @@ export function deckHeaderPlacement(cardLeft: number, visible: number): { availa
   const available = Math.max(width - DECK_HEADER.inset, 0);
   const centerX = Math.max(cardLeft + width / 2, DECK_HEADER.edge);
   return { available, left: centerX - available / 2 };
+}
+
+export const DECK_ARC_HEADER = { inset: 16, trailing: 8, titleHidden: 36, titleShown: 48 } as const;
+
+export function deckArcHeaderPlacement(cardLeft: number, visible: number): { available: number; left: number } {
+  "worklet";
+  return { available: Math.max(visible - DECK_ARC_HEADER.inset - DECK_ARC_HEADER.trailing, 0), left: cardLeft + DECK_ARC_HEADER.inset };
+}
+
+export function deckArcTitleReveal(available: number, icon: number, spacing: number): number {
+  "worklet";
+  return Math.min(Math.max((available - icon - spacing - DECK_ARC_HEADER.titleHidden) / (DECK_ARC_HEADER.titleShown - DECK_ARC_HEADER.titleHidden), 0), 1);
 }
 
 export function deckHeaderIconReveal(available: number, icon: number): number {

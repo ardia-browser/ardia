@@ -178,10 +178,11 @@ onIPhone("the field takes the keyboard as soon as the stage has presented, as ma
   expect(mockFocus).toHaveBeenCalledTimes(1);
 });
 
-onIPhone("a page's long address opens selected and showing its start, as main's field: the native field selects it all when the stage's focus lands, not at mount", () => {
+onIPhone("editing a page's address opens the panel with an empty field, as Arc's does, and selects nothing", () => {
   const root = page();
-  act(() => presentSearch("page", "https://en.wikipedia.org/w/index.php?title=Pastel_de_nata&utm_medium=search&utm_source=ardia"));
-  expect(field(root)!.props.selectsAllOnFocus).toBe(true);
+  act(() => presentSearch("page", "https://en.wikipedia.org/wiki/Pastel_de_nata", null, { currentUrl: "https://en.wikipedia.org/wiki/Pastel_de_nata", currentTabId: currentTabs().open[0]!.id }));
+  expect(useSearch.getState().text).toBe("");
+  expect(field(root)!.props.selectsAllOnFocus).toBe(false);
 });
 
 onIPhone("the stage is told which native view is the field, so it focuses the field itself as it presents", () => {
@@ -334,7 +335,7 @@ onIPhone("the dim fades in once the stage says the panel is up, and fades with t
     { state: State.ACTIVE, translationY: 60 },
   ]);
   expect(mockStage.holdLift).toHaveBeenCalledTimes(1);
-  const travel = 274 + 300;
+  const travel = StyleSheet.flatten(host(root, "traySurface")!.props.style).height as number;
   expect(opacity(host(root, "trayDim"))).toBeCloseTo(1 - 60 / travel, 2);
 });
 
@@ -392,8 +393,8 @@ onIPhone("the stage gets the panel's look, the field's centre and, on a late rev
   const counted = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
   const root = page();
   open();
-  expect(stage().fieldCenter).toBeCloseTo(9 + 47.5 / 2);
-  expect(stage().morphLook).toMatchObject({ usesGlass: true, panelDark: false });
+  expect(stage().fieldCenter).toBeCloseTo(15 + 44 / 2);
+  expect(stage().morphLook).toMatchObject({ usesGlass: false, panelDark: false, frosted: true, classicPanel: "rgba(255,255,255,0.62)" });
   reveal(true);
   expect(counted).toHaveBeenCalledWith("search_reveals_late");
   act(() => browse.cancelSearch());
@@ -434,13 +435,14 @@ for (const [name, hinge, right] of [["open Duo", "fullyOpen", 84], ["closed Duo"
   });
 }
 
-onIPhone("with no hinge the search panel keeps its 8 a side", () => {
+onIPhone("with no hinge the search panel runs edge to edge inside the safe area, as Arc's does", () => {
   const root = page();
   open();
   advance(400);
   const card = stageCardOf(root);
-  expect(card.paddingHorizontal).toBe(8);
-  expect(card.paddingRight).toBeUndefined();
+  expect(card.paddingHorizontal).toBeUndefined();
+  const insets = safeArea.useSafeAreaInsets();
+  expect(card).toMatchObject({ paddingLeft: insets.left, paddingRight: insets.right });
 });
 
 const anchorSpan = (root: Root, width: number) => {

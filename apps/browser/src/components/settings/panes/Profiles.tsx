@@ -1,4 +1,4 @@
-import { Box, Button, PopUp, Segmented, space, Text, TextField, Toggle } from "../../ui";
+import { Box, Button, PopUp, space, Text, TextField, Toggle } from "../../ui";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
 import { useShallow } from "zustand/react/shallow";
@@ -6,9 +6,8 @@ import { deleteProfile } from "../../../state/browser/actions";
 import { profileAccent } from "../../ui/theme";
 import { useDataSharingProfileIds, useProfileDataStats, useProfileOrder, useProfileRecords, useTopAppSiblingNames } from "../../../state/profiles/hooks";
 import { currentEngineProfile, currentProfiles } from "../../../state/browser/current";
-import { commitProfileName, setDefaultProfile, setShareTopApps } from "../../../state/profiles/actions";
+import { chooseIcon, commitProfileName, setDefaultProfile, setShareTopApps } from "../../../state/profiles/actions";
 import { openProfileIconPicker } from "../../../state/profiles/iconPicker";
-import { updateSettings } from "../../../state/settings/actions";
 import { useProfile, useProfiles, useSettings } from "../../../state/browser/hooks";
 import { ClearDataDialog } from "../../pages/ClearDataDialog";
 import { Anchor, Group, Row, SectionHeader, SettingToggle, useHiddenSetting } from "../Form";
@@ -34,18 +33,6 @@ import { PasswordsPage, PasswordsSection } from "./ProfilePasswords";
 import { AddressesPage, CardsPage } from "./ProfileAutofill";
 import { ExtensionPage, ExtensionsSection } from "./ProfileExtensions";
 import { SitePage, SitesPage } from "./SiteSettings";
-
-type SwitcherShows = "dots" | "icons" | "nothing";
-const SWITCHER_SHOWS: { value: SwitcherShows; title: string }[] = [
-  { value: "dots", title: "Dots" },
-  { value: "icons", title: "Icons" },
-  { value: "nothing", title: "Nothing" },
-];
-const SWITCHER_SETTINGS: Record<SwitcherShows, { showProfileDots: boolean; profileSwitcherIcons?: boolean }> = {
-  dots: { showProfileDots: true, profileSwitcherIcons: false },
-  icons: { showProfileDots: true, profileSwitcherIcons: true },
-  nothing: { showProfileDots: false },
-};
 
 export function ProfilesPane({ profileId: chosen, detail }: SettingsPlace) {
   const profileId = useSelectedProfile(chosen);
@@ -82,7 +69,6 @@ function ProfileOverview({ profileId }: { profileId: string }) {
 function AllProfilesSection() {
   const profiles = useProfiles();
   const defaultId = useSettings((s) => s.defaultProfileId);
-  const switcher = useSettings((s): SwitcherShows => (!s.showProfileDots ? "nothing" : s.profileSwitcherIcons ? "icons" : "dots"));
   const shareable = useDataSharingProfileIds();
 
   return (
@@ -101,9 +87,7 @@ function AllProfilesSection() {
             accessibilityLabel={setting("profiles.defaultProfile").title}
           />
         </Row>
-        <Row anchor="profiles.switcherShows">
-          <Segmented options={SWITCHER_SHOWS} value={switcher} onChange={(shows) => updateSettings(SWITCHER_SETTINGS[shows])} />
-        </Row>
+        <SettingToggle anchor="profiles.showProfileDots" />
         <Row
           anchor="profiles.shareTopApps"
           description={shareable.length ? "For profiles that share data: the same Top Apps, one live page each." : "For profiles that share data with another. None do yet."}
@@ -140,7 +124,7 @@ function ShareTopAppsRow({ profileId }: { profileId: string }) {
 function iconTitle(icon: string | null): string {
   const symbol = iconSymbol(icon);
   if (symbol) return PROFILE_SYMBOLS.find((s) => s.name === symbol)?.title ?? "Symbol";
-  return icon ?? "Initial";
+  return icon ?? "None";
 }
 
 const homeRelative = (path: string) => path.replace(/^\/Users\/[^/]+(?=\/|$)/, "~");
@@ -213,9 +197,12 @@ function ThisProfileSection({ profileId }: { profileId: string }) {
           <TextField value={name} onChangeText={editName} onSubmit={commitName} onBlur={commitName} width={220} />
         </Row>
         <Row title="Icon" description={iconTitle(profile.icon)}>
-          <View ref={changeButton} collapsable={false}>
-            <Button title="Change…" onPress={() => pickIcon(changeButton.current)} />
-          </View>
+          <Box row gap="s">
+            {profile.icon ? <Button title="Remove" onPress={() => chooseIcon(profileId, null)} /> : null}
+            <View ref={changeButton} collapsable={false}>
+              <Button title={profile.icon ? "Change…" : "Add…"} onPress={() => pickIcon(changeButton.current)} />
+            </View>
+          </Box>
         </Row>
         {sharing ? (
           <Row
@@ -242,7 +229,7 @@ function ThisProfileSection({ profileId }: { profileId: string }) {
         <Row anchor="profiles.siteSettings" onPress={() => goToSettingsPane("profiles", profileId, SETTINGS_DETAIL.sites)} />
       </Group>
 
-      <ThemeSection profileId={profileId} />
+      <ThemeSection profileId={profileId} anchor="profiles.themeColor" />
     </>
   );
 }

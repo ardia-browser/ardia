@@ -66,11 +66,11 @@ onAndroid("where sync isn't offered, Android's Settings has no Sync card and no 
   unmount(root);
 });
 
-test("where sync isn't offered, the start page has no Sync With Your Mac invitation, Android's shows the Ardia logo, and the page menu has no Pin to Mac", async () => {
+test("where sync isn't offered, the start page has no Sync With Your Mac invitation and shows the Ardia mark, and the page menu has no Pin to Mac", async () => {
   act(() => useBrowse.setState({ surface: "start" }));
   const start = inDesign("redesigned", <StartScreen />);
   expect(hosts(start, "startSyncInvitation")).toHaveLength(0);
-  expect(hosts(start, "startLogo")).toHaveLength(Platform.OS === "android" ? 1 : 0);
+  expect(hosts(start, "startLogo")).toHaveLength(1);
   unmount(start);
   act(() => useBrowse.setState({ surface: "browsing" }));
   const menu = inDesign("redesigned", <LiveMenu />);
@@ -84,12 +84,12 @@ test("where sync isn't offered, the start page has no Sync With Your Mac invitat
   unmount(menu);
 });
 
-test("where sync is offered, iPhone's start page invites while Android's shows the Ardia logo and keeps Sync in Settings, and the page menu offers Pin to Mac", async () => {
+test("where sync is offered, the start page still shows only the Ardia mark and keeps Sync in Settings, and the page menu offers Pin to Mac", async () => {
   mockOffered = true;
   act(() => useBrowse.setState({ surface: "start" }));
   const start = inDesign("redesigned", <StartScreen />);
-  expect(hosts(start, "startSyncInvitation")).toHaveLength(Platform.OS === "android" ? 0 : 1);
-  expect(hosts(start, "startLogo")).toHaveLength(Platform.OS === "android" ? 1 : 0);
+  expect(hosts(start, "startSyncInvitation")).toHaveLength(0);
+  expect(hosts(start, "startLogo")).toHaveLength(1);
   unmount(start);
   act(() => useBrowse.setState({ surface: "browsing" }));
   const menu = inDesign("redesigned", <LiveMenu />);

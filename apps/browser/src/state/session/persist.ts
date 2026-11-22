@@ -10,7 +10,7 @@ import { restoreLaunchLook, saveLaunchLook } from "../windows/launchLook";
 import { parkWindowPins } from "../pins/parkedPins";
 import { closedWindowEntry, MAX_CLOSED_WINDOWS } from "../pins/closedTabs";
 import { isPeekTab } from "../peek/peek";
-import type { BrowserWindow, ClosedWindow, ParkedPins, SplitView, Tab } from "../browser/types";
+import type { BrowserWindow, ClosedWindow, ParkedPins, Profile, SplitView, Tab } from "../browser/types";
 import { downloadSession, withoutRepeats } from "../downloads/downloadsSlice";
 import { anyDownloadProgress, withLiveProgress } from "../downloads/progress";
 import { noteDownloadHistoryWrite } from "../telemetry/downloadWork";
@@ -27,6 +27,8 @@ import { sessionWithPinChoiceStamps } from "../pins/pinChoices";
 import { isFields, isString, isStringList } from "../../lib/decode";
 import { pageFromDisk, pinFromDisk, splitsChecked, savedPage, sessionWithSplitSlots, sessionWithTabPages, sessionWithTabPins, slotsFromDisk } from "./savedShapes";
 import { beginActivity } from "../app/jobActivity";
+import { profilesKeepingLegacyDots } from "../profiles/switcherMark";
+import { profilesWithOwnLooks } from "../../lib/presetLook";
 
 const SAVE_DELAY_MS = 800;
 const COSMETIC_SAVE_DELAY_MS = 10_000;
@@ -156,7 +158,7 @@ export function parseSession(json: string | null | undefined): SavedSession | nu
   const settings = settingsWithAutoHideTabs(raw.settings, savedWindowRows);
   return {
     windowsAgainstAutoHideTabs: windowsAgainstAutoHideTabs(settings, savedWindowRows),
-    profiles: byProfile(raw.profiles, profileOk),
+    profiles: profilesWithOwnLooks(profilesKeepingLegacyDots(byProfile<Profile>(raw.profiles, profileOk), raw.settings)),
     profileOrder: strings(raw.profileOrder),
     orphanedProfileData: strings(raw.orphanedProfileData),
     settings,

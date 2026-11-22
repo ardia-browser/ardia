@@ -109,6 +109,9 @@ swiftc -O "$here/windows.swift" -o "$work/windows" 2>/dev/null
 swiftc -O "$here/quit.swift" -o "$work/quit" 2>/dev/null
 swiftc -O "$here/keys.swift" -o "$work/keys" 2>/dev/null
 swiftc -O "$here/gurl.swift" -o "$work/gurl" 2>/dev/null
+swiftc -O "$here/ax.swift" -o "$work/ax" 2>/dev/null
+passkeys=0
+codesign -d --entitlements - --xml "$app" 2>/dev/null | grep -q "com.apple.developer.web-browser.public-key-credential" && passkeys=1
 serve_dir "$here/pages"
 
 mkdir -p "$work/data"
@@ -144,7 +147,7 @@ sleep 8
 locked="$("$work/windows" --locked)"
 access="$("$work/windows" --access)"
 [ "$locked" = 1 ] && echo "note: the screen is locked; checks of window order and closing are skipped (they need an unlocked screen)"
-SMOKE_LOCKED="$locked" SMOKE_ACCESS="$access" SMOKE_DATA="$work/data" SMOKE_KEYS="$work/keys" SMOKE_GURL="$work/gurl" node "$here/smoke.mjs" "$version" "$work/windows" "$pages" || status=1
+SMOKE_LOCKED="$locked" SMOKE_ACCESS="$access" SMOKE_AX="$work/ax" SMOKE_PASSKEYS="$passkeys" SMOKE_DATA="$work/data" SMOKE_KEYS="$work/keys" SMOKE_GURL="$work/gurl" node "$here/smoke.mjs" "$version" "$work/windows" "$pages" || status=1
 
 children="$(ps -axo ppid=,pid=,comm= | awk -v p="$pid" '$1 == p { $1 = ""; $2 = ""; sub(/^ +/, ""); print }')"
 foreign="$(printf '%s\n' "$children" | grep -v "^$fw/Chromium Framework.framework/" | grep -v '^$' || true)"
@@ -186,13 +189,14 @@ logger=""
 kill -KILL "$pid" 2>/dev/null || true
 pid=""
 node "$root/packages/ardiacore/scripts/popup-check.mjs" "$app" "$work/popup-check" || status=1
-built_in_cli="$app/Contents/Resources/Plugins/cli/bin/ardia"
-if [ -x "$built_in_cli" ]; then
-  "$root/scripts/release/cli-bootstrap-smoke.sh" "$app" "$version" || status=1
-  mkdir -p "$work/cli" && ditto "$app/Contents/Resources/Plugins/cli" "$work/cli/built-in"
-  ARDIA_CLI_HOME="$work/cli-home" "$root/scripts/release/token-smoke.sh" "$app" "$work/cli/built-in/bin/ardia" || status=1
-elif [ -z "${SMOKE_APP:-}" ]; then
-  check "the release bundles the pinned Command Line plugin" 0
+fixtures="$work/official-plugins"
+if python3 -I "$root/scripts/release/official-plugins.py" ${OFFICIAL_PLUGINS_FROM:+--from "$OFFICIAL_PLUGINS_FROM"} fixtures "$fixtures" >/dev/null; then
+  check "the pinned official plugins are published and match the pin" 1
+  "$root/scripts/release/cli-bootstrap-smoke.sh" "$app" "$version" "$fixtures" "$([ -d "$old" ] && echo "$old")" || status=1
+  mkdir -p "$work/cli" && tar -xzf "$fixtures"/cli-plugin-*-macos-arm64.tar.gz -C "$work/cli"
+  ARDIA_CLI_HOME="$work/cli-home" "$root/scripts/release/token-smoke.sh" "$app" "$work/cli/cli/bin/ardia" || status=1
+else
+  check "the pinned official plugins are published and match the pin" 0
 fi
 codesign --verify --deep --strict "$app" && echo "PASS  bundle still sealed after running" || { echo "FAIL  running the app changed its bundle"; status=1; }
 "$here/feed.sh" "$version" --before-publish "$app" || status=1

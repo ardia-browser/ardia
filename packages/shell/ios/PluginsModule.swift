@@ -3,10 +3,12 @@ import ExpoModulesCore
 import Foundation
 
 public class PluginsModule: Module {
+  static let storageQueue = DispatchQueue(label: "ardia.plugins.storage", qos: .userInitiated)
+
   public func definition() -> ModuleDefinition {
     Name("ArdiaPlugins")
 
-    Events("onLine", "onExit")
+    Events("onLine", "onExit", OfficialPluginFetch.progressEvent)
 
     OnCreate {
       PluginHost.shared.attach(self) { [weak self] name, body in self?.sendEvent(name, body) }
@@ -31,7 +33,13 @@ public class PluginsModule: Module {
 
     AsyncFunction("linkPrograms") { (spec: [String: Any], promise: Promise) in PluginProgramLinks.link(spec) { promise.resolve($0) } }
 
+    AsyncFunction("takeAfterUpdateQuitStops") { (promise: Promise) in PluginProgramLinks.takeQuitStops { promise.resolve($0) } }
+
+    Function("setAfterUpdateQuitConsent") { (consent: String) in PluginProgramLinks.setQuitStopsConsent(consent) }
+
     AsyncFunction("legacyProgramsInstalled") { (promise: Promise) in PluginProgramLinks.legacyInstalled { promise.resolve($0) } }
+
+    AsyncFunction("programRegistry") { (promise: Promise) in PluginProgramLinks.registry { promise.resolve($0) } }
 
     AsyncFunction("sweepPrograms") { (active: [String], promise: Promise) in PluginProgramLinks.sweep(keeping: active) { promise.resolve(nil) } }
 
@@ -39,7 +47,34 @@ public class PluginsModule: Module {
       PluginProgramLinks.unlink(name, programs: programs, remove: remove) { promise.resolve($0) }
     }
 
-    AsyncFunction("remove") { (name: String, promise: Promise) in Self.remove(name, promise) }
+    AsyncFunction("officialPlugins") { () -> [[String: Any]]? in
+      PluginFolders.officialPin().map { pin in pin.entries.map { ["name": $0.name, "version": $0.version, "folderId": $0.folderId] } }
+    }
+    .runOnQueue(DispatchQueue.global(qos: .utility))
+
+    AsyncFunction("fetchOfficial") { (name: String, promise: Promise) in OfficialPluginFetch.shared.fetch(name) { promise.resolve($0) } }
+
+    Function("cancelOfficialFetch") { (name: String) in OfficialPluginFetch.shared.cancel(name) }
+
+    AsyncFunction("promoteOfficial") { (name: String, folderId: String, approved: String) -> [String: Any] in
+      OfficialPluginFetch.promote(name, folderId: folderId, approved: approved)
+    }
+    .runOnQueue(DispatchQueue.global(qos: .userInitiated))
+
+    AsyncFunction("hostFetch") { (spec: [String: Any], promise: Promise) in PluginHostFetch.run(spec) { promise.resolve($0) } }
+
+    AsyncFunction("storageRead") { (name: String) -> [String: Any] in Self.storageRead(name) }
+      .runOnQueue(Self.storageQueue)
+
+    AsyncFunction("storageWrite") { (name: String, text: String) -> [String: Any] in Self.storageWrite(name, text) }
+      .runOnQueue(Self.storageQueue)
+
+    AsyncFunction("readPluginFile") { (name: String, folderId: String, approved: String, path: String) -> [String: Any] in
+      Self.readPluginFile(name, folderId: folderId, approved: approved, path: path)
+    }
+    .runOnQueue(DispatchQueue.global(qos: .userInitiated))
+
+    AsyncFunction("remove") { (name: String, official: Bool, folderId: String?, promise: Promise) in Self.remove(name, official: official, folderId: folderId, promise) }
       .runOnQueue(.main)
 
     Function("revealLog") { (name: String) in DispatchQueue.main.async { Self.revealLog(name) } }
@@ -50,7 +85,7 @@ public class PluginsModule: Module {
       .runOnQueue(.main)
 
     View(PluginPageView.self) {
-      Events("onLoaded")
+      Events("onLoaded", "onTitleChange", "onNavigationChange", "onMessage")
       Prop("plugin") { (view: PluginPageView, value: String) in view.plugin = value }
       Prop("url") { (view: PluginPageView, value: String) in view.url = value }
       Prop("network") { (view: PluginPageView, value: Bool) in view.network = value }
@@ -58,6 +93,7 @@ public class PluginsModule: Module {
       Prop("approved") { (view: PluginPageView, value: String) in view.approved = value }
       Prop("run") { (view: PluginPageView, value: Int) in view.run = value }
       Prop("context") { (view: PluginPageView, value: String) in view.context = value }
+      Prop("themeCss") { (view: PluginPageView, value: String?) in view.themeCss = value ?? "" }
     }
 
     OnDestroy {
@@ -77,19 +113,54 @@ public class PluginsModule: Module {
     let name = spec["name"] as? String ?? ""
     let run = spec["run"] as? [String] ?? []
     let memoryMB = spec["memoryMB"] as? Int ?? 0
-    guard PluginFolders.isName(name), !run.isEmpty, memoryMB > 0, let network = spec["network"] as? Bool, let folderId = spec["folderId"] as? String,
+    let runtime = spec["runtime"] as? String ?? "process"
+    let entry = spec["entry"] as? String
+    let launchable = runtime == "js" ? entry?.isEmpty == false : runtime == "process" && !run.isEmpty
+    guard PluginFolders.isName(name), launchable, memoryMB > 0, let network = spec["network"] as? Bool, let folderId = spec["folderId"] as? String,
       let approved = spec["approved"] as? String, let hasPage = spec["page"] as? Bool, let launch = spec["launch"] as? Int
     else {
-      promise.reject("ERR_BAD_ARGS", "start needs name, run, memoryMB, network, folderId, approved, page and launch")
+      promise.reject("ERR_BAD_ARGS", "start needs name, run (or runtime js and entry), memoryMB, network, folderId, approved, page and launch")
       return
     }
-    let process = PluginProcess.Spec(name: name, run: run, memoryMB: memoryMB, network: network, folderId: folderId, approved: approved, hasPage: hasPage, launch: launch)
+    var process = PluginProcess.Spec(name: name, run: run, memoryMB: memoryMB, network: network, folderId: folderId, approved: approved, hasPage: hasPage, launch: launch)
+    process.runtime = runtime
+    process.entry = entry
     PluginHost.shared.start(process) { reply in promise.resolve(reply) }
   }
 
-  private static func remove(_ name: String, _ promise: Promise) {
-    PluginHost.shared.remove(name) { problem in
+  private static func storageRead(_ name: String) -> [String: Any] {
+    guard let data = PluginFolders.current()?.dataFolder(name) else { return PluginStorageRead.error("its data folder couldn't be opened").reply }
+    defer { data.close() }
+    let read = PluginStorage.read(in: data.fd)
+    if case .error(let reason) = read { NSLog("[plugins] %@'s storage wasn't read: %@", name, reason) }
+    return read.reply
+  }
+
+  private static func storageWrite(_ name: String, _ text: String) -> [String: Any] {
+    guard let data = PluginFolders.current()?.dataFolder(name) else { return ["ok": false, "reason": "its data folder couldn't be made"] }
+    defer { data.close() }
+    if let refusal = PluginStorage.write(in: data.fd, text: text) { return ["ok": false, "reason": refusal.reason] }
+    return ["ok": true]
+  }
+
+  private static func readPluginFile(_ name: String, folderId: String, approved: String, path: String) -> [String: Any] {
+    guard let folders = PluginFolders.current() else { return ["ok": false, "reason": "Ardia has no data folder"] }
+    let folder: OpenedFolder
+    switch folders.approvedFolder(name, folderId: folderId, approved: approved) {
+    case .success(let opened): folder = opened
+    case .failure(let refusal): return ["ok": false, "reason": refusal.reason]
+    }
+    defer { folder.close() }
+    switch PluginFiles.readText(path, in: folder) {
+    case .success(let text): return ["ok": true, "text": text]
+    case .failure(let refusal): return ["ok": false, "reason": refusal.reason]
+    }
+  }
+
+  private static func remove(_ name: String, official: Bool, folderId: String?, _ promise: Promise) {
+    PluginHost.shared.remove(name, official: official, folderId: folderId) { problem in
       if let problem { return promise.resolve(["ok": false, "reason": problem]) }
+      if official { return promise.resolve(["ok": true]) }
       PluginPageView.removeData(name) { promise.resolve(["ok": true]) }
     }
   }

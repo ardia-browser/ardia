@@ -12,7 +12,8 @@ import { measureAnchor, Portal, useOverlayFrame, usePortalLeaving, usePortalLeft
 import { Symbol } from "./Symbol";
 import type { SymbolName } from "./symbolPaths";
 import { useTheme } from "./theme";
-import { font, ink, menuInk, menuLook } from "./tokens";
+import { drawnMenuInk as menuInk, drawnMenuLook as menuLook } from "./menuTokens";
+import { font, ink, smoothCorners } from "./tokens";
 
 export type MenuAction = { label: string; icon?: SymbolName; systemImage?: string; destructive?: boolean; checked?: boolean; disabled?: boolean; onPress: () => void };
 
@@ -143,7 +144,7 @@ export function Menu({ items, place, placer, onDismiss, dimmed = false, origin =
   const leading = menuLook.iconSide === "leading";
   const shift = checks ? CHECK_SHIFT : 0;
   const iconsShown = !MATERIAL || page !== null || rows.every((item) => typeof item !== "object" || "heading" in item || item.icon !== undefined);
-  const iconGutter = MATERIAL && page !== null;
+  const iconGutter = (MATERIAL && page !== null) || (!MATERIAL && iconsShown && rows.some((item) => typeof item === "object" && !("heading" in item) && item.icon !== undefined));
   const labelLeft = (icon: boolean) => ((icon || iconGutter) && leading ? menuLook.labelInsetIcon : menuLook.labelInset) + shift - PRESS;
   const iconLeft = menuLook.iconCentre + shift - PRESS - menuLook.iconSlot / 2;
   const pressed = (on: boolean, disabled?: boolean) => [styles.row, on && !MATERIAL ? { backgroundColor: paint.highlight } : null, disabled ? styles.disabled : null];
@@ -325,13 +326,13 @@ export function FloatingMenu({ items, place = {}, onDismiss, anchor, at, align, 
 }
 
 const styles = StyleSheet.create({
-  panel: { position: "absolute", minWidth: menuLook.width, borderRadius: menuLook.radius, borderWidth: menuLook.rim },
+  panel: { position: "absolute", minWidth: menuLook.width, borderRadius: menuLook.radius, borderWidth: menuLook.rim, ...smoothCorners },
   unseen: { opacity: 0 },
-  material: { overflow: "hidden" },
+  material: { overflow: "hidden", ...smoothCorners },
   scroll: { flexGrow: 0 },
   rows: { paddingVertical: menuLook.padding / 2 },
   specular: { position: "absolute", top: 0, left: 0, right: 0, height: 1 },
-  row: { flexDirection: "row", alignItems: "center", marginHorizontal: PRESS, minHeight: menuLook.row, paddingVertical: (menuLook.row - menuLook.label.lineHeight) / 2, paddingRight: menuLook.labelInset - PRESS, borderRadius: menuLook.pressRadius },
+  row: { flexDirection: "row", alignItems: "center", marginHorizontal: PRESS, minHeight: menuLook.row, paddingVertical: (menuLook.row - menuLook.label.lineHeight) / 2, paddingRight: menuLook.labelInset - PRESS, borderRadius: menuLook.pressRadius, ...smoothCorners },
   chevronRoom: { paddingRight: menuLook.trailingInset - PRESS + menuLook.chevronSize + 8 },
   chevron: { position: "absolute", right: menuLook.trailingInset - PRESS, top: 0, bottom: 0, justifyContent: "center" },
   label: { flex: 1 },

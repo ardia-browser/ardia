@@ -5,6 +5,7 @@ import android.content.res.AssetManager
 object PageScripts {
     const val BRIDGE_NAME = "ardiaPage"
     const val NIGHT_SHADE_MESSAGE = "nightShade"
+    const val NIGHT_SHADE_VERDICT_MESSAGE = "nightShadeVerdict:"
 
     fun mainFrameOnly(script: String): String = "if (window === window.top) {\n$script\n}"
 
@@ -59,6 +60,16 @@ object PageScripts {
   for (const meta of document.getElementsByTagName("meta")) if (isViewport(meta)) pin(meta);
 })();
 """.trim()
+
+    fun nightShadeState(mode: NightShadeMode, verdict: NightShadeVerdict?): String = "${mode.raw} ${verdict?.raw ?: "unknown"}"
+
+    fun nightShadeAtStart(script: String, host: String?, mode: NightShadeMode, verdict: NightShadeVerdict?): String {
+        val baked = "{\"host\":${host?.let(org.json.JSONObject::quote) ?: "null"},\"mode\":\"${mode.raw}\",\"verdict\":\"${verdict?.raw ?: "unknown"}\"}"
+        return mainFrameOnly("(${script.trim()})($baked);")
+    }
+
+    fun nightShadeVerdict(message: String?): NightShadeVerdict? =
+        message?.takeIf { it.startsWith(NIGHT_SHADE_VERDICT_MESSAGE) }?.let { NightShadeVerdict.of(it.removePrefix(NIGHT_SHADE_VERDICT_MESSAGE)) }
 
     fun nightShadeCall(mode: NightShadeMode): String = "window.__ardiaNightShade && window.__ardiaNightShade(\"${mode.raw}\")"
 

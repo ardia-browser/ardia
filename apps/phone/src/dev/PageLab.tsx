@@ -1,6 +1,7 @@
 import {
   blocking,
   downloads,
+  isRefusedSnapshot,
   labLog,
   pages,
   PageView,
@@ -406,7 +407,7 @@ function Lab() {
           })} />
           <Button label="Snapshot" onPress={() => run("snapshot", async () => {
             const taken = await pages.snapshot(pageId);
-            setSnapshot(taken ?? "none");
+            setSnapshot(taken && !isRefusedSnapshot(taken) ? taken : "none");
             return taken;
           })} />
           <Button label="Save state" onPress={save} />

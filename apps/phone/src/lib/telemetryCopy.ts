@@ -70,12 +70,28 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         fields: ["page_summaries_pinched", "page_summaries_from_menu", "page_summaries_on_device", "page_summaries_excerpts", "page_summaries_failed"],
       },
       {
+        text: "In the same daily counts, on Android: when a search answer or a page summary couldn’t use Gemini Nano, why: it was still downloading, Google doesn’t offer it to apps on this phone, it needed a Google AICore or system update, or it failed. Counts only, never what you searched for or which page",
+        fields: ["gemini_nano_downloading", "gemini_nano_not_offered", "gemini_nano_needs_update", "gemini_nano_errors"],
+      },
+      {
         text: "In the same daily counts: how often you tapped Paste and Go with a link or with text, and how often it found nothing to paste because you didn’t allow the paste or the clipboard had emptied. Never what you copied, and never while browsing privately",
         fields: ["paste_and_go_links", "paste_and_go_texts", "paste_and_go_unread"],
       },
       {
         text: "In the same daily counts, on Android: how often you opened Ardia from its Search, Voice Search and New Incognito Tab tiles in Quick Settings. Counts only",
         fields: ["search_tile_taps", "voice_tile_taps", "incognito_tile_taps"],
+      },
+      {
+        text: "In the same daily counts: how often you tapped Archive or Synced Tabs on the start page, the button that takes the place of Tabs when no tabs are open. Counts only, and never while browsing privately",
+        fields: ["start_no_tabs_button_taps"],
+      },
+      {
+        text: "In the same daily counts, on Android: how often a page opened with Night Shade already knowing from an earlier visit whether that site is light or dark, how often it had to learn that on this visit, and how often a site had changed so what it knew was wrong. Counts only, never which site, and never while browsing privately",
+        fields: ["night_shade_verdicts_reused", "night_shade_verdicts_learned", "night_shade_verdicts_corrected"],
+      },
+      {
+        text: "In the same daily counts: how often a picture of a page for the tab switcher was thrown away because it came out as one flat colour or the page was not on screen, and how often it had to come from the page engine instead of a copy of the screen. Counts only, and never while browsing privately",
+        fields: ["page_pictures_blank", "page_pictures_hidden", "page_pictures_webkit"],
       },
       {
         text: "In the same daily counts, on Android: how often you tapped the Ardia logo on the start page to search. Counts only, and never while browsing privately",

@@ -33,7 +33,7 @@ onAndroid("switching the overview boolean retains the capsule and replaces addre
   expect(StyleSheet.flatten(capsule.props.style)).toEqual(geometry);
   expect(hosts("materialAddressField")).toHaveLength(0);
   expect(hosts("materialBarTabs")).toHaveLength(0);
-  expect(hosts("materialDeckArchive")).toHaveLength(1);
+  expect(hosts("materialDeckIncognito")).toHaveLength(1);
   const field = hosts("deckSearchField")[0]!;
   expect(field.props.value).toBe("work");
   act(() => field.props.onChangeText("docs"));
@@ -54,7 +54,7 @@ onAndroid("switching the overview boolean retains the capsule and replaces addre
   expect(hosts("sharedBar")[0]).toBe(capsule);
   expect(hosts("materialStartSearch")).toHaveLength(0);
   expect(hosts("deckSearchField")).toHaveLength(0);
-  expect(hosts("materialDeckArchive")).toHaveLength(0);
+  expect(hosts("materialDeckIncognito")).toHaveLength(0);
   expect(hosts("materialAddressField")).toHaveLength(1);
   unmount(root);
 });

@@ -44,6 +44,19 @@ def ardiaBundleSource = bundleExport ? "export of the commit" : "working tree"
 def ardiaNative = runBundleGuard(["native"])[1]
 def ardiaReleaseVersion = findProperty('ardiaVersionName') ?: ''
 def ardiaVersionCode = (findProperty('ardiaVersionCode') ?: '2') as int
+def ardiaReleasePackage = 'com.ardia.browser.android'
+def ardiaDevBuild = !ardiaReleaseVersion && findProperty('ardiaReleasePackage') != 'true'
+def ardiaPackage = ardiaDevBuild ? "${ardiaReleasePackage}.dev" : ardiaReleasePackage
+def ardiaShortcutsSource = file('src/main/res-shortcuts')
+def ardiaShortcuts = ardiaShortcutsSource
+if (ardiaDevBuild) {
+    ardiaShortcuts = layout.buildDirectory.dir('generated/ardia-dev-shortcuts').get().asFile
+    ardiaShortcutsSource.eachFileRecurse(groovy.io.FileType.FILES) { source ->
+        def copy = new File(ardiaShortcuts, ardiaShortcutsSource.toPath().relativize(source.toPath()).toString())
+        copy.parentFile.mkdirs()
+        copy.text = source.text.replace("android:targetPackage=\"${ardiaReleasePackage}\"", "android:targetPackage=\"${ardiaPackage}\"")
+    }
+}
 if (ardiaReleaseVersion && ardiaLab) throw new GradleException("a release version is for builds without the lab switch: drop -PardiaLab or the version")
 def bundleGuardState = new File(buildDir, "bundle-guard/state.json")
 tasks.matching { it.name.startsWith('createBundle') && it.name.endsWith('JsAndAssets') }.configureEach { task ->
@@ -79,17 +92,19 @@ android {
 
     namespace 'com.ardia.browser.android'
     sourceSets.main.res.srcDirs += "src/main/res-system"
+    sourceSets.main.res.srcDirs += ardiaShortcuts
     testOptions {
         unitTests.includeAndroidResources = true
         unitTests.returnDefaultValues = true
         unitTests.all { test -> test.filter.failOnNoMatchingTests = false }
     }
     defaultConfig {
-        applicationId 'com.ardia.browser.android'
+        applicationId ardiaPackage
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode ardiaVersionCode
         versionName ardiaReleaseVersion ?: "dev"
+        resValue "string", "app_name", ardiaDevBuild ? "Ardia Dev" : "Ardia"
         resValue "string", "ardia_release_version", ardiaReleaseVersion
         resValue "string", "ardia_build_commit", ardiaCommit
         resValue "string", "ardia_build_dirty", ardiaDirty

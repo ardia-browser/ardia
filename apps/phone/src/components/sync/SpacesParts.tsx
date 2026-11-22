@@ -5,7 +5,7 @@ import { openSettings } from "../../state/settings/nav";
 import { openRemote } from "../../state/sync/actions";
 import { remoteTitle } from "../../state/sync/spaces";
 import type { PinnedTile, SyncedProfile } from "../../state/sync/store";
-import { capsule, Favicon, font, isSymbolName, screenReaderActions, space, spacesLayout, Symbol, useTheme } from "../ui";
+import { capsule, controlRadius, Favicon, font, isSymbolName, screenReaderActions, space, spacesLayout, Symbol, useTheme } from "../ui";
 import type { Point } from "../../lib/menuPlace";
 
 const TILE_MIN_WIDTH = 72;
@@ -141,9 +141,9 @@ const styles = StyleSheet.create({
   tileFace: { alignSelf: "stretch", borderRadius: spacesLayout.tileFaceRadius, alignItems: "center", justifyContent: "center" },
   switcherRow: { alignItems: "center", paddingTop: space.xs },
   switcherContent: { flexDirection: "row", alignItems: "center", paddingHorizontal: space.xs },
-  switcher: { flexGrow: 0, maxWidth: "100%", height: 44, borderRadius: capsule(44), borderWidth: StyleSheet.hairlineWidth },
+  switcher: { flexGrow: 0, maxWidth: "100%", height: 44, borderRadius: controlRadius(44), borderCurve: "continuous", borderWidth: StyleSheet.hairlineWidth },
   switch: { width: 52, height: 36, alignItems: "center", justifyContent: "center" },
   dot: { width: spacesLayout.dot, height: spacesLayout.dot, borderRadius: capsule(spacesLayout.dot) },
   unavailable: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacesLayout.stackGap, paddingHorizontal: space.xxl },
-  primary: { minHeight: 44, borderRadius: capsule(44), paddingHorizontal: space.xl, justifyContent: "center", marginTop: spacesLayout.buttonTop },
+  primary: { minHeight: 44, borderRadius: controlRadius(44), borderCurve: "continuous", paddingHorizontal: space.xl, justifyContent: "center", marginTop: spacesLayout.buttonTop },
 });

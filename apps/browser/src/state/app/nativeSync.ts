@@ -34,7 +34,7 @@ import { startExtensionsBridge } from "../extensions/bridge";
 import { useExtensions } from "../extensions/actions";
 import { useReader } from "../reader/reader";
 import { answerQuitAfterSaves, isQuitting, setQuitting } from "./quit";
-import { liveReachesMenu, menuInputsChanged, trackedMenuState, type MenuReads } from "../commands/menuState";
+import { extensionsChangeMenu, liveReachesMenu, menuInputsChanged, readerChangesMenu, trackedMenuState, type MenuReads } from "../commands/menuState";
 import { onLiveChange } from "../tabs/tabLive";
 import { usePages } from "../tabs/pageState";
 import { openFromWindowlessPage } from "../tabs/openFromWindowlessPage";
@@ -158,10 +158,10 @@ export function startNativeSync() {
     if (p.pages !== prev.pages) menuTimer ??= setTimeout(syncMenu, 120);
   });
   useExtensions.subscribe((e, prev) => {
-    if (e.lists !== prev.lists) menuTimer ??= setTimeout(syncMenu, 120);
+    if (e.lists !== prev.lists && extensionsChangeMenu(e.lists, prev.lists)) menuTimer ??= setTimeout(syncMenu, 120);
   });
-  useReader.subscribe(() => {
-    menuTimer ??= setTimeout(syncMenu, 120);
+  useReader.subscribe((r, prev) => {
+    if (readerChangesMenu(r, prev)) menuTimer ??= setTimeout(syncMenu, 120);
   });
   void windows.sweep();
   startCaptionRegionSync();

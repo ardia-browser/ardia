@@ -17,7 +17,7 @@ export function DeckEmpty({ centerY, showsArchive, onArchive, searching = false,
       {words.detail ? <Text style={[font.subheadline, styles.centered, { color: theme.secondaryLabel }]}>{words.detail}</Text> : null}
       {showsArchive && !searching && !incognito ? (
         <Pressable accessibilityRole="button" onPress={onArchive} style={styles.archive}>
-          <Text style={[font.subheadline, styles.bold, { color: theme.formAccent }]}>Open Archive</Text>
+          <Text style={[font.subheadline, styles.bold, { color: theme.spaceAccentInk }]}>Open Archive</Text>
         </Pressable>
       ) : null}
     </View>
@@ -33,7 +33,7 @@ export function IncognitoChip({ count, top, onPress }: { count: number; top: num
         accessibilityLabel={`Incognito, ${count} ${count === 1 ? "tab" : "tabs"}`}
         accessibilityHint="Shows the option to close incognito tabs."
         onPress={onPress}
-        style={[styles.chip, { backgroundColor: tabsInk.incognitoCard, borderRadius: capsule(tabsLayout.chipHeight) }]}
+        style={[styles.chip, { backgroundColor: tabsInk.incognitoOnLight, borderRadius: capsule(tabsLayout.chipHeight) }]}
       >
         <IncognitoSpecs size={tabsLayout.specsChip} color={tabsInk.onDark} />
         <Text style={[font.subheadline, styles.bold, styles.chipText]}>Incognito</Text>

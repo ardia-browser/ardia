@@ -1,13 +1,29 @@
-import { Platform } from "react-native";
+import { Platform, processColor, type ColorValue, type StyleProp, type ViewStyle } from "react-native";
 import Svg, { Path } from "react-native-svg";
+import { NativeSymbol, nativeSymbolsAvailable, type NativeSymbolWeight } from "@ardia/phone-native";
 import { useDesign } from "./design";
 import { MaterialSymbol, materialSymbolFor } from "./MaterialSymbol";
+import { SF_SYMBOL_NAMES, sfPointSizePerSide } from "./sfSymbolNames";
 import { SYMBOLS, type SymbolName } from "./symbolPaths";
 
-export function Symbol({ name, size, color }: { name: SymbolName; size: number; color: string }) {
-  const material = useDesign() === "material";
-  const drawn = material && Platform.OS === "android" ? materialSymbolFor(name) : null;
+export type SymbolWeight = NativeSymbolWeight;
+
+export const nativeSymbolColor = (color: ColorValue) => (processColor(color) ?? undefined) as unknown as string | undefined;
+
+type NativeGlyphProps = { systemName: string; pointSize: number; weight: SymbolWeight; color: ColorValue; style: StyleProp<ViewStyle>; testID?: string };
+
+export function NativeGlyph({ systemName, pointSize, weight, color, style, testID }: NativeGlyphProps) {
+  return <NativeSymbol testID={testID} pointerEvents="none" name={systemName} pointSize={pointSize} weight={weight} color={nativeSymbolColor(color)} style={style} />;
+}
+
+export const nativeSymbolFor = (name: SymbolName) => (Platform.OS === "ios" && nativeSymbolsAvailable() ? SF_SYMBOL_NAMES[name] : null);
+
+export function Symbol({ name, size, color, weight = "regular" }: { name: SymbolName; size: number; color: string; weight?: SymbolWeight }) {
+  const design = useDesign();
+  const drawn = design === "material" && Platform.OS === "android" ? materialSymbolFor(name) : null;
   if (drawn) return <MaterialSymbol name={drawn} size={size} color={color} />;
+  const systemName = design === "material" ? null : nativeSymbolFor(name);
+  if (systemName) return <NativeGlyph systemName={systemName} pointSize={size * sfPointSizePerSide(name)} weight={weight} color={color} style={{ width: size, height: size }} />;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       {SYMBOLS[name].map((layer, index) => (

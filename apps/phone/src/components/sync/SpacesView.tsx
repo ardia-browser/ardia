@@ -19,7 +19,7 @@ import { spaceTone } from "../../lib/profileLook";
 import { sfSymbol } from "../../lib/sfSymbols";
 import { syncBanner, type BannerIcon } from "../../state/sync/syncRules";
 import {
-  capsule,
+  controlRadius,
   FadingBackdrop,
   DEFAULT_PROFILE_COLOR,
   Favicon,
@@ -128,7 +128,7 @@ export function SpacesView() {
             <Text style={[font.subheadline, styles.fill, { color: theme.label }]}>{banner.text}</Text>
             {banner.needsAction ? (
               <Pressable accessibilityRole="button" onPress={() => openSettings({ page: "sync" })} style={[styles.fix, { borderColor: theme.separator }]}>
-                <Text style={[font.subheadline, styles.bold, { color: theme.formAccent }]}>Fix</Text>
+                <Text style={[font.subheadline, styles.bold, { color: theme.spaceAccentInk }]}>Fix</Text>
               </Pressable>
             ) : null}
           </View>
@@ -367,9 +367,9 @@ const styles = StyleSheet.create({
   centered: { textAlign: "center" },
   header: { flexDirection: "row", alignItems: "center", gap: space.s, paddingLeft: space.l + 4, paddingRight: space.s, paddingTop: space.m, paddingBottom: space.xs },
   headerButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
-  headerCircle: { width: spacesLayout.headerCircle, height: spacesLayout.headerCircle, borderRadius: capsule(spacesLayout.headerCircle), alignItems: "center", justifyContent: "center" },
+  headerCircle: { width: spacesLayout.headerCircle, height: spacesLayout.headerCircle, borderRadius: controlRadius(spacesLayout.headerCircle), borderCurve: "continuous", alignItems: "center", justifyContent: "center" },
   banner: { flexDirection: "row", alignItems: "center", gap: spacesLayout.bannerGap, marginHorizontal: space.l, marginBottom: space.xs, padding: spacesLayout.bannerPadding, borderRadius: spacesLayout.bannerRadius },
-  fix: { borderWidth: StyleSheet.hairlineWidth, borderRadius: capsule(32), minHeight: 32, paddingHorizontal: space.m, justifyContent: "center" },
+  fix: { borderWidth: StyleSheet.hairlineWidth, borderRadius: controlRadius(32), borderCurve: "continuous", minHeight: 32, paddingHorizontal: space.m, justifyContent: "center" },
   row: { flexDirection: "row", alignItems: "center", gap: space.s, minHeight: 48, paddingRight: space.l },
   sectionHeader: { flexDirection: "row", alignItems: "center", gap: spacesLayout.headerGap, paddingHorizontal: space.l, paddingTop: space.l, paddingBottom: spacesLayout.headerBottom },
   showAll: { minHeight: 44, justifyContent: "center", paddingHorizontal: space.l },

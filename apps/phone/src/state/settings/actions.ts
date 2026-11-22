@@ -147,6 +147,7 @@ export async function clearBrowsingData(choice: ClearChoice, range: ClearRange) 
     const since = clearSince(range, Date.now());
     history().clear(since);
     forgetHiddenHistory(since);
+    await settled(() => pages.forgetNightShadeVerdicts(since), undefined);
   }
   const kinds = websiteDataKinds(choice);
   if (kinds.length) await settled(() => pages.clearWebsiteData(kinds, clearSince(range, Date.now())), undefined);

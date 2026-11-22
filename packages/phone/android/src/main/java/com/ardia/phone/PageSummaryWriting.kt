@@ -41,7 +41,7 @@ internal class PageSummaryWriting(private val cloud: PageSummaryCloud, private v
 
     data class Written(val text: String, val writer: Writer, val note: String, val chatGPTFellBack: Boolean) : Result
 
-    data class Unwritten(val message: String) : Result
+    data class Unwritten(val message: String, val geminiNanoMissing: String? = null) : Result
 
     suspend fun write(content: ReadableContent, provider: PageSummaryProvider, onText: (String) -> Unit, reason: String? = null): Result {
         var note = reason
@@ -72,10 +72,11 @@ internal class PageSummaryWriting(private val cloud: PageSummaryCloud, private v
                 fellBack = true
             }
         }
-        when (local.availability()) {
+        val availability = local.availability()
+        when (availability) {
             OnDeviceWriter.Availability.Available -> Unit
-            OnDeviceWriter.Availability.Downloading -> return Unwritten(joined(problem, NANO_DOWNLOADING))
-            OnDeviceWriter.Availability.Unavailable -> return Unwritten(joined(problem, NANO_UNAVAILABLE))
+            OnDeviceWriter.Availability.Downloading -> return Unwritten(joined(problem, NANO_DOWNLOADING), availability.telemetry)
+            else -> return Unwritten(joined(problem, "${availability.reason}."), availability.telemetry)
         }
         val budget = local.characterBudget()
         for (share in listOf(budget, budget / 2)) {
@@ -105,7 +106,6 @@ internal class PageSummaryWriting(private val cloud: PageSummaryCloud, private v
         const val NOT_CONNECTED = "ChatGPT isn’t connected, so this summary stayed on your phone. Reconnect it in Settings › Pinch to Summarize."
         const val NOT_CONNECTED_UNWRITTEN = "ChatGPT isn’t connected. Reconnect it in Settings › Pinch to Summarize."
         const val EMPTY_CHATGPT_ANSWER = "ChatGPT didn’t write a summary."
-        const val NANO_UNAVAILABLE = "Gemini Nano is unavailable on this phone."
         const val NANO_DOWNLOADING = "Gemini Nano is still downloading. Try again when it’s ready."
         const val NANO_FAILED = "Gemini Nano couldn’t summarize this page."
 

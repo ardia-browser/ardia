@@ -14,6 +14,8 @@ let pid = Int(CommandLine.arguments[1])!
 let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
 for w in list where (w[kCGWindowOwnerPID as String] as? Int) == pid {
   let b = w[kCGWindowBounds as String] as! [String: Any]
+  let frame = ["X", "Y", "Width", "Height"].compactMap { (b[$0] as? NSNumber)?.doubleValue }
+  guard frame.count == 4, frame.allSatisfy(\.isFinite) else { continue }
   let row: [String: Any] = [
     "id": w[kCGWindowNumber as String]!, "x": b["X"]!, "y": b["Y"]!, "w": b["Width"]!, "h": b["Height"]!,
     "layer": w[kCGWindowLayer as String]!, "alpha": w[kCGWindowAlpha as String]!,

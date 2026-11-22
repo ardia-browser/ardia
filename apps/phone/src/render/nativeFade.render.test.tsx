@@ -1,3 +1,4 @@
+import { DesignProvider } from "../components/ui";
 import { StyleSheet } from "react-native";
 import { act } from "react-test-renderer";
 import { SearchTray } from "../components/search/SearchTray";
@@ -40,7 +41,7 @@ function overflowingTray() {
   useBrowse.setState({ surface: "start" });
   presentSearch("start", "otter");
   useSearch.setState({ rows, text: "otter" });
-  const root = renderSurface(<SearchTray />);
+  const root = renderSurface(<DesignProvider design="original"><SearchTray /></DesignProvider>);
   act(() => root.root.findAll((node) => node.props.testID === "trayRows" && typeof node.props.onLayout === "function")[0]?.props.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width: 393, height: ROOM } } }));
   act(() =>
     rows.forEach((_row, index) =>

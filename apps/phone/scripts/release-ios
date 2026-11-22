@@ -2,7 +2,7 @@
 # Build the Expo iPhone app for App Store Connect and send it to TestFlight.
 #
 #   apps/phone/scripts/release-ios <build number> [--version <release version>] [--commit REV] [--no-upload]
-#                                  [--development] [--unsigned] [--default-browser] [--out <dir>]
+#                                  [--development] [--unsigned] [--no-default-browser] [--out <dir>]
 #   apps/phone/scripts/release-ios -h | --help
 #
 # The Expo counterpart of main's scripts/release-ios.sh, which archives the SwiftUI app. Same app record, same
@@ -20,8 +20,9 @@
 #
 # Checks before anything leaves the machine: the bundle id, every target's version and build, the release
 # version, three extensions, the stamp, Hermes bytecode, the lab off, the stripped frameworks, the app's
-# dSYM matching its binary, the default browser flag and, when signed, the entitlements (the app group,
-# and the web-browser entitlement only with --default-browser).
+# dSYM matching its binary, the default browser flag, every privacy API having its purpose string
+# (check-privacy-keys) and, when signed, the entitlements (the app group,
+# and the web-browser entitlement unless --no-default-browser).
 #
 # --unsigned archives without signing and stops after the checks: proof without the Apple account.
 # --no-upload signs the archive and stops: nothing reaches App Store Connect, whose app-store export opens an
@@ -46,14 +47,14 @@ help() {
   exit 0
 }
 
-build="" release_version="" rev=HEAD upload=1 development=0 unsigned=0 default_browser=NO out=""
+build="" release_version="" rev=HEAD upload=1 development=0 unsigned=0 default_browser=YES out=""
 while [ $# -gt 0 ]; do
   case "$1" in
     -h | --help) help ;;
     --no-upload) upload=0; shift ;;
     --development) development=1; upload=0; shift ;;
     --unsigned) unsigned=1; upload=0; shift ;;
-    --default-browser) default_browser=YES; shift ;;
+    --no-default-browser) default_browser=NO; shift ;;
     --out) [ $# -ge 2 ] || die "--out needs a directory"; out="$2"; shift 2 ;;
     --version) [ $# -ge 2 ] || die "--version needs a release version"; release_version="$2"; shift 2 ;;
     --commit) [ $# -ge 2 ] || die "--commit needs a revision"; rev="$2"; shift 2 ;;
@@ -165,6 +166,12 @@ for extension in com.ardia.browser.ios.share com.ardia.browser.ios.widgets com.a
 done
 [ "$(find "$app/PlugIns" -maxdepth 1 -name '*.appex' | wc -l | tr -d ' ')" = 3 ] || die "the archive should hold three extensions"
 [ "$(plist_value "$app" ArdiaDefaultBrowser)" = "$default_browser" ] || die "the app offers the default browser steps: $(plist_value "$app" ArdiaDefaultBrowser), expected $default_browser"
+if [ "$default_browser" = YES ]; then
+  for key in NSPhotoLibraryUsageDescription NSLocationAlwaysUsageDescription NSLocationAlwaysAndWhenInUseUsageDescription NSHomeKitUsageDescription NSBluetoothAlwaysUsageDescription NSBluetoothPeripheralUsageDescription NSHealthShareUsageDescription NSHealthUpdateUsageDescription; do
+    [ -z "$(plist_value "$app" "$key")" ] || die "the app asks for $key, which Apple refuses in a default browser"
+  done
+fi
+"$here/check-privacy-keys" "$app" $([ "$default_browser" = YES ] && echo --default-browser) || die "the app calls an API whose purpose string is missing or refused (above)"
 [ "$(plist_value "$app" ArdiaTestBuild)" = NO ] || die "the app is a test build: ArdiaTestBuild $(plist_value "$app" ArdiaTestBuild)"
 [ "$(plist_value "$app" ArdiaBuildCommit)" = "$commit" ] || die "the app's stamp says JS ${commit:-none}: $(plist_value "$app" ArdiaBuildCommit)"
 [ "$(plist_value "$app" ArdiaBuildDirty)" = no ] || die "the app's stamp says dirty"

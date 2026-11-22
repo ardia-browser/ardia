@@ -292,7 +292,7 @@ The only variables the app and engine read, through `ArdiaLaunchConfig` (`packag
 | --- | --- | --- |
 | `ARDIA_DATA_DIR` | path | Scratch data dir: Chrome's data in `<dir>/Chromium`, the app's documents, defaults, keychain items and Sparkle state (`packages/shell/ios/ArdiaIsolation.m`); Chrome gets `--use-mock-keychain`. A Debug build refuses to start without one |
 | `ARDIA_BACKGROUND` | `1` (anything but empty or `0`) | Hidden test instance (Rules › never steal focus; `docs/testing.md`) |
-| `ARDIA_REMOTE_DEBUGGING_PORT` | port | CDP on that port, only on the mock keychain |
+| `ARDIA_REMOTE_DEBUGGING_PORT` | port | CDP on that port, only on the mock keychain. CDP doesn't go through Settings › Advanced › Let programs control Ardia, so that switch can't be judged on an instance with a port: test it on one launched without |
 | `ARDIA_INSTANCE` | `jsLocation=host:port` | This launch's Metro (Debug builds) |
 | | `chromiumSwitches=--a --b=x,y` | Extra Chrome switches, space-separated, only on the mock keychain; background mode drops the auto-accept capture ones, and `--ardia-*` never passes |
 | | `downloadsDir=<dir>` | Chrome's default download folder for this launch, never written to the profile |
@@ -303,7 +303,7 @@ The only variables the app and engine read, through `ArdiaLaunchConfig` (`packag
 | | `syncFolder=<dir>` | The sync folder (`packages/sync/scripts/e2e.mjs`) |
 | | `sharedFolders=<dir>` | Where Share Folder… creates shared folders and where Add Shared Folder… starts (`iCloud Drive › Ardia Shared` otherwise; a scratch data dir uses `<data dir>/Ardia Shared`), `docs/shared-folders.md` |
 | | `importSourceDir=<dir>` · `importSafariHome=<dir>` | Where import looks for other browsers and Safari's home, so a scratch instance never sees the owner's profiles |
-| `ARDIA_SWITCHES` | `name=on\|off,…` | Kill switches (`platform/killSwitches.ts` `SWITCHES`, at most 8, on by default) and experiments (`EXPERIMENTS`: `serverWindowDragAllOpen`, `dragRegionEveryMount`, `webkitSignIn`, off by default). Honoured in every build (`docs/kill-switches.md`) |
+| `ARDIA_SWITCHES` | `name=on\|off,…` | Kill switches (`platform/killSwitches.ts` `SWITCHES`, at most 8, on by default) and experiments (`EXPERIMENTS`: `serverWindowDragAllOpen`, `dragRegionEveryMount`, off by default). Honoured in every build (`docs/kill-switches.md`) |
 | `ARDIA_TRACE` | `visibility` | Occlusion and each WebView attach/detach, `[ardiacore-vis]` in the system log |
 | | `pip` · `pipZoom` | PiP windows to `/tmp/ac-pip-trace.log` · PiP zoom gestures, `[pip-zoom]` |
 | | `trafficLights` | Every traffic-light change to `<data dir>/traffic-lights.log` |

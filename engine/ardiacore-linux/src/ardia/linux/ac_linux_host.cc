@@ -106,6 +106,7 @@
 #include "ardia/linux/ac_linux_system.h"
 #include "ardia/linux/ac_linux_telemetry.h"
 #include "ardia/linux/ac_linux_telemetry_policy.h"
+#include "ardia/linux/ac_linux_self_update.h"
 #include "ardia/linux/ac_linux_updates.h"
 #include "ardia/linux/ac_linux_password_prompt.h"
 #include "ardia/linux/ac_linux_system_signals.h"
@@ -3280,6 +3281,7 @@ base::DictValue ShellHostView::Bootstrap() const {
   for (const char* capability : kCliControlCalls) capabilities.Append(capability);
   for (const char* capability : ardiacore::kLinuxAutomationCapabilities) capabilities.Append(capability);
   for (const char* capability : ardiacore::kLinuxCliCapabilities) capabilities.Append(capability);
+  for (const char* capability : ardia::linux_self_update_policy::kSelfUpdateCapabilities) capabilities.Append(capability);
   for (const char* capability : ardiacore::kLinuxConfigCapabilities) capabilities.Append(capability);
   for (const char* capability : ardia::linux_desktop::kSystemCapabilities) capabilities.Append(capability);
   for (const char* capability : ardia::linux_hardware::kHardwareCapabilities) capabilities.Append(capability);
@@ -6682,6 +6684,9 @@ void ShellHostView::Invoke(
           std::move(done).Run(true, base::Value(base::DictValue().Set("body", std::move(*body))));
         },
         std::move(done)));
+  }
+  if (ardia::linux_self_update::Invokes(method)) {
+    return ardia::linux_self_update::Invoke(method, values, std::move(done));
   }
   if (const auto source = ardia::linux_updates_policy::SourceForMethod(method)) {
     if (!values.empty())

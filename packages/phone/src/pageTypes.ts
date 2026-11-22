@@ -153,13 +153,17 @@ export type PageSnapshot = {
   uri: string;
   width: number;
   height: number;
-  route?: "draw" | "windowCopy";
+  route?: "draw" | "windowCopy" | "screenCopy" | "engine";
   bytes?: number;
   kept?: boolean;
   durable?: boolean;
   generation?: number;
   frame?: { x: number; y: number; width: number; height: number } | null;
 };
+
+export type RefusedSnapshot = { refused: "hidden" | "blank" };
+
+export const isRefusedSnapshot = (taken: PageSnapshot | RefusedSnapshot): taken is RefusedSnapshot => "refused" in taken;
 
 export type PageScrollPosition = { y: number; viewportWidth?: number; viewportHeight: number; contentHeight: number };
 
@@ -199,7 +203,7 @@ export type PageEngineEvent =
   | { name: "page.longPress"; pageId: string; target: PressTarget; x: number; y: number }
   | { name: "page.closeRequested"; pageId: string }
   | { name: "page.summaryOpened"; pageId: string; trigger: PageSummaryTrigger; isPrivate: boolean }
-  | { name: "page.summarySettled"; pageId: string; trigger: PageSummaryTrigger; outcome: PageSummaryOutcome; chatGPTFellBack?: boolean; isPrivate: boolean }
+  | { name: "page.summarySettled"; pageId: string; trigger: PageSummaryTrigger; outcome: PageSummaryOutcome; chatGPTFellBack?: boolean; geminiNanoMissing?: string | null; isPrivate: boolean }
   | { name: "page.snapshotLanded"; pageId: string; uri: string; generation: number }
   | { name: "page.externalAppMissing"; pageId: string; url: string }
   | { name: "page.desktop"; pageId: string; line: string }

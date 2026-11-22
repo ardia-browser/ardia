@@ -1,4 +1,4 @@
-import { DECK, deckLeading, lerp, type DeckGeometry } from "./deckGeometry.ts";
+import { deckLeading, deckPileScale, lerp, type DeckGeometry } from "./deckGeometry.ts";
 
 export type PullTarget = {
   id: string;
@@ -74,7 +74,8 @@ export function pullTarget(id: string, screenWidth: number, screenHeight: number
 }
 
 export function stackPullTarget(g: DeckGeometry, id: string, index: number, scroll: number, shift: number): PullTarget {
-  return pullTarget(id, g.width, g.height, { centerX: deckLeading(g, index - scroll) + g.cardWidth / 2, centerY: g.cardCenterY + shift, width: g.cardWidth, height: g.cardHeight }, DECK.cardRadius, g.screenCorner);
+  const scale = deckPileScale(g, index - scroll);
+  return pullTarget(id, g.width, g.height, { centerX: deckLeading(g, index - scroll) + g.cardWidth / 2, centerY: g.cardCenterY + shift, width: g.cardWidth * scale, height: g.cardHeight * scale }, g.cardCorner * scale, g.screenCorner);
 }
 
 export function pullShrink(travel: number, pull: number): number {
@@ -114,10 +115,10 @@ export function pullSpeed(velocityY: number, pull: number): number {
 
 export type Tucked = { x: number; y: number; scale: number };
 
-export function pullTuck(behind: { x: number; y: number }, slot: { x: number; y: number }, reveal: number): Tucked {
+export function pullTuck(behind: { x: number; y: number }, slot: { x: number; y: number; scale?: number }, reveal: number): Tucked {
   "worklet";
   const out = Math.min(Math.max(reveal, 0), 1);
-  return { x: lerp(behind.x, slot.x, out), y: lerp(behind.y, slot.y, out), scale: lerp(DECK_PULL.tuckScale, 1, out) };
+  return { x: lerp(behind.x, slot.x, out), y: lerp(behind.y, slot.y, out), scale: lerp(DECK_PULL.tuckScale, slot.scale ?? 1, out) };
 }
 
 export function pullRise(target: PullTarget, shrink: number): number {

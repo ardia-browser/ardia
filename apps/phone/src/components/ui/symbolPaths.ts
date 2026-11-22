@@ -1,3 +1,5 @@
+import { incognitoEyesLidded } from "./IncognitoEyes";
+
 export type SymbolLayer = { d: string; stroke?: number; fill?: boolean; evenOdd?: boolean; rotate?: number; scale?: number; shift?: number };
 
 const STROKE = 1.9;
@@ -11,19 +13,10 @@ const polyline = (...points: number[]) =>
 const circle = (cx: number, cy: number, r: number) => `M${cx - r} ${cy}A${r} ${r} 0 1 1 ${cx + r} ${cy}A${r} ${r} 0 1 1 ${cx - r} ${cy}Z`;
 
 const EYES_SIDE = 24;
-const EYE = { width: EYES_SIDE * 0.2, height: EYES_SIDE * 0.42, gap: EYES_SIDE * 0.12, pupil: (EYES_SIDE * 0.13) / 2, pupilLift: EYES_SIDE * 0.04, lidAt: 0.62, lidSag: 0.24, lidReach: 0.6 };
+const EYE = { width: EYES_SIDE * 0.2, height: EYES_SIDE * 0.42, gap: EYES_SIDE * 0.12, lidAt: 0.62, lidSag: 0.24, lidReach: 0.6 };
 const EYES_LEFT = (EYES_SIDE - EYE.width * 2 - EYE.gap) / 2;
 const EYES_TOP = (EYES_SIDE - EYE.height) / 2;
 const eyeLeft = (index: number) => EYES_LEFT + index * (EYE.width + EYE.gap);
-
-function incognitoEyes(): string {
-  return [0, 1]
-    .map((index) => {
-      const x = eyeLeft(index);
-      return roundRect(x, EYES_TOP, EYE.width, EYE.height, EYE.width / 2) + circle(x + EYE.width / 2, EYES_TOP + EYE.height - EYE.pupilLift - EYE.pupil, EYE.pupil);
-    })
-    .join("");
-}
 
 function incognitoEyesClosed(): string {
   const lid = EYES_TOP + EYE.height * EYE.lidAt;
@@ -114,7 +107,7 @@ export const SYMBOLS = {
     },
   ],
   ellipsis: [{ d: circle(5.5, 12, 1.75) + circle(12, 12, 1.75) + circle(18.5, 12, 1.75), fill: true }],
-  eyes: [{ d: incognitoEyes(), fill: true, evenOdd: true }],
+  eyes: [{ d: incognitoEyesLidded(), fill: true, evenOdd: true }],
   eyesClosed: [{ d: incognitoEyesClosed(), stroke: STROKE }],
   chevronDown: [{ d: polyline(5.5, 8.5, 12, 15, 18.5, 8.5), stroke: BOLD }],
   minus: [{ d: line(5, 12, 19, 12), stroke: BOLD }],

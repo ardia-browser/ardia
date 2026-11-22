@@ -33,7 +33,7 @@ export function PageFailureView({ tabId }: { tabId: string }) {
         onPress={() => retryPage(tabId)}
         style={[styles.retry, failureButton.filled ? { backgroundColor: theme.dark ? failureButton.fill.dark : failureButton.fill.light } : { borderWidth: StyleSheet.hairlineWidth, borderColor: theme.separator }]}
       >
-        <Text style={[font.body, { color: theme.formAccent }]}>Try Again</Text>
+        <Text style={[font.body, { color: theme.spaceAccentInk }]}>Try Again</Text>
       </Pressable>
     </View>
   );

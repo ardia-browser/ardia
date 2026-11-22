@@ -31,7 +31,7 @@ export const tabRows = {
         hideToolbarWhileScrolling: {
           title: "Hide toolbar while scrolling",
           description: "Scrolling down shrinks the toolbar to a thin strip.",
-          keywords: ["auto hide toolbar", "address bar hides", "collapse", "compact", "scroll", "shrink", "shrinking", "address bar shrinks", "toolbar shrinks", "page shifts", "page jumps"],
+          keywords: ["hide toolbar", "auto hide toolbar", "toolbar hides", "address bar hides", "collapse", "compact", "scroll", "shrink", "shrinking", "address bar shrinks", "toolbar shrinks", "page shifts", "page jumps"],
         },
         buttons: {
           title: "Buttons",

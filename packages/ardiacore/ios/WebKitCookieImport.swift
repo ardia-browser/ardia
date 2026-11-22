@@ -3,6 +3,16 @@ import WebKit
 
 extension WebKitHub {
   static let httpOnlyCookieKey = HTTPCookiePropertyKey("HttpOnly")
+  static let createdCookieKey = HTTPCookiePropertyKey("Created")
+  private static let earliestCreated = Date(timeIntervalSince1970: 946_684_800)
+
+  static func created(_ cookie: HTTPCookie) -> Date? {
+    let raw = cookie.properties?[createdCookieKey]
+    let seconds = (raw as? NSNumber)?.doubleValue ?? (raw as? String).flatMap(Double.init)
+    guard let seconds, seconds.isFinite else { return nil }
+    let date = Date(timeIntervalSinceReferenceDate: seconds)
+    return date > earliestCreated && date <= Date().addingTimeInterval(60) ? date : nil
+  }
 
   static func httpCookie(fromEngine cookie: [String: Any]) -> HTTPCookie? {
     guard cookie["partitionKey"] == nil || cookie["partitionKey"] is NSNull, cookie["partitionKeyOpaque"] as? Bool != true,
@@ -35,5 +45,79 @@ extension WebKitHub {
       store.setCookie(cookie) { group.leave() }
     }
     group.notify(queue: .main) { completion(made.count) }
+  }
+
+  static func sends(_ cookie: HTTPCookie, to url: URL) -> Bool {
+    guard let host = url.host?.lowercased(), !host.isEmpty else { return false }
+    let domain = cookie.domain.lowercased()
+    let matchesHost = domain.hasPrefix(".") ? (host == String(domain.dropFirst()) || host.hasSuffix(domain)) : host == domain
+    let path = url.path.isEmpty ? "/" : url.path
+    let matchesPath = cookie.path == "/" || path == cookie.path || path.hasPrefix(cookie.path.hasSuffix("/") ? cookie.path : cookie.path + "/")
+    let live = cookie.expiresDate.map { $0 > Date() } ?? true
+    return matchesHost && matchesPath && live && (!cookie.isSecure || url.scheme?.lowercased() == "https")
+  }
+
+  private static func sameSite(_ cookie: HTTPCookie) -> String? {
+    switch cookie.sameSitePolicy {
+    case .some(.sameSiteStrict): "Strict"
+    case .some(.sameSiteLax): "Lax"
+    default: nil
+    }
+  }
+
+  func cookies(profile: String, urls: [URL], completion: @escaping ([HTTPCookie]) -> Void) {
+    guard !urls.isEmpty else { return completion([]) }
+    stores.dataStore(for: profile).httpCookieStore.getAllCookies { all in
+      completion(all.filter { cookie in urls.contains { Self.sends(cookie, to: $0) } })
+    }
+  }
+
+  func engineCookies(profile: String, urls: [URL], completion: @escaping ([[String: Any]]?) -> Void) {
+    cookies(profile: profile, urls: urls) { found in
+      completion(found.map { cookie in
+        var entry: [String: Any] = [
+          "name": cookie.name, "value": cookie.value, "domain": cookie.domain, "path": cookie.path,
+          "expires": cookie.expiresDate?.timeIntervalSince1970 ?? -1, "session": cookie.isSessionOnly,
+          "httpOnly": cookie.isHTTPOnly, "secure": cookie.isSecure,
+        ]
+        if let sameSite = Self.sameSite(cookie) { entry["sameSite"] = sameSite }
+        return entry
+      })
+    }
+  }
+
+  static func carryKey(_ cookie: HTTPCookie) -> String {
+    "\(cookie.name)\u{1}\(cookie.domain.lowercased())\u{1}\(cookie.path.isEmpty ? "/" : cookie.path)"
+  }
+
+  func exportCookies(profile: String, urls: [URL], keys: Set<String>? = nil, completion: @escaping (Int) -> Void) {
+    guard !WebKitStores.isPrivate(profile) else { return completion(0) }
+    cookies(profile: profile, urls: urls) { all in
+      let found = keys.map { keys in all.filter { keys.contains(Self.carryKey($0)) } } ?? all
+      let wire: [[String: Any]] = found.prefix(500).map { cookie in
+        var entry: [String: Any] = [
+          "name": cookie.name, "value": cookie.value, "domain": cookie.domain, "path": cookie.path,
+          "secure": cookie.isSecure, "httpOnly": cookie.isHTTPOnly, "sameSite": Self.sameSite(cookie)?.lowercased() ?? "unspecified",
+          "sourceScheme": cookie.isSecure ? "secure" : "nonSecure",
+        ]
+        if !cookie.isSessionOnly, let expires = cookie.expiresDate { entry["expires"] = expires.timeIntervalSince1970 * 1000 }
+        if let created = Self.created(cookie) { entry["created"] = created.timeIntervalSince1970 * 1000 }
+        return entry
+      }
+      guard !wire.isEmpty, var json = try? JSONSerialization.data(withJSONObject: ["cookies": wire, "replaceOlder": true]) else { return completion(0) }
+      json.append(0)
+      let secret = NSMutableData(data: json)
+      json.resetBytes(in: 0..<json.count)
+      let stamp = ArdiaConsentStamp.begin()
+      ArdiaEngineBridge.callWithSecret("ac_cookies_import", profile: profile, args: secret) { reply in
+        let parsed = (try? JSONSerialization.jsonObject(with: Data(reply.utf8))) as? [String: Any]
+        let imported = (parsed?["imported"] as? NSNumber)?.intValue ?? 0
+        let replaced = (parsed?["replaced"] as? NSNumber)?.intValue ?? 0
+        DispatchQueue.main.async {
+          for _ in 0..<max(0, min(replaced, 500)) { ArdiaEvents.emit("webKit.counted", data: stamp.onto(["name": "cookieReplaced"])) }
+          completion(imported + replaced)
+        }
+      }
+    }
   }
 }

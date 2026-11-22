@@ -8,9 +8,9 @@ Hosted CI never runs `gclient sync`, GN or a Chromium build.
 
 | Piece | What it does |
 | --- | --- |
-| [`.github/workflows/linux.yml`](../.github/workflows/linux.yml) | Runs on pull requests, pushes to `main` and by hand: a vouch `gate` job, then a `checks` job and a `package` job on `ubuntu-24.04` |
+| [`.github/workflows/linux.yml`](../.github/workflows/linux.yml) | Runs on pull requests, pushes to `main` and by hand: a vouch `gate` job, then four `checks` jobs (the UI checks, and the engine fixtures split three ways) and a `package` job on `ubuntu-24.04`. A pull request packages and smoke-tests the tarball alone unless it changes `scripts/linux`, the workflow or its setup action, or carries the `full-ci` label; pushes and manual runs also build, smoke-test and install the `.deb` and the AppImage |
 | [`.github/actions/linux-setup`](../.github/actions/linux-setup/action.yml) | Ubuntu packages for the fixtures (clang, dbus, NSS tools, gnome-keyring, PyGObject), Node 24, pnpm and `pnpm install --frozen-lockfile` |
-| [`scripts/linux/ci-checks.sh`](../scripts/linux/ci-checks.sh) | The engine-free checks; the `engine/ardiacore-linux/tests` modules run in parallel because the suite takes well over five minutes serially |
+| [`scripts/linux/ci-checks.sh`](../scripts/linux/ci-checks.sh) | The engine-free checks. `--part ui` runs the `apps/linux` and `scripts/linux` checks side by side; `--part engine --shard I/N` runs every Nth Python suite and `engine/ardiacore-linux/tests` module, those in parallel, because the suite takes well over five minutes serially. With no options it runs everything |
 | [`scripts/linux/publish-engine.sh`](../scripts/linux/publish-engine.sh) | Builder side: stages, strips and archives an engine from a Chromium out dir; `--upload` publishes it and adds its table row |
 | [`packages/ardiacore/prebuilt-engines-linux.tsv`](../packages/ardiacore/prebuilt-engines-linux.tsv) | `key<TAB>tag<TAB>sha256` for each Linux engine published in ardia-browser/ardia |
 | `packages/ardiacore/scripts/fetch-engine.sh --arch linux-x86_64` | Dispatches to [`scripts/linux/fetch-engine.sh`](../scripts/linux/fetch-engine.sh); the Mac path is unchanged |
@@ -200,6 +200,10 @@ The Release workflow (`release.yml`) runs it in its `linux` job, beside the Mac 
 artifact. When the install test fails (after apt's and the image pulls' retries), the job deletes the `.deb` and its
 `.sha256`, adds a `deb dropped` line to `provenance.txt` and warns, and still succeeds: the tarball, AppImage, Arch
 source package and CLI ship without it. Only a `deb dropped` line lets `publish.sh` go on without the `.deb`.
+The `linux-sign` job, the only one that sees the `LINUX_UPDATE_ED_PRIVATE_KEY` secret, downloads that artifact and
+signs `Ardia-<version>-linux-update.txt` with `scripts/linux/sign-update.mjs`, which refuses a key that doesn't match
+`scripts/linux/linux-update.pem`; it uploads the manifest and its `.sig` as the `linux-update` artifact. When signing
+fails, `publish` warns and the release ships without them, so installed Linux apps fall back to the release page for it.
 `publish` puts that artifact in `dist/<version>/linux/`, and `publish.sh` attaches the assets to the GitHub release it
 creates. It refuses a Linux folder whose provenance names an inexact engine or uncommitted changes. A dry run
 publishes nothing. When the `linux` job fails, usually because the release's engine key has no published Linux

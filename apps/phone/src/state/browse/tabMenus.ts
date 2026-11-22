@@ -10,7 +10,7 @@ import { recentOtherTabs, tabMenuTitle } from "../tabs/tabsState";
 import { showToast } from "../toasts/store";
 import { openPage, openTab, reopenArchived } from "./store";
 
-export type RowAction = { label: string; icon: "eyeglassesThin" | "squareOnSquare" | "link" | "squareAndArrowUp" | "docOnDoc"; run: () => void };
+export type RowAction = { label: string; icon: "eyes" | "squareOnSquare" | "link" | "squareAndArrowUp" | "docOnDoc"; run: () => void };
 
 function openSwitchingMode(url: string, origin: "search" | "typed") {
   setIncognito(!useTabs.getState().incognito);
@@ -19,7 +19,7 @@ function openSwitchingMode(url: string, origin: "search" | "typed") {
 
 export function trayRowActions(row: TrayRow): RowAction[] {
   const incognito = useTabs.getState().incognito;
-  const icon = incognito ? "squareOnSquare" : "eyeglassesThin";
+  const icon = incognito ? "squareOnSquare" : "eyes";
   if (row.kind === "query") {
     return [{ label: incognito ? "Search in New Tab" : "Search in Incognito Tab", icon, run: () => openSwitchingMode(row.url, "search") }];
   }

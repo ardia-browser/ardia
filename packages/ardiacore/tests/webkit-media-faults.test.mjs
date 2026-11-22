@@ -2,17 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { createContext, runInContext } from "node:vm";
+import { fieldProviderKit, webKitMediaBridge, webKitPageScript } from "./webkit-page-source.mjs";
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
-const pageScript = read("../ios/WebKitPageScript.swift");
 const faultsSwift = read("../ios/WebKitMediaFaults.swift");
-const chromiumPageScript = read("../ios/page_script.js");
-const fieldProviderKit = (() => {
-  const from = chromiumPageScript.indexOf("  const fieldProviderKit = ");
-  const to = chromiumPageScript.indexOf("  const nativeMutationObserver = ", from);
-  assert.ok(from >= 0 && to > from, "the field provider kit isn't in page_script.js");
-  return chromiumPageScript.slice(from, to);
-})();
+const pageScriptSwift = read("../ios/WebKitPageScript.swift");
 const tab = read("../ios/WebKitTab.swift");
 const engines = read("../../../apps/browser/src/state/engines/engines.ts");
 
@@ -30,9 +24,9 @@ const rawString = (text, name) => {
   const from = text.indexOf('"""', start) + 3;
   return text.slice(from, text.indexOf('"""#', from));
 };
-const filled = (script) => script.replace("\\#(WebKitMediaFaults.sitesJSON)", JSON.stringify(sites)).replace("\\#(WebKitMediaFaults.pageScript)", rawString(faultsSwift, "pageScript")).replace("\\#(fieldProviderKit)", () => fieldProviderKit);
-const bridge = filled(rawString(pageScript, "mediaBridge"));
-const source = filled(rawString(pageScript, "source"));
+const filled = (script) => script.replace("\\#(WebKitMediaFaults.sitesJSON)", JSON.stringify(sites)).replace("\\#(WebKitMediaFaults.pageScript)", rawString(faultsSwift, "pageScript"));
+const bridge = filled(webKitMediaBridge);
+const source = filled(webKitPageScript);
 
 test("the streaming sites are the protected video sites the app opens in WebKit", () => {
   const listed = listIn(engines, /export const PROTECTED_VIDEO_SITES: readonly string\[\] = \[([^\]]*)\]/);
@@ -114,7 +108,7 @@ globalThis.originalPlay = HTMLMediaElement.prototype.play;
 `;
 
 const fallbackKit = (() => {
-  const found = pageScript.match(/return "(  const fieldProviderKit = [^"]*)"/);
+  const found = pageScriptSwift.match(/return "(  const fieldProviderKit = [^"]*)"/);
   assert.ok(found, "the fallback kit isn't in WebKitPageScript.swift");
   return JSON.parse(`"${found[1]}"`);
 })();
@@ -297,6 +291,30 @@ test("a subdomain of a streaming site is watched", async () => {
   assert.deepEqual(p.reported(), ["eme_widevine_granted"]);
 });
 
+test("Canal+ is watched: its refused key system, rejected play() and decode error are recorded, on both its hosts and their subdomains", async () => {
+  assert.ok(sites.includes("canalplus.com") && sites.includes("mycanal.fr"));
+  for (const hostname of ["canalplus.com", "www.canalplus.com", "mycanal.fr", "www.mycanal.fr"]) {
+    const p = page({ hostname });
+    p.run(`
+      navigator.answer = () => Promise.reject(new DOMException("no CDM", "NotSupportedError"));
+      navigator.requestMediaKeySystemAccess("com.widevine.alpha", [{}]).catch(() => {});
+      const video = new HTMLMediaElement();
+      video.answer = () => Promise.reject(new DOMException("", "NotAllowedError"));
+      video.play().catch(() => {});
+      video._error = new MediaError(3);
+      video.dispatchEvent(new Event("error"));
+    `);
+    await settle();
+    assert.deepEqual(p.reported(), ["media_error_decode", "eme_widevine_refused_not_supported", "play_rejected_not_allowed"], hostname);
+  }
+  for (const [protocol, hostname] of [["http:", "www.canalplus.com"], ["https:", "canalplus.com.example.com"], ["https:", "notmycanal.fr"], ["http:", "mycanal.fr"]]) {
+    const p = page({ protocol, hostname });
+    p.run("navigator.answer = () => Promise.reject(new DOMException('', 'NotSupportedError')); navigator.requestMediaKeySystemAccess('com.widevine.alpha', [{}]).catch(() => {});");
+    await settle();
+    assert.deepEqual(p.reported(), [], `${protocol}//${hostname}`);
+  }
+});
+
 test("the page script relays a reason that is a short string and nothing else the page's events carry", () => {
   const p = page();
   p.run(`
@@ -320,4 +338,9 @@ test("a page off the streaming sites gets no media fault listener or wrapper", (
     p.run(`document.dispatchEvent(new CustomEvent("ardia:media-fault", { detail: "media_error_decode" }));`);
     assert.deepEqual(p.reported(), [], `${protocol}//${hostname}`);
   }
+});
+
+test("the play() the page sees keeps the native method's name, arity and native source", () => {
+  const p = page();
+  assert.deepEqual(p.json("[HTMLMediaElement.prototype.play.name, HTMLMediaElement.prototype.play.length, /\\[native code\\]/.test(Function.prototype.toString.call(HTMLMediaElement.prototype.play))]"), ["play", 0, true]);
 });

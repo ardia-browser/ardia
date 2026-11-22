@@ -72,6 +72,16 @@ test("hover cards, toasts and reload only fade or change state, with no grow, sl
   assert.doesNotMatch(source("../toolbar/tokens.ts"), /pressScale/);
 });
 
+test("plugin toolbar buttons press like Ardia's own icon buttons: a pressed fill, with no squish in either press motion", () => {
+  const plugin = source("../plugins/PluginToolbarItems.tsx");
+  const item = plugin.slice(plugin.indexOf("function ToolbarItemButton"), plugin.indexOf("function badgeOf"));
+  assert.ok(item.length > 0);
+  assert.doesNotMatch(plugin, /usePressScaleMotion|usePressMotion|buttonMotion|Animated/, "no press scale reaches a plugin's toolbar glyph");
+  assert.match(item, /<Button\s+variant="icon"\s+look="extension"/);
+  assert.match(item, /\bicon=\{icon\}/, "the glyph is drawn by the icon button itself, as Ardia's own toolbar buttons are");
+  assert.doesNotMatch(item, /onPressIn|onPressOut/);
+});
+
 test("the nightly.6 press bounce is opt-in through config.json's pressMotion, and still by default", () => {
   assert.equal(SETTING_SPECS.pressMotion.default, "still");
   assert.equal(SETTING_SPECS.pressMotion.synced, false);

@@ -16,7 +16,7 @@ import { tabsInSpace } from "../../state/tabs/spaces";
 import { useTabs } from "../../state/tabs/store";
 import { recencyOrder, type BrowserTab } from "../../state/tabs/tabModels";
 import { countUsage } from "../../state/telemetry/telemetry";
-import { capsule, ChromeSurface, ConfirmSheet, Favicon, font, IncognitoSpecs, rolesFor, startInk, startLayout, Symbol, tabsInk, tabsLayout, useTheme, type Confirmation, type MenuItem } from "../ui";
+import { capsule, controlRadius, ChromeSurface, ConfirmSheet, Favicon, font, IncognitoSpecs, rolesFor, startInk, startLayout, Symbol, tabsInk, tabsLayout, useTheme, type Confirmation, type MenuItem } from "../ui";
 import { confirmInSheet, MenuTrigger, spaceSystemImage } from "../ui/MenuTrigger";
 import { barAddress, spokenAddress } from "../browsing/FloatingBar";
 import { spaceMenuSymbol, SpaceTitle } from "../search/StartSpaces";
@@ -138,7 +138,7 @@ function AddressField({ dark, onClose }: { dark: boolean; onClose: () => void })
     else newTab();
   };
   return (
-    <ChromeSurface testID="duoSidebarAddress" shape="capsule" cornerRadius={capsule(DUO.sidebarFieldHeight)} dark={dark} style={styles.field}>
+    <ChromeSurface testID="duoSidebarAddress" shape="rounded" cornerRadius={controlRadius(DUO.sidebarFieldHeight)} dark={dark} style={styles.field}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Address"

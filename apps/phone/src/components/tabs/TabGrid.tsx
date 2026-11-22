@@ -162,7 +162,7 @@ const TabGridCell = memo(function TabGridCell({ tab, selected, width, aspect, co
               <View
                 testID="tabGridEdge"
                 pointerEvents="none"
-                style={[styles.edge, selected ? { borderWidth: tabGridLayout.selectedEdge, borderColor: theme.formAccent } : { borderWidth: tabGridLayout.edge, borderColor: theme.cardEdge }]}
+                style={[styles.edge, selected ? { borderWidth: tabGridLayout.selectedEdge, borderColor: theme.spaceAccentInk } : { borderWidth: tabGridLayout.edge, borderColor: theme.cardEdge }]}
               />
             </Animated.View>
           </Pressable>

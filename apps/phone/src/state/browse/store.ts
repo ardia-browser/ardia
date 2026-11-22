@@ -4,6 +4,7 @@ import { HISTORY_RETENTION_MS } from "../history/historySummary";
 import { useLibrary } from "../library/store";
 import {
   clearTone,
+  isRefusedSnapshot,
   livePageIds,
   listenToPages,
   pageNavigation,
@@ -713,7 +714,15 @@ export function captureCurrentCover() {
 
 export async function captureSnapshot(id: string, pageTop: number | null = null) {
   if (!snapshotAllowed(id)) return;
-  const snapshot = await snapshotPage(id);
+  const countable = pictureCountable(id);
+  const taken = await snapshotPage(id);
+  const counts = countable && pictureCountable(id);
+  if (taken && isRefusedSnapshot(taken)) {
+    pictureRefused(id, taken.refused, counts);
+    return;
+  }
+  const snapshot = taken;
+  if (snapshot) pictureSaved(id, snapshot.route, counts);
   const top = pageTop ?? (pullCapture?.id === id || deckPullGrowing() === id ? PULLED_PAGE_TOP : null);
   if (snapshot && top !== null) noteSnapshotPageTop(snapshot.uri, top);
   else if (snapshot?.frame) noteSnapshotPageTop(snapshot.uri, snapshot.frame.y);
@@ -724,6 +733,22 @@ export async function captureSnapshot(id: string, pageTop: number | null = null)
     updateTabById(id, { snapshotFileName: step.show });
     showFadingDeckThePicture(id);
   }
+}
+
+function pictureCountable(id: string) {
+  const tab = findTab(currentTabs(), id);
+  return tab !== undefined && !tab.isPrivate && !useTabs.getState().incognito;
+}
+
+function pictureSaved(id: string, route: string | undefined, counts: boolean) {
+  labTrace(`PAGELAB snapshot ${id} saved by ${route ?? "unknown"}`);
+  if (route === "engine" && counts) countUsage("page_pictures_webkit");
+}
+
+function pictureRefused(id: string, reason: "hidden" | "blank", counts: boolean) {
+  labTrace(`PAGELAB snapshot ${id} refused: page ${reason}, the card keeps its last picture`);
+  if (!counts) return;
+  countUsage(reason === "blank" ? "page_pictures_blank" : "page_pictures_hidden");
 }
 
 function showFadingDeckThePicture(id: string) {

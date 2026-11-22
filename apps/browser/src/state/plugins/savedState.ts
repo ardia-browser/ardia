@@ -12,9 +12,9 @@ const NAME = new RegExp(NAME_PATTERN);
 
 const HASH = /^[0-9a-f]{64}$/;
 
-function valuesOf(raw: unknown): Record<string, string | boolean> {
+function valuesOf(raw: unknown): Record<string, string | boolean | number> {
   if (!isFields(raw)) return {};
-  return Object.fromEntries(Object.entries(raw).filter((e): e is [string, string | boolean] => typeof e[1] === "string" || typeof e[1] === "boolean"));
+  return Object.fromEntries(Object.entries(raw).filter((e): e is [string, string | boolean | number] => typeof e[1] === "string" || typeof e[1] === "boolean" || (typeof e[1] === "number" && Number.isFinite(e[1]))));
 }
 
 function appliedOf(raw: unknown): PluginRecord["applied"] {
@@ -31,7 +31,7 @@ export function parsePluginRecords(json: string | null): Record<string, PluginRe
   for (const [name, raw] of Object.entries(doc.plugins as Fields)) {
     if (!NAME.test(name) || !isFields(raw)) continue;
     const approved = typeof raw.approved === "string" && HASH.test(raw.approved) ? raw.approved : null;
-    out[name] = { enabled: raw.enabled === true && approved !== null, approved, values: valuesOf(raw.values), applied: appliedOf(raw.applied), ...(raw.controlGranted === true ? { controlGranted: true } : {}), ...(raw.installed === true ? { installed: true } : {}) };
+    out[name] = { enabled: raw.enabled === true && approved !== null, approved, values: valuesOf(raw.values), applied: appliedOf(raw.applied), ...(raw.controlGranted === true ? { controlGranted: true } : {}), ...(raw.installed === true ? { installed: true } : {}), ...(typeof raw.previous === "string" && HASH.test(raw.previous) ? { previous: raw.previous } : {}) };
   }
   return out;
 }

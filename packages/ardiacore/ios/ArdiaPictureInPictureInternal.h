@@ -23,12 +23,8 @@ constexpr CGFloat kRimAlpha = 0.17;
 
 typedef NS_ENUM(NSInteger, ArdiaPiPEdge) { ArdiaPiPEdgeNone = 0, ArdiaPiPEdgeLeft = -1, ArdiaPiPEdgeRight = 1 };
 
-@interface ArdiaPiPControl : NSView
-@property (nonatomic, copy) void (^onClick)(void);
+@interface ArdiaPiPHandle : NSView
 @property (nonatomic) BOOL hovered;
-@end
-
-@interface ArdiaPiPHandle : ArdiaPiPControl
 @property (nonatomic) ArdiaPiPEdge edge;
 @end
 
@@ -149,6 +145,7 @@ typedef NS_ENUM(NSInteger, ArdiaPiPEdge) { ArdiaPiPEdgeNone = 0, ArdiaPiPEdgeLef
 - (void)followPointer:(NSEvent *)event;
 - (void)dragMoved:(NSEvent *)event;
 - (void)dragEnded:(NSEvent *)event;
+- (void)unstashFromHandle;
 - (void)devSwipe:(NSArray<NSString *> *)args;
 - (void)devDrag:(NSArray<NSString *> *)args;
 @end
@@ -170,6 +167,11 @@ typedef NS_ENUM(NSInteger, ArdiaPiPEdge) { ArdiaPiPEdgeNone = 0, ArdiaPiPEdgeLef
 
 @interface ArdiaPiPZoom : NSObject
 + (BOOL)handle:(NSEvent *)event;
++ (BOOL)beginEdgeResize:(NSWindow *)window event:(NSEvent *)event;
++ (BOOL)continueEdgeResize:(NSEvent *)event;
++ (void)devPinch:(NSWindow *)window args:(NSArray<NSString *> *)args;
++ (NSDictionary *)devPinchStats:(NSWindow *)window;
++ (NSString *)devStandInWindow:(NSWindow *)window;
 @end
 
 namespace ardia_pip {
@@ -188,7 +190,9 @@ BOOL PreventsActivation(NSWindow *window);
 extern NSInteger gActivations;
 void MarkBackToTabActivation();
 BOOL ConsumeBackToTabActivation();
-void ActivateApp(NSString *why);
+BOOL ActivateApp(NSString *why);
+void ActivateWithOnlyPictureInPicture(ArdiaPiPController *controller, BOOL move);
+BOOL ActiveOnlyForPictureInPicture();
 BOOL ThrowEnabled();
 NSPoint PointerOf(NSEvent *event);
 ardia_pip_throw::Rect ThrowRect(NSRect r);

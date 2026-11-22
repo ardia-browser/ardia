@@ -9,6 +9,7 @@ import type {
   CliControlStatus,
   CliTabTarget,
   EngineBookmark,
+  EngineComponent,
   EngineEvents,
   EngineTask,
   EventData,
@@ -45,6 +46,7 @@ const testGlobals = globalThis as {
   acTestCliOwns?: (tabId: string) => { owned: boolean; shown: boolean };
   acTestCliMoveOffscreen?: (tabId: string) => { ok: boolean; reason?: string };
   acTestTasks?: () => EngineTask[];
+  acTestComponents?: () => EngineComponent[];
   acTestEngineInfo?: () => CallResult<"engine.info">;
   acTestUserScripts?: { engine: ExtensionEngine };
   acTestSuggest?: (args: { url: string; id: number; profile: string }) => CallResult<"search.suggest"> | undefined;
@@ -236,6 +238,7 @@ function importHistoryRows(profile: string, { rows }: { rows: { u: string; t: st
   return heldHistoryImports.reply ? heldHistoryImports.reply.then(() => ({})) : {};
 }
 
+export const bookmarkModel = { loading: new Set<string>(), treeFails: false, treeHangs: false };
 export const historyDeletes = { failNext: false };
 
 function deleteHistoryUrls(profile: string, { urls }: { urls: string[] }) {
@@ -360,7 +363,7 @@ const cliControl = (on: boolean | null) => testGlobals.acTestCliControl?.(on) ??
 
 export const cancelledDownloads: string[] = [];
 export const downloadSettingsWrites: { profile: string; folder?: string; askWhereToSave?: boolean }[] = [];
-export const clearedSiteData: { profile: string; origin: string }[] = [];
+export const clearedSiteData: { profile: string; origin: string; engine?: string }[] = [];
 export const endedWebKitSessions: string[] = [];
 export const removedStagings: string[] = [];
 export const stagingRemovals = { ok: true };
@@ -421,7 +424,7 @@ const fakeModules = {
   ArdiaEngine: domain(
     "engine",
     {
-      components: () => [],
+      components: () => testGlobals.acTestComponents?.() ?? [],
       tasks: () => testGlobals.acTestTasks?.() ?? [],
       info: () => {
         const info = testGlobals.acTestEngineInfo?.();
@@ -502,7 +505,7 @@ const fakeModules = {
     setSetting: ({ profile, origin, type, value }) => (siteSettingsDb.set(`${profile}\n${origin}`, { ...(siteSettingsDb.get(`${profile}\n${origin}`) ?? {}), [type]: value }), null),
     origins: ({ profile }) => [...siteSettingsDb.keys()].filter((k) => k.startsWith(`${profile}\n`)).map((k) => k.slice(profile.length + 1)),
     reset: ({ profile, origin }) => (siteSettingsDb.delete(`${profile}\n${origin}`), null),
-    clearData: ({ profile, origin }) => (clearedSiteData.push({ profile, origin }), { cookies: 0, storage: true }),
+    clearData: ({ profile, origin, engine }) => (clearedSiteData.push({ profile, origin, engine }), { cookies: 0, storage: true }),
     zoomLevels: ({ profile }) => Object.fromEntries([...siteZoomDb].filter(([k]) => k.startsWith(`${profile}\n`)).map(([k, v]) => [k.slice(profile.length + 1), v])),
     setZoom: ({ profile, host, zoom }) => (siteZoomDb.set(`${profile}\n${host}`, zoom), null),
     preloadPages: () => false,
@@ -634,8 +637,16 @@ const fakeModules = {
     watch: ({ profile }) => (historyWatches.push(profile), null),
   }),
   ArdiaBookmarks: domain("bookmarks", {
-    tree: ({ profile }) => ({ bar: treeOf(chromeBookmarks(profile), "bar"), other: treeOf(chromeBookmarks(profile), "other") }),
-    apply: ({ profile, ...args }) => applyBookmarkOps(profile, args),
+    tree: ({ profile }) => {
+      if (bookmarkModel.treeFails) throw new Error("no bookmarks");
+      if (bookmarkModel.treeHangs) return new Promise(() => {});
+      bookmarkModel.loading.delete(profile);
+      return { bar: treeOf(chromeBookmarks(profile), "bar"), other: treeOf(chromeBookmarks(profile), "other") };
+    },
+    apply: ({ profile, ...args }) => {
+      if (bookmarkModel.loading.has(profile)) throw new Error("bookmarks.apply ran inside Chrome's bookmark model load");
+      return applyBookmarkOps(profile, args);
+    },
     watch: () => null,
   }),
   ArdiaFavicons: domain("favicons", {
@@ -665,8 +676,13 @@ const fakeModules = {
     removeDownloadStaging: ({ path }) => (removedStagings.push(path), stagingRemovals.ok),
     cookieStoreKey: ({ profile }) => profile,
     importCookies: ({ cookies }) => cookies.length,
+    watchSiteData: () => null,
+    siteDataReady: () => null,
+    readSiteData: () => ({ cookies: [], storage: {} }),
+    writeSiteData: ({ set, remove }) => ({ cookies: set.length, removed: remove.length, storage: 0 }),
     passkeyAccess: () => ({ entitled: false, status: "entitlementRequired" }),
     requestPasskeyAccess: () => ({ entitled: false, status: "entitlementRequired" }),
+    setFraudWarnings: () => null,
   }),
   ArdiaSwipe: {
     haptic: () => {},

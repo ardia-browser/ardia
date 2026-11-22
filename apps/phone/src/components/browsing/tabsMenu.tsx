@@ -6,7 +6,7 @@ import type { MenuItem } from "../ui";
 import { MenuTrigger, nativeMenus } from "../ui/MenuTrigger";
 
 export function tabsMenuItems(order: readonly BrowserTab[]): MenuItem[] {
-  const others = recentTabs(order).map((tab): MenuItem => ({ label: tabTitle(tab), onPress: () => switchToTab(tab.id) }));
+  const others = recentTabs(order).map((tab): MenuItem => ({ label: tabTitle(tab), icon: tab.isPrivate ? "eyes" : "globe", onPress: () => switchToTab(tab.id) }));
   return [...others, ...(others.length ? ["divider" as const] : []), { label: "Close Tab", icon: "xmark", systemImage: "xmark", destructive: true, onPress: closeFrontTab }];
 }
 

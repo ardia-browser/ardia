@@ -7,7 +7,7 @@ import { SCAN_REJECTED } from "../../state/sync/syncRules";
 import { copy } from "../../lib/platformCopy";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import Svg, { Path } from "react-native-svg";
-import { capsule, CodeCamera, font, ink, Portal, scanInk, scanLayout, space, Symbol, tabsMotion, useTheme } from "../ui";
+import { controlRadius, CodeCamera, font, ink, Portal, scanInk, scanLayout, space, Symbol, tabsMotion, useTheme } from "../ui";
 
 const CAMERA_STOP_MS = 120;
 
@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
   words: { alignItems: "center", gap: space.xs, paddingHorizontal: space.xxl },
   rejected: { backgroundColor: scanInk.note, borderRadius: scanLayout.noteRadius, paddingHorizontal: space.l, paddingVertical: space.s, overflow: "hidden" },
   unavailable: { flex: 1, alignItems: "center", justifyContent: "center", gap: space.m, paddingHorizontal: space.xxl },
-  glass: { minHeight: 50, borderRadius: capsule(50), paddingHorizontal: space.xl, justifyContent: "center" },
+  glass: { minHeight: 50, borderRadius: controlRadius(50), borderCurve: "continuous", paddingHorizontal: space.xl, justifyContent: "center" },
   cancel: { position: "absolute", left: space.s, minHeight: 44, justifyContent: "center", paddingHorizontal: space.s },
   bold: { fontWeight: "600" },
   medium: { fontWeight: "500" },

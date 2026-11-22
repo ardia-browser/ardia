@@ -33,12 +33,13 @@ import { useMenuTitle, useTitleFeedback } from "../../state/page/hooks";
 import { openLibrary, type LibrarySection } from "../../state/library/store";
 import { useIsPinned, useSendTargets } from "../../state/sync/hooks";
 import { useTab } from "../../state/tabs/hooks";
-import { capsule, ChromeSurface, font, menuLayout, pageMenuInk, pageMenuLayout, pageMenuMotion, PressScale, SheetScrollView, space, Symbol, Toggle, useTheme, type MenuItem, type SymbolName } from "../ui";
+import { font, pageMenuLayout, pageMenuMotion, PressScale, SheetScrollView, smoothCorners, space, Symbol, Toggle, useTheme, type MenuItem, type SymbolName } from "../ui";
 import { MenuTrigger } from "../ui/MenuTrigger";
 import { syncOffered } from "../../state/sync/offer";
 import { usePageSummariesEnabled } from "../../state/pageSummary/enabled";
+import { pageMenuCardInk, pageMenuCards } from "./pageMenuTokens";
 
-export const usePageMenuInk = () => pageMenuInk[useTheme().dark ? "dark" : "light"];
+export const usePageMenuInk = () => pageMenuCardInk[useTheme().dark ? "dark" : "light"];
 
 function openFromMenu(section: LibrarySection) {
   closePageMenu();
@@ -52,128 +53,120 @@ export function PageMenuWords({ tabId, model, onTranslate }: { tabId: string; mo
   const devices = useSendTargets(tabId);
   const offersSummary = usePageSummariesEnabled() && canSummarizePages();
   return (
-    <SheetScrollView testID="pageMenuWords" contentContainerStyle={[styles.column, large ? styles.largeBottom : null]} bounces={false}>
-      <View style={styles.bar}>
-        <NavigationCapsule tabId={tabId} model={model} large={large} />
-        <View style={styles.actions}>
-          <ActionCapsule icon="docPlaintext" label="Reader" enabled={model.tiles} onPress={showReader} />
-          <ActionCapsule icon="link" label="Copy Link" enabled={model.tiles} onPress={copyCurrentLink} />
-          <ActionCapsule icon="squareAndArrowUp" label="Share" enabled={model.tiles} onPress={shareCurrentPage} />
-        </View>
+    <SheetScrollView testID="pageMenuWords" style={styles.scroll} contentContainerStyle={[styles.column, large ? styles.largeBottom : null]} bounces={false}>
+      <NavigationBar tabId={tabId} model={model} large={large} />
+      <View style={styles.actions}>
+        <ActionTile icon="docPlaintext" label="Reader" enabled={model.tiles} large={large} onPress={showReader} />
+        <ActionTile icon="textMagnifyingglass" label="Find on Page" enabled={model.find} large={large} onPress={showFind} />
+        <ActionTile icon="link" label="Copy Link" enabled={model.tiles} large={large} onPress={copyCurrentLink} />
+        <ActionTile icon="squareAndArrowUp" label="Share" enabled={model.tiles} large={large} onPress={shareCurrentPage} />
       </View>
-      <View style={styles.groups}>
-        <Group>
-          <Row title="Find on Page" enabled={model.find} onPress={showFind} />
-          {offersSummary ? <Row title="Summarize Page" enabled={model.summarize} onPress={summarizeCurrentPage} /> : null}
-          {model.isWebPage && devices.length ? <SendRow devices={devices} /> : null}
-          {canPrintPages() ? <Row title="Print" enabled={model.print} onPress={printCurrentPage} /> : null}
-        </Group>
-        <Group>
-          <Row title="History" enabled onPress={() => openFromMenu("history")} />
-          <Row title="Bookmarks" enabled onPress={() => openFromMenu("bookmarks")} />
-          <Row title="Downloads" enabled onPress={() => openFromMenu("downloads")} />
-        </Group>
-        <Group>
-          {model.pageRows ? <ToggleRow title="Night Shade" value={model.nightShadeOn} enabled={model.isWebPage} onChange={setNightShadeOn} /> : null}
-          {model.pageRows ? <ZoomRow model={model} large={large} /> : null}
-          {model.pageRows ? <ToggleRow title="Desktop Site" value={model.desktopSite} enabled={model.isWebPage} onChange={setDesktopSite} /> : null}
-          {model.pageRows ? <Row title={model.translateTitle} enabled={model.translate} onPress={onTranslate} /> : null}
-          {model.pageRows ? (
-            <ToggleRow title="Block Ads and Trackers" value={model.blockersEnabled} enabled={model.isWebPage} detail={model.blockedCount} onChange={setBlockersOn} />
-          ) : null}
-          <Row title="Site Settings" enabled onPress={openSiteSettingsSheet} />
-        </Group>
-        {model.pageRows && model.offersDefaultBrowser ? (
-          <Group>
-            <Row title="Open in Default Browser" enabled onPress={openInDefaultBrowser} />
-          </Group>
+      <Group>
+        {offersSummary ? <Row icon="sparkles" title="Summarize Page" enabled={model.summarize} onPress={summarizeCurrentPage} /> : null}
+        {model.isWebPage && devices.length ? <SendRow devices={devices} /> : null}
+        {model.pageRows ? (
+          <ToggleRow icon={model.blockersEnabled ? "handRaised" : "handRaisedSlash"} title="Block Ads and Trackers" value={model.blockersEnabled} enabled={model.isWebPage} detail={model.blockedCount} onChange={setBlockersOn} />
         ) : null}
-      </View>
+      </Group>
+      <Group>
+        {model.pageRows ? <ToggleRow icon={model.nightShadeOn ? "moonFill" : "moon"} title="Night Shade" value={model.nightShadeOn} enabled={model.isWebPage} onChange={setNightShadeOn} /> : null}
+        {model.pageRows ? <ZoomRow model={model} large={large} /> : null}
+        {model.pageRows ? <ToggleRow icon="desktop" title="Desktop Site" value={model.desktopSite} enabled={model.isWebPage} onChange={setDesktopSite} /> : null}
+        {model.pageRows ? <Row icon="translate" title={model.translateTitle} enabled={model.translate} onPress={onTranslate} /> : null}
+        {canPrintPages() ? <Row icon="printer" title="Print" enabled={model.print} onPress={printCurrentPage} /> : null}
+        <Row icon="gearshape" title="Site Settings" enabled onPress={openSiteSettingsSheet} />
+      </Group>
+      <Group>
+        <Row icon="clockArrow" title="History" enabled onPress={() => openFromMenu("history")} />
+        <Row icon="star" title="Bookmarks" enabled onPress={() => openFromMenu("bookmarks")} />
+        <Row icon="arrowDownCircle" title="Downloads" enabled onPress={() => openFromMenu("downloads")} />
+      </Group>
+      {model.pageRows && model.offersDefaultBrowser ? (
+        <Group>
+          <Row icon="arrowUpForwardAppFill" title="Open in Default Browser" enabled onPress={openInDefaultBrowser} />
+        </Group>
+      ) : null}
     </SheetScrollView>
   );
 }
 
-function NavigationCapsule({ tabId, model, large }: { tabId: string; model: MenuModel; large: boolean }) {
+function NavigationBar({ tabId, model, large }: { tabId: string; model: MenuModel; large: boolean }) {
   const theme = useTheme();
+  const ink = usePageMenuInk();
   const title = useMenuTitle(tabId);
   const feedback = useTitleFeedback();
   const shown = feedback ?? title;
   const titleButton = (
-    <Pressable
-      testID="pageMenuTitle"
-      accessibilityRole="button"
-      accessibilityLabel={shown}
-      accessibilityHint="Edits the search"
-      onPress={editPageQuery}
-      style={large ? styles.titleBelow : styles.title}
-    >
+    <Pressable testID="pageMenuTitle" accessibilityRole="button" accessibilityLabel={shown} accessibilityHint="Edits the search" onPress={editPageQuery} style={large ? styles.titleBelow : styles.title}>
       <Animated.Text
         key={shown}
         entering={TITLE_IN}
         exiting={TITLE_OUT}
-        style={[font.body, large && !feedback ? styles.leading : styles.centered, feedback ? styles.feedback : null, { color: feedback ? theme.formAccent : theme.label }]}
+        style={[font.body, styles.titleText, large && !feedback ? styles.leading : styles.centered, feedback ? styles.feedback : null, { color: feedback ? theme.spaceAccentInk : theme.label }]}
         numberOfLines={large ? 3 : 1}
       >
         {shown}
       </Animated.Text>
     </Pressable>
   );
-  const radius = large ? menuLayout.innerRadius : capsule(menuLayout.capsuleHeight);
   return (
-    <ChromeSurface testID="pageMenuCapsule" shape={large ? "rounded" : "capsule"} cornerRadius={radius} interactive={false} style={styles.capsule}>
-      <View testID="pageMenuCapsuleRow" style={styles.capsuleRow}>
-        <CapsuleButton icon="chevronLeft" label="Back" enabled={model.back} onPress={menuBack} />
-        <CapsuleButton icon="chevronRight" label="Forward" enabled={model.forward} onPress={menuForward} />
+    <View testID="pageMenuCapsule" style={[styles.navigation, large ? styles.navigationTall : styles.navigationPill, { backgroundColor: ink.cell }]}>
+      <View testID="pageMenuCapsuleRow" style={styles.navigationRow}>
+        <BarButton icon="chevronLeft" label="Back" enabled={model.back} onPress={menuBack} />
+        <BarButton icon="chevronRight" label="Forward" enabled={model.forward} onPress={menuForward} />
         {large ? <View style={styles.fill} /> : titleButton}
         {syncOffered() ? <PinButton tabId={tabId} enabled={model.isWebPage} /> : null}
-        {model.reload === "stop" ? (
-          <CapsuleButton icon="xmark" label="Stop" enabled onPress={menuStop} />
-        ) : (
-          <CapsuleButton icon="arrowClockwise" label="Reload" enabled={model.reloadEnabled} onPress={menuReload} />
-        )}
+        {model.reload === "stop" ? <BarButton icon="xmark" label="Stop" enabled onPress={menuStop} /> : <BarButton icon="arrowClockwise" label="Reload" enabled={model.reloadEnabled} onPress={menuReload} />}
       </View>
-      {large ? <View style={[styles.capsuleDivider, { backgroundColor: theme.separator }]} /> : null}
+      {large ? <View style={[styles.navigationDivider, { backgroundColor: ink.separator }]} /> : null}
       {large ? titleButton : null}
-    </ChromeSurface>
+    </View>
   );
 }
 
 function PinButton({ tabId, enabled }: { tabId: string; enabled: boolean }) {
   const tab = useTab(tabId);
   const pinned = useIsPinned(tabId);
-  return <CapsuleButton icon={pinned ? "starFill" : "star"} label={pinned ? "Pinned to Mac" : "Pin to Mac"} enabled={enabled && !tab?.isPrivate} onPress={pinCurrentToMac} />;
+  return <BarButton icon={pinned ? "starFill" : "star"} label={pinned ? "Pinned to Mac" : "Pin to Mac"} enabled={enabled && !tab?.isPrivate} onPress={pinCurrentToMac} />;
 }
 
-function CapsuleButton({ icon, label, enabled, onPress }: { icon: SymbolName; label: string; enabled: boolean; onPress: () => void }) {
+function BarButton({ icon, label, enabled, onPress }: { icon: SymbolName; label: string; enabled: boolean; onPress: () => void }) {
   const theme = useTheme();
   return (
-    <PressScale label={label} disabled={!enabled} onPress={onPress} pressedScale={pageMenuLayout.pressedScale} pressSpring={pageMenuMotion.press} style={styles.capsuleButton}>
+    <PressScale label={label} disabled={!enabled} onPress={onPress} pressedScale={pageMenuLayout.pressedScale} pressSpring={pageMenuMotion.press} style={styles.barButton}>
       <Symbol name={icon} size={19} color={enabled ? theme.label : theme.tertiaryLabel} />
     </PressScale>
   );
 }
 
-function ActionCapsule({ icon, label, enabled, onPress }: { icon: SymbolName; label: string; enabled: boolean; onPress: () => void }) {
+function ActionTile({ icon, label, enabled, large, onPress }: { icon: SymbolName; label: string; enabled: boolean; large: boolean; onPress: () => void }) {
   const theme = useTheme();
+  const ink = usePageMenuInk();
   return (
-    <ChromeSurface testID={`pageMenuAction:${label}`} shape="capsule" cornerRadius={capsule(menuLayout.capsuleHeight)} style={styles.action}>
-      <PressScale label={label} disabled={!enabled} onPress={onPress} grow pressedScale={pageMenuLayout.pressedScale} pressSpring={pageMenuMotion.press} style={styles.actionHit}>
-        <Symbol name={icon} size={pageMenuLayout.actionGlyph} color={enabled ? theme.label : theme.tertiaryLabel} />
+    <View testID={`pageMenuAction:${label}`} style={styles.action}>
+      <PressScale label={label} disabled={!enabled} onPress={onPress} grow pressedScale={pageMenuLayout.pressedScale} pressSpring={pageMenuMotion.press} style={styles.actionPress}>
+        <View style={[styles.tile, { backgroundColor: ink.cell }]}>
+          <Symbol name={icon} size={pageMenuCards.tileGlyph} color={enabled ? theme.label : theme.tertiaryLabel} />
+        </View>
+        {large ? null : (
+          <Text importantForAccessibility="no" accessibilityElementsHidden style={[font.caption, styles.medium, styles.centered, { color: enabled ? theme.secondaryLabel : theme.tertiaryLabel }]} numberOfLines={1}>
+            {label}
+          </Text>
+        )}
       </PressScale>
-    </ChromeSurface>
+    </View>
   );
 }
 
 function Group({ children }: { children: ReactNode }) {
-  const theme = useTheme();
   const ink = usePageMenuInk();
   const rows = Children.toArray(children);
   if (!rows.length) return null;
   return (
-    <View testID="pageMenuGroup" style={[styles.group, { backgroundColor: ink.group }]}>
+    <View testID="pageMenuGroup" style={[styles.group, { backgroundColor: ink.cell }]}>
       {rows.map((row, index) => (
         <View key={index}>
-          {index > 0 ? <View style={[styles.divider, { backgroundColor: theme.separator }]} /> : null}
+          {index > 0 ? <View style={[styles.divider, { backgroundColor: ink.separator }]} /> : null}
           {row}
         </View>
       ))}
@@ -181,7 +174,16 @@ function Group({ children }: { children: ReactNode }) {
   );
 }
 
-function Row({ title, enabled, onPress }: { title: string; enabled: boolean; onPress: () => void }) {
+function RowIcon({ name, enabled }: { name: SymbolName; enabled: boolean }) {
+  const theme = useTheme();
+  return (
+    <View style={styles.icon}>
+      <Symbol name={name} size={pageMenuCards.rowGlyph} color={enabled ? theme.label : theme.tertiaryLabel} />
+    </View>
+  );
+}
+
+function Row({ icon, title, enabled, onPress }: { icon: SymbolName; title: string; enabled: boolean; onPress: () => void }) {
   const theme = useTheme();
   const ink = usePageMenuInk();
   return (
@@ -193,7 +195,8 @@ function Row({ title, enabled, onPress }: { title: string; enabled: boolean; onP
       onPress={onPress}
       style={({ pressed }) => [styles.row, pressed ? { backgroundColor: ink.rowPressed } : null]}
     >
-      <Text style={[font.callout, styles.rowTitle, { color: enabled ? theme.label : theme.tertiaryLabel }]}>{title}</Text>
+      <RowIcon name={icon} enabled={enabled} />
+      <Text style={[font.body, styles.rowTitle, { color: enabled ? theme.label : theme.tertiaryLabel }]}>{title}</Text>
     </Pressable>
   );
 }
@@ -201,18 +204,14 @@ function Row({ title, enabled, onPress }: { title: string; enabled: boolean; onP
 export function SendRow({ devices }: { devices: ReturnType<typeof useSendTargets> }) {
   const theme = useTheme();
   const ink = usePageMenuInk();
-  if (devices.length === 1) return <Row title={`Send to ${devices[0]!.name}`} enabled onPress={() => sendCurrentTab(devices[0]!)} />;
+  if (devices.length === 1) return <Row icon="paperplane" title={`Send to ${devices[0]!.name}`} enabled onPress={() => sendCurrentTab(devices[0]!)} />;
   const items: MenuItem[] = devices.map((device) => ({ label: device.name, icon: device.kind === "mac" ? "laptop" : "iphone", systemImage: device.kind === "mac" ? "laptopcomputer" : "iphone", onPress: () => sendCurrentTab(device) }));
   return (
     <MenuTrigger items={items} trigger="tap" place={{ left: space.xxl, width: SEND_MENU_WIDTH }}>
       {({ onPress }) => (
-        <Pressable
-          testID="pageMenuRow:Send to Device"
-          accessibilityRole="button"
-          onPress={onPress}
-          style={({ pressed }) => [styles.row, pressed ? { backgroundColor: ink.rowPressed } : null]}
-        >
-          <Text style={[font.callout, styles.rowTitle, { color: theme.label }]}>Send to Device</Text>
+        <Pressable testID="pageMenuRow:Send to Device" accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.row, pressed ? { backgroundColor: ink.rowPressed } : null]}>
+          <RowIcon name="paperplane" enabled />
+          <Text style={[font.body, styles.rowTitle, { color: theme.label }]}>Send to Device</Text>
           <Symbol name="chevronUpChevronDown" size={14} color={theme.tertiaryLabel} />
         </Pressable>
       )}
@@ -220,7 +219,7 @@ export function SendRow({ devices }: { devices: ReturnType<typeof useSendTargets
   );
 }
 
-function ToggleRow({ title, value, enabled, detail, onChange }: { title: string; value: boolean; enabled: boolean; detail?: string | null; onChange: (value: boolean) => void }) {
+function ToggleRow({ icon, title, value, enabled, detail, onChange }: { icon: SymbolName; title: string; value: boolean; enabled: boolean; detail?: string | null; onChange: (value: boolean) => void }) {
   const theme = useTheme();
   const flip = () => {
     if (enabled) onChange(!value);
@@ -228,7 +227,8 @@ function ToggleRow({ title, value, enabled, detail, onChange }: { title: string;
   const label = detail ? `${title}, Blocked ${detail}` : title;
   const content = (
     <>
-      <Text style={[font.callout, styles.rowTitle, { color: enabled ? theme.label : theme.tertiaryLabel }]}>{title}</Text>
+      <RowIcon name={icon} enabled={enabled} />
+      <Text style={[font.body, styles.rowTitle, { color: enabled ? theme.label : theme.tertiaryLabel }]}>{title}</Text>
       {detail ? <Text style={[font.subheadline, styles.digits, { color: theme.secondaryLabel }]}>{detail}</Text> : null}
       <View importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
         <Toggle label={title} value={value} disabled={!enabled} onChange={onChange} />
@@ -249,24 +249,25 @@ function ToggleRow({ title, value, enabled, detail, onChange }: { title: string;
 
 function ZoomRow({ model, large }: { model: MenuModel; large: boolean }) {
   const theme = useTheme();
+  const ink = usePageMenuInk();
   const zoomButton = (icon: SymbolName, label: string, can: boolean, onPress: () => void) => (
     <Pressable accessibilityRole="button" accessibilityLabel={label} disabled={!can} onPress={onPress} style={styles.zoomButton}>
       <Symbol name={icon} size={16} color={can ? theme.label : theme.tertiaryLabel} />
     </Pressable>
   );
+  const heading = (
+    <>
+      <RowIcon name="textformatSize" enabled={model.isWebPage} />
+      <Text style={[font.body, styles.rowTitle, { color: model.isWebPage ? theme.label : theme.tertiaryLabel }]}>Page Zoom</Text>
+    </>
+  );
   return (
     <View testID="menuZoom" style={large ? styles.zoomStacked : styles.row}>
-      <Text style={[font.callout, styles.rowTitle, large ? styles.zoomHeading : null, { color: model.isWebPage ? theme.label : theme.tertiaryLabel }]}>Page Zoom</Text>
-      <View style={[styles.zoom, { backgroundColor: theme.tertiaryFill, borderRadius: capsule(pageMenuLayout.zoomHeight) }]}>
+      {large ? <View style={styles.zoomHeading}>{heading}</View> : heading}
+      <View style={[styles.zoom, large ? styles.zoomIndented : null]}>
+        <View pointerEvents="none" style={[styles.zoomFill, { backgroundColor: ink.stepper }]} />
         {zoomButton("minus", "Zoom Out", model.zoomOut, zoomOut)}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Reset Zoom"
-          accessibilityValue={{ text: model.zoomPercent }}
-          disabled={!model.isWebPage}
-          onPress={resetZoom}
-          style={styles.zoomReset}
-        >
+        <Pressable accessibilityRole="button" accessibilityLabel="Reset Zoom" accessibilityValue={{ text: model.zoomPercent }} disabled={!model.isWebPage} onPress={resetZoom} style={styles.zoomReset}>
           <Text style={[font.subheadline, styles.digits, styles.semibold, { color: theme.label }]}>{model.zoomPercent}</Text>
         </Pressable>
         {zoomButton("plus", "Zoom In", model.zoomIn, zoomIn)}
@@ -278,34 +279,42 @@ function ZoomRow({ model, large }: { model: MenuModel; large: boolean }) {
 const SEND_MENU_WIDTH = 250;
 const TITLE_IN = FadeIn.duration(pageMenuMotion.titleFade);
 const TITLE_OUT = FadeOut.duration(pageMenuMotion.titleFade);
+const LABEL_START = pageMenuCards.rowInset + pageMenuCards.iconSlot + pageMenuCards.iconGap;
 
 const styles = StyleSheet.create({
-  column: { padding: menuLayout.inset },
-  largeBottom: { paddingBottom: menuLayout.inset + pageMenuLayout.accessibilityBottom },
-  bar: { gap: pageMenuLayout.barSpacing },
-  groups: { gap: pageMenuLayout.groupSpacing, paddingTop: pageMenuLayout.groupSpacing },
-  capsule: { paddingHorizontal: space.xs },
-  capsuleRow: { flexDirection: "row", alignItems: "center", minHeight: menuLayout.capsuleHeight },
-  capsuleButton: { minWidth: 44, minHeight: menuLayout.capsuleHeight, alignItems: "center", justifyContent: "center" },
-  capsuleDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: pageMenuLayout.rowInset },
-  title: { flex: 1, paddingHorizontal: space.xs, justifyContent: "center", minHeight: menuLayout.capsuleHeight },
+  scroll: { flexGrow: 0, flexShrink: 1 },
+  column: { padding: pageMenuCards.padding, gap: pageMenuCards.sectionGap },
+  largeBottom: { paddingBottom: pageMenuCards.padding + pageMenuLayout.accessibilityBottom },
+  navigation: { paddingHorizontal: space.xs, overflow: "hidden", ...smoothCorners },
+  navigationPill: { borderRadius: pageMenuCards.barHeight / 2 },
+  navigationTall: { borderRadius: pageMenuCards.groupRadius },
+  navigationRow: { flexDirection: "row", alignItems: "center", minHeight: pageMenuCards.barHeight },
+  barButton: { minWidth: pageMenuCards.barButton, minHeight: pageMenuCards.barHeight, alignItems: "center", justifyContent: "center" },
+  navigationDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: pageMenuCards.rowInset },
+  title: { flex: 1, paddingHorizontal: space.xs, justifyContent: "center", minHeight: pageMenuCards.barHeight },
   titleBelow: { paddingHorizontal: space.s, paddingVertical: space.m },
+  titleText: { fontWeight: "600" },
   fill: { flex: 1 },
   centered: { textAlign: "center" },
   leading: { textAlign: "left" },
   feedback: { fontWeight: "600" },
-  actions: { flexDirection: "row", gap: pageMenuLayout.barSpacing },
-  action: { flex: 1, minHeight: menuLayout.capsuleHeight },
-  actionHit: { flex: 1, minHeight: menuLayout.capsuleHeight, alignItems: "center", justifyContent: "center" },
-  group: { borderRadius: menuLayout.innerRadius, overflow: "hidden" },
-  divider: { height: StyleSheet.hairlineWidth, marginLeft: pageMenuLayout.rowInset },
-  row: { flexDirection: "row", alignItems: "center", minHeight: menuLayout.rowHeight, paddingHorizontal: pageMenuLayout.rowInset, gap: space.m },
+  actions: { flexDirection: "row", gap: pageMenuCards.tileGap },
+  action: { flex: 1 },
+  actionPress: { gap: pageMenuCards.tileLabelGap, alignItems: "stretch" },
+  tile: { aspectRatio: 1, borderRadius: pageMenuCards.tileRadius, ...smoothCorners, alignItems: "center", justifyContent: "center" },
+  medium: { fontWeight: "500" },
+  group: { borderRadius: pageMenuCards.groupRadius, ...smoothCorners, overflow: "hidden" },
+  divider: { height: StyleSheet.hairlineWidth, marginLeft: LABEL_START },
+  row: { flexDirection: "row", alignItems: "center", minHeight: pageMenuCards.rowHeight, paddingHorizontal: pageMenuCards.rowInset, gap: pageMenuCards.iconGap },
+  icon: { width: pageMenuCards.iconSlot, alignItems: "center" },
   rowTitle: { flex: 1, paddingVertical: space.s },
   digits: { fontVariant: ["tabular-nums"] },
   semibold: { fontWeight: "600" },
-  zoom: { flexDirection: "row", alignItems: "center", overflow: "hidden" },
-  zoomStacked: { paddingHorizontal: pageMenuLayout.rowInset, paddingVertical: space.m, gap: space.s, alignItems: "flex-start", minHeight: menuLayout.rowHeight },
-  zoomHeading: { alignSelf: "stretch", flex: 0 },
-  zoomButton: { width: pageMenuLayout.zoomButtonWidth, height: pageMenuLayout.zoomHeight, alignItems: "center", justifyContent: "center" },
-  zoomReset: { minWidth: pageMenuLayout.zoomReset, height: pageMenuLayout.zoomHeight, alignItems: "center", justifyContent: "center" },
+  zoom: { flexDirection: "row", alignItems: "center", height: pageMenuCards.rowHeight },
+  zoomFill: { position: "absolute", left: 0, right: 0, top: (pageMenuCards.rowHeight - pageMenuCards.stepperHeight) / 2, height: pageMenuCards.stepperHeight, borderRadius: pageMenuCards.stepperRadius, ...smoothCorners },
+  zoomStacked: { paddingHorizontal: pageMenuCards.rowInset, paddingVertical: space.m, gap: space.s, alignItems: "flex-start", minHeight: pageMenuCards.rowHeight },
+  zoomHeading: { flexDirection: "row", alignItems: "center", gap: pageMenuCards.iconGap, alignSelf: "stretch" },
+  zoomIndented: { marginLeft: pageMenuCards.iconSlot + pageMenuCards.iconGap },
+  zoomButton: { width: pageMenuCards.stepperButton, height: pageMenuCards.rowHeight, alignItems: "center", justifyContent: "center" },
+  zoomReset: { minWidth: pageMenuCards.stepperReset, height: pageMenuCards.rowHeight, alignItems: "center", justifyContent: "center" },
 });

@@ -12,6 +12,7 @@ import { changedPages, pagesWrittenSince, withPages, type PagesPair } from "./pa
 import { onProfilesOpened, profileOpened } from "../profiles/profileLoading";
 import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
+import { notePageFavicon, notePageFaviconFailed } from "../telemetry/pageFaviconCounts";
 import { fetchFailedBefore, forgetAsked, markAsked, noteFetchFailed, unmarkAsked } from "./askedFavicons";
 
 type Icons = {
@@ -141,10 +142,8 @@ export function noteFavicon(tabId: string, src: string) {
   const id = `${key}|${src}`;
   let pending = inflight.get(id);
   if (!pending) {
-    pending = handle
-      .downloadFavicon(src)
-      .then((image) => image?.uri ?? null)
-      .catch(() => null);
+    const consent = consentToken();
+    pending = handle.downloadFavicon(src).then((image) => notePageFavicon(image?.uri ?? null, consent), (error) => notePageFaviconFailed(error, consent));
     inflight.set(id, pending);
     void pending.finally(() => inflight.delete(id));
   }

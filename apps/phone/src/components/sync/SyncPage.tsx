@@ -6,7 +6,7 @@ import { haptics } from "../../state/app/haptics";
 import { useSync } from "../../state/sync/store";
 import { syncNowFeedback, connectMessage, deviceIcon, inboxNotice, shownProfile, deviceSeen, isSyncConnected, isSyncOff, orderedDevices, sendReceivers, syncHeroSubtitle } from "../../state/sync/syncRules";
 import { popSettings, pushSettings } from "../../state/settings/nav";
-import { capsule, ConfirmSheet, font, PasteButton, showActionSheet, useWarningInk, pasteButtonIsNative, settingsLayout, settingsTint, space, Symbol, useTheme, type Confirmation, type SymbolName } from "../ui";
+import { controlRadius, ConfirmSheet, font, PasteButton, showActionSheet, useWarningInk, pasteButtonIsNative, settingsLayout, settingsTint, space, Symbol, useTheme, type Confirmation, type SymbolName } from "../ui";
 import { copy } from "../../lib/platformCopy";
 import { ButtonRow, Divider, Group, IconTile, NavRow, SettingsPage, ValueRow } from "../settings/SettingsKit";
 
@@ -242,7 +242,8 @@ const styles = StyleSheet.create({
     gap: space.xs + 2,
     minHeight: 48,
     paddingHorizontal: space.xl,
-    borderRadius: capsule(48),
+    borderRadius: controlRadius(48),
+    borderCurve: "continuous",
     marginTop: space.s,
     alignSelf: "stretch",
   },

@@ -8,7 +8,7 @@ import { editPageQuery, menuBack, menuForward, menuReload, menuStop, openPageMen
 import { useIncognito, useSelectedTab } from "../../state/tabs/hooks";
 import { isSyncableUrl, type BrowserTab } from "../../state/tabs/tabModels";
 import { shownTone } from "../../lib/pageTone";
-import { capsule, chromeInk, ChromeSurface, IncognitoSpecs, isDarkColor, PressScale, rolesFor, Symbol, useTheme, type SymbolName } from "../ui";
+import { controlRadius, chromeInk, ChromeSurface, IncognitoSpecs, isDarkColor, PressScale, rolesFor, Symbol, useTheme, type SymbolName } from "../ui";
 import { barAddress, spokenAddress, type BarAddress } from "../browsing/FloatingBar";
 import { NotSecureLock } from "../browsing/NotSecureLock";
 import { DUO } from "./duoLayout";
@@ -64,7 +64,7 @@ function RoundButton({ icon, label, dark, enabled, onPress }: { icon: SymbolName
   const roles = rolesFor(dark);
   return (
     <PressScale label={label} disabled={!enabled} onPress={onPress} onPressIn={haptics.barPress} style={styles.round}>
-      <ChromeSurface testID={`duoToolbar:${label}`} shape="circle" cornerRadius={capsule(DUO.toolbarButton)} dark={dark} style={styles.round}>
+      <ChromeSurface testID={`duoToolbar:${label}`} shape="rounded" cornerRadius={controlRadius(DUO.toolbarButton)} dark={dark} style={styles.round}>
         <Symbol name={icon} size={DUO.toolbarGlyph} color={enabled ? roles.foregroundPrimary : roles.foregroundTertiary} />
       </ChromeSurface>
     </PressScale>
@@ -75,7 +75,7 @@ function AddressCapsule({ tab, dark, sidebarShown, onToggleSidebar }: { tab: Bro
   const roles = rolesFor(dark);
   const address = tab ? barAddress(tab) : null;
   return (
-    <ChromeSurface testID="duoAddress" shape="capsule" cornerRadius={capsule(DUO.addressHeight)} dark={dark} style={styles.address}>
+    <ChromeSurface testID="duoAddress" shape="rounded" cornerRadius={controlRadius(DUO.addressHeight)} dark={dark} style={styles.address}>
       <Pressable accessibilityRole="button" accessibilityLabel={sidebarShown ? "Hide Sidebar" : "Show Sidebar"} onPress={onToggleSidebar} style={styles.sidebarButton}>
         <SidebarGlyph size={DUO.sidebarGlyph} color={roles.foregroundPrimary} />
       </Pressable>

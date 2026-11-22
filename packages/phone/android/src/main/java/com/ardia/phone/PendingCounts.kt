@@ -1,6 +1,7 @@
 package com.ardia.phone
 
 import android.content.Context
+import com.ardia.browser.NightShadeVerdictUse
 
 object UsageConsent {
     private const val PREFERENCES = "ardia-usage-consent"
@@ -31,6 +32,15 @@ object UsageConsent {
 
 object PendingCounts {
     const val TABS_SENT = "tabs_sent"
+    const val NIGHT_SHADE_VERDICTS_REUSED = "night_shade_verdicts_reused"
+    const val NIGHT_SHADE_VERDICTS_LEARNED = "night_shade_verdicts_learned"
+    const val NIGHT_SHADE_VERDICTS_CORRECTED = "night_shade_verdicts_corrected"
+
+    fun nightShadeField(use: NightShadeVerdictUse): String = when (use) {
+        NightShadeVerdictUse.Reused -> NIGHT_SHADE_VERDICTS_REUSED
+        NightShadeVerdictUse.Learned -> NIGHT_SHADE_VERDICTS_LEARNED
+        NightShadeVerdictUse.Corrected -> NIGHT_SHADE_VERDICTS_CORRECTED
+    }
 
     interface Store {
         fun all(): Map<String, Int>

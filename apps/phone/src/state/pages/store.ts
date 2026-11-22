@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import {
   closePage,
+  isRefusedSnapshot,
   pages,
   type FindResult,
   type PageEngineEvent,
@@ -11,9 +12,11 @@ import {
   type PageState,
   type PageTone,
   type PageViewHandle,
+  type RefusedSnapshot,
 } from "../../platform/pages";
 
-export type { FindResult, PageEngineEvent, PageNavigationState, PageRequest, PageScrollPosition, PageSnapshot, PageState, PageTone, PageViewHandle };
+export type { FindResult, PageEngineEvent, PageNavigationState, PageRequest, PageScrollPosition, PageSnapshot, PageState, PageTone, PageViewHandle, RefusedSnapshot };
+export { isRefusedSnapshot };
 
 type PagesState = {
   navigation: Record<string, PageState>;
@@ -136,7 +139,7 @@ export function deletePageSnapshots(ids: readonly string[]) {
 
 export const endPrivateSession = () => void settled(() => pages.endPrivateSession(), undefined);
 
-export const snapshotPage = (id: string): Promise<PageSnapshot | null> => settled(() => pages.snapshot(id, { maxWidth: 600, quality: 72 }), null);
+export const snapshotPage = (id: string): Promise<PageSnapshot | RefusedSnapshot | null> => settled(() => pages.snapshot(id, { maxWidth: 600, quality: 72 }), null);
 
 export const savePageState = (id: string): Promise<string | null> => settled(() => pages.saveState(id), null);
 

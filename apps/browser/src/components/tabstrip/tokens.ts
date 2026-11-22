@@ -76,8 +76,6 @@ export const INCOMING_GAP_MS = duration.fast;
 export const FADE_IN_MS = duration.fast;
 export const TUCK_FADE_MS = 120;
 
-export const GROUP_SPRING = spring({ response: 0.3, damping: 0.82 });
-export const WIDTH_SPRING = { ...GROUP_SPRING, restDisplacementThreshold: 0.25, restSpeedThreshold: 2, useNativeDriver: false } as const;
 
 const REORDER_OMEGA = 90;
 

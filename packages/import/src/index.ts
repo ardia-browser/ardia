@@ -58,7 +58,7 @@ export type BrowserSource = {
   asksAppForTabs?: boolean;
 };
 
-export type BookmarkRole = "toolbar" | "other" | "mobile" | "menu" | "readingList" | "liveGitHubPullRequests" | "liveBitbucketPullRequests" | "split";
+export type BookmarkRole = "toolbar" | "other" | "mobile" | "menu" | "readingList" | "liveGitHubPullRequests" | "liveBitbucketPullRequests" | "split" | "list";
 
 export type BookmarkNode = {
   type: "folder" | "url";

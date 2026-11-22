@@ -6,7 +6,7 @@ import { Portal } from "./Overlay";
 import { useTheme } from "./theme";
 import { useDesign } from "./design";
 import { MaterialDialog } from "./MaterialSurfaces";
-import { dialogLayout, font, space } from "./tokens";
+import { dialogLayout, font, smoothCorners, space } from "./tokens";
 
 export type DialogButton = { title: string; onPress: () => void; destructive?: boolean };
 
@@ -39,7 +39,7 @@ function ClassicDialog({ title, message, buttons, onDismiss, children }: Props) 
             <View style={styles.buttons}>
               {buttons.map((button) => (
                 <Pressable key={button.title} accessibilityRole="button" onPress={button.onPress} style={styles.button}>
-                  <Text style={[font.body, styles.buttonText, { color: button.destructive ? theme.destructive : theme.formAccent }]}>{button.title}</Text>
+                  <Text style={[font.body, styles.buttonText, { color: button.destructive ? theme.destructive : theme.spaceAccentInk }]}>{button.title}</Text>
                 </Pressable>
               ))}
             </View>
@@ -52,7 +52,7 @@ function ClassicDialog({ title, message, buttons, onDismiss, children }: Props) 
 
 const styles = StyleSheet.create({
   center: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
-  panel: { width: dialogLayout.width, borderRadius: dialogLayout.radius, padding: space.xxl, gap: space.l, elevation: 24 },
+  panel: { width: dialogLayout.width, borderRadius: dialogLayout.radius, ...smoothCorners, padding: space.xxl, gap: space.l, elevation: 24 },
   title: { fontWeight: "600" },
   buttons: { flexDirection: "row", justifyContent: "flex-end", gap: space.s },
   button: { minHeight: 44, justifyContent: "center", paddingHorizontal: space.m },

@@ -6,7 +6,7 @@ import { Surfaces } from "../App";
 import { usePreferences } from "../state/settings/store";
 import { BottomBar } from "../components/browsing/BottomBar";
 import { MaterialBottomBar } from "../components/ui/MaterialBottomBar";
-import { DECK, deckGeometry } from "../lib/deckGeometry";
+import { DECK_ARC, deckGeometry } from "../lib/deckGeometry";
 
 import { coverFrame } from "../components/tabs/DeckCard";
 import { deckHeaderBottom } from "../components/tabs/DeckHeader";
@@ -116,7 +116,7 @@ onAndroid("with ArdiaOpeningCard, the opening card mounts in the tap's own commi
   const frame = StyleSheet.flatten(card.props.style) as { width: number; height: number; borderWidth?: number };
   expect(from.scale).toBeLessThanOrEqual(1);
   expect(frame.width * from.scale).toBeCloseTo(tapped.width, 5);
-  expect(from.cornerRadius * from.scale).toBeCloseTo(DECK.cardRadius, 5);
+  expect(from.cornerRadius * from.scale).toBeCloseTo(DECK_ARC.cardCorner, 5);
   expect(to).toMatchObject({ translateX: 0, translateY: 0, cornerRadius: 0 });
   expect(frame.width * to.scale).toBeCloseTo(393, 5);
   expect(frame.height * to.scale).toBeCloseTo(873, 5);
@@ -354,19 +354,19 @@ onAndroid("after an open through the opening card, the deck reopens settled and 
 
 test("the covering card lays out in the screen's own shape on whole pixels, so one scale lands it on the POCO F4's 1080 by 2400 exactly, and it starts at the deck card's width", () => {
   const ratio = 2.75;
-  const g = deckGeometry(1080 / ratio, 2400 / ratio, 80 / ratio, 130 / ratio, 0, "android", "redesigned", deckHeaderBottom());
+  const g = deckGeometry(1080 / ratio, 2400 / ratio, 80 / ratio, 130 / ratio, 0, "android", "redesigned", deckHeaderBottom(), 55, "arc");
   const frame = coverFrame(g, ratio);
   const px = (dp: number) => dp * ratio;
   expect(px(frame.width)).toBeCloseTo(Math.round(px(frame.width)), 6);
   expect(px(frame.height)).toBeCloseTo(Math.round(px(frame.height)), 6);
   expect(px(frame.left)).toBeCloseTo(Math.round(px(frame.left)), 6);
   expect(px(frame.top)).toBeCloseTo(Math.round(px(frame.top)), 6);
-  expect([Math.round(px(frame.width)), Math.round(px(frame.height))]).toEqual([756, 1680]);
+  expect([Math.round(px(frame.width)), Math.round(px(frame.height))]).toEqual([720, 1600]);
   expect(px(frame.width) * frame.scale).toBeCloseTo(1080, 6);
   expect(px(frame.height) * frame.scale).toBeCloseTo(2400, 6);
   expect(px(frame.left) + px(frame.width) / 2).toBeCloseTo(540, 6);
   expect(frame.width * frame.startScale).toBeCloseTo(g.cardWidth, 6);
-  const tall = coverFrame(deckGeometry(1080 / ratio, 2412 / ratio, 80 / ratio, 130 / ratio, 0, "android", "redesigned", deckHeaderBottom()), ratio);
+  const tall = coverFrame(deckGeometry(1080 / ratio, 2412 / ratio, 80 / ratio, 130 / ratio, 0, "android", "redesigned", deckHeaderBottom(), 55, "arc"), ratio);
   expect(px(tall.width) * tall.scale).toBeCloseTo(1080, 6);
   expect(px(tall.height) * tall.scale).toBeCloseTo(2412, 6);
 });

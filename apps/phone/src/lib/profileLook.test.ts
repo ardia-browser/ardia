@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { backdropStops, choiceAfterMatchToggle, lookForApp, lookOf, nativeLookColors, presetLook, showsTheme, spaceTone, windowTintStops } from "./profileLook.ts";
+import { backdropStops, choiceAfterMatchToggle, lookGlassTint, lookForApp, lookOf, nativeLookColors, presetLook, showsTheme, spaceTone, windowTintStops } from "./profileLook.ts";
 
 const presets = [
   { key: "plum", swatch: "#C07A98", tint: "#B25B6B" },
@@ -86,4 +86,9 @@ test("with Increased Contrast the Spaces tone moves further toward the backgroun
 test("the native look views get a preset by name, and the Mac's own look by its colour and theme", () => {
   assert.deepEqual(nativeLookColors(presetLook(presets[1]!)), { color: "blue", themeColors: [], darkThemeColors: null });
   assert.deepEqual(nativeLookColors(lookOf(macTheme, presets, "plum")), { color: "#BD5380", themeColors: ["#FF6A00", "#7A3CFF"], darkThemeColors: ["#401A00", "#1E0F40"] });
+});
+
+test("the glass takes the look's tint at 15%, and the neutral look leaves the glass untinted", () => {
+  assert.equal(lookGlassTint(presetLook({ key: "plum", swatch: "#B25B6B", tint: "#B25B6B" })), "rgba(178, 91, 107, 0.15)");
+  assert.equal(lookGlassTint(presetLook({ key: "neutral", swatch: "#8E8E93" })), undefined);
 });

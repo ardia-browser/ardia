@@ -6,10 +6,8 @@ enum PluginProgramLinks {
   private static let queue = DispatchQueue(label: "ardia.plugin-programs", qos: .utility)
   private static let afterUpdateQueue = DispatchQueue(label: "ardia.plugin-programs.after-update", qos: .utility)
   private static let afterUpdateDeadline: TimeInterval = 300
+  private static let afterUpdateGrace: TimeInterval = 3
   private static let pathMarker = ".path-line"
-  static let builtInDigestsKey = "ArdiaBuiltInPlugins"
-  private static let reservedProgram = "ardia"
-  private static let reservedOwner = "cli"
 
   private static let lock = NSLock()
   private static var generations: [String: Int] = [:]
@@ -45,23 +43,28 @@ enum PluginProgramLinks {
       if remove {
         done(["ok": PluginPrograms.remove(plugin: name, programs: programs, places: places)])
       } else {
-        PluginPrograms.withdraw(plugin: name, programs: programs, places: places)
+        PluginPrograms.withdraw(plugin: name, programs: programs, places: places, keepCopy: PluginFolders.officialPin()?.entry(name) != nil)
         done(["ok": true])
       }
     }
   }
 
-  static func legacyInstalled(done: @escaping (Bool) -> Void) {
+  static func legacyInstalled(done: @escaping ([String]) -> Void) {
     queue.async {
-      guard let folders = PluginFolders.current(), case .success(let places) = folders.programPlaces() else { return done(false) }
-      done(PluginPrograms.legacyInstalled(places))
+      guard let folders = PluginFolders.current() else { return done([]) }
+      let registry = folders.programRegistry()
+      done(registry.failClosed ? [] : registry.legacy.filter(PluginPrograms.legacyInstalled).map(\.owner))
     }
+  }
+
+  static func registry(done: @escaping ([String: Any]) -> Void) {
+    queue.async { done((PluginFolders.current()?.programRegistry() ?? .empty).jsonValue) }
   }
 
   static func sweep(keeping active: [String], done: @escaping () -> Void) {
     queue.async {
       if let folders = PluginFolders.current(), case .success(let places) = folders.programPlaces() {
-        PluginPrograms.withdrawAllBut(Set(active), places: places)
+        PluginPrograms.withdrawAllBut(Set(active), places: places, keepingCopies: Set(PluginFolders.officialPin()?.entries.map(\.name) ?? []))
       }
       done()
     }
@@ -76,15 +79,29 @@ enum PluginProgramLinks {
       guard let program = entry["name"] as? String, let path = entry["path"] as? String else { return nil }
       return PluginProgram(name: program, path: path)
     }
-    let builtIn = folderId == PluginFolders.bundledId
-    if programs.contains(where: { $0.name == reservedProgram }) && !(builtIn && name == reservedOwner) {
-      return ["ok": false, "reason": "\(reservedProgram) belongs to Ardia's built-in \(reservedOwner) plugin"]
+    guard let folders = PluginFolders.current() else { return ["ok": false, "reason": "Ardia has no data folder"] }
+    let pin = PluginFolders.officialPin()
+    let legacy = folderId == PluginFolders.legacyId
+    let copy = legacy ? nil : folders.officialCopy(name, folderId: folderId, pin: pin)
+    if legacy && folders.legacyFolder(name, pin: pin) == nil { return ["ok": false, "reason": "its earlier copy is gone"] }
+    let unverified = { (reason: String) -> [String: Any] in
+      if case .success(let places) = folders.programPlaces(),
+        PluginPrograms.dropCurrentUnlessTrusted(plugin: name, programs: programs, places: places, trusted: []) == .stuck
+      {
+        return ["ok": false, "reason": "\(reason), and the programs it left on PATH couldn't be taken off"]
+      }
+      return ["ok": false, "reason": reason]
     }
-    let afterUpdate = builtIn ? raw.compactMap { entry -> (String, [[String]])? in
+    if OfficialPin.sha(ofFolderId: folderId) != nil && copy == nil { return unverified("its downloaded copy is gone") }
+    let builtIn = legacy || copy != nil
+    let registry = folders.programRegistry(pin: pin)
+    if let refusal = programs.lazy.compactMap({ registry.refusal(program: $0.name, plugin: name, builtIn: builtIn) }).first {
+      return ["ok": false, "reason": refusal]
+    }
+    let afterUpdate = copy != nil ? raw.compactMap { entry -> (String, [[String]])? in
       guard let program = entry["path"] as? String, let commands = entry["afterUpdate"] as? [[String]], !commands.isEmpty else { return nil }
       return (program, commands)
     } : []
-    guard let folders = PluginFolders.current() else { return ["ok": false, "reason": "Ardia has no data folder"] }
     let places: ProgramPlaces
     switch folders.programPlaces() {
     case .failure(let refusal): return ["ok": false, "reason": refusal.reason]
@@ -92,120 +109,202 @@ enum PluginProgramLinks {
     }
     let folder: OpenedFolder
     switch folders.approvedFolder(name, folderId: folderId, approved: approved) {
-    case .failure(let refusal): return ["ok": false, "reason": refusal.reason]
+    case .failure(let refusal): return copy != nil ? unverified(refusal.reason) : ["ok": false, "reason": refusal.reason]
     case .success(let opened): folder = opened
     }
     defer { folder.close() }
-    var expected: String?
-    if builtIn {
-      let signed = (Bundle.main.infoDictionary?[builtInDigestsKey] as? [String: String])?[name]
-      if signed == nil && !LaunchConfig.shared.isolated { return ["ok": false, "reason": "it isn't in the list of built-in plugins this Ardia was signed with"] }
-      expected = signed
+    let result: Result<ProgramsLinked, FolderRefusal>
+    if legacy {
+      result = PluginPrograms.keepLegacy(plugin: name, programs: programs, places: places)
+    } else {
+      let adoption = registry.adoption(for: name, programs: programs.map(\.name), builtIn: builtIn)
+      result = PluginPrograms.install(
+        plugin: name, from: folder, approved: approved, version: spec["version"] as? String, programs: programs, places: places,
+        expectedDigest: copy?.payloadDigest, adoption: adoption)
     }
-    let adopt = builtIn && spec["adopt"] as? Bool == true
-    let result = PluginPrograms.install(
-      plugin: name, from: folder, approved: approved, version: spec["version"] as? String, programs: programs, places: places, expectedDigest: expected,
-      adopt: adopt)
+    let clean: Bool
+    switch result {
+    case .failure: clean = false
+    case .success(let linked): clean = linked.refused.isEmpty
+    }
+    var check = CurrentCheck.trusted
+    if !clean, let copy {
+      let source = TrustedProgramCopy(version: spec["version"] as? String, approved: approved, digest: copy.payloadDigest)
+      check = PluginPrograms.dropCurrentUnlessTrusted(plugin: name, programs: programs, places: places, trusted: [source])
+      if check == .stuck { return ["ok": false, "reason": "its programs on PATH don't match the copy Ardia checked, and couldn't be taken off PATH"] }
+    }
     switch result {
     case .failure(let refusal):
       return ["ok": false, "reason": refusal.reason]
     case .success(let linked):
       if !linked.linked.isEmpty { addToLoginPath(places) }
-      if !afterUpdate.isEmpty, PluginPrograms.needsAfterUpdate(plugin: name, version: linked.version, places: places) {
-        runAfterUpdate(name, version: linked.version, commands: afterUpdate, places: places, generation: generation)
+      if !afterUpdate.isEmpty, PluginPrograms.shouldRunAfterUpdate(linked, plugin: name, places: places) {
+        runAfterUpdate(name, version: linked.version, commands: afterUpdate, programs: programs, places: places, generation: generation, digest: copy?.payloadDigest)
       }
-      return ["ok": true, "linked": linked.linked, "refused": linked.refused, "binDir": places.binDir, "adopted": linked.adopted]
+      var reply: [String: Any] = ["ok": true, "linked": linked.linked, "refused": linked.refused, "binDir": places.binDir, "adopted": linked.adopted, "adoptBusy": linked.adoptBusy, "adoption": linked.adoption.rawValue]
+      if let kept = linked.kept, check == .trusted { reply["kept"] = kept }
+      return reply
     }
   }
 
-  private static let runningLock = NSLock()
-  private static var runningGroups: Set<pid_t> = []
+  private static let runs = AfterUpdateRuns.shared
+  private static let quitStopsFile = "after-update-quit-stops.json"
   private static var quitObserver: NSObjectProtocol?
+  private static var quitCancelObserver: NSObjectProtocol?
+  private static let quitObserverLock = NSLock()
+  private static let quitStopsLock = NSLock()
+  private static let quitStopsConsentLock = NSLock()
+  private static var quitStopsConsent = ""
 
-  private static func runAfterUpdate(_ name: String, version: String, commands: [(String, [[String]])], places: ProgramPlaces, generation: Int) {
-    let folder = (places.pluginStore(name) as NSString).appendingPathComponent(version)
-    let environment = childEnvironment(places)
+  static var afterUpdatesRunning: Bool { !runs.running.isEmpty }
+
+  private static let quitStopsQueue = DispatchQueue(label: "ardia.plugin-programs.quit-stops", qos: .userInitiated)
+  private static let quitStopsWriteLimit: TimeInterval = 0.25
+  private static let quitHoldLimit = AfterUpdateRuns.quitGrace + AfterUpdateRuns.quitReapLimit + quitStopsWriteLimit + 0.75
+  static let quitCancelledNotification = Notification.Name("ArdiaHostQuitCancelled")
+
+  static func holdAfterUpdates() {
     watchQuit()
+    runs.beginQuit()
+  }
+
+  static func resumeAfterUpdates() { runs.resume() }
+
+  static func stopAfterUpdates(done: @escaping () -> Void) {
+    var answered = false
+    let answer = {
+      guard !answered else { return }
+      answered = true
+      done()
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + quitHoldLimit, execute: answer)
+    runs.stopForQuit(limit: quitHoldLimit) { stops in
+      recordWithinLimit(stops)
+      DispatchQueue.main.async(execute: answer)
+    }
+  }
+
+  private static func finishAfterUpdates() {
+    guard let stops = runs.finishQuit() else { return }
+    recordWithinLimit(stops)
+  }
+
+  private static func recordWithinLimit(_ stops: AfterUpdateQuitStops) {
+    guard !stops.isEmpty else { return }
+    let consent = currentQuitStopsConsent()
+    let written = DispatchSemaphore(value: 0)
+    quitStopsQueue.async {
+      recordQuitStops(stops, consent: consent)
+      written.signal()
+    }
+    _ = written.wait(timeout: .now() + quitStopsWriteLimit)
+  }
+
+  private static func runAfterUpdate(
+    _ name: String, version: String, commands: [(String, [[String]])], programs: [PluginProgram], places: ProgramPlaces, generation: Int, digest: String?
+  ) {
+    let steps = commands.flatMap { program, runList in runList.map { (program, $0) } }
+    watchQuit()
+    runAfterUpdateSteps(name, version: version, steps: steps, from: 0, succeeded: true, programs: programs, places: places, generation: generation, digest: digest)
+  }
+
+  private static func runAfterUpdateSteps(
+    _ name: String, version: String, steps: [(String, [String])], from first: Int, succeeded earlier: Bool, programs: [PluginProgram], places: ProgramPlaces,
+    generation: Int, digest: String?
+  ) {
     afterUpdateQueue.async {
+      let retry = { (step: Int, succeeded: Bool) in
+        runs.whenOpen {
+          runAfterUpdateSteps(name, version: version, steps: steps, from: step, succeeded: succeeded, programs: programs, places: places, generation: generation, digest: digest)
+        }
+      }
+      guard !runs.isQuitting else { return retry(first, earlier) }
       guard PluginPrograms.claimAfterUpdate(plugin: name, version: version, places: places) else { return }
       defer { PluginPrograms.releaseAfterUpdate(plugin: name, version: version, places: places) }
       let leased = PluginPrograms.lease(plugin: name, version: version, places: places)
       defer { if let leased { Darwin.unlink(leased) } }
-      var succeeded = true
-      for (program, runs) in commands {
-        for arguments in runs {
-          guard isCurrent(name, generation) else { return }
-          let started = PluginPrograms.whileCurrent(plugin: name, version: version, places: places) {
-            spawnGroup((folder as NSString).appendingPathComponent(program), arguments, environment: environment)
+      let folder = (places.pluginStore(name) as NSString).appendingPathComponent(version)
+      let environment = childEnvironment(places)
+      var succeeded = earlier
+      for step in steps.indices where step >= first {
+        let (program, arguments) = steps[step]
+        guard isCurrent(name, generation) else { return }
+        var damaged = false
+        let started = PluginPrograms.whileCurrent(plugin: name, version: version, places: places) { () -> AfterUpdateSpawn in
+          if let digest, !PluginPrograms.isSealed(folder, keepingRootWritable: true) || PluginPrograms.payloadDigest(folder, keepingCaches: true) != digest {
+            damaged = true
+            return .failed
           }
-          guard let started else { return }
-          guard let group = started else {
-            succeeded = false
-            continue
-          }
-          if wait(group: group) != 0 { succeeded = false }
+          return runs.spawn((folder as NSString).appendingPathComponent(program), arguments, environment: environment)
+        }
+        if damaged {
+          _ = PluginPrograms.dropCurrentUnlessTrusted(plugin: name, programs: programs, places: places, trusted: [], onlyVersion: version)
+          return
+        }
+        switch started {
+        case nil: return
+        case .quitting?: return retry(step, succeeded)
+        case .failed?: succeeded = false
+        case .started(let group)?:
+          let code = runs.wait(group: group, deadline: afterUpdateDeadline, grace: afterUpdateGrace)
+          if code == AfterUpdateRuns.interrupted { return retry(step, succeeded) }
+          if code != 0 { succeeded = false }
         }
       }
       if succeeded, isCurrent(name, generation) { PluginPrograms.markAfterUpdate(plugin: name, version: version, places: places) }
     }
   }
 
-  private static func spawnGroup(_ program: String, _ arguments: [String], environment: [String: String]) -> pid_t? {
-    var attributes: posix_spawnattr_t?
-    var actions: posix_spawn_file_actions_t?
-    guard posix_spawnattr_init(&attributes) == 0 else { return nil }
-    defer { posix_spawnattr_destroy(&attributes) }
-    guard posix_spawn_file_actions_init(&actions) == 0 else { return nil }
-    defer { posix_spawn_file_actions_destroy(&actions) }
-    guard posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_CLOEXEC_DEFAULT)) == 0, posix_spawnattr_setpgroup(&attributes, 0) == 0 else { return nil }
-    for fd: Int32 in [0, 1, 2] {
-      guard posix_spawn_file_actions_addopen(&actions, fd, "/dev/null", fd == 0 ? O_RDONLY : O_WRONLY, 0) == 0 else { return nil }
-    }
-    guard posix_spawn_file_actions_addchdir_np(&actions, NSTemporaryDirectory()) == 0 else { return nil }
-    let argv = ([program] + arguments).map { strdup($0) } + [nil]
-    let envp = environment.map { strdup("\($0.key)=\($0.value)") } + [nil]
-    defer { (argv + envp).forEach { free($0) } }
-    var pid: pid_t = 0
-    guard posix_spawn(&pid, program, &actions, &attributes, argv, envp) == 0 else { return nil }
-    runningLock.lock()
-    runningGroups.insert(pid)
-    runningLock.unlock()
-    return pid
-  }
-
-  private static func wait(group: pid_t) -> Int32 {
-    let deadline = Date().addingTimeInterval(afterUpdateDeadline)
-    var exited = false
-    while Date() < deadline {
-      var info = siginfo_t()
-      if waitid(P_PID, id_t(group), &info, WEXITED | WNOHANG | WNOWAIT) == 0, info.si_pid == group {
-        exited = true
-        break
-      }
-      usleep(100_000)
-    }
-    kill(-group, SIGTERM)
-    if !exited {
-      usleep(3_000_000)
-      kill(-group, SIGKILL)
-    }
-    var status: Int32 = 0
-    while waitpid(group, &status, 0) < 0 && errno == EINTR {}
-    runningLock.lock()
-    runningGroups.remove(group)
-    runningLock.unlock()
-    return exited && (status & 0x7f) == 0 ? (status >> 8) & 0xff : -1
-  }
-
   private static func watchQuit() {
-    runningLock.lock()
-    defer { runningLock.unlock() }
+    quitObserverLock.lock()
+    defer { quitObserverLock.unlock() }
     guard quitObserver == nil else { return }
     quitObserver = NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: nil) { _ in
-      runningLock.lock()
-      let groups = runningGroups
-      runningLock.unlock()
-      for group in groups { kill(-group, SIGKILL) }
+      finishAfterUpdates()
+    }
+    quitCancelObserver = NotificationCenter.default.addObserver(forName: quitCancelledNotification, object: nil, queue: nil) { _ in
+      runs.resume()
+    }
+  }
+
+  static func setQuitStopsConsent(_ consent: String) {
+    quitStopsConsentLock.lock()
+    quitStopsConsent = consent
+    quitStopsConsentLock.unlock()
+  }
+
+  private static func currentQuitStopsConsent() -> String {
+    quitStopsConsentLock.lock()
+    defer { quitStopsConsentLock.unlock() }
+    return quitStopsConsent
+  }
+
+  private static func recordQuitStops(_ stops: AfterUpdateQuitStops, consent: String) {
+    quitStopsLock.lock()
+    defer { quitStopsLock.unlock() }
+    guard !consent.isEmpty, consent == currentQuitStopsConsent(), let url = try? DocumentStore.url(quitStopsFile) else { return }
+    let saved = readQuitStops(url)
+    let total = (saved.consent == consent ? saved.stops : AfterUpdateQuitStops()) + stops
+    let doc: [String: Any] = ["consent": consent, "exitedOnTerm": total.exitedOnTerm, "killed": total.killed]
+    guard let data = try? JSONSerialization.data(withJSONObject: doc) else { return }
+    try? data.write(to: url, options: .atomic)
+  }
+
+  private static func readQuitStops(_ url: URL) -> (consent: String, stops: AfterUpdateQuitStops) {
+    guard let data = try? Data(contentsOf: url), let saved = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any], let consent = saved["consent"] as? String else {
+      return ("", AfterUpdateQuitStops())
+    }
+    return (consent, AfterUpdateQuitStops(exitedOnTerm: max(0, saved["exitedOnTerm"] as? Int ?? 0), killed: max(0, saved["killed"] as? Int ?? 0)))
+  }
+
+  static func takeQuitStops(done: @escaping ([String: Any]) -> Void) {
+    queue.async {
+      guard let url = try? DocumentStore.url(quitStopsFile) else { return done(["consent": "", "exitedOnTerm": 0, "killed": 0]) }
+      quitStopsLock.lock()
+      let saved = readQuitStops(url)
+      try? FileManager.default.removeItem(at: url)
+      quitStopsLock.unlock()
+      done(["consent": saved.consent, "exitedOnTerm": saved.stops.exitedOnTerm, "killed": saved.stops.killed])
     }
   }
 
@@ -216,7 +315,7 @@ enum PluginProgramLinks {
     try? FileManager.default.createDirectory(atPath: home, withIntermediateDirectories: true)
     environment["HOME"] = home
     if let data = LaunchConfig.shared.dataDirectory { environment["ARDIA_DATA_DIR"] = data }
-    if let legacy = places.legacy { environment["ARDIA_CLI_HOME"] = legacy }
+    if let legacy = LaunchConfig.shared.instance(PluginFolders.isolatedLegacyKey) { environment["ARDIA_CLI_HOME"] = legacy }
     return environment
   }
 

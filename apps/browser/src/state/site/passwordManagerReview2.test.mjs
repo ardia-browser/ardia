@@ -93,7 +93,7 @@ test("a4: rejections back off from one second", async () => {
   assert.deepEqual(nativeProfiles(), ["", work].sort());
 });
 
-test("b: plugin → Ardia → plugin whose compensating record write fails keeps the record owed, so Ardia still gives saving back", async () => {
+test("b: plugin → Ardia → plugin whose record write fails leaves saving on until its record lands, and Ardia finds it on", async () => {
   assert.equal(offerToSave(""), false);
   stub.heldSaves.on = true;
   pm.choosePasswordManager("default", "ardia");
@@ -106,7 +106,8 @@ test("b: plugin → Ardia → plugin whose compensating record write fails keeps
   await settle();
   await settle();
   stub.refusedSaves.on = false;
-  assert.equal(offerToSave(""), false);
+  assert.equal(offerToSave(""), true, "the plugin's Off waits for its own record");
+  assert.ok(JSON.parse(stub.docs.get("password-manager.json")).offerToSaveHeldOff.includes(""), "the record still holds the profile, so a restart can still give saving back");
   pm.choosePasswordManager("default", "ardia");
   await settle();
   await settle();

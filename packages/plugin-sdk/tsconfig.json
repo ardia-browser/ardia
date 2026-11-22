@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "@ardia/plugin-sdk",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": [],
+    "paths": {
+      "@ardia/plugin-sdk": ["./src/index.ts"],
+      "@ardia/plugin-sdk/jsx-runtime": ["./src/jsxRuntime.ts"],
+      "@ardia/plugin-sdk/jsx-dev-runtime": ["./src/jsxRuntime.ts"],
+      "@ardia/plugin-sdk/protocol": ["./src/protocol.ts"]
+    }
+  },
+  "include": ["src"]
+}

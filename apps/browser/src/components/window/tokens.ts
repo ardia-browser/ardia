@@ -1,6 +1,6 @@
 import { Easing } from "react-native";
 import { curve, duration } from "../ui/motion";
-import { font, ink, monoFace, radius, shadow, type ShadowLevel } from "../ui/tokens";
+import { font, ink, monoFace, shadow, type ShadowLevel } from "../ui/tokens";
 
 const DARK = {
   statusFill: "rgba(40,38,39,0.96)",
@@ -54,7 +54,7 @@ export const STATUS_MOTION = {
 
 export const STATUS_FLIP_BAND = 48;
 
-export const CLI_PILL_MOTION = {
+export const CONTROL_PILL_MOTION = {
   show: { duration: duration.base, easing: curve.enter },
   hide: { duration: duration.base, easing: curve.exit },
 } as const;
@@ -96,7 +96,6 @@ export const ARC_PEEK_SPRING = { response: 0.18, damping: 0.8 } as const;
 export const ARC_PEEK_OUT_MS = 150;
 export const ARC_HIDE_MS = duration.fast;
 
-export const peekRadius = () => radius.panel;
 
 export const WINDOW_BUTTONS = {
   closeHover: "#C42B1C",

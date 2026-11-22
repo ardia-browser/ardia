@@ -16,6 +16,9 @@ export {
   type PictureInPictureDrag,
   type PictureInPictureResize,
   type PictureInPictureSkip,
+  type PictureInPictureStandIn,
+  type PictureInPictureActivation,
+  type PictureInPictureUnstash,
 } from "@ardia/ardiacore";
 
 export const getDisplayMediaSources = () => call("media.displayMediaSources");

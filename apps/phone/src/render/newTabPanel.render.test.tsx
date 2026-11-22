@@ -3,9 +3,12 @@ import { State } from "react-native-gesture-handler";
 import { fireGestureHandler, getByGestureTestId } from "react-native-gesture-handler/jest-utils";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { sheetPullTranslation } from "../components/ui/Sheet";
-import { browseLayout, floatingPanelLayout, space, Symbol } from "../components/ui";
+import { Symbol } from "../components/ui";
+import { IncognitoEyes } from "../components/ui/IncognitoEyes";
 import { act, type ReactTestInstance } from "react-test-renderer";
-import { newTabPanelShown, NEW_TAB_FIELD, SearchTray } from "../components/search/SearchTray";
+import { searchPanelShown, SearchTray } from "../components/search/SearchTray";
+import { searchPanel } from "../components/search/searchPanelTokens";
+import * as tabMenus from "../state/browse/tabMenus";
 import { DesignProvider } from "../components/ui";
 import * as browse from "../state/browse/store";
 import { history } from "../state/history/store";
@@ -39,7 +42,6 @@ jest.mock("@ardia/phone-native", () => {
 
 const onIPhone = Platform.OS === "ios" ? test : test.skip;
 const onAndroid = Platform.OS === "android" ? test : test.skip;
-const PAGE_TRAY = 274;
 let revision = 9000;
 
 beforeEach(() => {
@@ -70,80 +72,127 @@ const tray = () => renderSurface(<DesignProvider design="redesigned"><SearchTray
 const lift = (to: number) => act(() => (mockSeen.props!.onLift as (lift: { lift: number; up: boolean }) => void)({ lift: to, up: true }));
 const editPage = () => act(() => presentSearch("page", "site0.example", null, { currentUrl: "https://site0.example/", currentTabId: currentTabs().open[0]!.id }));
 
-onIPhone("on a new tab the search panel runs from under the status bar down to the keyboard, while editing a page's address keeps today's panel", () => {
+const rowsMeasure = (root: Root, height: number) => act(() => root.root.findAll((node) => node.props.testID === "searchPanelRowsScroll" && typeof node.props.onContentSizeChange === "function")[0]!.props.onContentSizeChange(0, height));
+const PANEL_HEIGHT = searchPanel.fieldTop + searchPanel.fieldHeight + searchPanel.rowsTop + searchPanel.rowsShown * searchPanel.rowPitch + searchPanel.bottom;
+
+onIPhone("the search panel has one fixed height, the field and four rows as in Arc, whatever the rows measure, from a new tab and when editing a page", () => {
   act(() => presentSearch("start", ""));
   const root = tray();
+  act(() => typeSearch("site"));
+  act(() => jest.advanceTimersByTime(50));
   lift(300);
-  const panel = flat(host(root, "traySurface")).height as number;
-  expect(panel).toBeGreaterThan(PAGE_TRAY);
+  rowsMeasure(root, 120);
+  expect(flat(host(root, "traySurface")).height).toBe(PANEL_HEIGHT + 300);
+  rowsMeasure(root, 2000);
+  expect(flat(host(root, "traySurface")).height).toBe(PANEL_HEIGHT + 300);
   unmount(root);
   act(() => dismissSearch());
   editPage();
   const edit = tray();
   lift(300);
-  expect(flat(host(edit, "traySurface")).height).toBe(PAGE_TRAY);
+  expect(flat(host(edit, "traySurface")).height).toBe(PANEL_HEIGHT + 300);
+  expect(PANEL_HEIGHT).toBe(276);
   unmount(edit);
 });
 
-onIPhone("the new-tab panel's field is the standard Search field with the mic and Incognito's specs inside it, and Incognito is clickable there", () => {
+onIPhone("editing a page opens the panel with an empty field, and the page is the first row: tapping it puts its address in the field, its copy button copies the link", () => {
+  editPage();
+  const root = tray();
+  expect(searchState().text).toBe("");
+  expect(host(root, "trayCurrentPage")).toBeDefined();
+  const copy = jest.spyOn(tabMenus, "copyLink").mockImplementation(() => undefined);
+  act(() => root.root.findAll((node) => node.props.testID === "trayCurrentPageCopy" && typeof node.props.onPress === "function")[0]!.props.onPress());
+  const { open, selectedId } = useTabs.getState();
+  expect(copy).toHaveBeenCalledWith(open.find((tab) => tab.id === selectedId)!.url);
+  act(() => root.root.findAll((node) => node.props.testID === "trayCurrentPage" && typeof node.props.onPress === "function")[0]!.props.onPress());
+  expect(searchState().text).toBe("site0.example");
+  expect(host(root, "trayCurrentPage")).toBeUndefined();
+  unmount(root);
+});
+
+onIPhone("a page that redirects while the panel is open keeps the page row on the address it opened with: its title, the copied link and the address it puts in the field", () => {
+  editPage();
+  const root = tray();
+  const { open, selectedId } = useTabs.getState();
+  const before = open.find((tab) => tab.id === selectedId)!;
+  act(() => useTabs.setState({ open: open.map((tab) => (tab.id === selectedId ? { ...tab, url: "https://moved.example/b", title: "Moved Page" } : tab)) }));
+  expect(root.root.findAll((node) => node.props.children === "Moved Page")).toHaveLength(0);
+  const copy = jest.spyOn(tabMenus, "copyLink").mockImplementation(() => undefined);
+  act(() => root.root.findAll((node) => node.props.testID === "trayCurrentPageCopy" && typeof node.props.onPress === "function")[0]!.props.onPress());
+  expect(copy).toHaveBeenCalledWith(before.url);
+  act(() => root.root.findAll((node) => node.props.testID === "trayCurrentPage" && typeof node.props.onPress === "function")[0]!.props.onPress());
+  expect(searchState().text).toBe("site0.example");
+  unmount(root);
+});
+
+onIPhone("the page row keeps the address it opened with when typing hides it, the page redirects, and the field is cleared", () => {
+  editPage();
+  const root = tray();
+  const { open, selectedId } = useTabs.getState();
+  const before = open.find((tab) => tab.id === selectedId)!;
+  act(() => typeSearch("abc"));
+  act(() => jest.runOnlyPendingTimers());
+  expect(host(root, "trayCurrentPage")).toBeUndefined();
+  act(() => useTabs.setState({ open: open.map((tab) => (tab.id === selectedId ? { ...tab, url: "https://moved.example/b", title: "Moved Page" } : tab)) }));
+  act(() => typeSearch(""));
+  act(() => jest.runOnlyPendingTimers());
+  expect(host(root, "trayCurrentPage")).toBeDefined();
+  expect(root.root.findAll((node) => node.props.children === "Moved Page")).toHaveLength(0);
+  const copy = jest.spyOn(tabMenus, "copyLink").mockImplementation(() => undefined);
+  act(() => root.root.findAll((node) => node.props.testID === "trayCurrentPageCopy" && typeof node.props.onPress === "function")[0]!.props.onPress());
+  expect(copy).toHaveBeenCalledWith(before.url);
+  unmount(root);
+});
+
+onIPhone("the panel's field is a 44 point pill with the mic and Incognito's eyes inside it, and in Incognito it reads Incognito beside the eyes", () => {
   act(() => presentSearch("start", ""));
   const root = tray();
   const capsule = host(root, "trayFieldCapsule")!;
-  expect(flat(host(root, "completingField")).minHeight).toBe(browseLayout.searchFieldHeight - floatingPanelLayout.fieldEdge * 2);
+  expect(flat(capsule)).toMatchObject({ minHeight: searchPanel.fieldHeight, borderRadius: searchPanel.fieldHeight / 2 });
   expect(flat(host(root, "completingField")).fontSize).toBeUndefined();
   expect(capsule.findAll((node) => node.props.accessibilityLabel === "Activate Incognito")).not.toHaveLength(0);
-  expect(capsule.findAll((node) => node.type === Symbol && node.props.name === "eyeglassesThin")).toHaveLength(1);
-  expect(host(root, "trayIncognitoPlate")).toBeUndefined();
+  expect(capsule.findAll((node) => node.type === IncognitoEyes)).toHaveLength(1);
+  expect(capsule.findAll((node) => node.type === Symbol && node.props.name === "eyes")).toHaveLength(0);
+  expect(host(root, "trayIncognitoLabel")).toBeUndefined();
   act(() => root.root.findAll((node) => node.props.testID === "trayIncognito" && typeof node.props.onPress === "function")[0]!.props.onPress());
   expect(useTabs.getState().incognito).toBe(true);
   const incognitoCapsule = host(root, "trayFieldCapsule")!;
   expect(incognitoCapsule.findAll((node) => node.props.accessibilityLabel === "Deactivate Incognito")).not.toHaveLength(0);
-  const plate = flat(host(root, "trayIncognitoPlate"));
-  expect(plate.borderRadius).toBe((plate.width as number) / 2);
-  expect(incognitoCapsule.findAll((node) => node.children.includes("Incognito"))).toHaveLength(0);
+  expect(incognitoCapsule.findAll((node) => node.type === IncognitoEyes && node.props.incognito === true)).toHaveLength(1);
+  expect(host(root, "trayIncognitoPlate")).toBeUndefined();
+  expect(root.root.findAll((node) => node.props.testID === "trayIncognitoLabel" && node.props.children === "Incognito").length).toBeGreaterThan(0);
+  expect(root.root.findAll((node) => node.props.children === "You\u2019re browsing Incognito").length).toBeGreaterThan(0);
+  expect(host(root, "searchPanelRowsScroll")).toBeUndefined();
   unmount(root);
 });
 
-onIPhone("the new-tab panel runs on under the keyboard to the screen's bottom, its rows ending above the keyboard, and its corners are concentric with the field's", () => {
+onIPhone("the panel runs edge to edge and on under the keyboard to the screen's bottom, its rows ending above the keyboard, with only its top corners rounded", () => {
   act(() => presentSearch("start", ""));
   const root = tray();
   lift(300);
-  const visible = flat(host(root, "trayRowsReveal"));
   expect(flat(host(root, "trayPanel")).bottom).toBe(-300);
-  expect(visible.paddingBottom).toBe(300);
-  const surface = flat(host(root, "traySurface")).height as number;
+  expect(flat(host(root, "trayRowsReveal")).paddingBottom).toBe(300);
+  expect(flat(host(root, "traySurface"))).toMatchObject({ borderTopLeftRadius: searchPanel.radius, borderTopRightRadius: searchPanel.radius });
+  expect(flat(host(root, "traySurface")).borderBottomLeftRadius).toBeUndefined();
+  expect(mockSeen.props).toMatchObject({ cardInset: 0, cardGap: 0, fieldInset: searchPanel.fieldSide, fieldTop: searchPanel.fieldTop, morphCorners: { panel: searchPanel.radius } });
   unmount(root);
   act(() => dismissSearch());
   editPage();
   const edit = tray();
   lift(300);
-  expect(flat(host(edit, "trayPanel")).bottom).toBe(-0);
-  expect(flat(host(edit, "trayRowsReveal")).paddingBottom).toBe(0);
-  expect(surface).toBeGreaterThan(flat(host(edit, "traySurface")).height as number);
-  expect(floatingPanelLayout.radius).toBe(floatingPanelLayout.fieldInset + browseLayout.searchFieldHeight / 2);
+  expect(flat(host(edit, "trayPanel")).bottom).toBe(-300);
   unmount(edit);
 });
 
-onIPhone("more suggestions than fit scroll inside the panel under a field that stays put, and dragging the list keeps the keyboard, as today's tray does", () => {
+onIPhone("more suggestions than fit scroll inside the panel under a field that stays put, and dragging the list keeps the keyboard", () => {
   act(() => presentSearch("start", ""));
   const root = tray();
   act(() => typeSearch("site"));
   act(() => jest.advanceTimersByTime(50));
-  const list = root.root.findAll((node) => node.type === ScrollView && node.props.testID === "newTabRowsScroll")[0]!;
+  const list = root.root.findAll((node) => node.type === ScrollView && node.props.testID === "searchPanelRowsScroll")[0]!;
   expect(list.props.keyboardDismissMode).toBe("none");
   expect(host(root, "trayRows")).toBeUndefined();
   expect(searchState().rows.length).toBeGreaterThan(3);
-  unmount(root);
-});
-
-onIPhone("editing a page's address keeps today's field, with Incognito inside it, and today's rows", () => {
-  editPage();
-  const root = tray();
-  expect(host(root, "newTabFieldRow")).toBeUndefined();
-  expect(host(root, "trayFieldCapsule")!.findAll((node) => node.props.accessibilityLabel === "Activate Incognito").length).toBeGreaterThan(0);
-  act(() => typeSearch("site"));
-  act(() => jest.advanceTimersByTime(50));
-  expect(host(root, "newTabRowsScroll")).toBeUndefined();
   unmount(root);
 });
 
@@ -161,17 +210,17 @@ onIPhone("the new-tab panel opening counts new_tab_search_opened, except in Inco
   unmount(edit);
 });
 
-test("the panel shows on a phone for a search that isn't editing a page, and never beside a command bar", () => {
-  expect(newTabPanelShown(false, true, false)).toBe(true);
-  expect(newTabPanelShown(true, true, false)).toBe(false);
-  expect(newTabPanelShown(false, false, false)).toBe(false);
-  expect(newTabPanelShown(false, true, true)).toBe(false);
+test("the panel shows on a phone, never beside a command bar", () => {
+  expect(searchPanelShown(true, false)).toBe(true);
+  expect(searchPanelShown(false, false)).toBe(false);
+  expect(searchPanelShown(true, true)).toBe(false);
 });
 
-onAndroid("Android's search keeps its own tray: no new-tab panel", () => {
+onAndroid("Android's search draws the same panel, edge to edge with its field on top", () => {
   act(() => presentSearch("start", ""));
   const root = tray();
-  expect(host(root, "newTabFieldRow")).toBeUndefined();
+  expect(host(root, "searchPanelFieldRow")).toBeDefined();
+  expect(flat(host(root, "trayPanel"))).toMatchObject({ borderTopLeftRadius: searchPanel.radius });
   expect(host(root, "traySurface")).toBeUndefined();
   unmount(root);
 });
@@ -198,16 +247,17 @@ const pull = (id: string, translationY: number) => {
 };
 const closeSearchDim = (root: Root) => root.root.findAll((node) => node.props.accessibilityLabel === "Close Search" && typeof node.props.onPress === "function")[0]!;
 
-onIPhone("the panel's top sits 28 points under the status bar, as in Arc Search's, whether the keyboard is up or down", () => {
+onIPhone("on a short screen the panel's top still stops 28 points under the status bar, whether the keyboard is up or down", () => {
   act(() => presentSearch("start", ""));
   const root = trayWithInsets();
   const window = Dimensions.get("window").height;
-  const gap = space.s + floatingPanelLayout.aboveKeyboard;
+  const gap = 0;
   const aboveKeyboard = () => (flat(host(root, "traySurface")).height as number) + (flat(host(root, "trayPanel")).bottom as number);
-  lift(300);
-  expect(window - 300 - gap - aboveKeyboard()).toBe(seenTop + 28);
-  act(() => (mockSeen.props!.onLift as (lift: { lift: number; up: boolean }) => void)({ lift: 0, up: false }));
-  expect(window - seenBottom - gap - aboveKeyboard()).toBe(seenTop + 28);
+  act(() => typeSearch("site"));
+  act(() => jest.advanceTimersByTime(50));
+  lift(window - seenTop - 28 - gap - 200);
+  rowsMeasure(root, 2000);
+  expect(window - (window - seenTop - 28 - gap - 200) - gap - aboveKeyboard()).toBe(seenTop + 28);
   unmount(root);
 });
 

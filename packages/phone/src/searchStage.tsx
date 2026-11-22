@@ -4,7 +4,9 @@ import { Platform, View, type ColorValue, type NativeSyntheticEvent, type ViewPr
 
 export type SearchStageExit = "morph" | "depart" | "drop";
 
-export type SearchStageMorphLook = { usesGlass: boolean; panelTint: ColorValue; panelDark: boolean; classicPanel: ColorValue };
+export type SearchStageMorphLook = { usesGlass: boolean; panelTint: ColorValue; panelDark: boolean; classicPanel: ColorValue; frosted?: boolean };
+
+export type SearchStageCorners = { anchor?: number; panel: number; field?: number };
 
 export type SearchStageHandle = {
   present(): Promise<void>;
@@ -27,6 +29,11 @@ export type SearchStageProps = ViewProps & {
   commandTop?: number | null;
   landsDirectly?: boolean;
   morphLook?: SearchStageMorphLook;
+  morphCorners?: SearchStageCorners;
+  cardInset?: number;
+  cardGap?: number;
+  fieldInset?: number;
+  fieldTop?: number;
   onLift?: (lift: SearchStageLift) => void;
   onReveal?: (reveal: { late: boolean }) => void;
   onSettled?: (settled: { landed: boolean }) => void;
@@ -35,7 +42,7 @@ export type SearchStageProps = ViewProps & {
 
 type NativeHandle = { present(): Promise<void>; holdLift(): Promise<void>; releaseLift(): Promise<void>; close(exit: string, velocity: number): Promise<void>; finish(): Promise<void> };
 
-type NativeProps = Omit<SearchStageProps, "onLift" | "onReveal" | "onSettled" | "morphLook" | "anchorNativeId" | "faceNativeId" | "focusNativeId" | "revealNativeId" | "rowsRevealNativeId" | "commandTop"> & {
+type NativeProps = Omit<SearchStageProps, "onLift" | "onReveal" | "onSettled" | "morphLook" | "morphCorners" | "anchorNativeId" | "faceNativeId" | "focusNativeId" | "revealNativeId" | "rowsRevealNativeId" | "commandTop"> & {
   ref?: Ref<NativeHandle>;
   anchorNativeId?: string;
   faceNativeId?: string;
@@ -45,8 +52,12 @@ type NativeProps = Omit<SearchStageProps, "onLift" | "onReveal" | "onSettled" | 
   commandTop?: number;
   morphUsesGlass?: boolean;
   morphPanelTint?: ColorValue;
+  morphFrosted?: boolean;
   morphPanelDark?: boolean;
   morphClassicPanel?: ColorValue;
+  anchorRadius?: number;
+  panelRadius?: number;
+  fieldRadius?: number;
   onLift?: (event: NativeSyntheticEvent<SearchStageLift>) => void;
   onReveal?: (event: NativeSyntheticEvent<{ late: boolean }>) => void;
   onSettled?: (event: NativeSyntheticEvent<{ landed: boolean }>) => void;
@@ -76,7 +87,7 @@ export const SearchStage = forwardRef<SearchStageHandle, SearchStageProps>(funct
     }),
     [],
   );
-  const { onLift, onReveal, onSettled, morphLook, anchorNativeId, faceNativeId, focusNativeId, revealNativeId, rowsRevealNativeId, commandTop, ...rest } = props;
+  const { onLift, onReveal, onSettled, morphLook, morphCorners, anchorNativeId, faceNativeId, focusNativeId, revealNativeId, rowsRevealNativeId, commandTop, ...rest } = props;
   if (!hasNative) return createElement(View, { ...rest, pointerEvents: props.shown ? "box-none" : "none" });
   return createElement(stage(), {
     ...rest,
@@ -89,8 +100,12 @@ export const SearchStage = forwardRef<SearchStageHandle, SearchStageProps>(funct
     commandTop: commandTop ?? undefined,
     morphUsesGlass: morphLook?.usesGlass,
     morphPanelTint: morphLook?.panelTint,
+    morphFrosted: morphLook?.frosted,
     morphPanelDark: morphLook?.panelDark,
     morphClassicPanel: morphLook?.classicPanel,
+    anchorRadius: morphCorners?.anchor,
+    panelRadius: morphCorners?.panel,
+    fieldRadius: morphCorners?.field,
     onLift: onLift ? (event: NativeSyntheticEvent<SearchStageLift>) => onLift(event.nativeEvent) : undefined,
     onReveal: onReveal ? (event: NativeSyntheticEvent<{ late: boolean }>) => onReveal(event.nativeEvent) : undefined,
     onSettled: onSettled ? (event: NativeSyntheticEvent<{ landed: boolean }>) => onSettled(event.nativeEvent) : undefined,

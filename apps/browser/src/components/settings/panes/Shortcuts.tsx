@@ -1,4 +1,5 @@
-import { cancelShortcutRecording, recordShortcut, type MenuShortcut, resolvedShortcuts, useMenuBarRevision } from "../../../state/commands/commandShortcuts";
+import { cancelShortcutRecording, recordShortcut, type MenuShortcut, resolvedShortcuts, useCtrlTabChoice, useMenuBarRevision } from "../../../state/commands/commandShortcuts";
+import type { CtrlTabChoice } from "../../../state/commands/ctrlTabKeys";
 import { Box, Button, EmptyState, KeyCap, PopUp, SearchField, space, Symbol, Text, Toggle, useHover, type Option } from "../../ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
@@ -17,7 +18,7 @@ import { comboKey, formatShortcut, isMouseShortcut, sameShortcut, type Shortcut 
 import { splitLinkModifierOf, type PeekModifier, type SplitLinkModifier } from "../../../state/settings/settings";
 import { keyText } from "../../../state/commands/keyText";
 import type { SettingsPlace } from "../../../state/settings/settingsWindows";
-import { keySearchConsent, noteShortcutsKeySearch, setShortcutsQuery, useSettingsSearch } from "../../../state/settings/searchState";
+import { jumpToSetting, keySearchConsent, noteShortcutsKeySearch, setShortcutsQuery, useSettingsSearch } from "../../../state/settings/searchState";
 import { bindsCombo, parseCombo } from "../../../state/commands/comboQuery";
 
 type Filter = "all" | "customized" | "conflicts";
@@ -164,6 +165,7 @@ function KeyboardSection() {
       <SectionHeader title="Keyboard" />
       <Box gap="xl">
         <Group>
+          <CtrlTabRow />
           <SettingToggle anchor="shortcuts.undoReopensClosedTab" />
         </Group>
         <Anchor id="shortcuts.menuCommands" shape="row" style={TOOLBAR}>
@@ -198,6 +200,21 @@ function KeyboardSection() {
         </Group>
       </View>
     </>
+  );
+}
+
+const CTRL_TAB_NOW: Record<CtrlTabChoice, string> = {
+  step: "Steps through your tabs in order.",
+  switcher: "Opens the recent tabs switcher.",
+  custom: "Set to your own shortcuts below.",
+};
+
+function CtrlTabRow() {
+  const choice = useCtrlTabChoice();
+  return (
+    <Row title={setting("appearance.ctrlTab").title} description={CTRL_TAB_NOW[choice]}>
+      <Button title="Choose…" onPress={() => jumpToSetting(setting("appearance.ctrlTab"))} />
+    </Row>
   );
 }
 

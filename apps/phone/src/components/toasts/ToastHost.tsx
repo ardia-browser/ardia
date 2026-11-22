@@ -6,9 +6,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useBottomLift } from "../search/useKeyboardHeight";
 import { useSurface } from "../../state/browse/hooks";
 import { useDeckBarTop, useToast } from "../../state/toasts/hooks";
-import { TOAST_MOTION, toastDragDismisses, toastPlace } from "../../state/toasts/placement";
+import { pageBarClearance, TOAST_MOTION, toastDragDismisses, toastPlace } from "../../state/toasts/placement";
 import { dismissToast, holdToast, tapToast, type ToastIcon } from "../../state/toasts/store";
-import { capsule, font, space, Symbol, tabsMotion, toastLayout, toastMotion, useTheme, type SymbolName, useReduceMotion } from "../ui";
+import { font, space, Symbol, tabsMotion, toastLayout, toastMotion, useDesign, useTheme, type SymbolName, useReduceMotion } from "../ui";
+import { materialBottomBar } from "../ui/materialTokens";
 
 const ICONS: Record<ToastIcon, SymbolName> = {
   checkmark: "checkmark",
@@ -28,13 +29,14 @@ export function ToastHost() {
   const { lift, keyboard } = useBottomLift();
   const surface = useSurface();
   const barTop = useDeckBarTop();
+  const material = useDesign() === "material";
   const frame = useRef<ViewInstance>(null);
   const [hostBottom, setHostBottom] = useState(0);
   const place = toastPlace({
     safeTop: insets.top,
     keyboardLift: keyboard ? lift : null,
     safeBottom: insets.bottom,
-    barClearance: toastLayout.barClearance,
+    barClearance: pageBarClearance(material ? materialBottomBar : null, toastLayout.barClearance, space.s),
     hostBottomY: hostBottom,
     barTopY: surface === "browsing" ? null : barTop,
     gap: space.s,
@@ -92,11 +94,11 @@ function ToastView({ place }: { place: { top: number } | { bottom: number } }) {
             onPress={tapToast}
             style={[
               styles.toast,
-              { backgroundColor: theme.toastFill, borderColor: theme.panelBorder, shadowColor: theme.toastShadow, borderRadius: capsule(toastLayout.minHeight) },
+              { backgroundColor: theme.toastFill, borderColor: theme.panelBorder, shadowColor: theme.toastShadow, borderRadius: toastLayout.radius },
             ]}
           >
-            <Symbol name={ICONS[toast.icon]} size={toastLayout.iconSize} color={theme.label} />
-            <Text style={[font.subheadline, styles.text, { color: theme.label }]} numberOfLines={3}>
+            <Symbol name={ICONS[toast.icon]} size={toastLayout.iconSize} color={theme.toastLabel} />
+            <Text style={[font.subheadline, styles.text, { color: theme.toastLabel }]} numberOfLines={3}>
               {toast.message}
             </Text>
           </Pressable>
@@ -140,6 +142,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.l,
     paddingVertical: toastLayout.verticalPadding,
     borderWidth: StyleSheet.hairlineWidth,
+    borderCurve: "continuous",
     shadowOpacity: 1,
     shadowRadius: toastLayout.shadowRadius,
     shadowOffset: { width: 0, height: toastLayout.shadowY },

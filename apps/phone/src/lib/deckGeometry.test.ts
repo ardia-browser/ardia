@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  deckMorphFrom,
+  DECK_ARC,
+  DECK_ARC_HEADER,
+  DECK_REDESIGN,
+  deckArcHeaderPlacement,
+  deckArcTitleReveal,
+  deckPileScale,
+  deckHeaderReveal,
   DECK_CHROME_FROM,
   deckChromeOpacity,
   deckSlot,
@@ -250,12 +256,34 @@ test("in the redesign the cards sit under main's header, about 24 points lower, 
   assert.equal(header.barCenterY, 874 - 34 - 11);
   assert.equal(header.cardCenterY, (62 + 48 + 21 + 20 + (874 - 34 - 67 + 24)) / 2);
   assert.equal(header.cardCenterY - original.cardCenterY, 24);
-  assert.equal(header.cardWidth, original.cardWidth);
+  assert.ok(Math.abs(header.cardWidth - 402 * DECK_REDESIGN.cardWidthRatio) < 1e-9, "the redesign's cards are smaller than main's, so three or four read at once");
+  assert.ok(header.cardWidth < original.cardWidth);
   const archive = deckGeometry(402, 874, 62, 34, 0, "ios", "redesigned", 100);
   assert.equal(archive.cardCenterY - header.cardCenterY, 26);
   const homeButton = deckGeometry(375, 667, 20, 0, 0, "ios", "redesigned", 48);
   assert.equal(homeButton.barCenterY, 667 - 20 - 11);
   assert.deepEqual(deckGeometry(412, 915, 48, 24, 0, "android", "original", 48), pixel7);
+});
+
+test("in the redesign the focused card sits centred, the cards on either side pile up 8 points in from the screen's edges instead of being sliced by them, and each card's strip ends at the screen", () => {
+  const g = deckGeometry(402, 874, 62, 34, 0, "ios", "redesigned", 48);
+  assert.ok(Math.abs(deckLeading(g, 0) + g.cardWidth / 2 - 201) < 1e-9);
+  assert.equal(deckLeading(g, 1), g.focusLeading + g.spacing);
+  for (let relative = -12; relative <= 12; relative += 0.25) {
+    const leading = deckLeading(g, relative);
+    assert.ok(leading >= DECK_REDESIGN.pileEdge - 1e-9 && leading <= 402 - DECK_REDESIGN.pileEdge + 1e-9, `card at ${relative} starts on screen`);
+    assert.ok(deckLeading(g, relative + 0.25) > leading, "cards keep their order");
+    assert.ok(leading + deckVisibleWidth(g, relative, relative === 12) <= 402 + 1e-9, `card at ${relative} shows no more than the screen holds`);
+  }
+  const slope = (relative: number) => (deckLeading(g, relative + 1e-4) - deckLeading(g, relative - 1e-4)) / 2e-4;
+  assert.ok(Math.abs(slope(1) - g.spacing) < 0.01 && Math.abs(slope(0) - g.spacing) < 0.01, "a pan moves the cards without a jolt where the piles begin");
+  assert.ok(deckVisibleWidth(g, 0, false) > 120 && deckVisibleWidth(g, 1, false) > 88, "the focused card and the one after it have room for a title");
+});
+
+test("a redesigned card's header shows its icon and title together, only once a title fits", () => {
+  assert.equal(deckHeaderReveal(56), 0);
+  assert.equal(deckHeaderReveal(70), 0.5);
+  assert.equal(deckHeaderReveal(84), 1);
 });
 
 test("the deck chrome is fully opaque the moment its motion settles, even when a spring stops a hair short of 1, since UIKit draws no glass under a view that is even slightly transparent", () => {
@@ -267,14 +295,99 @@ test("the deck chrome is fully opaque the moment its motion settles, even when a
   assert.ok(Math.abs(deckChromeOpacity(0.8) - 0.5) < 1e-9);
 });
 
-test("the archive capsule's geometry swap starts from where the focused card was: the cards' layer moves its centre back and scales it to its old width, then springs to rest", () => {
-  const was = deckGeometry(852, 393, 0, 21, 59, "ios", "redesigned", 48);
-  const now = deckGeometry(852, 393, 0, 21, 59, "ios", "redesigned", 96);
-  const morph = deckMorphFrom(was, now);
-  assert.equal(morph.originX, now.focusLeading + now.cardWidth / 2);
-  assert.equal(morph.originY, now.cardCenterY);
-  const centre = { x: morph.originX + morph.dx, y: morph.originY + morph.dy };
-  assert.ok(Math.abs(centre.x - (was.focusLeading + was.cardWidth / 2)) < 1e-9);
-  assert.ok(Math.abs(centre.y - was.cardCenterY) < 1e-9);
-  assert.ok(Math.abs(now.cardWidth * morph.scale - was.cardWidth) < 1e-9);
+test("the redesigned deck stacks as Arc Search's switcher: cards two thirds of the screen tall, the focused one's strip a little over half the width, its left neighbour peeking 0.17 of the width and the one behind a sliver at the edge", () => {
+  const g = deckGeometry(402, 874, 62, 34, 0, "ios", "redesigned", 48, 55, "arc");
+  assert.equal(g.stack, "arc");
+  assert.ok(Math.abs(g.cardWidth - 402 * DECK_ARC.cardWidthRatio) < 1e-9);
+  assert.ok(Math.abs(g.cardHeight / 874 - 0.655) < 0.002, `card ${g.cardHeight.toFixed(1)} tall on an 874 screen`);
+  assert.ok(Math.abs(g.spacing / 402 - 0.553) < 0.002, "the focused card shows about 55% of the width before the next card covers it");
+  assert.ok(Math.abs(deckLeading(g, 0) / 402 - 0.206) < 0.01, "the focused card starts a fifth of the way in");
+  assert.ok(Math.abs((deckLeading(g, 0) - deckLeading(g, -1)) / 402 - 0.173) < 0.002, "the card behind peeks out 0.17 of the width");
+  const behind = deckLeading(g, -2) + (g.cardWidth * (1 - deckPileScale(g, -2))) / 2;
+  assert.ok(behind > -4 && behind < deckLeading(g, -1), `the second card back starts at ${behind.toFixed(1)}, a sliver at the screen's edge`);
+  assert.ok(deckLeading(g, -3) + g.cardWidth * deckPileScale(g, -3) < deckLeading(g, -1) + g.cardWidth, "the third card back is hidden");
+  assert.ok(deckLeading(g, 1) + g.cardWidth > 402 + 100, "the next card runs off the right edge");
+  assert.ok(deckLeading(g, 2) > 402, "the one after is off screen");
+  assert.equal(g.cardCorner, DECK_ARC.cardCorner);
+  assert.ok(Math.abs(g.cardCenterY - 874 * DECK_ARC.centerRatio) < 1e-9, "the cards centre a little under the screen's middle");
+  assert.ok(g.cardCenterY - g.cardHeight / 2 >= 62 + 48 + 21 + 20 - 1e-9, "a card's title row clears the header");
+  assert.ok(g.cardCenterY + g.cardHeight / 2 < g.barCenterY - 24 - 40, "the cards end well above the bar");
+});
+
+test("Arc's stack moves without a jolt: cards keep their order, the focused card slides at the spacing on both sides of rest, and the cards behind shrink a little, then more", () => {
+  const g = deckGeometry(402, 874, 62, 34, 0, "ios", "redesigned", 48, 55, "arc");
+  for (let relative = -8; relative <= 4; relative += 0.25) assert.ok(deckLeading(g, relative + 0.25) > deckLeading(g, relative), `order at ${relative}`);
+  const before = (deckLeading(g, 0) - deckLeading(g, -1e-5)) / 1e-5;
+  const after = (deckLeading(g, 1e-5) - deckLeading(g, 0)) / 1e-5;
+  assert.ok(Math.abs(before - g.spacing) < 0.01 && Math.abs(after - g.spacing) < 0.01, `${before} then ${after} points per card`);
+  assert.equal(deckPileScale(g, 0), 1);
+  assert.equal(deckPileScale(g, 1), 1);
+  assert.ok(Math.abs(deckPileScale(g, -1) - 0.98) < 1e-9);
+  assert.ok(Math.abs(deckPileScale(g, -2) - 0.91) < 1e-9);
+  assert.equal(deckPileScale(g, -40), DECK_ARC.leastScale);
+  assert.equal(deckPileScale(deckGeometry(402, 874, 62, 34, 0, "ios", "redesigned", 48), -2), 1, "the pile never shrinks");
+  assert.ok(deckVisibleWidth(g, 1, true) <= 402 - deckLeading(g, 1) + 1e-9, "the next card's strip ends at the screen");
+});
+
+test("a tap and each card's accessibility frame land on the right card in Arc's stack", () => {
+  const g = deckGeometry(402, 874, 62, 34, 0, "ios", "redesigned", 48, 55, "arc");
+  const y = g.cardCenterY;
+  for (const scroll of [0, 1, 2, 3, 6]) {
+    for (let index = 0; index < 8; index++) {
+      const relative = index - scroll;
+      const width = deckVisibleWidth(g, relative, index === 7);
+      const leading = deckLeading(g, relative);
+      if (width < 1 || leading < 0 || leading > 402) continue;
+      assert.equal(deckCardAt(g, 8, scroll, leading + width / 2, y), index, `card ${index} at scroll ${scroll}`);
+    }
+  }
+});
+
+test("with 40 tabs on the redesigned pile a tap at the right edge lands on a mounted card, never one squeezed past the mount window", () => {
+  const g = deckGeometry(360, 740, 24, 48, 0, "android", "redesigned", 48);
+  assert.equal(g.stack, "pile");
+  assert.ok(g.rightReach > 0);
+  const reach = 9;
+  const card = deckCardAt(g, 40, 0, 359, g.cardCenterY, 0, reach);
+  assert.ok(card >= 0 && card <= reach, `card ${card}`);
+});
+
+test("in Arc's stack a card shrunk behind the focused one answers only inside its drawn bounds", () => {
+  const g = deckGeometry(402, 874, 62, 34, 0, "ios", "redesigned", 48, 55, "arc");
+  const scroll = 2;
+  const scale = deckPileScale(g, 0 - scroll);
+  assert.ok(scale < 1);
+  const centerX = deckLeading(g, -scroll) + g.cardWidth / 2;
+  const halfWidth = (g.cardWidth * scale) / 2;
+  const halfHeight = (g.cardHeight * scale) / 2;
+  const left = centerX - halfWidth;
+  const x = left + 2;
+  assert.equal(deckCardAt(g, 3, scroll, x, g.cardCenterY), 0, "inside the drawn card");
+  assert.equal(deckCardAt(g, 3, scroll, x, g.cardCenterY - halfHeight - 1), -1, "just above the drawn top edge");
+  assert.equal(deckCardAt(g, 3, scroll, x, g.cardCenterY + halfHeight + 1), -1, "just below the drawn bottom edge");
+  assert.equal(deckCardAt(g, 3, scroll, left - 1, g.cardCenterY), -1, "just left of the drawn edge");
+});
+
+test("Arc's card titles sit 16 in from the card's left edge, the favicon alone on a peeking card and the title once 36 points of it fit", () => {
+  assert.deepEqual(deckArcHeaderPlacement(80, 220), { available: 220 - DECK_ARC_HEADER.inset - DECK_ARC_HEADER.trailing, left: 96 });
+  assert.deepEqual(deckArcHeaderPlacement(10, 12), { available: 0, left: 26 });
+  const g = deckGeometry(402, 874, 62, 34, 0, "ios", "redesigned", 48, 55, "arc");
+  const peeking = deckArcHeaderPlacement(deckLeading(g, -1), deckVisibleWidth(g, -1, false));
+  assert.equal(deckHeaderIconReveal(peeking.available, 16), 1);
+  assert.equal(deckArcTitleReveal(peeking.available, 16, 6), 0);
+  const focused = deckArcHeaderPlacement(deckLeading(g, 0), deckVisibleWidth(g, 0, false));
+  assert.equal(deckArcTitleReveal(focused.available, 16, 6), 1);
+  const next = deckArcHeaderPlacement(deckLeading(g, 1), deckVisibleWidth(g, 1, true));
+  assert.equal(deckArcTitleReveal(next.available, 16, 6), 1);
+  assert.equal(deckArcTitleReveal(16 + 6 + 42, 16, 6), 0.5);
+});
+
+test("Arc's stack fits a home-button iPhone and an iPhone on its side", () => {
+  const se = deckGeometry(375, 667, 20, 0, 0, "ios", "redesigned", 48, 0, "arc");
+  assert.ok(se.cardCenterY - se.cardHeight / 2 >= 20 + 48 + 21 + 20 - 1e-9);
+  assert.ok(se.cardCenterY + se.cardHeight / 2 <= se.barCenterY - 24);
+  const side = deckGeometry(852, 393, 0, 21, 59, "ios", "redesigned", 48, 55, "arc");
+  assert.ok(side.cardCenterY - side.cardHeight / 2 >= 48 + 21 + 20 - 1e-9);
+  assert.ok(side.cardCenterY + side.cardHeight / 2 <= side.barCenterY - 24 + 1e-9);
+  assert.ok(deckLeading(side, -1) >= 59 - 1e-9, "the card behind clears the side inset");
 });

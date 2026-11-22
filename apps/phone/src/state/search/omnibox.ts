@@ -7,6 +7,8 @@ import {
   mobileSetSources,
   mobileSuggest,
   mobileSuggestRequest,
+  sameAddress,
+  spacedAddressGuess,
 } from "@ardia/core/src/mobile.ts";
 import { dedupeByLanding, displayHost, landingKey } from "../../lib/url.ts";
 import type { PasteOffer } from "./pasteRow.ts";
@@ -41,6 +43,7 @@ export function suggest(text: string, remote: readonly string[], context: Sugges
   if (!text.trim()) return { rows: [], completion: "" };
   const result = mobileSuggest(text, { remote: [...remote], preference: "website", limit: ROW_LIMIT, now: Date.now(), ...context });
   const rows: TrayRow[] = [];
+  const guess = spacedAddressGuess(text);
   for (const item of result.items) {
     const typedAddress = item.kind === "search" ? mobileResolve(item.query) : null;
     if (item.kind === "search" && typedAddress?.kind === "url") rows.push(addressRow(typedAddress.url));
@@ -53,7 +56,7 @@ export function suggest(text: string, remote: readonly string[], context: Sugges
         key: `p:${item.tabId ?? ""}:${item.url}`,
         kind: "page",
         title: item.title || host,
-        detail: item.tabId ? SWITCH_TO_TAB : host,
+        detail: item.tabId ? SWITCH_TO_TAB : !item.title && guess && sameAddress(item.url, guess) ? shown.display : host,
         url: item.url,
         favicon: item.favicon ?? null,
         tabId: item.tabId ?? null,
@@ -62,7 +65,8 @@ export function suggest(text: string, remote: readonly string[], context: Sugges
       });
     } else if (item.kind === "calc") rows.push({ key: `c:${item.expression}`, kind: "calc", title: `= ${item.value}`, detail: item.expression, url: item.url, value: item.value });
   }
-  const unique = dedupeByLanding(rows.map((row) => ({ row, url: row.kind === "page" ? row.url : row.key, opensTab: row.kind === "page" && row.switchesTab })));
+  const landing = (row: TrayRow) => (row.kind !== "page" ? row.key : guess && sameAddress(row.url, guess) ? `guess:${guess}` : row.url);
+  const unique = dedupeByLanding(rows.map((row) => ({ row, url: landing(row), opensTab: row.kind === "page" && row.switchesTab })));
   const typed = withTypedQuery(unique.map((item) => item.row), text);
   return { rows: browsesForMe ? withBrowseForMe(typed, text) : typed, completion: result.completion };
 }

@@ -1,6 +1,6 @@
 import { StyleSheet } from "react-native";
 import { act } from "react-test-renderer";
-import { OnboardingView } from "../components/onboarding/OnboardingView";
+import { OnboardingView, SYNC_SUBTITLE } from "../components/onboarding/OnboardingView";
 import { SyncScanIllustration } from "../components/onboarding/SyncScanIllustration";
 import { Symbol } from "../components/ui";
 import { SKETCH_QR_ROWS, sketchQrPath } from "../lib/sketchQr";
@@ -57,12 +57,12 @@ test("the sketch's QR code is a real 25-module code with its three finder square
   expect(sketchQrPath(["10", "01"])).toBe("M0 0h1v1h-1zM1 1h1v1h-1z");
 });
 
-test("once connected, the subtitle crossfades to Connected. and the phone's viewfinder scales out as the checkmark scales in on a plum screen", () => {
+test("once connected, the subtitle crossfades to say the Mac's tabs are here and the phone's viewfinder scales out as the checkmark scales in on a plum screen", () => {
   const root = renderSurface(<OnboardingView />);
   const before = root.root.findAll((node) => node.props.testID === "onboardingSubtitle" && typeof node.type === "string");
   expect(before).toHaveLength(1);
   act(() => useSync.setState((state) => ({ ...state, status: status({ isEnabled: true, phase: "updated" }) })));
-  const subtitle = root.root.findAll((node) => node.props.testID === "onboardingSubtitle" && typeof node.type === "string" && textOf({ root: node } as never) === "Connected.");
+  const subtitle = root.root.findAll((node) => node.props.testID === "onboardingSubtitle" && typeof node.type === "string" && textOf({ root: node } as never) === SYNC_SUBTITLE.connected);
   expect(subtitle).toHaveLength(1);
   const fading = root.root.findAll((node) => node.props.testID === "onboardingSubtitle" && node.props.entering !== undefined)[0]!;
   expect(fading.props.exiting).toBeDefined();

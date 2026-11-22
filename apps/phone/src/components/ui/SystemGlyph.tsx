@@ -1,8 +1,6 @@
-import { Host, Image as SystemImage } from "@expo/ui/swift-ui";
-import { font as systemFont } from "@expo/ui/swift-ui/modifiers";
-import { Platform, StyleSheet, View } from "react-native";
-import { settingsUI } from "@ardia/phone-native";
-import { Symbol } from "./Symbol";
+import { Platform } from "react-native";
+import { nativeSymbolsAvailable } from "@ardia/phone-native";
+import { NativeGlyph, Symbol } from "./Symbol";
 import type { SymbolName } from "./symbolPaths";
 
 export type SystemGlyphWeight = "regular" | "medium" | "semibold" | "bold";
@@ -18,19 +16,10 @@ type Props = {
   testID?: string;
 };
 
-export const systemGlyphsAvailable = () => Platform.OS === "ios" && settingsUI.settingsUIAvailable();
+export const systemGlyphsAvailable = () => Platform.OS === "ios" && nativeSymbolsAvailable();
 
 export function SystemGlyph({ systemName, pointSize, weight = "regular", name, size, color, fitted = false, testID }: Props) {
   if (!systemGlyphsAvailable()) return <Symbol name={name} size={size} color={color} />;
-  return (
-    <View testID={testID} pointerEvents="none" style={fitted ? styles.box : [styles.box, { width: size, height: size }]}>
-      <Host matchContents>
-        <SystemImage systemName={systemName as never} color={color} modifiers={[systemFont({ size: pointSize, weight })]} />
-      </Host>
-    </View>
-  );
+  const side = fitted ? pointSize : size;
+  return <NativeGlyph testID={testID} systemName={systemName} pointSize={pointSize} weight={weight} color={color} style={{ width: side, height: side }} />;
 }
-
-const styles = StyleSheet.create({
-  box: { alignItems: "center", justifyContent: "center" },
-});

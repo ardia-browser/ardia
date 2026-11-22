@@ -259,6 +259,8 @@ const variantOf = (command: BrowserCommand, arg: string | undefined): Variant =>
   return (arg && spec.variants?.[arg]) || spec;
 };
 
+export const commandTitle = (command: BrowserCommand, arg?: string): string | undefined => variantOf(command, arg).title;
+
 export function commandBarTitle(command: BrowserCommand, arg?: string): string {
   const { barTitle, title = "" } = variantOf(command, arg);
   return barTitle ?? title.replace(/…$/, "");

@@ -21,9 +21,9 @@ export function plusMenuItems(incognito: boolean, canReopen: boolean): MenuItem[
     ...(incognito
       ? [
           { label: "New Tab", icon: "plus" as const, onPress: newRegularTab },
-          { label: "New Incognito Tab", icon: "eyeglassesThin" as const, onPress: newTab },
+          { label: "New Incognito Tab", icon: "eyes" as const, onPress: newTab },
         ]
-      : [{ label: "New Incognito Tab", icon: "eyeglassesThin" as const, onPress: newIncognitoTab }]),
+      : [{ label: "New Incognito Tab", icon: "eyes" as const, onPress: newIncognitoTab }]),
     ...(canReopen ? [{ label: "Reopen Closed Tab", icon: "arrowUturnBackward" as const, onPress: reopenLastClosed }] : []),
   ];
 }
@@ -60,7 +60,7 @@ export function GlassPlusButton({ width, label, testID, dark, incognito = false,
   const size = { width, height: startLayout.barPlus.height };
   return (
     <PressScale label={label} hint="Touch and hold for more options." onPress={onPress} onLongPress={onLongPress} onPressIn={haptics.barPress} style={size}>
-      <ChromeSurface testID={testID} shape="capsule" cornerRadius={capsule(size.height)} incognito={incognito} dark={dark} shown={glassShown} shownMs={glassShownMs} style={[styles.centered, size]}>
+      <ChromeSurface testID={testID} shape={width === size.height ? "circle" : "capsule"} cornerRadius={capsule(size.height)} incognito={incognito} dark={dark} shown={glassShown} shownMs={glassShownMs} style={[styles.centered, size]}>
         <FadingGlyphs testID={`${testID}Glyph`} pointerEvents="none" fade={glyphFade}>
           <SystemGlyph systemName="plus" pointSize={PLUS_SYSTEM_GLYPH} weight="medium" name="plus" size={startLayout.plusGlyph} color={rolesFor(dark).label} />
         </FadingGlyphs>

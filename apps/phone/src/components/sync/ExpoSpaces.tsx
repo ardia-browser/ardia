@@ -116,7 +116,7 @@ function SpacesSheetContent() {
           systemImage="macbook.and.iphone"
           description={status.phase === "off" ? "Every tab, anywhere." : "Waiting for your Mac."}
           modifiers={[frame({ maxHeight: FILL })]}
-          actions={<Button label={status.phase === "off" ? "Sync With Mac" : "Sync Settings"} onPress={() => openSettings({ page: status.phase === "off" ? "syncConnect" : "sync" })} modifiers={[buttonStyle("borderedProminent"), buttonBorderShape("capsule")]} />}
+          actions={<Button label={status.phase === "off" ? "Sync With Mac" : "Sync Settings"} onPress={() => openSettings({ page: status.phase === "off" ? "syncConnect" : "sync" })} modifiers={[buttonStyle("borderedProminent"), buttonBorderShape("roundedRectangle", 12)]} />}
         />
       )}
     </VStack>

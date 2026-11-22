@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { ARCHIVE_SEARCH_DELAY_MS, archiveDayTitle } from "../../lib/archiveDay";
-import { parseColor } from "../../lib/color";
 import { haptics } from "../../state/app/haptics";
 import { ArchiveTile } from "./ArchiveTile";
 import { BackHandler, Platform, Pressable, SectionList, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
@@ -14,10 +13,8 @@ import { AUTO_ARCHIVE_INTERVALS, autoArchiveTitle, type AutoArchiveInterval, typ
 import { clearArchivedTabs, loadArchive, searchArchive, setAutoArchiveInterval } from "../../state/tabs/store";
 import { MenuTrigger, confirmInSheet } from "../ui/MenuTrigger";
 import { MaterialEmptyIcon, MaterialIconAction, MaterialSearchField, MaterialTopBar } from "../ui/MaterialTopBar";
-import { ConfirmSheet, Favicon, FloatingMenu, font, LookBackdrop, radius, space, SwipeToDelete, Symbol, tabsLayout, tabsMotion, useDesign, useSheetFrame, useTheme, type Confirmation, type MenuItem } from "../ui";
+import { ConfirmSheet, Favicon, FloatingMenu, font, ink, LookBackdrop, radius, smoothCorners, space, SwipeToDelete, Symbol, tabsLayout, tabsMotion, useDesign, useSheetFrame, useTheme, type Confirmation, type MenuItem } from "../ui";
 import type { Point } from "../../lib/menuPlace";
-
-const time = (at: number) => new Date(at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
 export function ArchiveView() {
   const theme = useTheme();
@@ -30,6 +27,7 @@ export function ArchiveView() {
   const interval = usePreferences((p) => p.autoArchiveInterval);
   const [query, setQuery] = useState("");
   const [rowMenu, setRowMenu] = useState<{ tab: BrowserTab; at: Point } | null>(null);
+  const [editing, setEditing] = useState(false);
   useEffect(() => loadArchive(), []);
   const [searched, setSearched] = useState("");
   useEffect(() => {
@@ -55,10 +53,6 @@ export function ArchiveView() {
     ? [{ title: "", data: results }]
     : days.map((day) => ({ title: archiveDayTitle(day.tabs[0]!.archivedAt ?? day.tabs[0]!.lastActive, now), data: day.tabs }));
   const hasArchive = days.some((day) => day.tabs.length > 0);
-  const headerFill = useMemo(() => {
-    const [r, g, b] = parseColor(theme.surface);
-    return `rgba(${r}, ${g}, ${b}, ${HEADER_ALPHA})`;
-  }, [theme.surface]);
 
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const ask = (asked: Confirmation) => confirmInSheet(asked, () => setConfirmation(asked));
@@ -109,19 +103,26 @@ export function ArchiveView() {
         ) : (
           <>
         <View style={styles.top}>
-          <Pressable accessibilityRole="button" onPress={closeArchive} style={styles.topButton}>
-            <Text style={[font.body, styles.bold, { color: theme.formAccent }]}>Done</Text>
-          </Pressable>
+          <View style={styles.side}>
+            <Pressable accessibilityRole="button" disabled={!hasArchive && !editing} onPress={() => setEditing((now) => !now)} style={styles.topButton}>
+              <Text style={[font.body, editing ? styles.bold : null, { color: hasArchive || editing ? theme.spaceAccentInk : theme.tertiaryLabel }]}>{editing ? "Done" : "Edit"}</Text>
+            </Pressable>
+          </View>
           <Text accessibilityRole="header" style={[font.body, styles.bold, { color: theme.label }]}>
             Archive
           </Text>
-          <MenuTrigger items={items} trigger="tap" place={{ right: space.s, width: Math.min(tabsLayout.menuWidth, width - space.l) }}>
-            {({ onPress }) => (
-              <Pressable accessibilityRole="button" accessibilityLabel="Options" onPress={onPress} style={[styles.topButton, styles.end]}>
-                <Symbol name="ellipsis" size={22} color={theme.formAccent} />
-              </Pressable>
-            )}
-          </MenuTrigger>
+          <View style={[styles.side, styles.end]}>
+            <MenuTrigger items={items} trigger="tap" place={{ right: space.s, width: Math.min(tabsLayout.menuWidth, width - space.l) }}>
+              {({ onPress }) => (
+                <Pressable accessibilityRole="button" accessibilityLabel="Options" onPress={onPress} style={[styles.topButton, styles.iconButton]}>
+                  <Symbol name="ellipsis" size={20} color={theme.spaceAccentInk} />
+                </Pressable>
+              )}
+            </MenuTrigger>
+            <Pressable accessibilityRole="button" onPress={closeArchive} style={[styles.topButton, styles.endButton]}>
+              <Text style={[font.body, styles.bold, { color: theme.spaceAccentInk }]}>Done</Text>
+            </Pressable>
+          </View>
         </View>
         <View style={[styles.search, { backgroundColor: theme.fieldFill }]}>
           <Symbol name="magnifyingglass" size={17} color={theme.secondaryLabel} />
@@ -131,7 +132,7 @@ export function ArchiveView() {
             placeholder="Search Archive"
             placeholderTextColor={theme.secondaryLabel}
             style={[font.body, styles.input, { color: theme.label }]}
-            selectionColor={theme.formAccent}
+            selectionColor={theme.spaceAccentInk}
             autoCorrect={false}
             autoCapitalize="none"
           />
@@ -160,15 +161,18 @@ export function ArchiveView() {
             sections={sections}
             keyExtractor={(tab) => tab.id}
             keyboardShouldPersistTaps="handled"
-            stickySectionHeadersEnabled
+            stickySectionHeadersEnabled={false}
             {...frame?.list(false)}
             contentContainerStyle={{ paddingBottom: insets.bottom + space.l }}
             renderSectionHeader={({ section }) =>
-              section.title ? <Text style={[font.footnote, styles.section, { color: theme.secondaryLabel, backgroundColor: headerFill }]}>{section.title}</Text> : null
+              section.title ? <Text style={[font.footnote, styles.section, { color: theme.secondaryLabel }]}>{section.title.toLocaleUpperCase()}</Text> : <View style={styles.sectionGap} />
             }
-            renderItem={({ item }) => (
+            renderItem={({ item, index, section }) => (
               <ArchiveRow
                 tab={item}
+                first={index === 0}
+                last={index === section.data.length - 1}
+                editing={editing}
                 faviconSize={ROW_FAVICON * Math.min(fontScale, ROW_FAVICON_SCALE_CAP)}
                 onMenu={(at) => {
                   menuOpenedHaptic();
@@ -213,36 +217,47 @@ function restoreRow(tab: BrowserTab) {
   openArchivedTab(tab);
 }
 
-function ArchiveRow({ tab, faviconSize, onMenu }: { tab: BrowserTab; faviconSize: number; onMenu: (at: Point) => void }) {
+function ArchiveRow({ tab, first, last, editing, faviconSize, onMenu }: { tab: BrowserTab; first: boolean; last: boolean; editing: boolean; faviconSize: number; onMenu: (at: Point) => void }) {
   const theme = useTheme();
   const shown = display(tab.url);
+  const corners = { borderTopLeftRadius: first ? archiveGroup.radius : 0, borderTopRightRadius: first ? archiveGroup.radius : 0, borderBottomLeftRadius: last ? archiveGroup.radius : 0, borderBottomRightRadius: last ? archiveGroup.radius : 0 };
   return (
-    <SwipeToDelete onDelete={() => deleteArchivedTab(tab)} revealsOnly={Platform.OS === "ios"}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityHint="Reopens the tab."
-        onPress={() => restoreRow(tab)}
-        onLongPress={(event) => onMenu({ x: event.nativeEvent.pageX, y: event.nativeEvent.pageY })}
-        delayLongPress={tabsMotion.longPress}
-        style={({ pressed }) => [styles.row, pressed ? { backgroundColor: theme.rowHighlight } : null]}
-      >
-        <View style={styles.icon}>
-          <Favicon iconUrl={tab.faviconUrl} pageUrl={tab.url} size={faviconSize} />
+    <View testID="archiveGroupRow" style={[styles.group, corners, { backgroundColor: theme.groupFill }]}>
+      <SwipeToDelete onDelete={() => deleteArchivedTab(tab)} revealsOnly={Platform.OS === "ios"}>
+        <View style={[styles.rowLine, { backgroundColor: theme.groupFill }]}>
+          {editing ? (
+            <Pressable accessibilityRole="button" accessibilityLabel={`Delete ${tab.title || shown.host}`} onPress={() => deleteArchivedTab(tab)} hitSlop={archiveGroup.deleteSlop} style={styles.deleteHit}>
+              <View style={[styles.deleteDot, { backgroundColor: theme.destructive }]}>
+                <Symbol name="minus" size={archiveGroup.deleteGlyph * 0.6} color={ink.white} />
+              </View>
+            </Pressable>
+          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityHint="Reopens the tab."
+            disabled={editing}
+            onPress={() => restoreRow(tab)}
+            onLongPress={(event) => onMenu({ x: event.nativeEvent.pageX, y: event.nativeEvent.pageY })}
+            delayLongPress={tabsMotion.longPress}
+            style={({ pressed }) => [styles.row, corners, pressed ? { backgroundColor: theme.rowHighlight } : null]}
+          >
+            <Favicon iconUrl={tab.faviconUrl} pageUrl={tab.url} size={faviconSize} />
+            <View style={[styles.label, last ? null : { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.separator }]}>
+              <Text style={[font.body, { color: theme.label }]} numberOfLines={1}>
+                {tab.title || shown.host}
+              </Text>
+              <Text style={[font.footnote, { color: theme.secondaryLabel }]} numberOfLines={1}>
+                {shown.display || shown.host}
+              </Text>
+            </View>
+          </Pressable>
         </View>
-        <View style={styles.label}>
-          <Text style={[font.body, { color: theme.label }]} numberOfLines={2}>
-            {tab.title || shown.host}
-          </Text>
-          <Text style={[font.footnote, { color: theme.secondaryLabel }]} numberOfLines={1}>
-            {`${shown.host} · ${time(tab.archivedAt ?? tab.lastActive)}`}
-          </Text>
-        </View>
-      </Pressable>
-    </SwipeToDelete>
+      </SwipeToDelete>
+    </View>
   );
 }
 
-const HEADER_ALPHA = 0.92;
+const archiveGroup = { inset: 16, radius: 12, rowGap: 14, rowPadding: 14, rowVertical: 5, deleteGlyph: 22, deleteSlop: 8 } as const;
 const EMPTY_TILE = 64;
 const NO_RESULTS_ICON = 44;
 const EMPTY_WIDTH = 320;
@@ -253,24 +268,31 @@ const styles = StyleSheet.create({
   materialSearch: { paddingHorizontal: 16, paddingBottom: 8 },
   column: { flex: 1 },
   top: { minHeight: tabsLayout.archiveTop, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: space.s },
+  side: { flex: 1, flexDirection: "row", alignItems: "center" },
   topButton: { minWidth: tabsLayout.archiveButton, minHeight: tabsLayout.archiveButton, justifyContent: "center", paddingHorizontal: space.s },
-  end: { alignItems: "flex-end" },
+  iconButton: { alignItems: "center" },
+  endButton: { alignItems: "flex-end" },
+  end: { justifyContent: "flex-end" },
   bold: { fontWeight: "600" },
   search: {
     flexDirection: "row",
     alignItems: "center",
     gap: space.xs + 2,
-    marginHorizontal: space.l,
+    marginHorizontal: archiveGroup.inset,
     marginVertical: space.s,
     paddingHorizontal: space.s + 2,
     minHeight: tabsLayout.archiveField,
     borderRadius: radius.field - space.xs,
   },
   input: { flex: 1, paddingVertical: space.s },
-  section: { paddingHorizontal: space.xl, paddingTop: space.l, paddingBottom: space.xs, fontWeight: "600" },
-  row: { flexDirection: "row", alignItems: "flex-start", gap: space.m, paddingHorizontal: space.l, paddingVertical: space.s, marginHorizontal: space.s, borderRadius: radius.row },
-  icon: { paddingTop: space.tight, alignSelf: "flex-start" },
+  section: { paddingHorizontal: archiveGroup.inset * 2, paddingTop: space.xl, paddingBottom: space.s - 2 },
+  sectionGap: { height: space.s },
+  group: { marginHorizontal: archiveGroup.inset, overflow: "hidden", ...smoothCorners },
+  rowLine: { flexDirection: "row", alignItems: "center" },
+  deleteHit: { paddingLeft: archiveGroup.rowPadding },
+  deleteDot: { width: archiveGroup.deleteGlyph, height: archiveGroup.deleteGlyph, borderRadius: archiveGroup.deleteGlyph / 2, alignItems: "center", justifyContent: "center" },
+  row: { flex: 1, flexDirection: "row", alignItems: "center", gap: archiveGroup.rowGap, paddingLeft: archiveGroup.rowPadding },
   centered: { textAlign: "center" },
-  label: { flex: 1, gap: space.hair },
+  label: { flex: 1, gap: 1, paddingVertical: archiveGroup.rowVertical + space.xs, paddingRight: archiveGroup.rowPadding },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: space.xs + 2, paddingHorizontal: space.xxl, maxWidth: EMPTY_WIDTH, alignSelf: "center" },
 });

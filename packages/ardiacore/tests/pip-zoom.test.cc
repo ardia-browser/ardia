@@ -101,6 +101,43 @@ int main() {
     }
     CHECK(Near(width, 480, 1e-6) && frame.w == 480 && frame.h == 270 && Near(frame.maxX(), 1480) && frame.y == 16);
   }
+  {
+    const Rect parked{1512 - 300, 300, 480, 270};
+    Result grown = Zoom(parked, 480, aspect, 1.25, {1400, 400}, visible, minSize, maxSize);
+    CHECK(grown.frame.w == 600 && Near(grown.frame.maxX(), parked.maxX()) && grown.frame.x < parked.x);
+    CHECK(grown.frame.maxX() > visible.maxX());
+    Result shrunk = Zoom(parked, 480, aspect, 0.8, {1400, 400}, visible, minSize, maxSize);
+    CHECK(shrunk.frame.w == 384 && shrunk.frame.x > parked.x && shrunk.frame.maxX() < parked.maxX());
+    CHECK(shrunk.frame.x <= 1400 && shrunk.frame.maxX() >= 1400);
+  }
+  {
+    const Rect parked{-200, 945 - 150, 480, 270};
+    Result grown = Zoom(parked, 480, aspect, 1.25, {100, 900}, visible, minSize, maxSize);
+    CHECK(grown.frame.x == parked.x && Near(grown.frame.maxY(), parked.maxY()));
+    CHECK(grown.frame.maxX() > parked.maxX() && grown.frame.y < parked.y);
+  }
+  {
+    for (const Rect parked : {Rect{1512 - 300, 300, 480, 270}, Rect{-200, 300, 480, 270}, Rect{500, 945 - 140, 480, 270}, Rect{500, -130, 480, 270}}) {
+      Rect frame = parked;
+      double width = parked.w;
+      for (double f : {1.1, 1.3, 0.7, 1.6, 0.5, 1.2}) {
+        Result r = Zoom(frame, width, aspect, f, {frame.x + frame.w / 2, frame.y + frame.h / 2}, visible, minSize, maxSize);
+        CHECK(r.frame.x >= std::min(visible.x, frame.x) - 0.51 && r.frame.maxX() <= std::max(visible.maxX(), frame.maxX()) + 0.51);
+        CHECK(r.frame.y >= std::min(visible.y, frame.y) - 0.51 && r.frame.maxY() <= std::max(visible.maxY(), frame.maxY()) + 0.51);
+        CHECK(visible.x - r.frame.x <= r.frame.w / 2 && r.frame.maxX() - visible.maxX() <= r.frame.w / 2);
+        CHECK(visible.y - r.frame.y <= r.frame.h / 2 && r.frame.maxY() - visible.maxY() <= r.frame.h / 2);
+        frame = r.frame, width = r.width;
+      }
+    }
+  }
+  {
+    CHECK(KeptWithin(900, 400, 800, 480, 0, 1512) == 900);
+    CHECK(KeptWithin(1300, 400, 1212, 480, 0, 1512) == 1292);
+    CHECK(KeptWithin(-300, 400, -200, 480, 0, 1512) == -200);
+    CHECK(KeptWithin(1300, 400, 800, 480, 0, 1512) == 1112);
+    CHECK(KeptWithin(1352, 360, 1232, 480, 0, 1512) == 1332);
+    CHECK(KeptWithin(-320, 360, -200, 480, 0, 1512) == -180);
+  }
   if (failures) return std::printf("%d failed\n", failures), 1;
   std::printf("pip-zoom: all passed\n");
   return 0;

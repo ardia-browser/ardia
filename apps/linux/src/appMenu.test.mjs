@@ -145,3 +145,12 @@ test("the Bookmarks menu exports bookmarks and the Window menu minimizes every w
   assert.deepEqual(find(items, "window:minimizeAll"), { id: "window:minimizeAll", title: "Minimize All", modifiers: ["option"], alternate: true });
   assert.deepEqual(appMenuChoice("window:minimizeAll"), { kind: "window", action: "minimizeAll" });
 });
+
+test("the Ardia menu checks for updates, or restarts to finish one, only where updates work", () => {
+  const ardia = (context) => top(appMenuItems(state(), new Map(), new Set(), context), "Ardia").children.map((item) => item.title ?? "—");
+  assert.deepEqual(ardia({}).slice(0, 2), ["About Ardia", "—"]);
+  assert.deepEqual(ardia({ updates: "check" }).slice(0, 2), ["About Ardia", "Check for Updates…"]);
+  assert.deepEqual(ardia({ updates: "restart" }).slice(0, 2), ["About Ardia", "Restart to Update"]);
+  assert.deepEqual(appMenuChoice("checkForUpdates"), { kind: "updates", restart: false });
+  assert.deepEqual(appMenuChoice("restartToUpdate"), { kind: "updates", restart: true }, "the item picked decides whether Ardia restarts, not what finished while the menu was open");
+});

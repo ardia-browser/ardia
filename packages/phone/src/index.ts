@@ -2,6 +2,7 @@ export { blocking } from "./blocking";
 export { browseForMe, BrowseForMeSettings, type BrowseForMeEvent, type BrowseForMeOutcome, type ChatGPTAccountState, type ChatGPTModelChoice } from "./browseForMe";
 export { defaultBrowser, type DefaultBrowserStatus } from "./defaultBrowser";
 export { downloads } from "./downloads";
+export { isRefusedSnapshot } from "./pageTypes";
 export type { DownloadedFile, DownloadedFileKind } from "./downloads";
 export {
   legacy,
@@ -24,8 +25,9 @@ export { CompletingField, completingFieldIsNative, type CompletingFieldHandle, t
 export { announceNatively, focusViewNatively, screenReaderFocusIsNative, ScrollActions, type ScrollActionDirection, type ScrollActionsProps } from "./accessibility";
 export { FadeView, fadeIsNative, type FadeEdge, type FadeViewProps } from "./fade";
 export { PasteButton, pasteButtonIsNative, type PasteButtonProps } from "./pasteButton";
+export { NativeSymbol, nativeSymbolExists, nativeSymbolsAvailable, type NativeSymbolProps, type NativeSymbolWeight } from "./symbol";
 export { actionSheet, ContextMenuView, nativeMenusAvailable, type ActionSheetAction, type ActionSheetOptions, type ContextMenuHandle, type ContextMenuProps, type MenuAppearance, type MenuItem } from "./menus";
-export { SearchStage, SearchStagePanel, searchStageIsNative, type SearchStageExit, type SearchStageHandle, type SearchStageLift, type SearchStageMorphLook, type SearchStageProps } from "./searchStage";
+export { SearchStage, SearchStagePanel, searchStageIsNative, type SearchStageExit, type SearchStageHandle, type SearchStageCorners, type SearchStageLift, type SearchStageMorphLook, type SearchStageProps } from "./searchStage";
 export { MotionView, motionReportsNearEnd, motionRunsInRenderServer, type MotionCurve, type MotionTarget, type MotionViewProps } from "./motion";
 export { forcedDuoCanvas, ScreenLayoutProbe, screenLayoutIsNative, type DuoCanvasMode, type ScreenLayoutName, type ScreenLayoutReport, type ScreenSpaceReport } from "./screenLayout";
 export * as settingsUI from "./settingsUI";
@@ -117,6 +119,7 @@ export type {
   PageSecurity,
   PageSetup,
   PageSnapshot,
+  RefusedSnapshot,
   PageState,
   PageSummaryProvider,
   PageTone,

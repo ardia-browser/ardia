@@ -322,7 +322,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"$PROJECT_DIR/../../../packages/shell/docktile/build.sh\" && \"$PROJECT_DIR/../../../packages/ardiacore/scripts/embed.sh\"\n";
+			shellScript = "\"$PROJECT_DIR/../../../packages/shell/docktile/build.sh\" && \"$PROJECT_DIR/../../../packages/shell/plugin-host/build.sh\" && \"$PROJECT_DIR/../../../packages/ardiacore/scripts/embed.sh\"\n";
 		};
 		F2B782290948FD07702EBCEC /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -389,7 +389,7 @@
 				CODE_SIGN_ENTITLEMENTS = "Ardia-macOS/Ardia.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 126;
+				CURRENT_PROJECT_VERSION = 127;
 				DEAD_CODE_STRIPPING = NO;
 				DEVELOPMENT_TEAM = U5L5T3NGVV;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -397,7 +397,7 @@
 				INFOPLIST_FILE = "Ardia-macOS/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.2.47-nightly.9;
+				MARKETING_VERSION = 0.2.47;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
@@ -424,7 +424,7 @@
 				CODE_SIGN_ENTITLEMENTS = "Ardia-macOS/Ardia.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 126;
+				CURRENT_PROJECT_VERSION = 127;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = U5L5T3NGVV;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -432,7 +432,7 @@
 				INFOPLIST_FILE = "Ardia-macOS/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.2.47-nightly.9;
+				MARKETING_VERSION = 0.2.47;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",

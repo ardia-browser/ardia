@@ -528,7 +528,7 @@ class PageView(context: Context, appContext: AppContext) : ExpoView(context, app
             isCurrent = { PageSummaryChoice.revision == revision && page === opened && document.generation == generation && web != null && opened.view.value === web },
         )
         made.onSettled = { settled ->
-            PhonePages.report(settled.pageId, "page.summarySettled", "trigger" to settled.trigger.raw, "outcome" to settled.outcome, "chatGPTFellBack" to settled.chatGPTFellBack, "isPrivate" to settled.isPrivate)
+            PhonePages.report(settled.pageId, "page.summarySettled", "trigger" to settled.trigger.raw, "outcome" to settled.outcome, "chatGPTFellBack" to settled.chatGPTFellBack, "geminiNanoMissing" to settled.geminiNanoMissing, "isPrivate" to settled.isPrivate)
         }
         val layer = ensureSummaryLayer()
         removeCallbacks(hideSummary)

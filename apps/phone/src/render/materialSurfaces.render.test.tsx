@@ -55,6 +55,7 @@ test("the scheme's roles follow Material's rules: text on surface, panels by con
   expect(roles.destructive).toBe(LIGHT.error);
   expect(roles.divider).toBe(LIGHT.outlineVariant);
   expect(roles.toastFill).toBe(LIGHT.inverseSurface);
+  expect(roles.toastLabel).toBe(LIGHT.inverseOnSurface);
   expect(roles.dialogScrim).toBe("rgba(0, 0, 0, 0.32)");
 });
 

@@ -175,11 +175,11 @@ test("tools: the CLI and other plugins call them; unknown tools and stopped help
   const pending = pluginSocketMethod("plugins.call", { plugin: "example", tool: "seen", input: {} });
   await settle();
   const call = host.events.map((e) => JSON.parse(e.line)).findLast((e) => e.call && e.tool === "seen");
-  assert.deepEqual(call.caller, { kind: "cli" });
+  assert.deepEqual(call.caller, { kind: "cli" }, "a socket caller is still \"cli\" on the wire");
   await ask("result", { call: call.call, result: { events: [] } }, run);
   assert.deepEqual(await pending, { result: { events: [] } });
-  assert.equal((await callTool("example", "missing", {}, { kind: "cli" })).code, "bad_request");
-  assert.equal((await callTool("other", "hello", {}, { kind: "cli" })).code, "refused");
+  assert.equal((await callTool("example", "missing", {}, { kind: "socket" })).code, "bad_request");
+  assert.equal((await callTool("other", "hello", {}, { kind: "socket" })).code, "refused");
   const { id, before } = helper("tools.call", { plugin: "example", tool: "hello" }, run);
   await settle();
   const nested = host.events.map((e) => JSON.parse(e.line)).findLast((e) => e.call && e.tool === "hello");
@@ -379,7 +379,7 @@ test("two plugins setting the same value: turning the first off keeps it while t
 
 test("a stopped helper's requests are ignored and its pending calls fail at once", async () => {
   const run = await enabled();
-  const pending = callTool("example", "seen", {}, { kind: "cli" });
+  const pending = callTool("example", "seen", {}, { kind: "socket" });
   await settle();
   lifecycle.disablePlugin("example");
   const outcome = await pending;
@@ -879,14 +879,14 @@ test("when a helper that called another plugin's tools stops, its waiting calls 
   const callee = P().processes.second.run;
   for (let i = 0; i < 16; i++) helper("tools.call", { plugin: "second", tool: "seen", input: {} }, caller);
   await settle();
-  const full = await Promise.race([callTool("second", "seen", {}, { kind: "cli" }), settle().then(() => null)]);
+  const full = await Promise.race([callTool("second", "seen", {}, { kind: "socket" }), settle().then(() => null)]);
   assert.match(full?.message ?? "", /too many calls/, "the caller's 16 calls fill second's slots");
   const sentBefore = host.events.length;
   restartProcess("example");
   await settle();
   const cancels = host.events.slice(sentBefore).filter((e) => e.name === "second" && e.run === callee && JSON.parse(e.line).cancel === true);
   assert.equal(cancels.length, 16, "second is told to stop each call its caller can no longer take");
-  const after = await Promise.race([callTool("second", "seen", {}, { kind: "cli" }), settle().then(() => null)]);
+  const after = await Promise.race([callTool("second", "seen", {}, { kind: "socket" }), settle().then(() => null)]);
   assert.equal(after, null, "a new call is waiting on second, not refused");
   lifecycle.disablePlugin("second");
   lifecycle.disablePlugin("example");
@@ -947,7 +947,7 @@ test("an open queued when its run ends never runs", async () => {
 test("a tool call that fails after sharing changed isn't counted in the new period", async () => {
   const run = await enabled();
   takePluginCounts();
-  const outcome = callTool("example", "seen", {}, { kind: "cli" });
+  const outcome = callTool("example", "seen", {}, { kind: "socket" });
   await settle();
   setConsentPeriod(true, "plugins-test-next");
   try {

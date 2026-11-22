@@ -21,7 +21,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
   private static let behindTimeout = 1.5
   private static let revealTimeout = 0.6
   private let typeAhead = TypeAheadHold()
-  private let linkActivation = LinkActivationOrder()
+  private let linkActivation = LinkActivationOrder(), leaving = LeavingOverPiP()
   private(set) lazy var fullScreen = FullScreenRestore(windows: self)
 
   private override init() {
@@ -466,7 +466,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
 
   @objc private func appDidBecomeActive(_ notification: Notification) {
     if ArdiaChromeWindowHost.consumePictureInPictureActivation() { return }
-    DispatchQueue.main.async { [weak self] in self?.focusBrowserPastPiP() }
+    DispatchQueue.main.async { [weak self] in if self?.leaving.givesFocusBack() != true { self?.focusBrowserPastPiP() } }
   }
 
   private func focusBrowserPastPiP() {

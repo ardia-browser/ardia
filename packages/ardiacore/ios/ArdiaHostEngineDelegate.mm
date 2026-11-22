@@ -114,6 +114,7 @@ static void EndFailedPageDragsAtMouseUp() {
 
 - (void)engineQuitCancelled {
   NSLog(@"[ardiacore] quit cancelled");
+  [NSNotificationCenter.defaultCenter postNotificationName:@"ArdiaHostQuitCancelled" object:nil];
   if (ArdiaHost.quitCancelledHandler) ArdiaHost.quitCancelledHandler();
 }
 

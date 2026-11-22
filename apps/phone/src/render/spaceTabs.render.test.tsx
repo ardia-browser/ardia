@@ -109,7 +109,7 @@ const pressable = (root: Root, label: string) => root.root.findAll((node) => nod
 function holdCard(root: Root, design: Design, id: string) {
   const order = cards(root);
   const index = order.indexOf(id);
-  const g = deckGeometry(393, 873, 40, 24, 0, Platform.OS, design, deckHeaderBottom());
+  const g = deckGeometry(393, 873, 40, 24, 0, Platform.OS, design, deckHeaderBottom(), 55, "arc");
   const y = g.cardCenterY;
   let x = 0;
   while (x < 393 && deckCardAt(g, order.length, initialDeckScroll(order.length), x, y) !== index) x += 2;

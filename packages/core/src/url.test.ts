@@ -4,7 +4,7 @@ import { PSL_TLDS } from "./tlds.ts";
 import { domainToASCII } from "node:url";
 import { cleanUrl } from "./cleanUrl.ts";
 import { displayHost, hostSpoofReason, punycodeEncode } from "./idn.ts";
-import { breadcrumb, classifyPaste, fixupUrl, resolveInput, urlForDisplay } from "./omnibox.ts";
+import { breadcrumb, classifyPaste, fixupUrl, resolveInput, sameAddress, spacedAddressGuess, urlForDisplay } from "./omnibox.ts";
 import { displayUrl } from "./suggest.ts";
 
 const GOOGLE = "https://www.google.com/search?q=";
@@ -42,6 +42,79 @@ test("fixupUrl leaves searches alone: file names, emails, prose, unknown schemes
   }
   assert.equal(fixupUrl("docs.internal/setup"), "http://docs.internal/setup");
   assert.equal(fixupUrl("site.photography/about"), "https://site.photography/about");
+});
+
+test("fixupUrl opens an address with a space after its host, as Chrome does, and leaves prose with a slash alone", () => {
+  assert.equal(fixupUrl("en.wikipedia.org/wiki/Jim Beam"), "https://en.wikipedia.org/wiki/Jim%20Beam");
+  assert.equal(fixupUrl("github.com/search?q=a b"), "https://github.com/search?q=a%20b");
+  assert.equal(fixupUrl("localhost:3000/a b"), "http://localhost:3000/a%20b");
+  for (const text of ["AC/DC songs", "AC/DC greatest hits #1", "C# nullable ? operator", "km/h to mph", "24/7 pharmacy near me", "r/macapps best apps", "x.com cats", "example.com /a", "foo bar/baz", "sms:123?what time"]) {
+    assert.equal(fixupUrl(text), null, text);
+  }
+  assert.deepEqual(classifyPaste("en.wikipedia.org/wiki/Jim Beam"), { kind: "go", url: "https://en.wikipedia.org/wiki/Jim%20Beam" });
+  assert.deepEqual(classifyPaste("AC/DC songs"), { kind: "search", query: "AC/DC songs" });
+  assert.deepEqual(classifyPaste("example.com/a\nb"), { kind: "search", query: "example.com/a b" });
+  assert.deepEqual(classifyPaste("https://a b.com/x"), { kind: "search", query: "https://a b.com/x" });
+});
+
+test("a spaced address opens only when it can't be prose: a wiki path, a named query key, a port, localhost or an IP", () => {
+  const opens = {
+    "en.wikipedia.org/wiki/Jim Beam": "https://en.wikipedia.org/wiki/Jim%20Beam",
+    "github.com/search?q=a b": "https://github.com/search?q=a%20b",
+    "localhost:3000/a b": "http://localhost:3000/a%20b",
+    "[::1]:8080/a b": "http://[::1]:8080/a%20b",
+    "devbox:8080/a b": "http://devbox:8080/a%20b",
+    "localhost./a b": "http://localhost./a%20b",
+    "192.168.1.2/a b": "http://192.168.1.2/a%20b",
+    "de.wikipedia.org/wiki/Foo Bar": "https://de.wikipedia.org/wiki/Foo%20Bar",
+    "example.com:8080/a b": "https://example.com:8080/a%20b",
+    "printer.local:80/My Folder": "http://printer.local:80/My%20Folder",
+  };
+  for (const [text, url] of Object.entries(opens)) {
+    assert.equal(fixupUrl(text), url, text);
+    assert.deepEqual(classifyPaste(text), { kind: "go", url }, text);
+  }
+  for (const text of [
+    "asp.net/core vs django",
+    "asp.net/core/mvc vs django",
+    "github.com/nodejs/node release notes",
+    "example.com/My Folder/index.html",
+    "node.js/express vs koa",
+    "x.com/ cats",
+    "192.168.1.2/ cats",
+    "x.com/my profile/x",
+    "3.5/5 stars rating",
+    "AC/DC/ songs/",
+    "a/b/c d",
+    "example.com#a b",
+    "example.com:99999/a b",
+    "example.com/search?= cats",
+    "asp.net/wiki/Core vs Django",
+    "example.com:443/docs release notes",
+    "example.com:80/a b",
+  ]) {
+    assert.equal(fixupUrl(text), null, text);
+    assert.deepEqual(classifyPaste(text), { kind: "search", query: text }, text);
+  }
+  assert.equal(fixupUrl("javascript:123/a b"), null);
+  assert.deepEqual(classifyPaste("javascript:123/a b"), { kind: "search", query: "123/a b" });
+});
+
+test("a spaced address that could be prose searches first and offers its escaped URL as a guess", () => {
+  assert.equal(spacedAddressGuess("asp.net/core vs django"), "https://asp.net/core%20vs%20django");
+  assert.equal(spacedAddressGuess("example.com/My Folder/index.html"), "https://example.com/My%20Folder/index.html");
+  assert.equal(spacedAddressGuess("github.com/nodejs/node release notes"), "https://github.com/nodejs/node%20release%20notes");
+  assert.equal(spacedAddressGuess("asp.net/wiki/Core vs Django"), "https://asp.net/wiki/Core%20vs%20Django");
+  assert.equal(spacedAddressGuess("example.com:443/docs release notes"), "https://example.com:443/docs%20release%20notes");
+  assert.equal(spacedAddressGuess("example.com# Chapter 2"), "https://example.com#%20Chapter%202");
+  for (const text of ["en.wikipedia.org/wiki/Jim Beam", "x.com/ cats", "x.com cats", "AC/DC songs", "foo.notatld/a/b c", "example.com:99999/a b", "javascript:123/a b", "example.com/a\tb"]) {
+    assert.equal(spacedAddressGuess(text), null, text);
+  }
+});
+
+test("Paste and Go still searches a pasted local path with a space, though Enter opens it as a file", () => {
+  assert.deepEqual(classifyPaste("/Users/me/My File.html"), { kind: "search", query: "/Users/me/My File.html" });
+  assert.equal(fixupUrl("/Users/me/My File.html"), "file:///Users/me/My%20File.html");
 });
 
 test("fixupUrl reads the host up to the first / ? or #: one trailing dot, a 1-5 digit port, labels never start or end in a hyphen", () => {
@@ -222,4 +295,14 @@ test("Latin lookalikes of finance domains stay punycode", () => {
   assert.equal(shown("fidélity.com"), ascii("fidélity.com"));
   assert.equal(shown("schwáb.com"), ascii("schwáb.com"));
   assert.equal(shown("bücher.de"), "bücher.de");
+});
+
+test("sameAddress folds only ASCII case in the host, and default ports and the root slash", () => {
+  assert.ok(sameAddress("https://EXAMPLE.com:443#x", "https://example.com/#x"));
+  assert.ok(sameAddress("http://example.com:0080/a", "http://example.com/a"));
+  assert.ok(!sameAddress("https://ΟΣ-example.com/a", "https://ος-example.com/a"));
+  assert.ok(sameAddress("https://bücher.de/a", "https://xn--bcher-kva.de/a"));
+  assert.ok(sameAddress("https://BÜCHER.de:443/a", "https://XN--BCHER-KVA.de/a"));
+  assert.ok(sameAddress("https://ﾌﾞｯｸ.jp/a", "https://xn--pckwb0c.jp/a"));
+  assert.ok(!sameAddress("https://example.com/A", "https://example.com/a"));
 });

@@ -150,11 +150,11 @@ export function LibraryView() {
         <View style={styles.top}>
           {folderKey ? (
             <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={popLibraryPage} style={styles.topButton}>
-              <Symbol name="chevronLeft" size={20} color={theme.formAccent} />
+              <Symbol name="chevronLeft" size={20} color={theme.spaceAccentInk} />
             </Pressable>
           ) : (
             <Pressable accessibilityRole="button" onPress={closeLibrary} style={styles.topButton}>
-              <Text style={[font.body, styles.bold, { color: theme.formAccent }]}>Done</Text>
+              <Text style={[font.body, styles.bold, { color: theme.spaceAccentInk }]}>Done</Text>
             </Pressable>
           )}
           <Text accessibilityRole="header" numberOfLines={1} style={[font.body, styles.bold, styles.title, { color: theme.label }]}>
@@ -163,7 +163,7 @@ export function LibraryView() {
           <MenuTrigger items={items} trigger="tap" place={{ right: space.s, width: Math.min(tabsLayout.menuWidth, width - space.l) }}>
             {({ onPress }) => (
               <Pressable accessibilityRole="button" accessibilityLabel="More" onPress={onPress} style={[styles.topButton, styles.end]}>
-                <Symbol name="ellipsis" size={22} color={theme.formAccent} />
+                <Symbol name="ellipsis" size={22} color={theme.spaceAccentInk} />
               </Pressable>
             )}
           </MenuTrigger>
@@ -214,7 +214,7 @@ function SearchField({ prompt, query, onChange }: { prompt: string; query: strin
         placeholder={prompt}
         placeholderTextColor={theme.secondaryLabel}
         style={[font.body, styles.input, { color: theme.label }]}
-        selectionColor={theme.formAccent}
+        selectionColor={theme.spaceAccentInk}
         autoCorrect={false}
         autoCapitalize="none"
       />

@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import { PlatformColor, StyleSheet, useWindowDimensions, View } from "react-native";
 import { BottomSheet, Button, ConfirmationDialog, ContentUnavailableView, ContextMenu, Divider, HStack, Host, Label, List, Menu, NavigationStack, Picker, RNHostView, Section, ShareLink, Spacer, Text, Toolbar, ToolbarItem, VStack, useNativeState } from "@expo/ui/swift-ui";
-import { accessibilityElement, accessibilityHint, buttonStyle, disabled, font, foregroundStyle, frame, lineLimit, listStyle, offset, navigationBarTitleDisplayMode, navigationTitle, onAppear, padding, pickerStyle, searchable, tag, tint } from "@expo/ui/swift-ui/modifiers";
+import { accessibilityElement, accessibilityHint, buttonStyle, disabled, environment, font, foregroundStyle, frame, lineLimit, listRowInsets, listStyle, navigationBarTitleDisplayMode, navigationTitle, onAppear, pickerStyle, searchable, tag, tint } from "@expo/ui/swift-ui/modifiers";
 import { ARCHIVE_SEARCH_DELAY_MS, archiveDayTitle } from "../../lib/archiveDay";
 import { eagerSections, LIST_PAGE_ROWS, sectionOverscan, sectionsWithin, sheetWasSlow } from "../../lib/sectionWindow";
-import { clockTime } from "../../state/library/libraryText";
 import { countUsage } from "../../state/telemetry/telemetry";
 import { haptics } from "../../state/app/haptics";
 import { closeArchive, useBrowse } from "../../state/browse/store";
@@ -20,7 +19,8 @@ const SECONDARY = { type: "hierarchical", style: "secondary" } as const;
 const FILL = Number.MAX_SAFE_INTEGER;
 const ROW_FAVICON = 20;
 const ROW_FAVICON_SCALE_CAP = 2;
-const ICON_ABOVE_BASELINE = 0.75;
+const ROW_INSETS = { top: 5, bottom: 5, leading: 14, trailing: 14 };
+const ROW_GAP = 14;
 const INTERVALS = Object.keys(AUTO_ARCHIVE_INTERVALS) as AutoArchiveInterval[];
 
 export function ExpoArchiveSheet() {
@@ -73,17 +73,20 @@ function WarmArchive() {
   return (
     <NavigationStack>
       <Toolbar>
-        <List modifiers={modifierList(...page, listStyle("plain"))}>
+        <List modifiers={modifierList(...page, listStyle("insetGrouped"))}>
           <Section title="">
             <ArchiveRows tabs={WARM_ROWS} overscan={0} />
           </Section>
         </List>
         <Toolbar.Content>
-          <ToolbarItem placement="cancellationAction">
-            <Button label="Done" onPress={noop} />
+          <ToolbarItem placement="topBarLeading">
+            <Button label="Edit" onPress={noop} />
           </ToolbarItem>
           <ToolbarItem placement="primaryAction">
             <Menu label="Options" systemImage="ellipsis">{null}</Menu>
+          </ToolbarItem>
+          <ToolbarItem placement="confirmationAction">
+            <Button label="Done" onPress={noop} />
           </ToolbarItem>
         </Toolbar.Content>
       </Toolbar>
@@ -116,6 +119,7 @@ function ArchiveNavigation({ requestedAt }: { requestedAt: MutableRefObject<numb
   const [searched, setSearched] = useState("");
   const [confirmingClear, setConfirmingClear] = useState(false);
   const [shown, setShown] = useState(false);
+  const [editing, setEditing] = useState(false);
   const appeared = useCallback(() => setShown(true), []);
   useEffect(() => loadArchiveUnlessPrepared(), []);
   useEffect(() => {
@@ -138,11 +142,13 @@ function ArchiveNavigation({ requestedAt }: { requestedAt: MutableRefObject<numb
   ) : results && !results.length ? (
     <ContentUnavailableView title={`No Results for “${searched}”`} systemImage="magnifyingglass" description="Check the spelling or try a new search." modifiers={page} />
   ) : (
-    <List modifiers={modifierList(...page, listStyle("plain"), ...(shown ? [] : [onAppear(appeared)]))}>
+    <List modifiers={modifierList(...page, listStyle("insetGrouped"), environment("editMode", editing ? "active" : "inactive"), ...(shown ? [] : [onAppear(appeared)]))}>
       {results ? (
-        <ArchiveRows tabs={results} />
+        <Section title="">
+          <ArchiveRows tabs={results} />
+        </Section>
       ) : (
-        days.slice(0, listed).filter((_, index) => shown || eager[index]).map((day, index) => <ArchiveDaySection key={day.tabs[0]!.id} title={archiveDayTitle(day.tabs[0]!.archivedAt ?? day.tabs[0]!.lastActive, now)} tabs={day.tabs} eager={eager[index] ?? false} onLast={shown && index === listed - 1 && listed < days.length ? more : undefined} />)
+        days.slice(0, listed).filter((_, index) => shown || eager[index]).map((day, index) => <ArchiveDaySection key={day.tabs[0]!.id} title={archiveDayTitle(day.tabs[0]!.archivedAt ?? day.tabs[0]!.lastActive, now).toLocaleUpperCase()} tabs={day.tabs} eager={eager[index] ?? false} onLast={shown && index === listed - 1 && listed < days.length ? more : undefined} />)
       )}
     </List>
   );
@@ -166,8 +172,8 @@ function ArchiveNavigation({ requestedAt }: { requestedAt: MutableRefObject<numb
           </ConfirmationDialog.Message>
         </ConfirmationDialog>
         <Toolbar.Content>
-          <ToolbarItem placement="cancellationAction">
-            <Button label="Done" onPress={closeArchive} />
+          <ToolbarItem placement="topBarLeading">
+            <Button label={editing ? "Done" : "Edit"} onPress={() => setEditing((now) => !now)} modifiers={[disabled(!hasArchive && !editing)]} />
           </ToolbarItem>
           <ToolbarItem placement="primaryAction">
             <Menu label="Options" systemImage="ellipsis">
@@ -185,6 +191,9 @@ function ArchiveNavigation({ requestedAt }: { requestedAt: MutableRefObject<numb
                 </>
               ) : null}
             </Menu>
+          </ToolbarItem>
+          <ToolbarItem placement="confirmationAction">
+            <Button label="Done" onPress={closeArchive} />
           </ToolbarItem>
         </Toolbar.Content>
       </Toolbar>
@@ -224,20 +233,18 @@ function ArchiveRow({ tab, iconSize }: { tab: BrowserTab; iconSize: number }) {
     openArchivedTab(tab);
   };
   return (
-    <ContextMenu>
+    <ContextMenu modifiers={[listRowInsets(ROW_INSETS)]}>
       <ContextMenu.Trigger>
         <Button onPress={restore} modifiers={[buttonStyle("plain"), accessibilityHint("Reopens the tab.")]}>
-          <HStack alignment="firstTextBaseline" spacing={12} modifiers={[padding({ vertical: 4 }), frame({ maxWidth: FILL, alignment: "leading" }), accessibilityElement("combine")]}>
-            <VStack modifiers={[offset({ y: -iconSize * ICON_ABOVE_BASELINE })]}>
-              <RNHostView matchContents>
-                <View style={{ width: iconSize, height: iconSize }}>
-                  <Favicon iconUrl={tab.faviconUrl} pageUrl={tab.url} size={iconSize} />
-                </View>
-              </RNHostView>
-            </VStack>
-            <VStack alignment="leading" spacing={2}>
-              <Text modifiers={[font({ textStyle: "body" }), lineLimit(2)]}>{tab.title || shown.host}</Text>
-              <Text modifiers={[font({ textStyle: "subheadline" }), foregroundStyle(SECONDARY), lineLimit(1)]}>{`${shown.host} · ${clockTime(tab.archivedAt ?? tab.lastActive)}`}</Text>
+          <HStack alignment="center" spacing={ROW_GAP} modifiers={[frame({ maxWidth: FILL, alignment: "leading" }), accessibilityElement("combine")]}>
+            <RNHostView matchContents>
+              <View style={{ width: iconSize, height: iconSize }}>
+                <Favicon iconUrl={tab.faviconUrl} pageUrl={tab.url} size={iconSize} />
+              </View>
+            </RNHostView>
+            <VStack alignment="leading" spacing={1}>
+              <Text modifiers={[font({ textStyle: "body" }), lineLimit(1)]}>{tab.title || shown.host}</Text>
+              <Text modifiers={[font({ textStyle: "footnote" }), foregroundStyle(SECONDARY), lineLimit(1)]}>{shown.display || shown.host}</Text>
             </VStack>
             <Spacer />
           </HStack>

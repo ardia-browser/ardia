@@ -1,13 +1,12 @@
-import { legacyProgramsInstalled, linkPluginPrograms, sweepPluginPrograms, unlinkPluginPrograms, type PluginProgramsResult } from "../../platform/plugins";
+import { linkPluginPrograms, setAfterUpdateQuitConsent, sweepPluginPrograms, takeAfterUpdateQuitStops, unlinkPluginPrograms, type PluginProgramsResult } from "../../platform/plugins";
 import { errorText } from "../../lib/errors";
-import { useBrowser } from "../browser/store";
-import { notePlugin } from "../telemetry/pluginCounts";
+import { notePlugin, notePluginTimes } from "../telemetry/pluginCounts";
 import { consentToken, type ConsentToken } from "../telemetry/consentPeriod";
+import { onConsentPeriodChange } from "../telemetry/choice";
 import { warnFor } from "../telemetry/consoleConsent";
-import { RESERVED_PROGRAMS } from "./appChecks";
-import { settleInstall } from "./installWaiters";
-import { writePluginRecords } from "./savedState";
-import { activeManifest, currentPlugins, isAlwaysOn, isInstalled, recordOf, usePlugins, type ProgramsState } from "./store";
+import { userTurnedControlOff } from "../app/programControlSetting";
+import { programsBlocked, refreshLegacyInstalls, REGISTRY_UNREADABLE } from "./programRegistry";
+import { activeManifest, currentPlugins, usePlugins, type ProgramsState } from "./store";
 
 const requested = new Map<string, string[]>();
 let requests = 0;
@@ -26,50 +25,40 @@ function programNames(name: string): string[] {
   return requested.get(name) ?? currentPlugins().listings[name]?.manifest?.programs.map((p) => p.name) ?? [];
 }
 
-export function userRefusedControl(): boolean {
-  const { settings, settingsMeta } = useBrowser.getState();
-  return !settings.cliControl && settingsMeta.chosen.includes("cliControl") && !settingsMeta.inferred.includes("cliControl");
-}
-
-function grantControlOnce(name: string, consent: ConsentToken | null) {
-  const s = currentPlugins();
-  const record = recordOf(s, name);
-  if (!activeManifest(s, name)?.permissions.includes("control")) return;
-  const { settings, settingsMeta } = useBrowser.getState();
-  const userChose = settingsMeta.chosen.includes("cliControl") && !settingsMeta.inferred.includes("cliControl");
-  if (record.controlGranted && (settings.cliControl || userChose)) return;
-  if (!record.controlGranted) {
-    const records = { ...s.records, [name]: { ...record, controlGranted: true } };
-    if (!writePluginRecords(records, consent)) return;
-    usePlugins.setState({ records });
-  }
-  if (!settings.cliControl && !userRefusedControl()) useBrowser.getState().updateSettings({ cliControl: true });
-}
+export const userRefusedControl = userTurnedControlOff;
 
 async function link(name: string, consent?: ConsentToken | null) {
   const s = currentPlugins();
   const listing = s.listings[name]!;
   const manifest = activeManifest(s, name)!;
   const hash = listing.hash!;
-  const builtIn = !!listing.bundled;
+  const builtIn = !!listing.official && !listing.legacy;
   const request = ++requests;
   requested.set(name, manifest.programs.map((p) => p.name));
   setPrograms(name, { state: "linking", hash, request });
   const programs = manifest.programs.map((p) => (builtIn && p.afterUpdate.length ? { name: p.name, path: p.path, afterUpdate: p.afterUpdate } : { name: p.name, path: p.path }));
-  const adopt = builtIn && manifest.programs.some((p) => RESERVED_PROGRAMS[p.name] === name);
-  const result = await linkPluginPrograms({ name, folderId: listing.folderId, approved: hash, version: manifest.version, programs, adopt }).catch(
+  if (programsBlocked()) {
+    notePlugin("program_link_failures", consent);
+    setPrograms(name, { state: "failed", hash, reason: REGISTRY_UNREADABLE });
+    return;
+  }
+  const result = await linkPluginPrograms({ name, folderId: listing.folderId, approved: hash, version: manifest.version, programs }).catch(
     (error: unknown): PluginProgramsResult => ({ ok: false, reason: errorText(error) }),
   );
   const now = currentPlugins().programs[name];
   if (now?.state !== "linking" || now.request !== request || (!result.ok && result.stale)) return;
   if (!result.ok) {
     notePlugin("program_link_failures", consent);
-    return setPrograms(name, { state: "failed", hash, reason: result.reason ?? "its commands couldn't go on PATH" });
+    setPrograms(name, { state: "failed", hash, reason: result.reason ?? "its commands couldn't go on PATH" });
+    return;
   }
   notePlugin(Object.keys(result.refused).length ? "program_link_failures" : "program_links", consent);
-  if (result.adopted) notePlugin("program_adoptions", consent);
-  setPrograms(name, { state: "linked", hash, linked: result.linked, refused: result.refused, binDir: result.binDir });
-  if (result.linked.length && isAlwaysOn(currentPlugins().listings[name]) && currentPlugins().listings[name]!.manifest!.autoInstall) grantControlOnce(name, consent ?? null);
+  if (result.kept && Object.keys(result.refused).length) notePlugin("program_links_kept", consent);
+  const adoption = adoptionOf(result);
+  if (adoption === "adopted") notePlugin("program_adoptions", consent);
+  const pending = adoption === "busy" ? retryAdoption(name, consent ?? null) : adoption === "failed" ? "failed" : undefined;
+  if (adoption !== "busy") adoptionRetries.delete(name);
+  setPrograms(name, { state: "linked", hash, linked: result.linked, refused: result.refused, binDir: result.binDir, ...(pending ? { adoption: pending } : {}) });
 }
 
 function withdraw(name: string, remove: boolean, consent?: ConsentToken | null): Promise<unknown> {
@@ -80,16 +69,36 @@ function withdraw(name: string, remove: boolean, consent?: ConsentToken | null):
   return unlinkPluginPrograms(name, programs, remove).catch((error: unknown) => warnFor(consent ?? null, `[plugins] couldn't take ${name}'s programs off PATH`, error));
 }
 
-function sweepAtLaunch() {
+export const programsKeptAtLaunch = (s: Pick<ReturnType<typeof currentPlugins>, "order" | "listings" | "records">): string[] =>
+  s.order.filter((name) => activeManifest(s, name)?.programs.length).sort();
+
+function sweepAtLaunch(consent: ConsentToken | null) {
   const s = currentPlugins();
   if (sweptAtLaunch || !s.loaded) return;
   sweptAtLaunch = true;
-  void sweepPluginPrograms(s.order.filter((name) => activeManifest(s, name)?.programs.length)).catch(() => {});
+  void sweepPluginPrograms(programsKeptAtLaunch(s)).catch(() => {});
+  void countAfterUpdateQuitStops(consent);
+  tellQuitStopsConsent();
+  onConsentPeriodChange(tellQuitStopsConsent);
+}
+
+function tellQuitStopsConsent() {
+  try {
+    setAfterUpdateQuitConsent(consentToken() ?? "");
+  } catch {}
+}
+
+async function countAfterUpdateQuitStops(consent: ConsentToken | null) {
+  const stops = await Promise.resolve()
+    .then(takeAfterUpdateQuitStops)
+    .catch(() => null);
+  if (!stops || !consent || stops.consent !== consent) return;
+  notePluginTimes("program_after_update_quit_exits", stops.exitedOnTerm, consent);
+  notePluginTimes("program_after_update_quit_kills", stops.killed, consent);
 }
 
 export function reconcilePrograms(consent?: ConsentToken | null) {
-  sweepAtLaunch();
-  keepControlWhileInstalled();
+  sweepAtLaunch(consent ?? null);
   const s = currentPlugins();
   for (const name of s.order) {
     const manifest = activeManifest(s, name);
@@ -101,7 +110,8 @@ export function reconcilePrograms(consent?: ConsentToken | null) {
   for (const name of Object.keys(s.programs)) if (!activeManifest(s, name)?.programs.length) void withdraw(name, false, consent);
 }
 
-export const canRelink = (state: ProgramsState | undefined) => state?.state === "failed" || (state?.state === "linked" && Object.keys(state.refused).length > 0);
+export const canRelink = (state: ProgramsState | undefined) =>
+  state?.state === "failed" || (state?.state === "linked" && (Object.keys(state.refused).length > 0 || state.adoption === "busy" || state.adoption === "failed"));
 
 export function relinkPrograms(name: string) {
   if (!canRelink(currentPlugins().programs[name])) return;
@@ -110,47 +120,69 @@ export function relinkPrograms(name: string) {
 }
 
 let adoptionChecked = false;
-let controlKept = false;
 
-export const ADOPT_WITH_CONTROL_OFF = false;
+export const ADOPTION_RETRY = { delayMs: 5000, tries: 6 };
 
-const asksControl = (name: string) => !!currentPlugins().listings[name]?.manifest?.permissions.includes("control");
+type AdoptionOutcome = "adopted" | "already" | "failed" | "busy" | "none";
 
-function keepControlWhileInstalled() {
-  const s = currentPlugins();
-  if (controlKept || !s.loaded) return;
-  controlKept = true;
-  if (useBrowser.getState().settings.cliControl) return;
-  if (s.order.some((name) => isAlwaysOn(s.listings[name]) && isInstalled(s, name) && asksControl(name))) useBrowser.getState().updateSettings({ cliControl: true });
+function adoptionOf(result: { adopted?: boolean; adoptBusy?: boolean; adoption?: string }): AdoptionOutcome {
+  if (result.adoption === "adopted" || result.adoption === "already" || result.adoption === "failed" || result.adoption === "busy" || result.adoption === "none") return result.adoption;
+  return result.adoptBusy ? "busy" : result.adopted ? "adopted" : "none";
 }
 
-const ownsReservedProgram = (name: string) => !!currentPlugins().listings[name]?.manifest?.programs.some((p) => RESERVED_PROGRAMS[p.name] === name);
+const adoptionRetries = new Map<string, number>();
+
+function retryAdoption(name: string, consent: ConsentToken | null): "retrying" | "busy" {
+  const tries = adoptionRetries.get(name) ?? 0;
+  if (tries >= ADOPTION_RETRY.tries) {
+    adoptionRetries.delete(name);
+    return "busy";
+  }
+  adoptionRetries.set(name, tries + 1);
+  setTimeout(() => {
+    const now = currentPlugins().programs[name];
+    if (now?.state !== "linked" || now.adoption !== "retrying") return;
+    setPrograms(name, null);
+    reconcilePrograms(consent);
+  }, ADOPTION_RETRY.delayMs);
+  return "retrying";
+}
+
+export function resetAdoptionForTests() {
+  adoptionChecked = false;
+}
 
 export async function adoptLegacyInstalls(consent: ConsentToken | null): Promise<boolean> {
   const s = currentPlugins();
   if (adoptionChecked || !s.order.length) return false;
   adoptionChecked = true;
-  const owners = s.order.filter((name) => isAlwaysOn(s.listings[name]) && !isInstalled(s, name) && ownsReservedProgram(name));
-  if (!owners.length || !(await legacyProgramsInstalled().catch(() => false))) return false;
-  let adopted = false;
-  for (const name of owners) {
-    const now = currentPlugins();
-    const listing = now.listings[name];
-    if (!listing?.hash || !isAlwaysOn(listing) || isInstalled(now, name)) continue;
-    const controlOff = asksControl(name) && !useBrowser.getState().settings.cliControl;
-    if (controlOff && !ADOPT_WITH_CONTROL_OFF) {
-      notePlugin("plugin_adoptions_waiting", consent);
-      continue;
-    }
-    const records = { ...now.records, [name]: { ...recordOf(now, name), enabled: true, approved: listing.hash, installed: true } };
-    if (!writePluginRecords(records, consent)) continue;
-    usePlugins.setState((s) => ({ records, consent: s.consent?.name === name ? null : s.consent }));
-    settleInstall(name, { ok: true });
-    if (controlOff) useBrowser.getState().updateSettings({ cliControl: true });
-    notePlugin("plugin_adoptions", consent);
-    adopted = true;
+  const found = await refreshLegacyInstalls();
+  for (const name of Array.isArray(found) ? found : []) {
+    if (!activeManifest(currentPlugins(), name)) notePlugin("plugin_adoptions_waiting", consent);
   }
-  return adopted;
+  return false;
+}
+
+export type OwnProgramsStatus = { state: "none" | "linking" | "linked" | "failed"; linked: string[]; failed: { name: string; reason: string }[]; binDir: string | null };
+
+export function programsStatus(name: string): OwnProgramsStatus {
+  const s = currentPlugins();
+  const names = activeManifest(s, name)?.programs.map((p) => p.name) ?? [];
+  if (!names.length) return { state: "none", linked: [], failed: [], binDir: null };
+  const now = s.programs[name];
+  if (!now || now.state === "linking" || now.hash !== s.listings[name]?.hash) return { state: "linking", linked: [], failed: [], binDir: null };
+  if (now.state === "failed") return { state: "failed", linked: [], failed: names.map((program) => ({ name: program, reason: now.reason })), binDir: null };
+  const failed = Object.entries(now.refused).map(([program, reason]) => ({ name: program, reason }));
+  return { state: failed.length ? "failed" : "linked", linked: [...now.linked], failed, binDir: now.binDir };
+}
+
+export function relinkOwnPrograms(name: string): { ok: true } | { ok: false; reason: string } {
+  const s = currentPlugins();
+  if (!activeManifest(s, name)?.programs.length) return { ok: false, reason: "This plugin has no programs." };
+  if (s.programs[name]?.state === "linking") return { ok: false, reason: "Its programs are being put on PATH now." };
+  setPrograms(name, null);
+  reconcilePrograms(consentToken());
+  return { ok: true };
 }
 
 export const removePrograms = (name: string, consent?: ConsentToken | null) => withdraw(name, true, consent);

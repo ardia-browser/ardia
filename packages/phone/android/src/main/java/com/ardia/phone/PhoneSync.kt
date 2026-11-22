@@ -15,7 +15,7 @@ object PhoneSync {
 
     internal var makeController: (Context, LocalBrowsingSource) -> SyncController = { app, source -> SyncController.forApp(app, source) }
     internal var makeDemo: () -> SyncController = { SyncController.demo() }
-    internal var makeRows: (File) -> BrowserRows = ::SqliteBrowserRows
+    internal var makeRows: (File) -> BrowserRows = ::ExpoSqliteBrowserRows
     internal var labBuild: Boolean = PhoneLab.isOn
 
     @Volatile

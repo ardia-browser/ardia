@@ -1,5 +1,5 @@
 import type { PluginManifest } from "../../lib/pluginManifest";
-import { startPluginProcess, stopPluginProcess, type PluginExit } from "../../platform/plugins";
+import { sendToPlugin, startPluginProcess, stopPluginProcess, type PluginExit, type PluginStartSpec } from "../../platform/plugins";
 import { notePlugin } from "../telemetry/pluginCounts";
 import { consentNow, consentToken, type ConsentToken } from "../telemetry/choice";
 import { warnFor } from "../telemetry/consoleConsent";
@@ -10,11 +10,13 @@ export const RESTART_DELAYS_MS = [1000, 2000, 4000, 8000, 16000];
 export const CRASH_WINDOW_MS = 10 * 60_000;
 export const CRASH_LIMIT = 5;
 export const STOP_GRACE_MS = 3000;
+export const STOPPING_NOTICE_MS = 120;
 
-type Supervised = { hash: string; folderId: string; manifest: PluginManifest; failures: number[]; timer: ReturnType<typeof setTimeout> | null; token: number; startingRun: number | null };
+type Supervised = { hash: string; folderId: string; manifest: PluginManifest; failures: number[]; timer: ReturnType<typeof setTimeout> | null; token: number; startingRun: number | null; liveRun: number | null };
 
 const supervised = new Map<string, Supervised>();
 const stopListeners = new Set<(name: string) => void>();
+const stopping = new Map<string, Promise<void>>();
 let tokens = 0;
 
 export function acceptsRun(name: string, run: number): boolean {
@@ -53,14 +55,58 @@ const stopped = (name: string) => {
   for (const listener of stopListeners) listener(name);
 };
 
+function targetRunOf(name: string, entry: Supervised): number | null {
+  const state = usePlugins.getState().processes[name];
+  if (state?.state === "running") return state.run;
+  return entry.liveRun ?? entry.startingRun;
+}
+
+function noticeStopping(name: string, entry: Supervised): boolean {
+  const state = usePlugins.getState().processes[name];
+  if (isQuitting() || !entry.manifest.main || state?.state !== "running") return false;
+  try {
+    sendToPlugin(name, state.run, JSON.stringify({ event: "plugin.stopping", time: Date.now(), data: {} }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function stopNative(name: string, entry: Supervised, graceMs: number, consent: ConsentToken | null): Promise<void> {
+  const targetRun = targetRunOf(name, entry);
+  const noticed = targetRun !== null && noticeStopping(name, entry);
+  const stop = () => (targetRun === null ? Promise.resolve() : stopPluginProcess(name, targetRun, graceMs));
+  const begin = () => (noticed ? new Promise<void>((resolve) => setTimeout(resolve, STOPPING_NOTICE_MS)).then(stop) : stop());
+  const prior = stopping.get(name);
+  const waited = prior ? prior.then(begin) : begin();
+  const done = waited.then(
+    () => {},
+    (error: unknown) => warnFor(consent, `[plugins] couldn't stop ${name}`, error),
+  );
+  stopping.set(name, done);
+  void done.then(() => {
+    if (stopping.get(name) === done) stopping.delete(name);
+  });
+  return done;
+}
+
+export function startSpec(name: string, entry: Pick<Supervised, "manifest" | "folderId" | "hash">, launchToken: number): PluginStartSpec {
+  const m = entry.manifest;
+  const base = { name, network: m.sidecar !== null && m.permissions.network !== false, folderId: entry.folderId, approved: entry.hash, page: m.contributes.panels.some((p) => !!p.file), launch: launchToken };
+  if (m.main) return { ...base, runtime: "js", entry: m.main.entry, run: [], memoryMB: m.main.memoryMB };
+  return { ...base, run: m.sidecar?.run ?? [], memoryMB: m.sidecar?.memoryMB ?? 0 };
+}
+
 async function launch(name: string, entry: Supervised, consent: ConsentToken | null) {
   const token = entry.token;
   entry.startingRun = null;
   setProcess(name, { state: "starting", run: 0, since: Date.now() });
-  const m = entry.manifest;
+  const pending = stopping.get(name);
+  if (pending) await pending;
+  if (supervised.get(name)?.token !== token) return;
   let started: Awaited<ReturnType<typeof startPluginProcess>>;
   try {
-    started = await startPluginProcess({ name, run: m.process!.run, memoryMB: m.process!.memoryMB, network: m.permissions.includes("network"), folderId: entry.folderId, approved: entry.hash, page: !!m.page, launch: token });
+    started = await startPluginProcess(startSpec(name, entry, token));
   } catch (error) {
     started = { ok: false, reason: String(error) };
   }
@@ -70,6 +116,7 @@ async function launch(name: string, entry: Supervised, consent: ConsentToken | n
   }
   if (!started.ok) return setProcess(name, { state: "failed", reason: started.reason });
   notePlugin("plugin_process_starts", consent);
+  entry.liveRun = started.run;
   setProcess(name, { state: "running", run: started.run, since: Date.now() });
 }
 
@@ -77,7 +124,7 @@ export function superviseProcess(name: string, hash: string, manifest: PluginMan
   const current = supervised.get(name);
   if (current && current.hash === hash) return;
   if (current) stopProcess(name, consent);
-  const entry: Supervised = { hash, folderId, manifest, failures: [], timer: null, token: ++tokens, startingRun: null };
+  const entry: Supervised = { hash, folderId, manifest, failures: [], timer: null, token: ++tokens, startingRun: null, liveRun: null };
   supervised.set(name, entry);
   void launch(name, entry, consent);
 }
@@ -87,9 +134,9 @@ export function stopProcess(name: string, consent: ConsentToken | null, graceMs 
   if (!entry) return;
   supervised.delete(name);
   if (entry.timer) clearTimeout(entry.timer);
+  void stopNative(name, entry, graceMs, consent);
   setProcess(name, null);
   stopped(name);
-  void stopPluginProcess(name, 0, graceMs).catch((error: unknown) => warnFor(consent, `[plugins] couldn't stop ${name}`, error));
 }
 
 export function restartProcess(name: string) {
@@ -100,10 +147,12 @@ export function restartProcess(name: string) {
   entry.timer = null;
   entry.failures = [];
   const token = (entry.token = ++tokens);
+  const stoppedNative = stopNative(name, entry, STOP_GRACE_MS, consent);
   entry.startingRun = null;
+  entry.liveRun = null;
   setProcess(name, { state: "starting", run: 0, since: Date.now() });
   stopped(name);
-  void stopPluginProcess(name, 0, STOP_GRACE_MS).then(() => {
+  void stoppedNative.then(() => {
     if (supervised.get(name) === entry && entry.token === token) void launch(name, entry, consent);
   });
 }
@@ -131,3 +180,5 @@ export function processExited(exit: PluginExit, now = Date.now()) {
 }
 
 export const supervisedNames = () => [...supervised.keys()];
+
+export const settledStops = (): Promise<void> => Promise.all([...stopping.values()]).then(() => {});

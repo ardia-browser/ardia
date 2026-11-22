@@ -78,7 +78,7 @@ export function ExpoSyncConnectPage() {
     }
   };
 
-  const capsule = [buttonBorderShape("capsule"), labelStyle("titleAndIcon"), lineLimit(1), fixedSize({ horizontal: true, vertical: false })];
+  const capsule = [buttonBorderShape("roundedRectangle", 12), labelStyle("titleAndIcon"), lineLimit(1), fixedSize({ horizontal: true, vertical: false })];
   const prominent = [buttonStyle("borderedProminent"), tint(theme.primaryAction), foregroundStyle(theme.onPrimaryAction)];
   return (
     <ZStack>

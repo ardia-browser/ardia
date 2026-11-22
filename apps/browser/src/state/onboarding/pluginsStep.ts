@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import { askConsentInOnboarding, CONFIRM_REFUSED, confirmConsentAs, dismissConsentAs, releaseOnboardingConsent } from "../plugins/consentSurface";
-import { installOfficialPlugin, type OfficialPlugin } from "../plugins/official";
+import { claimOnboardingConsent, CONFIRM_REFUSED, confirmConsentAs, dismissConsentAs, releaseOnboardingConsent } from "../plugins/consentSurface";
+import { cancelOfficialInstall, installOfficialPlugin, type OfficialPlugin } from "../plugins/official";
 import { officialTitle, wasCancelled } from "../plugins/officialView";
 import { consentToken, type ConsentToken } from "../telemetry/consentPeriod";
 import { noteOfficialPlugin } from "../telemetry/officialPluginCounts";
@@ -26,7 +26,14 @@ export const REFUSED_REASON = CONFIRM_REFUSED;
 const FRESH = { picks: {}, phase: "offer", current: null, failures: {}, installed: [], shown: [] } satisfies Omit<PluginsStepState, "run">;
 
 function installOrRefusal(name: string, run: number): Promise<InstallOutcome> {
-  return askConsentInOnboarding(name, useOnboarding.getState().windowId, () => inPluginsStep(run), () => installOfficialPlugin(name, { showSheet: false })).result;
+  const alive = () => inPluginsStep(run);
+  return installOfficialPlugin(name, { showSheet: false, alive, onConsent: (id) => void claimOnboardingConsent(id, useOnboarding.getState().windowId, alive) });
+}
+
+function stopInstalling() {
+  const current = now().current;
+  if (current) cancelOfficialInstall(current);
+  releaseOnboardingConsent();
 }
 
 export const confirmPluginConsent = (id: number): boolean => confirmConsentAs("onboarding", id);
@@ -118,13 +125,13 @@ export function skipPluginsStep(plugins: readonly OfficialPlugin[]) {
   if (useOnboarding.getState().step !== "plugins") return;
   const state = now();
   if (state.phase !== "working") for (const plugin of plugins) if (plugin.state === "available" && !(plugin.name in state.failures)) noteOfficialPlugin("onboarding", "skipped", plugin.name);
-  releaseOnboardingConsent();
+  stopInstalling();
   resetPluginsStep();
   skipStep();
 }
 
 export function leavePluginsStep() {
-  releaseOnboardingConsent();
+  stopInstalling();
   resetPluginsStep();
 }
 

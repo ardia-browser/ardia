@@ -71,6 +71,30 @@ forward.
   recreation or a JS reload is asked again: the first answer wins, and one granted in the meantime skips the dialog.
   An unanswered request is sent again when JS reopens a page it was already watching (07fca2a67).
 
+**Night Shade's timing on Android.** `night-shade.js` is added with `addDocumentStartJavaScript`, with the state for the
+page's host baked in: `WebViewPage` removes the old script and adds one carrying the host, the mode and the site's
+cached verdict (`light`: shade it, `dark`: it has its own dark look, or `unknown`) before each main-frame navigation
+(`prepareNavigation`, which `loadUrl`, reload, back and forward, restores, and renderer navigations and redirects
+through `shouldOverrideUrlLoading` all call), again in `onPageStarted`, when a site's verdict changes and when site
+settings change. The script trusts the baked state only when its host matches `location.hostname`; otherwise (a POST,
+a popup, a WebView without `DOCUMENT_START_SCRIPT`, which runs it at `onPageStarted`) it asks native over the
+`ardiaPage` listener at document start, which answers `"<mode> <verdict>"`. With the mode on (Always, or Automatic
+while the page sees a dark scheme) and the verdict `light`, the `#ardia-night-shade` style goes in as soon as `<html>`
+exists (a `MutationObserver` on the document), before any of the page's scripts and before the first paint. With no
+verdict, the page is measured when `<body>` exists (left alone while it has no background and stylesheets are still
+loading, as on iPhone) and again as each stylesheet loads, then at `DOMContentLoaded` and `load`. A cached verdict holds
+until `DOMContentLoaded`, then is measured again there and at `load`, so a redesigned site is corrected. When a
+measurement from `DOMContentLoaded` on differs from what the page was given, the script posts
+`nightShadeVerdict:light|dark` (accepted from the main frame only, keyed by its origin's host). `NightShadeVerdicts`
+keeps it: for regular tabs in the site preferences (`nightShade.verdicts`, at most 400 hosts, the least recently used
+dropped first, a use saved at most once a minute), for private tabs in memory until private browsing ends. Clear
+Browsing Data with History forgets the verdicts used in its range (`forgetNightShadeVerdicts`). The iPhone does the
+same in `WebEngine` and `NightShadeVerdicts.swift`; the measurement and the style are the same text on both
+(`PageScriptsTest`). Tests: `NightShadeVerdictsTest` (cap, order, private, clearing), `PageScriptsTest` (the baked
+script and the messages) and the device test `NightShadeStartTest` (an inline script at the top of `<body>` sees the
+style on a second load of a light site, typed, reloaded or followed from a script; a dark site is learned and left
+alone; a site that turned dark is corrected; Night Shade off shades nothing).
+
 `browser`'s `Omnibox.kt` (the ScriptEngine bridge) and `PageSurface.kt` (Compose) are left out of the module's build:
 the Expo app calls `@ardia/core` itself and hosts the page's view natively.
 
@@ -111,6 +135,12 @@ minutes, and a flush after the app leaves the screen) runs it without React Nati
   the sync state (`noBackupFilesDir/PhoneSync`), written whole and renamed into place, until the app applies
   them to its store (`sync.inbox()`, `sync.inboxApplied(ids)`, the `sync.inbox` event). Visits waiting to be
   removed are left out of what sync reads, so they never go back to the Mac.
+- **One SQLite engine for `browser.db`.** expo-sqlite bundles its own SQLite (`exsqlite3_*`) and the app's JS keeps
+  `browser.db` open through it, so native code reads the file through that same engine: on iPhone
+  `SQLiteEngine.expoSQLite` (sync's `PhoneBrowsingSource`, Spotlight and Shortcuts' `TabRecords`), on Android
+  `ExpoSqliteBrowserRows` over `ExpoSqliteConnection`. A second engine in the process can't see the first one's file
+  locks: it resets the WAL index the first has mapped and the app dies with SIGBUS (the iPhone crash on reopening the
+  app, 0.2.47 and 1.0.1). `apps/phone/scripts/one-sqlite-engine.test.mjs` fails on any other use of the system SQLite.
 - **Lab.** The page lab's Sync button connects with a typed phrase and a picked folder and shows the status and
   the synced view's counts. Runtime checks runs semantic fixtures (closures in loops, microtask order around a
   host call, sort stability, Map and Set order, large integers, string comparison) in a second sync runtime and
@@ -133,9 +163,9 @@ says what happened, and no tab or removed visit is lost or shows up twice.
    minute. Then revoke the grant (Settings › Apps › Ardia › clear the folder permission, or remove the folder in
    the provider): status turns `needsFolderAccess`, and Change folder recovers it.
 6. **WorkManager with the app process dead.** Make a change on the Mac, leave the app, run
-   `adb shell am kill com.ardia.browser.android`, then
-   `adb shell cmd jobscheduler run -f com.ardia.browser.android <job id>` (ids from
-   `adb shell dumpsys jobscheduler com.ardia.browser.android`). Open the app: the change is there before the
+   `adb shell am kill com.ardia.browser.android.dev`, then
+   `adb shell cmd jobscheduler run -f com.ardia.browser.android.dev <job id>` (ids from
+   `adb shell dumpsys jobscheduler com.ardia.browser.android.dev`). Open the app: the change is there before the
    first foreground cycle, and the inbox holds any tabs the Mac sent.
 7. **Stalled age.** Turn on airplane mode and wait three minutes: the status reads `Last synced N minutes ago`
    and N moves each minute.
@@ -215,13 +245,13 @@ Before any run, prove the phone has the build you were sent:
   (sync13 on the M3 once installed sync12 that way): `adb shell ls /sdcard/Download | grep -i ardia`, then
   `adb shell rm /sdcard/Download/<each old ardia apk>`.
 - After installing, hash what is installed and compare it with the `sha256:` line of the build's `.txt`:
-  `adb shell sha256sum $(adb shell pm path com.ardia.browser.android | sed -n 's/^package://p' | grep base.apk)`.
+  `adb shell sha256sum $(adb shell pm path com.ardia.browser.android.dev | sed -n 's/^package://p' | grep base.apk)`.
   An `adb install` of a single APK keeps it byte for byte as `base.apk`.
 - On the first launch logcat has `PAGELAB build <commit> dirty: no …`, and the commit must be the one sent
   with the APK. If the hash or the commit differs, stop and reinstall: nothing measured on the wrong build
   counts.
 
-`P=com.ardia.browser.android/.MainActivity`. Open the lab
+`P=com.ardia.browser.android.dev/com.ardia.browser.android.MainActivity`. Open the lab
 (`adb shell am start -n $P --ez com.ardia.phone.PAGE_LAB true`), tap System, and watch
 `adb logcat -s PAGELAB | grep "PAGELAB system"`. Each command should print one `PAGELAB system link`
 line with the kind and source shown. The lab also prints `PAGELAB system default browser` once when it opens
@@ -302,7 +332,7 @@ and again only when that status changes.
     airplane mode on and off: `network lost`, then `online again` once.
 23. **Accessibility dump:** in the app (not the lab), open the tray, the page menu, a long-press menu, Spaces
     and the Archive sheet in turn, and with each open run
-    `adb shell am broadcast -a com.ardia.phone.A11Y_DUMP -p com.ardia.browser.android` and
+    `adb shell am broadcast -a com.ardia.phone.A11Y_DUMP -p com.ardia.browser.android.dev` and
     `adb logcat -d -s PAGELAB | grep "PAGELAB a11y"`. The lines between `begin` and `end` are what TalkBack can
     reach; the surface behind a cover should not be among them.
 Look checks (24, 25, 32, 33, 38) start from the look on. The lab's Look on/Look off switch lasts across launches
@@ -333,11 +363,11 @@ off in the lab`.
     answered while Ardia is in front. From sync20d its receiver also stays registered in the background, but
     Android 14 and later, and MIUI's freezer, hold a broadcast to a cached app until it is back on screen. For the
     background itself use `adb shell dumpsys gfxinfo $P` and `dumpsys meminfo $P`.)
-    `adb shell am broadcast -a com.ardia.phone.MEMORY -p com.ardia.browser.android`
+    `adb shell am broadcast -a com.ardia.phone.MEMORY -p com.ardia.browser.android.dev`
     and `adb logcat -d -s PAGELAB | grep "PAGELAB memory"` (or System › Memory) at four points, after a
     force-stop and cold start each time you start over: with one tab; after opening nine tabs and visiting each;
     after closing eight of them; and after `adb shell am broadcast -a com.ardia.phone.TRIM -p
-    com.ardia.browser.android` (System › Trim, the same clear Android's low-memory signal does). Report the four
+    com.ardia.browser.android.dev` (System › Trim, the same clear Android's low-memory signal does). Report the four
     lines; the image cache's MB should fall when tabs close.
 28. **Scanner without a camera:** Scanner section with the camera allowed: Feed a phrase code gives
     `code: … 24 words, valid true`, Feed another code gives `rejected`; no recovery phrase in
@@ -402,7 +432,7 @@ off in the lab`.
     when the delete wins, the close says `no snapshot files left (…)` and the delete line carries the drops. For
     a tab that had a card, one of the two lines drops 1 or more; report any close of a carded tab where both say
     0. The image cache after closing eight is no larger than with nine open. Then run
-    `adb shell am send-trim-memory com.ardia.browser.android RUNNING_CRITICAL` (Android's own signal, which
+    `adb shell am send-trim-memory com.ardia.browser.android.dev RUNNING_CRITICAL` (Android's own signal, which
     also trims the system's GPU caches; the lab's Trim only clears the image cache) and tap Memory again. Report
     all the lines, graphics included.
     - Each Memory line now ends with `look on|off: N of M frost(s) blurring, about X MB of blur layers (largest …),
@@ -411,7 +441,7 @@ off in the lab`.
       between), so the look's share of graphics shows.
     - Android only releases GPU caches, the WebViews' tiles included, at "UI hidden" or deeper, not at
       `RUNNING_CRITICAL` with the app in front. So also press Home, run
-      `adb shell am send-trim-memory com.ardia.browser.android UI_HIDDEN`, come back and tap Memory.
+      `adb shell am send-trim-memory com.ardia.browser.android.dev UI_HIDDEN`, come back and tap Memory.
 38. **Frames with and without the look:** measure twice, look on and look off, doing the same thing each time.
     - In the lab's Look, set the toggle (Look on or Look off; it logs `PAGELAB look views off|on` and lasts across
       launches), then `adb shell am force-stop $P` and open the app normally.
@@ -477,7 +507,7 @@ off in the lab`.
     connected folder's grant, not the one left unused.
 41. **Launch arguments** (lab build): run the capture commands from "Launch arguments on Android" against the Expo
     app, for example
-    `adb shell am start -S -n $P/.MainActivity --ez ArdiaDemo true --es BrowseQuery otters`,
+    `adb shell am start -S -n $P/com.ardia.browser.android.MainActivity --ez ArdiaDemo true --es BrowseQuery otters`,
     `… --ez ArdiaDemo true --ez BrowseDeck true`, `… --ez ArdiaDemo true --es ArdiaOpenSheet settings` and
     `… --ez ArdiaOnboarding true`. Each does what it does in the Compose app, and with `ArdiaDemo` the sync view
     shows the demo Macs, not the real ones. Lab builds log `PAGELAB launch arguments {…}` once per launch
@@ -582,7 +612,7 @@ off in the lab`.
     - System settings win: with Remove animations on (Settings › Accessibility), the deck stands still whatever
       the budget says, and no sample is taken (nothing moves to measure).
 52. **An idle app draws nothing** (sync11's look-off deck drew 1825 frames in 30 s with nothing changing). With the
-    deck open and untouched, run `adb shell am broadcast -a com.ardia.phone.FRAMES -p com.ardia.browser.android
+    deck open and untouched, run `adb shell am broadcast -a com.ardia.phone.FRAMES -p com.ardia.browser.android.dev
     --ei seconds 5` and keep hands off for 5 s. Logcat (`-s PAGELAB`) has `PAGELAB idle frames: N frame(s) drawn in
     5.0 s, … draw pass(es), … layout pass(es), … with no view redrawn; look views redrawn: <view> xN, …; redrawn:
     <view> xN, … and K more`. The look views (backdrops, frosts, frost sources) are listed first and in full,
@@ -592,7 +622,7 @@ off in the lab`.
     chase.
 53. **The look lets go when the app is hidden.** Look on, nine tabs, tap Memory (step 37) and note the look part
     (`… frost(s) holding a blur layer, about X MB …`). Press Home, then
-    `adb shell am send-trim-memory com.ardia.browser.android HIDDEN` (this Android's name for UI_HIDDEN). Logcat
+    `adb shell am send-trim-memory com.ardia.browser.android.dev HIDDEN` (this Android's name for UI_HIDDEN). Logcat
     has `PAGELAB memory trim received: level 20 (UI_HIDDEN); …; look released for the hidden app: N frost
     layer(s) …`; every trim the app receives now logs one such line, whatever its level, so a missing line means
     the app never got it. Come back and tap Memory: graphics should be near the look-off figure until the deck is
@@ -745,6 +775,14 @@ Start the pass where R8 is most likely to have broken something, then run the wh
 7. Fullscreen video (media3).
 8. The lab: the deck-parts, frames and memory broadcasts and the Look section's buttons.
 
+## Ardia Dev on Android
+
+Every build without a release version (corex-build, build-apk without `--version`, lab builds) is a separate app, Ardia
+Dev, `com.ardia.browser.android.dev`, so it installs beside the published Ardia (`com.ardia.browser.android`) and
+neither replaces the other's data. Its activities keep their class names, so launch it with
+`com.ardia.browser.android.dev/com.ardia.browser.android.MainActivity`. `--compose-key` builds keep the release package,
+since they must install over the Compose app.
+
 ## Upgrade from the Compose app on Android
 
 Both apps are `com.ardia.browser.android`, so the Expo app installs over the Compose app and finds its files.
@@ -886,7 +924,7 @@ pass.
 Use the Compose APK and the Expo upgrade APK built for this run (same key), named here `$COMPOSE_APK` and
 `$EXPO_APK`. Watch `adb logcat -s ReactNativeJS:I ArdiaJS PAGELAB` throughout (the lab's own lines are all under
 `PAGELAB`), and `adb logcat -b crash` for crashes.
-`P=com.ardia.browser.android`. The lab is `adb shell am start -n $P/.MainActivity --ez com.ardia.phone.PAGE_LAB true`,
+`P=com.ardia.browser.android`. The lab is `adb shell am start -n $P/com.ardia.browser.android.MainActivity --ez com.ardia.phone.PAGE_LAB true`,
 then Upgrade; opening the lab never runs the import, and while the import waits its page area stays blank ("no
 state"). A launch intent reaches a process that is already running, so to get from the app to the lab (or back)
 force-stop first.
@@ -937,9 +975,9 @@ Pass A
    - The lab's page area stays blank with "no state": the page engine waits for the import. Force-stop.
 6. **A kill at each durable step.** A lab build can hold the import for 20 s at a step, through
    `--es ArdiaImportPause <step>`. Do these three in order, each from a stopped app:
-   - `adb shell am start -n $P/.MainActivity --es ArdiaImportPause afterReceipt`. When logcat says
+   - `adb shell am start -n $P/com.ardia.browser.android.MainActivity --es ArdiaImportPause afterReceipt`. When logcat says
      `PAGELAB upgrade paused at settingsStart`, send a link to the held app:
-     `adb shell am start -a android.intent.action.VIEW -d https://example.com/held-a -n $P/.MainActivity`. It does
+     `adb shell am start -a android.intent.action.VIEW -d https://example.com/held-a -n $P/com.ardia.browser.android.MainActivity`. It does
      not open; the import is still waiting. Then run `adb shell am force-stop $P`. The SQL receipt is written, and
      the native settings and the marker are not. The link was kept on disk, so it survives the kill: it must open
      in step 7, once. (Don't send the link from a stopped app: that launch runs the import with no pause.)
@@ -1003,7 +1041,7 @@ Pass B (after steps 1 to 3 again)
     - The "Couldn’t Bring Over Your Tabs" screen shows in place of the deck, and logcat has
       `ardia-legacy failed reason=unusable_io`.
     - Send a link while the screen is up:
-      `adb shell am start -a android.intent.action.VIEW -d https://example.com/held-b -n $P/.MainActivity`. It does
+      `adb shell am start -a android.intent.action.VIEW -d https://example.com/held-b -n $P/com.ardia.browser.android.MainActivity`. It does
       not open.
     - Tap Try Again: the same screen, now with Start Without Them and its note under it. Don't tap it.
     - Force-stop, open the lab, tap Make source usable, force-stop, then open the app normally. The import runs,
@@ -1378,10 +1416,18 @@ JavaScript is shared; it turns on wherever the native module is registered.
   answer with `[n]` citations from the pages' most relevant paragraphs, cut to fit the model's context. Without Apple
   Intelligence (an older iPhone, turned off, still downloading), or when the model refuses, the answer is the pages'
   most relevant sentences, cited, and the page says why. The sources sit in a row above the answer. On Android the
-  on-device writer is Gemini Nano through ML Kit's Prompt API (`com.google.mlkit:genai-prompt:1.0.0-beta2`, pinned:
-  beta3 and later need Kotlin 2.3 or 2.4 and React Native 0.88 builds with 2.2), on phones whose AICore has it
-  (Pixel 9 and newer, recent Galaxy flagships). A phone that can download it starts the download and shows excerpts
-  until it lands; a phone without it (a POCO, most mid-range phones) always gets the cited excerpts. The answer is
+  on-device writer is Gemini Nano through ML Kit's Prompt API (`com.google.mlkit:genai-prompt:1.0.0-beta4`, pinned:
+  beta4 ships Kotlin 2.3 metadata, which React Native 0.88's Kotlin 2.2 still reads; beta5 ships 2.4, which it
+  doesn't). Google opens the Prompt API to apps only on the phones it lists (Pixel 9 and newer, Galaxy S25 and newer,
+  the Z Fold7 and Flip7, and a few other flagships), so a phone can have AICore installed and still answer
+  `UNAVAILABLE` (a Galaxy S24, a POCO). `OnDeviceWriter.Availability` keeps the reason apart instead of calling every
+  miss "can't run": `NotOffered` (the status is `UNAVAILABLE`, or AICore throws `NOT_AVAILABLE`), `Downloading`
+  (it starts the download and shows excerpts until it lands), `NeedsUpdate` (`AICORE_INCOMPATIBLE`,
+  `NEEDS_SYSTEM_UPDATE`), `NeedsSpace`, `Busy` (`BUSY`, the per-app quota, `BACKGROUND_USE_BLOCKED`) and `Failed`.
+  A busy or failed status check is asked once more after 400 ms, and a client that couldn't be made is made again on
+  the next use instead of being remembered as missing. The note names the reason, for example "Google lets apps use
+  Gemini Nano only on newer phones, such as the Pixel 9 and Galaxy S25, so here are the most relevant lines from the
+  pages." (`OnDeviceWriterAvailabilityTest`). The answer is
   capped at 256 tokens, and the prompt is cut to the model's token limit, then halved once on failure. Generation
   never leaves the phone, but ML Kit itself reports anonymous API usage to Google.
 - **Continue with ChatGPT.** Settings › Browse for Me (and a button under an on-device answer) signs in with OpenAI's
@@ -1566,7 +1612,8 @@ The same action, card and menu row, with a choice of writer in Settings › Expe
   rewrites the summary on the phone. The choice applies to every page, Incognito included, as Browse for Me's
   connected account does.
 - **No key lines.** Android never quotes the page. When no writer succeeds the card says so plainly and the outcome
-  is `failed` (`PageSummaryWriting.Unwritten`): "Gemini Nano is unavailable on this phone.", "Gemini Nano is still
+  is `failed` (`PageSummaryWriting.Unwritten`): the reason from `OnDeviceWriter.Availability` (such as "Google lets
+  apps use Gemini Nano only on newer phones, such as the Pixel 9 and Galaxy S25."), "Gemini Nano is still
   downloading. Try again when it's ready." or "Gemini Nano couldn't summarize this page.", after ChatGPT's reason
   when ChatGPT was chosen.
 - **The card.** A Compose card (`PageSummaryCard.kt`) in a `ComposeView` laid out inside `PageView` above the WebView,
@@ -1595,7 +1642,7 @@ Events (service `ardia-phone`, `$lib` `ardia-phone-telemetry`, tags `app: phone`
 | `perf_launch` | `launch_ms`, `js_ms` | each launch, once the module gives the process start (`ArdiaPhoneSystem.processStartedAt()`, epoch ms) |
 | `perf_backdrop` | `backdrop_ms` | each launch on iPhone, once the native launch backdrop has shown (`system.launchBackdropShownAt()`, epoch ms on the process start's clock) |
 | `perf_launch_tray` | `tray_ms` | each launch with Auto-Open Keyboard on, once the launch tray is up (process start on `ArdiaPhoneSystem.processStartedAt()`'s clock) |
-| `usage_counts` | `tabs_opened`, `searches`, `pins_to_mac`, `tabs_sent`, `page_processes_gone`, `links_given_up` (a link whose handling passed its 8 s deadline), `pages_reloaded_online` (a failed page reloaded when the phone came back online), `find_opened_system` and `find_opened_bar` (Find on Page opened in WebKit's own panel, or in the app's find bar), `spaces_swiped` (a swipe in Spaces or on the start page that changed the profile), `tray_hidden_rows_opened` (a tray row opened while it peeked or sat under the keyboard), `deck_pictures_late` (a deck opened from a page whose picture hadn't painted within 250 ms, so it shrank without waiting), `search_tabs_opened` (the deck's Search Tabs field focused, in the redesign), `spaces_picked` (a space picked from the deck's switcher menu, or by a VoiceOver adjustment of the start page's dots, that changed the profile, in the redesign), `tabs_moved_to_space` (a tab moved to another space with the deck card menu's Move to Space, in the redesign), `pages_printed` (a page printed from the page menu's Print, counted when the print sheet opened, in the redesign), `pages_translated` (a page sent to Google Translate from the page menu's Translate, never from an Incognito tab), `pinned_tabs_refound` (a pinned site's tile or row switched to the tab it had opened after that tab had left the pinned address, where it used to open a second copy), `site_permissions_revoked` (a site's camera, microphone or location access revoked from Site Settings, by swipe or by its dialog, on iPhone's Expo UI Settings), `tray_back_swiped` (a search tray closed with Android's predictive back swipe), `card_opens_waited` (a card opened from the deck whose growth landed before its page had laid out and its picture painted, so the page waited up to 250 ms to take over), `native_menus_opened` (a menu opened as the system's own: a deck card's long press, the deck's ···, the space switchers, the + menus, Reader's Text Appearance, the page menu's Send to Device, the tabs button's recent tabs, on iPhone), `drawn_menus_opened` (a menu or confirmation card the app draws itself opened: every menu and confirmation card on Android, and on iPhone the few that have no system counterpart, such as a page link's long press; neither menu count is taken on the deck's Incognito side, on an Incognito page or for an Incognito card), `library_opened` (History, Bookmarks or Downloads opened from the page menu), `deck_grid_shown` (Grid picked for the deck in Settings › Appearance › Tabs, on iPhone), `landscape_shown` (a launch in which the phone was turned to landscape at least once, counted once a launch), `duo_layout_shown` (a launch on a Duo in any pose, or that used the wide or split layout at least once, counted once a launch, on iPhone), `list_sheets_late` (an Archive or History sheet whose rows were drawn more than 400 ms after it was asked for, on iPhone), `list_pages_added` (Archive or History adding its next 200 rows as you scroll, on iPhone), `search_reveals_late` (a search panel opened whose content had not laid out within 250 ms, so the stage revealed it on its deadline, on iPhone), `address_field_scrolled` (a long address in the search field scrolled sideways with a swipe, on iPhone), `deck_bar_swipes` (the deck opened by swiping up on the browsing bar, the second way in beside the tabs button), `tabs_swiped_closed` and `tabs_swiped_reopened` (a back swipe on a page with no history that closed its tab, and a forward swipe with no forward history that reopened the last closed tab), `page_menu_tapped_away` (the page menu closed by a tap on the page above it, on iPhone), `new_tab_search_opened` (search opened on a new tab in the iPhone's full-height search panel), `deck_incognito_switches` (a tap on the deck bar's Incognito switch that went from the normal tabs to the Incognito tabs, on iPhone), `deck_bar_swipes_returned` (a swipe up on the browsing bar let go before its commit point, so the page grew back), `deck_pulls_hitched` (a swipe up or a tabs tap during whose shrink into the deck two UI-thread frames were more than 50 ms apart), `browse_for_me_opened` (Browse for Me opened from the tray, voice search or a launch argument), `browse_answers_chatgpt`, `browse_answers_on_device`, `browse_answers_excerpts` and `browse_answers_failed` (a Browse for Me answer by who wrote it, or a page that found or read nothing), `browse_chatgpt_fallbacks` (a ChatGPT answer that failed, so Apple Intelligence, Gemini Nano or the excerpts wrote it instead), `talk_to_me_answers_read`, `talk_to_me_ear_listens`, `talk_to_me_voice_downloads`, `talk_to_me_download_failed` and `talk_to_me_failed` (Talk to Me reading a Browse for Me answer aloud once per answer, and of those the ones started by raising the phone to the ear, its voice download finishing or failing, and its models or speech failing, on iPhone), `page_summaries_pinched` and `page_summaries_from_menu` (a page summary opened by pinching in or from the page menu's Summarize Page), `page_summaries_chatgpt`, `page_summaries_on_device`, `page_summaries_excerpts` and `page_summaries_failed` (a page summary by who wrote it, or a page it couldn't read or summarize; ChatGPT on Android only), `page_summaries_chatgpt_fallbacks` (a ChatGPT summary that failed, so Gemini Nano wrote it instead, on Android), `paste_and_go_links`, `paste_and_go_texts` and `paste_and_go_unread` (a Paste and Go tap with a link, with text, or that read nothing because the paste prompt was refused or the clipboard emptied; never counted while browsing privately), `search_tile_taps`, `voice_tile_taps` and `incognito_tile_taps` (Ardia opened from its Quick Settings tiles, on Android, counted on the phone and sent with the next day's counts), `start_logo_taps`, `find_closed_bar` (the app's find bar closed, once per find), `material_you_turned_on` and `material_you_turned_off` (Settings › General › Material You switched, on Android), and, with Material You on: `card_close_tapped` (a deck card closed with its ×), `material_back_swiped` (a back swipe out of a Material sheet, dialog or the library), `archive_bar_opened` (Archive opened from the bottom bar), `site_settings_sheet_opened` and `site_settings_sheet_expanded` (the address bar's page menu opened, and pulled to full screen), `search_sheet_expanded` (the search sheet pulled to full screen) | at most once a day, for the last UTC day the app was used before today, when anything was counted; private tabs are never counted |
+| `usage_counts` | `tabs_opened`, `searches`, `pins_to_mac`, `tabs_sent`, `page_processes_gone`, `links_given_up` (a link whose handling passed its 8 s deadline), `pages_reloaded_online` (a failed page reloaded when the phone came back online), `find_opened_system` and `find_opened_bar` (Find on Page opened in WebKit's own panel, or in the app's find bar), `spaces_swiped` (a swipe in Spaces or on the start page that changed the profile), `tray_hidden_rows_opened` (a tray row opened while it peeked or sat under the keyboard), `deck_pictures_late` (a deck opened from a page whose picture hadn't painted within 250 ms, so it shrank without waiting), `search_tabs_opened` (the deck's Search Tabs field focused, in the redesign), `spaces_picked` (a space picked from the deck's switcher menu, or by a VoiceOver adjustment of the start page's dots, that changed the profile, in the redesign), `tabs_moved_to_space` (a tab moved to another space with the deck card menu's Move to Space, in the redesign), `pages_printed` (a page printed from the page menu's Print, counted when the print sheet opened, in the redesign), `pages_translated` (a page sent to Google Translate from the page menu's Translate, never from an Incognito tab), `pinned_tabs_refound` (a pinned site's tile or row switched to the tab it had opened after that tab had left the pinned address, where it used to open a second copy), `site_permissions_revoked` (a site's camera, microphone or location access revoked from Site Settings, by swipe or by its dialog, on iPhone's Expo UI Settings), `tray_back_swiped` (a search tray closed with Android's predictive back swipe), `card_opens_waited` (a card opened from the deck whose growth landed before its page had laid out and its picture painted, so the page waited up to 250 ms to take over), `native_menus_opened` (a menu opened as the system's own: a deck card's long press, the deck's ···, the space switchers, the + menus, Reader's Text Appearance, the page menu's Send to Device, the tabs button's recent tabs, on iPhone), `drawn_menus_opened` (a menu or confirmation card the app draws itself opened: every menu and confirmation card on Android, and on iPhone the few that have no system counterpart, such as a page link's long press; neither menu count is taken on the deck's Incognito side, on an Incognito page or for an Incognito card), `library_opened` (History, Bookmarks or Downloads opened from the page menu), `deck_grid_shown` (Grid picked for the deck in Settings › Appearance › Tabs, on iPhone), `landscape_shown` (a launch in which the phone was turned to landscape at least once, counted once a launch), `duo_layout_shown` (a launch on a Duo in any pose, or that used the wide or split layout at least once, counted once a launch, on iPhone), `list_sheets_late` (an Archive or History sheet whose rows were drawn more than 400 ms after it was asked for, on iPhone), `list_pages_added` (Archive or History adding its next 200 rows as you scroll, on iPhone), `search_reveals_late` (a search panel opened whose content had not laid out within 250 ms, so the stage revealed it on its deadline, on iPhone), `address_field_scrolled` (a long address in the search field scrolled sideways with a swipe, on iPhone), `deck_bar_swipes` (the deck opened by swiping up on the browsing bar, the second way in beside the tabs button), `tabs_swiped_closed` and `tabs_swiped_reopened` (a back swipe on a page with no history that closed its tab, and a forward swipe with no forward history that reopened the last closed tab), `page_menu_tapped_away` (the page menu closed by a tap on the page above it, on iPhone), `new_tab_search_opened` (search opened on a new tab in the iPhone's full-height search panel), `deck_incognito_switches` (a tap on the deck bar's Incognito switch that went from the normal tabs to the Incognito tabs, on iPhone), `deck_bar_swipes_returned` (a swipe up on the browsing bar let go before its commit point, so the page grew back), `deck_pulls_hitched` (a swipe up or a tabs tap during whose shrink into the deck two UI-thread frames were more than 50 ms apart), `browse_for_me_opened` (Browse for Me opened from the tray, voice search or a launch argument), `browse_answers_chatgpt`, `browse_answers_on_device`, `browse_answers_excerpts` and `browse_answers_failed` (a Browse for Me answer by who wrote it, or a page that found or read nothing), `browse_chatgpt_fallbacks` (a ChatGPT answer that failed, so Apple Intelligence, Gemini Nano or the excerpts wrote it instead), `talk_to_me_answers_read`, `talk_to_me_ear_listens`, `talk_to_me_voice_downloads`, `talk_to_me_download_failed` and `talk_to_me_failed` (Talk to Me reading a Browse for Me answer aloud once per answer, and of those the ones started by raising the phone to the ear, its voice download finishing or failing, and its models or speech failing, on iPhone), `page_summaries_pinched` and `page_summaries_from_menu` (a page summary opened by pinching in or from the page menu's Summarize Page), `page_summaries_chatgpt`, `page_summaries_on_device`, `page_summaries_excerpts` and `page_summaries_failed` (a page summary by who wrote it, or a page it couldn't read or summarize; ChatGPT on Android only), `page_summaries_chatgpt_fallbacks` (a ChatGPT summary that failed, so Gemini Nano wrote it instead, on Android), `gemini_nano_downloading`, `gemini_nano_not_offered`, `gemini_nano_needs_update` and `gemini_nano_errors` (a Browse for Me answer or page summary that couldn't use Gemini Nano, by why: still downloading, not offered to apps on this phone, needing an AICore or system update, or busy, out of space or failed, on Android; the settled events carry it as `geminiNanoMissing`), `paste_and_go_links`, `paste_and_go_texts` and `paste_and_go_unread` (a Paste and Go tap with a link, with text, or that read nothing because the paste prompt was refused or the clipboard emptied; never counted while browsing privately), `search_tile_taps`, `voice_tile_taps` and `incognito_tile_taps` (Ardia opened from its Quick Settings tiles, on Android, counted on the phone and sent with the next day's counts), `start_logo_taps`, `find_closed_bar` (the app's find bar closed, once per find), `material_you_turned_on` and `material_you_turned_off` (Settings › General › Material You switched, on Android), and, with Material You on: `card_close_tapped` (a deck card closed with its ×), `material_back_swiped` (a back swipe out of a Material sheet, dialog or the library), `archive_bar_opened` (Archive opened from the bottom bar), `site_settings_sheet_opened` and `site_settings_sheet_expanded` (the address bar's page menu opened, and pulled to full screen), `search_sheet_expanded` (the search sheet pulled to full screen) | at most once a day, for the last UTC day the app was used before today, when anything was counted; private tabs are never counted |
 
 On the dashboard they are kept out of every Mac section by source and lib (`PHONE_APP_SOURCE` in `apps/dashboard/src/server/sql.ts`).
 
@@ -1645,12 +1692,17 @@ Every count and timing the phone can send, for the owner to read as one set and 
 | `page_summaries_pinched`, `page_summaries_from_menu` | Pinch to Summarize on iPhone and Android | It is off by default, so opens count only people who turned it on. A drop in pinch opens alongside steady menu opens can point to a gesture regression. A rise in pinch opens relative to `tabs_opened` can indicate accidental summaries |
 | `page_summaries_on_device`, `page_summaries_excerpts`, `page_summaries_failed` | Pinch to Summarize on iPhone | A rising excerpt share can point to problems with Apple Intelligence. A rising failure share can point to problems reading pages |
 | `page_summaries_chatgpt`, `page_summaries_chatgpt_fallbacks` | Pinch to Summarize on Android | Android has no excerpts, so `page_summaries_failed` against `page_summaries_on_device` is the share of phones without a ready Gemini Nano. How many summaries the opt-in ChatGPT choice writes; fallbacks rising against `page_summaries_chatgpt` mean the Responses call or the token refresh broke. On Android, pinch opens against menu opens show the passive pinch watcher working, and zero pinch opens after a release with steady menu opens mean it stopped |
+| `gemini_nano_downloading`, `gemini_nano_not_offered`, `gemini_nano_needs_update`, `gemini_nano_errors` | Gemini Nano on Android | Why Browse for Me and Pinch to Summarize fell back. `not_offered` is the share of Android users on phones Google keeps the Prompt API from; `needs_update` or `errors` rising after a release or an AICore update means the ML Kit version and AICore disagree, so bump `genai-prompt` |
+| `start_no_tabs_button_taps` | Start's Archive or Synced Tabs button, which takes the place of Tabs when no tabs are open (#3324) | Whether people use it instead of landing on an empty tab view; zero across testers after a release means the swap stopped or the button stopped opening the Archive or the spaces |
+| `page_pictures_blank`, `page_pictures_hidden` | A tab switcher picture the iPhone threw away instead of saving: it came out one flat colour (`blank`), or the page was hidden or off screen when it was taken (`hidden`) | `blank` is how often a device still makes the empty card from the hltv report; the card keeps its last picture each time. A sudden rise in `hidden` means captures are being asked for pages that aren't showing |
+| `page_pictures_webkit` | An iPhone tab switcher picture that came from the page engine's snapshot because the instant screen copy failed or came out one flat colour | Should stay near zero: the screen copy is the normal route. A rise means the copy stopped working on some iOS version and pictures depend on the late, sometimes blank engine snapshot again |
 | `paste_and_go_links`, `paste_and_go_texts`, `paste_and_go_unread` | Paste and Go, now on iPhone too | iPhone taps should appear beside Android's. A high unread share on iPhone means people refuse the paste prompt, or the row shows when nothing can be pasted |
 | `search_tile_taps`, `voice_tile_taps`, `incognito_tile_taps` | Android's Quick Settings tiles | Voice and Incognito should appear once the release is out; a tile that stays at zero while Search counts can point to a broken tile |
 | `browse_chatgpt_fallbacks` | Browse for Me on Expo | How often a connected ChatGPT plan fails to answer; a jump after a release, or against `browse_answers_chatgpt`, means the Responses call or the token refresh broke |
 | `material_you_turned_on`, `material_you_turned_off` | the Material You switch in Android Settings (the owner, 2026-11-20) | How many testers try Material You and how many go back. Read `off` against `on`: a share near one means it is tried and dropped. `app_launched.material_colors` says how many launches run with it on |
 | `card_close_tapped` | the × on a card in Android's Material deck | Whether people close tabs with the card's own button rather than a flick; zero across Android testers after a release means the × stopped closing cards, or its tap zone opens the card instead |
 | `material_back_swiped` | a predictive back swipe on Android's Material sheets, dialogs, menus and library | Whether people swipe back out of Material surfaces; zero across Android testers after a release means the swipe stopped reaching them, or Back goes to the wrong surface |
+| `night_shade_verdicts_reused`, `night_shade_verdicts_learned`, `night_shade_verdicts_corrected` | Night Shade's cached verdicts on Android (a tester's report: yahoo.com loaded white until half way) | Counted natively and drained with the pending counts, never for private tabs. `reused` is a page load, with Night Shade not off, whose site's verdict was already known, so the shade was decided before the first paint; `learned` is a site measured for the first time, whose first load can still shade late; `corrected` is a site whose verdict changed, so that load showed the old one until `DOMContentLoaded`. Read `reused` against `learned` for the hit rate, which should climb as testers revisit sites; a `corrected` share that grows means the measurement disagrees with itself between loads |
 
 ## What is left before the Expo app replaces both native apps
 
@@ -2190,10 +2242,10 @@ simulator, the list under "The iPhone redesign".
 
 **2. Onboarding** (a fresh install, or a lab build launched with `ArdiaOnboarding`)
 - [ ] Go forward and back through every step. Expect: each step slides 60 points with a fade both ways; leaving the welcome crossfades the backdrop; each step ticks and the last gives a success haptic; the keyboard goes down between steps.
-- [ ] On the sync step. Expect: a Mac window with a QR code and a phone scanning it, not a symbol. Tap Connect to Your Mac: the connect screen slides up from the bottom; Cancel slides it down. Connect: the phone in the picture turns plum, its viewfinder shrinks away as a checkmark grows in, and the subtitle crossfades to "Connected."
+- [ ] On the sync step. Expect: a Mac window with a QR code and a phone scanning it, not a symbol. Tap Connect to Your Mac: the connect screen slides up from the bottom; Cancel slides it down. Connect: the phone in the picture turns plum, its viewfinder shrinks away as a checkmark grows in, and the subtitle crossfades from "Your Mac’s tabs, right here. End-to-end encrypted." to "Your Mac’s tabs are here, end-to-end encrypted."
 - [ ] **Android:** on the welcome, tap Continue at once. Expect: the default-browser step still shows.
 - [ ] **Android:** mid-onboarding, change the system font size so the activity is recreated (step 44). Expect: the same step comes back.
-- [ ] **iPhone:** the default-browser step. Expect: it shows only when SwiftUI's would (offered, and not asked within 100 days); with the entitlement off, as in test builds, it never shows.
+- [ ] **iPhone:** the default-browser step. Expect: it shows only when SwiftUI's would (offered, and not asked within 100 days); with the entitlement off (`--no-default-browser`), it never shows.
 - [ ] At the largest text size. Expect: each step scrolls. With Reduce Motion on: the welcome fades instead of moving.
 
 **3. Start page and the search tray**
@@ -2798,7 +2850,7 @@ The iPhone's launch arguments are intent extras on Android, with the same names.
 (`LaunchExtras.allowedInThisBuild`); a store build ignores them.
 
 ```
-adb shell am start -S -n com.ardia.browser.android/.MainActivity --ez ArdiaDemo true --es BrowseQuery otters
+adb shell am start -S -n com.ardia.browser.android.dev/com.ardia.browser.android.MainActivity --ez ArdiaDemo true --es BrowseQuery otters
 ```
 
 `ArdiaDemo` runs on demo data (two Macs, two profiles) and never touches real data. The rest drive captures without
@@ -3401,14 +3453,14 @@ What it needs, for a yes or no:
 
    The simulator rows above settle only how long our own work and animations take, and app size.
 
-#### Default browser on iPhone, once Apple grants the entitlement
+#### Default browser on iPhone
 
-Apple's web-browser entitlement (`com.apple.developer.web-browser`) has been requested. Until it is granted the
-app ships with the default browser off, and one build setting turns all of it on together:
+Apple granted the web-browser entitlement (`com.apple.developer.web-browser`) for `com.ardia.browser.ios`, so the
+app ships with the default browser on, and one build setting turns all of it on or off together:
 
-- **The switch.** `ARDIA_DEFAULT_BROWSER = NO` in the Debug and Release settings of the Ardia target in
-  `apps/phone/ios/Ardia.xcodeproj/project.pbxproj`. Flip both to `YES` (or pass `ARDIA_DEFAULT_BROWSER=YES` to
-  `xcodebuild`) for a build that should offer it.
+- **The switch.** `ARDIA_DEFAULT_BROWSER = YES` in the Debug and Release settings of the Ardia target in
+  `apps/phone/ios/Ardia.xcodeproj/project.pbxproj`. `release-ios` signs with it unless `--no-default-browser`, and
+  the iOS Release workflow's `default_browser` input is on by default.
 - **The entitlement.** `CODE_SIGN_ENTITLEMENTS = $(ARDIA_ENTITLEMENTS_$(ARDIA_DEFAULT_BROWSER))`, so `NO` signs with
   `apps/phone/ios/Config/Ardia.entitlements` and `YES` with `apps/phone/ios/Config/Ardia-DefaultBrowser.entitlements`,
   the same file plus `com.apple.developer.web-browser`. Main's SwiftUI app signs with the same two files.
@@ -3419,11 +3471,11 @@ app ships with the default browser off, and one build setting turns all of it on
   onboarding step shows (unless asked within 100 days, as in SwiftUI), and Settings › Default Browser opens the
   system's Default Apps page. Page menu › Open in Default Browser hides once Ardia is the default. With `NO`,
   `isDefault` and `canAsk` are both false and none of this shows.
-- **The signing side**, for the owner: the App ID `com.ardia.browser.ios` needs the Default Web Browser capability
-  once Apple grants it, and the provisioning profiles regenerated with it. A build with `YES` and an old profile
-  fails to sign, so it cannot ship half on.
+- **The signing side.** The App ID `com.ardia.browser.ios` has the Default Web Browser capability, switched on under
+  Additional Capabilities in the developer portal after Apple's approval; automatic signing puts it in the profile.
+  Without it a build with `YES` fails to sign ("requires approval from Apple"), so it cannot ship half on.
 
-`apps/phone/src/dev/defaultBrowserSwitch.test.ts` keeps this true: every configuration says `NO`, the entitlement and
+`apps/phone/src/dev/defaultBrowserSwitch.test.ts` keeps this true: every configuration says `YES`, the entitlement and
 the Info.plist key come from that one setting, and the two entitlement files differ only by the web-browser key.
 
 #### Settings on Expo UI: main's SwiftUI screens, the checklist
@@ -3897,10 +3949,9 @@ This was `docs/ios.md`'s, for main's SwiftUI app; since the clean-up the workflo
   email=<address>` invites someone to Public Testers.
 - **The default browser grant.** iOS lists an app as a browser only when it is signed with
   `com.apple.developer.web-browser`, which Apple grants per App ID on request
-  (https://developer.apple.com/contact/request/default-browser-entitlement/). Until then signing with it fails;
-  once granted, pass `default_browser=true` (`--default-browser`), then make `ARDIA_DEFAULT_BROWSER = YES` the
-  default ("Default browser on iPhone" above). iOS answers `UIApplication.isDefault(.webBrowser)` four times a year,
-  so `DefaultBrowserStatus` keeps the last answer and asks only on returning from the Settings button or after 100
+  (https://developer.apple.com/contact/request/default-browser-entitlement/). It is granted and on by default
+  ("Default browser on iPhone" above); `default_browser=false` (`--no-default-browser`) builds without it. iOS
+  answers `UIApplication.isDefault(.webBrowser)` four times a year, so `DefaultBrowserStatus` keeps the last answer and asks only on returning from the Settings button or after 100
   days; a web link from another app also proves it.
 - **Export compliance.** The only encryption is Apple's own (CryptoKit's AES-GCM, HKDF and HMAC for sync, and HTTPS),
   which Apple counts as exempt, so `ITSAppUsesNonExemptEncryption` is false and a build needs no compliance code.

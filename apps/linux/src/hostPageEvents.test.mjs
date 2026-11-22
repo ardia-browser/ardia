@@ -214,7 +214,7 @@ test("an aborted navigation keeps page state the restore snapshot does not repla
   const popup = { id: "kept", url: "https://popup.test", origin: "https://example.test" };
   const prompt = { state: "save", origin: "https://example.test", username: "u", passwordLength: 3, federation: "", usernames: [] };
   patchPage(h.tab, { popups: [popup], status: "https://hover.test", fullscreen: true, passwordPrompt: prompt, unresponsive: true });
-  setPopover(h.tab, "popups"); noteScroll(h.tab, "down");
+  setPopover(h.tab, "popups"); useBrowser.getState().updateSettings({ hideToolbarWhileScrolling: true }); noteScroll(h.tab, "down");
   const kept = () => {
     assert.deepEqual(pageOf(h.tab).popups, [popup]); assert.equal(pageOf(h.tab).status, "https://hover.test");
     assert.equal(pageOf(h.tab).fullscreen, true); assert.deepEqual(pageOf(h.tab).passwordPrompt, prompt);

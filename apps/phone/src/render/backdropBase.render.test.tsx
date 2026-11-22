@@ -31,18 +31,19 @@ function ThemeProbe() {
 
 const bases = (root: Root) => root.root.findAll((node) => node.props.testID === "backdropBase" && typeof node.type === "string").map((node) => StyleSheet.flatten(node.props.style).backgroundColor);
 
-test("at launch, the tray over the start screen has the start backdrop's own colour under it even before the native backdrop draws its first frame", () => {
+test("at launch, the tray over the start screen sits on the start page's own gradient, drawn by the app from the first frame, with no native backdrop to wait for", () => {
   jest.spyOn(lookModule, "lookIsNative").mockImplementation(() => true);
   useBrowse.setState({ surface: "start", sheet: null });
   presentSearch("home", "");
   const root = renderSurface(
     <>
-      <ThemeProbe />
       <StartScreen />
       <SearchTray />
     </>,
   );
-  expect(bases(root)).toEqual([theme!.start.colors[0]]);
+  expect(root.root.findAll((node) => node.props.testID === "startGradient" && typeof node.type === "string").length).toBeGreaterThan(0);
+  expect(root.root.findAll((node) => node.type === lookModule.DeckBackdrop)).toHaveLength(0);
+  expect(bases(root)).toEqual([]);
   unmount(root);
 });
 
@@ -66,7 +67,7 @@ test("with the look's fallback the gradient is drawn by the app and needs no bas
   unmount(root);
 });
 
-test("the deck's and the start page's frost sources hold only their native backdrop; the base colour sits beside the source, not in it", () => {
+test("the deck's frost source holds only its native backdrop; the base colour sits beside the source, not in it", () => {
   jest.spyOn(lookModule, "lookIsNative").mockImplementation(() => true);
   useBrowse.setState({ surface: "deck", sheet: null, deckEntrance: null, frozenOrder: null, opening: null });
   const deck = renderSurface(<TabDeck />);
@@ -76,10 +77,4 @@ test("the deck's and the start page's frost sources hold only their native backd
   expect(sources[0]!.findAll((node) => node.type === lookModule.DeckBackdrop)).toHaveLength(1);
   expect(bases(deck)).toHaveLength(1);
   unmount(deck);
-  useBrowse.setState({ surface: "start", sheet: null });
-  const start = renderSurface(<StartScreen />);
-  const startSources = start.root.findAll((node) => node.type === lookModule.FrostSource);
-  expect(startSources.every((source) => source.findAll((node) => node.props.testID === "backdropBase").length === 0)).toBe(true);
-  expect(bases(start)).toHaveLength(1);
-  unmount(start);
 });

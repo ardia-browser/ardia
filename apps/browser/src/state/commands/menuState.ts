@@ -3,8 +3,8 @@ import { engineBookmarkRoots, folderChildren, isBookmarked, isWithin, ROOT_TITLE
 import type { BrowserState } from "../browser/store";
 import { changedIds } from "../browser/changes";
 import { activeTab, bookmarkProfileId, engineProfile, IDLE_LIVE, isPinnedRow, tabLabel, togglePinTitle, windowTitle, tabLayoutOf, tabsShownIn } from "../browser/model";
-import { canSwitchEngine, tabEngine } from "../engines/engines";
-import { readerState as readerFor } from "../reader/reader";
+import { switchableEngine, tabEngine } from "../engines/engines";
+import { readerState as readerFor, type ReaderState } from "../reader/reader";
 import { peekTabId } from "../peek/peek";
 import { canHideElements } from "../site/hiddenElements";
 import { splitOf } from "../splits/splits";
@@ -16,6 +16,7 @@ import { muteState, muteTitle } from "../tabs/mute";
 import { sidebarMenuState } from "../sidebar/commands";
 import { LITTLE_ARDIA_DISABLED_COMMANDS, PAGE_COMMANDS, PAGE_COMMANDS_OFF_INTERNAL_PAGES, settingChecks, UNAVAILABLE_COMMANDS, WINDOW_COMMANDS } from "../commands/commandCatalog";
 import { extensionMenu } from "../extensions/actions";
+import type { InstalledExtension } from "../extensions/store";
 import { menuBarBindings, menuBarMouseBindings } from "./commandShortcuts";
 import { focusedWindowOf } from "../windows/ui";
 import { clearableRecentlyClosed, closedWindowTitle, newestClosed, recentlyClosedIn } from "../windows/recentlyClosedList";
@@ -103,7 +104,7 @@ export function menuState(s: BrowserState, liveOfTab = (id: string) => shownLive
   else disabled.push("togglePin:tile");
   if (page) titles.toggleMute = muteTitle(muteState(s, page));
   if (page && tabEngine(s, page.id) === "webkit") titles.togglePageEngine = "Open Page in Chromium";
-  if (!canSwitchEngine(page?.url)) disabled.push("togglePageEngine");
+  if (!switchableEngine(s, page?.url)) disabled.push("togglePageEngine");
   const reader = page ? readerFor(page.id) : undefined;
   if (reader?.active) titles.toggleReader = "Hide Reader";
   if (!reader?.active && !reader?.available) disabled.push("toggleReader");
@@ -187,6 +188,24 @@ export const liveReachesMenu = (s: BrowserState, tabId: string): boolean =>
     const tab = s.tabs[id];
     return !!tab && shownOrSelected(s, tab);
   });
+
+const readerShownInMenu = (reader: ReaderState | undefined) => (reader?.active ? 2 : 0) + (reader?.available ? 1 : 0);
+
+export function readerChangesMenu(next: Record<string, ReaderState | undefined>, prev: Record<string, ReaderState | undefined>): boolean {
+  for (const id in next) if (readerShownInMenu(next[id]) !== readerShownInMenu(prev[id])) return true;
+  for (const id in prev) if (!(id in next) && readerShownInMenu(prev[id]) !== 0) return true;
+  return false;
+}
+
+const extensionInMenu = (x: InstalledExtension) => [x.id, x.name, x.actionIcon || x.icon, x.enabled, x.incognito].join("\u0000");
+const extensionsInMenu = (list: readonly InstalledExtension[] | undefined) => (list ?? []).map(extensionInMenu).join("\u0001");
+
+export function extensionsChangeMenu(next: Record<string, InstalledExtension[]>, prev: Record<string, InstalledExtension[]>): boolean {
+  for (const profile of new Set([...Object.keys(next), ...Object.keys(prev)])) {
+    if (next[profile] !== prev[profile] && extensionsInMenu(next[profile]) !== extensionsInMenu(prev[profile])) return true;
+  }
+  return false;
+}
 
 export function menuInputsChanged(reads: MenuReads, s: BrowserState, prev: BrowserState): boolean {
   for (const key of reads) {

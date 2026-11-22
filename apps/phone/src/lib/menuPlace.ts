@@ -6,7 +6,7 @@ export type MenuSpot = { left: number; top: number; height: number; origin: stri
 
 export type MenuSizes = { row: number; heading: number; divider: number; padding: number };
 
-export const IPHONE_MENU_SIZES: MenuSizes = { row: 42, heading: 30, divider: 20.67, padding: 19 };
+export const IPHONE_MENU_SIZES: MenuSizes = { row: 44, heading: 30, divider: 9, padding: 12 };
 
 export const ANDROID_MENU_SIZES: MenuSizes = { row: 48, heading: 36, divider: 8, padding: 16 };
 

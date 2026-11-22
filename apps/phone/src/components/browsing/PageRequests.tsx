@@ -36,7 +36,7 @@ function RequestDialog({ tabId, request }: { tabId: string; request: Request }) 
       onChangeText={onChange}
       placeholder={label}
       placeholderTextColor={theme.foregroundTertiary}
-      selectionColor={theme.formAccent}
+      selectionColor={theme.spaceAccentInk}
       secureTextEntry={secure}
       autoCapitalize="none"
       autoCorrect={false}

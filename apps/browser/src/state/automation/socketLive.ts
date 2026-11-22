@@ -10,6 +10,7 @@ import { bool, id, ids, obj, oneOf, PAGE, PROFILE, text, WINDOW } from "./socket
 import { PAGE_BYTE_BUDGET } from "./socketWire";
 import { expect, now, page, profileArg, windowOrFocused } from "./socketTargets";
 import { OpError } from "./workspaceTargets";
+import { programControlOn } from "../app/programControlSetting";
 
 const KINDS = ["pullRequests", "documents"] as const satisfies readonly LiveFolderKind[];
 const SOURCES_OF: Record<LiveFolderKind, readonly LiveSourceId[]> = { pullRequests: ["github", "bitbucket"], documents: ["notion", "confluence", "gdrive"] };
@@ -110,7 +111,7 @@ function create(params: Record<string, unknown>) {
   return folderRow(live().folders[folderId]!);
 }
 
-const controlStillOn = () => now().settings.cliControl;
+const controlStillOn = () => programControlOn(now());
 
 function nameOf(value: unknown): string {
   const name = (value as string).trim();

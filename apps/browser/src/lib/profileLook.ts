@@ -2,7 +2,9 @@ import { THEME_TEXTURES, type ThemeBackdropProps, type ThemeMode, type ThemeText
 import { hslToRgb, parseColor, rgbToHsl, toHex } from "./color";
 import { numberOr } from "./decode";
 
-export type ProfileColor = "plum" | "blue" | "purple" | "pink" | "red" | "orange" | "yellow" | "green" | "neutral";
+export const PROFILE_COLOR_NAMES = ["plum", "blue", "purple", "pink", "red", "orange", "yellow", "green", "neutral"] as const;
+
+export type ProfileColor = (typeof PROFILE_COLOR_NAMES)[number];
 
 export type ThemeColor = { r: number; g: number; b: number; a: number };
 
@@ -22,7 +24,11 @@ export type ProfileTheme = ThemeLook & {
   dark?: ThemeLook;
 };
 
+export type PresetThemes = Partial<Record<ProfileColor, ProfileTheme>>;
+
 export type ProfileLookFields = { color: ProfileColor; theme?: ProfileTheme | null };
+
+export type PresetLookFields = ProfileLookFields & { presetThemes?: PresetThemes };
 
 export const MAX_THEME_STOPS = 3;
 export const PAD_LIGHTNESS = 0.6;

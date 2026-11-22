@@ -19,8 +19,16 @@ public final class SearchStageModule: Module {
         view.fieldCenter = value.map { CGFloat($0) } ?? BrowseLayout.stageFieldCenter(fieldHeight: BrowseLayout.searchFieldHeight)
       }
       Prop("commandTop") { (view: SearchStageView, value: Double?) in view.commandTop = value.map { CGFloat($0) } }
+      Prop("anchorRadius") { (view: SearchStageView, value: Double?) in view.corners.anchor = value.map { CGFloat($0) } }
+      Prop("panelRadius") { (view: SearchStageView, value: Double?) in view.corners.panel = value.map { CGFloat($0) } ?? BrowseLayout.panelRadius }
+      Prop("fieldRadius") { (view: SearchStageView, value: Double?) in view.corners.field = value.map { CGFloat($0) } }
+      Prop("cardInset") { (view: SearchStageView, value: Double?) in view.cardPlace.cardInset = value.map { CGFloat($0) } ?? BrowseLayout.panelInset }
+      Prop("cardGap") { (view: SearchStageView, value: Double?) in view.cardPlace.cardGap = value.map { CGFloat($0) } ?? BrowseLayout.panelAboveKeyboard }
+      Prop("fieldInset") { (view: SearchStageView, value: Double?) in view.cardPlace.fieldInset = value.map { CGFloat($0) } ?? BrowseLayout.panelFieldInset }
+      Prop("fieldTop") { (view: SearchStageView, value: Double?) in view.cardPlace.fieldTop = value.map { CGFloat($0) } ?? BrowseLayout.panelFieldInset }
       Prop("landsDirectly") { (view: SearchStageView, value: Bool?) in view.landsDirectly = value ?? false }
       Prop("morphUsesGlass") { (view: SearchStageView, value: Bool?) in view.look.usesGlass = value ?? true }
+      Prop("morphFrosted") { (view: SearchStageView, value: Bool?) in view.look.frosted = value ?? false }
       Prop("morphPanelTint") { (view: SearchStageView, value: UIColor?) in view.look.panelTint = value ?? .clear }
       Prop("morphPanelDark") { (view: SearchStageView, value: Bool?) in view.look.panelStyle = value == true ? .dark : .unspecified }
       Prop("morphClassicPanel") { (view: SearchStageView, value: UIColor?) in view.look.classicPanel = value ?? .secondarySystemBackground }

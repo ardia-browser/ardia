@@ -21,6 +21,8 @@ BRIDGE = REPO / 'engine/ardiacore-linux/content-blocker'
 BRIDGE_SCRIPTS = ('js/vapi.js', 'js/vapi-common.js', 'js/vapi-client.js')
 CLI_INSTALLER = REPO / 'apps/cli/install.sh'
 UBO_SEED = REPO / 'scripts/linux/ubo-seed.mjs'
+UPDATE_HELPER = REPO / 'scripts/linux/ardia-update'
+UPDATE_KEY = REPO / 'scripts/linux/linux-update.pem'
 CLI_PLATFORM = 'linux-x64'
 VERSION_PATTERN = re.compile(r'^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$')
 REQUIRED = runtime_files.REQUIRED
@@ -141,6 +143,10 @@ def package(output, ui, destination, content_blocker=None, version=None, cli=Non
             (runtime / 'chrome_sandbox').rename(runtime / 'chrome-sandbox')
         shutil.copyfile(pathlib.Path(__file__).resolve().parent / 'ardia-launch', runtime / 'ardia-launch')
         (runtime / 'ardia-launch').chmod(0o755)
+        shutil.copyfile(UPDATE_HELPER, runtime / 'ardia-update')
+        (runtime / 'ardia-update').chmod(0o755)
+        shutil.copyfile(UPDATE_KEY, runtime / 'linux-update.pem')
+        (runtime / 'linux-update.pem').chmod(0o644)
         shutil.copytree(ui, runtime / 'ardia-ui')
         if version is not None:
             (runtime / 'VERSION').write_text(version + '\n')

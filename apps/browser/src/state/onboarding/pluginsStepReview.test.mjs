@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 const stub = await import("../../test-native/index.ts");
-const { refusedWrites } = await import("../../test-native/shell.ts");
+const { refusedWrites, officialLegacyHash } = await import("../../test-native/shell.ts");
 const { useBrowser } = await import("../browser/store.ts");
 const { usePlugins } = await import("../plugins/store.ts");
 const lifecycle = await import("../plugins/lifecycle.ts");
@@ -25,7 +25,7 @@ const settle = async () => {
   for (let i = 0; i < 8; i++) await new Promise((resolve) => setTimeout(resolve, 0));
 };
 const CLI = JSON.stringify({ manifest: 1, name: "cli", title: "Command Line", version: "0.3.0", alwaysOn: true, official: true, icon: "terminal.fill", permissions: ["control"], programs: [{ name: "ardia", path: "bin/ardia" }] });
-const BUILT_IN = { status: "ok", folderId: "bundled", bundled: true };
+const BUILT_IN = { status: "ok", folderId: "bundled", official: true };
 const LONG_STEP = ["refresh", "--with-a-very-long-option-name", "and-another-argument-that-goes-on", "--plus-one-more-flag", "value-number-one", "value-number-two", "value-number-three", "--and-finally-this"];
 const LONG_CONSENT = JSON.stringify({ manifest: 1, name: "long", title: "Long", version: "1.0.0", alwaysOn: true, official: true, permissions: ["control", "network", "tabs", "fullUrls", "commands"], programs: Array.from({ length: 4 }, (_, i) => ({ name: `long-tool-${i}`, path: `bin/l${i}`, afterUpdate: Array.from({ length: 4 }, () => LONG_STEP) })) });
 const offered = (soon = false) => offeredInOnboarding(officialPlugins(P(), true, () => soon));
@@ -35,10 +35,16 @@ S().hydrate({});
 const windowId = S().createWindow();
 let closeSettings = surface.presentSettingsConsent();
 
-async function scanned(folders) {
+const fetched = (entries) => {
+  host.pinned = entries.map((e, i) => ({ name: e.name, version: JSON.parse(e.text).version ?? "1.0.0", folderId: `official-${String(i + 1).repeat(64)}` }));
+  host.officialArtifacts = Object.fromEntries(entries.map((e) => [e.name, e.text]));
+  return entries.map((e, i) => ({ name: e.name, status: "missing", official: true, candidateOnly: true, candidate: { folderId: host.pinned[i].folderId, text: e.text, legacyHash: officialLegacyHash(e.text), version: host.pinned[i].version } }));
+};
+
+async function scanned(entries) {
   host.linkResult = null;
-  usePlugins.setState({ records: {}, programs: {}, consent: null });
-  host.folders = folders;
+  usePlugins.setState({ records: {}, programs: {}, consent: null, pinned: null, candidates: {}, fetches: {} });
+  host.folders = fetched(entries);
   await lifecycle.rescanPlugins(null);
   await settle();
 }
@@ -52,7 +58,7 @@ async function atOffer() {
 
 test("resuming at the plugin step before the first scan keeps the step and saves no skip; it stays once the scan finds the command line", async () => {
   assert.equal(P().scanned, false);
-  host.folders = [{ name: "cli", text: CLI, ...BUILT_IN }];
+  host.folders = fetched([{ name: "cli", text: CLI, ...BUILT_IN }]);
   saveOnboarding({ startedAt: 1, step: "plugins", sub: 0, source: "fresh" });
   assert.equal(maybeStartOnboarding(), true);
   assert.equal(O().step, "plugins");
@@ -157,7 +163,7 @@ test("a Settings confirm can't accept onboarding's request, even for the same pl
 
 test("onboarding enables a plugin only through its own consent request, by that request's id and its hash", async () => {
   await scanned([{ name: "cli", text: CLI, ...BUILT_IN }]);
-  const hash = P().listings.cli.hash;
+  const hash = P().candidates.cli.hash;
   assert.equal(P().consent, null);
   assert.equal(step.confirmPluginConsent(1), false, "no request, no install");
   assert.equal(P().records.cli, undefined);
@@ -181,6 +187,8 @@ test("when the only official plugin disappears while its consent is open, the re
   await settle();
   assert.equal(owner(), "onboarding");
   host.folders = [];
+  host.pinned = [];
+  usePlugins.setState({ pinned: [] });
   await lifecycle.rescanPlugins(null);
   await settle();
   step.passEmptyPluginsStep();
@@ -258,8 +266,8 @@ test("Settings closing with its sheet up dismisses it and settles its waiter", a
 test("a long consent is still one request with every entry, for the sheet to scroll", async () => {
   await scanned([{ name: "long", text: LONG_CONSENT, ...BUILT_IN }]);
   const { consentLines } = await import("../plugins/consent.ts");
-  assert.deepEqual(P().listings.long.problems, []);
-  const lines = consentLines(P().listings.long.manifest);
+  assert.deepEqual(P().candidates.long.problems, []);
+  const lines = consentLines(P().candidates.long.manifest);
   assert.ok(lines.length >= 12, `${lines.length} entries`);
   assert.ok(lines.reduce((n, l) => n + l.text.length, 0) > 2400, "well over thirty wrapped lines at the sheet's width");
 });
@@ -311,7 +319,7 @@ test("a manifest that changes under an open request closes it with a reason", as
   await scanned([{ name: "cli", text: CLI, ...BUILT_IN }]);
   const waiting = installOfficialPlugin("cli", { showSheet: false });
   const asked = P().consent;
-  host.folders = [{ name: "cli", text: CLI.replace('"0.3.0"', '"0.3.1"'), ...BUILT_IN }];
+  host.folders = fetched([{ name: "cli", text: CLI.replace('"0.3.0"', '"0.3.1"'), ...BUILT_IN }]);
   await lifecycle.rescanPlugins(null);
   await settle();
   assert.equal(P().consent, null);

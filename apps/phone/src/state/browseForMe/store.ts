@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { browseForMe, type BrowseForMeEvent, type ChatGPTAccountState } from "../../platform/browseForMe";
-import { browseForMeCounts, talkToMeCount } from "../../lib/telemetrySchema";
+import { browseForMeCounts, geminiNanoMissingCount, talkToMeCount } from "../../lib/telemetrySchema";
 import { settled } from "../pages/store";
 import { dismissSearch } from "../search/store";
 import { useTabs } from "../tabs/store";
@@ -28,7 +28,7 @@ export function startBrowseForMe(query: string): boolean {
 
 export function noteBrowseForMe(event: BrowseForMeEvent) {
   if (event.name === "account") useBrowseForMe.setState(event.account ? { connected: event.connected, account: event.account } : { connected: event.connected });
-  if (event.name === "settled" && counting()) for (const field of browseForMeCounts(event.outcome, event.chatGPTFellBack)) countUsage(field);
+  if (event.name === "settled" && counting()) for (const field of [...browseForMeCounts(event.outcome, event.chatGPTFellBack), ...geminiNanoMissingCount(event.geminiNanoMissing)]) countUsage(field);
   if (event.name === "talkToMe" && counting()) {
     const field = talkToMeCount(event.count);
     if (field) countUsage(field);

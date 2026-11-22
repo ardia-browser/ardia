@@ -39,7 +39,8 @@ type CardFeed = {
 
 type Feeds = Record<string, CardFeed>;
 
-const STACK_DEPTH = -2.5;
+const STACK_DEPTH = -5;
+const CORNER_STEPS = 1000;
 
 export const deviceGrid = (g: DeckGeometry, ratio: number): DeviceGrid => ({ ratio, spacing: Math.round(g.spacing * ratio), focus: Math.round(g.focusLeading * ratio) });
 
@@ -74,7 +75,8 @@ export function containedPlacement(g: DeckGeometry, grid: DeviceGrid, now: Conta
   const shade = (value: number) => (exact ? value : opacityStep(value));
   const offsetPx = containedOffsetPx(grid, now.scroll);
   const left = p.x - g.cardWidth / 2;
-  const xPx = exact ? left * ratio - offsetPx : relative >= 0 && Math.floor(slotAt) === slotAt ? grid.focus + grid.spacing * slotAt : Math.round(left * ratio) - offsetPx;
+  const linear = relative >= 0 && (g.rightReach <= 0 || relative <= 1);
+  const xPx = exact ? left * ratio - offsetPx : linear && Math.floor(slotAt) === slotAt ? grid.focus + grid.spacing * slotAt : Math.round(left * ratio) - offsetPx;
   const x = xPx / ratio;
   const cardLeft = p.x - (g.cardWidth * p.scale) / 2;
   const top = p.y - (g.cardHeight * p.scale) / 2;
@@ -83,7 +85,7 @@ export function containedPlacement(g: DeckGeometry, grid: DeviceGrid, now: Conta
   return {
     z: m.z,
     move: { x, y: fit(p.y - g.cardHeight / 2), scale: p.scale },
-    look: { opacity: now.covering === id ? 0 : shade(p.opacity), corner: p.corner / Math.max(p.scale, 0.01) },
+    look: { opacity: now.covering === id ? 0 : shade(p.opacity), corner: Math.round((p.corner / Math.max(p.scale, 0.01)) * CORNER_STEPS) / CORNER_STEPS },
     reach: { x: x + fit(cardLeft - left), y: fit(top), scaleX: Math.max(1, fit(p.visible * p.scale)) / g.cardWidth, scaleY: p.scale },
     header: { x: x + fit(place.left + place.available - g.cardWidth - left), y: fit(top - tabsLayout.headerGap - tabsLayout.headerHeight), opacity: shade(p.header * deckHeaderIconReveal(available, tabsLayout.faviconSize)) },
     available,
@@ -245,7 +247,7 @@ export const ContainedDeckCard = memo(function ContainedDeckCard({ tab, index, g
         style={[deckCardStyles.card, { width: g.cardWidth, height: g.cardHeight, borderColor: theme.cardEdge, backgroundColor: tone.top ?? theme.surface }, cardZ, lookStyle, moveStyle]}
       >
         {nativeMenus() ? (
-          <DeckCardMenu tab={tab} index={index} onClose={onClose} fill={tone.top ?? theme.surface}>
+          <DeckCardMenu tab={tab} index={index} onClose={onClose} fill={tone.top ?? theme.surface} corner={g.cardCorner}>
             {cardContents}
           </DeckCardMenu>
         ) : (

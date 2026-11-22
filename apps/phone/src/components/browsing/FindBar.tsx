@@ -34,7 +34,7 @@ export function FindBar({ tabId }: { tabId: string }) {
             onSubmitEditing={() => matches && findNext()}
             placeholder="Find on Page"
             placeholderTextColor={theme.foregroundTertiary}
-            selectionColor={theme.formAccent}
+            selectionColor={theme.spaceAccentInk}
             style={[font.body, styles.input, { color: theme.label }]}
             autoCapitalize="none"
             autoCorrect={false}
@@ -55,7 +55,7 @@ export function FindBar({ tabId }: { tabId: string }) {
         <FindButton icon="chevronUp" label="Previous Match" enabled={matches} onPress={findPrevious} />
         <FindButton icon="chevronDown" label="Next Match" enabled={matches} onPress={findNext} />
         <Pressable accessibilityRole="button" onPress={closeFind} style={styles.done}>
-          <Text style={[font.body, styles.bold, { color: theme.formAccent }]}>Done</Text>
+          <Text style={[font.body, styles.bold, { color: theme.spaceAccentInk }]}>Done</Text>
         </Pressable>
       </View>
     </View>

@@ -10,6 +10,13 @@ final class SymbolView: ExpoView {
   var name = "questionmark" { didSet { update() } }
   var pointSize: Double = 14 { didSet { update() } }
   var weight = "regular" { didSet { update() } }
+  var centresInk = false {
+    didSet {
+      placeImageView()
+      render()
+    }
+  }
+  private static var inkOffsets: [String: CGVector] = [:]
   var tint: NSColor? {
     didSet {
       imageView.contentTintColor = tint
@@ -75,10 +82,17 @@ final class SymbolView: ExpoView {
   }
 
   private func centredImageRect() -> NSRect? {
-    guard let image, bounds.width > 0, bounds.height > 0, image.size.width > 0, image.size.height > 0 else { return nil }
-    let fit = min(1, bounds.width / image.size.width, bounds.height / image.size.height)
-    let size = NSSize(width: image.size.width * fit, height: image.size.height * fit)
-    return NSRect(x: bounds.midX - size.width / 2, y: bounds.midY - size.height / 2, width: size.width, height: size.height)
+    guard let image else { return nil }
+    return SymbolInk.centredRect(image.size, in: bounds, offset: centresInk ? inkOffset(of: image) : .zero, flipped: isFlipped)
+  }
+
+  private func inkOffset(of image: NSImage) -> CGVector {
+    let density = max(1, backingDensity)
+    let key = "\(name) \(pointSize) \(weight) \(density)"
+    if let known = Self.inkOffsets[key] { return known }
+    let offset = SymbolInk.offset(of: image, density: density)
+    Self.inkOffsets[key] = offset
+    return offset
   }
 
   private func placeImageView() {

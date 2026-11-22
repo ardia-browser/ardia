@@ -2,16 +2,17 @@ import { useEffect } from "react";
 import { Animated, StyleSheet, type ViewStyle } from "react-native";
 import { ENGINE_OFFER_WIDTH, EngineOfferPrompt } from "../site/EnginePrompt";
 import { useTabValue } from "../../state/tabs/tabWatch";
-import { CliControlPill } from "./CliControlPill";
+import { ControlPill } from "./ControlPill";
 import { LoadingPill } from "./LoadingPill";
 import { NewTabNotice } from "./NewTabNotice";
 import { FindBar } from "../find/FindBar";
 import { POPOVER_MARGIN, usePanelsPresence, type PanelPresence } from "../ui";
 import { NO_TOOLBAR, type ToolbarGeometry } from "./geometry";
-import { usePage, usePages } from "../../state/tabs/pageState";
+import { usePages } from "../../state/tabs/pageState";
+import { PLUGIN_CHROME, usePluginChrome } from "../../state/plugins/chrome";
 import { startPopoverEscape } from "../../state/tabs/popoverDismiss";
 import { SadTab, StatusBubble } from "./PaneOverlays";
-import { AutofillPrompt, BLOCKED_POPUPS_WIDTH, BlockedPopupsPrompt, EXTERNAL_APP_WIDTH, ExternalAppPrompt, PasswordPrompt, PERMISSION_PROMPT_WIDTH, PermissionPrompt, VerificationCodePrompt } from "../site/Prompts";
+import { AutofillPrompt, BLOCKED_POPUPS_WIDTH, BlockedPopupsPrompt, EXTERNAL_APP_WIDTH, ExternalAppPrompt, PasswordPrompt, PERMISSION_PROMPT_WIDTH, PermissionPrompt, VerificationCodeOffer } from "../site/Prompts";
 import { SiteControlsPanel } from "../site/SiteControls";
 import { SITE_PANEL } from "../site/SiteControlsParts";
 import { ZOOM_POPOVER_WIDTH, ZoomPanel } from "../site/ZoomControls";
@@ -51,7 +52,7 @@ export function PageOverlays({
 }) {
   const popover = usePages((s) => s.popover[tabId] ?? null);
   const panel = usePanelsPresence(popover, SITE_PANELS);
-  const verificationCode = usePage(tabId, (p) => !!p.verificationCode);
+  const verificationCodes = usePluginChrome(PLUGIN_CHROME.verificationCodes);
   const zoom = useTabValue(tabId, (t) => t?.zoom ?? 1);
   const sidebarRight = useSidebarSide(windowId) === "right";
   const anchor: PageAnchor = { toolbar: toolbar ? geometry : null, sidebarRight };
@@ -65,11 +66,11 @@ export function PageOverlays({
       </Animated.View>
       <SadTab tabId={tabId} />
       {!newTabShown && loadingPill && <LoadingPill tabId={tabId} />}
-      {cliPill && <CliControlPill style={statusStyle} />}
+      {cliPill && <ControlPill style={statusStyle} />}
       {!newTabShown && <PermissionPrompt tabId={tabId} {...at("prompt", PERMISSION_PROMPT_WIDTH)} />}
       <PasswordPrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />
       <AutofillPrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />
-      {verificationCode && <VerificationCodePrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />}
+      {verificationCodes && <VerificationCodeOffer tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />}
       <NewTabNotice windowId={windowId} tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />
       {!newTabShown && <ExternalAppPrompt tabId={tabId} {...at("prompt", EXTERNAL_APP_WIDTH)} />}
       {!newTabShown && <EngineOfferPrompt tabId={tabId} {...at("prompt", ENGINE_OFFER_WIDTH)} />}

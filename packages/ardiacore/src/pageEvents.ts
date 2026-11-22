@@ -30,6 +30,9 @@ import type {
   PictureInPictureDrag,
   PictureInPictureResize,
   PictureInPictureSkip,
+  PictureInPictureStandIn,
+  PictureInPictureActivation,
+  PictureInPictureUnstash,
   ProtectedMediaRequest,
   ScrollState,
   SecurityInfo,
@@ -66,6 +69,9 @@ type NativeEvents = {
   onPictureInPictureDragged: PictureInPictureDrag;
   onPictureInPictureResized: PictureInPictureResize;
   onPictureInPictureSkip: PictureInPictureSkip;
+  onPictureInPictureStandIn: PictureInPictureStandIn;
+  onPictureInPictureUnstashed: PictureInPictureUnstash;
+  onPictureInPictureActivated: PictureInPictureActivation;
   onMediaFault: MediaFault;
   onActivateRequest: ActivateRequest;
   onDisplayMediaRequest: DisplayMediaRequest;
@@ -124,6 +130,9 @@ const PAGE_EVENTS = {
   onPictureInPictureDragged: "pictureInPictureDragged",
   onPictureInPictureResized: "pictureInPictureResized",
   onPictureInPictureSkip: "pictureInPictureSkip",
+  onPictureInPictureStandIn: "pictureInPictureStandIn",
+  onPictureInPictureUnstashed: "pictureInPictureUnstashed",
+  onPictureInPictureActivated: "pictureInPictureActivated",
   onMediaFault: "mediaFault",
   onActivateRequest: "activateRequest",
   onDisplayMediaRequest: "displayMediaRequest",
@@ -179,6 +188,9 @@ const unwrap: { [K in Handlers]: (e: NativeEvents[K]) => Parameters<NonNullable<
   onPictureInPictureDragged: (e) => [{ offCursor: !!e.offCursor, slowMove: !!e.slowMove, epoch: e.epoch }],
   onPictureInPictureResized: (e) => [{ inside: !!e.inside, cursorShown: !!e.cursorShown, epoch: e.epoch }],
   onPictureInPictureSkip: (e) => [{ seconds: e.seconds, epoch: e.epoch }],
+  onPictureInPictureStandIn: (e) => [{ pinch: !!e.pinch, timedOut: !!e.timedOut, epoch: e.epoch }],
+  onPictureInPictureUnstashed: (e) => [{ epoch: e.epoch }],
+  onPictureInPictureActivated: (e) => [{ move: !!e.move, activated: !!e.activated, epoch: e.epoch }],
   onMediaFault: (e) => [e],
   onActivateRequest: (e) => [e],
   onDisplayMediaRequest: (e) => [e],

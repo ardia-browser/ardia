@@ -10,13 +10,14 @@
 </p>
 
 <h3 align="center">
-  <a href="https://github.com/mantrakp04/ardia/releases/download/v0.2.46/Ardia-0.2.46.dmg">Download Ardia 0.2.46 for Mac</a>
+  <a href="https://github.com/mantrakp04/ardia/releases/download/v0.2.47/Ardia-0.2.47.dmg">Download Ardia 0.2.47 for Mac</a>
 </h3>
 
 <p align="center">
-  128 MB DMG · macOS 14 Sonoma or later · Apple Silicon · Notarized by Apple<br>
+  143 MB DMG · macOS 14 Sonoma or later · Apple Silicon · Notarized by Apple<br>
   Like your paint wet? <a href="https://ardia.dev/nightly">The nightly</a> has every fix the day it’s made, smudges and all.<br>
   Homebrew: <code>brew install ardia-browser/tap/ardia</code><br>
+  On your phone: <a href="https://testflight.apple.com/join/yXHasDmr">iPhone (TestFlight)</a> · <a href="https://github.com/ardia-browser/ardia/releases/download/android-v1.0.2/Ardia-1.0.2.apk">Android (APK)</a><br>
   <a href="https://ardia.dev">ardia.dev</a> · <a href="https://ardia.dev/release-notes">What’s new</a> · <a href="https://github.com/mantrakp04/ardia/releases">All releases</a> · <a href="https://discord.gg/TdhuXrbcA6">Discord</a>
 </p>
 
@@ -80,16 +81,16 @@ Not WebKit. Not Electron. Every window is Chrome’s own, so sites, extensions a
 | DevTools | Docked, with device mode. Like Chrome. | ✓ Yes |
 | Sync | End-to-end encrypted, through your own iCloud Drive. | ✓ Yes |
 | Translate | On your Mac. Nothing leaves it. | ✓ macOS 26 |
-| Passkeys | Touch ID yes. iCloud Keychain waits on Apple. | ~ Partly |
+| Passkeys | Touch ID and iCloud Keychain. | ~ Partly |
 | Netflix and DRM | Streaming sites open in WebKit, where they play. Widevine in Chromium waits on Google. | ~ Partly |
 | Intel Macs | Apple Silicon only. | ✗ No |
 
 <h3 align="center">
-  <a href="https://github.com/mantrakp04/ardia/releases/download/v0.2.46/Ardia-0.2.46.dmg">Download Ardia 0.2.46</a>
+  <a href="https://github.com/mantrakp04/ardia/releases/download/v0.2.47/Ardia-0.2.47.dmg">Download Ardia 0.2.47</a>
 </h3>
 
 <p align="center">
-  It’s 128 MB and one drag into Applications.<br>
+  It’s 143 MB and one drag into Applications.<br>
   Not on a Mac? Watch › Custom › Releases up top and GitHub tells you when it is.
 </p>
 

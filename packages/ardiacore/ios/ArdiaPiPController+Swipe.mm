@@ -50,6 +50,7 @@ static __weak NSWindow *gSwipeMomentum;
     ArdiaPiPController *controller = [self swipeTargetFor:event];
     if (!controller) return NO;
     gSwipeWindow = controller.window;
+    ActivateWithOnlyPictureInPicture(controller, YES);
     [controller swipeBegan:event];
     return YES;
   }
@@ -115,6 +116,12 @@ static __weak NSWindow *gSwipeMomentum;
 
 - (void)dragMoved:(NSEvent *)event {
   if (_dragging) [self followPointer:event];
+}
+
+- (void)unstashFromHandle {
+  if (_stashedEdge == ArdiaPiPEdgeNone) return;
+  [self unstash];
+  [self.view emit:@"pictureInPictureUnstashed" payload:[(_dragStamp ?: ArdiaConsentStamp.begin) onto:@{}]];
 }
 
 - (void)dragEnded:(NSEvent *)event {

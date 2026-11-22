@@ -60,6 +60,7 @@ the commit's own.
   -h, --help        show this help
 `;
 
+export const privateFolder = (path) => mkdir(path, { recursive: true, mode: 0o700 });
 export const ASSERTIONS = ["ldd", "shell-ui", "bootstrap", "native-tab", "sandbox", "content-blocker", "restart-restore", "staged-install", "app-version", "cli-install", "cli-control", "cli-scripts"];
 export const FORBIDDEN_SWITCHES = ["--no-sandbox", "--disable-seccomp-filter-sandbox", "--disable-namespace-sandbox", "--disable-setuid-sandbox", "--disable-gpu-sandbox", "--no-zygote-sandbox", "--single-process", "--in-process-gpu"];
 export const TREE_FORBIDDEN_SWITCHES = ["--no-sandbox", "--disable-seccomp-filter-sandbox", "--disable-namespace-sandbox", "--disable-setuid-sandbox"];
@@ -551,7 +552,7 @@ class Smoke {
       if (!(await fileInfo(path))?.isFile) throw new Error(`the package has no ${path.slice(into.length + 1)}`);
     }
     this.profile = join(this.work, "profile");
-    await mkdir(this.profile);
+    await privateFolder(this.profile);
     this.version = (await readFile(join(this.runtime, "VERSION"), "utf8").catch(() => null))?.trim() || null;
     this.cliDir = join(this.runtime, "cli");
     this.hasCli = Boolean((await stat(this.cliDir).catch(() => null))?.isDirectory());
@@ -860,7 +861,8 @@ class Smoke {
 
   async pipeInstance(name, { extensions = false } = {}) {
     const profile = join(this.work, `${name}-profile`);
-    await mkdir(join(profile, "home"), { recursive: true });
+    await privateFolder(profile);
+    await mkdir(join(profile, "home"));
     const args = pipeLaunchArguments(launchArguments({ scratch: profile, extensions }));
     const env = launchEnvironment({ scratch: profile });
     const refused = launchRefusal(args, env);

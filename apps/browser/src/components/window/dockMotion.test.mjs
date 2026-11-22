@@ -50,12 +50,15 @@ test("the traffic lights go with the sidebar: at their place when it's shown, pa
   }
 });
 
-test("the peek keeps the same gap on every edge, with a 4 pt minimum", () => {
+test("the peek sits as far in from the window's edges as the page card, at every frame, and 1 pt in at a zero frame", () => {
   for (let inset = PAGE_FRAME.min; inset <= PAGE_FRAME.max; inset++) {
     const frame = dm.cardFrameOf(inset);
-    const gap = Math.max(4, inset);
+    const gap = Math.max(1, inset);
     assert.deepEqual([frame.peek.left, frame.peek.top, frame.peek.bottom], [gap, gap, gap]);
-    if (inset >= 4) checkPeekCoversCard(frame);
+    if (inset >= 1) {
+      assert.equal(frame.peek.radius, frame.radius, `frame ${inset}: the peek's corners are the card's`);
+      checkPeekCoversCard(frame);
+    }
   }
   assert.equal(DEFAULT_PEEK.left, PAGE_FRAME.default);
 });
@@ -109,7 +112,7 @@ test("the card radius follows the native window radius minus the frame, and the 
   assert.equal(dm.cardFrameOf(0).radius, 0, "edge to edge: square corners; the window rounds the page");
   assert.equal(dm.cardFrameOf(12).radius, 7);
   assert.equal(dm.cardFrameOf(4).radius, 15);
-  assert.equal(pageFrameOf(18, 19, dm.peekRadius()).radius, 2);
+  assert.equal(pageFrameOf(18, 19).radius, 2);
   assert.ok(dm.cardFrameOf(0).splitGap > 0, "split panes keep a hairline gap edge to edge, so they still read as two pages");
   assert.deepEqual(dm.toolbarLightsCenter(false, 0), [25, 21]);
   assert.deepEqual(dm.toolbarLightsCenter(false), [...dm.LIGHTS_CENTER]);
@@ -117,10 +120,9 @@ test("the card radius follows the native window radius minus the frame, and the 
 });
 
 test("on a window drawn at 16 pt, a thin frame's corner nests in the window's and the default frame keeps its 10 pt", () => {
-  const peek = dm.peekRadius();
-  assert.ok(Math.abs(pageFrameOf(1, 19, peek, 16).radius - 46 / 3) < 1e-9, "1 pt in from a 16 pt corner: 15 pt concentric, plus a ninth of the 3 pt the default frame adds");
-  for (const inset of [9, 12]) assert.equal(pageFrameOf(inset, 19, peek, 16).radius, pageFrameOf(inset, 19, peek).radius);
-  assert.equal(pageFrameOf(0, 19, peek, 16).radius, 0);
+  assert.ok(Math.abs(pageFrameOf(1, 19, 16).radius - 46 / 3) < 1e-9, "1 pt in from a 16 pt corner: 15 pt concentric, plus a ninth of the 3 pt the default frame adds");
+  for (const inset of [9, 12]) assert.equal(pageFrameOf(inset, 19, 16).radius, pageFrameOf(inset, 19).radius);
+  assert.equal(pageFrameOf(0, 19, 16).radius, 0);
 });
 
 test("the motion flag is per window, and ending it twice is harmless", () => {
@@ -228,9 +230,11 @@ test("Arc's peek slides in on its measured spring and leaves on its ease-in-out;
   assert.ok(Math.abs(peak - arcPeak) < 0.002, `the panel's overshoot ${peak}, Arc's ${arcPeak}`);
 });
 
-test("the peek stays off the window edge even when the page frame is zero", () => {
+test("the peek stays off the window edge even when the page frame is zero, its corner nested in the window's", () => {
   const frameZero = dm.cardFrameOf(PAGE_FRAME.min).peek;
-  assert.deepEqual([frameZero.left, frameZero.top, frameZero.bottom], [4, 4, 4]);
+  assert.deepEqual([frameZero.left, frameZero.top, frameZero.bottom], [1, 1, 1]);
+  assert.equal(frameZero.radius, 18);
+  assert.equal(pageFrameOf(0, 19, 16).peek.radius, 15);
   assert.equal(dm.peekBleed(frameZero.left), 0);
   assert.equal(dm.peekBleed(DEFAULT_PEEK.left), 0);
 });

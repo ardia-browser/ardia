@@ -8,11 +8,11 @@ const info = read("../../ios/Ardia/Info.plist");
 const entitlements = (name: string) => read(`../../ios/Config/${name}`);
 const WEB_BROWSER = "com.apple.developer.web-browser";
 
-test("the iPhone app ships with the default browser off until Apple grants the web-browser entitlement", () => {
+test("the iPhone app ships with the default browser on, now that Apple granted the web-browser entitlement", () => {
   const switches = [...project.matchAll(/ARDIA_DEFAULT_BROWSER = (\w+);/g)].map((match) => match[1]);
   assert.ok(switches.length >= 2, "Debug and Release both set ARDIA_DEFAULT_BROWSER");
-  assert.deepEqual([...new Set(switches)], ["NO"], "every configuration builds with ARDIA_DEFAULT_BROWSER = NO");
-  assert.equal(entitlements("Ardia.entitlements").includes(WEB_BROWSER), false, "the entitlements used today never claim the web-browser entitlement");
+  assert.deepEqual([...new Set(switches)], ["YES"], "every configuration builds with ARDIA_DEFAULT_BROWSER = YES");
+  assert.equal(entitlements("Ardia.entitlements").includes(WEB_BROWSER), false, "the NO build never claims the web-browser entitlement");
 });
 
 test("one build setting turns on the entitlement and the Info.plist key together, so the app is never half on", () => {
@@ -24,6 +24,21 @@ test("one build setting turns on the entitlement and the Info.plist key together
   const granted = entitlements("Ardia-DefaultBrowser.entitlements");
   assert.match(granted, new RegExp(`<key>${WEB_BROWSER}</key>\\s*<true/>`));
   assert.equal(granted.replace(new RegExp(`\\s*<key>${WEB_BROWSER}</key>\\s*<true/>`), ""), entitlements("Ardia.entitlements"), "the two files differ only by the web-browser entitlement");
+});
+
+test("the app asks for nothing Apple refuses in a default browser", () => {
+  const refused = [
+    "NSPhotoLibraryUsageDescription",
+    "NSLocationAlwaysUsageDescription",
+    "NSLocationAlwaysAndWhenInUseUsageDescription",
+    "NSHomeKitUsageDescription",
+    "NSBluetoothAlwaysUsageDescription",
+    "NSBluetoothPeripheralUsageDescription",
+    "NSHealthShareUsageDescription",
+    "NSHealthUpdateUsageDescription",
+  ];
+  assert.deepEqual(refused.filter((key) => info.includes(`<key>${key}</key>`)), []);
+  assert.match(info, /<key>NSPhotoLibraryAddUsageDescription<\/key>/, "saving images keeps its add-only access");
 });
 
 test("the app already declares http and https, which iOS requires of a default browser", () => {

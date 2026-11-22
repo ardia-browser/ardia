@@ -102,9 +102,9 @@ export function useTabPager({ width, selectedId, left, right, onCommit, onGrab }
   return { offset, active, gesture, outgoing, dim, grab, track, settleTo };
 }
 
-type NeighbourProps = { pager: TabPager; tab: BrowserTab; side: -1 | 1; width: number; statusHeight: number; hasLeft: boolean; hasRight: boolean };
+type NeighbourProps = { pager: TabPager; tab: BrowserTab; side: -1 | 1; width: number; statusHeight: number; statusOver?: boolean; hasLeft: boolean; hasRight: boolean };
 
-export function PagerNeighbour({ pager, tab, side, width, statusHeight, hasLeft, hasRight }: NeighbourProps) {
+export function PagerNeighbour({ pager, tab, side, width, statusHeight, statusOver = false, hasLeft, hasRight }: NeighbourProps) {
   const theme = useTheme();
   const tone = usePageTone(tab.id);
   const { offset } = pager;
@@ -123,10 +123,11 @@ export function PagerNeighbour({ pager, tab, side, width, statusHeight, hasLeft,
     <>
       <Animated.View testID="pagerEdgeShadow" pointerEvents="none" style={[styles.edge, { top: cornerRadius * 0.6, bottom: cornerRadius * 0.6 }, edge, shadowStyle]} />
       <Animated.View style={[StyleSheet.absoluteFill, styles.card, { backgroundColor: theme.surface }, style]} pointerEvents="none">
-        <View style={{ height: statusHeight, backgroundColor: tone?.top ?? theme.surface }} />
+        {statusOver ? null : <View style={{ height: statusHeight, backgroundColor: tone?.top ?? theme.surface }} />}
         <View style={styles.body}>
           <TabFace tab={tab} title={tab.title || shown.host} host={shown.host} tone={tone?.top ?? null} roles={theme} />
         </View>
+        {statusOver ? <View testID="pagerStatusStrip" style={[styles.statusOver, { height: statusHeight, backgroundColor: tone?.top ?? theme.pageSurface }]} /> : null}
       </Animated.View>
     </>
   );
@@ -143,4 +144,4 @@ export function PagerBackdrop() {
 
 const cornerRadius = screenCornerRadius(tabsLayout.displayCornerRadius);
 
-const styles = StyleSheet.create({ card: { overflow: "hidden", borderRadius: cornerRadius }, edge: { position: "absolute", width: tabsLayout.pagerEdgeShadow }, body: { flex: 1 } });
+const styles = StyleSheet.create({ card: { overflow: "hidden", borderRadius: cornerRadius }, edge: { position: "absolute", width: tabsLayout.pagerEdgeShadow }, body: { flex: 1 }, statusOver: { position: "absolute", left: 0, right: 0, top: 0 } });

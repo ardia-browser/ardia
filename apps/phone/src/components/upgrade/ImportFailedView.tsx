@@ -4,7 +4,7 @@ import { copy } from "../../lib/platformCopy";
 import { retryImport, startWithoutImporting, useBoot } from "../../state/app/boot";
 import { importChoices } from "../../state/legacy/importRules";
 import { offersStartWithout } from "../../state/legacy/upgrade";
-import { capsule, failureLayout, font, space, Symbol, useTheme } from "../ui";
+import { controlRadius, failureLayout, font, space, Symbol, useTheme } from "../ui";
 
 export function ImportFailedView() {
   const theme = useTheme();
@@ -30,12 +30,12 @@ export function ImportFailedView() {
         onPress={retryImport}
         style={[styles.retry, { borderColor: theme.separator }]}
       >
-        {busy ? <ActivityIndicator color={theme.secondaryLabel} /> : <Text style={[font.body, { color: theme.formAccent }]}>{words.tryAgain}</Text>}
+        {busy ? <ActivityIndicator color={theme.secondaryLabel} /> : <Text style={[font.body, { color: theme.spaceAccentInk }]}>{words.tryAgain}</Text>}
       </Pressable>
       {choices.startWithout ? (
         <View style={styles.without}>
           <Pressable accessibilityRole="button" accessibilityState={{ disabled: busy }} disabled={busy} onPress={() => void startWithoutImporting()} style={styles.plain}>
-            <Text style={[font.body, { color: busy ? theme.secondaryLabel : theme.formAccent }]}>{words.startWithout}</Text>
+            <Text style={[font.body, { color: busy ? theme.secondaryLabel : theme.spaceAccentInk }]}>{words.startWithout}</Text>
           </Pressable>
           <Text style={[font.footnote, styles.text, { color: theme.secondaryLabel }]}>{words.startWithoutNote}</Text>
         </View>
@@ -54,7 +54,8 @@ const styles = StyleSheet.create({
     minHeight: failureLayout.button,
     minWidth: failureLayout.button * 3,
     paddingHorizontal: space.xxl,
-    borderRadius: capsule(failureLayout.button),
+    borderRadius: controlRadius(failureLayout.button),
+    borderCurve: "continuous",
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: "center",
     justifyContent: "center",

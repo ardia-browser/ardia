@@ -13,7 +13,7 @@ Pod::Spec.new do |s|
   s.dependency 'hermes-engine'
   s.dependency 'React-jsi'
   s.dependency 'Sparkle', '~> 2.9'
-  s.frameworks     = 'AppKit', 'LocalAuthentication', 'ServiceManagement', 'UniformTypeIdentifiers', 'UserNotifications', 'CoreImage', 'EventKit', 'Security', 'NaturalLanguage', 'SwiftUI'
+  s.frameworks     = 'AppKit', 'LocalAuthentication', 'ServiceManagement', 'UniformTypeIdentifiers', 'UserNotifications', 'CoreImage', 'EventKit', 'Security', 'NaturalLanguage', 'SwiftUI', 'Network'
   s.weak_frameworks = 'Translation'
   s.source_files   = '**/*.{h,m,mm,swift}'
   s.pod_target_xcconfig = {

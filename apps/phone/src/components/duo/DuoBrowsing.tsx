@@ -146,7 +146,7 @@ function PageCard({ card, tab, front }: { card: DuoFrame; tab: BrowserTab | null
             <PageCover key={`${tab.id}:cover`} tab={tab} />
             <PageFailureView key={`${tab.id}:failure`} tabId={tab.id} />
             <View style={styles.loading} pointerEvents="none">
-              <DuoLoadingLine tabId={tab.id} color={theme.accent} />
+              <DuoLoadingLine tabId={tab.id} color={theme.spaceAccentInk} />
             </View>
           </>
         ) : null}

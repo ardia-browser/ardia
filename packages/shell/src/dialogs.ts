@@ -8,6 +8,7 @@ export type ConfirmOptions = {
   windowId?: string;
   onlyIfShown?: boolean;
   dismissKey?: string;
+  sheetOnly?: boolean;
 };
 
 export type PromptOptions = {
@@ -20,7 +21,7 @@ export type PromptOptions = {
 };
 
 export type DialogsNative = {
-  confirm(options: ConfirmOptions): Promise<{ confirmed: boolean; suppressed: boolean; unshown?: boolean }>;
+  confirm(options: ConfirmOptions): Promise<{ confirmed: boolean; suppressed: boolean; unshown?: boolean; unavailable?: boolean }>;
   prompt(options: PromptOptions): Promise<string | null>;
   dismissesShownOnly?: boolean;
   dismissShownOnly?(key: string | null): Promise<void>;

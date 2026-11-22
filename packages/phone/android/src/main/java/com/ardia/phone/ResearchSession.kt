@@ -55,6 +55,8 @@ internal class ResearchSession(context: Context, val query: String, val forcesEx
         private set
     var chatGPTFellBack = false
         private set
+    var geminiNanoMissing: String? = null
+        private set
     var isWritingWithChatGPT = false
         private set
     var onSettled: ((ResearchSession) -> Unit)? = null
@@ -196,10 +198,10 @@ internal class ResearchSession(context: Context, val query: String, val forcesEx
                 isWritingWithChatGPT = false
             }
         }
-        when (OnDeviceWriter.availability()) {
-            OnDeviceWriter.Availability.Available -> Unit
-            OnDeviceWriter.Availability.Downloading -> return quoteSources(listOfNotNull(fallback, "Gemini Nano is still downloading. Until it’s ready, here are the most relevant lines from the pages.").joinToString(" "))
-            OnDeviceWriter.Availability.Unavailable -> return quoteSources(listOfNotNull(fallback, "This phone can’t run Gemini Nano, so here are the most relevant lines from the pages.").joinToString(" "))
+        val availability = OnDeviceWriter.availability()
+        if (availability != OnDeviceWriter.Availability.Available) {
+            geminiNanoMissing = availability.telemetry
+            return quoteSources(listOfNotNull(fallback, availability.excerptsNote).joinToString(" "))
         }
         val budget = OnDeviceWriter.characterBudget()
         for (share in listOf(budget, budget / 2)) {

@@ -1,8 +1,8 @@
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
-import { officialPlugins, type OfficialPlugin } from "../plugins/official";
+import { officialPlugins, PRESELECTED_PLUGINS, type OfficialPlugin } from "../plugins/official";
 import { currentPlugins } from "../plugins/store";
 
-export const PRESELECTED_PLUGINS: readonly string[] = ["cli"];
+export { PRESELECTED_PLUGINS };
 
 export const offeredInOnboarding = (plugins: readonly OfficialPlugin[]) => plugins.filter((p) => p.state !== "unsupported");
 

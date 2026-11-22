@@ -331,6 +331,12 @@ class PageViewModule : Module() {
             engine.refreshSitePreferences()
         }.runOnQueue(Queues.MAIN)
 
+        AsyncFunction("forgetNightShadeVerdicts") { since: Double? ->
+            val engine = PhonePages.engine(context)
+            PhonePages.sitePreferences.forgetNightShadeVerdicts(since?.toLong())
+            engine.refreshSitePreferences()
+        }.runOnQueue(Queues.MAIN)
+
         AsyncFunction("setOpensLinksInApps") { host: String, opens: Boolean? ->
             PhonePages.engine(context)
             PhonePages.sitePreferences.setOpensLinksInApps(host, opens)

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Platform, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
 import Animated, { runOnJS, useAnimatedReaction, useAnimatedStyle, useDerivedValue } from "react-native-reanimated";
-import { DECK } from "../../lib/deckGeometry";
+import { DECK, DECK_REDESIGN } from "../../lib/deckGeometry";
 import { pullBarGhosts, pullBarGlyphs, pullBarShift, pullClearsBar, pullPagePose, pullRise } from "../../lib/deckPull";
 import { deckPull, PULL_STAGE, pullFades, setDeckOwnsBar } from "../../state/browse/deckPull";
 import { tabsInk, usesGlass, useTheme } from "../ui";
@@ -124,7 +124,7 @@ function pullLanded(stage: number): boolean {
   return stage === PULL_STAGE.landed || stage === PULL_STAGE.handed;
 }
 
-const CARD_SCALE = DECK.cardWidthRatio;
+const CARD_SCALE = DECK_REDESIGN.cardWidthRatio;
 
 const styles = StyleSheet.create({
   page: { overflow: "hidden" },

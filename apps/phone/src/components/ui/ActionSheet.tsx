@@ -10,7 +10,7 @@ import type { Confirmation } from "./Dialog";
 import { countDrawnMenuOpened, MenuMaterial } from "./Menu";
 import { menuMotion } from "./motion";
 import { Portal, usePortalLeaving, usePortalLeft } from "./Overlay";
-import { actionSheetInk, actionSheetLook, ink, materialDialogInk, materialDialogLook } from "./tokens";
+import { actionSheetInk, actionSheetLook, ink, materialDialogInk, materialDialogLook, shape, smoothCorners } from "./tokens";
 import { useTheme } from "./theme";
 
 export type SheetAction = { title: string; destructive?: boolean; onPress: () => void };
@@ -146,7 +146,7 @@ function SheetCard({ title, message, actions, cancel = "Cancel", onCancel }: Pro
       <Pressable testID="drawnConfirmationOutside" {...(announces ? { accessible: false, importantForAccessibility: "no" as const } : { accessibilityRole: "button" as const, accessibilityLabel: cancel })} style={[StyleSheet.absoluteFill, { backgroundColor: ink.clear }]} onPress={onCancel} />
       <View style={styles.centre} pointerEvents="box-none">
         <View ref={card} testID="drawnActionSheet" accessibilityViewIsModal style={[styles.card, { width, maxHeight, borderColor: paint.rim, boxShadow: actionSheetLook.shadow }]}>
-          <MenuMaterial source={null} fill={paint.fill} solid={paint.solid} radius={actionSheetLook.radius} style={[styles.material, { maxHeight: maxHeight - 2 * actionSheetLook.rim }]}>
+          <MenuMaterial source={null} fill={paint.fill} solid={paint.solid} radius={shape.panel} style={[styles.material, { maxHeight: maxHeight - 2 * actionSheetLook.rim }]}>
             <ScrollView testID="drawnConfirmationScroll" keyboardShouldPersistTaps="handled" style={styles.scroll} contentContainerStyle={styles.content} bounces={false} overScrollMode="never">
             {heading ? (
               <View ref={spoken} testID="drawnConfirmationHeading" accessible accessibilityRole="header" accessibilityLabel={heading} {...cancelAction}>
@@ -208,14 +208,14 @@ export function ConfirmSheet({ confirmation, onClose }: { confirmation: Confirma
 
 const styles = StyleSheet.create({
   centre: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
-  card: { borderRadius: actionSheetLook.radius, borderWidth: actionSheetLook.rim },
-  material: { overflow: "hidden" },
+  card: { borderRadius: shape.panel, borderWidth: actionSheetLook.rim, ...smoothCorners },
+  material: { overflow: "hidden", ...smoothCorners },
   scroll: { flexGrow: 0 },
   content: { paddingTop: actionSheetLook.top, paddingHorizontal: actionSheetLook.side, paddingBottom: actionSheetLook.buttonBottom },
   message: { marginTop: actionSheetLook.messageGap },
   buttons: { marginHorizontal: actionSheetLook.buttonSide - actionSheetLook.side, gap: actionSheetLook.buttonsBetween },
   afterText: { marginTop: actionSheetLook.buttonGap },
-  button: { minHeight: actionSheetLook.buttonHeight, borderRadius: actionSheetLook.buttonHeight / 2, justifyContent: "center", paddingHorizontal: actionSheetLook.buttonSide, paddingVertical: (actionSheetLook.buttonHeight - actionSheetLook.button.lineHeight) / 2 },
+  button: { minHeight: actionSheetLook.buttonHeight, borderRadius: shape.control, ...smoothCorners, justifyContent: "center", paddingHorizontal: actionSheetLook.buttonSide, paddingVertical: (actionSheetLook.buttonHeight - actionSheetLook.button.lineHeight) / 2 },
   pressed: { opacity: 0.7 },
   centred: { textAlign: "center" },
   dialog: { borderRadius: materialDialogLook.radius, overflow: "hidden" },

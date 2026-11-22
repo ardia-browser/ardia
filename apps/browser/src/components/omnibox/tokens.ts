@@ -90,8 +90,6 @@ export const SUGGESTION = {
 
 export const SELECTED_SUGGESTION_ALPHA = { dark: 0.56, light: 0.3 } as const;
 
-export const GROW = { duration: 130, easing: curve.outExpo } as const;
-
 export const SCOPE_PULSE = {
   fill: { dark: 0.28, light: 0.2 },
   ring: { dark: 0.55, light: 0.45 },

@@ -1,11 +1,14 @@
 import type { AppIcon } from "../../../state/app/appSettings";
-import { Box, GlassFill, PopUp, radius, space, Toggle, type Option } from "../../ui";
+import { Box, GlassFill, PopUp, radius, space, Text, Toggle, type Option } from "../../ui";
 import { Image, View } from "react-native";
 import { useTheme } from "../../ui/theme";
 import { useSettings } from "../../../state/browser/hooks";
-import { updateSettings } from "../../../state/settings/actions";
+import { chooseAddressBar, chooseCommandBarPlacement, updateSettings } from "../../../state/settings/actions";
+import { keyText } from "../../../state/commands/keyText";
+import { AddressBarPreview, CommandBarPreview } from "../ChoicePreviews";
+import { SwitchingTabsSection } from "./SwitchingTabs";
 import type { Settings } from "../../../state/settings/settings";
-import { Anchor, FormField, Group, Row, SectionHeader, SettingToggle } from "../Form";
+import { Anchor, FormField, Group, Row, SectionHeader, SettingToggle, useHiddenSetting } from "../Form";
 import { MiniWindow } from "../MiniWindow";
 import { PictureChoice } from "../PictureChoice";
 import { setting, type SettingId } from "../settingsIndex";
@@ -21,7 +24,7 @@ import { perLook } from "../../ui/tokens";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import type { SettingsPlace } from "../../../state/settings/settingsWindows";
 
-const ADDRESS_BAR_IN_MENU = PLATFORM_FEATURES.menuBar ? " Also in View › Show Address Bar in Sidebar." : "";
+const ADDRESS_BAR_IN_MENU = PLATFORM_FEATURES.menuBar ? "Also in View › Show Address Bar in Sidebar." : "";
 
 const MODES: { value: Settings["appearance"]; title: string; description: string }[] = [
   { value: "auto", title: "Automatic", description: "Follow the system appearance setting" },
@@ -52,15 +55,16 @@ const SIDEBAR_TEXT_SIZES: Option<Settings["sidebarTextSize"]>[] = [
   { value: "larger", title: "Larger" },
 ];
 
-const ADDRESS_BAR: Option<Settings["addressBar"]>[] = [
-  { value: "toolbar", title: "In the toolbar" },
-  { value: "sidebar", title: "In the sidebar" },
+const ADDRESS_BAR: { value: Settings["addressBar"]; title: string; caption: string }[] = [
+  { value: "toolbar", title: "In the toolbar", caption: "Above the page, with its buttons." },
+  { value: "sidebar", title: "In the sidebar", caption: "Above your tabs; the page gets more room." },
 ];
 
-const COMMAND_BAR_PLACEMENT: Option<Settings["commandBarPlacement"]>[] = [
-  { value: "field", title: "At the address" },
-  { value: "centred", title: "In the center" },
-  { value: "centredOnClick", title: "In the center, also on click" },
+type CommandBarPlace = "field" | "centred";
+
+const COMMAND_BAR_PLACES: { value: CommandBarPlace; title: string; caption: string }[] = [
+  { value: "field", title: "At the address", caption: "Opens where the address is, like Chrome." },
+  { value: "centred", title: "In the center", caption: "Floats over the page, like Arc." },
 ];
 
 const ADDRESS_BAR_BUTTONS: Option<Settings["addressBarButtons"]>[] = [
@@ -87,6 +91,7 @@ export function AppearancePane(_place: SettingsPlace) {
     <View>
       <LookSection />
       <SizeAndTextSection />
+      <SwitchingTabsSection />
       <ToolbarSection />
       <PageFrameSection />
     </View>
@@ -183,28 +188,65 @@ function ToolbarSection() {
   const compactToolbar = useSettings((s) => s.compactToolbar);
   const placement = useSettings((s) => s.commandBarPlacement);
   const buttons = useSettings((s) => s.addressBarButtons);
+  const minimal = useSettings((s) => s.minimalismMode);
+  const place: CommandBarPlace = placement === "field" ? "field" : "centred";
+  const addressBarFixed = useHiddenSetting()(setting("appearance.addressBar"));
+  const fieldIn = addressBar === "sidebar" && !addressBarFixed ? "sidebar" : "toolbar";
   return (
     <>
       <SectionHeader title="Toolbar" />
-      <Group>
-        <Row anchor="appearance.addressBar" description={`In the sidebar, the page gets the toolbar’s height.${ADDRESS_BAR_IN_MENU}`}>
-          <PopUp value={addressBar === "sidebar" ? "sidebar" : "toolbar"} options={ADDRESS_BAR} onChange={(v) => updateSettings({ addressBar: v })} minWidth={160} />
-        </Row>
-        <Row anchor="appearance.compactToolbar">
-          <Toggle value={compactToolbar} onChange={(v) => updateSettings({ compactToolbar: v })} />
-        </Row>
-        <Row anchor="appearance.commandBarPlacement">
-          <PopUp value={placement} options={COMMAND_BAR_PLACEMENT} onChange={(v) => updateSettings({ commandBarPlacement: v })} minWidth={220} />
-        </Row>
-        <Row anchor="appearance.addressBarButtons">
-          <PopUp value={buttons} options={ADDRESS_BAR_BUTTONS} onChange={(v) => updateSettings({ addressBarButtons: v })} minWidth={160} />
-        </Row>
-        <SettingToggle anchor="appearance.minimalismMode" />
-        <BookmarksBarRow />
-      </Group>
+      <Box gap="xl">
+        <Anchor id="appearance.addressBar" shape="card">
+          <FormField label={setting("appearance.addressBar").title}>
+            <Box row gap="xl" accessibilityRole="radiogroup">
+              {ADDRESS_BAR.map((a) => (
+                <PictureChoice key={a.value} title={a.title} caption={a.caption} selected={fieldIn === a.value} onPress={() => chooseAddressBar(a.value)} size="l">
+                  <AddressBarPreview addressBar={a.value} />
+                </PictureChoice>
+              ))}
+            </Box>
+            {ADDRESS_BAR_IN_MENU ? (
+              <Text size="caption" tone="textTertiary" style={MENU_NOTE}>
+                {ADDRESS_BAR_IN_MENU}
+              </Text>
+            ) : null}
+          </FormField>
+        </Anchor>
+        <Anchor id="appearance.commandBarPlacement" shape="card">
+          <FormField label={setting("appearance.commandBarPlacement").title}>
+            <Box row gap="xl" accessibilityRole="radiogroup">
+              {COMMAND_BAR_PLACES.map((c) => (
+                <PictureChoice key={c.value} title={c.title} caption={c.caption} selected={place === c.value} onPress={() => place !== c.value && chooseCommandBarPlacement(c.value)} size="l">
+                  <CommandBarPreview placement={c.value} addressBar={fieldIn} />
+                </PictureChoice>
+              ))}
+            </Box>
+            {minimal ? (
+              <Text size="caption" tone="textTertiary" style={MENU_NOTE}>
+                {`Minimalism mode hides the address, so ${keyText("⌘L")} opens in the center while it’s on.`}
+              </Text>
+            ) : null}
+          </FormField>
+        </Anchor>
+        <Group>
+          <Row anchor="appearance.commandBarOnClick">
+            <Toggle value={placement === "centredOnClick"} accessibilityLabel={setting("appearance.commandBarOnClick").title} onChange={(on) => updateSettings({ commandBarPlacement: on ? "centredOnClick" : "centred" })} />
+          </Row>
+          <Row anchor="appearance.compactToolbar">
+            <Toggle value={compactToolbar} onChange={(v) => updateSettings({ compactToolbar: v })} />
+          </Row>
+          <Row anchor="appearance.addressBarButtons">
+            <PopUp value={buttons} options={ADDRESS_BAR_BUTTONS} onChange={(v) => updateSettings({ addressBarButtons: v })} minWidth={160} />
+          </Row>
+          <SettingToggle anchor="appearance.minimalismMode" />
+          <BookmarksBarRow />
+        </Group>
+      </Box>
     </>
   );
 }
+
+const MENU_NOTE = { marginTop: space.m, textAlign: "center" } as const;
 
 const fullScreenFrameOf = (zeroInFullScreen: boolean, zeroWhenTabsHidden: boolean): FullScreenFrame => (zeroInFullScreen ? "remove" : zeroWhenTabsHidden ? "tabsHidden" : "keep");
 

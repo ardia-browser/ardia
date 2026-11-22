@@ -12,7 +12,7 @@ import { wallpaperColorsEnabled } from "../../lib/material/schemePick";
 import { usePreferences } from "../../state/settings/hooks";
 import { closeSettings, pushSettings } from "../../state/settings/nav";
 import { AUTO_ARCHIVE_INTERVALS, autoArchiveTitle, type AutoArchiveInterval } from "../../state/tabs/tabModels";
-import { capsule, duration, font, materialYouOffered, settingsLayout, settingsTint, space, Symbol, useDesign, useTheme, useWarningInk } from "../ui";
+import { controlRadius, duration, font, materialYouOffered, settingsLayout, settingsTint, space, Symbol, useDesign, useTheme, useWarningInk } from "../ui";
 import { PHONE_SHARING_COPY } from "../../lib/telemetryCopy";
 import { setUsageSharing, useUsageSharing } from "../../state/telemetry/telemetry";
 import { AppearanceRow, ColorRow, MatchMyMac } from "./AppearancePage";
@@ -208,7 +208,7 @@ function SyncCard({ stacks }: { stacks: boolean }) {
 const styles = StyleSheet.create({
   shortcuts: { paddingHorizontal: space.l, gap: space.s },
   fill: { flex: 1 },
-  shortcut: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: space.s, minHeight: 48, borderRadius: capsule(48) },
+  shortcut: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: space.s, minHeight: 48, borderRadius: controlRadius(48), borderCurve: "continuous" },
   medium: { fontWeight: "500" },
   bold: { fontWeight: "600" },
   syncCard: { flexDirection: "row", alignItems: "center", gap: space.m, paddingHorizontal: settingsLayout.rowInset, paddingVertical: space.m },

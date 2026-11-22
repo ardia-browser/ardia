@@ -17,10 +17,9 @@ import {
 } from "../../lib/trayMotion";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCoverFocus } from "./coverFocus";
-import { LookBackdrop } from "./LookViews";
 import { reducedMotionMs, tabsCurve, tabsMotion, trayMotion } from "./motion";
 import { useTheme } from "./theme";
-import { menuLayout } from "./tokens";
+import { menuLayout, sheetInk } from "./tokens";
 import { useReduceMotion } from "./contrast";
 import { MenuFrostProvider } from "./Menu";
 import { useDesign } from "./design";
@@ -227,7 +226,7 @@ function ClassicSheet({ open, onDismiss, onHidden, fill, onTapAway, children }: 
             slide,
           ]}
         >
-          {fill ? <View testID="sheetFill" style={[StyleSheet.absoluteFill, { backgroundColor: fill }]} /> : <LookBackdrop />}
+          <View testID="sheetFill" style={[StyleSheet.absoluteFill, { backgroundColor: fill ?? (theme.dark ? sheetInk.fill.dark : sheetInk.fill.light) }]} />
           <SheetScrollContext.Provider value={grabber ? scroll : null}>
             <MenuFrostProvider value={null}>{children}</MenuFrostProvider>
           </SheetScrollContext.Provider>

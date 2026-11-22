@@ -57,12 +57,12 @@ onAndroid("turning Material You on changes the whole app at once, without a rela
   act(() => openSettings());
   settle();
   const sheet = root.root.findAll((node) => node.props.testID === "fullSheet" && typeof node.type === "string")[0];
-  const scroll = root.root.findAll((node) => node.props.testID === "settingsPage" && typeof node.type === "string")[0]!.findByType(ScrollView);
+  const scroll = root.root.findAll((node) => node.props.testID === "settingsPage" && typeof node.type === "string")[0]!.findAll((node) => node.type === ScrollView)[0]!;
   act(() => scroll.props.onScroll({ nativeEvent: { contentOffset: { y: 120 } } }));
   act(() => materialYouRow(root)!.props.onPress());
   settle();
   expect(root.root.findAll((node) => node.props.testID === "fullSheet" && typeof node.type === "string")[0]).toBe(sheet);
-  expect(root.root.findAll((node) => node.props.testID === "settingsPage" && typeof node.type === "string")[0]!.findByType(ScrollView)).toBe(scroll);
+  expect(root.root.findAll((node) => node.props.testID === "settingsPage" && typeof node.type === "string")[0]!.findAll((node) => node.type === ScrollView)[0]!).toBe(scroll);
   expect(settingsScroll("Settings")).toBe(120);
   expect(currentPreferences().materialYou).toBe(true);
   expect(counted).toHaveBeenCalledWith("material_you_turned_on");
@@ -71,7 +71,7 @@ onAndroid("turning Material You on changes the whole app at once, without a rela
   expect(materialYouRow(root)).toBeDefined();
   act(() => materialYouRow(root)!.props.onPress());
   settle();
-  expect(root.root.findAll((node) => node.props.testID === "settingsPage" && typeof node.type === "string")[0]!.findByType(ScrollView)).toBe(scroll);
+  expect(root.root.findAll((node) => node.props.testID === "settingsPage" && typeof node.type === "string")[0]!.findAll((node) => node.type === ScrollView)[0]!).toBe(scroll);
   expect(settingsScroll("Settings")).toBe(120);
   expect(currentPreferences().materialYou).toBe(false);
   expect(counted).toHaveBeenCalledWith("material_you_turned_off");
@@ -115,10 +115,10 @@ test("a menu portal retains its opening design through its exit", () => {
     return <Text testID="portalDesign">{useDesign()}</Text>;
   }
   const root = renderSurface(<DesignProvider design="material"><Portal exitMs={200}><DesignLabel /></Portal></DesignProvider>);
-  expect(root.root.findByProps({ testID: "portalDesign" }).props.children).toBe("material");
+  expect(root.root.findAll((node) => node.props.testID === "portalDesign")[0]!.props.children).toBe("material");
   updateSurface(root, <DesignProvider design="redesigned">{null}</DesignProvider>);
-  expect(root.root.findByProps({ testID: "portalDesign" }).props.children).toBe("material");
+  expect(root.root.findAll((node) => node.props.testID === "portalDesign")[0]!.props.children).toBe("material");
   act(() => jest.advanceTimersByTime(400));
-  expect(root.root.findAllByProps({ testID: "portalDesign" })).toHaveLength(0);
+  expect(root.root.findAll((node) => node.props.testID === "portalDesign")).toHaveLength(0);
   unmount(root);
 });

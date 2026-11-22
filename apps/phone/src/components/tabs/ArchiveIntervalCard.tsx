@@ -5,7 +5,7 @@ import { dismissArchiveCard, hideArchiveCardSoon } from "../../state/browse/arch
 import { setArchiveInterval } from "../../state/settings/actions";
 import { usePreferences } from "../../state/settings/hooks";
 import { AUTO_ARCHIVE_INTERVALS, autoArchiveTitle, type AutoArchiveInterval } from "../../state/tabs/tabModels";
-import { archiveCardLayout, FloatingMenu, screenReaderActions, font, radius, shadowRadius, space, Symbol, tabsLayout, tabsMotion, useTheme, useReduceMotion } from "../ui";
+import { archiveCardLayout, FloatingMenu, screenReaderActions, font, radius, shadowRadius, space, Symbol, tabsLayout, tabsMotion, useTheme, useReduceMotion, usePressStyle, controlSize, smoothCorners } from "../ui";
 
 import { ArchiveTile } from "./ArchiveTile";
 
@@ -16,6 +16,7 @@ export function ArchiveIntervalCard({ edgeY }: { edgeY: number }) {
   const reduceMotion = useReduceMotion();
   const interval = usePreferences((p) => p.autoArchiveInterval);
   const picker = useRef<ViewInstance>(null);
+  const pickerStyle = usePressStyle("text", { style: styles.picker });
   const [open, setOpen] = useState(false);
   const side = archiveCardLayout.tile;
   return (
@@ -34,7 +35,7 @@ export function ArchiveIntervalCard({ edgeY }: { edgeY: number }) {
           <ArchiveTile side={side} />
           <Text style={[font.body, { color: theme.label }]}>Archive Inactive Tabs</Text>
         </View>
-        <Pressable ref={picker} accessibilityRole="button" accessibilityLabel="Archive Inactive Tabs" accessibilityValue={{ text: autoArchiveTitle(interval) }} onPress={() => setOpen(true)} style={styles.picker}>
+        <Pressable ref={picker} accessibilityRole="button" accessibilityLabel="Archive Inactive Tabs" accessibilityValue={{ text: autoArchiveTitle(interval) }} onPress={() => setOpen(true)} style={pickerStyle}>
           <Text style={[font.body, { color: theme.secondaryLabel }]}>{autoArchiveTitle(interval)}</Text>
           <Symbol name="chevronUpChevronDown" size={14} color={theme.secondaryLabel} />
         </Pressable>
@@ -91,10 +92,11 @@ const styles = StyleSheet.create({
     paddingRight: space.xs,
     paddingVertical: space.m + 2,
     borderRadius: archiveCardLayout.radius,
+    ...smoothCorners,
     shadowOpacity: 0.18,
     shadowRadius: shadowRadius.lifted,
     elevation: 12,
   },
   label: { flexDirection: "row", alignItems: "center", gap: space.m },
-  picker: { flexDirection: "row", alignItems: "center", gap: space.xs, minHeight: 44, paddingHorizontal: space.s + 2, borderRadius: radius.row },
+  picker: { flexDirection: "row", alignItems: "center", gap: space.xs, minHeight: controlSize.hitTarget, paddingHorizontal: space.s + 2, borderRadius: radius.row, ...smoothCorners },
 });

@@ -35,13 +35,16 @@ import { useTabs } from "../../state/tabs/store";
 import { ClearDataPage } from "../settings/DataPages";
 import { EmptyState } from "../settings/SettingsKit";
 import { MenuTrigger, confirmInSheet } from "../ui/MenuTrigger";
-import { ConfirmSheet, Favicon, FloatingMenu, font, LookBackdrop, radius, space, SwipeToDelete, Symbol, tabsLayout, tabsMotion, useSheetFrame, useTheme, type Confirmation, type MenuItem, type SymbolName } from "../ui";
+import { actionWords, dismissWords } from "../../lib/sharedWords";
+import { listSheetWords } from "./listSheetWords";
+import { ConfirmSheet, Favicon, iconRoles, LoadingState, NoResultsState, FloatingMenu, font, LookBackdrop, radius, space, SwipeToDelete, Symbol, tabsLayout, tabsMotion, useSheetFrame, useTheme, type Confirmation, type MenuItem, type SymbolName, Tappable, FieldAccessory, controlSize, smoothCorners } from "../ui";
+import { libraryLayout } from "./listSheetTokens";
 
 const FOLDER = "folder:";
 const ROW_FAVICON = 20;
 const ROW_FAVICON_SCALE_CAP = 2;
 const DEVICE_GLYPH = 13;
-const SWITCHER_HEIGHT = 32;
+const SWITCHER_FILL_INSET = (controlSize.hitTarget - libraryLayout.drawnSwitcherHeight) / 2 - space.hair;
 
 const SECTION_SYMBOLS: Record<LibrarySection, SymbolName> = { history: "clockArrow", bookmarks: "star", downloads: "arrowDownCircle" };
 
@@ -52,8 +55,8 @@ type RowMenu = { items: MenuItem[]; at: Point };
 const linkItems = (url: string, title: string): MenuItem[] =>
   shareable(url)
     ? [
-        { label: "Copy Link", icon: "link", onPress: () => copyLink(url) },
-        { label: "Share", icon: "squareAndArrowUp", onPress: () => shareUrl(url, title) },
+        { label: actionWords.copyLink, icon: iconRoles.copyLink, onPress: () => copyLink(url) },
+        { label: actionWords.share, icon: iconRoles.share, onPress: () => shareUrl(url, title) },
       ]
     : [];
 
@@ -117,7 +120,7 @@ export function LibraryView() {
     const asked: Confirmation = {
       title: "Delete All Downloads?",
       message: "The files are removed from this phone.",
-      action: "Delete All",
+      action: listSheetWords.deleteAll,
       run: () => {
         haptics.warning();
         deleteAllDownloads();
@@ -126,7 +129,7 @@ export function LibraryView() {
     confirmInSheet(asked, () => setConfirmation(asked));
   };
   const items: MenuItem[] = [
-    ...(section === "downloads" ? ([{ label: "Delete All Downloads…", icon: "trash", destructive: true, disabled: !hasFiles, onPress: confirmDeleteAll }, "divider"] as MenuItem[]) : []),
+    ...(section === "downloads" ? ([{ label: listSheetWords.deleteAllEntry, icon: "trash", destructive: true, disabled: !hasFiles, onPress: confirmDeleteAll }, "divider"] as MenuItem[]) : []),
     {
       label: "Clear Browsing Data",
       icon: "eraserFill",
@@ -149,22 +152,22 @@ export function LibraryView() {
       <View style={[styles.column, { paddingTop: frame ? 0 : insets.top }]}>
         <View style={styles.top}>
           {folderKey ? (
-            <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={popLibraryPage} style={styles.topButton}>
+            <Tappable kind="icon" label="Back" onPress={popLibraryPage} style={styles.topButton}>
               <Symbol name="chevronLeft" size={20} color={theme.spaceAccentInk} />
-            </Pressable>
+            </Tappable>
           ) : (
-            <Pressable accessibilityRole="button" onPress={closeLibrary} style={styles.topButton}>
-              <Text style={[font.body, styles.bold, { color: theme.spaceAccentInk }]}>Done</Text>
-            </Pressable>
+            <Tappable kind="text" label={dismissWords.done} onPress={closeLibrary} style={styles.topButton}>
+              <Text style={[font.body, styles.bold, { color: theme.spaceAccentInk }]}>{dismissWords.done}</Text>
+            </Tappable>
           )}
           <Text accessibilityRole="header" numberOfLines={1} style={[font.body, styles.bold, styles.title, { color: theme.label }]}>
             {folderKey ? folder?.title || "Untitled Folder" : LIBRARY_NAMES[section]}
           </Text>
           <MenuTrigger items={items} trigger="tap" place={{ right: space.s, width: Math.min(tabsLayout.menuWidth, width - space.l) }}>
             {({ onPress }) => (
-              <Pressable accessibilityRole="button" accessibilityLabel="More" onPress={onPress} style={[styles.topButton, styles.end]}>
-                <Symbol name="ellipsis" size={22} color={theme.spaceAccentInk} />
-              </Pressable>
+              <Tappable kind="icon" label={actionWords.more} onPress={onPress ?? (() => undefined)} style={[styles.topButton, styles.end]}>
+                <Symbol name={iconRoles.more} size={22} color={theme.spaceAccentInk} />
+              </Tappable>
             )}
           </MenuTrigger>
         </View>
@@ -181,21 +184,25 @@ export function LibraryView() {
 function Switcher({ section }: { section: LibrarySection }) {
   const theme = useTheme();
   return (
-    <View testID="librarySwitcher" accessibilityRole="tablist" style={[styles.switcher, { backgroundColor: theme.fieldFill }]}>
+    <View testID="librarySwitcher" accessibilityRole="tablist" style={styles.switcher}>
+      <View pointerEvents="none" style={[styles.switcherFill, { backgroundColor: theme.fieldFill }]} />
       {LIBRARY_SECTIONS.map((item) => {
         const selected = item === section;
         return (
-          <Pressable
+          <Tappable
             key={item}
+            kind="icon"
             testID={`librarySection:${item}`}
-            accessibilityRole="tab"
-            accessibilityLabel={LIBRARY_NAMES[item]}
-            accessibilityState={{ selected }}
+            role="tab"
+            label={LIBRARY_NAMES[item]}
+            selected={selected}
             onPress={() => showLibrarySection(item)}
-            style={[styles.segment, selected ? { backgroundColor: theme.groupFill } : null]}
+            style={styles.segmentSlot}
           >
-            <Symbol name={SECTION_SYMBOLS[item]} size={17} color={selected ? theme.label : theme.secondaryLabel} />
-          </Pressable>
+            <View testID={`librarySectionFace:${item}`} style={[styles.segment, selected ? { backgroundColor: theme.groupFill } : null]}>
+              <Symbol name={SECTION_SYMBOLS[item]} size={libraryLayout.drawnSectionGlyph} color={selected ? theme.label : theme.secondaryLabel} />
+            </View>
+          </Tappable>
         );
       })}
     </View>
@@ -219,22 +226,20 @@ function SearchField({ prompt, query, onChange }: { prompt: string; query: strin
         autoCapitalize="none"
       />
       {query ? (
-        <Pressable accessibilityRole="button" accessibilityLabel="Clear Search" onPress={() => onChange("")}>
-          <Symbol name="xmarkCircleFill" size={18} color={theme.secondaryLabel} />
-        </Pressable>
+        <FieldAccessory icon={iconRoles.clearText} label={actionWords.clearText} color={theme.secondaryLabel} layout="slop" onPress={() => onChange("")} />
       ) : null}
     </View>
   );
 }
 
-const noResults = (query: string) => <EmptyState title={`No Results for “${query.trim()}”`} message="Check the spelling or try a new search." icon="magnifyingglass" />;
+const noResults = (query: string) => <NoResultsState query={query.trim()} />;
 
 type MenuOpener = (items: MenuItem[], at: Point) => void;
 
 function SectionHeader({ title }: { title: string }) {
   const theme = useTheme();
   return (
-    <Text accessibilityRole="header" style={[font.footnote, styles.section, { color: theme.secondaryLabel, backgroundColor: theme.surface }]}>
+    <Text accessibilityRole="header" style={[font.footnote, styles.section, { color: theme.secondaryLabel, backgroundColor: theme.canvas }]}>
       {title}
     </Text>
   );
@@ -254,7 +259,7 @@ function HistoryList({ query, bottom, onMenu }: { query: string; bottom: number;
   const now = Date.now();
   const sections = useMemo(() => historyDays(shown).map((day) => ({ key: String(day.day), title: historyDayTitle(day.day, now), data: day.entries })), [shown]);
   const iconSize = useRowIcon();
-  if (!loaded) return null;
+  if (!loaded) return <LoadingState testID="libraryLoading" />;
   if (!entries.length) return <EmptyState title="No History" message="Pages you visit here and on your Mac show up here." icon="clockArrow" />;
   if (!shown.length) return noResults(query);
   return (
@@ -403,7 +408,8 @@ function DownloadList({ bottom, onMenu }: { bottom: number; onMenu: MenuOpener }
     await loadDownloads();
     setRefreshing(false);
   };
-  if (loaded && !files.length) return <EmptyState title="No Downloads" message="Files you download show up here." icon="arrowDownCircle" />;
+  if (!loaded) return <LoadingState testID="libraryLoading" />;
+  if (!files.length) return <EmptyState title="No Downloads" message="Files you download show up here." icon="arrowDownCircle" />;
   return (
     <FlatList
       testID="libraryDownloads"
@@ -433,7 +439,7 @@ function DownloadRow({ file, onMenu }: { file: DownloadedFile; onMenu: MenuOpene
         onLongPress={(at) =>
           onMenu(
             [
-              { label: "Share", icon: "squareAndArrowUp", onPress: () => shareDownload(file) },
+              { label: actionWords.share, icon: iconRoles.share, onPress: () => shareDownload(file) },
               "divider",
               { label: "Delete", icon: "trash", destructive: true, onPress: remove },
             ],
@@ -456,8 +462,10 @@ const styles = StyleSheet.create({
   end: { alignItems: "flex-end" },
   title: { flexShrink: 1, textAlign: "center" },
   bold: { fontWeight: "600" },
-  switcher: { flexDirection: "row", alignSelf: "center", padding: space.hair, borderRadius: radius.field - space.xs, marginTop: space.xs },
-  segment: { minWidth: SWITCHER_HEIGHT * 1.5, height: SWITCHER_HEIGHT, alignItems: "center", justifyContent: "center", borderRadius: radius.field - space.xs - space.hair },
+  switcher: { flexDirection: "row", alignSelf: "center", paddingHorizontal: space.hair, marginTop: space.xs - SWITCHER_FILL_INSET, marginBottom: -SWITCHER_FILL_INSET },
+  switcherFill: { position: "absolute", left: 0, right: 0, top: SWITCHER_FILL_INSET, bottom: SWITCHER_FILL_INSET, borderRadius: radius.field - space.xs, ...smoothCorners },
+  segmentSlot: { minWidth: libraryLayout.drawnSwitcherSegment, height: controlSize.hitTarget, alignItems: "center", justifyContent: "center" },
+  segment: { minWidth: libraryLayout.drawnSwitcherSegment, height: libraryLayout.drawnSwitcherHeight, alignItems: "center", justifyContent: "center", borderRadius: radius.field - space.xs - space.hair, ...smoothCorners },
   search: {
     flexDirection: "row",
     alignItems: "center",

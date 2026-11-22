@@ -1,4 +1,5 @@
 import { offersDefaultBrowser } from "../settings/settingsRules";
+import { launchArguments } from "../app/launchFlags";
 import { usePages } from "../pages/store";
 import { useDarkScheme } from "../settings/appearance";
 import { usePreferences } from "../settings/store";
@@ -21,6 +22,8 @@ export const useFindQuery = () => usePageUi((s) => s.findQuery);
 export const useReaderTabId = () => usePageUi((s) => s.readerTabId);
 export const usePress = () => usePageUi((s) => s.press);
 export const usePressOpen = () => usePageUi((s) => s.press !== null);
+
+export const usePageBusy = (id: string | null) => usePages((s) => id !== null && (launchArguments().loadFreeze !== null || (s.navigation[id]?.isLoading ?? true)));
 
 export const useFindResult = (id: string | null) => usePages((s) => (id ? s.finds[id] ?? null : null));
 

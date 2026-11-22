@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { View } from "react-native";
 import { copyText } from "../../../state/app/system";
-import { installOfficialPlugin, type OfficialPlugin } from "../../../state/plugins/actions";
-import { useOfficialFetch, useOfficialPlugins, usePluginConsent, usePluginOrder, usePluginPrograms } from "../../../state/plugins/hooks";
+import { installOfficialPlugin, UNSAVED, type OfficialPlugin } from "../../../state/plugins/actions";
+import { useOfficialFetch, useOfficialPlugins, usePluginConsent, usePluginOrder, usePluginPrograms, usePluginUnsaved } from "../../../state/plugins/hooks";
 import { installedLabel, isOffered, officialInSettings, officialTitle, officialView, wasCancelled, type OfficialAttempt } from "../../../state/plugins/officialView";
+import { OFFICIAL_LEGACY_PROGRAMS } from "../../../state/plugins/officialPin";
+import { refreshLegacyInstalls, useLegacyInstalls } from "../../../state/plugins/programRegistry";
 import { goToSettingsPane } from "../../../state/settings/settingsWindows";
 import { consentToken, noteOfficialPlugin } from "../../../state/telemetry/officialPluginCounts";
 import { Group, Row, SectionHeader } from "../Form";
@@ -23,6 +25,7 @@ export function usePluginsBelowOfficial(): string[] {
 export function OfficialPluginsSection() {
   const all = useOfficialPlugins();
   const plugins = all.filter((p) => officialInSettings([p]));
+  useEffect(() => void refreshLegacyInstalls(), []);
   if (!officialInSettings(all)) return null;
   return (
     <View>
@@ -58,7 +61,8 @@ function useInstall(plugin: OfficialPlugin) {
     setBusy(false);
     setFailure(result.ok || wasCancelled(result) ? null : result.reason);
   };
-  const attempt: OfficialAttempt = busy ? { state: asking ? "asking" : "installing" } : failure ? { state: "failed", reason: failure } : null;
+  const unsaved = usePluginUnsaved(plugin.name);
+  const attempt: OfficialAttempt = busy ? { state: asking ? "asking" : "installing" } : failure ? { state: "failed", reason: failure } : unsaved ? { state: "failed", reason: UNSAVED } : null;
   return { attempt, install };
 }
 
@@ -66,7 +70,9 @@ function OfficialPluginRow({ plugin }: { plugin: OfficialPlugin }) {
   const programs = usePluginPrograms(plugin.name);
   const { attempt, install } = useInstall(plugin);
   const fetch = useOfficialFetch(plugin.name);
-  const view = officialView(plugin, programs, attempt, fetch);
+  const legacy = useLegacyInstalls((s) => s.owners.includes(plugin.name));
+  const olderProgram = legacy && Object.hasOwn(OFFICIAL_LEGACY_PROGRAMS, plugin.name) ? OFFICIAL_LEGACY_PROGRAMS[plugin.name]! : null;
+  const view = officialView(plugin, programs, attempt, fetch, olderProgram);
   const offered = isOffered(plugin);
   useEffect(() => {
     if (offered) noteOfficialPlugin("settings", "shown", plugin.name);

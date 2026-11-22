@@ -63,7 +63,8 @@ export const tabsMotion = {
   sheetReduced: 200,
   toneFade: 300,
   barCollapseReduced: 200,
-  deckStandby: 600,
+  deckStandby: 500,
+  deckStandbyIdle: 200,
 } as const;
 
 export const menuMotion = {
@@ -99,16 +100,35 @@ export const startMotion = { rise: 360, reduced: 200, trayScale: 0.96, pageDot: 
 
 export const deckChromeMotion = { pill: spring(0.2, 1), pillScale: 0.9, chromeShift: spring(0.18, 1), keyboard: 300, archiveScale: 0.96 } as const;
 
-export const pageMenuMotion = { press: spring(0.2, 1), titleFade: 150 } as const;
+export const pageMenuMotion = { titleFade: 150 } as const;
+
+export const scanMotion = { cameraStopMs: 120 } as const;
 
 export const toastMotion = { snappy: spring(0.3, 0.86) } as const;
 
-export const settingsMotion = { swatchRing: spring(0.3, 0.86), titleFade: { stiffness: 1500, damping: 2 * Math.sqrt(1500), mass: 1 } } as const;
+export const snapSpring = { stiffness: 1500, damping: 2 * Math.sqrt(1500), mass: 1 } as const;
 
-export const tabsCurve = { easeOut: WorkletEasing.bezier(0, 0, 0.58, 1), easeInOut: WorkletEasing.bezier(0.42, 0, 0.58, 1), depart: WorkletEasing.bezier(0.2, 0, 0, 1) } as const;
+export const settingsMotion = { swatchRing: spring(0.3, 0.86), titleFade: snapSpring } as const;
 
-export const springs = {
-  barPress: { stiffness: (2 * Math.PI / 0.12) ** 2, damping: 4 * Math.PI * 0.9 / 0.12, mass: 1 },
+export const departBezier = [0.2, 0, 0, 1] as const;
+
+export const tabsCurve = { easeOut: WorkletEasing.bezier(0, 0, 0.58, 1), easeInOut: WorkletEasing.bezier(0.42, 0, 0.58, 1), depart: WorkletEasing.bezier(...departBezier) } as const;
+
+export const easeOutBezier = [0, 0, 0.58, 1] as const;
+
+const stepBezier = [0.05, 0.7, 0.1, 1] as const;
+
+export const motionAliases = {
+  hostPillEase: tabsCurve.easeOut,
+  loadingRevealEase: tabsCurve.easeOut,
+  voiceTranscriptFadeMs: tabsMotion.surfaceFade,
+  voiceWaveEaseMs: duration.resultsIn,
+  readerTextSize: snapSpring,
+  settingsTitleFade: snapSpring,
+  onboardingStep: { timing: { duration: 300, easing: WorkletEasing.bezier(...stepBezier) } } as Motion,
+  onboardingStepReduced: { timing: { duration: 150, easing: WorkletEasing.bezier(...easeOutBezier) } } as Motion,
+  toggleKnob: spring(0.12, 1),
+  toggleKnobReducedMs: 0,
 } as const;
 
 export const reducedMotionMs = (ms: number) => (Platform.OS === "android" ? 0 : ms);

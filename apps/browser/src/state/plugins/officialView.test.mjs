@@ -39,6 +39,14 @@ test("an available plugin offers Install, waits while its sheet is open, and sho
   assert.deepEqual([failed.action, failed.failed, failed.status], ["again", true, "It can't load."]);
 });
 
+test("an available plugin with an older copy of its program installed says so beside Install, until an attempt says more", () => {
+  const older = officialView(plugin("available"), undefined, null, undefined, "ardia");
+  assert.deepEqual([older.action, older.failed, older.status], ["install", false, "An older ardia is installed. Install Command Line to update it."]);
+  assert.equal(officialView(plugin("available"), undefined, { state: "installing" }, undefined, "ardia").status, "Installing…");
+  assert.equal(officialView(plugin("available"), undefined, { state: "failed", reason: "It can't load." }, undefined, "ardia").status, "It can't load.");
+  assert.equal(officialView(plugin("installed"), LINKED, null, undefined, "ardia").status, null);
+});
+
 test("an installed plugin shows no sentence, only the first command its manifest gives to copy", () => {
   const view = officialView(plugin("installed"), LINKED, null);
   assert.deepEqual([view.note, view.action, view.failed, view.busy, view.status], ["installed", null, false, false, null]);

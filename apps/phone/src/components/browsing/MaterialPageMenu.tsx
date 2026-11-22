@@ -4,6 +4,7 @@ import { Pressable } from "react-native-gesture-handler";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { withAlpha } from "../../lib/color";
 import { copy } from "../../lib/platformCopy";
+import { actionWords, blockingWords, destinationWords } from "../../lib/sharedWords";
 import {
   canPrintPages,
   canSummarizePages,
@@ -32,7 +33,7 @@ import {
   zoomOut,
   summarizeCurrentPage,
 } from "../../state/page/actions";
-import type { MenuModel } from "../../state/page/pageMenu";
+import { menuSwitchHint, type MenuModel, type MenuSwitch } from "../../state/page/pageMenu";
 import { useMenuTitle, useTitleFeedback } from "../../state/page/hooks";
 import type { MenuPage } from "../../state/page/store";
 import type { SettingsRoute } from "../../state/settings/nav";
@@ -43,7 +44,7 @@ import { useTab } from "../../state/tabs/hooks";
 import { usePageSummariesEnabled } from "../../state/pageSummary/enabled";
 import { MaterialSettingsSheetSurface } from "../settings/MaterialSettingsKit";
 import { AllowedSites, SiteSettingsGroups } from "../settings/SitePages";
-import { Favicon, MaterialIconButton, Symbol, Toggle, type MenuItem, type SymbolName } from "../ui";
+import { Favicon, iconRoles, MaterialIconButton, Symbol, Toggle, type MenuItem, type SymbolName } from "../ui";
 import { MATERIAL_STATE } from "../ui/materialRoles";
 import { useMaterialRipple } from "../ui/MaterialSurfaces";
 import { useMaterialTheme } from "../ui/materialTheme";
@@ -112,14 +113,14 @@ export function MaterialPageMenuItems({ tabId, model, onTranslate, onFind = show
       {large ? (
         <Group>
           <ListRow icon="docPlaintext" title="Reader" enabled={model.tiles} onPress={showReader} />
-          <ListRow icon="link" title="Copy Link" enabled={model.tiles} onPress={copyCurrentLink} />
-          <ListRow icon="squareAndArrowUp" title="Share" enabled={model.tiles} onPress={shareCurrentPage} />
+          <ListRow icon={iconRoles.copyLink} title={actionWords.copyLink} enabled={model.tiles} onPress={copyCurrentLink} />
+          <ListRow icon={iconRoles.share} title={actionWords.share} enabled={model.tiles} onPress={shareCurrentPage} />
         </Group>
       ) : (
         <View testID="materialPageMenuActions" style={styles.actions}>
           <TonalButton icon="docPlaintext" title="Reader" enabled={model.tiles} onPress={showReader} />
-          <TonalButton icon="link" title="Copy Link" enabled={model.tiles} onPress={copyCurrentLink} />
-          <TonalButton icon="squareAndArrowUp" title="Share" enabled={model.tiles} onPress={shareCurrentPage} />
+          <TonalButton icon={iconRoles.copyLink} title={actionWords.copyLink} enabled={model.tiles} onPress={copyCurrentLink} />
+          <TonalButton icon={iconRoles.share} title={actionWords.share} enabled={model.tiles} onPress={shareCurrentPage} />
         </View>
       )}
       <Groups>
@@ -130,19 +131,20 @@ export function MaterialPageMenuItems({ tabId, model, onTranslate, onFind = show
           {canPrintPages() ? <ListRow icon="printer" title="Print" enabled={model.print} onPress={printCurrentPage} /> : null}
         </Group>
         <Group>
-          <ListRow icon="clockArrow" title="History" enabled onPress={() => openFromMenu("history")} />
-          <ListRow icon="folderFill" title="Bookmarks" enabled onPress={() => openFromMenu("bookmarks")} />
-          <ListRow icon="arrowDownCircle" title="Downloads" enabled onPress={() => openFromMenu("downloads")} />
+          <ListRow icon="clockArrow" title={destinationWords.history} enabled onPress={() => openFromMenu("history")} />
+          <ListRow icon="folderFill" title={destinationWords.bookmarks} enabled onPress={() => openFromMenu("bookmarks")} />
+          <ListRow icon="arrowDownCircle" title={destinationWords.downloads} enabled onPress={() => openFromMenu("downloads")} />
         </Group>
         <Group>
-          {model.pageRows ? <SwitchRow icon={model.nightShadeOn ? "moonFill" : "moon"} title="Night Shade" value={model.nightShadeOn} enabled={model.isWebPage} onChange={setNightShadeOn} /> : null}
+          {model.pageRows ? <SwitchRow which="nightShade" icon={model.nightShadeOn ? "moonFill" : "moon"} title="Night Shade" value={model.nightShadeOn} enabled={model.isWebPage} onChange={setNightShadeOn} /> : null}
           {model.pageRows ? <ZoomRow model={model} large={large} /> : null}
-          {model.pageRows ? <SwitchRow icon="desktop" title="Desktop Site" value={model.desktopSite} enabled={model.isWebPage} onChange={setDesktopSite} /> : null}
+          {model.pageRows ? <SwitchRow which="desktopSite" icon="desktop" title="Desktop Site" value={model.desktopSite} enabled={model.isWebPage} onChange={setDesktopSite} /> : null}
           {model.pageRows ? <ListRow icon="translate" title={model.translateTitle} enabled={model.translate} onPress={onTranslate} /> : null}
           {model.pageRows ? (
             <SwitchRow
+              which="blockers"
               icon={model.blockersEnabled ? "handRaised" : "handRaisedSlash"}
-              title="Block Ads and Trackers"
+              title={blockingWords.blockAdsAndTrackers}
               value={model.blockersEnabled}
               enabled={model.isWebPage}
               supporting={model.blockedCount ? `${model.blockedCount} blocked` : null}
@@ -184,7 +186,7 @@ function MenuHeader({ tabId, model }: { tabId: string; model: MenuModel }) {
       <View testID="materialPageMenuNav" style={styles.nav}>
         <IconButton icon="chevronLeft" label="Back" enabled={model.back} onPress={menuBack} />
         <IconButton icon="chevronRight" label="Forward" enabled={model.forward} onPress={menuForward} />
-        {model.reload === "stop" ? <IconButton icon="xmark" label="Stop" enabled onPress={menuStop} /> : <IconButton icon="arrowClockwise" label="Reload" enabled={model.reloadEnabled} onPress={menuReload} />}
+        {model.reload === "stop" ? <IconButton icon={iconRoles.stopLoading} label={actionWords.stopLoading} enabled onPress={menuStop} /> : <IconButton icon={iconRoles.reload} label={actionWords.reload} enabled={model.reloadEnabled} onPress={menuReload} />}
         {syncOffered() ? <PinButton tabId={tabId} enabled={model.isWebPage} /> : null}
       </View>
     </View>
@@ -291,7 +293,7 @@ function SendRow({ devices }: { devices: ReturnType<typeof useSendTargets> }) {
   );
 }
 
-function SwitchRow({ icon, title, value, enabled, supporting, onChange }: { icon: SymbolName; title: string; value: boolean; enabled: boolean; supporting?: string | null; onChange: (value: boolean) => void }) {
+function SwitchRow({ which, icon, title, value, enabled, supporting, onChange }: { which: MenuSwitch; icon: SymbolName; title: string; value: boolean; enabled: boolean; supporting?: string | null; onChange: (value: boolean) => void }) {
   const ripple = useMaterialRipple();
   const label = supporting ? `${title}, ${supporting}` : title;
   return (
@@ -300,6 +302,7 @@ function SwitchRow({ icon, title, value, enabled, supporting, onChange }: { icon
       accessible
       accessibilityRole="switch"
       accessibilityLabel={label}
+      accessibilityHint={menuSwitchHint(which)}
       accessibilityState={{ checked: value, disabled: !enabled }}
       disabled={!enabled}
       android_ripple={ripple}

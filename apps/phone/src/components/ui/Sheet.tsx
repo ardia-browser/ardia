@@ -27,6 +27,8 @@ import { useReduceMotion, useScreenReader } from "./contrast";
 import { MenuFrostProvider } from "./Menu";
 import { useDesign } from "./design";
 import { MaterialSheet } from "./MaterialSurfaces";
+import { closingGate } from "./ModalOverlay";
+import { dismissWords } from "../../lib/sharedWords";
 import { FabricCatchUp } from "./FabricCatchUp";
 
 const SHEET_REDUCED_MS = reducedMotionMs(trayMotion.reduced);
@@ -257,14 +259,13 @@ function ClassicSheet({ open, onDismiss, onHidden, fill, onTapAway, halfOpen = f
   return (
     <View
       style={StyleSheet.absoluteFill}
-      pointerEvents={open ? "box-none" : "none"} collapsable={false}
-      importantForAccessibility={open ? "auto" : "no-hide-descendants"}
-      accessibilityElementsHidden={!open}
+      collapsable={false}
+      {...closingGate(!open, "box-none")}
     >
       {open ? <FabricCatchUp motion={sheetMotionNow} testID="sheetFabricCatchUp" /> : null}
       <Animated.View style={[StyleSheet.absoluteFill, dim]}>
         <Pressable
-          accessibilityLabel="Close"
+          accessibilityLabel={dismissWords.close}
           style={[StyleSheet.absoluteFill, { backgroundColor: theme.trayDim }]}
           onPress={() => {
             if (menuLayout.sheetGrabber) onTapAway?.();
@@ -276,6 +277,7 @@ function ClassicSheet({ open, onDismiss, onHidden, fill, onTapAway, halfOpen = f
         <Animated.View
           ref={panel}
           accessibilityViewIsModal
+          onAccessibilityEscape={open ? onDismiss : undefined}
           onLayout={(event) => {
             sheetHeight.value = event.nativeEvent.layout.height;
           }}

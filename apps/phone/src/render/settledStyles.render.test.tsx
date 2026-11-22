@@ -51,7 +51,7 @@ const END_STATES: EndState[] = [
   { name: "the deck open", reach: () => void showDeck() },
   { name: "a card opened from the deck", from: () => void showDeck(), reach: () => sendDeckCommand({ kind: "openSelected" }) },
   { name: "the tray up", reach: () => presentSearch("page", "") },
-  { name: "a toast showing", reach: () => showToast("Copied URL", "link", 60_000) },
+  { name: "a toast showing", reach: () => showToast("Copied Link", "link", 60_000) },
   { name: "the bar collapsed", reach: () => storeNavigation(currentTabs().selectedId!, page("down")) },
   ...(Platform.OS === "android" ? [{ name: "the Spaces sheet at rest", reach: () => void useBrowse.setState({ sheet: "spaces" }) }] : []),
 ];

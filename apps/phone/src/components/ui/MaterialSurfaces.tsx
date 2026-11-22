@@ -15,6 +15,7 @@ import { reducedMotionMs } from "./motion";
 import { Portal } from "./Overlay";
 import { Symbol } from "./Symbol";
 import type { SymbolName } from "./symbolPaths";
+import { dismissWords } from "../../lib/sharedWords";
 
 const HIDE_FALLBACK_MS = 900;
 const SHEET_TOP_GAP = materialSize.topAppBar;
@@ -356,7 +357,7 @@ export function MaterialSheet({ open, onDismiss, onTapAway, onBack, onHidden, ex
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents={open ? "box-none" : "none"} collapsable={false} importantForAccessibility={open ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={!open}>
       <Animated.View testID="materialScrim" style={[StyleSheet.absoluteFill, scrim]}>
-        <Pressable accessibilityLabel={searching ? "Close Search" : "Close"} style={[StyleSheet.absoluteFill, { backgroundColor: withAlpha(scheme.scrim, MATERIAL_STATE.scrim) }]} onPress={() => {
+        <Pressable accessibilityLabel={searching ? "Close Search" : dismissWords.close} style={[StyleSheet.absoluteFill, { backgroundColor: withAlpha(scheme.scrim, MATERIAL_STATE.scrim) }]} onPress={() => {
             onTapAway?.();
             onDismiss();
           }} />

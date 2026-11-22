@@ -1,4 +1,5 @@
 import { pages } from "../../platform/pages";
+import { actionWords } from "../../lib/sharedWords";
 import { openExternal } from "../../platform/system";
 import { countUsage } from "../telemetry/telemetry";
 import { showToast, TOAST_LONG_DURATION_MS } from "../toasts/store";
@@ -21,5 +22,5 @@ const openWebViewListing = () => {
 
 export function refuseIncognito() {
   countUsage("incognito_unavailable");
-  showToast(INCOGNITO_NEEDS_WEBVIEW, "warning", TOAST_LONG_DURATION_MS, openWebViewListing);
+  showToast(INCOGNITO_NEEDS_WEBVIEW, "warning", TOAST_LONG_DURATION_MS, { label: actionWords.update, run: openWebViewListing });
 }

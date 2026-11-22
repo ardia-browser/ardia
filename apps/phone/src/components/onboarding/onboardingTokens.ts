@@ -1,5 +1,5 @@
 import { Easing } from "react-native-reanimated";
-import { font, iPhoneOr, settingsLayout, shape, space } from "../ui";
+import { departBezier, easeOutBezier, font, iPhoneOr, motionAliases, shape, space, tabsMotion } from "../ui";
 import type { Motion } from "../ui/motion";
 
 type Curve = readonly [number, number, number, number];
@@ -29,12 +29,13 @@ export const onboardingLayout = {
   rowInset: space.l,
   cardInset: space.xs,
   cardRadius: shape.card,
-  cardShadow: "0px 6px 28px rgba(0, 0, 0, 0.07)",
   sketchScale: iPhoneOr(1.22, 1),
   rowIcons: iPhoneOr(false, true),
   tipIcons: iPhoneOr(false, true),
-  secondaryHeight: 44,
-  buttonRadius: iPhoneOr<number>(shape.card, settingsLayout.primaryButton.radius),
+  tipGlyph: 20,
+  tipGlyphSlot: 28,
+  minPage: 560,
+  scrollsAboveFontScale: 1.35,
 } as const;
 
 export const onboardingInk = {
@@ -44,8 +45,8 @@ export const onboardingInk = {
 
 export const onboardingCurves = {
   step: [0.05, 0.7, 0.1, 1] as Curve,
-  rise: [0.2, 0, 0, 1] as Curve,
-  easeOut: [0, 0, 0.58, 1] as Curve,
+  rise: departBezier as Curve,
+  easeOut: easeOutBezier as Curve,
 } as const;
 
 const timing = (duration: number, curve: Curve): Motion => ({ timing: { duration, easing: Easing.bezier(...curve) } });
@@ -53,10 +54,10 @@ const timing = (duration: number, curve: Curve): Motion => ({ timing: { duration
 export const onboardingMotion = {
   stepTravel: 72,
   riseDelayMs: 50,
-  step: timing(300, onboardingCurves.step),
-  stepReduced: timing(150, onboardingCurves.easeOut),
-  backdrop: timing(300, onboardingCurves.step),
-  backdropReduced: timing(150, onboardingCurves.easeOut),
+  step: motionAliases.onboardingStep,
+  stepReduced: motionAliases.onboardingStepReduced,
   rise: timing(360, onboardingCurves.rise),
   riseReduced: timing(300, onboardingCurves.easeOut),
+  connectRise: tabsMotion.sheetRise,
+  welcomeTilt: { fromDegrees: -18, travelDegrees: 12, reducedDegrees: -6, fromScale: 0.7, wordsRise: 16 },
 } as const;

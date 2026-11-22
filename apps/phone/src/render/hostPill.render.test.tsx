@@ -127,6 +127,21 @@ test("the pill reads Show Toolbar with the host as its value, and a tap on it br
   unmount(root);
 });
 
+test("the collapsed pill carries the page's busy state while it loads, as the address it stands in for does, and the progress line stays hidden from screen readers", () => {
+  const root = page("redesigned");
+  scrolled("down");
+  settle();
+  const tab = currentTabs().open[0]!;
+  const loading = (isLoading: boolean) => act(() => storeNavigation(tab.id, { url: "https://site0.example/", title: "Site", isLive: true, isLoading, progress: isLoading ? 0.4 : 1, failure: null, canGoBack: false, canGoForward: false, scrollDirection: "down" } as unknown as PageState));
+  expect(showToolbar(root)!.props.accessibilityState).toEqual({ busy: false });
+  loading(true);
+  expect(showToolbar(root)!.props.accessibilityState).toEqual({ busy: true });
+  expect(host(root, "loadingLine")?.props.accessibilityElementsHidden ?? true).toBe(true);
+  loading(false);
+  expect(showToolbar(root)!.props.accessibilityState).toEqual({ busy: false });
+  unmount(root);
+});
+
 test("scrolling back up, opening another page or turning the preference off expands the bar again", () => {
   const root = page("redesigned");
   for (const expand of [() => scrolled("up"), () => scrolled("down", "https://other.example/"), () => act(() => setPreference("collapsesBottomBar", false))]) {
@@ -219,4 +234,25 @@ test("Android Remove animations snaps the collapse and Find state without the ba
   expect(moved(host(root, "pageBar")!)).toMatchObject({ opacity: 0, translateY: 30 });
   unmount(root);
   mockMotion.reduced = false;
+});
+
+test("the 30 point pill reaches the 44 point touch target without growing: a tap just above or below it still brings the bar back, and its press dims the host as other bar controls do", () => {
+  const root = page("redesigned");
+  scrolled("down");
+  settle();
+  const reach = host(root, "hostPillReach")!;
+  const box = StyleSheet.flatten(reach.props.style) as { top: number; bottom: number; position: string };
+  expect(box.position).toBe("absolute");
+  expect(30 - box.top - box.bottom).toBeGreaterThanOrEqual(44);
+  expect(StyleSheet.flatten(host(root, "hostPill")!.props.style)).toMatchObject({ height: 30 });
+  expect(reach.props.accessible).toBe(false);
+  const reachPress = root.root.findAll((node) => node.props.testID === "hostPillReach" && typeof node.props.onPressIn === "function")[0]!;
+  act(() => reachPress.props.onPressIn());
+  expect(StyleSheet.flatten(host(root, "hostPillButton")!.props.style).opacity).toBe(0.35);
+  act(() => reachPress.props.onPressOut());
+  expect(StyleSheet.flatten(host(root, "hostPillButton")!.props.style).opacity).toBeUndefined();
+  act(() => reachPress.props.onPress());
+  settle();
+  expect(host(root, "floatingBarFold")!.props.pointerEvents).toBe("box-none");
+  unmount(root);
 });

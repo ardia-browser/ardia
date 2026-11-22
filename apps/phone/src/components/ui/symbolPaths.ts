@@ -295,6 +295,7 @@ export const SYMBOLS = {
     },
     { d: line(4.39, 17.1, 7.62, 14.58), stroke: 2.5, rotate: -15, scale: 0.62, shift: 4.5 },
   ],
+  sidebarLeft: [{ d: roundRect(2.5, 5.5, 19, 13, 2) + line(9, 5.5, 9, 18.5) + line(5, 9, 7, 9) + line(5, 11.5, 7, 11.5) + line(5, 14, 7, 14), stroke: 1.6 }],
 } satisfies Record<string, SymbolLayer[]>;
 
 export type SymbolName = keyof typeof SYMBOLS;

@@ -50,7 +50,7 @@ function MacWindowSketch() {
           ))}
         </View>
       </View>
-      <View style={[styles.page, { backgroundColor: theme.surface }]}>
+      <View style={[styles.page, { backgroundColor: theme.canvas }]}>
         <SketchQr side={syncSketch.qr} color={theme.label} />
         <View style={[styles.bar, { width: syncSketch.lineWide, backgroundColor: withAlpha(theme.label, 0.14) }]} />
         <View style={[styles.bar, { width: syncSketch.lineNarrow, backgroundColor: withAlpha(theme.label, 0.1) }]} />

@@ -17,7 +17,7 @@ import { initialPresence, presenceSettled, presenceShown, presenceTarget } from 
 import { iPhoneOr, reducedMotionMs, tabsCurve, tabsMotion } from "./motion";
 import { screenCornerRadius } from "../../state/app/displayCorner";
 import { useTheme } from "./theme";
-import { sheetInk, sheetLayout, tabsLayout } from "./tokens";
+import { sheetInk, sheetLayout, smoothCorners, tabsLayout } from "./tokens";
 import { MenuFrostProvider } from "./Menu";
 import { useDesign } from "./design";
 import { withAlpha } from "../../lib/color";
@@ -215,7 +215,7 @@ export function SheetBackground({ progress, children }: { progress: SharedValue<
     borderRadius: !material && progress.value > 0 ? sheetLayout.backgroundRadius : 0,
   }));
   return (
-    <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.surface }]}>
+    <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.canvas }]}>
       <Animated.View style={[StyleSheet.absoluteFill, styles.clip, shrink]}>{children}</Animated.View>
     </View>
   );
@@ -232,5 +232,5 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: sheetLayout.radius,
     borderTopRightRadius: sheetLayout.radius,
   },
-  clip: { overflow: "hidden" },
+  clip: { overflow: "hidden", ...smoothCorners },
 });

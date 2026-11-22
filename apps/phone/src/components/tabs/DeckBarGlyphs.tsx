@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 import { IncognitoEyes } from "../ui/IncognitoEyes";
-import { deckChromeLayout, font, iPhoneOr, rolesFor, startLayout, SystemGlyph } from "../ui";
+import { BarPlusGlyph, deckChromeLayout, font, iPhoneOr, rolesFor, SystemGlyph } from "../ui";
 
 export function IncognitoGlyph({ incognito, dark }: { incognito: boolean; dark: boolean }) {
   return <IncognitoEyes incognito={incognito} size={deckChromeLayout.incognitoEyes} color={rolesFor(dark).label} />;
@@ -23,7 +23,7 @@ export function SearchTabsGlyph({ dark }: { dark: boolean }) {
 }
 
 export function PlusGlyph({ dark }: { dark: boolean }) {
-  return <SystemGlyph systemName="plus" pointSize={18} weight="medium" name="plus" size={startLayout.plusGlyph} color={rolesFor(dark).label} />;
+  return <BarPlusGlyph color={rolesFor(dark).label} />;
 }
 
 const styles = StyleSheet.create({

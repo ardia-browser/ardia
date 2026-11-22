@@ -286,6 +286,7 @@ export function OverflowButton({
   hidden,
   palette,
   onActivate,
+  mayActivate,
   slot = "*",
   asset,
   glyph,
@@ -295,6 +296,7 @@ export function OverflowButton({
   hidden: InstalledExtension[];
   palette: ToolbarPalette;
   onActivate?: () => void;
+  mayActivate?: () => boolean;
   slot?: string;
   asset?: ImageSourcePropType;
   glyph?: number;
@@ -306,6 +308,7 @@ export function OverflowButton({
     const choice = await chooseFromMenu(extensionOverflowItems(enabled, hidden));
     if (choice && typeof choice === "object" && "front" in choice) void moveToolbarExtension(windowId, choice.front.id, 0, "menu");
     else if (choice && typeof choice === "object") {
+      if (mayActivate && !mayActivate()) return;
       onActivate?.();
       void activateExtension(windowId, choice, anchor, undefined, tabId);
     }

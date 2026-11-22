@@ -15,6 +15,8 @@ import { presentSearch, useSearch } from "../state/search/store";
 import { useStageBar } from "../state/search/stageBar";
 import { currentTabs, useTabs } from "../state/tabs/store";
 import * as telemetry from "../state/telemetry/telemetry";
+import * as lookViews from "../components/ui/LookViews";
+import { searchPanel } from "../components/search/searchPanelTokens";
 import { renderSurface, unmount, withTabs } from "../../test/render/harness";
 
 type StageProps = {
@@ -391,9 +393,10 @@ onIPhone("a drag past the dismiss distance closes through the stage with the tra
 
 onIPhone("the stage gets the panel's look, the field's centre and, on a late reveal, a count that Incognito never sends", () => {
   const counted = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
+  jest.spyOn(lookViews, "useSolidChrome").mockReturnValue(false);
   const root = page();
   open();
-  expect(stage().fieldCenter).toBeCloseTo(15 + 44 / 2);
+  expect(stage().fieldCenter).toBeCloseTo(16 + 47.5 / 2);
   expect(stage().morphLook).toMatchObject({ usesGlass: false, panelDark: false, frosted: true, classicPanel: "rgba(255,255,255,0.62)" });
   reveal(true);
   expect(counted).toHaveBeenCalledWith("search_reveals_late");
@@ -405,6 +408,23 @@ onIPhone("the stage gets the panel's look, the field's centre and, on a late rev
   expect(stage().morphLook).toMatchObject({ panelDark: true });
   reveal(true);
   expect(counted).not.toHaveBeenCalledWith("search_reveals_late");
+});
+
+onIPhone("the panel and its morph take one look from the chrome style: frosted under Glass, the solid fill under Classic or Reduce Transparency, in the face and the morph alike", () => {
+  const solid = jest.spyOn(lookViews, "useSolidChrome").mockReturnValue(false);
+  const root = page();
+  open();
+  expect(stage().morphLook).toMatchObject({ frosted: true, classicPanel: searchPanel.light.tint });
+  expect(host(root, "searchPanelFace")!.findAll((node) => node.type === lookViews.LookFrost)).toHaveLength(1);
+  act(() => browse.cancelSearch());
+  act(() => stage().onSettled?.({ landed: true }));
+  solid.mockReturnValue(true);
+  open();
+  expect(stage().morphLook).toMatchObject({ frosted: false, classicPanel: searchPanel.light.solid });
+  const face = host(root, "searchPanelFace")!;
+  expect(face.findAll((node) => node.type === lookViews.LookFrost)).toHaveLength(0);
+  expect(StyleSheet.flatten(face.props.style).backgroundColor).toBe(searchPanel.light.solid);
+  expect(root.root.findAll((node) => node.type === lookViews.LookFrost && node.props.fill !== undefined && node.props.variant === "thin")).toHaveLength(0);
 });
 
 onAndroid("Android keeps the sheet tray and its own motion: no stage, and the bar's centre never hides", () => {

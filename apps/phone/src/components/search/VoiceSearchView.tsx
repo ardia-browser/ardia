@@ -1,25 +1,47 @@
-import { useEffect, useRef } from "react";
-import { Pressable, StyleSheet, Text, View, type ViewInstance } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { StyleSheet, Text, View, type ViewInstance } from "react-native";
 import Animated, { Easing, FadeIn, FadeOut, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { copy } from "../../lib/platformCopy";
+import { actionWords, dismissWords } from "../../lib/sharedWords";
 import { PROBLEM_TEXT, voiceControl, type Dictation } from "../../state/voice/dictation";
-import { browseSpoken, closeVoiceSearch, openSpeechSettings, searchSpoken, startListening, stopListening, useDictation, useVoiceLevels, useVoicePresented } from "../../state/voice/store";
+import { browseSpoken, closeVoiceSearch, openSpeechSettings, presentVoiceSearch, searchSpoken, startListening, stopListening, useDictation, useVoiceLevels, useVoicePresented } from "../../state/voice/store";
 import { browseForMeOffered } from "../../state/browseForMe/offer";
-import { ArdiaLogo, controlRadius, font, FrostSource, LookBackdrop, LookFrost, space, Symbol, useCoverFocus, voiceInk, voiceLayout, type SymbolName, useReduceMotion } from "../ui";
+import { ActionButton, ArdiaLogo, font, FrostSource, LookBackdrop, motionAliases, smoothCorners, space, useModalOverlay, voiceInk, voiceLayout, useReduceMotion } from "../ui";
+import { OverlayCancelButton } from "../ui/LookViews";
+import type { FocusTarget } from "../ui/coverFocus";
+
+let voiceOpener: FocusTarget | null = null;
+
+export function presentVoiceSearchFrom(opener: FocusTarget) {
+  voiceOpener = opener;
+  if (!presentVoiceSearch()) voiceOpener = null;
+}
+
+const takeVoiceOpener = () => {
+  const opener = voiceOpener;
+  voiceOpener = null;
+  return opener ?? undefined;
+};
 
 export function VoiceSearchView() {
   const presented = useVoicePresented();
-  return presented ? <VoiceCover /> : null;
+  const [mounted, setMounted] = useState(presented);
+  if (presented && !mounted) setMounted(true);
+  useEffect(() => {
+    if (!presented && mounted) setMounted(false);
+  }, [presented, mounted]);
+  return mounted ? <VoiceCover closing={!presented} /> : null;
 }
 
-function VoiceCover() {
+function VoiceCover({ closing }: { closing: boolean }) {
   const insets = useSafeAreaInsets();
   const dictation = useDictation();
   const cancel = useRef<ViewInstance>(null);
-  useCoverFocus(cancel);
+  const [opener] = useState(takeVoiceOpener);
+  const modal = useModalOverlay({ open: true, closing, onDismiss: closeVoiceSearch, focus: cancel, returnFocusTo: opener });
   return (
-    <View style={StyleSheet.absoluteFill} accessibilityViewIsModal>
+    <View testID="voiceCover" style={StyleSheet.absoluteFill} {...modal}>
       <FrostSource name={VOICE_FROST} style={StyleSheet.absoluteFill} pointerEvents="none">
         <LookBackdrop dark />
       </FrostSource>
@@ -31,17 +53,7 @@ function VoiceCover() {
         <Waveform listening={dictation.phase === "listening"} />
         <Controls dictation={dictation} />
       </View>
-      <Pressable
-        ref={cancel}
-        accessibilityRole="button"
-        accessibilityLabel="Cancel"
-        onPress={closeVoiceSearch}
-        style={[styles.cancel, { top: insets.top + space.s, right: insets.right + space.l }]}
-      >
-        <LookFrost source={VOICE_FROST} variant="glass" dark cornerRadius={controlRadius(voiceLayout.cancel)} fill={voiceInk.glass} style={styles.cancelFace}>
-          <Symbol name="xmark" size={voiceLayout.icon} color={voiceInk.label} />
-        </LookFrost>
-      </Pressable>
+      <OverlayCancelButton testID="voiceCancel" label={dismissWords.cancel} onPress={closeVoiceSearch} frostSource={VOICE_FROST} buttonRef={cancel} />
     </View>
   );
 }
@@ -64,14 +76,18 @@ function Transcript({ dictation }: { dictation: Dictation }) {
   if (dictation.phase === "denied") {
     return (
       <View style={styles.message}>
-        <Text style={[font.title3, styles.bold, styles.centered, { color: voiceInk.label }]}>Speech and Mic permissions required.</Text>
+        <Text accessibilityRole="header" style={[font.title3, styles.bold, styles.centered, { color: voiceInk.label }]}>Speech and Mic permissions required.</Text>
         <Text style={[font.subheadline, styles.centered, { color: voiceInk.soft }]}>{copy().voicePermission}</Text>
-        <GlassPill title="Open Settings" onPress={openSpeechSettings} />
+        <ActionButton testID="voiceOpenSettings" title={actionWords.openSettings} tone="overlay" onPress={openSpeechSettings} stretch />
       </View>
     );
   }
   if (dictation.phase === "unavailable" && dictation.problem) {
-    return <Text style={[font.title3, styles.bold, styles.centered, { color: voiceInk.label }]}>{PROBLEM_TEXT[dictation.problem]}</Text>;
+    return (
+      <Text accessibilityRole="header" style={[font.title3, styles.bold, styles.centered, { color: voiceInk.label }]}>
+        {PROBLEM_TEXT[dictation.problem]}
+      </Text>
+    );
   }
   const empty = !dictation.transcript;
   return (
@@ -86,50 +102,41 @@ function Transcript({ dictation }: { dictation: Dictation }) {
   );
 }
 
+export const waveBarHeight = (level: number, reduceMotion: boolean) => (reduceMotion ? voiceLayout.barMin : Math.min(voiceLayout.waveHeight, voiceLayout.barMin + level * voiceLayout.barRange));
+
 function Waveform({ listening }: { listening: boolean }) {
   const levels = useVoiceLevels();
+  const reduceMotion = useReduceMotion();
   return (
-    <View style={[styles.wave, { opacity: listening ? 1 : 0 }]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+    <View testID="voiceWave" style={[styles.wave, { opacity: listening ? 1 : 0 }]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       {levels.map((level, index) => (
-        <WaveBar key={index} height={Math.min(voiceLayout.waveHeight, voiceLayout.barMin + level * voiceLayout.barRange)} />
+        <WaveBar key={index} height={waveBarHeight(level, reduceMotion)} eases={!reduceMotion} />
       ))}
     </View>
   );
 }
 
-const TRANSCRIPT_IN = FadeIn.duration(150);
-const TRANSCRIPT_OUT = FadeOut.duration(150);
-const WAVE_EASE_MS = 100;
+const TRANSCRIPT_IN = FadeIn.duration(motionAliases.voiceTranscriptFadeMs);
+const TRANSCRIPT_OUT = FadeOut.duration(motionAliases.voiceTranscriptFadeMs);
 
-function WaveBar({ height }: { height: number }) {
+function WaveBar({ height, eases }: { height: number; eases: boolean }) {
   const shown = useSharedValue(height);
   useEffect(() => {
-    shown.value = withTiming(height, { duration: WAVE_EASE_MS, easing: Easing.out(Easing.quad) });
-  }, [height]);
+    shown.value = eases ? withTiming(height, { duration: motionAliases.voiceWaveEaseMs, easing: Easing.out(Easing.quad) }) : height;
+  }, [height, eases]);
   const style = useAnimatedStyle(() => ({ height: shown.value }));
-  return <Animated.View style={[styles.bar, style]} />;
+  return <Animated.View testID="voiceWaveBar" style={[styles.bar, style]} />;
 }
 
 function Controls({ dictation }: { dictation: Dictation }) {
   const control = voiceControl(dictation);
   return (
     <View style={styles.controls}>
-      {control?.kind === "done" ? <GlassPill title="Done" icon="stopFill" onPress={stopListening} /> : null}
-      {control?.kind === "search" ? <GlassPill title="Search" onPress={() => searchSpoken(control.text)} /> : null}
-      {control?.kind === "search" && browseForMeOffered() ? <GlassPill title="Browse for Me" icon="sparkleMagnifyingglass" onPress={() => browseSpoken(control.text)} /> : null}
-      {control?.kind === "tryAgain" ? <GlassPill title="Try Again" icon="micFill" onPress={() => void startListening()} /> : null}
+      {control?.kind === "done" ? <ActionButton testID="voiceDone" title={dismissWords.done} icon="stopFill" variant="glass" tone="overlay" frostSource={VOICE_FROST} onPress={stopListening} stretch /> : null}
+      {control?.kind === "search" ? <ActionButton testID="voiceSearch" title="Search" variant="glass" tone="overlay" frostSource={VOICE_FROST} onPress={() => searchSpoken(control.text)} stretch /> : null}
+      {control?.kind === "search" && browseForMeOffered() ? <ActionButton testID="voiceBrowseForMe" title="Browse for Me" icon="sparkleMagnifyingglass" variant="glass" tone="overlay" frostSource={VOICE_FROST} onPress={() => browseSpoken(control.text)} stretch /> : null}
+      {control?.kind === "tryAgain" ? <ActionButton testID="voiceTryAgain" title={actionWords.tryAgain} icon="micFill" tone="overlay" onPress={() => void startListening()} stretch /> : null}
     </View>
-  );
-}
-
-function GlassPill({ title, icon, onPress }: { title: string; icon?: SymbolName; onPress: () => void }) {
-  return (
-    <Pressable accessibilityRole="button" accessibilityLabel={title} onPress={onPress} style={styles.pillHit}>
-      <LookFrost source={VOICE_FROST} variant="glass" dark cornerRadius={controlRadius(voiceLayout.pill)} fill={voiceInk.glass} style={styles.pill}>
-        {icon ? <Symbol name={icon} size={voiceLayout.icon} color={voiceInk.label} /> : null}
-        <Text style={[font.body, styles.medium, { color: voiceInk.label }]}>{title}</Text>
-      </LookFrost>
-    </Pressable>
   );
 }
 
@@ -139,7 +146,6 @@ const styles = StyleSheet.create({
   column: { flex: 1, alignItems: "center", gap: space.huge },
   fill: { flex: 1 },
   bold: { fontWeight: "600" },
-  medium: { fontWeight: "500" },
   centered: { textAlign: "center" },
   logo: {
     width: voiceLayout.logo,
@@ -147,26 +153,11 @@ const styles = StyleSheet.create({
     borderRadius: voiceLayout.logo / 2,
     alignItems: "center",
     justifyContent: "center",
-    boxShadow: "0px 6px 12px rgba(0, 0, 0, 0.15)",
+    boxShadow: voiceInk.logoShadow,
   },
   message: { alignItems: "center", gap: space.m, alignSelf: "stretch" },
-  transcript: { backgroundColor: voiceInk.transcript, borderRadius: voiceLayout.transcriptRadius, paddingHorizontal: space.xl, paddingVertical: space.m, overflow: "hidden" },
+  transcript: { backgroundColor: voiceInk.transcript, borderRadius: voiceLayout.transcriptRadius, paddingHorizontal: space.xl, paddingVertical: space.m, overflow: "hidden", ...smoothCorners },
   wave: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: voiceLayout.barGap, height: voiceLayout.waveHeight, alignSelf: "stretch" },
   bar: { width: voiceLayout.bar, borderRadius: voiceLayout.bar / 2, backgroundColor: voiceInk.bar },
   controls: { alignSelf: "stretch", minHeight: voiceLayout.pill, gap: space.m },
-  pillHit: { alignSelf: "stretch" },
-  pill: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: space.s,
-    minHeight: voiceLayout.pill,
-    paddingHorizontal: space.xl,
-  },
-  cancel: {
-    position: "absolute",
-    width: voiceLayout.cancel,
-    height: voiceLayout.cancel,
-  },
-  cancelFace: { flex: 1, alignItems: "center", justifyContent: "center" },
 });

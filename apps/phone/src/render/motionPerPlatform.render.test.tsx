@@ -1,4 +1,4 @@
-import { duration, menuMotion, spring, tabsMotion, trayLandingDelayMs, trayMotion } from "../components/ui";
+import { duration, menuMotion, motionAliases, spring, tabsMotion, trayLandingDelayMs, trayMotion } from "../components/ui";
 import { delay } from "../components/ui/motion";
 import { loadingPlaceholderLayout } from "../components/browsing/pageStateTokens";
 import { onboardingMotion } from "../components/onboarding/onboardingTokens";
@@ -58,13 +58,15 @@ test("fades, flights and waits are SwiftUI's lengths on both phones", () => {
   expect(spring(1, 1).mass).toBe(1);
 });
 
-test("onboarding moves on SwiftUI's timed curves on both phones: 300 ms steps over 72 points, a 360 ms rise after 50 ms", () => {
+test("onboarding moves on SwiftUI's timed curves on both phones: 300 ms steps over 72 points, a 360 ms rise after 50 ms, the step and backdrop on the one shared step alias", () => {
   expect(onboardingMotion.stepTravel).toBe(72);
   expect(onboardingMotion.riseDelayMs).toBe(50);
   expect(onboardingMotion.step).toEqual({ timing: expect.objectContaining({ duration: 300 }) });
   expect(onboardingMotion.rise).toEqual({ timing: expect.objectContaining({ duration: 360 }) });
-  expect(onboardingMotion.backdrop).toEqual({ timing: expect.objectContaining({ duration: 300 }) });
-  expect([onboardingMotion.stepReduced, onboardingMotion.backdropReduced, onboardingMotion.riseReduced]).toEqual([150, 150, 300].map((ms) => ({ timing: expect.objectContaining({ duration: ms }) })));
+  expect(onboardingMotion.step).toBe(motionAliases.onboardingStep);
+  expect(onboardingMotion.stepReduced).toBe(motionAliases.onboardingStepReduced);
+  expect(Object.keys(onboardingMotion)).not.toEqual(expect.arrayContaining(["backdrop", "backdropReduced"]));
+  expect([onboardingMotion.stepReduced, onboardingMotion.riseReduced]).toEqual([150, 300].map((ms) => ({ timing: expect.objectContaining({ duration: ms }) })));
 });
 
 test("a closed card flies off on main's fly-away spring on both phones: response 0.32 with no bounce, and the gap closes on the same gap spring", () => {

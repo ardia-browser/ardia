@@ -238,7 +238,7 @@ onAndroid("the page menu capsule docks with the iOS history controls, page title
   settle();
   expect(pressable(root, "siteSettingsBack").props.disabled).toBe(true);
   expect(pressable(root, "siteSettingsForward").props.disabled).toBe(false);
-  expect(pressable(root, "dockedPageMenuReload").props.accessibilityLabel).toBe("Stop");
+  expect(pressable(root, "dockedPageMenuReload").props.accessibilityLabel).toBe("Stop Loading");
   act(() => pressable(root, "siteSettingsForward").props.onPress());
   expect(forward).toHaveBeenCalledTimes(1);
   settle();
@@ -444,4 +444,19 @@ onAndroid("turning Collapse Bottom Bar off keeps the Material bottom bar unfolde
   const pageView = root.root.findAll((found) => found.props.pageId !== undefined && found.props.obscuredInsets !== undefined)[0]!;
   expect(pageView.props.obscuredInsets.bottom).toBe(barHeight(24, "material"));
   unmount(root);
+});
+
+onAndroid("the Material bar's + says New Tab, or New Incognito Tab on an Incognito page, as every other bar's + does", () => {
+  const plain = screen();
+  expect(pressable(plain, "materialBarPlus").props.accessibilityLabel).toBe("New Tab");
+  unmount(plain);
+  const privateTab = { ...currentTabs().open[0]!, isPrivate: true };
+  const incognito = renderSurface(
+    <DesignProvider design="material">
+      <BrowsingScreen tab={privateTab} />
+    </DesignProvider>,
+    { flushTimers: false },
+  );
+  expect(pressable(incognito, "materialBarPlus").props.accessibilityLabel).toBe("New Incognito Tab");
+  unmount(incognito);
 });

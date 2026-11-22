@@ -969,6 +969,7 @@ function calculate(raw        )                     {
 
 });
 __define("packages/core/src/cleanUrl.ts", function (exports, __require) {
+  __export(exports, "cleanUrlReport", () => cleanUrlReport);
   __export(exports, "cleanUrl", () => cleanUrl);
   __export(exports, "markdownLink", () => markdownLink);
 
@@ -1020,22 +1021,30 @@ function isTrackingParam(name        , hostname = "")          {
   return siteRules(hostname).some((r) => r.params.includes(key) || r.prefixes?.some((p) => key.startsWith(p)));
 }
 
-function cleanUrl(url        )         {
+                                                                  
+
+function cleanUrlReport(url        )             {
+  const unchanged = { url, removedTracker: false };
   const match = /^([^?#]*)(\?[^#]*)?(#.*)?$/.exec(url);
-  if (!match?.[2]) return url;
+  if (!match?.[2]) return unchanged;
   let hostname = "";
   try {
     const parsed = new URL(url);
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return url;
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return unchanged;
     hostname = parsed.hostname;
   } catch {
-    return url;
+    return unchanged;
   }
   const [, base = "", query = "", hash = ""] = match;
   const pairs = query.slice(1).split("&");
-  const kept = pairs.filter((pair) => pair && !isTrackingParam(decodeName(pair.split("=")[0] ), hostname));
-  if (kept.length === pairs.length) return url;
-  return `${base}${kept.length ? `?${kept.join("&")}` : ""}${hash}`;
+  const tracks = (pair        ) => isTrackingParam(decodeName(pair.split("=")[0] ), hostname);
+  const kept = pairs.filter((pair) => pair && !tracks(pair));
+  if (kept.length === pairs.length) return unchanged;
+  return { url: `${base}${kept.length ? `?${kept.join("&")}` : ""}${hash}`, removedTracker: pairs.some((pair) => pair !== "" && tracks(pair)) };
+}
+
+function cleanUrl(url        )         {
+  return cleanUrlReport(url).url;
 }
 
 function markdownLink(title        , url        )         {
@@ -1411,8 +1420,12 @@ function fixup(raw        )                {
   return host.port || path.endsWith("/") || parts > 1 ? `${proto}://${input}` : null;
 }
 
+const SURROGATE_PAIR_OR_LONE = /[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDFFF]/g;
+
+const wellFormed = (text        ) => text.replace(SURROGATE_PAIR_OR_LONE, (unit) => (unit.length === 2 ? unit : "\uFFFD"));
+
 function searchUrlFor(template        , query        )         {
-  const q = encodeURIComponent(query.trim());
+  const q = encodeURIComponent(wellFormed(query.trim()));
   return template.includes("%s") ? template.replace(/%s/g, q) : template + q;
 }
 

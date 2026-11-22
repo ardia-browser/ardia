@@ -1,6 +1,6 @@
 import { deletePassword } from "../../platform/passwords";
 import { orWarn } from "../../lib/fallback";
-import { assignPositions, SyncNative, type Adapter, type SealedLogin } from "../../platform/sync";
+import { assignPositions, folderChildren, SyncNative, type Adapter, type SealedLogin } from "../../platform/sync";
 import { bookmarkRoots, bookmarkUuidFor, ensureRoots, isBookmarkUuid } from "../bookmarks/bookmarks";
 import { useBrowser } from "../browser/store";
 import { engineProfile } from "../browser/model";
@@ -77,9 +77,9 @@ export function bookmarksAdapter(profileId: string): Adapter {
         return key && bookmarkUuidFor(key) === id ? key : id;
       };
       const seen = new Set<string>();
-      const walk = (folderId: string) => {
+      const open = (folderId: string) => {
         const folder = b.nodes[folderId];
-        if (folder?.kind !== "folder" || seen.has(folderId)) return;
+        if (folder?.kind !== "folder" || seen.has(folderId)) return null;
         seen.add(folderId);
         const parent = keyOf(folderId);
         const children = folder.children.filter((id) => b.nodes[id]);
@@ -89,21 +89,32 @@ export function bookmarksAdapter(profileId: string): Adapter {
             return known?.p === parent ? known.pos : undefined;
           }),
         );
-        children.forEach((id, i) => {
+        return { parent, children, positions, next: 0 };
+      };
+      for (const root of [roots.bar, roots.other]) {
+        const first = open(root);
+        const stack = first ? [first] : [];
+        while (stack.length) {
+          const top = stack.at(-1)!;
+          if (top.next === top.children.length) {
+            stack.pop();
+            continue;
+          }
+          const i = top.next++;
+          const id = top.children[i]!;
           const node = b.nodes[id]!;
           values.set(`${BOOKMARK}${keyOf(id)}`, {
             k: node.kind === "url" ? "u" : "f",
-            p: parent,
+            p: top.parent,
             t: node.title,
             ...(node.kind === "url" ? { u: node.url } : {}),
             a: node.addedAt,
-            pos: positions[i]!,
+            pos: top.positions[i]!,
           } satisfies BookmarkValue);
-          if (node.kind === "folder") walk(id);
-        });
-      };
-      walk(roots.bar);
-      walk(roots.other);
+          const inner = node.kind === "folder" ? open(id) : null;
+          if (inner) stack.push(inner);
+        }
+      }
       return { values };
     },
     apply: (visible) => {
@@ -121,22 +132,8 @@ export function bookmarksAdapter(profileId: string): Adapter {
         const parent = root ? null : bookmarkUuidFor(v.p);
         parentOf.set(id, root ?? (parent && values.get(parent)?.k === "f" ? parent : roots.other));
       }
-      for (const id of [...values.keys()].sort()) {
-        const seen = new Set<string>([id]);
-        for (let at = parentOf.get(id)!; parentOf.has(at); at = parentOf.get(at)!) {
-          if (seen.has(at)) {
-            parentOf.set(id, roots.other);
-            break;
-          }
-          seen.add(at);
-        }
-      }
-      const children = new Map<string, string[]>([[roots.bar, []], [roots.other, []]]);
-      for (const id of values.keys()) {
-        const siblings = children.get(parentOf.get(id)!);
-        if (siblings) siblings.push(id);
-        else children.set(parentOf.get(id)!, [id]);
-      }
+      const children = folderChildren(parentOf, [...values.keys()].sort(), roots.other);
+      for (const root of [roots.bar, roots.other]) if (!children.has(root)) children.set(root, []);
       const byPosition = (a: string, z: string) => {
         const pa = values.get(a)!.pos;
         const pz = values.get(z)!.pos;
@@ -145,13 +142,13 @@ export function bookmarksAdapter(profileId: string): Adapter {
         return pa < pz ? -1 : pa > pz ? 1 : ka < kz ? -1 : 1;
       };
       const nodes: Record<string, BookmarkNode> = { ...b.nodes };
-      const drop = (id: string) => {
+      const dropping = [roots.bar, roots.other];
+      while (dropping.length) {
+        const id = dropping.pop()!;
         const node = nodes[id];
-        if (node?.kind === "folder") node.children.forEach(drop);
+        if (node?.kind === "folder") for (const child of node.children) dropping.push(child);
         if (id !== roots.bar && id !== roots.other) delete nodes[id];
-      };
-      drop(roots.bar);
-      drop(roots.other);
+      }
       for (const [id, v] of values) {
         const old = b.nodes[id];
         const key = keys.get(id)!;

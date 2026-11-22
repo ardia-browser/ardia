@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { rememberSettingsScroll, settingsScroll } from "../../state/settings/nav";
 import { MenuTrigger } from "../ui/MenuTrigger";
 import { MaterialBarButton, MaterialButtonRow, MaterialEmptyState, MaterialGroup, MaterialIconTile, MaterialMediumTitle, MaterialNavRow, MaterialPickerRow, MaterialSettingsAppBar, MaterialToggleRow, MaterialValueRow, materialMediumTitleHeight, materialSettingsListStyles } from "./MaterialSettingsKit";
-import { duration, LookBackdrop, settingsMotion, useSheetFrame, font, ink, settingsLayout, space, Symbol, tabsLayout, ToggleTrack, useDesign, useTheme, type MenuItem, type SymbolName } from "../ui";
+import { duration, LookBackdrop, settingsMotion, useSheetFrame, font, ink, settingsLayout, space, Symbol, tabsLayout, ToggleRow as SharedToggleRow, Tappable, smoothCorners, slotAround, controlSize, useDesign, useTheme, type MenuItem, type SymbolName } from "../ui";
 import { useMaterialTheme } from "../ui/materialTheme";
 
 export const SettingsHostedContext = createContext(false);
@@ -68,9 +68,9 @@ export function SettingsPage({ title, onBack, onClose, leading, trailing, childr
         <View style={[styles.top, { paddingTop: frame ? 0 : insets.top }]}>
           <View style={styles.topSide}>
             {onBack ? (
-              <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={onBack} style={styles.back}>
+              <Tappable kind="icon" label="Back" onPress={onBack} style={styles.back}>
                 <Symbol name="chevronLeft" size={22} color={theme.formAccent} />
-              </Pressable>
+              </Tappable>
             ) : null}
             {leading}
           </View>
@@ -143,9 +143,9 @@ export function CrossfadeText({ text, style, testID }: { text: string; style: St
 function ClassicBarButton({ title, onPress, emphasized, enabled = true }: { title: string; onPress: () => void; emphasized?: boolean; enabled?: boolean }) {
   const theme = useTheme();
   return (
-    <Pressable accessibilityRole="button" disabled={!enabled} onPress={onPress} style={styles.barButton}>
+    <Tappable kind="text" label={title} disabled={!enabled} onPress={onPress} style={styles.barButton}>
       <Text style={[font.body, emphasized ? styles.bold : null, { color: enabled ? theme.formAccent : theme.tertiaryLabel }]}>{title}</Text>
-    </Pressable>
+    </Tappable>
   );
 }
 
@@ -212,23 +212,11 @@ function ClassicNavRow({ title, icon, tint, value, divider, onPress }: RowBase &
 }
 
 function ClassicToggleRow({ title, icon, tint, divider, value, onChange, detail }: RowBase & { value: boolean; onChange: (value: boolean) => void; detail?: string }) {
-  const theme = useTheme();
   return (
     <View>
-      <Pressable
-        accessibilityRole="switch"
-        accessibilityLabel={title}
-        accessibilityHint={detail}
-        accessibilityState={{ checked: value }}
-        onPress={() => onChange(!value)}
-        style={({ pressed }) => [styles.row, pressed ? { backgroundColor: theme.rowHighlight } : null]}
-      >
-        <View style={styles.fill} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-          <Label title={title} icon={icon} tint={tint} />
-          {detail ? <Text style={[font.footnote, { color: theme.secondaryLabel, marginLeft: icon ? settingsLayout.tile + settingsLayout.labelGap : 0 }]}>{detail}</Text> : null}
-        </View>
-        <ToggleTrack value={value} />
-      </Pressable>
+      <SharedToggleRow label={title} detail={detail} detailInset={icon ? settingsLayout.tile + settingsLayout.labelGap : 0} value={value} onChange={onChange} style={styles.row}>
+        <Label title={title} icon={icon} tint={tint} />
+      </SharedToggleRow>
       {divider ? <Divider /> : null}
     </View>
   );
@@ -343,16 +331,16 @@ const styles = StyleSheet.create({
   topSide: { flex: 1, flexDirection: "row", alignItems: "center" },
   end: { justifyContent: "flex-end" },
   title: { maxWidth: settingsLayout.titleWidth, textAlign: "center" },
-  back: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
-  barButton: { minHeight: 44, justifyContent: "center", paddingHorizontal: space.s },
+  back: slotAround(controlSize.hitTarget),
+  barButton: { minHeight: controlSize.hitTarget, justifyContent: "center", paddingHorizontal: space.s },
   bold: { fontWeight: "600" },
   content: { paddingTop: space.m, gap: space.xxl },
   fill: { flex: 1 },
   groupOuter: { paddingHorizontal: space.l },
   groupHeader: { paddingLeft: settingsLayout.rowInset, paddingBottom: space.s, fontWeight: "600" },
-  group: { borderRadius: settingsLayout.groupRadius, overflow: "hidden" },
+  group: { borderRadius: settingsLayout.groupRadius, ...smoothCorners, overflow: "hidden" },
   groupFooter: { paddingHorizontal: settingsLayout.rowInset, paddingTop: space.s },
-  tile: { alignItems: "center", justifyContent: "center" },
+  tile: { alignItems: "center", justifyContent: "center", ...smoothCorners },
   label: { flexDirection: "row", alignItems: "center", gap: settingsLayout.labelGap, flexShrink: 1, flexGrow: 1 },
   labelText: { flexShrink: 1 },
   divider: { height: StyleSheet.hairlineWidth },

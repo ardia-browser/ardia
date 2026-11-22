@@ -8,8 +8,8 @@ built, but **never build a Windows engine on the owner's Mac** (the owner's rule
 every core of the machine they work on). No Windows machine is needed, not even for the toolchain.
 
 The scripts are in `scripts/windows/engine/`, not next to the Mac ones: nothing for Windows may live under `engine/`,
-because `engine/engine-key.sh` hashes the whole `engine/` tree into the key the Mac app's prebuilt engine is fetched
-under, so a new file there would make every Mac build miss its prebuilt engine. Windows-only patches go in
+because `engine/engine-key.sh` hashes what is under `engine/` into the keys the Mac and Linux prebuilt engines are
+fetched under, so a new file there would make Mac or Linux builds miss their prebuilt engine. Windows-only patches go in
 `scripts/windows/engine/patches/` and their order in `scripts/windows/engine/series-win`. The scripts source the Mac's
 `engine/patches/build/env.sh` through their own `env.sh` and call its `step-guard.sh`, `gn_defines.sh`,
 `03-helium.py` and `game-resource.sh`; they change nothing the Mac scripts do. Everything lives in `~/chromium-build-win`
@@ -53,11 +53,11 @@ took hours. When the Chromium version moves, take the new versions from a full `
 
 ## On a Linux host
 
-Windows engines are built on a Boat VM, which runs the idle-stop watchdog like every VM: `ardia-linux` (`bx_x7n4g59u`,
-xlarge: 16 vCPU, 32 GB, 294 GB, Ubuntu 24.04). x64 and arm64 each need their own tree (about 85 GB with one out dir), so
-to build both at once take a second xlarge VM for the other CPU, give it the watchdog, and delete it once the engine is
-published. The toolchain, the Helium checkouts and the trees stay on the VMs; nothing from Microsoft's packages leaves
-them except inside the built engine.
+Windows engines are built on an `xlarge` Boat VM (16 vCPU, 32 GB, 294 GB, Ubuntu 24.04) created with `--ttl 21600`
+and Boat's built-in auto-stop left enabled (never `--no-auto-stop`), or resumed from a saved builder snapshot and
+stopped as soon as the engine is published. x64 and arm64 each need their own tree (about 85 GB with one out dir), so
+to build both at once take a second `xlarge` VM with `--ttl 21600 --no-snapshots` for the other CPU and delete it
+once the engine is published. Nothing from Microsoft's packages leaves the VM except inside the built engine.
 
 Once per VM:
 

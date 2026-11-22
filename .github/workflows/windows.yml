@@ -10,13 +10,14 @@ on:
       - "apps/browser/metro.config.js"
       - "apps/browser/src/**"
       - "packages/*/src/**"
+      - "!packages/phone/**"
       - "apps/browser/package.json"
       - "packages/expo-windows/**"
       - "scripts/windows/**"
       - "pnpm-lock.yaml"
       - ".github/workflows/windows.yml"
   push:
-    branches: [main, t3/windows-linux-release-priority]
+    branches: [main]
     paths:
       - "apps/browser/windows/**"
       - "apps/browser/NuGet.config"
@@ -25,6 +26,7 @@ on:
       - "apps/browser/metro.config.js"
       - "apps/browser/src/**"
       - "packages/*/src/**"
+      - "!packages/phone/**"
       - "apps/browser/package.json"
       - "packages/expo-windows/**"
       - "scripts/windows/**"
@@ -54,11 +56,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: windows-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: windows-${{ github.workflow }}-${{ (github.event_name == 'pull_request' || github.event_name == 'push') && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
   gate:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -66,7 +69,6 @@ jobs:
       pull-requests: read
     outputs:
       run: ${{ steps.vouch.outputs.run }}
-      full: ${{ steps.depth.outputs.full }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -80,27 +82,19 @@ jobs:
           script: |
             const vouch = require(`${process.env.GITHUB_WORKSPACE}/.github/vouch/vouch.cjs`);
             await vouch.gate({ github, context, core });
-      - id: depth
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
-        with:
-          retries: 3
-          script: |
-            let full = context.eventName !== "pull_request";
-            if (!full) {
-              const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number: context.payload.pull_request.number });
-              full = pr.labels.some((label) => label.name === "full-ci");
-            }
-            core.setOutput("full", full ? "true" : "false");
-            core.info(full ? "Full run: compile, tours and installers." : "Fast run: reuse a built app when the native code is unchanged, then launch it.");
 
   identity:
     needs: gate
-    if: needs.gate.outputs.run == 'true'
+    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       version: ${{ steps.identity.outputs.version }}
       build: ${{ steps.identity.outputs.build }}
+      full: ${{ steps.depth.outputs.full }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -120,10 +114,22 @@ jobs:
           build=$(git rev-list --count HEAD)
           { echo "version=$version"; echo "build=$build"; } >> "$GITHUB_OUTPUT"
           echo "Ardia $version, Windows build $build (the commits in $(git rev-parse --short HEAD)'s history)" >> "$GITHUB_STEP_SUMMARY"
+      - id: depth
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+        with:
+          retries: 3
+          script: |
+            let full = context.eventName !== "pull_request";
+            if (!full) {
+              const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number: context.payload.pull_request.number });
+              full = pr.labels.some((label) => label.name === "full-ci");
+            }
+            core.setOutput("full", full ? "true" : "false");
+            core.info(full ? "Full run: compile, tours and installers." : "Fast run: reuse a built app when the native code is unchanged, then launch it.");
 
   source:
     needs: identity
-    if: inputs.version
+    if: ${{ !cancelled() && needs.identity.result == 'success' && inputs.version }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -152,7 +158,7 @@ jobs:
 
   javascript:
     needs: gate
-    if: needs.gate.outputs.run == 'true'
+    if: ${{ !cancelled() && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -161,7 +167,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: 24
@@ -186,8 +192,8 @@ jobs:
           retention-days: 1
 
   app:
-    needs: gate
-    if: needs.gate.outputs.run == 'true'
+    needs: [gate, identity]
+    if: ${{ !cancelled() && needs.identity.result == 'success' && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
     runs-on: windows-latest
     timeout-minutes: 75
     env:
@@ -195,7 +201,7 @@ jobs:
       SLUG: x64
       APP: apps/browser/windows/x64/Release
       HERMES: .ci/windows-hermes/hermes.exe
-      FULL: ${{ needs.gate.outputs.full }}
+      FULL: ${{ needs.identity.outputs.full }}
     outputs:
       compiled: ${{ steps.built.outputs.cache-hit != 'true' }}
       key: ${{ steps.native.outputs.key }}
@@ -227,7 +233,7 @@ jobs:
           key: ${{ steps.native.outputs.key }}
           lookup-only: true
       - if: steps.built.outputs.cache-hit != 'true'
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115
       - if: steps.built.outputs.cache-hit != 'true'
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
@@ -306,8 +312,8 @@ jobs:
           retention-days: 14
 
   arm64-app:
-    needs: gate
-    if: needs.gate.outputs.run == 'true'
+    needs: [gate, identity]
+    if: ${{ !cancelled() && needs.identity.result == 'success' && (needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')) }}
     runs-on: windows-11-arm
     timeout-minutes: 90
     env:
@@ -315,7 +321,7 @@ jobs:
       SLUG: arm64
       APP: apps/browser/windows/ARM64/Release
       HERMES: .ci/windows-hermes/hermes.exe
-      FULL: ${{ needs.gate.outputs.full }}
+      FULL: ${{ needs.identity.outputs.full }}
     outputs:
       compiled: ${{ steps.built.outputs.cache-hit != 'true' }}
       key: ${{ steps.native.outputs.key }}
@@ -323,7 +329,7 @@ jobs:
 
   x64:
     needs: [gate, identity, javascript, app]
-    if: needs.gate.outputs.run == 'true'
+    if: ${{ !cancelled() && needs.identity.result == 'success' && needs.javascript.result == 'success' && needs.app.result == 'success' }}
     runs-on: windows-latest
     timeout-minutes: 60
     permissions:
@@ -335,7 +341,7 @@ jobs:
       NO_INPUT: "false"
       APP: apps/browser/windows/x64/Release
       HERMES: .ci/windows-hermes/hermes.exe
-      FULL: ${{ needs.gate.outputs.full }}
+      FULL: ${{ needs.identity.outputs.full }}
       COMPILED: ${{ needs.app.outputs.compiled }}
       KEY: ${{ needs.app.outputs.key }}
       VERSION: ${{ needs.identity.outputs.version }}
@@ -554,7 +560,7 @@ jobs:
 
   x64-tour:
     needs: [gate, identity, javascript, app]
-    if: needs.gate.outputs.run == 'true' && needs.gate.outputs.full == 'true'
+    if: ${{ !cancelled() && needs.identity.result == 'success' && needs.javascript.result == 'success' && needs.app.result == 'success' && needs.identity.outputs.full == 'true' }}
     runs-on: windows-latest
     timeout-minutes: 60
     permissions:
@@ -566,7 +572,7 @@ jobs:
       NO_INPUT: "false"
       APP: apps/browser/windows/x64/Release
       HERMES: .ci/windows-hermes/hermes.exe
-      FULL: ${{ needs.gate.outputs.full }}
+      FULL: ${{ needs.identity.outputs.full }}
       COMPILED: ${{ needs.app.outputs.compiled }}
       KEY: ${{ needs.app.outputs.key }}
       VERSION: ${{ needs.identity.outputs.version }}
@@ -575,7 +581,7 @@ jobs:
 
   x64-tour-first-run:
     needs: [gate, identity, javascript, app]
-    if: needs.gate.outputs.run == 'true' && needs.gate.outputs.full == 'true'
+    if: ${{ !cancelled() && needs.identity.result == 'success' && needs.javascript.result == 'success' && needs.app.result == 'success' && needs.identity.outputs.full == 'true' }}
     runs-on: windows-latest
     timeout-minutes: 60
     permissions:
@@ -587,7 +593,7 @@ jobs:
       NO_INPUT: "false"
       APP: apps/browser/windows/x64/Release
       HERMES: .ci/windows-hermes/hermes.exe
-      FULL: ${{ needs.gate.outputs.full }}
+      FULL: ${{ needs.identity.outputs.full }}
       COMPILED: ${{ needs.app.outputs.compiled }}
       KEY: ${{ needs.app.outputs.key }}
       VERSION: ${{ needs.identity.outputs.version }}
@@ -596,7 +602,7 @@ jobs:
 
   x64-gate:
     needs: [gate, identity, javascript, app]
-    if: needs.gate.outputs.run == 'true'
+    if: ${{ !cancelled() && needs.identity.result == 'success' && needs.javascript.result == 'success' && needs.app.result == 'success' }}
     runs-on: windows-latest
     timeout-minutes: 45
     permissions:
@@ -608,7 +614,7 @@ jobs:
       NO_INPUT: "false"
       APP: apps/browser/windows/x64/Release
       HERMES: .ci/windows-hermes/hermes.exe
-      FULL: ${{ needs.gate.outputs.full }}
+      FULL: ${{ needs.identity.outputs.full }}
       COMPILED: ${{ needs.app.outputs.compiled }}
       KEY: ${{ needs.app.outputs.key }}
       VERSION: ${{ needs.identity.outputs.version }}
@@ -617,7 +623,7 @@ jobs:
 
   arm64:
     needs: [gate, identity, javascript, arm64-app]
-    if: needs.gate.outputs.run == 'true'
+    if: ${{ !cancelled() && needs.identity.result == 'success' && needs.javascript.result == 'success' && needs.arm64-app.result == 'success' }}
     runs-on: windows-11-arm
     timeout-minutes: 60
     permissions:
@@ -629,7 +635,7 @@ jobs:
       NO_INPUT: "true"
       APP: apps/browser/windows/ARM64/Release
       HERMES: .ci/windows-hermes/hermes.exe
-      FULL: ${{ needs.gate.outputs.full }}
+      FULL: ${{ needs.identity.outputs.full }}
       COMPILED: ${{ needs.arm64-app.outputs.compiled }}
       KEY: ${{ needs.arm64-app.outputs.key }}
       VERSION: ${{ needs.identity.outputs.version }}
@@ -638,7 +644,7 @@ jobs:
 
   arm64-gate:
     needs: [gate, identity, javascript, arm64-app]
-    if: needs.gate.outputs.run == 'true'
+    if: ${{ !cancelled() && needs.identity.result == 'success' && needs.javascript.result == 'success' && needs.arm64-app.result == 'success' }}
     runs-on: windows-11-arm
     timeout-minutes: 45
     permissions:
@@ -650,7 +656,7 @@ jobs:
       NO_INPUT: "true"
       APP: apps/browser/windows/ARM64/Release
       HERMES: .ci/windows-hermes/hermes.exe
-      FULL: ${{ needs.gate.outputs.full }}
+      FULL: ${{ needs.identity.outputs.full }}
       COMPILED: ${{ needs.arm64-app.outputs.compiled }}
       KEY: ${{ needs.arm64-app.outputs.key }}
       VERSION: ${{ needs.identity.outputs.version }}

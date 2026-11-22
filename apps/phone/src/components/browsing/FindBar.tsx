@@ -1,10 +1,11 @@
 import { useEffect, useRef } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View, type TextInputInstance } from "react-native";
+import { StyleSheet, Text, TextInput, View, type TextInputInstance } from "react-native";
 import { useBottomLift } from "../search/useKeyboardHeight";
 import { closeFind, findNext, findPrevious, typeFind } from "../../state/page/actions";
 import { useFindQuery, useFindResult } from "../../state/page/hooks";
 import { findCount, findHasMatches } from "../../state/page/pagePrompts";
-import { browseLayout, capsule, font, pageInk, space, Symbol, useTheme, type SymbolName } from "../ui";
+import { browseLayout, font, pageInk, space, Symbol, useTheme, type SymbolName, Tappable, slopToReach, controlRadius, smoothCorners } from "../ui";
+import { dismissWords } from "../../lib/sharedWords";
 
 const FIELD_HEIGHT = 40;
 
@@ -21,10 +22,10 @@ export function FindBar({ tabId }: { tabId: string }) {
   const count = findCount(result, query);
   const matches = findHasMatches(result, query);
   return (
-    <View style={[styles.bar, { bottom: 0, paddingBottom: lift, backgroundColor: theme.surface }]}>
+    <View style={[styles.bar, { bottom: 0, paddingBottom: lift, backgroundColor: theme.canvas }]}>
       <View style={[styles.divider, { backgroundColor: theme.separator }]} />
       <View style={styles.row}>
-        <View style={[styles.field, { backgroundColor: theme.fieldFill, borderColor: theme.fieldStroke, borderRadius: capsule(FIELD_HEIGHT) }]}>
+        <View style={[styles.field, { backgroundColor: theme.fieldFill, borderColor: theme.fieldStroke, borderRadius: controlRadius(FIELD_HEIGHT) }, smoothCorners]}>
           <Symbol name="magnifyingglass" size={16} color={theme.foregroundSecondary} />
           <TextInput
             ref={input}
@@ -54,9 +55,9 @@ export function FindBar({ tabId }: { tabId: string }) {
         </View>
         <FindButton icon="chevronUp" label="Previous Match" enabled={matches} onPress={findPrevious} />
         <FindButton icon="chevronDown" label="Next Match" enabled={matches} onPress={findNext} />
-        <Pressable accessibilityRole="button" onPress={closeFind} style={styles.done}>
-          <Text style={[font.body, styles.bold, { color: theme.spaceAccentInk }]}>Done</Text>
-        </Pressable>
+        <Tappable kind="text" label={dismissWords.done} onPress={closeFind} style={styles.done}>
+          <Text style={[font.body, styles.bold, { color: theme.spaceAccentInk }]}>{dismissWords.done}</Text>
+        </Tappable>
       </View>
     </View>
   );
@@ -65,9 +66,9 @@ export function FindBar({ tabId }: { tabId: string }) {
 function FindButton({ icon, label, enabled, onPress }: { icon: SymbolName; label: string; enabled: boolean; onPress: () => void }) {
   const theme = useTheme();
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} disabled={!enabled} onPress={onPress} style={styles.button}>
-      <Symbol name={icon} size={18} color={enabled ? theme.label : theme.tertiaryLabel} />
-    </Pressable>
+    <Tappable kind="icon" label={label} disabled={!enabled} hitSlop={slopToReach(browseLayout.findButton)} onPress={onPress} style={styles.button}>
+      <Symbol name={icon} size={browseLayout.findGlyph} color={enabled ? theme.label : theme.tertiaryLabel} />
+    </Tappable>
   );
 }
 
@@ -86,7 +87,7 @@ const styles = StyleSheet.create({
   },
   input: { flex: 1, paddingVertical: 0 },
   digits: { fontVariant: ["tabular-nums"] },
-  button: { width: browseLayout.hitTarget - 4, height: browseLayout.hitTarget - 4, alignItems: "center", justifyContent: "center" },
+  button: { width: browseLayout.findButton, height: browseLayout.findButton, alignItems: "center", justifyContent: "center" },
   done: { minHeight: browseLayout.hitTarget, justifyContent: "center", paddingHorizontal: space.s },
   bold: { fontWeight: "600" },
 });

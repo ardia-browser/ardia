@@ -8,6 +8,7 @@ import { emitAppEvent, emitCommand, menuShown, setWindowCloseDecider } from "@ar
 import { WindowRoot } from "../../browser/src/App";
 import { startNativeSync } from "../../browser/src/state/app/nativeSync";
 import { startTabPages } from "../../browser/src/state/tabs/tabPages";
+import { startReader } from "../../browser/src/state/reader/reader";
 import { startTabLifecycle, useLifecycle } from "../../browser/src/state/tabs/tabLifecycle";
 import { useMedia } from "../../browser/src/state/media/media";
 import { useToolbarAutoHide } from "../../browser/src/state/windows/toolbarAutoHide";
@@ -155,6 +156,7 @@ async function start() {
     if (!saved) await recordFreshProfile();
     await persistence.flush();
     startTabPages();
+    startReader();
     startNativeSync();
     listenForOpenUrls(ardiaHost);
     startHostDownloads(ardiaHost, useBrowser);

@@ -251,14 +251,14 @@ object PhonePages {
         )
     }
 
-    suspend fun snapshot(pageId: String, maxWidth: Int, quality: Int, covered: Pair<Double, Double>?): Map<String, Any?>? {
+    suspend fun snapshot(pageId: String, maxWidth: Int, quality: Int, covered: Pair<Double, Double>?, windowCopy: Boolean = true): Map<String, Any?>? {
         val page = require(pageId)
         val (generation, shown, frameAtStart) = kotlinx.coroutines.withContext(Dispatchers.Main.immediate) {
             val view = views[pageId]?.get()
             Triple(visuals.generation(pageId), view, view?.takeIf { it.isAttachedToWindow }?.let(::frameInWindow))
         }
         val started = android.os.SystemClock.uptimeMillis()
-        val drawn = page.snapshot(maxWidth) ?: return null
+        val drawn = page.snapshot(maxWidth, windowCopy) ?: return null
         val captured = android.os.SystemClock.uptimeMillis()
         val route = (page as? WebViewPage)?.lastCaptureRoute
         val web = page.view.value

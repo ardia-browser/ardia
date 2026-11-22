@@ -9,8 +9,9 @@ import {
   type FrostVariant,
   type GlassShape,
 } from "@ardia/phone-native";
-import type { ReactNode } from "react";
-import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import type { ReactNode, RefObject } from "react";
+import { Pressable, StyleSheet, View, type StyleProp, type ViewInstance, type ViewStyle } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   backdropStops,
   lookGlassTint,
@@ -20,10 +21,13 @@ import {
   type ProfileLook,
 } from "../../lib/profileLook";
 import { Backdrop } from "./Backdrop";
+import type { ChromeStyle } from "../../lib/appearance";
 import { useChromeStyle } from "../../state/settings/appearance";
 import { useReduceTransparency } from "./contrast";
-import { useProfileLook, useTheme } from "./theme";
-import { chromeInk, chromeLayout, startInk, tabsInk } from "./tokens";
+import { useIncognitoLook, useProfileLook, useTheme } from "./theme";
+import { usePressStyle } from "./pressFeedback";
+import { Symbol } from "./Symbol";
+import { chromeInk, chromeLayout, controlRadius, nativeClassicChrome, overlayInk, shadowCss, smoothCorners, space, startInk, tabsInk, voiceLayout } from "./tokens";
 import { useReduceMotion } from "./contrast";
 import { useDesign } from "./design";
 
@@ -167,9 +171,26 @@ type FrostProps = {
   fill: string;
   dark?: boolean;
   incognito?: boolean;
+  solid?: boolean;
   style?: StyleProp<ViewStyle>;
   children?: ReactNode;
 };
+
+export const chromeIsSolid = (style: ChromeStyle, reduceTransparency: boolean, frostIsNative: boolean) => style === "classic" || reduceTransparency || !frostIsNative;
+
+export function useSolidChrome() {
+  const style = useChromeStyle();
+  const reduceTransparency = useReduceTransparency();
+  return chromeIsSolid(style, reduceTransparency, useNativeLook());
+}
+
+export type PlateMaterial = "glass" | "frost" | "solid";
+
+export type PlateFace = Exclude<PlateMaterial, "solid">;
+
+export const SEARCH_PANEL_FACE: PlateFace = "frost";
+
+export const plateMaterial = (face: PlateFace, solid: boolean, glassIsLive: boolean): PlateMaterial => (solid ? "solid" : face === "glass" && glassIsLive ? "glass" : "frost");
 
 export function LookFrost({
   source,
@@ -178,6 +199,7 @@ export function LookFrost({
   fill,
   dark,
   incognito = false,
+  solid = false,
   style,
   children,
 }: FrostProps) {
@@ -185,10 +207,10 @@ export function LookFrost({
   const theme = useTheme();
   const reduceTransparency = useReduceTransparency();
   const nativeLook = useNativeLook();
-  if (!nativeLook)
+  if (!nativeLook || solid)
     return (
       <View
-        style={[style, { backgroundColor: fill, borderRadius: cornerRadius }]}
+        style={[style, { backgroundColor: fill, borderRadius: cornerRadius, ...smoothCorners }]}
       >
         {children}
       </View>
@@ -209,12 +231,17 @@ export function LookFrost({
   );
 }
 
+export function ChromeFrost({ solidFill, ...props }: Omit<FrostProps, "solid"> & { solidFill?: string }) {
+  const solid = useSolidChrome();
+  return <LookFrost {...props} fill={solid && solidFill !== undefined ? solidFill : props.fill} solid={solid} />;
+}
+
 export const usesGlass = () => glassIsNative();
 
 export function ChromeSurface({
   shape,
   cornerRadius,
-  incognito = false,
+  incognito: incognitoChosen,
   barShadow = false,
   interactive = true,
   tinted = false,
@@ -241,10 +268,12 @@ export function ChromeSurface({
   const look = useProfileLook();
   const theme = useTheme();
   const surface = useChromeStyle();
+  const privateContext = useIncognitoLook();
+  const incognito = incognitoChosen ?? privateContext;
   if (glassIsNative()) {
     const shade = dark ?? (incognito || theme.dark);
     return (
-      <Glass testID={testID} source={SURFACES_FROST} shape={shape} cornerRadius={cornerRadius} tint={incognito ? undefined : lookGlassTint(look)} interactive={interactive} tinted={tinted} surface={surface} barShadow={barShadow} shown={shown} shownMs={shownMs} {...lookColors(look, incognito, shade)} dark={shade} style={[style, { borderRadius: cornerRadius }]}>
+      <Glass testID={testID} source={SURFACES_FROST} shape={shape} cornerRadius={cornerRadius} tint={incognito ? undefined : lookGlassTint(look)} interactive={interactive} tinted={tinted} surface={surface} barShadow={barShadow} shown={shown} shownMs={shownMs} classicChrome={nativeClassicChrome} {...lookColors(look, incognito, shade)} dark={shade} style={[style, { borderRadius: cornerRadius }]}>
         {children}
       </Glass>
     );
@@ -257,10 +286,10 @@ export function ChromeSurface({
         style,
         {
           borderRadius: cornerRadius,
-          backgroundColor: tinted ? theme.surface : ink.surface,
+          backgroundColor: tinted ? theme.canvas : ink.surface,
           borderWidth: chromeLayout.edge,
           borderColor: ink.edge,
-          boxShadow: barShadow ? `0px ${chromeLayout.shadowY}px ${chromeLayout.shadowRadius * 2}px ${ink.shadow}` : undefined,
+          boxShadow: barShadow ? shadowCss("control", dark ?? (incognito || theme.dark)) : undefined,
         },
       ]}
     >
@@ -283,6 +312,7 @@ export function LookGlass({
       source={frost.source}
       shape={shape}
       tint={frost.incognito ? undefined : lookGlassTint(look)}
+      classicChrome={nativeClassicChrome}
       {...lookColors(look, frost.incognito ?? false, shade)}
       dark={shade}
       style={frost.style}
@@ -291,3 +321,33 @@ export function LookGlass({
     </Glass>
   );
 }
+
+type OverlayFace = { frostSource?: string };
+
+function OverlayPlate({ frostSource, cornerRadius, style, children }: OverlayFace & { cornerRadius: number; style: StyleProp<ViewStyle>; children: ReactNode }) {
+  if (frostSource)
+    return (
+      <ChromeFrost source={frostSource} variant="glass" dark cornerRadius={cornerRadius} fill={overlayInk.glass} solidFill={overlayInk.solidGlass} style={style}>
+        {children}
+      </ChromeFrost>
+    );
+  return <View style={[style, overlayStyles.plate, { borderRadius: cornerRadius }]}>{children}</View>;
+}
+
+export function OverlayCancelButton({ label, onPress, frostSource, buttonRef, testID }: OverlayFace & { label: string; onPress: () => void; buttonRef?: RefObject<ViewInstance | null>; testID?: string }) {
+  const insets = useSafeAreaInsets();
+  const pressStyle = usePressStyle("icon", { style: [overlayStyles.cancel, { top: insets.top + space.s, right: insets.right + space.l }] });
+  return (
+    <Pressable ref={buttonRef} testID={testID} accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={pressStyle}>
+      <OverlayPlate frostSource={frostSource} cornerRadius={controlRadius(voiceLayout.cancel)} style={overlayStyles.cancelFace}>
+        <Symbol name="xmark" size={voiceLayout.icon} color={overlayInk.label} />
+      </OverlayPlate>
+    </Pressable>
+  );
+}
+
+const overlayStyles = StyleSheet.create({
+  plate: { backgroundColor: overlayInk.glass, overflow: "hidden", ...smoothCorners },
+  cancel: { position: "absolute", width: voiceLayout.cancel, height: voiceLayout.cancel },
+  cancelFace: { flex: 1, alignItems: "center", justifyContent: "center", ...smoothCorners },
+});

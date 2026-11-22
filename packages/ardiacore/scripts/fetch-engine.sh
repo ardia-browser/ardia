@@ -23,12 +23,13 @@ case "${1:-}" in
   *) die "usage: fetch-engine.sh [--nearest]" ;;
 esac
 
-key="$root/engine/engine-key.sh"
-git -C "$root" rev-parse --git-dir >/dev/null 2>&1 || die "$root isn't a git checkout: a prebuilt engine is matched to its engine key (engine/engine-key.sh)"
-key_paths=($("$key" --paths))
-[ -z "$(git -C "$root" status --porcelain -- "${key_paths[@]}")" ] \
-  || die "$(echo "${key_paths[@]}" | sed 's/ /, /g') have uncommitted changes, and no prebuilt has them: build the engine (docs/engine-build.md)"
-tree=$("$key")
+key_script="$root/engine/engine-key.sh"
+key() { "$key_script" --platform macos "$@"; }
+git -C "$root" rev-parse --git-dir >/dev/null 2>&1 || die "$root isn't a git checkout: a prebuilt engine is matched to its engine key (engine/engine-key.sh --platform macos)"
+key_paths=($(key --paths))
+dirty=$(git -C "$root" status --porcelain -- "${key_paths[@]}" | cut -c4- | awk 'NR <= 5' | paste -sd ',' - | sed 's/,/, /g')
+[ -z "$dirty" ] || die "$dirty (in the macOS engine key) have uncommitted changes, and no prebuilt has them: build the engine (docs/engine-build.md)"
+tree=$(key)
 
 remote_table=""
 lookup() {
@@ -49,7 +50,9 @@ entry=$(lookup "$tree")
 if [ -z "$entry" ]; then
   skipped=0 found=""
   while read -r commit; do
-    candidate=$(lookup "$("$key" "$commit" 2>/dev/null || true)")
+    candidate_key=$(key "$commit" 2>/dev/null || true)
+    [ "$candidate_key" != "$tree" ] || continue
+    candidate=$(lookup "$candidate_key")
     if [ -n "$candidate" ]; then found=$candidate; break; fi
     skipped=$((skipped + 1))
     [ "$skipped" -lt 200 ] || break
@@ -64,11 +67,12 @@ $version's engine anyway, or build the engine"
   echo "warning: using $version's engine; the engine's sources changed in $skipped commits since, and the app may not match it" >&2
   entry=$found
 fi
-read -r tree version sha <<<"$entry"
+read -r tree version sha built <<<"$entry"
+built=${built:-$tree}
 short=${tree:0:12}
 dest="$store/$short"
 if [ ! -f "$dest/.complete" ]; then
-  file="ArdiaCore-$short.tar.xz"
+  file="ArdiaCore-${built:0:12}.tar.xz"
   url="$assets/$(release_tag "$version")/$file"
   tmp="$store/.tmp-$$"
   rm -rf "$tmp" && mkdir -p "$tmp"

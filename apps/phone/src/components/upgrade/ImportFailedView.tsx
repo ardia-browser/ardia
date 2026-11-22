@@ -1,10 +1,10 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { copy } from "../../lib/platformCopy";
 import { retryImport, startWithoutImporting, useBoot } from "../../state/app/boot";
 import { importChoices } from "../../state/legacy/importRules";
 import { offersStartWithout } from "../../state/legacy/upgrade";
-import { controlRadius, failureLayout, font, space, Symbol, useTheme } from "../ui";
+import { ActionButton, failureLayout, font, space, Symbol, useTheme } from "../ui";
 
 export function ImportFailedView() {
   const theme = useTheme();
@@ -14,7 +14,7 @@ export function ImportFailedView() {
   const words = copy().importFailed;
   const choices = importChoices(failures, offersStartWithout());
   return (
-    <View style={[StyleSheet.absoluteFill, styles.column, { backgroundColor: theme.surface, paddingTop: insets.top, paddingBottom: insets.bottom + space.l }]}>
+    <View testID="importFailed" style={[StyleSheet.absoluteFill, styles.column, { backgroundColor: theme.appSurface, paddingTop: insets.top, paddingBottom: insets.bottom + space.l }]}>
       <View style={styles.icon}>
         <Symbol name="exclamationmarkTriangle" size={failureLayout.icon} color={theme.secondaryLabel} />
       </View>
@@ -22,21 +22,12 @@ export function ImportFailedView() {
         {words.title}
       </Text>
       <Text style={[font.subheadline, styles.text, { color: theme.secondaryLabel }]}>{words.body}</Text>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={busy ? words.tryingAgain : words.tryAgain}
-        accessibilityState={{ disabled: busy }}
-        disabled={busy}
-        onPress={retryImport}
-        style={[styles.retry, { borderColor: theme.separator }]}
-      >
-        {busy ? <ActivityIndicator color={theme.secondaryLabel} /> : <Text style={[font.body, { color: theme.spaceAccentInk }]}>{words.tryAgain}</Text>}
-      </Pressable>
+      <View style={styles.retry}>
+        <ActionButton testID="importRetry" title={words.tryAgain} variant="outlined" tone="accent" busy={busy} onPress={retryImport} />
+      </View>
       {choices.startWithout ? (
         <View style={styles.without}>
-          <Pressable accessibilityRole="button" accessibilityState={{ disabled: busy }} disabled={busy} onPress={() => void startWithoutImporting()} style={styles.plain}>
-            <Text style={[font.body, { color: busy ? theme.secondaryLabel : theme.spaceAccentInk }]}>{words.startWithout}</Text>
-          </Pressable>
+          <ActionButton testID="importStartWithout" title={words.startWithout} variant="plain" tone="accent" size="compact" disabled={busy} onPress={() => void startWithoutImporting()} />
           <Text style={[font.footnote, styles.text, { color: theme.secondaryLabel }]}>{words.startWithoutNote}</Text>
         </View>
       ) : null}
@@ -49,17 +40,6 @@ const styles = StyleSheet.create({
   icon: { paddingBottom: space.xs },
   bold: { fontWeight: "600" },
   text: { textAlign: "center", maxWidth: failureLayout.textWidth },
-  retry: {
-    marginTop: space.m,
-    minHeight: failureLayout.button,
-    minWidth: failureLayout.button * 3,
-    paddingHorizontal: space.xxl,
-    borderRadius: controlRadius(failureLayout.button),
-    borderCurve: "continuous",
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  retry: { marginTop: space.m },
   without: { marginTop: space.s, alignItems: "center", gap: space.xs },
-  plain: { minHeight: 44, paddingHorizontal: space.l, justifyContent: "center" },
 });

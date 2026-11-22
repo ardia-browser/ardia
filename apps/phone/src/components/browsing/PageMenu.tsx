@@ -5,6 +5,7 @@ import { Pressable as GesturePressable } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeIn, FadeOut, LayoutAnimationConfig, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, type SharedValue } from "react-native-reanimated";
 import { copy } from "../../lib/platformCopy";
+import { actionWords, blockingWords } from "../../lib/sharedWords";
 import type { MaterialScheme } from "../../lib/material/schemes";
 import {
   canPrintPages,
@@ -38,7 +39,7 @@ import {
   zoomIn,
   zoomOut,
 } from "../../state/page/actions";
-import { translationAsks, type MenuModel } from "../../state/page/pageMenu";
+import { menuSwitchHint, translationAsks, type MenuModel, type MenuSwitch } from "../../state/page/pageMenu";
 import { useMenuDocked, useMenuModel, useMenuPage, useMenuTitle, useTitleFeedback, useTranslationConfirmed } from "../../state/page/hooks";
 import type { MenuPage } from "../../state/page/store";
 import { SiteSettingsGroups } from "../settings/SitePages";
@@ -47,11 +48,12 @@ import { useSearchFromDockedMenu, useSearchOpen, useSearchSession } from "../../
 import { cancelSearch } from "../../state/browse/store";
 import { useTab } from "../../state/tabs/hooks";
 import type { BrowserTab } from "../../state/tabs/tabModels";
-import { ConfirmDialog, settingsUIAvailable, FloatingMenu, font, MaterialIconButton, menuLayout, PressScale, shape, Sheet, smoothCorners, space, Symbol, tabsMotion, Toggle, useDesign, useTheme, type SymbolName } from "../ui";
+import { ConfirmDialog, settingsUIAvailable, FloatingMenu, font, iconRoles, MaterialIconButton, menuLayout, PressInPlace, shape, Sheet, slotSide, smoothCorners, space, stroke, Symbol, tabsMotion, ToggleRow as SharedToggleRow, useDesign, usePressStyle, useTheme, type PressKind, type SymbolName } from "../ui";
 import { MaterialPageMenu, MaterialPageMenuItems, MaterialSiteSettingsContent, MaterialSiteSettingsHeader } from "./MaterialPageMenu";
 import { countSearchExpansion, MaterialSearchField, MaterialSearchResults, useMaterialSheetSearch } from "../search/MaterialSearchView";
 import { barAddress } from "./FloatingBar";
 import { PageMenuWords, usePageMenuInk } from "./PageMenuWords";
+import { classicPageMenu, pageMenuCards } from "./pageMenuTokens";
 import { SystemPageMenu } from "./SystemPageMenu";
 import { MaterialAddressContent } from "../ui/MaterialBottomBar";
 import { useMaterialTheme } from "../ui/materialTheme";
@@ -215,9 +217,9 @@ function DockedMainPageMenuBar({ tab, model, spread }: { tab: BrowserTab; model:
         </Animated.View>
         <Animated.View style={reloadStyle}>
           {model.reload === "stop" ? (
-            <DockedMenuButton id="dockedPageMenuReload" label="Stop" icon="xmark" scheme={scheme} enabled onPress={menuStop} />
+            <DockedMenuButton id="dockedPageMenuReload" label={actionWords.stopLoading} icon={iconRoles.stopLoading} scheme={scheme} enabled onPress={menuStop} />
           ) : (
-            <DockedMenuButton id="dockedPageMenuReload" label="Reload" icon="arrowClockwise" scheme={scheme} enabled={model.reloadEnabled} onPress={menuReload} />
+            <DockedMenuButton id="dockedPageMenuReload" label={actionWords.reload} icon={iconRoles.reload} scheme={scheme} enabled={model.reloadEnabled} onPress={menuReload} />
           )}
         </Animated.View>
       </Animated.View>
@@ -239,14 +241,14 @@ function MenuMain({ tabId, model, onTranslate }: { tabId: string; model: MenuMod
       {large ? (
         <Group>
           <Row icon="docPlaintext" title="Reader" enabled={model.tiles} onPress={showReader} />
-          <Row icon="link" title="Copy Link" enabled={model.tiles} onPress={copyCurrentLink} />
-          <Row icon="squareAndArrowUp" title="Share" enabled={model.tiles} divider={false} onPress={shareCurrentPage} />
+          <Row icon={iconRoles.copyLink} title={actionWords.copyLink} enabled={model.tiles} onPress={copyCurrentLink} />
+          <Row icon={iconRoles.share} title={actionWords.share} enabled={model.tiles} divider={false} onPress={shareCurrentPage} />
         </Group>
       ) : (
         <View style={styles.tiles}>
           <Tile icon="docPlaintext" title="Reader" enabled={model.tiles} onPress={showReader} />
-          <Tile icon="link" title="Copy Link" enabled={model.tiles} onPress={copyCurrentLink} />
-          <Tile icon="squareAndArrowUp" title="Share" enabled={model.tiles} onPress={shareCurrentPage} />
+          <Tile icon={iconRoles.copyLink} title={actionWords.copyLink} enabled={model.tiles} onPress={copyCurrentLink} />
+          <Tile icon={iconRoles.share} title={actionWords.share} enabled={model.tiles} onPress={shareCurrentPage} />
         </View>
       )}
       <Group>
@@ -260,6 +262,7 @@ function MenuMain({ tabId, model, onTranslate }: { tabId: string; model: MenuMod
         <>
           <Group>
             <ToggleRow
+              which="nightShade"
               icon={model.nightShadeOn ? "moonFill" : "moon"}
               title="Night Shade"
               value={model.nightShadeOn}
@@ -267,12 +270,13 @@ function MenuMain({ tabId, model, onTranslate }: { tabId: string; model: MenuMod
               onChange={setNightShadeOn}
             />
             <ZoomRow percent={model.zoomPercent} canZoomOut={model.zoomOut} canZoomIn={model.zoomIn} enabled={model.isWebPage} stacked={large} />
-            <ToggleRow icon="desktop" title="Desktop Site" value={model.desktopSite} enabled={model.isWebPage} divider={false} onChange={setDesktopSite} />
+            <ToggleRow which="desktopSite" icon="desktop" title="Desktop Site" value={model.desktopSite} enabled={model.isWebPage} divider={false} onChange={setDesktopSite} />
           </Group>
           <Group>
             <ToggleRow
+              which="blockers"
               icon={model.blockersEnabled ? "handRaised" : "handRaisedSlash"}
-              title="Block Ads and Trackers"
+              title={blockingWords.blockAdsAndTrackers}
               value={model.blockersEnabled}
               enabled={model.isWebPage}
               detail={model.blockedCount}
@@ -313,14 +317,15 @@ function NavigationCapsule({ tabId }: { tabId: string }) {
   const { fontScale } = useWindowDimensions();
   const below = copy().menuTitleBelowAtLargeText && fontScale > ACCESSIBILITY_TEXT;
   const shown = feedback ?? title;
+  const titleStyle = usePressStyle("text", { style: below ? styles.titleBelow : styles.title });
   const titleButton = (
-    <Pressable accessibilityRole="button" accessibilityLabel={shown} accessibilityHint="Edits the search" onPress={editPageQuery} style={below ? styles.titleBelow : styles.title}>
+    <Pressable testID="pageMenuTitle" accessibilityRole="button" accessibilityLabel={shown} accessibilityHint="Edits the search" onPress={editPageQuery} style={titleStyle}>
       <Animated.Text
         key={shown}
         entering={TITLE_IN}
         exiting={TITLE_OUT}
         style={[font.body, styles.centered, feedback ? styles.feedback : null, { color: feedback ? theme.spaceAccentInk : theme.label }]}
-        numberOfLines={below ? 3 : 1}
+        numberOfLines={below ? 3 : feedback ? pageMenuCards.feedbackLines : 1}
       >
         {shown}
       </Animated.Text>
@@ -334,9 +339,9 @@ function NavigationCapsule({ tabId }: { tabId: string }) {
         {below ? <View style={styles.fill} /> : titleButton}
         {syncOffered() ? <PinButton tabId={tabId} enabled={model.isWebPage} /> : null}
         {model.reload === "stop" ? (
-          <CapsuleButton icon="xmark" label="Stop" enabled onPress={menuStop} />
+          <CapsuleButton icon={iconRoles.stopLoading} label={actionWords.stopLoading} enabled onPress={menuStop} />
         ) : (
-          <CapsuleButton icon="arrowClockwise" label="Reload" enabled={model.reloadEnabled} onPress={menuReload} />
+          <CapsuleButton icon={iconRoles.reload} label={actionWords.reload} enabled={model.reloadEnabled} onPress={menuReload} />
         )}
       </View>
       {below ? titleButton : null}
@@ -350,9 +355,9 @@ function PinButton({ tabId, enabled }: { tabId: string; enabled: boolean }) {
   const pinned = useIsPinned(tabId);
   const can = enabled && !tab?.isPrivate;
   return (
-    <PressScale label={pinned ? "Pinned to Mac" : "Pin to Mac"} disabled={!can} onPress={pinCurrentToMac} style={styles.capsuleButton}>
+    <PressInPlace label={pinned ? "Pinned to Mac" : "Pin to Mac"} disabled={!can} onPress={pinCurrentToMac} style={styles.capsuleButton}>
       <Symbol name={pinned ? "starFill" : "star"} size={19} color={can ? theme.label : theme.tertiaryLabel} />
-    </PressScale>
+    </PressInPlace>
   );
 }
 
@@ -377,15 +382,12 @@ function SendRow({ tabId, enabled }: { tabId: string; enabled: boolean }) {
 
 function RowWithEvent({ icon, title, onPress }: { icon: SymbolName; title: string; onPress: (y: number) => void }) {
   const theme = useTheme();
+  const rowStyle = usePressStyle("row", { style: styles.row });
   return (
     <View>
-      <Pressable
-        accessibilityRole="button"
-        onPress={(event) => onPress(event.nativeEvent.pageY)}
-        style={({ pressed }) => [styles.row, pressed ? { backgroundColor: theme.rowHighlight } : null]}
-      >
+      <Pressable accessibilityRole="button" onPress={(event) => onPress(event.nativeEvent.pageY)} style={rowStyle}>
         <View style={styles.icon}>
-          <Symbol name={icon} size={20} color={theme.secondaryLabel} />
+          <Symbol name={icon} size={classicPageMenu.rowGlyph} color={theme.secondaryLabel} />
         </View>
         <Text style={[font.body, styles.rowTitle, { color: theme.label }]}>{title}</Text>
         <Symbol name="chevronDown" size={14} color={theme.tertiaryLabel} />
@@ -398,9 +400,9 @@ function RowWithEvent({ icon, title, onPress }: { icon: SymbolName; title: strin
 function CapsuleButton({ icon, label, enabled, onPress }: { icon: SymbolName; label: string; enabled: boolean; onPress: () => void }) {
   const theme = useTheme();
   return (
-    <PressScale label={label} disabled={!enabled} onPress={onPress} style={styles.capsuleButton}>
+    <PressInPlace label={label} disabled={!enabled} onPress={onPress} style={styles.capsuleButton}>
       <Symbol name={icon} size={19} color={enabled ? theme.label : theme.tertiaryLabel} />
-    </PressScale>
+    </PressInPlace>
   );
 }
 
@@ -408,12 +410,12 @@ function Tile({ icon, title, enabled, onPress }: { icon: SymbolName; title: stri
   const theme = useTheme();
   const ink = enabled ? theme.label : theme.tertiaryLabel;
   return (
-    <PressScale label={title} disabled={!enabled} onPress={onPress} grow style={[styles.tile, { backgroundColor: theme.groupFill }]}>
+    <PressInPlace label={title} disabled={!enabled} onPress={onPress} grow style={[styles.tile, { backgroundColor: theme.groupFill }]}>
       <Symbol name={icon} size={22} color={ink} />
       <Text style={[font.footnote, styles.medium, { color: ink }]} numberOfLines={1}>
         {title}
       </Text>
-    </PressScale>
+    </PressInPlace>
   );
 }
 
@@ -431,17 +433,12 @@ type RowProps = { icon: SymbolName; title: string; enabled: boolean; divider?: b
 
 function Row({ icon, title, enabled, divider = true, onPress }: RowProps) {
   const theme = useTheme();
+  const rowStyle = usePressStyle("row", { style: styles.row });
   return (
     <View>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ disabled: !enabled }}
-        disabled={!enabled}
-        onPress={onPress}
-        style={({ pressed }) => [styles.row, pressed ? { backgroundColor: theme.rowHighlight } : null]}
-      >
+      <Pressable accessibilityRole="button" accessibilityState={{ disabled: !enabled }} disabled={!enabled} onPress={onPress} style={rowStyle}>
         <View style={styles.icon}>
-          <Symbol name={icon} size={20} color={theme.secondaryLabel} />
+          <Symbol name={icon} size={classicPageMenu.rowGlyph} color={theme.secondaryLabel} />
         </View>
         <Text style={[font.body, styles.rowTitle, { color: enabled ? theme.label : theme.tertiaryLabel }]}>{title}</Text>
       </Pressable>
@@ -450,74 +447,82 @@ function Row({ icon, title, enabled, divider = true, onPress }: RowProps) {
   );
 }
 
-type ToggleRowProps = { icon: SymbolName; title: string; value: boolean; enabled: boolean; detail?: string | null; divider?: boolean; onChange: (value: boolean) => void };
+type ToggleRowProps = { which: MenuSwitch; icon: SymbolName; title: string; value: boolean; enabled: boolean; detail?: string | null; divider?: boolean; onChange: (value: boolean) => void };
 
-function ToggleRow({ icon, title, value, enabled, detail, divider = true, onChange }: ToggleRowProps) {
+function ToggleRow({ which, icon, title, value, enabled, detail, divider = true, onChange }: ToggleRowProps) {
   const theme = useTheme();
-  const flip = () => {
-    if (enabled) onChange(!value);
-  };
-  const label = detail ? `${title}, Blocked ${detail}` : title;
-  const content = (
-    <>
-      <View style={styles.icon}>
-        <Symbol name={icon} size={20} color={theme.secondaryLabel} />
-      </View>
-      <Text style={[font.body, styles.rowTitle, { color: enabled ? theme.label : theme.tertiaryLabel }]}>{title}</Text>
-      {detail ? <Text style={[font.subheadline, styles.digits, { color: theme.secondaryLabel }]}>{detail}</Text> : null}
-      <View importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-        <Toggle label={title} value={value} disabled={!enabled} onChange={onChange} />
-      </View>
-    </>
-  );
-  const switchRole = { accessible: true, accessibilityRole: "switch" as const, accessibilityLabel: label, accessibilityState: { checked: value, disabled: !enabled } };
   return (
     <View>
-      {copy().menuRowTogglesSwitch ? (
-        <Pressable testID={`menuToggle:${title}`} {...switchRole} disabled={!enabled} onPress={flip} style={styles.row}>
-          {content}
-        </Pressable>
-      ) : (
-        <View testID={`menuToggle:${title}`} {...switchRole} onAccessibilityTap={flip} style={styles.row}>
-          {content}
+      <SharedToggleRow
+        testID={`menuToggle:${title}`}
+        press={copy().menuRowTogglesSwitch ? "row" : "knob"}
+        label={detail ? `${title}, Blocked ${detail}` : title}
+        hint={menuSwitchHint(which)}
+        value={value}
+        disabled={!enabled}
+        onChange={onChange}
+        style={styles.toggleRow}
+      >
+        <View style={styles.toggleWords}>
+          <View style={styles.icon}>
+            <Symbol name={icon} size={classicPageMenu.rowGlyph} color={theme.secondaryLabel} />
+          </View>
+          <Text style={[font.body, styles.rowTitle, { color: enabled ? theme.label : theme.tertiaryLabel }]}>{title}</Text>
+          {detail ? <Text style={[font.subheadline, styles.digits, { color: theme.secondaryLabel }]}>{detail}</Text> : null}
         </View>
-      )}
+      </SharedToggleRow>
       {divider ? <Divider /> : null}
     </View>
   );
 }
 
-function ZoomRow({ percent, canZoomOut, canZoomIn, enabled, stacked }: { percent: string; canZoomOut: boolean; canZoomIn: boolean; enabled: boolean; stacked: boolean }) {
-  const theme = useTheme();
-  const zoomButton = (icon: SymbolName, label: string, can: boolean, onPress: () => void) => (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} disabled={!can} onPress={onPress} style={styles.zoomButton}>
-      <Symbol name={icon} size={16} color={can ? theme.label : theme.tertiaryLabel} />
+function ZoomSegment({ kind, label, value, enabled, onPress, style, children }: { kind: PressKind; label: string; value?: string; enabled: boolean; onPress: () => void; style: object; children: ReactNode }) {
+  const pressStyle = usePressStyle(kind, { style });
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityValue={value ? { text: value } : undefined} accessibilityState={{ disabled: !enabled }} disabled={!enabled} onPress={onPress} style={pressStyle}>
+      {children}
     </Pressable>
   );
+}
+
+function ZoomRow({ percent, canZoomOut, canZoomIn, enabled, stacked }: { percent: string; canZoomOut: boolean; canZoomIn: boolean; enabled: boolean; stacked: boolean }) {
+  const theme = useTheme();
+  const enabledInk = (on: boolean) => (on ? theme.label : theme.tertiaryLabel);
   const heading = (
     <>
       <View style={styles.icon}>
-        <Symbol name="textformatSize" size={20} color={theme.secondaryLabel} />
+        <Symbol name="textformatSize" size={classicPageMenu.rowGlyph} color={theme.secondaryLabel} />
       </View>
-      <Text style={[font.body, styles.rowTitle, { color: enabled ? theme.label : theme.tertiaryLabel }]}>Page Zoom</Text>
+      <Text style={[font.body, styles.rowTitle, { color: enabledInk(enabled) }]}>Page Zoom</Text>
     </>
   );
   return (
     <View>
       <View testID="menuZoom" style={stacked ? styles.zoomStacked : styles.row}>
         {stacked ? <View style={styles.zoomHeading}>{heading}</View> : heading}
-        <View style={[styles.zoom, { backgroundColor: theme.tertiaryFill }]}>
-          {zoomButton("minus", "Zoom Out", canZoomOut, zoomOut)}
-          <Pressable accessibilityRole="button" accessibilityLabel="Reset Zoom" accessibilityValue={{ text: percent }} disabled={!enabled} onPress={resetZoom} style={styles.zoomReset}>
-            <Text style={[font.subheadline, styles.digits, styles.medium, { color: theme.label }]}>{percent}</Text>
-          </Pressable>
-          {zoomButton("plus", "Zoom In", canZoomIn, zoomIn)}
+        <View testID="menuZoomControls" style={styles.zoom}>
+          <View pointerEvents="none" style={[styles.zoomPlate, { backgroundColor: theme.tertiaryFill }]} />
+          <ZoomSegment kind="icon" label="Zoom Out" enabled={canZoomOut} onPress={zoomOut} style={styles.zoomButton}>
+            <Symbol name="minus" size={classicPageMenu.zoomGlyph} color={enabledInk(canZoomOut)} />
+          </ZoomSegment>
+          <ZoomSegment kind="text" label="Reset Zoom" value={percent} enabled={enabled} onPress={resetZoom} style={styles.zoomReset}>
+            <Text testID="menuZoomPercent" style={[font.subheadline, styles.digits, styles.medium, { color: enabledInk(enabled) }]}>
+              {percent}
+            </Text>
+          </ZoomSegment>
+          <ZoomSegment kind="icon" label="Zoom In" enabled={canZoomIn} onPress={zoomIn} style={styles.zoomButton}>
+            <Symbol name="plus" size={classicPageMenu.zoomGlyph} color={enabledInk(canZoomIn)} />
+          </ZoomSegment>
         </View>
       </View>
       <Divider />
     </View>
   );
 }
+
+const ZOOM_SLOT = slotSide(menuLayout.zoomButton.width);
+const ZOOM_SLOT_HEIGHT = slotSide(menuLayout.zoomButton.height);
+const ZOOM_PLATE_INSET = (ZOOM_SLOT - menuLayout.zoomButton.width) / 2;
 
 const ACCESSIBILITY_TEXT = 1.6;
 const TITLE_IN = FadeIn.duration(tabsMotion.fade);
@@ -567,11 +572,14 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", minHeight: menuLayout.rowHeight, paddingHorizontal: space.l, gap: space.m },
   icon: { width: menuLayout.iconSlot, alignItems: "center" },
   rowTitle: { flex: 1, paddingVertical: space.s },
-  divider: { height: StyleSheet.hairlineWidth, marginLeft: space.l + menuLayout.iconSlot + space.m },
+  divider: { height: stroke.hairline, marginLeft: space.l + menuLayout.iconSlot + space.m },
   digits: { fontVariant: ["tabular-nums"] },
-  zoom: { flexDirection: "row", alignItems: "center", overflow: "hidden", borderRadius: shape.control, ...smoothCorners },
+  zoom: { flexDirection: "row", alignItems: "center", height: ZOOM_SLOT_HEIGHT },
+  zoomPlate: { position: "absolute", left: ZOOM_PLATE_INSET, right: ZOOM_PLATE_INSET, top: (ZOOM_SLOT_HEIGHT - menuLayout.zoomButton.height) / 2, height: menuLayout.zoomButton.height, borderRadius: shape.control, ...smoothCorners },
   zoomStacked: { paddingHorizontal: space.l, paddingVertical: space.m, gap: space.s, alignItems: "flex-start" },
   zoomHeading: { flexDirection: "row", alignItems: "center", gap: space.m, alignSelf: "stretch" },
-  zoomButton: { width: menuLayout.zoomButton.width, height: menuLayout.zoomButton.height, alignItems: "center", justifyContent: "center" },
-  zoomReset: { minWidth: menuLayout.zoomReset, height: menuLayout.zoomButton.height, alignItems: "center", justifyContent: "center" },
+  zoomButton: { width: ZOOM_SLOT, height: ZOOM_SLOT_HEIGHT, alignItems: "center", justifyContent: "center" },
+  zoomReset: { minWidth: menuLayout.zoomReset - 2 * ZOOM_PLATE_INSET, height: ZOOM_SLOT_HEIGHT, alignItems: "center", justifyContent: "center" },
+  toggleRow: { minHeight: menuLayout.rowHeight, paddingHorizontal: space.l, paddingVertical: space.none, gap: space.m },
+  toggleWords: { flexDirection: "row", alignItems: "center", gap: space.m },
 });

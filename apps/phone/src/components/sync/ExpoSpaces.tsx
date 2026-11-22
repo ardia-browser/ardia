@@ -1,13 +1,12 @@
-import { useMemo, useState } from "react";
-import { PlatformColor, StyleSheet, useWindowDimensions, View } from "react-native";
-import { BottomSheet, Button, ContentUnavailableView, ContextMenu, DisclosureGroup, HStack, Host, Image, Label, List, Menu, Picker, RNHostView, Section, ShareLink, Spacer, TabView, Text, VStack, ZStack } from "@expo/ui/swift-ui";
+import { useMemo, useState, type ReactElement } from "react";
+import { PlatformColor, StyleSheet } from "react-native";
+import { BottomSheet, Button, ContentUnavailableView, ContextMenu, DisclosureGroup, HStack, Host, Image, Label, List, Menu, Picker, Section, Spacer, TabView, Text, VStack, ZStack } from "@expo/ui/swift-ui";
 import {
   accessibilityAddTraits,
   accessibilityElement,
   accessibilityHint,
   accessibilityLabel,
   backgroundOverlay,
-  buttonBorderShape,
   buttonStyle,
   cornerRadius,
   dynamicTypeSize,
@@ -41,11 +40,16 @@ import { COLLAPSED_LIMIT, pinnedKeyAt, remoteTitle } from "../../state/sync/spac
 import { showAllDeviceTabs, toggleSpaceRow, useSpaceOpenFor } from "../../state/sync/spaceOpen";
 import { syncBanner, type BannerIcon } from "../../state/sync/syncRules";
 import { countUsage } from "../../state/telemetry/telemetry";
-import { DEFAULT_PROFILE_COLOR, expoSpacesLayout as L, Favicon, chromeSurface, contentMargins, GlassCircleButton, minListRowHeight, modifierList, PinnedTiles, PROFILE_PRESETS, settingsUIAvailable, spaceBackdrop, spaceColor, spaceMenuSymbol, SpacePageDots, spaceSymbol, SpaceTitle, useIncreasedContrast, useReduceMotion, useTheme } from "../ui";
+import { actionWords, destinationWords, syncWords } from "../../lib/sharedWords";
+import { DoneButton } from "../settings/ExpoSettingsDone";
+import { ExpoSettingsAction } from "../settings/ExpoSettingsParts";
+import { LinkMenuItems, ListLoading, ListRow, opensPage } from "../library/listSheet";
+import { DEFAULT_PROFILE_COLOR, expoSpacesLayout as L, chromeSurface, contentMargins, minListRowHeight, modifierList, PinnedTiles, PROFILE_PRESETS, settingsUIAvailable, shape, spaceBackdrop, spaceColor, spaceMenuSymbol, SpacePageDots, spaceSymbol, SpaceTitle, useIncreasedContrast, useReduceMotion, useTheme } from "../ui";
 
 const SECONDARY = { type: "hierarchical", style: "secondary" } as const;
 const FILL = Number.MAX_SAFE_INTEGER;
-const LARGE_TEXT = 1.35;
+const WAITING_FOR_MAC = "Waiting for your Mac…";
+const ROUNDED_FACE = chromeSurface({ shape: "rounded", cornerRadius: shape.control });
 const BANNER_SYMBOLS: Record<BannerIcon, string> = { folder: "folder.badge.questionmark", lock: "lock.fill", reset: "exclamationmark.arrow.triangle.2.circlepath", warning: "exclamationmark.icloud", offline: "wifi.slash" };
 const deviceSymbol = (kind: string, name: string) => (kind === "phone" ? "iphone" : /book/i.test(name) ? "laptopcomputer" : "desktopcomputer");
 const SPACE_ROW = [listRowBackground("transparent"), listRowSeparator("hidden"), listRowInsets({ top: 0, leading: L.rowInset, bottom: 0, trailing: L.rowInset })];
@@ -108,23 +112,31 @@ function SpacesSheetContent() {
               </TabView.Tab>
             ))}
           </TabView>
-          {view.profiles.length > 1 ? <SpacePageDots count={view.profiles.length} index={view.profiles.indexOf(profile)} modifiers={modifierList(padding({ horizontal: L.dotsPadding }), frame({ height: L.dotsHeight }), chromeSurface({ shape: "capsule", interactive: false }), padding({ top: L.tight }))} /> : null}
+          {view.profiles.length > 1 ? <SpacePageDots count={view.profiles.length} index={view.profiles.indexOf(profile)} modifiers={modifierList(padding({ horizontal: L.dotsPadding }), frame({ height: L.dotsHeight }), chromeSurface({ shape: "rounded", cornerRadius: shape.control, interactive: false }), padding({ top: L.tight }))} /> : null}
         </ZStack>
       ) : (
-        <ContentUnavailableView
-          title="Your Mac’s Spaces"
-          systemImage="macbook.and.iphone"
-          description={status.phase === "off" ? "Every tab, anywhere." : "Waiting for your Mac."}
-          modifiers={[frame({ maxHeight: FILL })]}
-          actions={<Button label={status.phase === "off" ? "Sync With Mac" : "Sync Settings"} onPress={() => openSettings({ page: status.phase === "off" ? "syncConnect" : "sync" })} modifiers={[buttonStyle("borderedProminent"), buttonBorderShape("roundedRectangle", 12)]} />}
-        />
+        <SpacesFallback off={status.phase === "off"} waiting={status.phase !== "off" && !banner} />
       )}
     </VStack>
   );
 }
 
+function SpacesFallback({ off, waiting }: { off: boolean; waiting: boolean }) {
+  const action = <ExpoSettingsAction title={off ? syncWords.connect : destinationWords.sync} size="compact" onPress={() => openSettings({ page: off ? "syncConnect" : "sync" })} />;
+  if (waiting) return <ListLoading label={WAITING_FOR_MAC} action={action} />;
+  return <ContentUnavailableView title="Your Mac’s Spaces" systemImage="macbook.and.iphone" description={off ? "Every tab, anywhere." : WAITING_FOR_MAC} modifiers={[frame({ maxHeight: FILL })]} actions={action} />;
+}
+
+function HeaderFace({ label, onPress, children }: { label: string; onPress: () => void; children: ReactElement }) {
+  return (
+    <Button onPress={onPress} modifiers={[buttonStyle("plain"), accessibilityLabel(label)]}>
+      {children}
+    </Button>
+  );
+}
+
 function SpacesHeader({ profiles, current, onSelect }: { profiles: SyncedProfile[]; current: SyncedProfile | null; onSelect: (id: string) => void }) {
-  const title = current?.name ?? "Spaces";
+  const title = current?.name ?? destinationWords.spaces;
   return (
     <HStack spacing={L.headerGap} modifiers={[padding({ leading: L.headerLeading, trailing: L.page, top: L.small, bottom: L.tight })]}>
       {current && profiles.length > 1 ? (
@@ -142,8 +154,10 @@ function SpacesHeader({ profiles, current, onSelect }: { profiles: SyncedProfile
       )}
       <Spacer />
       <HStack spacing={L.headerGap} modifiers={[dynamicTypeSize({ max: "xxxLarge" })]}>
-        <GlassCircleButton symbol="archivebox" label="Archive" diameter={L.headerCircle} onPress={openArchive} />
-        <GlassCircleButton symbol="xmark" label="Close" diameter={L.headerCircle} onPress={closeArchive} />
+        <HeaderFace label={destinationWords.archive} onPress={openArchive}>
+          <Image systemName="archivebox" modifiers={modifierList(font({ textStyle: "body", weight: "medium" }), frame({ width: L.headerCircle, height: L.headerCircle }), ROUNDED_FACE)} />
+        </HeaderFace>
+        <DoneButton onDone={closeArchive} modifiers={modifierList(buttonStyle("plain"), font({ textStyle: "body", weight: "semibold" }), padding({ horizontal: L.page }), frame({ minWidth: L.headerCircle, minHeight: L.headerCircle }), ROUNDED_FACE)} />
       </HStack>
     </HStack>
   );
@@ -219,36 +233,16 @@ function PinnedSectionRow({ profileId, section, openGroups, open }: { profileId:
 }
 
 function RemoteRow({ title, url, symbol, pinnedKey = null, open }: { title: string; url: string; symbol: string | null; pinnedKey?: string | null; open: (url: string, title: string, pinnedKey: string | null) => void }) {
-  const { fontScale } = useWindowDimensions();
-  const iconSide = L.icon * fontScale;
-  const shownTitle = remoteTitle(title, url);
-  const go = () => open(url, title, pinnedKey);
+  const systemSymbol = spaceSymbol(symbol);
+  const go = opensPage(() => open(url, title, pinnedKey));
   return (
     <ContextMenu modifiers={SPACE_ROW}>
       <ContextMenu.Trigger>
-        <Button onPress={go} modifiers={[buttonStyle("plain")]}>
-          <HStack spacing={L.small} modifiers={[frame({ minHeight: L.rowHeight })]}>
-            {spaceSymbol(symbol) ? (
-              <Image systemName={spaceSymbol(symbol) as never} color={PlatformColor("secondaryLabel")} modifiers={[font({ textStyle: "body" }), frame({ width: iconSide, height: iconSide })]} />
-            ) : (
-              <RNHostView matchContents>
-                <View style={{ width: iconSide, height: iconSide, alignItems: "center", justifyContent: "center" }}>
-                  <Favicon iconUrl={null} pageUrl={url} size={Math.min(iconSide, L.iconMax) - 2} />
-                </View>
-              </RNHostView>
-            )}
-            <Text modifiers={[font({ textStyle: "body", weight: "medium" }), lineLimit(fontScale >= LARGE_TEXT ? 3 : 1), frame({ maxWidth: FILL, alignment: "leading" })]}>{shownTitle}</Text>
-          </HStack>
-        </Button>
+        <ListRow title={remoteTitle(title, url)} leading={systemSymbol ? { symbol: systemSymbol } : { favicon: { url } }} hint="Opens the page." minHeight={L.rowHeight} onPress={go} />
       </ContextMenu.Trigger>
       <ContextMenu.Items>
-        <Button label="Open" systemImage="arrow.up.forward.square" onPress={go} />
-        {shareable(url) ? <Button label="Copy Link" systemImage="link" onPress={() => copyLink(url)} /> : null}
-        {shareable(url) ? (
-          <ShareLink item={url}>
-            <Label title="Share" systemImage="square.and.arrow.up" />
-          </ShareLink>
-        ) : null}
+        <Button label={actionWords.open} systemImage="arrow.up.forward.square" onPress={go} />
+        {shareable(url) ? <LinkMenuItems url={url} onCopy={() => copyLink(url)} /> : null}
       </ContextMenu.Items>
     </ContextMenu>
   );

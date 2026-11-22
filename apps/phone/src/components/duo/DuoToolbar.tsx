@@ -1,6 +1,7 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useRef, type ReactNode, type Ref } from "react";
+import { StyleSheet, Text, View, type StyleProp, type ViewInstance, type ViewStyle } from "react-native";
 import Animated, { useAnimatedStyle, type SharedValue } from "react-native-reanimated";
-import Svg, { Path } from "react-native-svg";
+import { actionWords } from "../../lib/sharedWords";
 import { haptics } from "../../state/app/haptics";
 import { newTab } from "../../state/browse/store";
 import { useNavigation, usePageTone } from "../../state/browse/hooks";
@@ -8,13 +9,18 @@ import { editPageQuery, menuBack, menuForward, menuReload, menuStop, openPageMen
 import { useIncognito, useSelectedTab } from "../../state/tabs/hooks";
 import { isSyncableUrl, type BrowserTab } from "../../state/tabs/tabModels";
 import { shownTone } from "../../lib/pageTone";
-import { controlRadius, chromeInk, ChromeSurface, IncognitoSpecs, isDarkColor, PressScale, rolesFor, Symbol, useTheme, type SymbolName } from "../ui";
-import { barAddress, spokenAddress, type BarAddress } from "../browsing/FloatingBar";
-import { NotSecureLock } from "../browsing/NotSecureLock";
+import { capsule, chromeInk, controlRadius, ChromeSurface, floatingBarLayout, iconRoles, isDarkColor, PressInPlace, rolesFor, smoothCorners, Symbol, Tappable, useTheme, type SymbolName } from "../ui";
+import { AddressFace } from "../browsing/AddressFace";
+import { barAddress } from "../browsing/FloatingBar";
+import { openPageMenuFrom } from "../browsing/pageMenuOpener";
 import { DUO } from "./duoLayout";
-import { SIDEBAR_GLYPH } from "./tokens";
 
 type Props = { showsAddress: boolean; sidebarShown: boolean; sidebar?: SharedValue<number>; onToggleSidebar: () => void };
+
+export function useTabPrivate(tab: BrowserTab | null): boolean {
+  const incognito = useIncognito();
+  return tab ? tab.isPrivate : incognito;
+}
 
 export function useToolbarDark(tab: BrowserTab | null): boolean {
   const theme = useTheme();
@@ -32,12 +38,14 @@ export function DuoToolbar({ showsAddress, sidebarShown, sidebar, onToggleSideba
   const canGoForward = useNavigation(id, (n) => n?.canGoForward ?? false);
   const loading = useNavigation(id, (n) => n?.isLoading ?? false);
   const dark = useToolbarDark(tab);
+  const incognito = useTabPrivate(tab);
+  const menuButton = useRef<ViewInstance>(null);
   const capsuleStyle = useAnimatedStyle(() => ({ opacity: 1 - (sidebar?.value ?? (sidebarShown ? 1 : 0)) }), [sidebarShown]);
   return (
     <View testID="duoToolbar" style={styles.row} pointerEvents="box-none">
-      <RoundButton icon="chevronLeft" label="Back" dark={dark} enabled={canGoBack} onPress={menuBack} />
-      <RoundButton icon="chevronRight" label="Forward" dark={dark} enabled={canGoForward} onPress={menuForward} />
-      {loading ? <RoundButton icon="xmark" label="Stop Loading" dark={dark} enabled onPress={menuStop} /> : <RoundButton icon="arrowClockwise" label="Reload" dark={dark} enabled={tab !== null} onPress={menuReload} />}
+      <RoundButton icon="chevronLeft" label="Back" dark={dark} incognito={incognito} enabled={canGoBack} onPress={menuBack} />
+      <RoundButton icon="chevronRight" label="Forward" dark={dark} incognito={incognito} enabled={canGoForward} onPress={menuForward} />
+      {loading ? <RoundButton icon={iconRoles.stopLoading} label={actionWords.stopLoading} dark={dark} incognito={incognito} enabled onPress={menuStop} /> : <RoundButton icon={iconRoles.reload} label={actionWords.reload} dark={dark} incognito={incognito} enabled={tab !== null} onPress={menuReload} />}
       <View style={styles.spacer} />
       {showsAddress ? (
         <>
@@ -54,70 +62,61 @@ export function DuoToolbar({ showsAddress, sidebarShown, sidebar, onToggleSideba
           <View style={styles.spacer} />
         </>
       ) : null}
-      <RoundButton icon="squareAndArrowUp" label="Share" dark={dark} enabled={tab !== null && isSyncableUrl(tab.url)} onPress={shareCurrentPage} />
-      <RoundButton icon="ellipsis" label="Page Menu" dark={dark} enabled={tab !== null} onPress={() => void openPageMenu()} />
+      <RoundButton icon={iconRoles.share} label={actionWords.share} dark={dark} incognito={incognito} enabled={tab !== null && isSyncableUrl(tab.url)} onPress={shareCurrentPage} />
+      <RoundButton buttonRef={menuButton} icon={iconRoles.more} label="Page Menu" dark={dark} incognito={incognito} enabled={tab !== null} onPress={() => openPageMenuFrom(() => menuButton.current, () => void openPageMenu())} />
     </View>
   );
 }
 
-function RoundButton({ icon, label, dark, enabled, onPress }: { icon: SymbolName; label: string; dark: boolean; enabled: boolean; onPress: () => void }) {
+function RoundButton({ icon, label, dark, incognito, enabled, onPress, buttonRef }: { icon: SymbolName; label: string; dark: boolean; incognito: boolean; enabled: boolean; onPress: () => void; buttonRef?: Ref<ViewInstance> }) {
   const roles = rolesFor(dark);
   return (
-    <PressScale label={label} disabled={!enabled} onPress={onPress} onPressIn={haptics.barPress} style={styles.round}>
-      <ChromeSurface testID={`duoToolbar:${label}`} shape="rounded" cornerRadius={controlRadius(DUO.toolbarButton)} dark={dark} style={styles.round}>
+    <PressInPlace ref={buttonRef} label={label} disabled={!enabled} onPress={onPress} onPressIn={haptics.barPress} style={styles.round}>
+      <ChromeSurface testID={`duoToolbar:${label}`} shape="rounded" cornerRadius={controlRadius(DUO.toolbarButton)} incognito={incognito} dark={dark} style={[styles.round, smoothCorners]}>
         <Symbol name={icon} size={DUO.toolbarGlyph} color={enabled ? roles.foregroundPrimary : roles.foregroundTertiary} />
       </ChromeSurface>
-    </PressScale>
+    </PressInPlace>
   );
 }
 
 function AddressCapsule({ tab, dark, sidebarShown, onToggleSidebar }: { tab: BrowserTab | null; dark: boolean; sidebarShown: boolean; onToggleSidebar: () => void }) {
   const roles = rolesFor(dark);
-  const address = tab ? barAddress(tab) : null;
+  const toggle = (
+    <Tappable kind="icon" label={sidebarShown ? "Hide Sidebar" : "Show Sidebar"} onPress={onToggleSidebar} style={styles.sidebarButton}>
+      <Symbol name={iconRoles.sidebar} size={DUO.sidebarGlyph} color={roles.foregroundPrimary} />
+    </Tappable>
+  );
+  return <DuoAddressField layout="toolbar" tab={tab} dark={dark} leading={toggle} onPress={tab ? editPageQuery : newTab} />;
+}
+
+export type DuoAddressLayout = "toolbar" | "sidebar";
+
+const ADDRESS_FACES = {
+  toolbar: { testID: "duoAddress", shape: "capsule", corner: capsule(DUO.addressHeight) },
+  sidebar: { testID: "duoSidebarAddress", shape: "rounded", corner: controlRadius(DUO.sidebarFieldHeight) },
+} as const;
+
+export function DuoAddressField({ layout, tab, dark, leading, onPress }: { layout: DuoAddressLayout; tab: BrowserTab | null; dark: boolean; leading?: ReactNode; onPress: () => void }) {
+  const face = ADDRESS_FACES[layout];
+  const incognito = useTabPrivate(tab);
+  const hit = layout === "toolbar" ? styles.hostButton : styles.sidebarFieldHit;
   return (
-    <ChromeSurface testID="duoAddress" shape="rounded" cornerRadius={controlRadius(DUO.addressHeight)} dark={dark} style={styles.address}>
-      <Pressable accessibilityRole="button" accessibilityLabel={sidebarShown ? "Hide Sidebar" : "Show Sidebar"} onPress={onToggleSidebar} style={styles.sidebarButton}>
-        <SidebarGlyph size={DUO.sidebarGlyph} color={roles.foregroundPrimary} />
-      </Pressable>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Address"
-        accessibilityValue={{ text: spokenAddress(address) }}
-        accessibilityHint="Opens search with this page’s address."
-        onPress={tab ? editPageQuery : newTab}
-        style={styles.hostButton}
-      >
-        <HostLabel address={address} dark={dark} />
-      </Pressable>
+    <ChromeSurface testID={face.testID} shape={face.shape} cornerRadius={face.corner} incognito={incognito} dark={dark} style={[layout === "toolbar" ? styles.address : styles.sidebarField, smoothCorners]}>
+      {leading}
+      {tab ? <AddressFace address={barAddress(tab)} dark={dark} testIDPrefix="duo" style={hit} onPress={onPress} /> : <NewTabFace dark={dark} style={hit} onPress={onPress} />}
     </ChromeSurface>
   );
 }
 
-export function HostLabel({ address, dark }: { address: BarAddress | null; dark: boolean }) {
+function NewTabFace({ dark, style, onPress }: { dark: boolean; style: StyleProp<ViewStyle>; onPress: () => void }) {
   const ink = dark ? chromeInk.dark : chromeInk.light;
-  const roles = rolesFor(dark);
   return (
-    <View testID="duoHost" style={styles.host} pointerEvents="none">
-      {address?.isPrivate ? <IncognitoSpecs size={DUO.hostLock} color={roles.foregroundSecondary} /> : null}
-      {address?.insecure ? (
-        <NotSecureLock testID="duoHostNotSecure" size={DUO.hostLock} color={ink.notSecure} />
-      ) : address?.isPrivate ? null : address?.pageUrl ? (
-        <Symbol name="lockFill" size={DUO.hostLock} color={roles.foregroundSecondary} />
-      ) : null}
-      <Text testID="duoHostText" maxFontSizeMultiplier={DUO.hostMaxTextScale} numberOfLines={1} ellipsizeMode="middle" style={[styles.hostText, styles.hostName, { color: roles.foregroundPrimary }]}>
-        {address?.host ?? ""}
+    <Tappable testID="duoNewTab" kind="text" label={actionWords.newTab} onPress={onPress} style={style}>
+      <Symbol name={iconRoles.newTab} size={floatingBarLayout.siteIcon} color={ink.secondary} />
+      <Text testID="duoHost" maxFontSizeMultiplier={floatingBarLayout.maxTextScale} numberOfLines={1} style={[styles.newTabLabel, { color: ink.secondary }]}>
+        {actionWords.newTab}
       </Text>
-    </View>
-  );
-}
-
-export function SidebarGlyph({ size, color }: { size: number; color: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Path d={SIDEBAR_GLYPH.frame} fill="none" stroke={color} strokeWidth={SIDEBAR_GLYPH.stroke} strokeLinejoin="round" />
-      <Path d={SIDEBAR_GLYPH.divider} fill="none" stroke={color} strokeWidth={SIDEBAR_GLYPH.stroke} strokeLinecap="round" />
-      <Path d={SIDEBAR_GLYPH.rows} fill="none" stroke={color} strokeWidth={SIDEBAR_GLYPH.stroke} strokeLinecap="round" />
-    </Svg>
+    </Tappable>
   );
 }
 
@@ -128,8 +127,8 @@ const styles = StyleSheet.create({
   addressSlot: { flexShrink: 1, minWidth: 0 },
   address: { height: DUO.addressHeight, flexDirection: "row", alignItems: "center", gap: DUO.addressGap, paddingLeft: DUO.addressLead - DUO.addressSidebarInset, paddingRight: DUO.addressTrail },
   sidebarButton: { width: DUO.addressSidebarButton, height: DUO.addressHeight, alignItems: "center", justifyContent: "center" },
-  hostButton: { flexShrink: 1, height: DUO.addressHeight, justifyContent: "center" },
-  host: { flexDirection: "row", alignItems: "center", gap: DUO.hostGap },
-  hostText: { fontSize: DUO.hostText },
-  hostName: { flexShrink: 1 },
+  hostButton: { flexShrink: 1, height: DUO.addressHeight, flexDirection: "row", alignItems: "center", gap: floatingBarLayout.addressSpacing },
+  sidebarField: { height: DUO.sidebarFieldHeight },
+  newTabLabel: { flexShrink: 1, fontSize: floatingBarLayout.hostText },
+  sidebarFieldHit: { flex: 1, paddingHorizontal: DUO.sidebarFieldPadding, flexDirection: "row", alignItems: "center", gap: floatingBarLayout.addressSpacing },
 });

@@ -47,22 +47,30 @@ function isTrackingParam(name: string, hostname = ""): boolean {
   return siteRules(hostname).some((r) => r.params.includes(key) || r.prefixes?.some((p) => key.startsWith(p)));
 }
 
-export function cleanUrl(url: string): string {
+export type CleanedUrl = { url: string; removedTracker: boolean };
+
+export function cleanUrlReport(url: string): CleanedUrl {
+  const unchanged = { url, removedTracker: false };
   const match = /^([^?#]*)(\?[^#]*)?(#.*)?$/.exec(url);
-  if (!match?.[2]) return url;
+  if (!match?.[2]) return unchanged;
   let hostname = "";
   try {
     const parsed = new URL(url);
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return url;
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return unchanged;
     hostname = parsed.hostname;
   } catch {
-    return url;
+    return unchanged;
   }
   const [, base = "", query = "", hash = ""] = match;
   const pairs = query.slice(1).split("&");
-  const kept = pairs.filter((pair) => pair && !isTrackingParam(decodeName(pair.split("=")[0]!), hostname));
-  if (kept.length === pairs.length) return url;
-  return `${base}${kept.length ? `?${kept.join("&")}` : ""}${hash}`;
+  const tracks = (pair: string) => isTrackingParam(decodeName(pair.split("=")[0]!), hostname);
+  const kept = pairs.filter((pair) => pair && !tracks(pair));
+  if (kept.length === pairs.length) return unchanged;
+  return { url: `${base}${kept.length ? `?${kept.join("&")}` : ""}${hash}`, removedTracker: pairs.some((pair) => pair !== "" && tracks(pair)) };
+}
+
+export function cleanUrl(url: string): string {
+  return cleanUrlReport(url).url;
 }
 
 export function markdownLink(title: string, url: string): string {

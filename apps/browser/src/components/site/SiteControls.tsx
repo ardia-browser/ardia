@@ -41,6 +41,7 @@ import { blockerLabel, choiceTitle, featuredPermissions, permissionValue, readSi
 import { isWebPageUrl } from "../../lib/url";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { DEVELOPER_BAR_IN_CORE, canChooseDeveloperMode, setDeveloperMode, useDeveloperMode } from "../../state/site/developerMode";
+import { SiteSwitchRows } from "../plugins/SiteSwitchRows";
 import { ALL_UNREAD_TITLE, canChooseSiteUnread, isUnreadSiteHidden, setSiteUnreadShown, showUnreadCounts } from "../../state/tabs/unreadSites";
 
 type Expanded = "connection" | "more" | null;
@@ -236,6 +237,7 @@ export function SiteControlsPanel({
             {DEVELOPER_BAR_IN_CORE && canChooseDeveloperMode(url) && !privatePage ? (
               <SettingRow icon="hammer" title="Developer Mode" value={developerMode ? "On" : "Off"} on={developerMode} onPress={() => setDeveloperMode(url, !developerMode)} />
             ) : null}
+            <SiteSwitchRows tabId={tabId} url={url} />
             {engineChoice && switchable ? <SettingRow icon={ENGINE_SYMBOLS[pageEngine]} title="Opens in" value={opensIn} on={!!engineRule} onPress={() => void pickEngine()} /> : null}
             {shownPermissions.map((p) => (
               <SettingRow

@@ -104,7 +104,7 @@ export function startEventFeed(send: AutomationEventSink) {
   sink = send;
   if (stopWatching) return;
   startedAt = Date.now();
-  void reportPageCommits(true).catch(() => {});
+  void reportPageCommits("automation", true).catch(() => {});
   const s = useBrowser.getState();
   for (const id in s.tabs) commits.set(id, { url: s.tabs[id]!.url, at: startedAt });
   const unsubscribe = useBrowser.subscribe((next, prev) => {
@@ -115,7 +115,7 @@ export function startEventFeed(send: AutomationEventSink) {
 }
 
 export function stopEventFeed() {
-  if (stopWatching) void reportPageCommits(false).catch(() => {});
+  if (stopWatching) void reportPageCommits("automation", false).catch(() => {});
   stopWatching?.();
   stopWatching = null;
   sink = null;

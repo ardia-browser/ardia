@@ -26,10 +26,10 @@ struct ContinueWithChatGPTButton: View {
       }
       .frame(maxWidth: .infinity, minHeight: 48)
       .foregroundStyle(colorScheme == .dark ? Color.black : Color.white)
-      .background(colorScheme == .dark ? Color.white : Color.black, in: .capsule)
-      .contentShape(.capsule)
+      .background(colorScheme == .dark ? Color.white : Color.black, in: .rect(cornerRadius: Radius.control, style: .continuous))
+      .contentShape(.rect(cornerRadius: Radius.control, style: .continuous))
     }
-    .buttonStyle(PressableStyle())
+    .buttonStyle(PressableStyle(.filled))
     .disabled(account.isSigningIn)
     .accessibilityHint(Text("Signs in with your ChatGPT account so Browse for Me can use your plan"))
   }

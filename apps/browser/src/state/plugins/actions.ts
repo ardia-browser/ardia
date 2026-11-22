@@ -4,6 +4,7 @@ import { turnOffPlugin } from "./lifecycle";
 import { consentNow } from "../telemetry/choice";
 
 export { dismissPluginConsent, enablePlugin, removePlugin, requestPluginConsent, setPluginValue, turnOnApprovedPlugin } from "./lifecycle";
+export { UNSAVED } from "./store";
 export const disablePlugin = (name: string) => turnOffPlugin(name, consentNow());
 export { restartProcess as restartPlugin } from "./process";
 export { removePluginAfterConfirm } from "./removeConfirmed";

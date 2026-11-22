@@ -2,8 +2,16 @@ name: Windows engine inputs
 
 on:
   pull_request:
+    paths: &inputs
+      - "engine/patches/**"
+      - "engine/chromium/**"
+      - "engine/ardiacore/**"
+      - "scripts/windows/engine/**"
+      - "apps/browser/windows/Ardia/EngineApi.h"
+      - ".github/workflows/windows-engine-inputs.yml"
   push:
     branches: [main]
+    paths: *inputs
   workflow_dispatch:
 
 permissions:

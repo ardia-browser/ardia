@@ -1,5 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const vouch = require("./vouch.cjs");
 
 const FILES = {
@@ -171,6 +173,7 @@ function fakeGithub({
   androidRuns = {},
   linuxRuns = {},
   windowsRuns = {},
+  macRuns = {},
   jobs = {},
   currentList = FILES.list,
   defaultBranch = "main",
@@ -246,7 +249,7 @@ function fakeGithub({
     },
     actions: {
       listWorkflowRuns: record("actions.listWorkflowRuns", ({ head_sha, workflow_id }) => {
-        const found = ({ "ios.yml": runs, "android.yml": androidRuns, "linux.yml": linuxRuns, "windows.yml": windowsRuns }[workflow_id] || {})[head_sha] || [];
+        const found = ({ "ios.yml": runs, "android.yml": androidRuns, "linux.yml": linuxRuns, "windows.yml": windowsRuns, "mac.yml": macRuns }[workflow_id] || {})[head_sha] || [];
         return { data: { workflow_runs: typeof found === "function" ? found() : found } };
       }),
       listJobsForWorkflowRun: record("actions.listJobsForWorkflowRun", ({ run_id }) => ({ data: jobs[run_id] || [] })),
@@ -677,14 +680,38 @@ test("the run-ci label re-runs the skipped build of every gated workflow", async
     runs: { s9: [runOf(9, 900)] },
     androidRuns: { s9: [runOf(9, 950)] },
     linuxRuns: { s9: [runOf(9, 970)] },
-    jobs: { 900: GATE_SKIPPED, 950: GATE_SKIPPED, 970: GATE_SKIPPED },
+    macRuns: { s9: [runOf(9, 990)] },
+    jobs: { 900: GATE_SKIPPED, 950: GATE_SKIPPED, 970: GATE_SKIPPED, 990: [{ name: "gate", conclusion: "success" }, { name: "compile (Debug)", conclusion: "skipped" }] },
   });
   await invoke("run", {
     github,
     eventName: "pull_request_target",
     payload: { action: "labeled", label: { name: "run-ci" }, pull_request: pr(9, "stranger", { sha: "s9" }) },
   });
-  assert.deepEqual(github.named("actions.reRunWorkflow").map((call) => call.params.run_id), [900, 950, 970]);
+  assert.deepEqual(github.named("actions.reRunWorkflow").map((call) => call.params.run_id), [900, 950, 970, 990]);
+});
+
+test("every gated workflow has a gate job that only fork pull requests run, and builds when it is skipped", () => {
+  const workflows = path.join(__dirname, "..", "workflows");
+  const forkOnly = "if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository";
+  const buildsWhenSkipped = "needs.gate.result == 'skipped' || (needs.gate.result == 'success' && needs.gate.outputs.run == 'true')";
+  for (const workflow of vouch.GATED_WORKFLOWS) {
+    const text = fs.readFileSync(path.join(workflows, workflow), "utf8");
+    const gateJob = text.match(/^  gate:\n((?:    .*\n|\n)*)/m);
+    assert.ok(gateJob, `${workflow} has a gate job`);
+    assert.ok(gateJob[1].includes(`    ${forkOnly}\n`), `${workflow}'s gate runs for fork pull requests only`);
+    assert.ok(gateJob[1].includes("vouch.gate("), `${workflow}'s gate asks vouch.gate`);
+    assert.ok(text.includes(buildsWhenSkipped), `${workflow} builds when its gate is skipped`);
+    assert.ok(!/^    if: needs\.gate\.outputs\.run == 'true'$/m.test(text), `${workflow} has no job that a skipped gate would skip`);
+    const runChecks = text.match(/[^\n]{0,40}needs\.gate\.outputs\.run == 'true'/g) || [];
+    assert.ok(runChecks.length > 0, `${workflow} reads the gate's decision`);
+    for (const check of runChecks) {
+      assert.ok(check.endsWith("needs.gate.result == 'success' && needs.gate.outputs.run == 'true'"), `${workflow} trusts run only from a gate that succeeded: ${check}`);
+    }
+    for (const line of text.match(/^    if: .*needs\.gate\..*$/gm) || []) {
+      assert.ok(line.startsWith("    if: ${{ !cancelled() && "), `${workflow}: ${line.trim()} starts with !cancelled()`);
+    }
+  }
 });
 
 test("the run-ci label re-runs that pull request's skipped build; other labels do nothing", async () => {

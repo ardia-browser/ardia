@@ -37,7 +37,7 @@ const fieldValue = (root: Root, label: string) => root.root.findAll((node) => no
 
 async function enterWords() {
   const root = renderSurface(<SyncConnect onClose={() => undefined} onConnected={() => undefined} />);
-  await pressButton(root, "Enter Words");
+  await pressButton(root, "Enter Recovery Phrase");
   act(() => jest.runOnlyPendingTimers());
   return root;
 }

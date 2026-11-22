@@ -6,9 +6,10 @@ import { idOf, resetNativeMenus, titles, type NativeItem } from "./nativeMenusMo
 jest.mock("@ardia/phone-native", () => require("./nativeMenusMock").nativeMenusModule(jest.requireActual("@ardia/phone-native")));
 
 const { TabDeck } = require("../components/tabs/TabDeck") as typeof import("../components/tabs/TabDeck");
-const { DesignProvider, deckChromeLayout, FloatingMenu, PROFILE_COLORS, rolesFor } = require("../components/ui") as typeof import("../components/ui");
+const { DesignProvider, deckChromeLayout, FloatingMenu, PROFILE_COLORS, reachesTarget, rolesFor, shadowCss } = require("../components/ui") as typeof import("../components/ui");
+const { getAnimatedStyle } = require("react-native-reanimated") as typeof import("react-native-reanimated");
 type MenuItem = import("../components/ui").MenuItem;
-const { centredGridOffset, tabGridColumns, tabGridInsets, tabGridLayout, tabGridStartOffset, tabGridRowHeight } = require("../components/tabs/tabGridLayout") as typeof import("../components/tabs/tabGridLayout");
+const { centredGridOffset, tabGridCloseSlot, tabGridColumns, tabGridInsets, tabGridLayout, tabGridStartOffset, tabGridRowHeight } = require("../components/tabs/tabGridLayout") as typeof import("../components/tabs/tabGridLayout");
 const { deckHeaderBottom } = require("../components/tabs/DeckHeader") as typeof import("../components/tabs/DeckHeader");
 const { haptics } = require("../state/app/haptics") as typeof import("../state/app/haptics");
 const { useArchiveCard } = require("../state/browse/archiveCard") as typeof import("../state/browse/archiveCard");
@@ -21,6 +22,7 @@ const { OFF_STATUS, useSync } = require("../state/sync/store") as typeof import(
 const telemetry = require("../state/telemetry/telemetry") as typeof import("../state/telemetry/telemetry");
 const tabStore = require("../state/tabs/store") as typeof import("../state/tabs/store");
 const { launchTabs } = require("../state/tabs/tabsState") as typeof import("../state/tabs/tabsState");
+const { PRIVATE_ACCENT } = require("../components/ui/theme") as typeof import("../components/ui/theme");
 
 type Root = ReturnType<typeof renderSurface>;
 
@@ -156,7 +158,7 @@ test("main's grid layout: adaptive columns of 150 to 260 pt, 14 pt apart, rows 1
   toggle();
   const scroll = hosts(root, "tabGridScroll")[0]!;
   const content = StyleSheet.flatten(scroll.props.contentContainerStyle);
-  expect(content).toMatchObject({ flexDirection: "row", flexWrap: "wrap", columnGap: 14, rowGap: 18, paddingTop: 14, paddingHorizontal: 16 });
+  expect(content).toMatchObject({ flexDirection: "row", flexWrap: "wrap", columnGap: 14, rowGap: 18 - 7, paddingTop: 14 - 7, paddingHorizontal: 16 });
   expect(scroll.props.showsVerticalScrollIndicator).toBe(false);
   const fade = root.root.findAll((node) => node.props.testID === "tabGrid" && node.props.top !== undefined && typeof node.props.top === "object")[0]!;
   expect(fade.props.top).toEqual({ length: 14 });
@@ -166,15 +168,67 @@ test("main's grid layout: adaptive columns of 150 to 260 pt, 14 pt apart, rows 1
   expect(width).toBe(178);
   expect(face.width).toBe(178);
   expect(face.height).toBeCloseTo((178 * SCREEN.height) / SCREEN.width);
-  expect(face).toMatchObject({ borderRadius: 13, overflow: "hidden", boxShadow: "0px 3px 20px rgba(0,0,0,0.108)" });
+  expect(face).toMatchObject({ borderRadius: 13, borderCurve: "continuous", overflow: "hidden", boxShadow: shadowCss("card", false) });
   const header = flat(hosts(root, "tabGridHeader")[0]!);
-  expect(header).toMatchObject({ flexDirection: "row", gap: 6, height: 30 });
+  expect(header).toMatchObject({ flexDirection: "row", gap: 6, height: 30 + 2 * 7 });
+  expect(flat(hosts(root, "tabGridCellStack")[0]!)).toMatchObject({ gap: 8 - 7 });
   const close = hosts(root, "tabGridClose")[0]!;
-  expect(flat(close)).toMatchObject({ width: 36, height: 30 });
+  expect(flat(close)).toMatchObject({ width: 44, height: 44, marginLeft: 36 - 44 });
   expect(close.props.accessibilityLabel).toBe("Close Tab");
   const title = hosts(root, "tabGridTitle")[0]!;
   expect(title.props.numberOfLines).toBe(1);
   expect(flat(title)).toMatchObject({ fontWeight: "500" });
+  unmount(root);
+});
+
+test("the grid's Close is a 24-point rounded glass plate in a real 44-point slot inside its header, with no slop the header would clip, and dims on the press", () => {
+  const root = deck();
+  toggle();
+  const close = hosts(root, "tabGridClose")[0]!;
+  const { width, height } = flat(close) as { width: number; height: number };
+  expect({ width, height }).toEqual({ width: 44, height: 44 });
+  expect(close.props.hitSlop).toBeUndefined();
+  expect(reachesTarget(width, height)).toBe(true);
+  expect(flat(hosts(root, "tabGridHeader")[0]!).height).toBeGreaterThanOrEqual(height);
+  expect(tabGridCloseSlot).toMatchObject({ side: 44, reach: 7, lead: -8 });
+  expect(flat(hosts(root, "tabGridClosePlate")[0]!)).toMatchObject({ width: 24, height: 24, borderRadius: 7, borderCurve: "continuous" });
+  expect(byTestId(root, "tabGridClosePlate").some((node) => node.props.shape === "rounded")).toBe(true);
+  const pressable = root.root.findAll((node) => node.props.testID === "tabGridClose" && typeof node.props.style === "function")[0]!;
+  expect(StyleSheet.flatten(pressable.props.style({ pressed: true }))).toMatchObject({ opacity: 0.35 });
+  unmount(root);
+});
+
+test("a grid card answers the press by dimming in place with the shared press, never by shrinking", () => {
+  const root = deck();
+  toggle();
+  const card = byTestId(root, "tabGridCard").find((node) => typeof node.props.onPressIn === "function")!;
+  const face = hosts(root, "tabGridFace")[0]!;
+  const scaleOf = () => ((getAnimatedStyle(face).transform ?? []) as { scale?: number }[]).find((step) => step.scale !== undefined)?.scale;
+  act(() => card.props.onPressIn());
+  act(() => jest.advanceTimersByTime(600));
+  expect(scaleOf() ?? 1).toBe(1);
+  expect(typeof card.props.style).toBe("function");
+  expect(StyleSheet.flatten(card.props.style({ pressed: true }))).toMatchObject({ opacity: 0.35 });
+  expect(StyleSheet.flatten(card.props.style({ pressed: false }))?.opacity).toBeUndefined();
+  act(() => card.props.onPressOut?.());
+  expect(scaleOf() ?? 1).toBe(1);
+  expect("pressedScale" in tabGridLayout).toBe(false);
+  unmount(root);
+});
+
+test("stack and grid cards speak one way: the same label, value, hint and actions, and the selected trait on the active tab", () => {
+  const root = deck();
+  const selected = tabStore.currentTabs().open.find((tab) => tab.id === tabStore.currentTabs().selectedId)!;
+  const spoken = (node: ReactTestInstance) => ({ label: node.props.accessibilityLabel, value: node.props.accessibilityValue, hint: node.props.accessibilityHint, actions: node.props.accessibilityActions, selected: node.props.accessibilityState?.selected });
+  const stack = root.root.findAll((node) => typeof node.type === "string" && node.props.accessibilityHint === "Opens the tab.").map(spoken);
+  expect(stack.length).toBeGreaterThan(0);
+  expect(stack.filter((card) => card.selected)).toEqual([expect.objectContaining({ label: selected.title })]);
+  toggle();
+  const grid = cards(root).map(spoken);
+  expect(grid.filter((card) => card.selected)).toEqual([expect.objectContaining({ label: selected.title })]);
+  const stackSelected = stack.find((card) => card.selected)!;
+  const gridSelected = grid.find((card) => card.selected)!;
+  expect(gridSelected).toEqual(stackSelected);
   unmount(root);
 });
 
@@ -203,18 +257,18 @@ test("the grid starts scrolled so the selected tab's row sits in the middle, as 
   const viewportTop = flat(hosts(root, "tabGrid")[0]!).top as number;
   const face = flat(hosts(root, "tabGridFace")[0]!);
   const rowHeight = tabGridRowHeight(width, width / (face.height as number));
-  expect(rowHeight).toBeCloseTo(30 + 8 + (face.height as number));
+  expect(rowHeight).toBeCloseTo(44 + 1 + (face.height as number));
   const bottom = StyleSheet.flatten(scroll.props.contentContainerStyle).paddingBottom as number;
   const viewport = SCREEN.height - viewportTop;
   const offset = scroll.props.contentOffset.y as number;
   expect(at).toBeGreaterThanOrEqual(4);
   expect(offset).toBeGreaterThan(0);
   expect(offset).toBeCloseTo(tabGridStartOffset(at, 20, 2, rowHeight, viewport, bottom));
-  const rowTop = 14 + Math.floor(at / 2) * (rowHeight + 18);
+  const rowTop = 7 + Math.floor(at / 2) * (rowHeight + 11);
   expect(rowTop - offset).toBeGreaterThanOrEqual(0);
   expect(rowTop + rowHeight - offset).toBeLessThanOrEqual(viewport);
-  expect(tabGridStartOffset(10, 40, 2, 100, 500, 50)).toBe(14 + 5 * 118 + 50 - 250);
-  expect(tabGridStartOffset(39, 40, 2, 100, 500, 50)).toBe(14 + 20 * 100 + 19 * 18 + 50 - 500);
+  expect(tabGridStartOffset(10, 40, 2, 107, 500, 50)).toBe(14 + 5 * 118 + 50 - 250);
+  expect(tabGridStartOffset(39, 40, 2, 107, 500, 50)).toBe(14 + 20 * 100 + 19 * 18 + 50 - 500);
   expect(tabGridStartOffset(0, 40, 2, 100, 500, 50)).toBe(0);
   unmount(root);
 });
@@ -232,7 +286,7 @@ test("once the selected cell, the viewport and the content are measured, the gri
   const selectedId = tabStore.currentTabs().selectedId;
   const at = cardLabels(root).indexOf(tabStore.currentTabs().open.find((tab) => tab.id === selectedId)!.title);
   const cell = hosts(root, "tabGridCell")[at]!;
-  act(() => cell.props.onLayout({ nativeEvent: { layout: { x: 0, y: 1400, width: 180, height: 420 } } }));
+  act(() => cell.props.onLayout({ nativeEvent: { layout: { x: 0, y: 1400 - 7, width: 180, height: 420 + 7 } } }));
   act(() => scroll.props.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width: 393, height: 700 } } }));
   expect(scrollTo).not.toHaveBeenCalled();
   act(() => scroll.props.onContentSizeChange(393, 4000));
@@ -240,9 +294,9 @@ test("once the selected cell, the viewport and the content are measured, the gri
   const other = hosts(root, "tabGridCell")[at === 0 ? 1 : 0]!;
   act(() => other.props.onLayout({ nativeEvent: { layout: { x: 0, y: 14, width: 180, height: 420 } } }));
   expect(scrollTo.mock.calls).toEqual([[{ x: 0, y: 1400 + 210 - 350, animated: false }]]);
-  expect(centredGridOffset(1400, 420, 700, 4000)).toBe(1260);
-  expect(centredGridOffset(100, 420, 700, 4000)).toBe(0);
-  expect(centredGridOffset(3800, 200, 700, 4000)).toBe(3300);
+  expect(centredGridOffset(1400 - 7, 420 + 7, 700, 4000)).toBe(1260);
+  expect(centredGridOffset(100 - 7, 420 + 7, 700, 4000)).toBe(0);
+  expect(centredGridOffset(3800 - 7, 200 + 7, 700, 4000)).toBe(3300);
   unmount(root);
 });
 
@@ -318,6 +372,40 @@ onIPhone("an Incognito tab's cell is titled Incognito, and its card reads Incogn
   expect(at).toBeGreaterThanOrEqual(0);
   expect(cards(root)[at]!.props.accessibilityValue).toEqual({ text: "Incognito, site0.example" });
   unmount(root);
+});
+
+test("on the Incognito side the selected card's edge takes the private accent, not the profile's colour", () => {
+  const privates = someTabs(2, true);
+  act(() => tabStore.useTabs.setState((state) => ({ ...state, privates, selectedId: privates[1]!.id, incognito: true })));
+  const root = deck();
+  toggle();
+  const selectedEdges = hosts(root, "tabGridEdge").map(flat).filter((edge) => edge.borderWidth === 2.5);
+  expect(selectedEdges.length).toBeGreaterThan(0);
+  selectedEdges.forEach((edge) => expect(edge.borderColor).toBe(PRIVATE_ACCENT.spaceAccentGlyph));
+  selectedEdges.forEach((edge) => expect(edge.borderColor).not.toBe(PROFILE_COLORS.plum.tint));
+  unmount(root);
+});
+
+test("on the Incognito side the grid's Close plate inherits the deck's private look, as the deck bar does, and the profile side keeps the profile's colours", () => {
+  const lookModule = require("@ardia/phone-native") as typeof import("@ardia/phone-native");
+  jest.spyOn(lookModule, "glassIsNative").mockImplementation(() => true);
+  const plates = (root: Root) => byTestId(root, "tabGridClosePlate").filter((node) => node.props.source !== undefined);
+  const regular = deck();
+  toggle();
+  expect(plates(regular).length).toBeGreaterThan(0);
+  plates(regular).forEach((plate) => expect(plate.props.color).not.toBe(lookModule.INCOGNITO_LOOK));
+  unmount(regular);
+  const privates = someTabs(2, true);
+  act(() => tabStore.useTabs.setState((state) => ({ ...state, privates, selectedId: privates[1]!.id, incognito: true })));
+  const privately = deck();
+  pick(true);
+  settle();
+  expect(plates(privately).length).toBeGreaterThan(0);
+  plates(privately).forEach((plate) => {
+    expect(plate.props).toMatchObject({ color: lookModule.INCOGNITO_LOOK, dark: true });
+    expect(plate.props.tint).toBeUndefined();
+  });
+  unmount(privately);
 });
 
 onAndroid("a grid card's Tab Options action gives TalkBack the same drawn CardMenu, placed from the card as a long press with no touch point", () => {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Keyboard, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Keyboard, StyleSheet, Text, useWindowDimensions, View, type ViewInstance } from "react-native";
 import Animated, { useAnimatedKeyboard, useAnimatedReaction, useAnimatedScrollHandler, useAnimatedStyle, useDerivedValue, useSharedValue, type SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { inlineOffer } from "../../lib/inlineOffer";
@@ -15,7 +15,8 @@ import { coverTray, useTrayCovers } from "../../state/search/trayBack";
 import { useIncognito, useSelectedTab } from "../../state/tabs/hooks";
 import { useTabs } from "../../state/tabs/store";
 import { countUsage } from "../../state/telemetry/telemetry";
-import { canSearchByVoice, presentVoiceSearch, useVoice } from "../../state/voice/store";
+import { canSearchByVoice, useVoice } from "../../state/voice/store";
+import { presentVoiceSearchFrom } from "./VoiceSearchView";
 import { FloatingMenu, space, Symbol, tabsLayout, usePresence, useTheme } from "../ui";
 import type { Point } from "../../lib/menuPlace";
 import { useMaterialSearchBarVisible } from "../browsing/PersistentMaterialBar";
@@ -111,6 +112,7 @@ export function MaterialSearchField({ open, dockedMenu = false, spread }: { open
   const completion = useSearchCompletion();
   const completedFor = useSearchCompletedFor();
   const field = useRef<MaterialSearchBarHandle | null>(null);
+  const fieldHost = useRef<ViewInstance>(null);
   const fieldWidth = useRef(0);
   const surface = useSurface();
   const tab = useSelectedTab();
@@ -136,7 +138,7 @@ export function MaterialSearchField({ open, dockedMenu = false, spread }: { open
 
   return (
     <View style={styles.fieldClip}>
-      <Animated.View testID="materialSearchEditing" onLayout={(event) => { fieldWidth.current = event.nativeEvent.layout.width; }} style={[styles.bar, !open && fieldWidth.current > 0 ? { width: fieldWidth.current } : null, editingStyle]}>
+      <Animated.View ref={fieldHost} collapsable={false} testID="materialSearchEditing" onLayout={(event) => { fieldWidth.current = event.nativeEvent.layout.width; }} style={[styles.bar, !open && fieldWidth.current > 0 ? { width: fieldWidth.current } : null, editingStyle]}>
         <MaterialSearchBar
           key={version}
           ref={field}
@@ -161,7 +163,7 @@ export function MaterialSearchField({ open, dockedMenu = false, spread }: { open
             setText("");
             setSearchText("");
           }}
-          onVoicePress={presentVoiceSearch}
+          onVoicePress={() => presentVoiceSearchFrom(() => fieldHost.current)}
           onIncognitoPress={toggleTrayIncognito}
         />
       </Animated.View>

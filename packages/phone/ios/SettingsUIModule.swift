@@ -2,6 +2,7 @@ import ArdiaDesign
 import ArdiaSync
 import ExpoModulesCore
 import ExpoUI
+import Observation
 import SwiftUI
 
 enum SettingsTintChoice {
@@ -102,6 +103,8 @@ struct SetupStepRowView: ExpoSwiftUI.View {
 
 final class ColorSwatchProps: UIBaseViewProps {
   @Field var preset: String = "plum"
+  @Field var colors: [String] = []
+  @Field var ring: String? = nil
   @Field var isSelected: Bool = false
 }
 
@@ -109,7 +112,13 @@ struct ColorSwatchView: ExpoSwiftUI.View {
   @ObservedObject var props: ColorSwatchProps
 
   var body: some View {
-    ColorSwatch(color: ProfileLook(preset: ProfileLook.Preset(rawValue: props.preset) ?? .plum).swatchColor, isSelected: props.isSelected)
+    let presetColor = ProfileLook(preset: ProfileLook.Preset(rawValue: props.preset) ?? .plum).swatchColor
+    let colors = props.colors.compactMap { Color(hexString: $0) }
+    if colors.isEmpty {
+      ColorSwatch(color: presetColor, isSelected: props.isSelected)
+    } else {
+      ColorSwatch(colors: colors, ring: props.ring.flatMap { Color(hexString: $0) } ?? presetColor, isSelected: props.isSelected)
+    }
   }
 }
 
@@ -394,6 +403,44 @@ struct LegibleInkResolver: ViewModifier {
   }
 }
 
+struct AccessibilityFocusRequestModifier: ViewModifier, Record {
+  @Field var request: Int = 0
+
+  func body(content: Content) -> some View {
+    content.modifier(AccessibilityFocusRequester(request: request))
+  }
+}
+
+struct AccessibilityFocusRequester: ViewModifier {
+  var request: Int
+  @AccessibilityFocusState private var isFocused: Bool
+
+  func body(content: Content) -> some View {
+    content
+      .accessibilityFocused($isFocused)
+      .onChange(of: request) { _, value in
+        if value > 0 { isFocused = true }
+      }
+  }
+}
+
+struct WidthChangeModifier: ViewModifier, Record {
+  var eventDispatcher: EventDispatcher?
+
+  init() {}
+
+  init(from params: Dict, appContext: AppContext, eventDispatcher: EventDispatcher) throws {
+    try self = .init(from: params, appContext: appContext)
+    self.eventDispatcher = eventDispatcher
+  }
+
+  func body(content: Content) -> some View {
+    content.onGeometryChange(for: CGFloat.self, of: { proxy in proxy.size.width }, action: { width in
+      eventDispatcher?(["ardia.widthChange": ["width": width]])
+    })
+  }
+}
+
 struct MinListRowHeightModifier: ViewModifier, Record {
   @Field var height: Double = 44
 
@@ -441,7 +488,7 @@ struct ProfileLookModifier: ViewModifier, Record {
 }
 
 enum SettingsUIModifiers {
-  static let names = ["ardia.navigationBarBackButtonHidden", "ardia.minListRowHeight", "ardia.spaceBackdrop", "ardia.settingsChrome", "ardia.settingsPage", "ardia.chromeSurface", "ardia.settingsSwitchStyle", "ardia.pressableStyle", "ardia.legibleInk", "ardia.profileLook", "ardia.contentMargins"]
+  static let names = ["ardia.navigationBarBackButtonHidden", "ardia.minListRowHeight", "ardia.spaceBackdrop", "ardia.settingsChrome", "ardia.settingsPage", "ardia.chromeSurface", "ardia.settingsSwitchStyle", "ardia.pressableStyle", "ardia.legibleInk", "ardia.profileLook", "ardia.contentMargins", "ardia.accessibilityFocusRequest", "ardia.widthChange"]
 
   static func register() {
     ViewModifierRegistry.register("ardia.navigationBarBackButtonHidden") { params, context, _ in try BackButtonHiddenModifier(from: params, appContext: context) }
@@ -455,11 +502,20 @@ enum SettingsUIModifiers {
     ViewModifierRegistry.register("ardia.legibleInk") { params, context, _ in try LegibleInkModifier(from: params, appContext: context) }
     ViewModifierRegistry.register("ardia.profileLook") { params, context, _ in try ProfileLookModifier(from: params, appContext: context) }
     ViewModifierRegistry.register("ardia.contentMargins") { params, context, _ in try ContentMarginsModifier(from: params, appContext: context) }
+    ViewModifierRegistry.register("ardia.accessibilityFocusRequest") { params, context, _ in try AccessibilityFocusRequestModifier(from: params, appContext: context) }
+    ViewModifierRegistry.register("ardia.widthChange") { params, context, dispatcher in try WidthChangeModifier(from: params, appContext: context, eventDispatcher: dispatcher) }
   }
 
   static func unregister() {
     for name in names { ViewModifierRegistry.unregister(name) }
   }
+}
+
+@MainActor
+@Observable
+final class NativeChromeLook {
+  static let shared = NativeChromeLook()
+  var usesGlass = true
 }
 
 public final class SettingsUIModule: Module {
@@ -488,6 +544,12 @@ public final class SettingsUIModule: Module {
     ExpoUIView(PinnedTilesView.self)
     ExpoUIView(FullScreenCoverView.self)
     ExpoUIView(FilterTextEditorView.self)
+
+    Function("setChromeUsesGlass") { (glass: Bool) in
+      DispatchQueue.main.async {
+        MainActor.assumeIsolated { NativeChromeLook.shared.usesGlass = glass }
+      }
+    }
 
     Function("spaceMenuSymbol") { (name: String, icon: String?) -> String in
       SpaceGlyph.menuSymbol(for: SpaceFields.profile(name: name, icon: icon, color: nil, themeColors: [], themeDarkColors: nil))

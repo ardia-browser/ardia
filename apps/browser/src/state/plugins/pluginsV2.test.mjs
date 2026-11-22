@@ -1455,3 +1455,50 @@ test("an address within the plugin rules opens even when percent-encoding makes 
   const applied = await ask("tabber", "apply", { ops: [{ op: "open", urls: [long], window: w }] }, run);
   assert.equal(applied.result?.ok, true, JSON.stringify(applied.error));
 });
+
+const { HOSTILE_VALUES } = await import("../../../../../scripts/security/hostile-inputs.mjs");
+
+function newTabUrls() {
+  const real = S().newTab;
+  const urls = [];
+  useBrowser.setState({ newTab: (windowId, options = {}) => (urls.push(options.url), real(windowId, options)) });
+  return { urls, restore: () => useBrowser.setState({ newTab: real }) };
+}
+
+test("D4: whatever URL a plugin sends through open, apply's open or group.create, only http and https reach tab creation", async () => {
+  await enable(ARRANGER);
+  const run = await activated("arranger");
+  const w = S().createWindow({ url: "https://a.example/" });
+  const sink = newTabUrls();
+  try {
+    const given = HOSTILE_VALUES.flatMap(({ value }) => (typeof value === "string" ? [value, `https://a.example/${value}`, `${value}https://a.example/`] : [value]));
+    const asks = given.flatMap((url) => [
+      send("arranger", "open", { urls: [url] }, run),
+      send("arranger", "apply", { ops: [{ op: "open", urls: [url], window: w }] }, run),
+      send("arranger", "apply", { ops: [{ op: "group.create", urls: [url], window: w, name: "G" }] }, run),
+    ]);
+    const controls = [
+      send("arranger", "open", { urls: ["https://control.example/open"] }, run),
+      send("arranger", "apply", { ops: [{ op: "open", urls: ["https://control.example/apply"], window: w }] }, run),
+      send("arranger", "apply", { ops: [{ op: "group.create", urls: ["https://control.example/group"], window: w, name: "G" }] }, run),
+    ];
+    const waiting = new Set([...asks, ...controls].map((a) => a.id));
+    const answered = () => {
+      for (const r of host.replies) waiting.delete(JSON.parse(r.line).id);
+      return waiting.size === 0;
+    };
+    for (let i = 0; i < 20 && !answered(); i++) await settle();
+    assert.deepEqual([...waiting], [], "every request, the three controls included, got its own reply");
+    const replyTo = (id) => host.replies.map((r) => JSON.parse(r.line)).find((r) => r.id === id);
+    for (const control of controls) assert.equal(replyTo(control.id)?.result?.ok, true, `control ${control.id}: ${JSON.stringify(replyTo(control.id))}`);
+  } finally {
+    sink.restore();
+  }
+  for (const control of ["https://control.example/open", "https://control.example/apply", "https://control.example/group"])
+    assert.ok(sink.urls.includes(control), `${control}: a valid address reaches tab creation`);
+  for (const url of sink.urls) {
+    assert.equal(typeof url, "string");
+    assert.match(url, /^https?:\/\/[^/?#\s\\@]+(?:[/?#]|$)/i, JSON.stringify(url).slice(0, 160));
+    assert.doesNotMatch(url, /[\u0000-\u001f\u007f-\u009f\s]/u, JSON.stringify(url).slice(0, 160));
+  }
+});

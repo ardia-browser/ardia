@@ -135,3 +135,11 @@ export function searchQuery(url: string): string | null {
   }
   return null;
 }
+
+export type MenuSwitch = "blockers" | "nightShade" | "desktopSite";
+
+const CLOSES_AND_RELOADS: Record<MenuSwitch, boolean> = { blockers: true, desktopSite: true, nightShade: false };
+
+export const MENU_SWITCH_RELOAD_HINT = "Closes the menu and reloads the page.";
+
+export const menuSwitchHint = (which: MenuSwitch): string | undefined => (CLOSES_AND_RELOADS[which] ? MENU_SWITCH_RELOAD_HINT : undefined);

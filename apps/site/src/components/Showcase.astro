@@ -24,17 +24,18 @@ const demoSrc = `${base}/demo/?embed${fullPage ? "&warm" : ""}`;
           <div class="demo-poster" data-demo-poster>
             <Shot
               src={windowShot}
-              alt="The Ardia window in light mode: pinned tiles and tabs in the sidebar, and Wikipedia’s article on The Hay Wain, John Constable’s painting of a hay cart crossing a river, open on the right."
+              alt="Ardia in light mode with pinned tiles and tabs in the sidebar and Wikipedia open on the right."
               sizes="(max-width: 1440px) 88vw, 1240px"
             />
           </div>
           <div class="demo-stage" data-demo-stage>
             <iframe
               class="demo-frame"
-              src={demoSrc}
+              src={fullPage ? demoSrc : undefined}
+              data-src={fullPage ? undefined : demoSrc}
               title="Ardia, live: try the sidebar, split view and the command bar"
               allow="clipboard-write"
-              loading="eager"></iframe>
+              loading={fullPage ? "eager" : "lazy"}></iframe>
           </div>
         </div>
       </Plate>
@@ -48,11 +49,11 @@ const demoSrc = `${base}/demo/?embed${fullPage ? "&warm" : ""}`;
           </span>
         </div>
         <code class="demo-code-value" data-demo-code-value hidden></code>
-        <p class="demo-code-line" data-demo-code-line hidden>Your setup code goes to your clipboard as the download starts. Paste it on Ardia’s first screen and it sets itself up just like this.</p>
+        <p class="demo-code-line" data-demo-code-line hidden>Downloading copies your setup code. Paste it on Ardia’s first screen to keep these settings.</p>
       </div>
     </figure>
     <aside class="band" aria-label="Download" data-download-band hidden>
-      <p class="band-line poster"><span data-band-lead>That was a screenshot. </span><span>This is the app.</span></p>
+      <p class="band-line poster"><span data-band-lead>Done clicking around? </span><span>Get the app.</span></p>
       <DownloadButton location="office-band" />
     </aside>
   </div>
@@ -131,7 +132,7 @@ const demoSrc = `${base}/demo/?embed${fullPage ? "&warm" : ""}`;
   .demo-nudge,
   .demo-told {
     grid-area: 1 / 1;
-    transition: opacity 400ms var(--ease-out);
+    transition: opacity 200ms var(--ease-out);
   }
   .demo-told,
   .demo[data-engaged] .demo-nudge {
@@ -139,7 +140,7 @@ const demoSrc = `${base}/demo/?embed${fullPage ? "&warm" : ""}`;
   }
   .demo[data-engaged] .demo-told {
     opacity: 1;
-    transition-delay: 250ms;
+    transition-delay: 100ms;
   }
   .by-touch {
     display: none;
@@ -253,7 +254,7 @@ const demoSrc = `${base}/demo/?embed${fullPage ? "&warm" : ""}`;
   @media (prefers-reduced-motion: no-preference) {
     .demo-code,
     .demo-code-line {
-      animation: band-in 600ms var(--ease-out) both;
+      animation: band-in 320ms var(--ease-out) both;
     }
   }
   .demo-code :global(.demo-get) {
@@ -291,14 +292,13 @@ const demoSrc = `${base}/demo/?embed${fullPage ? "&warm" : ""}`;
   }
   .band-line {
     font-size: clamp(2rem, 1.2rem + 2.6vw, 3.6rem);
-    line-height: 0.9;
   }
   .band-line span + span {
     color: var(--accent);
   }
   @media (prefers-reduced-motion: no-preference) {
     .band {
-      animation: band-in 600ms var(--ease-out) both;
+      animation: band-in 320ms var(--ease-out) both;
     }
   }
   @keyframes band-in {

@@ -72,7 +72,8 @@ test("tapping the refusal opens Android System WebView in the Play Store, and th
   webViewWith(true, false);
   const opened = jest.spyOn(Linking, "openURL").mockRejectedValueOnce(new Error("no store")).mockResolvedValue(undefined);
   act(() => browse.newIncognitoTab());
-  act(() => useToasts.getState().toast!.onTap!());
+  expect(useToasts.getState().toast!.action!.label).toBe("Update");
+  act(() => useToasts.getState().toast!.action!.run());
   await act(async () => undefined);
   expect(opened.mock.calls.map(([url]) => url)).toEqual(["market://details?id=com.google.android.webview", "https://play.google.com/store/apps/details?id=com.google.android.webview"]);
 });

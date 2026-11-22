@@ -1,4 +1,3 @@
-import { mobileClean } from "@ardia/core/src/mobile";
 import { blocking } from "../../platform/blocking";
 import { downloads, type DownloadEvent } from "../../platform/downloads";
 import { pages, type PageEngineEvent, type PageRequestAnswer } from "../../platform/pages";
@@ -22,6 +21,7 @@ import { refreshSettings } from "../settings/actions";
 import { openSettings, openSettingsPage, popSettings, type SettingsRoute } from "../settings/nav";
 import { pinToMac, sendTab } from "../sync/actions";
 import type { SyncedDevice } from "../../platform/sync";
+import { linkToCopy } from "./linkCopy";
 import { pageUi, usePageUi, type Press } from "./store";
 import { closeVoiceSearch, useVoice } from "../voice/store";
 import { addOnlineAgainListener } from "../../platform/network";
@@ -31,7 +31,7 @@ import { pageSummariesEnabled, pageSummariesRevision, refreshPageSummariesEnable
 import { dismissArchiveCard } from "../browse/archiveCard";
 import { copy } from "../../lib/platformCopy";
 import { launchValues } from "../../platform/launch";
-import { COPIED_LINK } from "../browse/tabMenus";
+import { actionWords } from "../../lib/sharedWords";
 import { syncData } from "../sync/store";
 import { libraryBack } from "../library/store";
 import { showToast, TOAST_LONG_DURATION_MS } from "../toasts/store";
@@ -39,7 +39,6 @@ import { syncOffered } from "../../platform/system";
 
 const TITLE_FEEDBACK_MS = 1000;
 const FIND_AFTER_MENU_MS = 350;
-const COPIED_URL = "Copied URL";
 const NO_APP_FOR_LINK = "No App Can Open This Link";
 
 const quietly = (call: () => Promise<unknown>) => void settled(call, undefined);
@@ -232,9 +231,10 @@ export const editDockedPageQuery = () => {
 export function copyCurrentLink() {
   const tab = selectedTab();
   if (!tab || !isSyncableUrl(tab.url)) return;
-  quietly(() => copyText(mobileClean(tab.url)));
+  const link = linkToCopy(tab.url);
+  quietly(() => copyText(link.text));
   quietly(successHaptic);
-  showTitleFeedback(COPIED_URL);
+  showTitleFeedback(link.acknowledgement);
 }
 
 export function showTitleFeedback(text: string) {
@@ -379,11 +379,13 @@ export function pressAction(press: Press, action: PressAction) {
       else openTab(tab.id);
       return;
     }
-    case "copy":
-      quietly(() => copyText(mobileClean(plan.url)));
+    case "copy": {
+      const link = linkToCopy(plan.url);
+      quietly(() => copyText(link.text));
       quietly(successHaptic);
-      showToast(COPIED_LINK, "link");
+      showToast(link.acknowledgement, "link");
       return;
+    }
     case "share":
       quietly(() => shareLink(plan.url, ""));
       return;
@@ -428,7 +430,7 @@ function downloadEvent(event: DownloadEvent) {
     return;
   }
   const uri = event.uri;
-  showToast(downloadedToast(event.fileName), "download", TOAST_LONG_DURATION_MS, uri ? () => quietly(() => downloads.open(uri)) : null);
+  showToast(downloadedToast(event.fileName), "download", TOAST_LONG_DURATION_MS, uri ? { label: actionWords.open, run: () => quietly(() => downloads.open(uri)) } : null);
 }
 
 function pageEvent(event: PageEngineEvent) {

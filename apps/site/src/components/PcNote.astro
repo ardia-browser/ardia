@@ -25,13 +25,12 @@ const windowsLink = (arch: "x64" | "arm64") => ({
     {LINUX_NIGHTLY ? "A nightly" : `Ardia ${LINUX_VERSION}`} for x86-64, Wayland or X11. Unpack it, then{" "}
     <code>sudo ardia/install.sh</code>.
   </p>
-  <p class="how label">
-    <span class="windows-only">Updates itself · </span>
-    <span class="linux-only">{LINUX_VERSION} · </span>
-    <a class="link windows-only x64-only" {...windowsLink("arm64")}>On an Arm PC?</a>
-    <a class="link windows-only arm-only" {...windowsLink("x64")}>On an x64 PC?</a>
-    <span class="windows-only"> · </span>
-    <a class="link" {...track} href={DMG} data-track-version={VERSION} data-track-pick="mac">Got a Mac?</a>
+  <p class="how label bits">
+    <span>Updates itself</span>
+    <span class="linux-only">{LINUX_VERSION}</span>
+    <a class="link windows-only x64-only" {...windowsLink("arm64")}>Download for Windows (Arm)</a>
+    <a class="link windows-only arm-only" {...windowsLink("x64")}>Download for Windows (x64)</a>
+    <a class="link" {...track} href={DMG} data-track-version={VERSION} data-track-pick="mac">Download for Mac</a>
   </p>
 </div>
 

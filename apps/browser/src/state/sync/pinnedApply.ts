@@ -1,6 +1,6 @@
 import type { ApplyRecords } from "../../platform/sync";
 import { useBrowser } from "../browser/store";
-import { depthOf, leaveGroups, orderSections, syncGroupOrder, withParent } from "../groups/groups";
+import { depthsIn, leaveGroups, orderSections, syncGroupOrder, withParent } from "../groups/groups";
 import { makeTab, newId, pinKeyOf, ROW_PIN } from "../browser/model";
 import { noteRemotePinDeletion } from "../pins/tabCleanup";
 import { type PinSyncEntry } from "../pins/pinChoices";
@@ -108,20 +108,28 @@ export function applyPinned(profileId: string, visible: Map<string, unknown>, ch
     const parent = p && listed(p) ? gid(p) : null;
     parentGroup.set(id, parent && parent !== id && all.has(parent) ? parent : null);
   }
+  const rooted = new Set<string>();
   for (const start of [...all].sort(byKey)) {
     const path: string[] = [];
-    for (let at: string | null = start; at; at = parentGroup.get(at) ?? null) {
-      const loop = path.indexOf(at);
-      if (loop >= 0) {
+    const onPath = new Map<string, number>();
+    for (let at: string | null = start; at && !rooted.has(at); at = parentGroup.get(at) ?? null) {
+      const loop = onPath.get(at);
+      if (loop !== undefined) {
         parentGroup.set(path.slice(loop).sort(byKey)[0]!, null);
         break;
       }
+      onPath.set(at, path.length);
       path.push(at);
     }
+    for (const at of path) rooted.add(at);
   }
   const chainUp = (id: string) => {
     const out: string[] = [];
-    for (let g: string | null = id; g && !out.includes(g); g = parentGroup.get(g) ?? null) out.push(g);
+    const seen = new Set<string>();
+    for (let g: string | null = id; g && !seen.has(g); g = parentGroup.get(g) ?? null) {
+      seen.add(g);
+      out.push(g);
+    }
     return out;
   };
   const lookOf = (id: string): Pick<PinGroupValue, "n" | "i" | "c"> => (parentGroup.get(id) ? (nestValues.get(id) ?? groupValues.get(id)) : (groupValues.get(id) ?? nestValues.get(id)))!;
@@ -143,21 +151,45 @@ export function applyPinned(profileId: string, visible: Map<string, unknown>, ch
     ...roots.map((id) => ({ id, group: true, pos: groupValues.get(id)?.pos ?? `\uffff${keyOf(id)}` })),
   ].sort(bySlot);
   const kids = new Map<string, Slot[]>();
+  const addKid = (parent: string, slot: Slot) => {
+    const list = kids.get(parent);
+    if (list) list.push(slot);
+    else kids.set(parent, [slot]);
+  };
   const placedGroups = new Set<string>();
   const members = [...pins].filter(([, v]) => v.g).map(([id, v]) => ({ id, group: false, pos: v.pos, chain: chainUp(v.g!).reverse() }));
   for (const m of members.sort(bySlot)) {
     m.chain.forEach((g, i) => {
       if (i === 0 || placedGroups.has(g)) return;
       placedGroups.add(g);
-      kids.set(m.chain[i - 1]!, [...(kids.get(m.chain[i - 1]!) ?? []), { id: g, group: true, pos: "" }]);
+      addKid(m.chain[i - 1]!, { id: g, group: true, pos: "" });
     });
-    kids.set(m.chain.at(-1)!, [...(kids.get(m.chain.at(-1)!) ?? []), m]);
+    addKid(m.chain.at(-1)!, m);
   }
-  const walk = (id: string): Slot[] => (kids.get(id) ?? []).flatMap((x) => (x.group ? [x, ...walk(x.id)] : [x]));
-  const tree = areaSlots.flatMap((x) => (x.group ? [x, ...walk(x.id)] : [x]));
+  const tree: Slot[] = [];
+  const memberIds: string[] = [];
+  const memberRange = new Map<string, [number, number]>();
+  const visiting: { slot: Slot; closing: boolean }[] = [];
+  for (let i = areaSlots.length - 1; i >= 0; i--) visiting.push({ slot: areaSlots[i]!, closing: false });
+  while (visiting.length) {
+    const { slot, closing } = visiting.pop()!;
+    if (closing) {
+      memberRange.get(slot.id)![1] = memberIds.length;
+      continue;
+    }
+    tree.push(slot);
+    if (!slot.group) {
+      memberIds.push(slot.id);
+      continue;
+    }
+    memberRange.set(slot.id, [memberIds.length, memberIds.length]);
+    visiting.push({ slot, closing: true });
+    const inner = kids.get(slot.id) ?? [];
+    for (let i = inner.length - 1; i >= 0; i--) visiting.push({ slot: inner[i]!, closing: false });
+  }
   const groupOrder = tree.filter((x) => x.group).map((x) => x.id);
   const tileOrder = areaSlots.filter((x) => !x.group).map((x) => x.id);
-  const memberOrder = new Map([...all].map((g) => [g, walk(g).filter((x) => !x.group).map((x) => x.id)]));
+  const memberOrder = new Map([...all].map((g) => [g, memberRange.has(g) ? memberIds.slice(...memberRange.get(g)!) : []]));
 
   const goneTabs = [...changed].filter((k) => k.startsWith(PIN_TAB) && !visible.has(k)).map((k) => tid(k.slice(PIN_TAB.length))).filter((id) => contained(id) && scope.has(s.tabs[id]!.windowId));
   const removable = goneTabs.filter((id) => {
@@ -236,7 +268,8 @@ export function applyPinned(profileId: string, visible: Map<string, unknown>, ch
   for (const g of Object.values(groups)) if (g.profileId === profileId && !g.tabIds.length) delete groups[g.id];
   const copied = new Map<string, string>();
   const pinnedHere = Object.values(groups).filter((g) => g.profileId === profileId && g.pinned);
-  for (const { id: groupId } of pinnedHere.map((g) => [g, depthOf(groups, g.id)] as const).sort((a, z) => a[1] - z[1]).map(([g]) => g)) {
+  const depth = depthsIn(groups);
+  for (const { id: groupId } of pinnedHere.map((g) => [g, depth(g.id)] as const).sort((a, z) => a[1] - z[1]).map(([g]) => g)) {
     const g = groups[groupId]!;
     const parent = g.parentId ? groups[g.parentId] : undefined;
     const real = (w: string) => w !== PARK && !!windows[w];

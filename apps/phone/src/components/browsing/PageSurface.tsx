@@ -23,7 +23,7 @@ export function PageSurface({ tab, toneBottom, obscured, summaryBottomInset, top
   const tone = usePageTone(id);
   const failed = useNavigation(id, (n) => n?.failure != null);
   const pageTone = failed ? null : shownTone(tone, tab.themeColorHex);
-  const obscuredColors = obscured ? { top: pageTone?.top ?? theme.surface, bottom: pageTone?.bottom ?? theme.surface } : undefined;
+  const obscuredColors = obscured ? { top: pageTone?.top ?? theme.canvas, bottom: pageTone?.bottom ?? theme.canvas } : undefined;
   const [setup] = useState(() => ({ url: tab.url, title: tab.title, saved: tabSavedState(id) ?? undefined }));
   useEffect(() => {
     registerPageHandle(id, handle.current);
@@ -50,7 +50,7 @@ export function PageSurface({ tab, toneBottom, obscured, summaryBottomInset, top
       reopensOnSwipeForward={canReopen}
       onSwipedPastHistory={(direction) => swipedPastHistory(id, direction)}
       pullToRefresh
-      surfaceColor={theme.surface}
+      surfaceColor={theme.canvas}
       onPageState={(state) => pageStateChanged(id, state)}
       onPageTone={(tone) => pageToneChanged(id, tone)}
       onPageDrawn={() => pageDrawn(id)}

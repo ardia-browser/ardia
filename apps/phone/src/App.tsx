@@ -36,7 +36,7 @@ import { startLinks } from "./state/links/links";
 import { useBaseSystemBars, useSystemBars } from "./state/app/systemBars";
 import { useSearchFromDockedMenu, useSearchOpen } from "./state/search/hooks";
 import { useLeavingTab, useOpeningTab, useSheet, useSurface } from "./state/browse/hooks";
-import { appBecameActive, appWillResignActive, closeArchive, deckPullInFlight, goBackToStartIfEmpty, startBrowser, type Surface } from "./state/browse/store";
+import { appBecameActive, appWillResignActive, closeArchive, deckPullInFlight, goBackToStartIfEmpty, keepFrontPictureCurrent, startBrowser, type Surface } from "./state/browse/store";
 import { refreshHiddenDeck, resizeRoot } from "./state/browse/deckHold";
 import { useDeckStandbyWanted } from "./state/browse/deckStandby";
 import { deckPullGrowing } from "./state/browse/deckPull";
@@ -52,6 +52,7 @@ import { closeSettings } from "./state/settings/nav";
 import { applyLaunchSettings, runLaunchScenario } from "./state/app/launch";
 import { frontSheet } from "./state/settings/settingsRules";
 import { inkLayer, lightStatusIcons } from "./lib/statusInk";
+import { whenIdle } from "./lib/whenIdle";
 import { countUsage, reportLaunch, startTelemetry } from "./state/telemetry/telemetry";
 import { useIncognito, useSelectedTab } from "./state/tabs/hooks";
 import { syncOffered } from "./state/sync/offer";
@@ -179,7 +180,7 @@ export function Surfaces() {
   const layer = inkLayer({ onboarding, voice, sheet: sheetCovers, searching: searching || libraryCovers, surface });
   const incognitoScheme = useMaterialTheme(true).scheme;
   const behind = material && incognito ? incognitoScheme.surface : theme.backdrop[0];
-  const lightIcons = settingsScreen && layer === "sheet" ? theme.dark : lightStatusIcons(layer, { cover: behind, surface: theme.surface, deck: behind, incognito: incognito && !libraryCovers });
+  const lightIcons = settingsScreen && layer === "sheet" ? theme.dark : lightStatusIcons(layer, { cover: behind, surface: theme.canvas, deck: behind, incognito: incognito && !libraryCovers });
   useEffect(goBackToStartIfEmpty, [tab, surface]);
   const duo = useScreenLayout((s) => s.layout.name === "wide" || s.layout.name === "split");
   const deckMounted = useDeckStandby(surface, surface === "browsing" && tab !== null && opening === null && leaving === null && !searching && !voice && !onboarding && front === null && !settingsScreen, tab?.id ?? null);
@@ -242,8 +243,8 @@ function PageLayer({ away, unseen, children }: { away: boolean; unseen: boolean;
       style={[StyleSheet.absoluteFill, unseen ? styles.unseen : null]}
       pointerEvents={away ? "none" : "box-none"}
       collapsable={false}
-      importantForAccessibility={unseen ? "no-hide-descendants" : "auto"}
-      accessibilityElementsHidden={unseen}
+      importantForAccessibility={unseen || away ? "no-hide-descendants" : "auto"}
+      accessibilityElementsHidden={unseen || away}
     >
       {children}
     </View>
@@ -281,11 +282,11 @@ function useDeckStandby(surface: Surface, pageSettled: boolean, pageId: string |
   }
   useEffect(() => {
     if (!pageSettled) return;
-    const settle = setTimeout(() => {
+    return whenIdle(() => {
+      keepFrontPictureCurrent();
       if (!standby) startTransition(() => setStandby(true));
       else if (!deckPullInFlight()) refreshHiddenDeck();
-    }, tabsMotion.deckStandby);
-    return () => clearTimeout(settle);
+    }, tabsMotion.deckStandby, tabsMotion.deckStandbyIdle);
   }, [pageSettled, pageId, standby]);
   return surface !== "start" && (standby || surface === "deck");
 }

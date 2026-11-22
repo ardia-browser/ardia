@@ -5,6 +5,7 @@ export type OpeningGate = (url: string, context: OpeningContext, signal: AbortSi
 
 let gate: OpeningGate | null = null;
 const holds = new Map<string, AbortController>();
+const admitted = new WeakSet<AbortSignal>();
 
 export const setOpeningGate = (next: OpeningGate | null) => {
   gate = next;
@@ -55,11 +56,16 @@ export function gateOpening(url: string, context: OpeningContext, key: string | 
   return { pending, signal };
 }
 
+export const openingSignal = (key: string): AbortSignal | null => holds.get(key)?.signal ?? null;
+
+export const openingAdmitted = (signal: AbortSignal) => admitted.has(signal);
+
 export function settleOpening<T>(gated: ReturnType<typeof gateOpening>, key: string | null, apply: (verdict: OpeningVerdict) => T): T | undefined {
   if ("verdict" in gated) return apply(gated.verdict);
   void gated.pending.then((verdict) => {
     if (gated.signal.aborted) return;
     if (key) releaseOpening(key, gated.signal);
+    if (!(verdict && "cancel" in verdict)) admitted.add(gated.signal);
     apply(verdict);
   });
   return undefined;

@@ -32,13 +32,11 @@ function watchTone(title: HTMLElement) {
   let sent = "";
   const send = () => {
     const tone = title.dataset.tone ?? (opensAtNight ? "dark" : "light");
-    const halo = Number.parseFloat(title.style.getPropertyValue("--halo")) || 0;
-    const key = `${tone}:${halo}`;
-    if (key === sent) return;
-    sent = key;
-    post({ state: "tone", tone, halo });
+    if (tone === sent) return;
+    sent = tone;
+    post({ state: "tone", tone, halo: 0 });
   };
-  new MutationObserver(send).observe(title, { attributes: true, attributeFilter: ["data-tone", "style"] });
+  new MutationObserver(send).observe(title, { attributes: true, attributeFilter: ["data-tone"] });
   send();
 }
 
@@ -52,7 +50,6 @@ function boot(hero: HTMLElement) {
   const meadow = createMeadow({
     canvas,
     hero,
-    hint: null,
     reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
     opening: opensAtNight ? [DUSK, NIGHT] : [SUNRISE_FROM, SUNRISE_TO],
     onFirstFrame() {

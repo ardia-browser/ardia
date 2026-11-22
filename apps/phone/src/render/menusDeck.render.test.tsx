@@ -156,7 +156,7 @@ nativeTest("the ··· menu is main's DeckMoreMenu on a tap, in fixed order, and
   const more = menuAround(root, "More");
   expect(more.props.trigger).toBe("tap");
   expect(more.props.fixedOrder).toBe(true);
-  expect(titles(items(more))).toEqual(["Spaces From Your Mac", { "": ["New Incognito Tab", "Reopen Closed Tab", "Close All Tabs"] }, { "": ["Settings"] }]);
+  expect(titles(items(more))).toEqual(["Spaces", { "": ["New Incognito Tab", "Reopen Closed Tab", "Close All Tabs"] }, { "": ["Settings"] }]);
   expect(itemOf(items(more), "Close All Tabs")!.destructive).toBe(true);
   choose(more, "Settings");
   expect(settings).toHaveBeenCalledTimes(1);
@@ -290,7 +290,7 @@ drawnTest("on Android the ··· menu is drawn with main's items, and Close All 
   const closeAll = jest.spyOn(browse, "closeAllFromDeck").mockImplementation(() => undefined);
   const root = deck();
   press(root, "More");
-  expect(menuitems(root)).toEqual(["Spaces From Your Mac", "New Incognito Tab", "Reopen Closed Tab", "Close All Tabs", "Settings"]);
+  expect(menuitems(root)).toEqual(["Spaces", "New Incognito Tab", "Reopen Closed Tab", "Close All Tabs", "Settings"]);
   expectEvenRows(root);
   pick(root, "Close All Tabs");
   expect(mockNative.sheets).toHaveLength(0);

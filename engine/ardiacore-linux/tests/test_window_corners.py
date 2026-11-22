@@ -92,6 +92,13 @@ class WindowCornersTests(unittest.TestCase):
         self.assertIn('for (const char* capability : ardia::linux_window_corners::kWindowCornersCapabilities) capabilities.Append(capability);', HOST)
         self.assertIn('bootstrap.Set("shellZoom", blink::ZoomLevelToZoomFactor(', HOST)
 
+    def test_a_viewport_rounds_out_from_doubles_and_windows_report_the_decision_the_frame_follows(self):
+        viewport = between(HOST, 'void ShellHostView::SetViewport(', '\n}\n')
+        self.assertIn('linux_window_corners::EnclosingBox(left, top, right, bottom)', viewport)
+        self.assertNotIn('gfx::RectF(left, top', viewport)
+        decorations = between(HOST, 'base::DictValue ShellHostView::WindowDecorationsValue() const {', '\n}\n')
+        self.assertIn('DecoratedByName(FrameIsBorderless())', decorations)
+
     def test_the_corners_follow_every_change_of_frame_or_window_state(self):
         self.assertIn('  RoundWindowCorners();\n  browser_view_->GetActiveContentsWebView()->SetVisible(false);',
                       between(HOST, 'void ShellHostView::LayoutOverlay() {', '\n}\n'))

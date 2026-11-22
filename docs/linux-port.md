@@ -927,9 +927,9 @@ pnpm --filter @ardia/linux acceptance -- <extracted>/ardia/bin/ardia
   `ArdiaShell.windowDecorations` `[windowId]` answers `{ decoratedBy: "app" | "compositor", answer: "none" | "client" |
   "server", corners: { upperLeft, upperRight, lowerRight, lowerLeft } }` (the frame's corner radii in DIP), and an
   `ArdiaShell` event of the same name follows each change of any of them. Every window, Settings and Import too,
-  counts them in `usage_counts`: `linux_windows_app_decorated` or `linux_windows_compositor_decorated` when the
-  decision changes, and `linux_decoration_answers_none`, `_client` or `_server` once per window when the answer
-  settles (a client or server answer at once, no answer after 5 seconds).
+  counts itself once in `usage_counts` when its answer settles (a client or server answer at once, no answer after 5
+  seconds): `linux_windows_app_decorated` or `linux_windows_compositor_decorated` for the decision at that moment, and
+  `linux_decoration_answers_none`, `_client` or `_server`. `decoratedBy` is the decision the frame follows.
   - Where the app decorates (GNOME, KDE, other floating desktops): Chromium's frame stays, with the shadow, outline
     and corner shape its theme gives it (GTK's own decoration when the GTK frame is in use, which renders a sample to
     measure the radius once per frame provider). The host clips its UI to that shape, like `overflow: clip` with the

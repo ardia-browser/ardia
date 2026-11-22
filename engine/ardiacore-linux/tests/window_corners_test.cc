@@ -1,6 +1,8 @@
 #include <cassert>
 #include <cmath>
 #include <cstdio>
+#include <limits>
+#include <utility>
 
 #include "ardia/linux/ac_linux_window_corners.h"
 
@@ -89,6 +91,37 @@ int main() {
     }
     const corners::Corners lopsided = corners::ClipToWindow({.x = 0, .y = 5, .width = 900, .height = 695}, 900, 700, window, kCard);
     assert(lopsided.upper_left == std::fmax(kCard, window_radius));
+  }
+  for (const float window_radius : {8.0f, 12.0f, 15.0f, 19.0f, 24.0f}) {
+    const corners::Corners window{window_radius, window_radius, window_radius, window_radius};
+    for (const auto& [inset_x, inset_y] : {std::pair{0, 3}, std::pair{1, 5}, std::pair{2, 9}, std::pair{4, 1}, std::pair{7, 2},
+                                           std::pair{3, 14}, std::pair{11, 6}}) {
+      const corners::Corners page = corners::ClipToWindow(
+          {.x = inset_x, .y = inset_y, .width = 900 - 2 * inset_x, .height = 700 - 2 * inset_y}, 900, 700, window, kCard);
+      const float radius = page.upper_left;
+      for (int y = inset_y; y < inset_y + 40; ++y) {
+        for (int x = inset_x; x < inset_x + 40; ++x) {
+          const float px = x + 0.5f;
+          const float py = y + 0.5f;
+          const float page_cx = static_cast<float>(inset_x) + radius;
+          const float page_cy = static_cast<float>(inset_y) + radius;
+          const bool in_page = !(px < page_cx && py < page_cy) || std::hypot(px - page_cx, py - page_cy) <= radius;
+          const bool in_window = !(px < window_radius && py < window_radius) ||
+                                 std::hypot(px - window_radius, py - window_radius) <= window_radius;
+          assert(!in_page || in_window || (inset_x == 0 && inset_y == 0));
+        }
+      }
+    }
+  }
+  {
+    const corners::Box box = corners::EnclosingBox(0.75, 0.2, 998.25, 699.5);
+    assert(box.x == 0 && box.y == 0 && box.width == 999 && box.height == 700);
+    const corners::Box near_one = corners::EnclosingBox(0.99999999999, 0.0, 1000.00000000001, 700.0);
+    assert(near_one.x == 0 && near_one.width == 1001);
+    const corners::Box exact = corners::EnclosingBox(1.0, 2.0, 999.0, 698.0);
+    assert(exact.x == 1 && exact.y == 2 && exact.width == 998 && exact.height == 696);
+    const corners::Box huge = corners::EnclosingBox(-1e300, 0.0, 1e300, std::nan(""));
+    assert(huge.x == std::numeric_limits<int>::min() && huge.width == std::numeric_limits<int>::max() && huge.height == 0);
   }
   std::puts("ok");
   return 0;

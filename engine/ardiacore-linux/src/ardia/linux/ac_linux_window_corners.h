@@ -1,7 +1,9 @@
 #ifndef ARDIA_LINUX_AC_LINUX_WINDOW_CORNERS_H_
 #define ARDIA_LINUX_AC_LINUX_WINDOW_CORNERS_H_
 
+#include <cmath>
 #include <cstddef>
+#include <limits>
 #include <string_view>
 
 namespace ardia::linux_window_corners {
@@ -96,6 +98,32 @@ struct Box {
   int width = 0;
   int height = 0;
 };
+
+inline int ClampedFloor(double value) {
+  const double floored = std::floor(value);
+  if (!(floored > std::numeric_limits<int>::min())) return std::numeric_limits<int>::min();
+  if (floored >= std::numeric_limits<int>::max()) return std::numeric_limits<int>::max();
+  return static_cast<int>(floored);
+}
+
+inline int ClampedCeil(double value) {
+  const double ceiled = std::ceil(value);
+  if (!(ceiled > std::numeric_limits<int>::min())) return std::numeric_limits<int>::min();
+  if (ceiled >= std::numeric_limits<int>::max()) return std::numeric_limits<int>::max();
+  return static_cast<int>(ceiled);
+}
+
+inline int ClampedSpan(int from, int to) {
+  const long long span = static_cast<long long>(to) - static_cast<long long>(from);
+  if (span <= 0) return 0;
+  return span >= std::numeric_limits<int>::max() ? std::numeric_limits<int>::max() : static_cast<int>(span);
+}
+
+inline Box EnclosingBox(double left, double top, double right, double bottom) {
+  const int x = ClampedFloor(left);
+  const int y = ClampedFloor(top);
+  return Box{.x = x, .y = y, .width = ClampedSpan(x, ClampedCeil(right)), .height = ClampedSpan(y, ClampedCeil(bottom))};
+}
 
 constexpr float NearCornerRadius(int inset_x, int inset_y, float window_radius, float own_radius) {
   if (inset_x < 1 && inset_y < 1) return window_radius;

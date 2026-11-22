@@ -4726,7 +4726,7 @@ bool ShellHostView::FrameIsBorderless() const {
 base::DictValue ShellHostView::WindowDecorationsValue() const {
   const linux_window_corners::Corners corners = window_corners_.value_or(linux_window_corners::Corners());
   return base::DictValue()
-      .Set("decoratedBy", linux_window_corners::DecoratedByName(DecoratedByCompositor()))
+      .Set("decoratedBy", linux_window_corners::DecoratedByName(FrameIsBorderless()))
       .Set("answer", linux_window_corners::AnswerName(DecorationAnswer()))
       .Set("corners", base::DictValue()
                           .Set("upperLeft", corners.upper_left)
@@ -6152,7 +6152,8 @@ void ShellHostView::SetViewport(
   const double top = std::clamp(y * scale, 0.0, static_cast<double>(this->height()));
   const double right = std::clamp((x + width) * scale, left, static_cast<double>(this->width()));
   const double bottom = std::clamp((y + height) * scale, top, static_cast<double>(this->height()));
-  const gfx::Rect bounds = gfx::ToEnclosingRect(gfx::RectF(left, top, right - left, bottom - top));
+  const linux_window_corners::Box box = linux_window_corners::EnclosingBox(left, top, right, bottom);
+  const gfx::Rect bounds(box.x, box.y, box.width, box.height);
   if (!binding->viewport()) {
     binding->SetViewport(AddChildView(std::make_unique<ViewportView>(ProfileOf(binding->contents()->GetBrowserContext()))));
   }

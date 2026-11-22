@@ -5,15 +5,17 @@ import type { MethodSpec } from "./socketCatalog";
 import { obj, WINDOW } from "./socketSchema";
 import { now, windowOf } from "./socketTargets";
 import { OpError } from "./workspaceTargets";
+import { t } from "../../lib/uiLanguage";
 
-const CODE = { type: "string", description: "A setup code like ardia1-…, from the demo on ardia.dev" } as const;
+
+const CODE = { type: "string", description: t(`A setup code like ardia1-…, from the demo on ardia.dev`) } as const;
 
 function windowFor(params: Record<string, unknown>): string | null {
   if (params.window !== undefined) return windowOf(params.window, ["normal"]).id;
   const s = now();
   const main = s.ui.focusOrder.find((w) => eligibleKind(s, w) === "normal") ?? s.windowOrder.find((w) => eligibleKind(s, w) === "normal");
   if (main) return main;
-  if (s.windowOrder.length) throw new OpError("no_window", "No window the ardia command can use is open.");
+  if (s.windowOrder.length) throw new OpError("no_window", t(`No window the ardia command can use is open.`));
   return null;
 }
 
@@ -37,13 +39,13 @@ function apply(params: Record<string, unknown>) {
 }
 
 export const PRESET_METHODS: MethodSpec[] = [
-  { name: "presets.describe", mutates: false, description: "What a setup code would change, without changing anything", params: obj({ code: CODE }, ["code"]), result: "{preset, settings, color, pins, lines}", run: describe },
+  { name: "presets.describe", mutates: false, description: t(`What a setup code would change, without changing anything`), params: obj({ code: CODE }, ["code"]), result: t(`{preset, settings, color, pins, lines}`), run: describe },
   {
     name: "presets.apply",
     mutates: true,
-    description: "Apply a setup code as Settings › Apply a setup code does: layout and look settings, the window's profile colour and its pinned apps",
-    params: obj({ code: CODE, window: { ...WINDOW, description: "The window whose profile takes the colour and pinned apps; the focused one when left out" } }, ["code"]),
-    result: "{ok, window, lines}",
+    description: t(`Apply a setup code as Settings › Apply a setup code does: layout and look settings, the window's profile colour and its pinned apps`),
+    params: obj({ code: CODE, window: { ...WINDOW, description: t(`The window whose profile takes the colour and pinned apps; the focused one when left out`) } }, ["code"]),
+    result: t(`{ok, window, lines}`),
     run: apply,
   },
 ];

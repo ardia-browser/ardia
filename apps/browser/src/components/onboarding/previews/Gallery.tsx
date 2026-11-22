@@ -24,6 +24,8 @@ import { useBasePaletteValue } from "../../../state/config/hooks";
 import { MockWindow } from "./MockWindow";
 import { mockInk } from "./tokens";
 import { devRegister } from "../../dev/devRegister";
+import { t } from "../../../lib/uiLanguage";
+
 
 const FRAME_POINTS = [0.2, 0.4, 0.65, 1] as const;
 const FRAMES_PER_PAGE = 4;
@@ -33,16 +35,16 @@ const ARC: Partial<Settings> = { tabLayout: "sidebar", addressBar: "sidebar", co
 
 const MOCK_PAGES: MockState[][] = [
   [
-    { label: "Dia preset, light, plum", settings: DIA, accent: PLUM, focus: null },
-    { label: "Arc preset, dark, blue", settings: ARC, accent: PROFILE_COLORS.blue.swatch, focus: null },
-    { label: "Auto appearance, top tabs, green", settings: { tabLayout: "top", appearance: "auto", extendWebsiteColor: true }, accent: PROFILE_COLORS.green.swatch, focus: null },
-    { label: "Website color off, orange", settings: { ...DIA, extendWebsiteColor: false }, accent: PROFILE_COLORS.orange.swatch, focus: null },
+    { label: t(`Dia preset, light, plum`), settings: DIA, accent: PLUM, focus: null },
+    { label: t(`Arc preset, dark, blue`), settings: ARC, accent: PROFILE_COLORS.blue.swatch, focus: null },
+    { label: t(`Auto appearance, top tabs, green`), settings: { tabLayout: "top", appearance: "auto", extendWebsiteColor: true }, accent: PROFILE_COLORS.green.swatch, focus: null },
+    { label: t(`Website color off, orange`), settings: { ...DIA, extendWebsiteColor: false }, accent: PROFILE_COLORS.orange.swatch, focus: null },
   ],
   [
-    { label: "⌘L field, sidebar address", settings: { ...DIA, addressBar: "sidebar" }, accent: PLUM, focus: "cmdl-field" },
-    { label: "⌘L field, toolbar address, dark", settings: { ...DIA, appearance: "dark" }, accent: PROFILE_COLORS.blue.swatch, focus: "cmdl-field" },
-    { label: "⌘L centred", settings: DIA, accent: PROFILE_COLORS.purple.swatch, focus: "cmdl-centred" },
-    { label: "Website color on", settings: DIA, accent: PLUM, focus: "sitecolor-on" },
+    { label: t(`⌘L field, sidebar address`), settings: { ...DIA, addressBar: "sidebar" }, accent: PLUM, focus: "cmdl-field" },
+    { label: t(`⌘L field, toolbar address, dark`), settings: { ...DIA, appearance: "dark" }, accent: PROFILE_COLORS.blue.swatch, focus: "cmdl-field" },
+    { label: t(`⌘L centred`), settings: DIA, accent: PROFILE_COLORS.purple.swatch, focus: "cmdl-centred" },
+    { label: t(`Website color on`), settings: DIA, accent: PLUM, focus: "sitecolor-on" },
   ],
 ];
 

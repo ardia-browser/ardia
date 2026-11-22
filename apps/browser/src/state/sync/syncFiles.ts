@@ -6,6 +6,8 @@ import { APP_SCOPE, DOC, DOC_MIGRATIONS, DOC_VERSION, JOURNAL, STATE, defaultTyp
 import { isFields, numberOr, stringOr } from "../../lib/decode";
 import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
+import { t } from "../../lib/uiLanguage";
+
 
 type Journal = Record<string, LogFile[]>;
 type ScopeChange = { records: Record<string, SyncRecord | null>; base: Record<string, string | null>; rest: Partial<ScopeState> };
@@ -111,7 +113,7 @@ export function syncFiles(current: () => SyncDoc) {
       docFile.json = json ?? "";
       return loaded;
     } catch (error) {
-      console.warn("[sync] couldn't read sync.json", error);
+      console.warn(t(`[sync] couldn't read sync.json`), error);
       return null;
     }
   }
@@ -220,7 +222,7 @@ export function syncFiles(current: () => SyncDoc) {
           await writePart(part);
           writtenRest.set(scope, rest);
         } catch (error) {
-          warnFor(consent, "[sync] couldn't journal this cycle's changes", error);
+          warnFor(consent, t(`[sync] couldn't journal this cycle's changes`), error);
           state.wanted = true;
         }
       });
@@ -283,7 +285,7 @@ export function syncFiles(current: () => SyncDoc) {
         if (!sealed) return;
         await saveDocument(STATE, sealed);
       } catch (error) {
-        warnFor(consent, "[sync] couldn't save the sync state", error);
+        warnFor(consent, t(`[sync] couldn't save the sync state`), error);
         return;
       }
       Object.assign(state, { json, onDisk: true });

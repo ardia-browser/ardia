@@ -14,6 +14,8 @@ import { useHoverCardOrigin } from "../sidebar/hoverMotion";
 import type { Anchor } from "../../state/sidebar/sidebarUi";
 import { TabIcon } from "../sidebar/TabIcon";
 import { liveMotion, liveType, useLiveColors, type LiveColors } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 const PREVIEW_GAP = space.m;
 const CI_BAR = 6;
@@ -82,7 +84,7 @@ function PullRequestPreview({ item, folderId, windowId }: { item: LiveItem; fold
         <Text lines={1} size="small" tone="textSecondary" style={FILL}>
           <Span style={{ fontWeight: weight.semibold, color: theme.textPrimary }}>{pr.author}</Span> · {pr.repo} #{pr.number}
         </Text>
-        {pr.draft ? <Badge text="Draft" outline color={colors.draft} /> : null}
+        {pr.draft ? <Badge text={t(`Draft`)} outline color={colors.draft} /> : null}
       </Box>
       <Text lines={3} style={liveType.heading}>
         {item.title}
@@ -106,9 +108,9 @@ function PullRequestPreview({ item, folderId, windowId }: { item: LiveItem; fold
       {pr.mergeable === "conflicting" ? (
         <Box row gap="m" style={CENTER}>
           <View style={FILL}>
-            <StatusLine symbol="exclamationmark.triangle.fill" color={colors.conflict} text="This branch has conflicts" />
+            <StatusLine symbol="exclamationmark.triangle.fill" color={colors.conflict} text={t(`This branch has conflicts`)} />
           </View>
-          <Button variant="pill" tone="chip" title="Resolve Conflicts" onPress={() => open(windowId, `${item.url}/conflicts`)} />
+          <Button variant="pill" tone="chip" title={t(`Resolve Conflicts`)} onPress={() => open(windowId, `${item.url}/conflicts`)} />
         </Box>
       ) : null}
 
@@ -116,7 +118,7 @@ function PullRequestPreview({ item, folderId, windowId }: { item: LiveItem; fold
         <StatusLine
           symbol={pr.review === "approved" ? "checkmark.seal.fill" : pr.review === "changesRequested" ? "arrow.uturn.backward.circle.fill" : "eye"}
           color={pr.review === "approved" ? colors.success : pr.review === "changesRequested" ? colors.failure : theme.textSecondary}
-          text={pr.review === "approved" ? "Approved" : pr.review === "changesRequested" ? "Changes Requested" : item.section === "authored" ? "Review required" : "Needs your review"}
+          text={pr.review === "approved" ? t(`Approved`) : pr.review === "changesRequested" ? t(`Changes Requested`) : item.section === "authored" ? t(`Review required`) : t(`Needs your review`)}
         />
       ) : null}
 
@@ -131,7 +133,7 @@ function PullRequestPreview({ item, folderId, windowId }: { item: LiveItem; fold
         >
           <Symbol name="bubble.left" size={10.5} color={theme.textSecondary} style={GLYPH_14} />
           <Text size="caption" tone="textSecondary" style={SHRINK}>
-            {pr.comments === 1 ? "1 comment" : `${pr.comments} comments`}
+            {pr.comments === 1 ? t(`1 comment`) : `${pr.comments} comments`}
             {pr.unresolvedThreads ? ` · ${pr.unresolvedThreads} unresolved` : ""}
           </Text>
         </Pressable>

@@ -1,9 +1,10 @@
+import { t } from "../../lib/uiLanguage";
 export const INTRO_COPY = {
-  tagline: "Your new home on the internet",
-  skip: "Skip",
-  skipHint: "Button that skips the onboarding intro animation",
-  mute: "Mute intro music",
-  unmute: "Unmute intro music",
+  tagline: t(`Your new home on the internet`),
+  skip: t(`Skip`),
+  skipHint: t(`Button that skips the onboarding intro animation`),
+  mute: t(`Mute intro music`),
+  unmute: t(`Unmute intro music`),
 } as const;
 
 export const INTRO_LOOK = {

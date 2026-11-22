@@ -7,13 +7,15 @@ import { ExtensionTile, SITE_PANEL, TileGrid } from "./SiteControlsParts";
 import { SectionLabel } from "../sidebar/SectionLabel";
 import { noteSiteControls } from "../../state/telemetry/usage";
 import { Button, PANEL } from "../ui";
+import { t } from "../../lib/uiLanguage";
+
 
 export function SiteExtensions({ windowId, tabId, columns, onClose }: { windowId: string; tabId: string; columns: number; onClose: () => void }) {
   const extensions = useWindowExtensions(windowId);
   return (
     <>
       <SectionLabel
-        title="Extensions"
+        title={t(`Extensions`)}
         inset={PANEL.inset}
         top={SITE_PANEL.sectionTop}
         bottom={SITE_PANEL.sectionGap}
@@ -23,8 +25,8 @@ export function SiteExtensions({ windowId, tabId, columns, onClose }: { windowId
             look="link"
             pad="none"
             size="caption"
-            title="Manage"
-            label="Manage Extensions"
+            title={t(`Manage`)}
+            label={t(`Manage Extensions`)}
             onPress={() => {
               onClose();
               noteSiteControls("manageExtensions");
@@ -38,7 +40,7 @@ export function SiteExtensions({ windowId, tabId, columns, onClose }: { windowId
           <ExtensionGridTile key={ext.id} ext={ext} windowId={windowId} tabId={tabId} onClose={onClose} />
         ))}
         <ExtensionTile
-          name="Add Extension"
+          name={t(`Add Extension`)}
           icon={null}
           symbol="plus"
           onPress={() => {

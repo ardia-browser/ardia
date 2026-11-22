@@ -3,6 +3,8 @@ import { useBrowser } from "../browser/store";
 import { extensionProfile } from "./store";
 import { showToast } from "../app/toasts";
 import { focusedWindowOf } from "../windows/ui";
+import { t } from "../../lib/uiLanguage";
+
 
 export function crxPath(url: string): string | null {
   const encoded = /^file:\/\/(\/[^/?#][^?#]*)$/i.exec(url)?.[1];
@@ -16,7 +18,7 @@ export function crxPath(url: string): string | null {
 }
 
 const toast = (windowId: string, message: string) =>
-  showToast(windowId, "Couldn't add the extension", message, { icon: "puzzlepiece.extension" });
+  showToast(windowId, t(`Couldn't add the extension`), message, { icon: "puzzlepiece.extension" });
 
 export function takesCrxDrops(windowId: string): boolean {
   const w = useBrowser.getState().windows[windowId];

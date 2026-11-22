@@ -11,6 +11,8 @@ import { Box, Button, DialogActions, DialogTitle, Divider, Dot, Group, PROFILE_C
 import { profileColors, SHARE_ROW_HEIGHT } from "./tokens";
 import { ThemeSwatches } from "../settings/ThemeEditor";
 import { closeSettingsSheet, showSettingsSheet } from "../../state/settings/sheet";
+import { t } from "../../lib/uiLanguage";
+
 
 useCreateProfileRequest.subscribe((s, prev) => {
   if (!s.sheet || s.sheet === prev.sheet) return;
@@ -52,19 +54,19 @@ function CreateProfileSheet({ windowId, preset, onDone }: { windowId: string | n
   return (
     <Sheet size="s" onClose={() => onDone(null)}>
       <Box gap="xl">
-        <DialogTitle subtitle="Profiles separate your logins, cookies, passwords, extensions, history and bookmarks.">Create a Profile</DialogTitle>
+        <DialogTitle subtitle={t(`Profiles separate your logins, cookies, passwords, extensions, history and bookmarks.`)}>Create a Profile</DialogTitle>
         <Box gap="l">
-          <TextField value={name} onChangeText={setName} placeholder="Profile name" autoFocus onSubmit={submit} onEscape={() => onDone(null)} />
+          <TextField value={name} onChangeText={setName} placeholder={t(`Profile name`)} autoFocus onSubmit={submit} onEscape={() => onDone(null)} />
           <ThemeSwatches color={color} onPreset={setColor} />
         </Box>
         <Group>
           <Row
-            title={single ? "Share data with current profile" : "Share data with another profile"}
+            title={single ? t(`Share data with current profile`) : t(`Share data with another profile`)}
             description={
               share
                 ? single
-                  ? "This profile will share your cookies, logins, passwords, extensions, bookmarks and history with your current profile. Tabs stay separate."
-                  : "This profile will share your cookies, logins, passwords, extensions, bookmarks and history with another profile you choose. Tabs stay separate."
+                  ? t(`This profile will share your cookies, logins, passwords, extensions, bookmarks and history with your current profile. Tabs stay separate.`)
+                  : t(`This profile will share your cookies, logins, passwords, extensions, bookmarks and history with another profile you choose. Tabs stay separate.`)
                 : undefined
             }
           >
@@ -91,8 +93,8 @@ function CreateProfileSheet({ windowId, preset, onDone }: { windowId: string | n
         </Group>
       </Box>
       <DialogActions>
-        <Button title="Cancel" onPress={() => onDone(null)} />
-        <Button title="Create Profile" kind="primary" onPress={submit} />
+        <Button title={t(`Cancel`)} onPress={() => onDone(null)} />
+        <Button title={t(`Create Profile`)} kind="primary" onPress={submit} />
       </DialogActions>
     </Sheet>
   );

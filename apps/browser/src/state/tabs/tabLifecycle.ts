@@ -13,6 +13,8 @@ import { startMemorySaver } from "./memorySaver";
 import { noteTabGone, noteTabWoke, startLoadedTabBudget } from "./loadedTabBudget";
 import { focusedWindowOf } from "../windows/ui";
 import { noteTabSlept } from "../telemetry/tabSleepCounts";
+import { t } from "../../lib/uiLanguage";
+
 
 export { useIsSleeping, useLifecycle } from "./sleepingTabs";
 
@@ -89,12 +91,12 @@ function updateBatterySaver(announce: boolean) {
   const windowId = focusedWindowOf(store());
   if (!announce || !windowId || !store().windows[windowId]) return;
   if (on) {
-    showToast(windowId, "Battery Saver Mode Activated", "Busy background tabs are paused.", {
+    showToast(windowId, t(`Battery Saver Mode Activated`), t(`Busy background tabs are paused.`), {
       icon: "battery.25",
-      action: { title: "Settings", run: () => openSettings("advanced") },
+      action: { title: t(`Settings`), run: () => openSettings("advanced") },
     });
   } else {
-    showToast(windowId, "Battery Saver Mode Deactivated", undefined, { icon: "battery.100.bolt" });
+    showToast(windowId, t(`Battery Saver Mode Deactivated`), undefined, { icon: "battery.100.bolt" });
   }
 }
 

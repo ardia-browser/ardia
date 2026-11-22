@@ -1,6 +1,8 @@
 import { Easing } from "react-native-reanimated";
 import { font, iPhoneOr, settingsLayout, shape, space } from "../ui";
 import type { Motion } from "../ui/motion";
+import { t } from "../../lib/uiLanguage";
+
 
 type Curve = readonly [number, number, number, number];
 
@@ -29,7 +31,7 @@ export const onboardingLayout = {
   rowInset: space.l,
   cardInset: space.xs,
   cardRadius: shape.card,
-  cardShadow: "0px 6px 28px rgba(0, 0, 0, 0.07)",
+  cardShadow: t(`0px 6px 28px rgba(0, 0, 0, 0.07)`),
   sketchScale: iPhoneOr(1.22, 1),
   rowIcons: iPhoneOr(false, true),
   tipIcons: iPhoneOr(false, true),

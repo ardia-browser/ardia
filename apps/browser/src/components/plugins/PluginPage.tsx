@@ -10,6 +10,8 @@ import { panelOfPath, wakeForFilePage } from "../../state/plugins/pages";
 import { openSettings } from "../../state/settings/settingsWindows";
 import { PluginFileView } from "./PluginFileView";
 import { PluginSurface } from "./PluginSurface";
+import { t } from "../../lib/uiLanguage";
+
 
 function Notice({ title, detail, name }: { title: string; detail: string; name: string }) {
   return (
@@ -18,7 +20,7 @@ function Notice({ title, detail, name }: { title: string; detail: string; name: 
         {title}
       </Text>
       <Text tone="textSecondary">{detail}</Text>
-      <Button title="Open Plugin Settings" onPress={() => openSettings("plugins", null, name)} />
+      <Button title={t(`Open Plugin Settings`)} onPress={() => openSettings("plugins", null, name)} />
     </Box>
   );
 }
@@ -48,8 +50,8 @@ export function PluginPage({ tabId, name }: { tabId: string; name: string }) {
   useEffect(() => {
     if (eligible && active && url) wakeForFilePage(name, path);
   }, [eligible, active, url, name, path]);
-  if (!eligible) return <Notice name={name} title="Plugins aren't available in private windows" detail="Open this plugin in a regular window." />;
-  if (!active || (!spec && !viewPanel)) return <Notice name={name} title={`${title} is off`} detail="Turn the plugin on in Settings › Plugins to use its page." />;
+  if (!eligible) return <Notice name={name} title={t(`Plugins aren't available in private windows`)} detail={t(`Open this plugin in a regular window.`)} />;
+  if (!active || (!spec && !viewPanel)) return <Notice name={name} title={`${title} is off`} detail={t(`Turn the plugin on in Settings › Plugins to use its page.`)} />;
   if (viewPanel?.view && !url) {
     return (
       <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.card }]}>
@@ -61,7 +63,7 @@ export function PluginPage({ tabId, name }: { tabId: string; name: string }) {
   }
   if (!url) {
     const failed = process?.state === "crashed" || process?.state === "failed";
-    return <Notice name={name} title={failed ? `${title} stopped` : `${title} is starting…`} detail={failed ? "Its program isn't running. Restart it from Settings › Plugins." : "Its program is getting the page ready."} />;
+    return <Notice name={name} title={failed ? `${title} stopped` : `${title} is starting…`} detail={failed ? t(`Its program isn't running. Restart it from Settings › Plugins.`) : t(`Its program is getting the page ready.`)} />;
   }
   return (
     <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.card }]}>

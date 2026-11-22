@@ -1,6 +1,8 @@
 import { setProviderApprovalSource } from "../omnibox/providerApproval";
 import { pendingOmniboxProviders } from "../omnibox/activeProviders";
 import { approveRule, isApproved, removeRule, useAutomationApprovals, type ApprovalRule } from "./approvals";
+import { t } from "../../lib/uiLanguage";
+
 
 const keyOf = (key: string) => `omniboxProvider:${key}`;
 
@@ -25,7 +27,7 @@ export function startOmniboxApprovals() {
     isApproved: (key) => isApproved(keyOf(key)),
     approve: (key) => {
       const row = pendingProviderRows().find((r) => r.providerKey === key);
-      approveRule(keyOf(key), row ?? { key: keyOf(key), kind: "omniboxProvider", name: key.slice(0, 12), summary: "Address bar provider" });
+      approveRule(keyOf(key), row ?? { key: keyOf(key), kind: "omniboxProvider", name: key.slice(0, 12), summary: t(`Address bar provider`) });
     },
     revoke: (key) => removeRule(keyOf(key)),
     subscribe: (listener) =>

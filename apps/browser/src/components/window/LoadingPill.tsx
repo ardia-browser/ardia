@@ -6,6 +6,8 @@ import { consentToken } from "../../state/telemetry/client";
 import { capsule, hairline, reduceMotion, useTheme } from "../ui";
 import { HudPlate } from "./Hud";
 import { LOADING_PILL } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 const { width, height, top, track, motion } = LOADING_PILL;
 const FULL = 1;
@@ -73,7 +75,7 @@ export function LoadingPill({ tabId }: { tabId: string }) {
           shape="capsule"
           height={height}
           accessibilityRole="progressbar"
-          accessibilityLabel="Loading page"
+          accessibilityLabel={t(`Loading page`)}
           style={{ width: width + 2 * hairline.panel, height: height + 2 * hairline.panel, alignItems: "center", justifyContent: "center" }}
         >
           <View style={{ width: track.width, height: track.height, borderRadius: ends, backgroundColor: theme.progressTrack, opacity: track.opacity, overflow: "hidden" }} />

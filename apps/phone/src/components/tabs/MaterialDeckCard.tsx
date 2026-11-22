@@ -16,9 +16,11 @@ import { materialShape, materialSize, materialType } from "../ui/materialTokens"
 import { nativeMenus } from "../ui/MenuTrigger";
 import { DeckCardMenu, deckCardStyles, ReceivedBadge, sameCard, useCardPlacement, type DeckCardProps } from "./DeckCard";
 import { MATERIAL_DECK, materialOnScreen, useDeckScheme } from "./MaterialDeckLayout";
+import { t } from "../../lib/uiLanguage";
+
 
 export const MaterialDeckCard = memo(function MaterialDeckCard({ tab, index, geometry: g, motion, onOpen, onClose, onCloseNow }: DeckCardProps) {
-  countRender("DeckCard");
+  countRender(t(`DeckCard`));
   const theme = useTheme();
   const reduceMotion = useReduceMotion();
   const scheme = useDeckScheme(tab.isPrivate);
@@ -49,7 +51,7 @@ export const MaterialDeckCard = memo(function MaterialDeckCard({ tab, index, geo
   const bar = deckBarBand(g, barHeight(g.safeBottom, "material"), 1);
   const bandStyle = useAnimatedStyle(() => ({ transform: [{ scaleY: placed.value.expanded && !underBars ? deckBarBand(g, 0, scaleProgress.value).grown : 0 }] }), [g, underBars]);
   const host = display(tab.url).host;
-  const title = tab.title || host || "New Tab";
+  const title = tab.title || host || t(`New Tab`);
   const fill = tone.top ?? scheme.surfaceContainerLow;
   const cardContents = (
     <>
@@ -83,10 +85,10 @@ export const MaterialDeckCard = memo(function MaterialDeckCard({ tab, index, geo
         accessibilityRole="button"
         accessibilityLabel={title}
         accessibilityValue={{ text: tab.isPrivate ? `Incognito, ${host}` : host }}
-        accessibilityHint="Opens the tab."
+        accessibilityHint={t(`Opens the tab.`)}
         {...screenReaderActions([
           { name: "activate", run: () => onOpen(index) },
-          { name: "close", label: "Close Tab", run: () => onCloseNow(index) },
+          { name: "close", label: t(`Close Tab`), run: () => onCloseNow(index) },
         ])}
         pointerEvents="none"
         style={[deckCardStyles.reach, { width: g.cardWidth, height: g.cardHeight }, reachStyle]}

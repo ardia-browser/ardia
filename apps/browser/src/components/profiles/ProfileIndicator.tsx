@@ -9,6 +9,8 @@ import { openProfileMenu } from "../../state/browser/actions";
 import { WINDOW_CHROME } from "../../lib/windowChrome";
 import { CARD_INSET } from "../../lib/windowLayout";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
+import { t } from "../../lib/uiLanguage";
+
 
 const PAD = 9;
 const HEIGHT = 34;
@@ -21,7 +23,7 @@ function useIndicator(room: number, profileShown: boolean) {
   const incognito = useIsIncognito();
   const profiles = useProfiles();
   const profile = useWindowProfile();
-  const title = incognito ? "Incognito" : profile.name;
+  const title = incognito ? t(`Incognito`) : profile.name;
   const textWidth = useMeasuredWidth(`profile-name|${title}`);
   const shown = profileShown && (incognito || profiles.length >= 2) && room >= ICON_WIDTH;
   const nameRoom = room - 2 * PAD;
@@ -49,7 +51,7 @@ export function ProfileIndicator({ room, profileShown = true }: { room: number; 
   if (!shown) return null;
 
   return (
-    <View {...hoverProps} ref={indicator} tooltip={incognito ? undefined : "Switch between profiles"}>
+    <View {...hoverProps} ref={indicator} tooltip={incognito ? undefined : t(`Switch between profiles`)}>
       <View pointerEvents="none" style={{ position: "absolute", width: 1000, height: 0, overflow: "hidden", opacity: 0 }}>
         <Text
           numberOfLines={1}

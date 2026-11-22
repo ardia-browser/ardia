@@ -5,6 +5,8 @@ import { StyleSheet, View, type TextInput } from "react-native";
 import { Box, display, SearchField, space, Text, useTheme, WindowDragRegion } from "../ui";
 import { pageHeader, pageToolbar } from "./tokens";
 import { perLook } from "../ui/tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 export const PAGE_WIDTH = 880;
 
@@ -54,8 +56,8 @@ const HEADER_SEARCH = { flex: 1, alignItems: "center" } as const;
 const SEARCH_WIDTH = { width: "100%", maxWidth: pageHeader.searchMaxWidth } as const;
 const HEADER_ACTIONS = { width: pageHeader.sideWidth, justifyContent: "flex-end", alignItems: "center" } as const;
 
-const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const DAYS = [t(`Sunday`), t(`Monday`), t(`Tuesday`), t(`Wednesday`), t(`Thursday`), t(`Friday`), t(`Saturday`)];
+const MONTHS = [t(`January`), t(`February`), t(`March`), t(`April`), t(`May`), t(`June`), t(`July`), t(`August`), t(`September`), t(`October`), t(`November`), t(`December`)];
 
 export const dayStart = (ms: number) => {
   const d = new Date(ms);

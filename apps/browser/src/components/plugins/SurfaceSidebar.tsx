@@ -6,6 +6,8 @@ import { ActionMenuButton, useActionMenu } from "./SurfaceActions";
 import { Children, SurfaceIcon } from "./SurfaceBasics";
 import { SURFACE } from "./tokens";
 import { actionsIn, bool, fillToneOf, isHandlerRef, str, toneOf, useSurface } from "./surfaceNodes";
+import { t } from "../../lib/uiLanguage";
+
 
 export function SidebarViewNode({ node }: { node: PluginNode }) {
   const p = node.props;

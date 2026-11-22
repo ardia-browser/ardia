@@ -4,6 +4,8 @@ import { Image, Pressable, Text as NativeText, View } from "react-native";
 import { Button, Symbol, Text, useHover, useTheme, withAlpha, type Theme } from "../ui";
 import { Favicon } from "../favicon/Favicon";
 import { SELECTED_SUGGESTION_ALPHA, SUGGESTION } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 const ICON_BOX = { width: SUGGESTION.iconBox, height: SUGGESTION.iconBox } as const;
 
@@ -38,7 +40,7 @@ export function SuggestionIcon({ suggestion: s, color }: { suggestion: Suggestio
 function labels(s: Suggestion): [string, string | null] {
   switch (s.kind) {
     case "page":
-      if (s.tabId) return [s.title || displayUrl(s.url), "Switch to Tab"];
+      if (s.tabId) return [s.title || displayUrl(s.url), t(`Switch to Tab`)];
       return s.title ? [s.title, displayUrl(s.url)] : [displayUrl(s.url), null];
     case "search":
       return [s.bang ? `Search ${s.engine} for ${s.query}` : s.query, null];
@@ -48,7 +50,7 @@ function labels(s: Suggestion): [string, string | null] {
     case "create":
       return [s.title, null];
     case "extension":
-      return [s.title, s.open === "action" ? "Open Extension" : "Extension Options"];
+      return [s.title, s.open === "action" ? t(`Open Extension`) : t(`Extension Options`)];
     case "provider": {
       const host = displayHost(hostOf(s.url)) || displayUrl(s.url);
       return [s.title, s.subtitle ? `${host} · ${s.subtitle}` : host];
@@ -144,7 +146,7 @@ const SuggestionRow = memo(
             <View style={{ flex: 1 }} />
             {hint && !removable ? <Text size="small" tone="textTertiary" ardiaCentersCapitals>{hint}</Text> : null}
             {removable ? (
-              <Button variant="icon" icon="xmark" size="s" color={theme.textSecondary} tooltip="Remove from History" onPress={onRemove} />
+              <Button variant="icon" icon="xmark" size="s" color={theme.textSecondary} tooltip={t(`Remove from History`)} onPress={onRemove} />
             ) : null}
           </View>
         </Pressable>

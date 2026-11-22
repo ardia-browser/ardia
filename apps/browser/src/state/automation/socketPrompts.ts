@@ -10,6 +10,8 @@ import { now, tabOf } from "./socketTargets";
 import type { EventSend } from "./storeEvents";
 import { OpError } from "./workspaceTargets";
 import { clippedRow } from "./socketWire";
+import { t } from "../../lib/uiLanguage";
+
 
 const PERMISSION_DECISIONS = ["allow", "allowOnce", "block", "dismiss"] as const;
 const PASSWORD_DECISIONS = ["save", "update", "never", "notNow", "dismiss"] as const;
@@ -17,11 +19,11 @@ const AUTOFILL_DECISIONS = ["accept", "decline", "dismiss"] as const;
 export const LISTED_USERNAMES = 20;
 const USERNAME_CHARS = 256;
 
-const CLOSED = "The prompt closed or changed before Ardia could answer it; list the prompts again.";
+const CLOSED = t(`The prompt closed or changed before Ardia could answer it; list the prompts again.`);
 
 function confirmed(outcome: ConfirmedAnswer) {
   if (outcome === "gone") throw new OpError("no_window", CLOSED);
-  if (outcome === "noView") throw new OpError("no_window", "That tab's page isn't open.");
+  if (outcome === "noView") throw new OpError("no_window", t(`That tab's page isn't open.`));
   if (outcome === "refused") throw new OpError("failed", CLOSED);
 }
 
@@ -46,7 +48,7 @@ function permissionTab(id: string) {
 }
 
 export const PERMISSION_NEEDS_ENGINE =
-  "Answering a permission prompt waits for engine support: the engine doesn't report what an answer did (a resolve result and a one-time grant in ac_permissions.mm). permissions.prompts lists them; the prompt on screen answers them.";
+  t(`Answering a permission prompt waits for engine support: the engine doesn't report what an answer did (a resolve result and a one-time grant in ac_permissions.mm). permissions.prompts lists them; the prompt on screen answers them.`);
 
 function respondPermission(params: Record<string, unknown>) {
   permissionTab(params.id as string);
@@ -75,7 +77,7 @@ const passwordRow = ({ tab, window, page }: Shown) => {
 };
 
 export const PASSWORD_NEEDS_ENGINE =
-  "Answering a password prompt waits for engine support: the engine names no offer and doesn't report whether an answer took (an offer id and a resolve result in ac_password_prompt.mm). passwords.prompts lists them; the prompt on screen answers them.";
+  t(`Answering a password prompt waits for engine support: the engine names no offer and doesn't report whether an answer took (an offer id and a resolve result in ac_password_prompt.mm). passwords.prompts lists them; the prompt on screen answers them.`);
 
 function respondPassword(params: Record<string, unknown>) {
   const t = tabOf(params.tab);
@@ -85,9 +87,9 @@ function respondPassword(params: Record<string, unknown>) {
 }
 
 const AUTOFILL_DESCRIPTIONS: Record<AutofillPrompt["kind"], string> = {
-  saveAddress: "Save a new address",
-  updateAddress: "Update a saved address",
-  saveCard: "Save a card",
+  saveAddress: t(`Save a new address`),
+  updateAddress: t(`Update a saved address`),
+  saveCard: t(`Save a card`),
 };
 
 export function autofillSummary(p: AutofillPrompt) {
@@ -111,17 +113,17 @@ export const PROMPT_METHODS: MethodSpec[] = [
   {
     name: "permissions.prompts",
     mutates: false,
-    description: "Permission prompts on screen: one per tab, with how many more wait behind it",
+    description: t(`Permission prompts on screen: one per tab, with how many more wait behind it`),
     params: obj({}),
-    result: "[{id, window, tab, origin, permissions, queued}]",
+    result: t(`[{id, window, tab, origin, permissions, queued}]`),
     run: () => shownPrompts((p) => p.permission).map(permissionRow),
   },
   {
     name: "permissions.respond",
     mutates: true,
-    description: "Refused for now: answering a permission prompt waits for engine support that reports what the answer did. permissions.prompts lists them",
-    params: obj({ id: text("A prompt id from permissions.prompts"), decision: oneOf(PERMISSION_DECISIONS, "The answer") }, ["id", "decision"]),
-    result: "{ok, id, decision}",
+    description: t(`Refused for now: answering a permission prompt waits for engine support that reports what the answer did. permissions.prompts lists them`),
+    params: obj({ id: text(t(`A prompt id from permissions.prompts`)), decision: oneOf(PERMISSION_DECISIONS, t(`The answer`)) }, ["id", "decision"]),
+    result: t(`{ok, id, decision}`),
     run: respondPermission,
   },
   {
@@ -129,19 +131,19 @@ export const PROMPT_METHODS: MethodSpec[] = [
     mutates: false,
     description: `Save and update password prompts on screen: the site and username, never the password. usernames lists at most ${LISTED_USERNAMES} as {id, name}: id is a token for that prompt and username, name is cut to ${USERNAME_CHARS} characters; usernameCount says how many there are`,
     params: obj({}),
-    result: "[{id, tab, window, origin, state, username, usernames, usernameCount, federation}]",
+    result: t(`[{id, tab, window, origin, state, username, usernames, usernameCount, federation}]`),
     run: () => shownPrompts((p) => p.passwordPrompt).map(passwordRow),
   },
   {
     name: "passwords.respond",
     mutates: true,
-    description: "Refused for now: answering a password prompt waits for engine support that names the offer and reports the result. passwords.prompts lists them",
+    description: t(`Refused for now: answering a password prompt waits for engine support that names the offer and reports the result. passwords.prompts lists them`),
     params: obj(
       {
         tab: TAB,
-        id: id("The prompt's id from passwords.prompts"),
-        decision: oneOf(PASSWORD_DECISIONS, "save or never for a save prompt, update for an update prompt; notNow and dismiss for both"),
-        usernameId: id("For an update prompt that offers several usernames, the id of the one to update, from usernames"),
+        id: id(t(`The prompt's id from passwords.prompts`)),
+        decision: oneOf(PASSWORD_DECISIONS, t(`save or never for a save prompt, update for an update prompt; notNow and dismiss for both`)),
+        usernameId: id(t(`For an update prompt that offers several usernames, the id of the one to update, from usernames`)),
       },
       ["tab", "id", "decision"],
     ),
@@ -151,16 +153,16 @@ export const PROMPT_METHODS: MethodSpec[] = [
   {
     name: "autofill.prompts",
     mutates: false,
-    description: "Save address, update address and save card prompts on screen: their kind and, for an update, which fields change; never the address, name or card",
+    description: t(`Save address, update address and save card prompts on screen: their kind and, for an update, which fields change; never the address, name or card`),
     params: obj({}),
-    result: "[{id, tab, window, origin, kind, fields, description}]",
+    result: t(`[{id, tab, window, origin, kind, fields, description}]`),
     run: () => shownPrompts((p) => p.autofillPrompt).map(autofillRow),
   },
   {
     name: "autofill.respond",
     mutates: true,
-    description: "Answer a tab's save address or save card prompt with one of its buttons; refused when that tab now shows another prompt",
-    params: obj({ tab: TAB, id: int("The prompt's id from autofill.prompts", 1), decision: oneOf(AUTOFILL_DECISIONS, "accept, decline or dismiss") }, ["tab", "id", "decision"]),
+    description: t(`Answer a tab's save address or save card prompt with one of its buttons; refused when that tab now shows another prompt`),
+    params: obj({ tab: TAB, id: int(t(`The prompt's id from autofill.prompts`), 1), decision: oneOf(AUTOFILL_DECISIONS, t(`accept, decline or dismiss`)) }, ["tab", "id", "decision"]),
     result: "{ok}",
     run: respondAutofill,
   },

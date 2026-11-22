@@ -3,6 +3,8 @@ import { endpoints, form } from "./net";
 import { connectGoogle } from "./sources";
 import { secureRandomHex } from "../../platform/secureRandom";
 import { base64Url, sha256 } from "../../lib/sha256";
+import { t } from "../../lib/uiLanguage";
+
 
 const REDIRECT = "http://127.0.0.1:53682/ardia-oauth";
 const SCOPE = "https://www.googleapis.com/auth/drive.metadata.readonly";
@@ -39,14 +41,14 @@ export function connectGoogleDrive(windowId: string, clientId: string, clientSec
     const stop = useBrowser.subscribe((s, prev) => {
       if (s.tabs === prev.tabs) return;
       const tab = s.tabs[tabId];
-      if (!tab) return finish(new Error("Sign-in was cancelled"));
+      if (!tab) return finish(new Error(t(`Sign-in was cancelled`)));
       if (!tab.url.startsWith(REDIRECT)) return;
       const params = query(tab.url);
-      if (params.get("state") !== state) return finish(new Error("Sign-in didn't match this request"));
+      if (params.get("state") !== state) return finish(new Error(t(`Sign-in didn't match this request`)));
       const code = params.get("code");
       stop();
       useBrowser.getState().closeTab(tabId);
-      if (!code) return finish(new Error(params.get("error") ?? "Google didn't grant access"));
+      if (!code) return finish(new Error(params.get("error") ?? t(`Google didn't grant access`)));
       connectGoogle(clientId.trim(), clientSecret.trim(), code, verifier, REDIRECT).then(() => finish(), finish);
     });
     const finish = (error?: unknown) => {
@@ -55,6 +57,6 @@ export function connectGoogleDrive(windowId: string, clientId: string, clientSec
       if (error) reject(error);
       else resolve();
     };
-    pending = { cancel: () => finish(new Error("Cancelled")) };
+    pending = { cancel: () => finish(new Error(t(`Cancelled`))) };
   });
 }

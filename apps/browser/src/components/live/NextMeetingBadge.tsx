@@ -7,6 +7,8 @@ import { useLive } from "../../state/live/store";
 import { useTab } from "../../state/browser/hooks";
 import { useSidebarTokens } from "../sidebar/tokens";
 import { liveMotion, useLiveColors } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 export const NextMeetingBadge = memo(function NextMeetingBadge({ tabId }: { tabId: string }) {
   const pinnedUrl = useTab(tabId, (t) => (t?.pin ? (t.pinnedUrl ?? t.url) : null));

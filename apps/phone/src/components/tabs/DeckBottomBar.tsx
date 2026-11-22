@@ -16,6 +16,8 @@ import { deckLook } from "./deckLook";
 import { useKeyboardTopFromBottom } from "../search/useKeyboardHeight";
 import { FadingGlyphs, GlassPlusButton, type ChromeFade } from "./ChromeButtons";
 import { besideStrip, DUO_BAR, duoFieldReach, type BottomBarLayout } from "../../lib/bottomBarSpan";
+import { t } from "../../lib/uiLanguage";
+
 
 type Props = {
   shown: boolean;
@@ -33,8 +35,8 @@ type Props = {
 
 export function plusMenu(incognito: boolean, canReopen: boolean): MenuItem[] {
   return [
-    ...(incognito ? [{ label: "New Tab", onPress: newRegularTab }, { label: "New Incognito Tab", onPress: newTab }] : [{ label: "New Incognito Tab", onPress: newIncognitoTab }]),
-    ...(canReopen ? [{ label: "Reopen Closed Tab", onPress: reopenLastClosed }] : []),
+    ...(incognito ? [{ label: t(`New Tab`), onPress: newRegularTab }, { label: t(`New Incognito Tab`), onPress: newTab }] : [{ label: t(`New Incognito Tab`), onPress: newIncognitoTab }]),
+    ...(canReopen ? [{ label: t(`Reopen Closed Tab`), onPress: reopenLastClosed }] : []),
   ];
 }
 
@@ -54,7 +56,7 @@ export function IncognitoSwitch({ incognito, dark, onLongPress, glassShown, glas
   const size = { width: deckChromeLayout.barCircle, height: deckChromeLayout.barCircle };
   const darkGlass = incognito && dark;
   return (
-    <PressScale label="Incognito" hint={incognito ? "Shows your tabs." : "Shows your Incognito tabs."} checked={incognito} onPress={switchDeckIncognito} onLongPress={onLongPress} longPressLabel={onLongPress ? "Close Incognito Tabs" : undefined} onPressIn={haptics.barPress} style={size}>
+    <PressScale label={t(`Incognito`)} hint={incognito ? t(`Shows your tabs.`) : t(`Shows your Incognito tabs.`)} checked={incognito} onPress={switchDeckIncognito} onLongPress={onLongPress} longPressLabel={onLongPress ? t(`Close Incognito Tabs`) : undefined} onPressIn={haptics.barPress} style={size}>
       <ChromeSurface testID="deckBarIncognito" shape="circle" cornerRadius={capsule(deckChromeLayout.barCircle)} incognito={darkGlass} dark={dark || darkGlass} shown={glassShown} shownMs={glassShownMs} style={[styles.centered, size]}>
         <FadingGlyphs testID="deckBarIncognitoGlyph" pointerEvents="none" fade={glyphFade} style={[styles.centered, size]}>
           <IncognitoEyes incognito={incognito} size={deckChromeLayout.incognitoEyes} color={rolesFor(dark).label} />
@@ -109,8 +111,8 @@ export function SearchTabsField({ search, testID = "deckSearchTabs", style, rest
             <TextInput
               ref={input}
               testID="deckSearchField"
-              accessibilityLabel="Search Tabs"
-              placeholder="Search Tabs"
+              accessibilityLabel={t(`Search Tabs`)}
+              placeholder={t(`Search Tabs`)}
               placeholderTextColor={iPhoneOr(roles.tertiaryLabel, roles.secondaryLabel)}
               selectionColor={roles.formAccent}
               value={text}
@@ -125,7 +127,7 @@ export function SearchTabsField({ search, testID = "deckSearchTabs", style, rest
               style={[font.callout, styles.field, { color: roles.label }]}
             />
             {text ? (
-              <Pressable testID="deckSearchClear" accessibilityRole="button" accessibilityLabel="Clear Search" onPress={() => change("")} style={styles.clear}>
+              <Pressable testID="deckSearchClear" accessibilityRole="button" accessibilityLabel={t(`Clear Search`)} onPress={() => change("")} style={styles.clear}>
                 <SystemGlyph testID="deckSearchClearGlyph" systemName="xmark.circle.fill" pointSize={19} name="xmarkCircleFill" size={deckChromeLayout.clearGlyph} color={roles.secondaryLabel} />
               </Pressable>
             ) : null}
@@ -157,7 +159,7 @@ export function DeckBottomBar({ shown, barCenterY, deckHeight, width, layout, in
   const plusTop = strip ? (strip.ends ? strip.plus : strip.tabs) : 0;
   const plusPlace = strip ? { bottom: deckHeight - centerY - deckChromeLayout.barCircle / 2 - plusTop, ...besideStrip(strip, width, tabsLayout.menuWidth, deckChromeLayout.menuGap) } : { bottom: deckHeight - centerY + deckChromeLayout.barCircle / 2 + deckChromeLayout.menuGap, right: span.right, width: tabsLayout.menuWidth };
   const switchPlace = strip ? plusPlace : { bottom: deckHeight - centerY + deckChromeLayout.barCircle / 2 + deckChromeLayout.menuGap, left: span.left, width: tabsLayout.menuWidth };
-  const closeIncognito: MenuItem[] = onCloseIncognito ? [{ label: "Close Incognito Tabs", destructive: true, onPress: onCloseIncognito }] : [];
+  const closeIncognito: MenuItem[] = onCloseIncognito ? [{ label: t(`Close Incognito Tabs`), destructive: true, onPress: onCloseIncognito }] : [];
   const switchMenuShown = menusShown && privateCount > 0 && closeIncognito.length > 0;
   const incognitoSwitch = (
     <MenuTrigger items={closeIncognito} trigger="longPress" haptic={menuOpenedHaptic} disabled={!switchMenuShown} onOpen={() => onMenu?.(true)} onClose={() => onMenu?.(false)} place={switchPlace} style={{ width: deckChromeLayout.barCircle, height: deckChromeLayout.barCircle }}>
@@ -181,7 +183,7 @@ export function DeckBottomBar({ shown, barCenterY, deckHeight, width, layout, in
   const grow = useAnimatedStyle(() => (reachSide === "marginLeft" ? { marginLeft: edge.value } : reachSide === "marginRight" ? { marginRight: edge.value } : {}), [reachSide]);
   const fieldFade = useAnimatedStyle(() => (ends ? { opacity: Math.min(Math.max(growth.value, 0), 1) } : {}), [ends]);
   const circleFade = useAnimatedStyle(() => ({ opacity: 1 - Math.min(Math.max(growth.value, 0), 1) }));
-  const plus = <PlusMenuButton width={deckChromeLayout.barCircle} label={incognito ? "New Incognito Tab" : "New Tab"} testID="deckBarPlus" dark={dark} place={plusPlace} menusShown={menusShown} onMenu={onMenu} {...fade} />;
+  const plus = <PlusMenuButton width={deckChromeLayout.barCircle} label={incognito ? t(`New Incognito Tab`) : t(`New Tab`)} testID="deckBarPlus" dark={dark} place={plusPlace} menusShown={menusShown} onMenu={onMenu} {...fade} />;
   const measure = () =>
     row.current?.measureInWindow((_x, y, _width, height) => {
       if (height > 0) noteDeckBarTop(y);
@@ -198,7 +200,7 @@ export function DeckBottomBar({ shown, barCenterY, deckHeight, width, layout, in
           <Animated.View testID="deckSearchGrow" collapsable={false} style={[styles.searchHit, styles.grows, grow]}>
             <SearchTabsField search={search} style={styles.searchHit} resting={!opened} contentStyle={fieldFade} {...fade} />
             <Animated.View testID="deckSearchCircle" collapsable={false} style={[styles.searchCircle, strip?.side === "left" ? styles.circleLeading : styles.circleTrailing, circleFade]} pointerEvents={opened ? "none" : "auto"} importantForAccessibility={opened ? "no-hide-descendants" : "auto"} accessibilityElementsHidden={opened}>
-              <PressScale label="Search Tabs" onPress={() => search.input.current?.focus()} onPressIn={haptics.barPress} style={[styles.centered, styles.circleHit]}>
+              <PressScale label={t(`Search Tabs`)} onPress={() => search.input.current?.focus()} onPressIn={haptics.barPress} style={[styles.centered, styles.circleHit]}>
                 <FadingGlyphs fade={glyphFade} pointerEvents="none" style={styles.centered}>
                   <SystemGlyph testID="deckSearchCircleGlyph" systemName="magnifyingglass" pointSize={18} weight="medium" fitted name="magnifyingglass" size={deckChromeLayout.searchGlyph} color={roles.label} />
                 </FadingGlyphs>

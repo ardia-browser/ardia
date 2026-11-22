@@ -11,6 +11,8 @@ import type { BasePalette } from "../../lib/themeFile";
 import { topAppSiblings } from "../pins/topApps";
 import { sharingProfiles } from "./profiles";
 import { useProfileOpened } from "./profileLoading";
+import { t } from "../../lib/uiLanguage";
+
 
 export function useProfileRecords(): Record<string, Profile>;
 export function useProfileRecords<T>(select: (profiles: Record<string, Profile>) => T): T;
@@ -56,7 +58,7 @@ export const useProfileDataStats = (profileId: string): string => {
       if (n?.kind === "folder") n.children.forEach(walk);
     };
     if (roots) [roots.bar, roots.other].forEach(walk);
-    const history = opened ? `${plural(historyOf(s, profileId).length, "page")} in history` : "History not loaded yet";
+    const history = opened ? `${plural(historyOf(s, profileId).length, "page")} in history` : t(`History not loaded yet`);
     return `${history} · ${plural(bookmarks, "bookmark")}`;
   });
 };

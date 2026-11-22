@@ -7,6 +7,8 @@ import { notePlugin } from "../telemetry/pluginCounts";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
 import { activeManifest, currentPlugins, usePlugins, type PluginsStore } from "./store";
 import { onProcessStopped, restartProcess, superviseProcess } from "./process";
+import { t } from "../../lib/uiLanguage";
+
 
 export const ACTIVATION_TIMEOUT_MS = 10_000;
 
@@ -15,7 +17,7 @@ export class PluginActivationError extends Error {
   constructor(plugin: string, message: string) {
     super(message);
     this.plugin = plugin;
-    this.name = "PluginActivationError";
+    this.name = t(`PluginActivationError`);
   }
 }
 

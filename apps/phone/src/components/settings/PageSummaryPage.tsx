@@ -7,6 +7,8 @@ import { refreshPageSummariesEnabled, setPageSummariesEnabled, usePageSummariesE
 import { popSettings } from "../../state/settings/nav";
 import { font, PrimaryButton, settingsLayout, settingsTint, space, Symbol, useTheme } from "../ui";
 import { Divider, Group, IconTile, SettingsPage, ToggleRow } from "./SettingsKit";
+import { t } from "../../lib/uiLanguage";
+
 
 export function PageSummaryPage() {
   const theme = useTheme();
@@ -40,7 +42,7 @@ export function PageSummaryPage() {
           <Divider />
           <Choice
             title={PAGE_SUMMARY_COPY.chatGPT}
-            detail={signingIn ? "Waiting for ChatGPT…" : connected && account?.label ? account.label : PAGE_SUMMARY_COPY.chatGPTDetail}
+            detail={signingIn ? t(`Waiting for ChatGPT…`) : connected && account?.label ? account.label : PAGE_SUMMARY_COPY.chatGPTDetail}
             selected={choosesChatGPT}
             enabled={!signingIn}
             onPress={() => void choosePageSummaryChatGPT(connected)}
@@ -49,7 +51,7 @@ export function PageSummaryPage() {
       ) : null}
       {enabled && choosesChatGPT && !connected ? (
         <View style={styles.connect}>
-          <PrimaryButton title={signingIn ? "Waiting for ChatGPT…" : "Continue with ChatGPT"} onPress={() => void choosePageSummaryChatGPT(false)} />
+          <PrimaryButton title={signingIn ? t(`Waiting for ChatGPT…`) : t(`Continue with ChatGPT`)} onPress={() => void choosePageSummaryChatGPT(false)} />
           <Text style={[font.footnote, { color: theme.secondaryLabel }]}>{PAGE_SUMMARY_COPY.reconnect}</Text>
         </View>
       ) : null}

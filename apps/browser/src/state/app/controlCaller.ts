@@ -1,3 +1,4 @@
+import { t } from "../../lib/uiLanguage";
 export type ControlCaller = { name: string; app: string | null };
 
 const MAX_NAME = 40;
@@ -30,8 +31,8 @@ export function parseControlCaller(raw: unknown): ControlCaller | null {
 export type ControlLine = { lead: string; name: string; rest: string };
 
 export function controlLine(caller: ControlCaller | null): ControlLine {
-  if (!caller) return { lead: "A program", name: "", rest: " is controlling Ardia" };
-  return { lead: "", name: caller.name, rest: " is controlling Ardia" };
+  if (!caller) return { lead: t(`A program`), name: "", rest: t(` is controlling Ardia`) };
+  return { lead: "", name: caller.name, rest: t(` is controlling Ardia`) };
 }
 
 export const controlLineText = ({ lead, name, rest }: ControlLine) => `${lead}${name}${rest}`;

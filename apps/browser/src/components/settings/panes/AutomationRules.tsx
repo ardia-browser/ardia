@@ -3,12 +3,14 @@ import { approveAutomationRule, removeAutomationRule, useAutomationRules, type A
 import { Button } from "../../ui";
 import { Group, Row, SectionHeader } from "../Form";
 import { setting } from "../settingsIndex";
+import { t } from "../../../lib/uiLanguage";
+
 
 function RuleRow({ rule, pending }: { rule: AutomationRuleRow; pending: boolean }) {
   return (
     <Row title={rule.name} description={rule.summary}>
-      {pending ? <Button title="Approve" onPress={() => approveAutomationRule(rule)} /> : null}
-      <Button variant="icon" icon="trash" size="m" onPress={() => removeAutomationRule(rule)} tooltip={pending ? "Remove" : "Revoke"} />
+      {pending ? <Button title={t(`Approve`)} onPress={() => approveAutomationRule(rule)} /> : null}
+      <Button variant="icon" icon="trash" size="m" onPress={() => removeAutomationRule(rule)} tooltip={pending ? t(`Remove`) : t(`Revoke`)} />
     </Row>
   );
 }

@@ -8,6 +8,8 @@ import { parsePluginThemeKey } from "../plugins/themes";
 import { parseLaunchAction } from "../automation/launchActions";
 import { readProviderEntries } from "@ardia/core";
 import { LEGACY_SWITCHER_ICONS_KEY } from "../profiles/switcherMark";
+import { t } from "../../lib/uiLanguage";
+
 
 export const CONFIG_FILE = "config.json";
 
@@ -32,18 +34,18 @@ export function describeSchema(schema: JsonSchema): string {
   if (schema.enum) return `must be ${listed(schema.enum)}`;
   const types = Array.isArray(schema.type) ? schema.type : schema.type ? [schema.type] : [];
   const parts = types.map((type) => {
-    if (type === "boolean") return "true or false";
+    if (type === "boolean") return t(`true or false`);
     if (type === "null") return "null";
-    if (type === "string") return "a string";
+    if (type === "string") return t(`a string`);
     if (type === "number" || type === "integer") {
       if (schema.minimum !== undefined && schema.maximum !== undefined) return `a number from ${schema.minimum} to ${schema.maximum}`;
       if (schema.exclusiveMinimum !== undefined) return `a number above ${schema.exclusiveMinimum}`;
-      return "a number";
+      return t(`a number`);
     }
-    if (type === "array") return schema.prefixItems ? `a list of ${schema.prefixItems.length} numbers above 0` : "a list of strings";
-    return "an object";
+    if (type === "array") return schema.prefixItems ? `a list of ${schema.prefixItems.length} numbers above 0` : t(`a list of strings`);
+    return t(`an object`);
   });
-  return parts.length ? `must be ${listed(parts)}` : "has the wrong shape";
+  return parts.length ? `must be ${listed(parts)}` : t(`has the wrong shape`);
 }
 
 function themeOf(doc: Record<string, unknown>, problems: string[]): string | null | undefined {

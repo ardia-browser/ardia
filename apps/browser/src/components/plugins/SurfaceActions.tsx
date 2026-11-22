@@ -12,6 +12,8 @@ import { notePlugin } from "../../state/telemetry/pluginCounts";
 import { Box, Button } from "../ui";
 import { actionsIn, bool, isHandlerRef, isWebUrl, str, useSurface } from "./surfaceNodes";
 import { heldByArdia, menuKeyOf, panelShortcuts, ShortcutScopeContext, shortcutHint, useShortcutRegistration, type ShortcutScope, type SurfaceKeys } from "./surfaceShortcuts";
+import { t } from "../../lib/uiLanguage";
+
 
 export function useRunAction() {
   const { fire, windowId } = useSurface();
@@ -82,7 +84,7 @@ export function useActionMenu() {
       const actions = actionsIn(panel);
       if (!actions.length) return;
       const shortcuts = panelShortcuts(actions);
-      const chosen = await chooseFromMenu<number>(actions.map((a, index) => ({ value: index, title: str(a.props.title) ?? "Action", symbol: str(a.props.icon), ...menuKeyOf(shortcuts.get(a)) })));
+      const chosen = await chooseFromMenu<number>(actions.map((a, index) => ({ value: index, title: str(a.props.title) ?? t(`Action`), symbol: str(a.props.icon), ...menuKeyOf(shortcuts.get(a)) })));
       if (chosen !== null) run(actions[chosen]);
     },
     [run],
@@ -100,7 +102,7 @@ export function ActionButtons({ panel, primaryFirst = true }: { panel: unknown; 
       {actions.map((action, index) => (
         <WithShortcutHint key={`${index}:${str(action.props.title) ?? ""}`} hint={shortcutHint(shortcuts.get(action))}>
           <Button
-            title={str(action.props.title) ?? "Action"}
+            title={str(action.props.title) ?? t(`Action`)}
             icon={str(action.props.icon)}
             kind={bool(action.props.destructive) || action.props.tone === "destructive" ? "destructive" : primaryFirst && index === 0 ? "primary" : "default"}
             onPress={() => void run(action)}
@@ -115,7 +117,7 @@ export function WithShortcutHint({ hint, children }: { hint: string | undefined;
   return hint ? <View tooltip={hint}>{children}</View> : <>{children}</>;
 }
 
-export function ActionMenuButton({ panel, tooltip = "Actions" }: { panel: unknown; tooltip?: string }) {
+export function ActionMenuButton({ panel, tooltip = t(`Actions`) }: { panel: unknown; tooltip?: string }) {
   const menu = useActionMenu();
   if (!actionsIn(panel).length) return null;
   return <Button variant="icon" size="s" icon="ellipsis" tooltip={tooltip} onPress={() => void menu(panel)} />;

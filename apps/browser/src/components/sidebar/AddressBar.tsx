@@ -32,6 +32,8 @@ import { GLYPH } from "../toolbar/tokens";
 import { HEADER_TOOLS, headerToggleXIn, navButtonsFitting, type HeaderButton } from "../window/dockMotion";
 import { ARC_LIGHTS_CENTER } from "../../state/windows/dockMotion";
 import { PAGE_IDENTITY_TAG } from "../../state/tabs/tabReveal";
+import { t } from "../../lib/uiLanguage";
+
 
 const BUTTON = layout.toolbarButton;
 const { edge: EDGE } = HEADER_TOOLS;
@@ -76,7 +78,7 @@ export function SidebarHeaderTools({ width }: { width: number }) {
           icon={right ? "sidebar.right" : "sidebar.left"}
           glyph={GLYPH}
           onPress={() => toggleSidebar(windowId)}
-          tooltip={withShortcut("Hide Tabs", hints.toggleSidebar)}
+          tooltip={withShortcut(t(`Hide Tabs`), hints.toggleSidebar)}
         />
       )}
       {tab ? <NavigationButtons tab={tab} palette={palette} hints={hints} buttons={shown} slots={at.slice(toggle ? 1 : 0).map(place)} /> : null}
@@ -211,7 +213,7 @@ function EmptyField({ windowId, tabId, width }: { windowId: string; tabId: strin
     <View {...hoverProps} style={{ flexDirection: "row", alignItems: "center", height: SIDEBAR_FIELD.height }}>
       <SidebarFieldFill hovered={hovered} />
       <Pressable onPress={open} style={{ flex: 1, height: SIDEBAR_FIELD.height, justifyContent: "center", paddingLeft: space.l }}>
-        <FadeLabel text="Search or enter address" fontSize={SIDEBAR_TYPE.title} color={theme.placeholder} fadeWidth={14} style={{ height: TAB_ROW.titleHeight, marginLeft: -space.xxs }} />
+        <FadeLabel text={t(`Search or enter address`)} fontSize={SIDEBAR_TYPE.title} color={theme.placeholder} fadeWidth={14} style={{ height: TAB_ROW.titleHeight, marginLeft: -space.xxs }} />
       </Pressable>
       {tabId && shown.extensions ? (
         <View style={{ paddingRight: space.xs }}>

@@ -8,6 +8,8 @@ import { clampLeft, clampTop, IconPickerLayer, type PickerAction, type PickerSym
 import { ICON_PICKER, ICON_PICKER_WIDTH } from "../iconPicker/tokens";
 import { useSidebarSide } from "../../state/browser/hooks";
 import type { SidebarSide } from "../../state/browser/model";
+import { t } from "../../lib/uiLanguage";
+
 
 const SYMBOLS: PickerSymbol[] = [
   "star", "heart", "bookmark", "flag", "pin", "bolt", "flame", "leaf", "globe", "house", "briefcase", "cart", "bag", "creditcard",
@@ -49,8 +51,8 @@ function PickerPanel({ picker, sidebarWidth, side }: { picker: Picker; sidebarWi
   const { anchor } = picker;
   const { windowMargin } = ICON_PICKER;
   const actions: PickerAction[] = [
-    ...(row ? [{ title: "No Icon", icon: "textformat", primary: current === NO_ROW_ICON, onPress: () => choose(NO_ROW_ICON) }] : []),
-    ...(current ? [{ title: "Reset Icon", onPress: () => choose(null) }] : []),
+    ...(row ? [{ title: t(`No Icon`), icon: "textformat", primary: current === NO_ROW_ICON, onPress: () => choose(NO_ROW_ICON) }] : []),
+    ...(current ? [{ title: t(`Reset Icon`), onPress: () => choose(null) }] : []),
   ];
 
   return (

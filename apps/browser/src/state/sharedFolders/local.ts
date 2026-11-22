@@ -4,6 +4,8 @@ import { pinKeyOf } from "../browser/model";
 import { displayHostOf } from "../../lib/url";
 import { isShareableUrl } from "./remote";
 import type { BaseEntry, LocalEntry } from "./tree";
+import { t } from "../../lib/uiLanguage";
+
 
 export type LocalFolder = {
   entries: LocalEntry[];
@@ -16,9 +18,9 @@ export type LocalFolder = {
 
 export const linkUrl = (t: Tab) => t.pinnedUrl || t.url;
 
-export const linkName = (t: Tab, known: string | undefined) => t.customTitle?.trim() || known || t.title.trim() || displayHostOf(linkUrl(t)) || "Link";
+export const linkName = (t: Tab, known: string | undefined) => t.customTitle?.trim() || known || t.title.trim() || displayHostOf(linkUrl(t)) || t(`Link`);
 
-export const groupName = (g: TabGroup) => g.name.trim() || "Folder";
+export const groupName = (g: TabGroup) => g.name.trim() || t(`Folder`);
 
 export function knownNames(base: BaseEntry[], into = new Map<string, string>()): Map<string, string> {
   for (const b of base) {

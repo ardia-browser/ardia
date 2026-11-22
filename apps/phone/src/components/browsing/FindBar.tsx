@@ -5,6 +5,8 @@ import { closeFind, findNext, findPrevious, typeFind } from "../../state/page/ac
 import { useFindQuery, useFindResult } from "../../state/page/hooks";
 import { findCount, findHasMatches } from "../../state/page/pagePrompts";
 import { browseLayout, capsule, font, pageInk, space, Symbol, useTheme, type SymbolName } from "../ui";
+import { t } from "../../lib/uiLanguage";
+
 
 const FIELD_HEIGHT = 40;
 
@@ -28,11 +30,11 @@ export function FindBar({ tabId }: { tabId: string }) {
           <Symbol name="magnifyingglass" size={16} color={theme.foregroundSecondary} />
           <TextInput
             ref={input}
-            accessibilityLabel="Find on Page"
+            accessibilityLabel={t(`Find on Page`)}
             value={query}
             onChangeText={typeFind}
             onSubmitEditing={() => matches && findNext()}
-            placeholder="Find on Page"
+            placeholder={t(`Find on Page`)}
             placeholderTextColor={theme.foregroundTertiary}
             selectionColor={theme.spaceAccentInk}
             style={[font.body, styles.input, { color: theme.label }]}
@@ -52,8 +54,8 @@ export function FindBar({ tabId }: { tabId: string }) {
             </Text>
           ) : null}
         </View>
-        <FindButton icon="chevronUp" label="Previous Match" enabled={matches} onPress={findPrevious} />
-        <FindButton icon="chevronDown" label="Next Match" enabled={matches} onPress={findNext} />
+        <FindButton icon="chevronUp" label={t(`Previous Match`)} enabled={matches} onPress={findPrevious} />
+        <FindButton icon="chevronDown" label={t(`Next Match`)} enabled={matches} onPress={findNext} />
         <Pressable accessibilityRole="button" onPress={closeFind} style={styles.done}>
           <Text style={[font.body, styles.bold, { color: theme.spaceAccentInk }]}>Done</Text>
         </Pressable>

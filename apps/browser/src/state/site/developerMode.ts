@@ -8,6 +8,8 @@ import { MAX_SPLIT_PANES, splitOf, splitTabIds, type SplitSide } from "../splits
 import { addressFieldShown, clickBarPlacement } from "../omnibox/barPlacement";
 import { activate } from "../tabs/actions";
 import { activeTabId } from "../browser/model";
+import { t } from "../../lib/uiLanguage";
+
 
 export type DeveloperModeSites = Settings["developerModeSites"];
 
@@ -55,10 +57,10 @@ export const DEVELOPER_BAR_IN_CORE = false;
 export const useDeveloperMode = (url: string): boolean => useSettings((s) => DEVELOPER_BAR_IN_CORE && developerModeOn(s.developerModeSites, url));
 
 const SPLIT_SIDES: { side: SplitSide; title: string; symbol: string }[] = [
-  { side: "right", title: "Add Right Split", symbol: "rectangle.righthalf.inset.filled" },
-  { side: "left", title: "Add Left Split", symbol: "sidebar.left" },
-  { side: "top", title: "Add Top Split", symbol: "rectangle.split.1x2" },
-  { side: "bottom", title: "Add Bottom Split", symbol: "rectangle.bottomhalf.inset.filled" },
+  { side: "right", title: t(`Add Right Split`), symbol: "rectangle.righthalf.inset.filled" },
+  { side: "left", title: t(`Add Left Split`), symbol: "sidebar.left" },
+  { side: "top", title: t(`Add Top Split`), symbol: "rectangle.split.1x2" },
+  { side: "bottom", title: t(`Add Bottom Split`), symbol: "rectangle.bottomhalf.inset.filled" },
 ];
 
 export async function showSplitSidesMenu(tabId: string) {

@@ -4,6 +4,8 @@ import { notePlugin } from "../telemetry/pluginCounts";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
 import { activeManifest, currentPlugins } from "./store";
 import { ensurePluginActivated, pluginReadyRun } from "./activation";
+import { t } from "../../lib/uiLanguage";
+
 
 export const MAX_CALLS_PER_PLUGIN = 16;
 export const MAX_TOOL_JSON = 1 << 20;
@@ -29,7 +31,7 @@ const awaitingReady = new Set<AwaitingReady>();
 let seq = 0;
 
 const failed = (code: Extract<ToolOutcome, { ok: false }>["code"], message: string): ToolOutcome => ({ ok: false, code, message });
-const CANCELLED = failed("failed", "The call was cancelled before the plugin answered.");
+const CANCELLED = failed("failed", t(`The call was cancelled before the plugin answered.`));
 
 export function runningRun(plugin: string): number | null {
   const p = currentPlugins().processes[plugin];
@@ -64,9 +66,9 @@ function send(plugin: string, run: number, call: PluginCall, caller: ToolCaller,
   try {
     line = lineOf(id, call, caller, timeoutMs);
   } catch {
-    return Promise.resolve(failed("bad_request", "The call's input isn't JSON."));
+    return Promise.resolve(failed("bad_request", t(`The call's input isn't JSON.`)));
   }
-  if (line.length > MAX_TOOL_JSON) return Promise.resolve(failed("bad_request", "The call's input is over 1 MB."));
+  if (line.length > MAX_TOOL_JSON) return Promise.resolve(failed("bad_request", t(`The call's input is over 1 MB.`)));
   if ([...pending.values()].filter((p) => p.plugin === plugin).length >= MAX_CALLS_PER_PLUGIN) return Promise.resolve(failed("failed", `${plugin} has too many calls waiting.`));
   if (call.kind === "tool") notePlugin("plugin_tool_calls", consent);
   return new Promise<ToolOutcome>((settle) => {
@@ -143,16 +145,16 @@ export function callTool(plugin: string, tool: string, input: unknown, caller: T
 
 export function answerCall(plugin: string, run: number, params: Record<string, unknown>): string | null {
   const id = params.call;
-  if (typeof id !== "string") return "result needs the call's id.";
+  if (typeof id !== "string") return t(`result needs the call's id.`);
   const call = pending.get(id);
   if (!call || call.plugin !== plugin || call.run !== run) return `There's no call ${id} waiting for this plugin.`;
   if (params.error !== undefined) {
-    finish(id, failed("failed", typeof params.error === "string" ? params.error.slice(0, 500) : "The tool failed."));
+    finish(id, failed("failed", typeof params.error === "string" ? params.error.slice(0, 500) : t(`The tool failed.`)));
     return null;
   }
-  if (!Object.hasOwn(params, "result")) return "result needs a result or an error.";
+  if (!Object.hasOwn(params, "result")) return t(`result needs a result or an error.`);
   if (JSON.stringify(params.result ?? null).length > MAX_TOOL_JSON) {
-    finish(id, failed("failed", "The tool's result is over 1 MB."));
+    finish(id, failed("failed", t(`The tool's result is over 1 MB.`)));
     return null;
   }
   finish(id, { ok: true, result: params.result ?? null });

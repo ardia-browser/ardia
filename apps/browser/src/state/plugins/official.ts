@@ -14,6 +14,8 @@ import { afterPluginScan } from "./scanListeners";
 import { adoptExactApproval, ALREADY_ASKING, consentTarget, promoteCandidate, requestPluginConsent, rescanPlugins } from "./lifecycle";
 import { relinkPrograms } from "./programs";
 import { activeManifest, approvalMatches, currentPlugins, setOfficialFetch, usePlugins, type PluginListing, type PluginsStore } from "./store";
+import { t } from "../../lib/uiLanguage";
+
 
 export { COMING_SOON, OFFICIAL_CATALOGUE, OFFICIAL_NAMES, PRESELECTED_PLUGINS, officialCatalogue } from "./officialPin";
 
@@ -87,14 +89,14 @@ function linkOutcome(name: string): InstallResult | null {
   if (fetch?.state === "promoting") return null;
   if (fetch?.state === "failed") return { ok: false, reason: `Couldn't switch to the download: ${fetch.reason}` };
   const manifest = activeManifest(s, name);
-  if (!manifest) return { ok: false, reason: "It changed while installing. Try again." };
+  if (!manifest) return { ok: false, reason: t(`It changed while installing. Try again.`) };
   if (!manifest.programs.length) return { ok: true };
   const programs = s.programs[name];
   if (!programs || programs.state === "linking" || programs.hash !== s.listings[name]?.hash) return null;
   if (programs.state === "failed") return { ok: false, reason: `Installed, but not on your PATH: ${programs.reason}` };
   if (programs.adoption === "retrying") return null;
-  if (programs.adoption === "busy") return { ok: false, reason: "Installed, but the old install is busy updating. Try again in a moment." };
-  if (programs.adoption === "failed") return { ok: false, reason: "Installed, but the old install couldn't be switched over to it." };
+  if (programs.adoption === "busy") return { ok: false, reason: t(`Installed, but the old install is busy updating. Try again in a moment.`) };
+  if (programs.adoption === "failed") return { ok: false, reason: t(`Installed, but the old install couldn't be switched over to it.`) };
   const refused = Object.values(programs.refused);
   return refused.length ? { ok: false, reason: `Installed, but ${refused[0]}` } : { ok: true };
 }
@@ -113,11 +115,11 @@ function linked(name: string): Promise<InstallResult> {
 }
 
 export const FETCH_REASONS: Record<Exclude<OfficialFetchResult, { ok: true }>["code"], string> = {
-  offline: "Couldn't download it. Check your internet connection, then try again.",
-  failed: "Couldn't download it. Try again.",
-  verify: "The download didn't match the copy this version of Ardia trusts, so it wasn't installed.",
+  offline: t(`Couldn't download it. Check your internet connection, then try again.`),
+  failed: t(`Couldn't download it. Try again.`),
+  verify: t(`The download didn't match the copy this version of Ardia trusts, so it wasn't installed.`),
   cancelled: "Cancelled.",
-  unsupported: `Not available in this version of Ardia.`,
+  unsupported: t(`Not available in this version of Ardia.`),
 };
 
 let progressWatched = false;
@@ -183,7 +185,7 @@ export const isOfficialName = (s: Pick<PluginsStore, "listings" | "candidates" |
 export function installOfficialPlugin(name: string, options: InstallOptions = {}): Promise<InstallResult> {
   if (!PLATFORM_FEATURES.plugins) return Promise.resolve({ ok: false, reason: `Not available on ${PLATFORM_TERMS.os} yet.` });
   const plugin = officialPlugins(currentPlugins()).find((p) => p.name === name);
-  if (!plugin || plugin.state === "unsupported" || plugin.state === "comingSoon") return Promise.resolve({ ok: false, reason: "Not an official plugin." });
+  if (!plugin || plugin.state === "unsupported" || plugin.state === "comingSoon") return Promise.resolve({ ok: false, reason: t(`Not an official plugin.`) });
   if (plugin.state === "installed" && !plugin.update) {
     relinkPrograms(name);
     return linked(name);
@@ -209,9 +211,9 @@ function askToInstall(name: string, options: InstallOptions): Promise<InstallRes
   const target = consentTarget(name, true);
   if (!target?.manifest || !target.hash) {
     const listing = candidateOf(currentPlugins(), name) ?? currentPlugins().listings[name];
-    return Promise.resolve({ ok: false, reason: listing?.problems[0] ?? "It can't load." });
+    return Promise.resolve({ ok: false, reason: listing?.problems[0] ?? t(`It can't load.`) });
   }
-  if (!requestPluginConsent(name, true)) return Promise.resolve({ ok: false, reason: "Can't install it right now." });
+  if (!requestPluginConsent(name, true)) return Promise.resolve({ ok: false, reason: t(`Can't install it right now.`) });
   options.onConsent?.(currentPlugins().consent!.id);
   const done = waitForInstall(name);
   if (options.showSheet !== false) openSettings("plugins", null, name);

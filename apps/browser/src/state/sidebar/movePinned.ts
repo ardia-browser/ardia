@@ -3,6 +3,8 @@ import { activeTab, pinKeyOf, pinnedSectionTitle } from "../browser/model";
 import { selectedTabIds } from "../pins/organize";
 import { groupOf } from "../pins/tabGrouping";
 import type { Tab } from "../browser/types";
+import { t } from "../../lib/uiLanguage";
+
 
 type ListSpot = { windowId: string; key: string; list: string[]; index: number; order: number; groupId: string | null };
 
@@ -10,7 +12,7 @@ const listSpots = new Map<string, ListSpot>();
 let spotOrder = 0;
 const store = () => useBrowser.getState();
 
-export const movePinnedTitle = (s: BrowserState, tab: Tab | undefined) => (tab?.pin ? "Move out of Pinned" : `Move to ${pinnedSectionTitle(s, tab)}`);
+export const movePinnedTitle = (s: BrowserState, tab: Tab | undefined) => (tab?.pin ? t(`Move out of Pinned`) : `Move to ${pinnedSectionTitle(s, tab)}`);
 
 const listTabIds = (s: BrowserState, windowId: string, profileId: string, except: Set<string>) =>
   (s.windows[windowId]?.tabIds ?? []).filter((id) => {

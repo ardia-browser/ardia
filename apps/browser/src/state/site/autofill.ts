@@ -4,20 +4,22 @@ import { activeTabId } from "../browser/model";
 import { isTabReady } from "../tabs/pageState";
 import { openSettings, SETTINGS_DETAIL } from "../settings/settingsWindows";
 import { currentManagerPlugin, openSystemPanel } from "./passwordManager";
+import { t } from "../../lib/uiLanguage";
+
 
 export { deleteAddress, deleteCard, revealCardNumber, saveAddress, saveCard, setAutofillSettings, type SavedAddress, type SavedCard } from "../../platform/autofill";
 
 export type { CardNetwork };
 
 const NETWORK_NAMES: Record<CardNetwork, string> = {
-  visa: "Visa",
-  mastercard: "Mastercard",
-  amex: "American Express",
-  discover: "Discover",
-  diners: "Diners Club",
-  jcb: "JCB",
-  unionpay: "UnionPay",
-  card: "Card",
+  visa: t(`Visa`),
+  mastercard: t(`Mastercard`),
+  amex: t(`American Express`),
+  discover: t(`Discover`),
+  diners: t(`Diners Club`),
+  jcb: t(`JCB`),
+  unionpay: t(`UnionPay`),
+  card: t(`Card`),
 };
 
 export const cardNetworkName = (network: CardNetwork) => NETWORK_NAMES[network];

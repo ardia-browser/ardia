@@ -3,6 +3,8 @@ import type { SettingsPane } from "../../../state/settings/settingsWindows";
 import { keyText } from "../../../state/commands/keyText";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
+import { t } from "../../../lib/uiLanguage";
+
 
 const inSidebar = (_: unknown, env: SettingsEnv) => !env.top;
 const syncOn = (_: unknown, env: SettingsEnv) => !!env.syncOn;
@@ -11,167 +13,167 @@ const blockerOffered = () => PLATFORM_FEATURES.contentBlocker;
 export const generalRows = {
   general: [
     {
-      section: "Default browser",
+      section: t(`Default browser`),
       rows: {
         defaultBrowser: {
-          title: "Default browser",
+          title: t(`Default browser`),
           description: `Make ${APP} your default browser.`,
-          keywords: ["default", "set as default", "links"],
+          keywords: ["default", t(`set as default`), "links"],
         },
       },
     },
     {
-      section: "Startup and quitting",
+      section: t(`Startup and quitting`),
       rows: {
         openAtLogin: {
           title: `Open ${APP} at login`,
-          keywords: ["startup", "launch", "login items", "boot"],
+          keywords: ["startup", "launch", t(`login items`), "boot"],
         },
         windowsAndTabs: {
-          title: "When Ardia quits",
+          title: t(`When Ardia quits`),
           description: `What you see the next time you open it. ${PLATFORM_FEATURES.menuBar ? "Closed windows stay in History › Recently Closed." : `${keyText("⇧⌘T")} reopens closed windows too.`}`,
-          keywords: ["restore", "session", "reopen", "preserve tabs", "start fresh", "windows and tabs"],
+          keywords: ["restore", "session", "reopen", t(`preserve tabs`), t(`start fresh`), t(`windows and tabs`)],
         },
         askBefore: {
-          title: "Ask before",
-          description: "Ardia asks before doing any of these.",
-          keywords: ["quit", "confirm", "cmd q", "last window", "exit", "warn before quitting", "close window", "warn before closing a window with multiple tabs", "close tab", "warn before closing last tab in a profile", "close group", "folder", "accidentally", "warn before closing a tab group", "warn before moving tabs between profiles", "warn", "last tab", "move tab"],
+          title: t(`Ask before`),
+          description: t(`Ardia asks before doing any of these.`),
+          keywords: ["quit", "confirm", t(`cmd q`), t(`last window`), "exit", t(`warn before quitting`), t(`close window`), t(`warn before closing a window with multiple tabs`), t(`close tab`), t(`warn before closing last tab in a profile`), t(`close group`), "folder", "accidentally", t(`warn before closing a tab group`), t(`warn before moving tabs between profiles`), "warn", t(`last tab`), t(`move tab`)],
         },
       },
     },
     {
-      section: "Web engine",
+      section: t(`Web engine`),
       rows: {
         engineMode: { ...ENGINE_MODE_ROW, keywords: [...ENGINE_MODE_ROW.keywords, ...WEBKIT_LIMITS_KEYWORDS], shown: () => PLATFORM_FEATURES.webKit },
       },
     },
     {
-      section: "Downloads",
+      section: t(`Downloads`),
       rows: {
         downloadsFolder: {
-          title: "Downloads folder",
-          description: "Where downloaded files are saved.",
-          keywords: ["download location", "save to", "path", "folder"],
+          title: t(`Downloads folder`),
+          description: t(`Where downloaded files are saved.`),
+          keywords: [t(`download location`), t(`save to`), "path", "folder"],
           shown: (s) => !s.separateDownloadFolders,
-          needs: "Turn off Separate folder for each profile to set one folder here",
+          needs: t(`Turn off Separate folder for each profile to set one folder here`),
         },
         separateDownloadFolders: {
-          title: "Separate folder for each profile",
-          description: "Each profile saves to its own folder.",
-          keywords: ["all profiles", "global", "download location", "use these settings for every profile", "per profile"],
+          title: t(`Separate folder for each profile`),
+          description: t(`Each profile saves to its own folder.`),
+          keywords: [t(`all profiles`), "global", t(`download location`), t(`use these settings for every profile`), t(`per profile`)],
         },
         askWhereToSave: {
-          title: "Ask where to save each file",
-          keywords: ["download location", "save as", "prompt", "choose folder"],
+          title: t(`Ask where to save each file`),
+          keywords: [t(`download location`), t(`save as`), "prompt", t(`choose folder`)],
         },
       },
     },
     {
-      section: "Content blocking",
+      section: t(`Content blocking`),
       rows: {
         blockAds: {
-          title: "Block ads",
-          keywords: ["ad blocker", "adblock", "ublock origin", "easylist"],
+          title: t(`Block ads`),
+          keywords: [t(`ad blocker`), "adblock", t(`ublock origin`), "easylist"],
           shown: blockerOffered,
         },
         blockTrackers: {
-          title: "Block trackers",
+          title: t(`Block trackers`),
           keywords: ["tracking", "easyprivacy", "fingerprinting"],
           shown: blockerOffered,
         },
         blockCookieBanners: {
-          title: "Block cookie banners",
+          title: t(`Block cookie banners`),
           keywords: ["cookies", "consent", "gdpr", "popups"],
           shown: blockerOffered,
         },
         filterLists: {
-          title: "Filter lists",
+          title: t(`Filter lists`),
           explained: true,
-          description: "Extra filter lists for the blocker.",
-          keywords: ["filter lists", "annoyances", "malware", "regional", "ad block settings", "custom filter list", "add filter list", "import list", "subscribe", "advanced settings", "sites without blocking", "allowlist", "exceptions", "hidden elements", "hide element"],
+          description: t(`Extra filter lists for the blocker.`),
+          keywords: [t(`filter lists`), "annoyances", "malware", "regional", t(`ad block settings`), t(`custom filter list`), t(`add filter list`), t(`import list`), "subscribe", t(`advanced settings`), t(`sites without blocking`), "allowlist", "exceptions", t(`hidden elements`), t(`hide element`)],
           shown: blockerOffered,
         },
       },
     },
     {
-      section: "Sync",
+      section: t(`Sync`),
       rows: {
         sync: {
-          title: "Sync",
+          title: t(`Sync`),
           explained: true,
           description: `Keep your profiles, tabs and settings the same on every ${PLATFORM_TERMS.syncedComputer}.`,
-          keywords: [PLATFORM_TERMS.cloudDrive.toLowerCase(), "recovery phrase", "devices", "turn on sync", "end to end", "encrypted"],
+          keywords: [PLATFORM_TERMS.cloudDrive.toLowerCase(), t(`recovery phrase`), "devices", t(`turn on sync`), t(`end to end`), "encrypted"],
         },
         syncFolder: {
-          title: "Sync folder",
-          keywords: ["icloud drive", "dropbox", "folder"],
+          title: t(`Sync folder`),
+          keywords: [t(`icloud drive`), "dropbox", "folder"],
           shown: syncOn,
-          needs: "Turn on Sync to use this",
+          needs: t(`Turn on Sync to use this`),
         },
         whatSyncs: {
-          title: "What syncs",
-          description: "What to sync.",
-          keywords: ["unpinned tabs", "regular tabs", "today tabs", "arc", "spaces", `tabs on every ${PLATFORM_TERMS.syncedComputer.toLowerCase()}`, "same tabs", `continue on another ${PLATFORM_TERMS.syncedComputer.toLowerCase()}`, "sync all open tabs", "open tabs", "data types"],
+          title: t(`What syncs`),
+          description: t(`What to sync.`),
+          keywords: [t(`unpinned tabs`), t(`regular tabs`), t(`today tabs`), "arc", "spaces", `tabs on every ${PLATFORM_TERMS.syncedComputer.toLowerCase()}`, t(`same tabs`), `continue on another ${PLATFORM_TERMS.syncedComputer.toLowerCase()}`, t(`sync all open tabs`), t(`open tabs`), t(`data types`)],
           shown: syncOn,
-          needs: "Turn on Sync to use this",
+          needs: t(`Turn on Sync to use this`),
         },
         syncDevices: {
-          title: "Devices",
-          description: "Computers syncing with this one.",
-          keywords: ["devices", "computers", "macs", "remove device"],
+          title: t(`Devices`),
+          description: t(`Computers syncing with this one.`),
+          keywords: ["devices", "computers", "macs", t(`remove device`)],
           shown: syncOn,
-          needs: "Turn on Sync to use this",
+          needs: t(`Turn on Sync to use this`),
         },
       },
     },
     {
-      section: "Updates",
+      section: t(`Updates`),
       rows: {
         autoUpdate: {
-          title: "Install updates automatically",
+          title: t(`Install updates automatically`),
           explained: true,
-          description: "Installs updates on the next restart.",
-          keywords: ["update", "install", "sparkle", "check for updates automatically", "automatic updates"],
+          description: t(`Installs updates on the next restart.`),
+          keywords: ["update", "install", "sparkle", t(`check for updates automatically`), t(`automatic updates`)],
         },
         updateChannel: {
-          title: "Update channel",
+          title: t(`Update channel`),
           explained: true,
-          description: "Nightly gets fixes first.",
+          description: t(`Nightly gets fixes first.`),
           keywords: ["nightly", "stable", "beta"],
         },
         version: {
-          title: "Version",
-          keywords: ["version", "update", "about", "check for updates now", "engine", "ardiacore", "chromium", "drm", "netflix", "disney", "github", "open source", "gpl", "license", "source code", "credits", "legal", "licenses", "check for updates", "chromium version", "widevine"],
+          title: t(`Version`),
+          keywords: ["version", "update", "about", t(`check for updates now`), "engine", "ardiacore", "chromium", "drm", "netflix", "disney", "github", t(`open source`), "gpl", "license", t(`source code`), "credits", "legal", "licenses", t(`check for updates`), t(`chromium version`), "widevine"],
         },
       },
     },
     {
-      section: "Crash reports",
+      section: t(`Crash reports`),
       rows: {
         shareDiagnostics: {
-          title: "Share anonymous crash reports",
-          keywords: ["telemetry", "analytics", "diagnostics", "crash", "share anonymous crash reports and usage stats"],
+          title: t(`Share anonymous crash reports`),
+          keywords: ["telemetry", "analytics", "diagnostics", "crash", t(`share anonymous crash reports and usage stats`)],
         },
         crashDetails: {
-          title: "Details",
-          description: "What's sent and what's kept on this computer.",
-          keywords: ["telemetry", "data collection", "analytics", "usage data", "what's sent", "install id", "identity", "reset id", "avatar", "anonymous name", "your anonymous id", "view my data", "local copy", "export", "download my data", "telemetry log", "diagnostics", "events", "the last 7 days", "whats sent", "anonymous id", "logs", "privacy"],
+          title: t(`Details`),
+          description: t(`What's sent and what's kept on this computer.`),
+          keywords: ["telemetry", t(`data collection`), "analytics", t(`usage data`), t(`what's sent`), t(`install id`), "identity", t(`reset id`), "avatar", t(`anonymous name`), t(`your anonymous id`), t(`view my data`), t(`local copy`), "export", t(`download my data`), t(`telemetry log`), "diagnostics", "events", t(`the last 7 days`), t(`whats sent`), t(`anonymous id`), "logs", "privacy"],
         },
       },
     },
     {
-      section: "Import",
+      section: t(`Import`),
       rows: {
         importBrowser: {
-          title: "Import from another browser",
+          title: t(`Import from another browser`),
           description: `From Chrome, Arc, ${PLATFORM_FEATURES.hiddenBrowserSources.includes("safari") ? "Edge" : "Safari"}, Firefox and more.`,
-          keywords: ["migrate", "switch", "transfer", "import from another browser", "setup code", "demo", "ardia.dev", "preset", "arc", "layout", "apply a setup code"],
+          keywords: ["migrate", "switch", "transfer", t(`import from another browser`), t(`setup code`), "demo", "ardia.dev", "preset", "arc", "layout", t(`apply a setup code`)],
         },
         redoSetup: {
           title: `Set up ${APP} again`,
           explained: true,
-          description: "Run setup again, starting from your current settings.",
-          keywords: ["onboarding", "setup", "redo", "welcome", "start over", "walkthrough", "first run"],
+          description: t(`Run setup again, starting from your current settings.`),
+          keywords: ["onboarding", "setup", "redo", "welcome", t(`start over`), "walkthrough", t(`first run`)],
         },
       },
     },

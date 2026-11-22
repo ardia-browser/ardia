@@ -10,8 +10,10 @@ import { showToast, TOAST_LONG_DURATION_MS } from "../../state/toasts/store";
 import { useIncognito } from "../../state/tabs/hooks";
 import { countUsage } from "../../state/telemetry/telemetry";
 import type { TabPager } from "./TabPager";
+import { t } from "../../lib/uiLanguage";
 
-export const TAB_SWIPE_HINT = { delayMs: 1500, text: "Swipe the bar sideways to switch tabs" } as const;
+
+export const TAB_SWIPE_HINT = { delayMs: 1500, text: t(`Swipe the bar sideways to switch tabs`) } as const;
 
 export function TabSwipeHint({ pager, toward, tabId, calm }: { pager: TabPager; toward: -1 | 0 | 1; tabId: string; calm: boolean }) {
   useTabSwipeHint(pager, toward, tabId, calm);

@@ -9,6 +9,8 @@ import { setConnectPhrase, useConnectDraft } from "../../state/sync/connectDraft
 import { phraseFooter } from "../../state/sync/syncRules";
 import { PasteAction, SYSTEM_PASTE_SIZE } from "../sync/SyncPage";
 import { legibleInk, modifierList, settingsChrome } from "../ui";
+import { t } from "../../lib/uiLanguage";
+
 
 const SECONDARY = { type: "hierarchical", style: "secondary" } as const;
 
@@ -33,7 +35,7 @@ export function ExpoPhrasePage() {
   const footerInk = footer.tone === "problem" ? legibleInk("red") : footer.tone === "good" ? legibleInk("green") : null;
   return (
     <Toolbar>
-      <Form modifiers={modifierList(navigationTitle("Enter Words"), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), scrollDismissesKeyboard("interactively"))}>
+      <Form modifiers={modifierList(navigationTitle(t(`Enter Words`)), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), scrollDismissesKeyboard("interactively"))}>
         <Section
           header={
             <HStack>
@@ -46,7 +48,7 @@ export function ExpoPhrasePage() {
         >
           <TextField
             text={text}
-            placeholder="Enter your 24-word recovery phrase"
+            placeholder={t(`Enter your 24-word recovery phrase`)}
             axis="vertical"
             autoFocus={!initial}
             onTextChange={setDraft}
@@ -65,7 +67,7 @@ export function ExpoPhrasePage() {
       </Form>
       <Toolbar.Content>
         <ToolbarItem placement="confirmationAction">
-          <Button label="Use Phrase" onPress={use} modifiers={[disabled(!check.isValid)]} />
+          <Button label={t(`Use Phrase`)} onPress={use} modifiers={[disabled(!check.isValid)]} />
         </ToolbarItem>
       </Toolbar.Content>
     </Toolbar>

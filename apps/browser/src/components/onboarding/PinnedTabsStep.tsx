@@ -12,6 +12,8 @@ import { SelectTile, useOnboardingColors } from "./Parts";
 import { StepActions, StepLayout } from "./StepLayout";
 import { trafficLights } from "./tokens";
 import { trafficLightsDrawn } from "../../lib/windowChrome";
+import { t } from "../../lib/uiLanguage";
+
 
 export function PinnedTabsStep() {
   const windowId = useOnboarding((s) => s.windowId);
@@ -31,11 +33,11 @@ export function PinnedTabsStep() {
 
   return (
     <StepLayout
-      title="Keep your favorite apps handy"
-      subtitle="Pin the apps you use most. They stay put when you open Ardia."
+      title={t(`Keep your favorite apps handy`)}
+      subtitle={t(`Pin the apps you use most. They stay put when you open Ardia.`)}
       actions={
         <StepActions
-          continueTitle={selected.length ? `Pin ${selected.length} ${selected.length === 1 ? "Tab" : "Tabs"}` : "Continue"}
+          continueTitle={selected.length ? `Pin ${selected.length} ${selected.length === 1 ? "Tab" : "Tabs"}` : t(`Continue`)}
           onContinue={pinSelected}
           onSkip={() => skipStep()}
         />

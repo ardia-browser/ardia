@@ -1,3 +1,4 @@
+import { t } from "../../lib/uiLanguage";
 export type TabOrigin = "typed" | "search" | "link" | "sync" | "share" | "sent";
 
 export const TAB_ORIGINS: readonly TabOrigin[] = ["typed", "search", "link", "sync", "share", "sent"];
@@ -44,7 +45,7 @@ export const isAutoArchiveInterval = (raw: unknown): raw is AutoArchiveInterval 
 
 export function autoArchiveTitle(interval: AutoArchiveInterval): string {
   const duration = AUTO_ARCHIVE_INTERVALS[interval];
-  if (duration === null) return "Never";
+  if (duration === null) return t(`Never`);
   const plural = (count: number, unit: string) => (count === 1 ? `1 ${unit}` : `${count} ${unit}s`);
   return `After ${duration >= 24 * HOUR ? plural(duration / (24 * HOUR), "day") : plural(duration / HOUR, "hour")}`;
 }
@@ -96,7 +97,7 @@ export const titleAfterFailedLoad = (beforeLoad: string | undefined, current: st
 
 export const coverIsCapturable = (finishedLoading: boolean | undefined, covered: boolean) => finishedLoading === true && !covered;
 
-const folded = (text: string) => text.normalize("NFD").replace(/\p{M}/gu, "").toLocaleLowerCase();
+const folded = (text: string) => text.normalize(t(`NFD`)).replace(/\p{M}/gu, "").toLocaleLowerCase();
 
 export function tabMatchesQuery(tab: Pick<BrowserTab, "title" | "url" | "isPrivate">, query: string): boolean {
   const needle = folded(query.trim());

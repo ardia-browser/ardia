@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import { Animated } from "react-native";
 import { curve } from "../../ui/motion";
+import { t } from "../../../lib/uiLanguage";
+
 
 export type Stop = readonly [number, number];
 
@@ -33,7 +35,7 @@ export function tracker(p: Animated.Value, duration: number) {
   t.in = (ms: number, dur = 240) => track(p, duration, [[ms, 0], [ms + dur, 1]]);
   t.out = (ms: number, dur = 240) => track(p, duration, [[ms, 1], [ms + dur, 0]]);
   t.step = (ms: number, from = 0, to = 1) => track(p, duration, [[ms, from], [ms + 1, to]], linear);
-  t.deg = (stops: readonly Stop[]) => track(p, duration, stops).interpolate({ inputRange: [0, 360], outputRange: ["0deg", "360deg"], extrapolate: "extend" });
+  t.deg = (stops: readonly Stop[]) => track(p, duration, stops).interpolate({ inputRange: [0, 360], outputRange: [t(`0deg`), t(`360deg`)], extrapolate: "extend" });
   return t;
 }
 

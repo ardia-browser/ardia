@@ -8,10 +8,12 @@ import { launchActionIds, MAX_LAUNCH_ACTIONS } from "../automation/launchActions
 import { PLUGIN_EVENTS } from "../automation/eventNames";
 import { PLUGIN_SCHEMA_FILE, pluginSchemaJson } from "../../lib/pluginSchema";
 import { PLUGIN_RULES } from "../plugins/appChecks";
+import { t } from "../../lib/uiLanguage";
+
 
 export const CONFIG_SCHEMA_FILE = "config.schema.json";
 export const THEME_SCHEMA_FILE = "theme.schema.json";
-const CONFIG_THEME_PATTERN = "^(?:[a-z0-9][a-z0-9_-]*|plugin:[a-z0-9][a-z0-9-]{0,39}/[A-Za-z0-9_-]{1,40})$";
+const CONFIG_THEME_PATTERN = t(`^(?:[a-z0-9][a-z0-9_-]*|plugin:[a-z0-9][a-z0-9-]{0,39}/[A-Za-z0-9_-]{1,40})$`);
 
 function shortcutsSchema(): JsonSchema {
   const properties: Record<string, JsonSchema> = {};
@@ -27,7 +29,7 @@ function settingSchema(key: (typeof CONFIG_SETTING_KEYS)[number]): JsonSchema {
       items: { type: "string", enum: launchActionIds() },
       maxItems: MAX_LAUNCH_ACTIONS,
       default: [],
-      description: "Commands Ardia runs in the focused window after it restores the session, like [\"newTab\"]. Command ids, or id:variant.",
+      description: t(`Commands Ardia runs in the focused window after it restores the session, like ["newTab"]. Command ids, or id:variant.`),
     };
   }
   const spec = SETTING_SPECS[key];
@@ -39,11 +41,11 @@ function settingSchema(key: (typeof CONFIG_SETTING_KEYS)[number]): JsonSchema {
 export function configSchema(): object {
   return {
     $schema: JSON_SCHEMA_DIALECT,
-    description: "Ardia's config.json. Ardia applies it at launch and whenever it changes; it never writes it.",
+    description: t(`Ardia's config.json. Ardia applies it at launch and whenever it changes; it never writes it.`),
     type: "object",
     properties: {
       $schema: { type: "string" },
-      theme: { type: ["string", "null"], pattern: CONFIG_THEME_PATTERN, description: "A theme in themes/<name>.json, a plugin's theme as plugin:<plugin>/<theme>, or null for Ardia's own", default: null },
+      theme: { type: ["string", "null"], pattern: CONFIG_THEME_PATTERN, description: t(`A theme in themes/<name>.json, a plugin's theme as plugin:<plugin>/<theme>, or null for Ardia's own`), default: null },
       settings: {
         type: "object",
         properties: Object.fromEntries(CONFIG_SETTING_KEYS.map((key) => [key, settingSchema(key)])),

@@ -11,6 +11,8 @@ import { OpError } from "./workspaceTargets";
 import { currentManagerPlugin } from "../site/passwordManager";
 import { noteSocketPasswordManagerRefused } from "../telemetry/cliCounts";
 import { consentToken } from "../telemetry/client";
+import { t } from "../../lib/uiLanguage";
+
 
 const ACTIONS = ["play", "pause", "toggle", "next", "previous", "seekBy", "seekTo", "stop"] as const;
 
@@ -38,7 +40,7 @@ function control(params: Record<string, unknown>) {
   const t = tabOf(params.tab);
   const seeks = params.action === "seekBy" || params.action === "seekTo";
   if (seeks !== (params.seconds !== undefined)) throw new OpError("bad_request", seeks ? `${params.action} needs seconds.` : `${params.action} takes no seconds.`);
-  if (params.action === "seekTo" && (params.seconds as number) < 0) throw new OpError("bad_request", "seekTo takes a position of 0 seconds or more.");
+  if (params.action === "seekTo" && (params.seconds as number) < 0) throw new OpError("bad_request", t(`seekTo takes a position of 0 seconds or more.`));
   mediaCommand(t.id, params.action as (typeof ACTIONS)[number], params.seconds as number | undefined);
   return { ok: true };
 }
@@ -84,25 +86,25 @@ async function removePassword(params: Record<string, unknown>, call: SocketCall)
   ardiaKeepsPasswords(params);
   const engine = engineOf(params);
   const known = (await listPasswords(engine)).some((p) => p.origin === params.origin && p.username === params.username);
-  if (!known) throw new OpError("no_window", "There's no saved login with that origin and username.");
+  if (!known) throw new OpError("no_window", t(`There's no saved login with that origin and username.`));
   call.stillServing();
   await deletePassword(engine, params.origin as string, params.username as string);
-  expect(!(await listPasswords(engine)).some((p) => p.origin === params.origin && p.username === params.username), "the login is still saved.");
+  expect(!(await listPasswords(engine)).some((p) => p.origin === params.origin && p.username === params.username), t(`the login is still saved.`));
   return { ok: true };
 }
 
 export const MISC_METHODS: MethodSpec[] = [
-  { name: "media.list", mutates: false, description: "Tabs playing or paused media, with what's playing", params: obj({}), result: "[{tab, window, title, artist, state, position, duration, …}]", run: mediaList },
+  { name: "media.list", mutates: false, description: t(`Tabs playing or paused media, with what's playing`), params: obj({}), result: t(`[{tab, window, title, artist, state, position, duration, …}]`), run: mediaList },
   {
     name: "media.control",
     mutates: true,
-    description: "Play, pause, skip or seek a tab's media",
-    params: obj({ tab: TAB, action: oneOf(ACTIONS, "What to do"), seconds: { type: "number", minimum: -86400, maximum: 864000, description: "For seekBy (may be negative) and seekTo" } }, ["tab", "action"]),
+    description: t(`Play, pause, skip or seek a tab's media`),
+    params: obj({ tab: TAB, action: oneOf(ACTIONS, t(`What to do`)), seconds: { type: "number", minimum: -86400, maximum: 864000, description: t(`For seekBy (may be negative) and seekTo`) } }, ["tab", "action"]),
     result: "{ok}",
     run: control,
   },
-  { name: "sync.status", mutates: false, description: "Sync: on or off, its folder, what syncs, devices and their tabs", params: obj({}), result: "{status, enabled, folder, types, profiles, devices, remoteTabs, …}", run: syncStatus },
-  { name: "passwords.list", mutates: false, description: "Saved logins: origin and username only, never the password", params: obj({ profile: PROFILE }), result: "[{origin, username, created, modified}]", run: passwordsList },
-  { name: "passwords.remove", mutates: true, description: "Delete a saved login", params: obj({ profile: PROFILE, origin: text("Its origin, as passwords.list gives it"), username: text("Its username") }, ["origin", "username"]), result: "{ok}", run: removePassword },
-  { name: "autofill.list", mutates: false, description: "Saved addresses, and cards by network, last four digits and expiry, never the number", params: obj({ profile: PROFILE }), result: "{addresses, cards}", run: autofillList },
+  { name: "sync.status", mutates: false, description: t(`Sync: on or off, its folder, what syncs, devices and their tabs`), params: obj({}), result: t(`{status, enabled, folder, types, profiles, devices, remoteTabs, …}`), run: syncStatus },
+  { name: "passwords.list", mutates: false, description: t(`Saved logins: origin and username only, never the password`), params: obj({ profile: PROFILE }), result: t(`[{origin, username, created, modified}]`), run: passwordsList },
+  { name: "passwords.remove", mutates: true, description: t(`Delete a saved login`), params: obj({ profile: PROFILE, origin: text(t(`Its origin, as passwords.list gives it`)), username: text(t(`Its username`)) }, ["origin", "username"]), result: "{ok}", run: removePassword },
+  { name: "autofill.list", mutates: false, description: t(`Saved addresses, and cards by network, last four digits and expiry, never the number`), params: obj({ profile: PROFILE }), result: t(`{addresses, cards}`), run: autofillList },
 ];

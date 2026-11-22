@@ -1,5 +1,7 @@
 import type { Counted } from "../../lib/telemetrySchema.ts";
 import type { TrayRow } from "./omnibox.ts";
+import { t } from "../../lib/uiLanguage";
+
 
 export type PasteOffer = "link" | "text";
 
@@ -7,8 +9,8 @@ export const PASTE_ROW_KEY = "paste";
 
 export function withPasteRow(rows: TrayRow[], typed: string, offer: PasteOffer | null): TrayRow[] {
   if (typed.trim() || !offer) return rows;
-  const detail = offer === "link" ? "Link You Copied" : "Text You Copied";
-  return [{ key: PASTE_ROW_KEY, kind: "paste", title: "Paste and Go", detail, url: "", offer }, ...rows];
+  const detail = offer === "link" ? t(`Link You Copied`) : t(`Text You Copied`);
+  return [{ key: PASTE_ROW_KEY, kind: "paste", title: t(`Paste and Go`), detail, url: "", offer }, ...rows];
 }
 
 export type PasteTap = { go: string | null; count: Counted };

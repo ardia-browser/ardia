@@ -4,6 +4,8 @@ import { requireOptionalNativeModule, uuid } from "expo-modules-core";
 import { Platform } from "react-native";
 import { appVersionOf, osVersionOf, type DeviceFacts } from "../lib/telemetrySchema";
 import { system } from "@ardia/phone-native";
+import { t } from "../lib/uiLanguage";
+
 
 const LOGS_URL = "https://ardia.dev/otel/v1/logs";
 
@@ -26,7 +28,7 @@ export function deviceFacts(): DeviceFacts {
 
 type ProcessClock = { processStartedAt?: () => number | Promise<number> };
 
-const processClock = requireOptionalNativeModule<ProcessClock>("ArdiaPhoneSystem");
+const processClock = requireOptionalNativeModule<ProcessClock>(t(`ArdiaPhoneSystem`));
 
 export async function processStartedAt(): Promise<number | null> {
   try {
@@ -47,7 +49,7 @@ export function launchBackdropShownAt(): number | null {
 }
 
 export async function postTelemetry(body: string, signal: AbortSignal): Promise<number> {
-  const response = await fetch(LOGS_URL, { method: "POST", headers: { "Content-Type": "application/json", [INGEST_KEY_HEADER]: APP_INGEST_KEY }, body, signal });
+  const response = await fetch(LOGS_URL, { method: t(`POST`), headers: { t(`Content-Type`): "application/json", [INGEST_KEY_HEADER]: APP_INGEST_KEY }, body, signal });
   return response.status;
 }
 

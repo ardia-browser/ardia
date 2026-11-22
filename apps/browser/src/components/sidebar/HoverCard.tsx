@@ -33,6 +33,8 @@ import { TabIcon } from "./TabIcon";
 import { HoverPlayer, useShowsMiniPlayer } from "../media/HoverPlayer";
 import { useMedia, usePictureInPicture } from "../../state/media/media";
 import { noteTabHoverCardPress } from "../../state/telemetry/hoverCardCounts";
+import { t } from "../../lib/uiLanguage";
+
 
 const WIDTH = 264;
 
@@ -97,19 +99,19 @@ function TabCard({ tabId, windowId, anchor }: { tabId: string; windowId: string;
         </Text>
       ) : null}
       <View style={{ flexDirection: "row", gap: space.xs, marginTop: space.m }}>
-        <ActionTile caption icon={tab.pin ? "pin.slash" : "pin"} label={tab.pin ? "Unpin" : "Pin"} onPress={() => (noteTabHoverCardPress(false), togglePin(tabId))} />
+        <ActionTile caption icon={tab.pin ? "pin.slash" : "pin"} label={tab.pin ? t(`Unpin`) : t(`Pin`)} onPress={() => (noteTabHoverCardPress(false), togglePin(tabId))} />
         {tab.url && showBookmarks ? (
           <ActionTile caption
             icon={bookmarked ? "bookmark.fill" : "bookmark"}
             active={bookmarked}
-            label="Bookmark"
+            label={t(`Bookmark`)}
             onPress={() => (noteTabHoverCardPress(false), toggleBookmarkInWindow(windowId, { url: tab.url, title: tabTitle(tab), favicon: tab.favicon }))}
           />
         ) : null}
         {!isActive && !tab.pin && splitViewAvailable ? (
           <ActionTile caption
             icon="rectangle.split.2x1"
-            label="Split"
+            label={t(`Split`)}
             onPress={() => {
               noteTabHoverCardPress(false);
               dismissHover();
@@ -117,11 +119,11 @@ function TabCard({ tabId, windowId, anchor }: { tabId: string; windowId: string;
             }}
           />
         ) : null}
-        {video ? <ActionTile caption icon={pip ? "pip.exit" : "pip.enter"} label={pip ? "Exit PiP" : "PiP"} onPress={(press) => (noteTabHoverCardPress(false), togglePip(press))} /> : null}
+        {video ? <ActionTile caption icon={pip ? "pip.exit" : "pip.enter"} label={pip ? t(`Exit PiP`) : t(`PiP`)} onPress={(press) => (noteTabHoverCardPress(false), togglePip(press))} /> : null}
         {away ? (
           <ActionTile caption
             icon="arrow.uturn.backward"
-            label="Reset"
+            label={t(`Reset`)}
             onPress={() => {
               noteTabHoverCardPress(true);
               dismissHover();

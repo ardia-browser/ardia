@@ -12,6 +12,8 @@ import { LAUNCH_REPLAY_MS } from "./eventNames";
 import { launchActionApproval } from "./hookPolicy";
 import { offerLaunchActions } from "./hookRules";
 import type { EventSend } from "./storeEvents";
+import { t } from "../../lib/uiLanguage";
+
 
 export type LaunchRecord = { time: number; monotonic: number; data: Record<string, unknown> };
 
@@ -63,7 +65,7 @@ function signal(stops: (() => void)[], start: () => () => void) {
   try {
     stops.push(start());
   } catch (error) {
-    console.warn("[automation] a system signal isn't available", error);
+    console.warn(t(`[automation] a system signal isn't available`), error);
   }
 }
 

@@ -13,11 +13,13 @@ import { currentBookmarks } from "../browser/current";
 import type { BookmarkNode } from "../browser/types";
 import { openInternalPage } from "../pages/urls";
 import { updateSettings } from "../settings/actions";
+import { t } from "../../lib/uiLanguage";
+
 
 export type ClickMods = { metaKey?: boolean; shiftKey?: boolean; altKey?: boolean };
 
 export async function openImportButtonMenu() {
-  const choice = await showMenu([{ id: "hide", title: "Hide Import Bookmarks Button" }]);
+  const choice = await showMenu([{ id: "hide", title: t(`Hide Import Bookmarks Button`) }]);
   if (choice === "hide") updateSettings({ bookmarksImportDismissed: true });
 }
 
@@ -27,28 +29,28 @@ export function barMenuItems(
   target: BarMenuTarget,
   { barShown, keys = menuShortcut }: { barShown: boolean; keys?: (command: string) => MenuKey },
 ): MenuItem[] {
-  if (target?.kind === "url") return menuSections(openLinkItems(), copyLinkItems(), [{ id: "edit", title: "Edit…", symbol: "pencil" }], [{ id: "delete", title: "Delete", symbol: "trash" }]);
+  if (target?.kind === "url") return menuSections(openLinkItems(), copyLinkItems(), [{ id: "edit", title: t(`Edit…`), symbol: "pencil" }], [{ id: "delete", title: t(`Delete`), symbol: "trash" }]);
   if (target?.kind === "folder")
     return menuSections(
       openAllItems(target.links),
       [
-        { id: "addGroup", title: "Add to Sidebar as Group", symbol: "sidebar.left", enabled: target.makesGroup },
-        target.restoresArc && { id: "restoreArc", title: "Restore Arc Folders as Groups" },
+        { id: "addGroup", title: t(`Add to Sidebar as Group`), symbol: "sidebar.left", enabled: target.makesGroup },
+        target.restoresArc && { id: "restoreArc", title: t(`Restore Arc Folders as Groups`) },
       ],
       [
-        { id: "rename", title: "Rename…", symbol: "pencil" },
-        { id: "addFolder", title: "New Folder…", symbol: "folder.badge.plus" },
+        { id: "rename", title: t(`Rename…`), symbol: "pencil" },
+        { id: "addFolder", title: t(`New Folder…`), symbol: "folder.badge.plus" },
       ],
-      [{ id: "delete", title: "Delete Folder", symbol: "trash" }],
+      [{ id: "delete", title: t(`Delete Folder`), symbol: "trash" }],
     );
   return menuSections(
     [
-      { id: "addPage", title: "Add Page…", symbol: "bookmark" },
-      { id: "addFolder", title: "New Folder…", symbol: "folder.badge.plus" },
+      { id: "addPage", title: t(`Add Page…`), symbol: "bookmark" },
+      { id: "addFolder", title: t(`New Folder…`), symbol: "folder.badge.plus" },
     ],
     [
-      { id: "manage", title: "Manage Bookmarks", symbol: "book", ...keys("manageBookmarks") },
-      { id: "toggleBar", title: "Show Bookmarks Bar", checked: barShown, ...keys("toggleBookmarksBar") },
+      { id: "manage", title: t(`Manage Bookmarks`), symbol: "book", ...keys("manageBookmarks") },
+      { id: "toggleBar", title: t(`Show Bookmarks Bar`), checked: barShown, ...keys("toggleBookmarksBar") },
     ],
   );
 }
@@ -87,7 +89,7 @@ export async function openBarMenu(windowId: string, profileId: string, node: Boo
   const index = node && parentId ? (folderChildren(currentBookmarks(), parentId).findIndex((n) => n.id === node.id) + 1) : undefined;
   if (choice === "addPage") void editBookmark(null, windowId, { profileId, parentId: parentId ?? undefined, index });
   if (choice === "addFolder") {
-    const title = await prompt({ title: "New Folder", placeholder: "Folder name", confirmTitle: "Create", windowId });
+    const title = await prompt({ title: t(`New Folder`), placeholder: t(`Folder name`), confirmTitle: t(`Create`), windowId });
     if (title) addBookmarkFolder({ profileId, title, parentId: parentId ?? undefined, index });
   }
   if (choice === "manage") openInternalPage("bookmarks", windowId);

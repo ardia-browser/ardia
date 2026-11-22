@@ -23,6 +23,8 @@ import { SYNC_CODE_SIZE, syncCodeFrame } from "./syncCodeFrame";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { monoFace, perLook } from "../../ui/tokens";
+import { t } from "../../../lib/uiLanguage";
+
 
 const WORDS = 24;
 
@@ -66,10 +68,10 @@ function RecoveryKitSheet() {
   };
   const more = async () => {
     const choice = await showMenu([
-      { id: "copy", title: "Copy", symbol: "doc.on.doc" },
-      ...(PLATFORM_FEATURES.sharesFiles ? [{ id: "share", title: "Share…", symbol: "square.and.arrow.up" }] : []),
+      { id: "copy", title: t(`Copy`), symbol: "doc.on.doc" },
+      ...(PLATFORM_FEATURES.sharesFiles ? [{ id: "share", title: t(`Share…`), symbol: "square.and.arrow.up" }] : []),
       { separator: true },
-      { id: "text", title: "Save as Text…", symbol: "doc.plaintext" },
+      { id: "text", title: t(`Save as Text…`), symbol: "doc.plaintext" },
     ]);
     if (choice === "copy") await copyRecoveryKit();
     else if (choice === "share") await shareRecoveryKit();
@@ -79,7 +81,7 @@ function RecoveryKitSheet() {
     <Sheet size="l" onClose={closeSettingsSheet}>
       <Box row gap="xl">
         <View style={FILL}>
-          <DialogTitle subtitle="Your Recovery Kit contains all you need to recover your data should you lose access to this device.">Save Your Recovery Kit</DialogTitle>
+          <DialogTitle subtitle={t(`Your Recovery Kit contains all you need to recover your data should you lose access to this device.`)}>Save Your Recovery Kit</DialogTitle>
           <Box row gap="m" pad="ml" radius="panel" style={[SECTION_TOP, { backgroundColor: look.warningFill }]}>
             <Symbol name="exclamationmark.triangle.fill" size={12} color={theme.warning} style={{ width: 16, height: 16 }} />
             <Text size="small" style={WARNING_TEXT()}>
@@ -92,13 +94,13 @@ function RecoveryKitSheet() {
           </Box>
           {saved ? <Body>Saved to {saved.replace(/^\/Users\/[^/]+/, "~")}.</Body> : null}
         </View>
-        <View accessibilityLabel="Recovery kit preview" style={[PREVIEW_FRAME(), { borderColor: theme.groupBorder }]}>
+        <View accessibilityLabel={t(`Recovery kit preview`)} style={[PREVIEW_FRAME(), { borderColor: theme.groupBorder }]}>
           {preview ? <Image source={{ uri: preview }} style={PREVIEW} /> : null}
         </View>
       </Box>
-      <DialogActions leading={<Button title="Other Options" onPress={() => void more()} />}>
-        <Button title="Close" onPress={closeSettingsSheet} />
-        <Button title="Save…" kind="primary" onPress={() => void save("pdf")} />
+      <DialogActions leading={<Button title={t(`Other Options`)} onPress={() => void more()} />}>
+        <Button title={t(`Close`)} onPress={closeSettingsSheet} />
+        <Button title={t(`Save…`)} kind="primary" onPress={() => void save("pdf")} />
       </DialogActions>
     </Sheet>
   );
@@ -112,19 +114,19 @@ const phraseError = (r: Awaited<ReturnType<typeof enterRecoveryPhrase>>): string
   if ("ok" in r) return null;
   switch (r.error) {
     case "wordCount":
-      return "Recovery phrase must be exactly 24 words.";
+      return t(`Recovery phrase must be exactly 24 words.`);
     case "unknownWord":
       return `“${r.word}” is not a valid recovery phrase word.`;
     case "checksum":
-      return "This recovery phrase is not valid. Please check for typos.";
+      return t(`This recovery phrase is not valid. Please check for typos.`);
     case "mismatch":
-      return "This recovery phrase doesn’t match the synced data in this folder. Check the phrase, or choose the folder your other devices sync to.";
+      return t(`This recovery phrase doesn’t match the synced data in this folder. Check the phrase, or choose the folder your other devices sync to.`);
     case "noData":
-      return "There’s no synced data in this folder yet. Choose the folder your other devices sync to, or wait for it to finish downloading.";
+      return t(`There’s no synced data in this folder yet. Choose the folder your other devices sync to, or wait for it to finish downloading.`);
     case "keychain":
       return `Couldn’t save the sync key in ${PLATFORM_TERMS.secretStore}.`;
     case "unavailable":
-      return "Sync isn’t available in this build.";
+      return t(`Sync isn’t available in this build.`);
   }
 };
 
@@ -151,7 +153,7 @@ function PhraseSheet({ folder, onChooseFolder }: { folder: FolderInfo | null; on
   if (joined) return <JoinedSheet />;
   return (
     <Sheet onClose={closeSettingsSheet}>
-      <DialogTitle subtitle="Enter your 24-word recovery phrase to sync with another device.">Connect with Recovery Phrase</DialogTitle>
+      <DialogTitle subtitle={t(`Enter your 24-word recovery phrase to sync with another device.`)}>Connect with Recovery Phrase</DialogTitle>
       <View style={CHECK_TOP}>
         <TextField
           multiline
@@ -163,7 +165,7 @@ function PhraseSheet({ folder, onChooseFolder }: { folder: FolderInfo | null; on
             setError(null);
           }}
           autoFocus
-          placeholder="Enter your 24-word recovery phrase"
+          placeholder={t(`Enter your 24-word recovery phrase`)}
         />
       </View>
       <Box row style={PHRASE_FOOT}>
@@ -171,7 +173,7 @@ function PhraseSheet({ folder, onChooseFolder }: { folder: FolderInfo | null; on
           {error ?? ""}
         </Text>
         <Text size="caption" tone={count > WORDS ? "destructive" : "textTertiary"} style={tabularNums}>
-          {count > WORDS ? "too many words" : `${count}/${WORDS} words`}
+          {count > WORDS ? t(`too many words`) : `${count}/${WORDS} words`}
         </Text>
       </Box>
       {folder ? (
@@ -180,20 +182,20 @@ function PhraseSheet({ folder, onChooseFolder }: { folder: FolderInfo | null; on
           <Text size="caption" tone="textSecondary" lines={1} style={FILL}>
             {folderLabel(folder)}
           </Text>
-          {onChooseFolder ? <Button title="Change…" kind="plain" onPress={onChooseFolder} /> : null}
+          {onChooseFolder ? <Button title={t(`Change…`)} kind="plain" onPress={onChooseFolder} /> : null}
         </Box>
       ) : null}
       <DialogActions>
-        <Button title="Cancel" onPress={closeSettingsSheet} />
-        <Button title={busy ? "Connecting…" : "Connect"} kind="primary" disabled={busy || count !== WORDS || !folder} onPress={() => void submit()} />
+        <Button title={t(`Cancel`)} onPress={closeSettingsSheet} />
+        <Button title={busy ? t(`Connecting…`) : t(`Connect`)} kind="primary" disabled={busy || count !== WORDS || !folder} onPress={() => void submit()} />
       </DialogActions>
     </Sheet>
   );
 }
 
 function sharingDescription(p: Pick<RemoteProfile, "sharesWith" | "waiting">): string {
-  if (p.waiting) return "On your other devices. Waiting for the profile it shares data with to sync.";
-  if (!p.sharesWith) return "On your other devices";
+  if (p.waiting) return t(`On your other devices. Waiting for the profile it shares data with to sync.`);
+  if (!p.sharesWith) return t(`On your other devices`);
   const { name, added } = p.sharesWith;
   return added ? `On your other devices. Shares data with ${name}, which is added too.` : `On your other devices. Shares data with ${name}.`;
 }
@@ -211,8 +213,8 @@ export function addAllRemoteProfiles(profiles: RemoteProfile[]) {
 async function confirmRemoveFromSync(profile: RemoteProfile) {
   const { confirmed } = await confirm({
     title: `Remove “${profile.name}” from Sync?`,
-    message: "It leaves this list on all your devices. A device that still has this profile keeps it, and it comes back here.",
-    confirmTitle: "Remove",
+    message: t(`It leaves this list on all your devices. A device that still has this profile keeps it, and it comes back here.`),
+    confirmTitle: t(`Remove`),
     destructive: true,
   });
   if (confirmed) removeRemoteProfile(profile.syncId);
@@ -221,8 +223,8 @@ async function confirmRemoveFromSync(profile: RemoteProfile) {
 export async function confirmRemoveDevice(device: SyncedDevice) {
   const { confirmed } = await confirm({
     title: `Remove “${device.name}” from Sync?`,
-    message: "It leaves this list on all your devices, with the tabs it shared. Its data stays on it, and if it still syncs, it comes back here.",
-    confirmTitle: "Remove",
+    message: t(`It leaves this list on all your devices, with the tabs it shared. Its data stays on it, and if it still syncs, it comes back here.`),
+    confirmTitle: t(`Remove`),
     destructive: true,
   });
   if (confirmed) removeSyncedDevice(device.id);
@@ -236,7 +238,7 @@ export function RemoteProfileRow({ profile }: { profile: RemoteProfile }) {
       description={remoteProfileDescription(profile)}
     >
       <Box row gap="s">
-        <Button title="Remove…" disabled={!!profile.sharedByOthers} onPress={() => void confirmRemoveFromSync(profile)} />
+        <Button title={t(`Remove…`)} disabled={!!profile.sharedByOthers} onPress={() => void confirmRemoveFromSync(profile)} />
         <Button title={`Add to This ${PLATFORM_TERMS.computerTitle}`} disabled={!!profile.waiting} onPress={() => addRemoteProfile(profile.syncId)} />
       </Box>
     </Row>
@@ -244,7 +246,7 @@ export function RemoteProfileRow({ profile }: { profile: RemoteProfile }) {
 }
 
 export function lookingForProfiles(pending: number): string {
-  const looking = "Looking for the profiles on your other devices…";
+  const looking = t(`Looking for the profiles on your other devices…`);
   return pending ? `${looking} Waiting for ${pending === 1 ? "1 file" : `${pending} files`} to download.` : looking;
 }
 
@@ -274,8 +276,8 @@ function JoinedSheet() {
         </View>
       ) : null}
       <DialogActions>
-        <Button title="Done" kind={addable > 1 ? "default" : "primary"} onPress={closeSettingsSheet} />
-        {addable > 1 ? <Button title="Add All" kind="primary" onPress={() => addAllRemoteProfiles(remote)} /> : null}
+        <Button title={t(`Done`)} kind={addable > 1 ? "default" : "primary"} onPress={closeSettingsSheet} />
+        {addable > 1 ? <Button title={t(`Add All`)} kind="primary" onPress={() => addAllRemoteProfiles(remote)} /> : null}
       </DialogActions>
     </Sheet>
   );
@@ -297,11 +299,11 @@ function ConnectDeviceSheet() {
         Connect Another Device
       </DialogTitle>
       <Box row gap="xl" style={[SECTION_TOP, { alignItems: "center" }]}>
-        <View style={syncCodeFrame(theme, qr !== null)}>{qr ? <Image source={{ uri: qr }} style={QR} /> : <Button title="Show Code" onPress={() => void recoveryQrCode().then(setQr)} />}</View>
+        <View style={syncCodeFrame(theme, qr !== null)}>{qr ? <Image source={{ uri: qr }} style={QR} /> : <Button title={t(`Show Code`)} onPress={() => void recoveryQrCode().then(setQr)} />}</View>
         <Text size="small" tone="textSecondary" style={QR_NOTE()}>
           {PLATFORM_FEATURES.syncsWithPhone
-            ? "Click Show Code. On your iPhone, open Ardia, tap Sync With Mac, and scan the code. For another Mac, you can also scan it with your iPhone’s camera and paste the words there with Universal Clipboard."
-            : "Click Show Code, then scan it with your phone’s camera to copy the words and enter them on your other computer."}
+            ? t(`Click Show Code. On your iPhone, open Ardia, tap Sync With Mac, and scan the code. For another Mac, you can also scan it with your iPhone’s camera and paste the words there with Universal Clipboard.`)
+            : t(`Click Show Code, then scan it with your phone’s camera to copy the words and enter them on your other computer.`)}
         </Text>
       </Box>
       {words ? (
@@ -317,12 +319,12 @@ function ConnectDeviceSheet() {
       <DialogActions
         leading={
           <>
-            <Button title={words ? "Hide Words" : "Show Words"} onPress={() => (words ? setWords(null) : void recoveryWords()?.then(setWords))} />
-            <Button title="Copy Words" onPress={() => void copyRecoveryPhrase()} />
+            <Button title={words ? t(`Hide Words`) : t(`Show Words`)} onPress={() => (words ? setWords(null) : void recoveryWords()?.then(setWords))} />
+            <Button title={t(`Copy Words`)} onPress={() => void copyRecoveryPhrase()} />
           </>
         }
       >
-        <Button title="Done" kind="primary" onPress={closeSettingsSheet} />
+        <Button title={t(`Done`)} kind="primary" onPress={closeSettingsSheet} />
       </DialogActions>
     </Sheet>
   );
@@ -338,9 +340,9 @@ function StopSheet() {
       <DialogTitle subtitle={`Syncing will stop on this device. To re-enable sync, you’ll need another device that is currently syncing, or the recovery phrase from your Recovery Kit. Everything on this ${PLATFORM_TERMS.computer} stays as it is.`}>
         Stop Syncing This Device?
       </DialogTitle>
-      <DialogActions leading={<Button title="Save Recovery Kit" onPress={() => showSettingsSheet(<RecoveryKitSheet />)} />}>
-        <Button title="Cancel" onPress={closeSettingsSheet} />
-        <Button title="Stop Syncing" kind="destructive" onPress={() => showSettingsSheet(<DeleteDataSheet />)} />
+      <DialogActions leading={<Button title={t(`Save Recovery Kit`)} onPress={() => showSettingsSheet(<RecoveryKitSheet />)} />}>
+        <Button title={t(`Cancel`)} onPress={closeSettingsSheet} />
+        <Button title={t(`Stop Syncing`)} kind="destructive" onPress={() => showSettingsSheet(<DeleteDataSheet />)} />
       </DialogActions>
     </Sheet>
   );
@@ -360,11 +362,11 @@ function DeleteDataSheet() {
         Delete Sync Data?
       </DialogTitle>
       <View style={CHECK_TOP}>
-        <Checkbox value={understood} onChange={setUnderstood} label="I understand this cannot be undone" />
+        <Checkbox value={understood} onChange={setUnderstood} label={t(`I understand this cannot be undone`)} />
       </View>
       <DialogActions>
-        <Button title="Keep Sync Data" disabled={busy} onPress={() => void finish(false)} />
-        <Button title="Delete My Sync Data" kind="destructive" disabled={!understood || busy} onPress={() => void finish(true)} />
+        <Button title={t(`Keep Sync Data`)} disabled={busy} onPress={() => void finish(false)} />
+        <Button title={t(`Delete My Sync Data`)} kind="destructive" disabled={!understood || busy} onPress={() => void finish(true)} />
       </DialogActions>
     </Sheet>
   );
@@ -378,7 +380,7 @@ export function folderLabel(folder: Pick<FolderInfo, "path" | "inICloud">): stri
   }
   if (folder.inICloud) {
     const rest = folder.path.split("com~apple~CloudDocs")[1]?.split("/").filter(Boolean) ?? [];
-    return ["iCloud Drive", ...rest].join(" › ");
+    return [t(`iCloud Drive`), ...rest].join(" › ");
   }
   return folder.path.replace(/^\/Users\/[^/]+/, "~");
 }

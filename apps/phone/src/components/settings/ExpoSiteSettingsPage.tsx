@@ -13,6 +13,8 @@ import type { SitePermissionGrant } from "../../platform/pages";
 import { contentMargins, Favicon, modifierList, settingsChrome, settingsLayout, settingsSwitchStyle, useDesign } from "../ui";
 import { ExpoRowLabel } from "./ExpoRowLabel";
 import { NIGHT_SHADE, SWIPE_NAVIGATION } from "./SitePages";
+import { t } from "../../lib/uiLanguage";
+
 
 const SECONDARY = { type: "hierarchical", style: "secondary" } as const;
 const FILL = Number.MAX_SAFE_INTEGER;
@@ -26,37 +28,37 @@ export function ExpoSiteSettingsPage() {
   const enabledLists = state?.lists.filter((list) => list.isEnabled).length ?? 0;
   const trusted = state?.exemptHosts.length ?? 0;
   return (
-    <Form modifiers={modifierList(navigationTitle("Site Settings"), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), contentMargins({ edges: "top", length: settingsLayout.expoListTop }))}>
+    <Form modifiers={modifierList(navigationTitle(t(`Site Settings`)), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), contentMargins({ edges: "top", length: settingsLayout.expoListTop }))}>
       <Section>
         <Toggle isOn={state?.blocksAds ?? true} onIsOnChange={(on) => setBlockingCategory("ads", on)} modifiers={modifierList(settingsSwitchStyle())}>
-          <ExpoRowLabel title="Block Ads" systemImage="hand.raised.fill" tint="ads" />
+          <ExpoRowLabel title={t(`Block Ads`)} systemImage="hand.raised.fill" tint="ads" />
         </Toggle>
         <Toggle isOn={state?.blocksTrackers ?? true} onIsOnChange={(on) => setBlockingCategory("trackers", on)} modifiers={modifierList(settingsSwitchStyle())}>
-          <ExpoRowLabel title="Block Trackers" systemImage="eyeglasses" tint="trackers" />
+          <ExpoRowLabel title={t(`Block Trackers`)} systemImage="eyeglasses" tint="trackers" />
         </Toggle>
         <Toggle isOn={state?.hidesCookieBanners ?? true} onIsOnChange={(on) => setBlockingCategory("cookieBanners", on)} modifiers={modifierList(settingsSwitchStyle())}>
-          <ExpoRowLabel title="Block Cookie Banners" systemImage="list.bullet.rectangle.portrait.fill" tint="cookies" />
+          <ExpoRowLabel title={t(`Block Cookie Banners`)} systemImage="list.bullet.rectangle.portrait.fill" tint="cookies" />
         </Toggle>
         <NavigationLink value={settingsRouteKey({ page: "filterLists" })}>
-          <LabeledContent label={<ExpoRowLabel title="Filter Lists" systemImage="line.3.horizontal.decrease" tint="neutral" />}>
+          <LabeledContent label={<ExpoRowLabel title={t(`Filter Lists`)} systemImage="line.3.horizontal.decrease" tint="neutral" />}>
             <Text>{formatNumber(enabledLists)}</Text>
           </LabeledContent>
         </NavigationLink>
         <NavigationLink value={settingsRouteKey({ page: "trustedSites" })}>
-          <LabeledContent label={<ExpoRowLabel title="Trusted Sites" systemImage="checkmark.shield.fill" tint="green" />}>
-            <Text>{trusted ? formatNumber(trusted) : "None"}</Text>
+          <LabeledContent label={<ExpoRowLabel title={t(`Trusted Sites`)} systemImage="checkmark.shield.fill" tint="green" />}>
+            <Text>{trusted ? formatNumber(trusted) : t(`None`)}</Text>
           </LabeledContent>
         </NavigationLink>
       </Section>
       <Section footer={<Text>Change one site from its page menu.</Text>}>
-        <Picker label={<ExpoRowLabel title="Night Shade" systemImage="moon.fill" tint="nightShade" />} selection={nightShade} onSelectionChange={setDefaultNightShade} modifiers={[pickerStyle("menu"), tint("secondary")]}>
+        <Picker label={<ExpoRowLabel title={t(`Night Shade`)} systemImage="moon.fill" tint="nightShade" />} selection={nightShade} onSelectionChange={setDefaultNightShade} modifiers={[pickerStyle("menu"), tint("secondary")]}>
           {NIGHT_SHADE.map((option) => (
             <Text key={option.id} modifiers={[tag(option.id)]}>
               {option.title}
             </Text>
           ))}
         </Picker>
-        <Picker label={<ExpoRowLabel title="Swipe to Navigate" systemImage="hand.draw.fill" tint="swipe" />} selection={swipe} onSelectionChange={setSwipeNavigation} modifiers={[pickerStyle("menu"), tint("secondary")]}>
+        <Picker label={<ExpoRowLabel title={t(`Swipe to Navigate`)} systemImage="hand.draw.fill" tint="swipe" />} selection={swipe} onSelectionChange={setSwipeNavigation} modifiers={[pickerStyle("menu"), tint("secondary")]}>
           {SWIPE_NAVIGATION.map((option) => (
             <Text key={option.id} modifiers={[tag(option.id)]}>
               {option.title}
@@ -64,7 +66,7 @@ export function ExpoSiteSettingsPage() {
           ))}
         </Picker>
         <Toggle isOn={collapses} onIsOnChange={setCollapsesBottomBar} modifiers={modifierList(settingsSwitchStyle())}>
-          <ExpoRowLabel title="Collapse Bottom Bar" systemImage="platter.filled.bottom.and.arrow.down.iphone" tint="bottomBar" />
+          <ExpoRowLabel title={t(`Collapse Bottom Bar`)} systemImage="platter.filled.bottom.and.arrow.down.iphone" tint="bottomBar" />
         </Toggle>
       </Section>
       <AllowedSites />
@@ -80,7 +82,7 @@ function AllowedSites() {
   }, []);
   if (!listed) return null;
   return (
-    <Section title="Camera, Microphone and Location" footer={<Text>Sites you allowed keep access on this iPhone until you revoke it. Private tabs always ask.</Text>}>
+    <Section title={t(`Camera, Microphone and Location`)} footer={<Text>Sites you allowed keep access on this iPhone until you revoke it. Private tabs always ask.</Text>}>
       {grants.length ? grants.map((grant) => <AllowedSite key={grant.origin} grant={grant} />) : <Text modifiers={[foregroundStyle(SECONDARY)]}>None</Text>}
     </Section>
   );
@@ -95,7 +97,7 @@ function AllowedSite({ grant }: { grant: SitePermissionGrant }) {
       <ConfirmationDialog.Trigger>
         <SwipeActions>
           <Button onPress={() => setAsking(true)} modifiers={[tint("primary")]}>
-            <HStack spacing={SITE_ROW_GAP} modifiers={[accessibilityElement("combine"), accessibilityHint("Revoke access")]}>
+            <HStack spacing={SITE_ROW_GAP} modifiers={[accessibilityElement("combine"), accessibilityHint(t(`Revoke access`))]}>
               <RNHostView matchContents>
                 <View style={{ width: SITE_FAVICON, height: SITE_FAVICON }}>
                   <Favicon iconUrl={null} pageUrl={grant.origin} size={SITE_FAVICON} />
@@ -108,13 +110,13 @@ function AllowedSite({ grant }: { grant: SitePermissionGrant }) {
             </HStack>
           </Button>
           <SwipeActions.Actions edge="trailing">
-            <Button role="destructive" label="Revoke" onPress={() => void revokeSiteAccess(grant.origin)} />
+            <Button role="destructive" label={t(`Revoke`)} onPress={() => void revokeSiteAccess(grant.origin)} />
           </SwipeActions.Actions>
         </SwipeActions>
       </ConfirmationDialog.Trigger>
       <ConfirmationDialog.Actions>
         {kinds.length > 1 ? kinds.map((kind) => <Button key={kind} role="destructive" label={`Revoke ${PERMISSION_NAMES[kind]}`} onPress={() => void revokeSiteAccess(grant.origin, kind)} />) : null}
-        <Button role="destructive" label={kinds.length > 1 ? "Revoke All" : `Revoke ${summary}`} onPress={() => void revokeSiteAccess(grant.origin)} />
+        <Button role="destructive" label={kinds.length > 1 ? t(`Revoke All`) : `Revoke ${summary}`} onPress={() => void revokeSiteAccess(grant.origin)} />
       </ConfirmationDialog.Actions>
       <ConfirmationDialog.Message>
         <Text>{`Allowed: ${summary}`}</Text>

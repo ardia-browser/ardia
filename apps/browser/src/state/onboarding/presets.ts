@@ -1,23 +1,25 @@
 import type { Settings } from "../settings/settings";
+import { t } from "../../lib/uiLanguage";
+
 
 export type BrowserSourceId = "arc" | "dia" | "chrome" | "safari" | "firefox" | "zen" | "brave" | "edge" | "helium" | "chromium" | "vivaldi" | "opera" | "fresh";
 
 export type Preset = BrowserSourceId;
 
 export const PRESET_NAMES: Record<Preset, string> = {
-  arc: "Arc",
-  dia: "Dia",
-  chrome: "Chrome",
-  safari: "Safari",
-  firefox: "Firefox",
-  zen: "Zen",
-  brave: "Brave",
-  edge: "Edge",
-  helium: "Helium",
-  chromium: "Chromium",
-  vivaldi: "Vivaldi",
-  opera: "Opera",
-  fresh: "Ardia",
+  arc: t(`Arc`),
+  dia: t(`Dia`),
+  chrome: t(`Chrome`),
+  safari: t(`Safari`),
+  firefox: t(`Firefox`),
+  zen: t(`Zen`),
+  brave: t(`Brave`),
+  edge: t(`Edge`),
+  helium: t(`Helium`),
+  chromium: t(`Chromium`),
+  vivaldi: t(`Vivaldi`),
+  opera: t(`Opera`),
+  fresh: t(`Ardia`),
 };
 
 const CLASSIC_TABS: Partial<Settings> = {

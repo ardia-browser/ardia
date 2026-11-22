@@ -1,6 +1,8 @@
 import type { LinkSource } from "../../lib/linkSource";
 import { parseSaved, unchanged, versionedJson, type Migrations } from "../../lib/savedDocument";
 import { sourceAppOf, type SourceApp } from "./rules";
+import { t } from "../../lib/uiLanguage";
+
 
 export const LINK_SOURCES_DOC = "link-sources.json";
 export const LINK_SOURCES_VERSION = 1;
@@ -8,18 +10,18 @@ export const MAX_RECENT_APPS = 20;
 const MIGRATIONS: Migrations = { 0: unchanged };
 
 export const COMMON_APPS: readonly SourceApp[] = [
-  { bundleId: "com.tinyspeck.slackmacgap", name: "Slack" },
-  { bundleId: "com.apple.mail", name: "Mail" },
-  { bundleId: "com.apple.MobileSMS", name: "Messages" },
-  { bundleId: "notion.id", name: "Notion" },
-  { bundleId: "com.linear", name: "Linear" },
-  { bundleId: "com.hnc.Discord", name: "Discord" },
-  { bundleId: "com.microsoft.teams2", name: "Microsoft Teams" },
-  { bundleId: "us.zoom.xos", name: "Zoom" },
-  { bundleId: "com.apple.iCal", name: "Calendar" },
-  { bundleId: "com.microsoft.Outlook", name: "Microsoft Outlook" },
-  { bundleId: "ru.keepcoder.Telegram", name: "Telegram" },
-  { bundleId: "net.whatsapp.WhatsApp", name: "WhatsApp" },
+  { bundleId: "com.tinyspeck.slackmacgap", name: t(`Slack`) },
+  { bundleId: "com.apple.mail", name: t(`Mail`) },
+  { bundleId: "com.apple.MobileSMS", name: t(`Messages`) },
+  { bundleId: "notion.id", name: t(`Notion`) },
+  { bundleId: "com.linear", name: t(`Linear`) },
+  { bundleId: "com.hnc.Discord", name: t(`Discord`) },
+  { bundleId: "com.microsoft.teams2", name: t(`Microsoft Teams`) },
+  { bundleId: "us.zoom.xos", name: t(`Zoom`) },
+  { bundleId: "com.apple.iCal", name: t(`Calendar`) },
+  { bundleId: "com.microsoft.Outlook", name: t(`Microsoft Outlook`) },
+  { bundleId: "ru.keepcoder.Telegram", name: t(`Telegram`) },
+  { bundleId: "net.whatsapp.WhatsApp", name: t(`WhatsApp`) },
 ];
 
 export const sourceAppKey = (app: SourceApp) => (app.bundleId ?? `name:${app.name}`).toLowerCase();

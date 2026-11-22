@@ -1,9 +1,11 @@
 import type { PluginNode } from "../../lib/pluginProtocol";
 import { records, str } from "./surfaceNodes";
+import { t } from "../../lib/uiLanguage";
+
 
 export type FormValue = string | boolean;
 
-const FIELD_TYPES = new Set(["TextField", "PasswordField", "Toggle", "Select"]);
+const FIELD_TYPES = new Set([t(`TextField`), t(`PasswordField`), t(`Toggle`), t(`Select`)]);
 
 export function fieldNodes(node: PluginNode, out: PluginNode[] = []): PluginNode[] {
   for (const child of node.children) {

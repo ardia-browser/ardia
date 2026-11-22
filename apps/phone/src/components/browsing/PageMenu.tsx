@@ -59,6 +59,8 @@ import { MaterialSheet, useMaterialRipple } from "../ui/MaterialSurfaces";
 import { materialBottomBar, materialShape, materialSize, materialType } from "../ui/materialTokens";
 import { syncOffered } from "../../state/sync/offer";
 import { usePageSummariesEnabled } from "../../state/pageSummary/enabled";
+import { t } from "../../lib/uiLanguage";
+
 
 const PAGE_MENU_LIST_HEIGHT_RATIO = 0.52;
 const countPageMenuExpansion = () => countUsage("site_settings_sheet_expanded");
@@ -81,7 +83,7 @@ export function PageMenu({ tabId, open, onHidden }: { tabId: string; open: boole
   };
   const confirmation = confirmsTranslation ? (
     <ConfirmDialog
-      confirmation={{ title: "Translate with Google?", message: "Google will see this page’s address.", action: "Translate", destructive: false, run: translatePage }}
+      confirmation={{ title: t(`Translate with Google?`), message: t(`Google will see this page’s address.`), action: t(`Translate`), destructive: false, run: translatePage }}
       onClose={() => setConfirmsTranslation(false)}
     />
   ) : null;
@@ -194,19 +196,19 @@ function DockedMainPageMenuBar({ tab, model, spread }: { tab: BrowserTab; model:
         <MaterialAddressContent address={address} scheme={scheme} testID="siteSettingsAddressHost" />
       </Animated.View>
       <Animated.View testID="dockedPageMenuHistory" style={[styles.siteNavGroup, navStyle]}>
-        <DockedMenuButton id="siteSettingsBack" label="Back" icon="chevronLeft" scheme={scheme} enabled={model.back} onPress={menuBack} />
-        <DockedMenuButton id="siteSettingsForward" label="Forward" icon="chevronRight" scheme={scheme} enabled={model.forward} onPress={menuForward} />
+        <DockedMenuButton id="siteSettingsBack" label={t(`Back`)} icon="chevronLeft" scheme={scheme} enabled={model.back} onPress={menuBack} />
+        <DockedMenuButton id="siteSettingsForward" label={t(`Forward`)} icon="chevronRight" scheme={scheme} enabled={model.forward} onPress={menuForward} />
       </Animated.View>
       <View style={styles.dockedTitleSlot}>
         <Animated.View testID="dockedPageMenuTitleSlot" style={[StyleSheet.absoluteFill, expandedStyle]}>
-          <GesturePressable testID="dockedPageMenuTitle" accessibilityRole="button" accessibilityLabel={feedback ?? title} accessibilityHint="Edits the search" android_ripple={ripple} onPress={Platform.OS === "android" ? editDockedPageQuery : editPageQuery} style={styles.dockedTitleButton}>
+          <GesturePressable testID="dockedPageMenuTitle" accessibilityRole="button" accessibilityLabel={feedback ?? title} accessibilityHint={t(`Edits the search`)} android_ripple={ripple} onPress={Platform.OS === "android" ? editDockedPageQuery : editPageQuery} style={styles.dockedTitleButton}>
             <Text numberOfLines={1} ellipsizeMode="tail" style={[materialType.bodyLarge, styles.centered, { color: feedback && !address.isPrivate ? scheme.primary : labelColor }]}>{feedback ?? title}</Text>
           </GesturePressable>
         </Animated.View>
       </View>
       {syncOffered() ? (
         <Animated.View style={[styles.siteNavSlot, styles.siteHiddenNav, pinStyle]}>
-          <DockedMenuButton id="dockedPageMenuPin" label={pinned ? "Pinned to Mac" : "Pin to Mac"} icon={pinned ? "starFill" : "star"} scheme={scheme} enabled={model.isWebPage && !tab.isPrivate} selected={pinned} onPress={pinCurrentToMac} />
+          <DockedMenuButton id="dockedPageMenuPin" label={pinned ? t(`Pinned to Mac`) : t(`Pin to Mac`)} icon={pinned ? "starFill" : "star"} scheme={scheme} enabled={model.isWebPage && !tab.isPrivate} selected={pinned} onPress={pinCurrentToMac} />
         </Animated.View>
       ) : null}
       <Animated.View style={[styles.siteNavSlot, reloadSlotStyle]}>
@@ -215,9 +217,9 @@ function DockedMainPageMenuBar({ tab, model, spread }: { tab: BrowserTab; model:
         </Animated.View>
         <Animated.View style={reloadStyle}>
           {model.reload === "stop" ? (
-            <DockedMenuButton id="dockedPageMenuReload" label="Stop" icon="xmark" scheme={scheme} enabled onPress={menuStop} />
+            <DockedMenuButton id="dockedPageMenuReload" label={t(`Stop`)} icon="xmark" scheme={scheme} enabled onPress={menuStop} />
           ) : (
-            <DockedMenuButton id="dockedPageMenuReload" label="Reload" icon="arrowClockwise" scheme={scheme} enabled={model.reloadEnabled} onPress={menuReload} />
+            <DockedMenuButton id="dockedPageMenuReload" label={t(`Reload`)} icon="arrowClockwise" scheme={scheme} enabled={model.reloadEnabled} onPress={menuReload} />
           )}
         </Animated.View>
       </Animated.View>
@@ -238,49 +240,49 @@ function MenuMain({ tabId, model, onTranslate }: { tabId: string; model: MenuMod
       <NavigationCapsule tabId={tabId} />
       {large ? (
         <Group>
-          <Row icon="docPlaintext" title="Reader" enabled={model.tiles} onPress={showReader} />
-          <Row icon="link" title="Copy Link" enabled={model.tiles} onPress={copyCurrentLink} />
-          <Row icon="squareAndArrowUp" title="Share" enabled={model.tiles} divider={false} onPress={shareCurrentPage} />
+          <Row icon="docPlaintext" title={t(`Reader`)} enabled={model.tiles} onPress={showReader} />
+          <Row icon="link" title={t(`Copy Link`)} enabled={model.tiles} onPress={copyCurrentLink} />
+          <Row icon="squareAndArrowUp" title={t(`Share`)} enabled={model.tiles} divider={false} onPress={shareCurrentPage} />
         </Group>
       ) : (
         <View style={styles.tiles}>
-          <Tile icon="docPlaintext" title="Reader" enabled={model.tiles} onPress={showReader} />
-          <Tile icon="link" title="Copy Link" enabled={model.tiles} onPress={copyCurrentLink} />
-          <Tile icon="squareAndArrowUp" title="Share" enabled={model.tiles} onPress={shareCurrentPage} />
+          <Tile icon="docPlaintext" title={t(`Reader`)} enabled={model.tiles} onPress={showReader} />
+          <Tile icon="link" title={t(`Copy Link`)} enabled={model.tiles} onPress={copyCurrentLink} />
+          <Tile icon="squareAndArrowUp" title={t(`Share`)} enabled={model.tiles} onPress={shareCurrentPage} />
         </View>
       )}
       <Group>
-        <Row icon="textMagnifyingglass" title="Find on Page" enabled={model.find} divider={offersSummary || model.pageRows} onPress={showFind} />
-        {offersSummary ? <Row icon="sparkles" title="Summarize Page" enabled={model.summarize} divider={model.pageRows} onPress={summarizeCurrentPage} /> : null}
+        <Row icon="textMagnifyingglass" title={t(`Find on Page`)} enabled={model.find} divider={offersSummary || model.pageRows} onPress={showFind} />
+        {offersSummary ? <Row icon="sparkles" title={t(`Summarize Page`)} enabled={model.summarize} divider={model.pageRows} onPress={summarizeCurrentPage} /> : null}
         {model.pageRows ? <SendRow tabId={tabId} enabled={model.isWebPage} /> : null}
         {model.pageRows ? <Row icon="translate" title={model.translateTitle} enabled={model.translate} divider={canPrintPages()} onPress={onTranslate} /> : null}
-        {model.pageRows && canPrintPages() ? <Row icon="printer" title="Print" enabled={model.print} divider={false} onPress={printCurrentPage} /> : null}
+        {model.pageRows && canPrintPages() ? <Row icon="printer" title={t(`Print`)} enabled={model.print} divider={false} onPress={printCurrentPage} /> : null}
       </Group>
       {model.pageRows ? (
         <>
           <Group>
             <ToggleRow
               icon={model.nightShadeOn ? "moonFill" : "moon"}
-              title="Night Shade"
+              title={t(`Night Shade`)}
               value={model.nightShadeOn}
               enabled={model.isWebPage}
               onChange={setNightShadeOn}
             />
             <ZoomRow percent={model.zoomPercent} canZoomOut={model.zoomOut} canZoomIn={model.zoomIn} enabled={model.isWebPage} stacked={large} />
-            <ToggleRow icon="desktop" title="Desktop Site" value={model.desktopSite} enabled={model.isWebPage} divider={false} onChange={setDesktopSite} />
+            <ToggleRow icon="desktop" title={t(`Desktop Site`)} value={model.desktopSite} enabled={model.isWebPage} divider={false} onChange={setDesktopSite} />
           </Group>
           <Group>
             <ToggleRow
               icon={model.blockersEnabled ? "handRaised" : "handRaisedSlash"}
-              title="Block Ads and Trackers"
+              title={t(`Block Ads and Trackers`)}
               value={model.blockersEnabled}
               enabled={model.isWebPage}
               detail={model.blockedCount}
               onChange={setBlockersOn}
             />
-            <Row icon="gearshape" title="Site Settings" enabled divider={model.offersDefaultBrowser} onPress={openSiteSettings} />
+            <Row icon="gearshape" title={t(`Site Settings`)} enabled divider={model.offersDefaultBrowser} onPress={openSiteSettings} />
             {model.offersDefaultBrowser ? (
-              <Row icon="safariFill" title="Open in Default Browser" enabled divider={false} onPress={openInDefaultBrowser} />
+              <Row icon="safariFill" title={t(`Open in Default Browser`)} enabled divider={false} onPress={openInDefaultBrowser} />
             ) : null}
           </Group>
         </>
@@ -294,7 +296,7 @@ function MenuSiteSettings() {
   return (
     <ScrollView contentContainerStyle={styles.subpage} bounces={false}>
       <View style={styles.subpageBar}>
-        <CapsuleButton icon="chevronLeft" label="Back" enabled onPress={closeMenuSubpage} />
+        <CapsuleButton icon="chevronLeft" label={t(`Back`)} enabled onPress={closeMenuSubpage} />
         <Text accessibilityRole="header" style={[font.body, styles.subpageTitle, { color: theme.label }]} numberOfLines={1}>
           Site Settings
         </Text>
@@ -314,7 +316,7 @@ function NavigationCapsule({ tabId }: { tabId: string }) {
   const below = copy().menuTitleBelowAtLargeText && fontScale > ACCESSIBILITY_TEXT;
   const shown = feedback ?? title;
   const titleButton = (
-    <Pressable accessibilityRole="button" accessibilityLabel={shown} accessibilityHint="Edits the search" onPress={editPageQuery} style={below ? styles.titleBelow : styles.title}>
+    <Pressable accessibilityRole="button" accessibilityLabel={shown} accessibilityHint={t(`Edits the search`)} onPress={editPageQuery} style={below ? styles.titleBelow : styles.title}>
       <Animated.Text
         key={shown}
         entering={TITLE_IN}
@@ -329,14 +331,14 @@ function NavigationCapsule({ tabId }: { tabId: string }) {
   return (
     <>
       <View style={[styles.capsule, { backgroundColor: theme.groupFill }]}>
-        <CapsuleButton icon="chevronLeft" label="Back" enabled={model.back} onPress={menuBack} />
-        <CapsuleButton icon="chevronRight" label="Forward" enabled={model.forward} onPress={menuForward} />
+        <CapsuleButton icon="chevronLeft" label={t(`Back`)} enabled={model.back} onPress={menuBack} />
+        <CapsuleButton icon="chevronRight" label={t(`Forward`)} enabled={model.forward} onPress={menuForward} />
         {below ? <View style={styles.fill} /> : titleButton}
         {syncOffered() ? <PinButton tabId={tabId} enabled={model.isWebPage} /> : null}
         {model.reload === "stop" ? (
-          <CapsuleButton icon="xmark" label="Stop" enabled onPress={menuStop} />
+          <CapsuleButton icon="xmark" label={t(`Stop`)} enabled onPress={menuStop} />
         ) : (
-          <CapsuleButton icon="arrowClockwise" label="Reload" enabled={model.reloadEnabled} onPress={menuReload} />
+          <CapsuleButton icon="arrowClockwise" label={t(`Reload`)} enabled={model.reloadEnabled} onPress={menuReload} />
         )}
       </View>
       {below ? titleButton : null}
@@ -350,7 +352,7 @@ function PinButton({ tabId, enabled }: { tabId: string; enabled: boolean }) {
   const pinned = useIsPinned(tabId);
   const can = enabled && !tab?.isPrivate;
   return (
-    <PressScale label={pinned ? "Pinned to Mac" : "Pin to Mac"} disabled={!can} onPress={pinCurrentToMac} style={styles.capsuleButton}>
+    <PressScale label={pinned ? t(`Pinned to Mac`) : t(`Pin to Mac`)} disabled={!can} onPress={pinCurrentToMac} style={styles.capsuleButton}>
       <Symbol name={pinned ? "starFill" : "star"} size={19} color={can ? theme.label : theme.tertiaryLabel} />
     </PressScale>
   );
@@ -363,7 +365,7 @@ function SendRow({ tabId, enabled }: { tabId: string; enabled: boolean }) {
   if (devices.length === 1) return <Row icon="paperplane" title={`Send to ${devices[0]!.name}`} enabled onPress={() => sendCurrentTab(devices[0]!)} />;
   return (
     <>
-      <RowWithEvent icon="paperplane" title="Send to Device" onPress={(y) => setMenuAt(y)} />
+      <RowWithEvent icon="paperplane" title={t(`Send to Device`)} onPress={(y) => setMenuAt(y)} />
       {menuAt !== null ? (
         <FloatingMenu
           items={devices.map((device) => ({ label: device.name, icon: device.kind === "mac" ? "laptop" : "iphone", onPress: () => sendCurrentTab(device) }))}
@@ -507,11 +509,11 @@ function ZoomRow({ percent, canZoomOut, canZoomIn, enabled, stacked }: { percent
       <View testID="menuZoom" style={stacked ? styles.zoomStacked : styles.row}>
         {stacked ? <View style={styles.zoomHeading}>{heading}</View> : heading}
         <View style={[styles.zoom, { backgroundColor: theme.tertiaryFill }]}>
-          {zoomButton("minus", "Zoom Out", canZoomOut, zoomOut)}
-          <Pressable accessibilityRole="button" accessibilityLabel="Reset Zoom" accessibilityValue={{ text: percent }} disabled={!enabled} onPress={resetZoom} style={styles.zoomReset}>
+          {zoomButton("minus", t(`Zoom Out`), canZoomOut, zoomOut)}
+          <Pressable accessibilityRole="button" accessibilityLabel={t(`Reset Zoom`)} accessibilityValue={{ text: percent }} disabled={!enabled} onPress={resetZoom} style={styles.zoomReset}>
             <Text style={[font.subheadline, styles.digits, styles.medium, { color: theme.label }]}>{percent}</Text>
           </Pressable>
-          {zoomButton("plus", "Zoom In", canZoomIn, zoomIn)}
+          {zoomButton("plus", t(`Zoom In`), canZoomIn, zoomIn)}
         </View>
       </View>
       <Divider />
@@ -532,7 +534,7 @@ const styles = StyleSheet.create({
   siteNavGroup: { width: 0, opacity: 0, flexDirection: "row", height: materialSize.touchTarget, overflow: "hidden" },
   siteHiddenNav: { width: 0, opacity: 0 },
   siteNavSlot: { width: materialSize.touchTarget, height: materialSize.touchTarget, overflow: "hidden", alignItems: "center", justifyContent: "center" },
-  siteAddressDots: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center", transform: [{ rotate: "90deg" }] },
+  siteAddressDots: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center", transform: [{ rotate: t(`90deg`) }] },
   column: { padding: menuLayout.inset, gap: menuLayout.inset },
   subpage: { paddingVertical: menuLayout.inset, gap: space.l },
   subpageBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: space.tight },

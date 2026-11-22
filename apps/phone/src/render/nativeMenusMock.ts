@@ -1,4 +1,6 @@
 import { createElement, useImperativeHandle, type ReactNode, type Ref } from "react";
+import { t } from "../lib/uiLanguage";
+
 
 export type SheetAnswer = string | null;
 
@@ -19,7 +21,7 @@ export function nativeMenusModule(actual: { settingsUI: object }) {
     nativeMenusAvailable: () => ({ contextMenu: mockNative.contextMenu, actionSheet: mockNative.actionSheet }),
     ContextMenuView: function ContextMenuView({ children, ref, ...props }: { children?: ReactNode; ref?: Ref<{ show(pressX?: number, pressY?: number): Promise<void> }> }) {
       useImperativeHandle(ref, () => ({ show: async (pressX?: number, pressY?: number) => void (mockNative.shown += 1, mockNative.shownAt.push([pressX, pressY])) }), []);
-      return createElement("ContextMenuView", props, children);
+      return createElement(t(`ContextMenuView`), props, children);
     },
     actionSheet: (options: unknown) => {
       mockNative.sheets.push(options);

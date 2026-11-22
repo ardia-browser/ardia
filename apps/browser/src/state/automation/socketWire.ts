@@ -1,5 +1,7 @@
 import { noteSocketLineShrunk } from "../telemetry/cliCounts";
 import type { ConsentToken } from "../telemetry/client";
+import { t } from "../../lib/uiLanguage";
+
 
 export const LINE_BYTE_LIMIT = 1024 * 1024;
 export const PAGE_BYTE_BUDGET = 512 * 1024;
@@ -53,8 +55,8 @@ export type WireMethod = { mutates: boolean; narrow?: string } | undefined;
 
 const TOO_BIG = (narrow: string) => `The reply would be over 1 MiB, the most a line can carry; ${narrow}.`;
 
-const WROTE = "The change was made; the full result was over 1 MiB, so read it back with the matching read method.";
-const WROTE_PART = "Part of the change was made (applied says how much, error what stopped it); the full result was over 1 MiB, so read it back with the matching read method.";
+const WROTE = t(`The change was made; the full result was over 1 MiB, so read it back with the matching read method.`);
+const WROTE_PART = t(`Part of the change was made (applied says how much, error what stopped it); the full result was over 1 MiB, so read it back with the matching read method.`);
 const FAILURE_MESSAGE_CHARS = 1024;
 
 function failureOf(result: Record<string, unknown>, counted: boolean): Record<string, unknown> | null {
@@ -89,7 +91,7 @@ export function fittedReply(id: unknown, body: WireBody, method: WireMethod, con
     return JSON.stringify({ id, error: { code: typeof error.code === "string" ? error.code : "failed", message: String(error.message ?? "").slice(0, 4096) } });
   }
   if (method?.mutates) return compactWrite(id, body.result);
-  return JSON.stringify({ id, error: { code: "failed", message: TOO_BIG(method?.narrow ?? "ask for less (a smaller limit, a later offset, a folder, a window or a lower depth)") } });
+  return JSON.stringify({ id, error: { code: "failed", message: TOO_BIG(method?.narrow ?? t(`ask for less (a smaller limit, a later offset, a folder, a window or a lower depth)`)) } });
 }
 
 export function fittedEvent(name: string, time: number, data: Record<string, unknown>, consent: ConsentToken | null): string {

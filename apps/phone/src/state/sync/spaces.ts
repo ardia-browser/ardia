@@ -1,5 +1,7 @@
 import { landingKey } from "../../lib/url.ts";
 import type { BookmarkItem, PinnedSection, PinnedTile, SyncedDevice, SyncedHistoryItem, SyncedProfile, SyncedView } from "../../platform/sync.ts";
+import { t } from "../../lib/uiLanguage";
+
 
 export const COLLAPSED_LIMIT = 8;
 export const IDLE_MAC_TABS = 3;
@@ -48,7 +50,7 @@ export function spaceRows(profile: SyncedProfile, openGroups: ReadonlySet<string
   if (profile.pinned.tiles.length) rows.push({ kind: "tiles", key: "tiles", tiles: profile.pinned.tiles });
   pinnedRows(profile.pinned.sections, 0, openGroups, rows);
   if (profile.bookmarks.length) {
-    rows.push({ kind: "header", key: "bookmarks-header", title: "Bookmarks", icon: "star" });
+    rows.push({ kind: "header", key: "bookmarks-header", title: t(`Bookmarks`), icon: "star" });
     bookmarkRows(profile.bookmarks, 0, openGroups, rows);
   }
   const devices = profile.deviceTabs.filter((device) => device.tabs.length > 0);

@@ -8,6 +8,8 @@ import { useFocusReturn } from "./focusReturn";
 import type { Confirmation } from "./Dialog";
 import { FloatingMenu, isSubmenu, useMenuFloor, useMenuFrost, type MenuAction, type MenuItem, type MenuSubmenu } from "./Menu";
 import { useTheme } from "./theme";
+import { t } from "../../lib/uiLanguage";
+
 
 export type MenuHandlers = { onPress?: (event?: GestureResponderEvent) => void; onLongPress?: (event?: GestureResponderEvent) => void; openFor?: (opener: unknown) => void };
 
@@ -168,7 +170,7 @@ export function confirmInSheet(confirmation: Confirmation, drawn: () => void) {
     message: confirmation.message,
     actions: [
       { id: "confirm", title: confirmation.action, destructive: confirmation.destructive !== false },
-      { id: "cancel", title: "Cancel", cancel: true },
+      { id: "cancel", title: t(`Cancel`), cancel: true },
     ],
   }).then((chosen) => {
     if (chosen === "confirm") confirmation.run();

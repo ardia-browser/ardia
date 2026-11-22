@@ -2,6 +2,8 @@ import { keychainDelete, keychainGet, keychainSet } from "../../platform/keychai
 import { devTestValue } from "../../platform/launchConfig";
 import { namesRateLimit } from "./githubLimits";
 import { LiveError, type LiveSourceId } from "./types";
+import { t } from "../../lib/uiLanguage";
+
 
 const mock = (() => {
   try {
@@ -29,15 +31,15 @@ export async function request<T>(url: string, init: RequestInit = {}, onHeaders?
   try {
     res = await fetch(url, { ...init, headers: { Accept: "application/json", ...init.headers } });
   } catch {
-    throw new LiveError("network", "Couldn't connect");
+    throw new LiveError("network", t(`Couldn't connect`));
   }
   onHeaders?.(res.headers);
-  if (res.status === 401) throw new LiveError("signedOut", "Signed out");
-  if (res.status === 403 && res.headers.get("x-github-sso")) throw new LiveError("sso", "Needs Single Sign-On");
-  if (res.status === 429 || (res.status === 403 && res.headers.get("x-ratelimit-remaining") === "0")) throw new LiveError("rateLimited", "Rate Limit Exceeded");
+  if (res.status === 401) throw new LiveError("signedOut", t(`Signed out`));
+  if (res.status === 403 && res.headers.get("x-github-sso")) throw new LiveError("sso", t(`Needs Single Sign-On`));
+  if (res.status === 429 || (res.status === 403 && res.headers.get("x-ratelimit-remaining") === "0")) throw new LiveError("rateLimited", t(`Rate Limit Exceeded`));
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    if (res.status === 403 && namesRateLimit(text)) throw new LiveError("rateLimited", "Rate Limit Exceeded");
+    if (res.status === 403 && namesRateLimit(text)) throw new LiveError("rateLimited", t(`Rate Limit Exceeded`));
     throw new LiveError(res.status === 403 ? "signedOut" : "other", `${res.status} ${text.slice(0, 200)}`.trim());
   }
   return (await res.json()) as T;

@@ -5,6 +5,8 @@ import { ignoreSafeArea, presentationDetents, presentationDragIndicator } from "
 import { closePageMenu, translatePage } from "../../state/page/actions";
 import type { MenuModel } from "../../state/page/pageMenu";
 import { PageMenuWords, usePageMenuInk } from "./PageMenuWords";
+import { t } from "../../lib/uiLanguage";
+
 
 const HIDDEN_AFTER_MS = 450;
 
@@ -29,7 +31,7 @@ export function SystemPageMenu({ tabId, model, open, asksTranslation, onAsksTran
     <Host testID="systemPageMenuSheet" style={styles.anchor} pointerEvents="none">
       <BottomSheet isPresented={open} onIsPresentedChange={(presented) => (presented ? undefined : closePageMenu())}>
         <Group modifiers={[presentationDetents(["medium", "large"]), presentationDragIndicator("visible")]}>
-          <ConfirmationDialog title="Translate with Google?" isPresented={asksTranslation} onIsPresentedChange={onAsksTranslationChange} titleVisibility="visible">
+          <ConfirmationDialog title={t(`Translate with Google?`)} isPresented={asksTranslation} onIsPresentedChange={onAsksTranslationChange} titleVisibility="visible">
             <ConfirmationDialog.Trigger>
               <VStack modifiers={[ignoreSafeArea({ edges: "bottom" })]}>
                 <RNHostView>
@@ -40,7 +42,7 @@ export function SystemPageMenu({ tabId, model, open, asksTranslation, onAsksTran
               </VStack>
             </ConfirmationDialog.Trigger>
             <ConfirmationDialog.Actions>
-              <Button label="Translate" onPress={translatePage} />
+              <Button label={t(`Translate`)} onPress={translatePage} />
             </ConfirmationDialog.Actions>
             <ConfirmationDialog.Message>
               <Text>Google will see this page’s address.</Text>

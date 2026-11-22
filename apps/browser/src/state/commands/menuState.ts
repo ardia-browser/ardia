@@ -22,6 +22,8 @@ import { focusedWindowOf } from "../windows/ui";
 import { clearableRecentlyClosed, closedWindowTitle, newestClosed, recentlyClosedIn } from "../windows/recentlyClosedList";
 import { BOOKMARK_COMMANDS, bookmarksShown } from "../bookmarks/visibility";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
+import { t } from "../../lib/uiLanguage";
+
 
 function menuBookmarks(b: Bookmarks, folderId: string, depth = 0): MenuBookmark[] {
   return folderChildren(b, folderId).map((n: BookmarkNode) =>
@@ -100,31 +102,31 @@ export function menuState(s: BrowserState, liveOfTab = (id: string) => shownLive
 
   const titles: Record<string, string> = {};
   if (tab?.pin) titles.togglePin = togglePinTitle(tab);
-  if (isPinnedRow(tab)) titles["togglePin:tile"] = "Move to Top Apps";
+  if (isPinnedRow(tab)) titles["togglePin:tile"] = t(`Move to Top Apps`);
   else disabled.push("togglePin:tile");
   if (page) titles.toggleMute = muteTitle(muteState(s, page));
-  if (page && tabEngine(s, page.id) === "webkit") titles.togglePageEngine = "Open Page in Chromium";
+  if (page && tabEngine(s, page.id) === "webkit") titles.togglePageEngine = t(`Open Page in Chromium`);
   if (!switchableEngine(s, page?.url)) disabled.push("togglePageEngine");
   const reader = page ? readerFor(page.id) : undefined;
-  if (reader?.active) titles.toggleReader = "Hide Reader";
+  if (reader?.active) titles.toggleReader = t(`Hide Reader`);
   if (!reader?.active && !reader?.available) disabled.push("toggleReader");
   if (page?.url && isBookmarked(s, bookmarkProfile, page.url)) {
-    titles.bookmarkPage = "Edit Bookmark…";
+    titles.bookmarkPage = t(`Edit Bookmark…`);
   }
 
-  if (!s.settings.openLinksInLittleArdia) titles.toggleOpenLinksInLittleArdia = "Open Links from Other Apps in Little Ardia";
+  if (!s.settings.openLinksInLittleArdia) titles.toggleOpenLinksInLittleArdia = t(`Open Links from Other Apps in Little Ardia`);
   if (!page || !canHideElements(s, page.id)) disabled.push("hideElement", "showHiddenElements");
 
   const sidebar = sidebarMenuState(s, windowId);
   disabled.push(...sidebar.disabled, ...UNAVAILABLE_COMMANDS);
   Object.assign(titles, sidebar.titles);
   if (peek) {
-    titles.openFile = "Open Peek as Tab";
-    titles.closeTab = "Close Peek";
+    titles.openFile = t(`Open Peek as Tab`);
+    titles.closeTab = t(`Close Peek`);
   }
   if (w?.kind === "small") {
     disabled.push(...LITTLE_ARDIA_DISABLED_COMMANDS);
-    titles.openFile = "Open in Ardia";
+    titles.openFile = t(`Open in Ardia`);
   }
 
   const closed = newestClosed(recentlyClosedIn(s, w)).map((c) => ({ id: c.id, title: c.kind === "tab" ? c.tab.title || tabLabel(c.tab) : closedWindowTitle(c) }));

@@ -7,6 +7,8 @@ import { activeTabId, bookmarkProfileId, resolveWindowId, tabTitle, viewTabIds }
 import { originalProfile } from "../windows/small";
 import { isWebPageUrl } from "../../lib/url";
 import { isBookmarklet, runBookmarklet } from "./bookmarklets";
+import { t } from "../../lib/uiLanguage";
+
 
 type OpenMode = "current" | "background" | "foreground" | "window" | "incognito" | "split";
 
@@ -39,13 +41,13 @@ export function openUrl(url: string, windowId: string | null | undefined, mode: 
 
 export type OpenAllMode = "tabs" | "window" | "incognito";
 
-export const FOLDER_MANY = "This folder has a lot of bookmarks.";
+export const FOLDER_MANY = t(`This folder has a lot of bookmarks.`);
 
 export function openFolder(folderId: string, windowId: string | null | undefined, mode: OpenAllMode = "tabs") {
   return openLinks(folderLinks(useBrowser.getState().bookmarks, folderId), windowId, mode, FOLDER_MANY);
 }
 
-export async function openLinks(given: { url: string }[], windowId: string | null | undefined, mode: OpenAllMode = "tabs", manyMessage = "That's a lot of pages.") {
+export async function openLinks(given: { url: string }[], windowId: string | null | undefined, mode: OpenAllMode = "tabs", manyMessage = t(`That's a lot of pages.`)) {
   const s = useBrowser.getState();
   const links = given.filter((link) => !isBookmarklet(link.url));
   if (!links.length) return;
@@ -53,7 +55,7 @@ export async function openLinks(given: { url: string }[], windowId: string | nul
     const { confirmed } = await confirm({
       title: `Open ${links.length} tabs?`,
       message: manyMessage,
-      confirmTitle: "Open All",
+      confirmTitle: t(`Open All`),
       windowId: resolveWindowId(s, windowId),
     });
     if (!confirmed) return;

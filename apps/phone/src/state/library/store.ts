@@ -12,6 +12,8 @@ import { belongsToSpace } from "../tabs/spaces";
 import { openNewTab, useTabs } from "../tabs/store";
 import { countUsage } from "../telemetry/telemetry";
 import { forgettingHidden, hidingEntry, historyEntries, keepingHidden, type HiddenHistory, type HistoryEntry, type HistoryVisitInput } from "./historyTimeline";
+import { t } from "../../lib/uiLanguage";
+
 
 export type DownloadedFile = Awaited<ReturnType<typeof downloads.files>>[number];
 
@@ -19,11 +21,11 @@ export type LibrarySection = "history" | "bookmarks" | "downloads";
 
 export const LIBRARY_SECTIONS: readonly LibrarySection[] = ["history", "bookmarks", "downloads"];
 
-export const LIBRARY_NAMES: Record<LibrarySection, string> = { history: "History", bookmarks: "Bookmarks", downloads: "Downloads" };
+export const LIBRARY_NAMES: Record<LibrarySection, string> = { history: t(`History`), bookmarks: t(`Bookmarks`), downloads: t(`Downloads`) };
 
 export const LIBRARY_SYMBOLS: Record<LibrarySection, string> = { history: "clock", bookmarks: "book", downloads: "arrow.down.circle" };
 
-export const LIBRARY_SEARCH_PROMPTS: Record<LibrarySection, string | null> = { history: "Search History", bookmarks: "Search Bookmarks", downloads: null };
+export const LIBRARY_SEARCH_PROMPTS: Record<LibrarySection, string | null> = { history: t(`Search History`), bookmarks: t(`Search Bookmarks`), downloads: null };
 export const LIBRARY_CLEAR_DATA = "clearData";
 
 export const HIDDEN_HISTORY_KEY = "library.hiddenHistory";

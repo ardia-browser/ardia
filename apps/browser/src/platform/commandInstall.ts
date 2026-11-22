@@ -1,9 +1,11 @@
 import { nativeModule, type CliInstallResult } from "@ardia/shell";
+import { t } from "../lib/uiLanguage";
+
 
 export type CommandInstallResult = CliInstallResult;
 
-let bound: ReturnType<typeof nativeModule<"ArdiaCli">> | null = null;
-const Installer = () => (bound ??= nativeModule("ArdiaCli"));
+let bound: ReturnType<typeof nativeModule<t(`ArdiaCli`)>> | null = null;
+const Installer = () => (bound ??= nativeModule(t(`ArdiaCli`)));
 
 export const installedCommandVersion = () => Installer().installedVersion();
 export const canInstallCommandUnattended = () => Installer().canInstallUnattended();

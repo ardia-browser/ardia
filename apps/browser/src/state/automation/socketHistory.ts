@@ -9,6 +9,8 @@ import { ids, int, obj, PAGE, PROFILE, text } from "./socketSchema";
 import { now, page, profileArg } from "./socketTargets";
 import { CLIPPED_STRING_CHARS } from "./socketWire";
 import { OpError } from "./workspaceTargets";
+import { t } from "../../lib/uiLanguage";
+
 
 export const HISTORY_SCAN = 20_000;
 export const MAX_RAW_HISTORY_ROWS = 200_000;
@@ -79,7 +81,7 @@ async function engineDeleted(deleting: Promise<unknown>) {
 async function historyRemove(params: Record<string, unknown>, call: SocketCall) {
   const given = params.ids as string[] | undefined;
   const urls = params.urls as string[] | undefined;
-  if (!given === !urls) throw new OpError("bad_request", "history.remove takes ids (from history.search) or urls, one of the two.");
+  if (!given === !urls) throw new OpError("bad_request", t(`history.remove takes ids (from history.search) or urls, one of the two.`));
   if (urls) {
     if (urls.some((url) => url.length >= CLIPPED_STRING_CHARS)) {
       throw new OpError("bad_request", `A URL of ${CLIPPED_STRING_CHARS} characters or more may be one history.search cut short, so it can't name a page; pass that row's id instead.`);
@@ -90,7 +92,7 @@ async function historyRemove(params: Record<string, unknown>, call: SocketCall) 
   const byProfile = new Map<string, { engine: string; urls: string[] }>();
   for (const found of pagesForIds(given!, call.connection, params.profile)) {
     const entry = byProfile.get(found.profileId) ?? { engine: found.engine, urls: [] };
-    if (entry.engine !== found.engine) throw new OpError("bad_request", "Those ids were read from different histories of one profile; search again.");
+    if (entry.engine !== found.engine) throw new OpError("bad_request", t(`Those ids were read from different histories of one profile; search again.`));
     entry.urls.push(found.url);
     byProfile.set(found.profileId, entry);
   }
@@ -112,24 +114,24 @@ async function historyClear(params: Record<string, unknown>, call: SocketCall) {
   return { ok: true };
 }
 
-const SINCE = int("Milliseconds since 1970", 0);
+const SINCE = int(t(`Milliseconds since 1970`), 0);
 
 export const HISTORY_METHODS: MethodSpec[] = [
   {
     name: "history.search",
     mutates: false,
-    description: "Visited pages whose title or URL contains the query, newest first; ids are handles for this connection",
-    params: obj({ profile: PROFILE, query: text("Text to look for"), since: SINCE, until: SINCE, ...PAGE }),
-    result: "{items: [{id, url, title, visits, lastVisit, clipped?}], total, nextOffset, truncated, reason?: window | scanLimit}",
+    description: t(`Visited pages whose title or URL contains the query, newest first; ids are handles for this connection`),
+    params: obj({ profile: PROFILE, query: text(t(`Text to look for`)), since: SINCE, until: SINCE, ...PAGE }),
+    result: t(`{items: [{id, url, title, visits, lastVisit, clipped?}], total, nextOffset, truncated, reason?: window | scanLimit}`),
     run: historySearch,
   },
   {
     name: "history.remove",
     mutates: true,
-    description: "Remove pages from history: every visit to each exact URL, as the browser's own Remove from History does",
-    params: obj({ profile: PROFILE, ids: ids("Ids from history.search on this connection", 1000), urls: ids("Exact URLs, none of them clipped (shorter than 32,768 characters)", 1000) }),
+    description: t(`Remove pages from history: every visit to each exact URL, as the browser's own Remove from History does`),
+    params: obj({ profile: PROFILE, ids: ids(t(`Ids from history.search on this connection`), 1000), urls: ids(t(`Exact URLs, none of them clipped (shorter than 32,768 characters)`), 1000) }),
     result: "{ok}",
     run: historyRemove,
   },
-  { name: "history.clear", mutates: true, description: "Clear a profile's history, all of it or since a time, as Clear Browsing Data does", params: obj({ profile: PROFILE, since: SINCE }), result: "{ok}", run: historyClear },
+  { name: "history.clear", mutates: true, description: t(`Clear a profile's history, all of it or since a time, as Clear Browsing Data does`), params: obj({ profile: PROFILE, since: SINCE }), result: "{ok}", run: historyClear },
 ];

@@ -2,6 +2,8 @@ import { Platform } from "react-native";
 import { canStartWithoutImport, legacyImport } from "../../platform/legacy";
 import { browserDatabase, browserDatabaseIsDurable } from "../store/database";
 import { runLegacyImport, startWithoutImport, type ImportDeps, type ImportResult } from "./importer";
+import { t } from "../../lib/uiLanguage";
+
 
 let running: Promise<ImportResult> | null = null;
 
@@ -17,7 +19,7 @@ async function importOnce(): Promise<ImportResult> {
   try {
     return await runLegacyImport(deps());
   } catch {
-    console.log("ardia-legacy failed reason=write");
+    console.log(t(`ardia-legacy failed reason=write`));
     return { kind: "failed", reason: "write" };
   }
 }
@@ -35,7 +37,7 @@ export async function startWithoutOldApp(): Promise<boolean> {
   try {
     return await startWithoutImport(deps());
   } catch {
-    console.log("ardia-legacy start-fresh failed");
+    console.log(t(`ardia-legacy start-fresh failed`));
     return false;
   }
 }

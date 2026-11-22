@@ -4,6 +4,8 @@ import { useBrowser } from "../browser/store";
 import { useExtensions } from "./actions";
 import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
+import { t } from "../../lib/uiLanguage";
+
 
 export function startExtensionSearchEngines() {
   const timers: Record<string, ReturnType<typeof setTimeout>> = {};
@@ -26,7 +28,7 @@ async function refreshExtensionSearchEngines(profile: string) {
   try {
     engines = await extensionSearchEngines(profile);
   } catch (error) {
-    warnFor(consent, "[extensions] search engines failed", error);
+    warnFor(consent, t(`[extensions] search engines failed`), error);
     return;
   }
   const s = useBrowser.getState();

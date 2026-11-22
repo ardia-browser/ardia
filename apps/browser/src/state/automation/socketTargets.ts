@@ -4,6 +4,8 @@ import type { BrowserWindow, Tab } from "../browser/types";
 import { eligibleKind, isEligibleTab, lastFocusedEligibleWindow, ownEntry, type AutomationWindowKind } from "./automationWindows";
 import { OpError } from "./workspaceTargets";
 import { withinBudget } from "./socketWire";
+import { t } from "../../lib/uiLanguage";
+
 
 export const now = (): BrowserState => useBrowser.getState();
 
@@ -28,7 +30,7 @@ export function windowOrFocused(id: unknown, kinds: readonly AutomationWindowKin
   const focused = lastFocusedEligibleWindow(s);
   if (focused && kinds.includes(eligibleKind(s, focused)!)) return s.windows[focused]!;
   const any = s.windowOrder.find((w) => kinds.includes(eligibleKind(s, w) as AutomationWindowKind));
-  if (!any) throw new OpError("no_window", "No window the ardia command can use is open.");
+  if (!any) throw new OpError("no_window", t(`No window the ardia command can use is open.`));
   return s.windows[any]!;
 }
 

@@ -11,6 +11,8 @@ import { findSetting, type SettingId } from "../settingsIndex";
 import { officialPluginAnchor } from "../rows/pluginRows";
 import { ActivitySpinner, Button, IconTile, Text } from "../../ui";
 import { lineHeight, monoFace, space } from "../../ui/tokens";
+import { t } from "../../../lib/uiLanguage";
+
 
 const COPIED_FOR_MS = 2000;
 
@@ -103,10 +105,10 @@ function OfficialPluginRow({ plugin }: { plugin: OfficialPlugin }) {
       ) : null}
       {view.firstCommand ? <FirstCommand command={view.firstCommand} /> : null}
       {view.action === "install" || (view.busy && !view.status) ? (
-        <Button title="Install…" disabled={view.busy} onPress={() => void install()} />
+        <Button title={t(`Install…`)} disabled={view.busy} onPress={() => void install()} />
       ) : null}
-      {view.action === "again" ? <Button title="Try Again" onPress={() => void install()} /> : null}
-      {view.action === "update" ? <Button title="Update…" onPress={() => void install()} /> : null}
+      {view.action === "again" ? <Button title={t(`Try Again`)} onPress={() => void install()} /> : null}
+      {view.action === "update" ? <Button title={t(`Update…`)} onPress={() => void install()} /> : null}
     </Row>
   );
 }
@@ -124,7 +126,7 @@ function FirstCommand({ command }: { command: string }) {
         {command}
       </Text>
       <Button
-        title={copied ? "Copied" : "Copy"}
+        title={copied ? t(`Copied`) : t(`Copy`)}
         onPress={() => {
           copyText(command);
           setCopied(true);

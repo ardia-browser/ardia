@@ -17,6 +17,8 @@ import { measureRect, useEased, useSlide } from "./barMotion";
 import { openBarMenu } from "../../state/bookmarks/barMenus";
 import { useBarSize, useBookmarksBarHeight } from "./barSize";
 import { bookmarksBar, type BarSize } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 export const BookmarksBar = memo(function BookmarksBar({ tabId, placeholder }: { tabId: string; placeholder?: boolean }) {
   const windowId = useWindowId();
@@ -212,7 +214,7 @@ function Bar({ windowId }: { windowId: string }) {
           <BarButton
             ref={overflowButton}
             icon="chevron.right.2"
-            tooltip="More bookmarks"
+            tooltip={t(`More bookmarks`)}
             onPress={() => void openFrom(windowId, overflowButton.current, barId, hiddenFrom, true)}
             width={bookmarksBar.overflowWidth}
           />
@@ -224,7 +226,7 @@ function Bar({ windowId }: { windowId: string }) {
           <BarButton
             ref={otherButton}
             icon="folder"
-            title="Other Bookmarks"
+            title={t(`Other Bookmarks`)}
             active={otherOpen}
             dropRing={!!spot && "into" in spot && spot.into === otherId}
             onPress={() => void openFrom(windowId, otherButton.current, otherId, 0, true)}

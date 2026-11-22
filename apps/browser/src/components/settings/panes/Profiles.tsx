@@ -33,6 +33,8 @@ import { PasswordsPage, PasswordsSection } from "./ProfilePasswords";
 import { AddressesPage, CardsPage } from "./ProfileAutofill";
 import { ExtensionPage, ExtensionsSection } from "./ProfileExtensions";
 import { SitePage, SitesPage } from "./SiteSettings";
+import { t } from "../../../lib/uiLanguage";
+
 
 export function ProfilesPane({ profileId: chosen, detail }: SettingsPlace) {
   const profileId = useSelectedProfile(chosen);
@@ -74,8 +76,8 @@ function AllProfilesSection() {
   return (
     <>
       <SectionHeader
-        title="All profiles"
-        description="Each profile keeps its own history, logins, cookies and extensions, unless it was created to share another's data."
+        title={t(`All profiles`)}
+        description={t(`Each profile keeps its own history, logins, cookies and extensions, unless it was created to share another's data.`)}
       />
       <Group>
         <Row anchor="profiles.defaultProfile">
@@ -90,7 +92,7 @@ function AllProfilesSection() {
         <SettingToggle anchor="profiles.showProfileDots" />
         <Row
           anchor="profiles.shareTopApps"
-          description={shareable.length ? "For profiles that share data: the same Top Apps, one live page each." : "For profiles that share data with another. None do yet."}
+          description={shareable.length ? t(`For profiles that share data: the same Top Apps, one live page each.`) : t(`For profiles that share data with another. None do yet.`)}
         />
         {shareable.map((id) => (
           <ShareTopAppsRow key={id} profileId={id} />
@@ -106,7 +108,7 @@ function useTopAppsDescription(profileId: string): string {
   const sharing = useTopAppSiblingNames(profileId);
   const shared = useSharedWith(profileId);
   const others = useProfileRecords(useShallow((profiles) => shared.filter((id) => id !== profileId).map((id) => profiles[id]?.name ?? "")));
-  if (own) return "Keeps its own Top Apps.";
+  if (own) return t(`Keeps its own Top Apps.`);
   return sharing.length ? `Same Top Apps as ${listOf(sharing)}, one live page each.` : `Shares once ${listOf(others, "or")} does.`;
 }
 
@@ -123,8 +125,8 @@ function ShareTopAppsRow({ profileId }: { profileId: string }) {
 
 function iconTitle(icon: string | null): string {
   const symbol = iconSymbol(icon);
-  if (symbol) return PROFILE_SYMBOLS.find((s) => s.name === symbol)?.title ?? "Symbol";
-  return icon ?? "None";
+  if (symbol) return PROFILE_SYMBOLS.find((s) => s.name === symbol)?.title ?? t(`Symbol`);
+  return icon ?? t(`None`);
 }
 
 const homeRelative = (path: string) => path.replace(/^\/Users\/[^/]+(?=\/|$)/, "~");
@@ -169,14 +171,14 @@ function ThisProfileSection({ profileId }: { profileId: string }) {
   const pickIcon = (anchor: View | null) => void openProfileIconPicker(profileId, SETTINGS_WINDOW_ID, "settings", anchor);
   const changeDownloads = async () => {
     if (!downloads) return;
-    const folder = await pickFolder(downloads.folder, "Use Folder");
+    const folder = await pickFolder(downloads.folder, t(`Use Folder`));
     if (folder) void setDownloadsFor({ folder }, [engineProfile]);
   };
 
   return (
     <>
       <Box gap="ml" style={DETAILS_HEAD}>
-        <Pressable onPress={() => pickIcon(badge.current)} tooltip="Change Icon">
+        <Pressable onPress={() => pickIcon(badge.current)} tooltip={t(`Change Icon`)}>
           <View ref={badge} collapsable={false}>
             <ProfileBadge profile={profile} size={64} />
           </View>
@@ -191,39 +193,39 @@ function ThisProfileSection({ profileId }: { profileId: string }) {
         </Box>
       </Box>
 
-      <SectionHeader title="This profile" />
+      <SectionHeader title={t(`This profile`)} />
       <Group>
-        <Row title="Name">
+        <Row title={t(`Name`)}>
           <TextField value={name} onChangeText={editName} onSubmit={commitName} onBlur={commitName} width={220} />
         </Row>
-        <Row title="Icon" description={iconTitle(profile.icon)}>
+        <Row title={t(`Icon`)} description={iconTitle(profile.icon)}>
           <Box row gap="s">
-            {profile.icon ? <Button title="Remove" onPress={() => chooseIcon(profileId, null)} /> : null}
+            {profile.icon ? <Button title={t(`Remove`)} onPress={() => chooseIcon(profileId, null)} /> : null}
             <View ref={changeButton} collapsable={false}>
-              <Button title={profile.icon ? "Change…" : "Add…"} onPress={() => pickIcon(changeButton.current)} />
+              <Button title={profile.icon ? t(`Change…`) : t(`Add…`)} onPress={() => pickIcon(changeButton.current)} />
             </View>
           </Box>
         </Row>
         {sharing ? (
           <Row
             icon={<ColorStack colors={sharedColors} size={14} />}
-            title="Shared data"
+            title={t(`Shared data`)}
             description={`${listOf(sharedNames)} share Cookies, Passwords, Extensions, Bookmarks, and History. Each keeps its own tabs.`}
           />
         ) : null}
-        <Row anchor="profiles.syncThisProfile" description={sharing ? "Its tabs sync here; the data it shares syncs with the profile that owns it." : undefined}>
+        <Row anchor="profiles.syncThisProfile" description={sharing ? t(`Its tabs sync here; the data it shares syncs with the profile that owns it.`) : undefined}>
           <Toggle value={!!syncLink?.enabled} disabled={!syncLink} accessibilityLabel={setting("profiles.syncThisProfile").title} onChange={(on) => setProfileSynced(profileId, on)} />
         </Row>
         {synced ? (
-          <Row title="Sync All Open Tabs" description={`Every open tab in this profile, not just pinned ones, is the same on all your ${PLATFORM_TERMS.syncedComputer}s.`}>
-            <Toggle value={!!profile.syncTabs} disabled={!syncsTabs} accessibilityLabel="Sync All Open Tabs" onChange={(on) => setOpenTabsSynced(profileId, on)} />
+          <Row title={t(`Sync All Open Tabs`)} description={`Every open tab in this profile, not just pinned ones, is the same on all your ${PLATFORM_TERMS.syncedComputer}s.`}>
+            <Toggle value={!!profile.syncTabs} disabled={!syncsTabs} accessibilityLabel={t(`Sync All Open Tabs`)} onChange={(on) => setOpenTabsSynced(profileId, on)} />
           </Row>
         ) : null}
         <Row
           anchor="profiles.profileDownloadsFolder"
           description={downloads ? (downloads.managed ? `${homeRelative(downloads.folder)}, set by your organization.` : homeRelative(downloads.folder)) : undefined}
         >
-          <Button title="Change…" disabled={!downloads || downloads.managed} onPress={() => void changeDownloads()} />
+          <Button title={t(`Change…`)} disabled={!downloads || downloads.managed} onPress={() => void changeDownloads()} />
         </Row>
         {PLATFORM_FEATURES.preloadPages ? <PreloadPagesRow profileId={profileId} /> : null}
         <Row anchor="profiles.siteSettings" onPress={() => goToSettingsPane("profiles", profileId, SETTINGS_DETAIL.sites)} />
@@ -241,21 +243,21 @@ function DataSection({ profileId }: { profileId: string }) {
 
   return (
     <>
-      <SectionHeader title="Data" />
+      <SectionHeader title={t(`Data`)} />
       <Group>
         {hidden(findSetting("profiles.exportBookmarks")) ? null : <ExportBookmarksRow key={profileId} profileId={profileId} />}
         <Row
           anchor="profiles.clearBrowsingData"
-          description={sharing ? "History, cookies, site data and cached files, for every profile that shares them." : "History, cookies, site data and cached files for this profile."}
+          description={sharing ? t(`History, cookies, site data and cached files, for every profile that shares them.`) : t(`History, cookies, site data and cached files for this profile.`)}
         >
-          <Button title="Clear…" onPress={() => showSettingsSheet(<ClearDataDialog profileId={profileId} onClose={closeSettingsSheet} />)} />
+          <Button title={t(`Clear…`)} onPress={() => showSettingsSheet(<ClearDataDialog profileId={profileId} onClose={closeSettingsSheet} />)} />
         </Row>
         <Row
-          title="Delete profile"
-          description={only ? "You can't delete your only profile." : sharing ? "Removes its tabs. The data it shares stays." : "Removes its tabs, history, bookmarks and site data."}
+          title={t(`Delete profile`)}
+          description={only ? t(`You can't delete your only profile.`) : sharing ? t(`Removes its tabs. The data it shares stays.`) : t(`Removes its tabs, history, bookmarks and site data.`)}
         >
           <Button
-            title="Delete…"
+            title={t(`Delete…`)}
             kind="destructive"
             disabled={only}
             onPress={() =>

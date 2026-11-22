@@ -6,6 +6,8 @@ import { GlassFill, useGlass } from "../ui/Glass";
 import { GoButton } from "./GoButton";
 import { ScopeChip } from "./ScopeChip";
 import { BAR, GO_BUTTON } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 type FrameProps = {
   rootRef: RefObject<View | null>;
@@ -37,7 +39,7 @@ export function DropdownFrame({ rootRef, onContextMenu, leadingIcon, scope, fiel
               glyph={BAR.siteControls.glyph}
               capsule
               color={theme.textSecondary}
-              tooltip="Site Controls"
+              tooltip={t(`Site Controls`)}
               onPress={onSiteControls}
             />
           ) : null}
@@ -102,7 +104,7 @@ const DictateButton = memo(function DictateButton({ onPress }: { onPress(): void
   const theme = useTheme();
   const glass = useGlass();
   const { hovered, hoverProps } = useHover();
-  if (!glass) return <Button variant="icon" icon="mic" glyph={BAR.bottom.mic} color={theme.textTertiary} tooltip="Dictate" onPress={onPress} />;
+  if (!glass) return <Button variant="icon" icon="mic" glyph={BAR.bottom.mic} color={theme.textTertiary} tooltip={t(`Dictate`)} onPress={onPress} />;
   return (
     <View {...hoverProps}>
       <GlassFill radius={capsule(GO_BUTTON.height)} state={hovered ? "lit" : "rest"} />
@@ -114,7 +116,7 @@ const DictateButton = memo(function DictateButton({ onPress }: { onPress(): void
         glyph={BAR.bottom.mic}
         color={theme.textTertiary}
         palette={{ icon: theme.textTertiary, iconDisabled: theme.iconDisabled, hover: ink.clear, pressed: theme.toolbarPressed }}
-        tooltip="Dictate"
+        tooltip={t(`Dictate`)}
         onPress={onPress}
       />
     </View>

@@ -1,6 +1,8 @@
 import type { JsonSchema } from "../../lib/jsonSchema";
 import { isFields } from "../../lib/decode";
 import type { TabPin } from "../browser/types";
+import { t } from "../../lib/uiLanguage";
+
 
 export type CommandBarStart = { openTabs?: { hidePinned?: boolean; hideTopApps?: boolean; limit?: number } };
 
@@ -23,16 +25,16 @@ export const isCommandBarStart = (v: unknown): v is CommandBarStart =>
 
 export const COMMAND_BAR_START_SCHEMA: JsonSchema = {
   type: "object",
-  description: "What a new tab's command bar (⌘T) lists before you type. Set by plugins in config.json; there is no Settings row.",
+  description: t(`What a new tab's command bar (⌘T) lists before you type. Set by plugins in config.json; there is no Settings row.`),
   additionalProperties: false,
   properties: {
     openTabs: {
       type: "object",
       additionalProperties: false,
       properties: {
-        hidePinned: { type: "boolean", description: "Leave out pinned tabs (the sidebar's pinned rows)." },
-        hideTopApps: { type: "boolean", description: "Leave out Top Apps (the pinned tiles)." },
-        limit: { type: "integer", minimum: 0, maximum: COMMAND_BAR_START_MAX_TABS, description: "How many open tabs to list; 0 lists none." },
+        hidePinned: { type: "boolean", description: t(`Leave out pinned tabs (the sidebar's pinned rows).`) },
+        hideTopApps: { type: "boolean", description: t(`Leave out Top Apps (the pinned tiles).`) },
+        limit: { type: "integer", minimum: 0, maximum: COMMAND_BAR_START_MAX_TABS, description: t(`How many open tabs to list; 0 lists none.`) },
       },
     },
   },

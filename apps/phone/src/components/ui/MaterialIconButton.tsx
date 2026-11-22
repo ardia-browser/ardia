@@ -16,6 +16,8 @@ import { useMaterialTheme } from "./materialTheme";
 import { materialShape, materialSize } from "./materialTokens";
 import { Symbol } from "./Symbol";
 import type { SymbolName } from "./symbolPaths";
+import { t } from "../../lib/uiLanguage";
+
 
 export type MaterialIconButtonVariant = "standard" | "filled" | "tonal" | "outlined";
 export type MaterialIconButtonSize = "default" | "compact" | "narrow";
@@ -198,6 +200,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   outlined: { borderWidth: 1 },
-  turned: { transform: [{ rotate: "90deg" }] },
+  turned: { transform: [{ rotate: t(`90deg`) }] },
   flipped: { transform: [{ scaleX: -1 }] },
 });

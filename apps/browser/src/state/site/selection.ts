@@ -15,6 +15,8 @@ import { selectedTabIds } from "../pins/organize";
 import { copyLinks } from "../bookmarks/linkMenus";
 import { tabTitle } from "../browser/model";
 import type { BrowserState } from "../browser/store";
+import { t } from "../../lib/uiLanguage";
+
 
 export type { PageSelection };
 
@@ -96,10 +98,10 @@ export async function copyLinkToSelection(tabId: string) {
   const windowId = store().tabs[tabId]?.windowId;
   if (!link || !windowId) return;
   copyText(link);
-  showToast(windowId, "Copied Quote Link", "Links directly to the selected text.", { icon: "quote.bubble.fill" });
+  showToast(windowId, t(`Copied Quote Link`), t(`Links directly to the selected text.`), { icon: "quote.bubble.fill" });
 }
 
-const HAS_SELECTION = `post("result", JSON.stringify(!!String(getSelection() || "").trim()))`;
+const HAS_SELECTION = t(`post("result", JSON.stringify(!!String(getSelection() || "").trim()))`);
 
 export function copySelectedTabUrls(s: BrowserState, windowId: string, markdown: boolean): boolean {
   if ((s.selection[windowId]?.length ?? 0) < 2) return false;
@@ -120,17 +122,17 @@ export async function copyPageUrl(tabId: string) {
   const clean = cleanUrl(tab.url);
   copyText(clean);
   noteUrlCopied(awaitsFirstPage(tabId));
-  const title = clean !== tab.url ? "Copied a clean link without trackers" : "Copied Current URL";
+  const title = clean !== tab.url ? t(`Copied a clean link without trackers`) : t(`Copied Current URL`);
   const web = webviews.get(tabId);
   const selected = /^https?:/.test(tab.url) && web ? await web.evaluate<boolean>(HAS_SELECTION) : false;
   if (selected !== true) return showToast(tab.windowId, title, undefined, { icon: "link" });
-  showToast(tab.windowId, title, "Share a link directly to this text instead?", {
+  showToast(tab.windowId, title, t(`Share a link directly to this text instead?`), {
     icon: "link",
-    action: { title: "Copy Quote Link", run: () => void copyLinkToSelection(tabId) },
+    action: { title: t(`Copy Quote Link`), run: () => void copyLinkToSelection(tabId) },
   });
 }
 
-const FOCUSED = `const focused = () => {
+const FOCUSED = t(`const focused = () => {
   let el = document.activeElement;
   for (;;) {
     if (el && el.shadowRoot && el.shadowRoot.activeElement) el = el.shadowRoot.activeElement;
@@ -140,7 +142,7 @@ const FOCUSED = `const focused = () => {
   }
 };
 const isTextField = (el) => !!el && !el.readOnly && !el.disabled &&
-  (el.tagName === "TEXTAREA" || (el.tagName === "INPUT" && /^(text|search|url|email|tel|)$/i.test(el.getAttribute("type") || "")));`;
+  (el.tagName === "TEXTAREA" || (el.tagName === "INPUT" && /^(text|search|url|email|tel|)$/i.test(el.getAttribute("type") || "")));`);
 
 const JUMP_TO_SELECTION = `(() => {
   ${FOCUSED}

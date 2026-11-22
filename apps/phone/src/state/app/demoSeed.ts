@@ -1,34 +1,36 @@
 import type { ImportRows } from "../store/browserDatabase.ts";
 import { POSITION_STEP, type BrowserTab } from "../tabs/tabModels.ts";
+import { t } from "../../lib/uiLanguage";
+
 
 type Page = { url: string; title: string; minutesAgo: number };
 
 export const DEMO_OPEN: readonly Page[] = [
-  { url: "https://en.wikipedia.org/wiki/Lisbon", title: "Lisbon - Wikipedia", minutesAgo: 600 },
-  { url: "https://www.nytimes.com/section/arts", title: "Arts - The New York Times", minutesAgo: 420 },
-  { url: "https://www.apple.com/iphone/", title: "iPhone - Apple", minutesAgo: 240 },
-  { url: "https://www.allrecipes.com/recipe/21014/good-old-fashioned-pancakes/", title: "Good Old-Fashioned Pancakes Recipe", minutesAgo: 180 },
-  { url: "https://www.bbc.com/news/science_and_environment", title: "Science - BBC News", minutesAgo: 95 },
-  { url: "https://www.swift.org/blog/", title: "Blog | Swift.org", minutesAgo: 40 },
-  { url: "https://www.theverge.com/", title: "The Verge", minutesAgo: 12 },
-  { url: "https://en.wikipedia.org/wiki/Sintra", title: "Sintra - Wikipedia", minutesAgo: 3 },
+  { url: "https://en.wikipedia.org/wiki/Lisbon", title: t(`Lisbon - Wikipedia`), minutesAgo: 600 },
+  { url: "https://www.nytimes.com/section/arts", title: t(`Arts - The New York Times`), minutesAgo: 420 },
+  { url: "https://www.apple.com/iphone/", title: t(`iPhone - Apple`), minutesAgo: 240 },
+  { url: "https://www.allrecipes.com/recipe/21014/good-old-fashioned-pancakes/", title: t(`Good Old-Fashioned Pancakes Recipe`), minutesAgo: 180 },
+  { url: "https://www.bbc.com/news/science_and_environment", title: t(`Science - BBC News`), minutesAgo: 95 },
+  { url: "https://www.swift.org/blog/", title: t(`Blog | Swift.org`), minutesAgo: 40 },
+  { url: "https://www.theverge.com/", title: t(`The Verge`), minutesAgo: 12 },
+  { url: "https://en.wikipedia.org/wiki/Sintra", title: t(`Sintra - Wikipedia`), minutesAgo: 3 },
 ];
 
 export const DEMO_ARCHIVED: readonly Page[] = [
-  { url: "https://www.timeout.com/lisbon", title: "Time Out Lisbon", minutesAgo: 60 * 5 },
-  { url: "https://www.metmuseum.org/", title: "The Metropolitan Museum of Art", minutesAgo: 60 * 26 },
-  { url: "https://news.ycombinator.com/", title: "Hacker News", minutesAgo: 60 * 30 },
-  { url: "https://www.npr.org/sections/music/", title: "Music : NPR", minutesAgo: 60 * 60 },
+  { url: "https://www.timeout.com/lisbon", title: t(`Time Out Lisbon`), minutesAgo: 60 * 5 },
+  { url: "https://www.metmuseum.org/", title: t(`The Metropolitan Museum of Art`), minutesAgo: 60 * 26 },
+  { url: "https://news.ycombinator.com/", title: t(`Hacker News`), minutesAgo: 60 * 30 },
+  { url: "https://www.npr.org/sections/music/", title: t(`Music : NPR`), minutesAgo: 60 * 60 },
 ];
 
 export const DEMO_HISTORY: readonly Page[] = [
-  { url: "https://www.google.com/search?q=best+time+to+visit+sintra", title: "best time to visit sintra - Google Search", minutesAgo: 8 },
-  { url: "https://www.google.com/search?q=past%C3%A9is+de+nata+recipe", title: "pastéis de nata recipe - Google Search", minutesAgo: 50 },
-  { url: "https://www.google.com/search?q=swift+concurrency", title: "swift concurrency - Google Search", minutesAgo: 75 },
-  { url: "https://www.apple.com/", title: "Apple", minutesAgo: 30 },
-  { url: "https://www.apple.com/iphone/", title: "iPhone - Apple", minutesAgo: 240 },
-  { url: "https://en.wikipedia.org/wiki/Lisbon", title: "Lisbon - Wikipedia", minutesAgo: 600 },
-  { url: "https://www.allrecipes.com/", title: "Allrecipes | Recipes, How-Tos, Videos and More", minutesAgo: 900 },
+  { url: "https://www.google.com/search?q=best+time+to+visit+sintra", title: t(`best time to visit sintra - Google Search`), minutesAgo: 8 },
+  { url: "https://www.google.com/search?q=past%C3%A9is+de+nata+recipe", title: t(`pastéis de nata recipe - Google Search`), minutesAgo: 50 },
+  { url: "https://www.google.com/search?q=swift+concurrency", title: t(`swift concurrency - Google Search`), minutesAgo: 75 },
+  { url: "https://www.apple.com/", title: t(`Apple`), minutesAgo: 30 },
+  { url: "https://www.apple.com/iphone/", title: t(`iPhone - Apple`), minutesAgo: 240 },
+  { url: "https://en.wikipedia.org/wiki/Lisbon", title: t(`Lisbon - Wikipedia`), minutesAgo: 600 },
+  { url: "https://www.allrecipes.com/", title: t(`Allrecipes | Recipes, How-Tos, Videos and More`), minutesAgo: 900 },
 ];
 
 const ARCHIVED_IDLE_MS = 600_000;

@@ -20,6 +20,8 @@ import { copy } from "../../lib/platformCopy";
 import { ChromeSurface, font, readerInk, readerLayout, space, Symbol, tabsMotion, useDesign, type MenuItem } from "../ui";
 import { MaterialIconAction, MaterialTopBar } from "../ui/MaterialTopBar";
 import { MenuTrigger } from "../ui/MenuTrigger";
+import { t } from "../../lib/uiLanguage";
+
 
 
 const rise = SlideInDown.springify().stiffness(tabsMotion.sheetIn.stiffness).damping(tabsMotion.sheetIn.damping);
@@ -52,14 +54,14 @@ export function ReaderView({ tabId }: { tabId: string }) {
   }, [size]);
   const family = settings.serif ? copy().readerSerif.family : copy().readerSans.family;
   const items: MenuItem[] = [
-    { label: "Smaller Text", systemImage: "textformat.size.smaller", disabled: settings.step <= 0, onPress: () => setReaderStep(clampReaderStep(settings.step - 1)) },
-    { label: "Larger Text", systemImage: "textformat.size.larger", disabled: settings.step >= READER_STEPS.length - 1, onPress: () => setReaderStep(clampReaderStep(settings.step + 1)) },
+    { label: t(`Smaller Text`), systemImage: "textformat.size.smaller", disabled: settings.step <= 0, onPress: () => setReaderStep(clampReaderStep(settings.step - 1)) },
+    { label: t(`Larger Text`), systemImage: "textformat.size.larger", disabled: settings.step >= READER_STEPS.length - 1, onPress: () => setReaderStep(clampReaderStep(settings.step + 1)) },
     "divider",
     { label: copy().readerSerif.label, checked: settings.serif, onPress: () => setReaderSerif(true) },
     { label: copy().readerSans.label, checked: !settings.serif, onPress: () => setReaderSerif(false) },
     "divider",
     ...(["light", "sepia", "dark"] as ReaderTheme[]).map((option) => ({
-      label: option === "light" ? "Light" : option === "sepia" ? "Sepia" : "Dark",
+      label: option === "light" ? t(`Light`) : option === "sepia" ? t(`Sepia`) : t(`Dark`),
       checked: option === shown,
       onPress: () => setReaderTheme(option),
     })),
@@ -74,7 +76,7 @@ export function ReaderView({ tabId }: { tabId: string }) {
           actions={
             load.kind === "loaded" ? (
               <MenuTrigger items={items} trigger="tap" fixedOrder frost={null} dark={shown === "dark"} place={{ top: insets.top + readerLayout.chromeBand, right: readerLayout.chromeSide }}>
-                {({ onPress }) => <MaterialIconAction icon="textformatSize" label="Text Appearance" ink={ink.ink} onPress={onPress ?? (() => undefined)} />}
+                {({ onPress }) => <MaterialIconAction icon="textformatSize" label={t(`Text Appearance`)} ink={ink.ink} onPress={onPress ?? (() => undefined)} />}
               </MenuTrigger>
             ) : null
           }
@@ -84,7 +86,7 @@ export function ReaderView({ tabId }: { tabId: string }) {
         {load.kind === "loaded" ? (
           <MenuTrigger items={items} trigger="tap" fixedOrder frost={null} dark={shown === "dark"} place={{ top: insets.top + readerLayout.chromeBand, left: readerLayout.chromeSide }}>
             {({ onPress }) => (
-              <Pressable accessibilityRole="button" accessibilityLabel="Text Appearance" onPress={onPress}>
+              <Pressable accessibilityRole="button" accessibilityLabel={t(`Text Appearance`)} onPress={onPress}>
                 <ChromeSurface shape="circle" cornerRadius={readerLayout.chromeButton / 2} dark={shown === "dark"} style={styles.circle}>
                   <View style={styles.mirrored}>
                     <Symbol name="textformatSize" size={30} color={ink.ink} />
@@ -104,7 +106,7 @@ export function ReaderView({ tabId }: { tabId: string }) {
       )}
       {load.kind === "loading" ? (
         <View style={styles.center}>
-          <ActivityIndicator accessibilityLabel="Loading article" color={ink.secondary} />
+          <ActivityIndicator accessibilityLabel={t(`Loading article`)} color={ink.secondary} />
         </View>
       ) : load.kind === "failed" ? (
         <View style={[styles.center, styles.gap]}>

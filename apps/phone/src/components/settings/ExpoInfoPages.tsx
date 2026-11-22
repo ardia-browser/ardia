@@ -6,6 +6,8 @@ import { PHONE_SHARING_COPY, PHONE_WHATS_SENT } from "../../lib/telemetryCopy";
 import { askForDefaultBrowser, refreshDefaultBrowser, useDefaultBrowser } from "../../state/settings/defaultBrowser";
 import { defaultBrowserCopy } from "../../state/settings/settingsRules";
 import { AppIconPreview, modifierList, settingsChrome, SettingsIconTile, settingsUIAvailable, useTheme } from "../ui";
+import { t } from "../../lib/uiLanguage";
+
 
 const FILL = Number.MAX_SAFE_INTEGER;
 const SECONDARY = { type: "hierarchical", style: "secondary" } as const;
@@ -23,7 +25,7 @@ export function ExpoDefaultBrowserPage() {
   }, []);
   const copy = status ? defaultBrowserCopy(status) : null;
   return (
-    <ScrollView modifiers={modifierList(navigationTitle("Default Browser"), navigationBarTitleDisplayMode("inline"), tint(BLUE), settingsChrome())}>
+    <ScrollView modifiers={modifierList(navigationTitle(t(`Default Browser`)), navigationBarTitleDisplayMode("inline"), tint(BLUE), settingsChrome())}>
       {copy ? (
         <VStack spacing={24} modifiers={[padding({ horizontal: 20, top: 24, bottom: 32 })]}>
           <VStack spacing={12}>

@@ -2,6 +2,8 @@ import type { Fields } from "./decode";
 import { at, integer, KEY, KEY_RULE, LIMITS, list, matching, NAME, NAME_RULE, object, only, symbolOf, text, type Check } from "./pluginChecks";
 import { isPagePath } from "./pluginNames";
 import { parseWhen } from "./pluginWhen";
+import { t } from "./uiLanguage";
+
 
 export const SPLIT_SIDES = ["left", "right", "top", "bottom"] as const;
 export type PageSide = (typeof SPLIT_SIDES)[number];
@@ -32,7 +34,7 @@ function openAction(c: Check, path: string, doc: Fields): CommandAction | null {
   const open = doc.open === "tab" || doc.open === "split" ? doc.open : (c.problems.push(`${path}.open must be tab or split`), null);
   if (doc.context !== undefined && typeof doc.context !== "boolean") c.problems.push(`${path}.context must be true or false`);
   const side = doc.side === undefined ? "right" : (SPLIT_SIDES as readonly unknown[]).includes(doc.side) ? (doc.side as PageSide) : (c.problems.push(`${path}.side must be left, right, top or bottom`), null);
-  const sideSetting = doc.sideSetting === undefined ? null : matching(c, `${path}.sideSetting`, doc.sideSetting, KEY, "a row's key");
+  const sideSetting = doc.sideSetting === undefined ? null : matching(c, `${path}.sideSetting`, doc.sideSetting, KEY, t(`a row's key`));
   if (open !== "split" && (doc.side !== undefined || doc.sideSetting !== undefined)) c.problems.push(`${path}: side and sideSetting only go with open: split`);
   const pagePath = doc.path === undefined ? "" : typeof doc.path === "string" && isPagePath(doc.path) ? doc.path : (c.problems.push(`${path}.path must be /like/this?q=1`), null);
   return open && side && pagePath !== null ? { open, context: doc.context === true, side, sideSetting, path: pagePath } : null;
@@ -48,7 +50,7 @@ function actionOf(c: Check, path: string, doc: Fields, hasMain: boolean): Comman
   if (kind !== "open") for (const key of OPEN_ONLY) if (doc[key] !== undefined) c.problems.push(`${path}.${key} only goes with open`);
   if (kind !== "tool" && kind !== "open" && doc.input !== undefined) c.problems.push(`${path}.input only goes with tool`);
   if (kind === "tool") {
-    const tool = matching(c, `${path}.tool`, doc.tool, NAME, "a tool's name");
+    const tool = matching(c, `${path}.tool`, doc.tool, NAME, t(`a tool's name`));
     const input = doc.input === undefined ? {} : object(c, `${path}.input`, doc.input);
     return tool && input ? { tool, input } : null;
   }
@@ -58,7 +60,7 @@ function actionOf(c: Check, path: string, doc: Fields, hasMain: boolean): Comman
     return view ? { view } : null;
   }
   if (kind === "panel") {
-    const panel = matching(c, `${path}.panel`, doc.panel, KEY, "a panel's id");
+    const panel = matching(c, `${path}.panel`, doc.panel, KEY, t(`a panel's id`));
     return panel ? { panel } : null;
   }
   if (doc.handler !== undefined && doc.handler !== true) c.problems.push(`${path}.handler must be true`);

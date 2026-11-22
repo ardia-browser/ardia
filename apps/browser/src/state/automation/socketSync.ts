@@ -5,6 +5,8 @@ import { bool, id, obj, oneOf, PROFILE, TAB } from "./socketSchema";
 import { expect, now, profileArg, tabOf } from "./socketTargets";
 import { OpError } from "./workspaceTargets";
 import { useBrowser } from "../browser/store";
+import { t } from "../../lib/uiLanguage";
+
 
 const TYPES = DATA_TYPES.map((t) => t.id);
 
@@ -26,9 +28,9 @@ export function settles(check: () => boolean, ms = SETTLE_MS): Promise<boolean> 
 
 function syncing(what: string) {
   const s = useSync.getState();
-  if (s.status === "unavailable") throw new OpError("refused", "Sync isn't available in this build of Ardia.");
+  if (s.status === "unavailable") throw new OpError("refused", t(`Sync isn't available in this build of Ardia.`));
   if (!s.enabled) throw new OpError("refused", `Sync is off; turn it on in Settings › General before ${what}.`);
-  if (s.status === "locked") throw new OpError("refused", "Sync is locked; enter the recovery phrase in Settings › General first.");
+  if (s.status === "locked") throw new OpError("refused", t(`Sync is locked; enter the recovery phrase in Settings › General first.`));
   return s;
 }
 
@@ -44,13 +46,13 @@ const summary = () => {
 };
 
 async function runNow(_params: Record<string, unknown>, call: SocketCall) {
-  writable("syncing now");
-  if (!(await syncNow(() => call.stillServing()))) throw new OpError("refused", "Sync turned off while the last cycle finished, so no new one started.");
+  writable(t(`syncing now`));
+  if (!(await syncNow(() => call.stillServing()))) throw new OpError("refused", t(`Sync turned off while the last cycle finished, so no new one started.`));
   return summary();
 }
 
 async function setType(params: Record<string, unknown>) {
-  writable("choosing what syncs");
+  writable(t(`choosing what syncs`));
   const type = params.type as DataType;
   setTypeSynced(type, params.on as boolean);
   expect(await settles(() => useSync.getState().types[type] === params.on), `${type} didn't turn ${params.on ? "on" : "off"}.`);
@@ -58,7 +60,7 @@ async function setType(params: Record<string, unknown>) {
 }
 
 function linkOf(profileId: string) {
-  const link = writable("choosing which profiles sync").profiles[profileId];
+  const link = writable(t(`choosing which profiles sync`)).profiles[profileId];
   if (!link) throw new OpError("refused", `Profile ${profileId} isn't linked to sync yet; it links on the next sync after it opens.`);
   return link;
 }
@@ -74,34 +76,34 @@ async function setProfile(params: Record<string, unknown>) {
 async function setOpenTabs(params: Record<string, unknown>) {
   const profileId = profileArg(params.profile);
   if (!linkOf(profileId).enabled) throw new OpError("refused", `Profile ${profileId} doesn't sync; turn it on with sync.setProfile first.`);
-  if (!useSync.getState().types.tabs) throw new OpError("refused", "Open Tabs don't sync; turn them on with sync.setType first.");
+  if (!useSync.getState().types.tabs) throw new OpError("refused", t(`Open Tabs don't sync; turn them on with sync.setType first.`));
   setOpenTabsSynced(profileId, params.on as boolean);
   expect(await settles(() => !!now().profiles[profileId]?.syncTabs === params.on), `profile ${profileId}'s open tabs didn't turn ${params.on ? "on" : "off"}.`);
   return summary();
 }
 
 function devicesFor(params: Record<string, unknown>) {
-  syncing("listing devices");
+  syncing(t(`listing devices`));
   return sendTargets(profileArg(params.profile));
 }
 
 function send(params: Record<string, unknown>) {
-  writable("sending a tab");
+  writable(t(`sending a tab`));
   const tab = tabOf(params.tab);
-  if (!/^https?:/i.test(tab.url)) throw new OpError("refused", "Only http and https pages can be sent to another device.");
+  if (!/^https?:/i.test(tab.url)) throw new OpError("refused", t(`Only http and https pages can be sent to another device.`));
   const device = sendTargets(tab.profileId).find((d) => d.id === params.device);
   if (!device) throw new OpError("no_window", `There's no device ${String(params.device)} that takes tabs from this profile (sync.devices lists them).`);
-  expect(sendTab(tab.id, device.id), "the tab wasn't queued for the device.");
+  expect(sendTab(tab.id, device.id), t(`the tab wasn't queued for the device.`));
   return { ok: true, device };
 }
 
-const ON = bool("On or off");
+const ON = bool(t(`On or off`));
 
 export const SYNC_METHODS: MethodSpec[] = [
-  { name: "sync.now", mutates: true, description: "Sync now, as Settings › General › Advanced › Sync Now does; answers when the cycle ends", params: obj({}), result: "{status, lastSyncedAt, pending, error, types, profiles}", run: runNow },
-  { name: "sync.setType", mutates: true, description: "Choose whether a kind of data syncs, as the checklist in Settings › General does", params: obj({ type: oneOf(TYPES, "The kind of data"), on: ON }, ["type", "on"]), result: "{status, types, profiles, …}", run: setType },
-  { name: "sync.setProfile", mutates: true, description: "Choose whether a profile syncs, as Settings › Profiles › Sync This Profile does", params: obj({ profile: PROFILE, on: ON }, ["profile", "on"]), result: "{status, types, profiles, …}", run: setProfile },
-  { name: "sync.setOpenTabs", mutates: true, description: "Sync every open tab of a profile, not just pinned ones", params: obj({ profile: PROFILE, on: ON }, ["profile", "on"]), result: "{status, types, profiles, …}", run: setOpenTabs },
-  { name: "sync.devices", mutates: false, description: "The devices a profile's tabs can be sent to", params: obj({ profile: PROFILE }), result: "[{id, name, kind}]", run: devicesFor },
-  { name: "sync.sendTab", mutates: true, description: "Send a tab to another device, as the tab menu's Send to Device does", params: obj({ tab: TAB, device: id("A device id from sync.devices") }, ["tab", "device"]), result: "{ok, device}", run: send },
+  { name: "sync.now", mutates: true, description: t(`Sync now, as Settings › General › Advanced › Sync Now does; answers when the cycle ends`), params: obj({}), result: t(`{status, lastSyncedAt, pending, error, types, profiles}`), run: runNow },
+  { name: "sync.setType", mutates: true, description: t(`Choose whether a kind of data syncs, as the checklist in Settings › General does`), params: obj({ type: oneOf(TYPES, t(`The kind of data`)), on: ON }, ["type", "on"]), result: t(`{status, types, profiles, …}`), run: setType },
+  { name: "sync.setProfile", mutates: true, description: t(`Choose whether a profile syncs, as Settings › Profiles › Sync This Profile does`), params: obj({ profile: PROFILE, on: ON }, ["profile", "on"]), result: t(`{status, types, profiles, …}`), run: setProfile },
+  { name: "sync.setOpenTabs", mutates: true, description: t(`Sync every open tab of a profile, not just pinned ones`), params: obj({ profile: PROFILE, on: ON }, ["profile", "on"]), result: t(`{status, types, profiles, …}`), run: setOpenTabs },
+  { name: "sync.devices", mutates: false, description: t(`The devices a profile's tabs can be sent to`), params: obj({ profile: PROFILE }), result: t(`[{id, name, kind}]`), run: devicesFor },
+  { name: "sync.sendTab", mutates: true, description: t(`Send a tab to another device, as the tab menu's Send to Device does`), params: obj({ tab: TAB, device: id(t(`A device id from sync.devices`)) }, ["tab", "device"]), result: t(`{ok, device}`), run: send },
 ];

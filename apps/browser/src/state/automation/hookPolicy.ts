@@ -2,6 +2,8 @@ import { sha256 } from "../../lib/sha256";
 import { formatUrl, hostWithPort, originOf, urlParts, webUrl } from "../../lib/urlParts";
 import { isApproved, type ApprovalRule } from "./approvals";
 import type { HookSpec, Rewrite } from "./hookFile";
+import { t } from "../../lib/uiLanguage";
+
 
 export const SAFE_LAUNCH_ACTIONS: ReadonlySet<string> = new Set([
   "newTab",
@@ -24,7 +26,7 @@ export const isInsideDownloads = (folder: string) => folder === DOWNLOADS_FOLDER
 export function approvalFor(hook: HookSpec): ApprovalRule | null {
   const rule = (kind: ApprovalRule["kind"], summary: string): ApprovalRule => ({ key: `${kind}:${hook.revision}`, kind, name: hook.name, summary });
   if (hook.omnibox) {
-    const typed = hook.omnibox.global ? "everything you type in the address bar" : `what you type after “${hook.omnibox.keyword}”`;
+    const typed = hook.omnibox.global ? t(`everything you type in the address bar`) : `what you type after “${hook.omnibox.keyword}”`;
     return rule("omnibox", `Sends ${typed} to ${hook.program![0]} for suggestions`);
   }
   if (!hook.decide) return null;

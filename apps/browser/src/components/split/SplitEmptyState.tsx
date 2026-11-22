@@ -11,6 +11,8 @@ import { noteSplit } from "../../state/telemetry/usage";
 import { Panel, SearchField, shadow, space, Symbol, Text, useHover } from "../ui";
 import { EMPTY_STATE_WIDTH, emptyStateRadius, SPLIT_ROW_HEIGHT, splitColors, splitRowRadius } from "./tokens";
 import { Favicon } from "../favicon/Favicon";
+import { t } from "../../lib/uiLanguage";
+
 
 export function SplitEmptyState({ tabId, focused }: { tabId: string; focused: boolean }) {
   const theme = useTheme();
@@ -65,7 +67,7 @@ export function SplitEmptyState({ tabId, focused }: { tabId: string; focused: bo
                 setText(next);
                 setSelected(null);
               }}
-              placeholder="Search or Ask a Question"
+              placeholder={t(`Search or Ask a Question`)}
               onSubmit={go}
               onArrow={move}
               onEscape={() => {
@@ -76,7 +78,7 @@ export function SplitEmptyState({ tabId, focused }: { tabId: string; focused: bo
             />
           </View>
         ) : (
-          <Row icon={<Symbol name="magnifyingglass" size={13} color={theme.textSecondary} style={{ width: 16, height: 16 }} />} label="Search or Ask a Question" secondary onPress={() => setTyping(true)} />
+          <Row icon={<Symbol name="magnifyingglass" size={13} color={theme.textSecondary} style={{ width: 16, height: 16 }} />} label={t(`Search or Ask a Question`)} secondary onPress={() => setTyping(true)} />
         )}
         {suggestions.length > 0 && <View style={{ height: space.s }} />}
         {suggestions.map((id) => (

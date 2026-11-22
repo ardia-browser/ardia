@@ -6,6 +6,8 @@ import { POPOVER_MOTION, PopoverSurface, space } from "../ui";
 import { searchSelection, setPageSelection, usePageSelection, type ClickModifiers, type PageSelection } from "../../state/site/selection";
 import { selectionBar } from "./tokens";
 import { ChipButton, SITE_PANEL } from "./SiteControlsParts";
+import { t } from "../../lib/uiLanguage";
+
 
 const HEIGHT = SITE_PANEL.footerControl + 2 * space.xs;
 const GAP = 6;
@@ -53,7 +55,7 @@ function Bar({ tabId, selection, zoom, area }: { tabId: string; selection: PageS
         left: x,
         top: y,
         opacity: width ? appear : 0,
-        transformOrigin: above ? "center bottom" : "center top",
+        transformOrigin: above ? t(`center bottom`) : t(`center top`),
         transform: [
           { scale: appear.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] }) },
           { translateY: appear.interpolate({ inputRange: [0, 1], outputRange: [above ? 3 : -3, 0] }) },
@@ -74,7 +76,7 @@ function SearchButton({ tabId, text }: { tabId: string; text: string }) {
     <ChipButton
       quiet
       icon="magnifyingglass"
-      title="Search"
+      title={t(`Search`)}
       tooltip={`Search ${engine} for “${quoted.replace(/\s+/g, " ")}”`}
       label={`Search ${engine}`}
       onPress={(e) => searchSelection(tabId, text, e.nativeEvent as unknown as ClickModifiers)}

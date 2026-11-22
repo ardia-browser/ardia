@@ -10,6 +10,8 @@ import { commitProfileName, setDefaultProfile, setShareTopApps } from "./actions
 import { sharingProfiles } from "./profiles";
 import { openProfileIconPicker } from "./iconPicker";
 import { choosePresetColor } from "./themeActions";
+import { t } from "../../lib/uiLanguage";
+
 
 export type ProfileMenuPlace = "sidebar" | "settings";
 export type ProfileColorChoice = { id: ProfileColor; title: string; swatch: string };
@@ -28,25 +30,25 @@ export type ProfileMenuState = {
 export function profileMenuItems({ place, hasIcon, colors, color, isDefault, only, sharesTopApps }: ProfileMenuState): ProfileMenuItem[] {
   return menuSections<ProfileMenuItem>(
     [
-      { id: "rename" as const, title: "Rename…", symbol: "pencil" },
-      { id: "icon" as const, title: hasIcon ? "Change Icon…" : "Add Icon…", symbol: "photo" },
-      { id: "color" as const, title: "Color", symbol: "paintpalette", children: colors.map((c) => ({ value: { color: c.id }, title: c.title, swatch: c.swatch, checked: c.id === color })) },
+      { id: "rename" as const, title: t(`Rename…`), symbol: "pencil" },
+      { id: "icon" as const, title: hasIcon ? t(`Change Icon…`) : t(`Add Icon…`), symbol: "photo" },
+      { id: "color" as const, title: t(`Color`), symbol: "paintpalette", children: colors.map((c) => ({ value: { color: c.id }, title: c.title, swatch: c.swatch, checked: c.id === color })) },
     ],
-    [sharesTopApps !== null && { id: "topApps" as const, title: "Share Top Apps", symbol: "square.grid.2x2", checked: sharesTopApps }],
+    [sharesTopApps !== null && { id: "topApps" as const, title: t(`Share Top Apps`), symbol: "square.grid.2x2", checked: sharesTopApps }],
     place === "sidebar"
-      ? [{ id: "settings" as const, title: "Profile Settings…", symbol: "gearshape" }]
+      ? [{ id: "settings" as const, title: t(`Profile Settings…`), symbol: "gearshape" }]
       : [
-          { id: "details" as const, title: "Show Profile Details", symbol: "info.circle" },
-          { id: "default" as const, title: "Make Default Profile", symbol: "star", enabled: !isDefault },
+          { id: "details" as const, title: t(`Show Profile Details`), symbol: "info.circle" },
+          { id: "default" as const, title: t(`Make Default Profile`), symbol: "star", enabled: !isDefault },
         ],
-    [{ id: "delete" as const, title: "Delete Profile…", symbol: "trash", enabled: !only }],
+    [{ id: "delete" as const, title: t(`Delete Profile…`), symbol: "trash", enabled: !only }],
   );
 }
 
 export async function renameProfile(profileId: string, windowId?: string) {
   const profile = currentProfile(profileId);
   if (!profile) return;
-  const name = await prompt({ title: "Rename Profile", value: profile.name, placeholder: "Profile name", confirmTitle: "Rename", windowId });
+  const name = await prompt({ title: t(`Rename Profile`), value: profile.name, placeholder: t(`Profile name`), confirmTitle: t(`Rename`), windowId });
   if (name !== null) commitProfileName(profileId, name);
 }
 

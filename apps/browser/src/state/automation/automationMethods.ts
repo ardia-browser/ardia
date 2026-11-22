@@ -4,6 +4,8 @@ import { automationCommands, automationDecision, isCatalogCommand, variantsOf } 
 import { COMMANDS, LITTLE_ARDIA_PAGE_COMMANDS } from "../commands/commandCatalog";
 import { eligibleKind, isEligibleTab, lastFocusedEligibleWindow } from "./automationWindows";
 import { AUTOMATION_EVENTS, MIN_IDLE_SECONDS, NAMED_ONLY_EVENTS, type AutomationEventName } from "./eventNames";
+import { t } from "../../lib/uiLanguage";
+
 
 export const PROTOCOL = 4;
 export const MIN_CLIENT_PROTOCOL = 4;
@@ -50,21 +52,21 @@ export function parseRequest(line: string): ParsedRequest | { id: RequestId; err
   try {
     doc = JSON.parse(line);
   } catch {
-    return { id: null, ...failure("bad_request", "The line isn't JSON.") };
+    return { id: null, ...failure("bad_request", t(`The line isn't JSON.`)) };
   }
-  if (!isFields(doc)) return { id: null, ...failure("bad_request", "A request is a JSON object.") };
+  if (!isFields(doc)) return { id: null, ...failure("bad_request", t(`A request is a JSON object.`)) };
   const id = doc.id;
   if (!usableId(id)) return { id: null, ...failure("bad_request", `A request needs an id: a safe integer, or a well-formed string of at most ${MAX_ID_BYTES} UTF-8 bytes.`) };
-  if (typeof doc.method !== "string") return { id, ...failure("bad_request", "A request needs a method.") };
-  if (doc.params !== undefined && !isFields(doc.params)) return { id, ...failure("bad_request", "params must be an object.") };
+  if (typeof doc.method !== "string") return { id, ...failure("bad_request", t(`A request needs a method.`)) };
+  if (doc.params !== undefined && !isFields(doc.params)) return { id, ...failure("bad_request", t(`params must be an object.`)) };
   return { id, method: doc.method, params: (doc.params as Record<string, unknown> | undefined) ?? {} };
 }
 
-export const hello = (version: string) => ({ app: "Ardia", version, protocol: PROTOCOL, minClientProtocol: MIN_CLIENT_PROTOCOL });
+export const hello = (version: string) => ({ app: t(`Ardia`), version, protocol: PROTOCOL, minClientProtocol: MIN_CLIENT_PROTOCOL });
 
 export function clientProtocolProblem(params: Record<string, unknown>, version: string): MethodError | null {
   const asked = params.protocol === undefined ? PROTOCOL : params.protocol;
-  if (typeof asked !== "number" || !Number.isSafeInteger(asked) || asked < 1) return { code: "bad_request", message: "protocol must be a whole number." };
+  if (typeof asked !== "number" || !Number.isSafeInteger(asked) || asked < 1) return { code: "bad_request", message: t(`protocol must be a whole number.`) };
   if (asked >= MIN_CLIENT_PROTOCOL) return null;
   return { code: "unsupported_protocol", message: `This ardia command speaks control protocol ${asked}, and Ardia ${version} needs ${MIN_CLIENT_PROTOCOL} or later: update the command (Settings › Plugins, or its install.sh).` };
 }
@@ -72,12 +74,12 @@ export function clientProtocolProblem(params: Record<string, unknown>, version: 
 export const commands = automationCommands;
 
 const REFUSALS: Record<string, string> = {
-  endsApp: "ends the app",
-  changesEngine: "changes which engine shows a page",
-  leftOutSetting: "changes a setting config files can't set",
-  control: "touches control itself",
-  needsArgument: "needs an argument the socket doesn't pass",
-  needsPerson: "needs the person to finish it",
+  endsApp: t(`ends the app`),
+  changesEngine: t(`changes which engine shows a page`),
+  leftOutSetting: t(`changes a setting config files can't set`),
+  control: t(`touches control itself`),
+  needsArgument: t(`needs an argument the socket doesn't pass`),
+  needsPerson: t(`needs the person to finish it`),
 };
 
 type RunState = Pick<BrowserState, "windows" | "windowOrder" | "ui" | "tabs" | "peeks">;
@@ -88,7 +90,7 @@ const scopeOf = (command: BrowserCommand) => (COMMANDS as Readonly<Record<string
 
 export function planRun(s: RunState, params: Record<string, unknown>): RunPlan | { error: MethodError } {
   const { command, arg, window, tab } = params;
-  if (typeof command !== "string" || !command) return failure("bad_request", "run needs a command id.");
+  if (typeof command !== "string" || !command) return failure("bad_request", t(`run needs a command id.`));
   if (!isCatalogCommand(command)) return failure("unknown_command", `There's no command ${command}.`);
   const decision = automationDecision(command);
   if (decision !== "run") return failure("refused", `${command} ${REFUSALS[decision]}, so the ardia command can't run it.`);
@@ -116,7 +118,7 @@ export function planRun(s: RunState, params: Record<string, unknown>): RunPlan |
   const target = lastFocusedEligibleWindow(s);
   if (target) return { command, arg: given, windowId: target, tabId: null };
   if (s.windowOrder.length === 0) return { command, arg: given, windowId: null, tabId: null };
-  return failure("no_window", "No window the ardia command can use is open.");
+  return failure("no_window", t(`No window the ardia command can use is open.`));
 }
 
 const KNOWN_EVENTS: ReadonlySet<string> = new Set(AUTOMATION_EVENTS);
@@ -130,14 +132,14 @@ function thresholds(value: unknown): Set<number> | null {
 
 export function parseSubscription(params: Record<string, unknown>): Subscription | { error: MethodError } {
   const { events, fullUrls, idle, hooks } = params;
-  if (!Array.isArray(events) || !events.every((name) => typeof name === "string")) return failure("bad_request", "subscribe needs events: a list of event names, or [\"*\"].");
+  if (!Array.isArray(events) || !events.every((name) => typeof name === "string")) return failure("bad_request", t(`subscribe needs events: a list of event names, or ["*"].`));
   const unknown = events.filter((name) => name !== "*" && !KNOWN_EVENTS.has(name));
   if (unknown.length) return failure("bad_request", `Unknown events: ${unknown.join(", ")}. Events: ${AUTOMATION_EVENTS.join(", ")}.`);
   const named = events.filter((name) => name !== "*") as AutomationEventName[];
   const all = events.includes("*") ? AUTOMATION_EVENTS.filter((name) => !NAMED_ONLY_EVENTS.has(name)) : [];
-  if (fullUrls !== undefined && typeof fullUrls !== "boolean") return failure("bad_request", "fullUrls must be true or false.");
+  if (fullUrls !== undefined && typeof fullUrls !== "boolean") return failure("bad_request", t(`fullUrls must be true or false.`));
   const idleFields = idle === undefined ? {} : idle;
-  if (typeof idleFields !== "object" || idleFields === null || Array.isArray(idleFields)) return failure("bad_request", "idle is {\"tab\": [seconds], \"user\": [seconds]}.");
+  if (typeof idleFields !== "object" || idleFields === null || Array.isArray(idleFields)) return failure("bad_request", t(`idle is {"tab": [seconds], "user": [seconds]}.`));
   const tabIdle = thresholds((idleFields as Record<string, unknown>).tab);
   const userIdle = thresholds((idleFields as Record<string, unknown>).user);
   if (!tabIdle || !userIdle) return failure("bad_request", `idle thresholds are lists of at most ${MAX_THRESHOLDS} whole seconds, at least ${MIN_IDLE_SECONDS}.`);

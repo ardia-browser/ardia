@@ -1,4 +1,6 @@
 import { appUrlOrigin, breadcrumb, displayHost, hostOf, urlForDisplay } from "@ardia/core";
+import { t } from "./uiLanguage";
+
 
 export const withoutFragment = (url: string) => url.replace(/#.*$/, "");
 
@@ -10,7 +12,7 @@ export const isWebPageUrl = (url: string) => /^(https?|file):/i.test(url);
 
 export const displayHostOf = (url: string) => displayHost(hostOf(url));
 
-export const pageHostLabel = (url: string) => (url.startsWith("file:") ? "File" : breadcrumb(url).host);
+export const pageHostLabel = (url: string) => (url.startsWith("file:") ? t(`File`) : breadcrumb(url).host);
 
 export function urlTrail(url: string, title: string, { hovered, showFullUrl }: { hovered: boolean; showFullUrl: boolean }): string {
   const isFile = url.startsWith("file:");

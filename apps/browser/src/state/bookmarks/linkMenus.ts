@@ -4,6 +4,8 @@ import type { MenuItem } from "../../platform/menus";
 import { withOptionAlternate, type MenuEntry } from "../app/menuSections";
 import { openLinks, openUrl, type OpenAllMode } from "./actions";
 import { splitViewAvailable } from "../splits/splits";
+import { t } from "../../lib/uiLanguage";
+
 
 export type Link = { url: string; title?: string | null };
 
@@ -11,15 +13,15 @@ export const OPEN_SYMBOLS = { tab: "plus.app", window: "macwindow.badge.plus", i
 
 export function openLinkItems({ split = true }: { split?: boolean } = {}): MenuItem[] {
   return [
-    { id: "tab", title: "Open in New Tab", symbol: OPEN_SYMBOLS.tab },
-    { id: "window", title: "Open in New Window", symbol: OPEN_SYMBOLS.window },
-    { id: "incognito", title: "Open in Incognito Window", symbol: OPEN_SYMBOLS.incognito },
-    ...(split && splitViewAvailable ? [{ id: "split", title: "Open in Split View", symbol: OPEN_SYMBOLS.split }] : []),
+    { id: "tab", title: t(`Open in New Tab`), symbol: OPEN_SYMBOLS.tab },
+    { id: "window", title: t(`Open in New Window`), symbol: OPEN_SYMBOLS.window },
+    { id: "incognito", title: t(`Open in Incognito Window`), symbol: OPEN_SYMBOLS.incognito },
+    ...(split && splitViewAvailable ? [{ id: "split", title: t(`Open in Split View`), symbol: OPEN_SYMBOLS.split }] : []),
   ];
 }
 
-export function openAllItems(links: number, label: "All" | number = "All"): MenuItem[] {
-  const what = label === "All" ? "All" : String(label);
+export function openAllItems(links: number, label: t(`All`) | number = t(`All`)): MenuItem[] {
+  const what = label === "All" ? t(`All`) : String(label);
   return [
     { id: "openAll", title: `Open ${what} in New ${label === 1 ? "Tab" : "Tabs"}`, symbol: OPEN_SYMBOLS.tab, enabled: links > 0 },
     { id: "openAllWindow", title: `Open ${what} in New Window`, symbol: OPEN_SYMBOLS.window, enabled: links > 0 },
@@ -28,7 +30,7 @@ export function openAllItems(links: number, label: "All" | number = "All"): Menu
 }
 
 export function copyLinkItems(count = 1): MenuEntry[] {
-  const n = count === 1 ? "Link" : `${count} Links`;
+  const n = count === 1 ? t(`Link`) : `${count} Links`;
   return withOptionAlternate(
     { id: "copy", title: `Copy ${n}`, symbol: "link", enabled: count > 0 },
     { id: "copyMarkdown", title: `Copy ${n} as Markdown`, symbol: "link", enabled: count > 0 },

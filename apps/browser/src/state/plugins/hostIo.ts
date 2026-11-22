@@ -1,5 +1,7 @@
 import { isFields } from "../../lib/decode";
 import { hostFetchPlugin, readPluginFile, readPluginStorage, writePluginStorage, type PluginFetchResult, type PluginFetchSpec, type PluginFileReadResult } from "../../platform/plugins";
+import { t } from "../../lib/uiLanguage";
+
 
 export type HostFetchSpec = PluginFetchSpec;
 export type HostFetchResult = PluginFetchResult;
@@ -15,9 +17,9 @@ export function storageReadOf(raw: unknown): StorageRead {
   if (isFields(raw)) {
     if (raw.status === "missing") return { status: "missing" };
     if (raw.status === "ok" && typeof raw.text === "string") return { status: "ok", text: raw.text };
-    if (raw.status === "error") return { status: "error", reason: typeof raw.reason === "string" && raw.reason ? raw.reason : "The plugin's storage couldn't be read." };
+    if (raw.status === "error") return { status: "error", reason: typeof raw.reason === "string" && raw.reason ? raw.reason : t(`The plugin's storage couldn't be read.`) };
   }
-  return { status: "error", reason: "The plugin's storage couldn't be read." };
+  return { status: "error", reason: t(`The plugin's storage couldn't be read.`) };
 }
 
 export const readStorageText = (name: string): Promise<StorageRead> =>

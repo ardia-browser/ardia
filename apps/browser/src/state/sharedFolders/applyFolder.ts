@@ -7,6 +7,8 @@ import { removeTabs } from "../tabs/tabs";
 import { ASLEEP, hasPage } from "../tabs/pageSession";
 import type { LocalFolder } from "./local";
 import type { TargetEntry, TargetLevel } from "./tree";
+import { t } from "../../lib/uiLanguage";
+
 
 export const APPLIED_FIELDS = ["tabs", "groups", "windows", "windowOrder", "windowUi", "find", "splits", "selection", "closedTabs", "pinChoices"] as const;
 
@@ -20,7 +22,7 @@ function keysIn(level: TargetLevel, links: Set<string>, dirs: Set<string>) {
 const hasLink = (level: TargetLevel): boolean => level.entries.some((e) => e.kind === "link" || hasLink(e.level));
 
 export const EMPTY_FOLDER_URL = "about:blank";
-const EMPTY_FOLDER_TITLE = "Empty Folder";
+const EMPTY_FOLDER_TITLE = t(`Empty Folder`);
 
 const isPlaceholder = (t: Tab | undefined) => !!t && !hasPage(t) && (!t.url || t.url === EMPTY_FOLDER_URL);
 

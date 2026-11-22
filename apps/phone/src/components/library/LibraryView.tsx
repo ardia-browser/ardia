@@ -36,6 +36,8 @@ import { ClearDataPage } from "../settings/DataPages";
 import { EmptyState } from "../settings/SettingsKit";
 import { MenuTrigger, confirmInSheet } from "../ui/MenuTrigger";
 import { ConfirmSheet, Favicon, FloatingMenu, font, LookBackdrop, radius, space, SwipeToDelete, Symbol, tabsLayout, tabsMotion, useSheetFrame, useTheme, type Confirmation, type MenuItem, type SymbolName } from "../ui";
+import { t } from "../../lib/uiLanguage";
+
 
 const FOLDER = "folder:";
 const ROW_FAVICON = 20;
@@ -52,8 +54,8 @@ type RowMenu = { items: MenuItem[]; at: Point };
 const linkItems = (url: string, title: string): MenuItem[] =>
   shareable(url)
     ? [
-        { label: "Copy Link", icon: "link", onPress: () => copyLink(url) },
-        { label: "Share", icon: "squareAndArrowUp", onPress: () => shareUrl(url, title) },
+        { label: t(`Copy Link`), icon: "link", onPress: () => copyLink(url) },
+        { label: t(`Share`), icon: "squareAndArrowUp", onPress: () => shareUrl(url, title) },
       ]
     : [];
 
@@ -115,9 +117,9 @@ export function LibraryView() {
   };
   const confirmDeleteAll = () => {
     const asked: Confirmation = {
-      title: "Delete All Downloads?",
-      message: "The files are removed from this phone.",
-      action: "Delete All",
+      title: t(`Delete All Downloads?`),
+      message: t(`The files are removed from this phone.`),
+      action: t(`Delete All`),
       run: () => {
         haptics.warning();
         deleteAllDownloads();
@@ -126,9 +128,9 @@ export function LibraryView() {
     confirmInSheet(asked, () => setConfirmation(asked));
   };
   const items: MenuItem[] = [
-    ...(section === "downloads" ? ([{ label: "Delete All Downloads…", icon: "trash", destructive: true, disabled: !hasFiles, onPress: confirmDeleteAll }, "divider"] as MenuItem[]) : []),
+    ...(section === "downloads" ? ([{ label: t(`Delete All Downloads…`), icon: "trash", destructive: true, disabled: !hasFiles, onPress: confirmDeleteAll }, "divider"] as MenuItem[]) : []),
     {
-      label: "Clear Browsing Data",
+      label: t(`Clear Browsing Data`),
       icon: "eraserFill",
       onPress: () => pushLibraryPage(LIBRARY_CLEAR_DATA),
     },
@@ -149,7 +151,7 @@ export function LibraryView() {
       <View style={[styles.column, { paddingTop: frame ? 0 : insets.top }]}>
         <View style={styles.top}>
           {folderKey ? (
-            <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={popLibraryPage} style={styles.topButton}>
+            <Pressable accessibilityRole="button" accessibilityLabel={t(`Back`)} onPress={popLibraryPage} style={styles.topButton}>
               <Symbol name="chevronLeft" size={20} color={theme.spaceAccentInk} />
             </Pressable>
           ) : (
@@ -158,11 +160,11 @@ export function LibraryView() {
             </Pressable>
           )}
           <Text accessibilityRole="header" numberOfLines={1} style={[font.body, styles.bold, styles.title, { color: theme.label }]}>
-            {folderKey ? folder?.title || "Untitled Folder" : LIBRARY_NAMES[section]}
+            {folderKey ? folder?.title || t(`Untitled Folder`) : LIBRARY_NAMES[section]}
           </Text>
           <MenuTrigger items={items} trigger="tap" place={{ right: space.s, width: Math.min(tabsLayout.menuWidth, width - space.l) }}>
             {({ onPress }) => (
-              <Pressable accessibilityRole="button" accessibilityLabel="More" onPress={onPress} style={[styles.topButton, styles.end]}>
+              <Pressable accessibilityRole="button" accessibilityLabel={t(`More`)} onPress={onPress} style={[styles.topButton, styles.end]}>
                 <Symbol name="ellipsis" size={22} color={theme.spaceAccentInk} />
               </Pressable>
             )}
@@ -219,7 +221,7 @@ function SearchField({ prompt, query, onChange }: { prompt: string; query: strin
         autoCapitalize="none"
       />
       {query ? (
-        <Pressable accessibilityRole="button" accessibilityLabel="Clear Search" onPress={() => onChange("")}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t(`Clear Search`)} onPress={() => onChange("")}>
           <Symbol name="xmarkCircleFill" size={18} color={theme.secondaryLabel} />
         </Pressable>
       ) : null}
@@ -227,7 +229,7 @@ function SearchField({ prompt, query, onChange }: { prompt: string; query: strin
   );
 }
 
-const noResults = (query: string) => <EmptyState title={`No Results for “${query.trim()}”`} message="Check the spelling or try a new search." icon="magnifyingglass" />;
+const noResults = (query: string) => <EmptyState title={`No Results for “${query.trim()}”`} message={t(`Check the spelling or try a new search.`)} icon="magnifyingglass" />;
 
 type MenuOpener = (items: MenuItem[], at: Point) => void;
 
@@ -255,7 +257,7 @@ function HistoryList({ query, bottom, onMenu }: { query: string; bottom: number;
   const sections = useMemo(() => historyDays(shown).map((day) => ({ key: String(day.day), title: historyDayTitle(day.day, now), data: day.entries })), [shown]);
   const iconSize = useRowIcon();
   if (!loaded) return null;
-  if (!entries.length) return <EmptyState title="No History" message="Pages you visit here and on your Mac show up here." icon="clockArrow" />;
+  if (!entries.length) return <EmptyState title={t(`No History`)} message={t(`Pages you visit here and on your Mac show up here.`)} icon="clockArrow" />;
   if (!shown.length) return noResults(query);
   return (
     <SectionList
@@ -286,7 +288,7 @@ function HistoryRow({ entry, iconSize, onMenu }: { entry: HistoryEntry; iconSize
         label={`${entry.title || entry.url}, ${host}, ${time}, ${thisDevice ? "This phone" : "Another device"}`}
         icon={<Favicon iconUrl={null} pageUrl={entry.url} size={iconSize} />}
         onPress={() => openRow(entry.url, entry.title)}
-        onLongPress={(at) => onMenu([...linkItems(entry.url, entry.title), "divider", { label: "Delete", icon: "trash", destructive: true, onPress: remove }], at)}
+        onLongPress={(at) => onMenu([...linkItems(entry.url, entry.title), "divider", { label: t(`Delete`), icon: "trash", destructive: true, onPress: remove }], at)}
       >
         <View style={styles.subtitle}>
           <Symbol name={thisDevice ? "iphone" : "laptop"} size={DEVICE_GLYPH} color={theme.secondaryLabel} />
@@ -297,7 +299,7 @@ function HistoryRow({ entry, iconSize, onMenu }: { entry: HistoryEntry; iconSize
   );
 }
 
-function LibraryRow({ title, label, icon, onPress, onLongPress, hint = "Opens the page.", children }: { title: string; label?: string; icon: ReactNode; onPress: () => void; onLongPress?: (at: Point) => void; hint?: string; children?: ReactNode }) {
+function LibraryRow({ title, label, icon, onPress, onLongPress, hint = t(`Opens the page.`), children }: { title: string; label?: string; icon: ReactNode; onPress: () => void; onLongPress?: (at: Point) => void; hint?: string; children?: ReactNode }) {
   const theme = useTheme();
   return (
     <Pressable
@@ -327,7 +329,7 @@ function BookmarkList({ bookmarks, query, bottom, onMenu }: { bookmarks: Bookmar
   const trimmed = query.trim();
   const matches = useMemo(() => (trimmed ? bookmarkMatches(bookmarks, trimmed) : null), [bookmarks, trimmed]);
   const sections = useMemo(() => (matches ? [{ id: "matches", title: null, data: matches }] : bookmarkSections(bookmarks).map((section) => ({ id: section.id, title: section.title, data: section.items }))), [bookmarks, matches]);
-  if (!bookmarks.length) return <EmptyState title="No Bookmarks" message={enabled ? "Bookmarks you save on your Mac show up here." : "Sync with your Mac to see its bookmarks here."} icon="star" />;
+  if (!bookmarks.length) return <EmptyState title={t(`No Bookmarks`)} message={enabled ? t(`Bookmarks you save on your Mac show up here.`) : t(`Sync with your Mac to see its bookmarks here.`)} icon="star" />;
   if (matches && !matches.length) return noResults(trimmed);
   return (
     <SectionList
@@ -349,7 +351,7 @@ function BookmarkFolder({ folder, bottom, onMenu }: { folder: BookmarkItem | nul
   const frame = useSheetFrame();
   const iconSize = useRowIcon();
   const children = folder?.children ?? [];
-  if (!children.length) return <EmptyState title="Empty Folder" message="" icon="folderFill" />;
+  if (!children.length) return <EmptyState title={t(`Empty Folder`)} message="" icon="folderFill" />;
   return (
     <FlatList
       testID="libraryFolder"
@@ -368,9 +370,9 @@ function BookmarkRow({ item, iconSize, onMenu }: { item: BookmarkItem; iconSize:
     const count = (item.children ?? []).length;
     return (
       <LibraryRow
-        title={item.title || "Untitled Folder"}
+        title={item.title || t(`Untitled Folder`)}
         label={`${item.title || "Untitled Folder"}, ${count.toLocaleString()}`}
-        hint="Opens the folder."
+        hint={t(`Opens the folder.`)}
         icon={<Symbol name="folderFill" size={iconSize} color={theme.secondaryLabel} />}
         onPress={() => pushLibraryPage(`${FOLDER}${item.key}`)}
       >
@@ -403,7 +405,7 @@ function DownloadList({ bottom, onMenu }: { bottom: number; onMenu: MenuOpener }
     await loadDownloads();
     setRefreshing(false);
   };
-  if (loaded && !files.length) return <EmptyState title="No Downloads" message="Files you download show up here." icon="arrowDownCircle" />;
+  if (loaded && !files.length) return <EmptyState title={t(`No Downloads`)} message={t(`Files you download show up here.`)} icon="arrowDownCircle" />;
   return (
     <FlatList
       testID="libraryDownloads"
@@ -427,15 +429,15 @@ function DownloadRow({ file, onMenu }: { file: DownloadedFile; onMenu: MenuOpene
       <LibraryRow
         title={file.name}
         label={`${file.name}, ${subtitle}`}
-        hint="Shows the file."
+        hint={t(`Shows the file.`)}
         icon={<Symbol name="docText" size={iconSize} color={theme.secondaryLabel} />}
         onPress={() => previewDownload(file)}
         onLongPress={(at) =>
           onMenu(
             [
-              { label: "Share", icon: "squareAndArrowUp", onPress: () => shareDownload(file) },
+              { label: t(`Share`), icon: "squareAndArrowUp", onPress: () => shareDownload(file) },
               "divider",
-              { label: "Delete", icon: "trash", destructive: true, onPress: remove },
+              { label: t(`Delete`), icon: "trash", destructive: true, onPress: remove },
             ],
             at,
           )

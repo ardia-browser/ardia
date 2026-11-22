@@ -1,3 +1,4 @@
+import { t } from "../lib/uiLanguage";
 type FeatureFlags = {
   scheduleAnimatedCleanupInMicrotask?: unknown;
   override: (overrides: { scheduleAnimatedCleanupInMicrotask: () => boolean }) => void;
@@ -28,7 +29,7 @@ export function deferCancellationsDuringDetach(animation: Ending, value: Detachi
 export function detachAnimatedPropsInCommit(): string | null {
   try {
     const flags: FeatureFlags = require("react-native/src/private/featureflags/ReactNativeFeatureFlags");
-    if (typeof flags.scheduleAnimatedCleanupInMicrotask !== "function") return "React Native has no scheduleAnimatedCleanupInMicrotask flag";
+    if (typeof flags.scheduleAnimatedCleanupInMicrotask !== "function") return t(`React Native has no scheduleAnimatedCleanupInMicrotask flag`);
     flags.override({ scheduleAnimatedCleanupInMicrotask: () => false });
     deferCancellationsDuringDetach(require("react-native/Libraries/Animated/animations/Animation").default.prototype, require("react-native/Libraries/Animated/nodes/AnimatedValue").default.prototype);
     return null;

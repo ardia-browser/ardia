@@ -13,6 +13,8 @@ import { noteBookmarkSyncDiff } from "../telemetry/bookmarkMoves";
 import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
 import { withDeadline } from "../../lib/deadline";
+import { t } from "../../lib/uiLanguage";
+
 
 const LEGACY_FILE = "bookmarks.json";
 type LegacyFile = { bookmarks?: { nodes: Bookmarks["nodes"]; roots: Record<string, { bar: string; other: string }> } };
@@ -81,7 +83,7 @@ async function sendOps(engine: string, ops: BookmarkOp[]): Promise<boolean> {
     const result = await applyBookmarkOps(engine, ops);
     return !result.skipped && !result.invalid.length;
   } catch (error) {
-    warnFor(consent, "[bookmarks] couldn't save to Chrome", error);
+    warnFor(consent, t(`[bookmarks] couldn't save to Chrome`), error);
     return false;
   }
 }

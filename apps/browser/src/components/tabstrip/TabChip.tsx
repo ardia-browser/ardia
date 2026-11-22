@@ -42,6 +42,8 @@ import { titleWithoutUnread } from "../../lib/unread";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
 import { TOGGLE_MS, toggleEase } from "./stripToggle";
 import { reduceMotion } from "../ui/reduceMotion";
+import { t } from "../../lib/uiLanguage";
+
 
 export const DraggableChip = memo(function DraggableChip({
   tabId,
@@ -199,7 +201,7 @@ export const TabChip = memo(function TabChip({ tabId, width, drawn, tuck, dragge
                   weight="semibold"
                   color={onBand ? palette.icon : undefined}
                   onPress={tuck ?? (() => pressTabClose(tab.id))}
-                  tooltip={tuck ? "Hide in Group" : closeControl.tooltip}
+                  tooltip={tuck ? t(`Hide in Group`) : closeControl.tooltip}
                 />
               }
               badge={<UnreadCount unread={unread} ink={ink} />}

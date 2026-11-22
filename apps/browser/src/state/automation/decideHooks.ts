@@ -18,6 +18,8 @@ import { currentAirTraffic, loadAirTraffic, noteLinkSource, useAirTraffic } from
 import { onPluginDecidersChanged, pluginsDeciding, runPluginDecideHook } from "../plugins/decideHooks";
 import { usePlugins } from "../plugins/store";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
+import { t } from "../../lib/uiLanguage";
+
 
 const LINK_OPEN = new Set(["tab", "littleArdia", "window"]);
 
@@ -101,7 +103,7 @@ function updateLinkHold() {
   try {
     setHoldIncomingLinks(wanted, useHookRules.getState().stamp);
   } catch (error) {
-    console.warn("[automation] couldn't set the incoming link hold", error);
+    console.warn(t(`[automation] couldn't set the incoming link hold`), error);
   }
 }
 

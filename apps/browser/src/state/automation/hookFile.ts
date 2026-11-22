@@ -2,6 +2,8 @@ import { isFields, type Fields } from "../../lib/decode";
 import { parseMatchPattern, type MatchSpec } from "../../lib/matchPattern";
 import { sha256 } from "../../lib/sha256";
 import { MIN_IDLE_SECONDS, TAB_IDLE_EVENTS, USER_IDLE_EVENTS, isAutomationEvent, isDecideEvent, type DecideEvent } from "./eventNames";
+import { t } from "../../lib/uiLanguage";
+
 
 export const HOOKS_FILE = "hooks.json";
 export const MAX_HOOKS = 200;
@@ -94,7 +96,7 @@ function rulesOf(item: Fields, event: DecideEvent): DecideRules | string {
     const rewrites: Rewrite[] = [];
     for (const rule of list) {
       if (!isFields(rule) || typeof rule.match !== "string" || typeof rule.to !== "string" || Object.keys(rule).some((k) => k !== "match" && k !== "to")) {
-        return 'each rewrite rule is {"match": pattern, "to": URL}';
+        return t(`each rewrite rule is {"match": pattern, "to": URL}`);
       }
       const spec = parseMatchPattern(rule.match);
       if ("error" in spec) return `bad match pattern ${rule.match}: ${spec.error}`;
@@ -104,56 +106,56 @@ function rulesOf(item: Fields, event: DecideEvent): DecideRules | string {
     rules.rewrite = rewrites;
   }
   if ("cancel" in item) {
-    if (item.cancel !== true) return "cancel must be true";
+    if (item.cancel !== true) return t(`cancel must be true`);
     rules.cancel = true;
   }
   if ("drop" in item) {
-    if (item.drop !== true) return "drop must be true";
+    if (item.drop !== true) return t(`drop must be true`);
     rules.drop = true;
   }
   if ("route" in item) {
     const route = item.route;
-    if (!isFields(route) || Object.keys(route).some((k) => k !== "profile" && k !== "open")) return 'route is {"profile"?: name, "open"?: "tab" | "littleArdia" | "window"}';
-    if (route.profile !== undefined && (typeof route.profile !== "string" || !route.profile)) return "route.profile must be a profile name or id";
+    if (!isFields(route) || Object.keys(route).some((k) => k !== "profile" && k !== "open")) return t(`route is {"profile"?: name, "open"?: "tab" | "littleArdia" | "window"}`);
+    if (route.profile !== undefined && (typeof route.profile !== "string" || !route.profile)) return t(`route.profile must be a profile name or id`);
     if (route.open !== undefined && !OPEN_MODES.includes(route.open as never)) return `route.open must be ${OPEN_MODES.join(", ")}`;
-    if (route.profile === undefined && route.open === undefined) return "route needs profile or open";
+    if (route.profile === undefined && route.open === undefined) return t(`route needs profile or open`);
     rules.route = { profile: (route.profile as string | undefined) ?? null, open: (route.open as Route["open"] | undefined) ?? null };
   }
   if ("folder" in item) {
-    if (typeof item.folder !== "string" || !item.folder.startsWith("~/")) return "folder must be a path under your home folder, starting with ~/";
-    if (item.folder.split("/").some((part) => part === ".." || part === ".")) return "folder can't contain . or .. parts";
+    if (typeof item.folder !== "string" || !item.folder.startsWith("~/")) return t(`folder must be a path under your home folder, starting with ~/`);
+    if (item.folder.split("/").some((part) => part === ".." || part === ".")) return t(`folder can't contain . or .. parts`);
     rules.folder = item.folder;
   }
   if ("permission" in item) {
-    if (item.permission !== "allow" && item.permission !== "deny" && item.permission !== "ask") return "permission must be allow, deny or ask";
+    if (item.permission !== "allow" && item.permission !== "deny" && item.permission !== "ask") return t(`permission must be allow, deny or ask`);
     rules.permission = item.permission;
   }
-  if (Object.keys(rules).length > 1 && !(event === "tab.opening" && rules.rewrite && !rules.cancel)) return "give one answer: one of the decide keys";
+  if (Object.keys(rules).length > 1 && !(event === "tab.opening" && rules.rewrite && !rules.cancel)) return t(`give one answer: one of the decide keys`);
   return rules;
 }
 
 function omniboxOf(value: unknown): OmniboxSpec | string {
-  if (!isFields(value) || Object.keys(value).some((k) => !["title", "keyword", "global"].includes(k))) return 'omnibox is {"title", "keyword"} or {"title", "global": true}';
-  if (typeof value.title !== "string" || !value.title.trim()) return "omnibox needs a title";
+  if (!isFields(value) || Object.keys(value).some((k) => !["title", "keyword", "global"].includes(k))) return t(`omnibox is {"title", "keyword"} or {"title", "global": true}`);
+  if (typeof value.title !== "string" || !value.title.trim()) return t(`omnibox needs a title`);
   const keyword = value.keyword;
-  if (keyword !== undefined && (typeof keyword !== "string" || !/^\S{1,32}$/.test(keyword))) return "omnibox.keyword must be one word";
-  if (value.global !== undefined && value.global !== true) return "omnibox.global must be true";
-  if ((keyword === undefined) === (value.global === undefined)) return "omnibox takes a keyword or global: true, not both";
+  if (keyword !== undefined && (typeof keyword !== "string" || !/^\S{1,32}$/.test(keyword))) return t(`omnibox.keyword must be one word`);
+  if (value.global !== undefined && value.global !== true) return t(`omnibox.global must be true`);
+  if ((keyword === undefined) === (value.global === undefined)) return t(`omnibox takes a keyword or global: true, not both`);
   return { title: value.title.trim(), keyword: (keyword as string | undefined) ?? null, global: value.global === true };
 }
 
 function checkTrigger(item: Fields): string | null {
   const triggers = ["on", "at", "every", "omnibox"].filter((k) => k in item);
-  if (triggers.length !== 1) return "give exactly one of on, at, every or omnibox";
-  if ("at" in item && (typeof item.at !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(item.at))) return 'at must be a time like "09:00"';
+  if (triggers.length !== 1) return t(`give exactly one of on, at, every or omnibox`);
+  if ("at" in item && (typeof item.at !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(item.at))) return t(`at must be a time like "09:00"`);
   if ("days" in item) {
-    if (!("at" in item)) return "days only goes with at";
+    if (!("at" in item)) return t(`days only goes with at`);
     if (!isStringList(item.days) || !item.days.length || item.days.some((d) => !DAYS.includes(d))) return `days must be a list of ${DAYS.join(", ")}`;
   }
-  if ("timezone" in item && (!("at" in item) || typeof item.timezone !== "string" || !/^[A-Za-z_]+(\/[A-Za-z0-9_+-]+)*$/.test(item.timezone))) return "timezone goes with at and is a name like Europe/Paris";
+  if ("timezone" in item && (!("at" in item) || typeof item.timezone !== "string" || !/^[A-Za-z_]+(\/[A-Za-z0-9_+-]+)*$/.test(item.timezone))) return t(`timezone goes with at and is a name like Europe/Paris`);
   if ("every" in item) {
     const every = parseDuration(item.every);
-    if (every === null || every < 60) return 'every must be a duration like "15m" or "1h", at least 1m';
+    if (every === null || every < 60) return t(`every must be a duration like "15m" or "1h", at least 1m`);
   }
   return null;
 }
@@ -164,18 +166,18 @@ function parseHook(item: Fields): Omit<HookSpec, "name" | "revision"> | string {
   const trigger = checkTrigger(item);
   if (trigger) return trigger;
   const on = listOrOne(item.on ?? []);
-  if (!isStringList(on)) return "on must be a list of event names";
+  if (!isStringList(on)) return t(`on must be a list of event names`);
   const decide = on.find(isDecideEvent) ?? null;
   for (const name of on) {
     if (name !== "*" && !isAutomationEvent(name) && !isDecideEvent(name)) return `unknown event ${name}`;
   }
-  if ("on" in item && !on.length) return "give at least one event";
+  if ("on" in item && !on.length) return t(`give at least one event`);
   if (decide && on.length !== 1) return `${decide} goes alone in on`;
   const matched = patternsOf(item.match, "match");
   if (typeof matched === "string") return matched;
   const ruleKeys = Object.keys(item).filter((k) => k in RULE_KEYS);
   const actions = ["run", "command"].filter((k) => k in item).length + (ruleKeys.length ? 1 : 0);
-  if (actions !== 1) return "give exactly one of run, command or a decide answer (rewrite, cancel, route, drop, folder, permission)";
+  if (actions !== 1) return t(`give exactly one of run, command or a decide answer (rewrite, cancel, route, drop, folder, permission)`);
   for (const key of [...ruleKeys, ...Object.keys(item).filter((k) => k in FILTER_KEYS)]) {
     const owner = RULE_KEYS[key] ?? FILTER_KEYS[key];
     if (decide !== owner) return `${key} only goes with on: ["${owner}"]`;
@@ -183,31 +185,31 @@ function parseHook(item: Fields): Omit<HookSpec, "name" | "revision"> | string {
   let program: string[] | null = null;
   if ("run" in item) {
     if (typeof item.run === "string") return `run must be a list, like ["${item.run}"], or ["/bin/sh", "-c", "…"] for a shell line`;
-    if (!isStringList(item.run) || !item.run.length || item.run.some((p) => !p || p.includes("\0"))) return "run must be a non-empty list of strings: [program, args…]";
+    if (!isStringList(item.run) || !item.run.length || item.run.some((p) => !p || p.includes("\0"))) return t(`run must be a non-empty list of strings: [program, args…]`);
     program = item.run;
   }
   let command: HookSpec["command"] = null;
   if ("command" in item) {
-    if (typeof item.command !== "string" || !item.command) return "command must be a command id";
-    if (decide || "omnibox" in item) return "command can't answer a decide event or the omnibox";
+    if (typeof item.command !== "string" || !item.command) return t(`command must be a command id`);
+    if (decide || "omnibox" in item) return t(`command can't answer a decide event or the omnibox`);
     command = { id: item.command, arg: null };
   }
   if ("arg" in item) {
-    if (!command) return "arg only goes with command";
-    if (typeof item.arg !== "string") return "arg must be a string";
+    if (!command) return t(`arg only goes with command`);
+    if (typeof item.arg !== "string") return t(`arg must be a string`);
     command.arg = item.arg;
   }
   if ("timeout" in item) {
-    if (decide || "omnibox" in item || !program) return "timeout only goes with run on events and schedules; decide and omnibox hooks have fixed deadlines";
-    if (typeof item.timeout !== "number" || !(item.timeout > 0 && item.timeout <= 86400)) return "timeout must be a number of seconds, more than 0 and at most 86400";
+    if (decide || "omnibox" in item || !program) return t(`timeout only goes with run on events and schedules; decide and omnibox hooks have fixed deadlines`);
+    if (typeof item.timeout !== "number" || !(item.timeout > 0 && item.timeout <= 86400)) return t(`timeout must be a number of seconds, more than 0 and at most 86400`);
   }
   const idleEvents = on.filter((n) => TAB_IDLE_EVENTS.has(n) || USER_IDLE_EVENTS.has(n));
   if ("idle" in item) {
     const idle = parseDuration(item.idle);
-    if (!idleEvents.length) return "idle only goes with tab.idle, tab.resumed, user.idle or user.active";
-    if (idle === null || idle < MIN_IDLE_SECONDS) return 'idle must be a duration like "30m", at least 1m';
+    if (!idleEvents.length) return t(`idle only goes with tab.idle, tab.resumed, user.idle or user.active`);
+    if (idle === null || idle < MIN_IDLE_SECONDS) return t(`idle must be a duration like "30m", at least 1m`);
   } else if (idleEvents.length) return `${idleEvents[0]} needs idle, like "idle": "30m"`;
-  if ("fullUrls" in item && typeof item.fullUrls !== "boolean") return "fullUrls must be true or false";
+  if ("fullUrls" in item && typeof item.fullUrls !== "boolean") return t(`fullUrls must be true or false`);
   let rules: DecideRules | null = null;
   if (ruleKeys.length) {
     const parsed = rulesOf(item, decide!);
@@ -218,13 +220,13 @@ function parseHook(item: Fields): Omit<HookSpec, "name" | "revision"> | string {
   if ("omnibox" in item) {
     const parsed = omniboxOf(item.omnibox);
     if (typeof parsed === "string") return parsed;
-    if (!program) return "an omnibox hook needs run";
+    if (!program) return t(`an omnibox hook needs run`);
     omnibox = parsed;
   }
   const from = listOrOne(item.from ?? []);
-  if (!isStringList(from)) return "from must be a list of app bundle ids or names";
+  if (!isStringList(from)) return t(`from must be a list of app bundle ids or names`);
   const kinds = listOrOne(item.kinds ?? []);
-  if (!isStringList(kinds)) return "kinds must be a list of permission kinds";
+  if (!isStringList(kinds)) return t(`kinds must be a list of permission kinds`);
   return {
     on,
     ...matched,

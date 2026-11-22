@@ -11,12 +11,14 @@ import { Box, Button, space, Text, Toggle } from "../../ui";
 import { Favicon } from "../../favicon/Favicon";
 import { Group, Row, SectionHeader } from "../Form";
 import { ConnectAccountSheet } from "./ConnectAccountSheet";
+import { t } from "../../../lib/uiLanguage";
+
 
 const ACCOUNTS: LiveSourceId[] = ["github", "bitbucket", "notion", "confluence", "gdrive"];
 
 const PR_OPTIONS = {
-  groupStacks: { title: "Group stacked pull requests", description: "Pull requests based on each other's branches sit together under one row." },
-  showCompleted: { title: "Show completed pull requests", description: "Merged, closed and reviewed pull requests stay listed for a day under Completed." },
+  groupStacks: { title: t(`Group stacked pull requests`), description: t(`Pull requests based on each other's branches sit together under one row.`) },
+  showCompleted: { title: t(`Show completed pull requests`), description: t(`Merged, closed and reviewed pull requests stay listed for a day under Completed.`) },
 } as const;
 
 export function LiveFoldersSection() {
@@ -30,16 +32,16 @@ export function LiveFoldersSection() {
       {folders.length ? (
         <Box gap="xl">
           {folders.map((f) => (
-            <FolderGroup key={f.id} folder={f} profileName={profiles[f.profileId]?.name ?? "Profile"} />
+            <FolderGroup key={f.id} folder={f} profileName={profiles[f.profileId]?.name ?? t(`Profile`)} />
           ))}
         </Box>
       ) : (
         <Group>
-          <Row title="No live folders yet" />
+          <Row title={t(`No live folders yet`)} />
         </Group>
       )}
 
-      <SectionHeader title="Connected accounts" description="Live folders read from these accounts." />
+      <SectionHeader title={t(`Connected accounts`)} description={t(`Live folders read from these accounts.`)} />
       <Group>
         {ACCOUNTS.map((id) => (
           <AccountRow key={id} id={id} />
@@ -59,8 +61,8 @@ function FolderGroup({ folder, profileName }: { folder: LiveFolder; profileName:
     <Group>
       <Row title={folder.name} description={`${profileName} · ${folder.sources.map((s) => SOURCES[s].name).join(", ")} · ${statusText(folder.id)}`}>
         <Box row gap="s">
-          <Button title="Refresh" onPress={() => void manualRefresh(folder.id)} />
-          <Button title="Delete" kind="destructive" onPress={() => deleteLiveFolder(folder.id)} />
+          <Button title={t(`Refresh`)} onPress={() => void manualRefresh(folder.id)} />
+          <Button title={t(`Delete`)} kind="destructive" onPress={() => deleteLiveFolder(folder.id)} />
         </Box>
       </Row>
       {folder.kind === "pullRequests"
@@ -92,7 +94,7 @@ function AccountRow({ id }: { id: LiveSourceId }) {
   const source = SOURCES[id];
   return (
     <Row anchor={`automations.${id}`} icon={<Favicon url={source.site} size={18} />} title={source.name} description={account ? `Connected as ${connectedAs(id, account)}` : undefined}>
-      {account ? <Button title="Disconnect" onPress={() => void disconnect(id)} /> : <Button title="Connect…" onPress={() => showSettingsSheet(<ConnectAccountSheet id={id} />)} />}
+      {account ? <Button title={t(`Disconnect`)} onPress={() => void disconnect(id)} /> : <Button title={t(`Connect…`)} onPress={() => showSettingsSheet(<ConnectAccountSheet id={id} />)} />}
     </Row>
   );
 }

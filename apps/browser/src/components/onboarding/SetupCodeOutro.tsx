@@ -9,6 +9,8 @@ import { Text } from "../ui";
 import { monoFace, proseLineHeight, radius, space } from "../ui/tokens";
 import { ChoiceCard } from "./ChoiceCard";
 import { SetupLines } from "./SetupLines";
+import { t } from "../../lib/uiLanguage";
+
 
 const COPIED_FOR_MS = 2400;
 
@@ -31,15 +33,15 @@ export function SetupCodeOutro() {
 
   return (
     <StepLayout
-      title="Your setup code"
-      subtitle="Paste it into Ardia after you download it, on its first screen or in Settings › General. Ardia sets itself up just like this."
+      title={t(`Your setup code`)}
+      subtitle={t(`Paste it into Ardia after you download it, on its first screen or in Settings › General. Ardia sets itself up just like this.`)}
       actions={
         <>
-          <StepActions icon="arrow.right" continueTitle="Done" onContinue={() => finishOnboarding()} />
-          <SecondaryButton title={copied ? "Copied, downloading" : "Download & Copy"} filled onPress={downloadAndCopy} />
+          <StepActions icon="arrow.right" continueTitle={t(`Done`)} onContinue={() => finishOnboarding()} />
+          <SecondaryButton title={copied ? t(`Copied, downloading`) : t(`Download & Copy`)} filled onPress={downloadAndCopy} />
         </>
       }
-      preview={<SetupLines heading="You picked:" lines={lines} />}
+      preview={<SetupLines heading={t(`You picked:`)} lines={lines} />}
     >
       <ChoiceCard dashed radius={radius.panel} style={{ paddingVertical: space.xl, paddingHorizontal: space.xl }}>
         <Text selectable accessibilityLabel={`Setup code ${code}`} color={colors.title} style={{ ...monoFace(), lineHeight: proseLineHeight.body }}>

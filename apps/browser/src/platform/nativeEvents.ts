@@ -1,4 +1,6 @@
 import type { PageEventName } from "@ardia/ardiacore";
+import { t } from "../lib/uiLanguage";
+
 
 export type Bridge = {
   __callFunction(module: string, method: string, args: unknown[]): void;

@@ -7,6 +7,8 @@ import { ActivityIndicator, Animated, Pressable, ScrollView, View } from "react-
 import { useTheme } from "../ui/theme";
 import { ink, space } from "../ui/tokens";
 import { useMediaTokens } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 const FLEX = { flex: 1 } as const;
 const UNDERLINE = { textDecorationLine: "underline" } as const;
@@ -34,14 +36,14 @@ export function CastPicker({ tabId, paneWidth }: { tabId: string; paneWidth: num
       <View style={{ paddingBottom: PANEL.inset }}>
         <PanelHeader
           icon={<Symbol name="tv.and.mediabox" size={14} color={theme.icon} style={{ width: PANEL.iconSlot, height: PANEL.iconSlot }} />}
-          title={screen ? "Cast screen" : dialog.header || "Cast tab"}
+          title={screen ? t(`Cast screen`) : dialog.header || t(`Cast tab`)}
           accessory={canScreen ? <SourceButton screen={screen} onChange={setScreen} /> : null}
         />
 
         {dialog.permissionRejected ? (
           <Message
-            text="Ardia needs Local Network access to find Cast devices."
-            link="Open Local Network Settings"
+            text={t(`Ardia needs Local Network access to find Cast devices.`)}
+            link={t(`Open Local Network Settings`)}
             onLink={() => void openExternalURL("x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork")}
           />
         ) : available.length ? (
@@ -60,7 +62,7 @@ export function CastPicker({ tabId, paneWidth }: { tabId: string; paneWidth: num
         )}
 
         <View style={{ flexDirection: "row", justifyContent: "flex-end", paddingHorizontal: PANEL.inset, marginTop: space.ml }}>
-          <Button variant="pill" title="Done" onPress={close} />
+          <Button variant="pill" title={t(`Done`)} onPress={close} />
         </View>
       </View>
     </Popover>
@@ -93,7 +95,7 @@ function SinkRow({ sink, onCast, onStop }: { sink: CastSink; onCast(): void; onS
             ) : null}
           </View>
           {busy ? <ActivityIndicator size="small" style={{ transform: [{ scale: 0.6 }], width: 16, height: 16 }} /> : null}
-          {active ? <Button variant="pill" title="Stop" onPress={onStop} /> : null}
+          {active ? <Button variant="pill" title={t(`Stop`)} onPress={onStop} /> : null}
         </View>
       </Pressable>
     </View>
@@ -103,12 +105,12 @@ function SinkRow({ sink, onCast, onStop }: { sink: CastSink; onCast(): void; onS
 function SourceButton({ screen, onChange }: { screen: boolean; onChange: (screen: boolean) => void }) {
   const pick = async () => {
     const choice = await showMenu([
-      { id: "tab", title: "Cast Tab", checked: !screen },
-      { id: "screen", title: "Cast Screen", checked: screen },
+      { id: "tab", title: t(`Cast Tab`), checked: !screen },
+      { id: "screen", title: t(`Cast Screen`), checked: screen },
     ]);
     if (choice) onChange(choice === "screen");
   };
-  return <PopoverValue title="Sources" chevron="chevron.down" tooltip="Source" onPress={() => void pick()} />;
+  return <PopoverValue title={t(`Sources`)} chevron="chevron.down" tooltip={t(`Source`)} onPress={() => void pick()} />;
 }
 
 function Message({ text, link, onLink }: { text: string; link: string; onLink: () => void }) {

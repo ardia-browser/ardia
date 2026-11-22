@@ -1,4 +1,6 @@
 import type { Design } from "./design";
+import { t } from "./uiLanguage";
+
 
 export type InterfaceStyleChoice = "matchMac" | "glass" | "classic";
 export type SchemeChoice = "matchMac" | "system" | "light" | "dark";
@@ -9,8 +11,8 @@ export type MacLook = { interfaceStyle: "glass" | "classic" | null; appearance: 
 export const INTERFACE_STYLES: readonly InterfaceStyleChoice[] = ["matchMac", "glass", "classic"];
 export const SCHEME_CHOICES: readonly SchemeChoice[] = ["matchMac", "system", "light", "dark"];
 
-export const INTERFACE_STYLE_NAMES: Record<InterfaceStyleChoice, string> = { matchMac: "Match My Mac", glass: "Glass", classic: "Classic" };
-export const SCHEME_NAMES: Record<SchemeChoice, string> = { matchMac: "Match My Mac", system: "System", light: "Light", dark: "Dark" };
+export const INTERFACE_STYLE_NAMES: Record<InterfaceStyleChoice, string> = { matchMac: t(`Match My Mac`), glass: t(`Glass`), classic: t(`Classic`) };
+export const SCHEME_NAMES: Record<SchemeChoice, string> = { matchMac: t(`Match My Mac`), system: t(`System`), light: t(`Light`), dark: t(`Dark`) };
 
 export const macLookOf = (syncEnabled: boolean, look: MacLook | null | undefined): MacLook | null => (syncEnabled ? (look ?? null) : null);
 
@@ -40,7 +42,7 @@ export function appearanceSummary(colorName: string | null, shownStyle: Interfac
   const style = offeredInterfaceStyle(shownStyle, offersSync);
   const scheme = offeredScheme(shownScheme, offersSync);
   const parts = [colorName, style === "matchMac" ? null : INTERFACE_STYLE_NAMES[style], scheme === "matchMac" ? null : SCHEME_NAMES[scheme]].filter((part): part is string => part !== null);
-  return parts.length ? parts.join(", ") : "Match My Mac";
+  return parts.length ? parts.join(", ") : t(`Match My Mac`);
 }
 
 const TELEMETRY_STYLE = { matchMac: "match_mac", glass: "glass", classic: "classic" } as const;
@@ -50,4 +52,4 @@ export const colorChoiceTelemetry = (choice: string | null): "match_mac" | "pres
 
 export const appearanceTelemetry = (style: InterfaceStyleChoice, scheme: SchemeChoice) => ({ interface_style: TELEMETRY_STYLE[style], color_scheme: TELEMETRY_SCHEME[scheme] });
 
-export const TABS_STYLE_FOOTER = "How your open tabs are laid out. Swipe up on the bottom bar to see them.";
+export const TABS_STYLE_FOOTER = t(`How your open tabs are laid out. Swipe up on the bottom bar to see them.`);

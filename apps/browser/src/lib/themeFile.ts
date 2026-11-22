@@ -2,6 +2,8 @@ import { isFields } from "./decode";
 import { JSON_SCHEMA_DIALECT, type JsonSchema } from "./jsonSchema";
 import { toHex } from "./color";
 import { LOOK_KEYS, lookSchemas, parseLookBlocks, type LookBlocks } from "./themeLook";
+import { t } from "./uiLanguage";
+
 
 export type RoleValue = string | number | boolean | readonly [string, string];
 export type RolePalette = Readonly<Record<string, RoleValue>>;
@@ -14,11 +16,11 @@ export type ParsedTheme = { roles: ThemeRoles | null; look: LookBlocks | null; p
 export const THEME_NAME = /^[a-z0-9][a-z0-9_-]*$/;
 export const THEME_MODES: readonly ThemeMode[] = ["dark", "light"];
 
-const CHANNEL = String.raw`\s*(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\s*`;
+const CHANNEL = String.rawt(`s*(25[0-5]|2[0-4]d|1dd|[1-9]?d)s*`);
 const ALPHA = String.raw`\s*(0|1|0?\.\d+|1\.0+)\s*`;
 export const COLOR_PATTERN = String.raw`^(?:#[0-9A-Fa-f]{3}|#[0-9A-Fa-f]{6}|#[0-9A-Fa-f]{8}|rgb\(${CHANNEL},${CHANNEL},${CHANNEL}\)|rgba\(${CHANNEL},${CHANNEL},${CHANNEL},${ALPHA}\))$`;
 const COLOR = new RegExp(COLOR_PATTERN);
-const COLOR_RULE = "a colour (#RGB, #RRGGBB, #RRGGBBAA, or rgb or rgba with r, g, b from 0 to 255 and a from 0 to 1)";
+const COLOR_RULE = t(`a colour (#RGB, #RRGGBB, #RRGGBBAA, or rgb or rgba with r, g, b from 0 to 255 and a from 0 to 1)`);
 
 export function themeColor(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -37,8 +39,8 @@ export function themeColor(value: unknown): string | null {
 type RoleKind = { kind: "color" } | { kind: "pair" } | { kind: "number"; minimum?: number; maximum?: number };
 
 function numberRange(role: string): { minimum?: number; maximum?: number } {
-  if (role === "grain" || role.endsWith("Opacity")) return { minimum: 0, maximum: 1 };
-  if (role.endsWith("Radius")) return { minimum: 0, maximum: 100 };
+  if (role === "grain" || role.endsWith(t(`Opacity`))) return { minimum: 0, maximum: 1 };
+  if (role.endsWith(t(`Radius`))) return { minimum: 0, maximum: 100 };
   return {};
 }
 
@@ -63,7 +65,7 @@ function checkedRole(kind: RoleKind, value: unknown): Checked {
   const { minimum, maximum } = kind;
   const inRange = typeof value === "number" && Number.isFinite(value) && (minimum === undefined || value >= minimum) && (maximum === undefined || value <= maximum);
   if (inRange) return { value };
-  return { error: minimum === undefined ? "must be a number" : `must be a number from ${minimum} to ${maximum}` };
+  return { error: minimum === undefined ? t(`must be a number`) : `must be a number from ${minimum} to ${maximum}` };
 }
 
 export function parseThemeFile(file: string, text: string, defaults: RolePalettes): ParsedTheme {
@@ -107,7 +109,7 @@ export function mergedPalettes(defaults: RolePalettes, roles: ThemeRoles | null,
 function roleSchema(kind: RoleKind, value: RoleValue): JsonSchema {
   const color: JsonSchema = { type: "string", pattern: COLOR_PATTERN };
   if (kind.kind === "color") return { ...color, default: value };
-  if (kind.kind === "pair") return { type: "array", prefixItems: [color, color], minItems: 2, maxItems: 2, default: value, description: "Two colours: the top and bottom of the border" };
+  if (kind.kind === "pair") return { type: "array", prefixItems: [color, color], minItems: 2, maxItems: 2, default: value, description: t(`Two colours: the top and bottom of the border`) };
   return { type: "number", ...(kind.minimum === undefined ? {} : { minimum: kind.minimum, maximum: kind.maximum }), default: value };
 }
 
@@ -123,7 +125,7 @@ function modeSchema(mode: ThemeMode, palette: RolePalette): JsonSchema {
 export function themeSchema(defaults: RolePalettes): object {
   return {
     $schema: JSON_SCHEMA_DIALECT,
-    description: "An Ardia theme: colour roles that replace Ardia's own, per appearance, and the type, metrics, layout and icons it draws with",
+    description: t(`An Ardia theme: colour roles that replace Ardia's own, per appearance, and the type, metrics, layout and icons it draws with`),
     type: "object",
     properties: { $schema: { type: "string" }, dark: modeSchema("dark", defaults.dark), light: modeSchema("light", defaults.light), ...lookSchemas() },
     additionalProperties: false,

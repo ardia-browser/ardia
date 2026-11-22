@@ -1,5 +1,7 @@
 import type { MotionCurve } from "@ardia/phone-native";
 import { spring } from "../ui/motion";
+import { t } from "../../lib/uiLanguage";
+
 
 export const tabGridLayout = {
   columnMin: 150,
@@ -19,7 +21,7 @@ export const tabGridLayout = {
   pressedScale: 0.94,
 } as const;
 
-export const tabGridInk = { shadow: "0px 3px 20px rgba(0,0,0,0.108)" } as const;
+export const tabGridInk = { shadow: t(`0px 3px 20px rgba(0,0,0,0.108)`) } as const;
 
 const crossfade: MotionCurve = { type: "spring", response: 0.18, dampingFraction: 1 };
 const crossfadeReduced: MotionCurve = { type: "timing", durationMs: 150, curve: [0, 0, 0.58, 1] };

@@ -4,6 +4,8 @@ import { acceptEngineOffer, stayOnPage, useEngineOffers, type EngineOffer } from
 import { Button, PanelCloseButton, Popover, POPOVER_WIDTH } from "../ui";
 import { CheckRow } from "./PromptParts";
 import { PromptBody } from "./Prompts";
+import { t } from "../../lib/uiLanguage";
+
 
 export const ENGINE_OFFER_WIDTH = POPOVER_WIDTH.s;
 
@@ -20,13 +22,13 @@ function OfferPopover({ tabId, offer, left, top }: { tabId: string; offer: Engin
         <PromptBody
           icons={["play.circle.fill", "safari"]}
           title={`Play ${offer.host} in WebKit?`}
-          message="This site's protected video doesn't play in Chromium. It plays in WebKit."
+          message={t(`This site's protected video doesn't play in Chromium. It plays in WebKit.`)}
           detail={
-            offer.canRemember ? <CheckRow value={remember} onChange={setRemember} label="Don't ask again for this site" /> : undefined
+            offer.canRemember ? <CheckRow value={remember} onChange={setRemember} label={t(`Don't ask again for this site`)} /> : undefined
           }
         >
-          <Button variant="pill" title="Stay on Page" onPress={() => stayOnPage(tabId, remember)} />
-          <Button variant="pill" title="Open in WebKit" primary onPress={() => void acceptEngineOffer(tabId)} />
+          <Button variant="pill" title={t(`Stay on Page`)} onPress={() => stayOnPage(tabId, remember)} />
+          <Button variant="pill" title={t(`Open in WebKit`)} primary onPress={() => void acceptEngineOffer(tabId)} />
         </PromptBody>
         <PanelCloseButton onPress={() => stayOnPage(tabId)} />
       </View>

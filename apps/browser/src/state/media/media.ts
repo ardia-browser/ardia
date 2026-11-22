@@ -17,6 +17,8 @@ import { noteMediaPositionReport, noteNowPlayingLoopRestart } from "../telemetry
 import { isSleeping } from "../tabs/sleepingTabs";
 import { notePictureInPictureClosed } from "../telemetry/pictureInPictureCloses";
 import { liveOf, watchLive } from "../tabs/tabLive";
+import { t } from "../../lib/uiLanguage";
+
 
 export type Session = NowPlaying & {
   playedAt: number;
@@ -206,7 +208,7 @@ export function skipOrTrack(tabId: string, session: Session, direction: "back" |
 
 export const transportIcons = (session: Session) =>
   hasTrackControls(session)
-    ? { back: "backward.end.fill", ahead: "forward.end.fill", backTip: "Play Previous Track", aheadTip: "Play Next Track" }
+    ? { back: "backward.end.fill", ahead: "forward.end.fill", backTip: t(`Play Previous Track`), aheadTip: t(`Play Next Track`) }
     : { back: `gobackward.${SKIP_SECONDS}`, ahead: `goforward.${SKIP_SECONDS}`, backTip: `Skip back ${SKIP_SECONDS} seconds`, aheadTip: `Skip ahead ${SKIP_SECONDS} seconds` };
 
 export function isTabShown(s: BrowserState, tabId: string, profileId?: string): boolean {
@@ -272,7 +274,7 @@ export function sidebarPlayerTabFor(m: Pick<Store, "sessions" | "dismissed">, ta
   return tabId;
 }
 
-const PIP_STATE = 'post("result", JSON.stringify(!!document.pictureInPictureElement || !!window.documentPictureInPicture?.window))';
+const PIP_STATE = t(`post("result", JSON.stringify(!!document.pictureInPictureElement || !!window.documentPictureInPicture?.window))`);
 
 async function inPictureInPicture(tabId: string): Promise<boolean> {
   return (await webviews.get(tabId)?.evaluate<boolean>(PIP_STATE)) === true;

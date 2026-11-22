@@ -9,6 +9,8 @@ import { setPopover } from "../../state/tabs/pageState";
 import { dismissPopoverByPress } from "../../state/tabs/popoverDismiss";
 import type { SitePanelPlace } from "./ZoomControls";
 import { hiddenElementsOn, hiddenElementTitle, restoreHiddenElements, startHidingElement, useHiddenElements, type HiddenElement } from "../../state/site/hiddenElements";
+import { t } from "../../lib/uiLanguage";
+
 
 export const HIDDEN_ELEMENTS_WIDTH = POPOVER_WIDTH.l;
 const LIST_HEIGHT = 300;
@@ -41,8 +43,8 @@ export function HiddenElementsPanel({ tabId, right, left, top, closing, onClosed
       <View style={{ paddingTop: PANEL.inset, paddingBottom: PANEL.rowInset }}>
         <PanelHeader
           icon={<Favicon url={url} favicon={tab.favicon} size={PANEL.iconSlot} profileId={tab.profileId} />}
-          title={host ? `Hidden on ${displayHost(host)}` : "Hidden Elements"}
-          subtitle={!listed ? "…" : count ? `${count} element${count === 1 ? "" : "s"} hidden on every visit` : "Nothing hidden on this site"}
+          title={host ? `Hidden on ${displayHost(host)}` : t(`Hidden Elements`)}
+          subtitle={!listed ? "…" : count ? `${count} element${count === 1 ? "" : "s"} hidden on every visit` : t(`Nothing hidden on this site`)}
         />
         {count ? (
           <ScrollView style={{ maxHeight: LIST_HEIGHT }}>
@@ -52,14 +54,14 @@ export function HiddenElementsPanel({ tabId, right, left, top, closing, onClosed
                 icon="eye.slash"
                 title={hiddenElementTitle(e.selector)}
                 tooltip={e.session ? `${e.selector} (this private session only)` : e.selector}
-                accessory={<Button variant="pill" title="Show" onPress={() => restore([e])} />}
+                accessory={<Button variant="pill" title={t(`Show`)} onPress={() => restore([e])} />}
               />
             ))}
           </ScrollView>
         ) : null}
         <MenuSeparator />
-        <MenuRow icon="eye.slash" title={count ? "Hide Another Element…" : "Hide an Element…"} onPress={hideAnother} />
-        {count > 1 ? <MenuRow icon="eye" title="Show All Again" onPress={() => restore(elements)} /> : null}
+        <MenuRow icon="eye.slash" title={count ? t(`Hide Another Element…`) : t(`Hide an Element…`)} onPress={hideAnother} />
+        {count > 1 ? <MenuRow icon="eye" title={t(`Show All Again`)} onPress={() => restore(elements)} /> : null}
       </View>
     </Popover>
   );

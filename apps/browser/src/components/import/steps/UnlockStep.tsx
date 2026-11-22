@@ -3,6 +3,8 @@ import { APP } from "../model";
 import { ErrorText, Handoff, Spacer, Title } from "../Parts";
 import { backTo, importsBySpaces, type ImportFlow } from "../../../state/import/flow";
 import { skipEncryptedData, unlockAndImport } from "../../../state/import/runImport";
+import { t } from "../../../lib/uiLanguage";
+
 
 export function UnlockBody({ flow }: { flow: ImportFlow }) {
   const { source, sourceProfiles, step } = flow;
@@ -12,7 +14,7 @@ export function UnlockBody({ flow }: { flow: ImportFlow }) {
   return (
     <>
       <Title
-        title="Unlock your data for import"
+        title={t(`Unlock your data for import`)}
         subtitle={`${APP} can securely import logins, cookies and cards from your previous browser, so you stay signed in and don't have to enter your passwords again.`}
       />
       <Handoff
@@ -20,7 +22,7 @@ export function UnlockBody({ flow }: { flow: ImportFlow }) {
         symbol="lock.fill"
         lead={
           many
-            ? `Some data is encrypted, so macOS will ask for your computer password once for each selected profile.`
+            ? t(`Some data is encrypted, so macOS will ask for your computer password once for each selected profile.`)
             : `Some data is encrypted, so macOS will ask for your computer password to bring it securely into ${APP}.`
         }
         detail={`macOS may ask whether ${APP} can use “${source.keychainService ?? `${source.name} Safe Storage`}” from your keychain: it's the key ${source.name} encrypts passwords, cookies, cards and open tabs with. Click Allow. Your data stays on this Mac.`}
@@ -36,10 +38,10 @@ export function UnlockFooter({ flow }: { flow: ImportFlow }) {
   const { unlocking } = step;
   return (
     <>
-      <Button title="Back" onPress={() => backTo(source.profiles.length > 1 || importsBySpaces(source) ? "profiles" : "choose")} />
+      <Button title={t(`Back`)} onPress={() => backTo(source.profiles.length > 1 || importsBySpaces(source) ? "profiles" : "choose")} />
       <Spacer />
-      <Button title="Skip Encrypted Data" onPress={skipEncryptedData} />
-      <Button title={unlocking ? "Waiting for password..." : "Continue"} kind="primary" disabled={unlocking} onPress={() => void unlockAndImport()} />
+      <Button title={t(`Skip Encrypted Data`)} onPress={skipEncryptedData} />
+      <Button title={unlocking ? t(`Waiting for password...`) : t(`Continue`)} kind="primary" disabled={unlocking} onPress={() => void unlockAndImport()} />
     </>
   );
 }

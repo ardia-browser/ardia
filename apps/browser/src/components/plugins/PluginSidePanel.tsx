@@ -12,6 +12,8 @@ import { PluginFileView } from "./PluginFileView";
 import { PluginSurface } from "./PluginSurface";
 import { pluginFileUrl } from "./surfaceNodes";
 import { SIDE_PANEL, SURFACE } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 const panelKeyOf = (panel: SidePanel) => `${panel.plugin}:${panel.panelId}:${panel.generation}`;
 
@@ -93,7 +95,7 @@ function PanelCard({ windowId, panel, current, live }: { windowId: string; panel
         <Text numberOfLines={1} weight="medium" style={FLEX}>
           {title}
         </Text>
-        <Button variant="icon" icon="xmark" glyph={GLYPH} weight="medium" tooltip="Close Side Panel" onPress={() => closePluginSidePanel(windowId, panel.plugin)} />
+        <Button variant="icon" icon="xmark" glyph={GLYPH} weight="medium" tooltip={t(`Close Side Panel`)} onPress={() => closePluginSidePanel(windowId, panel.plugin)} />
       </Box>
       <Divider />
       <View style={FLEX}>

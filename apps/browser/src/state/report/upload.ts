@@ -1,4 +1,6 @@
 import type { ReportFile } from "./form";
+import { t } from "../../lib/uiLanguage";
+
 
 export type FailedStage = "create" | "upload" | "complete";
 
@@ -84,15 +86,15 @@ const sentence = (value: string) => (/[.!?]$/.test(value) ? value : `${value}.`)
 export function failureMessage(errorClass: FailureClass, status: number, json: unknown): string {
   switch (errorClass) {
     case "offline":
-      return "Couldn't reach Ardia's report server. Check your connection; your draft is kept.";
+      return t(`Couldn't reach Ardia's report server. Check your connection; your draft is kept.`);
     case "storage":
-      return "Ardia's report server couldn't store this right now. Your draft is kept; try again in a minute.";
+      return t(`Ardia's report server couldn't store this right now. Your draft is kept; try again in a minute.`);
     case "server":
-      return "Ardia's report server ran into a problem. Your draft is kept; try again in a minute.";
+      return t(`Ardia's report server ran into a problem. Your draft is kept; try again in a minute.`);
     case "rate_limited":
-      return "Ardia's report server has had too many reports from your network. Your draft is kept; try again in an hour.";
+      return t(`Ardia's report server has had too many reports from your network. Your draft is kept; try again in an hour.`);
     case "expired":
-      return "This report waited too long to finish sending. Your draft is kept; Try Again sends it fresh.";
+      return t(`This report waited too long to finish sending. Your draft is kept; Try Again sends it fresh.`);
     case "rejected": {
       const reason = text(object(json).message) ?? text(object(json).error);
       return sentence(`Ardia's report server couldn't accept this report (${reason ?? `error ${status}`}). Your draft is kept`);

@@ -1,11 +1,13 @@
 export type ClearRange = "lastHour" | "today" | "todayAndYesterday" | "allTime";
 import { copy, type DefaultBrowserSteps } from "../../lib/platformCopy.ts";
+import { t } from "../../lib/uiLanguage";
+
 
 export const CLEAR_RANGES: { id: ClearRange; title: string; phrase: string }[] = [
-  { id: "lastHour", title: "Last Hour", phrase: "from the last hour" },
-  { id: "today", title: "Today", phrase: "from today" },
-  { id: "todayAndYesterday", title: "Today and Yesterday", phrase: "from today and yesterday" },
-  { id: "allTime", title: "All Time", phrase: "from all time" },
+  { id: "lastHour", title: t(`Last Hour`), phrase: t(`from the last hour`) },
+  { id: "today", title: t(`Today`), phrase: t(`from today`) },
+  { id: "todayAndYesterday", title: t(`Today and Yesterday`), phrase: t(`from today and yesterday`) },
+  { id: "allTime", title: t(`All Time`), phrase: t(`from all time`) },
 ];
 
 export function clearSince(range: ClearRange, now: number): number | null {
@@ -43,17 +45,17 @@ export function joinList(items: readonly string[]): string {
 
 export function clearNames(choice: ClearChoice): string[] {
   const names: string[] = [];
-  if (choice.history) names.push("History");
-  if (choice.cache) names.push("Cache");
-  if (choice.cookies) names.push("Cookies");
-  if (choice.archive) names.push("Archived Tabs");
+  if (choice.history) names.push(t(`History`));
+  if (choice.cache) names.push(t(`Cache`));
+  if (choice.cookies) names.push(t(`Cookies`));
+  if (choice.archive) names.push(t(`Archived Tabs`));
   return names;
 }
 
 function websiteDataNames(choice: ClearChoice): string[] {
   const names: string[] = [];
-  if (choice.cache) names.push("Cache");
-  if (choice.cookies) names.push("Cookies");
+  if (choice.cache) names.push(t(`Cache`));
+  if (choice.cookies) names.push(t(`Cookies`));
   return names;
 }
 
@@ -67,15 +69,15 @@ export function clearTitle(choice: ClearChoice, range: ClearRange, websiteDataBy
 }
 
 export const clearMessage = (choice: ClearChoice) =>
-  choice.cookies ? "You’ll be signed out of websites. Open tabs stay open." : "Open tabs stay open, and you stay signed in to websites.";
+  choice.cookies ? t(`You’ll be signed out of websites. Open tabs stay open.`) : t(`Open tabs stay open, and you stay signed in to websites.`);
 
 export function clearFooter(choice: ClearChoice, range: ClearRange = "allTime", websiteDataByTime = true): string {
-  if (clearIsEmpty(choice)) return "Choose what to clear.";
+  if (clearIsEmpty(choice)) return t(`Choose what to clear.`);
   const lines: string[] = [];
   if (choice.history) lines.push(copy().historyClears);
-  lines.push(choice.cookies ? "Clearing cookies signs you out of websites." : "You’ll stay signed in to websites.");
+  lines.push(choice.cookies ? t(`Clearing cookies signs you out of websites.`) : t(`You’ll stay signed in to websites.`));
   if (websiteDataIgnoresRange(choice, range, websiteDataByTime)) {
-    const names = [choice.cache ? "the cache" : null, choice.cookies ? "cookies and site data" : null].filter((name): name is string => name !== null);
+    const names = [choice.cache ? t(`the cache`) : null, choice.cookies ? t(`cookies and site data`) : null].filter((name): name is string => name !== null);
     lines.push(`This phone can only clear ${joinList(names)} entirely, so ${names.length > 1 ? "they clear" : "it clears"} from all time.`);
   }
   return lines.join(" ");
@@ -97,21 +99,21 @@ export const listsText = (count: number) => plural(count, "list", "lists");
 
 export function relativeTime(date: number, now: number): string {
   const minutes = Math.max(1, Math.round((now - date) / 60_000));
-  if (minutes < 60) return minutes === 1 ? "1 minute ago" : `${minutes} minutes ago`;
+  if (minutes < 60) return minutes === 1 ? t(`1 minute ago`) : `${minutes} minutes ago`;
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
+  if (hours < 24) return hours === 1 ? t(`1 hour ago`) : `${hours} hours ago`;
   const days = Math.round(hours / 24);
   return days === 1 ? "yesterday" : `${days} days ago`;
 }
 
 export function updatedText(date: number | null, now: number): string {
-  if (date === null) return "Not updated yet";
-  if (now - date < 60_000) return "Updated just now";
+  if (date === null) return t(`Not updated yet`);
+  if (now - date < 60_000) return t(`Updated just now`);
   return `Updated ${relativeTime(date, now)}`;
 }
 
 export function listsStatus(isUpdating: boolean, isOffline: boolean, lastUpdated: number | null, now: number): string {
-  if (isUpdating) return "Updating…";
+  if (isUpdating) return t(`Updating…`);
   if (isOffline) return `Offline · ${updatedText(lastUpdated, now)}`;
   return updatedText(lastUpdated, now);
 }
@@ -126,17 +128,17 @@ export type ListLike = {
 export function listFacts(list: ListLike, now: number): { text: string; isWarning: boolean } {
   switch (list.state) {
     case "downloading":
-      return { text: "Downloading…", isWarning: false };
+      return { text: t(`Downloading…`), isWarning: false };
     case "compiling":
-      return { text: "Compiling…", isWarning: false };
+      return { text: t(`Compiling…`), isWarning: false };
     case "failed":
-      return { text: "Couldn’t update", isWarning: true };
+      return { text: t(`Couldn’t update`), isWarning: true };
     case "tooLarge":
-      return { text: "Too large for Ardia to use", isWarning: true };
+      return { text: t(`Too large for Ardia to use`), isWarning: true };
     case "offline":
       return { text: `${rulesText(list.ruleCount)} · Waiting for a connection`, isWarning: false };
     case "ready":
-      if (!list.isEnabled && list.updatedAt === null) return { text: "Downloads when you turn it on", isWarning: false };
+      if (!list.isEnabled && list.updatedAt === null) return { text: t(`Downloads when you turn it on`), isWarning: false };
       return { text: `${rulesText(list.ruleCount)} · ${updatedText(list.updatedAt, now)}`, isWarning: false };
   }
 }
@@ -144,42 +146,42 @@ export function listFacts(list: ListLike, now: number): { text: string; isWarnin
 export function listStatus(list: ListLike): string {
   switch (list.state) {
     case "downloading":
-      return "Downloading…";
+      return t(`Downloading…`);
     case "compiling":
-      return "Compiling…";
+      return t(`Compiling…`);
     case "failed":
-      return "Couldn’t Update";
+      return t(`Couldn’t Update`);
     case "tooLarge":
-      return "Too Large";
+      return t(`Too Large`);
     case "offline":
-      return "Offline";
+      return t(`Offline`);
     case "ready":
-      return list.isEnabled ? "On" : "Off";
+      return list.isEnabled ? t(`On`) : t(`Off`);
   }
 }
 
 export const listIsBusy = (list: ListLike) => list.state === "downloading" || list.state === "compiling";
 
 export function resetMessage(customLists: number): string {
-  if (customLists <= 0) return "uBlock Origin’s default lists turn back on and the rest turn off.";
+  if (customLists <= 0) return t(`uBlock Origin’s default lists turn back on and the rest turn off.`);
   const removed = `${formatNumber(customLists)} ${customLists === 1 ? "list" : "lists"} you added`;
   return `uBlock Origin’s default lists turn back on, the rest turn off, and ${removed} will be removed.`;
 }
 
-export const myFiltersCount = (ruleCount: number) => (ruleCount === 0 ? "None" : rulesText(ruleCount));
+export const myFiltersCount = (ruleCount: number) => (ruleCount === 0 ? t(`None`) : rulesText(ruleCount));
 
 export function myFiltersSummary(ruleCount: number, skippedCount: number, hasChanges: boolean): string {
-  if (hasChanges) return "Changes aren’t applied yet";
-  if (ruleCount === 0 && skippedCount === 0) return "No rules yet";
+  if (hasChanges) return t(`Changes aren’t applied yet`);
+  if (ruleCount === 0 && skippedCount === 0) return t(`No rules yet`);
   const rules = rulesText(ruleCount);
   return skippedCount > 0 ? `${rules} · ${formatNumber(skippedCount)} skipped` : rules;
 }
 
 export const FILTER_LIST_ADDRESS = {
-  empty: "Enter the list’s address.",
+  empty: t(`Enter the list’s address.`),
   invalid: "Enter an address that starts with https://.",
-  footer: "Adblock Plus or uBlock Origin format.",
-  failed: "Couldn’t add that list.",
+  footer: t(`Adblock Plus or uBlock Origin format.`),
+  failed: t(`Couldn’t add that list.`),
 } as const;
 
 export function filterListAddress(text: string): { url: string } | { message: string } {
@@ -217,8 +219,8 @@ export type DefaultBrowserAction = "askForRole" | "openDefaultApps";
 
 export type DefaultBrowserCopy = { title: string; subtitle: string; steps: string[]; action: string | null; does: DefaultBrowserAction | null; inSettings: boolean };
 
-export const DEFAULT_BROWSER_ACTION = "Set as Default Browser";
-export const OPEN_DEFAULT_APPS = "Open Default Apps";
+export const DEFAULT_BROWSER_ACTION = t(`Set as Default Browser`);
+export const OPEN_DEFAULT_APPS = t(`Open Default Apps`);
 
 type Status = { isDefault: boolean; canAsk: boolean };
 
@@ -231,12 +233,12 @@ export function defaultBrowserCopy(status: Status, instructions: DefaultBrowserS
   if (instructions) {
     return { title: instructions.title, subtitle: instructions.subtitle, steps: instructions.steps, action: instructions.action, does: "openDefaultApps", inSettings: true };
   }
-  if (status.isDefault) return { title: "Ardia is your default browser", subtitle: "Links from other apps open in Ardia.", steps: [], action: null, does: null, inSettings: false };
+  if (status.isDefault) return { title: t(`Ardia is your default browser`), subtitle: t(`Links from other apps open in Ardia.`), steps: [], action: null, does: null, inSettings: false };
   const action = status.canAsk ? DEFAULT_BROWSER_ACTION : OPEN_DEFAULT_APPS;
   return {
-    title: "Make Ardia your default browser",
-    subtitle: "Open links from other apps in Ardia.",
-    steps: [`Tap “${action}”`, status.canAsk ? "Select Ardia" : "Choose Browser app"],
+    title: t(`Make Ardia your default browser`),
+    subtitle: t(`Open links from other apps in Ardia.`),
+    steps: [`Tap “${action}”`, status.canAsk ? t(`Select Ardia`) : t(`Choose Browser app`)],
     action,
     does: status.canAsk ? "askForRole" : "openDefaultApps",
     inSettings: false,
@@ -261,14 +263,14 @@ export const listUpdatedAt = (at: number, locale?: string): string =>
   new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(new Date(at));
 
 export const FALLBACK_ENGINES: readonly { id: string; name: string }[] = [
-  { id: "google", name: "Google" },
-  { id: "bing", name: "Bing" },
-  { id: "duckduckgo", name: "DuckDuckGo" },
-  { id: "ecosia", name: "Ecosia" },
-  { id: "brave", name: "Brave Search" },
-  { id: "kagi", name: "Kagi" },
-  { id: "startpage", name: "Startpage" },
-  { id: "yahoo", name: "Yahoo" },
+  { id: "google", name: t(`Google`) },
+  { id: "bing", name: t(`Bing`) },
+  { id: "duckduckgo", name: t(`DuckDuckGo`) },
+  { id: "ecosia", name: t(`Ecosia`) },
+  { id: "brave", name: t(`Brave Search`) },
+  { id: "kagi", name: t(`Kagi`) },
+  { id: "startpage", name: t(`Startpage`) },
+  { id: "yahoo", name: t(`Yahoo`) },
 ];
 
 export function pickerEngines(loaded: readonly { id: string; name: string; custom: boolean }[]): { id: string; name: string }[] {

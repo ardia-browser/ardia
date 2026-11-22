@@ -1,6 +1,8 @@
 import { Platform } from "react-native";
 import { FLOATING_BAR_PLACE } from "../../lib/deckGeometry";
 import { ANDROID_MENU_SIZES, IPHONE_MENU_SIZES } from "../../lib/menuPlace";
+import { t } from "../../lib/uiLanguage";
+
 export const ink = { white: "#FFFFFF", black: "#000000", clear: "#00000000", knobShadow: "rgba(0,0,0,0.25)" } as const;
 
 export const shape = { control: 12, field: 12, row: 12, card: 16, panel: 22 } as const;
@@ -16,15 +18,15 @@ export type ProfileColor = "plum" | "blue" | "purple" | "pink" | "red" | "orange
 export type ProfileColorSpec = { name: string; swatch: string; tint?: string; action?: string };
 
 export const PROFILE_COLORS: Record<ProfileColor, ProfileColorSpec> = {
-  plum: { name: "Plum", swatch: "#C07A98", tint: "#B25B6B", action: "#DD899B" },
-  blue: { name: "Blue", swatch: "#4691C3" },
-  purple: { name: "Purple", swatch: "#7873AF" },
-  pink: { name: "Pink", swatch: "#D37B8B" },
-  red: { name: "Red", swatch: "#C1575C" },
-  orange: { name: "Orange", swatch: "#D87249" },
-  yellow: { name: "Yellow", swatch: "#E3AC38" },
-  green: { name: "Green", swatch: "#3EB489" },
-  neutral: { name: "Neutral", swatch: "#8E8E93" },
+  plum: { name: t(`Plum`), swatch: "#C07A98", tint: "#B25B6B", action: "#DD899B" },
+  blue: { name: t(`Blue`), swatch: "#4691C3" },
+  purple: { name: t(`Purple`), swatch: "#7873AF" },
+  pink: { name: t(`Pink`), swatch: "#D37B8B" },
+  red: { name: t(`Red`), swatch: "#C1575C" },
+  orange: { name: t(`Orange`), swatch: "#D87249" },
+  yellow: { name: t(`Yellow`), swatch: "#E3AC38" },
+  green: { name: t(`Green`), swatch: "#3EB489" },
+  neutral: { name: t(`Neutral`), swatch: "#8E8E93" },
 };
 
 const lightRoles = {
@@ -253,7 +255,7 @@ const iPhoneMenuLook = {
   disabledOpacity: 0.4,
   frost: "thin" as const,
   frosted: true,
-  shadow: "0px 10px 40px rgba(0,0,0,0.12)",
+  shadow: t(`0px 10px 40px rgba(0,0,0,0.12)`),
 };
 
 const androidMenuLook: typeof iPhoneMenuLook = {
@@ -282,7 +284,7 @@ const androidMenuLook: typeof iPhoneMenuLook = {
   disabledOpacity: 0.38,
   frost: "thin",
   frosted: false,
-  shadow: "0px 2px 6px 2px rgba(0,0,0,0.15), 0px 1px 2px 0px rgba(0,0,0,0.3)",
+  shadow: t(`0px 2px 6px 2px rgba(0,0,0,0.15), 0px 1px 2px 0px rgba(0,0,0,0.3)`),
 };
 
 export const menuLook = Platform.OS === "android" ? androidMenuLook : iPhoneMenuLook;
@@ -364,7 +366,7 @@ export const actionSheetLook = {
   message: { fontSize: 15, lineHeight: 20 },
   button: { fontSize: 17, lineHeight: 22 },
   frost: "thin",
-  shadow: "0px 10px 40px rgba(0,0,0,0.1)",
+  shadow: t(`0px 10px 40px rgba(0,0,0,0.1)`),
 } as const;
 
 export const actionSheetInk = {
@@ -385,7 +387,7 @@ export const materialDialogLook = {
   title: { fontSize: 24, lineHeight: 32 },
   message: { fontSize: 14, lineHeight: 20, letterSpacing: 0.25 },
   button: { fontSize: 14, lineHeight: 20, fontWeight: "500", letterSpacing: 0.1 },
-  shadow: "0px 4px 8px 3px rgba(0,0,0,0.15), 0px 1px 3px 0px rgba(0,0,0,0.3)",
+  shadow: t(`0px 4px 8px 3px rgba(0,0,0,0.15), 0px 1px 3px 0px rgba(0,0,0,0.3)`),
 } as const;
 
 export const materialDialogInk = {
@@ -468,8 +470,8 @@ export const floatingPanelLayout = {
   tintShare: 0.55,
   incognitoShare: 0.85,
   incognitoFill: "#151517",
-  shadow: "0px 4px 36px rgba(0, 0, 0, 0.1)",
-  incognitoShadow: "0px 4px 36px rgba(0, 0, 0, 0.3)",
+  shadow: t(`0px 4px 36px rgba(0, 0, 0, 0.1)`),
+  incognitoShadow: t(`0px 4px 36px rgba(0, 0, 0, 0.3)`),
 } as const;
 
 export const startLayout = {
@@ -559,7 +561,7 @@ export const syncSketch = {
   macTrailing: 46,
   macBottom: 40,
   macRadius: 12,
-  macShadow: "0px 8px 36px rgba(0, 0, 0, 0.18)",
+  macShadow: t(`0px 8px 36px rgba(0, 0, 0, 0.18)`),
   sidebarWidth: 84,
   sidebarPadding: 10,
   sidebarGap: 7,
@@ -578,7 +580,7 @@ export const syncSketch = {
   phoneRadius: 22,
   phoneScreenInset: 4,
   phoneScreenRadius: 18,
-  phoneShadow: "0px 8px 28px rgba(0, 0, 0, 0.25)",
+  phoneShadow: t(`0px 8px 28px rgba(0, 0, 0, 0.25)`),
   phoneBody: "#141414",
   phoneScreen: "#383838",
   notchWidth: 28,
@@ -707,11 +709,11 @@ export const appIconLayout = {
   fill: "#FFFFFF",
   edge: 0.5,
   edgeAlpha: 0.08,
-  shadow: "0px 4px 20px rgba(0, 0, 0, 0.12)",
+  shadow: t(`0px 4px 20px rgba(0, 0, 0, 0.12)`),
   about: 72,
   welcome: 104,
   welcomeFrame: 5,
-  welcomeShadow: "0px 12px 48px rgba(0, 0, 0, 0.18)",
+  welcomeShadow: t(`0px 12px 48px rgba(0, 0, 0, 0.18)`),
 } as const;
 
 export const font = {

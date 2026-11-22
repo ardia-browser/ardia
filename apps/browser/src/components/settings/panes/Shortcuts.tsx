@@ -20,6 +20,8 @@ import { keyText } from "../../../state/commands/keyText";
 import type { SettingsPlace } from "../../../state/settings/settingsWindows";
 import { jumpToSetting, keySearchConsent, noteShortcutsKeySearch, setShortcutsQuery, useSettingsSearch } from "../../../state/settings/searchState";
 import { bindsCombo, parseCombo } from "../../../state/commands/comboQuery";
+import { t } from "../../../lib/uiLanguage";
+
 
 type Filter = "all" | "customized" | "conflicts";
 
@@ -29,15 +31,15 @@ const KEY_SEARCH_SETTLE_MS = 1000;
 const KEY_SEARCH_CANCEL_PRESS_MS = 600;
 
 const FILTERS: Option<Filter>[] = [
-  { value: "all", title: "All Shortcuts" },
-  { value: "customized", title: "Customized Shortcuts" },
-  { value: "conflicts", title: "Conflicting Shortcuts" },
+  { value: "all", title: t(`All Shortcuts`) },
+  { value: "customized", title: t(`Customized Shortcuts`) },
+  { value: "conflicts", title: t(`Conflicting Shortcuts`) },
 ];
 
 const PEEK_WITH: Option<PeekModifier>[] = [
   { value: "shift", title: `${keyText("⇧")}-click` },
   { value: "alt", title: `${keyText("⌥")}-click` },
-  { value: "off", title: "Off" },
+  { value: "off", title: t(`Off`) },
 ];
 
 const SPLIT_WITH: Option<SplitLinkModifier>[] = [
@@ -146,7 +148,7 @@ function KeyboardSection() {
           ) : undefined
         }
       >
-        {overrides[item.id] && <Button variant="icon" icon="arrow.uturn.backward" size="m" onPress={() => setShortcutOverride(item.id, null)} tooltip="Reset to Default" />}
+        {overrides[item.id] && <Button variant="icon" icon="arrow.uturn.backward" size="m" onPress={() => setShortcutOverride(item.id, null)} tooltip={t(`Reset to Default`)} />}
         <ShortcutField
           combo={effective(item)}
           mouse={resolved.mouse.get(item.id)}
@@ -162,7 +164,7 @@ function KeyboardSection() {
 
   return (
     <>
-      <SectionHeader title="Keyboard" />
+      <SectionHeader title={t(`Keyboard`)} />
       <Box gap="xl">
         <Group>
           <CtrlTabRow />
@@ -170,19 +172,19 @@ function KeyboardSection() {
         </Group>
         <Anchor id="shortcuts.menuCommands" shape="row" style={TOOLBAR}>
           <View style={FILL}>
-            <SearchField value={keySearching ? "" : query} onChangeText={setShortcutsQuery} placeholder={keySearching ? "Type Shortcut" : "Search menu commands"} />
+            <SearchField value={keySearching ? "" : query} onChangeText={setShortcutsQuery} placeholder={keySearching ? t(`Type Shortcut`) : t(`Search menu commands`)} />
           </View>
-          <Button variant="icon" icon="keyboard" size="m" active={keySearching} tooltip="Search by Keys" onPress={() => (keySearching ? void cancelShortcutRecording() : void searchKeys())} />
+          <Button variant="icon" icon="keyboard" size="m" active={keySearching} tooltip={t(`Search by Keys`)} onPress={() => (keySearching ? void cancelShortcutRecording() : void searchKeys())} />
           <PopUp value={filter} options={FILTERS} onChange={setFilter} minWidth={170} />
-          <Button title="Reset All Shortcuts" disabled={!customizedCount} onPress={() => updateSettings(PLATFORM_FEATURES.mouseShortcuts ? { shortcuts: {}, mouseShortcuts: {} } : { shortcuts: {} })} />
+          <Button title={t(`Reset All Shortcuts`)} disabled={!customizedCount} onPress={() => updateSettings(PLATFORM_FEATURES.mouseShortcuts ? { shortcuts: {}, mouseShortcuts: {} } : { shortcuts: {} })} />
         </Anchor>
         <Text size="caption" tone="textTertiary">
-          {PLATFORM_FEATURES.mouseShortcuts ? "To use a mouse button, click a shortcut, then press the middle button or a side button." : "Mouse buttons as shortcuts work on Mac only for now."}
+          {PLATFORM_FEATURES.mouseShortcuts ? t(`To use a mouse button, click a shortcut, then press the middle button or a side button.`) : t(`Mouse buttons as shortcuts work on Mac only for now.`)}
         </Text>
       </Box>
       {items !== null && (combo ? !found : menuItems.length === 0) && (
         <View style={NO_MATCH}>
-          <EmptyState symbol={combo ? "keyboard" : "magnifyingglass"} title={combo ? `No command uses ${formatShortcut(combo)}` : "No matching commands"} />
+          <EmptyState symbol={combo ? "keyboard" : "magnifyingglass"} title={combo ? `No command uses ${formatShortcut(combo)}` : t(`No matching commands`)} />
         </View>
       )}
       {menus.map((menu) => (
@@ -194,7 +196,7 @@ function KeyboardSection() {
       <View style={EXTENSIONS}>
         <Group>
           <Row anchor="shortcuts.extensionShortcuts">
-            <Button title="Edit…" onPress={() => openUrls(["chrome://extensions/shortcuts"])} />
+            <Button title={t(`Edit…`)} onPress={() => openUrls(["chrome://extensions/shortcuts"])} />
           </Row>
           {extensionItems.map(itemRow)}
         </Group>
@@ -204,16 +206,16 @@ function KeyboardSection() {
 }
 
 const CTRL_TAB_NOW: Record<CtrlTabChoice, string> = {
-  step: "Steps through your tabs in order.",
-  switcher: "Opens the recent tabs switcher.",
-  custom: "Set to your own shortcuts below.",
+  step: t(`Steps through your tabs in order.`),
+  switcher: t(`Opens the recent tabs switcher.`),
+  custom: t(`Set to your own shortcuts below.`),
 };
 
 function CtrlTabRow() {
   const choice = useCtrlTabChoice();
   return (
     <Row title={setting("appearance.ctrlTab").title} description={CTRL_TAB_NOW[choice]}>
-      <Button title="Choose…" onPress={() => jumpToSetting(setting("appearance.ctrlTab"))} />
+      <Button title={t(`Choose…`)} onPress={() => jumpToSetting(setting("appearance.ctrlTab"))} />
     </Row>
   );
 }
@@ -225,7 +227,7 @@ function ClicksSection() {
   const splitOptions = SPLIT_WITH.map((o) => (o.value === "alt" && peekWith === "alt" ? { ...o, title: `${keyText("⌥")}-click (Peek moves to ${keyText("⇧")}-click)` } : o));
   return (
     <>
-      <SectionHeader title="Clicks" />
+      <SectionHeader title={t(`Clicks`)} />
       <Group>
         <Row
           anchor="shortcuts.peekModifier"
@@ -265,7 +267,7 @@ function MouseField({ button, onClear }: { button: Shortcut; onClear: () => void
     <View {...hoverProps} style={KEY_FIELD}>
       <KeyCap keys={[formatShortcut(button)]} hovered={hovered} />
       {hovered ? (
-        <Pressable onPress={onClear} tooltip="Remove Mouse Shortcut" style={CLEAR}>
+        <Pressable onPress={onClear} tooltip={t(`Remove Mouse Shortcut`)} style={CLEAR}>
           <Symbol name="xmark.circle.fill" size={11} color={theme.textTertiary} style={{ width: 14, height: 14 }} />
         </Pressable>
       ) : null}
@@ -276,10 +278,10 @@ function MouseField({ button, onClear }: { button: Shortcut; onClear: () => void
 function KeyField({ combo, remappable, recording, onRecord, onClear }: Omit<ShortcutFieldProps, "mouse" | "onClearMouse">) {
   const theme = useTheme();
   const { hovered, hoverProps } = useHover();
-  const text = recording ? "Type Shortcut" : formatShortcut(combo);
+  const text = recording ? t(`Type Shortcut`) : formatShortcut(combo);
   if (!remappable) {
     return (
-      <View style={FIXED_KEYS} tooltip="(not remappable)">
+      <View style={FIXED_KEYS} tooltip={t(`(not remappable)`)}>
         <Text tone="textTertiary">{text || "—"}</Text>
       </View>
     );
@@ -287,10 +289,10 @@ function KeyField({ combo, remappable, recording, onRecord, onClear }: Omit<Shor
   return (
     <View {...hoverProps} style={KEY_FIELD}>
       <Pressable onPress={onRecord}>
-        <KeyCap keys={[text || "None"]} editing={recording} empty={!text} hovered={hovered} />
+        <KeyCap keys={[text || t(`None`)]} editing={recording} empty={!text} hovered={hovered} />
       </Pressable>
       {hovered && !recording && combo.key ? (
-        <Pressable onPress={onClear} tooltip="Remove Shortcut" style={CLEAR}>
+        <Pressable onPress={onClear} tooltip={t(`Remove Shortcut`)} style={CLEAR}>
           <Symbol name="xmark.circle.fill" size={11} color={theme.textTertiary} style={{ width: 14, height: 14 }} />
         </Pressable>
       ) : null}

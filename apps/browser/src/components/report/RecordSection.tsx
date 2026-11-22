@@ -6,11 +6,13 @@ import { useReport, useReportShallow, useReportWindowIsPrivate } from "../../sta
 import { discardRecording, startRecording } from "../../state/report/recording";
 import { ActivitySpinner, Box, Button, Checkbox, Dot, ink, radius, ReportVideo, space, Symbol, Text, useTheme } from "../ui";
 import { REPORT } from "./tokens";
+import { t } from "../../lib/uiLanguage";
 
-const RECORD_HINT = "Records this window, its Picture in Picture and the menus and prompts it opens. Never your other windows. Reports with a recording get fixed first.";
+
+const RECORD_HINT = t(`Records this window, its Picture in Picture and the menus and prompts it opens. Never your other windows. Reports with a recording get fixed first.`);
 const PAGES_WARNING =
-  "Pages and Picture in Picture videos can show private things like email, messages or bank details. Only include them if nothing sensitive is on screen. Tab names, addresses and what Ardia itself shows about a page, like suggestions and media controls, always show. WebKit pages with audio or video, where streaming services play, stay black. You'll watch it before it's sent.";
-const PRIVATE_NOTE = "Pages always stay hidden when you record a private window. Tab names and addresses still show.";
+  t(`Pages and Picture in Picture videos can show private things like email, messages or bank details. Only include them if nothing sensitive is on screen. Tab names, addresses and what Ardia itself shows about a page, like suggestions and media controls, always show. WebKit pages with audio or video, where streaming services play, stay black. You'll watch it before it's sent.`);
+const PRIVATE_NOTE = t(`Pages always stay hidden when you record a private window. Tab names and addresses still show.`);
 
 export function RecordSection() {
   const recording = useReport((s) => s.recording);
@@ -43,7 +45,7 @@ export function RecordSection() {
         </Box>
       ) : (
         <Box row gap="l" style={CENTER_ROW}>
-          <Button title="Record the problem" icon="record.circle" onPress={() => void startRecording()} />
+          <Button title={t(`Record the problem`)} icon="record.circle" onPress={() => void startRecording()} />
           <Text size="small" tone={recording.phase === "failed" ? "destructive" : "textSecondary"} style={FLEX}>
             {recording.phase === "failed" ? recording.message : RECORD_HINT}
           </Text>
@@ -77,13 +79,13 @@ function Recorded({
   const theme = useTheme();
   const actions = (
     <Box row gap="l" style={ACTIONS}>
-      <Button variant="text" look="link" pad="none" title={watching ? "Hide" : "Watch"} onPress={() => onWatch(!watching)} />
-      <Button variant="text" look="link" pad="none" title="Record again" onPress={() => void startRecording()} />
+      <Button variant="text" look="link" pad="none" title={watching ? t(`Hide`) : t(`Watch`)} onPress={() => onWatch(!watching)} />
+      <Button variant="text" look="link" pad="none" title={t(`Record again`)} onPress={() => void startRecording()} />
       <Button
         variant="text"
         look="link"
         tone="destructive"
-        title="Remove"
+        title={t(`Remove`)}
         onPress={() => {
           onWatch(false);
           discardRecording();
@@ -131,11 +133,11 @@ function TraceRow({ on, locked }: { on: boolean; locked: boolean }) {
     trace.phase === "ready"
       ? `Trace attached · ${Math.round(trace.seconds)} s · ${formatBytes(trace.bytes)}`
       : trace.phase === "tracing"
-        ? "Recording a trace…"
+        ? t(`Recording a trace…`)
         : trace.phase === "saving"
-          ? "Saving the trace…"
+          ? t(`Saving the trace…`)
           : trace.phase === "failed"
-            ? "The trace couldn't be recorded."
+            ? t(`The trace couldn't be recorded.`)
             : `Records what the engine does for up to ${TRACE_MAX_SECONDS} seconds while you record.`;
   return (
     <Box row gap="m" style={TOP_ROW}>
@@ -167,7 +169,7 @@ function PagesChoice({ on, locked, privateWindow }: { on: boolean; locked: boole
             <Text size="small" tone="textSecondary">
               Applies to the next recording ·
             </Text>
-            <Button variant="text" look="link" pad="none" title="Record again" onPress={() => void startRecording()} />
+            <Button variant="text" look="link" pad="none" title={t(`Record again`)} onPress={() => void startRecording()} />
           </Box>
         ) : (
           <Text size="small" tone="textSecondary" style={{ marginTop: space.xxs }}>

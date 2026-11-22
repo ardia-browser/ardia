@@ -1,4 +1,6 @@
 import { Platform, type AccessibilityActionEvent, type AccessibilityActionInfo } from "react-native";
+import { t } from "../../lib/uiLanguage";
+
 
 export type ScreenReaderAction = { name: string; label?: string; run: () => void };
 
@@ -8,7 +10,7 @@ type ActionProps = {
   onAccessibilityTap?: () => void;
 };
 
-const LONG_PRESS_NAME = "More Options";
+const LONG_PRESS_NAME = t(`More Options`);
 
 export function screenReaderActions(actions: readonly ScreenReaderAction[], os: string = Platform.OS): ActionProps {
   if (!actions.length) return {};

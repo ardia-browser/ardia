@@ -15,6 +15,8 @@ import { TOOLBAR_MOTION } from "./tokens";
 import { motionStep, pageCover, restStep, tallPage, type MotionValue, type TallPage } from "./toolbarMotion";
 import { useToolbarRow } from "./useToolbarRow";
 import { PAGE_IDENTITY_TAG } from "../../state/tabs/tabReveal";
+import { t } from "../../lib/uiLanguage";
+
 
 const HIDE_MS = TOOLBAR_MOTION.hide;
 const HIDE_EASING = curve.enter;
@@ -226,7 +228,7 @@ export function AutoHideToolbar({
             }}
             onMouseEnter={() => modeNow.current === "collapsed" && peekLater(true, PEEK_DELAY)}
             onMouseLeave={() => modeNow.current === "collapsed" && clearTimeout(peekTimer.current)}
-            tooltip="Show Toolbar"
+            tooltip={t(`Show Toolbar`)}
             style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.l }}
           >
             <Text numberOfLines={1} ellipsizeMode="head" size="caption" weight="medium" color={palette.secondary}>

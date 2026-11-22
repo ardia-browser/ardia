@@ -1,6 +1,8 @@
 import { nativeModule, type Click, type ClickResult, type IntroMusicCues, type KeyPress, type KeyPressResult } from "@ardia/shell";
+import { t } from "../lib/uiLanguage";
 
-const Dev = nativeModule("ArdiaDev");
+
+const Dev = nativeModule(t(`ArdiaDev`));
 
 export const devCrash = (kind?: "exception") => Dev.devCrash(kind);
 export const devRenderIntroMusic = (cues: IntroMusicCues, path: string) => Dev.devRenderIntroMusic(cues, path);

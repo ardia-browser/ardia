@@ -1,21 +1,23 @@
 import Svg, { Defs, G, LinearGradient, Path, Stop } from "react-native-svg";
 import { logoInk } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 const CANVAS = { left: 26, top: 186, width: 972, height: 772 };
 const OUTLINE = 0.05;
 
 const SHAPES = [
-  { id: "sun", d: "M432 316a124 124 0 1 0 248 0a124 124 0 1 0-248 0Z", top: 192, bottom: 440, ink: logoInk.sun },
+  { id: "sun", d: t(`M432 316a124 124 0 1 0 248 0a124 124 0 1 0-248 0Z`), top: 192, bottom: 440, ink: logoInk.sun },
   {
     id: "backHill",
-    d: "M66 828C22 700 40 520 150 430C210 375 300 352 372 388C460 425 530 486 610 548L640 780L300 820Z",
+    d: t(`M66 828C22 700 40 520 150 430C210 375 300 352 372 388C460 425 530 486 610 548L640 780L300 820Z`),
     top: 352,
     bottom: 828,
     ink: logoInk.backHill,
   },
   {
     id: "frontHill",
-    d: "M68 834C250 700 500 556 690 466C770 432 868 424 935 482C1004 545 1000 705 978 820C962 902 922 952 842 952L204 952C124 950 70 904 68 834Z",
+    d: t(`M68 834C250 700 500 556 690 466C770 432 868 424 935 482C1004 545 1000 705 978 820C962 902 922 952 842 952L204 952C124 950 70 904 68 834Z`),
     top: 424,
     bottom: 952,
     ink: logoInk.frontHill,

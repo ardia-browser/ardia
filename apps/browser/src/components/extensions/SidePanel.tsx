@@ -14,6 +14,8 @@ import { closePanelCard, closeSidePanelOnTab, dropSidePanelCard, findExtension, 
 import { curve, duration } from "../ui/motion";
 import { GLYPH } from "../toolbar/tokens";
 import { useResizeDrag } from "../sidebar/useResizeDrag";
+import { t } from "../../lib/uiLanguage";
+
 
 const MIN_WIDTH = 320;
 const MAX_WIDTH = 600;
@@ -104,7 +106,7 @@ function PanelCard({ windowId, panel, current, onWindowClose, onHiddenCrash }: {
     if (current && loaded && takeSidePanelFocus(windowId, panel)) void web.current?.focus();
   }, [current, loaded, opened, lookingUp]);
   const ext = useExtensions((e) => e.lists[profile]?.find((x) => x.id === extensionId));
-  const title = ext?.actionTitle || ext?.name || "Extension";
+  const title = ext?.actionTitle || ext?.name || t(`Extension`);
   const icon = ext?.actionIcon || ext?.icon;
   return (
     <View
@@ -119,13 +121,13 @@ function PanelCard({ windowId, panel, current, onWindowClose, onHiddenCrash }: {
         <Button variant="icon"
           icon="ellipsis"
           glyph={GLYPH}
-          tooltip="More"
+          tooltip={t(`More`)}
           onPress={() => {
             const found = findExtension(profile, extensionId);
             if (found) void showExtensionMenu(windowId, found);
           }}
         />
-        <Button variant="icon" icon="xmark" glyph={GLYPH} weight="medium" tooltip="Close Side Panel" onPress={() => closeSidePanelOnTab(windowId)} />
+        <Button variant="icon" icon="xmark" glyph={GLYPH} weight="medium" tooltip={t(`Close Side Panel`)} onPress={() => closeSidePanelOnTab(windowId)} />
       </Box>
       <Divider />
       <View style={PAGE}>

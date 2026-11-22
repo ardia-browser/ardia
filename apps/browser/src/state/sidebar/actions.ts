@@ -21,6 +21,8 @@ import type { BookmarkFolderChoice } from "./menuParts";
 import { DEFAULT_SIDEBAR_WIDTH } from "../../lib/windowLayout";
 import { activeLook } from "../../lib/activeLook";
 import { measureRow, setSidebarUi, sidebarUi, type Target } from "./sidebarUi";
+import { t } from "../../lib/uiLanguage";
+
 
 const store = () => useBrowser.getState();
 
@@ -64,10 +66,10 @@ export async function startRename(windowId: string, target: Target) {
     if (!tab) return;
     if (pinSection(tab) === "tile") {
       const name = await prompt({
-        title: "Rename Tab",
+        title: t(`Rename Tab`),
         value: tab.customTitle ?? tab.title,
-        placeholder: tab.title || "Tab name",
-        confirmTitle: "Update",
+        placeholder: tab.title || t(`Tab name`),
+        confirmTitle: t(`Update`),
         windowId,
       });
       if (name !== null) foreignWriteHooks.around(() => store().updateTab(tab.id, { customTitle: name }));
@@ -88,10 +90,10 @@ async function renameGroupInSheet(windowId: string, groupId: string) {
   const g = store().groups[groupId];
   if (!g) return;
   const name = await prompt({
-    title: "Rename Group",
+    title: t(`Rename Group`),
     value: g.name,
     placeholder: groupLabel(store(), g),
-    confirmTitle: "Update",
+    confirmTitle: t(`Update`),
     windowId,
   });
   if (name !== null && store().groups[groupId]) foreignWriteHooks.around(() => store().updateGroup(groupId, { name: name.trim() }));
@@ -142,7 +144,7 @@ export async function bookmarkTabs(windowId: string, ids: string[], folder: Book
   const profileId = bookmarkProfileId(s, s.windows[windowId]);
   let parentId = folder.kind === "folder" ? folder.parentId : undefined;
   if (folder.kind === "newFolder") {
-    const title = await prompt({ title: "New Folder", placeholder: "Folder name", confirmTitle: "Create", windowId });
+    const title = await prompt({ title: t(`New Folder`), placeholder: t(`Folder name`), confirmTitle: t(`Create`), windowId });
     if (!title) return;
     parentId = store().addBookmarkFolder({ profileId, title });
   }
@@ -156,10 +158,10 @@ export async function editPinnedPage(windowId: string, tabId: string) {
   const tab = store().tabs[tabId];
   if (!tab || !inPinnedContainer(store(), tabId)) return;
   const url = await prompt({
-    title: "Edit Pinned Page",
+    title: t(`Edit Pinned Page`),
     value: tab.pinnedUrl ?? tab.url,
-    placeholder: "Enter Pinned URL",
-    confirmTitle: "Save",
+    placeholder: t(`Enter Pinned URL`),
+    confirmTitle: t(`Save`),
     windowId,
   });
   if (url) store().setPinnedUrl(tabId, url.includes("://") ? url : `https://${url}`);

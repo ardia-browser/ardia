@@ -6,6 +6,8 @@ import { groupOf } from "../pins/tabGrouping";
 import { bookmarkTabs, copyUrls, newGroupWithSelection } from "./actions";
 import { bookmarksShown } from "../bookmarks/visibility";
 import { bookmarkFolderItems, groupItems, hintWhen, profileItems, sections, windowItems, withAlternate, type Destination } from "./menuParts";
+import { t } from "../../lib/uiLanguage";
+
 
 const store = () => useBrowser.getState();
 
@@ -34,8 +36,8 @@ export function multiTabMenuItems(s: BrowserState, windowId: string, ids: string
     [{ id: "duplicate", title: `Duplicate ${n} Tabs`, symbol: "plus.square.on.square" }],
     [
       { id: "newGroup", title: `New Group with ${n} Tabs`, symbol: "folder.badge.plus", enabled: !f.allTiles, ...hintWhen(!f.allTiles, "newGroupWithTabs", s) },
-      ...(f.tabs.some((t) => groupOf(s, t.id)) ? [{ id: "ungroup", title: "Remove from Group", symbol: "folder.badge.minus" }] : []),
-      ...(groups.length ? [{ id: "moveToGroup", title: "Move to Group", symbol: "folder", children: groups }] : []),
+      ...(f.tabs.some((t) => groupOf(s, t.id)) ? [{ id: "ungroup", title: t(`Remove from Group`), symbol: "folder.badge.minus" }] : []),
+      ...(groups.length ? [{ id: "moveToGroup", title: t(`Move to Group`), symbol: "folder", children: groups }] : []),
       {
         id: "moveToProfile",
         title: `Move ${n} Tabs to Profile`,
@@ -43,7 +45,7 @@ export function multiTabMenuItems(s: BrowserState, windowId: string, ids: string
         enabled: !f.incognito,
         children: profileItems(s, (id) => f.tabs.every((t) => t.profileId === id)),
       },
-      { id: "moveToWindow", title: "Move to Window", symbol: "macwindow", enabled: !f.incognito, children: windowItems(s, windowId) },
+      { id: "moveToWindow", title: t(`Move to Window`), symbol: "macwindow", enabled: !f.incognito, children: windowItems(s, windowId) },
     ],
     bookmarksShown(s.settings)
       ? [
@@ -54,7 +56,7 @@ export function multiTabMenuItems(s: BrowserState, windowId: string, ids: string
     withAlternate({ id: "copy", title: `Copy ${n} Links`, symbol: "link" }, { id: "copyMd", title: `Copy ${n} Links as Markdown`, symbol: "link" }, null),
     [
       { id: "close", title: `Close ${n} Tabs`, symbol: "xmark" },
-      { id: "closeOthers", title: "Close Other Tabs", enabled: f.others.length > 0 },
+      { id: "closeOthers", title: t(`Close Other Tabs`), enabled: f.others.length > 0 },
     ],
   );
 }

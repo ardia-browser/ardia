@@ -1,5 +1,7 @@
 import { useBrowser, type BrowserState } from "../browser/store";
 import { hideKeyedToast, showToast, useToasts } from "../app/toasts";
+import { t } from "../../lib/uiLanguage";
+
 
 export type Undoable = { message?: string; undo: () => void; watched: (s: BrowserState) => unknown[]; canUndo: (s: BrowserState) => boolean };
 
@@ -7,7 +9,7 @@ let undoToasts = 0;
 
 export function showUndoToast(windowId: string, title: string, icon: string, { message, undo, watched, canUndo }: Undoable) {
   const key = `undo-${++undoToasts}`;
-  showToast(windowId, title, message, { icon, key, action: { title: "Undo", run: undo } });
+  showToast(windowId, title, message, { icon, key, action: { title: t(`Undo`), run: undo } });
   let seen: unknown[] = [];
   const stop = () => {
     stopWatchingStore();

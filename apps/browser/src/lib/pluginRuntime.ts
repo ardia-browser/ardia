@@ -1,4 +1,6 @@
 import { at, DEFAULT_MAIN_MB, DEFAULT_SIDECAR_MB, flag, integer, isArgument, isPluginPath, LIMITS, matching, NAME, NAME_RULE, object, only, pluginFile, text, type Check } from "./pluginChecks";
+import { t } from "./uiLanguage";
+
 
 export type ProcessSpec = { run: string[]; memoryMB: number };
 export type MainSpec = { entry: string; memoryMB: number };
@@ -23,11 +25,11 @@ export function sidecarOf(c: Check, path: string, value: unknown): ProcessSpec |
 
 export function mainOf(c: Check, entry: unknown, memory: unknown): MainSpec | null {
   if (entry === undefined) {
-    if (memory !== undefined) c.problems.push("memoryMB only goes with main");
+    if (memory !== undefined) c.problems.push(t(`memoryMB only goes with main`));
     return null;
   }
-  const file = pluginFile(c, "main", entry, "a JavaScript file inside the plugin's folder, like dist/index.js", undefined);
-  if (file && !/\.(m?js|cjs)$/i.test(file)) c.problems.push("main must be a .js, .mjs or .cjs file");
+  const file = pluginFile(c, "main", entry, t(`a JavaScript file inside the plugin's folder, like dist/index.js`), undefined);
+  if (file && !/\.(m?js|cjs)$/i.test(file)) c.problems.push(t(`main must be a .js, .mjs or .cjs file`));
   const memoryMB = integer(c, "memoryMB", memory, LIMITS.memoryMB, DEFAULT_MAIN_MB);
   return file ? { entry: file, memoryMB } : null;
 }

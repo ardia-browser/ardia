@@ -1,9 +1,11 @@
 import { iPhoneOr } from "../ui/motion";
+import { t } from "../../lib/uiLanguage";
+
 
 export const loadingPlaceholderLayout = {
   icon: 44,
   iconCorner: 44 * 0.26,
-  iconShadow: "0px 2px 12px rgba(0,0,0,0.08)",
+  iconShadow: t(`0px 2px 12px rgba(0,0,0,0.08)`),
   spacing: 12,
   sideInset: 32,
   titleLines: 3,

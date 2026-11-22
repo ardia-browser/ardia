@@ -2,22 +2,24 @@ import { useBrowser } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import type { HistoryEntry } from "../browser/types";
 import { hostOf } from "@ardia/core";
+import { t } from "../../lib/uiLanguage";
+
 
 type PinnableSite = { id: string; title: string; url: string };
 
 export const PINNABLE_SITES: PinnableSite[] = [
-  { id: "gmail", title: "Gmail", url: "https://mail.google.com/" },
-  { id: "calendar", title: "Calendar", url: "https://calendar.google.com/" },
-  { id: "slack", title: "Slack", url: "https://app.slack.com/" },
-  { id: "notion", title: "Notion", url: "https://www.notion.so/" },
-  { id: "figma", title: "Figma", url: "https://www.figma.com/" },
-  { id: "github", title: "GitHub", url: "https://github.com/" },
-  { id: "linear", title: "Linear", url: "https://linear.app/" },
-  { id: "docs", title: "Docs", url: "https://docs.google.com/" },
-  { id: "drive", title: "Drive", url: "https://drive.google.com/" },
-  { id: "outlook", title: "Outlook", url: "https://outlook.office.com/mail/" },
-  { id: "youtube", title: "YouTube", url: "https://www.youtube.com/" },
-  { id: "spotify", title: "Spotify", url: "https://open.spotify.com/" },
+  { id: "gmail", title: t(`Gmail`), url: "https://mail.google.com/" },
+  { id: "calendar", title: t(`Calendar`), url: "https://calendar.google.com/" },
+  { id: "slack", title: t(`Slack`), url: "https://app.slack.com/" },
+  { id: "notion", title: t(`Notion`), url: "https://www.notion.so/" },
+  { id: "figma", title: t(`Figma`), url: "https://www.figma.com/" },
+  { id: "github", title: t(`GitHub`), url: "https://github.com/" },
+  { id: "linear", title: t(`Linear`), url: "https://linear.app/" },
+  { id: "docs", title: t(`Docs`), url: "https://docs.google.com/" },
+  { id: "drive", title: t(`Drive`), url: "https://drive.google.com/" },
+  { id: "outlook", title: t(`Outlook`), url: "https://outlook.office.com/mail/" },
+  { id: "youtube", title: t(`YouTube`), url: "https://www.youtube.com/" },
+  { id: "spotify", title: t(`Spotify`), url: "https://open.spotify.com/" },
 ];
 
 export function pinnedHosts(windowId: string): Set<string> {

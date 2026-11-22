@@ -1,4 +1,6 @@
 import { call, nativeModule, on, type TabStripTransaction, type WindowRequest } from "@ardia/ardiacore";
+import { t } from "../lib/uiLanguage";
+
 
 export {
   sendTabStripCommand,
@@ -28,7 +30,7 @@ export {
   type AppBadge,
 } from "@ardia/ardiacore";
 
-const Tabs = nativeModule("ArdiaTabs");
+const Tabs = nativeModule(t(`ArdiaTabs`));
 
 export const prepareTabTransfer = (tabId: string) => Tabs.prepareTransfer(tabId);
 export const releaseTabTransfer = (tabId: string) => Tabs.releaseTransfer(tabId);

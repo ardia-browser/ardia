@@ -8,6 +8,8 @@ import { dismissShareBar, shareInstead, stopSharing, useShareFor } from "../../s
 import { mediaMotion, useMediaTokens } from "./tokens";
 import { hostOrOrigin } from "../../lib/url";
 import { curve } from "../ui/motion";
+import { t } from "../../lib/uiLanguage";
+
 
 export const SHARE_BAR_HEIGHT = 38;
 const FLEX = { flex: 1 } as const;
@@ -46,16 +48,16 @@ export function ShareBar({ tabId }: { tabId: string }) {
           <Symbol name="rectangle.inset.filled" size={9} weight="bold" color={ink.white} style={{ width: 14, height: 14 }} />
         </Dot>
         <Text lines={1} tone="textSecondary" style={FLEX}>
-          {"Sharing "}
-          <Text weight="semibold">{isShared ? "this tab" : "another tab"}</Text>
+          {t(`Sharing `)}
+          <Text weight="semibold">{isShared ? t(`this tab`) : t(`another tab`)}</Text>
           {` with ${host}`}
         </Text>
         {isShared ? (
-          <Button variant="pill" title="Stop Sharing" onPress={() => stopSharing(capturer)} />
+          <Button variant="pill" title={t(`Stop Sharing`)} onPress={() => stopSharing(capturer)} />
         ) : (
-          <Button variant="pill" title="Share This Tab Instead" primary onPress={() => void shareInstead(capturer, tabId)} />
+          <Button variant="pill" title={t(`Share This Tab Instead`)} primary onPress={() => void shareInstead(capturer, tabId)} />
         )}
-        <Button variant="pill" title="Dismiss" onPress={() => dismissShareBar(capturer, tabId)} />
+        <Button variant="pill" title={t(`Dismiss`)} onPress={() => dismissShareBar(capturer, tabId)} />
       </View>
     </Animated.View>
   );

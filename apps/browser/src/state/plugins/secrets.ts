@@ -1,4 +1,6 @@
 import { keychainDelete, keychainRead, keychainSet } from "../../platform/keychain";
+import { t } from "../../lib/uiLanguage";
+
 
 export const SECRET_LIMITS = { keys: 64, valueBytes: 16 * 1024 } as const;
 const SECRET_KEY = /^[A-Za-z0-9_-]{1,64}$/;
@@ -21,7 +23,7 @@ export const isSecretKey = (key: unknown): key is string => typeof key === "stri
 
 type Index = { ok: true; keys: string[] } | { ok: false; message: string };
 
-export const UNREADABLE_INDEX = "The Keychain's list of this plugin's secrets can't be read, so Ardia leaves it alone.";
+export const UNREADABLE_INDEX = t(`The Keychain's list of this plugin's secrets can't be read, so Ardia leaves it alone.`);
 
 type Read = { ok: true; value: string | null } | { ok: false; message: string };
 
@@ -50,7 +52,7 @@ async function indexOf(plugin: string): Promise<Index> {
 
 async function deleteFromKeychain(account: string): Promise<string | null> {
   try {
-    return (await keychainDelete(account)) === false ? "The Keychain didn't delete it." : null;
+    return (await keychainDelete(account)) === false ? t(`The Keychain didn't delete it.`) : null;
   } catch (error) {
     return `The Keychain didn't delete it: ${String(error)}`;
   }
@@ -62,7 +64,7 @@ async function writeIndex(plugin: string, keys: string[]): Promise<boolean> {
 }
 
 export function getPluginSecret(plugin: string, key: unknown): Promise<SecretOutcome<string | null>> {
-  if (!isSecretKey(key)) return Promise.resolve(fail("bad_request", "key is 1 to 64 letters, digits, - and _."));
+  if (!isSecretKey(key)) return Promise.resolve(fail("bad_request", t(`key is 1 to 64 letters, digits, - and _.`)));
   return queued(plugin, async () => {
     const read = await readKeychain(secretAccount(plugin, key));
     return read.ok ? { ok: true as const, value: read.value } : fail<string | null>("failed", read.message);
@@ -70,7 +72,7 @@ export function getPluginSecret(plugin: string, key: unknown): Promise<SecretOut
 }
 
 export function setPluginSecret(plugin: string, key: unknown, value: unknown): Promise<SecretOutcome<true>> {
-  if (!isSecretKey(key)) return Promise.resolve(fail("bad_request", "key is 1 to 64 letters, digits, - and _."));
+  if (!isSecretKey(key)) return Promise.resolve(fail("bad_request", t(`key is 1 to 64 letters, digits, - and _.`)));
   if (typeof value !== "string" || new TextEncoder().encode(value).length > SECRET_LIMITS.valueBytes) return Promise.resolve(fail("bad_request", `value is text of at most ${SECRET_LIMITS.valueBytes / 1024} KB.`));
   return queued(plugin, async () => {
     const index = await indexOf(plugin);
@@ -78,22 +80,22 @@ export function setPluginSecret(plugin: string, key: unknown, value: unknown): P
     const keys = index.keys;
     if (!keys.includes(key)) {
       if (keys.length >= SECRET_LIMITS.keys) return fail<true>("bad_request", `A plugin keeps at most ${SECRET_LIMITS.keys} secrets.`);
-      if (!(await writeIndex(plugin, [...keys, key]))) return fail<true>("failed", "The Keychain didn't save it.");
+      if (!(await writeIndex(plugin, [...keys, key]))) return fail<true>("failed", t(`The Keychain didn't save it.`));
     }
     const saved = await keychainSet(secretAccount(plugin, key), value).catch(() => false);
-    return saved === false ? fail<true>("failed", "The Keychain didn't save it.") : { ok: true as const, value: true as const };
+    return saved === false ? fail<true>("failed", t(`The Keychain didn't save it.`)) : { ok: true as const, value: true as const };
   });
 }
 
 export function deletePluginSecret(plugin: string, key: unknown): Promise<SecretOutcome<true>> {
-  if (!isSecretKey(key)) return Promise.resolve(fail("bad_request", "key is 1 to 64 letters, digits, - and _."));
+  if (!isSecretKey(key)) return Promise.resolve(fail("bad_request", t(`key is 1 to 64 letters, digits, - and _.`)));
   return queued(plugin, async () => {
     const index = await indexOf(plugin);
     if (!index.ok) return fail<true>("failed", index.message);
     const problem = await deleteFromKeychain(secretAccount(plugin, key));
     if (problem) return fail<true>("failed", problem);
     const keys = index.keys;
-    if (keys.includes(key) && !(await writeIndex(plugin, keys.filter((k) => k !== key)))) return fail<true>("failed", "The secret is gone, but the Keychain didn't update the plugin's list of secrets.");
+    if (keys.includes(key) && !(await writeIndex(plugin, keys.filter((k) => k !== key)))) return fail<true>("failed", t(`The secret is gone, but the Keychain didn't update the plugin's list of secrets.`));
     return { ok: true as const, value: true as const };
   });
 }

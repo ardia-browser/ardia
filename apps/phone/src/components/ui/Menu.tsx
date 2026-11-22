@@ -14,6 +14,8 @@ import type { SymbolName } from "./symbolPaths";
 import { useTheme } from "./theme";
 import { drawnMenuInk as menuInk, drawnMenuLook as menuLook } from "./menuTokens";
 import { font, ink, smoothCorners } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 export type MenuAction = { label: string; icon?: SymbolName; systemImage?: string; destructive?: boolean; checked?: boolean; disabled?: boolean; onPress: () => void };
 
@@ -53,7 +55,7 @@ const MATERIAL = !menuLook.frosted;
 
 const CHECK_TRAILING = menuLook.checkSide === "trailing";
 
-const SCRIM_ACCESSIBILITY = Platform.OS === "android" ? ({ accessible: false, importantForAccessibility: "no" } as const) : ({ accessibilityLabel: "Dismiss" } as const);
+const SCRIM_ACCESSIBILITY = Platform.OS === "android" ? ({ accessible: false, importantForAccessibility: "no" } as const) : ({ accessibilityLabel: t(`Dismiss`) } as const);
 const CHECK_SHIFT = CHECK_TRAILING ? 0 : menuLook.labelInsetChecked - menuLook.labelInset;
 
 type Props = { items: MenuItem[]; place?: ViewStyle; placer?: MenuPlacer; onDismiss: (chosen?: boolean) => void; dimmed?: boolean; origin?: string; frost?: string | null; shown?: boolean; privately?: boolean };

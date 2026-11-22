@@ -21,6 +21,8 @@ import { groupBoxAtRest, groupSurface, SIDEBAR_TYPE, TAB_ROW, TABULAR_NUMS, useS
 import { SidebarRowLabel } from "./SidebarRow";
 import { entryKey, parseEntry } from "../../state/sidebar/entryKey";
 import { shownLiveOf } from "../../state/tabs/tabLive";
+import { t } from "../../lib/uiLanguage";
+
 
 type TabShot = { kind: "tab"; key: string; title: string; url: string; favicon?: string | null; icon?: string | null; textOnly: boolean; profileId: string; uri: string | null; template: boolean; sound: "muted" | "playing" | null; hovered: boolean };
 type SplitShot = { kind: "split"; key: string; panes: TabShot[] };
@@ -151,7 +153,7 @@ function GroupGhost({ shot }: { shot: GroupShot }) {
           </Text>
           <FadeLabel text={shot.label} fontSize={SIDEBAR_TYPE.title} weight="medium" color={tokens.groupTitle} style={{ position: "absolute", left: 0, right: 0, top: 0, height: TAB_ROW.titleHeight }} />
         </View>
-        <View style={{ width: 10, height: 10, transform: [{ rotate: shot.collapsed ? "-90deg" : "0deg" }] }}>
+        <View style={{ width: 10, height: 10, transform: [{ rotate: shot.collapsed ? "-90deg" : t(`0deg`) }] }}>
           <Symbol name="chevron.down" size={9} weight="semibold" color={withAlpha(tokens.groupTitle, 0.5)} style={{ width: 10, height: 10 }} />
         </View>
       </View>

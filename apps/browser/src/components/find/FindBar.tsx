@@ -12,6 +12,8 @@ import type { FindState } from "../../state/browser/types";
 import { Button, Divider, font, Panel, radius, shadow, space, Symbol, Text } from "../ui";
 import { replaceInField } from "../../state/site/selection";
 import { FIND_APPEAR, FIND_WIDTH } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 export function FindBar({ tabId }: { tabId: string }) {
   const hasPage = useTab(tabId, (t) => !!t?.url);
@@ -21,11 +23,11 @@ export function FindBar({ tabId }: { tabId: string }) {
 }
 
 const FIND_KEYS = [
-  { key: "Escape" },
-  { key: "Enter" },
-  { key: "Enter", shiftKey: true },
-  { key: "Enter", altKey: true },
-  { key: "Enter", altKey: true, shiftKey: true },
+  { key: t(`Escape`) },
+  { key: t(`Enter`) },
+  { key: t(`Enter`), shiftKey: true },
+  { key: t(`Enter`), altKey: true },
+  { key: t(`Enter`), altKey: true, shiftKey: true },
 ];
 
 function FindBarPanel({ tabId, find }: { tabId: string; find: FindState }) {
@@ -65,8 +67,8 @@ function FindBarPanel({ tabId, find }: { tabId: string; find: FindState }) {
   const replace = async (all: boolean) => {
     if (!find.query) return;
     const { field, count } = await replaceInField(tabId, find.query, replacement, all);
-    if (!field) return setNote({ text: "Not in a text field", error: true });
-    if (all || !count) setNote({ text: count ? `${count} replaced` : "No matches", error: !count });
+    if (!field) return setNote({ text: t(`Not in a text field`), error: true });
+    if (all || !count) setNote({ text: count ? `${count} replaced` : t(`No matches`), error: !count });
     run(false, find.query, false);
   };
   const none = find.count === 0 && !!find.query;
@@ -92,7 +94,7 @@ function FindBarPanel({ tabId, find }: { tabId: string; find: FindState }) {
               setFind({ query });
               run(false, query, false);
             }}
-            placeholder="Find on Page"
+            placeholder={t(`Find on Page`)}
             placeholderTextColor={theme.placeholder}
             selectionColor={theme.selection}
             enableFocusRing={false}
@@ -125,10 +127,10 @@ function FindBarPanel({ tabId, find }: { tabId: string; find: FindState }) {
               </Text>
             </View>
           ) : null}
-          <Button variant="icon" icon="chevron.up" size="l" disabled={!find.count} onPress={() => findStep(tabId, true)} tooltip={withShortcut("Previous", previousHint)} />
-          <Button variant="icon" icon="chevron.down" size="l" disabled={!find.count} onPress={() => findStep(tabId, false)} tooltip={withShortcut("Next", nextHint)} />
+          <Button variant="icon" icon="chevron.up" size="l" disabled={!find.count} onPress={() => findStep(tabId, true)} tooltip={withShortcut(t(`Previous`), previousHint)} />
+          <Button variant="icon" icon="chevron.down" size="l" disabled={!find.count} onPress={() => findStep(tabId, false)} tooltip={withShortcut(t(`Next`), nextHint)} />
           <Divider vertical thick length={18} style={CLOSE_GAP} />
-          <Button variant="icon" icon="xmark" size="l" onPress={close} tooltip="Done (Esc)" />
+          <Button variant="icon" icon="xmark" size="l" onPress={close} tooltip={t(`Done (Esc)`)} />
         </View>
         {find.replace && <Divider thick />}
         {find.replace && (
@@ -137,12 +139,12 @@ function FindBarPanel({ tabId, find }: { tabId: string; find: FindState }) {
             <TextInput
               value={replacement}
               onChangeText={setReplacement}
-              placeholder="Replace"
+              placeholder={t(`Replace`)}
               placeholderTextColor={theme.placeholder}
               selectionColor={theme.selection}
               enableFocusRing={false}
               onSubmitEditing={() => void replace(false)}
-              keyDownEvents={[{ key: "Escape" }]}
+              keyDownEvents={[{ key: t(`Escape`) }]}
               onKeyDown={(e) => e.nativeEvent.key === "Escape" && close()}
               style={{ flex: 1, ...font.title, color: theme.textPrimary, paddingVertical: 0 }}
             />
@@ -151,8 +153,8 @@ function FindBarPanel({ tabId, find }: { tabId: string; find: FindState }) {
                 {note.text}
               </Text>
             )}
-            <Button variant="text" look="toolbar" title="Replace" disabled={!find.query} onPress={() => void replace(false)} />
-            <Button variant="text" look="toolbar" title="All" disabled={!find.query} onPress={() => void replace(true)} />
+            <Button variant="text" look="toolbar" title={t(`Replace`)} disabled={!find.query} onPress={() => void replace(false)} />
+            <Button variant="text" look="toolbar" title={t(`All`)} disabled={!find.query} onPress={() => void replace(true)} />
           </View>
         )}
       </Panel>

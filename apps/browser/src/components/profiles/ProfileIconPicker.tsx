@@ -3,6 +3,8 @@ import { useProfile } from "../../state/browser/hooks";
 import { chooseProfileIcon, closeProfileIconPicker, closeProfileIconPickerIfShown, useProfileIconPicker, type ProfileIconPicker as Picker } from "../../state/profiles/iconPicker";
 import { IconPickerLayer, nearAnchor } from "../iconPicker/IconPickerPanel";
 import { PROFILE_SYMBOLS } from "./ProfileIcons";
+import { t } from "../../lib/uiLanguage";
+
 
 export function ProfileIconPicker({ windowId }: { windowId: string }) {
   const picker = useProfileIconPicker((s) => (s.picker?.windowId === windowId ? s.picker : null));
@@ -22,7 +24,7 @@ function PickerFor({ picker }: { picker: Picker }) {
       symbols={PROFILE_SYMBOLS}
       actions={[
         {
-          title: "No Icon",
+          title: t(`No Icon`),
           icon: picker.place === "sidebar" ? "circle.fill" : "textformat",
           primary: !current,
           onPress: () => chooseProfileIcon(picker, null),

@@ -15,6 +15,8 @@ import { useDeckOwnsBar } from "../../state/browse/hooks";
 import { PullGhost, PullGlyphs } from "./PagePull";
 import { IncognitoGlyph, PlusGlyph, SearchTabsGlyph, SearchTabsGlyphs } from "../tabs/DeckBarGlyphs";
 import { DUO_PLUS_ABOVE, type DuoSqueeze } from "../../lib/bottomBarSpan";
+import { t } from "../../lib/uiLanguage";
+
 
 type Props = {
   tab: BrowserTab;
@@ -48,13 +50,13 @@ export function siteHost(url: string): string | null {
   return withoutPort(display(url).host, url) || null;
 }
 
-export const spokenAddress = (address: BarAddress | null): string => (address ? [address.isPrivate ? "Incognito" : null, address.insecure ? "Not Secure" : null, address.host].filter(Boolean).join(", ") : "");
+export const spokenAddress = (address: BarAddress | null): string => (address ? [address.isPrivate ? t(`Incognito`) : null, address.insecure ? t(`Not Secure`) : null, address.host].filter(Boolean).join(", ") : "");
 
 export function barAddress(tab: BrowserTab): BarAddress {
   const shown = display(tab.url);
   const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(tab.url)?.[1]?.toLowerCase() ?? null;
   return {
-    host: withoutPort(shown.host, tab.url) || tab.title || "New Tab",
+    host: withoutPort(shown.host, tab.url) || tab.title || t(`New Tab`),
     insecure: scheme === "http",
     isPrivate: tab.isPrivate,
     iconUrl: tab.faviconUrl,
@@ -109,9 +111,9 @@ export function FloatingBar({ tab, order, roles, dark, showsPlus, anchors = true
         <Animated.View testID="floatingBarAddressFade" collapsable={false} style={[styles.addressFade, addressFade]} pointerEvents={squeezed ? "none" : "box-none"} importantForAccessibility={squeezed ? "no-hide-descendants" : "auto"} accessibilityElementsHidden={squeezed}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Address"
+          accessibilityLabel={t(`Address`)}
           accessibilityValue={{ text: spokenAddress(address) }}
-          accessibilityHint="Opens search with this page’s address."
+          accessibilityHint={t(`Opens search with this page’s address.`)}
           onPress={onAddress}
           style={styles.addressHit}
         >
@@ -126,7 +128,7 @@ export function FloatingBar({ tab, order, roles, dark, showsPlus, anchors = true
           </Text>
         </Pressable>
         </Animated.View>
-        <PressScale label={squeezed ? `Page Menu, ${spokenAddress(address)}` : "Page Menu"} onPress={onMore} onPressIn={haptics.barPress} style={styles.menu}>
+        <PressScale label={squeezed ? `Page Menu, ${spokenAddress(address)}` : t(`Page Menu`)} onPress={onMore} onPressIn={haptics.barPress} style={styles.menu}>
           <Animated.View style={[styles.menuGlyph, dotsFade]}>
             <Symbol name="ellipsis" size={floatingBarLayout.menuSymbol} color={ink.foreground} />
           </Animated.View>
@@ -171,14 +173,14 @@ export function FloatingTabsButton({ tab, order, roles, dark, testID, glass, gly
     <TabsMenuTrigger order={order} onTabsMenu={onTabsMenu}>
       {({ onLongPress, screenReaderActions }) => (
         <PressScale
-          label="Tabs"
+          label={t(`Tabs`)}
           value={`${count} ${count === 1 ? "tab" : "tabs"}`}
-          hint="Touch and hold for recent tabs."
-          longPressLabel="Recent Tabs"
+          hint={t(`Touch and hold for recent tabs.`)}
+          longPressLabel={t(`Recent Tabs`)}
           actions={[
             ...screenReaderActions,
-            { name: "previousTab", label: "Previous Tab", run: () => onStep(-1) },
-            { name: "nextTab", label: "Next Tab", run: () => onStep(1) },
+            { name: "previousTab", label: t(`Previous Tab`), run: () => onStep(-1) },
+            { name: "nextTab", label: t(`Next Tab`), run: () => onStep(1) },
           ]}
           onPress={onTabs}
           onPressIn={haptics.barPress}
@@ -206,7 +208,7 @@ export function FloatingTabsButton({ tab, order, roles, dark, testID, glass, gly
 export function FloatingPlusButton({ tab, dark, testID, glass, glyphs, ghost = false, onPlus }: ButtonProps & { onPlus: () => void }) {
   const ink = dark ? chromeInk.dark : chromeInk.light;
   return (
-    <PressScale label="New Search" onPress={onPlus} onPressIn={haptics.barPress} style={styles.circleHit}>
+    <PressScale label={t(`New Search`)} onPress={onPlus} onPressIn={haptics.barPress} style={styles.circleHit}>
       <ChromeSurface testID={testID} shape="circle" cornerRadius={capsule(floatingBarLayout.control)} incognito={tab.isPrivate} dark={dark} barShadow={chromeLayout.barCastsShadow} shown={glass?.shown} shownMs={glass?.shownMs} style={styles.circle}>
         <PullGlyphs>
           <Animated.View testID={`${testID}Glyphs`} pointerEvents="none" style={glyphs}>

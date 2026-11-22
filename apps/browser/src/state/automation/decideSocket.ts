@@ -5,6 +5,8 @@ import { hookNamed } from "./hookRules";
 import { fitsOnLine } from "./socketWire";
 import { noteSocketLineShrunk } from "../telemetry/cliCounts";
 import type { ConsentToken } from "../telemetry/client";
+import { t } from "../../lib/uiLanguage";
+
 
 export const MAX_PENDING_DECISIONS = 64;
 export const MAX_PENDING_PER_CONNECTION = 16;
@@ -80,7 +82,7 @@ function sendLine(connection: number, line: string) {
   try {
     broadcastOnControlSocket([connection], line);
   } catch (error) {
-    console.warn("[automation] couldn't send a decide request", error);
+    console.warn(t(`[automation] couldn't send a decide request`), error);
   }
 }
 
@@ -118,7 +120,7 @@ export function requestDecision(hook: HookSpec, event: string, data: Record<stri
 
 export function answerDecision(connection: number, params: Record<string, unknown>): { ok: true } | { error: string } {
   const id = params.decide;
-  if (typeof id !== "string") return { error: "answer needs decide: the request's id" };
+  if (typeof id !== "string") return { error: t(`answer needs decide: the request's id`) };
   const entry = pending.get(id);
   const responder = responders.get(connection);
   const current = !!entry && entry.connection === connection && responder?.generation === entry.generation && responder.served.get(entry.hook) === entry.revision;
@@ -130,7 +132,7 @@ export function answerDecision(connection: number, params: Record<string, unknow
   const usable = answer === null || answer === undefined || isFields(answer) || Array.isArray(answer);
   if (!usable) {
     entry.cancel();
-    return { error: "answer must be an object, a list or null; Ardia used its default" };
+    return { error: t(`answer must be an object, a list or null; Ardia used its default`) };
   }
   entry.answer(answer ?? null);
   return { ok: true };

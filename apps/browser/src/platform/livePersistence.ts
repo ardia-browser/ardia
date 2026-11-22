@@ -1,5 +1,7 @@
 import { readDocument, writeDocument } from "./documents";
 import { parseSaved, unchanged, versionedJson, type Migrations } from "../lib/savedDocument";
+import { t } from "../lib/uiLanguage";
+
 
 const DOC = "live.json";
 const DOC_VERSION = 2;
@@ -38,7 +40,7 @@ export function createLivePersistence(onSave?: (changed: boolean, kind?: "write"
     const json = versionedJson(projection, DOC_VERSION);
     if (json === lastSaved) return void onSave?.(false);
     try { writeDocument(DOC, json); lastSaved = json; onSave?.(true); }
-    catch (error) { console.warn("Couldn't save live folders", error); }
+    catch (error) { console.warn(t(`Couldn't save live folders`), error); }
   };
   return {
     load: () => {

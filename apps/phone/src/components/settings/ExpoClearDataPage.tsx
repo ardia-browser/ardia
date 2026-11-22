@@ -7,6 +7,8 @@ import { clearBrowsingData, websiteDataClearsByTime } from "../../state/settings
 import { popSettings, type SettingsRoute } from "../../state/settings/nav";
 import { CLEAR_RANGES, clearChoice, clearFooter, clearIsEmpty, clearMessage, clearTitle, type ClearRange } from "../../state/settings/settingsRules";
 import { modifierList, settingsChrome, settingsSwitchStyle } from "../ui";
+import { t } from "../../lib/uiLanguage";
+
 
 export function ExpoClearDataPage({ onCleared = popSettings }: { route?: SettingsRoute; onCleared?: () => void }) {
   const [range, setRange] = useState<ClearRange>("today");
@@ -31,9 +33,9 @@ export function ExpoClearDataPage({ onCleared = popSettings }: { route?: Setting
     </Toggle>
   );
   return (
-    <Form modifiers={modifierList(navigationTitle("Clear Browsing Data"), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome())}>
+    <Form modifiers={modifierList(navigationTitle(t(`Clear Browsing Data`)), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome())}>
       <Section>
-        <Picker label="Time Range" selection={range} onSelectionChange={(next: ClearRange) => setRange(next)} modifiers={[pickerStyle("menu"), tint("secondary")]}>
+        <Picker label={t(`Time Range`)} selection={range} onSelectionChange={(next: ClearRange) => setRange(next)} modifiers={[pickerStyle("menu"), tint("secondary")]}>
           {CLEAR_RANGES.map((option) => (
             <Text key={option.id} modifiers={[tag(option.id)]}>
               {option.title}
@@ -41,11 +43,11 @@ export function ExpoClearDataPage({ onCleared = popSettings }: { route?: Setting
           ))}
         </Picker>
       </Section>
-      <Section title="Clear" footer={<Text modifiers={[contentTransition("opacity")]}>{clearFooter(choice, range, byTime)}</Text>}>
-        {toggle("History", history, setHistory)}
-        {toggle("Cache", cache, setCache)}
-        {toggle("Cookies and Site Data", cookies, setCookies)}
-        {range === "allTime" ? toggle("Archived Tabs", archive, setArchive) : null}
+      <Section title={t(`Clear`)} footer={<Text modifiers={[contentTransition("opacity")]}>{clearFooter(choice, range, byTime)}</Text>}>
+        {toggle(t(`History`), history, setHistory)}
+        {toggle(t(`Cache`), cache, setCache)}
+        {toggle(t(`Cookies and Site Data`), cookies, setCookies)}
+        {range === "allTime" ? toggle(t(`Archived Tabs`), archive, setArchive) : null}
       </Section>
       <Section>
         <ConfirmationDialog title={clearTitle(choice, range, byTime)} isPresented={confirming} onIsPresentedChange={setConfirming} titleVisibility="visible">
@@ -59,7 +61,7 @@ export function ExpoClearDataPage({ onCleared = popSettings }: { route?: Setting
             </Button>
           </ConfirmationDialog.Trigger>
           <ConfirmationDialog.Actions>
-            <Button role="destructive" label="Clear Data" onPress={() => void clear()} />
+            <Button role="destructive" label={t(`Clear Data`)} onPress={() => void clear()} />
           </ConfirmationDialog.Actions>
           <ConfirmationDialog.Message>
             <Text>{clearMessage(choice)}</Text>

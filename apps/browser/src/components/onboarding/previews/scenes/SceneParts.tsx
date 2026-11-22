@@ -11,6 +11,8 @@ import { mockInk } from "../tokens";
 import { font, space } from "../../../ui/tokens";
 import { SUGGESTION } from "../../../omnibox/tokens";
 import type { SceneOpts } from "../scene";
+import { t } from "../../../../lib/uiLanguage";
+
 
 export const listTop = (opts: SceneOpts) => (opts.addressInSidebar ? ROW.topWithField : ROW.top);
 
@@ -60,15 +62,15 @@ export function KeyPress({ g, t, label, ms = 0 }: { g: Geo; t: Tracker; label: s
 }
 
 export const CURRENT: Suggestion[] = [
-  { fav: tab(0), title: "A slow morning on the coast trail", detail: "fieldnotes.blog" },
-  { fav: tab(2), title: "Weekend in Lisbon", hint: "Switch to Tab" },
-  { icon: "magnifyingglass", title: "coast trail walks" },
+  { fav: tab(0), title: t(`A slow morning on the coast trail`), detail: "fieldnotes.blog" },
+  { fav: tab(2), title: t(`Weekend in Lisbon`), hint: t(`Switch to Tab`) },
+  { icon: "magnifyingglass", title: t(`coast trail walks`) },
 ];
 
 export const FRESH: Suggestion[] = [
-  { fav: tab(1), title: "Inbox", hint: "Switch to Tab" },
-  { fav: tab(3), title: "Q4 roadmap", detail: "docs.new" },
-  { icon: "clock", title: "coast trail walks" },
+  { fav: tab(1), title: t(`Inbox`), hint: t(`Switch to Tab`) },
+  { fav: tab(3), title: t(`Q4 roadmap`), detail: "docs.new" },
+  { icon: "clock", title: t(`coast trail walks`) },
 ];
 
 export function SuggestionList({ g, look, t, rows, ms }: { g: Geo; look: Look; t: Tracker; rows: Suggestion[]; ms: number }) {

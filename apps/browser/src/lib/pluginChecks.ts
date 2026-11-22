@@ -1,5 +1,7 @@
 import { isFields, type Fields } from "./decode";
 import { isWellFormed } from "./pluginNames";
+import { t } from "./uiLanguage";
+
 
 export const LIMITS = {
   name: 40,
@@ -51,9 +53,9 @@ export const SYMBOL = new RegExp(SYMBOL_PATTERN);
 export const KEYWORD = new RegExp(KEYWORD_PATTERN);
 export const UNSAFE_TEXT = /[\u0000-\u001f\u007f-\u009f؜‎‏‪-‮⁦-⁩]/;
 
-export const NAME_RULE = "1 to 40 lowercase letters, digits and dashes, starting with a letter or digit";
-export const KEY_RULE = "1 to 40 letters, digits, - and _";
-export const SYMBOL_RULE = "an SF Symbol name";
+export const NAME_RULE = t(`1 to 40 lowercase letters, digits and dashes, starting with a letter or digit`);
+export const KEY_RULE = t(`1 to 40 letters, digits, - and _`);
+export const SYMBOL_RULE = t(`an SF Symbol name`);
 
 export type Check = { problems: string[] };
 

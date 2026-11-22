@@ -8,6 +8,8 @@ import { presentSystemRequest } from "./systemRequest";
 import { ActionSheet, Dialog, dialogLayout, font, Menu, menuExitMs, menuLook, pointPlacer, Portal, radius, space, useTheme, type MenuItem, type SymbolName } from "../ui";
 import { currentTabs } from "../../state/tabs/store";
 import { findTab } from "../../state/tabs/tabsState";
+import { t } from "../../lib/uiLanguage";
+
 
 export function PageRequestHost({ tabId }: { tabId: string }) {
   const request = usePageRequest(tabId);
@@ -44,7 +46,7 @@ function RequestDialog({ tabId, request }: { tabId: string; request: Request }) 
     />
   );
   if (dialog.choices.length)
-    return <ActionSheet title={dialog.title || null} message={dialog.message} cancel={dialog.cancel ?? "Cancel"} onCancel={dismiss} actions={dialog.choices.map((choice) => ({ title: choice.title, onPress: () => answerRequest(tabId, request, choice.answer) }))} />;
+    return <ActionSheet title={dialog.title || null} message={dialog.message} cancel={dialog.cancel ?? t(`Cancel`)} onCancel={dismiss} actions={dialog.choices.map((choice) => ({ title: choice.title, onPress: () => answerRequest(tabId, request, choice.answer) }))} />;
   return (
     <Dialog
       title={dialog.title}
@@ -52,11 +54,11 @@ function RequestDialog({ tabId, request }: { tabId: string; request: Request }) 
       onDismiss={dialog.cancel ? dismiss : confirm}
       buttons={[...(dialog.cancel ? [{ title: dialog.cancel, onPress: dismiss }] : []), { title: dialog.confirm, onPress: confirm }]}
     >
-      {dialog.field === "text" ? field(text, setText, "Text") : null}
+      {dialog.field === "text" ? field(text, setText, t(`Text`)) : null}
       {dialog.field === "credentials" ? (
         <>
-          {field(user, setUser, "User Name")}
-          {field(password, setPassword, "Password", true)}
+          {field(user, setUser, t(`User Name`))}
+          {field(password, setPassword, t(`Password`), true)}
         </>
       ) : null}
     </Dialog>

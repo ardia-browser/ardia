@@ -10,6 +10,8 @@ import { openBookmarkRowMenu } from "../../state/bookmarks/bookmarkMenus";
 import { hostLabel } from "./PageLayout";
 import { bookmarkList, pagesColors } from "./tokens";
 import { perLook } from "../ui/tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 const ROW_LOOK = perLook(() => ({ height: bookmarkList.row, borderRadius: radius.tile, flexDirection: "row", alignItems: "center", paddingHorizontal: space.ml, gap: space.ml }) as const);
 const FOLDER_ICON = { width: bookmarkList.folderIconBox, height: bookmarkList.folderIconBox } as const;
@@ -117,7 +119,7 @@ export function BookmarkRow({
                 {showPath ? path : node.kind === "url" ? hostLabel(node.url) : plural(node.children.length, "item")}
               </Text>
               <View style={{ opacity: hovered ? 1 : 0 }}>
-                <Button variant="icon" icon="ellipsis" size="l" onPress={() => void menu()} tooltip="More actions" />
+                <Button variant="icon" icon="ellipsis" size="l" onPress={() => void menu()} tooltip={t(`More actions`)} />
               </View>
             </View>
           </Pressable>

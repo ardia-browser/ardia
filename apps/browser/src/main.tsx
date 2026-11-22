@@ -40,6 +40,14 @@ import { installErrorReporting, startTelemetry } from "./state/telemetry";
 import { launchCommitted } from "./state/telemetry/journeys";
 import { markFirstWindow } from "./state/telemetry/track";
 import { noteWindowRoot } from "./state/telemetry/windowRootCounts";
+import { systemInfo } from "./platform/app";
+import { adoptUiLanguage } from "./lib/uiLanguage";
+
+try {
+  adoptUiLanguage(systemInfo().locale);
+} catch {
+  adoptUiLanguage(Intl.DateTimeFormat().resolvedOptions().locale);
+}
 
 probeStore("browser", useBrowser);
 installErrorReporting();

@@ -1,8 +1,9 @@
+import { t } from "./uiLanguage";
 export type PermissionKind = "camera" | "microphone" | "location";
 
 const ORDER: PermissionKind[] = ["camera", "microphone", "location"];
 
-export const PERMISSION_NAMES: Record<PermissionKind, string> = { camera: "Camera", microphone: "Microphone", location: "Location" };
+export const PERMISSION_NAMES: Record<PermissionKind, string> = { camera: t(`Camera`), microphone: t(`Microphone`), location: t(`Location`) };
 
 export const sortedPermissions = (kinds: readonly PermissionKind[]): PermissionKind[] => ORDER.filter((kind) => kinds.includes(kind));
 

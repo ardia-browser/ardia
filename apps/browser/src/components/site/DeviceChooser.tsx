@@ -6,6 +6,8 @@ import { ActivitySpinner, Box, Button, capsule, MenuRow, PANEL, Popover, POPOVER
 import { usePromptInputGuard } from "./PromptParts";
 import { PromptBody } from "./Prompts";
 import { noticeType, UNAVAILABLE_OPACITY } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 const SIGNAL_BAR = 2.5;
 
@@ -67,13 +69,13 @@ export function DeviceChooser({ tabId, left, top }: { tabId: string; left: numbe
     body = (
       <Notice
         icon="lock"
-        text="Ardia needs access to Bluetooth to find devices."
-        link="Open Bluetooth Settings"
+        text={t(`Ardia needs access to Bluetooth to find devices.`)}
+        link={t(`Open Bluetooth Settings`)}
         onLink={() => openChooserBluetoothSettings(chooser.id)}
       />
     );
   } else if (chooser.adapterOff) {
-    body = <Notice icon="antenna.radiowaves.left.and.right.slash" text="Bluetooth is turned off. Turn it on to find devices." />;
+    body = <Notice icon="antenna.radiowaves.left.and.right.slash" text={t(`Bluetooth is turned off. Turn it on to find devices.`)} />;
   } else if (scanning) {
     body = null;
   } else {
@@ -85,7 +87,7 @@ export function DeviceChooser({ tabId, left, top }: { tabId: string; left: numbe
               <OptionRow
                 key={`${i}:${o.name}`}
                 name={o.name}
-                detail={o.connected ? "Connected" : o.paired ? "Paired" : null}
+                detail={o.connected ? t(`Connected`) : o.paired ? t(`Paired`) : null}
                 signal={chooser.showSignal ? o.signal : -1}
                 selected={selected === i}
                 onSelect={() => setSelected(i)}
@@ -109,7 +111,7 @@ export function DeviceChooser({ tabId, left, top }: { tabId: string; left: numbe
                   {chooser.noOptionsText}
                 </Text>
               ) : null}
-              {chooser.canRefresh ? <Button variant="text" look="link" title="Scan Again" onPress={() => rescanDevices(chooser.id)} /> : null}
+              {chooser.canRefresh ? <Button variant="text" look="link" title={t(`Scan Again`)} onPress={() => rescanDevices(chooser.id)} /> : null}
             </>
           )}
         </Box>
@@ -122,13 +124,13 @@ export function DeviceChooser({ tabId, left, top }: { tabId: string; left: numbe
       <View
         focusable
         enableFocusRing={false}
-        keyDownEvents={[{ key: "Escape" }, { key: "Enter" }]}
+        keyDownEvents={[{ key: t(`Escape`) }, { key: t(`Enter`) }]}
         onKeyDown={(e) => (e.nativeEvent.key === "Escape" ? cancel() : valid && !blocked && choose())}
       >
         <PromptBody icons={[chooser.showSignal || scanning ? "dot.radiowaves.left.and.right" : "cable.connector"]} title={chooser.title} detail={body}>
-          <Button variant="pill" title={chooser.cancelLabel || "Cancel"} onPress={cancel} />
+          <Button variant="pill" title={chooser.cancelLabel || t(`Cancel`)} onPress={cancel} />
           <View pointerEvents={valid && !blocked ? "auto" : "none"} style={{ opacity: valid && !blocked ? 1 : UNAVAILABLE_OPACITY }}>
-            <Button variant="pill" title={chooser.okLabel || "Connect"} primary onPress={() => choose()} />
+            <Button variant="pill" title={chooser.okLabel || t(`Connect`)} primary onPress={() => choose()} />
           </View>
         </PromptBody>
       </View>

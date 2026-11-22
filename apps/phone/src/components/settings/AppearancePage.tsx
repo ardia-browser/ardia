@@ -18,17 +18,19 @@ import { useIncognito } from "../../state/tabs/hooks";
 import { capsule, font, PROFILE_COLORS, settingsLayout, settingsMotion, settingsTint, space, Symbol, themeEditorLayout, useDesign, useProfileLook, useTheme, type ProfileColor } from "../ui";
 import { MaterialSettingsLeading } from "./MaterialSettingsKit";
 import { Divider, Group, IconTile, NavRow, SettingsPage, ToggleRow } from "./SettingsKit";
+import { t } from "../../lib/uiLanguage";
+
 
 const COLORS = Object.keys(PROFILE_COLORS) as ProfileColor[];
 
-export const colorName = (choice: string) => (choice === "custom" ? "Custom" : (PROFILE_COLORS[choice as ProfileColor]?.name ?? choice));
+export const colorName = (choice: string) => (choice === "custom" ? t(`Custom`) : (PROFILE_COLORS[choice as ProfileColor]?.name ?? choice));
 
 const RAINBOW = rainbow(themeEditorLayout.rainbowStops);
 
 export function AppearanceRow() {
   const look = useProfileLook();
   const summary = useAppearanceSummary(colorName);
-  return <NavRow title="Appearance" icon="paintpaletteFill" tint={look.swatch} value={summary} onPress={() => pushSettings({ page: "appearance" })} />;
+  return <NavRow title={t(`Appearance`)} icon="paintpaletteFill" tint={look.swatch} value={summary} onPress={() => pushSettings({ page: "appearance" })} />;
 }
 
 export function AppearancePage() {
@@ -41,24 +43,24 @@ export function AppearancePage() {
   const grid = useDeckGrid();
   const incognito = useIncognito();
   return (
-    <SettingsPage title="Appearance" onBack={popSettings}>
+    <SettingsPage title={t(`Appearance`)} onBack={popSettings}>
       <Group>
         <ColorRow labelled={false} />
         {syncEnabled ? <MatchMyMac labelled={false} /> : null}
       </Group>
-      <Group header="Interface Style" footer={offersSync ? "Match My Mac follows your Mac." : undefined}>
+      <Group header={t(`Interface Style`)} footer={offersSync ? t(`Match My Mac follows your Mac.`) : undefined}>
         {styleChoices.map((choice, index) => (
           <CheckRow key={choice} title={INTERFACE_STYLE_NAMES[choice]} checked={style === choice} divider={index < styleChoices.length - 1} onPress={() => setInterfaceStyle(choice)} />
         ))}
       </Group>
-      <Group header="Light or Dark" footer={offersSync ? "Match My Mac follows your Mac. System follows this device." : "System follows this device."}>
+      <Group header={t(`Light or Dark`)} footer={offersSync ? t(`Match My Mac follows your Mac. System follows this device.`) : t(`System follows this device.`)}>
         {schemeChoices.map((choice, index) => (
           <CheckRow key={choice} title={SCHEME_NAMES[choice]} checked={scheme === choice} divider={index < schemeChoices.length - 1} onPress={() => setSchemeChoice(choice)} />
         ))}
       </Group>
-      <Group header="Tabs" footer={TABS_STYLE_FOOTER}>
-        <CheckRow title="Stack" checked={!grid} divider onPress={() => setDeckGrid(false, !incognito)} />
-        <CheckRow title="Grid" checked={grid} divider={false} onPress={() => setDeckGrid(true, !incognito)} />
+      <Group header={t(`Tabs`)} footer={TABS_STYLE_FOOTER}>
+        <CheckRow title={t(`Stack`)} checked={!grid} divider onPress={() => setDeckGrid(false, !incognito)} />
+        <CheckRow title={t(`Grid`)} checked={grid} divider={false} onPress={() => setDeckGrid(true, !incognito)} />
       </Group>
     </SettingsPage>
   );
@@ -90,7 +92,7 @@ export function MatchMyMac({ labelled = true }: { labelled?: boolean }) {
   return (
     <>
       <View style={[styles.divider, labelled ? styles.dividerPastIcon : null, { backgroundColor: theme.separator }]} />
-      <ToggleRow title="Match My Mac" icon={labelled ? "laptop" : undefined} tint={labelled ? settingsTint.neutral : undefined} value={chosen === null} onChange={(on) => matchMyMac(on, look)} />
+      <ToggleRow title={t(`Match My Mac`)} icon={labelled ? "laptop" : undefined} tint={labelled ? settingsTint.neutral : undefined} value={chosen === null} onChange={(on) => matchMyMac(on, look)} />
     </>
   );
 }
@@ -119,7 +121,7 @@ export function ColorRow({ labelled = true, plainIcon = false }: { labelled?: bo
       {custom ? (
         <>
           <Divider />
-          <NavRow title="Edit Theme" onPress={() => pushSettings({ page: "theme" })} />
+          <NavRow title={t(`Edit Theme`)} onPress={() => pushSettings({ page: "theme" })} />
         </>
       ) : null}
     </>
@@ -149,8 +151,8 @@ function CustomSwatch({ selected }: { selected: boolean }) {
   return (
     <Pressable
       accessibilityRole="radio"
-      accessibilityLabel="Custom"
-      accessibilityHint="Opens the theme editor"
+      accessibilityLabel={t(`Custom`)}
+      accessibilityHint={t(`Opens the theme editor`)}
       accessibilityState={{ selected }}
       onPress={() => openThemeEditor(look)}
       style={[styles.swatchHit, styles.swatchCell]}

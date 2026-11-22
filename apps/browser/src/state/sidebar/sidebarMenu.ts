@@ -17,6 +17,8 @@ import { pinnedFoldMenuItem, runPinnedFold } from "./pinnedFold";
 import { addSharedFolder } from "../sharedFolders/actions";
 import { canAddSharedFolder } from "../sharedFolders/removal";
 import { switchTabLayout, toggleSidebarSide } from "../settings/actions";
+import { t } from "../../lib/uiLanguage";
+
 
 const store = () => useBrowser.getState();
 
@@ -25,23 +27,23 @@ export function sidebarMenuItems(s: BrowserState, windowId: string): MenuItem[] 
   const inSidebar = tabLayoutOf(s, windowId) === "sidebar";
   return sections(
     [
-      { id: "newTab", title: "New Tab", symbol: "plus.app", ...menuShortcut("newTab", s) },
-      { id: "reopen", title: "Reopen Closed Tab", enabled: !!lastClosedEntry(s, windowId), ...menuShortcut("reopenClosedTab", s) },
+      { id: "newTab", title: t(`New Tab`), symbol: "plus.app", ...menuShortcut("newTab", s) },
+      { id: "reopen", title: t(`Reopen Closed Tab`), enabled: !!lastClosedEntry(s, windowId), ...menuShortcut("reopenClosedTab", s) },
     ],
     [
-      { id: "newGroup", title: "New Group", symbol: "folder.badge.plus" },
+      { id: "newGroup", title: t(`New Group`), symbol: "folder.badge.plus" },
       newLiveFolderMenuItem(),
-      ...(canAddSharedFolder(w?.profileId) ? [{ id: "addShared", title: "Add Shared Folder…", symbol: "person.2" }] : []),
+      ...(canAddSharedFolder(w?.profileId) ? [{ id: "addShared", title: t(`Add Shared Folder…`), symbol: "person.2" }] : []),
     ],
-    [{ id: "newProfile", title: "New Profile…", symbol: "plus" }],
-    [bookmarksShown(s.settings) && { id: "bookmarkAll", title: "Bookmark All Tabs…", symbol: "bookmark", ...menuShortcut("bookmarkAllTabs", s) }],
+    [{ id: "newProfile", title: t(`New Profile…`), symbol: "plus" }],
+    [bookmarksShown(s.settings) && { id: "bookmarkAll", title: t(`Bookmark All Tabs…`), symbol: "bookmark", ...menuShortcut("bookmarkAllTabs", s) }],
     [
       ...pinnedFoldMenuItem(s, windowId),
-      { id: "tabLayout", title: "Show Tabs in Sidebar", symbol: "sidebar.left", checked: inSidebar, ...menuShortcut("toggleTabLayout", s) },
-      ...(inSidebar ? [{ id: "sidebarSide", title: "Sidebar on Right", symbol: "sidebar.right", checked: s.settings.sidebarSide === "right", ...menuShortcut("toggleSidebarSide", s) }] : []),
-      { id: "autoHide", title: "Auto-Hide Tabs", checked: !!w && !tabsShownIn(s, windowId), ...menuShortcut("toggleSidebar", s) },
+      { id: "tabLayout", title: t(`Show Tabs in Sidebar`), symbol: "sidebar.left", checked: inSidebar, ...menuShortcut("toggleTabLayout", s) },
+      ...(inSidebar ? [{ id: "sidebarSide", title: t(`Sidebar on Right`), symbol: "sidebar.right", checked: s.settings.sidebarSide === "right", ...menuShortcut("toggleSidebarSide", s) }] : []),
+      { id: "autoHide", title: t(`Auto-Hide Tabs`), checked: !!w && !tabsShownIn(s, windowId), ...menuShortcut("toggleSidebar", s) },
     ],
-    [{ id: "closeAll", title: "Close All Tabs", symbol: "xmark", ...menuShortcut("closeAllTabs", s) }],
+    [{ id: "closeAll", title: t(`Close All Tabs`), symbol: "xmark", ...menuShortcut("closeAllTabs", s) }],
   );
 }
 

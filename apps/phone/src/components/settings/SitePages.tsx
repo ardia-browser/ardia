@@ -12,17 +12,19 @@ import { Dialog, Favicon, font, settingsLayout, settingsTint, Symbol, useDesign,
 import { Divider, Group, NavRow, PickerRow, SettingsPage, ToggleRow } from "./SettingsKit";
 import { useSyncEnabled, useSyncView } from "../../state/sync/hooks";
 import { syncedEngineName } from "../../state/sync/syncRules";
+import { t } from "../../lib/uiLanguage";
+
 
 export const SWIPE_NAVIGATION = [
-  { id: "anywhere" as const, title: "From Anywhere" },
-  { id: "screenEdges" as const, title: "From Screen Edges" },
-  { id: "disabled" as const, title: "Off" },
+  { id: "anywhere" as const, title: t(`From Anywhere`) },
+  { id: "screenEdges" as const, title: t(`From Screen Edges`) },
+  { id: "disabled" as const, title: t(`Off`) },
 ];
 
 export const NIGHT_SHADE = [
-  { id: "disabled" as const, title: "Off" },
-  { id: "automatic" as const, title: "Automatic" },
-  { id: "always" as const, title: "Always" },
+  { id: "disabled" as const, title: t(`Off`) },
+  { id: "automatic" as const, title: t(`Automatic`) },
+  { id: "always" as const, title: t(`Always`) },
 ];
 
 export function SearchEnginePage() {
@@ -33,9 +35,9 @@ export function SearchEnginePage() {
   const synced = useSyncView().search;
   if (syncEnabled && synced) {
     return (
-      <SettingsPage title="Search Engine" onBack={popSettings}>
-        <Group footer="Set on your Mac.">
-          <View testID="engineFromMac" accessible accessibilityLabel="From Your Mac" accessibilityValue={{ text: syncedEngineName(synced, engines) }} style={[styles.row, styles.labelled]}>
+      <SettingsPage title={t(`Search Engine`)} onBack={popSettings}>
+        <Group footer={t(`Set on your Mac.`)}>
+          <View testID="engineFromMac" accessible accessibilityLabel={t(`From Your Mac`)} accessibilityValue={{ text: syncedEngineName(synced, engines) }} style={[styles.row, styles.labelled]}>
             <Symbol name="laptop" size={22} color={theme.formAccent} />
             <Text style={[font.body, styles.fill, { color: theme.label }]}>From Your Mac</Text>
             <Text style={[font.body, { color: theme.secondaryLabel }]}>{syncedEngineName(synced, engines)}</Text>
@@ -45,7 +47,7 @@ export function SearchEnginePage() {
     );
   }
   return (
-    <SettingsPage title="Search Engine" onBack={popSettings}>
+    <SettingsPage title={t(`Search Engine`)} onBack={popSettings}>
       <Group>
         {engines.map((engine, index) => (
           <View key={engine.id}>
@@ -68,7 +70,7 @@ export function SearchEnginePage() {
 
 export function SiteSettingsPage() {
   return (
-    <SettingsPage title="Site Settings" onBack={popSettings}>
+    <SettingsPage title={t(`Site Settings`)} onBack={popSettings}>
       <SiteSettingsGroups openRoute={pushSettings} />
       <AllowedSites />
     </SettingsPage>
@@ -84,7 +86,7 @@ export function AllowedSites() {
   }, []);
   if (!listed) return null;
   return (
-    <Group header="Camera, Microphone and Location" footer="Sites you allowed keep access on this phone until you revoke it. Private tabs always ask.">
+    <Group header={t(`Camera, Microphone and Location`)} footer={t(`Sites you allowed keep access on this phone until you revoke it. Private tabs always ask.`)}>
       {grants.length ? (
         grants.map((grant, index) => <AllowedSite key={grant.origin} grant={grant} divider={index < grants.length - 1} />)
       ) : (
@@ -107,8 +109,8 @@ function AllowedSite({ grant, divider }: { grant: SitePermissionGrant; divider: 
   };
   const buttons: DialogButton[] = [
     ...(kinds.length > 1 ? kinds.map((kind) => ({ title: `Revoke ${PERMISSION_NAMES[kind]}`, destructive: true, onPress: () => revoke(kind) })) : []),
-    { title: kinds.length > 1 ? "Revoke All" : `Revoke ${summary}`, destructive: true, onPress: () => revoke() },
-    { title: "Cancel", onPress: () => setAsking(false) },
+    { title: kinds.length > 1 ? t(`Revoke All`) : `Revoke ${summary}`, destructive: true, onPress: () => revoke() },
+    { title: t(`Cancel`), onPress: () => setAsking(false) },
   ];
   return (
     <View>
@@ -116,7 +118,7 @@ function AllowedSite({ grant, divider }: { grant: SitePermissionGrant; divider: 
         testID="allowedSite"
         accessibilityRole="button"
         accessibilityLabel={`${grant.host}, ${summary}`}
-        accessibilityHint="Revoke access"
+        accessibilityHint={t(`Revoke access`)}
         onPress={() => setAsking(true)}
         style={({ pressed }) => [styles.row, styles.site, pressed ? { backgroundColor: theme.rowHighlight } : null]}
       >
@@ -149,23 +151,23 @@ export function SiteSettingsGroups({ openRoute }: { openRoute: (route: SettingsR
   return (
     <>
       <Group>
-        <ToggleRow title="Block Ads" icon="handRaised" tint={settingsTint.ads} value={state?.blocksAds ?? true} divider onChange={(on) => setBlockingCategory("ads", on)} />
-        <ToggleRow title="Block Trackers" icon="eyeglasses" tint={settingsTint.trackers} value={state?.blocksTrackers ?? true} divider onChange={(on) => setBlockingCategory("trackers", on)} />
+        <ToggleRow title={t(`Block Ads`)} icon="handRaised" tint={settingsTint.ads} value={state?.blocksAds ?? true} divider onChange={(on) => setBlockingCategory("ads", on)} />
+        <ToggleRow title={t(`Block Trackers`)} icon="eyeglasses" tint={settingsTint.trackers} value={state?.blocksTrackers ?? true} divider onChange={(on) => setBlockingCategory("trackers", on)} />
         <ToggleRow
-          title="Block Cookie Banners"
+          title={t(`Block Cookie Banners`)}
           icon="listBulletFill"
           tint={settingsTint.cookies}
           value={state?.hidesCookieBanners ?? true}
           divider
           onChange={(on) => setBlockingCategory("cookieBanners", on)}
         />
-        <NavRow title="Filter Lists" icon="line3HorizontalDecrease" tint={settingsTint.neutral} value={formatNumber(enabledLists)} divider onPress={() => openRoute({ page: "filterLists" })} />
-        <NavRow title="Trusted Sites" icon="checkmarkShield" tint={settingsTint.green} value={trusted ? String(trusted) : "None"} onPress={() => openRoute({ page: "trustedSites" })} />
+        <NavRow title={t(`Filter Lists`)} icon="line3HorizontalDecrease" tint={settingsTint.neutral} value={formatNumber(enabledLists)} divider onPress={() => openRoute({ page: "filterLists" })} />
+        <NavRow title={t(`Trusted Sites`)} icon="checkmarkShield" tint={settingsTint.green} value={trusted ? String(trusted) : t(`None`)} onPress={() => openRoute({ page: "trustedSites" })} />
       </Group>
-      <Group footer="Change one site from its page menu.">
-        <PickerRow title="Night Shade" icon="moonFill" tint={settingsTint.nightShade} options={NIGHT_SHADE} selected={nightShade} divider onSelect={setDefaultNightShade} />
+      <Group footer={t(`Change one site from its page menu.`)}>
+        <PickerRow title={t(`Night Shade`)} icon="moonFill" tint={settingsTint.nightShade} options={NIGHT_SHADE} selected={nightShade} divider onSelect={setDefaultNightShade} />
         <PickerRow
-          title="Swipe to Navigate"
+          title={t(`Swipe to Navigate`)}
           icon="handDrawFill"
           tint={settingsTint.swipe}
           options={SWIPE_NAVIGATION}
@@ -174,7 +176,7 @@ export function SiteSettingsGroups({ openRoute }: { openRoute: (route: SettingsR
           onSelect={setSwipeNavigation}
         />
         <ToggleRow
-          title="Collapse Bottom Bar"
+          title={t(`Collapse Bottom Bar`)}
           icon="platterBottomArrowDown"
           tint={settingsTint.bottomBar}
           value={collapses}

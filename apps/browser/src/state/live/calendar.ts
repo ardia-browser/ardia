@@ -20,6 +20,8 @@ import { everySlowly } from "../../platform/slowTimers";
 import { isPerfRun } from "../app/perfRun";
 import type { CalendarEvent } from "./meetings";
 import { live, updateCalendarSettings, useLive } from "./store";
+import { t } from "../../lib/uiLanguage";
+
 
 export type { SystemCalendar } from "../../platform/calendar";
 
@@ -45,7 +47,7 @@ export const useCalendar = create<CalendarData>()(() => ({
   requestError: null,
 }));
 
-const CALENDARS_PRIVACY = "System Settings › Privacy & Security › Calendars";
+const CALENDARS_PRIVACY = t(`System Settings › Privacy & Security › Calendars`);
 
 export const openCalendarPrivacy = () => void openExternalURL("x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars");
 
@@ -56,7 +58,7 @@ export function calendarRequestFailure(access: CalendarAuthorization, request: P
   if (access === "restricted") return `Calendar access is restricted on this Mac, by Screen Time or your organization. If you can change it, allow Ardia in ${CALENDARS_PRIVACY}.`;
   if (access === "writeOnly") return `Ardia can only add events to your calendars. Choose Full Access for Ardia in ${CALENDARS_PRIVACY}.`;
   if (access === "denied") return `Ardia isn't allowed to read your calendars. Turn on Ardia in ${CALENDARS_PRIVACY}.`;
-  const launcherHint = request?.responsible === "other" ? " macOS may have checked the app that opened Ardia instead of Ardia: quit Ardia, open it from the Dock or Finder, then connect again." : "";
+  const launcherHint = request?.responsible === "other" ? t(` macOS may have checked the app that opened Ardia instead of Ardia: quit Ardia, open it from the Dock or Finder, then connect again.`) : "";
   if (request?.error) return `macOS couldn't give Ardia calendar access (${request.error}). Check ${CALENDARS_PRIVACY}.${launcherHint}`;
   if (launcherHint) return `macOS didn't ask Ardia for calendar access.${launcherHint}`;
   return `macOS didn't ask for calendar access. Allow Ardia in ${CALENDARS_PRIVACY}.`;

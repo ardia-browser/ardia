@@ -19,10 +19,12 @@ import { onboardingInk, onboardingLayout, onboardingMotion } from "./onboardingT
 import { PHONE_SHARING_COPY } from "../../lib/telemetryCopy";
 import { setUsageSharing, useUsageSharing } from "../../state/telemetry/telemetry";
 import { useSyncConnected } from "../../state/sync/hooks";
+import { t } from "../../lib/uiLanguage";
+
 
 const ONBOARDING_MIN_PAGE = 560;
 const PRESSED_OPACITY = 0.82;
-export const SYNC_SUBTITLE = { offer: "Your Mac’s tabs, right here. End-to-end encrypted.", connected: "Your Mac’s tabs are here, end-to-end encrypted." } as const;
+export const SYNC_SUBTITLE = { offer: t(`Your Mac’s tabs, right here. End-to-end encrypted.`), connected: t(`Your Mac’s tabs are here, end-to-end encrypted.`) } as const;
 const LARGE_TEXT = 1.35;
 export const ONBOARDING_LAYERS = { stepsBackdrop: 0, welcomeBackdrop: 1, step: 2 } as const;
 const smooth = spring(0.42, 0.9);
@@ -160,11 +162,11 @@ function SyncStep() {
         }
       >
         {connected ? (
-          <Primary title="Continue" onPress={advanceOnboarding} />
+          <Primary title={t(`Continue`)} onPress={advanceOnboarding} />
         ) : (
           <>
-            <Primary title="Connect to Your Mac" onPress={() => setConnecting(true)} />
-            <Secondary title="Not Now" onPress={advanceOnboarding} />
+            <Primary title={t(`Connect to Your Mac`)} onPress={() => setConnecting(true)} />
+            <Secondary title={t(`Not Now`)} onPress={advanceOnboarding} />
           </>
         )}
       </Page>
@@ -249,7 +251,7 @@ function Welcome() {
       </Animated.View>
       <View style={styles.fill} />
       <Animated.View testID="onboardingActions" style={[styles.actions, { paddingTop: onboardingLayout.welcomeActionsTop }, start]}>
-        <Primary title="Get Started" onPress={advanceOnboarding} />
+        <Primary title={t(`Get Started`)} onPress={advanceOnboarding} />
       </Animated.View>
     </View>
   );
@@ -318,9 +320,9 @@ function PlainToggleRow({ title, value, divider, onChange }: { title: string; va
 }
 
 const BLOCKING_ROWS = [
-  { key: "ads", title: "Block Ads", icon: "handRaised", tint: settingsTint.ads },
-  { key: "trackers", title: "Block Trackers", icon: "eyeglasses", tint: settingsTint.trackers },
-  { key: "cookieBanners", title: "Block Cookie Banners", icon: "listBulletFill", tint: settingsTint.cookies },
+  { key: "ads", title: t(`Block Ads`), icon: "handRaised", tint: settingsTint.ads },
+  { key: "trackers", title: t(`Block Trackers`), icon: "eyeglasses", tint: settingsTint.trackers },
+  { key: "cookieBanners", title: t(`Block Cookie Banners`), icon: "listBulletFill", tint: settingsTint.cookies },
 ] as const;
 
 function Blocking() {
@@ -334,7 +336,7 @@ function Blocking() {
           Never see another <Text style={{ color: theme.spaceAccentInk }}>ad</Text>.
         </>
       }
-      subtitle="Trackers and cookie banners too."
+      subtitle={t(`Trackers and cookie banners too.`)}
       sitsLow
       hero="handRaised"
       illustration={
@@ -351,24 +353,24 @@ function Blocking() {
         </OnboardingCard>
       }
     >
-      <Primary title="Continue" onPress={advanceOnboarding} />
+      <Primary title={t(`Continue`)} onPress={advanceOnboarding} />
     </Page>
   );
 }
 
 const TIPS: { icon: SymbolName; text: string }[] = [
-  { icon: "plus", text: "Tap + to search." },
-  { icon: "squareOnSquare", text: "Flick a tab up to close it." },
-  { icon: "handDrawFill", text: "Swipe a page to go back." },
-  { icon: "archivebox", text: "Old tabs archive after a day." },
+  { icon: "plus", text: t(`Tap + to search.`) },
+  { icon: "squareOnSquare", text: t(`Flick a tab up to close it.`) },
+  { icon: "handDrawFill", text: t(`Swipe a page to go back.`) },
+  { icon: "archivebox", text: t(`Old tabs archive after a day.`) },
 ];
 
 function AllSet() {
   const theme = useTheme();
   return (
     <Page
-      title="You’re all set!"
-      subtitle="Happy browsing."
+      title={t(`You’re all set!`)}
+      subtitle={t(`Happy browsing.`)}
       sitsLow
       illustration={
         onboardingLayout.tipIcons ? (
@@ -397,7 +399,7 @@ function AllSet() {
       }
     >
       <SharingChoice />
-      <Primary title="Start Browsing" onPress={finishOnboarding} />
+      <Primary title={t(`Start Browsing`)} onPress={finishOnboarding} />
     </Page>
   );
 }

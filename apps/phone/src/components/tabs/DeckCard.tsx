@@ -24,6 +24,8 @@ import { moveTabToSpace } from "../../state/tabs/store";
 import type { SyncedProfile } from "../../state/sync/store";
 import { isLabBuild } from "../../platform/lab";
 import { launchArguments } from "../../state/app/launchFlags";
+import { t } from "../../lib/uiLanguage";
+
 
 export type DeckRole = "stay" | "expanded" | "launcher" | "slideLeft" | "slideRight";
 
@@ -246,7 +248,7 @@ export type DeckCardProps = Props;
 
 export const DeckCard = memo(function DeckCard({ tab, index, geometry: g, motion, onOpen, onClose, onCloseNow, onMenu }: Props) {
   const reach = useRef<ViewInstance>(null);
-  countRender("DeckCard");
+  countRender(t(`DeckCard`));
   const theme = useTheme();
   const design = useDesign();
   const tone = shownTone(useHeldPageTone(tab.id), tab.themeColorHex);
@@ -311,7 +313,7 @@ export const DeckCard = memo(function DeckCard({ tab, index, geometry: g, motion
   const bandStyle = useAnimatedStyle(() => ({ transform: [{ scaleY: placed.value.expanded && !underBars ? deckBarBand(g, 0, scaleProgress.value).grown : 0 }] }), [g, underBars]);
 
   const host = display(tab.url).host;
-  const title = tab.title || host || "New Tab";
+  const title = tab.title || host || t(`New Tab`);
   const cardContents = (
     <>
       <Animated.View testID="deckCardFace" style={[StyleSheet.absoluteFill, faceStyle]}>
@@ -351,10 +353,10 @@ export const DeckCard = memo(function DeckCard({ tab, index, geometry: g, motion
         accessibilityRole="button"
         accessibilityLabel={title}
         accessibilityValue={{ text: tab.isPrivate ? `Incognito, ${host}` : host }}
-        accessibilityHint="Opens the tab."
+        accessibilityHint={t(`Opens the tab.`)}
         {...screenReaderActions([
           { name: "activate", run: () => onOpen(index) },
-          { name: "close", label: "Close Tab", run: () => onCloseNow(index) },
+          { name: "close", label: t(`Close Tab`), run: () => onCloseNow(index) },
           ...(onMenu ? [{ name: "menu", label: CARD_MENU_ACTION, run: () => onMenu(index, reach) }] : []),
         ])}
         pointerEvents="none"
@@ -389,12 +391,12 @@ type CardMenuContext = { devices: SendTarget[]; pinned: boolean; syncEnabled: bo
 const deviceSystemImage = (device: Pick<SendTarget, "name" | "kind">) => (device.kind === "phone" ? "iphone" : /book/i.test(device.name) ? "laptopcomputer" : "desktopcomputer");
 
 const CARD_MENU_ICONS: Record<string, { icon: SymbolName; systemImage: string }> = {
-  "Copy Link": { icon: "link", systemImage: "link" },
+  t(`Copy Link`): { icon: "link", systemImage: "link" },
   Share: { icon: "squareAndArrowUp", systemImage: "square.and.arrow.up" },
-  "Pin to Mac": { icon: "star", systemImage: "star" },
-  "Pinned to Mac": { icon: "starFill", systemImage: "star.fill" },
-  "Move to Space": { icon: "squareStack", systemImage: "square.stack" },
-  "Close Tab": { icon: "xmark", systemImage: "xmark" },
+  t(`Pin to Mac`): { icon: "star", systemImage: "star" },
+  t(`Pinned to Mac`): { icon: "starFill", systemImage: "star.fill" },
+  t(`Move to Space`): { icon: "squareStack", systemImage: "square.stack" },
+  t(`Close Tab`): { icon: "xmark", systemImage: "xmark" },
 };
 
 const withMenuIcon = (item: MenuItem): MenuItem => (item === "divider" || "heading" in item || !CARD_MENU_ICONS[item.label] ? item : { ...item, ...CARD_MENU_ICONS[item.label] });
@@ -405,19 +407,19 @@ export function cardMenuItems(tab: BrowserTab, context: CardMenuContext, close: 
 }
 
 function plainCardMenuItems(tab: BrowserTab, { devices, pinned, syncEnabled, spaces }: CardMenuContext, close: () => void): MenuItem[] {
-  const closing: MenuItem = { label: "Close Tab", destructive: true, onPress: close };
+  const closing: MenuItem = { label: t(`Close Tab`), destructive: true, onPress: close };
   if (!canShareTab(tab)) return [closing];
   const send = (device: SendTarget) => () => void sendTab(tab, device);
   const sends: MenuItem[] =
     devices.length === 1
       ? [{ label: `Send to ${devices[0]!.name}`, icon: devices[0]!.kind === "phone" ? "iphone" : "laptop", systemImage: deviceSystemImage(devices[0]!), onPress: send(devices[0]!) }]
       : devices.length > 1
-        ? [{ label: "Send to Device", children: devices.map((device): MenuItem => ({ label: device.name, icon: device.kind === "phone" ? "iphone" : "laptop", systemImage: deviceSystemImage(device), onPress: send(device) })) }]
+        ? [{ label: t(`Send to Device`), children: devices.map((device): MenuItem => ({ label: device.name, icon: device.kind === "phone" ? "iphone" : "laptop", systemImage: deviceSystemImage(device), onPress: send(device) })) }]
         : [];
-  const pin: MenuItem[] = tab.isPrivate || !syncEnabled ? [] : pinned ? [{ label: "Pinned to Mac", disabled: true, onPress: () => undefined }] : [{ label: "Pin to Mac", onPress: () => void pinToMac(tab, () => openSettings({ page: "sync" })) }];
+  const pin: MenuItem[] = tab.isPrivate || !syncEnabled ? [] : pinned ? [{ label: t(`Pinned to Mac`), disabled: true, onPress: () => undefined }] : [{ label: t(`Pin to Mac`), onPress: () => void pinToMac(tab, () => openSettings({ page: "sync" })) }];
   const others = tab.isPrivate ? [] : spaces;
-  const move: MenuItem[] = others.length ? [{ label: "Move to Space", children: others.map((space): MenuItem => ({ label: space.name, systemImage: spaceSystemImage(space.name, space.icon), onPress: () => moveTabToSpace(tab.id, space.syncId) })) }] : [];
-  return [{ label: "Copy Link", onPress: () => copyTabLink(tab) }, { label: "Share", onPress: () => shareTab(tab) }, ...sends, ...pin, ...move, "divider", closing];
+  const move: MenuItem[] = others.length ? [{ label: t(`Move to Space`), children: others.map((space): MenuItem => ({ label: space.name, systemImage: spaceSystemImage(space.name, space.icon), onPress: () => moveTabToSpace(tab.id, space.syncId) })) }] : [];
+  return [{ label: t(`Copy Link`), onPress: () => copyTabLink(tab) }, { label: t(`Share`), onPress: () => shareTab(tab) }, ...sends, ...pin, ...move, "divider", closing];
 }
 
 type CardMenuProps = { tab: BrowserTab; close: () => void; testID: string; haptic?: () => void; style?: StyleProp<ViewStyle>; children: (handlers: MenuHandlers) => ReactNode };
@@ -436,7 +438,7 @@ export function CardMenu({ tab, close, testID, haptic, style, children }: CardMe
   );
 }
 
-export const CARD_MENU_ACTION = "Tab Options";
+export const CARD_MENU_ACTION = t(`Tab Options`);
 
 export function DeckCardMenu({ tab, index, onClose, fill, corner = DECK.cardRadius, children }: { tab: BrowserTab; index: number; onClose: (index: number) => void; fill: string; corner?: number; children: ReactNode }) {
   return (
@@ -446,7 +448,7 @@ export function DeckCardMenu({ tab, index, onClose, fill, corner = DECK.cardRadi
   );
 }
 
-export const deckHeaderTitle = (tab: BrowserTab, title: string): string => (tab.isPrivate ? iPhoneOr("Incognito", title) : title);
+export const deckHeaderTitle = (tab: BrowserTab, title: string): string => (tab.isPrivate ? iPhoneOr(t(`Incognito`), title) : title);
 
 export function CardIcon({ tab }: { tab: BrowserTab }) {
   return tab.isPrivate ? (
@@ -510,7 +512,7 @@ export function OpeningCard({ tab, geometry: g, centerX, centerY, growsAtMount =
   const full = frame.scale;
   const bar = deckBarBand(inner, barHeight(g.safeBottom), 1);
   const host = display(tab.url).host;
-  const title = tab.title || host || "New Tab";
+  const title = tab.title || host || t(`New Tab`);
   const start = { translateX: centerX - g.width / 2, translateY: centerY - g.height / 2, scale: frame.startScale, cornerRadius: g.cardCorner / frame.startScale };
   const to = grown ? { translateX: 0, translateY: 0, scale: full, cornerRadius: endsSquare ? 0 : DECK.displayCornerRadius / full } : start;
   return (
@@ -590,7 +592,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   badgeText: { fontSize: 11, lineHeight: 13, fontWeight: "600" },
-  reach: { position: "absolute", left: 0, top: 0, transformOrigin: "left top" },
+  reach: { position: "absolute", left: 0, top: 0, transformOrigin: t(`left top`) },
   header: { position: "absolute", left: 0, top: 0, height: tabsLayout.headerHeight, overflow: "hidden" },
   headerRow: { position: "absolute", left: 0, top: 0, width: HEADER_ROW_ROOM, flexDirection: "row", alignItems: "center", gap: tabsLayout.headerSpacing, height: tabsLayout.headerHeight },
   title: { fontWeight: "500" },

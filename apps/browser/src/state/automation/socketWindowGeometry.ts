@@ -7,12 +7,14 @@ import { bool, obj, WINDOW } from "./socketSchema";
 import { expect, now, windowOf } from "./socketTargets";
 import { windowRow } from "./socketWindows";
 import { OpError } from "./workspaceTargets";
+import { t } from "../../lib/uiLanguage";
+
 
 const FULL_SCREEN_WAIT_MS = 4000;
 const FULL_SCREEN_LIMIT_S = 6;
 
 function geometryWindow(id: unknown, kinds: Parameters<typeof windowOf>[1] = ["normal", "little"]) {
-  if (!PLATFORM_FEATURES.windowGeometry) throw new OpError("refused", "Ardia can't move or resize its windows from the ardia command on this platform yet.");
+  if (!PLATFORM_FEATURES.windowGeometry) throw new OpError("refused", t(`Ardia can't move or resize its windows from the ardia command on this platform yet.`));
   return windowOf(id, kinds);
 }
 
@@ -28,7 +30,7 @@ function isFullScreen(id: string) {
   return !!now().windows[id]?.fullScreen;
 }
 
-const FRAME_REFUSALS = { offscreen: "that frame isn't on any display", invalid: "a frame is finite numbers with a positive width and height" } as const;
+const FRAME_REFUSALS = { offscreen: t(`that frame isn't on any display`), invalid: t(`a frame is finite numbers with a positive width and height`) } as const;
 
 async function setFrame(params: Record<string, unknown>) {
   const w = geometryWindow(params.window);
@@ -36,7 +38,7 @@ async function setFrame(params: Record<string, unknown>) {
   const frame = params.frame as [number, number, number, number];
   const geometry = await nativeGeometry(w.id, setWindowFrame(w.id, frame));
   if (geometry.refused) throw new OpError(geometry.refused === "invalid" ? "bad_request" : "refused", `Window ${w.id} didn't move: ${FRAME_REFUSALS[geometry.refused]}.`);
-  expect(!geometry.fullScreen, "the window is full screen.");
+  expect(!geometry.fullScreen, t(`the window is full screen.`));
   return answer(w.id, geometry);
 }
 
@@ -44,7 +46,7 @@ async function setMaximized(params: Record<string, unknown>) {
   const w = geometryWindow(params.window);
   if (isFullScreen(w.id)) throw new OpError("refused", `Window ${w.id} is full screen; leave full screen first (windows.setFullScreen).`);
   const geometry = await nativeGeometry(w.id, setWindowZoomed(w.id, params.on as boolean));
-  expect(!geometry.fullScreen, "the window is full screen.");
+  expect(!geometry.fullScreen, t(`the window is full screen.`));
   expect(geometry.zoomed === params.on, `the window isn't ${params.on ? "zoomed" : "back from zoom"}.`);
   return answer(w.id, geometry);
 }
@@ -102,7 +104,7 @@ const COORDINATE = 100_000;
 
 const FRAME: JsonSchema = {
   type: "array",
-  description: "[x, y, width, height] in screen points, from the bottom-left of the main display, as windows reports it; it has to overlap a display",
+  description: t(`[x, y, width, height] in screen points, from the bottom-left of the main display, as windows reports it; it has to overlap a display`),
   prefixItems: [
     { type: "number", minimum: -COORDINATE, maximum: COORDINATE },
     { type: "number", minimum: -COORDINATE, maximum: COORDINATE },
@@ -117,12 +119,12 @@ export const WINDOW_GEOMETRY_METHODS: MethodSpec[] = [
   {
     name: "windows.geometry",
     mutates: false,
-    description: "Where a window is on screen: its frame, whether it's zoomed, full screen or in the Dock, and its display",
+    description: t(`Where a window is on screen: its frame, whether it's zoomed, full screen or in the Dock, and its display`),
     params: obj({ window: WINDOW }, ["window"]),
-    result: "{frame, zoomed, fullScreen, miniaturized, visible, display}",
+    result: t(`{frame, zoomed, fullScreen, miniaturized, visible, display}`),
     run: async (p) => nativeGeometry(String(p.window), windowGeometry(geometryWindow(p.window).id)),
   },
-  { name: "windows.setFrame", mutates: true, description: "Move and resize a window; it stays on a display and at least its smallest size", params: obj({ window: WINDOW, frame: FRAME }, ["window", "frame"]), result: "window", run: setFrame },
-  { name: "windows.setMaximized", mutates: true, description: "Zoom a window to fill its display, as double-clicking its title bar does, or put it back", params: obj({ window: WINDOW, on: bool("Zoomed or not") }, ["window", "on"]), result: "window", run: setMaximized },
-  { name: "windows.setFullScreen", mutates: true, description: "Put a window in full screen in its own Space, or bring it back; answers once the change has finished, one change at a time per window", params: obj({ window: WINDOW, on: bool("Full screen or not") }, ["window", "on"]), result: "window", run: setFullScreen },
+  { name: "windows.setFrame", mutates: true, description: t(`Move and resize a window; it stays on a display and at least its smallest size`), params: obj({ window: WINDOW, frame: FRAME }, ["window", "frame"]), result: "window", run: setFrame },
+  { name: "windows.setMaximized", mutates: true, description: t(`Zoom a window to fill its display, as double-clicking its title bar does, or put it back`), params: obj({ window: WINDOW, on: bool(t(`Zoomed or not`)) }, ["window", "on"]), result: "window", run: setMaximized },
+  { name: "windows.setFullScreen", mutates: true, description: t(`Put a window in full screen in its own Space, or bring it back; answers once the change has finished, one change at a time per window`), params: obj({ window: WINDOW, on: bool(t(`Full screen or not`)) }, ["window", "on"]), result: "window", run: setFullScreen },
 ];

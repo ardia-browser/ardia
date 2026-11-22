@@ -15,6 +15,8 @@ import { reducedMotionMs } from "./motion";
 import { Portal } from "./Overlay";
 import { Symbol } from "./Symbol";
 import type { SymbolName } from "./symbolPaths";
+import { t } from "../../lib/uiLanguage";
+
 
 const HIDE_FALLBACK_MS = 900;
 const SHEET_TOP_GAP = materialSize.topAppBar;
@@ -90,7 +92,7 @@ export function useMaterialRipple(borderless = false) {
 export function DragHandle({ onPress }: { onPress?: () => void }) {
   const { scheme } = useMaterialTheme();
   return (
-    <Pressable testID="materialDragHandle" accessibilityRole="button" accessibilityLabel="Dismiss" onPress={onPress} disabled={!onPress} style={styles.handleHit}>
+    <Pressable testID="materialDragHandle" accessibilityRole="button" accessibilityLabel={t(`Dismiss`)} onPress={onPress} disabled={!onPress} style={styles.handleHit}>
       <View style={[styles.handle, { backgroundColor: withAlpha(scheme.onSurfaceVariant, 0.4) }]} />
     </Pressable>
   );
@@ -356,7 +358,7 @@ export function MaterialSheet({ open, onDismiss, onTapAway, onBack, onHidden, ex
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents={open ? "box-none" : "none"} collapsable={false} importantForAccessibility={open ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={!open}>
       <Animated.View testID="materialScrim" style={[StyleSheet.absoluteFill, scrim]}>
-        <Pressable accessibilityLabel={searching ? "Close Search" : "Close"} style={[StyleSheet.absoluteFill, { backgroundColor: withAlpha(scheme.scrim, MATERIAL_STATE.scrim) }]} onPress={() => {
+        <Pressable accessibilityLabel={searching ? t(`Close Search`) : t(`Close`)} style={[StyleSheet.absoluteFill, { backgroundColor: withAlpha(scheme.scrim, MATERIAL_STATE.scrim) }]} onPress={() => {
             onTapAway?.();
             onDismiss();
           }} />
@@ -394,7 +396,7 @@ export function MaterialDialog({ title, message, buttons, onDismiss, children }:
   return (
     <Portal>
       <Animated.View testID="materialDialogScrim" style={[StyleSheet.absoluteFill, scrim]}>
-        <Pressable accessibilityLabel="Dismiss" style={[StyleSheet.absoluteFill, { backgroundColor: withAlpha(scheme.scrim, MATERIAL_STATE.scrim) }]} onPress={onDismiss} />
+        <Pressable accessibilityLabel={t(`Dismiss`)} style={[StyleSheet.absoluteFill, { backgroundColor: withAlpha(scheme.scrim, MATERIAL_STATE.scrim) }]} onPress={onDismiss} />
       </Animated.View>
       <KeyboardAvoidingView style={styles.center} pointerEvents="box-none">
         <Animated.View testID="materialDialog" accessibilityViewIsModal style={[styles.dialog, { backgroundColor: scheme.surfaceContainerHigh }, panel]}>

@@ -12,6 +12,8 @@ import { SyncScan } from "./SyncScan";
 import { copy } from "../../lib/platformCopy";
 import type { ConnectResult } from "../../platform/sync";
 import { canScanCodes } from "../../state/sync/scan";
+import { t } from "../../lib/uiLanguage";
+
 
 type FlowProps = { onClose: () => void; onConnected: () => void; closes?: boolean };
 
@@ -113,22 +115,22 @@ export function SyncConnect({ onClose, onConnected, closes }: FlowProps) {
   return (
     <View style={StyleSheet.absoluteFill}>
       <View style={StyleSheet.absoluteFill} importantForAccessibility={entering ? "no-hide-descendants" : "auto"} accessibilityElementsHidden={entering}>
-        <SettingsPage title="Connect to Your Mac" onBack={closes || busy ? undefined : onClose} onClose={material && closes && !busy ? onClose : undefined} leading={closes && !material ? <BarButton title="Close" onPress={onClose} enabled={!busy} /> : undefined}>
-          <SyncHero title="Connect to Your Mac" subtitle="Two steps, and your Mac’s tabs are here." />
-          <Group header="Two Steps" footer={copy().phraseStays}>
-            <Step number={1} title="Show the code on your Mac" detail={MAC_HINT} done={hasPhrase} current>
+        <SettingsPage title={t(`Connect to Your Mac`)} onBack={closes || busy ? undefined : onClose} onClose={material && closes && !busy ? onClose : undefined} leading={closes && !material ? <BarButton title={t(`Close`)} onPress={onClose} enabled={!busy} /> : undefined}>
+          <SyncHero title={t(`Connect to Your Mac`)} subtitle={t(`Two steps, and your Mac’s tabs are here.`)} />
+          <Group header={t(`Two Steps`)} footer={copy().phraseStays}>
+            <Step number={1} title={t(`Show the code on your Mac`)} detail={MAC_HINT} done={hasPhrase} current>
               {hasPhrase ? (
                 <Animated.View key="added" entering={STEP_IN} exiting={STEP_OUT}>
                   <PhraseAdded onChange={() => setEntering(true)} />
                 </Animated.View>
               ) : (
                 <Animated.View key="ways" entering={STEP_IN} exiting={STEP_OUT} style={styles.ways}>
-                  {scans ? <CapsuleButton title="Scan Code" icon="qrcodeViewfinder" prominent onPress={() => setScanning(true)} /> : null}
-                  <CapsuleButton title="Enter Words" icon="textCursor" prominent={!scans} onPress={() => setEntering(true)} />
+                  {scans ? <CapsuleButton title={t(`Scan Code`)} icon="qrcodeViewfinder" prominent onPress={() => setScanning(true)} /> : null}
+                  <CapsuleButton title={t(`Enter Words`)} icon="textCursor" prominent={!scans} onPress={() => setEntering(true)} />
                 </Animated.View>
               )}
             </Step>
-            <Step number={2} title="Choose the Ardia Sync folder" detail={copy().chooseFolderDetail} done={false} current={hasPhrase}>
+            <Step number={2} title={t(`Choose the Ardia Sync folder`)} detail={copy().chooseFolderDetail} done={false} current={hasPhrase}>
               {session ? (
                 <>
                   {picked.folder && !picked.connecting ? (
@@ -141,7 +143,7 @@ export function SyncConnect({ onClose, onConnected, closes }: FlowProps) {
                       <Connecting />
                     </Animated.View>
                   ) : (
-                    <CapsuleButton title={picked.folder ? "Choose Another Folder…" : "Choose Folder…"} onPress={() => void session.pickFolder(phrase).then(finished)} />
+                    <CapsuleButton title={picked.folder ? t(`Choose Another Folder…`) : t(`Choose Folder…`)} onPress={() => void session.pickFolder(phrase).then(finished)} />
                   )}
                   {picked.failure && connectMessage(picked.failure) ? <Problem text={connectMessage(picked.failure)!} /> : null}
                 </>
@@ -189,7 +191,7 @@ function PhraseAdded({ onChange }: { onChange: () => void }) {
     <View style={styles.added}>
       <Symbol name="checkmarkCircle" size={18} color={theme.switchOn} />
       <Text style={[font.subheadline, styles.medium, styles.fill, { color: theme.switchOn }]}>Recovery phrase added</Text>
-      <BarButton title="Change" onPress={onChange} />
+      <BarButton title={t(`Change`)} onPress={onChange} />
     </View>
   );
 }
@@ -244,7 +246,7 @@ function PhraseEntry({ initial, onUse, onBack }: { initial: string; onUse: (phra
     if (check.isValid) onUse(draft);
   };
   return (
-    <SettingsPage title="Enter Words" onBack={onBack} dismissesKeyboard={Platform.OS === "ios"} trailing={<BarButton title="Use Phrase" emphasized enabled={check.isValid} onPress={use} />}>
+    <SettingsPage title={t(`Enter Words`)} onBack={onBack} dismissesKeyboard={Platform.OS === "ios"} trailing={<BarButton title={t(`Use Phrase`)} emphasized enabled={check.isValid} onPress={use} />}>
       <View style={styles.phrase}>
         <View style={styles.phraseHeader}>
           <Text style={[font.footnote, styles.fill, { color: theme.secondaryLabel }]}>Recovery Phrase</Text>
@@ -252,10 +254,10 @@ function PhraseEntry({ initial, onUse, onBack }: { initial: string; onUse: (phra
         </View>
         <View style={[styles.field, { backgroundColor: theme.groupFill }]}>
           <TextInput
-            accessibilityLabel="Recovery Phrase"
+            accessibilityLabel={t(`Recovery Phrase`)}
             value={draft}
             onChangeText={setDraft}
-            placeholder="Enter your 24-word recovery phrase"
+            placeholder={t(`Enter your 24-word recovery phrase`)}
             placeholderTextColor={theme.tertiaryLabel}
             multiline
             autoFocus={!initial}
@@ -296,7 +298,7 @@ const styles = StyleSheet.create({
   phrase: { paddingHorizontal: space.l, gap: space.s },
   phraseHeader: { flexDirection: "row", paddingHorizontal: settingsLayout.rowInset },
   field: { borderRadius: radius.card, paddingHorizontal: settingsLayout.rowInset, paddingVertical: space.s },
-  phraseInput: { minHeight: 140, textAlignVertical: "top", fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" },
+  phraseInput: { minHeight: 140, textAlignVertical: "top", fontFamily: Platform.OS === "ios" ? t(`Menlo`) : "monospace" },
   footer: { paddingHorizontal: settingsLayout.rowInset },
   paste: { alignItems: "center", paddingHorizontal: space.huge },
   ways: { gap: space.s },

@@ -27,6 +27,8 @@ import {
 } from "./passwordManagerChoice";
 import { closeVerificationCodePrompts, offerVerificationCode } from "./verificationCodes";
 import { followMode, forgetHeldOffOutside, forgetPendingOfferToSave, offerToSaveHeldOffSomewhere, passwordAutofill, pendingOfferToSave, startOfferToSave, watchPendingOfferToSave, writeOfferToSave } from "./offerToSave";
+import { t } from "../../lib/uiLanguage";
+
 
 export { forgetPendingOfferToSave, passwordAutofill };
 export { profilesSharingData, type FieldProviderHint, type FieldProviderOpened, type ManagerPlugin, type PasswordManagerChoice, type VerificationCodeFound };
@@ -217,7 +219,7 @@ function pushProviders(plugins: readonly ManagerPlugin[], consent: ConsentToken 
     (reply) => {
       if (!reply.answered && !bareNoted) {
         bareNoted = true;
-        warnFor(consent, "[passwords] native answered setFieldProviders without applied; retrying");
+        warnFor(consent, t(`[passwords] native answered setFieldProviders without applied; retrying`));
       }
       settle(reply.applied);
     },

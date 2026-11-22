@@ -27,8 +27,10 @@ import { FilterListsPage } from "./FilterListsPage";
 import { PaneSubPage } from "./PaneSubPage";
 import { SyncSection } from "./SyncSection";
 import { UpdatesSection } from "./UpdatesSection";
+import { t } from "../../../lib/uiLanguage";
 
-const APP = "Ardia";
+
+const APP = t(`Ardia`);
 
 export function GeneralPane({ detail }: SettingsPlace) {
   if (detail === SETTINGS_DETAIL.filterLists) return <FilterListsPage />;
@@ -66,7 +68,7 @@ function DefaultBrowserSection() {
   if (isDefault !== false) return null;
   return (
     <>
-      <SectionHeader title="Default browser" />
+      <SectionHeader title={t(`Default browser`)} />
       <Group>
         <Row anchor="general.defaultBrowser">
           <Button
@@ -90,7 +92,7 @@ function StartupSection() {
   const [loginStatus = "notRegistered", refreshLogin] = useResource(loginItem);
   return (
     <>
-      <SectionHeader title="Startup and quitting" />
+      <SectionHeader title={t(`Startup and quitting`)} />
       <Group>
         <Row anchor="general.openAtLogin" description={loginStatus === "requiresApproval" ? `Allow it in ${PLATFORM_TERMS.loginItemsSettings}.` : undefined}>
           <Toggle
@@ -103,8 +105,8 @@ function StartupSection() {
           <PopUp
             value={restoreSession ? "keep" : "close"}
             options={[
-              { value: "keep", title: "Keep windows and tabs" },
-              { value: "close", title: "Start fresh" },
+              { value: "keep", title: t(`Keep windows and tabs`) },
+              { value: "close", title: t(`Start fresh`) },
             ]}
             onChange={(v) => updateSettings({ restoreSession: v === "keep" })}
             minWidth={190}
@@ -115,14 +117,14 @@ function StartupSection() {
           items={[
             {
               key: "quit",
-              label: PLATFORM_FEATURES.quitsWithLastWindow ? `Quitting when you close the last window` : `Quitting with ${keyText("⌘Q")}`,
+              label: PLATFORM_FEATURES.quitsWithLastWindow ? t(`Quitting when you close the last window`) : `Quitting with ${keyText("⌘Q")}`,
               value: warnBeforeQuitting,
               onChange: (on) => updateSettings({ warnBeforeQuitting: on }),
             },
-            { key: "window", label: "Closing a window with several tabs", value: warnBeforeClosingWindow, onChange: (on) => updateSettings({ warnBeforeClosingWindow: on }) },
-            { key: "lastTab", label: "Closing the last tab in a profile", value: warnBeforeClosingLastTab, onChange: (on) => updateSettings({ warnBeforeClosingLastTab: on }) },
-            { key: "group", label: "Closing a tab group", value: warnBeforeClosingTabGroup, onChange: (on) => updateSettings({ warnBeforeClosingTabGroup: on }) },
-            { key: "move", label: "Moving tabs to another profile", value: warnBeforeMovingTabs, onChange: (on) => updateSettings({ warnBeforeMovingTabsToProfile: on }) },
+            { key: "window", label: t(`Closing a window with several tabs`), value: warnBeforeClosingWindow, onChange: (on) => updateSettings({ warnBeforeClosingWindow: on }) },
+            { key: "lastTab", label: t(`Closing the last tab in a profile`), value: warnBeforeClosingLastTab, onChange: (on) => updateSettings({ warnBeforeClosingLastTab: on }) },
+            { key: "group", label: t(`Closing a tab group`), value: warnBeforeClosingTabGroup, onChange: (on) => updateSettings({ warnBeforeClosingTabGroup: on }) },
+            { key: "move", label: t(`Moving tabs to another profile`), value: warnBeforeMovingTabs, onChange: (on) => updateSettings({ warnBeforeMovingTabsToProfile: on }) },
           ]}
         />
       </Group>
@@ -133,7 +135,7 @@ function StartupSection() {
 function EngineSection() {
   return (
     <>
-      <SectionHeader title="Web engine" />
+      <SectionHeader title={t(`Web engine`)} />
       <Group>
         <EngineModeRow anchor="general.engineMode" />
       </Group>
@@ -163,7 +165,7 @@ function DownloadsSection() {
   const apply = (patch: Partial<Pick<DownloadSettings, "folder" | "askWhereToSave">>, targets = everyProfile) => void setDownloadsFor(patch, targets);
   const change = async () => {
     if (!current) return;
-    const folder = await pickFolder(current.folder, "Use Folder");
+    const folder = await pickFolder(current.folder, t(`Use Folder`));
     if (folder) apply({ folder });
   };
   const setSeparate = (on: boolean) => {
@@ -172,16 +174,16 @@ function DownloadsSection() {
   };
   return (
     <>
-      <SectionHeader title="Downloads" />
+      <SectionHeader title={t(`Downloads`)} />
       <Group>
         <Row
           anchor="general.downloadsFolder"
           description={current ? (current.managed ? `${homeRelative(current.folder)}, set by your organization.` : homeRelative(current.folder)) : undefined}
         >
-          <Button title="Change…" disabled={locked} onPress={() => void change()} />
+          <Button title={t(`Change…`)} disabled={locked} onPress={() => void change()} />
         </Row>
         <Row anchor="general.separateDownloadFolders">
-          <Toggle value={separate} accessibilityLabel="Separate folder for each profile" onChange={setSeparate} />
+          <Toggle value={separate} accessibilityLabel={t(`Separate folder for each profile`)} onChange={setSeparate} />
         </Row>
         <Row anchor="general.askWhereToSave">
           <Toggle value={current?.askWhereToSave ?? false} disabled={locked} onChange={(v) => apply({ askWhereToSave: v })} />
@@ -197,9 +199,9 @@ function ContentBlockingSection() {
     if (!blocker) return;
     if (!on && c === "ads") {
       const { confirmed } = await confirm({
-        title: "Turn Off Ad Blocker?",
-        message: "Ardia's Ad Blocker hides ads so pages load faster and feel cleaner.",
-        confirmTitle: "Turn Off",
+        title: t(`Turn Off Ad Blocker?`),
+        message: t(`Ardia's Ad Blocker hides ads so pages load faster and feel cleaner.`),
+        confirmTitle: t(`Turn Off`),
       });
       if (!confirmed) return refresh();
     }
@@ -207,7 +209,7 @@ function ContentBlockingSection() {
   };
   return (
     <>
-      <SectionHeader title="Content blocking" />
+      <SectionHeader title={t(`Content blocking`)} />
       <Group>
         {CATEGORIES.filter((c) => c.anchor).map((c) => (
           <Row key={c.id} anchor={c.anchor}>
@@ -216,8 +218,8 @@ function ContentBlockingSection() {
         ))}
         <Row anchor="general.filterLists" onPress={() => goToSettingsPane("general", null, SETTINGS_DETAIL.filterLists)} />
         {unavailable && (
-          <Row title="uBlock Origin isn't answering" description="Its settings show here once it responds. Pages keep the blocking they had.">
-            <Button title="Try Again" onPress={refresh} />
+          <Row title={t(`uBlock Origin isn't answering`)} description={t(`Its settings show here once it responds. Pages keep the blocking they had.`)}>
+            <Button title={t(`Try Again`)} onPress={refresh} />
           </Row>
         )}
       </Group>
@@ -228,7 +230,7 @@ function ContentBlockingSection() {
 function CrashReportsSection() {
   return (
     <>
-      <SectionHeader title="Crash reports" />
+      <SectionHeader title={t(`Crash reports`)} />
       <Group>
         <ShareDiagnosticsToggle />
         <Row anchor="general.crashDetails" onPress={() => goToSettingsPane("general", null, SETTINGS_DETAIL.crashDetails)} />
@@ -240,14 +242,14 @@ function CrashReportsSection() {
 function ImportSection() {
   return (
     <>
-      <SectionHeader title="Import" />
+      <SectionHeader title={t(`Import`)} />
       <Group>
         <Row anchor="general.importBrowser">
-          <Button title="Import…" onPress={() => openImport()} />
+          <Button title={t(`Import…`)} onPress={() => openImport()} />
         </Row>
         <SetupCodeRow />
         <Row anchor="general.redoSetup">
-          <Button title="Redo Setup…" onPress={redoSetupFromSettings} />
+          <Button title={t(`Redo Setup…`)} onPress={redoSetupFromSettings} />
         </Row>
       </Group>
     </>

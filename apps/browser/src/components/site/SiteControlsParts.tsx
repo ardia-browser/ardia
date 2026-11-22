@@ -4,6 +4,8 @@ import { useTheme } from "../ui/theme";
 import { capsule, ContextMenuArea, Dot, GlassFill, hairline, menuRowFill, opacity, PANEL, radius, space, Symbol, Text, useGlass, useHover } from "../ui";
 import { useSiteTokens } from "./tokens";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
+import { t } from "../../lib/uiLanguage";
+
 
 export const SITE_PANEL = {
   width: 288,
@@ -256,7 +258,7 @@ export function MoreButton({ open, onPress }: { open: boolean; onPress: () => vo
   const { hovered, hoverProps } = useHover();
   const pressMotion = usePressScaleMotion(true, buttonMotion.controlPressScale);
   const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined;
-  const label = open ? "Fewer Site Controls" : "More Site Controls";
+  const label = open ? t(`Fewer Site Controls`) : t(`More Site Controls`);
   return (
     <View {...hoverProps} tooltip={label}>
       <Pressable onPress={onPress} onPressIn={pressMotion.onPressIn} onPressOut={pressMotion.onPressOut} accessibilityRole="button" accessibilityLabel={label}>

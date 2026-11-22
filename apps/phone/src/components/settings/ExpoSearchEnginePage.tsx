@@ -6,6 +6,8 @@ import { usePreferences } from "../../state/settings/hooks";
 import { useSyncEnabled, useSyncView } from "../../state/sync/hooks";
 import { syncedEngineName } from "../../state/sync/syncRules";
 import { modifierList, settingsChrome, useTheme } from "../ui";
+import { t } from "../../lib/uiLanguage";
+
 
 export function ExpoSearchEnginePage() {
   const theme = useTheme();
@@ -14,10 +16,10 @@ export function ExpoSearchEnginePage() {
   const syncEnabled = useSyncEnabled();
   const synced = useSyncView().search;
   return (
-    <Form modifiers={modifierList(navigationTitle("Search Engine"), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome())}>
+    <Form modifiers={modifierList(navigationTitle(t(`Search Engine`)), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome())}>
       {syncEnabled && synced ? (
         <Section footer={<Text>Set on your Mac.</Text>}>
-          <LabeledContent label="From Your Mac">
+          <LabeledContent label={t(`From Your Mac`)}>
             <Text>{syncedEngineName(synced, engines)}</Text>
           </LabeledContent>
         </Section>

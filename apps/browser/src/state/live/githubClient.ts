@@ -3,6 +3,8 @@ import { createGithubLimits, graphqlRateLimited, retryAtFromHeaders, type Github
 import { LiveError, type CompletionState, type LiveFolder, type LiveItem, type PullRequestSection } from "./types";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
 import { noteLiveGithubBlocked, noteLiveGithubDetails, noteLiveGithubRequest } from "../telemetry/liveGithub";
+import { t } from "../../lib/uiLanguage";
+
 
 export const LIST_SHARED_MS = 30_000;
 export const DETAILS_FRESH_MS = 10 * 60_000;
@@ -56,13 +58,13 @@ export function createGithubClient(send: GithubSend, clock: () => number = Date.
     return limits.withSlot(async () => {
       if (limits.blockedUntil(scope, interactive) !== null) {
         noteLiveGithubRequest("held");
-        throw new LiveError("rateLimited", "Waiting for the GitHub rate limit to reset");
+        throw new LiveError("rateLimited", t(`Waiting for the GitHub rate limit to reset`));
       }
       let headers: HeaderReader | null = null;
       const limited = () => {
         noteLiveGithubRequest("rateLimited");
         limits.rateLimited(scope, retryAtFromHeaders(headers, clock()));
-        return new LiveError("rateLimited", "Rate Limit Exceeded");
+        return new LiveError("rateLimited", t(`Rate Limit Exceeded`));
       };
       noteLiveGithubRequest("sent");
       let json: T;

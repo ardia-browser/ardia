@@ -1,4 +1,6 @@
 import type { JsonSchema, JsonType } from "../../lib/jsonSchema";
+import { t } from "../../lib/uiLanguage";
+
 
 const isFields = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -18,7 +20,7 @@ const fits = (value: unknown, type: JsonType) => {
   return actual === type;
 };
 
-const words = (types: JsonType[]) => types.map((t) => (t === "integer" ? "a whole number" : t === "null" ? "null" : t === "array" ? "a list" : t === "object" ? "an object" : `a ${t}`)).join(" or ");
+const words = (types: JsonType[]) => types.map((t) => (t === "integer" ? t(`a whole number`) : t === "null" ? "null" : t === "array" ? t(`a list`) : t === "object" ? t(`an object`) : `a ${t}`)).join(t(` or `));
 
 export function schemaProblem(schema: JsonSchema, value: unknown, path: string): string | null {
   if (schema.anyOf) return schema.anyOf.some((option) => schemaProblem(option, value, path) === null) ? null : `${path} doesn't match any of its forms.`;
@@ -79,8 +81,8 @@ export const text = (description: string): JsonSchema => ({ type: "string", desc
 export const int = (description: string, minimum?: number, maximum?: number): JsonSchema => ({ type: "integer", description, ...(minimum !== undefined ? { minimum } : {}), ...(maximum !== undefined ? { maximum } : {}) });
 export const oneOf = (values: readonly string[], description: string): JsonSchema => ({ type: "string", enum: values, description });
 
-export const WINDOW = id("A window id from windows");
-export const TAB = id("A tab id from windows or tabs.list");
-export const PROFILE = id("A profile id from profiles.list; the default profile when left out");
+export const WINDOW = id(t(`A window id from windows`));
+export const TAB = id(t(`A tab id from windows or tabs.list`));
+export const PROFILE = id(t(`A profile id from profiles.list; the default profile when left out`));
 export const NO_PARAMS = obj({});
-export const PAGE = { limit: int("At most this many items (default 100)", 1, 1000), offset: int("Skip this many items first (default 0)", 0) };
+export const PAGE = { limit: int(t(`At most this many items (default 100)`), 1, 1000), offset: int(t(`Skip this many items first (default 0)`), 0) };

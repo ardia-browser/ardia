@@ -2,6 +2,8 @@ import type { AreaLightPalette } from "@ardia/shaders";
 import type { ProfileColor } from "../../lib/profileLook";
 import { parseColor } from "../../lib/color";
 import { font, radius, weight, withFace, withMono } from "./look";
+import { t } from "../../lib/uiLanguage";
+
 
 export { font, lineHeight, monoFace, perLook, proseLineHeight, radius, sidebarFont, sidebarIconSize, sidebarLineHeight, sidebarPoints, typeFace, weight, withFace, withMono } from "./look";
 
@@ -267,21 +269,21 @@ export type ProfileColorSpec = {
 
 export const PROFILE_COLORS: Record<ProfileColor, ProfileColorSpec> = {
   plum: {
-    name: "Plum",
+    name: t(`Plum`),
     swatch: "#C07A98",
     powerUp: "#B5556B",
     tint: "#B25B6B",
     action: "#DD899B",
     palette: "pink",
   },
-  blue: { name: "Blue", swatch: "#4691C3", palette: "blue" },
-  purple: { name: "Purple", swatch: "#7873AF", palette: "purple" },
-  pink: { name: "Pink", swatch: "#D37B8B", palette: "pink" },
-  red: { name: "Red", swatch: "#C1575C", palette: "red" },
-  orange: { name: "Orange", swatch: "#D87249", palette: "orange" },
-  yellow: { name: "Yellow", swatch: "#E3AC38", palette: "yellow" },
-  green: { name: "Green", swatch: "#3EB489", palette: "green" },
-  neutral: { name: "Neutral", swatch: "#8E8E93", palette: null },
+  blue: { name: t(`Blue`), swatch: "#4691C3", palette: "blue" },
+  purple: { name: t(`Purple`), swatch: "#7873AF", palette: "purple" },
+  pink: { name: t(`Pink`), swatch: "#D37B8B", palette: "pink" },
+  red: { name: t(`Red`), swatch: "#C1575C", palette: "red" },
+  orange: { name: t(`Orange`), swatch: "#D87249", palette: "orange" },
+  yellow: { name: t(`Yellow`), swatch: "#E3AC38", palette: "yellow" },
+  green: { name: t(`Green`), swatch: "#3EB489", palette: "green" },
+  neutral: { name: t(`Neutral`), swatch: "#8E8E93", palette: null },
 };
 
 export const INCOGNITO_TINT = "#3A3A3C";

@@ -66,6 +66,8 @@ import { useSelectedProfile, useSyncEnabled } from "../../state/sync/hooks";
 import { useTabs } from "../../state/tabs/store";
 import { ExpoClearDataPage } from "../settings/ExpoClearDataPage";
 import { contentMargins, Favicon, modifierList, settingsChrome } from "../ui";
+import { t } from "../../lib/uiLanguage";
+
 
 const SECONDARY = { type: "hierarchical", style: "secondary" } as const;
 const FILL = Number.MAX_SAFE_INTEGER;
@@ -118,12 +120,12 @@ function LibraryNavigation() {
   return (
     <NavigationStack path={path} onPathChange={followLibraryPath}>
       <Toolbar>
-        <ConfirmationDialog title="Delete All Downloads?" isPresented={confirmingDelete} onIsPresentedChange={setConfirmingDelete} titleVisibility="visible">
+        <ConfirmationDialog title={t(`Delete All Downloads?`)} isPresented={confirmingDelete} onIsPresentedChange={setConfirmingDelete} titleVisibility="visible">
           <ConfirmationDialog.Trigger>{content}</ConfirmationDialog.Trigger>
           <ConfirmationDialog.Actions>
             <Button
               role="destructive"
-              label="Delete All"
+              label={t(`Delete All`)}
               onPress={() => {
                 haptics.warning();
                 deleteAllDownloads();
@@ -136,15 +138,15 @@ function LibraryNavigation() {
         </ConfirmationDialog>
         <Toolbar.Content>
           <ToolbarItem placement="cancellationAction">
-            <Button label="Done" onPress={closeLibrary} />
+            <Button label={t(`Done`)} onPress={closeLibrary} />
           </ToolbarItem>
           <ToolbarItem placement="principal">
             <LibrarySwitcher section={section} />
           </ToolbarItem>
           <ToolbarItem placement="primaryAction">
-            <Menu label="More" systemImage="ellipsis" modifiers={[accessibilityLabel("More")]}>
-              {section === "downloads" ? <Button label="Delete All Downloads" role="destructive" onPress={() => setConfirmingDelete(true)} modifiers={[disabled(!hasFiles)]} /> : null}
-              <Button label="Clear Browsing Data" onPress={() => pushLibraryPage(LIBRARY_CLEAR_DATA)} />
+            <Menu label={t(`More`)} systemImage="ellipsis" modifiers={[accessibilityLabel(t(`More`))]}>
+              {section === "downloads" ? <Button label={t(`Delete All Downloads`)} role="destructive" onPress={() => setConfirmingDelete(true)} modifiers={[disabled(!hasFiles)]} /> : null}
+              <Button label={t(`Clear Browsing Data`)} onPress={() => pushLibraryPage(LIBRARY_CLEAR_DATA)} />
             </Menu>
           </ToolbarItem>
         </Toolbar.Content>
@@ -178,7 +180,7 @@ type PageModifiers = ReturnType<typeof modifierList>;
 
 const listModifiers = (page: PageModifiers, extra: PageModifiers = []) => modifierList(...page, listStyle("plain"), contentMargins({ edges: "top", length: TIGHT }), scrollContentBackground("hidden"), scrollDismissesKeyboard("immediately"), ...extra);
 
-const noResults = (query: string, page: PageModifiers) => <ContentUnavailableView title={`No Results for “${query.trim()}”`} systemImage="magnifyingglass" description="Check the spelling or try a new search." modifiers={page} />;
+const noResults = (query: string, page: PageModifiers) => <ContentUnavailableView title={`No Results for “${query.trim()}”`} systemImage="magnifyingglass" description={t(`Check the spelling or try a new search.`)} modifiers={page} />;
 
 function useRowIcon() {
   const { fontScale } = useWindowDimensions();
@@ -218,7 +220,7 @@ function HistoryContent({ query, page }: { query: string; page: PageModifiers })
   const iconSize = useRowIcon();
   const now = Date.now();
   if (!loaded) return <List modifiers={page}>{null}</List>;
-  if (!entries.length) return <ContentUnavailableView title="No History" systemImage="clock" description="Pages you visit here and on your Mac show up here." modifiers={page} />;
+  if (!entries.length) return <ContentUnavailableView title={t(`No History`)} systemImage="clock" description={t(`Pages you visit here and on your Mac show up here.`)} modifiers={page} />;
   if (!shown.length) return noResults(query, page);
   return (
     <List modifiers={listModifiers(page)}>
@@ -269,11 +271,11 @@ function HistoryRow({ entry, iconSize }: { entry: HistoryEntry; iconSize: number
       <ContextMenu.Items>
         {shareable(entry.url) ? (
           <ShareLink item={entry.url}>
-            <Label title="Share" systemImage="square.and.arrow.up" />
+            <Label title={t(`Share`)} systemImage="square.and.arrow.up" />
           </ShareLink>
         ) : null}
-        {shareable(entry.url) ? <Button label="Copy Link" systemImage="doc.on.doc" onPress={() => copyLink(entry.url)} /> : null}
-        <Button label="Delete" systemImage="trash" role="destructive" onPress={() => deleteHistoryEntry(entry)} />
+        {shareable(entry.url) ? <Button label={t(`Copy Link`)} systemImage="doc.on.doc" onPress={() => copyLink(entry.url)} /> : null}
+        <Button label={t(`Delete`)} systemImage="trash" role="destructive" onPress={() => deleteHistoryEntry(entry)} />
       </ContextMenu.Items>
     </ContextMenu>
   );
@@ -285,7 +287,7 @@ function LibraryRow({ title, url, iconSize, subtitle, label }: { title: string; 
     openFromLibrary(url, title);
   };
   return (
-    <Button onPress={open} modifiers={[buttonStyle("plain"), accessibilityHint("Opens the page.")]}>
+    <Button onPress={open} modifiers={[buttonStyle("plain"), accessibilityHint(t(`Opens the page.`))]}>
       <HStack alignment="top" spacing={SMALL} modifiers={[padding({ vertical: ROW_PADDING }), frame({ maxWidth: FILL, alignment: "leading" }), accessibilityElement("combine"), ...(label ? [accessibilityLabel(label)] : [])]}>
         <RNHostView matchContents>
           <View style={{ width: iconSize, height: iconSize, marginTop: 2 }}>
@@ -315,7 +317,7 @@ function BookmarksContent({ query, page }: { query: string; page: PageModifiers 
   const trimmed = query.trim();
   const matches = useMemo(() => (trimmed ? bookmarkMatches(bookmarks, trimmed) : null), [bookmarks, trimmed]);
   const sections = useMemo(() => bookmarkSections(bookmarks), [bookmarks]);
-  if (!bookmarks.length) return <ContentUnavailableView title="No Bookmarks" systemImage="book" description={enabled ? "Bookmarks you save on your Mac show up here." : "Sync with your Mac to see its bookmarks here."} modifiers={page} />;
+  if (!bookmarks.length) return <ContentUnavailableView title={t(`No Bookmarks`)} systemImage="book" description={enabled ? t(`Bookmarks you save on your Mac show up here.`) : t(`Sync with your Mac to see its bookmarks here.`)} modifiers={page} />;
   if (matches && !matches.length) return noResults(trimmed, page);
   return (
     <List modifiers={listModifiers(page)}>
@@ -344,7 +346,7 @@ function BookmarkRow({ item, iconSize }: { item: BookmarkItem; iconSize: number 
     return (
       <NavigationLink value={`${FOLDER}${item.key}`} modifiers={ROW_CHROME}>
         <HStack spacing={SMALL} modifiers={[padding({ vertical: SMALL })]}>
-          <Text>{item.title || "Untitled Folder"}</Text>
+          <Text>{item.title || t(`Untitled Folder`)}</Text>
           <Spacer />
           <Text modifiers={[foregroundStyle(SECONDARY)]}>{(item.children ?? []).length.toLocaleString()}</Text>
         </HStack>
@@ -360,10 +362,10 @@ function BookmarkRow({ item, iconSize }: { item: BookmarkItem; iconSize: number 
       <ContextMenu.Items>
         {shareable(url) ? (
           <ShareLink item={url}>
-            <Label title="Share" systemImage="square.and.arrow.up" />
+            <Label title={t(`Share`)} systemImage="square.and.arrow.up" />
           </ShareLink>
         ) : null}
-        {shareable(url) ? <Button label="Copy Link" systemImage="doc.on.doc" onPress={() => copyLink(url)} /> : null}
+        {shareable(url) ? <Button label={t(`Copy Link`)} systemImage="doc.on.doc" onPress={() => copyLink(url)} /> : null}
       </ContextMenu.Items>
     </ContextMenu>
   );
@@ -384,7 +386,7 @@ function BookmarkFolderPage({ folderKey }: { folderKey: string }) {
   const folder = findFolder(bookmarks, folderKey);
   const page = modifierList(navigationTitle(folder?.title ?? ""), navigationBarTitleDisplayMode("inline"), settingsChrome());
   const children = folder?.children ?? [];
-  if (!children.length) return <ContentUnavailableView title="Empty Folder" systemImage="folder" modifiers={page} />;
+  if (!children.length) return <ContentUnavailableView title={t(`Empty Folder`)} systemImage="folder" modifiers={page} />;
   return (
     <List modifiers={listModifiers(page)}>
       <BookmarkGroup title={null} items={children} iconSize={iconSize} />
@@ -399,7 +401,7 @@ function DownloadsContent({ page }: { page: PageModifiers }) {
   useEffect(() => {
     if (open) void loadDownloads();
   }, [open]);
-  if (loaded && !files.length) return <ContentUnavailableView title="No Downloads" systemImage="arrow.down.circle" description="Files you download show up here." modifiers={page} />;
+  if (loaded && !files.length) return <ContentUnavailableView title={t(`No Downloads`)} systemImage="arrow.down.circle" description={t(`Files you download show up here.`)} modifiers={page} />;
   return (
     <List modifiers={listModifiers(page, [refreshable(loadDownloads)])}>
       {files.map((file) => (
@@ -416,7 +418,7 @@ function DownloadRow({ file }: { file: DownloadedFile }) {
     <SwipeActions modifiers={ROW_CHROME}>
       <ContextMenu>
       <ContextMenu.Trigger>
-        <Button onPress={() => previewDownload(file)} modifiers={[buttonStyle("plain"), accessibilityHint("Shows the file.")]}>
+        <Button onPress={() => previewDownload(file)} modifiers={[buttonStyle("plain"), accessibilityHint(t(`Shows the file.`))]}>
           <HStack alignment="top" spacing={SMALL} modifiers={[padding({ vertical: SMALL }), frame({ maxWidth: FILL, alignment: "leading" }), accessibilityElement("combine")]}>
             <Image systemName={FILE_SYMBOLS[file.kind] as never} size={side * 0.8} color={PlatformColor("secondaryLabel")} modifiers={[frame({ width: side, height: side }), padding({ top: 2 }), accessibilityElement("ignore")]} />
             <VStack alignment="leading" spacing={2}>
@@ -428,13 +430,13 @@ function DownloadRow({ file }: { file: DownloadedFile }) {
         </Button>
       </ContextMenu.Trigger>
       <ContextMenu.Items>
-        <Button label="Share" systemImage="square.and.arrow.up" onPress={() => shareDownload(file)} />
-        <Button label="Delete" systemImage="trash" role="destructive" onPress={() => deleteDownload(file)} />
+        <Button label={t(`Share`)} systemImage="square.and.arrow.up" onPress={() => shareDownload(file)} />
+        <Button label={t(`Delete`)} systemImage="trash" role="destructive" onPress={() => deleteDownload(file)} />
       </ContextMenu.Items>
       </ContextMenu>
       <SwipeActions.Actions edge="trailing">
-        <Button label="Delete" role="destructive" onPress={() => deleteDownload(file)} />
-        <Button label="Share" onPress={() => shareDownload(file)} modifiers={[tint(PlatformColor("systemBlue"))]} />
+        <Button label={t(`Delete`)} role="destructive" onPress={() => deleteDownload(file)} />
+        <Button label={t(`Share`)} onPress={() => shareDownload(file)} modifiers={[tint(PlatformColor("systemBlue"))]} />
       </SwipeActions.Actions>
     </SwipeActions>
   );

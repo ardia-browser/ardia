@@ -27,6 +27,8 @@ import {
   withPanes,
 } from "./workspaceChecks";
 import {
+import { t } from "../../lib/uiLanguage";
+
   anchorRef,
   besideAnchor,
   blockEnd,
@@ -89,7 +91,7 @@ export function openTabs(urls: string[], where: Space, created: string[]): strin
   return ids;
 }
 
-const sectionName = (p: TabPlacement) => (p.pinned ? (p.row ? "pinned rows" : "Top Apps tiles") : p.groupId ? `group ${p.groupId}` : "tabs");
+const sectionName = (p: TabPlacement) => (p.pinned ? (p.row ? t(`pinned rows`) : t(`Top Apps tiles`)) : p.groupId ? `group ${p.groupId}` : "tabs");
 
 function undoOpen(ids: string[], error: unknown, touched: Changed = {}): never {
   if (!ids.length) {
@@ -113,7 +115,7 @@ function undoOpen(ids: string[], error: unknown, touched: Changed = {}): never {
 
 function open(results: OpResult[], op: Op): OpResult {
   const group = op.group !== undefined ? groupRef(results, op.group, () => ({ windowId: space(op).windowId, profileId: op.profile as string | undefined })) : undefined;
-  if (group && op.pin) throw new OpError("bad_request", "A pinned tile or row can't go into a group; pin the group instead.");
+  if (group && op.pin) throw new OpError("bad_request", t(`A pinned tile or row can't go into a group; pin the group instead.`));
   const dest = destination(results, op, new Set(), group);
   if (dest) checkSame(dest, op);
   const asked: TabPlacement | undefined = op.pin ? { pinned: true, row: op.pin === "row", beforeId: dest?.placement.beforeId ?? null } : undefined;
@@ -176,7 +178,7 @@ function pin(results: OpResult[], op: Op): OpResult {
   const panes = withPanes(s, ids);
   organizable(s, panes);
   const row = op.as === undefined ? undefined : op.as === "row";
-  noSplitTiles(s, panes, row === false ? { pinned: true, row: false } : undefined, "among Top Apps tiles; pin it as a row");
+  noSplitTiles(s, panes, row === false ? { pinned: true, row: false } : undefined, t(`among Top Apps tiles; pin it as a row`));
   guardEmptied(s, new Set(panes));
   for (const set of bySpace(ids)) store().pinTabs(set, true, row);
   afterChange({ tabs: panes }, () => {
@@ -236,7 +238,7 @@ function createGroup(results: OpResult[], op: Op): OpResult {
     intoSpace(given, where);
     placeEach(ids, dest && pinned && !parentId ? { pinned: true, row: true, beforeId } : { pinned: false, groupId: parentId, beforeId });
     id = store().groupTabs(ids, { pinned, name: op.name as string | undefined });
-    if (!id) throw new OpError("failed", "Ardia didn't do that: the group couldn't be made.");
+    if (!id) throw new OpError("failed", t(`Ardia didn't do that: the group couldn't be made.`));
     const patch = groupPatch({ ...op, name: undefined });
     if (Object.keys(patch).length) store().updateGroup(id, patch);
     expectGroup(id, { ...patch, windowId: where.windowId, profileId: where.profileId, pinned, parentId, tabs: ids });

@@ -1,10 +1,12 @@
 import type { Download } from "./actions";
+import { t } from "../../lib/uiLanguage";
+
 
 export const awaitsKeep = (d: Pick<Download, "state" | "dangerous">) => d.state === "downloading" && d.dangerous === true;
 
 function formatBytes(n: number) {
   if (n < 0) return "";
-  const units = ["B", "KB", "MB", "GB", "TB"];
+  const units = [t(`B`), t(`KB`), t(`MB`), t(`GB`), t(`TB`)];
   let i = 0;
   while (n >= 1000 && i < units.length - 1) {
     n /= 1000;
@@ -20,14 +22,14 @@ function formatDuration(seconds: number) {
 }
 
 export function dangerWarning(d: Download, short = false) {
-  if (d.url.startsWith("http:")) return short ? "Blocked: not secure" : "Insecure download blocked";
-  return short ? "Blocked: unsafe file type" : "This type of file can harm your computer";
+  if (d.url.startsWith("http:")) return short ? t(`Blocked: not secure`) : t(`Insecure download blocked`);
+  return short ? t(`Blocked: unsafe file type`) : t(`This type of file can harm your computer`);
 }
 
 export function downloadStatus(d: Download, exists = true) {
-  if (d.state === "finished") return exists ? formatBytes(d.total > 0 ? d.total : d.received) : "Deleted";
-  if (d.state === "failed") return "Failed to Download";
-  if (d.state === "cancelled") return "Cancelled";
+  if (d.state === "finished") return exists ? formatBytes(d.total > 0 ? d.total : d.received) : t(`Deleted`);
+  if (d.state === "failed") return t(`Failed to Download`);
+  if (d.state === "cancelled") return t(`Cancelled`);
   if (awaitsKeep(d)) return dangerWarning(d);
   const progress = d.total > 0 ? `${formatBytes(d.received)} of ${formatBytes(d.total)}` : formatBytes(d.received);
   if (d.paused) return `${progress} — Paused`;

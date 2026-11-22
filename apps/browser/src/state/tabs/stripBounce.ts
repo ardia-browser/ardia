@@ -2,6 +2,8 @@ import type { BrowserState } from "../browser/store";
 import { useMedia } from "../media/media";
 import { consentToken, counted, queueLog, type ConsentToken } from "../telemetry/client";
 import { switchingPress } from "./tabReveal";
+import { t } from "../../lib/uiLanguage";
+
 
 const BOUNCE_WINDOW_MS = 2000;
 
@@ -48,7 +50,7 @@ export function judgeStripSelection(prev: BrowserState, s: BrowserState, now = D
       if (pictureInPicture) counts.backWithPictureInPicture++;
       if (last.nativePress) counts.backAfterNativePress++;
     });
-    queueLog("warn", back ? "Chromium's tab strip selected the tab the user had just left" : "Chromium's tab strip selected another tab right after a switch", {
+    queueLog("warn", back ? t(`Chromium's tab strip selected the tab the user had just left`) : t(`Chromium's tab strip selected another tab right after a switch`), {
       ms: now - last.at, nativePress: last.nativePress, pictureInPicture, tile,
     }, consent);
   }

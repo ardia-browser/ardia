@@ -4,6 +4,8 @@ import { engineProfiles } from "../profiles/engineProfiles";
 import type { ConsentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
 import { useExtensions } from "./store";
+import { t } from "../../lib/uiLanguage";
+
 
 const EMPTY: InstalledExtension[] = [];
 
@@ -25,7 +27,7 @@ function fetchList(profile: string): Promise<InstalledExtension[]> {
 }
 
 const cachedOnFailure = (profile: string, consent: ConsentToken | null) => (error: unknown) => {
-  if (consent) warnFor(consent, "[extensions] list failed", error);
+  if (consent) warnFor(consent, t(`[extensions] list failed`), error);
   return useExtensions.getState().lists[profile] ?? EMPTY;
 };
 

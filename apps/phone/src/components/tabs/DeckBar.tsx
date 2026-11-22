@@ -4,6 +4,8 @@ import { StyleSheet, View, type ViewInstance } from "react-native";
 import { noteDeckBarTop, watchDeckBar } from "../../state/toasts/store";
 import type { FrostVariant } from "@ardia/phone-native";
 import { browseLayout, capsule, LookGlass, PressScale, Symbol, tabsLayout, usesGlass, useTheme, type SymbolName } from "../ui";
+import { t } from "../../lib/uiLanguage";
+
 
 export type DeckBarFrost = { source: string; variant: FrostVariant; incognito?: boolean };
 
@@ -58,7 +60,7 @@ export function DeckBar({ leading, plusLabel, frost, onPlus, onPlusMenu, onSetti
       </View>
       <PressScale
         label={plusLabel}
-        hint="Touch and hold for more options."
+        hint={t(`Touch and hold for more options.`)}
         onPress={onPlus}
         onLongPress={onPlusMenu}
         onPressIn={haptics.barPress}
@@ -71,7 +73,7 @@ export function DeckBar({ leading, plusLabel, frost, onPlus, onPlusMenu, onSetti
         </Plate>
       </PressScale>
       <View style={[styles.side, styles.end]}>
-        <PressScale label="Settings" onPress={onSettings} onPressIn={haptics.barPress} style={styles.hit}>
+        <PressScale label={t(`Settings`)} onPress={onSettings} onPressIn={haptics.barPress} style={styles.hit}>
           <Plate {...frost} shape="circle" cornerRadius={circleRadius} fill={theme.deckControl} style={[styles.circle, edge]}>
             <View pointerEvents="none">
               <Symbol name="gearshape" size={sideSize("gearshape")} color={theme.secondaryLabel} />

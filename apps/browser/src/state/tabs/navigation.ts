@@ -17,6 +17,8 @@ import { adoptedPage, IDLE } from "./pageSession";
 import { isPeekTab } from "../peek/peek";
 import { dismissPeek } from "../peek/actions";
 import { liveOf } from "./tabLive";
+import { t } from "../../lib/uiLanguage";
+
 
 const store = () => useBrowser.getState();
 
@@ -164,7 +166,7 @@ export async function historyItems(asked: string, direction: -1 | 1, max = 15): 
       items.push({ key: String(i), title: e.title || e.url, url: e.url, offset: i - current });
     }
   }
-  if (direction < 0 && page.backToNewTab && items.length < max) items.push({ key: "newTab", title: "New Tab", url: "", offset: "newTab" });
+  if (direction < 0 && page.backToNewTab && items.length < max) items.push({ key: "newTab", title: t(`New Tab`), url: "", offset: "newTab" });
   return items;
 }
 

@@ -9,6 +9,8 @@ import { popSettings, pushSettings } from "../../state/settings/nav";
 import { controlRadius, ConfirmSheet, font, PasteButton, showActionSheet, useWarningInk, pasteButtonIsNative, settingsLayout, settingsTint, space, Symbol, useTheme, type Confirmation, type SymbolName } from "../ui";
 import { copy } from "../../lib/platformCopy";
 import { ButtonRow, Divider, Group, IconTile, NavRow, SettingsPage, ValueRow } from "../settings/SettingsKit";
+import { t } from "../../lib/uiLanguage";
+
 
 const NAME_SETTLE_MS = 600;
 const DEVICE_ICONS: Record<ReturnType<typeof deviceIcon>, SymbolName> = { phone: "iphone", laptop: "laptop", desktop: "macDesktop", studio: "macStudio", mini: "macMini" };
@@ -53,9 +55,9 @@ export function PasteAction({ onText }: { onText: (text: string) => void }) {
     if (text.trim()) onText(text);
   };
   if (pasteButtonIsNative()) {
-    return <PasteButton testID="systemPaste" accessibilityLabel="Paste" tint={theme.formAccent} onPaste={take} style={[styles.systemPaste, SYSTEM_PASTE_SIZE]} />;
+    return <PasteButton testID="systemPaste" accessibilityLabel={t(`Paste`)} tint={theme.formAccent} onPaste={take} style={[styles.systemPaste, SYSTEM_PASTE_SIZE]} />;
   }
-  return <CapsuleButton title="Paste" icon="docOnDoc" onPress={() => void pastedText().then(take)} />;
+  return <CapsuleButton title={t(`Paste`)} icon="docOnDoc" onPress={() => void pastedText().then(take)} />;
 }
 
 function FeatureRow({ icon, title, divider }: { icon: SymbolName; title: string; divider?: boolean }) {
@@ -100,14 +102,14 @@ function DeviceName({ current }: { current: string }) {
     timer.current = setTimeout(save, NAME_SETTLE_MS);
   };
   return (
-    <Group header={copy().deviceNameHeader} footer="Shown on your Mac.">
+    <Group header={copy().deviceNameHeader} footer={t(`Shown on your Mac.`)}>
       <View style={styles.row}>
         <TextInput
           ref={field}
-          accessibilityLabel="Name"
+          accessibilityLabel={t(`Name`)}
           value={draft}
           onChangeText={change}
-          placeholder="Name"
+          placeholder={t(`Name`)}
           placeholderTextColor={theme.tertiaryLabel}
           autoCapitalize="words"
           returnKeyType="done"
@@ -142,9 +144,9 @@ export function SyncPage() {
     if (feedback) haptics[feedback]();
   };
   const stopConfirmation: Confirmation = {
-    title: "Stop Syncing This Device?",
-    message: "To sync again, you’ll need your Mac’s code or your recovery phrase.",
-    action: "Stop Syncing",
+    title: t(`Stop Syncing This Device?`),
+    message: t(`To sync again, you’ll need your Mac’s code or your recovery phrase.`),
+    action: t(`Stop Syncing`),
     run: async () => {
       haptics.warning();
       setStopping(true);
@@ -154,16 +156,16 @@ export function SyncPage() {
   };
   const confirmStop = (event?: GestureResponderEvent) => (copy().stopSyncAsActionSheet ? showActionSheet(stopConfirmation) : setConfirmation({ ...stopConfirmation, opener: event?.currentTarget }));
   return (
-    <SettingsPage title="Sync With Mac" onBack={popSettings} onRefresh={status.isEnabled ? syncNow : undefined} heroTitle>
-      <SyncHero title="Sync With Mac" subtitle={hero.text} warning={hero.isWarning}>
-        {off ? <CapsuleButton title="Connect to Your Mac" prominent onPress={() => pushSettings({ page: "syncConnect" })} /> : null}
+    <SettingsPage title={t(`Sync With Mac`)} onBack={popSettings} onRefresh={status.isEnabled ? syncNow : undefined} heroTitle>
+      <SyncHero title={t(`Sync With Mac`)} subtitle={hero.text} warning={hero.isWarning}>
+        {off ? <CapsuleButton title={t(`Connect to Your Mac`)} prominent onPress={() => pushSettings({ page: "syncConnect" })} /> : null}
       </SyncHero>
       {off ? (
-        <Group header="What You Get" footer={copy().syncFeatureFooter}>
-          <FeatureRow icon="laptop" title="Your Mac’s Tabs" divider />
-          <FeatureRow icon="pinFill" title="Pinned Tabs and Spaces" divider />
-          <FeatureRow icon="paperplane" title="Send Tabs Both Ways" divider />
-          <FeatureRow icon="clockArrow" title="History and Bookmarks" />
+        <Group header={t(`What You Get`)} footer={copy().syncFeatureFooter}>
+          <FeatureRow icon="laptop" title={t(`Your Mac’s Tabs`)} divider />
+          <FeatureRow icon="pinFill" title={t(`Pinned Tabs and Spaces`)} divider />
+          <FeatureRow icon="paperplane" title={t(`Send Tabs Both Ways`)} divider />
+          <FeatureRow icon="clockArrow" title={t(`History and Bookmarks`)} />
         </Group>
       ) : null}
       {notice ? (
@@ -175,19 +177,19 @@ export function SyncPage() {
         </Group>
       ) : null}
       {status.attention === "folder" ? (
-        <Group footer="Choose the Ardia Sync folder again.">
-          <ButtonRow title="Choose Folder…" onPress={() => void chooseFolder()} />
+        <Group footer={t(`Choose the Ardia Sync folder again.`)}>
+          <ButtonRow title={t(`Choose Folder…`)} onPress={() => void chooseFolder()} />
         </Group>
       ) : null}
       {status.attention === "phrase" ? (
         <Group>
-          <NavRow title="Enter Recovery Phrase" onPress={() => pushSettings({ page: "syncConnect" })} />
+          <NavRow title={t(`Enter Recovery Phrase`)} onPress={() => pushSettings({ page: "syncConnect" })} />
         </Group>
       ) : null}
       {status.attention === "reset" ? (
         <Group footer={copy().syncTabsStay}>
           <NavRow
-            title="Connect Again"
+            title={t(`Connect Again`)}
             onPress={() => {
               void acknowledgeSyncReset().then(() => pushSettings({ page: "syncConnect" }));
             }}
@@ -197,10 +199,10 @@ export function SyncPage() {
       {isSyncConnected(status) ? (
         <>
           <Group>
-            <ButtonRow title={syncing ? "Syncing…" : "Sync Now"} enabled={!syncing} busy={syncing} onPress={() => void runSyncNow()} />
+            <ButtonRow title={syncing ? t(`Syncing…`) : t(`Sync Now`)} enabled={!syncing} busy={syncing} onPress={() => void runSyncNow()} />
           </Group>
           {devices.length ? (
-            <Group header="Devices" footer={noReceivers ? "Update Ardia on your Mac to send tabs to it." : null}>
+            <Group header={t(`Devices`)} footer={noReceivers ? t(`Update Ardia on your Mac to send tabs to it.`) : null}>
               {devices.map((device, index) => (
                 <View key={device.id}>
                   <View accessible accessibilityLabel={deviceSeen(device, now) ? `${device.name}, ${deviceSeen(device, now)}` : device.name} style={styles.row}>
@@ -216,12 +218,12 @@ export function SyncPage() {
             </Group>
           ) : null}
           <DeviceName current={status.deviceName} />
-          <Group header="Sync Folder" footer={folderError ?? "Encrypted so only your devices can read it."}>
-            <ValueRow title="Folder" value={status.folderName ?? "Ardia Sync"} divider />
-            <ButtonRow title="Change Folder…" onPress={() => void chooseFolder()} />
+          <Group header={t(`Sync Folder`)} footer={folderError ?? t(`Encrypted so only your devices can read it.`)}>
+            <ValueRow title={t(`Folder`)} value={status.folderName ?? t(`Ardia Sync`)} divider />
+            <ButtonRow title={t(`Change Folder…`)} onPress={() => void chooseFolder()} />
           </Group>
           <Group footer={copy().stopSyncingFooter}>
-            <ButtonRow title="Stop Syncing…" destructive enabled={!stopping} busy={stopping} onPress={confirmStop} />
+            <ButtonRow title={t(`Stop Syncing…`)} destructive enabled={!stopping} busy={stopping} onPress={confirmStop} />
           </Group>
         </>
       ) : null}

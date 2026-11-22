@@ -14,16 +14,18 @@ import { themeGesture, type ThemeEdit } from "../../lib/themeGesture";
 import { Row, SectionHeader } from "./Form";
 import type { SettingId } from "./settingsIndex";
 import { ColorPad, DirectionDial, LABEL, Labelled, LightnessBar, Preview, Slider } from "./ThemeControls";
+import { t } from "../../lib/uiLanguage";
+
 
 export { arcThemeChoices, importArcTheme } from "../../state/profiles/arcThemes";
 
 const MODES: { value: ThemeMode; symbol: string; title: string }[] = [
-  { value: "light", symbol: "sun.max", title: "Light" },
-  { value: "dark", symbol: "moon", title: "Dark" },
-  { value: "auto", symbol: "circle.lefthalf.filled", title: "Match System" },
+  { value: "light", symbol: "sun.max", title: t(`Light`) },
+  { value: "dark", symbol: "moon", title: t(`Dark`) },
+  { value: "auto", symbol: "circle.lefthalf.filled", title: t(`Match System`) },
 ];
 
-const TEXTURE_NAMES: Record<ThemeTexture, string> = { grain: "Grain", sand: "Sand", denim: "Denim", tweed: "Tweed" };
+const TEXTURE_NAMES: Record<ThemeTexture, string> = { grain: t(`Grain`), sand: t(`Sand`), denim: t(`Denim`), tweed: t(`Tweed`) };
 
 function useLiveTheme(profileId: string, theme: ProfileTheme | null | undefined, target: string, showing: () => string, apply: (theme: ProfileTheme | null) => void) {
   const [draft, setDraft] = useState<ThemeEdit | null>(null);
@@ -80,9 +82,9 @@ export function ThemeSection({ profileId, anchor }: { profileId: string; anchor:
   return (
     <>
       <SectionHeader
-        title="Theme"
-        description="Tints this profile's windows, New Tab page and highlights."
-        action={<Button title="Import from Arc…" onPress={() => void importArcTheme(profileId)} />}
+        title={t(`Theme`)}
+        description={t(`Tints this profile's windows, New Tab page and highlights.`)}
+        action={<Button title={t(`Import from Arc…`)} onPress={() => void importArcTheme(profileId)} />}
       />
       <Group>
         <Row
@@ -156,7 +158,7 @@ export function ThemeSwatches({
   gap?: number;
 }) {
   return (
-    <View style={{ flexDirection: "row", flexWrap: "wrap", gap }} accessibilityRole="radiogroup" accessibilityLabel="Theme color">
+    <View style={{ flexDirection: "row", flexWrap: "wrap", gap }} accessibilityRole="radiogroup" accessibilityLabel={t(`Theme color`)}>
       {COLORS.map((c) => {
         const edited = edits ? presetThemeOf(edits, c) : null;
         const name = presetLabel(c, !!edited);
@@ -214,11 +216,11 @@ function ThemeStops({ theme, onChange, onReset, resetLabel, onBegin, start }: { 
           {theme.stops.length} of {MAX_THEME_STOPS} colours
         </Text>
         <Box row gap="xs" style={CENTERED}>
-          {onReset ? <Button variant="text" look="link" size="caption" title="Reset" label={resetLabel ? `Reset to ${resetLabel}` : "Reset"} onPress={onReset} /> : null}
+          {onReset ? <Button variant="text" look="link" size="caption" title={t(`Reset`)} label={resetLabel ? `Reset to ${resetLabel}` : t(`Reset`)} onPress={onReset} /> : null}
           <Button
             variant="stepper"
             icon="minus"
-            tooltip="Remove Colour"
+            tooltip={t(`Remove Colour`)}
             disabled={theme.stops.length <= 1}
             onPress={() => {
               onChange(withoutStop(theme, index), true);
@@ -228,7 +230,7 @@ function ThemeStops({ theme, onChange, onReset, resetLabel, onBegin, start }: { 
           <Button
             variant="stepper"
             icon="plus"
-            tooltip="Add Colour"
+            tooltip={t(`Add Colour`)}
             disabled={theme.stops.length >= MAX_THEME_STOPS}
             onPress={() => {
               onChange(withAddedStop(theme), true);
@@ -260,9 +262,9 @@ export function ThemeEditor({
       <ThemeStops theme={theme} onChange={onChange} onReset={onReset} resetLabel={resetLabel} onBegin={onBegin} start={start} />
       <Box gap={full ? "l" : "xl"} style={FILL}>
         {full ? <Preview shown={full.shown} /> : null}
-        <Slider stacked={stacked} label="Intensity" value={theme.intensity} snapTo={start?.intensity} onChange={(v, settle) => onChange({ ...theme, intensity: v }, settle)} />
-        <Slider stacked={stacked} label="Pass-through blur" value={theme.translucency} snapTo={start?.translucency} onChange={(v, settle) => onChange({ ...theme, translucency: v }, settle)} />
-        <Slider stacked={stacked} label="Noise" value={theme.grain} snapTo={start?.grain} onChange={(v, settle) => onChange({ ...theme, grain: v }, settle)}>
+        <Slider stacked={stacked} label={t(`Intensity`)} value={theme.intensity} snapTo={start?.intensity} onChange={(v, settle) => onChange({ ...theme, intensity: v }, settle)} />
+        <Slider stacked={stacked} label={t(`Pass-through blur`)} value={theme.translucency} snapTo={start?.translucency} onChange={(v, settle) => onChange({ ...theme, translucency: v }, settle)} />
+        <Slider stacked={stacked} label={t(`Noise`)} value={theme.grain} snapTo={start?.grain} onChange={(v, settle) => onChange({ ...theme, grain: v }, settle)}>
           <PopUp
             value={theme.texture}
             minWidth={78}
@@ -270,11 +272,11 @@ export function ThemeEditor({
             onChange={(texture) => onChange({ ...theme, texture, grain: theme.grain || 0.5 }, true)}
           />
         </Slider>
-        <EditorRow stacked={stacked} label="Direction">
+        <EditorRow stacked={stacked} label={t(`Direction`)}>
           <DirectionDial angle={lookAngle(theme)} onChange={(angle, settle) => onChange(withAngle(theme, angle), settle)} />
         </EditorRow>
         {full ? (
-          <EditorRow label="Appearance">
+          <EditorRow label={t(`Appearance`)}>
             {full.followsApp ? (
               <Text size="caption" tone="textSecondary" lines={2} style={FILL}>
                 Follows Settings › Appearance

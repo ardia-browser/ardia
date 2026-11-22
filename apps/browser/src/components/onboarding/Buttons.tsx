@@ -5,6 +5,8 @@ import { ink, space } from "../ui/tokens";
 import { useOnboardingColors } from "./Parts";
 import { onboardingButton } from "./tokens";
 import { usePressScaleMotion } from "../ui/motion";
+import { t } from "../../lib/uiLanguage";
+
 
 function PressScale({ title, onPress, disabled, scale, tooltip, pressRef, children }: { title: string; onPress: () => void; disabled?: boolean; scale: number; tooltip?: string; pressRef?: Ref<View>; children: (state: { hovered: boolean; pressed: boolean }) => ReactNode }) {
   const { hovered, hoverProps } = useHover();
@@ -128,5 +130,5 @@ export function CircleButton({
 }
 
 export function BackButton({ onPress }: { onPress: () => void }) {
-  return <CircleButton title="Back" icon="chevron.left" size={12} symbolWeight="semibold" box={14} onPress={onPress} />;
+  return <CircleButton title={t(`Back`)} icon="chevron.left" size={12} symbolWeight="semibold" box={14} onPress={onPress} />;
 }

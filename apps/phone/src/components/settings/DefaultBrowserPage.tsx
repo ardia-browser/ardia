@@ -5,6 +5,8 @@ import { popSettings } from "../../state/settings/nav";
 import { defaultBrowserCopy } from "../../state/settings/settingsRules";
 import { AppIcon, font, ink, PrimaryButton, radius, settingsLayout, settingsTint, space, spacesLayout, Symbol, useTheme } from "../ui";
 import { SettingsPage } from "./SettingsKit";
+import { t } from "../../lib/uiLanguage";
+
 
 export function DefaultBrowserSteps({ onLater, onDone }: { onLater?: () => void; onDone?: () => void }) {
   const theme = useTheme();
@@ -58,7 +60,7 @@ export function DefaultBrowserSteps({ onLater, onDone }: { onLater?: () => void;
         {copy.action ? (
           <PrimaryButton title={copy.action} onPress={() => void ask()} />
         ) : onLater ? (
-          <PrimaryButton title="Continue" onPress={onLater} />
+          <PrimaryButton title={t(`Continue`)} onPress={onLater} />
         ) : null}
         {copy.action && onLater ? (
           <Pressable accessibilityRole="button" onPress={onLater} style={styles.secondary}>
@@ -96,7 +98,7 @@ function StepIcon({ index, count, inSettings }: { index: number; count: number; 
 
 export function DefaultBrowserPage() {
   return (
-    <SettingsPage title="Default Browser" onBack={popSettings}>
+    <SettingsPage title={t(`Default Browser`)} onBack={popSettings}>
       <DefaultBrowserSteps />
     </SettingsPage>
   );

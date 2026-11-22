@@ -1,4 +1,6 @@
 import { hostSpoofReason, punycodeEncode } from "@ardia/core";
+import { t } from "./uiLanguage";
+
 
 export type UrlParts = {
   scheme: string;
@@ -48,8 +50,8 @@ const UNICODE_LABEL = /^[\p{L}\p{M}\p{N}-]{1,63}$/u;
 
 export function asciiHost(host: string): string | null {
   if (/^[\x00-\x7f]*$/.test(host)) return host;
-  const lower = host.normalize("NFC").toLowerCase();
-  if (DEVIATIONS.test(lower) || lower.normalize("NFKC") !== lower) return null;
+  const lower = host.normalize(t(`NFC`)).toLowerCase();
+  if (DEVIATIONS.test(lower) || lower.normalize(t(`NFKC`)) !== lower) return null;
   const labels = lower.split(".").map((label) => {
     if (/^[\x00-\x7f]*$/.test(label)) return label;
     if (!UNICODE_LABEL.test(label) || label.startsWith("-") || label.endsWith("-")) return null;

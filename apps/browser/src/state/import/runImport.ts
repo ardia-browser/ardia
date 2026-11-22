@@ -35,6 +35,8 @@ import { importModule } from "./importApi";
 import { listFoundExtensions } from "./listedExtensions";
 import type { ExtensionGroup } from "./extensionListing";
 import { during } from "../app/jobActivity";
+import { t } from "../../lib/uiLanguage";
+
 
 export function continueImport() {
   const { source, step, kinds, sourceProfiles } = importNow();
@@ -79,11 +81,11 @@ async function destination(target: string, index: number, name: string, color?: 
   const clash = profileNamed(name);
   if (clash) {
     const { confirmed } = await confirm({
-      title: "Import as new profile?",
+      title: t(`Import as new profile?`),
       message:
-        "Import this data as a new profile to avoid data loss. If you replace a profile, your passwords, cookies, and payment info will be replaced, while your bookmarks and history will be combined.",
-      confirmTitle: "Import as new profile",
-      cancelTitle: "Replace this profile",
+        t(`Import this data as a new profile to avoid data loss. If you replace a profile, your passwords, cookies, and payment info will be replaced, while your bookmarks and history will be combined.`),
+      confirmTitle: t(`Import as new profile`),
+      cancelTitle: t(`Replace this profile`),
     });
     if (!confirmed) return clash;
   }
@@ -92,10 +94,10 @@ async function destination(target: string, index: number, name: string, color?: 
 
 type AppTabs = { result: DiaTabsResult } | { note: string };
 
-const NOT_BROUGHT = "Dia's tabs couldn't be brought over:";
-const SIDEBAR_UNREAD = "Dia's sidebar file couldn't be read, so Ardia asked Dia for its open and pinned tabs: their folders, custom names and split views stay in Dia.";
-const FAVORITES_LOCKED = "Dia's Favorites weren't imported: they're in its sidebar file, which needs the keychain access you skipped.";
-const HELD_BACK = "what looked like a password, cookie or card number turned up where it shouldn't, so Ardia held it all back to keep it private. Importing again without passwords, cookies and cards should work.";
+const NOT_BROUGHT = t(`Dia's tabs couldn't be brought over:`);
+const SIDEBAR_UNREAD = t(`Dia's sidebar file couldn't be read, so Ardia asked Dia for its open and pinned tabs: their folders, custom names and split views stay in Dia.`);
+const FAVORITES_LOCKED = t(`Dia's Favorites weren't imported: they're in its sidebar file, which needs the keychain access you skipped.`);
+const HELD_BACK = t(`what looked like a password, cookie or card number turned up where it shouldn't, so Ardia held it all back to keep it private. Importing again without passwords, cookies and cards should work.`);
 
 function readAppTabs(): Promise<AppTabs> {
   return importModule()
@@ -282,7 +284,7 @@ async function runImportJob(wanted: ReadonlySet<ImportKind>, withoutKey: boolean
       for (const { space: planned, partition } of plan.spaces) {
         const space = source.sidebar === "arc" ? withArcGlyph(planned) : planned;
         if (space !== planned) arc.glyphs += 1;
-        const name = space.name || "Space";
+        const name = space.name || t(`Space`);
         const head = members[partition]?.[0] ?? null;
         const shared = plan.sharesTopApps && plan.spaces.filter((p) => p.partition === partition).length > 1;
         const first = destinationIndex === 0;

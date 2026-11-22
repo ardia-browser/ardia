@@ -39,6 +39,8 @@ import { consentToken, type ConsentToken } from "../telemetry/client";
 import { showToast } from "../app/toasts";
 import { openSettings } from "../settings/settingsWindows";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
+import { t } from "../../lib/uiLanguage";
+
 
 export type EngineOffer = { site: string; host: string; keySystem: string; canRemember: boolean };
 
@@ -69,12 +71,12 @@ function modeStillHolds(): () => boolean {
   return () => generation === modeGeneration && engineMode(store()) === mode && !useEngineModeSwitch.getState().pending;
 }
 
-const UNSAVED_WORK = `(() => {
+const UNSAVED_WORK = t(`(() => {
   const fields = Array.from(document.querySelectorAll("input:not([type=hidden]):not([type=password]):not([type=submit]):not([type=button]), textarea, select"));
   const changed = (f) => f.type === "checkbox" || f.type === "radio" ? f.checked !== f.defaultChecked : f.tagName === "SELECT" ? Array.from(f.options).some((o) => o.selected !== o.defaultSelected) : f.value !== f.defaultValue;
   const editing = document.activeElement && document.activeElement.isContentEditable;
   post("result", JSON.stringify(fields.some(changed) || !!editing));
-})()`;
+})()`);
 
 async function hasUnsavedWork(tabId: string): Promise<boolean> {
   const web = webviews.get(tabId);
@@ -103,7 +105,7 @@ const asksAboutUnsavedWork = () => store().settings.engineSwitchAsksAboutUnsaved
 
 async function mayLeavePage(t: Tab, title: string, message: string, confirmTitle: string, ask: typeof confirm = confirm): Promise<boolean> {
   if (!wantsPage(t) || !asksAboutUnsavedWork() || !(await hasUnsavedWork(t.id))) return true;
-  const { confirmed } = await ask({ title, message, confirmTitle, cancelTitle: "Stay on Page", windowId: t.windowId });
+  const { confirmed } = await ask({ title, message, confirmTitle, cancelTitle: t(`Stay on Page`), windowId: t.windowId });
   return confirmed;
 }
 
@@ -120,7 +122,7 @@ export async function goBackAcrossEngines(tabId: string, mayAct: () => boolean =
   }
   const from = pageUrl(t);
   const holds = modeStillHolds();
-  const leaving = await mayLeavePage(t, "Go back to the previous page?", `It opens in ${ENGINE_NAMES[back.engine]}, so changes you made on this page may not be saved.`, "Go Back", ask);
+  const leaving = await mayLeavePage(t, t(`Go back to the previous page?`), `It opens in ${ENGINE_NAMES[back.engine]}, so changes you made on this page may not be saved.`, t(`Go Back`), ask);
   const now = store().tabs[tabId];
   if (!leaving || !holds() || !now || pageUrl(now) !== from || pageOf(tabId).engineBack !== back || !mayAct()) return false;
   const held = await holdPageForSwap(tabId, tabEngine(store(), tabId), back.engine, back.url, false, holds);
@@ -204,11 +206,11 @@ function tellChromiumModeBlocks(t: Tab, site: string) {
   if (!PLATFORM_FEATURES.webKit || toldInChromiumMode.has(site)) return;
   toldInChromiumMode.add(site);
   noteEngineModeVideoNotice("shown", consentToken());
-  showToast(t.windowId, "Protected video won't play in Chromium", `${hostLabel(site)} plays in WebKit. Set Engine to Automatic or WebKit in Settings.`, {
+  showToast(t.windowId, t(`Protected video won't play in Chromium`), `${hostLabel(site)} plays in WebKit. Set Engine to Automatic or WebKit in Settings.`, {
     icon: "play.rectangle",
     key: `engine-mode-video:${site}`,
     action: {
-      title: "Open Settings",
+      title: t(`Open Settings`),
       run: () => {
         noteEngineModeVideoNotice("opened", consentToken());
         openSettings("general");
@@ -279,11 +281,11 @@ const GOOGLE_SIGN_IN = /^https:\/\/accounts\.google\.com([/?#]|$)/i;
 const googleSignIn = (url: string | undefined | null) => !!url && GOOGLE_SIGN_IN.test(url);
 const leftForChromium = (url: string | undefined | null) => webStorePage(url) || googleSignIn(url);
 
-const MODE_NAMES: Record<EngineMode, string> = { automatic: "Automatic", chromium: ENGINE_NAMES.chromium, webkit: ENGINE_NAMES.webkit };
+const MODE_NAMES: Record<EngineMode, string> = { automatic: t(`Automatic`), chromium: ENGINE_NAMES.chromium, webkit: ENGINE_NAMES.webkit };
 
 export function modeSwitchConfirm(mode: EngineMode, unsavedPages: number, windowId?: string) {
-  const pages = unsavedPages === 1 ? "A page with unsaved changes reloads" : `${unsavedPages} pages with unsaved changes reload`;
-  return { title: `Switch to ${MODE_NAMES[mode]}?`, message: `${pages}, so the changes may be lost.`, confirmTitle: `Switch to ${MODE_NAMES[mode]}`, cancelTitle: "Cancel", windowId };
+  const pages = unsavedPages === 1 ? t(`A page with unsaved changes reloads`) : `${unsavedPages} pages with unsaved changes reload`;
+  return { title: `Switch to ${MODE_NAMES[mode]}?`, message: `${pages}, so the changes may be lost.`, confirmTitle: `Switch to ${MODE_NAMES[mode]}`, cancelTitle: t(`Cancel`), windowId };
 }
 
 async function carryEachSite(moves: { tab: Tab; to: PageEngine; url: string }[], consent: ConsentToken | null) {

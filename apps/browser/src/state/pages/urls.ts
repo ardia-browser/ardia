@@ -6,13 +6,15 @@ import type { Tab } from "../browser/types";
 import { navigationOf } from "../tabs/pageSession";
 import { noteChromeSettingsOpen } from "../telemetry/chromeSettingsOpens";
 import { pluginPageOf } from "../plugins/pageNames";
+import { t } from "../../lib/uiLanguage";
+
 
 export { pluginPageOf };
 
 export const INTERNAL_PAGES: Record<AppPageHost, { title: string }> = {
-  history: { title: "History" },
-  bookmarks: { title: "Bookmarks" },
-  downloads: { title: "Downloads" },
+  history: { title: t(`History`) },
+  bookmarks: { title: t(`Bookmarks`) },
+  downloads: { title: t(`Downloads`) },
 };
 
 const internalUrl = (page: AppPageHost, query?: string) => `ardia://${page}${query ? `?q=${encodeURIComponent(query)}` : ""}`;

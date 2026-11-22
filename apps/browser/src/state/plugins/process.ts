@@ -5,6 +5,8 @@ import { consentNow, consentToken, type ConsentToken } from "../telemetry/choice
 import { warnFor } from "../telemetry/consoleConsent";
 import { isQuitting } from "../app/quit";
 import { usePlugins, type ProcessState } from "./store";
+import { t } from "../../lib/uiLanguage";
+
 
 export const RESTART_DELAYS_MS = [1000, 2000, 4000, 8000, 16000];
 export const CRASH_WINDOW_MS = 10 * 60_000;
@@ -167,7 +169,7 @@ export function processExited(exit: PluginExit, now = Date.now()) {
   if (clean) return setProcess(exit.name, { state: "exited" });
   notePlugin("plugin_process_crashes", consent);
   entry.failures = [...entry.failures.filter((t) => now - t < CRASH_WINDOW_MS), now];
-  const reason = exit.overMemory ? "went over its memory limit" : exit.signal !== null ? `stopped by signal ${exit.signal}` : `exited with status ${exit.status}`;
+  const reason = exit.overMemory ? t(`went over its memory limit`) : exit.signal !== null ? `stopped by signal ${exit.signal}` : `exited with status ${exit.status}`;
   if (entry.failures.length >= CRASH_LIMIT) return setProcess(exit.name, { state: "crashed", reason });
   const delay = RESTART_DELAYS_MS[Math.min(entry.failures.length - 1, RESTART_DELAYS_MS.length - 1)]!;
   setProcess(exit.name, { state: "waiting", until: now + delay, failures: entry.failures.length });

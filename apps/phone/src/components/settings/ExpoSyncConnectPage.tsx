@@ -14,6 +14,8 @@ import { chooseFolderTitle, connectMessage, MAC_HINT } from "../../state/sync/sy
 import { legibleInk, modifierList, settingsChrome, settingsPage, useTheme } from "../ui";
 import { SyncScan } from "../sync/SyncScan";
 import { ExpoHero, ExpoStep } from "./ExpoSettingsParts";
+import { t } from "../../lib/uiLanguage";
+
 
 const SECONDARY = { type: "hierarchical", style: "secondary" } as const;
 const noSubscription = () => () => undefined;
@@ -82,24 +84,24 @@ export function ExpoSyncConnectPage() {
   const prominent = [buttonStyle("borderedProminent"), tint(theme.primaryAction), foregroundStyle(theme.onPrimaryAction)];
   return (
     <ZStack>
-    <Form modifiers={modifierList(settingsPage("Connect to Your Mac"), tint(PlatformColor("systemBlue")), settingsChrome(), interactiveDismissDisabled(busy))}>
-      <ExpoHero title="Connect to Your Mac" subtitle="Two steps, and your Mac’s tabs are here." systemImage="macbook.and.iphone" tint="sync" />
-      <Section title="Two Steps" footer={<Text>{copy().phraseStays}</Text>}>
-        <ExpoStep number={1} title="Show the code on your Mac" detail={MAC_HINT} progress={hasPhrase ? "done" : "current"}>
+    <Form modifiers={modifierList(settingsPage(t(`Connect to Your Mac`)), tint(PlatformColor("systemBlue")), settingsChrome(), interactiveDismissDisabled(busy))}>
+      <ExpoHero title={t(`Connect to Your Mac`)} subtitle={t(`Two steps, and your Mac’s tabs are here.`)} systemImage="macbook.and.iphone" tint="sync" />
+      <Section title={t(`Two Steps`)} footer={<Text>{copy().phraseStays}</Text>}>
+        <ExpoStep number={1} title={t(`Show the code on your Mac`)} detail={MAC_HINT} progress={hasPhrase ? "done" : "current"}>
           {hasPhrase ? (
             <HStack spacing={8}>
-              <Label title="Recovery phrase added" systemImage="checkmark.circle.fill" modifiers={modifierList(font({ textStyle: "subheadline", weight: "medium" }), legibleInk("green"))} />
+              <Label title={t(`Recovery phrase added`)} systemImage="checkmark.circle.fill" modifiers={modifierList(font({ textStyle: "subheadline", weight: "medium" }), legibleInk("green"))} />
               <Spacer />
-              <Button label="Change" onPress={() => pushSettings({ page: "syncWords" })} modifiers={[font({ textStyle: "subheadline" })]} />
+              <Button label={t(`Change`)} onPress={() => pushSettings({ page: "syncWords" })} modifiers={[font({ textStyle: "subheadline" })]} />
             </HStack>
           ) : (
             <PhraseButtons stacked={!buttonsFit}>
-              {scans ? <Button label="Scan Code" systemImage="qrcode.viewfinder" onPress={() => setScanning(true)} modifiers={[...prominent, ...capsule]} /> : null}
-              <Button label="Enter Words" systemImage="character.cursor.ibeam" onPress={() => pushSettings({ page: "syncWords" })} modifiers={[...(scans ? [buttonStyle("bordered")] : prominent), ...capsule]} />
+              {scans ? <Button label={t(`Scan Code`)} systemImage="qrcode.viewfinder" onPress={() => setScanning(true)} modifiers={[...prominent, ...capsule]} /> : null}
+              <Button label={t(`Enter Words`)} systemImage="character.cursor.ibeam" onPress={() => pushSettings({ page: "syncWords" })} modifiers={[...(scans ? [buttonStyle("bordered")] : prominent), ...capsule]} />
             </PhraseButtons>
           )}
         </ExpoStep>
-        <ExpoStep number={2} title="Choose the Ardia Sync folder" detail={copy().chooseFolderDetail} progress={hasPhrase ? "current" : "upcoming"}>
+        <ExpoStep number={2} title={t(`Choose the Ardia Sync folder`)} detail={copy().chooseFolderDetail} progress={hasPhrase ? "current" : "upcoming"}>
           <VStack alignment="leading" spacing={8}>
             {session && picked.folder && !picked.connecting ? <Label title={picked.folder.name} systemImage="folder.fill" modifiers={[font({ textStyle: "subheadline", weight: "medium" }), foregroundStyle(SECONDARY)]} /> : null}
             {busy ? (
@@ -108,7 +110,7 @@ export function ExpoSyncConnectPage() {
                 <Text modifiers={[foregroundStyle(SECONDARY)]}>Connecting…</Text>
               </HStack>
             ) : session ? (
-              <Button label={picked.folder ? "Choose Another Folder…" : "Choose Folder…"} onPress={() => void session.pickFolder(phrase).then(finished)} modifiers={[buttonStyle("bordered"), ...capsule]} />
+              <Button label={picked.folder ? t(`Choose Another Folder…`) : t(`Choose Folder…`)} onPress={() => void session.pickFolder(phrase).then(finished)} modifiers={[buttonStyle("bordered"), ...capsule]} />
             ) : (
               <Button label={chooseFolderTitle(lastResult)} onPress={() => void connect()} modifiers={[buttonStyle("bordered"), ...capsule, disabled(!hasPhrase)]} />
             )}

@@ -9,6 +9,8 @@ import type { ReleaseNotes } from "../../state/releaseNotes/releaseNotes";
 import { PostageStamp, PostcardPaper } from "./PostageStamp";
 import { ntpType, postcard, useNtpColors } from "./tokens";
 import { perLook } from "../ui/tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 const CARD = { width: 320, height: 200, overhangRight: 40, overhangTop: 30, tilt: 2, get radius() { return radii.panel; } };
 const HOVER_SLOP = 24;
@@ -93,7 +95,7 @@ export function ReleaseNotesPostcard({ notes, size, onOpen, onDismiss }: { notes
             transform: [{ rotate: `${CARD.tilt}deg` }, { scale }],
           }}
         >
-          <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel="What's new in Ardia" style={FILL}>
+          <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel={t(`What's new in Ardia`)} style={FILL}>
             <Panel style={StyleSheet.absoluteFill} radius={CARD.radius} fill={ink.clear} border={null} shadow={postcard.cardShadow} />
             <Artwork notes={notes} radius={CARD.radius} titleSize={40} hidden={{ top: CARD.overhangTop, right: CARD.overhangRight }} />
           </Pressable>
@@ -102,7 +104,7 @@ export function ReleaseNotesPostcard({ notes, size, onOpen, onDismiss }: { notes
           pointerEvents={hovered ? "box-none" : "none"}
           style={{ position: "absolute", left: 0, right: 0, top: HOVER_SLOP + card.height + TOOLTIP.gap, alignItems: "center", opacity: tooltip }}
         >
-          <Tooltip text="Latest Release Notes" onOpen={onOpen} onClose={dismiss} />
+          <Tooltip text={t(`Latest Release Notes`)} onOpen={onOpen} onClose={dismiss} />
         </Animated.View>
       </View>
     </Animated.View>
@@ -119,7 +121,7 @@ function Tooltip({ text, onOpen, onClose }: { text: string; onOpen: () => void; 
         <Text lines={1} size="small" weight="medium" style={TOOLTIP_TEXT}>
           {text}
         </Text>
-        <Button variant="close" look="art" onPress={onClose} tooltip="Dismiss release notes" label="Dismiss release notes" />
+        <Button variant="close" look="art" onPress={onClose} tooltip={t(`Dismiss release notes`)} label={t(`Dismiss release notes`)} />
       </View>
     </Pressable>
   );
@@ -138,7 +140,7 @@ function Artwork({ notes, radius, titleSize, hidden }: { notes: ReleaseNotes; ra
       <WindowBackdrop colors={colors} angle={150} grainOpacity={0.1} style={StyleSheet.absoluteFill} />
       <View style={{ flex: 1, padding: pad, paddingTop: pad + (hidden?.top ?? 0), paddingRight: pad + (hidden?.right ?? 0), justifyContent: "space-between" }}>
         <Text style={{ ...ntpType.artworkVersion, fontSize: ntpType.artworkVersion.fontSize * k, letterSpacing: ntpType.artworkVersion.letterSpacing * k, color: postcard.artworkVersion }}>{`ARDIA ${notes.version}`}</Text>
-        <Text style={{ ...ntpType.artworkTitle, fontSize: titleSize, letterSpacing: ntpType.artworkTitle.letterSpacing * k, color: postcard.artworkTitle }}>{"What's new"}</Text>
+        <Text style={{ ...ntpType.artworkTitle, fontSize: titleSize, letterSpacing: ntpType.artworkTitle.letterSpacing * k, color: postcard.artworkTitle }}>{t(`What's new`)}</Text>
       </View>
     </View>
   );
@@ -168,7 +170,7 @@ export function ReleaseNotesPage({ notes, size, onClose }: { notes: ReleaseNotes
       <Animated.View style={[StyleSheet.absoluteFill, { opacity: t.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolate: "clamp" }) }]}>
         <VisualEffect material="hudWindow" blendingMode="withinWindow" style={StyleSheet.absoluteFill} />
         <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.releaseNotesScrim }]} />
-        <Pressable style={StyleSheet.absoluteFill} onPress={close} accessibilityLabel="Close release notes" />
+        <Pressable style={StyleSheet.absoluteFill} onPress={close} accessibilityLabel={t(`Close release notes`)} />
       </Animated.View>
       <View style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center" }]} pointerEvents="box-none">
         <Animated.View
@@ -191,7 +193,7 @@ export function ReleaseNotesPage({ notes, size, onClose }: { notes: ReleaseNotes
             </View>
             <View style={NOTES_COLUMN}>
               <View style={STAMP_PLACE}>
-                <PostageStamp icon={STAMP.icon} ring={STAMP.ring} label="WHAT'S NEW" tilt={STAMP.tilt} ink={STAMP_INK} ringAt={STAMP.ringAt} />
+                <PostageStamp icon={STAMP.icon} ring={STAMP.ring} label={t(`WHAT'S NEW`)} tilt={STAMP.tilt} ink={STAMP_INK} ringAt={STAMP.ringAt} />
               </View>
               <Text style={DATE_TEXT()}>{notes.date.toUpperCase()}</Text>
               <Text style={TITLE_TEXT()}>{notes.title}</Text>
@@ -211,7 +213,7 @@ export function ReleaseNotesPage({ notes, size, onClose }: { notes: ReleaseNotes
             </View>
           </Box>
           <View style={PAGE_CLOSE_PLACE}>
-            <Button variant="close" look="hud" onPress={close} tooltip="Close release notes" label="Close release notes" />
+            <Button variant="close" look="hud" onPress={close} tooltip={t(`Close release notes`)} label={t(`Close release notes`)} />
           </View>
         </Animated.View>
       </View>

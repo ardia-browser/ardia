@@ -1,8 +1,10 @@
 import { nativeModule, type UserScriptsFolder } from "@ardia/shell";
+import { t } from "../lib/uiLanguage";
+
 
 export type { UserScriptsFolder };
 
-const UserScripts = nativeModule("ArdiaUserScripts");
+const UserScripts = nativeModule(t(`ArdiaUserScripts`));
 
 export const watchUserScripts = (on: boolean) => UserScripts.watch(on);
 export const readUserScripts = () => UserScripts.read();

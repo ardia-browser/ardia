@@ -11,16 +11,18 @@ import { useSync } from "../../state/sync/store";
 import { connectMessage, deviceIcon, deviceSeen, inboxNotice, isSyncConnected, isSyncOff, orderedDevices, sendReceivers, shownProfile, syncHeroSubtitle, syncNowFeedback } from "../../state/sync/syncRules";
 import { modifierList, settingsChrome, settingsPage, useTheme } from "../ui";
 import { ExpoHero } from "./ExpoSettingsParts";
+import { t } from "../../lib/uiLanguage";
+
 
 const FILL = Number.MAX_SAFE_INTEGER;
 const SECONDARY = { type: "hierarchical", style: "secondary" } as const;
 const NAME_SETTLE_MS = 600;
 const DEVICE_SYMBOLS = { phone: "iphone", laptop: "laptopcomputer", desktop: "desktopcomputer", studio: "macstudio", mini: "macmini" } as const;
 const FEATURES = [
-  { symbol: "macbook", title: "Your Mac’s Tabs" },
-  { symbol: "pin.fill", title: "Pinned Tabs and Spaces" },
-  { symbol: "paperplane.fill", title: "Send Tabs Both Ways" },
-  { symbol: "clock.arrow.circlepath", title: "History and Bookmarks" },
+  { symbol: "macbook", title: t(`Your Mac’s Tabs`) },
+  { symbol: "pin.fill", title: t(`Pinned Tabs and Spaces`) },
+  { symbol: "paperplane.fill", title: t(`Send Tabs Both Ways`) },
+  { symbol: "clock.arrow.circlepath", title: t(`History and Bookmarks`) },
 ] as const;
 
 export function ExpoSyncPage() {
@@ -53,8 +55,8 @@ export function ExpoSyncPage() {
     setStopping(false);
   };
   return (
-    <Form modifiers={modifierList(settingsPage("Sync With Mac"), tint(PlatformColor("systemBlue")), settingsChrome(), status.isEnabled ? refreshable(syncNow) : null)}>
-      <ExpoHero title="Sync With Mac" subtitle={hero.text} warning={hero.isWarning} systemImage="macbook.and.iphone" tint="sync">
+    <Form modifiers={modifierList(settingsPage(t(`Sync With Mac`)), tint(PlatformColor("systemBlue")), settingsChrome(), status.isEnabled ? refreshable(syncNow) : null)}>
+      <ExpoHero title={t(`Sync With Mac`)} subtitle={hero.text} warning={hero.isWarning} systemImage="macbook.and.iphone" tint="sync">
         {off ? (
           <Button onPress={() => pushSettings({ page: "syncConnect" })} modifiers={[buttonStyle("borderedProminent"), buttonBorderShape("roundedRectangle", 12), controlSize("large"), tint(theme.primaryAction), foregroundStyle(theme.onPrimaryAction), padding({ top: 8 })]}>
             <Text modifiers={[frame({ maxWidth: FILL })]}>Connect to Your Mac</Text>
@@ -62,7 +64,7 @@ export function ExpoSyncPage() {
         ) : null}
       </ExpoHero>
       {off ? (
-        <Section title="What You Get" footer={<Text>{copy().syncFeatureFooter}</Text>}>
+        <Section title={t(`What You Get`)} footer={<Text>{copy().syncFeatureFooter}</Text>}>
           {FEATURES.map((feature) => (
             <HStack key={feature.symbol} alignment="firstTextBaseline" spacing={12} modifiers={[padding({ vertical: 2 }), accessibilityElement("combine")]}>
               <Image systemName={feature.symbol} modifiers={[font({ textStyle: "body", weight: "semibold" }), foregroundStyle(theme.formAccent), frame({ width: 28 }), accessibilityHidden(true)]} />
@@ -78,7 +80,7 @@ export function ExpoSyncPage() {
       ) : null}
       {status.attention === "folder" ? (
         <Section footer={<Text>Choose the Ardia Sync folder again.</Text>}>
-          <Button label="Choose Folder…" onPress={() => void chooseFolder()} />
+          <Button label={t(`Choose Folder…`)} onPress={() => void chooseFolder()} />
         </Section>
       ) : null}
       {status.attention === "phrase" ? (
@@ -104,14 +106,14 @@ export function ExpoSyncPage() {
           <Section>
             <Button onPress={() => void runSyncNow()} modifiers={[disabled(syncing)]}>
               <HStack>
-                <Text>{syncing ? "Syncing…" : "Sync Now"}</Text>
+                <Text>{syncing ? t(`Syncing…`) : t(`Sync Now`)}</Text>
                 <Spacer />
                 {syncing ? <ProgressView /> : null}
               </HStack>
             </Button>
           </Section>
           {devices.length ? (
-            <Section title="Devices" footer={noReceivers ? <Text>Update Ardia on your Mac to send tabs to it.</Text> : undefined}>
+            <Section title={t(`Devices`)} footer={noReceivers ? <Text>Update Ardia on your Mac to send tabs to it.</Text> : undefined}>
               {devices.map((device) => {
                 const seen = deviceSeen(device, now);
                 return (
@@ -123,14 +125,14 @@ export function ExpoSyncPage() {
             </Section>
           ) : null}
           <DeviceName current={status.deviceName} />
-          <Section title="Sync Folder" footer={folderError ? <Text modifiers={[foregroundStyle(theme.destructive)]}>{folderError}</Text> : <Text>Encrypted so only your devices can read it.</Text>}>
-            <LabeledContent label="Folder">
-              <Text>{status.folderName ?? "Ardia Sync"}</Text>
+          <Section title={t(`Sync Folder`)} footer={folderError ? <Text modifiers={[foregroundStyle(theme.destructive)]}>{folderError}</Text> : <Text>Encrypted so only your devices can read it.</Text>}>
+            <LabeledContent label={t(`Folder`)}>
+              <Text>{status.folderName ?? t(`Ardia Sync`)}</Text>
             </LabeledContent>
-            <Button label="Change Folder…" onPress={() => void chooseFolder()} />
+            <Button label={t(`Change Folder…`)} onPress={() => void chooseFolder()} />
           </Section>
           <Section footer={<Text>{copy().stopSyncingFooter}</Text>}>
-            <ConfirmationDialog title="Stop Syncing This Device?" isPresented={confirmingStop} onIsPresentedChange={setConfirmingStop} titleVisibility="visible">
+            <ConfirmationDialog title={t(`Stop Syncing This Device?`)} isPresented={confirmingStop} onIsPresentedChange={setConfirmingStop} titleVisibility="visible">
               <ConfirmationDialog.Trigger>
                 <Button role="destructive" onPress={() => setConfirmingStop(true)} modifiers={[disabled(stopping)]}>
                   <HStack>
@@ -141,7 +143,7 @@ export function ExpoSyncPage() {
                 </Button>
               </ConfirmationDialog.Trigger>
               <ConfirmationDialog.Actions>
-                <Button role="destructive" label="Stop Syncing" onPress={() => void stop()} />
+                <Button role="destructive" label={t(`Stop Syncing`)} onPress={() => void stop()} />
               </ConfirmationDialog.Actions>
               <ConfirmationDialog.Message>
                 <Text>To sync again, you’ll need your Mac’s code or your recovery phrase.</Text>
@@ -179,7 +181,7 @@ function DeviceName({ current }: { current: string }) {
   };
   return (
     <Section title={copy().deviceNameHeader} footer={<Text>Shown on your Mac.</Text>}>
-      <TextField text={text} placeholder="Name" onTextChange={change} modifiers={[textInputAutocapitalization("words"), submitLabel("done")]} />
+      <TextField text={text} placeholder={t(`Name`)} onTextChange={change} modifiers={[textInputAutocapitalization("words"), submitLabel("done")]} />
     </Section>
   );
 }

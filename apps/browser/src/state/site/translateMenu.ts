@@ -1,5 +1,7 @@
 import type { ChoiceItem } from "../app/menuChoice";
 import { menuSections } from "../app/menuSections";
+import { t } from "../../lib/uiLanguage";
+
 
 export type TranslateMenuState = {
   translated: boolean;
@@ -13,14 +15,14 @@ export type TranslateMenuItem = ChoiceItem<{ language: string }, "original" | "t
 export function translateMenuItems({ translated, target, languages, neverTranslate }: TranslateMenuState): TranslateMenuItem[] {
   return menuSections<TranslateMenuItem>(
     [
-      translated ? { id: "original" as const, title: "Show Original", symbol: "arrow.uturn.backward" } : { id: "translate" as const, title: `Translate to ${target}`, symbol: "translate" },
+      translated ? { id: "original" as const, title: t(`Show Original`), symbol: "arrow.uturn.backward" } : { id: "translate" as const, title: `Translate to ${target}`, symbol: "translate" },
       languages.length > 0 && {
         id: "choose" as const,
-        title: "Choose Another Language",
+        title: t(`Choose Another Language`),
         symbol: "globe",
         children: languages.map((l) => ({ value: { language: l.id }, title: l.name, checked: l.current })),
       },
     ],
-    [neverTranslate !== null && { id: "never" as const, title: "Never Translate This Site", checked: neverTranslate }],
+    [neverTranslate !== null && { id: "never" as const, title: t(`Never Translate This Site`), checked: neverTranslate }],
   );
 }

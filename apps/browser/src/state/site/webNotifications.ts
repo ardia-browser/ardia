@@ -19,6 +19,8 @@ import { noteWebNotificationFromShim } from "../telemetry/webNotificationCounts"
 import { recordWebNotificationPost } from "../telemetry/webNotificationFailures";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
 import { noteWebNotificationClicked } from "../telemetry/notificationRequestCounts";
+import { t } from "../../lib/uiLanguage";
+
 
 const shown = new Map<string, string>();
 
@@ -124,10 +126,10 @@ export async function ensureNotificationPermission(windowId?: string): Promise<b
   if (asked) return false;
   asked = true;
   const { confirmed } = await confirm({
-    title: "Ardia Needs Notifications Permission",
-    message: "You need to open System Settings to give Ardia permission to show you Notifications.",
-    confirmTitle: "Open System Settings",
-    cancelTitle: "Not Now",
+    title: t(`Ardia Needs Notifications Permission`),
+    message: t(`You need to open System Settings to give Ardia permission to show you Notifications.`),
+    confirmTitle: t(`Open System Settings`),
+    cancelTitle: t(`Not Now`),
     windowId,
   });
   if (confirmed) void openNotificationSettings();

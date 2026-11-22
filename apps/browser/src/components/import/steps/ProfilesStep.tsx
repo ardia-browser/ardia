@@ -15,9 +15,11 @@ import {
 } from "../../../state/import/flow";
 import { continueImport } from "../../../state/import/runImport";
 import type { BrowserSource } from "../../../state/import/apply";
+import { t } from "../../../lib/uiLanguage";
+
 
 const firstSpaceNote =
-  "The first space goes into your selected profile and the others become new profiles. If Personal is your only profile and you haven't changed it, it takes the first space's name, emoji and color instead.";
+  t(`The first space goes into your selected profile and the others become new profiles. If Personal is your only profile and you haven't changed it, it takes the first space's name, emoji and color instead.`);
 
 const spacesNote = (name: string, zen: boolean) =>
   zen
@@ -27,7 +29,7 @@ const spacesNote = (name: string, zen: boolean) =>
 function spaceSubtitle(source: BrowserSource, s: ReturnType<typeof spacesOf>[number]) {
   const withSpaces = source.profiles.filter((p) => p.spaces?.length);
   const from = withSpaces.length > 1 ? source.profiles.find((p) => p.id === s.profileId)?.name : undefined;
-  return [plural(s.pinnedCount, "pinned tab"), plural(s.tabCount, "tab"), from, s.containerName ? `${s.containerName} container` : undefined]
+  return [plural(s.pinnedCount, t(`pinned tab`)), plural(s.tabCount, "tab"), from, s.containerName ? `${s.containerName} container` : undefined]
     .filter(Boolean)
     .join(" · ");
 }
@@ -38,7 +40,7 @@ export function ProfilesBody({ flow }: { flow: ImportFlow }) {
   if (importsBySpaces(source))
     return (
       <>
-        <Title title="Select spaces to import" subtitle={`We'll import your ${source.name} spaces, tabs, and folders to ${APP}.`} />
+        <Title title={t(`Select spaces to import`)} subtitle={`We'll import your ${source.name} spaces, tabs, and folders to ${APP}.`} />
         <Text size="small" tone="textSecondary" style={{ marginBottom: space.ml }}>{spacesNote(source.name, source.sidebar === "zen")}</Text>
         <Group>
           {spacesOf(source).map((s) => (
@@ -47,7 +49,7 @@ export function ProfilesBody({ flow }: { flow: ImportFlow }) {
               selected={spaces.includes(s.id)}
               onToggle={(v) => toggleImportSpace(s.id, v)}
               icon={<SpaceIcon space={s} />}
-              title={s.name || "Space"}
+              title={s.name || t(`Space`)}
               subtitle={spaceSubtitle(source, s)}
             />
           ))}
@@ -60,7 +62,7 @@ export function ProfilesBody({ flow }: { flow: ImportFlow }) {
                   onToggle={(v) => toggleSourceProfile(p.id, v)}
                   icon={<Monogram name={p.name} color={p.color} />}
                   title={p.name}
-                  subtitle={p.isDefault ? "Default profile" : undefined}
+                  subtitle={p.isDefault ? t(`Default profile`) : undefined}
                 />
               ))}
         </Group>
@@ -68,7 +70,7 @@ export function ProfilesBody({ flow }: { flow: ImportFlow }) {
     );
   return (
     <>
-      <Title title="Unlock your data for import" subtitle="Select the profiles you want to import." />
+      <Title title={t(`Unlock your data for import`)} subtitle={t(`Select the profiles you want to import.`)} />
       <Text size="small" tone="textSecondary" style={{ marginBottom: space.ml }}>{`Customize which profiles to bring over to ${APP}. The first goes into your selected profile; the others become new profiles.`}</Text>
       <Group>
         {source.profiles.map((p) => (
@@ -78,7 +80,7 @@ export function ProfilesBody({ flow }: { flow: ImportFlow }) {
             onToggle={(v) => toggleSourceProfile(p.id, v)}
             icon={<ProfileAvatar path={p.avatarPath} name={p.name} color={p.color} />}
             title={p.name}
-            subtitle={p.email ?? (p.isDefault ? "Default profile" : undefined)}
+            subtitle={p.email ?? (p.isDefault ? t(`Default profile`) : undefined)}
           />
         ))}
       </Group>
@@ -92,11 +94,11 @@ export function ProfilesFooter({ flow }: { flow: ImportFlow }) {
   const bySpaces = importsBySpaces(source);
   return (
     <>
-      <Button title="Back" onPress={() => backTo("choose")} />
+      <Button title={t(`Back`)} onPress={() => backTo("choose")} />
       <Spacer />
       <TargetPicker target={flow.target} onChange={setImportTarget} />
       <Button
-        title="Continue"
+        title={t(`Continue`)}
         kind="primary"
         disabled={bySpaces ? !spaces.length && (source.sidebar !== "zen" || !spacelessProfiles(source).some((p) => sourceProfiles.includes(p.id))) : !sourceProfiles.length}
         onPress={continueImport}

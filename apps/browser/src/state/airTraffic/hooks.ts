@@ -9,6 +9,8 @@ import { isIncognitoProfile } from "../browser/model";
 import { useAirTraffic } from "./store";
 import { routeGroupName, routeGroups, routeTargetsStamp, type RouteGroup } from "./groups";
 import type { AirTrafficConfig, SourceApp } from "./rules";
+import { t } from "../../lib/uiLanguage";
+
 
 export const useAirTrafficConfig = (): AirTrafficConfig => useAirTraffic((s) => s.config);
 
@@ -36,7 +38,7 @@ export type LinkHookRow = { name: string; from: string[]; patterns: string[]; an
 
 function answerOf(hook: HookSpec): string {
   if (hook.program) return `asks ${hook.program[0]}`;
-  if (hook.rules?.drop) return "drops it";
+  if (hook.rules?.drop) return t(`drops it`);
   const route = hook.rules?.route;
   return [route?.profile && `profile ${route.profile}`, route?.open].filter(Boolean).join(", ");
 }

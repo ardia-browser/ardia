@@ -9,6 +9,8 @@ import { defaultSearchEngine } from "../settings/settings";
 import { canShare, shareTab } from "../site/share";
 import { copyPageUrl } from "../site/selection";
 import type { Tab } from "../browser/types";
+import { t } from "../../lib/uiLanguage";
+
 
 export async function clipboardPasteAction(): Promise<PasteAction | null> {
   return classifyPaste(await readText());
@@ -16,7 +18,7 @@ export async function clipboardPasteAction(): Promise<PasteAction | null> {
 
 export function pasteMenuItem(action: PasteAction | null): MenuItem[] {
   if (!action) return [];
-  return [{ id: "pasteAndGo", title: action.kind === "go" ? "Paste and Go" : "Paste and Search", symbol: action.kind === "go" ? "arrow.right.circle" : "magnifyingglass" }];
+  return [{ id: "pasteAndGo", title: action.kind === "go" ? t(`Paste and Go`) : t(`Paste and Search`), symbol: action.kind === "go" ? "arrow.right.circle" : "magnifyingglass" }];
 }
 
 export function pasteTarget(action: PasteAction): string {
@@ -29,13 +31,13 @@ export function urlBarMenuItems({ paste, shareable, keys = menuShortcut }: { pas
   return menuSections(
     [
       ...withOptionAlternate(
-        { id: "copy", title: "Copy Link", symbol: "link" },
-        { id: "copyMarkdown", title: "Copy Link as Markdown", symbol: "link" },
+        { id: "copy", title: t(`Copy Link`), symbol: "link" },
+        { id: "copyMarkdown", title: t(`Copy Link as Markdown`), symbol: "link" },
         { primary: keys("copyUrl"), alternate: keys("copyUrlAsMarkdown") },
       ),
       ...pasteMenuItem(paste),
     ],
-    [shareable && { id: "share", title: "Share", symbol: "square.and.arrow.up", share: true }],
+    [shareable && { id: "share", title: t(`Share`), symbol: "square.and.arrow.up", share: true }],
   );
 }
 
@@ -54,8 +56,8 @@ const editItem = (id: keyof typeof EDIT_KEYS, title: string, enabled: boolean): 
 export function fieldMenuItems({ paste, hasSelection, hasText }: { paste: PasteAction | null; hasSelection: boolean; hasText: boolean }): MenuItem[] {
   return menuSections(
     pasteMenuItem(paste),
-    [editItem("cut", "Cut", hasSelection), editItem("copy", "Copy", hasSelection), editItem("paste", "Paste", !!paste)],
-    [editItem("selectAll", "Select All", hasText)],
+    [editItem("cut", t(`Cut`), hasSelection), editItem("copy", t(`Copy`), hasSelection), editItem("paste", t(`Paste`), !!paste)],
+    [editItem("selectAll", t(`Select All`), hasText)],
   );
 }
 

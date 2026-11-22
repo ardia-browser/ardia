@@ -4,6 +4,8 @@ import { noteSearchSuggest } from "../telemetry/track";
 import { consentNow } from "../telemetry/client";
 import { engineProfile, isIncognitoProfile } from "../browser/model";
 import { useBrowser } from "../browser/store";
+import { t } from "../../lib/uiLanguage";
+
 
 const BLOCKED_STATUSES = new Set([403, 429]);
 let nextRequestId = 1;
@@ -20,7 +22,7 @@ export function browserSuggestFetch(profile: string): FetchLike {
     signal.addEventListener("abort", stop, { once: true });
     try {
       const reply = await fetchSearchSuggestions(profile, url, id);
-      if (reply.stopped || signal.aborted) throw new Error("suggestion request stopped");
+      if (reply.stopped || signal.aborted) throw new Error(t(`suggestion request stopped`));
       noteSearchSuggest(reply.status === 200 ? "ok" : BLOCKED_STATUSES.has(reply.status) ? "blocked" : "failed", consent);
       const body = reply.body ?? "";
       return { ok: reply.status === 200 && !!body, text: async () => body };

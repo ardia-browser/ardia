@@ -10,6 +10,8 @@ import { useCustomTheme } from "../../state/settings/themeDraft";
 import { capsule, CustomLookBackdrop, font, settingsLayout, space, Symbol, themeEditorLayout as L, useProfileLook, useTheme } from "../ui";
 import { Group, PickerRow, SettingsHostedContext, SettingsPage } from "./SettingsKit";
 import { ColorPad, DirectionDial, LightnessBar, ThemeSlider, type BlockedScroll } from "./ThemeControls";
+import { t } from "../../lib/uiLanguage";
+
 
 function useLiveTheme(stored: ProfileTheme) {
   const [local, setLocal] = useState<ProfileTheme | null>(null);
@@ -67,7 +69,7 @@ function ThemeEditor({ stored }: { stored: ProfileTheme }) {
       <Group>
         <CustomLookBackdrop testID="themePreview" look={preview} dark={dark} style={styles.preview} />
       </Group>
-      <Group header="Colors" footer={editsDark === null ? null : `Separate light and dark looks. Editing keeps the ${editsDark ? "dark" : "light"} one.`}>
+      <Group header={t(`Colors`)} footer={editsDark === null ? null : `Separate light and dark looks. Editing keeps the ${editsDark ? "dark" : "light"} one.`}>
         <View style={styles.colors}>
           <ColorPad theme={theme} selected={index} onSelect={setSelected} onChange={change} blocks={blocks} />
           <LightnessBar theme={theme} index={index} onChange={change} blocks={blocks} />
@@ -77,7 +79,7 @@ function ThemeEditor({ stored }: { stored: ProfileTheme }) {
             </Text>
             <Stepper
               icon="minus"
-              label="Remove Color"
+              label={t(`Remove Color`)}
               enabled={theme.stops.length > 1}
               onPress={() => {
                 change(withoutStop(theme, index), true);
@@ -86,7 +88,7 @@ function ThemeEditor({ stored }: { stored: ProfileTheme }) {
             />
             <Stepper
               icon="plus"
-              label="Add Color"
+              label={t(`Add Color`)}
               enabled={theme.stops.length < MAX_THEME_STOPS}
               onPress={() => {
                 change(withAddedStop(theme), true);
@@ -97,22 +99,22 @@ function ThemeEditor({ stored }: { stored: ProfileTheme }) {
         </View>
       </Group>
       <Group>
-        <ThemeSlider title="Intensity" value={theme.intensity} onChange={live("intensity")} blocks={blocks} />
-        <ThemeSlider title="Pass-Through Blur" value={theme.translucency} onChange={live("translucency")} blocks={blocks} />
-        <ThemeSlider title="Noise" value={theme.grain} onChange={live("grain")} blocks={blocks} />
-        <PickerRow<ThemeTexture> title="Texture" options={THEME_TEXTURES.map((id) => ({ id, title: TEXTURE_NAMES[id] }))} selected={theme.texture} divider onSelect={(texture) => change(withTexture(theme, texture), true)} />
-        <Row title="Direction">
+        <ThemeSlider title={t(`Intensity`)} value={theme.intensity} onChange={live("intensity")} blocks={blocks} />
+        <ThemeSlider title={t(`Pass-Through Blur`)} value={theme.translucency} onChange={live("translucency")} blocks={blocks} />
+        <ThemeSlider title={t(`Noise`)} value={theme.grain} onChange={live("grain")} blocks={blocks} />
+        <PickerRow<ThemeTexture> title={t(`Texture`)} options={THEME_TEXTURES.map((id) => ({ id, title: TEXTURE_NAMES[id] }))} selected={theme.texture} divider onSelect={(texture) => change(withTexture(theme, texture), true)} />
+        <Row title={t(`Direction`)}>
           <Text style={[font.body, styles.degrees, { color: ui.secondaryLabel }]}>{Math.round(lookAngle(theme))}°</Text>
           <DirectionDial angle={lookAngle(theme)} onChange={(angle, settle) => change(withAngle(theme, angle), settle)} blocks={blocks} />
         </Row>
       </Group>
       <Group footer={kept ? `Kept ${dark ? "dark" : "light"} so text stays readable.` : null}>
-        <PickerRow<ThemeMode> title="Appearance" options={[...THEME_MODES]} selected={theme.mode} onSelect={(mode) => set({ mode })} />
+        <PickerRow<ThemeMode> title={t(`Appearance`)} options={[...THEME_MODES]} selected={theme.mode} onSelect={(mode) => set({ mode })} />
       </Group>
     </LegacyScrollView>
   );
   return (
-    <SettingsPage title="Theme" onBack={popSettings} scroll={false}>
+    <SettingsPage title={t(`Theme`)} onBack={popSettings} scroll={false}>
       {hosted ? <GestureHandlerRootView style={styles.fill}>{body}</GestureHandlerRootView> : body}
     </SettingsPage>
   );

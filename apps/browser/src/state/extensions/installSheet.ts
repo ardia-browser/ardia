@@ -10,8 +10,10 @@ import { noteExtensionInstallPromptStale } from "../telemetry/usage";
 import { declinePrompt, holdPrompt, takeHeldPrompt } from "./installPrompts";
 import { refreshExtensions, refreshExtensionsAfterChange } from "./lists";
 import { extensionProfile, nextInstallKey, useExtensions, type InstallRequest } from "./store";
+import { t } from "../../lib/uiLanguage";
 
-const STALE_PROMPT = "This install request has closed. Open the extension's page in the Chrome Web Store and add it again.";
+
+const STALE_PROMPT = t(`This install request has closed. Open the extension's page in the Chrome Web Store and add it again.`);
 
 const utilityHosts = new Map<string, number>();
 

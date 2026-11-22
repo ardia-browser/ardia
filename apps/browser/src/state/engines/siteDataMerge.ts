@@ -1,4 +1,6 @@
 import type { ChromiumCookieWrite, CookieRemoval, PageCookie, StorageItems } from "../../platform/webkit";
+import { t } from "../../lib/uiLanguage";
+
 
 const knownDomains = new Map<string, string>();
 const MAX_KNOWN_DOMAINS = 4000;

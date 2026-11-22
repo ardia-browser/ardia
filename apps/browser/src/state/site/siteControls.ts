@@ -8,17 +8,19 @@ import { ensureLocationPermission } from "./locationAccess";
 import { noteSiteControls } from "../telemetry/usage";
 import { consentToken } from "../telemetry/client";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
+import { t } from "../../lib/uiLanguage";
+
 
 export type SitePermission = { type: SiteSettingType; title: string; icon: string; badge: string; choices: SiteSettingValue[] };
 
 const SITE_PERMISSIONS: SitePermission[] = [
-  { type: "camera", title: "Camera", icon: "video", badge: "video.fill", choices: ["ask", "allow", "block"] },
-  { type: "microphone", title: "Microphone", icon: "mic", badge: "mic.fill", choices: ["ask", "allow", "block"] },
-  { type: "location", title: "Location", icon: "location", badge: "location.fill", choices: ["ask", "allow", "block"] },
-  { type: "notifications", title: "Notifications", icon: "bell", badge: "bell.fill", choices: ["ask", "allow", "block"] },
-  { type: "popups", title: "Pop-ups and Redirects", icon: "macwindow.on.rectangle", badge: "macwindow.on.rectangle", choices: ["allow", "block"] },
-  { type: "sound", title: "Sound", icon: "speaker.wave.2", badge: "speaker.wave.2.fill", choices: ["allow", "block"] },
-  { type: "autoplay", title: "Autoplay", icon: "play.rectangle", badge: "play.rectangle.fill", choices: ["allow", "block"] },
+  { type: "camera", title: t(`Camera`), icon: "video", badge: "video.fill", choices: ["ask", "allow", "block"] },
+  { type: "microphone", title: t(`Microphone`), icon: "mic", badge: "mic.fill", choices: ["ask", "allow", "block"] },
+  { type: "location", title: t(`Location`), icon: "location", badge: "location.fill", choices: ["ask", "allow", "block"] },
+  { type: "notifications", title: t(`Notifications`), icon: "bell", badge: "bell.fill", choices: ["ask", "allow", "block"] },
+  { type: "popups", title: t(`Pop-ups and Redirects`), icon: "macwindow.on.rectangle", badge: "macwindow.on.rectangle", choices: ["allow", "block"] },
+  { type: "sound", title: t(`Sound`), icon: "speaker.wave.2", badge: "speaker.wave.2.fill", choices: ["allow", "block"] },
+  { type: "autoplay", title: t(`Autoplay`), icon: "play.rectangle", badge: "play.rectangle.fill", choices: ["allow", "block"] },
 ];
 
 export const offersSiteSetting = (type: SiteSettingType) => type !== "autoplay" || PLATFORM_FEATURES.blocksAutoplay;
@@ -27,7 +29,7 @@ export const sitePermissionsFor = (engine: PageEngine) =>
   SITE_PERMISSIONS.filter((p) => offersSiteSetting(p.type) && (engine !== "webkit" || p.type === "sound" || WEBKIT_SITE_SETTINGS.includes(p.type)));
 
 export const choiceTitle = (type: SiteSettingType, value: SiteSettingValue) =>
-  type === "sound" ? (value === "block" ? "Muted" : "Allowed") : value === "allow" ? "Allowed" : value === "block" ? "Blocked" : "Ask";
+  type === "sound" ? (value === "block" ? t(`Muted`) : t(`Allowed`)) : value === "allow" ? t(`Allowed`) : value === "block" ? t(`Blocked`) : t(`Ask`);
 
 export const readSiteSettings = (profile: string, origin: string, engine: PageEngine) =>
   getSiteSettings(profile, origin, engine).catch((): SiteSettings => ({}) as SiteSettings);
@@ -73,7 +75,7 @@ export async function setSitePermission(
 
 export function blockerLabel(blocker: { enabled: boolean; allowed: boolean } | null, blocked: number): string {
   if (!blocker) return "…";
-  if (!blocker.enabled) return "Off in Settings";
-  if (blocker.allowed) return "Off for this site";
-  return blocked > 0 ? `On · ${blocked} blocked on this page` : "On";
+  if (!blocker.enabled) return t(`Off in Settings`);
+  if (blocker.allowed) return t(`Off for this site`);
+  return blocked > 0 ? `On · ${blocked} blocked on this page` : t(`On`);
 }

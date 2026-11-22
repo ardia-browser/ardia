@@ -7,6 +7,8 @@ import { SURFACE } from "./tokens";
 import { bool, isHandlerRef, records, str, useSurface } from "./surfaceNodes";
 import { ShortcutScopeContext, useDeeperShortcutScope, useSurfaceKeys } from "./surfaceShortcuts";
 import { controlledValueOf, fieldNodes, formValues, initialOf, optionValue, shownSelectValue, type FormValue } from "./surfaceFormValues";
+import { t } from "../../lib/uiLanguage";
+
 
 type FormState = { values: Record<string, FormValue>; set: (id: string, value: FormValue) => void; submit: () => void } | null;
 
@@ -38,7 +40,7 @@ export function FormNode({ node }: { node: PluginNode }) {
           <Box row gap="s" style={FOOTER}>
             {loading ? <ActivitySpinner style={SPINNER} /> : null}
             <ActionButtons panel={p.actions} primaryFirst={false} />
-            {isHandlerRef(p.onSubmit) ? <Button title={str(p.submitTitle) ?? "Submit"} kind="primary" disabled={loading} onPress={submit} /> : null}
+            {isHandlerRef(p.onSubmit) ? <Button title={str(p.submitTitle) ?? t(`Submit`)} kind="primary" disabled={loading} onPress={submit} /> : null}
           </Box>
         </Box>
       </SurfaceScroll>

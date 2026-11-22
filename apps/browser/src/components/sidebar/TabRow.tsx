@@ -42,6 +42,8 @@ import { entryKey } from "../../state/sidebar/entryKey";
 import type { RowSection } from "./dragModel";
 import type { SplitDropSide } from "../../state/drag/drops";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
+import { t } from "../../lib/uiLanguage";
+
 
 export const TabRowItem = memo(function TabRowItem({
   tabId,
@@ -120,9 +122,9 @@ export const TabRow = memo(function TabRow({
               {resettable ? (
                 <Pressable
                   onPress={() => returnToPinnedUrl(shown.id)}
-                  tooltip={withShortcut("Back to Pinned URL", backToPinHint)}
+                  tooltip={withShortcut(t(`Back to Pinned URL`), backToPinHint)}
                   accessibilityRole="button"
-                  accessibilityLabel="Back to Pinned URL"
+                  accessibilityLabel={t(`Back to Pinned URL`)}
                 >
                   <View pointerEvents="none">
                     {resetting ? (
@@ -147,7 +149,7 @@ export const TabRow = memo(function TabRow({
     );
   }, [tab, iconMarks, quiet, resettable, resetting, textOnly, backToPinHint, resetInk, backToPin.hoverProps]);
   if (!tab) return null;
-  const title = resetting ? "Back to Pinned URL" : tab.customTitle ? tabTitle(tab) : titleWithoutUnread(tabTitle(tab), unread);
+  const title = resetting ? t(`Back to Pinned URL`) : tab.customTitle ? tabTitle(tab) : titleWithoutUnread(tabTitle(tab), unread);
   const away = resettable && !resetting ? rowAwayTitle(tab) : null;
   const hoverFill = quiet ? tokens.quietHover : theme.tabHover;
   const titleColor = quiet ? hex(withAlpha(theme.textTab, active ? tokens.quietActiveText : tokens.quietText)) : active ? theme.rowSelectedText : theme.textTab;
@@ -167,7 +169,7 @@ export const TabRow = memo(function TabRow({
           {previewFade(preview, <>
             {iconSlot}
             {pip && (
-              <StatusIconButton icon="pip" color={theme.textTab} tooltip="Exit Picture in Picture" onPress={togglePip} />
+              <StatusIconButton icon="pip" color={theme.textTab} tooltip={t(`Exit Picture in Picture`)} onPress={togglePip} />
             )}
             {(playingAudio || mute) && (
               <StatusIconButton icon={mute ? "speaker.slash" : "speaker.wave.2"} color={theme.textTab} tooltip={muteTitle(mute)} onPress={() => toggleMute(tab.id)} />
@@ -175,7 +177,7 @@ export const TabRow = memo(function TabRow({
             {renaming ? (
               <RenameField
                 initial={tab.customTitle ?? tab.title}
-                placeholder={tab.title || "Tab name"}
+                placeholder={tab.title || t(`Tab name`)}
                 color={active ? theme.rowSelectedText : theme.textPrimary}
                 onDone={(text) => (text === null ? endRename({ kind: "tab", id: tabId }) : commitRename({ kind: "tab", id: tabId }, text))}
               />
@@ -267,7 +269,7 @@ export function RenameField({
         enableFocusRing={false}
         onSubmitEditing={() => finish(text)}
         onBlur={() => finish(text)}
-        keyDownEvents={[{ key: "Escape" }]}
+        keyDownEvents={[{ key: t(`Escape`) }]}
         onKeyDown={(e) => e.nativeEvent.key === "Escape" && finish(null)}
         style={{ flex: 1, fontSize, fontWeight: weight, color, paddingVertical: 0, paddingHorizontal: 0, transform: [{ translateY: TAB_ROW.renameTextOffset }], ...typeFace() }}
       />

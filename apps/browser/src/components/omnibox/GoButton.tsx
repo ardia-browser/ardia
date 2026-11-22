@@ -4,11 +4,13 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { Symbol, Text, useHover, useTheme } from "../ui";
 import { GlassFill, useGlass } from "../ui/Glass";
 import { BAR_TYPE, GO_BUTTON } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 export function destinationLabel(s: Suggestion | undefined): string {
   if (s?.kind === "search") return s.engine;
-  if (s?.kind === "calc") return "Copy";
-  return "Go";
+  if (s?.kind === "calc") return t(`Copy`);
+  return t(`Go`);
 }
 
 export const GoButton = memo(function GoButton({ label, enabled, onPress }: { label: string; enabled: boolean; onPress(): void }) {

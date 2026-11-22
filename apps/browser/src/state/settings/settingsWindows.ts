@@ -2,6 +2,8 @@ import { focusWindow, openWindow } from "../../platform/windows";
 import { create } from "zustand";
 import { useBrowser } from "../browser/store";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
+import { t } from "../../lib/uiLanguage";
+
 
 export const SETTINGS_WINDOW_ID = "settings";
 export const IMPORT_WINDOW_ID = "import";
@@ -71,7 +73,7 @@ export function openSettings(pane?: SettingsPane, profileId?: string | null, det
     targetedOpenListeners.forEach((listener) => listener(consent));
     goToSettingsPane(pane, profileId ?? null, detail ?? null);
   }
-  void openWindow(SETTINGS_WINDOW_ID, { kind: "settings", title: "Settings" });
+  void openWindow(SETTINGS_WINDOW_ID, { kind: "settings", title: t(`Settings`) });
 }
 
 export const openSiteSettings = (origin: string, profileId: string) => openSettings("profiles", profileId, SETTINGS_DETAIL.site(origin));
@@ -86,7 +88,7 @@ export function takePreferredImportSource() {
 
 export function openImport(browserId?: string) {
   useImportRequest.setState({ source: browserId ?? null });
-  void openWindow(IMPORT_WINDOW_ID, { kind: "import", title: "Import from Another Browser" });
+  void openWindow(IMPORT_WINDOW_ID, { kind: "import", title: t(`Import from Another Browser`) });
 }
 
 export function settingsBrowserWindow(): string | null {

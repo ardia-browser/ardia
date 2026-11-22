@@ -7,6 +7,8 @@ import { MenuRow, MenuSeparator, MouseArea, PANEL, Popover, POPOVER_MARGIN, POPO
 import { Favicon, NewTabIcon } from "../favicon/Favicon";
 import { modifiersOf } from "../../lib/keys";
 import { closeHistoryMenu, closeHistoryMenuOf, goToHistoryItem, historyFavicons, useHistoryMenu, type HistoryItem } from "../../state/tabs/navigation";
+import { t } from "../../lib/uiLanguage";
+
 
 const FAVICON_X = PANEL.inset + (PANEL.iconSlot - 16) / 2;
 
@@ -43,7 +45,7 @@ export function HistoryPopover({ tabId, windowId, left, top }: { tabId: string; 
         <MenuSeparator />
         <MenuRow
           icon="clock"
-          title="Show Full History"
+          title={t(`Show Full History`)}
           onPress={() => {
             closeHistoryMenu();
             openInternalPage("history", windowId);

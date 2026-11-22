@@ -23,6 +23,8 @@ import { spaceMenuSymbol, SpaceTitle } from "../search/StartSpaces";
 import { DUO } from "./duoLayout";
 import { HostLabel, SidebarGlyph } from "./DuoToolbar";
 import { duoInk } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 export type DuoSidebarVariant = "overlay" | "panel";
 
@@ -43,9 +45,9 @@ export function DuoSidebar({ variant, onClose }: Props) {
   const confirmCloseAll = () => {
     const count = order.length;
     const ask: Confirmation = {
-      title: count === 1 ? "Close 1 Tab?" : `Close ${count} Tabs?`,
-      message: privateCount ? "Incognito tabs aren’t saved. Other tabs stay in your Archive." : "They’ll stay in your Archive.",
-      action: count === 1 ? "Close Tab" : "Close All Tabs",
+      title: count === 1 ? t(`Close 1 Tab?`) : `Close ${count} Tabs?`,
+      message: privateCount ? t(`Incognito tabs aren’t saved. Other tabs stay in your Archive.`) : t(`They’ll stay in your Archive.`),
+      action: count === 1 ? t(`Close Tab`) : t(`Close All Tabs`),
       run: () => {
         hideArchiveCard();
         haptics.press();
@@ -61,7 +63,7 @@ export function DuoSidebar({ variant, onClose }: Props) {
     selectProfile(id);
   };
   return (
-    <View testID={variant === "overlay" ? "duoSidebar" : "duoPanel"} accessibilityLabel={variant === "overlay" ? "Sidebar" : "Tabs"} style={styles.fill}>
+    <View testID={variant === "overlay" ? "duoSidebar" : "duoPanel"} accessibilityLabel={variant === "overlay" ? t(`Sidebar`) : t(`Tabs`)} style={styles.fill}>
       {variant === "overlay" ? <View testID="duoSidebarFill" pointerEvents="none" style={[StyleSheet.absoluteFill, styles.overlayFill, { backgroundColor: incognito ? tabsInk.incognitoSheet : theme.surface }]} /> : null}
       <View testID="duoSidebarHeader" style={[styles.header, { marginTop: variant === "overlay" ? DUO.sidebarHeaderTop : DUO.panelTop }]}>
         <View style={styles.switcher}>
@@ -75,7 +77,7 @@ export function DuoSidebar({ variant, onClose }: Props) {
               place={{ width: tabsLayout.menuWidth }}
             >
               {({ onPress }) => (
-                <Pressable accessibilityRole="button" accessibilityLabel={`Space, ${current.name}`} accessibilityHint="Shows your Mac’s spaces." onPress={onPress}>
+                <Pressable accessibilityRole="button" accessibilityLabel={`Space, ${current.name}`} accessibilityHint={t(`Shows your Mac’s spaces.`)} onPress={onPress}>
                   <SpaceTitle space={current} dark={dark} showsChevron />
                 </Pressable>
               )}
@@ -92,7 +94,7 @@ export function DuoSidebar({ variant, onClose }: Props) {
         </View>
         <MoreMenu dark={dark} hasTabs={order.length > 0} syncEnabled={status.isEnabled} onCloseAll={confirmCloseAll} />
         {variant === "overlay" ? (
-          <Pressable accessibilityRole="button" accessibilityLabel="Hide Sidebar" onPress={onClose} style={styles.headerButton}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t(`Hide Sidebar`)} onPress={onClose} style={styles.headerButton}>
             <SidebarGlyph size={DUO.sidebarGlyph} color={rolesFor(dark).foregroundPrimary} />
           </Pressable>
         ) : null}
@@ -109,19 +111,19 @@ export function DuoSidebar({ variant, onClose }: Props) {
 function MoreMenu({ dark, hasTabs, syncEnabled, onCloseAll }: { dark: boolean; hasTabs: boolean; syncEnabled: boolean; onCloseAll: () => void }) {
   const canReopen = useCanReopen();
   const items: MenuItem[] = [
-    { label: "Archive", onPress: openArchive },
-    ...(syncEnabled ? [{ label: "Spaces From Your Mac", onPress: openSpaces }] : []),
+    { label: t(`Archive`), onPress: openArchive },
+    ...(syncEnabled ? [{ label: t(`Spaces From Your Mac`), onPress: openSpaces }] : []),
     "divider",
-    { label: "New Incognito Tab", onPress: newIncognitoTab },
-    ...(canReopen ? [{ label: "Reopen Closed Tab", onPress: reopenLastClosed }] : []),
-    ...(hasTabs ? [{ label: "Close All Tabs", destructive: true, onPress: onCloseAll }] : []),
+    { label: t(`New Incognito Tab`), onPress: newIncognitoTab },
+    ...(canReopen ? [{ label: t(`Reopen Closed Tab`), onPress: reopenLastClosed }] : []),
+    ...(hasTabs ? [{ label: t(`Close All Tabs`), destructive: true, onPress: onCloseAll }] : []),
     "divider",
-    { label: "Settings", onPress: () => openSettings() },
+    { label: t(`Settings`), onPress: () => openSettings() },
   ];
   return (
     <MenuTrigger frost={null} items={items} trigger="tap" fixedOrder haptic={menuOpenedHaptic} dark={dark} place={{ width: tabsLayout.menuWidth }}>
       {({ onPress }) => (
-        <Pressable testID="duoSidebarMore" accessibilityRole="button" accessibilityLabel="More" onPress={onPress} style={styles.headerButton}>
+        <Pressable testID="duoSidebarMore" accessibilityRole="button" accessibilityLabel={t(`More`)} onPress={onPress} style={styles.headerButton}>
           <Symbol name="ellipsis" size={DUO.sidebarMoreGlyph} color={rolesFor(dark).foregroundPrimary} />
         </Pressable>
       )}
@@ -141,9 +143,9 @@ function AddressField({ dark, onClose }: { dark: boolean; onClose: () => void })
     <ChromeSurface testID="duoSidebarAddress" shape="rounded" cornerRadius={controlRadius(DUO.sidebarFieldHeight)} dark={dark} style={styles.field}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Address"
+        accessibilityLabel={t(`Address`)}
         accessibilityValue={{ text: spokenAddress(address) }}
-        accessibilityHint="Opens search with this page’s address."
+        accessibilityHint={t(`Opens search with this page’s address.`)}
         onPress={edit}
         style={styles.fieldHit}
       >
@@ -241,7 +243,7 @@ function SpaceList({ space, isCurrent, showsTiles, dark, onClose }: { space: Syn
       <Pressable
         testID="duoSidebarNewTab"
         accessibilityRole="button"
-        accessibilityLabel="New Tab"
+        accessibilityLabel={t(`New Tab`)}
         onPress={() => {
           onClose();
           newTab();
@@ -262,7 +264,7 @@ function TabRow({ tab, dark, selected, onOpen, onCloseTab }: { tab: BrowserTab; 
   const title = tabTitle(tab);
   const host = barAddress(tab).host;
   return (
-    <MenuTrigger frost={null} items={[{ label: "Close Tab", destructive: true, onPress: onCloseTab }]} haptic={menuOpenedHaptic} dark={dark} place={{ width: tabsLayout.menuWidth }} style={styles.rowPitch}>
+    <MenuTrigger frost={null} items={[{ label: t(`Close Tab`), destructive: true, onPress: onCloseTab }]} haptic={menuOpenedHaptic} dark={dark} place={{ width: tabsLayout.menuWidth }} style={styles.rowPitch}>
       {({ onLongPress }) => (
         <View testID={`duoSidebarRow:${tab.id}`} style={styles.row}>
           {selected ? <ChromeSurface testID="duoSidebarRowGlass" shape="rounded" cornerRadius={DUO.sidebarRowRadius} interactive={false} dark={dark} style={StyleSheet.absoluteFill} /> : null}
@@ -281,7 +283,7 @@ function TabRow({ tab, dark, selected, onOpen, onCloseTab }: { tab: BrowserTab; 
             </Text>
           </Pressable>
           {selected ? (
-            <Pressable testID="duoSidebarRowClose" accessibilityRole="button" accessibilityLabel="Close Tab" onPress={onCloseTab} style={styles.rowClose}>
+            <Pressable testID="duoSidebarRowClose" accessibilityRole="button" accessibilityLabel={t(`Close Tab`)} onPress={onCloseTab} style={styles.rowClose}>
               <Symbol name="xmark" size={DUO.sidebarCloseGlyph} color={roles.secondaryLabel} />
             </Pressable>
           ) : null}
@@ -316,7 +318,7 @@ function SidebarTile({ tile, dark, onOpen }: { tile: PinnedTile; dark: boolean; 
   const folder = tile.folder?.length ? tile.folder : null;
   const label = remoteTitle(tile.title, tile.url);
   const face = (onPress: () => void) => (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityHint={folder ? "Shows the folder’s tabs." : undefined} onPress={onPress} style={styles.tileSlot}>
+    <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityHint={folder ? t(`Shows the folder’s tabs.`) : undefined} onPress={onPress} style={styles.tileSlot}>
       <ChromeSurface testID="duoSidebarTile" shape="rounded" cornerRadius={startLayout.tileRadius} dark={dark} style={styles.tile}>
         <View pointerEvents="none" style={folder ? styles.folderInk : null}>
           {folder ? <Symbol name="folderFill" size={startLayout.tileIcon * startLayout.folderIconShare} color={rolesFor(dark).formAccent} /> : <Favicon iconUrl={null} pageUrl={tile.url} size={startLayout.tileIcon} />}

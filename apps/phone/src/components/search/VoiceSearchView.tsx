@@ -7,6 +7,8 @@ import { PROBLEM_TEXT, voiceControl, type Dictation } from "../../state/voice/di
 import { browseSpoken, closeVoiceSearch, openSpeechSettings, searchSpoken, startListening, stopListening, useDictation, useVoiceLevels, useVoicePresented } from "../../state/voice/store";
 import { browseForMeOffered } from "../../state/browseForMe/offer";
 import { ArdiaLogo, controlRadius, font, FrostSource, LookBackdrop, LookFrost, space, Symbol, useCoverFocus, voiceInk, voiceLayout, type SymbolName, useReduceMotion } from "../ui";
+import { t } from "../../lib/uiLanguage";
+
 
 export function VoiceSearchView() {
   const presented = useVoicePresented();
@@ -34,7 +36,7 @@ function VoiceCover() {
       <Pressable
         ref={cancel}
         accessibilityRole="button"
-        accessibilityLabel="Cancel"
+        accessibilityLabel={t(`Cancel`)}
         onPress={closeVoiceSearch}
         style={[styles.cancel, { top: insets.top + space.s, right: insets.right + space.l }]}
       >
@@ -66,7 +68,7 @@ function Transcript({ dictation }: { dictation: Dictation }) {
       <View style={styles.message}>
         <Text style={[font.title3, styles.bold, styles.centered, { color: voiceInk.label }]}>Speech and Mic permissions required.</Text>
         <Text style={[font.subheadline, styles.centered, { color: voiceInk.soft }]}>{copy().voicePermission}</Text>
-        <GlassPill title="Open Settings" onPress={openSpeechSettings} />
+        <GlassPill title={t(`Open Settings`)} onPress={openSpeechSettings} />
       </View>
     );
   }
@@ -80,7 +82,7 @@ function Transcript({ dictation }: { dictation: Dictation }) {
         accessibilityLiveRegion="polite"
         style={[font.title2, styles.bold, styles.centered, styles.transcript, { color: empty ? voiceInk.quiet : voiceInk.label }]}
       >
-        {empty ? "Listening…" : dictation.transcript}
+        {empty ? t(`Listening…`) : dictation.transcript}
       </Text>
     </Animated.View>
   );
@@ -114,10 +116,10 @@ function Controls({ dictation }: { dictation: Dictation }) {
   const control = voiceControl(dictation);
   return (
     <View style={styles.controls}>
-      {control?.kind === "done" ? <GlassPill title="Done" icon="stopFill" onPress={stopListening} /> : null}
-      {control?.kind === "search" ? <GlassPill title="Search" onPress={() => searchSpoken(control.text)} /> : null}
-      {control?.kind === "search" && browseForMeOffered() ? <GlassPill title="Browse for Me" icon="sparkleMagnifyingglass" onPress={() => browseSpoken(control.text)} /> : null}
-      {control?.kind === "tryAgain" ? <GlassPill title="Try Again" icon="micFill" onPress={() => void startListening()} /> : null}
+      {control?.kind === "done" ? <GlassPill title={t(`Done`)} icon="stopFill" onPress={stopListening} /> : null}
+      {control?.kind === "search" ? <GlassPill title={t(`Search`)} onPress={() => searchSpoken(control.text)} /> : null}
+      {control?.kind === "search" && browseForMeOffered() ? <GlassPill title={t(`Browse for Me`)} icon="sparkleMagnifyingglass" onPress={() => browseSpoken(control.text)} /> : null}
+      {control?.kind === "tryAgain" ? <GlassPill title={t(`Try Again`)} icon="micFill" onPress={() => void startListening()} /> : null}
     </View>
   );
 }
@@ -147,7 +149,7 @@ const styles = StyleSheet.create({
     borderRadius: voiceLayout.logo / 2,
     alignItems: "center",
     justifyContent: "center",
-    boxShadow: "0px 6px 12px rgba(0, 0, 0, 0.15)",
+    boxShadow: t(`0px 6px 12px rgba(0, 0, 0, 0.15)`),
   },
   message: { alignItems: "center", gap: space.m, alignSelf: "stretch" },
   transcript: { backgroundColor: voiceInk.transcript, borderRadius: voiceLayout.transcriptRadius, paddingHorizontal: space.xl, paddingVertical: space.m, overflow: "hidden" },

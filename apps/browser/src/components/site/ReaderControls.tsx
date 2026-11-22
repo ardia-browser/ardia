@@ -4,6 +4,8 @@ import { useShortcutHint, withShortcut } from "../../state/commands/commandShort
 import { Button, MenuRow } from "../ui";
 import { useTheme } from "../ui/theme";
 import type { ToolbarPalette } from "../ui/toolbarColors";
+import { t } from "../../lib/uiLanguage";
+
 
 export const readerButtonShown = (state: { active: boolean; available: boolean } | undefined, quiet: boolean) => !!state && (state.active || (state.available && !quiet));
 
@@ -24,7 +26,7 @@ export const ReaderButton = memo(function ReaderButton({ tabId, palette, onFocus
         onFocus();
         void toggleReader(tabId);
       }}
-      tooltip={withShortcut(state.active ? "Hide Reader" : "Show Reader", hint)}
+      tooltip={withShortcut(state.active ? t(`Hide Reader`) : t(`Show Reader`), hint)}
     />
   );
 });
@@ -35,7 +37,7 @@ export function ReaderRow({ tabId, onClose }: { tabId: string; onClose: () => vo
   return (
     <MenuRow
       icon="doc.plaintext"
-      title={state.active ? "Hide Reader" : "Show Reader"}
+      title={state.active ? t(`Hide Reader`) : t(`Show Reader`)}
       onPress={() => {
         onClose();
         void toggleReader(tabId);

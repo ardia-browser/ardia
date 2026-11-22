@@ -4,6 +4,8 @@ import { sourceMatches, type LinkSource } from "../../lib/linkSource";
 import { globMatches, matchesUrl, parseMatchPattern, type MatchSpec } from "../../lib/matchPattern";
 import { parseSaved, unchanged, versionedJson, type Migrations } from "../../lib/savedDocument";
 import { urlParts } from "../../lib/urlParts";
+import { t } from "../../lib/uiLanguage";
+
 
 export const AIR_TRAFFIC_DOC = "air-traffic.json";
 export const AIR_TRAFFIC_VERSION = 2;
@@ -66,9 +68,9 @@ export function exactAddress(text: string): string | null {
 
 export function linkTextProblem(kind: LinkTextKind, text: string): string | null {
   const t = linkText(text);
-  if (/^[\s/?#.:;,&=]*$/.test(t)) return "it matches every link; pick Any link for that";
+  if (/^[\s/?#.:;,&=]*$/.test(t)) return t(`it matches every link; pick Any link for that`);
   if (text.length > MAX_LINK_TEXT) return `keep it under ${MAX_LINK_TEXT} characters`;
-  if (kind === "equals" && !exactAddress(text)) return "type a web address like example.com/docs, without ? or # (http and https only)";
+  if (kind === "equals" && !exactAddress(text)) return t(`type a web address like example.com/docs, without ? or # (http and https only)`);
   return null;
 }
 
@@ -83,7 +85,7 @@ export const isWildcardPattern = (pattern: string) => pattern !== "<all_urls>" &
 export function patternProblem(pattern: string): string | null {
   const text = pattern.trim();
   if (!text) return "type one, like *github* or https://*.example.com/docs/*";
-  if (isWildcardPattern(text)) return /\s/.test(text) ? "a pattern can't have spaces" : null;
+  if (isWildcardPattern(text)) return /\s/.test(text) ? t(`a pattern can't have spaces`) : null;
   const spec = parseMatchPattern(text);
   return "error" in spec ? spec.error : null;
 }

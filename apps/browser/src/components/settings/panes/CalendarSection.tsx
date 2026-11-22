@@ -8,10 +8,12 @@ import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { Box, Button, Checkbox, EmptyState, PopUp, radius, space, Text, Toggle, type Option } from "../../ui";
 import { perLook } from "../../ui/tokens";
 import { Group, Row, SectionHeader } from "../Form";
+import { t } from "../../../lib/uiLanguage";
+
 
 const COUNTDOWN_OFF = "off";
 const COUNTDOWN_OPTIONS: Option<string>[] = [
-  { value: COUNTDOWN_OFF, title: "Off" },
+  { value: COUNTDOWN_OFF, title: t(`Off`) },
   ...COUNTDOWN_LEADS.map((m, i) => ({ value: String(m), title: countdownLeadTitle(m), separatorBefore: i === 0 })),
 ];
 
@@ -35,28 +37,28 @@ function OfferedCalendarSection() {
   return (
     <View>
       <SectionHeader
-        title="Calendar"
-        description="Pin a calendar to see your day, a countdown and meeting alerts. Uses the Calendar app's accounts."
+        title={t(`Calendar`)}
+        description={t(`Pin a calendar to see your day, a countdown and meeting alerts. Uses the Calendar app's accounts.`)}
       />
       <Group>
         <Row
           anchor="automations.calendarAccess"
           description={
             access === "fixture"
-              ? "Development build: using calendar-fixture.json"
+              ? t(`Development build: using calendar-fixture.json`)
               : connected
                 ? `Connected · ${calendars.length === 1 ? "1 calendar" : `${calendars.length} calendars`}`
                 : blocked
-                  ? (requestError ?? "Ardia isn't allowed to read your calendars. Allow it in System Settings › Privacy & Security › Calendars.")
-                  : (requestError ?? "Not connected")
+                  ? (requestError ?? t(`Ardia isn't allowed to read your calendars. Allow it in System Settings › Privacy & Security › Calendars.`))
+                  : (requestError ?? t(`Not connected`))
           }
         >
           {blocked ? (
-            <Button title="Open System Settings" onPress={openCalendarPrivacy} />
+            <Button title={t(`Open System Settings`)} onPress={openCalendarPrivacy} />
           ) : !connected ? (
             <Box row gap="s">
-              {requestError ? <Button title="Open System Settings" onPress={openCalendarPrivacy} /> : null}
-              <Button title={requesting ? "Connecting…" : "Connect Calendar…"} kind="primary" disabled={requesting} onPress={() => void connectCalendar()} />
+              {requestError ? <Button title={t(`Open System Settings`)} onPress={openCalendarPrivacy} /> : null}
+              <Button title={requesting ? t(`Connecting…`) : t(`Connect Calendar…`)} kind="primary" disabled={requesting} onPress={() => void connectCalendar()} />
             </Box>
           ) : null}
         </Row>
@@ -67,8 +69,8 @@ function OfferedCalendarSection() {
           <PopUp
             value={settings.alertCondition}
             options={[
-              { value: "always", title: "Always" },
-              { value: "activeOnly", title: "Only When Active" },
+              { value: "always", title: t(`Always`) },
+              { value: "activeOnly", title: t(`Only When Active`) },
             ]}
             disabled={settings.alertLead === "never"}
             onChange={(v) => updateCalendarSettings({ alertCondition: v })}
@@ -76,27 +78,27 @@ function OfferedCalendarSection() {
           />
         </Row>
         <Row anchor="automations.calendarPreview">
-          <Toggle value={settings.showPreview} accessibilityLabel="Show calendar preview" onChange={(v) => updateCalendarSettings({ showPreview: v })} />
+          <Toggle value={settings.showPreview} accessibilityLabel={t(`Show calendar preview`)} onChange={(v) => updateCalendarSettings({ showPreview: v })} />
         </Row>
         <Row anchor="automations.countdown">
-          <PopUp value={countdown} options={COUNTDOWN_OPTIONS} onChange={pickCountdown} minWidth={170} accessibilityLabel="Countdown to next meeting" />
+          <PopUp value={countdown} options={COUNTDOWN_OPTIONS} onChange={pickCountdown} minWidth={170} accessibilityLabel={t(`Countdown to next meeting`)} />
         </Row>
         <Row anchor="automations.groupMeetingTabs">
-          <Toggle value={autoGroup} accessibilityLabel="Group tabs for meetings" onChange={(v) => updateSettings({ autoGroupMeetingTabs: v })} />
+          <Toggle value={autoGroup} accessibilityLabel={t(`Group tabs for meetings`)} onChange={(v) => updateSettings({ autoGroupMeetingTabs: v })} />
         </Row>
       </Group>
 
       {connected && calendars.length ? (
         <>
-          <SectionHeader title="Active calendars" description="Meetings from unchecked calendars don't show or alert." />
+          <SectionHeader title={t(`Active calendars`)} description={t(`Meetings from unchecked calendars don't show or alert.`)} />
           <Group>
-            {owned.length ? <CalendarList title="My Calendars" calendars={owned} hidden={settings.hiddenCalendarIds} /> : null}
-            {others.length ? <CalendarList title="Other Calendars" calendars={others} hidden={settings.hiddenCalendarIds} /> : null}
+            {owned.length ? <CalendarList title={t(`My Calendars`)} calendars={owned} hidden={settings.hiddenCalendarIds} /> : null}
+            {others.length ? <CalendarList title={t(`Other Calendars`)} calendars={others} hidden={settings.hiddenCalendarIds} /> : null}
           </Group>
         </>
       ) : connected ? (
         <View style={NO_CALENDARS}>
-          <EmptyState symbol="calendar" title="No calendars found" subtitle="Add accounts in the Calendar app." />
+          <EmptyState symbol="calendar" title={t(`No calendars found`)} subtitle={t(`Add accounts in the Calendar app.`)} />
         </View>
       ) : null}
     </View>

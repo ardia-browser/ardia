@@ -4,6 +4,8 @@ import { newId, pinSection, TILE_PIN } from "../browser/model";
 import { placing } from "./placing";
 import { sameTopApp } from "./topApps";
 import type { ParkedPins, Tab, TileFolder } from "../browser/types";
+import { t } from "../../lib/uiLanguage";
+
 
 export const FOLDER_CELL = "folder:";
 export const folderCell = (folderId: string) => `${FOLDER_CELL}${folderId}`;
@@ -11,7 +13,7 @@ export const folderIdOfCell = (key: string): string | null => (key.startsWith(FO
 
 export const tileFolderOf = (t: Pick<Tab, "pin"> | undefined): TileFolder | undefined => (t?.pin?.as === "tile" ? t.pin.folder : undefined);
 
-export const folderLabel = (folder: TileFolder | undefined) => folder?.name.trim() || "Folder";
+export const folderLabel = (folder: TileFolder | undefined) => folder?.name.trim() || t(`Folder`);
 
 export function withTileFolder<T extends Pick<Tab, "pin">>(t: T, folder: TileFolder | undefined): T {
   if (t.pin?.as !== "tile" || t.pin.folder === folder) return t;

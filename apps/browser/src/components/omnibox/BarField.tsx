@@ -7,6 +7,8 @@ import { PASTED_TYPES } from "./omniboxKeys";
 import { useClaimFollowsFocus, type FocusClaim } from "./claimFollowsFocus";
 import { useRevertRepair } from "./useRevertRepair";
 import { BAR, BAR_TYPE } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 type InputProps = ComponentProps<typeof TextInput>;
 
@@ -71,7 +73,7 @@ export function BarField({
         }
         onSelection(next);
       }}
-      placeholder={scope ? `Search ${scope.name}` : incognito ? "Search privately or enter address" : "Search or enter address"}
+      placeholder={scope ? `Search ${scope.name}` : incognito ? t(`Search privately or enter address`) : t(`Search or enter address`)}
       placeholderTextColor={theme.placeholder}
       pastedTypes={PASTED_TYPES}
       selectionColor={theme.selection}

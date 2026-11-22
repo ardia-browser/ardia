@@ -1,3 +1,4 @@
+import { t } from "./uiLanguage";
 export type ArchiveDayKind = "today" | "yesterday" | "weekday" | "monthDay" | "monthDayYear";
 
 const startOfDay = (at: number) => {
@@ -19,9 +20,9 @@ export function archiveDayTitle(at: number, now: number, locale?: string): strin
   const day = new Date(at);
   switch (archiveDayKind(at, now)) {
     case "today":
-      return "Today";
+      return t(`Today`);
     case "yesterday":
-      return "Yesterday";
+      return t(`Yesterday`);
     case "weekday":
       return day.toLocaleDateString(locale, { weekday: "long" });
     case "monthDay":

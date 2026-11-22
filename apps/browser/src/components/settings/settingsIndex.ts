@@ -12,18 +12,20 @@ import { profileRows } from "./rows/profileRows";
 import { shortcutRows } from "./rows/shortcutRows";
 import { tabRows } from "./rows/tabRows";
 import type { SettingSection, SettingsEnv } from "./rows/types";
+import { t } from "../../lib/uiLanguage";
+
 
 type PaneTint = Exclude<keyof typeof paneTints, "ink">;
 
 const PANE_LOOKS: Record<SettingsPane, { title: string; icon: string; tint: PaneTint }> = {
-  general: { title: "General", icon: "gearshape.fill", tint: "gray" },
-  profiles: { title: "Profiles", icon: "person.2.fill", tint: "blue" },
-  tabs: { title: "Tabs", icon: "square.on.square.fill", tint: "orange" },
-  appearance: { title: "Appearance", icon: "circle.lefthalf.filled", tint: "indigo" },
-  automations: { title: "Automations", icon: "wand.and.rays", tint: "purple" },
-  plugins: { title: "Plugins", icon: "puzzlepiece.fill", tint: "teal" },
-  shortcuts: { title: "Shortcuts", icon: "keyboard.fill", tint: "pink" },
-  advanced: { title: "Advanced", icon: ADVANCED_PANE_SYMBOL, tint: "gray" },
+  general: { title: t(`General`), icon: "gearshape.fill", tint: "gray" },
+  profiles: { title: t(`Profiles`), icon: "person.2.fill", tint: "blue" },
+  tabs: { title: t(`Tabs`), icon: "square.on.square.fill", tint: "orange" },
+  appearance: { title: t(`Appearance`), icon: "circle.lefthalf.filled", tint: "indigo" },
+  automations: { title: t(`Automations`), icon: "wand.and.rays", tint: "purple" },
+  plugins: { title: t(`Plugins`), icon: "puzzlepiece.fill", tint: "teal" },
+  shortcuts: { title: t(`Shortcuts`), icon: "keyboard.fill", tint: "pink" },
+  advanced: { title: t(`Advanced`), icon: ADVANCED_PANE_SYMBOL, tint: "gray" },
 };
 
 export const PANES: { id: SettingsPane; title: string; icon: string; tint: PaneTint }[] = SETTINGS_PANES.map((id) => ({ id, ...PANE_LOOKS[id] }));

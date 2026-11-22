@@ -16,6 +16,8 @@ import { ChoiceCard } from "./ChoiceCard";
 import { OptionCard } from "./OptionCard";
 import { Tag, useOnboardingColors } from "./Parts";
 import { StepActions, StepLayout } from "./StepLayout";
+import { t } from "../../lib/uiLanguage";
+
 
 export function PluginsStep() {
   const plugins = offeredInOnboarding(useOfficialPlugins());
@@ -40,8 +42,8 @@ export function PluginsStep() {
   return (
     <StepLayout
       pageKey="plugins"
-      title={nothingToDo ? "You're already set" : phase === "installed" ? "Installed" : "Want the extras?"}
-      subtitle={nothingToDo ? "Nothing to install." : phase === "installed" ? "Open a new terminal to use it." : "Official plugins. Optional."}
+      title={nothingToDo ? t(`You're already set`) : phase === "installed" ? t(`Installed`) : t(`Want the extras?`)}
+      subtitle={nothingToDo ? t(`Nothing to install.`) : phase === "installed" ? t(`Open a new terminal to use it.`) : t(`Official plugins. Optional.`)}
       actions={
         <StepActions
           continueTitle={primaryTitle(plugins, { picks, phase: shownPhase })}
@@ -70,7 +72,7 @@ function PluginCard({ plugin, picked, asking }: { plugin: OfficialPlugin; picked
   const view = officialView(plugin, programs, failure ? { state: "failed", reason: failure } : working ? { state: "installing" } : null, working ? fetch : undefined);
   if (plugin.state === "available" && (phase === "offer" || asking))
     return <OptionCard control="check" icon={plugin.icon} title={officialTitle(plugin)} subtitle={plugin.blurb} subtitleLines={1} selected={picked} onPress={() => togglePluginPick(plugin)} />;
-  return <StatusCard plugin={plugin} status={view.note === "comingSoon" ? "" : (view.status ?? (view.note === "installed" ? "Installed" : null))} failed={view.failed} busy={view.busy} soon={view.note === "comingSoon"} done={view.note === "installed" && !view.failed && !view.busy} />;
+  return <StatusCard plugin={plugin} status={view.note === "comingSoon" ? "" : (view.status ?? (view.note === "installed" ? t(`Installed`) : null))} failed={view.failed} busy={view.busy} soon={view.note === "comingSoon"} done={view.note === "installed" && !view.failed && !view.busy} />;
 }
 
 function StatusCard({ plugin, status, failed, busy, soon, done }: { plugin: OfficialPlugin; status: string | null; failed: boolean; busy: boolean; soon: boolean; done: boolean }) {
@@ -90,7 +92,7 @@ function StatusCard({ plugin, status, failed, busy, soon, done }: { plugin: Offi
             </Text>
           )}
         </View>
-        {soon ? <Tag title="Coming soon" /> : null}
+        {soon ? <Tag title={t(`Coming soon`)} /> : null}
         {busy ? <ActivitySpinner style={SPINNER} /> : null}
         {done ? (
           <View pointerEvents="none">
@@ -101,7 +103,7 @@ function StatusCard({ plugin, status, failed, busy, soon, done }: { plugin: Offi
       </View>
       {failed && phase === "failed" ? (
         <View style={{ flexDirection: "row" }}>
-          <SecondaryButton title="Try Again" onPress={() => void installPluginAgain(plugin.name)} />
+          <SecondaryButton title={t(`Try Again`)} onPress={() => void installPluginAgain(plugin.name)} />
         </View>
       ) : null}
     </ChoiceCard>
@@ -123,7 +125,7 @@ function Terminal({ plugin }: { plugin: OfficialPlugin | undefined }) {
   const mono = monoFace();
   const programs = usePluginPrograms(plugin?.name ?? "");
   const command = programs?.state === "linked" ? programs.linked[0] : undefined;
-  const lines = command ? [`$ ${command} --version`, `${command}${plugin?.version ? ` ${plugin.version}` : ""}`, `$ ${command} tabs`] : ["$ ardia tabs"];
+  const lines = command ? [`$ ${command} --version`, `${command}${plugin?.version ? ` ${plugin.version}` : ""}`, `$ ${command} tabs`] : [t(`$ ardia tabs`)];
   return (
     <View style={{ width: TERMINAL_WIDTH, borderRadius: radius.panel, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.rowBorder, overflow: "hidden" }}>
       <View style={{ flexDirection: "row", gap: space.s, paddingHorizontal: space.l, paddingVertical: space.ml, borderBottomWidth: 1, borderColor: colors.rowBorder }}>

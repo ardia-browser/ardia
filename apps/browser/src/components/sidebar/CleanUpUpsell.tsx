@@ -12,6 +12,8 @@ import { useShownTabId } from "../../state/sidebar/hooks";
 import { noteCleanUp } from "../../state/telemetry/usage";
 import { useShift } from "./EntryMotion";
 import { useSidebarTokens } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 const UPSELL_MIN = 10;
 const FILL = { flex: 1 } as const;
@@ -92,17 +94,17 @@ function SuggestionCard({ count, shift, cleanUp, everyDay, notNow, neverAgain }:
         <Text size="small" weight="semibold" style={FILL}>
           {count} unused tabs
         </Text>
-        <Button variant="close" look="panel" tooltip="Not Now" onPress={notNow} style={CLOSE_NUDGE} />
+        <Button variant="close" look="panel" tooltip={t(`Not Now`)} onPress={notNow} style={CLOSE_NUDGE} />
       </View>
       <Text size="small" tone="textSecondary">
         Auto Clean Up clears any tab unused for a day.
       </Text>
       <View style={ACTIONS}>
-        <Button variant="pill" tone="chip" size="m" primary title="Clean Up Now" onPress={cleanUp} />
-        <Button variant="pill" tone="chip" size="m" title="Auto Clean Up" onPress={everyDay} />
+        <Button variant="pill" tone="chip" size="m" primary title={t(`Clean Up Now`)} onPress={cleanUp} />
+        <Button variant="pill" tone="chip" size="m" title={t(`Auto Clean Up`)} onPress={everyDay} />
       </View>
       <View style={NEVER_AGAIN}>
-        <Button variant="text" look="panel" tone="textTertiary" hoverTone="textSecondary" title="Don’t show again" onPress={neverAgain} />
+        <Button variant="text" look="panel" tone="textTertiary" hoverTone="textSecondary" title={t(`Don’t show again`)} onPress={neverAgain} />
       </View>
     </View>
   );

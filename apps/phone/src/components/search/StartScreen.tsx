@@ -11,6 +11,8 @@ import { openSettings } from "../../state/settings/hooks";
 import { DeckBar } from "../tabs/DeckBar";
 import { MaterialStart } from "./MaterialStart";
 import { StartPage } from "./StartPage";
+import { t } from "../../lib/uiLanguage";
+
 
 const BAR_RESERVE = 58;
 
@@ -40,18 +42,18 @@ function OriginalStart() {
   const logoStyle = useAnimatedStyle(() => ({ opacity: shown.value, transform: [{ scale: reduceMotion ? 1 : 0.92 + 0.08 * shown.value }] }), [reduceMotion]);
   const barStyle = useAnimatedStyle(() => ({ opacity: BAR_STAYS_UNDER_TRAY ? 1 : shown.value }));
   const leading = hasTabs
-    ? { icon: "squareOnSquare" as const, label: "Tabs", onPress: showDeck }
+    ? { icon: "squareOnSquare" as const, label: t(`Tabs`), onPress: showDeck }
     : syncs
-      ? { icon: "laptop" as const, label: "Synced Tabs", onPress: openSpaces }
-      : { icon: "archivebox" as const, label: "Archive", onPress: openArchive };
+      ? { icon: "laptop" as const, label: t(`Synced Tabs`), onPress: openSpaces }
+      : { icon: "archivebox" as const, label: t(`Archive`), onPress: openArchive };
   const items: MenuItem[] = incognito
     ? [
-        { label: "New Tab", icon: "plus", onPress: newRegularTab },
-        { label: "New Incognito Tab", icon: "eyes", onPress: newTab },
+        { label: t(`New Tab`), icon: "plus", onPress: newRegularTab },
+        { label: t(`New Incognito Tab`), icon: "eyes", onPress: newTab },
       ]
     : [
-        { label: "New Incognito Tab", icon: "eyes", onPress: newIncognitoTab },
-        ...(canReopen ? [{ label: "Reopen Closed Tab", icon: "arrowUturnBackward" as const, onPress: reopenLastClosed }] : []),
+        { label: t(`New Incognito Tab`), icon: "eyes", onPress: newIncognitoTab },
+        ...(canReopen ? [{ label: t(`Reopen Closed Tab`), icon: "arrowUturnBackward" as const, onPress: reopenLastClosed }] : []),
       ];
   return (
     <View style={StyleSheet.absoluteFill}>
@@ -73,7 +75,7 @@ function OriginalStart() {
       >
         <DeckBar
             leading={leading}
-            plusLabel={incognito ? "New Incognito Tab" : "New Tab"}
+            plusLabel={incognito ? t(`New Incognito Tab`) : t(`New Tab`)}
             frost={{ source: START_FROST, variant: "glass", incognito }}
             covered={trayUp}
             onPlus={newTab}

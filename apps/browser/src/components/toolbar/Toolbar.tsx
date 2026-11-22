@@ -47,6 +47,8 @@ import { useStableHandler } from "./useStableHandler";
 import { PAGE_IDENTITY_TAG } from "../../state/tabs/tabReveal";
 import { DeveloperToolsButtons } from "./DeveloperToolsButtons";
 import { useDeveloperMode } from "../../state/site/developerMode";
+import { t } from "../../lib/uiLanguage";
+
 
 type ToolbarTab = Pick<Tab, "id" | "url" | "title" | "windowId" | "zoom">;
 const toolbarTab = (t: Tab | undefined): ToolbarTab | undefined =>
@@ -143,7 +145,7 @@ export const Toolbar = memo(function Toolbar({
             icon={tabsIcon}
             look="row"
             onPress={toggleTabs}
-            tooltip={withShortcut(tabsShown ? "Hide Tabs" : "Show Tabs", hints.toggleSidebar)}
+            tooltip={withShortcut(tabsShown ? t(`Hide Tabs`) : t(`Show Tabs`), hints.toggleSidebar)}
           />
         )}
         <HistoryButton place={at.back} tabId={tab.id} windowId={tab.windowId} direction={-1} disabled={!history.back} palette={palette} onFocus={focus} closesTab={history.backCloses} historyHint={hints.back} />
@@ -158,8 +160,8 @@ export const Toolbar = memo(function Toolbar({
         </View>
         {inSplit && (
           <View style={{ position: "absolute", top: at.top, right: trailing.splitRight + geometry.trailing, flexDirection: "row" }}>
-            <Button variant="icon" toolbar palette={palette} icon="rectangle.split.2x1" look="row" onPress={splitMenu} tooltip="Split View" />
-            <Button variant="icon" toolbar palette={palette} icon="xmark" look="row" weight="medium" onPress={closeThisPane} tooltip="Close Pane" />
+            <Button variant="icon" toolbar palette={palette} icon="rectangle.split.2x1" look="row" onPress={splitMenu} tooltip={t(`Split View`)} />
+            <Button variant="icon" toolbar palette={palette} icon="xmark" look="row" weight="medium" onPress={closeThisPane} tooltip={t(`Close Pane`)} />
           </View>
         )}
       </Animated.View>
@@ -223,7 +225,7 @@ export const ToolbarUrlField = memo(function ToolbarUrlField({ tab, palette, win
       ) : null}
       {loadFill && <FieldLoadFill tabId={tab.id} color={loadFillColor(palette, theme.accent)} height={row.field} radius={row.fieldRadius} />}
       {insecure && (
-        <Pressable onPress={toggleSiteControls} style={{ paddingLeft: LOCK.left }} tooltip="Connection is not secure">
+        <Pressable onPress={toggleSiteControls} style={{ paddingLeft: LOCK.left }} tooltip={t(`Connection is not secure`)}>
           {drawnSymbol({
             name: "lock.open.trianglebadge.exclamationmark.fill",
             size: 12,
@@ -262,10 +264,10 @@ export const ToolbarUrlField = memo(function ToolbarUrlField({ tab, palette, win
                 icon="rectangle.split.2x1"
                 look="field"
                 onPress={openSplit}
-                tooltip={withShortcut("Open Split View", splitHint)}
+                tooltip={withShortcut(t(`Open Split View`), splitHint)}
               />
             )}
-            <Button variant="icon" toolbar palette={palette} icon="slider.horizontal.3" look="field" onPress={toggleSiteControls} active={popover === "siteControls"} tooltip="Site Controls" />
+            <Button variant="icon" toolbar palette={palette} icon="slider.horizontal.3" look="field" onPress={toggleSiteControls} active={popover === "siteControls"} tooltip={t(`Site Controls`)} />
           </>
         )}
         {field.developerMode && <DeveloperToolsButtons tabId={tab.id} palette={palette} look="field" onFocus={onFocus} />}
@@ -293,7 +295,7 @@ export const SidebarUrlField = memo(function SidebarUrlField({ tab, palette, win
         <FieldSiteButton
           icon={insecure ? "lock.open.trianglebadge.exclamationmark.fill" : "slider.horizontal.3"}
           color={insecure === "certificateError" ? theme.destructive : undefined}
-          tooltip={insecure ? "Connection is not secure" : "Site Controls"}
+          tooltip={insecure ? t(`Connection is not secure`) : t(`Site Controls`)}
           active={popover === "siteControls"}
           palette={palette}
           onPress={openSiteControls}
@@ -312,7 +314,7 @@ export const SidebarUrlField = memo(function SidebarUrlField({ tab, palette, win
       <ToolbarRowContext.Provider value={TOOLBAR_ROWS.regular}>
         <FieldButtons tab={tab} palette={palette} onFocus={onFocus} popover={popover} toggleSiteControls={openSiteControls} accessory={shown.extensions ? accessory : null} quiet={!shown.page}>
           {shown.page && <PageButton tab={tab} palette={palette} windowId={windowId} />}
-          {shown.siteControls && <Button variant="icon" toolbar palette={palette} icon="slider.horizontal.3" look="field" onPress={openSiteControls} active={popover === "siteControls"} tooltip="Site Controls" />}
+          {shown.siteControls && <Button variant="icon" toolbar palette={palette} icon="slider.horizontal.3" look="field" onPress={openSiteControls} active={popover === "siteControls"} tooltip={t(`Site Controls`)} />}
         </FieldButtons>
       </ToolbarRowContext.Provider>
     </View>
@@ -330,14 +332,14 @@ function PageButton(props: PageButtonProps) {
 
 function CopyUrlButton({ tab, palette }: PageButtonProps) {
   const copyHint = useShortcutHint("copyUrl");
-  return <Button variant="icon" toolbar palette={palette} icon="link" look="field" onPress={() => void copyPageUrl(tab.id)} tooltip={withShortcut("Copy URL", copyHint)} />;
+  return <Button variant="icon" toolbar palette={palette} icon="link" look="field" onPress={() => void copyPageUrl(tab.id)} tooltip={withShortcut(t(`Copy URL`), copyHint)} />;
 }
 
 function BookmarkButton({ tab, palette, windowId }: PageButtonProps) {
   const bookmarkHint = useShortcutHint("bookmarkPage");
   const bookmarked = useIsBookmarked(tab.url);
   return (
-    <Button variant="icon" toolbar palette={palette} icon={bookmarked ? "bookmark.fill" : "bookmark"} look="field" onPress={() => toggleBookmarkOfTab(windowId, tab.id)} tooltip={bookmarked ? "Remove Bookmark" : withShortcut("Bookmark This Page", bookmarkHint)} />
+    <Button variant="icon" toolbar palette={palette} icon={bookmarked ? "bookmark.fill" : "bookmark"} look="field" onPress={() => toggleBookmarkOfTab(windowId, tab.id)} tooltip={bookmarked ? t(`Remove Bookmark`) : withShortcut(t(`Bookmark This Page`), bookmarkHint)} />
   );
 }
 
@@ -380,7 +382,7 @@ function FieldButtons({
             togglePopover(tab.id, "popups");
           }}
           active={popover === "popups"}
-          tooltip="Pop-ups blocked on this page"
+          tooltip={t(`Pop-ups blocked on this page`)}
         />
       )}
       {accessory}
@@ -391,7 +393,7 @@ function FieldButtons({
 function CaptureIndicator({ camera, microphone, screen, onPress }: { camera: boolean; microphone: boolean; screen: boolean; onPress: () => void }) {
   const theme = useTheme();
   const icon = screen ? "rectangle.inset.filled.on.rectangle" : camera ? "video.fill" : "mic.fill";
-  const what = [camera && "camera", microphone && "microphone", screen && "screen"].filter(Boolean).join(" and ");
+  const what = [camera && "camera", microphone && "microphone", screen && "screen"].filter(Boolean).join(t(` and `));
   return <Button variant="icon" icon={icon} look="field" color={theme.destructive} onPress={onPress} tooltip={`This page is using your ${what}`} />;
 }
 

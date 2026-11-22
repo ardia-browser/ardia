@@ -6,6 +6,8 @@ import { consentToken, type ConsentToken } from "../telemetry/consentPeriod";
 import { noteOfficialPlugin } from "../telemetry/officialPluginCounts";
 import { activeSteps, confirmAnswer, goToStep, skipStep, STEPS, useOnboarding } from "./onboarding";
 import { PRESELECTED_PLUGINS, pluginsStepShown } from "./pluginsOffer";
+import { t } from "../../lib/uiLanguage";
+
 
 export type PluginsStepPhase = "offer" | "working" | "installed" | "failed";
 
@@ -58,9 +60,9 @@ export const pickedPlugins = (plugins: readonly OfficialPlugin[], picks: Record<
 export const installedLines = (plugins: readonly OfficialPlugin[], installed: readonly string[]) => plugins.filter((p) => installed.includes(p.name)).map((p) => `${officialTitle(p)} installed`);
 
 export function primaryTitle(plugins: readonly OfficialPlugin[], state: Pick<PluginsStepState, "picks" | "phase">): string {
-  if (state.phase === "working") return "Installing…";
-  if (state.phase !== "offer") return "Continue";
-  return pickedPlugins(plugins, state.picks).length ? "Install" : "Continue";
+  if (state.phase === "working") return t(`Installing…`);
+  if (state.phase !== "offer") return t(`Continue`);
+  return pickedPlugins(plugins, state.picks).length ? t(`Install`) : t(`Continue`);
 }
 
 export function togglePluginPick(plugin: OfficialPlugin) {

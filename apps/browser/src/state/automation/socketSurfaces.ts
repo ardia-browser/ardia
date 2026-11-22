@@ -8,13 +8,15 @@ import type { EventSend } from "./storeEvents";
 import { OpError } from "./workspaceTargets";
 import { runMethod } from "./controlSocket";
 import { backgroundInstance } from "../app/appSettings";
+import { t } from "../../lib/uiLanguage";
 
-export const NO_SUCH_MENU = "There's no open menu with that id; menus.open lists them.";
+
+export const NO_SUCH_MENU = t(`There's no open menu with that id; menus.open lists them.`);
 export const CAPTURED_PICK_NEEDS_ENGINE =
-  "A captured page menu is listed only: picking from it waits for engine support that runs the item for the frame the menu came from (runContextMenuCommand in ac_context_menu.mm).";
-export const PRIVATE_WINDOW_OPEN = "A private window is open, so the ardia command doesn't use the menu bar until it closes.";
-export const NATIVE_ITEMS_NEED_VISIBLE = "A background Ardia runs no native menu item (Minimize, Zoom and the like), and run refuses every command there, so menus.runBar runs nothing in it.";
-export const DYNAMIC_ROW_REFUSED = "That row stands for a menu built from open windows, profiles, pages or history, which the ardia command doesn't read or run.";
+  t(`A captured page menu is listed only: picking from it waits for engine support that runs the item for the frame the menu came from (runContextMenuCommand in ac_context_menu.mm).`);
+export const PRIVATE_WINDOW_OPEN = t(`A private window is open, so the ardia command doesn't use the menu bar until it closes.`);
+export const NATIVE_ITEMS_NEED_VISIBLE = t(`A background Ardia runs no native menu item (Minimize, Zoom and the like), and run refuses every command there, so menus.runBar runs nothing in it.`);
+export const DYNAMIC_ROW_REFUSED = t(`That row stands for a menu built from open windows, profiles, pages or history, which the ardia command doesn't read or run.`);
 
 const privateOpen = (s: BrowserState) => Object.values(s.windows).some((w) => w.kind === "private");
 
@@ -79,7 +81,7 @@ async function runBarItem(params: Record<string, unknown>, call: SocketCall) {
   const window = (params.window as string | undefined) ?? null;
   refusePrivate(call);
   const item = catalogItem(await nativeCall(() => menuBar()), ref);
-  if (!item || item.path.join() !== path.join()) throw new OpError("no_window", "There's no menu bar item with that path and ref; menus.bar lists them.");
+  if (!item || item.path.join() !== path.join()) throw new OpError("no_window", t(`There's no menu bar item with that path and ref; menus.bar lists them.`));
   if (item.dynamic) throw new OpError("refused", DYNAMIC_ROW_REFUSED);
   if (item.separator || item.submenu) throw new OpError("no_window", `${item.title || "That row"} isn't an item that runs.`);
   if (typeof item.command === "string") {
@@ -93,25 +95,25 @@ async function runBarItem(params: Record<string, unknown>, call: SocketCall) {
   }
   if (surfaceRunMode.background) throw new OpError("refused", NATIVE_ITEMS_NEED_VISIBLE);
   const s = now();
-  if (window !== null && !eligibleKind(s, window)) throw new OpError("refused", "That window isn't one the ardia command may use.");
+  if (window !== null && !eligibleKind(s, window)) throw new OpError("refused", t(`That window isn't one the ardia command may use.`));
   const target = window ?? lastFocusedEligibleWindow(s);
-  if (!target) throw new OpError("no_window", "No window the ardia command may use is focused.");
+  if (!target) throw new OpError("no_window", t(`No window the ardia command may use is focused.`));
   refusePrivate(call);
   const title = await nativeCall(() => performMenuBarItem(ref, target));
   return { ok: true, title, action: item.action ?? null };
 }
 
-const MENU = id("A menu id from menus.open");
-const PATH = { type: "array", items: { type: "integer", minimum: 0 }, minItems: 1, maxItems: 8, description: "The item's path, as menus.bar gives it" } as const;
-const REF = text("The item's ref, as menus.bar gives it: its command or action and its static titles");
+const MENU = id(t(`A menu id from menus.open`));
+const PATH = { type: "array", items: { type: "integer", minimum: 0 }, minItems: 1, maxItems: 8, description: t(`The item's path, as menus.bar gives it`) } as const;
+const REF = text(t(`The item's ref, as menus.bar gives it: its command or action and its static titles`));
 
 export const SURFACE_METHODS: MethodSpec[] = [
   {
     name: "menus.open",
     mutates: false,
-    description: "Page context menus captured in a hidden Ardia, each with the tab and window it came from and its items' enabled and checked state. No other menu is listed: one on screen (a page's, a <select> popup's, Ardia's own, WebKit's) has no proven source",
+    description: t(`Page context menus captured in a hidden Ardia, each with the tab and window it came from and its items' enabled and checked state. No other menu is listed: one on screen (a page's, a <select> popup's, Ardia's own, WebKit's) has no proven source`),
     params: obj({}),
-    result: "[{id, kind, window, tab, items}]",
+    result: t(`[{id, kind, window, tab, items}]`),
     run: async () => {
       const s = now();
       return (await openSurfaces()).flatMap((m) => visibleSurface(s, m) ?? []);
@@ -121,15 +123,15 @@ export const SURFACE_METHODS: MethodSpec[] = [
     name: "menus.choose",
     mutates: true,
     hidden: true,
-    description: "Hidden from methods. Refused for a captured page menu until the engine runs its items; any other id is unknown",
+    description: t(`Hidden from methods. Refused for a captured page menu until the engine runs its items; any other id is unknown`),
     params: obj({ menu: MENU, path: PATH, ref: REF }, ["menu", "path"]),
-    result: "{ok, menu, kind, title}",
+    result: t(`{ok, menu, kind, title}`),
     run: choose,
   },
   {
     name: "menus.dismiss",
     mutates: true,
-    description: "Drop a captured page menu from the list; any other id is unknown",
+    description: t(`Drop a captured page menu from the list; any other id is unknown`),
     params: obj({ menu: MENU }, ["menu"]),
     result: "{ok}",
     run: dismiss,
@@ -138,9 +140,9 @@ export const SURFACE_METHODS: MethodSpec[] = [
     name: "menus.bar",
     mutates: false,
     description:
-      "A static catalog of the menu bar, built from its definition: every menu and item with its path, ref, title, shortcut, and its command when run takes it, or its action. Menus built from open windows, profiles, pages or history are one dynamic row each. Refused while any private window is open",
+      t(`A static catalog of the menu bar, built from its definition: every menu and item with its path, ref, title, shortcut, and its command when run takes it, or its action. Menus built from open windows, profiles, pages or history are one dynamic row each. Refused while any private window is open`),
     params: obj({}),
-    result: "[{path, ref, title, separator, key?, command?, arg?, action?, dynamic?, submenu?}]",
+    result: t(`[{path, ref, title, separator, key?, command?, arg?, action?, dynamic?, submenu?}]`),
     run: async () => {
       refusePrivate();
       return nativeCall(() => menuBar());
@@ -150,9 +152,9 @@ export const SURFACE_METHODS: MethodSpec[] = [
     name: "menus.runBar",
     mutates: true,
     description:
-      "Run a menu bar item from menus.bar: an Ardia command goes through run and its policy (refused when it needs the person, such as Open File or Print); a window item (Minimize, Zoom, Enter Full Screen, Minimize All, Arrange in Front) goes to the named key window or the app, with no menu validation. In a background Ardia it runs nothing: run refuses every command there, and native items need a visible Ardia. Also refused while any private window is open, for dynamic rows, and for Quit, Hide, Close Window, updates and items that only act through the responder chain",
-    params: obj({ path: PATH, ref: REF, window: text("The window to run it in; the last focused one when left out. Window items act only when it is the key window and the item can be sent to that window itself") }, ["path", "ref"]),
-    result: "{ok, title, command? | action?}",
+      t(`Run a menu bar item from menus.bar: an Ardia command goes through run and its policy (refused when it needs the person, such as Open File or Print); a window item (Minimize, Zoom, Enter Full Screen, Minimize All, Arrange in Front) goes to the named key window or the app, with no menu validation. In a background Ardia it runs nothing: run refuses every command there, and native items need a visible Ardia. Also refused while any private window is open, for dynamic rows, and for Quit, Hide, Close Window, updates and items that only act through the responder chain`),
+    params: obj({ path: PATH, ref: REF, window: text(t(`The window to run it in; the last focused one when left out. Window items act only when it is the key window and the item can be sent to that window itself`)) }, ["path", "ref"]),
+    result: t(`{ok, title, command? | action?}`),
     run: runBarItem,
   },
 ];

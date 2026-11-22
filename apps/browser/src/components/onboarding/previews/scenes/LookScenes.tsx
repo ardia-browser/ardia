@@ -11,6 +11,8 @@ import { font } from "../../../ui/tokens";
 import type { Scene } from "../scene";
 import { Std } from "./SceneParts";
 import { PLATFORM_TERMS } from "../../../../lib/platformTerms";
+import { t } from "../../../../lib/uiLanguage";
+
 
 export function appearance(mode: "light" | "dark" | "auto"): Scene {
   return ({ g, p, opts }) => {
@@ -19,7 +21,7 @@ export function appearance(mode: "light" | "dark" | "auto"): Scene {
     const from = lookFor(!toDark, opts.accent, opts.palette);
     const to = lookFor(toDark, opts.accent, opts.palette);
     const icon = toDark ? "moon.fill" : "sun.max.fill";
-    const label = mode === "auto" ? `Auto · ${toDark ? "Dark" : "Light"} like your ${PLATFORM_TERMS.computer}` : toDark ? "Dark" : "Light";
+    const label = mode === "auto" ? `Auto · ${toDark ? "Dark" : "Light"} like your ${PLATFORM_TERMS.computer}` : toDark ? t(`Dark`) : t(`Light`);
     return (
       <>
         <View style={fill}>

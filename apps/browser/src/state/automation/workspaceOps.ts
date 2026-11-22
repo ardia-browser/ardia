@@ -5,6 +5,8 @@ import { symbolIcon } from "../../lib/customIcon";
 import { EMOJI_GROUPS } from "../../lib/emojiData";
 import { urlParts } from "../../lib/urlParts";
 import { internalPageOf } from "../pages/urls";
+import { t } from "../../lib/uiLanguage";
+
 
 export const MAX_OPS = 500;
 export const MAX_URLS = 100;
@@ -70,8 +72,8 @@ export function iconValue(value: unknown): IconValue | undefined {
 }
 
 export function openableUrl(value: string): string | { error: string } {
-  if (!value.trim()) return { error: "An empty URL." };
-  if (value.length > MAX_URL) return { error: "A URL longer than 8192 characters." };
+  if (!value.trim()) return { error: t(`An empty URL.`) };
+  if (value.length > MAX_URL) return { error: t(`A URL longer than 8192 characters.`) };
   const url = fixupUrl(value);
   if (!url || isJavaScriptUrl(url)) return { error: `${JSON.stringify(value.slice(0, 200))} isn't a URL Ardia opens.` };
   if (url === "about:blank" || internalPageOf(url)) return url;
@@ -95,7 +97,7 @@ function groupField(value: unknown, index: number): string | GroupName | null {
   return { name: fields.name.trim() };
 }
 
-const GROUP_FIELD = "a group id, a group's name, {\"name\": \"…\"}, or $N for an earlier operation's group";
+const GROUP_FIELD = t(`a group id, a group's name, {"name": "…"}, or $N for an earlier operation's group`);
 
 function check(kind: Kind, value: unknown, index: number): unknown | { bad: string } {
   switch (kind) {
@@ -104,26 +106,26 @@ function check(kind: Kind, value: unknown, index: number): unknown | { bad: stri
     case "groupOrNull":
       return value === null ? null : (groupField(value, index) ?? { bad: `${GROUP_FIELD}, or null` });
     case "ref":
-      return isRef(value, index) ? value : { bad: "an id (or $N for an earlier operation's result)" };
+      return isRef(value, index) ? value : { bad: t(`an id (or $N for an earlier operation's result)`) };
     case "refOrNull":
-      return value === null || isRef(value, index) ? value : { bad: "an id or null" };
+      return value === null || isRef(value, index) ? value : { bad: t(`an id or null`) };
     case "refs":
-      return Array.isArray(value) && value.length > 0 && value.length <= MAX_OPS && value.every((v) => isRef(v, index)) ? value : { bad: "a non-empty list of ids" };
+      return Array.isArray(value) && value.length > 0 && value.length <= MAX_OPS && value.every((v) => isRef(v, index)) ? value : { bad: t(`a non-empty list of ids`) };
     case "id":
-      return typeof value === "string" && value.length > 0 && value.length <= MAX_ID ? value : { bad: "an id" };
+      return typeof value === "string" && value.length > 0 && value.length <= MAX_ID ? value : { bad: t(`an id`) };
     case "bool":
-      return typeof value === "boolean" ? value : { bad: "true or false" };
+      return typeof value === "boolean" ? value : { bad: t(`true or false`) };
     case "text":
       return typeof value === "string" && value.length <= MAX_TEXT && !/[\u0000-\u001f\u007f]/.test(value) ? value.trim() : { bad: `text of at most ${MAX_TEXT} characters without control characters` };
     case "textOrNull":
       return value === null ? null : check("text", value, index);
     case "pinAs":
-      return value === "tile" || value === "row" ? value : { bad: "\"tile\" or \"row\"" };
+      return value === "tile" || value === "row" ? value : { bad: t(`"tile" or "row"`) };
     case "color":
       return typeof value === "string" && (value === "neutral" || value === "none" || COLORS.has(value)) ? value : { bad: `one of neutral, none, ${TAB_GROUP_COLORS.join(", ")}` };
     case "icon": {
       const icon = iconValue(value);
-      return icon === undefined ? { bad: "an emoji from Ardia's picker, symbol:<SF Symbol name>, \"none\", or null to reset" } : icon;
+      return icon === undefined ? { bad: t(`an emoji from Ardia's picker, symbol:<SF Symbol name>, "none", or null to reset`) } : icon;
     }
     case "urls": {
       const list = typeof value === "string" ? [value] : value;
@@ -147,7 +149,7 @@ export function parseOps(value: unknown): Op[] | ParseError {
   const out: Op[] = [];
   for (const [index, raw] of list.entries()) {
     const fail = (message: string, code: ParseError["code"] = "bad_request"): ParseError => ({ index, code, message: `Operation ${index}: ${message}` });
-    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return fail("an operation is a JSON object.");
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return fail(t(`an operation is a JSON object.`));
     const fields = raw as Record<string, unknown>;
     const name = fields.op;
     if (typeof name !== "string" || !(name in SPECS)) return fail(`op is one of: ${OP_NAMES.join(", ")}.`);
@@ -166,10 +168,10 @@ export function parseOps(value: unknown): Op[] | ParseError {
     }
     const missing = spec.required.filter((key) => op[key] === undefined);
     if (missing.length) return fail(`${name} needs ${missing.join(" and ")}.`);
-    if (op.before !== undefined && op.after !== undefined) return fail("give before or after, not both.");
-    if (name === "group.update" && Object.keys(op).length < 3) return fail("group.update needs name, icon, color or collapsed.");
+    if (op.before !== undefined && op.after !== undefined) return fail(t(`give before or after, not both.`));
+    if (name === "group.update" && Object.keys(op).length < 3) return fail(t(`group.update needs name, icon, color or collapsed.`));
     if (name === "tab.move" && op.window === undefined && op.profile === undefined && op.group === undefined && op.before === undefined && op.after === undefined) {
-      return fail("tab.move needs a destination: group, before, after, window or profile.");
+      return fail(t(`tab.move needs a destination: group, before, after, window or profile.`));
     }
     out.push(op);
   }

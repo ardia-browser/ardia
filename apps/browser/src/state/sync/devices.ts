@@ -1,6 +1,8 @@
 import { visible, type ScopeState } from "../../platform/sync";
 import { DEVICE, RECEIVES_TABS, deviceRecord, recordId, type DeviceKind, type DeviceRecord } from "./records";
 import type { SyncedDevice } from "./syncDoc";
+import { t } from "../../lib/uiLanguage";
+
 
 export const PHONE_SEEN_MS = 30 * 86_400_000;
 
@@ -23,7 +25,7 @@ export function deviceRecords(app: ScopeState): Map<string, DeviceRecord> {
   );
 }
 
-const modelOf = (name: string) => name.split(/[’']s /).slice(1).join("'s ").trim() || name;
+const modelOf = (name: string) => name.split(/[’t(`]s /).slice(1).join("`)s ").trim() || name;
 
 export const deviceLabel = (kind: DeviceKind, name: string) => (kind === "phone" ? "iPhone" : modelOf(name));
 
@@ -33,6 +35,6 @@ export function deviceSymbol(kind: DeviceKind, name: string): string {
 }
 
 export function deviceDetail(device: Pick<SyncedDevice, "lastSeen" | "version" | "os">, ago: (at: number) => string): string {
-  const seen = device.lastSeen ? `last synced ${ago(device.lastSeen)}` : "hasn’t synced yet";
+  const seen = device.lastSeen ? `last synced ${ago(device.lastSeen)}` : t(`hasn’t synced yet`);
   return [seen, device.version && `Ardia ${device.version}`, device.os].filter(Boolean).join(" · ");
 }

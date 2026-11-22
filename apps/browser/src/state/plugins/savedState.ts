@@ -5,6 +5,8 @@ import { NAME_PATTERN } from "../../lib/pluginManifest";
 import type { PluginRecord } from "./store";
 import { warnFor } from "../telemetry/consoleConsent";
 import type { ConsentToken } from "../telemetry/choice";
+import { t } from "../../lib/uiLanguage";
+
 
 export const PLUGINS_DOC = "plugins.json";
 const VERSION = 1;
@@ -51,7 +53,7 @@ export function writePluginRecords(records: Record<string, PluginRecord>, consen
     writeDocument(PLUGINS_DOC, pluginRecordsJson(records));
     return true;
   } catch (error) {
-    warnFor(consent, "[plugins] couldn't save plugins.json", error);
+    warnFor(consent, t(`[plugins] couldn't save plugins.json`), error);
     return false;
   }
 }
@@ -60,7 +62,7 @@ export const pluginRecordsSaved = (consent: ConsentToken | null): Promise<boolea
   documentSaved(PLUGINS_DOC).then(
     () => true,
     (error: unknown) => {
-      warnFor(consent, "[plugins] couldn't save plugins.json", error);
+      warnFor(consent, t(`[plugins] couldn't save plugins.json`), error);
       return false;
     },
   );

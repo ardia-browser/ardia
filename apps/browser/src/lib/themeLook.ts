@@ -1,12 +1,14 @@
 import { isFields } from "./decode";
 import type { JsonSchema } from "./jsonSchema";
 import { DEFAULT_SIDEBAR_WIDTH } from "./windowLayout";
+import { t } from "./uiLanguage";
+
 
 export const TYPE_SIZES = { badge: 9, tiny: 10, caption: 11, small: 12, body: 13, title: 15, large: 17 } as const;
 export const WEIGHTS = { regular: "400", medium: "500", semibold: "600", bold: "700" } as const;
 export const RADII = { none: 0, hair: 2, control: 4, tile: 8, panel: 12, sheet: 16, hero: 20, chrome: 10, toolbar: 7, pinned: 10 } as const;
 export const ROW_METRICS = { rowHeight: 34, rowGap: 3, pinnedHeight: 41 } as const;
-export const MONO_FAMILY = "Menlo";
+export const MONO_FAMILY = t(`Menlo`);
 export const SIDEBAR_TEXT_SIZES = ["default", "large", "larger"] as const;
 export type SidebarTextSize = (typeof SIDEBAR_TEXT_SIZES)[number];
 const SIDEBAR_TEXT_SCALE: Record<SidebarTextSize, number> = { default: 1, large: 15 / 13, larger: 17 / 13 };
@@ -62,51 +64,51 @@ const number = (min: number, max: number, value: number | null, about: string): 
 const sizeRange = (size: number, about: string) => number(Math.round(size * 0.75), Math.round(size * 1.6), size, about);
 
 const SIZE_ABOUT: Record<TypeSizeName, string> = {
-  badge: "Counts on badges",
-  tiny: "The smallest labels",
-  caption: "Captions, section labels, URLs under titles",
-  small: "Sidebar tab titles, secondary text",
-  body: "Most text: menus, fields, folder and group names",
-  title: "Panel and dialog titles, the command bar's results",
-  large: "Large headings, the command bar's field",
+  badge: t(`Counts on badges`),
+  tiny: t(`The smallest labels`),
+  caption: t(`Captions, section labels, URLs under titles`),
+  small: t(`Sidebar tab titles, secondary text`),
+  body: t(`Most text: menus, fields, folder and group names`),
+  title: t(`Panel and dialog titles, the command bar's results`),
+  large: t(`Large headings, the command bar's field`),
 };
 
 const WEIGHT_ABOUT: Record<WeightName, string> = {
-  regular: "What regular text draws with",
-  medium: "What medium text (group names, selected rows) draws with",
-  semibold: "What semibold text (headings, badges) draws with",
-  bold: "What bold text draws with",
+  regular: t(`What regular text draws with`),
+  medium: t(`What medium text (group names, selected rows) draws with`),
+  semibold: t(`What semibold text (headings, badges) draws with`),
+  bold: t(`What bold text draws with`),
 };
 
 const RADIUS_ABOUT: Record<ThemeRadius, string> = {
-  row: "Sidebar rows (tabs, folders, New Tab), the sidebar address field, top-strip tabs",
-  pinned: "Pinned tiles in the sidebar's top apps grid",
-  tile: "List rows, menu rows, fields, cards and icon tiles",
-  control: "Small controls: steppers, chips, keys",
-  toolbar: "Toolbar button plates",
-  panel: "Popovers, menus and panels",
-  sheet: "Sheets, the tab switcher, search and other large panels",
+  row: t(`Sidebar rows (tabs, folders, New Tab), the sidebar address field, top-strip tabs`),
+  pinned: t(`Pinned tiles in the sidebar's top apps grid`),
+  tile: t(`List rows, menu rows, fields, cards and icon tiles`),
+  control: t(`Small controls: steppers, chips, keys`),
+  toolbar: t(`Toolbar button plates`),
+  panel: t(`Popovers, menus and panels`),
+  sheet: t(`Sheets, the tab switcher, search and other large panels`),
 };
 
 const BLOCKS: Record<keyof LookBlocks, Spec> = {
   type: {
     kind: "block",
     noun: "type",
-    about: "Fonts and text sizes",
+    about: t(`Fonts and text sizes`),
     keys: {
-      family: { kind: "family", default: null, about: "The interface font family, like \"Avenir Next\"; left out, the system font. A family macOS doesn't have falls back to the system font" },
-      mono: { kind: "family", default: MONO_FAMILY, about: "The monospaced family for codes, keys and logs" },
-      scale: number(0.85, 1.3, 1, "Multiplies every text size, after sizes"),
+      family: { kind: "family", default: null, about: t(`The interface font family, like "Avenir Next"; left out, the system font. A family macOS doesn't have falls back to the system font`) },
+      mono: { kind: "family", default: MONO_FAMILY, about: t(`The monospaced family for codes, keys and logs`) },
+      scale: number(0.85, 1.3, 1, t(`Multiplies every text size, after sizes`)),
       sizes: {
         kind: "block",
-        noun: "text size",
-        about: "Text sizes in points, each replacing one step of Ardia's scale",
+        noun: t(`text size`),
+        about: t(`Text sizes in points, each replacing one step of Ardia's scale`),
         keys: Object.fromEntries(Object.entries(TYPE_SIZES).map(([k, v]) => [k, sizeRange(v, SIZE_ABOUT[k as TypeSizeName])])),
       },
       weights: {
         kind: "block",
         noun: "weight",
-        about: "What each of Ardia's weight names draws with, from \"100\" (thin) to \"900\" (black)",
+        about: t(`What each of Ardia's weight names draws with, from "100" (thin) to "900" (black)`),
         keys: Object.fromEntries(Object.entries(WEIGHTS).map(([k, v]) => [k, { kind: "weight", default: v, about: WEIGHT_ABOUT[k as WeightName] }])),
       },
     },
@@ -114,16 +116,16 @@ const BLOCKS: Record<keyof LookBlocks, Spec> = {
   metrics: {
     kind: "block",
     noun: "metrics",
-    about: "Sizes and corner radii, in points",
+    about: t(`Sizes and corner radii, in points`),
     keys: {
-      rowHeight: number(24, 56, ROW_METRICS.rowHeight, "Height of a sidebar row: tabs, folders, groups, the New Tab row and the sidebar address field"),
-      rowGap: number(0, 12, ROW_METRICS.rowGap, "Space between sidebar rows"),
-      pinnedHeight: number(28, 72, ROW_METRICS.pinnedHeight, "Height of a pinned tile in the sidebar's top apps grid"),
+      rowHeight: number(24, 56, ROW_METRICS.rowHeight, t(`Height of a sidebar row: tabs, folders, groups, the New Tab row and the sidebar address field`)),
+      rowGap: number(0, 12, ROW_METRICS.rowGap, t(`Space between sidebar rows`)),
+      pinnedHeight: number(28, 72, ROW_METRICS.pinnedHeight, t(`Height of a pinned tile in the sidebar's top apps grid`)),
       sidebarWidth: number(160, 400, null, `The sidebar's width. The sidebar takes it when you switch to the theme or change this value, and a double-click on its edge returns to it; left out, the width is yours (Ardia's default is ${DEFAULT_SIDEBAR_WIDTH})`),
       radius: {
         kind: "block",
         noun: "radius",
-        about: "Corner radii",
+        about: t(`Corner radii`),
         keys: Object.fromEntries(
           Object.entries(THEME_RADII).map(([k, token]) => [k, number(0, k === "sheet" ? 32 : k === "panel" ? 28 : k === "control" ? 12 : 24, RADII[token], RADIUS_ABOUT[k as ThemeRadius])]),
         ),
@@ -133,14 +135,14 @@ const BLOCKS: Record<keyof LookBlocks, Spec> = {
   layout: {
     kind: "block",
     noun: "layout",
-    about: "Which parts of the sidebar show, and where",
+    about: t(`Which parts of the sidebar show, and where`),
     keys: {
-      hide: { kind: "parts", about: "Parts of the sidebar to hide" },
-      addressField: { kind: "place", default: "top", about: "Where the sidebar address field sits when the address bar is in the sidebar: top or bottom" },
-      newTab: { kind: "place", default: null, about: "Where the New Tab row sits: top or bottom of the tab list; left out, Settings › Tabs decides" },
+      hide: { kind: "parts", about: t(`Parts of the sidebar to hide`) },
+      addressField: { kind: "place", default: "top", about: t(`Where the sidebar address field sits when the address bar is in the sidebar: top or bottom`) },
+      newTab: { kind: "place", default: null, about: t(`Where the New Tab row sits: top or bottom of the tab list; left out, Settings › Tabs decides`) },
     },
   },
-  icons: { kind: "symbols", about: "SF Symbols to draw in place of Ardia's, by name: { \"plus\": \"plus.circle\" }" },
+  icons: { kind: "symbols", about: t(`SF Symbols to draw in place of Ardia's, by name: { "plus": "plus.circle" }`) },
 };
 
 export const LOOK_KEYS = Object.keys(BLOCKS) as (keyof LookBlocks)[];
@@ -151,17 +153,17 @@ const ruleOf = (spec: Spec): string => {
     case "number":
       return `must be a number from ${spec.min} to ${spec.max}`;
     case "family":
-      return "must be a font family name (1 to 64 characters, no space at either end)";
+      return t(`must be a font family name (1 to 64 characters, no space at either end)`);
     case "weight":
-      return 'must be a weight from "100" to "900" in steps of 100';
+      return t(`must be a weight from "100" to "900" in steps of 100`);
     case "place":
       return `must be one of ${list(PLACES)}`;
     case "parts":
       return `must be a list of parts (${list(CHROME_PARTS)})`;
     case "symbols":
-      return "must be an object of SF Symbol names";
+      return t(`must be an object of SF Symbol names`);
     case "block":
-      return "must be an object";
+      return t(`must be an object`);
   }
 };
 

@@ -15,6 +15,8 @@ export {
 } from "@ardia/shell";
 import { call } from "@ardia/ardiacore";
 import { nativeModule, type AppEvent, type AppearanceMode, type OpenURLSource, type UpdateChannel } from "@ardia/shell";
+import { t } from "../lib/uiLanguage";
+
 
 export type { AppEvent, OpenURLSource };
 
@@ -25,9 +27,9 @@ export { WIDEVINE_COMPONENT_ID, type EngineComponent } from "@ardia/ardiacore";
 export const engineInfo = () => call("engine.info");
 export const listComponents = () => call("engine.components");
 
-const Shell = nativeModule("ArdiaShell");
-const App = nativeModule("ArdiaApp");
-const Updater = nativeModule("ArdiaUpdater");
+const Shell = nativeModule(t(`ArdiaShell`));
+const App = nativeModule(t(`ArdiaApp`));
+const Updater = nativeModule(t(`ArdiaUpdater`));
 
 export const setAppearance = (mode: AppearanceMode) => Shell.setAppearance(mode);
 export const isDarkAppearance = () => Shell.isDarkAppearance();

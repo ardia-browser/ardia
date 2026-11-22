@@ -1,6 +1,8 @@
 import type { SettingRow, SettingSection } from "./types";
 import type { SettingsPane } from "../../../state/settings/settingsWindows";
 import { OFFICIAL_ANCHOR_ALIASES, OFFICIAL_CATALOGUE, COMING_SOON } from "../../../state/plugins/officialPin";
+import { t } from "../../../lib/uiLanguage";
+
 
 export const officialPluginAnchor = (name: string) => `plugins.${name}` as const;
 
@@ -10,7 +12,7 @@ const officialRows: Record<string, SettingRow> = Object.fromEntries(
     {
       title: p.title,
       description: p.blurb,
-      keywords: ["official plugin", "built in plugin"],
+      keywords: [t(`official plugin`), t(`built in plugin`)],
       shown: (_, env) => !!env.officialPlugins?.includes(p.name),
     } satisfies SettingRow,
   ]),
@@ -23,23 +25,23 @@ export const SETTING_ALIASES: Readonly<Record<string, string>> = Object.fromEntr
 export const pluginRows = {
   plugins: [
     {
-      section: "Official",
+      section: t(`Official`),
       rows: {
         official: {
-          title: "Official plugins",
-          keywords: ["official", "plugins", "built in", "first party", "ardia plugins", "install"],
+          title: t(`Official plugins`),
+          keywords: ["official", "plugins", t(`built in`), t(`first party`), t(`ardia plugins`), "install"],
           shown: (_, env) => !!env.officialPlugins?.length,
         },
         ...officialRows,
       },
     },
     {
-      section: "Plugins",
+      section: t(`Plugins`),
       rows: {
         plugins: {
-          title: "Plugins",
-          description: "Yours stay off until you turn them on.",
-          keywords: ["plugin", "add-on", "addon", "install plugin", "ardia plugins"],
+          title: t(`Plugins`),
+          description: t(`Yours stay off until you turn them on.`),
+          keywords: ["plugin", "add-on", "addon", t(`install plugin`), t(`ardia plugins`)],
         },
       },
     },

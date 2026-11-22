@@ -22,11 +22,13 @@ import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 import { useAutomationRuleRows } from "./AutomationRules";
 import { WebEngineSection } from "./WebEngineSection";
+import { t } from "../../../lib/uiLanguage";
+
 
 const BATTERY_SAVER_DESCRIPTIONS: Record<BatterySaverWhen, string> = {
   lowBattery: `At 20% battery or less, or in ${PLATFORM_TERMS.lowPowerMode}, busy background tabs pause and animations slow down.`,
   unplugged: `On battery or in ${PLATFORM_TERMS.lowPowerMode}, busy background tabs pause and animations slow down.`,
-  never: "Background tabs and animations run at full speed on battery.",
+  never: t(`Background tabs and animations run at full speed on battery.`),
 };
 
 type MemorySaverLevel = "off" | MemorySaverMode | "custom";
@@ -38,29 +40,29 @@ type MemorySaverPreset = Exclude<MemorySaverLevel, "custom">;
 
 const MEMORY_SAVER_LEVELS: Record<MemorySaverPreset, { title: string; description: () => string; settings: Partial<MemorySaverKeys> }> = {
   off: {
-    title: "Off",
-    description: () => "Tabs stay loaded.",
+    title: t(`Off`),
+    description: () => t(`Tabs stay loaded.`),
     settings: { memorySaver: false },
   },
   moderate: {
-    title: "Moderate",
-    description: () => "Tabs become inactive after a longer period of time. Profiles load when you first open them.",
+    title: t(`Moderate`),
+    description: () => t(`Tabs become inactive after a longer period of time. Profiles load when you first open them.`),
     settings: { memorySaver: true, memorySaverMode: "moderate", loadProfilesWhenOpened: true, unloadProfilesAfter: "never" },
   },
   balanced: {
-    title: "Balanced (recommended)",
-    description: () => "Tabs become inactive after an optimal period of time. Profiles load when you first open them.",
+    title: t(`Balanced (recommended)`),
+    description: () => t(`Tabs become inactive after an optimal period of time. Profiles load when you first open them.`),
     settings: { memorySaver: true, memorySaverMode: "balanced", loadProfilesWhenOpened: true, unloadProfilesAfter: "never" },
   },
   maximum: {
-    title: "Maximum",
+    title: t(`Maximum`),
     description: () => `Tabs become inactive after a shorter period of time. Profiles load when you first open them.${profilesUnload("15 minutes")}`,
-    settings: { memorySaver: true, memorySaverMode: "maximum", loadProfilesWhenOpened: true, unloadProfilesAfter: "15m" },
+    settings: { memorySaver: true, memorySaverMode: "maximum", loadProfilesWhenOpened: true, unloadProfilesAfter: t(`15m`) },
   },
 };
 const MEMORY_SAVER_PRESETS = Object.keys(MEMORY_SAVER_LEVELS) as MemorySaverPreset[];
 
-const UNLOAD_AFTER: Record<Settings["unloadProfilesAfter"], string> = { never: "", "5m": "5 minutes", "15m": "15 minutes", "1h": "an hour", "2h": "2 hours" };
+const UNLOAD_AFTER: Record<Settings["unloadProfilesAfter"], string> = { never: "", t(`5m`): t(`5 minutes`), t(`15m`): t(`15 minutes`), t(`1h`): t(`an hour`), t(`2h`): t(`2 hours`) };
 
 function memorySaverLevel(s: MemorySaverKeys): MemorySaverLevel {
   if (!s.memorySaver) return "off";
@@ -70,18 +72,18 @@ function memorySaverLevel(s: MemorySaverKeys): MemorySaverLevel {
 
 function customDescription(s: MemorySaverKeys) {
   const tabs = MEMORY_SAVER_LEVELS[s.memorySaverMode].description().split(". ")[0];
-  const load = s.loadProfilesWhenOpened ? " Profiles load when you first open them." : " Every profile loads when Ardia opens.";
+  const load = s.loadProfilesWhenOpened ? t(` Profiles load when you first open them.`) : t(` Every profile loads when Ardia opens.`);
   return `${tabs}.${load}${s.unloadProfilesAfter === "never" ? "" : profilesUnload(UNLOAD_AFTER[s.unloadProfilesAfter])} Pick a level to use its settings instead.`;
 }
 
 export function AdvancedPane(_: SettingsPlace) {
   return (
     <View>
-      <SectionHeader title="Browsing" />
+      <SectionHeader title={t(`Browsing`)} />
       <Group>
         <SettingToggle anchor="advanced.showFullUrl" />
         <Row anchor="advanced.chromeSettings">
-          <Button title="Open Chromium Settings" onPress={openChromeSettings} />
+          <Button title={t(`Open Chromium Settings`)} onPress={openChromeSettings} />
         </Row>
       </Group>
       <PerformanceSection />
@@ -100,32 +102,32 @@ function PerformanceSection() {
   const batterySaverWhen = useSettings((s) => s.batterySaverWhen);
   const keepActiveSites = useSettings((s) => s.keepActiveSites);
   const level = memorySaverLevel(keys);
-  const options = [...MEMORY_SAVER_PRESETS.map((value) => ({ value: value as MemorySaverLevel, title: MEMORY_SAVER_LEVELS[value].title })), ...(level === "custom" ? [{ value: "custom" as const, title: "Custom" }] : [])];
+  const options = [...MEMORY_SAVER_PRESETS.map((value) => ({ value: value as MemorySaverLevel, title: MEMORY_SAVER_LEVELS[value].title })), ...(level === "custom" ? [{ value: "custom" as const, title: t(`Custom`) }] : [])];
   return (
     <>
-      <SectionHeader title="Performance" />
+      <SectionHeader title={t(`Performance`)} />
       <Group>
         <Row anchor="advanced.memorySaver" description={level === "custom" ? customDescription(keys) : MEMORY_SAVER_LEVELS[level].description()}>
           <PopUp value={level} options={options} onChange={(v) => v !== "custom" && updateSettings(MEMORY_SAVER_LEVELS[v].settings)} minWidth={190} />
         </Row>
         <Row anchor="advanced.keepActiveSites">
-          <Button title="Add Site…" icon="plus" onPress={() => showSettingsSheet(<KeepActiveSiteSheet />)} />
+          <Button title={t(`Add Site…`)} icon="plus" onPress={() => showSettingsSheet(<KeepActiveSiteSheet />)} />
         </Row>
         {memorySaver &&
           [...keepActiveSites]
             .sort((a, b) => a.localeCompare(b))
             .map((site) => (
               <Row key={site} icon={<Favicon url={siteUrl(site)} />} title={site}>
-                <Button variant="icon" icon="trash" size="m" onPress={() => stopKeepingSiteActive(site)} tooltip="Remove" />
+                <Button variant="icon" icon="trash" size="m" onPress={() => stopKeepingSiteActive(site)} tooltip={t(`Remove`)} />
               </Row>
             ))}
         <Row anchor="advanced.batterySaver" description={BATTERY_SAVER_DESCRIPTIONS[batterySaverWhen]}>
           <PopUp
             value={batterySaverWhen}
             options={[
-              { value: "lowBattery", title: "When battery is low" },
-              { value: "unplugged", title: "When unplugged" },
-              { value: "never", title: "Never" },
+              { value: "lowBattery", title: t(`When battery is low`) },
+              { value: "unplugged", title: t(`When unplugged`) },
+              { value: "never", title: t(`Never`) },
             ]}
             onChange={(v) => updateSettings({ batterySaverWhen: v })}
             minWidth={190}
@@ -142,13 +144,13 @@ export function programsLine(programs: ProgramsState | undefined): string {
   if (programs?.state === "linked") {
     const refused = Object.entries(programs.refused).map(([name, reason]) => `${name}: ${reason}`);
     if (refused.length) return refused.join("; ");
-    if (programs.adoption === "retrying") return "Waiting for the old install to finish updating…";
-    if (programs.adoption === "busy") return "The old install is busy updating. Try again in a moment.";
-    if (programs.adoption === "failed") return "The old install couldn't be switched over to it.";
-    return programs.linked.length ? `On your PATH: ${programs.linked.join(", ")}` : "Nothing on your PATH.";
+    if (programs.adoption === "retrying") return t(`Waiting for the old install to finish updating…`);
+    if (programs.adoption === "busy") return t(`The old install is busy updating. Try again in a moment.`);
+    if (programs.adoption === "failed") return t(`The old install couldn't be switched over to it.`);
+    return programs.linked.length ? `On your PATH: ${programs.linked.join(", ")}` : t(`Nothing on your PATH.`);
   }
   if (programs?.state === "failed") return `Not on your PATH: ${programs.reason}`;
-  return "Putting it on your PATH…";
+  return t(`Putting it on your PATH…`);
 }
 
 function PluginProgramsRow({ name, title }: { name: string; title: string }) {
@@ -164,7 +166,7 @@ function PluginProgramsRow({ name, title }: { name: string; title: string }) {
         </Text>
       }
     >
-      {failed ? <Button title="Try Again" onPress={() => relinkPrograms(name)} /> : null}
+      {failed ? <Button title={t(`Try Again`)} onPress={() => relinkPrograms(name)} /> : null}
     </Row>
   );
 }
@@ -174,17 +176,17 @@ function ProgramControlRow() {
   const server = useControlServer((s) => s.server);
   const note =
     server?.state === "external"
-      ? "This instance already has a DevTools port from the command line, so the setting leaves it alone."
+      ? t(`This instance already has a DevTools port from the command line, so the setting leaves it alone.`)
       : server?.reason
         ? server.reason
         : on && server?.state === "on"
           ? server.connections
             ? `Connected now: ${server.connections === 1 ? "1 session" : `${server.connections} sessions`}.`
-            : "On. Nothing is connected."
+            : t(`On. Nothing is connected.`)
           : null;
   return (
     <Row anchor="advanced.programControl" description={note ?? undefined}>
-      <Toggle value={on} accessibilityLabel="Let programs control Ardia" onChange={setControlFromSettings} />
+      <Toggle value={on} accessibilityLabel={t(`Let programs control Ardia`)} onChange={setControlFromSettings} />
     </Row>
   );
 }
@@ -200,7 +202,7 @@ function ProgramsRows() {
         description={
           <View>
             <Text size="caption" tone="textSecondary" style={NOTE()}>
-              {plugins.length ? "Commands your plugins put in your terminal." : "None of your plugins add commands to your terminal."}
+              {plugins.length ? t(`Commands your plugins put in your terminal.`) : t(`None of your plugins add commands to your terminal.`)}
             </Text>
             {registryUnreadable ? (
               <Text selectable size="caption" tone="destructive" style={NOTE()}>
@@ -224,14 +226,14 @@ function CommandLineSection() {
   const ruleRows = useAutomationRuleRows();
   const serverNote =
     server?.state === "external"
-      ? "This instance already has a DevTools port from the command line, so the setting leaves it alone."
+      ? t(`This instance already has a DevTools port from the command line, so the setting leaves it alone.`)
       : server?.reason
         ? server.reason
         : on && server?.state === "on"
           ? server.connections
             ? `Connected now: ${server.connections === 1 ? "1 session" : `${server.connections} sessions`}.`
-            : "On. Nothing is connected."
-          : "Installs the ardia command and lets it open, read and act in every page you're signed in to. It stays on after you quit.";
+            : t(`On. Nothing is connected.`)
+          : t(`Installs the ardia command and lets it open, read and act in every page you're signed in to. It stays on after you quit.`);
   const failed = !!install.error && !install.installing;
   const setOn = (next: boolean) => {
     setProgramControl(next);
@@ -241,7 +243,7 @@ function CommandLineSection() {
   const installLine = on || install.installedVersion || install.installing || failed ? describeCommandInstall(install) : null;
   return (
     <>
-      <SectionHeader title="Command line and automation" />
+      <SectionHeader title={t(`Command line and automation`)} />
       <Group>
         {viaPlugin ? <ProgramsRows /> : (
         <Row
@@ -259,9 +261,9 @@ function CommandLineSection() {
             </View>
           }
         >
-          {failed && on ? <Button title="Try Again" onPress={tryAgain} /> : null}
-          {on && !failed && install.installedVersion && !install.installing ? <Button title="Reinstall" onPress={() => void installCommandInBackground("settings")} /> : null}
-          <Toggle value={on} accessibilityLabel="ardia command" onChange={setOn} />
+          {failed && on ? <Button title={t(`Try Again`)} onPress={tryAgain} /> : null}
+          {on && !failed && install.installedVersion && !install.installing ? <Button title={t(`Reinstall`)} onPress={() => void installCommandInBackground("settings")} /> : null}
+          <Toggle value={on} accessibilityLabel={t(`ardia command`)} onChange={setOn} />
         </Row>
         )}
         <SettingToggle anchor="advanced.compactCliPill" />
@@ -286,8 +288,8 @@ function KeepActiveSiteSheet() {
   };
   return (
     <Sheet onClose={closeSettingsSheet}>
-      <DialogTitle subtitle="Sites you add will always stay active and memory won't be freed up from them.">Add Site</DialogTitle>
-      <FormField label="Site">
+      <DialogTitle subtitle={t(`Sites you add will always stay active and memory won't be freed up from them.`)}>Add Site</DialogTitle>
+      <FormField label={t(`Site`)}>
         <TextField value={site} onChangeText={setSite} placeholder="youtube.com" onSubmit={() => void add()} onEscape={closeSettingsSheet} autoFocus />
       </FormField>
       {error && (
@@ -296,8 +298,8 @@ function KeepActiveSiteSheet() {
         </Text>
       )}
       <DialogActions>
-        <Button title="Cancel" onPress={closeSettingsSheet} />
-        <Button title="Add" kind="primary" disabled={saving || !site.trim()} onPress={() => void add()} />
+        <Button title={t(`Cancel`)} onPress={closeSettingsSheet} />
+        <Button title={t(`Add`)} kind="primary" disabled={saving || !site.trim()} onPress={() => void add()} />
       </DialogActions>
     </Sheet>
   );

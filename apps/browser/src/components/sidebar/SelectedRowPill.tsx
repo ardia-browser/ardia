@@ -13,6 +13,8 @@ import { iconSymbol } from "../../lib/customIcon";
 import { FADED, markedEngine } from "../../state/sidebar/rowState";
 import { EngineMark, SLEEPING_OPACITY } from "./TabIcon";
 import { SELECTED_ROW_PILL, SELECTED_ROW_PILL_MOTION, SELECTED_ROW_REVEAL_SETTLE_MS, useSidebarTokens } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 function settle(progress: Animated.Value, phase: keyof typeof SELECTED_ROW_PILL_MOTION, done?: () => void) {
   const toValue = phase === "enter" ? 1 : 0;
@@ -208,7 +210,7 @@ function PillFace({ windowId, side, tab }: { windowId: string; side: "above" | "
     revealTab(windowId, tab.id);
   };
   return (
-    <Pressable onPress={press} accessibilityRole="button" accessibilityLabel={side === "below" ? "Scroll down to the selected tab" : "Scroll up to the selected tab"}>
+    <Pressable onPress={press} accessibilityRole="button" accessibilityLabel={side === "below" ? t(`Scroll down to the selected tab`) : t(`Scroll up to the selected tab`)}>
       <Panel fill={tokens.selectedRowPillFill} border={tokens.selectedRowPillStroke} radius={capsule(SELECTED_ROW_PILL.height)} shadow={SHADOWS.status}>
         <View style={FACE}>
           <PillIcon tab={tab} size={SELECTED_ROW_PILL.icon} />

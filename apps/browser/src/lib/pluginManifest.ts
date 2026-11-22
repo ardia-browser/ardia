@@ -11,6 +11,8 @@ import { permissionsOf, type PluginPermissions } from "./pluginPermissions";
 import { storedRows, type RowValue, type SettingsSpec } from "./pluginRows";
 import { mainOf, sidecarOf, type MainSpec, type ProcessSpec, type ProgramSpec } from "./pluginRuntime";
 import type { PasswordManagerSpec } from "./pluginPasswordManager";
+import { t } from "./uiLanguage";
+
 
 export { compareVersions } from "./versions";
 export { LIMITS, NAME_PATTERN, KEY_PATTERN, VERSION_PATTERN, SYMBOL_PATTERN, KEYWORD_PATTERN, isPluginPath, DEFAULT_MAIN_MB, DEFAULT_SIDECAR_MB } from "./pluginChecks";
@@ -91,7 +93,7 @@ function contributionProblems(c: Check, k: PluginContributions, permissions: Plu
   k.panels.forEach((p, i) => p.view && !runtime.main && c.problems.push(`${K}.panels[${i}].view needs a main`));
   const needsMain: [string, boolean][] = [["sidebarViews", k.sidebarViews.length > 0], ["omnibox", k.omnibox.length > 0]];
   for (const [what, used] of needsMain) if (used && !runtime.main) c.problems.push(`${K}.${what} needs a main`);
-  const needsRuntime: [string, boolean][] = [["tool commands", k.commands.some((x) => "tool" in x.action)], ["tools", k.tools.length > 0], ["hooks", k.hooks.length > 0]];
+  const needsRuntime: [string, boolean][] = [[t(`tool commands`), k.commands.some((x) => "tool" in x.action)], ["tools", k.tools.length > 0], ["hooks", k.hooks.length > 0]];
   for (const [what, used] of needsRuntime) if (used && !runtime.main && !runtime.sidecar) c.problems.push(`${what} needs a main or a sidecar`);
   if (k.settings.rows.some((r) => r.type === "secret") && !permissions.secrets) c.problems.push(`${K}.settings.rows: a secret row needs the secrets permission`);
 }
@@ -134,7 +136,7 @@ export function checkManifest(raw: Fields, declaredManifest = MANIFEST_VERSION):
   const title = text(c, "title", raw.title ?? raw.name, LIMITS.title);
   const description = text(c, "description", raw.description, LIMITS.description, false) ?? "";
   const version = matching(c, "version", raw.version, VERSION, "MAJOR.MINOR.PATCH", false);
-  const requires = matching(c, "requires", raw.requires, VERSION, "an Ardia version, MAJOR.MINOR.PATCH", false);
+  const requires = matching(c, "requires", raw.requires, VERSION, t(`an Ardia version, MAJOR.MINOR.PATCH`), false);
   const icon = matching(c, "icon", raw.icon, SYMBOL, SYMBOL_RULE, false);
   const keywords = keywordsOf(c, raw.keywords);
   const telemetry = telemetryOf(c, raw.telemetry);
@@ -142,17 +144,17 @@ export function checkManifest(raw: Fields, declaredManifest = MANIFEST_VERSION):
   const main = mainOf(c, raw.main, raw.memoryMB);
   const sidecar = sidecarOf(c, "sidecar", raw.sidecar);
   const runtime = { main: main !== null || raw.main !== undefined, sidecar: sidecar !== null || raw.sidecar !== undefined };
-  if (runtime.main && runtime.sidecar) c.problems.push("a plugin can declare main or sidecar, not both");
+  if (runtime.main && runtime.sidecar) c.problems.push(t(`a plugin can declare main or sidecar, not both`));
   const contributes = contributesOf(c, raw[K], runtime.main);
   const given = activationEventsOf(c, raw.activationEvents);
-  if (given && !runtime.main) c.problems.push("activationEvents only go with a main");
+  if (given && !runtime.main) c.problems.push(t(`activationEvents only go with a main`));
   const [alwaysOn, official, autoInstall] = (["alwaysOn", "official", "autoInstall"] as const).map((k) => (raw[k] === undefined ? false : raw[k] === true || (c.problems.push(`${k} must be true`), false)));
   const page = pageOf(contributes);
   v2OnlyProblems(c, raw, contributes.programs, declaredManifest);
   commandProblems(c, contributes, permissions, page !== null, runtime.main);
   contributionProblems(c, contributes, permissions, runtime);
   if (contributes.panels.some((p) => p.file) && name && RESERVED_PAGE_NAMES.includes(name)) c.problems.push(`name: ${name} is one of Ardia's own pages (ardia://${name}), so a plugin with a page can't use it`);
-  if (sidecar && Array.isArray(permissions.network)) c.problems.push(`permissions.network: a sidecar can only have "*" or false, since Ardia can't hold a program to a list of hosts`);
+  if (sidecar && Array.isArray(permissions.network)) c.problems.push(t(`permissions.network: a sidecar can only have "*" or false, since Ardia can't hold a program to a list of hosts`));
   if (c.problems.length || !name || !title) return { manifest: null, problems: c.problems };
   const activationEvents = given ?? derivedActivationEvents(contributes, runtime);
   const k = contributes;
@@ -176,7 +178,7 @@ export function readManifest(text: string): ManifestRead {
   if (!isFields(doc)) return { manifest: null, problems: [`${MANIFEST_FILE} must be an object`], newer: false };
   const given = doc.manifest;
   if (given !== undefined && (typeof given !== "number" || !Number.isSafeInteger(given) || given < 0))
-    return { manifest: null, problems: ["manifest must be a whole number, the manifest's version"], newer: false };
+    return { manifest: null, problems: [t(`manifest must be a whole number, the manifest's version`)], newer: false };
   if (typeof given === "number" && given > MANIFEST_VERSION)
     return { manifest: null, problems: [`manifest ${given} needs a newer Ardia (this one reads up to ${MANIFEST_VERSION})`], newer: true };
   const current = upgraded(doc, MANIFEST_VERSION, MANIFEST_MIGRATIONS, "manifest");

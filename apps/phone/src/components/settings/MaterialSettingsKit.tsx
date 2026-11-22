@@ -8,6 +8,8 @@ import { MATERIAL_STATE } from "../ui/materialRoles";
 import { MaterialDialog, useMaterialRipple } from "../ui/MaterialSurfaces";
 import { useMaterialTheme } from "../ui/materialTheme";
 import { MATERIAL_SEGMENT_GAP, materialSegmentCorners, materialShape, materialSize, materialType } from "../ui/materialTokens";
+import { t } from "../../lib/uiLanguage";
+
 
 const AVATAR = 40;
 const RADIO = 20;
@@ -40,9 +42,9 @@ export function MaterialSettingsPage({ title, onBack, onClose, leading, trailing
       <View testID="materialTopAppBar" style={[styles.appBar, { paddingTop: frame ? 0 : insets.top, paddingLeft: insets.left + 4, paddingRight: insets.right + 4, backgroundColor: materialAppBarFill(scheme, scrolled) }]}>
         <View style={styles.appBarRow}>
           {onBack ? (
-            <MaterialIconButton testID="materialSettingsBack" icon="arrowRight" flipped label="Back" ink={scheme.onSurface} onPress={onBack} />
+            <MaterialIconButton testID="materialSettingsBack" icon="arrowRight" flipped label={t(`Back`)} ink={scheme.onSurface} onPress={onBack} />
           ) : onClose ? (
-            <MaterialIconButton testID="materialSettingsClose" icon="xmark" label="Close" ink={scheme.onSurface} onPress={onClose} />
+            <MaterialIconButton testID="materialSettingsClose" icon="xmark" label={t(`Close`)} ink={scheme.onSurface} onPress={onClose} />
           ) : null}
           {leading}
           <Text testID="settingsTitle" accessibilityRole="header" numberOfLines={1} style={[materialType.titleLarge, styles.title, { color: scheme.onSurface, paddingLeft: onBack || onClose || leading ? 0 : 12 }]} accessibilityElementsHidden={mediumAppBar && !collapsed} importantForAccessibility={mediumAppBar && !collapsed ? "no" : "auto"}>
@@ -213,7 +215,7 @@ export function MaterialPickerRow<T extends string>({ title, icon, options, sele
         <ItemText title={title} supporting={current} />
       </Pressable>
       {choosing ? (
-        <MaterialDialog title={title} buttons={[{ title: "Cancel", onPress: () => setChoosing(false) }]} onDismiss={() => setChoosing(false)}>
+        <MaterialDialog title={title} buttons={[{ title: t(`Cancel`), onPress: () => setChoosing(false) }]} onDismiss={() => setChoosing(false)}>
           <View testID="materialRadioList" accessibilityRole="radiogroup" style={styles.radioList}>
             {options.map((option) => (
               <RadioItem

@@ -1,4 +1,6 @@
 import { secureRandomBytes } from "../../platform/secureRandom";
+import { t } from "../../lib/uiLanguage";
+
 
 export type HistoryPage = { url: string; profileId: string; engine: string };
 
@@ -19,7 +21,7 @@ export type HandleScope = { connection: number; serving: () => boolean };
 export class AbandonedRequest extends Error {}
 
 export function historyHandle(scope: HandleScope, page: HistoryPage): string {
-  if (!scope.serving()) throw new AbandonedRequest("The connection closed or control went off before the search finished, so it was dropped.");
+  if (!scope.serving()) throw new AbandonedRequest(t(`The connection closed or control went off before the search finished, so it was dropped.`));
   const connection = scope.connection;
   let table = tables.get(connection);
   if (!table) tables.set(connection, (table = { byId: new Map(), byPage: new Map() }));

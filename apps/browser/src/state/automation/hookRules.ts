@@ -9,6 +9,8 @@ import { offerRules, pendingRules, useAutomationApprovals, type ApprovalRule, ty
 import { HOOKS_FILE, parseHooksText, type HookSpec } from "./hookFile";
 import { approvalFor, isHookActive, launchActionApproval } from "./hookPolicy";
 import type { DecideEvent } from "./eventNames";
+import { t } from "../../lib/uiLanguage";
+
 
 type Store = { hooks: HookSpec[]; generation: number; problems: string[]; stamp: string | null };
 
@@ -30,7 +32,7 @@ function noticeWindow(): string | undefined {
 
 function announce(windowId: string, sources: ApprovalSource[], rules: ApprovalRule[]) {
   const what = rules.length === 1 ? `“${rules[0]!.name}” waits` : `${rules.length} automation rules wait`;
-  showToast(windowId, `${sources.join(", ")}: ${what} for your approval`, "Settings › Advanced › Automation", { icon: "lock.shield" });
+  showToast(windowId, `${sources.join(", ")}: ${what} for your approval`, t(`Settings › Advanced › Automation`), { icon: "lock.shield" });
 }
 
 function noticePending(source: ApprovalSource, fresh: ApprovalRule[]) {

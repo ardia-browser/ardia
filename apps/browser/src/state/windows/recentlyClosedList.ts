@@ -1,6 +1,8 @@
 import type { BrowserState } from "../browser/store";
 import type { BrowserWindow, ClosedGroup, ClosedTab, ClosedWindow } from "../browser/types";
 import { isIncognitoProfile } from "../browser/model";
+import { t } from "../../lib/uiLanguage";
+
 
 export type RecentlyClosed = { tabs: ClosedTab[]; windows: ClosedWindow[]; groups: ClosedGroup[] };
 
@@ -16,7 +18,7 @@ export function recentlyClosedIn(s: BrowserState, w: BrowserWindow | undefined):
   };
 }
 
-export const closedWindowTitle = (c: ClosedWindow) => (c.tabs.length ? (c.tabs.length === 1 ? "Window (1 Tab)" : `Window (${c.tabs.length} Tabs)`) : "Window (Pinned Tabs)");
+export const closedWindowTitle = (c: ClosedWindow) => (c.tabs.length ? (c.tabs.length === 1 ? t(`Window (1 Tab)`) : `Window (${c.tabs.length} Tabs)`) : t(`Window (Pinned Tabs)`));
 
 export function newestClosed(list: RecentlyClosed): (ClosedTab | ClosedWindow)[] {
   return [...list.tabs, ...list.windows].sort((a, b) => b.closedAt - a.closedAt).slice(0, RECENTLY_CLOSED_SHOWN);

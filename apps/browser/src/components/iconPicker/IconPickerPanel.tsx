@@ -6,6 +6,8 @@ import { iconSymbol, symbolIcon } from "../../lib/customIcon";
 import { emojiSections, matchesTerms, searchEmoji, searchTerms } from "../../lib/emoji";
 import { IconGrid, type GridSection } from "./IconGrid";
 import { ICON_PICKER, ICON_PICKER_SHADOW, ICON_PICKER_WIDTH } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 export type PickerSymbol = { name: string; title?: string };
 export type PickerAction = { title: string; icon?: string; primary?: boolean; onPress: () => void };
@@ -14,17 +16,17 @@ export type PickerPlace = { top: number; left: number; upward?: boolean };
 type Tab = "emoji" | "symbols";
 
 const TABS: { tab: Tab; icon: string; title: string }[] = [
-  { tab: "emoji", icon: "face.smiling", title: "Emoji" },
-  { tab: "symbols", icon: "star.square.on.square", title: "Symbols" },
+  { tab: "emoji", icon: "face.smiling", title: t(`Emoji`) },
+  { tab: "symbols", icon: "star.square.on.square", title: t(`Symbols`) },
 ];
 
 const SECTION_SYMBOLS: Record<string, string> = {
   Smileys: "face.smiling",
   People: "person",
-  "Animals & Nature": "pawprint",
-  "Food & Drink": "fork.knife",
+  t(`Animals & Nature`): "pawprint",
+  t(`Food & Drink`): "fork.knife",
   Activities: "soccerball",
-  "Travel & Places": "car",
+  t(`Travel & Places`): "car",
   Objects: "lightbulb",
   Symbols: "heart",
   Flags: "flag",
@@ -82,7 +84,7 @@ function IconPickerPanel({ current, symbols, actions, onChoose, onClose, place, 
               width="100%"
               value={query}
               onChangeText={setQuery}
-              placeholder={tab === "emoji" ? "Search emoji" : "Search symbols"}
+              placeholder={tab === "emoji" ? t(`Search emoji`) : t(`Search symbols`)}
               onEscape={onClose}
               onSubmit={() => {
                 if (!terms.length) return;

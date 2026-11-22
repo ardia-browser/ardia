@@ -13,6 +13,8 @@ import { nativeMenus } from "../ui/MenuTrigger";
 import { isLabBuild } from "../../platform/lab";
 import { launchArguments } from "../../state/app/launchFlags";
 import { CardIcon, cardPose, deckCardMotion, deckHeaderTitle, DeckCard, DeckCardMenu, deckCardStyles, deckNow, ReceivedBadge, sameCard, type DeckMotion, type DeckNow } from "./DeckCard";
+import { t } from "../../lib/uiLanguage";
+
 
 export const containedDeckScroll = (): boolean => Platform.OS === "android" && isLabBuild && launchArguments().oneContainerScroll;
 
@@ -187,7 +189,7 @@ function ContainedCards({ ids, geometry, motion, children }: ContainedCardsProps
 }
 
 export const ContainedDeckCard = memo(function ContainedDeckCard({ tab, index, geometry: g, motion, onOpen, onClose, onCloseNow }: ComponentProps<typeof DeckCard>) {
-  countRender("DeckCard");
+  countRender(t(`DeckCard`));
   const theme = useTheme();
   const design = useDesign();
   const tone = shownTone(useHeldPageTone(tab.id), tab.themeColorHex);
@@ -225,7 +227,7 @@ export const ContainedDeckCard = memo(function ContainedDeckCard({ tab, index, g
   const bandStyle = useAnimatedStyle(() => ({ transform: [{ scaleY: expanded.value && !underBars ? deckBarBand(g, 0, scaleProgress.value).grown : 0 }] }), [g, underBars]);
 
   const host = display(tab.url).host;
-  const title = tab.title || host || "New Tab";
+  const title = tab.title || host || t(`New Tab`);
   const cardContents = (
     <>
       <Animated.View testID="deckCardFace" style={[StyleSheet.absoluteFill, faceStyle]}>
@@ -260,10 +262,10 @@ export const ContainedDeckCard = memo(function ContainedDeckCard({ tab, index, g
         accessibilityRole="button"
         accessibilityLabel={title}
         accessibilityValue={{ text: tab.isPrivate ? `Incognito, ${host}` : host }}
-        accessibilityHint="Opens the tab."
+        accessibilityHint={t(`Opens the tab.`)}
         {...screenReaderActions([
           { name: "activate", run: () => onOpen(index) },
-          { name: "close", label: "Close Tab", run: () => onCloseNow(index) },
+          { name: "close", label: t(`Close Tab`), run: () => onCloseNow(index) },
         ])}
         pointerEvents="none"
         style={[deckCardStyles.reach, { width: g.cardWidth, height: g.cardHeight }, overZ, reachStyle]}

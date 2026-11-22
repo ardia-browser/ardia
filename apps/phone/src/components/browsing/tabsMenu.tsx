@@ -4,10 +4,12 @@ import { closeFrontTab, menuOpenedHaptic, recentTabs, switchToTab, tabTitle } fr
 import type { BrowserTab } from "../../state/tabs/tabModels";
 import type { MenuItem } from "../ui";
 import { MenuTrigger, nativeMenus } from "../ui/MenuTrigger";
+import { t } from "../../lib/uiLanguage";
+
 
 export function tabsMenuItems(order: readonly BrowserTab[]): MenuItem[] {
   const others = recentTabs(order).map((tab): MenuItem => ({ label: tabTitle(tab), icon: tab.isPrivate ? "eyes" : "globe", onPress: () => switchToTab(tab.id) }));
-  return [...others, ...(others.length ? ["divider" as const] : []), { label: "Close Tab", icon: "xmark", systemImage: "xmark", destructive: true, onPress: closeFrontTab }];
+  return [...others, ...(others.length ? ["divider" as const] : []), { label: t(`Close Tab`), icon: "xmark", systemImage: "xmark", destructive: true, onPress: closeFrontTab }];
 }
 
 export type TabsMenuHandlers = { onLongPress?: (event?: GestureResponderEvent) => void; screenReaderActions: { name: string; label: string; run: () => void }[] };
@@ -21,7 +23,7 @@ export function TabsMenuTrigger({ order, onTabsMenu, style, children }: { order:
     );
   return (
     <MenuTrigger testID="tabsButtonMenu" items={tabsMenuItems(order)} trigger="longPress" frost={null} style={style}>
-      {() => children({ screenReaderActions: [{ name: "recentTabs", label: "Recent Tabs", run: onTabsMenu }] })}
+      {() => children({ screenReaderActions: [{ name: "recentTabs", label: t(`Recent Tabs`), run: onTabsMenu }] })}
     </MenuTrigger>
   );
 }

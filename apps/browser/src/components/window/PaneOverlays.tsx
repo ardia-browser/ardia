@@ -7,6 +7,8 @@ import { Hud } from "./Hud";
 import { patchPage, usePage } from "../../state/tabs/pageState";
 import { noteRendererResponsive } from "../../state/telemetry/freezes";
 import { STATUS_MOTION, windowColors } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 export function StatusBubble({ tabId, maxWidth }: { tabId: string; maxWidth: number }) {
   const colors = windowColors(useTheme().dark);
@@ -51,7 +53,7 @@ export function SadTab({ tabId }: { tabId: string }) {
           Something went wrong with this tab. Reloading often fixes it.
         </Text>
         <Button variant="pill"
-          title="Reload"
+          title={t(`Reload`)}
           primary
           onPress={() => {
             patchPage(tabId, { crashed: null });
@@ -64,10 +66,10 @@ export function SadTab({ tabId }: { tabId: string }) {
   if (!unresponsive) return null;
   return (
     <Dialog width="xs" pad="xl">
-      <DialogTitle subtitle="You can wait for it to become responsive or exit the page.">Page Unresponsive</DialogTitle>
+      <DialogTitle subtitle={t(`You can wait for it to become responsive or exit the page.`)}>Page Unresponsive</DialogTitle>
       <DialogActions>
         <Button variant="pill"
-          title="Exit Page"
+          title={t(`Exit Page`)}
           onPress={() => {
             noteRendererResponsive(tabId, true);
             patchPage(tabId, { unresponsive: false });
@@ -75,7 +77,7 @@ export function SadTab({ tabId }: { tabId: string }) {
           }}
         />
         <Button variant="pill"
-          title="Wait"
+          title={t(`Wait`)}
           primary
           onPress={() => {
             patchPage(tabId, { unresponsive: false });

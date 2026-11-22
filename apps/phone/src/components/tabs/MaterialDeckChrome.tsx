@@ -17,6 +17,8 @@ import { useKeyboardHeight } from "../search/useKeyboardHeight";
 import { useSearchTabs } from "./DeckBottomBar";
 import { deckMoreMenuItems, useDeckSpaces } from "./DeckHeader";
 import { MATERIAL_DECK, useDeckScheme } from "./MaterialDeckLayout";
+import { t } from "../../lib/uiLanguage";
+
 
 export { MaterialBarIconButton as MaterialIconButton } from "../ui/MaterialBottomBar";
 
@@ -66,7 +68,7 @@ export function MaterialDeckTopBar({ safeTop, safeSide, incognito, privateCount,
   const below = safeTop + materialSize.topAppBar;
   const menu = { trigger: "tap" as const, fixedOrder: true, haptic: menuOpenedHaptic, disabled: !menusShown, onOpen: () => onMenu(true), onClose: () => onMenu(false) };
   const moreItems = deckMoreMenuItems({ syncEnabled, canReopen, hasTabs, onCloseAll });
-  const title = current?.name ?? "Tabs";
+  const title = current?.name ?? t(`Tabs`);
   return (
     <Animated.View testID="materialDeckTopBar" pointerEvents="box-none" style={[styles.topBar, { paddingTop: safeTop, height: safeTop + materialSize.topAppBar, paddingHorizontal: side, backgroundColor: scheme.surface }, chromeStyle]}>
       <View style={styles.titleSlot}>
@@ -77,7 +79,7 @@ export function MaterialDeckTopBar({ safeTop, safeSide, incognito, privateCount,
                 testID="materialDeckSpace"
                 accessibilityRole="button"
                 accessibilityLabel={`Space, ${current.name}`}
-                accessibilityHint="Shows your Mac’s spaces."
+                accessibilityHint={t(`Shows your Mac’s spaces.`)}
                 android_ripple={ripple(scheme)}
                 onPress={onPress}
                 style={styles.spaceButton}
@@ -96,7 +98,7 @@ export function MaterialDeckTopBar({ safeTop, safeSide, incognito, privateCount,
         )}
       </View>
       <MenuTrigger items={moreItems} {...menu} place={{ top: below, right: side }}>
-        {({ onPress }) => <MaterialIconButton testID="materialDeckMore" icon="ellipsis" label="More" scheme={scheme} turned onPress={onPress ?? noop} />}
+        {({ onPress }) => <MaterialIconButton testID="materialDeckMore" icon="ellipsis" label={t(`More`)} scheme={scheme} turned onPress={onPress ?? noop} />}
       </MenuTrigger>
     </Animated.View>
   );
@@ -156,7 +158,7 @@ export function MaterialDeckEmpty({ centerY, showsArchive, onArchive, searching 
   const scheme = useDeckScheme(incognito);
   return (
     <View testID="materialDeckEmpty" pointerEvents="box-none" style={[styles.empty, { top: centerY - materialSize.listItemTwoLine }]}>
-      <Text style={[materialType.titleLarge, styles.centered, { color: scheme.onSurface }]}>{searching ? "No Matching Tabs" : "No Open Tabs"}</Text>
+      <Text style={[materialType.titleLarge, styles.centered, { color: scheme.onSurface }]}>{searching ? t(`No Matching Tabs`) : t(`No Open Tabs`)}</Text>
       {searching ? null : <Text style={[materialType.bodyMedium, styles.centered, { color: scheme.onSurfaceVariant }]}>Tabs you open appear here. Inactive tabs move to the Archive.</Text>}
       {showsArchive && !searching ? (
         <Pressable accessibilityRole="button" android_ripple={ripple(scheme, scheme.primary)} onPress={onArchive} style={styles.textButton}>

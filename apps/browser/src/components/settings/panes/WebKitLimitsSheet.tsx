@@ -6,35 +6,37 @@ import { noteWebKitLimits } from "../../../state/telemetry/usage";
 import { Button, DialogActions, DialogTitle, lineHeight, proseLineHeight, Sheet, space, Text } from "../../ui";
 import { aboutEngines } from "../tokens";
 import { useContentBlocker } from "./FilterListsSheet";
+import { t } from "../../../lib/uiLanguage";
 
-export const ABOUT_ENGINES_TITLE = "About Engines";
 
-const AUTOMATIC = "Automatic opens most sites in Chromium, where every extension and the full ad blocker run. Netflix and other sites whose video needs FairPlay (Apple's DRM) open in WebKit.";
+export const ABOUT_ENGINES_TITLE = t(`About Engines`);
+
+const AUTOMATIC = t(`Automatic opens most sites in Chromium, where every extension and the full ad blocker run. Netflix and other sites whose video needs FairPlay (Apple's DRM) open in WebKit.`);
 
 type Limit = { label: string; detail: string };
 type LimitGroup = { title: string; limits: Limit[]; onlyWhileBlocking?: true };
 
-const PASSKEYS: Limit = { label: "Passkeys", detail: "No passkeys or security keys" };
+const PASSKEYS: Limit = { label: t(`Passkeys`), detail: t(`No passkeys or security keys`) };
 
 const WEBKIT_LIMITS: LimitGroup[] = [
   {
-    title: "WebKit Pages",
+    title: t(`WebKit Pages`),
     limits: [
-      { label: "Picture in Picture", detail: "Videos only" },
+      { label: t(`Picture in Picture`), detail: t(`Videos only`) },
       PASSKEYS,
-      { label: "Client Hints", detail: "Sites see Safari's browser details" },
-      { label: "Web MIDI and Casting", detail: "Not supported" },
-      { label: "Offline Data", detail: "Kept per engine, so some apps sign out" },
+      { label: t(`Client Hints`), detail: t(`Sites see Safari's browser details`) },
+      { label: t(`Web MIDI and Casting`), detail: t(`Not supported`) },
+      { label: t(`Offline Data`), detail: t(`Kept per engine, so some apps sign out`) },
     ],
   },
   {
-    title: "WebKit Extensions",
-    limits: [{ label: "Extensions", detail: "Not supported" }],
+    title: t(`WebKit Extensions`),
+    limits: [{ label: t(`Extensions`), detail: t(`Not supported`) }],
   },
   {
-    title: "WebKit Ad Blocking",
+    title: t(`WebKit Ad Blocking`),
     onlyWhileBlocking: true,
-    limits: [{ label: "uBlock Filters", detail: "No stand-ins, removeparam, headers" }],
+    limits: [{ label: t(`uBlock Filters`), detail: t(`No stand-ins, removeparam, headers`) }],
   },
 ];
 
@@ -66,7 +68,7 @@ function WebKitLimitsSheet() {
         ))}
       </ScrollView>
       <DialogActions>
-        <Button title="Done" kind="primary" onPress={closeSettingsSheet} />
+        <Button title={t(`Done`)} kind="primary" onPress={closeSettingsSheet} />
       </DialogActions>
     </Sheet>
   );

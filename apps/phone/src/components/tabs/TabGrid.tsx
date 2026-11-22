@@ -14,6 +14,8 @@ import { CARD_MENU_ACTION, CardIcon, CardMenu, ReceivedBadge, type Reads } from 
 import { nativeMenus } from "../ui/MenuTrigger";
 import { deckHeaderBottom } from "./DeckHeader";
 import { centredGridOffset, tabGridColumns, tabGridInk, tabGridInsets, tabGridLayout, tabGridMotion, tabGridRowHeight, tabGridStartOffset } from "./tabGridLayout";
+import { t } from "../../lib/uiLanguage";
+
 
 export type GridFrame = { centerX: number; centerY: number; width: number; height: number };
 
@@ -110,7 +112,7 @@ const TabGridCell = memo(function TabGridCell({ tab, selected, width, aspect, co
   const theme = useTheme();
   const tone = shownTone(useHeldPageTone(tab.id), tab.themeColorHex);
   const host = display(tab.url).host;
-  const title = tab.title || host || "New Tab";
+  const title = tab.title || host || t(`New Tab`);
   const open = () => onOpen(tab.id);
   const close = () => onClose(tab.id);
   const scale = useSharedValue(1);
@@ -126,9 +128,9 @@ const TabGridCell = memo(function TabGridCell({ tab, selected, width, aspect, co
       <View testID="tabGridHeader" style={styles.header}>
         <CardIcon tab={tab} />
         <Text testID="tabGridTitle" style={[font.footnote, styles.title, { color: theme.headerText }]} numberOfLines={1}>
-          {tab.isPrivate ? "Incognito" : title}
+          {tab.isPrivate ? t(`Incognito`) : title}
         </Text>
-        <Pressable testID="tabGridClose" accessibilityRole="button" accessibilityLabel="Close Tab" onPress={close} style={styles.closeHit}>
+        <Pressable testID="tabGridClose" accessibilityRole="button" accessibilityLabel={t(`Close Tab`)} onPress={close} style={styles.closeHit}>
           <ChromeSurface shape="circle" cornerRadius={capsule(tabGridLayout.closeCircle)} dark={theme.dark} style={styles.closeCircle}>
             <Symbol name="xmark" size={tabGridLayout.closeGlyph} color={theme.secondaryLabel} />
           </ChromeSurface>
@@ -145,7 +147,7 @@ const TabGridCell = memo(function TabGridCell({ tab, selected, width, aspect, co
             accessibilityState={{ selected }}
             {...screenReaderActions([
               { name: "activate", run: open },
-              { name: "close", label: "Close Tab", run: close },
+              { name: "close", label: t(`Close Tab`), run: close },
               ...(onLongPress && !nativeMenus() ? [{ name: "menu", label: CARD_MENU_ACTION, run: () => (openFor ? openFor(card.current) : onLongPress()) }] : []),
             ])}
             onPress={open}

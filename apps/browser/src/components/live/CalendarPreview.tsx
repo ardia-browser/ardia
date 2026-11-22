@@ -14,6 +14,8 @@ import { Avatar, AVATAR_SIZE, HoverSurface } from "./LiveItemCard";
 import { liveType, useLiveColors } from "./tokens";
 import { UI_LOCALE } from "../../lib/uiLocale";
 import { perLook } from "../ui/tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 export function useIsCalendarTab(tabId: string | null): boolean {
   const pinnedCalendar = useTab(tabId ?? undefined, (t) => !!t?.pin && isCalendarUrl(t.pinnedUrl ?? t.url));
@@ -37,10 +39,10 @@ export function CalendarPreview({ tabId, windowId, anchor }: { tabId: string; wi
 
   let body: React.ReactNode;
   if (!connected) body = <SignIn blocked={calendarBlocked(access)} requesting={requesting} failure={requestError} />;
-  else if (!lastFetch && loading) body = <Empty text="Loading events" />;
-  else if (error && !lastFetch) body = <Empty text="Couldn't load events" />;
-  else if (!today.length) body = <Empty text="No events today" />;
-  else if (!upcoming.length) body = <Empty text="No more events today" />;
+  else if (!lastFetch && loading) body = <Empty text={t(`Loading events`)} />;
+  else if (error && !lastFetch) body = <Empty text={t(`Couldn't load events`)} />;
+  else if (!today.length) body = <Empty text={t(`No events today`)} />;
+  else if (!upcoming.length) body = <Empty text={t(`No more events today`)} />;
   else
     body = (
       <Box gap="xxs">
@@ -79,7 +81,7 @@ const REFRESH = { marginRight: -space.s, marginVertical: -space.xs } as const;
 function Refresh({ spinning }: { spinning: boolean }) {
   return (
     <RefreshSpinner spinning={spinning} style={REFRESH}>
-      <Button variant="icon" icon="arrow.clockwise" size="s" weight="semibold" onPress={() => void refreshCalendar()} tooltip="Refresh" />
+      <Button variant="icon" icon="arrow.clockwise" size="s" weight="semibold" onPress={() => void refreshCalendar()} tooltip={t(`Refresh`)} />
     </RefreshSpinner>
   );
 }
@@ -103,7 +105,7 @@ const SETTINGS_LINK = { alignSelf: "flex-start" } as const;
 function OpenSystemSettings() {
   return (
     <View style={SETTINGS_LINK}>
-      <Button variant="text" look="link" title="Open System Settings" onPress={openCalendarPrivacy} />
+      <Button variant="text" look="link" title={t(`Open System Settings`)} onPress={openCalendarPrivacy} />
     </View>
   );
 }
@@ -115,7 +117,7 @@ function SignIn({ blocked, requesting, failure }: { blocked: boolean; requesting
     return (
       <View style={NOTE_WRAP}>
         <Text tone="textSecondary" style={liveType.detail}>
-          {failure ?? "Allow Ardia in System Settings › Privacy & Security › Calendars to see your meetings here."}
+          {failure ?? t(`Allow Ardia in System Settings › Privacy & Security › Calendars to see your meetings here.`)}
         </Text>
         <OpenSystemSettings />
       </View>
@@ -125,7 +127,7 @@ function SignIn({ blocked, requesting, failure }: { blocked: boolean; requesting
     <View {...hoverProps} style={NOTE_WRAP}>
       <Text tone="textSecondary" style={liveType.detail}>
         <Span onPress={requesting ? undefined : () => void connectCalendar()} style={[{ color: theme.accent }, hovered && !requesting ? UNDERLINE : NO_UNDERLINE]}>
-          {requesting ? "Connecting…" : "Connect your calendar"}
+          {requesting ? t(`Connecting…`) : t(`Connect your calendar`)}
         </Span>{" "}
         to see your meetings here and get alerts before they start.
       </Text>
@@ -146,7 +148,7 @@ function AllDayRow({ event }: { event: CalendarEvent }) {
   return (
     <Box row gap="m" padX="xs" style={ALL_DAY}>
       <View style={[ALL_DAY_DOT(), { backgroundColor: event.color }]} />
-      <FadeLabel text={event.title || "Untitled event"} fontSize={font.small.fontSize} color={theme.textSecondary} style={ALL_DAY_LABEL} />
+      <FadeLabel text={event.title || t(`Untitled event`)} fontSize={font.small.fontSize} color={theme.textSecondary} style={ALL_DAY_LABEL} />
       <Text size="caption" tone="textTertiary">
         All day
       </Text>
@@ -178,16 +180,16 @@ function EventRow({ event, now, windowId, tabId }: { event: CalendarEvent; now: 
         <Box row gap="m" padY="s" padX="xs" radius="tile" fill={hovered ? "rowHover" : undefined} style={past ? EVENT_PAST : EVENT}>
           <View style={[EVENT_BAR, { backgroundColor: event.color }]} />
           <Box gap="xxs" style={FILL}>
-            <FadeLabel text={event.title || "Untitled event"} fontSize={font.body.fontSize} weight="medium" color={theme.textPrimary} style={EVENT_TITLE} />
+            <FadeLabel text={event.title || t(`Untitled event`)} fontSize={font.body.fontSize} weight="medium" color={theme.textPrimary} style={EVENT_TITLE} />
             <Text lines={1} size="caption" tone="textSecondary">
               {timeRange(event)}
-              <Span style={{ fontWeight: weight.medium, color: running ? colors.now : theme.textSecondary }}> · {running ? "Now" : relativeTime(event.start, now)}</Span>
+              <Span style={{ fontWeight: weight.medium, color: running ? colors.now : theme.textSecondary }}> · {running ? t(`Now`) : relativeTime(event.start, now)}</Span>
             </Text>
           </Box>
           {others.length && !joinable ? <OverlappingAvatars people={others} /> : null}
           {joinable ? (
             <View tooltip={joinTitle(link!.provider)}>
-              <Button variant="pill" tone="chip" title="Join" icon="video.fill" primary onPress={() => (dismissHover(), joinEvent(event, false, windowId))} />
+              <Button variant="pill" tone="chip" title={t(`Join`)} icon="video.fill" primary onPress={() => (dismissHover(), joinEvent(event, false, windowId))} />
             </View>
           ) : null}
         </Box>

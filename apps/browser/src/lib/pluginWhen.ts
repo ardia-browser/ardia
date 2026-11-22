@@ -1,3 +1,4 @@
+import { t } from "./uiLanguage";
 export const WHEN_KEYS = ["urlHost", "urlScheme", "isPinned", "isInGroup", "isSplit", "isActive", "tabCount"] as const;
 export type WhenKey = (typeof WHEN_KEYS)[number];
 export type WhenValue = string | number | boolean;
@@ -42,7 +43,7 @@ function tokenize(source: string): Token[] | string {
     }
     if (ch === '"' || ch === "'") {
       const end = source.indexOf(ch, i + 1);
-      if (end < 0) return "has a string without its closing quote";
+      if (end < 0) return t(`has a string without its closing quote`);
       tokens.push({ type: "string", value: source.slice(i + 1, end) });
       i = end + 1;
       continue;
@@ -113,7 +114,7 @@ class Parser {
     if (this.peekOp("(")) {
       this.at++;
       const inner = this.or(depth + 1);
-      if (!this.peekOp(")")) throw new Error("has a ( without its )");
+      if (!this.peekOp(")")) throw new Error(t(`has a ( without its )`));
       this.at++;
       return inner;
     }
@@ -128,7 +129,7 @@ class Parser {
 
   private operand(): Operand {
     const t = this.tokens[this.at++];
-    if (!t) throw new Error("ends too soon");
+    if (!t) throw new Error(t(`ends too soon`));
     if (t.type === "string" || t.type === "number") return { kind: "literal", value: t.value };
     if (t.type === "word") {
       if (t.value === "true" || t.value === "false") return { kind: "literal", value: t.value === "true" };
@@ -140,7 +141,7 @@ class Parser {
 }
 
 export function parseWhen(source: string): WhenParse {
-  if (typeof source !== "string" || !source.trim()) return { ok: false, problem: "is empty" };
+  if (typeof source !== "string" || !source.trim()) return { ok: false, problem: t(`is empty`) };
   if (source.length > MAX_WHEN_LENGTH) return { ok: false, problem: `is over ${MAX_WHEN_LENGTH} characters` };
   const tokens = tokenize(source);
   if (typeof tokens === "string") return { ok: false, problem: tokens };

@@ -1,8 +1,10 @@
 import type { ConnectResult, PhraseCheck, SyncedDevice, SyncedProfile, SyncedView, SyncPhase, SyncStatus } from "../../platform/sync.ts";
 import { copy } from "../../lib/platformCopy.ts";
+import { t } from "../../lib/uiLanguage";
 
-export const MAC_HINT = "On your Mac: Settings › Sync › Connect Another Device.";
-export const YOUR_MAC = "Your Mac";
+
+export const MAC_HINT = t(`On your Mac: Settings › Sync › Connect Another Device.`);
+export const YOUR_MAC = t(`Your Mac`);
 export const JUST_NOW_MS = 60_000;
 
 export type StatusLine = { text: string; isWarning: boolean };
@@ -26,15 +28,15 @@ export function isSyncConnected(status: SyncStatus): boolean {
 export function syncRowSubtitle(status: SyncStatus): StatusLine {
   switch (status.attention) {
     case "folder":
-      return { text: "Choose Your Sync Folder Again", isWarning: true };
+      return { text: t(`Choose Your Sync Folder Again`), isWarning: true };
     case "phrase":
-      return { text: "Enter Your Recovery Phrase", isWarning: true };
+      return { text: t(`Enter Your Recovery Phrase`), isWarning: true };
     case "reset":
-      return { text: "Out of Sync", isWarning: true };
+      return { text: t(`Out of Sync`), isWarning: true };
     case "stalled":
       return { text: status.statusText, isWarning: true };
     default:
-      return { text: isSyncOff(status) ? "Every tab, anywhere." : status.statusText, isWarning: false };
+      return { text: isSyncOff(status) ? t(`Every tab, anywhere.`) : status.statusText, isWarning: false };
   }
 }
 
@@ -68,15 +70,15 @@ export function connectMessage(result: ConnectResult): string | null {
     case "invalidPhrase":
       return result.problem;
     case "mismatch":
-      return "This recovery phrase doesn’t match the synced data in this folder. Check the phrase, or choose the folder your other devices sync to.";
+      return t(`This recovery phrase doesn’t match the synced data in this folder. Check the phrase, or choose the folder your other devices sync to.`);
     case "noSyncData":
-      return "There’s no synced data in this folder yet. Choose the folder your other devices sync to, or wait for it to finish downloading.";
+      return t(`There’s no synced data in this folder yet. Choose the folder your other devices sync to, or wait for it to finish downloading.`);
     case "folderUnavailable":
       return copy().folderUnavailable;
     case "keyStoreFailed":
       return copy().keySaveFailed;
     case "busy":
-      return "Ardia is still turning off sync. Try again in a moment.";
+      return t(`Ardia is still turning off sync. Try again in a moment.`);
   }
 }
 
@@ -84,7 +86,7 @@ export type PhraseTone = "hint" | "problem" | "good";
 
 export function phraseFooter(check: PhraseCheck): { text: string; tone: PhraseTone } {
   if (check.problem) return { text: check.problem, tone: "problem" };
-  if (check.isValid) return { text: "All 24 words check out.", tone: "good" };
+  if (check.isValid) return { text: t(`All 24 words check out.`), tone: "good" };
   return { text: MAC_HINT, tone: "hint" };
 }
 
@@ -107,7 +109,7 @@ export function ago(then: number, now: number): string {
   return `${count} ${unit}${count === 1 ? "" : "s"} ago`;
 }
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTHS = [t(`Jan`), t(`Feb`), t(`Mar`), t(`Apr`), t(`May`), t(`Jun`), t(`Jul`), t(`Aug`), t(`Sep`), t(`Oct`), t(`Nov`), t(`Dec`)];
 
 const calendarDay = (at: number) => {
   const date = new Date(at);
@@ -130,8 +132,8 @@ export function abbreviatedAgo(then: number, now: number): string {
 export function deviceSeen(device: SyncedDevice, now: number, othersShowSeen = copy().devicesShowLastSeen): string {
   if (device.isCurrent) return copy().thisDevice;
   if (!othersShowSeen) return "";
-  if (device.lastSeen === null) return "Not Yet Synced";
-  if (now - device.lastSeen < JUST_NOW_MS) return "Just Now";
+  if (device.lastSeen === null) return t(`Not Yet Synced`);
+  if (now - device.lastSeen < JUST_NOW_MS) return t(`Just Now`);
   return abbreviatedAgo(device.lastSeen, now);
 }
 
@@ -174,10 +176,10 @@ export const sentToast = (device: string) => `Sent to ${device}`;
 
 export const couldNotSendToast = (device: string) => `Couldn’t Send to ${device}`;
 
-export const PINNED_TOAST = "Pinned to Your Mac";
-export const COULD_NOT_PIN_TOAST = "Couldn’t Pin to Your Mac";
-export const SYNC_TO_PIN_TOAST = "Sync With Your Mac to Pin Tabs";
-export const CONNECTED_TOAST = "Syncing With Your Mac";
+export const PINNED_TOAST = t(`Pinned to Your Mac`);
+export const COULD_NOT_PIN_TOAST = t(`Couldn’t Pin to Your Mac`);
+export const SYNC_TO_PIN_TOAST = t(`Sync With Your Mac to Pin Tabs`);
+export const CONNECTED_TOAST = t(`Syncing With Your Mac`);
 
 export function syncedEngineName(
   search: { engineId: string; customEngines: { id: string; name: string }[] },
@@ -185,11 +187,11 @@ export function syncedEngineName(
 ): string {
   const custom = search.customEngines.find((engine) => engine.id === search.engineId);
   if (custom) return custom.name;
-  if (search.engineId === "custom") return "Custom";
+  if (search.engineId === "custom") return t(`Custom`);
   return engines.find((engine) => engine.id === search.engineId)?.name ?? search.engineId.charAt(0).toUpperCase() + search.engineId.slice(1);
 }
 
-export const INBOX_RETRY = "Sync couldn’t read some changes your Mac sent and set that file aside. Sync Now tries again.";
+export const INBOX_RETRY = t(`Sync couldn’t read some changes your Mac sent and set that file aside. Sync Now tries again.`);
 
 export function inboxNotice(status: SyncStatus): { message: string; footer: string } | null {
   const problem = status.inboxProblem?.trim();
@@ -197,7 +199,7 @@ export function inboxNotice(status: SyncStatus): { message: string; footer: stri
   return { message: problem, footer: INBOX_RETRY };
 }
 
-export const SCAN_REJECTED = "Not an Ardia sync code.";
+export const SCAN_REJECTED = t(`Not an Ardia sync code.`);
 
 export type ScanVerdict = { kind: "accept"; phrase: string } | { kind: "reject" } | { kind: "repeat" };
 
@@ -214,14 +216,14 @@ export const setupStepLabel = (number: number, done: boolean, current: boolean) 
 
 export const pickedFolder = (result: ConnectResult["result"] | null) => result === "mismatch" || result === "noSyncData" || result === "keyStoreFailed";
 
-export const chooseFolderTitle = (lastResult: ConnectResult["result"] | null) => (pickedFolder(lastResult) ? "Choose Another Folder…" : "Choose Folder…");
+export const chooseFolderTitle = (lastResult: ConnectResult["result"] | null) => (pickedFolder(lastResult) ? t(`Choose Another Folder…`) : t(`Choose Folder…`));
 
 export type PinOutcome = "pinned" | "alreadyPinned" | "failed";
 
 export type PinAnnouncement = { where: "title"; text: string } | { where: "toast"; text: string; icon: "star" | "warning" };
 
 export function pinAnnouncement(outcome: PinOutcome, inPageMenu: boolean, copy: { pinFeedbackInMenu: boolean; alreadyPinnedToast: string }): PinAnnouncement {
-  if (inPageMenu && copy.pinFeedbackInMenu && outcome !== "failed") return { where: "title", text: outcome === "pinned" ? "Pinned to Mac" : "Already Pinned to Mac" };
+  if (inPageMenu && copy.pinFeedbackInMenu && outcome !== "failed") return { where: "title", text: outcome === "pinned" ? t(`Pinned to Mac`) : t(`Already Pinned to Mac`) };
   if (outcome === "failed") return { where: "toast", text: COULD_NOT_PIN_TOAST, icon: "warning" };
   return { where: "toast", text: outcome === "pinned" ? PINNED_TOAST : copy.alreadyPinnedToast, icon: "star" };
 }

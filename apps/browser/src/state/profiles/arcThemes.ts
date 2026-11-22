@@ -4,6 +4,8 @@ import type { ProfileTheme } from "../browser/types";
 import { parseArcTheme } from "../import/arcTheme";
 import { setProfileTheme } from "./themeActions";
 import { importModule } from "../../platform/importModule";
+import { t } from "../../lib/uiLanguage";
+
 
 export async function arcThemeChoices(): Promise<{ id: string; name: string; emoji?: string; color?: string; theme: ProfileTheme }[]> {
   const api = importModule();
@@ -21,7 +23,7 @@ export async function importArcTheme(profileId: string): Promise<boolean> {
   const choices = await arcThemeChoices();
   const items: MenuItem[] = choices.length
     ? choices.map((c) => ({ id: c.id, title: c.emoji ? `${c.emoji}  ${c.name}` : c.name, swatch: themeAccent(c.theme) }))
-    : [{ id: "none", title: "No Arc spaces with a theme found", enabled: false }];
+    : [{ id: "none", title: t(`No Arc spaces with a theme found`), enabled: false }];
   const choice = await showMenu(items);
   const picked = choices.find((c) => c.id === choice);
   if (!picked) return false;

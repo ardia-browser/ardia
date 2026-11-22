@@ -2,6 +2,8 @@ import { findFibers, nameOf, roots, walk, type Fiber } from "./perfFibers";
 import { countNativeNodes, nativeNodes } from "./perfNativeNodes";
 import { bump, fresh, now, type Counter } from "./perfStats";
 import { perfProbeOptions } from "./perfRun";
+import { t } from "../../lib/uiLanguage";
+
 
 const modules = (globalThis as { expo?: { modules?: Record<string, Record<string, (...a: unknown[]) => unknown>> } }).expo?.modules;
 const shell = modules?.ArdiaDocuments;

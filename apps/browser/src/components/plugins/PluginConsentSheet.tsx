@@ -10,6 +10,8 @@ import { useTheme } from "../ui/theme";
 import { ink, radius } from "../ui/tokens";
 import { useControlTurnedOff } from "../../state/app/programControlSetting";
 import { useNeverChosenCount } from "../../state/site/passwordManager";
+import { t } from "../../lib/uiLanguage";
+
 
 type ConsentRequest = NonNullable<PluginsStore["consent"]>;
 
@@ -71,7 +73,7 @@ export function PluginConsentSheet({ request, onCancel, onConfirm, onClosed }: {
         </ScrollView>
         <DialogActions>
           <Ring on={selected === "cancel"} color={theme.formAccent}>
-            <Button title="Cancel" onPress={close} />
+            <Button title={t(`Cancel`)} onPress={close} />
           </Ring>
           <Ring on={selected === "install"} color={theme.formAccent}>
             <Button title={words.button} kind="primary" disabled={changed} onPress={confirm} />

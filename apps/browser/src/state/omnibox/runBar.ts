@@ -14,6 +14,8 @@ import { openSettings } from "../settings/settingsWindows";
 import { isOrganizeId, shownOrganizeContext, sideBySide, splitCandidates, type OrganizeContext, type OrganizeId } from "./organizeActions";
 import { renameProfile } from "../profiles/profileMenu";
 import { isPluginAction, runPluginAction } from "../plugins/commands";
+import { t } from "../../lib/uiLanguage";
+
 
 const store = () => useBrowser.getState();
 
@@ -35,7 +37,7 @@ async function pickProfileForTab({ s, tab }: OrganizeContext) {
   const items: MenuItem[] = [
     ...s.profileOrder.map((id) => ({ id, title: s.profiles[id]?.name ?? "", checked: id === tab.profileId, enabled: id !== tab.profileId })),
     { separator: true },
-    { id: "new", title: "New Profile…" },
+    { id: "new", title: t(`New Profile…`) },
   ];
   const choice = await showMenu(items);
   if (choice) await moveTabToProfile(tab.id, choice);

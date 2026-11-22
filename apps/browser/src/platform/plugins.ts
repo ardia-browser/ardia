@@ -1,4 +1,6 @@
 import {
+import { t } from "../lib/uiLanguage";
+
   nativeModule,
   type OfficialCandidate,
   type OfficialFetchProgress,
@@ -39,8 +41,8 @@ export type {
   PluginStorageReadResult,
 };
 
-let bound: ReturnType<typeof nativeModule<"ArdiaPlugins">> | null = null;
-const Plugins = () => (bound ??= nativeModule("ArdiaPlugins"));
+let bound: ReturnType<typeof nativeModule<t(`ArdiaPlugins`)>> | null = null;
+const Plugins = () => (bound ??= nativeModule(t(`ArdiaPlugins`)));
 
 export const pluginsFolder = () => Plugins().folder();
 export const listPluginFolders = () => Plugins().list();

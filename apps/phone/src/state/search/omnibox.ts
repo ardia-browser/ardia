@@ -12,6 +12,8 @@ import {
 } from "@ardia/core/src/mobile.ts";
 import { dedupeByLanding, displayHost, landingKey } from "../../lib/url.ts";
 import type { PasteOffer } from "./pasteRow.ts";
+import { t } from "../../lib/uiLanguage";
+
 
 export type TrayRow =
   | { key: string; kind: "query"; title: string; url: string; query: string; detail?: string | null }
@@ -23,9 +25,9 @@ export type TrayRow =
 export type { PasteOffer };
 
 
-export const SWITCH_TO_TAB = "Switch to Tab";
+export const SWITCH_TO_TAB = t(`Switch to Tab`);
 
-export const BROWSE_FOR_ME = "Browse for Me";
+export const BROWSE_FOR_ME = t(`Browse for Me`);
 
 const BROWSE_FOR_ME_SHORTEST = 3;
 

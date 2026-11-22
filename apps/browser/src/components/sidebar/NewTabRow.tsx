@@ -18,6 +18,8 @@ import { SidebarRowLabel } from "./SidebarRow";
 import { useQuietRows } from "./rowLook";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
 import { Squish, useSquish } from "../ui/Squish";
+import { t } from "../../lib/uiLanguage";
+
 
 const clippedRow = perLook(() => ({ marginTop: -layout.rowGap, paddingTop: layout.rowGap, overflow: "hidden" as const }));
 const NEW_TAB_LABEL_X = 30;
@@ -99,7 +101,7 @@ export const NewTabRow = memo(function NewTabRow({ windowId, shift = null, clip 
               <Animated.View pointerEvents="none" style={iconScale}>
                 {drawnSymbol({ name: "plus", size: quiet ? sidebarPoints(10) : ROW_GLYPH.plus, weight: "medium", color: quiet ? quietInk : tokens.newTabIcon, style: { width: ROW_GLYPH.box, height: ROW_GLYPH.box } })}
               </Animated.View>
-              <SidebarRowLabel text="New Tab" color={quiet ? quietInk : tokens.newTabLabel} compact={quiet} />
+              <SidebarRowLabel text={t(`New Tab`)} color={quiet ? quietInk : tokens.newTabLabel} compact={quiet} />
             </View>
             </Squish>
           )}
@@ -117,7 +119,7 @@ export const NewTabRow = memo(function NewTabRow({ windowId, shift = null, clip 
           size="s"
           weight="semibold"
           color={hovered ? theme.textSecondary : theme.textTertiary}
-          tooltip="Open and recently closed tabs"
+          tooltip={t(`Open and recently closed tabs`)}
           onPress={() => void openOverflowMenu(windowId)}
         />}
       </View>

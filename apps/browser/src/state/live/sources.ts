@@ -4,6 +4,8 @@ import { basic, deleteSecret, endpoints, form, getSecret, request, setSecret } f
 import { live, setAccount, updateConfig } from "./store";
 import { LiveError, type CompletionState, type LiveAccount, type LiveFolder, type LiveItem, type LiveSourceId } from "./types";
 import { symbolIcon } from "../../lib/customIcon";
+import { t } from "../../lib/uiLanguage";
+
 
 export type LiveSource = {
   id: LiveSourceId;
@@ -20,17 +22,17 @@ export type FetchOptions = { interactive?: boolean };
 
 async function secret(source: LiveSourceId): Promise<string> {
   const value = await getSecret(source);
-  if (!value) throw new LiveError(live().accounts[source] ? "signedOut" : "notConfigured", "Not signed in");
+  if (!value) throw new LiveError(live().accounts[source] ? "signedOut" : "notConfigured", t(`Not signed in`));
   return value;
 }
 
 const githubClient = createGithubClient((token, payload, onHeaders) =>
-  request(endpoints.githubGraphql, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(payload) }, onHeaders),
+  request(endpoints.githubGraphql, { method: t(`POST`), headers: { Authorization: `Bearer ${token}`, t(`Content-Type`): "application/json" }, body: JSON.stringify(payload) }, onHeaders),
 );
 
 const github: LiveSource = {
   id: "github",
-  name: "GitHub",
+  name: t(`GitHub`),
   kind: "pullRequests",
   site: "https://github.com",
   async fetch(folder, options) {
@@ -50,14 +52,14 @@ const bitbucketAuth = async () => basic(live().config.bitbucketUser, await secre
 
 const bitbucket: LiveSource = {
   id: "bitbucket",
-  name: "Bitbucket",
+  name: t(`Bitbucket`),
   kind: "pullRequests",
   site: "https://bitbucket.org",
   async fetch(folder) {
     if (!folder.filters.authored) return [];
     const auth = await bitbucketAuth();
     const me = live().accounts.bitbucket;
-    if (!me) throw new LiveError("signedOut", "Not signed in");
+    if (!me) throw new LiveError("signedOut", t(`Not signed in`));
     const page = await request<{ values: BitbucketPR[] }>(`${endpoints.bitbucket}/pullrequests/${encodeURIComponent(me.login)}?state=OPEN&pagelen=50`, {
       headers: { Authorization: auth },
     });
@@ -88,17 +90,17 @@ const bitbucket: LiveSource = {
   },
 };
 
-const notionHeaders = (token: string) => ({ Authorization: `Bearer ${token}`, "Notion-Version": "2022-06-28", "Content-Type": "application/json" });
+const notionHeaders = (token: string) => ({ Authorization: `Bearer ${token}`, t(`Notion-Version`): "2022-06-28", t(`Content-Type`): "application/json" });
 
 const notion: LiveSource = {
   id: "notion",
-  name: "Notion",
+  name: t(`Notion`),
   kind: "documents",
   site: "https://www.notion.so",
   async fetch() {
     const token = await secret("notion");
     const [pages, users] = await Promise.all([
-      request<NotionSearch>(`${endpoints.notion}/search`, { method: "POST", headers: notionHeaders(token), body: JSON.stringify(NOTION_SEARCH_BODY) }),
+      request<NotionSearch>(`${endpoints.notion}/search`, { method: t(`POST`), headers: notionHeaders(token), body: JSON.stringify(NOTION_SEARCH_BODY) }),
       request<NotionUsers>(`${endpoints.notion}/users?page_size=100`, { headers: notionHeaders(token) }).catch(() => null),
     ]);
     return mapNotion(pages, users, live().accounts.notion?.name ?? null);
@@ -107,12 +109,12 @@ const notion: LiveSource = {
 
 const confluence: LiveSource = {
   id: "confluence",
-  name: "Confluence",
+  name: t(`Confluence`),
   kind: "documents",
   site: "https://www.atlassian.com",
   async fetch() {
     const { confluenceSite, confluenceEmail } = live().config;
-    if (!confluenceSite) throw new LiveError("notConfigured", "No Confluence site");
+    if (!confluenceSite) throw new LiveError("notConfigured", t(`No Confluence site`));
     const auth = basic(confluenceEmail, await secret("confluence"));
     const url = `${endpoints.confluence(confluenceSite)}/wiki/rest/api/content/search?limit=30&expand=space,history.lastUpdated&cql=${encodeURIComponent(CONFLUENCE_CQL)}`;
     return mapConfluence(await request<ConfluenceSearch>(url, { headers: { Authorization: auth } }), confluenceSite);
@@ -125,8 +127,8 @@ async function googleAccessToken(): Promise<string> {
   const stored = JSON.parse(await secret("gdrive")) as GoogleTokens;
   if (stored.expires_at > Date.now() + 60_000) return stored.access_token;
   const json = await request<{ access_token: string; expires_in: number }>(endpoints.googleToken, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    method: t(`POST`),
+    headers: { t(`Content-Type`): "application/x-www-form-urlencoded" },
     body: form({ client_id: live().config.googleClientId, client_secret: stored.client_secret, refresh_token: stored.refresh_token, grant_type: "refresh_token" }),
   });
   await setSecret("gdrive", JSON.stringify({ ...stored, access_token: json.access_token, expires_at: Date.now() + json.expires_in * 1000 }));
@@ -135,7 +137,7 @@ async function googleAccessToken(): Promise<string> {
 
 const gdrive: LiveSource = {
   id: "gdrive",
-  name: "Google Drive",
+  name: t(`Google Drive`),
   kind: "documents",
   site: "https://drive.google.com",
   async fetch() {
@@ -153,7 +155,7 @@ const account = (login: string, name: string | null, avatar: string | null): Liv
 
 export async function connectGithub(token: string) {
   const viewer = await githubClient.viewer(token.trim());
-  if (!viewer) throw new LiveError("signedOut", "GitHub didn't accept the token");
+  if (!viewer) throw new LiveError("signedOut", t(`GitHub didn't accept the token`));
   await setSecret("github", token.trim());
   setAccount("github", account(viewer.login, viewer.name, viewer.avatarUrl));
 }
@@ -163,7 +165,7 @@ export type DeviceFlow = { userCode: string; verificationUri: string; expiresAt:
 export async function startGithubDeviceFlow(clientId: string): Promise<DeviceFlow> {
   const code = await request<{ device_code: string; user_code: string; verification_uri: string; expires_in: number; interval: number }>(
     `${endpoints.githubWeb}/login/device/code`,
-    { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form({ client_id: clientId, scope: "repo read:org" }) },
+    { method: t(`POST`), headers: { t(`Content-Type`): "application/x-www-form-urlencoded" }, body: form({ client_id: clientId, scope: t(`repo read:org`) }) },
   );
   let cancelled = false;
   let interval = Math.max(code.interval, 1) * 1000;
@@ -173,15 +175,15 @@ export async function startGithubDeviceFlow(clientId: string): Promise<DeviceFlo
       await new Promise((r) => setTimeout(r, interval));
       if (cancelled) break;
       const json = await request<{ access_token?: string; error?: string; interval?: number }>(`${endpoints.githubWeb}/login/oauth/access_token`, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        method: t(`POST`),
+        headers: { t(`Content-Type`): "application/x-www-form-urlencoded" },
         body: form({ client_id: clientId, device_code: code.device_code, grant_type: "urn:ietf:params:oauth:grant-type:device_code" }),
       });
       if (json.access_token) return connectGithub(json.access_token);
       if (json.error === "slow_down") interval = (json.interval ?? interval / 1000 + 5) * 1000;
-      else if (json.error && json.error !== "authorization_pending") throw new LiveError("signedOut", json.error === "access_denied" ? "Access was denied" : json.error);
+      else if (json.error && json.error !== "authorization_pending") throw new LiveError("signedOut", json.error === "access_denied" ? t(`Access was denied`) : json.error);
     }
-    throw new LiveError("signedOut", cancelled ? "Cancelled" : "The code expired");
+    throw new LiveError("signedOut", cancelled ? t(`Cancelled`) : t(`The code expired`));
   })();
   return { userCode: code.user_code, verificationUri: code.verification_uri, expiresAt, done, cancel: () => (cancelled = true) };
 }
@@ -198,7 +200,7 @@ export async function connectBitbucket(user: string, token: string) {
 export async function connectNotion(token: string) {
   const me = await request<{ name?: string; bot?: { workspace_name?: string } }>(`${endpoints.notion}/users/me`, { headers: notionHeaders(token.trim()) });
   await setSecret("notion", token.trim());
-  setAccount("notion", account(me.bot?.workspace_name ?? me.name ?? "Notion", me.bot?.workspace_name ?? null, null));
+  setAccount("notion", account(me.bot?.workspace_name ?? me.name ?? t(`Notion`), me.bot?.workspace_name ?? null, null));
 }
 
 export async function connectConfluence(site: string, email: string, token: string) {
@@ -213,18 +215,18 @@ export async function connectConfluence(site: string, email: string, token: stri
 
 export async function connectGoogle(clientId: string, clientSecret: string, code: string, verifier: string, redirectUri: string) {
   const json = await request<{ access_token: string; refresh_token?: string; expires_in: number }>(endpoints.googleToken, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    method: t(`POST`),
+    headers: { t(`Content-Type`): "application/x-www-form-urlencoded" },
     body: form({ client_id: clientId, client_secret: clientSecret, code, code_verifier: verifier, grant_type: "authorization_code", redirect_uri: redirectUri }),
   });
-  if (!json.refresh_token) throw new LiveError("signedOut", "Google didn't return a refresh token");
+  if (!json.refresh_token) throw new LiveError("signedOut", t(`Google didn't return a refresh token`));
   const tokens: GoogleTokens = { access_token: json.access_token, refresh_token: json.refresh_token, expires_at: Date.now() + json.expires_in * 1000, client_secret: clientSecret };
   await setSecret("gdrive", JSON.stringify(tokens));
   const about = await request<{ user?: { displayName: string; emailAddress: string; photoLink?: string } }>(`${endpoints.drive}/about?fields=user`, {
     headers: { Authorization: `Bearer ${json.access_token}` },
   }).catch(() => null);
   updateConfig({ googleClientId: clientId });
-  setAccount("gdrive", account(about?.user?.emailAddress ?? "Google Drive", about?.user?.displayName ?? null, about?.user?.photoLink ?? null));
+  setAccount("gdrive", account(about?.user?.emailAddress ?? t(`Google Drive`), about?.user?.displayName ?? null, about?.user?.photoLink ?? null));
 }
 
 export async function disconnect(source: LiveSourceId) {

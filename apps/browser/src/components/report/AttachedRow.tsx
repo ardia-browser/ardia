@@ -3,6 +3,8 @@ import { setAttach, setAttachedOpen, setPreview } from "../../state/report/actio
 import type { AttachmentKey } from "../../state/report/form";
 import { useReport, useReportShallow } from "../../state/report/hooks";
 import { Box, Button, Checkbox, Divider, space, Symbol, Text, useHover, useTheme } from "../ui";
+import { t } from "../../lib/uiLanguage";
+
 
 const shortAddress = (url: string) => url.replace(/^https?:\/\/(www\.)?/i, "").replace(/[?#].*$/, "");
 
@@ -10,18 +12,18 @@ export function useAttachedRows() {
   const { attach, local, pageAddress, systemLine } = useReportShallow((s) => ({ attach: s.draft.attach, local: s.local, pageAddress: s.pageAddress, systemLine: s.systemLine }));
   const events = local?.lines ?? 0;
   const rows: { key: AttachmentKey; title: string; detail: string; on: boolean; disabled?: boolean }[] = [
-    { key: "system", title: "System info", detail: systemLine, on: attach.system },
-    { key: "errors", title: "Usage, errors and crashes, last 7 days", detail: local ? `${events} ${events === 1 ? "event" : "events"}` : "Reading…", on: attach.errors && events > 0, disabled: !events },
-    { key: "settings", title: "Settings", detail: "No passwords or history", on: attach.settings },
-    { key: "page", title: "Page address", detail: pageAddress ? shortAddress(pageAddress) : "No page open", on: attach.page && !!pageAddress, disabled: !pageAddress },
+    { key: "system", title: t(`System info`), detail: systemLine, on: attach.system },
+    { key: "errors", title: t(`Usage, errors and crashes, last 7 days`), detail: local ? `${events} ${events === 1 ? "event" : "events"}` : t(`Reading…`), on: attach.errors && events > 0, disabled: !events },
+    { key: "settings", title: t(`Settings`), detail: t(`No passwords or history`), on: attach.settings },
+    { key: "page", title: t(`Page address`), detail: pageAddress ? shortAddress(pageAddress) : t(`No page open`), on: attach.page && !!pageAddress, disabled: !pageAddress },
   ];
   const summary = [
-    attach.system ? "System info" : null,
+    attach.system ? t(`System info`) : null,
     attach.errors && events ? `${events} ${events === 1 ? "event" : "events"}` : null,
     attach.settings ? "settings" : null,
-    attach.page && pageAddress ? "page address" : null,
+    attach.page && pageAddress ? t(`page address`) : null,
   ].filter(Boolean);
-  return { rows, summary: summary.length ? summary.join(", ") : "Nothing" };
+  return { rows, summary: summary.length ? summary.join(", ") : t(`Nothing`) };
 }
 
 export function AttachedRow() {
@@ -71,7 +73,7 @@ function AttachedList({ rows }: { rows: ReturnType<typeof useAttachedRows>["rows
           </Pressable>
         ))}
         <View style={{ marginTop: space.s, alignSelf: "flex-start" }}>
-          <Button variant="text" look="link" pad="none" title="Preview everything that's sent" onPress={() => setPreview(true)} />
+          <Button variant="text" look="link" pad="none" title={t(`Preview everything that's sent`)} onPress={() => setPreview(true)} />
         </View>
       </View>
     </>

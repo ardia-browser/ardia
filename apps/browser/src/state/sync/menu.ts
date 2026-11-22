@@ -4,12 +4,14 @@ import type { Tab } from "../browser/types";
 import { deviceLabel, deviceSymbol } from "./devices";
 import { sendTab, sendTargets, useSync } from "./engine";
 import type { RemoteTabs } from "./syncDoc";
+import { t } from "../../lib/uiLanguage";
+
 
 export function syncedDevicesMenuItem(profileId: string): MenuItem | null {
   const devices = useSync.getState().remoteTabs[profileId] ?? [];
   if (!devices.length) return null;
   const tabs = (d: RemoteTabs): MenuItem[] => [
-    { id: "synced-header", title: "Recent Tabs", enabled: false },
+    { id: "synced-header", title: t(`Recent Tabs`), enabled: false },
     ...d.tabs.map((t, i) => ({ id: `synced:${d.deviceId}:${i}`, title: t.title || t.url })),
   ];
   if (devices.length === 1) {
@@ -18,7 +20,7 @@ export function syncedDevicesMenuItem(profileId: string): MenuItem | null {
   }
   return {
     id: "synced",
-    title: "Your Devices",
+    title: t(`Your Devices`),
     symbol: "macbook.and.iphone",
     children: devices.map((d) => ({ id: `device:${d.deviceId}`, title: d.name, symbol: deviceSymbol(d.kind, d.name), children: tabs(d) })),
   };
@@ -44,7 +46,7 @@ export function sendTabMenuItem(tab: Tab): MenuItem | null {
   }
   return {
     id: "sendToDevice",
-    title: "Send to Device",
+    title: t(`Send to Device`),
     symbol: "macbook.and.iphone",
     children: targets.map((d) => ({ id: `${SEND_CHOICE}${d.id}`, title: d.name, symbol: deviceSymbol(d.kind, d.name) })),
   };

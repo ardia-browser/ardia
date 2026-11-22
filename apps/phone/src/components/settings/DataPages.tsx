@@ -8,6 +8,8 @@ import { AppIcon, appIconLayout, ConfirmSheet, font, settingsLayout, space, Symb
 import { copy } from "../../lib/platformCopy";
 import { libraryCredits } from "../../state/settings/libraryCredits";
 import { ButtonRow, Divider, Group, NavRow, PickerRow, SettingsPage, ToggleRow, ValueRow } from "./SettingsKit";
+import { t } from "../../lib/uiLanguage";
+
 
 export function ClearDataPage({ onBack = popSettings }: { onBack?: () => void }) {
   const [range, setRange] = useState<ClearRange>("today");
@@ -27,23 +29,23 @@ export function ClearDataPage({ onBack = popSettings }: { onBack?: () => void })
     onBack();
   };
   return (
-    <SettingsPage title="Clear Browsing Data" onBack={onBack}>
+    <SettingsPage title={t(`Clear Browsing Data`)} onBack={onBack}>
       <Group>
-        <PickerRow title="Time Range" options={CLEAR_RANGES} selected={range} onSelect={setRange} />
+        <PickerRow title={t(`Time Range`)} options={CLEAR_RANGES} selected={range} onSelect={setRange} />
       </Group>
-      <Group header="Clear" footer={clearFooter(choice, range, byTime)}>
-        <ToggleRow title="History" value={history} divider onChange={setHistory} />
-        <ToggleRow title="Cache" value={cache} divider onChange={setCache} />
-        <ToggleRow title="Cookies and Site Data" value={cookies} divider={range === "allTime"} onChange={setCookies} />
-        {range === "allTime" ? <ToggleRow title="Archived Tabs" value={archive} onChange={setArchive} /> : null}
+      <Group header={t(`Clear`)} footer={clearFooter(choice, range, byTime)}>
+        <ToggleRow title={t(`History`)} value={history} divider onChange={setHistory} />
+        <ToggleRow title={t(`Cache`)} value={cache} divider onChange={setCache} />
+        <ToggleRow title={t(`Cookies and Site Data`)} value={cookies} divider={range === "allTime"} onChange={setCookies} />
+        {range === "allTime" ? <ToggleRow title={t(`Archived Tabs`)} value={archive} onChange={setArchive} /> : null}
       </Group>
       <Group>
         <ButtonRow
-          title="Clear Data…"
+          title={t(`Clear Data…`)}
           destructive
           enabled={!clearIsEmpty(choice) && !clearing}
           busy={clearing}
-          onPress={(event) => setConfirmation({ title: clearTitle(choice, range, byTime), message: clearMessage(choice), action: "Clear Data", run: () => void clear(), opener: event?.currentTarget })}
+          onPress={(event) => setConfirmation({ title: clearTitle(choice, range, byTime), message: clearMessage(choice), action: t(`Clear Data`), run: () => void clear(), opener: event?.currentTarget })}
         />
       </Group>
       {confirmation ? <ConfirmSheet confirmation={confirmation} onClose={() => setConfirmation(null)} /> : null}
@@ -55,7 +57,7 @@ function LinkRow({ title, icon, url, divider }: { title: string; icon: SymbolNam
   const theme = useTheme();
   return (
     <View>
-      <Pressable accessibilityRole="link" accessibilityHint="Opens in a new tab" onPress={() => openFromSettings(url)} style={({ pressed }) => [styles.row, pressed ? { backgroundColor: theme.rowHighlight } : null]}>
+      <Pressable accessibilityRole="link" accessibilityHint={t(`Opens in a new tab`)} onPress={() => openFromSettings(url)} style={({ pressed }) => [styles.row, pressed ? { backgroundColor: theme.rowHighlight } : null]}>
         <Symbol name={icon} size={22} color={theme.formAccent} />
         <Text style={[font.body, styles.fill, { color: theme.label }]}>{title}</Text>
         <Symbol name="arrowUpForward" size={13} color={theme.tertiaryLabel} />
@@ -68,7 +70,7 @@ function LinkRow({ title, icon, url, divider }: { title: string; icon: SymbolNam
 export function AboutPage() {
   const theme = useTheme();
   return (
-    <SettingsPage title="About Ardia" onBack={popSettings}>
+    <SettingsPage title={t(`About Ardia`)} onBack={popSettings}>
       <View style={styles.hero}>
         <AppIcon side={appIconLayout.about} shadow />
         <View style={styles.heroText}>
@@ -80,22 +82,22 @@ export function AboutPage() {
       </View>
       <Group footer={copy().privacy}>
         <LinkRow title="ardia.dev" icon="globe" url="https://ardia.dev" divider />
-        <LinkRow title="Release Notes" icon="sparkles" url="https://ardia.dev/release-notes" divider />
-        <LinkRow title="Source Code" icon="code" url="https://github.com/mantrakp04/ardia" />
+        <LinkRow title={t(`Release Notes`)} icon="sparkles" url="https://ardia.dev/release-notes" divider />
+        <LinkRow title={t(`Source Code`)} icon="code" url="https://github.com/mantrakp04/ardia" />
       </Group>
       <Group>
-        <NavRow title="Open Source Licenses" onPress={() => pushSettings({ page: "licenses" })} />
+        <NavRow title={t(`Open Source Licenses`)} onPress={() => pushSettings({ page: "licenses" })} />
       </Group>
     </SettingsPage>
   );
 }
 
 export const dataCredits = () => [
-  { name: "Ardia", use: copy().ardiaCredit, license: "Apache License 2.0", url: "https://github.com/mantrakp04/ardia" },
-  { name: "EasyList", use: "The list behind Block Ads.", license: "CC BY-SA 3.0 or GPLv3", url: "https://easylist.to" },
-  { name: "EasyPrivacy", use: "The list behind Block Trackers.", license: "CC BY-SA 3.0 or GPLv3", url: "https://easylist.to" },
-  { name: "Fanboy’s Cookie Monster List", use: "The list behind Block Cookie Banners.", license: "CC BY-SA 3.0 or GPLv3", url: "https://secure.fanboy.co.nz" },
-  { name: "Public Suffix List", use: "Tells which part of an address is the site.", license: "Mozilla Public License 2.0", url: "https://publicsuffix.org" },
+  { name: t(`Ardia`), use: copy().ardiaCredit, license: t(`Apache License 2.0`), url: "https://github.com/mantrakp04/ardia" },
+  { name: t(`EasyList`), use: t(`The list behind Block Ads.`), license: t(`CC BY-SA 3.0 or GPLv3`), url: "https://easylist.to" },
+  { name: t(`EasyPrivacy`), use: t(`The list behind Block Trackers.`), license: t(`CC BY-SA 3.0 or GPLv3`), url: "https://easylist.to" },
+  { name: t(`Fanboy’s Cookie Monster List`), use: t(`The list behind Block Cookie Banners.`), license: t(`CC BY-SA 3.0 or GPLv3`), url: "https://secure.fanboy.co.nz" },
+  { name: t(`Public Suffix List`), use: t(`Tells which part of an address is the site.`), license: t(`Mozilla Public License 2.0`), url: "https://publicsuffix.org" },
 ];
 
 export const LIBRARY_CREDITS = libraryCredits(Platform.OS);
@@ -103,7 +105,7 @@ export const LIBRARY_CREDITS = libraryCredits(Platform.OS);
 export function LicensesPage() {
   const theme = useTheme();
   return (
-    <SettingsPage title="Open Source Licenses" onBack={popSettings}>
+    <SettingsPage title={t(`Open Source Licenses`)} onBack={popSettings}>
       {dataCredits().map((credit) => (
         <Group key={credit.name}>
           <View style={styles.credit}>
@@ -111,7 +113,7 @@ export function LicensesPage() {
             <Text style={[font.subheadline, { color: theme.secondaryLabel }]}>{credit.use}</Text>
           </View>
           <Divider />
-          <ValueRow title="License" value={credit.license} divider />
+          <ValueRow title={t(`License`)} value={credit.license} divider />
           <Pressable accessibilityRole="link" onPress={() => openFromSettings(credit.url)} style={styles.row}>
             <Text style={[font.body, { color: theme.formAccent }]} numberOfLines={1}>
               {credit.url.replace(/^https:\/\//, "")}
@@ -119,7 +121,7 @@ export function LicensesPage() {
           </Pressable>
         </Group>
       ))}
-      <Group header="Code in This App">
+      <Group header={t(`Code in This App`)}>
         {LIBRARY_CREDITS.map((credit, index) => (
           <View key={`${credit.name}@${credit.detail}`}>
             <Pressable

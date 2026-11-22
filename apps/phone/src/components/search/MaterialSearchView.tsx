@@ -27,6 +27,8 @@ import { MaterialSheet, materialSheetMs, type MaterialSheetSearch } from "../ui/
 import { useMaterialTheme } from "../ui/materialTheme";
 import { MATERIAL_SEGMENT_GAP, materialBottomBar, materialDuration, materialSegmentCorners, materialShape, materialSize, materialType } from "../ui/materialTokens";
 import { SuggestionRow } from "./SuggestionRow";
+import { t } from "../../lib/uiLanguage";
+
 
 const SHEET_ABOVE_KEYBOARD = 340;
 const FOCUS_AFTER_ENTER_MS = 32;
@@ -175,7 +177,7 @@ export function MaterialSearchField({ open, dockedMenu = false, spread }: { open
           ) : (
             <>
               <Symbol name="magnifyingglass" size={materialSize.icon} color={scheme.onSurfaceVariant} />
-              <Text numberOfLines={1} style={[materialType.bodyLarge, styles.landingText, { color: scheme.onSurfaceVariant }]}>{surface === "deck" ? "Search Tabs" : "Search or type address"}</Text>
+              <Text numberOfLines={1} style={[materialType.bodyLarge, styles.landingText, { color: scheme.onSurfaceVariant }]}>{surface === "deck" ? t(`Search Tabs`) : t(`Search or type address`)}</Text>
             </>
           )}
         </Animated.View>

@@ -1,6 +1,8 @@
 import type { SavedObject } from "../../lib/savedDocument";
 import { durationTitle } from "../../lib/time";
 import { isFields } from "../../lib/decode";
+import { t } from "../../lib/uiLanguage";
+
 
 export const CLEAN_UP_KEY = "cleanUpInactiveTabsAfterMinutes";
 export const LEGACY_CLEAN_UP_KEY = "cleanUpInactiveTabsAfterHours";
@@ -8,10 +10,10 @@ export const LEGACY_CLEAN_UP_KEY = "cleanUpInactiveTabsAfterHours";
 export const DAILY_CLEAN_UP_MINUTES = 24 * 60;
 
 export const CLEAN_UP_PRESETS: readonly { minutes: number; title: string }[] = [
-  { minutes: 12 * 60, title: "12 hours" },
-  { minutes: 24 * 60, title: "24 hours" },
-  { minutes: 7 * 24 * 60, title: "7 days" },
-  { minutes: 30 * 24 * 60, title: "30 days" },
+  { minutes: 12 * 60, title: t(`12 hours`) },
+  { minutes: 24 * 60, title: t(`24 hours`) },
+  { minutes: 7 * 24 * 60, title: t(`7 days`) },
+  { minutes: 30 * 24 * 60, title: t(`30 days`) },
 ];
 
 export const CUSTOM_CLEAN_UP = "custom";
@@ -21,7 +23,7 @@ export function cleanUpChoices(minutes: number): { value: string; title: string 
   const sorted = [...CLEAN_UP_PRESETS, ...own].sort((a, b) => a.minutes - b.minutes);
   const custom = sorted.indexOf(CLEAN_UP_PRESETS[0]!) + 1;
   const choices = sorted.map((c) => ({ value: String(c.minutes), title: c.title }));
-  return [...choices.slice(0, custom), { value: CUSTOM_CLEAN_UP, title: "Custom…" }, ...choices.slice(custom)];
+  return [...choices.slice(0, custom), { value: CUSTOM_CLEAN_UP, title: t(`Custom…`) }, ...choices.slice(custom)];
 }
 
 export function minutesFromHours(hours: unknown): number | null | undefined {

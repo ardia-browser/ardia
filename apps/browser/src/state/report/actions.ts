@@ -29,6 +29,8 @@ import { discardRecording, discardTrace, lastRecordingStats, startRecording, sto
 import { SAVED_DRAFT_DOC, restoredDraft, savedDraftJson, savedDraftOf } from "./savedDraft";
 import { currentReport, initialReportState, patchDraft, patchReport, useReportSheet, type ReportSheetState } from "./store";
 import { isBusy, sendReport, type UploadDeps, type UploadState } from "./upload";
+import { t } from "../../lib/uiLanguage";
+
 
 export const FEEDBACK_URL = "https://ardia.dev/api/feedback";
 const POST_TIMEOUT_MS = 30_000;
@@ -90,10 +92,10 @@ export async function closeReport() {
   const s = currentReport();
   if (isBusy(s.upload)) {
     const answer = await confirm({
-      title: "Stop sending this report?",
-      message: "It hasn't finished sending. Your draft stays here if you stop.",
-      confirmTitle: "Stop Sending",
-      cancelTitle: "Keep Sending",
+      title: t(`Stop sending this report?`),
+      message: t(`It hasn't finished sending. Your draft stays here if you stop.`),
+      confirmTitle: t(`Stop Sending`),
+      cancelTitle: t(`Keep Sending`),
       windowId: s.windowId ?? undefined,
     });
     if (!answer.confirmed) return;
@@ -136,7 +138,7 @@ export function reportFiles(s = currentReport()): ReportFile[] {
 }
 
 async function postJson(url: string, body: unknown, headers: Record<string, string>) {
-  const { status, text } = await postReportJson(url, JSON.stringify(body), { "Content-Type": "application/json", ...headers }, POST_TIMEOUT_MS);
+  const { status, text } = await postReportJson(url, JSON.stringify(body), { t(`Content-Type`): "application/json", ...headers }, POST_TIMEOUT_MS);
   let json: unknown = null;
   try {
     json = text ? JSON.parse(text) : null;
@@ -154,7 +156,7 @@ function listenProgress() {
 
 const deps: UploadDeps = {
   postJson,
-  putFile: async (id, url, headers, file) => (await uploadFile(id, url, "PUT", { ...headers, "Content-Type": file.type }, file.path)).status,
+  putFile: async (id, url, headers, file) => (await uploadFile(id, url, t(`PUT`), { ...headers, t(`Content-Type`): file.type }, file.path)).status,
   onProgress(handler) {
     listenProgress();
     progressHandlers.add(handler);
@@ -166,7 +168,7 @@ const deps: UploadDeps = {
 
 export async function previewPayload(): Promise<Record<string, unknown>> {
   const s = currentReport();
-  return buildPayload(s.draft, await payloadContext(s.draft, identity?.id ?? "<anonymous id, made when you send>"));
+  return buildPayload(s.draft, await payloadContext(s.draft, identity?.id ?? t(`<anonymous id, made when you send>`)));
 }
 
 async function payloadContext(draft: ReportDraft, installId: string) {

@@ -12,6 +12,8 @@ import { useHover } from "./useHover";
 import { Panel, type PanelProps } from "./Panel";
 import { OutsidePressArea } from "./native";
 import { useGlass } from "./Glass";
+import { t } from "../../lib/uiLanguage";
+
 
 export const POPOVER_MARGIN = space.m;
 
@@ -136,7 +138,7 @@ export function Popover({
   glass?: boolean;
 }) {
   const appear = usePopoverMotion(closing, onClosed);
-  const motion = usePopoverMotionStyle(appear, right !== undefined ? "top right" : "top left");
+  const motion = usePopoverMotionStyle(appear, right !== undefined ? t(`top right`) : t(`top left`));
   const [room, setRoom] = useState<number | null>(null);
   return (
     <>
@@ -240,6 +242,6 @@ export function PopoverValue({ title, onPress, chevron = "chevron.up.chevron.dow
 const PANEL_CLOSE_OFFSET = PANEL.inset - (PANEL_CLOSE_SIZE - PANEL_CLOSE_GLYPH) / 2;
 const PANEL_CLOSE_PLACE = { position: "absolute", top: PANEL_CLOSE_OFFSET, right: PANEL_CLOSE_OFFSET } as const;
 
-export function PanelCloseButton({ onPress, tooltip = "Dismiss" }: { onPress: () => void; tooltip?: string }) {
+export function PanelCloseButton({ onPress, tooltip = t(`Dismiss`) }: { onPress: () => void; tooltip?: string }) {
   return <Button variant="close" look="panel" onPress={onPress} tooltip={tooltip} style={PANEL_CLOSE_PLACE} />;
 }

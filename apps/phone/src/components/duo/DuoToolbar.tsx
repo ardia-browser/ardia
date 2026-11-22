@@ -13,6 +13,8 @@ import { barAddress, spokenAddress, type BarAddress } from "../browsing/Floating
 import { NotSecureLock } from "../browsing/NotSecureLock";
 import { DUO } from "./duoLayout";
 import { SIDEBAR_GLYPH } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 type Props = { showsAddress: boolean; sidebarShown: boolean; sidebar?: SharedValue<number>; onToggleSidebar: () => void };
 
@@ -35,9 +37,9 @@ export function DuoToolbar({ showsAddress, sidebarShown, sidebar, onToggleSideba
   const capsuleStyle = useAnimatedStyle(() => ({ opacity: 1 - (sidebar?.value ?? (sidebarShown ? 1 : 0)) }), [sidebarShown]);
   return (
     <View testID="duoToolbar" style={styles.row} pointerEvents="box-none">
-      <RoundButton icon="chevronLeft" label="Back" dark={dark} enabled={canGoBack} onPress={menuBack} />
-      <RoundButton icon="chevronRight" label="Forward" dark={dark} enabled={canGoForward} onPress={menuForward} />
-      {loading ? <RoundButton icon="xmark" label="Stop Loading" dark={dark} enabled onPress={menuStop} /> : <RoundButton icon="arrowClockwise" label="Reload" dark={dark} enabled={tab !== null} onPress={menuReload} />}
+      <RoundButton icon="chevronLeft" label={t(`Back`)} dark={dark} enabled={canGoBack} onPress={menuBack} />
+      <RoundButton icon="chevronRight" label={t(`Forward`)} dark={dark} enabled={canGoForward} onPress={menuForward} />
+      {loading ? <RoundButton icon="xmark" label={t(`Stop Loading`)} dark={dark} enabled onPress={menuStop} /> : <RoundButton icon="arrowClockwise" label={t(`Reload`)} dark={dark} enabled={tab !== null} onPress={menuReload} />}
       <View style={styles.spacer} />
       {showsAddress ? (
         <>
@@ -54,8 +56,8 @@ export function DuoToolbar({ showsAddress, sidebarShown, sidebar, onToggleSideba
           <View style={styles.spacer} />
         </>
       ) : null}
-      <RoundButton icon="squareAndArrowUp" label="Share" dark={dark} enabled={tab !== null && isSyncableUrl(tab.url)} onPress={shareCurrentPage} />
-      <RoundButton icon="ellipsis" label="Page Menu" dark={dark} enabled={tab !== null} onPress={() => void openPageMenu()} />
+      <RoundButton icon="squareAndArrowUp" label={t(`Share`)} dark={dark} enabled={tab !== null && isSyncableUrl(tab.url)} onPress={shareCurrentPage} />
+      <RoundButton icon="ellipsis" label={t(`Page Menu`)} dark={dark} enabled={tab !== null} onPress={() => void openPageMenu()} />
     </View>
   );
 }
@@ -76,14 +78,14 @@ function AddressCapsule({ tab, dark, sidebarShown, onToggleSidebar }: { tab: Bro
   const address = tab ? barAddress(tab) : null;
   return (
     <ChromeSurface testID="duoAddress" shape="rounded" cornerRadius={controlRadius(DUO.addressHeight)} dark={dark} style={styles.address}>
-      <Pressable accessibilityRole="button" accessibilityLabel={sidebarShown ? "Hide Sidebar" : "Show Sidebar"} onPress={onToggleSidebar} style={styles.sidebarButton}>
+      <Pressable accessibilityRole="button" accessibilityLabel={sidebarShown ? t(`Hide Sidebar`) : t(`Show Sidebar`)} onPress={onToggleSidebar} style={styles.sidebarButton}>
         <SidebarGlyph size={DUO.sidebarGlyph} color={roles.foregroundPrimary} />
       </Pressable>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Address"
+        accessibilityLabel={t(`Address`)}
         accessibilityValue={{ text: spokenAddress(address) }}
-        accessibilityHint="Opens search with this page’s address."
+        accessibilityHint={t(`Opens search with this page’s address.`)}
         onPress={tab ? editPageQuery : newTab}
         style={styles.hostButton}
       >

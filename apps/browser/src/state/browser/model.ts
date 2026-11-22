@@ -4,6 +4,8 @@ import type { BrowserState } from "./store";
 import { DEFAULT_PROFILE_ID } from "../settings/settings";
 import type { BrowserWindow, Navigation, Profile, Tab, TabGroup, TabLive, TabPin, TabSnapshot } from "./types";
 import { pinnedGroupMembers } from "./structure";
+import { t } from "../../lib/uiLanguage";
+
 
 
 const launch = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -35,7 +37,7 @@ export const engineProfile = (s: Pick<BrowserState, "profiles">, profileId: stri
 export const privateSession = (s: Pick<BrowserState, "profiles">, profileId: string): string | null =>
   isIncognitoProfile(profileId) ? engineProfile(s, incognitoOriginal(profileId)) : null;
 
-const INCOGNITO_PROFILE: Profile = { id: "incognito", name: "Incognito", color: "neutral", icon: null, createdAt: 0 };
+const INCOGNITO_PROFILE: Profile = { id: "incognito", name: t(`Incognito`), color: "neutral", icon: null, createdAt: 0 };
 
 export const IDLE_LIVE: TabLive = {
   isLoading: false,
@@ -93,7 +95,7 @@ export const isPinnedRow = (t: Pick<Tab, "pin"> | undefined): boolean => t?.pin?
 export const samePin = (a: TabPin | null | undefined, b: TabPin | null | undefined): boolean =>
   (a?.as ?? null) === (b?.as ?? null) && (a?.as !== "tile" || a.folder === (b as Extract<TabPin, { as: "tile" }>).folder);
 export const pinnedSectionTitle = (s: BrowserState, tab: Pick<Tab, "profileId"> | undefined) => `Pinned in ${s.profiles[tab?.profileId ?? ""]?.name ?? "Profile"}`;
-export const togglePinTitle = (tab: Pick<Tab, "pin"> | undefined) => (isPinnedRow(tab) ? "Unpin" : tab?.pin ? "Unpin from Top Apps" : "Move to Top Apps");
+export const togglePinTitle = (tab: Pick<Tab, "pin"> | undefined) => (isPinnedRow(tab) ? t(`Unpin`) : tab?.pin ? t(`Unpin from Top Apps`) : t(`Move to Top Apps`));
 
 export type PinSection = "tile" | "row" | "none";
 export const pinSection = (t: Pick<Tab, "pin"> | undefined): PinSection => t?.pin?.as ?? "none";
@@ -194,7 +196,7 @@ export function without<T>(map: Record<string, T>, ids: Iterable<string>): Recor
 
 export function tabLabel(t: Pick<Tab, "url" | "title" | "customTitle">): string {
   if (t.customTitle) return t.customTitle;
-  if (!t.url) return "New Tab";
+  if (!t.url) return t(`New Tab`);
   const app = appUrlOrigin(t.url);
   if (app) return app;
   try {
@@ -207,7 +209,7 @@ export function tabLabel(t: Pick<Tab, "url" | "title" | "customTitle">): string 
 }
 
 const urlLabel = (url: string) => url.replace(/^[a-z][\w+.-]*:\/\//i, "").replace(/^www\./, "").replace(/\/$/, "");
-export const tabTitle = (t: Pick<Tab, "customTitle" | "title" | "url">) => singleLine(t.customTitle || t.title || "") || (t.url && urlLabel(t.url)) || "New Tab";
+export const tabTitle = (t: Pick<Tab, "customTitle" | "title" | "url">) => singleLine(t.customTitle || t.title || "") || (t.url && urlLabel(t.url)) || t(`New Tab`);
 
 export const tabTooltip = (t: Pick<Tab, "customTitle" | "title" | "url">) => (t.url ? `${tabTitle(t)}\n${t.url}` : tabTitle(t));
 
@@ -225,6 +227,6 @@ export function windowTitle(s: BrowserState, windowId: string): string {
   if (!w) return "";
   const tab = activeTab(s, windowId);
   const others = viewTabIds(s, windowId).length - 1;
-  const label = tab ? tabLabel(tab) : "New Tab";
+  const label = tab ? tabLabel(tab) : t(`New Tab`);
   return `${profileFor(s, w.profileId).name} — ${label}${others > 0 ? ` & ${plural(others, "Tab")}` : ""}`;
 }

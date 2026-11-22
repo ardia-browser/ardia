@@ -8,6 +8,8 @@ import { expect, now, tabOf, windowOrFocused } from "./socketTargets";
 import { guardEmptied, noSplitTiles } from "./workspaceChecks";
 import { refuseSharedTabs } from "./workspaceSharedGuard";
 import { OpError } from "./workspaceTargets";
+import { t } from "../../lib/uiLanguage";
+
 
 const MAX_NAME = 200;
 
@@ -46,15 +48,15 @@ function nameOf(value: unknown): string {
 function sameSpace(tabIds: string[]) {
   const tabs = [...new Set(tabIds)].map(tabOf);
   const first = tabs[0]!;
-  if (eligibleKind(now(), first.windowId) !== "normal") throw new OpError("bad_request", "Tile folders are in a main window's sidebar, not in Little Ardia.");
-  if (tabs.some((t) => t.windowId !== first.windowId || t.profileId !== first.profileId)) throw new OpError("bad_request", "Every tab must be in the same window and profile.");
-  if (now().windows[first.windowId]!.profileId !== first.profileId) throw new OpError("bad_request", "Those tabs belong to a profile the window isn't showing.");
+  if (eligibleKind(now(), first.windowId) !== "normal") throw new OpError("bad_request", t(`Tile folders are in a main window's sidebar, not in Little Ardia.`));
+  if (tabs.some((t) => t.windowId !== first.windowId || t.profileId !== first.profileId)) throw new OpError("bad_request", t(`Every tab must be in the same window and profile.`));
+  if (now().windows[first.windowId]!.profileId !== first.profileId) throw new OpError("bad_request", t(`Those tabs belong to a profile the window isn't showing.`));
   return tabs.map((t) => t.id);
 }
 
 function intoFolderChecks(tabIds: string[]) {
   const s = now();
-  noSplitTiles(s, tabIds, { pinned: true, row: false }, "into a tile folder");
+  noSplitTiles(s, tabIds, { pinned: true, row: false }, t(`into a tile folder`));
   refuseSharedTabs(tabIds);
   guardEmptied(s, new Set(tabIds));
 }
@@ -63,10 +65,10 @@ function createFolder(params: Record<string, unknown>) {
   const tabIds = sameSpace(params.tabs as string[]);
   intoFolderChecks(tabIds);
   const { state, folderId } = newTileFolder(now(), tabIds, nameOf(params.name));
-  expect(!!folderId, "the folder wasn't made.");
+  expect(!!folderId, t(`the folder wasn't made.`));
   useBrowser.setState(state);
   const windowId = now().tabs[tabIds[0]!]!.windowId;
-  expect(folderMembers(now(), windowId, folderId!).length > 0, "the folder wasn't made.");
+  expect(folderMembers(now(), windowId, folderId!).length > 0, t(`the folder wasn't made.`));
   return folderRow(now(), windowId, folderId!);
 }
 
@@ -80,7 +82,7 @@ function removeFolder(params: Record<string, unknown>) {
   const { windowId, folderId } = folderOf(params);
   const tabs = folderMembers(now(), windowId, folderId);
   useBrowser.setState((s) => dissolveTileFolder(s, windowId, folderId));
-  expect(folderMembers(now(), windowId, folderId).length === 0, "the folder is still there.");
+  expect(folderMembers(now(), windowId, folderId).length === 0, t(`the folder is still there.`));
   return { ok: true, tabs };
 }
 
@@ -88,11 +90,11 @@ function addTabs(params: Record<string, unknown>) {
   const { windowId, folderId } = folderOf(params, tabOf((params.tabs as string[])[0]).windowId);
   const onto = folderMembers(now(), windowId, folderId)[0]!;
   const moving = sameSpace([onto, ...(params.tabs as string[])]).filter((t) => t !== onto);
-  if (moving.some((t) => now().tabs[t]!.windowId !== windowId)) throw new OpError("bad_request", "Those tabs aren't in the folder's window.");
-  expect(pinSection(now().tabs[onto]) === "tile", "the folder's tabs aren't tiles.");
+  if (moving.some((t) => now().tabs[t]!.windowId !== windowId)) throw new OpError("bad_request", t(`Those tabs aren't in the folder's window.`));
+  expect(pinSection(now().tabs[onto]) === "tile", t(`the folder's tabs aren't tiles.`));
   intoFolderChecks(moving);
   useBrowser.setState((s) => addToTileFolder(s, moving, onto));
-  expect(moving.every((t) => tileFolderOf(now().tabs[t])?.id === folderId), "not every tab went into the folder.");
+  expect(moving.every((t) => tileFolderOf(now().tabs[t])?.id === folderId), t(`not every tab went into the folder.`));
   return folderRow(now(), windowId, folderId);
 }
 
@@ -101,26 +103,26 @@ function removeTabs(params: Record<string, unknown>) {
   const outside = tabIds.filter((t) => !tileFolderOf(now().tabs[t]));
   if (outside.length) throw new OpError("bad_request", `${outside.join(", ")} ${outside.length === 1 ? "isn't" : "aren't"} in a tile folder.`);
   for (const tabId of tabIds) if (tileFolderOf(now().tabs[tabId])) useBrowser.setState((s) => leaveTileFolder(s, [tabId]));
-  expect(tabIds.every((t) => !tileFolderOf(now().tabs[t])), "a tab is still in its folder.");
+  expect(tabIds.every((t) => !tileFolderOf(now().tabs[t])), t(`a tab is still in its folder.`));
   return { ok: true };
 }
 
-const FOLDER = id("A tile folder id from pins.folders");
-const FOLDER_WINDOW = { ...WINDOW, description: "The window the folder is in; any window when left out" };
-const ROW = "{id, window, profile, name, label, tabs}";
+const FOLDER = id(t(`A tile folder id from pins.folders`));
+const FOLDER_WINDOW = { ...WINDOW, description: t(`The window the folder is in; any window when left out`) };
+const ROW = t(`{id, window, profile, name, label, tabs}`);
 
 export const PIN_METHODS: MethodSpec[] = [
-  { name: "pins.folders", mutates: false, description: "The tile folders among a window's Top Apps, with their tabs", params: obj({ window: { ...WINDOW, description: "A window id from windows; the focused one when left out" } }), result: `[${ROW}]`, run: (p) => foldersIn(now(), windowOrFocused(p.window).id) },
+  { name: "pins.folders", mutates: false, description: t(`The tile folders among a window's Top Apps, with their tabs`), params: obj({ window: { ...WINDOW, description: t(`A window id from windows; the focused one when left out`) } }), result: `[${ROW}]`, run: (p) => foldersIn(now(), windowOrFocused(p.window).id) },
   {
     name: "pins.createFolder",
     mutates: true,
-    description: "Make a tile folder of tabs in one window, pinning them as tiles",
-    params: obj({ tabs: ids("Tab ids from one window", 100), name: text("The folder's name; none when left out") }, ["tabs"]),
+    description: t(`Make a tile folder of tabs in one window, pinning them as tiles`),
+    params: obj({ tabs: ids(t(`Tab ids from one window`), 100), name: text(t(`The folder's name; none when left out`)) }, ["tabs"]),
     result: ROW,
     run: createFolder,
   },
-  { name: "pins.renameFolder", mutates: true, description: "Rename a tile folder", params: obj({ folder: FOLDER, window: FOLDER_WINDOW, name: text("The new name; empty for none") }, ["folder", "name"]), result: ROW, run: renameFolder },
-  { name: "pins.removeFolder", mutates: true, description: "Remove a tile folder; its tabs stay pinned as tiles", params: obj({ folder: FOLDER, window: FOLDER_WINDOW }, ["folder"]), result: "{ok, tabs}", run: removeFolder },
-  { name: "pins.addToFolder", mutates: true, description: "Put tabs from the folder's window into a tile folder, pinning them", params: obj({ folder: FOLDER, window: FOLDER_WINDOW, tabs: ids("Tab ids", 100) }, ["folder", "tabs"]), result: ROW, run: addTabs },
-  { name: "pins.removeFromFolder", mutates: true, description: "Take tabs out of their tile folder; they stay pinned as tiles", params: obj({ tabs: ids("Tab ids in a tile folder", 100) }, ["tabs"]), result: "{ok}", run: removeTabs },
+  { name: "pins.renameFolder", mutates: true, description: t(`Rename a tile folder`), params: obj({ folder: FOLDER, window: FOLDER_WINDOW, name: text(t(`The new name; empty for none`)) }, ["folder", "name"]), result: ROW, run: renameFolder },
+  { name: "pins.removeFolder", mutates: true, description: t(`Remove a tile folder; its tabs stay pinned as tiles`), params: obj({ folder: FOLDER, window: FOLDER_WINDOW }, ["folder"]), result: t(`{ok, tabs}`), run: removeFolder },
+  { name: "pins.addToFolder", mutates: true, description: t(`Put tabs from the folder's window into a tile folder, pinning them`), params: obj({ folder: FOLDER, window: FOLDER_WINDOW, tabs: ids(t(`Tab ids`), 100) }, ["folder", "tabs"]), result: ROW, run: addTabs },
+  { name: "pins.removeFromFolder", mutates: true, description: t(`Take tabs out of their tile folder; they stay pinned as tiles`), params: obj({ tabs: ids(t(`Tab ids in a tile folder`), 100) }, ["tabs"]), result: "{ok}", run: removeTabs },
 ];

@@ -1,3 +1,4 @@
+import { t } from "./uiLanguage";
 export type LaunchValue = string | number | boolean | null | undefined;
 
 export type LaunchArguments = {
@@ -76,48 +77,48 @@ const whole = (values: Record<string, LaunchValue>, key: string): number | null 
 };
 
 export function parseLaunchArguments(values: Record<string, LaunchValue>): LaunchArguments {
-  const isDemo = flag(values, "ArdiaDemo");
+  const isDemo = flag(values, t(`ArdiaDemo`));
   return {
     isDemo,
-    browseOpen: text(values, "BrowseOpen"),
-    browseQuery: raw(values, "BrowseQuery"),
-    browseSurface: text(values, "BrowseSurface"),
-    browseTab: whole(values, "BrowseTab"),
-    browseToolbar: flag(values, "BrowseToolbar"),
-    browseReader: flag(values, "BrowseReader"),
-    browseIncognito: flag(values, "BrowseIncognito"),
-    browseDelayMs: (number(values, "BrowseDelay") ?? LAUNCH_TIMING.delaySeconds) * 1000,
-    browseDeck: flag(values, "BrowseDeck"),
-    browseDeckOpen: whole(values, "BrowseDeckOpen"),
-    browseDeckPull: whole(values, "BrowseDeckPull"),
-    browsePlus: flag(values, "BrowsePlus"),
-    browseOverlay: raw(values, "BrowseOverlay"),
-    browseResearch: text(values, "BrowseResearch"),
-    voiceHeard: text(values, "ArdiaVoiceHeard"),
-    browseSteps: (text(values, "BrowseSteps") ?? "")
+    browseOpen: text(values, t(`BrowseOpen`)),
+    browseQuery: raw(values, t(`BrowseQuery`)),
+    browseSurface: text(values, t(`BrowseSurface`)),
+    browseTab: whole(values, t(`BrowseTab`)),
+    browseToolbar: flag(values, t(`BrowseToolbar`)),
+    browseReader: flag(values, t(`BrowseReader`)),
+    browseIncognito: flag(values, t(`BrowseIncognito`)),
+    browseDelayMs: (number(values, t(`BrowseDelay`)) ?? LAUNCH_TIMING.delaySeconds) * 1000,
+    browseDeck: flag(values, t(`BrowseDeck`)),
+    browseDeckOpen: whole(values, t(`BrowseDeckOpen`)),
+    browseDeckPull: whole(values, t(`BrowseDeckPull`)),
+    browsePlus: flag(values, t(`BrowsePlus`)),
+    browseOverlay: raw(values, t(`BrowseOverlay`)),
+    browseResearch: text(values, t(`BrowseResearch`)),
+    voiceHeard: text(values, t(`ArdiaVoiceHeard`)),
+    browseSteps: (text(values, t(`BrowseSteps`)) ?? "")
       .split(",")
       .map((step) => step.trim())
       .filter((step) => /^-?\d+$/.test(step))
       .map(Number),
-    browseStepGapMs: (number(values, "BrowseStepGap") ?? LAUNCH_TIMING.stepGapSeconds) * 1000,
-    deckScript: text(values, "ArdiaDeck"),
-    showsOnboarding: flag(values, "ArdiaOnboarding"),
-    openSheet: text(values, "ArdiaOpenSheet"),
-    opensSettings: flag(values, "ArdiaOpenSettings"),
-    settingsPage: text(values, "ArdiaSettingsPage"),
-    restingStart: flag(values, "ArdiaRestingStart"),
-    color: text(values, "ArdiaColor"),
-    interfaceStyle: text(values, "ArdiaInterfaceStyle"),
-    colorScheme: text(values, "ArdiaColorScheme"),
-    toast: text(values, "ArdiaToast"),
-    trustedSitesSample: flag(values, "ArdiaTrustedSites"),
-    pagerFreeze: isDemo ? number(values, "BrowsePagerFreeze") : null,
-    pagerScript: isDemo && flag(values, "BrowsePagerScript"),
-    loadFreeze: isDemo ? number(values, "BrowseLoadFreeze") : null,
-    demoScale: isDemo ? Math.max(0, whole(values, "ArdiaDemoScale") ?? 0) : 0,
-    openingCard: flag(values, "ArdiaOpeningCard"),
-    oneContainerScroll: flag(values, "ArdiaOneContainerScroll"),
-    redesign: flag(values, "ArdiaRedesign"),
+    browseStepGapMs: (number(values, t(`BrowseStepGap`)) ?? LAUNCH_TIMING.stepGapSeconds) * 1000,
+    deckScript: text(values, t(`ArdiaDeck`)),
+    showsOnboarding: flag(values, t(`ArdiaOnboarding`)),
+    openSheet: text(values, t(`ArdiaOpenSheet`)),
+    opensSettings: flag(values, t(`ArdiaOpenSettings`)),
+    settingsPage: text(values, t(`ArdiaSettingsPage`)),
+    restingStart: flag(values, t(`ArdiaRestingStart`)),
+    color: text(values, t(`ArdiaColor`)),
+    interfaceStyle: text(values, t(`ArdiaInterfaceStyle`)),
+    colorScheme: text(values, t(`ArdiaColorScheme`)),
+    toast: text(values, t(`ArdiaToast`)),
+    trustedSitesSample: flag(values, t(`ArdiaTrustedSites`)),
+    pagerFreeze: isDemo ? number(values, t(`BrowsePagerFreeze`)) : null,
+    pagerScript: isDemo && flag(values, t(`BrowsePagerScript`)),
+    loadFreeze: isDemo ? number(values, t(`BrowseLoadFreeze`)) : null,
+    demoScale: isDemo ? Math.max(0, whole(values, t(`ArdiaDemoScale`)) ?? 0) : 0,
+    openingCard: flag(values, t(`ArdiaOpeningCard`)),
+    oneContainerScroll: flag(values, t(`ArdiaOneContainerScroll`)),
+    redesign: flag(values, t(`ArdiaRedesign`)),
   };
 }
 

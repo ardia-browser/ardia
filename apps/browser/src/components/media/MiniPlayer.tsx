@@ -13,6 +13,8 @@ import { useMarqueeGroup, Marquee } from "./Marquee";
 import { formatTime, hasTrackControls, isPlaying, mediaCommand, positionOf, seekTo, skipOrTrack, transportIcons, useSession, useTicker, type Session } from "../../state/media/media";
 import { hostOf } from "@ardia/core";
 import { ART_HOVER_SCRIM, useMediaTokens, type MediaTokens } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 export const MINI_PLAYER_WIDTH = 320;
 export const MINI_PLAYER_HEIGHT = 76;
@@ -62,7 +64,7 @@ export function MiniPlayer({ tabId, onBackToTab }: { tabId: string; onBackToTab:
         width={24}
         icon={playing ? "pause.fill" : "play.fill"}
         size={24}
-        tooltip={playing ? "Pause" : "Play"}
+        tooltip={playing ? t(`Pause`) : t(`Play`)}
         tokens={tokens}
         onPress={() => mediaCommand(tabId, "toggle")}
       />
@@ -149,7 +151,7 @@ function AlbumArt({
   useEffect(() => fade.setValue(0), [art]);
   return (
     <View {...hoverProps} style={{ position: "absolute", left: INSET, top: INSET, width: ART, height: ART }}>
-      <Pressable onPress={onPress} onPressIn={artPressMotion.onPressIn} onPressOut={artPressMotion.onPressOut} tooltip="Back to Tab">
+      <Pressable onPress={onPress} onPressIn={artPressMotion.onPressIn} onPressOut={artPressMotion.onPressOut} tooltip={t(`Back to Tab`)}>
         <Animated.View style={[{ width: ART, height: ART }, artPressMotion.scale ? { transform: [{ scale: artPressMotion.scale }] } : undefined]}>
           <View style={{ width: ART, height: ART, borderRadius: radius.tile, overflow: "hidden", backgroundColor: tokens.artPlaceholder, alignItems: "center", justifyContent: "center" }}>
             {art ? (
@@ -177,7 +179,7 @@ function AlbumArt({
         </Animated.View>
       </Pressable>
       {muted ? (
-        <Pressable onPress={onUnmute} onPressIn={unmuteMotion.onPressIn} onPressOut={unmuteMotion.onPressOut} tooltip="Unmute Site" style={{ position: "absolute", right: -5, bottom: -5 }}>
+        <Pressable onPress={onUnmute} onPressIn={unmuteMotion.onPressIn} onPressOut={unmuteMotion.onPressOut} tooltip={t(`Unmute Site`)} style={{ position: "absolute", right: -5, bottom: -5 }}>
           <Animated.View pointerEvents="none" style={unmuteMotion.scale ? { transform: [{ scale: unmuteMotion.scale }] } : undefined}>
             <Dot size={20} color={tokens.background}>
               <Symbol name="speaker.slash.fill" size={10} color={hex(tokens.label)} style={{ width: 16, height: 16 }} />

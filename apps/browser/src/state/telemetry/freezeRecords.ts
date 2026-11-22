@@ -1,5 +1,7 @@
 import { readDocument } from "../../platform/documents";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
+import { t } from "../../lib/uiLanguage";
+
 
 export const FREEZE_RECORDS_DOC = "freezes.txt";
 const SLOT_BYTES = 4096;
@@ -32,7 +34,7 @@ export function parseFreezeRecords(file: string | null | undefined): LocalFreeze
     const field = (name: string) => lines.find((l) => l.startsWith(`${name} `))?.slice(name.length + 1) ?? "";
     const samples: LocalFreezeFrame[][] = [];
     for (const line of lines) {
-      if (line.startsWith("sample ")) samples.push([]);
+      if (line.startsWith(t(`sample `))) samples.push([]);
       const frame = FRAME.exec(line);
       if (frame && samples.length) samples.at(-1)!.push({ image: frame[1]!, offset: frame[2]! });
     }
@@ -63,17 +65,17 @@ const seconds = (ms: number) => `${(ms / 1000).toFixed(1)} s`;
 const sameDay = (a: number, b: number) => new Date(a).toDateString() === new Date(b).toDateString();
 
 export function freezeSummaryLine(records: LocalFreeze[], now = Date.now()): string {
-  if (!PLATFORM_FEATURES.freezeWatch) return "Freezes: not recorded on this platform";
+  if (!PLATFORM_FEATURES.freezeWatch) return t(`Freezes: not recorded on this platform`);
   const today = records.filter((r) => sameDay(r.startedMs, now));
   const last = records.at(-1);
-  if (!last) return "Freezes: none recorded";
+  if (!last) return t(`Freezes: none recorded`);
   const longest = Math.max(...today.map((r) => r.durationMs), 0);
-  const cause = last.activity !== "none" ? last.activity : (topOwnFrame(last) ?? "no frames from Ardia");
+  const cause = last.activity !== "none" ? last.activity : (topOwnFrame(last) ?? t(`no frames from Ardia`));
   return `Freezes: ${today.length} today${today.length ? `, longest ${seconds(longest)}` : ""}; last ${seconds(last.durationMs)} on the ${last.thread} thread${last.recovered ? "" : " (did not recover)"}, cause ${cause}`;
 }
 
 export function lastFreezeText(records: LocalFreeze[]): string {
-  if (!PLATFORM_FEATURES.freezeWatch) return "Freeze records aren't kept on this platform.";
+  if (!PLATFORM_FEATURES.freezeWatch) return t(`Freeze records aren't kept on this platform.`);
   const last = records.at(-1);
-  return last ? `${new Date(last.startedMs).toISOString()}\n${last.text}` : "No freezes recorded.";
+  return last ? `${new Date(last.startedMs).toISOString()}\n${last.text}` : t(`No freezes recorded.`);
 }

@@ -1,3 +1,4 @@
+import { t } from "../../lib/uiLanguage";
 const words = (query: string) => query.toLowerCase().split(/\s+/).filter(Boolean);
 
 export type BookmarkLike = { key: string; title: string; url: string | null; root: string | null; children: readonly BookmarkLike[] | null };
@@ -8,8 +9,8 @@ export function bookmarkSections<T extends BookmarkLike>(bookmarks: readonly T[]
   const bar = bookmarks.filter((item) => item.root === "bar");
   const other = bookmarks.filter((item) => item.root !== "bar");
   const sections: BookmarkSection<T>[] = [];
-  if (bar.length) sections.push({ id: "bar", title: "Bookmarks Bar", items: bar });
-  if (other.length) sections.push({ id: "other", title: "Other Bookmarks", items: other });
+  if (bar.length) sections.push({ id: "bar", title: t(`Bookmarks Bar`), items: bar });
+  if (other.length) sections.push({ id: "other", title: t(`Other Bookmarks`), items: other });
   return sections;
 }
 

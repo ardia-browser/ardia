@@ -6,13 +6,15 @@ import { capsule, Checkbox, Dot, ink, Radio, Row, space, Symbol, Text, useTheme 
 import { SelectableCard } from "../settings/SelectableCard";
 import type { BrowserSource, SpaceSummary } from "./model";
 import { importColors, importLayout, importType } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 function browserDetail(browser: BrowserSource) {
   const spaces = browser.profiles.reduce((n, p) => n + (p.spaces?.length ?? 0), 0);
   return browser.needsFullDiskAccess
-    ? "Needs Full Disk Access"
+    ? t(`Needs Full Disk Access`)
     : browser.requiresExport
-      ? "Direct or from an exported .zip"
+      ? t(`Direct or from an exported .zip`)
       : browser.sidebar && spaces
         ? plural(spaces, "space")
         : browser.profiles.length > 1

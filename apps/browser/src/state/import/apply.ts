@@ -25,6 +25,8 @@ import { DEFAULT_PROFILE } from "../profiles/profiles";
 import { focusedWindowOf } from "../windows/ui";
 import { originOfLogin } from "../site/savedPasswords";
 import { importFavicons, importTabs, linksOf, windowFor } from "./tabImport";
+import { t } from "../../lib/uiLanguage";
+
 
 export { importTabs };
 export { importArcSpace, importDiaSpace } from "./sidebarTree";
@@ -132,7 +134,7 @@ export function importDiaProfile(profileId: string, profile: DiaTabsProfile, wha
   const have = openPages(useBrowser.getState(), profileId);
   const fresh = (tabs: ImportedTab[]) => tabs.filter((t) => !have.has(pageKey(t.url)));
   let n = what.pinned ? importTabs(profileId, fresh(profile.pinned), null) : 0;
-  if (what.open) n += importTabs(profileId, fresh(profile.tabs).map((t) => ({ ...t, pinned: false })), "Imported");
+  if (what.open) n += importTabs(profileId, fresh(profile.tabs).map((t) => ({ ...t, pinned: false })), t(`Imported`));
   return n;
 }
 
@@ -151,7 +153,7 @@ export async function applyResult(
   if (result.history.length) counts.history += await importHistory(profileId, result.history, onFailed, consent);
   const native = (["cookies", "autofill"] as const).filter((k) => requested.includes(k));
   Object.assign(counts, await importNative(profileId, result.vaultToken, native, onFailed));
-  if (result.tabs.length && !result.spaces.length) counts.tabs += importTabs(profileId, result.tabs, "Imported");
+  if (result.tabs.length && !result.spaces.length) counts.tabs += importTabs(profileId, result.tabs, t(`Imported`));
   if (result.favorites.length) counts.tabs += importTabs(profileId, result.favorites.map((t) => ({ ...t, pinned: true })), null, "tiles");
   if (result.credentials.length) counts.passwords += await importPasswords(profileId, result.credentials);
   return counts;
@@ -159,11 +161,11 @@ export async function applyResult(
 
 export async function applySafari(profileId: string, data: SafariExport, cookies = true, onFailed?: (kind: ImportKind) => void, consent?: ConsentToken | null): Promise<ImportCounts> {
   const counts = emptyCounts();
-  counts.bookmarks = importBookmarks(profileId, data.bookmarks, "Safari");
+  counts.bookmarks = importBookmarks(profileId, data.bookmarks, t(`Safari`));
   const history = data.profiles.find((p) => !p.name)?.history ?? data.profiles[0]?.history ?? [];
   counts.history = await importHistory(profileId, history, onFailed, consent);
   Object.assign(counts, await importNative(profileId, data.vaultToken, cookies ? ["cookies", "autofill"] : ["autofill"], onFailed));
-  if (data.tabs.length) counts.tabs += importTabs(profileId, data.tabs, "Imported");
+  if (data.tabs.length) counts.tabs += importTabs(profileId, data.tabs, t(`Imported`));
   counts.passwords = await importPasswords(profileId, data.credentials);
   return counts;
 }

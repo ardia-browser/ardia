@@ -1,6 +1,8 @@
 import { parseThemeFile, type ParsedTheme, type RolePalettes } from "../../lib/themeFile";
 import { activeManifest, activeNames, currentPlugins, recordOf, type PluginsStore } from "./store";
 import { readFolderFile } from "./hostIo";
+import { t } from "../../lib/uiLanguage";
+
 
 export type PluginTheme = { plugin: string; pluginTitle: string; id: string; title: string; key: string };
 
@@ -31,5 +33,5 @@ export async function loadPluginTheme(plugin: string, themeId: string, defaults:
   if (!read.ok) return { ok: false, reason: read.reason };
   if (currentPlugins().listings[plugin]?.hash !== listing.hash) return { ok: false, reason: `${plugin} changed while its theme loaded.` };
   const theme = parseThemeFile(`${plugin}/${spec.file}`, read.text, defaults);
-  return theme.roles ? { ok: true, theme } : { ok: false, reason: theme.problems[0] ?? "The theme couldn't be read." };
+  return theme.roles ? { ok: true, theme } : { ok: false, reason: theme.problems[0] ?? t(`The theme couldn't be read.`) };
 }

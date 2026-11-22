@@ -11,6 +11,8 @@ import { launchArguments } from "../../state/app/launchFlags";
 import type { BrowserTab } from "../../state/tabs/tabModels";
 import { TabFace, useTheme } from "../ui";
 import { PageLoadingPlaceholder } from "./PageLoadingPlaceholder";
+import { t } from "../../lib/uiLanguage";
+
 
 export type CoverFace = { kind: "card"; picture: string | null; title: string; host: string; cardWidth: number | null } | { kind: "placeholder" };
 
@@ -19,7 +21,7 @@ export type OpeningCard = { cardWidth: number | null };
 export function coverFace(tab: Pick<BrowserTab, "title" | "url">, picture: string | null, card: OpeningCard | null): CoverFace {
   if (!picture && !card) return { kind: "placeholder" };
   const host = display(tab.url).host;
-  return { kind: "card", picture, title: tab.title || host || "New Tab", host, cardWidth: card?.cardWidth ?? null };
+  return { kind: "card", picture, title: tab.title || host || t(`New Tab`), host, cardWidth: card?.cardWidth ?? null };
 }
 
 const openingCardOf = (id: string): OpeningCard | null => {
@@ -36,7 +38,7 @@ function AtCardScale({ cardWidth, box, children }: { cardWidth: number | null; b
 }
 
 export const PageCover = memo(function PageCover({ tab }: { tab: BrowserTab }) {
-  countRender("PageCover");
+  countRender(t(`PageCover`));
   const theme = useTheme();
   const tone = usePageTone(tab.id);
   const [frozen] = useState(() => launchArguments().loadFreeze !== null);
@@ -122,4 +124,4 @@ export const PageCover = memo(function PageCover({ tab }: { tab: BrowserTab }) {
   );
 });
 
-const styles = StyleSheet.create({ cardFace: { position: "absolute", left: 0, top: 0, transformOrigin: "left top" } });
+const styles = StyleSheet.create({ cardFace: { position: "absolute", left: 0, top: 0, transformOrigin: t(`left top`) } });

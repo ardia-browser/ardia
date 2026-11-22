@@ -1,6 +1,8 @@
 import { onAppEvent, type AppEvent } from "../../platform/app";
 import { capture } from "./client";
 import { nativeConsent } from "./nativeConsent";
+import { t } from "../../lib/uiLanguage";
+
 
 export type PasteRefusedEvent = Extract<AppEvent, { type: "pasteRefused" }>;
 
@@ -41,23 +43,23 @@ const STANDARD_TYPES = new Set([
   "com.apple.flat-rtfd",
   "org.chromium.web-custom-data",
   "org.chromium.source-url",
-  "NSStringPboardType",
-  "NSFilenamesPboardType",
-  "NeXT TIFF v4.0 pasteboard type",
-  "NeXT Rich Text Format v1.0 pasteboard type",
-  "NeXT RTFD pasteboard type",
-  "Apple PNG pasteboard type",
-  "Apple PDF pasteboard type",
-  "Apple HTML pasteboard type",
-  "Apple URL pasteboard type",
-  "Apple Web Archive pasteboard type",
-  "CorePasteboardFlavorType 0x75743136",
-  "CorePasteboardFlavorType 0x75747874",
-  "CorePasteboardFlavorType 0x6675726C",
-  "CorePasteboardFlavorType 0x75726C20",
-  "CorePasteboardFlavorType 0x75726C6E",
-  "CorePasteboardFlavorType 0x4A504547",
-  "CorePasteboardFlavorType 0x54455854",
+  t(`NSStringPboardType`),
+  t(`NSFilenamesPboardType`),
+  t(`NeXT TIFF v4.0 pasteboard type`),
+  t(`NeXT Rich Text Format v1.0 pasteboard type`),
+  t(`NeXT RTFD pasteboard type`),
+  t(`Apple PNG pasteboard type`),
+  t(`Apple PDF pasteboard type`),
+  t(`Apple HTML pasteboard type`),
+  t(`Apple URL pasteboard type`),
+  t(`Apple Web Archive pasteboard type`),
+  t(`CorePasteboardFlavorType 0x75743136`),
+  t(`CorePasteboardFlavorType 0x75747874`),
+  t(`CorePasteboardFlavorType 0x6675726C`),
+  t(`CorePasteboardFlavorType 0x75726C20`),
+  t(`CorePasteboardFlavorType 0x75726C6E`),
+  t(`CorePasteboardFlavorType 0x4A504547`),
+  t(`CorePasteboardFlavorType 0x54455854`),
   "text/plain",
   "text/html",
   "text/uri-list",

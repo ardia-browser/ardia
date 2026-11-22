@@ -2,12 +2,14 @@ import type { ComponentProps } from "react";
 import { call } from "@ardia/ardiacore";
 import { isPopupWindowId, nativeModule, type DragPreviewShape, type OpenWindowOptions, type OutsidePressArea, type Rect4, type WindowEvent, type WindowGeometry } from "@ardia/shell";
 import { PLATFORM_FEATURES } from "../lib/platformFeatures";
+import { t } from "../lib/uiLanguage";
+
 
 export type { DragPreviewShape, WindowEvent, OpenWindowOptions, WindowGeometry };
 export type OutsidePressEvent = Parameters<NonNullable<ComponentProps<typeof OutsidePressArea>["onOutsidePress"]>>[0];
 export { isPopupWindowId };
 
-const Windows = nativeModule("ArdiaAppWindows");
+const Windows = nativeModule(t(`ArdiaAppWindows`));
 let cachedWindowCornerRadius: number | undefined;
 export const windowCornerRadius = () => (cachedWindowCornerRadius ??= Windows.windowCornerRadius());
 export const drawnWindowCornerRadius = () => Windows.drawnWindowCornerRadius();
@@ -51,4 +53,4 @@ export const chromeWindows = () => call("windows.list");
 export const devWindowAction = (windowNumber: number, action: string) => call("windows.dev", { window: windowNumber, action });
 
 export const setWindowActivity = (windowId: string, url: string | null, title: string | null) =>
-  nativeModule("ArdiaApp").setWindowActivity(windowId, url, title);
+  nativeModule(t(`ArdiaApp`)).setWindowActivity(windowId, url, title);

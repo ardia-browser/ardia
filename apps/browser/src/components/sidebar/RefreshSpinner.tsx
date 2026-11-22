@@ -1,6 +1,8 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Animated, type StyleProp, type ViewStyle } from "react-native";
 import { curve, period } from "../ui/motion";
+import { t } from "../../lib/uiLanguage";
+
 
 export function RefreshSpinner({ spinning = true, style, children }: { spinning?: boolean; style?: StyleProp<ViewStyle>; children: ReactNode }) {
   const turn = useRef(new Animated.Value(0)).current;
@@ -11,5 +13,5 @@ export function RefreshSpinner({ spinning = true, style, children }: { spinning?
     loop.start();
     return () => loop.stop();
   }, [spinning]);
-  return <Animated.View style={[style, { transform: [{ rotate: turn.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] }) }] }]}>{children}</Animated.View>;
+  return <Animated.View style={[style, { transform: [{ rotate: turn.interpolate({ inputRange: [0, 1], outputRange: [t(`0deg`), t(`360deg`)] }) }] }]}>{children}</Animated.View>;
 }

@@ -34,6 +34,8 @@ import { LiveFolderBlock } from "./LiveFolderBlock";
 import { tailKey, type RowSection } from "./dragModel";
 import { SharedFolderMark } from "./SharedFolderMark";
 import { FolderHeaderTitle } from "./FolderHeaderTitle";
+import { t } from "../../lib/uiLanguage";
+
 
 const NO_GROUPS: ReadonlySet<string> = new Set();
 
@@ -175,7 +177,7 @@ const GroupHeader = memo(function GroupHeader({ groupId, windowId, collapsed, op
   const profileId = usePageProfileId();
   const showsExtra = useShowsExtraTabs(windowId, profileId, groupId);
   const squish = useSquish(renaming ? null : "row");
-  const chevronTurn = useMemo(() => ({ ...CHEVRON_BOX, transform: [{ rotate: open.interpolate({ inputRange: [0, 1], outputRange: ["-90deg", "0deg"] }) }] }), [open]);
+  const chevronTurn = useMemo(() => ({ ...CHEVRON_BOX, transform: [{ rotate: open.interpolate({ inputRange: [0, 1], outputRange: ["-90deg", t(`0deg`)] }) }] }), [open]);
   if (!group) return null;
   const target = { kind: "group" as const, id: groupId };
 

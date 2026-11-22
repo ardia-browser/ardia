@@ -6,14 +6,16 @@ import { appVersion, openFromSettings } from "../../state/settings/actions";
 import { settingsRouteKey } from "../../state/settings/nav";
 import { AppIconPreview, modifierList, settingsChrome, settingsUIAvailable, useTheme } from "../ui";
 import { dataCredits, LIBRARY_CREDITS } from "./DataPages";
+import { t } from "../../lib/uiLanguage";
+
 
 const FILL = Number.MAX_SAFE_INTEGER;
 const SECONDARY = { type: "hierarchical", style: "secondary" } as const;
 const BLUE = PlatformColor("systemBlue");
 const LINKS = [
   { title: "ardia.dev", url: "https://ardia.dev" },
-  { title: "Release Notes", url: "https://ardia.dev/release-notes" },
-  { title: "Source Code", url: "https://github.com/mantrakp04/ardia" },
+  { title: t(`Release Notes`), url: "https://ardia.dev/release-notes" },
+  { title: t(`Source Code`), url: "https://github.com/mantrakp04/ardia" },
 ] as const;
 
 const page = (title: string) => modifierList(navigationTitle(title), navigationBarTitleDisplayMode("inline"), tint(BLUE), settingsChrome());
@@ -21,7 +23,7 @@ const page = (title: string) => modifierList(navigationTitle(title), navigationB
 export function ExpoAboutPage() {
   const theme = useTheme();
   return (
-    <Form modifiers={page("About Ardia")}>
+    <Form modifiers={page(t(`About Ardia`))}>
       <Section>
         <VStack spacing={12} modifiers={[frame({ maxWidth: FILL }), listRowBackground("clear")]}>
           {settingsUIAvailable() ? <AppIconPreview side={72} modifiers={[shadow({ radius: 10, y: 4, color: "rgba(0,0,0,0.12)" })]} /> : null}
@@ -33,7 +35,7 @@ export function ExpoAboutPage() {
       </Section>
       <Section footer={<Text>{copy().privacy}</Text>}>
         {LINKS.map((link) => (
-          <Button key={link.url} onPress={() => openFromSettings(link.url)} modifiers={[accessibilityHint("Opens in a new tab")]}>
+          <Button key={link.url} onPress={() => openFromSettings(link.url)} modifiers={[accessibilityHint(t(`Opens in a new tab`))]}>
             <HStack>
               <Text modifiers={[foregroundStyle(theme.formAccent)]}>{link.title}</Text>
               <Spacer />
@@ -53,24 +55,24 @@ export function ExpoAboutPage() {
 
 export function ExpoLicensesPage() {
   return (
-    <Form modifiers={page("Open Source Licenses")}>
+    <Form modifiers={page(t(`Open Source Licenses`))}>
       {dataCredits().map((credit) => (
         <Section key={credit.name}>
           <VStack alignment="leading" spacing={4} modifiers={[padding({ vertical: 2 }), frame({ maxWidth: FILL, alignment: "leading" })]}>
             <Text modifiers={[font({ textStyle: "body", weight: "semibold" })]}>{credit.name}</Text>
             <Text modifiers={[font({ textStyle: "subheadline" }), foregroundStyle(SECONDARY)]}>{credit.use}</Text>
           </VStack>
-          <LabeledContent label="License">
+          <LabeledContent label={t(`License`)}>
             <Text>{credit.license}</Text>
           </LabeledContent>
-          <Button onPress={() => openFromSettings(credit.url)} modifiers={[accessibilityHint("Opens in a new tab")]}>
+          <Button onPress={() => openFromSettings(credit.url)} modifiers={[accessibilityHint(t(`Opens in a new tab`))]}>
             <Text modifiers={[lineLimit(1), truncationMode("middle")]}>{credit.url.replace(/^https:\/\//, "")}</Text>
           </Button>
         </Section>
       ))}
-      <Section title="Code in This App">
+      <Section title={t(`Code in This App`)}>
         {LIBRARY_CREDITS.map((credit) => (
-          <Button key={`${credit.name}@${credit.detail}`} onPress={() => openFromSettings(credit.url)} modifiers={[tint("primary"), accessibilityHint("Opens in a new tab")]}>
+          <Button key={`${credit.name}@${credit.detail}`} onPress={() => openFromSettings(credit.url)} modifiers={[tint("primary"), accessibilityHint(t(`Opens in a new tab`))]}>
             <HStack spacing={12}>
               <VStack alignment="leading" spacing={2} modifiers={[frame({ maxWidth: FILL, alignment: "leading" })]}>
                 <Text modifiers={[lineLimit(1)]}>{credit.name}</Text>

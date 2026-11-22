@@ -1,12 +1,14 @@
 import { orWarn, passwordFailure } from "../../lib/fallback";
 import { capture, consentToken } from "./client";
+import { t } from "../../lib/uiLanguage";
+
 
 export type PasswordImportSource = "browser" | "csv";
 
 export function passwordImportTally(source: PasswordImportSource) {
   const counts = { tried: 0, saved: 0, refused: 0, not_landed: 0, other: 0 };
   const consent = consentToken();
-  const warn = orWarn(false, source === "csv" ? "csv import" : "browser import");
+  const warn = orWarn(false, source === "csv" ? t(`csv import`) : t(`browser import`));
   return {
     async attempt(save: Promise<boolean>): Promise<boolean> {
       counts.tried++;

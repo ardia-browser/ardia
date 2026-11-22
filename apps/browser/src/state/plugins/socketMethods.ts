@@ -9,6 +9,8 @@ import { activeManifest, currentPlugins, needsReview, recordOf } from "./store";
 import { installOfficialPlugin, isOfficialName, officialPlugins } from "./official";
 import { pluginRecordsSaved } from "./savedState";
 import { callTool } from "./tools";
+import { t } from "../../lib/uiLanguage";
+
 
 const nameOf = (params: Record<string, unknown>) => (typeof params.name === "string" ? params.name : null);
 
@@ -34,7 +36,7 @@ export function pluginList() {
 
 function callPluginTool(params: Record<string, unknown>): Body | Promise<Body> {
   const { plugin, tool, input } = params;
-  if (typeof plugin !== "string" || typeof tool !== "string") return failure("bad_request", "plugins.call needs a plugin and a tool.");
+  if (typeof plugin !== "string" || typeof tool !== "string") return failure("bad_request", t(`plugins.call needs a plugin and a tool.`));
   return callTool(plugin, tool, input, { kind: "socket" }).then((o) => (o.ok ? { result: o.result } : failure(o.code, o.message)));
 }
 
@@ -66,12 +68,12 @@ export function pluginSocketMethod(method: string, params: Record<string, unknow
       if (!known && !leftOn) return failure("bad_request", `There's no plugin ${String(name)}.`);
       const consent = consentNow();
       return turnOffPlugin(name!, consent).then((off) =>
-        !off ? failure("failed", "Couldn't save plugins.json.") : pluginRecordsSaved(consent).then((saved) => (saved ? { result: { ok: true } } : failure("failed", "It's off for now, but plugins.json couldn't be saved, so it may be on again after Ardia restarts."))),
+        !off ? failure("failed", t(`Couldn't save plugins.json.`)) : pluginRecordsSaved(consent).then((saved) => (saved ? { result: { ok: true } } : failure("failed", t(`It's off for now, but plugins.json couldn't be saved, so it may be on again after Ardia restarts.`)))),
       );
     }
     case "plugins.remove":
       if (!known && !recorded) return failure("bad_request", `There's no plugin ${String(name)}.`);
-      return removePlugin(name, serving).then((r) => (r.ok ? { result: { ok: true } } : failure("failed", r.reason ?? "Couldn't remove it.")));
+      return removePlugin(name, serving).then((r) => (r.ok ? { result: { ok: true } } : failure("failed", r.reason ?? t(`Couldn't remove it.`))));
   }
   return failure("unknown_method", `There's no method ${method}.`);
 }

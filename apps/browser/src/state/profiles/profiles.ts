@@ -7,6 +7,8 @@ import { DEFAULT_PROFILE_ID } from "../settings/settings";
 import { activated, apply, removeTabs, withNewTab } from "../tabs/tabs";
 import type { Profile, ProfileColor } from "../browser/types";
 import { patchedProfile } from "./switcherMark";
+import { t } from "../../lib/uiLanguage";
+
 
 export type ProfilesSlice = {
   profiles: Record<string, Profile>;
@@ -22,7 +24,7 @@ export type ProfilesSlice = {
   profileDataDeleted(engineId: string): void;
 };
 
-export const DEFAULT_PROFILE: Profile = { id: DEFAULT_PROFILE_ID, name: "Personal", color: "plum", icon: null, createdAt: 0, presetThemes: {}, seenTheme: null, seenColor: "plum" };
+export const DEFAULT_PROFILE: Profile = { id: DEFAULT_PROFILE_ID, name: t(`Personal`), color: "plum", icon: null, createdAt: 0, presetThemes: {}, seenTheme: null, seenColor: "plum" };
 
 const COLORS: ProfileColor[] = ["blue", "green", "orange", "purple", "red", "yellow", "pink"];
 

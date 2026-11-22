@@ -36,6 +36,8 @@ import { copy } from "../../lib/platformCopy";
 
 const FILTER_SYNTAX_URL = "https://github.com/gorhill/uBlock/wiki/Static-filter-syntax";
 import { BarButton, ButtonRow, CrossfadeText, Divider, EmptyState, Group, IconTile, NavRow, SettingsPage, ToggleRow, ValueRow } from "./SettingsKit";
+import { t } from "../../lib/uiLanguage";
+
 
 export function FilterListsPage() {
   const theme = useTheme();
@@ -55,7 +57,7 @@ export function FilterListsPage() {
   const updating = busy || Boolean(state?.isUpdating);
   return (
     <SettingsPage
-      title="Filter Lists"
+      title={t(`Filter Lists`)}
       onBack={popSettings}
       onRefresh={updateLists}
       heroTitle
@@ -71,8 +73,8 @@ export function FilterListsPage() {
           style={[font.footnote, { color: state?.isOffline ? theme.destructive : theme.secondaryLabel }]}
         />
       </View>
-      <Group footer="Checked weekly.">
-        <ButtonRow title={updating ? "Updating Lists…" : "Update Now"} enabled={!updating} busy={updating} onPress={() => void updateListsFromButton()} />
+      <Group footer={t(`Checked weekly.`)}>
+        <ButtonRow title={updating ? t(`Updating Lists…`) : t(`Update Now`)} enabled={!updating} busy={updating} onPress={() => void updateListsFromButton()} />
       </Group>
       {groups.map(([group, items]) => (
         <Group key={group} header={group}>
@@ -82,18 +84,18 @@ export function FilterListsPage() {
         </Group>
       ))}
       <Group>
-        <ButtonRow title="Add a List…" divider onPress={() => setAdding(true)} />
-        <NavRow title="My Filters" value={myFiltersCount(state?.myFiltersRuleCount ?? 0)} onPress={() => pushSettings({ page: "myFilters" })} />
+        <ButtonRow title={t(`Add a List…`)} divider onPress={() => setAdding(true)} />
+        <NavRow title={t(`My Filters`)} value={myFiltersCount(state?.myFiltersRuleCount ?? 0)} onPress={() => pushSettings({ page: "myFilters" })} />
       </Group>
       <Group>
         <ButtonRow
-          title="Restore Defaults…"
+          title={t(`Restore Defaults…`)}
           destructive
           onPress={(event) =>
             setConfirmation({
-              title: "Restore Default Filter Lists?",
+              title: t(`Restore Default Filter Lists?`),
               message: resetMessage(lists.filter((list) => list.isCustom).length),
-              action: "Restore Defaults",
+              action: t(`Restore Defaults`),
               run: resetLists,
               opener: event?.currentTarget,
             })
@@ -112,7 +114,7 @@ function ListRow({ list, now, divider }: { list: FilterListInfo; now: number; di
   return (
     <View>
       <View style={styles.listRow}>
-        <Pressable accessibilityRole="button" accessibilityHint="Shows the list’s details" onPress={() => pushSettings({ page: "filterList", id: list.id })} style={styles.fill}>
+        <Pressable accessibilityRole="button" accessibilityHint={t(`Shows the list’s details`)} onPress={() => pushSettings({ page: "filterList", id: list.id })} style={styles.fill}>
           <Text style={[font.body, { color: theme.label }]} numberOfLines={2}>
             {list.title}
           </Text>
@@ -133,48 +135,48 @@ export function FilterListDetailPage({ id }: { id: string }) {
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   if (!list)
     return (
-      <SettingsPage title="Filter List" onBack={popSettings}>
-        <EmptyState title="List Removed" message="" icon="listBulletFill" />
+      <SettingsPage title={t(`Filter List`)} onBack={popSettings}>
+        <EmptyState title={t(`List Removed`)} message="" icon="listBulletFill" />
       </SettingsPage>
     );
   return (
     <SettingsPage title={list.title} onBack={popSettings}>
-      <Group footer={list.isDefault ? "On by default in uBlock Origin." : null}>
-        <ToggleRow title="Use This List" value={list.isEnabled} onChange={(on) => setListEnabled(list.id, on)} />
+      <Group footer={list.isDefault ? t(`On by default in uBlock Origin.`) : null}>
+        <ToggleRow title={t(`Use This List`)} value={list.isEnabled} onChange={(on) => setListEnabled(list.id, on)} />
       </Group>
       {list.state === "failed" ? (
         <Group>
           <View testID="listFailure" style={styles.failure}>
             <Symbol name="exclamationmarkTriangle" size={22} color={theme.destructive} />
-            <Text style={[font.body, styles.fill, { color: theme.label }]}>{list.failure ?? "This list couldn’t be updated."}</Text>
+            <Text style={[font.body, styles.fill, { color: theme.label }]}>{list.failure ?? t(`This list couldn’t be updated.`)}</Text>
           </View>
           <Divider />
-          <ButtonRow title="Try Again" enabled={!updating} onPress={() => void updateLists()} />
+          <ButtonRow title={t(`Try Again`)} enabled={!updating} onPress={() => void updateLists()} />
         </Group>
       ) : null}
       <Group footer={list.skippedCount > 0 ? copy().filterRulesUnsupported : null}>
-        <ValueRow title="Status" value={listStatus(list)} divider />
-        <ValueRow title="Last Updated" value={list.updatedAt ? listUpdatedAt(list.updatedAt) : "Never"} divider />
-        <ValueRow title="Rules" value={formatNumber(list.ruleCount)} divider />
-        <ValueRow title="Skipped" value={formatNumber(list.skippedCount)} />
+        <ValueRow title={t(`Status`)} value={listStatus(list)} divider />
+        <ValueRow title={t(`Last Updated`)} value={list.updatedAt ? listUpdatedAt(list.updatedAt) : t(`Never`)} divider />
+        <ValueRow title={t(`Rules`)} value={formatNumber(list.ruleCount)} divider />
+        <ValueRow title={t(`Skipped`)} value={formatNumber(list.skippedCount)} />
       </Group>
       {list.sourceUrl || list.supportUrl ? (
-        <Group header="Source">
+        <Group header={t(`Source`)}>
           {list.sourceUrl ? <LinkRow text={list.sourceUrl} small divider={Boolean(list.supportUrl)} onPress={() => openFromSettings(list.sourceUrl!)} /> : null}
-          {list.supportUrl ? <LinkRow text="Visit the List’s Website" onPress={() => openFromSettings(list.supportUrl!)} /> : null}
+          {list.supportUrl ? <LinkRow text={t(`Visit the List’s Website`)} onPress={() => openFromSettings(list.supportUrl!)} /> : null}
         </Group>
       ) : null}
       {list.isCustom ? (
         <Group>
           <ButtonRow
-            title="Remove List…"
+            title={t(`Remove List…`)}
             destructive
             onPress={(event) =>
               setConfirmation({
                 opener: event?.currentTarget,
-                title: "Remove This List?",
-                message: "You can add it again later.",
-                action: "Remove List",
+                title: t(`Remove This List?`),
+                message: t(`You can add it again later.`),
+                action: t(`Remove List`),
                 run: () => {
                   removeList(list.id);
                   popSettings();
@@ -195,7 +197,7 @@ function LinkRow({ text, small = false, divider = false, onPress }: { text: stri
     <View>
       <Pressable
         accessibilityRole="link"
-        accessibilityHint="Opens the link in a new tab"
+        accessibilityHint={t(`Opens the link in a new tab`)}
         onPress={onPress}
         style={({ pressed }) => [styles.linkRow, pressed ? { backgroundColor: theme.rowHighlight } : null]}
       >
@@ -249,20 +251,20 @@ function AddListSheet({ open, onClose, onHidden }: { open: boolean; onClose: () 
     <Sheet open={open} onDismiss={close} onHidden={onHidden}>
       <View style={styles.sheetBar}>
         <View style={styles.sheetSide}>
-          <BarButton title="Cancel" onPress={close} />
+          <BarButton title={t(`Cancel`)} onPress={close} />
         </View>
         <Text accessibilityRole="header" style={[font.body, styles.bold, styles.sheetTitle, { color: theme.label }]} numberOfLines={1}>
           Add a List
         </Text>
         <View style={[styles.sheetSide, styles.sheetEnd]}>
-          {adding ? <ActivityIndicator testID="addingList" color={theme.secondaryLabel} /> : <BarButton title="Add" emphasized enabled={url !== null} onPress={() => void add()} />}
+          {adding ? <ActivityIndicator testID="addingList" color={theme.secondaryLabel} /> : <BarButton title={t(`Add`)} emphasized enabled={url !== null} onPress={() => void add()} />}
         </View>
       </View>
       <View style={styles.sheetBody}>
         <Text style={[font.footnote, styles.bold, styles.sheetLabel, { color: theme.secondaryLabel }]}>List Address</Text>
         <View style={[styles.fieldSurface, { backgroundColor: theme.groupFill }]}>
           <TextInput
-            accessibilityLabel="List Address"
+            accessibilityLabel={t(`List Address`)}
             autoFocus
             value={address}
             onChangeText={(value) => {
@@ -332,17 +334,17 @@ export function MyFiltersPage() {
   }, [changed]);
   return (
     <SettingsPage
-      title="My Filters"
+      title={t(`My Filters`)}
       onBack={changed ? undefined : leave}
       scroll={false}
-      leading={changed ? <BarButton title="Revert" onPress={() => setDraft(null)} /> : null}
-      trailing={applying ? <ActivityIndicator testID="applyingFilters" color={theme.secondaryLabel} style={styles.barSpinner} /> : <BarButton title="Apply" emphasized enabled={changed} onPress={() => void apply()} />}
+      leading={changed ? <BarButton title={t(`Revert`)} onPress={() => setDraft(null)} /> : null}
+      trailing={applying ? <ActivityIndicator testID="applyingFilters" color={theme.secondaryLabel} style={styles.barSpinner} /> : <BarButton title={t(`Apply`)} emphasized enabled={changed} onPress={() => void apply()} />}
     >
       <View style={[styles.editor, { backgroundColor: theme.groupFill }]}>
         <TextInput
           ref={field}
           testID="myFiltersField"
-          accessibilityLabel="My Filters"
+          accessibilityLabel={t(`My Filters`)}
           multiline
           scrollEnabled
           value={text}
@@ -376,12 +378,12 @@ export function TrustedSitesPage() {
   const editingShown = editing && hosts.length > 0;
   return (
     <SettingsPage
-      title="Trusted Sites"
+      title={t(`Trusted Sites`)}
       onBack={popSettings}
-      trailing={hosts.length ? <BarButton title={editingShown ? "Done" : "Edit"} emphasized={editingShown} onPress={() => setEditing(!editingShown)} /> : null}
+      trailing={hosts.length ? <BarButton title={editingShown ? t(`Done`) : t(`Edit`)} emphasized={editingShown} onPress={() => setEditing(!editingShown)} /> : null}
     >
       {hosts.length === 0 ? (
-        <EmptyState title="No Trusted Sites" message="Sites you allow from the page menu show up here." icon="checkmarkShield" />
+        <EmptyState title={t(`No Trusted Sites`)} message={t(`Sites you allow from the page menu show up here.`)} icon="checkmarkShield" />
       ) : (
         <Group>
           {hosts.map((host, index) => (
@@ -444,7 +446,7 @@ const styles = StyleSheet.create({
   paste: { alignItems: "center", paddingTop: space.s },
   editor: { flex: 1, marginHorizontal: space.l, marginTop: space.xs, borderRadius: settingsLayout.groupRadius, padding: space.l },
   barSpinner: { marginRight: space.s },
-  editorText: { flex: 1, textAlignVertical: "top", fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" },
+  editorText: { flex: 1, textAlignVertical: "top", fontFamily: Platform.OS === "ios" ? t(`Menlo`) : "monospace" },
   footer: { paddingHorizontal: space.l + settingsLayout.rowInset, gap: space.xs },
   removeDot: { width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   trustedLabel: { flex: 1, flexDirection: "row", alignItems: "center", gap: settingsLayout.labelGap },

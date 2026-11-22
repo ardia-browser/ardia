@@ -9,6 +9,8 @@ import type { JsonSchema } from "../../lib/jsonSchema";
 import { bool, id, obj, oneOf, PROFILE, text } from "./socketSchema";
 import { now, profileArg } from "./socketTargets";
 import { OpError } from "./workspaceTargets";
+import { t } from "../../lib/uiLanguage";
+
 
 const SITE_ACCESS = ["allSites", "specificSites", "onClick"] as const;
 type SiteAccess = (typeof SITE_ACCESS)[number];
@@ -21,15 +23,15 @@ function stillThere(call: SocketCall, profileId: string, engine: string) {
   if (!ownEntry(now().profiles, profileId) || engineProfile(now(), profileId) !== engine) throw new OpError("no_window", `Profile ${profileId} closed before Ardia made the change, so nothing changed.`);
 }
 
-export const NO_FOLDER_INSTALLS = "installing an unpacked folder from the socket isn't supported; use Settings › Extensions › Load Unpacked";
+export const NO_FOLDER_INSTALLS = t(`installing an unpacked folder from the socket isn't supported; use Settings › Extensions › Load Unpacked`);
 
 async function install(params: Record<string, unknown>, call: SocketCall) {
   if (params.folder !== undefined) throw new OpError("refused", NO_FOLDER_INSTALLS);
-  if (params.webStore === undefined) throw new OpError("bad_request", "extensions.install takes webStore, a Chrome Web Store link or extension id.");
+  if (params.webStore === undefined) throw new OpError("bad_request", t(`extensions.install takes webStore, a Chrome Web Store link or extension id.`));
   const profileId = profileArg(params.profile);
   const engine = engineProfile(now(), profileId);
   const extensionId = webStoreExtensionId(params.webStore as string);
-  if (!extensionId) throw new OpError("bad_request", "webStore is a Chrome Web Store link or extension id.");
+  if (!extensionId) throw new OpError("bad_request", t(`webStore is a Chrome Web Store link or extension id.`));
   const already = (await loaded(engine)).find((x) => x.id === extensionId);
   stillThere(call, profileId, engine);
   if (already) return { waiting: false, installed: true, extensions: [{ id: already.id, name: already.name, version: already.version }] };
@@ -45,7 +47,7 @@ function requestedChange(params: Record<string, unknown>): Change {
   return { userScripts: params.userScripts as boolean };
 }
 
-export const SPECIFIC_SITES_REFUSED = "changing to specific sites needs engine support";
+export const SPECIFIC_SITES_REFUSED = t(`changing to specific sites needs engine support`);
 
 function checkedChange(ext: InstalledExtension, change: Change) {
   if (!ext.mayModify) throw new OpError("refused", `${ext.name} is installed by policy, so it can't be changed.`);
@@ -96,14 +98,14 @@ async function configureExtension(params: Record<string, unknown>, call: SocketC
   return { id: after.id, name: after.name, incognito: after.incognito, userScripts: !!after.userScripts, siteAccess: after.siteAccess ?? null, sites: after.sites ?? [] };
 }
 
-const EXTENSION_ID = id("An extension id from extensions.list");
-const SITE_ACCESS_PARAM = oneOf(SITE_ACCESS, "Which sites it can read and change: allSites or onClick; specificSites is refused until the engine can grant sites");
+const EXTENSION_ID = id(t(`An extension id from extensions.list`));
+const SITE_ACCESS_PARAM = oneOf(SITE_ACCESS, t(`Which sites it can read and change: allSites or onClick; specificSites is refused until the engine can grant sites`));
 const CONFIGURE_PARAMS: JsonSchema = {
-  ...obj({ profile: PROFILE, id: EXTENSION_ID, siteAccess: SITE_ACCESS_PARAM, incognito: bool("Allow in Incognito"), userScripts: bool("Allow User Scripts") }, ["id"]),
+  ...obj({ profile: PROFILE, id: EXTENSION_ID, siteAccess: SITE_ACCESS_PARAM, incognito: bool(t(`Allow in Incognito`)), userScripts: bool(t(`Allow User Scripts`)) }, ["id"]),
   anyOf: [
     obj({ profile: PROFILE, id: EXTENSION_ID, siteAccess: SITE_ACCESS_PARAM }, ["id", "siteAccess"]),
-    obj({ profile: PROFILE, id: EXTENSION_ID, incognito: bool("Allow in Incognito") }, ["id", "incognito"]),
-    obj({ profile: PROFILE, id: EXTENSION_ID, userScripts: bool("Allow User Scripts") }, ["id", "userScripts"]),
+    obj({ profile: PROFILE, id: EXTENSION_ID, incognito: bool(t(`Allow in Incognito`)) }, ["id", "incognito"]),
+    obj({ profile: PROFILE, id: EXTENSION_ID, userScripts: bool(t(`Allow User Scripts`)) }, ["id", "userScripts"]),
   ],
 };
 
@@ -112,18 +114,18 @@ export const EXTENSION_METHODS: MethodSpec[] = [
     name: "extensions.install",
     mutates: true,
     description:
-      "Add an extension from the Chrome Web Store, as Settings › Profiles › Extensions does: opens its store page, where the user adds it ({waiting}), or answers {installed} when it's already there. An unpacked folder is refused; Settings › Extensions › Load Unpacked adds one",
-    params: obj({ profile: PROFILE, webStore: text("A Chrome Web Store link or extension id"), folder: text("Refused: unpacked folders install from Settings only") }),
-    result: "{waiting, id} | {installed, extensions}",
+      t(`Add an extension from the Chrome Web Store, as Settings › Profiles › Extensions does: opens its store page, where the user adds it ({waiting}), or answers {installed} when it's already there. An unpacked folder is refused; Settings › Extensions › Load Unpacked adds one`),
+    params: obj({ profile: PROFILE, webStore: text(t(`A Chrome Web Store link or extension id`)), folder: text(t(`Refused: unpacked folders install from Settings only`)) }),
+    result: t(`{waiting, id} | {installed, extensions}`),
     run: install,
   },
   {
     name: "extensions.configure",
     mutates: true,
     description:
-      "Change exactly one of an extension's settings per call, as its page in Settings does: site access (allSites or onClick; specificSites is refused), Allow in Incognito or Allow User Scripts; a request with none or more than one fails validation",
+      t(`Change exactly one of an extension's settings per call, as its page in Settings does: site access (allSites or onClick; specificSites is refused), Allow in Incognito or Allow User Scripts; a request with none or more than one fails validation`),
     params: CONFIGURE_PARAMS,
-    result: "{id, name, incognito, userScripts, siteAccess, sites}",
+    result: t(`{id, name, incognito, userScripts, siteAccess, sites}`),
     run: configureExtension,
   },
 ];

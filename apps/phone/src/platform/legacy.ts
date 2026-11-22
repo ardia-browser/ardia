@@ -1,8 +1,10 @@
 import { legacyImport as native } from "@ardia/phone-native";
 import { requireOptionalNativeModule } from "expo-modules-core";
 import type { LegacyApi } from "../state/legacy/importer";
+import { t } from "../lib/uiLanguage";
 
-const opensWithoutImport = typeof requireOptionalNativeModule<{ startFresh?: unknown }>("ArdiaPhoneLegacy")?.startFresh === "function";
+
+const opensWithoutImport = typeof requireOptionalNativeModule<{ startFresh?: unknown }>(t(`ArdiaPhoneLegacy`))?.startFresh === "function";
 
 export const legacyImport: LegacyApi = {
   source: () => native.source(),

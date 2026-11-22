@@ -8,6 +8,8 @@ import { bool, id, obj, oneOf, PROFILE, text } from "./socketSchema";
 import { expect, now, profileArg } from "./socketTargets";
 import { OpError } from "./workspaceTargets";
 import { askWhereSeen, shownWindowId } from "./socketAsk";
+import { t } from "../../lib/uiLanguage";
+
 
 const SITE_SETTINGS = [
   "popups", "camera", "microphone", "location", "notifications", "sound", "autoplay", "javascript", "images", "clipboard", "automaticDownloads", "cookies", "midi", "sensors",
@@ -42,7 +44,7 @@ const HOST = /^(?=.{1,253}$)[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[
 
 async function setSiteZoom(params: Record<string, unknown>) {
   const host = params.host as string;
-  if (!/^[a-z0-9.-]+(:\d+)?$/i.test(host)) throw new OpError("bad_request", "host is a host name like example.com.");
+  if (!/^[a-z0-9.-]+(:\d+)?$/i.test(host)) throw new OpError("bad_request", t(`host is a host name like example.com.`));
   const engine = engineOf(params);
   await setZoom(engine, host, params.zoom as number);
   return getZoomLevels(engine);
@@ -118,24 +120,24 @@ async function uninstall(params: Record<string, unknown>, call: SocketCall) {
   return { removed };
 }
 
-const EXTENSION = { profile: PROFILE, id: id("An extension id from extensions.list") };
+const EXTENSION = { profile: PROFILE, id: id(t(`An extension id from extensions.list`)) };
 const SITE = { profile: PROFILE, origin: { type: "string", pattern: ORIGIN, description: "An origin like https://example.com" } as const };
 
 export const SITE_METHODS: MethodSpec[] = [
-  { name: "sites.origins", mutates: false, description: "Origins with their own site settings", params: obj({ profile: PROFILE }), result: "[origin]", run: (p) => getSiteSettingsOrigins(engineOf(p)) },
-  { name: "sites.get", mutates: false, description: "An origin's settings and permissions: camera, location, notifications, pop-ups, JavaScript, sound, …", params: obj(SITE, ["origin"]), result: "{type: {value, isDefault}}", run: (p) => getSiteSettings(engineOf(p), originOf(p.origin)) },
+  { name: "sites.origins", mutates: false, description: t(`Origins with their own site settings`), params: obj({ profile: PROFILE }), result: "[origin]", run: (p) => getSiteSettingsOrigins(engineOf(p)) },
+  { name: "sites.get", mutates: false, description: t(`An origin's settings and permissions: camera, location, notifications, pop-ups, JavaScript, sound, …`), params: obj(SITE, ["origin"]), result: t(`{type: {value, isDefault}}`), run: (p) => getSiteSettings(engineOf(p), originOf(p.origin)) },
   {
     name: "sites.set",
     mutates: true,
-    description: "Allow, block or ask for one permission on an origin, or put it back to the default",
-    params: obj({ ...SITE, type: oneOf(SITE_SETTINGS, "Which setting"), value: oneOf(VALUES, "allow, block, ask or default") }, ["origin", "type", "value"]),
-    result: "{type: {value, isDefault}}",
+    description: t(`Allow, block or ask for one permission on an origin, or put it back to the default`),
+    params: obj({ ...SITE, type: oneOf(SITE_SETTINGS, t(`Which setting`)), value: oneOf(VALUES, t(`allow, block, ask or default`)) }, ["origin", "type", "value"]),
+    result: t(`{type: {value, isDefault}}`),
     run: setSetting,
   },
   {
     name: "sites.reset",
     mutates: true,
-    description: "Put every setting of an origin back to the default",
+    description: t(`Put every setting of an origin back to the default`),
     params: obj(SITE, ["origin"]),
     result: "{ok}",
     run: async (p) => {
@@ -146,20 +148,20 @@ export const SITE_METHODS: MethodSpec[] = [
   {
     name: "sites.clearData",
     mutates: true,
-    description: "Delete a whole site's cookies and stored data: its registrable domain and every subdomain, over http and https (mail.example.com clears all of example.com)",
-    params: obj({ profile: PROFILE, site: text("A host like example.com; the whole site it belongs to is cleared") }, ["site"]),
-    result: "{site, cookies, storage}",
+    description: t(`Delete a whole site's cookies and stored data: its registrable domain and every subdomain, over http and https (mail.example.com clears all of example.com)`),
+    params: obj({ profile: PROFILE, site: text(t(`A host like example.com; the whole site it belongs to is cleared`)) }, ["site"]),
+    result: t(`{site, cookies, storage}`),
     run: clearData,
   },
-  { name: "sites.zoomLevels", mutates: false, description: "Zoom per host", params: obj({ profile: PROFILE }), result: "{host: zoom}", run: (p) => getZoomLevels(engineOf(p)) },
-  { name: "sites.setZoom", mutates: true, description: "Set a host's zoom (1 is 100%)", params: obj({ profile: PROFILE, host: text("A host like example.com"), zoom: { type: "number", minimum: 0.25, maximum: 5, description: "1 is 100%" } }, ["host", "zoom"]), result: "{host: zoom}", run: setSiteZoom },
-  { name: "extensions.list", mutates: false, description: "A profile's extensions", params: obj({ profile: PROFILE }), result: "[extension]", run: async (p) => (await refreshExtensions(engineOf(p))).map(extensionRow) },
-  { name: "extensions.setEnabled", mutates: true, description: "Turn an extension on or off", params: obj({ ...EXTENSION, enabled: bool("On or off") }, ["id", "enabled"]), result: "extension", run: enable },
-  { name: "extensions.setPinned", mutates: true, description: "Show or hide an extension in the toolbar", params: obj({ ...EXTENSION, pinned: bool("In the toolbar") }, ["id", "pinned"]), result: "extension", run: pin },
+  { name: "sites.zoomLevels", mutates: false, description: t(`Zoom per host`), params: obj({ profile: PROFILE }), result: t(`{host: zoom}`), run: (p) => getZoomLevels(engineOf(p)) },
+  { name: "sites.setZoom", mutates: true, description: t(`Set a host's zoom (1 is 100%)`), params: obj({ profile: PROFILE, host: text(t(`A host like example.com`)), zoom: { type: "number", minimum: 0.25, maximum: 5, description: t(`1 is 100%`) } }, ["host", "zoom"]), result: t(`{host: zoom}`), run: setSiteZoom },
+  { name: "extensions.list", mutates: false, description: t(`A profile's extensions`), params: obj({ profile: PROFILE }), result: "[extension]", run: async (p) => (await refreshExtensions(engineOf(p))).map(extensionRow) },
+  { name: "extensions.setEnabled", mutates: true, description: t(`Turn an extension on or off`), params: obj({ ...EXTENSION, enabled: bool(t(`On or off`)) }, ["id", "enabled"]), result: "extension", run: enable },
+  { name: "extensions.setPinned", mutates: true, description: t(`Show or hide an extension in the toolbar`), params: obj({ ...EXTENSION, pinned: bool(t(`In the toolbar`)) }, ["id", "pinned"]), result: "extension", run: pin },
   {
     name: "extensions.reload",
     mutates: true,
-    description: "Reload an extension",
+    description: t(`Reload an extension`),
     params: obj(EXTENSION, ["id"]),
     result: "{ok}",
     run: async (p, call) => {
@@ -169,5 +171,5 @@ export const SITE_METHODS: MethodSpec[] = [
       return { ok: true };
     },
   },
-  { name: "extensions.uninstall", mutates: true, description: "Remove an extension; Ardia asks the user to confirm first", params: obj(EXTENSION, ["id"]), result: "{removed}", run: uninstall },
+  { name: "extensions.uninstall", mutates: true, description: t(`Remove an extension; Ardia asks the user to confirm first`), params: obj(EXTENSION, ["id"]), result: "{removed}", run: uninstall },
 ];

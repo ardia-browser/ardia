@@ -1,6 +1,8 @@
 import { nativeModule } from "@ardia/shell";
+import { t } from "../lib/uiLanguage";
 
-const Focus = nativeModule("ArdiaFocus");
+
+const Focus = nativeModule(t(`ArdiaFocus`));
 
 export const setSwitcherCapture = (active: boolean) => Focus.setSwitcherCapture(active);
 const escapeOwners = new Set<string>();

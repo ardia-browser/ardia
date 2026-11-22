@@ -4,6 +4,8 @@ import { useBrowser, type BrowserState } from "../browser/store";
 import { appliedInterfaceScale, currentInterfaceScale } from "./interfaceScale";
 import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
+import { t } from "../../lib/uiLanguage";
+
 
 export const storedScaleWins = (s: Pick<BrowserState, "settings" | "settingsMeta">): boolean =>
   s.settingsMeta.chosen.includes("interfaceScale") || s.settings.interfaceScale !== INTERFACE_SCALE.default;
@@ -22,7 +24,7 @@ function push(scale: number) {
     },
     (error: unknown) => {
       if (asked === scale) refused = scale;
-      warnFor(consent, "[interfaceScale] couldn't apply the interface size", error);
+      warnFor(consent, t(`[interfaceScale] couldn't apply the interface size`), error);
     },
   );
 }

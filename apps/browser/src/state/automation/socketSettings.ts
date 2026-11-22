@@ -8,13 +8,15 @@ import { checkedByRules, hasSocketRule, searchProblem } from "./socketSettingRul
 import { id, ids, obj, text } from "./socketSchema";
 import { expect, now } from "./socketTargets";
 import { OpError } from "./workspaceTargets";
+import { t } from "../../lib/uiLanguage";
+
 
 const OWN_METHOD: Partial<Record<SettingKey, string>> = {
   defaultProfileId: "profiles.setDefault",
-  customSearchEngines: "search.add, search.update and search.remove",
-  cliControl: "nothing: the ardia command can't switch its own control",
-  allowJavaScriptFromAppleEvents: "nothing: it would let any AppleScript run script in every page",
-  extensionSearchEngines: "nothing: it mirrors the search engines extensions add, so install, turn off or remove the extension (extensions.*)",
+  customSearchEngines: t(`search.add, search.update and search.remove`),
+  cliControl: t(`nothing: the ardia command can't switch its own control`),
+  allowJavaScriptFromAppleEvents: t(`nothing: it would let any AppleScript run script in every page`),
+  extensionSearchEngines: t(`nothing: it mirrors the search engines extensions add, so install, turn off or remove the extension (extensions.*)`),
 };
 
 const whyNot = (key: string) => {
@@ -32,7 +34,7 @@ function getSettings(params: Record<string, unknown>) {
   return Object.fromEntries(keys.map((k) => [k, s[k as SettingKey]]));
 }
 
-const SHORTCUTS_INPUT = { type: "object", additionalProperties: { type: "string" }, description: 'Command id to a shortcut like "cmd+shift+t" or "⇧⌘T", or "" for none; settings.set adds these to the custom shortcuts' };
+const SHORTCUTS_INPUT = { type: "object", additionalProperties: { type: "string" }, description: t(`Command id to a shortcut like "cmd+shift+t" or "⇧⌘T", or "" for none; settings.set adds these to the custom shortcuts`) };
 
 const settingsSchema = () =>
   SETTING_KEYS.map((key) => ({
@@ -118,7 +120,7 @@ function addEngine(params: Record<string, unknown>) {
 
 function refuseLegacyEngine(engine: { id: string }) {
   if (engine.id === "custom" && !now().settings.customSearchEngines.some((e) => e.id === "custom")) {
-    throw new OpError("refused", "The Custom engine comes from the custom search URL setting, which the socket doesn't change; edit it in Settings › Search.");
+    throw new OpError("refused", t(`The Custom engine comes from the custom search URL setting, which the socket doesn't change; edit it in Settings › Search.`));
   }
 }
 
@@ -136,30 +138,30 @@ function removeEngine(params: Record<string, unknown>) {
   if (!was.custom) throw new OpError("refused", `${was.name} is built in; only engines added in Settings can be removed.`);
   refuseLegacyEngine(was);
   now().removeCustomEngine(was.id);
-  expect(!engineRows().some((e) => e.id === was.id), "the engine is still there.");
+  expect(!engineRows().some((e) => e.id === was.id), t(`the engine is still there.`));
   return { ok: true };
 }
 
-const ENGINE_FIELDS = { name: text("Its name"), keyword: text("The keyword that searches it from the address bar"), url: text("Its search URL, with %s for the query") };
+const ENGINE_FIELDS = { name: text(t(`Its name`)), keyword: text(t(`The keyword that searches it from the address bar`)), url: text(t(`Its search URL, with %s for the query`)) };
 
 export const SETTINGS_METHODS: MethodSpec[] = [
-  { name: "settings.get", mutates: false, description: "Settings and their values: every one, or the keys given", params: obj({ keys: ids("Setting keys", 200) }), result: "{key: value}", run: getSettings },
-  { name: "settings.schema", mutates: false, description: "Every setting: its JSON schema, default, whether the command can set it, and whether it syncs", params: obj({}), result: "[{key, schema, default, writable, why?, synced}]", run: settingsSchema },
+  { name: "settings.get", mutates: false, description: t(`Settings and their values: every one, or the keys given`), params: obj({ keys: ids(t(`Setting keys`), 200) }), result: t(`{key: value}`), run: getSettings },
+  { name: "settings.schema", mutates: false, description: t(`Every setting: its JSON schema, default, whether the command can set it, and whether it syncs`), params: obj({}), result: t(`[{key, schema, default, writable, why?, synced}]`), run: settingsSchema },
   {
     name: "settings.set",
     mutates: true,
-    description: "Change settings, as the Settings window does; the keys and values config.json takes. Nothing changes unless every value is valid",
-    params: obj({ values: { type: "object", description: "Setting key to new value (settings.schema lists them)" } }, ["values"]),
-    result: "{changed, values}",
+    description: t(`Change settings, as the Settings window does; the keys and values config.json takes. Nothing changes unless every value is valid`),
+    params: obj({ values: { type: "object", description: t(`Setting key to new value (settings.schema lists them)`) } }, ["values"]),
+    result: t(`{changed, values}`),
     run: (p) => apply(p.values as Record<string, unknown>, "settings.set"),
   },
-  { name: "settings.reset", mutates: true, description: "Put settings back to their defaults", params: obj({ keys: ids("Setting keys", 200) }, ["keys"]), result: "{changed, values}", run: reset },
-  { name: "search.engines", mutates: false, description: "Search engines: built in, added in Settings and from extensions; default marks the one searches use, and controlledBy names the extension that set it", params: obj({}), result: "[{id, name, keyword, url, custom, default, controlledBy?}]", run: engineRows },
+  { name: "settings.reset", mutates: true, description: t(`Put settings back to their defaults`), params: obj({ keys: ids(t(`Setting keys`), 200) }, ["keys"]), result: t(`{changed, values}`), run: reset },
+  { name: "search.engines", mutates: false, description: t(`Search engines: built in, added in Settings and from extensions; default marks the one searches use, and controlledBy names the extension that set it`), params: obj({}), result: t(`[{id, name, keyword, url, custom, default, controlledBy?}]`), run: engineRows },
   {
     name: "search.setDefault",
     mutates: true,
-    description: "Make a search engine the default; refused while an extension controls it, as Settings disables the picker",
-    params: obj({ id: id("An engine id from search.engines") }, ["id"]),
+    description: t(`Make a search engine the default; refused while an extension controls it, as Settings disables the picker`),
+    params: obj({ id: id(t(`An engine id from search.engines`)) }, ["id"]),
     result: "engine",
     run: (p) => {
       const engine = engineOf(p.id);
@@ -169,7 +171,7 @@ export const SETTINGS_METHODS: MethodSpec[] = [
       return engineOf(engine.id);
     },
   },
-  { name: "search.add", mutates: true, description: "Add a search engine", params: obj(ENGINE_FIELDS, ["name", "keyword", "url"]), result: "engine", run: addEngine },
-  { name: "search.update", mutates: true, description: "Change a search engine added in Settings", params: obj({ id: id("An engine id"), ...ENGINE_FIELDS }, ["id"]), result: "engine", run: updateEngine },
-  { name: "search.remove", mutates: true, description: "Remove a search engine added in Settings", params: obj({ id: id("An engine id") }, ["id"]), result: "{ok}", run: removeEngine },
+  { name: "search.add", mutates: true, description: t(`Add a search engine`), params: obj(ENGINE_FIELDS, ["name", "keyword", "url"]), result: "engine", run: addEngine },
+  { name: "search.update", mutates: true, description: t(`Change a search engine added in Settings`), params: obj({ id: id(t(`An engine id`)), ...ENGINE_FIELDS }, ["id"]), result: "engine", run: updateEngine },
+  { name: "search.remove", mutates: true, description: t(`Remove a search engine added in Settings`), params: obj({ id: id(t(`An engine id`)) }, ["id"]), result: "{ok}", run: removeEngine },
 ];

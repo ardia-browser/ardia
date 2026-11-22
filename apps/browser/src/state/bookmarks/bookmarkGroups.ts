@@ -4,8 +4,10 @@ import { bookmarkProfileId, plural } from "../browser/model";
 import { isRegularWindow, mainWindowFor } from "../windows/small";
 import { showToast } from "../app/toasts";
 import { bookmarkRoots, type BookmarkOwners } from "./bookmarks";
+import { t } from "../../lib/uiLanguage";
 
-export const ARC_HOLDER = " (Arc)";
+
+export const ARC_HOLDER = t(` (Arc)`);
 
 function sidebarWindow(s: BrowserState, profileId: string, near?: string | null): string | undefined {
   const w = near ? s.windows[near] : undefined;

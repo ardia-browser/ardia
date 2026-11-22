@@ -7,6 +7,8 @@ import { useSearchCompletedFor, useSearchCompletion } from "../../state/search/h
 import { useTabs } from "../../state/tabs/store";
 import { countUsage } from "../../state/telemetry/telemetry";
 import { font } from "../ui";
+import { t } from "../../lib/uiLanguage";
+
 
 export type TrayInputHandle = { focus(): void; blur(): void; clearsInPlace(): boolean };
 
@@ -26,8 +28,8 @@ type Props = {
 };
 
 const SHARED = {
-  placeholder: "Search…",
-  accessibilityLabel: "Search or Enter Address",
+  placeholder: t(`Search…`),
+  accessibilityLabel: t(`Search or Enter Address`),
   autoCapitalize: "none",
   autoCorrect: false,
   keyboardType: "web-search",

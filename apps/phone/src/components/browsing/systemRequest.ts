@@ -1,5 +1,7 @@
 import { ActionSheetIOS, Alert, type AlertButton } from "react-native";
 import { confirmAnswer, type Request, type RequestAnswer, type RequestDialog } from "../../state/page/pagePrompts";
+import { t } from "../../lib/uiLanguage";
+
 
 type Credentials = { login?: string; password?: string };
 
@@ -8,7 +10,7 @@ export function presentSystemRequest(request: Request, dialog: RequestDialog, an
   if (dialog.choices.length) {
     const cancelIndex = dialog.choices.length;
     ActionSheetIOS.showActionSheetWithOptions(
-      { title: dialog.title || undefined, message: dialog.message ?? undefined, options: [...dialog.choices.map((choice) => choice.title), dialog.cancel ?? "Cancel"], cancelButtonIndex: cancelIndex },
+      { title: dialog.title || undefined, message: dialog.message ?? undefined, options: [...dialog.choices.map((choice) => choice.title), dialog.cancel ?? t(`Cancel`)], cancelButtonIndex: cancelIndex },
       (index) => answer(index < cancelIndex ? dialog.choices[index]!.answer : dismiss),
     );
     return;

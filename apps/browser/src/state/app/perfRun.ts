@@ -1,7 +1,8 @@
+import { t } from "../../lib/uiLanguage";
 if (!(globalThis as { expo?: unknown }).expo) {
   try {
     const { TurboModuleRegistry } = require("react-native") as typeof import("react-native");
-    (TurboModuleRegistry.get("ExpoModulesCore") as { installModules?: () => void } | null)?.installModules?.();
+    (TurboModuleRegistry.get(t(`ExpoModulesCore`)) as { installModules?: () => void } | null)?.installModules?.();
   } catch {}
 }
 const modules = (globalThis as { expo?: { modules?: Record<string, Record<string, (...a: unknown[]) => unknown>> } }).expo?.modules;

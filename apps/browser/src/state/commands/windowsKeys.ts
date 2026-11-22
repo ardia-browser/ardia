@@ -2,6 +2,8 @@ import type { ShortcutModifier } from "../../platform/commands";
 import { FIRST_FUNCTION_KEY, ordered } from "./modifiers";
 import { GLYPH_KEYS, parseMacShortcut } from "./macGlyphs";
 import type { Shortcut } from "./shortcuts";
+import { t } from "../../lib/uiLanguage";
+
 
 export const WINDOWS_KEYS: Readonly<Record<string, readonly (string | null)[]>> = {
   openSettings: ["Ctrl+,"],
@@ -25,14 +27,14 @@ export const WINDOWS_KEYS: Readonly<Record<string, readonly (string | null)[]>> 
   copyUrlAsMarkdown: ["Ctrl+Alt+Shift+C"],
   findInPage: ["Ctrl+F"],
   findAndReplace: ["Ctrl+Shift+H"],
-  findNext: ["Ctrl+G", "F3"],
+  findNext: ["Ctrl+G", t(`F3`)],
   findPrevious: ["Ctrl+Shift+G", "Shift+F3"],
   useSelectionForFind: ["Ctrl+E"],
   jumpToSelection: [null],
   stop: ["Ctrl+."],
-  reload: ["Ctrl+R", "F5"],
+  reload: ["Ctrl+R", t(`F5`)],
   forceReload: ["Ctrl+Shift+R", "Ctrl+F5", "Shift+F5"],
-  toggleReader: ["Ctrl+Alt+R", "F9"],
+  toggleReader: ["Ctrl+Alt+R", t(`F9`)],
   toggleMinimalism: ["Ctrl+Alt+M"],
   toggleTabLayout: ["Ctrl+Shift+S"],
   toggleSidebar: ["Ctrl+S", "Ctrl+Shift+L", "Ctrl+Shift+F"],
@@ -43,13 +45,13 @@ export const WINDOWS_KEYS: Readonly<Record<string, readonly (string | null)[]>> 
   zoomReset: ["Ctrl+0"],
   zoomIn: ["Ctrl+Plus", "Ctrl+="],
   zoomOut: ["Ctrl+-"],
-  "std:toggleFullScreen:": [null, null, "F11"],
+  "std:toggleFullScreen:": [null, null, t(`F11`)],
   viewSource: ["Ctrl+U"],
   devTools: ["Ctrl+Shift+I"],
   inspectElements: ["Ctrl+Alt+C"],
   javaScriptConsole: ["Ctrl+Shift+J"],
-  toggleDevTools: ["F12"],
-  caretBrowsing: ["F7"],
+  toggleDevTools: [t(`F12`)],
+  caretBrowsing: [t(`F7`)],
   back: ["Ctrl+[", "Alt+Left"],
   forward: ["Ctrl+]", "Alt+Right"],
   nextTab: ["Ctrl+Shift+]", "Ctrl+}", "Ctrl+Tab", "Ctrl+PgDn", null],
@@ -95,7 +97,7 @@ export const windowsProfileSwitchKey = (n: number): string => `Alt+${n}`;
 
 const LAST_WINDOWS_FUNCTION_KEY = FIRST_FUNCTION_KEY + 23;
 
-const MODIFIER_NAMES: Partial<Record<ShortcutModifier, string>> = { control: "Ctrl", option: "Alt", shift: "Shift" };
+const MODIFIER_NAMES: Partial<Record<ShortcutModifier, string>> = { control: t(`Ctrl`), option: t(`Alt`), shift: t(`Shift`) };
 const MODIFIER_WORDS: Readonly<Record<string, ShortcutModifier>> = {
   ctrl: "control",
   control: "control",
@@ -107,24 +109,24 @@ const MODIFIER_WORDS: Readonly<Record<string, ShortcutModifier>> = {
   shift: "shift",
 };
 const KEY_NAMES: Readonly<Record<string, string>> = {
-  "": "Left",
-  "": "Right",
-  "": "Up",
-  "": "Down",
-  "": "PgUp",
-  "": "PgDn",
-  "": "Home",
-  "": "End",
-  "": "Del",
-  "": "Ins",
-  "\u0008": "Backspace",
-  "\u007f": "Backspace",
-  "\t": "Tab",
-  "\r": "Enter",
-  "\u0003": "Enter",
-  "\u001b": "Esc",
-  " ": "Space",
-  "+": "Plus",
+  "": t(`Left`),
+  "": t(`Right`),
+  "": t(`Up`),
+  "": t(`Down`),
+  "": t(`PgUp`),
+  "": t(`PgDn`),
+  "": t(`Home`),
+  "": t(`End`),
+  "": t(`Del`),
+  "": t(`Ins`),
+  "\u0008": t(`Backspace`),
+  "\u007f": t(`Backspace`),
+  "\t": t(`Tab`),
+  "\r": t(`Enter`),
+  "\u0003": t(`Enter`),
+  "\u001b": t(`Esc`),
+  " ": t(`Space`),
+  "+": t(`Plus`),
 };
 const KEY_WORDS: Readonly<Record<string, string>> = {
   left: "",

@@ -1,8 +1,10 @@
 import { nativeModule, type CalendarAccessRequest, type CalendarAuthorization, type CalendarParticipant, type SystemCalendar, type SystemCalendarEvent } from "@ardia/shell";
+import { t } from "../lib/uiLanguage";
+
 
 export type { CalendarAccessRequest, CalendarAuthorization, SystemCalendar, SystemCalendarEvent, CalendarParticipant };
 
-const Calendar = nativeModule("ArdiaCalendar");
+const Calendar = nativeModule(t(`ArdiaCalendar`));
 
 export const calendarAuthorization = (): CalendarAuthorization => Calendar.authorizationStatus();
 export const requestCalendarAccess = async (): Promise<CalendarAccessRequest> => {

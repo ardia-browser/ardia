@@ -10,6 +10,8 @@ import type { ConsentToken } from "../telemetry/client";
 import { noteSearchEngineOfferTaken } from "../telemetry/importRuns";
 import { noteSearchEngineImport, type SearchEngineImportOutcome } from "../telemetry/searchEngineImports";
 import { importNow, patchImport, type EngineNotice } from "./flow";
+import { t } from "../../lib/uiLanguage";
+
 
 export type ImportedEngineMatch = { id: string } | { custom: EngineInput } | null;
 
@@ -22,7 +24,7 @@ export function chromiumTemplateUrl(template: string): string {
     .trim()
     .replace(/^\{google:baseURL\}/, "https://www.google.com/")
     .replace(/\{searchTerms\??\}/g, "%s")
-    .replace(/\{(?:inputEncoding|outputEncoding)\}/g, "UTF-8")
+    .replace(/\{(?:inputEncoding|outputEncoding)\}/g, t(`UTF-8`))
     .replace(/\{[^{}]*\}/g, "")
     .replace(/&{2,}/g, "&")
     .replace(/\?&/, "?")

@@ -13,6 +13,8 @@ import { errorText } from "../../lib/errors";
 import { capture, consentToken, type ConsentToken } from "../telemetry/client";
 import { noteWebKitCount } from "../telemetry/engineSwitchCounts";
 import { tabEngine } from "../engines/engines";
+import { t } from "../../lib/uiLanguage";
+
 
 export { translation } from "../../platform/text";
 
@@ -123,7 +125,7 @@ export async function translatePassage(model: BlockTranslator, source: string, t
   if (!live()) return pieces.map(([id]) => [id, null]);
   if (pieces.length > 1) progress.unlinked++;
   const single = await model.translateBlocks(source, target, texts.map((text) => [text]), token);
-  if (live() && single.every((part) => !part)) throw new Error("the Mac's translation model didn't answer");
+  if (live() && single.every((part) => !part)) throw new Error(t(`the Mac's translation model didn't answer`));
   return pieces.map(([id], i) => [id, single[i]?.[0] ?? null]);
 }
 
@@ -147,7 +149,7 @@ async function drain(tabId: string, token: string, onProgress?: (done: number, t
   const released = untilReleased(tabId, token);
   const page = () => {
     const web = webviews.get(tabId);
-    if (!web) throw new Error("the tab closed");
+    if (!web) throw new Error(t(`the tab closed`));
     return web;
   };
   try {
@@ -203,7 +205,7 @@ export async function translatePage(tabId: string, target = defaultTarget()) {
   if (!translation || !tab || !webviews.get(tabId)) return;
   await revertPage(tabId, { quiet: true });
   const source = stateOf(tabId).source ?? (await pageLanguage(tabId))?.language ?? null;
-  if (!source) return toast(tabId, "Translation error (can't tell the page's language)");
+  if (!source) return toast(tabId, t(`Translation error (can't tell the page's language)`));
   if (baseLanguage(source) === baseLanguage(target)) return toast(tabId, `Translation error (the page is already in ${languageName(target)})`);
   let shown = false;
   let started = 0;
@@ -217,7 +219,7 @@ export async function translatePage(tabId: string, target = defaultTarget()) {
     await translation.open(mine);
     set(tabId, { status: "translating", source, target, token: mine });
     atStage(tabId, "start");
-    if (!(await webviews.get(tabId)?.evaluate<boolean>(translatorCall("start", mine)))) throw new Error("the page isn't ready");
+    if (!(await webviews.get(tabId)?.evaluate<boolean>(translatorCall("start", mine)))) throw new Error(t(`the page isn't ready`));
     started = Date.now();
     const done = await drain(
       tabId,

@@ -5,9 +5,11 @@ import { chatGPTEffortName, browseForMeSubtitle } from "../../state/browseForMe/
 import { popSettings } from "../../state/settings/nav";
 import { ConfirmDialog, font, PrimaryButton, settingsTint, space, useTheme } from "../ui";
 import { ButtonRow, Group, IconTile, PickerRow, SettingsPage, ValueRow } from "./SettingsKit";
+import { t } from "../../lib/uiLanguage";
 
-const PRIVACY = "Your search and the text of the pages it read go straight from this phone to OpenAI on your plan, never through a server of ours. Usage counts toward your ChatGPT limits.";
-const NEEDS_PLAN = "Needs ChatGPT Plus or Pro. Your search and the text of the pages it read go straight from this phone to OpenAI, never through a server of ours.";
+
+const PRIVACY = t(`Your search and the text of the pages it read go straight from this phone to OpenAI on your plan, never through a server of ours. Usage counts toward your ChatGPT limits.`);
+const NEEDS_PLAN = t(`Needs ChatGPT Plus or Pro. Your search and the text of the pages it read go straight from this phone to OpenAI, never through a server of ours.`);
 
 export function BrowseForMePage() {
   const theme = useTheme();
@@ -21,7 +23,7 @@ export function BrowseForMePage() {
   const model = account?.models.find((choice) => choice.slug === account.model) ?? account?.models[0] ?? null;
   const efforts = model?.efforts ?? [];
   return (
-    <SettingsPage title="Browse for Me" onBack={popSettings}>
+    <SettingsPage title={t(`Browse for Me`)} onBack={popSettings}>
       <View testID="browseForMeSettings" accessible style={styles.hero}>
         <IconTile icon="sparkleMagnifyingglass" tint={settingsTint.nightShade} side={56} />
         <Text accessibilityRole="header" style={[font.title3, styles.bold, { color: theme.label }]}>
@@ -31,34 +33,34 @@ export function BrowseForMePage() {
       </View>
       {connected && account ? (
         <Group footer={PRIVACY}>
-          <ValueRow title="ChatGPT" value={account.label ?? "ChatGPT account"} divider />
+          <ValueRow title={t(`ChatGPT`)} value={account.label ?? t(`ChatGPT account`)} divider />
           {account.models.length > 1 && model ? (
-            <PickerRow title="Model" options={account.models.map((choice) => ({ id: choice.slug, title: choice.name }))} selected={model.slug} divider onSelect={(slug) => void chooseChatGPTModel(slug)} />
+            <PickerRow title={t(`Model`)} options={account.models.map((choice) => ({ id: choice.slug, title: choice.name }))} selected={model.slug} divider onSelect={(slug) => void chooseChatGPTModel(slug)} />
           ) : model ? (
-            <ValueRow title="Model" value={model.name} divider />
+            <ValueRow title={t(`Model`)} value={model.name} divider />
           ) : null}
           {efforts.length ? (
             <PickerRow
-              title="Thinking"
-              options={[{ id: "", title: model?.defaultEffort ? `Automatic (${chatGPTEffortName(model.defaultEffort)})` : "Automatic" }, ...efforts.map((effort) => ({ id: effort, title: chatGPTEffortName(effort) }))]}
+              title={t(`Thinking`)}
+              options={[{ id: "", title: model?.defaultEffort ? `Automatic (${chatGPTEffortName(model.defaultEffort)})` : t(`Automatic`) }, ...efforts.map((effort) => ({ id: effort, title: chatGPTEffortName(effort) }))]}
               selected={account.effort ?? ""}
               divider
               onSelect={(effort) => void chooseChatGPTEffort(effort || null)}
             />
           ) : null}
-          <ButtonRow title="Check Usage" divider onPress={openChatGPTUsage} />
-          <ButtonRow title="Disconnect ChatGPT" destructive onPress={() => setConfirmsDisconnect(true)} />
+          <ButtonRow title={t(`Check Usage`)} divider onPress={openChatGPTUsage} />
+          <ButtonRow title={t(`Disconnect ChatGPT`)} destructive onPress={() => setConfirmsDisconnect(true)} />
         </Group>
       ) : (
         <View style={styles.connect}>
-          <PrimaryButton title={account?.signingIn ? "Waiting for ChatGPT…" : "Continue with ChatGPT"} onPress={() => void connectChatGPT()} />
+          <PrimaryButton title={account?.signingIn ? t(`Waiting for ChatGPT…`) : t(`Continue with ChatGPT`)} onPress={() => void connectChatGPT()} />
           {account?.problem ? <Text style={[font.footnote, { color: theme.destructive }]}>{account.problem}</Text> : null}
           <Text style={[font.footnote, { color: theme.secondaryLabel }]}>{NEEDS_PLAN}</Text>
         </View>
       )}
       {confirmsDisconnect ? (
         <ConfirmDialog
-          confirmation={{ title: "Disconnect ChatGPT?", message: "Browse for Me goes back to answering on this phone.", action: "Disconnect", run: () => void disconnectChatGPT() }}
+          confirmation={{ title: t(`Disconnect ChatGPT?`), message: t(`Browse for Me goes back to answering on this phone.`), action: t(`Disconnect`), run: () => void disconnectChatGPT() }}
           onClose={() => setConfirmsDisconnect(false)}
         />
       ) : null}

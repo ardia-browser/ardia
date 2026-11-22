@@ -2,12 +2,14 @@ import { COMMANDS, STANDARD_ITEMS, type CommandSpec } from "./commandCatalog";
 import { MODIFIER_GLYPHS, parseMacShortcut } from "./macGlyphs";
 import { comboKey, type Shortcut } from "./shortcuts";
 import { formatWindowsShortcut, parseWindowsShortcut, windowsKeysPaired, windowsModifiers, windowsProfileSwitchKey } from "./windowsKeys";
+import { t } from "../../lib/uiLanguage";
+
 
 type Keyed = Pick<CommandSpec, "keys" | "variants">;
 
 const KEYS_WITHOUT_A_COMMAND: Readonly<Record<string, string>> = { "⌘Q": "Alt+F4" };
 const UNICODE_MINUS = "\u2212";
-const MODIFIER_NAMES = { control: "Ctrl", option: "Alt", shift: "Shift" } as const;
+const MODIFIER_NAMES = { control: t(`Ctrl`), option: t(`Alt`), shift: t(`Shift`) } as const;
 const GLYPH_MODIFIERS = new Map(Object.entries(MODIFIER_GLYPHS).map(([modifier, glyph]) => [glyph, modifier as keyof typeof MODIFIER_GLYPHS]));
 
 let byMacCombo: Map<string, Shortcut | null> | undefined;

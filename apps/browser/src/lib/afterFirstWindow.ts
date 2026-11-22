@@ -1,3 +1,4 @@
+import { t } from "./uiLanguage";
 const FALLBACK_MS = 5000;
 
 let waiting: (() => void)[] | null = [];
@@ -8,7 +9,7 @@ function run(tasks: (() => void)[]) {
     try {
       task();
     } catch (error) {
-      console.warn("[launch] deferred work failed", error);
+      console.warn(t(`[launch] deferred work failed`), error);
     }
   }
 }

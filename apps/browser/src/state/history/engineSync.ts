@@ -13,6 +13,8 @@ import { migrateLegacyFile } from "../app/legacyFiles";
 import { during } from "../app/jobActivity";
 import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
+import { t } from "../../lib/uiLanguage";
+
 
 const LEGACY_FILE = "history.json";
 const LEGACY_TOLERANCE_MS = 60_000;
@@ -22,7 +24,7 @@ export const GAP_REPORT_MS = 30_000;
 const MAX_GAP_REPORTS = 10;
 
 const store = () => useBrowser.getState();
-const profileLabel = (engine: string) => (engine ? "another profile" : "the default profile");
+const profileLabel = (engine: string) => (engine ? t(`another profile`) : t(`the default profile`));
 
 export type HistoryGap = `${HistoryChange["kind"]}-${"unloaded" | "moving"}` | "modified-unknown" | "visit-untitled";
 export type NoteGap = (gap: HistoryGap, count?: number) => void;

@@ -3,6 +3,8 @@ import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent, Scroll
 import { isPluginPath } from "../../lib/pluginChecks";
 import type { PluginNode } from "../../lib/pluginProtocol";
 import type { ColorRole, Space, TypeSize } from "../ui";
+import { t } from "../../lib/uiLanguage";
+
 
 export type HandlerRef = { __handler: string };
 export type Child = PluginNode | string;

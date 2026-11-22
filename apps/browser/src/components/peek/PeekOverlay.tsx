@@ -23,6 +23,8 @@ import { SMALL_BAR_HEIGHT } from "../../state/windows/small";
 import { switchOn } from "../../state/app/switches";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { endPeekToolbarPreview, previewPeekToolbar } from "../../state/peek/toolbarPreview";
+import { t } from "../../lib/uiLanguage";
+
 
 const SIDE_GAP = space.m;
 const BEGIN_RETRIES = 30;
@@ -35,9 +37,9 @@ const sideRoomFor = (buttons: PeekButtons) => ({ left: buttons === "left" ? SIDE
 
 function peekButtonList(windowId: string, splitFull: boolean): SmallBarButton[] {
   return [
-    ...(splitViewAvailable ? [{ icon: "rectangle.split.2x1", disabled: splitFull, tooltip: "Open in Split View", onPress: () => openPeekInSplit(windowId) }] : []),
+    ...(splitViewAvailable ? [{ icon: "rectangle.split.2x1", disabled: splitFull, tooltip: t(`Open in Split View`), onPress: () => openPeekInSplit(windowId) }] : []),
     { icon: "arrow.up.left.and.arrow.down.right", tooltip: `Open as Tab (${keyText("⌘O")})`, onPress: () => openPeekAsTab(windowId) },
-    { icon: "xmark", tooltip: "Close (Esc)", onPress: () => dismissPeek(windowId) },
+    { icon: "xmark", tooltip: t(`Close (Esc)`), onPress: () => dismissPeek(windowId) },
   ];
 }
 
@@ -217,7 +219,7 @@ function PeekCard({
         >
           <View collapsable={false} style={StyleSheet.absoluteFill}>
             <Pressable
-              accessibilityLabel="Close Peek"
+              accessibilityLabel={t(`Close Peek`)}
               onPress={() => dismissPeek(windowId)}
               style={{ flex: 1, borderRadius: card.radius, backgroundColor: theme.dark ? PEEK_SCRIM.dark : PEEK_SCRIM.light }}
             />
@@ -316,5 +318,5 @@ function PeekBar({ windowId, tabId, withButtons }: { windowId: string; tabId: st
   const splitFull = usePeekSplitFull(windowId);
   if (!tab) return null;
   const host = tab.url ? breadcrumb(tab.url).host : "";
-  return <SmallBar fieldLeft={SMALL_INSET} field={<PageLabel tab={tab} label={host ? `Peek: ${host}` : "Peek"} />} buttons={withButtons ? peekButtonList(windowId, splitFull) : []} />;
+  return <SmallBar fieldLeft={SMALL_INSET} field={<PageLabel tab={tab} label={host ? `Peek: ${host}` : t(`Peek`)} />} buttons={withButtons ? peekButtonList(windowId, splitFull) : []} />;
 }

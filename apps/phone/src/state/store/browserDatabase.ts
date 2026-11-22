@@ -1,14 +1,16 @@
 import { TAB_ORIGINS, type BrowserTab, type TabOrigin } from "../tabs/tabModels.ts";
 import type { SqlDatabase, SqlValue } from "../../lib/sqlDatabase.ts";
+import { t } from "../../lib/uiLanguage";
+
 
 export type VisitTransition = "typed" | "link" | "backForward" | "formSubmit" | "restored" | "other";
 
 export type Visit = { id: number; url: string; title: string; visitedAt: number; profileSyncId: string | null; transition: VisitTransition };
 
 const TAB_COLUMNS =
-  "id, url, title, created, lastActive, archivedAt, position, profileSyncId, faviconUrl, themeColorHex, snapshotFileName, origin, receivedKey, receivedFromDevice, pinnedKey";
+  t(`id, url, title, created, lastActive, archivedAt, position, profileSyncId, faviconUrl, themeColorHex, snapshotFileName, origin, receivedKey, receivedFromDevice, pinnedKey`);
 
-const VISIT_COLUMNS = "id, url, title, visitedAt, profileSyncId, transition";
+const VISIT_COLUMNS = t(`id, url, title, visitedAt, profileSyncId, transition`);
 
 type TabRow = Omit<BrowserTab, "isPrivate" | "origin"> & { origin: string };
 
@@ -57,7 +59,7 @@ export const searchArchivedTabs = (db: SqlDatabase, text: string, limit: number)
     .map(tabOf);
 };
 
-export const countArchivedTabs = (db: SqlDatabase) => db.first<{ n: number }>("SELECT count(*) AS n FROM tabs WHERE archivedAt IS NOT NULL")?.n ?? 0;
+export const countArchivedTabs = (db: SqlDatabase) => db.first<{ n: number }>(t(`SELECT count(*) AS n FROM tabs WHERE archivedAt IS NOT NULL`))?.n ?? 0;
 
 export function writeTabs(db: SqlDatabase, put: readonly BrowserTab[], remove: readonly string[]) {
   const stored = put.filter((tab) => !tab.isPrivate);
@@ -65,8 +67,8 @@ export function writeTabs(db: SqlDatabase, put: readonly BrowserTab[], remove: r
   db.transaction(() => {
     for (const tab of stored) db.run(`INSERT OR REPLACE INTO tabs (${TAB_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, tabValues(tab));
     for (const id of remove) {
-      db.run("DELETE FROM tabs WHERE id = ?", [id]);
-      db.run("DELETE FROM tab_state WHERE id = ?", [id]);
+      db.run(t(`DELETE FROM tabs WHERE id = ?`), [id]);
+      db.run(t(`DELETE FROM tab_state WHERE id = ?`), [id]);
     }
   });
 }
@@ -74,25 +76,25 @@ export function writeTabs(db: SqlDatabase, put: readonly BrowserTab[], remove: r
 export function deleteArchivedTabs(db: SqlDatabase): string[] {
   let removed: string[] = [];
   db.transaction(() => {
-    removed = db.all<{ id: string }>("SELECT id FROM tabs WHERE archivedAt IS NOT NULL").map((r) => r.id);
-    db.run("DELETE FROM tab_state WHERE id IN (SELECT id FROM tabs WHERE archivedAt IS NOT NULL)");
-    db.run("DELETE FROM tabs WHERE archivedAt IS NOT NULL");
+    removed = db.all<{ id: string }>(t(`SELECT id FROM tabs WHERE archivedAt IS NOT NULL`)).map((r) => r.id);
+    db.run(t(`DELETE FROM tab_state WHERE id IN (SELECT id FROM tabs WHERE archivedAt IS NOT NULL)`));
+    db.run(t(`DELETE FROM tabs WHERE archivedAt IS NOT NULL`));
   });
   return removed;
 }
 
 export function expiredArchivedIds(db: SqlDatabase, cutoff: number, keep: number): string[] {
-  const old = db.all<{ id: string }>("SELECT id FROM tabs WHERE archivedAt IS NOT NULL AND archivedAt < ?", [cutoff]);
-  const beyond = db.all<{ id: string }>("SELECT id FROM tabs WHERE archivedAt IS NOT NULL ORDER BY archivedAt DESC LIMIT -1 OFFSET ?", [keep]);
+  const old = db.all<{ id: string }>(t(`SELECT id FROM tabs WHERE archivedAt IS NOT NULL AND archivedAt < ?`), [cutoff]);
+  const beyond = db.all<{ id: string }>(t(`SELECT id FROM tabs WHERE archivedAt IS NOT NULL ORDER BY archivedAt DESC LIMIT -1 OFFSET ?`), [keep]);
   return [...new Set([...old, ...beyond].map((r) => r.id))];
 }
 
-export const readTabState = (db: SqlDatabase, id: string) => db.first<{ data: string }>("SELECT data FROM tab_state WHERE id = ?", [id])?.data ?? null;
+export const readTabState = (db: SqlDatabase, id: string) => db.first<{ data: string }>(t(`SELECT data FROM tab_state WHERE id = ?`), [id])?.data ?? null;
 
 export const writeTabState = (db: SqlDatabase, id: string, data: string | null) =>
-  data === null ? db.run("DELETE FROM tab_state WHERE id = ?", [id]) : db.run("INSERT OR REPLACE INTO tab_state (id, data) VALUES (?, ?)", [id, data]);
+  data === null ? db.run(t(`DELETE FROM tab_state WHERE id = ?`), [id]) : db.run(t(`INSERT OR REPLACE INTO tab_state (id, data) VALUES (?, ?)`), [id, data]);
 
-export const maxVisitId = (db: SqlDatabase) => db.first<{ n: number | null }>("SELECT max(id) AS n FROM visits")?.n ?? 0;
+export const maxVisitId = (db: SqlDatabase) => db.first<{ n: number | null }>(t(`SELECT max(id) AS n FROM visits`))?.n ?? 0;
 
 export const insertVisit = (db: SqlDatabase, visit: Visit) =>
   db.run(`INSERT OR REPLACE INTO visits (${VISIT_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?)`, [
@@ -105,7 +107,7 @@ export const insertVisit = (db: SqlDatabase, visit: Visit) =>
   ]);
 
 export const updateVisit = (db: SqlDatabase, visit: Visit) =>
-  db.run("UPDATE visits SET url = ?, title = ? WHERE id = ?", [visit.url, visit.title, visit.id]);
+  db.run(t(`UPDATE visits SET url = ?, title = ? WHERE id = ?`), [visit.url, visit.title, visit.id]);
 
 export const newestVisits = (db: SqlDatabase, limit: number) =>
   db.all<Visit>(`SELECT ${VISIT_COLUMNS} FROM visits ORDER BY visitedAt DESC, id DESC LIMIT ?`, [limit]);
@@ -118,10 +120,10 @@ export const searchVisits = (db: SqlDatabase, text: string, limit: number) => {
   );
 };
 
-export const deleteVisitsBefore = (db: SqlDatabase, cutoff: number) => db.run("DELETE FROM visits WHERE visitedAt < ?", [cutoff]);
+export const deleteVisitsBefore = (db: SqlDatabase, cutoff: number) => db.run(t(`DELETE FROM visits WHERE visitedAt < ?`), [cutoff]);
 
 export const deleteVisitsSince = (db: SqlDatabase, since: number | null) =>
-  since === null ? db.run("DELETE FROM visits") : db.run("DELETE FROM visits WHERE visitedAt >= ?", [since]);
+  since === null ? db.run(t(`DELETE FROM visits`)) : db.run(t(`DELETE FROM visits WHERE visitedAt >= ?`), [since]);
 
 export function knownReceivedKeys(db: SqlDatabase, keys: readonly string[]): Set<string> {
   if (!keys.length) return new Set();
@@ -148,34 +150,34 @@ export class ImportMismatch extends Error {}
 export function writeImport(db: SqlDatabase, rows: ImportRows, markerKey: string, marker: string) {
   db.transaction(() => {
     for (const tab of rows.tabs) db.run(`INSERT INTO tabs (${TAB_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, tabValues(tab));
-    for (const state of rows.states) db.run("INSERT OR REPLACE INTO tab_state (id, data) VALUES (?, ?)", [state.id, state.data]);
+    for (const state of rows.states) db.run(t(`INSERT OR REPLACE INTO tab_state (id, data) VALUES (?, ?)`), [state.id, state.data]);
     let id = maxVisitId(db);
     for (const visit of rows.visits) {
       id += 1;
       db.run(`INSERT INTO visits (${VISIT_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?)`, [id, visit.url, visit.title, visit.visitedAt, visit.profileSyncId, visit.transition]);
     }
-    for (const [key, value] of Object.entries(rows.preferences)) db.run("INSERT OR REPLACE INTO preferences (key, value) VALUES (?, ?)", [key, value]);
-    const tabs = db.first<{ n: number }>("SELECT count(*) AS n FROM tabs")?.n ?? 0;
-    const visits = db.first<{ n: number }>("SELECT count(*) AS n FROM visits")?.n ?? 0;
-    const states = db.first<{ n: number }>("SELECT count(*) AS n FROM tab_state")?.n ?? 0;
+    for (const [key, value] of Object.entries(rows.preferences)) db.run(t(`INSERT OR REPLACE INTO preferences (key, value) VALUES (?, ?)`), [key, value]);
+    const tabs = db.first<{ n: number }>(t(`SELECT count(*) AS n FROM tabs`))?.n ?? 0;
+    const visits = db.first<{ n: number }>(t(`SELECT count(*) AS n FROM visits`))?.n ?? 0;
+    const states = db.first<{ n: number }>(t(`SELECT count(*) AS n FROM tab_state`))?.n ?? 0;
     if (tabs !== rows.tabs.length || visits !== rows.visits.length || states !== rows.states.length) {
       throw new ImportMismatch(`tabs ${tabs}/${rows.tabs.length} visits ${visits}/${rows.visits.length} states ${states}/${rows.states.length}`);
     }
-    db.run("INSERT OR REPLACE INTO preferences (key, value) VALUES (?, ?)", [markerKey, marker]);
+    db.run(t(`INSERT OR REPLACE INTO preferences (key, value) VALUES (?, ?)`), [markerKey, marker]);
   });
 }
 
 export class TransactionLost extends Error {}
 
 export async function asyncTransaction(db: SqlDatabase, work: () => Promise<void>) {
-  db.exec("BEGIN IMMEDIATE");
+  db.exec(t(`BEGIN IMMEDIATE`));
   try {
     await work();
     if (!db.inTransaction()) throw new TransactionLost();
-    db.exec("COMMIT");
+    db.exec(t(`COMMIT`));
   } catch (error) {
     try {
-      db.exec("ROLLBACK");
+      db.exec(t(`ROLLBACK`));
     } catch {}
     throw error;
   }
@@ -192,8 +194,8 @@ export function existingTabIds(db: SqlDatabase, ids: readonly string[]): Set<str
 }
 
 export function bringOpenTabToFront(db: SqlDatabase, id: string) {
-  const newest = db.first<{ n: number | null }>("SELECT max(lastActive) AS n FROM tabs WHERE archivedAt IS NULL AND id != ?", [id])?.n ?? null;
-  if (newest !== null) db.run("UPDATE tabs SET lastActive = ? WHERE id = ? AND archivedAt IS NULL AND lastActive <= ?", [newest + 1, id, newest]);
+  const newest = db.first<{ n: number | null }>(t(`SELECT max(lastActive) AS n FROM tabs WHERE archivedAt IS NULL AND id != ?`), [id])?.n ?? null;
+  if (newest !== null) db.run(t(`UPDATE tabs SET lastActive = ? WHERE id = ? AND archivedAt IS NULL AND lastActive <= ?`), [newest + 1, id, newest]);
 }
 
 export const insertNewTab = (db: SqlDatabase, tab: BrowserTab) =>
@@ -208,15 +210,15 @@ export const countTabStates = (db: SqlDatabase, ids: readonly string[]) => {
   return n;
 };
 
-export const countVisits = (db: SqlDatabase) => db.first<{ n: number }>("SELECT count(*) AS n FROM visits")?.n ?? 0;
+export const countVisits = (db: SqlDatabase) => db.first<{ n: number }>(t(`SELECT count(*) AS n FROM visits`))?.n ?? 0;
 
 export function readPreferences(db: SqlDatabase): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const row of db.all<{ key: string; value: string }>("SELECT key, value FROM preferences")) out[row.key] = row.value;
+  for (const row of db.all<{ key: string; value: string }>(t(`SELECT key, value FROM preferences`))) out[row.key] = row.value;
   return out;
 }
 
 export function writePreference(db: SqlDatabase, key: string, value: string | null) {
-  if (value === null) db.run("DELETE FROM preferences WHERE key = ?", [key]);
-  else db.run("INSERT OR REPLACE INTO preferences (key, value) VALUES (?, ?)", [key, value]);
+  if (value === null) db.run(t(`DELETE FROM preferences WHERE key = ?`), [key]);
+  else db.run(t(`INSERT OR REPLACE INTO preferences (key, value) VALUES (?, ?)`), [key, value]);
 }

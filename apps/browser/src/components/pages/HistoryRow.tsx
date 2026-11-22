@@ -10,6 +10,8 @@ import { historyScroll } from "./historyLayout";
 import { openHistoryRowMenu } from "../../state/history/historyMenus";
 import { hostLabel, timeLabel } from "./PageLayout";
 import { historyRow, pagesColors, pageType } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 const DAY_HEADER = { position: "absolute", left: 0, right: 0, height: historyRow.header, justifyContent: "flex-end", paddingBottom: space.m, paddingHorizontal: historyRow.headerInset } as const;
 const ROW_FRAME = { height: historyRow.height, paddingHorizontal: space.xl } as const;
@@ -129,8 +131,8 @@ export const HistoryRow = memo(function HistoryRow({
                 openUrl(entry.url, windowId, openModeFor(modifiers));
               }}
               accessibilityActions={[
-                { name: "select", label: selected ? "Deselect" : "Select" },
-                { name: "menu", label: "More Actions" },
+                { name: "select", label: selected ? t(`Deselect`) : t(`Select`) },
+                { name: "menu", label: t(`More Actions`) },
               ]}
               onAccessibilityAction={(e) => {
                 if (e.nativeEvent.actionName === "select") onToggle(entry.url, false);
@@ -147,7 +149,7 @@ export const HistoryRow = memo(function HistoryRow({
               </Text>
             </Pressable>
           </MouseArea>
-          <HoverSlot hovered={showControls} width={historyRow.menuBox} hover={<Button variant="icon" icon="ellipsis" size="l" onPress={() => void menu()} tooltip="More actions" />} />
+          <HoverSlot hovered={showControls} width={historyRow.menuBox} hover={<Button variant="icon" icon="ellipsis" size="l" onPress={() => void menu()} tooltip={t(`More actions`)} />} />
         </View>
       </ContextMenuArea>
       {!last && <Divider thick style={SEPARATOR} />}

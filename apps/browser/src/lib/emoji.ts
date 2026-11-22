@@ -1,11 +1,13 @@
 import { EMOJI_GROUPS } from "./emojiData";
+import { t } from "./uiLanguage";
+
 
 export type EmojiEntry = { emoji: string; name: string; nameWords: string; words: string };
 export type EmojiSection = { title: string; emoji: EmojiEntry[] };
 
 let sections: EmojiSection[] | null = null;
 
-const fold = (text: string) => text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+const fold = (text: string) => text.normalize(t(`NFD`)).replace(/\p{M}/gu, "").toLowerCase();
 
 const wordsOf = (text: string) => ` ${fold(text).replace(/[.,:]/g, " ")}`;
 

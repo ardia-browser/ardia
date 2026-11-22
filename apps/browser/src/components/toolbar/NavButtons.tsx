@@ -16,6 +16,8 @@ import { withShortcut } from "../../state/commands/commandShortcuts";
 import { GLYPH, HISTORY_GLYPH, HISTORY_BUTTON_MOTION, RELOAD_BUTTON_MOTION, SYMBOL_BOX } from "./tokens";
 import { showReloadMenu } from "../../state/site/reloadMenu";
 import { useStableHandler } from "./useStableHandler";
+import { t } from "../../lib/uiLanguage";
+
 
 const ICON_CENTER = { width: GLYPH, height: GLYPH, alignItems: "center" as const, justifyContent: "center" as const };
 const ICON_LAYER = { ...ICON_CENTER, position: "absolute" as const };
@@ -96,7 +98,7 @@ const ReloadGlyph = memo(function ReloadGlyph({ loading, color }: { loading: boo
       opacity: stateMotion.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
       transform: [
         { scale: stateMotion.interpolate({ inputRange: [0, 1], outputRange: [1, RELOAD_BUTTON_MOTION.hiddenScale] }) },
-        { rotate: returnMotion.interpolate({ inputRange: [0, 1], outputRange: ["0deg", `${RELOAD_BUTTON_MOTION.returnRotation}deg`] }) },
+        { rotate: returnMotion.interpolate({ inputRange: [0, 1], outputRange: [t(`0deg`), `${RELOAD_BUTTON_MOTION.returnRotation}deg`] }) },
       ],
     };
     const stop = { opacity: stateMotion, transform: [{ scale: stateMotion.interpolate({ inputRange: [0, 1], outputRange: [RELOAD_BUTTON_MOTION.hiddenScale, 1] }) }] };
@@ -156,7 +158,7 @@ export const ReloadButton = memo(function ReloadButton({
       disabled={!tab.url}
       onPress={onPress}
       onContextMenu={onContextMenu}
-      tooltip={loading ? "Stop Loading This Page" : withShortcut("Refresh", reloadHint)}
+      tooltip={loading ? t(`Stop Loading This Page`) : withShortcut(t(`Refresh`), reloadHint)}
     >
       {glyph}
     </Button>
@@ -260,7 +262,7 @@ export const HistoryButton = memo(function HistoryButton({
         onPress={onPress}
         onLongPress={openMenu}
         onContextMenu={openMenu}
-        tooltip={withShortcut(direction > 0 ? "Go Forward" : closesTab ? "Close Tab and Go Back" : "Go Back", historyHint)}
+        tooltip={withShortcut(direction > 0 ? t(`Go Forward`) : closesTab ? t(`Close Tab and Go Back`) : t(`Go Back`), historyHint)}
       >
         {face}
       </Button>

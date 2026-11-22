@@ -1,17 +1,18 @@
+import { t } from "../../lib/uiLanguage";
 export type FileKind = "image" | "video" | "audio" | "pdf" | "archive" | "document";
 
 export const FILE_SYMBOLS: Record<FileKind, string> = { image: "photo", video: "film", audio: "waveform", pdf: "doc.richtext", archive: "doc.zipper", document: "doc" };
 
 const UNITS = [
-  { name: "KB", size: 1e3, digits: 0 },
-  { name: "MB", size: 1e6, digits: 1 },
-  { name: "GB", size: 1e9, digits: 2 },
-  { name: "TB", size: 1e12, digits: 2 },
+  { name: t(`KB`), size: 1e3, digits: 0 },
+  { name: t(`MB`), size: 1e6, digits: 1 },
+  { name: t(`GB`), size: 1e9, digits: 2 },
+  { name: t(`TB`), size: 1e12, digits: 2 },
 ] as const;
 
 export function fileSizeText(bytes: number): string {
-  if (bytes <= 0) return "Zero KB";
-  if (bytes < 1000) return bytes === 1 ? "1 byte" : `${bytes} bytes`;
+  if (bytes <= 0) return t(`Zero KB`);
+  if (bytes < 1000) return bytes === 1 ? t(`1 byte`) : `${bytes} bytes`;
   let unit: (typeof UNITS)[number] = UNITS[0];
   for (const next of UNITS) if (bytes >= next.size) unit = next;
   const value = bytes / unit.size;
@@ -24,7 +25,7 @@ const clockFormats = new Map<string, Intl.DateTimeFormat>();
 function clockFormat(locale?: string): Intl.DateTimeFormat {
   const key = locale ?? "";
   let format = clockFormats.get(key);
-  if (!format) clockFormats.set(key, (format = new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit" })));
+  if (!format) clockFormats.set(key, (format = new Intl.DateTimeFormat(locale, { hour: "numeric", minute: t(`2-digit`) })));
   return format;
 }
 

@@ -5,6 +5,8 @@ import { Panel } from "./Panel";
 import { Text } from "./Text";
 import { useTheme } from "./theme";
 import { perLook, proseLineHeight, radius, shadow, sheetWidth, space, type SheetSize, type Space } from "./tokens";
+import { t } from "../../lib/uiLanguage";
+
 
 const CENTERED: StyleProp<ViewStyle> = [StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center" }];
 
@@ -81,7 +83,7 @@ export function Dialog({
   );
 }
 
-const DIALOG_KEYS = [{ key: "Escape" }, { key: "Enter" }, { key: "Tab" }, { key: "Tab", shiftKey: true }];
+const DIALOG_KEYS = [{ key: t(`Escape`) }, { key: t(`Enter`) }, { key: t(`Tab`) }, { key: t(`Tab`), shiftKey: true }];
 const targetTag = (event: object) => (event as { target?: number }).target;
 
 function DialogKeys({ onDismiss, onSubmit, pad, children }: { onDismiss?: () => void; onSubmit: () => void; pad: Space; children: ReactNode }) {

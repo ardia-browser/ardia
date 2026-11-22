@@ -49,6 +49,8 @@ import { useDownloadsPlacement } from "./useDownloadsPlacement";
 import { sameSize, useSettled, type Size } from "../ui/useSettled";
 import { DOWNLOADS_LIST as L, FILE_ICON_GLYPH_SHARE, MAGNET, useDownloadsColors } from "./tokens";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
+import { t } from "../../lib/uiLanguage";
+
 
 const rowFill = (theme: Theme, hovered: boolean, pressed: boolean) => (hovered || pressed ? menuRowFill(theme, pressed) : undefined);
 
@@ -125,7 +127,7 @@ function DownloadsPanel({ windowId, closing, onClosed }: { windowId: string; clo
                   <Button
                     variant="text"
                     look="panel"
-                    title="Clear"
+                    title={t(`Clear`)}
                     onPress={() => {
                       setOpen(false);
                       clearDownloads(windowId);
@@ -146,7 +148,7 @@ function DownloadsPanel({ windowId, closing, onClosed }: { windowId: string; clo
               )}
               <MenuSeparator />
               <FooterButton
-                title="View all downloads"
+                title={t(`View all downloads`)}
                 onPress={() => {
                   setOpen(false);
                   openInternalPage("downloads", windowId);
@@ -229,7 +231,7 @@ function DownloadRow({ d, windowId }: { d: Download; windowId: string }) {
                     tone={exists ? "textPrimary" : "textSecondary"}
                     style={{ lineHeight: PANEL.titleLine, textDecorationLine: exists ? "none" : "line-through" }}
                   >
-                    {d.filename || "Preparing…"}
+                    {d.filename || t(`Preparing…`)}
                   </Text>
                   {d.state === "downloading" && !blocked ? (
                     <ProgressTrack value={Math.max(progress, L.progressMin)} height={L.progressHeight} tone={d.paused ? "textTertiary" : "accent"} style={PROGRESS_GAP} />
@@ -240,17 +242,17 @@ function DownloadRow({ d, windowId }: { d: Download; windowId: string }) {
                 </View>
                 {blocked ? (
                   <View style={{ flexDirection: "row", marginRight: -L.textButtonPad }}>
-                    <Button variant="text" look="panel" title="Keep" onPress={() => void keepDownload(d.id)} />
-                    <Button variant="text" look="panel" title="Discard" onPress={() => void cancelDownload(d.id)} />
+                    <Button variant="text" look="panel" title={t(`Keep`)} onPress={() => void keepDownload(d.id)} />
+                    <Button variant="text" look="panel" title={t(`Discard`)} onPress={() => void cancelDownload(d.id)} />
                   </View>
                 ) : d.state === "downloading" ? (
                   <View style={{ flexDirection: "row", marginRight: -L.rowButtonBearing }}>
                     <RowButton
                       icon={d.paused ? "play.circle.fill" : "pause.circle.fill"}
                       onPress={() => void (d.paused ? resumeDownload(d.id) : pauseDownload(d.id))}
-                      tooltip={d.paused ? "Resume" : "Pause"}
+                      tooltip={d.paused ? t(`Resume`) : t(`Pause`)}
                     />
-                    <RowButton icon="xmark.circle.fill" onPress={() => void cancelDownload(d.id)} tooltip="Cancel" />
+                    <RowButton icon="xmark.circle.fill" onPress={() => void cancelDownload(d.id)} tooltip={t(`Cancel`)} />
                   </View>
                 ) : done ? (
                   <HoverSlot

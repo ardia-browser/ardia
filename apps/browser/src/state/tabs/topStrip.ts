@@ -13,6 +13,8 @@ import { renameFolder } from "../sidebar/tileFolderUi";
 import { chooseFromMenu, type ChoiceItem } from "../app/menuChoice";
 import { entryKey, parseEntry } from "../sidebar/entryKey";
 import { splitTabIds, splitTabIdsOf } from "../splits/splits";
+import { t } from "../../lib/uiLanguage";
+
 
 export function tuckTarget(s: BrowserState, windowId: string, profileId: string, groupId: string): string | undefined {
   const members = new Set(s.groups[groupId]?.tabIds ?? []);
@@ -136,7 +138,7 @@ export function tileFolderMenuItems(s: BrowserState, windowId: string, folderId:
   return [
     ...folderMembers(s, windowId, folderId).map((id): FolderMenuItem => ({ value: { tabId: id }, title: tabLabel(s.tabs[id]!), checked: id === activeId })),
     { separator: true },
-    { id: "rename", title: "Rename…", symbol: "pencil" },
+    { id: "rename", title: t(`Rename…`), symbol: "pencil" },
   ];
 }
 

@@ -64,6 +64,11 @@ import { useMaterialTheme } from "./components/ui/materialTheme";
 import type { Design } from "./lib/design";
 import { onMaterialBackSwiped } from "./components/ui/MaterialSurfaces";
 import { useTabs } from "./state/tabs/store";
+import { getLocales } from "expo-localization";
+import { adoptUiLanguage, t } from "./lib/uiLanguage";
+
+adoptUiLanguage(getLocales()[0]?.languageTag ?? "");
+
 
 export default function App() {
   useState(() =>
@@ -155,7 +160,7 @@ export function Surfaces() {
   const front = settingsScreen ? null : frontSheet(settingsOpen && !SYSTEM_SHEETS, SYSTEM_SHEETS && (sheet === "archive" || sheet === "spaces") ? null : sheet, libraryOpen && !SYSTEM_SHEETS && !libraryCovers);
   const sheetCovers = front !== null || systemSheet || settingsScreen;
   const theme = useTheme();
-  countRender("Surfaces");
+  countRender(t(`Surfaces`));
   const incognito = useIncognito();
   const layer = inkLayer({ onboarding, voice, sheet: sheetCovers, searching: searching || libraryCovers, surface });
   const incognitoScheme = useMaterialTheme(true).scheme;

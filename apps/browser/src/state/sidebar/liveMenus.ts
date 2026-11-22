@@ -21,14 +21,16 @@ import { moveLiveFolder, pinnedSequence } from "./pinnedOrder";
 import { entryKey } from "./entryKey";
 import { activeTabId } from "../browser/model";
 import { hintWhen, sections, sep, withAlternate } from "./menuParts";
+import { t } from "../../lib/uiLanguage";
+
 
 export function newLiveFolderMenuItem(): MenuItem {
   return {
     id: "live",
-    title: "New Live Folder",
+    title: t(`New Live Folder`),
     children: [
-      { id: "live:pullRequests", title: "Pull Requests", symbol: "arrow.triangle.pull" },
-      { id: "live:documents", title: "Documents", symbol: "doc.text" },
+      { id: "live:pullRequests", title: t(`Pull Requests`), symbol: "arrow.triangle.pull" },
+      { id: "live:documents", title: t(`Documents`), symbol: "doc.text" },
     ],
   };
 }
@@ -88,38 +90,38 @@ export function liveFolderMenuItems(windowId: string, folderId: string): MenuIte
   return sections(
     [
       { id: "status", title: statusText(folderId), enabled: false },
-      { id: "refresh", title: "Refresh", symbol: "arrow.clockwise", enabled: s.status[folderId]?.state !== "updating" },
-      { id: "read", title: "Mark All as Read", enabled: (s.unread[folderId]?.length ?? 0) > 0 },
+      { id: "refresh", title: t(`Refresh`), symbol: "arrow.clockwise", enabled: s.status[folderId]?.state !== "updating" },
+      { id: "read", title: t(`Mark All as Read`), enabled: (s.unread[folderId]?.length ?? 0) > 0 },
     ],
     pr
       ? [
-          { id: "filter:authored", title: "Created by Me", checked: folder.filters.authored },
-          { id: "filter:reviewRequests", title: "Awaiting My Review", checked: folder.filters.reviewRequests },
+          { id: "filter:authored", title: t(`Created by Me`), checked: folder.filters.authored },
+          { id: "filter:reviewRequests", title: t(`Awaiting My Review`), checked: folder.filters.reviewRequests },
           {
             id: "repos",
-            title: "Repositories",
+            title: t(`Repositories`),
             enabled: repos.length > 0,
             children: sections(
               [
-                { id: "repos:all", title: "Show All Repositories", enabled: hiddenRepos.size > 0, keepOpen: true },
-                { id: "repos:none", title: "Hide All Repositories", enabled: repos.some((r) => !hiddenRepos.has(r.key)), keepOpen: true },
+                { id: "repos:all", title: t(`Show All Repositories`), enabled: hiddenRepos.size > 0, keepOpen: true },
+                { id: "repos:none", title: t(`Hide All Repositories`), enabled: repos.some((r) => !hiddenRepos.has(r.key)), keepOpen: true },
               ],
               repos.map((r) => ({ id: `repo:${r.key}`, title: oneSource ? r.name : `${r.name} (${SOURCES[r.source].name})`, checked: !hiddenRepos.has(r.key), keepOpen: true })),
-              [{ id: "repos:new", title: "Show New Repositories", checked: folder.showNewRepos, keepOpen: true }],
+              [{ id: "repos:new", title: t(`Show New Repositories`), checked: folder.showNewRepos, keepOpen: true }],
             ),
           },
         ]
       : [],
     pr
       ? [
-          { id: "option:groupStacks", title: "Group Stacked Pull Requests", checked: folder.groupStacks },
-          { id: "option:showCompleted", title: "Show Completed", checked: folder.showCompleted },
+          { id: "option:groupStacks", title: t(`Group Stacked Pull Requests`), checked: folder.groupStacks },
+          { id: "option:showCompleted", title: t(`Show Completed`), checked: folder.showCompleted },
         ]
       : [],
     [
       {
         id: "sources",
-        title: pr ? "Pull Requests" : "Documents",
+        title: pr ? t(`Pull Requests`) : t(`Documents`),
         symbol: pr ? "arrow.triangle.pull" : "doc.text",
         children: SOURCE_GROUPS[folder.kind].map((id) => ({
           id: `source:${id}`,
@@ -127,18 +129,18 @@ export function liveFolderMenuItems(windowId: string, folderId: string): MenuIte
           checked: folder.sources.includes(id),
         })),
       },
-      { id: "settings", title: "Live Folder Settings…", symbol: "gearshape" },
+      { id: "settings", title: t(`Live Folder Settings…`), symbol: "gearshape" },
     ],
     [
-      { id: "up", title: "Move Up", symbol: "arrow.up", enabled: canMoveUp },
-      { id: "down", title: "Move Down", enabled: canMoveDown },
+      { id: "up", title: t(`Move Up`), symbol: "arrow.up", enabled: canMoveUp },
+      { id: "down", title: t(`Move Down`), enabled: canMoveDown },
     ],
     [
-      { id: "rename", title: "Rename…", symbol: "pencil" },
-      { id: "icon", title: folder.icon ? "Change Icon…" : "Add Icon…", symbol: "photo" },
-      { id: "color", title: "Color", symbol: "paintpalette", children: folderColorItems(folder.color ?? null) },
+      { id: "rename", title: t(`Rename…`), symbol: "pencil" },
+      { id: "icon", title: folder.icon ? t(`Change Icon…`) : t(`Add Icon…`), symbol: "photo" },
+      { id: "color", title: t(`Color`), symbol: "paintpalette", children: folderColorItems(folder.color ?? null) },
     ],
-    [{ id: "delete", title: "Delete Live Folder", symbol: "trash" }],
+    [{ id: "delete", title: t(`Delete Live Folder`), symbol: "trash" }],
   );
 }
 
@@ -187,7 +189,7 @@ export async function openLiveFolderMenu(windowId: string, folderId: string) {
     updateFolder(folderId, { sources: sources.length ? sources : folder.sources });
     void refreshFolder(folderId);
   } else if (choice === "rename") {
-    const name = await prompt({ title: "Rename Live Folder", value: folder.name, placeholder: "Live folder name", confirmTitle: "Rename", windowId });
+    const name = await prompt({ title: t(`Rename Live Folder`), value: folder.name, placeholder: t(`Live folder name`), confirmTitle: t(`Rename`), windowId });
     if (name?.trim()) updateFolder(folderId, { name: name.trim() });
   } else if (choice === "icon") void openIconPicker(windowId, { kind: "live", id: `livefolder|${folderId}` });
   else if (choice.startsWith(COLOR_CHOICE)) {
@@ -207,13 +209,13 @@ export function liveItemMenuItems(windowId: string, folderId: string, item: Live
   const shown = !!tabId && activeTabId(useBrowser.getState(), windowId) === tabId;
   return sections(
     [
-      { id: "open", title: tabId ? "Show Tab" : "Open", symbol: "arrow.up.forward.square" },
-      { id: "background", title: "Open in Background", enabled: !tabId },
-      ...(tabId ? [{ id: "backToPin", title: "Back to Pinned URL", symbol: "arrow.uturn.backward", enabled: liveTabAway(tabId), ...hintWhen(shown, "returnToPinnedUrl") }] : []),
+      { id: "open", title: tabId ? t(`Show Tab`) : t(`Open`), symbol: "arrow.up.forward.square" },
+      { id: "background", title: t(`Open in Background`), enabled: !tabId },
+      ...(tabId ? [{ id: "backToPin", title: t(`Back to Pinned URL`), symbol: "arrow.uturn.backward", enabled: liveTabAway(tabId), ...hintWhen(shown, "returnToPinnedUrl") }] : []),
     ],
-    withAlternate({ id: "copy", title: "Copy Link", symbol: "link" }, { id: "copyMd", title: "Copy Link as Markdown", symbol: "link" }, null),
-    [{ id: "unread", title: unread ? "Mark as Read" : "Mark as Unread", symbol: unread ? "circle" : "circle.fill" }],
-    tabId ? [{ id: "close", title: "Close", symbol: "xmark", ...hintWhen(shown, "closeTab") }] : [],
+    withAlternate({ id: "copy", title: t(`Copy Link`), symbol: "link" }, { id: "copyMd", title: t(`Copy Link as Markdown`), symbol: "link" }, null),
+    [{ id: "unread", title: unread ? t(`Mark as Read`) : t(`Mark as Unread`), symbol: unread ? "circle" : "circle.fill" }],
+    tabId ? [{ id: "close", title: t(`Close`), symbol: "xmark", ...hintWhen(shown, "closeTab") }] : [],
   );
 }
 
@@ -249,28 +251,28 @@ export function calendarMenuItem(): MenuItem {
   const calendarItems = (list: typeof calendars): MenuItem[] => list.map((c) => ({ id: `cal:toggle:${c.id}`, title: c.title, swatch: c.color, checked: !hidden.has(c.id) }));
   return {
     id: "cal",
-    title: "Calendar",
+    title: t(`Calendar`),
     symbol: "calendar",
     children: [
-      ...(calendarConnected() ? [] : [{ id: "cal:connect", title: "Connect Calendar…", symbol: "calendar.badge.plus" }, sep]),
+      ...(calendarConnected() ? [] : [{ id: "cal:connect", title: t(`Connect Calendar…`), symbol: "calendar.badge.plus" }, sep]),
       {
         id: "cal:alerts",
-        title: "Show Next Meeting Alert",
+        title: t(`Show Next Meeting Alert`),
         children: ALERT_LEADS.map((l) => ({ id: `cal:lead:${l.value}`, title: l.title, checked: settings.alertLead === l.value })),
       },
-      { id: "cal:preview", title: "Show Calendar Preview", checked: settings.showPreview },
-      { id: "cal:badge", title: "Show Time to Next Meeting", checked: settings.showTimeToNext },
+      { id: "cal:preview", title: t(`Show Calendar Preview`), checked: settings.showPreview },
+      { id: "cal:badge", title: t(`Show Time to Next Meeting`), checked: settings.showTimeToNext },
       {
         id: "cal:active",
-        title: "Active Calendars",
+        title: t(`Active Calendars`),
         enabled: calendars.length > 0,
         children: [
-          ...(owned.length ? [{ id: "cal:h1", title: "My Calendars", enabled: false }, ...calendarItems(owned)] : []),
-          ...(others.length ? [sep, { id: "cal:h2", title: "Other Calendars", enabled: false }, ...calendarItems(others)] : []),
+          ...(owned.length ? [{ id: "cal:h1", title: t(`My Calendars`), enabled: false }, ...calendarItems(owned)] : []),
+          ...(others.length ? [sep, { id: "cal:h2", title: t(`Other Calendars`), enabled: false }, ...calendarItems(others)] : []),
         ],
       },
       sep,
-      { id: "cal:settings", title: "Calendar Settings…", symbol: "gearshape" },
+      { id: "cal:settings", title: t(`Calendar Settings…`), symbol: "gearshape" },
     ],
   };
 }

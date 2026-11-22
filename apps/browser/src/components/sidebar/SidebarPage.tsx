@@ -10,7 +10,7 @@ import { newTab } from "../../state/tabs/actions";
 import { sidebarListLengthNow, useSidebarCells } from "../../state/sidebar/hooks";
 import { useSidebarField, useSidebarPart } from "../../state/sidebar/chrome";
 import { SIDEBAR_PLAYER_GROWTH, SIDEBAR_PLAYER_HEIGHT, SidebarPlayer, usePlayerMotion, useSidebarPlayerTab } from "../media/SidebarPlayer";
-import { usePageStyle } from "../../state/windows/profilePager";
+import { useOffsetKeptAway, usePageInReach, usePageStyle } from "../../state/windows/profilePager";
 import { useSharedTilesStyle } from "../../state/sidebar/sharedTiles";
 import { DragScope, useDragPage, useDragController, useDragging, usePinnedCount } from "./DragProvider";
 import { openSidebarMenu } from "../../state/sidebar/menus";
@@ -64,7 +64,8 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
     const frame = requestAnimationFrame(() => setBeside(false));
     return () => cancelAnimationFrame(frame);
   }, [beside]);
-  const offScreen = beside && !current;
+  const inReach = usePageInReach(windowId, profileId, current);
+  const offScreen = (beside && !current) || !inReach;
   const playerTab = useSidebarPlayerTab(windowId, profileId, current);
   const playerHeight = playerTab ? SIDEBAR_PLAYER_HEIGHT : 0;
   const playerMotion = usePlayerMotion();
@@ -123,6 +124,7 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
   useEffect(() => () => forgetRowsScrolled(windowRef.current), []);
   const page = useRef<PageGeometry>({ scrollY: 0, viewport: 0, regions: { pinnedGroups: 0, list: 0 } }).current;
   const scrollView = useRef<ScrollView | null>(null);
+  const keptOffset = useOffsetKeptAway(inReach, () => page.scrollY);
   const [listViewport] = useState<ListViewport>(() => ({
     band: () => (page.viewport ? withOverscan(page.scrollY - LIST_PAD - page.regions.list, page.viewport) : null),
   }));
@@ -214,6 +216,7 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
                           contentContainerStyle={{ flexGrow: 1, width, paddingHorizontal: layout.sidebarInset, paddingTop: LIST_PAD, paddingBottom: docked ? GLOW_ROOM : 0 }}
                         >
                           <PageRows
+                            key={offScreen ? "away" : "near"}
                             windowId={windowId}
                             profileId={profileId}
                             current={current}
@@ -229,6 +232,7 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
                             regions={page.regions}
                             viewport={listViewport}
                           />
+                          {keptOffset ? <View style={{ height: keptOffset + page.viewport }} /> : null}
                           <View key={`${docked ? "docked" : "inline"}${canDock ? "" : ":fixed"}${resting ? ":resting" : ""}`} style={{ flexGrow: 1, minHeight: !canDock && inlineNewTab ? 24 : 0 }}>
                             <ContextMenuArea style={{ flex: 1 }} onLayout={onSlack} onContextMenu={() => void openSidebarMenu(windowId)}>
                               <WindowDragRegion style={{ flex: 1 }} titleBarDoubleClick={false} onRegionDoubleClick={() => toggleNewTabBar(windowId) || newTab(windowId, { newTabCommand: true })} />

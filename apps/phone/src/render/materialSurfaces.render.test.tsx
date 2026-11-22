@@ -1,6 +1,6 @@
 import { Dimensions, Platform, StyleSheet, Text } from "react-native";
 import { act, type ReactTestInstance } from "react-test-renderer";
-import { ConfirmSheet, DesignProvider, Dialog, Sheet, useTheme } from "../components/ui";
+import { ConfirmSheet, DesignProvider, Dialog, Menu, pointPlacer, Sheet, useTheme } from "../components/ui";
 import { rolesFromScheme } from "../components/ui/materialRoles";
 import { materialMenuFill, materialSheetMs } from "../components/ui/MaterialSurfaces";
 import { SEEDED_SCHEMES } from "../lib/material/schemes";
@@ -172,4 +172,15 @@ onAndroid("in dark, drawn menus sit on surfaceContainerHighest, a tone above the
   expect(materialMenuFill(dark, true)).toBe(dark.surfaceContainerHighest);
   expect(materialMenuFill(dark, true)).not.toBe(dark.surfaceContainerHigh);
   expect(materialMenuFill(LIGHT, false)).toBe(LIGHT.surfaceContainer);
+});
+
+onAndroid("a wider Material submenu stays inside the right screen edge", () => {
+  const items = [{ label: "More", children: [{ label: "A much longer submenu action label", onPress: () => undefined }] }];
+  const root = material(<Menu items={items} placer={pointPlacer({ x: 340, y: 120 }, { width: 360, height: 800 }, { top: 0, bottom: 0, left: 0, right: 0 }, 112)} onDismiss={() => undefined} />);
+  const rows = root.root.findAll((node) => node.props.accessibilityLabel === "More" && typeof node.props.onPress === "function");
+  act(() => rows[0]!.props.onPress());
+  const panel = flat(host(root, "materialMenu"));
+  expect(panel.width).toBe(280);
+  expect(Number(panel.left) + Number(panel.width)).toBeLessThanOrEqual(352);
+  unmount(root);
 });

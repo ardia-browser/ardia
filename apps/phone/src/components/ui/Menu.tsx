@@ -39,7 +39,7 @@ export const onDrawnMenuOpened = (handler: (privately: boolean) => void) => {
 
 export const countDrawnMenuOpened = (privately = false) => drawnMenuOpened(privately);
 
-export type MenuPlacer = (height: number, keepBelow?: boolean) => { place: ViewStyle; origin: string; maxHeight?: number; shrink?: { x: number; y: number } };
+export type MenuPlacer = (height: number, keepBelow?: boolean, pageWidth?: number) => { place: ViewStyle; origin: string; maxHeight?: number; shrink?: { x: number; y: number } };
 
 const MenuFrostContext = createContext<string | null>(SURFACES_FROST);
 
@@ -84,7 +84,7 @@ function MaterialMenu({ items, place, placer, onDismiss, origin = "top", shown =
   const [content, setContent] = useState<number | null>(null);
   const revealed = shown && (placer === undefined || content !== null);
   const side = useRef<boolean | undefined>(undefined);
-  const spot = placer ? placer(content ?? materialMenuHeight(rows, page !== null), side.current) : { place: place ?? {}, origin, maxHeight: undefined, shrink: undefined };
+  const spot = placer ? placer(content ?? materialMenuHeight(rows, page !== null), side.current, width) : { place: place ?? {}, origin, maxHeight: undefined, shrink: undefined };
   if (revealed && placer && side.current === undefined) side.current = spot.origin.includes("top");
   const firstRow = useRef<ViewInstance>(null);
   const chosen = useRef(false);
@@ -418,28 +418,29 @@ type Insets = { top: number; bottom: number; left: number; right: number };
 
 export function pointPlacer(at: Point, screen: { width: number; height: number }, insets: Insets, width: number, limits?: MenuLimits): MenuPlacer {
   const host = { x: 0, y: 0, width: screen.width, height: screen.height };
-  return (height, keepBelow) => {
-    const spot = menuAt(at, host, insetRect(host, insets), width, height, MENU_MARGIN, keepBelow, limits);
-    return { place: { left: spot.left, top: spot.top, width }, origin: spot.origin, maxHeight: spot.height };
+  return (height, keepBelow, pageWidth = width) => {
+    const spot = menuAt(at, host, insetRect(host, insets), pageWidth, height, MENU_MARGIN, keepBelow, limits);
+    return { place: { left: spot.left, top: spot.top, width: pageWidth }, origin: spot.origin, maxHeight: spot.height };
   };
 }
 
 function triggerPlacer(row: Rect, host: Rect, insets: Insets, width: number, align?: MenuAlign, clearAnchor = false): MenuPlacer {
-  return (height, keepBelow) => {
-    const spot = menuOnTrigger(row, host, host.width > 0 ? insetRect(host, insets) : host, width, height, MENU_MARGIN, keepBelow, align, clearAnchor);
-    return { place: { left: spot.left, top: spot.top, width }, origin: spot.origin, maxHeight: spot.height, shrink: menuShrink(row, width, spot.height) };
+  return (height, keepBelow, pageWidth = width) => {
+    const spot = menuOnTrigger(row, host, host.width > 0 ? insetRect(host, insets) : host, pageWidth, height, MENU_MARGIN, keepBelow, align, clearAnchor);
+    return { place: { left: spot.left, top: spot.top, width: pageWidth }, origin: spot.origin, maxHeight: spot.height, shrink: menuShrink(row, pageWidth, spot.height) };
   };
 }
 
 function fixedPlacer(place: ViewStyle, host: Rect, insets: Insets, width: number): MenuPlacer {
-  return (height) => {
-    if (typeof place.top !== "number") return { place: { ...place, width }, origin: place.bottom !== undefined ? "bottom" : "top" };
+  return (height, _keepBelow, pageWidth = width) => {
+    if (typeof place.top !== "number") return { place: { ...place, width: pageWidth }, origin: place.bottom !== undefined ? "bottom" : "top" };
     const room = host.width > 0 ? insetRect(host, insets) : host;
     const roomTop = room.y + MENU_MARGIN;
     const roomBottom = room.y + room.height - MENU_MARGIN;
     const fitted = Math.min(height, roomBottom - roomTop);
     const top = Math.max(roomTop, Math.min(place.top, roomBottom - fitted)) - host.y;
-    return { place: { ...place, width, top }, origin: "top", maxHeight: fitted };
+    const left = typeof place.left === "number" ? Math.max(room.x + MENU_MARGIN, Math.min(place.left, room.x + room.width - MENU_MARGIN - pageWidth)) - host.x : place.left;
+    return { place: { ...place, width: pageWidth, top, left }, origin: "top", maxHeight: fitted };
   };
 }
 

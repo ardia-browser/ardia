@@ -134,7 +134,7 @@ export const BrowsingScreen = memo(function BrowsingScreen({ tab }: { tab: Brows
   const fullscreen = usePages((s) => s.fullscreen[tab.id] ?? false);
   const coveredBottom = design === "material" ? materialCoveredBottom(collapse.collapses, barSlotHeight, fullscreen || finding || searching) : obscuredBottom({ follows: Platform.OS === "android", bar: barSlotHeight, pill: barCenterFromBottom(insets.bottom, design) - floatingBarLayout.control / 2 + hostPillLayout.height, collapsed: collapse.collapsed, cleared: fullscreen || finding || searching });
   const obscured = underBar ? { top: insets.top, bottom: coveredBottom } : undefined;
-  const materialSummaryBottom = fullscreen || finding || searching ? insets.bottom : collapse.collapsed ? insets.bottom + materialBottomBar.inset + materialBarPill.height : barSlotHeight;
+  const materialSummaryBottom = fullscreen || searching ? insets.bottom : collapse.collapsed ? insets.bottom + materialBottomBar.inset + materialBarPill.height : barSlotHeight;
   const summaryBottomInset = design === "material" ? materialSummaryBottom : undefined;
   const painted = useSharedValue(false);
   useEffect(() => {

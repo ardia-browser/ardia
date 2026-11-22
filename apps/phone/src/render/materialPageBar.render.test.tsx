@@ -388,6 +388,15 @@ onAndroid("a wallpaper scheme change re-themes the bar", () => {
   unmount(root);
 });
 
+onAndroid("an open Material Find bar keeps the summary card clear of it", () => {
+  const root = screen();
+  act(() => usePageUi.setState({ findOpen: true }));
+  settle();
+  const pageView = root.root.findAll((found) => found.props.pageId !== undefined && found.props.obscuredInsets !== undefined)[0]!;
+  expect(pageView.props.summaryBottomInset).toBe(barHeight(24, "material"));
+  unmount(root);
+});
+
 onAndroid("scrolling a page down folds the Material bottom bar into a host pill by default, and the pill or scrolling up brings it back", () => {
   scrolled("up");
   const root = screen();

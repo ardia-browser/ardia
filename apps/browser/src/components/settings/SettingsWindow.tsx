@@ -5,7 +5,7 @@ import { useTheme } from "../ui/theme";
 import { useProfile } from "../../state/browser/hooks";
 import { usePluginTitle } from "../../state/plugins/hooks";
 import { trackSettingsSection } from "../../state/telemetry/track";
-import { clearSettingsReveal, flashSetting, settingsSearchHost, useSettingsSearch } from "../../state/settings/searchState";
+import { clearSettingsReveal, currentSettingsSearch, flashSetting, settingsSearchHost, useSettingsSearch } from "../../state/settings/searchState";
 import { anchorView, onAnchorRegistered } from "./anchors";
 import { findSetting, resolveSettingId, PANES, paneTitle } from "./settingsIndex";
 import { SettingsPaneContext } from "./Form";
@@ -21,7 +21,7 @@ import { ShortcutsPane } from "./panes/Shortcuts";
 import { TabsPane } from "./panes/Tabs";
 import { useSettingsSheet } from "../../state/settings/sheet";
 import { SettingsConsentSheet } from "../plugins/SettingsConsentSheet";
-import { goToSettingsPane, SETTINGS_WINDOW_ID, settingsBack, settingsForward, useSettingsNav, type SettingsPane, type SettingsPlace } from "../../state/settings/settingsWindows";
+import { currentSettingsPlace, goToSettingsPane, SETTINGS_WINDOW_ID, settingsBack, settingsForward, useSettingsNav, type SettingsPane, type SettingsPlace } from "../../state/settings/settingsWindows";
 import { closeProfileIconPickerIn } from "../../state/profiles/iconPicker";
 import { ProfileIconPicker } from "../profiles/ProfileIconPicker";
 import { settingsProfileFor } from "../../state/extensions/store";
@@ -83,7 +83,7 @@ export function SettingsWindow() {
     const animated = switched.current === key;
     let active = true;
     let frame: number | null = null;
-    const stillCurrent = () => active && useSettingsSearch.getState().reveal === reveal && shownKey(useSettingsNav.getState()) === key;
+    const stillCurrent = () => active && currentSettingsSearch().reveal === reveal && shownKey(currentSettingsPlace()) === key;
     const measure = () => {
       frame = null;
       if (!stillCurrent()) return;

@@ -43,8 +43,7 @@ function fixture() {
       effects[index] = { deps, cleanup: run() };
     });
   };
-  const useSettingsNav = Object.assign(() => nav, { getState: () => nav });
-  const useSettingsSearch = Object.assign(select => select({ query, reveal }), { getState: () => ({ query, reveal }) });
+  const currentSettingsSearch = () => ({ query, reveal });
   const ui = new Proxy({ space: { ml: 12, m: 8, l: 16, xxxl: 24 }, NativeFormContext: { Provider: dummy } }, { get: (own, key) => own[key] ?? dummy });
   const modules = {
     "react": { useEffect, useLayoutEffect: () => {}, useRef, useState: value => [value, () => {}] },
@@ -55,9 +54,12 @@ function fixture() {
     "../../state/browser/hooks": { useProfile: () => undefined },
     "../../state/plugins/hooks": { usePluginTitle: id => id ? `Plugin: ${id}` : null },
     "../../state/settings/paneData": { usePaneLoaded: () => false, preparePane: async () => {} },
-    "../../state/settings/settingsWindows": { useSettingsNav, SETTINGS_WINDOW_ID: "settings" },
+    "../../state/settings/settingsWindows": {
+      useSettingsNav: () => nav, currentSettingsPlace: () => nav, SETTINGS_WINDOW_ID: "settings",
+    },
     "../../state/settings/searchState": {
-      useSettingsSearch, clearSettingsReveal: () => { reveal = null; },
+      useSettingsSearch: select => select(currentSettingsSearch()), currentSettingsSearch,
+      clearSettingsReveal: () => { reveal = null; },
       flashSetting: id => { flashes.push(id); reveal = null; },
       settingsSearchHost: () => {},
     },

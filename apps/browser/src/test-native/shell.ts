@@ -659,6 +659,8 @@ const plugins: Modules["ArdiaPlugins"] = {
     const text = pluginHost.files[`${name}/${path}`];
     return text === undefined ? { ok: false, reason: "the file wasn't found" } : { ok: true, text };
   },
+  setCredentialProvider: async () => ({ ok: true }),
+  forgetCredentialProvider: async () => ({ ok: true }),
   addListener: pluginEvents.addListener,
 };
 

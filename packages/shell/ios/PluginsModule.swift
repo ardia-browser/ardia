@@ -57,7 +57,7 @@ public class PluginsModule: Module {
     }
 
     AsyncFunction("officialPlugins") { () -> [[String: Any]]? in
-      PluginFolders.officialPin().map { pin in pin.entries.map { ["name": $0.name, "version": $0.version, "folderId": $0.folderId] } }
+      PluginFolders.officialPin().map { pin in pin.entries.map(Self.pinnedValue) }
     }
     .runOnQueue(DispatchQueue.global(qos: .utility))
 
@@ -108,6 +108,15 @@ public class PluginsModule: Module {
     OnDestroy {
       PluginHost.shared.detach(self)
     }
+  }
+
+  static func pinnedValue(_ entry: OfficialPinEntry) -> [String: Any] {
+    var value: [String: Any] = ["name": entry.name, "version": entry.version, "folderId": entry.folderId]
+    if !entry.credentialPrograms.isEmpty { value["credentialPrograms"] = entry.credentialPrograms }
+    for (key, text) in [("title", entry.title), ("blurb", entry.blurb), ("icon", entry.icon), ("symbol", entry.symbol), ("accent", entry.accent)] where !text.isEmpty {
+      value[key] = text
+    }
+    return value
   }
 
   private static func folder() -> String {

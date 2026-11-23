@@ -16,6 +16,11 @@ struct OfficialPinEntry: Equatable {
   var trustedArtifacts: Set<String> = []
   var bundledDigests: Set<String> = []
   var credentialPrograms: [String] = []
+  var title = ""
+  var blurb = ""
+  var icon = ""
+  var symbol = ""
+  var accent = ""
 
   var folderId: String { OfficialPin.folderId(sha256) }
 
@@ -38,10 +43,11 @@ struct OfficialPin: Equatable {
 
   let entries: [OfficialPinEntry]
   var reservedProviders: [String: String] = [:]
+  var ownerTitles: [String: String] = [:]
 
   func credentialRefusal(name: String, official: Bool, program: String?) -> String? {
     if !official {
-      if let owner = reservedProviders[name] { return "\(name) is kept for Ardia's official \(owner) plugin." }
+      if let owner = providerTitle(name) { return "\(name) is kept for Ardia's official \(owner) plugin." }
       return program == nil ? nil : "Ardia runs password managers only from its official plugins."
     }
     guard let program else { return nil }
@@ -49,7 +55,27 @@ struct OfficialPin: Equatable {
     return entry.credentialPrograms.contains(program) ? nil : "\(program) isn't a program this plugin may run."
   }
 
+  func providerTitle(_ name: String) -> String? {
+    guard let owner = reservedProviders[name] else { return nil }
+    let title = ownerTitles[owner] ?? ""
+    return title.isEmpty ? owner : title
+  }
+
+  var providerTitles: [String: String] {
+    Dictionary(uniqueKeysWithValues: reservedProviders.keys.compactMap { name in providerTitle(name).map { (name, $0) } })
+  }
+
   static func folderId(_ sha256: String) -> String { folderPrefix + sha256 }
+
+  private static func label(_ value: Any?, limit: Int) -> String {
+    guard let text = value as? String, text.count <= limit, !text.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else { return "" }
+    return text
+  }
+
+  private static func accent(_ value: Any?) -> String {
+    let text = label(value, limit: 7)
+    return text.range(of: "^#[0-9A-Fa-f]{6}$", options: .regularExpression) == nil ? "" : text
+  }
 
   static func sha(ofFolderId folderId: String) -> String? {
     guard folderId.hasPrefix(folderPrefix) else { return nil }
@@ -74,8 +100,10 @@ struct OfficialPin: Equatable {
     var entries: [OfficialPinEntry] = []
     var reserved: Set<String> = []
     var providers: [String: String] = [:]
+    var ownerTitles: [String: String] = [:]
     for plugin in plugins {
       guard let owner = plugin["name"] as? String else { return nil }
+      ownerTitles[owner] = label(plugin["title"], limit: 60)
       let names = plugin["reservedProviders"] as? [String] ?? []
       guard plugin["reservedProviders"] == nil || plugin["reservedProviders"] is [String], names.allSatisfy(PluginPrograms.isName) else { return nil }
       for name in names {
@@ -119,9 +147,10 @@ struct OfficialPin: Equatable {
       entries.append(
         OfficialPinEntry(
           name: name, version: version, url: url, sha256: sha, reservedPrograms: programs, legacyInstall: legacy, trustedArtifacts: trustedArtifacts, bundledDigests: bundledDigests,
-          credentialPrograms: credentialPrograms))
+          credentialPrograms: credentialPrograms, title: label(plugin["title"], limit: 60), blurb: label(plugin["blurb"], limit: 200), icon: label(plugin["icon"], limit: 64),
+          symbol: label(plugin["symbol"], limit: 64), accent: accent(plugin["accent"])))
     }
-    return OfficialPin(entries: entries, reservedProviders: providers)
+    return OfficialPin(entries: entries, reservedProviders: providers, ownerTitles: ownerTitles.filter { !$0.value.isEmpty })
   }
 
   static func manifestName(_ text: String) -> String? {

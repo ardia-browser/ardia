@@ -10,8 +10,9 @@ struct PluginCredentialPinTests {
     OfficialPin.parse(["version": 1, "plugins": plugins])
   }
 
-  static func plugin(_ name: String, providers: [String]? = nil, programs: [String]? = nil, artifact: Bool = true) -> [String: Any] {
+  static func plugin(_ name: String, title: String? = nil, providers: [String]? = nil, programs: [String]? = nil, artifact: Bool = true) -> [String: Any] {
     var entry: [String: Any] = ["name": name, "version": "1.0.0", "release": "https://example.invalid/\(name)"]
+    if let title { entry["title"] = title }
     if artifact { entry["artifacts"] = ["macos-arm64": ["file": "\(name).tar.gz", "sha256": String(repeating: "b", count: 64)]] }
     if let providers { entry["reservedProviders"] = providers }
     if let programs { entry["credentialPrograms"] = programs }
@@ -25,9 +26,10 @@ struct PluginCredentialPinTests {
   }
 
   @Test func `a plugin that isn't official can't take a reserved name, whatever it declares`() throws {
-    let pin = try #require(Self.pin([Self.plugin("bitwarden", providers: ["bitwarden"], programs: ["bw"])]))
-    #expect(pin.credentialRefusal(name: "bitwarden", official: false, program: nil) == "bitwarden is kept for Ardia's official bitwarden plugin.")
-    #expect(pin.credentialRefusal(name: "bitwarden", official: false, program: "bw") == "bitwarden is kept for Ardia's official bitwarden plugin.")
+    let pin = try #require(Self.pin([Self.plugin("bitwarden", title: "Bitwarden", providers: ["bitwarden"], programs: ["bw"])]))
+    #expect(pin.credentialRefusal(name: "bitwarden", official: false, program: nil) == "bitwarden is kept for Ardia's official Bitwarden plugin.")
+    #expect(pin.credentialRefusal(name: "bitwarden", official: false, program: "bw") == "bitwarden is kept for Ardia's official Bitwarden plugin.")
+    #expect(pin.providerTitles == ["bitwarden": "Bitwarden"])
   }
 
   @Test func `a plugin that isn't official can't be a password manager under any name`() throws {
@@ -42,9 +44,24 @@ struct PluginCredentialPinTests {
   }
 
   @Test func `a reserved name holds even on a platform with no artifact for it`() throws {
-    let pin = try #require(Self.pin([Self.plugin("protonpass", providers: ["protonpass"], programs: ["pass-cli"], artifact: false)]))
+    let pin = try #require(Self.pin([Self.plugin("protonpass", title: "Proton Pass", providers: ["protonpass"], programs: ["pass-cli"], artifact: false)]))
     #expect(pin.entry("protonpass") == nil)
-    #expect(pin.credentialRefusal(name: "protonpass", official: false, program: nil) == "protonpass is kept for Ardia's official protonpass plugin.")
+    #expect(pin.credentialRefusal(name: "protonpass", official: false, program: nil) == "protonpass is kept for Ardia's official Proton Pass plugin.")
+    #expect(Self.pin([Self.plugin("vault", providers: ["vault"])])?.credentialRefusal(name: "vault", official: false, program: nil) == "vault is kept for Ardia's official vault plugin.")
+  }
+
+  @Test func `a pin entry carries the catalogue words and look the Add Password Manager list shows`() throws {
+    var entry = Self.plugin("bitwarden", title: "Bitwarden", providers: ["bitwarden"], programs: ["bw"])
+    entry["blurb"] = "Logins from your Bitwarden vault."
+    entry["symbol"] = "shield.lefthalf.filled"
+    entry["accent"] = "#175DDC"
+    var damaged = Self.plugin("onepassword", title: "1Password\n", programs: ["op"])
+    damaged["accent"] = "blue"
+    let pin = try #require(Self.pin([entry, damaged]))
+    let bitwarden = try #require(pin.entry("bitwarden"))
+    #expect([bitwarden.title, bitwarden.blurb, bitwarden.symbol, bitwarden.accent] == ["Bitwarden", "Logins from your Bitwarden vault.", "shield.lefthalf.filled", "#175DDC"])
+    let other = try #require(pin.entry("onepassword"))
+    #expect([other.title, other.accent] == ["", ""])
   }
 
   @Test func `two official plugins can't reserve the same provider name`() {

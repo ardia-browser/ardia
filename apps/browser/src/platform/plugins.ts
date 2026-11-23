@@ -1,5 +1,7 @@
 import {
   nativeModule,
+  type CredentialProviderResult,
+  type CredentialRunWanted,
   type OfficialCandidate,
   type OfficialFetchProgress,
   type OfficialFetchResult,
@@ -20,6 +22,8 @@ import {
 } from "@ardia/shell";
 
 export type {
+  CredentialProviderResult,
+  CredentialRunWanted,
   OfficialCandidate,
   OfficialFetchProgress,
   OfficialFetchResult,
@@ -39,16 +43,8 @@ export type {
   PluginStorageReadResult,
 };
 
-export type CredentialProviderResult = { ok: boolean; reason?: string };
-type CredentialProviderNative = {
-  setCredentialProvider(name: string, enabled: boolean): Promise<CredentialProviderResult>;
-  forgetCredentialProvider(name: string): Promise<CredentialProviderResult>;
-  addListener(event: "onCredentialRunWanted", listener: (e: { name: string }) => void): { remove(): void };
-};
-
 let bound: ReturnType<typeof nativeModule<"ArdiaPlugins">> | null = null;
 const Plugins = () => (bound ??= nativeModule("ArdiaPlugins"));
-const CredentialPlugins = () => Plugins() as unknown as CredentialProviderNative;
 
 export const pluginsFolder = () => Plugins().folder();
 export const listPluginFolders = () => Plugins().list();
@@ -79,6 +75,6 @@ export const writePluginStorage = (name: string, text: string) => Plugins().stor
 export const readPluginFile = (name: string, folderId: string, approved: string, path: string) => Plugins().readPluginFile(name, folderId, approved, path);
 export const onPluginLine = (listener: (e: PluginLine) => void) => Plugins().addListener("onLine", listener);
 export const onPluginExit = (listener: (e: PluginExit) => void) => Plugins().addListener("onExit", listener);
-export const setCredentialProvider = (name: string, enabled: boolean) => CredentialPlugins().setCredentialProvider(name, enabled);
-export const forgetCredentialProvider = (name: string) => CredentialPlugins().forgetCredentialProvider(name);
-export const onCredentialRunWanted = (listener: (e: { name: string }) => void) => CredentialPlugins().addListener("onCredentialRunWanted", listener);
+export const setCredentialProvider = (name: string, enabled: boolean) => Plugins().setCredentialProvider(name, enabled);
+export const forgetCredentialProvider = (name: string) => Plugins().forgetCredentialProvider(name);
+export const onCredentialRunWanted = (listener: (e: CredentialRunWanted) => void) => Plugins().addListener("onCredentialRunWanted", listener);

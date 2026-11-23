@@ -58,7 +58,11 @@ enum PluginProgramLinks {
   }
 
   static func registry(done: @escaping ([String: Any]) -> Void) {
-    queue.async { done((PluginFolders.current()?.programRegistry() ?? .empty).jsonValue) }
+    queue.async {
+      var value = (PluginFolders.current()?.programRegistry() ?? .empty).jsonValue
+      if let providers = PluginFolders.officialPin()?.providerTitles, !providers.isEmpty { value["providers"] = providers }
+      done(value)
+    }
   }
 
   static func sweep(keeping active: [String], done: @escaping () -> Void) {

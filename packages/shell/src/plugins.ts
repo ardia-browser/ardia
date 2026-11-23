@@ -16,7 +16,17 @@ export type PluginFolderEntry = {
 };
 
 export type OfficialCandidate = { folderId: string; text: string; legacyHash: string; version: string };
-export type OfficialPinned = { name: string; version: string; folderId: string };
+export type OfficialPinned = {
+  name: string;
+  version: string;
+  folderId: string;
+  credentialPrograms?: string[];
+  title?: string;
+  blurb?: string;
+  icon?: string;
+  symbol?: string;
+  accent?: string;
+};
 export type OfficialFetchCode = "offline" | "failed" | "verify" | "cancelled" | "unsupported";
 export type OfficialFetchResult = { ok: true; candidate: OfficialCandidate; reused?: boolean } | { ok: false; code: OfficialFetchCode; reason: string };
 export type OfficialFetchProgress = { name: string; received: number; total: number };
@@ -29,7 +39,9 @@ export type PluginProgramsSpec = {
   programs: { name: string; path: string; afterUpdate?: string[][] }[];
 };
 export type PluginAfterUpdateQuitStops = { consent: string; exitedOnTerm: number; killed: number };
-export type PluginProgramRegistry = { claims: Record<string, string>; failClosed: boolean; legacyOwners: string[] };
+export type PluginProgramRegistry = { claims: Record<string, string>; failClosed: boolean; legacyOwners: string[]; providers?: Record<string, string> };
+export type CredentialProviderResult = { ok: boolean; reason?: string };
+export type CredentialRunWanted = { name: string };
 export type PluginProgramsResult =
   | { ok: true; linked: string[]; refused: Record<string, string>; binDir: string; adopted: boolean; adoptBusy?: boolean; kept?: string }
   | { ok: false; reason?: string; stale?: true };
@@ -84,9 +96,12 @@ export type PluginsNative = {
   storageRead(name: string): Promise<PluginStorageReadResult>;
   storageWrite(name: string, text: string): Promise<{ ok: boolean; reason?: string }>;
   readPluginFile(name: string, folderId: string, approved: string, path: string): Promise<PluginFileReadResult>;
+  setCredentialProvider(name: string, enabled: boolean): Promise<CredentialProviderResult>;
+  forgetCredentialProvider(name: string): Promise<CredentialProviderResult>;
   addListener(name: "onLine", listener: (e: PluginLine) => void): EventSubscription;
   addListener(name: "onExit", listener: (e: PluginExit) => void): EventSubscription;
   addListener(name: "onOfficialFetch", listener: (e: OfficialFetchProgress) => void): EventSubscription;
+  addListener(name: "onCredentialRunWanted", listener: (e: CredentialRunWanted) => void): EventSubscription;
 };
 
 export type PluginPageEvent<T> = { nativeEvent: T };

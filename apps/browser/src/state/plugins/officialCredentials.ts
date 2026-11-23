@@ -7,7 +7,7 @@ export type OfficialCredentialProviderState = "available" | "installed" | "unsup
 
 export type OfficialCredentialProvider = { name: string; title: string; blurb: string; icon: string; symbol: string; accent: string | null; state: OfficialCredentialProviderState; enabled: boolean };
 
-type PinnedCredential = { name: string; credentialPrograms?: readonly string[]; credentialProvider?: boolean; title?: string; blurb?: string; icon?: string };
+type PinnedCredential = { name: string; credentialPrograms?: readonly string[]; credentialProvider?: boolean; title?: string; blurb?: string; icon?: string; symbol?: string; accent?: string };
 
 type CredentialView = Pick<PluginsStore, "listings" | "records" | "order"> & Partial<Pick<PluginsStore, "pinned" | "candidates">>;
 
@@ -29,6 +29,7 @@ export function officialCredentialProviders(s: CredentialView, supported: boolea
     const provider = m?.contributes.credentialProvider ?? null;
     const offered = !!listing || pinned.some((p) => p.name === entry.name);
     const record = has(s.records, entry.name);
+    const pin = pinned.find((p) => p.name === entry.name);
     const enabled = !!listing && !!activeManifest(s, entry.name);
     const state: OfficialCredentialProviderState = !supported || !offered ? "unsupported" : enabled || (listing && recordApproves(listing, record)) ? "installed" : "available";
     return {
@@ -36,8 +37,8 @@ export function officialCredentialProviders(s: CredentialView, supported: boolea
       title: provider?.title ?? m?.title ?? (entry.title || entry.name),
       blurb: m?.description || entry.blurb,
       icon: m?.icon ?? (entry.icon || provider?.symbol || "key.fill"),
-      symbol: provider?.symbol ?? (entry.icon || "key.fill"),
-      accent: provider?.accent ?? null,
+      symbol: provider?.symbol ?? (pin?.symbol || entry.icon || "key.fill"),
+      accent: provider?.accent ?? (pin?.accent || null),
       state,
       enabled: state === "installed" && enabled,
     };

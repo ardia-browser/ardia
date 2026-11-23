@@ -5,6 +5,7 @@ import { confirm, showMenu } from "../../state/app/system";
 import { openSettings } from "../../state/settings/settingsWindows";
 import { copyInstallCommand, lockProvider, refreshProvider, restartProvider, signInError, signOutProvider, unlockProvider, type VaultProviderState } from "../../state/vaults/actions";
 import { exportManagerPasswords } from "../../state/vaults/export";
+import { joinSignIn } from "../../state/vaults/signInRequest";
 import { addPasswordManager, dismissAddingManager, turnOnPasswordManager, type AddingManager, type CatalogueEntry } from "../../state/vaults/managerCatalogue";
 import { managerStatus, type ManagerStatus } from "../../state/vaults/managerStatus";
 import { groupGround, readableInk } from "../../state/vaults/readableInk";
@@ -85,7 +86,7 @@ export function ProviderRow({ provider, sheets }: { provider: VaultProviderState
   };
   const unlock = () =>
     run(async () => {
-      const result = await unlockProvider(p.id, null);
+      const result = await joinSignIn(p.id, () => unlockProvider(p.id, null));
       if (result.needs === "password") sheets.unlock(p.id);
       else if (!result.ok) setError(signInError(result, name));
     });

@@ -53,7 +53,7 @@ export function ProviderSignInSheet({ provider, preview }: { provider: Credentia
     if (provider.needs && provider.needs !== before.needs && phase !== "form") {
       setNeeds(provider.needs);
       setPhase(provider.needs.kind === "approval" ? "waiting" : "needs");
-    } else if (phase === "waiting" && !provider.needs && provider.problem?.message && provider.problem.message !== before.problem) {
+    } else if (phase === "waiting" && !request.inFlight() && !provider.needs && provider.problem?.message && provider.problem.message !== before.problem) {
       setSlide(-1);
       setPhase("form");
       setError(provider.problem.message);
@@ -93,7 +93,7 @@ export function ProviderSignInSheet({ provider, preview }: { provider: Credentia
   }, [focusField, phase]);
 
   const submit = async () => {
-    if (busy || !method) return;
+    if (busy || request.inFlight() || !method) return;
     if (chosen?.custom && !customServerURL(server.url)) return setServerError(SERVER_REFUSED);
     if (!canSubmit(method, entries, true)) return;
     const consent = consentToken();
@@ -109,6 +109,7 @@ export function ProviderSignInSheet({ provider, preview }: { provider: Credentia
   };
 
   const answer = async (reply: VaultAnswer) => {
+    if (request.inFlight()) return;
     const consent = consentToken();
     const asked = needs;
     setBusy(true);

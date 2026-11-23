@@ -110,3 +110,33 @@ test("a sheet waiting on the browser cancels on close, and one that's idle or do
   for (let i = 0; i < 5; i++) await Promise.resolve();
   assert.deepEqual(native.vaultFakes.cancelledSignIns, ["bitwarden"]);
 });
+
+test("pressing Continue again while a sign-in is pending joins it instead of starting another, and Cancel then a retry starts a fresh one", async () => {
+  await signedOut();
+  const { signInInFlight } = await import("./signInRequest.ts");
+  let release;
+  native.vaultFakes.signInGate = new Promise((r) => (release = r));
+  let started = 0;
+  const signIn = () => ((started += 1), actions.signInProvider("bitwarden", { method: "password", values: { email: "a@b.c" }, secrets: {} }));
+  try {
+    const sheet = signInRequest("bitwarden", "connected");
+    const first = sheet.run(signIn);
+    const second = sheet.run(signIn);
+    const elsewhere = signInRequest("bitwarden", "connected").run(signIn);
+    assert.equal(started, 1, "a double press and a second sheet both wait on the one request");
+    assert.equal(sheet.inFlight(), true);
+    assert.equal(signInInFlight("bitwarden"), true);
+    sheet.close();
+    release();
+    assert.equal(await first, null);
+    assert.equal(await second, null);
+    assert.equal(await elsewhere, null, "the cancelled answer reaches no one");
+    assert.equal(signInInFlight("bitwarden"), false);
+  } finally {
+    native.vaultFakes.signInGate = null;
+  }
+  await signedOut();
+  const retry = signInRequest("bitwarden", "connected");
+  assert.equal((await retry.run(signIn))?.ok, true);
+  assert.equal(started, 2, "after Cancel, trying again starts a new request");
+});

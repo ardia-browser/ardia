@@ -86,7 +86,7 @@ function UnlockSheet({ provider: id, preview }: { provider: string; preview?: { 
   const name = titleOf(provider);
   const label = unlockFieldOf(provider)?.title ?? "Password";
   const unlock = async () => {
-    if (!length || busy) return;
+    if (!length || busy || request.inFlight()) return;
     const consent = consentToken();
     setBusy(true);
     setError(NO_ERROR);

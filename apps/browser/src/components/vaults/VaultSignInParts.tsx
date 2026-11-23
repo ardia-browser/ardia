@@ -33,8 +33,8 @@ export function useSignInRequest(provider: string, goal: SignInGoal, keepsWaitin
     return () => request.close();
   }, [provider, goal]);
   useEffect(() => current.current?.keepWaiting(keepsWaiting), [keepsWaiting, provider, goal]);
-  return (request: () => Promise<VaultSignInResult>): Promise<VaultSignInResult | null> =>
-    current.current ? current.current.run(request) : Promise.resolve(null);
+  const run = (request: () => Promise<VaultSignInResult>): Promise<VaultSignInResult | null> => (current.current ? current.current.run(request) : Promise.resolve(null));
+  return Object.assign(run, { inFlight: () => current.current?.inFlight() ?? false });
 }
 
 export function useFocusChain(count: number) {

@@ -1,6 +1,9 @@
 import { cancelProviderSignIn, wasCancelled, type VaultSignInResult } from "./actions";
 import { vaultProviderOf } from "./store";
 import { noteVaultSignInCancelled } from "../telemetry/vaultCounts";
+import { joinSignIn, signInInFlight } from "./signInJoin";
+
+export { joinSignIn, signInInFlight };
 
 export type SignInGoal = "unlocked" | "connected";
 
@@ -16,20 +19,6 @@ export type SignInRequest = {
   close: () => void;
 };
 
-const inFlight = new Map<string, Promise<VaultSignInResult>>();
-
-export const signInInFlight = (provider: string) => inFlight.has(provider);
-
-export function joinSignIn(provider: string, request: () => Promise<VaultSignInResult>): Promise<VaultSignInResult> {
-  const running = inFlight.get(provider);
-  if (running) return running;
-  const started = request().finally(() => {
-    if (inFlight.get(provider) === started) inFlight.delete(provider);
-  });
-  inFlight.set(provider, started);
-  return started;
-}
-
 export function signInRequest(provider: string, goal: SignInGoal): SignInRequest {
   let running = 0;
   let open = true;
@@ -44,7 +33,7 @@ export function signInRequest(provider: string, goal: SignInGoal): SignInRequest
         running -= 1;
       }
     },
-    inFlight: () => running > 0 || inFlight.has(provider),
+    inFlight: () => running > 0 || signInInFlight(provider),
     keepWaiting(next) {
       waiting = next;
     },

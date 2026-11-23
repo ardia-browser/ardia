@@ -31,6 +31,7 @@ actor VaultBroker {
   var warming: [String: Task<Void, Never>] = [:]
   var warmedSites: [String: Date] = [:]
   var siteIndexes: [String: (items: [VaultItem], index: VaultSiteIndex)] = [:]
+  var passkeyIndexes: [String: (items: [VaultItem], index: VaultPasskeyIndex)] = [:]
   var indexing: Set<String> = []
   var versions: [String: String] = [:]
   var refreshing: Task<Void, Never>?

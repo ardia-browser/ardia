@@ -3596,6 +3596,13 @@
       const PasskeyStackError = Error;
       const passkeyContenders = { passkeyCreate: new PasskeyMap(), passkeyGet: new PasskeyMap() };
       const passkeyHandedOff = new PasskeyWeakSet();
+      const passkeyDelegations = new WeakMap();
+      const passkeyWeakMapGet = WeakMap.prototype.get;
+      const passkeyWeakMapSet = WeakMap.prototype.set;
+      const passkeyAssign = Object.assign;
+      const passkeyNow = Date.now;
+      const PASSKEY_DELEGATION_GAP_MS = 600;
+      let passkeyLastDelegation = 0;
       const PASSKEY_EXTENSION_FRAME = /^\s*at (?:.* \()?chrome-extension:\/\/([a-p]{32})\//;
 
       const passkeyOwnOrNull = (o, name) => {
@@ -3794,6 +3801,14 @@
           return PasskeyPromise.reject(e);
         }
       };
+      const passkeyDelegationOf = (options) => {
+        const marks = passkeyMarks(options);
+        for (let i = 0; i < marks.length; i++) {
+          const found = apply(passkeyWeakMapGet, passkeyDelegations, [marks[i]]);
+          if (found) return found;
+        }
+        return null;
+      };
       const passkeyHandedOffAlready = (options) => {
         const marks = passkeyMarks(options);
         for (let i = 0; i < marks.length; i++) if (apply(passkeyWeakHas, passkeyHandedOff, [marks[i]])) return true;
@@ -3823,6 +3838,45 @@
               return top ? passkeyHandOff(top, self, options) : apply(original, self, [options]);
             });
           entry.chrome = () => settle(() => apply(original, self, [options]));
+          entry.delegation = null;
+          entry.delegate = (extensionId, allow) => {
+            const fn = apply(passkeyMapGet, passkeyContenders[kind], [extensionId]);
+            if (!fn) return send("passkeyDelegated", { id, outcome: "returned" });
+            const token = {};
+            entry.delegation = token;
+            let copy;
+            try {
+              const narrowed = apply(passkeyAssign, null, [{}, passkeyOwnOrNull(options, "publicKey")]);
+              if (typeof allow === "string") narrowed.allowCredentials = [{ type: "public-key", id: passkeyDecode(allow) }];
+              copy = apply(passkeyAssign, null, [{}, options, { publicKey: narrowed }]);
+              const mark = { entry, token };
+              apply(passkeyWeakMapSet, passkeyDelegations, [copy, mark]);
+              apply(passkeyWeakMapSet, passkeyDelegations, [narrowed, mark]);
+            } catch (e) {
+              entry.delegation = null;
+              return send("passkeyDelegated", { id, outcome: "returned" });
+            }
+            const ended = (outcome, finish) => (value) => {
+              if (entry.delegation !== token || !passkeySettle(id)) return;
+              entry.delegation = null;
+              send("passkeyDelegated", { id, outcome });
+              finish(value);
+            };
+            const go = () => {
+              if (entry.delegation !== token) return;
+              passkeyLastDelegation = apply(passkeyNow, Date, []);
+              let settled;
+              try {
+                settled = PasskeyPromise.resolve(apply(fn, self, [copy]));
+              } catch (e) {
+                settled = PasskeyPromise.reject(e);
+              }
+              apply(passkeyThen, settled, [ended("done", resolve), ended("rejected", reject)]);
+            };
+            const wait = passkeyLastDelegation + PASSKEY_DELEGATION_GAP_MS - apply(passkeyNow, Date, []);
+            if (wait > 0) apply(passkeyTimer, window, [go, wait]);
+            else go();
+          };
           entry.extension = (extensionId) =>
             settle(() => {
               const fn = apply(passkeyMapGet, passkeyContenders[kind], [extensionId]);
@@ -3850,6 +3904,14 @@
       const passkeyWrap = (original, kind) =>
         asNative(original, (target, self, args) => {
           const options = args[0];
+          const delegation = passkeyDelegationOf(options);
+          if (delegation) {
+            if (delegation.entry.delegation === delegation.token) {
+              delegation.entry.delegation = null;
+              send("passkeyDelegated", { id: delegation.entry.id, outcome: "returned" });
+            }
+            return PasskeyPromise.reject(new PasskeyError("The operation either timed out or was not allowed.", "NotAllowedError"));
+          }
           if (passkeyHandedOffAlready(options)) return apply(target, self, args);
           if (self !== passkeyStore) return apply(target, self, args);
           let message = null;
@@ -3891,8 +3953,15 @@
           }
           return;
         }
+        const delegate = passkeyOwn(message, "delegate");
+        if (typeof delegate === "string") {
+          const waiting = apply(passkeyMapGet, passkeyPending, [id]);
+          if (waiting && waiting.delegate) waiting.delegate(delegate, passkeyOwn(message, "allow"));
+          return;
+        }
         const entry = passkeySettle(id);
         if (!entry) return;
+        entry.delegation = null;
         if (passkeyOwn(message, "fallback") === true) return entry.fallback();
         if (passkeyOwn(message, "chrome") === true) return entry.chrome();
         const extension = passkeyOwn(message, "extension");

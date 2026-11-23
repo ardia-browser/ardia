@@ -56,7 +56,17 @@ final class PluginVaultProvider: VaultPasskeyHolder, @unchecked Sendable {
     return VaultCapabilities(
       totp: offers("totp"), save: offers("save"), selfHosted: offers("selfHosted"), masterPassword: offers("masterPassword"), touchID: offers("touchID"),
       addTotp: offers("addTotp"), edit: offers("edit"), desktopApproval: contribution.signIn.methods.first?.kind == .desktopApproval, passkeys: offers("passkeys"),
-      opensItems: !contribution.appLinks.isEmpty)
+      opensItems: !contribution.appLinks.isEmpty, passkeysVia: passkeyDelegations)
+  }
+
+  var passkeyDelegations: [VaultPasskeyDelegation]? {
+    guard !contribution.passkeyRoutes.isEmpty else { return nil }
+    return contribution.passkeyRoutes.map { route in
+      switch route {
+      case .system: VaultPasskeyDelegation(via: .system)
+      case .browserExtension(let ids): VaultPasskeyDelegation(via: .browserExtension, extensions: ids)
+      }
+    }
   }
 
   var setup: VaultSetup? {

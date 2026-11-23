@@ -74,7 +74,7 @@ export type VaultItem = {
   favorite?: boolean;
   updatedAt?: number;
   profile?: string;
-  passkey?: { requestId: string; credentialId: string };
+  passkey?: { requestId: string; credentialId: string; delegated?: boolean };
   match?: VaultItemMatch;
 };
 
@@ -137,7 +137,9 @@ export type VaultStandaloneCode = { id: string; label: string; issuer?: string; 
 export type VaultStandaloneCodeAdded = { added: boolean; code?: VaultStandaloneCode; error?: "expired" | "invalid" | "exists" | "declined" | "failed"; id?: string };
 export type VaultStandaloneCodeEdited = { saved: boolean; code?: VaultStandaloneCode; error?: "notFound" | "invalid" | "failed" };
 export type VaultCodeReadError = "none" | "many" | "declined" | "unreadable";
-export type VaultPasskey = { id: string; provider: VaultProviderId; rpId: string; userName: string; displayName: string; createdAt?: number; origin?: string; item?: string };
+export type VaultPasskey = { id: string; provider: VaultProviderId; rpId: string; userName: string; displayName: string; createdAt?: number; origin?: string; item?: string; delegated?: boolean };
+export type VaultPasskeyDelegate = { provider: VaultProviderId; via: "system" | "extension" };
+export type VaultPasskeyNotice = { kind: "returned" | "systemFailed"; provider: VaultProviderId };
 export type VaultPasskeyRequest = {
   tabId: string;
   epoch?: string;
@@ -155,10 +157,12 @@ export type VaultPasskeyRequest = {
   extensions?: { id: string; name: string }[];
   choose?: boolean;
   ardia?: boolean;
+  delegates?: VaultPasskeyDelegate[];
+  notice?: VaultPasskeyNotice;
 };
-export type VaultPasskeyOutcome = "created" | "used" | "fallback" | "refused" | "cancelled" | "timedOut" | "failed" | "extension";
+export type VaultPasskeyOutcome = "created" | "used" | "fallback" | "refused" | "cancelled" | "timedOut" | "failed" | "extension" | "handingOff";
 export type VaultPasskeyDone = { tabId: string; requestId: string; outcome: VaultPasskeyOutcome; via?: string; epoch?: string };
-export type VaultPasskeyAnswer = { ok: boolean; error?: "gone" | "busy" | "invalid" | "declined" | "failed" | "unavailable"; message?: string };
+export type VaultPasskeyAnswer = { ok: boolean; error?: "gone" | "busy" | "invalid" | "declined" | "failed" | "unavailable"; message?: string; provider?: VaultProviderId };
 export type VaultCodeRead = { token: string; issuer: string; account: string; error?: undefined } | { error: VaultCodeReadError; token?: undefined };
 
 export type VaultBackupState = "off" | "never" | "backedUp" | "waitingForKeychain" | "waitingForICloud" | "failed" | "deleted" | "needsUpdate";

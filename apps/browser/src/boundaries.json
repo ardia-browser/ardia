@@ -251,7 +251,7 @@
    "id": "page-script-message-count:page_script.js",
    "source": "page",
    "guard": "Every send or post call in the page script, including those with a kind computed at run time; each literal kind has its own row and native receiver. The count changes when a send is added, so a new one gets reviewed",
-   "count": 53,
+   "count": 57,
    "checks": [
     "packages/ardiacore/ios/page_script.js"
    ]
@@ -1759,6 +1759,15 @@
    "id": "chromium-page-message:passkeyGet",
    "source": "frame",
    "guard": "Menu mode only, else handed to Chrome's own WebAuthn; a page id is checked, the rpId must match the verified origin, and every sign-in asks for Touch ID or the Mac password",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+VaultPageMessages.mm",
+    "packages/ardiacore/ios/VaultPasskeys.swift"
+   ]
+  },
+  {
+   "id": "chromium-page-message:passkeyDelegated",
+   "source": "frame",
+   "guard": "Only moves a request native itself handed to a delegated extension: it must be that frame's pending request by page id with a hand-off open; done and rejected only end it (the page already has the extension's answer), returned reopens Ardia's sheet; it carries no credential and native never answers it with one",
    "checks": [
     "packages/ardiacore/ios/ArdiaWebView+VaultPageMessages.mm",
     "packages/ardiacore/ios/VaultPasskeys.swift"

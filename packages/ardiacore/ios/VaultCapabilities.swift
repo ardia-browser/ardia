@@ -9,4 +9,15 @@ struct VaultCapabilities: Codable, Equatable, Sendable {
   var desktopApproval: Bool = false
   var passkeys: Bool = false
   var opensItems: Bool = false
+  var passkeysVia: [VaultPasskeyDelegation]? = nil
+}
+
+struct VaultPasskeyDelegation: Codable, Equatable, Sendable {
+  enum Via: String, Codable, Sendable {
+    case system
+    case browserExtension = "extension"
+  }
+
+  var via: Via
+  var extensions: [String]? = nil
 }

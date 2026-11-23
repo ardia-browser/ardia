@@ -13,6 +13,7 @@ extension VaultBroker {
     let id = provider.id
     gate.lock(id)
     provider.locked()
+    Task { @MainActor in VaultPasskeys.shared.providersLocked([id]) }
     epochs.advance(id) { sessions.forget(id, keepStored: !forget) }
     authorizedAt[id] = nil
     stopWork(id)

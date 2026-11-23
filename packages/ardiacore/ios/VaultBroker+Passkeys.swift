@@ -6,19 +6,47 @@ extension VaultBroker {
     return holder
   }
 
+  func listsDelegatedPasskeys(_ provider: any VaultProvider) -> Bool {
+    provider.capabilities.passkeysVia?.contains { $0.via == .browserExtension } == true && isReady(provider.id)
+  }
+
+  func passkeyIndex(_ provider: any VaultProvider, delegated: Bool) -> VaultPasskeyIndex? {
+    guard let items = cachedItems[provider.id] else {
+      passkeyIndexes[provider.id] = nil
+      return nil
+    }
+    if let built = passkeyIndexes[provider.id], built.items == items {
+      passkeyIndexes[provider.id] = (items, built.index)
+      return built.index
+    }
+    let index = VaultPasskeyIndex(provider: provider.id, items: items, delegated: delegated)
+    passkeyIndexes[provider.id] = (items, index)
+    return index
+  }
+
   func passkeyCandidates(rpId: String?) -> [VaultPasskeyCandidate] {
     var found: [VaultPasskeyCandidate] = []
-    for provider in VaultRegistry.providers where passkeyHolder(provider.id) != nil {
-      for item in cachedItems[provider.id] ?? [] {
-        for passkey in item.passkeys ?? [] where passkey.counter == 0 && (rpId == nil || passkey.rpId == rpId) {
-          guard let raw = VaultBase64URL.decode(passkey.credentialId) else { continue }
-          found.append(VaultPasskeyCandidate(provider: provider.id, credentialId: raw, item: item.id, rpId: passkey.rpId,
-                                             userName: passkey.userName.isEmpty ? item.username : passkey.userName,
-                                             displayName: passkey.displayName, discoverable: passkey.discoverable))
-        }
+    for provider in VaultRegistry.providers {
+      let delegated: Bool
+      if passkeyHolder(provider.id) != nil {
+        delegated = false
+      } else if listsDelegatedPasskeys(provider) {
+        delegated = true
+      } else {
+        continue
       }
+      guard let index = passkeyIndex(provider, delegated: delegated) else { continue }
+      found += rpId.map(index.candidates) ?? index.all
     }
-    return found.sorted { ($0.userName.lowercased(), $0.id) < ($1.userName.lowercased(), $1.id) }
+    return found
+  }
+
+  func passkeyDelegates() -> [VaultPasskeyDelegate] {
+    VaultRegistry.providers.compactMap { provider in
+      guard let routes = provider.capabilities.passkeysVia, !routes.isEmpty, let state = states[provider.id]?.state, state == .locked || state == .unlocked
+      else { return nil }
+      return VaultPasskeyDelegate(provider: provider.id, name: provider.name, routes: routes)
+    }
   }
 
   func passkeySigner(_ candidate: VaultPasskeyCandidate) async -> VaultPasskeySigner? {
@@ -69,5 +97,13 @@ extension VaultBroker {
       if case VaultError.failed(let message) = error { return .failure(.failed(message)) }
       return .failure(.failed("\(provider.name) couldn't save the passkey."))
     }
+  }
+}
+
+extension VaultBroker {
+  func refetchItems(_ id: String) async {
+    guard let provider = VaultRegistry.provider(id), isReady(id) else { return }
+    fetchedAt[id] = nil
+    _ = await fetchItems(provider)
   }
 }

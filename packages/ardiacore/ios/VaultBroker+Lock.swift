@@ -24,6 +24,7 @@ extension VaultBroker {
     let keepStored = sessions.touchID
     epochs.advance(id) { sessions.forget(id, keepStored: keepStored) }
     provider.locked()
+    Task { @MainActor in VaultPasskeys.shared.providersLocked([id]) }
     authorizedAt[id] = nil
     dropItems(id, announce: true)
     stopWork(id)
@@ -59,6 +60,7 @@ extension VaultBroker {
     }
     epochs.advanceAll { for id in ids { sessions.forget(id, keepStored: keepStored) } }
     for provider in VaultRegistry.providers { provider.locked() }
+    Task { @MainActor in VaultPasskeys.shared.providersLocked(nil) }
     gate.lockAll()
     resumedStore = false
     resumedAtQuit = []

@@ -15,11 +15,45 @@ struct VaultPasskeyExtension: Equatable, Sendable {
   static func isId(_ id: String) -> Bool { id.count == 32 && id.utf8.allSatisfy { $0 >= 0x61 && $0 <= 0x70 } }
 }
 
+enum VaultPasskeyHandler: Equatable, Sendable {
+  case system
+  case browserExtension(String)
+}
+
+struct VaultPasskeyDelegate: Equatable, Sendable {
+  var provider: String
+  var name: String
+  var routes: [VaultPasskeyDelegation]
+
+  func handler(systemAvailable: Bool, contenders: [String]) -> VaultPasskeyHandler? {
+    for route in routes {
+      switch route.via {
+      case .system:
+        if systemAvailable { return .system }
+      case .browserExtension:
+        if let id = (route.extensions ?? []).first(where: contenders.contains) { return .browserExtension(id) }
+      }
+    }
+    return nil
+  }
+
+  static func handlers(_ delegates: [VaultPasskeyDelegate], systemAvailable: Bool, contenders: [String]) -> [String: VaultPasskeyHandler] {
+    var found: [String: VaultPasskeyHandler] = [:]
+    for delegate in delegates {
+      if let handler = delegate.handler(systemAvailable: systemAvailable, contenders: contenders) { found[delegate.provider] = handler }
+    }
+    return found
+  }
+}
+
 enum VaultPasskeySource: Equatable, Sendable {
   case ask
   case ardia
   case chrome
   case extensionId(String)
+  case provider(String)
+
+  static let providerPattern = #"^[a-z0-9][a-z0-9._-]{0,63}$"#
 
   init(setting: String) {
     switch setting {
@@ -28,6 +62,8 @@ enum VaultPasskeySource: Equatable, Sendable {
     default:
       if setting.hasPrefix("ext:"), VaultPasskeyExtension.isId(String(setting.dropFirst(4))) {
         self = .extensionId(String(setting.dropFirst(4)))
+      } else if setting.hasPrefix("provider:"), case let id = String(setting.dropFirst(9)), id.range(of: Self.providerPattern, options: .regularExpression) != nil {
+        self = .provider(id)
       } else {
         self = .ask
       }
@@ -40,6 +76,7 @@ enum VaultPasskeyRoute: Equatable, Sendable {
   case chrome
   case asIfAbsent
   case extensionId(String)
+  case system(String)
   case choose(ardia: Bool, extensions: [String])
 
   struct Input: Sendable {
@@ -49,25 +86,32 @@ enum VaultPasskeyRoute: Equatable, Sendable {
     var extensions: [String]
     var ardiaCan: Bool
     var ardiaHasPasskeys: Bool
+    var systemProviders: [String] = []
+    var delegatedExtensions: [String] = []
   }
 
   static func decide(_ input: Input) -> VaultPasskeyRoute {
     let ardiaOffers = input.ardiaCan && (input.creating || input.ardiaHasPasskeys)
-    guard !input.extensions.isEmpty else {
-      if input.source == .chrome { return .chrome }
-      return ardiaOffers ? .ardia : .asIfAbsent
-    }
+    let systemRows = input.ardiaCan && !input.conditional ? input.systemProviders : []
+    let sheetOffers = ardiaOffers || !systemRows.isEmpty
     var source = input.source
     if case .extensionId(let id) = source, !input.extensions.contains(id) { source = .ask }
-    switch source {
-    case .extensionId(let id):
-      return .extensionId(id)
-    case .chrome:
-      return .chrome
-    case .ardia, .ask:
-      if input.conditional { return ardiaOffers ? .ardia : .asIfAbsent }
-      if source == .ardia, ardiaOffers { return .ardia }
-      return .choose(ardia: ardiaOffers, extensions: input.extensions)
+    if case .provider(let id) = source {
+      if systemRows.contains(id) { return .system(id) }
+      source = .ask
     }
+    if case .extensionId(let id) = source {
+      if input.conditional, ardiaOffers, input.delegatedExtensions.contains(id) { return .ardia }
+      return .extensionId(id)
+    }
+    let open = input.extensions.filter { !input.delegatedExtensions.contains($0) }
+    guard !open.isEmpty else {
+      if source == .chrome { return .chrome }
+      return sheetOffers ? .ardia : .asIfAbsent
+    }
+    if source == .chrome { return .chrome }
+    if input.conditional { return ardiaOffers ? .ardia : .asIfAbsent }
+    if source == .ardia, sheetOffers { return .ardia }
+    return .choose(ardia: sheetOffers, extensions: open)
   }
 }

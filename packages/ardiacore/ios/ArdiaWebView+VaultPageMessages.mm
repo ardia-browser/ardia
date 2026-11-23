@@ -82,7 +82,9 @@ void RefreshPasskeysInPageScript() {
     if (VaultWebOrigin(origin)) [self emit:@"vaultLoginPage" payload:@{@"frameId" : frameId, @"origin" : origin, @"main" : @(main)}];
   } else if ([kind isEqualToString:@"vaultLoginOutcome"] && dict && menuMode) {
     [self noteVaultLoginOutcome:dict tab:tab frame:frameId main:main origin:origin];
-  } else if (([kind isEqualToString:@"passkeyCreate"] || [kind isEqualToString:@"passkeyGet"] || [kind isEqualToString:@"passkeyCancel"]) && dict) {
+  } else if (([kind isEqualToString:@"passkeyCreate"] || [kind isEqualToString:@"passkeyGet"] || [kind isEqualToString:@"passkeyCancel"] ||
+              [kind isEqualToString:@"passkeyDelegated"]) &&
+             dict) {
     if (gPasskeyHandler && menuMode) gPasskeyHandler(self, kind, json, frameId, main, origin);
     else [self passPasskeyToChrome:dict kind:kind frame:frameId];
   } else if ([kind isEqualToString:@"vaultFilled"] && dict) {
@@ -249,7 +251,7 @@ static id VaultFieldInset(NSDictionary *raw) {
 
 - (void)passPasskeyToChrome:(NSDictionary *)dict kind:(NSString *)kind frame:(NSString *)frameId {
   NSString *requestId = Text(dict, @"id", 64);
-  if ([kind isEqualToString:@"passkeyCancel"] || !requestId.length || !frameId.length || !_tab || _tab.closed) return;
+  if ([kind isEqualToString:@"passkeyCancel"] || [kind isEqualToString:@"passkeyDelegated"] || !requestId.length || !frameId.length || !_tab || _tab.closed) return;
   [_tab callFrame:frameId kind:@"passkey" json:JSONText(@{@"id" : requestId, @"fallback" : @YES})];
 }
 

@@ -455,13 +455,16 @@ struct PasskeyRouteCase: Sendable, CustomTestStringConvertible {
   var extensions = [proton]
   var can = true
   var has = true
+  var system: [String] = []
+  var delegated: [String] = []
   let route: VaultPasskeyRoute
 
   var testDescription: String { why }
 
   var decided: VaultPasskeyRoute {
     VaultPasskeyRoute.decide(.init(source: VaultPasskeySource(setting: setting), creating: create, conditional: conditional, extensions: extensions,
-                                   ardiaCan: can, ardiaHasPasskeys: has))
+                                   ardiaCan: can, ardiaHasPasskeys: has, systemProviders: system,
+                                   delegatedExtensions: delegated))
   }
 
   static let all: [PasskeyRouteCase] = [
@@ -483,6 +486,30 @@ struct PasskeyRouteCase: Sendable, CustomTestStringConvertible {
     .init(why: "with nothing in Ardia, autofill is left to the page's own order", setting: "ask", conditional: true, extensions: [proton, other], has: false,
           route: .asIfAbsent),
     .init(why: "a request Ardia can't take never offers Ardia", setting: "ask", can: false, route: .choose(ardia: false, extensions: [proton])),
+    .init(why: "a system provider's row opens Ardia's sheet even with nothing of Ardia's", setting: "ask", extensions: [], has: false, system: ["1password"],
+          route: .ardia),
+    .init(why: "a system provider as the default goes straight to the system", setting: "provider:1password", extensions: [], has: false,
+          system: ["1password"], route: .system("1password")),
+    .init(why: "a system provider as the default also saves there", setting: "provider:1password", create: true, extensions: [], system: ["1password"],
+          route: .system("1password")),
+    .init(why: "autofill can't go to the system, so a system default behaves like Ask", setting: "provider:1password", conditional: true, extensions: [],
+          system: ["1password"], route: .ardia),
+    .init(why: "with nothing in Ardia, a system default's autofill is left to the page", setting: "provider:1password", conditional: true, extensions: [],
+          has: false, system: ["1password"], route: .asIfAbsent),
+    .init(why: "a system default whose route is unavailable means ask", setting: "provider:1password", extensions: [], has: false, route: .asIfAbsent),
+    .init(why: "a request Ardia can't take never goes to the system", setting: "provider:1password", extensions: [], can: false, system: ["1password"],
+          route: .asIfAbsent),
+    .init(why: "the chooser offers Ardia's sheet when only a system provider can sign in", setting: "ask", has: false, system: ["1password"],
+          route: .choose(ardia: true, extensions: [proton])),
+    .init(why: "an extension whose passkeys Ardia lists needs no chooser", setting: "ask", delegated: [proton], route: .ardia),
+    .init(why: "an extension Ardia lists saves from Ardia's sheet", setting: "ask", create: true, delegated: [proton], route: .ardia),
+    .init(why: "the chooser lists only extensions Ardia doesn't list", setting: "ask", extensions: [proton, other], delegated: [proton],
+          route: .choose(ardia: true, extensions: [other])),
+    .init(why: "a listed extension as the default keeps autofill in Ardia's menu", setting: "ext:\(proton)", conditional: true, delegated: [proton],
+          route: .ardia),
+    .init(why: "a listed extension with nothing listed here still takes autofill", setting: "ext:\(proton)", conditional: true, has: false, delegated: [proton],
+          route: .extensionId(proton)),
+    .init(why: "a listed extension as the default takes a modal request straight", setting: "ext:\(proton)", delegated: [proton], route: .extensionId(proton)),
   ]
 }
 
@@ -492,7 +519,8 @@ struct VaultPasskeyRouteTests {
   static let other = PasskeyRouteCase.other
 
   @Test("The passkey setting reads as a source", arguments: [
-    ("ext:\(proton)", VaultPasskeySource.extensionId(proton)), ("ext:NOTANID", .ask), ("", .ask),
+    ("ext:\(proton)", VaultPasskeySource.extensionId(proton)), ("ext:NOTANID", .ask), ("", .ask), ("provider:1password", .provider("1password")),
+    ("provider:", .ask), ("provider:One Password", .ask),
   ])
   func source(setting: String, source: VaultPasskeySource) {
     #expect(VaultPasskeySource(setting: setting) == source)
@@ -501,6 +529,17 @@ struct VaultPasskeyRouteTests {
   @Test("A passkey request goes where the setting and the page allow", arguments: PasskeyRouteCase.all)
   func routes(row: PasskeyRouteCase) {
     #expect(row.decided == row.route)
+  }
+
+  @Test func `a delegate uses its first route that works here, in the manifest's order`() {
+    let both = VaultPasskeyDelegate(provider: "protonpass", name: "Proton Pass", routes: [
+      VaultPasskeyDelegation(via: .browserExtension, extensions: [Self.other, Self.proton]), VaultPasskeyDelegation(via: .system),
+    ])
+    #expect(both.handler(systemAvailable: true, contenders: [Self.proton]) == .browserExtension(Self.proton))
+    #expect(both.handler(systemAvailable: true, contenders: []) == .system)
+    #expect(both.handler(systemAvailable: false, contenders: []) == nil)
+    let system = VaultPasskeyDelegate(provider: "1password", name: "1Password", routes: [VaultPasskeyDelegation(via: .system)])
+    #expect(VaultPasskeyDelegate.handlers([both, system], systemAvailable: false, contenders: [Self.other]) == ["protonpass": .browserExtension(Self.other)])
   }
 
   @Test func `only installed passkey extensions count as claims, once each, in installed order`() {
@@ -538,5 +577,48 @@ struct VaultPasskeyExtensionScanTests {
     #expect(VaultPasskeyExtensionScan.wrapsWebAuthn(id: isolated, userDataDirectory: root.path) == false)
     #expect(VaultPasskeyExtensionScan.wrapsWebAuthn(id: unrelated, userDataDirectory: root.path) == false)
     #expect(VaultPasskeyExtensionScan.wrapsWebAuthn(id: String(repeating: "d", count: 32), userDataDirectory: root.path) == false)
+  }
+}
+
+@Suite("Passkey index")
+struct VaultPasskeyIndexTests {
+  static func item(_ id: String, user: String, passkeys: [VaultItemPasskey]) -> VaultItem {
+    VaultItem(provider: "protonpass", id: id, title: id, username: user, urls: [], passkeys: passkeys)
+  }
+
+  static func passkey(_ byte: UInt8, rpId: String, user: String = "", counter: Int = 0) -> VaultItemPasskey {
+    VaultItemPasskey(credentialId: VaultBase64URL.encode(Data(repeating: byte, count: 16)), rpId: rpId, userName: user, displayName: "", discoverable: true,
+                     counter: counter)
+  }
+
+  @Test func `a site's passkeys come from its bucket, sorted by account, marked delegated, without counters that moved`() {
+    let items = [
+      Self.item("a", user: "zed@x.com", passkeys: [Self.passkey(1, rpId: "github.com")]),
+      Self.item("b", user: "amy@x.com", passkeys: [Self.passkey(2, rpId: "github.com"), Self.passkey(3, rpId: "github.com", counter: 4)]),
+      Self.item("c", user: "amy@x.com", passkeys: [Self.passkey(4, rpId: "example.com"), VaultItemPasskey(credentialId: "+/=", rpId: "example.com", userName: "",
+                                                                                                           displayName: "", discoverable: true, counter: 0)]),
+    ]
+    let index = VaultPasskeyIndex(provider: "protonpass", items: items, delegated: true)
+    #expect(index.candidates(rpId: "github.com").map(\.userName) == ["amy@x.com", "zed@x.com"])
+    #expect(index.candidates(rpId: "github.com").allSatisfy { $0.delegated && $0.provider == "protonpass" })
+    #expect(index.candidates(rpId: "example.com").map(\.item) == ["c"])
+    #expect(index.candidates(rpId: "other.com").isEmpty)
+    #expect(index.count == 3)
+  }
+
+  @Test func `a large vault's lookup stays fast after one build`() {
+    let rpIds = (0..<2000).map { "site\($0).example" }
+    let items = (0..<50_000).map { i -> VaultItem in
+      let passkeys = i % 16 == 0 ? [Self.passkey(UInt8(i % 251), rpId: rpIds[i % rpIds.count], user: "user\(i)")] : []
+      return Self.item("item\(i)", user: "user\(i)", passkeys: passkeys)
+    }
+    let clock = ContinuousClock()
+    var index: VaultPasskeyIndex?
+    let built = clock.measure { index = VaultPasskeyIndex(provider: "protonpass", items: items, delegated: true) }
+    let lookups = clock.measure { for rpId in rpIds { _ = index!.candidates(rpId: rpId) } }
+    #expect(index!.count == 3125)
+    #expect(built < .seconds(2), "built \(built)")
+    #expect(lookups / rpIds.count < .milliseconds(1), "\(lookups / rpIds.count) per lookup")
+    print("passkey index: 50k items, \(index!.count) passkeys, built in \(built), \(lookups / rpIds.count) per lookup")
   }
 }

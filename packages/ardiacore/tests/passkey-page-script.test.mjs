@@ -466,3 +466,66 @@ test("an extension putting back its bound original leaves the race, and a page's
   page.credentials.create = mine;
   assert.equal(page.credentials.create, mine, "a page's assignment shadows like a normal property");
 });
+
+test("a delegated row hands the extension a copy narrowed to that passkey, and its answer settles the page and tells native", async () => {
+  const page = makePage();
+  installAs(page, PROTON, "proton");
+  const signal = new AbortController().signal;
+  const options = { publicKey: { challenge: new Uint8Array([1]), timeout: 60000, allowCredentials: [] }, signal };
+  const pending = page.credentials.get(options);
+  const sent = page.posted.find((p) => p.kind === "passkeyGet");
+  page.answer({ id: sent.data.id, ack: true });
+  page.answer({ id: sent.data.id, delegate: PROTON, allow: b64url([7, 7, 7]) });
+  assert.equal(await pending, "proton-get");
+  const handed = page.context.calls_proton[0];
+  assert.notEqual(handed, options, "a copy, so the page's own options stay as they were");
+  assert.equal(handed.signal, signal);
+  assert.equal(handed.publicKey.challenge, options.publicKey.challenge);
+  assert.equal(handed.publicKey.timeout, 60000);
+  assert.deepEqual([...new Uint8Array(handed.publicKey.allowCredentials[0].id)], [7, 7, 7]);
+  assert.deepEqual(options.publicKey.allowCredentials, []);
+  assert.deepEqual(page.posted.filter((p) => p.kind === "passkeyDelegated").map((p) => p.data), [{ id: sent.data.id, outcome: "done" }]);
+});
+
+test("a delegated hand-off that comes back to Ardia's wrapper keeps the page waiting for Ardia's sheet, never Chrome's window", async () => {
+  const page = makePage();
+  installAs(page, PROTON, "proton");
+  page.context.decline_proton = true;
+  let settled = false;
+  const pending = page.credentials.get({ publicKey: { challenge: new Uint8Array([1]) } }).finally(() => (settled = true));
+  const sent = page.posted.find((p) => p.kind === "passkeyGet");
+  page.answer({ id: sent.data.id, ack: true });
+  page.answer({ id: sent.data.id, delegate: PROTON, allow: b64url([7]) });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(settled, false);
+  assert.equal(page.originals.get.length, 0, "Chrome's window never opens");
+  assert.deepEqual(page.posted.filter((p) => p.kind === "passkeyDelegated").map((p) => p.data.outcome), ["returned"]);
+  page.answer({ id: sent.data.id, error: "NotAllowedError" });
+  await assert.rejects(pending, { name: "NotAllowedError" });
+});
+
+test("a delegated hand-off the extension rejects rejects the page with its error", async () => {
+  const page = makePage();
+  page.extension(PROTON, "navigator.credentials.create = function protonCreate() { return Promise.reject(new DOMException('replaced', 'NotAllowedError')); };");
+  const pending = page.credentials.create(createOptions());
+  const sent = page.posted.find((p) => p.kind === "passkeyCreate");
+  page.answer({ id: sent.data.id, delegate: PROTON });
+  await assert.rejects(pending, /replaced/);
+  assert.deepEqual(page.posted.filter((p) => p.kind === "passkeyDelegated").map((p) => p.data.outcome), ["rejected"]);
+});
+
+test("a second hand-off within Proton's 500 ms window waits instead of being refused", async () => {
+  const page = makePage();
+  installAs(page, PROTON, "proton");
+  page.context.decline_proton = true;
+  const pending = page.credentials.get({ publicKey: { challenge: new Uint8Array([1]) } });
+  const sent = page.posted.find((p) => p.kind === "passkeyGet");
+  page.answer({ id: sent.data.id, delegate: PROTON, allow: b64url([1]) });
+  await new Promise((resolve) => setImmediate(resolve));
+  page.context.decline_proton = false;
+  page.answer({ id: sent.data.id, delegate: PROTON, allow: b64url([1]) });
+  assert.equal(page.context.calls_proton.length, 1, "held back");
+  page.tick(600);
+  assert.equal(await pending, "proton-get");
+  assert.equal(page.context.calls_proton.length, 2);
+});

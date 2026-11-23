@@ -179,12 +179,14 @@ struct VaultPasskeyCandidate: Sendable {
   var userName: String
   var displayName: String
   var discoverable: Bool
+  var delegated = false
 
   var id: String { VaultBase64URL.encode(credentialId) }
 
   func metadata() -> [String: Any] {
     var object: [String: Any] = ["id": id, "provider": provider, "rpId": rpId, "userName": userName, "displayName": displayName]
     if let item { object["item"] = item }
+    if delegated { object["delegated"] = true }
     return object
   }
 }

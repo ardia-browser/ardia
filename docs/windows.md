@@ -564,8 +564,13 @@ is plain Chromium.
   (`engine/pageCalls.ts`), is answered in TypeScript (`capturePicture`, `downloadFavicon`, `focusIfUnfocused`), or is
   in `NOT_ON_WINDOWS_YET`, which answers the Mac's empty answer and logs the method once. Those need the engine:
   `downloadImage`, `requestPictureInPicture`, `takeControlPress`, `exitPictureInPicture`, `resolvePasswordPrompt`,
-  `resolveAutofillPrompt`, `answerAutofillPrompt`, `executeExtensionAction`, `resolveDisplayMedia` (Chromium's own
-  picker shows), `mediaCaptureSourceId` and `notificationAction`. A failed `tab.call` rejects with the engine's error,
+  `resolveAutofillPrompt`, `answerAutofillPrompt`, `resolveDisplayMedia` (Chromium's own
+  picker shows), `mediaCaptureSourceId` and `notificationAction`. `executeExtensionAction` goes to `tab.call` with the
+  pressed button's place: the engine runs Chromium's action for the shown tab and answers `nativePopup` when it showed
+  the extension's popup itself, anchored to that button (`//ardia/win` `extension_actions.cc`). The app keeps the
+  pinned buttons' places in the engine with `extensions.toolbarContext`, so `chrome.action.openPopup()` anchors there
+  too, and a press in the shell (`extensions.shellPress`) closes the popup. An engine older than this answers
+  `unknown method`, read as no result, and the click opens the extension's menu as before. A failed `tab.call` rejects with the engine's error,
   as on the Mac, an `evaluate` result, navigation list or cookie list of the wrong type rejects with `ERR_BAD_REPLY`,
   and a closed page answers the empty answer. A focus the page takes only once it shows logs `could not take focus`
   when the engine refuses it. `nativeTag` is null: a page is its own window, with no React Native tag to hand keyboard

@@ -1,0 +1,90 @@
+--- a/chrome/browser/extensions/api/extension_action/extension_action_api.cc
++++ b/chrome/browser/extensions/api/extension_action/extension_action_api.cc
+@@ -8,6 +8,7 @@
+ 
+ #include <algorithm>
+ #include <memory>
++#include <optional>
+ #include <string>
+ #include <utility>
+ 
+@@ -60,6 +61,18 @@
+ using content::WebContents;
+ using extensions::browser_window_util::GetLastActiveBrowserWithProfile;
+ 
++#if BUILDFLAG(IS_WIN)
++BrowserWindowInterface* (*g_ardia_win_active_extension_browser)(
++    Profile& profile,
++    bool include_incognito) = nullptr;
++std::optional<bool> (*g_ardia_win_extension_browser_active)(
++    BrowserWindowInterface& browser) = nullptr;
++std::optional<bool> (*g_ardia_win_show_action_popup)(
++    BrowserWindowInterface& browser,
++    const extensions::Extension& extension,
++    ShowPopupCallback& callback) = nullptr;
++#endif
++
+ namespace extensions {
+ 
+ namespace {
+@@ -107,14 +120,33 @@
+   return true;
+ }
+ 
++bool IsActivePopupBrowser(BrowserWindowInterface& browser) {
++#if BUILDFLAG(IS_WIN)
++  if (g_ardia_win_extension_browser_active) {
++    if (auto active = g_ardia_win_extension_browser_active(browser)) {
++      return *active;
++    }
++  }
++#endif
++  return browser.GetWindow()->IsActive();
++}
++
+ // Returns the browser that is active in the given `profile`, optionally
+ // also checking the incognito profile.
+ BrowserWindowInterface* FindActiveBrowserWindow(Profile& profile,
+                                                 bool check_incognito_profile) {
++#if BUILDFLAG(IS_WIN)
++  if (g_ardia_win_active_extension_browser) {
++    if (auto* browser = g_ardia_win_active_extension_browser(
++            profile, check_incognito_profile)) {
++      return browser;
++    }
++  }
++#endif
+   BrowserWindowInterface* browser = GetLastActiveBrowserWithProfile(
+       profile,
+       /*include_incognito_or_parent=*/check_incognito_profile);
+-  return browser && browser->GetWindow()->IsActive() ? browser : nullptr;
++  return browser && IsActivePopupBrowser(*browser) ? browser : nullptr;
+ }
+ 
+ // Returns true if the given `extension` has an active popup on the active tab
+@@ -144,6 +176,16 @@
+                         const Extension& extension,
+                         std::string* error,
+                         ShowPopupCallback callback) {
++#if BUILDFLAG(IS_WIN)
++  if (g_ardia_win_show_action_popup) {
++    if (auto shown = g_ardia_win_show_action_popup(browser, extension, callback)) {
++      if (!*shown) {
++        *error = kFailedToOpenPopupGenericError;
++      }
++      return *shown;
++    }
++  }
++#endif
+ #if !BUILDFLAG(IS_ANDROID)
+   // On Android, the extension toolbar exists if and only if ExtensionsContainer
+   // exists, so the check below is sufficient.
+@@ -566,7 +608,7 @@
+     }
+   }
+ 
+-  if (!browser->GetWindow()->IsActive()) {
++  if (!IsActivePopupBrowser(*browser)) {
+     return RespondNow(Error(kOpenPopupInactiveWindow));
+   }
+ 

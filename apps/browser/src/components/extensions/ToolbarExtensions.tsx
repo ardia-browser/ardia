@@ -3,7 +3,7 @@ import type { ActionState, InstalledExtension } from "../../state/extensions/sto
 import { Badge, Button, ContextMenuArea, Symbol, useToolbarRowContext } from "../ui";
 import { chooseFromMenu } from "../../state/app/menuChoice";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Image, PanResponder, View, type ImageSourcePropType } from "react-native";
+import { Animated, Image, PanResponder, Platform, View, type ImageSourcePropType } from "react-native";
 import { useTheme } from "../ui/theme";
 import type { ToolbarPalette } from "../ui/toolbarColors";
 import { usePages } from "../../state/tabs/pageState";
@@ -15,6 +15,9 @@ import { TOOLBAR_TRAILING } from "../../lib/toolbarRow";
 import { isLight } from "../../lib/color";
 import { dropToolbarAnchor, setToolbarAnchor } from "../../state/extensions/toolbarAnchors";
 import { onInterfaceScaleSettled } from "../../state/settings/interfaceScale";
+import { consentToken } from "../../state/telemetry/client";
+import { useMeasuredWindowRootSize } from "../../state/windows/rootSize";
+import type { Rect } from "../window/geometry";
 import {
   activateExtension,
   extensionOverflowItems,
@@ -68,6 +71,8 @@ type ToolbarExtensionsProps = {
   top: number;
   right: number;
   limit?: number;
+  buttonsVisible?: boolean;
+  paneBounds?: Rect;
   onActivate?: () => void;
 };
 
@@ -82,6 +87,8 @@ function TabToolbarExtensions({
   top,
   right,
   limit = Infinity,
+  buttonsVisible = true,
+  paneBounds,
   onActivate,
 }: ToolbarExtensionsProps) {
   const { pinned, overflow, routes } = useToolbarExtensions(windowId, limit);
@@ -90,6 +97,12 @@ function TabToolbarExtensions({
   const reorderable = useToolbarReorderable(windowId);
   const movable = reorderable && pinned.length > 1;
   const drag = useToolbarDrag(windowId);
+  const [rowBounds, setRowBounds] = useState<Rect>();
+  const rootSize = useMeasuredWindowRootSize(Platform.OS === "windows" ? windowId : "");
+  const anchorLayout = buttonsVisible
+    ? [rootSize?.width, rootSize?.height, paneBounds?.x, paneBounds?.y, paneBounds?.width, paneBounds?.height,
+        rowBounds?.x, rowBounds?.y, rowBounds?.width, rowBounds?.height].join(":")
+    : null;
   useEffect(() => () => endToolbarDrag(windowId), [windowId]);
   if (!pinned.length && !overflow && !routes.length) return <EmptyAnchor windowId={windowId} tabId={tabId} top={top} right={right} />;
   const reorder: Reorder | undefined = movable
@@ -107,12 +120,15 @@ function TabToolbarExtensions({
       }
     : undefined;
   return (
-    <View style={{ position: "absolute", top, right, flexDirection: "row", gap: GAP }}>
+    <View
+      onLayout={Platform.OS === "windows" ? (event) => setRowBounds(event.nativeEvent.layout) : undefined}
+      style={{ position: "absolute", top, right, flexDirection: "row", gap: GAP }}
+    >
       {routes.length ? <CastButton windowId={windowId} tabId={tabId} routes={routes} palette={palette} /> : null}
       {pinned.length ? (
         <View style={{ width: pinned.length * pitch - GAP, height: pitch - GAP }}>
           {paintOrder(pinned, drag?.id).map(({ ext, index }) => (
-            <ExtensionButton key={ext.id} ext={ext} index={index} pitch={pitch} reorder={reorder} windowId={windowId} tabId={tabId} ready={ready} palette={palette} onActivate={onActivate} />
+            <ExtensionButton key={ext.id} ext={ext} index={index} pitch={pitch} reorder={reorder} windowId={windowId} tabId={tabId} ready={ready} palette={palette} onActivate={onActivate} anchorLayout={anchorLayout} />
           ))}
         </View>
       ) : null}
@@ -131,10 +147,13 @@ function EmptyAnchor({ windowId, tabId, top, right }: { windowId: string; tabId:
   return <View ref={ref} pointerEvents="none" style={{ position: "absolute", top, right, width: button, height: button }} onLayout={() => void measure()} />;
 }
 
-function useAnchor(windowId: string, tabId: string, slot: string) {
+function useAnchor(windowId: string, tabId: string, slot: string, layout?: string | null) {
   const ref = useRef<View>(null);
   const [owner] = useState(() => ({ windowId, tabId, slot }));
   const mine = useRef<Anchor | null>(null);
+  const measurement = useRef(0);
+  const actionable = useRef(true);
+  actionable.current = Platform.OS !== "windows" || layout !== null;
   useEffect(
     () => () => {
       if (mine.current) dropToolbarAnchor(owner.windowId, owner.tabId, owner.slot, mine.current);
@@ -146,9 +165,10 @@ function useAnchor(windowId: string, tabId: string, slot: string) {
     new Promise<Anchor>((resolve) => {
       const view = ref.current;
       if (!view) return resolve({ x: 0, y: 0, width: BUTTON, height: BUTTON });
+      const requested = ++measurement.current;
       view.measureInWindow((x, y, width, height) => {
         const anchor = { x, y, width, height };
-        if (ref.current) {
+        if (ref.current && actionable.current && requested === measurement.current) {
           mine.current = anchor;
           setToolbarAnchor(owner.windowId, owner.tabId, owner.slot, anchor, measure);
         }
@@ -156,6 +176,13 @@ function useAnchor(windowId: string, tabId: string, slot: string) {
       });
     });
   useEffect(() => onInterfaceScaleSettled(() => void measure()), [owner]);
+  useEffect(() => {
+    if (Platform.OS !== "windows" || layout === undefined) return;
+    ++measurement.current;
+    if (mine.current) dropToolbarAnchor(owner.windowId, owner.tabId, owner.slot, mine.current);
+    mine.current = null;
+    if (layout !== null) void measure();
+  }, [owner, layout]);
   return { ref, measure };
 }
 
@@ -200,13 +227,13 @@ function useReorderResponder(id: string, index: number, reorder: Reorder | undef
   );
 }
 
-function ExtensionButton({ ext, index, pitch, reorder, windowId, tabId, ready, palette, onActivate }: { ext: InstalledExtension; index: number; pitch: number; reorder?: Reorder; windowId: string; tabId: string; ready: boolean; palette: ToolbarPalette; onActivate?: () => void }) {
+function ExtensionButton({ ext, index, pitch, reorder, windowId, tabId, ready, palette, onActivate, anchorLayout }: { ext: InstalledExtension; index: number; pitch: number; reorder?: Reorder; windowId: string; tabId: string; ready: boolean; palette: ToolbarPalette; onActivate?: () => void; anchorLayout: string | null }) {
   const fetched = useExtensions((e) => (ready ? e.actions[tabId] : undefined));
   const held = useRef<ActionState | undefined>(undefined);
   if (fetched) held.current = fetched[ext.id];
   const state = held.current;
   const open = useExtensions((e) => e.popup?.windowId === windowId && e.popup.extensionId === ext.id);
-  const { ref, measure } = useAnchor(windowId, tabId, ext.id);
+  const { ref, measure } = useAnchor(windowId, tabId, ext.id, anchorLayout);
   const badge = state?.badgeText ?? "";
   const dimmed = state ? !state.enabled : false;
   const title = state?.title || ext.actionTitle || ext.name;
@@ -239,8 +266,9 @@ function ExtensionButton({ ext, index, pitch, reorder, windowId, tabId, ready, p
           onPressIn={pressMotion.onPressIn}
           onPressOut={pressMotion.onPressOut}
           onPress={async () => {
+            const consent = consentToken();
             onActivate?.();
-            return activateExtension(windowId, ext, await measure(), fetched?.[ext.id], tabId);
+            return activateExtension(windowId, ext, await measure(), fetched?.[ext.id], tabId, consent);
           }}
           badge={badge ? <Badge text={badge.slice(0, 4)} size="s" fit={badgeRoom} fill={fill} color={state?.badgeTextColor ?? contrastText(fill)} style={BADGE_PLACE} /> : null}
         >
@@ -301,13 +329,14 @@ export function OverflowButton({
 }) {
   const { ref, measure } = useAnchor(windowId, tabId, slot);
   const onPress = async () => {
+    const consent = consentToken();
     const anchor = await measure();
     const enabled = currentWindowExtensions(windowId);
     const choice = await chooseFromMenu(extensionOverflowItems(enabled));
     if (choice && typeof choice === "object") {
       if (mayActivate && !mayActivate()) return;
       onActivate?.();
-      void activateExtension(windowId, choice, anchor, undefined, tabId);
+      void activateExtension(windowId, choice, anchor, undefined, tabId, consent);
     } else runExtensionListChoice(choice, windowId);
   };
   return (

@@ -28,8 +28,8 @@ const engine: Engine = {
     }
     return engineCallJson(name, profile, argsJson);
   },
-  async host(verb, args = {}) {
-    const reply = await hostCall<unknown>(verb, args);
+  async host(verb, args = {}, windowId) {
+    const reply = await hostCall<unknown>(verb, args, windowId);
     return isFields(reply) ? reply : {};
   },
   profileDataFolder,

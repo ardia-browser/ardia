@@ -51,6 +51,7 @@ public class ExtensionsModule: Module {
     "actionStates": { args, reply in
       reply.ok(ArdiaHost.actionStates(tabId: try args.text("tabId"), extensions: try args.strings("ids")))
     },
+    "toolbarContext": { _, reply in reply.ok() },
     "sidePanelUrl": { args, reply in
       reply.ok(ArdiaHost.sidePanelURL(tabId: try args.text("tabId"), extension: try args.text("extensionId")))
     },

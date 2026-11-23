@@ -31,6 +31,7 @@ test("nothing is counted while sharing is off", async () => {
   work.noteLiveSourceFetch(true);
   work.noteLiveSave(false);
   work.noteExtensionActionTabChangeSkipped();
+  work.noteWindowsExtensionPopup(client.consentToken());
   assert.ok(Object.values(takeSyncWorkCounts()).every((n) => n === 0));
   assert.ok(Object.values(work.takeLiveWorkCounts()).every((n) => n === 0));
 });
@@ -83,10 +84,12 @@ test("live and extension work reaches usage_counts once, then resets", async () 
   work.noteExtensionActionStateRequest();
   work.noteExtensionActionStateRequest();
   work.noteExtensionActionTabChangeSkipped();
+  work.noteWindowsExtensionPopup(client.consentToken());
   withSyncWorkCounts("history", adapter(true)).extract(() => undefined);
   usage.sessionEnding();
   const sent = (await usageCounts()).slice(before);
   assert.equal(sent.length, 1);
+  assert.equal(sent[0].windows_extension_popups_requested, 1);
   assert.deepEqual(
     [sent[0].live_source_fetches, sent[0].live_source_fetches_shared, sent[0].live_saves_written, sent[0].live_saves_unchanged, sent[0].live_save_intents_queued, sent[0].live_save_intents_unchanged, sent[0].extension_action_refreshes, sent[0].extension_action_state_requests, sent[0].extension_action_tab_changes_skipped, sent[0].sync_history_extracts, sent[0].sync_history_records_max],
     [1, 2, 1, 1, 1, 1, 1, 2, 1, 1, 3],

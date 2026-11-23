@@ -1,0 +1,12 @@
+--- a/chrome/browser/ui/views/extensions/extension_popup.cc
++++ b/chrome/browser/ui/views/extensions/extension_popup.cc
+@@ -326,6 +326,9 @@
+ }
+ 
+ void ExtensionPopup::ShowBubble() {
++  if (GetWidget()->IsClosed()) {
++    return;
++  }
+   // Don't show the popup if there are visible security dialogs. This protects
+   // the security dialogs from spoofing.
+   if (extensions::SecurityDialogTracker::GetInstance()

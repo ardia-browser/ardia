@@ -138,6 +138,7 @@ export type EngineCalls = BookmarksCalls & FaviconsCalls & HistoryCalls & {
   "extensions.chooseFolder": [{}, string | null];
   "extensions.resolveInstallPrompt": [Profile & { requestId: string; accepted: boolean }, null];
   "extensions.actionStates": [Profile & { tabId: string; ids: string[] }, Record<string, ActionState>];
+  "extensions.toolbarContext": [{ windowId: string; tabId: string; anchors: Record<string, { x: number; y: number; width: number; height: number }> }, null];
   "extensions.sidePanelUrl": [Profile & { tabId: string; extensionId: string }, string | null];
   "extensions.watchActions": [Profile, Done];
   "extensions.syncState": [Profile, ExtensionsSyncState];

@@ -6,6 +6,7 @@ import { activateExtension, EXTENSION_LIST_ITEMS, openManageExtensions, openWebS
 import { ExtensionTile, SITE_PANEL, TileGrid } from "./SiteControlsParts";
 import { SectionLabel } from "../sidebar/SectionLabel";
 import { noteSiteControls } from "../../state/telemetry/usage";
+import { consentToken } from "../../state/telemetry/client";
 import { Button, PANEL } from "../ui";
 
 export function SiteExtensions({ windowId, tabId, columns, onClose }: { windowId: string; tabId: string; columns: number; onClose: () => void }) {
@@ -65,9 +66,10 @@ function ExtensionGridTile({ ext, windowId, tabId, onClose }: { ext: InstalledEx
       name={ext.pinned ? `${ext.actionTitle || ext.name} (pinned)` : ext.actionTitle || ext.name}
       icon={ext.actionIcon || ext.icon || null}
       onPress={async () => {
+        const consent = consentToken();
         const at = await anchor();
         onClose();
-        void activateExtension(windowId, ext, at, undefined, tabId);
+        void activateExtension(windowId, ext, at, undefined, tabId, consent);
       }}
       onContextMenu={() => void showExtensionMenu(windowId, ext)}
     />

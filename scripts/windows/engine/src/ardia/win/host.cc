@@ -13,6 +13,7 @@
 #include "ardia/core/ac_launch_switches.h"
 #include "ardia/win/autoplay.h"
 #include "ardia/win/context_menu.h"
+#include "ardia/win/extension_actions.h"
 #include "ardia/win/frame_view.h"
 #include "ardia/win/hooks.h"
 #include "ardia/win/main.h"
@@ -55,6 +56,7 @@
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
+#include "extensions/common/extension.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_tree_host.h"
 #include "ui/base/base_window.h"
@@ -142,7 +144,7 @@ LRESULT CALLBACK ParentProcedure(HWND window,
     Host::Get()->ParentMoved(window);
   }
   if (message == WM_ACTIVATE && LOWORD(w_param) != WA_INACTIVE) {
-    Host::Get()->ParentActivated(window);
+    Host::Get()->ParentActivated(window, reinterpret_cast<HWND>(l_param));
   }
   if (message == WM_NCDESTROY) {
     ::RemoveWindowSubclass(window, &ParentProcedure, id);
@@ -333,6 +335,18 @@ void Host::Start() {
   g_ardia_win_prompt_window = &PromptWindow;
   g_ardia_win_open_as_offer = &HostOpensAsOffer;
   g_ardia_win_offer_inserted = &HostNotesOfferInserted;
+  g_ardia_win_active_extension_browser =
+      [](Profile& profile, bool include_incognito) {
+        return Host::Get()->ActiveExtensionBrowser(profile, include_incognito);
+      };
+  g_ardia_win_extension_browser_active = [](BrowserWindowInterface& browser) {
+    return Host::Get()->ExtensionBrowserActive(browser);
+  };
+  g_ardia_win_show_action_popup =
+      [](BrowserWindowInterface& browser, const extensions::Extension& extension,
+         ShowPopupCallback& callback) {
+        return Host::Get()->OpenExtensionPopupFromApi(browser, extension, callback);
+      };
   InstallHostedPageMenus();
   InstallAutoplayPolicy();
   browsers_observation_.Observe(GlobalBrowserCollection::GetInstance());
@@ -361,6 +375,10 @@ void Host::Call(const std::string& verb,
       std::move(reply).Run(Error("no such tab"));
       return;
     }
+    if (Text(args, "method") == "executeExtensionAction") {
+      std::move(reply).Run(RunExtensionAction(contents, window, args));
+      return;
+    }
     if (std::optional<base::DictValue> done = CallTab(contents, args)) {
       std::move(reply).Run(std::move(*done));
       return;
@@ -373,6 +391,12 @@ void Host::Call(const std::string& verb,
   base::DictValue result;
   if (verb == "tab.show") {
     result = ShowTab(args, window);
+  } else if (verb == "extensions.toolbarContext") {
+    UpdateExtensionToolbar(window, args);
+    result = Ok();
+  } else if (verb == "extensions.shellPress") {
+    ShellPressed(window, args);
+    result = Ok();
   } else if (verb == "tab.close") {
     result = CloseTab(args);
   } else if (verb == "tab.discard") {
@@ -495,6 +519,7 @@ void Host::TabDestroyed(TabState* state) {
 
 void Host::ParentDestroying(HWND parent) {
   parents_.erase(parent);
+  extension_toolbars_.erase(parent);
   for (auto& entry : hosted_) {
     Hosted& hosted = entry.second;
     if (hosted.parent != parent) {
@@ -899,6 +924,146 @@ std::optional<base::DictValue> Host::CallTab(content::WebContents* contents,
   return Ok();
 }
 
+base::DictValue Host::RunExtensionAction(content::WebContents* contents,
+                                         HWND parent,
+                                         const base::DictValue& args) {
+  Browser* browser = BrowserOf(contents);
+  auto found = hosted_.find(browser);
+  base::DictValue result = Ok();
+  result.Set("result", "none");
+  if (found == hosted_.end() || !::IsWindow(parent) ||
+      found->second.parent != parent ||
+      found->second.shown != Text(args, "key") ||
+      browser->GetTabStripModel()->GetActiveWebContents() != contents) {
+    return result;
+  }
+  for (auto& [other, page] : hosted_) {
+    if (other != browser && page.parent == parent) {
+      CloseExtensionActionPopup(page.extension_popup_anchor);
+    }
+  }
+  result.Set("result", OpenOrRunExtensionAction(
+                           *browser, *contents, parent, args,
+                           found->second.extension_popup_anchor));
+  return result;
+}
+
+void Host::UpdateExtensionToolbar(HWND parent, const base::DictValue& args) {
+  const auto* anchors = args.FindDict("anchors");
+  RECT client{};
+  if (!anchors || !::GetClientRect(parent, &client)) {
+    return;
+  }
+  WatchParent(parent);
+  auto& toolbar = extension_toolbars_[parent];
+  const auto selected = Text(args, "key");
+  if (toolbar.selected != selected) {
+    for (auto& [browser, hosted] : hosted_) {
+      if (hosted.parent == parent && hosted.shown != selected) {
+        CloseExtensionActionPopup(hosted.extension_popup_anchor);
+      }
+    }
+  }
+  toolbar.selected = selected;
+  toolbar.anchors = anchors->Clone();
+  toolbar.client_size = gfx::Size(client.right, client.bottom);
+}
+
+Browser* Host::ForegroundHostedPage() const {
+  const HWND front = ::GetForegroundWindow();
+  if (!front) {
+    return nullptr;
+  }
+  const HWND shell = ::GetAncestor(front, GA_ROOTOWNER);
+  if (!parents_.contains(shell) || !::IsWindowVisible(shell)) {
+    return nullptr;
+  }
+  Browser* only = nullptr;
+  Browser* selected = nullptr;
+  bool multiple = false;
+  const auto toolbar = extension_toolbars_.find(shell);
+  for (const auto& [browser, hosted] : hosted_) {
+    auto* active = browser->GetTabStripModel()->GetActiveWebContents();
+    if (hosted.parent != shell || !active || active != Find(hosted.shown)) {
+      continue;
+    }
+    const HWND page = WindowOf(browser);
+    if (!page || !::IsWindowVisible(page)) {
+      continue;
+    }
+    if (front == page || ::GetWindow(front, GW_OWNER) == page) {
+      return browser;
+    }
+    if (toolbar != extension_toolbars_.end() &&
+        toolbar->second.selected == hosted.shown) {
+      selected = browser;
+    }
+    multiple = only != nullptr;
+    only = browser;
+  }
+  return front == shell ? (selected ? selected : multiple ? nullptr : only)
+                        : nullptr;
+}
+
+BrowserWindowInterface* Host::ActiveExtensionBrowser(
+    Profile& profile,
+    bool include_incognito) const {
+  Browser* browser = ForegroundHostedPage();
+  if (!browser) {
+    return nullptr;
+  }
+  Profile* candidate = browser->GetProfile();
+  return candidate == &profile ||
+                 (include_incognito && profile.IsSameOrParent(candidate))
+             ? browser
+             : nullptr;
+}
+
+std::optional<bool> Host::ExtensionBrowserActive(
+    BrowserWindowInterface& browser) const {
+  if (!Keeps(&browser)) {
+    return std::nullopt;
+  }
+  return ForegroundHostedPage() == &browser;
+}
+
+std::optional<bool> Host::OpenExtensionPopupFromApi(
+    BrowserWindowInterface& browser,
+    const extensions::Extension& extension,
+    ShowPopupCallback& callback) {
+  if (!Keeps(&browser)) {
+    return std::nullopt;
+  }
+  auto* page = static_cast<Browser*>(&browser);
+  if (ForegroundHostedPage() != page) {
+    return false;
+  }
+  Hosted& hosted = hosted_.at(page);
+  for (auto& entry : hosted_) {
+    if (entry.second.parent == hosted.parent &&
+        HasExtensionActionPopup(entry.second.extension_popup_anchor)) {
+      return false;
+    }
+  }
+  auto* contents = page->GetTabStripModel()->GetActiveWebContents();
+  gfx::Rect location;
+  const auto toolbar = extension_toolbars_.find(hosted.parent);
+  RECT client{};
+  if (toolbar != extension_toolbars_.end() &&
+      toolbar->second.selected == hosted.shown &&
+      ::GetClientRect(hosted.parent, &client) &&
+      toolbar->second.client_size == gfx::Size(client.right, client.bottom)) {
+    location = ExtensionActionAnchorInClient(
+        hosted.parent, toolbar->second.anchors.FindDict(extension.id()));
+  }
+  if (location.IsEmpty()) {
+    location = gfx::Rect(hosted.place.right(), hosted.place.y(), 1, 1);
+  }
+  return contents && ShowExtensionActionPopup(
+                         browser, *contents, extension, hosted.parent, location,
+                         hosted.extension_popup_anchor, callback);
+}
+
 base::DictValue Host::Info() {
   base::DictValue result;
   result.Set("chromium", version_info::GetVersionNumber());
@@ -1037,10 +1202,9 @@ Browser* Host::NewPage(HWND parent, Profile* profile) {
   if (!browser) {
     return nullptr;
   }
-  Hosted hosted;
+  Hosted& hosted = hosted_[browser];
   hosted.parent = parent;
   hosted.profile = profile;
-  hosted_[browser] = hosted;
   WatchParent(parent);
   Adopt(browser);
   return browser;
@@ -1142,6 +1306,7 @@ void Host::ParkForeign(base::WeakPtr<BrowserWindowInterface> browser) {
 }
 
 void Host::Hide(Browser* browser, Hosted& hosted) {
+  CloseExtensionActionPopup(hosted.extension_popup_anchor);
   if (hosted.parent) {
     auto wanted = keyboard_wanted_.find(hosted.parent);
     if (wanted != keyboard_wanted_.end() && wanted->second == hosted.shown) {
@@ -1194,7 +1359,28 @@ void Host::GiveKeyboard(Browser* browser,
   contents->Focus();
 }
 
-void Host::ParentActivated(HWND parent) {
+void Host::ShellPressed(HWND parent, const base::DictValue& args) {
+  const auto x = args.FindInt("x");
+  const auto y = args.FindInt("y");
+  if (!parents_.contains(parent) || !x || !y) {
+    return;
+  }
+  const POINT screen{*x, *y};
+  const bool primary = args.FindBool("primary").value_or(false);
+  for (auto& entry : hosted_) {
+    if (entry.second.parent == parent) {
+      DismissExtensionActionPopupForPress(entry.second.extension_popup_anchor,
+                                          screen, primary);
+    }
+  }
+}
+
+void Host::ParentActivated(HWND parent, HWND previous) {
+  for (auto& entry : hosted_) {
+    if (entry.second.parent == parent) {
+      DismissExtensionActionPopup(entry.second.extension_popup_anchor, previous);
+    }
+  }
   if (!keyboard_wanted_.contains(parent)) {
     return;
   }
@@ -1441,7 +1627,13 @@ void Host::FocusFor(ui::Event* event) {
     if (Browser* browser = BrowserOf(contents)) {
       auto found = hosted_.find(browser);
       if (found != hosted_.end() && found->second.parent) {
-        keyboard_wanted_.erase(found->second.parent);
+        const HWND parent = found->second.parent;
+        keyboard_wanted_.erase(parent);
+        for (auto& entry : hosted_) {
+          if (entry.second.parent == parent) {
+            ClosePendingExtensionActionPopup(entry.second.extension_popup_anchor);
+          }
+        }
       }
     }
     if (TabState* state = TabState::FromWebContents(contents)) {

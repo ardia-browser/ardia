@@ -1,7 +1,7 @@
 import { toAppUrl, toEngineUrl } from "@ardia/core";
 import { requireNativeViewManager } from "expo-modules-core";
 import { forwardRef, useImperativeHandle, useRef } from "react";
-import type { NativeSyntheticEvent } from "react-native";
+import { Platform, type NativeSyntheticEvent } from "react-native";
 import { ArdiaError, ardiaError } from "@ardia/core";
 import { deliverPageEvent, isPageEventProp, pageEventOf, type NativeProps, type PageEvent } from "./pageEvents";
 import type { DiscardOutcome, DiscardRefusal, WebViewHandle, WebViewNativeHandle, WebViewProps } from "./pageTypes";
@@ -80,7 +80,8 @@ export function webViewHandle(native: { readonly current: WebViewNativeHandle | 
       call(undefined, (n) => n.resolvePasswordPrompt(answer, edits?.username ?? null, edits?.password ?? null)),
     resolveAutofillPrompt: (id, answer) => call(undefined, (n) => n.resolveAutofillPrompt(id, answer)),
     answerAutofillPrompt: (id, answer) => call(false, (n) => n.answerAutofillPrompt(id, answer)),
-    executeExtensionAction: (extensionId) => call(null, (n) => n.executeExtensionAction(extensionId)),
+    executeExtensionAction: (extensionId, anchor) =>
+      call(null, (n) => Platform.OS === "windows" ? n.executeExtensionAction(extensionId, anchor) : n.executeExtensionAction(extensionId)),
     resolveDisplayMedia: (id, sourceId, audio = false) => call(undefined, (n) => n.resolveDisplayMedia(id, sourceId, audio)),
     mediaCaptureSourceId: () => call(null, (n) => n.mediaCaptureSourceId()),
     notificationAction: (id, action) => call(undefined, (n) => n.notificationAction(id, action)),

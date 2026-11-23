@@ -173,7 +173,7 @@ export type AutofillPrompt = {
   oldLabel?: string;
 };
 export type AutofillPromptAnswer = "accept" | "decline" | "dismiss";
-type ExtensionActionResult = "none" | "popup" | "sidePanel";
+type ExtensionActionResult = "none" | "popup" | "nativePopup" | "sidePanel";
 
 export type PageSelection = { text: string; rect: { x: number; y: number; width: number; height: number } };
 export type ScrollState = "down" | "up" | "top";
@@ -297,7 +297,7 @@ export type WebViewHandle = {
   resolvePasswordPrompt(answer: PasswordPromptAnswer, edits?: { username?: string; password?: string; offer?: string }): Promise<void>;
   resolveAutofillPrompt(id: number, answer: AutofillPromptAnswer): Promise<void>;
   answerAutofillPrompt?(id: number, answer: AutofillPromptAnswer): Promise<boolean>;
-  executeExtensionAction(extensionId: string): Promise<ExtensionActionResult | null>;
+  executeExtensionAction(extensionId: string, anchor?: PageSelection["rect"]): Promise<ExtensionActionResult | null>;
 
   resolveDisplayMedia(id: string, sourceId: string | null, audio?: boolean): Promise<void>;
   mediaCaptureSourceId(): Promise<string | null>;

@@ -366,7 +366,8 @@ export function callPage<Result = unknown>(key: string, method: string, args: Re
     if (args.follow === true && fieldFocusedIn(page.windowId, page.key)) return Promise.resolve(null);
   }
   const ready = REOPENING_METHODS.has(method) ? readyOrReopened(page, args.url) : page.ready;
-  return ready.then((opened) => (opened && !page.closed ? hostCall<Result>("tab.call", { key, method, ...args }) : null));
+  const windowId = method === "executeExtensionAction" ? page.windowId : "";
+  return ready.then((opened) => (opened && !page.closed ? hostCall<Result>("tab.call", { key, method, ...args }, windowId) : null));
 }
 
 export function followPage(key: string, windowId = "") {

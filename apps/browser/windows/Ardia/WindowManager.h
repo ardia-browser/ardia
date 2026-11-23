@@ -64,6 +64,8 @@ struct ManagedWindow {
   bool pageFullScreen{false};
   bool fullScreenBeforePage{false};
   winrt::Microsoft::UI::Input::InputNonClientPointerSource nonClient{nullptr};
+  winrt::Microsoft::UI::Input::InputPointerSource clientPointer{nullptr};
+  winrt::event_token clientPressed{};
   bool captionBand{false};
   bool maximized{false};
   std::optional<std::array<double, 4>> restoredFrame;
@@ -898,12 +900,17 @@ struct WindowManager {
     });
     entry.window.ReactNativeIsland().ReactViewHost(
         winrt::Microsoft::ReactNative::ReactCoreInjection::MakeViewHost(Host::Current()->reactHost, options));
+    if (entry.IsBrowser()) ConnectClientInput(entry);
   }
 
   void Closed(std::string const &id) noexcept {
     auto found = m_windows.find(id);
     if (found == m_windows.end()) return;
     if (m_pageLeftBySecondaryPress.app == found->second.hwnd) ClearPageLeftBySecondaryPress();
+    try {
+      if (found->second.clientPointer) found->second.clientPointer.PointerPressed(found->second.clientPressed);
+    } catch (...) {
+    }
     RemoveWindowSubclass(found->second.hwnd, &WindowManager::WindowProc, kSubclassId);
     auto closedWindow = found->second.window;
     auto exits = std::move(found->second.exits);
@@ -1316,6 +1323,30 @@ struct WindowManager {
     std::wstring id = Paths::Wide(entry.id);
     if (entry.nonClient) LaunchLog::Write(L"window", std::wstring(L"drags of ").append(id).append(L" are moved by the app, and by Windows in the caption regions the UI marks"));
     else LaunchLog::Write(L"window", std::wstring(L"drags of ").append(id).append(L" are moved by the app: the window has no non-client input source"));
+  }
+
+  static void ConnectClientInput(ManagedWindow &entry) noexcept {
+    try {
+      auto island = entry.window.ReactNativeIsland().Island();
+      if (!island) return;
+      entry.clientPointer = winrt::Microsoft::UI::Input::InputPointerSource::GetForIsland(island);
+      entry.clientPressed = entry.clientPointer.PointerPressed(
+          [hwnd = entry.hwnd, coordinates = island.CoordinateConverter()](auto const &, winrt::Microsoft::UI::Input::PointerEventArgs const &args) noexcept {
+            const ArdiaEngineApi *engine = Host::Engine();
+            if (!engine || !engine->hostCall) return;
+            try {
+              const auto point = args.CurrentPoint();
+              const auto screen = coordinates.ConvertLocalToScreen(point.Position());
+              using Update = winrt::Microsoft::UI::Input::PointerUpdateKind;
+              const bool primary = point.Properties().PointerUpdateKind() == Update::LeftButtonPressed;
+              const auto payload = "{\"x\":" + std::to_string(screen.X) + ",\"y\":" +
+                  std::to_string(screen.Y) + ",\"primary\":" + (primary ? "true" : "false") + "}";
+              engine->hostCall("extensions.shellPress", payload.c_str(), reinterpret_cast<uint64_t>(hwnd), nullptr, nullptr);
+            } catch (...) {
+            }
+          });
+    } catch (...) {
+    }
   }
 
   void ApplyInputRegions(ManagedWindow &entry) noexcept {

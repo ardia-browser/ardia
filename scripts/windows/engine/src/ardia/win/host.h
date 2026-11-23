@@ -17,13 +17,19 @@
 #include "base/values.h"
 #include "chrome/browser/ui/browser_window/public/browser_collection_observer.h"
 #include "chrome/browser/ui/browser_window/public/global_browser_collection.h"
+#include "chrome/browser/ui/extensions/extension_popup_types.h"
 #include "chrome/browser/ui/tabs/tab_strip_model_observer.h"
 #include "ui/base/window_open_disposition.h"
 #include "ui/events/event_handler.h"
 #include "ui/gfx/geometry/rect.h"
+#include "ui/views/view_tracker.h"
 
 class Browser;
 class BrowserWindowInterface;
+
+namespace extensions {
+class Extension;
+}
 
 namespace blink::mojom {
 class WindowFeatures;
@@ -63,7 +69,14 @@ class Host : public TabStripModelObserver,
   void DeleteClosedTab(content::WebContents* contents);
   void ParentDestroying(HWND parent);
   void ParentMoved(HWND parent);
-  void ParentActivated(HWND parent);
+  void ParentActivated(HWND parent, HWND previous);
+  BrowserWindowInterface* ActiveExtensionBrowser(Profile& profile,
+                                                 bool include_incognito) const;
+  std::optional<bool> ExtensionBrowserActive(BrowserWindowInterface& browser) const;
+  std::optional<bool> OpenExtensionPopupFromApi(
+      BrowserWindowInterface& browser,
+      const extensions::Extension& extension,
+      ShowPopupCallback& callback);
   bool HandOverWindowCommand(HWND window, WPARAM command, LPARAM point);
   void HoldPagePlace(HWND window, WINDOWPOS& change);
   void PageMoved(HWND window, const WINDOWPOS& change);
@@ -92,6 +105,13 @@ class Host : public TabStripModelObserver,
     raw_ptr<Profile> profile = nullptr;
     std::string shown;
     gfx::Rect place;
+    views::ViewTracker extension_popup_anchor;
+  };
+
+  struct ExtensionToolbar {
+    std::string selected;
+    base::DictValue anchors;
+    gfx::Size client_size;
   };
 
   Host();
@@ -108,6 +128,12 @@ class Host : public TabStripModelObserver,
   base::DictValue CloseTab(const base::DictValue& args);
   std::optional<base::DictValue> CallTab(content::WebContents* contents,
                                          const base::DictValue& args);
+  base::DictValue RunExtensionAction(content::WebContents* contents,
+                                     HWND parent,
+                                     const base::DictValue& args);
+  Browser* ForegroundHostedPage() const;
+  void UpdateExtensionToolbar(HWND parent, const base::DictValue& args);
+  void ShellPressed(HWND parent, const base::DictValue& args);
   base::DictValue DiscardOffered(const base::DictValue& args);
   base::DictValue HitTest(const base::DictValue& args);
   base::DictValue MoveWindowForTest(content::WebContents* contents,
@@ -175,6 +201,7 @@ class Host : public TabStripModelObserver,
   std::map<std::string, raw_ptr<content::WebContents>> tabs_;
   std::map<Profile*, std::string> profile_names_;
   std::set<HWND> parents_;
+  std::map<HWND, ExtensionToolbar> extension_toolbars_;
   std::map<HWND, std::string> keyboard_wanted_;
   std::set<HWND> fullscreen_pages_;
   std::set<HWND> leaving_fullscreen_;

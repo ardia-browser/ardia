@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { enginePageCalls, NOT_ON_WINDOWS_YET } from "../../../../packages/expo-windows/src/engine/pageCalls.ts";
+import { EngineError } from "../../../../packages/expo-windows/src/engine/host.ts";
 import { missingOnWindows } from "../../../../packages/expo-windows/src/missing.ts";
+import { Platform } from "../test-native/reactNative.ts";
 const { webViewHandle } = await import("../../../../packages/ardiacore/src/WebView.tsx");
 
 function host(answers = {}) {
@@ -82,6 +84,27 @@ test("the shared page view reaches the Windows calls with the engine's address",
   ]);
 });
 
+test("a Windows extension press sends its anchor and reports a native popup or a completed action", async () => {
+  const { call, received } = host({ executeExtensionAction: { result: "nativePopup" } });
+  const anchor = { x: 320, y: 8, width: 30, height: 30 };
+  const shared = webViewHandle({ current: { ...enginePageCalls(call, "page-e"), nativeTag: null } });
+  const previous = Platform.OS;
+  try {
+    Platform.OS = "windows";
+    assert.equal(await shared.executeExtensionAction("popup-extension", anchor), "nativePopup");
+  } finally {
+    Platform.OS = previous;
+  }
+  assert.deepEqual(received, [["page-e", "executeExtensionAction", { extensionId: "popup-extension", anchor }]]);
+
+  const dispatched = enginePageCalls(host({ executeExtensionAction: { result: "none" } }).call, "page-e");
+  assert.equal(await dispatched.executeExtensionAction("click-extension", anchor), "none");
+  const sidePanel = enginePageCalls(host({ executeExtensionAction: { result: "sidePanel" } }).call, "page-e");
+  assert.equal(await sidePanel.executeExtensionAction("panel-extension", anchor), "sidePanel");
+  const olderEngine = enginePageCalls(host({ executeExtensionAction: new EngineError("unknown method") }).call, "page-e");
+  assert.equal(await olderEngine.executeExtensionAction("popup-extension", anchor), null);
+});
+
 test("an engine reply of the wrong shape rejects as a bad reply instead of reading as an empty answer", async () => {
   const page = enginePageCalls(host({ evaluate: { result: { title: "A" } }, navigationEntries: { entries: { url: "x" } }, pageCookies: { cookies: "n=v" } }).call, "page-f");
   await assert.rejects(page.evaluate("1"), { code: "ERR_BAD_REPLY" });
@@ -105,7 +128,6 @@ test("a call Windows has no engine for yet answers what the Mac answers when it 
     resolvePasswordPrompt: undefined,
     resolveAutofillPrompt: undefined,
     answerAutofillPrompt: false,
-    executeExtensionAction: null,
     resolveDisplayMedia: undefined,
     mediaCaptureSourceId: null,
     notificationAction: undefined,

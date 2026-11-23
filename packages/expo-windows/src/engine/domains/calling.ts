@@ -7,7 +7,7 @@ export type Fields = Record<string, unknown>;
 
 export type Engine = {
   call: DomainModule["call"];
-  host(verb: string, args?: Fields): Promise<Fields>;
+  host(verb: string, args?: Fields, windowId?: string): Promise<Fields>;
   profileDataFolder: typeof profileDataFolder;
   removeProfileFolder: typeof removeProfileFolder;
   emit(name: string, data: unknown): void;

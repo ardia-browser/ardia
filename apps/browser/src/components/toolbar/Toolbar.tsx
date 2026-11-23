@@ -12,7 +12,7 @@ import { openBarFromAddress } from "../../state/omnibox/barState";
 import { useIsBookmarked, useSettings, useTab, useTabLive, useTabsPlace, useTabsShown } from "../../state/browser/hooks";
 import type { Tab } from "../../state/browser/types";
 import { Button, ContextMenuArea, Divider, FadeLabel, ink, monoFace, sidebarFont, sidebarPoints, drawnSymbol, space, Text, useHover, WindowDragRegion } from "../ui";
-import { type ToolbarGeometry } from "../window/geometry";
+import type { Rect, ToolbarGeometry } from "../window/geometry";
 import { usePage, usePages, type PageState } from "../../state/tabs/pageState";
 import { togglePopover } from "../../state/tabs/popoverDismiss";
 import { useHistoryAvailability } from "../../state/tabs/navigation";
@@ -73,13 +73,7 @@ function useTabsToggleIcon(windowId: string) {
 const TOOLBAR_HINTS = ["toggleSidebar", "openSplitPane", ...NAV_HINTS] as const;
 
 export const Toolbar = memo(function Toolbar({
-  tabId,
-  geometry,
-  windowId,
-  inSplit,
-  focused,
-  bare,
-  loadFill = true,
+  tabId, geometry, windowId, inSplit, focused, bare, loadFill = true, extensionButtonsVisible = true, paneBounds,
 }: {
   tabId: string;
   geometry: ToolbarGeometry;
@@ -88,6 +82,8 @@ export const Toolbar = memo(function Toolbar({
   focused: boolean;
   bare?: boolean;
   loadFill?: boolean;
+  extensionButtonsVisible?: boolean;
+  paneBounds?: Rect;
 }) {
   const hints = useShortcutHints(TOOLBAR_HINTS);
   const tabsIcon = useTabsToggleIcon(windowId);
@@ -152,7 +148,7 @@ export const Toolbar = memo(function Toolbar({
         <HistoryButton place={at.back} tabId={tab.id} windowId={tab.windowId} direction={-1} disabled={!history.back} palette={palette} onFocus={focus} closesTab={history.backCloses} historyHint={hints.back} />
         <HistoryButton place={at.forward} tabId={tab.id} windowId={tab.windowId} direction={1} disabled={!history.forward} palette={palette} onFocus={focus} historyHint={hints.forward} />
         <ReloadButton place={at.reload} tab={tab} loading={isLoading} palette={palette} onFocus={focus} reloadHint={hints.reload} />
-        <ToolbarExtensions tabId={tab.id} windowId={windowId} palette={palette} top={row.center - row.extensionButton / 2} right={extensionsRight} />
+        <ToolbarExtensions tabId={tab.id} windowId={windowId} palette={palette} top={row.center - row.extensionButton / 2} right={extensionsRight} buttonsVisible={extensionButtonsVisible} paneBounds={paneBounds} />
         {pluginToolbar ? <PluginToolbarItems windowId={windowId} palette={palette} top={row.center - row.extensionButton / 2} right={extensionsRight + extensionsWidth} onWidth={setPluginsWidth} /> : null}
         <View nativeID={PAGE_IDENTITY_TAG} collapsable={false} pointerEvents="box-none" style={StyleSheet.absoluteFill}>
           {tab.url ? (

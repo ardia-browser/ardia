@@ -24,7 +24,6 @@ export const NOT_ON_WINDOWS_YET = {
   resolvePasswordPrompt: answeredWithoutWindows("resolvePasswordPrompt", undefined),
   resolveAutofillPrompt: answeredWithoutWindows("resolveAutofillPrompt", undefined),
   answerAutofillPrompt: answeredWithoutWindows("answerAutofillPrompt", false),
-  executeExtensionAction: answeredWithoutWindows("executeExtensionAction", null),
   resolveDisplayMedia: answeredWithoutWindows("resolveDisplayMedia", undefined),
   mediaCaptureSourceId: answeredWithoutWindows("mediaCaptureSourceId", null),
   notificationAction: answeredWithoutWindows("notificationAction", undefined),
@@ -79,6 +78,16 @@ export function enginePageCalls(call: PageCall, key: string): EnginePageCalls {
     clearSiteData: async () => ((await ask("clearSiteData")) as { cookies: number | false; storage: boolean } | null) ?? { cookies: false, storage: false },
     pageCookies: async (urls) => listOr<PageCookie>("pageCookies", "cookies", (await ask("pageCookies", { urls }))?.cookies, []),
     openBlockedPopup: (id, always) => run("openBlockedPopup", { id, always }),
+    executeExtensionAction: async (extensionId, anchor) => {
+      const reply = await ask("executeExtensionAction", { extensionId, anchor }).catch((error: unknown) => {
+        if (error instanceof EngineError && error.message === "unknown method") return null;
+        throw error;
+      });
+      const result = reply?.result;
+      if (result == null) return null;
+      if (result === "none" || result === "nativePopup" || result === "sidePanel") return result;
+      throw badReply("executeExtensionAction", "result");
+    },
     discard: async (unload) => ((await ask("discard", { unload }))?.outcome as DiscardOutcome | undefined) ?? "refused",
     sleepIfHidden: async (seconds) => {
       const keptBy = (await ask("sleepIfHidden", { seconds }))?.keptBy;

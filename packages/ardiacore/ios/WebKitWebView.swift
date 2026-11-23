@@ -102,7 +102,7 @@ final class WebKitWebView: WKWebView {
     super.keyDown(with: event)
   }
 
-  private var page: WebKitTab? { superview as? WebKitTab }
+  private var page: WebKitTab? { (superview as? WebKitPageContainer)?.superview as? WebKitTab }
 
   @objc func notePagePress() {
     page?.emit("pagePress")

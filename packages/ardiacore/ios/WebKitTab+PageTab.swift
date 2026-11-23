@@ -43,8 +43,7 @@ extension WebKitTab: PageTab {
   }
 
   func fillWithPage() {
-    guard let webView, webView.frame != bounds else { return }
-    webView.frame = bounds
+    pageContainer.fill(self)
   }
 
   func followInterfaceScale() {

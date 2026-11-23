@@ -21,6 +21,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
   let browserId = WebKitHub.shared.nextBrowserId()
 
   private(set) var webView: WebKitWebView?
+  let pageContainer = WebKitPageContainer()
   private var observations: [NSObject] = []
   private var started = false
   private(set) var closed = false { didSet { if closed { stopWatchingSight() } } }
@@ -145,9 +146,9 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     view.isInspectable = WebKitHub.inspectable && !WebKitStores.isPrivate(profile)
     if let color = pageBackgroundColor ?? life.contentsBackgroundColor { view.underPageBackgroundColor = color }
     listen(to: view)
-    view.frame = bounds
-    view.autoresizingMask = [.width, .height]
-    addSubview(view)
+    fillWithPage()
+    if pageContainer.superview !== self { addSubview(pageContainer) }
+    pageContainer.hold(view)
     updateHidden()
     observe(view)
     prepareFirstPaint(view)

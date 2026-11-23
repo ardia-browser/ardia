@@ -461,6 +461,10 @@ export const vaultFakes = {
   providersGate: null as Promise<void> | null,
   totpGate: null as Promise<void> | null,
   totpCode: "123456",
+  totpCalls: 0,
+  totpAsked: [] as string[],
+  cachedCodes: {} as Record<string, string>,
+  codesForCalls: [] as string[][],
   signInGate: null as Promise<void> | null,
   cancelledSignIns: [] as string[],
   ardiaProfiles: [] as string[][],
@@ -801,7 +805,21 @@ const fakeModules = {
         return vaultState(provider);
       },
       copy: ({ provider, id, field }) => (vaultFakes.copied.push({ provider, id, field }), { copied: true, clearsAfter: 90 }),
-      totp: () => {
+      codesFor: ({ items }) => {
+        const keys = items.map((item) => `${item.provider}/${item.id}`);
+        vaultFakes.codesForCalls.push(keys);
+        const codes: Record<string, { code: string; period: number; expiresAt: number }> = {};
+        const none: string[] = [];
+        for (const key of keys) {
+          const known = vaultFakes.cachedCodes[key];
+          if (known === "") none.push(key);
+          else if (known) codes[key] = { code: known, period: 30, expiresAt: Date.now() + 30_000 };
+        }
+        return { codes, none };
+      },
+      totp: ({ provider, id }) => {
+        vaultFakes.totpCalls += 1;
+        vaultFakes.totpAsked.push(`${provider}/${id}`);
         const code = vaultFakes.totpCode;
         const answer = () => ({ code, period: 30, expiresAt: Date.now() + 30_000 });
         return vaultFakes.totpGate ? vaultFakes.totpGate.then(answer) : answer();

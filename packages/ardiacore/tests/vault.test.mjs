@@ -14,6 +14,7 @@ const suites = [
   ["vault-passkeys", [], ["VaultWebAuthn", "VaultPasskey", "VaultPasskeyRoute", "VaultPasskeyExtensionScan", "VaultItem", "VaultJSON", "VaultError", "VaultOriginMatch", "VaultPublicSuffixRules", "ArdiaVaultLogin", "ArdiaVaultFile", "ArdiaStandaloneCode", "VaultLedger", "VaultSealed", "VaultCacheSnapshot"]],
   ["vault-catalog", ["-O"], ["VaultCatalog", "VaultOffMain", "VaultItem", "VaultOriginMatch", "VaultPublicSuffixRules"]],
   ["vault-off-main", ["-DDEBUG"], ["VaultOffMain"]],
+  ["vault-totp-warm", ["-O"], ["VaultTotpWarm", "VaultTotpSecret", "VaultTotp", "VaultTotpURI", "VaultCacheSnapshot", "VaultItem", "VaultJSON", "VaultError", "VaultOriginMatch", "VaultPublicSuffixRules"]],
   ["vault-cache-writer", [], ["VaultCacheWriter", "VaultCacheSnapshot", "VaultItem", "VaultJSON", "VaultError"]],
   ["vault-revealed-field", [], ["VaultRevealedFieldEditor"]],
   ["vault-secret-entries", [], ["VaultSecretEntries"]],

@@ -9,6 +9,7 @@ extension VaultOriginMatch {
 extension VaultBroker {
   func warm(origin: String) {
     guard VaultOriginMatch.isSecure(origin) else { return }
+    focusTotpWarm(on: origin)
     for provider in VaultRegistry.providers { warm(provider, origin: origin) }
   }
 

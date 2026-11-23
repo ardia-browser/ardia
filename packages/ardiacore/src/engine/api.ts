@@ -250,6 +250,7 @@ export type EngineCalls = BookmarksCalls & FaviconsCalls & HistoryCalls & {
   "vaults.updateFromBackup": [{ profiles: string[] }, VaultRestoreResult];
   "vaults.deleteBackup": [{}, VaultBackupDeleteResult];
   "vaults.resumeBackup": [{}, Record<string, never>];
+  "vaults.codesFor": [{ items: { provider: VaultProviderId; id: string }[] }, { codes: Record<string, VaultTotp>; none: string[] }];
   "vaults.biometrics": [{}, { available: boolean }];
   "vaults.keychainCounts": [
     {},
@@ -339,6 +340,7 @@ export type EngineEvents = BookmarksEvents & FaviconsEvents & HistoryEvents & {
   "vaults.generatedChanged": Record<string, never>;
   "vaults.backupChanged": VaultBackupChange;
   "vaults.codesChanged": Record<string, never>;
+  "vaults.codesWarmed": { provider: VaultProviderId };
   "vaults.passkeyRequest": VaultPasskeyRequest;
   "vaults.passkeyOffer": VaultPasskeyRequest;
   "vaults.passkeyDone": VaultPasskeyDone;

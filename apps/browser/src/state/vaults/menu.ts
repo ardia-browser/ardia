@@ -6,7 +6,7 @@ import { useBrowser } from "../browser/store";
 import { rememberedVaultAccount } from "./accounts";
 import { shownTabIds } from "../tabs/shownTabs";
 import { rowsOfMenu, type VaultsNow } from "./menuRowsOf";
-import { prefetchVaultCode } from "./codes";
+import { prefetchVaultCodes } from "./codes";
 import { forgetClosedVaultSaves, forgetVaultPageSaves } from "./saveOffer";
 import { hasMatchRow, restingRow, type VaultRow } from "./menuModel";
 import type { VaultMenu } from "./menuState";
@@ -166,7 +166,7 @@ function openMenu(tabId: string, field: FieldSeen, onDemand: boolean) {
 
 function prefetchCodesOf(menu: VaultMenu) {
   if (menu.field !== "otp") return;
-  for (const row of rowsOfMenu(menu)) if (row.kind === "otp") prefetchVaultCode(row.item);
+  prefetchVaultCodes(rowsOfMenu(menu).flatMap((row) => (row.kind === "otp" ? [row.item] : [])));
 }
 
 const suggestOnFocus = () => useBrowser.getState().settings.vaultSuggestOnFocus;

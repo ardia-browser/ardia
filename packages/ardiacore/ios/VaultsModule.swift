@@ -147,6 +147,8 @@ public class VaultsModule: Module {
     return result.jsonObject()
   }
 
+  static let codesLimit = 500
+
   static func count(_ value: Double?, otherwise: Int) -> Int {
     guard let value, value.isFinite else { return otherwise }
     return Int(min(max(value, 0), 100_000))
@@ -235,6 +237,13 @@ public class VaultsModule: Module {
       let id = try VaultsModule.provider(args)
       let item = try args.text("id")
       VaultsModule.answer(reply) { await VaultBroker.shared.totp(id, item: item)?.jsonObject() }
+    },
+    "codesFor": { args, reply in
+      let keys = try args.dicts("items").compactMap { entry -> (provider: String, id: String)? in
+        guard let provider = entry["provider"] as? String, let id = entry["id"] as? String else { return nil }
+        return (provider, id)
+      }
+      VaultsModule.answer(reply) { await VaultBroker.shared.codes(for: Array(keys.prefix(VaultsModule.codesLimit))) }
     },
     "biometrics": { _, reply in reply.ok(["available": VaultOwnerCheck.biometricsAvailable]) },
     "keychainCounts": { _, reply in

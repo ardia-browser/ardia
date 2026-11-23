@@ -87,7 +87,7 @@
       "devPagePhase",
       "devClosePage"
     ],
-    "vaults": ["claimChromeDropdowns", "providers", "refresh", "siteItems", "searchItems", "listItems", "usernames", "itemsStatus", "lock", "signOut", "configure", "answer", "cancelSignIn", "copy", "totp", "biometrics", "keychainCounts", "sync", "syncStatus", "backupStatus", "restoreBackup", "updateFromBackup", "deleteBackup", "resumeBackup", "warm", "generate", "export", "setOptions", "listGenerated", "copyGenerated", "saveGenerated", "deleteGenerated", "setGeneratedRetention", "addTotp", "edit", "removeTotp", "readCode", "forgetCode", "copyCode", "ardiaLoginChanged", "copyConcealed", "dropTouchGrant", "newPasswordDraft", "dropPasswordDraft", "createLogin", "passkeys", "deletePasskey", "passkeyAnswer", "setPasskeys", "codes", "addCode", "editCode", "deleteCode", "importCodes"],
+    "vaults": ["claimChromeDropdowns", "providers", "refresh", "siteItems", "searchItems", "listItems", "usernames", "itemsStatus", "lock", "signOut", "configure", "answer", "cancelSignIn", "copy", "totp", "codesFor", "biometrics", "keychainCounts", "sync", "syncStatus", "backupStatus", "restoreBackup", "updateFromBackup", "deleteBackup", "resumeBackup", "warm", "generate", "export", "setOptions", "listGenerated", "copyGenerated", "saveGenerated", "deleteGenerated", "setGeneratedRetention", "addTotp", "edit", "removeTotp", "readCode", "forgetCode", "copyCode", "ardiaLoginChanged", "copyConcealed", "dropTouchGrant", "newPasswordDraft", "dropPasswordDraft", "createLogin", "passkeys", "deletePasskey", "passkeyAnswer", "setPasskeys", "codes", "addCode", "editCode", "deleteCode", "importCodes"],
     "webView": [
       "setDisplayMediaPicker",
       "setSelectionPopover",

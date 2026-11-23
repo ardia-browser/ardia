@@ -4,11 +4,11 @@ import { useBrowser } from "../browser/store";
 import { onAppEvent } from "../../platform/app";
 import { openUrlFromSettings } from "../settings/settingsWindows";
 import { useEffect } from "react";
-import { onVaultApproval, onVaultChanged, onVaultItemsChanged, searchVaultItems, vaultBiometrics, vaultItemsStatus, vaultProviders, vaultSiteItems, type VaultItem, type VaultProviderState } from "../../platform/vaults";
+import { onVaultApproval, onVaultChanged, onVaultCodesWarmed, onVaultItemsChanged, searchVaultItems, vaultBiometrics, vaultItemsStatus, vaultProviders, vaultSiteItems, type VaultItem, type VaultProviderState } from "../../platform/vaults";
 import { isArdiaProvider } from "./ardia";
 import { credential, titleOf } from "./providerModel";
 import { vaultsOnForProfile } from "./enabled";
-import { clearVaultCodes } from "./codes";
+import { clearVaultCodes, primeVaultCodes, refreshWarmedCodes } from "./codes";
 import { forgetRememberedVaultAccount, rememberedVaultLogin } from "./accounts";
 import { forgetPending, type PendingTotp } from "./pendingTotp";
 import { itemKey, siteKey } from "./originMatch";
@@ -141,17 +141,20 @@ export function loadSiteItems(origin: string): Promise<readonly VaultItem[]> {
   const consent = consentToken();
   const asked = itemsGeneration;
   const answered = vaultSiteItems(origin).then(
-    ({ items, listed }): readonly VaultItem[] | null => {
+    ({ items, listed }): Promise<readonly VaultItem[] | null> | null => {
       if (asked !== itemsGeneration) return null;
       const dropped = keepSite(key, origin);
       const unlocked = unlockedIdsOf(vaults().providers);
       const kept = items.filter((item) => unlocked.has(item.provider));
-      changeVaults((s) => {
-        const sites: Record<string, readonly VaultItem[]> = { ...s.sites, [key]: kept };
-        for (const gone of dropped) delete sites[gone];
-        return { sites, listed: listed.filter((id) => unlocked.has(id)) };
+      return primeVaultCodes(kept).then(() => {
+        if (asked !== itemsGeneration) return null;
+        changeVaults((s) => {
+          const sites: Record<string, readonly VaultItem[]> = { ...s.sites, [key]: kept };
+          for (const gone of dropped) delete sites[gone];
+          return { sites, listed: listed.filter((id) => unlocked.has(id)) };
+        });
+        return kept;
       });
-      return kept;
     },
     (): readonly VaultItem[] => NO_ITEMS,
   );
@@ -315,6 +318,7 @@ export function startVaultIndex() {
   onVaultChanged(applyProviderState);
   onVaultApproval((_, url) => openUrlFromSettings(url));
   onVaultItemsChanged(() => void refreshVaultItems());
+  onVaultCodesWarmed(refreshWarmedCodes);
   useBrowser.subscribeTo(["tabs", "windows", "ui"], (b, prev) => {
     if (b.tabs === prev.tabs && b.windows === prev.windows && b.ui === prev.ui) return;
     const front = frontOriginOf(b);

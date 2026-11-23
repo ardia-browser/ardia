@@ -187,6 +187,9 @@ export function startDevHarness() {
     get vaultStore(): typeof import("../../state/vaults/store") {
       return require("../../state/vaults/store");
     },
+    get vaultCodes(): typeof import("../../state/vaults/codes") {
+      return require("../../state/vaults/codes");
+    },
     get vaultPasskeys(): typeof import("../vaults/VaultPasskeys") & typeof import("../../state/vaults/passkeys") {
       return { ...require("../vaults/VaultPasskeys"), ...require("../../state/vaults/passkeys") };
     },

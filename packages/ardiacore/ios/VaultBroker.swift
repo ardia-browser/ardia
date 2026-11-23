@@ -39,6 +39,11 @@ actor VaultBroker {
   var cachedTotps: [String: [String: VaultCacheSnapshot.Password]] = [:]
   var codeFetches: [String: Task<Result<VaultTotp, VaultFillError>, Never>] = [:]
   var recentCodes: [String: VaultTotp] = [:]
+  var totpWarming: [String: Task<Void, Never>] = [:]
+  var totpWarmTried: [String: Set<String>] = [:]
+  var totpUrgent: [String: Set<String>] = [:]
+  var totpSweepLeft: [String: Int] = [:]
+  var totpFocusSite: String?
   var snapshotAccounts: [String: String] = [:]
   var gate = VaultStoreGate()
   var storeOpen: Bool { gate.open }

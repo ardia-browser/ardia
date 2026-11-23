@@ -80,6 +80,7 @@ extension VaultBroker {
     persist(id, toCloud: previous != fresh.items || previousSecrets != (cachedPasswords[id] ?? [:]).mapValues(\.value))
     sessions.touch(id)
     if previous != fresh.items { announceItems(id) }
+    startTotpWarm(provider)
     return .success(fresh.items)
   }
 
@@ -130,6 +131,7 @@ extension VaultBroker {
 
   func dropItems(_ id: String, announce: Bool) {
     stopWarming(id)
+    forgetTotpWarm(id)
     siteIndexes[id] = nil
     cachedPasswords[id] = nil
     cachedTotps[id] = nil

@@ -46,6 +46,8 @@ export const signOutVault = (provider: string) => call("vaults.signOut", { provi
 export const configureVault = (provider: string, server: string | null) => call("vaults.configure", { provider, server });
 export const copyFromVault = (provider: string, id: string, field: VaultCopyField) => call("vaults.copy", { provider, id, field });
 export const vaultTotp = (provider: string, id: string) => call("vaults.totp", { provider, id });
+export const vaultCodesFor = (items: { provider: string; id: string }[]) => call("vaults.codesFor", { items });
+export const onVaultCodesWarmed = (listener: (provider: string) => void) => on("vaults.codesWarmed", ({ provider }) => listener(provider));
 export const cancelVaultSignIn = (provider: string) => call("vaults.cancelSignIn", { provider });
 type VaultOptions = CallArgs<"vaults.setOptions">;
 export const setVaultOptions = (options: VaultOptions) => call("vaults.setOptions", options);

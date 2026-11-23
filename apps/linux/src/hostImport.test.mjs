@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { asSecret } from "@ardia/core";
 import { CHOOSER_DEADLINE_MS, IMPORT_IDLE_MS, MAX_SPACE_IDS, UNLOCK_DEADLINE_MS, UNLOCK_LIFETIME_MS, createHostImport, nativeSpaceIds, pendingPasswords } from "./hostImport.ts";
 import { applyPendingPasswords, applyResult, setImportPasswordSink } from "./importApply.ts";
 import { IMPORT_HANDLE_LIFETIME_MS, claimImportHandle, isImportHandle, issueImportHandles } from "./importHandles.ts";
@@ -499,9 +500,9 @@ test("the Passwords pane's savePassword claims import handles instead of saving 
     writes.push([token, profile]);
     return { added: 1 };
   });
-  assert.equal(await savePassword("work", "https://a.example", "a", row.password), true);
+  assert.equal(await savePassword("work", "https://a.example", "a", asSecret("password", row.password)), true);
   assert.deepEqual(writes, [[TOKEN, "work"]]);
-  assert.equal(await savePassword("work", "https://a.example", "a", row.password).catch(() => "shared"), false);
+  assert.equal(await savePassword("work", "https://a.example", "a", asSecret("password", row.password)).catch(() => "shared"), false);
   assert.deepEqual(writes, [[TOKEN, "work"]]);
 });
 
@@ -514,7 +515,7 @@ test("import handles nobody claims expire after their lifetime and never become 
   });
   context.mock.timers.tick(IMPORT_HANDLE_LIFETIME_MS);
   assert.equal(isImportHandle(row.password), true);
-  assert.equal(await savePassword("work", "https://idle.example", "idle", row.password).catch(() => "shared"), false);
+  assert.equal(await savePassword("work", "https://idle.example", "idle", asSecret("password", row.password)).catch(() => "shared"), false);
   assert.equal(await claimImportHandle(row.password, "work"), false);
   assert.deepEqual(writes, []);
 });

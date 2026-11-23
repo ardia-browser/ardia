@@ -111,7 +111,7 @@ async function writeEngineStorage(profile: string, origin: string, change: Stora
   return { written, overQuota };
 }
 
-export type ChromiumRead = { data: SiteData; page: WebViewHandle; pages: ChromiumPage[] };
+type ChromiumRead = { data: SiteData; page: WebViewHandle; pages: ChromiumPage[] };
 
 const COOKIE_READ_BATCH_MS = 25;
 const MAX_READ_DOMAINS = 64;
@@ -124,7 +124,7 @@ const openCookieReads = new Map<string, CookieReadBatch>();
 
 const bareCookieDomain = (domain: string) => domain.toLowerCase().replace(/^\.+|\.+$/g, "");
 
-export function cookieCovered(domain: string, domains: readonly string[]): boolean {
+function cookieCovered(domain: string, domains: readonly string[]): boolean {
   const bare = bareCookieDomain(domain);
   return !!bare && domains.some((wanted) => bare === wanted || bare.endsWith(`.${wanted}`));
 }
@@ -188,7 +188,7 @@ export async function readChromium(profile: string, domains: string[], origins: 
   return { data: { cookies: read.cookies, storage }, page: read.page, pages };
 }
 
-export type Written = { cookies: number; removed: number; storage: number; landed: Set<string>; overQuota?: number };
+type Written = { cookies: number; removed: number; storage: number; landed: Set<string>; overQuota?: number };
 
 export async function writeChromium(
   profile: string,

@@ -72,7 +72,14 @@ function RuleRow({ rule, index, last, profiles }: { rule: AirTrafficRule; index:
   const target = targetLabel(rule, profiles, groupName);
   const groupGone = !!rule.groupKey && !groupName;
   const more = async () => {
-    const choice = await showMenu([{ id: "edit", title: "Edit…" }, { separator: true }, { id: "up", title: "Move Up", enabled: index > 0 }, { id: "down", title: "Move Down", enabled: !last }, { separator: true }, { id: "delete", title: "Delete" }]);
+    const choice = await showMenu([
+      { id: "edit", title: "Edit…", symbol: "pencil" },
+      { separator: true },
+      { id: "up", title: "Move Up", symbol: "arrow.up", enabled: index > 0 },
+      { id: "down", title: "Move Down", symbol: "arrow.down", enabled: !last },
+      { separator: true },
+      { id: "delete", title: "Delete", symbol: "trash" },
+    ]);
     if (choice === "edit") showSettingsSheet(<RuleSheet rule={rule} />);
     else if (choice === "up" || choice === "down") moveAirTrafficRule(rule.id, choice === "up" ? -1 : 1);
     else if (choice === "delete") removeAirTrafficRule(rule.id);
@@ -80,9 +87,7 @@ function RuleRow({ rule, index, last, profiles }: { rule: AirTrafficRule; index:
   return (
     <Row icon={null} title={`${fromLabel(rule.from)} · ${conditionLabel(rule.when)} → ${target ?? "a deleted profile"}`} description={ruleProblem(target, groupGone)}>
       <Toggle value={rule.enabled} accessibilityLabel="Use this rule" onChange={(enabled) => void updateAirTrafficRule(rule.id, { enabled })} />
-      <Button variant="icon" icon="pencil" size="m" onPress={() => showSettingsSheet(<RuleSheet rule={rule} />)} tooltip="Edit" />
-      <Button variant="icon" icon="ellipsis.circle" size="m" onPress={() => void more()} tooltip="Move or Delete" />
-      <Button variant="icon" icon="trash" size="m" onPress={() => removeAirTrafficRule(rule.id)} tooltip="Delete" />
+      <Button variant="icon" icon="ellipsis.circle" size="m" onPress={() => void more()} tooltip="Edit, Move or Delete" />
     </Row>
   );
 }

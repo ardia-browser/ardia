@@ -59,6 +59,12 @@ const TOP = [
   ["tab switcher", ["appearance.ctrlTab"]],
   ["switch tabs", ["appearance.ctrlTab"]],
   ["recent tabs", ["appearance.ctrlTab"]],
+  ["after closing a tab", ["appearance.afterClosingTab"]],
+  ["closing a tab", ["appearance.afterClosingTab"]],
+  ["tab above", ["appearance.afterClosingTab"]],
+  ["tab to the left", ["appearance.afterClosingTab"]],
+  ["tab closing", ["appearance.afterClosingTab"]],
+  ["close behavior", ["appearance.afterClosingTab"]],
   ["address bar", ["appearance.addressBar"]],
   ["url bar", ["appearance.addressBar"]],
   ["command bar", ["appearance.commandBarPlacement"]],
@@ -187,6 +193,14 @@ test("rows named by the query stay apart even when they share a place", () => {
   assert.equal(first("devtools"), "advanced.ardiaCommand");
 });
 
+test("a lower-tier named row in the same section does not suppress a higher-tier unnamed match", () => {
+  const hits = search(SETTINGS_INDEX, "switch tabs");
+  assert.equal(hits[0]?.entry.id, "appearance.ctrlTab");
+  assert.ok(hits[0].tier > (hits.find((h) => h.entry.id === "appearance.afterClosingTab")?.tier ?? -1));
+  assert.equal(first("check for updates"), "general.autoUpdate");
+  assert.equal(first("corner radius"), "appearance.tabCornerRadius");
+});
+
 test("a pane's name finds that pane's rows", () => {
   const found = search(SETTINGS_INDEX, "shortcuts");
   const sections = new Set(SETTINGS.filter((s) => s.pane === "shortcuts").map((s) => s.section));
@@ -310,7 +324,8 @@ test("a row its pane doesn't draw is left out of search, by the same rule the pa
   for (const id of ["tabs.sidebarSide", "appearance.sidebarTextSize", "general.syncFolder", "automations.meetingAlert"]) assert.ok(!sidebar.has(id), id);
   for (const id of ["appearance.interfaceStyle", "appearance.glassTint"]) assert.ok(unshown({}, { top: false }).has(id), id);
   assert.ok(unshown({ interfaceStyle: "classic" }, { top: false, glass: true }).has("appearance.glassTint"));
-  assert.ok(unshown({ memorySaver: false }, { top: false }).has("advanced.keepActiveSites"));
+  assert.ok(unshown({ memorySaver: false, busyTabWarnings: false }, { top: false }).has("advanced.keepActiveSites"));
+  assert.ok(!unshown({ memorySaver: false, busyTabWarnings: true }, { top: false }).has("advanced.keepActiveSites"), "busy-tab warnings read the kept sites too");
   assert.ok(!unshown({ memorySaver: true }, { top: false }).has("advanced.keepActiveSites"));
   assert.ok(unshown({ newTabOpens: "commandBar" }, { top: false }).has("tabs.newTabUrl"));
   assert.ok(unshown({ cleanUpInactiveTabsAfterMinutes: 60 }, { top: false }).has("tabs.suggestCleanUp"));

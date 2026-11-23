@@ -79,7 +79,7 @@ const unavailable = (feature: string) => (..._args: unknown[]): Promise<never> =
 
 export const fetchBangList: (etag: string | null) => Promise<BangListReply> = unavailable("Bang list fetching");
 
-export const LINUX_WINDOW_CORNER_RADIUS = 19;
+const LINUX_WINDOW_CORNER_RADIUS = 19;
 
 const frameCornerRadius = (host?: ArdiaHost) => (id: string): Promise<number> =>
   invokeHost<unknown>("ArdiaShell.windowFrame", { args: [id] }, host).then(
@@ -89,7 +89,9 @@ const frameCornerRadius = (host?: ArdiaHost) => (id: string): Promise<number> =>
 
 const noGeometry = (): Promise<null> => Promise.resolve(null);
 
-const HOST_SHELL_METHODS: Record<string, (host?: ArdiaHost) => ShellMethod> = { frameCornerRadius };
+const copyURL = (host?: ArdiaHost) => (address: string): Promise<unknown> => invokeHost("ArdiaShell.copyText", { args: [address] }, host);
+
+const HOST_SHELL_METHODS: Record<string, (host?: ArdiaHost) => ShellMethod> = { frameCornerRadius, copyURL };
 
 const LINUX_SHELL_METHODS: Record<string, ShellMethod> = {
   windowCornerRadius: () => LINUX_WINDOW_CORNER_RADIUS,
@@ -130,6 +132,7 @@ const LINUX_SHELL_METHODS: Record<string, ShellMethod> = {
   menuBar: unavailable("The menu bar catalog"),
   performMenuBarItem: unavailable("Running menu bar items"),
   dismissShownOnly: unavailable("Taking away a question Ardia asked on the control socket's behalf"),
+  choose: () => Promise.resolve({ choice: -1, unshown: true }),
   replyToTerminate: resolved,
   readText: readClipboardText,
   windowGeometry: noGeometry,

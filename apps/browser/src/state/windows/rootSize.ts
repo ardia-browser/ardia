@@ -24,6 +24,8 @@ export function windowRootSize(s: Pick<BrowserState, "windows">, windowId: strin
   return frame ? rootSizeOfFrame(frame, currentInterfaceScale()) : undefined;
 }
 
+export const windowRootHeightNow = (windowId: string): number | undefined => windowRootSize(useBrowser.getState(), windowId)?.height;
+
 export const windowRootWidth = (s: Pick<BrowserState, "windows">, windowId: string): number | undefined => windowRootSize(s, windowId)?.width;
 
 export const onWindowRootSizes = (listener: () => void): (() => void) => useRootSizes.subscribe(listener);

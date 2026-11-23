@@ -33,7 +33,10 @@ unless every step below says Boat:
 3. **First attempt.** Any re-run goes to GitHub.
 4. **`boat-ci` label.** A team pull request with the label skips the busy check below (Boat headroom still applies).
 5. **GitHub is busy.** It reads queued and running runs in this repo and `ardia-browser/plugins`, then their jobs,
-   newest runs first. It makes at most 30 API calls: up to 10 for run lists, the rest for job lists, page by page. It
+   newest runs first: the newest four first, and the rest of its budget at once only when those four don't already
+   make GitHub busy (more jobs can only add to the counts), so a busy GitHub costs a few calls, not the whole budget. It
+   makes at most 30 API calls: up to 10 for run lists, the rest for job lists, page by page. These calls use the
+   repo's `GITHUB_TOKEN`, whose 1,000 requests an hour every workflow shares, `cla` and `identity` included. It
    skips its own run and counts only jobs on a fixed list of GitHub-hosted labels: `ubuntu-latest`, `-24.04`,
    `-22.04` and their `-arm` twins, `windows-latest`, `-2025`, `-2022`, `-11-arm`, `macos-latest`, `-26`, `-15`, `-14`,
    their `-intel` twins, `macos-13` and `xcode-27`. A test fails if a workflow uses a hosted label that isn't on it.

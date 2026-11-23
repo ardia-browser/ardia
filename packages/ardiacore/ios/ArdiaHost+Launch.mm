@@ -248,7 +248,9 @@ static void TryEarlyWindow() {
   NSString *focused = session.focusedWindowId, *key = session.launchTabId, *url = session.launchTabURL, *profile = session.launchTabProfile;
   if (!focused || !key) return;
   NSDictionary *window = [session windowWithId:focused];
-  if (!window || [window[@"incognito"] boolValue] || window[@"kind"] || ![window[@"frame"] isKindOfClass:NSArray.class]) return;
+  if (!window || ![window[@"incognito"] isKindOfClass:NSNumber.class] && window[@"incognito"] || [window[@"incognito"] isEqual:@YES] || window[@"kind"] ||
+      ![window[@"frame"] isKindOfClass:NSArray.class])
+    return;
   if (![window[@"tabIds"] isKindOfClass:NSArray.class] || ![window[@"tabIds"] containsObject:key]) return;
   for (NSDictionary *split in session.splits)
     if ([[session tabIdsOfSplit:split] containsObject:key]) return;

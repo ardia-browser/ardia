@@ -1,3 +1,4 @@
+import { asSecret } from "@ardia/core";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -98,7 +99,7 @@ async function pairAgainstExistingTheme(local, tag) {
   await c.with(async () => {
     if (local) S().updateProfile("default", { theme: local });
     engineC.startSync();
-    assert.ok("ok" in (await engineC.enterRecoveryPhrase("/sync", "words")));
+    assert.ok("ok" in (await engineC.enterRecoveryPhrase("/sync", asSecret("syncPhrase", "words"))));
     await engineC.syncNow();
     await engineC.syncNow();
     assert.deepEqual(S().profiles.default.theme, THEME_B, "the paired profile takes the synced theme");
@@ -144,7 +145,7 @@ async function joinWhileThemeDownloads(tag, hold = downloading) {
   await c.with(async () => {
     S().updateProfile("default", { theme: THEME_A });
     engineC.startSync();
-    assert.ok("ok" in (await engineC.enterRecoveryPhrase("/sync", "words")));
+    assert.ok("ok" in (await engineC.enterRecoveryPhrase("/sync", asSecret("syncPhrase", "words"))));
     await engineC.syncNow();
     await engineC.syncNow();
     assert.ok(engineC.useSync.getState().remoteProfiles.every((p) => p.name !== "Personal"), "Personal paired");
@@ -215,7 +216,7 @@ test("an established profile's theme edit publishes while unrelated files are st
   });
   await c.with(async () => {
     engineC.startSync();
-    assert.ok("ok" in (await engineC.enterRecoveryPhrase("/sync", "words")));
+    assert.ok("ok" in (await engineC.enterRecoveryPhrase("/sync", asSecret("syncPhrase", "words"))));
     await engineC.syncNow();
     await engineC.syncNow();
     assert.deepEqual(S().profiles.default.theme, THEME_B);
@@ -333,7 +334,7 @@ test("a Mac joining sync takes a paired profile's choice to share its Top Apps i
   });
   await c.with(async () => {
     engineC.startSync();
-    assert.ok("ok" in (await engineC.enterRecoveryPhrase("/sync", "words")));
+    assert.ok("ok" in (await engineC.enterRecoveryPhrase("/sync", asSecret("syncPhrase", "words"))));
     await engineC.syncNow();
     await engineC.syncNow();
     assert.equal(S().profiles.default.shareTopApps, true, "the paired profile takes the synced choice");

@@ -30,7 +30,7 @@
 //     Prints the first and last sample of each, and the growth per 1000 navigations, side by side.
 
 import { execFileSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { prepareApp } from "../../../../scripts/lib/app-copy.mjs";

@@ -9,6 +9,7 @@ export const addFilterList = (url: string) => call("contentBlocker.addList", { u
 export const removeFilterList = (id: string) => call("contentBlocker.removeList", { id });
 export const isContentBlockerAllowed = (host: string) => call("contentBlocker.isAllowed", { host });
 export const setContentBlockerAllowed = (host: string, allowed: boolean) => call("contentBlocker.setAllowed", { host, allowed });
+export const removeContentBlockerAllowed = (host: string) => call("contentBlocker.removeAllowed", { host });
 export const onContentBlockerChange = (listener: (stats: ContentBlockerStats) => void) => on("contentBlocker.changed", listener);
 export const getHiddenElements = (profile: string) => call("contentBlocker.hiddenElements", { profile });
 export const hideElements = (profile: string, filters: string[]) => call("contentBlocker.hideElements", { profile, filters });

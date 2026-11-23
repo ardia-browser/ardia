@@ -5,9 +5,9 @@ import type { Rect4 } from "@ardia/shell";
 export const POPUP_CAPTION_HEIGHT = 32;
 export const POPUP_ORIGIN_STRIP_HEIGHT = 28;
 export const POPUP_CHROME_HEIGHT = POPUP_CAPTION_HEIGHT + POPUP_ORIGIN_STRIP_HEIGHT;
-export const POPUP_DEFAULT_PAGE = { width: 500, height: 600 } as const;
+const POPUP_DEFAULT_PAGE = { width: 500, height: 600 } as const;
 export const POPUP_MIN_PAGE = { width: 200, height: 150 } as const;
-export const POPUP_BELOW_OPENER_TOP = 60;
+const POPUP_BELOW_OPENER_TOP = 60;
 
 const FIELDS = ["x", "y", "width", "height"] as const;
 

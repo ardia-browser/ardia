@@ -70,7 +70,7 @@ const newRuleId = () => `r${Date.now().toString(36)}${Math.random().toString(36)
 
 export type RuleDraft = Omit<AirTrafficRule, "id">;
 
-export type RuleAdded = { id: string } | { refused: "full" | "exists" | "unsaved" };
+type RuleAdded = { id: string } | { refused: "full" | "exists" | "unsaved" };
 
 export function addAirTrafficRule(draft: RuleDraft, id = newRuleId()): string | null {
   const added = tryAddAirTrafficRule(draft, id);

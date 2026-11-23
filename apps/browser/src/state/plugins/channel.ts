@@ -14,8 +14,7 @@ import { valuesFor } from "./values";
 import { dropHiddenRetainedSidePanels } from "./surfaces";
 import { answerMethod } from "./channelApi";
 
-export { CHANNEL_PROTOCOL, MAX_OPEN_URLS, type ChannelCaller } from "./channelApi";
-export { pluginWebUrl, MAX_OPEN_URL_LENGTH, type PluginWebUrl } from "../../lib/pluginWebUrl";
+export { pluginWebUrl } from "../../lib/pluginWebUrl";
 
 type Connection = { name: string; run: number; sub: Subscription | null; launchSent: boolean };
 
@@ -30,7 +29,7 @@ function connectionFor(name: string, run: number): Connection {
   return c;
 }
 
-export const observedHooks = (m: PluginManifest) => m.hooks.filter((h) => !isDecideEvent(h));
+const observedHooks = (m: PluginManifest) => m.hooks.filter((h) => !isDecideEvent(h));
 
 function subscribe(c: Connection, m: PluginManifest, params: Record<string, unknown>): Body {
   const given = params.events;
@@ -68,7 +67,7 @@ function reply(c: Connection, id: RequestId, body: Body) {
   for (const data of replay) deliverTo(c, "tab.idle", data, Date.now());
 }
 
-export function handlePluginLine({ name, run, launch, line }: PluginLine) {
+function handlePluginLine({ name, run, launch, line }: PluginLine) {
   if (!acceptsLine(name, run, launch)) return;
   const manifest = activeManifest(currentPlugins(), name);
   const c = connectionFor(name, run);
@@ -103,7 +102,7 @@ function deliver(name: AutomationEventName, data: Record<string, unknown>, time:
   for (const index of [...full, ...plain]) deliverTo(byIndex[index]!, name, data, time);
 }
 
-export function dropConnections(name: string) {
+function dropConnections(name: string) {
   let changed = false;
   for (const [k, c] of connections) {
     if (c.name !== name) continue;
@@ -137,4 +136,3 @@ export function startChannels() {
   setFeedConsumer("plugins", { subscriptions: () => [...connections.values()].flatMap((c) => (c.sub ? [c.sub] : [])), deliver });
 }
 
-export const channelCount = () => connections.size;

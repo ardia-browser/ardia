@@ -8,7 +8,7 @@ const INPUT_EVENTS = ["keydown", "pointerdown", "pointermove", "wheel", "touchst
 
 export const TAB_POLICY_LOCK = "ardia.linux.tab-policies";
 export const TAB_POLICY_CHANNEL = "ardia.linux.tab-policies";
-export const BATTERY_SAVER_WAIT_MS = 2_000;
+const BATTERY_SAVER_WAIT_MS = 2_000;
 
 export function watchInputIdle(target: InputTarget, now: () => number = Date.now) {
   let last = now();
@@ -30,10 +30,10 @@ export function watchHostInputActivity(engine: EngineEvents, listener: () => voi
   return () => subscription.remove();
 }
 
-export type PolicyLocks = { request(name: string, callback: () => Promise<void>): Promise<unknown> };
-export type PolicyChannel = { postMessage(message: unknown): void; addEventListener(type: "message", listener: (event: { data: unknown }) => void): void; close(): void };
+type PolicyLocks = { request(name: string, callback: () => Promise<void>): Promise<unknown> };
+type PolicyChannel = { postMessage(message: unknown): void; addEventListener(type: "message", listener: (event: { data: unknown }) => void): void; close(): void };
 
-export type LinuxPolicyDeps = {
+type LinuxPolicyDeps = {
   target: InputTarget;
   provide: (provider: ModuleProvider) => () => void;
   startLifecycle: () => void;

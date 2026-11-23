@@ -12,7 +12,7 @@ const LIGHT: typeof DARK = {
   bubbleTint: "rgba(255,255,255,0.3)",
 };
 
-export type DownloadsColors = typeof DARK;
+type DownloadsColors = typeof DARK;
 
 export function useDownloadsColors(): DownloadsColors {
   return useTheme().dark ? DARK : LIGHT;

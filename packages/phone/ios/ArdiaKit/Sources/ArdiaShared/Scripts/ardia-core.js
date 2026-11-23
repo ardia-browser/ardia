@@ -64,7 +64,7 @@ if (typeof scope.URL === "undefined") scope.URL = HostURL;
                              
                
   
-                                                                                                               
+                                                                                                        
 
 let source                   = { tabs: [], history: [], bookmarks: [] };
 let engines                 = allEngines();
@@ -187,6 +187,7 @@ __define("packages/core/src/index.ts", function (exports, __require) {
   __exportAll(exports, __require("packages/core/src/providerNetwork.ts"));
   __exportAll(exports, __require("packages/core/src/providerRows.ts"));
   __exportAll(exports, __require("packages/core/src/quickCreate.ts"));
+  __exportAll(exports, __require("packages/core/src/secret.ts"));
   __exportAll(exports, __require("packages/core/src/siteSearch.ts"));
   __exportAll(exports, __require("packages/core/src/suggest.ts"));
   __exportAll(exports, __require("packages/core/src/suggestFetcher.ts"));
@@ -194,6 +195,7 @@ __define("packages/core/src/index.ts", function (exports, __require) {
   __exportAll(exports, __require("packages/core/src/textFragment.ts"));
   __exportAll(exports, __require("packages/core/src/theme.ts"));
   __exportAll(exports, __require("packages/core/src/webStore.ts"));
+
 
 
 
@@ -372,7 +374,7 @@ function appUrlOrigin(url        )                {
   return parts ? `${APP_SCHEME}://${parts.host}` : null;
 }
 
-                         
+                  
                                        
                                                 
                       
@@ -947,7 +949,7 @@ function convert(input        )                                         {
   return { value: (amount * a.factor) / b.factor, unit: b.label };
 }
 
-                                                                                 
+                                                                          
 
 function calculate(raw        )                     {
   const expression = raw.trim().replace(/^=\s*/, "").replace(/\s*=\s*\??$/, "");
@@ -971,7 +973,9 @@ function calculate(raw        )                     {
 __define("packages/core/src/cleanUrl.ts", function (exports, __require) {
   __export(exports, "cleanUrlReport", () => cleanUrlReport);
   __export(exports, "cleanUrl", () => cleanUrl);
+  __export(exports, "cleanLinkTitle", () => cleanLinkTitle);
   __export(exports, "markdownLink", () => markdownLink);
+  __export(exports, "linkLines", () => linkLines);
 
 const GLOBAL_PARAMS = new Set([
   "gclid", "gclsrc", "dclid", "gbraid", "wbraid", "gad_source", "gad_campaignid", "_ga", "_gl", "srsltid",
@@ -1021,10 +1025,12 @@ function isTrackingParam(name        , hostname = "")          {
   return siteRules(hostname).some((r) => r.params.includes(key) || r.prefixes?.some((p) => key.startsWith(p)));
 }
 
-                                                                  
+                                                                               
+                                                                                                 
+                                                                                     
 
-function cleanUrlReport(url        )             {
-  const unchanged = { url, removedTracker: false };
+function cleanUrlReport(url        )                 {
+  const unchanged = Object.freeze({ url: url              , removedTracker: false });
   const match = /^([^?#]*)(\?[^#]*)?(#.*)?$/.exec(url);
   if (!match?.[2]) return unchanged;
   let hostname = "";
@@ -1040,15 +1046,38 @@ function cleanUrlReport(url        )             {
   const tracks = (pair        ) => isTrackingParam(decodeName(pair.split("=")[0] ), hostname);
   const kept = pairs.filter((pair) => pair && !tracks(pair));
   if (kept.length === pairs.length) return unchanged;
-  return { url: `${base}${kept.length ? `?${kept.join("&")}` : ""}${hash}`, removedTracker: pairs.some((pair) => pair !== "" && tracks(pair)) };
+  const cleaned = `${base}${kept.length ? `?${kept.join("&")}` : ""}${hash}`              ;
+  return Object.freeze({ url: cleaned, removedTracker: pairs.some((pair) => pair !== "" && tracks(pair)) });
 }
 
-function cleanUrl(url        )         {
+function cleanUrl(url        )             {
   return cleanUrlReport(url).url;
 }
 
-function markdownLink(title        , url        )         {
-  return `[${(title || url).replace(/([[\]])/g, "\\$1")}](${cleanUrl(url)})`;
+const LINE_BREAK_ESCAPES                         = { "\r": "%0D", "\n": "%0A" };
+
+const markdownLabel = (text        ) => text.replace(/[\\[\]*_\x60<>~]/g, "\\$&").replace(/&(?=#?[A-Za-z0-9]+;)/g, "&amp;");
+
+function markdownDestination(url        )         {
+  const oneLine = url.replace(/[\r\n]/g, (character) => LINE_BREAK_ESCAPES[character] ).replace(/&(?=#?[A-Za-z0-9]+;)/g, "&amp;");
+  return /[\s<>]/.test(oneLine) ? `<${oneLine.replace(/[<>\\]/g, "\\$&")}>` : oneLine.replace(/[()\\]/g, "\\$&");
+}
+
+                                                                                      
+
+function cleanLinkTitle(title                           , url        )               {
+  const oneLine = (title ?? "").replace(/\s*[\r\n\u2028\u2029]+\s*/g, " ").trim();
+  if (!oneLine) return ""                ;
+  return (oneLine === url.trim() ? cleanUrl(url) : cleanUrl(oneLine))                          ;
+}
+
+function markdownLink(title        , url        )           {
+  const clean = cleanUrl(url);
+  return `[${markdownLabel(cleanLinkTitle(title, url) || clean)}](${markdownDestination(clean)})`            ;
+}
+
+function linkLines(lines                     , markdown         )           {
+  return (markdown && lines.length > 1 ? lines.map((line) => `- ${line}`).join("\n") : lines.join("\n"))            ;
 }
 
 });
@@ -1269,7 +1298,7 @@ const { cleanUrl } = __require("packages/core/src/cleanUrl.ts");
 const { displayHost, punycodeEncode } = __require("packages/core/src/idn.ts");
 const { PSL_TLDS } = __require("packages/core/src/tlds.ts");
 
-                                                                                                                  
+                                                                                                           
 
 const URL_PARTS = /^([a-z][a-z0-9+.-]*):\/\/(?:[^@/?#]*@)?(\[[^\]]*\]|[^:/?#]*)(?::(\d+))?([^?#]*)(\?[^#]*)?(#.*)?$/i;
 
@@ -1700,7 +1729,7 @@ const DANGEROUS = new RegExp(
   "u",
 );
 
-                         
+                  
              
                          
                
@@ -1948,7 +1977,7 @@ const { matchActions } = __require("packages/core/src/fuzzy.ts");
                    
   
 
-                                                                   
+                                                            
 
 const NONE                = { rows: [], exact: false };
 const MIN_PARTIAL_QUERY = 3;
@@ -2083,7 +2112,7 @@ const SITE_INGEST_KEY = "ak_site_6b26588b3764ae7d0f6d63d7";
 
 const INGEST_KEY_HEADER = "X-Ardia-Key";
 
-                                                  
+                                           
 
 const INGEST_KEYS                                         = {
   app: APP_INGEST_KEY,
@@ -2597,7 +2626,7 @@ const providerApprovalKey = (definition         ) => `omnibox-provider:${sha256H
 });
 __define("packages/core/src/quickCreate.ts", function (exports, __require) {
   __export(exports, "matchQuickCreate", () => matchQuickCreate);
-                           
+                    
              
                 
               
@@ -2637,6 +2666,171 @@ function matchQuickCreate(query        , limit = 3)                {
     .slice(0, limit)
     .map((x) => x.c);
 }
+
+});
+__define("packages/core/src/secret.ts", function (exports, __require) {
+  __export(exports, "SECRET_KINDS", () => SECRET_KINDS);
+  __export(exports, "REDACTED_SECRET", () => REDACTED_SECRET);
+  __export(exports, "SecretEscapeError", () => SecretEscapeError);
+  __export(exports, "Secret", () => Secret);
+  __export(exports, "asSecret", () => asSecret);
+  __export(exports, "isSecret", () => isSecret);
+  __export(exports, "reveal", () => reveal);
+  __export(exports, "sameSecret", () => sameSecret);
+  __export(exports, "noteSecretEscape", () => noteSecretEscape);
+  __export(exports, "setSecretEscapeMode", () => setSecretEscapeMode);
+  __export(exports, "onSecretEscape", () => onSecretEscape);
+  __export(exports, "secretsDropped", () => secretsDropped);
+  __export(exports, "withoutSecrets", () => withoutSecrets);
+const SECRET_KINDS = ["password", "oauthToken", "oauthClientSecret", "apiToken", "pluginSecret", "syncPhrase", "devtoolsToken"]         ;
+
+                                                       
+
+                                                                              
+
+                                         
+
+const REDACTED_SECRET = "<secret>";
+
+const plaintext = new WeakMap                ();
+const kinds = new WeakMap                    ();
+const listeners = new Set                                                 ();
+let mode                   = "drop";
+let dropped = 0;
+
+class SecretEscapeError extends Error {
+           where              ;
+           kind            ;
+
+  constructor(where              , kind            ) {
+    super(`A ${kind} secret reached a ${where} sink`);
+    this.name = "SecretEscapeError";
+    this.where = where;
+    this.kind = kind;
+  }
+}
+
+class Secret                                    {
+                   secretKind    ;
+
+          constructor() {}
+
+  get kind()    {
+    return kinds.get(this)     ;
+  }
+
+  toJSON()            {
+    noteSecretEscape("json", this);
+    return undefined;
+  }
+
+  toString()         {
+    noteSecretEscape("text", this);
+    return REDACTED_SECRET;
+  }
+
+  valueOf()         {
+    return this.toString();
+  }
+}
+
+Object.defineProperty(Secret.prototype, Symbol.toPrimitive, { value: Secret.prototype.toString });
+Object.defineProperty(Secret.prototype, Symbol.for("nodejs.util.inspect.custom"), { value: () => `Secret(${REDACTED_SECRET})` });
+
+function asSecret                      (kind   , value        )            {
+  if (typeof value !== "string") throw new TypeError("A secret is text");
+  if (!SECRET_KINDS.includes(kind)) throw new TypeError("Unknown secret kind");
+  const box = Object.create(Secret.prototype)             ;
+  plaintext.set(box, value);
+  kinds.set(box, kind);
+  Object.freeze(box);
+  return box;
+}
+
+const isSecret = (value         )                  => typeof value === "object" && value !== null && plaintext.has(value);
+
+function reveal(secret        )         {
+  const value = plaintext.get(secret);
+  if (value === undefined) throw new TypeError("Not a secret");
+  return value;
+}
+
+const sameSecret = (a                           , b                           )          =>
+  !!a && !!b && (a === b || (a.kind === b.kind && reveal(a) === reveal(b)));
+
+function noteSecretEscape(where              , secret        )       {
+  const kind = kinds.get(secret) ?? "password";
+  if (mode === "throw") throw new SecretEscapeError(where, kind);
+  dropped++;
+  for (const listener of listeners) {
+    try {
+      listener(where, kind);
+    } catch {}
+  }
+}
+
+function setSecretEscapeMode(next                  )                   {
+  const previous = mode;
+  mode = next;
+  return previous;
+}
+
+function onSecretEscape(listener                                                 )             {
+  listeners.add(listener);
+  return () => void listeners.delete(listener);
+}
+
+const secretsDropped = () => dropped;
+
+function withoutSecrets   (value   , where              , seen = new WeakSet        ())    {
+  if (isSecret(value)) {
+    noteSecretEscape(where, value);
+    return undefined     ;
+  }
+  if (!value || typeof value !== "object" || seen.has(value)) return value;
+  seen.add(value);
+  if (Array.isArray(value)) {
+    let changed = false;
+    const out = value.map((item) => {
+      const kept = withoutSecrets(item, where, seen);
+      if (kept !== item) changed = true;
+      return kept;
+    });
+    return (changed ? out : value)     ;
+  }
+  if (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null) return value;
+  let out                                 = null;
+  for (const [key, item] of Object.entries(value)) {
+    const kept = withoutSecrets(item, where, seen);
+    if (kept === item) continue;
+    out ??= { ...(value                           ) };
+    if (kept === undefined) delete out[key];
+    else out[key] = kept;
+  }
+  return (out ?? value)     ;
+}
+
+                                               
+                                           
+
+                                                  
+                       
+           
+                             
+             
+                        
+              
+                                                 
+                 
+                                             
+                                                    
+                              
+                                                                                                  
+                      
+                       
+                      
+
+                                                                       
 
 });
 __define("packages/core/src/siteSearch.ts", function (exports, __require) {
@@ -2689,7 +2883,7 @@ const POPULAR_SITE_SEARCHES                        = [
 
                                                                                                           
 
-                            
+                     
                                    
                                 
                             
@@ -2761,14 +2955,14 @@ function offeredSiteSearch(typed        , completion        , sources           
                     
   
 
-                                                                                                                    
+                                                                                                             
 
-                           
+                    
                                                        
                                    
                                      
 
-                                                               
+                                                        
 
 function keywordBySpace(typed        , next        )                        {
   if (!typed.trim() || /\s$/.test(typed) || next !== `${typed} `) return null;
@@ -3346,7 +3540,7 @@ __define("packages/core/src/pageMatch.ts", function (exports, __require) {
                                                           
 const { shownWordsOf } = __require("packages/core/src/pageText.ts");
 
-                     
+              
             
                                          
                 
@@ -3603,7 +3797,7 @@ __define("packages/core/src/textFragment.ts", function (exports, __require) {
   __export(exports, "chooseTextFragment", () => chooseTextFragment);
   __export(exports, "withTextFragment", () => withTextFragment);
 
-                                                                                             
+                                                                                      
 
                                 
                    
@@ -4091,7 +4285,7 @@ __define("packages/core/src/webStore.ts", function (exports, __require) {
   __export(exports, "isExtensionId", () => isExtensionId);
   __export(exports, "webStoreExtensionId", () => webStoreExtensionId);
   __export(exports, "permissionWarnings", () => permissionWarnings);
-                                                                                        
+                                                                                 
 
 const isExtensionId = (s        ) => /^[a-p]{32}$/.test(s);
 

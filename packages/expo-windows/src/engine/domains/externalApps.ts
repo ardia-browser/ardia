@@ -3,7 +3,7 @@ import type { DocumentsNative, ExternalAppCountsNative, ExternalAppLaunches } fr
 import type { ExternalAppsModule, ExternalHandler } from "../../nativeModuleTypes";
 import { callError, isFields, isPrivateProfile, ok, type Engine, type Fields, type Handlers } from "./calling";
 
-export type ExternalAppAsk = { id: string; url: string; origin: string | null; userGesture: boolean; offTheRecord: boolean };
+type ExternalAppAsk = { id: string; url: string; origin: string | null; userGesture: boolean; offTheRecord: boolean };
 
 type Pending = { ask: string; handler: ExternalHandler; url: string; scheme: string; profile: string; page: string; origin: string | null; rememberable: boolean };
 

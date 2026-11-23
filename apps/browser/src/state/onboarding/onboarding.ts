@@ -31,7 +31,7 @@ export {
 } from "./onboardingDocument";
 export { playIntroMusic, setIntroMusicMuted, stopIntroMusic, type IntroMusicCues } from "../../platform/introMusic";
 export { introStartDelayMs };
-export { PRESET_NAMES, PRESETS, presetFor, setsUpLikeBrowser, type BrowserSourceId, type Preset } from "./presets";
+export { PRESET_NAMES, PRESETS, presetFor, type BrowserSourceId, type Preset } from "./presets";
 
 export const STEPS: OnboardingStep[] = stepsForThisSurface(["intro", "source", "layout", "tabs", "look", "searchPrivacy", "pins", "home", "plugins", "outro"]);
 
@@ -58,7 +58,7 @@ export const draftPreset = (s: { prefill: Prefill; preset: Preset }): Preset | n
 
 export const presetPatch = (source: BrowserSourceId | null): Partial<Settings> => (setsUpLikeBrowser(source) ? PRESETS[source] : {});
 
-export type Extras = {
+type Extras = {
   color: ProfileColor;
   appIcon: string;
   share: boolean;

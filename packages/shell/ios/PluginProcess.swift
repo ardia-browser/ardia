@@ -129,7 +129,8 @@ final class PluginProcess: PluginRun {
     }
     let sandbox = PluginSandbox(
       home: PluginSandbox.resolved(NSHomeDirectory()) ?? NSHomeDirectory(), appData: folders.appData, configFolder: folders.config,
-      pluginFolder: pluginFolder, pluginData: data, program: program, network: spec.sandboxNetwork)
+      pluginFolder: pluginFolder, pluginData: data, program: program, network: spec.sandboxNetwork, kind: spec.isScript ? .script : .program,
+      officialCopy: folders.officialCopy(spec.name, folderId: spec.folderId).flatMap { PluginSandbox.resolved($0.path) })
     let sandboxArguments: [String]
     do {
       sandboxArguments = try sandbox.arguments()
@@ -320,11 +321,6 @@ final class PluginProcess: PluginRun {
     }
     killTimer = item
     queue.asyncAfter(deadline: .now() + .milliseconds(max(0, graceMs)), execute: item)
-  }
-
-  func killNow() {
-    guard !exited else { return }
-    signalFamily(SIGKILL)
   }
 
   func terminateForQuit(within seconds: TimeInterval) {

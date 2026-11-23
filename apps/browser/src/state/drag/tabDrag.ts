@@ -12,12 +12,12 @@ import { dropTabIntoSplit } from "../splits/actions";
 import { dropTabsOutside, rootPointIn, screenPoint, windowUnder } from "./windowDrop";
 import { dropTabsOnBar, followTabDragOnBar } from "../bookmarks/barDrag";
 
-export type DropTarget = { tabId: string; side: SplitSide };
+type DropTarget = { tabId: string; side: SplitSide };
 type Insert = { windowId: string; beforeId: string | null };
 type Picture = { chip: () => [number, number, number, number]; grab: [number, number] };
 type TabDragSession = { seq: number; liveFrame: Frame | null; pointer: [number, number]; picture: Picture | null; sentShape: DragPreviewShape };
 
-export type TabDragging = {
+type TabDragging = {
   phase: "tab";
   tabId: string | null;
   tabIds: string[];
@@ -34,7 +34,7 @@ export type TabDragging = {
   session: TabDragSession;
 };
 
-export type ExternalDragging = {
+type ExternalDragging = {
   phase: "external";
   owner: { windowId: string; token: number };
   overWindow: string;

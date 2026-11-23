@@ -8,6 +8,7 @@ import { fieldTiming } from "../../platform/fieldTiming";
 import { isAsleep } from "../tabs/pageSession";
 import { NATIVE_REVEAL_COUNTS, forgetDroppedPress, nativePressTime, type Mark } from "./nativeRevealMarks";
 import { switchingPress } from "../tabs/tabReveal";
+import { launchRowsFields, launchRowsSettled } from "../sidebar/launchRows";
 
 let on = false;
 
@@ -195,7 +196,6 @@ let launch: Launch | null = null;
 let launchSent = false;
 type PreviousLaunch = { lastLaunchAt: number | null; lastQuitAt: number | null; firstOfVersion: boolean | null; coldNth?: number | null; versionSince?: number | null };
 let previousLaunch: PreviousLaunch = { lastLaunchAt: null, lastQuitAt: null, firstOfVersion: null };
-
 let firstRootCommitted = false;
 
 export function launchCommitted() {
@@ -236,7 +236,7 @@ export function launchFirstWindow(at: number) {
 function settleLaunch(l: Launch, now: number) {
   const content = mark("launch", "content", l.t0);
   const paints = l.keys.map((k) => mark(k, "fcp", l.t0)).filter((at): at is number => at !== null);
-  const done = l.usable !== undefined && l.firstWindow !== undefined && content !== null && (paints.length || !l.keys.length);
+  const done = l.usable !== undefined && l.firstWindow !== undefined && content !== null && (paints.length || !l.keys.length) && launchRowsSettled();
   if (!done && now - (l.commit ?? l.t0) < 30_000) return false;
   sendLaunch(l, content, paints);
   return true;
@@ -280,7 +280,7 @@ function sendLaunch(l: Launch, content: number | null, paints: number[]) {
     history: bucket(history, [[0, "0"], [99, "<100"], [999, "<1k"], [4999, "<5k"], [19_999, "<20k"], [99_999, "<100k"]], "100k+"),
     history_oldest: oldestVisit > 0 && oldestVisit <= l.t0 ? bucket(l.t0 - oldestVisit, [[30 * DAY, "<30d"], [91 * DAY, "<91d"], [365 * DAY, "<1y"], [3 * 365 * DAY, "<3y"]], "3y+") : null,
     cold: bootTime && lastLaunchAt ? lastLaunchAt < bootTime : null,
-    first_of_version: firstOfVersion, ...launchCohortFields(previousLaunch, l.t0),
+    first_of_version: firstOfVersion, ...launchCohortFields(previousLaunch, l.t0), ...launchRowsFields(),
     update_prewarm: firstOfVersion ? (prewarm ? (prewarm.status === 0 ? "done" : "failed") : "none") : null,
     update_prewarm_ago: prewarm?.at ? ago(l.t0 - prewarm.at) : null,
     since_quit: lastQuitAt && (!lastLaunchAt || lastQuitAt >= lastLaunchAt) ? ago(l.t0 - lastQuitAt) : lastLaunchAt ? "unclean" : "unknown",

@@ -34,7 +34,7 @@ export const folderMenuOpen = (windowId: string) => {
   return s.windowId === windowId && s.panels.some((p) => !p.retained);
 };
 
-export const openPanelKey = (windowId: string, level: number) => {
+const openPanelKey = (windowId: string, level: number) => {
   const s = useFolderMenus.getState();
   return s.windowId === windowId ? (s.panels.find((p) => p.level === level && !p.retained)?.key ?? null) : null;
 };

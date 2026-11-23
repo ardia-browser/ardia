@@ -62,7 +62,6 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)resolveUnresponsive:(BOOL)terminate NS_SWIFT_NAME(resolveUnresponsive(terminate:));
 - (NSString *)discard:(BOOL)unload NS_SWIFT_NAME(discard(unload:));
 - (NSArray<NSNumber *> *)sleepIfHiddenFor:(NSTimeInterval)seconds NS_SWIFT_NAME(sleepIfHidden(for:));
-+ (nullable NSString *)appTabIdContainingView:(nullable NSView *)view NS_SWIFT_NAME(appTabId(containing:));
 @end
 
 @interface ArdiaWebView (Reveals)
@@ -93,7 +92,6 @@ NS_ASSUME_NONNULL_BEGIN
 + (BOOL)refusesInputAheadOfSwitch:(nullable id)target NS_SWIFT_NAME(refusesInputAheadOfSwitch(_:));
 + (void)setAppWideKeys:(nullable BOOL (^)(NSEvent *event))perform;
 + (void)installRevealGuards;
-+ (NSUInteger)guardedAccessibilityCalls;
 @end
 
 @interface ArdiaWebView (PaintedFrame)

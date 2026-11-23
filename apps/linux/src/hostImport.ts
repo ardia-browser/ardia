@@ -10,8 +10,8 @@ type ImportEvent = { jobId?: unknown; type?: unknown; [key: string]: unknown };
 export type PendingPasswords = { token: string; count: number };
 export type WrittenPasswords = { added: number; existing: number; conflicts: number; invalid: number };
 
-export const IMPORT_MODULE = "ArdiaImport";
-export const IMPORT_EVENT = "onImportEvent";
+const IMPORT_MODULE = "ArdiaImport";
+const IMPORT_EVENT = "onImportEvent";
 export const IMPORT_IDLE_MS = 120_000;
 export const CHOOSER_DEADLINE_MS = 30 * 60_000;
 export const UNLOCK_DEADLINE_MS = 150_000;
@@ -19,7 +19,7 @@ export const UNLOCK_LIFETIME_MS = 10 * 60_000;
 const HISTORY_CHUNK = 500;
 const TOKEN = /^[0-9a-f]{32}$/;
 export const MAX_SPACE_IDS = 256;
-export const MAX_SPACE_ID_LENGTH = 256;
+const MAX_SPACE_ID_LENGTH = 256;
 
 type Clock = { schedule(run: () => void, ms: number): unknown; cancel(handle: unknown): void; now?(): number };
 const realClock: Clock = { schedule: (run, ms) => setTimeout(run, ms), cancel: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>), now: () => Date.now() };
@@ -59,9 +59,9 @@ function writtenPasswords(reply: unknown): WrittenPasswords {
   return { added: count(value.added), existing: count(value.existing), conflicts: count(value.conflicts), invalid: count(value.invalid) };
 }
 
-export type UnlockOptions = { primaryPassword?: string; profiles?: readonly string[]; kinds?: readonly string[] };
+type UnlockOptions = { primaryPassword?: string; profiles?: readonly string[]; kinds?: readonly string[] };
 
-export type HostImport = Pick<
+type HostImport = Pick<
   Api,
   | "listBrowsers"
   | "importData"

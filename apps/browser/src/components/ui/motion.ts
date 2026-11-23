@@ -9,7 +9,6 @@ export const curve = {
   exit: Easing.in(Easing.quad),
   move: Easing.inOut(Easing.quad),
   pulse: Easing.inOut(Easing.sin),
-  outExpo: Easing.out(Easing.exp),
   fade: Easing.bezier(0.25, 0.46, 0.45, 0.94),
   cssEase: Easing.bezier(0.25, 0.1, 0.25, 1),
   cssEaseOut: Easing.bezier(0, 0, 0.58, 1),

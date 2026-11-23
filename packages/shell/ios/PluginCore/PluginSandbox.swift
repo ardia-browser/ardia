@@ -9,6 +9,9 @@ struct PluginSandbox {
   let pluginData: String
   let program: String
   let network: Bool
+  var kind: Kind = .program
+  var officialCopy: String?
+  var developer: String? = PluginSandbox.developerFolder()
 
   static let searchPath = ["/usr/bin", "/bin", "/usr/sbin", "/sbin", "/opt/homebrew/bin", "/usr/local/bin"]
 
@@ -277,50 +280,112 @@ struct PluginSandbox {
     return true
   }
 
-  static func profile(network: Bool) -> String {
-    let mach = machAllowed + (network ? machAllowedOnline : [])
-    let preferences = preferenceDomainsAllowed.isEmpty
-      ? "" : "\n(allow user-preference-read \(preferenceDomainsAllowed.map { "(preference-domain \"\($0)\")" }.joined(separator: " ")))"
-    let sockets = network
-      ? "\n(allow network-outbound \(unixSocketsAllowedOnline.map { "(remote unix-socket (literal \"\($0)\"))" }.joined(separator: " ")))" : ""
-    let addresses = network
-      ? ""
-      : """
+  enum Kind {
+    case program
+    case script
+  }
 
-        (deny network-outbound (remote ip))
-        (deny network-bind (local ip))
-        (deny network-inbound (local ip))
+  static let systemReadable = ["/System", "/usr/lib", "/usr/share", "/Library/Apple", "/Library/Preferences/Logging", "/private/var/db/timezone"]
+
+  static let systemMappable = ["/System", "/usr/lib", "/Library/Apple"]
+
+  static let systemVolumes = "/System/Volumes"
+
+  static let cryptexes = [
+    "/System/Volumes/Preboot/Cryptexes/App/System", "/System/Volumes/Preboot/Cryptexes/Incoming/OS", "/System/Volumes/Preboot/Cryptexes/OS",
+    "/System/Volumes/Preboot/Cryptexes/Rosetta",
+  ]
+
+  static let devicesReadable = ["/dev/random", "/dev/urandom", "/dev/autofs_nowait"]
+
+  static let packagePrefixes = ["/usr/local", "/opt/homebrew"]
+
+  static let packageFolders = ["bin", "sbin", "lib", "libexec", "opt", "Cellar", "Frameworks", "share"]
+
+  static let toolFolders = ["/bin", "/sbin", "/usr/bin", "/usr/sbin", "/usr/libexec"] + packagePrefixes.flatMap { prefix in packageFolders.map { "\(prefix)/\($0)" } }
+
+  static let sharedTemporaryTrees = ["/private/tmp", "/private/var", "/tmp", "/var"]
+
+  static let toolSystemFiles = [
+    "/private/etc/passwd", "/private/etc/group", "/private/etc/protocols", "/private/etc/services", "/private/etc/shells", "/private/etc/localtime",
+    "/private/var/db/xcode_select_link", "/Library/Preferences/com.apple.dt.Xcode.plist",
+  ]
+
+  static let commandLineTools = "/Library/Developer/CommandLineTools"
+
+  static let toolSystemFolders = ["/private/etc/ssl", "/private/var/select"]
+
+  static let onlineSystemFiles = ["/private/etc/hosts", "/private/etc/resolv.conf", "/private/var/run/resolv.conf"]
+
+  static let developerLink = "/private/var/db/xcode_select_link"
+
+  static let officialFolderName = "OfficialPlugins"
+
+  static func developerFolder(link: String = developerLink) -> String? {
+    guard let real = resolved(link), real.hasPrefix("/") else { return nil }
+    let bundle = real.hasSuffix("/Contents/Developer") ? String(real.dropLast("/Contents/Developer".count)) : real
+    guard bundle != "/", bundle.split(separator: "/").count >= 2, !unreadableTrees.contains(where: { overlaps($0, bundle) }) else { return nil }
+    return bundle
+  }
+
+  static func any(_ filter: String, _ paths: [String]) -> String { paths.map { "(\(filter) \"\($0)\")" }.joined(separator: " ") }
+
+  static func profile(network: Bool, kind: Kind = .program, developer: Bool = false) -> String {
+    let mach = machAllowed + (network ? machAllowedOnline : [])
+    let preferences = preferenceDomainsAllowed.isEmpty ? "" : "\n(allow user-preference-read \(any("preference-domain", preferenceDomainsAllowed)))"
+    let developerRule = developer ? " (subpath (param \"DEVELOPER\"))" : ""
+    let programs: String
+    let ownPrograms: String
+    switch kind {
+    case .script:
+      programs = ""
+      ownPrograms = "(allow process-exec (literal (param \"PROGRAM\")))"
+    case .program:
+      ownPrograms = "(allow process-exec (literal (param \"PROGRAM\")) (subpath (param \"PLUGIN\")) (subpath (param \"INSTALL\")))"
+      programs = """
+
+        (allow process-fork)
+        (allow process-exec file-map-executable \(any("subpath", toolFolders + [commandLineTools]))\(developerRule))
+        (allow file-read* \(any("subpath", toolFolders + [commandLineTools] + toolSystemFolders)) \(any("literal", toolSystemFiles))\(developerRule))
+        (allow file-read* file-write-data file-ioctl (literal "/dev/dtracehelper"))
         """
+    }
+    let online = network
+      ? """
+
+        (allow network-outbound (remote ip))
+        (allow network-bind (local ip))
+        (allow network-inbound (local ip))
+        (allow network-outbound \(unixSocketsAllowedOnline.map { "(remote unix-socket (literal \"\($0)\"))" }.joined(separator: " ")))
+        (allow file-read* \(any("literal", onlineSystemFiles)))
+        """ : ""
     return """
       (version 1)
-      (allow default)
-      (deny appleevent-send)
-      (deny lsopen)
-      (deny job-creation)
-      (deny distributed-notification-post)
-      (deny darwin-notification-post)
-      (deny user-preference-write)
-      (deny user-preference-read)\(preferences)
-      (deny iokit-open)
-      (deny sysctl-write)
+      (deny default)
+      (deny appleevent-send lsopen job-creation distributed-notification-post darwin-notification-post user-preference-write iokit-open sysctl-write)
+      (deny process-info* signal ipc-posix-shm* mach-lookup user-preference-read)
+      (allow file-read-metadata)
+      (allow file-read* (literal "/") \(any("subpath", systemReadable)) \(any("literal", devicesReadable)))
+      (allow file-map-executable \(any("subpath", systemMappable)))
+      (deny file-read* file-map-executable (subpath "\(systemVolumes)"))
+      (allow file-read* file-map-executable \(any("subpath", cryptexes)))
+      (allow file-read* file-write-data \(any("literal", devicesWritable)))
+      (allow file-read-data file-write-data (subpath "/dev/fd"))
       (allow sysctl-read)
-      (deny process-info* signal)
-      (allow process-info* signal (target same-sandbox))
+      (allow system-info (info-type "vfs.disk-space"))
+      (allow process-info* (target same-sandbox))
+      (allow signal (target same-sandbox))
       (allow process-info-listpids)
-      (deny ipc-posix-shm*)
+      (allow system-socket)
       (allow ipc-posix-shm-read* (ipc-posix-name "apple.shm.notification_center") (ipc-posix-name-prefix "apple.cfprefs."))
-      (deny mach-lookup)
-      (allow mach-lookup \(mach.map { "(global-name \"\($0)\")" }.joined(separator: " ")))
-      (deny file-read* file-write* (subpath (param "HOME")) (subpath (param "APP_DATA")) (subpath (param "CONFIG")))
-      (deny file-read* file-write* \(unreadableTrees.map { "(subpath \"\($0)\")" }.joined(separator: " ")))
-      (allow file-read-metadata \(unreadableTrees.map { "(literal \"\($0)\")" }.joined(separator: " ")))
-      (deny file-write* (subpath "/"))
-      (allow file-write* \(devicesWritable.map { "(literal \"\($0)\")" }.joined(separator: " ")) (subpath "/dev/fd"))
-      (deny network-outbound (remote unix-socket))\(sockets)\(addresses)
-      (deny network-bind (local unix-socket))
-      (allow file-read* (subpath (param "PLUGIN")) (literal (param "PROGRAM")) (subpath (param "INSTALL")))
-      (allow file-read* file-write* (subpath (param "DATA")))
+      (allow mach-lookup \(any("global-name", mach)))\(preferences)\(programs)\(online)
+      (deny file-read* file-read-metadata file-write* file-map-executable process-exec (subpath (param "HOME")) (subpath (param "APP_DATA")) (subpath (param "CONFIG")))
+      (deny file-read* file-read-metadata file-write* file-map-executable process-exec \(any("subpath", unreadableTrees)))
+      (allow file-read-metadata \(any("literal", unreadableTrees)))
+      (allow file-read* file-read-metadata file-map-executable (subpath (param "PLUGIN")) (literal (param "PROGRAM")) (subpath (param "INSTALL")))
+      (allow file-read* file-read-metadata file-write* file-ioctl (subpath (param "DATA")))
       (allow file-read-metadata (literal (param "HOME")))
+      \(ownPrograms)
       """
   }
 
@@ -356,10 +421,13 @@ struct PluginSandbox {
   private var protected: [String] { [home, appData, configFolder] }
 
   func installFolder() -> String {
+    if kind == .script { return program }
     let parent = (program as NSString).deletingLastPathComponent
     let folder = (parent as NSString).lastPathComponent == "bin" ? (parent as NSString).deletingLastPathComponent : parent
     if folder == "/" || folder.split(separator: "/").count < 2 || protected.contains(where: { Self.overlaps($0, folder) }) { return program }
     if Self.unreadableTrees.contains(where: { Self.overlaps($0, folder) }) && !readable(folder) { return program }
+    if Self.sharedTemporaryTrees.contains(where: { Self.overlaps($0, folder) }) && !readable(folder) { return program }
+    if (["/usr"] + Self.packagePrefixes).contains(where: { Self.isInside($0, folder) }) { return program }
     return folder
   }
 
@@ -396,10 +464,13 @@ struct PluginSandbox {
     }
     let pluginsRoot = (configFolder as NSString).appendingPathComponent("plugins")
     let inPluginsRoot = Self.isInside(pluginFolder, pluginsRoot) && pluginFolder != pluginsRoot
+    let officialRoot = (appData as NSString).appendingPathComponent(Self.officialFolderName)
+    let inOfficialStore = officialCopy == pluginFolder && Self.isInside(pluginFolder, officialRoot)
+      && pluginFolder.dropFirst(officialRoot.count + 1).split(separator: "/", omittingEmptySubsequences: false).count == 2
     if pluginFolder == "/" || [home, configFolder, appData].contains(where: { Self.isInside($0, pluginFolder) }) {
       throw Refusal.unsafe("its folder takes in Ardia's data, its settings or your home folder")
     }
-    if (Self.isInside(pluginFolder, configFolder) || Self.isInside(pluginFolder, appData)) && !inPluginsRoot {
+    if (Self.isInside(pluginFolder, configFolder) || Self.isInside(pluginFolder, appData)) && !inPluginsRoot && !inOfficialStore {
       throw Refusal.unsafe("its folder is in Ardia's data or config folder")
     }
     if !Self.isInside(program, pluginFolder) && (Self.isInside(program, appData) || Self.isInside(program, configFolder)) {
@@ -411,10 +482,12 @@ struct PluginSandbox {
   func arguments() throws -> [String] {
     try checked()
     let paths = pathRules()
-    let parameters = [
+    let developerFolder = kind == .program ? developer.flatMap { $0.contains("\0") ? nil : $0 } : nil
+    var parameters = [
       "HOME": home, "APP_DATA": appData, "CONFIG": configFolder, "PLUGIN": pluginFolder, "DATA": pluginData, "PROGRAM": program,
       "INSTALL": installFolder(),
     ].merging(paths.parameters) { first, _ in first }
-    return ["-p", Self.profile(network: network) + paths.text] + parameters.sorted { $0.key < $1.key }.flatMap { ["-D", "\($0.key)=\($0.value)"] }
+    if let developerFolder { parameters["DEVELOPER"] = developerFolder }
+    return ["-p", Self.profile(network: network, kind: kind, developer: developerFolder != nil) + paths.text] + parameters.sorted { $0.key < $1.key }.flatMap { ["-D", "\($0.key)=\($0.value)"] }
   }
 }

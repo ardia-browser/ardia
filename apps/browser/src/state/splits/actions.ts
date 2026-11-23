@@ -2,6 +2,7 @@ import { showMenu, type MenuItem } from "../../platform/menus";
 import { showToast } from "../app/toasts";
 import { closeTab } from "../browser/actions";
 import { menuShortcut } from "../commands/commandShortcuts";
+import { withOptionAlternate } from "../app/menuSections";
 import { storeAction, useBrowser } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import { isStacked, MAX_SPLIT_PANES, type OpenPaneOptions, splitOf, type SplitSide, splitTabIds, splitTabIdsOf } from "./splits";
@@ -9,6 +10,9 @@ import { splitLane, type SplitLane, splitsOnRow } from "./lanes";
 import type { AdoptId } from "../browser/types";
 import { noteSplit } from "../telemetry/usage";
 import { returnFocusToPage } from "../sidebar/actions";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
+import { userClose, type ByUser } from "../tabs/closeActivation";
+import { consentToken } from "../telemetry/client";
 
 const store = () => useBrowser.getState();
 
@@ -65,7 +69,7 @@ export function dropTabIntoSplit(tabId: string, targetTabId: string, side: Split
   return openSplitPane(target.windowId, { tabId, anchorTabId: targetTabId, side });
 }
 
-export type RowSplitDrop = { adopted: SplitLane | null };
+type RowSplitDrop = { adopted: SplitLane | null };
 
 export function dropTabOnRow(tabId: string, rowTabId: string, side: "left" | "right"): RowSplitDrop | null {
   const s = store();
@@ -83,42 +87,62 @@ export function dropTabOnRow(tabId: string, rowTabId: string, side: "left" | "ri
   return { adopted: now && splitLane(now) !== splitLane(tab) ? splitLane(now) : null };
 }
 
-export function closePane(tabId: string) {
-  void closeTab(tabId);
+function closePane(tabId: string, user: ByUser) {
+  void closeTab(tabId, { user });
 }
 
-export function closeSplitView(splitId: string) {
+export const pressClosePane = (tabId: string) => closePane(tabId, { consent: consentToken() });
+
+export function closeSplitView(splitId: string, user: ByUser) {
   const split = store().splits[splitId];
   if (!split) return;
   noteSplit("splitViewCloses");
-  store().closeTabs(splitTabIds(split));
+  store().closeTabs(splitTabIds(split), userClose(splitTabIds(split), user));
+}
+
+function splitMenuItems(tabId: string): MenuItem[] {
+  const s = store();
+  const split = splitOf(s, tabId);
+  if (!split || !s.tabs[tabId]) return [];
+  const horizontal = split.orientation === "horizontal";
+  const index = splitTabIds(split).indexOf(tabId);
+  const full = splitTabIds(split).length >= MAX_SPLIT_PANES;
+  const stacked = isStacked(split, tabId);
+  return [
+    { id: "add", title: "Add Split Pane", symbol: horizontal ? "rectangle.split.2x1" : "rectangle.split.1x2", enabled: !full, ...menuShortcut("openSplitPane") },
+    { id: "bottom", title: horizontal ? "Add Bottom Split" : "Add Right Split", symbol: horizontal ? "rectangle.bottomhalf.inset.filled" : "rectangle.righthalf.inset.filled", enabled: !full && !stacked },
+    { separator: true },
+    {
+      id: "arrange",
+      title: "Arrange",
+      symbol: "arrow.left.arrow.right",
+      children: [
+        { id: "left", title: horizontal ? "Move Pane Left" : "Move Pane Up", symbol: "rectangle.lefthalf.inset.filled.arrow.left", enabled: index > 0 },
+        { id: "right", title: horizontal ? "Move Pane Right" : "Move Pane Down", symbol: "rectangle.righthalf.inset.filled.arrow.right", enabled: index < splitTabIds(split).length - 1 },
+        { id: "flip", title: "Flip Split View", symbol: horizontal ? "arrow.left.arrow.right" : "arrow.up.arrow.down" },
+        { id: "convert", title: horizontal ? "Convert to Vertical Split View" : "Convert to Horizontal Split View", symbol: horizontal ? "rectangle.split.1x2" : "rectangle.split.2x1" },
+      ],
+    },
+    ...(PLATFORM_FEATURES.menuAlternates
+      ? withOptionAlternate({ id: "remove", title: "Remove from Split View", symbol: "rectangle.portrait.and.arrow.right" }, { id: "separate", title: "Separate All Tabs", symbol: "rectangle.split.3x1" })
+      : [
+          { id: "remove", title: "Remove from Split View", symbol: "rectangle.portrait.and.arrow.right" },
+          { id: "separate", title: "Separate All Tabs", symbol: "rectangle.split.3x1" },
+        ]),
+    { separator: true },
+    { id: "close", title: "Close Pane", symbol: "xmark" },
+    { id: "closeSplit", title: "Close Split View", symbol: "xmark.square" },
+  ];
 }
 
 export async function showSplitMenu(tabId: string) {
+  const consent = consentToken();
   const s = store();
   const split = splitOf(s, tabId);
   const tab = s.tabs[tabId];
   if (!split || !tab) return;
   const horizontal = split.orientation === "horizontal";
-  const index = splitTabIds(split).indexOf(tabId);
-  const full = splitTabIds(split).length >= MAX_SPLIT_PANES;
-  const stacked = isStacked(split, tabId);
-  const items: MenuItem[] = [
-    { id: "add", title: horizontal ? "Add Vertical Split View" : "Add Horizontal Split View", symbol: horizontal ? "rectangle.split.2x1" : "rectangle.split.1x2", enabled: !full, ...menuShortcut("openSplitPane") },
-    { id: "bottom", title: horizontal ? "Add Bottom Split" : "Add Right Split", symbol: horizontal ? "rectangle.bottomhalf.inset.filled" : "rectangle.righthalf.inset.filled", enabled: !full && !stacked },
-    { separator: true },
-    { id: "left", title: horizontal ? "Move Pane Left" : "Move Pane Up", symbol: "rectangle.lefthalf.inset.filled.arrow.left", enabled: index > 0 },
-    { id: "right", title: horizontal ? "Move Pane Right" : "Move Pane Down", symbol: "rectangle.righthalf.inset.filled.arrow.right", enabled: index < splitTabIds(split).length - 1 },
-    { id: "flip", title: "Flip Split View", symbol: horizontal ? "arrow.left.arrow.right" : "arrow.up.arrow.down" },
-    { id: "convert", title: horizontal ? "Convert to Vertical Split View" : "Convert to Horizontal Split View", symbol: horizontal ? "rectangle.split.1x2" : "rectangle.split.2x1" },
-    { separator: true },
-    { id: "remove", title: "Remove from Split View", symbol: "rectangle.portrait.and.arrow.right" },
-    { id: "separate", title: "Separate All Tabs", symbol: "rectangle.split.3x1" },
-    { separator: true },
-    { id: "close", title: "Close Pane", symbol: "xmark" },
-    { id: "closeSplit", title: "Close Split View" },
-  ];
-  const choice = await showMenu(items);
+  const choice = await showMenu(splitMenuItems(tabId));
   const st = store();
   switch (choice) {
     case "add":
@@ -138,9 +162,9 @@ export async function showSplitMenu(tabId: string) {
     case "separate":
       return st.separateSplit(split.id);
     case "close":
-      return closePane(tabId);
+      return closePane(tabId, { consent });
     case "closeSplit":
-      return closeSplitView(split.id);
+      return closeSplitView(split.id, { consent });
   }
 }
 

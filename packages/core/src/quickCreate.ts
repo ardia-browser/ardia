@@ -1,4 +1,4 @@
-export type QuickCreate = {
+type QuickCreate = {
   id: string;
   title: string;
   url: string;

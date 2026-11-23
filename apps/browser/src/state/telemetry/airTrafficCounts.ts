@@ -1,7 +1,7 @@
 import { currentAirTraffic } from "../airTraffic/store";
 import { isWildcardPattern, type AirTrafficConfig } from "../airTraffic/rules";
 
-export type AirTrafficRouted = "rule" | "fallback" | "group";
+type AirTrafficRouted = "rule" | "fallback" | "group";
 
 const counts: Record<AirTrafficRouted, number> = { rule: 0, fallback: 0, group: 0 };
 const ROUTED: readonly AirTrafficRouted[] = ["rule", "fallback", "group"];

@@ -2,12 +2,12 @@ import type { DiscardOutcome, DiscardRefusal, NavigationEntry, PageCookie, Secur
 import { noteMissing } from "../missing";
 import { EngineError } from "./host";
 
-export type PageCall = <Result = unknown>(key: string, method: string, args: Record<string, unknown>) => Promise<Result | null>;
+type PageCall = <Result = unknown>(key: string, method: string, args: Record<string, unknown>) => Promise<Result | null>;
 
 export type EnginePageView = Required<WebViewNativeHandle>;
 type AnsweredByTheView = "nativeTag" | "capturePicture" | "downloadFavicon" | "focusIfUnfocused";
 type NotOnWindowsYet = keyof typeof NOT_ON_WINDOWS_YET;
-export type EnginePageCalls = Omit<EnginePageView, AnsweredByTheView | NotOnWindowsYet>;
+type EnginePageCalls = Omit<EnginePageView, AnsweredByTheView | NotOnWindowsYet>;
 
 const answeredWithoutWindows =
   <Answer>(method: string, answer: Answer) =>

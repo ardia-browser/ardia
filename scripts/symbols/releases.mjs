@@ -21,7 +21,7 @@ export function parseUuids(text) {
   return rows;
 }
 
-export function readMapFile(path) {
+function readMapFile(path) {
   const raw = readFileSync(path);
   return parseMap((raw[0] === 0x1f && raw[1] === 0x8b ? gunzipSync(raw) : raw).toString("utf8"));
 }

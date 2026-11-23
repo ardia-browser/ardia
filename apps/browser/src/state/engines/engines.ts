@@ -192,11 +192,11 @@ export function engineMark(s: EngineState, tabId: string): PageEngine | null {
 }
 
 export type WebKitPage = { url: string; title: string; isLoading: boolean; committedUrl: string };
-export type RecordedVisit = { url: string; title: string; at: number };
+type RecordedVisit = { url: string; title: string; at: number };
 type Visit = RecordedVisit & { staleTitle: string; profile: string | null; timer?: unknown };
 type VisitTimers = { set(run: () => void, ms: number): unknown; clear(handle: unknown): void };
 
-export const VISIT_SETTLE_MS = 1500;
+const VISIT_SETTLE_MS = 1500;
 
 export function visitRecorder(write: (profile: string, visit: RecordedVisit) => void, timers: VisitTimers, now: () => number) {
   const open = new Map<string, Visit>();

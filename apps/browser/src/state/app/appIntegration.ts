@@ -8,6 +8,7 @@ import { afterFirstWindow } from "../../lib/afterFirstWindow";
 import { offerDefaultBrowserAgain } from "../onboarding/defaultBrowserOffer";
 import { openReleaseNotesAfterUpdate } from "../releaseNotes/releaseNotesPage";
 import { startWebKitNotifications } from "../site/webKitNotificationEvents";
+import { startPageLinkCopies } from "../site/pageLinkCopy";
 import { startWebKitCounts } from "../telemetry/engineSwitchCounts";
 import { startNotificationResponses } from "./notificationResponses";
 import { startHandoff } from "./handoff";
@@ -21,6 +22,7 @@ export function startAppIntegration() {
   startNotificationResponses();
   if (PLATFORM_FEATURES.webKit) {
     startWebKitNotifications();
+    startPageLinkCopies();
     startWebKitCounts();
     startSiteData();
   }

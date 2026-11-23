@@ -50,6 +50,10 @@ store but through `storeAction` wrappers in each domain's `actions.ts` (`newTab`
   holds each such profile's previous pins in parked-pins shape, without merging pins of the same page. To restore, merge
   the entry's tabs, groups and splits whose ids `parkedPins[profileId]` doesn't have yet; never replace newer parked pins.
   The next window showing the profile adopts them.
+  The whole session also has immutable daily backups (`session-backup-<ms>.json`, the 7 newest kept) and pre-migration
+  snapshots (`session-premigration-<ms>.json`, the 3 newest kept), and a damaged `session.json`
+  is copied aside and the newest backup restored before anything is saved over it (`state/session/sessionSafety.ts`,
+  docs/conventions.md).
 - Pins are per profile in every window (state/pins/pinMirror.ts): each regular window showing a profile holds its own copy
   (a Tab, a TabGroup) of every pinned tile and pinned group, linked by `pinKey` (unset on the first copy, whose id is
   the key; `pinKeyOf`). A store listener (`mirrorPins`) carries a change of one window's pinned section to the others

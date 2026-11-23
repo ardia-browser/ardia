@@ -39,7 +39,7 @@ export function utf8(bytes: Uint8Array): string {
   return out;
 }
 
-export function utf16le(bytes: Uint8Array): string {
+function utf16le(bytes: Uint8Array): string {
   let out = "";
   for (let i = 0; i + 1 < bytes.length; i += 2) out += String.fromCharCode(bytes[i]! | (bytes[i + 1]! << 8));
   return out;

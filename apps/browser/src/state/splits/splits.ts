@@ -36,7 +36,7 @@ export type OpenPaneOptions = {
   inPlaceOf?: string;
   openedForSplit?: boolean;
 };
-export type OpenPaneResult = { ok: true; tabId: string; splitId: string } | { ok: false; reason: "max" | "invalid" | "unavailable" };
+type OpenPaneResult = { ok: true; tabId: string; splitId: string } | { ok: false; reason: "max" | "invalid" | "unavailable" };
 
 export const MAX_SPLIT_PANES = 3;
 

@@ -92,7 +92,7 @@ test("cleaning up a private window keeps its tabs in memory, out of session.json
   stop();
 });
 
-test("private entries an older build saved are dropped when the session loads, and never written again", (t) => {
+test("private entries an older build saved are dropped when the session loads, and never written again", async (t) => {
   stub.docs.clear();
   const privateEntry = {
     kind: "tab", id: "ct-old", windowId: "w-private", index: 0, group: null, closedAt: Date.now(),
@@ -103,6 +103,7 @@ test("private entries an older build saved are dropped when the session loads, a
   const stop = startApp(t);
   assert.deepEqual(S().cleanedTabs.map((c) => c.id), ["ct-ok"]);
   S().createWindow({ url: "https://public.example/" });
+  await new Promise((resolve) => setTimeout(resolve, 0));
   flushPersistence();
   assert.ok(!saved().includes("secret.example"));
   stop();

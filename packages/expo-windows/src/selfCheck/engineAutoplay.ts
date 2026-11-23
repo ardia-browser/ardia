@@ -2,7 +2,7 @@ import { hostCall, onEngineTopic } from "../engine/host";
 import { mountPage } from "../engine/pages";
 import { expectEqual, expectTrue, type Check } from "./check";
 import { click, evaluate, firstWindow, LEFT, listed, pause, RIGHT, show, until } from "./engineSleep";
-import { AUTOPLAY_SETTLES_MS, CTRL, DETACHED_MUTED_VIDEO, DETACHED_SOUND, LOAD_MS, NEXT_LINK, PER_PAGE_COUNT, PLAY_BUTTON, SETTLE_MS, blockEverywhere, blocked, blockedHeard, framed, held, loadedAt, mediaCommand, origin, played, playing, port, refusedThenStill, restore, setAutoplay, setSite, stateOf, withMedia } from "./engineAutoplayKit";
+import { AUTOPLAY_SETTLES_MS, CTRL, DETACHED_MUTED_VIDEO, DETACHED_SOUND, LOAD_MS, NEXT_LINK, PER_PAGE_COUNT, PLAY_BUTTON, SETTLE_MS, blockEverywhere, blocked, blockedHeard, framed, held, loadedAt, origin, played, playing, port, refusedThenStill, restore, setAutoplay, setSite, stateOf, withMedia } from "./engineAutoplayKit";
 
 const autoplayChecks: Check[] = [
   {

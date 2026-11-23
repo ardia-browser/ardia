@@ -353,6 +353,8 @@ const BODIES: readonly string[] = [
   "<path d=\"M22.11 21.46L2.39 1.73L1.11 3L7 8.89V10.39C6.66 10.08 6.24 9.85 5.78 9.73L5 9.5C4.18 9.29 3.31 9.61 2.82 10.35C2.44 10.92 2.42 11.66 2.67 12.3L5.23 18.73C6.5 21.91 9.57 24 13 24C15.5 24 17.7 22.85 19.17 21.06L20.84 22.73L22.11 21.46M13 22C10.39 22 8.05 20.41 7.09 18L4.5 11.45L5 11.59C5.5 11.71 5.85 12.05 6 12.5L7 15H9V10.89L17.75 19.64C16.66 21.07 14.94 22 13 22M9 5.8L7.09 3.89C7.36 2.8 8.33 2 9.5 2C9.69 2 9.87 2 10.04 2.06C10.25 .89 11.27 0 12.5 0C13.56 0 14.46 .66 14.83 1.59C15.04 1.53 15.27 1.5 15.5 1.5C16.88 1.5 18 2.62 18 4V4.55C18.16 4.5 18.33 4.5 18.5 4.5C19.88 4.5 21 5.62 21 7V16C21 16.56 20.94 17.11 20.83 17.63L19 15.8V7C19 6.72 18.78 6.5 18.5 6.5S18 6.72 18 7V12H16V4C16 3.72 15.78 3.5 15.5 3.5S15 3.72 15 4V11.8L13 9.8V2.5C13 2.22 12.78 2 12.5 2S12 2.22 12 2.5V8.8L10 6.8V4.5C10 4.22 9.78 4 9.5 4S9 4.22 9 4.5V5.8Z\" />",
   "<path d=\"M14 3h7\" /><path d=\"M3 3h5.28a1 1 0 0 1 .948.684l5.544 16.632a1 1 0 0 0 .949.684H21\" />",
   "<path d=\"M229.66,114.34l-96-96a8,8,0,0,0-11.32,0l-96,96A8,8,0,0,0,32,128H72v80a16,16,0,0,0,16,16h80a16,16,0,0,0,16-16V128h40a8,8,0,0,0,5.66-13.66ZM176,112a8,8,0,0,0-8,8v88H88V120a8,8,0,0,0-8-8H51.31L128,35.31,204.69,112Z\"/>",
+  "<path d=\"M24.77 16.03A8.78 8.78 0 1 1 15.6 7.23L19.97 7.04\" fill=\"none\"/><path d=\"M15.57 2.41L19.97 7.04L15.57 11.67\" fill=\"none\" transform=\"rotate(-2.59 19.97 7.04)\"/>",
+  "<circle cx=\"16\" cy=\"16\" r=\"10.96\"/><path d=\"M9.78 12.91L22.22 12.91\"/><path d=\"M11.48 16.8L20.52 16.8\"/><path d=\"M13.28 20.69L18.72 20.69\"/>",
 ];
 
 const ENCODED: Record<string, readonly EncodedLayer[]> = {
@@ -365,6 +367,7 @@ const ENCODED: Record<string, readonly EncodedLayer[]> = {
   "app.badge": [[8,32,0,1,0,[[1.333,1,-0.0206,0.0581,0.065,0,1],[1.333,1,-0.0131,0.09,0.0785,0,1],[1.3293,1,-0.0112,0.0872,0.0883,0,1],[1.318,1,-0.0019,0.0788,0.11,0,1],[1.3143,1,0.0038,0.0731,0.1235,0,1]]],[9,32,1,1,0.07,[[1.1792,1,0.3503,-0.3109,0.0263,0,1],[1.2111,1.005,0.3616,-0.2819,0.0398,0,1],[1.1961,1,0.3634,-0.2856,0.0435,0,1],[1.2186,0.995,0.3653,-0.2875,0.0368,0,1],[1.1549,0.9975,0.3709,-0.2903,0.0518,0,1]]]],
   "archivebox": [[10,24,0,1,0,[[1.2552,1.0175,-0.0181,-0.0194,0.077,0,1],[1.2552,1.0175,-0.0134,0.0106,0.0785,0,1],[1.2552,1.0175,-0.0059,0.0031,0.0928,0,1],[1.2514,1.0175,-0.0002,-0.0007,0.11,0,1],[1.2402,1.0175,0.0035,-0.0044,0.1205,0,1]]]],
   "arrow.clockwise": [[11,32,0,1,0,[[1.4365,1.005,0.0009,0.1163,0.0665,0,1],[1.429,1.0025,0.0066,0.1125,0.0815,0,1],[1.4158,1.0075,0.0131,0.105,0.0995,0,1],[1.4102,1.005,0.0178,0.1012,0.11,0,1],[1.399,1.0075,-0.0159,0.0956,0.1258,0,1]]]],
+  "arrow.counterclockwise": [[349,32,0,1,0,[[1.4327,1.005,-0.0169,0.0975,0.0605,0,-1],[1.4233,1.005,-0.0112,0.0909,0.0793,0,-1],[1.4121,1.0025,-0.0066,0.0844,0.0958,0,-1],[1.4046,1,-0.0037,0.0797,0.1085,0,-1],[1.3933,1.0025,0,0.1134,0.1265,0,-1]]]],
   "arrow.down": [[12,256,1,1,0,[[1.219,0.9975,0.0119,0.0084,0.003,0,1],[1.2078,0.9825,-0.0106,0.0028,0.0075,0,1],[1.1778,1,-0.0106,0.0066,0.036,0,1],[1.1815,0.99,-0.0002,-0.0009,0.0368,0,1],[1.1946,1,0.0054,-0.0112,0.057,0,1]]]],
   "arrow.down.circle": [[13,256,1,1,0,[[1.2182,1.0025,-0.0075,0.015,0.0008,0,1],[1.2201,1,-0.0019,0.0028,0.0083,0,1],[1.2126,1,0.0056,-0.0028,0.0233,0,1],[1.207,1.0025,0.0094,-0.0066,0.0383,0,1],[1.2051,1,0.015,-0.0141,0.054,0,1]]]],
   "arrow.down.doc": [[14,256,1,1,0,[[1.2162,0.9625,0.0138,0.0321,0,0,1],[1.2162,0.965,-0.0162,0.0284,0.0075,0,1],[1.2162,0.965,-0.0162,0.0274,0.0195,0,1],[1.2125,0.97,-0.0012,0.0181,0.0368,0,1],[1.2013,0.975,0.0063,0.0209,0.0473,0,1]]]],
@@ -514,6 +517,7 @@ const ENCODED: Record<string, readonly EncodedLayer[]> = {
   "lightbulb": [[157,24,0,1,0,[[1.2113,0.975,0.0145,0.0059,0.0717,0,1],[1.2113,0.97,0.0183,-0.0054,0.0883,0,1],[1.2113,0.98,-0.0136,-0.0279,0.0973,0,1],[1.215,0.9725,-0.0089,-0.0354,0.104,0,1],[1.2038,0.99,-0.0023,-0.0204,0.1213,0,1]]]],
   "lightbulb.fill": [[158,24,1,1,0,[[1.2075,0.89,0.0117,0.0021,0.0053,0,1],[1.2225,0.8925,0.0192,-0.0054,0.0023,0,1],[1.2525,0.9125,-0.0145,-0.026,0.0015,0,1],[1.245,0.905,-0.007,-0.041,0.0158,0,1],[1.2506,0.9025,-0.007,-0.0166,0.0173,0,1]]]],
   "line.3.horizontal": [[159,24,1,1,0,[[1.135,1.12,-0.0124,-0.0174,0.0007,0,1],[1.1388,1.12,-0.0049,-0.0174,0.0038,0,1],[1.1688,1.11,0.0016,0.0051,0.0052,0,1],[1.1988,1.1,0.0026,-0.0099,0.0135,0,1],[1.2232,1.09,0.0166,0.0164,0.0165,0,1]]]],
+  "line.3.horizontal.decrease.circle": [[350,32,0,1,0,[[1.339,1,0.0094,-0.0103,0.062,0,1],[1.3333,1,0.0169,-0.0169,0.083,0,1],[1.3277,1,-0.015,0.015,0.0965,0,1],[1.3258,1,-0.0103,0.0094,0.107,0,1],[1.3183,1,-0.0037,0.0037,0.1258,0,1]]]],
   "link": [[160,32,0,1,0,[[1.6818,0.9575,-0.18,0.18,0.0672,-45,1],[1.6499,0.93,-0.18,0.18,0.0822,-45,1],[1.6218,0.91,-0.18,0.18,0.095,-45,1],[1.7024,0.95,-0.195,0.195,0.1018,-45,1],[1.663,0.95,-0.195,0.195,0.1168,-45,1]]],[161,32,0,1,0.06,[[1.6518,0.96,0.1397,-0.1425,0.065,-45,1],[1.663,0.9575,0.1537,-0.1575,0.089,-45,1],[1.6686,0.96,0.1603,-0.165,0.0972,-45,1],[1.6705,0.9625,0.1275,-0.1312,0.107,-45,1],[1.6818,0.9625,0.135,-0.1388,0.1205,-45,1]]]],
   "list.bullet": [[162,32,0,1,0,[[1.3952,0.9925,0.1125,-0.0037,0.0635,0,1],[1.3933,1,0.12,-0.0112,0.0778,0,1],[1.4215,1,0.1341,0.0188,0.083,0,1],[1.4421,0.99,0.1538,0.0038,0.0943,0,1],[1.4421,0.9775,0.1256,-0.0094,0.1115,0,1]]]],
   "location": [[163,24,0,1,0,[[1.1095,1.0025,-0.0205,-0.0142,0.0672,0,1],[1.0888,1.0025,-0.0448,0.0101,0.0875,0,1],[1.1095,1.0025,-0.0308,-0.0049,0.101,0,1],[1.1132,1.005,-0.0177,-0.0208,0.116,0,1],[1.1338,0.9975,-0.0448,0.0101,0.134,0,1]]]],
@@ -718,6 +722,7 @@ const NUDGES: Record<string, string> = {
   "app.badge": "a9ed99cfcd79bde8bdf8ab675edecdccbcaa9acd99bfce79bdf9ad68ac5g5fcfcebdaeaca9dd99bfcd89ccf8ac7fab6f5edecdccbcbb9add99bgcd89bd6hbd6gac6f5edecdbd3c9c",
   "archivebox": "bfgcc8eegcd8gcc8ged9gdcacacaccdcddc6cfgccfeegdc9gcd9gecagfcbcccccececgdgcf8ccgee8cch8dca8ec98fcbcccdcecfcfcgcf8ccgfe8cch8ddi9eda9fdcdcdddededfdg",
   "arrow.clockwise": "faade98f9dc98cc7fba7eb9786fdddccbcabfaaee97f9dc98cc87ba7eb9f8e7eddcdbcac7aaee97f9dd98cb87bafeb9f8e6e5dcdbcac9adeh9bfddg9ccggccffbbffeededdcdkcjb",
+  "arrow.counterclockwise": "cfcffb9hbfebaedadagecagefdhhhhcdbciccfcffb9hbfebaedadagecifeee9hghbdbdaccfcffb9hbfebaedadi8ecifeee9h8hbdadalcdccf89ebbe7aadedd89cdf8e79a8abdac9b",
   "arrow.down": "cegaafcdebhgcce8acd8fcb9h9fadabbhcfbdfgbbfcdeb9gccf8bcd8gcc8a9gafadbbbhcdegbbfcdeb9fccffacd88cb999gaeacaab8bdf8bbfcdeb9gccfgade99dc9aa8bebccbc9d",
   "arrow.down.circle": "ccg8cceag8ccg8ccg8ccg8cccccccccccccccc8gccea8gcc8gcc8gcc8gcccccccccccccccc8gccea8gcc8gcc8gcc8gcccccccccccccccc8gccea8gcc8gcc8gcc8gcccccccccccccc",
   "arrow.down.doc": "f9ade9f7adc8gcb7eba7dbg6f6edddbchbhag8bde9feadd7hbc7fab6ea9dgdfcfbcbcaa9f9acd8ff9cc88bb7ebaeda8efdecccbbaa9af8bce77d9bd78abeeaaed98d7c6bdab8a897",
@@ -867,6 +872,7 @@ const NUDGES: Record<string, string> = {
   "lightbulb": "8jagdjeg7faice7j9nbj6n8j5jai7oco9o6oajdfgjhhaedigmbiemgjbmeibohoeocohofoajdegi9gaedhglbhdlgibleobohoeocnhnfoafdbge9caiddghbcdhgkbgejbi9hegcm9mfl",
   "lightbulb.fill": "8fabdeec79adc86c9fbb6e8a58a77ecd9c6bagdbgfhcbadeghbdeggcbfebbihhfgcfiefdagdbgf9caadeghbddggcbfdjbighegbfheeladd9gc99bfeagdb8echfcaedcc9af9dfadgc",
   "line.3.horizontal": "cdgbc9ehgfcegbc9ghcegdcbcecbcfcccgcccb89cfed8cca88cd8cc988ccc9cdc8cdc8cbcb88cfee8dca8gce8cc98fcedhdddhdddgddc88ecbea89b67bca87cd8bc8bbb6b9bcb8ba",
+  "line.3.horizontal.decrease.circle": "f9f9aecceaaeeaaeaeeb9edbdb9f8gccccbc9f9feag8aeeaaeeaeaaef9bdbdf8g8cccbdb9f9eeag8aeeaaeeaeabef9bdbdf9g8ccccdb9f9eeag8aeeaaeeaeabef9bdbdf9g8ccccdb",
   "link": "eabdf99fbd8hcc8gdc9fdbafaebdcdccdbebeabd8hafcc8gdc9fdbaeeabebdccdcdb6i7ih7eaaedbf9ccg8dbi7eabdg9h7i6j5dceaf99febaedcf9bdh8dbafeabdg9h8aecddceag9",
   "list.bullet": "degbcgefgecbghccgbcggdcacecgcicccfchcc88bdec8ac78bb97eba78bcb6b7babdb6b7bc68adcc6baf6c9a5e8b599d8f888b7d7e69db8gcdec8bcf8dd98ecb9hdddf5h5c5d5e5g",
   "location": "dehadefchadf9bdfabefabeg6g6g7h7h7i7i5e9idefc9i5eai6faj6faj6g6g6g7h7h7h7i5e9idefc9idf9j5faj6gak6g6g6h6h7i7i7j8bcfgbbgdehaeeaafeba8echdh6h7h7g8g9g",

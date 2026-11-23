@@ -1,14 +1,14 @@
 import type { ChoiceItem } from "../app/menuChoice";
 import { menuSections } from "../app/menuSections";
 
-export type TranslateMenuState = {
+type TranslateMenuState = {
   translated: boolean;
   target: string;
   languages: { id: string; name: string; current: boolean }[];
   neverTranslate: boolean | null;
 };
 
-export type TranslateMenuItem = ChoiceItem<{ language: string }, "original" | "translate" | "choose" | "never">;
+type TranslateMenuItem = ChoiceItem<{ language: string }, "original" | "translate" | "choose" | "never">;
 
 export function translateMenuItems({ translated, target, languages, neverTranslate }: TranslateMenuState): TranslateMenuItem[] {
   return menuSections<TranslateMenuItem>(

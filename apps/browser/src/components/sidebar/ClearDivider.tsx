@@ -8,6 +8,7 @@ import { closeAllTabs } from "../../state/sidebar/clearTabs";
 import { tidy as tidyTabs } from "../../state/sidebar/tidyUi";
 import { openSidebarMenu } from "../../state/sidebar/menus";
 import { PINNED_FOLD_TITLES, togglePinnedFold } from "../../state/sidebar/pinnedFold";
+import { consentToken } from "../../state/telemetry/client";
 
 const BROOM = require("../../../assets/tidy-broom.png");
 
@@ -69,7 +70,7 @@ export const ClearDivider = memo(function ClearDivider({ windowId, profileId, li
                   <DividerButton
                     title="Clear"
                     label="Clear unpinned tabs"
-                    onPress={() => closeAllTabs(windowId)}
+                    onPress={() => closeAllTabs(windowId, { consent: consentToken() })}
                     icon={(color) => drawnSymbol({ name: "arrow.down", size: 9, weight: "semibold", color, style: CLEAR_ARROW })}
                   />
                 ) : null}

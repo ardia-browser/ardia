@@ -262,7 +262,8 @@ final class WebKitContentBlocker {
     if let lists = info["lists"] as? [String] { next.lists = lists.map { $0.lowercased() }.sorted() }
     if let hosts = info["allowedHosts"] as? [String] { next.allowedHosts = hosts.map { $0.lowercased() }.sorted() }
     if let host = (info["host"] as? String)?.lowercased(), let allowed = info["allowed"] as? Bool {
-      var kept = next.allowedHosts.filter { allowed ? $0 != host : !WebKitHub.covers($0, host: host) }
+      let exact = (info["exact"] as? Bool) == true
+      var kept = next.allowedHosts.filter { allowed || exact ? $0 != host : !WebKitHub.covers($0, host: host) }
       if allowed { kept.append(host) }
       next.allowedHosts = kept.sorted()
     }

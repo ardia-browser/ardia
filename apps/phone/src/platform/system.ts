@@ -1,4 +1,5 @@
-import { clipboard, system as nativeSystem, type ClipboardOffer } from "@ardia/phone-native";
+import type { CleanedTitle, CleanedUrl, LinkText } from "@ardia/core/src/cleanUrl.ts";
+import { clipboard, pages, system as nativeSystem, type ClipboardOffer } from "@ardia/phone-native";
 import { getStringAsync, hasStringAsync, setStringAsync } from "expo-clipboard";
 import { requireOptionalNativeModule } from "expo-modules-core";
 import { AndroidHaptics, impactAsync, ImpactFeedbackStyle, notificationAsync, NotificationFeedbackType, performAndroidHapticsAsync, selectionAsync } from "expo-haptics";
@@ -7,7 +8,11 @@ import { Image, Linking, Platform, Share } from "react-native";
 
 export const copyText = (text: string) => setStringAsync(text);
 
-export const shareLink = (url: string, title: string) => Share.share({ message: url, url, title });
+export const copyLink = (url: CleanedUrl) => setStringAsync(url);
+
+export const shareLink = (url: CleanedUrl, title: CleanedTitle) => Share.share({ message: url, url, title });
+
+export const sharePageWithPrint = (pageId: string, url: CleanedUrl, title: CleanedTitle) => pages.sharePage(pageId, url, title);
 
 export const openExternal = (url: string) => Linking.openURL(url);
 
@@ -45,7 +50,7 @@ export const selectionHaptic = () =>
 
 export const confirmHaptic = () => (android ? performAndroidHapticsAsync(AndroidHaptics.Confirm) : impactAsync(ImpactFeedbackStyle.Light));
 
-export const shareText = (text: string, title: string) => Share.share({ message: text, title });
+export const shareLinkList = (links: LinkText, title: string) => Share.share({ message: links, title });
 
 export const pasteText = () => getStringAsync();
 

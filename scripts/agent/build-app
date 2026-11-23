@@ -40,7 +40,10 @@
 #    or a settings change replays compiles instead of redoing them; AC_COMPILE_CACHE=0 turns it off. Otherwise
 #    (--plain, or build-NAME holds a build) it builds there as before.
 # The engine (ARDIACORE_FRAMEWORK, else ~/chromium-build, else the published one) is first cloned into an immutable
-# folder named by its content, and the build uses that copy, so the engine embedded is the one stamped.
+# folder named by its content, and the build uses that copy, so the engine embedded is the one stamped. The
+# engine record beside a published engine (match=local for any other), judged against this tree as it is on disk,
+# rides along as ARDIACORE_ENGINE_MATCH into the stamp and the app's Info.plist, and a nearest engine whose public
+# headers differ from this tree's stops the build here (packages/ardiacore/scripts/engine-match.sh).
 # Runs into one build-NAME take turns (a lock on it); build-app inside build-app is refused. Only the Debug Metro app
 # is recorded for the JS-only answer, and every run that goes past that answer drops the record first; a build
 # writes it again only after it succeeds (a plain one only if nothing native changed meanwhile).
@@ -97,6 +100,11 @@ stamp_file="$dd/.ac-native-stamp-Debug"
 app_file="$dd/.ac-app-Debug"
 kind_file="$dd/.ac-kind-Debug"
 mkdir -p "$dd"
+judge_engine() {
+  ARDIACORE_ENGINE_MATCH=$("$repo/packages/ardiacore/scripts/engine-match.sh" resolve "$repo" "${AC_ENGINE_RECORD:?build-app lost the engine record it read before taking its lock}") || return 1
+  export ARDIACORE_ENGINE_MATCH
+  "$repo/packages/ardiacore/scripts/engine-match.sh" check "$ARDIACORE_ENGINE_MATCH"
+}
 if [[ -n "${AC_BUILD_APP_LOCKER:-}" && "$AC_BUILD_APP_LOCKER" != "$PPID" ]]; then
   echo "build-app: already running inside build-app (pid $AC_BUILD_APP_LOCKER); a nested build-app isn't supported" >&2
   exit 64
@@ -111,6 +119,9 @@ if [[ -z "${AC_BUILD_APP_LOCKER:-}" ]]; then
   else
     source_framework=$("$cache_tool" engine --repo "$repo") || { echo "build-app: couldn't fetch the prebuilt engine" >&2; exit 1; }
   fi
+  AC_ENGINE_RECORD=$("$repo/packages/ardiacore/scripts/engine-match.sh" record-of "$source_framework") || exit 1
+  export AC_ENGINE_RECORD
+  judge_engine || exit 1
   ARDIACORE_FRAMEWORK=$("$cache_tool" stage-engine --framework "$source_framework" --as "$name" --wait "$wait") ||
     { echo "build-app: couldn't stage the engine from $source_framework" >&2; exit 1; }
   export ARDIACORE_FRAMEWORK
@@ -118,6 +129,7 @@ if [[ -z "${AC_BUILD_APP_LOCKER:-}" ]]; then
 fi
 signing=default
 [[ -n "$adhoc" ]] && signing=adhoc
+judge_engine || exit 1
 
 stamp_now() {
   "$cache_tool" stamp --repo "$repo" --config "$config" --signing "$signing" --framework "$ARDIACORE_FRAMEWORK" "$@" 2>"$log.stamp"
@@ -202,7 +214,7 @@ if [[ $mode == plain ]]; then
     cd "$app_dir" &&
       "$repo/scripts/agent/locked" xcodebuild --wait "$wait" --as "$name" -- \
         xcodebuild -workspace macos/Ardia.xcworkspace -scheme Ardia-macOS -derivedDataPath "$dd" \
-        -destination 'platform=macOS,arch=arm64' -configuration "$config" -hideShellScriptEnvironment \
+        -destination 'platform=macOS,arch=arm64' ARCHS=arm64 -configuration "$config" -hideShellScriptEnvironment \
         ${settings[@]+"${settings[@]}"} build
   ) >>"$log" 2>&1
   status=$?
@@ -246,7 +258,7 @@ else
           "$cache_tool" slot-run --repo "$repo" --slot "$slot" --stamp "${stamp:-none}" --config "$config" --out "$prebuilt_out" \
           "${slot_args[@]}" -- \
           -workspace macos/Ardia.xcworkspace -scheme Ardia-macOS -derivedDataPath "$slot_dd" \
-          -destination 'platform=macOS,arch=arm64' -configuration "$config" -hideShellScriptEnvironment \
+          -destination 'platform=macOS,arch=arm64' ARCHS=arm64 -configuration "$config" -hideShellScriptEnvironment \
           ${settings[@]+"${settings[@]}"} ${compile_cache[@]+"${compile_cache[@]}"} build
     ) >"$log" 2>&1
     status=$?

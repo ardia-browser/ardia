@@ -102,7 +102,7 @@ export function moveSwitcher(step: 1 | -1) {
   });
 }
 
-export function focusSwitcherRow(index: number) {
+function focusSwitcherRow(index: number) {
   const s = sidebarUi().switcher;
   if (!s) return;
   const n = s.ids.length;
@@ -148,7 +148,7 @@ export async function closeSwitcherRow() {
   const id = s.ids[pointedRow(s) ?? s.index];
   if (!id) return;
   const consent = consentToken();
-  await closeTab(id);
+  await closeTab(id, { user: { consent } });
   syncSwitcherTabs(s.windowId);
   if (!sidebarUi().switcher?.ids.includes(id) || isWindowClosing(s.windowId)) noteTabSwitcherRowClosed(consent);
 }

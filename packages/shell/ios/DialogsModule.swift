@@ -54,8 +54,39 @@ public class DialogsModule: Module {
     }.runOnQueue(.main)
     AsyncFunction("dismissShownOnly") { (key: String?) in
       for (window, alert, shownKey) in DialogsModule.shownOnly where key == nil || shownKey == key {
-        window.endSheet(alert.window, returnCode: .alertSecondButtonReturn)
+        window.endSheet(alert.window, returnCode: .cancel)
       }
+    }.runOnQueue(.main)
+    AsyncFunction("choose") { (options: ChooseOptions, promise: Promise) in
+      if let file = MenuChoice.testFile(flag: "appDialog", name: "dialog.json"),
+         let answer = MenuChoice.testAnswer(dumping: options.toDictionary().merging(["kind": "choose"]) { $1 }, to: file) {
+        let picked = options.choices.firstIndex(of: answer) ?? Int(answer) ?? -1
+        promise.resolve(["choice": options.choices.indices.contains(picked) ? picked : -1])
+        return
+      }
+      guard !options.choices.isEmpty else { return promise.resolve(["choice": -1]) }
+      if options.onlyIfShown && (LaunchConfig.shared.background || DialogsModule.visibleWindow(options.windowId) == nil) {
+        promise.resolve(["choice": -1, "unshown": true])
+        return
+      }
+      let alert = DialogsModule.alert(title: options.title, message: options.message)
+      for choice in options.choices { alert.addButton(withTitle: choice) }
+      if options.noDefault { alert.buttons.first?.keyEquivalent = "" }
+      if let cancel = options.cancelChoice, alert.buttons.indices.contains(cancel) {
+        alert.buttons[cancel].keyEquivalent = "\u{1b}"
+        alert.window.initialFirstResponder = alert.buttons[cancel]
+      }
+      let answer = { (response: NSApplication.ModalResponse) in
+        DialogsModule.shownOnly.removeAll { $0.alert === alert }
+        let index = response.rawValue - NSApplication.ModalResponse.alertFirstButtonReturn.rawValue
+        promise.resolve(["choice": options.choices.indices.contains(index) ? index : -1])
+      }
+      if options.onlyIfShown, let window = DialogsModule.visibleWindow(options.windowId) {
+        DialogsModule.shownOnly.append((window, alert, options.dismissKey))
+        alert.beginSheetModal(for: window, completionHandler: answer)
+        return
+      }
+      DialogsModule.present(alert, windowId: options.windowId, completion: answer)
     }.runOnQueue(.main)
     AsyncFunction("prompt") { (options: PromptOptions, promise: Promise) in
       if let file = MenuChoice.testFile(flag: "appDialog", name: "dialog.json"),
@@ -94,6 +125,12 @@ public class DialogsModule: Module {
       if let current { panel.directoryURL = URL(fileURLWithPath: current, isDirectory: true) }
       panel.begin { response in promise.resolve(response == .OK ? panel.url?.path : nil) }
     }.runOnQueue(.main)
+  }
+
+  static func dismissShownOnly(key: String) {
+    for (window, alert, shownKey) in shownOnly where shownKey == key {
+      window.endSheet(alert.window, returnCode: .cancel)
+    }
   }
 
   static func alert(title: String, message: String) -> NSAlert {

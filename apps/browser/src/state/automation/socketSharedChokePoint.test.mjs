@@ -81,7 +81,7 @@ test("closeGroup checks its guard after each await and writes nothing once it fa
   const windowId = S().createWindow({ url: "https://home.example/" });
   const a = S().newTab(windowId, { url: "https://a.example/", background: true });
   const group = S().groupTabs([a], { name: "Plain" });
-  await closeGroup(group, () => false);
+  await closeGroup(group, { mayWrite: () => false });
   assert.ok(S().groups[group], "the group stays when the guard fails after the await");
   await closeGroup(group);
   assert.ok(!S().groups[group], "the group closes when nothing guards it");

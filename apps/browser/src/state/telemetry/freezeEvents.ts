@@ -62,7 +62,7 @@ export function freezeSignature(thread: string, frames: readonly FreezeFrame[], 
   return own.length ? `sig_${fnv1a(`${thread}|${own.map((f) => `${f.image}@${build(f.image)}+${f.offset.toString(16)}`).join("|")}`)}` : `none_${thread}`;
 }
 
-export function allowedThisSession(signature: string) {
+function allowedThisSession(signature: string) {
   return sentThisSession < MAX_FREEZES_PER_SESSION && !signaturesThisSession.has(signature);
 }
 

@@ -570,6 +570,7 @@ test(
     const script = 'packages/ardiacore/scripts/fetch-engine.sh'
     mkdirSync(join(root, 'packages/ardiacore/scripts'), { recursive: true })
     copyFileSync(join(repo, script), join(root, script))
+    copyFileSync(join(repo, 'packages/ardiacore/scripts/engine-match.sh'), join(root, 'packages/ardiacore/scripts/engine-match.sh'))
     writeFileSync(join(root, '.gitignore'), 'apps/browser/build-ardiacore/\n')
     const built = 'f'.repeat(40)
     const tag = `engine-${built.slice(0, 12)}`
@@ -585,11 +586,12 @@ test(
     writeFileSync(join(root, 'packages/ardiacore/prebuilt-engines.tsv'), `# fixture\n${macos}\t${tag}\t${sha}\t${built}\n`)
     git('add', '-A')
     git('commit', '-q', '-m', 'table')
-    const fetch = (env = {}) => spawnSync(join(root, script), [], { cwd: root, env: { ...gitEnv, ARDIACORE_PREBUILT_REPO: 'invalid/invalid', ...env }, encoding: 'utf8' })
+    const fetch = (env = {}) => spawnSync(join(root, script), [], { cwd: root, env: { ...gitEnv, ARDIACORE_PREBUILT_REPO: 'invalid/invalid', ARDIACORE_ENGINE_TAG_REMOTE: `${root}-no-remote`, ...env }, encoding: 'utf8' })
     try {
       const fetched = fetch({ ARDIACORE_PREBUILT_ASSETS: `file://${assets}` })
       assert.equal(fetched.status, 0, fetched.stderr)
       assert.equal(fetched.stdout.trim(), join(root, 'apps/browser/build-ardiacore/prebuilt', macos.slice(0, 12), 'Chromium Framework.framework'))
+      assert.match(readFileSync(join(root, 'apps/browser/build-ardiacore/prebuilt', macos.slice(0, 12), 'engine-match'), 'utf8'), new RegExp(`^match=exact key=${macos} version=${tag} source= public_tree=[0-9a-f]{64}\n$`))
       appendFileSync(join(root, ardia, 'ac_external_apps_linux.cc'), 'uncommitted\n')
       const dirtyLinux = fetch()
       assert.equal(dirtyLinux.status, 0, dirtyLinux.stderr)

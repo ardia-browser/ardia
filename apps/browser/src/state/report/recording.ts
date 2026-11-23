@@ -22,7 +22,7 @@ let lastResult: RecordingResult | null = null;
 
 export const lastRecordingStats = () => lastResult;
 
-export const recordedPictureInPicture = (result: RecordingResult | null) =>
+const recordedPictureInPicture = (result: RecordingResult | null) =>
   !!result?.windows?.some((w) => w.kind === "pictureInPicture" && w.frames > 0);
 
 export const canRecord = recordsReports;
@@ -64,7 +64,6 @@ function listen() {
 
 async function recordingStopped(result: RecordingResult | null) {
   void finishTrace();
-  const r = currentReport().recording;
   lastResult = result;
   if (!result) return patchReport({ recording: { phase: "failed", message: "The recording couldn't be saved." } });
   const dir = ensureDraftDir();

@@ -6,30 +6,30 @@ const { historyRowMenuItems } = await import("../history/historyMenus.ts");
 
 const G = { control: "⌃", option: "⌥", shift: "⇧", command: "⌘" };
 const keys = (i) => (i.key ? ["control", "option", "shift", "command"].filter((m) => i.modifiers?.includes(m)).map((m) => G[m]).join("") + i.key.toUpperCase() : "");
-const render = (items) =>
-  items.map((i) => (i.separator ? "---" : [i.checked ? "✓" : "", i.title, keys(i), i.symbol ? `[${i.symbol}]` : "", i.enabled === false ? "(off)" : "", i.alternate ? "(alt)" : ""].filter(Boolean).join(" ")));
+const render = (items, depth = 0) =>
+  items.flatMap((i) => [
+    "  ".repeat(depth) + (i.separator ? "---" : [i.checked ? "✓" : "", i.title, keys(i), i.symbol ? `[${i.symbol}]` : "", i.enabled === false ? "(off)" : "", i.alternate ? "(alt)" : "", i.children ? "›" : ""].filter(Boolean).join(" ")),
+    ...(i.children ? render(i.children, depth + 1) : []),
+  ]);
 
-const OPEN_ONE = ["Open in New Tab [plus.app]", "Open in New Window [macwindow.badge.plus]", "Open in Incognito Window [eyeglasses]", "Open in Split View [rectangle.split.2x1]"];
+const OPEN_ONE = ["Open in New Tab [plus.app]", "Open in Split View [rectangle.split.2x1]", "Open in [macwindow] ›", "  New Window [macwindow.badge.plus]", "  Incognito Window [eyeglasses]"];
 const COPY_ONE = ["Copy Link [link]", "Copy Link as Markdown [link] (alt)"];
-const OPEN_ALL = ["Open All in New Tabs [plus.app]", "Open All in New Window [macwindow.badge.plus]", "Open All in Incognito Window [eyeglasses]"];
 
 test("a bookmarks bar link: opens, Copy Link, Edit…, and Delete last, with no bar settings mixed in", () => {
   assert.deepEqual(render(barMenuItems({ kind: "url" }, { barShown: true })), [...OPEN_ONE, "---", ...COPY_ONE, "---", "Edit… [pencil]", "---", "Delete [trash]"]);
 });
 
-test("a bookmarks bar folder: Open All in each place, group, Rename… and New Folder…, Delete Folder last", () => {
+test("a bookmarks bar folder: Open All in New Tabs and group, Rename…, Delete Folder last; New Folder… lives on the bar", () => {
   assert.deepEqual(render(barMenuItems({ kind: "folder", links: 2, makesGroup: true, restoresArc: false }, { barShown: true })), [
-    ...OPEN_ALL,
-    "---",
+    "Open All in New Tabs [plus.app]",
     "Add to Sidebar as Group [sidebar.left]",
     "---",
     "Rename… [pencil]",
-    "New Folder… [folder.badge.plus]",
     "---",
     "Delete Folder [trash]",
   ]);
   const empty = render(barMenuItems({ kind: "folder", links: 0, makesGroup: false, restoresArc: true }, { barShown: true }));
-  assert.deepEqual(empty.slice(0, 6), [...OPEN_ALL.map((t) => `${t} (off)`), "---", "Add to Sidebar as Group [sidebar.left] (off)", "Restore Arc Folders as Groups"]);
+  assert.deepEqual(empty.slice(0, 3), ["Open All in New Tabs [plus.app] (off)", "Add to Sidebar as Group [sidebar.left] (off)", "Restore Arc Folders as Groups [arrow.uturn.backward]"]);
 });
 
 test("the bookmarks bar background: Add Page…, New Folder…, then Manage Bookmarks and the bar toggle with their real keys", () => {
@@ -38,20 +38,19 @@ test("the bookmarks bar background: Add Page…, New Folder…, then Manage Book
     "New Folder… [folder.badge.plus]",
     "---",
     "Manage Bookmarks ⌥⌘B [book]",
-    "✓ Show Bookmarks Bar ⇧⌘B",
+    "✓ Show Bookmarks Bar ⇧⌘B [menubar.rectangle]",
   ]);
-  assert.deepEqual(render(barMenuItems(null, { barShown: false, keys: () => ({}) })).slice(3), ["Manage Bookmarks [book]", "Show Bookmarks Bar"]);
+  assert.deepEqual(render(barMenuItems(null, { barShown: false, keys: () => ({}) })).slice(3), ["Manage Bookmarks [book]", "Show Bookmarks Bar [menubar.rectangle]"]);
 });
 
 test("a Bookmarks page row matches the bar, adds Show in Folder for a search result, and a selection acts on all of it", () => {
   assert.deepEqual(render(bookmarkRowMenuItems({ kind: "url", showPath: true })), [...OPEN_ONE, "Show in Folder [folder]", "---", ...COPY_ONE, "---", "Edit… [pencil]", "---", "Delete [trash]"]);
-  assert.deepEqual(render(bookmarkRowMenuItems({ kind: "folder", links: 3, makesGroup: false, restoresArc: false, showPath: false })), [
-    ...OPEN_ALL,
-    "---",
+  assert.deepEqual(render(bookmarkRowMenuItems({ kind: "folder", links: 3, makesGroup: false, restoresArc: false, showPath: true })), [
+    "Open All in New Tabs [plus.app]",
     "Add to Sidebar as Group [sidebar.left] (off)",
+    "Show in Folder [folder]",
     "---",
     "Rename… [pencil]",
-    "New Folder… [folder.badge.plus]",
     "---",
     "Delete Folder [trash]",
   ]);

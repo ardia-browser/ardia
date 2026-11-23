@@ -11,9 +11,11 @@ ardia tabs answers; the linked ardia is the pinned version, run as published (ad
 same profile with a changed asset, or with none (offline), gets no ardia and no downloaded copy. A copy no signed pin
 names gets no ardia even with active pointing at it and plugins.json approving it. Command Line coverage
 can't be skipped: no fixture fails. Given an earlier release that bundles Command Line (0.2.47), a profile where it
-installed and linked its own ardia keeps that ardia on <Ardia.app>: the pinned copy is fetched and verified but waits for
-your approval, because its plugin.json isn't the one approved, and plugins.json stays as it was; once the approval the
-Update… sheet records is saved, ardia switches to the pinned version."
+installed and linked its own ardia moves to the pinned version on <Ardia.app> the way that pair is expected to:
+CLI_UPGRADE_EXPECT=auto or prompt, or the built-in answer for a known pair (0.4.0 to 0.6.0: auto); an unknown pair with
+no answer fails. auto: it switches with no click and plugins.json records the new approval, the old one as previous and
+the update note. prompt: the pinned copy is fetched and verified but waits for Update…, with plugins.json untouched,
+and switches once that approval is saved."
 case "${1:-}" in -h | --help | "") echo "$usage"; [ -n "${1:-}" ] && exit 0 || exit 64 ;; esac
 app="$(cd "$1" && pwd -P)"
 version="${2:?$usage}"
@@ -25,7 +27,7 @@ case "$earlier" in /Applications/*) echo "error: never an installed app" >&2; ex
 read -r pinned file sha < <(python3 -I -c 'import json, sys; p = next(p for p in json.load(open(sys.argv[1]))["plugins"] if p["name"] == "cli"); a = p["artifacts"]["macos-arm64"]; print(p["version"], a["file"], a["sha256"])' "$root/apps/browser/official-plugins.json")
 [ -f "$fixtures/$file" ] || { echo "error: $fixtures has no $file; run scripts/release/official-plugins.py fixtures $fixtures" >&2; exit 1; }
 [ "$(shasum -a 256 "$fixtures/$file" | cut -d' ' -f1)" = "$sha" ] || { echo "error: $fixtures/$file isn't the pinned $sha" >&2; exit 1; }
-work="$(cd "$(mktemp -d /tmp/ac-cli.XXXXXX)" && pwd -P)"
+work="$(cd "$(mktemp -d "${AC_SCRATCH_TMP:-/tmp}/ac-cli.XXXXXX")" && pwd -P)"
 pid=""
 stop() {
   [ -n "$pid" ] && { kill "$pid" 2>/dev/null; for _ in $(seq 1 50); do kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done; kill -KILL "$pid" 2>/dev/null; } || true
@@ -153,23 +155,49 @@ print(json.loads(text)["version"], hashlib.sha256(text + b"\0bundled").hexdigest
   saved="$(shasum -a 256 "$upgrade/d/plugins.json" | cut -d' ' -f1)"
   launch "$upgrade/d" "$upgrade/bin" "$fixtures"
   for _ in $(seq 1 300); do [ -f "$upgrade/d/OfficialPlugins/cli/$sha/plugin.json" ] && break; sleep 0.2; done
-  sleep 5
-  check "after the update, the pinned $pinned is fetched and verified, then waits for your approval instead of switching" \
-    "$([ -f "$upgrade/d/OfficialPlugins/cli/$sha/plugin.json" ] && [ ! -e "$upgrade/d/OfficialPlugins/cli/active" ] && echo 1 || echo 0)"
-  ran="$(env -i HOME="$HOME" PATH="$upgrade/bin:/usr/bin:/bin" ARDIA_DATA_DIR="$upgrade/d" ARDIA_TELEMETRY=off ardia --version 2>&1 || true)"
-  check "ardia still runs, and is still the earlier $old_version" "$([ "$ran" = "ardia $old_version" ] && echo 1 || echo 0)" "$ran"
-  check "plugins.json is untouched before you confirm" "$([ "$(shasum -a 256 "$upgrade/d/plugins.json" | cut -d' ' -f1)" = "$saved" ] && echo 1 || echo 0)"
-  stop
-  printf '{"plugins":{"cli":{"enabled":true,"approved":"%s","previous":"%s","values":{},"applied":{},"installed":true}},"version":1}\n' "$approved" "$receipt" >"$upgrade/d/plugins.json"
-  launch "$upgrade/d" "$upgrade/bin" "$fixtures"
-  for _ in $(seq 1 300); do [ -L "$upgrade/d/OfficialPlugins/cli/active" ] && break; sleep 0.2; done
   ran=""
-  for _ in $(seq 1 100); do
+  for _ in $(seq 1 75); do
     ran="$(env -i HOME="$HOME" PATH="$upgrade/bin:/usr/bin:/bin" ARDIA_DATA_DIR="$upgrade/d" ARDIA_TELEMETRY=off ardia --version 2>&1 || true)"
     [ "$ran" = "ardia $pinned" ] && break
     sleep 0.2
   done
-  check "once you confirm (the approval Update… records), ardia is the pinned $pinned" "$([ "$ran" = "ardia $pinned" ] && echo 1 || echo 0)" "$ran"
-  stop
+  case "${CLI_UPGRADE_EXPECT:-}" in
+    auto|prompt) expect=$CLI_UPGRADE_EXPECT ;;
+    "") case "$old_version>$pinned" in 0.4.0\>0.6.0) expect=auto ;; *) expect="" ;; esac ;;
+    *) expect="" ;;
+  esac
+  observed=$([ "$ran" = "ardia $pinned" ] && echo auto || echo prompt)
+  if [ -z "$expect" ]; then
+    check "the expected outcome of $old_version to $pinned is known (set CLI_UPGRADE_EXPECT=auto or prompt from the two plugin.json files)" 0 "it was $observed"
+    expect=$observed
+  else
+    check "$old_version to $pinned is expected to $([ "$expect" = auto ] && echo "switch with no click" || echo "wait for Update…"), and it did" "$([ "$observed" = "$expect" ] && echo 1 || echo 0)" "it was $observed"
+  fi
+  if [ "$expect" = auto ]; then
+    echo "NOTE  $old_version to $pinned asks for nothing $old_version's approval didn't cover, so it switches with no click"
+    recorded="$(python3 -I -c '
+import json, sys
+cli = json.load(open(sys.argv[1]))["plugins"]["cli"]
+print(int(cli["approved"] == sys.argv[2] and cli.get("previous") == sys.argv[3] and cli.get("updated", {}).get("to") == sys.argv[4]))' "$upgrade/d/plugins.json" "$approved" "$receipt" "$pinned" 2>/dev/null || echo 0)"
+    check "a silent switch records the pinned approval, keeps $old_version's as previous and notes the update" "$recorded"
+    stop
+  else
+    echo "NOTE  $old_version to $pinned needs review, so it waits for Update…"
+    check "the pinned $pinned is fetched and verified, then waits for your approval instead of switching" \
+      "$([ -f "$upgrade/d/OfficialPlugins/cli/$sha/plugin.json" ] && [ ! -e "$upgrade/d/OfficialPlugins/cli/active" ] && echo 1 || echo 0)"
+    check "ardia still runs, and is still the earlier $old_version" "$([ "$ran" = "ardia $old_version" ] && echo 1 || echo 0)" "$ran"
+    check "plugins.json is untouched before you confirm" "$([ "$(shasum -a 256 "$upgrade/d/plugins.json" | cut -d' ' -f1)" = "$saved" ] && echo 1 || echo 0)"
+    stop
+    printf '{"plugins":{"cli":{"enabled":true,"approved":"%s","previous":"%s","values":{},"applied":{},"installed":true}},"version":1}\n' "$approved" "$receipt" >"$upgrade/d/plugins.json"
+    launch "$upgrade/d" "$upgrade/bin" "$fixtures"
+    ran=""
+    for _ in $(seq 1 100); do
+      ran="$(env -i HOME="$HOME" PATH="$upgrade/bin:/usr/bin:/bin" ARDIA_DATA_DIR="$upgrade/d" ARDIA_TELEMETRY=off ardia --version 2>&1 || true)"
+      [ "$ran" = "ardia $pinned" ] && break
+      sleep 0.2
+    done
+    check "once you confirm (the approval Update… records), ardia is the pinned $pinned" "$([ "$ran" = "ardia $pinned" ] && echo 1 || echo 0)" "$ran"
+    stop
+  fi
 fi
 exit "$status"

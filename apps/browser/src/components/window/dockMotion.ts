@@ -48,7 +48,7 @@ export const HEADER_TOOLS = {
   },
   fullScreenToggleX: FULL_SCREEN_TOGGLE_X, pitch: 35, plate: 32, edge: layout.sidebarInset + 1 } as const;
 
-export type HeaderToggleState = { windowFullScreen: boolean; pageFullScreen: boolean; controlsRow: boolean };
+type HeaderToggleState = { windowFullScreen: boolean; pageFullScreen: boolean; controlsRow: boolean };
 
 export function headerToggleXIn({ windowFullScreen, pageFullScreen, controlsRow }: HeaderToggleState, chrome: WindowChrome = WINDOW_CHROME): number {
   if (windowFullScreen || (chrome.leadingButtons.length && (controlsRow || pageFullScreen))) return FULL_SCREEN_TOGGLE_X;
@@ -69,14 +69,14 @@ export function navButtonsFitting(width: number, button = 30, toggle = true, tog
 
 export const PEEK_EDGE_STRIP = 3;
 export const TAB_DRAG_EDGE_STRIP = 8;
-export const PEEK_HOLD_SLACK = 40;
+const PEEK_HOLD_SLACK = 40;
 export const PEEK_CLOSE_DELAY_MS = 200;
-export const PEEK_BLEED = 16;
+const PEEK_BLEED = 16;
 
 export const peekBleed = (peekLeft: number) => (peekLeft > 0 ? 0 : PEEK_BLEED);
 
-export type DockState = "fullscreen" | "docked" | "peeking" | "leaving" | "hiding" | "away";
-export type DockInput = { open: boolean; fullscreen: boolean; moving: boolean; peekLive: boolean; peekLeaving?: boolean };
+type DockState = "fullscreen" | "docked" | "peeking" | "leaving" | "hiding" | "away";
+type DockInput = { open: boolean; fullscreen: boolean; moving: boolean; peekLive: boolean; peekLeaving?: boolean };
 
 export function dockState({ open, fullscreen, moving, peekLive, peekLeaving = false }: DockInput): DockState {
   if (peekLive && (fullscreen || !open)) return peekLeaving ? "leaving" : "peeking";
@@ -91,13 +91,13 @@ export const shownAs = (state: DockState) => (peekOnScreen(state) ? "peek" : sta
 
 export const watchesEdge = (state: DockState, moving: boolean) => (peekOnScreen(state) || state === "away" || state === "fullscreen") && !moving;
 
-export const atRevealEdge = (x: number, right: boolean, windowWidth: number, band: number = PEEK_EDGE_STRIP) => (right ? x >= windowWidth - band : x < band);
+const atRevealEdge = (x: number, right: boolean, windowWidth: number, band: number = PEEK_EDGE_STRIP) => (right ? x >= windowWidth - band : x < band);
 
 export const edgeEventReveals = (state: DockState, x: number, right: boolean, windowWidth: number, band: number = PEEK_EDGE_STRIP) =>
   state === "peeking" || atRevealEdge(x, right, windowWidth, band);
 
-export type EdgeSource = "strip" | "native";
-export type EdgeArm = { armed: boolean; strip: boolean; native: boolean };
+type EdgeSource = "strip" | "native";
+type EdgeArm = { armed: boolean; strip: boolean; native: boolean };
 export const EDGE_ARMED: EdgeArm = { armed: true, strip: false, native: false };
 export const EDGE_DISARMED: EdgeArm = { armed: false, strip: false, native: false };
 
@@ -118,7 +118,7 @@ export const edgeWatchWidth = (peeking: boolean, draggingTab: boolean, holdWidth
 
 export const edgeStripOverPage = (inset: number) => inset < PEEK_EDGE_STRIP;
 
-export type DockMove = "jump" | "arcHide" | "slide";
+type DockMove = "jump" | "arcHide" | "slide";
 
 export function dockMove(o: { open: boolean; animated: boolean; arc: boolean; peekOut: boolean }): DockMove {
   if (!o.animated || (o.arc && o.open && o.peekOut)) return "jump";

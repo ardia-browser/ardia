@@ -1,4 +1,4 @@
-export const TOOLBAR_BOUNCE_MS = 1000;
+const TOOLBAR_BOUNCE_MS = 1000;
 
 type Hidden = Record<string, true>;
 

@@ -1,15 +1,64 @@
-import Compression
 import CryptoKit
 import Darwin
 import Foundation
+import zlib
 
 enum OfficialArchive {
-  static let maxDownload: Int64 = 512 << 20
-  static let maxExpanded: Int64 = 1 << 30
-  static let maxEntries = 20_000
-  static let maxDepth = 32
+  struct Limits {
+    var download: Int64 = 512 << 20
+    var expanded: Int64 = 1 << 30
+    var entries = 20_000
+    var depth = 32
+    var ratio: Int64 = 100
+    var entryRatio: Int64 = 200
+    var ratioFloor: Int64 = 4 << 20
+
+    static let standard = Limits()
+
+    func expandedAllowed(compressed: Int64) -> Int64 {
+      min(expanded, max(ratioFloor, compressed.multipliedReportingOverflow(by: ratio).overflow ? Int64.max : compressed * ratio))
+    }
+  }
+
+  static let maxDownload = Limits.standard.download
+  static let maxDepth = Limits.standard.depth
+
+  struct Inflation {
+    private(set) var produced: [Int64] = [0]
+    private(set) var consumed: [Int64] = [0]
+
+    mutating func mark(produced output: Int64, consumed input: Int64) {
+      produced.append(output)
+      consumed.append(input)
+    }
+
+    func compressed(from start: Int64, to end: Int64) -> Int64 {
+      var low = 0
+      var high = produced.count - 1
+      while low < high {
+        let middle = (low + high + 1) / 2
+        if produced[middle] <= start { low = middle } else { high = middle - 1 }
+      }
+      let before = consumed[low]
+      var first = produced.count - 1
+      var lower = 0
+      var upper = produced.count - 1
+      while lower <= upper {
+        let middle = (lower + upper) / 2
+        if produced[middle] >= end {
+          first = middle
+          upper = middle - 1
+        } else {
+          lower = middle + 1
+        }
+      }
+      return max(1, consumed[first] - before)
+    }
+  }
+
   private static let block = 512
   private static let chunk = 1 << 20
+  private static let step = 4 << 10
 
   static func sha256(file path: String) -> String? {
     let fd = open(path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
@@ -50,12 +99,12 @@ enum OfficialArchive {
     return fd
   }
 
-  static func snapshot(_ path: String, in scratch: String) -> Snapshot? {
+  static func snapshot(_ path: String, in scratch: String, limits: Limits = .standard) -> Snapshot? {
     let input = open(path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
     guard input >= 0 else { return nil }
     defer { Darwin.close(input) }
     var info = stat()
-    guard fstat(input, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG, info.st_size <= maxDownload, let output = anonymousFile(in: scratch) else { return nil }
+    guard fstat(input, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG, info.st_size <= limits.download, let output = anonymousFile(in: scratch) else { return nil }
     var hasher = SHA256()
     let buffer = UnsafeMutableRawPointer.allocate(byteCount: chunk, alignment: 16)
     defer { buffer.deallocate() }
@@ -69,7 +118,7 @@ enum OfficialArchive {
       }
       if count == 0 { break }
       total += Int64(count)
-      guard total <= maxDownload, writeAll(output, buffer, count) else {
+      guard total <= limits.download, writeAll(output, buffer, count) else {
         Darwin.close(output)
         return nil
       }
@@ -108,105 +157,80 @@ enum OfficialArchive {
     }
   }
 
-  static func unpack(_ archive: Int32, top: String, into stage: Int32, scratch: String) -> String? {
+  static func unpack(_ archive: Int32, top: String, into stage: Int32, scratch: String, limits: Limits = .standard) -> String? {
     guard let tar = anonymousFile(in: scratch) else { return "the download couldn't be unpacked" }
     defer { Darwin.close(tar) }
-    if let problem = gunzip(input: archive, output: tar, limit: maxExpanded) { return problem }
-    return extract(tar: tar, top: top, into: stage, limit: maxExpanded)
+    var inflation = Inflation()
+    if let problem = gunzip(input: archive, output: tar, limits: limits, inflation: &inflation) { return problem }
+    return extract(tar: tar, top: top, into: stage, limits: limits, inflation: inflation)
   }
 
-  static func gunzip(input: Int32, output: Int32, limit: Int64) -> String? {
+  static func gunzip(input: Int32, output: Int32, limits: Limits, inflation: inout Inflation) -> String? {
     guard lseek(input, 0, SEEK_SET) == 0 else { return "the download couldn't be read" }
-    var data = Data()
-    var headerLength: Int?
-    while headerLength == nil {
-      var piece = [UInt8](repeating: 0, count: 64 * 1024)
-      let count = read(input, &piece, piece.count)
-      if count < 0 && errno == EINTR { continue }
-      guard count > 0 else { return "the download isn't a gzip file" }
-      data.append(piece, count: count)
-      switch gzipHeaderLength(data) {
-      case .some(.some(let length)): headerLength = length
-      case .some(.none): return "the download isn't a gzip file"
-      case .none: if data.count > 1 << 20 { return "the download isn't a gzip file" }
-      }
-    }
-    let stream = UnsafeMutablePointer<compression_stream>.allocate(capacity: 1)
-    defer { stream.deallocate() }
-    guard compression_stream_init(stream, COMPRESSION_STREAM_DECODE, COMPRESSION_ZLIB) == COMPRESSION_STATUS_OK else { return "the download couldn't be unpacked" }
-    defer { compression_stream_destroy(stream) }
+    var sized = stat()
+    guard fstat(input, &sized) == 0 else { return "the download couldn't be read" }
+    var magic = [UInt8](repeating: 0, count: 3)
+    guard pread(input, &magic, 3, 0) == 3, magic == [0x1f, 0x8b, 8] else { return "the download isn't a gzip file" }
+    let limit = limits.expandedAllowed(compressed: Int64(sized.st_size))
+    var stream = z_stream()
+    guard inflateInit2_(&stream, 15 + 16, zlibVersion(), Int32(MemoryLayout<z_stream>.size)) == Z_OK else { return "the download couldn't be unpacked" }
+    defer { inflateEnd(&stream) }
     let source = UnsafeMutablePointer<UInt8>.allocate(capacity: chunk)
     let target = UnsafeMutablePointer<UInt8>.allocate(capacity: chunk)
     defer {
       source.deallocate()
       target.deallocate()
     }
-    var pending = Data(data.dropFirst(headerLength!))
+    var fed: Int64 = 0
     var written: Int64 = 0
+    var buffered = 0
+    func flush() -> String? {
+      var offset = 0
+      while offset < buffered {
+        let count = write(output, target + offset, buffered - offset)
+        if count < 0 {
+          if errno == EINTR { continue }
+          return "the download couldn't be unpacked (\(String(cString: strerror(errno))))"
+        }
+        offset += count
+      }
+      buffered = 0
+      return nil
+    }
     var atEnd = false
-    var finished = false
-    while !finished {
-      if pending.isEmpty && !atEnd {
+    while true {
+      if stream.avail_in == 0 && !atEnd {
         let count = read(input, source, chunk)
         if count < 0 {
           if errno == EINTR { continue }
           return "the download couldn't be read"
         }
-        if count == 0 { atEnd = true } else { pending = Data(bytes: source, count: count) }
+        atEnd = count == 0
+        stream.next_in = source
+        stream.avail_in = uInt(count)
       }
-      let consumed: Int = pending.withUnsafeBytes { raw -> Int in
-        stream.pointee.src_ptr = raw.bindMemory(to: UInt8.self).baseAddress ?? UnsafePointer(source)
-        stream.pointee.src_size = raw.count
-        stream.pointee.dst_ptr = target
-        stream.pointee.dst_size = chunk
-        let status = compression_stream_process(stream, atEnd ? Int32(COMPRESSION_STREAM_FINALIZE.rawValue) : 0)
-        if status == COMPRESSION_STATUS_ERROR { return -1 }
-        if status == COMPRESSION_STATUS_END { finished = true }
-        return raw.count - stream.pointee.src_size
-      }
-      guard consumed >= 0 else { return "the download is damaged" }
-      let produced = chunk - stream.pointee.dst_size
+      if buffered + step > chunk, let problem = flush() { return problem }
+      let before = stream.avail_in
+      stream.next_out = target + buffered
+      stream.avail_out = uInt(step)
+      let status = inflate(&stream, Z_NO_FLUSH)
+      let produced = step - Int(stream.avail_out)
+      fed += Int64(before - stream.avail_in)
       if produced > 0 {
+        buffered += produced
         written += Int64(produced)
-        guard written <= limit else { return "the download unpacks to more than \(limit >> 20) MB" }
-        var offset = 0
-        while offset < produced {
-          let count = write(output, target + offset, produced - offset)
-          if count < 0 {
-            if errno == EINTR { continue }
-            return "the download couldn't be unpacked (\(String(cString: strerror(errno))))"
-          }
-          offset += count
-        }
+        inflation.mark(produced: written, consumed: fed)
+        guard written <= limits.expanded else { return "the download unpacks to more than \(limits.expanded >> 20) MB" }
+        guard written <= limit else { return "the download unpacks to more than \(limits.ratio) times its size" }
       }
-      pending = Data(pending.dropFirst(consumed))
-      if !finished && atEnd && pending.isEmpty && produced == 0 { return "the download ends too soon" }
+      if status == Z_STREAM_END { break }
+      if status == Z_BUF_ERROR && atEnd && stream.avail_in == 0 { return "the download ends too soon" }
+      guard status == Z_OK || status == Z_BUF_ERROR else { return "the download is damaged" }
     }
-    var info = stat()
-    guard fstat(input, &info) == 0, info.st_size >= 18 else { return "the download is damaged" }
-    var tail = [UInt8](repeating: 0, count: 8)
-    guard pread(input, &tail, 8, info.st_size - 8) == 8 else { return "the download couldn't be read" }
-    let size = UInt32(tail[4]) | UInt32(tail[5]) << 8 | UInt32(tail[6]) << 16 | UInt32(tail[7]) << 24
-    guard size == UInt32(truncatingIfNeeded: written) else { return "the download is damaged" }
+    if let problem = flush() { return problem }
+    var extra: UInt8 = 0
+    guard stream.avail_in == 0, fed == Int64(sized.st_size), read(input, &extra, 1) == 0 else { return "the download has data after its archive" }
     return nil
-  }
-
-  static func gzipHeaderLength(_ data: Data) -> Int?? {
-    let bytes = [UInt8](data.prefix(1 << 20))
-    guard bytes.count >= 10 else { return .none }
-    guard bytes[0] == 0x1f, bytes[1] == 0x8b, bytes[2] == 8, bytes[3] & 0xe0 == 0 else { return .some(nil) }
-    let flags = bytes[3]
-    var at = 10
-    if flags & 0x04 != 0 {
-      guard bytes.count >= at + 2 else { return .none }
-      at += 2 + Int(bytes[at]) + Int(bytes[at + 1]) << 8
-    }
-    for flag: UInt8 in [0x08, 0x10] where flags & flag != 0 {
-      guard let end = bytes[min(at, bytes.count)...].firstIndex(of: 0) else { return .none }
-      at = end + 1
-    }
-    if flags & 0x02 != 0 { at += 2 }
-    return bytes.count >= at ? .some(at) : .none
   }
 
   struct Header {
@@ -247,11 +271,11 @@ enum OfficialArchive {
     return .some(Header(path: path, type: raw[156], mode: Int(mode), size: size))
   }
 
-  static func parts(_ path: String, top: String) -> [String]? {
+  static func parts(_ path: String, top: String, depth: Int = maxDepth) -> [String]? {
     var trimmed = path
     while trimmed.hasSuffix("/") { trimmed.removeLast() }
     let pieces = trimmed.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
-    guard let first = pieces.first, first == top, pieces.count <= maxDepth else { return nil }
+    guard let first = pieces.first, first == top, pieces.count <= depth else { return nil }
     for piece in pieces {
       guard !piece.isEmpty, piece != ".", piece != "..", piece.utf8.count <= 255,
         !piece.unicodeScalars.contains(where: { $0.value < 0x20 || $0.value == 0x7f })
@@ -266,7 +290,7 @@ enum OfficialArchive {
     var at = 0
     while at < bytes.count {
       guard let space = bytes[at...].firstIndex(of: 0x20), let length = Int(String(decoding: bytes[at..<space], as: UTF8.self)), length > space - at + 1,
-        at + length <= bytes.count, bytes[at + length - 1] == 0x0a, let equals = bytes[(space + 1)..<(at + length)].firstIndex(of: 0x3d)
+        length <= bytes.count - at, bytes[at + length - 1] == 0x0a, let equals = bytes[(space + 1)..<(at + length)].firstIndex(of: 0x3d)
       else { return .none }
       let key = String(decoding: bytes[(space + 1)..<equals], as: UTF8.self)
       if key == "size" || key == "linkpath" { return .none }
@@ -293,10 +317,10 @@ enum OfficialArchive {
     return (current, name)
   }
 
-  static func extract(tar: Int32, top: String, into stage: Int32, limit: Int64) -> String? {
+  static func extract(tar: Int32, top: String, into stage: Int32, limits: Limits, inflation: Inflation) -> String? {
     var out: Int32 = -1
     let problem = walk(
-      tar: tar, top: top, limit: limit,
+      tar: tar, top: top, limits: limits, inflation: inflation,
       folder: { path in
         guard let parent = openParent(stage, of: path) else { return "\(path) couldn't be made (its folder changed while it was unpacked)" }
         defer { Darwin.close(parent.folder) }
@@ -331,22 +355,23 @@ enum OfficialArchive {
     return problem
   }
 
-  static func verifiedPayloadDigest(archive: String, sha: String, top: String, scratch: String, limit: Int64 = maxExpanded) -> String? {
-    guard let held = snapshot(archive, in: scratch) else { return nil }
+  static func verifiedPayloadDigest(archive: String, sha: String, top: String, scratch: String, limits: Limits = .standard) -> String? {
+    guard let held = snapshot(archive, in: scratch, limits: limits) else { return nil }
     defer { held.close() }
     guard held.sha == sha else { return nil }
-    return payloadDigest(archive: held.fd, top: top, scratch: scratch, limit: limit)
+    return payloadDigest(archive: held.fd, top: top, scratch: scratch, limits: limits)
   }
 
-  static func payloadDigest(archive: Int32, top: String, scratch: String, limit: Int64 = maxExpanded) -> String? {
+  static func payloadDigest(archive: Int32, top: String, scratch: String, limits: Limits = .standard) -> String? {
     guard let tar = anonymousFile(in: scratch) else { return nil }
     defer { Darwin.close(tar) }
-    guard gunzip(input: archive, output: tar, limit: limit) == nil else { return nil }
+    var inflation = Inflation()
+    guard gunzip(input: archive, output: tar, limits: limits, inflation: &inflation) == nil else { return nil }
     var listing: [(String, String)] = []
     var hasher = SHA256()
     let skipped: (String) -> Bool = { _ in false }
     let problem = walk(
-      tar: tar, top: top, limit: limit,
+      tar: tar, top: top, limits: limits, inflation: inflation,
       folder: { path in
         if !skipped(path) { listing.append((path, "d \(path)\n")) }
         return nil
@@ -371,10 +396,11 @@ enum OfficialArchive {
   }
 
   private static func walk(
-    tar fd: Int32, top: String, limit: Int64, folder: (String) -> String?, file: (String, Int64) -> String?, bytes: (String, Data) -> String?,
-    done: (String, Bool) -> String?
+    tar fd: Int32, top: String, limits: Limits, inflation: Inflation, folder: (String) -> String?, file: (String, Int64) -> String?,
+    bytes: (String, Data) -> String?, done: (String, Bool) -> String?
   ) -> String? {
     guard lseek(fd, 0, SEEK_SET) == 0 else { return "the download couldn't be unpacked" }
+    var position: Int64 = 0
     func readExactly(_ count: Int) -> [UInt8]? {
       var bytes = [UInt8](repeating: 0, count: count)
       var offset = 0
@@ -384,6 +410,7 @@ enum OfficialArchive {
         guard got > 0 else { return nil }
         offset += got
       }
+      position += Int64(count)
       return bytes
     }
     var seen: Set<String> = []
@@ -395,6 +422,7 @@ enum OfficialArchive {
         path = path.isEmpty ? part : "\(path)/\(part)"
         if folders.contains(path) { continue }
         guard !files.contains(path) else { return "\(path) is both a file and a folder" }
+        guard folders.count + files.count <= limits.entries else { return "the archive has more than \(limits.entries) entries" }
         if let problem = folder(path) { return problem }
         folders.insert(path)
       }
@@ -408,7 +436,7 @@ enum OfficialArchive {
       guard let parsed = header(raw) else { return "the archive is damaged" }
       guard let entry = parsed else { break }
       entries += 1
-      guard entries <= maxEntries else { return "the archive has more than \(maxEntries) entries" }
+      guard entries <= limits.entries else { return "the archive has more than \(limits.entries) entries" }
       let padded = Int((entry.size + Int64(block) - 1) / Int64(block)) * block
       if entry.type == UInt8(ascii: "x") {
         guard nextPath == nil, entry.size <= 64 * 1024, let body = readExactly(padded) else { return "the archive is damaged" }
@@ -418,7 +446,7 @@ enum OfficialArchive {
       }
       let path = nextPath.flatMap { $0.isEmpty ? nil : $0 } ?? entry.path
       nextPath = nil
-      guard let relative = parts(path, top: top) else { return "\(path) isn't inside \(top)/" }
+      guard let relative = parts(path, top: top, depth: limits.depth) else { return "\(path) isn't inside \(top)/ or is more than \(limits.depth) folders deep" }
       if relative.contains(where: { PluginPrograms.folded($0) == PluginPrograms.caches }) || relative.first.map(PluginPrograms.isReserved) == true {
         return "\(path) is a name Ardia keeps for itself"
       }
@@ -433,9 +461,14 @@ enum OfficialArchive {
       case UInt8(ascii: "0"), 0:
         guard !relative.isEmpty else { return "\(path) isn't inside \(top)/" }
         total += entry.size
-        guard total <= limit else { return "the archive unpacks to more than \(limit >> 20) MB" }
+        guard total <= limits.expanded else { return "the archive unpacks to more than \(limits.expanded >> 20) MB" }
         if relative.count > 1, let problem = makeFolders(Array(relative.dropLast())) { return problem }
         guard !folders.contains(joined) else { return "\(path) is both a file and a folder" }
+        guard folders.count + files.count <= limits.entries else { return "the archive has more than \(limits.entries) entries" }
+        let start = position
+        if entry.size >= limits.ratioFloor, entry.size / inflation.compressed(from: start, to: start + entry.size) > limits.entryRatio {
+          return "\(path) unpacks to more than \(limits.entryRatio) times its compressed size"
+        }
         if let problem = file(joined, entry.size) { return problem }
         files.insert(joined)
         var left = entry.size

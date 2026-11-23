@@ -1,7 +1,7 @@
-export type OpeningVia = "typed" | "newTab" | "link" | "external";
+type OpeningVia = "typed" | "newTab" | "link" | "external";
 export type OpeningContext = { tabId: string | null; windowId: string | null; profileId: string | null; via: OpeningVia };
 export type OpeningVerdict = { url: string } | { cancel: true } | null;
-export type OpeningGate = (url: string, context: OpeningContext, signal: AbortSignal) => OpeningVerdict | Promise<OpeningVerdict>;
+type OpeningGate = (url: string, context: OpeningContext, signal: AbortSignal) => OpeningVerdict | Promise<OpeningVerdict>;
 
 let gate: OpeningGate | null = null;
 const holds = new Map<string, AbortController>();
@@ -13,7 +13,7 @@ export const setOpeningGate = (next: OpeningGate | null) => {
 
 export const isGatedUrl = (url: string) => /^https?:\/\//i.test(url);
 
-export function supersedeOpening(key: string): AbortSignal {
+function supersedeOpening(key: string): AbortSignal {
   holds.get(key)?.abort();
   const controller = new AbortController();
   holds.set(key, controller);
@@ -27,7 +27,7 @@ export function cancelOpening(key: string) {
   held.abort();
 }
 
-export function releaseOpening(key: string, signal: AbortSignal) {
+function releaseOpening(key: string, signal: AbortSignal) {
   const held = holds.get(key);
   if (held?.signal === signal) holds.delete(key);
 }

@@ -7,8 +7,8 @@ import { isInsideDownloads } from "./hookPolicy";
 import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
 
-export type MoveResult = { ok: true; path: string } | { ok: false; reason: string; stagedPath?: string; strayPath?: string };
-export type DownloadMover = {
+type MoveResult = { ok: true; path: string } | { ok: false; reason: string; stagedPath?: string; strayPath?: string };
+type DownloadMover = {
   move(path: string, folder: string): Promise<MoveResult>;
   approveFolders(folders: string[]): void;
 };
@@ -45,7 +45,7 @@ function remember(id: string) {
   if (handled.size > HANDLED_CAP) handled.delete(handled.values().next().value!);
 }
 
-export async function settleFinishedDownload(d: Download): Promise<MoveResult | null> {
+async function settleFinishedDownload(d: Download): Promise<MoveResult | null> {
   if (!mover || handled.has(d.id) || d.state !== "finished" || !d.path || d.offTheRecord || d.dangerous) return null;
   remember(d.id);
   const consent = consentToken();
@@ -73,7 +73,7 @@ let started = false;
 const inProgress = new Set<string>();
 const IN_PROGRESS_CAP = 500;
 
-export function noteDownloadEvent(d: Download) {
+function noteDownloadEvent(d: Download) {
   if (d.state === "downloading") {
     inProgress.add(d.id);
     if (inProgress.size > IN_PROGRESS_CAP) inProgress.delete(inProgress.values().next().value!);

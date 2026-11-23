@@ -2,6 +2,7 @@ import { WEBKIT_LIMITS_KEYWORDS, type SettingSection } from "./types";
 import type { SettingsPane } from "../../../state/settings/settingsWindows";
 import type { Settings } from "../../../state/settings/settings";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
+import { keptSitesListed } from "../../../state/tabs/keptSites";
 
 const webKitOffered = () => PLATFORM_FEATURES.webKit;
 const automaticEngine = (s: Settings) => webKitOffered() && s.engineMode === "automatic";
@@ -41,8 +42,15 @@ export const advancedRows = {
           explained: true,
           description: "These sites never go to sleep.",
           keywords: ["sleep", "never sleep", "keep awake", "exceptions", "discard", "hibernate", "memory saver", "memory", "always keep these sites active"],
-          shown: (s) => s.memorySaver,
+          shown: keptSitesListed,
           needs: "Turn on Memory Saver to use this",
+        },
+        busyTabWarnings: {
+          title: "Warn about busy background tabs",
+          explained: true,
+          description: "When a hidden tab keeps the processor busy for 2 minutes.",
+          keywords: ["cpu", "processor", "energy", "power", "battery", "busy", "background tabs", "high cpu", "fan", "hot", "sleep tab", "keep running"],
+          shown: () => PLATFORM_FEATURES.busyTabWatch,
         },
         batterySaver: {
           title: "Battery Saver",
@@ -84,22 +92,22 @@ export const advancedRows = {
         engineSwitchKeepsPage: {
           title: "Keep the page on screen while it switches",
           explained: true,
-          description: "The old page stays up, at the same scroll position, until the other engine has drawn it, for up to 3 seconds.",
-          keywords: ["seamless", "swap", "flash", "blank", "reload", "scroll position", "switch engine", "switching engines", "open in webkit", "open in chromium"],
+          description: "The old page stays up until the other engine draws it, up to 3 seconds.",
+          keywords: ["seamless", "swap", "flash", "blank", "reload", "scroll position", "same scroll position", "switch engine", "switching engines", "open in webkit", "open in chromium", "3 seconds", "drawn"],
           shown: webKitOffered,
         },
         engineSwitchAsksAboutUnsavedWork: {
           title: "Ask before reloading a page you've typed in",
           explained: true,
-          description: "Switching engines reloads the page, so text you haven't sent can be lost.",
-          keywords: ["unsaved", "form", "input", "confirm", "warn", "stay on page", "switch engine", "switching engines"],
+          description: "Switching engines reloads the page, which can lose unsent text.",
+          keywords: ["unsaved", "form", "input", "confirm", "warn", "stay on page", "switch engine", "switching engines", "text you haven't sent", "lost"],
           shown: webKitOffered,
         },
         engineSwitchCarriesSiteData: {
           title: "Bring sign-ins along",
           explained: true,
-          description: "A page that switches engines takes its site's cookies and saved data with it, so you stay signed in.",
-          keywords: ["bring sign-ins", "cookies", "site data", "sign in", "logged out", "local storage", "session", "switch engine", "separate sign-ins"],
+          description: "A switching page takes its cookies along, so you stay signed in.",
+          keywords: ["bring sign-ins", "cookies", "site data", "sign in", "logged out", "local storage", "session", "switch engine", "separate sign-ins", "saved data", "stay signed in"],
           shown: webKitOffered,
         },
       },
@@ -110,8 +118,8 @@ export const advancedRows = {
         webKitFraudWarnings: {
           title: "Warn about fraudulent websites",
           explained: true,
-          description: "WebKit pages check addresses against Google's or Tencent's Safe Browsing lists and warn before a deceptive site opens.",
-          keywords: ["safe browsing", "phishing", "malware", "fraud", "deceptive", "security", "warning"],
+          description: "WebKit pages warn before a deceptive site opens.",
+          keywords: ["safe browsing", "phishing", "malware", "fraud", "deceptive", "security", "warning", "google", "tencent", "safe browsing lists", "addresses"],
           shown: webKitInUse,
           needs: NEEDS_WEBKIT,
         },
@@ -131,9 +139,16 @@ export const advancedRows = {
         programControl: {
           title: "Let programs control Ardia",
           explained: true,
-          description: "Programs you run, like the ardia command or an agent, can open, read and act in your pages, with your logins.",
-          keywords: ["control", "cli", "automation", "agent", "stop", "turn control back on", "devtools", "remote debugging", "control pill", "let the ardia command control ardia"],
+          description: "Programs like the ardia command can act in your signed-in pages.",
+          keywords: ["control", "cli", "automation", "agent", "stop", "turn control back on", "devtools", "remote debugging", "control pill", "let the ardia command control ardia", "programs you run", "open", "read", "logins", "ardia command"],
           shown: () => PLATFORM_FEATURES.plugins,
+        },
+        allowedPrograms: {
+          title: "Programs you let in",
+          explained: true,
+          description: "A program that isn't part of Ardia asks before it can control Ardia. The ones you allowed for 30 minutes or always are listed here.",
+          keywords: ["control", "socket", "allow", "always allow", "doorbell", "revoke", "programs", "agent", "script", "python", "cli", "permission"],
+          shown: () => PLATFORM_FEATURES.controlDoorbell,
         },
         programs: {
           title: "Programs on your PATH",

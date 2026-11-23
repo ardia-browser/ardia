@@ -4,7 +4,7 @@ import type { Settings } from "../settings/settings";
 import { linkDestination } from "../../lib/linkWrappers";
 import { peekSourceOf, peeksLinksToOtherSites, type SiteLanding } from "./peek";
 
-export type NewTabLinkRoute = Settings["newTabLinksOpenIn"] | "otherSite";
+type NewTabLinkRoute = Settings["newTabLinksOpenIn"] | "otherSite";
 
 const SITE_LANDING_MS = 8000;
 

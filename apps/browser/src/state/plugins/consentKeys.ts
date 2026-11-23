@@ -1,8 +1,8 @@
 export type ConsentButton = "cancel" | "install";
 
-export type ConsentKeyState = { selected: ConsentButton | null; spaceDown: boolean };
+type ConsentKeyState = { selected: ConsentButton | null; spaceDown: boolean };
 
-export type ConsentKeyPress = { key: string; shiftKey?: boolean; altKey?: boolean; ctrlKey?: boolean; metaKey?: boolean };
+type ConsentKeyPress = { key: string; shiftKey?: boolean; altKey?: boolean; ctrlKey?: boolean; metaKey?: boolean };
 
 export const CONSENT_KEYS = [{ key: "Escape" }, { key: "Tab" }, { key: "Tab", shiftKey: true }, { key: " " }];
 

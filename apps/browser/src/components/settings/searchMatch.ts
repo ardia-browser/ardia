@@ -9,7 +9,7 @@ export type Searchable = {
 };
 
 export type SearchRange = { start: number; end: number };
-export type SearchNote = { text: string; ranges: SearchRange[] };
+type SearchNote = { text: string; ranges: SearchRange[] };
 export type SearchHit<T extends Searchable = Searchable> = {
   entry: T;
   score: number;
@@ -33,7 +33,7 @@ function foldChar(c: string): string {
   return folded.length === 1 ? folded : c.toLowerCase().length === 1 ? c.toLowerCase() : c;
 }
 
-export function fold(raw: string): Folded {
+function fold(raw: string): Folded {
   let text = "";
   const source: number[] = [];
   for (let i = 0; i < raw.length; i++) {
@@ -60,7 +60,7 @@ export function fold(raw: string): Folded {
   return { raw, text, source, starts };
 }
 
-export const normalize = (text: string) => fold(text).text;
+const normalize = (text: string) => fold(text).text;
 
 export function editDistance(a: string, b: string, limit: number): number {
   if (Math.abs(a.length - b.length) > limit) return limit + 1;
@@ -343,20 +343,26 @@ export function search<T extends Searchable>(index: Prepared<T>[], query: string
   const shown = hits.filter((h) => topTier < 2 || h.tier > 0);
   const placeOf = (h: Scored<T>) => `${h.entry.pane}\u0000${h.entry.section}`;
   const named = (h: Scored<T>) => h.title.length > 0 || h.viaPane;
-  const landed = new Set(shown.filter(named).map(placeOf));
+  const namedTier = new Map<string, number>();
+  for (const h of shown) {
+    if (!named(h)) continue;
+    const place = placeOf(h);
+    namedTier.set(place, Math.max(namedTier.get(place) ?? -1, h.tier));
+  }
+  const unnamedSeen = new Set<string>();
   return shown
     .filter((h) => {
       if (named(h)) return true;
       const place = placeOf(h);
-      if (landed.has(place)) return false;
-      landed.add(place);
+      if ((namedTier.get(place) ?? -1) >= h.tier || unnamedSeen.has(place)) return false;
+      unnamedSeen.add(place);
       return true;
     })
     .slice(0, limit)
     .map(({ entry, score, tier, title, section, note }) => ({ entry, score, tier, title, section, ...(note ? { note } : {}) }));
 }
 
-export type SearchTextPart = { text: string; highlighted: boolean };
+type SearchTextPart = { text: string; highlighted: boolean };
 
 export function splitByRanges(text: string, ranges: SearchRange[]): SearchTextPart[] {
   const parts: SearchTextPart[] = [];

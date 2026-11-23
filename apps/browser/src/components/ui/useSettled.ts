@@ -6,7 +6,7 @@ export type Size = { width: number; height: number };
 
 export const sameSize = (a: Size, b: Size) => a.width === b.width && a.height === b.height;
 
-export type Settler<T> = {
+type Settler<T> = {
   push(value: T): void;
   cancel(): void;
   apply: (value: T) => void;

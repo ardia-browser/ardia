@@ -6,6 +6,7 @@ import type {
   DiagnosticsSample,
   HardwareInfo,
   LaunchConfig,
+  NativeDevtoolsEndpoint,
   OpenSurface,
   OpenWindowOptions,
   ShellNativeModules,
@@ -21,7 +22,7 @@ import { reportModule } from "./report";
 import { telemetryLocalModule } from "./telemetryLocal";
 import { windowGeometries, windowGeometryFakes } from "./windowGeometry";
 import officialPin from "../../official-plugins.json";
-import { sha256 } from "../lib/sha256";
+import { hexOf, sha256 } from "../lib/sha256";
 export { beginWindowControlTransition, finishStalledTransition, geometryWorld } from "./windowGeometry";
 
 type Modules = ShellNativeModules;
@@ -40,6 +41,13 @@ export const docs = new Map<string, string>();
 export const stagedDocs = new Map<string, string>();
 export const unreadableDocs = new Set<string>();
 export const asyncExists = { on: false };
+export const copiedDocs: [string, string][] = [];
+export const refusedCopies = { on: false, of: new Set<string>() };
+export const takenNames = new Set<string>();
+export const syncedDocs: string[] = [];
+export const refusedSyncs = { on: false };
+export const linkedButUnsynced = { on: false };
+export const heldCopies = { on: false, queue: [] as (() => void)[] };
 export const heldSaves = { on: false, queue: [] as (() => void)[] };
 export const refusedSaves = { on: false };
 export const refusedWrites = { on: false, returnsFalse: false, landingFails: false };
@@ -64,7 +72,7 @@ export const launch: LaunchConfig = {
   test: {},
 };
 
-export type FakeWindow = OpenWindowOptions & { title?: string; trafficLightsCenter?: [number, number] | null; trafficLightsTrailing?: boolean };
+type FakeWindow = OpenWindowOptions & { title?: string; trafficLightsCenter?: [number, number] | null; trafficLightsTrailing?: boolean };
 const shellEvents = nativeEvents();
 export const windows = {
   closeRequests: [] as string[],
@@ -76,8 +84,6 @@ export const windows = {
 };
 export const emitAppEvent = (event: AppEvent) => shellEvents.emit("onAppEvent", event);
 export const emitCommand = (event: CommandEvent) => shellEvents.emit("onCommand", event);
-export const emitOpenURLs = (urls: string[], pointer?: [number, number], source?: { bundleId: string | null; appName: string | null }) =>
-  shellEvents.emit("onOpenURLs", { urls, pointer, source });
 
 const shell: Modules["ArdiaShell"] = {
   addListener: shellEvents.addListener,
@@ -211,10 +217,26 @@ const menus: Modules["ArdiaMenus"] = {
   mouseShortcutMonitor: () => Promise.resolve({ installed: false, installs: 0 }),
 };
 
+export const controlPeers = {
+  chosen: [] as unknown[],
+  chooseResult: { choice: -1, unshown: true } as { choice: number; unshown?: boolean },
+  dismissed: [] as (string | null)[],
+  answers: [] as [number, string][],
+  approvals: [] as { key: string; name: string; signedBy: string; added: number; until?: number }[],
+  revoked: [] as string[],
+};
+
 const dialogs: Modules["ArdiaDialogs"] = {
+  choose: (options) => {
+    controlPeers.chosen.push(options);
+    return Promise.resolve(controlPeers.chooseResult);
+  },
   confirm: () => Promise.resolve({ confirmed: false, suppressed: false }),
   dismissesShownOnly: true,
-  dismissShownOnly: () => Promise.resolve(),
+  dismissShownOnly: (key) => {
+    controlPeers.dismissed.push(key);
+    return Promise.resolve();
+  },
   prompt: () => Promise.resolve(null),
   pickFiles: () => Promise.resolve([]),
   pickFolder: () => Promise.resolve(null),
@@ -251,6 +273,39 @@ const documents: Modules["ArdiaDocuments"] = {
     }),
   documentSaved: () => (refusedWrites.on || refusedWrites.landingFails ? Promise.reject(new Error("save refused")) : Promise.resolve()),
   removeDocument: (name) => void (docs.delete(name), stagedDocs.delete(name), unreadableDocs.delete(name)),
+  listDocuments: (prefix) => [...new Set([...docs.keys(), ...unreadableDocs])].filter((name) => name.startsWith(prefix)),
+  syncDocument: (name) => {
+    syncedDocs.push(name);
+    if (!docs.has(name)) return Promise.reject(Object.assign(new Error("gone"), { code: "ERR_DOCUMENT_GONE" }));
+    return refusedSyncs.on ? Promise.reject(new Error("sync refused")) : Promise.resolve();
+  },
+  createDocument: (name, contents) => {
+    if (docs.has(name) || unreadableDocs.has(name) || takenNames.has(name)) return Promise.reject(Object.assign(new Error("exists"), { code: "ERR_DOCUMENT_EXISTS" }));
+    if (refusedSaves.on) return Promise.reject(new Error("create refused"));
+    if (linkedButUnsynced.on) {
+      docs.set(name, contents);
+      return Promise.reject(new Error("folder sync failed"));
+    }
+    return new Promise((resolve) => {
+      const land = () => {
+        docs.set(name, contents);
+        resolve();
+      };
+      if (heldSaves.on) heldSaves.queue.push(land);
+      else land();
+    });
+  },
+  copyDocument: (name, copyName) => {
+    copiedDocs.push([name, copyName]);
+    if (refusedCopies.on || refusedCopies.of.has(name)) return Promise.reject(new Error("copy refused"));
+    if (!unreadableDocs.has(name) && !docs.has(name)) return Promise.reject(Object.assign(new Error("nothing to copy"), { code: "ERR_DOCUMENT_GONE" }));
+    const land = () => {
+      if (unreadableDocs.has(name)) unreadableDocs.add(copyName);
+      else if (docs.has(name)) docs.set(copyName, docs.get(name)!);
+    };
+    if (!heldCopies.on) return Promise.resolve(land());
+    return new Promise<void>((resolve) => heldCopies.queue.push(() => (land(), resolve())));
+  },
 };
 
 const app: Modules["ArdiaApp"] = {
@@ -361,7 +416,7 @@ const calendar: Modules["ArdiaCalendar"] = {
   events: () => Promise.resolve([]),
 };
 
-export const keychainReads = { values: new Map<string, string>(), errors: new Map<string, string>() };
+const keychainReads = { values: new Map<string, string>(), errors: new Map<string, string>() };
 
 const keychain: Modules["ArdiaKeychain"] = {
   get: () => Promise.resolve(null),
@@ -394,7 +449,6 @@ const fileDrop: Modules["ArdiaFileDrop"] = {
   devDrag: () => unfaked("ArdiaFileDrop", "devDrag"),
   devLastFileDrag: () => Promise.resolve([]),
 };
-
 
 const cliEvents = nativeEvents();
 const cli: Modules["ArdiaCli"] = {
@@ -448,10 +502,15 @@ export const controlSocket = {
   held: [] as number[],
   replies: [] as { connection: number; line: string }[],
   broadcasts: [] as { connections: number[]; line: string }[],
+  devtoolsEndpoint: ((_connection: number): NativeDevtoolsEndpoint | Promise<NativeDevtoolsEndpoint> => ({ problem: "off" })) as ((connection: number) => NativeDevtoolsEndpoint | Promise<NativeDevtoolsEndpoint>) | null,
+  devtoolsEndpointAsks: [] as number[],
+  calls: [] as string[],
 };
 const controlEvents = nativeEvents();
 export const emitControlRequest = (request: { connection: number; generation: number; line: string }) => controlEvents.emit("onRequest", request);
 export const emitControlClose = (connection: number) => controlEvents.emit("onClose", { connection });
+export const emitControlPeerAsk = (ask: { ask: number; name: string; signedBy: string; path: string; identifier: string; remember: boolean; deadline: number }) => controlEvents.emit("onPeerAsk", ask);
+export const emitControlPeerAskEnded = (ask: number, outcome: string) => controlEvents.emit("onPeerAskEnded", { ask, outcome });
 export function writeHeldReplies() {
   const tickets = controlSocket.held.splice(0);
   if (tickets.length) controlEvents.emit("onWritten", { tickets });
@@ -463,16 +522,38 @@ const automation: Modules["ArdiaAutomation"] = {
     return { state: "on", generation: controlSocket.generation, path: "/data/ArdiaControl.sock" };
   },
   stop: async () => {
+    controlSocket.calls.push("stop");
     controlSocket.running = false;
   },
+  cutOff: () => (controlSocket.calls.push("cutOff"), true),
   reply: (connection, line, ticket) => {
     controlSocket.replies.push({ connection, line });
     if (ticket > 0) controlSocket.held.push(ticket);
     if (!controlSocket.holdWrites) writeHeldReplies();
   },
   broadcast: (connections, line) => void controlSocket.broadcasts.push({ connections, line }),
+  answerPeer: (ask, outcome) => {
+    controlPeers.answers.push([ask, outcome]);
+    return Promise.resolve(true);
+  },
+  approvals: () => Promise.resolve({ approvals: [...controlPeers.approvals], doorbell: true }),
+  revokeApproval: (key) => {
+    controlPeers.revoked.push(key);
+    const before = controlPeers.approvals.length;
+    controlPeers.approvals = controlPeers.approvals.filter((a) => a.key !== key);
+    return Promise.resolve(controlPeers.approvals.length !== before);
+  },
   addListener: controlEvents.addListener,
 };
+Object.defineProperty(automation, "devtoolsEndpoint", {
+  enumerable: true,
+  get: () =>
+    controlSocket.devtoolsEndpoint &&
+    (async (connection: number) => {
+      controlSocket.devtoolsEndpointAsks.push(connection);
+      return controlSocket.devtoolsEndpoint!(connection);
+    }),
+});
 
 export const systemSignals = {
   idleThresholds: [] as number[],
@@ -561,7 +642,6 @@ function derivedRegistry() {
     for (const program of plugin.reservedPrograms ?? []) if (declared[plugin.name]?.includes(program)) claims[program] ??= plugin.name;
   return { claims, failClosed: false, legacyOwners: [] };
 }
-const hexOf = (bytes: Uint8Array) => Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 export const officialLegacyHash = (text: string) => hexOf(sha256(`${text}\u0000bundled`));
 export function officialPinnedFromPin(): { name: string; version: string; folderId: string }[] {
   return (officialPin as { plugins: { name: string; version: string; artifacts: Record<string, { sha256?: string | null }> }[] }).plugins.flatMap((p) => {

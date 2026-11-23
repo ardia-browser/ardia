@@ -36,7 +36,7 @@ function node(json: Json): BookmarkNode | undefined {
   return folder(title, kids, added === undefined ? {} : { dateAdded: added });
 }
 
-export function parseChromiumBookmarks(json: unknown): BookmarkNode {
+function parseChromiumBookmarks(json: unknown): BookmarkNode {
   const roots = isJson(json) && isJson(json.roots) ? json.roots : undefined;
   if (!roots) throw new ImportFailure("unreadable", "Bookmarks file is not Chromium bookmarks JSON");
   const children: BookmarkNode[] = [];

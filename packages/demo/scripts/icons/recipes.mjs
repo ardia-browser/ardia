@@ -86,6 +86,7 @@ export const RECIPES = {
   "battery.100.bolt": one(O("battery.solid"), L("phosphor-fill:lightning-fill", { knockout: 0.05, ...at(0.55, -0.05, 0) })),
   "chart.bar": one(O("chart.bar")),
   "line.3.horizontal": one(O("line.3.horizontal")),
+  "line.3.horizontal.decrease.circle": one(O("line.3.decrease.circle")),
   "list.bullet": one(O("list.bullet")),
   "text.alignleft": one(O("text.alignleft")),
   doc: one(O("doc")),

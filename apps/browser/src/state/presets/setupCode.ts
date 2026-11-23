@@ -4,7 +4,7 @@ import type { Settings } from "../settings/settings";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import { keyText } from "../commands/keyText";
 
-export const SETUP_CODE_VERSION = 1;
+const SETUP_CODE_VERSION = 1;
 export const SETUP_CODE_PREFIX = `ardia${SETUP_CODE_VERSION}-`;
 export const SETUP_CODE_MAX_LENGTH = 160;
 export const SETUP_CODE_MAX_INPUT = SETUP_CODE_MAX_LENGTH * 8;
@@ -30,7 +30,7 @@ export const SETUP_SETTING_KEYS = [
   "bookmarksBar",
 ] as const;
 
-export type SetupSettingKey = (typeof SETUP_SETTING_KEYS)[number];
+type SetupSettingKey = (typeof SETUP_SETTING_KEYS)[number];
 
 export type SetupChoices = {
   preset?: Preset;
@@ -39,7 +39,7 @@ export type SetupChoices = {
   pins?: string[];
 };
 
-export type SetupCodeResult = { ok: true; choices: SetupChoices } | { ok: false; error: string };
+type SetupCodeResult = { ok: true; choices: SetupChoices } | { ok: false; error: string };
 
 type Field<T> = { key: string; values: readonly T[] };
 
@@ -138,7 +138,7 @@ function parseEntries(body: string): Map<string, string> | null {
   return entries;
 }
 
-export function normalizeSetupCode(input: string): string {
+function normalizeSetupCode(input: string): string {
   return input.replace(/\s+/g, "").toLowerCase();
 }
 

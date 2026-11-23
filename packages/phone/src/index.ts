@@ -46,6 +46,8 @@ export {
   Glass,
   glassIsNative,
   INCOGNITO_LOOK,
+  nativeGlassRender,
+  type NativeGlassRender,
   lookIsNative,
   lookLab,
   type LookCounts,

@@ -5,7 +5,7 @@ import { capture, consentNow } from "./client";
 
 export const SWAP_WAIT_MS = 12_000;
 
-export type ProfileSwapProperties = { swap_ms?: number; swap_active_ms?: number; profile_loaded?: boolean; held_timed_out?: boolean };
+type ProfileSwapProperties = { swap_ms?: number; swap_active_ms?: number; profile_loaded?: boolean; held_timed_out?: boolean };
 
 type Waiter = { switchId: number; settle: (swap: ProfileSwapProperties) => void };
 

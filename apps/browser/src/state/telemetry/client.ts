@@ -1,3 +1,4 @@
+import { SecretEscapeError, withoutSecrets, type SecretFree } from "@ardia/core";
 import { engineInfo, updaterState } from "../../platform/app";
 import { readDocument, saveDocument, writeDocument } from "../../platform/documents";
 import { MAX_BODY_BYTES } from "./config";
@@ -125,14 +126,19 @@ let droppedWhileOff = 0;
 
 export type { CaptureOptions };
 
-export function capture(event: string, props: Record<string, unknown>, consent: ConsentToken | null, options: CaptureOptions = {}) {
+export function capture<P extends Record<string, unknown>, R extends Record<string, unknown> = Record<string, never>>(
+  event: string,
+  props: P & SecretFree<P>,
+  consent: ConsentToken | null,
+  options: CaptureOptions & { raw?: R & SecretFree<R> } = {},
+) {
   const sharing = stillValid(consent);
   if (!sharing && COUNT_EVENTS.has(event)) {
     droppedWhileOff++;
     return;
   }
   const relay = telemetryRelay();
-  if (relay) return relay.capture(event, props, consent, options);
+  if (relay) return relay.capture(event, withoutSecrets(props, "telemetry"), consent, { ...options, raw: withoutSecrets(options.raw, "telemetry") });
   try {
     const { installId } = saved();
     const at = Date.now();
@@ -141,7 +147,7 @@ export function capture(event: string, props: Record<string, unknown>, consent: 
       event,
       distinct_id: installId ?? "",
       timestamp: new Date(at).toISOString(),
-      properties: { ...context(), ...cleanProperties(props), ...options.raw },
+      properties: { ...context(), ...cleanProperties(props), ...withoutSecrets(options.raw, "telemetry") },
     };
     recordLocal("event", sharing, { event, uuid: record.uuid, distinct_id: sharing ? installId : null, properties: record.properties }, at);
     if (!sharing) {
@@ -153,12 +159,14 @@ export function capture(event: string, props: Record<string, unknown>, consent: 
     if (queue.events.length > MAX_EVENTS) queue.events.splice(0, queue.events.length - MAX_EVENTS);
     persistQueue(options.persist);
     scheduleFlush(options.urgent ? URGENT_FLUSH_DELAY_MS : FLUSH_DELAY_MS);
-  } catch {}
+  } catch (error) {
+    if (error instanceof SecretEscapeError) throw error;
+  }
 }
 
 export function queueLog(level: "warn" | "error", message: string, attributes: Record<string, string | number | boolean>, consent: ConsentToken | null) {
   const relay = telemetryRelay();
-  if (relay) return relay.log(level, message, attributes, consent);
+  if (relay) return relay.log(level, message, withoutSecrets(attributes, "log"), consent);
   try {
     const sharing = stillValid(consent);
     const at = Date.now();
@@ -227,6 +235,7 @@ async function drain<T>(
 }
 
 export async function flush() {
+  clearTimeout(flushTimer);
   flushTimer = undefined;
   if (!saved().sharing || flushing) return;
   flushing = true;
@@ -250,7 +259,7 @@ export async function flush() {
   }
 }
 
-export type { AskPlacement, SharingSource };
+export type { AskPlacement };
 
 export function setSharing(on: boolean, source: SharingSource, placement?: AskPlacement): Promise<boolean> {
   const relay = telemetryRelay();

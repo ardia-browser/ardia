@@ -58,7 +58,7 @@ function apply(values: Record<string, unknown>, label: string, replaced: Partial
   const settings = now().settings;
   const ruled = Object.fromEntries(Object.entries(values).filter(([key]) => hasSocketRule(key)));
   const fromRules = checkedByRules(ruled, settings, values);
-  const { values: checked, problems } = checkedSettings(label, Object.fromEntries(Object.entries(values).filter(([key]) => !hasSocketRule(key))), { ...settings, ...fromRules.patch });
+  const { values: checked, problems } = checkedSettings(label, Object.fromEntries(Object.entries(values).filter(([key]) => !hasSocketRule(key))), { ...settings, ...fromRules.patch }, { order: now().profileOrder, mustExist: true });
   problems.push(...fromRules.problems.map((p) => `${label}: ${p}`));
   const merged = { ...fromRules.patch, ...checked, ...replaced };
   const problem = problems.length ? null : searchProblem(settings, { ...settings, ...merged } as Settings);

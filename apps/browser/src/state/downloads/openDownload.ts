@@ -5,7 +5,7 @@ import { consentToken } from "../telemetry/client";
 
 const ARCHIVE = /\.(?:zip|tar|tgz|tbz|tbz2|txz|cpio|tar\.gz|tar\.bz2|tar\.xz|gz|bz2|xz)$/i;
 
-export type OpenDownloadDeps = {
+type OpenDownloadDeps = {
   open: (path: string) => Promise<boolean>;
   reveal: (path: string) => Promise<boolean>;
 };

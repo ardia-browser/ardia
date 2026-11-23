@@ -44,7 +44,7 @@ export type GroupOut = { top: DragGeometry; slot: number; chip: number; expanded
 
 export type Release = { kind: "handedOff" } | { kind: "across"; landing: Landing } | { kind: "dropped" } | { kind: "settle" };
 
-export type ReleaseSteps = {
+type ReleaseSteps = {
   local: boolean;
   lifted: boolean;
   from: number;

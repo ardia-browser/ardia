@@ -19,9 +19,9 @@ export type SearchStageHandle = {
 
 export type SearchStageLift = { lift: number; up: boolean; predicted?: boolean };
 
-export type SearchStageSettled = { landed: boolean; path?: string };
+type SearchStageSettled = { landed: boolean; path?: string };
 
-export type SearchStageLanding = { lands: boolean; path: string };
+type SearchStageLanding = { lands: boolean; path: string };
 
 export type SearchStageProps = ViewProps & {
   shown: boolean;

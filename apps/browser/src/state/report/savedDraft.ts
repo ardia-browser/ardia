@@ -13,7 +13,7 @@ type ReadyRecording = Extract<Recording, { phase: "ready" }>;
 type ReadyTrace = Extract<Trace, { phase: "ready" }>;
 type Pending = { stage: FailedStage; errorClass: FailureClass; status: number; created: Created | null };
 
-export type SavedDraft = {
+type SavedDraft = {
   draft: ReportDraft;
   draftDir: string | null;
   recording: ReadyRecording | null;
@@ -22,7 +22,7 @@ export type SavedDraft = {
   identity: ReportIdentity | null;
 };
 
-export type Restored = Pick<ReportSheetState, "draft" | "draftDir" | "recording" | "trace" | "upload"> & { identity: ReportIdentity | null };
+type Restored = Pick<ReportSheetState, "draft" | "draftDir" | "recording" | "trace" | "upload"> & { identity: ReportIdentity | null };
 
 export function savedDraftOf(s: ReportSheetState, identity: ReportIdentity | null): SavedDraft | null {
   if (s.sent) return null;

@@ -472,10 +472,15 @@ git -C "$AC_CHROMIUM_BUILD/helium" fetch --depth 1 origin "$(sed -n 's/^helium_c
 
 source engine/patches/build/env.sh
 scripts/agent/locked chromium -- engine/patches/build/01-sync.sh --apply
-scripts/agent/locked chromium -- python3 engine/patches/build/03-helium.py --platform linux --apply
+scripts/agent/locked chromium -- python3 scripts/engine/run-step3.py --platform linux --apply
+scripts/agent/locked chromium -- python3 scripts/engine/run-capture.py --platform linux
 scripts/linux/build.sh --apply --generate
 ```
 
+- **Step 3 through the wrappers.** `run-step3.py` runs `03-helium.py` and stamps one full run on a fresh tree.
+  `run-capture.py` runs `series.py capture-base` before step 4 and records the base it captured. Only a tree and base
+  made that way can be packed into the series base the Engine series workflow checks against
+  (`docs/engine-build.md`, "The series base archive").
 - **Pins.** The tags must match `engine/patches/build/helium-pins.ini`. helium-linux's `helium-chromium` submodule
   may sit a few commits past the shared Helium tag; `03-helium.py` accepts that only when the two commits agree on
   everything the build reads (the patches, version files, lists and utils), which is why the `fetch` line brings in
@@ -680,7 +685,10 @@ command ([linux-ci.md](linux-ci.md) › Linux releases).
   unprivileged user namespaces. `scripts/linux/arch/update-pkgbuild.sh <version> --package <tarball>` (or `--sha256`) sets
   `pkgver` (`0.2.47-nightly.3` becomes `0.2.47nightly.3`, which pacman sorts before `0.2.47`), resets `pkgrel` and writes the matching `.SRCINFO` without makepkg;
   `update-pkgbuild.sh --check` fails when the committed `.SRCINFO` drifts from the PKGBUILD. The committed pair
-  pins the 0.2.47-nightly.2 test build this was verified with; the AUR copy moves with each stable release.
+  pins the 0.2.47-nightly.2 test build this was verified with, on purpose: its sha256 is a real tarball's, and every
+  release writes its own pair with `--out` instead of moving it. The release preflight
+  (`scripts/release/preflight.mjs`) checks the `pkgver` and tarball URL `update-pkgbuild.sh` derives for the version and
+  that the committed `.SRCINFO` matches. The AUR copy moves with each stable release.
   `scripts/linux/arch/publish-aur.sh <version> --sha256 <digest>` clones `ssh://aur@aur.archlinux.org/ardia-bin.git`
   (host keys pinned in `aur_known_hosts`), refuses to go back a version (a nightly counts as older than its stable), checks that the release's tarball has the
   digest, commits and pushes; `--dry-run` clones over HTTPS and pushes nothing. The Release workflow runs it after

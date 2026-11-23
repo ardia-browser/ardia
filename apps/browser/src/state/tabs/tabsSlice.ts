@@ -28,7 +28,7 @@ export type TabsSlice = {
   closedTabs: ClosedTab[];
 
   newTab(windowId: string, options?: NewTabOptions): string;
-  closeTab(id: string): void;
+  closeTab(id: string, options?: CloseOptions): void;
   closeTabs(ids: string[], options?: CloseOptions): void;
   activate(id: string): void;
   handOffPin(id: string): void;
@@ -106,8 +106,8 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
     return id;
   },
 
-  closeTab(id) {
-    get().closeTabs([id], { lastClosesWindow: true });
+  closeTab(id, options) {
+    get().closeTabs([id], { lastClosesWindow: true, ...options });
   },
 
   closeTabs(ids, options) {

@@ -729,13 +729,151 @@ final class OfficialPluginsTests: XCTestCase {
     XCTAssertTrue(FileManager.default.isExecutableFile(atPath: "\(made.copy.path)/bin/tool"))
   }
 
-  func unpack(_ archive: String, into stage: String) -> String? {
-    guard let held = OfficialArchive.snapshot(archive, in: root) else { return "no snapshot" }
+  func unpack(_ archive: String, into stage: String, limits: OfficialArchive.Limits = .standard) -> String? {
+    guard let held = OfficialArchive.snapshot(archive, in: root, limits: limits) else { return "no snapshot" }
     defer { held.close() }
     let folder = open(stage, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
     guard folder >= 0 else { return "no stage" }
     defer { close(folder) }
-    return OfficialArchive.unpack(held.fd, top: "tool", into: folder, scratch: root)
+    return OfficialArchive.unpack(held.fd, top: "tool", into: folder, scratch: root, limits: limits)
+  }
+
+  func freshStage() throws -> String {
+    let stage = "\(root)/stage-\(UUID().uuidString)"
+    XCTAssertEqual(mkdir(stage, 0o700), 0)
+    return stage
+  }
+
+  func file(_ name: String, _ body: Data) -> (name: String, type: UInt8, body: Data, mode: Int, link: String) {
+    (name, UInt8(ascii: "0"), body, 0o644, "")
+  }
+
+  func noise(_ count: Int) -> Data {
+    var data = Data(count: count)
+    data.withUnsafeMutableBytes { arc4random_buf($0.baseAddress, count) }
+    return data
+  }
+
+  func testTheStandardCapsAreTheDocumentedOnes() {
+    let limits = OfficialArchive.Limits.standard
+    XCTAssertEqual(limits.download, 512 << 20)
+    XCTAssertEqual(limits.expanded, 1 << 30)
+    XCTAssertEqual(limits.entries, 20_000)
+    XCTAssertEqual(limits.depth, 32)
+    XCTAssertEqual(limits.ratio, 100)
+    XCTAssertEqual(limits.entryRatio, 200)
+    XCTAssertEqual(limits.ratioFloor, 4 << 20)
+    XCTAssertEqual(limits.expandedAllowed(compressed: 1_000), 4 << 20, "a small download may still unpack to the floor")
+    XCTAssertEqual(limits.expandedAllowed(compressed: 100 << 20), 1 << 30, "never past the expanded cap")
+    XCTAssertEqual(limits.expandedAllowed(compressed: .max), 1 << 30)
+  }
+
+  func testADownloadOverTheSizeCapIsNotTaken() throws {
+    let archive = try pluginArchive(manifest(), extra: [file("tool/noise", noise(64 << 10))])
+    var small = OfficialArchive.Limits.standard
+    small.download = 32 << 10
+    XCTAssertNil(OfficialArchive.snapshot(archive, in: root, limits: small))
+    XCTAssertEqual(unpack(archive, into: try freshStage(), limits: small), "no snapshot")
+    let sha = try XCTUnwrap(OfficialArchive.sha256(file: archive))
+    XCTAssertNil(OfficialArchive.verifiedPayloadDigest(archive: archive, sha: sha, top: "tool", scratch: root, limits: small))
+    XCTAssertNotNil(OfficialArchive.verifiedPayloadDigest(archive: archive, sha: sha, top: "tool", scratch: root))
+  }
+
+  func testMoreEntriesThanTheCapAreRefused() throws {
+    var small = OfficialArchive.Limits.standard
+    small.entries = 40
+    let folders = (0..<40).map { (name: "tool/d\($0)/", type: UInt8(ascii: "5"), body: Data(), mode: 0o755, link: "") }
+    let archive = try pluginArchive(manifest(), extra: folders)
+    XCTAssertEqual(unpack(archive, into: try freshStage(), limits: small), "the archive has more than 40 entries")
+    let fits = try pluginArchive(manifest(), extra: Array(folders.prefix(36)))
+    XCTAssertNil(unpack(fits, into: try freshStage(), limits: small), "exactly the cap unpacks")
+    let sha = try XCTUnwrap(OfficialArchive.sha256(file: archive))
+    XCTAssertNil(OfficialArchive.verifiedPayloadDigest(archive: archive, sha: sha, top: "tool", scratch: root, limits: small), "verifying a kept copy holds to the same cap")
+  }
+
+  func testFoldersAFileImpliesCountTowardTheEntryCap() throws {
+    var small = OfficialArchive.Limits.standard
+    small.entries = 40
+    let deep = (0..<5).map { file("tool/\($0)/a/b/c/d/e/f/g/h/i", Data("x".utf8)) }
+    let archive = try pluginArchive(manifest(), extra: deep)
+    let stage = try freshStage()
+    XCTAssertEqual(unpack(archive, into: stage, limits: small), "the archive has more than 40 entries", "9 headers, but 45 folders made")
+    XCTAssertNil(unpack(try pluginArchive(manifest(), extra: Array(deep.prefix(3))), into: try freshStage(), limits: small), "3 such files, 30 folders, fit")
+  }
+
+  func testAFileUnderAnExistingFolderCanStillCrossTheEntryCap() throws {
+    var small = OfficialArchive.Limits.standard
+    small.entries = 40
+    let deep = file("tool/" + Array(repeating: "a", count: 30).joined(separator: "/") + "/f", Data("x".utf8))
+    let more = (0..<10).map { file("tool/bin/extra\($0)", Data("x".utf8)) }
+    let archive = try pluginArchive(manifest(), extra: [deep] + more)
+    XCTAssertEqual(unpack(archive, into: try freshStage(), limits: small), "the archive has more than 40 entries", "15 headers, but the files in bin take the paths past 40")
+    XCTAssertNil(unpack(try pluginArchive(manifest(), extra: [deep] + Array(more.prefix(4))), into: try freshStage(), limits: small))
+  }
+
+  func testTrailingBytesAfterTheGzipMemberAreRefused() throws {
+    let archive = try pluginArchive(manifest(), extra: [file("tool/zeros", Data(count: 3 << 20))])
+    let padded = "\(root)/padded.tar.gz"
+    var bytes = try Data(contentsOf: URL(fileURLWithPath: archive))
+    bytes.append(noise(4 << 20))
+    try bytes.write(to: URL(fileURLWithPath: padded))
+    XCTAssertEqual(unpack(padded, into: try freshStage()), "the download has data after its archive")
+    let twice = "\(root)/twice.tar.gz"
+    let original = try Data(contentsOf: URL(fileURLWithPath: archive))
+    try (original + original).write(to: URL(fileURLWithPath: twice))
+    XCTAssertEqual(unpack(twice, into: try freshStage()), "the download has data after its archive", "a second gzip member is refused too")
+    var corrupt = original
+    corrupt[corrupt.count - 6] ^= 0xff
+    let badCheck = "\(root)/bad-crc.tar.gz"
+    try corrupt.write(to: URL(fileURLWithPath: badCheck))
+    XCTAssertEqual(unpack(badCheck, into: try freshStage()), "the download is damaged", "the trailer's CRC is checked")
+  }
+
+  func testAnOutOfRangePaxRecordLengthIsRefusedNotTrapped() {
+    XCTAssertNil(OfficialArchive.paxPath(Data("9223372036854775807 path=x\n".utf8)))
+  }
+
+  func testFoldersDeeperThanTheCapAreRefused() throws {
+    let deepest = Array(repeating: "a", count: OfficialArchive.maxDepth - 1).joined(separator: "/")
+    let fits = try pluginArchive(manifest(), extra: [file("tool/\(deepest)", Data("deep".utf8))])
+    XCTAssertNil(unpack(fits, into: try freshStage()), "a file \(OfficialArchive.maxDepth) parts deep unpacks")
+    let archive = try pluginArchive(manifest(), extra: [file("tool/\(deepest)/b", Data("deep".utf8))])
+    XCTAssertEqual(unpack(archive, into: try freshStage()), "tool/\(deepest)/b isn't inside tool/ or is more than 32 folders deep")
+  }
+
+  func testUnpackingPastTheExpandedCapStops() throws {
+    let archive = try pluginArchive(manifest(), extra: [file("tool/noise", noise(2 << 20))])
+    var small = OfficialArchive.Limits.standard
+    small.expanded = 1 << 20
+    XCTAssertEqual(unpack(archive, into: try freshStage(), limits: small), "the download unpacks to more than 1 MB")
+    XCTAssertNil(unpack(archive, into: try freshStage()))
+  }
+
+  func testADownloadThatInflatesPastTheRatioIsRefused() throws {
+    let archive = try pluginArchive(manifest(), extra: [file("tool/zeros", Data(count: 16 << 20))])
+    let stage = try freshStage()
+    XCTAssertEqual(unpack(archive, into: stage), "the download unpacks to more than 100 times its size")
+    XCTAssertFalse(FileManager.default.fileExists(atPath: "\(stage)/zeros"), "it stops before the tar is read")
+  }
+
+  func testOneEntryThatInflatesPastItsRatioIsRefusedAmongOrdinaryOnes() throws {
+    let archive = try pluginArchive(manifest(), extra: [file("tool/noise", noise(8 << 20)), file("tool/zeros", Data(count: 6 << 20))])
+    let stage = try freshStage()
+    XCTAssertEqual(unpack(archive, into: stage), "tool/zeros unpacks to more than 200 times its compressed size")
+    XCTAssertFalse(FileManager.default.fileExists(atPath: "\(stage)/zeros"), "it is refused before a byte of it is written")
+    let ordinary = try pluginArchive(manifest(), extra: [file("tool/noise", noise(8 << 20)), file("tool/text", Data(String(repeating: "a", count: 3 << 20).utf8))])
+    XCTAssertNil(unpack(ordinary, into: try freshStage()), "a highly compressible file under the floor is fine")
+  }
+
+  func testInflationEstimatesNeverUndercountWhatAnEntryTook() {
+    var inflation = OfficialArchive.Inflation()
+    inflation.mark(produced: 1 << 20, consumed: 1_000)
+    inflation.mark(produced: 2 << 20, consumed: 900_000)
+    inflation.mark(produced: 3 << 20, consumed: 901_000)
+    XCTAssertEqual(inflation.compressed(from: 0, to: 1 << 20), 1_000)
+    XCTAssertEqual(inflation.compressed(from: 512, to: (1 << 20) + 1), 900_000, "a range that crosses a mark counts the whole step it ends in")
+    XCTAssertEqual(inflation.compressed(from: 2 << 20, to: 3 << 20), 1_000)
+    XCTAssertEqual(inflation.compressed(from: 3 << 20, to: 3 << 20), 1, "never zero")
   }
 
   func testTheBytesHashedAreTheBytesUnpackedEvenIfTheDownloadChangesAfterward() throws {

@@ -46,6 +46,6 @@ export type ReportNative = {
   addListener(name: "onReport", listener: (e: ReportEvent) => void): EventSubscription;
 };
 
-export type ReportVideoProps = ViewProps & { path: string | null; playing: boolean };
+type ReportVideoProps = ViewProps & { path: string | null; playing: boolean };
 
 export const ReportVideo = requireNativeViewManager<ReportVideoProps>("ArdiaReport");

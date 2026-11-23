@@ -37,7 +37,7 @@ function SurfaceRoot({ view, surface }: RootProps): Renderable {
   return jsx(SurfaceContext.Provider, { value: surface, children: jsx(view, props) });
 }
 
-export type SurfaceHost = {
+type SurfaceHost = {
   handle(message: SurfaceMessage): void;
   count(): number;
   tree(surfaceId: string): unknown;

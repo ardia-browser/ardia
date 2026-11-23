@@ -222,7 +222,7 @@ export const closeOnArt = { rest: "rgba(255,255,255,0.1)", hover: "rgba(255,255,
 
 export const arcSelectedFill = { dark: "rgba(255,255,255,0.24)", light: "rgba(255,255,255,0.8)" } as const;
 
-export type SiteToolbarRoles = {
+type SiteToolbarRoles = {
   text: string;
   secondary: string;
   icon: string;
@@ -371,6 +371,6 @@ export const sheetWidth = { xs: 320, s: 420, m: 440, l: 480, xl: 560 } as const;
 
 export type SheetSize = keyof typeof sheetWidth;
 
-export const toastLayout = { bottom: space.xxxl, maxWidth: 420 } as const;
+export const toastLayout = { bottom: space.xxxl, edge: space.l, maxWidth: 420, twoActionMaxWidth: 600 } as const;
 
 export const POPOVER_WIDTH = { s: 300, m: 340, l: 360 } as const;

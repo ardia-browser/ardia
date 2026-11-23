@@ -1,3 +1,4 @@
+import type { CleanedUrl } from "@ardia/core";
 import type { EventSubscription } from "expo-modules-core";
 import type { BangListReply } from "./documents";
 
@@ -58,5 +59,6 @@ export type ShellNative = {
   dictationAvailable?(): boolean;
   fetchBangList(etag: string | null): Promise<BangListReply>;
   copyText(text: string): void;
+  copyURL?(address: CleanedUrl): void;
   readText(): Promise<string>;
 };

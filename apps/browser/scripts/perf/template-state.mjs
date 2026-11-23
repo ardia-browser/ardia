@@ -8,7 +8,7 @@ export const STARTUP_COMPONENTS = {
   giekcmmlnklenlaomppkphknjmnnpneh: "SSLErrorAssistant",
 };
 
-export const TEMPLATE_LIMITS = {
+const TEMPLATE_LIMITS = {
   uboStoreMB: [25, 50],
   uboBlobsMB: [15, 40],
   uboLogMB: 1,
@@ -27,7 +27,7 @@ export function installedVersion(dataDir, folder) {
   }
 }
 
-export function updaterChecked(dataDir) {
+function updaterChecked(dataDir) {
   try {
     const apps = JSON.parse(readFileSync(join(dataDir, "Chromium", "Local State"), "utf8")).updateclientdata?.apps ?? {};
     return Object.keys(apps).filter((id) => apps[id]?.dlrc != null);
@@ -80,4 +80,13 @@ export function sidesProblems(records, limits = TEMPLATE_LIMITS) {
   const stores = records.map((r) => r.sizes.uboStoreMB);
   const ratio = Math.max(...stores) / Math.min(...stores);
   return ratio > limits.sidesUboStoreRatio ? [`the templates' uBO stores differ ${ratio.toFixed(2)}× (${stores.map((s) => s.toFixed(1)).join(" vs ")} MB)`] : [];
+}
+
+export const jointProblems = (records) => [...sidesProblems(records), ...componentsMismatch(records)];
+
+export function componentsMismatch(records) {
+  if (records.length < 2) return [];
+  const names = new Set(records.flatMap((r) => Object.keys(r.components ?? {})));
+  return [...names].filter((name) => new Set(records.map((r) => r.components?.[name]?.version ?? null)).size > 1)
+    .map((name) => `component ${name} differs (${records.map((r) => r.components?.[name]?.version ?? "none").join(" vs ")})`);
 }

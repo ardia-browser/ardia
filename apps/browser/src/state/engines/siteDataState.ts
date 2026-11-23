@@ -50,7 +50,7 @@ export const active = new Map<string, Promise<void>>();
 export const pushTimers = new Map<string, ReturnType<typeof setTimeout>>();
 export const clearCount = (profile: string) => clears.get(profile) ?? 0;
 
-export function abortCarries(profile: string) {
+function abortCarries(profile: string) {
   clears.set(profile, clearCount(profile) + 1);
   for (const [key, timer] of pushTimers)
     if (key.startsWith(`${profile}|`)) {

@@ -9,7 +9,7 @@ import { ICON_PICKER, ICON_PICKER_SHADOW, ICON_PICKER_WIDTH } from "./tokens";
 
 export type PickerSymbol = { name: string; title?: string };
 export type PickerAction = { title: string; icon?: string; primary?: boolean; onPress: () => void };
-export type PickerPlace = { top: number; left: number; upward?: boolean };
+type PickerPlace = { top: number; left: number; upward?: boolean };
 
 type Tab = "emoji" | "symbols";
 

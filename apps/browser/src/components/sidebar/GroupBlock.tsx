@@ -1,4 +1,4 @@
-import { createContext, memo, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, Pressable, View } from "react-native";
 import { useTheme } from "../ui/theme";
 import { useGroup, usePageProfileId, useWindowId, useWindowProfileId } from "../../state/browser/hooks";
@@ -61,6 +61,25 @@ function useInnermostHover(groupId: string, hovered: boolean) {
   return { innermost: hovered && hoveredInside.size === 0, reportInside };
 }
 
+type EntryNode = { motion: EntryMotion | null; section: string; node: ReactNode };
+
+function useEntryNodes(entries: string[]) {
+  const cache = useRef(new Map<string, EntryNode>()).current;
+  const seen = useRef(entries);
+  if (seen.current !== entries) {
+    seen.current = entries;
+    const live = new Set(entries);
+    for (const key of cache.keys()) if (!live.has(key)) cache.delete(key);
+  }
+  return (entry: string, section: string, motion: EntryMotion | null, make: (motion: EntryMotion | null) => ReactNode) => {
+    const known = cache.get(entry);
+    if (known && known.motion === motion && known.section === section) return known.node;
+    const node = make(motion);
+    cache.set(entry, { motion, section, node });
+    return node;
+  };
+}
+
 export const GroupBlock = memo(function GroupBlock({
   groupId,
   section,
@@ -88,6 +107,7 @@ export const GroupBlock = memo(function GroupBlock({
   const tail = useDragItem(tailKey({ group: groupId }), { kind: "tail", tabIds: [], section, parentGroup: groupId });
 
   const fold = useFold(collapsed);
+  const nodes = useEntryNodes(entries);
   const scope = useContext(ListMotionContext);
   const onShownPage = useWindowProfileId() === profileId;
   const motion = useGroupMotion(windowId, profileId, groupId, entries, captured, section === "list" && !parentGroup ? scope : NO_SLIDE_BELOW, onShownPage && !collapsed);
@@ -116,12 +136,7 @@ export const GroupBlock = memo(function GroupBlock({
             entries={motion.slots(entries).map((slot) =>
               "ghost" in slot
                 ? { key: slot.ghost.key, ghost: true, node: <GhostSlot snapshot={slot.ghost.snapshot} top={slot.top} opacity={slot.ghost.opacity} /> }
-                : {
-                    key: slot.entry,
-                    node: (
-                      <SidebarEntry entry={slot.entry} section={section} parentGroup={groupId} motion={motion.motion(slot.entry)} />
-                    ),
-                  },
+                : { key: slot.entry, node: nodes(slot.entry, section, motion.motion(slot.entry), (m) => <SidebarEntry entry={slot.entry} section={section} parentGroup={groupId} motion={m} />) },
             )}
             keep={keptEntries}
             rowHeight={(key) => entryHeightNow(windowId, profileId, key)}

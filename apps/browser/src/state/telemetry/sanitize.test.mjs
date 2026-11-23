@@ -412,3 +412,56 @@ test("the snapshot reports the interface size in whole percent with its default,
   }
   assert.equal(settingsSnapshot(DEFAULT_SETTINGS).setting_interfaceScale, "100");
 });
+
+const shape = (prefix, separator, body) => `${prefix}${separator}${body}`;
+
+const TOKEN_SHAPES = {
+  github: shape("ghp", "_", "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8"),
+  githubFineGrained: shape("github", "_pat_", "11ABCDEFG0123456789_abcdefghijklmnopqrstuvwxyz"),
+  gitlab: shape("glpat", "-", "AbCdEf0123456789xYz_"),
+  openai: shape("sk", "-proj-", "AbCdEfGhIjKlMnOpQrStUvWx0123456789"),
+  anthropic: shape("sk", "-ant-api03-", "AbCdEfGhIjKlMnOpQrStUvWx0123456789-_AA"),
+  stripe: shape("sk", "_live_", "51HAbCdEfGhIjKlMnOpQrSt"),
+  slackBot: shape("xoxb", "-", "1234567890-0987654321-AbCdEfGhIjKlMnOp"),
+  slackApp: shape("xapp", "-", "1-A0123456789-0123456789012-abcdef0123"),
+  googleKey: shape("AIza", "", "SyA1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q"),
+  googleAccess: shape("ya29", ".", "a0AfH6SMBx1y2z3AbCdEfGhIjKlMnOpQ"),
+  googleRefresh: shape("1", "//", "0gAbCdEfGhIjKlMnOpQrStUvWxYz"),
+  aws: shape("AKIA", "", "IOSFODNN7EXAMPLE"),
+  jwt: [shape("eyJ", "", "hbGciOiJIUzI1NiJ9"), shape("eyJ", "", "zdWIiOiIxMjM0NTY3ODkwIn0"), "dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"].join("."),
+  base64: "Zm9vYmFyYmF6cXV4MTIzNDU2Nzg5MEFCQ0RFRkdISUpLTE1OT1BRUlNU",
+  base64url: "QmFzZTY0VXJsU2VjcmV0XzEyMzQ1Njc4OTAtQUJDREVGR0hJSktM",
+};
+
+for (const [shape, token] of Object.entries(TOKEN_SHAPES)) {
+  test(`a ${shape} token never survives scrubbing, in text or a property`, () => {
+    for (const text of [`request failed with ${token} attached`, `${token}`, `auth=${token}`, `(${token})`]) {
+      assert.deepEqual(leaks(scrubText(text), token, token.slice(4, 20)), [], text);
+    }
+    assert.deepEqual(leaks(JSON.stringify(cleanProperties({ reason: `got ${token}` })), token, token.slice(4, 20)), []);
+    assert.deepEqual(leaks(errorMessage(new Error(`Bad credentials for ${token}`)), token, token.slice(4, 20)), []);
+  });
+}
+
+test("Authorization headers, key=value secrets and private keys are scrubbed", () => {
+  assert.equal(scrubText("sent Authorization: Bearer abc123.DEF456-ghi"), "sent Authorization: <token>");
+  assert.equal(scrubText("Basic dXNlcjpodW50ZXIy rejected"), "<token> rejected");
+  assert.equal(scrubText("login failed password=hunter2!x for user"), "login failed password=<secret> for user");
+  assert.equal(scrubText("client_secret: GOCSPX-abcdefgh"), "client_secret: <secret>");
+  assert.equal(scrubText("-----BEGIN OPENSSH PRIVATE KEY----- b3BlbnNzaC1rZXktdjEAAAAA"), "<token>");
+});
+
+test("ordinary words, identifiers and error text keep reading the same", () => {
+  for (const text of [
+    "Unexpected token u in JSON at position 0",
+    "basic authentication is off",
+    "token expired",
+    "token: expired",
+    "refresh token: missing",
+    "password: incorrect",
+    "secret=unset for this account",
+    "takeTabSwitcherOpensInWebKitCountsForEveryWindow failed",
+    "risk-assessment-framework-version is missing",
+    "Couldn't save the sync state; can't retry",
+  ]) assert.equal(scrubText(text), text);
+});

@@ -68,7 +68,7 @@ export function stripTabWidths(o: {
   return { chip: halfPoint(at(level, o.min)), titled: halfPoint(at(level, o.titledMin)), selected: halfPoint(at(level, o.selectedShown ? selectedMin : o.min)) };
 }
 
-export type DragSlot = { tabIds: string[]; width: number; marginLeft?: number; marginRight?: number };
+type DragSlot = { tabIds: string[]; width: number; marginLeft?: number; marginRight?: number };
 export type DragGeometry = { slots: DragSlot[]; lefts: number[] };
 
 export function dragGeometry(slots: DragSlot[], gap: number): DragGeometry {
@@ -138,8 +138,8 @@ export const tabsOf = (m: StripMember) => (m.kind === "tab" ? [m.id] : m.tabIds)
 export const CELL_STEP = PINNED_CELL + PINNED_SPACING;
 export const dockWidth = (cells: number) => cells * CELL_STEP - PINNED_SPACING;
 
-export type StripMeasures = { groupChip: (groupId: string) => number | undefined; folderChip: (groupId: string) => number | undefined; needsTitle?: (tabId: string) => boolean };
-export type StripLayout = {
+type StripMeasures = { groupChip: (groupId: string) => number | undefined; folderChip: (groupId: string) => number | undefined; needsTitle?: (tabId: string) => boolean };
+type StripLayout = {
   chip: number;
   selected: number;
   widths: TabWidths;

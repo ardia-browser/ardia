@@ -30,6 +30,11 @@ public class WebKitModule: Module {
       let keys = args.values["keys"] == nil ? nil : Set(try args.strings("keys"))
       WebKitHub.shared.exportCookies(profile: args.profile, urls: urls, keys: keys) { reply.ok($0) }
     },
+    "writeCopiedAddress": { args, reply in
+      let request = try args.int("request")
+      let address = try args.text("url")
+      DispatchQueue.main.async { reply.ok(WebKitCopiedAddresses.write(request, address)) }
+    },
     "setFraudWarnings": { args, reply in
       WebKitFraudWarnings.set(try args.bool("enabled"))
       reply.ok()

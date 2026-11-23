@@ -18,9 +18,9 @@ export const SITE_PANEL = {
   footerControl: 26,
 } as const;
 
-export type TileShape = "tile" | "row" | "capsule";
+type TileShape = "tile" | "row" | "capsule";
 
-export function Tile({
+function Tile({
   shape,
   height,
   hovered,

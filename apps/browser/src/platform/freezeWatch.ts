@@ -11,7 +11,7 @@ export type StallTally = {
   gcBound: number;
 };
 
-export type FreezeWatch = {
+type FreezeWatch = {
   start(): boolean;
   setConsentEpoch(epoch: number): boolean;
   take(epoch: number): { main: StallTally; js: StallTally } | null;
@@ -19,7 +19,7 @@ export type FreezeWatch = {
 };
 
 export type FreezeFrame = { image: string; offset: number };
-export type FreezeSample = { state: number; frames: FreezeFrame[] };
+type FreezeSample = { state: number; frames: FreezeFrame[] };
 export type FreezeRecord = {
   id: number;
   thread: "main" | "js";

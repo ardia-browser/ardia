@@ -16,9 +16,17 @@
 //     --control-bundle <file> the control's bundle (default: --app's bundle); --control-label <name> (default as --label)
 //     --prepared              --app (and --control) are copies this script already prepared (<out>/<label>/app/
 //                             Ardia.app: bundle swapped in, signed for the marker): run them in place, without
-//                             building a bundle, copying or signing. `--only prepare` makes those copies and exits.
+//                             building a bundle, copying or signing. `--only prepare` makes those copies and both templates, and exits.
 //     --runs <n>              session and windows runs (default 3); --launch-runs <n> cold launches (default 5)
 //     --idle <secs>           each idle window (default 60)
+//     --launch-settle <secs>  session: the wait after the first page paints, before the 1-tab idle window (default 30)
+//     --close-settle <secs>   session: the wait after closing back to 1 tab, before that memory reading (default 30)
+//     --template-cache <dir>  where finished templates are kept (default dist/<v>/bench/templates for an app in
+//                             dist/<v>/export, else <out>/.templates), keyed by the app's version, build and code signature
+//                             hash, its bundled uBO, the bench bundle and the page port. A cached one is checked again
+//                             before use, and both sides' startup components must match
+//     --template-max-age <h>  a cached template older than this is made again (default 12; 0 never caches): the CRLSet
+//                             and uBO's lists move, so an old one would download them inside the runs
 //     --only <a,b>            phases (default launch,session,throttle,sample):
 //                               launch     cold launches
 //                               session    one instance per run with all of: idle, memory, switch, newtab, newwindow
@@ -45,8 +53,17 @@
 //                               windows    8 new windows per run, alone
 //                               throttle   hidden animating tabs' rAF and timer rates
 //                               churn      leak check: open and close 10 tabs 5 times
+//                               loading    what a page that never finishes loading costs while it's the active tab (the
+//                                          toolbar's stop button breathing): --idle seconds with the seed tab loaded,
+//                                          then --idle seconds with a new active tab whose response never ends.
+//                                          Against an app built before this phase or on another NATIVE_API_VERSION,
+//                                          give the control its own bench bundle: in a worktree of that revision run
+//                                          `native-bench.mjs --app <that app> --only prepare --out <dir>` and pass
+//                                          <dir>/<label>/bundle/main.jsbundle as --control-bundle. A bundle without
+//                                          ac.tabLive is checked through the page's document.readyState instead
 //                               sample     main-thread `sample`s, idle and while switching and scrolling
-//                               prepare    prepare the app copies and exit (see --prepared)
+//                               prepare    prepare the app copies and both templates, and exit (see --prepared); none
+//                                          of it is a timing, so it can run beside the smoke test and the ratchet
 //     --env K=V               repeatable: extra environment for every instance (DYLD_INSERT_LIBRARIES is appended to
 //                             the marker library). Instances stay muted; don't pass ARDIA_INSTANCE allowAudio.
 //     --control-env K=V       repeatable: extra environment for the control's instances only, so one app can be measured
@@ -61,11 +78,13 @@
 //     --frames-only <regex>   frames, framecounts: only the interactions whose name matches (case-insensitive)
 //     --frames-sample         frames: `sample` the app over the first repetition of each interaction (<out>/frames-sample/*.txt)
 //     --journey-n <n>         iterations of each journey per run in newtabkey and navigate (default 10)
-//     --page-port <n>         the test pages' server port (default: any free port)
+//     --page-port <n>         the test pages' server port (default 9476; when it's busy, any free port, and templates
+//                             aren't cached: they restore their page from this port)
 //     --seed big              launch, newtabkey and navigate phases: start every launch from seed.mjs's big saved session (200 tabs in two
 //                             profiles, 5000 history entries, 1000 bookmarks) instead of one tab, to time what a
 //                             long-time user's launch does. Its active tab is the bench's id=seed page, so the launch
 //                             rows mean the same; the other 199 tabs point at the bench server's /static?id=p-…
+//     --seed-tabs <n>         --seed big: that many tabs instead of 200 (the extra ones are plain tabs in Personal)
 //     --fresh-copy            launch phase only: every launch runs from its own APFS clone of the app (same signature,
 //                             a new path and inodes), removed after, as the first launch after an install or update
 //                             is. Without it only the first launch of a prepared copy is cold; the rest are warm.
@@ -95,9 +114,9 @@
 //                   launch, the bench-cmd.js → bench-result.json channel of bench-channel.js, marks(), quit)
 //   Phases          makeTemplate (the seeded data folder each run copies: its instance stays up until uBO's cache is
 //                   written and flushed and the component updater's first check is done, then template.json records
-//                   both and a template whose sizes are off stops the run), launchRun, sessionRun, windowsRun, newWindow,
-//                   idleWindow, throttled, throttleRun, churnRun, sampleRun
-//   Report          summary() builds every row below; printTable
+//                   both and a template whose sizes are off stops the run; template-cache.mjs keeps it), launchRun,
+//                   sessionRun, windowsRun, newWindow, idleWindow, throttled, throttleRun, churnRun, sampleRun
+//   Report          native-summary.mjs builds every row below; printTable. gate-verdict.mjs reads rounds pooled
 //   Main            options, the candidate and control sides, interleaved()
 //
 // Rows: the function that measures each, and what it waits on. Launch rows count from just before `open`; command rows
@@ -111,10 +130,19 @@
 //   launch → first page painted             launchRun   the seed tab's first-contentful-paint (PerformanceObserver)
 //   launch → first page's first frame       launchRun   the seed tab's first requestAnimationFrame callback
 //   idle CPU / idle wakeups/s (…)           sessionRun  idle: idleWindow(), acperf rusage over the process tree --idle
-//                                                        secs apart with the channel paused, at 1 tab and at 20
-//   memory (phys_footprint), …              sessionRun  memory: footprint() of the tree at 1 tab (30 s after launch,
-//                                                        after the idle window), 10 tabs (+10 s), 20 tabs (+15 s), and
-//                                                        closed back to 1 (+30 s); "browser process" rows: that process
+//                                                        secs apart with the channel paused, at 1 tab (--launch-settle
+//                                                        secs after the first page paints) and at 20
+//   active tab loading: …                   loadingRun  idleWindow() with the seed tab loaded, then with the active tab
+//                                                        on /hang (headers and a first chunk, never the end), checked
+//                                                        loading before and after (tabLive isLoading, or the page's
+//                                                        readyState when the bundle has no ac.tabLive); only runs where
+//                                                        the same /hang tab is active and loading at both ends count
+//   JS heap / JS allocated (Hermes)         sessionRun  memory: HermesInternal.getInstrumentedStats() right after each
+//                                                        footprint: js_heapSize (the GC's capacity, in 4 MB segments) and
+//                                                        js_allocatedBytes
+//   memory (phys_footprint), …              sessionRun  memory: footprint() of the tree at 1 tab (after the idle
+//                                                        window), 10 tabs (+10 s), 20 tabs (+15 s), and closed back to
+//                                                        1 (+--close-settle secs); "browser process" rows: that process
 //   after an idle minute: command answered  sessionRun  idle: the first command after the 1-tab idle (App Nap check)
 //   idle windows: someone used the Mac      sessionRun  idle: acperf input over each idle window: seconds of mouse,
 //                                                        trackpad or keyboard input (HIDIdleTime), and of the pointer
@@ -147,14 +175,16 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { INJECTION_ENTITLEMENTS, prepareApp } from "../../../../scripts/lib/app-copy.mjs";
-import { appEnv, launchVariables, mergeLaunchEnv } from "../../../../scripts/lib/instance.mjs";
+import { appEnv, launchVariables, mergeLaunchEnv, sleep } from "../../../../scripts/lib/instance.mjs";
 import { buildSeed } from "./seed.mjs";
 import { waitForUboEngine } from "./ubo-cache.mjs";
 import { launchedTree, listenerPid, quitTargets, signalIfSame, stopTree, survivors } from "./processes.mjs";
-import { componentsState, sidesProblems, templateProblems, templateSizes, waitForStartupComponents } from "./template-state.mjs";
+import { componentsMismatch, componentsState, jointProblems, templateProblems, templateSizes, waitForStartupComponents } from "./template-state.mjs";
 import { parseSettings, profileSeed } from "./profile-seed.mjs";
 import { writeSwitches } from "./js-bench.mjs";
-import { frameRows, frameTable, framesLibrary, framesRun } from "./frames-phase.mjs";
+import { frameTable, framesLibrary, framesRun } from "./frames-phase.mjs";
+import { LOADING_FIXTURE, summary } from "./native-summary.mjs";
+import { appIdentity, copyCachedTemplate, defaultCacheDir, fileSha256, keyProblems, lookupTemplate, sourceChanged, storePair, TEMPLATE_MAX_AGE_HOURS, templateKey, cachedAgeHours } from "./template-cache.mjs";
 import { sideLaunchEnv } from "./launch-env.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -169,6 +199,10 @@ const { values: opt } = parseArgs({
     runs: { type: "string", default: "3" },
     "launch-runs": { type: "string", default: "5" },
     idle: { type: "string", default: "60" },
+    "launch-settle": { type: "string", default: "30" },
+    "close-settle": { type: "string", default: "30" },
+    "template-cache": { type: "string" },
+    "template-max-age": { type: "string", default: String(TEMPLATE_MAX_AGE_HOURS) },
     only: { type: "string", default: "launch,session,throttle,sample" },
     compare: { type: "string" },
     report: { type: "string" },
@@ -180,13 +214,14 @@ const { values: opt } = parseArgs({
     env: { type: "string", multiple: true, default: [] },
     "control-env": { type: "string", multiple: true, default: [] },
     seed: { type: "string" },
+    "seed-tabs": { type: "string", default: "200" },
     "profile-count": { type: "string", default: "4" },
     "profile-visits": { type: "string" },
     setting: { type: "string", multiple: true, default: [] },
     "control-setting": { type: "string", multiple: true, default: [] },
     "fresh-copy": { type: "boolean" },
     "trace-startup": { type: "string" },
-    "page-port": { type: "string", default: "0" },
+    "page-port": { type: "string", default: "9476" },
     "journey-n": { type: "string", default: "10" },
     "frames-n": { type: "string", default: "8" },
     "frames-only": { type: "string" },
@@ -201,14 +236,7 @@ if (opt.help) {
   process.exit(0);
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (...a) => console.error(`[bench ${new Date().toISOString().slice(11, 19)}]`, ...a);
-const median = (xs) => {
-  const s = xs.filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
-  if (!s.length) return NaN;
-  const m = s.length >> 1;
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-};
 
 const toolDir = join(opt.out, ".tools");
 function acperf(...args) {
@@ -297,6 +325,7 @@ const footprint = (snap) => {
   return { totalMB: total, processes: snap.length, kinds };
 };
 
+
 const PAGE_SCRIPT = `
 window.__ac = { vis: [[Date.now(), document.visibilityState]], shown: [], fcp: null, frame: null, ticks: 0, raf: 0, fast: 0 };
 requestAnimationFrame(() => (__ac.frame = Date.now()));
@@ -332,16 +361,30 @@ function animPage(id) {
 setInterval(() => __ac.fast++, 16);</script>`;
 }
 
+const hanging = new Set();
+
 function startServer() {
   return new Promise((resolveServer) => {
     const server = createServer((req, res) => {
       const url = new URL(req.url, "http://x");
       const id = url.searchParams.get("id") ?? "0";
+      if (url.pathname === "/hang") {
+        hanging.add(res);
+        res.on("close", () => hanging.delete(res));
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+        return void res.write(`<!doctype html><meta charset=utf-8><title>Loading ${id}</title><script>${PAGE_SCRIPT}</script><h1>Still loading ${id}</h1>`);
+      }
       const html = url.pathname === "/anim" ? animPage(id) : url.pathname === "/static" ? staticPage(id) : null;
       if (!html) return res.writeHead(404).end();
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" }).end(html);
     });
-    server.listen(+opt["page-port"], "127.0.0.1", () => resolveServer(server));
+    const wanted = +opt["page-port"];
+    server.once("error", (error) => {
+      if (error.code !== "EADDRINUSE" || !wanted) throw error;
+      log(`page port ${wanted} is busy: serving the test pages on any free port, so templates aren't cached this run`);
+      server.listen(0, "127.0.0.1", () => resolveServer(server));
+    });
+    server.listen(wanted, "127.0.0.1", () => resolveServer(server));
   });
 }
 
@@ -404,7 +447,7 @@ class Cdp {
 
 function prepareBenchApp(app, out, bundle) {
   const copy = prepareApp(app, out, { bundle, entitlements: INJECTION_ENTITLEMENTS });
-  writeFileSync(join(out, "prepared.json"), JSON.stringify({ app, bundle, date: new Date().toISOString() }));
+  writeFileSync(join(out, "prepared.json"), JSON.stringify({ app, bundle, source: appIdentity(app), date: new Date().toISOString() }));
   return copy;
 }
 
@@ -413,11 +456,15 @@ function checkPrepared(copy) {
   const granted = spawnSync("codesign", ["-d", "--entitlements", "-", "--xml", copy], { encoding: "utf8" }).stdout ?? "";
   if (!granted.includes("<key>com.apple.security.cs.allow-dyld-environment-variables</key>"))
     throw new Error(`${copy} isn't a copy native-bench prepared (run once without --prepared, or with --only prepare)`);
+  let from;
   try {
-    return JSON.parse(readFileSync(join(dirname(copy), "prepared.json"), "utf8"));
+    from = JSON.parse(readFileSync(join(dirname(copy), "prepared.json"), "utf8"));
   } catch {
     return { app: copy, bundle: join(copy, "Contents/Resources/main.jsbundle") };
   }
+  const changed = existsSync(from.app) ? sourceChanged(from.source, appIdentity(from.app)) : [];
+  if (changed.length) throw new Error(`${copy} was prepared from an older build of ${from.app} (${changed.join("; ")}): run --only prepare again`);
+  return from;
 }
 
 function buildBundle(out) {
@@ -574,7 +621,7 @@ const sideSettings = (side) => parseSettings(side.role === "control" ? opt["cont
 function writeBigSeed(side) {
   const dir = side.template;
   const version = execFileSync("defaults", ["read", join(side.src, "Contents/Info.plist"), "CFBundleShortVersionString"], { encoding: "utf8" }).trim();
-  const files = buildSeed(base(), version);
+  const files = buildSeed(base(), version, { tabs: +opt["seed-tabs"] });
   delete files["perf-probe"];
   const session = files["session.json"];
   Object.assign(session.settings, sideSettings(side));
@@ -617,13 +664,65 @@ async function makeTemplate(side) {
     await app.quit();
   }
   for (const f of ["bench-cmd.js", "bench-result.json", "bench-boot.json"]) rmSync(join(dir, f), { force: true });
-  side.templateRecord = { waitedSecs: { ubo: waited.ubo.secs, components: waited.components.secs }, uboSelfies: waited.ubo.selfies, sizes: templateSizes(dir), components: componentsState(dir).components };
-  writeFileSync(join(side.dir, "template.json"), JSON.stringify(side.templateRecord, null, 2));
-  side.results.meta.template = side.templateRecord;
-  const problems = templateProblems(side.templateRecord);
+  const record = { waitedSecs: { ubo: waited.ubo.secs, components: waited.components.secs }, uboSelfies: waited.ubo.selfies, sizes: templateSizes(dir), components: componentsState(dir).components };
+  useTemplateRecord(side, record, "made now");
+}
+
+const cachedChecks = () => ({ maxAgeHours: +opt["template-max-age"], componentsOf: (dir) => componentsState(dir).components });
+
+function templateCache(side) {
+  if (!(+opt["template-max-age"] > 0) || only.has("profiles") || opt.seed) return null;
+  if (opt.env.length || opt["control-env"].length) {
+    log(`${side.label}: not caching its template (--env or --control-env changes what the template's launch ran with)`);
+    return null;
+  }
+  const key = templateKey({ identity: appIdentity(side.app), bundleSha: fileSha256(join(side.app, "Contents/Resources/main.jsbundle")), pagePort: server.address().port === +opt["page-port"] ? +opt["page-port"] : 0 });
+  const problems = keyProblems(key);
+  if (problems.length) {
+    log(`${side.label}: not caching its template (${problems.join("; ")})`);
+    return null;
+  }
+  return { key, dir: resolve(opt["template-cache"] ?? defaultCacheDir(side.results.meta.preparedFrom?.app ?? side.src, opt.out)) };
+}
+
+function useTemplateRecord(side, record, how) {
+  side.templateRecord = record;
+  writeFileSync(join(side.dir, "template.json"), JSON.stringify(record, null, 2));
+  side.results.meta.template = record;
+  const problems = templateProblems(record);
   if (problems.length) throw new Error(`${side.label}'s template is off, so its runs would be skewed: ${problems.join("; ")} (${join(side.dir, "template.json")})`);
-  const { uboStoreMB, uboBlobsMB } = side.templateRecord.sizes;
-  log(`${side.label}'s template: uBO store ${uboStoreMB.toFixed(1)} MB, blobs ${uboBlobsMB.toFixed(1)} MB; components ${Object.entries(side.templateRecord.components).map(([k, c]) => `${k} ${c.version}`).join(", ")}`);
+  const { uboStoreMB, uboBlobsMB } = record.sizes;
+  log(`${side.label}'s template (${how}): uBO store ${uboStoreMB.toFixed(1)} MB, blobs ${uboBlobsMB.toFixed(1)} MB; components ${Object.entries(record.components).map(([k, c]) => `${k} ${c.version}`).join(", ")}`);
+}
+
+async function makeTemplates() {
+  for (const side of sides) side.cache = templateCache(side);
+  const found = sides.map((side) => side.cache && lookupTemplate(side.cache.dir, side.cache.key, cachedChecks()));
+  const pairs = new Set(found.map((f) => f?.entry?.pair ?? null));
+  const cachedJoint = found.every((f) => f?.hit) ? jointProblems(found.map((f) => f.entry.record)) : [];
+  if (cachedJoint.length) log(`the cached pair doesn't match (${cachedJoint.join("; ")}): making both again`);
+  const usable = found.every((f) => f?.hit) && pairs.size === 1 && !pairs.has(null) && !cachedJoint.length;
+  const copied = usable ? sides.map((side, i) => copyCachedTemplate(found[i], side.template, cachedChecks())) : [];
+  if (usable && copied.every((c) => c.ok)) {
+    for (const [i, side] of sides.entries())
+      useTemplateRecord(side, { ...found[i].entry.record, cached: { dir: found[i].dir, made: found[i].entry.made, pair: found[i].entry.pair } },
+        `cached ${cachedAgeHours(found[i].entry).toFixed(1)} h ago with the other side's, ${found[i].dir}`);
+  } else {
+    if (usable) log(`a cached template didn't copy cleanly (${copied.map((c, i) => `${sides[i].label}: ${c.ok ? "ok" : c.problems.join("; ")}`).join("; ")}): making both again`);
+    if (sides.some((s) => s.cache)) log(`making ${sides.length > 1 ? "both sides' templates together" : "the template"} (${found.map((f, i) => `${sides[i].label}: ${!f ? "not cached" : !f.hit ? f.problems.join("; ") : "cached, but not made with the other side's"}`).join("; ")})`);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      for (const side of sides) await makeTemplate(side);
+      if (!componentsMismatch(sides.map((s) => s.templateRecord).filter(Boolean)).length) break;
+      log(`the sides' startup components differ (${componentsMismatch(sides.map((s) => s.templateRecord)).join("; ")}): making both again`);
+    }
+    const cached = sides.filter((s) => s.cache);
+    const stored = storePair(cached.map((s) => ({ cacheDir: s.cache.dir, key: s.cache.key, templateDir: s.template, record: s.templateRecord })), jointProblems(sides.map((s) => s.templateRecord).filter(Boolean)));
+    for (const [i, dir] of stored.entries()) log(`${cached[i].label}'s template stored in ${dir}`);
+    if (cached.length && !stored.length) log("not caching these templates: the two sides don't match");
+  }
+  const records = sides.map((s) => s.templateRecord).filter(Boolean);
+  const mismatch = jointProblems(records);
+  if (mismatch.length) throw new Error(`the two sides' templates don't match: ${mismatch.join("; ")}`);
 }
 
 function freshDir(side, name) {
@@ -1013,26 +1112,29 @@ async function profilesRun(side, i) {
 
 const SESSION_PARTS = ["idle", "memory", "switch", "newtab", "newwindow"];
 
+const jsHeap = (app) => app.run(`const s = globalThis.HermesInternal?.getInstrumentedStats?.(); return s ? { heapMB: s.js_heapSize / 1048576, allocatedMB: s.js_allocatedBytes / 1048576 } : null;`).catch(() => null);
+
 async function sessionRun(side, i, parts) {
   const has = (part) => parts.has(part);
   const secs = +opt.idle;
   const app = new Instance(side, freshDir(side, `session-${i}`));
-  const r = { memory: {}, idle: {}, tabSwitch: [], newTab: [], newTabFrame: [], newWindow: [], processes: {}, throttled: { tabSwitch: 0, newTab: 0 } };
+  const r = { memory: {}, heap: {}, idle: {}, tabSwitch: [], newTab: [], newTabFrame: [], newWindow: [], processes: {}, throttled: { tabSwitch: 0, newTab: 0 } };
   if (parts.size < SESSION_PARTS.length) r.parts = [...parts];
   try {
     await app.launch();
     await app.pageState("id=seed", 30_000, (s) => s.fcp);
-    if (has("idle") || has("memory")) await sleep(30_000);
+    if (has("idle") || has("memory")) await sleep(+opt["launch-settle"] * 1000);
     if (has("idle")) r.idle.tabs1 = await idleWindow(app, secs);
-    if (has("memory")) r.memory.tabs1 = footprint(usage(app.pid));
+    if (has("memory")) r.memory.tabs1 = footprint(usage(app.pid)), r.heap.tabs1 = await jsHeap(app);
     await openTabs(app, 1, 10);
     if (has("memory")) {
       await sleep(10_000);
       r.memory.tabs10 = footprint(usage(app.pid));
+      r.heap.tabs10 = await jsHeap(app);
     }
     await openTabs(app, 10, 20);
     await sleep(15_000);
-    if (has("memory")) r.memory.tabs20 = footprint(usage(app.pid));
+    if (has("memory")) r.memory.tabs20 = footprint(usage(app.pid)), r.heap.tabs20 = await jsHeap(app);
     if (has("idle")) r.idle.tabs20 = await idleWindow(app, secs);
 
     const tabs = has("switch") ? (await tabIds(app)).filter(([, url]) => url.includes("/static?id=t")) : [];
@@ -1069,8 +1171,9 @@ async function sessionRun(side, i, parts) {
       r.processes.tabs20 = usage(app.pid).length;
       await app.run(`const s = ac.store.getState(); const w = ${WINDOW}; const keep = s.windows[w].tabIds.find((id) => s.tabs[id].url.includes("id=seed"));
         ac.store.getState().activate(keep); for (const id of s.windows[w].tabIds) if (id !== keep) ac.store.getState().closeTab(id); return true;`);
-      await sleep(30_000);
+      await sleep(+opt["close-settle"] * 1000);
       r.memory.closed = footprint(usage(app.pid));
+      r.heap.closed = await jsHeap(app);
       r.processes.closed = r.memory.closed.processes;
     }
   } finally {
@@ -1078,6 +1181,55 @@ async function sessionRun(side, i, parts) {
   }
   log(`${side.tag}session ${i}:`, JSON.stringify({ idle: r.idle, mem: Object.fromEntries(Object.entries(r.memory).map(([k, v]) => [k, Math.round(v.totalMB)])), sw: r.tabSwitch, nt: r.newTab, nw: r.newWindow }));
   side.results.session.push(r);
+}
+
+const ACTIVE_TAB = `(() => { const s = ac.store.getState(); const w = s.windows[${WINDOW}]; const id = w.activeTabIds[w.profileId];
+  return { id, url: s.tabs[id]?.url ?? null, appLoading: ac.tabLive ? !!ac.tabLive.shownLiveOf(s, id).isLoading : null }; })()`;
+
+async function fixturePage(app) {
+  try {
+    const target = await app.cdp.find("id=load");
+    if (!target) return null;
+    const reply = await app.cdp.send(target, "Runtime.evaluate", { expression: "({ url: location.href, state: document.readyState })", returnByValue: true });
+    return reply?.result?.value ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function activeLoading(app) {
+  const tab = await app.run(`return ${ACTIVE_TAB};`);
+  const page = tab.url?.includes(LOADING_FIXTURE) ? await fixturePage(app) : null;
+  const pageLoading = page?.url?.includes(LOADING_FIXTURE) ? page.state === "loading" : null;
+  return { ...tab, pageLoading, loading: tab.appLoading ?? pageLoading ?? false };
+}
+
+async function loadingRun(side, i) {
+  const secs = +opt.idle;
+  const app = new Instance(side, freshDir(side, `loading-${i}`));
+  const r = { load: [Math.round(loadavg()[0] * 10) / 10] };
+  try {
+    await app.launch();
+    await app.pageState("id=seed", 30_000, (s) => s.fcp);
+    await sleep(30_000);
+    r.loadedBefore = await activeLoading(app);
+    r.loaded = await idleWindow(app, secs);
+    await app.run(`ac.store.getState().newTab(${WINDOW}, { url: "${base()}${LOADING_FIXTURE}" }); return true;`);
+    await app.pageState("id=load", 30_000, (s) => s.vis);
+    let state = null;
+    for (const end = Date.now() + 20_000; Date.now() < end && !(state?.loading && state.url?.includes(LOADING_FIXTURE)); await sleep(100)) state = await activeLoading(app);
+    r.loadingBefore = state;
+    await sleep(3000);
+    r.loading = await idleWindow(app, secs);
+    r.loadingAfter = await activeLoading(app);
+    r.load.push(Math.round(loadavg()[0] * 10) / 10);
+  } finally {
+    for (const res of hanging) res.destroy();
+    await app.done();
+  }
+  const brief = (w) => w && { wakeups: +w.kinds.browser?.wakeups.toFixed(1), cpu: +w.kinds.browser?.cpu.toFixed(2), all: +w.total.wakeups.toFixed(1) };
+  log(`${side.tag}loading ${i}:`, JSON.stringify({ loaded: brief(r.loaded), loading: brief(r.loading), appLoading: [r.loadingBefore?.loading, r.loadingAfter?.loading], load: r.load }));
+  side.results.loading.push(r);
 }
 
 async function throttleRun(side) {
@@ -1185,98 +1337,6 @@ function summarizeSample(file) {
   };
 }
 
-function summary(res) {
-  const rows = [];
-  const add = (name, xs, unit, digits = 0) => {
-    const v = xs.filter(Number.isFinite);
-    rows.push({ name, median: median(v), min: Math.min(...v), max: Math.max(...v), n: v.length, unit, digits });
-  };
-  add("launch → window shown", res.launch.map((r) => r.window), "ms");
-  add("launch → window shown with its content", res.launch.map((r) => r.withContent), "ms");
-  add("launch → JS running", res.launch.map((r) => r.js), "ms");
-  add("launch → first page painted", res.launch.map((r) => r.firstPaint), "ms");
-  add("launch → first page's first frame", res.launch.map((r) => r.firstFrame), "ms");
-  const P = res.profiles ?? [];
-  if (P.length) {
-    const of = `${P[0].profiles} profiles, ${P[0].visits} opened`;
-    add(`profiles loaded ${P[0].warmupMs / 1000} s after opening them (${of})`, P.map((r) => r.before.loaded), "");
-    add(`profiles loaded after ${P[0].idleMs / 1000} s on Personal`, P.map((r) => r.after.loaded), "");
-    add(`memory ${P[0].warmupMs / 1000} s after opening them (phys_footprint)`, P.map((r) => r.before.memory.totalMB), "MB");
-    add(`memory after ${P[0].idleMs / 1000} s on Personal (phys_footprint)`, P.map((r) => r.after.memory.totalMB), "MB");
-    add(`memory after ${P[0].idleMs / 1000} s on Personal, browser process`, P.map((r) => r.after.memory.kinds.browser), "MB");
-    add(`processes after ${P[0].idleMs / 1000} s on Personal`, P.map((r) => r.after.memory.processes), "");
-    add("back to a profile → its page shown", P.map((r) => r.back), "ms");
-    add("back to a profile: runs where it had to load again", [P.filter((r) => r.reloaded).length], "");
-  }
-  const S = res.session;
-  for (const t of ["tabs1", "tabs20"]) {
-    add(`idle CPU, ${t.slice(4)} tab(s) (all processes)`, S.map((r) => r.idle[t]?.total.cpu), "%", 2);
-    add(`idle wakeups/s, ${t.slice(4)} tab(s) (all processes)`, S.map((r) => r.idle[t]?.total.wakeups), "/s", 1);
-    add(`idle CPU, ${t.slice(4)} tab(s) (browser process)`, S.map((r) => r.idle[t]?.kinds.browser?.cpu), "%", 2);
-    add(`idle wakeups/s, ${t.slice(4)} tab(s) (browser process)`, S.map((r) => r.idle[t]?.kinds.browser?.wakeups), "/s", 1);
-    add(`idle wakeups/s, ${t.slice(4)} tab(s) (GPU process)`, S.map((r) => r.idle[t]?.kinds["gpu-process"]?.wakeups), "/s", 1);
-    add(`idle wakeups/s, ${t.slice(4)} tab(s) (renderers)`, S.map((r) => r.idle[t]?.kinds.renderer?.wakeups), "/s", 1);
-  }
-  for (const m of ["tabs1", "tabs10", "tabs20", "closed"]) add(`memory (phys_footprint), ${m === "closed" ? "after closing back to 1 tab" : m.slice(4) + " tab(s)"}`, S.map((r) => r.memory[m]?.totalMB), "MB");
-  add("memory, browser process, 20 tabs", S.map((r) => r.memory.tabs20?.kinds.browser), "MB");
-  add("memory, browser process, after closing", S.map((r) => r.memory.closed?.kinds.browser), "MB");
-  const used = (r, k) => {
-    const windows = [r.idle.tabs1, r.idle.tabs20].filter(Boolean);
-    return windows.length ? windows.reduce((n, w) => n + (w.input?.[k] ?? NaN), 0) : NaN;
-  };
-  add("idle windows: someone used the Mac (s, per run)", S.map((r) => used(r, "inputSecs")), "s", 2);
-  add("idle windows: …with the pointer moving over the window (s, per run)", S.map((r) => used(r, "overWindowSecs")), "s", 2);
-  add("after an idle minute: command answered (App Nap check)", S.map((r) => r.idle.tabs1?.afterIdle?.commandMs), "ms");
-  const timedSwitches = (r) => !r.parts || r.parts.includes("switch") || r.parts.includes("newtab");
-  add("samples left out: page couldn't paint (switch + new tab, per run)", S.map((r) => r.throttled && timedSwitches(r) ? r.throttled.tabSwitch + r.throttled.newTab : NaN), "");
-  add("tab switch → shown (median of 16 per run)", S.map((r) => median(r.tabSwitch)), "ms");
-  add("new tab → first paint (median of 5 per run)", S.map((r) => median(r.newTab)), "ms");
-  add("new tab → its page's first frame (median of 5 per run)", S.map((r) => median(r.newTabFrame ?? [])), "ms");
-  const W = [...S, ...(res.windows ?? [])];
-  add("new window → on screen (median per run)", W.map((r) => median(r.newWindow.map((w) => w.window))), "ms");
-  add("new window → on screen with its content (median per run)", W.map((r) => median(r.newWindow.map((w) => w.withContent))), "ms");
-  add("new window → first paint (median per run)", W.map((r) => median(r.newWindow.map((w) => w.firstPaint))), "ms");
-  add("new window → its page's first frame (median per run)", W.map((r) => median(r.newWindow.map((w) => w.firstFrame))), "ms");
-  const J = res.journeys ?? [];
-  const pooled = (name, get) => {
-    const v = J.flatMap((r) => get(r)).filter(Number.isFinite).sort((a, b) => a - b);
-    if (!v.length) return;
-    rows.push({ name, median: median(v), p75: v[Math.min(v.length - 1, Math.ceil(v.length * 0.75) - 1)], min: v[0], max: v.at(-1), n: v.length, unit: "ms", digits: 0 });
-  };
-  const of = (kind, field) => (r) => r[kind].map((x) => x[field]);
-  pooled("J2 ⌘T key → JS has the new tab", of("j2", "js"));
-  pooled("J2 ⌘T key → its command bar committed", of("j2", "commit"));
-  pooled("J2 ⌘T key → that commit on screen", of("j2", "shown"));
-  pooled("J2 ⌘T key → bar focused and on screen (typeable)", of("j2", "typeable"));
-  pooled("J2 keystroke → its suggestions on screen", of("j2", "suggest"));
-  pooled("J2 the app's own ⌘T → typeable (its t0 is the event's timestamp)", of("j2", "appTypeable"));
-  pooled("J2 the app's t0 minus the key's timestamp (should be 0)", of("j2", "t0Skew"));
-  pooled("J2 acperf hands ⌘T over → the event's timestamp (not in the rows)", of("j2", "postGap"));
-  pooled("J2 ⌘T key made → the app's event loop saw it", of("j2", "delivery"));
-  pooled("J2 keystroke made → the app's event loop saw it", of("j2", "suggestDelivery"));
-  for (const [kind, from] of [["j4new", "new tab's bar (⌘T)"], ["j4page", "page's panel (⌘L)"]]) {
-    pooled(`J4 ${from}: Enter → engine asked to load (our side)`, of(kind, "request"));
-    pooled(`J4 ${from}: Enter → Chrome started the navigation`, of(kind, "start"));
-    pooled(`J4 ${from}: Enter → document committed`, of(kind, "commit"));
-    pooled(`J4 ${from}: Enter → first contentful paint (the app's mark)`, of(kind, "fcp"));
-    pooled(`J4 ${from}: Enter → first contentful paint (the page's own, CDP)`, of(kind, "pageFcp"));
-    pooled(`J4 ${from}: request → first contentful paint (engine and network)`, of(kind, "engine"));
-    pooled(`J4 ${from}: Enter made → the app's event loop saw it`, of(kind, "delivery"));
-  }
-  if (J.length) {
-    for (const kind of ["j2", "j4new", "j4page"]) {
-      const lost = J.reduce((n, r) => n + r.lost[kind].length, 0);
-      const kept = J.reduce((n, r) => n + r[kind].length, 0);
-      if (lost || kept) rows.push({ name: `journeys ${kind}: iterations lost (no bar, panel, page or sample)`, median: lost, min: lost, max: lost, n: lost + kept, unit: "", digits: 0 });
-    }
-    const loads = J.flatMap((r) => r.load ?? []);
-    if (loads.length) rows.push({ name: "journeys: 1-minute load average at each run's start and end", median: median(loads), min: Math.min(...loads), max: Math.max(...loads), n: loads.length, unit: "", digits: 0 });
-    rows.push({ name: "journeys: fetches the guard answered (nothing left the machine)", median: J.reduce((n, r) => n + (r.blocked ?? 0), 0), min: 0, max: 0, n: J.length, unit: "", digits: 0 });
-  }
-  rows.push(...frameRows(res));
-  return rows;
-}
-
 function printTable(rows, other, names = ["Before", "After"]) {
   const fmt = (r) =>
     Number.isFinite(r?.median) ? `${r.median.toFixed(r.digits)} ${r.unit}${r.p75 === undefined ? "" : `, p75 ${r.p75.toFixed(r.digits)}`} (${r.min.toFixed(r.digits)}–${r.max.toFixed(r.digits)}, n=${r.n})` : "—";
@@ -1298,7 +1358,7 @@ const fail = (message) => {
 if (!opt.app) fail("usage: native-bench.mjs --app <Ardia.app> [--control <app>] [--out dir] [--only phases] … (--help)");
 const JOURNEY_PHASES = ["newtabkey", "navigate"];
 const FRAME_PHASES = ["frames", "framecounts"];
-const PHASES = ["launch", "session", ...SESSION_PARTS, ...JOURNEY_PHASES, ...FRAME_PHASES, "profiles", "windows", "throttle", "churn", "sample", "prepare"];
+const PHASES = ["launch", "session", ...SESSION_PARTS, ...JOURNEY_PHASES, ...FRAME_PHASES, "profiles", "windows", "throttle", "churn", "loading", "sample", "prepare"];
 const only = new Set(opt.only.split(",").map((p) => p.trim()).filter(Boolean));
 for (const p of only) if (!PHASES.includes(p)) fail(`--only: no phase "${p}"; phases: ${PHASES.join(", ")}`);
 if (only.has("frames") || only.has("framecounts")) opt.seed ??= "big";
@@ -1325,7 +1385,7 @@ function makeSide(app, label, role) {
   const dir = join(opt.out, label);
   mkdirSync(dir, { recursive: true });
   return { role, label, tag: "", src: resolve(app), dir, template: join(dir, "template"), app: null, bundle: null,
-    results: { meta: {}, profiles: [], launch: [], session: [], windows: [], journeys: [], frames: [], throttle: [], sample: [] } };
+    results: { meta: {}, profiles: [], launch: [], session: [], windows: [], journeys: [], frames: [], throttle: [], loading: [], sample: [] } };
 }
 const candidate = makeSide(opt.app, opt.label ?? labelOf(opt.app), "candidate");
 let control = null;
@@ -1346,11 +1406,12 @@ const cleanup = async () => {
   for (const app of [...live]) await app.quit().catch(() => {});
   server?.close();
 };
-process.on("SIGINT", async () => {
-  log("interrupted: quitting the instance");
-  await cleanup();
-  process.exit(130);
-});
+for (const [sig, code] of [["SIGINT", 130], ["SIGTERM", 143]])
+  process.on(sig, async () => {
+    log(`${sig === "SIGINT" ? "interrupted" : "terminated"}: quitting the instance`);
+    await cleanup();
+    process.exit(code);
+  });
 
 try {
   server = await startServer();
@@ -1366,16 +1427,16 @@ try {
       side.app = prepareBenchApp(side.src, join(side.dir, "app"), side.bundle);
     }
     const other = sides.find((s) => s !== side);
+    side.results.meta.source = side.results.meta.preparedFrom?.source ?? appIdentity(side.src);
+    side.results.meta.bundleSha = fileSha256(join(side.app, "Contents/Resources/main.jsbundle"));
     Object.assign(side.results.meta, { app: side.src, bundle: side.bundle, label: side.label, date: new Date().toISOString(),
-      runs: +opt.runs, idleSecs: +opt.idle, only: [...only], env: opt.env, seed: opt.seed ?? null, freshCopy: !!opt["fresh-copy"], ...(other ? { role: side.role, interleavedWith: other.label } : {}) });
+      runs: +opt.runs, launchRuns: +opt["launch-runs"], idleSecs: +opt.idle, launchSettleSecs: +opt["launch-settle"], closeSettleSecs: +opt["close-settle"], only: [...only], env: opt.env, seed: opt.seed ?? null, freshCopy: !!opt["fresh-copy"], ...(other ? { role: side.role, interleavedWith: other.label } : {}) });
   }
+  await makeTemplates();
   if (only.has("prepare")) {
     for (const side of sides) console.log(`prepared ${side.app} (rerun with --app ${side.app} --prepared)`);
     process.exit(0);
   }
-  for (const side of sides) await makeTemplate(side);
-  const mismatch = sidesProblems(sides.map((s) => s.templateRecord).filter(Boolean));
-  if (mismatch.length) throw new Error(`the two sides' templates don't match: ${mismatch.join("; ")}`);
   if (only.has("profiles")) await interleaved(+opt.runs, profilesRun);
   if (only.has("launch")) await interleaved(+opt["launch-runs"], launchRun);
   const parts = new Set(SESSION_PARTS.filter((p) => only.has("session") || only.has(p)));
@@ -1388,6 +1449,7 @@ try {
   if (only.has("windows")) await interleaved(+opt.runs, windowsRun);
   if (only.has("throttle")) await interleaved(1, throttleRun);
   if (only.has("churn")) await interleaved(1, churnRun);
+  if (only.has("loading")) await interleaved(+opt.runs, loadingRun);
   if (only.has("sample")) await interleaved(1, sampleRun);
   for (const side of sides) writeFileSync(join(side.dir, "results.json"), JSON.stringify(side.results, null, 1));
   const rows = summary(candidate.results);

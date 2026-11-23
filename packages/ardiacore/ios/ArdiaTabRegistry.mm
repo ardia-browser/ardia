@@ -113,13 +113,6 @@ id AppTabIdValue(ArdiaCoreTab *tab) {
   return AppTabIdOf(tab) ?: NSNull.null;
 }
 
-NSString *AppTabIdContaining(NSView *view) {
-  if (!view) return nil;
-  for (ArdiaCoreTab *tab in Views().keyEnumerator.allObjects)
-    if (tab.view && [view isDescendantOf:tab.view]) return AppTabIdOf(tab);
-  return nil;
-}
-
 ArdiaCoreTab *TabWithAppTabId(NSString *tabId) {
   if (!tabId.length) return nil;
   for (ArdiaCoreTab *tab in Views().keyEnumerator.allObjects)

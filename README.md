@@ -231,6 +231,12 @@ Feature parity with Dia (everything but its AI) is tracked row by row in
 [docs/dia-feature-parity.md](docs/dia-feature-parity.md); releases and their notes are at
 [ardia.dev/release-notes](https://ardia.dev/release-notes).
 
+## Sponsors
+
+Greptile reads every pull request before we do.
+
+<a href="https://www.greptile.com/?utm_source=oss_badge&utm_medium=readme&utm_campaign=greptile_for_open_source"><img src="https://www.greptile.com/badge.svg" alt="Greptile: The War on Bugs"></a>
+
 ## License
 
 Ardia as distributed is licensed under the [GNU General Public License v3](LICENSE), because its engine is built

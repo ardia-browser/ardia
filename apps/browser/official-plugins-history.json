@@ -5,7 +5,8 @@
       { "release": "v0.2.47-nightly.7", "version": "0.3.0", "artifact": "076c2139d35b59acc826ea4db8dbce4526f6406bc8e3b2ef5de440d0d28be022", "bundledDigest": "7d68e701f1811272d245e203905618f455db3f6251a09e1fc3fad18bf0e7a8af" },
       { "release": "v0.2.47-nightly.8", "version": "0.4.0", "artifact": "5f6442242c0a7d42d9ec592c599a167faa3675dbbc18999ef2cf34fc2336339e", "bundledDigest": "e0a4e0df1ce84eef2a9f41bd00ee6e3511353f28e5d1b9fc4354df35ab544e4d" },
       { "release": "v0.2.47-nightly.9", "version": "0.4.0", "artifact": "5f6442242c0a7d42d9ec592c599a167faa3675dbbc18999ef2cf34fc2336339e", "bundledDigest": "d112d65c22bbc11c235026a6957c22025e93dbc7e8a012d2844eb3623146360d" },
-      { "release": "v0.2.47", "version": "0.4.0", "artifact": "5f6442242c0a7d42d9ec592c599a167faa3675dbbc18999ef2cf34fc2336339e", "bundledDigest": "24258d7e4eca85540c7b9d2cfb647214df391cb944342352aa26027b0c5f1dc4" }
+      { "release": "v0.2.47", "version": "0.4.0", "artifact": "5f6442242c0a7d42d9ec592c599a167faa3675dbbc18999ef2cf34fc2336339e", "bundledDigest": "24258d7e4eca85540c7b9d2cfb647214df391cb944342352aa26027b0c5f1dc4" },
+      { "release": "v0.2.48", "version": "0.6.0", "artifact": "ca438f2159460804a8e8f1eef50cfb6a3d0149ada247cc463b04586df39feadb" }
     ]
   }
 }

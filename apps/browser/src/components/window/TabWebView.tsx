@@ -62,6 +62,7 @@ import { STATUS_FLIP_BAND } from "./tokens";
 import { startHidingElement } from "../../state/site/hiddenElements";
 import { forgetPeekHandover, notePeekRecipient, peekDonorTaken } from "../../state/peek/donors";
 import { promotedFromPeek } from "../../state/peek/actions";
+import { consumedCallbackUrl } from "../../state/tabs/callbackUrls";
 
 const webViewTab = (t: Tab | undefined) => ({ navigation: navigationOf(t), adoptId: adoptOf(t), profileId: t?.profileId ?? "", shownUrl: t?.url ?? "" });
 
@@ -214,6 +215,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
         watchFirstPaint(tabId, engine, visible);
       }}
       onNavigationChange={({ url: reported, title: reportedPageTitle, canGoBack, canGoForward, isLoading, themeColor, themeColorSource, initialDocumentAccessed, committedInitial, committedUrl, committedAt, httpStatus }) => {
+        if (consumedCallbackUrl(tabId, reported, committedUrl)) return;
         noteCommit(tabId, committedUrl, committedAt, httpStatus);
         verificationCodeDocument(tabId, committedAt);
         notePageDocument(tabId, reported, committedUrl, committedAt, isIncognitoProfile(profileId), documentReporter);

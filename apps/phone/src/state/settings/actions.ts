@@ -4,7 +4,8 @@ import { appVersion } from "../../platform/appInfo";
 import { haptics } from "../app/haptics";
 import { blocking, type BlockingCategory, type BlockingState } from "../../platform/blocking";
 import { pages } from "../../platform/pages";
-import { openExternal, shareText } from "../../platform/system";
+import { cleanUrl, linkLines } from "@ardia/core/src/cleanUrl.ts";
+import { openExternal, shareLinkList } from "../../platform/system";
 import { openPage } from "../browse/store";
 import { history } from "../history/store";
 import { forgetHiddenHistory } from "../library/store";
@@ -163,7 +164,7 @@ export function exportOpenTabs() {
     showToast("No Open Tabs", "warning");
     return;
   }
-  quietly(() => shareText(urls.join("\n"), "Open Tabs from Ardia"));
+  quietly(() => shareLinkList(linkLines(urls.map(cleanUrl), false), "Open Tabs from Ardia"));
 }
 
 export function openFromSettings(url: string) {

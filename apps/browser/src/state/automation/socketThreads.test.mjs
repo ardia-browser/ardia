@@ -26,6 +26,21 @@ test("settings.schema advertises the shortcut format settings.set takes, and tha
   assert.ok(S().settings.shortcuts.newTab, "the advertised shape was accepted");
 });
 
+test("settings.set takes the switchProfile:<id> and newLittleArdia:<id> shortcuts settings lists, and refuses a profile that doesn't exist", async () => {
+  await freshWindow();
+  const profile = S().profileOrder[0];
+  await ok("settings.set", { values: { shortcuts: { [`switchProfile:${profile}`]: "alt+1", [`newLittleArdia:${profile}`]: "cmd+alt+shift+l" } } });
+  assert.deepEqual(S().settings.shortcuts[`switchProfile:${profile}`], ["1", "option"]);
+  assert.deepEqual(S().settings.shortcuts[`newLittleArdia:${profile}`], ["l", "option", "shift", "command"]);
+  assert.ok(Object.hasOwn((await ok("settings.get", { keys: ["shortcuts"] })).shortcuts, `switchProfile:${profile}`), "settings.get lists what settings.set took");
+  await ok("settings.set", { values: { shortcuts: { [`switchProfile:${profile}`]: "ctrl+1" } } });
+  assert.equal(S().settings.shortcuts[`switchProfile:${profile}`], undefined, "its default ⌃1 clears the override");
+  const missing = await call("settings.set", { values: { shortcuts: { "switchProfile:p-gone": "alt+2" } } });
+  assert.equal(missing.error?.code, "bad_request");
+  assert.match(missing.error.message, /switchProfile:p-gone names a profile that doesn't exist/);
+  S().updateSettings({ shortcuts: {} });
+});
+
 test("the legacy Custom engine from customSearchUrl is refused by search.update and search.remove, and nothing changes", async () => {
   await freshWindow();
   S().updateSettings({ customSearchUrl: "https://legacy.example/?q=%s", searchEngine: "custom" });

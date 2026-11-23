@@ -121,8 +121,11 @@ jobs:
           script: |
             let full = context.eventName !== "pull_request";
             if (!full) {
-              const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number: context.payload.pull_request.number });
-              full = pr.labels.some((label) => label.name === "full-ci");
+              const firstAttempt = Number(process.env.GITHUB_RUN_ATTEMPT || 1) === 1;
+              const pr = firstAttempt
+                ? context.payload.pull_request
+                : (await github.rest.pulls.get({ ...context.repo, pull_number: context.payload.pull_request.number })).data;
+              full = (pr.labels || []).some((label) => label.name === "full-ci");
             }
             core.setOutput("full", full ? "true" : "false");
             core.info(full ? "Full run: compile, tours and installers." : "Fast run: reuse a built app when the native code is unchanged, then launch it.");

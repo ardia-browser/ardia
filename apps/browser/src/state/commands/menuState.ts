@@ -93,8 +93,10 @@ export function menuState(s: BrowserState, liveOfTab = (id: string) => shownLive
 
   const disabled: string[] = [];
   if (!tab || !splitOf(s, tab.id)) disabled.push("focusNextPane", "focusPreviousPane");
-  if (w && tabLayoutOf(s, w.id) === "top") disabled.push("toggleAddressBar", "toggleSidebarSide");
+  const inSidebar = !w || tabLayoutOf(s, w.id) === "sidebar";
+  if (!inSidebar) disabled.push("toggleAddressBar", "toggleSidebarSide");
   if (s.settings.minimalismMode) disabled.push("toggleAddressBar");
+  if (s.settings.minimalismMode || (inSidebar && s.settings.addressBar === "sidebar")) disabled.push("toggleCompactToolbar");
   if (!w) disabled.push(...WINDOW_COMMANDS);
   else {
     if (!page?.url) disabled.push(...PAGE_COMMANDS);
@@ -102,7 +104,7 @@ export function menuState(s: BrowserState, liveOfTab = (id: string) => shownLive
     if (!page || !canGoBack(page.id, live, s)) disabled.push("back");
     if (!page || !canGoForward(page.id, live)) disabled.push("forward");
     if (!live.isLoading) disabled.push("stop");
-    if (w.kind === "private") disabled.push("moveTabToProfile", "moveTabToWindow", "switchProfile", "nextProfile", "previousProfile");
+    if (w.kind === "private") disabled.push("moveTabToProfile", "moveTabToWindow", "switchProfile", "nextProfile", "previousProfile", "setBookmarksBar", "toggleBookmarksBar");
     else if (tab) disabled.push(`moveTabToProfile:${tab.profileId}`);
     if (regularWindows.length < 2) disabled.push("mergeAllWindows");
   }
@@ -114,7 +116,11 @@ export function menuState(s: BrowserState, liveOfTab = (id: string) => shownLive
   const checked = settingChecks(s.settings);
   if (s.settings.addressBar === "sidebar") checked.push("toggleAddressBar");
   if (s.settings.sidebarSide === "right") checked.push("toggleSidebarSide");
-  if (tabLayoutOf(s, windowId) === "sidebar") checked.push("toggleTabLayout");
+  if (tabLayoutOf(s, windowId) === "sidebar") {
+    checked.push("toggleTabLayout", s.settings.sidebarSide === "right" ? "setTabLayout:sidebarRight" : "setTabLayout:sidebarLeft");
+  } else {
+    checked.push("setTabLayout:top");
+  }
   if (w && !tabsShownIn(s, w.id)) checked.push("toggleSidebar");
 
   const titles: Record<string, string> = {};

@@ -1,3 +1,4 @@
+import { asSecret, reveal } from "@ardia/core";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { test } from "node:test";
@@ -63,7 +64,7 @@ const revealed = async (origin, username) => {
   await unlockPasswordsFor("work");
   const password = await revealPassword("work", origin, username);
   lockPasswords();
-  return password;
+  return password && reveal(password);
 };
 
 test("a CSV login whose url has no scheme saves under https", async () => {
@@ -94,9 +95,9 @@ test("importing the same CSV login twice counts it as saved both times", async (
 
 test("saving a login again with the same password leaves the stored record alone", async (t) => {
   const now = t.mock.method(Date, "now", () => 1000);
-  assert.equal(await passwords.savePassword("work", "https://stamp.example", "me", "same"), true);
+  assert.equal(await passwords.savePassword("work", "https://stamp.example", "me", asSecret("password", "same")), true);
   now.mock.mockImplementation(() => 2000);
-  assert.equal(await passwords.savePassword("work", "https://stamp.example", "me", "same"), true);
+  assert.equal(await passwords.savePassword("work", "https://stamp.example", "me", asSecret("password", "same")), true);
   const [stored] = (await stub.readLogins()).filter((l) => l.url === "https://stamp.example");
   assert.equal(stored.created, 1000);
 });
@@ -105,7 +106,7 @@ test("a login is edited through the origin the list reports for it", async () =>
   await importing([login("https://listed.example/login", "me", "old")]);
   const listed = (await passwords.listPasswords("work")).find((p) => p.username === "me" && p.origin.includes("listed.example"));
   assert.ok(listed);
-  assert.equal(await passwords.updatePassword("work", listed.origin, "me", { password: "new" }), true);
+  assert.equal(await passwords.updatePassword("work", listed.origin, "me", { password: asSecret("password", "new") }), true);
   assert.equal(await revealed(listed.origin, "me"), "new");
 });
 

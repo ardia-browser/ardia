@@ -3,20 +3,27 @@ import { JSON_SCHEMA_DIALECT, schemaJson, type JsonSchema } from "../../lib/json
 import { themeSchema, type RolePalettes } from "../../lib/themeFile";
 import { CONFIG_SETTING_KEYS } from "../settings/configAllowlist";
 import { SETTING_SPECS } from "../settings/settings";
-import { SHORTCUT_FORMAT, shortcutCatalog, shortcutDescription } from "./configShortcuts";
+import { PER_PROFILE_SHORTCUT_PATTERN, SHORTCUT_FORMAT, shortcutCatalog, shortcutDescription } from "./configShortcuts";
 import { launchActionIds, MAX_LAUNCH_ACTIONS } from "../automation/launchActions";
 import { PLUGIN_EVENTS } from "../automation/eventNames";
 import { PLUGIN_SCHEMA_FILE, pluginSchemaJson } from "../../lib/pluginSchema";
 import { PLUGIN_RULES } from "../plugins/appChecks";
 
-export const CONFIG_SCHEMA_FILE = "config.schema.json";
-export const THEME_SCHEMA_FILE = "theme.schema.json";
+const CONFIG_SCHEMA_FILE = "config.schema.json";
+const THEME_SCHEMA_FILE = "theme.schema.json";
 const CONFIG_THEME_PATTERN = "^(?:[a-z0-9][a-z0-9_-]*|plugin:[a-z0-9][a-z0-9-]{0,39}/[A-Za-z0-9_-]{1,40})$";
 
 function shortcutsSchema(): JsonSchema {
   const properties: Record<string, JsonSchema> = {};
   for (const [id, entry] of shortcutCatalog()) properties[id] = { type: "string", description: shortcutDescription(entry) };
-  return { type: "object", description: `Command id to shortcut. ${SHORTCUT_FORMAT} A command left out keeps what it has.`, properties, additionalProperties: false, default: {} };
+  return {
+    type: "object",
+    description: `Command id to shortcut, or switchProfile:<profile id> and newLittleArdia:<profile id> with the id from profiles.list. ${SHORTCUT_FORMAT} A command left out keeps what it has.`,
+    properties,
+    propertyNames: { anyOf: [{ enum: Object.keys(properties) }, { pattern: PER_PROFILE_SHORTCUT_PATTERN }] },
+    additionalProperties: { type: "string", description: "A profile's own shortcut: switchProfile:<profile id> or newLittleArdia:<profile id>" },
+    default: {},
+  };
 }
 
 function settingSchema(key: (typeof CONFIG_SETTING_KEYS)[number]): JsonSchema {

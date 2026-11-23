@@ -1,12 +1,13 @@
 import type { JsonSchema } from "../../lib/jsonSchema";
 import { errorText } from "../../lib/errors";
 import { failure, type MethodError } from "./automationMethods";
-import { obj, ownField, schemaProblem } from "./socketSchema";
+import { obj, schemaProblem } from "./socketSchema";
 import { OpError } from "./workspaceTargets";
+import { isFields, ownValue } from "../../lib/decode";
 
 export const STOPPED = "Control was turned off before Ardia made the change, so nothing changed.";
 
-export type SocketBody = { result: unknown } | { error: MethodError };
+type SocketBody = { result: unknown } | { error: MethodError };
 
 export type SocketCall = { connection: number; serving: () => boolean; stillServing: () => void };
 
@@ -20,7 +21,7 @@ export type MethodSpec = {
   hidden?: boolean;
 };
 
-export type MethodEntry = { name: string; area: string; mutates: boolean; description: string; params: JsonSchema; result: string };
+type MethodEntry = { name: string; area: string; mutates: boolean; description: string; params: JsonSchema; result: string };
 
 export type ConnectionAccess = "owner" | "plugin";
 
@@ -63,8 +64,8 @@ const FAMILY_OF_AREA: Record<string, SocketFamily> = {
   menus: "menus",
 };
 
-export const areaOf = (name: string) => name.split(".")[0]!;
-export const familyOf = (name: string): SocketFamily => ownField(FAMILY_OF_AREA, areaOf(name)) ?? "core";
+const areaOf = (name: string) => name.split(".")[0]!;
+export const familyOf = (name: string): SocketFamily => ownValue(FAMILY_OF_AREA, areaOf(name)) ?? "core";
 
 const core = (name: string, mutates: boolean, description: string, result: string, params: JsonSchema = obj({})): MethodSpec => ({ name, mutates, description, params, result });
 
@@ -72,7 +73,7 @@ const NULLABLE_ID = { type: ["string", "null"] } as const satisfies JsonSchema;
 const SECONDS: JsonSchema = { type: "array", items: { type: "integer" }, description: "Idle thresholds in whole seconds" };
 const PLUGIN_NAME = obj({ name: { type: "string", description: "A plugin name from plugins" } }, ["name"]);
 
-export const CORE_METHODS: MethodSpec[] = [
+const CORE_METHODS: MethodSpec[] = [
   core("hello", false, "Protocol handshake; send it first with your protocol", "{app, version, protocol, minClientProtocol}", {
     type: "object",
     properties: { protocol: { type: "integer" }, caller: { type: "object", description: "{name, app} of the program calling" } },
@@ -142,8 +143,8 @@ function guarded(method: string, schema: JsonSchema, value: Record<string, unkno
     if (typeof key === "string" && !Object.hasOwn(listed, key) && !PROTOTYPE_KEYS.has(key)) throw new UnlistedParamError(`${method} read ${path}${String(key)}, which its params schema doesn't list.`);
   };
   const wrapped = (key: string | symbol, found: unknown) => {
-    const nested = typeof key === "string" ? ownField(listed, key) : undefined;
-    if (isClosedObject(nested) && typeof found === "object" && found !== null && !Array.isArray(found)) return guarded(method, nested, found as Record<string, unknown>, `${path}${String(key)}.`);
+    const nested = typeof key === "string" ? ownValue(listed, key) : undefined;
+    if (isClosedObject(nested) && isFields(found)) return guarded(method, nested, found, `${path}${String(key)}.`);
     return found;
   };
   return new Proxy(value, {

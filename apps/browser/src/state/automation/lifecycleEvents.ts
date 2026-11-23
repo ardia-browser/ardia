@@ -13,7 +13,7 @@ import { launchActionApproval } from "./hookPolicy";
 import { offerLaunchActions } from "./hookRules";
 import type { EventSend } from "./storeEvents";
 
-export type LaunchRecord = { time: number; monotonic: number; data: Record<string, unknown> };
+type LaunchRecord = { time: number; monotonic: number; data: Record<string, unknown> };
 
 let launch: LaunchRecord | null = null;
 let launchActionsRan = false;

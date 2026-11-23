@@ -7,6 +7,12 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(function benchSleep() 
 const pageOf = (tab) => tab.page ?? { nav: tab.navigation, adopt: tab.adoptId };
 const sum = (o) => Object.values(o ?? {}).reduce((a, b) => a + (typeof b === "number" ? b : 0), 0);
 
+const CHURN_OPEN_MS = 60;
+const CHURN_CLOSE_MS = 10;
+const CHURN_SWITCH_MS = 10;
+const NODES_SETTLE_BEFORE_MS = 1500;
+const NODES_WATCH_AFTER_MS = 2500;
+
 const extra = {
   async nodeChurn({ origin, opens = 60, switches = 120 } = {}) {
     if (!P.nativeNodes?.()) return { left: null };
@@ -16,18 +22,18 @@ const extra = {
     const visit = (n, gap) => Array.from({ length: n }).reduce((p, _, i) => p.then(() => S().activate(ids[(i * 7) % ids.length])).then(() => sleep(gap)), Promise.resolve());
     await visit(ids.length, 60);
     S().activate(ids[0]);
-    await sleep(1500);
+    await sleep(NODES_SETTLE_BEFORE_MS);
     const start = P.nativeNodes().live;
     for (let i = 0; i < opens; i++) {
       const made = S().newTab(w, { url: `${origin}/p/churn-${i}-${Date.now()}` });
       const id = typeof made === "string" ? made : made?.id;
-      await sleep(60);
+      await sleep(CHURN_OPEN_MS);
       if (id) S().closeTab(id);
-      await sleep(40);
+      await sleep(CHURN_CLOSE_MS);
     }
-    await visit(switches, 25);
+    await visit(switches, CHURN_SWITCH_MS);
     S().activate(ids[0]);
-    await sleep(2500);
+    await sleep(NODES_WATCH_AFTER_MS);
     const end = P.nativeNodes().live;
     return { start, end, left: end - start };
   },

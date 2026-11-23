@@ -2,7 +2,7 @@ import { pickerCall } from "../../browser/src/state/site/elementPicker";
 
 type PickerOp = "start" | "cancel" | "apply" | "unhide";
 
-export type PickerCallSplit = { prefix: string; json: string; suffix: string };
+type PickerCallSplit = { prefix: string; json: string; suffix: string };
 
 const KEY = 'window[Symbol.for("ardia.elementPicker")]';
 
@@ -16,7 +16,7 @@ else if (picker && picker.linuxPick) {
   post("result", JSON.stringify({ pick: pick.value }));
 } else post("result", "null");`;
 
-export const PICKER_POLL_MS = 120;
+const PICKER_POLL_MS = 120;
 
 export function splitPickerCall(op: PickerOp, value: unknown): PickerCallSplit {
   const code = pickerCall(op, value);

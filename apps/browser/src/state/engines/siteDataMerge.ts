@@ -41,7 +41,7 @@ export const coveredBy = (domain: string, domains: readonly string[]) => {
   return !!bare && domains.some((d) => bare === d || bare.endsWith(`.${d}`));
 };
 
-export function fingerprintOf(text: string): string {
+function fingerprintOf(text: string): string {
   let low = 0x811c9dc5;
   let high = 0x050c5d1f;
   for (let i = 0; i < text.length; i++) {
@@ -58,11 +58,11 @@ export const domainOfKey = (key: string) => key.split("\u0001")[1] ?? "";
 
 export const cookieFingerprint = (c: PageCookie) => `${fingerprintOf(c.value)}|${c.session || !(c.expires > 0) ? "s" : Math.floor(c.expires / 60)}`;
 
-export const usableCookie = (c: PageCookie, nowSeconds: number) =>
+const usableCookie = (c: PageCookie, nowSeconds: number) =>
   !!c.name && !!c.domain && c.partitionKey == null && c.partitionKeyOpaque !== true && (c.session || !(c.expires > 0) || c.expires > nowSeconds);
 
 export type Base = Record<string, string>;
-export type Merged<T> = { put: [string, T][]; drop: [string, T][]; base: Base; conflicts: number; held: number };
+type Merged<T> = { put: [string, T][]; drop: [string, T][]; base: Base; conflicts: number; held: number };
 
 export function mergeInto<T>(
   source: ReadonlyMap<string, T>,

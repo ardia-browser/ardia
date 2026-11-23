@@ -1,14 +1,15 @@
 import { loadedProfiles, onProfileLoaded, unloadIdleProfile } from "../../platform/profiles";
 import { everySlowly } from "../../platform/slowTimers";
-import { useBrowser } from "../browser/store";
+import { useBrowser, type BrowserState } from "../browser/store";
 import { engineProfile, isIncognitoProfile } from "../browser/model";
 import { hasPage, IDLE, needsPage, wakeOf, withWake, wokenPage } from "../tabs/pageSession";
-import { noteProfileUnloaded, noteUnloadedProfileReloaded, noteUnloadedProfileReopened } from "../telemetry/tabSleepCounts";
+import { noteProfileKeptForCli, noteProfileUnloaded, noteUnloadedProfileReloaded, noteUnloadedProfileReopened } from "../telemetry/tabSleepCounts";
 import { engineProfiles } from "./engineProfiles";
-import { consentToken } from "../telemetry/client";
+import { consentToken, stillValid } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
 import { idleProfiles, profileUnloadDelay } from "./idleProfiles";
 import { markProfileUnloaded, onProfilesOpened, openProfile, profileOpened, shownEngineProfiles } from "./profileLoading";
+import { onCliHoldsChanged, tabsHeldByCli } from "../tabs/cliHolds";
 
 const CHECK_MS = 60_000;
 const REMOUNT_MS = 100;
@@ -46,7 +47,30 @@ export function closedByUnload(tabId: string): boolean {
 
 const unloadable = (profile: string) => profile !== PERSONAL && !isIncognitoProfile(profile);
 
-export function applyUnload(profile: string, result: Unload) {
+function cliHeldEngineProfiles(s: BrowserState): string[] {
+  return [...new Set(tabsHeldByCli().flatMap((id) => (s.tabs[id] ? [engineProfile(s, s.tabs[id]!.profileId)] : [])))];
+}
+
+const profilesInUse = (s: BrowserState) => new Set([...shownEngineProfiles(s), ...cliHeldEngineProfiles(s)]);
+
+const keptForCli = new Set<string>();
+
+function forgetEndedCliHolds(s: BrowserState) {
+  const held = cliHeldEngineProfiles(s);
+  for (const profile of keptForCli) if (!held.includes(profile)) keptForCli.delete(profile);
+}
+
+function noteKeptForCli(s: BrowserState, consent: ReturnType<typeof consentToken>) {
+  forgetEndedCliHolds(s);
+  const shown = shownEngineProfiles(s);
+  for (const profile of cliHeldEngineProfiles(s)) {
+    if (keptForCli.has(profile) || !unloadable(profile) || shown.includes(profile) || !profileOpened(profile) || profileUnloadDelay(s.settings) === null || !stillValid(consent)) continue;
+    keptForCli.add(profile);
+    noteProfileKeptForCli(consent);
+  }
+}
+
+function applyUnload(profile: string, result: Unload) {
   const s = store();
   const shown = shownEngineProfiles(s).includes(profile);
   for (const id of result.tabs) {
@@ -70,9 +94,9 @@ export function applyUnload(profile: string, result: Unload) {
 
 const SETTLE_MS = 5_000;
 
-async function unload(profile: string, settled = false): Promise<boolean> {
+async function unload(profile: string, now: number, settled = false): Promise<boolean> {
   const s = store();
-  if (!unloadable(profile) || profileUnloadDelay(s.settings) === null || shownEngineProfiles(s).includes(profile)) return false;
+  if (!unloadable(profile) || profilesInUse(s).has(profile) || !readyToUnload.due(profile, now, profileUnloadDelay(s.settings))) return false;
   unloadingNow.add(profile);
   try {
     const result = await unloadIdleProfile(profile);
@@ -81,7 +105,7 @@ async function unload(profile: string, settled = false): Promise<boolean> {
     unloadingNow.delete(profile);
   }
   await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
-  return unload(profile, true);
+  return unload(profile, clock(), true);
 }
 
 export async function checkIdleProfiles(now = clock()) {
@@ -93,7 +117,8 @@ export async function checkIdleProfiles(now = clock()) {
   const consent = consentToken();
   try {
     const loaded = (await loadedProfiles()).filter((profile) => unloadable(profile) && profileOpened(profile));
-    for (const profile of readyToUnload(loaded, new Set(shownEngineProfiles(store())), now, delay)) await unload(profile);
+    noteKeptForCli(store(), consent);
+    for (const profile of readyToUnload(loaded, profilesInUse(store()), now, delay)) await unload(profile, now);
   } catch (error) {
     warnFor(consent, "[profiles] couldn't unload idle profiles", error);
   } finally {
@@ -102,9 +127,13 @@ export async function checkIdleProfiles(now = clock()) {
 }
 
 function watchProfiles(): () => void {
-  readyToUnload.noteShown(new Set(shownEngineProfiles(store())), clock());
+  readyToUnload.noteShown(profilesInUse(store()), clock());
   const shown = useBrowser.subscribeTo(["windows", "profiles"], (s, prev) => {
-    if (s.windows !== prev.windows || s.profiles !== prev.profiles) readyToUnload.noteShown(new Set(shownEngineProfiles(s)), clock());
+    if (s.windows !== prev.windows || s.profiles !== prev.profiles) readyToUnload.noteShown(profilesInUse(s), clock());
+  });
+  const held = onCliHoldsChanged(() => {
+    readyToUnload.noteShown(profilesInUse(store()), clock());
+    forgetEndedCliHolds(store());
   });
   const opened = onProfilesOpened((engines) => {
     for (const engine of engines) {
@@ -122,6 +151,7 @@ function watchProfiles(): () => void {
   const timer = everySlowly({ every: CHECK_MS, run: () => void checkIdleProfiles() });
   return () => {
     shown();
+    held();
     opened();
     loaded.remove();
     timer();

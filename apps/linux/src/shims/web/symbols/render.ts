@@ -1,6 +1,6 @@
 export type SymbolWeight = "light" | "regular" | "medium" | "semibold" | "bold";
 
-export type LayerFit = readonly [scale: number, aspect: number, dx: number, dy: number, stroke: number, rotate: number, flip: number];
+type LayerFit = readonly [scale: number, aspect: number, dx: number, dy: number, stroke: number, rotate: number, flip: number];
 
 export type SymbolLayer = {
   body: string;

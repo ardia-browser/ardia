@@ -139,6 +139,7 @@ export function LicensesPage() {
               </View>
               <Text style={[font.footnote, { color: theme.secondaryLabel }]}>{credit.license}</Text>
             </Pressable>
+            {credit.notice ? <Text style={[font.caption, styles.notice, { color: theme.secondaryLabel }]}>{credit.notice}</Text> : null}
             {index < LIBRARY_CREDITS.length - 1 ? <Divider /> : null}
           </View>
         ))}
@@ -157,4 +158,5 @@ const styles = StyleSheet.create({
   bold: { fontWeight: "600" },
   library: { flexDirection: "row", alignItems: "center", gap: space.m, minHeight: settingsLayout.rowMinHeight, paddingHorizontal: settingsLayout.rowInset, paddingVertical: space.s },
   credit: { paddingHorizontal: settingsLayout.rowInset, paddingVertical: space.m, gap: space.xs },
+  notice: { paddingHorizontal: settingsLayout.rowInset, paddingBottom: space.s },
 });

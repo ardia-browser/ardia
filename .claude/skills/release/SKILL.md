@@ -19,8 +19,11 @@ There are two channels (`docs/releasing.md` › Channels):
 - **Nightly** (`0.2.37-nightly.1`): fast iteration, one fix at a time. Only the focused checks for what changed run;
   no perf ratchet, no perf gate, no landing-page refresh. It's a GitHub prerelease, so the site's download,
   the README and fetch-engine (all on `releases/latest`) keep pointing at stable.
-- **Stable** (`0.2.37`): everything below, about 2 h with the smoke test, the update test, the ratchet, the
-  perf gate and the site's benchmarks. Its perf is compared with the previous **stable** release, never a nightly.
+- **Stable** (`0.2.37`): everything below. From the candidate to publish, the checks take about 45 min: the smoke
+  test, the update test, the ratchet and the perf gate's preparation side by side (about 5 min), then the gate's two
+  timed rounds (about 19 min each), all in `apps/browser/scripts/perf/gate.sh` under one perflab lock.
+  The site's benchmarks run on the Mac mini beside them or after publishing, never in front of it. Its perf is
+  compared with the previous **stable** release, never a nightly.
 
 When the owner asks for a nightly, or asks for a release without saying stable, run the nightly loop. A fix being
 ready is not a request: never start a nightly or a stable unless the owner asks for a release in that request.
@@ -157,6 +160,21 @@ scripts/release.sh <version>     # ~15–25 min with notarization; run it in the
 For a nightly, set `MARKETING_VERSION` to `<version>` (`0.2.37-nightly.1`) the same way, commit as "Nightly <version>",
 and run `scripts/release.sh <version>`: the version alone makes it a nightly.
 
+Before any of that, check the commit in about a second:
+
+```bash
+scripts/release/preflight.mjs <version>    # --mode dry-run as the CI dry run checks it
+```
+
+It reads the published appcast once and fails on everything that would stop the release later: a version that fits
+no channel, missing, empty or unreadable notes, `MARKETING_VERSION` or `CURRENT_PROJECT_VERSION` with more than one
+value across the project's configurations or a version that isn't `<version>`, an `Info.plist` that stopped reading
+them from the build settings, an Arch `pkgver` that `update-pkgbuild.sh` wouldn't derive from `<version>`, a stable
+that isn't above the latest stable in the feed, and a build number that isn't above every build in it (stable and
+nightly share one feed). `release.sh` and the
+Release workflow's `preflight` job run it first, so a stale build number fails in seconds instead of after the engine
+fetch and `pod install`.
+
 `release.sh` checks everything first, then runs the stages in `scripts/release/` in order: `archive.sh`,
 `export-sign.sh`, `verify.sh`, `launch-check.sh`, `notarize.sh`, `package.sh`, `notes.sh`, `appcast.sh`. When one
 fails, read its log in `dist/<version>/` and rerun that stage alone (each prints its usage); `notes.sh` prints the
@@ -183,6 +201,26 @@ shipping an unnotarized build. Never store or re-create the credential yourself;
 Notarization adds a few minutes per submission.
 
 ## 4. Smoke test the build
+
+For a stable, run the gate script as soon as the candidate exists (`run_in_background`; it ends in about 45 min):
+
+```bash
+apps/browser/scripts/perf/gate.sh <version> <previous>    # --out $HOME/ardia-scratch/gate-<version> by default
+```
+
+It takes the perflab lock for the whole run, so no other agent's timing shares the Mac. While another job holds it,
+it waits up to `GATE_LOCK_WAIT` seconds (default 3600), then gives up with exit 75 without starting anything. Inside
+the lock it runs this step's smoke test, 4b's ratchet and 4c's preparation side by side (none of them is a timing;
+logs in `<out>/smoke.log`, `ratchet.log`, `prep.log`), then 4c's two timed rounds and the verdict. Its exit status is
+0 pass, 1 a row fails, 2 a round is invalid, or the step that failed: 10 smoke, 11 ratchet, 12 prepare, 13 and 14 the
+rounds, 15 the verdict didn't run, 71 an app instance it launched is still running after cleanup, whatever the
+verdict (`gate.sh --help` lists them all; each step's own status is in its output). A ^C, a
+TERM to it or its process group, or a timeout stops every job it started and waits for them; the lock stays held
+until they've exited. Fix what failed and run the script again. When the fix means a new candidate (a rebuild, a new
+`--rc`), the next run prepares it afresh: `--prepared` refuses copies made from an older build of the same path, and
+the templates are keyed by the copy's code signature. A new candidate also means running 4d again on it: the site's
+benchmarks must be the build that ships. Start 4d on the Mac mini at the same time. A nightly runs only the smoke
+test:
 
 ```bash
 .claude/skills/release/scripts/smoke.sh <version> <previous>     # --rc for dist/<version>-rc
@@ -243,37 +281,57 @@ don't publish) or the check itself going stale after an intended change (fix the
 `.claude/skills/release/scripts/smoke.mjs`, and say so). When a release fixes a new class of bug that can be observed over CDP or
 the window list, add a check for it to `smoke.mjs` so the next release guards it.
 
-**After a fix mid-release, test only the fix.** When the smoke test, the ratchet or the perf gate fails and you fix it,
-rebuild and re-run only what covers that fix: the failed rows (a launch-only native-bench for a launch row, the
-ratchet for counts), plus the smoke test when the fix touches what it checks. Don't repeat the checks that already
-passed on the earlier candidate; move on to publishing.
+**After a fix mid-release, test only the fix, except for the perf gate.** When the smoke test or the ratchet fails and
+you fix it, rebuild and re-run only what covers that fix: the failed checks (the ratchet for counts), plus the smoke
+test when the fix touches what it checks. Don't repeat the checks that already passed on the earlier candidate. A
+perf-gate failure is different: its verdict is read from two whole rounds pooled, so no partial run (a launch-only
+native-bench, say) stands in for it. Rerun `gate.sh` in full, both rounds and the verdict, and publish only on its
+pass. A launch-only native-bench is for finding the cause, not for clearing the gate. Any fix that rebuilds the
+candidate also needs the full `gate.sh` before publishing, because its rounds measured the old build.
 
 ### 4b. Perf ratchet (stable only)
 
-Check the candidate's counts against the ceilings before publishing (about two minutes, no perflab lock needed: they
-are counts, not timings):
+Check the candidate's counts against the ceilings before publishing, beside the smoke test (about two minutes, four
+with a retry; no perflab lock needed: they are counts, not timings):
 
 ```bash
 node apps/browser/scripts/perf/ratchet.mjs run --own --app dist/<version>-rc/export/Ardia.app   # dist/<version>/export without an rc
 ```
 
 `--own` runs the app's own `main.jsbundle`, so it checks what ships. It must print `ratchet: ok`. It runs the launch,
-idle, command bar, tab switch, navigate, scroll, hover and native-node churn scenarios in a hidden instance, and a count over its ceiling
-gets one more run (a stray window event isn't a regression; a count over in both is). A failure is a real regression
+idle, command bar, tab switch, navigate, scroll, hover and native-node churn scenarios in one hidden instance and a
+one-tab launch in a second one beside it (report `ratchet-small.json`). A count over its ceiling gets one more run of
+the journeys up to that scenario, and a one-tab count gets its own one-tab rerun (a stray window event isn't a
+regression; a count over in both is). Native nodes left behind by the churn are never rerun: one run with any left
+fails. To check its verdict again from the saved reports, use the `check` line it prints last (the reports, `--retry`
+for a retry, `--micro` for the Node counts), not the retry report listed as a plain one: that drops the scenarios it
+didn't rerun. A failure is a real regression
 (find the commit that added the commit, render, store update or timer, and fix it) or an intended increase: raise that
 one ceiling by hand in `apps/browser/scripts/perf/ratchet.json` and say why in the commit and the release report. When
-the release made counts go down, run `ratchet.mjs lower <the run's report>` (`$TMPDIR/ac-ratchet/ratchet.json`), commit
+the release made counts go down, run `ratchet.mjs lower` with the arguments of the `check` line the run printed last: both
+sessions' reports (`ratchet.json` and `ratchet-small.json` in `$TMPDIR/ac-ratchet`), a `--retry` for each retry report it
+produced, and `--micro` (under `gate.sh`, `TMPDIR` is the gate's scratch folder, `/tmp/ac-gate.XXXXXX`, named in its
+output). Then commit
 the lowered ceilings, and say which counts dropped. The wall-clock gate is a separate step: `docs/perf/README.md`.
 
 ### 4c. Perf gate: the RC against the previous stable release (stable only)
 
 Every stable release is timed against the previous stable one before it publishes (never against a nightly: the
-control is `dist/<previous stable>/export/Ardia.app`), and ships only when every row is the same or
-better (`docs/perf/README.md` › Gating a release: native-bench with `--control dist/<previous>/export/Ardia.app`,
-interleaved, launch x6+ and session x2, then js-bench alternating the two apps). It runs alone on a quiet Mac, holding
-the perflab lock, after the smoke test and the ratchet. Call a row a regression only when the ranges separate.
-Afterwards read `scripts/agent/cpu-cap`'s log (`cpu-cap.log`): a pause of the bench or its instances during the run
-invalidates it, so rerun. Put the numbers in `docs/perf/<previous>-to-<version>.md`.
+control is `dist/<previous stable>/export/Ardia.app`), and ships only when every row passes
+(`docs/perf/README.md` › Gating a release). The copies and both templates were made beside the smoke test (step 4);
+the timed part is two rounds of native-bench on the prepared copies, interleaved, launch x6, session x2 and windows x2
+each, about 19 minutes a round, both run by `gate.sh` (step 4) under its lock. Each round gets a new empty folder, and
+the verdict runs only when both rounds exited 0, so a retry never scores an earlier round or build.
+`gate-verdict.mjs` reads the two rounds pooled: a row fails when the pooled ranges separate, or when it's worse in
+both rounds by more than the previous release's own round-to-round spread. It exits 1 on a failed row, and 2 on an
+invalid round, before scoring anything: a phase, run or sample missing, samples left out with the screen locked or
+the display asleep, or the rounds measuring different builds (version, build or code signature hash). Rerun the gate
+for a 2.
+
+js-bench is triage, not a gate step, when the ratchet passed: run its alternating loop (`docs/perf/README.md`) only
+when a gate row fails or needs explaining. Afterwards read `scripts/agent/cpu-cap`'s log (`cpu-cap.log`): a pause of
+the bench or its instances during the run invalidates it, so rerun. Put the verdict table and both rounds' tables in
+`docs/perf/<previous>-to-<version>.md`.
 
 The notes get a `## Faster` section only when the release is measurably faster: a short table of the rows that
 moved (old, new, change) and one sentence naming the biggest win. A release that's the same within noise has no
@@ -282,14 +340,22 @@ Faster section. (0.2.28 and 0.2.29 were also timed against 0.2.17, the last CEF 
 
 ### 4d. The site's benchmarks: Ardia again, rivals kept (stable only)
 
-After the perf gate passes, measure the same build against the stored Dia and Helium rows, so ardia.dev's Benchmarks
-section and `/benchmarks` show this release. Only Ardia runs; the rivals' figures, versions and dates come from
-`apps/site/src/data/bench.json` (`docs/perf/vs-browsers.md` › Running it). It's a timing run, so it goes after the perf
-gate, never beside it, and xbench takes the perflab lock itself. Nightlies skip it, as they skip the perf gate.
+Measure the same build against the stored Dia and Helium rows, so ardia.dev's Benchmarks section and `/benchmarks`
+show this release. Only Ardia runs; the rivals' figures, versions and dates come from `apps/site/src/data/bench.json`
+(`docs/perf/vs-browsers.md` › Running it). Nightlies skip it, as they skip the perf gate.
+
+It never blocks the binary: publishing (step 5) doesn't wait for it. It has to run on the Mac mini, the machine
+bench.json was measured on (xbench refuses any other), and it's a timing run, so it takes the mini's perflab lock
+itself and never runs beside another timing on the same Mac. When the gate runs on the MacBook, start it on the mini
+as soon as the candidate exists. When the gate is on the mini, run it there after publishing. Its template is cached
+in `$X/apps/.templates` (`--template-cache`), so a rerun after exit 75 or a `clean` skips the 90 s settle. Step 6's site
+deploy ships bench.json with the release notes when it's ready by then; otherwise deploy the notes without it and
+ship it with the next site deploy. Never hold the notes for it.
 
 ```bash
-V=<version>; X=$HOME/ardia-scratch/xbench-$V
-mkdir -p $X/apps/ardia && cp -Rc dist/$V-rc/export/Ardia.app $X/apps/ardia/   # dist/$V/export without an rc
+V=<version>; A=dist/$V-rc/export/Ardia.app   # dist/$V/export without an rc
+X=$HOME/ardia-scratch/xbench-$V-$(plutil -extract CFBundleVersion raw $A/Contents/Info.plist)-$(codesign -dvvv $A 2>&1 | sed -n 's/^CDHash=//p' | cut -c1-12)
+mkdir -p $X/apps/ardia && { [ -e $X/apps/ardia/Ardia.app ] || cp -Rc $A $X/apps/ardia/; }
 codesign --force --deep --sign - $X/apps/ardia/Ardia.app   # ad hoc, as the stored rows' Ardia and Helium ran
 node apps/browser/scripts/perf/xbench.mjs run --out $X/out --apps $X/apps --browsers ardia --rounds 3 --launches 2 \
   --gate off --deadline 60   # run_in_background, about 35 min; exit 75 means items are left: run it again
@@ -298,6 +364,9 @@ node apps/browser/scripts/perf/xbench.mjs report --out $X/out --apps $X/apps --b
 node apps/browser/scripts/perf/xbench.mjs clean --out $X/out --apps $X/apps --browsers ardia && rm -rf $X
 ```
 
+- The folder is named after the candidate's version, build and code signature hash, so running it again after exit 75
+  resumes only that same candidate. A rebuilt candidate gets a new folder and starts over, never reusing the old
+  build's samples.
 - **Refused** (exit 65, bench.json untouched): this Mac's model or chip, or xbench's harness revision, differ from the
   stored file. Leave the site's numbers as they are and tell the owner a full rerun is needed; don't `--force` it.
 - **`full rerun due: …`** in the report's output: a stored rival is over 60 days old, or Dia or Helium in
@@ -325,13 +394,23 @@ gh run list -R ardia-browser/ardia -w release.yml -L 1        # its id; then gh 
 onto the published feed, creates the release as latest with the DMG, zip and appcast (the `ardia` command is released from ardia-browser/plugins, `docs/cli.md`), checks
 `releases/latest/download/appcast.xml` and `https://ardia.dev/appcast.xml` list the version, and updates the tap when it has `HOMEBREW_TAP_TOKEN` (else run `update-tap.sh <version>`). Locally:
 `git tag v<version> && git push origin main v<version>`, then `.claude/skills/release/scripts/publish.sh <version>`.
+The release also ships up to three Sparkle deltas (`Ardia<build>-<earlier build>.delta`) that `appcast.sh` builds
+from the newest earlier zips; when none come out the sign job warns and the release goes on, so mention it in the
+report (`docs/releasing.md` › Deltas). `publish.sh` stops when the live feed is listed but won't download, and when the
+latest stable has no `appcast.xml` unless `PUBLISH_NEW_FEED=1`. If it stops on a missing feed, re-upload the last good
+`appcast.xml` (the last publishing run's `release` artifact) to the latest stable release with
+`gh release upload <tag> --clobber`, then re-run the publish (`docs/releasing.md` › Feed recovery).
+`PUBLISH_NEW_FEED=1`, with a local `publish.sh`, is only for a genuinely new feed. A dry run only notes a missing feed.
 It holds the `release-lock` branch while it publishes, so
 it refuses to run alongside another publish, local or CI, naming the holder; `--break-lock` clears a lock older than
 2 h left by a publish that died. The build job has no secrets; a separate sign job, which installs nothing, holds the
 keys and deletes them before the launch check (`docs/releasing.md` › CI releases).
 
-**Smoke-testing CI's build.** Dispatch with `dry_run=true` (the default): the same build as a release candidate
-(`release.sh --rc`: the next build number, signed and notarized), published nowhere. Download it and run the smoke test
+**Smoke-testing CI's build.** Commit the bump and the notes first, then dispatch with `dry_run=true` (the default):
+the same build as a release candidate (`release.sh --rc`, signed and notarized), published nowhere. Its preflight
+fails on everything a real run would, except a nightly that's already released at the checkout's build and still the
+newest build (the feed must list it; a published tag alone fails), which
+only warns (`publish.sh --dry-run` refuses an already released stable anyway). Download it and run the smoke test
 on it:
 
 ```bash

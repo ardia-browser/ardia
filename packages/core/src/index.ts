@@ -15,6 +15,7 @@ export * from "./providerConfig.ts";
 export * from "./providerNetwork.ts";
 export * from "./providerRows.ts";
 export * from "./quickCreate.ts";
+export * from "./secret.ts";
 export * from "./siteSearch.ts";
 export * from "./suggest.ts";
 export * from "./suggestFetcher.ts";

@@ -55,3 +55,6 @@ registerHooks({
     return next(url, context);
   },
 });
+
+const { setSecretEscapeMode } = await import(new URL("../../../packages/core/src/secret.ts", import.meta.url).href);
+setSecretEscapeMode("throw");

@@ -691,7 +691,7 @@ class MacDispatchTests(unittest.TestCase):
         self.assertEqual(current.count(DISPATCH), 1)
         committed = subprocess.run(['git', 'show', f'HEAD:{MAC_FETCH}'], cwd=REPO, capture_output=True, text=True, check=True).stdout
         self.assertEqual(current.replace(DISPATCH, ''), committed.replace(DISPATCH, ''))
-        self.assertLess(current.index(DISPATCH), current.index('nearest=0\n'))
+        self.assertLess(current.index(DISPATCH), current.index('nearest=0 describe=0\n'))
 
     def test_unknown_arch_fails_and_mac_usage_is_unchanged(self):
         script = REPO / MAC_FETCH
@@ -700,7 +700,7 @@ class MacDispatchTests(unittest.TestCase):
         self.assertIn('--arch linux-x86_64', bogus.stderr)
         self.assertNotEqual(run([script, '--arch']).returncode, 0)
         mac = run([script, '--bogus'])
-        self.assertEqual((mac.returncode, mac.stderr), (1, 'error: usage: fetch-engine.sh [--nearest]\n'))
+        self.assertEqual((mac.returncode, mac.stderr), (1, 'error: usage: fetch-engine.sh [--nearest] [--describe [--offline]]\n'))
 
 
 if __name__ == '__main__':

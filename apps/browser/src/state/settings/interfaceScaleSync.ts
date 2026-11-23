@@ -5,7 +5,7 @@ import { appliedInterfaceScale, currentInterfaceScale } from "./interfaceScale";
 import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
 
-export const storedScaleWins = (s: Pick<BrowserState, "settings" | "settingsMeta">): boolean =>
+const storedScaleWins = (s: Pick<BrowserState, "settings" | "settingsMeta">): boolean =>
   s.settingsMeta.chosen.includes("interfaceScale") || s.settings.interfaceScale !== INTERFACE_SCALE.default;
 
 let stop: (() => void) | null = null;

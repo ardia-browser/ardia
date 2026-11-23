@@ -5,7 +5,7 @@ import { isTabReady } from "../tabs/pageState";
 import { openSettings, SETTINGS_DETAIL } from "../settings/settingsWindows";
 import { currentManagerPlugin, openSystemPanel } from "./passwordManager";
 
-export { deleteAddress, deleteCard, revealCardNumber, saveAddress, saveCard, setAutofillSettings, type SavedAddress, type SavedCard } from "../../platform/autofill";
+export { deleteAddress, deleteCard, revealCardNumber, saveAddress, saveCard, type SavedAddress, type SavedCard } from "../../platform/autofill";
 
 export type { CardNetwork };
 

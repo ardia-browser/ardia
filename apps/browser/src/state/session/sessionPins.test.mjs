@@ -66,11 +66,12 @@ for (const version of [2, 3, 4, 5]) {
   });
 }
 
-test("the pins save as they are and read back the same", () => {
+test("the pins save as they are and read back the same", async () => {
   stub.docs.clear();
   stub.docs.set("session.json", JSON.stringify(oldDocument(5)));
   const stop = startPersistence();
   S().updateTab("plain", { title: "touched" });
+  await new Promise((resolve) => setTimeout(resolve, 0));
   flushPersistence();
   stop();
   const saved = JSON.parse(stub.docs.get("session.json"));

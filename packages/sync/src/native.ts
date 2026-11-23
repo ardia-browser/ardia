@@ -54,8 +54,8 @@ type SyncNative = {
   core?: SyncCore;
 };
 
-export type SyncCore = "rust" | "native";
-export type SyncOpenFailure = "format" | "authentication" | "too_large" | "other";
+type SyncCore = "rust" | "native";
+type SyncOpenFailure = "format" | "authentication" | "too_large" | "other";
 
 export const SyncNative = requireOptionalNativeModule<SyncNative>("ArdiaSync");
 

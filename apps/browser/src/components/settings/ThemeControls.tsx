@@ -8,7 +8,7 @@ import { MiniWindow } from "./MiniWindow";
 import { settingsInk, themePreview } from "./tokens";
 import { perLook } from "../ui/tokens";
 
-export const PAD = 172;
+const PAD = 172;
 const KNOB = 22;
 export const LABEL = 112;
 const LIGHTNESS_STEPS = 24;

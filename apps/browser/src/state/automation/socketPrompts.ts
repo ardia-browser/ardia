@@ -14,7 +14,7 @@ import { clippedRow } from "./socketWire";
 const PERMISSION_DECISIONS = ["allow", "allowOnce", "block", "dismiss"] as const;
 const PASSWORD_DECISIONS = ["save", "update", "never", "notNow", "dismiss"] as const;
 const AUTOFILL_DECISIONS = ["accept", "decline", "dismiss"] as const;
-export const LISTED_USERNAMES = 20;
+const LISTED_USERNAMES = 20;
 const USERNAME_CHARS = 256;
 
 const CLOSED = "The prompt closed or changed before Ardia could answer it; list the prompts again.";
@@ -45,7 +45,7 @@ function permissionTab(id: string) {
   return shown;
 }
 
-export const PERMISSION_NEEDS_ENGINE =
+const PERMISSION_NEEDS_ENGINE =
   "Answering a permission prompt waits for engine support: the engine doesn't report what an answer did (a resolve result and a one-time grant in ac_permissions.mm). permissions.prompts lists them; the prompt on screen answers them.";
 
 function respondPermission(params: Record<string, unknown>) {
@@ -74,7 +74,7 @@ const passwordRow = ({ tab, window, page }: Shown) => {
   return clippedRow({ id: passwordPromptId(p), tab, window, origin: p.origin, state: p.state, username: p.username.slice(0, USERNAME_CHARS), ...usernameList(passwordPromptId(p), p.usernames), federation: p.federation || null });
 };
 
-export const PASSWORD_NEEDS_ENGINE =
+const PASSWORD_NEEDS_ENGINE =
   "Answering a password prompt waits for engine support: the engine names no offer and doesn't report whether an answer took (an offer id and a resolve result in ac_password_prompt.mm). passwords.prompts lists them; the prompt on screen answers them.";
 
 function respondPassword(params: Record<string, unknown>) {
@@ -90,7 +90,7 @@ const AUTOFILL_DESCRIPTIONS: Record<AutofillPrompt["kind"], string> = {
   saveCard: "Save a card",
 };
 
-export function autofillSummary(p: AutofillPrompt) {
+function autofillSummary(p: AutofillPrompt) {
   const fields = p.kind === "updateAddress" ? [...new Set((p.changes ?? []).map((c) => c.field))] : [];
   return { kind: p.kind, fields, description: fields.length ? `${AUTOFILL_DESCRIPTIONS[p.kind]}: ${fields.join(", ")} change` : AUTOFILL_DESCRIPTIONS[p.kind] };
 }

@@ -19,6 +19,8 @@ final class PluginSandboxEscapeTests: XCTestCase {
     #include <libproc.h>
     #include <servers/bootstrap.h>
     #include <signal.h>
+    #include <spawn.h>
+    #include <sys/wait.h>
     #include <stdio.h>
     #include <stdlib.h>
     #include <string.h>
@@ -178,6 +180,34 @@ final class PluginSandboxEscapeTests: XCTestCase {
         printf("wrote\\n");
         return 0;
       }
+      if (!strcmp(mode, "read")) {
+        int fd = open(argv[2], O_RDONLY);
+        if (fd < 0) return failed();
+        char buffer[64];
+        if (read(fd, buffer, sizeof buffer) < 0) return failed();
+        close(fd);
+        printf("read\\n");
+        return 0;
+      }
+      if (!strcmp(mode, "spawn")) {
+        pid_t child = 0;
+        char *arguments[] = {argv[2], NULL};
+        int code = posix_spawn(&child, argv[2], NULL, NULL, arguments, NULL);
+        if (code != 0) { printf("errno %d\\n", code); return code; }
+        int status = 0;
+        waitpid(child, &status, 0);
+        printf("spawned\\n");
+        return 0;
+      }
+      if (!strcmp(mode, "fork")) {
+        pid_t child = fork();
+        if (child < 0) return failed();
+        if (child == 0) _exit(0);
+        int status = 0;
+        waitpid(child, &status, 0);
+        printf("forked\\n");
+        return 0;
+      }
       if (!strcmp(mode, "connect")) {
         int fd = socket(AF_UNIX, SOCK_STREAM, 0);
         struct sockaddr_un address = {0};
@@ -265,8 +295,10 @@ final class PluginSandboxEscapeTests: XCTestCase {
     return Outcome(status: process.terminationStatus, output: String(decoding: output, as: UTF8.self))
   }
 
-  func sandboxed(_ program: String, _ arguments: [String], network: Bool = true, realHome: Bool = false) throws -> Outcome {
-    let box = PluginSandbox(home: realHome ? PluginSandbox.resolved(NSHomeDirectory())! : home, appData: data, configFolder: config, pluginFolder: plugin, pluginData: pluginData, program: program, network: network)
+  func sandboxed(_ program: String, _ arguments: [String], network: Bool = true, realHome: Bool = false, kind: PluginSandbox.Kind = .program) throws -> Outcome {
+    let box = PluginSandbox(
+      home: realHome ? PluginSandbox.resolved(NSHomeDirectory())! : home, appData: data, configFolder: config, pluginFolder: plugin, pluginData: pluginData, program: program,
+      network: network, kind: kind)
     return try Self.run("/usr/bin/sandbox-exec", try box.arguments() + [program] + arguments, in: plugin)
   }
 
@@ -312,11 +344,126 @@ final class PluginSandboxEscapeTests: XCTestCase {
     listeners.append(fd)
   }
 
+  func testOnlyTheSystemItsOwnFolderAndItsDataAreReadable() throws {
+    let secret = "\(outside)/secret"
+    let temporary = "/private/tmp/ardia-escape-\(Self.short())"
+    scratch.append(temporary)
+    for path in [secret, temporary] { try "outside-secret".write(toFile: path, atomically: true, encoding: .utf8) }
+    try "own".write(toFile: "\(plugin)/own.txt", atomically: true, encoding: .utf8)
+    try "data".write(toFile: "\(pluginData)/home/data.txt", atomically: true, encoding: .utf8)
+    for kind in [PluginSandbox.Kind.program, .script] {
+      for path in [secret, temporary, "/System/Volumes/Data\(secret)", "/System/Volumes/Data\(temporary)"] {
+        XCTAssertEqual(try Self.run(probe, ["read", path]).status, 0, "control: \(path) reads outside")
+        for network in [true, false] {
+          XCTAssertEqual(try sandboxed(probe, ["read", path], network: network, kind: kind).status, EPERM, "\(path) reads from inside (\(kind), network \(network))")
+        }
+      }
+      for folder in ["/Applications", "/private/var/folders", root, "/Library/Keychains", "/private/etc", "/opt/homebrew/etc", "/opt/homebrew/var", "/usr/local/etc", "/usr/local/var"] where try Self.run(probe, ["listdir", folder]).status == 0 {
+        XCTAssertEqual(try sandboxed(probe, ["listdir", folder], kind: kind).status, EPERM, "\(folder) lists from inside (\(kind))")
+      }
+      for path in ["/System/Library/CoreServices/SystemVersion.plist", "/usr/share/zoneinfo/UTC", "/dev/urandom", "\(plugin)/own.txt", "\(pluginData)/home/data.txt"] {
+        let read = try sandboxed(probe, ["read", path], network: false, kind: kind)
+        XCTAssertEqual(read.status, 0, "\(path) is part of what it needs (\(kind)): \(read.output)")
+      }
+    }
+    XCTAssertEqual(try Self.run(probe, ["read", "/private/etc/hosts"]).status, 0, "control")
+    XCTAssertEqual(try sandboxed(probe, ["read", "/private/etc/hosts"], network: true).status, 0, "a program with network reads the hosts file")
+    XCTAssertEqual(try sandboxed(probe, ["read", "/private/etc/hosts"], network: false).status, EPERM, "without network it doesn't")
+    XCTAssertEqual(try sandboxed(probe, ["read", "/bin/sh"], network: false).status, 0, "a program reads the system's tools")
+    XCTAssertEqual(try sandboxed(probe, ["read", "/bin/sh"], network: false, kind: .script).status, EPERM, "the script host doesn't")
+    XCTAssertEqual(try sandboxed(probe, ["read", "/private/etc/ssl/cert.pem"], network: false, kind: .script).status, EPERM, "nor the system's certificates")
+  }
+
+  func testAProgramStraightInAPackagePrefixReadsOnlyThePrefixsToolFolders() throws {
+    for (program, private_) in [("/opt/homebrew/bin/brew", "/opt/homebrew/etc"), ("/opt/homebrew/bin/brew", "/opt/homebrew/var"), ("/usr/bin/python3", "/usr/local/etc")] {
+      guard FileManager.default.fileExists(atPath: program), try Self.run(probe, ["listdir", private_]).status == 0 else { continue }
+      let box = PluginSandbox(home: home, appData: data, configFolder: config, pluginFolder: plugin, pluginData: pluginData, program: program, network: true)
+      let listed = try Self.run("/usr/bin/sandbox-exec", try box.arguments() + [probe, "listdir", private_], in: plugin)
+      XCTAssertEqual(listed.status, EPERM, "\(private_) lists for a helper running \(program): \(listed.output)")
+    }
+  }
+
+  func testTheScriptHostCannotStartProgramsOrFork() throws {
+    let copy = "\(plugin)/copy"
+    try FileManager.default.copyItem(atPath: probe, toPath: copy)
+    XCTAssertEqual(try sandboxed(probe, ["spawn", "/usr/bin/true"], network: false).status, 0, "control: a program plugin starts programs")
+    XCTAssertEqual(try sandboxed(probe, ["spawn", copy], network: false).status, 0, "control: and its own")
+    XCTAssertEqual(try sandboxed(probe, ["fork", "x"], network: false).status, 0, "control: and forks")
+    for target in ["/usr/bin/true", "/bin/sh", copy] {
+      let spawned = try sandboxed(probe, ["spawn", target], network: false, kind: .script)
+      XCTAssertEqual(spawned.status, EPERM, "the script host started \(target): \(spawned.output)")
+    }
+    let forked = try sandboxed(probe, ["fork", "x"], network: false, kind: .script)
+    XCTAssertEqual(forked.status, EPERM, "the script host forked: \(forked.output)")
+  }
+
+  func testProgramsCanStillRunTheSystemsInterpreters() throws {
+    let python = try sandboxed("/usr/bin/python3", ["-I", "-c", "import json, ssl; print('ran')"], network: false)
+    XCTAssertEqual(python.status, 0, python.output)
+    XCTAssertTrue(python.output.contains("ran"), python.output)
+    let shell = try sandboxed("/bin/sh", ["-c", "echo $(/usr/bin/uname -s) > \"$0/home/uname\" && /bin/cat \"$0/home/uname\"", pluginData], network: false)
+    XCTAssertEqual(shell.output.trimmingCharacters(in: .whitespacesAndNewlines), "Darwin", shell.output)
+    for brewed in ["/opt/homebrew/bin/python3", "/usr/local/bin/python3"] {
+      guard let program = PluginSandbox.program(brewed, pluginFolder: plugin), program.hasPrefix("/opt/homebrew/") || program.hasPrefix("/usr/local/") else { continue }
+      let ran = try sandboxed(program, ["-I", "-c", "import json, ssl, sqlite3; print('ran')"], network: false)
+      XCTAssertTrue(ran.output.contains("ran"), "a Homebrew runtime still runs from its Cellar: \(ran.output)")
+    }
+  }
+
+  func testTheJavaScriptHostStartsAndAnswersOnItsChannelUnderItsProfile() throws {
+    let script = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("plugin-host/build.sh").path
+    let built = Process()
+    built.executableURL = URL(fileURLWithPath: "/bin/bash")
+    built.arguments = [script]
+    built.environment = ProcessInfo.processInfo.environment.merging(["TARGET_BUILD_DIR": "\(root)/host", "DERIVED_FILE_DIR": "\(root)/host-build"]) { _, given in given }
+    built.standardOutput = FileHandle.nullDevice
+    built.standardError = FileHandle.nullDevice
+    try built.run()
+    built.waitUntilExit()
+    XCTAssertEqual(built.terminationStatus, 0, "the host builds")
+    let host = "\(root)/host/Contents/Helpers/ArdiaPluginHost"
+    try "__ardiaBridge.send(JSON.stringify({ id: 1, method: \"hello\", params: { protocol: 2 } }));\n".write(toFile: "\(plugin)/main.js", atomically: true, encoding: .utf8)
+    let box = PluginSandbox(home: home, appData: data, configFolder: config, pluginFolder: plugin, pluginData: pluginData, program: host, network: false, kind: .script)
+    let launcher = """
+      import os, socket, subprocess, sys
+      reserved = os.open("/dev/null", os.O_RDONLY)
+      ours, theirs = socket.socketpair()
+      os.dup2(theirs.fileno(), 3)
+      os.set_inheritable(3, True)
+      child = subprocess.Popen(["/usr/bin/sandbox-exec"] + sys.argv[1:], pass_fds=(3,), stdin=subprocess.DEVNULL, env={"ARDIA_PLUGIN_FD": "3", "ARDIA_PLUGIN_NAME": "example"})
+      os.close(3)
+      theirs.close()
+      ours.settimeout(10)
+      line = b""
+      while not line.endswith(b"\\n"):
+          piece = ours.recv(4096)
+          if not piece:
+              break
+          line += piece
+      ours.close()
+      print(line.decode().strip())
+      print("exit", child.wait(timeout=10))
+      """
+    let ran = try Self.run("/usr/bin/python3", ["-I", "-c", launcher] + (try box.arguments()) + [host, "--entry", "main.js"], in: plugin)
+    XCTAssertTrue(ran.output.contains("\"method\":\"hello\""), "the host started and spoke on descriptor 3: \(ran.output)")
+    XCTAssertTrue(ran.output.contains("exit 0"), "it left when its channel closed: \(ran.output)")
+  }
+
   func testTheControlTokenIsUnreadableFromInside() throws {
     XCTAssertEqual(try Self.run("/bin/cat", [tokenFile]).output.contains(token), true, "control: the token is readable outside")
     let inside = try sandboxed("/bin/cat", [tokenFile])
     XCTAssertNotEqual(inside.status, 0)
     XCTAssertFalse(inside.output.contains(token))
+    XCTAssertEqual(try Self.run("/usr/bin/stat", ["-f", "%z", tokenFile]).status, 0, "control: it stats outside")
+    for kind in [PluginSandbox.Kind.program, .script] {
+      for network in [true, false] where kind == .program || !network {
+        let program = kind == .program ? "/usr/bin/stat" : probe
+        let arguments = kind == .program ? ["-f", "%z", tokenFile] : ["finderinfo", tokenFile]
+        let looked = try sandboxed(program, arguments, network: network, kind: kind)
+        XCTAssertNotEqual(looked.status, 0, "the token file can't even be looked at (\(kind), network \(network)): \(looked.output)")
+        XCTAssertTrue(looked.output.contains("Operation not permitted") || looked.output.contains("errno 1"), looked.output)
+      }
+    }
   }
 
   func testAnAppItWritesCannotBeLaunchedOutsideTheSandbox() throws {

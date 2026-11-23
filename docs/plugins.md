@@ -121,7 +121,13 @@ is the only source of which version may be fetched.
     60 s, deadline 15 min. It goes into a private scratch folder under `OfficialPlugins/<name>/.fetch-*`.
   - refuses the download unless its SHA-256 is the pinned one.
   - unpacks it with its own gzip and tar reader. Only files and folders are accepted, all under `<name>/`: no links,
-    devices, `..`, absolute paths, duplicates or PAX `size`/`linkpath` overrides, and the expanded tree is capped.
+    devices, `..`, absolute paths, duplicates or PAX `size`/`linkpath` overrides. The caps (`OfficialArchive.Limits`):
+    512 MB downloaded, 1 GB unpacked, 20,000 entries (files and folders, however they're named), 32 levels deep, and no more than 100 times the download's size
+    unpacked overall or 200 times its compressed size for any one file. Neither ratio applies below 4 MB, so small text
+    files that compress well are fine. Folders a path implies count as entries. zlib reads the one gzip member,
+    checking its CRC and length; bytes after it (a second member, padding) are refused. The per-file ratio comes from
+    how much of the stream zlib consumed while that file came out, taken every 4 KB of output. Verifying a kept copy
+    applies the same caps. A file's ratio is checked before its staged file is created.
   - requires the unpacked `plugin.json` to be the pinned name and version, claiming only programs the pin reserves
     for it.
   - trusts nothing but the pin, as VS Code does with its own extensions: no Developer ID signature or notarization is
@@ -158,8 +164,40 @@ is the only source of which version may be fetched.
     Try Again, in Settings and in onboarding. Leaving onboarding during a download cancels it.
 - **Updates.** A pin that names a new artifact fetches it in the background once you have the plugin, retrying after
   10 minutes, then doubling up to 6 hours.
-  - It switches over only if its exact approval is on record: the same name and hash, or the old receipt below.
-    Otherwise it waits, and the plugin's row offers **Update…**, which shows the consent sheet for the new copy.
+  - It switches over by itself if its exact approval is on record: the same name and hash, or the old receipt below.
+  - It also switches over by itself, with no sheet, when it grants nothing you hadn't already approved
+    (`state/plugins/officialUpdate.ts`, #3868). All of these must hold:
+    - the installed copy is official by native's say (the pin's digest, an earlier pinned digest, or a 0.2.47 bundled
+      digest), it's on, and the record's `approved` is that copy's exact receipt;
+    - the new copy is the verified download of the pin's own digest (`folderId` is the pin's), its manifest has the
+      same `name`, is marked `official` and has no problems;
+    - its manifest asks for nothing the approved one didn't. Every field that runs, reaches pages, changes the
+      browser or grants anything must be identical, order and limits included: permissions (narrowing too, since it
+      changes which other plugins may call its tools; only the order of network hosts doesn't count), programs with
+      their paths and after-update steps, hooks, tools and their timeouts, settings defaults and rows, menus, toolbar,
+      sidebar views, panels, omnibox, themes, site switches, the page bar, the page, `main` and sidecar specs with
+      their memory budgets, every activation event other than `onCommand:`, and every approved command. A program's
+      `example` must stay what Settings offers to copy (the pin's example stands in for a manifest without one).
+      The one addition is a first `main` (the owner's call, for the move off the Python CLI): it passes only when
+      its only way in is the command bar, with the new view or handler commands that reach it (all its activation
+      events `onCommand:`; no page, panels, sidebar views, toolbar, omnibox, menus, tools, hooks or sidecar), and
+      the unchanged permissions give it nothing to use (only `control`, the separate program-control setting). It
+      is still a new runtime, able to show toasts and dialogs and relink its own programs, so the note says so.
+      Python 0.4.0 to Bun 0.6.0 is this case. Title, description, version, `requires`, icon, keywords, the telemetry
+      text and a program's `claim` don't count. Any field the comparison doesn't know, or a malformed one, prompts.
+      The boundary row is `plugin-update:official-auto`.
+    - The record keeps `previous` for a rollback and an `updated` note (`from`, `to`, the consent lines that are
+      new, and `runtime` when it added a first `main`). While that copy is the one installed, the plugin's page shows
+      "Updated by itself to 0.6.0", "It added its own code, which runs in Ardia's sandbox, offline, and first starts
+      when you use one of its commands in the command bar" when it did, "Its permissions didn't change", and those lines.
+      `official_updates_auto` counts the switch once it took.
+      Approving any later update by hand drops the note.
+  - Otherwise it waits, and the plugin's row offers **Update…**, which shows the consent sheet for the new copy. It
+    also waits while the consent sheet is open for that plugin, and when nothing is on record: an `ardia` installed
+    the old way that was never approved isn't adopted, since there's no approval to compare with.
+  - Telemetry: `official_updates_auto` counts updates that installed by themselves; `official_updates_waiting` the
+    ones left for review, with `official_update_prompts_<reason>` saying why (`baseline`, `permissions`, `network`,
+    `runtime`, `activation`, `programs`, `hooks`, `settings`, `contributions`, `unknown`), once per download.
   - Until then the approved copy keeps running, and `previous` in the record keeps it approved while the switch
     happens.
 - **Provenance.** Only native code decides that a plugin is official: the signed pin plus a verified copy in the
@@ -365,7 +403,7 @@ plugin that isn't needed yet costs nothing: no host process, no memory. The firs
 | `storage` | `true` | A private key-value store in `PluginData/<name>/storage.json`, at most 2 MB in all and 256 KB a value (`plugin_storage_writes`). `storage.get` answers `{found: true, value}` or `{found: false}`. A file Ardia can't read or parse, an empty one included, fails every call; Ardia never overwrites it with an empty store |
 | `secrets` | `true` | Keychain items of its own (`ardia.plugin.<name>.<key>`, at most 64, 16 KB each; `plugin_secret_writes`). If the Keychain's list of them can't be read, Ardia keeps it, fails secret writes and deletes, and says removing the plugin left its secrets |
 | `network` | `false`, `"*"`, or 1 to 32 host patterns | main's `fetch` reaches only these hosts (`*.example.com` included); a sidecar gets the network as in v1. A web view the plugin shows (its page, a `file` panel) goes online only with `"*"`: WebKit's traffic can't be held to a list of hosts, so with a list it stays offline and the plugin reaches its hosts through `net.fetch` |
-| `control` | `true` | Turning it on turns on `cliControl`, unless you turned control off yourself: an Off you chose wins, and the consent sheet points to the switch, Settings › Advanced › Let programs control Ardia |
+| `control` | `true` | Turning it on turns on `cliControl`, unless you turned control off yourself: an Off you chose wins, and the consent sheet points to the switch, Settings › Advanced › Let programs control Ardia. While control is on, any program you run has the `ardia` command's reach: the control socket and the engine's token connection, a full DevTools client of the browser (every tab and page, signed-in sites and their cookies, downloads and uploads; `docs/cli.md`). So the consent sheet and the plugin's page in Settings › Plugins put that first ("Turns on control in Settings › Advanced. While it's on, any program you run can fully control Ardia: every tab and page, your signed-in sites and their cookies, and uploads and downloads of any file on this Mac"; "While control is on …" when you turned control off yourself, and naming the commands Ardia runs for it after updates when it has any), and its row in the list, the official ones' included (also while an update has failed), says "Can fully control Ardia" (`fullControlLine`, `FULL_CONTROL_SUMMARY` in `state/plugins/consent.ts`) |
 
 The old list form (`["tabs", "network"]`) still reads, as above. Contributions grant their own reach and are shown on
 the consent sheet too: a toolbar button, a sidebar view, a context-menu item, a theme, a decide hook, site switches in
@@ -503,6 +541,39 @@ approval covers the manifest's declarations, not the code. An absolute path or a
 it is whatever is at that path when the helper starts. The approval names it ("Runs a program in the background:
 /usr/bin/python3 helper.py"), it may not live in Ardia's data or config folder, and beyond that it is trusted as
 installed, like a hook's program in `hooks.json`.
+
+### The sandbox
+
+Every helper starts under `/usr/bin/sandbox-exec` with a Seatbelt profile built by `PluginCore/PluginSandbox.swift`,
+and so does main's `ArdiaPluginHost`. The profile starts from `(deny default)` and allows only what is listed below.
+Paths go in as `-D` parameters, never into the profile's text.
+
+- **Everyone:** reading and mapping the system (`/System`, less `/System/Volumes` except dyld's cryptexes, `/usr/lib`,
+  `/usr/share`, `/Library/Apple`, the time zone database), metadata (`stat`) outside the protected folders below,
+  `/dev/null`, `/dev/zero`, `/dev/random`, `/dev/urandom` and `/dev/fd`, reading the plugin's own folder and program,
+  reading and writing `PluginData/<name>/`, descriptor 3 (the channel), `sysctl` reads, the Mach services on
+  `machAllowed`, the global preferences domain, and inspecting or signalling only its own processes.
+- **A sidecar** may also fork and start programs: those in its own folder, the tools in `/bin`, `/sbin`, `/usr/bin`,
+  `/usr/sbin`, `/usr/libexec`, the `bin`, `sbin`, `lib`, `libexec`, `opt`, `Cellar`, `Frameworks` and `share` folders of
+  `/usr/local` and `/opt/homebrew` (nothing else there, so no `etc`, `var` or a database beside them), the Command Line Tools and
+  the Xcode `xcode-select` points to, so `/usr/bin/python3` and `git` work. It reads those trees, `/etc/ssl` and a few
+  files programs look up (`passwd`, `group`, `services`, `localtime`, Xcode's license choice). An absolute program also
+  reads its own install folder (`/opt/homebrew/opt/node` for its `bin/node`), except in a shared temp folder or straight
+  in `/usr`, `/usr/local` or `/opt/homebrew` (`/usr/bin/python3`, `/opt/homebrew/bin/brew`), where it reads only itself.
+- **main's host** may start nothing, not even a file in its own folder, and can't fork. It reads only the system, its own
+  binary and the plugin's folder.
+- **With network** (a sidecar whose plugin is granted it), outbound and local IP, the resolver's socket, the
+  `machAllowedOnline` services and `/etc/hosts` and `resolv.conf`. Without it, no IP at all: no loopback, no listening,
+  no names. main's host is always offline.
+- **An official plugin's folder** is its verified, read-only copy, `OfficialPlugins/<name>/<sha256>/`, the one place in
+  Ardia's data folder a plugin may run from: only the copy `OfficialTrust` just verified for that plugin, compared by
+  real path, so a local plugin linked to a folder there is refused. It can't read or list another copy.
+- **Never:** your home folder, Ardia's data and config folders, `/Users` and `/Volumes` (an absolute program elsewhere
+  reads only itself), any other app's temp files, `/Applications`, `/etc` beyond the files above, pathname sockets,
+  shared memory, IOKit, Apple Events, Launch Services, launchd jobs, preference writes and notifications.
+
+`PluginSandboxEscapeTests.swift` proves each line from inside a sandbox, and `mac.yml`'s Swift job runs it on pull
+requests that touch `PluginCore`, `PluginProcess.swift`, `plugin-*` or the import readers.
 
 ### programs
 
@@ -645,7 +716,15 @@ Ardia never runs a plugin's program itself, with one exception for official plug
   sandbox nor the plugin's other permissions apply to it, and the consent sheet says so ("Adds ardia to your PATH. It runs as you,
   outside Ardia's sandbox", and "Adds ~/.local/bin to your PATH in your shell's login file"). It reaches Ardia the way any program does, while "Let the ardia command control Ardia" is on: the
   control socket, which checks only that its peer runs as the same user, and the engine's token connection, whose token
-  sits in `ArdiaControl.json` for the user's processes to read (`docs/cli.md`, `docs/control-socket.md`).
+  sits in `ArdiaControl.json` for the user's processes to read (`docs/cli.md`, `docs/control-socket.md`). Nothing can
+  hold a program running as you to less, so a plugin with programs says so first, whether or not it asks for `control`
+  ("The <name> command runs as you, so while control is on in Settings › Advanced, it can fully control Ardia: …",
+  or "…, as do the commands Ardia runs for it after updates" for `afterUpdate`), and its row in Settings › Plugins says "Can fully
+  control Ardia". A plugin's own code can't reach either. main and a sidecar run under `sandbox-exec`, which denies
+  `ArdiaControl.json` and Unix sockets outside the plugin's folder (`PluginSandboxEscapeTests`); a sidecar with the
+  network can reach the engine's loopback port, but only the token opens it. Its pages are WebKit views that load the
+  plugin's own folder through its scheme handler (`PluginPageView.swift`), with no file access to the data folder, and
+  anything they send to the port carries an `Origin`, which the engine refuses.
 
 Code: `PluginCore/PluginPrograms.swift` (the store, links and leases; `plugin-tests/PluginProgramsTests.swift`),
 `PluginCore/PluginProgramRegistry.swift` (claims and legacy installs; `plugin-tests/PluginProgramRegistryTests.swift`),

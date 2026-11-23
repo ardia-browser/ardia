@@ -4,15 +4,16 @@ import { automationCommands, automationDecision, isCatalogCommand, variantsOf } 
 import { COMMANDS, LITTLE_ARDIA_PAGE_COMMANDS } from "../commands/commandCatalog";
 import { eligibleKind, isEligibleTab, lastFocusedEligibleWindow } from "./automationWindows";
 import { AUTOMATION_EVENTS, MIN_IDLE_SECONDS, NAMED_ONLY_EVENTS, type AutomationEventName } from "./eventNames";
+import { isFields } from "../../lib/decode";
 
-export const PROTOCOL = 4;
-export const MIN_CLIENT_PROTOCOL = 4;
+const PROTOCOL = 4;
+const MIN_CLIENT_PROTOCOL = 4;
 
 export type ErrorCode = "bad_request" | "unknown_method" | "unknown_command" | "refused" | "no_window" | "failed" | "password_manager_plugin" | "unsupported_protocol";
 export type MethodError = { code: ErrorCode; message: string };
 export type RequestId = number | string | null;
-export type ParsedRequest = { id: RequestId; method: string; params: Record<string, unknown> };
-export type RunPlan = { command: BrowserCommand; arg: string | null; windowId: string | null; tabId: string | null };
+type ParsedRequest = { id: RequestId; method: string; params: Record<string, unknown> };
+type RunPlan = { command: BrowserCommand; arg: string | null; windowId: string | null; tabId: string | null };
 export type Subscription = {
   events: ReadonlySet<AutomationEventName>;
   fullUrls: boolean;
@@ -23,9 +24,7 @@ export type Subscription = {
 
 export const failure = (code: ErrorCode, message: string) => ({ error: { code, message } satisfies MethodError });
 
-const isFields = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
-
-export const MAX_ID_BYTES = 256;
+const MAX_ID_BYTES = 256;
 
 const utf8 = new TextEncoder();
 

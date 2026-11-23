@@ -26,18 +26,6 @@ export function ShareDiagnosticsToggle() {
   );
 }
 
-export function ShareDiagnosticsSection() {
-  return (
-    <>
-      <SectionHeader title="Crash reports and usage" description={SHARING_COPY.dailyCountShort} />
-      <Group>
-        <ShareDiagnosticsToggle />
-        <Row title={SHARING_COPY.whatsSent} onPress={() => showSettingsSheet(<WhatsSentSheet />)} />
-      </Group>
-    </>
-  );
-}
-
 export function CrashReportDetails() {
   const report = useWatchReport();
   const until = useWatchUntil();

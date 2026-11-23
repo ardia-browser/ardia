@@ -1,10 +1,10 @@
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
-import { isPagePath, MAX_PAGE_PATH } from "../../lib/pluginNames";
+import { isPagePath } from "../../lib/pluginNames";
 import { loadPluginRecords } from "./records";
 import { usePlugins } from "./store";
 
 const PAGE_URL = /^ardia:\/\/([a-z0-9][a-z0-9-]{0,39})(\/[^?#]*)?(\?[^#]*)?(?:#.*)?$/i;
-export { isPagePath, MAX_PAGE_PATH };
+export { isPagePath };
 
 export const pluginPageUrl = (name: string, path = "") => `ardia://${name}${path}`;
 

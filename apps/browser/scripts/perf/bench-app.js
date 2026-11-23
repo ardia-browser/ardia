@@ -65,15 +65,26 @@ async function timersSettled(stepMs = 1000, timeoutMs = 15000) {
   return { settled: false, last: previous };
 }
 
-async function settleWindow({ hold = false } = {}) {
+async function persisted(persistence) {
+  if (!persistence) return false;
+  if (typeof persistence.sessionSaved !== "function") {
+    persistence.flushPersistence();
+    return true;
+  }
+  const problem = await persistence.sessionSaved().then((ok) => (ok ? null : "it reported it didn't"), (error) => `it failed: ${error?.message ?? error}`);
+  if (problem) throw new Error(`settle: the session didn't save (${problem}), so the sample could count its writes`);
+  return true;
+}
+
+async function settleWindow({ hold = false, quietMs = 3000, stepMs = 1000 } = {}) {
+  const started = Date.now();
   const persistence = ac.persistence;
-  const flushed = !!persistence;
-  persistence?.flushPersistence();
-  const writes = await writesSettled();
-  const timers = await timersSettled();
+  const flushed = await persisted(persistence);
+  const writes = await writesSettled(quietMs);
+  const timers = await timersSettled(stepMs);
   const held = hold && !!persistence?.holdPersistence;
   if (held) persistence.holdPersistence();
-  return { flushed, writes, timers, held };
+  return { flushed, writes, timers, held, ms: Date.now() - started };
 }
 
 function release(settled) {
@@ -728,5 +739,6 @@ function censusScenarios() {
 globalThis.acBench = {
   names: Object.keys(scenarios),
   run: (name, options) => scenarios[name](options ?? {}),
+  settleWindow,
 };
 return globalThis.acBench.names;

@@ -135,6 +135,8 @@ export const takeContentDriftCounts = (): Promise<Record<string, number>> =>
     return { content_layer_layouts: drift.layouts, content_layer_refits: drift.fits, content_layer_drift_max_pt: drift.maxPoints };
   });
 
+export { takeStopBreathing } from "./stopBreathing";
+
 export const takeColdTabHoldCounts = (): Promise<Record<string, number>> =>
   inTurn(async (): Promise<Record<string, number>> => {
     const holds = await call("webView.takeFirstPaintHolds", {}).catch(() => null);
@@ -260,7 +262,7 @@ export async function hardwareProperties(): Promise<Record<string, unknown>> {
 
 const GONE_REASONS = new Set(["abnormal", "killed", "crashed", "oom", "launchFailed", "integrity", "unknown"]);
 
-export type PageTranslateContext = { translate: string; translate_stage: string | null; translating_tabs: number; translated_tabs: number };
+type PageTranslateContext = { translate: string; translate_stage: string | null; translating_tabs: number; translated_tabs: number };
 
 export function trackPageProcessGone(info: { reason: string; code: number }, visible: boolean, translate?: PageTranslateContext) {
   const consent = consentNow();
@@ -296,7 +298,7 @@ const UNPAINTED_OCCLUSIONS = new Set(["visible", "occluded"]);
 const cappedCount = (value: unknown) => (Number.isFinite(value) ? Math.min(Math.max(0, Math.round(value as number)), MAX_WINDOW_VIEWS) : null);
 const hasBit = (bits: unknown, bit: number) => typeof bits === "number" && Number.isSafeInteger(bits) && (bits & (1 << bit)) !== 0;
 
-export function windowUnpaintedProperties(r: WindowUnpaintedRecord) {
+function windowUnpaintedProperties(r: WindowUnpaintedRecord) {
   return {
     window: oneOf(UNPAINTED_WINDOWS, r.window),
     trigger: oneOf(UNPAINTED_TRIGGERS, r.trigger),

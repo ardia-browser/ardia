@@ -46,21 +46,21 @@ export function sameTheme(a: ProfileTheme | null | undefined, b: ProfileTheme | 
   return a.dark && b.dark ? sameLook(a.dark, b.dark) : !a.dark && !b.dark;
 }
 
-export type OwnLook = { theme: ProfileTheme | null; presetThemes: PresetThemes };
+type OwnLook = { theme: ProfileTheme | null; presetThemes: PresetThemes };
 
 export function withOwnLook(profile: PresetLookFields, theme: ProfileTheme | null): OwnLook {
   const { [profile.color]: _replaced, ...others } = ownLooksOf(profile);
   return { theme, presetThemes: theme ? { ...others, [profile.color]: theme } : others };
 }
 
-export type PresetChoice = { color: ProfileColor; theme: ProfileTheme | null };
+type PresetChoice = { color: ProfileColor; theme: ProfileTheme | null };
 
 export function withPresetChosen(profile: PresetLookFields, color: ProfileColor): PresetChoice | null {
   if (color === profile.color) return null;
   return { color, theme: ownLooksOf(profile)[color] ?? null };
 }
 
-export type SyncedColor = { color: ProfileColor; theme: ProfileTheme | null | undefined };
+type SyncedColor = { color: ProfileColor; theme: ProfileTheme | null | undefined };
 
 export function withSyncedColor(profile: PresetLookFields, color: ProfileColor, synced: ProfileTheme | null | undefined): SyncedColor | null {
   return color === profile.color ? null : { color, theme: synced };

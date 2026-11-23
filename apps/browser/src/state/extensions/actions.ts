@@ -212,18 +212,14 @@ export async function openActionPopup(windowId: string, extensionId: string, anc
   useExtensions.setState({ popup: { windowId, pageProfile: pageProfile(useBrowser.getState(), windowId), extensionId, url, anchor, opened: request } });
 }
 
-export function extensionMenuItems(ext: Pick<InstalledExtension, "name" | "enabled" | "pinned" | "optionsUrl" | "sidePanel" | "mayModify">, sidePanelOpen: boolean): MenuItem[] {
+export function extensionMenuItems(ext: Pick<InstalledExtension, "enabled" | "pinned" | "optionsUrl" | "sidePanel" | "mayModify">, sidePanelOpen: boolean): MenuItem[] {
   return menuSections(
-    [{ id: "name", title: ext.name, enabled: false }],
     [
-      { id: "options", title: "Options", symbol: "gearshape", enabled: !!ext.optionsUrl && ext.enabled },
+      !!ext.optionsUrl && ext.enabled && { id: "options", title: "Options", symbol: "gearshape" },
       !!ext.sidePanel && ext.enabled && { id: "sidePanel", title: sidePanelOpen ? "Close Side Panel" : "Open Side Panel", symbol: "sidebar.right" },
       { id: "pin", title: ext.pinned ? "Unpin from Toolbar" : "Pin to Toolbar", symbol: ext.pinned ? "pin.slash" : "pin" },
     ],
-    [
-      { id: "enable", title: ext.enabled ? "Turn Off" : "Turn On", symbol: "power" },
-      { id: "manage", title: "Manage Extension", symbol: "puzzlepiece.extension" },
-    ],
+    [{ id: "manage", title: "Manage Extension", symbol: "puzzlepiece.extension" }],
     [{ id: "remove", title: "Remove Extension…", symbol: "trash", enabled: ext.mayModify }],
   );
 }
@@ -235,7 +231,6 @@ export async function showExtensionMenu(windowId: string, ext: InstalledExtensio
   const choice = await showMenu(extensionMenuItems(ext, panel?.extensionId === ext.id && !panel.hidden));
   if (choice === "options") foreignWriteHooks.around(() => openOptions(windowId, ext));
   if (choice === "pin") void setPinned(profile, ext.id, !ext.pinned);
-  if (choice === "enable") void setEnabled(profile, ext.id, !ext.enabled);
   if (choice === "remove") void removeExtension(profile, ext, windowId);
   if (choice === "sidePanel") void toggleSidePanel(windowId, ext.id);
   if (choice === "manage") {
@@ -245,21 +240,17 @@ export async function showExtensionMenu(windowId: string, ext: InstalledExtensio
   }
 }
 
-export type ExtensionListChoice = "add" | "manage" | "pin";
+type ExtensionListChoice = "add" | "manage";
 
 export const EXTENSION_LIST_ITEMS: ChoiceItem<never, ExtensionListChoice>[] = [
-  { id: "add", title: "Add Extension…", symbol: "plus" },
   { id: "manage", title: "Manage Extensions…", symbol: "puzzlepiece.extension" },
-  { id: "pin", title: "Pin Extensions…", symbol: "pin" },
+  { id: "add", title: "Add Extension…", symbol: "plus" },
 ];
 
-export type ExtensionOverflowChoice = InstalledExtension | { front: InstalledExtension };
-
-export function extensionOverflowItems(enabled: InstalledExtension[], hidden: InstalledExtension[]): ChoiceItem<ExtensionOverflowChoice, ExtensionListChoice | "front">[] {
+export function extensionOverflowItems(enabled: InstalledExtension[]): ChoiceItem<InstalledExtension, ExtensionListChoice>[] {
   return [
     ...enabled.map((x) => ({ value: x, title: x.name, symbol: x.pinned ? "pin.fill" : undefined })),
     ...(enabled.length ? [{ separator: true as const }] : []),
-    ...(hidden.length ? [{ id: "front" as const, title: "Move to Front", symbol: "arrow.left.to.line", children: hidden.map((x) => ({ value: { front: x }, title: x.name })) }, { separator: true as const }] : []),
     ...EXTENSION_LIST_ITEMS,
   ];
 }
@@ -267,7 +258,6 @@ export function extensionOverflowItems(enabled: InstalledExtension[], hidden: In
 export function runExtensionListChoice(choice: ExtensionListChoice | null, windowId: string) {
   if (choice === "add") openWebStore(windowId);
   if (choice === "manage") openManageExtensions(windowId);
-  if (choice === "pin") openPinDialog(windowId);
 }
 
 export function extensionMenu(s: BrowserState, windowId: string | undefined) {

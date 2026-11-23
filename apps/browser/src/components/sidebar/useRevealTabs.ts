@@ -4,9 +4,11 @@ import { inShownProfile, selectedTabIn, showsProfile, watchRevealTargets, window
 import { reduceMotion } from "../ui/reduceMotion";
 import { GLOW_ROOM, type SidebarGeometry } from "./pageLayout";
 import { locateTab } from "./selectedRow";
+import { flushFolds, foldsFilling } from "./foldFlush";
+import { releaseLaunchRows } from "../../state/sidebar/launchRows";
 import { REVEAL_ROW_MARGIN } from "./tokens";
 
-export type RevealScroll = { y: number; animated: boolean };
+type RevealScroll = { y: number; animated: boolean };
 
 export function revealScrollFor(row: { y: number; height: number }, at: { top: number; viewport: number; edgeLift?: number }, animated: boolean): RevealScroll | null {
   const { top, viewport, edgeLift = 0 } = at;
@@ -25,10 +27,26 @@ export function startRevealTabs(windowId: string, scroll: RefObject<Scroller | n
     let reveals = 0;
     let atRest: string | null = null;
     let switchedIn: string | null = null;
-    const show = (row: { y: number; height: number }, pill: boolean) => {
+    let stopped = false;
+    const show = (row: { y: number; height: number }, pill: boolean, redo: (() => void) | null) => {
       const { viewport, edgeLift } = geometry.current;
       const move = revealScrollFor(row, { top: scrollY.current ?? 0, viewport, edgeLift }, pill && !stillMotion());
-      if (move) scroll.current?.scrollTo(move);
+      if (!move) return;
+      if (!redo || !foldsFilling(windowId)) return scroll.current?.scrollTo(move);
+      const scroller = scroll.current;
+      const from = scrollY.current ?? 0;
+      const mine = reveals;
+      void flushFolds(windowId).then(() => !stopped && mine === reveals && scroll.current === scroller && Math.abs((scrollY.current ?? 0) - from) < 1 && redo());
+    };
+    const place = (tabId: string, pill: boolean, mine: number, redo: boolean) => {
+      const scroller = scroll.current;
+      const from = scrollY.current ?? 0;
+      const row = locateTab(windowId, tabId, geometry.current, scroller as ScrollView, () => scrollY.current ?? 0);
+      if (!row) return;
+      const again = redo ? () => place(tabId, pill, mine, false) : null;
+      const unmoved = () => Math.abs((scrollY.current ?? 0) - from) < 1;
+      if ("then" in row) void row.then((found) => found && mine === reveals && scroll.current === scroller && unmoved() && show(found, pill, again));
+      else show(row, pill, again);
     };
     const reveal = () => {
       frame = 0;
@@ -48,13 +66,8 @@ export function startRevealTabs(windowId: string, scroll: RefObject<Scroller | n
       switched = opened = null;
       viaPill = false;
       if (!tabId) return;
-      const scroller = scroll.current;
-      const from = scrollY.current ?? 0;
-      const row = locateTab(windowId, tabId, geometry.current, scroller as ScrollView, () => scrollY.current ?? 0);
-      if (!row) return;
-      const unmoved = () => Math.abs((scrollY.current ?? 0) - from) < 1;
-      if ("then" in row) void row.then((found) => found && mine === reveals && scroll.current === scroller && unmoved() && show(found, pill));
-      else show(row, pill);
+      releaseLaunchRows(windowId, "reveal");
+      place(tabId, pill, mine, true);
     };
     const schedule = () => {
       if ((switched || opened || atRest) && !frame) frame = requestAnimationFrame(reveal);
@@ -71,6 +84,7 @@ export function startRevealTabs(windowId: string, scroll: RefObject<Scroller | n
     });
     geometry.current.laidOut = schedule;
     return () => {
+      stopped = true;
       cancelAnimationFrame(frame);
       unsubscribe();
       geometry.current.laidOut = undefined;

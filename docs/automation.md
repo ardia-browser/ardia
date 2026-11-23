@@ -8,8 +8,17 @@ Issue #717. Config files and themes are `docs/config.md`; page scripting over CD
 
 - While "Let the ardia command control Ardia" (`cliControl`) is on, the app listens on a Unix socket at exactly
   `<data dir>/ArdiaControl.sock` (the app's own data dir; `ARDIA_DATA_DIR` for test instances).
-- **Safe place.** The server starts only if the data dir is a real directory (not a symlink) owned by the user and not
-  writable by group or others; otherwise it logs one line and reports an error status. The socket is created under a
+- **Safe place.** The server starts only if the data dir is a real directory (not a symlink) owned by the user, not
+  writable by group or others, not on a volume that ignores ownership, and with no macOS access list that allows
+  anyone but the user anything (an inherited `everyone allow read` would otherwise reach every file made in it, 0600
+  or not; `ControlPeerCore/PrivateFolder.swift`, as the engine's `UnsafeControlFolder`), and only if no folder above
+  it (its real path, `F_GETPATH`) could be swapped by someone else: each is owned by root or the user, not writable by
+  others unless sticky, with no access list that lets anyone else write, delete or take ownership; otherwise it logs
+  one line and reports an error status. The checked folder stays open while the socket serves: the lock file, the old
+  socket's removal and the stop's cleanup all go through that descriptor (`openat`, `fstatat`, `unlinkat`), and
+  since `bind` only takes a path, the socket bound at the path must be the same inode found through the descriptor, or
+  it doesn't start (binding relative to the folder after `fchdir` would change the whole process's working folder,
+  which Chromium's threads share). The socket is created under a
   0177 umask, so it is 0600 from the start (a socket is made 0777 less the umask, so 0077 would leave it 0700).
 - **One owner.** The server holds an exclusive `flock` on `<data dir>/ArdiaControl.sock.lock` for as long as it
   serves. Only after taking the lock may it remove an old path, and only a socket (never a regular file, directory or
@@ -17,7 +26,53 @@ Issue #717. Config files and themes are `docs/config.md`; page scripting over CD
   A second instance that can't take the lock serves nothing and disturbs nothing.
 - **Both ends check the peer.** The server refuses a peer whose uid (`getpeereid`) isn't its own; the CLI checks the
   server's uid on the connected socket (`LOCAL_PEERCRED`) before sending anything. A pathname check alone is not
-  authentication. No token: the bar is the user's own account, as for the token file.
+  authentication. No token: the bar is the user's own account, as for the token file, and on macOS the program's
+  code identity on top (next point).
+- **Who the program is (macOS).** After the uid check the server reads the peer's audit token (`LOCAL_PEERTOKEN`, so
+  a reused pid can't stand in for it: a token whose process has gone resolves to nothing) and resolves its code with
+  Security.framework off the socket queue (`ControlPeerCore/ControlPeer.swift`): Team ID, signing identifier, path,
+  cdhash, hardened runtime, and whether the signature is valid against an Apple anchor. A hardened program signed with
+  Ardia's own Team ID (the bundled `ardia` and its runtime, and any other code Ardia ships, all signed by the release's
+  `sign` job) is the owner, as before. Any other program waits, unread, while Ardia rings a **doorbell**: a sheet on
+  the last focused window, "A program wants to control Ardia", with the program's name right beside who signed it
+  ("Not signed by an identified developer" for anything else) and its path, control and direction characters stripped
+  and lengths bounded, so a program can't pass itself off as `ardia` in the headline. Its buttons are Allow Once, Allow
+  for 30 Minutes, Always Allow and Don't Allow; Return does nothing, Escape and the initial keyboard focus are Don't
+  Allow, so a keystroke meant for a page never lets a program in.
+  Approvals are keyed by Team ID + identifier for a program signed by an identified developer, `apple:` + identifier
+  for one of macOS's own, and path + cdhash for anything else. That cdhash is checked against the running process
+  (a `cdhash H"…"` requirement on the dynamic code), so a file swapped on disk can't borrow an approval; a program whose
+  running code doesn't validate has no cdhash and can only be allowed once.
+  They live in `<data dir>/ArdiaControlApprovals.json` (0600 with no access list, read only if it's a private regular
+  file of the user's with no access list letting anyone else in, from a folder that passes the same check, and written
+  by an `O_EXCL` temp file stripped of any inherited access list and flushed to disk (`F_FULLFSYNC`, `fsync` where
+  that isn't supported), then a rename and a flush of the folder, so a grant reported saved survives a power loss), are listed in Settings › Advanced › Command line and automation ›
+  Programs you let in, and removing one there closes its open connections; a 30-minute one also closes them when it
+  runs out, at the approval's own end time on the wall clock (sleep included), and after that end no line it sends is
+  run and no new event is sent to it (only a frame already being written to it may finish). One doorbell shows at a time. Connections share one only when they come
+  from the same process (pid and pid version from the audit token) with the same identity; another process gets its
+  own, and choosing Allow for 30 Minutes or Always Allow then lets in every waiting process with the same key. An
+  answer counts only while the ask is live: a click after its deadline, or after the process has gone (its audit token
+  no longer resolves, or its socket hung up even with a request still buffered), lets nothing in and saves nothing,
+  and nothing is saved when there's no room for a new connection. A waiting connection is
+  refused (a `{"id": null, "error": {"code": "refused", …}}` line, then close) when you choose Don't Allow, after 60 s,
+  when nobody can see the question (no window on screen, or a background instance), or when control goes off; it's
+  dropped without a word if the program leaves. After Don't Allow or a timeout the same program is refused without
+  asking for 30 s, and its other pending asks end with it. A grant checks every other waiting ask it lets in the same
+  way as the one answered. At most 8 connections wait and 8 identity look-ups run at once (counted until each look-up returns,
+  across stop and start); one that takes over 10 s is refused. When the JS bridge changes (a reload), its open asks
+  end and Ardia takes their sheets away natively.
+  What it doesn't stop: a process of the user's can still run the bundled `ardia` (or its signed runtime) itself and
+  get in as it does, can still read `ArdiaControl.json` for the token connection until the engine stops writing the token there (the
+  socket's `control.devtoolsEndpoint` hands it only to programs let in, and the command will move to it;
+  `docs/control-socket.md` › The DevTools token), and can write its
+  own entry into `ArdiaControlApprovals.json` (the file is the user's, and its entries carry no signature). The doorbell is
+  so a program never drives Ardia without the user seeing its name, not a wall against malware running as the user.
+- **Test instances keep the old rule.** A test instance (a build not signed for distribution with a scratch
+  `ARDIA_DATA_DIR`, `docs/agent-brief.md` › Launch variables) admits every process of the user, as before, so agents'
+  and tests' clients keep working against hidden instances. `ARDIA_TEST controlDoorbell` gives one the doorbell to
+  test it; with `appDialog` too, the doorbell is written to `dialog.json` and answered from `dialog.json.pick` (a
+  choice's title or its index). Release builds have no such switch.
 - A path longer than `sun_path` allows (103 bytes plus the terminator) is refused with a logged line and an error
   status; the CLI says so instead of hanging.
 - **Turning it off.** Turning `cliControl` off, or quitting, closes every connection, drops what is queued and removes

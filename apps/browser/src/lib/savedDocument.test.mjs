@@ -49,3 +49,19 @@ test("a write puts the version last, so the payload can't override it", () => {
   assert.equal(versionedJson({ version: 7, a: 1 }, 2), '{"version":2,"a":1}');
   assert.equal(versionedJson({ version: "0.3.1" }, 1, "schemaVersion"), '{"version":"0.3.1","schemaVersion":1}');
 });
+
+test("readSaved tells an empty, broken, unknown-shaped or newer document apart, and says which version a good one came from", async () => {
+  const { readSaved } = await import("./savedDocument.ts");
+  const migrations = { 0: (doc) => doc, 1: (doc) => ({ ...doc, moved: true }) };
+  assert.deepEqual(readSaved("", 2, migrations), { problem: "empty" });
+  assert.deepEqual(readSaved(" \n\t", 2, migrations), { problem: "empty" });
+  assert.deepEqual(readSaved('{"version":2,"a":', 2, migrations), { problem: "invalid" });
+  assert.deepEqual(readSaved("[]", 2, migrations), { problem: "shape" });
+  assert.deepEqual(readSaved('{"version":-1}', 2, migrations), { problem: "shape" });
+  assert.deepEqual(readSaved('{"version":"2"}', 2, migrations), { problem: "shape" });
+  assert.deepEqual(readSaved('{"version":3}', 2, migrations), { problem: "newer" });
+  assert.deepEqual(readSaved('{"version":1}', 2, {}), { problem: "shape" });
+  assert.deepEqual(readSaved('{"version":1,"a":1}', 2, migrations), { doc: { version: 2, a: 1, moved: true }, from: 1 });
+  assert.deepEqual(readSaved('{"a":1}', 2, migrations), { doc: { version: 2, a: 1, moved: true }, from: 0 });
+  assert.deepEqual(readSaved('{"version":1}', 2, { 1: () => { throw new Error("bad step"); } }), { problem: "shape" });
+});

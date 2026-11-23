@@ -8,7 +8,7 @@ const round = (ms: number) => Math.round(ms * 100) / 100;
 const p95 = (values: number[]) => (values.length ? round(percentile([...values].sort((a, b) => a - b), 0.95)) : null);
 const max = (values: number[]) => (values.length ? round(Math.max(...values)) : null);
 
-export function localStoreProperties(reading: LocalStoreReading, posts: ReturnType<typeof takePostStats>, queueBytes: number) {
+function localStoreProperties(reading: LocalStoreReading, posts: ReturnType<typeof takePostStats>, queueBytes: number) {
   return {
     write_ms_p95: p95(reading.writeMs),
     write_ms_max: max(reading.writeMs),

@@ -1,11 +1,11 @@
 import { readDocument } from "../../platform/documents";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 
-export const FREEZE_RECORDS_DOC = "freezes.txt";
+const FREEZE_RECORDS_DOC = "freezes.txt";
 const SLOT_BYTES = 4096;
 
-export type LocalFreezeFrame = { image: string; offset: string };
-export type LocalFreeze = {
+type LocalFreezeFrame = { image: string; offset: string };
+type LocalFreeze = {
   seq: number;
   thread: string;
   recovered: boolean;

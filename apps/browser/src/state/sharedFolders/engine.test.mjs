@@ -32,6 +32,7 @@ globalThis.acTestNativeModules = {
   ArdiaApp: { ...shellNativeModules.ArdiaApp, share: async (url) => void (shares.push(url), events.push("share")) },
   ArdiaDocuments: {
     readDocument: (name) => pending.get(name) ?? landed.get(name) ?? null,
+    documentExists: (name) => pending.has(name) || landed.has(name),
     writeDocument: (name, contents) => {
       if (unstageable.has(name)) throw new Error(`can't stage ${name}`);
       pending.set(name, contents);

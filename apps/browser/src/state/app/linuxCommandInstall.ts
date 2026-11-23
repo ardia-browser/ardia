@@ -29,7 +29,7 @@ type Saved = {
   autoInstallTries?: number;
 };
 
-export type CommandInstallState = {
+type CommandInstallState = {
   installing: CliInstallReason | null;
   step: string | null;
   installedVersion: string | null;
@@ -124,7 +124,7 @@ async function installForTheFirstTime() {
   if (result.ok) finishAutoInstall();
 }
 
-export function installOrUpgradeCommand() {
+function installOrUpgradeCommand() {
   const installed = installedCommandVersion();
   useCommandInstall.setState({ installedVersion: installed });
   const record = readSaved();

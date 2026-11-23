@@ -2,7 +2,7 @@ import { folder, ImportFailure, link, linkCount, type BookmarkNode, type Credent
 
 const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
 
-export function decodeEntities(text: string): string {
+function decodeEntities(text: string): string {
   if (!text.includes("&")) return text;
   return text.replace(/&(#[xX][0-9a-fA-F]{1,8}|#\d{1,9}|[a-zA-Z]{2,8});/g, (whole, name: string) => {
     if (name.startsWith("#")) {
@@ -45,7 +45,7 @@ const seconds = (value: string | undefined) => {
   return Number.isFinite(n) && n > 0 ? n * 1000 : undefined;
 };
 
-export function parseNetscape(html: string): BookmarkNode {
+function parseNetscape(html: string): BookmarkNode {
   const stack: BookmarkNode[] = [folder("Bookmarks", [])];
   const top = () => stack[stack.length - 1]!;
   let pending: BookmarkNode | undefined;
@@ -100,7 +100,7 @@ export function bookmarksFromHtml(html: string, name: string): BookmarkNode {
   return root;
 }
 
-export function parseCsv(text: string): string[][] {
+function parseCsv(text: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let field = "";

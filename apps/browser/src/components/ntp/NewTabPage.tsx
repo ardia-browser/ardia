@@ -12,6 +12,7 @@ import { Omnibox } from "../omnibox/Omnibox";
 import { NTP_BAR } from "./tokens";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { markNewTabBar } from "../../state/omnibox/newTabMarks";
+import { useHeroBarFocusWhenShownAgain } from "../../state/tabs/newTabKeep";
 
 const BAR_HEIGHT = 112;
 const MARKS = {
@@ -49,12 +50,13 @@ export function barWidth(viewWidth: number) {
   return Math.min(content, viewWidth - 28);
 }
 
-export function NewTabPage({ tabId, toolbar = true }: { tabId: string; toolbar?: boolean }) {
+export function NewTabPage({ tabId, toolbar = true, kept = false }: { tabId: string; toolbar?: boolean; kept?: boolean }) {
   const theme = useTheme();
   const windowId = useWindowId();
   const incognito = useWindow(windowId, (w) => w?.kind === "private");
   const onboarding = useOnboarding((s) => s.windowId === windowId);
   const card = useCardAnchors((s) => s[windowId]);
+  useHeroBarFocusWhenShownAgain(windowId, tabId, kept);
   const [size, setSizeState] = useState<Size | null>(() => (lastSize && (!card || sameSize(lastSize.card, card)) ? lastSize.size : null));
   const setSize = (next: Size) => setSizeState((prev) => (prev && sameSize(prev, next) ? prev : next));
   useEffect(() => {

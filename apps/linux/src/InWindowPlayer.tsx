@@ -3,13 +3,13 @@ import { useCardAnchors } from "../../browser/src/state/windows/layout";
 import { ardiaHost } from "./host.ts";
 import { inputRegions, pageHoles, useInputRegion } from "./shellAbove";
 import { createPlayerHoles, cutClip, hitRects, nextFrameRunner } from "./playerHoles.ts";
+import { intersection } from "./inputRegions.ts";
 import {
   aspectOf,
   clampInto,
   flingTarget,
   frameOf,
   handleAt,
-  intersect,
   outside,
   placeFrame,
   PLAYER_RADIUS,
@@ -46,7 +46,7 @@ function useViewportSync(player: number | null, rect: Rect | null) {
   const [hole, setHole] = useState<Rect | null>(null);
   const publish = () => {
     const { acked, pending } = sync.current;
-    setHole(acked && pending ? intersect(acked, pending) : acked);
+    setHole(acked && pending ? intersection(acked, pending) : acked);
   };
   const push = (id: number, next: Rect) => {
     const current = sync.current;
@@ -102,7 +102,7 @@ function usePlayerHoles(root: HTMLElement | null, hole: Rect | null) {
       const cuts = overlays
         .flatMap((overlay) => hitRects(overlay, (element) => getComputedStyle(element).pointerEvents !== "none", rectOf))
         .flatMap((rect) => {
-          const cut = intersect(rect, { x: box.x, y: box.y, width: box.width, height: box.height });
+          const cut = intersection(rect, { x: box.x, y: box.y, width: box.width, height: box.height });
           return cut ? [{ x: cut.x - box.x, y: cut.y - box.y, width: cut.width, height: cut.height }] : [];
         });
       const clip = cutClip(cuts);

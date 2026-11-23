@@ -9,20 +9,26 @@ const native = import.meta.resolve("../../platform/favicons.ts");
 const stub = `export * from ${JSON.stringify(native)};
 export const faviconsFor = (profile, pages) => globalThis.faviconsForTest(profile, pages);
 export const storeFavicon = (...args) => (globalThis.storedFavicons.push(args), Promise.resolve({ stored: true }));
+export const iconAccent = (uri) => (globalThis.iconAccentForTest ? globalThis.iconAccentForTest(uri) : Promise.resolve(null));
+export const iconTheme = (request) => (globalThis.iconThemeForTest ? globalThis.iconThemeForTest(request) : Promise.resolve(null));
 export const fetchFavicon = (src, profile) => (globalThis.fetchFaviconForTest ? globalThis.fetchFaviconForTest(src, profile) : Promise.resolve(null));`;
 registerHooks({
   resolve(specifier, context, next) {
-    if (specifier === "../../platform/favicons" && context.parentURL?.endsWith("/state/favicons/favicons.ts"))
+    if (specifier === "../../platform/favicons" && /\/state\/favicons\/(favicons|faviconAccent)\.ts$/.test(context.parentURL ?? ""))
       return { url: `data:text/javascript,${encodeURIComponent(stub)}`, shortCircuit: true };
     return next(specifier, context);
   },
 });
-const { adoptFavicons, faviconOutlived, noteFavicon, pruneEngineFavicons, resolveFavicon, startFavicons, useFavicons } = await import("./favicons.ts");
+const { adoptFavicons, askFaviconTheme, faviconFailed, faviconOutlived, noteFavicon, pruneEngineFavicons, resolveFavicon, startFavicons, useFavicons } = await import("./favicons.ts");
 const { useFavicon } = await import("./faviconHooks.ts");
 const { seedFavicons } = await import("./launchFavicons.ts");
 const { adoptIconPage, dropOutlivedFavicon, noteIconPage } = await import("./iconPage.ts");
 const { useBrowser } = await import("../browser/store.ts");
 const { engineProfile } = await import("../browser/model.ts");
+const { webviews } = await import("../../platform/webviews.ts");
+const { askFaviconAccent, useFaviconAccent, useFaviconAccents } = await import("./faviconAccent.ts");
+const { markAsked } = await import("./askedFavicons.ts");
+const { unheldIn } = await import("./privateLookups.ts");
 
 const waitFor = async (check) => {
   for (let i = 0; i < 200 && !check(); i++) await new Promise((resolve) => setTimeout(resolve, 5));
@@ -309,4 +315,247 @@ test("an icon the page reported during a lookup still wins after the cache start
   } finally {
     delete globalThis.faviconsForTest;
   }
+});
+
+const privateWindow = (url) => {
+  const s = useBrowser.getState();
+  const id = s.createWindow({ kind: "private", url });
+  return { id, profile: useBrowser.getState().windows[id].profileId, tab: useBrowser.getState().windows[id].tabIds[0] };
+};
+
+test("an icon a private tab reports after its window closed doesn't bring the page back into memory", async () => {
+  useBrowser.getState().hydrate({});
+  const stop = startFavicons();
+  const w = privateWindow("https://late-icon.test/");
+  let answer;
+  webviews.set(w.tab, { downloadFavicon: () => new Promise((resolve) => (answer = resolve)) });
+  try {
+    noteFavicon(w.tab, "https://late-icon.test/favicon.ico");
+    useBrowser.getState().closeWindow(w.id);
+    await waitFor(() => !!answer);
+    answer({ uri: "data:image/png;base64,LATE", width: 32, height: 32 });
+    await settle();
+    assert.equal(useFavicons.getState().profiles[w.profile], undefined);
+  } finally {
+    webviews.clear();
+    stop();
+  }
+});
+
+test("a private tab's icon leaves the theme and accent caches with its window, late answers included", async () => {
+  useBrowser.getState().hydrate({});
+  const stop = startFavicons();
+  const shown = "data:image/png;base64,PRIVATESHOWN";
+  const pending = "data:image/png;base64,PRIVATEPENDING";
+  const w = privateWindow("https://private-theme.test/");
+  webviews.set(w.tab, { downloadFavicon: (src) => Promise.resolve({ uri: src.endsWith("a.ico") ? shown : pending, width: 32, height: 32 }) });
+  const held = [];
+  globalThis.iconThemeForTest = ({ uri }) => (uri === pending ? new Promise((resolve) => held.push(() => resolve({ kind: "template" }))) : Promise.resolve({ kind: "full" }));
+  try {
+    noteFavicon(w.tab, "https://private-theme.test/a.ico");
+    await waitFor(() => resolveFavicon("https://private-theme.test/", null, w.profile)?.uri === shown);
+    noteFavicon(w.tab, "https://private-theme.test/b.ico");
+    await waitFor(() => Object.values(useFavicons.getState().profiles[w.profile]?.srcs ?? {}).includes(pending));
+    askFaviconTheme(shown);
+    askFaviconTheme(pending);
+    await waitFor(() => useFavicons.getState().themes[shown] !== undefined && held.length === 1);
+    useFaviconAccents.setState({ byUri: { [shown]: "#123456" } });
+    useBrowser.getState().closeWindow(w.id);
+    await waitFor(() => useFavicons.getState().profiles[w.profile] === undefined);
+    held[0]();
+    await settle();
+    assert.equal(useFavicons.getState().themes[shown], undefined);
+    assert.equal(useFavicons.getState().themes[pending], undefined, "a theme that answered after the close isn't kept");
+    assert.equal(useFaviconAccents.getState().byUri[shown], undefined);
+  } finally {
+    delete globalThis.iconThemeForTest;
+    webviews.clear();
+    stop();
+  }
+});
+
+test("a private icon that already left the cache still takes its theme and accent with it at close", async () => {
+  useBrowser.getState().hydrate({});
+  const stop = startFavicons();
+  const uri = "data:image/png;base64,PRIVATEEVICTED";
+  const w = privateWindow("https://evicted-theme.test/");
+  webviews.set(w.tab, { downloadFavicon: () => Promise.resolve({ uri, width: 32, height: 32 }) });
+  globalThis.iconThemeForTest = () => Promise.resolve({ kind: "full" });
+  try {
+    noteFavicon(w.tab, "https://evicted-theme.test/a.ico");
+    await waitFor(() => resolveFavicon("https://evicted-theme.test/", null, w.profile)?.uri === uri);
+    askFaviconTheme(uri);
+    await waitFor(() => useFavicons.getState().themes[uri] !== undefined);
+    useFaviconAccents.setState({ byUri: { [uri]: "#654321" } });
+    faviconFailed(w.profile, uri);
+    await waitFor(() => !Object.values(useFavicons.getState().profiles[w.profile]?.srcs ?? {}).includes(uri));
+    useBrowser.getState().closeWindow(w.id);
+    await waitFor(() => useFavicons.getState().profiles[w.profile] === undefined);
+    assert.equal(useFavicons.getState().themes[uri], undefined);
+    assert.equal(useFaviconAccents.getState().byUri[uri], undefined);
+  } finally {
+    delete globalThis.iconThemeForTest;
+    webviews.clear();
+    stop();
+  }
+});
+
+test("closing a private window cancels no other window's theme or accent request, and keeps no late private answer", async () => {
+  useBrowser.getState().hydrate({});
+  const stop = startFavicons();
+  const shared = "data:image/png;base64,SHAREDICON";
+  const only = "data:image/png;base64,PRIVATEONLY";
+  const s = () => useBrowser.getState();
+  const normalWindow = s().createWindow({ url: "https://shared-icon.test/" });
+  const normalTab = s().windows[normalWindow].tabIds[0];
+  const w = privateWindow("https://shared-icon.test/");
+  const [, privateTab] = [w.tab, s().newTab(w.id, { url: "https://private-only-icon.test/" })];
+  const icons = { [normalTab]: shared, [w.tab]: shared, [privateTab]: only };
+  for (const [tab, uri] of Object.entries(icons)) webviews.set(tab, { downloadFavicon: () => Promise.resolve({ uri, width: 32, height: 32 }) });
+  const themes = new Map();
+  const accents = new Map();
+  globalThis.iconThemeForTest = ({ uri }) => new Promise((resolve) => themes.set(uri, resolve));
+  globalThis.iconAccentForTest = (uri) => new Promise((resolve) => accents.set(uri, resolve));
+  globalThis.faviconsForTest = () => empty();
+  try {
+    noteFavicon(normalTab, "https://shared-icon.test/a.ico");
+    noteFavicon(w.tab, "https://shared-icon.test/a.ico");
+    noteFavicon(privateTab, "https://private-only-icon.test/b.ico");
+    await waitFor(() => resolveFavicon("https://private-only-icon.test/", null, w.profile)?.uri === only && resolveFavicon("https://shared-icon.test/", null, "default")?.uri === shared);
+    askFaviconTheme(shared);
+    askFaviconTheme(only);
+    const rows = [mount(() => useFaviconAccent("https://shared-icon.test/", "default")), mount(() => useFaviconAccent("https://private-only-icon.test/", w.profile))];
+    await waitFor(() => themes.size === 2 && accents.size === 2);
+    for (const row of rows) row.unmount();
+    s().closeWindow(w.id);
+    await waitFor(() => useFavicons.getState().profiles[w.profile] === undefined);
+    for (const resolve of themes.values()) resolve({ kind: "full" });
+    for (const resolve of accents.values()) resolve("#112233");
+    await settle();
+    assert.deepEqual(useFavicons.getState().themes[shared], { kind: "full" }, "the regular window's theme request survived the close");
+    assert.equal(useFaviconAccents.getState().byUri[shared], "#112233", "and its accent request");
+    assert.equal(useFavicons.getState().themes[only], undefined);
+    assert.equal(useFaviconAccents.getState().byUri[only], undefined);
+  } finally {
+    delete globalThis.iconThemeForTest;
+    delete globalThis.iconAccentForTest;
+    delete globalThis.faviconsForTest;
+    webviews.clear();
+    stop();
+  }
+});
+
+test("a private window's close leaves a pending theme request alone, so a stale answer can't land over a newer one", async () => {
+  useBrowser.getState().hydrate({});
+  const stop = startFavicons();
+  const uri = "data:image/png;base64,STALETHEME";
+  const w = privateWindow("https://stale-theme.test/");
+  webviews.set(w.tab, { downloadFavicon: () => Promise.resolve({ uri, width: 32, height: 32 }) });
+  const replies = [];
+  globalThis.iconThemeForTest = () => new Promise((resolve) => replies.push(resolve));
+  try {
+    noteFavicon(w.tab, "https://stale-theme.test/a.ico");
+    await waitFor(() => resolveFavicon("https://stale-theme.test/", null, w.profile)?.uri === uri);
+    askFaviconTheme(uri);
+    await waitFor(() => replies.length === 1);
+    useBrowser.getState().closeWindow(w.id);
+    await waitFor(() => useFavicons.getState().profiles[w.profile] === undefined);
+    askFaviconTheme(uri);
+    await settle();
+    replies[0](null);
+    await settle();
+    assert.equal(useFavicons.getState().themes[uri], undefined, "the answer from before the close isn't stored");
+    for (const reply of replies.slice(1)) reply({ kind: "full" });
+    await settle();
+    assert.equal(useFavicons.getState().themes[uri], undefined, "nothing holds the private icon any more");
+  } finally {
+    delete globalThis.iconThemeForTest;
+    webviews.clear();
+    stop();
+  }
+});
+
+test("a theme or accent asked for after its private window closed is never requested or kept", async () => {
+  useBrowser.getState().hydrate({});
+  const stop = startFavicons();
+  const uri = "data:image/png;base64,ASKEDTOOLATE";
+  const w = privateWindow("https://asked-too-late.test/");
+  webviews.set(w.tab, { downloadFavicon: () => Promise.resolve({ uri, width: 32, height: 32 }) });
+  const requested = [];
+  globalThis.iconThemeForTest = ({ uri: asked }) => (requested.push(asked), Promise.resolve({ kind: "full" }));
+  globalThis.iconAccentForTest = (asked) => (requested.push(asked), Promise.resolve("#abcdef"));
+  try {
+    noteFavicon(w.tab, "https://asked-too-late.test/a.ico");
+    await waitFor(() => resolveFavicon("https://asked-too-late.test/", null, w.profile)?.uri === uri);
+    useBrowser.getState().closeWindow(w.id);
+    await waitFor(() => useFavicons.getState().profiles[w.profile] === undefined);
+    askFaviconTheme(uri);
+    askFaviconAccent(uri);
+    await settle();
+    assert.deepEqual(requested, []);
+    assert.equal(useFavicons.getState().themes[uri], undefined);
+    assert.equal(useFaviconAccents.getState().byUri[uri], undefined);
+  } finally {
+    delete globalThis.iconThemeForTest;
+    delete globalThis.iconAccentForTest;
+    webviews.clear();
+    stop();
+  }
+});
+
+test("a private icon's pending theme and accent requests go at close, so a regular window that gets the same icon asks afresh", async () => {
+  useBrowser.getState().hydrate({});
+  const stop = startFavicons();
+  const uri = "data:image/png;base64,HANDEDOVER";
+  const s = () => useBrowser.getState();
+  const w = privateWindow("https://handed-over.test/");
+  const normalWindow = s().createWindow({ url: "https://handed-over.test/" });
+  const normalTab = s().windows[normalWindow].tabIds[0];
+  for (const tab of [w.tab, normalTab]) webviews.set(tab, { downloadFavicon: () => Promise.resolve({ uri, width: 32, height: 32 }) });
+  const themes = [];
+  const accents = [];
+  globalThis.iconThemeForTest = () => new Promise((resolve) => themes.push(resolve));
+  globalThis.iconAccentForTest = () => new Promise((resolve) => accents.push(resolve));
+  try {
+    noteFavicon(w.tab, "https://handed-over.test/a.ico");
+    await waitFor(() => resolveFavicon("https://handed-over.test/", null, w.profile)?.uri === uri);
+    askFaviconTheme(uri);
+    askFaviconAccent(uri);
+    await waitFor(() => themes.length === 1 && accents.length === 1);
+    s().closeWindow(w.id);
+    await waitFor(() => useFavicons.getState().profiles[w.profile] === undefined);
+    noteFavicon(normalTab, "https://handed-over.test/a.ico");
+    await waitFor(() => resolveFavicon("https://handed-over.test/", null, "default")?.uri === uri);
+    askFaviconTheme(uri);
+    askFaviconAccent(uri);
+    await waitFor(() => themes.length === 2 && accents.length === 2);
+    themes[0](null);
+    accents[0](null);
+    await settle();
+    assert.equal(useFavicons.getState().themes[uri], undefined, "the private request's answer isn't kept");
+    assert.equal(useFaviconAccents.getState().byUri[uri], undefined);
+    themes[1]({ kind: "full" });
+    accents[1]("#0a0b0c");
+    await settle();
+    assert.deepEqual(useFavicons.getState().themes[uri], { kind: "full" });
+    assert.equal(useFaviconAccents.getState().byUri[uri], "#0a0b0c");
+  } finally {
+    delete globalThis.iconThemeForTest;
+    delete globalThis.iconAccentForTest;
+    webviews.clear();
+    stop();
+  }
+});
+
+test("checking whether an icon is still held reuses one set until the icon caches change", () => {
+  const pages = Object.fromEntries(Array.from({ length: 3000 }, (_, i) => [`https://held-${i}.test/`, `data:image/png;base64,HELD${i}`]));
+  const profiles = Object.fromEntries(["a", "b", "c", "d"].map((id) => [id, { pages, srcs: {}, appearances: {} }]));
+  const first = unheldIn(profiles);
+  assert.equal(unheldIn(profiles), first, "the same cache state gives the same set");
+  const started = performance.now();
+  for (let i = 0; i < 300; i++) unheldIn(profiles)(`data:image/png;base64,HELD${i}`);
+  assert.ok(performance.now() - started < 50, "300 checks against 12,000 cached icons stay cheap");
+  assert.equal(first("data:image/png;base64,HELD7"), false);
+  assert.equal(first("data:image/png;base64,ELSEWHERE"), true);
+  assert.notEqual(unheldIn({ ...profiles }), first, "a new cache state is read again");
 });

@@ -342,7 +342,7 @@ test("a pull request hidden until refresh stays hidden when its repo is hidden a
 });
 
 const repoMenu = (id) => {
-  const submenu = liveFolderMenuItems("no-window", id).find((it) => it.id === "repos");
+  const submenu = liveFolderMenuItems(id).find((it) => it.id === "filters").children.find((it) => it.id === "repos");
   return {
     enabled: submenu.enabled,
     rows: submenu.children.map((it) => (it.separator ? "---" : `${it.checked === false ? "[ ]" : it.checked ? "[x]" : ""}${it.title}${it.enabled === false ? " (off)" : ""}`)),
@@ -441,9 +441,9 @@ test("a hidden repo's pull requests come back read when it's shown, even after t
   assert.deepEqual(live().unread[id], [], "c was in the folder before its repo was hidden, so it isn't new");
 });
 
-test("a live folder's menu has a group's Color submenu, without Match Site Color, checked at the folder's colour", () => {
+test("a live folder's Customize menu has a group's Color submenu, without Match Site Color, checked at the folder's colour", () => {
   const id = createFolder("p", "pullRequests", []);
-  const colors = () => liveFolderMenuItems("w", id).find((item) => item.id === "color")?.children ?? [];
+  const colors = () => liveFolderMenuItems(id).find((item) => item.id === "customize")?.children.find((item) => item.id === "color")?.children ?? [];
   const ids = colors().filter((item) => item.id).map((item) => item.id);
   assert.deepEqual(ids.slice(0, 2), ["color:none", "color:neutral"]);
   assert.equal(ids.length, 11, "None, Neutral and the nine colours");
@@ -463,7 +463,7 @@ test("picking a colour from a live folder's menu saves it, Neutral clears it, No
   const real = shell.showMenu;
   takeLiveHideCounts();
   const pick = async (title) => {
-    shell.showMenu = (shown) => Promise.resolve(shown.find((it) => it.id === "color").children.find((it) => it.title === title).id);
+    shell.showMenu = (shown) => Promise.resolve(shown.find((it) => it.id === "customize").children.find((it) => it.id === "color").children.find((it) => it.title === title).id);
     try {
       await openLiveFolderMenu("w", id);
     } finally {
@@ -476,4 +476,33 @@ test("picking a colour from a live folder's menu saves it, Neutral clears it, No
   assert.equal(await pick("None"), "none");
   assert.equal(takeLiveHideCounts().live_folder_color_picks, 3);
   removeFolder(id);
+});
+
+test("a live folder's menu: refresh and read, then Filters, Sources and Customize, and Delete alone; no status line or Move Up and Down", () => {
+  const id = createFolder("p", "pullRequests", ["github"]);
+  const rows = (items) => items.map((it) => (it.separator ? "---" : `${it.title}${it.symbol ? ` [${it.symbol}]` : ""}${it.children ? " ›" : ""}`));
+  const items = liveFolderMenuItems(id);
+  assert.deepEqual(rows(items), [
+    "Refresh [arrow.clockwise]",
+    "Mark All as Read [checkmark]",
+    "---",
+    "Filters [line.3.horizontal.decrease.circle] ›",
+    "Sources [arrow.triangle.pull] ›",
+    "Customize [slider.horizontal.3] ›",
+    "---",
+    "Delete Live Folder [trash]",
+  ]);
+  assert.deepEqual(rows(items.find((it) => it.id === "filters").children), [
+    "Created by Me",
+    "Awaiting My Review",
+    "Repositories ›",
+    "---",
+    "Group Stacked Pull Requests",
+    "Show Completed",
+  ]);
+  assert.equal(rows(items.find((it) => it.id === "sources").children).at(-1), "Live Folder Settings… [gearshape]");
+  const docs = createFolder("d", "documents", []);
+  assert.ok(!liveFolderMenuItems(docs).some((it) => it.id === "filters"), "documents have no pull request filters");
+  removeFolder(id);
+  removeFolder(docs);
 });

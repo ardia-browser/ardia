@@ -1,7 +1,7 @@
 export type IcsProperty = { name: string; params: Record<string, string>; value: string };
 export type IcsComponent = { name: string; properties: IcsProperty[]; components: IcsComponent[] };
-export type Wall = { year: number; month: number; day: number; hour: number; minute: number; second: number };
-export type IcsTime = { wall: Wall; kind: "date" | "utc" | "floating" | "zoned"; tzid?: string };
+type Wall = { year: number; month: number; day: number; hour: number; minute: number; second: number };
+type IcsTime = { wall: Wall; kind: "date" | "utc" | "floating" | "zoned"; tzid?: string };
 
 const DAY_MS = 86_400_000;
 const ZONE_SLACK_MS = 15 * 3_600_000;
@@ -91,7 +91,7 @@ export function parseTime(value: string, params: Record<string, string> = {}): I
   return { wall, kind: "floating" };
 }
 
-export function parseDuration(value: string): { days: number; ms: number } | null {
+function parseDuration(value: string): { days: number; ms: number } | null {
   const match = /^([+-])?P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/.exec(value.trim());
   if (!match || value.trim() === "P" || value.trim().endsWith("T")) return null;
   const sign = match[1] === "-" ? -1 : 1;
@@ -122,19 +122,19 @@ const leap = (year: number) => (year % 4 === 0 && year % 100 !== 0) || year % 40
 const dayNumber = (year: number, month: number, day: number) => utcMs(year, month - 1, day) / DAY_MS;
 const weekday = (dn: number) => (new Date(dn * DAY_MS).getUTCDay() + 6) % 7;
 
-export function wallFromMs(ms: number): Wall {
+function wallFromMs(ms: number): Wall {
   const d = new Date(ms);
   return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate(), hour: d.getUTCHours(), minute: d.getUTCMinutes(), second: d.getUTCSeconds() };
 }
 
-export const addDays = (w: Wall, days: number): Wall => wallFromMs(wallMs(w) + days * DAY_MS);
+const addDays = (w: Wall, days: number): Wall => wallFromMs(wallMs(w) + days * DAY_MS);
 const compareWalls = (a: Wall, b: Wall) => wallMs(a) - wallMs(b);
 const dateKey = (w: Wall) => `${w.year}-${w.month}-${w.day}`;
 
 export type Zone = { toUtc(wall: Wall): number };
 
-export const UTC_ZONE: Zone = { toUtc: wallMs };
-export const LOCAL_ZONE: Zone = { toUtc: (w) => localMs(w.year, w.month - 1, w.day, w.hour, w.minute, w.second) };
+const UTC_ZONE: Zone = { toUtc: wallMs };
+const LOCAL_ZONE: Zone = { toUtc: (w) => localMs(w.year, w.month - 1, w.day, w.hour, w.minute, w.second) };
 
 const formatters = new Map<string, Intl.DateTimeFormat | null>();
 
@@ -238,7 +238,7 @@ export function vtimezoneZone(component: IcsComponent): Zone | null {
   });
 }
 
-export type Rule = {
+type Rule = {
   freq: "SECONDLY" | "MINUTELY" | "HOURLY" | "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY";
   interval: number;
   count?: number;
@@ -410,7 +410,7 @@ function periodsBefore(rule: Rule, start: Wall, from: number): number {
 
 const simpleRule = (rule: Rule) => !!FIXED_STEP[rule.freq] && !rule.byMonth && !rule.byWeekNo && !rule.byYearDay && !rule.byMonthDay && !rule.byDay && !rule.byHour && !rule.byMinute && !rule.bySecond && !rule.bySetPos;
 
-export type ExpandOptions = { from?: number; deadline?: number; onTruncate?: () => void };
+type ExpandOptions = { from?: number; deadline?: number; onTruncate?: () => void };
 
 export function expandRule(start: Wall, allDay: boolean, input: Rule, beyond: (wall: Wall) => boolean, passedUntil: (wall: Wall) => boolean, keep: (wall: Wall) => boolean = () => true, options: ExpandOptions = {}): Wall[] {
   const rule = withDefaults(input, start);
@@ -449,9 +449,9 @@ export function expandRule(start: Wall, allDay: boolean, input: Rule, beyond: (w
   return instances;
 }
 
-export type ZoneLookup = (tzid: string) => Zone | null;
+type ZoneLookup = (tzid: string) => Zone | null;
 
-export function zoneFor(time: IcsTime, lookup: ZoneLookup): Zone {
+function zoneFor(time: IcsTime, lookup: ZoneLookup): Zone {
   if (time.kind === "utc") return UTC_ZONE;
   if (time.kind === "zoned" && time.tzid) return lookup(time.tzid) ?? LOCAL_ZONE;
   return LOCAL_ZONE;
@@ -497,7 +497,7 @@ export function events(components: IcsComponent[]): IcsComponent[] {
   return found;
 }
 
-export type Occurrence = { event: IcsComponent; start: number; end: number; allDay: boolean };
+type Occurrence = { event: IcsComponent; start: number; end: number; allDay: boolean };
 
 type Timing = { start: IcsTime; zone: Zone; allDay: boolean; days: number; ms: number };
 

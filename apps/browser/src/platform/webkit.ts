@@ -1,3 +1,4 @@
+import type { CleanedUrl } from "@ardia/core";
 import {
   call,
   on,
@@ -6,7 +7,6 @@ import {
   type PageCookie,
   type CookieRemoval,
   type SiteData,
-  type SiteDataWritten,
   type StorageChange,
   type PasskeyAccess,
   type PasskeyAccessStatus,
@@ -14,14 +14,11 @@ import {
 } from "@ardia/ardiacore";
 
 export { NO_PASSKEY_ACCESS };
-export type { ChromiumCookieWrite, ChromiumSiteDataReply, ChromiumSiteDataRequest, SiteStorage, StorageItems } from "@ardia/ardiacore";
-export type { CookieRemoval, SiteData, SiteDataWritten, StorageChange };
-export type { PasskeyAccess, PasskeyAccessStatus, PageCookie, WebKitCount };
+export type { ChromiumCookieWrite, SiteStorage, StorageItems } from "@ardia/ardiacore";
+export type { CookieRemoval, SiteData, StorageChange };
+export type { PasskeyAccess, PasskeyAccessStatus, PageCookie };
 
 export const endWebKitPrivateSession = (session: string) => call("webKit.endPrivateSession", { session });
-export const webKitCookieStoreKey = (profile: string) => call("webKit.cookieStoreKey", { profile });
-export const importWebKitCookies = (profile: string, storeKey: string, cookies: PageCookie[]) =>
-  call("webKit.importCookies", { profile, storeKey, cookies });
 export const exportWebKitCookies = (profile: string, urls: string[], keys?: string[]) => call("webKit.exportCookies", { profile, urls, ...(keys ? { keys } : {}) });
 export const setWebKitFraudWarnings = (enabled: boolean) => call("webKit.setFraudWarnings", { enabled });
 export const watchWebKitSiteData = (enabled: boolean) => call("webKit.watchSiteData", { enabled });
@@ -33,6 +30,8 @@ export const onWebKitSiteDataWanted = (listener: (e: { id: string; profile: stri
 export const onWebKitSiteCookiesChanged = (listener: (e: { profile: string; domains: string[]; epoch?: string }) => void) => on("webKit.siteCookiesChanged", listener);
 export const setWebKitZoom = (profile: string, host: string, zoom: number) => call("webKit.setZoom", { profile, host, zoom });
 export const onWebKitCount = (listener: (e: { name: WebKitCount; epoch?: string }) => void) => on("webKit.counted", listener);
+export const onWebKitCopyAddress = (listener: (e: EngineEvents["webKit.copyAddress"]) => void) => on("webKit.copyAddress", listener);
+export const writeCopiedWebKitAddress = (request: number, url: CleanedUrl) => call("webKit.writeCopiedAddress", { request, url });
 export const webKitNotificationAction = (id: string, action: "click" | "close") => call("webKit.notificationAction", { id, action });
 export const onWebKitNotification = (listener: (e: EngineEvents["webKit.notification"]) => void) => on("webKit.notification", listener);
 export const onWebKitNotificationClose = (listener: (e: { id: string }) => void) => on("webKit.notificationClose", listener);

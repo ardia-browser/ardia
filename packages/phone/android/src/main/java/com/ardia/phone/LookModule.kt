@@ -1,5 +1,6 @@
 package com.ardia.phone
 
+import com.ardia.design.Frosting
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
@@ -20,15 +21,30 @@ class LookModule : Module() {
 
         Function("systemLook") { systemLook.check() }
 
-        Function("hasGlass") { GlassRules.nativeGlassAsked(LaunchExtras.arguments(LaunchExtras.of(appContext.currentActivity?.intent))) }
+        Function("hasGlass") {
+            readGlassLaunch()
+            true
+        }
+
+        Function("glassRender") {
+            readGlassLaunch()
+            val context = appContext.reactContext
+            val blurs = Frosting.isBlurSupported && context != null && !LookSwitch.isOff(context) && !LookBudget.isDegraded(context)
+            LiquidGlassRules.render(android.os.Build.VERSION.SDK_INT, classic = false, flat = GlassLaunch.flat || GlassShaders.lens.failed, blurs = blurs).raw
+        }
 
         OnCreate {
             val context = appContext.reactContext ?: return@OnCreate
+            readGlassLaunch()
             SystemMotion.note(systemLook.seed())
+            GlassShaders.onFailed = PendingCounts.glassShaderFailures(context.applicationContext)
             systemLookObserver = SystemLookObserver(context.applicationContext) { systemLook.check() }.also { it.start() }
         }
 
-        OnActivityEntersForeground { systemLook.check() }
+        OnActivityEntersForeground {
+            systemLook.check()
+            if (GlassShaders.retryFailed()) AttachedLookViews.all().forEach { it.postInvalidate() }
+        }
 
         OnDestroy { systemLookObserver?.stop() }
 
@@ -36,6 +52,7 @@ class LookModule : Module() {
             check(PhoneLab.isOn) { "the page frost mode is a lab switch" }
             FrostSources.pageMode = FrostSources.PageMode.entries.firstOrNull { it.raw == mode } ?: FrostSources.PageMode.Live
             FrostSources.frosts().forEach { it.invalidate() }
+            FrostSources.allSources().forEach { it.invalidate() }
             FrostSources.pageMode.raw
         }
 
@@ -242,10 +259,18 @@ class LookModule : Module() {
             Prop("surface") { view: GlassView, value: String? -> view.surface = value }
             Prop("tinted") { view: GlassView, value: Boolean? -> view.tinted = value == true }
             Prop("barShadow") { view: GlassView, value: Boolean? -> view.barShadow = value == true }
+            Prop("classicChrome") { view: GlassView, value: Map<String, Any?>? -> view.classicFill = GlassRules.chromeFill(value) }
             Prop("shown") { view: GlassView, value: Boolean? -> view.shown = value ?: true }
             Prop("shownMs") { view: GlassView, value: Float? -> view.shownMs = (value ?: GlassRules.DEFAULT_SHOWN_MS).coerceAtLeast(0f) }
             OnViewDidUpdateProps { view -> view.update() }
         }
+    }
+
+    private fun readGlassLaunch() {
+        val activity = appContext.currentActivity ?: return
+        val arguments = LaunchExtras.arguments(LaunchExtras.of(activity.intent))
+        GlassLaunch.flat = LiquidGlassRules.flatAsked(arguments)
+        GlassLaunch.overPage = LiquidGlassRules.overPageAsked(arguments)
     }
 
     companion object {

@@ -6,7 +6,7 @@ import { finishAnimatedCloses } from "./closeAnimated";
 import { mainWindowFor } from "./small";
 import { focusWindow } from "../../platform/windows";
 
-export type LastWindowSource = "dock" | "launch";
+type LastWindowSource = "dock" | "launch";
 
 const tabCount = (n: number) => bucket(n, [[0, "0"], [1, "1"], [5, "2-5"], [20, "6-20"], [50, "21-50"]], "50+");
 

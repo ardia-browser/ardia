@@ -1,4 +1,4 @@
-import { Animated, View } from "react-native";
+import { Animated } from "react-native";
 import { CRUMB_X, FIELD, fill, type Rect, ROW, rowY, sideCard } from "../geometry";
 import { BLANK } from "../content";
 import { tracker } from "../timeline";

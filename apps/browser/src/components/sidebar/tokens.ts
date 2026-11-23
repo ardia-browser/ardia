@@ -1,6 +1,6 @@
 import { Easing } from "react-native";
 import { useTheme } from "../ui/theme";
-import { duration, spring } from "../ui/motion";
+import { duration } from "../ui/motion";
 import { font, ink, radius, shadow, sidebarFont, sidebarIconSize, sidebarPoints, space, withAlpha, type ShadowLevel } from "../ui/tokens";
 import type { GroupColor } from "../../state/browser/types";
 import type { Settings } from "../../state/settings/settings";
@@ -90,7 +90,6 @@ export function useSidebarTokens(): SidebarTokens {
   return sidebarTokens(useTheme());
 }
 
-
 export const SIDEBAR_SHADOW = {
   dragGhost: { color: ink.black, opacity: { dark: 0.45, light: 0.18 }, radius: 10, offset: [0, 4] },
   card: shadow.card,
@@ -159,7 +158,6 @@ export const SLEEPING_TITLE_OPACITY = 0.6;
 export const SPLIT_DROP = { gap: 14 } as const;
 
 export const SPLIT_PREVIEW = { response: 0.1, damping: 1 } as const;
-
 
 export const GHOST_TILE_MORPH = { response: 0.1, damping: 1 } as const;
 
@@ -363,7 +361,7 @@ export function groupSurface(color: GroupColor | null | undefined, tokens: Sideb
   return tint ? { fill: withAlpha(tint, 0.16), stroke: withAlpha(tint, 0.3) } : { fill: tokens.groupFill, stroke: tokens.groupStroke };
 }
 
-export { SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH } from "../../lib/windowLayout";
+export { SIDEBAR_MIN_WIDTH } from "../../lib/windowLayout";
 export const SIDEBAR_RESIZE_HANDLE = { top: 46, width: 8 } as const;
 export const SELECTED_ROW_PILL = {
   height: 28,

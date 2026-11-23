@@ -73,6 +73,18 @@ provideNativeModule("ArdiaDocuments", {
   writeDocument: (name: string, contents: string) => void documents.set(name, contents),
   saveDocument: async (name: string, contents: string) => void documents.set(name, contents),
   removeDocument: (name: string) => void documents.delete(name),
+  syncDocument: async (name: string) => {
+    if (!documents.has(name)) throw Object.assign(new Error("gone"), { code: "ERR_DOCUMENT_GONE" });
+  },
+  createDocument: async (name: string, contents: string) => {
+    if (documents.has(name)) throw Object.assign(new Error("exists"), { code: "ERR_DOCUMENT_EXISTS" });
+    documents.set(name, contents);
+  },
+  listDocuments: (prefix: string) => [...documents.keys()].filter((name) => name.startsWith(prefix)),
+  copyDocument: async (name: string, copyName: string) => {
+    const contents = documents.get(name);
+    if (contents !== undefined) documents.set(copyName, contents);
+  },
 });
 provideNativeModule("ArdiaShell", {
   fetchBangList: async (_etag: string | null) => ({ status: 304, etag: null, contentType: null, body: null, bytes: 0 }),

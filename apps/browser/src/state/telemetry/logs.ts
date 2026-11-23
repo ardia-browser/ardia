@@ -1,3 +1,4 @@
+import { isSecret, noteSecretEscape } from "@ardia/core";
 import { queueLog, type ConsentToken } from "./client";
 import { errorCode, errorMessage, errorType, scrubText } from "./sanitize";
 
@@ -7,6 +8,7 @@ const seen = new Set<string>();
 export { errorFor, logConsent, warnFor } from "./consoleConsent";
 
 export function recordLog(level: "warn" | "error", args: unknown[], consent: ConsentToken | null) {
+  for (const arg of args) if (isSecret(arg)) noteSecretEscape("log", arg);
   const first = args[0];
   if (typeof first !== "string") return;
   const message = scrubText(first, 160);

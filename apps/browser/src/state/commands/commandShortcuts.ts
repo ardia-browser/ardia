@@ -46,7 +46,7 @@ export function resolvedShortcuts({ settings, profileOrder }: ShortcutState): Re
   return resolvedFor.resolved;
 }
 
-export const shortcutOf = (id: string, s: ShortcutState = useBrowser.getState()): Shortcut | undefined => resolvedShortcuts(s).bindings.get(id)?.[0];
+const shortcutOf = (id: string, s: ShortcutState = useBrowser.getState()): Shortcut | undefined => resolvedShortcuts(s).bindings.get(id)?.[0];
 
 export const commandsHolding = (shortcut: Shortcut, s: ShortcutState = useBrowser.getState()): string[] => resolvedShortcuts(s).holdersOf(shortcut);
 

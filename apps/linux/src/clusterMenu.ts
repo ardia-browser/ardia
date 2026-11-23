@@ -8,7 +8,7 @@ type ActivationTarget = {
 
 export const CLUSTER_MENU_BUTTON = '[role="button"][aria-label="Menu"]';
 
-export type ClusterMenuHooks = {
+type ClusterMenuHooks = {
   target: ActivationTarget | null;
   open(windowId: string, anchor: HTMLElement): Promise<unknown>;
   shown(): boolean;

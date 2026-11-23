@@ -20,23 +20,23 @@ import {
 import { consentToken, type ConsentToken } from "../../browser/src/state/telemetry/consentPeriod";
 
 export const UPDATE_METHODS = ["updaterState", "checkForUpdates", "setAutomaticUpdateChecks", "setAutomaticUpdateDownloads", "setUpdateChannel"] as const;
-export const RELEASES_METHOD = "ArdiaUpdates.releases";
+const RELEASES_METHOD = "ArdiaUpdates.releases";
 export const [, UPDATE_METHOD, STATUS_METHOD, CLAIM_METHOD, RESTART_METHOD] = SELF_UPDATE_METHODS;
-export const KILL_SWITCHES_METHOD = "ArdiaShell.fetchKillSwitches";
+const KILL_SWITCHES_METHOD = "ArdiaShell.fetchKillSwitches";
 export const UPDATE_PREFERENCES = "linux-updates.json";
-export const RELEASES_PAGE = "https://github.com/ardia-browser/ardia/releases";
+const RELEASES_PAGE = "https://github.com/ardia-browser/ardia/releases";
 export const FIRST_CHECK_AFTER_MS = 30_000;
 export const CHECK_EVERY_MS = 6 * 60 * 60 * 1000;
 export const WATCH_EVERY_MS = 30_000;
-export const FOLLOW_RUN_EVERY_MS = 2_000;
-export const FOLLOW_RUN_FOR_MS = 75 * 60 * 1000;
+const FOLLOW_RUN_EVERY_MS = 2_000;
+const FOLLOW_RUN_FOR_MS = 75 * 60 * 1000;
 export const UPDATE_CHECK_LOCK = "ardia.linux.update-checks";
-export const UPDATE_PREFERENCES_LOCK = "ardia.linux.update-preferences";
+const UPDATE_PREFERENCES_LOCK = "ardia.linux.update-preferences";
 export const AUR_UPDATE_COMMAND = "yay -Syu ardia-bin";
 
-export type InstallKind = UpdateInstallKind | "managed" | "unsupported";
+type InstallKind = UpdateInstallKind | "managed" | "unsupported";
 type Phase = "idle" | "downloading" | "installing" | "ready" | "failed";
-export type EngineStatus = { phase: Phase; version: string | null; reason: string | null; kind: InstallKind; run: number };
+type EngineStatus = { phase: Phase; version: string | null; reason: string | null; kind: InstallKind; run: number };
 type Preferences = { automaticChecks: boolean; automaticDownloads: boolean; lastCheck: number | null; channel: UpdateChannel | null; notified: string | null; failed: string | null };
 type Fetched = { status: number; body: string };
 type SwitchCheck = NonNullable<Extract<UpdaterState, { available: true }>["switchCheck"]>;
@@ -45,7 +45,7 @@ type OwnRun = { release: Release; from: StartedFrom };
 
 export type UpdateLocks = { request(name: string, callback: () => Promise<unknown>): Promise<unknown> };
 
-export type UpdateDeps = {
+type UpdateDeps = {
   host: ArdiaHost;
   appVersion: () => string | null;
   read: (name: string) => string | null;
@@ -69,15 +69,15 @@ const INSTALLABLE: ReadonlySet<string> = new Set<UpdateInstallKind>(["deb", "tar
 const PHASES: ReadonlySet<string> = new Set<Phase>(["idle", "downloading", "installing", "ready", "failed"]);
 const ONLY_INSTALL_FAILURES: ReadonlySet<string> = new Set(UPDATE_INSTALL_FAILURES.filter((reason) => !(UPDATE_DOWNLOAD_FAILURES as readonly string[]).includes(reason)));
 
-export const installs = (kind: InstallKind | null | undefined): kind is UpdateInstallKind => !!kind && INSTALLABLE.has(kind);
-export const updateBusy = (status: EngineStatus | null | undefined) => status?.phase === "downloading" || status?.phase === "installing";
+const installs = (kind: InstallKind | null | undefined): kind is UpdateInstallKind => !!kind && INSTALLABLE.has(kind);
+const updateBusy = (status: EngineStatus | null | undefined) => status?.phase === "downloading" || status?.phase === "installing";
 const finished = (status: EngineStatus) => status.run > 0 && (status.phase === "ready" || status.phase === "failed");
 
-export function readInstallKind(line: unknown): InstallKind {
+function readInstallKind(line: unknown): InstallKind {
   return line === "managed" || (typeof line === "string" && INSTALLABLE.has(line)) ? (line as InstallKind) : "unsupported";
 }
 
-export function readEngineStatus(answer: unknown): EngineStatus | null {
+function readEngineStatus(answer: unknown): EngineStatus | null {
   if (!answer || typeof answer !== "object") return null;
   const { phase, version, reason, kind, run } = answer as Record<string, unknown>;
   if (typeof phase !== "string" || !PHASES.has(phase) || typeof run !== "number" || !Number.isSafeInteger(run) || run < 0) return null;
@@ -86,7 +86,7 @@ export function readEngineStatus(answer: unknown): EngineStatus | null {
 
 const knownKinds = new WeakMap<ArdiaHost, InstallKind>();
 export const installsUpdates = (host: ArdiaHost | undefined) => !!host && installs(knownKinds.get(host));
-export const selfUpdateAvailable = (host: ArdiaHost) => SELF_UPDATE_METHODS.every((method) => hostSupports(method, host));
+const selfUpdateAvailable = (host: ArdiaHost) => SELF_UPDATE_METHODS.every((method) => hostSupports(method, host));
 const releasePage = (version: string): Release => ({ version, url: `${RELEASES_PAGE}/tag/v${version}`, prerelease: channelOf(version) === "nightly" });
 
 function readPreferences(read: UpdateDeps["read"]): Preferences {

@@ -27,7 +27,7 @@ export function contributedChrome(s: Contributing): number {
 
 export const pageBarsWanted = (): boolean => (contributedChrome(currentPlugins()) & PLUGIN_CHROME.pageBars) !== 0;
 
-export function shownChrome(s: PluginSurfacesStore, windowId: string): number {
+function shownChrome(s: PluginSurfacesStore, windowId: string): number {
   let parts = 0;
   if (s.sidePanels[windowId] || s.retainedSidePanels[windowId]?.length) parts |= PLUGIN_CHROME.panels;
   if (s.popovers[windowId] || s.commandViews[windowId] || s.quickPick?.windowId === windowId || s.inputBox?.windowId === windowId) parts |= PLUGIN_CHROME.overlays;

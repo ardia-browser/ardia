@@ -7,7 +7,7 @@ import { noteOfficialPlugin } from "../telemetry/officialPluginCounts";
 import { activeSteps, confirmAnswer, goToStep, skipStep, STEPS, useOnboarding } from "./onboarding";
 import { PRESELECTED_PLUGINS, pluginsStepShown } from "./pluginsOffer";
 
-export type PluginsStepPhase = "offer" | "working" | "installed" | "failed";
+type PluginsStepPhase = "offer" | "working" | "installed" | "failed";
 
 type PluginsStepState = {
   picks: Record<string, boolean>;
@@ -55,7 +55,7 @@ export const isPicked = (plugin: OfficialPlugin, picks: Record<string, boolean>)
 
 export const pickedPlugins = (plugins: readonly OfficialPlugin[], picks: Record<string, boolean>) => plugins.filter((p) => isPicked(p, picks));
 
-export const installedLines = (plugins: readonly OfficialPlugin[], installed: readonly string[]) => plugins.filter((p) => installed.includes(p.name)).map((p) => `${officialTitle(p)} installed`);
+const installedLines = (plugins: readonly OfficialPlugin[], installed: readonly string[]) => plugins.filter((p) => installed.includes(p.name)).map((p) => `${officialTitle(p)} installed`);
 
 export function primaryTitle(plugins: readonly OfficialPlugin[], state: Pick<PluginsStepState, "picks" | "phase">): string {
   if (state.phase === "working") return "Installing…";

@@ -31,7 +31,7 @@ export function suggestionRequestAllowed(url: string, extensionEndpoints: readon
     extensionEndpoints.some((endpoint) => /^https:\/\/[^/@{}%?]+\/[^?{}]*$/.test(endpoint) && queriesEndpoint(url, endpoint));
 }
 
-export function canonicalSuggestionRequest(url: string) {
+function canonicalSuggestionRequest(url: string) {
   const query = url.indexOf("?");
   if (query < 0 || url.length > 2048 || /[^\x21-\x7e]|[#\\]/.test(url)) return null;
   try {

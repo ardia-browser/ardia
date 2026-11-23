@@ -1,7 +1,7 @@
 import type { PictureInPictureState } from "../../platform/media";
 import { isSharing, onConsentPeriodChange } from "./choice";
 
-export type PictureInPictureCloser = NonNullable<PictureInPictureState["closedBy"]>;
+type PictureInPictureCloser = NonNullable<PictureInPictureState["closedBy"]>;
 
 const none = () => ({ app: { auto: 0, manual: 0 }, chrome: { auto: 0, manual: 0 } });
 

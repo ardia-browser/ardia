@@ -717,3 +717,42 @@ test("a launch that doesn't restore windows keeps each one as a closed window wi
   assert.equal(fromLaunch.tabs[0].url, "https://example.test/playing");
   assert.equal(launched.windows[windowId], undefined);
 });
+
+const launchHost = (windowId = "main") => ({ bootstrap: { windowId, profileId: "default", startup: true } });
+
+function savedWindow(id = "main", restoreSession = true) {
+  const saved = browserSession();
+  saved.settings = { ...saved.settings, restoreSession };
+  if (id === "main") return saved;
+  const window = { ...saved.windows.main, id };
+  const tabs = Object.fromEntries(Object.entries(saved.tabs).map(([key, tab]) => [key, { ...tab, windowId: id }]));
+  return { ...saved, windows: { [id]: window }, windowOrder: [id], focusedWindowId: id, tabs };
+}
+
+test("launch sidebar hold: with no saved session the startup window wasn't restored", async () => {
+  const { initialLinuxLaunch } = await import("./session.ts");
+  assert.deepEqual(initialLinuxLaunch(launchHost(), null).restored, []);
+});
+
+test("launch sidebar hold: with session restore off the startup window wasn't restored", async () => {
+  const { initialLinuxLaunch } = await import("./session.ts");
+  assert.deepEqual(initialLinuxLaunch(launchHost(), savedWindow("main", false)).restored, []);
+});
+
+test("launch sidebar hold: a second window present when the host started, with nothing saved for it, wasn't restored", async () => {
+  const { initialLinuxLaunch } = await import("./session.ts");
+  assert.deepEqual(initialLinuxLaunch(launchHost("w2"), savedWindow("main")).restored, []);
+});
+
+test("launch sidebar hold: the startup window that reuses its saved window is restored, also when a saved window is adopted onto its id", async () => {
+  const { initialLinuxLaunch } = await import("./session.ts");
+  assert.deepEqual(initialLinuxLaunch(launchHost(), savedWindow("main")).restored, ["main"]);
+  const adopted = initialLinuxLaunch(launchHost(), savedWindow("old"));
+  assert.deepEqual(adopted.restored, ["main"]);
+  assert.ok(adopted.initial.windows.main.tabIds.length > 0, "the saved window was adopted onto the launch window's id");
+});
+
+test("launch sidebar hold: a new window (startup: false) wasn't restored", async () => {
+  const { initialLinuxLaunch } = await import("./session.ts");
+  assert.deepEqual(initialLinuxLaunch(host("w3"), savedWindow("main")).restored, []);
+});

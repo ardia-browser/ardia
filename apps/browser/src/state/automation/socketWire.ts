@@ -1,5 +1,7 @@
+import type { SecretFree } from "@ardia/core";
 import { noteSocketLineShrunk } from "../telemetry/cliCounts";
 import type { ConsentToken } from "../telemetry/client";
+import { isFields } from "../../lib/decode";
 
 export const LINE_BYTE_LIMIT = 1024 * 1024;
 export const PAGE_BYTE_BUDGET = 512 * 1024;
@@ -13,10 +15,8 @@ export const frameBytes = (line: string) => utf8.encode(line).length + 1;
 
 export const fitsOnLine = (line: string, room = 0) => (line.length + 1) * 3 + room <= LINE_BYTE_LIMIT || frameBytes(line) + room <= LINE_BYTE_LIMIT;
 
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
-
 export function clippedRow<T>(row: T): T {
-  if (!isRecord(row)) return row;
+  if (!isFields(row)) return row;
   const clipped = Object.keys(row).filter((k) => typeof row[k] === "string" && (row[k] as string).length > CLIPPED_STRING_CHARS);
   if (!clipped.length) return row;
   const out: Record<string, unknown> = { ...row, clipped };
@@ -38,7 +38,7 @@ export function withinBudget<T>(rows: readonly T[]): T[] {
 }
 
 function summary(value: unknown): Record<string, unknown> {
-  if (!isRecord(value)) return Array.isArray(value) ? { count: value.length } : {};
+  if (!isFields(value)) return Array.isArray(value) ? { count: value.length } : {};
   const kept: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(value)) {
     if (Array.isArray(v)) kept[k] = { count: v.length };
@@ -48,8 +48,8 @@ function summary(value: unknown): Record<string, unknown> {
   return kept;
 }
 
-export type WireBody = { result: unknown } | { error: unknown };
-export type WireMethod = { mutates: boolean; narrow?: string } | undefined;
+type WireBody = { result: unknown } | { error: unknown };
+type WireMethod = { mutates: boolean; narrow?: string } | undefined;
 
 const TOO_BIG = (narrow: string) => `The reply would be over 1 MiB, the most a line can carry; ${narrow}.`;
 
@@ -59,15 +59,15 @@ const FAILURE_MESSAGE_CHARS = 1024;
 
 function failureOf(result: Record<string, unknown>, counted: boolean): Record<string, unknown> | null {
   const error = result.error;
-  if (!isRecord(error)) return null;
+  if (!isFields(error)) return null;
   const kept: Record<string, unknown> = { ...summary(error), message: String(error.message ?? "").slice(0, FAILURE_MESSAGE_CHARS) };
   delete kept.changed;
-  if (isRecord(error.changed)) kept.changed = counted ? summary(error.changed) : error.changed;
+  if (isFields(error.changed)) kept.changed = counted ? summary(error.changed) : error.changed;
   return kept;
 }
 
 function compactWrite(id: unknown, result: unknown): string {
-  const fields = isRecord(result) ? result : {};
+  const fields = isFields(result) ? result : {};
   const ok = fields.ok !== false;
   const hint = ok ? WROTE : WROTE_PART;
   for (const counted of [false, true]) {
@@ -80,19 +80,19 @@ function compactWrite(id: unknown, result: unknown): string {
   return JSON.stringify({ id, result: { ok, oversized: true, ...(typeof fields.applied === "number" ? { applied: fields.applied } : {}), ...(bare ? { error: bare } : {}), hint } });
 }
 
-export function fittedReply(id: unknown, body: WireBody, method: WireMethod, consent: ConsentToken | null): string {
+export function fittedReply<B extends WireBody>(id: unknown, body: B & SecretFree<B>, method: WireMethod, consent: ConsentToken | null): string {
   const line = JSON.stringify({ id, ...body });
   if (fitsOnLine(line)) return line;
   noteSocketLineShrunk(consent);
   if ("error" in body) {
-    const error = isRecord(body.error) ? body.error : {};
+    const error = isFields(body.error) ? body.error : {};
     return JSON.stringify({ id, error: { code: typeof error.code === "string" ? error.code : "failed", message: String(error.message ?? "").slice(0, 4096) } });
   }
   if (method?.mutates) return compactWrite(id, body.result);
   return JSON.stringify({ id, error: { code: "failed", message: TOO_BIG(method?.narrow ?? "ask for less (a smaller limit, a later offset, a folder, a window or a lower depth)") } });
 }
 
-export function fittedEvent(name: string, time: number, data: Record<string, unknown>, consent: ConsentToken | null): string {
+export function fittedEvent<D extends Record<string, unknown>>(name: string, time: number, data: D & SecretFree<D>, consent: ConsentToken | null): string {
   const line = JSON.stringify({ event: name, time, data });
   if (fitsOnLine(line, DROPPED_MARKER_ROOM)) return line;
   noteSocketLineShrunk(consent);

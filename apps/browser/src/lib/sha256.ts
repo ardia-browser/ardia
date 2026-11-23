@@ -55,6 +55,8 @@ export function sha256(text: string): Uint8Array {
   return out;
 }
 
+export const hexOf = (bytes: Uint8Array) => Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+
 const BASE64URL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
 export function base64Url(bytes: Uint8Array): string {

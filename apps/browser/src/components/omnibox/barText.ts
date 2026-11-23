@@ -3,7 +3,7 @@ import type { BarSnapshot } from "../../state/omnibox/barState";
 
 export type Selection = { start: number; end: number };
 
-export type BarText = {
+type BarText = {
   typed: string;
   edited: boolean;
   suppressCompletion: boolean;

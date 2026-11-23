@@ -33,6 +33,10 @@ if ! [[ -f "$stamp" && "$(cat "$stamp")" == "$want" && -d "$frameworks/Chromium 
   echo "$want" > "$stamp"
 fi
 
+if [ -n "${INFOPLIST_PATH:-}" ]; then
+  "$here/engine-match.sh" plist "$(cat "$staged/../engine-match" 2>/dev/null || echo match=local)" "$TARGET_BUILD_DIR/$INFOPLIST_PATH"
+fi
+
 "$here/ubo.sh"
 ubo="$repo/packages/ardiacore/vendor/ubo/ext"
 if [ -n "${UNLOCALIZED_RESOURCES_FOLDER_PATH:-}" ] && [ -f "$ubo/manifest.json" ]; then

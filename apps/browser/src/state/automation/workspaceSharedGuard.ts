@@ -11,7 +11,7 @@ export function sharedRoot(s: BrowserState, groupId: string): string | null {
   return root && sharedFolderOfGroup(s, root.id) ? root.id : null;
 }
 
-export function sharedRootOfTab(s: BrowserState, tabId: string): string | null {
+function sharedRootOfTab(s: BrowserState, tabId: string): string | null {
   const g = innermostGroupOf(s.groups, tabId);
   return g ? sharedRoot(s, g.id) : null;
 }

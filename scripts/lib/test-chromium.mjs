@@ -23,7 +23,7 @@ function findChromium() {
   return ["/usr/bin/google-chrome", "/usr/bin/google-chrome-stable", "/usr/bin/chromium", "/usr/bin/chromium-browser", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"].find((path) => existsSync(path)) ?? null;
 }
 
-export const chromiumPath = findChromium();
+const chromiumPath = findChromium();
 
 export const CHROMIUM_MISSING = chromiumPath === null && !process.env.CI && "no Chromium for Playwright (install Playwright's or set ARDIA_TEST_CHROMIUM)";
 

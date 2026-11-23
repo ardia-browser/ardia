@@ -13,7 +13,7 @@ export const PER_PAGE_COUNT = 20;
 export const TRANSIENT_ACTIVATION_MS = 6000;
 export const TOUCH_POINT = { x: 80, y: 45 };
 
-export type Played = { paused?: boolean; ended?: boolean; ready?: number; time?: number; tries?: string[]; active?: boolean };
+type Played = { paused?: boolean; ended?: boolean; ready?: number; time?: number; tries?: string[]; active?: boolean };
 
 export const port = engineAvailable() ? httpPagesPort() : null;
 export const origin = `http://127.0.0.1:${port}`;
@@ -48,7 +48,7 @@ export async function withMedia(name: string, path: string, title: string, run: 
   }
 }
 
-export const tried = async (key: string, media: string) =>
+const tried = async (key: string, media: string) =>
   evaluate(key, `const media = ${media}; window.lastMedia = media; media.play().then(() => "played", (error) => error.name).then((result) => post("result", JSON.stringify(result)));`);
 export const stateOf = async (key: string, media: string) =>
   ((await evaluate(key, `const media = ${media}; post("result", JSON.stringify(media ? { paused: media.paused, time: media.currentTime } : {}));`)) ?? {}) as Played;

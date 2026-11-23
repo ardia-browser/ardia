@@ -7,6 +7,7 @@ export function createHostDocuments(host: ArdiaHost) {
   const stored = new Map(documents);
   const latest = new Map<string, number>();
   const landing = new Map<string, Promise<void>>();
+  const creating = new Set<string>();
   let operations = 0;
   let writes = Promise.resolve();
   const invoke = (method: string, args: unknown[]) => {
@@ -58,6 +59,31 @@ export function createHostDocuments(host: ArdiaHost) {
       keep(stored, name, contents ?? undefined);
       keep(documents, name, contents ?? undefined);
       return typeof contents === "string";
+    },
+    create: async (name: string, contents: string) => {
+      if (name === "live.json" || name === "live.canonical.json") throw Object.assign(new Error("Canonical Live documents require typed operations"), { code: "ERR_DOCUMENT_RESERVED" });
+      const exists = () => Object.assign(new Error("Document exists"), { code: "ERR_DOCUMENT_EXISTS" });
+      if (documents.has(name) || creating.has(name)) throw exists();
+      creating.add(name);
+      try {
+        await writes.catch(() => {});
+        if ((await invokeHost<unknown>("ArdiaShell.readDocument", { args: [name] }, host)) !== null) throw exists();
+        await change(name, contents, "writeDocument", [name, contents]);
+      } finally {
+        creating.delete(name);
+      }
+    },
+    list: (prefix: string) => [...stored.keys()].filter((name) => name.startsWith(prefix)),
+    copy: async (name: string, _copyName: string) => {
+      if (name === "live.json" || name === "live.canonical.json") throw Object.assign(new Error("Canonical Live documents cannot be copied generically"), { code: "ERR_DOCUMENT_RESERVED" });
+      await writes.catch(() => {});
+      const contents = await invokeHost<unknown>("ArdiaShell.readDocument", { args: [name] }, host);
+      if (contents === null) throw Object.assign(new Error(`Nothing to copy at ${name}`), { code: "ERR_DOCUMENT_GONE" });
+      throw Object.assign(new Error("The Linux host can't copy document bytes yet (#3872)"), { code: "ERR_UNSUPPORTED" });
+    },
+    sync: async (name: string) => {
+      await writes.catch(() => {});
+      if ((await invokeHost<unknown>("ArdiaShell.readDocument", { args: [name] }, host)) === null) throw Object.assign(new Error(`Nothing to sync at ${name}`), { code: "ERR_DOCUMENT_GONE" });
     },
     remove: (name: string) => {
       if (name === "live.json" || name === "live.canonical.json") return Promise.reject(Object.assign(new Error("Canonical Live documents cannot be removed generically"), { code: "ERR_DOCUMENT_RESERVED" }));

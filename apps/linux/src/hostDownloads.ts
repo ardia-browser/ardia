@@ -6,7 +6,7 @@ import { showToast } from "../../browser/src/state/app/toasts";
 
 const DOWNLOAD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const STATES = new Set(["downloading", "finished", "failed", "cancelled"]);
-export const DOWNLOAD_LIMIT = 100;
+const DOWNLOAD_LIMIT = 100;
 
 export const nativeDownloadId = (id: unknown): id is string => typeof id === "string" && DOWNLOAD_ID.test(id);
 
@@ -24,7 +24,7 @@ export function snapshotDownload(value: unknown, offTheRecord = false): Download
 
 const SNAPSHOT_PROFILE = "\u0000snapshot";
 
-export function planDownloadSnapshot(current: Download[], snapshot: unknown, excluded: ReadonlySet<string> = new Set(), limit = DOWNLOAD_LIMIT, offTheRecord = false) {
+function planDownloadSnapshot(current: Download[], snapshot: unknown, excluded: ReadonlySet<string> = new Set(), limit = DOWNLOAD_LIMIT, offTheRecord = false) {
   if (!Array.isArray(snapshot)) return { downloads: null, added: [] as Download[] };
   const known = new Set(current.map((d) => d.id));
   const seen = new Set<string>();
@@ -49,7 +49,7 @@ type DownloadState = {
   clearDownloads(windowId?: string): void;
 };
 
-export type DownloadStore = {
+type DownloadStore = {
   getState(): DownloadState;
   setState(patch: Partial<DownloadState>): void;
 };

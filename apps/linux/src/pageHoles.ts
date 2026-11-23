@@ -2,17 +2,17 @@ import { intersection, subtract, type PageArea, type Rect } from "./inputRegions
 import type { CornerRadii } from "./hostExtensionView.ts";
 
 export const PAGE_CORNER_RADIUS = 12;
-export const HOLE_HOST_CLASS = "ardia-hole-host";
+const HOLE_HOST_CLASS = "ardia-hole-host";
 export const PAGE_STACK_ATTRIBUTE = "data-ardia-page-stack";
 const FILL_VAR = "--ardia-hole-fill";
 const CLIP_VAR = "--ardia-hole-clip";
 
 const n = (value: number) => +value.toFixed(2);
 
-export type Radii = readonly [topLeft: number, topRight: number, bottomRight: number, bottomLeft: number];
-export type HolePiece = { rect: Rect; radii: Radii };
+type Radii = readonly [topLeft: number, topRight: number, bottomRight: number, bottomLeft: number];
+type HolePiece = { rect: Rect; radii: Radii };
 export type FloatingHole = { rect: Rect; radius: number };
-export type Hole = Rect & { radii?: CornerRadii };
+type Hole = Rect & { radii?: CornerRadii };
 
 const tupleOf = (radii: CornerRadii): Radii => [radii.upperLeft, radii.upperRight, radii.lowerRight, radii.lowerLeft];
 
@@ -29,7 +29,7 @@ export function roundedRect({ x, y, width, height }: Rect, radius: number | Radi
   return `M${n(x + tl)} ${n(y)}H${n(right - tr)}${arc(tr, right, y + tr)}V${n(bottom - br)}${arc(br, right - br, bottom)}H${n(x + bl)}${arc(bl, x, bottom - bl)}V${n(y + tl)}${arc(tl, x + tl, y)}Z`;
 }
 
-export type WindowSize = { width: number; height: number };
+type WindowSize = { width: number; height: number };
 
 const SQUARE_WINDOW: CornerRadii = { upperLeft: 0, upperRight: 0, lowerRight: 0, lowerLeft: 0 };
 
@@ -126,7 +126,7 @@ export function separateHoles(holes: readonly Hole[], radius = PAGE_CORNER_RADIU
   return { holes: whole, pieces };
 }
 
-export function localPieces(layer: Rect, scale: { x: number; y: number }, pieces: readonly HolePiece[]) {
+function localPieces(layer: Rect, scale: { x: number; y: number }, pieces: readonly HolePiece[]) {
   return pieces.filter((piece) => intersection(piece.rect, layer)).map((piece) => ({
     rect: { x: (piece.rect.x - layer.x) / scale.x, y: (piece.rect.y - layer.y) / scale.y, width: piece.rect.width / scale.x, height: piece.rect.height / scale.y },
     radii: piece.radii.map((radius) => radius / Math.min(scale.x, scale.y)) as unknown as Radii,
@@ -145,14 +145,14 @@ export function localHoles(layer: Rect, scale: { x: number; y: number }, pages: 
   return holes;
 }
 
-export type StackDom<E> = { stackOf: (element: E) => E | null; contains: (outer: E, inner: E) => boolean };
+type StackDom<E> = { stackOf: (element: E) => E | null; contains: (outer: E, inner: E) => boolean };
 
 export function pagesAbove<E, P extends { slot: E }>(element: E, pages: readonly P[], dom: StackDom<E>): readonly P[] {
   const stack = dom.stackOf(element);
   return stack ? pages.filter((page) => dom.contains(stack, page.slot)) : pages;
 }
 
-export type PainterDom<E> = {
+type PainterDom<E> = {
   contains: (outer: E, inner: E) => boolean;
   precedes: (element: E, slot: E) => boolean;
   overlaps: (element: E, slot: E) => boolean;

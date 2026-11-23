@@ -23,6 +23,10 @@ const { syncedHome } = await import("./state/sync/pinRecords.ts");
 const { sendableUrl } = await import("./state/sync/sentTabsAdapter.ts");
 const { filterListAddress } = await import("./state/site/contentBlocking.ts");
 const { CLEAN_UP_KEY, LEGACY_CLEAN_UP_KEY } = await import("./state/settings/cleanUpAfter.ts");
+const { updateWithin } = await import("./state/plugins/officialUpdate.ts");
+const { readManifest } = await import("./lib/pluginManifest.ts");
+const { copyLinkFromPageMenu } = await import("./state/site/pageLinkCopy.ts");
+const { cleanUrl } = await import("@ardia/core");
 
 const S = () => useBrowser.getState();
 const show = (value) => {
@@ -355,4 +359,49 @@ test("the release's original smuggled hide is refused at every layer", () => {
   assert.equal(hidingFilter(HOST, smuggled), null);
   assert.equal(MAC_WRITE_RULE.test(`${HOST}##${smuggled}`), false);
   assert.equal(LINUX_NATIVE_REFUSES.test(`${HOST}##${smuggled}`), true);
+});
+
+test("an official update's manifest with any hostile value in a field that counts is never approved without a sheet", () => {
+  const steps = [["skills", "install", "--auto"], ["skills", "refresh"], ["computer", "refresh"]];
+  const approved = readManifest(JSON.stringify({ manifest: 1, name: "cli", title: "Command Line", version: "0.4.0", alwaysOn: true, official: true, permissions: ["control"], programs: [{ name: "ardia", path: "bin/ardia", afterUpdate: steps }] })).manifest;
+  const next = readManifest(JSON.stringify({ manifest: 2, name: "cli", title: "Command Line", version: "0.6.0", alwaysOn: true, official: true, main: "dist/main.js", permissions: { control: true }, contributes: { commands: [{ name: "show-status", title: "Status", icon: "terminal", view: "status" }], programs: [{ name: "ardia", path: "bin/ardia", claim: true, afterUpdate: steps }] } })).manifest;
+  assert.equal(updateWithin(approved, next).ok, true, "the real move passes, so the refusals below aren't vacuous");
+  const COSMETIC = new Set(["manifest", "declaredManifest", "title", "description", "version", "requires", "icon", "keywords", "telemetry"]);
+  const unchanged = (a, b) => typeof a === typeof b && JSON.stringify(a) === JSON.stringify(b);
+  let refused = 0;
+  for (const { value } of HOSTILE_VALUES) {
+    for (const key of Object.keys(next).filter((k) => !COSMETIC.has(k) && !unchanged(value, next[k]) && !unchanged(value, approved[k]))) {
+      const verdict = updateWithin(approved, { ...next, [key]: value });
+      assert.equal(verdict.ok, false, `${key} = ${show(value)}`);
+      refused++;
+    }
+    for (const key of Object.keys(next.permissions).filter((k) => !unchanged(value, next.permissions[k]) && !unchanged(value, approved.permissions[k]))) assert.equal(updateWithin(approved, { ...next, permissions: { ...next.permissions, [key]: value } }).ok, false, `permissions.${key} = ${show(value)}`);
+    for (const key of Object.keys(next.contributes).filter((k) => !unchanged(value, next.contributes[k]) && !unchanged(value, approved.contributes[k]))) assert.equal(updateWithin(approved, { ...next, contributes: { ...next.contributes, [key]: value } }).ok, false, `contributes.${key} = ${show(value)}`);
+    assert.equal(updateWithin(approved, { ...next, programs: [{ ...next.programs[0], afterUpdate: [...steps, [value]] }] }).ok, false, `afterUpdate step ${show(value)}`);
+  }
+  for (const key of PROTOTYPE_KEYS) {
+    const extra = JSON.parse(`{${JSON.stringify(key)}: true}`);
+    assert.equal(updateWithin(approved, { ...next, ...extra }).ok, false, `manifest key ${key}`);
+    assert.equal(updateWithin(approved, { ...next, permissions: { ...next.permissions, ...extra } }).ok, false, `permission key ${key}`);
+    assert.equal(updateWithin(approved, { ...next, contributes: { ...next.contributes, ...extra } }).ok, false, `contributes key ${key}`);
+  }
+  assert.ok(refused > 1000);
+});
+
+test("a WebKit page menu address reaches native's writer only as a string the cleaner returned, whatever the page holds", async () => {
+  const { webKitAddressWrites } = stub;
+  webKitAddressWrites.written.length = 0;
+  for (const { id, value } of HOSTILE_VALUES) {
+    webKitAddressWrites.written.length = 0;
+    await copyLinkFromPageMenu(value, 7, null);
+    if (typeof value !== "string" || !value) assert.deepEqual(webKitAddressWrites.written, [], id);
+    else assert.deepEqual(webKitAddressWrites.written, [{ request: 7, url: cleanUrl(value) }], id);
+  }
+  for (const s of strings) {
+    for (const address of [s, `https://a.example/?utm_source=${s}&q=1`, `https://a.example/${s}?fbclid=1`]) {
+      webKitAddressWrites.written.length = 0;
+      await copyLinkFromPageMenu(address, 7, null);
+      assert.deepEqual(webKitAddressWrites.written, address ? [{ request: 7, url: cleanUrl(address) }] : [], show(address));
+    }
+  }
 });

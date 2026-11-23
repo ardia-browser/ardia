@@ -108,7 +108,7 @@ final class WebKitCertificates {
 
   func noteTransportSecurity(_ header: String, host: String, fingerprint: String?, store: StoreID) {
     let name = WebKitCertificatePolicy.normalizedHost(host)
-    guard !name.isEmpty, !Self.isIPAddress(name) else { return }
+    guard !name.isEmpty, !WebKitPreloadedHSTS.isIPAddress(name) else { return }
     let changed = change(store) { $0.noteHeader(header, host: name, fingerprint: fingerprint, now: Date()) }
     if changed { scheduleSave(store) }
   }
@@ -118,12 +118,6 @@ final class WebKitCertificates {
     if let last = name.split(separator: ".").last, Self.preloadedSuffixes.contains(String(last)) { return true }
     if WebKitPreloadedHSTS.requiresHTTPS(name) { return true }
     return policy(store).requiresHTTPS(host: name, now: Date())
-  }
-
-  static func isIPAddress(_ host: String) -> Bool {
-    var v4 = in_addr(), v6 = in6_addr()
-    let bare = host.trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
-    return inet_pton(AF_INET, bare, &v4) == 1 || inet_pton(AF_INET6, bare, &v6) == 1
   }
 
   private func policy(_ store: StoreID) -> WebKitCertificatePolicy {

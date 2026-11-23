@@ -33,7 +33,7 @@ import { isBusy, restartReason, sendReport, type RestartReason, type UploadDeps,
 export const FEEDBACK_URL = "https://ardia.dev/api/feedback";
 const POST_TIMEOUT_MS = 30_000;
 
-export const feedbackEndpoint = () => feedbackURLOverride() ?? FEEDBACK_URL;
+const feedbackEndpoint = () => feedbackURLOverride() ?? FEEDBACK_URL;
 export const canAttachFiles = sendsReportFiles;
 
 let identity: ReportIdentity | null = null;

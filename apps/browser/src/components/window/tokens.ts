@@ -26,7 +26,7 @@ const LIGHT: typeof DARK = {
   swipeSelection: "rgba(0,0,0,0.1)",
 };
 
-export type WindowColors = typeof DARK;
+type WindowColors = typeof DARK;
 
 export const windowColors = (dark: boolean): WindowColors => (dark ? DARK : LIGHT);
 

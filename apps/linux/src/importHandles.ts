@@ -1,6 +1,6 @@
 import type { Credential } from "../../../packages/import/src/index.ts";
 
-export const IMPORT_HANDLE_PREFIX = "ardia-import-handle:";
+const IMPORT_HANDLE_PREFIX = "ardia-import-handle:";
 export const IMPORT_HANDLE_LIFETIME_MS = 10 * 60_000;
 
 type Writer = (token: string, profile: string) => Promise<{ added: number }>;

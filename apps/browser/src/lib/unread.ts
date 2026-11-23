@@ -100,7 +100,7 @@ const fileNameOf = (url: string) => {
   return path.slice(path.lastIndexOf("/") + 1);
 };
 
-export const faviconIsBadgeNamed = (url: string) => !url.startsWith("data:") && BADGE_TOKEN.test(fileNameOf(url));
+const faviconIsBadgeNamed = (url: string) => !url.startsWith("data:") && BADGE_TOKEN.test(fileNameOf(url));
 
 export const faviconIsOrdinary = (url: string) => !!url && !url.startsWith("data:") && !faviconIsBadgeNamed(url);
 

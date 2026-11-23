@@ -62,7 +62,7 @@ const inert = (module: string, key: string) => () => {
 
 const SHELL_PARTS = ["ArdiaAppWindows", "ArdiaFocus", "ArdiaMenus", "ArdiaDialogs"];
 const APP_PARTS = ["ArdiaUpdater", "ArdiaNotifications", "ArdiaScripting", "ArdiaDev"];
-const SHELL_DOCUMENT_METHODS = ["readDocument", "documentExists", "writeDocument", "saveDocument", "documentSaved", "removeDocument", "refreshDocument", "deleteDocument"];
+const SHELL_DOCUMENT_METHODS = ["readDocument", "documentExists", "writeDocument", "saveDocument", "documentSaved", "removeDocument", "refreshDocument", "deleteDocument", "copyDocument", "listDocuments", "createDocument", "syncDocument"];
 
 export function hostModuleName(name: string, method?: string): string {
   if (SHELL_PARTS.includes(name)) return "ArdiaShell";

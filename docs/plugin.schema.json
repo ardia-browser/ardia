@@ -184,7 +184,7 @@
           },
           "control": {
             "type": "boolean",
-            "description": "Let programs you run drive your tabs and pages"
+            "description": "Let programs you run fully control Ardia, including your signed-in sites"
           }
         },
         "additionalProperties": false

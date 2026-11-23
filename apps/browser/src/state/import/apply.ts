@@ -1,3 +1,4 @@
+import { asSecret } from "@ardia/core";
 import { savePassword } from "../../platform/passwords";
 import {
   importModule,
@@ -27,9 +28,9 @@ import { originOfLogin } from "../site/savedPasswords";
 import { importFavicons, importTabs, linksOf, windowFor } from "./tabImport";
 
 export { importTabs };
-export { importArcSpace, importDiaSpace } from "./sidebarTree";
+export { importArcSpace } from "./sidebarTree";
 
-export type { BrowserProfile, BrowserSource, DiaTabsResult, ImportedExtension, ImportedSearchEngine, ImportKind, ImportResult, SpaceSuggestion, SpaceSummary } from "../../platform/importModule";
+export type { BrowserProfile, BrowserSource, DiaTabsResult, ImportedExtension, ImportedSearchEngine, ImportKind, ImportResult, SpaceSummary } from "../../platform/importModule";
 
 export type ImportCounts = { bookmarks: number; history: number; tabs: number; passwords: number; cookies: number; addresses: number; cards: number; rules: number; archived: number; settings: number };
 
@@ -85,13 +86,13 @@ async function importPasswords(profileId: string, credentials: Credential[]): Pr
   for (const c of credentials) {
     const origin = originOfLogin(c.realm?.startsWith("http") ? c.realm : c.url);
     if (!origin || !c.password) continue;
-    if (await tally.attempt(savePassword(engineProfile(useBrowser.getState(), profileId), origin, c.username, c.password))) saved++;
+    if (await tally.attempt(savePassword(engineProfile(useBrowser.getState(), profileId), origin, c.username, asSecret("password", c.password)))) saved++;
   }
   tally.done();
   return saved;
 }
 
-export async function importNative(
+async function importNative(
   profileId: string,
   token: string | undefined,
   kinds: ("cookies" | "autofill")[],

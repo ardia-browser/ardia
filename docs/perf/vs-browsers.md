@@ -135,6 +135,15 @@ sends the navigation to the engine (`platform/earlyNavigate.ts`) instead of the 
 after React re-renders, and the request leaves 5 ms after Enter instead of 24 (uBO's webRequest round trip used to
 queue behind the New Tab page's teardown on the main thread). First paint 46 against 51 ms. What's left there is that
 teardown: the response is handled only once React Native's ~14 ms of view updates on Enter are done.
+Update (2026-11-22, #3719): Enter now hides the New Tab page (display: none, so it leaves layout, input and the
+accessibility tree, and focus goes to the page) and removes it once the page's load has ended (+100 ms, at most 1.5 s;
+not on Windows, whose display: none removes the native views anyway). native-bench `--only navigate --seed big`, one
+Release app with each side's bundle, interleaved, 3 runs × 10, ⌘T bar, Enter → commit / → first contentful paint:
+63 → 54 / 92 → 81 ms with the page kept whole (load 22 against 31), 68 → 57 / 107 → 87 ms with the field kept inside
+the hidden page (load 52 against 32), and 67 → 65 / 93 → 92 ms when the bar's omnibox was removed at Enter instead
+(its suggestion rows are most of the teardown). The untouched ⌘L path moved +6, −6 and −1 ms in those runs, so the
+gain is several ms under this machine's load, not a precise figure. Main thread busy between Enter and commit fell
+53 → 45 and 55 → 49 ms (acframes).
 
 **Memory at 10 and 20 tabs (+71 / +264 MB).** Every browser has the same process count, 1 renderer per tab: Ardia 25
 processes at 20 tabs, Chrome 27. GPU (142 against 291 MB) and network/storage are smaller in Ardia; the browser
@@ -411,8 +420,9 @@ a full rerun is due.
 The release skill's step 4d (`.claude/skills/release/SKILL.md`), after the perf gate, on the build that passed it:
 
 ```sh
-V=<version>; X=$HOME/ardia-scratch/xbench-$V
-mkdir -p $X/apps/ardia && cp -Rc dist/$V-rc/export/Ardia.app $X/apps/ardia/   # dist/$V/export without an rc
+V=<version>; A=dist/$V-rc/export/Ardia.app   # dist/$V/export without an rc
+X=$HOME/ardia-scratch/xbench-$V-$(plutil -extract CFBundleVersion raw $A/Contents/Info.plist)-$(codesign -dvvv $A 2>&1 | sed -n 's/^CDHash=//p' | cut -c1-12)
+mkdir -p $X/apps/ardia && { [ -e $X/apps/ardia/Ardia.app ] || cp -Rc $A $X/apps/ardia/; }
 codesign --force --deep --sign - $X/apps/ardia/Ardia.app   # ad hoc, as the stored rows' Ardia and Helium ran
 node apps/browser/scripts/perf/xbench.mjs run --out $X/out --apps $X/apps --browsers ardia --rounds 3 --launches 2 \
   --gate off --deadline 60   # run_in_background; about 35 min; rerun to resume

@@ -1,4 +1,5 @@
 import { ActivitySpinner } from "./ActivitySpinner";
+import { Breathe } from "./Breathe";
 import { ClipView } from "./ClipView";
 import { ThemeSwatch, WindowBackdrop } from "./backdrop";
 import { DockSelection } from "./DockSelection";
@@ -24,6 +25,7 @@ export const viewsDrawnInJs = new Map<string, ViewByName>([
   ["ArdiaFadeLabel", FadeLabel],
   ["ArdiaEdgeFadeMask", EdgeFadeMask],
   ["ArdiaActivitySpinner", ActivitySpinner],
+  ["ArdiaBreathe", Breathe],
   ["ArdiaVisualEffect", VisualEffect],
   ["ArdiaGlassEffect", GlassEffect],
   ["ArdiaGlassGroup", GlassGroup],

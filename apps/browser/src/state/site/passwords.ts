@@ -9,10 +9,10 @@ export {
   listPasswords,
   savePassword,
   setNeverSavePasswords,
-  setPasswordAutofill,
   unlockPasswords,
   updatePassword,
   type PasswordExportStatus,
+  type PasswordSecret,
   type SavedPassword,
 } from "../../platform/passwords";
 

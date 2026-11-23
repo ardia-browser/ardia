@@ -31,7 +31,7 @@ export function macEvent(node: HTMLElement, e: PointerSample): MacMouseEvent {
   };
 }
 
-export type TrackedHover = { node: () => HTMLElement | null; enter: () => MouseHandler | undefined; leave: () => MouseHandler | undefined; inside: boolean };
+type TrackedHover = { node: () => HTMLElement | null; enter: () => MouseHandler | undefined; leave: () => MouseHandler | undefined; inside: boolean };
 
 const tracked = new Set<TrackedHover>();
 const OUTSIDE: PointerSample = { clientX: -1e5, clientY: -1e5, shiftKey: false, ctrlKey: false, altKey: false, metaKey: false };

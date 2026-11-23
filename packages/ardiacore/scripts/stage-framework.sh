@@ -41,6 +41,17 @@ fi
 
 [[ -d "$src" ]] || { echo "error: no ArdiaCore framework at $src (engine/ardiacore/apply.sh, then build chrome_framework)" >&2; exit 1; }
 stamp="$dest/.stamp"
+engine_match=$("$here/engine-match.sh" resolve "$repo" "${ARDIACORE_ENGINE_MATCH:-$("$here/engine-match.sh" record-of "$src")}") || exit 1
+if [[ -n "${ARDIACORE_ENGINE_MATCH:-}" && "$engine_match" != "$ARDIACORE_ENGINE_MATCH" ]]; then
+  echo "error: the engine was judged \"$ARDIACORE_ENGINE_MATCH\" for this build but is \"$engine_match\" now: the tree changed meanwhile, so build again" >&2
+  exit 1
+fi
+"$here/engine-match.sh" check "$engine_match" || exit 1
+mkdir -p "$dest"
+if [[ "$(cat "$dest/engine-match" 2>/dev/null)" != "$engine_match" ]]; then
+  echo "$engine_match" >"$dest/engine-match.tmp-$$"
+  mv "$dest/engine-match.tmp-$$" "$dest/engine-match"
+fi
 
 fill_cache() {
   local tmp="$cache/.tmp-$$" key fwv lib helper

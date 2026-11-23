@@ -42,11 +42,43 @@ enum DocumentStore {
   }
 
   static func exists(_ name: String) -> Bool {
-    guard let url = try? url(name) else { return false }
+    guard let url = try? url(name) else { return true }
     lock.lock()
     let pending = staged[url.lastPathComponent] != nil
     lock.unlock()
-    return pending || FileManager.default.fileExists(atPath: url.path)
+    return pending || !confirmedMissing(url)
+  }
+
+  private static func confirmedMissing(_ url: URL) -> Bool {
+    var info = stat()
+    if lstat(url.path, &info) == 0 { return false }
+    guard errno == ENOENT else { return false }
+    var parent = stat()
+    return stat(url.deletingLastPathComponent().path, &parent) == 0 && (parent.st_mode & S_IFMT) == S_IFDIR
+  }
+
+  private static func durable(_ path: String) -> Bool {
+    let fd = open(path, O_RDONLY)
+    guard fd >= 0 else { return false }
+    defer { Darwin.close(fd) }
+    if fcntl(fd, F_FULLFSYNC) == 0 { return true }
+    let unsupported = errno == ENOTSUP || errno == EINVAL
+    return unsupported && fsync(fd) == 0
+  }
+
+  struct DocumentGone: Error {}
+
+  static func sync(_ name: String, done: @escaping Done) throws {
+    let target = try url(name)
+    queue.async {
+      if confirmedMissing(target) { return done(DocumentGone()) }
+      done(regularFile(target) && durable(target.path) && durable(target.deletingLastPathComponent().path) ? nil : CocoaError(.fileWriteUnknown))
+    }
+  }
+
+  private static func regularFile(_ url: URL) -> Bool {
+    var info = stat()
+    return lstat(url.path, &info) == 0 && (info.st_mode & S_IFMT) == S_IFREG
   }
 
   static func write(_ name: String, _ contents: String, done: Done? = nil) throws {
@@ -85,8 +117,66 @@ enum DocumentStore {
     let waiters = staged.removeValue(forKey: url.lastPathComponent)?.waiters ?? []
     lock.unlock()
     queue.async {
-      try? FileManager.default.removeItem(at: url)
+      if regularFile(url) { unlink(url.path) }
       for waiter in waiters { waiter(nil) }
+    }
+  }
+
+  static func list(_ prefix: String) -> [String] {
+    guard let directory = try? url(prefix.isEmpty ? "documents" : prefix).deletingLastPathComponent() else { return [] }
+    let stored = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+    return stored.filter { $0.hasPrefix(prefix) && !$0.hasPrefix(".") && regularFile(directory.appendingPathComponent($0)) }.sorted()
+  }
+
+  static func create(_ name: String, _ contents: String, done: @escaping Done) throws {
+    let target = try url(name)
+    queue.async {
+      let temporary = target.deletingLastPathComponent().appendingPathComponent(".\(target.lastPathComponent).\(UUID().uuidString).tmp")
+      do {
+        try Data(contents.utf8).write(to: temporary, options: [.withoutOverwriting])
+      } catch {
+        try? FileManager.default.removeItem(at: temporary)
+        return done(error)
+      }
+      guard durable(temporary.path) else {
+        unlink(temporary.path)
+        return done(CocoaError(.fileWriteUnknown))
+      }
+      let linked = link(temporary.path, target.path) == 0
+      let failure = errno
+      unlink(temporary.path)
+      guard linked else { return done(CocoaError(failure == EEXIST ? .fileWriteFileExists : .fileWriteUnknown)) }
+      done(durable(target.deletingLastPathComponent().path) ? nil : CocoaError(.fileWriteUnknown))
+    }
+  }
+
+  static func copy(_ name: String, to copyName: String, done: @escaping Done) throws {
+    let source = try url(name)
+    let target = try url(copyName)
+    queue.async {
+      if confirmedMissing(source) { return done(DocumentGone()) }
+      do {
+        let staging = target.deletingLastPathComponent().appendingPathComponent(".\(target.lastPathComponent).\(UUID().uuidString).tmp")
+        try FileManager.default.copyItem(at: source, to: staging)
+        guard durable(staging.path) else {
+          try? FileManager.default.removeItem(at: staging)
+          throw CocoaError(.fileWriteUnknown)
+        }
+        do {
+          if FileManager.default.fileExists(atPath: target.path) {
+            _ = try FileManager.default.replaceItemAt(target, withItemAt: staging)
+          } else {
+            try FileManager.default.moveItem(at: staging, to: target)
+          }
+        } catch {
+          try? FileManager.default.removeItem(at: staging)
+          throw error
+        }
+        guard durable(target.deletingLastPathComponent().path) else { throw CocoaError(.fileWriteUnknown) }
+        done(nil)
+      } catch {
+        done(error)
+      }
     }
   }
 

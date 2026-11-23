@@ -48,13 +48,43 @@ jobs:
         run: |
           set -euo pipefail
           fail() { echo "::error::$*"; exit 1; }
-          check() { if [ "$DRY_RUN" = true ]; then echo "::warning::$* (a real release would stop here)"; else fail "$*"; fi; }
           . scripts/lib/releases.sh
           channel=$(channel_of "$VERSION") || fail "$VERSION is neither <major>.<minor>.<patch> nor <next stable>-nightly.<n>"
-          project=$(sed -n 's/.*MARKETING_VERSION = "\{0,1\}\([^";]*\)"\{0,1\};/\1/p' apps/browser/macos/Ardia.xcodeproj/project.pbxproj | sort -u)
-          [ "$project" = "$VERSION" ] || check "MARKETING_VERSION is $project: commit the bump to $VERSION first"
-          [ -f "docs/release-notes/$VERSION.md" ] || check "no docs/release-notes/$VERSION.md: write and commit the notes first"
-          if gh release view "v$VERSION" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then check "v$VERSION is already published"; fi
+          if [ "$DRY_RUN" = true ]; then mode=dry-run; else mode=release; fi
+          values="$RUNNER_TEMP/preflight-values"
+          node scripts/release/preflight.mjs "$VERSION" --mode "$mode" --allow-no-feed --github --values-out "$values"
+          lookup() {
+            lookup_out=$(gh release view "$@" -R "$GITHUB_REPOSITORY" 2>&1) && return 0
+            grep -qx 'release not found' <<<"$lookup_out" && return 1
+            return 2
+          }
+          found=0
+          lookup "v$VERSION" || found=$?
+          case "$found" in
+            0)
+              if [ "$DRY_RUN" = true ] && grep -qx 'already_released=nightly-newest' "$values"; then
+                echo "::warning::v$VERSION is already published, as the newest nightly at this build (a real release would stop here)"
+              else
+                fail "v$VERSION is already published: only a dry run of a nightly the feed lists at this build, still the newest, may go on"
+              fi
+              ;;
+            1) ;;
+            *) fail "couldn't ask GitHub whether v$VERSION is published, so this stops rather than guess: $lookup_out" ;;
+          esac
+          if [ "$channel" = stable ]; then
+            found=0
+            lookup --json tagName -q .tagName || found=$?
+            case "$found" in
+              0) latest="$lookup_out" ;;
+              1) latest="" ;;
+              *) fail "couldn't ask GitHub for the latest release, so this stops rather than guess: $lookup_out" ;;
+            esac
+            if [[ "$latest" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              latest="${latest#v}"
+              [ "$latest" = "$VERSION" ] || [ "$(printf '%s\n%s\n' "$latest" "$VERSION" | sort -V | tail -1)" = "$VERSION" ] \
+                || fail "$VERSION isn't above the latest stable release ($latest): publish.sh refuses it, so it stops here instead of after the build"
+            fi
+          fi
           tree=$(engine/engine-key.sh --platform macos)
           linux_tree=$(engine/engine-key.sh --platform linux)
           { echo "tree=$tree"; echo "linux_tree=$linux_tree"; } >> "$GITHUB_OUTPUT"
@@ -210,6 +240,8 @@ jobs:
     needs: [preflight, build]
     runs-on: xcode-27
     timeout-minutes: 150
+    env:
+      APPCAST_DELTAS: ${{ vars.APPCAST_DELTAS }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -253,10 +285,8 @@ jobs:
         run: |
           export RELEASE_BUILD_INPUT="$RUNNER_TEMP/build-in"
           args=("$VERSION" --phase sign)
-          if [ "$DRY_RUN" = true ]; then args+=(--rc); fi
-          if ! curl -fsIL -o /dev/null "https://github.com/$GITHUB_REPOSITORY/releases/latest/download/appcast.xml"; then
-            export APPCAST_BASE=none
-          fi
+          if [ "$DRY_RUN" = true ]; then args+=(--rc); export RELEASE_PREFLIGHT_MODE=dry-run; fi
+          export RELEASE_FEED_MAY_BE_MISSING=1
           scripts/release.sh "${args[@]}"
       - if: always()
         name: Remove signing
@@ -300,6 +330,7 @@ jobs:
           path: |
             ${{ steps.paths.outputs.dist }}/Ardia-${{ inputs.version }}.dmg
             ${{ steps.paths.outputs.dist }}/Ardia-${{ inputs.version }}.zip
+            ${{ steps.paths.outputs.dist }}/*.delta
             ${{ steps.paths.outputs.dist }}/appcast.xml
             ${{ steps.paths.outputs.dist }}/release-notes.md
             ${{ steps.paths.outputs.dist }}/provenance.txt

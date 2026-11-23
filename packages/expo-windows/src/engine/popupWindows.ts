@@ -19,7 +19,7 @@ export type PopupWindowInfo = {
   focused: boolean;
 };
 
-export type PopupWindowAsk = {
+type PopupWindowAsk = {
   adopt: string;
   url: string;
   profile: string;
@@ -42,7 +42,7 @@ const windows = (): PopupWindows => {
   return native;
 };
 
-export type PopupWindowOutcome = "shown" | "closed" | "failed";
+type PopupWindowOutcome = "shown" | "closed" | "failed";
 
 const popups = new Map<string, PopupWindowInfo>();
 const privateHolds = new Map<string, () => void>();

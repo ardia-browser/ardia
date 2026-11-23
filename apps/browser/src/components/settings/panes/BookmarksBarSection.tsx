@@ -2,7 +2,7 @@ import { useSettings } from "../../../state/browser/hooks";
 import { updateSettings } from "../../../state/settings/actions";
 import type { Settings } from "../../../state/settings/settings";
 import { PopUp, type Option } from "../../ui";
-import { Group, Row } from "../Form";
+import { Row } from "../Form";
 
 type BookmarksBarChoice = Settings["bookmarksBar"] | "hidden";
 
@@ -25,13 +25,5 @@ export function BookmarksBarRow() {
         minWidth={190}
       />
     </Row>
-  );
-}
-
-export function BookmarksBarSection() {
-  return (
-    <Group>
-      <BookmarksBarRow />
-    </Group>
   );
 }

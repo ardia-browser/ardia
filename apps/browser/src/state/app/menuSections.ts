@@ -1,7 +1,7 @@
 import type { MenuItem } from "../../platform/menus";
 
 export type MenuEntry = Extract<MenuItem, { id: string }>;
-export type MenuModifier = NonNullable<MenuEntry["modifiers"]>[number];
+type MenuModifier = NonNullable<MenuEntry["modifiers"]>[number];
 export type MenuKey = { key?: string; modifiers?: MenuModifier[] };
 
 type Slot<I> = I | false | null | undefined;

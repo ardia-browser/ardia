@@ -108,16 +108,16 @@ function SyncOff({ info }: { info: FolderInfo | null }) {
     asksWhere ? void pickThenEnter() : showPhraseEntry(info, () => void chooseSyncFolder().then(() => folderInfo().then((i) => showPhraseEntry(i))));
   const otherOptions = async () => {
     const choice = await showMenu([
-      { id: "folder", title: "Choose Sync Folder…" },
+      { id: "folder", title: "Choose Sync Folder…", symbol: "folder" },
       { separator: true },
-      ...(hasData ? [{ id: "new", title: "Set Up Without Another Device", enabled: !noICloud }] : []),
-      { id: "phrase", title: "Enter Recovery Phrase…" },
+      ...(hasData ? [{ id: "new", title: "Set Up Without Another Device", symbol: "plus.app", enabled: !noICloud }] : []),
+      { id: "phrase", title: "Enter Recovery Phrase…", symbol: "key" },
     ]);
     if (choice === "folder") void chooseSyncFolder();
     else if (choice === "new") void turnOn();
     else if (choice === "phrase") enterPhrase();
   };
-  const where = info ? `Syncs through ${folderLabel(info)}.` : "";
+  const where = info ? folderLabel(info) : "a synced folder you choose";
 
   return (
     <>
@@ -130,10 +130,10 @@ function SyncOff({ info }: { info: FolderInfo | null }) {
             status === "reset" && error
               ? error
               : hasData
-                ? "This folder has synced data already. To sync with your other devices, enter the recovery phrase from one of them."
+                ? "Synced data found. Enter your recovery phrase to join."
                 : asksWhere
-                  ? `Off. Your ${PLATFORM_TERMS.syncedComputer}s meet in a folder you choose, end-to-end encrypted. Turn On asks where: pick one that ${PLATFORM_TERMS.cloudDrive} keeps in sync, or one on a shared drive, and Ardia keeps its files in an “Ardia Sync” folder there.`
-                  : `Off. Your ${PLATFORM_TERMS.syncedComputer}s meet in a folder you choose, end-to-end encrypted. ${where}`
+                  ? "End-to-end encrypted through a synced folder you choose."
+                  : `End-to-end encrypted through ${where}.`
           }
         >
           <Button title="More" onPress={() => void otherOptions()} />
@@ -204,7 +204,6 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
       { separator: true },
       { id: "now", title: "Sync Now", symbol: "arrow.triangle.2.circlepath" },
       { id: "reveal", title: `Show Sync Folder in ${PLATFORM_TERMS.fileManager}`, symbol: "folder", enabled: !!info?.exists },
-      ...(PLATFORM_FEATURES.movesSyncFolder ? [{ id: "move", title: "Move Sync Folder…", symbol: "arrow.right.circle", enabled: !locked && !!info }] : []),
       { separator: true },
       { id: "stop", title: "Stop Syncing…", symbol: "xmark.circle" },
     ]);
@@ -212,7 +211,6 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
     else if (choice === "copy") await copyRecoveryPhrase();
     else if (choice === "now") await syncNow();
     else if (choice === "reveal" && info) await revealSyncFolder(info.path);
-    else if (choice === "move") await move();
     else if (choice === "stop") showStopSync();
   };
 

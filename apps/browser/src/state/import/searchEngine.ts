@@ -11,9 +11,9 @@ import { noteSearchEngineOfferTaken } from "../telemetry/importRuns";
 import { noteSearchEngineImport, type SearchEngineImportOutcome } from "../telemetry/searchEngineImports";
 import { importNow, patchImport, type EngineNotice } from "./flow";
 
-export type ImportedEngineMatch = { id: string } | { custom: EngineInput } | null;
+type ImportedEngineMatch = { id: string } | { custom: EngineInput } | null;
 
-export type AdoptedEngine = { outcome: SearchEngineImportOutcome; notice: EngineNotice | null; changed: boolean };
+type AdoptedEngine = { outcome: SearchEngineImportOutcome; notice: EngineNotice | null; changed: boolean };
 
 type ProfileEngines = readonly { profile: BrowserProfile; engine?: ImportedSearchEngine }[];
 
@@ -65,11 +65,11 @@ export function matchImportedEngine(engine: ImportedSearchEngine, engines: reado
   return custom ? { custom } : null;
 }
 
-export function sourceEngine(profiles: ProfileEngines): ImportedSearchEngine | undefined {
+function sourceEngine(profiles: ProfileEngines): ImportedSearchEngine | undefined {
   return (profiles.find((p) => p.profile.isDefault) ?? profiles[0])?.engine;
 }
 
-export function engineChosenByUser(): boolean {
+function engineChosenByUser(): boolean {
   const { settings, settingsMeta } = useBrowser.getState();
   if (settingsMeta.chosen.includes("searchEngine") || settings.searchEngine !== DEFAULT_SETTINGS.searchEngine) return true;
   return settingSyncedIn(appScopeRecords(), "searchEngine");

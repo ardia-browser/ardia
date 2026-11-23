@@ -27,7 +27,7 @@ const shapedWindow = ({ incognito: _i, originalProfileId: _o, ...w }: StoredWind
 const keyedById = <T,>(list: unknown): Record<string, T> | undefined =>
   Array.isArray(list) ? Object.fromEntries(list.filter((v): v is T & { id: string } => !!v && typeof v === "object" && typeof (v as { id?: unknown }).id === "string").map((v) => [v.id, v])) : undefined;
 
-export function currentSessionShape(saved: HydrateData): HydrateData {
+function currentSessionShape(saved: HydrateData): HydrateData {
   const doc = { ...saved, tabs: Object.values(saved.tabs ?? {}), splits: Object.values(saved.splits ?? {}) } as unknown as SavedObject;
   const shaped = sessionWithSplitSlots(sessionWithTabPins(sessionWithTabPages(doc))) as unknown as HydrateData & { tabs: unknown; splits: unknown };
   return {
@@ -139,7 +139,7 @@ export const linuxSessionShape = (saved: HydrateData): HydrateData => {
   return migratedSession(sniffedSessionShape(saved), Math.max(stamped ?? SNIFFED_SESSION_VERSION, SNIFFED_SESSION_VERSION));
 };
 
-export const unmigratedSessionShape = (saved: HydrateData): HydrateData => sniffedSessionShape(saved);
+const unmigratedSessionShape = (saved: HydrateData): HydrateData => sniffedSessionShape(saved);
 const sessionOnDisk = (saved: HydrateData): HydrateData => withPinChoicesOnDisk(linuxSessionShape(saved), saved);
 
 const inClosingOrder = <T extends { closedAt: number }>(entries: T[]) => [...entries].sort((a, b) => a.closedAt - b.closedAt).slice(-MAX_CLOSED_WINDOWS);
@@ -207,7 +207,7 @@ function withLaunchWindowAdopted(saved: HydrateData, windowId: string): HydrateD
   });
 }
 
-export function initialHostSession(host: ArdiaHost, saved: HydrateData | null | undefined, now = Date.now()): HydrateData {
+export function initialHostSession(host: ArdiaHost, saved: HydrateData | null | undefined, now = Date.now(), onRestored?: (windowId: string) => void): HydrateData {
   const { windowId } = host.bootstrap;
   const profileId = seedProfile(host.bootstrap);
   if (!windowId || !profileId || /[\\/\0]/.test(windowId + profileId)) throw new Error("Invalid Ardia host bootstrap IDs");
@@ -222,7 +222,10 @@ export function initialHostSession(host: ArdiaHost, saved: HydrateData | null | 
   const profile = { id: profileId, name: "Personal", color: "plum" as const, icon: null, createdAt: now };
   const profiles = { ...saved?.profiles };
   profiles[profileId] ??= profile;
-  if (saved?.windows?.[windowId]?.tabIds.some((id) => saved.tabs?.[id])) return { ...saved, profiles, focusedWindowId: windowId };
+  if (saved?.windows?.[windowId]?.tabIds.some((id) => saved.tabs?.[id])) {
+    onRestored?.(windowId);
+    return { ...saved, profiles, focusedWindowId: windowId };
+  }
   const seeds = seedTabs(host.bootstrap);
   const tabs: Tab[] = seeds.map(({ url, page }) => ({
     id: `t_${crypto.randomUUID()}`, windowId, profileId, url, title: "", favicon: null, pin: null, muted: false, zoom: 1,

@@ -40,7 +40,7 @@ const section = (text, from, to) => text.slice(text.indexOf(from), text.indexOf(
 const EXPECTED = [
   ["components/settings/panes/CalendarSection.tsx", ["<Button title=\"Try Again\" onPress={() => void connectCalendar()} />", "Ardia reads your calendars through Evolution Data Server, which isn't running", "Evolution Data Server refused to share your calendars"], []],
   ["components/settings/panes/ProfilePasswords.tsx", ["system password"], []],
-  ["components/settings/panes/SyncSection.tsx", ["Your computers meet in a folder you choose", "like one that Syncthing, Nextcloud or Dropbox keeps in sync", "title: \"Open Sync Folder\""], ["Linking.openURL", "Open iCloud Settings"]],
+  ["components/settings/panes/SyncSection.tsx", ["End-to-end encrypted through a synced folder you choose.", "like one that Syncthing, Nextcloud or Dropbox keeps in sync", "title: \"Open Sync Folder\""], ["Linking.openURL", "Open iCloud Settings"]],
   ["components/settings/panes/SyncSheets.tsx", ["title={`Add to This Computer`}", "system keyring", "return folder.path.replace(/^\\/home\\/[^/]+(?=\\/|$)/, \"~\");", "<Button title=\"Save as Text…\" kind=\"primary\" onPress={() => void save(\"text\")} />", "<Button title=\"Copy Words\" onPress={() => void copyRecoveryPhrase()} />"], ["recoveryKitPreview(", "copyRecoveryKit()", "shareRecoveryKit()", "save(\"pdf\")", "title=\"Other Options\""]],
   ["lib/themeLook.ts", ["export const MONO_FAMILY = \"monospace\";"], ["export const MONO_FAMILY = \"Menlo\";"]],
   ["state/sync/syncDoc.ts", ["never removes them from this computer"], []],

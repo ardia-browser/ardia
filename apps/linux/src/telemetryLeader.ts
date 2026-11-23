@@ -3,7 +3,7 @@ export const TELEMETRY_CHANNEL = "ardia.linux.telemetry";
 const MAX_HELD = 500;
 const MAX_ANSWERS = 100;
 
-export type Relayed =
+type Relayed =
   | { kind: "capture"; event: string; props: Record<string, unknown>; options: Record<string, unknown>; consent: string | null }
   | { kind: "log"; level: "warn" | "error"; message: string; attributes: Record<string, string | number | boolean>; consent: string | null };
 
@@ -24,7 +24,7 @@ export type LeaderLocks = {
 
 export type LeaderChannel = { postMessage(message: unknown): void; onmessage: ((event: { data: unknown }) => void) | null };
 
-export type TelemetryLeadershipDeps = {
+type TelemetryLeadershipDeps = {
   candidate: boolean;
   locks?: LeaderLocks;
   channel: LeaderChannel | null;

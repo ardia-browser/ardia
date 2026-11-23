@@ -1224,8 +1224,8 @@ doesn't.
 
 A new passkey follows Save new logins to, the same target as logins (`preferredSaveTarget`; with one manager connected
 that one is the default). Ardia can always hold one, and so can a provider that declares `capabilities.passkeys` and
-conforms to `VaultPasskeyHolder` (`holdsPasskeys(provider)` in `state/vaults/passkeyTarget.ts`). No provider holds
-passkeys yet:
+conforms to `VaultPasskeyHolder` (`holdsPasskeys(provider)` in `state/vaults/passkeyTarget.ts`); Bitwarden does. A
+manager that signs its passkeys itself is a target too (below):
 
 - **A holder, unlocked:** the sheet says "Saves to <name>" with its badge, and Save writes it through the provider.
   Native generates the key (CryptoKit) and hands the provider a `VaultNewPasskey` through `savePasskey(cli, credential:,
@@ -1241,6 +1241,49 @@ and the person can try again or switch to Ardia. If the page has gone by the tim
 stays in that manager (unlike Ardia's store, Ardia doesn't delete from a manager on its own). Signing with a
 provider's passkey goes through `passkeySigner(cli, item:, credential:)`, which reads the key at signing time; the
 provider drops it after use and never caches it.
+
+### Passkeys a manager signs itself (1Password, Proton Pass)
+
+1Password never hands over a passkey's key, and Proton Pass only signs in its extension, so neither can be a holder.
+Their plugins declare where the passkeys are signed instead (`contributes.credentialProvider.passkeys`, in order of
+preference; `docs/plugins.md`): `{ "via": "system" }` (1Password: its Mac app is a macOS AutoFill passkey provider)
+or `{ "via": "extension", "extensions": [id] }` (Proton Pass). Native turns each signed-in (locked or unlocked) such
+provider into a handler per request (`VaultPasskeyDelegate.handler`): its first route that works now, `system` while
+the system route is available, `extension` while that extension is a contender on the page. A provider with no
+working route is in no sheet at all; Settings › Passwords › Passkeys says why in one line (`state/vaults/passkeyRoutes.ts`).
+
+- **Sign In to <site>?** A system handler adds one row, "Use a passkey from 1Password" with its badge (no
+  per-passkey rows: `op` can't list them); Continue runs the system route, where macOS shows its sheet and 1Password
+  answers. An extension handler's passkeys are rows like Ardia's, with the manager's badge: the plugin lists their
+  metadata on its items (never a key; `CredentialResults` reads only metadata, and those candidates are marked
+  `delegated`, so `passkeys.get` is never called for them). Continue hands a copy of the page's options to that
+  extension's recorded function, with `allowCredentials` narrowed to that one id and the challenge, signal and timeout
+  kept; Proton shows its own one-row panel and the person clicks it. In the fill menu (conditional requests) those rows
+  hand off the same way when picked, with no Touch ID glyph; a conditional request is never handed to Proton on its
+  own while Ardia lists its rows, since its panel would pop up at once.
+- **Save a Passkey?** The provider is a Save To target and follows Save new logins to. The copy says who asks:
+  "macOS will ask where to save it. Choose 1Password there." or "Proton Pass will ask which login or vault to save it
+  in." Ardia checks `excludeCredentials` against the provider's listed ids first (Proton doesn't), with the usual
+  Passkey Already Saved. After an extension saves, Ardia refetches that provider's list.
+- **No Ardia Touch ID for these.** Deliberately: macOS and 1Password require user verification in Apple's sheet
+  (`userVerificationPreference = .required`), and Proton gates on its own lock and reports UV itself, so a second
+  prompt from Ardia would be noise. Native never calls the owner check on those paths, and `VaultPasskeys.signer`
+  refuses a delegated candidate outright.
+- **When it comes back.** A system error after an explicit pick, or a hand-off that comes back to Ardia's wrapper
+  (Proton signed out, locked, no match, panel closed), reopens Ardia's sheet with a message ("Proton Pass didn't sign
+  you in. It may be locked, or have no passkey for github.com. Try again, or choose another way."), never Chrome's
+  window; Chrome is only Other Options. A hand-off that rejects (timeout, replaced) rejects the page as before. The page
+  script spaces hand-offs at least 600 ms apart (Proton refuses a second request within 500 ms) and sends one per
+  request (`passkeyDelegated` tells native `done`, `rejected` or `returned`).
+- **The rest is shared.** Locking the provider cancels a system request it started (`VaultPasskeys.providersLocked`);
+  cancel, timeouts, navigation, abort, the switch and private windows behave as for the other routes.
+- **Use passkeys from** lists "1Password App" while its system route works: modal requests go straight to the system
+  route; autofill can't (macOS has no browser conditional UI), so it behaves like Ask there.
+- **Scale.** Candidates come from a native index by rpId per provider (`VaultPasskeyIndex`), built on the broker actor
+  when the provider's list changes and reused while the list is the same array; a lookup is one dictionary read
+  (`vault-passkeys.test.swift` builds 50,000 items with 3,125 passkeys and times both). JS gets only the rows for the
+  request. Message parsing, request and rpId checks, matching, key generation, signing and attestation parsing run off
+  the main thread; the main actor only routes and presents.
 
 ### What the person sees
 
@@ -1293,7 +1336,8 @@ Password-manager extensions do WebAuthn the same way Ardia does: a MAIN-world co
   | --- | --- | --- |
   | Ask Each Time | the chooser: Ardia (when it has a passkey for the site, or to save), each extension, Security Key or Phone | Ardia's fill menu when Ardia has passkeys there, else as if Ardia weren't there |
   | Ardia | Ardia's sheet; with nothing to sign in with, the chooser without Ardia | Ardia's fill menu, else as if Ardia weren't there |
-  | an extension | straight to it | straight to it |
+  | an extension | straight to it | straight to it, unless Ardia lists that extension's passkeys here (then Ardia's fill menu) |
+  | a manager's Mac app (system route) | straight to the system route | as Ask |
   | Chrome (Security Key or Phone) | Chrome's own window | Chrome's own |
 
   With no contender on the page everything works as before. A default extension that's disabled or removed counts as
@@ -1330,19 +1374,21 @@ Password-manager extensions do WebAuthn the same way Ardia does: a MAIN-world co
   extension counts against the chooser: a chooser that's always answered with the same extension means people want it
   as the default.
 
-### The system route (lights up with Apple's grant)
+### The system route
 
 `VaultSystemPasskeys` uses `ASAuthorizationPlatformPublicKeyCredentialProvider` with `ASPublicKeyCredentialClientData`
 (challenge, the verified origin, `crossOrigin = .sameOriginWithAncestors`), so macOS builds `clientDataJSON` with the true
 origin and offers iCloud Keychain and every enabled credential provider app (System Settings › General › AutoFill &
 Passwords). It is available only when `com.apple.developer.web-browser.public-key-credential` is in
-the signature (`WebKitHub.passkeysEntitled`) and browser passkey access isn't denied; the sheets then offer iCloud
-Keychain or Another App… under Other Options…. The same origin, rpId and certificate checks run first; a request that
+the signature (`WebKitHub.passkeysEntitled`) and browser passkey access isn't denied. Release builds are signed with it
+(0.2.48 is; local, Dev and ad hoc builds aren't); the sheets then offer iCloud Keychain or Another App… under Other
+Options…, and a provider that declares `{ "via": "system" }` gets its own row (above). The same origin, rpId and certificate checks run first; a request that
 ends (timeout, abort, navigation) cancels Apple's sheet; a registration's authenticator data and public key are read back
 from the attestation object so `getPublicKey()` and `toJSON()` are complete. macOS has no system conditional UI for
 browsers (`performAutoFillAssistedRequests` is unavailable on macOS), so system passkeys are offered from the sheet, not
-the fill menu. Once the grant arrives, Chrome's own WebAuthn (Other Options…) also reaches iCloud Keychain, since it
-checks the same entitlement at run time. Untested until then.
+the fill menu. Chrome's own WebAuthn (Other Options…) also reaches iCloud Keychain in a signed build, since it checks the
+same entitlement at run time. An `excludeCredentials` hit (`ASAuthorizationError` 1006) rejects with InvalidStateError.
+Apple's sheet answered by 1Password hasn't been tried yet: it needs the team-signed build and a person.
 
 ### Builds and testing
 
@@ -1360,8 +1406,11 @@ checks the same entitlement at run time. Untested until then.
 
 `usage_counts`: `vault_passkeys_created`, `vault_passkeys_used`, `vault_passkeys_fallback` (handed to Chrome, chosen or
 because nothing applied), `vault_passkeys_refused` (Not Now, Cancel, timed out), `vault_passkeys_failed`,
-`vault_passkeys_deleted`. Watch used against created (a passkey that's never used means sign-in isn't finding it), and
-fallback against created + used on the dashboard.
+`vault_passkeys_deleted`, `vault_passkeys_via_system_provider`, `vault_passkeys_system_provider_{used,created,cancelled,failed}`
+and `vault_passkeys_extension_delegate_{used,created,returned,rejected}`. Watch used against created (a passkey that's
+never used means sign-in isn't finding it), and fallback against created + used on the dashboard. For the managers
+that sign their own passkeys, watch failed and returned against used and created: a high share means 1Password's
+AutoFill provider isn't turned on, or Proton is locked or signed out when people pick it.
 
 ## The Passwords sub-page
 

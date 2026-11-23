@@ -207,8 +207,8 @@ stays up. That's GPL-3.0 §6(d) for the GPL parts (uBlock Origin today), and it'
      designated requirement (our team), the keychain groups, Sparkle's feed and key and the usage strings in
      `Info.plist`; that every piece of code is Developer ID with a timestamp and no `get-task-allow`; and that the app
      is signed with `com.apple.developer.web-browser.public-key-credential` exactly when its provisioning profile
-     grants it. Apple hasn't granted it yet; once it has, a `RELEASE_PROVISIONING_PROFILE` downloaded again carries it
-     and the export signs with `Ardia-ICloudPasskeys.entitlements` on its own (the Xcode-managed export still needs
+     grants it. Apple has granted it and the Developer ID profile carries it, so the export signs with
+     `Ardia-ICloudPasskeys.entitlements` (0.2.48 shipped with it; the Xcode-managed export still needs
      `CODE_SIGN_ENTITLEMENTS` switched to that file),
    - launches the app once in the background (throwaway data dir), waits for uBlock's rulesets to be indexed,
      quits it and checks the signature again: the app must never write into its own bundle,

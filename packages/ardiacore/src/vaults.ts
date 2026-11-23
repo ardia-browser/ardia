@@ -75,6 +75,10 @@ export type VaultItem = {
   passkey?: { requestId: string; credentialId: string };
 };
 
+export type VaultSiteItems = { items: VaultItem[]; listed: VaultProviderId[]; revision: number };
+export type VaultItemPage = { total: number; items: VaultItem[]; revision: number };
+export type VaultItemsStatus = { revision: number; listed: VaultProviderId[]; counts: Record<VaultProviderId, number> };
+
 export type VaultSignInMethod = { id: string; name: string; sendsCode?: boolean };
 
 export type VaultSignInResult = {

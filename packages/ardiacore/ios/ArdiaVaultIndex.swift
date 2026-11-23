@@ -10,9 +10,11 @@ actor ArdiaVaultIndex {
 
   static var knownState: VaultProviderState { lastState.withLock { $0 } }
 
-  private var listed: [VaultItem] = []
+  private var listed: [VaultItem] = [] {
+    didSet { revision = VaultItemsRevision.next() }
+  }
+  private(set) var revision = 0
   private var positions: [String: Int] = [:]
-  private var listedJSON: String?
   private var listedAt = Date.distantPast
   private var everListed = false
   private var stale = true
@@ -43,7 +45,7 @@ actor ArdiaVaultIndex {
   }
 
   private func announceItems() {
-    let payload = ArdiaConsentStamp.begin().onto(["provider": ArdiaVault.id])
+    let payload = ArdiaConsentStamp.begin().onto(["provider": ArdiaVault.id, "revision": revision])
     DispatchQueue.main.async { ArdiaEvents.emit("vaults.itemsChanged", data: payload) }
   }
 
@@ -93,16 +95,12 @@ actor ArdiaVaultIndex {
     if loginsChanged { await ArdiaVaultBackup.shared.noteChange() }
   }
 
-  func itemsJSON() async -> String {
-    _ = await items()
-    if let listedJSON { return listedJSON }
-    let built = VaultJSON.data(listed.map { $0.jsonObject() }).flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
-    listedJSON = built
-    return built
+  func snapshot() async -> (revision: Int, items: [VaultItem]) {
+    let items = await items()
+    return (revision, items)
   }
 
   private func adopt(_ fresh: [VaultItem]) {
-    listedJSON = nil
     listed = fresh
     positions = Dictionary(fresh.enumerated().map { ($0.element.id, $0.offset) }, uniquingKeysWith: { first, _ in first })
   }
@@ -118,7 +116,6 @@ actor ArdiaVaultIndex {
     guard positions[id] == nil else { return }
     positions[id] = listed.count
     listed.append(item)
-    listedJSON = nil
     announceItems()
   }
 
@@ -210,7 +207,6 @@ actor ArdiaVaultIndex {
       }
     }
     guard changed else { return }
-    listedJSON = nil
     announceItems()
   }
 

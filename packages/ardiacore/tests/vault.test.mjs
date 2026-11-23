@@ -12,6 +12,8 @@ const suites = [
   ["vault-edit", [], ["VaultLoginEdit", "VaultJSON", "VaultError", "VaultItem", "VaultTotp", "VaultTotpSecret", "VaultTotpURI", "VaultOriginMatch", "VaultPublicSuffixRules"]],
   ["vault-secrets", [], ["VaultSecretPlace", "VaultSecretShelf", "VaultSecretFile", "VaultSealed", "VaultSealedFolder", "VaultTouchGrants"]],
   ["vault-passkeys", [], ["VaultWebAuthn", "VaultPasskey", "VaultPasskeyRoute", "VaultPasskeyExtensionScan", "VaultItem", "VaultJSON", "VaultError", "VaultOriginMatch", "VaultPublicSuffixRules", "ArdiaVaultLogin", "ArdiaVaultFile", "ArdiaStandaloneCode", "VaultLedger", "VaultSealed", "VaultCacheSnapshot"]],
+  ["vault-catalog", ["-O"], ["VaultCatalog", "VaultOffMain", "VaultItem", "VaultOriginMatch", "VaultPublicSuffixRules"]],
+  ["vault-off-main", ["-DDEBUG"], ["VaultOffMain"]],
   ["vault-revealed-field", [], ["VaultRevealedFieldEditor"]],
   ["vault-secret-entries", [], ["VaultSecretEntries"]],
   ["vault-touch-scopes", [], ["VaultTouchGrants"]],
@@ -19,12 +21,12 @@ const suites = [
   ["autofill-card", [], ["AutofillCardNumber"]],
   ["credential-verbs", [], ["CredentialLimits", "CredentialCatalog", "CredentialCatalogParser", "CredentialCatalogParser+Cli", "CredentialVerbLaunch"]],
   ["credential-output", [], [
-    "CredentialLimits", "CredentialCatalog", "CredentialCatalogParser", "CredentialCatalogParser+Cli", "CredentialVerbLaunch", "CredentialVerbOutput", "CredentialWording", "CredentialResults",
+    "CredentialLimits", "CredentialCatalog", "CredentialCatalogParser", "CredentialCatalogParser+Cli", "CredentialVerbLaunch", "CredentialVerbOutput", "VaultOffMain", "CredentialWording", "CredentialResults",
     "VaultCommandResult", "VaultJSON", "VaultError", "VaultItem", "VaultItemList", "VaultState", "VaultWebAuthn", "VaultOriginMatch", "VaultPublicSuffixRules",
   ]],
   ["credential-locator", [], ["VaultBinaryLocator", "CredentialHost", "VaultCommand", "VaultCommandResult", "VaultLockEpoch"]],
   ["credential-run", [], [
-    "CredentialLimits", "CredentialCatalog", "CredentialCatalogParser", "CredentialCatalogParser+Cli", "CredentialVerbLaunch", "CredentialVerbOutput", "CredentialWording",
+    "CredentialLimits", "CredentialCatalog", "CredentialCatalogParser", "CredentialCatalogParser+Cli", "CredentialVerbLaunch", "CredentialVerbOutput", "VaultOffMain", "CredentialWording",
     "CredentialResults", "CredentialHandles", "CredentialHost", "CredentialRunEndpoint", "PluginVaultProvider", "PluginVaultProvider+SignIn", "VaultPasskeyHolder", "VaultPasskey",
     "VaultProvider", "VaultCLI", "VaultCommand", "VaultCommandResult", "VaultLockEpoch", "VaultJSON", "VaultError", "VaultItem", "VaultItemList",
     "VaultState", "VaultWebAuthn", "VaultOriginMatch", "VaultPublicSuffixRules", "VaultCapabilities", "VaultInstall", "VaultSetup", "VaultSetupKind",

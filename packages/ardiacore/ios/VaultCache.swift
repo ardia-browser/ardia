@@ -36,11 +36,13 @@ enum VaultCache {
   static func exists(_ provider: String) -> Bool { locked({ $0.exists(provider) }, otherwise: false) }
 
   static func load(_ provider: String) -> VaultCacheSnapshot? {
-    readSealed(provider).plain.flatMap(VaultCacheSnapshot.decoded)
+    VaultOffMain.check()
+    return readSealed(provider).plain.flatMap(VaultCacheSnapshot.decoded)
   }
 
   @discardableResult
   static func save(_ provider: String, _ snapshot: VaultCacheSnapshot, toCloud: Bool = true) -> Bool {
+    VaultOffMain.check()
     guard let plain = try? JSONEncoder().encode(snapshot) else { return false }
     let saved = updateSealed(provider) { read -> (Data?, Bool) in
       if let held = read.plain, VaultCacheSnapshot.isNewerFormat(held) {

@@ -19,7 +19,7 @@ import type {
   CookieRemoval, PageCookie, PageEngine, PasskeyAccess, SiteData, SiteDataWritten, StorageChange, StorageItems, WebKitCount,
 } from "../webkit";
 import type { ChromeDropdownShown, DisplayMediaSource, OpenWindowRequest, VaultPasswordStyle, WebNotification } from "../pageTypes";
-import type { VaultPasskey, VaultPasskeyAnswer, VaultPasskeyDone, VaultPasskeyRequest, VaultAddTotpResult, VaultCreateLoginResult, VaultEditResult, VaultStandaloneCode, VaultStandaloneCodeAdded, VaultStandaloneCodeEdited, VaultCodeRead, VaultCodeSource, VaultCopyResult, VaultRemoveTotpResult, VaultGeneratedPassword, VaultGeneratedSaveResult, VaultItem, VaultProviderId, VaultProviderState, VaultSecretField, VaultSyncResult, VaultTotp, VaultBackupStatus, VaultBackupChange, VaultBackupDeleteResult, VaultRestoreResult, VaultSignInAnswer, VaultSignInResult } from "../vaults";
+import type { VaultPasskey, VaultPasskeyAnswer, VaultPasskeyDone, VaultPasskeyRequest, VaultAddTotpResult, VaultCreateLoginResult, VaultEditResult, VaultStandaloneCode, VaultStandaloneCodeAdded, VaultStandaloneCodeEdited, VaultCodeRead, VaultCodeSource, VaultCopyResult, VaultRemoveTotpResult, VaultGeneratedPassword, VaultGeneratedSaveResult, VaultItem, VaultItemPage, VaultItemsStatus, VaultSiteItems, VaultProviderId, VaultProviderState, VaultSecretField, VaultSyncResult, VaultTotp, VaultBackupStatus, VaultBackupChange, VaultBackupDeleteResult, VaultRestoreResult, VaultSignInAnswer, VaultSignInResult } from "../vaults";
 import type { BookmarksCalls, BookmarksEvents } from "./generated/bookmarks";
 import type { FaviconsCalls, FaviconsEvents } from "./generated/favicons";
 import type { HistoryCalls, HistoryEvents } from "./generated/history";
@@ -224,7 +224,11 @@ export type EngineCalls = BookmarksCalls & FaviconsCalls & HistoryCalls & {
   "vaults.providers": [{}, VaultProviderState[]];
   "vaults.claimChromeDropdowns": [{ tabId: string; kinds: ChromeDropdownShown[]; usernames: string[]; anyLogin?: boolean }, { hidden: boolean; showing: ChromeDropdownShown[]; logins: string[] }];
   "vaults.refresh": [{ provider: VaultProviderId; ardiaProfiles?: string[] }, VaultProviderState];
-  "vaults.items": [{ provider?: VaultProviderId }, VaultItem[]];
+  "vaults.siteItems": [{ origin: string }, VaultSiteItems];
+  "vaults.searchItems": [{ query: string; limit?: number; ardiaProfile?: string | null }, VaultItem[]];
+  "vaults.listItems": [{ query?: string; offset?: number; limit: number; managersOnly?: boolean; ardiaProfile?: string | null }, VaultItemPage];
+  "vaults.usernames": [{ email: boolean; limit?: number; ardiaProfile?: string | null }, VaultItem[]];
+  "vaults.itemsStatus": [{}, VaultItemsStatus];
   "vaults.lock": [{ provider: VaultProviderId }, VaultProviderState];
   "vaults.signOut": [{ provider: VaultProviderId }, VaultProviderState];
   "vaults.configure": [{ provider: VaultProviderId; server?: string | null }, VaultProviderState];
@@ -329,7 +333,7 @@ export type EngineEvents = BookmarksEvents & FaviconsEvents & HistoryEvents & {
   "media.castRoutes": { profile: string; routes: CastRoute[] };
   "vaults.changed": { provider: VaultProviderState; removed?: boolean };
   "vaults.openApproval": { provider: VaultProviderId; url: string };
-  "vaults.itemsChanged": { provider: VaultProviderId };
+  "vaults.itemsChanged": { provider: VaultProviderId; revision: number };
   "vaults.generatedChanged": Record<string, never>;
   "vaults.backupChanged": VaultBackupChange;
   "vaults.codesChanged": Record<string, never>;

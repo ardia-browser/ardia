@@ -147,6 +147,18 @@ public class VaultsModule: Module {
     return result.jsonObject()
   }
 
+  static func count(_ value: Double?, otherwise: Int) -> Int {
+    guard let value, value.isFinite else { return otherwise }
+    return Int(min(max(value, 0), 100_000))
+  }
+
+  static func profileFilter(_ args: CallArgs, managersOnly: Bool) throws -> VaultCatalog.ProfileFilter {
+    if managersOnly { return .managersOnly }
+    guard args.values.keys.contains("ardiaProfile") else { return .everyProfile }
+    guard let profile = try args.optionalText("ardiaProfile") else { return .managersOnly }
+    return .profile(profile)
+  }
+
   static func readCode(_ source: VaultCodeSource, origin: String, tabId: String?) async -> [String: Any] {
     switch await VaultTotpSetup.read(source, origin: origin, tabId: tabId) {
     case .success(let offer): return offer
@@ -165,13 +177,30 @@ public class VaultsModule: Module {
       if id == ArdiaVault.id, let profiles = try args.optionalStrings("ardiaProfiles") { ArdiaVaultStore.setArdiaProfiles(profiles) }
       VaultsModule.answer(reply) { await VaultBroker.shared.refresh(id, explicit: true)?.jsonObject() }
     },
-    "items": { args, reply in
-      let id = try VaultsModule.optionalProvider(args)
-      Task {
-        if let json = await VaultBroker.shared.itemsJSON(id) { return reply.promise.resolve(json) }
-        reply.ok(await VaultBroker.shared.items(id).map { $0.jsonObject() })
-      }
+    "siteItems": { args, reply in
+      let origin = try args.text("origin")
+      VaultsModule.answer(reply) { await VaultBroker.shared.siteItems(origin: origin) }
     },
+    "searchItems": { args, reply in
+      let query = try args.text("query")
+      let limit = VaultsModule.count(try args.optionalDouble("limit"), otherwise: 100)
+      let filter = try VaultsModule.profileFilter(args, managersOnly: false)
+      VaultsModule.answer(reply) { await VaultBroker.shared.searchItems(query, limit: limit, filter: filter) }
+    },
+    "listItems": { args, reply in
+      let query = try args.optionalText("query") ?? ""
+      let offset = VaultsModule.count(try args.optionalDouble("offset"), otherwise: 0)
+      let limit = VaultsModule.count(try args.double("limit"), otherwise: 0)
+      let filter = try VaultsModule.profileFilter(args, managersOnly: try args.optionalBool("managersOnly") == true)
+      VaultsModule.answer(reply) { await VaultBroker.shared.listItems(query: query, offset: offset, limit: limit, filter: filter) }
+    },
+    "usernames": { args, reply in
+      let email = try args.bool("email")
+      let limit = VaultsModule.count(try args.optionalDouble("limit"), otherwise: 12)
+      let filter = try VaultsModule.profileFilter(args, managersOnly: false)
+      VaultsModule.answer(reply) { await VaultBroker.shared.usernames(email: email, limit: limit, filter: filter) }
+    },
+    "itemsStatus": { _, reply in VaultsModule.answer(reply) { await VaultBroker.shared.itemsStatus() } },
     "lock": { args, reply in
       let id = try VaultsModule.provider(args)
       VaultsModule.answer(reply) { await VaultBroker.shared.lock(id)?.jsonObject() }
@@ -217,7 +246,7 @@ public class VaultsModule: Module {
         "storeNewerFormatKept": store.newerFormatKept, "storeUnreadableKept": store.unreadableKept,
         "storeKeyReadFailed": store.keyReadFailed, "staleWorkDropped": store.staleWorkDropped,
         "storeResealed": store.resealed, "storeSetAside": store.setAside, "storeKeyNotNoted": store.keyNotNoted,
-        "storeCloudNewerFormatKept": store.cloudNewerFormatKept, "credential": CredentialCounts.shared.take(),
+        "storeCloudNewerFormatKept": store.cloudNewerFormatKept, "catalogBuilds": store.catalogBuilds, "catalogBuildsSlow": store.catalogBuildsSlow, "credential": CredentialCounts.shared.take(),
       ])
     },
     "sync": { _, reply in VaultsModule.answer(reply) { await VaultBroker.shared.sync().jsonObject() } },

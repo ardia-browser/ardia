@@ -313,6 +313,8 @@ struct VaultStoreCounts: Equatable, Sendable {
   var setAside = 0
   var keyNotNoted = 0
   var cloudNewerFormatKept = 0
+  var catalogBuilds = 0
+  var catalogBuildsSlow = 0
 
   private static let lock = NSLock()
   nonisolated(unsafe) private static var held = VaultStoreCounts()

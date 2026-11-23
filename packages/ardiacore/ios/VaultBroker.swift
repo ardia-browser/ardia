@@ -19,7 +19,12 @@ actor VaultBroker {
   let sessions = VaultSessionStore.shared
   var lanes: [String: VaultLane] = [:]
   var states: [String: VaultProviderState] = [:]
-  var cachedItems: [String: [VaultItem]] = [:]
+  var cachedItems: [String: [VaultItem]] = [:] {
+    didSet { itemsRevision = VaultItemsRevision.next() }
+  }
+  var itemsRevision = 0
+  var catalog: (key: VaultCatalogKey, catalog: VaultCatalog)?
+  var catalogBuild: (key: VaultCatalogKey, task: Task<VaultCatalog, Never>)?
   var fetchedAt: [String: Date] = [:]
   var loading: [String: Task<Result<[VaultItem], Error>, Never>] = [:]
   var yieldingLoads: Set<String> = []
@@ -184,7 +189,7 @@ actor VaultBroker {
   }
 
   func announceItems(_ id: String) {
-    let payload = ArdiaConsentStamp.begin().onto(["provider": id])
+    let payload = ArdiaConsentStamp.begin().onto(["provider": id, "revision": itemsRevision])
     DispatchQueue.main.async { ArdiaEvents.emit("vaults.itemsChanged", data: payload) }
   }
 }

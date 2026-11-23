@@ -29,16 +29,6 @@ extension VaultBroker {
     VaultSyncResult(syncedAt: lastSyncedAt, iCloud: VaultCloud.shared.isOn, backup: await ArdiaVaultBackup.shared.status(profiles: nil))
   }
 
-  func itemsJSON(_ id: String?) async -> String? {
-    guard id == nil || id == ArdiaVault.id else { return nil }
-    let ardia = await ArdiaVaultIndex.shared.itemsJSON()
-    guard id == nil else { return ardia }
-    let rest = await items(across: VaultRegistry.providers)
-    guard !rest.isEmpty, let data = VaultJSON.data(rest.map { $0.jsonObject() }), let others = String(data: data, encoding: .utf8) else { return ardia }
-    guard ardia != "[]" else { return others }
-    return String(ardia.dropLast()) + "," + String(others.dropFirst())
-  }
-
   func cloudChanged(_ id: String, fromHere: Bool) async {
     if gate.admits(id), cloudAccepts(id) != nil, cachedItems[id] != nil || sessions.session(id) != nil {
       return await pullFromCloud(id)

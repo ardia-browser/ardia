@@ -96,6 +96,7 @@ enum CredentialVerbOutput {
   }
 
   static func report(_ result: VaultCommandResult, verb: CredentialVerb, launch: CredentialVerbLaunch, verbOf: Int, streamed droppedLines: Int = 0) -> CredentialVerbReport {
+    VaultOffMain.check()
     let secrets = redactor(launch.secretValues)
     var report = CredentialVerbReport()
     var overflowed = result.overflowed

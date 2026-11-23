@@ -61,7 +61,7 @@ enum VaultOriginMatch {
   }
 
   private static let localHosts: Set<String> = ["localhost", "127.0.0.1", "::1"]
-  private static let cacheLimit = 50_000
+  private static let cacheLimit = 250_000
   private static let parsed = OSAllocatedUnfairLock(initialState: [String: Site?]())
   private static let registrable = OSAllocatedUnfairLock(initialState: [String: String]())
 
@@ -85,6 +85,8 @@ enum VaultOriginMatch {
     guard let port = found.port, port != defaultPort(found.scheme) else { return "\(found.scheme)://\(host)" }
     return "\(found.scheme)://\(host):\(port)"
   }
+
+  static func siteLabel(of text: String) -> String? { host(of: text).map(bare) }
 
   static func siteName(of text: String) -> String? {
     host(of: text).map { $0.hasPrefix("www.") ? String($0.dropFirst(4)) : $0 }

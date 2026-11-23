@@ -21,16 +21,34 @@ function hostOnPage(urls: readonly string[], site: string) {
   return hosts.find((host) => siteKey(withScheme(host)) === page) ?? hosts[0] ?? "";
 }
 
-export function loginLines(item: Extract<VaultRow, { kind: "login" }>["item"], site: string) {
+type LoginItem = Extract<VaultRow, { kind: "login" }>["item"];
+
+function plainLines(item: LoginItem, site: string) {
   const where = hostOnPage(item.urls, site) || site;
   if (item.passkey) return { title: item.username || item.title || where, detail: `Passkey for ${where}` };
   return { title: item.username || item.title || where, detail: item.username || item.title ? where : "" };
 }
 
-export function rowLabel(row: VaultRow, site: string): string {
+export function loginLines(item: LoginItem, site: string, twin = false) {
+  const lines = plainLines(item, site);
+  return twin && item.title && item.title !== lines.title ? { title: lines.title, detail: item.title } : lines;
+}
+
+export function twinLogins(rows: readonly VaultRow[], site: string): ReadonlySet<string> {
+  const seen = new Map<string, string[]>();
+  for (const row of rows) {
+    if (row.kind !== "login") continue;
+    const { title, detail } = plainLines(row.item, site);
+    const same = `${title}\n${detail}`;
+    seen.set(same, [...(seen.get(same) ?? []), row.key]);
+  }
+  return new Set([...seen.values()].filter((keys) => keys.length > 1).flat());
+}
+
+export function rowLabel(row: VaultRow, site: string, twin = false): string {
   switch (row.kind) {
     case "login": {
-      const { title, detail } = loginLines(row.item, site);
+      const { title, detail } = loginLines(row.item, site, twin);
       return [title, detail, brandOf(row.item.provider).name].filter(Boolean).join(", ");
     }
     case "otp":
@@ -48,7 +66,7 @@ export function rowLabel(row: VaultRow, site: string): string {
     case "suggest":
       return "Suggest New Password";
     case "openPasswords":
-      return "Open Passwords";
+      return "Open Passwords…";
     case "settings":
       return "Password Settings…";
   }

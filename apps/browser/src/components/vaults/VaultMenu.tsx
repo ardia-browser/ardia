@@ -3,6 +3,7 @@ import { Animated, ScrollView, StyleSheet, View } from "react-native";
 import { clickVaultRow, stepVaultMenu } from "../../state/vaults/fill";
 import { closeVaultMenu, hoverVaultMenu, noteVaultSearchFocus, useVaultMenus, offerToFocusedField, restingRowOf, searchVaultMenu, selectVaultRow, setVaultMenuOffscreen, showVaultMatches, type VaultMenu as MenuState } from "../../state/vaults/menu";
 import { FOOTER_KINDS, GENERATOR_STYLES, type VaultRow } from "../../state/vaults/menuModel";
+import { scrollToKeep } from "../../state/vaults/menuScroll";
 import { siteLabel } from "../../state/vaults/originMatch";
 import { useVaultMenu, useVaultMenuGlass, useVaultMenuRows, useVaultTouchID } from "../../state/vaults/hooks";
 import { armVaultTouchID, isTouchRow, noteVaultTouchStatus, touchIDGlyphShown, touchScopeOf } from "../../state/vaults/touchID";
@@ -12,6 +13,7 @@ import { vaultHighlight } from "../../state/vaults/highlight";
 import { over } from "../../lib/color";
 import { useSettings, useTab, useTabLive } from "../../state/browser/hooks";
 import { anchoredClose, anchoredOpen, Button, Divider, Expand, GlassFill, ink, liquidGlass, PANEL, Panel, POPOVER_MARGIN, PopoverSurface, reduceMotion, SearchField, selectionSlide, shadow, space, Text, useTheme, VaultTouchID, withAlpha } from "../ui";
+import { twinLogins } from "./rowText";
 import { CodesTicking, rowHeight, VaultRowView } from "./VaultRows";
 import { VAULT_MENU } from "./tokens";
 
@@ -149,12 +151,14 @@ function MenuPanel({ tabId, menu, zoom, area, onGone }: { tabId: string; menu: M
     let at = 0;
     return list.map((r) => (at += rowHeight(r)) - rowHeight(r));
   }, [rows]);
+  const contentHeight = useRef(0);
   useEffect(() => {
     if (menu.selected < 0 || menu.selected >= list.length) return;
-    const start = offsets[menu.selected]!;
-    const end = start + rowHeight(list[menu.selected]!);
-    if (start < scrollTop.current) scroll.current?.scrollTo({ y: start, animated: false });
-    else if (end > scrollTop.current + listRoom) scroll.current?.scrollTo({ y: end - listRoom, animated: false });
+    const start = VAULT_MENU.listPad + offsets[menu.selected]!;
+    const y = scrollToKeep({ start, end: start + rowHeight(list[menu.selected]!) }, { top: scrollTop.current, room: listRoom, content: contentHeight.current || Number.POSITIVE_INFINITY, inset: VAULT_MENU.listPad });
+    if (y === null) return;
+    scrollTop.current = y;
+    scroll.current?.scrollTo({ y, animated: false });
   }, [menu.selected, whole, listRoom, offsets]);
   const touchIDReady = useVaultTouchID();
   const windowId = useTab(tabId, (t) => t?.windowId);
@@ -172,6 +176,7 @@ function MenuPanel({ tabId, menu, zoom, area, onGone }: { tabId: string; menu: M
   }, [tabId, touchArmed, menu.seq]);
   const touch = { phase: menu.touch, retries: menu.touchRetries };
   const site = siteLabel(menu.origin);
+  const twins = useMemo(() => twinLogins(list, site), [rows, site]);
   const unfolds = allSettled.reduce((sum, r) => sum + rowHeight(r), 0) + GENERATOR_STYLES.length * VAULT_MENU.row <= listRoom;
   const view = (row: VaultRow, index: number) => (
     <VaultRowView
@@ -180,6 +185,7 @@ function MenuPanel({ tabId, menu, zoom, area, onGone }: { tabId: string; menu: M
       seq={menu.seq}
       row={row}
       site={site}
+      twin={twins.has(row.key)}
       selected={shownSelected === index}
       plated={index < list.length}
       reserveTrailing={touchIDReady}
@@ -229,6 +235,7 @@ function MenuPanel({ tabId, menu, zoom, area, onGone }: { tabId: string; menu: M
               showsVerticalScrollIndicator={false}
               scrollEventThrottle={16}
               onScroll={(e) => (scrollTop.current = e.nativeEvent.contentOffset.y)}
+              onContentSizeChange={(_, h) => (contentHeight.current = h)}
             >
               <SelectionPlate index={shownSelected} offsets={offsets} fill={highlight.fill} />
               {settled.map(view)}

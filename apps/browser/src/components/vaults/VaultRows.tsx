@@ -37,7 +37,7 @@ type RowProps = Parameters<typeof VaultRowViewOf>[0];
 const sameTouch = (a: VaultTouchState | null, b: VaultTouchState | null) => a === b || (!!a && !!b && a.phase === b.phase && a.retries === b.retries);
 
 const sameRowProps = (a: RowProps, b: RowProps) =>
-  a.tabId === b.tabId && a.seq === b.seq && a.row === b.row && a.selected === b.selected && a.plated === b.plated && a.reserveTrailing === b.reserveTrailing && a.highlight === b.highlight && a.busy === b.busy && a.site === b.site && sameTouch(a.touch, b.touch);
+  a.tabId === b.tabId && a.seq === b.seq && a.row === b.row && a.selected === b.selected && a.plated === b.plated && a.reserveTrailing === b.reserveTrailing && a.highlight === b.highlight && a.busy === b.busy && a.site === b.site && a.twin === b.twin && sameTouch(a.touch, b.touch);
 
 export const VaultRowView = memo(VaultRowViewOf, sameRowProps);
 
@@ -281,6 +281,7 @@ function VaultRowViewOf({
   touch,
   busy,
   site,
+  twin,
   onHover,
   onPress,
 }: {
@@ -294,11 +295,12 @@ function VaultRowViewOf({
   touch: VaultTouchState | null;
   busy: boolean;
   site: string;
+  twin?: boolean;
   onHover: () => void;
   onPress: () => void;
 }) {
   const tryAgain = useTryAgain(touch?.retries ?? 0) && !!touch && !busy;
-  const label = rowLabel(row, site);
+  const label = rowLabel(row, site, twin);
   const shell = (children: (ink: Ink, lit: boolean) => ReactNode) => (
     <RowShell label={label} height={rowHeight(row)} compact={FOOTER_KINDS.has(row.kind)} selected={selected} plated={plated} highlight={highlight} onHover={onHover} onPress={onPress}>
       {children}
@@ -307,7 +309,7 @@ function VaultRowViewOf({
   const trailing = (ink: Ink, lit: boolean) => <Trailing busy={busy} touch={touch} ink={ink} fill={lit ? highlight.fill : null} reserve={reserveTrailing} />;
   switch (row.kind) {
     case "login": {
-      const { title, detail } = loginLines(row.item, site);
+      const { title, detail } = loginLines(row.item, site, twin);
       return shell((ink, lit) => (
         <>
           <ItemTile provider={row.item.provider} ink={ink} />

@@ -45,3 +45,21 @@ test("a stored plugin that was removed says it isn't installed, never to turn it
   assert.match(unavailableNote("plugin:password-manager", "ardia", { title: "Test Passwords", installed: true }), /is off/);
   assert.equal(unavailableNote("plugin:password-manager", "plugin:password-manager", { title: "Test Passwords", installed: true }), null);
 });
+
+test("Ardia names the password managers it fills from, in the row's value and in the menu, so a manager is never hunted for as its own choice", async () => {
+  const { managersOn } = await import("../../../state/vaults/ardiaSources.ts");
+  const provider = (id, name, state, unavailable) => ({ id, name, state, ...(unavailable ? { unavailable } : {}) });
+  const providers = [
+    provider("ardia", "Ardia", "unlocked"),
+    provider("1password", "1Password", "unlocked"),
+    provider("bitwarden", "Bitwarden", "signedOut"),
+    provider("protonpass", "Proton Pass", "unavailable", { reason: "off", canRestart: false }),
+  ];
+  const on = managersOn(providers).map((p) => p.name);
+  assert.deepEqual(on, ["1Password", "Bitwarden"], "a signed-out manager is still a source; one turned off isn't");
+  const title = (sources) => managerPopUp([], "ardia", "ardia", null, sources).options[0].title;
+  assert.equal(title([]), "Ardia");
+  assert.equal(title(["1Password"]), "Ardia · 1Password");
+  assert.equal(title(["1Password", "Bitwarden", "Proton Pass"]), "Ardia · 1Password, Bitwarden, Proton Pass");
+  assert.equal(managerPopUp([], "ardia", "ardia", null, ["1Password"]).options.at(-1).title, "None (an extension handles logins)");
+});

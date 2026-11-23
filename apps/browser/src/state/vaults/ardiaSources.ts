@@ -46,6 +46,19 @@ export function startArdiaSources() {
 
 export type ArdiaSources = { saved: boolean; managers: string[] };
 
+const isOn = (p: Pick<VaultProviderState, "state" | "unavailable">) => !(p.state === "unavailable" && p.unavailable?.reason === "off");
+
+export const managersOn = (providers: readonly VaultProviderState[]) => passwordManagersOnly(providers).filter(isOn);
+
+export function useManagersOn(): string[] {
+  const names = useVaults((s) =>
+    managersOn(s.providers)
+      .map((p) => p.name)
+      .join("\n"),
+  );
+  return useMemo(() => (names ? names.split("\n") : []), [names]);
+}
+
 export function useArdiaSources(profileId: string): ArdiaSources {
   const profile = useBrowser((s) => engineProfile(s, regularProfileId(profileId)));
   const [saved] = useResource(passwordAutofill, profile);

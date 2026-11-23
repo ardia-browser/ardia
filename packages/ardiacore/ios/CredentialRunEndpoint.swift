@@ -37,6 +37,7 @@ struct CredentialCallBuilder {
 }
 
 public final class CredentialRunEndpoint: @unchecked Sendable {
+  static let forwardedReadyId = "ardia-ready"
   static let refusedMethodMessage = "A password manager plugin can only use hello, ready, result and credentials requests."
   private static let callCounter = OSAllocatedUnfairLock(initialState: 0)
 
@@ -60,9 +61,11 @@ public final class CredentialRunEndpoint: @unchecked Sendable {
     var deadline: DispatchWorkItem?
     var verbs: Set<Int> = []
     var owner = false
+    var takingStored = false
   }
 
   private struct RunningVerb {
+    let serial: Int
     let requestId: Int
     let call: String
     let verb: CredentialVerb
@@ -77,13 +80,15 @@ public final class CredentialRunEndpoint: @unchecked Sendable {
 
   private var calls: [String: OpenCall] = [:]
   private var verbs: [Int: RunningVerb] = [:]
+  private var verbSerial = 0
   private var handles = CredentialHandles()
   private var remembered: [String] = []
   private var greeted = false
   private var readyHandlers: [String]?
   private(set) var refusal: String?
   private var finished = false
-  private var readyWaiters: [CheckedContinuation<Bool, Never>] = []
+  private var readyWaiters: [Int: CheckedContinuation<Bool, Never>] = [:]
+  private var readyWaiterSerial = 0
   private(set) var droppedLines = 0
   var onReady: (@Sendable (CredentialRunEndpoint) -> Void)?
   var onEnded: (@Sendable (CredentialRunEndpoint, Bool) -> Void)?
@@ -114,20 +119,19 @@ public final class CredentialRunEndpoint: @unchecked Sendable {
       queue.async { [self] in
         if finished || refusal != nil { return continuation.resume(returning: false) }
         if readyHandlers != nil { return continuation.resume(returning: true) }
-        readyWaiters.append(continuation)
+        readyWaiterSerial += 1
+        let mine = readyWaiterSerial
+        readyWaiters[mine] = continuation
         queue.asyncAfter(deadline: .now() + timeout) { [self] in
-          guard !readyWaiters.isEmpty else { return }
-          let waiting = readyWaiters
-          readyWaiters = []
-          waiting.forEach { $0.resume(returning: readyHandlers != nil && refusal == nil && !finished) }
+          readyWaiters.removeValue(forKey: mine)?.resume(returning: readyHandlers != nil && refusal == nil && !finished)
         }
       }
     }
   }
 
   private func settleReadyWaiters() {
-    let waiting = readyWaiters
-    readyWaiters = []
+    let waiting = readyWaiters.values
+    readyWaiters = [:]
     let ready = readyHandlers != nil && refusal == nil && !finished
     waiting.forEach { $0.resume(returning: ready) }
   }
@@ -246,8 +250,9 @@ public final class CredentialRunEndpoint: @unchecked Sendable {
     if !greeted, refusal == nil { refusal = wording.protocolSkew(0) }
     if refusal == nil { refusal = Self.handlerProblem(known, contribution: contribution, wording: wording) }
     readyHandlers = known
+    if let refusal { reply(CredentialRequestId(json: id), refusal: CredentialRefusal(.refused, refusal)) } else { reply(CredentialRequestId(json: id), result: ["ok": true]) }
     let forwarded: [String: Any] = [
-      "id": id, "method": "ready", "params": ["commands": [Any](), "tools": [Any](), "views": [Any](), "omnibox": false, "decide": [Any](), "events": [Any]()],
+      "id": Self.forwardedReadyId, "method": "ready", "params": ["commands": [Any](), "tools": [Any](), "views": [Any](), "omnibox": false, "decide": [Any](), "events": [Any]()],
     ]
     if let data = CredentialVerbOutput.encoded(forwarded) { link.forward(String(decoding: data, as: UTF8.self)) }
     settleReadyWaiters()
@@ -322,8 +327,8 @@ public final class CredentialRunEndpoint: @unchecked Sendable {
   private func answer(_ callId: String, _ outcome: CredentialCallAnswer) {
     guard var open = calls.removeValue(forKey: callId) else { return }
     open.deadline?.cancel()
-    for requestId in open.verbs {
-      guard let running = verbs[requestId], !running.verb.outlivesCall else { continue }
+    for serial in open.verbs {
+      guard let running = verbs[serial], !running.verb.outlivesCall else { continue }
       running.command.cancel()
     }
     remembered = Array((remembered + handles.values(in: callId)).suffix(64))
@@ -372,7 +377,9 @@ public final class CredentialRunEndpoint: @unchecked Sendable {
 
   private func verbCancel(id: CredentialRequestId, params: [String: Any]) {
     guard let open = openCall(params, id: id) else { return }
-    if let requestId = (params["verbOf"] as? NSNumber)?.intValue, open.verbs.contains(requestId) { verbs[requestId]?.command.cancel() }
+    if let requestId = (params["verbOf"] as? NSNumber)?.intValue {
+      verbs.values.first { $0.requestId == requestId && $0.call == open.id && open.verbs.contains($0.serial) }?.command.cancel()
+    }
     reply(id, result: ["ok": true])
   }
 
@@ -383,15 +390,28 @@ public final class CredentialRunEndpoint: @unchecked Sendable {
   }
 
   private func reason(_ params: [String: Any], id: CredentialRequestId) -> String? {
-    guard let text = params["reason"] as? String, (1...CredentialLimits.ownerReasonLength).contains(text.count), !CredentialCatalogParser.hasControlOrDirection(text) else {
+    guard let text = params["reason"] as? String, (1...CredentialLimits.ownerReasonLength).contains(text.count), text.utf8.count <= CredentialLimits.ownerReasonBytes,
+      !CredentialCatalogParser.hasControlOrDirection(text), !text.unicodeScalars.contains(where: Self.isMarkOrFormat)
+    else {
       reply(id, refusal: CredentialRefusal(.badRequest, "reason must be text of 1 to \(CredentialLimits.ownerReasonLength) characters."))
       return nil
     }
     return text
   }
 
+  private static func isMarkOrFormat(_ scalar: Unicode.Scalar) -> Bool {
+    switch scalar.properties.generalCategory {
+    case .nonspacingMark, .spacingMark, .enclosingMark, .format: return true
+    default: return false
+    }
+  }
+
   private func takeStored(id: CredentialRequestId, params: [String: Any]) {
     guard let open = openCall(params, id: id), let reason = reason(params, id: id) else { return }
+    guard !calls.values.contains(where: \.takingStored) else {
+      return reply(id, refusal: CredentialRefusal(.overloaded, "\(contribution.title) is already asking for Touch ID."))
+    }
+    calls[open.id]?.takingStored = true
     let provider = plugin
     let host = self.host
     let callId = open.id
@@ -399,6 +419,7 @@ public final class CredentialRunEndpoint: @unchecked Sendable {
     Task {
       let value = await host.storedSession(provider, reason: reason)
       queue.async { [self] in
+        calls[callId]?.takingStored = false
         guard let current = calls[callId], host.isCurrent(current.ticket) else {
           return reply(id, refusal: CredentialRefusal(.closed, "The call \(callId) has ended."))
         }
@@ -469,6 +490,9 @@ public final class CredentialRunEndpoint: @unchecked Sendable {
     case .failure(let refusal): return reply(id, refusal: refusal)
     case .success(let made): launch = made
     }
+    guard !verbs.values.contains(where: { $0.requestId == requestId }) else {
+      return reply(id, refusal: CredentialRefusal(.badRequest, "A command with id \(requestId) is already running."))
+    }
     guard verbs.count < CredentialLimits.runningVerbs else {
       return reply(id, refusal: CredentialRefusal(.overloaded, "\(contribution.title) has \(CredentialLimits.runningVerbs) commands running."))
     }
@@ -483,19 +507,21 @@ public final class CredentialRunEndpoint: @unchecked Sendable {
     for (name, value) in launch.env { environment[name] = value }
     let secrets = launch.secretValues
     let streams = verb.output == .stream
+    verbSerial += 1
+    let serial = verbSerial
     var lineSink: (@Sendable (Bool, String) -> Void)?
     if streams {
-      lineSink = { [weak self] fromErrors, text in self?.streamed(requestId, fromErrors: fromErrors, text: text, secrets: secrets) }
+      lineSink = { [weak self] fromErrors, text in self?.streamed(serial, fromErrors: fromErrors, text: text, secrets: secrets) }
     }
     let command = VaultCommand(
       executable: program.executable, arguments: program.leadingArguments + launch.argv, environment: environment, input: launch.stdin,
       timeout: TimeInterval(launch.timeoutMs) / 1000, outputLimit: launch.outputLimitBytes, lineLimit: CredentialLimits.streamLineBytes, onLine: lineSink)
     handles.launched(launch.handles)
-    verbs[requestId] = RunningVerb(requestId: requestId, call: open.id, verb: verb, launch: launch, command: command, ticket: open.ticket)
-    calls[open.id]?.verbs.insert(requestId)
+    verbs[serial] = RunningVerb(serial: serial, requestId: requestId, call: open.id, verb: verb, launch: launch, command: command, ticket: open.ticket)
+    calls[open.id]?.verbs.insert(serial)
     if verb.signIn { host.startSigningIn(plugin, command)?.cancel() }
     if verb.outlivesCall { host.setSignInRun(plugin, CredentialSignInRun(state: .running)) }
-    command.start { [weak self] result in self?.queue.async { self?.verbExited(requestId, id: id, result: result) } }
+    command.start { [weak self] result in self?.queue.async { self?.verbExited(serial, id: id, result: result) } }
   }
 
   private func notLaunched(_ verb: CredentialVerb) -> [String: Any] {
@@ -506,9 +532,9 @@ public final class CredentialRunEndpoint: @unchecked Sendable {
     ]
   }
 
-  private func streamed(_ requestId: Int, fromErrors: Bool, text: String, secrets: [String]) {
+  private func streamed(_ serial: Int, fromErrors: Bool, text: String, secrets: [String]) {
     queue.async { [self] in
-      guard var running = verbs[requestId], calls[running.call] != nil else { return }
+      guard var running = verbs[serial], calls[running.call] != nil else { return }
       let now = Date()
       if now.timeIntervalSince(running.windowStart) >= 1 {
         running.windowStart = now
@@ -517,16 +543,17 @@ public final class CredentialRunEndpoint: @unchecked Sendable {
       running.windowCount += 1
       if running.windowCount > CredentialLimits.streamLinesPerSecond {
         running.droppedLines += 1
-        verbs[requestId] = running
+        verbs[serial] = running
         return
       }
-      verbs[requestId] = running
-      link.send(CredentialVerbOutput.streamLine(text, stream: fromErrors ? "stderr" : "stdout", verbOf: requestId, secrets: secrets))
+      verbs[serial] = running
+      link.send(CredentialVerbOutput.streamLine(text, stream: fromErrors ? "stderr" : "stdout", verbOf: running.requestId, secrets: secrets))
     }
   }
 
-  private func verbExited(_ requestId: Int, id: CredentialRequestId, result: VaultCommandResult) {
-    guard let running = verbs.removeValue(forKey: requestId) else { return }
+  private func verbExited(_ serial: Int, id: CredentialRequestId, result: VaultCommandResult) {
+    guard let running = verbs.removeValue(forKey: serial) else { return }
+    let requestId = running.requestId
     host.finishedSigningIn(plugin, running.command)
     handles.exited(running.launch.handles, succeeded: result.succeeded)
     let open = calls[running.call]
@@ -551,7 +578,7 @@ public final class CredentialRunEndpoint: @unchecked Sendable {
       if open == nil { host.announceChange(plugin) }
     }
     guard let open else { return }
-    calls[open.id]?.verbs.remove(requestId)
+    calls[open.id]?.verbs.remove(serial)
     report.reply["unlocked"] = unlocked
     report.reply["signInRun"] = host.signInRun(plugin).wire
     guard let data = CredentialVerbOutput.encoded(["id": id.json, "result": report.reply]) else { return }
@@ -559,7 +586,13 @@ public final class CredentialRunEndpoint: @unchecked Sendable {
     if lines.count == 1 {
       link.send(lines[0])
     } else {
-      link.sendPaced(lines) { _ in }
+      var overflowed = report.reply
+      for (key, value) in ["overflowed": true, "succeeded": false, "json": NSNull(), "items": 0, "parts": 0, "lines": [String]()] as [String: Any] { overflowed[key] = value }
+      let fallback = CredentialVerbOutput.encoded(["id": id.json, "result": overflowed]).map { String(decoding: $0, as: UTF8.self) }
+      link.sendPaced(lines) { [weak self] sent in
+        guard !sent, let self, let fallback else { return }
+        self.link.send(fallback)
+      }
     }
   }
 }

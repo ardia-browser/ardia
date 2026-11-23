@@ -44,7 +44,11 @@ final class FakeCredentialHost: CredentialHost, @unchecked Sendable {
   }
 
   func hasStoredSession(_ provider: String) -> Bool { false }
-  func storedSession(_ provider: String, reason: String) async -> String? { nil }
+  var storedWait: Duration = .zero
+  func storedSession(_ provider: String, reason: String) async -> String? {
+    try? await Task.sleep(for: storedWait)
+    return nil
+  }
   func dropStoredSession(_ provider: String) {}
   func scratch(_ provider: String) -> [String: String] { lock.withLock { scratchValues } }
   func setScratch(_ provider: String, _ key: String, _ value: String?) { lock.withLock { scratchValues[key] = value } }
@@ -76,15 +80,23 @@ final class RecordingLink: CredentialPluginLink, @unchecked Sendable {
   private var lines: [String] = []
   private var forwardedLines: [String] = []
   private var stops = 0
+  private var refusing = false
 
+  var refusesPaced: Bool {
+    get { lock.withLock { refusing } }
+    set { lock.withLock { refusing = newValue } }
+  }
   var sent: [String] { lock.withLock { lines } }
   var forwarded: [String] { lock.withLock { forwardedLines } }
   var stopped: Int { lock.withLock { stops } }
 
   func send(_ line: String) { lock.withLock { lines.append(line) } }
   func sendPaced(_ batch: [String], then: @escaping @Sendable (Bool) -> Void) {
-    lock.withLock { lines.append(contentsOf: batch) }
-    then(true)
+    let refused = lock.withLock { () -> Bool in
+      if !refusing { lines.append(contentsOf: batch) }
+      return refusing
+    }
+    then(!refused)
   }
   func forward(_ line: String) { lock.withLock { forwardedLines.append(line) } }
   func stopRun() { lock.withLock { stops += 1 } }
@@ -142,7 +154,7 @@ struct CredentialRun {
   var provider: String { endpoint.plugin }
   private static let ids = OSAllocatedUnfairLock(initialState: 1000)
 
-  init(handlers: [String] = ["state", "signIn", "unlock", "signOut", "list", "reveal", "save"], credentials: Any? = 1) async throws {
+  init(handlers: [String] = ["state", "signIn", "unlock", "signOut", "list", "reveal", "save"], credentials: Any? = 1, ready: Bool = true) async throws {
     host = try FakeCredentialHost()
     endpoint = CredentialRunEndpoint(
       plugin: "fakewarden", run: 1, approved: "approved", attachment: 1, contribution: try CredentialRunFixture.contribution(), host: host, link: link,
@@ -151,6 +163,7 @@ struct CredentialRun {
     if let credentials { hello["credentials"] = credentials }
     send(["id": 1, "method": "hello", "params": hello])
     _ = try await link.reply(to: 1)
+    guard ready else { return }
     send(["id": 2, "method": "ready", "params": ["commands": [Any](), "credentialProvider": ["handlers": handlers]]])
     _ = await endpoint.waitUntilReady(timeout: 5)
   }
@@ -202,6 +215,9 @@ struct CredentialRunTests {
     let forwarded = try #require(run.link.forwarded.first)
     #expect(forwarded.contains("\"method\":\"ready\""))
     #expect(!forwarded.contains("credentialProvider"))
+    let ready = try await run.link.reply(to: 2)
+    #expect((ready["result"] as? [String: Any])?["ok"] as? Bool == true)
+    #expect(!forwarded.contains("\"id\":2"), "JS answers a ready native already answered, so its reply can't reach the plugin")
   }
 
   @Test("A plugin speaking another credentials protocol is refused and its provider stays unavailable", arguments: [2, 0])
@@ -431,6 +447,50 @@ struct CredentialRunTests {
     _ = try await CredentialRunFixture.eventually(10) { run.endpoint.runningVerbs == 0 ? true : nil }
   }
 
+  @Test func `a reused request id can't start a second CLI past the cap, and lock still kills every CLI`() async throws {
+    let run = try await CredentialRun()
+    let open = try await run.open("list")
+    let id = run.nextId()
+    let pidFile = (run.host.folder as NSString).appendingPathComponent("sleeping.pid")
+    run.send(["id": id, "method": "credentials.verb", "params": ["call": open.call, "verb": "sleep", "params": ["seconds": "30"]]])
+    let pid = try await CredentialRunFixture.eventually(10) { (try? String(contentsOfFile: pidFile, encoding: .utf8)).flatMap { Int32($0.trimmingCharacters(in: .whitespacesAndNewlines)) } }
+    run.send(["id": id, "method": "credentials.verb", "params": ["call": open.call, "verb": "sleep", "params": ["seconds": "30"]]])
+    let duplicate = try await run.link.reply(to: id, within: 10)
+    #expect((duplicate["error"] as? [String: Any])?["code"] as? String == "bad_request")
+    #expect(run.endpoint.runningVerbs == 1)
+    run.host.epochs.advance(run.provider)
+    run.endpoint.lockNow()
+    _ = await open.answer.value
+    _ = try await CredentialRunFixture.eventually(5) { kill(pid, 0) != 0 ? true : nil }
+    #expect(run.endpoint.runningVerbs == 0)
+  }
+
+  @Test func `a secret field typed as plain text never reaches the plugin on the first sign-in step`() async throws {
+    let run = try await CredentialRun()
+    let provider = PluginVaultProvider(contribution: try CredentialRunFixture.contribution(), host: run.host, wantRun: { _ in }, openApproval: { _, _ in })
+    provider.attach(run.endpoint)
+    let cli = VaultCLI(provider: "fakewarden", path: run.host.script, environment: [:], host: NoCLIHost(), epochs: run.host.epochs)
+    let signing = Task { await provider.signIn(cli, fields: VaultSignInFields(method: "password", values: ["email": "a@example.com", "masterPassword": "typed in plain"], secrets: [:])) }
+    let message = try await run.link.call(named: "signIn")
+    let fields = try #require((message["input"] as? [String: Any])?["fields"] as? [String: Any])
+    #expect(fields["email"] as? String == "a@example.com")
+    #expect(fields["masterPassword"] == nil)
+    #expect(!run.link.sent.joined().contains("typed in plain"))
+    try await run.finish(try #require(message["call"] as? String), result: ["outcome": "failed", "problem": "wrongCredentials"])
+    _ = await signing.value
+  }
+
+  @Test func `one caller's wait for ready running out doesn't end another caller's longer wait`() async throws {
+    let run = try await CredentialRun(ready: false)
+    let endpoint = run.endpoint
+    let short = Task { await endpoint.waitUntilReady(timeout: 0.2) }
+    let long = Task { await endpoint.waitUntilReady(timeout: 10) }
+    #expect(await short.value == false)
+    try await Task.sleep(for: .milliseconds(300))
+    run.send(["id": 2, "method": "ready", "params": ["commands": [Any](), "credentialProvider": ["handlers": ["state", "signIn", "unlock", "signOut", "list", "reveal", "save"]]]])
+    #expect(await long.value == true)
+  }
+
   @Test func `a big listing streams one item per line before its reply`() async throws {
     let run = try await CredentialRun()
     let open = try await run.open("list")
@@ -448,6 +508,21 @@ struct CredentialRunTests {
     #expect(items.count == 20000)
     #expect(items.allSatisfy { !(String(describing: $0)).contains(key) })
     try await run.finish(open.call)
+    try await run.finish(session.call)
+  }
+
+  @Test func `a listing the link can't hold fails as overflowed with none of its items`() async throws {
+    let run = try await CredentialRun()
+    run.link.refusesPaced = true
+    run.host.setSession(run.provider, CredentialRunFixture.key)
+    let session = try await run.open("list")
+    let handle = try #require(((session.message["context"] as? [String: Any])?["session"] as? [String: Any])?["key"] as? [String: Any])
+    let reply = try await run.verb(session.call, "list.items", ["session": handle, "count": "200"])
+    let result = try #require(reply["result"] as? [String: Any])
+    #expect(result["overflowed"] as? Bool == true)
+    #expect(result["succeeded"] as? Bool == false)
+    #expect(result["items"] as? Int == 0)
+    #expect(!run.link.messages().contains { $0["item"] != nil })
     try await run.finish(session.call)
   }
 
@@ -474,6 +549,22 @@ struct CredentialRunTests {
     let texts = messages.prefix(replyIndex).compactMap { ($0["line"] as? [String: Any])?["text"] as? String }
     #expect(texts.prefix(3) == ["line 1", "line 2", "line 3"])
     #expect(texts.contains("warning 4"))
+    try await run.finish(open.call)
+  }
+
+  @Test func `Touch ID is asked one at a time, and its reason is short plain text`() async throws {
+    let run = try await CredentialRun()
+    run.host.storedWait = .seconds(1)
+    let open = try await run.open("unlock")
+    let first = run.nextId()
+    run.send(["id": first, "method": "credentials.session.takeStored", "params": ["call": open.call, "reason": "unlock Fakewarden"]])
+    let second = try await run.request("credentials.session.takeStored", ["call": open.call, "reason": "unlock Fakewarden"])
+    #expect((second["error"] as? [String: Any])?["code"] as? String == "overloaded")
+    #expect((try await run.link.reply(to: first))["result"] != nil)
+    for reason in ["unlock Fake\u{0301}warden", "unlock\u{200B}Fakewarden", String(repeating: "\u{1D538}", count: 60)] {
+      let refused = try await run.request("credentials.session.takeStored", ["call": open.call, "reason": reason])
+      #expect((refused["error"] as? [String: Any])?["code"] as? String == "bad_request", "\(reason.unicodeScalars.count) scalars")
+    }
     try await run.finish(open.call)
   }
 

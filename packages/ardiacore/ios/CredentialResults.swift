@@ -117,7 +117,7 @@ enum CredentialResults {
     let table = try record(value)
     guard let code = table["code"] as? String, ["locked", "signedOut", "notFound", "unsupported", "failed"].contains(code) else { throw Invalid() }
     return CredentialWireError(
-      code: code, problem: try problem(table["problem"]), detail: cleanedDisplay(table["detail"], longest: 4096), state: try failureState(table["state"]),
+      code: code, problem: try problem(table["problem"]), detail: cleanedDisplay(table["detail"], longest: CredentialLimits.detailLength), state: try failureState(table["state"]),
       field: try optionalIdentifier(table["field"], longest: 40))
   }
 
@@ -134,7 +134,7 @@ enum CredentialResults {
         throw Invalid()
       }
     }
-    reported.detail = cleanedDisplay(table["detail"], longest: 4096)
+    reported.detail = cleanedDisplay(table["detail"], longest: CredentialLimits.detailLength)
     reported.problem = try problem(table["problem"])
     return reported
   }
@@ -156,7 +156,7 @@ enum CredentialResults {
       guard let id = CredentialVerbLaunch.handleId(session) else { throw Invalid() }
       return .done(sessionHandle: id)
     }
-    let detail = cleanedDisplay(table["detail"], longest: 4096)
+    let detail = cleanedDisplay(table["detail"], longest: CredentialLimits.detailLength)
     let state = try failureState(table["state"])
     let problem = try problem(table["problem"])
     if let raw = table["need"], !(raw is NSNull) {

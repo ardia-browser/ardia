@@ -26,7 +26,8 @@ final class PluginVaultProvider: VaultPasskeyHolder, @unchecked Sendable {
   let wording: CredentialWording
   let stateLock = NSLock()
   private var endpoint: CredentialRunEndpoint?
-  private var waiters: [CheckedContinuation<CredentialRunEndpoint?, Never>] = []
+  private var waiters: [Int: CheckedContinuation<CredentialRunEndpoint?, Never>] = [:]
+  private var waiterSerial = 0
   var attempt: SignInAttempt?
   var pendingNeeds: VaultProviderNeeds?
   private var unavailable: VaultProviderUnavailable?
@@ -110,8 +111,8 @@ final class PluginVaultProvider: VaultPasskeyHolder, @unchecked Sendable {
       endpoint = fresh
       unavailable = nil
       unavailableMessage = nil
-      defer { waiters = [] }
-      return waiters
+      defer { waiters = [:] }
+      return Array(waiters.values)
     }
     waiting.forEach { $0.resume(returning: fresh) }
   }
@@ -152,18 +153,16 @@ final class PluginVaultProvider: VaultPasskeyHolder, @unchecked Sendable {
     if stateLock.withLock({ unavailable?.reason == .damaged || unavailable?.reason == .off }) { return nil }
     wantRun(id)
     let waited = await withCheckedContinuation { (continuation: CheckedContinuation<CredentialRunEndpoint?, Never>) in
-      let resumeNow = stateLock.withLock { () -> CredentialRunEndpoint?? in
-        if let current = endpoint, !current.isFinished { return .some(current) }
-        waiters.append(continuation)
-        return .none
+      let resumeNow = stateLock.withLock { () -> (CredentialRunEndpoint?, Int) in
+        if let current = endpoint, !current.isFinished { return (current, 0) }
+        waiterSerial += 1
+        waiters[waiterSerial] = continuation
+        return (nil, waiterSerial)
       }
-      if case .some(let current) = resumeNow { return continuation.resume(returning: current) }
+      if let current = resumeNow.0 { return continuation.resume(returning: current) }
+      let mine = resumeNow.1
       DispatchQueue.global().asyncAfter(deadline: .now() + CredentialLimits.runWait) { [self] in
-        let expired = stateLock.withLock { () -> [CheckedContinuation<CredentialRunEndpoint?, Never>] in
-          defer { waiters = [] }
-          return waiters
-        }
-        expired.forEach { $0.resume(returning: nil) }
+        stateLock.withLock { waiters.removeValue(forKey: mine) }?.resume(returning: nil)
       }
     }
     guard let waited else { return nil }

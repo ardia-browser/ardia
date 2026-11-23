@@ -48,8 +48,9 @@ extension PluginVaultProvider {
       guard let value = VaultSecretEntries.value(token) else { return typedPasswordExpired(nil) }
       resolved[field] = value
     }
+    let plainValues = attempt.values.filter { contribution.signIn.field($0.key)?.type != .secret }
     let input = CredentialRequestId(json: [
-      "method": attempt.method, "step": attempt.step, "values": attempt.values, "server": server ?? NSNull(), "code": attempt.code ?? NSNull(),
+      "method": attempt.method, "step": attempt.step, "values": plainValues, "server": server ?? NSNull(), "code": attempt.code ?? NSNull(),
       "codeMethod": attempt.codeMethod ?? NSNull(), "account": attempt.account ?? NSNull(),
     ] as [String: Any])
     let secrets = resolved

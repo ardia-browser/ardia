@@ -148,6 +148,14 @@ struct CredentialVerbOutputTests {
 
 @Suite("Credential results")
 struct CredentialResultTests {
+  @Test func `a plugin's error detail is cut to 240 bytes wherever it comes in`() throws {
+    let long = String(repeating: "é", count: 400)
+    let wire = try CredentialResults.wireError(["code": "failed", "problem": "failed", "detail": long])
+    #expect(try #require(wire.detail).utf8.count <= 240)
+    let state = try CredentialResults.state(["state": "locked", "detail": long])
+    #expect(try #require(state.detail).utf8.count <= 240)
+  }
+
   @Test func `a listed item keeps passkey metadata only and cleans display text`() throws {
     let raw: [String: Any] = [
       "snapshot": "s1",

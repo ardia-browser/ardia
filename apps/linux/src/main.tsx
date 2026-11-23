@@ -54,6 +54,8 @@ import { listenForOpenUrls } from "./openUrls";
 import { followExtensionChanges, settingsShowsExtensions } from "./utilityExtensions";
 import { refreshExtensionsAfterChange } from "../../browser/src/state/extensions/actions";
 import { provideNativeModuleProvider, requireNativeModule } from "./shims/expo-modules-core";
+import { setDownloadTurns } from "../../browser/src/state/downloads/downloadTurns";
+import { linuxDownloadTurns, publishSwitchInTurn } from "./hostDownloadTurns";
 import { setHostPageHooks } from "./hostPageHooks";
 import { applyHostPageTheme, forgetDepartedPage, resetHostPage } from "./hostPageLifecycle";
 import { setPopupDismissal } from "./popupDismissal";
@@ -74,7 +76,7 @@ import { TrafficLights } from "./TrafficLights";
 import { startWindowButtonStyle } from "../../browser/src/state/windows/windowButtons";
 import { followDesktopButtonLayout } from "./desktopButtonLayout";
 import { followWindowMaximized } from "./windowMaximized";
-import { createUtilitySessionSnapshot, initialLinuxSession, isLinuxUtility, setSessionDeparture, setSessionFlush } from "./session";
+import { createUtilitySessionSnapshot, flushLinuxSession, initialLinuxSession, isLinuxUtility, setSessionDeparture, setSessionFlush } from "./session";
 import { startUtility } from "./utility";
 import { announceShellPainted } from "./shellPainted";
 import { watchActiveProfile } from "./hostWindowProfiles";
@@ -116,6 +118,8 @@ async function start() {
   const launch = ardiaHost.bootstrap.startup !== false;
   const restoreSession = launch ? configRestoreSession() : undefined;
   setStoreBatching(unstable_batchedUpdates);
+  const downloadTurns = linuxDownloadTurns(navigator.locks, ardiaHost, flushLinuxSession);
+  setDownloadTurns(downloadTurns);
   hydrateLaunchSession(saved, initialLinuxSession(ardiaHost, saved?.settings && restoreSession !== undefined ? { ...saved, settings: { ...saved.settings, restoreSession } } : saved));
   followDesktopButtonLayout(ardiaHost);
   startWindowButtonStyle();
@@ -182,6 +186,7 @@ async function start() {
     });
     void noticeUnsandboxedLaunch(ardiaHost, windowId, services.launch);
   }
+  publishSwitchInTurn(useBrowser, downloadTurns);
   createRoot(document.getElementById("root")!, { onUncaughtError: (error) => { reportUncaughtRender(error); console.error("[ardia linux] crashed", error); }, onRecoverableError: (error) => { reportRecoverableRender(error); console.warn("[ardia linux] recovered", error); } }).render(
     <div className={`ardia-desktop host ardia-linux${utility ? " utility" : ""}`} data-ardia-linux-window={windowId}>
       <div className="ardia-window">

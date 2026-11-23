@@ -2,6 +2,7 @@ import { engineProfile } from "../browser/model";
 import { cancelDownload, keepDownload, pauseDownload, resumeDownload, setDownloadSettings, type Download } from "../downloads/actions";
 import { downloadSession } from "../downloads/downloadsSlice";
 import { openDownload } from "../downloads/openDownload";
+import { inDownloadTurn } from "../downloads/downloadTurns";
 import { awaitsKeep } from "../downloads/status";
 import { getDownloadSettings } from "../../platform/downloads";
 import { revealFile } from "../../platform/files";
@@ -87,17 +88,22 @@ function clear() {
 }
 
 async function settings(params: Record<string, unknown>) {
-  return getDownloadSettings(engineProfile(now(), profileArg(params.profile)));
+  const id = profileArg(params.profile);
+  return inDownloadTurn(async () => getDownloadSettings(engineProfile(now(), profileArg(id))));
 }
 
 async function setSettings(params: Record<string, unknown>, call: SocketCall) {
   if (params.folder === undefined && params.askWhereToSave === undefined) throw new OpError("bad_request", "downloads.setSettings needs folder or askWhereToSave.");
   if (params.folder !== undefined && !isAbsoluteFolder(params.folder as string)) throw new OpError("bad_request", "folder is an absolute path.");
-  const engine = engineProfile(now(), profileArg(params.profile));
-  const current = await getDownloadSettings(engine);
-  if (current.managed) throw new OpError("refused", "A policy sets this profile's download settings.");
-  call.stillServing();
-  return setDownloadSettings({ ...(params.folder !== undefined ? { folder: params.folder as string } : {}), ...(params.askWhereToSave !== undefined ? { askWhereToSave: params.askWhereToSave as boolean } : {}) }, engine);
+  const id = profileArg(params.profile);
+  return inDownloadTurn(async () => {
+    const engine = engineProfile(now(), profileArg(id));
+    const current = await getDownloadSettings(engine);
+    if (current.managed) throw new OpError("refused", "A policy sets this profile's download settings.");
+    call.stillServing();
+    profileArg(id);
+    return setDownloadSettings({ ...(params.folder !== undefined ? { folder: params.folder as string } : {}), ...(params.askWhereToSave !== undefined ? { askWhereToSave: params.askWhereToSave as boolean } : {}) }, engine);
+  });
 }
 
 const DOWNLOAD = obj({ id: id("A download id from downloads.list") }, ["id"]);

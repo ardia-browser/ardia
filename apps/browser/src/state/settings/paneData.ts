@@ -17,6 +17,9 @@ import { setAsDefaultBrowser } from "../app/appSettings";
 import { getAutofillSettings, listAddresses, listCards, setAutofillSettings, type AutofillToggle, type SavedAddress, type SavedCard } from "../../platform/autofill";
 import { getContentBlocker } from "../../platform/contentBlocker";
 import { getDownloadSettings, setDownloadSettings, type DownloadSettings } from "../../platform/downloads";
+import { inDownloadTurn } from "../downloads/downloadTurns";
+import { readExistingSource } from "../downloads/sharedSettings";
+import { engineProfiles } from "../profiles/engineProfiles";
 import { getExternalAppAllowances, getPreloadPages, getSiteSettingsOrigins, getZoomLevels, setPreloadPages } from "../../platform/siteSettings";
 import { getPasswordAutofill, setPasswordAutofill } from "../../platform/passwords";
 import { orWarn } from "../../lib/fallback";
@@ -35,6 +38,7 @@ import { consentToken } from "../telemetry/client";
 import { forgetPendingOfferToSave, passwordAutofill } from "../site/passwordManager";
 import { notePreloadPagesTurned } from "../telemetry/preloadPagesCounts";
 import { trackAutofillToggleKept } from "../telemetry/track";
+import { noteDownloadFoldersFoundSeparate } from "../telemetry/downloadFolderCounts";
 import { askedValue, rememberAsked } from "./autofillAsked";
 
 export { passwordAutofill };
@@ -59,7 +63,13 @@ export const autofillEnabled = resource("autofillEnabled", (profile: string) =>
   load(addresses, [profile]).then(() => getAutofillSettings(profile).catch(() => ({ addresses: true, cards: true }))),
 );
 export const autofillToggleAsked = resource("autofillToggleAsked", (profile: string, toggle: AutofillToggle) => Promise.resolve(askedValue(profile, toggle)));
-export const downloadSettings = resource("downloadSettings", (profile: string) => getDownloadSettings(profile).catch(() => null));
+const stillExisting = (profiles: string[]) => {
+  const engines = engineProfiles(useBrowser.getState());
+  return profiles.filter((profile) => engines.includes(profile));
+};
+export const downloadSettings = resource("downloadSettings", (profile: string) =>
+  inDownloadTurn(async () => (stillExisting([profile]).length ? getDownloadSettings(profile) : null)).catch(() => null),
+);
 export const extensionList = resource("extensions", (profile: string) => refreshExtensions(profile, consentToken()));
 export const shortcutItems = resource("menuShortcuts", () =>
   menuShortcuts().then(
@@ -134,11 +144,38 @@ export async function setAutofillFor(profile: string, kind: Exclude<AutofillTogg
   noteAsked(profile, kind, on, now[kind]);
 }
 
-export const downloadFoldersDiffer = (profiles: string[]) =>
-  Promise.all(profiles.map((p) => getDownloadSettings(p).catch(() => null))).then((all) => new Set(all.flatMap((d) => (d ? [d.folder] : []))).size > 1);
+export async function separateIfFoldersDiffer(profiles: string[], stillShown: () => boolean) {
+  const consent = consentToken();
+  await inDownloadTurn(async () => {
+    if (!stillShown()) return;
+    const all = await Promise.all(stillExisting(profiles).map((p) => getDownloadSettings(p).catch(() => null)));
+    if (new Set(all.flatMap((d) => (d ? [d.folder] : []))).size < 2 || !stillShown()) return;
+    useBrowser.getState().updateSettings({ separateDownloadFolders: true });
+    noteDownloadFoldersFoundSeparate(consent);
+  });
+}
 
-export const setDownloadsFor = (patch: Partial<Pick<DownloadSettings, "folder" | "askWhereToSave">>, profiles: string[]) =>
+type DownloadsPatch = Partial<Pick<DownloadSettings, "folder" | "askWhereToSave">>;
+
+const writeDownloads = (patch: DownloadsPatch, profiles: string[]) =>
   Promise.all(profiles.map((p) => setDownloadSettings(patch, p).then((next) => store(downloadSettings, [p], next), orWarn(undefined))));
+
+export const setDownloadsFor = (patch: DownloadsPatch, profiles: string[]) => inDownloadTurn(() => writeDownloads(patch, stillExisting(profiles)));
+
+export const setDownloadsForEveryProfile = (patch: DownloadsPatch) => inDownloadTurn(() => writeDownloads(patch, engineProfiles(useBrowser.getState())));
+
+const copyDefaultToEveryProfile = async () => {
+  if (currentSettings().separateDownloadFolders) return;
+  const read = await readExistingSource(useBrowser.getState, defaultProfile).catch(orWarn(null));
+  if (!read?.settings.folder || read.settings.managed || currentSettings().separateDownloadFolders) return;
+  const { folder, askWhereToSave } = read.settings;
+  await writeDownloads({ folder, askWhereToSave }, engineProfiles(useBrowser.getState()).filter((p) => p !== read.from));
+};
+
+export function setSeparateDownloadFolders(on: boolean) {
+  if (!on) void inDownloadTurn(copyDefaultToEveryProfile);
+  useBrowser.getState().updateSettings({ separateDownloadFolders: on });
+}
 
 export function setUpdaterPrefs(patch: { automaticChecks?: boolean; automaticDownloads?: boolean; channel?: UpdateChannel }) {
   const state = cached(updater, []);

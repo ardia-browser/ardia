@@ -3,6 +3,7 @@ import type { BrowserState } from "../browser/store";
 import { engineBookmarkRoots, ensureRoots, removeBookmarkTree } from "../bookmarks/bookmarks";
 import { engineProfile, incognitoOriginal, newId, viewTabIds, without } from "../browser/model";
 import { handPagesOutOfProfile } from "../pins/pinShare";
+import { shareDownloadsWithNewProfile } from "../downloads/sharedSettings";
 import { DEFAULT_PROFILE_ID, settingsWith } from "../settings/settings";
 import { activated, apply, removeTabs, withNewTab } from "../tabs/tabs";
 import type { Profile, ProfileColor } from "../browser/types";
@@ -71,7 +72,9 @@ export const createProfilesSlice: StateCreator<BrowserState, [], [], ProfilesSli
         ...(shareTopApps ? { shareTopApps: true as const } : {}),
       };
       const profiles = { ...s.profiles, [profile.id]: profile };
-      const bookmarks = ensureRoots(s.bookmarks, engineProfile({ profiles }, profile.id))[0];
+      const engine = engineProfile({ profiles }, profile.id);
+      const bookmarks = ensureRoots(s.bookmarks, engine)[0];
+      if (!source) shareDownloadsWithNewProfile(get, engine);
       set({ profiles, profileOrder: [...s.profileOrder, profile.id], bookmarks });
       return profile.id;
     },

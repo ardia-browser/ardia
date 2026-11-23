@@ -207,6 +207,8 @@ export const Easing = {
   inOut: (curve: Curve) => curve,
 };
 
+export const Linking = { openURL: () => Promise.resolve() };
+
 export const AppState = { currentState: "active", addEventListener: () => ({ remove() {} }) };
 
 export const AccessibilityInfo = {

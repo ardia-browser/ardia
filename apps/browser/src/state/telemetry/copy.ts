@@ -60,6 +60,7 @@ export const WHATS_SENT: { title: string; items: string[] }[] = [
     items: [
       "Launches, updates, and whether the last session ended cleanly",
       "How many times a running download reported progress, how many times the download list was saved and how large those saves were in all, summed up once an hour. Never file names, folders or addresses",
+      "How many new profiles were given the Downloads folder and Ask where to save choice every profile shares, how many times that failed, and how many times Settings turned Separate folder for each profile on because it found profiles saving to different folders, summed up once an hour. Never which profile or folder",
       "How many times a click outside the Downloads panel closed it and went on to the page, how many times the panel opened by itself for a download that waits for Keep or Discard, how many downloaded archives you opened, and how many times you pressed inside the Downloads panel on Linux, summed up once an hour. Never which files or where you pressed",
       "When you turn sharing on from the New Tab question: where it was shown and on how many New Tab pages it was shown first",
       "At launch: the chip and graphics chip names, how much memory the Mac has, how many displays and their scale, and whether the Mac decodes AV1, VP9, HEVC and H.264 video in hardware",

@@ -1,5 +1,6 @@
 import { takeChromeSettingsOpens } from "./chromeSettingsOpens";
 import { takePreloadPagesCounts } from "./preloadPagesCounts";
+import { takeDownloadFolderCounts } from "./downloadFolderCounts";
 import { takeHiddenElementCounts } from "./hiddenElementCounts";
 import { takeMinimalismCounts } from "./minimalismCounts";
 import { takePageFocusReturns } from "./pageFocusReturns";
@@ -17,5 +18,5 @@ import { takeSettingsPickerCounts } from "./settingsPickerCounts";
 import { takePageBarCounts } from "./pageBarCounts";
 
 export function takeFocusFeatureCounts() {
-  return { ...takeMinimalismCounts(), ...takeReaderCounts(), ...takeSettingsWriteCounts(), ...takeHiddenElementCounts(), ...takeChromeSettingsOpens(), ...takePreloadPagesCounts(), ...takeWindowOcclusionCounts(), ...takePageFocusReturns(), ...takeBarLoadFocusCounts(), ...takePageCursorCounts(), ...takeFocusHandoffCounts(), ...takeWebNotificationCounts(), ...takePictureInPictureCloseCounts(), ...takeDeveloperModeCounts(), ...takePasswordManagerCounts(), ...takeSettingsPickerCounts(), ...takePageBarCounts() };
+  return { ...takeMinimalismCounts(), ...takeReaderCounts(), ...takeSettingsWriteCounts(), ...takeHiddenElementCounts(), ...takeChromeSettingsOpens(), ...takePreloadPagesCounts(), ...takeDownloadFolderCounts(), ...takeWindowOcclusionCounts(), ...takePageFocusReturns(), ...takeBarLoadFocusCounts(), ...takePageCursorCounts(), ...takeFocusHandoffCounts(), ...takeWebNotificationCounts(), ...takePictureInPictureCloseCounts(), ...takeDeveloperModeCounts(), ...takePasswordManagerCounts(), ...takeSettingsPickerCounts(), ...takePageBarCounts() };
 }

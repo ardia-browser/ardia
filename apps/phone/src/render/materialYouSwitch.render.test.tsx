@@ -10,7 +10,8 @@ import { MaterialBottomBar } from "../components/ui/MaterialBottomBar";
 import { SEEDED_SCHEMES } from "../lib/material/schemes";
 import { pages } from "../platform/pages";
 import { setDynamicScheme } from "../state/app/dynamicScheme";
-import { openArchive, useBrowse } from "../state/browse/store";
+import { closeArchive, markSheetFromSettings, openArchive, openSpaces, useBrowse } from "../state/browse/store";
+import { handleSystemBack } from "../state/page/actions";
 import { closeSettings, openSettings, settingsScroll } from "../state/settings/nav";
 import { currentPreferences, usePreferences } from "../state/settings/store";
 import * as telemetry from "../state/telemetry/telemetry";
@@ -195,6 +196,33 @@ onAndroid("Archive opened from full-screen Material Settings slides up as a shee
   unmount(root);
 });
 
+for (const [name, open] of [["Archive", openArchive], ["Spaces", openSpaces]] as const) {
+  onAndroid(`Back from ${name} opened in Material Settings brings Settings back opaque and in place`, () => {
+    usePreferences.setState({ materialYou: true });
+    const root = renderSurface(<Surfaces />);
+    act(() => openSettings());
+    for (let pass = 0; pass < 4; pass++) settle();
+    act(() => {
+      closeSettings();
+      open();
+      markSheetFromSettings();
+    });
+    for (let pass = 0; pass < 4; pass++) settle();
+    expect(getAnimatedStyle(fullSheet(root))).toMatchObject({ transform: [{ translateY: 0 }] });
+    act(() => void handleSystemBack());
+    expect(root.root.findAll((node) => node.props.testID === "materialSettingsPage" && typeof node.type === "string")).toHaveLength(1);
+    for (let frame = 0; frame < 20; frame++) {
+      act(() => jest.advanceTimersByTime(16));
+      expect(getAnimatedStyle(fullSheet(root))).toMatchObject({ opacity: 1, transform: [{ translateY: 0 }] });
+    }
+    act(() => {
+      closeSettings();
+      closeArchive();
+    });
+    unmount(root);
+  });
+}
+
 onAndroid("a Material You flip during Settings' entrance lands the new frame instead of jumping to a part-way slide", () => {
   usePreferences.setState({ materialYou: true });
   const root = renderSurface(<Surfaces />, { flushTimers: false });
@@ -209,7 +237,15 @@ onAndroid("a Material You flip during Settings' entrance lands the new frame ins
 });
 
 onAndroid("turning Material You off brings the replacement switch into the list's view before focusing it", () => {
-  const reveal = jest.spyOn(settingsReveal, "revealInList");
+  const actualReveal = settingsReveal.revealInList;
+  const scrolledTo: unknown[] = [];
+  const reveal = jest.spyOn(settingsReveal, "revealInList").mockImplementation((frame, target) => {
+    const list = frame.list as unknown as { getInnerViewRef: () => unknown; scrollTo: jest.Mock };
+    list.getInnerViewRef = () => ({});
+    list.scrollTo.mockImplementation((to: unknown) => void scrolledTo.push(to));
+    (target as unknown as { measureLayout: (relative: unknown, onSuccess: (x: number, y: number, width: number, height: number) => void) => void }).measureLayout = (_relative, onSuccess) => onSuccess(0, 40, 393, 72);
+    actualReveal(frame, target);
+  });
   const focus = jest.spyOn(coverFocus, "focusForScreenReader").mockImplementation(() => () => undefined);
   usePreferences.setState({ materialYou: true });
   const root = renderSurface(<Surfaces />);
@@ -226,6 +262,7 @@ onAndroid("turning Material You off brings the replacement switch into the list'
   expect(frame).toMatchObject({ scrollY: 260, viewport: 700 });
   expect(frame.list).not.toBeNull();
   expect(target).not.toBeNull();
+  expect(scrolledTo).toEqual([{ y: 40, animated: false }]);
   expect(reveal.mock.invocationCallOrder[0]!).toBeLessThan(focus.mock.invocationCallOrder.at(-1)!);
   unmount(root);
 });

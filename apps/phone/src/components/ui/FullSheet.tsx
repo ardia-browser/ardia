@@ -83,7 +83,8 @@ export function FullSheet<T extends string>({ sheet, progress, onDismiss, fullSc
       scrollTop.value = 0;
       const changesFrame = framedFullScreen.current !== fullScreen;
       framedFullScreen.current = fullScreen;
-      if (step.fromHidden || changesFrame) offset.value = height.value;
+      if (step.fromHidden) offset.value = height.value;
+      else if (changesFrame) offset.value = fullScreen ? 0 : height.value;
       if (material) offset.value = materialMove(0, enter.easing, reduceMotion ? SHEET_REDUCED_MS : enter.durationMs);
       else offset.value = reduceMotion ? withTiming(0, { duration: SHEET_REDUCED_MS, easing: tabsCurve.easeOut }) : withSpring(0, tabsMotion.sheetRise);
       return;
